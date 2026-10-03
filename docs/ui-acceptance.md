@@ -50,3 +50,9 @@ The supplemental DOM tests are not a replacement for browser, layout, focus-trap
 `TRACEBOLT_SOURCE_SHA` is recorded in both result JSON and the screenshot manifest. A browser runtime error fails the suite. Completed scenarios and screenshots survive later scenario failures, with a nonzero exit status.
 
 Only `synthetic-*.png` images are intended for a public gallery. Those are captured before mutation tests and show Windows demo inventory, a demo device, or a demo case in desktop/mobile and light/dark layouts. The remaining review images can include real sandbox observations and must not be published. The database and manager logs are never public artifacts.
+
+## Next LAN, language and scroll-shell checkpoint (pending hosted browser evidence)
+
+The next frozen candidate updates only the acceptance harness here: 40 UI/AI scenarios (32 baseline/language/scroll cases plus eight AI cases), the existing six managed-preview cases with explicit German preference, and ten separate authenticated HTTP-test browser cases. JavaScript syntax, compilation of the isolated LAN fixture, and nine supplemental DOM regressions passed locally. A real loopback HTTP smoke confirmed anonymous API rejection, successful session login, safe awaiting-agent contract data and actual short session expiry.
+
+The new browser target uses the actual operator HTTP-test handler with disposable fixture material. It is not a production LAN CLI launch or trusted HTTPS browser validation. All captures are viewport-sized. Main content scrolls inside the application shell; the manifest records the selected section, locale and scroll position. Primary synthetic gallery scenes start in English, and separate tests check an explicit German switch without losing state. No new browser or pixel pass is claimed until the exact published source has completed hosted CI and its images have been inspected.

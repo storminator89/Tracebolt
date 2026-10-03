@@ -1,0 +1,37 @@
+# Standalone, deliberately opt-in plaintext LAN test profile. Do not merge with TLS compose.
+name: tracebolt-http-test
+services:
+  manager-http-test:
+    profiles: [http-test]
+    image: tracebolt-manager:local
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    command: ["--lan-config", "/run/tracebolt/http-test.json"]
+    user: "65532:65532"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 128
+    mem_limit: 512m
+    cpus: 2
+    restart: "no"
+    stop_grace_period: 15s
+    ports:
+      - "${TRACEBOLT_HTTP_TEST_BIND_IP:?Set the explicit LAN address for unencrypted testing}:8787:8787"
+      - "${TRACEBOLT_HTTP_TEST_BIND_IP:?Set the explicit LAN address for unencrypted testing}:8788:8788"
+    volumes:
+      - http-test-state:/data
+      - type: bind
+        source: ${TRACEBOLT_HTTP_TEST_CONFIG_DIR:?Set the separate private HTTP test configuration directory}
+        target: /run/tracebolt
+        read_only: true
+        bind:
+          create_host_path: false
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "3"
+volumes:
+  http-test-state:

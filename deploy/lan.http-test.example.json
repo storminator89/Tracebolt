@@ -1,0 +1,13 @@
+{
+  "schemaVersion": "tracebolt.lan-config.v1",
+  "profile": "http-test",
+  "insecureHTTPAcknowledged": true,
+  "operatorListen": "0.0.0.0:8787",
+  "agentListen": "0.0.0.0:8788",
+  "operatorOrigin": "http://192.0.2.10:8787",
+  "agentOrigin": "http://192.0.2.10:8788",
+  "agentClientCAFile": "/run/tracebolt/agent-ca.pem",
+  "operatorAuthFile": "/run/tracebolt/operator-auth.json",
+  "stateDirectory": "/data/state",
+  "webDirectory": "/tracebolt/web"
+}

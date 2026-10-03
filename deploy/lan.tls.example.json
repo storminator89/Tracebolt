@@ -1,0 +1,14 @@
+{
+  "schemaVersion": "tracebolt.lan-config.v1",
+  "profile": "tls",
+  "operatorListen": "0.0.0.0:8443",
+  "agentListen": "0.0.0.0:8444",
+  "operatorOrigin": "https://manager.example.invalid:8443",
+  "agentOrigin": "https://manager.example.invalid:8444",
+  "tlsCertificateFile": "/run/tracebolt/server.pem",
+  "tlsPrivateKeyFile": "/run/tracebolt/server.key",
+  "agentClientCAFile": "/run/tracebolt/agent-ca.pem",
+  "operatorAuthFile": "/run/tracebolt/operator-auth.json",
+  "stateDirectory": "/data/state",
+  "webDirectory": "/tracebolt/web"
+}

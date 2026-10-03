@@ -1,6 +1,6 @@
 # Tracebolt Web
 
-German-first React/TypeScript admin UI for the local Tracebolt development prototype. Source labels distinguish synthetic demonstration devices from the actual sandbox collector; no API failure is replaced with fixtures.
+English-default React/TypeScript admin UI for the Tracebolt prototype, with a German language switch. Source labels distinguish synthetic demonstration devices from the actual sandbox collector; no API failure is replaced with fixtures.
 
 ## Run
 
@@ -25,7 +25,7 @@ npm audit --omit=dev
 npm audit
 ```
 
-All fonts/icons are installed dependencies served locally; no CDN or remote font request. Dark/light theme and one saved inventory view persist in local browser storage. CSV export neutralizes formula-leading cells. Notes validate the backend's 2000 UTF-8 byte limit. Dynamic strings are rendered as React text, not HTML.
+All fonts/icons are installed dependencies served locally; no CDN or remote font request. The explicit language preference (English unless German is chosen), dark/light theme and one saved inventory view persist in local browser storage. UI labels, errors, status and dates are localized; collected evidence, notes and model output retain their original text. CSV export neutralizes formula-leading cells. Notes validate the backend's 2000 UTF-8 byte limit. Dynamic strings are rendered as React text, not HTML.
 
 ## Screenshots
 
@@ -35,7 +35,7 @@ All fonts/icons are installed dependencies served locally; no CDN or remote font
 - `TRACEBOLT_SCREENSHOTS` (output directory)
 - `CHROMIUM_PATH` (an existing browser executable)
 
-The capture script uses only synthetic-device inventory, case, and drawer views. The overview screenshot is deliberately cropped above the mixed-source table, excluding actual sandbox telemetry. It fails if synthetic inventory contains a real-source row, mobile pages overflow, or JavaScript errors occur.
+The capture script explicitly selects German and uses only synthetic-device inventory, case, and drawer views. The workspace is viewport-bounded: content scrolls independently of the navigation and header. Gallery captures use viewport framing, not stitched full-document images of fixed navigation. The overview screenshot is deliberately cropped above the mixed-source table, excluding actual sandbox telemetry. It fails if synthetic inventory contains a real-source row, mobile pages overflow, or JavaScript errors occur.
 
 Browser evidence is produced by the hosted CI runner against the compiled UI and a disposable local manager. Screenshots are associated with their exact source commit. The first reviewed UI snapshot was `594e88e`; newer UI changes require a new browser run and captures.
 
@@ -46,3 +46,11 @@ Settings includes a native OpenAI-compatible provider panel: base URL, model and
 An investigation can request one bounded analysis after showing the exact destination and obtaining explicit operator review. Case title/summary and selected evidence text are sent without automatic secret redaction; review them first. A loopback endpoint may itself relay externally. There is no automatic provider request, periodic analysis, command execution or remediation in this version.
 
 Model hypotheses stay separate from the deterministic rule finding. Citation buttons open the exact analyzed evidence snapshot. Missing/stale evidence and unconfirmed root cause remain visible. Configuration races, superseded responses, navigation and cancellation cannot install an old result into the current view. AI results are transient and disappear on reload.
+
+## Operator access
+
+The UI first reads the manager's explicit `/api/auth/session` contract. Development mode remains clearly unauthenticated. LAN mode loads protected data only after confirmed operator access, with no automatic replay of interrupted writes. Passwords and CSRF/session tokens are never placed in browser storage. Sign-out clears visible private state, aborts pending requests and broadcasts invalidation to other tabs. A non-secret pending-sign-out marker protects reloads when server confirmation is unavailable; if neither storage mechanism works, the UI explicitly warns about that limit. Hidden/BFCache-restored workspaces are concealed and the actual session is revalidated before showing their contents.
+
+HTTPS is the normal LAN transport. Explicit HTTP LAN test mode keeps a persistent warning on the login and workspace surfaces: passwords and data can be read on the network. Declared LAN transport must match the actual browser protocol, otherwise access fails closed. No trust is inferred from forwarded headers or a hostname.
+
+Auth and language component checks run with the app's unit suite. Real browser acceptance belongs to the exact source commit recorded by the hosted CI; prior gallery results do not validate a newer source snapshot.

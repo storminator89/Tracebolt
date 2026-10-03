@@ -10,6 +10,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runAIReview } from './ai-scenarios.mjs';
+import { runShellReview } from './shell-scenarios.mjs';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const require = createRequire(path.join(root, 'web/package.json'));
 const { chromium, expect } = require('@playwright/test');
@@ -48,7 +49,9 @@ const noteText = '<img src=x onerror="window.__reviewXss=1"> Review: literal evi
 const allPages = new Set();
 const runtimeErrors = [];
 async function pageAt(hash='/overview', viewport={width:1440,height:1000}, extra={}) {
- const context = await browser.newContext({ viewport, locale:'de-DE', ...extra });
+ const {reviewLocale='de',...contextOptions}=extra;
+ const context = await browser.newContext({ viewport, locale:'de-DE', ...contextOptions });
+ if(reviewLocale) await context.addInitScript(value=>localStorage.setItem('tracebolt.locale',value),reviewLocale);
  const page = await context.newPage(); allPages.add(context);
  page.on('pageerror', error=>runtimeErrors.push({test:currentTest, message:error.message}));
  await page.goto(`${base}/#${hash}`); return page;
@@ -56,14 +59,23 @@ async function pageAt(hash='/overview', viewport={width:1440,height:1000}, extra
 let currentTest='';
 async function test(name, run) { currentTest=name; const begun=Date.now(); try { await run(); results.push({name, status:'PASS', durationMs:Date.now()-begun}); console.log(`PASS ${name}`); } catch(error) { results.push({name,status:'FAIL',error:sanitize(name.startsWith('AI ') ? error.message.split('\n')[0] : error.message),durationMs:Date.now()-begun}); console.log(`FAIL ${name}: ${error.message.split('\n')[0]}`); } finally { for(const context of allPages) await context.close(); allPages.clear(); } }
 async function loaded(page) { await expect(page.locator('.page-footer')).toBeVisible(); }
-async function shot(page,name) { const fullPage = await page.getByRole('dialog').count() === 0; await page.screenshot({path:path.join(out,`${name}.png`),fullPage,animations:'disabled'}); screenshots.push({fullPage,file:`${name}.png`,sourceSha,publicSafe:name.startsWith('synthetic-'),fixtureDisclosure:name.includes('ai-fixture')?'Testanbieter / keine reale Modellanalyse':null,viewport:page.viewportSize(),theme:await page.locator('html').getAttribute('data-theme'),test:currentTest}); }
+async function shot(page,name,section=null) {
+ const fullPage=false,dialog=await page.getByRole('dialog').count()>0;
+ if(!dialog) {
+  await page.locator('.main-content').evaluate(el=>el.scrollTo({top:0,left:0,behavior:'instant'})).catch(()=>{});
+  const target=section || (name.includes('ai-fixture-case')?'.ai-analysis-panel':null);
+  if(target) await page.locator(target).evaluate(el=>el.scrollIntoView({block:'start',behavior:'instant'}));
+ }
+ await page.screenshot({path:path.join(out,`${name}.png`),fullPage,animations:'disabled'});
+ screenshots.push({fullPage,file:`${name}.png`,sourceSha,publicSafe:name.startsWith('synthetic-'),fixtureDisclosure:name.includes('ai-fixture')?'Testanbieter / keine reale Modellanalyse':null,viewport:page.viewportSize(),section:section || (name.includes('ai-fixture-case')?'AI analysis':dialog?'dialog':'top'),contentScrollTop:await page.locator('.main-content').evaluate(el=>el.scrollTop).catch(()=>null),theme:await page.locator('html').getAttribute('data-theme'),locale:await page.locator('html').getAttribute('lang'),test:currentTest});
+}
 async function noOverflow(page) { const size=await page.evaluate(()=>({view:innerWidth,body:document.body.scrollWidth,html:document.documentElement.scrollWidth})); expect(size.body).toBeLessThanOrEqual(size.view+1); expect(size.html).toBeLessThanOrEqual(size.view+1); }
 async function rows(page) { return page.locator('.device-table tbody tr'); }
 try {
  await test('Desktop light overview: real API, provenance, no layout overflow', async()=>{
   const page=await pageAt(); await loaded(page);
   await expect(page.getByRole('heading',{name:'Übersicht',exact:true,level:1})).toBeVisible();
-  await expect(page.locator('.demo-banner')).toContainText('DEMO + SANDBOX');
+  await expect(page.locator('.demo-banner')).toContainText('DEMO + LOKAL');
   await expect(page.locator('.summary-strip button').first()).toContainText(String(data.devices.length));
   await noOverflow(page); await shot(page,'desktop-overview-light');
  });
@@ -98,7 +110,7 @@ try {
   await page.reload(); await loaded(page); await page.getByRole('button',{name:'Gespeicherte Ansicht'}).click(); await expect(page.getByLabel('Nach Betriebssystem filtern')).toHaveValue('macos'); await expect(await rows(page)).toHaveCount(2);
  });
  await test('Source filter and unknown data never become healthy', async()=>{
-  const page=await pageAt('/devices'); await loaded(page); await page.locator('.inventory-tabs button').filter({hasText:'Lokale Sandbox'}).click(); await expect(await rows(page)).toHaveCount(1); await expect((await rows(page)).first()).toContainText('Lokal');
+  const page=await pageAt('/devices'); await loaded(page); await page.locator('.inventory-tabs button').filter({hasText:'Lokale Quellen'}).click(); await expect(await rows(page)).toHaveCount(1); await expect((await rows(page)).first()).toContainText('Lokal');
   const sandbox=data.devices.find(d=>!d.synthetic); expect(sandbox.status).toBe('unknown'); await expect((await rows(page)).first()).toContainText('Unbekannt');
   await page.locator('.device-name-button').click(); await expect(page.getByRole('dialog')).toContainText('Lokale Linux-Umgebung. Messwerte werden nur angezeigt, wenn ein Collector sie geliefert hat.'); await shot(page,'sandbox-provenance');
  });
@@ -127,15 +139,15 @@ try {
   await page.keyboard.press('Escape'); await expect(page.getByRole('dialog')).toHaveCount(0);
  });
  for(const [label,viewport,mobile] of [['desktop',{width:1440,height:1000},false],['mobile',{width:390,height:844},true]]) for(const theme of ['light','dark']) await test(`Synthetic-only gallery ${label} ${theme}`, async()=>{
-  const page=await pageAt('/devices',viewport,{isMobile:mobile,hasTouch:mobile}); await loaded(page);
-  if(theme==='dark') await page.getByRole('button',{name:'Dunkles Design aktivieren'}).click();
-  await page.getByLabel('Nach Betriebssystem filtern').selectOption('windows'); await expect(await rows(page)).toHaveCount(3);
+  const page=await pageAt('/devices',viewport,{isMobile:mobile,hasTouch:mobile,reviewLocale:null}); await loaded(page);
+  if(theme==='dark') await page.getByRole('button',{name:'Switch to dark theme'}).click();
+  await page.getByLabel('Filter by operating system').selectOption('windows'); await expect(await rows(page)).toHaveCount(3);
   // All displayed inventory rows are Windows demo fixtures. Never publish the
   // overview or sandbox screenshots, which can contain the real local sample.
   await shot(page,`synthetic-inventory-${label}-${theme}`);
-  await page.getByRole('button',{name:`${device.name}: Details öffnen`}).click(); await expect(page.getByRole('dialog')).toHaveAttribute('aria-label',`Gerät ${device.name}`);
-  await page.getByRole('tab',{name:/Belege/}).click(); await page.locator('.dialog .evidence-card summary').first().click(); await shot(page,`synthetic-device-${label}-${theme}`);
-  await page.getByRole('tab',{name:'Übersicht',exact:true}).click(); await page.locator('.linked-case').first().click(); await expect(page.locator('.case-detail-header h1')).toHaveText(caseItem.title);
+  await page.getByRole('button',{name:`Open details: ${device.name}`}).click(); await expect(page.getByRole('dialog')).toHaveAttribute('aria-label',`Device ${device.name}`);
+  await page.getByRole('tab',{name:/Evidence/}).click(); await page.locator('.dialog .evidence-card summary').first().click(); await shot(page,`synthetic-device-${label}-${theme}`);
+  await page.getByRole('tab',{name:'Overview',exact:true}).click(); await page.locator('.linked-case').first().click(); await expect(page.locator('.case-detail-header h1')).toHaveText(caseItem.title);
   await page.locator('.evidence-card summary').first().click(); await shot(page,`synthetic-case-${label}-${theme}`);
  });
  await test('Notes: real API, literal XSS payload, single write on repeated click, reload persistence', async()=>{
@@ -165,12 +177,12 @@ try {
   await expect(page.locator('.case-detail-header h1')).toHaveText(nextCase.title); await expect(page).toHaveURL(new RegExp(nextCase.id));
  });
  await test('First-load API failure shows explicit error without fake data; retry recovers', async()=>{
-  const context=await browser.newContext({viewport:{width:1440,height:1000}}); allPages.add(context); const page=await context.newPage(); page.on('pageerror',error=>runtimeErrors.push({test:currentTest,message:error.message})); await page.route('**/api/overview',route=>route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({error:{message:'Controlled manager unavailable'}})}));
+  const context=await browser.newContext({viewport:{width:1440,height:1000}}); allPages.add(context); await context.addInitScript(()=>localStorage.setItem('tracebolt.locale','de')); const page=await context.newPage(); page.on('pageerror',error=>runtimeErrors.push({test:currentTest,message:error.message})); await page.route('**/api/overview',route=>route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({error:{message:'Controlled manager unavailable'}})}));
   await page.goto(`${base}/#/overview`); await expect(page.getByRole('alert')).toContainText('Keine Verbindung'); await expect(page.getByRole('alert')).toContainText('keine Ersatz-Demodaten'); await expect(page.locator('.device-table')).toHaveCount(0); await shot(page,'desktop-api-error');
   await page.unroute('**/api/overview'); await page.getByRole('button',{name:'Erneut versuchen'}).click(); await loaded(page);
  });
  await test('Loading state is visible and refreshing error keeps stale data labeled', async()=>{
-  const context=await browser.newContext({viewport:{width:1440,height:1000}}); allPages.add(context); const page=await context.newPage(); page.on('pageerror',error=>runtimeErrors.push({test:currentTest,message:error.message}));
+  const context=await browser.newContext({viewport:{width:1440,height:1000}}); allPages.add(context); await context.addInitScript(()=>localStorage.setItem('tracebolt.locale','de')); const page=await context.newPage(); page.on('pageerror',error=>runtimeErrors.push({test:currentTest,message:error.message}));
   let release; const gate=new Promise(r=>release=r); await page.route('**/api/overview',async route=>{await gate; await route.continue();}); await page.goto(`${base}/#/overview`); await expect(page.getByRole('status')).toContainText('geladen'); await shot(page,'desktop-loading'); release(); await loaded(page); await page.unroute('**/api/overview');
   await page.route('**/api/overview',route=>route.abort('failed')); await page.getByRole('button',{name:'Aktualisieren',exact:true}).click(); await expect(page.getByRole('alert')).toContainText('letzten erfolgreichen Abruf'); await expect(page.locator('.device-table')).toBeVisible(); await expect(page.locator('.page-footer')).toContainText('Letzter erfolgreicher Abruf');
  });
@@ -198,6 +210,7 @@ try {
  await test('Settings states capability boundary without claiming native OS support', async()=>{
   const page=await pageAt('/settings'); await loaded(page); await expect(page.getByRole('heading',{name:'Einstellungen',exact:true,level:1})).toBeVisible(); await expect(page.locator('.setting-row').filter({has:page.getByText('Manager',{exact:true})})).toContainText(`127.0.0.1:${port}`); await expect(page.locator('.main-content')).toContainText('Windows'); await expect(page.locator('.main-content')).toContainText('macOS'); await shot(page,'desktop-settings');
  });
+ await runShellReview({test,pageAt,loaded,shot,expect,caseItem,cleanCase:data.cases.find(c=>c.deviceId==='demo-linux-01')});
  if(process.env.TRACEBOLT_REVIEW_AI==='1') await runAIReview({test,pageAt,loaded,shot,base,data,expect,restartManager:async()=>{await stop();start();await ready();}});
 } finally {
  await browser.close(); await stop(); await log.close();

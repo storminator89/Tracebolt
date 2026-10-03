@@ -4,7 +4,7 @@ Date: 2026-10-03. Scope: `internal/analysis`, the AI configuration/analyze route
 
 ## Current result
 
-Source, component, and fake-provider checks pass. No real API key was used and no external model service was called. The new AI browser flow still needs its own exact-source Chromium result; the earlier 25-scenario baseline browser result must not be reused as AI end-to-end evidence.
+Source, component, and fake-provider checks pass. No real API key was used and no external model service was called. All eight AI Chromium scenarios passed on source `51c93f6f655102c25b25737c25da581b3ddd5c0f`, using fake providers only. The complete corrected-selector browser run passed 34/34 scenarios with zero runtime errors. [Exact CI run](https://github.com/storminator89/Tracebolt/actions/runs/37135116303). This evidence covers the frozen localhost AI/managed-preview slice; later LAN authentication and mTLS changes are separate.
 
 ## Boundaries implemented
 
@@ -43,6 +43,6 @@ All provider test keys are visibly synthetic and test-only. The HTTP harness cre
 ## Remaining limits and gates
 
 - Real-provider compatibility, model availability, latency, cost and diagnostic usefulness are untested. A model identifier is configured provenance, not verification of model weights or retention practices.
-- The new browser flow requires an exact-source end-to-end result. Component tests alone do not establish browser behavior.
+- The eight AI browser scenarios passed on the pinned source above, including zero save-time calls, explicit consent/cancel, one request after repeated approval, delayed-result cancellation, invalid output, mobile layout and memory reset on restart. The complete 34-scenario run also passed. This does not cover later LAN authentication or mTLS source.
 - Before recurring analysis or log scanning, review collection sources, retention, sensitive-text handling, destination approval, cadence/cost limits and failure behavior separately. The manual-case flow does not authorize broader raw-log transmission.
 - The localhost guard is still not operator authentication or multi-user isolation. Production use needs authenticated roles/sessions, agent identity/enrollment, protected secrets and audit logs, transport security and an independent deployment review.

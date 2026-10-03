@@ -50,7 +50,7 @@ jobs:
 
   backend:
     name: Go tests and build-only platform checks
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -103,7 +103,7 @@ jobs:
 
   frontend:
     name: UI types, tests and production build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     defaults:
       run:
@@ -131,7 +131,7 @@ jobs:
   browser:
     name: Same-origin browser acceptance and screenshots
     needs: [frontend]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -161,6 +161,11 @@ jobs:
         env:
           TRACEBOLT_SOURCE_SHA: ${{ github.sha }}
         run: node tests/e2e-review/managed-preview.mjs
+      - name: Authenticated HTTP-test UI, language and warning checks
+        if: ${{ !cancelled() }}
+        env:
+          TRACEBOLT_SOURCE_SHA: ${{ github.sha }}
+        run: node tests/e2e-review/lan-browser.mjs
       - name: Keep browser review evidence briefly
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -171,5 +176,30 @@ jobs:
             artifacts/review/results.json
             artifacts/review/screenshot-manifest.json
             artifacts/review/managed-preview-result.json
+            artifacts/review/lan-browser-results.json
+            artifacts/review/lan-browser-manifest.json
           if-no-files-found: warn
           retention-days: 3
+
+  container:
+    name: Linux manager container lifecycle (TLS and HTTP test)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Build local Linux image without registry publication
+        run: docker build --tag tracebolt-manager:ci .
+      - name: Exercise both disposable container profiles
+        run: |
+          if ! TRACEBOLT_CONTAINER_IMAGE=tracebolt-manager:ci go test -count=1 -v ./tests/container > "$RUNNER_TEMP/container-tests.log" 2>&1; then
+            echo 'FAIL: container lifecycle; fixture material and raw logs withheld.'
+            sed -nE 's/^--- FAIL: (Test[A-Za-z0-9_]+) .*/FAIL: \1/p' "$RUNNER_TEMP/container-tests.log"
+            exit 1
+          fi
+          echo 'PASS: TLS and explicit HTTP-test container lifecycle, durable approval/replay/revocation and nonroot runtime.'

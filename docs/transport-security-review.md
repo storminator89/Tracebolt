@@ -4,7 +4,7 @@ Date: 2026-10-03. Scope: `internal/telemetry`, `cmd/dev-agent`, guarded developm
 
 ## Result
 
-Source review, independent race tests and real local process/API checks pass. The reviewer independently ran two separate Linux dev-agent deliveries and verified default-off behavior, guard enforcement, replay rejection and timestamp expiry without manager fallback. The transport owner's real two-minute expiry artifact was also inspected. New UI/browser coverage must be tied to the exact source tested; earlier browser results do not implicitly cover this mode.
+Source review, independent race tests and real local process/API checks pass. The reviewer independently ran two separate Linux dev-agent deliveries and verified default-off behavior, guard enforcement, replay rejection and timestamp expiry without manager fallback. The transport owner's real two-minute expiry artifact was also inspected. The exact-source managed-preview Chromium flow also passed 6/6 checks with zero runtime errors on `51c93f6f655102c25b25737c25da581b3ddd5c0f`. The associated corrected-selector general browser run passed 34/34 scenarios with zero runtime errors. [Exact CI run](https://github.com/storminator89/Tracebolt/actions/runs/37135116303). Later LAN authentication and mTLS changes are separate and are not covered by this gate.
 
 ## Verified protections and limits
 
@@ -35,3 +35,7 @@ Source review, independent race tests and real local process/API checks pass. Th
 - Frontend typecheck/build and all **56 component/unit tests** passed independently. Zero/unset operational timestamps display unknown instead of a fabricated year-one date/age. Labels describe a local source rather than treating an awaiting placeholder as delivered telemetry.
 
 A valid bundle and successful receipt do not prove machine identity or trustworthy authorship. Production transport requires separately reviewed authentication, enrollment/revocation, durable replay/audit controls, signing/distribution, availability limits and native lifecycle testing.
+
+## Managed-preview browser evidence
+
+The inspected pinned-source artifact confirms awaiting/unknown values without a year-one date, actual separate Linux sender delivery, UI values and provenance matching the manager, and real two-minute expiry with unchanged timestamps and stale/unknown presentation. All six checks passed. It explicitly records that telemetry was not exported and no screenshots of those real observations were captured. This does not establish Windows/macOS transport or production fleet support.

@@ -2,6 +2,8 @@
 build:
 	go build -buildvcs=false -trimpath -o bin/manager ./cmd/manager
 	go build -buildvcs=false -trimpath -o bin/agent ./cmd/agent
+	go build -buildvcs=false -trimpath -o bin/dev-agent ./cmd/dev-agent
+	go build -buildvcs=false -trimpath -o bin/lan-manager ./cmd/lan-manager
 test:
 	go test -race ./...
 web:

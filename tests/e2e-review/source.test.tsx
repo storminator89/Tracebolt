@@ -8,7 +8,9 @@ const metric={value:25,unit:'%',quality:'healthy',source:'synthetic-fixture',col
 const device={id:'review-device',name:'REVIEW-DEMO',platform:'windows',os:'Windows demo',site:'Synthetic',group:'Review',ip:null,status:'critical',source:'synthetic',synthetic:true,lastSeen:at,agentVersion:'demo',cpu:metric,memory:metric,disk:metric,uptime:'demo',tags:[],capabilities:[],evidence:[],trend:[],caseIds:[]};
 const overview={product:'Tracebolt',mode:'local-development',generatedAt:at,devices:[device],cases:[],activity:[],stats:{totalDevices:1,healthyDevices:0,attentionDevices:1,unknownDevices:0,openCases:0,criticalCases:0}};
 const response=(body:any,status=200)=>Promise.resolve(new Response(JSON.stringify(body),{status,headers:{'Content-Type':'application/json'}}));
-beforeEach(()=>{localStorage.clear();location.hash='/devices';vi.stubGlobal('fetch',vi.fn(()=>response(overview)));});
+const devSession={mode:'development',authenticationRequired:false,authenticated:false,csrfToken:'fixture-csrf',serverNow:at,expiresAt:null,expiresInSeconds:null,transport:'http',insecureTestMode:false,transportWarning:null};
+const fetchMock=(handler:any)=>vi.fn((url:any,...args:any[])=>String(url).endsWith('/auth/session')?response(devSession):handler(url,...args));
+beforeEach(()=>{localStorage.clear();location.hash='/devices';vi.stubGlobal('fetch',fetchMock(()=>response(overview)));});
 afterEach(()=>{cleanup();vi.unstubAllGlobals();});
 describe('Independent source/DOM regressions',()=>{
  it('combined attention retains critical and attention while excluding unknown',()=>{
@@ -19,10 +21,10 @@ describe('Independent source/DOM regressions',()=>{
  it('CSV neutralizes formula starters and quote escaping',()=>{for(const value of ['=1+1','+1','-1','@SUM(A1)','  =1','\t=1']) expect(csvCell(value).startsWith('"\'')).toBe(true);expect(csvCell('a"b')).toBe('"a""b"');});
  it('notes count UTF-8 bytes explicitly',()=>{expect(noteBytes('é😀')).toBe(6);});
  it('skip-to-content preserves inventory route and moves DOM focus',async()=>{render(<App/>);await screen.findByRole('heading',{name:'Geräte',exact:true,level:1});fireEvent.click(screen.getByRole('link',{name:'Zum Inhalt'}));expect(location.hash).toBe('#/devices');expect(document.activeElement?.id).toBe('main-content');});
- it('initial API failure presents explicit failure with no fake inventory',async()=>{vi.stubGlobal('fetch',vi.fn(()=>response({error:{message:'controlled unavailable'}},503)));render(<App/>);expect(await screen.findByRole('alert')).toHaveTextContent('keine Ersatz-Demodaten');expect(screen.queryByText('REVIEW-DEMO')).toBeNull();});
- it('literal name markup is never interpreted as HTML',async()=>{const payload='<img src=x onerror="window.reviewXss=1">';vi.stubGlobal('fetch',vi.fn(()=>response({...overview,devices:[{...device,name:payload}]})));const {container}=render(<App/>);expect(await screen.findByText(payload)).toBeInTheDocument();expect(container.querySelector('img')).toBeNull();});
+ it('initial API failure presents explicit failure with no fake inventory',async()=>{vi.stubGlobal('fetch',fetchMock(()=>response({error:{message:'controlled unavailable'}},503)));render(<App/>);expect(await screen.findByRole('alert')).toHaveTextContent('keine Ersatz-Demodaten');expect(screen.queryByText('REVIEW-DEMO')).toBeNull();});
+ it('literal name markup is never interpreted as HTML',async()=>{const payload='<img src=x onerror="window.reviewXss=1">';vi.stubGlobal('fetch',fetchMock(()=>response({...overview,devices:[{...device,name:payload}]})));const {container}=render(<App/>);expect(await screen.findByText(payload)).toBeInTheDocument();expect(container.querySelector('img')).toBeNull();});
  it('shortcuts invoked from a device dialog do not let Escape close both layers',async()=>{
-  vi.stubGlobal('fetch',vi.fn((url:string)=>response(url.includes('/devices/')?device:overview)));
+  vi.stubGlobal('fetch',fetchMock((url:string)=>response(url.includes('/devices/')?device:overview)));
   render(<App/>);await screen.findByRole('heading',{name:'Geräte',exact:true,level:1});fireEvent.click(screen.getByRole('button',{name:'REVIEW-DEMO: Details öffnen'}));await screen.findByRole('dialog',{name:'Gerät REVIEW-DEMO'});
   fireEvent.keyDown(window,{key:'?'});
   if(screen.queryByRole('dialog',{name:'Tastenkürzel'})) {

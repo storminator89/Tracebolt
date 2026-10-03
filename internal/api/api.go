@@ -26,14 +26,17 @@ import (
 )
 
 type Server struct {
-	store          *store.Store
-	port           int
-	web            string
-	csrf           string
-	mu             sync.RWMutex
-	sample         model.Device
-	ai             *aiState
-	managedPreview *telemetry.State
+	store            *store.Store
+	port             int
+	web              string
+	csrf             string
+	mu               sync.RWMutex
+	sample           model.Device
+	ai               *aiState
+	managedPreview   *telemetry.State
+	lanOnly          bool
+	insecureHTTPTest bool
+	lanDevices       func() ([]model.Device, error)
 }
 
 func New(s *store.Store, port int, web string, sample model.Device) (*Server, error) {
@@ -80,6 +83,13 @@ func fail(w http.ResponseWriter, status int, code, message string) {
 	write(w, status, map[string]any{"error": map[string]string{"code": code, "message": message}})
 }
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	s.mu.RLock()
+	lanOnly := s.lanOnly
+	s.mu.RUnlock()
+	if lanOnly {
+		fail(w, 403, "operator_boundary_required", "Use the authenticated TLS operator surface.")
+		return
+	}
 	h := w.Header()
 	h.Set("X-Content-Type-Options", "nosniff")
 	h.Set("X-Frame-Options", "DENY")
@@ -139,6 +149,12 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	s.static(w, r)
 }
 func (s *Server) devices() ([]model.Device, error) {
+	s.mu.RLock()
+	provider := s.lanDevices
+	s.mu.RUnlock()
+	if provider != nil {
+		return provider()
+	}
 	ds, err := s.store.Devices()
 	if err != nil {
 		return nil, err
@@ -168,15 +184,21 @@ func (s *Server) api(w http.ResponseWriter, r *http.Request) {
 	case "/api/dev/telemetry/status":
 		s.telemetryStatus(w)
 		return
+	case "/api/auth/session":
+		write(w, 200, s.developmentAuthView())
+		return
 	case "/api/ai/config":
 		s.aiConfig(w)
 		return
 	case "/api/health":
-		write(w, 200, map[string]any{"status": "ok", "version": model.Version, "mode": "local-development"})
+		write(w, 200, map[string]any{"status": "ok", "version": model.Version, "mode": s.mode()})
 	case "/api/session":
-		write(w, 200, map[string]string{"csrfToken": s.csrf})
+		write(w, 200, map[string]string{"csrfToken": s.requiredCSRF(r)})
 	case "/api/capabilities":
-		write(w, 200, map[string]any{"mode": "local-development", "version": model.Version, "syntheticFleet": true, "realCollector": s.collectorDescription(), "remoteEnrollment": false, "shellExecution": false, "aiConnected": false, "aiConfigured": s.aiConfigured(), "managedPreview": s.managedPreviewEnabled(), "persistence": "SQLite", "limitations": []string{"Loopback-only development app; no production authentication or fleet enrollment.", "Seven synthetic devices are examples, not enrolled customer endpoints.", "The live Linux sample has sandbox scope and incomplete host visibility.", "Windows and macOS have limited native adapters with fixture and cross-build checks only; target-machine acceptance remains unverified.", "No systemd, journal, service, software, update or vulnerability assessment is performed on the sandbox.", "Deterministic rules produce demo findings. Optional AI is configured separately and called only for an explicit case analysis; saved settings do not verify a connection.", "Runbooks are read-only guidance. No remote shell, jobs or remediation are available.", "SQLite state is local and not encrypted; protect your operating-system account and workspace.", "Metric quality healthy means observation validity; it does not mean the endpoint or metric is healthy."}})
+		if s.lanCapabilities(w) {
+			return
+		}
+		write(w, 200, map[string]any{"mode": s.mode(), "version": model.Version, "syntheticFleet": true, "realCollector": s.collectorDescription(), "remoteEnrollment": false, "shellExecution": false, "aiConnected": false, "aiConfigured": s.aiConfigured(), "managedPreview": s.managedPreviewEnabled(), "persistence": "SQLite", "limitations": []string{"Loopback-only development app; no production authentication or fleet enrollment.", "Seven synthetic devices are examples, not enrolled customer endpoints.", "The live Linux sample has sandbox scope and incomplete host visibility.", "Windows and macOS have limited native adapters with fixture and cross-build checks only; target-machine acceptance remains unverified.", "No systemd, journal, service, software, update or vulnerability assessment is performed on the sandbox.", "Deterministic rules produce demo findings. Optional AI is configured separately and called only for an explicit case analysis; saved settings do not verify a connection.", "Runbooks are read-only guidance. No remote shell, jobs or remediation are available.", "SQLite state is local and not encrypted; protect your operating-system account and workspace.", "Metric quality healthy means observation validity; it does not mean the endpoint or metric is healthy."}})
 	case "/api/devices":
 		ds, e := s.devices()
 		if e != nil {
@@ -230,7 +252,7 @@ func (s *Server) api(w http.ResponseWriter, r *http.Request) {
 		if len(activity) > 12 {
 			activity = activity[:12]
 		}
-		write(w, 200, model.Overview{Product: "Tracebolt", Mode: "local-development", GeneratedAt: time.Now().UTC(), Stats: stats, Devices: ds, Cases: cs, Activity: activity})
+		write(w, 200, model.Overview{Product: "Tracebolt", Mode: s.mode(), GeneratedAt: time.Now().UTC(), Stats: stats, Devices: ds, Cases: cs, Activity: activity})
 	default:
 		if strings.HasPrefix(p, "/api/devices/") {
 			id := strings.TrimPrefix(p, "/api/devices/")
@@ -278,7 +300,7 @@ func validID(s string) bool {
 		return false
 	}
 	for _, r := range s {
-		if !(r >= 'a' && r <= 'z' || r >= '0' && r <= '9' || r == '-') {
+		if !(r >= 'a' && r <= 'z' || r >= '0' && r <= '9' || r == '-' || r == '_') {
 			return false
 		}
 	}
@@ -324,12 +346,12 @@ func oneField(body []byte, key string) (string, error) {
 	return value, nil
 }
 func (s *Server) mutation(w http.ResponseWriter, r *http.Request) {
-	if r.Header.Get("Origin") != "http://"+r.Host {
+	if r.Header.Get("Origin") != s.requiredOrigin(r) {
 		fail(w, 403, "origin_required", "Same-origin header is required for local changes.")
 		return
 	}
 	tokens := r.Header.Values("X-CSRF-Token")
-	if len(tokens) != 1 || subtle.ConstantTimeCompare([]byte(tokens[0]), []byte(s.csrf)) != 1 {
+	if len(tokens) != 1 || subtle.ConstantTimeCompare([]byte(tokens[0]), []byte(s.requiredCSRF(r))) != 1 {
 		fail(w, 403, "csrf_required", "A current CSRF token is required.")
 		return
 	}
@@ -372,7 +394,16 @@ func (s *Server) mutation(w http.ResponseWriter, r *http.Request) {
 		fail(w, 400, "invalid_status", "Status must be open, investigating or resolved.")
 		return
 	}
+	if !operatorStillActive(w, r) {
+		return
+	}
+	release, ok := beginOperatorMutation(w, r)
+	if !ok {
+		return
+	}
+	defer release()
 	c, e := s.store.Mutate(parts[2], kind, value)
+	release()
 	if errors.Is(e, store.ErrNotFound) {
 		fail(w, 404, "not_found", "Case not found.")
 		return
@@ -385,6 +416,7 @@ func (s *Server) mutation(w http.ResponseWriter, r *http.Request) {
 		s.internal(w)
 		return
 	}
+	release()
 	write(w, 200, c)
 }
 func (s *Server) static(w http.ResponseWriter, r *http.Request) {

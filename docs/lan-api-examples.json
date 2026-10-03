@@ -1,0 +1,54 @@
+{
+  "scope": "Contract fixture only; no real endpoint or observation.",
+  "approvedAwaitingObservation": {
+    "id": "agent_00000000000000000000000000000001",
+    "name": "Fixture workstation",
+    "platform": "unknown",
+    "os": "Awaiting agent",
+    "site": "Local network",
+    "group": "Managed devices",
+    "ip": null,
+    "status": "unknown",
+    "source": "lan",
+    "synthetic": false,
+    "lastSeen": "0001-01-01T00:00:00Z",
+    "agentVersion": "unknown",
+    "cpu": {
+      "value": null,
+      "unit": "%",
+      "quality": "unknown",
+      "source": "Awaiting authenticated agent observation",
+      "collectedAt": "0001-01-01T00:00:00Z"
+    },
+    "memory": {
+      "value": null,
+      "unit": "%",
+      "quality": "unknown",
+      "source": "Awaiting authenticated agent observation",
+      "collectedAt": "0001-01-01T00:00:00Z"
+    },
+    "disk": {
+      "value": null,
+      "unit": "%",
+      "quality": "unknown",
+      "source": "Awaiting authenticated agent observation",
+      "collectedAt": "0001-01-01T00:00:00Z"
+    },
+    "uptime": "Unknown",
+    "tags": [
+      "lan",
+      "read-only"
+    ],
+    "capabilities": [
+      {
+        "id": "agent_identity",
+        "name": "Agent certificate identity",
+        "status": "supported",
+        "detail": "Manually approved certificate; identity is assigned by this manager. This does not establish overall device health."
+      }
+    ],
+    "evidence": [],
+    "trend": [],
+    "caseIds": []
+  }
+}

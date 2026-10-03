@@ -2,17 +2,15 @@
 
 Evidence-first endpoint diagnostics, built for a self-hosted future.
 
-Tracebolt is an early, local-only development prototype. It combines a React investigation interface, a Go manager, durable SQLite case notes and status, deterministic diagnostic rules, seven explicitly synthetic demo devices, and bounded read-only collectors. Windows and macOS adapters are implemented previews. Read-only CLI smoke has passed on standard hosted native runners; broader endpoint acceptance remains unverified.
+Tracebolt is an early self-hosted diagnostics prototype with a React interface, a Go manager, evidence-linked investigations and bounded native collectors. The development manager provides synthetic demonstrations. A separate single-operator LAN manager implements authenticated operator access and manually approved agent ingress; its new browser and container gates remain commit-specific CI checks.
 
-**Do not expose this prototype to a network or use it to manage customer endpoints.** It has no operator authentication, enrolled endpoint identity, production audit trail, or remote execution capability.
+**This is a development pilot, not a production release.** Real LAN deployment, installed agent services, certificate provisioning, production audit/backup controls and fleet-scale acceptance remain open. Do not expose the loopback development manager to a network.
 
 ## Screenshots
 
-Real Chromium captures with synthetic demo data. [View the desktop/mobile, light/dark gallery and capture provenance](docs/screenshots/2026-10-03-ui-preview/README.md).
+The [historical desktop/mobile gallery](docs/screenshots/2026-10-03-ui-preview/README.md) contains original synthetic-data Chromium captures from its explicitly identified earlier source. The current English-default interface and viewport-bounded scroll layout require fresh exact-source captures; historical screenshots are not evidence for the new LAN interface.
 
-![Tracebolt investigation, light theme, synthetic demo case](docs/screenshots/2026-10-03-ui-preview/synthetic-case-desktop-light.png)
-
-## Run locally
+## Run the local development demo
 
 Requirements: Go 1.27.1 (the version in `go.mod`), Node.js 24 with npm, a C toolchain for race-detector tests, and `make`. Python 3 and curl are used by boundary regressions. No database server or container runtime is required.
 
@@ -52,11 +50,12 @@ It does not contact a server, enroll a device, execute commands, or install a se
 ./bin/agent --support-bundle > support-bundle.json
 ```
 
-This writes local stdout only, capped at 64 KiB. Review the file before sharing it; no upload endpoint exists. See the [support bundle contract](docs/support-bundle.md).
+This writes local stdout only, capped at 64 KiB. Review the file before sharing it; this command does not upload it. See the [support bundle contract](docs/support-bundle.md).
 
 ## Investigation interface
 
-- Light and dark themes, desktop and narrow-screen layouts
+- English by default with a persisted German language switch
+- Light and dark themes, desktop and narrow-screen layouts with independently scrolling content
 - Searchable inventory with OS, status and source filters, sorting, saved local views, and CSV export
 - Device details with collection provenance, capability boundaries, and expandable evidence
 - Case investigations with read-only next steps, durable notes, and status transitions
@@ -64,6 +63,22 @@ This writes local stdout only, capped at 64 KiB. Review the file before sharing 
 - Keyboard navigation, focus-contained device dialogs, and Back/Forward navigation
 
 The interface uses the real local API. Browser acceptance and screenshots are produced by the same-origin Playwright workflow; inspect the exact commit's CI outcome rather than assuming every rendered state has passed.
+
+## Separate LAN manager and Docker packaging
+
+`make build` also builds `bin/lan-manager`. It starts only with an explicit protected configuration:
+
+```sh
+./bin/lan-manager --lan-config /absolute/path/lan.json
+```
+
+Read the [LAN runtime contract](docs/lan-runtime.md) before providing configuration. The default TLS profile uses separate operator HTTPS and agent mTLS listeners, a preprovided operator password verifier, bounded sessions/CSRF, manual public-leaf approval and durable replay/revocation state. The LAN runtime starts without demo devices or fallback host sampling. Approved agents awaiting their first observation remain unknown. Current diagnostics do not turn synthetic demo rules into real LAN findings.
+
+An explicitly enabled [HTTP test profile](docs/signed-http-test.md) uses separate disposable authentication/state and signed telemetry. **HTTP exposes operator passwords, sessions and telemetry on the network; signatures do not encrypt them or authenticate the browser UI.** A permanent warning is shown before and after login. Use this only for deliberate isolated testing with test-only material.
+
+[Docker packaging and Compose examples](docs/docker.md) provide an optional Linux server route. The image runs as a fixed nonroot user with a read-only root filesystem and dropped capabilities. Endpoint collectors remain native. CI builds a local image and exercises both disposable profiles on a standard Linux runner; check this commit's actual outcome before treating container execution as verified. No registry publication or real deployment is part of the workflow.
+
+Current sender helpers and fixture runtime tests do not provide an installed or continuously scheduled native agent. Certificate issuance, trusted browser TLS setup and real endpoint provisioning are separate work.
 
 ## Optional previews
 
@@ -99,16 +114,20 @@ For browser acceptance locally, install Chromium with `cd web && npx playwright 
 
 ## Security boundary
 
-The manager combines a fixed loopback listener, loopback peer check, exact Host and Origin checks, mutation CSRF tokens, no CORS, bounded request bodies, and canonical paths. These reduce common browser-to-local-service attacks, but they are not user authentication. Other processes or users able to reach the loopback service can access its local data. Never reverse-proxy, tunnel, or publish the manager.
+The development manager combines a fixed loopback listener, loopback peer check, exact Host and Origin checks, mutation CSRF tokens, no CORS, bounded request bodies, and canonical paths. These reduce common browser-to-local-service attacks, but they are not user authentication. Other processes or users able to reach the loopback service can access its local data. Never reverse-proxy, tunnel, or publish the manager.
 
 Case notes are local text. Runbooks are read-only suggestions. There is no arbitrary shell, remote control, privileged remediation, network scan, patch installation, or automatic update path.
 
-Before any network-exposed pilot: authenticated operators and endpoints, revocation, roles, protected audit records, signed agent distribution, retention controls, native OS acceptance tests, and an independent deployment review are required.
+The separate LAN implementation adds operator sessions, approved endpoint identity and revocation. Its [targeted security review](docs/lan-security-review.md) records exact verification and remaining gates. Protected audit records, multi-operator roles, signed agent distribution, retention/backup controls, native service acceptance and a deployment review are still required before production use. The current dependency review found no reachable or imported-package advisory, but records an unused OpenPGP advisory in a required module; it is not a blanket advisory-free claim.
 
 ## Project map
 
 - `cmd/manager`: loopback development manager
 - `cmd/agent`: single-sample, read-only collector command
+- `cmd/dev-agent`: one-shot loopback development sender
+- `cmd/lan-manager`: separate explicitly configured operator/agent runtime
+- `internal/operatorauth`, `lantrust`, `lanstore`, `signedhttp`: session, identity, replay and transport boundaries
+- `tests/container`: opt-in disposable TLS/HTTP-test lifecycle checks
 - `internal/api`: request boundaries and API handlers
 - `internal/collector`: bounded local observations and platform adapters
 - `internal/store`: SQLite persistence
@@ -119,6 +138,7 @@ Before any network-exposed pilot: authenticated operators and endpoints, revocat
 - `internal/fixtures` and `internal/rules`: synthetic scenarios and deterministic findings
 - [API contract](docs/api-contract.json)
 - [Product scope and release gates](docs/product-plan.md)
+- [Research-backed MVP priorities](docs/competitor-mvp-priorities.md)
 - [Scoped security review and verification](docs/security-review.md)
 
 ## License

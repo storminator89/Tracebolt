@@ -1,0 +1,88 @@
+{
+  "version": "tracebolt.operator-auth.v1",
+  "scope": "Code/test-only LAN pilot; no deployment or credential provisioning performed.",
+  "routes": {
+    "GET /api/auth/session": {
+      "mode": "development|lan",
+      "authenticationRequired": true,
+      "authenticated": false,
+      "csrfToken": null,
+      "serverNow": "RFC3339",
+      "expiresAt": null,
+      "expiresInSeconds": null,
+      "transport": "http|https",
+      "insecureTestMode": false,
+      "transportWarning": null
+    },
+    "POST /api/auth/login": {
+      "body": {
+        "password": "12..1024 UTF-8 bytes; never persisted or logged"
+      },
+      "requirements": "Dedicated LAN operator surface. TLS by default; explicit HTTP-test profile only with independent test auth/state. Exact configured Origin/Host, application/json, <=4096 raw bytes; no pre-login CSRF token needed. No CORS.",
+      "response": "Session view above, authenticated=true, per-session csrfToken, expiresAt and expiresInSeconds.",
+      "cookie": "TLS: __Host-tracebolt-session, Secure, HttpOnly, SameSite=Strict, Path=/, no Domain. HTTP test: tracebolt-http-test-session, same properties except Secure=false. Token only in Set-Cookie, never JSON.",
+      "semantics": "Existing cookie session revoked on successful login; session and CSRF both rotate. Default absolute expiry30min, no silent sliding extension."
+    },
+    "POST /api/auth/logout": {
+      "body": {},
+      "requirements": "Authenticated profile-specific cookie + per-session X-CSRF-Token + exact configured Origin/Host + application/json.",
+      "response": "Unauthenticated LAN session view; cookie cleared with matching __Host attributes.",
+      "semantics": "Revokes this session and cancels its active analysis. All concurrent logout calls wait for already admitted short mutations to drain; new mutations are denied. No auth mutex/lease is held during provider network calls. No automatic replay after reauthentication."
+    },
+    "GET /api/session": "Compatibility endpoint: development returns existing process CSRF; LAN requires authentication and returns the current session CSRF.",
+    "GET /api/lan/agents": "Authenticated operator: public certificate approval registry; never private keys.",
+    "POST /api/lan/agents/approve": {
+      "body": {
+        "certificatePEM": "bounded public client leaf and optional intermediate certificates only",
+        "label": "1..120 UTF-8 bytes",
+        "expectedFingerprintSHA256": "exact lowercase leaf SHA256 from an independently checked source"
+      },
+      "requirements": "Authenticated session mutation lease + exact Origin/CSRF + strict JSON <=65536 bytes; registry validates chain, role, expiry and key strength. HTTP test transport accepts Ed25519 leaf keys directly issued by configured roots."
+    },
+    "POST /api/lan/agents/{id}/revoke": {
+      "body": {},
+      "requirements": "Same authenticated mutation boundary; durable tombstone; later telemetry commits rejected."
+    }
+  },
+  "modeBehavior": {
+    "development": "Existing loopback-only guard remains unchanged. GET auth/session explicitly says authenticationRequired=false, authenticated=false, csrfToken=current process token, expiry=null. No fake authentication. Login/logout routes are disabled.",
+    "lan": "Dedicated authenticated operator handler. Unauthenticated auth/session is200, protected APIs401. Static assets may load without data. Actual TLS required in the default profile, never inferred from forwarded headers. HTTP test accepts plaintext only, has its own cookie/state/auth profile and permanent warning. Developer ingress is unavailable in either profile."
+  },
+  "errors": {
+    "400": "invalid typed or duplicate-key body",
+    "401": "invalid_credentials or authentication_required; response never echoes password",
+    "403": "wrong Origin/Host/CSRF or insecure transport",
+    "404": "developer route unavailable on LAN",
+    "409": "existing data/config conflicts unchanged",
+    "413": "body cap",
+    "415": "JSON content type required",
+    "429": "bounded login rate exceeded",
+    "503": "bounded authentication workload/session capacity"
+  },
+  "uiRules": [
+    "Bootstrap failure must fail closed; never guess authentication is disabled.",
+    "Protected401 clears visible app data, pending requests, API-key/password drafts and CSRF cache before showing sign-in. Do not replay the interrupted write after login.",
+    "Use serverNow/expiresInSeconds for display; backend expiry remains authoritative.",
+    "Clear password input when submitting; never persist secrets in browser storage or repopulate from responses.",
+    "Render logout as a real CSRF-protected POST; abort and clear session-owned UI state.",
+    "Configured LAN mode is not deployment evidence. Tests use temporary loopback TLS fixtures only.",
+    "Show a permanent localized plaintext credentials/data and server-impersonation warning on sign-in and throughout the app when insecureTestMode=true."
+  ],
+  "transportMetadata": {
+    "development": {
+      "transport": "http",
+      "insecureTestMode": false,
+      "transportWarning": null
+    },
+    "tls": {
+      "transport": "https",
+      "insecureTestMode": false,
+      "transportWarning": null
+    },
+    "http-test": {
+      "transport": "http",
+      "insecureTestMode": true,
+      "transportWarning": "unencrypted_lan_test"
+    }
+  }
+}

@@ -18,7 +18,7 @@ The runner:
 - Terminates the manager and removes the disposable database even if a test fails.
 - Never uses the default `.local/state.db`, connects enrolled customer devices, shares telemetry externally, publishes, or executes suggested runbooks.
 
-Only screenshots prefixed `synthetic-` are approved for a public gallery: they show Windows demo inventory, a demo device, or a demo case. The other review screenshots can include real sandbox metrics and must remain local.
+Only screenshots prefixed `synthetic-` are eligible for a public gallery after independent pixel review: they show Windows demo inventory, a demo device, or a demo case. The other review screenshots can include real sandbox metrics and must remain local.
 
 Desktop viewport: 1440×1000. Mobile emulation: 390×844. This is responsive Chromium testing, not real mobile-device, Windows, or macOS native-agent validation.
 
@@ -41,3 +41,21 @@ This adds eight scenarios against a deterministic in-process loopback fixture pr
 Run `node tests/e2e-review/managed-preview.mjs` in a separate job after building the frontend and installing the pinned Playwright browser. It builds the real manager and one-shot Linux dev-agent, observes awaiting→accepted→stale with actual two-minute expiry, compares rendered values and provenance with the actual manager, and verifies seven demos remain separate.
 
 Only `artifacts/review/managed-preview-result.json` is suitable for upload. It contains bounded pass/fail metadata, no metric values, receipts, logs, database or screenshots. The runner deliberately captures no screenshots. This is a loopback development preview, not production enrollment or sender authentication.
+
+## English, German and bounded viewport shell
+
+The coherent LAN/i18n source runs 32 baseline/shell scenarios, or 40 with the eight AI scenarios enabled. Existing regression paths explicitly select German. Primary synthetic inventory, device and case gallery scenes start with a clean English default. Six additional checks cover English→German state continuity, long case/settings content, independent main scrolling, reachable navigation at 1024×420, keyboard use at a 720×500 CSS viewport (200% equivalent space), and mobile overlay dismissal. The reduced CSS viewport is not a claim of native browser/OS zoom certification.
+
+All new screenshots are `fullPage:false`, exactly the configured viewport. The manifest records language, selected content section and `main-content.scrollTop`. Detailed AI captures scroll the actual content pane; they do not extend the document beyond the sidebar. Do not reuse old full-document gallery images as evidence of this shell.
+
+## Authenticated HTTP-test browser acceptance
+
+Run after the normal and managed targets:
+
+```sh
+node tests/e2e-review/lan-browser.mjs
+```
+
+This adds ten scenarios against the real `NewLANOperatorHandler` with explicit `InsecureHTTPTest:true`, bound only to 127.0.0.1 (port 19886, overridable with `LAN_REVIEW_PORT`). The test fixture uses a known synthetic password, an in-memory ephemeral CA and the safe awaiting-agent contract from `docs/lan-api-examples.json`. It starts fresh disposable state for each scenario and tests real login, cookie/CSRF boundaries, logout and actual short expiry. Malformed bootstrap, protected 401 and interrupted logout are explicitly injected fault paths. Nothing calls a real model or enrolls a device.
+
+Upload only `lan-browser-results.json`, `lan-browser-manifest.json` and `synthetic-http-test-*.png` from `artifacts/review`. These contain bounded outcomes and labelled synthetic UI fixtures, no raw cookies, passwords, private keys or real telemetry. Login screenshots are captured before password entry. The target does not run the production LAN CLI or validate real trusted TLS browser deployment. It never uses `ignoreHTTPSErrors`, certificate-error launch flags, a certificate-warning bypass, a public listener or a tunnel.

@@ -2,6 +2,25 @@
 
 Meaningful development checkpoints are recorded here. These are prototype milestones, not production releases.
 
+## 2026-10-03 — Authenticated LAN pilot, container packaging and bilingual interface
+
+### Added
+- Separate explicitly configured LAN manager with operator authentication, bounded sessions/CSRF, manual public-certificate approval, TLS/mTLS listener separation and durable replay/revocation state.
+- A default-off, explicitly acknowledged HTTP test profile with signed telemetry, separate authentication/state and a persistent plaintext-risk warning.
+- Optional nonroot, read-only Linux manager Docker image and Compose examples; hosted CI builds locally and tests TLS and HTTP-test container lifecycle without registry publication.
+- English-default UI with a persisted German switch, authenticated session/logout flows and truthful awaiting-agent/source/platform states.
+- Research-backed competitor priorities with objective acceptance criteria and explicit implementation gaps.
+
+### Improved
+- Viewport-bounded application shell: the content area scrolls while navigation remains within the viewport. New captures use actual viewport framing rather than long-document composites.
+- Session revocation ordering, interrupted/logout UI handling and privacy-safe support-bundle/configuration boundaries.
+
+### Verification and limits
+- Frozen backend source, real loopback CLI fixtures, targeted security checks, UI types/build and 97 component/unit tests passed before publication. Exact-source browser and actual Docker lifecycle results are separate CI gates, pending for this new scope at publication.
+- The current Linux advisory review reports zero reachable/imported-package findings and one unused OpenPGP advisory in a required module; see the scoped security report.
+- No real LAN deployment, trusted browser certificate provisioning, installed/scheduled native sender, production audit/backup or fleet-scale assurance is claimed. HTTP testing remains deliberately insecure.
+- Assessment remains an isolated synthetic foundation; this milestone does not expose real missing-update/CVE results. AI tests remain deterministic test-provider evidence, not real-model diagnostic validation.
+
 ## 2026-10-03 — Strict malformed-response transport regression
 
 - Keep explicit rejection status, CORS and no-mutation assertions when the server closes a deliberately malformed HTTP request after returning its headers.

@@ -44,6 +44,7 @@ type aiState struct {
 	busy         bool
 	activeCancel context.CancelFunc
 	activeID     uint64
+	activeOwner  string
 	timeout      time.Duration // Internal bounded test seam, never user-controlled over HTTP.
 }
 
@@ -154,15 +155,15 @@ func readObject(w http.ResponseWriter, r *http.Request, limit int64, fields []st
 	if err = typed.Decode(out); err != nil {
 		return invalid()
 	}
-	return true
+	return operatorStillActive(w, r)
 }
 func (s *Server) authorizeJSONMutation(w http.ResponseWriter, r *http.Request) bool {
-	if r.Header.Get("Origin") != "http://"+r.Host {
+	if r.Header.Get("Origin") != s.requiredOrigin(r) {
 		fail(w, 403, "origin_required", "Same-origin header is required for local changes.")
 		return false
 	}
 	tokens := r.Header.Values("X-CSRF-Token")
-	if len(tokens) != 1 || subtle.ConstantTimeCompare([]byte(tokens[0]), []byte(s.csrf)) != 1 {
+	if len(tokens) != 1 || subtle.ConstantTimeCompare([]byte(tokens[0]), []byte(s.requiredCSRF(r))) != 1 {
 		fail(w, 403, "csrf_required", "A current CSRF token is required.")
 		return false
 	}
@@ -219,6 +220,11 @@ func (s *Server) saveAIConfig(w http.ResponseWriter, r *http.Request) {
 		invalid()
 		return
 	}
+	release, ok := beginOperatorMutation(w, r)
+	if !ok {
+		return
+	}
+	defer release()
 	s.ai.mu.Lock()
 	defer s.ai.mu.Unlock()
 	if input.ExpectedRevision != s.ai.config.Revision {
@@ -239,6 +245,9 @@ func (s *Server) saveAIConfig(w http.ResponseWriter, r *http.Request) {
 		fail(w, 500, "configuration_error", "Provider settings could not be saved.")
 		return
 	}
+	if !operatorStillActive(w, r) {
+		return
+	}
 	if s.ai.activeCancel != nil {
 		s.ai.activeCancel()
 	}
@@ -252,7 +261,9 @@ func (s *Server) saveAIConfig(w http.ResponseWriter, r *http.Request) {
 	view.AllowRemoteEvidence = input.AllowRemoteEvidence
 	s.ai.config = view
 	s.ai.service = analysis.NewService(provider)
-	write(w, 200, s.ai.publicLocked())
+	viewResult := s.ai.publicLocked()
+	release()
+	write(w, 200, viewResult)
 }
 func (s *Server) clearAIConfig(w http.ResponseWriter, r *http.Request) {
 	var input struct {
@@ -261,6 +272,11 @@ func (s *Server) clearAIConfig(w http.ResponseWriter, r *http.Request) {
 	if !readObject(w, r, 1024, []string{"expectedRevision"}, &input) {
 		return
 	}
+	release, ok := beginOperatorMutation(w, r)
+	if !ok {
+		return
+	}
+	defer release()
 	s.ai.mu.Lock()
 	defer s.ai.mu.Unlock()
 	if input.ExpectedRevision != s.ai.config.Revision {
@@ -272,12 +288,17 @@ func (s *Server) clearAIConfig(w http.ResponseWriter, r *http.Request) {
 		fail(w, 500, "configuration_error", "Provider settings could not be cleared.")
 		return
 	}
+	if !operatorStillActive(w, r) {
+		return
+	}
 	if s.ai.activeCancel != nil {
 		s.ai.activeCancel()
 	}
 	s.ai.config = defaultAIConfig(revision)
 	s.ai.service = analysis.NewService(nil)
-	write(w, 200, s.ai.publicLocked())
+	viewResult := s.ai.publicLocked()
+	release()
+	write(w, 200, viewResult)
 }
 
 type caseAnalysisResponse struct {
@@ -302,6 +323,14 @@ func (s *Server) analyzeCase(w http.ResponseWriter, r *http.Request, id string) 
 		s.internal(w)
 		return
 	}
+	if !operatorStillActive(w, r) {
+		return
+	}
+	release, ok := beginOperatorMutation(w, r)
+	if !ok {
+		return
+	}
+	defer release()
 	s.ai.mu.Lock()
 	if input.ConfigRevision != s.ai.config.Revision {
 		s.ai.mu.Unlock()
@@ -313,23 +342,38 @@ func (s *Server) analyzeCase(w http.ResponseWriter, r *http.Request, id string) 
 		fail(w, 409, "analysis_busy", "Another analysis is still running or canceling.")
 		return
 	}
-	ctx, cancel := context.WithTimeout(r.Context(), analysis.MaxTimeout)
+	deadline := time.Now().Add(analysis.MaxTimeout)
+	owner := ""
+	if operator, ok := operatorContext(r); ok {
+		owner = operator.session.ID
+		if operator.session.ExpiresAt.Before(deadline) {
+			deadline = operator.session.ExpiresAt
+		}
+	}
+	ctx, cancel := context.WithDeadline(r.Context(), deadline)
 	s.ai.busy = true
 	s.ai.activeID++
+	s.ai.activeOwner = owner
 	run := s.ai.activeID
 	s.ai.activeCancel = cancel
 	service := s.ai.service
 	s.ai.mu.Unlock()
+	release()
 	defer cancel()
 	defer func() {
 		s.ai.mu.Lock()
 		if s.ai.activeID == run {
 			s.ai.busy = false
 			s.ai.activeCancel = nil
+			s.ai.activeOwner = ""
 		}
 		s.ai.mu.Unlock()
 	}()
 	result, err := service.Analyze(ctx, c, c.Evidence)
+	if operator, ok := operatorContext(r); ok && (operator.active == nil || !operator.active()) {
+		fail(w, 401, "authentication_required", "Operator session expired or was revoked.")
+		return
+	}
 	if err != nil {
 		fail(w, 422, "case_evidence_invalid", "The stored case evidence could not be safely prepared for analysis.")
 		return
