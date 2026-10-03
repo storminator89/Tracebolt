@@ -2,6 +2,14 @@
 
 Meaningful development checkpoints are recorded here. These are prototype milestones, not production releases.
 
+## 2026-10-03 — Defensive Ed25519 key policy and dependency notice
+
+- Reject noncanonical, identity and non-prime-order Ed25519 public keys through a shared bounded policy used by certificate trust/approval and signed HTTP validation.
+- Add a key/time check only after ordinary TLS chain and hostname verification; no trust bypass, automatic credential replacement or new enrollment surface is introduced.
+- Pin `filippo.io/edwards25519` v1.2.0, preserve its upstream license in source and the runtime image, and verify exact notice bytes in both container lifecycle profiles.
+- Independent review covers generated-key classification and normal real TLS compatibility, with zero reachable/imported-package advisory findings and the already documented unused OpenPGP module advisory.
+- The immutable aggregate passed Go race/vet/module verification and build before publication. Exact-source native, browser and container CI are separate gates. This is defensive hardening, not a claim of a reproduced exploit through an existing deployment.
+
 ## 2026-10-03 — Verified bilingual viewport gallery and installation runbook
 
 - Add a source-validated human/automation installation runbook and repository entry guide, with explicit credential/trust/deployment approval boundaries and supported-platform limits.

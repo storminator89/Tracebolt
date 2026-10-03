@@ -17,6 +17,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"io"
+	"localrmm/internal/keyvalidation"
 	"localrmm/internal/lantrust"
 	"net"
 	"net/http"
@@ -220,7 +221,7 @@ func (v *Verifier) Verify(req *http.Request) (Verified, error) {
 		return bad(ErrUnauthorized)
 	}
 	publicKey, ok := cert.PublicKey.(ed25519.PublicKey)
-	if !ok || len(publicKey) != ed25519.PublicKeySize {
+	if !ok || !keyvalidation.Ed25519(publicKey) {
 		return bad(ErrUnauthorized)
 	}
 	signature, ok := decodeBase64(sigText, base64.RawStdEncoding.EncodedLen(ed25519.SignatureSize))
@@ -279,7 +280,7 @@ func NewSignedRequest(ctx context.Context, origin string, certificate tls.Certif
 	}
 	key, ok := certificate.PrivateKey.(ed25519.PrivateKey)
 	public, publicOK := cert.PublicKey.(ed25519.PublicKey)
-	if !ok || len(key) != ed25519.PrivateKeySize || !publicOK || !bytes.Equal(key.Public().(ed25519.PublicKey), public) {
+	if !ok || len(key) != ed25519.PrivateKeySize || !publicOK || !keyvalidation.Ed25519(public) || !bytes.Equal(key.Public().(ed25519.PublicKey), public) {
 		return nil, ErrUnauthorized
 	}
 	certText := base64.RawStdEncoding.EncodeToString(cert.Raw)

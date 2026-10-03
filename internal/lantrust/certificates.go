@@ -16,6 +16,7 @@ import (
 	"encoding/hex"
 	"encoding/pem"
 	"errors"
+	"localrmm/internal/keyvalidation"
 	"net/netip"
 	"reflect"
 	"strings"
@@ -87,7 +88,7 @@ func strongPublicKey(key any) bool {
 	case *ecdsa.PublicKey:
 		return k != nil && k.X != nil && k.Y != nil && (k.Curve == elliptic.P256() || k.Curve == elliptic.P384() || k.Curve == elliptic.P521()) && k.Curve.IsOnCurve(k.X, k.Y)
 	case ed25519.PublicKey:
-		return len(k) == ed25519.PublicKeySize
+		return keyvalidation.Ed25519(k)
 	}
 	return false
 }
@@ -222,7 +223,30 @@ func ClientTLSConfig(client tls.Certificate, serverCAPEM []byte, serverName stri
 		return nil, err
 	}
 	client.Leaf, _ = x509.ParseCertificate(client.Certificate[0])
-	return &tls.Config{MinVersion: tls.VersionTLS13, Certificates: []tls.Certificate{client}, RootCAs: roots, ServerName: serverName}, nil
+	config := &tls.Config{MinVersion: tls.VersionTLS13, Certificates: []tls.Certificate{client}, RootCAs: roots, ServerName: serverName}
+	// Add key-strength checks after ordinary chain/SAN verification. Never
+	// replace normal verification, load ambient roots or accept a raw peer
+	// chain that Go has not verified. VerifyConnection also covers resumption.
+	config.VerifyConnection = func(state tls.ConnectionState) error {
+		if len(state.PeerCertificates) == 0 || len(state.VerifiedChains) == 0 {
+			return ErrCertificate
+		}
+		now := time.Now().UTC()
+		for _, chain := range state.VerifiedChains {
+			if len(chain) == 0 || len(chain) > maxChainCertificates || chain[0] == nil || state.PeerCertificates[0] == nil || !bytes.Equal(chain[0].Raw, state.PeerCertificates[0].Raw) {
+				continue
+			}
+			valid := true
+			for _, cert := range chain {
+				valid = valid && validCertificate(cert, now)
+			}
+			if valid {
+				return nil
+			}
+		}
+		return ErrCertificate
+	}
+	return config, nil
 }
 
 func validServerName(name string) bool {

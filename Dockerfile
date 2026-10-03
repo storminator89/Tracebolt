@@ -25,6 +25,8 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -buildvcs=false
 # A static Go executable needs no shell, package manager or root account.
 FROM scratch AS runtime
 COPY --from=build /out/manager /tracebolt/manager
+# Preserve the pinned dependency notice with the distributed static binary.
+COPY --chmod=0444 docs/dependencies/edwards25519-LICENSE.txt /tracebolt/licenses/edwards25519-LICENSE.txt
 # Public system roots support optional outbound HTTPS integrations; agent trust
 # still uses only its explicitly configured private CA pool.
 COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt

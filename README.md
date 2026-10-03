@@ -128,6 +128,8 @@ Case notes are local text. Runbooks are read-only suggestions. There is no arbit
 
 The separate LAN implementation adds operator sessions, approved endpoint identity and revocation. Its [targeted security review](docs/lan-security-review.md) records exact verification and remaining gates. Protected audit records, multi-operator roles, signed agent distribution, retention/backup controls, native service acceptance and a deployment review are still required before production use. The current dependency review found no reachable or imported-package advisory, but records an unused OpenPGP advisory in a required module; it is not a blanket advisory-free claim.
 
+The [defensive Ed25519 key-policy review](docs/ed25519-hardening-review.md) documents canonical, nonidentity and prime-order key checks and compatibility limits. Ordinary TLS chain/hostname verification remains enabled.
+
 ## Project map
 
 - `cmd/manager`: loopback development manager
@@ -152,4 +154,4 @@ The separate LAN implementation adds operator sessions, approved endpoint identi
 
 ## License
 
-A project license has not been selected. Public source availability is not an open-source license grant. Dependencies retain their own licenses.
+A project license has not been selected. Public source availability is not an open-source license grant. Dependencies retain their own licenses. The added curve dependency has a [pinned notice and distribution requirements](docs/dependencies/edwards25519.md); its exact license is included in the manager container and must accompany affected binary distributions.

@@ -117,6 +117,14 @@ func containerLifecycle(t *testing.T, profile string) {
 		t.Fatal("unconfigured image did not fail promptly")
 	}
 	run("docker", args...)
+	// Verify the exact source notice is present in the actual distribution image.
+	noticePath := filepath.Join(t.TempDir(), "edwards25519-LICENSE.txt")
+	run("docker", "cp", name+":/tracebolt/licenses/edwards25519-LICENSE.txt", noticePath)
+	distributedNotice, noticeErr := os.ReadFile(noticePath)
+	sourceNotice, sourceErr := os.ReadFile(filepath.Join("..", "..", "docs", "dependencies", "edwards25519-LICENSE.txt"))
+	if noticeErr != nil || sourceErr != nil || len(sourceNotice) == 0 || !bytes.Equal(distributedNotice, sourceNotice) {
+		t.Fatal("container dependency notice missing or changed")
+	}
 	roots := x509.NewCertPool()
 	if !roots.AppendCertsFromPEM(creds.ca) {
 		t.Fatal("fixture roots")

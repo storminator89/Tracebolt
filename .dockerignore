@@ -9,6 +9,12 @@
 !internal/**
 !web/
 !web/**
+# Only this required dependency notice may enter from docs.
+!docs/
+docs/**
+!docs/dependencies/
+docs/dependencies/**
+!docs/dependencies/edwards25519-LICENSE.txt
 artifacts
 web/artifacts
 web/node_modules
