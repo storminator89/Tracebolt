@@ -80,6 +80,8 @@ jobs:
           ./bin/agent --support-bundle | "$RUNNER_TEMP/bundle-validator/bin/python" tests/security/validate_bundle.py --expect-platform linux -
       - name: Cross-build native previews (not target-OS runtime validation)
         run: make crosscheck
+      - name: Strict malformed-response reader regressions
+        run: python3 tests/security/test_boundary_transport.py
       - name: Disposable HTTP, fake-provider AI and managed API regressions
         run: |
           if ! bash tests/security/run.sh > "$RUNNER_TEMP/api-tests.log" 2>&1; then

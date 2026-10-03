@@ -2,6 +2,12 @@
 
 Meaningful development checkpoints are recorded here. These are prototype milestones, not production releases.
 
+## 2026-10-03 — Strict malformed-response transport regression
+
+- Keep explicit rejection status, CORS and no-mutation assertions when the server closes a deliberately malformed HTTP request after returning its headers.
+- Only the malformed-framing test tolerates reset/truncation after an allowed denial status; ordinary requests, missing or unexpected status, oversized bodies and timeouts still fail.
+- Add five transport-reader regressions. The corrected test passed 500 repeated framing groups and the full 13-group boundary suite against the immutable assessment source. Application guards and source are unchanged.
+
 ## 2026-10-03 — Isolated read-only assessment foundation
 
 ### Added

@@ -19,6 +19,38 @@ from urllib.parse import quote, urlsplit
 BASE_URL = ""
 
 
+def read_response_body(response, tolerate_rejection_close=False):
+    """A malformed request may be rejected and then reset with unread bytes.
+
+    Only the framing test opts in, and only after a real rejection status and
+    complete headers were parsed. Never infer rejection from EOF/reset alone.
+    Normal responses, timeouts, missing status and unexpected status still fail.
+    """
+    if not tolerate_rejection_close or response.status not in (400, 403, 411, 413, 501):
+        return response.read()
+    chunks = []
+    size = 0
+    limit = 64 * 1024
+    while True:
+        try:
+            chunk = response.read1(min(4096, limit - size + 1))
+        except http.client.IncompleteRead as error:
+            chunk = error.partial
+            if size + len(chunk) > limit:
+                raise AssertionError("rejection body exceeds 64 KiB") from error
+            chunks.append(chunk)
+            break
+        except ConnectionResetError:
+            break
+        if not chunk:
+            break
+        size += len(chunk)
+        if size > limit:
+            raise AssertionError("rejection body exceeds 64 KiB")
+        chunks.append(chunk)
+    return b"".join(chunks)
+
+
 class BoundaryTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -40,7 +72,7 @@ class BoundaryTests(unittest.TestCase):
         cls.status_path = f"/api/cases/{quote(cls.case_id, safe='')}/status"
 
     @classmethod
-    def request(cls, method, path, body=None, headers=None, raw_headers=None):
+    def request(cls, method, path, body=None, headers=None, raw_headers=None, tolerate_rejection_close=False):
         conn = http.client.HTTPConnection(cls.url.hostname, cls.url.port, timeout=4)
         try:
             if isinstance(body, dict):
@@ -55,7 +87,7 @@ class BoundaryTests(unittest.TestCase):
             else:
                 conn.request(method, path, body=body, headers=headers or {})
             response = conn.getresponse()
-            return response.status, dict((k.lower(), v) for k, v in response.getheaders()), response.read()
+            return response.status, dict((k.lower(), v) for k, v in response.getheaders()), read_response_body(response, tolerate_rejection_close)
         finally:
             conn.close()
 
@@ -219,7 +251,7 @@ class BoundaryTests(unittest.TestCase):
         for headers in header_sets:
             with self.subTest(headers=[k for k, _ in headers]):
                 encoded = (f"{len(body):x}\r\n".encode() + body + b"\r\n0\r\n\r\n") if any(k == "Transfer-Encoding" for k, _ in headers) else body
-                self.assert_denied(self.request("POST", self.note_path, encoded, raw_headers=headers), (400, 403, 411, 413, 501))
+                self.assert_denied(self.request("POST", self.note_path, encoded, raw_headers=headers, tolerate_rejection_close=True), (400, 403, 411, 413, 501))
         self.assertEqual(self.case()["notes"], before)
 
     def test_12_concurrent_writes_are_not_lost(self):
