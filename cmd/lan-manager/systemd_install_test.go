@@ -253,6 +253,9 @@ func TestApprovedDisposableSystemdInstallation(t *testing.T) {
 	case <-time.After(30 * time.Second):
 		t.Fatal("native hidden prompt timeout")
 	}
+	if prompt.Phase == "exit" {
+		stage = systemdInstallerStage(prompt.InstallerStage)
+	}
 	if prompt.Phase != "prompt" || !prompt.EchoDisabled || len(prompt.Fingerprint) != 64 || len(prompt.Comparison) != 32 {
 		t.Fatal("native trust display or hidden prompt failed")
 	}
@@ -280,6 +283,9 @@ func TestApprovedDisposableSystemdInstallation(t *testing.T) {
 	case outcome = <-events:
 	case <-time.After(30 * time.Second):
 		t.Fatal("installer completion timeout")
+	}
+	if outcome.ExitCode != 0 {
+		stage = systemdInstallerStage(outcome.InstallerStage)
 	}
 	if outcome.Phase != "exit" || outcome.ExitCode != 0 || outcome.SecretEcho || !outcome.Ready || outcome.HTTPWarning != (profile == lanconfig.HTTPTest) {
 		t.Fatal("native enrollment or private terminal boundary failed")
@@ -467,5 +473,38 @@ func systemdCheckProcessIdentity(t *testing.T, uid, gid int) {
 	}
 	if found != 3 {
 		t.Fatal("service credential fields missing")
+	}
+}
+
+func systemdInstallerStage(raw string) string {
+	switch raw {
+	case "preflight":
+		return "installer_preflight"
+	case "prepare_account_and_paths":
+		return "installer_prepare"
+	case "stage_verified_artifacts":
+		return "installer_stage"
+	case "enroll_as_dedicated_account":
+		return "installer_enroll"
+	case "validate_existing_guided_state":
+		return "installer_validate"
+	case "publish_owned_binaries_and_unit":
+		return "installer_publish"
+	case "start_owned_service":
+		return "installer_start"
+	case "commit":
+		return "installer_commit"
+	default:
+		return "install_enroll"
+	}
+}
+func TestSystemdDiagnosticStageAllowlist(t *testing.T) {
+	for _, raw := range []string{"", "private-token-or-log", "unexpected/path"} {
+		if systemdInstallerStage(raw) != "install_enroll" {
+			t.Fatal("unrecognized diagnostic leaked")
+		}
+	}
+	if systemdInstallerStage("enroll_as_dedicated_account") != "installer_enroll" {
+		t.Fatal("fixed installer stage unavailable")
 	}
 }

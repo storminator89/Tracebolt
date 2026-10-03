@@ -2,6 +2,13 @@
 
 Meaningful development checkpoints are recorded here. These are prototype milestones, not production releases.
 
+## 2026-10-03 — Preserve public installer path traversal under restrictive umask
+
+- Set the intended mode through a verified descriptor only for newly created owned public binary/bootstrap directories; restrictive caller umasks no longer unintentionally remove traversal needed by the unprivileged enrollment child. Existing and private paths are not relaxed or adopted.
+- Add inert restrictive-umask regressions and bounded fixed installer-stage diagnostics without exporting private terminal or runtime output.
+- The initial installer source passed all ordinary CI jobs, but its separately approved fresh-VM installation attempt stopped in the `install_enroll` phase. Local regressions establish this directory-mode defect; only a new exact-source manual run can establish whether the hosted installation now completes.
+- Independent focused race/vet and actual three-binary TLS/HTTP regressions pass. Installed-service lifecycle, true OS reboot and the three quarantined enrollment browser cases retain their distinct acceptance boundaries.
+
 ## 2026-10-03 — Linux/systemd installer candidate and opt-in acceptance gate
 
 - Add a default-read-only fixed-path Linux installer with explicit install, restart, selected local artifact upgrade, uninstall and same-identity resume operations.

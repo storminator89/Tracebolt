@@ -100,7 +100,7 @@ jobs:
               assert value['profile'] == 'tls'
               assert value['osRebootTested'] is False and value['telemetryExported'] is False
               assert value['status'] in {'pass', 'fail'}
-              assert value['stage'] in {'preflight', 'manager_start', 'operator_login', 'install_enroll', 'approval', 'initial_reports', 'restart', 'upgrade', 'uninstall', 'complete'}
+              assert value['stage'] in {'preflight', 'manager_start', 'operator_login', 'install_enroll', 'approval', 'initial_reports', 'restart', 'upgrade', 'uninstall', 'complete', 'installer_preflight', 'installer_prepare', 'installer_stage', 'installer_enroll', 'installer_validate', 'installer_publish', 'installer_start', 'installer_commit'}
               print(json.dumps(value, indent=2))
           except Exception:
               raise SystemExit('FAIL: missing or invalid sanitized systemd acceptance evidence.')

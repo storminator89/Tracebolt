@@ -55,7 +55,16 @@ try:
  if status is None:
   os.kill(pid,signal.SIGTERM)
   _,st=os.waitpid(pid,0);status=os.waitstatus_to_exitcode(st)
- print(json.dumps({'phase':'exit','exitCode':status,'secretEcho':cfg['secret'].encode() in buf,'ready':b'Enrollment handoff is ready.' in buf,'httpWarning':b'UNENCRYPTED HTTP TEST' in buf}),flush=True)
+ stage=''
+ stages={'preflight','prepare_account_and_paths','stage_verified_artifacts','enroll_as_dedicated_account','validate_existing_guided_state','publish_owned_binaries_and_unit','start_owned_service','commit'}
+ for line in buf.splitlines():
+  try:
+   value=json.loads(line)
+   if isinstance(value,dict) and value.get('committed') is False and value.get('identityRetained') is True and isinstance(value.get('plan'),dict):
+    candidate=value.get('failureStage','preflight')
+    if isinstance(candidate,str) and candidate in stages: stage=candidate
+  except (ValueError,UnicodeError): pass
+ print(json.dumps({'phase':'exit','exitCode':status,'secretEcho':cfg['secret'].encode() in buf,'ready':b'Enrollment handoff is ready.' in buf,'httpWarning':b'UNENCRYPTED HTTP TEST' in buf,'installerStage':stage}),flush=True)
 finally:
  try: os.kill(pid,signal.SIGTERM)
  except ProcessLookupError: pass
@@ -65,14 +74,15 @@ finally:
 `
 
 type ptyEvent struct {
-	Phase        string `json:"phase"`
-	EchoDisabled bool   `json:"echoDisabled"`
-	Fingerprint  string `json:"fingerprint"`
-	Comparison   string `json:"comparison"`
-	ExitCode     int    `json:"exitCode"`
-	SecretEcho   bool   `json:"secretEcho"`
-	Ready        bool   `json:"ready"`
-	HTTPWarning  bool   `json:"httpWarning"`
+	Phase          string `json:"phase"`
+	InstallerStage string `json:"installerStage"`
+	EchoDisabled   bool   `json:"echoDisabled"`
+	Fingerprint    string `json:"fingerprint"`
+	Comparison     string `json:"comparison"`
+	ExitCode       int    `json:"exitCode"`
+	SecretEcho     bool   `json:"secretEcho"`
+	Ready          bool   `json:"ready"`
+	HTTPWarning    bool   `json:"httpWarning"`
 }
 
 func stopFixtureProcess(t *testing.T, cmd *exec.Cmd, done <-chan error) {

@@ -237,7 +237,7 @@ func (t *linuxTransaction) prepare(ctx context.Context) error {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
-		if e := os.Mkdir(t.h.path(p), 0755); e != nil {
+		if e := t.h.createPublicDirectory(t.h.path(p)); e != nil {
 			return ErrState
 		}
 	}
@@ -283,7 +283,7 @@ func (t *linuxTransaction) stage(ctx context.Context) error {
 	}
 	// Stable fixed basename in a root-owned directory; never execute a user path.
 	t.staged = filepath.Join(t.h.path(InstallDirectory), ".staging-"+t.j.ID)
-	if os.Mkdir(t.staged, 0755) != nil {
+	if t.h.createPublicDirectory(t.staged) != nil {
 		return ErrState
 	}
 	for _, a := range []*VerifiedArtifact{t.inputs.Agent, t.inputs.Enrollment} {

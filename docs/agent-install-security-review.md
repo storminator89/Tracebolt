@@ -10,6 +10,9 @@ The 20 held runtime files and their hashes are listed in
 [`agent-install-review.sha256`](agent-install-review.sha256). That manifest's
 SHA-256 is `9970f6a89ffb3e448ecc9aa1b61983695edcd601a6076157ff9be52264bde8a1`.
 Its contents remained unchanged through the final independent focused checks.
+This manifest identifies the initial candidate, before the subsequent
+[restrictive-umask correction](installer-umask-correction.md); it is not a rolling
+claim that later runtime files have those same hashes.
 
 ## Implemented boundaries reviewed
 
@@ -114,6 +117,16 @@ and one exact precompiled test. Workflow wiring and actual execution remain
 separate gates; this harness review is not a runtime pass.
 
 ## Explicit remaining gates
+
+The first separately authorized hosted attempt on
+`070159d3f2ef4cec92f74015b5f582980a4cdf63` failed in the sanitized
+`install_enroll` phase in
+[run 37159157926](https://github.com/storminator89/Tracebolt/actions/runs/37159157926).
+That phase alone does not identify the exact failed operation. A subsequent
+inert subprocess regression established a restrictive-umask traversal defect;
+the narrow new-directory fix and fixed diagnostic-stage filtering passed an
+independent race/vet recheck. No repeat privileged execution is implied by that
+local correction. See the linked correction report for its distinct scope.
 
 The injected command fixtures cannot validate real systemd behavior, effective
 credential dropping, account database changes, boot persistence or a deployed
