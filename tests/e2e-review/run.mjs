@@ -55,7 +55,7 @@ async function pageAt(hash='/overview', viewport={width:1440,height:1000}, extra
 let currentTest='';
 async function test(name, run) { currentTest=name; const begun=Date.now(); try { await run(); results.push({name, status:'PASS', durationMs:Date.now()-begun}); console.log(`PASS ${name}`); } catch(error) { results.push({name,status:'FAIL',error:sanitize(error.message),durationMs:Date.now()-begun}); console.log(`FAIL ${name}: ${error.message.split('\n')[0]}`); } finally { for(const context of allPages) await context.close(); allPages.clear(); } }
 async function loaded(page) { await expect(page.locator('.page-footer')).toBeVisible(); }
-async function shot(page,name) { await page.screenshot({path:path.join(out,`${name}.png`),fullPage:true}); screenshots.push({file:`${name}.png`,sourceSha,publicSafe:name.startsWith('synthetic-'),viewport:page.viewportSize(),theme:await page.locator('html').getAttribute('data-theme'),test:currentTest}); }
+async function shot(page,name) { const fullPage = await page.getByRole('dialog').count() === 0; await page.screenshot({path:path.join(out,`${name}.png`),fullPage,animations:'disabled'}); screenshots.push({fullPage,file:`${name}.png`,sourceSha,publicSafe:name.startsWith('synthetic-'),viewport:page.viewportSize(),theme:await page.locator('html').getAttribute('data-theme'),test:currentTest}); }
 async function noOverflow(page) { const size=await page.evaluate(()=>({view:innerWidth,body:document.body.scrollWidth,html:document.documentElement.scrollWidth})); expect(size.body).toBeLessThanOrEqual(size.view+1); expect(size.html).toBeLessThanOrEqual(size.view+1); }
 async function rows(page) { return page.locator('.device-table tbody tr'); }
 try {
@@ -118,6 +118,12 @@ try {
   await opener.click(); await page.locator('.dialog-backdrop').click({position:{x:10,y:10}}); await expect(page.getByRole('dialog')).toHaveCount(0);
   await page.keyboard.press('?'); await expect(page.getByRole('dialog',{name:'Tastenkürzel'})).toBeVisible(); await page.keyboard.press('Escape'); await expect(page.getByRole('dialog')).toHaveCount(0);
   await page.keyboard.press('Control+k'); await expect(page.getByRole('textbox',{name:'Geräte durchsuchen'})).toBeFocused();
+ });
+ await test('Modal blocks background help/search shortcuts without losing the device', async()=>{
+  const page=await pageAt('/devices'); await loaded(page); await page.getByRole('button',{name:`${device.name}: Details öffnen`}).click(); await expect(page.getByRole('dialog')).toHaveAttribute('aria-label',`Gerät ${device.name}`);
+  await page.keyboard.press('?'); await expect(page.getByRole('dialog')).toHaveCount(1); await expect(page.getByRole('dialog')).toHaveAttribute('aria-label',`Gerät ${device.name}`);
+  await page.keyboard.press('Control+k'); await expect(page.getByRole('dialog')).toHaveAttribute('aria-label',`Gerät ${device.name}`); await expect(page).toHaveURL(new RegExp(device.id));
+  await page.keyboard.press('Escape'); await expect(page.getByRole('dialog')).toHaveCount(0);
  });
  for(const [label,viewport,mobile] of [['desktop',{width:1440,height:1000},false],['mobile',{width:390,height:844},true]]) for(const theme of ['light','dark']) await test(`Synthetic-only gallery ${label} ${theme}`, async()=>{
   const page=await pageAt('/devices',viewport,{isMobile:mobile,hasTouch:mobile}); await loaded(page);

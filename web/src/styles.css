@@ -16,3 +16,5 @@
 :root:not([data-theme=dark]) .status-healthy{color:#46765f}
 .demo-banner-label{color:var(--secondary)}
 @media(max-width:760px){.topbar-actions .icon-button,.mobile-menu{min-width:40px;min-height:40px}.row-open{min-width:40px;min-height:40px}.row-arrow{width:40px;padding-right:0!important;padding-left:0!important}.select-wrap{padding:0 8px;min-width:0;gap:5px;min-height:42px}.select-wrap select{min-height:40px;min-width:0;width:100%;padding-top:0;padding-bottom:0}.device-name-button{min-height:42px}}
+
+button:focus-visible,a:focus-visible,summary:focus-visible{outline-color:var(--accent)}

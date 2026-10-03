@@ -2,6 +2,23 @@
 
 Meaningful development checkpoints are recorded here. These are prototype milestones, not production releases.
 
+## 2026-10-03 — Native runtime CI and keyboard refinements
+
+### Added
+- Read-only agent runtime smoke jobs on standard hosted Linux amd64, Windows amd64 and macOS arm64 runners.
+- Native package tests and actual executable/schema/privacy validation with required-field availability checks. Only pass/fail summaries and availability counts are logged; raw runtime samples are not uploaded.
+- An additional independent dialog-shortcut regression and corresponding Chromium scenario.
+
+### Fixed
+- Global help/search shortcuts no longer open background views while a device dialog is active.
+- Keyboard focus outlines use an opaque accent color.
+- Screenshot capture waits for animations to complete and frames fixed dialogs at the viewport height.
+
+### Verification boundaries
+- Native hosted execution outcomes are recorded per exact CI commit. A configured job does not itself prove a platform passed.
+- Hosted CLI checks do not establish service installation, reboot persistence, ordinary-user permission parity, macOS TCC behavior, signing, or production readiness.
+- The earlier gallery remains tied to its actual source commit; refreshed captures follow the new browser run.
+
 ## 2026-10-03 — Verified browser gallery
 
 ### Added
