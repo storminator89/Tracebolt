@@ -72,6 +72,13 @@ jobs:
 
       - name: Build local binaries
         run: make build
+      - name: Execute actual Linux LAN manager and sender binaries
+        run: |
+          if ! go test -count=1 -timeout=4m ./tests/lanclient > "$RUNNER_TEMP/lan-client-tests.log" 2>&1; then
+            echo 'FAIL: native two-binary TLS/HTTP sender acceptance; raw runtime output withheld.'
+            exit 1
+          fi
+          echo 'PASS: actual Linux manager/sender TLS and HTTP-test round trips, restart, replay and revocation.'
       - name: Execute Linux agent and validate bounded support-bundle schema
         run: |
           python3 -m venv "$RUNNER_TEMP/bundle-validator"

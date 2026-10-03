@@ -1,0 +1,10 @@
+{
+  "schemaVersion": "tracebolt.lan-agent.v1",
+  "profile": "tls",
+  "managerOrigin": "https://tracebolt.example.test:8444",
+  "agentId": "agent_REPLACE_WITH_SERVER_ASSIGNED_32_HEX_ID",
+  "certificateFile": "/etc/tracebolt-agent/client.pem",
+  "privateKeyFile": "/etc/tracebolt-agent/client.key",
+  "serverCAFile": "/etc/tracebolt-agent/server-ca.pem",
+  "stateDirectory": "/var/lib/tracebolt-agent"
+}

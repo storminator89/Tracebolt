@@ -1,0 +1,10 @@
+{
+  "schemaVersion": "tracebolt.lan-agent.v1",
+  "profile": "http-test",
+  "managerOrigin": "http://tracebolt.example.test:8444",
+  "agentId": "agent_REPLACE_WITH_SERVER_ASSIGNED_32_HEX_ID",
+  "certificateFile": "/etc/tracebolt-agent-test/client-ed25519.pem",
+  "privateKeyFile": "/etc/tracebolt-agent-test/client-ed25519.key",
+  "stateDirectory": "/var/lib/tracebolt-agent-test",
+  "insecureHTTPAcknowledged": true
+}

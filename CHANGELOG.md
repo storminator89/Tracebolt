@@ -2,6 +2,19 @@
 
 Meaningful development checkpoints are recorded here. These are prototype milestones, not production releases.
 
+## 2026-10-03 — Native Linux one-shot LAN sender
+
+### Added
+- A separate foreground Linux sender using protected, preprovided configuration and approved client identity for default TLS/mTLS or explicit signed HTTP testing.
+- Private single-writer durable state bound to profile, exact origin, certificate fingerprint and expected agent ID, preserving exact request bytes across uncertain responses and process restarts.
+- Strict bounded receipt validation, stale-sample discard without sequence reuse, static diagnostics and privacy-safe availability counts.
+- Actual two-binary manager/sender tests for both loopback profiles, restart/replay/revocation and isolated filesystem-state boundary regressions.
+
+### Verification and limits
+- Owner and independent review passed full Go race/vet/module verification and actual Linux manager/sender execution. Exact-source hosted CI remains a separate gate.
+- No real LAN deployment or persistent credentials were created. Windows/macOS sender state/ACL protection, service installation, scheduling, offline history and production acceptance remain unimplemented.
+- HTTP test traffic is readable and an impersonating server can forge an acknowledgement. It is not confidential or server-authenticated.
+
 ## 2026-10-03 — Contain accessible labels within the scrolling content pane
 
 - Give the main content pane a positioned containing block so its visually hidden form labels cannot extend the outer document or scroll the topbar away.

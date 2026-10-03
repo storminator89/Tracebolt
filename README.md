@@ -78,7 +78,7 @@ An explicitly enabled [HTTP test profile](docs/signed-http-test.md) uses separat
 
 [Docker packaging and Compose examples](docs/docker.md) provide an optional Linux server route. The image runs as a fixed nonroot user with a read-only root filesystem and dropped capabilities. Endpoint collectors remain native. CI builds a local image and exercises both disposable profiles on a standard Linux runner; check this commit's actual outcome before treating container execution as verified. No registry publication or real deployment is part of the workflow.
 
-Current sender helpers and fixture runtime tests do not provide an installed or continuously scheduled native agent. Certificate issuance, trusted browser TLS setup and real endpoint provisioning are separate work.
+A [native one-shot Linux sender](docs/lan-agent.md) now collects and delivers one bounded observation using preprovided approved material. Its private durable state preserves exact request bytes across uncertain delivery/restart and binds them to the configured destination and identity. Run `bin/lan-agent --config /absolute/path/agent.json` after following that contract. [Two-binary runtime tests](tests/lanclient/README.md) exercise the actual manager and sender over both loopback profiles. Windows/macOS sender state protection, installed services and continuous scheduling remain unimplemented. Certificate issuance, trusted browser TLS setup and real endpoint provisioning are separate work.
 
 ## Optional previews
 
@@ -126,6 +126,7 @@ The separate LAN implementation adds operator sessions, approved endpoint identi
 - `cmd/agent`: single-sample, read-only collector command
 - `cmd/dev-agent`: one-shot loopback development sender
 - `cmd/lan-manager`: separate explicitly configured operator/agent runtime
+- `cmd/lan-agent`: Linux one-shot sender with protected exact-retry state
 - `internal/operatorauth`, `lantrust`, `lanstore`, `signedhttp`: session, identity, replay and transport boundaries
 - `tests/container`: opt-in disposable TLS/HTTP-test lifecycle checks
 - `internal/api`: request boundaries and API handlers
