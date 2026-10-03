@@ -196,7 +196,7 @@ try {
   const small=sizes.filter(s=>s.width<40||s.height<40); expect(small,JSON.stringify(small)).toEqual([]);
  });
  await test('Settings states capability boundary without claiming native OS support', async()=>{
-  const page=await pageAt('/settings'); await loaded(page); await expect(page.getByRole('heading',{name:'Einstellungen',exact:true,level:1})).toBeVisible(); await expect(page.locator('.setting-row').filter({hasText:'Zugriff nur über Loopback'})).toContainText(`127.0.0.1:${port}`); await expect(page.locator('.main-content')).toContainText('Windows'); await expect(page.locator('.main-content')).toContainText('macOS'); await shot(page,'desktop-settings');
+  const page=await pageAt('/settings'); await loaded(page); await expect(page.getByRole('heading',{name:'Einstellungen',exact:true,level:1})).toBeVisible(); await expect(page.locator('.setting-row').filter({has:page.getByText('Manager',{exact:true})})).toContainText(`127.0.0.1:${port}`); await expect(page.locator('.main-content')).toContainText('Windows'); await expect(page.locator('.main-content')).toContainText('macOS'); await shot(page,'desktop-settings');
  });
  if(process.env.TRACEBOLT_REVIEW_AI==='1') await runAIReview({test,pageAt,loaded,shot,base,data,expect,restartManager:async()=>{await stop();start();await ready();}});
 } finally {

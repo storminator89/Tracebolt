@@ -2,6 +2,11 @@
 
 Meaningful development checkpoints are recorded here. These are prototype milestones, not production releases.
 
+## 2026-10-03 — Stable current-address browser assertion
+
+- Identify the runtime-address row by its stable Manager label while retaining the exact custom-port assertion.
+- No application behavior changed. The preceding run passed all eight AI test-provider scenarios and all six real managed-preview checks; this updates the remaining Settings test locator before a complete rerun.
+
 ## 2026-10-03 — Provider form readiness and native test isolation
 
 ### Fixed
