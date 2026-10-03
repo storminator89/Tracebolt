@@ -6,6 +6,7 @@ import argparse
 from collections import Counter
 import json
 import os
+import re
 from pathlib import Path
 import subprocess
 import sys
@@ -14,8 +15,25 @@ import tempfile
 from validate_bundle import MAX_BYTES, validate
 
 PACKAGES = (
-    "./internal/collector", "./internal/bundle", "./cmd/agent", "./tests/security",
+    "./internal/collector", "./internal/bundle", "./cmd/agent",
 )
+
+
+def safe_failed_test_names(raw):
+    allowed = {"localrmm/internal/collector", "localrmm/internal/bundle", "localrmm/cmd/agent", "localrmm/tests/security"}
+    failures = set()
+    for line in raw.splitlines():
+        try:
+            event = json.loads(line)
+        except (ValueError, UnicodeError):
+            continue
+        if not isinstance(event, dict) or event.get("Action") != "fail" or event.get("Package") not in allowed:
+            continue
+        name = event.get("Test", "")
+        if isinstance(name, str) and re.fullmatch(r"Test[A-Za-z0-9_]{1,120}", name):
+            failures.add(name)
+    # No subtest labels, output events, values, paths or telemetry are emitted.
+    return ", ".join(sorted(failures)[:10])
 
 
 class SmokeFailure(Exception):
@@ -35,7 +53,9 @@ def command(args, env, timeout, stage):
                                 check=False)
     except (OSError, subprocess.TimeoutExpired):
         raise SmokeFailure(f"{stage} could not complete") from None
-    require(result.returncode == 0, f"{stage} failed")
+    if result.returncode != 0:
+        names = safe_failed_test_names(result.stdout) if "Go" in stage else ""
+        raise SmokeFailure(f"{stage} failed" + (f"; failed tests: {names}" if names else ""))
     return result
 
 
@@ -91,15 +111,21 @@ def main():
         env.pop("GOARCH", None)
         tests = command(["go", "test", "-json", "-count=1", "-timeout=120s", *PACKAGES],
                         env, 600, "native Go package tests")
+        # The rest of tests/security includes Linux-only manager/developer
+        # transport tests. Keep those in the full Linux job; this native job
+        # executes every independent native support-bundle contract unchanged.
+        bundle_tests = command(["go", "test", "-json", "-count=1", "-timeout=120s",
+                                "-run", "^TestSupportBundle", "./tests/security"],
+                               env, 600, "native Go independent bundle tests")
         passed = set()
-        for line in tests.stdout.splitlines():
+        for line in (tests.stdout + b"\n" + bundle_tests.stdout).splitlines():
             try:
                 event = json.loads(line)
             except (ValueError, UnicodeError):
                 continue
             if event.get("Action") == "pass" and "Test" not in event:
                 passed.add(event.get("Package"))
-        expected = {"localrmm/" + package[2:] for package in PACKAGES}
+        expected = {"localrmm/" + package[2:] for package in PACKAGES} | {"localrmm/tests/security"}
         require(expected <= passed, "native package execution was not fully confirmed")
         print("PASS: native Go package tests.")
         suffix = ".exe" if host == "windows" else ""

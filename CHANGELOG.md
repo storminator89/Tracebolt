@@ -2,6 +2,18 @@
 
 Meaningful development checkpoints are recorded here. These are prototype milestones, not production releases.
 
+## 2026-10-03 — Provider form readiness and native test isolation
+
+### Fixed
+- Provider settings become editable only after the fetched configuration is applied, preventing early edits from being overwritten. Inputs remain disabled during save.
+- Form-validation tests wait for actual configuration readiness and cover the first editable state.
+- Native agent smoke jobs keep all collector, bundle and agent tests while selecting only independent support-bundle contracts from the shared security-test package. Linux-only managed transport and AI/API checks still run in the full Linux job.
+- Native smoke failure diagnostics expose only fixed package and top-level test names, never raw runtime samples.
+
+### Verified locally
+- 57 UI tests, nine independent UI regressions, type checking and production build passed.
+- Actual Linux native test/build/CLI schema, cap and privacy checks passed. Hosted Windows/macOS and new browser results remain commit-specific CI gates.
+
 ## 2026-10-03 — Consent-based AI preview and local agent delivery
 
 ### Added
