@@ -1,0 +1,167 @@
+{
+  "version": "0.1.0",
+  "baseURL": "http://127.0.0.1:8787",
+  "mode": "local-development",
+  "envelope": "GET returns object directly; lists are {items:[...],total:N}",
+  "endpoints": {
+    "GET /api/overview": {
+      "product": "Tracebolt",
+      "mode": "local-development",
+      "generatedAt": "RFC3339",
+      "stats": {
+        "totalDevices": 7,
+        "healthyDevices": 3,
+        "attentionDevices": 3,
+        "unknownDevices": 1,
+        "openCases": 3,
+        "criticalCases": 1
+      },
+      "devices": "Device[]",
+      "cases": "Case[]",
+      "activity": "Activity[]"
+    },
+    "GET /api/devices": {
+      "items": "Device[]",
+      "total": "number"
+    },
+    "GET /api/devices/{id}": "Device",
+    "GET /api/cases": {
+      "items": "Case[]",
+      "total": "number"
+    },
+    "GET /api/cases/{id}": "Case",
+    "GET /api/runbooks": {
+      "items": "Runbook[]",
+      "total": 3
+    },
+    "GET /api/capabilities": {
+      "mode": "local-development",
+      "syntheticFleet": true,
+      "realCollector": "Linux sandbox: CPU, memory, root filesystem, OS only",
+      "remoteEnrollment": false,
+      "shellExecution": false,
+      "aiConnected": false,
+      "persistence": "SQLite",
+      "limitations": "string[]"
+    },
+    "GET /api/session": {
+      "csrfToken": "ephemeral token for mutations"
+    },
+    "POST /api/cases/{id}/notes": {
+      "body": {
+        "text": "1..2000 UTF-8 bytes after trim; raw request maximum 4096 bytes"
+      },
+      "headers": {
+        "X-CSRF-Token": "from /api/session",
+        "Origin": "exact current origin required",
+        "Content-Type": "application/json"
+      },
+      "response": "Case"
+    },
+    "POST /api/cases/{id}/status": {
+      "body": {
+        "status": "open|investigating|resolved"
+      },
+      "headers": "same as notes",
+      "response": "Case"
+    }
+  },
+  "types": {
+    "Device": {
+      "id": "string",
+      "name": "string",
+      "platform": "windows|linux|macos",
+      "os": "string",
+      "site": "string",
+      "group": "string",
+      "ip": "synthetic address or null",
+      "status": "healthy|attention|critical|stale|unknown",
+      "source": "synthetic|sandbox",
+      "synthetic": "boolean",
+      "lastSeen": "RFC3339",
+      "agentVersion": "string",
+      "cpu": {
+        "value": "number|null",
+        "unit": "%",
+        "quality": "healthy|stale|unknown|denied",
+        "source": "string",
+        "collectedAt": "RFC3339"
+      },
+      "memory": "Metric",
+      "disk": "Metric",
+      "uptime": "string",
+      "tags": "string[]",
+      "capabilities": "Capability[]",
+      "evidence": "Evidence[]",
+      "trend": "number[]; synthetic fixture only",
+      "caseIds": "string[]"
+    },
+    "Evidence": {
+      "id": "string",
+      "title": "string",
+      "source": "string",
+      "quality": "healthy|stale|unknown|denied",
+      "collectedAt": "RFC3339",
+      "detail": "string",
+      "value": "string",
+      "synthetic": "boolean"
+    },
+    "Case": {
+      "id": "string",
+      "title": "string",
+      "deviceId": "string",
+      "deviceName": "string",
+      "severity": "critical|warning|info",
+      "status": "open|investigating|resolved",
+      "category": "service|storage|network",
+      "summary": "string",
+      "ruleId": "string",
+      "confidence": "evidence-backed|limited",
+      "createdAt": "RFC3339",
+      "updatedAt": "RFC3339",
+      "evidenceIds": "string[] (resolvable in evidence array)",
+      "evidence": "Evidence[]",
+      "runbookId": "string",
+      "nextSteps": "string[]",
+      "timeline": "Activity[]",
+      "notes": "Note[]",
+      "synthetic": true
+    },
+    "Activity": {
+      "id": "string",
+      "type": "observation|case|note|status",
+      "title": "string",
+      "detail": "string",
+      "time": "RFC3339",
+      "deviceId": "string optional",
+      "caseId": "string optional"
+    },
+    "Capability": {
+      "id": "string",
+      "name": "string",
+      "status": "supported|limited|unsupported|denied",
+      "detail": "string"
+    },
+    "Runbook": {
+      "id": "service|storage|network",
+      "title": "string",
+      "description": "string",
+      "steps": "string[]",
+      "readOnly": true
+    },
+    "Note": {
+      "id": "string",
+      "text": "string",
+      "createdAt": "RFC3339",
+      "author": "Local operator"
+    }
+  },
+  "errors": {
+    "error": {
+      "code": "string",
+      "message": "string"
+    }
+  },
+  "security": "Loopback bind+Host allowlist+no CORS+Origin checks+CSRF for mutations; no remote auth/enrollment; not production security.",
+  "qualitySemantics": "Metric/Evidence quality healthy means current valid observation, not low severity or endpoint health. Source synthetic is simulated; sandbox has deliberately unknown overall device status."
+}

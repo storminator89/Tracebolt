@@ -1,0 +1,772 @@
+{
+  "cases": [
+    {
+      "id": "case-demo-win-01-service",
+      "title": "DNS Server is stopped",
+      "deviceId": "demo-win-01",
+      "deviceName": "BER-DC-01",
+      "severity": "critical",
+      "status": "open",
+      "category": "service",
+      "summary": "A configured critical service is recorded as stopped. Its required-running policy is explicit. The failure cause is not established.",
+      "ruleId": "service.required_stopped.v1",
+      "confidence": "evidence-backed",
+      "createdAt": "2026-10-03T12:57:00Z",
+      "updatedAt": "2026-10-03T12:57:00Z",
+      "evidenceIds": [
+        "demo-win-01-service-state",
+        "demo-win-01-service-policy"
+      ],
+      "evidence": [
+        {
+          "id": "demo-win-01-service-state",
+          "title": "Service state",
+          "source": "synthetic-fixture",
+          "quality": "healthy",
+          "collectedAt": "2026-10-03T12:57:00Z",
+          "detail": "Service: DNS Server; configured expected state: running.",
+          "value": "stopped",
+          "synthetic": true
+        },
+        {
+          "id": "demo-win-01-service-policy",
+          "title": "Service policy",
+          "source": "synthetic-fixture",
+          "quality": "healthy",
+          "collectedAt": "2026-10-03T12:57:00Z",
+          "detail": "The demo policy explicitly marks this service as required. Other stopped services are not treated as failures.",
+          "value": "required",
+          "synthetic": true
+        }
+      ],
+      "runbookId": "service",
+      "nextSteps": [
+        "Confirm this service is expected to be running on this endpoint.",
+        "Inspect the service state, last exit code and relevant bounded log evidence.",
+        "Check recent configuration and dependency changes.",
+        "Document the finding. Any restart requires separate operator approval."
+      ],
+      "timeline": [
+        {
+          "id": "case-demo-win-01-service-created",
+          "type": "case",
+          "title": "Rule matched",
+          "detail": "service.required_stopped.v1 evaluated against explicitly synthetic observations. No automated action ran.",
+          "time": "2026-10-03T12:57:00Z",
+          "deviceId": "demo-win-01",
+          "caseId": "case-demo-win-01-service"
+        }
+      ],
+      "notes": [],
+      "synthetic": true
+    },
+    {
+      "id": "case-demo-linux-01-storage",
+      "title": "Storage pressure on system volume",
+      "deviceId": "demo-linux-01",
+      "deviceName": "FRA-APP-02",
+      "severity": "warning",
+      "status": "open",
+      "category": "storage",
+      "summary": "The fixture system volume is 94.6% used, above the 90% rule threshold. This establishes capacity pressure, not hardware failure or its cause.",
+      "ruleId": "storage.used_gte_90.v1",
+      "confidence": "evidence-backed",
+      "createdAt": "2026-10-03T12:57:00Z",
+      "updatedAt": "2026-10-03T12:57:00Z",
+      "evidenceIds": [
+        "demo-linux-01-disk-used"
+      ],
+      "evidence": [
+        {
+          "id": "demo-linux-01-disk-used",
+          "title": "System volume usage",
+          "source": "synthetic-fixture",
+          "quality": "healthy",
+          "collectedAt": "2026-10-03T12:57:00Z",
+          "detail": "Measured used-capacity ratio; available space should be confirmed before any cleanup.",
+          "value": "94.6%",
+          "synthetic": true
+        }
+      ],
+      "runbookId": "storage",
+      "nextSteps": [
+        "Verify the affected local volume and available capacity.",
+        "Compare the last samples and confirm whether growth is continuing.",
+        "Check approved application retention settings with the owner.",
+        "Propose a scoped cleanup; do not delete or move files automatically."
+      ],
+      "timeline": [
+        {
+          "id": "case-demo-linux-01-storage-created",
+          "type": "case",
+          "title": "Rule matched",
+          "detail": "storage.used_gte_90.v1 evaluated against explicitly synthetic observations. No automated action ran.",
+          "time": "2026-10-03T12:57:00Z",
+          "deviceId": "demo-linux-01",
+          "caseId": "case-demo-linux-01-storage"
+        }
+      ],
+      "notes": [],
+      "synthetic": true
+    },
+    {
+      "id": "case-demo-mac-01-network",
+      "title": "Repeated DNS lookup failures",
+      "deviceId": "demo-mac-01",
+      "deviceName": "MUC-DESIGN-04",
+      "severity": "warning",
+      "status": "open",
+      "category": "network",
+      "summary": "Three or more recorded DNS failures occurred while the fixture interface remained up. A resolver problem is a hypothesis; upstream reachability and domain-specific issues remain untested.",
+      "ruleId": "network.dns_failures_gte_3_link_up.v1",
+      "confidence": "evidence-backed",
+      "createdAt": "2026-10-03T12:57:00Z",
+      "updatedAt": "2026-10-03T12:57:00Z",
+      "evidenceIds": [
+        "demo-mac-01-dns-failures",
+        "demo-mac-01-link-state"
+      ],
+      "evidence": [
+        {
+          "id": "demo-mac-01-dns-failures",
+          "title": "Recorded DNS failures",
+          "source": "synthetic-fixture",
+          "quality": "healthy",
+          "collectedAt": "2026-10-03T12:57:00Z",
+          "detail": "Synthetic bounded five-minute observation window; no live probes were executed.",
+          "value": "7 failures",
+          "synthetic": true
+        },
+        {
+          "id": "demo-mac-01-link-state",
+          "title": "Interface state",
+          "source": "synthetic-fixture",
+          "quality": "healthy",
+          "collectedAt": "2026-10-03T12:57:00Z",
+          "detail": "A configured interface is reported up; that alone does not prove Internet connectivity.",
+          "value": "up",
+          "synthetic": true
+        }
+      ],
+      "runbookId": "network",
+      "nextSteps": [
+        "Verify the scope and timestamp of the recorded DNS failures.",
+        "Inspect approved resolver configuration and interface state.",
+        "Compare failures against a known approved destination; no network probe runs in this MVP.",
+        "Record the observation before proposing configuration changes."
+      ],
+      "timeline": [
+        {
+          "id": "case-demo-mac-01-network-created",
+          "type": "case",
+          "title": "Rule matched",
+          "detail": "network.dns_failures_gte_3_link_up.v1 evaluated against explicitly synthetic observations. No automated action ran.",
+          "time": "2026-10-03T12:57:00Z",
+          "deviceId": "demo-mac-01",
+          "caseId": "case-demo-mac-01-network"
+        }
+      ],
+      "notes": [],
+      "synthetic": true
+    }
+  ],
+  "devices": [
+    {
+      "id": "demo-win-01",
+      "name": "BER-DC-01",
+      "platform": "windows",
+      "os": "Windows Server 2025",
+      "site": "Berlin HQ",
+      "group": "Infrastructure",
+      "ip": "192.0.2.11",
+      "status": "critical",
+      "source": "synthetic",
+      "synthetic": true,
+      "lastSeen": "2026-10-03T12:57:00Z",
+      "agentVersion": "0.1.0-demo",
+      "cpu": {
+        "value": 24,
+        "unit": "%",
+        "quality": "healthy",
+        "source": "synthetic-fixture",
+        "collectedAt": "2026-10-03T12:57:00Z"
+      },
+      "memory": {
+        "value": 62,
+        "unit": "%",
+        "quality": "healthy",
+        "source": "synthetic-fixture",
+        "collectedAt": "2026-10-03T12:57:00Z"
+      },
+      "disk": {
+        "value": 47,
+        "unit": "%",
+        "quality": "healthy",
+        "source": "synthetic-fixture",
+        "collectedAt": "2026-10-03T12:57:00Z"
+      },
+      "uptime": "18d 4h",
+      "tags": [
+        "production",
+        "directory"
+      ],
+      "capabilities": [
+        {
+          "id": "metrics",
+          "name": "Health metrics",
+          "status": "supported",
+          "detail": "Synthetic example observations only; no native endpoint has been enrolled."
+        },
+        {
+          "id": "service",
+          "name": "Service state",
+          "status": "limited",
+          "detail": "Fixture evidence only. Native OS service adapters are not implemented."
+        },
+        {
+          "id": "updates",
+          "name": "Patch assessment",
+          "status": "unsupported",
+          "detail": "Installed OS version is not a missing-update or vulnerability assessment."
+        }
+      ],
+      "evidence": [
+        {
+          "id": "demo-win-01-service-state",
+          "title": "Service state",
+          "source": "synthetic-fixture",
+          "quality": "healthy",
+          "collectedAt": "2026-10-03T12:57:00Z",
+          "detail": "Service: DNS Server; configured expected state: running.",
+          "value": "stopped",
+          "synthetic": true
+        },
+        {
+          "id": "demo-win-01-service-policy",
+          "title": "Service policy",
+          "source": "synthetic-fixture",
+          "quality": "healthy",
+          "collectedAt": "2026-10-03T12:57:00Z",
+          "detail": "The demo policy explicitly marks this service as required. Other stopped services are not treated as failures.",
+          "value": "required",
+          "synthetic": true
+        }
+      ],
+      "trend": [
+        16.799999999999997,
+        21.6,
+        20.4,
+        24,
+        22.080000000000002,
+        26.400000000000002,
+        24
+      ],
+      "caseIds": [
+        "case-demo-win-01-service"
+      ]
+    },
+    {
+      "id": "demo-linux-01",
+      "name": "FRA-APP-02",
+      "platform": "linux",
+      "os": "Ubuntu 24.04 LTS",
+      "site": "Frankfurt DC",
+      "group": "Application servers",
+      "ip": "192.0.2.22",
+      "status": "attention",
+      "source": "synthetic",
+      "synthetic": true,
+      "lastSeen": "2026-10-03T12:57:00Z",
+      "agentVersion": "0.1.0-demo",
+      "cpu": {
+        "value": 38,
+        "unit": "%",
+        "quality": "healthy",
+        "source": "synthetic-fixture",
+        "collectedAt": "2026-10-03T12:57:00Z"
+      },
+      "memory": {
+        "value": 73,
+        "unit": "%",
+        "quality": "healthy",
+        "source": "synthetic-fixture",
+        "collectedAt": "2026-10-03T12:57:00Z"
+      },
+      "disk": {
+        "value": 94.6,
+        "unit": "%",
+        "quality": "healthy",
+        "source": "synthetic-fixture",
+        "collectedAt": "2026-10-03T12:57:00Z"
+      },
+      "uptime": "42d 8h",
+      "tags": [
+        "production",
+        "web"
+      ],
+      "capabilities": [
+        {
+          "id": "metrics",
+          "name": "Health metrics",
+          "status": "supported",
+          "detail": "Synthetic example observations only; no native endpoint has been enrolled."
+        },
+        {
+          "id": "service",
+          "name": "Service state",
+          "status": "limited",
+          "detail": "Fixture evidence only. Native OS service adapters are not implemented."
+        },
+        {
+          "id": "updates",
+          "name": "Patch assessment",
+          "status": "unsupported",
+          "detail": "Installed OS version is not a missing-update or vulnerability assessment."
+        }
+      ],
+      "evidence": [
+        {
+          "id": "demo-linux-01-disk-used",
+          "title": "System volume usage",
+          "source": "synthetic-fixture",
+          "quality": "healthy",
+          "collectedAt": "2026-10-03T12:57:00Z",
+          "detail": "Measured used-capacity ratio; available space should be confirmed before any cleanup.",
+          "value": "94.6%",
+          "synthetic": true
+        }
+      ],
+      "trend": [
+        26.599999999999998,
+        34.2,
+        32.3,
+        38,
+        34.96,
+        41.800000000000004,
+        38
+      ],
+      "caseIds": [
+        "case-demo-linux-01-storage"
+      ]
+    },
+    {
+      "id": "demo-mac-01",
+      "name": "MUC-DESIGN-04",
+      "platform": "macos",
+      "os": "macOS Tahoe 26",
+      "site": "Munich Studio",
+      "group": "Workstations",
+      "ip": "192.0.2.34",
+      "status": "attention",
+      "source": "synthetic",
+      "synthetic": true,
+      "lastSeen": "2026-10-03T12:57:00Z",
+      "agentVersion": "0.1.0-demo",
+      "cpu": {
+        "value": 12,
+        "unit": "%",
+        "quality": "healthy",
+        "source": "synthetic-fixture",
+        "collectedAt": "2026-10-03T12:57:00Z"
+      },
+      "memory": {
+        "value": 48,
+        "unit": "%",
+        "quality": "healthy",
+        "source": "synthetic-fixture",
+        "collectedAt": "2026-10-03T12:57:00Z"
+      },
+      "disk": {
+        "value": 38,
+        "unit": "%",
+        "quality": "healthy",
+        "source": "synthetic-fixture",
+        "collectedAt": "2026-10-03T12:57:00Z"
+      },
+      "uptime": "3d 6h",
+      "tags": [
+        "design",
+        "apple-silicon"
+      ],
+      "capabilities": [
+        {
+          "id": "metrics",
+          "name": "Health metrics",
+          "status": "supported",
+          "detail": "Synthetic example observations only; no native endpoint has been enrolled."
+        },
+        {
+          "id": "service",
+          "name": "Service state",
+          "status": "limited",
+          "detail": "Fixture evidence only. Native OS service adapters are not implemented."
+        },
+        {
+          "id": "updates",
+          "name": "Patch assessment",
+          "status": "unsupported",
+          "detail": "Installed OS version is not a missing-update or vulnerability assessment."
+        }
+      ],
+      "evidence": [
+        {
+          "id": "demo-mac-01-dns-failures",
+          "title": "Recorded DNS failures",
+          "source": "synthetic-fixture",
+          "quality": "healthy",
+          "collectedAt": "2026-10-03T12:57:00Z",
+          "detail": "Synthetic bounded five-minute observation window; no live probes were executed.",
+          "value": "7 failures",
+          "synthetic": true
+        },
+        {
+          "id": "demo-mac-01-link-state",
+          "title": "Interface state",
+          "source": "synthetic-fixture",
+          "quality": "healthy",
+          "collectedAt": "2026-10-03T12:57:00Z",
+          "detail": "A configured interface is reported up; that alone does not prove Internet connectivity.",
+          "value": "up",
+          "synthetic": true
+        }
+      ],
+      "trend": [
+        8.399999999999999,
+        10.8,
+        10.2,
+        12,
+        11.040000000000001,
+        13.200000000000001,
+        12
+      ],
+      "caseIds": [
+        "case-demo-mac-01-network"
+      ]
+    },
+    {
+      "id": "demo-win-02",
+      "name": "BER-FIN-07",
+      "platform": "windows",
+      "os": "Windows 11 Enterprise",
+      "site": "Berlin HQ",
+      "group": "Workstations",
+      "ip": "192.0.2.47",
+      "status": "healthy",
+      "source": "synthetic",
+      "synthetic": true,
+      "lastSeen": "2026-10-03T12:57:00Z",
+      "agentVersion": "0.1.0-demo",
+      "cpu": {
+        "value": 16,
+        "unit": "%",
+        "quality": "healthy",
+        "source": "synthetic-fixture",
+        "collectedAt": "2026-10-03T12:57:00Z"
+      },
+      "memory": {
+        "value": 44,
+        "unit": "%",
+        "quality": "healthy",
+        "source": "synthetic-fixture",
+        "collectedAt": "2026-10-03T12:57:00Z"
+      },
+      "disk": {
+        "value": 32,
+        "unit": "%",
+        "quality": "healthy",
+        "source": "synthetic-fixture",
+        "collectedAt": "2026-10-03T12:57:00Z"
+      },
+      "uptime": "5d 2h",
+      "tags": [
+        "finance",
+        "managed"
+      ],
+      "capabilities": [
+        {
+          "id": "metrics",
+          "name": "Health metrics",
+          "status": "supported",
+          "detail": "Synthetic example observations only; no native endpoint has been enrolled."
+        },
+        {
+          "id": "service",
+          "name": "Service state",
+          "status": "limited",
+          "detail": "Fixture evidence only. Native OS service adapters are not implemented."
+        },
+        {
+          "id": "updates",
+          "name": "Patch assessment",
+          "status": "unsupported",
+          "detail": "Installed OS version is not a missing-update or vulnerability assessment."
+        }
+      ],
+      "evidence": [],
+      "trend": [
+        11.2,
+        14.4,
+        13.6,
+        16,
+        14.72,
+        17.6,
+        16
+      ],
+      "caseIds": []
+    },
+    {
+      "id": "demo-linux-02",
+      "name": "FRA-DB-01",
+      "platform": "linux",
+      "os": "Debian 13",
+      "site": "Frankfurt DC",
+      "group": "Infrastructure",
+      "ip": "192.0.2.51",
+      "status": "healthy",
+      "source": "synthetic",
+      "synthetic": true,
+      "lastSeen": "2026-10-03T12:57:00Z",
+      "agentVersion": "0.1.0-demo",
+      "cpu": {
+        "value": 28,
+        "unit": "%",
+        "quality": "healthy",
+        "source": "synthetic-fixture",
+        "collectedAt": "2026-10-03T12:57:00Z"
+      },
+      "memory": {
+        "value": 67,
+        "unit": "%",
+        "quality": "healthy",
+        "source": "synthetic-fixture",
+        "collectedAt": "2026-10-03T12:57:00Z"
+      },
+      "disk": {
+        "value": 54,
+        "unit": "%",
+        "quality": "healthy",
+        "source": "synthetic-fixture",
+        "collectedAt": "2026-10-03T12:57:00Z"
+      },
+      "uptime": "23d 11h",
+      "tags": [
+        "database",
+        "production"
+      ],
+      "capabilities": [
+        {
+          "id": "metrics",
+          "name": "Health metrics",
+          "status": "supported",
+          "detail": "Synthetic example observations only; no native endpoint has been enrolled."
+        },
+        {
+          "id": "service",
+          "name": "Service state",
+          "status": "limited",
+          "detail": "Fixture evidence only. Native OS service adapters are not implemented."
+        },
+        {
+          "id": "updates",
+          "name": "Patch assessment",
+          "status": "unsupported",
+          "detail": "Installed OS version is not a missing-update or vulnerability assessment."
+        }
+      ],
+      "evidence": [],
+      "trend": [
+        19.599999999999998,
+        25.2,
+        23.8,
+        28,
+        25.76,
+        30.800000000000004,
+        28
+      ],
+      "caseIds": []
+    },
+    {
+      "id": "demo-mac-02",
+      "name": "HAM-ENG-12",
+      "platform": "macos",
+      "os": "macOS Sequoia 15",
+      "site": "Hamburg Office",
+      "group": "Workstations",
+      "ip": "192.0.2.62",
+      "status": "healthy",
+      "source": "synthetic",
+      "synthetic": true,
+      "lastSeen": "2026-10-03T12:57:00Z",
+      "agentVersion": "0.1.0-demo",
+      "cpu": {
+        "value": 8,
+        "unit": "%",
+        "quality": "healthy",
+        "source": "synthetic-fixture",
+        "collectedAt": "2026-10-03T12:57:00Z"
+      },
+      "memory": {
+        "value": 36,
+        "unit": "%",
+        "quality": "healthy",
+        "source": "synthetic-fixture",
+        "collectedAt": "2026-10-03T12:57:00Z"
+      },
+      "disk": {
+        "value": 41,
+        "unit": "%",
+        "quality": "healthy",
+        "source": "synthetic-fixture",
+        "collectedAt": "2026-10-03T12:57:00Z"
+      },
+      "uptime": "1d 9h",
+      "tags": [
+        "engineering",
+        "apple-silicon"
+      ],
+      "capabilities": [
+        {
+          "id": "metrics",
+          "name": "Health metrics",
+          "status": "supported",
+          "detail": "Synthetic example observations only; no native endpoint has been enrolled."
+        },
+        {
+          "id": "service",
+          "name": "Service state",
+          "status": "limited",
+          "detail": "Fixture evidence only. Native OS service adapters are not implemented."
+        },
+        {
+          "id": "updates",
+          "name": "Patch assessment",
+          "status": "unsupported",
+          "detail": "Installed OS version is not a missing-update or vulnerability assessment."
+        }
+      ],
+      "evidence": [],
+      "trend": [
+        5.6,
+        7.2,
+        6.8,
+        8,
+        7.36,
+        8.8,
+        8
+      ],
+      "caseIds": []
+    },
+    {
+      "id": "demo-win-03",
+      "name": "BER-SALES-03",
+      "platform": "windows",
+      "os": "Windows 11 Pro",
+      "site": "Berlin HQ",
+      "group": "Workstations",
+      "ip": "192.0.2.73",
+      "status": "stale",
+      "source": "synthetic",
+      "synthetic": true,
+      "lastSeen": "2026-10-03T11:00:00Z",
+      "agentVersion": "0.1.0-demo",
+      "cpu": {
+        "value": null,
+        "unit": "%",
+        "quality": "stale",
+        "source": "synthetic-fixture",
+        "collectedAt": "2026-10-03T11:00:00Z"
+      },
+      "memory": {
+        "value": null,
+        "unit": "%",
+        "quality": "stale",
+        "source": "synthetic-fixture",
+        "collectedAt": "2026-10-03T11:00:00Z"
+      },
+      "disk": {
+        "value": null,
+        "unit": "%",
+        "quality": "stale",
+        "source": "synthetic-fixture",
+        "collectedAt": "2026-10-03T11:00:00Z"
+      },
+      "uptime": "unknown",
+      "tags": [
+        "sales",
+        "last-seen-2h"
+      ],
+      "capabilities": [
+        {
+          "id": "metrics",
+          "name": "Health metrics",
+          "status": "supported",
+          "detail": "Synthetic example observations only; no native endpoint has been enrolled."
+        },
+        {
+          "id": "service",
+          "name": "Service state",
+          "status": "limited",
+          "detail": "Fixture evidence only. Native OS service adapters are not implemented."
+        },
+        {
+          "id": "updates",
+          "name": "Patch assessment",
+          "status": "unsupported",
+          "detail": "Installed OS version is not a missing-update or vulnerability assessment."
+        }
+      ],
+      "evidence": [
+        {
+          "id": "demo-win-03-stale",
+          "title": "Telemetry stale",
+          "source": "synthetic-fixture",
+          "quality": "stale",
+          "collectedAt": "2026-10-03T11:00:00Z",
+          "detail": "No recent fixture sample is available. No conclusion about endpoint health is possible.",
+          "value": "2 hours since sample",
+          "synthetic": true
+        }
+      ],
+      "trend": [],
+      "caseIds": []
+    }
+  ],
+  "runbooks": [
+    {
+      "id": "service",
+      "title": "Service availability",
+      "description": "Verify the intended service state and scope the failure before changing anything.",
+      "steps": [
+        "Confirm this service is expected to be running on this endpoint.",
+        "Inspect the service state, last exit code and relevant bounded log evidence.",
+        "Check recent configuration and dependency changes.",
+        "Document the finding. Any restart requires separate operator approval."
+      ],
+      "readOnly": true
+    },
+    {
+      "id": "storage",
+      "title": "Storage pressure",
+      "description": "Confirm filesystem pressure without scanning personal files or deleting data.",
+      "steps": [
+        "Verify the affected local volume and available capacity.",
+        "Compare the last samples and confirm whether growth is continuing.",
+        "Check approved application retention settings with the owner.",
+        "Propose a scoped cleanup; do not delete or move files automatically."
+      ],
+      "readOnly": true
+    },
+    {
+      "id": "network",
+      "title": "DNS resolution",
+      "description": "Separate observed lookup failures from transport and configuration hypotheses.",
+      "steps": [
+        "Verify the scope and timestamp of the recorded DNS failures.",
+        "Inspect approved resolver configuration and interface state.",
+        "Compare failures against a known approved destination; no network probe runs in this MVP.",
+        "Record the observation before proposing configuration changes."
+      ],
+      "readOnly": true
+    }
+  ]
+}
