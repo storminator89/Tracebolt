@@ -1,0 +1,120 @@
+{
+  "sourceCommit": "594e88eee0e45060374a2c1049be711a96b58d37",
+  "sourceUrl": "https://github.com/storminator89/Tracebolt/commit/594e88eee0e45060374a2c1049be711a96b58d37",
+  "workflowRun": "https://github.com/storminator89/Tracebolt/actions/runs/37128509338",
+  "capturedAt": "2026-10-03T14:10:48.572Z",
+  "data": "Synthetic demo devices and cases only. No live sandbox readings.",
+  "browser": "Playwright Chromium headless shell on standard Ubuntu GitHub-hosted runner",
+  "validation": {
+    "browserScenariosPassed": 25,
+    "browserScenariosFailed": 0,
+    "runtimeErrors": 0
+  },
+  "screenshots": [
+    {
+      "file": "synthetic-inventory-desktop-light.png",
+      "sourceSha": "594e88eee0e45060374a2c1049be711a96b58d37",
+      "publicSafe": true,
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "theme": "light",
+      "test": "Synthetic-only gallery desktop light",
+      "sha256": "92b12a06cc8f5892da5a49afee66549a4b30af12aa2ac7c69689e436346c8ef5",
+      "bytes": 103151
+    },
+    {
+      "file": "synthetic-device-desktop-light.png",
+      "sourceSha": "594e88eee0e45060374a2c1049be711a96b58d37",
+      "publicSafe": true,
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "theme": "light",
+      "test": "Synthetic-only gallery desktop light",
+      "sha256": "6fa95d0a5705dea35e32b28a94a32de6e24a35d862a1202256637857ea20b94f",
+      "bytes": 169561
+    },
+    {
+      "file": "synthetic-case-desktop-light.png",
+      "sourceSha": "594e88eee0e45060374a2c1049be711a96b58d37",
+      "publicSafe": true,
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "theme": "light",
+      "test": "Synthetic-only gallery desktop light",
+      "sha256": "4f4fa60623daefb342084e1cf9aa131af74942ab10f97d7f5b2ebe66c263d489",
+      "bytes": 163805
+    },
+    {
+      "file": "synthetic-device-desktop-dark.png",
+      "sourceSha": "594e88eee0e45060374a2c1049be711a96b58d37",
+      "publicSafe": true,
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "theme": "dark",
+      "test": "Synthetic-only gallery desktop dark",
+      "sha256": "c52145d18326d8c24796f571ce8410bcf9a1ffec090763a42c3e2a684975fcb7",
+      "bytes": 167703
+    },
+    {
+      "file": "synthetic-case-desktop-dark.png",
+      "sourceSha": "594e88eee0e45060374a2c1049be711a96b58d37",
+      "publicSafe": true,
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "theme": "dark",
+      "test": "Synthetic-only gallery desktop dark",
+      "sha256": "1af1d445325812eb2dbf91d2724f597ca44dd27cc9eba17cf6bb21063aef3bb0",
+      "bytes": 163632
+    },
+    {
+      "file": "synthetic-inventory-mobile-light.png",
+      "sourceSha": "594e88eee0e45060374a2c1049be711a96b58d37",
+      "publicSafe": true,
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "theme": "light",
+      "test": "Synthetic-only gallery mobile light",
+      "sha256": "2174d2e89ca7ce24b59f54d9a2c9736cac7a291673aeed5f9797f94abd194f73",
+      "bytes": 54474
+    },
+    {
+      "file": "synthetic-case-mobile-light.png",
+      "sourceSha": "594e88eee0e45060374a2c1049be711a96b58d37",
+      "publicSafe": true,
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "theme": "light",
+      "test": "Synthetic-only gallery mobile light",
+      "sha256": "65c46e70688502307e22e3560c1354d09be03b26a7c2555dd2bebffc09edaf8f",
+      "bytes": 124475
+    },
+    {
+      "file": "synthetic-case-mobile-dark.png",
+      "sourceSha": "594e88eee0e45060374a2c1049be711a96b58d37",
+      "publicSafe": true,
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "theme": "dark",
+      "test": "Synthetic-only gallery mobile dark",
+      "sha256": "676353d8dd57ecc60d8597a0c6cdc165f7b29252b717e88f9602396d6b452470",
+      "bytes": 124756
+    }
+  ],
+  "selection": "Eight original captures passed visual review. Transition-state dark inventory and full-page mobile drawer captures are omitted pending a fresh render."
+}

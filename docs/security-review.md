@@ -4,7 +4,7 @@ Review date: 2026-10-03. Method: independent source review and focused regressio
 
 ## Conclusion and scope
 
-The reviewed localhost backend, collector/bundle contract, and frontend component checks pass the tests described below. No unresolved blocker was found in those tested boundaries. Real-browser integration is a separate gate: local Chromium/cloud-browser access was blocked by the development environment, and the standard-runner browser workflow is pending. Windows/macOS native execution and acceptance remain unverified.
+The reviewed localhost backend, collector/bundle contract, and frontend checks pass the tests described below. No unresolved blocker was found in those tested boundaries. The standard-runner real-browser gate passed 25/25 scenarios for source `594e88eee0e45060374a2c1049be711a96b58d37`, with zero recorded runtime errors. Later changes require their own checks. Windows/macOS native execution and acceptance remain unverified.
 
 Reviewed source: `cmd/manager`, `cmd/agent`, `internal/api`, `internal/store`, `internal/collector`, `internal/bundle`, `internal/rules`, `internal/fixtures`, and the frontend's API, routing, rendering, export, and case-mutation paths. Third-party source was not exhaustively audited. Dependency advisory scans are listed separately.
 
@@ -58,6 +58,7 @@ Executed against the reviewed source on Linux:
 - `bash tests/security/run.sh`: all **13 test groups passed**, followed by SQLite integrity `ok` and file-mode `0600` checks.
 - Actual Linux `--support-bundle` output: JSON Schema Draft 2020-12 plus date-time format validation passed; final sampled output was 6753 bytes, below 65,536. Fixed role labels, null IP, unknown whole-device health, and absent runtime hostname were also checked during review.
 - Frontend `npm run typecheck`, `npm test`, and `npm run build`: passed; **30 frontend tests** across three files passed.
+- Real-browser results were independently inspected from the standard-runner artifact: **25/25 Chromium scenarios passed, zero runtime errors**, for source `594e88eee0e45060374a2c1049be711a96b58d37`. The tests used the real local manager and a disposable database. They cover literal attack-looking notes, same-origin writes, repeated clicks, status/note persistence across reload and manager restart, delayed-save navigation, failed-write preservation, malformed routes, unknown/stale states, desktop/mobile layouts, and modal keyboard behavior. [CI run](https://github.com/storminator89/Tracebolt/actions/runs/37128509338). This browser result does not automatically cover later keyboard changes or the separate AI/settings work.
 
 The 13 HTTP groups cover:
 
@@ -86,7 +87,7 @@ The wrapper creates deliberately placed hidden files and an escaping symlink, us
 - Native collector/bundle role metadata agreement, checked through provider-to-bundle integration tests.
 - Bundle fixed-label/field-bound validation, healthy/null rejection, and schema-conforming empty arrays.
 
-The case-navigation fix is source-verified; a delayed-response real-browser regression remains part of the separate browser gate.
+The case-navigation fix also passed the delayed-response real-browser regression on the pinned source above.
 
 ## Dependency evidence
 
@@ -97,7 +98,7 @@ The case-navigation fix is source-verified; a delayed-response real-browser regr
 
 ## Unverified and later release gates
 
-- Real Chromium interaction, rendered screenshots, CSP behavior in the target browser, and delayed navigation/write behavior await the standard-runner browser result. DOM component tests are not represented as browser end-to-end tests.
+- Chromium interaction passed for the pinned source above. The test runner could exercise the manager on its own loopback without publishing the application. Local cloud-browser access remained blocked and was not bypassed. Other browser engines, every CSP edge, and changes after that source are not covered by that result.
 - Independent syscall tracing was attempted but the sandbox prohibits ptrace. Zero network/child-process activity was not established by a successful runtime trace; no-network/no-shell statements above are source-backed.
 - Windows/macOS native execution, real permission denial, filesystem semantics, signing/notarization, installation/lifecycle, and uninstall require real target machines. Full Linux host/systemd/service/log behavior is likewise outside the exercised sandbox scope.
 - No adversarial local-user isolation, multi-user authorization, encrypted database, protected audit log, fleet identity/enrollment, rotation/revocation, transport authentication, or production availability guarantee is supplied.

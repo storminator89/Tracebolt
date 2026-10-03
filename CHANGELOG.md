@@ -2,6 +2,21 @@
 
 Meaningful development checkpoints are recorded here. These are prototype milestones, not production releases.
 
+## 2026-10-03 — Verified browser gallery
+
+### Added
+- Eight actual synthetic-data screenshots covering inventory, device evidence and investigations across desktop/mobile and light/dark themes.
+- A gallery with immutable source-commit association, CI run, capture time, viewports, and image SHA-256 hashes.
+
+### Verified
+- Hosted Chromium completed 25 real-manager scenarios with zero failures and zero uncaught runtime errors for source `594e88eee0e45060374a2c1049be711a96b58d37`.
+- Coverage includes API loading/failure/retry, filters and sorting, source quality, dialogs and history, literal note rendering, write deduplication, persistence across manager restart, delayed-save navigation, malformed routes, and responsive layouts.
+- The same commit's Go, UI, Linux CLI bundle-schema and HTTP boundary jobs passed.
+
+### Scope
+- Screenshots contain synthetic devices and cases. No live sandbox telemetry, database, or raw server log is published.
+- These browser results do not imply native Windows/macOS agent acceptance or production deployment approval.
+
 ## 2026-10-03 — Investigation UI and bounded native preview
 
 ### Added

@@ -6,6 +6,12 @@ Tracebolt is an early, local-only development prototype. It combines a React inv
 
 **Do not expose this prototype to a network or use it to manage customer endpoints.** It has no operator authentication, enrolled endpoint identity, production audit trail, or remote execution capability.
 
+## Screenshots
+
+Real Chromium captures with synthetic demo data. [View the desktop/mobile, light/dark gallery and capture provenance](docs/screenshots/2026-10-03-ui-preview/README.md).
+
+![Tracebolt investigation, light theme, synthetic demo case](docs/screenshots/2026-10-03-ui-preview/synthetic-case-desktop-light.png)
+
 ## Run locally
 
 Requirements: Go 1.27.1 (the version in `go.mod`), Node.js 24 with npm, a C toolchain for race-detector tests, and `make`. Python 3 and curl are used by boundary regressions. No database server or container runtime is required.
