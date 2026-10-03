@@ -3,8 +3,9 @@ export const statusLabels: Record<DeviceStatus, string> = { healthy: 'Unauffäll
 export const platformLabels: Record<Platform, string> = { windows: 'Windows', linux: 'Linux', macos: 'macOS' };
 export const qualityLabels: Record<Quality, string> = { healthy: 'Aktuell', stale: 'Veraltet', unknown: 'Nicht verfügbar', denied: 'Zugriff verweigert' };
 export const caseStatusLabels = { open: 'Offen', investigating: 'In Untersuchung', resolved: 'Abgeschlossen' };
+function operationalTime(date: string): number { if (!date) return Number.NaN; const time = new Date(date).getTime(); return time === -62135596800000 ? Number.NaN : time; }
 export function relativeTime(date: string, now = Date.now()): string {
-  const time = new Date(date).getTime();
+  const time = operationalTime(date);
   if (!Number.isFinite(time)) return 'Zeitpunkt unbekannt';
   const seconds = Math.max(0, Math.floor((now - time) / 1000));
   if (seconds < 60) return 'gerade eben';
@@ -13,7 +14,7 @@ export function relativeTime(date: string, now = Date.now()): string {
   return `vor ${Math.floor(seconds / 86400)} Tagen`;
 }
 export function fullDate(date: string): string {
-  const value = new Date(date); return Number.isNaN(value.getTime()) ? 'Zeitpunkt unbekannt' : new Intl.DateTimeFormat('de-DE', { dateStyle: 'medium', timeStyle: 'medium' }).format(value);
+  const value = new Date(operationalTime(date)); return Number.isNaN(value.getTime()) ? 'Zeitpunkt unbekannt' : new Intl.DateTimeFormat('de-DE', { dateStyle: 'medium', timeStyle: 'medium' }).format(value);
 }
 export interface Filters { query: string; platform: string; status: string; source: string; sort: string }
 export const defaultFilters: Filters = { query: '', platform: 'all', status: 'all', source: 'all', sort: 'priority' };

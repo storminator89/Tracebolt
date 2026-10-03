@@ -2,7 +2,7 @@
 
 ## Scope
 
-Independent acceptance review of the local Go API, SQLite state, and built React application. The review uses a unique disposable database, never the default application database. Raw captures are produced under `artifacts/review`; only inspected synthetic images are included in the [public gallery](screenshots/2026-10-03-ui-preview/README.md).
+Independent acceptance review of the local Go API, SQLite state, and built React application. The review uses a unique disposable database, never the default application database. Screenshots remain local in `artifacts/review`.
 
 The automated review runs desktop Chromium at 1440×1000 and mobile Chromium emulation at 390×844, with light and dark themes. Its scenario source is `tests/e2e-review/run.mjs`; exact machine-readable outcomes are in `artifacts/review/results.json`.
 
@@ -21,11 +21,15 @@ Build the frontend, then run `node tests/e2e-review/run.mjs` from the repository
 
 ## Results
 
-The first real-browser run passed all **25 scenarios with zero runtime errors** on source commit `594e88eee0e45060374a2c1049be711a96b58d37`. It used the built React app, a real loopback Go manager and a unique SQLite database on a standard Linux CI runner. [Exact CI run](https://github.com/storminator89/Tracebolt/actions/runs/37128509338).
+The initial real-browser run passed all **25 scenarios with zero runtime errors** on source commit `594e88eee0e45060374a2c1049be711a96b58d37`. It used the built React app, a real loopback Go manager and a unique SQLite database on a standard Linux CI runner. [Exact CI run](https://github.com/storminator89/Tracebolt/actions/runs/37128509338).
 
-The independent reviewer inspected all 12 actual synthetic screenshots across 1440px desktop, 390px mobile, light and dark layouts. Inventory, evidence drawers and case pages have coherent hierarchy, readable primary content, explicit provenance, and no observed clipping or horizontal overflow. Two screenshot-only refinements are queued: complete CSS transitions before capture, and capture a fixed device modal at viewport height rather than extending beyond the visible screen.
+The independent reviewer inspected all 12 actual synthetic screenshots across 1440px desktop, 390px mobile, light and dark layouts. Inventory, evidence drawers and case pages have coherent hierarchy, readable primary content, explicit provenance, and no observed clipping or horizontal overflow. Two screenshot-only refinements were identified: complete CSS transitions before capture, and capture a fixed device modal at viewport height rather than extending beyond the visible screen.
 
-An additional small patch suppresses global help/search shortcuts while a dialog is active and uses opaque keyboard focus outlines. Its source/DOM regression passes locally; the expanded 26-scenario browser rerun and refreshed screenshot inspection remain pending for that later source commit. The 25-pass result above must not be attributed to the later patch.
+The subsequent source commit `2bccc168c6ef770484b1641bcaeabfe1d10270df` passed all **26 browser scenarios with zero runtime errors**, including the added modal keyboard regression. [Exact 26-scenario CI run](https://github.com/storminator89/Tracebolt/actions/runs/37130214233). It suppresses global help/search shortcuts while a dialog is active and uses opaque keyboard focus outlines.
+
+The four corrected captures have been inspected at their actual pixels: both dark inventories now show settled theme colors; both mobile device drawers are correctly framed at 390×844 with no artificial page region below the overlay. No visual blocker was observed. All 12 synthetic captures from this source are suitable for the gallery, with their source hash retained.
+
+The later AI integration, shortened page headings and managed-preview transport are separate pending checkpoints. Prepared AI coverage uses a deterministic loopback fixture provider, never a real model or real telemetry. Prepared managed-preview browser coverage uses actual separate Linux processes and real two-minute expiry, exports only bounded pass/fail metadata, and captures no real-sample screenshots. Do not attribute the verified 26-pass result to these later features until their own hosted runs finish.
 
 Local browser execution was unavailable in the restricted workspace: system Chromium could not create its singleton socket, the dedicated cloud browser rejected loopback navigation, and an official headless-shell download returned an empty ZIP. The service remained loopback-only throughout; hosted CI provided the actual browser evidence without a tunnel or deployment.
 

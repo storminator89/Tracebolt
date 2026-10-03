@@ -2,6 +2,8 @@
 
 Review date: 2026-10-03. Method: independent source review and focused regression execution against the current local-development implementation. This is not a production-security approval, certification, or complete penetration test.
 
+This document records the initial manager/collector/UI checkpoint before optional AI configuration was integrated. The subsequent AI scope is reviewed separately in [ai-security-review.md](ai-security-review.md), and the Linux one-shot ingress in [transport-security-review.md](transport-security-review.md). Newer features are not implicitly covered by the baseline results below.
+
 ## Conclusion and scope
 
 The reviewed localhost backend, collector/bundle contract, and frontend checks pass the tests described below. No unresolved blocker was found in those tested boundaries. The standard-runner real-browser gate passed 25/25 scenarios for source `594e88eee0e45060374a2c1049be711a96b58d37`, with zero recorded runtime errors. Later changes require their own checks. Windows/macOS native execution and acceptance remain unverified.

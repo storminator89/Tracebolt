@@ -37,4 +37,12 @@ All fonts/icons are installed dependencies served locally; no CDN or remote font
 
 The capture script uses only synthetic-device inventory, case, and drawer views. The overview screenshot is deliberately cropped above the mixed-source table, excluding actual sandbox telemetry. It fails if synthetic inventory contains a real-source row, mobile pages overflow, or JavaScript errors occur.
 
-On the initial cloud coding executor, Chromium could not create its required profile socket (`EPERM`); the cloud browser separately blocked loopback access. These are recorded verification gaps until a supported CI renderer produces real screenshots. No mockup screenshot should be presented as a verified UI capture.
+Browser evidence is produced by the hosted CI runner against the compiled UI and a disposable local manager. Screenshots are associated with their exact source commit. The first reviewed UI snapshot was `594e88e`; newer UI changes require a new browser run and captures.
+
+## Optional AI diagnosis
+
+Settings includes a native OpenAI-compatible provider panel: base URL, model and a password field for a freshly entered API key. Configuration and credentials are kept only in manager memory, cleared by restart, and never read back into or stored by the browser. Changing the destination clears the entered key and remote-evidence consent. Saving configuration does not contact or verify the provider.
+
+An investigation can request one bounded analysis after showing the exact destination and obtaining explicit operator review. Case title/summary and selected evidence text are sent without automatic secret redaction; review them first. A loopback endpoint may itself relay externally. There is no automatic provider request, periodic analysis, command execution or remediation in this version.
+
+Model hypotheses stay separate from the deterministic rule finding. Citation buttons open the exact analyzed evidence snapshot. Missing/stale evidence and unconfirmed root cause remain visible. Configuration races, superseded responses, navigation and cancellation cannot install an old result into the current view. AI results are transient and disappear on reload.

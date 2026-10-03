@@ -2,7 +2,7 @@
 
 Evidence-first endpoint diagnostics, built for a self-hosted future.
 
-Tracebolt is an early, local-only development prototype. It combines a React investigation interface, a Go manager, durable SQLite case notes and status, deterministic diagnostic rules, seven explicitly synthetic demo devices, and bounded read-only collectors. Windows and macOS adapters are implemented previews whose target-machine acceptance remains unverified.
+Tracebolt is an early, local-only development prototype. It combines a React investigation interface, a Go manager, durable SQLite case notes and status, deterministic diagnostic rules, seven explicitly synthetic demo devices, and bounded read-only collectors. Windows and macOS adapters are implemented previews. Read-only CLI smoke has passed on standard hosted native runners; broader endpoint acceptance remains unverified.
 
 **Do not expose this prototype to a network or use it to manage customer endpoints.** It has no operator authentication, enrolled endpoint identity, production audit trail, or remote execution capability.
 
@@ -65,13 +65,18 @@ This writes local stdout only, capped at 64 KiB. Review the file before sharing 
 
 The interface uses the real local API. Browser acceptance and screenshots are produced by the same-origin Playwright workflow; inspect the exact commit's CI outcome rather than assuming every rendered state has passed.
 
+## Optional previews
+
+- [AI-assisted investigation](docs/ai-diagnostics.md): configure an OpenAI-compatible provider, inspect the bounded evidence packet and destination, then explicitly approve an analysis. Provider configuration and keys are memory-only. Suggestions remain unconfirmed and cannot execute actions. Validation so far uses a deterministic loopback test provider, not a real model.
+- [Local agent transport preview](docs/local-transport-preview.md): start the manager with `--managed-preview`, then run the separate one-shot development sender. The manager starts with unknown/awaiting data and never substitutes its own sampler. This is loopback-only development transport, not authenticated enrollment or LAN support.
+
 ## What the data means
 
 - Seven Windows, Linux, and macOS demo devices, their histories, cases, and evidence are synthetic fixtures.
 - The additional live Linux sample reads only fixed local OS and kernel sources for CPU, memory, filesystem usage, OS label, and uptime. A sandbox may share a kernel or expose host-wide readings; attribution and container limits are unknown.
 - `healthy` metric quality means the observation was collected successfully. It is not a security or endpoint-health verdict.
-- Missing, denied, stale, and unsupported observations remain visible. No language model is connected, and diagnostic rules do not claim proven root causes.
-- Windows and macOS have limited implemented read-only adapters. Provider tests and cross-compilation check code contracts and buildability; native API behavior, installation, lifecycle, permissions, signing, and distribution are not validated. Windows CPU and macOS CPU/RAM utilization remain explicitly unknown. See [native collection and verification](docs/native-collection.md).
+- Missing, denied, stale, and unsupported observations remain visible. No language model is connected by default. Diagnostic rules and optional AI suggestions do not claim proven root causes.
+- Windows and macOS have limited implemented read-only adapters. Provider tests and cross-compilation check code contracts and buildability; installation, lifecycle, ordinary-user permission parity, signing, and distribution remain unvalidated. A bounded CLI smoke passed on hosted Windows amd64 and macOS arm64 at [2bccc168](https://github.com/storminator89/Tracebolt/actions/runs/37130214233). Windows CPU and macOS CPU/RAM utilization remain explicitly unknown. See [native collection and verification](docs/native-collection.md).
 
 ## Validate
 

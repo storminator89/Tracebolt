@@ -64,6 +64,43 @@
       },
       "headers": "same as notes",
       "response": "Case"
+    },
+    "GET /api/ai/config": "See docs/ai-api-contract.json",
+    "POST /api/ai/config": "See docs/ai-api-contract.json",
+    "POST /api/ai/config/clear": "See docs/ai-api-contract.json",
+    "POST /api/cases/{id}/analyze": "See docs/ai-api-contract.json",
+    "GET /api/dev/telemetry/status": {
+      "enabledOnlyWith": "--managed-preview",
+      "response": {
+        "managerStartedAt": "RFC3339 process epoch, not a credential",
+        "mode": "managed-preview",
+        "state": "awaiting|fresh|stale",
+        "deviceId": "sandbox-local",
+        "acceptedSamples": "uint64",
+        "collectedAt": "RFC3339|null",
+        "receivedAt": "RFC3339|null",
+        "maxAgeSeconds": 120
+      }
+    },
+    "POST /api/dev/telemetry": {
+      "enabledOnlyWith": "--managed-preview",
+      "body": "strict Linux tracebolt.support.v1 bundle; <=65536 bytes",
+      "guards": "same exact Host/Origin/CSRF/JSON guard as local settings; no device authentication claim",
+      "response": {
+        "managerStartedAt": "RFC3339 process epoch",
+        "deviceId": "sandbox-local",
+        "sequence": "monotonic uint64 per manager runtime",
+        "collectedAt": "RFC3339",
+        "receivedAt": "RFC3339"
+      },
+      "errors": {
+        "400": "invalid/future bundle",
+        "403": "local guard rejected",
+        "404": "preview disabled",
+        "409": "stale/replayed/out-of-order sample",
+        "413": "oversize"
+      },
+      "storage": "ephemeral only; fixed Linux sandbox role; no enrollment, credential storage, or direct-collector fallback"
     }
   },
   "types": {
@@ -168,5 +205,6 @@
     "agent --once": "Single local Device as JSON on stdout; no transport",
     "agent --support-bundle": "Versioned schema tracebolt.support.v1; stdout only, max65536 bytes; docs/support-bundle.schema.json"
   },
-  "ruleScope": "V1 deterministic rules accept only explicitly synthetic fixtures. Native local observations are not automatically turned into cases."
+  "ruleScope": "V1 deterministic rules accept only explicitly synthetic fixtures. Native local observations are not automatically turned into cases.",
+  "managedPreview": "Explicitly default-off. Disables both initial and periodic manager-side collection. Only a separate dev-agent delivery updates sandbox-local. Expiry preserves old values as stale and never asserts continuous process availability."
 }

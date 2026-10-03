@@ -21,3 +21,5 @@ describe('safe exports and routes',()=>{
 });
 
 describe("stored state validation",()=>{it("normalizes malformed filters instead of crashing",()=>expect(normalizeFilters({query:null,platform:"invalid",status:42,sort:{},source:null})).toEqual(defaultFilters));it("preserves valid filters",()=>expect(normalizeFilters({...defaultFilters,query:"Berlin",platform:"windows"})).toEqual({...defaultFilters,query:"Berlin",platform:"windows"}));});
+
+describe("awaiting telemetry time",()=>{it("treats Go zero time as unknown instead of ancient observation",()=>{expect(relativeTime("0001-01-01T00:00:00Z")).toBe("Zeitpunkt unbekannt");expect(fullDate("0001-01-01T00:00:00Z")).toBe("Zeitpunkt unbekannt");});it("treats unset times as unknown",()=>{expect(relativeTime("")).toBe("Zeitpunkt unbekannt");expect(fullDate("")).toBe("Zeitpunkt unbekannt");});});

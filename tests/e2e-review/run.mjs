@@ -9,6 +9,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { runAIReview } from './ai-scenarios.mjs';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const require = createRequire(path.join(root, 'web/package.json'));
 const { chromium, expect } = require('@playwright/test');
@@ -53,15 +54,15 @@ async function pageAt(hash='/overview', viewport={width:1440,height:1000}, extra
  await page.goto(`${base}/#${hash}`); return page;
 }
 let currentTest='';
-async function test(name, run) { currentTest=name; const begun=Date.now(); try { await run(); results.push({name, status:'PASS', durationMs:Date.now()-begun}); console.log(`PASS ${name}`); } catch(error) { results.push({name,status:'FAIL',error:sanitize(error.message),durationMs:Date.now()-begun}); console.log(`FAIL ${name}: ${error.message.split('\n')[0]}`); } finally { for(const context of allPages) await context.close(); allPages.clear(); } }
+async function test(name, run) { currentTest=name; const begun=Date.now(); try { await run(); results.push({name, status:'PASS', durationMs:Date.now()-begun}); console.log(`PASS ${name}`); } catch(error) { results.push({name,status:'FAIL',error:sanitize(name.startsWith('AI ') ? error.message.split('\n')[0] : error.message),durationMs:Date.now()-begun}); console.log(`FAIL ${name}: ${error.message.split('\n')[0]}`); } finally { for(const context of allPages) await context.close(); allPages.clear(); } }
 async function loaded(page) { await expect(page.locator('.page-footer')).toBeVisible(); }
-async function shot(page,name) { const fullPage = await page.getByRole('dialog').count() === 0; await page.screenshot({path:path.join(out,`${name}.png`),fullPage,animations:'disabled'}); screenshots.push({fullPage,file:`${name}.png`,sourceSha,publicSafe:name.startsWith('synthetic-'),viewport:page.viewportSize(),theme:await page.locator('html').getAttribute('data-theme'),test:currentTest}); }
+async function shot(page,name) { const fullPage = await page.getByRole('dialog').count() === 0; await page.screenshot({path:path.join(out,`${name}.png`),fullPage,animations:'disabled'}); screenshots.push({fullPage,file:`${name}.png`,sourceSha,publicSafe:name.startsWith('synthetic-'),fixtureDisclosure:name.includes('ai-fixture')?'Testanbieter / keine reale Modellanalyse':null,viewport:page.viewportSize(),theme:await page.locator('html').getAttribute('data-theme'),test:currentTest}); }
 async function noOverflow(page) { const size=await page.evaluate(()=>({view:innerWidth,body:document.body.scrollWidth,html:document.documentElement.scrollWidth})); expect(size.body).toBeLessThanOrEqual(size.view+1); expect(size.html).toBeLessThanOrEqual(size.view+1); }
 async function rows(page) { return page.locator('.device-table tbody tr'); }
 try {
  await test('Desktop light overview: real API, provenance, no layout overflow', async()=>{
   const page=await pageAt(); await loaded(page);
-  await expect(page.getByRole('heading',{name:/Ein klarer Blick/})).toBeVisible();
+  await expect(page.getByRole('heading',{name:'Übersicht',exact:true,level:1})).toBeVisible();
   await expect(page.locator('.demo-banner')).toContainText('DEMO + SANDBOX');
   await expect(page.locator('.summary-strip button').first()).toContainText(String(data.devices.length));
   await noOverflow(page); await shot(page,'desktop-overview-light');
@@ -99,7 +100,7 @@ try {
  await test('Source filter and unknown data never become healthy', async()=>{
   const page=await pageAt('/devices'); await loaded(page); await page.locator('.inventory-tabs button').filter({hasText:'Lokale Sandbox'}).click(); await expect(await rows(page)).toHaveCount(1); await expect((await rows(page)).first()).toContainText('Lokal');
   const sandbox=data.devices.find(d=>!d.synthetic); expect(sandbox.status).toBe('unknown'); await expect((await rows(page)).first()).toContainText('Unbekannt');
-  await page.locator('.device-name-button').click(); await expect(page.getByRole('dialog')).toContainText('kein entfernter Kundenrechner'); await shot(page,'sandbox-provenance');
+  await page.locator('.device-name-button').click(); await expect(page.getByRole('dialog')).toContainText('Lokale Linux-Umgebung. Messwerte werden nur angezeigt, wenn ein Collector sie geliefert hat.'); await shot(page,'sandbox-provenance');
  });
  await test('Device details → evidence → case, history Back/Forward', async()=>{
   const page=await pageAt('/devices'); await loaded(page);
@@ -164,25 +165,25 @@ try {
   await expect(page.locator('.case-detail-header h1')).toHaveText(nextCase.title); await expect(page).toHaveURL(new RegExp(nextCase.id));
  });
  await test('First-load API failure shows explicit error without fake data; retry recovers', async()=>{
-  const context=await browser.newContext({viewport:{width:1440,height:1000}}); allPages.add(context); const page=await context.newPage(); await page.route('**/api/overview',route=>route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({error:{message:'Controlled manager unavailable'}})}));
+  const context=await browser.newContext({viewport:{width:1440,height:1000}}); allPages.add(context); const page=await context.newPage(); page.on('pageerror',error=>runtimeErrors.push({test:currentTest,message:error.message})); await page.route('**/api/overview',route=>route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({error:{message:'Controlled manager unavailable'}})}));
   await page.goto(`${base}/#/overview`); await expect(page.getByRole('alert')).toContainText('Keine Verbindung'); await expect(page.getByRole('alert')).toContainText('keine Ersatz-Demodaten'); await expect(page.locator('.device-table')).toHaveCount(0); await shot(page,'desktop-api-error');
   await page.unroute('**/api/overview'); await page.getByRole('button',{name:'Erneut versuchen'}).click(); await loaded(page);
  });
  await test('Loading state is visible and refreshing error keeps stale data labeled', async()=>{
-  const context=await browser.newContext({viewport:{width:1440,height:1000}}); allPages.add(context); const page=await context.newPage();
+  const context=await browser.newContext({viewport:{width:1440,height:1000}}); allPages.add(context); const page=await context.newPage(); page.on('pageerror',error=>runtimeErrors.push({test:currentTest,message:error.message}));
   let release; const gate=new Promise(r=>release=r); await page.route('**/api/overview',async route=>{await gate; await route.continue();}); await page.goto(`${base}/#/overview`); await expect(page.getByRole('status')).toContainText('geladen'); await shot(page,'desktop-loading'); release(); await loaded(page); await page.unroute('**/api/overview');
   await page.route('**/api/overview',route=>route.abort('failed')); await page.getByRole('button',{name:'Aktualisieren',exact:true}).click(); await expect(page.getByRole('alert')).toContainText('letzten erfolgreichen Abruf'); await expect(page.locator('.device-table')).toBeVisible(); await expect(page.locator('.page-footer')).toContainText('Letzter erfolgreicher Abruf');
  });
  await test('Unknown device and case links show safe recoverable error', async()=>{
   const page=await pageAt('/devices/does-not-exist'); await expect(page.getByRole('alert')).toContainText('Gerät nicht verfügbar'); await page.getByRole('button',{name:'Schließen',exact:true}).click(); await expect(page.getByRole('dialog')).toHaveCount(0);
-  await page.goto(`${base}/#/cases/does-not-exist`); await expect(page.getByRole('alert')).toContainText('Untersuchung nicht verfügbar'); await page.getByRole('button',{name:'Alle Untersuchungen'}).click(); await expect(page.getByRole('heading',{name:/Vom Signal/})).toBeVisible();
+  await page.goto(`${base}/#/cases/does-not-exist`); await expect(page.getByRole('alert')).toContainText('Untersuchung nicht verfügbar'); await page.getByRole('button',{name:'Alle Untersuchungen'}).click(); await expect(page.getByRole('heading',{name:'Untersuchungen',exact:true,level:1})).toBeVisible();
  });
  await test('Malformed percent-encoded route cannot blank the application', async()=>{
-  const page=await pageAt('/devices/%E0%A4%A'); await expect(page.locator('.app-shell')).toBeVisible(); await expect(page.getByRole('heading',{name:/Jedes Gerät/})).toBeVisible();
+  const page=await pageAt('/devices/%E0%A4%A'); await expect(page.locator('.app-shell')).toBeVisible(); await expect(page.getByRole('heading',{name:'Geräte',exact:true,level:1})).toBeVisible();
  });
  await test('Skip link focuses main without changing the active view', async()=>{
   const page=await pageAt('/devices'); await loaded(page); await page.keyboard.press('Tab'); await expect(page.getByRole('link',{name:'Zum Inhalt'})).toBeFocused(); await page.keyboard.press('Enter');
-  await expect(page.getByRole('heading',{name:/Jedes Gerät/})).toBeVisible(); expect(await page.evaluate(()=>document.activeElement?.id)).toBe('main-content');
+  await expect(page.getByRole('heading',{name:'Geräte',exact:true,level:1})).toBeVisible(); expect(await page.evaluate(()=>document.activeElement?.id)).toBe('main-content');
  });
  for(const theme of ['light','dark']) await test(`Mobile 390px ${theme}: inventory, navigation, case, dialog, no overflow`, async()=>{
   const page=await pageAt('/overview',{width:390,height:844},{isMobile:true,hasTouch:true}); await loaded(page); if(theme==='dark') await page.getByRole('button',{name:'Dunkles Design aktivieren'}).click();
@@ -195,11 +196,12 @@ try {
   const small=sizes.filter(s=>s.width<40||s.height<40); expect(small,JSON.stringify(small)).toEqual([]);
  });
  await test('Settings states capability boundary without claiming native OS support', async()=>{
-  const page=await pageAt('/settings'); await loaded(page); await expect(page.getByRole('heading',{name:/Klarheit über deine Umgebung/})).toBeVisible(); await expect(page.locator('.main-content')).toContainText('Windows'); await expect(page.locator('.main-content')).toContainText('macOS'); await shot(page,'desktop-settings');
+  const page=await pageAt('/settings'); await loaded(page); await expect(page.getByRole('heading',{name:'Einstellungen',exact:true,level:1})).toBeVisible(); await expect(page.locator('.setting-row').filter({hasText:'Zugriff nur über Loopback'})).toContainText(`127.0.0.1:${port}`); await expect(page.locator('.main-content')).toContainText('Windows'); await expect(page.locator('.main-content')).toContainText('macOS'); await shot(page,'desktop-settings');
  });
+ if(process.env.TRACEBOLT_REVIEW_AI==='1') await runAIReview({test,pageAt,loaded,shot,base,data,expect,restartManager:async()=>{await stop();start();await ready();}});
 } finally {
  await browser.close(); await stop(); await log.close();
- const report={createdAt:new Date().toISOString(),sourceSha,base,viewportDesktop:'1440×1000',viewportMobile:'390×844',browser:process.env.CHROMIUM_PATH ? `Chromium at ${process.env.CHROMIUM_PATH}` : 'Playwright Chromium headless shell',database:'disposable unique temporary database (never production)',results,runtimeErrors,summary:{passed:results.filter(r=>r.status==='PASS').length,failed:results.filter(r=>r.status==='FAIL').length,runtimeErrorCount:runtimeErrors.length}};
+ const report={createdAt:new Date().toISOString(),sourceSha,base,aiFixtureReview:process.env.TRACEBOLT_REVIEW_AI==='1',viewportDesktop:'1440×1000',viewportMobile:'390×844',browser:process.env.CHROMIUM_PATH ? `Chromium at ${process.env.CHROMIUM_PATH}` : 'Playwright Chromium headless shell',database:'disposable unique temporary database (never production)',results,runtimeErrors,summary:{passed:results.filter(r=>r.status==='PASS').length,failed:results.filter(r=>r.status==='FAIL').length,runtimeErrorCount:runtimeErrors.length}};
  await fs.writeFile(path.join(out,'results.json'),JSON.stringify(report,null,2)); await fs.writeFile(path.join(out,'screenshot-manifest.json'),JSON.stringify({sourceSha,createdAt:report.createdAt,screenshots},null,2)); console.log(JSON.stringify(report.summary)); await fs.rm(temp,{recursive:true,force:true});
 }
 process.exitCode=results.some(r=>r.status==='FAIL') || runtimeErrors.length ? 1 : 0;

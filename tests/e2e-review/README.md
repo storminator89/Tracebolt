@@ -25,3 +25,19 @@ Desktop viewport: 1440×1000. Mobile emulation: 390×844. This is responsive Chr
 The notes mutation test intentionally stores a harmless markup-shaped text payload in the disposable database to verify that it is rendered literally rather than interpreted as HTML. No external URL is involved.
 
 Results are focused product and regression checks, not an independent security certification or an exhaustive accessibility audit.
+
+## Optional AI integration checks
+
+For a source checkpoint containing the AI API and UI, run:
+
+```sh
+TRACEBOLT_REVIEW_AI=1 node tests/e2e-review/run.mjs
+```
+
+This adds eight scenarios against a deterministic in-process loopback fixture provider. It performs no real model inference and never sends sandbox telemetry. The fixture key is an obvious synthetic test string, not a credential. Reports record whether these checks were enabled; AI screenshots include `ai-fixture` in the filename and show the fixture model label. They must never be presented as evidence of real-model accuracy.
+
+## Managed-preview transport UI
+
+Run `node tests/e2e-review/managed-preview.mjs` in a separate job after building the frontend and installing the pinned Playwright browser. It builds the real manager and one-shot Linux dev-agent, observes awaiting→accepted→stale with actual two-minute expiry, compares rendered values and provenance with the actual manager, and verifies seven demos remain separate.
+
+Only `artifacts/review/managed-preview-result.json` is suitable for upload. It contains bounded pass/fail metadata, no metric values, receipts, logs, database or screenshots. The runner deliberately captures no screenshots. This is a loopback development preview, not production enrollment or sender authentication.

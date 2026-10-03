@@ -63,7 +63,13 @@ jobs:
       - name: Vet
         run: go vet ./...
       - name: Unit and race tests
-        run: go test -race ./...
+        run: |
+          if ! go test -race ./... > "$RUNNER_TEMP/go-tests.log" 2>&1; then
+            echo 'FAIL: Go race tests; raw runtime output withheld.'
+            exit 1
+          fi
+          echo 'PASS: Go unit and race tests.'
+
       - name: Build local binaries
         run: make build
       - name: Execute Linux agent and validate bounded support-bundle schema
@@ -74,8 +80,22 @@ jobs:
           ./bin/agent --support-bundle | "$RUNNER_TEMP/bundle-validator/bin/python" tests/security/validate_bundle.py --expect-platform linux -
       - name: Cross-build native previews (not target-OS runtime validation)
         run: make crosscheck
-      - name: Disposable loopback boundary regressions
-        run: bash tests/security/run.sh
+      - name: Disposable HTTP, fake-provider AI and managed API regressions
+        run: |
+          if ! bash tests/security/run.sh > "$RUNNER_TEMP/api-tests.log" 2>&1; then
+            echo 'FAIL: local HTTP/AI/managed API regressions; runtime details withheld.'
+            exit 1
+          fi
+          echo 'PASS: 13 HTTP, six fake-provider AI and seven managed API groups; SQLite checks.'
+
+      - name: Real two-process Linux transport and 120-second expiry
+        run: |
+          if ! python3 tests/security/run_transport_smoke.py --wait-stale > "$RUNNER_TEMP/transport-smoke.log" 2>&1; then
+            echo 'FAIL: local transport smoke; raw output withheld to avoid telemetry disclosure.'
+            exit 1
+          fi
+          echo 'PASS: 14 real two-process transport checks including actual expiry; no telemetry uploaded.'
+
 
   frontend:
     name: UI types, tests and production build
@@ -130,7 +150,13 @@ jobs:
       - name: Test real loopback manager with disposable state
         env:
           TRACEBOLT_SOURCE_SHA: ${{ github.sha }}
+          TRACEBOLT_REVIEW_AI: '1'
         run: node tests/e2e-review/run.mjs
+      - name: Real managed-preview browser checks without telemetry screenshots
+        if: ${{ !cancelled() }}
+        env:
+          TRACEBOLT_SOURCE_SHA: ${{ github.sha }}
+        run: node tests/e2e-review/managed-preview.mjs
       - name: Keep browser review evidence briefly
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -140,5 +166,6 @@ jobs:
             artifacts/review/synthetic-*.png
             artifacts/review/results.json
             artifacts/review/screenshot-manifest.json
+            artifacts/review/managed-preview-result.json
           if-no-files-found: warn
           retention-days: 3

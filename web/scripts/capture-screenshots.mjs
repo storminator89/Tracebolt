@@ -13,7 +13,7 @@ const captures = [];
 async function snap(name, view, options = {}) { await page.screenshot({path:path.join(output,name),...options});captures.push({file:name,view,viewport:page.viewportSize(),data:'Actual local manager, synthetic example devices only; no real telemetry in capture'}); }
 try {
   await page.goto(base);
-  await page.getByRole('heading',{name:'Ein klarer Blick auf deine Geräte.'}).waitFor();
+  await page.getByRole('heading',{name:'Übersicht',exact:true}).waitFor();
   await page.locator('.fleet-panel').waitFor();
   const fleet = await page.locator('.fleet-panel').boundingBox();
   await snap('overview-1440-light.png','Overview, cropped above mixed-source fleet table to exclude sandbox telemetry',{clip:{x:0,y:0,width:1440,height:Math.ceil(fleet.y-12)}});

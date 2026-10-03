@@ -12,6 +12,7 @@ import (
 	"localrmm/internal/model"
 	"localrmm/internal/rules"
 	"localrmm/internal/store"
+	"localrmm/internal/telemetry"
 	"net"
 	"net/http"
 	"os"
@@ -25,12 +26,14 @@ import (
 )
 
 type Server struct {
-	store  *store.Store
-	port   int
-	web    string
-	csrf   string
-	mu     sync.RWMutex
-	sample model.Device
+	store          *store.Store
+	port           int
+	web            string
+	csrf           string
+	mu             sync.RWMutex
+	sample         model.Device
+	ai             *aiState
+	managedPreview *telemetry.State
 }
 
 func New(s *store.Store, port int, web string, sample model.Device) (*Server, error) {
@@ -45,10 +48,29 @@ func New(s *store.Store, port int, web string, sample model.Device) (*Server, er
 	if e != nil {
 		return nil, e
 	}
-	return &Server{store: s, port: port, web: absolute, csrf: hex.EncodeToString(raw), sample: sample}, nil
+	ai, err := newAIState()
+	if err != nil {
+		return nil, err
+	}
+	return &Server{store: s, port: port, web: absolute, csrf: hex.EncodeToString(raw), sample: sample, ai: ai}, nil
 }
-func (s *Server) SetSample(d model.Device)   { s.mu.Lock(); s.sample = d; s.mu.Unlock() }
-func (s *Server) sampleDevice() model.Device { s.mu.RLock(); defer s.mu.RUnlock(); return s.sample }
+func (s *Server) SetSample(d model.Device) {
+	s.mu.Lock()
+	if s.managedPreview == nil {
+		s.sample = d
+	}
+	s.mu.Unlock()
+}
+func (s *Server) sampleDevice() model.Device {
+	s.mu.RLock()
+	state := s.managedPreview
+	sample := s.sample
+	s.mu.RUnlock()
+	if state != nil {
+		return state.Device(time.Now().UTC())
+	}
+	return sample
+}
 func write(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(status)
@@ -126,6 +148,14 @@ func (s *Server) devices() ([]model.Device, error) {
 func (s *Server) api(w http.ResponseWriter, r *http.Request) {
 	p := r.URL.Path
 	if r.Method == "POST" {
+		if p == "/api/dev/telemetry" {
+			s.receiveTelemetry(w, r)
+			return
+		}
+		if p == "/api/ai/config" || p == "/api/ai/config/clear" || (strings.HasPrefix(p, "/api/cases/") && strings.HasSuffix(p, "/analyze")) {
+			s.aiMutation(w, r)
+			return
+		}
 		s.mutation(w, r)
 		return
 	}
@@ -135,12 +165,18 @@ func (s *Server) api(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	switch p {
+	case "/api/dev/telemetry/status":
+		s.telemetryStatus(w)
+		return
+	case "/api/ai/config":
+		s.aiConfig(w)
+		return
 	case "/api/health":
 		write(w, 200, map[string]any{"status": "ok", "version": model.Version, "mode": "local-development"})
 	case "/api/session":
 		write(w, 200, map[string]string{"csrfToken": s.csrf})
 	case "/api/capabilities":
-		write(w, 200, map[string]any{"mode": "local-development", "version": model.Version, "syntheticFleet": true, "realCollector": fmt.Sprintf("%s local read-only observations; scope=%s; see per-field capability details", s.sampleDevice().Platform, s.sampleDevice().Source), "remoteEnrollment": false, "shellExecution": false, "aiConnected": false, "persistence": "SQLite", "limitations": []string{"Loopback-only development app; no production authentication or fleet enrollment.", "Seven synthetic devices are examples, not enrolled customer endpoints.", "The live Linux sample has sandbox scope and incomplete host visibility.", "Windows and macOS have limited native adapters with fixture and cross-build checks only; target-machine acceptance remains unverified.", "No systemd, journal, service, software, update or vulnerability assessment is performed on the sandbox.", "Deterministic rules produce demo findings. No language model is connected.", "Runbooks are read-only guidance. No remote shell, jobs or remediation are available.", "SQLite state is local and not encrypted; protect your operating-system account and workspace.", "Metric quality healthy means observation validity; it does not mean the endpoint or metric is healthy."}})
+		write(w, 200, map[string]any{"mode": "local-development", "version": model.Version, "syntheticFleet": true, "realCollector": s.collectorDescription(), "remoteEnrollment": false, "shellExecution": false, "aiConnected": false, "aiConfigured": s.aiConfigured(), "managedPreview": s.managedPreviewEnabled(), "persistence": "SQLite", "limitations": []string{"Loopback-only development app; no production authentication or fleet enrollment.", "Seven synthetic devices are examples, not enrolled customer endpoints.", "The live Linux sample has sandbox scope and incomplete host visibility.", "Windows and macOS have limited native adapters with fixture and cross-build checks only; target-machine acceptance remains unverified.", "No systemd, journal, service, software, update or vulnerability assessment is performed on the sandbox.", "Deterministic rules produce demo findings. Optional AI is configured separately and called only for an explicit case analysis; saved settings do not verify a connection.", "Runbooks are read-only guidance. No remote shell, jobs or remediation are available.", "SQLite state is local and not encrypted; protect your operating-system account and workspace.", "Metric quality healthy means observation validity; it does not mean the endpoint or metric is healthy."}})
 	case "/api/devices":
 		ds, e := s.devices()
 		if e != nil {

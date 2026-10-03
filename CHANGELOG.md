@@ -2,6 +2,26 @@
 
 Meaningful development checkpoints are recorded here. These are prototype milestones, not production releases.
 
+## 2026-10-03 — Consent-based AI preview and local agent delivery
+
+### Added
+- Optional OpenAI-compatible provider configuration held in process memory, with explicit evidence-and-destination review before each analysis request.
+- Bounded, validated AI suggestions with evidence citations, unconfirmed-cause labeling, cancellation and clear provider-error states. Automated validation uses only a deterministic local test provider, not a real model.
+- A separate one-shot development agent and opt-in loopback telemetry preview, with awaiting/fresh/stale states, replay rejection, receipt provenance and no manager-side fallback sampling.
+- Additive AI and transport security reviews, contracts, independent API regressions, and separate AI/managed browser scenarios.
+
+### Improved
+- Concise operational headings and current-address runtime information.
+- Unknown collection times and awaiting samples remain visibly unknown rather than appearing as valid measurements.
+
+### Verified prior milestone
+- Source `2bccc168c6ef770484b1641bcaeabfe1d10270df` passed actual hosted Linux amd64, Windows amd64 and macOS arm64 read-only agent/runtime checks, plus 26 Chromium scenarios with zero runtime errors.
+
+### Scope
+- Provider tests use synthetic evidence and an explicitly labeled test provider. They do not establish diagnostic quality of a real model.
+- Managed preview remains loopback-only, without enrolled sender identity, LAN transport, remote actions, service installation or production approval. Native hosted CLI smoke does not establish service, reboot or ordinary-user permission acceptance.
+- New UI/browser outcomes are recorded for this checkpoint's exact CI commit; earlier browser passes do not cover these new features.
+
 ## 2026-10-03 — Native runtime CI and keyboard refinements
 
 ### Added

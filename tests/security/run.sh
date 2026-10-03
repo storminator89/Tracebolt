@@ -11,7 +11,12 @@ fi
 
 state=$(mktemp -d "${TMPDIR:-/tmp}/tracebolt-boundary.XXXXXXXX")
 pid=''
+managed_pid=''
 cleanup() {
+  if [[ -n "$managed_pid" ]]; then
+    kill "$managed_pid" 2>/dev/null || true
+    wait "$managed_pid" 2>/dev/null || true
+  fi
   if [[ -n "$pid" ]]; then
     kill "$pid" 2>/dev/null || true
     wait "$pid" 2>/dev/null || true
@@ -59,6 +64,38 @@ if [[ "$ready" != true ]] || ! kill -0 "$pid" 2>/dev/null; then
 fi
 
 python3 tests/security/run_boundary.py --base-url "http://127.0.0.1:$port" --allow-mutations
+python3 tests/security/run_ai_boundary.py --base-url "http://127.0.0.1:$port" --allow-mutations
+
+managed_port=$(python3 - <<'PORT'
+import socket
+with socket.socket() as listener:
+    listener.bind(('127.0.0.1', 0))
+    print(listener.getsockname()[1])
+PORT
+)
+"$manager" --managed-preview --port "$managed_port" --db "$state/managed.db" --web "$state/web" > "$state/managed.log" 2>&1 &
+managed_pid=$!
+managed_ready=false
+for attempt in {1..100}; do
+  if ! kill -0 "$managed_pid" 2>/dev/null; then
+    printf 'Managed test process failed; runtime details withheld.\n' >&2
+    exit 1
+  fi
+  response=$(curl --silent --fail --connect-timeout 1 --max-time 2 "http://127.0.0.1:$managed_port/" || true)
+  if [[ "$response" == "$marker" ]]; then managed_ready=true; break; fi
+  sleep 0.1
+done
+[[ "$managed_ready" == true ]] && kill -0 "$managed_pid" 2>/dev/null || exit 1
+go build -buildvcs=false -trimpath -o "$state/dev-agent" ./cmd/dev-agent
+if ! python3 tests/security/run_telemetry_boundary.py --base-url "http://127.0.0.1:$managed_port" --disabled-url "http://127.0.0.1:$port" --agent ./bin/agent --dev-agent "$state/dev-agent" > "$state/telemetry-tests.log" 2>&1; then
+  printf 'FAIL: seven managed API boundary groups; runtime details withheld.\n' >&2
+  exit 1
+fi
+printf 'PASS: seven managed API boundary groups; no runtime samples printed.\n'
+kill "$managed_pid"
+wait "$managed_pid"
+managed_pid=''
+
 kill "$pid"
 wait "$pid"
 pid=''

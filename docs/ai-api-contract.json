@@ -1,0 +1,91 @@
+{
+  "version": "tracebolt.ai-api.v1",
+  "mode": "local-development",
+  "secrets": "Server memory only; every save replaces configuration including API key. No disk/database/browser storage, no save-time network request. Restart clears settings.",
+  "authentication": "Existing Host/Origin/CSRF guards. Every POST requires current same-origin Origin, X-CSRF-Token, Content-Type: application/json.",
+  "endpoints": {
+    "GET /api/ai/config": {
+      "revision": "cfg-opaque-token",
+      "configured": false,
+      "provider": "openai-compatible",
+      "baseURL": "http://127.0.0.1:11434/v1",
+      "endpointOrigin": "http://127.0.0.1:11434",
+      "model": "",
+      "keyConfigured": false,
+      "useLegacyMaxTokens": false,
+      "allowRemoteEvidence": false,
+      "storage": "memory-only",
+      "resetsOnRestart": true,
+      "busy": false,
+      "limitations": [
+        "No provider has been contacted by reading or saving settings.",
+        "Literal loopback or explicitly approved public HTTPS only. LAN/private destinations require a later reviewed policy.",
+        "Loopback transport does not prove inference stays local.",
+        "Only bounded case-linked evidence is analyzed. Notes, device identifiers and unrelated telemetry are excluded.",
+        "Evidence can still contain sensitive text; review the case and destination before starting."
+      ]
+    },
+    "POST /api/ai/config": {
+      "body": {
+        "expectedRevision": "from GET config",
+        "baseURL": "exact user-selected OpenAI-compatible base URL ending /v1 normally",
+        "model": "1..128 printable ASCII bytes",
+        "apiKey": "fresh key, <=4096 printable ASCII bytes; empty allowed only for literal loopback",
+        "approvedOrigin": "exact scheme://authority of baseURL, no path",
+        "allowRemoteEvidence": "boolean; must be true for public HTTPS",
+        "useLegacyMaxTokens": "boolean; explicit compatibility choice, no automatic retries"
+      },
+      "rawBodyMaxBytes": 8192,
+      "response": "same public shape as GET; never API key or fragment",
+      "effects": "Construct/replace provider locally. Cancel prior in-flight analysis, retain global busy slot until cancellation settles. No network/DNS calls."
+    },
+    "POST /api/ai/config/clear": {
+      "body": {
+        "expectedRevision": "from GET config"
+      },
+      "response": "default public config, new revision; in-flight old work canceled"
+    },
+    "POST /api/cases/{id}/analyze": {
+      "body": {
+        "configRevision": "exact revision last displayed to operator"
+      },
+      "rawBodyMaxBytes": 1024,
+      "response": "internal/analysis.Result plus configRevision:string and superseded:boolean",
+      "effects": "Explicit single provider request for existing server-loaded case/evidence only. No commands, fetching extra context, retries or fallback. No result persistence. With no provider returns rule baseline + ai.status not_configured."
+    }
+  },
+  "errors": {
+    "400": "invalid JSON/configuration",
+    "403": "Host/Origin/CSRF blocked",
+    "404": "unknown case/route",
+    "409": "config_revision_mismatch or analysis_busy; refresh config",
+    "413": "body too large",
+    "415": "wrong content type"
+  },
+  "analysisResult": {
+    "schemaVersion": "tracebolt.analysis.v1",
+    "id": "analysis-opaque-token",
+    "fingerprint": "evidence/config version fingerprint",
+    "generatedAt": "RFC3339",
+    "configRevision": "snapshot config revision",
+    "superseded": "true if configuration changed while request ran; UI must ignore outdated completion",
+    "packet": "See internal/analysis/packet.go; bounded selected evidence with source/time/quality/synthetic metadata",
+    "baseline": "summary, evidenceIDs[], nextCheck, nextSteps[], provenance",
+    "ai": {
+      "status": "not_configured|completed|canceled|timeout|busy|invalid_response|unavailable",
+      "reason": "safe diagnostic text",
+      "findings": "null unless completed; observedEvidenceIDs[],hypotheses[{statement,evidenceIDs[]}],counterevidence[{statement,evidenceIDs[]}],missingData[],nextCheck",
+      "nextSteps": "server-owned read-only runbook steps only",
+      "provenance": "method,provider,model,promptVersion,runbookVersion,ruleId,packetSHA256,destination,endpointOrigin"
+    },
+    "rootCauseConfirmed": false,
+    "limitations": "string[]"
+  },
+  "uiRules": [
+    "Never persist API keys in browser storage. Clear the password input after an accepted save; never fill it from GET. Every save requires fresh entry where a key is needed.",
+    "Show the exact selected destination and evidence-sharing explanation before explicit analyze. Require remote-evidence opt-in for HTTPS outside loopback.",
+    "Ignore old navigation responses and mismatched/superseded config results. Keep deterministic baseline separate from model suggestions.",
+    "Do not label settings saved as a successful provider connection or model test.",
+    "Configuration and results are memory-only and reset on restart/reload respectively."
+  ]
+}
