@@ -35,6 +35,7 @@ type Server struct {
 	ai               *aiState
 	managedPreview   *telemetry.State
 	lanOnly          bool
+	guidedEnrollment bool
 	insecureHTTPTest bool
 	lanDevices       func() ([]model.Device, error)
 }
@@ -181,6 +182,9 @@ func (s *Server) api(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	switch p {
+	case "/api/enrollment":
+		write(w, 200, map[string]any{"enabled": false, "schemaVersion": "tracebolt.enrollment-operator.v2", "platforms": []string{}, "recordLimit": 25, "items": []any{}, "serverNow": time.Now().UTC()})
+		return
 	case "/api/dev/telemetry/status":
 		s.telemetryStatus(w)
 		return

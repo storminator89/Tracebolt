@@ -37,7 +37,8 @@ type linuxStorage struct {
 	ops     fileOps
 }
 
-func newStorage(path string) (storage, []byte, bool, error) {
+func newStorage(path string) (storage, []byte, bool, error) { return newStorageMode(path, true) }
+func newStorageMode(path string, allowCreate bool) (storage, []byte, bool, error) {
 	if path == "" || strings.ContainsRune(path, 0) {
 		return nil, nil, false, ErrUnsafe
 	}
@@ -47,12 +48,15 @@ func newStorage(path string) (storage, []byte, bool, error) {
 	}
 	s := &linuxStorage{ops: fileOps{sync: unix.Fsync, rename: unix.Renameat}}
 	fail := func(err error) (storage, []byte, bool, error) { _ = s.close(); return nil, nil, false, err }
-	if err = s.openDirectory(abs); err != nil {
+	if err = s.openDirectoryMode(abs, allowCreate); err != nil {
 		return fail(err)
 	}
 	dfd := s.dirFD()
 	var existingLock unix.Stat_t
 	if err = unix.Fstatat(dfd, lockName, &existingLock, unix.AT_SYMLINK_NOFOLLOW); errors.Is(err, unix.ENOENT) {
+		if !allowCreate {
+			return fail(ErrCorrupt)
+		}
 		// Do not turn an arbitrary configured directory into a sender store,
 		// or create a new lock domain beside an existing sequence ledger.
 		if err = s.requireDedicatedDirectory(false); err != nil {
@@ -61,8 +65,12 @@ func newStorage(path string) (storage, []byte, bool, error) {
 	} else if err != nil {
 		return fail(ErrIO)
 	}
-	fd, err := unix.Openat(dfd, lockName, unix.O_RDWR|unix.O_CREAT|unix.O_EXCL|unix.O_NOFOLLOW|unix.O_NONBLOCK|unix.O_CLOEXEC, 0600)
-	newLock := err == nil
+	flags := unix.O_RDWR | unix.O_NOFOLLOW | unix.O_NONBLOCK | unix.O_CLOEXEC
+	if allowCreate {
+		flags |= unix.O_CREAT | unix.O_EXCL
+	}
+	fd, err := unix.Openat(dfd, lockName, flags, 0600)
+	newLock := allowCreate && err == nil
 	if errors.Is(err, unix.EEXIST) {
 		fd, err = unix.Openat(dfd, lockName, unix.O_RDWR|unix.O_NOFOLLOW|unix.O_NONBLOCK|unix.O_CLOEXEC, 0)
 	}
@@ -140,7 +148,8 @@ func (s *linuxStorage) dirFD() int { return int(s.chain[len(s.chain)-1].file.Fd(
 // Walk from / with anchored descriptors, never following a symlink. Trusted
 // sticky directories (such as /tmp) are acceptable ancestors: other users cannot
 // replace a root/runtime-owned child. Every other writable ancestor is rejected.
-func (s *linuxStorage) openDirectory(abs string) error {
+func (s *linuxStorage) openDirectory(abs string) error { return s.openDirectoryMode(abs, true) }
+func (s *linuxStorage) openDirectoryMode(abs string, allowCreate bool) error {
 	fd, err := unix.Open("/", unix.O_RDONLY|unix.O_DIRECTORY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
 	if err != nil {
 		return ErrIO
@@ -161,6 +170,9 @@ func (s *linuxStorage) openDirectory(abs string) error {
 		parent := s.dirFD()
 		child, err := unix.Openat(parent, name, unix.O_RDONLY|unix.O_DIRECTORY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
 		if errors.Is(err, unix.ENOENT) {
+			if !allowCreate {
+				return ErrCorrupt
+			}
 			if err = unix.Mkdirat(parent, name, 0700); err != nil {
 				return safeOpenError(err)
 			}

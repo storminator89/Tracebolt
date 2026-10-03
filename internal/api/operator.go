@@ -8,6 +8,7 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"errors"
+	"localrmm/internal/enrollmentservice"
 	"localrmm/internal/lantrust"
 	"localrmm/internal/model"
 	"localrmm/internal/operatorauth"
@@ -26,15 +27,19 @@ type LANOperatorConfig struct {
 	Registry *lantrust.Registry
 	Devices  func() ([]model.Device, error)
 	// InsecureHTTPTest is a separate, explicitly opted-in plaintext profile.
-	InsecureHTTPTest bool
+	InsecureHTTPTest    bool
+	Enrollment          *enrollmentservice.Service
+	EnrollmentBootstrap EnrollmentBootstrap
 }
 type operatorHandler struct {
-	app               *Server
-	origin, authority string
-	auth              *operatorauth.Manager
-	registry          *lantrust.Registry
-	insecureHTTPTest  bool
-	cookieName        string
+	app                 *Server
+	origin, authority   string
+	auth                *operatorauth.Manager
+	registry            *lantrust.Registry
+	insecureHTTPTest    bool
+	cookieName          string
+	enrollment          *enrollmentservice.Service
+	enrollmentBootstrap EnrollmentBootstrap
 }
 type operatorRequestKey struct{}
 type operatorRequest struct {
@@ -79,14 +84,18 @@ func NewLANOperatorHandler(app *Server, c LANOperatorConfig) (http.Handler, erro
 	if strings.HasSuffix(u.Host, ":") || u.Hostname() == "" {
 		return nil, errors.New("invalid operator authority")
 	}
+	if c.Enrollment != nil && !validEnrollmentBootstrap(c.Enrollment, c.EnrollmentBootstrap, c.Origin, c.InsecureHTTPTest) {
+		return nil, errors.New("enrollment public bootstrap does not match configured authority")
+	}
 	app.mu.Lock()
 	app.lanOnly = true
+	app.guidedEnrollment = c.Enrollment != nil
 	app.insecureHTTPTest = c.InsecureHTTPTest
 	app.managedPreview = nil
 	app.sample = model.Device{}
 	app.lanDevices = c.Devices
 	app.mu.Unlock()
-	return &operatorHandler{app: app, origin: c.Origin, authority: u.Host, auth: c.Auth, registry: c.Registry, insecureHTTPTest: c.InsecureHTTPTest, cookieName: cookieName}, nil
+	return &operatorHandler{app: app, origin: c.Origin, authority: u.Host, auth: c.Auth, registry: c.Registry, insecureHTTPTest: c.InsecureHTTPTest, cookieName: cookieName, enrollment: c.Enrollment, enrollmentBootstrap: c.EnrollmentBootstrap}, nil
 }
 func (s *Server) developmentAuthView() authView {
 	token := s.csrf
@@ -208,7 +217,7 @@ func (h *operatorHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		fail(w, 400, "invalid_framing", "Chunked request bodies are not accepted.")
 		return
 	}
-	if strings.Contains(r.URL.Path, "//") || strings.Contains(r.URL.Path, "\\") || strings.Contains(r.URL.EscapedPath(), "%") || r.URL.RawQuery != "" {
+	if strings.Contains(r.URL.Path, "//") || strings.Contains(r.URL.Path, "\\") || strings.Contains(r.URL.EscapedPath(), "%") || r.URL.RawQuery != "" || r.URL.ForceQuery {
 		fail(w, 400, "invalid_path", "Path is not canonical.")
 		return
 	}
@@ -217,6 +226,10 @@ func (h *operatorHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			fail(w, 404, "not_found", "Path is unavailable.")
 			return
 		}
+	}
+	if strings.HasPrefix(r.URL.Path, "/v2/enrollment/") {
+		h.enrollmentClient(w, r)
+		return
 	}
 	apiPath := strings.HasPrefix(r.URL.Path, "/api/")
 	if apiPath && r.Header.Get("Sec-Fetch-Site") == "cross-site" {
@@ -288,6 +301,10 @@ func (h *operatorHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		fail(w, 405, "method_not_allowed", "Method is unsupported.")
 		return
 	}
+	if r.URL.Path == "/api/enrollment" || strings.HasPrefix(r.URL.Path, "/api/enrollment/") {
+		h.enrollmentOperator(w, r)
+		return
+	}
 	h.app.api(w, r)
 }
 func (h *operatorHandler) login(w http.ResponseWriter, r *http.Request) {
@@ -334,6 +351,10 @@ func (h *operatorHandler) login(w http.ResponseWriter, r *http.Request) {
 	write(w, 200, h.view(&session))
 }
 func (h *operatorHandler) agentMutation(w http.ResponseWriter, r *http.Request) {
+	if h.enrollment != nil {
+		fail(w, 404, "manual_identity_unavailable", "Manual certificate actions are unavailable in guided enrollment mode.")
+		return
+	}
 	if !h.app.authorizeJSONMutation(w, r) {
 		return
 	}

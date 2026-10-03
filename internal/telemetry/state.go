@@ -188,9 +188,9 @@ func decodeBundle(raw []byte, receivedAt time.Time) (bundle.Bundle, error) {
 	if b.Observation.Platform != "linux" {
 		return b, invalid("Only the fixed Linux preview role is accepted.")
 	}
-	// Existing exporter validates role labels, metadata bounds, privacy fields,
+	// Deterministic policy validates role labels, metadata bounds, privacy fields,
 	// finite metric ranges, quality, capability states and evidence uniqueness.
-	if _, err := bundle.Encode(b.Observation); err != nil {
+	if err := bundle.ValidateObservation(b.Observation); err != nil {
 		return b, invalid("Invalid local observation contract.")
 	}
 	if err := linuxContract(b.Observation); err != nil {

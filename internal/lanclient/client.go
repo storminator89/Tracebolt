@@ -51,11 +51,23 @@ func Run(ctx context.Context, m Material) (Report, error) {
 		return report, ErrConfiguration
 	}
 	report.Profile = m.config.Profile
-	state, e := lanclientstate.Open(m.config.StateDirectory, m.binding)
+	state, e := openSenderState(m)
 	if e != nil {
 		return report, ErrState
 	}
 	defer state.Close()
+	return runUsingState(ctx, m, state)
+}
+
+// runUsingState preserves one exclusive ledger lock across foreground attempts.
+func runUsingState(ctx context.Context, m Material, state *lanclientstate.State) (Report, error) {
+	report := Report{SchemaVersion: "tracebolt.agent-run.v1", Status: "failed", Profile: m.config.Profile}
+	if ctx.Err() != nil {
+		return report, ctx.Err()
+	}
+	if !m.valid() {
+		return report, ErrConfiguration
+	}
 	pending, e := state.Pending()
 	if e != nil {
 		return report, ErrState
@@ -179,7 +191,11 @@ func decodeFrame(raw []byte, sequence uint64) (frame, error) {
 	if f.SchemaVersion != FrameVersion || f.Sequence != sequence || f.Observation.SchemaVersion != bundle.SchemaVersion || f.Observation.Product != "Tracebolt" || f.Observation.Platform != f.Observation.Observation.Platform || f.Observation.Scope != "single-read-only-local-observation" {
 		return f, ErrState
 	}
-	if _, e := bundle.Encode(f.Observation.Observation); e != nil {
+	if e := bundle.ValidateObservation(f.Observation.Observation); e != nil {
+		return f, ErrState
+	}
+	encoded, e := json.Marshal(f.Observation)
+	if e != nil || len(encoded) > bundle.MaxBytes {
 		return f, ErrState
 	}
 	return f, nil

@@ -214,16 +214,32 @@ func (r *Registry) TLSConfig(server tls.Certificate) (*tls.Config, error) {
 // server name. Go's normal chain and SAN verification remains enabled. The caller
 // must use a dedicated transport with no proxy or redirects and an exact origin.
 func ClientTLSConfig(client tls.Certificate, serverCAPEM []byte, serverName string) (*tls.Config, error) {
+	if validateKeyPair(client, x509.ExtKeyUsageClientAuth, time.Now().UTC()) != nil {
+		return nil, ErrConfiguration
+	}
+	config, err := ServerTLSConfig(serverCAPEM, serverName)
+	if err != nil {
+		return nil, err
+	}
+	client.Leaf, _ = x509.ParseCertificate(client.Certificate[0])
+	config.Certificates = []tls.Certificate{client}
+	return config, nil
+}
+
+// ServerTLSConfig validates an explicit server trust pool for enrollment before
+// a client identity exists. It keeps normal CA/SAN checks and adds the same
+// verified-chain strength/time policy as the mutual-TLS client configuration.
+// No system roots, client certificate, network call or trust installation occurs.
+func ServerTLSConfig(serverCAPEM []byte, serverName string) (*tls.Config, error) {
 	now := time.Now().UTC()
-	if !validServerName(serverName) || validateKeyPair(client, x509.ExtKeyUsageClientAuth, now) != nil {
+	if !validServerName(serverName) {
 		return nil, ErrConfiguration
 	}
 	roots, err := certificatePool(serverCAPEM, now)
 	if err != nil {
 		return nil, err
 	}
-	client.Leaf, _ = x509.ParseCertificate(client.Certificate[0])
-	config := &tls.Config{MinVersion: tls.VersionTLS13, Certificates: []tls.Certificate{client}, RootCAs: roots, ServerName: serverName}
+	config := &tls.Config{MinVersion: tls.VersionTLS13, RootCAs: roots, ServerName: serverName}
 	// Add key-strength checks after ordinary chain/SAN verification. Never
 	// replace normal verification, load ambient roots or accept a raw peer
 	// chain that Go has not verified. VerifyConnection also covers resumption.

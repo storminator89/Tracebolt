@@ -8,7 +8,7 @@ Tracebolt is an early self-hosted diagnostics prototype with a React interface, 
 
 ## Installation
 
-Start with the **[installation runbook for humans and automation agents](docs/installation.md)**. It covers Docker/native Linux setup, manual public-certificate approval, the one-shot Linux sender, verification, recovery and explicit permission boundaries. [AGENTS.md](AGENTS.md) is the repository entry guide.
+Start with the **[installation runbook for humans and automation agents](docs/installation.md)**. It covers Docker/native Linux setup, manual public-certificate approval, the Linux one-shot/foreground sender, optional guided enrollment, verification, recovery and explicit permission boundaries. [AGENTS.md](AGENTS.md) is the repository entry guide.
 
 ## Screenshots
 
@@ -80,13 +80,21 @@ The interface uses the real local API. Browser acceptance and screenshots are pr
 ./bin/lan-manager --lan-config /absolute/path/lan.json
 ```
 
-Read the [LAN runtime contract](docs/lan-runtime.md) before providing configuration. The default TLS profile uses separate operator HTTPS and agent mTLS listeners, a preprovided operator password verifier, bounded sessions/CSRF, manual public-leaf approval and durable replay/revocation state. The LAN runtime starts without demo devices or fallback host sampling. Approved agents awaiting their first observation remain unknown. Current diagnostics do not turn synthetic demo rules into real LAN findings.
+Read the [LAN runtime contract](docs/lan-runtime.md) before providing configuration. The default TLS profile uses separate operator HTTPS and agent mTLS listeners, a preprovided operator password verifier, bounded sessions/CSRF, manual public-leaf approval and durable replay/revocation state. An opt-in guided-v2 mode adds a dedicated protected client-auth intermediate, a conditional operator UI, proof-bound approval and a native Linux bootstrap; default manual-v1 remains separate. The LAN runtime starts without demo devices or fallback host sampling. Approved agents awaiting their first observation remain unknown. Current diagnostics do not turn synthetic demo rules into real LAN findings.
 
 An explicitly enabled [HTTP test profile](docs/signed-http-test.md) uses separate disposable authentication/state and signed telemetry. **HTTP exposes operator passwords, sessions and telemetry on the network; signatures do not encrypt them or authenticate the browser UI.** A permanent warning is shown before and after login. Use this only for deliberate isolated testing with test-only material.
 
 [Docker packaging and Compose examples](docs/docker.md) provide an optional Linux server route. The image runs as a fixed nonroot user with a read-only root filesystem and dropped capabilities. Endpoint collectors remain native. CI builds a local image and exercises both disposable profiles on a standard Linux runner; check this commit's actual outcome before treating container execution as verified. No registry publication or real deployment is part of the workflow.
 
-A [native one-shot Linux sender](docs/lan-agent.md) now collects and delivers one bounded observation using preprovided approved material. Its private durable state preserves exact request bytes across uncertain delivery/restart and binds them to the configured destination and identity. Run `bin/lan-agent --config /absolute/path/agent.json` after following that contract. [Two-binary runtime tests](tests/lanclient/README.md) exercise the actual manager and sender over both loopback profiles. Windows/macOS sender state protection, installed services and continuous scheduling remain unimplemented. Certificate issuance, trusted browser TLS setup and real endpoint provisioning are separate work.
+A [native one-shot Linux sender](docs/lan-agent.md) now collects and delivers one bounded observation using preprovided approved material. Its private durable state preserves exact request bytes across uncertain delivery/restart and binds them to the configured destination and identity. Run `bin/lan-agent --config /absolute/path/agent.json` after following that contract. [Two-binary runtime tests](tests/lanclient/README.md) exercise the actual manager and sender over both loopback profiles. Linux reporting can now repeat in the foreground with bounded cadence/backoff; it stops with the process. Windows/macOS LAN sender state protection, OS services, boot persistence and automatic renewal remain unimplemented. Provisioning the dedicated issuer, normally trusted browser TLS setup and real endpoint rollout remain separate authorized work.
+
+## Optional guided Linux enrollment
+
+Enable guided-v2 only with the [explicit runtime/issuer contract](docs/enrollment-v2/runtime-config.md). It requires an empty legacy registry and a preprovided dedicated client-auth intermediate; the root signing key stays offline. There is no automatic migration or CA provisioning. The pilot retains at most 25 enrollment records, including terminal records.
+
+The enabled interface creates a one-time Linux invitation and exports only public bootstrap information. The native `enroll-agent` displays exact trust/origin context and a full public-key fingerprint/comparison, reads the invitation from a hidden local terminal, and waits for deliberate operator approval. Its protected, fail-closed handoff feeds `lan-agent --foreground`. [Installation and recovery instructions](docs/installation.md#6b-optional-guided-v2-bootstrap-compare-approve-and-report) explain the required permissions and exact commands. Real endpoint key creation and access grants still need their own authorized workflow.
+
+New source/component and actual three-binary fixture checks passed before publication; the exact-source hosted browser/container gates remain the release evidence. Existing gallery captures are pinned to their earlier source and do not claim to show this new enrollment interface. No invitation or comparison values belong in public screenshots.
 
 ## Optional previews
 
@@ -136,7 +144,10 @@ The [defensive Ed25519 key-policy review](docs/ed25519-hardening-review.md) docu
 - `cmd/agent`: single-sample, read-only collector command
 - `cmd/dev-agent`: one-shot loopback development sender
 - `cmd/lan-manager`: separate explicitly configured operator/agent runtime
-- `cmd/lan-agent`: Linux one-shot sender with protected exact-retry state
+- `cmd/lan-agent`: Linux one-shot/foreground sender with protected exact-retry state
+- `cmd/enroll-agent`: opt-in Linux guided bootstrap with hidden invitation input
+- `internal/enrollment*`: bounded lifecycle, durable issuer/identity and native-client contracts
+- `internal/agentloop`: serial foreground cadence/backoff with bounded metadata
 - `internal/operatorauth`, `lantrust`, `lanstore`, `signedhttp`: session, identity, replay and transport boundaries
 - `tests/container`: opt-in disposable TLS/HTTP-test lifecycle checks
 - `internal/api`: request boundaries and API handlers

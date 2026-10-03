@@ -267,3 +267,49 @@ func TestMixedAgeObservationExpiresWithoutNewPost(t *testing.T) {
 		t.Fatal("aging resampled data")
 	}
 }
+
+func TestPreviewValidatesActualBundleAtExactBodyBoundary(t *testing.T) {
+	at := time.Unix(1800000000, 123456789).UTC()
+	var b bundle.Bundle
+	if err := json.Unmarshal(sample(t, at), &b); err != nil {
+		t.Fatal(err)
+	}
+	for n := range b.Observation.Evidence {
+		b.Observation.Evidence[n].Detail = ""
+		b.Observation.Evidence[n].Value = ""
+		b.Observation.Evidence[n].Source = ""
+	}
+	raw, err := json.Marshal(b)
+	if err != nil {
+		t.Fatal(err)
+	}
+	remaining := MaxBodyBytes - len(raw)
+	for n := range b.Observation.Evidence {
+		for _, field := range []*string{&b.Observation.Evidence[n].Detail, &b.Observation.Evidence[n].Value, &b.Observation.Evidence[n].Source} {
+			count := remaining
+			if count > 4096 {
+				count = 4096
+			}
+			*field = strings.Repeat("x", count)
+			remaining -= count
+		}
+	}
+	if remaining != 0 {
+		t.Fatal("fixture did not fill accepted envelope")
+	}
+	raw, err = json.Marshal(b)
+	if err != nil || len(raw) != MaxBodyBytes {
+		t.Fatal("fixture boundary mismatch")
+	}
+	if _, err = bundle.Encode(b.Observation); err == nil {
+		t.Fatal("fixture must distinguish fresh generated envelope from received envelope")
+	}
+	for range 30 {
+		if _, err = decodeBundle(raw, at); err != nil {
+			t.Fatal("exact original-envelope boundary rejected:", err)
+		}
+	}
+	if _, err = decodeBundle(append(raw, ' '), at); code(err) != "payload_too_large" {
+		t.Fatal("over-bound original envelope accepted")
+	}
+}

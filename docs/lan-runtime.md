@@ -1,10 +1,10 @@
 # Single-environment LAN runtime
 
-This is a code/test pilot for one administrator and manually approved native agents. The separate `cmd/lan-manager` binary never starts the development manager or seeds synthetic devices. Current native sender/service installation and continuous scheduling are not implemented here. The actual runtime tests use temporary loopback listeners, credentials and certificates; they do not provision a real LAN deployment.
+This is a code/test pilot for one administrator with two mutually exclusive identity modes: manual public-certificate approval (default) and optional guided enrollment v2. The separate `cmd/lan-manager` binary never starts the development manager or seeds synthetic devices. The Linux sender supports one-shot and bounded foreground reporting; operating-system service installation/reboot acceptance remains pending. The actual runtime tests use temporary loopback listeners, credentials and certificates; they do not provision a real LAN deployment.
 
 ## Explicit configuration
 
-Build with `go build -buildvcs=false -o bin/lan-manager ./cmd/lan-manager`. The only startup argument is `--lan-config /absolute/path/lan.json`. All referenced filesystem paths are absolute. Config is bounded strict JSON; unknown/duplicate keys, null values, malformed ports and noncanonical origins are rejected. Omitting `profile` selects `tls`; there is no automatic fallback.
+Build with `go build -buildvcs=false -o bin/lan-manager ./cmd/lan-manager`. The required startup argument is `--lan-config /absolute/path/lan.json`. Optional guided mode adds `--enrollment-config /absolute/path/enrollment.json`; it requires a dedicated preprovided issuer and an empty legacy registry. See [enrollment runtime configuration](enrollment-v2/runtime-config.md). All referenced filesystem paths are absolute. Config is bounded strict JSON; unknown/duplicate keys, null values, malformed ports and noncanonical origins are rejected. Omitting `profile` selects `tls`; there is no automatic fallback.
 
 Configuration fields:
 
@@ -21,9 +21,9 @@ Configuration fields:
 
 Server key and authentication files must be owned by the runtime UID, regular single-link files with no group/world access (normally0400 or0600). Public config/certificate/CA files may be0644 but cannot be group/world writable. Paths and ancestors cannot be symlinks or replaceable by another account. Root-owned sticky temporary ancestors are accepted for isolated tests. Runtime state must be0700 or tighter. The Docker packaging documents UID65532 volume/material ownership separately. Same-UID/root compromise is outside this process boundary.
 
-## Default TLS profile
+## Default manual identity mode over TLS
 
-Operator and agent traffic have separate listeners and routers. Operator HTTPS uses normal server verification and session authentication, while agent ingress requires TLS1.3 mutual authentication against the explicitly configured client CA. No certificate issuer, automatic enrollment, scans, account hierarchy or trust-store changes are performed.
+Operator and agent traffic have separate listeners and routers. Operator HTTPS uses normal server verification and session authentication, while agent ingress requires TLS 1.3 mutual authentication against the explicitly configured client CA. In default manual mode there is no certificate issuer or enrollment. Optional guided-v2 has a separately configured fixed-policy issuer; neither mode performs discovery scans, account hierarchy management or OS trust-store changes.
 
 The administrator approves a public leaf certificate and checks its complete DER SHA256 fingerprint through an independent channel. The server assigns an opaque agent ID. Certificate subjects and body role labels are not fleet identity. Registry approval/revocation is checked on every request, including reused TLS connections, and again when committing telemetry. Approval/revocation and bounded latest-observation/replay state persist in SQLite. Certificate renewal requires a new explicit approval; revoked entries are tombstones.
 
@@ -43,8 +43,34 @@ No actual credentials are generated or entered by this implementation work. `sig
 
 `POST /v1/agent/telemetry` accepts at most72KiB of strict JSON: `schemaVersion: tracebolt.agent-telemetry.v1`, a positive bounded monotonic `sequence`, and `observation` containing the bounded support-bundle schema. The application build version is distinct from protocol/schema version. All observation/field timestamps must be at most2minutes old and no more than30seconds ahead. The authenticated registry identity replaces local collector role identity server-side.
 
-Only latest observations are retained. Staleness degrades quality without fabricating a fresh sample, agent process liveness, or healthy host verdict. There is no collector fallback, synthetic fleet, polling scheduler, history retention, update/CVE integration or automatic remediation in this LAN runtime yet. Existing rules are explicitly synthetic-demo rules and do not generate real LAN incidents. Current AI configuration also still rejects private LAN model origins; trusted private model support needs its separate transport policy.
+Only latest observations are retained. Staleness degrades quality without fabricating a fresh sample, agent process liveness, or healthy host verdict. There is no collector fallback, synthetic fleet, history retention, update/CVE integration or automatic remediation in this LAN runtime yet. Native `lan-agent --foreground` schedules bounded reports; the manager does not initiate collection or establish that an OS service is installed. Existing rules are explicitly synthetic-demo rules and do not generate real LAN incidents. Current AI configuration also still rejects private LAN model origins; trusted private model support needs its separate transport policy.
 
 ## Verification
 
 `go test -race ./cmd/lan-manager ./internal/lanconfig ./internal/lanstore ./internal/operatorauth ./internal/lantrust ./internal/signedhttp ./internal/api ./tests/security` exercises protected profile files, auth/session ordering, strict telemetry/replay, and real loopback HTTP/HTTPS listeners. TLS clients use explicit ephemeral CA pools with normal verification, never `InsecureSkipVerify`. The runtime profile test logs in, approves a public certificate, collects a bounded Linux sample, ingests it, retries without refreshing receipt age, revokes the agent and logs out. Tests print no raw sample values, secrets or certificates. Container execution is a separate opt-in gate; building the image or compiling skipped tests is not runtime evidence.
+
+
+## Optional guided identity mode
+
+The dedicated intermediate's private key is runtime-owned and private; the root
+private key stays offline. Configuration validates the exact issuer/root chain,
+server trust and both listener SAN names before startup. Guided mode retains at
+most25 enrollment records including tombstones and does not combine its identity
+store with manual approvals. It rejects a nonempty legacy registry, disables
+manual mutations, and persists an exact mode/instance/origin/issuer marker.
+Unmarked partial enrollment databases or sidecars require explicit recovery;
+there is no silent repair, trust migration or fallback.
+
+A fresh bound-key proof can claim an invitation, inspect pending state, receive
+the same committed certificate after a lost response and activate the approved
+identity. Only activated exact certificates may commit telemetry; lifecycle,
+revocation and sequence/observation state are checked in the same SQLite
+transaction. HTTP test keeps its original 2-minute signed timestamp window;
+clients discard stale pending observations while preserving the consumed sequence
+rather than retimestamping or indefinitely replaying them.
+
+See [HTTP contract](enrollment-v2/http-contract.md),
+[durability review](enrollment-v2/durability-security-review.md) and
+[issuer custody](enrollment-v2/issuer.md). Pure/service/HTTP fixture checks,
+runtime preparation tests and native end-to-end installation acceptance are
+separate evidence gates. No fixture key may be reused for deployment.

@@ -9,6 +9,10 @@ import (
 	"flag"
 	"localrmm/internal/analysis"
 	"localrmm/internal/api"
+	"localrmm/internal/enrollmentconfig"
+	"localrmm/internal/enrollmentservice"
+	"localrmm/internal/enrollmentstore"
+	"localrmm/internal/enrollmenttransport"
 	"localrmm/internal/lanconfig"
 	"localrmm/internal/lanstore"
 	"localrmm/internal/lantrust"
@@ -32,77 +36,134 @@ type prepared struct {
 	close                 func()
 }
 
-func prepare(m lanconfig.Material) (*prepared, error) {
+func prepare(m lanconfig.Material) (*prepared, error) { return prepareWithEnrollment(m, nil) }
+func prepareWithEnrollment(m lanconfig.Material, enrollment *enrollmentconfig.Material) (*prepared, error) {
 	c := m.Config
-	if err := c.Validate(); err != nil {
-		return nil, err
+	if e := c.Validate(); e != nil {
+		return nil, e
 	}
-	auth, err := operatorauth.New(operatorauth.Config{PasswordHash: m.PasswordHash})
-	if err != nil {
-		return nil, err
+	if enrollment != nil && !enrollment.ValidFor(c) {
+		return nil, enrollmentconfig.ErrConfiguration
 	}
-	if err = lanstore.PrepareProfileDirectory(c.StateDirectory, c.Profile); err != nil {
-		return nil, err
+	if enrollment == nil && enrollmentconfig.RejectEnrollmentMode(c.StateDirectory) != nil {
+		return nil, enrollmentconfig.ErrConfiguration
 	}
-	trustStore, err := lanstore.Open(filepath.Join(c.StateDirectory, "agents.db"))
-	if err != nil {
-		return nil, err
+	auth, e := operatorauth.New(operatorauth.Config{PasswordHash: m.PasswordHash})
+	if e != nil {
+		return nil, e
 	}
-	registry, err := lantrust.NewRegistry(context.Background(), m.ClientCA, trustStore)
-	if err != nil {
+	if e = lanstore.PrepareProfileDirectory(c.StateDirectory, c.Profile); e != nil {
+		return nil, e
+	}
+	trustStore, e := lanstore.Open(filepath.Join(c.StateDirectory, "agents.db"))
+	if e != nil {
+		return nil, e
+	}
+	registry, e := lantrust.NewRegistry(context.Background(), m.ClientCA, trustStore)
+	if e != nil {
+		trustStore.Close()
+		return nil, e
+	}
+	var enrolledStore *enrollmentstore.Store
+	var enrolledService *enrollmentservice.Service
+	var enrolledIngress *enrollmenttransport.Ingress
+	fail := func(err error) (*prepared, error) {
+		if enrolledStore != nil {
+			enrolledStore.Close()
+		}
 		trustStore.Close()
 		return nil, err
 	}
+	if enrollment != nil {
+		if len(registry.List()) != 0 {
+			return fail(enrollmentconfig.ErrConfiguration)
+		}
+		if e = enrollment.PrepareMode(c.StateDirectory, len(registry.List())); e != nil {
+			return fail(e)
+		}
+		enrolledStore, e = enrollmentstore.Open(filepath.Join(c.StateDirectory, enrollmentconfig.DatabaseFile), enrollment.StoreConfig(), enrollment.Issuer().IssuerDER())
+		if e != nil {
+			return fail(e)
+		}
+		enrolledService, e = enrollmentservice.New(enrolledStore, enrollment.Issuer(), nil)
+		if e != nil {
+			return fail(e)
+		}
+		enrolledIngress, e = enrollmenttransport.New(enrolledStore, enrollment.Issuer().IssuerDER(), c.AgentOrigin)
+		if e != nil {
+			return fail(e)
+		}
+	}
 	var operatorTLS, agentTLS *tls.Config
 	if c.Profile == lanconfig.TLS {
-		agentTLS, err = registry.TLSConfig(m.Server)
-		if err != nil {
-			trustStore.Close()
-			return nil, err
+		if enrolledIngress != nil {
+			agentTLS, e = enrolledIngress.TLSConfig(m.Server)
+		} else {
+			agentTLS, e = registry.TLSConfig(m.Server)
+		}
+		if e != nil {
+			return fail(e)
 		}
 		operatorTLS = &tls.Config{Certificates: []tls.Certificate{m.Server}, MinVersion: tls.VersionTLS13, SessionTicketsDisabled: true}
 	}
 	appPath := filepath.Join(c.StateDirectory, "operator.db")
-	if err = lanstore.ValidateStateFile(appPath); err != nil {
-		trustStore.Close()
-		return nil, err
+	if e = lanstore.ValidateStateFile(appPath); e != nil {
+		return fail(e)
 	}
-	appStore, err := store.Open(appPath)
-	if err != nil {
-		trustStore.Close()
-		return nil, err
+	appStore, e := store.Open(appPath)
+	if e != nil {
+		return fail(e)
 	}
 	var once sync.Once
-	closeAll := func() { once.Do(func() { appStore.Close(); trustStore.Close() }) }
-	app, err := api.New(appStore, 8787, c.WebDirectory, model.Device{})
-	if err != nil {
-		closeAll()
-		return nil, err
+	closeAll := func() {
+		once.Do(func() {
+			appStore.Close()
+			trustStore.Close()
+			if enrolledStore != nil {
+				enrolledStore.Close()
+			}
+		})
 	}
-	operator, err := api.NewLANOperatorHandler(app, api.LANOperatorConfig{Origin: c.OperatorOrigin, Auth: auth, Registry: registry, InsecureHTTPTest: c.Profile == lanconfig.HTTPTest, Devices: func() ([]model.Device, error) {
-		return trustStore.Devices(context.Background(), registry.List(), time.Now().UTC())
-	}})
-	if err != nil {
+	app, e := api.New(appStore, 8787, c.WebDirectory, model.Device{})
+	if e != nil {
 		closeAll()
-		return nil, err
+		return nil, e
+	}
+	operatorConfig := api.LANOperatorConfig{Origin: c.OperatorOrigin, Auth: auth, Registry: registry, InsecureHTTPTest: c.Profile == lanconfig.HTTPTest, Devices: func() ([]model.Device, error) {
+		return trustStore.Devices(context.Background(), registry.List(), time.Now().UTC())
+	}}
+	if enrolledService != nil {
+		binding := enrolledService.Binding()
+		operatorConfig.Enrollment = enrolledService
+		operatorConfig.EnrollmentBootstrap = api.EnrollmentBootstrap{SchemaVersion: "tracebolt.enrollment-bootstrap.v2", ManagerInstanceID: binding.InstanceID, Profile: binding.Profile, EnrollmentOrigin: c.OperatorOrigin, AgentOrigin: c.AgentOrigin, CollectionProfile: binding.CollectionProfile, ServerCAPEM: enrollment.ServerCAPEM(), IssuerRootPEM: enrollment.RootPEM(), IssuerPEM: enrollment.IssuerPEM()}
+		operatorConfig.Devices = func() ([]model.Device, error) { return enrolledService.Devices(context.Background(), time.Now().UTC()) }
+	}
+	operator, e := api.NewLANOperatorHandler(app, operatorConfig)
+	if e != nil {
+		closeAll()
+		return nil, e
 	}
 	var agent http.Handler
-	if c.Profile == lanconfig.TLS {
-		agent, err = api.NewLANIngressHandler(registry, trustStore, c.AgentOrigin)
+	if enrolledIngress != nil {
+		agent = enrolledIngress
+	} else if c.Profile == lanconfig.TLS {
+		agent, e = api.NewLANIngressHandler(registry, trustStore, c.AgentOrigin)
 	} else {
-		agent, err = api.NewHTTPTestIngressHandler(registry, trustStore, c.AgentOrigin)
+		agent, e = api.NewHTTPTestIngressHandler(registry, trustStore, c.AgentOrigin)
 	}
-	if err != nil {
+	if e != nil {
 		closeAll()
-		return nil, err
+		return nil, e
 	}
 	return &prepared{operator: operator, agent: agent, operatorTLS: operatorTLS, agentTLS: agentTLS, close: closeAll}, nil
 }
+
 func server(handler http.Handler) *http.Server {
 	return &http.Server{Handler: handler, ReadHeaderTimeout: 3 * time.Second, ReadTimeout: 5 * time.Second, WriteTimeout: analysis.MaxTimeout + 5*time.Second, IdleTimeout: 30 * time.Second, MaxHeaderBytes: 16384}
 }
-func run(ctx context.Context, m lanconfig.Material) error {
-	p, err := prepare(m)
+func run(ctx context.Context, m lanconfig.Material) error { return runWithEnrollment(ctx, m, nil) }
+func runWithEnrollment(ctx context.Context, m lanconfig.Material, enrollment *enrollmentconfig.Material) error {
+	p, err := prepareWithEnrollment(m, enrollment)
 	if err != nil {
 		return err
 	}
@@ -128,7 +189,11 @@ func run(ctx context.Context, m lanconfig.Material) error {
 	if m.Config.Profile == lanconfig.HTTPTest {
 		log.Print("WARNING: UNENCRYPTED LAN TEST. Passwords, sessions and telemetry are exposed. Signed telemetry does not authenticate the server or UI. Use disposable test material.")
 	}
-	log.Print("Tracebolt single-environment LAN pilot started with separate operator and agent listeners; no automatic enrollment, discovery or commands.")
+	if enrollment != nil {
+		log.Print("Tracebolt guided-enrollment LAN pilot started; manual approval is required and no service installation or discovery is performed.")
+	} else {
+		log.Print("Tracebolt single-environment LAN pilot started with separate operator and agent listeners; manual certificate mode, no discovery or commands.")
+	}
 	select {
 	case <-ctx.Done():
 	case err = <-results:
@@ -144,6 +209,7 @@ func run(ctx context.Context, m lanconfig.Material) error {
 }
 func main() {
 	path := flag.String("lan-config", "", "Explicit protected LAN profile JSON (required); HTTPS is the default")
+	enrollmentPath := flag.String("enrollment-config", "", "Optional protected guided-enrollment v2 profile; requires a dedicated preprovided issuer and empty legacy registry")
 	flag.Parse()
 	if *path == "" || flag.NArg() != 0 {
 		log.Fatal("Tracebolt LAN manager requires --lan-config PATH")
@@ -152,9 +218,17 @@ func main() {
 	if err != nil {
 		log.Fatal("Tracebolt LAN configuration rejected; verify profile, file ownership, TLS identity and protected material")
 	}
+	var enrollment *enrollmentconfig.Material
+	if *enrollmentPath != "" {
+		loaded, e := enrollmentconfig.Load(*enrollmentPath, material, time.Now().UTC())
+		if e != nil {
+			log.Fatal("Tracebolt enrollment configuration rejected; verify dedicated issuer custody, profile and bootstrap server trust")
+		}
+		enrollment = &loaded
+	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	if run(ctx, material) != nil {
+	if runWithEnrollment(ctx, material, enrollment) != nil {
 		log.Fatal("Tracebolt LAN manager failed closed")
 	}
 }

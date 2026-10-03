@@ -56,5 +56,22 @@ must not be omitted when discussing possible impact.
 
 This evidence is not a full changed-tree execution pass, browser acceptance,
 fresh native-platform matrix, deployment, or operational security guarantee.
-The publisher's immutable checkpoint and its own CI results remain the release
+The independent targeted review above is separate from the later publisher
 gate. No real credentials or network exposure were provisioned for this review.
+
+## Subsequent immutable checkpoint
+
+Source `786dbf3a672dd80be9c8ad21f68f3d4abefb16ec` passed
+[CI run 37145326437](https://github.com/storminator89/Tracebolt/actions/runs/37145326437).
+The independently re-read browser artifacts contain 40/40 general/AI/layout
+checks, 6/6 managed-preview checks and 10/10 real HTTP-test-handler checks,
+with zero runtime errors. GitHub job/step results also confirm successful
+native collector execution on Linux, Windows and macOS, actual Linux manager
+and sender binaries, and both disposable Docker profiles. These are distinct
+execution scopes; the HTTP browser suite does not establish trusted-TLS browser
+acceptance, and the three-OS collectors are not three-OS installed LAN agents.
+
+That published checkpoint contains no enrollment implementation. Its passing
+gate must not be attributed to later enrollment durability, delivery or loop
+work. It also does not establish the previously unperformed existing-path
+weak-key exploit validation.

@@ -96,13 +96,33 @@ type storage interface {
 // identity to this value. An existing binding is never changed implicitly.
 // Missing directories are created privately; insecure existing paths are never
 // repaired with chmod. A leftover lock with missing state fails closed.
-func Open(dir, binding string) (*State, error) {
+func Open(dir, binding string) (*State, error) { return open(dir, binding, true, true) }
+
+// OpenExisting loads a previously initialized exact sender ledger. It never
+// creates a fresh sequence domain when the ledger is absent, including an empty
+// replacement directory. Guided enrollment uses this after its durable handoff.
+func OpenExisting(dir, binding string) (*State, error) { return open(dir, binding, false, true) }
+
+// ValidateExisting verifies a bound existing ledger under its exclusive lock,
+// then closes it without creating files or cleaning sender-owned temporaries.
+func ValidateExisting(dir, binding string) error {
+	state, e := open(dir, binding, false, false)
+	if e != nil {
+		return e
+	}
+	return state.Close()
+}
+func open(dir, binding string, allowFresh, recoverTemp bool) (*State, error) {
 	if !validDigest(binding) {
 		return nil, ErrBinding
 	}
-	store, raw, fresh, err := newStorage(dir)
+	store, raw, fresh, err := newStorageMode(dir, allowFresh)
 	if err != nil {
 		return nil, err
+	}
+	if fresh && !allowFresh {
+		_ = store.close()
+		return nil, ErrCorrupt
 	}
 	record := diskRecord{Version: stateVersion, Binding: binding}
 	if !fresh {
@@ -112,7 +132,7 @@ func Open(dir, binding string) (*State, error) {
 		}
 		// Recovery may remove only an uncommitted temporary belonging to an
 		// already valid, correctly bound ledger. Rejected state is untouched.
-		if err == nil {
+		if err == nil && recoverTemp {
 			err = store.cleanup()
 		}
 	} else {

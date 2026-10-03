@@ -1,6 +1,6 @@
-# Native one-shot LAN sender
+# Native LAN sender and foreground reporting
 
-`cmd/lan-agent` is a foreground **Linux-only sender milestone**. It collects the existing bounded read-only observation and attempts one delivery. It does not install a service, enroll a device, issue credentials, discover the network, download models, run arbitrary commands or start a scheduler. Original `cmd/agent` remains stdout-only; `cmd/dev-agent` remains a localhost developer transport.
+`cmd/lan-agent` is a foreground **Linux-only sender milestone**. It collects the existing bounded read-only observation and attempts one delivery. Optional `--foreground --interval 30s` schedules sequential bounded reports. The sender does not install a service, enroll a device, issue credentials, discover the network, download models or run arbitrary commands; guided enrollment is the separate `enroll-agent` command. Original `cmd/agent` remains stdout-only; `cmd/dev-agent` remains a localhost developer transport.
 
 Build: `go build -buildvcs=false -trimpath -o bin/lan-agent ./cmd/lan-agent`.
 
@@ -22,7 +22,7 @@ Before transmission, sequence and exact request bytes are atomically persisted w
 
 A pending sample older than the manager's2minute window is explicitly discarded while keeping its consumed sequence. The sender may then collect a genuinely new observation with a higher sequence. It never changes an old observation's timestamps to make delivery appear fresh. This is a bounded latest-sample buffer, not an offline history queue.
 
-Request timeout is15seconds with5second dial/TLS/header bounds. CLI cancellation is propagated with a cooperative20second context budget. Synchronous local filesystem/fsync and stdout operations are not forcibly interrupted by that context; this is not a hard process wall-clock deadline. There is one network delivery attempt per invocation: no background loop, retry storm or service claim. Failures print a fixed diagnostic and bounded JSON status; pending telemetry is never printed.
+Request timeout is15seconds with5second dial/TLS/header bounds. CLI cancellation is propagated with a cooperative20second context budget. Synchronous local filesystem/fsync and stdout operations are not forcibly interrupted by that context; this is not a hard process wall-clock deadline. Default one-shot mode performs one network delivery attempt. Explicit foreground mode uses the bounded loop described in [agent-loop.md](agent-loop.md), retains its exclusive ledger lock through waits and gives each attempt its own cooperative budget. It is not an installed service. Failures print a fixed diagnostic and bounded JSON status; pending telemetry is never printed.
 
 ## Status and current evidence
 
@@ -30,4 +30,21 @@ Output `tracebolt.agent-run.v1` reports acknowledged/pending status, profile, se
 
 Focused tests use temporary loopback TLS and HTTP fixtures, normal ephemeral CA trust and actual built CLI subprocesses. They cover a committed manager observation followed by a lost response, exact retry from a new CLI process, receipt validation, destination changes, redirection refusal, cancellation and fresh collection after a stale pending sample. Manager restart/revocation is additionally exercised by the separate two-binary test package. Test completion evidence is recorded separately; compiling a test or cross-building a binary is not target execution.
 
-Windows/macOS collectors exist, but LAN sender ACL/state protection and foreground/service lifecycle on those systems remain unimplemented. No installation, reboot, service recovery or uninstall acceptance is claimed. Repeat scheduling/backoff and longer offline spool are intentionally deferred until this one-shot durability boundary is accepted.
+Windows/macOS collectors exist, but LAN sender ACL/state protection and foreground/service lifecycle on those systems remain unimplemented. No installation, reboot, service recovery or uninstall acceptance is claimed. Bounded foreground scheduling/backoff is implemented. Longer offline history queues and OS service lifecycle remain separate work.
+
+
+## Guided sender state requirement
+
+`enroll-agent` emits `tracebolt.lan-agent.v2` with a separate state-binding domain.
+Its private handoff initializes the exact sender counter ledger once before
+publishing runnable configuration. Both one-shot and foreground v2 startup
+require that existing bound ledger; missing paths, locks, ledger files, replaced
+empty directories or a different binding cannot silently initialize a new
+counter. Resumed enrollment uses a read-only existing-ledger validation under the
+same exclusive lock and never removes sender-owned crash temporaries. Stop an
+active foreground sender before revalidating its completed enrollment handoff.
+
+Manual `tracebolt.lan-agent.v1` preserves its original fresh-state behavior. There
+is no automatic migration between v1 and v2 bindings. A structurally valid older
+backup cannot establish the latest sequence floor by itself; restoring a live
+identity remains an explicit recovery operation, not a transparent reset.

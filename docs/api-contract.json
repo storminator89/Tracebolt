@@ -101,7 +101,23 @@
         "413": "oversize"
       },
       "storage": "ephemeral only; fixed Linux sandbox role; no enrollment, credential storage, or direct-collector fallback"
-    }
+    },
+    "GET /api/enrollment": {
+      "enabled": "boolean; false in development/manual mode",
+      "schemaVersion": "tracebolt.enrollment-operator.v2",
+      "platforms": "linux[] when enabled, otherwise []",
+      "recordLimit": 25,
+      "items": "EnrollmentSnapshot[]",
+      "serverNow": "RFC3339 trusted clock anchor"
+    },
+    "POST /api/enrollment/invitations": "Optional guided-v2 exclusive LAN mode; see docs/enrollment-v2/http-contract.md",
+    "POST /api/enrollment/{invitationId}/approve": "Optional guided-v2 exclusive LAN mode; see docs/enrollment-v2/http-contract.md",
+    "POST /api/enrollment/{invitationId}/terminate": "Optional guided-v2 exclusive LAN mode; see docs/enrollment-v2/http-contract.md",
+    "POST /v2/enrollment/challenge": "Optional guided-v2 exclusive LAN mode; see docs/enrollment-v2/http-contract.md",
+    "POST /v2/enrollment/claim": "Optional guided-v2 exclusive LAN mode; see docs/enrollment-v2/http-contract.md",
+    "POST /v2/enrollment/status": "Optional guided-v2 exclusive LAN mode; see docs/enrollment-v2/http-contract.md",
+    "POST /v2/enrollment/credential": "Optional guided-v2 exclusive LAN mode; see docs/enrollment-v2/http-contract.md",
+    "POST /v2/enrollment/activate": "Optional guided-v2 exclusive LAN mode; see docs/enrollment-v2/http-contract.md"
   },
   "types": {
     "Device": {
@@ -203,8 +219,10 @@
   "qualitySemantics": "Metric/Evidence quality healthy means current valid observation, not low severity or endpoint health. Source synthetic is simulated; sandbox has deliberately unknown overall device status.",
   "cli": {
     "agent --once": "Single local Device as JSON on stdout; no transport",
-    "agent --support-bundle": "Versioned schema tracebolt.support.v1; stdout only, max65536 bytes; docs/support-bundle.schema.json"
+    "agent --support-bundle": "Versioned schema tracebolt.support.v1; stdout only, max65536 bytes; docs/support-bundle.schema.json",
+    "lan-agent --config PATH --foreground --interval 30s": "Linux bounded foreground reports with exclusive durable ledger and retry/backoff; no OS service installation."
   },
   "ruleScope": "V1 deterministic rules accept only explicitly synthetic fixtures. Native local observations are not automatically turned into cases.",
-  "managedPreview": "Explicitly default-off. Disables both initial and periodic manager-side collection. Only a separate dev-agent delivery updates sandbox-local. Expiry preserves old values as stale and never asserts continuous process availability."
+  "managedPreview": "Explicitly default-off. Disables both initial and periodic manager-side collection. Only a separate dev-agent delivery updates sandbox-local. Expiry preserves old values as stale and never asserts continuous process availability.",
+  "deploymentModes": "Development remains loopback-only. Separate lan-manager supports manual-v1 or explicit guided-v2 identity mode; docs/lan-runtime.md and docs/enrollment-v2/runtime-config.md define trust/custody requirements. No automatic mode migration."
 }

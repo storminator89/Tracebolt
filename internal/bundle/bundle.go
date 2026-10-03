@@ -53,46 +53,8 @@ func Encode(d model.Device) ([]byte, error) {
 	if d.CaseIDs == nil {
 		d.CaseIDs = []string{}
 	}
-	if d.Synthetic || d.IP != nil || len(d.CaseIDs) != 0 || len(d.Trend) != 0 {
-		return nil, errors.New("support bundles accept only identifier-free local observations")
-	}
-	if err := validateMetadata(d); err != nil {
+	if err := ValidateObservation(d); err != nil {
 		return nil, err
-	}
-	if d.Status != "unknown" {
-		return nil, errors.New("incomplete observations cannot assert device health")
-	}
-	if d.Platform != "linux" && d.Platform != "macos" && d.Platform != "windows" {
-		return nil, errors.New("unsupported bundle platform")
-	}
-	for _, m := range []model.Metric{d.CPU, d.Memory, d.Disk} {
-		if m.Unit != "%" || !validQuality(m.Quality) {
-			return nil, errors.New("invalid metric metadata")
-		}
-		if m.Quality == "healthy" && m.Value == nil {
-			return nil, errors.New("valid metric quality requires a value")
-		}
-		if m.Value != nil && (math.IsNaN(*m.Value) || math.IsInf(*m.Value, 0) || *m.Value < 0 || *m.Value > 100) {
-			return nil, errors.New("metric is outside finite percentage bounds")
-		}
-		if m.Value != nil && (m.Quality == "unknown" || m.Quality == "denied") {
-			return nil, errors.New("unavailable metric must not contain a value")
-		}
-	}
-	switch d.ID {
-	case "sandbox-local", "local-windows", "local-macos":
-	default:
-		return nil, errors.New("unexpected local role label")
-	}
-	if d.Source != "sandbox" && d.Source != "local" {
-		return nil, errors.New("unsupported observation source")
-	}
-	seen := map[string]bool{}
-	for _, e := range d.Evidence {
-		if e.ID == "" || seen[e.ID] || e.Synthetic || !validQuality(e.Quality) {
-			return nil, errors.New("invalid local evidence identity")
-		}
-		seen[e.ID] = true
 	}
 	b, err := json.MarshalIndent(newBundle(d), "", "  ")
 	if err != nil {
@@ -103,6 +65,54 @@ func Encode(d model.Device) ([]byte, error) {
 		return nil, fmt.Errorf("support bundle exceeds %d-byte limit", MaxBytes)
 	}
 	return b, nil
+}
+
+// ValidateObservation applies the deterministic identifier-minimizing observation
+// policy without generating an envelope or consulting the clock. Callers must
+// additionally enforce their actual enclosing contract's aggregate byte bound.
+func ValidateObservation(d model.Device) error {
+	if d.Synthetic || d.IP != nil || len(d.CaseIDs) != 0 || len(d.Trend) != 0 {
+		return errors.New("support bundles accept only identifier-free local observations")
+	}
+	if err := validateMetadata(d); err != nil {
+		return err
+	}
+	if d.Status != "unknown" {
+		return errors.New("incomplete observations cannot assert device health")
+	}
+	if d.Platform != "linux" && d.Platform != "macos" && d.Platform != "windows" {
+		return errors.New("unsupported bundle platform")
+	}
+	for _, m := range []model.Metric{d.CPU, d.Memory, d.Disk} {
+		if m.Unit != "%" || !validQuality(m.Quality) {
+			return errors.New("invalid metric metadata")
+		}
+		if m.Quality == "healthy" && m.Value == nil {
+			return errors.New("valid metric quality requires a value")
+		}
+		if m.Value != nil && (math.IsNaN(*m.Value) || math.IsInf(*m.Value, 0) || *m.Value < 0 || *m.Value > 100) {
+			return errors.New("metric is outside finite percentage bounds")
+		}
+		if m.Value != nil && (m.Quality == "unknown" || m.Quality == "denied") {
+			return errors.New("unavailable metric must not contain a value")
+		}
+	}
+	switch d.ID {
+	case "sandbox-local", "local-windows", "local-macos":
+	default:
+		return errors.New("unexpected local role label")
+	}
+	if d.Source != "sandbox" && d.Source != "local" {
+		return errors.New("unsupported observation source")
+	}
+	seen := map[string]bool{}
+	for _, e := range d.Evidence {
+		if e.ID == "" || seen[e.ID] || e.Synthetic || !validQuality(e.Quality) {
+			return errors.New("invalid local evidence identity")
+		}
+		seen[e.ID] = true
+	}
+	return nil
 }
 
 func validQuality(q string) bool {

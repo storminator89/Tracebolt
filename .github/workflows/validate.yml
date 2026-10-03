@@ -51,7 +51,7 @@ jobs:
   backend:
     name: Go tests and build-only platform checks
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -79,6 +79,27 @@ jobs:
             exit 1
           fi
           echo 'PASS: actual Linux manager/sender TLS and HTTP-test round trips, restart, replay and revocation.'
+      - name: Actual guided enrollment and foreground reporting across three Linux binaries
+        run: |
+          command -v python3 > /dev/null
+          if ! go test -json -race ./cmd/lan-manager -run '^TestGuidedThreeBinaryEnrollmentAndForeground$' -count=1 -timeout=8m > "$RUNNER_TEMP/guided-enrollment-tests.log" 2>&1; then
+            echo 'FAIL: guided three-binary enrollment/foreground; raw invitation and runtime output withheld.'
+            exit 1
+          fi
+          python3 - "$RUNNER_TEMP/guided-enrollment-tests.log" <<'PYTHON'
+          import json, sys
+          expected = {"TestGuidedThreeBinaryEnrollmentAndForeground", "TestGuidedThreeBinaryEnrollmentAndForeground/tls", "TestGuidedThreeBinaryEnrollmentAndForeground/http-test"}
+          passed = set()
+          with open(sys.argv[1], encoding="utf-8") as stream:
+              for line in stream:
+                  event = json.loads(line)
+                  if event.get("Action") == "pass" and event.get("Test") in expected:
+                      passed.add(event["Test"])
+          if passed != expected:
+              print("FAIL: actual guided TLS/HTTP test execution not fully confirmed; skips do not pass this gate.")
+              raise SystemExit(1)
+          print("PASS: actual manager, hidden-terminal enrollment client and foreground sender under TLS and explicit HTTP test.")
+          PYTHON
       - name: Execute Linux agent and validate bounded support-bundle schema
         run: |
           python3 -m venv "$RUNNER_TEMP/bundle-validator"
@@ -173,6 +194,11 @@ jobs:
         env:
           TRACEBOLT_SOURCE_SHA: ${{ github.sha }}
         run: node tests/e2e-review/lan-browser.mjs
+      - name: Guided enrollment real-handler browser acceptance
+        if: ${{ !cancelled() }}
+        env:
+          TRACEBOLT_SOURCE_SHA: ${{ github.sha }}
+        run: node tests/e2e-review/enrollment-browser.mjs
       - name: Keep browser review evidence briefly
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -185,6 +211,8 @@ jobs:
             artifacts/review/managed-preview-result.json
             artifacts/review/lan-browser-results.json
             artifacts/review/lan-browser-manifest.json
+            artifacts/review/enrollment-browser-results.json
+            artifacts/review/enrollment-browser-manifest.json
           if-no-files-found: warn
           retention-days: 3
 

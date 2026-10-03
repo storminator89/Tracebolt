@@ -58,9 +58,11 @@ func ValidateFrame(raw []byte, now time.Time) (Frame, error) {
 	if len(b.Architecture) == 0 || len(b.Architecture) > 32 || len(b.Privacy) > 16 {
 		return frame, ErrFrame
 	}
-	if _, err = bundle.Encode(b.Observation); err != nil {
+	if err = bundle.ValidateObservation(b.Observation); err != nil {
 		return frame, ErrFrame
 	}
+	// Bound the actual incoming envelope, not a newly generated bundle whose
+	// clock-dependent timestamp/default text could alter boundary acceptance.
 	encoded, err := json.Marshal(b)
 	if err != nil || len(encoded) > bundle.MaxBytes {
 		return frame, ErrFrame

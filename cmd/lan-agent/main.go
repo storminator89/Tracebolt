@@ -1,11 +1,13 @@
-// lan-agent is currently a Linux one-shot foreground sender, not a service.
+// lan-agent is a Linux read-only sender with optional foreground scheduling.
 package main
 
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
+	"localrmm/internal/agentloop"
 	"localrmm/internal/lanclient"
 	"os"
 	"os/signal"
@@ -16,6 +18,8 @@ import (
 
 func main() {
 	path := flag.String("config", "", "Absolute protected preprovided agent configuration JSON")
+	foreground := flag.Bool("foreground", false, "Repeat bounded read-only reports until interrupted; does not install a service")
+	interval := flag.Duration("interval", 30*time.Second, "Foreground report interval, 15s to 1h")
 	flag.Parse()
 	if *path == "" || flag.NArg() != 0 {
 		fmt.Fprintln(os.Stderr, "Tracebolt LAN agent requires --config PATH; no service installation is performed.")
@@ -35,6 +39,24 @@ func main() {
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	if *foreground {
+		encoder := json.NewEncoder(os.Stdout)
+		_, e := lanclient.RunForeground(ctx, material, *interval, func(event agentloop.Event) error {
+			return encoder.Encode(struct {
+				SchemaVersion string          `json:"schemaVersion"`
+				Event         agentloop.Event `json:"event"`
+			}{"tracebolt.agent-loop.v1", event})
+		})
+		if e != nil && !errors.Is(e, context.Canceled) {
+			fmt.Fprintln(os.Stderr, "Tracebolt reporting stopped; inspect the safe status reason and local configuration.")
+			os.Exit(1)
+		}
+		return
+	}
+	if *interval != 30*time.Second {
+		fmt.Fprintln(os.Stderr, "--interval requires --foreground.")
+		os.Exit(2)
+	}
 	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
 	report, e := lanclient.Run(ctx, material)

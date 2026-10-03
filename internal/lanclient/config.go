@@ -25,6 +25,7 @@ import (
 )
 
 const ConfigVersion = "tracebolt.lan-agent.v1"
+const GuidedConfigVersion = "tracebolt.lan-agent.v2"
 const FrameVersion = "tracebolt.agent-telemetry.v1"
 const MaxFrameBytes = 72 * 1024
 
@@ -100,7 +101,7 @@ func canonicalOrigin(raw, scheme string) (*url.URL, error) {
 	return u, nil
 }
 func (c *Config) Validate() error {
-	if c.SchemaVersion != ConfigVersion {
+	if c.SchemaVersion != ConfigVersion && c.SchemaVersion != GuidedConfigVersion {
 		return ErrConfiguration
 	}
 	if c.Profile == "" {
@@ -149,6 +150,13 @@ func Load(path string) (Material, error) {
 	if lanconfig.StrictObject(raw, &c, "schemaVersion", "profile", "managerOrigin", "agentId", "certificateFile", "privateKeyFile", "serverCAFile", "stateDirectory", "insecureHTTPAcknowledged") != nil || c.Validate() != nil {
 		return fail()
 	}
+	return loadConfig(c)
+}
+func loadConfig(c Config) (Material, error) {
+	fail := func() (Material, error) { return Material{}, ErrConfiguration }
+	if c.Validate() != nil {
+		return fail()
+	}
 	cert, e := lanconfig.ReadProtected(c.CertificateFile, false, 65536)
 	if e != nil {
 		return fail()
@@ -193,7 +201,7 @@ func Load(path string) (Material, error) {
 			return fail()
 		}
 	}
-	binding := sha256.Sum256([]byte("tracebolt.sender-binding.v1\n" + c.Profile + "\n" + c.ManagerOrigin + "\n" + lantrust.Fingerprint(leaf) + "\n" + c.AgentID))
+	binding := senderBinding(c, leaf)
 	m.binding = hex.EncodeToString(binding[:])
 	m.loaded = true
 	return m, nil
@@ -214,7 +222,7 @@ func (m Material) valid() bool {
 	if leaf.IsCA || now.Before(leaf.NotBefore) || !now.Before(leaf.NotAfter) || leaf.KeyUsage&x509.KeyUsageDigitalSignature == 0 || len(leaf.ExtKeyUsage) != 1 || leaf.ExtKeyUsage[0] != x509.ExtKeyUsageClientAuth || len(leaf.UnknownExtKeyUsage) != 0 {
 		return false
 	}
-	sum := sha256.Sum256([]byte("tracebolt.sender-binding.v1\n" + m.config.Profile + "\n" + m.config.ManagerOrigin + "\n" + lantrust.Fingerprint(leaf) + "\n" + m.config.AgentID))
+	sum := senderBinding(m.config, leaf)
 	if m.binding != hex.EncodeToString(sum[:]) {
 		return false
 	}
@@ -223,4 +231,12 @@ func (m Material) valid() bool {
 		return m.tlsConfig != nil && m.tlsConfig.RootCAs != nil && !m.tlsConfig.InsecureSkipVerify && m.tlsConfig.MinVersion >= tls.VersionTLS13 && m.tlsConfig.ServerName == u.Hostname() && len(m.tlsConfig.Certificates) == 1
 	}
 	return m.tlsConfig == nil
+}
+
+func senderBinding(c Config, leaf *x509.Certificate) [32]byte {
+	domain := "tracebolt.sender-binding.v1\n"
+	if c.SchemaVersion == GuidedConfigVersion {
+		domain = "tracebolt.sender-binding.v2\n"
+	}
+	return sha256.Sum256([]byte(domain + c.Profile + "\n" + c.ManagerOrigin + "\n" + lantrust.Fingerprint(leaf) + "\n" + c.AgentID))
 }

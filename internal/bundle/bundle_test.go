@@ -67,3 +67,17 @@ func TestRejectUnexpectedData(t *testing.T) {
 		})
 	}
 }
+
+func TestValidateObservationLeavesInputUnchanged(t *testing.T) {
+	d := valid()
+	before, _ := json.Marshal(d)
+	for range 100 {
+		if err := ValidateObservation(d); err != nil {
+			t.Fatal(err)
+		}
+	}
+	after, _ := json.Marshal(d)
+	if string(before) != string(after) {
+		t.Fatal("policy validation changed observation")
+	}
+}

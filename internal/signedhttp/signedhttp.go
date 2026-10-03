@@ -23,6 +23,7 @@ import (
 	"net/http"
 	"net/netip"
 	"net/url"
+	"reflect"
 	"strconv"
 	"strings"
 	"time"
@@ -50,13 +51,20 @@ var (
 	ErrUnavailable   = errors.New("signed HTTP trust is unavailable")
 )
 
+// PublicCertificateAuthorizer checks current public certificate authorization.
+// This lookup alone never proves possession; Verify retains the fixed Ed25519
+// signature protocol and the caller must still atomically commit replay state.
+type PublicCertificateAuthorizer interface {
+	AuthorizePublicCertificate([]byte) (lantrust.Agent, error)
+}
+
 type Config struct {
 	Origin   string
-	Registry *lantrust.Registry
+	Registry PublicCertificateAuthorizer
 }
 type Verifier struct {
 	origin, authority string
-	registry          *lantrust.Registry
+	registry          PublicCertificateAuthorizer
 	now               func() time.Time
 }
 
@@ -75,7 +83,7 @@ type Verified struct {
 
 func New(config Config) (*Verifier, error) {
 	authority, err := canonicalOrigin(config.Origin)
-	if err != nil || config.Registry == nil {
+	if err != nil || config.Registry == nil || (reflect.ValueOf(config.Registry).Kind() == reflect.Pointer && reflect.ValueOf(config.Registry).IsNil()) {
 		return nil, ErrConfiguration
 	}
 	return &Verifier{origin: config.Origin, authority: authority, registry: config.Registry, now: func() time.Time { return time.Now().UTC() }}, nil
@@ -191,7 +199,7 @@ func transcript(origin, fingerprint, sequence, signedAt string, body []byte) []b
 // quietly become an authentication fallback on the mutual-TLS HTTPS surface.
 func (v *Verifier) Verify(req *http.Request) (Verified, error) {
 	bad := func(err error) (Verified, error) { return Verified{}, err }
-	if v == nil || req == nil || req.URL == nil || req.TLS != nil || req.Method != http.MethodPost || req.Host != v.authority || req.URL.Path != Path || req.URL.RawPath != "" || req.URL.RawQuery != "" || req.URL.ForceQuery || req.URL.Fragment != "" || req.URL.RawFragment != "" || req.URL.Opaque != "" || req.URL.User != nil || (req.URL.Scheme != "" && req.URL.Scheme != "http") || (req.URL.Host != "" && req.URL.Host != v.authority) || (req.RequestURI != "" && req.RequestURI != Path) || len(req.TransferEncoding) != 0 || len(req.Trailer) != 0 || req.Body == nil || req.ContentLength <= 0 || !requestHeaders(req.Header) {
+	if v == nil || v.registry == nil || v.now == nil || req == nil || req.URL == nil || req.TLS != nil || req.Method != http.MethodPost || req.Host != v.authority || req.URL.Path != Path || req.URL.RawPath != "" || req.URL.RawQuery != "" || req.URL.ForceQuery || req.URL.Fragment != "" || req.URL.RawFragment != "" || req.URL.Opaque != "" || req.URL.User != nil || (req.URL.Scheme != "" && req.URL.Scheme != "http") || (req.URL.Host != "" && req.URL.Host != v.authority) || (req.RequestURI != "" && req.RequestURI != Path) || len(req.TransferEncoding) != 0 || len(req.Trailer) != 0 || req.Body == nil || req.ContentLength <= 0 || !requestHeaders(req.Header) {
 		return bad(ErrRequest)
 	}
 	if req.ContentLength > MaxBodyBytes {

@@ -2,8 +2,10 @@
 
 Start here when given this repository to install. **This is a self-hosted LAN
 pilot, not an unattended fleet installer.** The supported path today is a
-Docker or native Linux central manager plus manually configured, native Linux
-one-shot senders. A repository link alone does not authorize a deployment or
+Docker or native Linux central manager plus native Linux senders. The default
+manual-v1 mode uses preprovided approved material; optional guided-v2 adds a
+hidden-terminal bootstrap and deliberate operator approval. Reporting can run
+once or repeatedly in the foreground. A repository link alone does not authorize a deployment or
 provide credentials. Read the checklist before executing the quickstart.
 
 ## 1. Choose the correct milestone
@@ -11,7 +13,7 @@ provide credentials. Read the checklist before executing the quickstart.
 | Component | Available now | Not provided by this milestone |
 | --- | --- | --- |
 | Central manager | Separate `cmd/lan-manager`, Admin UI, authenticated operator API, approved agent ingress; Docker or native Linux execution | Production assurance, automatic provisioning, HA/shared SQLite writers |
-| Linux endpoint | Native `cmd/lan-agent --config …`; one read-only collection/delivery per explicit invocation, durable retry state | Installer, enrollment wizard/token, service, scheduler, automatic update/uninstall |
+| Linux endpoint | Native `cmd/lan-agent --config …`, one-shot or bounded foreground reporting; optional `cmd/enroll-agent` with explicit guided-v2 configuration | OS installer/service, boot persistence, automatic renewal/update/uninstall |
 | Windows/macOS endpoint | Native `cmd/agent` bounded stdout-only collector; limited platform reads | Supported LAN sender, native ACL/state lifecycle, installed service or fleet deployment |
 | Docker architectures | Linux amd64 TLS and explicit HTTP-test lifecycle gates; Linux arm64 cross-build support | arm64 runtime acceptance from cross-building alone |
 
@@ -19,8 +21,8 @@ Use the selected revision's actual CI results, not this table, to establish what
 passed. Windows/macOS collector runtime results do **not** validate a LAN sender.
 The product direction is native agents on Windows, Linux and macOS with a Docker
 or native manager; all three endpoint installation paths are not shipped yet.
-Enrollment-v2 and hardening proposal documents describe future work, not callable
-installation commands. Do not substitute the synthetic development manager
+The original enrollment proposal remains design history. Use the implemented
+[runtime configuration](enrollment-v2/runtime-config.md) and [native client](enrollment-v2/native-client.md) contracts for guided-v2; do not invent commands from proposed routes. Do not substitute the synthetic development manager
 (`make run`, `cmd/manager`) or loopback `cmd/dev-agent` for the LAN manager/sender.
 
 ## 2. Preflight and approval checklist
@@ -42,8 +44,8 @@ plan. Record these answers without secrets:
 - TLS (default) or explicitly approved isolated HTTP test, operator who will sign
   in, credential/certificate custodian, and endpoint/public fingerprint to approve.
 - Endpoint OS/architecture, ordinary-user collection constraints, and whether a
-  one-shot Linux sender actually meets the request. If a Windows/macOS LAN service
-  or continuous monitoring is required, report the missing implementation now.
+  foreground Linux sender meets the request. If a Windows/macOS LAN client or an
+  installed/reboot-persistent service is required, report the missing implementation.
 
 Before changing the target, get approval for the concrete plan, destinations and
 paths. Persistent credential creation/import, device trust approval/revocation,
@@ -148,8 +150,10 @@ termination is not this runtime's trust contract.
 
 - `server.pem` + `server.key`: matching manager certificate and private key,
   currently valid, SANs covering both origin hosts, **ServerAuth only** leaf EKU.
-- `agent-ca.pem`: public CA roots that may issue client certificates. No CA private
-  key belongs on the manager or endpoint. CA signing is an external workflow.
+- `agent-ca.pem`: public CA roots that may issue client certificates. No root CA
+  private key belongs on the manager or endpoint. Default manual-v1 uses
+  externally provisioned client leaves. Optional guided-v2 instead requires the
+  dedicated online intermediate and custody boundary described below.
 - `operator-auth.json`: schema `tracebolt.operator-auth.v1`, profile `tls`, and a
   previously provisioned `passwordHash` Argon2id PHC verifier. Accepted parameters:
   version 19, memory 65536–131072 KiB, iterations 2–4, parallelism 1–4,
@@ -194,7 +198,7 @@ The build toolchain is not needed on a host receiving an independently verified
 matching binary plus matching frontend assets, but this repository does not
 provide a complete signed binary distribution/install workflow.
 
-## 6. Sign in, manually approve, then run one Linux endpoint
+## 6. Default manual-v1: sign in, approve a public certificate, run Linux
 
 1. Open the exact HTTPS **operator** origin in a normally trusting browser. If
    trust is absent, have the administrator provide an approved trust solution;
@@ -205,7 +209,9 @@ provide a complete signed binary distribution/install workflow.
 3. Independently verify the full lowercase SHA-256 of the leaf DER and the intended
    endpoint. A certificate label/hostname is not identity. An approved operator
    must approve that exact fingerprint through the authenticated operator API.
-   There is no enrollment/install CLI or assumed approval wizard in this milestone.
+   This default manual-v1 path uses the public-certificate API below. The separate
+   opt-in guided-v2 interface/native bootstrap is described in section 6B; neither
+   path installs an OS service.
 
 The actual API sequence is documented in
 [`lan-operator-api-contract.json`](lan-operator-api-contract.json):
@@ -251,7 +257,12 @@ frame. Preserve state across invocations; never delete it to “fix” replay er
 Only one process may use a sender state directory. A lost response retains a
 pending frame, not proof of loss at the manager. A stale pending frame is discarded
 without reusing its sequence, and a genuinely new observation can be collected.
-There is no timer/background loop. See [sender contract](lan-agent.md).
+The default command performs one attempt. Add `--foreground --interval 30s` for
+serial repeated reporting; the interval must be 15 seconds to 1 hour. It retains
+the exclusive sender-state lock during attempts and backoff, preserves pending
+bytes/timestamps and stops on invalid state/configuration. Ctrl+C/SIGTERM stops
+it; no service or boot persistence is installed. See the [sender contract](lan-agent.md)
+and [foreground loop](agent-loop.md).
 
 Windows/macOS: stop here for LAN installation. You may separately build/run the
 stdout collector with `go build -buildvcs=false -trimpath -o bin/agent ./cmd/agent`
@@ -260,6 +271,123 @@ prints local observation data and does not send it to this manager. Review/expor
 handling is separate; do not upload the sample automatically. Do not improvise a
 scheduled task, launchd job, cron or systemd service as if it were shipped support.
 
+## 6B. Optional guided-v2: bootstrap, compare, approve and report
+
+This mode is deliberately opt-in and mutually exclusive with manual-v1 identity
+state. Before using it on a real target, obtain approval for the dedicated issuer
+private-key custody, endpoint credential creation, invitation transfer and device
+trust grant. Automation must hand secret invitation entry to the human or the
+approved secure handoff. A source checkout or successful fixture test is not that
+permission. No CA is automatically provisioned.
+
+### Manager prerequisites and start
+
+Use an empty legacy registry, including tombstones, and a dedicated protected
+state location. There is no automatic migration, adoption or downgrade. Supply
+a preprovided **Ed25519 client-auth-only issuing intermediate**, path length zero,
+directly chained to its explicit public root. Keep the root private key offline.
+The intermediate signing key alone is available to the manager, as protected
+PKCS#8 material owned by the runtime UID (normally 0400/0600). This online custody
+is a security boundary; it is not hardware isolation or encrypted storage.
+
+The LAN configuration's `agentClientCAFile` must contain exactly this dedicated
+intermediate, not the root or a sibling/combined pool. Add a separate protected
+`tracebolt.enrollment-config.v2` JSON file with the matching profile, stable
+manager instance ID, issuer certificate/key/root paths, full expected issuer
+fingerprint and TLS bootstrap server-CA path. For HTTP test the bootstrap
+server-CA field must be empty. Validate the exact fields and roles against
+[the runtime contract](enrollment-v2/runtime-config.md); placeholders do not work.
+
+```sh
+go build -buildvcs=false -trimpath -o bin/lan-manager ./cmd/lan-manager
+./bin/lan-manager --lan-config /absolute/path/private/lan.json \
+  --enrollment-config /absolute/path/private/enrollment.json
+```
+
+For Docker, retain the protected read-only material mount and image hardening,
+then explicitly add `--enrollment-config /run/tracebolt/enrollment.json` alongside
+`--lan-config /run/tracebolt/lan.json` in an approved Compose override. The shipped
+Compose examples keep manual-v1 as their default; no guided-mode container
+acceptance is inferred from a manual-profile Docker pass.
+
+A durable private mode marker binds profile, origins, instance, collection
+profile, issuer/root and server trust. Existing unmarked or mismatched database/
+sidecar files are rejected unchanged. Never remove that marker or reset a
+registry to switch modes. The current enrollment ledger retains at most 25
+records, including terminal records; it is a bounded pilot, not a fleet-scale
+capacity claim or invitation-cleanup permission.
+
+### Endpoint and deliberate approval
+
+1. Sign in at the exact configured operator origin. In the enabled enrollment
+   interface, create a Linux invitation only after the explicit creation step.
+   Export its **public bootstrap JSON** to the intended Linux endpoint through a
+   trusted channel. The export excludes the invitation secret and private keys.
+   The interface appears only when the runtime capability is enabled.
+2. Build the native commands from the same reviewed revision:
+
+```sh
+go build -buildvcs=false -trimpath -o bin/enroll-agent ./cmd/enroll-agent
+go build -buildvcs=false -trimpath -o bin/lan-agent ./cmd/lan-agent
+./bin/enroll-agent --bootstrap /absolute/path/bootstrap.json \
+  --state-directory /absolute/path/new-private-device-directory
+```
+
+3. Use a controlling local terminal. Before secret entry, independently inspect
+   the exact origins, profile, instance/invitation IDs, public CA/issuer
+   fingerprints, locally generated full SPKI SHA-256 and context-bound 128-bit
+   comparison value. The bootstrap is locally supplied trust, not authority
+   learned from an unauthenticated response. Endpoint credential creation needs
+   its required authorization before this command runs.
+4. Enter the invitation only in the hidden terminal prompt. There is no supported
+   invitation argument, environment variable, URL, bootstrap-secret field, stdin
+   mode or downloadable secret file. Do not paste it into an agent conversation
+   or transcript. The human/operator checks the entire fingerprint and comparison
+   value against the manager's pending claim and explicitly approves that device.
+   A label or short code alone does not establish identity.
+5. The client verifies the committed credential/intent, activates the bound
+   identity and prepares protected sender state. Default cooperative approval
+   timeout is 15 minutes, with `--timeout` capped at 30 minutes. On success, run
+   the exact safely quoted handoff command it prints, equivalent to:
+
+```sh
+./bin/lan-agent --config /absolute/path/new-private-device-directory/agent.json \
+  --foreground --interval 30s
+```
+
+This starts foreground reporting only. Closing/stopping it stops reporting.
+No OS service, automatic renewal, reboot persistence or installer is supplied.
+Keep Windows/macOS limited to their separately tested stdout collectors.
+
+For deliberately insecure HTTP testing, the native enrollment command also
+requires `--insecure-http-test` on every invocation. Invitations, reports and
+operator sessions are readable; the manager can be impersonated. An HTTP
+activation response is not verified server activation. Use separate disposable
+material/state and retain every visible warning; never downgrade a TLS setup.
+
+### Resume, uncertainty and protected state
+
+Resume only with the identical trusted bootstrap and private directory. The local
+key, CSR, operation IDs and semantic claim hash are persisted before network
+actions; the invitation itself is not saved. Preserve the complete private
+ledger, handoff files, ready marker and telemetry directory. Missing or mismatched
+state fails closed. Do not delete temporaries, replace keys, reset a sequence or
+re-enroll automatically to work around an uncertain result.
+
+A definite authenticated TLS rejection can permit corrected invitation entry
+only after the client's bound-key status reconciliation, using the same local
+identity. An uncertain response keeps the earlier candidate pinned. HTTP-test
+rejections cannot authorize correction: a wrong token may require operator
+cancellation and a new separately authorized invitation/directory. Follow the
+[native recovery contract](enrollment-v2/native-client.md), rather than improvising
+a reset. Stop an active foreground sender before enrollment validates a completed
+handoff, because both protect the same sender-state lock boundary.
+
+Before revoking a real endpoint, get the appropriate explicit approval. Revocation
+is durable; a transport error is not evidence of revocation and does not authorize
+new credentials. Lost-key recovery, issuer rotation, renewal, old-backup rollback
+detection and service installation remain separate work.
+
 ## 7. Acceptance: establish evidence, not just uptime
 
 On the actual approved target, confirm all of the following:
@@ -267,6 +395,8 @@ On the actual approved target, confirm all of the following:
 - Exact configured operator origin verifies TLS normally; login works, protected
   inventory is denied before authentication, and no synthetic devices appear.
 - Endpoint approval was deliberate; no measurements appear before its first send.
+  For guided-v2, record matching local/manager public fingerprints, explicit approval,
+  verified TLS activation and the private handoff; HTTP-test activation is untrusted.
 - A real one-shot sender exits successfully; authenticated inventory shows the
   server-assigned ID, `source=lan`, `synthetic=false`, and an observation time.
   Unknown health/unavailable metrics are valid results, not proof of a healthy host.
@@ -283,6 +413,8 @@ not real installation, browser acceptance or production-hardening proof:
 ```sh
 # Linux: separate actual manager/sender subprocesses and temporary loopback trust.
 go test -count=1 -timeout=4m ./tests/lanclient
+# Guided-v2: actual manager, hidden-terminal client and foreground sender.
+go test -race ./cmd/lan-manager -run '^TestGuidedThreeBinaryEnrollmentAndForeground$' -count=1 -timeout=8m
 # Broader Go coverage; race mode requires a working C toolchain.
 go test -race ./...
 # Frontend tests and build, from the repository root.
@@ -364,7 +496,8 @@ public or overlay/CGNAT exceptions are not silently supported.
 **Stop:** Docker `docker compose -f deploy/compose.yaml stop manager` stops while
 retaining the named state volume. `down` also retains it. **Do not use `down -v`**
 for ordinary shutdown. Native foreground manager stops with Ctrl+C/SIGTERM;
-there is no agent background process after its one-shot invocation finishes.
+the default one-shot sender leaves no background process. An explicitly started
+foreground sender must also receive Ctrl+C/SIGTERM; it is not an installed service.
 
 **Backup:** stop all writers first. Use the site's approved volume/filesystem
 backup procedure to capture the **complete** private manager state (including
@@ -411,7 +544,8 @@ nonsecret origins, what ran, exact passed/failed/skipped checks, retained data,
 remaining manual/provisioning steps and the next safe action. Say “Linux one-shot
 sender verified” only when it actually sent and inventory was checked. Say
 “blocked awaiting protected credentials/public approval ID” when that is true.
-Do not say “installed fleet”, “continuous monitoring” or “production ready”.
+Do not say “installed fleet”, “boot-persistent monitoring” or “production ready”.
+Describe foreground reporting separately, including that it stops with the process.
 
 Suggested German handoff: „Lies zuerst `AGENTS.md` und `docs/installation.md`.
 Prüfe Zielrechner, Commit und vorhandene Konfiguration. Schlage den passenden

@@ -2,6 +2,21 @@
 
 Meaningful development checkpoints are recorded here. These are prototype milestones, not production releases.
 
+## 2026-10-03 — Guided Linux enrollment and foreground reporting
+
+### Added
+- Explicit guided-v2 manager mode with protected preprovided client-auth intermediate custody, offline root key separation, strict public bootstrap, and durable proof/approval/issuance/activation/revocation.
+- Conditional English/German enrollment UI, one-time secret display, public-only export, exact fingerprint/comparison consent, server-clock deadlines and safe suspended-page handling.
+- Native Linux `enroll-agent` with hidden terminal invitation entry, strict trust display, preserved same-identity recovery and private-first sender handoff.
+- Bounded serial foreground sender cadence/backoff retaining the exact pending-byte/sequence domain and exclusive lock during waits.
+- Independent crypto/state/store/service/API/config/client/loop regressions, actual three-binary TLS/HTTP fixture acceptance, and a separate 13-case hosted enrollment browser target.
+
+### Boundaries
+- Manual-v1 remains the default; guided-v2 requires an empty legacy registry and does not automatically migrate identity or provision a CA.
+- The ledger retains at most 25 records, including terminal states. No Windows/macOS LAN client, OS installer/service, reboot persistence, renewal or lost-key recovery is claimed.
+- HTTP test remains explicitly unauthenticated plaintext. Invitations and activation responses are not made trustworthy by client possession proofs.
+- Source/component and actual native fixture tests are distinct from exact hosted browser/container gates. New gallery captures remain pending until real rendering and pixel review; no secret/comparison values may be exported.
+
 ## 2026-10-03 — Defensive Ed25519 key policy and dependency notice
 
 - Reject noncanonical, identity and non-prime-order Ed25519 public keys through a shared bounded policy used by certificate trust/approval and signed HTTP validation.
