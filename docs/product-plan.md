@@ -49,7 +49,7 @@ Cross-compilation and fixtures do not establish native OS support. Installation,
 - Independent deployment review before any network-exposed pilot.
 
 ## Deferred
-Patch orchestration and vulnerability intelligence, interactive remote control, privileged remediation, general software deployment, customer multi-tenancy and billing. Consider MeshCentral only if remote access is concretely required; avoid a Tactical-derived commercial product without license review. osquery remains an optional later data source rather than an additional mandatory agent.
+Patch installation/orchestration, interactive remote control, privileged remediation, general software deployment, customer multi-tenancy and billing. Consider MeshCentral only if remote access is concretely required; avoid a Tactical-derived commercial product without license review. osquery remains an optional later data source rather than an additional mandatory agent.
 
 ## Research anchors (reviewed 2026-10-03)
 - https://www.ninjaone.com/docs/new-to-ninjaone/dashboards-navigation/software-inventory-endpoint-management/
@@ -59,3 +59,19 @@ Patch orchestration and vulnerability intelligence, interactive remote control, 
 - https://learn.microsoft.com/en-us/windows/win32/services/service-security-and-access-rights
 - https://developer.apple.com/library/archive/documentation/MacOSX/Conceptual/BPSystemStartup/Chapters/CreatingLaunchdJobs.html
 - https://cheatsheetseries.owasp.org/cheatsheets/AI_Agent_Security_Cheat_Sheet.html
+
+## Required next product capabilities
+
+The initial target is a private LAN deployment with a central manager and manually installed, outbound-connecting agents. Loopback development guards must not be relaxed into LAN access: operator authentication, trusted TLS, approved per-device identities and per-request revocation checks are separate release gates.
+
+Read-only missing-update assessment and vulnerability comparison are required roadmap capabilities. Installed inventory, offered updates and vendor-evidence CVE applicability are separate results. Every assessment needs source, coverage, freshness and an explicit unknown/partial state; no successful inventory scan or empty update list implies vulnerability-free status. Patch installation remains outside this detection milestone.
+
+The OpenAI-compatible provider interface supports an explicitly chosen base URL, model and server-side key. Evidence preparation precedes inference. Recurring log review/dashboard alerting is a later, separately gated capability with approved sources and bounded collection/inference budgets, not a claim made by the current manual analysis prototype.
+
+## Administration and monitoring direction
+
+The first deployment is one environment, not a multi-customer MSP portal. The device workspace should progressively expose actual reachability and agent state, resource history, selected services/processes, network diagnostics, software changes, update/CVE assessments, relevant logs, evidence and case notes. Unsupported, denied and stale sources stay visible. These are phased requirements, not a statement that every collector is implemented.
+
+Required interface behavior: English by default, with German available as a persisted preference. Source evidence and log/model text retain their original content. Favor short labels, accessible consistent icons and expandable detail over promotional copy or dense explanatory blocks.
+
+Before expanding fleet scope, establish authenticated LAN transport, persistent bounded measurements, usable alert lifecycle and verified backup/restore. Multi-tenancy, complex technician roles and broad remote execution remain outside the initial environment.

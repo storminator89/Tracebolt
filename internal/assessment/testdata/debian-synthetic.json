@@ -1,0 +1,16 @@
+{
+  "schema": "debian-tracker-normalized-1",
+  "synthetic": true,
+  "coveredSources": ["tracebolt-fixture-source"],
+  "rules": [
+    {
+      "sourcePackage": "tracebolt-fixture-source",
+      "advisoryId": "CVE-2099-99990001",
+      "release": "trixie",
+      "status": "resolved",
+      "fixedVersion": "1:2.0-1+deb13u2",
+      "qualifications": [],
+      "archiveVersions": [{"repository": "trixie-security", "version": "1:2.0-1+deb13u2"}]
+    }
+  ]
+}

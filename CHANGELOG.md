@@ -2,6 +2,23 @@
 
 Meaningful development checkpoints are recorded here. These are prototype milestones, not production releases.
 
+## 2026-10-03 — Isolated read-only assessment foundation
+
+### Added
+- Bounded fixed-path Debian package inventory parsing, an injectable/native Debian version comparator, digest-pinned normalized synthetic advisory matching, and in-memory last-good result retention.
+- Separate inventory, offered-update and CVE result types with nullable counts, source/coverage/freshness evidence, origin qualification and explicit unknown states.
+- Independent contract tests, adversarial parser fixtures, safety checks, cross-build checks and short fuzz smoke coverage.
+- A reviewed multi-platform implementation plan and updated product requirements.
+
+### Verification
+- Focused assessment race/vet and independent security-contract tests passed on the isolated source overlay.
+- Full Go tests, Windows amd64/macOS arm64 test cross-compilation, and two bounded three-second fuzz smoke runs passed. Cross-compiled assessment tests were not executed on those target systems.
+
+### Known limits
+- Live advisory import, verified package-origin adapters, offered-update adapters, and UI/API integration remain unimplemented.
+- This does not yet show real missing updates or CVEs in Tracebolt. All advisory fixtures are explicitly synthetic, and no real inventory or customer data is published.
+- No LAN/authentication, Docker or new language-interface implementation is included in this foundation checkpoint.
+
 ## 2026-10-03 — Robust timestamp-based transport checks
 
 - Give the deliberately aged test observation a 15-second admission margin, then wait against its actual timestamp and the server's configured expiry. The same freshness, replay and stale-state assertions remain in place.

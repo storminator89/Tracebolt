@@ -70,6 +70,10 @@ The interface uses the real local API. Browser acceptance and screenshots are pr
 - [AI-assisted investigation](docs/ai-diagnostics.md): configure an OpenAI-compatible provider, inspect the bounded evidence packet and destination, then explicitly approve an analysis. Provider configuration and keys are memory-only. Suggestions remain unconfirmed and cannot execute actions. Validation so far uses a deterministic loopback test provider, not a real model.
 - [Local agent transport preview](docs/local-transport-preview.md): start the manager with `--managed-preview`, then run the separate one-shot development sender. The manager starts with unknown/awaiting data and never substitutes its own sampler. This is loopback-only development transport, not authenticated enrollment or LAN support.
 
+## Assessment foundation
+
+An [isolated read-only inventory and synthetic CVE-assessment foundation](docs/assessment-foundation.md) is available for further development. Live advisory import, verified package-origin adapters, offered-update adapters, and UI/API integration remain unimplemented. **This does not yet show real missing updates or CVEs in Tracebolt.** The [implementation plan](docs/update-vulnerability-plan.md) records the remaining platform, provenance and release gates.
+
 ## What the data means
 
 - Seven Windows, Linux, and macOS demo devices, their histories, cases, and evidence are synthetic fixtures.
