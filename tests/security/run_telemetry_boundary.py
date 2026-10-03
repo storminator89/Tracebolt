@@ -96,7 +96,7 @@ print('PASS: two real separate one-shot Linux agent deliveries, explicit unknown
 # A mixed-age but valid bundle must age out without receiving another sample.
 command = subprocess.run([args.agent, '--support-bundle'], check=True, capture_output=True, timeout=10)
 bundle = json.loads(command.stdout)
-bundle['observation']['cpu']['collectedAt'] = (datetime.now(timezone.utc) - timedelta(seconds=119)).isoformat().replace('+00:00', 'Z')
+bundle['observation']['cpu']['collectedAt'] = (datetime.now(timezone.utc) - timedelta(seconds=105)).isoformat().replace('+00:00', 'Z')
 code, receipt = post(bundle)
 assert code == 200 and receipt['sequence'] == 3, (code, receipt)
 assert status()['state'] == 'fresh'
@@ -106,7 +106,15 @@ unchanged = status()
 assert unchanged['acceptedSamples'] == 3 and unchanged['receivedAt'] == receipt['receivedAt']
 print('PASS: replay rejected without refreshing receipt')
 
-time.sleep(2.1)
+# Leave a real 15-second admission margin on shared runners. Then wait for
+# the actual field timestamp + server-declared freshness bound, not a guessed
+# sleep or an arbitrary retry count. This still exercises real API aging.
+oldest = datetime.fromisoformat(bundle['observation']['cpu']['collectedAt'].replace('Z', '+00:00'))
+expiry = oldest.timestamp() + unchanged['maxAgeSeconds'] + 1
+while time.time() < expiry:
+    time.sleep(min(0.5, max(0, expiry - time.time())))
+    current = status()
+    assert current['acceptedSamples'] == 3 and current['receivedAt'] == receipt['receivedAt']
 aged = status()
 assert aged['state'] == 'stale' and aged['acceptedSamples'] == 3
 _, device = request(args.base_url, 'GET', '/api/devices/sandbox-local')

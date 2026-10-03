@@ -63,9 +63,12 @@ if [[ "$ready" != true ]] || ! kill -0 "$pid" 2>/dev/null; then
   exit 1
 fi
 
+printf 'TRACEBOLT_STAGE=http\n'
 python3 tests/security/run_boundary.py --base-url "http://127.0.0.1:$port" --allow-mutations
+printf 'TRACEBOLT_STAGE=ai\n'
 python3 tests/security/run_ai_boundary.py --base-url "http://127.0.0.1:$port" --allow-mutations
 
+printf 'TRACEBOLT_STAGE=managed_startup\n'
 managed_port=$(python3 - <<'PORT'
 import socket
 with socket.socket() as listener:
@@ -87,8 +90,9 @@ for attempt in {1..100}; do
 done
 [[ "$managed_ready" == true ]] && kill -0 "$managed_pid" 2>/dev/null || exit 1
 go build -buildvcs=false -trimpath -o "$state/dev-agent" ./cmd/dev-agent
+printf 'TRACEBOLT_STAGE=managed\n'
 if ! python3 tests/security/run_telemetry_boundary.py --base-url "http://127.0.0.1:$managed_port" --disabled-url "http://127.0.0.1:$port" --agent ./bin/agent --dev-agent "$state/dev-agent" > "$state/telemetry-tests.log" 2>&1; then
-  printf 'FAIL: seven managed API boundary groups; runtime details withheld.\n' >&2
+  python3 tests/security/report_failure.py --stage managed "$state/telemetry-tests.log" >&2
   exit 1
 fi
 printf 'PASS: seven managed API boundary groups; no runtime samples printed.\n'
@@ -99,6 +103,7 @@ managed_pid=''
 kill "$pid"
 wait "$pid"
 pid=''
+printf 'TRACEBOLT_STAGE=sqlite\n'
 python3 - "$state/state.db" <<'PY'
 import os
 import sqlite3

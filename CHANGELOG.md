@@ -2,6 +2,13 @@
 
 Meaningful development checkpoints are recorded here. These are prototype milestones, not production releases.
 
+## 2026-10-03 — Robust timestamp-based transport checks
+
+- Give the deliberately aged test observation a 15-second admission margin, then wait against its actual timestamp and the server's configured expiry. The same freshness, replay and stale-state assertions remain in place.
+- Report safe failure stages, top-level test names and source-line identifiers without exposing raw telemetry or request bodies.
+- Run browser acceptance independently after frontend validation; backend/security jobs still contribute to the overall workflow result.
+- Application source and security guards are unchanged.
+
 ## 2026-10-03 — Stable current-address browser assertion
 
 - Identify the runtime-address row by its stable Manager label while retaining the exact custom-port assertion.

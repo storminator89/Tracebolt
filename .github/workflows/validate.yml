@@ -84,6 +84,7 @@ jobs:
         run: |
           if ! bash tests/security/run.sh > "$RUNNER_TEMP/api-tests.log" 2>&1; then
             echo 'FAIL: local HTTP/AI/managed API regressions; runtime details withheld.'
+            python3 tests/security/report_failure.py --stage api "$RUNNER_TEMP/api-tests.log"
             exit 1
           fi
           echo 'PASS: 13 HTTP, six fake-provider AI and seven managed API groups; SQLite checks.'
@@ -92,6 +93,7 @@ jobs:
         run: |
           if ! python3 tests/security/run_transport_smoke.py --wait-stale > "$RUNNER_TEMP/transport-smoke.log" 2>&1; then
             echo 'FAIL: local transport smoke; raw output withheld to avoid telemetry disclosure.'
+            python3 tests/security/report_failure.py --stage transport "$RUNNER_TEMP/transport-smoke.log"
             exit 1
           fi
           echo 'PASS: 14 real two-process transport checks including actual expiry; no telemetry uploaded.'
@@ -126,7 +128,7 @@ jobs:
 
   browser:
     name: Same-origin browser acceptance and screenshots
-    needs: [backend, frontend]
+    needs: [frontend]
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
