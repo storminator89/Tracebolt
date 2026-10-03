@@ -86,7 +86,7 @@ An explicitly enabled [HTTP test profile](docs/signed-http-test.md) uses separat
 
 [Docker packaging and Compose examples](docs/docker.md) provide an optional Linux server route. The image runs as a fixed nonroot user with a read-only root filesystem and dropped capabilities. Endpoint collectors remain native. CI builds a local image and exercises both disposable profiles on a standard Linux runner; check this commit's actual outcome before treating container execution as verified. No registry publication or real deployment is part of the workflow.
 
-A [native one-shot Linux sender](docs/lan-agent.md) now collects and delivers one bounded observation using preprovided approved material. Its private durable state preserves exact request bytes across uncertain delivery/restart and binds them to the configured destination and identity. Run `bin/lan-agent --config /absolute/path/agent.json` after following that contract. [Two-binary runtime tests](tests/lanclient/README.md) exercise the actual manager and sender over both loopback profiles. Linux reporting can now repeat in the foreground with bounded cadence/backoff; it stops with the process. Windows/macOS LAN sender state protection, OS services, boot persistence and automatic renewal remain unimplemented. Provisioning the dedicated issuer, normally trusted browser TLS setup and real endpoint rollout remain separate authorized work.
+A [native one-shot Linux sender](docs/lan-agent.md) now collects and delivers one bounded observation using preprovided approved material. Its private durable state preserves exact request bytes across uncertain delivery/restart and binds them to the configured destination and identity. Run `bin/lan-agent --config /absolute/path/agent.json` after following that contract. [Two-binary runtime tests](tests/lanclient/README.md) exercise the actual manager and sender over both loopback profiles. Linux reporting can now repeat in the foreground with bounded cadence/backoff; it stops with the process. Windows/macOS LAN sender state protection and automatic renewal remain unimplemented. A separate Linux/systemd installer candidate is described below; actual service and reboot acceptance must be established separately. Provisioning the dedicated issuer, normally trusted browser TLS setup and real endpoint rollout remain separate authorized work.
 
 ## Optional guided Linux enrollment
 
@@ -95,6 +95,12 @@ Enable guided-v2 only with the [explicit runtime/issuer contract](docs/enrollmen
 The enabled interface creates a one-time Linux invitation and exports only public bootstrap information. The native `enroll-agent` displays exact trust/origin context and a full public-key fingerprint/comparison, reads the invitation from a hidden local terminal, and waits for deliberate operator approval. Its protected, fail-closed handoff feeds `lan-agent --foreground`. [Installation and recovery instructions](docs/installation.md#6b-optional-guided-v2-bootstrap-compare-approve-and-report) explain the required permissions and exact commands. Real endpoint key creation and access grants still need their own authorized workflow.
 
 New source/component and actual three-binary fixture checks passed before publication; the exact-source hosted browser/container gates remain the release evidence. Existing gallery captures are pinned to their earlier source and do not claim to show this new enrollment interface. No invitation or comparison values belong in public screenshots.
+
+## Linux/systemd service candidate
+
+The [Linux service installer](docs/linux-agent-service.md) builds as `bin/agent-service`. It defaults to read-only preflight and applies fixed-path install, restart, verified local artifact upgrade or uninstall only with explicit `--apply` authorization. It uses a dedicated non-login identity, generated numeric-UID/GID unit, hidden native enrollment and retained private sender state. No download pipeline or automatic updater is provided.
+
+Source, fixture and default-skip checks are separate from actual service execution. The [manual disposable-systemd workflow](.github/workflows/systemd-acceptance.yml) is opt-in only and checks a fresh Ubuntu VM; its current result must be read before claiming installation acceptance. It does not test a complete OS reboot, change global trust/firewall rules or deploy to a real endpoint. The three temporarily quarantined enrollment browser scenarios remain an explicit independent gap in [browser acceptance](tests/e2e-review/ENROLLMENT.md).
 
 ## Optional previews
 
@@ -145,6 +151,7 @@ The [defensive Ed25519 key-policy review](docs/ed25519-hardening-review.md) docu
 - `cmd/dev-agent`: one-shot loopback development sender
 - `cmd/lan-manager`: separate explicitly configured operator/agent runtime
 - `cmd/lan-agent`: Linux one-shot/foreground sender with protected exact-retry state
+- `cmd/agent-service`: explicit Linux/systemd installation candidate, default read-only preflight
 - `cmd/enroll-agent`: opt-in Linux guided bootstrap with hidden invitation input
 - `internal/enrollment*`: bounded lifecycle, durable issuer/identity and native-client contracts
 - `internal/agentloop`: serial foreground cadence/backoff with bounded metadata

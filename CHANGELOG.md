@@ -2,6 +2,14 @@
 
 Meaningful development checkpoints are recorded here. These are prototype milestones, not production releases.
 
+## 2026-10-03 — Linux/systemd installer candidate and opt-in acceptance gate
+
+- Add a default-read-only fixed-path Linux installer with explicit install, restart, selected local artifact upgrade, uninstall and same-identity resume operations.
+- Preserve dedicated numeric service identity, private sender state, selected-byte verification, bounded enrollment/rollback handling and terminal restoration. Retain identity/account on uninstall; no remote download, automatic updater or reset/purge path is added.
+- Include independent source/inert-fixture regressions and a manual-dispatch-only fresh-Ubuntu acceptance harness. Ordinary push/PR tests skip its privileged account/service operations before effects.
+- Actual install/reporting/restart/upgrade/uninstall acceptance remains pending until the approved exact-source manual job runs. A service restart does not establish true OS reboot persistence. Windows/macOS service installation, automatic renewal and real endpoint deployment remain open.
+- Keep the three temporarily skipped enrollment browser cases explicit and independent of installer verification.
+
 ## 2026-10-03 — Explicit temporary enrollment browser quarantine
 
 - Temporarily exclude exactly three named termination-dependent enrollment browser scenarios from the required gate. Each remains in source and is recorded as `SKIPPED` with a reason; the other ten enrollment cases and all existing 40 general/AI, 6 managed-preview and 10 operator-auth cases stay mandatory.

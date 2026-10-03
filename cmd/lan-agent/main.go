@@ -18,6 +18,8 @@ import (
 
 func main() {
 	path := flag.String("config", "", "Absolute protected preprovided agent configuration JSON")
+	identity := flag.String("service-identity", "", "Expected numeric service UID:GID; rejects additional groups before state access")
+	validate := flag.Bool("validate-guided", false, "Validate local guided handoff and existing ledger without collection or network")
 	foreground := flag.Bool("foreground", false, "Repeat bounded read-only reports until interrupted; does not install a service")
 	interval := flag.Duration("interval", 30*time.Second, "Foreground report interval, 15s to 1h")
 	flag.Parse()
@@ -28,6 +30,18 @@ func main() {
 	if runtime.GOOS != "linux" {
 		fmt.Fprintln(os.Stderr, "Tracebolt LAN sender state is currently supported on Linux only; native ACL validation is pending for other platforms.")
 		os.Exit(2)
+	}
+	if *identity != "" && (!*foreground || *validate || !serviceIdentity(*identity)) {
+		fmt.Fprintln(os.Stderr, "Tracebolt service identity rejected before private-state access.")
+		os.Exit(2)
+	}
+	if *validate {
+		if *foreground || *interval != 30*time.Second || lanclient.ValidateGuidedHandoff(*path) != nil {
+			fmt.Fprintln(os.Stderr, "Tracebolt guided handoff validation failed; identity and state preserved.")
+			os.Exit(2)
+		}
+		fmt.Fprintln(os.Stdout, "Tracebolt guided handoff validated locally; no collection or network request performed.")
+		return
 	}
 	material, e := lanclient.Load(*path)
 	if e != nil {

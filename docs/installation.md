@@ -5,7 +5,9 @@ pilot, not an unattended fleet installer.** The supported path today is a
 Docker or native Linux central manager plus native Linux senders. The default
 manual-v1 mode uses preprovided approved material; optional guided-v2 adds a
 hidden-terminal bootstrap and deliberate operator approval. Reporting can run
-once or repeatedly in the foreground. A repository link alone does not authorize a deployment or
+once or repeatedly in the foreground. A separate Linux/systemd installer candidate
+adds explicit service operations; its actual disposable-VM gate is tracked separately.
+A repository link alone does not authorize a deployment or
 provide credentials. Read the checklist before executing the quickstart.
 
 ## 1. Choose the correct milestone
@@ -13,7 +15,7 @@ provide credentials. Read the checklist before executing the quickstart.
 | Component | Available now | Not provided by this milestone |
 | --- | --- | --- |
 | Central manager | Separate `cmd/lan-manager`, Admin UI, authenticated operator API, approved agent ingress; Docker or native Linux execution | Production assurance, automatic provisioning, HA/shared SQLite writers |
-| Linux endpoint | Native `cmd/lan-agent --config …`, one-shot or bounded foreground reporting; optional `cmd/enroll-agent` with explicit guided-v2 configuration | OS installer/service, boot persistence, automatic renewal/update/uninstall |
+| Linux endpoint | Native `cmd/lan-agent --config …`, one-shot or bounded foreground reporting; optional `cmd/enroll-agent` with explicit guided-v2 configuration; `cmd/agent-service` candidate with explicit fixed-path operations | Verified OS reboot persistence, automatic renewal or remote updater; actual systemd acceptance requires its separate manual gate |
 | Windows/macOS endpoint | Native `cmd/agent` bounded stdout-only collector; limited platform reads | Supported LAN sender, native ACL/state lifecycle, installed service or fleet deployment |
 | Docker architectures | Linux amd64 TLS and explicit HTTP-test lifecycle gates; Linux arm64 cross-build support | arm64 runtime acceptance from cross-building alone |
 
@@ -45,7 +47,8 @@ plan. Record these answers without secrets:
   in, credential/certificate custodian, and endpoint/public fingerprint to approve.
 - Endpoint OS/architecture, ordinary-user collection constraints, and whether a
   foreground Linux sender meets the request. If a Windows/macOS LAN client or an
-  installed/reboot-persistent service is required, report the missing implementation.
+  installed service is required, read the candidate [service contract](linux-agent-service.md)
+  and exact manual-gate evidence. True reboot persistence remains unverified.
 
 Before changing the target, get approval for the concrete plan, destinations and
 paths. Persistent credential creation/import, device trust approval/revocation,
@@ -192,8 +195,8 @@ go build -buildvcs=false -trimpath -o bin/lan-manager ./cmd/lan-manager
 ```
 
 Run foreground as the chosen unprivileged owner. Stop with Ctrl+C/SIGTERM. There
-is no supplied native service unit/installer; do not describe a foreground run as
-boot persistence. Installing a custom system service is separate reviewed work.
+is a separate Linux endpoint service candidate, but no manager service installer;
+do not describe a foreground manager run as boot persistence.
 The build toolchain is not needed on a host receiving an independently verified
 matching binary plus matching frontend assets, but this repository does not
 provide a complete signed binary distribution/install workflow.
@@ -356,7 +359,8 @@ go build -buildvcs=false -trimpath -o bin/lan-agent ./cmd/lan-agent
 ```
 
 This starts foreground reporting only. Closing/stopping it stops reporting.
-No OS service, automatic renewal, reboot persistence or installer is supplied.
+This command installs no service. A separate Linux/systemd installer candidate is
+described below; automatic renewal and true reboot acceptance remain open.
 Keep Windows/macOS limited to their separately tested stdout collectors.
 
 For deliberately insecure HTTP testing, the native enrollment command also
@@ -386,7 +390,38 @@ handoff, because both protect the same sender-state lock boundary.
 Before revoking a real endpoint, get the appropriate explicit approval. Revocation
 is durable; a transport error is not evidence of revocation and does not authorize
 new credentials. Lost-key recovery, issuer rotation, renewal, old-backup rollback
-detection and service installation remain separate work.
+detection remain separate work. Service installation uses the separately authorized
+Linux/systemd candidate below.
+
+## 6c. Optional Linux/systemd service candidate
+
+Read [the complete service contract](linux-agent-service.md) and its
+[targeted review](agent-install-security-review.md) before acting. Build
+`cmd/agent-service` from the exact selected revision alongside `enroll-agent` and
+`lan-agent`. Its default is read-only preflight; `--apply` requires concrete
+administrator approval for the specified host, account/service changes and
+persistent endpoint identity.
+
+The installation uses fixed owned paths, a dedicated non-login account and a
+numeric-UID/GID systemd unit. It requires independently selected hashes for the
+local binary pair, source archive and public bootstrap. The installer never
+fetches an executable or accepts an invitation argument. A human/approved secure
+handoff enters the invitation through the hidden native prompt, followed by
+public fingerprint/comparison approval.
+
+`--action install`, `restart`, `upgrade` and `uninstall` are explicit operations;
+consult the component contract for their exact required inputs. Upgrades preserve
+identity and the sequence domain. Uninstall stops/disables and removes owned
+unit/binaries while retaining the account, bootstrap and private identity/state.
+There is no reset or purge flag. An uncertain transaction needs inspection rather
+than deletion or automatic re-enrollment.
+
+The manual [disposable-systemd acceptance gate](../tests/systemd/README.md) tests
+actual install/start/reporting/restart/artifact replacement/uninstall only when
+explicitly enabled on a fresh hosted Ubuntu VM. Default tests skip it before
+effects. Source and inert-fixture passes do not establish this runtime result;
+check the selected source's manual workflow evidence. True OS reboot, native
+Windows/macOS installation and automatic credential renewal remain separate gaps.
 
 ## 7. Acceptance: establish evidence, not just uptime
 
@@ -529,9 +564,10 @@ identity silently. There is no guaranteed database downgrade path or automatic
 rollback tool.
 
 **Uninstall:** stop/remove only the known deployment containers or foreground
-binaries. Preserve state/backups by default. Inventory any separately approved
-service, firewall or trust changes and remove only those exact changes with
-approval; this repository created no such native service. Credential revocation
+binaries. For an explicitly installed Linux agent, use the reviewed owned
+`agent-service --action uninstall` preflight and separately approved `--apply`;
+retain identity/state by default. Inventory any other separately approved service,
+firewall or trust changes and remove only those exact changes with approval. Credential revocation
 is separate from deleting a key file. Confirm whether data/volumes/configuration,
 credentials and backups should be retained or destroyed before deleting anything;
 permanent deletion requires explicit action-time confirmation in an agent workflow.

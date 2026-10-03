@@ -1,0 +1,126 @@
+name: Approved disposable systemd acceptance
+
+# Deliberately manual-only: this creates a test account and service on one fresh
+# hosted VM. It never runs on push, pull request, a schedule or a self-hosted host.
+on:
+  workflow_dispatch:
+    inputs:
+      approved_disposable_systemd:
+        description: 'Approve install/start/restart/upgrade/uninstall on this fresh Ubuntu VM (no OS reboot)'
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: approved-systemd-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  disposable-systemd:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.approved_disposable_systemd }}
+    name: Explicitly approved Linux service lifecycle
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Build exact selected source as the ordinary runner user
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$RUNNER_ENVIRONMENT" = github-hosted
+          test "$RUNNER_OS" = Linux
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          STAGE="$RUNNER_TEMP/tracebolt-systemd-acceptance"
+          mkdir -m 0700 "$STAGE"
+          go mod verify
+          go build -buildvcs=false -o "$STAGE/agent-service" ./cmd/agent-service
+          go build -buildvcs=false -o "$STAGE/lan-manager" ./cmd/lan-manager
+          go build -buildvcs=false -o "$STAGE/enroll-agent" ./cmd/enroll-agent
+          go build -buildvcs=false -o "$STAGE/lan-agent" ./cmd/lan-agent
+          go build -buildvcs=false -trimpath -ldflags=-buildid=tracebolt-disposable-upgrade -o "$STAGE/enroll-agent-upgrade" ./cmd/enroll-agent
+          go build -buildvcs=false -trimpath -ldflags=-buildid=tracebolt-disposable-upgrade -o "$STAGE/lan-agent-upgrade" ./cmd/lan-agent
+          go test -c -o "$STAGE/systemd.test" ./cmd/lan-manager
+          git archive --format=tar --output="$STAGE/source.tar" "$GITHUB_SHA"
+      - name: Execute the approved test once with a minimal root environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          STAGE="$RUNNER_TEMP/tracebolt-systemd-acceptance"
+          umask 077
+          if ! sudo env -i \
+            PATH=/usr/sbin:/usr/bin:/sbin:/bin \
+            LANG=C LC_ALL=C HOME=/ \
+            GITHUB_ACTIONS="$GITHUB_ACTIONS" \
+            RUNNER_ENVIRONMENT="$RUNNER_ENVIRONMENT" \
+            RUNNER_OS="$RUNNER_OS" \
+            TRACEBOLT_APPROVED_SYSTEMD_TEST=1 \
+            TRACEBOLT_SYSTEMD_BINARY_DIRECTORY="$STAGE" \
+            TRACEBOLT_SYSTEMD_SOURCE_ARCHIVE="$STAGE/source.tar" \
+            TRACEBOLT_SYSTEMD_RESULT_FILE="$STAGE/systemd-result.json" \
+            "$STAGE/systemd.test" \
+            -test.run '^TestApprovedDisposableSystemdInstallation$' \
+            -test.v -test.timeout 8m > "$STAGE/private-test.log" 2>&1; then
+            echo 'FAIL: approved disposable systemd test; private runtime output withheld.'
+            exit 1
+          fi
+          echo 'Native test returned successfully; sanitized completion evidence is checked next.'
+      - name: Validate the bounded result and require complete acceptance
+        if: ${{ always() && !cancelled() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          # The root test inherits umask 077. Read only its sanitized result as
+          # root, validate fixed fields with a bounded read, and emit normalized
+          # JSON through this ordinary-user shell's runner-owned output file.
+          TARGET="$RUNNER_TEMP/systemd-result.json"
+          if ! sudo env -i PATH=/usr/sbin:/usr/bin:/sbin:/bin LANG=C LC_ALL=C \
+            /usr/bin/python3 - "$RUNNER_TEMP/tracebolt-systemd-acceptance/systemd-result.json" \
+            > "$TARGET" <<'PYTHON'; then
+          import json, os, stat, sys
+          try:
+              fd = os.open(sys.argv[1], os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC)
+              with os.fdopen(fd, 'rb') as stream:
+                  info = os.fstat(stream.fileno())
+                  assert stat.S_ISREG(info.st_mode) and 0 < info.st_size <= 4096
+                  raw = stream.read(4097)
+              assert 0 < len(raw) <= 4096
+              value = json.loads(raw)
+              assert set(value) == {'schemaVersion', 'status', 'stage', 'profile', 'osRebootTested', 'telemetryExported'}
+              assert value['schemaVersion'] == 'tracebolt.systemd-acceptance.v1'
+              assert value['profile'] == 'tls'
+              assert value['osRebootTested'] is False and value['telemetryExported'] is False
+              assert value['status'] in {'pass', 'fail'}
+              assert value['stage'] in {'preflight', 'manager_start', 'operator_login', 'install_enroll', 'approval', 'initial_reports', 'restart', 'upgrade', 'uninstall', 'complete'}
+              print(json.dumps(value, indent=2))
+          except Exception:
+              raise SystemExit('FAIL: missing or invalid sanitized systemd acceptance evidence.')
+          PYTHON
+            rm -f -- "$TARGET"
+            exit 1
+          fi
+          python3 - "$TARGET" <<'PYTHON'
+          import json, sys
+          with open(sys.argv[1], 'rb') as stream:
+              value = json.loads(stream.read(4097))
+          if value['status'] != 'pass' or value['stage'] != 'complete':
+              raise SystemExit('FAIL: sanitized systemd acceptance records an incomplete or failing run.')
+          print('PASS: actual install, reporting, restart, artifact upgrade and uninstall; OS reboot remains untested.')
+          PYTHON
+      - name: Upload only the validated sanitized result
+        if: ${{ always() && !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: systemd-acceptance-${{ github.sha }}
+          path: ${{ runner.temp }}/systemd-result.json
+          if-no-files-found: ignore
+          retention-days: 3

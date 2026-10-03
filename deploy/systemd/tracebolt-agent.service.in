@@ -1,0 +1,40 @@
+[Unit]
+Description=Tracebolt read-only endpoint agent
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=300s
+StartLimitBurst=5
+ConditionPathExists=/var/lib/tracebolt-agent/enrollment/ready.json
+
+[Service]
+Type=simple
+User=tracebolt-agent
+Group=tracebolt-agent
+WorkingDirectory=/var/lib/tracebolt-agent
+ExecStart=/opt/tracebolt-agent/lan-agent --config /var/lib/tracebolt-agent/enrollment/agent.json --foreground --interval 30s
+Restart=on-failure
+RestartSec=30s
+RestartPreventExitStatus=2
+TimeoutStopSec=30s
+KillMode=control-group
+UMask=0077
+NoNewPrivileges=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictRealtime=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+ReadWritePaths=/var/lib/tracebolt-agent
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

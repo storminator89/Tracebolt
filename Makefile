@@ -6,6 +6,7 @@ build:
 	go build -buildvcs=false -trimpath -o bin/lan-manager ./cmd/lan-manager
 	go build -buildvcs=false -trimpath -o bin/lan-agent ./cmd/lan-agent
 	go build -buildvcs=false -trimpath -o bin/enroll-agent ./cmd/enroll-agent
+	go build -buildvcs=false -trimpath -o bin/agent-service ./cmd/agent-service
 test:
 	go test -race ./...
 web:

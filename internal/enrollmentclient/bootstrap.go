@@ -61,6 +61,15 @@ func LoadBootstrap(path string) (Bootstrap, error) {
 	if err != nil {
 		return Bootstrap{}, ErrBootstrap
 	}
+	return ParseBootstrap(raw)
+}
+
+// ParseBootstrap validates an already bounded public-only byte snapshot. It makes
+// no filesystem or network changes; caller is responsible for its integrity.
+func ParseBootstrap(raw []byte) (Bootstrap, error) {
+	if len(raw) == 0 || len(raw) > maxJSON {
+		return Bootstrap{}, ErrBootstrap
+	}
 	var b Bootstrap
 	if strictJSON(raw, &b) != nil {
 		return Bootstrap{}, ErrBootstrap

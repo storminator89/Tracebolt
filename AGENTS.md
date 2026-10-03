@@ -11,8 +11,10 @@ file as navigation and project constraints, never as permission to act on a host
   explicitly configured guided-v2 with a dedicated protected client-auth issuer.
   Linux `enroll-agent` uses a hidden local terminal prompt and deliberate public
   fingerprint/comparison approval; Linux `lan-agent` supports one-shot or bounded
-  foreground reporting. Windows/macOS LAN clients, OS installers/services, boot
-  persistence and renewal are not shipped. `make run` is the synthetic developer
+  foreground reporting. A Linux/systemd `agent-service` candidate adds read-only preflight and separately
+  authorized install/restart/upgrade/uninstall; actual service acceptance is a
+  manual disposable-VM gate. Windows/macOS LAN clients, verified boot persistence
+  and automatic renewal are not shipped. `make run` is the synthetic developer
   manager, not the LAN startup command.
 - Obtain the required approval for deployment exposure, persistent credential or
   trust changes, firewall/global settings, service installation and destructive
@@ -35,4 +37,5 @@ file as navigation and project constraints, never as permission to act on a host
 
 Build/test entry points and safe operational boundaries are in the runbook;
 component detail is in `docs/lan-runtime.md`, `docs/lan-agent.md`, `docs/docker.md`
-and `tests/lanclient/README.md`.
+and `tests/lanclient/README.md`. For service requests also read
+`docs/linux-agent-service.md`; its candidate status does not authorize host changes.
