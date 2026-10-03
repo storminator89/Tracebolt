@@ -31,5 +31,79 @@ jobs:
         run: go test -race ./...
       - name: Build local binaries
         run: make build
-      - name: Cross-build agent stubs (not native OS validation)
+      - name: Execute Linux agent and validate bounded support-bundle schema
+        run: |
+          python3 -m venv "$RUNNER_TEMP/bundle-validator"
+          "$RUNNER_TEMP/bundle-validator/bin/python" -m pip install -r tests/security/requirements.txt
+          set -o pipefail
+          ./bin/agent --support-bundle | "$RUNNER_TEMP/bundle-validator/bin/python" tests/security/validate_bundle.py --expect-platform linux -
+      - name: Cross-build native previews (not target-OS runtime validation)
         run: make crosscheck
+      - name: Disposable loopback boundary regressions
+        run: bash tests/security/run.sh
+
+  frontend:
+    name: UI types, tests and production build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Type check
+        run: npm run typecheck
+      - name: Unit and interaction tests
+        run: npm test
+      - name: Independent UI regression tests
+        working-directory: .
+        run: ./web/node_modules/.bin/vitest run --config tests/e2e-review/vitest.config.mts
+      - name: Production build
+        run: npm run build
+
+  browser:
+    name: Same-origin browser acceptance and screenshots
+    needs: [backend, frontend]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - name: Build UI from locked dependencies
+        working-directory: web
+        run: npm ci && npm run build
+      - name: Install Playwright Chromium on hosted runner
+        working-directory: web
+        run: npx playwright install --with-deps chromium
+      - name: Test real loopback manager with disposable state
+        env:
+          TRACEBOLT_SOURCE_SHA: ${{ github.sha }}
+        run: node tests/e2e-review/run.mjs
+      - name: Keep browser review evidence briefly
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ui-review-${{ github.sha }}
+          path: |
+            artifacts/review/synthetic-*.png
+            artifacts/review/results.json
+            artifacts/review/screenshot-manifest.json
+          if-no-files-found: warn
+          retention-days: 3

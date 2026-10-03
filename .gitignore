@@ -21,3 +21,5 @@ test-results/
 .DS_Store
 __pycache__/
 *.py[cod]
+/support-bundle*.json
+/support-bundles/

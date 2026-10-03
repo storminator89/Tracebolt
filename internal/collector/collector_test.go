@@ -3,6 +3,7 @@ package collector
 import (
 	"encoding/json"
 	"math"
+	"runtime"
 	"testing"
 	"time"
 
@@ -27,7 +28,11 @@ func TestPercentMetricRejectsInvalid(t *testing.T) {
 func TestSnapshotRealSample(t *testing.T) {
 	start := time.Now().UTC()
 	sample := Snapshot()
-	if sample.ID != "sandbox-local" || sample.Source != "sandbox" || sample.Synthetic {
+	wantID, wantSource := "sandbox-local", "sandbox"
+	if runtime.GOOS == "windows" || runtime.GOOS == "darwin" {
+		wantID, wantSource = "local-"+platformName(runtime.GOOS), "local"
+	}
+	if sample.ID != wantID || sample.Source != wantSource || sample.Synthetic {
 		t.Fatalf("wrong scope or provenance: %+v", sample)
 	}
 	if sample.Status != "unknown" || sample.IP != nil {

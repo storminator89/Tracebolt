@@ -64,7 +64,7 @@ func main() {
 		defer cancel()
 		_ = server.Shutdown(shutdown)
 	}()
-	log.Printf("Tracebolt development MVP: http://127.0.0.1:%d | 7 synthetic devices + limited Linux sandbox sample | no remote enrollment or commands", *port)
+	log.Printf("Tracebolt development MVP: http://127.0.0.1:%d | 7 synthetic devices + limited local read-only sample | no remote enrollment or commands", *port)
 	if e = server.Serve(listener); e != nil && e != http.ErrServerClosed {
 		log.Fatal(e)
 	}

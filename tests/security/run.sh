@@ -1,0 +1,77 @@
+#!/usr/bin/env bash
+# Run focused boundary regressions against an owned disposable local manager.
+set -euo pipefail
+
+cd "$(dirname "$0")/../.."
+manager="${TRACEBOLT_MANAGER:-./bin/manager}"
+if [[ ! -x "$manager" ]]; then
+  printf 'Build the manager first: make build\n' >&2
+  exit 1
+fi
+
+state=$(mktemp -d "${TMPDIR:-/tmp}/tracebolt-boundary.XXXXXXXX")
+pid=''
+cleanup() {
+  if [[ -n "$pid" ]]; then
+    kill "$pid" 2>/dev/null || true
+    wait "$pid" 2>/dev/null || true
+  fi
+  rm -rf -- "$state"
+}
+trap cleanup EXIT
+
+# The server does not accept port zero; reserve a free loopback port, then
+# verify our own process is alive before issuing any mutating test requests.
+port=$(python3 - <<'PY'
+import socket
+with socket.socket() as listener:
+    listener.bind(('127.0.0.1', 0))
+    print(listener.getsockname()[1])
+PY
+)
+mkdir -p "$state/web/.git"
+marker="Tracebolt boundary fixture ${state##*/}"
+printf '%s\n' "$marker" > "$state/web/index.html"
+printf 'synthetic dotfile trap\n' > "$state/web/.env"
+printf 'synthetic hidden directory trap\n' > "$state/web/.git/config"
+printf 'synthetic outside-root trap\n' > "$state/outside.txt"
+ln -s "$state/outside.txt" "$state/web/escape.txt"
+
+"$manager" --port "$port" --db "$state/state.db" --web "$state/web" > "$state/manager.log" 2>&1 &
+pid=$!
+ready=false
+for attempt in {1..100}; do
+  if ! kill -0 "$pid" 2>/dev/null; then
+    printf 'Disposable manager failed to start.\n' >&2
+    cat "$state/manager.log" >&2
+    exit 1
+  fi
+  response=$(curl --silent --fail --connect-timeout 1 --max-time 2 "http://127.0.0.1:$port/" || true)
+  if [[ "$response" == "$marker" ]]; then
+    ready=true
+    break
+  fi
+  sleep 0.1
+done
+if [[ "$ready" != true ]] || ! kill -0 "$pid" 2>/dev/null; then
+  printf 'Disposable manager did not become ready.\n' >&2
+  exit 1
+fi
+
+python3 tests/security/run_boundary.py --base-url "http://127.0.0.1:$port" --allow-mutations
+kill "$pid"
+wait "$pid"
+pid=''
+python3 - "$state/state.db" <<'PY'
+import os
+import sqlite3
+import stat
+import sys
+
+path = sys.argv[1]
+with sqlite3.connect(path) as database:
+    result = database.execute('PRAGMA integrity_check').fetchone()[0]
+assert result == 'ok', result
+assert stat.S_IMODE(os.stat(path).st_mode) == 0o600, 'database must remain private (0600)'
+print('Disposable database integrity and file mode: PASS')
+PY

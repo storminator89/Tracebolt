@@ -36,7 +36,7 @@ func Seed(now time.Time) ([]model.Device, []model.Case) {
 			quality = "stale"
 			seen = now.UTC().Add(-2 * time.Hour)
 		}
-		d := model.Device{ID: s.id, Name: s.name, Platform: s.platform, OS: s.os, Site: s.site, Group: s.group, IP: &ip, Status: s.status, Source: "synthetic", Synthetic: true, LastSeen: seen, AgentVersion: model.Version + "-demo", CPU: metric(s.cpu), Memory: metric(s.mem), Disk: metric(s.disk), Uptime: s.uptime, Tags: s.tags, Capabilities: []model.Capability{{ID: "metrics", Name: "Health metrics", Status: "supported", Detail: "Synthetic example observations only; no native endpoint has been enrolled."}, {ID: "service", Name: "Service state", Status: "limited", Detail: "Fixture evidence only. Native OS service adapters are not implemented."}, {ID: "updates", Name: "Patch assessment", Status: "unsupported", Detail: "Installed OS version is not a missing-update or vulnerability assessment."}}, Evidence: []model.Evidence{}, Trend: []float64{s.cpu * .7, s.cpu * .9, s.cpu * .85, s.cpu, s.cpu * .92, s.cpu * 1.1, s.cpu}, CaseIDs: []string{}}
+		d := model.Device{ID: s.id, Name: s.name, Platform: s.platform, OS: s.os, Site: s.site, Group: s.group, IP: &ip, Status: s.status, Source: "synthetic", Synthetic: true, LastSeen: seen, AgentVersion: model.Version + "-demo", CPU: metric(s.cpu), Memory: metric(s.mem), Disk: metric(s.disk), Uptime: s.uptime, Tags: s.tags, Capabilities: []model.Capability{{ID: "metrics", Name: "Systemmetriken", Status: "supported", Detail: "Nur synthetische Beispielbeobachtungen. Es wurde kein echtes Gerät eingebunden."}, {ID: "service", Name: "Dienstzustand", Status: "limited", Detail: "Nur Demo-Evidenz. Native Adapter für Betriebssystemdienste sind noch nicht implementiert."}, {ID: "updates", Name: "Patch-Prüfung", Status: "unsupported", Detail: "Die installierte Betriebssystemversion ersetzt keine Prüfung auf fehlende Updates oder Sicherheitslücken."}}, Evidence: []model.Evidence{}, Trend: []float64{s.cpu * .7, s.cpu * .9, s.cpu * .85, s.cpu, s.cpu * .92, s.cpu * 1.1, s.cpu}, CaseIDs: []string{}}
 		if s.status == "stale" {
 			d.CPU.Value = nil
 			d.Memory.Value = nil
@@ -55,6 +55,6 @@ func Seed(now time.Time) ([]model.Device, []model.Case) {
 		}
 		cases = append(cases, cs...)
 	}
-	devices[6].Evidence = []model.Evidence{{ID: "demo-win-03-stale", Title: "Telemetry stale", Source: "synthetic-fixture", Quality: "stale", CollectedAt: devices[6].LastSeen, Detail: "No recent fixture sample is available. No conclusion about endpoint health is possible.", Value: "2 hours since sample", Synthetic: true}}
+	devices[6].Evidence = []model.Evidence{{ID: "demo-win-03-stale", Title: "Telemetrie veraltet", Source: "synthetic-fixture", Quality: "stale", CollectedAt: devices[6].LastSeen, Detail: "Es liegt kein aktueller Demo-Messwert vor. Daraus lässt sich kein Gerätezustand ableiten.", Value: "Messwert ist 2 Stunden alt", Synthetic: true}}
 	return devices, cases
 }

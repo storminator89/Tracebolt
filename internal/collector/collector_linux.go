@@ -4,7 +4,6 @@ package collector
 
 import (
 	"errors"
-	"fmt"
 	"io"
 	"math"
 	"os"
@@ -106,13 +105,6 @@ func Snapshot() model.Device {
 	return d
 }
 
-func errorQuality(err error) string {
-	if errors.Is(err, os.ErrPermission) {
-		return "denied"
-	}
-	return "unknown"
-}
-
 func readBounded(path string, maxBytes int64) ([]byte, error) {
 	f, err := os.Open(path)
 	if err != nil {
@@ -210,13 +202,6 @@ func memoryPercent(data []byte) (float64, bool) {
 	return 100 * (float64(total-available) / float64(total)), true
 }
 
-func diskPercent(blocks, free uint64) (float64, bool) {
-	if blocks == 0 || free > blocks {
-		return 0, false
-	}
-	return 100 * (float64(blocks-free) / float64(blocks)), true
-}
-
 func parseOSRelease(data []byte) (string, bool) {
 	values := make(map[string]string)
 	for _, line := range strings.Split(string(data), "\n") {
@@ -266,9 +251,4 @@ func parseUptime(data []byte) (time.Duration, bool) {
 		return 0, false
 	}
 	return time.Duration(seconds * float64(time.Second)), true
-}
-
-func formatUptime(duration time.Duration) string {
-	minutes := int64(duration / time.Minute)
-	return fmt.Sprintf("%dd %dh %dm", minutes/(24*60), (minutes/60)%24, minutes%60)
 }

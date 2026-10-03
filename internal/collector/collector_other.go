@@ -1,4 +1,4 @@
-//go:build !linux
+//go:build !linux && !darwin && !windows
 
 package collector
 
@@ -9,7 +9,7 @@ import (
 	"localrmm/internal/model"
 )
 
-// Snapshot on non-Linux platforms intentionally makes no collection claims.
+// Snapshot on other platforms intentionally makes no collection claims.
 // Cross-compilation is supported; native telemetry collection is not.
 func Snapshot() model.Device {
 	at := time.Now().UTC()
@@ -20,7 +20,7 @@ func Snapshot() model.Device {
 	d.Memory = unknownMetric("unknown", "native collection is not implemented for this platform", at)
 	d.Disk = unknownMetric("unknown", "native collection is not implemented for this platform", at)
 	d.Capabilities = []model.Capability{
-		{ID: "native_collection", Name: "Native collection", Status: "unsupported", Detail: "This build emits an explicit unsupported observation. Only Linux sandbox collection is implemented."},
+		{ID: "native_collection", Name: "Native collection", Status: "unsupported", Detail: "This build emits an explicit unsupported observation. Native collection is not implemented for this platform."},
 		{ID: "remote_actions", Name: "Remote actions", Status: "unsupported", Detail: "No network ingestion, remote control, or command execution."},
 	}
 	d.Evidence = []model.Evidence{

@@ -46,3 +46,9 @@ func TestRulesAndCounterexamples(t *testing.T) {
 		})
 	}
 }
+
+func TestNativeInputsDoNotBecomeDemoEvidence(t *testing.T) {
+	if got := Evaluate(model.Device{ID: "sandbox-local", Synthetic: false}, Signals{ServiceRequired: true, ServiceQuality: "healthy"}, time.Now()); len(got) != 0 {
+		t.Fatal("native input treated as synthetic evidence")
+	}
+}

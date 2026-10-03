@@ -7,7 +7,9 @@ import (
 	"io"
 	"testing"
 
+	"localrmm/internal/bundle"
 	"localrmm/internal/model"
+	"runtime"
 )
 
 func TestOneJSONObservation(t *testing.T) {
@@ -21,7 +23,11 @@ func TestOneJSONObservation(t *testing.T) {
 		if err := decoder.Decode(&device); err != nil {
 			t.Fatal(err)
 		}
-		if device.ID != "sandbox-local" || device.Status != "unknown" || device.Synthetic {
+		expectedID := map[string]string{"windows": "local-windows", "darwin": "local-macos"}[runtime.GOOS]
+		if expectedID == "" {
+			expectedID = "sandbox-local"
+		}
+		if device.ID != expectedID || device.Status != "unknown" || device.Synthetic {
 			t.Fatalf("wrong sample: %+v", device)
 		}
 		if err := decoder.Decode(&device); err != io.EOF {
@@ -57,5 +63,25 @@ func TestOutputFailure(t *testing.T) {
 	var stderr bytes.Buffer
 	if code := run(nil, brokenWriter{}, &stderr); code != 1 || stderr.Len() == 0 {
 		t.Errorf("code=%d stderr=%s", code, stderr.String())
+	}
+}
+
+func TestSupportBundle(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	if code := run([]string{"--support-bundle"}, &stdout, &stderr); code != 0 {
+		t.Fatalf("code %d: %s", code, stderr.String())
+	}
+	if stdout.Len() > bundle.MaxBytes {
+		t.Fatal("oversize bundle")
+	}
+	var got bundle.Bundle
+	if err := json.Unmarshal(stdout.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.SchemaVersion != bundle.SchemaVersion || got.Product != "Tracebolt" || got.Observation.IP != nil || got.Observation.Synthetic {
+		t.Fatalf("bad envelope: %+v", got)
+	}
+	if code := run([]string{"--support-bundle"}, brokenWriter{}, &stderr); code != 1 {
+		t.Fatal("writer failure not propagated", code)
 	}
 }

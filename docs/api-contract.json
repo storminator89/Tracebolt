@@ -9,10 +9,10 @@
       "mode": "local-development",
       "generatedAt": "RFC3339",
       "stats": {
-        "totalDevices": 7,
+        "totalDevices": 8,
         "healthyDevices": 3,
         "attentionDevices": 3,
-        "unknownDevices": 1,
+        "unknownDevices": 2,
         "openCases": 3,
         "criticalCases": 1
       },
@@ -76,7 +76,7 @@
       "group": "string",
       "ip": "synthetic address or null",
       "status": "healthy|attention|critical|stale|unknown",
-      "source": "synthetic|sandbox",
+      "source": "synthetic|sandbox|local",
       "synthetic": "boolean",
       "lastSeen": "RFC3339",
       "agentVersion": "string",
@@ -163,5 +163,10 @@
     }
   },
   "security": "Loopback bind+Host allowlist+no CORS+Origin checks+CSRF for mutations; no remote auth/enrollment; not production security.",
-  "qualitySemantics": "Metric/Evidence quality healthy means current valid observation, not low severity or endpoint health. Source synthetic is simulated; sandbox has deliberately unknown overall device status."
+  "qualitySemantics": "Metric/Evidence quality healthy means current valid observation, not low severity or endpoint health. Source synthetic is simulated; sandbox has deliberately unknown overall device status.",
+  "cli": {
+    "agent --once": "Single local Device as JSON on stdout; no transport",
+    "agent --support-bundle": "Versioned schema tracebolt.support.v1; stdout only, max65536 bytes; docs/support-bundle.schema.json"
+  },
+  "ruleScope": "V1 deterministic rules accept only explicitly synthetic fixtures. Native local observations are not automatically turned into cases."
 }

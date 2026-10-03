@@ -3,8 +3,10 @@
 package collector
 
 import (
+	"errors"
 	"fmt"
 	"math"
+	"os"
 	"time"
 
 	"localrmm/internal/model"
@@ -66,4 +68,23 @@ func metricEvidence(id, title string, metric model.Metric) model.Evidence {
 		CollectedAt: metric.CollectedAt, Value: value, Synthetic: false,
 		Detail: "One local observation. This value does not establish device health or physical-host scope.",
 	}
+}
+
+func errorQuality(err error) string {
+	if errors.Is(err, os.ErrPermission) {
+		return "denied"
+	}
+	return "unknown"
+}
+
+func diskPercent(blocks, free uint64) (float64, bool) {
+	if blocks == 0 || free > blocks {
+		return 0, false
+	}
+	return 100 * (float64(blocks-free) / float64(blocks)), true
+}
+
+func formatUptime(duration time.Duration) string {
+	minutes := int64(duration / time.Minute)
+	return fmt.Sprintf("%dd %dh %dm", minutes/(24*60), (minutes/60)%24, minutes%60)
 }

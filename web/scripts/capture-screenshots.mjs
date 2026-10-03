@@ -1,0 +1,53 @@
+/** Real-browser screenshots of the real compiled UI. No mocked APIs or injected fixtures. */
+import { chromium } from '@playwright/test';
+import { mkdir, writeFile } from 'node:fs/promises';
+import path from 'node:path';
+const base = process.env.TRACEBOLT_BASE_URL || 'http://127.0.0.1:8787';
+const output = process.env.TRACEBOLT_SCREENSHOTS || path.resolve('artifacts/screenshots');
+await mkdir(output, { recursive: true });
+const browser = await chromium.launch({ headless: true, ...(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {}) });
+const page = await browser.newPage({ viewport: { width: 1440, height: 1100 }, deviceScaleFactor: 1, reducedMotion: 'reduce', locale: 'de-DE' });
+const errors = [];
+page.on('pageerror', error => errors.push(error.message));
+const captures = [];
+async function snap(name, view, options = {}) { await page.screenshot({path:path.join(output,name),...options});captures.push({file:name,view,viewport:page.viewportSize(),data:'Actual local manager, synthetic example devices only; no real telemetry in capture'}); }
+try {
+  await page.goto(base);
+  await page.getByRole('heading',{name:'Ein klarer Blick auf deine Geräte.'}).waitFor();
+  await page.locator('.fleet-panel').waitFor();
+  const fleet = await page.locator('.fleet-panel').boundingBox();
+  await snap('overview-1440-light.png','Overview, cropped above mixed-source fleet table to exclude sandbox telemetry',{clip:{x:0,y:0,width:1440,height:Math.ceil(fleet.y-12)}});
+  await page.getByRole('button',{name:'Zum Geräteinventar',exact:true}).click();
+  await page.getByRole('button',{name:/^Demo-Geräte/}).click();
+  await page.locator('.device-table tbody tr').first().waitFor();
+  if(await page.locator('.device-table tbody .source.real').count())throw new Error('Refusing to capture real telemetry');
+  await snap('inventory-1440-light.png','Synthetic device inventory, light mode',{fullPage:true});
+  await page.getByRole('button',{name:'Dunkles Design aktivieren'}).click();
+  await snap('inventory-1440-dark.png','Synthetic device inventory, dark mode',{fullPage:true});
+  await page.getByRole('button',{name:'Helles Design aktivieren'}).click();
+  await page.locator('.device-name-button').filter({hasText:'BER-DC-01'}).click();
+  await page.getByRole('dialog',{name:'Gerät BER-DC-01'}).waitFor();
+  await snap('device-1440-light.png','Synthetic Windows device drawer',{fullPage:true});
+  await page.getByRole('button',{name:'Schließen',exact:true}).click();
+  await page.goto(`${base}/#/cases/case-demo-win-01-service`);
+  await page.getByRole('heading',{name:'Was die Daten zeigen'}).waitFor();
+  await page.locator('.evidence-card summary').first().click();
+  await snap('investigation-1440-light.png','Synthetic evidence-backed investigation, one evidence expanded',{fullPage:true});
+  await page.getByRole('button',{name:'Dunkles Design aktivieren'}).click();
+  await snap('investigation-1440-dark.png','Synthetic investigation, dark mode',{fullPage:true});
+  await page.getByRole('button',{name:'Helles Design aktivieren'}).click();
+  await page.setViewportSize({width:390,height:844});
+  await snap('investigation-390-light.png','Synthetic investigation, 390 px mobile viewport',{fullPage:true});
+  const overflow = await page.evaluate(()=>document.documentElement.scrollWidth > window.innerWidth);
+  if(overflow)throw new Error('Mobile investigation has horizontal overflow');
+  await page.goto(`${base}/#/devices`);
+  await page.getByRole('button',{name:/^Demo-Geräte/}).click();
+  await page.locator('.device-table tbody tr').first().waitFor();
+  if(await page.locator('.device-table tbody .source.real').count())throw new Error('Refusing to capture real telemetry');
+  await snap('inventory-390-light.png','Synthetic inventory, 390 px mobile viewport',{fullPage:true});
+  const mobileOverflow = await page.evaluate(()=>document.documentElement.scrollWidth > window.innerWidth);
+  if(mobileOverflow)throw new Error('Mobile inventory has horizontal overflow');
+  if(errors.length)throw new Error(`Browser errors: ${errors.join('; ')}`);
+  await writeFile(path.join(output,'manifest.json'),JSON.stringify({sourceCommit:process.env.GITHUB_SHA || null,capturedAt:new Date().toISOString(),baseURL:base,captures,browserErrors:errors},null,2));
+  console.log(`Captured ${captures.length} real-browser screenshots to ${output}`);
+} finally { await browser.close(); }

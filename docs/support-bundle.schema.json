@@ -1,0 +1,329 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {
+      "const": "tracebolt.support.v1"
+    },
+    "product": {
+      "const": "Tracebolt"
+    },
+    "version": {
+      "type": "string",
+      "maxLength": 64
+    },
+    "generatedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "platform": {
+      "enum": [
+        "linux",
+        "windows",
+        "macos"
+      ]
+    },
+    "architecture": {
+      "type": "string",
+      "maxLength": 32
+    },
+    "scope": {
+      "const": "single-read-only-local-observation"
+    },
+    "validation": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "platformExecution": {
+          "type": "string",
+          "maxLength": 4096
+        },
+        "acceptance": {
+          "type": "string",
+          "maxLength": 4096
+        }
+      },
+      "required": [
+        "platformExecution",
+        "acceptance"
+      ]
+    },
+    "privacy": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "maxLength": 4096
+      },
+      "maxItems": 16
+    },
+    "observation": {
+      "$ref": "#/$defs/device"
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "product",
+    "version",
+    "generatedAt",
+    "platform",
+    "architecture",
+    "scope",
+    "validation",
+    "privacy",
+    "observation"
+  ],
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Tracebolt bounded support bundle v1",
+  "description": "Maximum serialized size 65536 bytes including trailing newline. Local stdout-only observations. No host identifiers or transmission. Evidence IDs must be unique; parser must reject duplicate object keys. Native execution acceptance is not implied.",
+  "x-maxSerializedBytes": 65536,
+  "$defs": {
+    "metric": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "value": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 100
+        },
+        "unit": {
+          "const": "%"
+        },
+        "quality": {
+          "enum": [
+            "healthy",
+            "stale",
+            "unknown",
+            "denied"
+          ]
+        },
+        "source": {
+          "type": "string",
+          "maxLength": 4096
+        },
+        "collectedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "value",
+        "unit",
+        "quality",
+        "source",
+        "collectedAt"
+      ]
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "maxLength": 96
+        },
+        "title": {
+          "type": "string",
+          "maxLength": 256
+        },
+        "source": {
+          "type": "string",
+          "maxLength": 4096
+        },
+        "quality": {
+          "enum": [
+            "healthy",
+            "stale",
+            "unknown",
+            "denied"
+          ]
+        },
+        "collectedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "detail": {
+          "type": "string",
+          "maxLength": 4096
+        },
+        "value": {
+          "type": "string",
+          "maxLength": 4096
+        },
+        "synthetic": {
+          "const": false
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "source",
+        "quality",
+        "collectedAt",
+        "detail",
+        "value",
+        "synthetic"
+      ]
+    },
+    "capability": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "maxLength": 96
+        },
+        "name": {
+          "type": "string",
+          "maxLength": 256
+        },
+        "status": {
+          "enum": [
+            "supported",
+            "limited",
+            "unsupported",
+            "denied"
+          ]
+        },
+        "detail": {
+          "type": "string",
+          "maxLength": 4096
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "status",
+        "detail"
+      ]
+    },
+    "device": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "enum": [
+            "sandbox-local",
+            "local-windows",
+            "local-macos"
+          ]
+        },
+        "name": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "platform": {
+          "enum": [
+            "linux",
+            "windows",
+            "macos"
+          ]
+        },
+        "os": {
+          "type": "string",
+          "maxLength": 512
+        },
+        "site": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "group": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "ip": {
+          "type": "null"
+        },
+        "status": {
+          "const": "unknown"
+        },
+        "source": {
+          "enum": [
+            "sandbox",
+            "local"
+          ]
+        },
+        "synthetic": {
+          "const": false
+        },
+        "lastSeen": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "agentVersion": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "cpu": {
+          "$ref": "#/$defs/metric"
+        },
+        "memory": {
+          "$ref": "#/$defs/metric"
+        },
+        "disk": {
+          "$ref": "#/$defs/metric"
+        },
+        "uptime": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "maxItems": 64
+        },
+        "capabilities": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/capability"
+          },
+          "maxItems": 64
+        },
+        "evidence": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/evidence"
+          },
+          "maxItems": 64
+        },
+        "trend": {
+          "type": "array",
+          "maxItems": 0
+        },
+        "caseIds": {
+          "type": "array",
+          "maxItems": 0
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "platform",
+        "os",
+        "site",
+        "group",
+        "ip",
+        "status",
+        "source",
+        "synthetic",
+        "lastSeen",
+        "agentVersion",
+        "cpu",
+        "memory",
+        "disk",
+        "uptime",
+        "tags",
+        "capabilities",
+        "evidence",
+        "trend",
+        "caseIds"
+      ]
+    }
+  }
+}
