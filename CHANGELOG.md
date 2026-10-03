@@ -2,6 +2,12 @@
 
 Meaningful development checkpoints are recorded here. These are prototype milestones, not production releases.
 
+## 2026-10-03 — Contain accessible labels within the scrolling content pane
+
+- Give the main content pane a positioned containing block so its visually hidden form labels cannot extend the outer document or scroll the topbar away.
+- Retain all strict viewport, document-scroll and reachable-navigation browser assertions; add bounded geometry names to failures and scope the loading check to the application state.
+- The preceding LAN checkpoint passed actual TLS/HTTP-test Docker lifecycle, all three native CLI jobs, 97 UI tests, six managed browser checks and ten authenticated HTTP-test browser checks. Four newly added scroll-shell checks exposed this layout defect; this checkpoint reruns the exact broader gates before updated gallery publication.
+
 ## 2026-10-03 — Authenticated LAN pilot, container packaging and bilingual interface
 
 ### Added

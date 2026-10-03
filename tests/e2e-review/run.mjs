@@ -183,7 +183,7 @@ try {
  });
  await test('Loading state is visible and refreshing error keeps stale data labeled', async()=>{
   const context=await browser.newContext({viewport:{width:1440,height:1000}}); allPages.add(context); await context.addInitScript(()=>localStorage.setItem('tracebolt.locale','de')); const page=await context.newPage(); page.on('pageerror',error=>runtimeErrors.push({test:currentTest,message:error.message}));
-  let release; const gate=new Promise(r=>release=r); await page.route('**/api/overview',async route=>{await gate; await route.continue();}); await page.goto(`${base}/#/overview`); await expect(page.getByRole('status')).toContainText('geladen'); await shot(page,'desktop-loading'); release(); await loaded(page); await page.unroute('**/api/overview');
+  let release; const gate=new Promise(r=>release=r); await page.route('**/api/overview',async route=>{await gate; await route.continue();}); await page.goto(`${base}/#/overview`); await expect(page.locator('.initial-loading')).toBeVisible(); await expect(page.locator('.initial-loading').getByRole('status')).toContainText('geladen'); await shot(page,'desktop-loading'); release(); await loaded(page); await page.unroute('**/api/overview');
   await page.route('**/api/overview',route=>route.abort('failed')); await page.getByRole('button',{name:'Aktualisieren',exact:true}).click(); await expect(page.getByRole('alert')).toContainText('letzten erfolgreichen Abruf'); await expect(page.locator('.device-table')).toBeVisible(); await expect(page.locator('.page-footer')).toContainText('Letzter erfolgreicher Abruf');
  });
  await test('Unknown device and case links show safe recoverable error', async()=>{

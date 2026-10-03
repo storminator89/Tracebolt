@@ -2,7 +2,8 @@
 export async function runShellReview({test,pageAt,loaded,shot,expect,caseItem,cleanCase}) {
  async function bounds(page) {
   const value=await page.evaluate(()=>({width:innerWidth,height:innerHeight,scrollY,bodyH:document.body.scrollHeight,docH:document.documentElement.scrollHeight,bodyW:document.body.scrollWidth,docW:document.documentElement.scrollWidth,header:document.querySelector('.topbar')?.getBoundingClientRect().toJSON(),main:document.querySelector('.main-content')?.getBoundingClientRect().toJSON()}));
-  expect(value.scrollY).toBe(0);expect(value.bodyH).toBeLessThanOrEqual(value.height+1);expect(value.docH).toBeLessThanOrEqual(value.height+1);expect(value.bodyW).toBeLessThanOrEqual(value.width+1);expect(value.docW).toBeLessThanOrEqual(value.width+1);expect(value.header.top).toBeGreaterThanOrEqual(0);expect(value.main.bottom).toBeLessThanOrEqual(value.height+1);
+  const geometry=JSON.stringify(value);
+  expect(value.scrollY,'window.scrollY; '+geometry).toBe(0);expect(value.bodyH,'body.scrollHeight; '+geometry).toBeLessThanOrEqual(value.height+1);expect(value.docH,'documentElement.scrollHeight; '+geometry).toBeLessThanOrEqual(value.height+1);expect(value.bodyW,'body.scrollWidth; '+geometry).toBeLessThanOrEqual(value.width+1);expect(value.docW,'documentElement.scrollWidth; '+geometry).toBeLessThanOrEqual(value.width+1);expect(value.header.top,'topbar top; '+geometry).toBeGreaterThanOrEqual(0);expect(value.main.bottom,'main bottom; '+geometry).toBeLessThanOrEqual(value.height+1);
   return value;
  }
  async function scrollMain(page,selector) {
