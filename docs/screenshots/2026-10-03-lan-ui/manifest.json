@@ -1,0 +1,260 @@
+{
+  "sourceSha": "b4a6f40ce9193f9ee91290eb2c50eb07ab8819a9",
+  "ciRun": "https://github.com/storminator89/Tracebolt/actions/runs/37142090350",
+  "scope": "Twelve unedited synthetic viewport captures individually inspected at actual pixels",
+  "images": [
+    {
+      "file": "synthetic-inventory-desktop-light.png",
+      "caption": "English inventory, light theme. Windows demo fixtures; no real endpoint measurements.",
+      "sourceSha": "b4a6f40ce9193f9ee91290eb2c50eb07ab8819a9",
+      "sha256": "86b59834bb34f7d3c0a6735038a5e0fb5da044f619fb88662b8d4224144b916e",
+      "width": 1440,
+      "height": 1000,
+      "locale": "en",
+      "pixelReview": "approved",
+      "publicSafe": true,
+      "bytes": 87394,
+      "fullPage": false,
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "contentScrollTop": 0,
+      "section": "top",
+      "gitBlobSha": "9f46343b95449bafe00ebb68e4f7e6f08b4534f4"
+    },
+    {
+      "file": "synthetic-inventory-desktop-dark.png",
+      "caption": "English inventory, dark theme. The same synthetic Windows inventory with explicit stale and unknown-value handling.",
+      "sourceSha": "b4a6f40ce9193f9ee91290eb2c50eb07ab8819a9",
+      "sha256": "0c6963776dea200023f1b985ad698fe6dd3c18ad6e743f038262c8ad15938561",
+      "width": 1440,
+      "height": 1000,
+      "locale": "en",
+      "pixelReview": "approved",
+      "publicSafe": true,
+      "bytes": 87908,
+      "fullPage": false,
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "contentScrollTop": 0,
+      "section": "top",
+      "gitBlobSha": "d223e91a2e271240287e101f0c22b92ee0925a7d"
+    },
+    {
+      "file": "synthetic-inventory-mobile-light.png",
+      "caption": "English inventory at 390×844. Synthetic Windows fixtures with responsive filters and source labels.",
+      "sourceSha": "b4a6f40ce9193f9ee91290eb2c50eb07ab8819a9",
+      "sha256": "d14dd01f07361ce0cdac2a448ab9476229124afc1896a6932d84ac536b522b3d",
+      "width": 390,
+      "height": 844,
+      "locale": "en",
+      "pixelReview": "approved",
+      "publicSafe": true,
+      "bytes": 42639,
+      "fullPage": false,
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "contentScrollTop": 0,
+      "section": "top",
+      "gitBlobSha": "6e60449328c6f7f63e72ad44ec013e2287cfd255"
+    },
+    {
+      "file": "synthetic-device-mobile-light.png",
+      "caption": "English device drawer at 390×844. Synthetic Windows evidence; the original observation text is preserved.",
+      "sourceSha": "b4a6f40ce9193f9ee91290eb2c50eb07ab8819a9",
+      "sha256": "f3c52829e65436a469df0ae7350b9c74be939157110521aef989d554398e4f34",
+      "width": 390,
+      "height": 844,
+      "locale": "en",
+      "pixelReview": "approved",
+      "publicSafe": true,
+      "bytes": 38702,
+      "fullPage": false,
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "contentScrollTop": 0,
+      "section": "dialog",
+      "gitBlobSha": "7cce980fc3ae13b5ece85d2d5b345b4b3b4b515f"
+    },
+    {
+      "file": "synthetic-case-desktop-light.png",
+      "caption": "English investigation view of a synthetic Windows case. Original evidence prose remains in its source language.",
+      "sourceSha": "b4a6f40ce9193f9ee91290eb2c50eb07ab8819a9",
+      "sha256": "6a1868717fab6717572357cb6544bdb10d6e151ac4ef793222b9f0f516876b45",
+      "width": 1440,
+      "height": 1000,
+      "locale": "en",
+      "pixelReview": "approved",
+      "publicSafe": true,
+      "bytes": 114827,
+      "fullPage": false,
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "contentScrollTop": 0,
+      "section": "top",
+      "gitBlobSha": "8c53b78988772849ccc33c1ee442caf58708bc69"
+    },
+    {
+      "file": "synthetic-case-scrolled-desktop-light.png",
+      "caption": "German investigation view, scrolled inside the content pane. Synthetic Linux case; the topbar and sidebar remain fixed in the viewport.",
+      "sourceSha": "b4a6f40ce9193f9ee91290eb2c50eb07ab8819a9",
+      "sha256": "8fbf22b79a24bac12bd3d6d7b6756a209048b4d0a21871a6591bdbf43c9e9b5b",
+      "width": 1440,
+      "height": 1000,
+      "locale": "de",
+      "pixelReview": "approved",
+      "publicSafe": true,
+      "bytes": 100559,
+      "fullPage": false,
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "contentScrollTop": 419,
+      "section": ".notes-panel",
+      "gitBlobSha": "8ac236e07fe0bb37e16424aaaa111d488386955e"
+    },
+    {
+      "file": "synthetic-ai-fixture-settings-desktop-light.png",
+      "caption": "German AI settings with an empty API-key input. Testanbieter / keine reale Modellanalyse: controlled loopback provider configuration, not a real inference.",
+      "sourceSha": "b4a6f40ce9193f9ee91290eb2c50eb07ab8819a9",
+      "sha256": "1d1536cb073ab700ec392a7da6e850aa1e748a5e50c12bc8c317b2dc5f35e7c8",
+      "width": 1440,
+      "height": 1000,
+      "locale": "de",
+      "pixelReview": "approved",
+      "publicSafe": true,
+      "bytes": 102264,
+      "fullPage": false,
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "contentScrollTop": 0,
+      "section": "top",
+      "gitBlobSha": "f9a08f7d2740659ec7c90bef05f9815f127eee0a"
+    },
+    {
+      "file": "synthetic-ai-fixture-case-desktop-dark.png",
+      "caption": "German AI result, dark theme. Testanbieter / keine reale Modellanalyse: controlled response to synthetic case evidence; cause explicitly unconfirmed.",
+      "sourceSha": "b4a6f40ce9193f9ee91290eb2c50eb07ab8819a9",
+      "sha256": "0f7068b5203ec2b586c04dfc925366002fade1cd9b1a7ddb631e15760332bfda",
+      "width": 1440,
+      "height": 1000,
+      "locale": "de",
+      "pixelReview": "approved",
+      "publicSafe": true,
+      "bytes": 95672,
+      "fullPage": false,
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "contentScrollTop": 685,
+      "section": "AI analysis",
+      "gitBlobSha": "fa4f9360ebbd45ecaa766222719acc6da7d5e334"
+    },
+    {
+      "file": "synthetic-ai-fixture-case-mobile-light.png",
+      "caption": "German mobile AI result with stable header. Testanbieter / keine reale Modellanalyse: controlled response with cited synthetic evidence.",
+      "sourceSha": "b4a6f40ce9193f9ee91290eb2c50eb07ab8819a9",
+      "sha256": "4020e09e54b0ff423d10191903fdabf72f47b2a9ddec37f9afaf9e00456016bb",
+      "width": 390,
+      "height": 844,
+      "locale": "de",
+      "pixelReview": "approved",
+      "publicSafe": true,
+      "bytes": 42261,
+      "fullPage": false,
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "contentScrollTop": 814,
+      "section": "AI analysis",
+      "gitBlobSha": "25ff00dc462151ed99cc82f051b2b5a2e1f1916b"
+    },
+    {
+      "file": "synthetic-ai-fixture-consent-mobile-light.png",
+      "caption": "German mobile evidence-transfer confirmation. Testanbieter / keine reale Modellanalyse: explicit destination and one-request consent for a controlled loopback provider.",
+      "sourceSha": "b4a6f40ce9193f9ee91290eb2c50eb07ab8819a9",
+      "sha256": "1fa5da3493be698b41c7266aefa7cd2ad57ef0364248e122cbd636d9377132e4",
+      "width": 390,
+      "height": 844,
+      "locale": "de",
+      "pixelReview": "approved",
+      "publicSafe": true,
+      "bytes": 54377,
+      "fullPage": false,
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "contentScrollTop": 587,
+      "section": "dialog",
+      "gitBlobSha": "d073c1a87fd1330d887a47fa998db8288a91f95b"
+    },
+    {
+      "file": "synthetic-http-test-login-mobile-en.png",
+      "caption": "English mobile sign-in for the explicit unencrypted HTTP-test profile. Empty password field and permanent risk warning; loopback test fixture, not a trusted TLS deployment.",
+      "sourceSha": "b4a6f40ce9193f9ee91290eb2c50eb07ab8819a9",
+      "sha256": "5ed97b204ff64db56b4d5b825b98ad39e30445be4985db6eaf857b10e53ba263",
+      "width": 390,
+      "height": 844,
+      "locale": "en",
+      "pixelReview": "approved",
+      "publicSafe": true,
+      "bytes": 29097,
+      "fullPage": false,
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "contentScrollTop": 0,
+      "section": "top",
+      "gitBlobSha": "ee2e7ae888cc450785d0dde9d8b685cf6b4f3cb5"
+    },
+    {
+      "file": "synthetic-http-test-awaiting-desktop-en.png",
+      "caption": "English authenticated HTTP-test view using a synthetic awaiting-agent contract. No real enrolled endpoint or telemetry; unknown data and unavailable assessment remain explicit.",
+      "sourceSha": "b4a6f40ce9193f9ee91290eb2c50eb07ab8819a9",
+      "sha256": "61e9c2d59eb2eb9c9c383d20d006ebe28f132547f82fa39c71418ed814643d8b",
+      "width": 1440,
+      "height": 1000,
+      "locale": "en",
+      "pixelReview": "approved",
+      "publicSafe": true,
+      "bytes": 93082,
+      "fullPage": false,
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "contentScrollTop": 0,
+      "section": "top",
+      "gitBlobSha": "2623621c4664631e193a5a96a72806d34e1be765"
+    }
+  ],
+  "artifactArchiveSha256": "44f2fbbdad9e20e746740c2ebc681a24fa9d373d938b969f066cd7871bc286f2",
+  "captureCreatedAt": "2026-10-03T17:54:28.306Z",
+  "verification": {
+    "generalAIAndShell": 40,
+    "managedPreview": 6,
+    "httpTestOperator": 10,
+    "runtimeErrors": 0,
+    "dockerProfiles": [
+      "tls",
+      "http-test"
+    ],
+    "trustedTLSBrowser": false
+  }
+}

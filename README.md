@@ -6,9 +6,17 @@ Tracebolt is an early self-hosted diagnostics prototype with a React interface, 
 
 **This is a development pilot, not a production release.** Real LAN deployment, installed agent services, certificate provisioning, production audit/backup controls and fleet-scale acceptance remain open. Do not expose the loopback development manager to a network.
 
+## Installation
+
+Start with the **[installation runbook for humans and automation agents](docs/installation.md)**. It covers Docker/native Linux setup, manual public-certificate approval, the one-shot Linux sender, verification, recovery and explicit permission boundaries. [AGENTS.md](AGENTS.md) is the repository entry guide.
+
 ## Screenshots
 
-The [historical desktop/mobile gallery](docs/screenshots/2026-10-03-ui-preview/README.md) contains original synthetic-data Chromium captures from its explicitly identified earlier source. The current English-default interface and viewport-bounded scroll layout require fresh exact-source captures; historical screenshots are not evidence for the new LAN interface.
+[View the verified English/German viewport gallery](docs/screenshots/2026-10-03-lan-ui/README.md): desktop/mobile, light/dark, fixed navigation while content scrolls, explicit AI-test-provider scenes and HTTP-test login/awaiting states. All twelve captures are synthetic, unedited, pixel-reviewed and pinned to source `b4a6f40` with original hashes.
+
+![English investigation with synthetic evidence](docs/screenshots/2026-10-03-lan-ui/synthetic-case-desktop-light.png)
+
+The [earlier preview gallery](docs/screenshots/2026-10-03-ui-preview/README.md) remains historical. The current gallery's AI scenes are labelled **Testanbieter / keine reale Modellanalyse**, and HTTP-test scenes do not represent a trusted TLS deployment.
 
 ## Run the local development demo
 

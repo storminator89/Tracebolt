@@ -1,58 +1,55 @@
 # Tracebolt UI acceptance
 
-## Scope
+## Accepted source and evidence
 
-Independent acceptance review of the local Go API, SQLite state, and built React application. The review uses a unique disposable database, never the default application database. Screenshots remain local in `artifacts/review`.
+Source **`b4a6f40ce9193f9ee91290eb2c50eb07ab8819a9`** passed the complete browser acceptance checkpoint. [Exact CI run](https://github.com/storminator89/Tracebolt/actions/runs/37142090350). The independent reviewer read the structured results and matched their source hashes with both screenshot manifests.
 
-The automated review runs desktop Chromium at 1440×1000 and mobile Chromium emulation at 390×844, with light and dark themes. Its scenario source is `tests/e2e-review/run.mjs`; exact machine-readable outcomes are in `artifacts/review/results.json`.
+| Target | Result | Verification scope |
+| --- | --- | --- |
+| General UI, language, scroll shell and AI | 40/40 passed | Real built React app and Go API; eight AI checks use a controlled loopback provider |
+| Managed-preview transport | 6/6 passed | Actual separate Linux manager and one-shot sender, including real two-minute expiry |
+| Authenticated HTTP-test UI | 10/10 passed | Real operator HTTP-test handler on loopback, with synthetic awaiting-agent data |
+| Browser runtime errors | 0 across all three targets | Uncaught page errors fail the corresponding target |
+| Supplemental DOM regressions | 9/9 passed | Focused source/DOM checks, separately from browser and pixel evidence |
 
-## Verification levels
+The reviewer inspected the twelve selected gallery captures at their actual pixels. No visual blocker remains in this selection. Every image is an unedited **1440×1000 desktop or 390×844 mobile viewport**, with its exact source hash, language and selected content section retained in the manifest. The primary inventory, device and investigation images show the English default. German screenshots demonstrate the alternate language and controlled AI workflow. Original evidence prose is preserved in its source language.
 
-- **Real implementation:** inventory and case HTTP responses; search, filter and sorting behavior; device/case/evidence navigation; note and status writes through CSRF-protected API; durable SQLite behavior after reload and manager restart.
-- **Explicit fault injection:** initial HTTP failure, interrupted refresh, delayed response, failed note mutation, and malformed route. These checks exercise the real UI against controlled failures; they do not prove recovery from every deployment or network failure.
-- **Synthetic evidence:** the seven demo devices and diagnostic cases are fixtures. The markup-shaped note is harmless controlled text in the disposable database.
-- **Limited local sample:** only the bundled Linux sandbox collector is available. Its data is not an enrolled remote endpoint and is not a native Windows/macOS acceptance result.
-- **Visual acceptance gate:** inspect actual screenshot pixels after capture, including small-screen layouts, drawer content, readable hierarchy and both themes. All 12 synthetic screenshots from the first hosted run have been inspected. Screenshots alone cannot establish semantic accessibility.
-- **Not verified by this review:** native Windows/macOS installation or collectors, real mobile devices, remote enrollment, production authentication/RBAC, customer telemetry, deployed hosting, unrestricted remote command execution, or formal security certification.
+## Scroll-shell repair
 
-## Reproduction
+The preceding `cc724cfc753a25e3ea5ab8752552dfac7fbdb683` run passed 36/40 general cases but failed four new geometry checks. Long-case content caused outer document overflow and moved the window 55–60px; its AI screenshots visibly lost the topbar. A hidden, absolutely positioned case-note label lacked a containing block within the main pane.
 
-Build the frontend, then run `node tests/e2e-review/run.mjs` from the repository root. See `tests/e2e-review/README.md` for prerequisites and isolation guarantees.
+The accepted source adds `position:relative` to the scrollable main pane. All four strict checks now pass without relaxed thresholds: the outer document stays within the viewport, window scroll remains zero, long content scrolls within the main pane, and navigation remains reachable. Coverage includes long case/settings views, a 1024×420 short window, mobile overlay dismissal, and keyboard navigation at a 720×500 CSS viewport. The latter represents the available CSS space of a 1440×1000 display at 200%; it is not native OS/browser zoom certification.
 
-## Results
+Fresh scrolled-case and AI-result pixels confirm that the full topbar and sidebar remain intact. The earlier mobile AI provider wrapping and full-document capture problems are also absent from the selected fresh viewport images.
 
-The initial real-browser run passed all **25 scenarios with zero runtime errors** on source commit `594e88eee0e45060374a2c1049be711a96b58d37`. It used the built React app, a real loopback Go manager and a unique SQLite database on a standard Linux CI runner. [Exact CI run](https://github.com/storminator89/Tracebolt/actions/runs/37128509338).
+## Functional and security-relevant coverage
 
-The independent reviewer inspected all 12 actual synthetic screenshots across 1440px desktop, 390px mobile, light and dark layouts. Inventory, evidence drawers and case pages have coherent hierarchy, readable primary content, explicit provenance, and no observed clipping or horizontal overflow. Two screenshot-only refinements were identified: complete CSS transitions before capture, and capture a fixed device modal at viewport height rather than extending beyond the visible screen.
+- Inventory search, OS/status/source filters, sorting, saved views, empty states, CSV formula neutralization, safe unknown/malformed routes, and explicit error/loading states with no fake fallback.
+- Device → evidence → investigation navigation, browser history, dialog keyboard containment and dismissal, skip-link focus, repeated actions, delayed-response navigation, literal rendering of markup-shaped text, notes/status persistence, and manager restart.
+- Clean English default and an explicit German switch preserving the active route, filter, theme and unsaved note draft. Language preference persists across reload.
+- AI destination/evidence review and explicit one-request consent; no provider call on configuration save or dismissal; one request under repeated submission; bounded packet exclusions; immutable citations; invalid-output rejection; cancellation; empty key input/storage checks; and configuration loss after restart. **Testanbieter / keine reale Modellanalyse** identifies every AI fixture capture. These checks establish integration behavior, not real-model diagnostic quality.
+- Actual HTTP-test login rejection/success, one submission under repeated clicks, HttpOnly/SameSite session behavior, real CSRF logout, actual short expiry, fail-closed bootstrap and protected 401 handling, no interrupted-write replay, unconfirmed logout across reload, cross-tab logout and persistent transport warnings. Password fields are empty in the selected sign-in capture.
+- Actual Linux development transport awaiting → accepted → stale, displayed values matched against the real API, preserved collection/receipt provenance, no manager fallback after the sender exits, seven separate demo devices and unknown whole-device health. Its report exports no telemetry or screenshots.
 
-The subsequent source commit `2bccc168c6ef770484b1641bcaeabfe1d10270df` passed all **26 browser scenarios with zero runtime errors**, including the added modal keyboard regression. [Exact 26-scenario CI run](https://github.com/storminator89/Tracebolt/actions/runs/37130214233). It suppresses global help/search shortcuts while a dialog is active and uses opaque keyboard focus outlines.
+Fault injection is explicit: unavailable or malformed responses, delayed responses, protected 401 and interrupted logout. These tests exercise selected recovery paths rather than every deployment failure.
 
-The four corrected captures have been inspected at their actual pixels: both dark inventories now show settled theme colors; both mobile device drawers are correctly framed at 390×844 with no artificial page region below the overlay. No visual blocker was observed. All 12 synthetic captures from this source are suitable for the gallery, with their source hash retained.
+## Publication selection
 
-The later AI integration, shortened page headings and managed-preview transport are separate pending checkpoints. Prepared AI coverage uses a deterministic loopback fixture provider, never a real model or real telemetry. Prepared managed-preview browser coverage uses actual separate Linux processes and real two-minute expiry, exports only bounded pass/fail metadata, and captures no real-sample screenshots. Do not attribute the verified 26-pass result to these later features until their own hosted runs finish.
+The twelve exact approved filenames and captions are recorded in the companion `screenshots/2026-10-03-lan-ui/manifest.json` selection, along with individual image SHA-256 hashes. Use only those unedited source captures for this gallery checkpoint.
 
-Local browser execution was unavailable in the restricted workspace: system Chromium could not create its singleton socket, the dedicated cloud browser rejected loopback navigation, and an official headless-shell download returned an empty ZIP. The service remained loopback-only throughout; hosted CI provided the actual browser evidence without a tunnel or deployment.
+The HTTP-test images use the safe synthetic awaiting-agent contract and a disposable known test password. They must be captioned as loopback HTTP-test fixtures, not an actual enrolled endpoint, production LAN rollout or trusted TLS browser session. AI images require the explicit test-provider/no-real-analysis caption. No raw database, manager log, cookie, private key, real sample screenshot or raw telemetry is suitable for publication.
 
-A supplemental independent DOM/source suite is runnable with:
+## Reproduction and limits
+
+Build `web/dist`, install the repository-pinned Playwright Chromium, and use Go on `PATH` or `GO_BIN`. Run from the repository root:
 
 ```sh
+TRACEBOLT_SOURCE_SHA=<exact-source-sha> TRACEBOLT_REVIEW_AI=1 node tests/e2e-review/run.mjs
+TRACEBOLT_SOURCE_SHA=<exact-source-sha> node tests/e2e-review/managed-preview.mjs
+TRACEBOLT_SOURCE_SHA=<exact-source-sha> node tests/e2e-review/lan-browser.mjs
 ./web/node_modules/.bin/vitest run --config tests/e2e-review/vitest.config.mts
 ```
 
-The supplemental suite now passes all 9 checks after repairs. The ninth interrupted-keyboard regression initially found that opening help from a device drawer and pressing Escape closed both layers. Global help/search shortcuts are now suppressed while a dialog is active; the independent rerun passes. It confirmed aggregate attention filtering, safe malformed-route parsing, CSV formula neutralization, UTF-8 note byte counting, skip-link focus without changing route, explicit first-load API failure without fake inventory, and literal rendering of markup-shaped names. The initial run reproduced a saved-view validation crash: a persisted filter with `query: null` threw when recalled. The implementation now validates saved filter/theme shapes; the independent regression rerun passed.
+All targets use unique disposable state and loopback listeners. See `tests/e2e-review/README.md` for ports and artifact allowlists. Local browser launch was blocked by the workspace environment; the exact hosted CI above supplied actual Chromium evidence. No tunnel, public deployment, browser certificate-warning bypass or `ignoreHTTPSErrors` was used.
 
-Source contrast arithmetic also identified low-contrast light-theme metadata text and undersized mobile hit areas. The owner has darkened text tokens above 4.5:1 against intended backgrounds and increased action targets to at least 40px; the first hosted browser run confirmed the targeted interactive hit areas are at least 40×40 CSS pixels. Focus outlines now use the opaque accent color.
-
-The supplemental DOM tests are not a replacement for browser, layout, focus-trap, pixel, native OS, or end-to-end API verification. Browser/API and visual evidence are recorded separately above. Native Windows/macOS and real-device mobile acceptance are not claimed.
-
-## Artifact provenance and publication
-
-`TRACEBOLT_SOURCE_SHA` is recorded in both result JSON and the screenshot manifest. A browser runtime error fails the suite. Completed scenarios and screenshots survive later scenario failures, with a nonzero exit status.
-
-Only `synthetic-*.png` images are intended for a public gallery. Those are captured before mutation tests and show Windows demo inventory, a demo device, or a demo case in desktop/mobile and light/dark layouts. The remaining review images can include real sandbox observations and must not be published. The database and manager logs are never public artifacts.
-
-## Next LAN, language and scroll-shell checkpoint (pending hosted browser evidence)
-
-The next frozen candidate updates only the acceptance harness here: 40 UI/AI scenarios (32 baseline/language/scroll cases plus eight AI cases), the existing six managed-preview cases with explicit German preference, and ten separate authenticated HTTP-test browser cases. JavaScript syntax, compilation of the isolated LAN fixture, and nine supplemental DOM regressions passed locally. A real loopback HTTP smoke confirmed anonymous API rejection, successful session login, safe awaiting-agent contract data and actual short session expiry.
-
-The new browser target uses the actual operator HTTP-test handler with disposable fixture material. It is not a production LAN CLI launch or trusted HTTPS browser validation. All captures are viewport-sized. Main content scrolls inside the application shell; the manifest records the selected section, locale and scroll position. Primary synthetic gallery scenes start in English, and separate tests check an explicit German switch without losing state. No new browser or pixel pass is claimed until the exact published source has completed hosted CI and its images have been inspected.
+This review does not establish production enrollment, RBAC, real customer-fleet operations, real mobile hardware, native Windows/macOS installation or service lifecycle, or trusted-TLS browser deployment. Separate native, Docker and TLS/CLI checks must be reported with their own evidence. It is not formal security certification or an exhaustive accessibility audit. Later enrollment or sender changes require their own acceptance and are outside this immutable checkpoint.

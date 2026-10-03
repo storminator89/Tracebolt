@@ -2,6 +2,15 @@
 
 Meaningful development checkpoints are recorded here. These are prototype milestones, not production releases.
 
+## 2026-10-03 — Verified bilingual viewport gallery and installation runbook
+
+- Add a source-validated human/automation installation runbook and repository entry guide, with explicit credential/trust/deployment approval boundaries and supported-platform limits.
+- Publish twelve original synthetic Chromium captures: English default inventory/investigation, German scrolled content, mobile device/AI views, consent and explicit HTTP-test login/awaiting states.
+- Record exact capture source `b4a6f40`, CI run, viewport, per-image SHA-256 and independent pixel approval. No screenshot pixels were edited.
+- The corrected source passed 40 general/AI/language/layout, 6 managed and 10 authenticated HTTP-test scenarios with zero runtime errors; actual Docker TLS/HTTP lifecycle and three native collector jobs also passed.
+- Preserve explicit test-provider/no-real-analysis and plaintext-profile captions. No real endpoint data, key values or session material are included.
+- Update scoped UI/LAN verification reports while keeping later Linux sender evidence separate from the capture source.
+
 ## 2026-10-03 — Native Linux one-shot LAN sender
 
 ### Added

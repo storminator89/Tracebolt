@@ -1,0 +1,420 @@
+# Installation runbook: humans and automation agents
+
+Start here when given this repository to install. **This is a self-hosted LAN
+pilot, not an unattended fleet installer.** The supported path today is a
+Docker or native Linux central manager plus manually configured, native Linux
+one-shot senders. A repository link alone does not authorize a deployment or
+provide credentials. Read the checklist before executing the quickstart.
+
+## 1. Choose the correct milestone
+
+| Component | Available now | Not provided by this milestone |
+| --- | --- | --- |
+| Central manager | Separate `cmd/lan-manager`, Admin UI, authenticated operator API, approved agent ingress; Docker or native Linux execution | Production assurance, automatic provisioning, HA/shared SQLite writers |
+| Linux endpoint | Native `cmd/lan-agent --config …`; one read-only collection/delivery per explicit invocation, durable retry state | Installer, enrollment wizard/token, service, scheduler, automatic update/uninstall |
+| Windows/macOS endpoint | Native `cmd/agent` bounded stdout-only collector; limited platform reads | Supported LAN sender, native ACL/state lifecycle, installed service or fleet deployment |
+| Docker architectures | Linux amd64 TLS and explicit HTTP-test lifecycle gates; Linux arm64 cross-build support | arm64 runtime acceptance from cross-building alone |
+
+Use the selected revision's actual CI results, not this table, to establish what
+passed. Windows/macOS collector runtime results do **not** validate a LAN sender.
+The product direction is native agents on Windows, Linux and macOS with a Docker
+or native manager; all three endpoint installation paths are not shipped yet.
+Enrollment-v2 and hardening proposal documents describe future work, not callable
+installation commands. Do not substitute the synthetic development manager
+(`make run`, `cmd/manager`) or loopback `cmd/dev-agent` for the LAN manager/sender.
+
+## 2. Preflight and approval checklist
+
+An installation agent must first inspect, then propose the smallest supported
+plan. Record these answers without secrets:
+
+- Exact repository URL, chosen full commit SHA, clean/dirty checkout, relevant CI
+  run and evidence. Preserve existing work. Confirm which computer is the target;
+  an editing sandbox is not implicitly the user's server.
+- Manager OS/architecture, Docker Engine/Compose availability or native Go/Node
+  toolchain, available disk and existing workloads/ports. Prefer Linux for the
+  current protected-file contract; Docker Desktop mount semantics need separate
+  verification. Do not assume administrator/root access.
+- Chosen runtime UID/GID, private configuration/state locations, backup location,
+  whether state already exists, and the owners of all parent directories.
+- Exact operator origin, agent ingress origin, intended LAN IP, DNS/SAN names,
+  reachable endpoint networks and approved firewall scope. No Internet exposure.
+- TLS (default) or explicitly approved isolated HTTP test, operator who will sign
+  in, credential/certificate custodian, and endpoint/public fingerprint to approve.
+- Endpoint OS/architecture, ordinary-user collection constraints, and whether a
+  one-shot Linux sender actually meets the request. If a Windows/macOS LAN service
+  or continuous monitoring is required, report the missing implementation now.
+
+Before changing the target, get approval for the concrete plan, destinations and
+paths. Persistent credential creation/import, device trust approval/revocation,
+firewall/network/security settings, global certificate trust, account/service
+creation, startup persistence and destructive deletion need their appropriate
+explicit approval; obey any stronger policy of the agent's execution environment.
+A generic “install this” is not permission to disable security or provision
+unbounded access. A permission-denied result is a blocker to explain, not a reason
+to retry as root or through another channel.
+
+Do not silently install tools, open ports, change DNS/hosts, trust a CA, disable a
+firewall, bypass a browser certificate warning, use `curl -k`, or fall back to
+HTTP. Never request passwords/private keys in chat, commit them, put them in
+command arguments, print them to a transcript, or pass them as Docker build args
+or environment variables. Use the user's approved secure provisioning/handoff
+mechanism. Read only the minimum private files needed; do not dump their contents.
+
+## 3. Pin and inspect source
+
+On a fresh work directory, with the intended repository and revision confirmed:
+
+```sh
+git clone https://github.com/storminator89/Tracebolt.git
+cd Tracebolt
+git fetch origin
+# Set this to the full, independently selected commit SHA, not a moving branch.
+REVISION=REPLACE_WITH_FULL_COMMIT_SHA
+git checkout --detach "$REVISION"
+git rev-parse HEAD
+git status --short
+```
+
+Do not run the checkout command over existing uncommitted work. For an existing
+checkout, inspect its remote, status and revision first. A Git SHA identifies
+content; it does not prove publisher identity. Compare the revision with the
+trusted repository/release/CI record, and verify any published signature or
+checksum if one is provided. Do not invent a signed-release guarantee. Review
+`Dockerfile`, `deploy/`, dependency locks and CI for this exact revision.
+
+Prerequisites for source builds: Go **1.27.1** as declared in `go.mod`, Node.js
+**24** with npm as used in the Dockerfile/CI, Git, and a POSIX shell for the commands
+below. The race detector also needs a C toolchain. Native manager runtime uses
+SQLite without a separate database server. Docker packaging needs a running
+Docker Engine, Compose **v2** and BuildKit; inspect `docker version` and
+`docker compose version` before using them. Docker access is powerful host access;
+do not “fix” it by changing socket permissions or group membership silently.
+Check runtime licensing before installation; no project license has been selected.
+
+Go modules are locked by `go.mod`/`go.sum`; npm uses `web/package-lock.json`.
+Builds need dependency/image registry access. Docker base tags are version-selected,
+not digest-pinned: record the resulting image ID as well as the source SHA. Do not
+claim bit-for-bit reproducibility or pull an unverified prebuilt project image.
+
+## 4. Quickstart: TLS Docker manager, preprovided material
+
+**Gate:** this sequence assumes an approved target and correctly provisioned,
+protected material already exist. There is no bundled credential issuer or
+operator-password setup command. If these prerequisites are absent, stop at the
+material checklist below; do not turn test fixtures into deployment identities.
+All commands in this section run from the repository root.
+
+1. Prepare an external private config directory with `lan.json`, `server.pem`,
+   `server.key`, `agent-ca.pem`, and `operator-auth.json`. Use
+   [`deploy/lan.tls.example.json`](../deploy/lan.tls.example.json) as the shape of
+   `lan.json`, replacing both documentation origins with the exact real origins.
+   Keep its container paths: `/run/tracebolt/…`, `/data/state`, `/tracebolt/web`.
+2. Have the authorized administrator arrange ownership for UID/GID `65532:65532`
+   and private-file access as described below. Verify host and container mount
+   semantics. This runbook deliberately does not recursively `chown` a user path.
+3. Set only nonsecret configuration paths/bind addresses and build:
+
+```sh
+export TRACEBOLT_CONFIG_DIR=/absolute/path/to/private/tracebolt-config
+# Initial publication is loopback only. This is not yet endpoint LAN access.
+export TRACEBOLT_BIND_IP=127.0.0.1
+docker compose -f deploy/compose.yaml config
+docker compose -f deploy/compose.yaml build manager
+docker image inspect tracebolt-manager:local --format '{{.Id}}'
+docker compose -f deploy/compose.yaml up --no-build -d manager
+docker compose -f deploy/compose.yaml ps
+docker compose -f deploy/compose.yaml logs --tail=50 manager
+```
+
+Review logs locally; do not upload unreviewed logs or private paths. A process
+running is only startup evidence. Do not test against `localhost` if the
+configured public origin/SAN is a different host: exact Host/Origin checks still
+apply. Use the configured origin with approved DNS/routing to this listener.
+For an authorized LAN deployment, set `TRACEBOLT_BIND_IP` to the selected server
+LAN address (not a blanket `0.0.0.0` exposure) and recreate with the same `up`
+command. Review exposure before executing; the origins and certificate SANs must
+match client-visible names/IPs and ports. This is an explicit deployment change.
+
+Default host ports are TCP **8443** for operator HTTPS and TCP **8444** for agent
+mTLS. Permit only the chosen operator/endpoint networks in the host/network
+firewall. Compose does not configure that firewall. The container listens on
+`0.0.0.0` internally; host port bindings determine publication. There is no
+required inbound endpoint port. Do not use host networking, privileged mode,
+Docker socket mounts, or a proxy that removes agent mTLS. Proxy/header-based TLS
+termination is not this runtime's trust contract.
+
+### Material and filesystem checklist
+
+- `server.pem` + `server.key`: matching manager certificate and private key,
+  currently valid, SANs covering both origin hosts, **ServerAuth only** leaf EKU.
+- `agent-ca.pem`: public CA roots that may issue client certificates. No CA private
+  key belongs on the manager or endpoint. CA signing is an external workflow.
+- `operator-auth.json`: schema `tracebolt.operator-auth.v1`, profile `tls`, and a
+  previously provisioned `passwordHash` Argon2id PHC verifier. Accepted parameters:
+  version 19, memory 65536–131072 KiB, iterations 2–4, parallelism 1–4,
+  salt 16–32 bytes, output 32 bytes. The login password must be 12–1024 UTF-8 bytes.
+  A placeholder is not usable authentication. Treat the verifier as secret data.
+- Private key and auth files: runtime-UID-owned regular single-link files, normally
+  `0400` or `0600`, with no group/world access. Public config/cert/CA files may be
+  `0644`, never group/world writable, and owned by the runtime UID or root.
+  All referenced paths must be absolute. Parents must be owned by that UID or
+  root, traversable by the runtime, and not symlinks or replaceable by another
+  account (the implementation permits root-owned sticky temporary ancestors
+  for isolated fixtures).
+- State: dedicated runtime-owned `0700` directory. Do not use a shared writable
+  directory, insecure existing data, another profile's directory, or silently
+  reset a rejected store. Docker supplies a named `/data` volume; a fresh volume
+  receives the image's private ownership. One manager owns it, no replicas.
+- Check mount ownership on Docker Desktop before claiming compatibility. File
+  permissions that look correct on the host may not satisfy Linux checks inside
+  the container. Do not weaken checks; report this as a platform blocker.
+
+Detailed certificate roles/key strengths and protected paths are specified in
+[LAN trust](lan-trust.md) and [LAN runtime](lan-runtime.md).
+
+## 5. Native Linux manager alternative
+
+Use the same material and trust contract, but paths in `lan.json` refer to the
+**host**, not container paths. Set distinct literal `operatorListen`/`agentListen`
+addresses on the approved interface, private host state, and `webDirectory` to the
+absolute path of this build's `web/dist`. Do not copy Docker's internal
+`0.0.0.0` binds to a host without reviewing the exposure.
+
+```sh
+(cd web && npm ci --ignore-scripts && npm run build)
+go build -buildvcs=false -trimpath -o bin/lan-manager ./cmd/lan-manager
+./bin/lan-manager --lan-config /absolute/path/to/private/lan.json
+```
+
+Run foreground as the chosen unprivileged owner. Stop with Ctrl+C/SIGTERM. There
+is no supplied native service unit/installer; do not describe a foreground run as
+boot persistence. Installing a custom system service is separate reviewed work.
+The build toolchain is not needed on a host receiving an independently verified
+matching binary plus matching frontend assets, but this repository does not
+provide a complete signed binary distribution/install workflow.
+
+## 6. Sign in, manually approve, then run one Linux endpoint
+
+1. Open the exact HTTPS **operator** origin in a normally trusting browser. If
+   trust is absent, have the administrator provide an approved trust solution;
+   do not click through a warning. Sign in with the preprovided operator password.
+2. Provision the endpoint's own ClientAuth-only certificate and matching private
+   key through the separately authorized credential workflow. Keep its private
+   key on the endpoint. The manager only needs the **public** leaf/chain.
+3. Independently verify the full lowercase SHA-256 of the leaf DER and the intended
+   endpoint. A certificate label/hostname is not identity. An approved operator
+   must approve that exact fingerprint through the authenticated operator API.
+   There is no enrollment/install CLI or assumed approval wizard in this milestone.
+
+The actual API sequence is documented in
+[`lan-operator-api-contract.json`](lan-operator-api-contract.json):
+
+- `POST /api/auth/login` uses exact operator Origin, JSON `{ "password": … }` and
+  returns a cookie/session with `csrfToken`. Handle password, cookie and token
+  only in a secure local client; do not paste them into commands/chat/logs.
+- `POST /api/lan/agents/approve` uses that cookie, `X-CSRF-Token`, exact Origin,
+  JSON content type and `{ "certificatePEM": …, "label": …,
+  "expectedFingerprintSHA256": … }`. Submit public certificate blocks only.
+- A successful HTTP **201** returns a public descriptor whose **`id`** is the
+  server-assigned `agent_` followed by 32 lowercase hex digits. Use that value as
+  **`agentId`** in the endpoint configuration. Do not generate your own ID.
+- `GET /api/lan/agents` checks the authenticated public registry. A CA-valid client
+  is not authorized until its exact leaf has been manually approved.
+
+The API contract is provided for an approved secure client/integration, not as
+permission to create trust. There is no bundled secret-safe provisioning helper;
+if your agent cannot complete this step safely, hand it to the administrator and
+report exactly which public ID/config input is still missing.
+
+On the **Linux endpoint**, build from the same reviewed source:
+
+```sh
+go build -buildvcs=false -trimpath -o bin/lan-agent ./cmd/lan-agent
+./bin/lan-agent --config /absolute/path/to/private/agent.json
+```
+
+Start from [`examples/lan-agent.tls.json`](examples/lan-agent.tls.json). Replace
+all placeholders: `managerOrigin` is the **agent ingress**, normally HTTPS port
+8444, not the operator URL; `agentId` is the approval response's `id`;
+`certificateFile`/`privateKeyFile` belong to this endpoint; `serverCAFile` is the
+explicit public server CA; `stateDirectory` is private persistent endpoint state.
+Its private files/path ownership follow the same policy as the manager, owned by
+the endpoint runtime UID. Server/client CAs may be different; configure their
+roles correctly. No ambient CA, environment proxy, redirect or downgrade is used.
+
+Expected success: exit 0 and bounded `tracebolt.agent-run.v1` JSON with
+`status: "acknowledged"`, profile and sequence. Exit 1 means delivery was not
+confirmed; exit 2 covers unsupported platform/configuration or output failure.
+An explicit later invocation sends a new sample or retries the exact pending
+frame. Preserve state across invocations; never delete it to “fix” replay errors.
+Only one process may use a sender state directory. A lost response retains a
+pending frame, not proof of loss at the manager. A stale pending frame is discarded
+without reusing its sequence, and a genuinely new observation can be collected.
+There is no timer/background loop. See [sender contract](lan-agent.md).
+
+Windows/macOS: stop here for LAN installation. You may separately build/run the
+stdout collector with `go build -buildvcs=false -trimpath -o bin/agent ./cmd/agent`
+on macOS (use `bin/agent.exe` on Windows) and its `--support-bundle` flag, but that
+prints local observation data and does not send it to this manager. Review/export
+handling is separate; do not upload the sample automatically. Do not improvise a
+scheduled task, launchd job, cron or systemd service as if it were shipped support.
+
+## 7. Acceptance: establish evidence, not just uptime
+
+On the actual approved target, confirm all of the following:
+
+- Exact configured operator origin verifies TLS normally; login works, protected
+  inventory is denied before authentication, and no synthetic devices appear.
+- Endpoint approval was deliberate; no measurements appear before its first send.
+- A real one-shot sender exits successfully; authenticated inventory shows the
+  server-assigned ID, `source=lan`, `synthetic=false`, and an observation time.
+  Unknown health/unavailable metrics are valid results, not proof of a healthy host.
+- A second explicit invocation preserves state and advances/retries appropriately.
+- An approved maintenance restart preserves approvals and accepted observations;
+  it invalidates operator sessions. Sign in again. Verify ports/exposure remain
+  within the agreed scope.
+- Prove rejection/revocation/replay scenarios with isolated disposable fixtures.
+  Do not revoke a real endpoint or discard its state merely for a smoke test.
+
+These repository commands test the corresponding isolated contracts; they are
+not real installation, browser acceptance or production-hardening proof:
+
+```sh
+# Linux: separate actual manager/sender subprocesses and temporary loopback trust.
+go test -count=1 -timeout=4m ./tests/lanclient
+# Broader Go coverage; race mode requires a working C toolchain.
+go test -race ./...
+# Frontend tests and build, from the repository root.
+(cd web && npm ci --ignore-scripts && npm test && npm run build)
+```
+
+The Linux two-binary test collects bounded real observations from the test host.
+Get the host/collection scope right; avoid logging those samples. Disposable
+certificate fixtures are not persistent enrollment. Container acceptance is
+separate, on an approved disposable native Linux Docker runner:
+
+```sh
+docker build -t tracebolt-manager:ci .
+TRACEBOLT_CONTAINER_IMAGE=tracebolt-manager:ci go test -count=1 -v ./tests/container
+```
+
+Read [`tests/container/README.md`](../tests/container/README.md) first: fixtures
+require narrowly scoped passwordless `sudo chown` for their fresh temporary
+material. Do not change sudo policy just to make them run; use a suitable approved
+runner. Without the environment variable these lifecycle tests **skip**. Tests
+create/remove only disposable containers/volumes, not the deployment volume.
+Run natively on each architecture you intend to claim. Never call an arm64
+cross-build an arm64 runtime pass. Record revision, architecture, exact command,
+pass/fail/skip, and safe outcome summaries, not secret material or raw telemetry.
+
+## 8. Optional, explicit plaintext LAN test
+
+Use [Docker's HTTP-test instructions](docker.md#explicit-http-lan-test-profile)
+only after the user accepts that passwords, sessions and telemetry are readable
+and the server/UI can be impersonated. Signature verification is not encryption
+or server authentication. Use an isolated network and **separate disposable**
+authentication, certificate/key and state. Never downgrade the TLS installation.
+
+The standalone `deploy/compose.http-test.yaml` requires
+`TRACEBOLT_HTTP_TEST_BIND_IP` and `TRACEBOLT_HTTP_TEST_CONFIG_DIR`, profile
+`--profile http-test`, and `http-test.json` based on
+`deploy/lan.http-test.example.json`. Its ports are **8787 operator / 8788 agent**,
+its project/volume differ from TLS, and it does not auto-restart. Do not merge the
+two Compose files. Both manager and sender explicitly require `profile: "http-test"`
+and `insecureHTTPAcknowledged: true`. Auth profile must also be `http-test`.
+The test client's Ed25519 leaf must be directly issued by a configured root;
+submit only that leaf. The manager still needs `agent-ca.pem`, but no server TLS
+key/certificate. The sender must omit `serverCAFile`.
+
+The generic HTTP sender template's example port is **8444**; when paired with
+this Compose profile, replace its `managerOrigin` with the actual **8788** ingress
+origin. Never assume template addresses or ports are deployable defaults. HTTP
+sender destinations are limited to loopback, RFC1918 or IPv6 ULA; special/metadata,
+public or overlay/CGNAT exceptions are not silently supported.
+
+## 9. Diagnose without weakening security
+
+- **Configuration rejected:** verify strict JSON keys/schema/profile, absolute
+  canonical paths, owner/modes/ancestors, matching key/certificate, current
+  validity, exclusive EKU roles, both SANs, and Argon2id bounds. Do not print the
+  key/hash or recursively relax permissions. There is no separate config-check CLI.
+- **Cannot start listener:** inspect exact configured IPs/ports and existing
+  listeners. Select approved free ports and update origins consistently; do not
+  kill another application's process. Compose host/container ports are distinct.
+- **TLS failure:** verify endpoint clock, explicit CA and correct hostname/SAN.
+  Stop on trust errors; do not add `-k`, accept all certificates, or change trust
+  globally. HTTP profiles cannot use a TLS state/auth directory.
+- **Login/403:** use exact operator origin, correct profile, browser cookie and
+  fresh session/CSRF. No trailing slash/path in configured origins. Rate limiting
+  is deliberate; do not hammer retries. Restart means a new login.
+- **Sender pending/rejected:** check approved ID/fingerprint, revocation, time,
+  network reachability, matching profile/origin, state ownership/lock and receipt.
+  Age window is 2 minutes with up to 30 seconds future skew. Do not reset sequence
+  or rewrite timestamps. Approval does not make a wrong origin valid.
+- **State/registry unavailable:** preserve the complete state and stop writes.
+  Investigate disk, ownership and backup recovery; never delete revocation rows
+  or initialize an empty DB to bypass a failed load. No in-place repair command
+  is provided.
+- **Browser empty/unknown inventory:** check first successful native delivery;
+  manager self-sampling and synthetic fallback are intentionally absent.
+
+## 10. Stop, back up, restore, update, uninstall
+
+**Stop:** Docker `docker compose -f deploy/compose.yaml stop manager` stops while
+retaining the named state volume. `down` also retains it. **Do not use `down -v`**
+for ordinary shutdown. Native foreground manager stops with Ctrl+C/SIGTERM;
+there is no agent background process after its one-shot invocation finishes.
+
+**Backup:** stop all writers first. Use the site's approved volume/filesystem
+backup procedure to capture the **complete** private manager state (including
+SQLite sidecars/profile marker), separate protected configuration and required
+credential material under the credential custodian's controls. Preserve modes,
+UID/GID and integrity; protect backups as telemetry/security data, encrypt under
+site policy, and do not upload them to Git/CI/chat. This project has no backup CLI.
+Keep endpoint sender state too; do not clone one sender's state/identity to another.
+
+**Restore:** with services stopped, restore into a private location/volume owned
+by the same intended runtime UID, using the matching profile/config/build. Test
+first in an isolated target, with deliberate network exposure and no duplicate
+writer. Old backups can predate revocations and replay floors: reconcile those
+security changes before reconnecting endpoints. Never treat a stale backup as a
+safe trust reset. Endpoints with pending/advanced sequences need review; do not
+“synchronize” them by deleting state. Confirm sign-in, expected public approvals,
+revocations and accepted observations after restoring.
+
+**Update:** choose a reviewed revision and its CI results; keep the old source,
+manager binary/UI or exact Docker image ID, configuration and consistent stopped
+backup. Build separately, review schema/migration changes, get the maintenance
+window approved, stop the old writer and start the replacement with the approved
+existing state. Re-run acceptance. No automatic updater is shipped.
+
+**Rollback:** do not simply run an old binary against a possibly migrated newer
+DB. Restore the matching pre-update backup and tested build after reviewing lost
+telemetry and intervening approval/revocation changes. Never restore a revoked
+identity silently. There is no guaranteed database downgrade path or automatic
+rollback tool.
+
+**Uninstall:** stop/remove only the known deployment containers or foreground
+binaries. Preserve state/backups by default. Inventory any separately approved
+service, firewall or trust changes and remove only those exact changes with
+approval; this repository created no such native service. Credential revocation
+is separate from deleting a key file. Confirm whether data/volumes/configuration,
+credentials and backups should be retained or destroyed before deleting anything;
+permanent deletion requires explicit action-time confirmation in an agent workflow.
+Avoid broad cleanup commands, recursive deletion of guessed paths and volume prune.
+
+## Completion report for an installation agent
+
+Report source SHA/image ID, actual host/architecture and route, configured
+nonsecret origins, what ran, exact passed/failed/skipped checks, retained data,
+remaining manual/provisioning steps and the next safe action. Say “Linux one-shot
+sender verified” only when it actually sent and inventory was checked. Say
+“blocked awaiting protected credentials/public approval ID” when that is true.
+Do not say “installed fleet”, “continuous monitoring” or “production ready”.
+
+Suggested German handoff: „Lies zuerst `AGENTS.md` und `docs/installation.md`.
+Prüfe Zielrechner, Commit und vorhandene Konfiguration. Schlage den passenden
+Installationsweg vor und frage vor Zugangsdaten-, Vertrauens-, Firewall- oder
+Dienständerungen. Erfinde keine Installer-/Enrollment-Befehle. Berichte klar,
+was wirklich getestet wurde und welche manuellen Schritte noch fehlen.“
