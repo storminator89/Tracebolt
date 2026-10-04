@@ -440,6 +440,17 @@ func (s *Store) InventoryBegin(ctx context.Context, id, certificateHash string, 
 				if old.State == "aborted" || old.State == "source_failed" {
 					return inventoryledger.ErrConflict
 				}
+				// The durable floor outlives cleanup. An exact retry must never
+				// recreate a removed generation or refresh its original lifetime.
+				if old.State == "pending" && !now.Before(old.StartedAt.Add(inventoryledger.StagingTTL)) {
+					return inventoryledger.ErrExpired
+				}
+				// Load validated a bijection with retained ledger generations;
+				// require that binding even if the supplied clock predates cleanup.
+				retained, e := inventoryGenerationBinding(ctx, t, snap.Approval.DeviceID, b.GenerationID)
+				if e != nil || retained != b {
+					return ErrStorage
+				}
 				out, e = completeLedger().Begin(ctx, t.conn, snap.Approval.DeviceID, m, now)
 				if e == nil {
 					touchInventory(t, id, now)
@@ -580,7 +591,12 @@ func (s *Store) InventoryAbort(ctx context.Context, id, certificateHash string, 
 			return inventoryledger.ErrConflict
 		}
 		if e = completeLedger().Abandon(ctx, t.conn, snap.Approval.DeviceID, b.GenerationID, now); e != nil {
-			return e
+			// Cleanup may already have removed this expired pending transfer.
+			// Current authority and the exact retained binding above still prove
+			// which floor to terminate; absence before original expiry is an error.
+			if !errors.Is(e, inventoryledger.ErrNotFound) || now.Before(r.StartedAt.Add(inventoryledger.StagingTTL)) {
+				return e
+			}
 		}
 		r.State = "aborted"
 		r.LastAt = now

@@ -2,6 +2,13 @@
 
 Meaningful development checkpoints are recorded here. These are prototype milestones, not production releases.
 
+## 2026-10-04 — Keep expired inventory retries from recreating invalid generations
+
+- Disposable-store fixtures reproduced a data-integrity failure after a lost Begin response, original transfer expiry and complete cleanup: retrying the same Begin could recreate an unbound generation and make later reads or reopening fail. The same cleanup prevented an authenticated pending Abort from reaching a terminal state.
+- Reject expired or missing-bound-generation Begin retries before the ledger can create anything. Permit exact authenticated pending Abort after cleanup only for a missing generation at or after the original expiry. Preserve the full authority binding, durable floor, original start/receipt/expiry, prior completed generation and collection age.
+- Add package, process and volume regressions covering reopen, wrong authority/binding, backward clock, revocation, rollback, previous-current preservation and higher-sequence continuation. The reviewed scoped race suite and vet pass. Regenerate only the finite Go diagnostic vocabulary for these exact source bytes; positive native/browser gates and time budgets remain unchanged.
+- This prevents the reproduced path in an otherwise valid store. It does not repair an already-unreadable store and introduces no deletion, reset or state adoption. The preceding `04dc4808` repair passed 110 required browser checks with three retained enrollment skips and 12 CI jobs; its aggregate was still pending at this correction's preparation. Exact corrected-source full CI remains required, and official pilot.2 artifacts/pin remain unchanged.
+
 ## 2026-10-04 — Preserve Logs state across temporary interruptions
 
 - A manual journal pilot configured its separate helper and returned a first captured result. Subsequent loss exposed two reproducible defects: a temporary authority-read failure erased accepted in-memory content, and a visible-window blur left the Logs view silently suspended. Retain cached bytes only across explicitly transient authority failures without returning them before fresh authorization; preserve original expiry and deletion on definitive invalidation.

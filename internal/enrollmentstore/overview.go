@@ -419,6 +419,17 @@ func (s *Store) OverviewBegin(ctx context.Context, id, certificateHash string, b
 				if old.State == "aborted" || old.State == "source_failed" {
 					return overviewledger.ErrConflict
 				}
+				// The durable floor outlives cleanup. An exact retry must never
+				// recreate a removed generation or refresh its original lifetime.
+				if old.State == "pending" && !now.Before(old.StartedAt.Add(overviewledger.StagingTTL)) {
+					return overviewledger.ErrExpired
+				}
+				// Load validated a bijection with retained ledger generations;
+				// require that binding even if the supplied clock predates cleanup.
+				retained, e := overviewGenerationBinding(ctx, t, overviewDevice(snap.Approval.DeviceID, b.Section), b.GenerationID)
+				if e != nil || retained != b {
+					return ErrStorage
+				}
 				out, e = overviewLedger().Begin(ctx, t.conn, overviewDevice(snap.Approval.DeviceID, b.Section), m, now)
 				if e == nil {
 					touchOverview(t, id, b.Section, now)
@@ -578,7 +589,12 @@ func (s *Store) OverviewAbort(ctx context.Context, id, certificateHash string, b
 			return overviewledger.ErrConflict
 		}
 		if e = overviewLedger().Abandon(ctx, t.conn, overviewDevice(snap.Approval.DeviceID, b.Section), b.GenerationID, now); e != nil {
-			return e
+			// Cleanup may already have removed this expired pending transfer.
+			// Current authority and the exact retained binding above still prove
+			// which floor to terminate; absence before original expiry is an error.
+			if !errors.Is(e, overviewledger.ErrNotFound) || now.Before(r.StartedAt.Add(overviewledger.StagingTTL)) {
+				return e
+			}
 		}
 		r.State = "aborted"
 		r.LastAt = now
