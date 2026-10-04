@@ -2,6 +2,12 @@
 
 Meaningful development checkpoints are recorded here. These are prototype milestones, not production releases.
 
+## 2026-10-04 — Verified Linux inventory UI gallery
+
+- Add four original, independently inspected synthetic screenshots for operational inventory, conditional review detail, offline catalog settings and the mobile package table, pinned to capture source `ed18d9a` with hashes and explicit fixture captions.
+- Record18/18 new real-handler browser cases, plus the established40+6+10 and reduced enrollment10 passed/3 skipped scope. No browser runtime errors were reported.
+- Retain unknown CVE/update authority, unverified catalog provenance, component/frame distinctions and service/telemetry boundaries. No real device data or credentials are published; prior screenshot galleries remain historical.
+
 ## 2026-10-04 — Keep CI evidence channels separate and reopen refreshed catalog controls
 
 - Prepare locked Go dependencies before the dense race matrix and keep stderr in its own private file. The four exact cases, ten-minute budgets, process-exit checks and strict package/root/leaf completion requirements are unchanged. A real Go cold-cache reproduction showed how dependency messages could invalidate otherwise successful JSON evidence; the original private CI stream was not exported.

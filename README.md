@@ -14,11 +14,11 @@ Start with the **[installation runbook for humans and automation agents](docs/in
 
 ## Screenshots
 
-[View the verified English/German viewport gallery](docs/screenshots/2026-10-03-lan-ui/README.md): desktop/mobile, light/dark, fixed navigation while content scrolls, explicit AI-test-provider scenes and HTTP-test login/awaiting states. All twelve captures are synthetic, unedited, pixel-reviewed and pinned to source `b4a6f40` with original hashes.
+[View the new Linux inventory and conditional-review gallery](docs/screenshots/2026-10-04-linux-inventory/README.md): four original viewport captures with source/hash provenance from `ed18d9a`. All device/package/catalog data are invented QA fixtures. Conditional candidates are not confirmed CVEs or offered updates, and these images do not prove actual service installation.
 
-![English investigation with synthetic evidence](docs/screenshots/2026-10-03-lan-ui/synthetic-case-desktop-light.png)
+![Linux operational inventory with invented QA data](docs/screenshots/2026-10-04-linux-inventory/synthetic-conditional-inventory-desktop-en.png)
 
-The [earlier preview gallery](docs/screenshots/2026-10-03-ui-preview/README.md) remains historical. The current gallery's AI scenes are labelled **Testanbieter / keine reale Modellanalyse**, and HTTP-test scenes do not represent a trusted TLS deployment.
+The [earlier English/German investigation gallery](docs/screenshots/2026-10-03-lan-ui/README.md) and [first UI preview](docs/screenshots/2026-10-03-ui-preview/README.md) remain historical. Their captures retain their original source association, including explicit AI test-provider and HTTP-test labels.
 
 ## Run the local development demo
 

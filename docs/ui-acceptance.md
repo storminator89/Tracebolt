@@ -1,5 +1,48 @@
 # Tracebolt UI acceptance
 
+## Current operational inventory and conditional-review checkpoint
+
+Exact source **`ed18d9ab0dd88a14ea86eaec1548facd807ecc22`** passed the required browser targets in [CI run 37193131587](https://github.com/storminator89/Tracebolt/actions/runs/37193131587). Independent readback checked the source identity, unique case names, summaries and runtime-error counts in all five reports. This section records browser and pixel acceptance; other CI jobs and native/service acceptance have their own evidence.
+
+| Target | Exact result | Scope |
+| --- | --- | --- |
+| General UI, language, shell and controlled AI | 40 PASS | Built React and real development API, with a disclosed test AI provider |
+| Managed preview | 6 PASS | Separate Linux development sender, actual expiry; bounded report without telemetry screenshots |
+| Operator HTTP-test UI | 10 PASS | Real loopback operator handler and explicit HTTP-test profile |
+| Guided enrollment reduced gate | 10 PASS, 3 SKIPPED | The three named quarantines remain open; `fullEnrollmentAcceptance:false` |
+| Operational/package/catalog/conditional review | 18 PASS | Real handlers and store, entirely invented observations and catalog files |
+| Browser runtime errors | 0 across all five targets | No setup failures reported |
+
+The 18 new cases cover explicit collection consent, lazy device-bound reads, partial/unknown/retained data, exact binary/source-version distinctions, conditional source-bound comparison, stale/revoked/retention boundaries, catalog import/clear and revision conflicts, uncertain committed responses without replay, wrong-device or inconsistent response rejection, protected 401 handling, injected page lifecycle changes, keyboard table scrolling, and English/German mobile viewport bounds. Direct synthetic store admission does not verify native collection or telemetry transport. Age transitions use an injected service clock while the auth clock stays real. Injected lifecycle events do not certify real BFCache or OS suspension.
+
+The application baseline archive is separately identified as `applicationBaselineArchiveSha256` (`b3acbd80ba33e173f6425256c75ed1f372c9ea7ff2c9e516e5e937aaf5937d9b`). The exact composed and tested source is the commit above; the archive hash is not presented as that final tree.
+
+### Catalog-browser correction and confirmation
+
+The prior c943 run recorded 16/18 passing cases. Both catalog recovery scenarios looked for the replacement button after a refresh recreated its import disclosure closed. Source review and two isolated component checks established the closed/hidden/disabled state. The harness now opens that disclosure through its summary, then requires a visible disabled replacement action and empty file input. Real 409, lost committed-response, single-write, catalog-state and storage assertions remain. Application source was unchanged. The new exact-source hosted run passes all 18 cases; the original three enrollment quarantines were not changed.
+
+### Fresh pixel selection
+
+All five new original PNGs were inspected at their actual resolution after individual SHA-256/source checks: desktop 1440×1000 and mobile 390×844, all `fullPage:false`. Fixed navigation and drawer framing remain intact. Unknown states, source/version facts, unverified catalog provenance and the HTTP-test warning are legible. No secret is visible; the settings API-key input is empty.
+
+Four images are selected for publication with exact hashes and required captions in [the gallery selection](screenshots/2026-10-04-linux-inventory/gallery-selection.json): operational inventory desktop, conditional-candidate desktop detail, offline-catalog desktop, and English mobile package-table detail. The German mobile image remains valid test evidence, but its candidate heading and first row label are above the scrolled viewport, so it is excluded from this first gallery selection. No image was edited.
+
+Every caption must identify entirely invented QA data and the loopback HTTP-test profile. Catalog fixtures may declare `synthetic:false` solely to exercise the unverified interchange path; they are not real vendor advisories. Candidate rows do not establish an affected-CVE total, available update or verified installed-artifact finding. Mobile/detail captures show a bounded scrolled viewport rather than a full table or complete review summary.
+
+Artifact ID: `11300151573`. Retrieved archive SHA-256: `ffdd1773e0067e4a5e920c8f8fa13da4bb18664c1ee037069f824029312f7838`. Browser checks do not imply trusted-TLS browser deployment, native Windows/macOS service acceptance, real customer-fleet operation or security certification.
+
+The new target can be repeated after building `web/dist` and installing pinned Playwright Chromium:
+
+```sh
+TRACEBOLT_SOURCE_SHA=<exact-source-sha> node tests/e2e-review/conditional-browser.mjs
+```
+
+See `tests/e2e-review/CONDITIONAL.md` for fixture boundaries and the artifact allowlist, and `tests/e2e-review/ENROLLMENT.md` for the retained enrollment quarantines and restoration command.
+
+## Historical scroll-shell checkpoint
+
+The following records the earlier b4a6f40 checkpoint; its claims and image selection apply to that exact historical source.
+
 ## Accepted source and evidence
 
 Source **`b4a6f40ce9193f9ee91290eb2c50eb07ab8819a9`** passed the complete browser acceptance checkpoint. [Exact CI run](https://github.com/storminator89/Tracebolt/actions/runs/37142090350). The independent reviewer read the structured results and matched their source hashes with both screenshot manifests.

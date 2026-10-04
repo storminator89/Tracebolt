@@ -1,0 +1,103 @@
+{
+  "sourceSha": "ed18d9ab0dd88a14ea86eaec1548facd807ecc22",
+  "ciRun": "https://github.com/storminator89/Tracebolt/actions/runs/37193131587",
+  "artifactId": 11300151573,
+  "artifactZipSha256": "ffdd1773e0067e4a5e920c8f8fa13da4bb18664c1ee037069f824029312f7838",
+  "applicationBaselineArchiveSha256": "b3acbd80ba33e173f6425256c75ed1f372c9ea7ff2c9e516e5e937aaf5937d9b",
+  "reviewedOriginalImages": 5,
+  "selectedImages": [
+    {
+      "file": "synthetic-conditional-inventory-desktop-en.png",
+      "sha256": "a9273114d602011b9b8c195d23cb9c75fcadb81dc3411fbeafd390331348d52e",
+      "sourceSha": "ed18d9ab0dd88a14ea86eaec1548facd807ecc22",
+      "applicationBaselineArchiveSha256": "b3acbd80ba33e173f6425256c75ed1f372c9ea7ff2c9e516e5e937aaf5937d9b",
+      "publicSafe": true,
+      "fullPage": false,
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "locale": "en",
+      "fixtureDisclosure": "Entirely invented QA devices and metadata on loopback HTTP-test. A catalog declaring synthetic:false is an invented parser fixture, not real vendor data or verified provenance. No telemetry, invitation material or installed-service evidence.",
+      "test": "Operational observations preserve section scope, sample filtering, unavailable data and unknown assessment",
+      "selectionRole": "primary",
+      "caption": "Operational inventory overview with section counts, unknown sections, collection/receipt times and fixed device navigation. Entirely invented QA data on the loopback HTTP-test profile. The disposable fixture uses the managed-operations-v2 binding; operational records retain their declared v1 component profile. No real endpoint telemetry or installed-service acceptance is shown.",
+      "pixelReview": "PASS: original resolution independently inspected; navigation intact and no secret visible"
+    },
+    {
+      "file": "synthetic-conditional-candidate-desktop-en.png",
+      "sha256": "d511ec104e378d870d558d89fad4b978b2277925ed238ed07e21377d981711da",
+      "sourceSha": "ed18d9ab0dd88a14ea86eaec1548facd807ecc22",
+      "applicationBaselineArchiveSha256": "b3acbd80ba33e173f6425256c75ed1f372c9ea7ff2c9e516e5e937aaf5937d9b",
+      "publicSafe": true,
+      "fullPage": false,
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "locale": "en",
+      "fixtureDisclosure": "Entirely invented QA devices and metadata on loopback HTTP-test. A catalog declaring synthetic:false is an invented parser fixture, not real vendor data or verified provenance. No telemetry, invitation material or installed-service evidence.",
+      "test": "Conditional candidates use reported source version, immutable lineage and unknown authority counts",
+      "selectionRole": "detail",
+      "caption": "Scrolled desktop advisory review detail. Invented package source version 1.0-1 is compared with an unverified declared fix 2.0-1; this is a conditional candidate, not a verified vulnerability or offered update. The invented catalog declares synthetic:false only to exercise the unverified interchange path. Entirely invented QA data on the loopback HTTP-test profile. The disposable fixture uses the managed-operations-v2 binding; operational records retain their declared v1 component profile. No real endpoint telemetry or installed-service acceptance is shown.",
+      "pixelReview": "PASS: original resolution independently inspected; navigation intact and no secret visible"
+    },
+    {
+      "file": "synthetic-conditional-catalog-desktop-en.png",
+      "sha256": "38d71d0c7992a71e4487ad5dc686d93ceeddd0b5988d34b06def93fee7931505",
+      "sourceSha": "ed18d9ab0dd88a14ea86eaec1548facd807ecc22",
+      "applicationBaselineArchiveSha256": "b3acbd80ba33e173f6425256c75ed1f372c9ea7ff2c9e516e5e937aaf5937d9b",
+      "publicSafe": true,
+      "fullPage": false,
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "locale": "en",
+      "fixtureDisclosure": "Entirely invented QA devices and metadata on loopback HTTP-test. A catalog declaring synthetic:false is an invented parser fixture, not real vendor data or verified provenance. No telemetry, invitation material or installed-service evidence.",
+      "test": "Catalog file selection is local, import is revision-bound, and explicit clear returns to empty memory-only state",
+      "selectionRole": "primary",
+      "caption": "Offline catalog settings with memory-only storage, explicit unverified origin/freshness, and persistent unencrypted-test warning. File-format counts are not vulnerability counts. The invented catalog declares synthetic:false for the fixture. The API-key field is empty. Entirely invented QA data on the loopback HTTP-test profile. The disposable fixture uses the managed-operations-v2 binding; operational records retain their declared v1 component profile. No real endpoint telemetry or installed-service acceptance is shown.",
+      "pixelReview": "PASS: original resolution independently inspected; navigation intact and no secret visible"
+    },
+    {
+      "file": "synthetic-conditional-packages-mobile-en.png",
+      "sha256": "332eeebe77e63bbeab855b2f85dd63356050be0121a9e1c1f49c4b078134af83",
+      "sourceSha": "ed18d9ab0dd88a14ea86eaec1548facd807ecc22",
+      "applicationBaselineArchiveSha256": "b3acbd80ba33e173f6425256c75ed1f372c9ea7ff2c9e516e5e937aaf5937d9b",
+      "publicSafe": true,
+      "fullPage": false,
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "locale": "en",
+      "fixtureDisclosure": "Entirely invented QA devices and metadata on loopback HTTP-test. A catalog declaring synthetic:false is an invented parser fixture, not real vendor data or verified provenance. No telemetry, invitation material or installed-service evidence.",
+      "test": "Mobile package tables remain keyboard-scrollable within the viewport, and German review preserves unknown-count warnings",
+      "selectionRole": "detail",
+      "caption": "Scrolled English mobile package table with visible keyboard focus and a bounded horizontal scroll region. Additional source-package columns extend within the table; this is a partial viewport, not the complete inventory. Entirely invented QA data on the loopback HTTP-test profile. The disposable fixture uses the managed-operations-v2 binding; operational records retain their declared v1 component profile. No real endpoint telemetry or installed-service acceptance is shown.",
+      "pixelReview": "PASS: original resolution independently inspected; navigation intact and no secret visible"
+    }
+  ],
+  "excludedImages": [
+    {
+      "file": "synthetic-conditional-review-mobile-de.png",
+      "sha256": "b8a07bbbd9a5162c32dda7b4c63584ffde5d17f6227cc2a2cec4f1a65836d393",
+      "sourceSha": "ed18d9ab0dd88a14ea86eaec1548facd807ecc22",
+      "applicationBaselineArchiveSha256": "b3acbd80ba33e173f6425256c75ed1f372c9ea7ff2c9e516e5e937aaf5937d9b",
+      "publicSafe": true,
+      "fullPage": false,
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "locale": "de",
+      "fixtureDisclosure": "Entirely invented QA devices and metadata on loopback HTTP-test. A catalog declaring synthetic:false is an invented parser fixture, not real vendor data or verified provenance. No telemetry, invitation material or installed-service evidence.",
+      "test": "Mobile package tables remain keyboard-scrollable within the viewport, and German review preserves unknown-count warnings",
+      "reason": "Valid scrolled German detail evidence, but candidate heading and the first row label are above the viewport. Keep as test evidence rather than the first publication gallery."
+    }
+  ],
+  "newConditionalBrowserResult": "18 unique PASS; 0 runtime errors; no secret or real-telemetry export",
+  "enrollmentScope": "10 PASS, 3 explicitly SKIPPED; fullEnrollmentAcceptance false",
+  "scope": "Real handler and built React with invented fixtures. Gallery review does not establish native transport, actual collector/service behavior, trusted TLS browser deployment or advisory accuracy."
+}
