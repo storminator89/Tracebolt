@@ -125,7 +125,8 @@ class Fixture:
         if self.fail == (kind, target):
             raise s.Rejected("injected-failure")
 
-    def command(self, args, uid=None, gid=None, limit=16384, timeout=45):
+    def command(self, args, uid=None, gid=None, limit=16384, timeout=45,
+                failure_stage="fixed-command-failed"):
         args = tuple(args)
         self.effect("command", args)
         if args[0] == "/usr/sbin/useradd":
@@ -214,12 +215,60 @@ class SetupTests(unittest.TestCase):
             with mock.patch.object(e, "command", return_value=status_output(name)) as command:
                 self.assertTrue(s.absent_unit(e.status(name), name))
             command.assert_called_once_with(["/usr/bin/systemctl", "show", name,
-                "--property=" + properties, "--all", "--no-pager"], timeout=5)
+                "--property=" + properties, "--all", "--no-pager"], timeout=5,
+                failure_stage="systemd-unit-inspection-command-failed")
         for name in ("other.service", "other.socket", "*.service", "--all"):
             e = s.Effects()
             with mock.patch.object(e, "command") as command, self.assertRaisesRegex(s.Rejected, "^fixed-unit$"):
                 e.status(name)
             command.assert_not_called()
+
+    def test_command_failure_reports_only_allowlisted_stage(self):
+        for stage in s.COMMAND_FAILURE_STAGES:
+            e = s.Effects()
+            child = mock.Mock()
+            child.wait.return_value = child.poll.return_value = 3
+            with mock.patch.object(e, "read", return_value=b"inert executable"), \
+                 mock.patch.object(s.subprocess, "Popen", return_value=child) as popen, \
+                 mock.patch.object(s.selectors, "DefaultSelector") as selectors:
+                selectors.return_value.__enter__.return_value.get_map.return_value = {}
+                with self.subTest(stage=stage), self.assertRaisesRegex(s.Rejected, "^" + stage + "$"):
+                    e.command(["/usr/bin/systemctl", "daemon-reload"], failure_stage=stage)
+                self.assertEqual(popen.call_args.kwargs["stderr"], s.subprocess.DEVNULL)
+        e = s.Effects()
+        with mock.patch.object(e, "read") as read, \
+             mock.patch.object(s.subprocess, "Popen") as popen, \
+             self.assertRaisesRegex(s.Rejected, "^fixed-command-stage$"):
+            e.command(["/usr/bin/systemctl", "daemon-reload"], failure_stage="untrusted error /path")
+        read.assert_not_called()
+        popen.assert_not_called()
+
+    def test_post_attempt_command_failures_retain_state_and_restore_agent(self):
+        for stage in ("helper-account-command-failed", "journal-initialize-command-failed",
+                      "systemd-reload-command-failed", "helper-socket-start-command-failed"):
+            f = Fixture()
+            before = set(f.files)
+            original = f.command
+            def command(args, **kwargs):
+                if kwargs.get("failure_stage") == stage:
+                    f.effect("command", tuple(args))
+                    raise s.Rejected(stage)
+                return original(args, **kwargs)
+            f.command = command
+            result = f.apply()
+            with self.subTest(stage=stage):
+                self.assertEqual(result["failureStage"], stage)
+                self.assertFalse(result["configured"])
+                self.assertTrue(result["retainedPartialState"])
+                self.assertTrue(result["agentRestarted"])
+                self.assertFalse(result["sourceVerified"])
+                self.assertFalse(result["contentRead"])
+                if stage == "helper-account-command-failed":
+                    self.assertEqual(set(f.files) - before, {s.ATTEMPT})
+                    self.assertNotIn(s.HELPER.encode(), f.files["/etc/passwd"])
+                    self.assertNotIn(s.HELPER.encode(), f.files["/etc/group"])
+                with self.assertRaises(s.Rejected):
+                    f.plan()
 
     def test_stopped_service_pid_check_remains_required(self):
         f = Fixture()
@@ -277,6 +326,9 @@ class SetupTests(unittest.TestCase):
         self.assertIn(b"SocketGroup=201\nSocketMode=0660", f.files[s.UNIT_DIR + "/" + s.SOCKET])
         self.assertEqual(set(x[1] for x in f.actions if x[0] == "create"), s.CREATED_FILES)
         self.assertNotIn("tracebolt-journal-reader", f.files["/etc/group"].decode().split("systemd-journal:")[1].splitlines()[0])
+        self.assertEqual([x[1] for x in f.actions if x[0] == "command" and x[1][0] == "/usr/sbin/useradd"],
+            [("/usr/sbin/useradd", "--system", "--user-group", "--no-create-home", "--no-log-init",
+              "--home-dir", "/nonexistent", "--shell", "/usr/sbin/nologin", s.HELPER)])
 
     def test_http_requires_separate_plaintext_ack(self):
         f = Fixture("http-test")

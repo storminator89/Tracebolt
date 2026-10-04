@@ -7,6 +7,8 @@ WORKDIR /src/web
 COPY web/package.json web/package-lock.json ./
 RUN npm ci --ignore-scripts
 COPY web/ ./
+# TypeScript checks the shared, entirely synthetic Go/UI contract fixture.
+COPY internal/api/testdata/complete-overview-synthetic.json /src/internal/api/testdata/complete-overview-synthetic.json
 RUN npm run build
 
 FROM --platform=$BUILDPLATFORM golang:${GO_VERSION}-bookworm AS build

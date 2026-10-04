@@ -2,6 +2,13 @@
 
 Meaningful development checkpoints are recorded here. These are prototype milestones, not production releases.
 
+## 2026-10-04 — Repair the pilot helper account command and preserve the failed attempt
+
+- The observed helper apply stopped when the local useradd parser rejected the unsupported `CREATE_MAIL_SPOOL` override. Read-only inspection found no helper account or group creation; the protected attempt marker was retained and the existing agent was restarted. Remove only the unsupported override and report finite command-failure stages while preserving all setup guards.
+- Add a separate, narrowly bounded marker-archive utility for that account-failure case. It verifies the original installation and absence of helper-side state, preserves the exact marker without clobbering, and never adopts/reset identities or applies setup. Human review and explicit local execution remain required; retrying the fresh setup is a separate step.
+- Include the one missing public synthetic contract fixture in Docker's frontend stage. The original isolated stage reproduces the TypeScript failure; the single-file copy makes the build pass with identical production assets. Runtime image permissions, dependencies and application bytes are unchanged.
+- Publish this small experimental recovery checkpoint for user feedback. All 73 inert helper/recovery tests pass and the source slices are reviewed. Actual marker archival, helper apply, source access and the full hosted rerun remain unverified. The preceding overview native gate passed, while its Docker/browser findings remain recorded and are not presented as a full CI pass.
+
 ## 2026-10-04 — Add complete visible process and mount generations
 
 - Add a separately acknowledged, default-off extension for an existing activated v3 identity. Capture supported visible processes and mounted filesystems into bounded independent generations, preserving field failures, exact enumeration scope, durable counters and original capture/retention times. No command lines, environments or additional OS privilege are introduced.

@@ -52,6 +52,12 @@ ENV = {"PATH": "/usr/sbin:/usr/bin:/sbin:/bin", "LANG": "C", "LC_ALL": "C",
        "SYSTEMD_PAGER": "cat", "SYSTEMD_COLORS": "0"}
 TEMPLATES = Path(__file__).resolve().parent.parent / "systemd"
 DIGEST = re.compile(r"[0-9a-f]{64}\Z")
+COMMAND_FAILURE_STAGES = frozenset((
+    "fixed-command-failed", "systemd-unit-inspection-command-failed",
+    "agent-stop-command-failed", "journal-preview-command-failed",
+    "helper-account-command-failed", "journal-initialize-command-failed",
+    "systemd-reload-command-failed", "helper-socket-start-command-failed",
+    "agent-restart-command-failed"))
 
 
 class Rejected(Exception):
@@ -278,8 +284,10 @@ class Effects:
         finally:
             os.close(fd)
 
-    def command(self, args, uid=None, gid=None, limit=16384, timeout=45):
+    def command(self, args, uid=None, gid=None, limit=16384, timeout=45,
+                failure_stage="fixed-command-failed"):
         # Every caller below supplies a fixed executable and a bounded argument set.
+        require(failure_stage in COMMAND_FAILURE_STAGES, "fixed-command-stage")
         require(args[0] in ("/usr/bin/systemctl", "/usr/sbin/useradd", BINARY), "fixed-command")
         self.read(args[0], 256 << 20)
         kw = {} if uid is None else dict(user=uid, group=gid, extra_groups=[])
@@ -299,7 +307,7 @@ class Effects:
                             sel.unregister(key.fileobj)
                         out.extend(chunk)
                         require(len(out) <= limit, "command-output-limit")
-            require(child.wait(timeout=max(0.01, until - time.monotonic())) == 0, "fixed-command-failed")
+            require(child.wait(timeout=max(0.01, until - time.monotonic())) == 0, failure_stage)
             return bytes(out)
         finally:
             if child.poll() is None:
@@ -310,7 +318,8 @@ class Effects:
     def status(self, name):
         fields = unit_fields(name)
         return unit_state(self.command(["/usr/bin/systemctl", "show", name,
-            "--property=" + ",".join(fields), "--all", "--no-pager"], timeout=5), name)
+            "--property=" + ",".join(fields), "--all", "--no-pager"], timeout=5,
+            failure_stage="systemd-unit-inspection-command-failed"), name)
 
     @contextlib.contextmanager
     def lock(self):
@@ -462,7 +471,9 @@ def consent_command(e, mode, facts):
         args.append("--ack-journal-content")
         if facts["profile"] == "http-test":
             args.append("--ack-journal-http-plaintext")
-    return preview(e.command(args, uid=facts["uid"], gid=facts["gid"], limit=8192), facts, mode)
+    stage = "journal-initialize-command-failed" if mode == "initialize" else "journal-preview-command-failed"
+    return preview(e.command(args, uid=facts["uid"], gid=facts["gid"], limit=8192,
+                             failure_stage=stage), facts, mode)
 
 
 def same_agent(a, b):
@@ -482,7 +493,7 @@ def apply(e, units, templates, expected_plan, content_ack, plaintext_ack):
         try:
             # Remember before attempting: even an uncertain stop must be reconciled.
             stopped = True
-            e.command(["/usr/bin/systemctl", "stop", AGENT_UNIT])
+            e.command(["/usr/bin/systemctl", "stop", AGENT_UNIT], failure_stage="agent-stop-command-failed")
             require(owned_unit(e.status(AGENT_UNIT), AGENT_UNIT, "inactive") and
                     e.status(AGENT_UNIT)["MainPID"] == "0", "stopped-agent")
             require(same_agent(facts, inspect_agent(e, templates)), "agent-changed-after-stop")
@@ -492,9 +503,10 @@ def apply(e, units, templates, expected_plan, content_ack, plaintext_ack):
             e.create(ATTEMPT, canonical(dict(schemaVersion="tracebolt.journal-setup-attempt.v1",
                      planSHA256=expected_plan, senderBinding=p["senderBinding"], deviceId=p["deviceId"],
                      certificateHash=p["certificateHash"])), 0, 0o600)
+            # --system skips mail creation; CREATE_MAIL_SPOOL is not a login.defs -K key.
             e.command(["/usr/sbin/useradd", "--system", "--user-group", "--no-create-home",
                        "--no-log-init", "--home-dir", "/nonexistent", "--shell", "/usr/sbin/nologin",
-                       "-K", "CREATE_MAIL_SPOOL=no", HELPER])
+                       HELPER], failure_stage="helper-account-command-failed")
             users, groups = account_tables(e.read("/etc/passwd", 1 << 20), e.read("/etc/group", 1 << 20))
             hu, hg = account(users, groups, HELPER, "/nonexistent")
             require(account(users, groups, AGENT, STATE_DIR) == (facts["uid"], facts["gid"]) and
@@ -512,10 +524,10 @@ def apply(e, units, templates, expected_plan, content_ack, plaintext_ack):
             e.create(UNIT_DIR + "/" + SOCKET, socket, 0, 0o644)
             initialized = consent_command(e, "initialize", facts)
             require(all(initialized[k] == p[k] for k in ("senderBinding", "deviceId", "certificateHash")), "consent-identity-changed")
-            e.command(["/usr/bin/systemctl", "daemon-reload"])
+            e.command(["/usr/bin/systemctl", "daemon-reload"], failure_stage="systemd-reload-command-failed")
             require(owned_unit(e.status(SERVICE), SERVICE, "inactive") and
                     owned_unit(e.status(SOCKET), SOCKET, "inactive"), "published-helper-units")
-            e.command(["/usr/bin/systemctl", "enable", "--now", SOCKET])
+            e.command(["/usr/bin/systemctl", "enable", "--now", SOCKET], failure_stage="helper-socket-start-command-failed")
             require(owned_unit(e.status(SOCKET), SOCKET, "active"), "socket-activation")
             e.protected_dir(RUNTIME_DIR)
             st = e.metadata(SOCKET_PATH)
@@ -531,7 +543,7 @@ def apply(e, units, templates, expected_plan, content_ack, plaintext_ack):
                     # Never start over a new/uncertain installer transaction, changed
                     # ownership/identity or foreign unit. Do not bypass failed checks.
                     require(same_agent(facts, inspect_agent(e, templates)), "agent-restart-ownership")
-                    e.command(["/usr/bin/systemctl", "start", AGENT_UNIT])
+                    e.command(["/usr/bin/systemctl", "start", AGENT_UNIT], failure_stage="agent-restart-command-failed")
                     require(owned_unit(e.status(AGENT_UNIT), AGENT_UNIT, "active"), "agent-restart-status")
                     result["agentRestarted"] = True
                 except (Rejected, OSError, ValueError, TypeError, KeyError, UnicodeError, subprocess.SubprocessError):
