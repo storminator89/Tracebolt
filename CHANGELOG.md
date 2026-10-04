@@ -2,6 +2,14 @@
 
 Meaningful development checkpoints are recorded here. These are prototype milestones, not production releases.
 
+## 2026-10-04 — Correct managed capability descriptions and source-archive permissions
+
+- Describe managed inventory capabilities from the server's selected collection profile. Keep current coverage, failures and ages in their dedicated views, preserve denied states, and avoid treating supported inventory or service code as proof of successful collection, installation or reboot.
+- Update the guided manager's capability limitations to reflect complete supported dpkg generations and paged services/sockets, while retaining the limits on remote actions, confirmed CVE/update authority and managed-inventory AI use.
+- Create the v2/v3 first-start source archive under a scoped `umask 077`, preserving the existing refusal to overwrite an output file and the caller's shell settings. An inherited group-writable mode could otherwise make the installer correctly reject the archive before fetching bootstrap metadata.
+- Retain all installer ownership and write-permission guards. This guide correction requires no binary rebuild.
+- The preceding `1dadb7b` source passed all 13 hosted CI jobs, including positive native package/service/socket observations and 92 browser checks with three previously documented enrollment skips. Actual installed-service and reboot observations remain separate from these automated checks.
+
 ## 2026-10-04 — Correct capability-absence handling and match native bootstrap requests
 
 - Handle the capability-query error before its byte count: the pinned Linux syscall wrapper returns-1 with the accepted no-attribute/unsupported errors. The old zero-count conjunction rejected ordinary no-capability executables. Inert private-file reproduction and regression tables cover the correction; actual capabilities, unrelated errors and all executable/path protection checks still reject.

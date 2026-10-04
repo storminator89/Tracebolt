@@ -36,6 +36,7 @@ func (s *Service) Devices(ctx context.Context, now time.Time) ([]model.Device, e
 		d := model.Device{ID: id, Name: id, Platform: "unknown", OS: "Awaiting agent", Site: "Local network", Group: "Managed devices", Source: "lan", Status: "unknown", AgentVersion: "unknown", CPU: metric, Memory: metric, Disk: metric, Uptime: "Unknown", Tags: []string{"lan", "read-only", "guided-enrollment"}, Capabilities: []model.Capability{}, Evidence: []model.Evidence{}, Trend: []float64{}, CaseIDs: []string{}}
 		if observation, ok := observations[id]; ok {
 			d = observation
+			d.Capabilities = profileCapabilities(d.Capabilities, s.binding.CollectionProfile)
 			old := now.Sub(received[id]) > 2*time.Minute || now.Sub(d.LastSeen) > 2*time.Minute || now.Before(received[id]) || now.Before(d.LastSeen)
 			for _, m := range []model.Metric{d.CPU, d.Memory, d.Disk} {
 				old = old || now.Sub(m.CollectedAt) > 2*time.Minute || now.Before(m.CollectedAt)

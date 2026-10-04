@@ -38,7 +38,7 @@ docker run --rm --mount "type=bind,src=$PWD,dst=/src,readonly" \
   --mount "type=bind,src=$PWD/bin,dst=/out" --workdir /src \
   golang:1.27.1-bookworm sh -ec \
   'CGO_ENABLED=0 go build -buildvcs=false -trimpath -o /out/ ./cmd/http-test-setup ./cmd/enroll-agent ./cmd/lan-agent ./cmd/agent-service' &&
-(set -o noclobber; git archive --format=tar HEAD > "$PWD/tracebolt-selected-source.tar") &&
+(umask 077; set -o noclobber; git archive --format=tar HEAD > "$PWD/tracebolt-selected-source.tar") &&
 sha256sum bin/agent-service bin/enroll-agent bin/lan-agent tracebolt-selected-source.tar &&
 docker build -t tracebolt-manager:http-complete-test .
 ```

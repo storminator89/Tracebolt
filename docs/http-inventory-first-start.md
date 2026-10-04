@@ -62,7 +62,7 @@ reproducible builds. The archive command refuses any existing output path.
 unset TRACEBOLT_AGENT_SHA TRACEBOLT_ENROLL_SHA TRACEBOLT_SOURCE_SHA
 if git diff --quiet && git diff --cached --quiet &&
    test -z "$(git ls-files --others -- cmd internal web tests)"; then
-  (set -o noclobber; git archive --format=tar HEAD > "$PWD/tracebolt-selected-source.tar") &&
+  (umask 077; set -o noclobber; git archive --format=tar HEAD > "$PWD/tracebolt-selected-source.tar") &&
   TRACEBOLT_AGENT_SHA=$(sha256sum bin/lan-agent) &&
   TRACEBOLT_AGENT_SHA=${TRACEBOLT_AGENT_SHA%% *} &&
   TRACEBOLT_ENROLL_SHA=$(sha256sum bin/enroll-agent) &&
