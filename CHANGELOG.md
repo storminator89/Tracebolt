@@ -2,6 +2,13 @@
 
 Meaningful development checkpoints are recorded here. These are prototype milestones, not production releases.
 
+## 2026-10-04 — Diagnose intermittent browser lifecycle revalidation
+
+- Keep the successful `ed18d9a` acceptance and screenshot provenance intact. A later documentation-only run passed17/18 conditional cases and exposed an intermittent persisted-page lifecycle assertion on identical application and test code; no production root cause is established yet.
+- Repeat that existing scenario for five consecutive suspension/restoration cycles and require every cycle to pass. All18 named scenarios, privacy/freshness assertions and failure exits remain mandatory; this is not retry-until-success or a new quarantine.
+- Add fixed substage labels and capped request/status, whitelisted error-code and DOM-state counters. No response body, UI text, URL, device identifier, secret or telemetry value is exported. The formerly unbounded request-arrival wait now uses the normal assertion budget.
+- Application behavior is unchanged. The diagnostic-only hosted result will determine whether request ordering, store admission or another path needs a focused correction.
+
 ## 2026-10-04 — Verified Linux inventory UI gallery
 
 - Add four original, independently inspected synthetic screenshots for operational inventory, conditional review detail, offline catalog settings and the mobile package table, pinned to capture source `ed18d9a` with hashes and explicit fixture captions.

@@ -339,6 +339,7 @@ jobs:
         if: ${{ !cancelled() }}
         env:
           TRACEBOLT_SOURCE_SHA: ${{ github.sha }}
+          TRACEBOLT_REVIEW_LIFECYCLE_REPEATS: '5'
         run: node tests/e2e-review/conditional-browser.mjs
       - name: Require complete exact-source conditional browser evidence
         if: ${{ !cancelled() }}
