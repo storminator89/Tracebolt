@@ -2,6 +2,13 @@
 
 Meaningful development checkpoints are recorded here. These are prototype milestones, not production releases.
 
+## 2026-10-04 — Correct capability-absence handling and match native bootstrap requests
+
+- Handle the capability-query error before its byte count: the pinned Linux syscall wrapper returns-1 with the accepted no-attribute/unsupported errors. The old zero-count conjunction rejected ordinary no-capability executables. Inert private-file reproduction and regression tables cover the correction; actual capabilities, unrelated errors and all executable/path protection checks still reject.
+- Match the native public-bootstrap contract in the browser test: explicitly require rejection of the authenticated cookie-bearing request, then verify the credential-free response, exact checksum and secret exclusion. No server guard is changed.
+- Wait for committed drawer dismissal, locale selection and fresh pane state before the German mobile flow. Preserve its rows, viewport, keyboard focus and dismissal assertions; the prior broad failure did not prove a production navigation defect. All eight scenario identities remain mandatory.
+- Hosted diagnostics identified complete package acknowledgement and socket coverage, but failed service coverage; the positive-data gate stayed red. This correction still needs the unchanged exact-source native/browser gates. No installed-service or reboot acceptance is claimed.
+
 ## 2026-10-04 — Efficient large-list test queries and bounded native diagnostics
 
 - Scope the large service/socket traversal tests to semantic table cells instead of repeatedly computing every row's accessible name. Retain complete row ordering, pagination, visibility, request bounds and scope checks; strengthen exact socket endpoint/owner ordering. The owner's three full709-test runs pass with unchanged runtime assets and test timeouts.

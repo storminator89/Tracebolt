@@ -236,12 +236,23 @@ func openSystemctl() (*os.File, error) {
 	var magic [4]byte
 	n, readErr := unix.Pread(tool, magic[:], 0)
 	capBytes, capErr := unix.Fgetxattr(tool, "security.capability", nil)
-	capSafe := capBytes == 0 && (capErr == nil || errors.Is(capErr, unix.ENODATA) || errors.Is(capErr, unix.EOPNOTSUPP))
+	capSafe := noFileCapabilities(capBytes, capErr)
 	if unix.Fstat(tool, &st) != nil || st.Uid != 0 || st.Mode&unix.S_IFMT != unix.S_IFREG || st.Mode&0022 != 0 || st.Mode&(unix.S_ISUID|unix.S_ISGID) != 0 || !capSafe || st.Mode&0111 == 0 || readErr != nil || n != 4 || magic != [4]byte{0x7f, 'E', 'L', 'F'} {
 		unix.Close(tool)
 		return nil, SourceError{ReasonInvalidSource}
 	}
 	return os.NewFile(uintptr(tool), "systemctl"), nil
+}
+
+// noFileCapabilities checks errors before the returned size: Linux Fgetxattr
+// returns size -1 with ENODATA when the attribute is absent. EOPNOTSUPP means
+// the filesystem does not support it. Only a successful zero size or these
+// absence results are safe; present capabilities and all other errors fail closed.
+func noFileCapabilities(size int, err error) bool {
+	if err != nil {
+		return errors.Is(err, unix.ENODATA) || errors.Is(err, unix.EOPNOTSUPP)
+	}
+	return size == 0
 }
 
 type limitedBuffer struct {
