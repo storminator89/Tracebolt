@@ -15,7 +15,10 @@ import (
 	"io"
 	"localrmm/internal/agentinstall"
 	"localrmm/internal/api"
+	"localrmm/internal/enrollmentconfig"
+	"localrmm/internal/enrollmentcrypto"
 	"localrmm/internal/enrollmentstate"
+	"localrmm/internal/enrollmentstore"
 	"localrmm/internal/lanconfig"
 	"localrmm/internal/model"
 	"net/http"
@@ -37,6 +40,25 @@ func TestApprovedDisposableSystemdInstallation(t *testing.T) {
 	if os.Getenv("TRACEBOLT_APPROVED_SYSTEMD_TEST") != "1" {
 		t.Skip("actual systemd installation not enabled; no privileged acceptance claimed")
 	}
+	runApprovedSystemdInstallation(t, lanconfig.TLS, enrollmentcrypto.CollectionProfile)
+}
+
+// The managed gate is separate from the original basic acceptance. Enabling it
+// requires both explicit opt-ins and the same freshly approved hosted VM. Never
+// run both gates on one machine: each requires a fresh fixed-path installation.
+func TestApprovedManagedDisposableSystemdInstallation(t *testing.T) {
+	value := os.Getenv("TRACEBOLT_APPROVED_MANAGED_SYSTEMD_TEST")
+	if value == "" {
+		t.Skip("managed systemd installation is not enabled; no privileged acceptance claimed")
+	}
+	if value != "1" || os.Getenv("TRACEBOLT_APPROVED_SYSTEMD_TEST") != "1" {
+		t.Fatal("managed systemd acceptance requires both explicit opt-ins")
+	}
+	runApprovedSystemdInstallation(t, lanconfig.HTTPTest, enrollmentcrypto.CollectionProfilePackages)
+}
+
+func runApprovedSystemdInstallation(t *testing.T, profile, collectionProfile string) {
+	t.Helper()
 	if os.Geteuid() != 0 || os.Getenv("GITHUB_ACTIONS") != "true" || os.Getenv("RUNNER_ENVIRONMENT") != "github-hosted" || os.Getenv("RUNNER_OS") != "Linux" {
 		t.Fatal("explicit gate requires the approved fresh root Linux hosted runner")
 	}
@@ -100,7 +122,12 @@ func TestApprovedDisposableSystemdInstallation(t *testing.T) {
 		if t.Failed() {
 			status = "fail"
 		}
-		raw, _ := json.Marshal(map[string]any{"schemaVersion": "tracebolt.systemd-acceptance.v1", "status": status, "stage": stage, "osRebootTested": false, "profile": "tls", "telemetryExported": false})
+		result := map[string]any{"schemaVersion": "tracebolt.systemd-acceptance.v1", "status": status, "stage": stage, "osRebootTested": false, "profile": profile, "telemetryExported": false}
+		if collectionProfile == enrollmentcrypto.CollectionProfilePackages {
+			result["schemaVersion"] = "tracebolt.managed-systemd-acceptance.v1"
+			result["collectionProfile"] = collectionProfile
+		}
+		raw, _ := json.Marshal(result)
 		f, e := os.OpenFile(resultPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0644)
 		if e != nil {
 			t.Error("sanitized result creation failed")
@@ -111,12 +138,17 @@ func TestApprovedDisposableSystemdInstallation(t *testing.T) {
 			t.Error("sanitized result write failed")
 		}
 	})
-	profile := lanconfig.TLS
+	profileArguments := func(arguments []string) []string {
+		if profile == lanconfig.HTTPTest {
+			return append(arguments, "--insecure-http-test")
+		}
+		return arguments
+	}
 	t.Cleanup(func() {
 		if _, e := os.Lstat(agentinstall.ManifestPath); e == nil {
 			ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 			defer cancel()
-			cmd := exec.CommandContext(ctx, binaries["agent-service"], "--action", "uninstall", "--apply")
+			cmd := exec.CommandContext(ctx, binaries["agent-service"], profileArguments([]string{"--action", "uninstall", "--apply"})...)
 			cmd.Env = systemdCleanEnvironment()
 			if cmd.Run() != nil {
 				t.Error("owned service cleanup incomplete; discard this VM without exporting state")
@@ -124,6 +156,22 @@ func TestApprovedDisposableSystemdInstallation(t *testing.T) {
 		}
 	})
 	m, enrolled, enrollmentPath := guidedFixture(t, profile)
+	if collectionProfile == enrollmentcrypto.CollectionProfilePackages {
+		raw, err := os.ReadFile(enrollmentPath)
+		var configured enrollmentconfig.Config
+		if err != nil || json.Unmarshal(raw, &configured) != nil {
+			t.Fatal("managed fixture configuration")
+		}
+		configured.CollectionProfile = collectionProfile
+		raw, err = json.Marshal(configured)
+		if err != nil || os.WriteFile(enrollmentPath, raw, 0600) != nil {
+			t.Fatal("managed fixture configuration write")
+		}
+		enrolled, err = enrollmentconfig.Load(enrollmentPath, m, time.Now().UTC())
+		if err != nil {
+			t.Fatal("managed fixture configuration load")
+		}
+	}
 	configPath := filepath.Join(t.TempDir(), "lan.json")
 	config, _ := json.Marshal(m.Config)
 	if os.WriteFile(configPath, config, 0600) != nil {
@@ -196,7 +244,11 @@ func TestApprovedDisposableSystemdInstallation(t *testing.T) {
 	if status != 200 || json.Unmarshal(body, &session) != nil || session.CSRFToken == "" {
 		t.Fatal("operator fixture login")
 	}
-	status, body = call("/api/enrollment/invitations", map[string]string{"requestId": "request_" + strings.Repeat("8", 32), "platform": "linux"}, session.CSRFToken)
+	invitation := map[string]any{"requestId": "request_" + strings.Repeat("8", 32), "platform": "linux"}
+	if collectionProfile == enrollmentcrypto.CollectionProfilePackages {
+		invitation["collectionAcknowledged"] = true
+	}
+	status, body = call("/api/enrollment/invitations", invitation, session.CSRFToken)
 	var created struct {
 		Snapshot         enrollmentstate.Snapshot `json:"snapshot"`
 		InvitationSecret string                   `json:"invitationSecret"`
@@ -213,6 +265,7 @@ func TestApprovedDisposableSystemdInstallation(t *testing.T) {
 	stateDir := agentinstall.EnrollmentDirectory
 	stage = "install_enroll"
 	args := []string{binaries["agent-service"], "--action", "install", "--apply", "--agent-binary", binaries["lan-agent"], "--agent-sha256", systemdHash(t, binaries["lan-agent"]), "--enroll-binary", binaries["enroll-agent"], "--enroll-sha256", systemdHash(t, binaries["enroll-agent"]), "--source-archive", sourceArchive, "--source-sha256", systemdHash(t, sourceArchive), "--bootstrap", bootstrapPath, "--bootstrap-sha256", systemdHash(t, bootstrapPath)}
+	args = profileArguments(args)
 	input, _ := json.Marshal(map[string]any{"args": args, "secret": created.InvitationSecret})
 	defer clear(input)
 	enrollment := exec.Command(python, "-c", enrollmentPTY)
@@ -294,9 +347,43 @@ func TestApprovedDisposableSystemdInstallation(t *testing.T) {
 	if e := <-enrollmentDone; e != nil {
 		t.Fatal("PTY helper failed")
 	}
+	managedSequence := uint64(0)
+	managedGeneration := ""
+	var managedCollectedAt time.Time
+	checkManagedObservation := func(after time.Time) {
+		if collectionProfile != enrollmentcrypto.CollectionProfilePackages {
+			return
+		}
+		var devices struct{ Items []model.Device }
+		get("/api/devices", &devices)
+		if len(devices.Items) != 1 {
+			t.Fatal("managed service identity is unavailable")
+		}
+		deadline := time.Now().Add(75 * time.Second)
+		for time.Now().Before(deadline) {
+			var packages enrollmentstore.PackageView
+			var operations enrollmentstore.OperationalView
+			get("/api/devices/"+devices.Items[0].ID+"/packages", &packages)
+			get("/api/devices/"+devices.Items[0].ID+"/operational", &operations)
+			if operations.Sequence != nil && systemdManagedObservationAdvanced(packages, managedSequence, managedGeneration, managedCollectedAt, after) && *packages.Sequence == *operations.Sequence {
+				if _, err := packageUbuntu2404PositiveEvidence(packages, operations); err != nil {
+					t.Fatal("managed service requires positive bounded Ubuntu package and operational observations")
+				}
+				managedSequence = *packages.Sequence
+				managedGeneration = packages.Snapshot.GenerationID
+				managedCollectedAt = packages.Snapshot.CollectedAt
+				return
+			}
+			time.Sleep(100 * time.Millisecond)
+		}
+		t.Fatal("managed service observation readback did not advance consistently")
+	}
 	stage = "initial_reports"
+	installationCompletedAt := time.Now().UTC()
 	first := systemdWaitObservation(t, get, time.Time{})
+	checkManagedObservation(installationCompletedAt)
 	second := systemdWaitObservation(t, get, first)
+	checkManagedObservation(installationCompletedAt)
 	if !second.After(first) {
 		t.Fatal("service did not send two distinct observations")
 	}
@@ -333,7 +420,7 @@ func TestApprovedDisposableSystemdInstallation(t *testing.T) {
 	invoke := func(arguments ...string) {
 		ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 		defer cancel()
-		cmd := exec.CommandContext(ctx, binaries["agent-service"], arguments...)
+		cmd := exec.CommandContext(ctx, binaries["agent-service"], profileArguments(arguments)...)
 		cmd.Env = systemdCleanEnvironment()
 		if cmd.Run() != nil {
 			t.Fatal("real installer lifecycle operation failed")
@@ -341,7 +428,9 @@ func TestApprovedDisposableSystemdInstallation(t *testing.T) {
 	}
 	stage = "restart"
 	invoke("--action", "restart", "--apply")
+	restartCompletedAt := time.Now().UTC()
 	third := systemdWaitObservation(t, get, second)
+	checkManagedObservation(restartCompletedAt)
 	checkIdentity()
 	if n := systemdSequence(t, stateDir); n <= sequence {
 		t.Fatal("restart reset or failed sequence")
@@ -350,7 +439,9 @@ func TestApprovedDisposableSystemdInstallation(t *testing.T) {
 	}
 	stage = "upgrade"
 	invoke("--action", "upgrade", "--apply", "--agent-binary", binaries["lan-agent-upgrade"], "--agent-sha256", systemdHash(t, binaries["lan-agent-upgrade"]), "--enroll-binary", binaries["enroll-agent-upgrade"], "--enroll-sha256", systemdHash(t, binaries["enroll-agent-upgrade"]), "--source-archive", sourceArchive, "--source-sha256", systemdHash(t, sourceArchive))
+	upgradeCompletedAt := time.Now().UTC()
 	_ = systemdWaitObservation(t, get, third)
+	checkManagedObservation(upgradeCompletedAt)
 	checkIdentity()
 	systemdCheckProcessIdentity(t, uid, gid)
 	if systemdSequence(t, stateDir) <= sequence {
@@ -506,5 +597,34 @@ func TestSystemdDiagnosticStageAllowlist(t *testing.T) {
 	}
 	if systemdInstallerStage("enroll_as_dedicated_account") != "installer_enroll" {
 		t.Fatal("fixed installer stage unavailable")
+	}
+}
+
+// Positive sequence alone is insufficient: a post-operation report must carry a
+// new collection generation and collection time after the completed action.
+func systemdManagedObservationAdvanced(view enrollmentstore.PackageView, sequence uint64, generation string, collectedAt, after time.Time) bool {
+	return view.Sequence != nil && *view.Sequence > sequence && view.Snapshot != nil &&
+		view.Snapshot.GenerationID != "" && view.Snapshot.GenerationID != generation &&
+		view.Snapshot.CollectedAt.After(collectedAt) && view.Snapshot.CollectedAt.After(after)
+}
+
+func TestManagedServiceObservationRequiresPostActionCollection(t *testing.T) {
+	view, _ := packagePositiveFixture()
+	boundary := view.Snapshot.CollectedAt.Add(-time.Second)
+	prior := view.Snapshot.CollectedAt.Add(-2 * time.Second)
+	sequence := *view.Sequence - 1
+	if !systemdManagedObservationAdvanced(view, sequence, "different_generation", prior, boundary) {
+		t.Fatal("fresh independent collection rejected")
+	}
+	if systemdManagedObservationAdvanced(view, *view.Sequence, "different_generation", prior, boundary) ||
+		systemdManagedObservationAdvanced(view, sequence, view.Snapshot.GenerationID, prior, boundary) ||
+		systemdManagedObservationAdvanced(view, sequence, "different_generation", view.Snapshot.CollectedAt, boundary) ||
+		systemdManagedObservationAdvanced(view, sequence, "different_generation", prior, view.Snapshot.CollectedAt) ||
+		systemdManagedObservationAdvanced(view, sequence, "different_generation", prior, view.Snapshot.CollectedAt.Add(time.Second)) {
+		t.Fatal("old sequence, generation or pre-operation collection accepted")
+	}
+	view.Snapshot = nil
+	if systemdManagedObservationAdvanced(view, sequence, "", prior, boundary) {
+		t.Fatal("missing collection accepted")
 	}
 }

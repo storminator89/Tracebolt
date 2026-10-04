@@ -85,7 +85,6 @@ For suspected compromise, revoke first. The endpoint must remain denied even if 
 ## Verification
 
 ```sh
-source scripts/env.sh  # only for this development workspace's Go toolchain
 go test -race ./internal/lantrust
 go test -cover ./internal/lantrust
 go vet ./internal/lantrust

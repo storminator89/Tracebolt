@@ -57,7 +57,7 @@ type clientFixture struct {
 	claims                                          []map[string]string
 }
 
-func newClientFixture(t *testing.T, profile string) *clientFixture {
+func newClientFixture(t *testing.T, profile string, collection ...string) *clientFixture {
 	t.Helper()
 	now := time.Now().UTC()
 	rp, rk, _ := ed25519.GenerateKey(rand.Reader)
@@ -93,6 +93,9 @@ func newClientFixture(t *testing.T, profile string) *clientFixture {
 		serverCA = testPEM(rd)
 	}
 	binding := enrollmentstate.Binding{InstanceID: testID("manager", 1), Profile: profile, Origin: origin, CollectionProfile: enrollmentcrypto.CollectionProfile, IssuerFingerprint: fingerprint(id)}
+	if len(collection) == 1 {
+		binding.CollectionProfile = collection[0]
+	}
 	cfg := enrollmentstate.DefaultConfig(binding)
 	cfg.RecordLimit = 25
 	cfg.InvitationLimit = 25

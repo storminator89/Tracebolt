@@ -107,7 +107,7 @@ func ValidateObservation(d model.Device) error {
 	}
 	seen := map[string]bool{}
 	for _, e := range d.Evidence {
-		if e.ID == "" || seen[e.ID] || e.Synthetic || !validQuality(e.Quality) {
+		if e.CollectionProfile != "" || e.ID == "" || seen[e.ID] || e.Synthetic || !validQuality(e.Quality) {
 			return errors.New("invalid local evidence identity")
 		}
 		seen[e.ID] = true

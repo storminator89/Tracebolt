@@ -2,6 +2,22 @@
 
 Meaningful development checkpoints are recorded here. These are prototype milestones, not production releases.
 
+## 2026-10-04 — Bounded Linux operations, package observations and conditional review
+
+### Added
+- Explicitly consented fresh operational enrollment profiles, bounded Linux services/processes/interfaces/volumes/software/journal metadata, authenticated durable ingestion and per-section freshness/last-good views.
+- Protected read-only release and dpkg package observations with selected source-version metadata, bounded counts and truthful unsupported/denied/partial states.
+- Admin operational and Security panels, an explicitly imported unverified offline catalog, and bounded Debian-only conditional review candidates that retain observation/catalog lineage.
+- A separately acknowledged managed setup selector, fresh HTTP inventory Compose profile and native background-service guide. Existing basic credentials/state are not adopted or relabelled; a new explicit profile/identity is required.
+- A separate manual-only managed-service acceptance target requiring advancing observations after actual install/restart/upgrade. It is default-disabled and has not been executed by this checkpoint.
+- Independent parser, consent, admission, replay, persistence, capacity, cancellation and stale-result regressions. A new authorized advisory scan records zero reached/imported findings and the existing unused OpenPGP module-only advisory for its exact frozen source.
+
+### Boundaries and validation
+- The composed source passes serial race checks with the one dense package matrix reserved for four mandatory isolated CI rows, plus vet/modules/build,571 UI tests and nine independent DOM checks. New exact-source browser, positive Ubuntu package and container gates remain separately tracked until actual completion.
+- Confirmed CVE and offered-update counts remain unknown. Catalog declarations and version matches do not prove installed artifact origin, exploitability or update availability. Ubuntu packages are not reviewed against Debian rules.
+- No raw journal bodies, arbitrary shell commands, update installation or automatic remediation are introduced. Operational labels remain private metadata. Basic identities are not silently upgraded into expanded consent.
+- The corrected installed-service gate and three quarantined enrollment browser cases retain their existing explicit status. Cached-APT fixture-only work remains separate and is not enabled in this milestone.
+
 ## 2026-10-04 — Handle bracketed paste in the hidden enrollment prompt
 
 - Recognize the terminal's standard bracketed-paste framing around one complete invitation. Keep input hidden and require an explicit Enter after the closing delimiter.

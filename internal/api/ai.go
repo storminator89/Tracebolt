@@ -314,6 +314,15 @@ func (s *Server) analyzeCase(w http.ResponseWriter, r *http.Request, id string) 
 	if !readObject(w, r, 1024, []string{"configRevision"}, &input) {
 		return
 	}
+	// Instance policy is restored from trusted enrollment state. Client/case
+	// tags cannot relabel a managed source as legacy/basic to permit export.
+	s.mu.RLock()
+	profile := s.aiCollectionProfile
+	s.mu.RUnlock()
+	if profile != "" && profile != "basic-readonly-v1" {
+		fail(w, 403, "evidence_export_not_approved", "This collection profile is not approved for AI export.")
+		return
+	}
 	c, err := s.store.Case(id)
 	if errors.Is(err, store.ErrNotFound) {
 		fail(w, 404, "not_found", "Case not found.")

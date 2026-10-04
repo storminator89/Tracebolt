@@ -1,0 +1,21 @@
+.advisory-review-disclosure { margin-top: 24px; border: 1px solid var(--line); border-radius: 9px; overflow: hidden; }
+.advisory-review-toggle { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; padding: 16px; background: transparent; border: 0; color: inherit; font: inherit; font-weight: 600; text-align: left; cursor: pointer; }
+.advisory-review-toggle[aria-expanded="true"] svg { transform: rotate(180deg); }
+.advisory-review { padding: 0 16px 16px; font-size: 13px; line-height: 1.55; }
+.advisory-review-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+.advisory-review h3 { margin: 4px 0; font-size: 16px; }
+.advisory-review h4 { margin: 0; font-size: 14px; overflow-wrap: anywhere; }
+.advisory-review p { margin: 8px 0; }
+.advisory-review-status { font-weight: 600; }
+.advisory-review-caution { color: var(--secondary); }
+.advisory-review-error { display: flex; align-items: flex-start; gap: 8px; color: var(--warning, #996415); }
+.advisory-review-error svg { flex-shrink: 0; margin-top: 2px; }
+.advisory-review-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.advisory-review-facts div { min-width: 0; }
+.advisory-review-facts dt { color: var(--secondary); font-size: 12px; }
+.advisory-review-facts dd { margin: 3px 0 0; overflow-wrap: anywhere; }
+.advisory-review-candidates { padding: 0; list-style: none; }
+.advisory-review-candidates li { border: 1px solid var(--line); border-radius: 7px; margin-top: 12px; padding: 12px; }
+.advisory-review-reasons { padding-left: 20px; }
+.advisory-review-toggle:focus-visible { outline: 3px solid #3aab9877; outline-offset: -3px; }
+@media (max-width: 540px) { .advisory-review-facts { grid-template-columns: 1fr; } .advisory-review-heading .button { width: 100%; justify-content: center; } }

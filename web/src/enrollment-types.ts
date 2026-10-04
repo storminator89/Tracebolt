@@ -10,7 +10,8 @@ export interface EnrollmentSnapshot {
   intent:{intentID:string;requestID:string;serialHex:string;templateVersion:string;deviceID:string;keyFingerprint:string;notBefore:number;notAfter:number;at:number};
   issuance:{requestID:string;certificateHash:string;at:number}; activation:{requestID:string;at:number}; termination:{requestID:string;from:string;at:number};
 }
-export interface EnrollmentList {serverNow:string;schemaVersion:'tracebolt.enrollment-operator.v2';enabled:boolean;platforms:string[];recordLimit:number;items:EnrollmentSnapshot[]}
+export type EnrollmentCollectionProfile = 'basic-readonly-v1' | 'managed-operations-v1' | 'managed-operations-v2';
+export interface EnrollmentList {collectionProfile?:EnrollmentCollectionProfile;collectionPrivacy?:'metadata_labels_may_be_sensitive'|'package_source_metadata_may_be_sensitive';serverNow:string;schemaVersion:'tracebolt.enrollment-operator.v2';enabled:boolean;platforms:string[];recordLimit:number;items:EnrollmentSnapshot[]}
 export interface EnrollmentBootstrap {
  schemaVersion:'tracebolt.enrollment-bootstrap.v2';managerInstanceId:string;profile:'tls'|'http-test';enrollmentOrigin:string;agentOrigin:string;collectionProfile:string;invitationId:string;serverCaPem:string;issuerRootPem:string;issuerPem:string;
 }
@@ -26,8 +27,13 @@ export function validSnapshot(value:unknown):value is EnrollmentSnapshot {
  return true;
 }
 export function validEnrollmentList(value:unknown):value is EnrollmentList {
- return object(value)&&value.schemaVersion==='tracebolt.enrollment-operator.v2'&&validServerTime(value.serverNow)&&typeof value.enabled==='boolean'&&Array.isArray(value.platforms)&&value.platforms.every(text)&&Number.isSafeInteger(value.recordLimit)&&Number(value.recordLimit)>0&&Number(value.recordLimit)<=25&&Array.isArray(value.items)&&value.items.length<=Number(value.recordLimit)&&value.items.every(validSnapshot)&&new Set(value.items.map(item=>item.invitationID)).size===value.items.length;
+ return object(value)&&validCollectionConsent(value)&&value.schemaVersion==='tracebolt.enrollment-operator.v2'&&validServerTime(value.serverNow)&&typeof value.enabled==='boolean'&&Array.isArray(value.platforms)&&value.platforms.every(text)&&Number.isSafeInteger(value.recordLimit)&&Number(value.recordLimit)>0&&Number(value.recordLimit)<=25&&Array.isArray(value.items)&&value.items.length<=Number(value.recordLimit)&&value.items.every(validSnapshot)&&new Set(value.items.map(item=>item.invitationID)).size===value.items.length;
 }
+function validCollectionConsent(value:Record<string,unknown>):boolean {
+ if(value.collectionProfile===undefined||value.collectionProfile==='basic-readonly-v1')return value.collectionPrivacy===undefined;
+ return (value.collectionProfile==='managed-operations-v1'&&value.collectionPrivacy==='metadata_labels_may_be_sensitive')||(value.collectionProfile==='managed-operations-v2'&&value.collectionPrivacy==='package_source_metadata_may_be_sensitive');
+}
+export function enrollmentCollectionProfile(value:EnrollmentList):EnrollmentCollectionProfile {return value.collectionProfile??'basic-readonly-v1';}
 export function comparisonValid(item:EnrollmentSnapshot):boolean{return /^[a-f0-9]{64}$/.test(item.claim.keyFingerprint)&&/^[a-f0-9]{32}$/.test(item.claim.comparisonCode);}
 export function groupedHex(value:string,size=4):string{return value.match(new RegExp(`.{1,${size}}`,'g'))?.join(' ')||value;}
 export function enrollmentDate(seconds:number):string{return seconds?new Date(seconds*1000).toISOString():'';}

@@ -42,9 +42,13 @@ func openProtectedParent() (int, error) {
 	}
 	return parent, nil
 }
-func outputAbsent(parent int) error {
+func outputAbsent(profile setupProfile, parent int) error {
+	_, selectedName, selectedStage, e := profile.paths()
+	if e != nil {
+		return errSetup
+	}
 	var st unix.Stat_t
-	if e := unix.Fstatat(parent, outputName, &st, unix.AT_SYMLINK_NOFOLLOW); e != unix.ENOENT {
+	if e := unix.Fstatat(parent, selectedName, &st, unix.AT_SYMLINK_NOFOLLOW); e != unix.ENOENT {
 		return errSetup
 	}
 	// Leftover staging output is ambiguous after a crash. Never adopt or reset it.
@@ -59,27 +63,26 @@ func outputAbsent(parent int) error {
 		return errSetup
 	}
 	for _, name := range names {
-		if len(name) >= len(stagePrefix) && name[:len(stagePrefix)] == stagePrefix {
+		if len(name) >= len(selectedStage) && name[:len(selectedStage)] == selectedStage {
 			return errSetup
 		}
 	}
 	return nil
 }
 
-const stagePrefix = ".tracebolt-http-test-setup-"
-
 type publicationOps struct {
 	sync    func(int) error
 	handoff func(int, int, int) error
 }
 
-func publish(ctx context.Context, parent int, files []materialFile, uid, gid int) error {
-	return publishWithOps(ctx, parent, files, uid, gid, publicationOps{sync: unix.Fsync, handoff: unix.Fchown})
+func publish(profile setupProfile, ctx context.Context, parent int, files []materialFile, uid, gid int) error {
+	return publishWithOps(profile, ctx, parent, files, uid, gid, publicationOps{sync: unix.Fsync, handoff: unix.Fchown})
 }
 
 // The operation seam exists only for synthetic failure testing, never CLI input.
-func publishWithOps(ctx context.Context, parent int, files []materialFile, uid, gid int, ops publicationOps) error {
-	if len(files) != len(fileNames) || outputAbsent(parent) != nil {
+func publishWithOps(profile setupProfile, ctx context.Context, parent int, files []materialFile, uid, gid int, ops publicationOps) error {
+	_, selectedName, selectedStage, e := profile.paths()
+	if e != nil || len(files) != len(fileNames) || outputAbsent(profile, parent) != nil {
 		return errSetup
 	}
 	for i, f := range files {
@@ -91,7 +94,7 @@ func publishWithOps(ctx context.Context, parent int, files []materialFile, uid, 
 	if _, e := rand.Read(random[:]); e != nil {
 		return errSetup
 	}
-	name := stagePrefix + hex.EncodeToString(random[:])
+	name := selectedStage + hex.EncodeToString(random[:])
 	if e := unix.Mkdirat(parent, name, 0700); e != nil {
 		return errSetup
 	}
@@ -142,7 +145,7 @@ func publishWithOps(ctx context.Context, parent int, files []materialFile, uid, 
 		return errSetup
 	}
 	// Linux no-replace rename publishes the complete new directory atomically.
-	if unix.Renameat2(parent, name, parent, outputName, unix.RENAME_NOREPLACE) != nil {
+	if unix.Renameat2(parent, name, parent, selectedName, unix.RENAME_NOREPLACE) != nil {
 		return errSetup
 	}
 	published = true // Every later failure preserves output for manual inspection.

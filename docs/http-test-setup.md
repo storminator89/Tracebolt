@@ -14,8 +14,11 @@ go build -buildvcs=false -trimpath -o bin/http-test-setup ./cmd/http-test-setup
 
 Replace that example with the exact selected RFC1918 IPv4 address on the test VM.
 No address discovery, DNS, interface change, port probing or network request occurs.
-The plan does not create files, generate keys, or prompt for a password. The only
-flags are `--lan-ip`, `--ack-disposable-http-test`, `--apply`, and help.
+The plan does not create files, generate keys, or prompt for a password. This page describes the default basic layout. Its main flags are `--lan-ip`,
+`--ack-disposable-http-test`, `--apply`, and help. The separate
+[`managed-operations-v2` selector](http-inventory-test-setup.md) additionally
+requires `--collection-profile` and `--ack-managed-metadata`, and uses a different
+fixed output directory; it does not modify this basic configuration.
 
 Only after reviewing and separately authorizing the credential creation on that
 specific disposable VM, its administrator runs this manually in a local terminal:

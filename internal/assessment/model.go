@@ -1,6 +1,7 @@
 // Package assessment contains isolated, read-only software assessment foundations.
-// It is not wired into telemetry, the API, or the UI. An assessed scope is never a
-// claim that an endpoint is secure, and an advisory fix is never an offered update.
+// Its normalized snapshot parser is used by offline catalog validation; matching
+// and native inventory remain disconnected. An assessed scope never claims that
+// an endpoint is secure, and an advisory fix is never an offered update.
 package assessment
 
 import (

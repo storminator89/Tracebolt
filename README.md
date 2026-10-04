@@ -8,7 +8,7 @@ Tracebolt is an early self-hosted diagnostics prototype with a React interface, 
 
 ## Installation
 
-For a fresh disposable Linux VM with Docker, use the **[HTTP test first-start guide](docs/http-test-first-start.md)**. It builds the setup helper, creates new test-only credentials through a hidden local prompt, and starts guided enrollment with the correct Docker flags. HTTP remains an explicitly insecure test profile.
+For a fresh disposable Linux inventory pilot, use the **[Docker manager and native background-service guide](docs/http-inventory-first-start.md)**. It selects the bounded metadata profile explicitly, creates fresh private test material, starts the manager, and uses the reviewed native systemd installer. Actual service success must be observed on the selected host; HTTP remains an explicitly insecure test profile. The [basic HTTP first-start guide](docs/http-test-first-start.md) remains available for the narrower collection policy.
 
 Start with the **[installation runbook for humans and automation agents](docs/installation.md)**. It covers Docker/native Linux setup, manual public-certificate approval, the Linux one-shot/foreground sender, optional guided enrollment, verification, recovery and explicit permission boundaries. [AGENTS.md](AGENTS.md) is the repository entry guide.
 
@@ -104,6 +104,16 @@ The [Linux service installer](docs/linux-agent-service.md) builds as `bin/agent-
 
 Source, fixture and default-skip checks are separate from actual service execution. The [manual disposable-systemd workflow](.github/workflows/systemd-acceptance.yml) is opt-in only and checks a fresh Ubuntu VM; its current result must be read before claiming installation acceptance. It does not test a complete OS reboot, change global trust/firewall rules or deploy to a real endpoint. The three temporarily quarantined enrollment browser scenarios remain an explicit independent gap in [browser acceptance](tests/e2e-review/ENROLLMENT.md).
 
+## Linux operational inventory and Security views
+
+For a fresh Linux pilot, follow the [inventory manager and background-service guide](docs/http-inventory-first-start.md). It uses a new explicitly consented profile and private state, with actual service installation checked separately. The [manual TLS/native setup reference](docs/linux-first-test.md) covers preprovided issuer material and alternative process-level checks.
+
+Fresh, explicitly acknowledged managed collection profiles add bounded Linux services, processes, network counters, mounted-filesystem measurements, installed package samples and journal metadata to the Admin UI. Each section keeps its own coverage, collection time, quality and retained last-good state. Process arguments, environment contents and raw journal message bodies are excluded; operational names can still be sensitive. Existing basic identities are not silently expanded into this profile. See the [collection contract](docs/operational/contract.md) and [collector limits](docs/operational/collector.md).
+
+The package profile adds protected read-only OS-release and dpkg observations for exact supported Debian13/Trixie and Ubuntu24.04/Noble release facts. The Security views display selected package/source versions, coverage and an explicitly operator-imported offline catalog. Debian review candidates are conditional comparisons against unverified declarations. **Confirmed CVE counts and offered-update counts remain unknown.** Ubuntu observations never enter Debian advisory rules; an empty review is not a clean-security verdict. See the [package contract](docs/linux-assessment/package-contract.md), [catalog contract](docs/offline-security-contract.md) and [conditional review](docs/linux-assessment/review-http-contract.md).
+
+The latest local integration checks cover571 UI tests, bounded native/API flows and targeted race reviews. Exact-source hosted Chromium, positive Ubuntu package collection and container results are separate gates for this checkpoint. Cached-APT foundation work is not enabled here; no update installation, automatic remediation or real deployment is claimed.
+
 ## Optional previews
 
 - [AI-assisted investigation](docs/ai-diagnostics.md): configure an OpenAI-compatible provider, inspect the bounded evidence packet and destination, then explicitly approve an analysis. Provider configuration and keys are memory-only. Suggestions remain unconfirmed and cannot execute actions. Validation so far uses a deterministic loopback test provider, not a real model.
@@ -111,7 +121,7 @@ Source, fixture and default-skip checks are separate from actual service executi
 
 ## Assessment foundation
 
-An [isolated read-only inventory and synthetic CVE-assessment foundation](docs/assessment-foundation.md) is available for further development. Live advisory import, verified package-origin adapters, offered-update adapters, and UI/API integration remain unimplemented. **This does not yet show real missing updates or CVEs in Tracebolt.** The [implementation plan](docs/update-vulnerability-plan.md) records the remaining platform, provenance and release gates.
+The [original assessment foundation](docs/assessment-foundation.md) now has separate bounded package-observation and conditional offline-review consumers described above. Live advisory acquisition, verified installed-artifact origin, offered-update adapters and authoritative CVE verdicts remain unimplemented. **Tracebolt does not yet show confirmed missing-update or CVE counts.** The [implementation plan](docs/update-vulnerability-plan.md) records the remaining platform, provenance and acceptance gates.
 
 ## What the data means
 

@@ -53,6 +53,7 @@ type TrustDisplay struct {
 	ManagerInstanceID, Profile, EnrollmentOrigin, AgentOrigin, CollectionProfile, InvitationID string
 	ServerCAFingerprints                                                                       []string
 	IssuerRootFingerprint, IssuerFingerprint, KeyFingerprint, ComparisonCode                   string
+	CollectionPrivacy                                                                          string
 	HTTPTest                                                                                   bool
 }
 
@@ -125,7 +126,7 @@ func publicCertificates(raw string) ([]*x509.Certificate, error) {
 }
 func validateBootstrap(b Bootstrap, now time.Time) (TrustDisplay, error) {
 	fail := func() (TrustDisplay, error) { return TrustDisplay{}, ErrBootstrap }
-	if b.SchemaVersion != BootstrapVersion || !enrollmentcrypto.ValidID(b.ManagerInstanceID, "manager_") || !enrollmentcrypto.ValidID(b.InvitationID, "invite_") || b.CollectionProfile != enrollmentcrypto.CollectionProfile {
+	if b.SchemaVersion != BootstrapVersion || !enrollmentcrypto.ValidID(b.ManagerInstanceID, "manager_") || !enrollmentcrypto.ValidID(b.InvitationID, "invite_") || !enrollmentcrypto.ValidCollectionProfile(b.CollectionProfile) {
 		return fail()
 	}
 	// Both destinations use the shared exact-origin and explicit-trust policy.
@@ -149,6 +150,12 @@ func validateBootstrap(b Bootstrap, now time.Time) (TrustDisplay, error) {
 		return fail()
 	}
 	d := TrustDisplay{ManagerInstanceID: b.ManagerInstanceID, Profile: b.Profile, EnrollmentOrigin: b.EnrollmentOrigin, AgentOrigin: b.AgentOrigin, CollectionProfile: b.CollectionProfile, InvitationID: b.InvitationID, IssuerRootFingerprint: fingerprint(root.Raw), IssuerFingerprint: fingerprint(issuer.Raw), HTTPTest: b.Profile == "http-test"}
+	if enrollmentcrypto.ManagedCollectionProfile(b.CollectionProfile) {
+		d.CollectionPrivacy = "Includes volume mount labels and utilization, network interface names and counters, service unit names and states, process IDs and names and resource usage, installed package names and versions, and event unit/priority/count metadata. Names and mount paths can reveal personal or secret-like labels; this profile is not anonymous or guaranteed secret-free. No command lines, environment, account IDs, IP/MAC address values, raw log messages or package descriptions are collected. Operational metadata stays in the operator-only latest/last-good view and is not added to AI evidence."
+	}
+	if b.CollectionProfile == enrollmentcrypto.CollectionProfilePackages {
+		d.CollectionPrivacy += " This fresh profile additionally reports exact selected OS release identifiers, binary/source package names and versions, source-mapping basis and installation state. Package rows are bounded and may be partial. No repository URLs, maintainer data, package descriptions, APT queries or update installation are included. The latest package frame remains stored until replaced, including after revocation; freshness expiry does not delete its bytes. Package metadata is excluded from AI export. Existing sender state cannot be adopted or reset into this profile."
+	}
 	if b.Profile == "tls" {
 		cs, e := publicCertificates(b.ServerCAPEM)
 		if e != nil {

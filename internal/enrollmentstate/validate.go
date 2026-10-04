@@ -77,7 +77,7 @@ func validOrigin(s, profile string) bool {
 }
 
 func validBinding(b Binding) bool {
-	return validID(b.InstanceID, "manager") && (b.Profile == "tls" || b.Profile == "http-test") && validOrigin(b.Origin, b.Profile) && b.CollectionProfile == "basic-readonly-v1" && validHash(b.IssuerFingerprint)
+	return validID(b.InstanceID, "manager") && (b.Profile == "tls" || b.Profile == "http-test") && validOrigin(b.Origin, b.Profile) && enrollmentcrypto.ValidCollectionProfile(b.CollectionProfile) && validHash(b.IssuerFingerprint)
 }
 
 func validateConfig(c Config) error {

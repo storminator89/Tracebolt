@@ -3,7 +3,7 @@ package lanclient
 import "localrmm/internal/lanclientstate"
 
 func openSenderState(m Material) (*lanclientstate.State, error) {
-	if m.config.SchemaVersion == GuidedConfigVersion {
+	if m.config.guided() {
 		return lanclientstate.OpenExisting(m.config.StateDirectory, m.binding)
 	}
 	return lanclientstate.Open(m.config.StateDirectory, m.binding)
@@ -15,7 +15,7 @@ func openSenderState(m Material) (*lanclientstate.State, error) {
 // Call only before the durable HandoffPrepared/ready publication, never as a
 // recovery fallback for a previously prepared identity.
 func InitializeGuidedState(c Config) error {
-	if c.SchemaVersion != GuidedConfigVersion {
+	if !c.guided() {
 		return ErrConfiguration
 	}
 	m, e := loadConfig(c)
@@ -35,7 +35,7 @@ func InitializeGuidedState(c Config) error {
 // ValidateGuidedState does not create missing paths, locks or sequence records.
 // It respects the same exclusive lifetime lock held by the foreground sender.
 func ValidateGuidedState(c Config) error {
-	if c.SchemaVersion != GuidedConfigVersion {
+	if !c.guided() {
 		return ErrConfiguration
 	}
 	m, e := loadConfig(c)

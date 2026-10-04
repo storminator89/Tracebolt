@@ -12,6 +12,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"localrmm/internal/enrollmentcrypto"
 	"localrmm/internal/lanconfig"
 	"localrmm/internal/lantrust"
 	"localrmm/internal/signedhttp"
@@ -26,7 +27,12 @@ import (
 
 const ConfigVersion = "tracebolt.lan-agent.v1"
 const GuidedConfigVersion = "tracebolt.lan-agent.v2"
+const OperationalConfigVersion = "tracebolt.lan-agent.v3"
+const PackageConfigVersion = "tracebolt.lan-agent.v4"
 const FrameVersion = "tracebolt.agent-telemetry.v1"
+const FrameOperationalVersion = "tracebolt.agent-telemetry.v2"
+const FramePackagesVersion = "tracebolt.agent-telemetry.v3"
+const MaxPackageObservationBytes = 16 << 10
 const MaxFrameBytes = 72 * 1024
 
 var ErrConfiguration = errors.New("agent configuration or protected material is invalid")
@@ -36,6 +42,7 @@ var ErrTransport = errors.New("telemetry delivery was not acknowledged; pending 
 var ErrReceipt = errors.New("telemetry receipt was invalid; pending observation retained")
 
 type Config struct {
+	CollectionProfile        string `json:"collectionProfile,omitempty"`
 	SchemaVersion            string `json:"schemaVersion"`
 	Profile                  string `json:"profile"`
 	ManagerOrigin            string `json:"managerOrigin"`
@@ -101,7 +108,18 @@ func canonicalOrigin(raw, scheme string) (*url.URL, error) {
 	return u, nil
 }
 func (c *Config) Validate() error {
-	if c.SchemaVersion != ConfigVersion && c.SchemaVersion != GuidedConfigVersion {
+	if c.SchemaVersion != ConfigVersion && !c.guided() {
+		return ErrConfiguration
+	}
+	if c.SchemaVersion == OperationalConfigVersion {
+		if c.CollectionProfile != enrollmentcrypto.CollectionProfileOperational {
+			return ErrConfiguration
+		}
+	} else if c.SchemaVersion == PackageConfigVersion {
+		if c.CollectionProfile != enrollmentcrypto.CollectionProfilePackages {
+			return ErrConfiguration
+		}
+	} else if c.CollectionProfile != "" {
 		return ErrConfiguration
 	}
 	if c.Profile == "" {
@@ -147,7 +165,7 @@ func Load(path string) (Material, error) {
 		return fail()
 	}
 	var c Config
-	if lanconfig.StrictObject(raw, &c, "schemaVersion", "profile", "managerOrigin", "agentId", "certificateFile", "privateKeyFile", "serverCAFile", "stateDirectory", "insecureHTTPAcknowledged") != nil || c.Validate() != nil {
+	if lanconfig.StrictObject(raw, &c, "schemaVersion", "profile", "managerOrigin", "agentId", "certificateFile", "privateKeyFile", "serverCAFile", "stateDirectory", "insecureHTTPAcknowledged", "collectionProfile") != nil || c.Validate() != nil {
 		return fail()
 	}
 	return loadConfig(c)
@@ -238,5 +256,19 @@ func senderBinding(c Config, leaf *x509.Certificate) [32]byte {
 	if c.SchemaVersion == GuidedConfigVersion {
 		domain = "tracebolt.sender-binding.v2\n"
 	}
+	if c.SchemaVersion == OperationalConfigVersion {
+		domain = "tracebolt.sender-binding.v3\n" + c.CollectionProfile + "\n"
+	}
+	if c.SchemaVersion == PackageConfigVersion {
+		domain = "tracebolt.sender-binding.v4\n" + c.CollectionProfile + "\n"
+	}
 	return sha256.Sum256([]byte(domain + c.Profile + "\n" + c.ManagerOrigin + "\n" + lantrust.Fingerprint(leaf) + "\n" + c.AgentID))
+}
+
+func (c Config) guided() bool {
+	return c.SchemaVersion == GuidedConfigVersion || c.managed()
+}
+
+func (c Config) managed() bool {
+	return c.SchemaVersion == OperationalConfigVersion || c.SchemaVersion == PackageConfigVersion
 }

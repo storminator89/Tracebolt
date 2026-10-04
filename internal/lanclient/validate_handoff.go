@@ -17,7 +17,7 @@ func ValidateGuidedHandoff(path string) error {
 		return ErrConfiguration
 	}
 	var c Config
-	if lanconfig.StrictObject(raw, &c, "schemaVersion", "profile", "managerOrigin", "agentId", "certificateFile", "privateKeyFile", "serverCAFile", "stateDirectory", "insecureHTTPAcknowledged") != nil || c.SchemaVersion != GuidedConfigVersion {
+	if lanconfig.StrictObject(raw, &c, "schemaVersion", "profile", "managerOrigin", "agentId", "certificateFile", "privateKeyFile", "serverCAFile", "stateDirectory", "insecureHTTPAcknowledged", "collectionProfile") != nil || !c.guided() {
 		return ErrConfiguration
 	}
 	m, e := loadConfig(c)

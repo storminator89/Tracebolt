@@ -54,7 +54,10 @@ func validPassword(p []byte) bool {
 	}
 	return true
 }
-func generate(ip string, password []byte, random io.Reader, now time.Time) (files []materialFile, err error) {
+func generate(profile setupProfile, ip string, password []byte, random io.Reader, now time.Time) (files []materialFile, err error) {
+	if _, _, _, e := profile.paths(); e != nil {
+		return nil, errSetup
+	}
 	if !validIP(ip) || !validPassword(password) || random == nil || now.Unix() <= 0 {
 		return nil, errSetup
 	}
@@ -130,8 +133,12 @@ func generate(ip string, password []byte, random io.Reader, now time.Time) (file
 	if lan.Validate() != nil {
 		return nil, errSetup
 	}
-	// Use the published strict schema. It intentionally has no collectionProfile.
+	// Preserve omitted/basic compatibility; only the explicit fresh inventory
+	// selection serializes the existing managed-v2 collectionProfile field.
 	enrollment := enrollmentconfig.Config{SchemaVersion: enrollmentconfig.SchemaVersion, Profile: lanconfig.HTTPTest, InstanceID: "manager_" + hex.EncodeToString(instance), IssuerCertificateFile: "/run/tracebolt/client-issuer.pem", IssuerPrivateKeyFile: "/run/tracebolt/client-issuer.key", IssuerRootFile: "/run/tracebolt/client-root.pem", ExpectedIssuerFingerprint: fingerprintText, BootstrapServerCAFile: ""}
+	if profile == inventorySetup {
+		enrollment.CollectionProfile = inventoryProfileName
+	}
 	auth := struct {
 		SchemaVersion string `json:"schemaVersion"`
 		Profile       string `json:"profile"`

@@ -20,6 +20,7 @@ type publicAuthorizer struct {
 	ctx      context.Context
 	now      func() time.Time
 	snapshot enrollmentstate.Snapshot
+	busy     bool
 }
 
 func (a *publicAuthorizer) AuthorizePublicCertificate(publicPEM []byte) (lantrust.Agent, error) {
@@ -27,6 +28,7 @@ func (a *publicAuthorizer) AuthorizePublicCertificate(publicPEM []byte) (lantrus
 		return lantrust.Agent{}, lantrust.ErrRegistryUnavailable
 	}
 	a.snapshot = enrollmentstate.Snapshot{}
+	a.busy = false
 	if len(publicPEM) == 0 || len(publicPEM) > 2*enrollmentcrypto.MaxCertificateBytes || !bytes.HasPrefix(publicPEM, []byte("-----BEGIN CERTIFICATE-----\n")) {
 		return lantrust.Agent{}, lantrust.ErrUnauthorized
 	}
@@ -36,6 +38,10 @@ func (a *publicAuthorizer) AuthorizePublicCertificate(publicPEM []byte) (lantrus
 	}
 	snapshot, err := a.store.AuthorizeCertificate(a.ctx, block.Bytes, a.now())
 	if err != nil {
+		if errors.Is(err, enrollmentstore.ErrBusy) {
+			a.busy = true
+			return lantrust.Agent{}, lantrust.ErrRegistryUnavailable
+		}
 		if errors.Is(err, enrollmentstore.ErrStorage) || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 			return lantrust.Agent{}, lantrust.ErrRegistryUnavailable
 		}

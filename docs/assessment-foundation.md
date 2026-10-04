@@ -1,6 +1,6 @@
 # Read-only assessment foundation
 
-Implemented 2026-10-03 in `internal/assessment`. This is an isolated core and fixture-tested integration proposal. **The application API, telemetry, agent command and UI do not call it yet.** It does not make missing updates or CVEs visible in the product and does not meet the complete detection release gate by itself. The parent design is [update-vulnerability-plan.md](update-vulnerability-plan.md).
+Implemented 2026-10-03 in `internal/assessment`. The offline catalog API now uses `ParseDebianSnapshot` solely for strict normalized-document validation. The package inventory adapter, comparator and vulnerability matcher remain disconnected from the application telemetry and assessment UI. The coverage panel reports those missing facts explicitly; it does not yet expose missing-update or confirmed-CVE counts and does not meet the complete detection release gate by itself. The parent design is [update-vulnerability-plan.md](update-vulnerability-plan.md).
 
 ## What exists
 

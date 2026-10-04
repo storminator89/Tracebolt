@@ -171,9 +171,12 @@ type certFixture struct {
 	context      ChallengeContext
 }
 
-func certificateFixture(t testing.TB, profile string, now time.Time) certFixture {
+func certificateFixture(t testing.TB, profile string, now time.Time, collection ...string) certFixture {
 	t.Helper()
 	c := contextFixture(profile, now)
+	if len(collection) == 1 {
+		c.CollectionProfile = collection[0]
+	}
 	_, claim, key, _, _ := claimFixture(t, c, now)
 	rootPub, rootKey, _ := ed25519.GenerateKey(rand.Reader)
 	root := &x509.Certificate{SerialNumber: big.NewInt(1), Subject: pkix.Name{CommonName: "ephemeral offline test root"}, NotBefore: now.Add(-time.Hour), NotAfter: now.Add(90 * 24 * time.Hour), IsCA: true, BasicConstraintsValid: true, MaxPathLen: 1, KeyUsage: x509.KeyUsageCertSign | x509.KeyUsageCRLSign}
@@ -189,7 +192,7 @@ func certificateFixture(t testing.TB, profile string, now time.Time) certFixture
 		t.Fatal("fixture intermediate")
 	}
 	issuer, _ := x509.ParseCertificate(issuerDER)
-	i := Intent{ManagerInstanceID: c.ManagerInstanceID, Profile: profile, Origin: c.Origin, CollectionProfile: CollectionProfile, InvitationID: c.InvitationID, ClaimID: c.ClaimID, RequestID: claim.RequestID(), DeviceID: testID("agent_", 8), IntentID: testID("intent_", 9), KeyFingerprint: claim.KeyFingerprint(), PublicKeyDERBase64: base64.RawStdEncoding.EncodeToString(claim.PublicKeyDER()), CSRHash: claim.CSRHash(), ClaimHash: claim.ClaimHash(), IssuerFingerprint: hash(issuerDER), SerialHex: hex.EncodeToString(bytes.Repeat([]byte{10}, 16)), TemplateVersion: TemplateVersion, KeyGeneration: 1, NotBefore: now.Unix() - 30, NotAfter: now.Add(24 * time.Hour).Unix()}
+	i := Intent{ManagerInstanceID: c.ManagerInstanceID, Profile: profile, Origin: c.Origin, CollectionProfile: c.CollectionProfile, InvitationID: c.InvitationID, ClaimID: c.ClaimID, RequestID: claim.RequestID(), DeviceID: testID("agent_", 8), IntentID: testID("intent_", 9), KeyFingerprint: claim.KeyFingerprint(), PublicKeyDERBase64: base64.RawStdEncoding.EncodeToString(claim.PublicKeyDER()), CSRHash: claim.CSRHash(), ClaimHash: claim.ClaimHash(), IssuerFingerprint: hash(issuerDER), SerialHex: hex.EncodeToString(bytes.Repeat([]byte{10}, 16)), TemplateVersion: TemplateVersion, KeyGeneration: 1, NotBefore: now.Unix() - 30, NotAfter: now.Add(24 * time.Hour).Unix()}
 	f := certFixture{intent: i, issuer: issuerDER, issuerCert: issuer, issuerKey: issuerKey, endpointKey: key, context: c}
 	f.leaf = issueFixture(t, f, nil)
 	return f

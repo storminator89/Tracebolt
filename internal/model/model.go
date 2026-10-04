@@ -19,14 +19,15 @@ type Capability struct {
 	Detail string `json:"detail"`
 }
 type Evidence struct {
-	ID          string    `json:"id"`
-	Title       string    `json:"title"`
-	Source      string    `json:"source"`
-	Quality     string    `json:"quality"`
-	CollectedAt time.Time `json:"collectedAt"`
-	Detail      string    `json:"detail"`
-	Value       string    `json:"value"`
-	Synthetic   bool      `json:"synthetic"`
+	CollectionProfile string    `json:"collectionProfile,omitempty"`
+	ID                string    `json:"id"`
+	Title             string    `json:"title"`
+	Source            string    `json:"source"`
+	Quality           string    `json:"quality"`
+	CollectedAt       time.Time `json:"collectedAt"`
+	Detail            string    `json:"detail"`
+	Value             string    `json:"value"`
+	Synthetic         bool      `json:"synthetic"`
 }
 type Device struct {
 	ID           string       `json:"id"`
@@ -67,25 +68,26 @@ type Note struct {
 	Author    string    `json:"author"`
 }
 type Case struct {
-	ID          string     `json:"id"`
-	Title       string     `json:"title"`
-	DeviceID    string     `json:"deviceId"`
-	DeviceName  string     `json:"deviceName"`
-	Severity    string     `json:"severity"`
-	Status      string     `json:"status"`
-	Category    string     `json:"category"`
-	Summary     string     `json:"summary"`
-	RuleID      string     `json:"ruleId"`
-	Confidence  string     `json:"confidence"`
-	CreatedAt   time.Time  `json:"createdAt"`
-	UpdatedAt   time.Time  `json:"updatedAt"`
-	EvidenceIDs []string   `json:"evidenceIds"`
-	Evidence    []Evidence `json:"evidence"`
-	RunbookID   string     `json:"runbookId"`
-	NextSteps   []string   `json:"nextSteps"`
-	Timeline    []Activity `json:"timeline"`
-	Notes       []Note     `json:"notes"`
-	Synthetic   bool       `json:"synthetic"`
+	CollectionProfile string     `json:"collectionProfile,omitempty"`
+	ID                string     `json:"id"`
+	Title             string     `json:"title"`
+	DeviceID          string     `json:"deviceId"`
+	DeviceName        string     `json:"deviceName"`
+	Severity          string     `json:"severity"`
+	Status            string     `json:"status"`
+	Category          string     `json:"category"`
+	Summary           string     `json:"summary"`
+	RuleID            string     `json:"ruleId"`
+	Confidence        string     `json:"confidence"`
+	CreatedAt         time.Time  `json:"createdAt"`
+	UpdatedAt         time.Time  `json:"updatedAt"`
+	EvidenceIDs       []string   `json:"evidenceIds"`
+	Evidence          []Evidence `json:"evidence"`
+	RunbookID         string     `json:"runbookId"`
+	NextSteps         []string   `json:"nextSteps"`
+	Timeline          []Activity `json:"timeline"`
+	Notes             []Note     `json:"notes"`
+	Synthetic         bool       `json:"synthetic"`
 }
 type Runbook struct {
 	ID          string   `json:"id"`

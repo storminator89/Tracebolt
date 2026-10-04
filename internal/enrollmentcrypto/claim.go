@@ -95,7 +95,7 @@ func InvitationHash(secret string) ([32]byte, error) {
 	return sha256.Sum256(append([]byte("tracebolt.invitation.v2\x00"), b...)), nil
 }
 func validContext(c ChallengeContext, now time.Time) bool {
-	if now.Unix() <= 0 || now.Unix() > 253402300499 || !ValidID(c.ManagerInstanceID, "manager_") || !ValidID(c.InvitationID, "invite_") || !ValidID(c.ClaimID, "claim_") || c.CollectionProfile != CollectionProfile || !canonicalOrigin(c.Origin, c.Profile) || c.ExpiresAt <= now.Unix() || c.ExpiresAt > now.Unix()+300 {
+	if now.Unix() <= 0 || now.Unix() > 253402300499 || !ValidID(c.ManagerInstanceID, "manager_") || !ValidID(c.InvitationID, "invite_") || !ValidID(c.ClaimID, "claim_") || !ValidCollectionProfile(c.CollectionProfile) || !canonicalOrigin(c.Origin, c.Profile) || c.ExpiresAt <= now.Unix() || c.ExpiresAt > now.Unix()+300 {
 		return false
 	}
 	b, e := secretBytes(c.Challenge)

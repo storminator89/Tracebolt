@@ -25,9 +25,15 @@ file as navigation and project constraints, never as permission to act on a host
   pass invitation secrets through args, environment, URLs, files, chat or logs.
 - Keep passwords, verifiers, private keys, cookies, raw telemetry and runtime state
   out of Git, logs, chat and artifacts. Use approved secure provisioning. Root CA
-  private keys stay offline. Only opt-in guided-v2 permits a dedicated preprovided
-  client-auth intermediate signing key in protected manager custody. Public approval still
+  private keys stay offline outside the explicitly authorized disposable HTTP setup
+  helper, which creates a temporary root key in memory and never writes it. Only
+  opt-in guided-v2 permits a dedicated client-auth intermediate signing key in
+  protected manager custody. Public approval still
   requires independently verified identity/fingerprint and explicit authority.
+- Expanded operational/package collection requires a fresh explicitly acknowledged
+  profile and identity. Never relabel or reuse a basic ledger to grant it. For the
+  fresh HTTP background-service pilot read `docs/http-inventory-first-start.md`;
+  helper/source checks do not establish actual service or reboot acceptance.
 - Follow Go/Node versions and dependency locks in this revision. Validate commands
   against actual flags/config. Distinguish runtime tests from cross-builds, skipped
   container tests, and proposed functionality. Never invent install/enroll flags.

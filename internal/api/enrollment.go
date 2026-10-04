@@ -50,7 +50,15 @@ func (h *operatorHandler) enrollmentOperator(w http.ResponseWriter, r *http.Requ
 			}
 			platforms = []string{"linux"}
 		}
-		write(w, 200, map[string]any{"enabled": h.enrollment != nil, "schemaVersion": "tracebolt.enrollment-operator.v2", "platforms": platforms, "recordLimit": enrollmentservice.MaxRecords, "items": items, "serverNow": serverNow})
+		response := map[string]any{"enabled": h.enrollment != nil, "schemaVersion": "tracebolt.enrollment-operator.v2", "platforms": platforms, "recordLimit": enrollmentservice.MaxRecords, "items": items, "serverNow": serverNow}
+		if h.enrollment != nil && enrollmentcrypto.ManagedCollectionProfile(h.enrollment.Binding().CollectionProfile) {
+			response["collectionProfile"] = h.enrollment.Binding().CollectionProfile
+			response["collectionPrivacy"] = "metadata_labels_may_be_sensitive"
+			if h.enrollment.Binding().CollectionProfile == enrollmentcrypto.CollectionProfilePackages {
+				response["collectionPrivacy"] = "package_source_metadata_may_be_sensitive"
+			}
+		}
+		write(w, 200, response)
 		return
 	}
 	if h.enrollment == nil {
@@ -65,11 +73,8 @@ func (h *operatorHandler) enrollmentOperator(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	if r.URL.Path == "/api/enrollment/invitations" {
-		var input struct {
-			RequestID string `json:"requestId"`
-			Platform  string `json:"platform"`
-		}
-		if !readObject(w, r, 1024, []string{"requestId", "platform"}, &input) {
+		input, ok := readInvitationInput(w, r, h.enrollment.Binding().CollectionProfile)
+		if !ok {
 			return
 		}
 		release, ok := beginOperatorMutation(w, r)
@@ -231,6 +236,9 @@ func enrollmentError(w http.ResponseWriter, e error) {
 	switch {
 	case errors.Is(e, enrollmentstate.ErrCapacity):
 		fail(w, 409, "enrollment_capacity_reached", "Enrollment retention limit reached; existing identities are not automatically deleted or reset.")
+	case errors.Is(e, enrollmentstore.ErrBusy):
+		w.Header().Set("Retry-After", "15")
+		fail(w, 429, "storage_busy", "Enrollment storage is temporarily busy.")
 	case errors.Is(e, enrollmentservice.ErrBusy):
 		w.Header().Set("Retry-After", "60")
 		fail(w, 429, "enrollment_busy", "Enrollment is temporarily busy.")
@@ -321,4 +329,33 @@ func enrollmentOperatorError(w http.ResponseWriter, e error) {
 	default:
 		enrollmentError(w, e)
 	}
+}
+
+// The collection choice comes from the immutable instance binding; request
+// fields can only acknowledge it, never select or widen an endpoint profile.
+type invitationInput struct {
+	RequestID              string `json:"requestId"`
+	Platform               string `json:"platform"`
+	CollectionAcknowledged bool   `json:"collectionAcknowledged"`
+}
+
+func readInvitationInput(w http.ResponseWriter, r *http.Request, profile string) (invitationInput, bool) {
+	var input invitationInput
+	fields := []string{"requestId", "platform"}
+	switch profile {
+	case enrollmentcrypto.CollectionProfile:
+	case enrollmentcrypto.CollectionProfileOperational, enrollmentcrypto.CollectionProfilePackages:
+		fields = append(fields, "collectionAcknowledged")
+	default:
+		fail(w, 503, "enrollment_unavailable", "Enrollment is not configured.")
+		return input, false
+	}
+	if !readObject(w, r, 1024, fields, &input) {
+		return input, false
+	}
+	if enrollmentcrypto.ManagedCollectionProfile(profile) && !input.CollectionAcknowledged {
+		fail(w, 400, "collection_consent_required", "Explicit collection profile acknowledgement is required.")
+		return input, false
+	}
+	return input, true
 }

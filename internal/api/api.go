@@ -2,6 +2,7 @@
 package api
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/subtle"
 	"encoding/hex"
@@ -9,7 +10,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"localrmm/internal/assessment"
+	"localrmm/internal/enrollmentstore"
 	"localrmm/internal/model"
+	"localrmm/internal/offlinecatalog"
 	"localrmm/internal/rules"
 	"localrmm/internal/store"
 	"localrmm/internal/telemetry"
@@ -26,18 +30,26 @@ import (
 )
 
 type Server struct {
-	store            *store.Store
-	port             int
-	web              string
-	csrf             string
-	mu               sync.RWMutex
-	sample           model.Device
-	ai               *aiState
-	managedPreview   *telemetry.State
-	lanOnly          bool
-	guidedEnrollment bool
-	insecureHTTPTest bool
-	lanDevices       func() ([]model.Device, error)
+	store               *store.Store
+	port                int
+	web                 string
+	csrf                string
+	mu                  sync.RWMutex
+	sample              model.Device
+	ai                  *aiState
+	managedPreview      *telemetry.State
+	lanOnly             bool
+	guidedEnrollment    bool
+	insecureHTTPTest    bool
+	lanDevices          func() ([]model.Device, error)
+	lanOperational      func(context.Context, string, time.Time) (enrollmentstore.OperationalView, error)
+	lanPackages         func(context.Context, string, time.Time) (enrollmentstore.PackageView, error)
+	aiCollectionProfile string
+	catalogStore        *offlinecatalog.Store
+	catalogImports      chan struct{}
+	catalogReviews      chan struct{}
+	reviewComparator    assessment.VersionComparator
+	catalogNow          func() time.Time
 }
 
 func New(s *store.Store, port int, web string, sample model.Device) (*Server, error) {
@@ -56,7 +68,7 @@ func New(s *store.Store, port int, web string, sample model.Device) (*Server, er
 	if err != nil {
 		return nil, err
 	}
-	return &Server{store: s, port: port, web: absolute, csrf: hex.EncodeToString(raw), sample: sample, ai: ai}, nil
+	return &Server{store: s, port: port, web: absolute, csrf: hex.EncodeToString(raw), sample: sample, ai: ai, aiCollectionProfile: "basic-readonly-v1"}, nil
 }
 func (s *Server) SetSample(d model.Device) {
 	s.mu.Lock()
@@ -164,6 +176,10 @@ func (s *Server) devices() ([]model.Device, error) {
 }
 func (s *Server) api(w http.ResponseWriter, r *http.Request) {
 	p := r.URL.Path
+	if p == "/api/security/catalog" || p == "/api/security/catalog/clear" {
+		s.catalogAPI(w, r)
+		return
+	}
 	if r.Method == "POST" {
 		if p == "/api/dev/telemetry" {
 			s.receiveTelemetry(w, r)
@@ -258,6 +274,22 @@ func (s *Server) api(w http.ResponseWriter, r *http.Request) {
 		}
 		write(w, 200, model.Overview{Product: "Tracebolt", Mode: s.mode(), GeneratedAt: time.Now().UTC(), Stats: stats, Devices: ds, Cases: cs, Activity: activity})
 	default:
+		if strings.HasPrefix(p, "/api/devices/") && strings.HasSuffix(p, "/security/review") {
+			s.securityReview(w, r)
+			return
+		}
+		if strings.HasPrefix(p, "/api/devices/") && strings.HasSuffix(p, "/packages") {
+			s.packageView(w, r)
+			return
+		}
+		if strings.HasPrefix(p, "/api/devices/") && strings.HasSuffix(p, "/security") {
+			s.securityCoverage(w, r)
+			return
+		}
+		if strings.HasPrefix(p, "/api/devices/") && strings.HasSuffix(p, "/operational") {
+			s.operationalView(w, r)
+			return
+		}
 		if strings.HasPrefix(p, "/api/devices/") {
 			id := strings.TrimPrefix(p, "/api/devices/")
 			if !validID(id) {

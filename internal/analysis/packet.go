@@ -69,8 +69,16 @@ type DataGap struct {
 // Callers must load the case/evidence from their own store, not a request body.
 func BuildPacket(c model.Case, available []model.Evidence) (Packet, error) {
 	bad := func(reason string) (Packet, error) { return Packet{}, fmt.Errorf("%w: %s", ErrInvalidPacket, reason) }
+	if !exportableCollectionProfile(c.CollectionProfile) {
+		return bad("case provenance is not approved for AI export")
+	}
 	if !validID(c.ID) || !bounded(c.Title, 256) || !bounded(c.Summary, MaxFieldBytes) || !bounded(c.Category, 64) || !bounded(c.RuleID, 128) || !bounded(c.RunbookID, 64) {
 		return bad("case metadata exceeds bounds")
+	}
+	for _, e := range c.Evidence {
+		if !exportableCollectionProfile(e.CollectionProfile) {
+			return bad("case evidence provenance is not approved for AI export")
+		}
 	}
 	if len(c.EvidenceIDs) > MaxEvidence || len(available) > MaxSourceEvidence {
 		return bad("evidence count exceeds bounds")
@@ -86,6 +94,9 @@ func BuildPacket(c model.Case, available []model.Evidence) (Packet, error) {
 	for _, e := range available {
 		if !wanted[e.ID] {
 			continue
+		}
+		if !exportableCollectionProfile(e.CollectionProfile) {
+			return bad("evidence provenance is not approved for AI export")
 		}
 		e.CollectedAt = e.CollectedAt.UTC()
 		if previous, exists := selected[e.ID]; exists {
@@ -184,4 +195,8 @@ func validID(s string) bool {
 
 func validQuality(q string) bool {
 	return q == "healthy" || q == "stale" || q == "unknown" || q == "denied"
+}
+
+func exportableCollectionProfile(profile string) bool {
+	return profile == "" || profile == "basic-readonly-v1"
 }

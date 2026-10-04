@@ -8,9 +8,12 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"errors"
+	"localrmm/internal/enrollmentcrypto"
 	"localrmm/internal/enrollmentservice"
+	"localrmm/internal/enrollmentstore"
 	"localrmm/internal/lantrust"
 	"localrmm/internal/model"
+	"localrmm/internal/offlinecatalog"
 	"localrmm/internal/operatorauth"
 	"math"
 	"net"
@@ -94,6 +97,31 @@ func NewLANOperatorHandler(app *Server, c LANOperatorConfig) (http.Handler, erro
 	app.managedPreview = nil
 	app.sample = model.Device{}
 	app.lanDevices = c.Devices
+	app.lanOperational = nil
+	app.lanPackages = nil
+	app.aiCollectionProfile = "basic-readonly-v1"
+	app.catalogStore = nil
+	app.catalogImports = nil
+	app.catalogReviews = nil
+	app.reviewComparator = nil
+	app.catalogNow = nil
+	if c.Enrollment != nil {
+		app.lanOperational = func(ctx context.Context, id string, _ time.Time) (enrollmentstore.OperationalView, error) {
+			return c.Enrollment.OperationalView(ctx, id, c.Enrollment.Now())
+		}
+		app.lanPackages = func(ctx context.Context, id string, _ time.Time) (enrollmentstore.PackageView, error) {
+			return c.Enrollment.PackageView(ctx, id, c.Enrollment.Now())
+		}
+		app.aiCollectionProfile = c.Enrollment.Binding().CollectionProfile
+		if enrollmentcrypto.ManagedCollectionProfile(app.aiCollectionProfile) {
+			app.catalogStore = offlinecatalog.New()
+			app.catalogImports = make(chan struct{}, 1)
+			if app.aiCollectionProfile == enrollmentcrypto.CollectionProfilePackages {
+				app.catalogReviews = make(chan struct{}, 1)
+			}
+			app.catalogNow = c.Enrollment.Now
+		}
+	}
 	app.mu.Unlock()
 	return &operatorHandler{app: app, origin: c.Origin, authority: u.Host, auth: c.Auth, registry: c.Registry, insecureHTTPTest: c.InsecureHTTPTest, cookieName: cookieName, enrollment: c.Enrollment, enrollmentBootstrap: c.EnrollmentBootstrap}, nil
 }

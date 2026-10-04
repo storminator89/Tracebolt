@@ -1,5 +1,5 @@
-// Package enrollmenttransport admits bounded v1 telemetry only for the exclusive
-// enrollment-v2 runtime. The committed enrollment store is its sole approval
+// Package enrollmenttransport admits profile-bound, bounded v1/v2 telemetry for
+// the exclusive enrollment-v2 runtime. The committed enrollment store is its sole approval
 // authority. It never provisions credentials, trusts an offline root, or falls
 // back to manual/v1 approvals. Public certificate lookup alone is not possession.
 package enrollmenttransport
@@ -7,8 +7,10 @@ package enrollmenttransport
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/base64"
 	"encoding/json"
 	"encoding/pem"
 	"errors"
@@ -19,6 +21,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"localrmm/internal/enrollmentcrypto"
@@ -42,6 +45,7 @@ type Ingress struct {
 	roots                      *x509.CertPool
 	origin, authority, profile string
 	slots                      chan struct{}
+	admission                  *certificateAdmission
 	now                        func() time.Time
 }
 
@@ -63,7 +67,7 @@ func New(store *enrollmentstore.Store, issuerDER []byte, agentOrigin string) (*I
 	}
 	roots := x509.NewCertPool()
 	roots.AddCert(issuer)
-	return &Ingress{store: store, issuer: issuer, roots: roots, origin: agentOrigin, authority: authority, profile: cfg.Binding.Profile, slots: make(chan struct{}, MaxInFlight), now: time.Now}, nil
+	return &Ingress{store: store, issuer: issuer, roots: roots, origin: agentOrigin, authority: authority, profile: cfg.Binding.Profile, slots: make(chan struct{}, MaxInFlight), admission: &certificateAdmission{active: make(map[[32]byte]bool)}, now: time.Now}, nil
 }
 
 // TLSConfig retains normal Go chain verification and TLS1.3. ONLY the exact
@@ -86,7 +90,7 @@ func (h *Ingress) TLSConfig(server tls.Certificate) (*tls.Config, error) {
 }
 
 func (h *Ingress) valid() bool {
-	return h != nil && h.store != nil && h.issuer != nil && h.roots != nil && h.slots != nil && h.now != nil && h.authority != "" && (h.profile == "tls" || h.profile == "http-test")
+	return h != nil && h.store != nil && h.issuer != nil && h.roots != nil && h.slots != nil && h.admission != nil && h.now != nil && h.authority != "" && (h.profile == "tls" || h.profile == "http-test")
 }
 
 func (h *Ingress) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -122,6 +126,13 @@ func (h *Ingress) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		failure(w, http.StatusForbidden, "agent_unauthorized")
 		return
 	}
+	release, ok := h.admitCertificate(r.TLS.PeerCertificates[0].Raw)
+	if !ok {
+		w.Header().Set("Retry-After", "15")
+		failure(w, http.StatusTooManyRequests, "ingress_busy")
+		return
+	}
+	defer release()
 	identity, err := h.store.AuthorizeCertificate(r.Context(), r.TLS.PeerCertificates[0].Raw, h.now())
 	if err != nil {
 		storeFailure(w, err)
@@ -182,6 +193,10 @@ func (h *Ingress) serveSigned(w http.ResponseWriter, r *http.Request) {
 	}
 	verified, err := verifier.Verify(r)
 	if err != nil {
+		if authorizer.busy {
+			storeFailure(w, enrollmentstore.ErrBusy)
+			return
+		}
 		switch {
 		case errors.Is(err, signedhttp.ErrUnavailable):
 			failure(w, http.StatusServiceUnavailable, "storage_unavailable")
@@ -194,6 +209,20 @@ func (h *Ingress) serveSigned(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
+	// Only verified possession may reserve an identity-specific slot. A public
+	// certificate header alone cannot block its legitimate holder.
+	der, e := base64.RawStdEncoding.DecodeString(r.Header.Get("X-Tracebolt-Certificate"))
+	if e != nil {
+		failure(w, http.StatusBadRequest, "invalid_request")
+		return
+	}
+	release, ok := h.admitCertificate(der)
+	if !ok {
+		w.Header().Set("Retry-After", "15")
+		failure(w, http.StatusTooManyRequests, "ingress_busy")
+		return
+	}
+	defer release()
 	frame, err := lanstore.ValidateFrame(verified.Body, h.now())
 	if err != nil {
 		storeFailure(w, err)
@@ -223,6 +252,9 @@ func failure(w http.ResponseWriter, status int, code string) {
 }
 func storeFailure(w http.ResponseWriter, err error) {
 	switch {
+	case errors.Is(err, enrollmentstore.ErrBusy):
+		w.Header().Set("Retry-After", "15")
+		failure(w, http.StatusTooManyRequests, "storage_busy")
 	case errors.Is(err, enrollmentstore.ErrStorage), errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
 		failure(w, http.StatusServiceUnavailable, "storage_unavailable")
 	case errors.Is(err, lanstore.ErrReplay):
@@ -326,4 +358,30 @@ func validRequest(r *http.Request, authority, profile string) bool {
 		}
 	}
 	return contentTypes == 1 && lengths <= 1
+}
+
+// One certificate cannot occupy both durable-work slots. This is an admission
+// key, never an authorization decision; at most MaxInFlight keys are retained.
+func (h *Ingress) admitCertificate(der []byte) (func(), bool) {
+	a := h.admission
+	if a == nil {
+		return nil, false
+	}
+	key := sha256.Sum256(der)
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.active[key] || len(a.active) >= MaxInFlight {
+		return nil, false
+	}
+	a.active[key] = true
+	var once sync.Once
+	return func() {
+		once.Do(func() { a.mu.Lock(); delete(a.active, key); a.mu.Unlock() })
+	}, true
+}
+
+// Keep the mutex and its map together when an exported Ingress handle is copied.
+type certificateAdmission struct {
+	mu     sync.Mutex
+	active map[[32]byte]bool
 }

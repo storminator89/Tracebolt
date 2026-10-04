@@ -14,11 +14,11 @@ import (
 
 const outputDirectory = "/etc/tracebolt-http-test"
 const outputName = "tracebolt-http-test"
-const usage = "Usage: http-test-setup --lan-ip <private-IPv4> --ack-disposable-http-test [--apply]\nDefault: print a plan only. Linux apply requires root and a controlling terminal.\n"
+const usage = "Usage: http-test-setup --lan-ip <private-IPv4> --ack-disposable-http-test [--collection-profile basic-readonly-v1|managed-operations-v2] [--ack-managed-metadata] [--apply]\nDefault: print a plan only. Linux apply requires root and a controlling terminal.\n"
 
 type options struct {
-	ip                 string
-	acknowledge, apply bool
+	ip, collectionProfile                   string
+	acknowledge, acknowledgeMetadata, apply bool
 }
 
 // All injection is package-private and unavailable through flags or environment.
@@ -38,6 +38,8 @@ func run(ctx context.Context, args []string, out io.Writer, d dependencies) int 
 	var o options
 	fs.StringVar(&o.ip, "lan-ip", "", "selected private LAN IPv4")
 	fs.BoolVar(&o.acknowledge, "ack-disposable-http-test", false, "acknowledge disposable plaintext test")
+	fs.StringVar(&o.collectionProfile, "collection-profile", basicProfileName, "exact basic or managed-v2 collection profile")
+	fs.BoolVar(&o.acknowledgeMetadata, "ack-managed-metadata", false, "acknowledge expanded sensitive metadata in a fresh managed test")
 	fs.BoolVar(&o.apply, "apply", false, "create the fixed new directory")
 	if e := fs.Parse(args); e != nil {
 		if e == flag.ErrHelp {
@@ -49,8 +51,18 @@ func run(ctx context.Context, args []string, out io.Writer, d dependencies) int 
 	if fs.NArg() != 0 || !validIP(o.ip) {
 		return fail("arguments")
 	}
-	if _, e := fmt.Fprintf(out, "Disposable HTTP-test plan (unencrypted passwords, sessions and telemetry):\nOperator origin: http://%s:8787\nAgent origin: http://%s:8788\nContainer listeners: 0.0.0.0:8787 and 0.0.0.0:8788; host publication must use the selected LAN IP.\nCreate only: %s (0700), six files (0600), Docker UID/GID 65532:65532.\nDedicated 30-day client-auth issuer; root private key is memory-only and discarded.\nNo server, listener, service, account, trust, firewall, invitation or endpoint changes.\n", o.ip, o.ip, outputDirectory); e != nil {
+	profile, e := selectProfile(o.collectionProfile, o.acknowledgeMetadata)
+	if e != nil {
+		return fail("collection profile or metadata acknowledgement")
+	}
+	directory, _, _, _ := profile.paths()
+	if _, e := fmt.Fprintf(out, "Disposable HTTP-test plan (unencrypted passwords, sessions and telemetry):\nOperator origin: http://%s:8787\nAgent origin: http://%s:8788\nContainer listeners: 0.0.0.0:8787 and 0.0.0.0:8788; host publication must use the selected LAN IP.\nCreate only: %s (0700), six files (0600), Docker UID/GID 65532:65532.\nDedicated 30-day client-auth issuer; root private key is memory-only and discarded.\nNo server, listener, service, account, trust, firewall, invitation or endpoint changes.\n", o.ip, o.ip, directory); e != nil {
 		return 1
+	}
+	if profile == inventorySetup {
+		if _, e := fmt.Fprint(out, inventoryNotice); e != nil {
+			return 1
+		}
 	}
 	if !o.apply {
 		return 0
@@ -69,7 +81,7 @@ func run(ctx context.Context, args []string, out io.Writer, d dependencies) int 
 		return fail("protected parent or existing output")
 	}
 	defer closeParent(parent)
-	if e = outputAbsent(parent); e != nil {
+	if e = outputAbsent(profile, parent); e != nil {
 		return fail("protected parent or existing output")
 	}
 	password, e := d.prompt(ctx)
@@ -80,7 +92,7 @@ func run(ctx context.Context, args []string, out io.Writer, d dependencies) int 
 	if ctx.Err() != nil {
 		return fail("cancelled")
 	}
-	files, e := generate(o.ip, password, d.random, d.now().UTC())
+	files, e := generate(profile, o.ip, password, d.random, d.now().UTC())
 	clear(password)
 	if e != nil {
 		return fail("material generation or validation")
@@ -89,10 +101,10 @@ func run(ctx context.Context, args []string, out io.Writer, d dependencies) int 
 	if ctx.Err() != nil {
 		return fail("cancelled")
 	}
-	if e = publish(ctx, parent, files, d.uid, d.gid); e != nil {
+	if e = publish(profile, ctx, parent, files, d.uid, d.gid); e != nil {
 		return fail("publication; inspect fixed output before retry")
 	}
-	fmt.Fprintln(out, "HTTP-test setup complete:", outputDirectory+"/http-test.json")
+	fmt.Fprintln(out, "HTTP-test setup complete:", directory+"/http-test.json")
 	return 0
 }
 

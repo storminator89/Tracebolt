@@ -73,7 +73,7 @@ func (h *ingressHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	now := time.Now().UTC()
 	frame, err := lanstore.ValidateFrame(raw, now)
-	if err != nil {
+	if err != nil || !lanstore.FrameMatchesCollectionProfile(frame, "basic-readonly-v1") {
 		if errors.Is(err, lanstore.ErrStale) {
 			fail(w, 409, "stale_sample", "Observation timestamps are outside the accepted window.")
 		} else {

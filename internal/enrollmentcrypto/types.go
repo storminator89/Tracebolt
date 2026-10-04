@@ -12,6 +12,20 @@ const ClaimVersion = "tracebolt.enrollment-claim.v2"
 const ActivationVersion = "tracebolt.enrollment-activation.v2"
 const TemplateVersion = "tracebolt.enrollment.client.v2"
 const CollectionProfile = "basic-readonly-v1"
+const CollectionProfileOperational = "managed-operations-v1"
+const CollectionProfilePackages = "managed-operations-v2"
+
+// ValidCollectionProfile admits only explicitly implemented, consent-bound profiles.
+func ValidCollectionProfile(profile string) bool {
+	return profile == CollectionProfile || ManagedCollectionProfile(profile)
+}
+
+// ManagedCollectionProfile identifies explicit managed metadata scopes. It does
+// not authorize any frame; the exact frame/profile pair is validated separately.
+func ManagedCollectionProfile(profile string) bool {
+	return profile == CollectionProfileOperational || profile == CollectionProfilePackages
+}
+
 const MaxClaimBytes = 16 * 1024
 const MaxCSRBytes = 8 * 1024
 const MaxCertificateBytes = 8 * 1024

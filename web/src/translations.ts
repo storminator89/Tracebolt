@@ -142,6 +142,12 @@ export const english = {
 "Die Serverfrist ist abgelaufen. Keine Freigabe möglich; Status aktualisieren.":"The server deadline has passed. Approval is unavailable; refresh status."
 ,
 "Serverzeit nicht bestätigt. Status aktualisieren.":"Server time is unconfirmed. Refresh status."
+ ,
+"Inventar":"Inventory",
+"Betriebsinventar · Linux":"Operational inventory · Linux",
+"Datenträger, Netzwerk, Dienste, Prozesse, Software und Ereignis-Metadaten. Namen und Mount-Pfade können persönliche oder sensible Angaben enthalten.":"Volumes, network, services, processes, software and event metadata. Names and mount paths may contain personal or sensitive information.",
+"Keine Befehlszeilen, Umgebungsvariablen oder Rohprotokolle. Kein KI-Export. Sichtbarkeit hängt vom Namensraum und den Berechtigungen des Agents ab.":"No command lines, environment variables or raw log bodies. No AI export. Coverage depends on the agent’s namespace and permissions.",
+"Ich bestätige diese zusätzliche Erfassung für das neue Gerät.":"I acknowledge this additional collection for the new device."
 } as const;
 export type TranslationKey=keyof typeof english;
 export const germanOverrides:Partial<Record<TranslationKey,string>>={'WORKSPACE':'ARBEITSBEREICH','Local Operator':'Lokaler Operator','Dateiname CSV':'tracebolt-inventar.csv','Passwörter und Daten sind im Netzwerk mitlesbar. Nur in einer isolierten Testumgebung verwenden.':'Passwörter und Daten sind im Netzwerk mitlesbar. Angreifer können den Server nachahmen und Sitzungen übernehmen. Nur für isolierte Tests.'};

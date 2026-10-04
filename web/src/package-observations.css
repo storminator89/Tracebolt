@@ -1,0 +1,27 @@
+.package-disclosure { margin-top: 24px; border: 1px solid var(--line); border-radius: 9px; overflow: hidden; }
+.package-disclosure-toggle { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; padding: 16px; background: transparent; border: 0; color: inherit; font: inherit; font-weight: 600; text-align: left; cursor: pointer; }
+.package-disclosure-toggle[aria-expanded="true"] svg { transform: rotate(180deg); }
+.package-observations { padding: 0 16px 16px; font-size: 13px; line-height: 1.55; }
+.package-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+.package-heading h3 { margin: 4px 0; font-size: 16px; }
+.package-observations section { border-top: 1px solid var(--line); padding-top: 14px; margin-top: 18px; }
+.package-observations p { margin: 8px 0; }
+.package-observations h4 { margin: 0; font-size: 14px; }
+.package-note { color: var(--secondary); }
+.package-error, .package-retention { display: flex; align-items: flex-start; gap: 8px; }
+.package-error svg, .package-retention svg { flex-shrink: 0; margin-top: 2px; }
+.package-status { font-weight: 600; }
+.package-status-stale, .package-status-revoked, .package-error { color: var(--warning, #996415); }
+.package-facts, .package-counts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.package-facts div, .package-counts div { min-width: 0; }
+.package-facts dt, .package-counts dt { color: var(--secondary); font-size: 12px; }
+.package-facts dd, .package-counts dd { margin: 3px 0 0; overflow-wrap: anywhere; }
+.package-counts dd { font-size: 19px; font-weight: 600; }
+.package-table-scroll { overflow-x: auto; max-width: 100%; border: 1px solid var(--line); border-radius: 7px; }
+.package-table-scroll table { width: 100%; border-collapse: collapse; text-align: left; font-size: 12px; }
+.package-table-scroll th, .package-table-scroll td { padding: 9px; border-bottom: 1px solid var(--line); vertical-align: top; min-width: 95px; max-width: 210px; overflow-wrap: anywhere; }
+.package-table-scroll th { font-weight: 600; }
+.package-times { margin-top: 20px; }
+@media (max-width: 540px) { .package-facts, .package-counts { grid-template-columns: 1fr; } .package-heading .button { width: 100%; justify-content: center; } }
+
+.package-table-scroll:focus-visible { outline: 3px solid #3aab9877; outline-offset: 3px; }

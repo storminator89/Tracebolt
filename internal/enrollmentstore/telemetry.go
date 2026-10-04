@@ -32,6 +32,7 @@ func (s *Store) SaveObservation(ctx context.Context, invitationID, certificateHa
 	digest := hex.EncodeToString(sum[:])
 	var out lanstore.Receipt
 	err := s.transact(ctx, func(t *transaction) error {
+		t.pruneOperational(receivedAt)
 		snapshot, err := t.engine.Get(invitationID)
 		if err != nil {
 			return err
@@ -60,12 +61,28 @@ func (s *Store) SaveObservation(ctx context.Context, invitationID, certificateHa
 			out = lanstore.Receipt{SchemaVersion: "tracebolt.agent-receipt.v1", AgentID: snapshot.Approval.DeviceID, Sequence: previous.Sequence, CollectedAt: previous.CollectedAt, ReceivedAt: previous.ReceivedAt, Duplicate: true}
 			return nil
 		}
-		frame, err := lanstore.ValidateFrame(raw, receivedAt)
+		frame, err := t.validateFrame(raw, receivedAt)
 		if err != nil {
 			return err
 		}
+		if !lanstore.FrameMatchesCollectionProfile(frame, snapshot.Binding.CollectionProfile) || frame.Observation.Observation.Platform != snapshot.Platform {
+			return enrollmentstate.ErrProof
+		}
 		if previous != (Replay{}) && (frame.Sequence <= previous.Sequence || !frame.Observation.GeneratedAt.After(previous.GeneratedAt) || !frame.Observation.Observation.LastSeen.After(previous.CollectedAt)) {
 			return lanstore.ErrReplay
+		}
+
+		if frame.Operational != nil {
+			if previous != (Replay{}) {
+				old, e := t.validateFrame(c.Frame, previous.ReceivedAt)
+				if e != nil || old.Operational == nil {
+					return ErrStorage
+				}
+				if !frame.Operational.CollectedAt.After(old.Operational.CollectedAt) || frame.Operational.GenerationID == old.Operational.GenerationID {
+					return lanstore.ErrReplay
+				}
+			}
+			t.retainOperational(invitationID, frame.Operational)
 		}
 		c.Replay = Replay{Sequence: frame.Sequence, PayloadHash: digest, GeneratedAt: frame.Observation.GeneratedAt.UTC(), CollectedAt: frame.Observation.Observation.LastSeen.UTC(), ReceivedAt: receivedAt}
 		c.Frame = raw
@@ -106,7 +123,7 @@ func (s *Store) DeviceViews(ctx context.Context) ([]DeviceView, error) {
 				out = append(out, DeviceView{Snapshot: snapshot})
 				continue
 			}
-			frame, err := lanstore.ValidateFrame(c.Frame, c.Replay.ReceivedAt)
+			frame, err := t.validateFrame(c.Frame, c.Replay.ReceivedAt)
 			if err != nil {
 				return ErrStorage
 			}

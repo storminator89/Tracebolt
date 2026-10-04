@@ -117,7 +117,21 @@
     "POST /v2/enrollment/claim": "Optional guided-v2 exclusive LAN mode; see docs/enrollment-v2/http-contract.md",
     "POST /v2/enrollment/status": "Optional guided-v2 exclusive LAN mode; see docs/enrollment-v2/http-contract.md",
     "POST /v2/enrollment/credential": "Optional guided-v2 exclusive LAN mode; see docs/enrollment-v2/http-contract.md",
-    "POST /v2/enrollment/activate": "Optional guided-v2 exclusive LAN mode; see docs/enrollment-v2/http-contract.md"
+    "POST /v2/enrollment/activate": "Optional guided-v2 exclusive LAN mode; see docs/enrollment-v2/http-contract.md",
+    "GET /api/devices/{id}/operational": {
+      "schemaVersion": "tracebolt.operational-view.v1",
+      "contract": "docs/operational/contract.md",
+      "authentication": "existing operator session in LAN mode",
+      "collection": "read-only stored observations; no collection or provider calls",
+      "statuses": [
+        "not_configured",
+        "awaiting",
+        "fresh",
+        "stale",
+        "revoked",
+        "unavailable"
+      ]
+    }
   },
   "types": {
     "Device": {
@@ -224,5 +238,18 @@
   },
   "ruleScope": "V1 deterministic rules accept only explicitly synthetic fixtures. Native local observations are not automatically turned into cases.",
   "managedPreview": "Explicitly default-off. Disables both initial and periodic manager-side collection. Only a separate dev-agent delivery updates sandbox-local. Expiry preserves old values as stale and never asserts continuous process availability.",
-  "deploymentModes": "Development remains loopback-only. Separate lan-manager supports manual-v1 or explicit guided-v2 identity mode; docs/lan-runtime.md and docs/enrollment-v2/runtime-config.md define trust/custody requirements. No automatic mode migration."
+  "deploymentModes": "Development remains loopback-only. Separate lan-manager supports manual-v1 or explicit guided-v2 identity mode; docs/lan-runtime.md and docs/enrollment-v2/runtime-config.md define trust/custody requirements. No automatic mode migration.",
+  "operationalProfile": {
+    "collectionProfile": "managed-operations-v1",
+    "snapshotSchema": "tracebolt.linux-operational.v1",
+    "frameSchema": "tracebolt.agent-telemetry.v2",
+    "senderSchema": "tracebolt.lan-agent.v3",
+    "platform": "linux only in this release",
+    "freshEnrollmentOnly": true,
+    "invitationAcknowledgement": {
+      "collectionAcknowledged": true
+    },
+    "AIExport": false,
+    "contract": "docs/operational/contract.md"
+  }
 }

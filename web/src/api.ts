@@ -13,7 +13,36 @@ export function abortProtectedRequests(): void {
             pendingRequests.delete(controller);
         }
 }
-export async function request<T>(path: string, options?: RequestInit): Promise<T> {
+async function boundedJSON(response: Response, maximum: number): Promise<unknown> {
+    const length = response.headers?.get('Content-Length');
+    if (length && /^\d+$/.test(length) && Number(length) > maximum) {
+        await response.body?.cancel();
+        throw new APIError(t("Der Manager hat keine gültigen JSON-Daten zurückgegeben."));
+    }
+    if (!response.body) throw new APIError(t("Der Manager hat keine gültigen JSON-Daten zurückgegeben."));
+    const reader = response.body.getReader();
+    const chunks: Uint8Array[] = [];
+    let count = 0;
+    try {
+        for (;;) {
+            const chunk = await reader.read();
+            if (chunk.done) break;
+            count += chunk.value.byteLength;
+            if (count > maximum) {
+                await reader.cancel();
+                throw new APIError(t("Der Manager hat keine gültigen JSON-Daten zurückgegeben."));
+            }
+            chunks.push(chunk.value);
+        }
+    } finally { reader.releaseLock(); }
+    const bytes = new Uint8Array(count);
+    let offset = 0;
+    for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
+    return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes)) as unknown;
+}
+export async function request<T>(path: string, options?: RequestInit, maxResponseBytes?: number): Promise<T> {
+    if (maxResponseBytes !== undefined && (!Number.isSafeInteger(maxResponseBytes) || maxResponseBytes < 1 || maxResponseBytes > 262144))
+        throw new APIError(t("Der Manager hat keine gültigen JSON-Daten zurückgegeben."));
     const controller = new AbortController();
     const protectedRoute = !path.startsWith('/auth/') || path === '/auth/logout';
     const epoch = protectedEpoch;
@@ -49,7 +78,7 @@ export async function request<T>(path: string, options?: RequestInit): Promise<T
         if (!response.ok) {
             let message = t("Die Anfrage konnte nicht geladen werden (HTTP {0}).", { "0": response.status });
             try {
-                const data = await response.json();
+                const data = maxResponseBytes === undefined ? await response.json() : await boundedJSON(response, maxResponseBytes) as { error?: { code?: string; message?: string } };
                 message = apiErrorText(data.error?.code, typeof data.error?.message === "string" ? data.error.message : message);
             }
             catch { /* Preserve status if response is not JSON. */ }
@@ -58,7 +87,7 @@ export async function request<T>(path: string, options?: RequestInit): Promise<T
         }
         let data: T;
         try {
-            data = await response.json() as T;
+            data = (maxResponseBytes === undefined ? await response.json() : await boundedJSON(response, maxResponseBytes)) as T;
         }
         catch {
             active();
@@ -80,4 +109,19 @@ export async function mutate<T>(path: string, data: unknown, signal?: AbortSigna
     if (epoch !== protectedEpoch || signal?.aborted)
         throw new DOMException(t("Anfrage abgebrochen."), 'AbortError');
     return request<T>(path, { signal, method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken }, body: JSON.stringify(data) });
+}
+
+/** Raw catalog JSON is preserved so duplicate keys remain visible to the server.
+ * This helper retains the protected epoch across the CSRF read and never accepts
+ * caller-supplied credentials or a destination other than the existing API path. */
+export async function mutateRaw<T>(path: string, rawJson: string, headers: Record<string, string> = {}, signal?: AbortSignal, maxResponseBytes = 32768): Promise<T> {
+    if (typeof rawJson !== 'string' || new TextEncoder().encode(rawJson).byteLength > 2097152 || Object.keys(headers).some(key => key !== 'X-Tracebolt-Catalog-Revision'))
+        throw new APIError(t("Die Anfrage konnte nicht geladen werden (HTTP {0}).", { "0": 400 }), 400);
+    const epoch = protectedEpoch;
+    const { csrfToken } = await request<{ csrfToken: string }>('/session', { signal }, maxResponseBytes);
+    if (epoch !== protectedEpoch || signal?.aborted)
+        throw new DOMException(t("Anfrage abgebrochen."), 'AbortError');
+    if (typeof csrfToken !== 'string' || csrfToken.length < 1 || csrfToken.length > 256)
+        throw new APIError(t("Die Anfrage konnte nicht geladen werden (HTTP {0}).", { "0": 400 }), 400);
+    return request<T>(path, { signal, method: 'POST', headers: { ...headers, 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken }, body: rawJson }, maxResponseBytes);
 }

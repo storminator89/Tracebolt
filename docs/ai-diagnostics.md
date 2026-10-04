@@ -121,7 +121,6 @@ Recurring log review/dashboard alerting remains a later feature. Its prerequisit
 ## Reproducible verification
 
 ```sh
-source scripts/env.sh  # optional workspace-local Go toolchain
 go test -race ./internal/analysis
 go vet ./internal/analysis
 ```

@@ -64,3 +64,32 @@ The creation response contains a one-time invitation secret. It is masked by def
 Only a whitelisted public bootstrap schema can be downloaded, on an explicit click. It contains exact destinations, profile, public trust material and the invitation ID. Secret-bearing downloads are unsupported. The UI rejects extra bootstrap fields, private-key material and mismatched destinations/identity before enabling export. The compatible native client must independently validate that public trust and take the invitation through its hidden prompt; no invitation is placed in a URL, command argument or browser storage.
 
 Approval requires the operator to compare both the complete SHA-256 key fingerprint and context-bound comparison value on the device. Confirmation is bound to the displayed key, comparison value and revision. Lifecycle mutations carry that revision, require CSRF, do not automatically replay, and cannot replace newer revoked state with a delayed older response. Cancel/reject/revoke actions are phase-specific and require a visible final confirmation. Issued/activated identity states do not establish online status, ongoing collection, an installed service or device health. Deadlines use the validated server clock plus monotonic elapsed time, with a conservative request-duration allowance; browser wall-clock changes cannot extend an invitation. Expired approval stays disabled and the displayed secret is removed at its deadline. Hiding or leaving the page invalidates the clock anchor; approval waits for a fresh server response and a new comparison after return. The 25-record cap includes retained terminal records.
+
+
+### Operational device inventory candidate
+
+The authenticated device drawer exposes an **Inventory** tab for Linux LAN devices
+and LAN identities whose platform has not yet been observed. Selecting it performs
+the protected operational GET; the server explicitly distinguishes a basic profile,
+awaiting data, current/retained observations, and errors. Synthetic/local demo devices
+do not gain operational fixtures. Leaving the tab, changing device, losing operator
+access or restoring a suspended view clears/refreshes the observation state.
+
+For fresh `managed-operations-v1` enrollment, the manager must advertise the matching
+`metadata_labels_may_be_sensitive` privacy value. The dialog names all six collection
+categories, warns that names/mount paths may be personal or sensitive, and requires
+an unchecked affirmative checkbox. Only this profile sends
+`collectionAcknowledged: true`; basic enrollment retains its existing request body.
+The returned snapshot/bootstrap must match the acknowledged profile, and confirmed
+profile changes close the invitation dialog. Failed or malformed current-configuration
+reads also invalidate the clock, consent and open dialog. In-flight writes are
+aborted, older responses cannot restore a token, and an already-submitted request
+remains explicitly unconfirmed until its server state is checked. Recovery requires
+a fresh unchecked acknowledgement. Consent is not stored in the browser.
+Direct command lines, environment variables and raw message bodies remain excluded;
+namespace/permission coverage is bounded and operational observations are excluded
+from AI evidence by the server policy. This integration does not migrate identities,
+install a service, or turn unknown update/CVE assessment into a health claim.
+
+Component and integration checks are local. Real-handler Chromium and safe synthetic
+viewport captures must be run against the exact publication candidate separately.

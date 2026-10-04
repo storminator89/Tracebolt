@@ -9,8 +9,9 @@ the authorized administrator of that test VM.
 **HTTP is unencrypted:** another party on the network can read passwords,
 sessions, invitations and telemetry, impersonate the server or hijack sessions.
 Use an isolated trusted LAN and a unique throwaway password. Do not reuse this
-configuration for production. This path uses `basic-readonly-v1`; the broader
-operational/package profiles are not part of this checkpoint.
+configuration for production. This path uses `basic-readonly-v1`. For a fresh explicitly acknowledged metadata
+profile and native background service, follow the separate
+[inventory first-start guide](http-inventory-first-start.md).
 
 ## 1. Obtain and build the source
 

@@ -45,6 +45,11 @@ func run(ctx context.Context, args []string, out, errOut io.Writer) int {
 		if _, e := fmt.Fprintf(out, "Manager: %s\nProfile: %s\nEnrollment destination: %s\nAgent destination: %s\nCollection: %s\nInvitation: %s\n", d.ManagerInstanceID, d.Profile, d.EnrollmentOrigin, d.AgentOrigin, d.CollectionProfile, d.InvitationID); e != nil {
 			return e
 		}
+		if d.CollectionPrivacy != "" {
+			if _, e := fmt.Fprintln(out, "COLLECTION PRIVACY: "+d.CollectionPrivacy); e != nil {
+				return e
+			}
+		}
 		for _, fp := range d.ServerCAFingerprints {
 			if _, e := fmt.Fprintf(out, "Server CA certificate SHA-256: %s\n", fp); e != nil {
 				return e

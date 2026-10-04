@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"localrmm/internal/model"
 	"reflect"
+	"strings"
 	"time"
 	"unicode/utf8"
 )
@@ -103,12 +105,24 @@ func shape(raw []byte, t reflect.Type) error {
 		if err := json.Unmarshal(raw, &obj); err != nil {
 			return err
 		}
-		if len(obj) != t.NumField() {
+		expected := t.NumField()
+		if t == reflect.TypeOf(model.Evidence{}) {
+			expected--
+		}
+		if len(obj) != expected {
 			return errors.New("unexpected object fields")
 		}
 		for i := 0; i < t.NumField(); i++ {
 			f := t.Field(i)
-			v, ok := obj[f.Tag.Get("json")]
+			name := strings.Split(f.Tag.Get("json"), ",")[0]
+			// Internal AI provenance is deliberately absent from bundle-v1.
+			if t == reflect.TypeOf(model.Evidence{}) && name == "collectionProfile" {
+				if _, present := obj[name]; present {
+					return errors.New("internal-only evidence field")
+				}
+				continue
+			}
+			v, ok := obj[name]
 			if !ok {
 				return errors.New("missing exact field")
 			}

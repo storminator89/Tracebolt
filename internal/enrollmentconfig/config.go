@@ -29,6 +29,7 @@ const SchemaVersion = "tracebolt.enrollment-config.v2"
 var ErrConfiguration = errors.New("enrollment configuration or protected material is invalid")
 
 type Config struct {
+	CollectionProfile         string `json:"collectionProfile,omitempty"`
 	SchemaVersion             string `json:"schemaVersion"`
 	Profile                   string `json:"profile"`
 	InstanceID                string `json:"instanceId"`
@@ -80,7 +81,7 @@ func (m Material) StoreConfig() enrollmentstate.Config {
 		return enrollmentstate.Config{}
 	}
 	v := m.value
-	cfg := enrollmentstate.DefaultConfig(enrollmentstate.Binding{InstanceID: v.config.InstanceID, Profile: v.config.Profile, Origin: v.lan.OperatorOrigin, CollectionProfile: enrollmentcrypto.CollectionProfile, IssuerFingerprint: v.issuer.Fingerprint()})
+	cfg := enrollmentstate.DefaultConfig(enrollmentstate.Binding{InstanceID: v.config.InstanceID, Profile: v.config.Profile, Origin: v.lan.OperatorOrigin, CollectionProfile: v.config.CollectionProfile, IssuerFingerprint: v.issuer.Fingerprint()})
 	cfg.RecordLimit = enrollmentservice.MaxRecords
 	cfg.InvitationLimit = enrollmentservice.MaxRecords
 	cfg.PendingLimit = enrollmentservice.MaxRecords
@@ -110,7 +111,13 @@ func Load(path string, lan lanconfig.Material, now time.Time) (Material, error) 
 		return fail()
 	}
 	var c Config
-	if lanconfig.StrictObject(raw, &c, "schemaVersion", "profile", "instanceId", "issuerCertificateFile", "issuerPrivateKeyFile", "issuerRootFile", "expectedIssuerFingerprint", "bootstrapServerCAFile") != nil || c.SchemaVersion != SchemaVersion || c.Profile != lan.Config.Profile || !enrollmentcrypto.ValidID(c.InstanceID, "manager_") || !enrollmentcrypto.ValidHash(c.ExpectedIssuerFingerprint) {
+	if lanconfig.StrictObject(raw, &c, "schemaVersion", "profile", "instanceId", "issuerCertificateFile", "issuerPrivateKeyFile", "issuerRootFile", "expectedIssuerFingerprint", "bootstrapServerCAFile", "collectionProfile") != nil || c.SchemaVersion != SchemaVersion || c.Profile != lan.Config.Profile || !enrollmentcrypto.ValidID(c.InstanceID, "manager_") || !enrollmentcrypto.ValidHash(c.ExpectedIssuerFingerprint) {
+		return fail()
+	}
+	if c.CollectionProfile == "" {
+		c.CollectionProfile = enrollmentcrypto.CollectionProfile
+	}
+	if !enrollmentcrypto.ValidCollectionProfile(c.CollectionProfile) {
 		return fail()
 	}
 	for _, p := range []string{c.IssuerCertificateFile, c.IssuerPrivateKeyFile, c.IssuerRootFile} {
@@ -203,6 +210,6 @@ func (m Material) marker() []byte {
 	v := m.value
 	server := sha256.Sum256(v.serverCAPEM)
 	root := sha256.Sum256(v.issuer.RootDER())
-	raw, _ := json.Marshal(struct{ SchemaVersion, Profile, InstanceID, OperatorOrigin, AgentOrigin, CollectionProfile, IssuerFingerprint, IssuerRootFingerprint, ServerTrustHash string }{"tracebolt.identity-mode.v2", v.config.Profile, v.config.InstanceID, v.lan.OperatorOrigin, v.lan.AgentOrigin, enrollmentcrypto.CollectionProfile, v.issuer.Fingerprint(), hex.EncodeToString(root[:]), hex.EncodeToString(server[:])})
+	raw, _ := json.Marshal(struct{ SchemaVersion, Profile, InstanceID, OperatorOrigin, AgentOrigin, CollectionProfile, IssuerFingerprint, IssuerRootFingerprint, ServerTrustHash string }{"tracebolt.identity-mode.v2", v.config.Profile, v.config.InstanceID, v.lan.OperatorOrigin, v.lan.AgentOrigin, v.config.CollectionProfile, v.issuer.Fingerprint(), hex.EncodeToString(root[:]), hex.EncodeToString(server[:])})
 	return raw
 }

@@ -43,11 +43,12 @@ const credentialSchema = `CREATE TABLE enrollment_credentials(invitation_id TEXT
 
 type Store struct{ *storeState }
 type storeState struct {
-	db        *sql.DB
-	path      string
-	info      os.FileInfo
-	config    enrollmentstate.Config
-	issuerDER []byte
+	db               *sql.DB
+	path             string
+	info             os.FileInfo
+	config           enrollmentstate.Config
+	issuerDER        []byte
+	operationalReads chan struct{}
 }
 
 func (Store) String() string               { return "enrollmentstore.Store{contents:redacted}" }
@@ -80,13 +81,16 @@ type transaction struct {
 	credentials         map[string]credential
 	originalLedger      []byte
 	originalCredentials map[string][]byte
+	operational         map[string]operationalRecord
+	originalOperational map[string][]byte
+	validatedFrames     map[frameValidationKey]lanstore.Frame
 }
 
 // Open rejects existing insecure paths; it never chmods or adopts them. The
 // issuer is public preprovided DER, not a signing key. Config changes are refused
 // on reopen, including the manager instance, origins, issuer and quotas.
 func Open(path string, config enrollmentstate.Config, issuerDER []byte) (*Store, error) {
-	if runtime.GOOS != "linux" || validateIssuer(config, issuerDER) != nil {
+	if runtime.GOOS != "linux" || validateIssuer(config, issuerDER) != nil || (enrollmentcrypto.ManagedCollectionProfile(config.Binding.CollectionProfile) && config.RecordLimit > 25) {
 		return nil, ErrStorage
 	}
 	engine, err := enrollmentstate.New(config)
@@ -124,7 +128,7 @@ func Open(path string, config enrollmentstate.Config, issuerDER []byte) (*Store,
 		if info.Size() == 0 {
 			return nil, ErrStorage
 		}
-		candidate := &Store{&storeState{path: absolute, info: info, config: config, issuerDER: bytes.Clone(issuerDER)}}
+		candidate := &Store{&storeState{path: absolute, info: info, config: config, issuerDER: bytes.Clone(issuerDER), operationalReads: make(chan struct{}, 1)}}
 		if candidate.preflightExisting() != nil {
 			return nil, ErrStorage
 		}
@@ -139,7 +143,7 @@ func Open(path string, config enrollmentstate.Config, issuerDER []byte) (*Store,
 		return nil, ErrStorage
 	}
 	db.SetMaxOpenConns(1)
-	s := &Store{&storeState{db: db, path: absolute, info: info, config: config, issuerDER: bytes.Clone(issuerDER)}}
+	s := &Store{&storeState{db: db, path: absolute, info: info, config: config, issuerDER: bytes.Clone(issuerDER), operationalReads: make(chan struct{}, 1)}}
 	fail := func() (*Store, error) { db.Close(); return nil, ErrStorage }
 	for _, query := range []string{"PRAGMA busy_timeout=5000", "PRAGMA journal_mode=WAL", "PRAGMA synchronous=FULL", "PRAGMA foreign_keys=ON", "PRAGMA trusted_schema=OFF", "PRAGMA max_page_count=49152"} {
 		if _, err = db.Exec(query); err != nil {
@@ -166,11 +170,11 @@ func Open(path string, config enrollmentstate.Config, issuerDER []byte) (*Store,
 			rollback()
 			return fail()
 		}
-		for _, query := range []string{
-			stateSchema,
-			credentialSchema,
-			`PRAGMA user_version=1`,
-		} {
+		queries := []string{stateSchema, credentialSchema, `PRAGMA user_version=1`}
+		if enrollmentcrypto.ManagedCollectionProfile(config.Binding.CollectionProfile) {
+			queries = []string{stateSchema, credentialSchema, operationalSchema, `PRAGMA user_version=2`}
+		}
+		for _, query := range queries {
 			if _, err = conn.ExecContext(context.Background(), query); err != nil {
 				rollback()
 				return fail()
@@ -181,11 +185,11 @@ func Open(path string, config enrollmentstate.Config, issuerDER []byte) (*Store,
 			rollback()
 			return fail()
 		}
-	} else if version != schemaVersion {
+	} else if version != storeSchemaVersion(config.Binding.CollectionProfile) {
 		rollback()
 		return fail()
 	}
-	if validateSchema(context.Background(), conn) != nil {
+	if validateSchema(context.Background(), conn, s.config.Binding.CollectionProfile) != nil {
 		rollback()
 		return fail()
 	}
@@ -299,7 +303,7 @@ func storageError(ctx context.Context) error {
 }
 
 func (s *Store) load(ctx context.Context, conn *sql.Conn) (*transaction, error) {
-	if validateSchema(ctx, conn) != nil {
+	if validateSchema(ctx, conn, s.config.Binding.CollectionProfile) != nil {
 		return nil, ErrStorage
 	}
 	var count, n int
@@ -314,7 +318,7 @@ func (s *Store) load(ctx context.Context, conn *sql.Conn) (*transaction, error) 
 	if err != nil {
 		return nil, ErrStorage
 	}
-	t := &transaction{conn: conn, engine: engine, credentials: make(map[string]credential), originalLedger: raw, originalCredentials: make(map[string][]byte)}
+	t := &transaction{conn: conn, engine: engine, credentials: make(map[string]credential), originalLedger: raw, originalCredentials: make(map[string][]byte), operational: map[string]operationalRecord{}, originalOperational: map[string][]byte{}}
 	if conn.QueryRowContext(ctx, "SELECT count(*),coalesce(max(length(body)),0) FROM enrollment_credentials").Scan(&count, &n) != nil || count > s.config.RecordLimit || n > maxCredentialBytes {
 		return nil, ErrStorage
 	}
@@ -346,7 +350,7 @@ func (s *Store) load(ctx context.Context, conn *sql.Conn) (*transaction, error) 
 			return nil, ErrStorage
 		}
 		cert, err := enrollmentcrypto.VerifyIssued(c.DER, s.issuerDER, intent, time.Unix(snapshot.Issuance.At, 0))
-		if err != nil || cert.CertificateHash() != snapshot.Issuance.CertificateHash || !validMetadata(snapshot, c) {
+		if err != nil || cert.CertificateHash() != snapshot.Issuance.CertificateHash || !t.validMetadata(snapshot, c) {
 			return nil, ErrStorage
 		}
 		t.credentials[id] = c
@@ -361,9 +365,12 @@ func (s *Store) load(ctx context.Context, conn *sql.Conn) (*transaction, error) 
 			return nil, ErrStorage
 		}
 	}
+	if err = s.loadOperational(ctx, t); err != nil {
+		return nil, ErrStorage
+	}
 	return t, nil
 }
-func validMetadata(s enrollmentstate.Snapshot, c credential) bool {
+func (t *transaction) validMetadata(s enrollmentstate.Snapshot, c credential) bool {
 	d := c.Delivery
 	if d != (Delivery{}) && (!enrollmentcrypto.ValidID(d.RequestID, "request_") || d.Count == 0 || d.Count > enrollmentstate.MaxRevision || d.FirstAt < s.Issuance.At || d.LastAt < d.FirstAt || d.LastAt >= s.Intent.NotAfter) {
 		return false
@@ -381,9 +388,9 @@ func validMetadata(s enrollmentstate.Snapshot, c credential) bool {
 	if s.Termination.At != 0 && r.ReceivedAt.Unix() > s.Termination.At {
 		return false
 	}
-	frame, err := lanstore.ValidateFrame(c.Frame, r.ReceivedAt)
+	frame, err := t.validateFrame(c.Frame, r.ReceivedAt)
 	sum := sha256.Sum256(c.Frame)
-	if err != nil || hex.EncodeToString(sum[:]) != r.PayloadHash || frame.Sequence != r.Sequence || !frame.Observation.GeneratedAt.Equal(r.GeneratedAt) || !frame.Observation.Observation.LastSeen.Equal(r.CollectedAt) {
+	if err != nil || !lanstore.FrameMatchesCollectionProfile(frame, s.Binding.CollectionProfile) || frame.Observation.Observation.Platform != s.Platform || hex.EncodeToString(sum[:]) != r.PayloadHash || frame.Sequence != r.Sequence || !frame.Observation.GeneratedAt.Equal(r.GeneratedAt) || !frame.Observation.Observation.LastSeen.Equal(r.CollectedAt) {
 		return false
 	}
 
@@ -405,7 +412,7 @@ func (s *Store) transact(ctx context.Context, action func(*transaction) error) e
 	}
 	defer conn.Close()
 	if _, err = conn.ExecContext(ctx, "BEGIN IMMEDIATE"); err != nil {
-		return storageError(ctx)
+		return beginError(ctx, err)
 	}
 	defer conn.ExecContext(context.Background(), "ROLLBACK")
 	t, err := s.load(ctx, conn)
@@ -417,7 +424,7 @@ func (s *Store) transact(ctx context.Context, action func(*transaction) error) e
 	}
 	for id, c := range t.credentials {
 		snapshot, err := t.engine.Get(id)
-		if err != nil || !validMetadata(snapshot, c) {
+		if err != nil || !t.validMetadata(snapshot, c) {
 			return enrollmentstate.ErrInvalid
 		}
 	}
@@ -442,6 +449,9 @@ func (s *Store) transact(ctx context.Context, action func(*transaction) error) e
 			return storageError(ctx)
 		}
 	}
+	if err = s.saveOperational(ctx, t); err != nil {
+		return storageError(ctx)
+	}
 	if s.checkPath() != nil {
 		return ErrStorage
 	}
@@ -454,9 +464,9 @@ func (s *Store) transact(ctx context.Context, action func(*transaction) error) e
 	return nil
 }
 
-func validateSchema(ctx context.Context, conn *sql.Conn) error {
+func validateSchema(ctx context.Context, conn *sql.Conn, profile string) error {
 	var version int
-	if conn.QueryRowContext(ctx, "PRAGMA user_version").Scan(&version) != nil || version != schemaVersion {
+	if conn.QueryRowContext(ctx, "PRAGMA user_version").Scan(&version) != nil || version != storeSchemaVersion(profile) {
 		return ErrStorage
 	}
 	rows, err := conn.QueryContext(ctx, "SELECT type,name,sql FROM sqlite_master WHERE name NOT LIKE 'sqlite_%' ORDER BY name")
@@ -475,6 +485,10 @@ func validateSchema(ctx context.Context, conn *sql.Conn) error {
 			if definition != stateSchema {
 				return ErrStorage
 			}
+		case "enrollment_operational":
+			if !enrollmentcrypto.ManagedCollectionProfile(profile) || definition != operationalSchema {
+				return ErrStorage
+			}
 		case "enrollment_credentials":
 			if definition != credentialSchema {
 				return ErrStorage
@@ -484,7 +498,11 @@ func validateSchema(ctx context.Context, conn *sql.Conn) error {
 		}
 		count++
 	}
-	if rows.Err() != nil || count != 2 {
+	wanted := 2
+	if enrollmentcrypto.ManagedCollectionProfile(profile) {
+		wanted = 3
+	}
+	if rows.Err() != nil || count != wanted {
 		return ErrStorage
 	}
 	return nil
@@ -528,7 +546,7 @@ func (s *Store) preflightExisting() error {
 		return ErrStorage
 	}
 	defer conn.ExecContext(context.Background(), "ROLLBACK")
-	if validateSchema(context.Background(), conn) != nil {
+	if validateSchema(context.Background(), conn, s.config.Binding.CollectionProfile) != nil {
 		return ErrStorage
 	}
 	var integrity string
@@ -539,4 +557,11 @@ func (s *Store) preflightExisting() error {
 		return ErrStorage
 	}
 	return s.checkPath()
+}
+
+func storeSchemaVersion(profile string) int {
+	if enrollmentcrypto.ManagedCollectionProfile(profile) {
+		return 2
+	}
+	return schemaVersion
 }

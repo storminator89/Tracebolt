@@ -23,6 +23,14 @@ func (s *session) handoff() (lanclient.Config, []artifact, []byte, error) {
 		return fail()
 	}
 	c := lanclient.Config{SchemaVersion: lanclient.GuidedConfigVersion, Profile: s.l.Bootstrap.Profile, ManagerOrigin: s.l.Bootstrap.AgentOrigin, AgentID: s.l.Intent.DeviceID, CertificateFile: filepath.Join(s.opts.StateDirectory, "agent-cert.pem"), PrivateKeyFile: filepath.Join(s.opts.StateDirectory, "agent-key.pem"), StateDirectory: filepath.Join(s.opts.StateDirectory, "telemetry"), InsecureHTTPAcknowledged: s.opts.InsecureHTTPAcknowledged}
+	if s.l.Bootstrap.CollectionProfile == enrollmentcrypto.CollectionProfileOperational {
+		c.SchemaVersion = lanclient.OperationalConfigVersion
+		c.CollectionProfile = enrollmentcrypto.CollectionProfileOperational
+	}
+	if s.l.Bootstrap.CollectionProfile == enrollmentcrypto.CollectionProfilePackages {
+		c.SchemaVersion = lanclient.PackageConfigVersion
+		c.CollectionProfile = enrollmentcrypto.CollectionProfilePackages
+	}
 	if c.Profile == "tls" {
 		c.ServerCAFile = filepath.Join(s.opts.StateDirectory, "server-ca.pem")
 	}

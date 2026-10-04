@@ -32,7 +32,7 @@ func fixtureFiles(t *testing.T) []materialFile {
 	t.Helper()
 	password := fixturePassword()
 	defer clear(password)
-	files, e := generate("192.168.1.50", password, rand.New(rand.NewSource(81)), fixtureTime())
+	files, e := generate(basicSetup, "192.168.1.50", password, rand.New(rand.NewSource(81)), fixtureTime())
 	if e != nil {
 		t.Fatal("synthetic material generation failed")
 	}
@@ -92,7 +92,7 @@ func TestPasswordPolicy(t *testing.T) {
 func TestGeneratedMaterialPublishedSchemaAndLoaders(t *testing.T) {
 	files := fixtureFiles(t)
 	dir, parent := temporaryParent(t)
-	if publish(context.Background(), parent, files, os.Geteuid(), os.Getegid()) != nil {
+	if publish(basicSetup, context.Background(), parent, files, os.Geteuid(), os.Getegid()) != nil {
 		t.Fatal("synthetic publication failed")
 	}
 	dest := filepath.Join(dir, outputName)
@@ -195,7 +195,7 @@ func TestNoOverwriteAdoptionOrReset(t *testing.T) {
 				os.Mkdir(filepath.Join(dir, stagePrefix+"leftover"), 0700)
 			}
 			before, _ := os.ReadDir(dir)
-			if publish(context.Background(), fd, files, os.Geteuid(), os.Getegid()) == nil {
+			if publish(basicSetup, context.Background(), fd, files, os.Geteuid(), os.Getegid()) == nil {
 				t.Fatal("existing output accepted")
 			}
 			after, _ := os.ReadDir(dir)
@@ -210,7 +210,7 @@ func TestCancelledPublicationAndPasswordClearing(t *testing.T) {
 	dir, parent := temporaryParent(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	if publish(ctx, parent, files, os.Geteuid(), os.Getegid()) == nil {
+	if publish(basicSetup, ctx, parent, files, os.Geteuid(), os.Getegid()) == nil {
 		t.Fatal("cancelled publication succeeded")
 	}
 	entries, _ := os.ReadDir(dir)
@@ -372,7 +372,7 @@ func TestPublicationFailurePhasesPreserveCommittedOutput(t *testing.T) {
 					return unix.Fchown(fd, uid, gid)
 				},
 			}
-			if publishWithOps(context.Background(), parent, files, os.Geteuid(), os.Getegid(), ops) == nil {
+			if publishWithOps(basicSetup, context.Background(), parent, files, os.Geteuid(), os.Getegid(), ops) == nil {
 				t.Fatal("injected failure ignored")
 			}
 			entries, e := os.ReadDir(dir)

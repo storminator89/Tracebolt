@@ -7,17 +7,24 @@ import (
 	"io"
 	"localrmm/internal/bundle"
 	"localrmm/internal/collector"
+	"localrmm/internal/enrollmentcrypto"
 	"localrmm/internal/lanclientstate"
 	"localrmm/internal/lanconfig"
+	"localrmm/internal/linuxpackages"
+	"localrmm/internal/model"
+	"localrmm/internal/operational"
+	"localrmm/internal/packagecollector"
 	"localrmm/internal/signedhttp"
 	"net/http"
 	"time"
 )
 
 type frame struct {
-	SchemaVersion string        `json:"schemaVersion"`
-	Sequence      uint64        `json:"sequence"`
-	Observation   bundle.Bundle `json:"observation"`
+	SchemaVersion string                  `json:"schemaVersion"`
+	Sequence      uint64                  `json:"sequence"`
+	Observation   bundle.Bundle           `json:"observation"`
+	Operational   *operational.Snapshot   `json:"operational,omitempty"`
+	Packages      *linuxpackages.Snapshot `json:"packages,omitempty"`
 }
 type receipt struct {
 	SchemaVersion string    `json:"schemaVersion"`
@@ -61,6 +68,21 @@ func Run(ctx context.Context, m Material) (Report, error) {
 
 // runUsingState preserves one exclusive ledger lock across foreground attempts.
 func runUsingState(ctx context.Context, m Material, state *lanclientstate.State) (Report, error) {
+	return runUsingStateWithCollectors(ctx, m, state, operational.Collect, packagecollector.Collect)
+}
+
+// The collector is a per-attempt dependency, never an asynchronous background job.
+func runUsingStateWithCollector(ctx context.Context, m Material, state *lanclientstate.State, collectOperations func(context.Context, time.Time) operational.Snapshot) (Report, error) {
+	return runUsingStateWithCollectors(ctx, m, state, collectOperations, packagecollector.Collect)
+}
+
+func runUsingStateWithCollectors(ctx context.Context, m Material, state *lanclientstate.State, collectOperations func(context.Context, time.Time) operational.Snapshot, collectPackages func(context.Context, string, time.Time) (linuxpackages.Snapshot, error)) (Report, error) {
+	return runUsingStateWithSources(ctx, m, state, collectOperations, collectPackages, collector.Snapshot)
+}
+
+// All dependencies are private per-attempt values. Tests can exercise staging
+// and transport without reading any production observation source.
+func runUsingStateWithSources(ctx context.Context, m Material, state *lanclientstate.State, collectOperations func(context.Context, time.Time) operational.Snapshot, collectPackages func(context.Context, string, time.Time) (linuxpackages.Snapshot, error), collectBasic func() model.Device) (Report, error) {
 	report := Report{SchemaVersion: "tracebolt.agent-run.v1", Status: "failed", Profile: m.config.Profile}
 	if ctx.Err() != nil {
 		return report, ctx.Err()
@@ -73,10 +95,14 @@ func runUsingState(ctx context.Context, m Material, state *lanclientstate.State)
 		return report, ErrState
 	}
 	var f frame
+	var body []byte
 	if pending != nil {
-		f, e = decodeFrame(pending.Body(), pending.Sequence)
+		f, e = decodeFrameForConfig(pending.Body(), pending.Sequence, m.config)
 		if e != nil {
 			return report, ErrState
+		}
+		if ctx.Err() != nil {
+			return report, ctx.Err()
 		}
 		if stale(f, time.Now().UTC()) {
 			if state.Discard(pending.Digest) != nil {
@@ -96,24 +122,24 @@ func runUsingState(ctx context.Context, m Material, state *lanclientstate.State)
 		if e != nil {
 			return report, ErrState
 		}
-		raw, e := bundle.Encode(collector.Snapshot())
+		if m.config.managed() && sequence > operational.MaxSafeInteger {
+			return report, ErrState
+		}
+		f, body, e = collectFrameWithSources(ctx, m.config, sequence, collectOperations, collectPackages, collectBasic)
 		if e != nil {
-			return report, ErrObservation
+			return report, e
 		}
-		var observation bundle.Bundle
-		if json.Unmarshal(raw, &observation) != nil {
-			return report, ErrObservation
-		}
-		f = frame{SchemaVersion: FrameVersion, Sequence: sequence, Observation: observation}
-		body, e := json.Marshal(f)
-		if e != nil || len(body) > MaxFrameBytes {
-			return report, ErrObservation
+		if ctx.Err() != nil {
+			return report, ctx.Err()
 		}
 		p, e := state.Stage(sequence, body)
 		if e != nil {
 			return report, ErrState
 		}
 		pending = &p
+	}
+	if ctx.Err() != nil {
+		return report, ctx.Err()
 	}
 	report.Sequence = pending.Sequence
 	for _, v := range []bool{f.Observation.Observation.CPU.Value != nil && f.Observation.Observation.CPU.Quality == "healthy", f.Observation.Observation.Memory.Value != nil && f.Observation.Observation.Memory.Quality == "healthy", f.Observation.Observation.Disk.Value != nil && f.Observation.Observation.Disk.Quality == "healthy"} {
@@ -138,6 +164,9 @@ func runUsingState(ctx context.Context, m Material, state *lanclientstate.State)
 	}
 	client := newHTTPClient(m.tlsConfig, m.config.Profile == "http-test")
 	defer client.CloseIdleConnections()
+	if ctx.Err() != nil {
+		return report, ctx.Err()
+	}
 	response, e := client.Do(req)
 	if e != nil {
 		return report, ErrTransport
@@ -175,27 +204,145 @@ func runUsingState(ctx context.Context, m Material, state *lanclientstate.State)
 	report.Duplicate = acknowledged.Duplicate
 	return report, nil
 }
+
+// collectFrame keeps the basic bundle unchanged and collects it after operations,
+// so its generated-at timestamp also bounds the operational collection start.
+func collectFrame(ctx context.Context, c Config, sequence uint64, collectOperations func(context.Context, time.Time) operational.Snapshot) (frame, []byte, error) {
+	return collectFrameWithCollectors(ctx, c, sequence, collectOperations, packagecollector.Collect)
+}
+
+func collectFrameWithCollectors(ctx context.Context, c Config, sequence uint64, collectOperations func(context.Context, time.Time) operational.Snapshot, collectPackages func(context.Context, string, time.Time) (linuxpackages.Snapshot, error)) (frame, []byte, error) {
+	return collectFrameWithSources(ctx, c, sequence, collectOperations, collectPackages, collector.Snapshot)
+}
+
+func collectFrameWithSources(ctx context.Context, c Config, sequence uint64, collectOperations func(context.Context, time.Time) operational.Snapshot, collectPackages func(context.Context, string, time.Time) (linuxpackages.Snapshot, error), collectBasic func() model.Device) (frame, []byte, error) {
+	f := frame{SchemaVersion: FrameVersion, Sequence: sequence}
+	if c.SchemaVersion == PackageConfigVersion && c.CollectionProfile != enrollmentcrypto.CollectionProfilePackages {
+		return f, nil, ErrConfiguration
+	}
+	if ctx.Err() != nil {
+		return f, nil, ctx.Err()
+	}
+	if c.managed() {
+		if sequence == 0 || sequence > operational.MaxSafeInteger {
+			return f, nil, ErrState
+		}
+		snapshot := collectOperations(ctx, time.Now().UTC())
+		if ctx.Err() != nil {
+			return f, nil, ctx.Err()
+		}
+		if operational.Validate(snapshot) != nil {
+			return f, nil, ErrObservation
+		}
+		f.SchemaVersion, f.Operational = FrameOperationalVersion, &snapshot
+		if c.SchemaVersion == PackageConfigVersion {
+			bounded, err := operational.TrimForPackageFrame(snapshot)
+			if err != nil {
+				return f, nil, ErrObservation
+			}
+			packages, err := collectPackages(ctx, bounded.GenerationID, bounded.CollectedAt)
+			if ctx.Err() != nil {
+				return f, nil, ctx.Err()
+			}
+			if err != nil || linuxpackages.Validate(packages) != nil || packages.GenerationID != bounded.GenerationID || !packages.CollectedAt.Equal(bounded.CollectedAt) {
+				return f, nil, ErrObservation
+			}
+			f.SchemaVersion, f.Operational, f.Packages = FramePackagesVersion, &bounded, &packages
+		}
+	}
+	raw, err := bundle.Encode(collectBasic())
+	if ctx.Err() != nil {
+		return f, nil, ctx.Err()
+	}
+	if err != nil || json.Unmarshal(raw, &f.Observation) != nil {
+		return f, nil, ErrObservation
+	}
+	body, err := json.Marshal(f)
+	if err != nil || len(body) > MaxFrameBytes {
+		return f, nil, ErrObservation
+	}
+	if f.Operational != nil && stale(f, time.Now().UTC()) {
+		return f, nil, ErrObservation
+	}
+	if _, err := decodeFrameForConfig(body, sequence, c); err != nil {
+		return f, nil, ErrObservation
+	}
+	return f, body, nil
+}
+
 func decodeFrame(raw []byte, sequence uint64) (frame, error) {
+	return decodeFrameForConfig(raw, sequence, Config{SchemaVersion: ConfigVersion})
+}
+func decodeFrameForConfig(raw []byte, sequence uint64, c Config) (frame, error) {
 	var f frame
-	if len(raw) == 0 || len(raw) > MaxFrameBytes {
+	if len(raw) == 0 || len(raw) > MaxFrameBytes || rejectDuplicateJSON(raw) != nil {
 		return f, ErrState
+	}
+	var fields map[string]json.RawMessage
+	if json.Unmarshal(raw, &fields) != nil {
+		return f, ErrState
+	}
+	want := 3
+	if c.SchemaVersion == OperationalConfigVersion {
+		want = 4
+	} else if c.SchemaVersion == PackageConfigVersion {
+		want = 5
+	}
+	if len(fields) != want {
+		return f, ErrState
+	}
+	for _, key := range []string{"schemaVersion", "sequence", "observation"} {
+		if len(fields[key]) == 0 || bytes.Equal(bytes.TrimSpace(fields[key]), []byte("null")) {
+			return f, ErrState
+		}
 	}
 	d := json.NewDecoder(bytes.NewReader(raw))
 	d.DisallowUnknownFields()
-	if d.Decode(&f) != nil {
+	if d.Decode(&f) != nil || d.Decode(new(any)) != io.EOF {
 		return f, ErrState
 	}
-	if d.Decode(new(any)) != io.EOF {
+	if c.SchemaVersion == OperationalConfigVersion {
+		if f.Packages != nil || f.SchemaVersion != FrameOperationalVersion || f.Sequence == 0 || f.Sequence > operational.MaxSafeInteger || c.CollectionProfile != operational.CollectionProfile || f.Operational == nil || len(fields["operational"]) > operational.MaxSnapshotBytes || exactOperationalJSON(fields["operational"]) != nil || operational.Validate(*f.Operational) != nil || f.Observation.Platform != "linux" || f.Operational.CollectedAt.After(f.Observation.GeneratedAt) {
+			return f, ErrState
+		}
+	} else if c.SchemaVersion == PackageConfigVersion {
+		if c.CollectionProfile != enrollmentcrypto.CollectionProfilePackages || f.SchemaVersion != FramePackagesVersion || f.Sequence == 0 || f.Sequence > operational.MaxSafeInteger || f.Operational == nil || f.Packages == nil || f.Observation.Platform != "linux" || exactPackageFrameJSON(raw) != nil || len(fields["observation"]) > MaxPackageObservationBytes || len(fields["operational"]) > operational.MaxPackageFrameSnapshotBytes || operational.Validate(*f.Operational) != nil || f.Operational.CollectedAt.After(f.Observation.GeneratedAt) {
+			return f, ErrState
+		}
+		d := f.Observation.Observation
+		for _, at := range []time.Time{d.CPU.CollectedAt, d.Memory.CollectedAt, d.Disk.CollectedAt} {
+			if at.After(d.LastSeen) {
+				return f, ErrState
+			}
+		}
+		for _, evidence := range d.Evidence {
+			if evidence.CollectedAt.After(d.LastSeen) {
+				return f, ErrState
+			}
+		}
+		p, err := linuxpackages.Decode(fields["packages"])
+		if err != nil || p.GenerationID != f.Operational.GenerationID || !p.CollectedAt.Equal(f.Operational.CollectedAt) {
+			return f, ErrState
+		}
+		op, err := json.Marshal(f.Operational)
+		if err != nil || len(op) > operational.MaxPackageFrameSnapshotBytes {
+			return f, ErrState
+		}
+		canonical, err := json.Marshal(f)
+		if err != nil || len(canonical) > MaxFrameBytes || len(f.Observation.Version) == 0 || len(f.Observation.Version) > 64 || len(f.Observation.Architecture) == 0 || len(f.Observation.Architecture) > 32 || len(f.Observation.Privacy) > 16 {
+			return f, ErrState
+		}
+	} else if f.SchemaVersion != FrameVersion || f.Operational != nil || f.Packages != nil {
 		return f, ErrState
 	}
-	if f.SchemaVersion != FrameVersion || f.Sequence != sequence || f.Observation.SchemaVersion != bundle.SchemaVersion || f.Observation.Product != "Tracebolt" || f.Observation.Platform != f.Observation.Observation.Platform || f.Observation.Scope != "single-read-only-local-observation" {
+	if f.Sequence != sequence || f.Observation.SchemaVersion != bundle.SchemaVersion || f.Observation.Product != "Tracebolt" || f.Observation.Platform != f.Observation.Observation.Platform || f.Observation.Scope != "single-read-only-local-observation" {
 		return f, ErrState
 	}
 	if e := bundle.ValidateObservation(f.Observation.Observation); e != nil {
 		return f, ErrState
 	}
 	encoded, e := json.Marshal(f.Observation)
-	if e != nil || len(encoded) > bundle.MaxBytes {
+	if e != nil || len(encoded) > bundle.MaxBytes || c.SchemaVersion == PackageConfigVersion && len(encoded) > MaxPackageObservationBytes {
 		return f, ErrState
 	}
 	return f, nil
@@ -203,6 +350,12 @@ func decodeFrame(raw []byte, sequence uint64) (frame, error) {
 func stale(f frame, now time.Time) bool {
 	d := f.Observation.Observation
 	times := []time.Time{f.Observation.GeneratedAt, d.LastSeen, d.CPU.CollectedAt, d.Memory.CollectedAt, d.Disk.CollectedAt}
+	if f.Operational != nil {
+		times = append(times, f.Operational.CollectedAt)
+	}
+	if f.Packages != nil {
+		times = append(times, f.Packages.CollectedAt)
+	}
 	for _, e := range d.Evidence {
 		times = append(times, e.CollectedAt)
 	}

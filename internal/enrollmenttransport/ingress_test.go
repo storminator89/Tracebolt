@@ -261,6 +261,10 @@ func TestSlowBodyCannotOutrunRevocationAndAdmissionIsBounded(t *testing.T) {
 	for _, profile := range []string{"tls", "http-test"} {
 		t.Run(profile, func(t *testing.T) {
 			f := newFixture(t, profile, true)
+			count := MaxInFlight
+			if profile == "tls" {
+				count = 1
+			} // verified TLS identity has a one-request fairness bound
 			entered := make(chan struct{}, MaxInFlight)
 			release := make(chan struct{})
 			var releaseOnce sync.Once
@@ -274,7 +278,7 @@ func TestSlowBodyCannotOutrunRevocationAndAdmissionIsBounded(t *testing.T) {
 			at := time.Now().UTC()
 			raw := frame(t, 1, at)
 			statuses := make(chan int, MaxInFlight)
-			for n := 0; n < MaxInFlight; n++ {
+			for n := 0; n < count; n++ {
 				r := f.request(t, s.URL, 1, at, raw)
 				go func() {
 					res, err := client.Do(r)
@@ -287,7 +291,7 @@ func TestSlowBodyCannotOutrunRevocationAndAdmissionIsBounded(t *testing.T) {
 					statuses <- res.StatusCode
 				}()
 			}
-			for n := 0; n < MaxInFlight; n++ {
+			for n := 0; n < count; n++ {
 				select {
 				case <-entered:
 				case <-time.After(5 * time.Second):
@@ -297,7 +301,7 @@ func TestSlowBodyCannotOutrunRevocationAndAdmissionIsBounded(t *testing.T) {
 			response(t, client, f.request(t, s.URL, 1, at, raw), http.StatusTooManyRequests)
 			f.revoke(t)
 			releaseOnce.Do(func() { close(release) })
-			for n := 0; n < MaxInFlight; n++ {
+			for n := 0; n < count; n++ {
 				select {
 				case status := <-statuses:
 					if status != http.StatusForbidden {

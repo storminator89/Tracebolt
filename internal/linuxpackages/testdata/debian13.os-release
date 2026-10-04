@@ -1,0 +1,7 @@
+# Synthetic fixture, not a captured host file.
+PRETTY_NAME="Debian GNU/Linux 13 (trixie)"
+NAME="Debian GNU/Linux"
+ID=debian
+VERSION_ID="13"
+VERSION_CODENAME=trixie
+HOME_URL="https://example.invalid/private-path"

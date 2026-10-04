@@ -14,14 +14,20 @@ import (
 )
 
 func TestValidateGuidedHandoffIsLocalAndPreservesState(t *testing.T) {
-	for _, profile := range []string{"tls", "http-test"} {
-		t.Run(profile, func(t *testing.T) {
+	for _, mode := range []struct{ profile, version string }{{"tls", GuidedConfigVersion}, {"http-test", GuidedConfigVersion}, {"tls", OperationalConfigVersion}, {"http-test", OperationalConfigVersion}, {"tls", PackageConfigVersion}, {"http-test", PackageConfigVersion}} {
+		profile := mode.profile
+		t.Run(profile+"/"+mode.version, func(t *testing.T) {
 			var calls atomic.Int32
 			f := integrationFixture(t, profile, func(next http.Handler) http.Handler {
 				return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { calls.Add(1); next.ServeHTTP(w, r) })
 			})
 			c := f.material.config
-			c.SchemaVersion = GuidedConfigVersion
+			c.SchemaVersion = mode.version
+			if mode.version == OperationalConfigVersion {
+				c = operationsConfig(c)
+			} else if mode.version == PackageConfigVersion {
+				c = packagesConfig(c)
+			}
 			if InitializeGuidedState(c) != nil {
 				t.Fatal("initialize fixture")
 			}

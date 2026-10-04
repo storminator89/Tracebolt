@@ -1,8 +1,12 @@
-import { t, ui } from './i18n';
+import { t, ui, useLocale } from './i18n';
 import { useEffect, useState } from 'react';
 import { ArrowLeft, ArrowRight, Check, CheckCircle2, ChevronRight, Clock3, Database, FileText, HardDrive, Info, ListFilter, LoaderCircle, MemoryStick, MessageSquare, Monitor, Play, ShieldCheck, Terminal, TriangleAlert } from 'lucide-react';
 import { mutate, request } from './api';
 import { AIAnalysisPanel } from './ai';
+import { OperationalInventoryPanel } from './operational';
+import { SecurityCoveragePanel } from './security-coverage';
+import { PackageObservationsPanel } from './package-observations';
+import { useOperator } from './auth';
 import { ActivityList, CaseStatus, Dialog, EvidenceCard, Loading, MetricValue, OSIcon, SectionHead, Severity, Source, Status } from './components';
 import type { Case, Device } from './types';
 import { fullDate, relativeTime, noteBytes, platformLabels } from './utils';
@@ -11,26 +15,37 @@ export function DeviceDetail({ id, onClose, onCase }: {
     onClose: () => void;
     onCase: (id: string) => void;
 }) {
+    const operator = useOperator();
+    const [locale] = useLocale();
     const [device, setDevice] = useState<Device | null>(null);
     const [error, setError] = useState('');
     const [tab, setTab] = useState('overview');
     const [retry, setRetry] = useState(0);
     useEffect(() => {
         let active = true;
+        const controller = new AbortController();
         setDevice(null);
         setError('');
         setTab('overview');
-        request<Device>(`/devices/${encodeURIComponent(id)}`).then(value => {
-            if (active)
+        request<Device>(`/devices/${encodeURIComponent(id)}`, { signal: controller.signal }).then(value => {
+            if (active) {
+                if (!value || value.id !== id) { setError(t('Der Manager hat keine gültigen JSON-Daten zurückgegeben.')); return; }
                 setDevice(value);
+            }
         }).catch(err => {
             if (active)
                 setError(err.message);
         });
-        return () => { active = false; };
+        return () => { active = false; controller.abort(); };
     }, [id, retry]);
-    return <Dialog title={device ? t("Ger\u00E4t {0}", { "0": device.name }) : t("Ger\u00E4tedetails")} onClose={onClose} className="device-drawer"><div className="drawer-eyebrow"><Monitor size={14}/>{t("GER\u00C4TEDETAILS")}</div>{error ? <div className="detail-error" role="alert"><TriangleAlert size={25}/><h2>{t("Ger\u00E4t nicht verf\u00FCgbar")}</h2><p>{ui(error)}</p><button className="button" onClick={() => setRetry(v => v + 1)}>{t("Erneut versuchen")}</button></div> : !device ? <Loading /> : <><div className="device-detail-heading"><OSIcon platform={device.platform}/><div><h2>{device.name}</h2><p>{device.os}</p></div></div><div className="detail-badges"><Status status={device.status}/><Source synthetic={device.synthetic} source={device.source}/><span className="detail-time"><Clock3 size={13}/>{relativeTime(device.lastSeen)}</span></div><div className={`provenance-notice ${device.synthetic ? '' : 'real'}`}><Database size={16}/><p>{device.synthetic ? t("Synthetisches Beispielger\u00E4t. Messwerte, Ereignisse und Belege dienen der Demonstration.") : device.source === "lan" ? t("Freigegebener LAN-Agent. Messwerte werden erst nach einer akzeptierten Übertragung angezeigt.") : t("Lokale {0}-Umgebung. Messwerte werden nur angezeigt, wenn ein Collector sie geliefert hat.", { "0": platformLabels[device.platform] })}</p></div><div className="drawer-tabs" role="tablist" aria-label={t("Ger\u00E4tedaten")}>{[{ id: 'overview', name: t("\u00DCbersicht") }, { id: 'evidence', name: t("Belege"), count: device.evidence.length }, { id: 'capabilities', name: t("F\u00E4higkeiten"), count: device.capabilities.length }].map(item => <button key={item.id} role="tab" aria-selected={tab === item.id} aria-controls={`device-${item.id}`} id={`tab-${item.id}`} onClick={() => setTab(item.id)}>{item.name}{item.count !== undefined && <span>{item.count}</span>}</button>)}</div><div className="drawer-content" role="tabpanel" id={`device-${tab}`} aria-labelledby={`tab-${tab}`}>
+    const inventoryAvailable = Boolean(device && device.id === id && !device.synthetic && device.source === 'lan' && (device.platform === 'linux' || device.platform === 'unknown'));
+    const securityAvailable = inventoryAvailable && operator?.mode === 'lan' && operator.authenticated;
+    const securityTabLabel = locale === 'de' ? 'Sicherheitsabdeckung' : 'Security coverage';
+    const tabs: {id:string;name:string;count?:number}[] = device ? [{ id: 'overview', name: t("\u00DCbersicht") }, ...(inventoryAvailable ? [{ id: 'inventory', name: t('Inventar') }] : []), ...(securityAvailable ? [{ id: 'security', name: securityTabLabel }] : []), { id: 'evidence', name: t("Belege"), count: device.evidence.length }, { id: 'capabilities', name: t("F\u00E4higkeiten"), count: device.capabilities.length }] : [];
+    return <Dialog title={device ? t("Ger\u00E4t {0}", { "0": device.name }) : t("Ger\u00E4tedetails")} onClose={onClose} className="device-drawer"><div className="drawer-eyebrow"><Monitor size={14}/>{t("GER\u00C4TEDETAILS")}</div>{error ? <div className="detail-error" role="alert"><TriangleAlert size={25}/><h2>{t("Ger\u00E4t nicht verf\u00FCgbar")}</h2><p>{ui(error)}</p><button className="button" onClick={() => setRetry(v => v + 1)}>{t("Erneut versuchen")}</button></div> : !device ? <Loading /> : <><div className="device-detail-heading"><OSIcon platform={device.platform}/><div><h2>{device.name}</h2><p>{device.os}</p></div></div><div className="detail-badges"><Status status={device.status}/><Source synthetic={device.synthetic} source={device.source}/><span className="detail-time"><Clock3 size={13}/>{relativeTime(device.lastSeen)}</span></div><div className={`provenance-notice ${device.synthetic ? '' : 'real'}`}><Database size={16}/><p>{device.synthetic ? t("Synthetisches Beispielger\u00E4t. Messwerte, Ereignisse und Belege dienen der Demonstration.") : device.source === "lan" ? t("Freigegebener LAN-Agent. Messwerte werden erst nach einer akzeptierten Übertragung angezeigt.") : t("Lokale {0}-Umgebung. Messwerte werden nur angezeigt, wenn ein Collector sie geliefert hat.", { "0": platformLabels[device.platform] })}</p></div><div className="drawer-tabs" role="tablist" aria-label={t("Ger\u00E4tedaten")}>{tabs.map(item => <button key={item.id} role="tab" tabIndex={tab === item.id ? 0 : -1} aria-selected={tab === item.id} aria-controls={`device-${item.id}`} id={`tab-${item.id}`} onClick={() => setTab(item.id)} onKeyDown={event => { const index=tabs.findIndex(entry=>entry.id===item.id); const target=event.key==='ArrowRight'?(index+1)%tabs.length:event.key==='ArrowLeft'?(index+tabs.length-1)%tabs.length:event.key==='Home'?0:event.key==='End'?tabs.length-1:null; if(target!==null){event.preventDefault();setTab(tabs[target].id);document.getElementById(`tab-${tabs[target].id}`)?.focus();} }}>{item.name}{item.count !== undefined && <span>{item.count}</span>}</button>)}</div><div className="drawer-content" role="tabpanel" id={`device-${tab}`} aria-labelledby={`tab-${tab}`}>
     {tab === 'overview' && <><div className="device-metrics">{[{ label: 'CPU', metric: device.cpu, icon: Terminal }, { label: t("Arbeitsspeicher"), metric: device.memory, icon: MemoryStick }, { label: t("Datentr\u00E4ger"), metric: device.disk, icon: HardDrive }].map(item => <div className="device-metric-card" key={item.label}><span className="device-metric-label"><item.icon size={14}/>{ui(item.label)}</span><MetricValue metric={item.metric}/><span className="metric-source">{item.metric.source}</span></div>)}</div><section className="detail-section"><SectionHead title={t("Ger\u00E4teprofil")}/><dl className="metadata-grid"><div><dt>{t("Ger\u00E4tename")}</dt><dd className="mono">{device.name}</dd></div><div><dt>{t("Standort")}</dt><dd>{device.site}</dd></div><div><dt>{t("Gruppe")}</dt><dd>{device.group}</dd></div><div><dt>{t("IP-Adresse")}</dt><dd className="mono">{device.ip || t("Nicht erfasst")}</dd></div><div><dt>{t("Laufzeit")}</dt><dd>{device.uptime || t("Nicht verf\u00FCgbar")}</dd></div><div><dt>{t("Collector-Version")}</dt><dd className="mono">{device.agentVersion || t("Nicht verf\u00FCgbar")}</dd></div><div className="metadata-wide"><dt>{t("Letzter Kontakt")}</dt><dd>{fullDate(device.lastSeen)}</dd></div></dl>{device.tags.length > 0 && <div className="device-tags">{device.tags.map(tag => <span key={tag}>{tag}</span>)}</div>}</section><section className="detail-section"><SectionHead title={t("Verkn\u00FCpfte Untersuchungen")} count={device.caseIds.length}/>{device.caseIds.length ? device.caseIds.map(caseId => <button className="linked-case" key={caseId} onClick={() => onCase(caseId)}><span><FileText size={16}/><strong>{caseId}</strong></span><span>{t("Untersuchen")}<ArrowRight size={15}/></span></button>) : <p className="quiet-empty"><CheckCircle2 size={16}/>{t("Keine Untersuchung zu diesem Ger\u00E4t.")}</p>}</section><div className="quality-explainer"><Info size={16}/><p><strong>{t("Datenqualit\u00E4t ist Teil der Diagnose.")}</strong>{" " + t("Veraltete, verweigerte oder fehlende Werte sind ausdr\u00FCcklich markiert. Fehlende Daten bedeuten keinen gesunden Zustand.")}</p></div></>}
+    {tab === 'inventory' && inventoryAvailable && <OperationalInventoryPanel key={device.id} deviceId={device.id}/> }
+    {tab === 'security' && securityAvailable && <><SecurityCoveragePanel deviceId={device.id} sessionKey={operator.expiresAt ?? undefined}/><PackageObservationsPanel deviceId={device.id} sessionKey={operator.expiresAt ?? undefined}/></>}
     {tab === 'evidence' && <><div className="tab-intro"><h3>{t("Jede Beobachtung hat eine Quelle.")}</h3><p>{t("\u00D6ffne einen Beleg f\u00FCr Messwert, Zeitpunkt und Herkunft.")}</p></div><div className="evidence-list">{device.evidence.map((evidence, index) => <EvidenceCard key={evidence.id} evidence={evidence} index={index}/>)}</div>{!device.evidence.length && <p className="quiet-empty">{t("F\u00FCr dieses Ger\u00E4t sind keine Belege verf\u00FCgbar.")}</p>}</>}
     {tab === 'capabilities' && <><div className="tab-intro"><h3>{t("Unterst\u00FCtzung transparent gemacht.")}</h3><p>{t("F\u00E4higkeiten gelten nur f\u00FCr den angegebenen Collector und seine Berechtigungen.")}</p></div><div className="device-capabilities">{device.capabilities.map(capability => <div key={capability.id}><span className={`capability-icon ${capability.status}`}>{capability.status === 'supported' ? <Check size={16}/> : capability.status === 'limited' ? <Info size={16}/> : <span>—</span>}</span><div><strong>{capability.name}</strong><p>{capability.detail}</p></div><span className={`capability-state ${capability.status}`}>{{ supported: t("Unterst\u00FCtzt"), limited: t("Eingeschr\u00E4nkt"), unsupported: t("Nicht verf\u00FCgbar"), denied: t("Verweigert") }[capability.status]}</span></div>)}</div></>}
   </div><div className="drawer-footer"><ShieldCheck size={14}/><span>{t("Lesende Ger\u00E4teansicht \u00B7 keine Remote-Ausf\u00FChrung")}</span><code>{device.id}</code></div></>}</Dialog>;

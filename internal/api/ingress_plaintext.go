@@ -45,7 +45,7 @@ func (h *httpTestIngress) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	now := time.Now().UTC()
 	frame, e := lanstore.ValidateFrame(verified.Body, now)
-	if e != nil {
+	if e != nil || !lanstore.FrameMatchesCollectionProfile(frame, "basic-readonly-v1") {
 		status, code := 400, "invalid_frame"
 		if errors.Is(e, lanstore.ErrStale) {
 			status, code = 409, "stale_sample"

@@ -1,0 +1,122 @@
+{
+  "schemaVersion": 1,
+  "scope": "Static Go dependency advisory scan of the frozen Tracebolt application; not a managed-device vulnerability assessment",
+  "completedDateUTC": "2026-10-04",
+  "source": {
+    "candidate": "conditional-review-candidate-20261004",
+    "manifestSHA256": "9c899da0c74e0722906d76e319470b348e059e6870733922e857e04e32bea87e",
+    "fileCount": 532,
+    "allSourceHashesVerifiedBeforeAndAfter": true,
+    "excluded": "Separate unintegrated cached APT overlay"
+  },
+  "scanner": {
+    "name": "golang.org/x/vuln/cmd/govulncheck",
+    "version": "v1.8.0",
+    "binarySHA256": "63be04eeacf136e961c969190a0a236144dfe52a506b8636b3c3ab3115773e1a",
+    "goVersion": "go1.27.1",
+    "GOOS": "linux",
+    "GOARCH": "amd64",
+    "advisoryDatabase": "https://vuln.go.dev",
+    "arguments": [
+      "-show",
+      "verbose",
+      "./..."
+    ],
+    "environment": {
+      "GOPROXY": "off",
+      "GOSUMDB": "off",
+      "GOTOOLCHAIN": "local",
+      "GOFLAGS": "-buildvcs=false"
+    },
+    "goTelemetryModeObserved": "local"
+  },
+  "result": {
+    "exitCode": 0,
+    "reachableSymbolFindings": 0,
+    "importedPackageFindings": 0,
+    "requiredModuleOnlyFindings": [
+      {
+        "id": "GO-2026-5932",
+        "module": "golang.org/x/crypto",
+        "moduleVersion": "v0.57.0",
+        "package": "golang.org/x/crypto/openpgp",
+        "importedByScannedApplication": false,
+        "reachableFromScannedApplication": false,
+        "fixedVersionListed": null,
+        "summary": "The unused OpenPGP package is unmaintained and has known design or security problems.",
+        "advisoryURL": "https://pkg.go.dev/vuln/GO-2026-5932"
+      }
+    ]
+  },
+  "rootPackageCount": 45,
+  "rootPackages": [
+    "localrmm/cmd/agent",
+    "localrmm/cmd/agent-service",
+    "localrmm/cmd/dev-agent",
+    "localrmm/cmd/enroll-agent",
+    "localrmm/cmd/lan-agent",
+    "localrmm/cmd/lan-manager",
+    "localrmm/cmd/manager",
+    "localrmm/internal/agentinstall",
+    "localrmm/internal/agentloop",
+    "localrmm/internal/analysis",
+    "localrmm/internal/api",
+    "localrmm/internal/assessment",
+    "localrmm/internal/bundle",
+    "localrmm/internal/collector",
+    "localrmm/internal/debianversion",
+    "localrmm/internal/enrollmentclient",
+    "localrmm/internal/enrollmentconfig",
+    "localrmm/internal/enrollmentcrypto",
+    "localrmm/internal/enrollmentissuer",
+    "localrmm/internal/enrollmentservice",
+    "localrmm/internal/enrollmentstate",
+    "localrmm/internal/enrollmentstore",
+    "localrmm/internal/enrollmenttransport",
+    "localrmm/internal/fixtures",
+    "localrmm/internal/keyvalidation",
+    "localrmm/internal/lanclient",
+    "localrmm/internal/lanclientstate",
+    "localrmm/internal/lanconfig",
+    "localrmm/internal/lanstore",
+    "localrmm/internal/lantrust",
+    "localrmm/internal/linuxpackages",
+    "localrmm/internal/model",
+    "localrmm/internal/offlinecatalog",
+    "localrmm/internal/operational",
+    "localrmm/internal/operatorauth",
+    "localrmm/internal/packagecollector",
+    "localrmm/internal/rules",
+    "localrmm/internal/signedhttp",
+    "localrmm/internal/store",
+    "localrmm/internal/telemetry",
+    "localrmm/tests/container",
+    "localrmm/tests/e2e-review/enrollmentfixture",
+    "localrmm/tests/e2e-review/lanfixture",
+    "localrmm/tests/lanclient",
+    "localrmm/tests/security"
+  ],
+  "moduleCount": 11,
+  "modules": [
+    "localrmm",
+    "filippo.io/edwards25519@v1.2.0",
+    "github.com/dustin/go-humanize@v1.0.1",
+    "github.com/google/uuid@v1.6.0",
+    "github.com/remyoudompheng/bigfft@v0.0.0-20230129092748-24d4a6f8daec",
+    "golang.org/x/crypto@v0.57.0",
+    "golang.org/x/sys@v0.48.0",
+    "modernc.org/libc@v1.77.1",
+    "modernc.org/mathutil@v1.7.1",
+    "modernc.org/memory@v1.12.1",
+    "modernc.org/sqlite@v1.60.1"
+  ],
+  "standardLibrary": "go1.27.1",
+  "scanOutputSHA256": "52db5ca19281951a180849c92e1fa46741889f0c6e2d1bacbcb5f6aa64db4079",
+  "limits": [
+    "This is a fresh completed scan; the earlier blocked attempt supplies no evidence.",
+    "Known-advisory and static reachability results are not a guarantee of vulnerability absence.",
+    "Only the Linux amd64 build context was scanned; no Windows or macOS advisory result is implied.",
+    "This scan does not execute application tests or establish browser, container, service-installation or deployment acceptance.",
+    "The separate unintegrated APT overlay is outside this source snapshot."
+  ]
+}

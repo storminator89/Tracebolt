@@ -1,0 +1,23 @@
+Package: tracebolt-fixture-binary
+Status: hold ok installed
+Version: 1:2.0~rc1-1+deb13u1+b1
+Architecture: amd64
+Source: tracebolt-fixture-source (1:2.0~rc1-1+deb13u1)
+Maintainer: private-synthetic-person@example.invalid
+Description: private synthetic description
+ ignored continuation
+
+Package: tracebolt-fixture-binary
+Status: install ok installed
+Version: 1:2.0~rc1-1+deb13u1
+Architecture: arm64
+Source: tracebolt-fixture-source
+
+Package: tracebolt-fixture-default
+Status: install reinstreq half-installed
+Version: 2.0-1+b9
+Architecture: all
+
+Package: tracebolt-fixture-residual
+Status: deinstall ok config-files
+

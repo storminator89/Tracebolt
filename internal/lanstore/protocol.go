@@ -6,6 +6,10 @@ import (
 	"errors"
 	"io"
 	"localrmm/internal/bundle"
+	"localrmm/internal/enrollmentcrypto"
+	"localrmm/internal/linuxpackages"
+	"localrmm/internal/model"
+	"localrmm/internal/operational"
 	"reflect"
 	"strings"
 	"time"
@@ -13,6 +17,10 @@ import (
 )
 
 const FrameVersion = "tracebolt.agent-telemetry.v1"
+const FrameOperationalVersion = "tracebolt.agent-telemetry.v2"
+const FramePackagesVersion = "tracebolt.agent-telemetry.v3"
+const MaxPackageObservationBytes = 16 << 10
+const MaxPackageOperationalBytes = operational.MaxPackageFrameSnapshotBytes
 const MaxFrameBytes = 72 * 1024
 const SampleMaxAge = 2 * time.Minute
 const AllowedClockSkew = 30 * time.Second
@@ -21,9 +29,11 @@ var ErrFrame = errors.New("agent telemetry frame is invalid")
 var ErrStale = errors.New("agent observation is stale or future-dated")
 
 type Frame struct {
-	SchemaVersion string        `json:"schemaVersion"`
-	Sequence      uint64        `json:"sequence"`
-	Observation   bundle.Bundle `json:"observation"`
+	SchemaVersion string                  `json:"schemaVersion"`
+	Sequence      uint64                  `json:"sequence"`
+	Observation   bundle.Bundle           `json:"observation"`
+	Operational   *operational.Snapshot   `json:"operational,omitempty"`
+	Packages      *linuxpackages.Snapshot `json:"packages,omitempty"`
 }
 
 // ValidateFrame separates protocol version from application/agent build version.
@@ -43,8 +53,43 @@ func ValidateFrame(raw []byte, now time.Time) (Frame, error) {
 	if _, err = decoder.Token(); err != io.EOF {
 		return frame, ErrFrame
 	}
-	if !shape(value, reflect.TypeOf(frame)) {
+	shapeType := reflect.TypeOf(frame)
+	object, ok := value.(map[string]any)
+	if !ok {
 		return frame, ErrFrame
+	}
+	if object["schemaVersion"] == FrameVersion {
+		shapeType = reflect.TypeOf(struct {
+			SchemaVersion string        `json:"schemaVersion"`
+			Sequence      uint64        `json:"sequence"`
+			Observation   bundle.Bundle `json:"observation"`
+		}{})
+	}
+	if object["schemaVersion"] == FrameOperationalVersion {
+		shapeType = reflect.TypeOf(struct {
+			SchemaVersion string                `json:"schemaVersion"`
+			Sequence      uint64                `json:"sequence"`
+			Observation   bundle.Bundle         `json:"observation"`
+			Operational   *operational.Snapshot `json:"operational"`
+		}{})
+	}
+	if !shape(value, shapeType) {
+		return frame, ErrFrame
+	}
+	if object["schemaVersion"] == FrameOperationalVersion {
+		var rawMembers map[string]json.RawMessage
+		if json.Unmarshal(raw, &rawMembers) != nil || len(rawMembers["operational"]) > operational.MaxSnapshotBytes {
+			return frame, ErrFrame
+		}
+	}
+	if object["schemaVersion"] == FramePackagesVersion {
+		var members map[string]json.RawMessage
+		if json.Unmarshal(raw, &members) != nil || len(members["observation"]) > MaxPackageObservationBytes || len(members["operational"]) > MaxPackageOperationalBytes {
+			return frame, ErrFrame
+		}
+		if _, err := linuxpackages.Decode(members["packages"]); err != nil {
+			return frame, ErrFrame
+		}
 	}
 	strict := json.NewDecoder(bytes.NewReader(raw))
 	strict.DisallowUnknownFields()
@@ -52,7 +97,7 @@ func ValidateFrame(raw []byte, now time.Time) (Frame, error) {
 		return frame, ErrFrame
 	}
 	b := frame.Observation
-	if frame.SchemaVersion != FrameVersion || frame.Sequence == 0 || frame.Sequence > 1<<63-1 || b.SchemaVersion != bundle.SchemaVersion || b.Product != "Tracebolt" || b.Version == "" || len(b.Version) > 64 || b.Platform != b.Observation.Platform || b.Scope != "single-read-only-local-observation" {
+	if (frame.SchemaVersion != FrameVersion && frame.SchemaVersion != FrameOperationalVersion && frame.SchemaVersion != FramePackagesVersion) || frame.Sequence == 0 || frame.Sequence > 1<<63-1 || b.SchemaVersion != bundle.SchemaVersion || b.Product != "Tracebolt" || b.Version == "" || len(b.Version) > 64 || b.Platform != b.Observation.Platform || b.Scope != "single-read-only-local-observation" {
 		return frame, ErrFrame
 	}
 	if len(b.Architecture) == 0 || len(b.Architecture) > 32 || len(b.Privacy) > 16 {
@@ -66,6 +111,39 @@ func ValidateFrame(raw []byte, now time.Time) (Frame, error) {
 	encoded, err := json.Marshal(b)
 	if err != nil || len(encoded) > bundle.MaxBytes {
 		return frame, ErrFrame
+	}
+	if frame.SchemaVersion == FrameVersion {
+		if frame.Operational != nil || frame.Packages != nil {
+			return frame, ErrFrame
+		}
+	} else {
+		if frame.SchemaVersion == FrameOperationalVersion && frame.Packages != nil {
+			return frame, ErrFrame
+		}
+		op := frame.Operational
+		if op == nil || frame.Sequence > operational.MaxSafeInteger || b.Platform != "linux" || operational.Validate(*op) != nil {
+			return frame, ErrFrame
+		}
+		if op.CollectedAt.After(b.GeneratedAt) {
+			return frame, ErrFrame
+		}
+		if now.Sub(op.CollectedAt) > SampleMaxAge || op.CollectedAt.Sub(now) > AllowedClockSkew {
+			return frame, ErrStale
+		}
+	}
+	if frame.SchemaVersion == FramePackagesVersion {
+		p := frame.Packages
+		if p == nil || linuxpackages.Validate(*p) != nil || p.GenerationID != frame.Operational.GenerationID || !p.CollectedAt.Equal(frame.Operational.CollectedAt) || len(encoded) > MaxPackageObservationBytes {
+			return frame, ErrFrame
+		}
+		op, err := json.Marshal(frame.Operational)
+		if err != nil || len(op) > MaxPackageOperationalBytes {
+			return frame, ErrFrame
+		}
+		canonical, err := json.Marshal(frame)
+		if err != nil || len(canonical) > MaxFrameBytes {
+			return frame, ErrFrame
+		}
 	}
 	times := []time.Time{b.GeneratedAt, b.Observation.LastSeen, b.Observation.CPU.CollectedAt, b.Observation.Memory.CollectedAt, b.Observation.Disk.CollectedAt}
 	for _, e := range b.Observation.Evidence {
@@ -130,7 +208,7 @@ func readStrictValue(d *json.Decoder, depth int) (any, error) {
 					return nil, err
 				}
 				list = append(list, child)
-				if len(list) > 64 {
+				if len(list) > 256 {
 					return nil, ErrFrame
 				}
 			}
@@ -179,6 +257,14 @@ func shape(value any, t reflect.Type) bool {
 			if name == "" {
 				name = field.Name
 			}
+			// Case/evidence provenance is persisted internally for AI export policy.
+			// It is not a new support-bundle-v1 wire field.
+			if t == reflect.TypeOf(model.Evidence{}) && name == "collectionProfile" {
+				if _, present := object[name]; present {
+					return false
+				}
+				continue
+			}
 			expected++
 			child, exists := object[name]
 			if !exists || !shape(child, field.Type) {
@@ -206,6 +292,21 @@ func shape(value any, t reflect.Type) bool {
 	case reflect.Float32, reflect.Float64, reflect.Int, reflect.Int64, reflect.Uint64:
 		_, ok := value.(json.Number)
 		return ok
+	default:
+		return false
+	}
+}
+
+// FrameMatchesCollectionProfile accepts only the profile from trusted durable
+// identity state, never a profile claimed by the incoming payload itself.
+func FrameMatchesCollectionProfile(frame Frame, profile string) bool {
+	switch profile {
+	case "basic-readonly-v1":
+		return frame.SchemaVersion == FrameVersion && frame.Operational == nil && frame.Packages == nil
+	case operational.CollectionProfile:
+		return frame.SchemaVersion == FrameOperationalVersion && frame.Operational != nil && frame.Packages == nil && frame.Operational.CollectionProfile == profile && frame.Observation.Platform == "linux"
+	case enrollmentcrypto.CollectionProfilePackages:
+		return frame.SchemaVersion == FramePackagesVersion && frame.Operational != nil && frame.Packages != nil && frame.Operational.CollectionProfile == operational.CollectionProfile && frame.Observation.Platform == "linux"
 	default:
 		return false
 	}

@@ -26,7 +26,7 @@ func ValidateIntent(i Intent) error {
 			return ErrContract
 		}
 	}
-	if !canonicalOrigin(i.Origin, i.Profile) || i.CollectionProfile != CollectionProfile || i.TemplateVersion != TemplateVersion || i.KeyGeneration != 1 || !validHex(i.SerialHex, 32) || !ValidHash(i.KeyFingerprint) || !ValidHash(i.CSRHash) || !ValidHash(i.ClaimHash) || !ValidHash(i.IssuerFingerprint) {
+	if !canonicalOrigin(i.Origin, i.Profile) || !ValidCollectionProfile(i.CollectionProfile) || i.TemplateVersion != TemplateVersion || i.KeyGeneration != 1 || !validHex(i.SerialHex, 32) || !ValidHash(i.KeyFingerprint) || !ValidHash(i.CSRHash) || !ValidHash(i.ClaimHash) || !ValidHash(i.IssuerFingerprint) {
 		return ErrContract
 	}
 	if i.NotBefore <= 0 || i.NotAfter <= i.NotBefore || i.NotAfter > 253402300799 || i.NotAfter-i.NotBefore > MaxCertificateLifetimeSeconds {
