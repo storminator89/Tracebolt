@@ -2,6 +2,12 @@
 
 Meaningful development checkpoints are recorded here. These are prototype milestones, not production releases.
 
+## 2026-10-04 — Construct the exact review byte-limit fixture efficiently
+
+- Replace repeated whole-document serialization for every removed ASCII padding byte with one initial measurement and bounded bulk trimming of the same rows. The existing exact65,536-byte acceptance and65,537-byte rejection assertions remain unchanged; add an explicit zero-remainder check.
+- Preserve production source, default test timeout and all browser privacy/freshness assertions. The previous hosted run passed616/617 frontend tests but timed out constructing this boundary fixture before Chromium could start.
+- The owner's corrected contract file passes10/10 and full frontend617/617, typecheck and production build pass. The affected test took2ms locally; exact-source hosted browser/CI acceptance is still pending.
+
 ## 2026-10-04 — Recover conditional review after transient read contention
 
 - Exact-source browser diagnostics observed a restored review GET returning `429 storage_busy` while concurrent coverage loaded successfully. Private stale rows were cleared correctly; the missing fresh view was a read-admission recovery defect.

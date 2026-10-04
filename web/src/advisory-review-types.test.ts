@@ -45,7 +45,16 @@ describe('strict conditional review contract', () => {
     it('accepts exactly the canonical 64 KiB core limit and rejects one byte more', () => {
         const value = reviewView(), r = value.review!; r.pairsInspected = 64; r.comparisons = 64; r.catalog!.ruleCount = 64; r.candidates = Array.from({ length: 64 }, (_, i) => ({ ...reviewCandidate(), advisoryId: `A-${String(i).padStart(4, '0')}`, reportedSourceVersion: '1'.repeat(512), declaredFixedVersion: '2'.repeat(512) }));
         const size = () => new TextEncoder().encode(JSON.stringify(r)).byteLength;
-        while (size() > ADVISORY_REVIEW_MAX_BYTES) { const row = r.candidates.find(row => row.declaredFixedVersion.length > 1)!; row.declaredFixedVersion = row.declaredFixedVersion.slice(0, -1); }
+        // These padding versions contain only unescaped ASCII: one removed digit is one JSON byte.
+        // Trim the same rows in bulk rather than serializing the full fixture for every digit.
+        let excess = size() - ADVISORY_REVIEW_MAX_BYTES;
+        for (const row of r.candidates) {
+            if (excess <= 0) break;
+            const remove = Math.min(excess, row.declaredFixedVersion.length - 1);
+            row.declaredFixedVersion = row.declaredFixedVersion.slice(0, row.declaredFixedVersion.length - remove);
+            excess -= remove;
+        }
+        expect(excess).toBe(0);
         expect(size()).toBe(ADVISORY_REVIEW_MAX_BYTES); expect(valid(value)).toBe(true); r.candidates.find(row => row.declaredFixedVersion.length < 512)!.declaredFixedVersion += '1'; expect(size()).toBe(ADVISORY_REVIEW_MAX_BYTES + 1); expect(valid(value)).toBe(false);
     });
     it('rejects impossible work counters independently of row and byte limits', () => {
