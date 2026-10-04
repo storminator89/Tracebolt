@@ -65,18 +65,25 @@ jobs:
         with:
           go-version-file: go.mod
           cache: false
+      - name: Prepare verified dependencies before the offline dense test
+        run: |
+          go mod download
+          go mod verify
       - name: Run one exact dense case with the unchanged ten-minute test budget
         env:
           DENSE_TOPOLOGY: ${{ matrix.topology }}
           DENSE_PROFILE: ${{ matrix.profile }}
+          GOTOOLCHAIN: local
+          GOPROXY: off
+          GOSUMDB: off
         shell: bash
         run: |
           set -euo pipefail
           ROOT_TEST=TestIndependentPackageStoreDenseCapacityAndActualIngress
-          (umask 077; : > "$RUNNER_TEMP/dense-package-race.jsonl")
+          (umask 077; : > "$RUNNER_TEMP/dense-package-race.jsonl"; : > "$RUNNER_TEMP/dense-package-race.stderr")
           if ! go test -race -json -buildvcs=false ./tests/security \
             -run "^${ROOT_TEST}$/^${DENSE_TOPOLOGY}$/^${DENSE_PROFILE}$" \
-            -count=1 -timeout=10m > "$RUNNER_TEMP/dense-package-race.jsonl" 2>&1; then
+            -count=1 -timeout=10m > "$RUNNER_TEMP/dense-package-race.jsonl" 2> "$RUNNER_TEMP/dense-package-race.stderr"; then
             echo 'FAIL: exact dense package race case; raw runtime output withheld.'
             exit 1
           fi

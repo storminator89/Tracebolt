@@ -2,6 +2,12 @@
 
 Meaningful development checkpoints are recorded here. These are prototype milestones, not production releases.
 
+## 2026-10-04 — Keep CI evidence channels separate and reopen refreshed catalog controls
+
+- Prepare locked Go dependencies before the dense race matrix and keep stderr in its own private file. The four exact cases, ten-minute budgets, process-exit checks and strict package/root/leaf completion requirements are unchanged. A real Go cold-cache reproduction showed how dependency messages could invalidate otherwise successful JSON evidence; the original private CI stream was not exported.
+- Reopen the catalog-import disclosure after refreshed state recreates it, then require visible disabled replacement and an empty file selection. Retain real revision-conflict, lost committed response, single-write and storage assertions; all18 scenarios remain required.
+- The first integrated run passed actual positive Ubuntu collection, Docker, native platform and inherited browser gates. Its new browser target passed16/18 and dense completion-evidence checks failed. These focused test/workflow corrections still require an exact-source hosted rerun; application and installer behavior are unchanged.
+
 ## 2026-10-04 — Bounded Linux operations, package observations and conditional review
 
 ### Added
