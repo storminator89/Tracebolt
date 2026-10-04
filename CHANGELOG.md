@@ -2,6 +2,13 @@
 
 Meaningful development checkpoints are recorded here. These are prototype milestones, not production releases.
 
+## 2026-10-04 — Recover conditional review after transient read contention
+
+- Exact-source browser diagnostics observed a restored review GET returning `429 storage_busy` while concurrent coverage loaded successfully. Private stale rows were cleared correctly; the missing fresh view was a read-admission recovery defect.
+- Retry that exact review read once after two seconds, with visible English/German progress. Preserve the original cancellation controller, protected view epoch, freshness clock and ten-second total deadline; a second failure remains visible. Mutation requests never replay.
+- Add deterministic backend admission/error-contract regressions and46 frontend retry/cancellation/error-classification cases. Owner617 component tests, typecheck and build passed; independent QA reran46 focused cases and security reviewed the exact overlay.
+- Keep all18 conditional browser cases and five consecutive lifecycle cycles unchanged. Exact-source hosted acceptance for this correction is pending; service installation and real-device evidence remain separate.
+
 ## 2026-10-04 — Diagnose intermittent browser lifecycle revalidation
 
 - Keep the successful `ed18d9a` acceptance and screenshot provenance intact. A later documentation-only run passed17/18 conditional cases and exposed an intermittent persisted-page lifecycle assertion on identical application and test code; no production root cause is established yet.

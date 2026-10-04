@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { ChevronDown, LoaderCircle, RefreshCw, TriangleAlert } from 'lucide-react';
-import { APIError, AUTH_REQUIRED_EVENT, request } from './api';
+import { APIError, AUTH_REQUIRED_EVENT, getProtectedRequestEpoch, request } from './api';
 import { useOperator } from './auth';
 import { useLocale } from './i18n';
 import { ADVISORY_REVIEW_LEASE_MS, ADVISORY_REVIEW_RESPONSE_MAX_BYTES, advisoryReviewRemainingMs, advisoryReviewVisible, validAdvisoryReviewView } from './advisory-review-types';
@@ -10,7 +10,7 @@ import './advisory-review.css';
 const copy = {
     en: {
         details: 'Conditional advisory review candidates', title: 'Review candidates', intro: 'Conditional inspection of reported source-package metadata against one operator-supplied, unverified offline catalog. Each row is a review candidate, not a finding or an available update.',
-        access: 'Authenticated LAN operator access is required.', refresh: 'Refresh review candidates', loading: 'Reading review candidates…', loadError: 'Review candidates could not be read. Refresh to try again.', invalid: 'The manager returned unsupported or inconsistent review candidates. Previous output is not used.', timeout: 'The manager did not respond in time. Refresh review candidates.', session: 'Your session has ended. Sign in again.', expired: 'The review candidate view expired or its time anchor changed. Refresh before using it.', busy: 'Another review is in progress. Retry in a moment.', changed: 'The package snapshot or catalog changed. Previous review candidates were cleared. Refresh to inspect the current selection.',
+        access: 'Authenticated LAN operator access is required.', refresh: 'Refresh review candidates', loading: 'Reading review candidates…', recovering: 'Storage is busy. One automatic read retry in 2 seconds.', loadError: 'Review candidates could not be read. Refresh to try again.', invalid: 'The manager returned unsupported or inconsistent review candidates. Previous output is not used.', timeout: 'The manager did not respond in time. Refresh review candidates.', session: 'Your session has ended. Sign in again.', expired: 'The review candidate view expired or its time anchor changed. Refresh before using it.', busy: 'Another review is in progress. Retry in a moment.', changed: 'The package snapshot or catalog changed. Previous review candidates were cleared. Refresh to inspect the current selection.',
         not_configured: 'Review candidate collection not configured', awaiting: 'Awaiting package observations for review candidates', fresh: 'Package observations within the collection window', stale: 'Package observations stale; no review candidates shown', revoked: 'Device identity revoked; no review candidates shown', unavailable: 'Package observations unavailable; no review candidates shown',
         noReview: 'Review candidates require a fresh, activated managed-operations-v2 package observation. This view does not collect packages or change enrollment.',
         complete: 'Selected-scope inspection completed', partial: 'Partial selected-scope inspection', unavailableReview: 'Review candidate inspection unavailable', scope: 'Scope is limited to selected reported source metadata and declared catalog coverage. Completed inspection never means a secure host or complete CVE coverage.',
@@ -26,7 +26,7 @@ const copy = {
     },
     de: {
         details: 'Bedingte Hinweis-Prüfkandidaten', title: 'Prüfkandidaten', intro: 'Bedingte Prüfung gemeldeter Quellpaket-Metadaten gegen einen vom Operator gelieferten, unbestätigten Offline-Katalog. Jede Zeile ist ein Prüfkandidat, kein Befund und kein verfügbares Update.',
-        access: 'Ein authentifizierter LAN-Operator-Zugang ist erforderlich.', refresh: 'Prüfkandidaten aktualisieren', loading: 'Prüfkandidaten werden gelesen…', loadError: 'Prüfkandidaten konnten nicht gelesen werden. Zum Wiederholen aktualisieren.', invalid: 'Der Manager lieferte nicht unterstützte oder widersprüchliche Prüfkandidaten. Frühere Ergebnisse werden nicht verwendet.', timeout: 'Der Manager hat nicht rechtzeitig geantwortet. Prüfkandidaten aktualisieren.', session: 'Die Sitzung ist beendet. Erneut anmelden.', expired: 'Die Prüfkandidaten-Ansicht ist abgelaufen oder ihr Zeitanker hat sich geändert. Vor Nutzung aktualisieren.', busy: 'Eine andere Prüfung läuft. Gleich erneut versuchen.', changed: 'Paket-Snapshot oder Katalog wurden geändert. Frühere Prüfkandidaten wurden entfernt. Für die aktuelle Auswahl aktualisieren.',
+        access: 'Ein authentifizierter LAN-Operator-Zugang ist erforderlich.', refresh: 'Prüfkandidaten aktualisieren', loading: 'Prüfkandidaten werden gelesen…', recovering: 'Der Datenspeicher ist ausgelastet. Ein automatischer Leseversuch folgt in 2 Sekunden.', loadError: 'Prüfkandidaten konnten nicht gelesen werden. Zum Wiederholen aktualisieren.', invalid: 'Der Manager lieferte nicht unterstützte oder widersprüchliche Prüfkandidaten. Frühere Ergebnisse werden nicht verwendet.', timeout: 'Der Manager hat nicht rechtzeitig geantwortet. Prüfkandidaten aktualisieren.', session: 'Die Sitzung ist beendet. Erneut anmelden.', expired: 'Die Prüfkandidaten-Ansicht ist abgelaufen oder ihr Zeitanker hat sich geändert. Vor Nutzung aktualisieren.', busy: 'Eine andere Prüfung läuft. Gleich erneut versuchen.', changed: 'Paket-Snapshot oder Katalog wurden geändert. Frühere Prüfkandidaten wurden entfernt. Für die aktuelle Auswahl aktualisieren.',
         not_configured: 'Erfassung für Prüfkandidaten nicht eingerichtet', awaiting: 'Paketbeobachtungen für Prüfkandidaten ausstehend', fresh: 'Paketbeobachtungen im Erfassungszeitfenster', stale: 'Paketbeobachtungen veraltet; keine Prüfkandidaten angezeigt', revoked: 'Geräteidentität widerrufen; keine Prüfkandidaten angezeigt', unavailable: 'Paketbeobachtungen nicht verfügbar; keine Prüfkandidaten angezeigt',
         noReview: 'Prüfkandidaten benötigen eine aktuelle, aktivierte managed-operations-v2-Paketbeobachtung. Diese Ansicht erfasst keine Pakete und ändert kein Enrollment.',
         complete: 'Prüfung des ausgewählten Umfangs abgeschlossen', partial: 'Prüfung des ausgewählten Umfangs teilweise abgeschlossen', unavailableReview: 'Prüfkandidaten-Prüfung nicht verfügbar', scope: 'Der Umfang ist auf ausgewählte gemeldete Quellmetadaten und die deklarierte Katalogabdeckung begrenzt. Eine abgeschlossene Prüfung belegt niemals einen sicheren Host oder vollständige CVE-Abdeckung.',
@@ -50,39 +50,58 @@ const reasons: Record<'en' | 'de', Record<AdvisoryReviewReason, string>> = {
     },
 };
 type Failure = 'loadError' | 'invalid' | 'timeout' | 'session' | 'expired' | 'busy' | 'changed';
-type Anchor = { mono: number; wall: number };
+type Anchor = { mono: number; wall: number; epoch: number };
 function elapsed(anchor: Anchor): number { return performance.now() - anchor.mono; }
 function uncertain(anchor: Anchor): boolean { const delta = elapsed(anchor), wallDelta = Date.now() - anchor.wall; return !Number.isFinite(delta) || delta < 0 || !Number.isFinite(wallDelta) || Math.abs(wallDelta - delta) > 1500; }
 function useAdvisoryReviewResource(deviceId: string) {
-    const [value, setValue] = useState<AdvisoryReviewView | null>(null), [loading, setLoading] = useState(false), [error, setError] = useState<Failure | null>(null), [, tick] = useState(0);
+    const [value, setValue] = useState<AdvisoryReviewView | null>(null), [loading, setLoading] = useState(false), [recovering, setRecovering] = useState(false), [error, setError] = useState<Failure | null>(null), [, tick] = useState(0);
     const alive = useRef(false), locked = useRef(false), suspended = useRef(false);
     const pending = useRef<{ controller: AbortController; anchor: Anchor; timeout: number } | null>(null), current = useRef<Anchor | null>(null), expiry = useRef<number | undefined>(undefined);
     const invalidate = useCallback((failure: Failure | null = null) => {
         window.clearTimeout(expiry.current); pending.current?.controller.abort(); window.clearTimeout(pending.current?.timeout); pending.current = null; current.current = null;
-        if (alive.current) { setValue(null); setLoading(false); setError(failure); }
+        if (alive.current) { setValue(null); setLoading(false); setRecovering(false); setError(failure); }
     }, []);
     const load = useCallback(async () => {
         if (!alive.current || locked.current || suspended.current || document.visibilityState === 'hidden') return;
-        invalidate(); const controller = new AbortController(), anchor = { mono: performance.now(), wall: Date.now() };
+        invalidate(); const controller = new AbortController(), anchor = { mono: performance.now(), wall: Date.now(), epoch: getProtectedRequestEpoch() };
         pending.current = { controller, anchor, timeout: window.setTimeout(() => { if (pending.current?.controller === controller) invalidate('timeout'); }, 10000) }; setLoading(true);
         const active = () => {
             if (!alive.current || locked.current || suspended.current || controller.signal.aborted || pending.current?.controller !== controller) return false;
+            if (anchor.epoch !== getProtectedRequestEpoch()) { locked.current = true; invalidate('session'); return false; }
             if (uncertain(anchor)) { invalidate('expired'); return false; }
             if (elapsed(anchor) >= 10000) { invalidate('timeout'); return false; }
             return true;
         };
-        try {
-            const next = await request<unknown>(`/devices/${encodeURIComponent(deviceId)}/security/review`, { signal: controller.signal }, ADVISORY_REVIEW_RESPONSE_MAX_BYTES);
-            if (!active()) return;
-            if (!validAdvisoryReviewView(next, deviceId)) { invalidate('invalid'); return; }
-            window.clearTimeout(pending.current?.timeout); pending.current = null; current.current = anchor; setValue(next); setLoading(false);
-            const remaining = next.collectionStatus === 'fresh' ? Math.min(ADVISORY_REVIEW_LEASE_MS - elapsed(anchor), advisoryReviewRemainingMs(next) - elapsed(anchor) + 1) : ADVISORY_REVIEW_LEASE_MS - elapsed(anchor);
-            if (remaining <= 0) { invalidate('expired'); return; }
-            expiry.current = window.setTimeout(() => invalidate('expired'), remaining);
-        } catch (caught) {
-            if (!active()) return;
-            if (caught instanceof APIError && caught.status === 401) locked.current = true;
-            invalidate(caught instanceof APIError && caught.status === 401 ? 'session' : caught instanceof APIError && caught.status === 409 ? 'changed' : caught instanceof APIError && caught.status === 429 ? 'busy' : 'loadError');
+        // At most one repeat, only for this fixed read's exact storage-contention code.
+        // The controller, access epoch, clock anchor and total deadline never restart.
+        for (let attempt = 0; attempt < 2; attempt++) {
+            try {
+                const next = await request<unknown>(`/devices/${encodeURIComponent(deviceId)}/security/review`, { signal: controller.signal }, ADVISORY_REVIEW_RESPONSE_MAX_BYTES);
+                if (!active()) return;
+                if (!validAdvisoryReviewView(next, deviceId)) { invalidate('invalid'); return; }
+                window.clearTimeout(pending.current?.timeout); pending.current = null; current.current = anchor; setValue(next); setLoading(false); setRecovering(false);
+                const remaining = next.collectionStatus === 'fresh' ? Math.min(ADVISORY_REVIEW_LEASE_MS - elapsed(anchor), advisoryReviewRemainingMs(next) - elapsed(anchor) + 1) : ADVISORY_REVIEW_LEASE_MS - elapsed(anchor);
+                if (remaining <= 0) { invalidate('expired'); return; }
+                expiry.current = window.setTimeout(() => invalidate('expired'), remaining);
+                return;
+            } catch (caught) {
+                if (!active()) return;
+                if (attempt === 0 && caught instanceof APIError && caught.status === 429 && caught.code === 'storage_busy') {
+                    setRecovering(true);
+                    await new Promise<void>(resolve => {
+                        const finish = () => { window.clearTimeout(delay); controller.signal.removeEventListener('abort', finish); resolve(); };
+                        const delay = window.setTimeout(finish, 2000);
+                        controller.signal.addEventListener('abort', finish, { once: true });
+                        if (controller.signal.aborted) finish();
+                    });
+                    if (!active()) return;
+                    setRecovering(false);
+                    continue;
+                }
+                if (caught instanceof APIError && caught.status === 401) locked.current = true;
+                invalidate(caught instanceof APIError && caught.status === 401 ? 'session' : caught instanceof APIError && caught.status === 409 ? 'changed' : caught instanceof APIError && caught.status === 429 ? 'busy' : 'loadError');
+                return;
+            }
         }
     }, [deviceId, invalidate]);
     useEffect(() => {
@@ -94,11 +113,11 @@ function useAdvisoryReviewResource(deviceId: string) {
         const show = (event: PageTransitionEvent) => { if (event.persisted || suspended.current) restore(); };
         const navigate = () => invalidate();
         window.addEventListener(AUTH_REQUIRED_EVENT, lock); window.addEventListener('pagehide', suspend); window.addEventListener('pageshow', show); window.addEventListener('blur', suspend); window.addEventListener('focus', restore); window.addEventListener('hashchange', navigate); window.addEventListener('popstate', navigate); document.addEventListener('visibilitychange', visibility);
-        const timer = window.setInterval(() => { const anchor = current.current ?? pending.current?.anchor; if (anchor && uncertain(anchor)) invalidate('expired'); else if (current.current) tick(value => value + 1); }, 1000);
+        const timer = window.setInterval(() => { const anchor = current.current ?? pending.current?.anchor; if (anchor && anchor.epoch !== getProtectedRequestEpoch()) { locked.current = true; invalidate('session'); } else if (anchor && uncertain(anchor)) invalidate('expired'); else if (current.current) tick(value => value + 1); }, 1000);
         void load();
         return () => { alive.current = false; invalidate(); window.clearInterval(timer); window.removeEventListener(AUTH_REQUIRED_EVENT, lock); window.removeEventListener('pagehide', suspend); window.removeEventListener('pageshow', show); window.removeEventListener('blur', suspend); window.removeEventListener('focus', restore); window.removeEventListener('hashchange', navigate); window.removeEventListener('popstate', navigate); document.removeEventListener('visibilitychange', visibility); };
     }, [invalidate, load]);
-    return { value, loading, error, load, elapsed: current.current ? elapsed(current.current) : Number.POSITIVE_INFINITY };
+    return { value, loading, recovering, error, load, elapsed: current.current ? elapsed(current.current) : Number.POSITIVE_INFINITY };
 }
 
 /** Read-only and lazy. Closing or changing the identity destroys the resource. */
@@ -119,7 +138,7 @@ function ReviewContent({ deviceId }: { deviceId: string }) {
     return <div className="advisory-review" aria-labelledby={heading} aria-busy={resource.loading}>
         <header className="advisory-review-heading"><h3 id={heading}>{labels.title}</h3><button className="button small" type="button" disabled={resource.loading || resource.error === 'session'} onClick={() => void resource.load()}><RefreshCw size={14}/>{labels.refresh}</button></header>
         <p>{labels.intro}</p><p className="advisory-review-caution">{labels.unknownCounts}</p>
-        {resource.loading && <p role="status"><LoaderCircle size={16} className="spin"/>{labels.loading}</p>}
+        {resource.loading && <p role="status"><LoaderCircle size={16} className="spin"/>{resource.recovering ? labels.recovering : labels.loading}</p>}
         {resource.error && <p className="advisory-review-error" role="alert"><TriangleAlert size={16}/>{labels[resource.error]}</p>}
         {view && <><p className="advisory-review-status">{labels[view.collectionStatus]}</p>{!review && <p>{labels.noReview}</p>}</>}
         {review && <>

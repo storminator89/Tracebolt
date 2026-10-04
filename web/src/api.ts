@@ -1,10 +1,12 @@
 import { t, apiErrorText } from './i18n';
 export class APIError extends Error {
-    constructor(message: string, public status?: number) { super(message); this.name = 'APIError'; }
+    constructor(message: string, public status?: number, public code?: 'storage_busy') { super(message); this.name = 'APIError'; }
 }
 export const AUTH_REQUIRED_EVENT = 'tracebolt:authentication-required';
 const pendingRequests = new Map<AbortController, boolean>();
 let protectedEpoch = 0;
+/** A delayed read remains bound to the access scope in which it started. */
+export function getProtectedRequestEpoch(): number { return protectedEpoch; }
 export function abortProtectedRequests(): void {
     protectedEpoch++;
     for (const [controller, protectedRoute] of pendingRequests)
@@ -77,13 +79,15 @@ export async function request<T>(path: string, options?: RequestInit, maxRespons
         }
         if (!response.ok) {
             let message = t("Die Anfrage konnte nicht geladen werden (HTTP {0}).", { "0": response.status });
+            let code: APIError['code'];
             try {
                 const data = maxResponseBytes === undefined ? await response.json() : await boundedJSON(response, maxResponseBytes) as { error?: { code?: string; message?: string } };
+                if (data.error?.code === 'storage_busy') code = 'storage_busy';
                 message = apiErrorText(data.error?.code, typeof data.error?.message === "string" ? data.error.message : message);
             }
             catch { /* Preserve status if response is not JSON. */ }
             active();
-            throw new APIError(message, response.status);
+            throw new APIError(message, response.status, code);
         }
         let data: T;
         try {
