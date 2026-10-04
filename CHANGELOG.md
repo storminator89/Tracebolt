@@ -2,6 +2,13 @@
 
 Meaningful development checkpoints are recorded here. These are prototype milestones, not production releases.
 
+## 2026-10-04 — Manual disposable HTTP setup and Docker first start
+
+- Add a default-plan-only Linux helper for a new fixed private HTTP-test configuration directory. Explicit apply requires a root controlling terminal, hidden confirmed disposable password input, and a selected private IPv4 address.
+- Generate a dedicated short-lived client-auth issuer and password verifier without exporting secrets; reject existing destinations and preserve uncertain published state.
+- Add a guided Compose command override and a concrete Docker build/start/enrollment guide. The current strict published schema selects `basic-readonly-v1`; no unpublished operational or package profile is enabled.
+- Owner full Go tests and focused race/vet plus independent focused review pass. Actual helper apply, credential provisioning and the guided Docker first-start path still need host verification. Existing manager/UI behavior, installer diagnostics and the three quarantined enrollment browser cases retain their prior scope.
+
 ## 2026-10-03 — Preserve public installer path traversal under restrictive umask
 
 - Set the intended mode through a verified descriptor only for newly created owned public binary/bootstrap directories; restrictive caller umasks no longer unintentionally remove traversal needed by the unprivileged enrollment child. Existing and private paths are not relaxed or adopted.

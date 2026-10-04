@@ -1,0 +1,9 @@
+# Apply after compose.http-test.yaml for the separately provisioned guided test.
+# All port, filesystem and runtime restrictions come from that base file.
+services:
+  manager-http-test:
+    command:
+      - --lan-config
+      - /run/tracebolt/http-test.json
+      - --enrollment-config
+      - /run/tracebolt/enrollment.json

@@ -8,6 +8,8 @@ Tracebolt is an early self-hosted diagnostics prototype with a React interface, 
 
 ## Installation
 
+For a fresh disposable Linux VM with Docker, use the **[HTTP test first-start guide](docs/http-test-first-start.md)**. It builds the setup helper, creates new test-only credentials through a hidden local prompt, and starts guided enrollment with the correct Docker flags. HTTP remains an explicitly insecure test profile.
+
 Start with the **[installation runbook for humans and automation agents](docs/installation.md)**. It covers Docker/native Linux setup, manual public-certificate approval, the Linux one-shot/foreground sender, optional guided enrollment, verification, recovery and explicit permission boundaries. [AGENTS.md](AGENTS.md) is the repository entry guide.
 
 ## Screenshots
@@ -90,7 +92,7 @@ A [native one-shot Linux sender](docs/lan-agent.md) now collects and delivers on
 
 ## Optional guided Linux enrollment
 
-Enable guided-v2 only with the [explicit runtime/issuer contract](docs/enrollment-v2/runtime-config.md). It requires an empty legacy registry and a preprovided dedicated client-auth intermediate; the root signing key stays offline. There is no automatic migration or CA provisioning. The pilot retains at most 25 enrollment records, including terminal records.
+Enable guided-v2 only with the [explicit runtime/issuer contract](docs/enrollment-v2/runtime-config.md). It requires an empty legacy registry and a dedicated protected client-auth intermediate. For TLS/manual provisioning the root signing key stays offline. There is no automatic migration. The explicit disposable HTTP helper is the sole test-only provisioning exception: it creates a short-lived test issuer, generates the root key only in memory and discards that key without writing it. The pilot retains at most 25 enrollment records, including terminal records.
 
 The enabled interface creates a one-time Linux invitation and exports only public bootstrap information. The native `enroll-agent` displays exact trust/origin context and a full public-key fingerprint/comparison, reads the invitation from a hidden local terminal, and waits for deliberate operator approval. Its protected, fail-closed handoff feeds `lan-agent --foreground`. [Installation and recovery instructions](docs/installation.md#6b-optional-guided-v2-bootstrap-compare-approve-and-report) explain the required permissions and exact commands. Real endpoint key creation and access grants still need their own authorized workflow.
 
