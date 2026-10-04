@@ -58,8 +58,8 @@ async function start(){
 async function pageAt({mobile=false}={}){
  context=await browser.newContext({viewport:mobile?{width:390,height:844}:{width:1440,height:1000},locale:'en-GB'});
  const page=await context.newPage();page.on('pageerror',()=>runtimeErrorCount++);
- await page.goto(base+'/#/devices');
- await page.getByLabel('Operator password',{exact:true}).fill(password);
+ mark('open signed-out journal fixture');await page.goto(base+'/#/devices');
+ mark('sign in to journal fixture');await page.getByLabel('Operator password',{exact:true}).fill(password);
  await page.getByRole('button',{name:'Sign in',exact:true}).click();
  await expect(page.locator('.app-shell')).toBeVisible();return page;
 }
@@ -67,23 +67,23 @@ async function get(route){const response=await context.request.get(base+route);e
 async function post(route,data){const auth=await get('/api/auth/session');return context.request.post(base+route,{headers:{Origin:base,'X-CSRF-Token':auth.csrfToken},data});}
 async function settled(page){await expect(panel(page)).toHaveAttribute('aria-busy','false');await expect(panel(page).getByRole('alert')).toHaveCount(0);}
 async function open(page,label='alpha'){
- await page.goto(`${base}/#/devices/${devices[label]}`);
+ mark('open journal device page');await page.goto(`${base}/#/devices/${devices[label]}`);
  await expect(page.getByRole('region',{name:`Device QA synthetic journal ${label}`,exact:true})).toBeVisible();
- await page.getByRole('tab',{name:'Logs',exact:true}).click();
- await expect(state(page)).toBeVisible();await settled(page);
+ mark('open lazy Logs tab');await page.getByRole('tab',{name:'Logs',exact:true}).click();
+ mark('read initial journal status');await expect(state(page)).toBeVisible();await settled(page);
 }
 async function refresh(page){await page.getByRole('button',{name:'Refresh status',exact:true}).click();await expect(state(page)).toBeVisible();await settled(page);}
 async function capture(page){
- await page.getByLabel('Exact service unit',{exact:true}).fill('invented.service');
- await page.getByLabel('Include severity through',{exact:true}).selectOption('7');
- await page.getByRole('checkbox',{name:/^I understand that log messages/}).check();
- await page.getByRole('checkbox',{name:/^I also accept that this HTTP test/}).check();
- await page.getByRole('button',{name:'Capture logs',exact:true}).click();
- await expect(state(page)).toHaveText('Pending');await settled(page);
+ mark('choose exact journal service');await page.getByLabel('Exact service unit',{exact:true}).fill('invented.service');
+ mark('choose journal severity');const severity=page.getByRole('combobox',{name:'Include severity through',exact:true});await severity.selectOption('7');await expect(severity).toHaveValue('7');
+ mark('acknowledge journal content');await page.getByRole('checkbox',{name:/^I understand that log messages/}).check();
+ mark('acknowledge plaintext journal transport');await page.getByRole('checkbox',{name:/^I also accept that this HTTP test/}).check();
+ mark('create explicit journal capture');await page.getByRole('button',{name:'Capture logs',exact:true}).click();
+ mark('await committed pending journal request');await expect(state(page)).toHaveText('Pending');await settled(page);
 }
 async function deliver(page,label='alpha',mode='complete'){
- const proof=await control('deliver',{device:label,mode});
- await refresh(page);await expect(rows(page)).toHaveCount(100);await settled(page);return proof;
+ mark('admit invented journal snapshot');const proof=await control('deliver',{device:label,mode});
+ mark('read accepted journal status');await refresh(page);mark('read first captured journal page');await expect(rows(page)).toHaveCount(100);await settled(page);return proof;
 }
 async function clean(page){
  expect(await page.evaluate(values=>{const saved=JSON.stringify({...localStorage,...sessionStorage});return values.some(value=>saved.includes(value));},[password,'Needle[.*]','SYNTHETIC journal','invented.service'])).toBe(false);

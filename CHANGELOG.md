@@ -2,6 +2,13 @@
 
 Meaningful development checkpoints are recorded here. These are prototype milestones, not production releases.
 
+## 2026-10-04 — Match browser checks to journal controls and unassessed health
+
+- The first journal checkpoint's browser report recorded 9/10 inherited HTTP-test cases and 1/6 new journal cases passing, with zero browser runtime errors. Five journal cases timed out in their shared capture setup; the endpoint target did not execute after the earlier failure. Those results remain failed/pending evidence, not complete acceptance.
+- Use the severity control's exact combobox role/name and require the selected value. An inert check of the actual rendered component reproduced why the former exact label selector failed: its wrapping label text included every option. Add fixed setup-stage labels while retaining the request, coverage, paging, search, cancellation, expiry and private-content assertions.
+- Match the two active LAN health checks to the reviewed `Not assessed` label and explicit no-assessment explanation. Preserve sandbox `Unknown` checks, the three quarantined enrollment bodies and all case identities, timeouts and required outcomes.
+- This is a browser-harness correction only. Application, helper, installer and release bytes are unchanged; the exact-source hosted rerun must establish the result.
+
 ## 2026-10-04 — Connect bounded on-demand service logs
 
 - Add explicit service/time/severity requests, one-time native claim/consumption, authenticated result transport and operator-only Logs pages. Results keep their original expiry, immutable snapshot identity and coverage; paging and literal search operate on captured content. Expiry, cancellation, revocation and restart loss never become healthy empty data.
