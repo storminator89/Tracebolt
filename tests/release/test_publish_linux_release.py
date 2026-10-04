@@ -12,6 +12,7 @@ spec = importlib.util.spec_from_file_location("publisher", ROOT / "deploy/releas
 p = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(p)
 VERSION, SOURCE = "v0.1.0-fixture.1", "a" * 40
+DRAFT_TAG = "untagged-5de35e2eadff66a24c09"
 
 
 def reference(name, source=SOURCE):
@@ -30,6 +31,11 @@ class FakeAPI:
         self.fail_after_draft = False
         self.change_main_after_upload = False
         self.change_tag_after_upload = False
+        self.draft_download_tag = DRAFT_TAG
+        self.upload_override = {}
+        self.change_draft_url_after_upload = False
+        self.keep_published_draft_url = False
+        self.keep_published_draft_asset_urls = False
 
     def request(self, method, path, payload=None, upload=None, missing=False):
         self.calls.append((method, path, payload))
@@ -49,7 +55,7 @@ class FakeAPI:
                 raise OSError("simulated lost tag response")
             return self.tag
         if method == "POST" and path == p.PREFIX + "/releases":
-            self.release = dict(payload, id=17, assets=[])
+            self.release = dict(payload, id=17, assets=[], html_url=f"https://github.com/{p.b.REPOSITORY}/releases/tag/{self.draft_download_tag}")
             if self.fail_after_draft:
                 raise OSError("simulated lost draft response")
             return dict(self.release)
@@ -57,12 +63,15 @@ class FakeAPI:
             name = upload.name
             entry = self.expected[name]
             asset = {"id": 100 + len(self.assets), "name": name, "state": "uploaded", "size": entry["size"], "digest": "sha256:" + entry["sha256"],
-                     "browser_download_url": f"https://github.com/{p.b.REPOSITORY}/releases/download/{VERSION}/{name}"}
+                     "browser_download_url": f"https://github.com/{p.b.REPOSITORY}/releases/download/{self.draft_download_tag}/{name}"}
+            asset.update(self.upload_override)
             self.assets.append(asset)
             if self.change_main_after_upload:
                 self.main = "b" * 40
             if self.change_tag_after_upload:
                 self.tag = reference("tags/" + VERSION, "b" * 40)
+            if self.change_draft_url_after_upload:
+                self.release["html_url"] = f"https://github.com/{p.b.REPOSITORY}/releases/tag/untagged-{'b' * 20}"
             return dict(asset, digest="sha256:" + "f" * 64) if self.bad_upload else asset
         if method == "GET" and path == p.PREFIX + "/releases/17/assets?per_page=100":
             return list(self.assets)
@@ -70,6 +79,11 @@ class FakeAPI:
             return dict(self.release)
         if method == "PATCH" and path == p.PREFIX + "/releases/17":
             self.release.update(payload)
+            if not self.keep_published_draft_url:
+                self.release["html_url"] = f"https://github.com/{p.b.REPOSITORY}/releases/tag/{VERSION}"
+            if not self.keep_published_draft_asset_urls:
+                for asset in self.assets:
+                    asset["browser_download_url"] = f"https://github.com/{p.b.REPOSITORY}/releases/download/{VERSION}/{asset['name']}"
             return dict(self.release)
         raise AssertionError((method, path))
 
@@ -167,6 +181,67 @@ class Publication(unittest.TestCase):
             with self.assertRaises(p.b.Rejected):
                 self.publish()
             self.assertEqual(self.mutations(), [])
+
+    def test_draft_with_version_urls_also_publishes(self):
+        self.api.draft_download_tag = VERSION
+        self.assertEqual(self.publish(), f"https://github.com/{p.b.REPOSITORY}/releases/tag/{VERSION}")
+
+    def test_draft_urls_are_bounded_to_the_exact_repository_and_version(self):
+        prefix = f"https://github.com/{p.b.REPOSITORY}/releases/tag/"
+        for url in (
+            prefix + "v0.1.0-other.1", prefix + DRAFT_TAG + "?x=1", prefix + DRAFT_TAG + "#fragment",
+            prefix + DRAFT_TAG + "/extra", prefix + "untagged-../bad", prefix + "untagged-" + "a" * 21,
+            prefix.replace("https:", "http:") + DRAFT_TAG,
+            prefix.replace("github.com", "github.com.evil.example") + DRAFT_TAG,
+            prefix.replace("github.com", "user@github.com") + DRAFT_TAG,
+            prefix.replace("github.com", "github.com:443") + DRAFT_TAG,
+            prefix.replace(p.b.REPOSITORY, "other/repository") + DRAFT_TAG,
+            None,
+        ):
+            with self.subTest(url=url), self.assertRaises(p.b.Rejected):
+                p.release_download_tag({"html_url": url}, VERSION, True)
+        self.assertEqual(p.release_download_tag({"html_url": prefix + DRAFT_TAG}, VERSION, True), DRAFT_TAG)
+        with self.assertRaises(p.b.Rejected):
+            p.release_download_tag({"html_url": prefix + DRAFT_TAG}, VERSION, False)
+
+    def test_wrong_draft_asset_url_or_metadata_stops_before_publication(self):
+        prefix = f"https://github.com/{p.b.REPOSITORY}/releases/download/"
+        first_name = next(iter(self.expected))
+        variants = [
+            {"browser_download_url": prefix + "untagged-" + "b" * 20 + "/" + first_name},
+            {"browser_download_url": prefix + VERSION + "/" + first_name},
+            {"browser_download_url": prefix + DRAFT_TAG + "/other.py"},
+            {"browser_download_url": prefix.replace(p.b.REPOSITORY, "other/repository") + DRAFT_TAG + "/" + first_name},
+            {"browser_download_url": prefix + DRAFT_TAG + "/" + first_name + "?token=x"},
+            {"name": "other.py"}, {"size": self.expected[first_name]["size"] + 1},
+            {"digest": "sha256:" + "f" * 64}, {"state": "starter"},
+        ]
+        for override in variants:
+            with self.subTest(override=override):
+                self.api = FakeAPI(self.expected)
+                self.api.upload_override = override
+                with self.assertRaises(p.b.Rejected):
+                    self.publish()
+                self.assertTrue(self.api.release["draft"])
+                self.assertFalse(any(item[0] in ("DELETE", "PATCH") for item in self.api.calls))
+
+    def test_changed_draft_url_stops_before_publication(self):
+        self.api.change_draft_url_after_upload = True
+        with self.assertRaises(p.b.Rejected):
+            self.publish()
+        self.assertTrue(self.api.release["draft"])
+        self.assertFalse(any(item[0] in ("DELETE", "PATCH") for item in self.api.calls))
+
+    def test_published_release_and_assets_must_use_the_exact_version_url(self):
+        for field in ("keep_published_draft_url", "keep_published_draft_asset_urls"):
+            with self.subTest(field=field):
+                self.api = FakeAPI(self.expected)
+                setattr(self.api, field, True)
+                with self.assertRaises(p.b.Rejected):
+                    self.publish()
+                self.assertFalse(self.api.release["draft"])
+                self.assertEqual(sum(item[0] == "PATCH" for item in self.api.calls), 1)
+                self.assertFalse(any(item[0] == "DELETE" for item in self.api.calls))
 
     def test_wrong_repository_or_moved_main_refuses_all_mutation(self):
         for attribute, value in (("repo_id", 999), ("main", "b" * 40)):

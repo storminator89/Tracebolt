@@ -2,6 +2,12 @@
 
 Meaningful development checkpoints are recorded here. These are prototype milestones, not production releases.
 
+## 2026-10-04 — Validate temporary GitHub draft asset URLs
+
+- The first actual release candidate build and keyless verification passed on `79cef736`, but publication stopped after the first asset because GitHub returned a temporary draft URL instead of the final version URL. The existing `v0.1.0-pilot.1` tag and partial draft are retained for inspection; no release was published and no production download pin was activated.
+- Bind draft asset URLs to the exact newly created draft's validated repository URL, while retaining exact names, sizes and SHA-256 checks. After publication, require the chosen version URL again for the release and every asset. A changed draft URL, unrelated repository, unexpected asset or uncertain mutation still stops publication.
+- Add regression fixtures for the observed draft URL shape and rejected metadata/URL changes. All 48 inert release fixtures pass. This correction does not adopt, overwrite, delete or retry the retained partial release; a new selected version and actual workflow result remain required.
+
 ## 2026-10-04 — Prepare verified Linux release downloads
 
 - Add a manually dispatched, exact-source Linux release build with keyless GitHub provenance for its strict artifact manifest. Keep ordinary jobs read-only; isolate the specifically approved attestation permissions to the candidate job and release write permission to the explicit fresh-version publish job.

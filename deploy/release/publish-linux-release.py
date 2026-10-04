@@ -10,6 +10,7 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+import re
 import stat
 import tempfile
 from urllib.parse import quote
@@ -131,21 +132,34 @@ def release_identity(value, release_id, version, commit, draft):
     return value["id"]
 
 
-def check_asset(value, name, entry, version):
+def release_download_tag(value, version, draft):
+    # GitHub gives a fresh draft an opaque URL even when tag_name is already set.
+    # Bind every draft asset to this exact release URL; after publication only
+    # the chosen version URL is acceptable. Neither URL is followed here.
+    url = value.get("html_url")
+    prefix = f"https://github.com/{b.REPOSITORY}/releases/tag/"
+    b.require(type(url) is str and url.startswith(prefix), "Release URL does not identify the selected repository.")
+    tag = url[len(prefix):]
+    b.require(tag == version or (draft and re.fullmatch(r"untagged-[0-9a-f]{20}", tag)),
+              "Release URL does not match the selected version or its fresh draft.")
+    return tag
+
+
+def check_asset(value, name, entry, download_tag):
     b.require(type(value) is dict and type(value.get("id")) is int and value["id"] > 0 and value.get("name") == name and
               value.get("state") == "uploaded" and type(value.get("size")) is int and value["size"] == entry["size"] and
               value.get("digest") == "sha256:" + entry["sha256"] and
-              value.get("browser_download_url") == f"https://github.com/{b.REPOSITORY}/releases/download/{version}/{name}",
+              value.get("browser_download_url") == f"https://github.com/{b.REPOSITORY}/releases/download/{download_tag}/{name}",
               "Release asset readback does not match the verified candidate; inspect the retained release state.")
 
 
-def check_assets(api, release_id, expected, version):
+def check_assets(api, release_id, expected, download_tag):
     assets = api.request("GET", PREFIX + f"/releases/{release_id}/assets?per_page=100")
     b.require(type(assets) is list and len(assets) == len(expected), "Release has missing or unexpected assets; publication stopped.")
     names = [item.get("name") for item in assets if type(item) is dict]
     b.require(len(names) == len(assets) and all(type(name) is str for name in names) and len(set(names)) == len(names) and set(names) == set(expected), "Release asset identity is ambiguous.")
     for item in assets:
-        check_asset(item, item["name"], expected[item["name"]], version)
+        check_asset(item, item["name"], expected[item["name"]], download_tag)
 
 
 def require_fresh_version(api, version):
@@ -183,21 +197,27 @@ def publish(api, directory, version, source_commit, expected):
         "body": release_description(source_commit),
         "draft": True, "prerelease": True, "generate_release_notes": False, "make_latest": "false"})
     release_id = release_identity(draft, None, version, source_commit, True)
+    draft_download_tag = release_download_tag(draft, version, True)
     b.require(draft.get("assets") == [], "New release was not empty; publication stopped.")
     for name, entry in expected.items():
         path = directory / name
         b.require(path.stat().st_size == entry["size"] and b.file_digest(path) == entry["sha256"], "Verified staging changed before upload.")
         asset = api.request("POST", PREFIX + f"/releases/{release_id}/assets?name=" + quote(name, safe=""), upload=path)
-        check_asset(asset, name, entry, version)
-    check_assets(api, release_id, expected, version)
+        check_asset(asset, name, entry, draft_download_tag)
+    check_assets(api, release_id, expected, draft_download_tag)
     validate_ref(api.request("GET", tag_path), "tags/" + version, source_commit)
-    release_identity(api.request("GET", PREFIX + f"/releases/{release_id}"), release_id, version, source_commit, True)
+    draft = api.request("GET", PREFIX + f"/releases/{release_id}")
+    release_identity(draft, release_id, version, source_commit, True)
+    b.require(release_download_tag(draft, version, True) == draft_download_tag, "Draft release URL changed; publication stopped.")
     validate_ref(api.request("GET", PREFIX + "/git/ref/heads/main"), "heads/main", source_commit)
     published = api.request("PATCH", PREFIX + f"/releases/{release_id}", {"draft": False, "make_latest": "false"})
     release_identity(published, release_id, version, source_commit, False)
+    release_download_tag(published, version, False)
     # Read back the final publication and every digest instead of treating a
     # successful PATCH response as enough evidence to activate production pins.
-    release_identity(api.request("GET", PREFIX + f"/releases/{release_id}"), release_id, version, source_commit, False)
+    published = api.request("GET", PREFIX + f"/releases/{release_id}")
+    release_identity(published, release_id, version, source_commit, False)
+    release_download_tag(published, version, False)
     validate_ref(api.request("GET", tag_path), "tags/" + version, source_commit)
     check_assets(api, release_id, expected, version)
     return f"https://github.com/{b.REPOSITORY}/releases/tag/{version}"
