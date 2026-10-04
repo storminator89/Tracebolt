@@ -37,7 +37,9 @@ The [full-width device-page checkpoint](https://github.com/storminator89/Tracebo
    choice for hostname and local interface IPv4/IPv6 addresses. Show source and
    visibility limits. Local addresses do not prove external reachability; this
    does not add network scanning.
-3. **Verified release-download installer — in progress.** Provide official Linux
+3. **Verified release-download installer — source prepared; official build pending.**
+   The [manual attested build and fresh-version publication workflow](linux-release-distribution.md)
+   and disabled dashboard command are implemented and source-reviewed. Provide official Linux
    release artifacts and a short installation command that verifies the selected
    release before execution. Publication, verification and a fresh-host install
    must pass before this replaces the current source-build instructions. Existing

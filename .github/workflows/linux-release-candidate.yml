@@ -1,0 +1,114 @@
+name: Build attested Linux release candidate
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'New reviewed version, for example v0.1.0-rc.1'
+        required: true
+        type: string
+      publish:
+        description: 'Publish this fresh version after the candidate and provenance checks pass'
+        required: true
+        default: false
+        type: boolean
+
+# Normal jobs keep read-only repository access. Keyless permissions are confined
+# to the candidate job; release-write permission is confined to the separate,
+# explicitly selected publication job. No signing secret or host installation.
+permissions:
+  contents: read
+
+concurrency:
+  group: tracebolt-linux-release-${{ inputs.version }}
+  cancel-in-progress: false
+
+jobs:
+  candidate:
+    if: github.repository == 'storminator89/Tracebolt' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    outputs:
+      artifact-id: ${{ steps.candidate-artifact.outputs.artifact-id }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Verify bootstrap negative and keyless-policy fixture paths
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: python3 -I -B -m unittest discover -s tests/release -v
+      - name: Validate existing fixed-path installer
+        run: go test -race -buildvcs=false ./internal/agentinstall ./internal/bootstrapfetch ./cmd/agent-service
+      - name: Build both architectures without execution or signing
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: python3 -I -B deploy/release/build-linux-release.py --version "$RELEASE_VERSION" --output "$RUNNER_TEMP/tracebolt-release"
+      - name: Attest the exact manifest binding all candidate file hashes
+        id: provenance
+        uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3
+        with:
+          subject-path: ${{ runner.temp }}/tracebolt-release/manifest.json
+      - name: Keep the public signature bundle beside the manifest
+        env:
+          BUNDLE_PATH: ${{ steps.provenance.outputs.bundle-path }}
+        run: cp -- "$BUNDLE_PATH" "$RUNNER_TEMP/tracebolt-release/manifest.sigstore.json"
+      - name: Verify exact source and signer before preparing the pinned bootstrap
+        env:
+          SOURCE_COMMIT: ${{ github.sha }}
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: >-
+          python3 -I -B deploy/release/prepare-pinned-bootstrap.py
+          --manifest "$RUNNER_TEMP/tracebolt-release/manifest.json"
+          --bundle "$RUNNER_TEMP/tracebolt-release/manifest.sigstore.json"
+          --source-commit "$SOURCE_COMMIT"
+          --output "$RUNNER_TEMP/tracebolt-release/bootstrap.py"
+      - name: Keep verified candidates for explicit publication review
+        id: candidate-artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: attested-linux-release-candidate
+          path: ${{ runner.temp }}/tracebolt-release/
+          if-no-files-found: error
+          retention-days: 7
+
+
+  publish:
+    name: Publish only the selected fresh Linux version
+    needs: candidate
+    if: inputs.publish && github.repository == 'storminator89/Tracebolt' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: write
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Download the exact candidate artifact from this successful run
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with:
+          artifact-ids: ${{ needs.candidate.outputs.artifact-id }}
+          path: ${{ runner.temp }}/tracebolt-publication-input
+          merge-multiple: true
+      - name: Reverify all provenance and bytes, then publish without overwrite
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ inputs.version }}
+          SOURCE_COMMIT: ${{ github.sha }}
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: >-
+          python3 -I -B deploy/release/publish-linux-release.py
+          --version "$RELEASE_VERSION"
+          --source-commit "$SOURCE_COMMIT"
+          --artifacts "$RUNNER_TEMP/tracebolt-publication-input"
+          --publish

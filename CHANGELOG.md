@@ -2,6 +2,14 @@
 
 Meaningful development checkpoints are recorded here. These are prototype milestones, not production releases.
 
+## 2026-10-04 — Prepare verified Linux release downloads
+
+- Add a manually dispatched, exact-source Linux release build with keyless GitHub provenance for its strict artifact manifest. Keep ordinary jobs read-only; isolate the specifically approved attestation permissions to the candidate job and release write permission to the explicit fresh-version publish job.
+- Reverify provenance, artifact bytes, repository identity, unchanged selected main source and absent version before publication. Refuse existing or uncertain release state without overwrite, deletion or automatic retries. No signing private key or repository-settings change is introduced.
+- Add a fixed-origin, checksum-pinned bootstrap that verifies the complete official release before handing verified files to the existing installer. Preserve hidden terminal input, deliberate apply, identity retention and installer guards. Linux amd64 is the first runtime target; arm64 is only cross-built.
+- Prepare the dashboard command selector with its source-owned production pin disabled. Until real release artifacts and the separately published bootstrap are verified, the existing manual installation command remains byte-for-byte selected.
+- The composed source passes 43 inert release/wrapper fixtures and 831 frontend tests, type checking and build. These results do not establish an actual attested Tracebolt build, release publication, downloader installation or host reboot. Those gates remain open and require the exact selected source and official artifacts.
+
 ## 2026-10-04 — Add explicitly consented endpoint hostname and interface observations
 
 - Add a separately versioned, bounded hostname/interface-address extension for the existing managed-v3 identity. Local preview/enable/disable requires the exact nonroot service identity, a stopped sender and explicit scope acknowledgement. Default collection stays off, and existing keys and counter domains are preserved.
