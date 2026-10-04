@@ -14,7 +14,7 @@ import (
 
 const outputDirectory = "/etc/tracebolt-http-test"
 const outputName = "tracebolt-http-test"
-const usage = "Usage: http-test-setup --lan-ip <private-IPv4> --ack-disposable-http-test [--collection-profile basic-readonly-v1|managed-operations-v2] [--ack-managed-metadata] [--apply]\nDefault: print a plan only. Linux apply requires root and a controlling terminal.\n"
+const usage = "Usage: http-test-setup --lan-ip <private-IPv4> --ack-disposable-http-test [--collection-profile basic-readonly-v1|managed-operations-v2|managed-operations-v3] [--ack-managed-metadata] [--apply]\nDefault: print a plan only. Linux apply requires root and a controlling terminal.\n"
 
 type options struct {
 	ip, collectionProfile                   string
@@ -38,7 +38,7 @@ func run(ctx context.Context, args []string, out io.Writer, d dependencies) int 
 	var o options
 	fs.StringVar(&o.ip, "lan-ip", "", "selected private LAN IPv4")
 	fs.BoolVar(&o.acknowledge, "ack-disposable-http-test", false, "acknowledge disposable plaintext test")
-	fs.StringVar(&o.collectionProfile, "collection-profile", basicProfileName, "exact basic or managed-v2 collection profile")
+	fs.StringVar(&o.collectionProfile, "collection-profile", basicProfileName, "exact basic, selected-row managed-v2 or complete-dpkg managed-v3 profile")
 	fs.BoolVar(&o.acknowledgeMetadata, "ack-managed-metadata", false, "acknowledge expanded sensitive metadata in a fresh managed test")
 	fs.BoolVar(&o.apply, "apply", false, "create the fixed new directory")
 	if e := fs.Parse(args); e != nil {
@@ -61,6 +61,11 @@ func run(ctx context.Context, args []string, out io.Writer, d dependencies) int 
 	}
 	if profile == inventorySetup {
 		if _, e := fmt.Fprint(out, inventoryNotice); e != nil {
+			return 1
+		}
+	}
+	if profile == completeSetup {
+		if _, e := fmt.Fprint(out, completeNotice); e != nil {
 			return 1
 		}
 	}

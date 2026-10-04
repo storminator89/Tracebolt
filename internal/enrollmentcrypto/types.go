@@ -15,6 +15,10 @@ const CollectionProfile = "basic-readonly-v1"
 const CollectionProfileOperational = "managed-operations-v1"
 const CollectionProfilePackages = "managed-operations-v2"
 
+// CollectionProfileComplete requires fresh explicit consent for complete dpkg
+// generation transfer. Existing selected-row profiles retain their old scope.
+const CollectionProfileComplete = "managed-operations-v3"
+
 // ValidCollectionProfile admits only explicitly implemented, consent-bound profiles.
 func ValidCollectionProfile(profile string) bool {
 	return profile == CollectionProfile || ManagedCollectionProfile(profile)
@@ -23,7 +27,7 @@ func ValidCollectionProfile(profile string) bool {
 // ManagedCollectionProfile identifies explicit managed metadata scopes. It does
 // not authorize any frame; the exact frame/profile pair is validated separately.
 func ManagedCollectionProfile(profile string) bool {
-	return profile == CollectionProfileOperational || profile == CollectionProfilePackages
+	return profile == CollectionProfileOperational || profile == CollectionProfilePackages || profile == CollectionProfileComplete
 }
 
 const MaxClaimBytes = 16 * 1024

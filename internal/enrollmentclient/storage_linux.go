@@ -59,13 +59,15 @@ type localStoreData struct {
 
 func storeDataName(name string) bool {
 	switch name {
-	case "ledger.json", "agent-key.pem", "agent-cert.pem", "server-ca.pem", "agent.json", "ready.json":
+	case "ledger.json", "agent-key.pem", "agent-cert.pem", "server-ca.pem", "agent.json", "ready.json", "service-enrollment.json":
 		return true
 	}
 	return false
 }
 
-func openStore(absPath string) (*localStore, error) {
+func openStore(absPath string) (*localStore, error)         { return openStoreMode(absPath, false) }
+func openExistingStore(absPath string) (*localStore, error) { return openStoreMode(absPath, true) }
+func openStoreMode(absPath string, existingOnly bool) (*localStore, error) {
 	// Do not normalize away a symlink-bearing component or accept a relative
 	// location whose meaning could change during the workflow.
 	if !filepath.IsAbs(absPath) || filepath.Clean(absPath) != absPath || absPath == "/" || strings.ContainsRune(absPath, 0) {
@@ -76,7 +78,7 @@ func openStore(absPath string) (*localStore, error) {
 		ops:   storeOperations{sync: unix.Fsync, rename: unix.Renameat2},
 	}}
 	fail := func(err error) (*localStore, error) { _ = s.Close(); return nil, err }
-	if err := s.openDirectory(absPath); err != nil {
+	if err := s.openDirectoryMode(absPath, existingOnly); err != nil {
 		return fail(err)
 	}
 	entries, err := s.entries()
@@ -84,6 +86,9 @@ func openStore(absPath string) (*localStore, error) {
 		return fail(err)
 	}
 	newLock := len(entries) == 0
+	if existingOnly && (newLock || !entries["ledger.json"]) {
+		return fail(ErrState)
+	}
 	if !newLock && !entries[storeLockName] {
 		return fail(ErrState)
 	}
@@ -176,7 +181,8 @@ func storeUnchanged(a, b unix.Stat_t) bool {
 	return storeSameFile(a, b) && a.Size == b.Size && a.Mtim == b.Mtim && a.Ctim == b.Ctim
 }
 
-func (s *localStore) openDirectory(abs string) error {
+func (s *localStore) openDirectory(abs string) error { return s.openDirectoryMode(abs, false) }
+func (s *localStore) openDirectoryMode(abs string, existingOnly bool) error {
 	fd, err := unix.Open("/", unix.O_RDONLY|unix.O_DIRECTORY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
 	if err != nil {
 		return ErrState
@@ -189,7 +195,7 @@ func (s *localStore) openDirectory(abs string) error {
 	for i, name := range parts {
 		parent := s.dirFD()
 		child, openErr := unix.Openat(parent, name, unix.O_RDONLY|unix.O_DIRECTORY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
-		if errors.Is(openErr, unix.ENOENT) && i == len(parts)-1 {
+		if errors.Is(openErr, unix.ENOENT) && i == len(parts)-1 && !existingOnly {
 			if unix.Mkdirat(parent, name, 0700) != nil || s.ops.sync(parent) != nil {
 				return ErrState
 			}
@@ -254,8 +260,8 @@ func (s *localStore) entries() (map[string]bool, error) {
 	}
 	f := os.NewFile(uintptr(fd), "enrollment-directory-entries")
 	defer f.Close()
-	entries, err := f.ReadDir(10)
-	if (err != nil && !errors.Is(err, io.EOF)) || len(entries) > 9 {
+	entries, err := f.ReadDir(11)
+	if (err != nil && !errors.Is(err, io.EOF)) || len(entries) > 10 {
 		return nil, ErrState
 	}
 	names := make(map[string]bool, len(entries))

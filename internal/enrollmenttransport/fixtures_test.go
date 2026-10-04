@@ -72,6 +72,9 @@ func makeCertificate(t *testing.T, template, parent *x509.Certificate, public ed
 	return c
 }
 func newFixture(t *testing.T, profile string, activate bool) *fixture {
+	return newCollectionFixture(t, profile, enrollmentcrypto.CollectionProfile, activate)
+}
+func newCollectionFixture(t *testing.T, profile, collection string, activate bool) *fixture {
 	t.Helper()
 	now := time.Now().UTC().Truncate(time.Second)
 	rp, rk := key(t)
@@ -90,7 +93,7 @@ func newFixture(t *testing.T, profile string, activate bool) *fixture {
 	if profile == "http-test" {
 		origin = "http://manager.test"
 	}
-	cfg := enrollmentstate.DefaultConfig(enrollmentstate.Binding{InstanceID: id("manager", 1), Origin: origin, Profile: profile, CollectionProfile: enrollmentcrypto.CollectionProfile, IssuerFingerprint: issuer.Fingerprint()})
+	cfg := enrollmentstate.DefaultConfig(enrollmentstate.Binding{InstanceID: id("manager", 1), Origin: origin, Profile: profile, CollectionProfile: collection, IssuerFingerprint: issuer.Fingerprint()})
 	cfg.RecordLimit, cfg.InvitationLimit, cfg.PendingLimit = MaxRecords, MaxRecords, MaxRecords
 	f := &fixture{path: filepath.Join(t.TempDir(), "private", "enrollment.sqlite"), config: cfg, issuer: issuer, root: root, rootKey: rk, now: now}
 	f.store, err = enrollmentstore.Open(f.path, cfg, issuer.IssuerDER())

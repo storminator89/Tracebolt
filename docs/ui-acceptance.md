@@ -1,6 +1,53 @@
 # Tracebolt UI acceptance
 
-## Current operational inventory and conditional-review checkpoint
+## Current review-read recovery checkpoint
+
+Exact source **`2641448162d2d9d53fc17db6c4cb8865fcebc7cb`** passed the required browser targets in [CI run 37198507471](https://github.com/storminator89/Tracebolt/actions/runs/37198507471). Independent readback verified exact source identities, all 18 unique conditional case results, the five lifecycle attempts, report totals and runtime-error counts. This acceptance covers the described browser flows and original synthetic pixels; it does not declare every CI job, native/service behavior or every panel-recovery path complete.
+
+| Target | Result |
+| --- | --- |
+| General UI, language, shell and controlled AI | 40 PASS |
+| Actual Linux managed preview | 6 PASS |
+| Operator HTTP-test UI | 10 PASS |
+| Guided enrollment reduced gate | 10 PASS, 3 named SKIPPED; full enrollment acceptance remains false |
+| Operational/package/catalog/conditional review | 18 PASS, including five consecutive persisted-page cycles |
+| Browser runtime errors | 0 across all five targets |
+
+### Confirmed failure and bounded recovery
+
+The unchanged ed18 code later failed one persisted-page case on eff256b. Diagnostic source `85fd06b5db7258c70ace532ccd8d6c69a06f7556` established the actual failure: page restoration started auth, coverage and review reads together; auth and coverage returned 200, while review returned **429 / storage_busy**. The old rows were removed correctly and the private view became visible/non-inert. The missing final row resulted from review-read contention, not a privacy or visibility failure. The store's single-reader admission bound remains unchanged.
+
+The corrected review resource repeats only its read-only GET once, after two seconds, for the exact 429 storage_busy code. It announces recovery in English/German, keeps rows cleared, and retains the original AbortController, protected-request epoch, monotonic/wall anchor and total ten-second deadline. Invalidation cancels the delay; a second busy response remains visible. It does not retry mutations, generic 429 errors, authorization failures or arbitrary network errors. Independent QA reran 46 targeted API/retry regressions successfully. The exact 64KiB boundary fixture was also made cheaper to construct; its 65,536-byte acceptance, 65,537-byte rejection and timeout were preserved, and the ten focused boundary tests passed independently.
+
+On the accepted hosted source, lifecycle cycles **1 and 2** recorded actual review **429 storage_busy → 200** sequences. Cycles **3–5** returned review 200 directly. Every cycle ended with exactly one candidate row, no review alert, and a visible/non-inert private view. All original row-removal and fresh-read assertions remained; no case was skipped or weakened. The browser test injects page lifecycle events and does not certify real OS suspension or BFCache implementation behavior.
+
+**Remaining coverage-panel recovery gap:** the same bounded trace records coverage HTTP 429 in cycles 3 and 5, without a subsequent coverage 200. The current coverage resource maps that failure to its load-error/manual-refresh state. The passing lifecycle assertions concern the review panel; they do not establish automatic recovery of every surrounding panel. No stale data or healthy-state fallback is introduced. Broader coverage recovery remains a separate usability issue.
+
+### Pixel readback and evidence scope
+
+All five fresh original conditional PNGs were individually hash-verified and inspected at original resolution (1440×1000 desktop, 390×844 mobile; fullPage:false). Navigation/drawer framing remains intact; fixture, unknown and unverified labels are legible, and no secret is visible. The catalog settings API-key field is empty. The English mobile table and candidate views are deliberately scrolled detail views. The German mobile detail still omits its heading above the viewport, so it remains test evidence rather than a new primary gallery image. This update does not replace the previously published ed18 gallery or its source attribution.
+
+These captures contain entirely invented observations and catalogs on the loopback HTTP-test profile. The managed-operations-v2 fixture binding intentionally contains the unchanged operational-v1 component. A catalog declaring synthetic:false is still an invented, unverified interchange fixture, not a real vendor source or authoritative CVE finding. Direct store admission is not native collection or telemetry-transport acceptance.
+
+Artifact ID: `11302236740`. Retrieved archive SHA-256: `1c11e90435301208214d2ee1ee042640a935d39c4a655468b80f4c5ff4025c2c`. Exact image hashes:
+
+| Original PNG | SHA-256 |
+| --- | --- |
+| `synthetic-conditional-inventory-desktop-en.png` | `231c2146d6f2620f5e18e8112498a3793044764f35f039016de35d5f64a9fb79` |
+| `synthetic-conditional-candidate-desktop-en.png` | `3a6706eb3132d69c8c0639d643a84494019be0f4829d11ef5d748ca7c4aab3b7` |
+| `synthetic-conditional-catalog-desktop-en.png` | `531b03c983c70cc4c0c12aaba3b64d91886e2128cc66be2d3bf16e44f1eafc0a` |
+| `synthetic-conditional-packages-mobile-en.png` | `b0c4128a85e652f131454ba3784534645c65dc0fb316e32dc33243aedae1cd01` |
+| `synthetic-conditional-review-mobile-de.png` | `973ba0d08bd55756ad588a225d44bebd46ef1c7f105ccb71cb0ea6b7def57cf0` |
+
+Repeat the conditional gate after building the UI and installing pinned Playwright Chromium:
+
+```sh
+TRACEBOLT_SOURCE_SHA=<exact-source-sha> TRACEBOLT_REVIEW_LIFECYCLE_REPEATS=5 node tests/e2e-review/conditional-browser.mjs
+```
+
+The baseline archive provenance remains separately labelled applicationBaselineArchiveSha256. Exact tested identity comes from TRACEBOLT_SOURCE_SHA/github.sha. Existing enrollment quarantines and all fixture/export limitations below remain applicable.
+
+## Historical ed18 operational inventory checkpoint
 
 Exact source **`ed18d9ab0dd88a14ea86eaec1548facd807ecc22`** passed the required browser targets in [CI run 37193131587](https://github.com/storminator89/Tracebolt/actions/runs/37193131587). Independent readback checked the source identity, unique case names, summaries and runtime-error counts in all five reports. This section records browser and pixel acceptance; other CI jobs and native/service acceptance have their own evidence.
 

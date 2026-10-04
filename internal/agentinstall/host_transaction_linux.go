@@ -43,6 +43,7 @@ type linuxTransaction struct {
 	bootstrap                                                 []byte
 	staged                                                    string
 	account                                                   accountRecord
+	installationVersion, profile                              string
 	stopped, started, enabled, disabled, published, committed bool
 }
 
@@ -134,6 +135,9 @@ func (t *linuxTransaction) Apply(ctx context.Context, op Operation, r Request) e
 			return ErrState
 		}
 		args := []string{"--bootstrap", t.h.path(BootstrapPath), "--state-directory", t.h.path(EnrollmentDirectory)}
+		if t.installationVersion == pendingInstallationVersion {
+			args = append(args, "--claim-only")
+		}
 		if r.InsecureHTTPTest {
 			args = append(args, "--insecure-http-test")
 		}
@@ -153,6 +157,17 @@ func (t *linuxTransaction) Apply(ctx context.Context, op Operation, r Request) e
 				return ErrState
 			}
 			t.account = a
+		}
+		if t.installationVersion == pendingInstallationVersion {
+			binary := t.h.path(EnrollPath)
+			if t.staged != "" {
+				binary = filepath.Join(t.staged, "enroll-agent")
+			}
+			args := []string{"--bootstrap", t.h.path(BootstrapPath), "--state-directory", t.h.path(EnrollmentDirectory), "--validate-service", "--service-identity", strconv.Itoa(t.account.UID) + ":" + strconv.Itoa(t.account.GID)}
+			if t.profile == "http-test" {
+				args = append(args, "--insecure-http-test")
+			}
+			return t.h.run(ctx, binary, args, &t.account, false)
 		}
 		binary := t.h.path(AgentPath)
 		if t.staged != "" {
@@ -222,7 +237,7 @@ func (t *linuxTransaction) prepare(ctx context.Context) error {
 	t.account = a
 	t.j.UID = a.UID
 	t.j.GID = a.GID
-	m := installation{Version: "tracebolt.agent-installation.v1", UID: a.UID, GID: a.GID, Profile: b.Profile, AgentHash: t.r.AgentSHA256, EnrollHash: t.r.EnrollSHA256, SourceHash: t.r.SourceSHA256, BootstrapHash: t.r.BootstrapSHA256, UnitHash: sum([]byte(unitFor(t.account)))}
+	m := installation{Version: t.installationVersion, UID: a.UID, GID: a.GID, Profile: b.Profile, AgentHash: t.r.AgentSHA256, EnrollHash: t.r.EnrollSHA256, SourceHash: t.r.SourceSHA256, BootstrapHash: t.r.BootstrapSHA256, UnitHash: sum([]byte(unitForMode(t.account, t.installationVersion, t.profile)))}
 	if t.createOwnership(m) != nil {
 		return ErrState
 	}
@@ -363,7 +378,7 @@ func (t *linuxTransaction) publish(ctx context.Context) error {
 	if t.staged == "" || t.inputs == nil {
 		return ErrState
 	}
-	m := installation{Version: "tracebolt.agent-installation.v1", UID: t.account.UID, GID: t.account.GID, AgentHash: t.r.AgentSHA256, EnrollHash: t.r.EnrollSHA256, SourceHash: t.r.SourceSHA256, UnitHash: sum([]byte(unitFor(t.account))), BootstrapHash: t.r.BootstrapSHA256}
+	m := installation{Version: t.installationVersion, UID: t.account.UID, GID: t.account.GID, AgentHash: t.r.AgentSHA256, EnrollHash: t.r.EnrollSHA256, SourceHash: t.r.SourceSHA256, UnitHash: sum([]byte(unitForMode(t.account, t.installationVersion, t.profile))), BootstrapHash: t.r.BootstrapSHA256}
 	if t.r.Action == Upgrade {
 		old, e := t.h.readInstallation()
 		if e != nil {
@@ -392,7 +407,7 @@ func (t *linuxTransaction) publish(ctx context.Context) error {
 			return e
 		}
 	}
-	if e := t.changeBytes(UnitPath, []byte(unitFor(t.account)), 0644); e != nil {
+	if e := t.changeBytes(UnitPath, []byte(unitForMode(t.account, t.installationVersion, t.profile)), 0644); e != nil {
 		return e
 	}
 	if e := t.changeBytes(ManifestPath, encode(m), 0644); e != nil {
@@ -592,6 +607,20 @@ func (t *linuxTransaction) cleanupOwnedTemporary() error {
 func unitFor(a accountRecord) string {
 	unit, e := UnitForAccount(a.UID, a.GID)
 	if e != nil {
+		return ""
+	}
+	return unit
+}
+
+func unitForMode(a accountRecord, version, profile string) string {
+	if version == readyInstallationVersion {
+		return unitFor(a)
+	}
+	if version != pendingInstallationVersion {
+		return ""
+	}
+	unit, err := PendingUnitForAccount(a.UID, a.GID, profile)
+	if err != nil {
 		return ""
 	}
 	return unit

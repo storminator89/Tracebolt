@@ -53,27 +53,31 @@ func Collect(ctx context.Context, generationID string, at time.Time) (linuxpacka
 }
 
 func collectWith(ctx context.Context, generationID string, at time.Time, slot *atomic.Bool, factory providerFactory) (linuxpackages.Snapshot, error) {
+	return collectWithFinalizer(ctx, generationID, at, slot, factory, finish)
+}
+
+func collectWithFinalizer(ctx context.Context, generationID string, at time.Time, slot *atomic.Bool, factory providerFactory, finalize func(linuxpackages.Snapshot, time.Time) (linuxpackages.Snapshot, error)) (linuxpackages.Snapshot, error) {
 	start := time.Now()
 	s := unavailable(generationID, at, linuxpackages.ReasonNotImplemented)
 	if ctx == nil || linuxpackages.Validate(s) != nil {
 		return linuxpackages.Snapshot{}, errInvalidInput
 	}
 	if ctx.Err() != nil {
-		return finish(unavailable(generationID, at, linuxpackages.ReasonTimeout), start)
+		return finalize(unavailable(generationID, at, linuxpackages.ReasonTimeout), start)
 	}
 	if !slot.CompareAndSwap(false, true) {
-		return finish(unavailable(generationID, at, linuxpackages.ReasonCollectorBusy), start)
+		return finalize(unavailable(generationID, at, linuxpackages.ReasonCollectorBusy), start)
 	}
 	defer slot.Store(false)
 	if ctx.Err() != nil {
-		return finish(unavailable(generationID, at, linuxpackages.ReasonTimeout), start)
+		return finalize(unavailable(generationID, at, linuxpackages.ReasonTimeout), start)
 	}
 	p, err := factory()
 	if err != nil {
 		if ctx.Err() != nil {
-			return finish(unavailable(generationID, at, linuxpackages.ReasonTimeout), start)
+			return finalize(unavailable(generationID, at, linuxpackages.ReasonTimeout), start)
 		}
-		return finish(unavailable(generationID, at, failureReason(err)), start)
+		return finalize(unavailable(generationID, at, failureReason(err)), start)
 	}
 	// Resources are closed synchronously before final export and slot release.
 	var release, inventory source
@@ -143,9 +147,9 @@ func collectWith(ctx context.Context, generationID string, at time.Time, slot *a
 	if ctx.Err() != nil {
 		s = unavailable(generationID, at, linuxpackages.ReasonTimeout)
 	}
-	s, err = finish(s, start)
+	s, err = finalize(s, start)
 	if ctx.Err() != nil {
-		return finish(unavailable(generationID, at, linuxpackages.ReasonTimeout), start)
+		return finalize(unavailable(generationID, at, linuxpackages.ReasonTimeout), start)
 	}
 	return s, err
 }

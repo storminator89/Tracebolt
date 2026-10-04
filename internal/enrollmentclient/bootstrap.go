@@ -16,6 +16,7 @@ import (
 	"localrmm/internal/lanclient"
 	"localrmm/internal/lanconfig"
 	"reflect"
+	"strings"
 	"time"
 	"unicode/utf8"
 )
@@ -155,6 +156,11 @@ func validateBootstrap(b Bootstrap, now time.Time) (TrustDisplay, error) {
 	}
 	if b.CollectionProfile == enrollmentcrypto.CollectionProfilePackages {
 		d.CollectionPrivacy += " This fresh profile additionally reports exact selected OS release identifiers, binary/source package names and versions, source-mapping basis and installation state. Package rows are bounded and may be partial. No repository URLs, maintainer data, package descriptions, APT queries or update installation are included. The latest package frame remains stored until replaced, including after revocation; freshness expiry does not delete its bytes. Package metadata is excluded from AI export. Existing sender state cannot be adopted or reset into this profile."
+	}
+	if b.CollectionProfile == enrollmentcrypto.CollectionProfileComplete {
+		d.CollectionPrivacy = strings.Replace(d.CollectionPrivacy, "No command lines, environment, account IDs, IP/MAC address values, raw log messages or package descriptions are collected.", "No command lines, environment, account IDs, MAC addresses, raw log messages, network payloads or package descriptions are collected.", 1)
+		d.CollectionPrivacy += " This profile includes system-service runtime and startup/enablement states, locally observed TCP listeners and connections, UDP-bound/connected sockets, numeric local/remote IP addresses and ports, and process IDs/names where attribution is permitted. These fields can reveal private network topology and user activity. Missing ownership and unsupported scopes remain explicitly unknown. Local binding does not prove external reachability; no scan, DNS lookup, namespace entry or additional privilege is used."
+		d.CollectionPrivacy += " This fresh profile additionally transfers the complete supported dpkg installed/incomplete package dataset in bounded chunks, including exact OS release identifiers, binary/source package names and versions, source-mapping basis and installation state. Unsupported software managers remain unknown. Resource limits fail the new generation explicitly rather than publishing a truncated list as complete. The previous completed generation retains its original collection time while a new transfer is pending or fails; rows are hidden after 24 hours but current stored bytes can remain until replaced, including after revocation. Names can contain personal or secret-like metadata. No repository URLs, maintainer data, descriptions, APT queries or update installation are included. All package metadata is excluded from AI export. Existing sender state cannot be adopted or reset into this profile."
 	}
 	if b.Profile == "tls" {
 		cs, e := publicCertificates(b.ServerCAPEM)

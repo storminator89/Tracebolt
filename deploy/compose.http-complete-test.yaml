@@ -1,0 +1,40 @@
+# Explicit disposable HTTP complete-inventory pilot, separate from the basic test stack.
+name: tracebolt-http-complete-test
+services:
+  manager-http-complete-test:
+    image: tracebolt-manager:http-complete-test
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    command:
+      - --lan-config
+      - /run/tracebolt/http-test.json
+      - --enrollment-config
+      - /run/tracebolt/enrollment.json
+    user: "65532:65532"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 128
+    mem_limit: 512m
+    cpus: 2
+    restart: "no"
+    stop_grace_period: 15s
+    ports:
+      - "${TRACEBOLT_HTTP_TEST_BIND_IP:?Set the selected private LAN IPv4}:8787:8787"
+      - "${TRACEBOLT_HTTP_TEST_BIND_IP:?Set the selected private LAN IPv4}:8788:8788"
+    volumes:
+      - http-complete-state:/data
+      - type: bind
+        source: /etc/tracebolt-http-complete-test
+        target: /run/tracebolt
+        read_only: true
+        bind:
+          create_host_path: false
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "3"
+volumes:
+  http-complete-state:

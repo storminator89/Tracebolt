@@ -10,12 +10,12 @@ export interface EnrollmentSnapshot {
   intent:{intentID:string;requestID:string;serialHex:string;templateVersion:string;deviceID:string;keyFingerprint:string;notBefore:number;notAfter:number;at:number};
   issuance:{requestID:string;certificateHash:string;at:number}; activation:{requestID:string;at:number}; termination:{requestID:string;from:string;at:number};
 }
-export type EnrollmentCollectionProfile = 'basic-readonly-v1' | 'managed-operations-v1' | 'managed-operations-v2';
-export interface EnrollmentList {collectionProfile?:EnrollmentCollectionProfile;collectionPrivacy?:'metadata_labels_may_be_sensitive'|'package_source_metadata_may_be_sensitive';serverNow:string;schemaVersion:'tracebolt.enrollment-operator.v2';enabled:boolean;platforms:string[];recordLimit:number;items:EnrollmentSnapshot[]}
+export type EnrollmentCollectionProfile = 'basic-readonly-v1' | 'managed-operations-v1' | 'managed-operations-v2' | 'managed-operations-v3';
+export interface EnrollmentList {collectionProfile?:EnrollmentCollectionProfile;collectionPrivacy?:'metadata_labels_may_be_sensitive'|'package_source_metadata_may_be_sensitive'|'complete_system_inventory_metadata_may_be_sensitive';serverNow:string;schemaVersion:'tracebolt.enrollment-operator.v2';enabled:boolean;platforms:string[];recordLimit:number;items:EnrollmentSnapshot[]}
 export interface EnrollmentBootstrap {
  schemaVersion:'tracebolt.enrollment-bootstrap.v2';managerInstanceId:string;profile:'tls'|'http-test';enrollmentOrigin:string;agentOrigin:string;collectionProfile:string;invitationId:string;serverCaPem:string;issuerRootPem:string;issuerPem:string;
 }
-export interface InvitationCreation {serverNow:string;schemaVersion:'tracebolt.enrollment-invitation.v2';snapshot:EnrollmentSnapshot;invitationSecret:string;bootstrap:EnrollmentBootstrap}
+export interface InvitationCreation {serverNow:string;schemaVersion:'tracebolt.enrollment-invitation.v2';snapshot:EnrollmentSnapshot;invitationSecret:string;bootstrap:EnrollmentBootstrap;bootstrapSHA256?:string}
 const object=(value:unknown):value is Record<string,unknown>=>Boolean(value)&&typeof value==='object'&&!Array.isArray(value);
 const text=(v:unknown):v is string=>typeof v==='string'&&v.length<=32768;
 const time=(v:unknown):v is number=>typeof v==='number'&&Number.isSafeInteger(v)&&v>=0&&v<=253402300799;
@@ -31,7 +31,7 @@ export function validEnrollmentList(value:unknown):value is EnrollmentList {
 }
 function validCollectionConsent(value:Record<string,unknown>):boolean {
  if(value.collectionProfile===undefined||value.collectionProfile==='basic-readonly-v1')return value.collectionPrivacy===undefined;
- return (value.collectionProfile==='managed-operations-v1'&&value.collectionPrivacy==='metadata_labels_may_be_sensitive')||(value.collectionProfile==='managed-operations-v2'&&value.collectionPrivacy==='package_source_metadata_may_be_sensitive');
+ return (value.collectionProfile==='managed-operations-v1'&&value.collectionPrivacy==='metadata_labels_may_be_sensitive')||(value.collectionProfile==='managed-operations-v2'&&value.collectionPrivacy==='package_source_metadata_may_be_sensitive')||(value.collectionProfile==='managed-operations-v3'&&value.collectionPrivacy==='complete_system_inventory_metadata_may_be_sensitive');
 }
 export function enrollmentCollectionProfile(value:EnrollmentList):EnrollmentCollectionProfile {return value.collectionProfile??'basic-readonly-v1';}
 export function comparisonValid(item:EnrollmentSnapshot):boolean{return /^[a-f0-9]{64}$/.test(item.claim.keyFingerprint)&&/^[a-f0-9]{32}$/.test(item.claim.comparisonCode);}
@@ -60,3 +60,7 @@ function certificatePEM(value:unknown,maxBlocks:number):boolean {
  while(rest){const match=/^-----BEGIN CERTIFICATE-----[\r\n\t ]+([A-Za-z0-9+/=\r\n\t ]+?)[\r\n\t ]+-----END CERTIFICATE-----/.exec(rest);if(!match||++blocks>maxBlocks)return false;const encoded=match[1].replace(/\s/g,'');try{if(!encoded||btoa(atob(encoded))!==encoded)return false;}catch{return false;}rest=rest.slice(match[0].length).trim();}
  return blocks>0;
 }
+
+/** Older invitation responses omit this field. A present invalid checksum fails closed.
+ * Use only the manager-returned checksum: JSON.stringify is not the Go wire encoding. */
+export function validBootstrapSHA256(value: unknown): value is string | undefined { return value === undefined || typeof value === 'string' && /^[a-f0-9]{64}$/.test(value); }

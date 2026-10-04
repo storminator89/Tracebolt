@@ -307,6 +307,11 @@ func FrameMatchesCollectionProfile(frame Frame, profile string) bool {
 		return frame.SchemaVersion == FrameOperationalVersion && frame.Operational != nil && frame.Packages == nil && frame.Operational.CollectionProfile == profile && frame.Observation.Platform == "linux"
 	case enrollmentcrypto.CollectionProfilePackages:
 		return frame.SchemaVersion == FramePackagesVersion && frame.Operational != nil && frame.Packages != nil && frame.Operational.CollectionProfile == operational.CollectionProfile && frame.Observation.Platform == "linux"
+	case enrollmentcrypto.CollectionProfileComplete:
+		// Complete packages travel through the independent generation protocol;
+		// periodic metrics retain the bounded operational schema without a second
+		// truncated package observation or client-controlled profile downgrade.
+		return frame.SchemaVersion == FrameOperationalVersion && frame.Operational != nil && frame.Packages == nil && frame.Operational.CollectionProfile == operational.CollectionProfile && frame.Observation.Platform == "linux"
 	default:
 		return false
 	}

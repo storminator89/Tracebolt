@@ -121,6 +121,9 @@ func (s *session) challenge(ctx context.Context, purpose string) (enrollmentcryp
 	if e != nil || len(nonce) != 32 || base64.RawURLEncoding.EncodeToString(nonce) != c.Challenge {
 		return enrollmentcrypto.ChallengeContext{}, ErrResponse
 	}
+	if err := s.enforceServiceDeadline(time.Now()); err != nil {
+		return enrollmentcrypto.ChallengeContext{}, err
+	}
 	return c, nil
 }
 func proofBase(c enrollmentcrypto.ChallengeContext) map[string]string {
@@ -282,9 +285,15 @@ func (s *session) credential(ctx context.Context, v enrollmentstate.Snapshot) er
 	if e != nil {
 		return e
 	}
+	if err := s.enforceServiceDeadline(time.Now()); err != nil {
+		return err
+	}
 	body, e := s.wire.post(ctx, "credential", raw)
 	if e != nil {
 		return e
+	}
+	if err := s.enforceServiceDeadline(time.Now()); err != nil {
+		return err
 	}
 	var in struct {
 		SchemaVersion  string                  `json:"schemaVersion"`
@@ -329,9 +338,15 @@ func (s *session) activate(ctx context.Context) error {
 	if e = s.save(); e != nil {
 		return e
 	}
+	if err := s.enforceServiceDeadline(time.Now()); err != nil {
+		return err
+	}
 	body, e := s.wire.post(ctx, "activate", raw)
 	if e != nil {
 		return e
+	}
+	if err := s.enforceServiceDeadline(time.Now()); err != nil {
+		return err
 	}
 	v, e := enrollmentstate.DecodeSnapshot(body)
 	if e != nil || v.State != enrollmentstate.Activated || v.Activation.RequestID != s.l.ActivationRequestID {

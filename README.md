@@ -8,7 +8,9 @@ Tracebolt is an early self-hosted diagnostics prototype with a React interface, 
 
 ## Installation
 
-For a fresh disposable Linux inventory pilot, use the **[Docker manager and native background-service guide](docs/http-inventory-first-start.md)**. It selects the bounded metadata profile explicitly, creates fresh private test material, starts the manager, and uses the reviewed native systemd installer. Actual service success must be observed on the selected host; HTTP remains an explicitly insecure test profile. The [basic HTTP first-start guide](docs/http-test-first-start.md) remains available for the narrower collection policy.
+For the fresh Linux inventory MVP, use the **[short manager and background-agent startup guide](docs/http-complete-first-start.md)**. Prepare one selected build, start a fresh explicitly consented `managed-operations-v3` test manager, then copy the dashboard's public installation command. The pending service can wait for approval in the background; its invitation stays in the hidden native prompt. Supported dpkg generations, system services and locally observed sockets have bounded, generation-pinned views with explicit unavailable/partial states. Actual installed-service and reboot success remain separate host observations; HTTP is an insecure disposable test profile.
+
+The [earlier bounded v2 pilot](docs/http-inventory-first-start.md) and [basic HTTP guide](docs/http-test-first-start.md) retain their narrower policies. Existing identities are not relabeled or migrated to v3.
 
 Start with the **[installation runbook for humans and automation agents](docs/installation.md)**. It covers Docker/native Linux setup, manual public-certificate approval, the Linux one-shot/foreground sender, optional guided enrollment, verification, recovery and explicit permission boundaries. [AGENTS.md](AGENTS.md) is the repository entry guide.
 

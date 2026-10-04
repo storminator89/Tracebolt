@@ -1,6 +1,10 @@
 package lanclient
 
-import "localrmm/internal/lanclientstate"
+import (
+	"localrmm/internal/inventorystate"
+	"localrmm/internal/lanclientstate"
+	"localrmm/internal/systemstate"
+)
 
 func openSenderState(m Material) (*lanclientstate.State, error) {
 	if m.config.guided() {
@@ -22,12 +26,33 @@ func InitializeGuidedState(c Config) error {
 	if e != nil {
 		return e
 	}
-	state, e := lanclientstate.Open(c.StateDirectory, m.binding)
+	var state *lanclientstate.State
+	if c.complete() {
+		state, e = lanclientstate.InitializeNew(c.StateDirectory, m.binding)
+	} else {
+		state, e = lanclientstate.Open(c.StateDirectory, m.binding)
+	}
 	if e != nil {
 		return ErrState
 	}
 	if state.Close() != nil {
 		return ErrState
+	}
+	if c.complete() {
+		inventory, e := inventorystate.InitializeNew(inventoryStateDirectory(c), m.binding, c.AgentID)
+		if e != nil {
+			return ErrState
+		}
+		if inventory.Close() != nil {
+			return ErrState
+		}
+		system, e := systemstate.InitializeNew(systemStateDirectory(c), systemStateBinding(m))
+		if e != nil {
+			return ErrState
+		}
+		if system.Close() != nil {
+			return ErrState
+		}
 	}
 	return nil
 }
@@ -43,6 +68,12 @@ func ValidateGuidedState(c Config) error {
 		return e
 	}
 	if lanclientstate.ValidateExisting(c.StateDirectory, m.binding) != nil {
+		return ErrState
+	}
+	if c.complete() && inventorystate.ValidateExisting(inventoryStateDirectory(c), m.binding, c.AgentID) != nil {
+		return ErrState
+	}
+	if c.complete() && systemstate.ValidateExisting(systemStateDirectory(c), systemStateBinding(m)) != nil {
 		return ErrState
 	}
 	return nil

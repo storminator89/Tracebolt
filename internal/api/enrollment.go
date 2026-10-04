@@ -20,7 +20,7 @@ import (
 )
 
 // EnrollmentBootstrap is public operator-supplied bootstrap material. It is
-// delivered through the authenticated UI; native clients must validate/pin its
+// delivered through the authenticated UI or exact public download; native clients must validate/pin its
 // explicit trust before sending an invitation, never discover trust over HTTP.
 type EnrollmentBootstrap struct {
 	SchemaVersion     string `json:"schemaVersion"`
@@ -57,6 +57,9 @@ func (h *operatorHandler) enrollmentOperator(w http.ResponseWriter, r *http.Requ
 			if h.enrollment.Binding().CollectionProfile == enrollmentcrypto.CollectionProfilePackages {
 				response["collectionPrivacy"] = "package_source_metadata_may_be_sensitive"
 			}
+			if h.enrollment.Binding().CollectionProfile == enrollmentcrypto.CollectionProfileComplete {
+				response["collectionPrivacy"] = "complete_system_inventory_metadata_may_be_sensitive"
+			}
 		}
 		write(w, 200, response)
 		return
@@ -90,7 +93,12 @@ func (h *operatorHandler) enrollmentOperator(w http.ResponseWriter, r *http.Requ
 		}
 		bootstrap := h.enrollmentBootstrap
 		bootstrap.InvitationID = created.Snapshot().InvitationID
-		write(w, 201, map[string]any{"schemaVersion": "tracebolt.enrollment-invitation.v2", "snapshot": created.Snapshot(), "invitationSecret": created.Secret(), "bootstrap": bootstrap, "serverNow": h.enrollment.Now()})
+		_, bootstrapSHA256, err := publicBootstrapBytes(bootstrap, bootstrap.InvitationID)
+		if err != nil {
+			fail(w, 503, "bootstrap_unavailable", "Public bootstrap is unavailable.")
+			return
+		}
+		write(w, 201, map[string]any{"schemaVersion": "tracebolt.enrollment-invitation.v2", "snapshot": created.Snapshot(), "invitationSecret": created.Secret(), "bootstrap": bootstrap, "bootstrapSHA256": bootstrapSHA256, "serverNow": h.enrollment.Now()})
 		return
 	}
 	parts := strings.Split(r.URL.Path, "/")
@@ -344,7 +352,7 @@ func readInvitationInput(w http.ResponseWriter, r *http.Request, profile string)
 	fields := []string{"requestId", "platform"}
 	switch profile {
 	case enrollmentcrypto.CollectionProfile:
-	case enrollmentcrypto.CollectionProfileOperational, enrollmentcrypto.CollectionProfilePackages:
+	case enrollmentcrypto.CollectionProfileOperational, enrollmentcrypto.CollectionProfilePackages, enrollmentcrypto.CollectionProfileComplete:
 		fields = append(fields, "collectionAcknowledged")
 	default:
 		fail(w, 503, "enrollment_unavailable", "Enrollment is not configured.")

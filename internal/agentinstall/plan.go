@@ -39,6 +39,7 @@ const (
 type Request struct {
 	Action           Action
 	Apply            bool
+	PendingService   bool
 	Resume           bool
 	AgentBinary      string
 	AgentSHA256      string
@@ -57,19 +58,21 @@ type HostFacts struct {
 	Linux, SystemdAvailable, Root, AccountCompatible, InstallationOwned, EnrollmentReady bool
 	Profile                                                                              string
 	RetainedPreparation, InstallationRemoved                                             bool
+	PendingService                                                                       bool
 }
 type Step struct {
 	Kind        string `json:"kind"`
 	Description string `json:"description"`
 }
 type Plan struct {
-	SchemaVersion                  string `json:"schemaVersion"`
-	Action                         Action `json:"action"`
-	DryRun                         bool   `json:"dryRun"`
-	RequiresPrivilege              bool   `json:"requiresPrivilege"`
-	IdentityRetained               bool   `json:"identityRetained"`
-	ServiceStartRequiresEnrollment bool   `json:"serviceStartRequiresEnrollment"`
-	Steps                          []Step `json:"steps"`
+	SchemaVersion                      string `json:"schemaVersion"`
+	Action                             Action `json:"action"`
+	DryRun                             bool   `json:"dryRun"`
+	RequiresPrivilege                  bool   `json:"requiresPrivilege"`
+	IdentityRetained                   bool   `json:"identityRetained"`
+	ServiceStartRequiresEnrollment     bool   `json:"serviceStartRequiresEnrollment"`
+	ServiceStartRequiresCommittedClaim bool   `json:"serviceStartRequiresCommittedClaim,omitempty"`
+	Steps                              []Step `json:"steps"`
 }
 
 func BuildPlan(r Request, h HostFacts) (Plan, error) {
@@ -91,10 +94,16 @@ func BuildPlan(r Request, h HostFacts) (Plan, error) {
 	if h.Profile == "tls" && r.InsecureHTTPTest {
 		return Plan{}, ErrContract
 	}
+	if r.PendingService && r.Action != Install {
+		return Plan{}, ErrContract
+	}
 	if r.Resume && r.Action != Install {
 		return Plan{}, ErrContract
 	}
 	if r.Action == Install && r.Resume != (h.RetainedPreparation || h.InstallationRemoved) {
+		return Plan{}, ErrState
+	}
+	if r.Action == Install && r.Resume && r.PendingService != h.PendingService {
 		return Plan{}, ErrState
 	}
 	if (r.Action == Upgrade || r.Action == Restart) && h.InstallationRemoved {
@@ -115,6 +124,12 @@ func BuildPlan(r Request, h HostFacts) (Plan, error) {
 		return Plan{}, ErrContract
 	}
 	p := Plan{SchemaVersion: "tracebolt.agent-install-plan.v1", Action: r.Action, DryRun: !r.Apply, RequiresPrivilege: true, IdentityRetained: true, ServiceStartRequiresEnrollment: true, Steps: []Step{{"preflight", "Check systemd, fixed paths, trusted ownership, local artifact hashes and existing installation state."}}}
+	pending := r.Action == Install && r.PendingService || r.Action != Install && h.PendingService
+	if pending {
+		p.SchemaVersion = "tracebolt.agent-install-plan.v2"
+		p.ServiceStartRequiresEnrollment = false
+		p.ServiceStartRequiresCommittedClaim = true
+	}
 	switch r.Action {
 	case Install:
 		p.Steps = append(p.Steps, Step{"prepare", "Prepare the dedicated non-login service account and protected fixed directories."}, Step{"artifacts", "Stage and verify local native binaries; no download or shell pipeline."}, Step{"enroll", "Run the verified enrollment client as the dedicated account with hidden terminal input; wait for explicit operator approval."}, Step{"validate", "Validate the guided-v2 handoff and existing bound sender ledger."}, Step{"service", "Install the sandboxed unit, then enable/start only after valid enrollment."})
@@ -124,6 +139,9 @@ func BuildPlan(r Request, h HostFacts) (Plan, error) {
 		p.Steps = append(p.Steps, Step{"stop", "Stop the owned service."}, Step{"validate", "Validate the existing guided-v2 identity and bound ledger without resetting it."}, Step{"service", "Restart only after validation succeeds."})
 	case Uninstall:
 		p.Steps = append(p.Steps, Step{"stop", "Disable and stop only the owned Tracebolt service."}, Step{"remove-owned", "Remove only manifest-owned unit and binaries; retain the dedicated account, bootstrap and all private identity/counter data."})
+	}
+	if pending && r.Action == Install {
+		p.Steps = []Step{{"preflight", "Check fixed paths, exact local artifacts, immutable v2 mode and retained state."}, {"prepare", "Prepare the dedicated non-login account and private paths."}, {"artifacts", "Stage and reverify only selected local native binaries."}, {"claim", "Use hidden local invitation entry and save only a status-confirmed same-key claim; no observations collected."}, {"validate", "Validate the existing bound service enrollment locally with no network or initialization."}, {"service", "Publish the v2 waiting-capable unit and observe process start. Approval, activation and reporting remain separate phases."}}
 	}
 	return p, nil
 }

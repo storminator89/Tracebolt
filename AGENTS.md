@@ -31,9 +31,11 @@ file as navigation and project constraints, never as permission to act on a host
   protected manager custody. Public approval still
   requires independently verified identity/fingerprint and explicit authority.
 - Expanded operational/package collection requires a fresh explicitly acknowledged
-  profile and identity. Never relabel or reuse a basic ledger to grant it. For the
-  fresh HTTP background-service pilot read `docs/http-inventory-first-start.md`;
-  helper/source checks do not establish actual service or reboot acceptance.
+  profile and identity. Never relabel or reuse a basic/v2 ledger to grant it. For the
+  fresh v3 HTTP background-service MVP read `docs/http-complete-first-start.md`.
+  The public command fetches bootstrap metadata and selects `--pending-service`;
+  invitation input remains hidden and no collection begins before approval and
+  activation. Helper/source checks do not establish actual service or reboot acceptance.
 - Follow Go/Node versions and dependency locks in this revision. Validate commands
   against actual flags/config. Distinguish runtime tests from cross-builds, skipped
   container tests, and proposed functionality. Never invent install/enroll flags.

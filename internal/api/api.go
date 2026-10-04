@@ -146,6 +146,10 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	if strings.HasPrefix(r.URL.Path, publicBootstrapPrefix) {
+		fail(w, 404, "enrollment_unavailable", "Enrollment is not configured on the development surface.")
+		return
+	}
 	if strings.HasPrefix(r.URL.Path, "/api/") {
 		if r.URL.RawQuery != "" {
 			fail(w, 400, "invalid_query", "This endpoint does not accept query parameters.")

@@ -30,12 +30,12 @@ func (h *linuxHost) readOwnership() (ownershipRecord, error) {
 	if e != nil {
 		return o, ErrState
 	}
-	if decodeCanonical(raw, &o) != nil || o.Version != "tracebolt.agent-install-owner.v1" || (o.Status != "preparing" && o.Status != "prepared" && o.Status != "installed" && o.Status != "uninstalled") || !validAccountID(o.Installation.UID) || !validAccountID(o.Installation.GID) {
+	if decodeCanonical(raw, &o) != nil || o.Version != ownerVersion(o.Installation.Version) || (o.Status != "preparing" && o.Status != "prepared" && o.Status != "installed" && o.Status != "uninstalled") || !validAccountID(o.Installation.UID) || !validAccountID(o.Installation.GID) {
 		return o, ErrState
 	}
 	// Exact root-owned local record is still validated before it can authorize paths.
 	m := o.Installation
-	if m.Version != "tracebolt.agent-installation.v1" || (m.Profile != "tls" && m.Profile != "http-test") {
+	if !validInstallationVersion(m.Version) || (m.Profile != "tls" && m.Profile != "http-test") {
 		return o, ErrState
 	}
 	for _, d := range []string{m.AgentHash, m.EnrollHash, m.SourceHash, m.BootstrapHash, m.UnitHash} {
@@ -96,7 +96,7 @@ func (t *linuxTransaction) removedAlready() bool {
 	return e == nil && o.Status == "uninstalled" && t.r.Action == Uninstall && t.h.validateRetained(o) == nil
 }
 func (t *linuxTransaction) createOwnership(m installation) error {
-	o := ownershipRecord{Version: "tracebolt.agent-install-owner.v1", Status: "preparing", Installation: m}
+	o := ownershipRecord{Version: ownerVersion(m.Version), Status: "preparing", Installation: m}
 	if exclusiveBytes(t.h.path(ownershipPath), encode(o), 0600) != nil {
 		return ErrState
 	}

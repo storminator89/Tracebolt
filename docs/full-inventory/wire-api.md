@@ -1,0 +1,15 @@
+# Complete inventory wire and operator API
+
+Unpublished managed-operations-v3 integration. Existing profiles keep their original contracts. The immutable collection profile comes from activated enrollment identity, never an incoming package row.
+
+Native operations use POST /v3/agent/inventory/{begin,append,finalize,abort,status,failure}. Each strict JSON envelope binds the independent decimal-string sequence, deterministic generation identifier, exact manifest digest and purpose-specific payload. Every save rechecks current activation, exact certificate, revocation, sequence and profile inside the same authority transaction. Agent endpoints never expose storage maintenance.
+
+TLS uses normal dedicated-issuer mTLS and exact origin. Explicit HTTP-test uses a distinct Ed25519 purpose/path/body-bound transcript and headers, with a short proof lifetime independent of original collection time. Responses over HTTP-test remain unauthenticated even when structurally valid. No transport fallback, browser credentials, redirected destination or forwarded-header authority is supported. The listener's two global work slots precede authorization/body work; identity-specific exclusion follows possession verification.
+
+Requests are at most72KiB; manifests4KiB and chunks64KiB retain their independent limits. Receipt envelopes are at most4KiB and bind the exact request SHA-256, operation, sequence, generation and manifest. Exact retries return original committed timestamps and never make source data newer. Status completedAt is an empty string until completion; an expired completed generation retains its original completion time and must not be aborted as an unfinished upload.
+
+The authenticated operator reads GET /api/devices/{agentID}/inventory/packages and pages with POST to its /query suffix. Page input is exactly generationId, cursor, search and limit; no query-string transport is accepted. The read-only POST still requires Origin/CSRF and a current post-body session lease. Up to100 rows are returned per page with a bounded2048-row search scan; an empty nonexhausted page is a continuation, not evidence of no packages. Cursors are generation/search/order/limit-bound. Expired generations return a conflict, never an empty successful list.
+
+The status view distinguishes awaiting, old completed generation, pending transfer and fixed source-failure metadata. It preserves original collection/completion times. UI-visible sequence values are canonical decimal strings. Source failures do not create zero-row inventory; a valid residual-only dpkg source can explicitly complete zero rows. Package/checkpoint/source metadata remain excluded from AI via the trusted instance-level policy.
+
+Owner tests use generated keys, invented package rows and actual loopback TLS/explicit HTTP. They exercise513 rows, all chunks, partial invisibility, exact retries, receipt binding, zero-versus-failed source, revocation and operator pagination. This is not an actual host/service, full-capacity or reboot result. The native batch sender and combined runtime acceptance are separate gates.

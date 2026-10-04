@@ -59,7 +59,7 @@ function version(value: unknown): value is string {
     return /^[A-Za-z0-9.+~:-]+$/.test(hyphen < 0 ? remainder : remainder.slice(0, hyphen));
 }
 function packageName(value: unknown): value is string { return typeof value === 'string' && /^[a-z0-9][a-z0-9+.-]{1,255}$/.test(value); }
-function validRow(value: unknown): value is PackageRow {
+export function validPackageRow(value: unknown): value is PackageRow {
     return record(value, ['name', 'version', 'architecture', 'sourcePackage', 'sourceVersion', 'sourceMapping', 'installState']) && packageName(value.name) && packageName(value.sourcePackage) && version(value.version) && version(value.sourceVersion) &&
         typeof value.architecture === 'string' && /^[a-z0-9][a-z0-9-]{0,63}$/.test(value.architecture) && value.architecture !== 'source' && !value.architecture.split('-').includes('any') && member(value.installState, ['installed', 'incomplete']) &&
         (value.sourceMapping === 'source-field' || value.sourceMapping === 'binary-default' && value.sourcePackage === value.name && value.sourceVersion === value.version);
@@ -78,7 +78,7 @@ export function validPackageSnapshot(value: unknown): value is PackageSnapshot {
         if (inventory.complete ? inventory.truncated || inventory.reason !== 'none' || inventory.observedCount !== inventory.items.length : !inventory.truncated || inventory.observedCount <= inventory.items.length || !member(inventory.reason, ['item_limit', 'byte_limit'])) return false;
         let previous: PackageRow | null = null, installed = 0;
         for (const row of inventory.items) {
-            if (!validRow(row) || previous && (row.name < previous.name || row.name === previous.name && row.architecture <= previous.architecture)) return false;
+            if (!validPackageRow(row) || previous && (row.name < previous.name || row.name === previous.name && row.architecture <= previous.architecture)) return false;
             previous = row; if (row.installState === 'installed') installed++;
         }
         if (installed > inventory.installedCount || inventory.installedCount - installed > inventory.observedCount - inventory.items.length) return false;

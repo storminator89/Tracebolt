@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"localrmm/internal/bundle"
 	"localrmm/internal/collector"
@@ -44,11 +45,19 @@ type Report struct {
 	DiscardedStale              bool   `json:"discardedStale"`
 	AvailablePercentageFields   int    `json:"availablePercentageFields"`
 	UnavailablePercentageFields int    `json:"unavailablePercentageFields"`
+	InventoryStatus             string `json:"inventoryStatus,omitempty"`
+	InventorySequence           uint64 `json:"inventorySequence,omitempty"`
+	InventoryOperations         uint8  `json:"inventoryOperations,omitempty"`
+	SystemStatus                string `json:"systemStatus,omitempty"`
+	SystemSequence              uint64 `json:"systemSequence,omitempty"`
+	SystemRetriedPending        bool   `json:"systemRetriedPending,omitempty"`
+	SystemDiscardedStale        bool   `json:"systemDiscardedStale,omitempty"`
 }
 
-// Run performs at most one collection and one bounded delivery attempt. Pending
-// exact bytes are durably retained after uncertain delivery. It never retries to
-// another origin, alters old timestamps, creates credentials or installs a service.
+// Run preserves the legacy one-shot collection/delivery behavior. The explicitly
+// complete profile additionally performs one serialized, bounded inventory
+// capture/delivery burst. Pending exact bytes survive uncertain delivery. It
+// never switches origin, refreshes source timestamps, enrolls or installs.
 func Run(ctx context.Context, m Material) (Report, error) {
 	report := Report{SchemaVersion: "tracebolt.agent-run.v1", Status: "failed", Profile: m.config.Profile}
 	if ctx.Err() != nil {
@@ -63,7 +72,64 @@ func Run(ctx context.Context, m Material) (Report, error) {
 		return report, ErrState
 	}
 	defer state.Close()
-	return runUsingState(ctx, m, state)
+	var inventory *inventorySender
+	var system *systemSender
+	if m.config.complete() {
+		inventory, e = openInventorySender(m)
+		if e != nil {
+			return report, e
+		}
+		defer inventory.Close()
+		system, e = openSystemSender(m)
+		if e != nil {
+			return report, e
+		}
+		defer system.Close()
+	}
+	if inventory == nil {
+		// Preserve the preexisting one-shot caller-context contract. Legacy
+		// foreground attempts retain their original20s budget separately.
+		return runUsingState(ctx, m, state)
+	}
+	return runPreparedAttemptWithSystem(ctx, m, state, system, inventory, runUsingState)
+}
+
+// Complete-profile work is serialized: a bounded metric attempt followed by a
+// bounded inventory burst. The caller retains both locks across this function.
+// Normal chunk-budget exhaustion is pending progress, not exponential backoff.
+func runPreparedAttempt(ctx context.Context, m Material, state *lanclientstate.State, inventory *inventorySender, metrics func(context.Context, Material, *lanclientstate.State) (Report, error)) (Report, error) {
+	return runPreparedAttemptWithSystem(ctx, m, state, nil, inventory, metrics)
+}
+func runPreparedAttemptWithSystem(ctx context.Context, m Material, state *lanclientstate.State, system *systemSender, inventory *inventorySender, metrics func(context.Context, Material, *lanclientstate.State) (Report, error)) (Report, error) {
+	metricCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	report, err := metrics(metricCtx, m, state)
+	cancel()
+	if err != nil {
+		return report, err
+	}
+	if system != nil {
+		systemCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
+		status, e := system.Run(systemCtx)
+		cancel()
+		report.SystemStatus, report.SystemSequence = status.Status, status.Sequence
+		report.SystemRetriedPending, report.SystemDiscardedStale = status.RetriedPending, status.DiscardedStale
+		if e != nil {
+			return report, e
+		}
+	}
+	if inventory == nil {
+		return report, nil
+	}
+	burstCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	status, inventoryErr := inventory.Burst(burstCtx)
+	cancel()
+	report.InventoryStatus = status.Status
+	report.InventorySequence = status.Sequence
+	report.InventoryOperations = uint8(status.Operations)
+	if errors.Is(inventoryErr, ErrInventoryPending) {
+		inventoryErr = nil
+	}
+	return report, inventoryErr
 }
 
 // runUsingState preserves one exclusive ledger lock across foreground attempts.
@@ -283,7 +349,7 @@ func decodeFrameForConfig(raw []byte, sequence uint64, c Config) (frame, error) 
 		return f, ErrState
 	}
 	want := 3
-	if c.SchemaVersion == OperationalConfigVersion {
+	if c.SchemaVersion == OperationalConfigVersion || c.complete() {
 		want = 4
 	} else if c.SchemaVersion == PackageConfigVersion {
 		want = 5
@@ -301,8 +367,8 @@ func decodeFrameForConfig(raw []byte, sequence uint64, c Config) (frame, error) 
 	if d.Decode(&f) != nil || d.Decode(new(any)) != io.EOF {
 		return f, ErrState
 	}
-	if c.SchemaVersion == OperationalConfigVersion {
-		if f.Packages != nil || f.SchemaVersion != FrameOperationalVersion || f.Sequence == 0 || f.Sequence > operational.MaxSafeInteger || c.CollectionProfile != operational.CollectionProfile || f.Operational == nil || len(fields["operational"]) > operational.MaxSnapshotBytes || exactOperationalJSON(fields["operational"]) != nil || operational.Validate(*f.Operational) != nil || f.Observation.Platform != "linux" || f.Operational.CollectedAt.After(f.Observation.GeneratedAt) {
+	if c.SchemaVersion == OperationalConfigVersion || c.complete() {
+		if f.Packages != nil || f.SchemaVersion != FrameOperationalVersion || f.Sequence == 0 || f.Sequence > operational.MaxSafeInteger || (c.CollectionProfile != operational.CollectionProfile && !c.complete()) || f.Operational == nil || len(fields["operational"]) > operational.MaxSnapshotBytes || exactOperationalJSON(fields["operational"]) != nil || operational.Validate(*f.Operational) != nil || f.Observation.Platform != "linux" || f.Operational.CollectedAt.After(f.Observation.GeneratedAt) {
 			return f, ErrState
 		}
 	} else if c.SchemaVersion == PackageConfigVersion {

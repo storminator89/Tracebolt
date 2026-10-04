@@ -10,6 +10,14 @@ adds explicit service operations; its actual disposable-VM gate is tracked separ
 A repository link alone does not authorize a deployment or
 provide credentials. Read the checklist before executing the quickstart.
 
+For the fresh v3 Linux MVP, follow the shorter **[manager and background-agent
+startup guide](http-complete-first-start.md)**. It prepares local binaries first,
+then uses the dashboard public command with explicit `--pending-service` and
+hidden invitation entry. The new manager/profile/identity is separate from any
+existing basic/v2 state. The detailed manual and default ready-only paths below
+remain valid for their stated scopes; neither source checks nor a started pending
+process establish approved reporting or actual reboot acceptance.
+
 ## 1. Choose the correct milestone
 
 | Component | Available now | Not provided by this milestone |

@@ -45,6 +45,13 @@ type Metadata struct {
 	DiscardedStale              bool   `json:"discardedStale"`
 	AvailablePercentageFields   uint8  `json:"availablePercentageFields"`
 	UnavailablePercentageFields uint8  `json:"unavailablePercentageFields"`
+	InventoryStatus             string `json:"inventoryStatus,omitempty"`
+	InventorySequence           uint64 `json:"inventorySequence,omitempty"`
+	InventoryOperations         uint8  `json:"inventoryOperations,omitempty"`
+	SystemStatus                string `json:"systemStatus,omitempty"`
+	SystemSequence              uint64 `json:"systemSequence,omitempty"`
+	SystemRetriedPending        bool   `json:"systemRetriedPending,omitempty"`
+	SystemDiscardedStale        bool   `json:"systemDiscardedStale,omitempty"`
 }
 
 // Result must use one of the five declared outcomes. The adapter is responsible

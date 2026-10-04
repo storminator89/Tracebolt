@@ -2,6 +2,14 @@
 
 Meaningful development checkpoints are recorded here. These are prototype milestones, not production releases.
 
+## 2026-10-04 — Fresh v3 Linux inventory and pending-service onboarding
+
+- Add explicitly consented `managed-operations-v3` supported-dpkg generations, bounded chunk transfer and generation-pinned package pages, plus system-service and locally observed socket state with honest permission/source/attribution limits. Preserve basic/v2 identities and their narrower collection scopes.
+- Add the secret-free dashboard installation command and checksum-bound public bootstrap fetch. A fresh explicitly selected pending service can retain its committed same-key claim while awaiting operator approval; collection and reporting start only after activation. Executables remain locally prepared and independently selected.
+- Provide one fresh-start guide and dedicated complete-test Compose configuration. Build binaries/archive before inviting a device; retain old test state and use a new config/project/volume on the selected test ports. No automatic migration, identity reset or executable download is added.
+- Retain released review-recovery, byte-limit, catalog and lifecycle regressions. Source/fixture checks and the owner's native TLS/HTTP approval/reporting/process-restart gate passed; this executor rejected package/service source prerequisites before collection, so positive v3 package/service observations require the hosted gate. New exact-source browser/container/native CI and actual installed-service/reboot acceptance remain separately reported.
+- CVE authority and offered-update counts remain unknown. No APT action, remediation, network scanning, private telemetry upload or production-fleet claim is included.
+
 ## 2026-10-04 — Construct the exact review byte-limit fixture efficiently
 
 - Replace repeated whole-document serialization for every removed ASCII padding byte with one initial measurement and bounded bulk trimming of the same rows. The existing exact65,536-byte acceptance and65,537-byte rejection assertions remain unchanged; add an explicit zero-remainder check.

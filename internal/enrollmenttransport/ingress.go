@@ -27,9 +27,11 @@ import (
 	"localrmm/internal/enrollmentcrypto"
 	"localrmm/internal/enrollmentstate"
 	"localrmm/internal/enrollmentstore"
+	"localrmm/internal/inventorywire"
 	"localrmm/internal/lanstore"
 	"localrmm/internal/lantrust"
 	"localrmm/internal/signedhttp"
+	"localrmm/internal/systemwire"
 )
 
 const MaxInFlight = 2
@@ -108,6 +110,14 @@ func (h *Ingress) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	default:
 		w.Header().Set("Retry-After", "15")
 		failure(w, http.StatusTooManyRequests, "ingress_busy")
+		return
+	}
+	if r != nil && r.URL != nil && r.URL.Path == systemwire.Path {
+		h.systemObservation(w, r)
+		return
+	}
+	if r != nil && r.URL != nil && strings.HasPrefix(r.URL.Path, inventorywire.PathPrefix) {
+		h.inventory(w, r)
 		return
 	}
 	if !validRequest(r, h.authority, h.profile) {

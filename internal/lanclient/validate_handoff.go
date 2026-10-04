@@ -3,8 +3,10 @@ package lanclient
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"localrmm/internal/inventorystate"
 	"localrmm/internal/lanclientstate"
 	"localrmm/internal/lanconfig"
+	"localrmm/internal/systemstate"
 	"path/filepath"
 )
 
@@ -43,6 +45,12 @@ func ValidateGuidedHandoff(path string) error {
 		return ErrState
 	}
 	if lanclientstate.ValidateExisting(c.StateDirectory, m.binding) != nil {
+		return ErrState
+	}
+	if c.complete() && inventorystate.ValidateExisting(inventoryStateDirectory(c), m.binding, c.AgentID) != nil {
+		return ErrState
+	}
+	if c.complete() && systemstate.ValidateExisting(systemStateDirectory(c), systemStateBinding(m)) != nil {
 		return ErrState
 	}
 	return nil

@@ -64,3 +64,25 @@ func UnitForAccount(uid, gid int) (string, error) {
 }
 
 func validAccountID(id int) bool { return id > 0 && uint64(id) < uint64(1<<32-1) }
+
+// PendingUnitForAccount is an explicitly selected v2 unit. The numeric process
+// identity is checked before private state. It can wait using its saved key but
+// never constructs collectors or a sender before activation and valid handoff.
+// Type=simple is process-start observation, not proof of approval or reporting.
+func PendingUnitForAccount(uid, gid int, profile string) (string, error) {
+	if profile != "tls" && profile != "http-test" {
+		return "", ErrContract
+	}
+	unit, err := UnitForAccount(uid, gid)
+	if err != nil {
+		return "", err
+	}
+	unit = strings.Replace(unit, "ConditionPathExists=/var/lib/tracebolt-agent/enrollment/ready.json\n", "", 1)
+	args := " --enrollment-bootstrap " + BootstrapPath + " --enrollment-state-directory " + EnrollmentDirectory
+	if profile == "http-test" {
+		args += " --insecure-http-test"
+	}
+	identity := " --service-identity " + strconv.Itoa(uid) + ":" + strconv.Itoa(gid)
+	unit = strings.Replace(unit, identity+"\n", identity+args+"\n", 1)
+	return unit, nil
+}

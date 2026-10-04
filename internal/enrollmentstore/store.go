@@ -28,6 +28,7 @@ import (
 
 	"localrmm/internal/enrollmentcrypto"
 	"localrmm/internal/enrollmentstate"
+	"localrmm/internal/inventoryledger"
 	"localrmm/internal/keyvalidation"
 	"localrmm/internal/lanstore"
 	_ "modernc.org/sqlite"
@@ -49,6 +50,7 @@ type storeState struct {
 	config           enrollmentstate.Config
 	issuerDER        []byte
 	operationalReads chan struct{}
+	inventoryCalls   chan struct{}
 }
 
 func (Store) String() string               { return "enrollmentstore.Store{contents:redacted}" }
@@ -84,6 +86,10 @@ type transaction struct {
 	operational         map[string]operationalRecord
 	originalOperational map[string][]byte
 	validatedFrames     map[frameValidationKey]lanstore.Frame
+	inventory           map[string]inventoryRecord
+	originalInventory   map[string][]byte
+	inventoryKey        inventoryledger.CursorKey
+	system              map[string]systemRecord
 }
 
 // Open rejects existing insecure paths; it never chmods or adopts them. The
@@ -107,7 +113,7 @@ func Open(path string, config enrollmentstate.Config, issuerDER []byte) (*Store,
 	if err = privateStateDirectory(filepath.Dir(absolute)); err != nil {
 		return nil, err
 	}
-	if err = checkFiles(absolute); err != nil {
+	if err = checkFilesForProfile(absolute, config.Binding.CollectionProfile); err != nil {
 		return nil, err
 	}
 	created := false
@@ -121,14 +127,14 @@ func Open(path string, config enrollmentstate.Config, issuerDER []byte) (*Store,
 		return nil, ErrStorage
 	}
 	info, err := os.Lstat(absolute)
-	if err != nil || info.Size() > maxDatabaseBytes {
+	if err != nil || info.Size() > databaseCap(config.Binding.CollectionProfile) {
 		return nil, ErrStorage
 	}
 	if !created {
 		if info.Size() == 0 {
 			return nil, ErrStorage
 		}
-		candidate := &Store{&storeState{path: absolute, info: info, config: config, issuerDER: bytes.Clone(issuerDER), operationalReads: make(chan struct{}, 1)}}
+		candidate := &Store{&storeState{path: absolute, info: info, config: config, issuerDER: bytes.Clone(issuerDER), operationalReads: make(chan struct{}, 1), inventoryCalls: make(chan struct{}, 1)}}
 		if candidate.preflightExisting() != nil {
 			return nil, ErrStorage
 		}
@@ -143,9 +149,14 @@ func Open(path string, config enrollmentstate.Config, issuerDER []byte) (*Store,
 		return nil, ErrStorage
 	}
 	db.SetMaxOpenConns(1)
-	s := &Store{&storeState{db: db, path: absolute, info: info, config: config, issuerDER: bytes.Clone(issuerDER), operationalReads: make(chan struct{}, 1)}}
+	s := &Store{&storeState{db: db, path: absolute, info: info, config: config, issuerDER: bytes.Clone(issuerDER), operationalReads: make(chan struct{}, 1), inventoryCalls: make(chan struct{}, 1)}}
 	fail := func() (*Store, error) { db.Close(); return nil, ErrStorage }
-	for _, query := range []string{"PRAGMA busy_timeout=5000", "PRAGMA journal_mode=WAL", "PRAGMA synchronous=FULL", "PRAGMA foreign_keys=ON", "PRAGMA trusted_schema=OFF", "PRAGMA max_page_count=49152"} {
+	pragmas := []string{"PRAGMA busy_timeout=5000", "PRAGMA journal_mode=WAL", "PRAGMA synchronous=FULL", "PRAGMA foreign_keys=ON", "PRAGMA trusted_schema=OFF", "PRAGMA max_page_count=49152"}
+	if completeProfile(config.Binding.CollectionProfile) {
+		pragmas[len(pragmas)-1] = "PRAGMA max_page_count=131072"
+		pragmas = append(pragmas, "PRAGMA cache_spill=OFF")
+	}
+	for _, query := range pragmas {
 		if _, err = db.Exec(query); err != nil {
 			return fail()
 		}
@@ -180,6 +191,16 @@ func Open(path string, config enrollmentstate.Config, issuerDER []byte) (*Store,
 				return fail()
 			}
 		}
+		if completeProfile(config.Binding.CollectionProfile) {
+			if initializeInventory(context.Background(), conn) != nil || initializeSystemObservations(context.Background(), conn) != nil {
+				rollback()
+				return fail()
+			}
+			if _, err = conn.ExecContext(context.Background(), "PRAGMA user_version=3"); err != nil {
+				rollback()
+				return fail()
+			}
+		}
 		raw, _ := engine.EncodeTrustedLedger()
 		if _, err = conn.ExecContext(context.Background(), "INSERT INTO enrollment_state(id,ledger) VALUES(1,?)", raw); err != nil {
 			rollback()
@@ -203,6 +224,10 @@ func Open(path string, config enrollmentstate.Config, issuerDER []byte) (*Store,
 		return fail()
 	}
 	if s.checkPath() != nil {
+		rollback()
+		return fail()
+	}
+	if completeProfile(s.config.Binding.CollectionProfile) && s.inventoryCapacityBeforeCommit(context.Background(), conn) != nil {
 		rollback()
 		return fail()
 	}
@@ -268,19 +293,20 @@ func safePath(path string) (string, error) {
 	}
 	return absolute, nil
 }
-func checkFiles(path string) error {
+func checkFiles(path string) error { return checkFilesForProfile(path, "") }
+func checkFilesForProfile(path, profile string) error {
 	for _, suffix := range []string{"", "-wal", "-shm", "-journal"} {
 		if err := privateStateFile(path + suffix); err != nil {
 			return err
 		}
-		if info, err := os.Lstat(path + suffix); err == nil && info.Size() > maxDatabaseBytes {
+		if info, err := os.Lstat(path + suffix); err == nil && info.Size() > sidecarCap(profile, suffix) {
 			return ErrStorage
 		}
 	}
 	return nil
 }
 func (s *Store) checkPath() error {
-	if s == nil || s.storeState == nil || privateStateDirectory(filepath.Dir(s.path)) != nil || checkFiles(s.path) != nil {
+	if s == nil || s.storeState == nil || privateStateDirectory(filepath.Dir(s.path)) != nil || checkFilesForProfile(s.path, s.config.Binding.CollectionProfile) != nil {
 		return ErrStorage
 	}
 	info, err := os.Lstat(s.path)
@@ -318,7 +344,7 @@ func (s *Store) load(ctx context.Context, conn *sql.Conn) (*transaction, error) 
 	if err != nil {
 		return nil, ErrStorage
 	}
-	t := &transaction{conn: conn, engine: engine, credentials: make(map[string]credential), originalLedger: raw, originalCredentials: make(map[string][]byte), operational: map[string]operationalRecord{}, originalOperational: map[string][]byte{}}
+	t := &transaction{conn: conn, engine: engine, credentials: make(map[string]credential), originalLedger: raw, originalCredentials: make(map[string][]byte), operational: map[string]operationalRecord{}, originalOperational: map[string][]byte{}, inventory: map[string]inventoryRecord{}, originalInventory: map[string][]byte{}}
 	if conn.QueryRowContext(ctx, "SELECT count(*),coalesce(max(length(body)),0) FROM enrollment_credentials").Scan(&count, &n) != nil || count > s.config.RecordLimit || n > maxCredentialBytes {
 		return nil, ErrStorage
 	}
@@ -366,6 +392,12 @@ func (s *Store) load(ctx context.Context, conn *sql.Conn) (*transaction, error) 
 		}
 	}
 	if err = s.loadOperational(ctx, t); err != nil {
+		return nil, ErrStorage
+	}
+	if err = s.loadInventory(ctx, t); err != nil {
+		return nil, ErrStorage
+	}
+	if err = s.loadSystemMetadata(ctx, t); err != nil {
 		return nil, ErrStorage
 	}
 	return t, nil
@@ -419,6 +451,9 @@ func (s *Store) transact(ctx context.Context, action func(*transaction) error) e
 	if err != nil {
 		return storageError(ctx)
 	}
+	if completeProfile(s.config.Binding.CollectionProfile) && s.configureInventoryConnection(ctx, conn) != nil {
+		return storageError(ctx)
+	}
 	if err = action(t); err != nil {
 		return err
 	}
@@ -452,8 +487,17 @@ func (s *Store) transact(ctx context.Context, action func(*transaction) error) e
 	if err = s.saveOperational(ctx, t); err != nil {
 		return storageError(ctx)
 	}
+	if err = s.saveInventory(ctx, t); err != nil {
+		return storageError(ctx)
+	}
+	if validateSystemRecords(t) != nil {
+		return ErrStorage
+	}
 	if s.checkPath() != nil {
 		return ErrStorage
+	}
+	if completeProfile(s.config.Binding.CollectionProfile) && s.inventoryCapacityBeforeCommit(ctx, conn) != nil {
+		return storageError(ctx)
 	}
 	if err = ctx.Err(); err != nil {
 		return err
@@ -469,40 +513,42 @@ func validateSchema(ctx context.Context, conn *sql.Conn, profile string) error {
 	if conn.QueryRowContext(ctx, "PRAGMA user_version").Scan(&version) != nil || version != storeSchemaVersion(profile) {
 		return ErrStorage
 	}
-	rows, err := conn.QueryContext(ctx, "SELECT type,name,sql FROM sqlite_master WHERE name NOT LIKE 'sqlite_%' ORDER BY name")
-	if err != nil {
+	expected := map[string]inventoryledger.SchemaObject{
+		"enrollment_state":       {Type: "table", Name: "enrollment_state", SQL: stateSchema},
+		"enrollment_credentials": {Type: "table", Name: "enrollment_credentials", SQL: credentialSchema},
+	}
+	if enrollmentcrypto.ManagedCollectionProfile(profile) {
+		expected["enrollment_operational"] = inventoryledger.SchemaObject{Type: "table", Name: "enrollment_operational", SQL: operationalSchema}
+	}
+	if completeProfile(profile) {
+		expected["enrollment_inventory_meta"] = inventoryledger.SchemaObject{Type: "table", Name: "enrollment_inventory_meta", SQL: inventoryMetaSchema}
+		expected["enrollment_inventory_authority"] = inventoryledger.SchemaObject{Type: "table", Name: "enrollment_inventory_authority", SQL: inventoryAuthoritySchema}
+		expected["enrollment_inventory_generations"] = inventoryledger.SchemaObject{Type: "table", Name: "enrollment_inventory_generations", SQL: inventoryGenerationsSchema}
+		for _, obj := range systemSchemaObjects() {
+			expected[obj.Name] = obj
+		}
+		for _, obj := range inventoryledger.SchemaObjects() {
+			expected[obj.Name] = obj
+		}
+	}
+	rows, e := conn.QueryContext(ctx, "SELECT type,name,sql FROM sqlite_master WHERE name NOT LIKE 'sqlite_%' ORDER BY name")
+	if e != nil {
 		return ErrStorage
 	}
 	defer rows.Close()
 	count := 0
 	for rows.Next() {
 		var kind, name, definition string
-		if rows.Scan(&kind, &name, &definition) != nil || kind != "table" {
+		if rows.Scan(&kind, &name, &definition) != nil {
 			return ErrStorage
 		}
-		switch name {
-		case "enrollment_state":
-			if definition != stateSchema {
-				return ErrStorage
-			}
-		case "enrollment_operational":
-			if !enrollmentcrypto.ManagedCollectionProfile(profile) || definition != operationalSchema {
-				return ErrStorage
-			}
-		case "enrollment_credentials":
-			if definition != credentialSchema {
-				return ErrStorage
-			}
-		default:
+		obj, ok := expected[name]
+		if !ok || kind != obj.Type || definition != obj.SQL {
 			return ErrStorage
 		}
 		count++
 	}
-	wanted := 2
-	if enrollmentcrypto.ManagedCollectionProfile(profile) {
-		wanted = 3
-	}
-	if rows.Err() != nil || count != wanted {
+	if rows.Err() != nil || count != len(expected) {
 		return ErrStorage
 	}
 	return nil
@@ -556,10 +602,16 @@ func (s *Store) preflightExisting() error {
 	if _, err = s.load(context.Background(), conn); err != nil {
 		return ErrStorage
 	}
+	if completeProfile(s.config.Binding.CollectionProfile) && s.inventoryReadOnlyCapacity(context.Background(), conn) != nil {
+		return ErrStorage
+	}
 	return s.checkPath()
 }
 
 func storeSchemaVersion(profile string) int {
+	if completeProfile(profile) {
+		return 3
+	}
 	if enrollmentcrypto.ManagedCollectionProfile(profile) {
 		return 2
 	}

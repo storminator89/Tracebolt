@@ -10,7 +10,10 @@ import (
 // RunForeground retains the private state ledger's exclusive OS lock for the
 // entire foreground lifetime, including sleep/backoff. It never installs a
 // service, re-enrolls, changes a credential or queues additional observations.
-// Each attempt has a cooperative 20s context; synchronous OS I/O and observers
+// Each metric attempt has a cooperative 20s context. The complete profile adds
+// one serialized service/socket observation and one inventory burst, each with
+// its own20s budget. The package burst additionally has a64-operation cap.
+// Synchronous OS I/O and observers
 // still require a supervisor for a hard process deadline.
 func RunForeground(ctx context.Context, m Material, interval time.Duration, observe func(agentloop.Event) error) (agentloop.Summary, error) {
 	return runForeground(ctx, m, interval, observe, nil, nil)
@@ -31,10 +34,22 @@ func runForeground(ctx context.Context, m Material, interval time.Duration, obse
 		return agentloop.Summary{Reason: agentloop.InvalidState}, agentloop.ErrState
 	}
 	defer state.Close()
+	var inventory *inventorySender
+	var system *systemSender
+	if m.config.complete() {
+		inventory, e = openInventorySender(m)
+		if e != nil {
+			return agentloop.Summary{Reason: agentloop.InvalidState}, agentloop.ErrState
+		}
+		defer inventory.Close()
+		system, e = openSystemSender(m)
+		if e != nil {
+			return agentloop.Summary{Reason: agentloop.InvalidState}, agentloop.ErrState
+		}
+		defer system.Close()
+	}
 	return agentloop.Run(ctx, agentloop.Config{Interval: interval}, agentloop.Dependencies{Clock: clock, Random: random, Observe: observe, Attempt: func(parent context.Context) agentloop.Result {
-		attempt, cancel := context.WithTimeout(parent, 20*time.Second)
-		defer cancel()
-		report, err := runUsingState(attempt, m, state)
+		report, err := runPreparedAttemptWithSystem(parent, m, state, system, inventory, runUsingState)
 		outcome := agentloop.Retryable
 		switch {
 		case err == nil:
@@ -46,6 +61,6 @@ func runForeground(ctx context.Context, m Material, interval time.Duration, obse
 		}
 		// Transport/receipt failures retain exact pending data. A generic transport
 		// error cannot establish revocation and never triggers automatic enrollment.
-		return agentloop.Result{Outcome: outcome, Metadata: agentloop.Metadata{Sequence: report.Sequence, Duplicate: report.Duplicate, RetriedPending: report.RetriedPending, DiscardedStale: report.DiscardedStale, AvailablePercentageFields: uint8(report.AvailablePercentageFields), UnavailablePercentageFields: uint8(report.UnavailablePercentageFields)}}
+		return agentloop.Result{Outcome: outcome, Metadata: agentloop.Metadata{Sequence: report.Sequence, Duplicate: report.Duplicate, RetriedPending: report.RetriedPending, DiscardedStale: report.DiscardedStale, AvailablePercentageFields: uint8(report.AvailablePercentageFields), UnavailablePercentageFields: uint8(report.UnavailablePercentageFields), InventoryStatus: report.InventoryStatus, InventorySequence: report.InventorySequence, InventoryOperations: report.InventoryOperations, SystemStatus: report.SystemStatus, SystemSequence: report.SystemSequence, SystemRetriedPending: report.SystemRetriedPending, SystemDiscardedStale: report.SystemDiscardedStale}}
 	}})
 }

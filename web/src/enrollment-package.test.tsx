@@ -1,6 +1,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { EnrollmentSection } from './enrollment';
+import { preparedEnrollmentCommand } from './enrollment-command';
 import { AUTH_REQUIRED_EVENT, mutate, request } from './api';
 import { AuthBoundary } from './auth';
 import { validEnrollmentList } from './enrollment-types';
@@ -8,15 +9,15 @@ import type { EnrollmentCollectionProfile, EnrollmentList, EnrollmentSnapshot, I
 import { setLocale } from './i18n';
 
 vi.mock('./api', async original => ({ ...await original<typeof import('./api')>(), request: vi.fn(), mutate: vi.fn() }));
-const v1 = 'managed-operations-v1', v2 = 'managed-operations-v2';
-const v1Privacy = 'metadata_labels_may_be_sensitive', v2Privacy = 'package_source_metadata_may_be_sensitive';
+const v1 = 'managed-operations-v1', v2 = 'managed-operations-v2', v3 = 'managed-operations-v3';
+const v1Privacy = 'metadata_labels_may_be_sensitive', v2Privacy = 'package_source_metadata_may_be_sensitive', v3Privacy = 'complete_system_inventory_metadata_may_be_sensitive';
 const serverNow = '2026-10-03T15:00:00Z', seconds = Date.parse(serverNow) / 1000;
 const secret = 'S'.repeat(43), invitation = `invite_${'1'.repeat(32)}`;
 // Certificate framing only. Native enrollment remains responsible for X.509 validation.
 const certificate = '-----BEGIN CERTIFICATE-----\nQUJDRA==\n-----END CERTIFICATE-----';
 const session = { mode: 'lan', transport: 'https', insecureTestMode: false, transportWarning: null, authenticationRequired: true, authenticated: true, csrfToken: 'synthetic-session', serverNow, expiresAt: '2026-10-03T15:30:00Z', expiresInSeconds: 1800 };
 function listing(profile: EnrollmentCollectionProfile = v2): EnrollmentList {
- return { schemaVersion: 'tracebolt.enrollment-operator.v2', serverNow, enabled: true, platforms: ['linux'], recordLimit: 25, items: [], ...(profile === 'basic-readonly-v1' ? {} : { collectionProfile: profile, collectionPrivacy: profile === v1 ? v1Privacy : v2Privacy }) };
+ return { schemaVersion: 'tracebolt.enrollment-operator.v2', serverNow, enabled: true, platforms: ['linux'], recordLimit: 25, items: [], ...(profile === 'basic-readonly-v1' ? {} : { collectionProfile: profile, collectionPrivacy: profile === v1 ? v1Privacy : profile === v2 ? v2Privacy : v3Privacy }) };
 }
 function creation(profile: EnrollmentCollectionProfile = v2): InvitationCreation {
  const snapshot: EnrollmentSnapshot = {
@@ -57,11 +58,11 @@ afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); vi.use
 
 describe('exact package-source enrollment consent', () => {
  it('accepts only coherent explicit managed pairs and the unchanged basic omission', () => {
-  for (const profile of ['basic-readonly-v1', v1, v2] as const) expect(validEnrollmentList(listing(profile))).toBe(true);
+  for (const profile of ['basic-readonly-v1', v1, v2, v3] as const) expect(validEnrollmentList(listing(profile))).toBe(true);
   expect(validEnrollmentList({ ...listing('basic-readonly-v1'), collectionProfile: 'basic-readonly-v1' })).toBe(true);
   for (const profile of [undefined, 'basic-readonly-v1', v1, v2, 'managed-operations-v3', null]) {
-   for (const privacy of [undefined, v1Privacy, v2Privacy, 'anonymous', null]) {
-    const allowed = (profile === undefined || profile === 'basic-readonly-v1') && privacy === undefined || profile === v1 && privacy === v1Privacy || profile === v2 && privacy === v2Privacy;
+   for (const privacy of [undefined, v1Privacy, v2Privacy, v3Privacy, 'anonymous', null]) {
+    const allowed = (profile === undefined || profile === 'basic-readonly-v1') && privacy === undefined || profile === v1 && privacy === v1Privacy || profile === v2 && privacy === v2Privacy || profile === v3 && privacy === v3Privacy;
     expect(validEnrollmentList({ ...listing('basic-readonly-v1'), collectionProfile: profile, collectionPrivacy: privacy })).toBe(allowed);
    }
   }
@@ -236,5 +237,61 @@ describe('authoritative server-clock regression', () => {
   const dialog = await add(); fireEvent.click(within(dialog).getByRole('checkbox'));
   vi.mocked(performance.now).mockReturnValue(2000); wall.mockReturnValue(101000); await refresh();
   expect(within(dialog).getByRole('checkbox')).toBeChecked(); expect(within(dialog).getByRole('button', { name: 'Create invitation' })).toBeEnabled();
+ });
+});
+
+
+describe('fresh complete dpkg consent', () => {
+ it('requires the separate managed-v3 acknowledgement and preserves its bootstrap binding', async () => {
+  current = listing(v3); vi.mocked(mutate).mockResolvedValue({ ...creation(v3), bootstrapSHA256: 'b'.repeat(64) }); const dialog = await add();
+  for (const text of ['Complete package, service and connection inventory', 'all supported installed and incomplete dpkg rows', 'Snap, Flatpak', 'up to 24 hours', 'fresh managed-operations-v3 store', 'private network topology', 'does not prove external reachability', 'No network scan, DNS lookup or UID collection']) expect(dialog.textContent).toContain(text);
+  expect(within(dialog).getByRole('checkbox')).not.toBeChecked(); expect(within(dialog).getByRole('button', { name: 'Create invitation' })).toBeDisabled(); acknowledgeAndCreate(dialog); await screen.findByLabelText('One-time invitation secret');
+  expect(mutate).toHaveBeenCalledExactlyOnceWith('/enrollment/invitations', { requestId: expect.any(String), platform: 'linux', collectionAcknowledged: true }, expect.any(AbortSignal));
+ });
+ it('cannot inherit managed-v2 consent after switching to managed-v3', async () => {
+  current = listing(v2); let dialog = await add(); fireEvent.click(within(dialog).getByRole('checkbox')); current = listing(v3); await refresh(); expect(screen.queryByRole('dialog')).not.toBeInTheDocument(); dialog = await open(); expect(within(dialog).getByRole('checkbox')).not.toBeChecked(); expect(within(dialog).getByRole('button', { name: 'Create invitation' })).toBeDisabled();
+ });
+ it('fails closed if a present bootstrap SHA256 is invalid while older omitted-checksum responses stay compatible', async () => {
+  current = listing(v3); vi.mocked(mutate).mockResolvedValue({ ...creation(v3), bootstrapSHA256: 'invalid' }); const dialog = await add(); acknowledgeAndCreate(dialog); await within(dialog).findByRole('alert'); expect(screen.queryByLabelText('One-time invitation secret')).not.toBeInTheDocument();
+ });
+ it('renders separate complete-dpkg consent in German', async () => {
+  current = listing(v3); setLocale('de', false); render(section()); await waitFor(() => expect(screen.getByRole('button', { name: 'Gerät hinzufügen' })).toBeEnabled()); fireEvent.click(screen.getByRole('button', { name: 'Gerät hinzufügen' })); const dialog = screen.getByRole('dialog', { name: 'Gerät hinzufügen' }); expect(dialog.textContent).toContain('Vollständiges Paket-, Dienst- und Verbindungsinventar'); expect(within(dialog).getByRole('checkbox', { name: 'Ich bestätige die Erfassung von Betriebsmetadaten, allen unterstützten dpkg-Paketen, Systemdiensten und lokalen Verbindungsmetadaten für dieses neue Gerät.' })).not.toBeChecked();
+ });
+});
+
+
+describe('public prepared-checkout command', () => {
+ it('serializes only the fixed root/local-artifact command and validated public TLS fields', () => {
+  const response = creation(v3), checksum = 'b'.repeat(64);
+  const expected = '"$PWD/bin/agent-service" --action install --apply --pending-service' +
+   ' --agent-binary "$PWD/bin/lan-agent" --agent-sha256 "$(sha256sum < "$PWD/bin/lan-agent" | cut -d \' \' -f 1)"' +
+   ' --enroll-binary "$PWD/bin/enroll-agent" --enroll-sha256 "$(sha256sum < "$PWD/bin/enroll-agent" | cut -d \' \' -f 1)"' +
+   ' --source-archive "$PWD/tracebolt-selected-source.tar" --source-sha256 "$(sha256sum < "$PWD/tracebolt-selected-source.tar" | cut -d \' \' -f 1)"' +
+   ` --manager-origin '${window.location.origin}' --invitation-id '${invitation}' --bootstrap-sha256 '${checksum}' --server-ca-base64 '${btoa(certificate)}'`;
+  const command = preparedEnrollmentCommand(response.bootstrap, response.snapshot, checksum);
+  expect(command).toBe(expected); expect(command).not.toContain(secret); expect(command).not.toMatch(/sudo|curl|wget|invitation-secret/);
+ });
+ it('never derives or accepts a missing, uppercase, malformed or shell-bearing digest', () => {
+  const response = creation();
+  for (const checksum of [undefined, null, '', 'B'.repeat(64), 'a'.repeat(63), "'; touch /tmp/untrusted; '", 1]) expect(preparedEnrollmentCommand(response.bootstrap, response.snapshot, checksum)).toBeNull();
+ });
+ it('rejects untrusted origin, invitation identity, certificate and additional bootstrap fields before serialization', () => {
+  const response = creation();
+  for (const bootstrap of [{ ...response.bootstrap, enrollmentOrigin: 'https://other.example' }, { ...response.bootstrap, enrollmentOrigin: "https://localhost';touch /tmp/untrusted;#" }, { ...response.bootstrap, invitationId: "invite_';touch /tmp/untrusted;#" }, { ...response.bootstrap, serverCaPem: '$(touch /tmp/untrusted)' }, { ...response.bootstrap, invitationSecret: secret }]) expect(preparedEnrollmentCommand(bootstrap, response.snapshot, 'b'.repeat(64))).toBeNull();
+  expect(preparedEnrollmentCommand(response.bootstrap, { ...response.snapshot, state: 'revoked' }, 'b'.repeat(64))).toBeNull();
+ });
+ it('keeps explicit HTTP-test transport separate and omits CA flags', () => {
+  const response = creation(); const origin = 'http://manager.test:8080'; response.snapshot.binding.profile = 'http-test'; response.snapshot.binding.origin = origin; response.bootstrap.profile = 'http-test'; response.bootstrap.enrollmentOrigin = origin; response.bootstrap.agentOrigin = 'http://manager.test:8081'; response.bootstrap.serverCaPem = '';
+  vi.stubGlobal('window', { location: { origin } });
+  try { const command = preparedEnrollmentCommand(response.bootstrap, response.snapshot, 'b'.repeat(64)); expect(command).toContain("--manager-origin 'http://manager.test:8080'"); expect(command).toMatch(/ --insecure-http-test$/); expect(command).not.toContain('--server-ca-base64'); } finally { vi.unstubAllGlobals(); }
+ });
+ it('copies the public command only on an explicit click, separately from the hidden invitation', async () => {
+  const clipboard = vi.fn().mockResolvedValue(undefined); Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: clipboard } });
+  current = listing(v3); vi.mocked(mutate).mockResolvedValue({ ...creation(v3), bootstrapSHA256: 'b'.repeat(64) }); const dialog = await add(); acknowledgeAndCreate(dialog); await screen.findByLabelText('One-time invitation secret');
+  expect(clipboard).not.toHaveBeenCalled(); expect(within(dialog).getByText('Run as root from the prepared local checkout')).toBeVisible(); expect(dialog.textContent).toContain('do not verify the publisher'); expect(dialog.textContent).toContain('No inventory is collected before approval and activation.');
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Copy public installation command' })); await waitFor(() => expect(clipboard).toHaveBeenCalledTimes(1)); expect(clipboard.mock.calls[0][0]).toBe(preparedEnrollmentCommand(creation(v3).bootstrap, creation(v3).snapshot, 'b'.repeat(64))); expect(clipboard.mock.calls[0][0]).not.toContain(secret); expect(screen.getByLabelText('One-time invitation secret')).toHaveAttribute('type', 'password');
+ });
+ it('keeps older responses usable without presenting an invented online command', async () => {
+  vi.mocked(mutate).mockResolvedValue(creation()); const dialog = await add(); acknowledgeAndCreate(dialog); await screen.findByLabelText('One-time invitation secret'); expect(within(dialog).queryByRole('button', { name: 'Copy public installation command' })).not.toBeInTheDocument(); expect(within(dialog).getByRole('button', { name: 'Download bootstrap file' })).toBeVisible();
  });
 });

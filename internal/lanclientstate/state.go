@@ -98,6 +98,12 @@ type storage interface {
 // repaired with chmod. A leftover lock with missing state fails closed.
 func Open(dir, binding string) (*State, error) { return open(dir, binding, true, true) }
 
+// InitializeNew is a create-only sequence-domain constructor. It rejects an
+// existing ledger unchanged, even when the requested binding is identical.
+func InitializeNew(dir, binding string) (*State, error) {
+	return openConfigured(dir, binding, true, false, true)
+}
+
 // OpenExisting loads a previously initialized exact sender ledger. It never
 // creates a fresh sequence domain when the ledger is absent, including an empty
 // replacement directory. Guided enrollment uses this after its durable handoff.
@@ -113,12 +119,19 @@ func ValidateExisting(dir, binding string) error {
 	return state.Close()
 }
 func open(dir, binding string, allowFresh, recoverTemp bool) (*State, error) {
+	return openConfigured(dir, binding, allowFresh, recoverTemp, false)
+}
+func openConfigured(dir, binding string, allowFresh, recoverTemp, requireNew bool) (*State, error) {
 	if !validDigest(binding) {
 		return nil, ErrBinding
 	}
 	store, raw, fresh, err := newStorageMode(dir, allowFresh)
 	if err != nil {
 		return nil, err
+	}
+	if requireNew && !fresh {
+		_ = store.close()
+		return nil, ErrUnsafe
 	}
 	if fresh && !allowFresh {
 		_ = store.close()

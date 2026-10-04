@@ -29,6 +29,7 @@ const ConfigVersion = "tracebolt.lan-agent.v1"
 const GuidedConfigVersion = "tracebolt.lan-agent.v2"
 const OperationalConfigVersion = "tracebolt.lan-agent.v3"
 const PackageConfigVersion = "tracebolt.lan-agent.v4"
+const CompleteConfigVersion = "tracebolt.lan-agent.v5"
 const FrameVersion = "tracebolt.agent-telemetry.v1"
 const FrameOperationalVersion = "tracebolt.agent-telemetry.v2"
 const FramePackagesVersion = "tracebolt.agent-telemetry.v3"
@@ -117,6 +118,10 @@ func (c *Config) Validate() error {
 		}
 	} else if c.SchemaVersion == PackageConfigVersion {
 		if c.CollectionProfile != enrollmentcrypto.CollectionProfilePackages {
+			return ErrConfiguration
+		}
+	} else if c.SchemaVersion == CompleteConfigVersion {
+		if c.CollectionProfile != enrollmentcrypto.CollectionProfileComplete {
 			return ErrConfiguration
 		}
 	} else if c.CollectionProfile != "" {
@@ -262,6 +267,9 @@ func senderBinding(c Config, leaf *x509.Certificate) [32]byte {
 	if c.SchemaVersion == PackageConfigVersion {
 		domain = "tracebolt.sender-binding.v4\n" + c.CollectionProfile + "\n"
 	}
+	if c.SchemaVersion == CompleteConfigVersion {
+		domain = "tracebolt.sender-binding.v5\n" + c.CollectionProfile + "\n"
+	}
 	return sha256.Sum256([]byte(domain + c.Profile + "\n" + c.ManagerOrigin + "\n" + lantrust.Fingerprint(leaf) + "\n" + c.AgentID))
 }
 
@@ -270,5 +278,15 @@ func (c Config) guided() bool {
 }
 
 func (c Config) managed() bool {
-	return c.SchemaVersion == OperationalConfigVersion || c.SchemaVersion == PackageConfigVersion
+	return c.SchemaVersion == OperationalConfigVersion || c.SchemaVersion == PackageConfigVersion || c.complete()
+}
+
+func (c Config) complete() bool {
+	return c.SchemaVersion == CompleteConfigVersion && c.CollectionProfile == enrollmentcrypto.CollectionProfileComplete
+}
+func inventoryStateDirectory(c Config) string { return filepath.Join(c.StateDirectory, "inventory") }
+func systemStateDirectory(c Config) string    { return filepath.Join(c.StateDirectory, "system") }
+func systemStateBinding(m Material) string {
+	sum := sha256.Sum256([]byte("tracebolt.system-observation-state.v1\x00" + m.binding))
+	return hex.EncodeToString(sum[:])
 }

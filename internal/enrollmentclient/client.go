@@ -21,6 +21,9 @@ import (
 )
 
 type Options struct {
+	// ClaimOnly returns only after a fresh bound-key status confirms commitment.
+	// ResumeOnly opens an existing service-bound identity and never claims/prompts.
+	ClaimOnly, ResumeOnly    bool
 	StateDirectory           string
 	InsecureHTTPAcknowledged bool
 	Display                  func(TrustDisplay) error
@@ -38,6 +41,7 @@ type Progress struct {
 	HTTPTest       bool
 }
 type Result struct {
+	Pending        bool // A saved committed claim, not approval, activation or reporting.
 	Config         lanclient.Config
 	ConfigPath     string
 	KeyFingerprint string
@@ -83,12 +87,16 @@ type sessionData struct {
 	publicDER, csr, issuerDER []byte
 	trust                     TrustDisplay
 	wire                      *wireClient
+	service                   *serviceEnrollment
 }
 
 // Run resumes the same locally bound operation after interruption. It never
 // resets keys/state or installs anything. Uncertain network outcomes reconcile
 // with a fresh bound-key status proof; only uncommitted claims ask for the secret.
 func Run(ctx context.Context, b Bootstrap, o Options) (Result, error) {
+	if o.ClaimOnly && o.ResumeOnly || o.ResumeOnly && o.Secret != nil {
+		return Result{}, ErrBootstrap
+	}
 	if ctx == nil || runtime.GOOS != "linux" || o.Display == nil || !filepath.IsAbs(o.StateDirectory) || filepath.Clean(o.StateDirectory) != o.StateDirectory {
 		return Result{}, ErrBootstrap
 	}
@@ -108,7 +116,12 @@ func Run(ctx context.Context, b Bootstrap, o Options) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	st, err := openStore(o.StateDirectory)
+	var st *localStore
+	if o.ResumeOnly {
+		st, err = openExistingStore(o.StateDirectory)
+	} else {
+		st, err = openStore(o.StateDirectory)
+	}
 	if err != nil {
 		return Result{}, err
 	}
@@ -123,6 +136,12 @@ func Run(ctx context.Context, b Bootstrap, o Options) (Result, error) {
 	if err != nil {
 		return Result{}, ErrState
 	}
+	if err = s.loadService(o.ResumeOnly); err != nil {
+		return Result{}, err
+	}
+	if err = s.enforceServiceDeadline(time.Now()); err != nil {
+		return Result{}, err
+	}
 	// No socket is opened until public trust and locally generated identity display.
 	if o.Display(s.trust) != nil {
 		return Result{}, ErrInput
@@ -135,15 +154,26 @@ func Run(ctx context.Context, b Bootstrap, o Options) (Result, error) {
 	s.wire = &wireClient{client: c, origin: b.EnrollmentOrigin}
 	ctx, cancel := context.WithTimeout(ctx, o.Timeout)
 	defer cancel()
+	if s.service != nil && !s.l.Activated {
+		var stopDeadline context.CancelFunc
+		ctx, stopDeadline = context.WithDeadline(ctx, time.Unix(s.service.DeadlineAt, 0))
+		defer stopDeadline()
+	}
 	delay := o.PollInterval
 	for {
 		if err = ctx.Err(); err != nil {
-			return Result{}, err
+			return Result{}, s.deadlineError(err)
+		}
+		if err = s.enforceServiceDeadline(time.Now()); err != nil {
+			return Result{}, s.deadlineError(err)
 		}
 		snapshot, e := s.status(ctx)
 		if e != nil {
+			if err = s.enforceServiceDeadline(time.Now()); err != nil {
+				return Result{}, err
+			}
 			var failure *httpFailure
-			if errors.As(e, &failure) && (failure.status == 401 || failure.status == 409) && !s.l.ClaimConfirmed && s.l.CertificateDER == "" {
+			if errors.As(e, &failure) && (failure.status == 401 || failure.status == 409) && !o.ResumeOnly && !s.l.ClaimConfirmed && s.l.CertificateDER == "" {
 				if e = s.claim(ctx); e == nil {
 					delay = o.PollInterval
 					continue
@@ -153,60 +183,93 @@ func Run(ctx context.Context, b Bootstrap, o Options) (Result, error) {
 				return Result{}, e
 			}
 			if err = s.notify("reconciling"); err != nil {
-				return Result{}, err
+				return Result{}, s.deadlineError(err)
 			}
 			if err = pause(ctx, retryDelay(e, delay)); err != nil {
-				return Result{}, err
+				return Result{}, s.deadlineError(err)
 			}
 			delay = grow(delay)
 			continue
 		}
+		// A response arriving after the immutable local pending deadline cannot
+		// promote a previously unacknowledged activation in the background.
+		if o.ClaimOnly || s.service != nil {
+			if err = s.enforceServiceDeadline(time.Now()); err != nil {
+				return Result{}, s.deadlineError(err)
+			}
+			if !s.l.Activated && (time.Now().Unix() >= snapshot.DeadlineAt || snapshot.Intent.NotAfter != 0 && time.Now().Unix() >= snapshot.Intent.NotAfter) {
+				return Result{}, ErrServiceDeadline
+			}
+		}
 		delay = o.PollInterval
 		if err = s.acceptSnapshot(snapshot); err != nil {
-			return Result{}, err
+			return Result{}, s.deadlineError(err)
+		}
+		if o.ClaimOnly || s.service != nil {
+			if err = s.recordServiceSnapshot(snapshot, o.ClaimOnly); err != nil {
+				return Result{}, s.deadlineError(err)
+			}
+		}
+		if o.ClaimOnly && !serviceTerminal(snapshot.State) {
+			return Result{Pending: true, KeyFingerprint: s.trust.KeyFingerprint, ComparisonCode: s.trust.ComparisonCode, ServerAuthenticated: b.Profile == "tls"}, nil
 		}
 		switch snapshot.State {
 		case enrollmentstate.Expired, enrollmentstate.Canceled, enrollmentstate.Rejected, enrollmentstate.Revoked:
 			return Result{}, ErrTerminal
 		case enrollmentstate.ClaimedPending, enrollmentstate.Approved, enrollmentstate.IssuanceIntent:
 			if err = s.notify("pending_approval"); err != nil {
-				return Result{}, err
+				return Result{}, s.deadlineError(err)
 			}
 			if err = pause(ctx, delay); err != nil {
-				return Result{}, err
+				return Result{}, s.deadlineError(err)
 			}
 		case enrollmentstate.Issued, enrollmentstate.Activated:
 			if s.l.CertificateDER == "" {
+				if err = s.enforceServiceDeadline(time.Now()); err != nil {
+					return Result{}, s.deadlineError(err)
+				}
 				if err = s.credential(ctx, snapshot); err != nil {
 					if !retryable(err) {
-						return Result{}, err
+						return Result{}, s.deadlineError(err)
 					}
 					if err = pause(ctx, retryDelay(err, delay)); err != nil {
-						return Result{}, err
+						return Result{}, s.deadlineError(err)
 					}
 					continue
 				}
 			}
+			if err = s.enforceServiceDeadline(time.Now()); err != nil {
+				return Result{}, s.deadlineError(err)
+			}
 			if err = s.matchIssuedSnapshot(snapshot); err != nil {
-				return Result{}, err
+				return Result{}, s.deadlineError(err)
 			}
 			if snapshot.State == enrollmentstate.Activated {
 				if !s.l.ActivationAttempted || snapshot.Activation.RequestID != s.l.ActivationRequestID {
 					return Result{}, ErrResponse
 				}
+				if err = s.enforceServiceDeadline(time.Now()); err != nil {
+					return Result{}, s.deadlineError(err)
+				}
 				s.l.Activated = true
 				if err = s.save(); err != nil {
-					return Result{}, err
+					return Result{}, s.deadlineError(err)
 				}
 				return s.publish()
 			}
+			if err = s.enforceServiceDeadline(time.Now()); err != nil {
+				return Result{}, s.deadlineError(err)
+			}
 			if err = s.activate(ctx); err != nil {
 				if !retryable(err) {
-					return Result{}, err
+					return Result{}, s.deadlineError(err)
 				}
 				if err = pause(ctx, retryDelay(err, delay)); err != nil {
-					return Result{}, err
+					return Result{}, s.deadlineError(err)
 				}
+			}
+			if err = s.enforceServiceDeadline(time.Now()); err != nil {
+				return Result{}, s.deadlineError(err)
 			}
 		default:
 			return Result{}, ErrResponse
@@ -223,6 +286,9 @@ func randomID(prefix string) (string, error) {
 func (s *session) load(b Bootstrap) error {
 	raw, err := s.store.Read("ledger.json")
 	if errors.Is(err, os.ErrNotExist) {
+		if s.opts.ResumeOnly {
+			return ErrState
+		}
 		_, key, e := ed25519.GenerateKey(rand.Reader)
 		if e != nil {
 			return ErrState

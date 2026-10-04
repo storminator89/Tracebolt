@@ -117,6 +117,7 @@ func (b *LinuxBackend) Inspect(ctx context.Context, r Request) (HostFacts, error
 		facts.InstallationOwned = true
 		facts.AccountCompatible = true
 		facts.Profile = manifest.Profile
+		facts.PendingService = manifest.Version == pendingInstallationVersion
 		if h.validateInstallation(ctx, manifest) != nil {
 			return facts, ErrState
 		}
@@ -135,6 +136,7 @@ func (b *LinuxBackend) Inspect(ctx context.Context, r Request) (HostFacts, error
 			}
 			facts.AccountCompatible = true
 			facts.Profile = owned.Installation.Profile
+			facts.PendingService = owned.Installation.Version == pendingInstallationVersion
 			if owned.Status == "prepared" {
 				facts.RetainedPreparation = true
 			} else if owned.Status == "uninstalled" {
@@ -250,7 +252,7 @@ func (h *linuxHost) readInstallation() (installation, error) {
 	if e != nil {
 		return out, ErrState
 	}
-	if lanconfig.StrictObject(raw, &out, "version", "profile", "uid", "gid", "agentHash", "enrollHash", "sourceHash", "bootstrapHash", "unitHash") != nil || out.Version != "tracebolt.agent-installation.v1" || !validAccountID(out.UID) || !validAccountID(out.GID) || (out.Profile != "tls" && out.Profile != "http-test") {
+	if lanconfig.StrictObject(raw, &out, "version", "profile", "uid", "gid", "agentHash", "enrollHash", "sourceHash", "bootstrapHash", "unitHash") != nil || !validInstallationVersion(out.Version) || !validAccountID(out.UID) || !validAccountID(out.GID) || (out.Profile != "tls" && out.Profile != "http-test") {
 		return out, ErrState
 	}
 	for _, d := range []string{out.AgentHash, out.EnrollHash, out.SourceHash, out.BootstrapHash, out.UnitHash} {
@@ -261,6 +263,10 @@ func (h *linuxHost) readInstallation() (installation, error) {
 	return out, nil
 }
 func (h *linuxHost) validateInstallation(ctx context.Context, m installation) error {
+	expected := unitForMode(accountRecord{m.UID, m.GID}, m.Version, m.Profile)
+	if expected == "" || sum([]byte(expected)) != m.UnitHash {
+		return ErrState
+	}
 	if h.secureDirectory(h.path(InstallDirectory), false) != nil || h.secureDirectory(h.path(publicDirectory), false) != nil {
 		return ErrState
 	}
@@ -408,7 +414,26 @@ func (b *LinuxBackend) Begin(ctx context.Context, r Request, p Plan) (Transactio
 	if _, e := rand.Read(nonce[:]); e != nil {
 		return fail()
 	}
-	t := &linuxTransaction{h: h, lock: f, dir: dir, r: r, j: installJournal{ID: hex.EncodeToString(nonce[:]), Version: "tracebolt.agent-install-transaction.v1", Action: r.Action, Phase: "begun", Changes: []fileChange{}}}
+	version := readyInstallationVersion
+	profile := "tls"
+	if r.InsecureHTTPTest {
+		profile = "http-test"
+	}
+	if r.PendingService {
+		version = pendingInstallationVersion
+	}
+	if r.Action != Install || r.Resume {
+		owned, oe := h.readOwnership()
+		if oe != nil {
+			return fail()
+		}
+		version = owned.Installation.Version
+		profile = owned.Installation.Profile
+		if r.Action == Install && (version == pendingInstallationVersion) != r.PendingService {
+			return fail()
+		}
+	}
+	t := &linuxTransaction{h: h, lock: f, dir: dir, r: r, installationVersion: version, profile: profile, j: installJournal{ID: hex.EncodeToString(nonce[:]), Version: transactionVersion(version), Action: r.Action, Phase: "begun", Changes: []fileChange{}}}
 	status, se := h.unit(ctx)
 	if se != nil {
 		t.Close()

@@ -43,6 +43,7 @@ type operatorHandler struct {
 	cookieName          string
 	enrollment          *enrollmentservice.Service
 	enrollmentBootstrap EnrollmentBootstrap
+	bootstrapAdmission  bootstrapAdmission
 }
 type operatorRequestKey struct{}
 type operatorRequest struct {
@@ -255,6 +256,14 @@ func (h *operatorHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	if strings.HasPrefix(r.URL.Path, publicBootstrapPrefix) {
+		if h.enrollment == nil {
+			fail(w, 404, "enrollment_unavailable", "Enrollment is not configured.")
+			return
+		}
+		servePublicBootstrap(w, r, h.enrollmentBootstrap, &h.bootstrapAdmission)
+		return
+	}
 	if strings.HasPrefix(r.URL.Path, "/v2/enrollment/") {
 		h.enrollmentClient(w, r)
 		return
@@ -331,6 +340,14 @@ func (h *operatorHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if r.URL.Path == "/api/enrollment" || strings.HasPrefix(r.URL.Path, "/api/enrollment/") {
 		h.enrollmentOperator(w, r)
+		return
+	}
+	if strings.HasPrefix(r.URL.Path, "/api/devices/") && strings.Contains(r.URL.Path, "/inventory/packages") {
+		h.completePackages(w, r)
+		return
+	}
+	if strings.HasPrefix(r.URL.Path, "/api/devices/") && strings.Contains(r.URL.Path, "/inventory/system") {
+		h.systemInventory(w, r)
 		return
 	}
 	h.app.api(w, r)

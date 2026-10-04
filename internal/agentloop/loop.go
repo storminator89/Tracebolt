@@ -136,6 +136,35 @@ func valid(r Result) bool {
 		return false
 	}
 	a, u := r.Metadata.AvailablePercentageFields, r.Metadata.UnavailablePercentageFields
+	switch r.Metadata.InventoryStatus {
+	case "":
+		if r.Metadata.InventorySequence != 0 || r.Metadata.InventoryOperations != 0 {
+			return false
+		}
+	case "not_due", "pending_retained":
+	case "acknowledged", "failure_acknowledged", "aborted":
+		if r.Metadata.InventorySequence == 0 {
+			return false
+		}
+	default:
+		return false
+	}
+	if r.Metadata.InventoryOperations > 64 {
+		return false
+	}
+	switch r.Metadata.SystemStatus {
+	case "":
+		if r.Metadata.SystemSequence != 0 || r.Metadata.SystemRetriedPending || r.Metadata.SystemDiscardedStale {
+			return false
+		}
+	case "pending_retained":
+	case "acknowledged":
+		if r.Metadata.SystemSequence == 0 {
+			return false
+		}
+	default:
+		return false
+	}
 	return a <= 3 && u <= 3 && int(a)+int(u) <= 3
 }
 

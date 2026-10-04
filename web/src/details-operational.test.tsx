@@ -21,7 +21,7 @@ describe('actual device drawer operational integration',()=>{
  it('loads the protected read model only when the Inventory tab is selected',async()=>{
   render(detail());const tab=await screen.findByRole('tab',{name:'Inventory'});expect(request).not.toHaveBeenCalledWith(expect.stringContaining('/operational'),expect.anything());fireEvent.click(tab);
   await screen.findByText('This device is not enrolled for the Linux operational profile. No operational inventory has been collected.');
-  expect(tab).toHaveAttribute('aria-selected','true');expect(screen.getByRole('tabpanel')).toHaveAttribute('aria-labelledby',tab.id);expect(request).toHaveBeenCalledWith(`/devices/${id}/operational`,expect.objectContaining({signal:expect.any(AbortSignal)}));
+  expect(tab).toHaveAttribute('aria-selected','true');expect(screen.getByRole('tabpanel',{name:'Inventory'})).toHaveAttribute('aria-labelledby',tab.id);expect(request).toHaveBeenCalledWith(`/devices/${id}/operational`,expect.objectContaining({signal:expect.any(AbortSignal)}));
   expect(screen.getByText('Available updates')).toBeVisible();expect(screen.getByText('Vulnerabilities / CVEs')).toBeVisible();expect(screen.queryByText('Secure')).not.toBeInTheDocument();
  });
  it.each([{synthetic:true},{source:'sandbox' as const},{source:'local' as const},{platform:'windows' as const},{platform:'macos' as const}])('does not invent operational support for %j',async overrides=>{
@@ -44,6 +44,6 @@ describe('actual device drawer operational integration',()=>{
   render(detail());const overview=await screen.findByRole('tab',{name:'Overview'});overview.focus();fireEvent.keyDown(overview,{key:'ArrowRight'});const inventory=screen.getByRole('tab',{name:'Inventory'});expect(inventory).toHaveFocus();expect(inventory).toHaveAttribute('aria-selected','true');fireEvent.keyDown(inventory,{key:'End'});expect(screen.getByRole('tab',{name:/^Capabilities/})).toHaveFocus();fireEvent.keyDown(screen.getByRole('tab',{name:/^Capabilities/}),{key:'Home'});expect(overview).toHaveFocus();expect(overview).toHaveAttribute('aria-selected','true');
  });
  it('retains German tab and operational labels',async()=>{
-  setLocale('de',false);render(detail());fireEvent.click(await screen.findByRole('tab',{name:'Inventar'}));const panel=screen.getByRole('tabpanel');await within(panel).findByText('Betriebsinventar');expect(within(panel).getByRole('button',{name:'Beobachtungen aktualisieren'})).toBeInTheDocument();
+  setLocale('de',false);render(detail());fireEvent.click(await screen.findByRole('tab',{name:'Inventar'}));const panel=screen.getByRole('tabpanel',{name:'Inventar'});await within(panel).findByText('Betriebsinventar');expect(within(panel).getByRole('button',{name:'Beobachtungen aktualisieren'})).toBeInTheDocument();
  });
 });

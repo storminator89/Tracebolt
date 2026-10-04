@@ -11,7 +11,7 @@ import (
 func TestOrdinaryGeneratedProofsBindSelectedCollectionProfile(t *testing.T) {
 	now := time.Now().UTC().Truncate(time.Second)
 	for _, profile := range []string{"tls", "http-test"} {
-		for _, collection := range []string{CollectionProfile, CollectionProfileOperational, CollectionProfilePackages} {
+		for _, collection := range []string{CollectionProfile, CollectionProfileOperational, CollectionProfilePackages, CollectionProfileComplete} {
 			t.Run(profile+"/"+collection, func(t *testing.T) {
 				c := contextFixture(profile, now)
 				c.CollectionProfile = collection
@@ -73,7 +73,7 @@ func TestOrdinaryGeneratedProofsBindSelectedCollectionProfile(t *testing.T) {
 
 func TestImplementedCollectionProofDomainsRemainDistinct(t *testing.T) {
 	now := time.Now().UTC().Truncate(time.Second)
-	profiles := []string{CollectionProfile, CollectionProfileOperational, CollectionProfilePackages}
+	profiles := []string{CollectionProfile, CollectionProfileOperational, CollectionProfilePackages, CollectionProfileComplete}
 	for _, selected := range profiles {
 		c := contextFixture("tls", now)
 		c.CollectionProfile = selected

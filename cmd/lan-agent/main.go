@@ -22,6 +22,9 @@ func main() {
 	validate := flag.Bool("validate-guided", false, "Validate local guided handoff and existing ledger without collection or network")
 	foreground := flag.Bool("foreground", false, "Repeat bounded read-only reports until interrupted; does not install a service")
 	interval := flag.Duration("interval", 30*time.Second, "Foreground report interval, 15s to 1h")
+	enrollmentBootstrap := flag.String("enrollment-bootstrap", "", "Fixed public bootstrap for explicit pending-service mode")
+	enrollmentState := flag.String("enrollment-state-directory", "", "Existing private pending-service enrollment directory")
+	insecurePending := flag.Bool("insecure-http-test", false, "Explicit unauthenticated HTTP pending-service acknowledgement")
 	flag.Parse()
 	if *path == "" || flag.NArg() != 0 {
 		fmt.Fprintln(os.Stderr, "Tracebolt LAN agent requires --config PATH; no service installation is performed.")
@@ -36,12 +39,22 @@ func main() {
 		os.Exit(2)
 	}
 	if *validate {
-		if *foreground || *interval != 30*time.Second || lanclient.ValidateGuidedHandoff(*path) != nil {
+		if *enrollmentBootstrap != "" || *enrollmentState != "" || *insecurePending || *foreground || *interval != 30*time.Second || lanclient.ValidateGuidedHandoff(*path) != nil {
 			fmt.Fprintln(os.Stderr, "Tracebolt guided handoff validation failed; identity and state preserved.")
 			os.Exit(2)
 		}
 		fmt.Fprintln(os.Stdout, "Tracebolt guided handoff validated locally; no collection or network request performed.")
 		return
+	}
+	pendingMode := *enrollmentBootstrap != "" || *enrollmentState != "" || *insecurePending
+	if pendingMode {
+		if *enrollmentBootstrap == "" || *enrollmentState == "" || !*foreground || *validate || *identity == "" {
+			fmt.Fprintln(os.Stderr, "Pending service requires the complete explicit bootstrap/state/identity contract.")
+			os.Exit(2)
+		}
+		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+		defer stop()
+		os.Exit(runPendingService(ctx, pendingServiceOptions{BootstrapPath: *enrollmentBootstrap, StateDirectory: *enrollmentState, ConfigPath: *path, Identity: *identity, InsecureHTTPTest: *insecurePending, Interval: *interval}, os.Stdout, os.Stderr, defaultPendingServiceHooks()))
 	}
 	material, e := lanclient.Load(*path)
 	if e != nil {

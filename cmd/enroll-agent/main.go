@@ -7,6 +7,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"localrmm/internal/agentidentity"
 	"localrmm/internal/enrollmentclient"
 	"os"
 	"os/signal"
@@ -26,6 +27,9 @@ func run(ctx context.Context, args []string, out, errOut io.Writer) int {
 	bootstrap := f.String("bootstrap", "", "Absolute public bootstrap JSON path")
 	state := f.String("state-directory", "", "Absolute dedicated private enrollment directory")
 	insecure := f.Bool("insecure-http-test", false, "Acknowledge visible invitations and unauthenticated HTTP test responses")
+	claimOnly := f.Bool("claim-only", false, "Save a committed pending claim for an explicitly selected pending-service installation")
+	validateService := f.Bool("validate-service", false, "Read-only validation of existing service-bound enrollment; no network or initialization")
+	serviceIdentity := f.String("service-identity", "", "Expected numeric service UID:GID for offline service validation")
 	timeout := f.Duration("timeout", 15*time.Minute, "Approval timeout, at most 30m")
 	if f.Parse(args) != nil || f.NArg() != 0 || *bootstrap == "" || *state == "" {
 		fmt.Fprintln(errOut, "Usage: enroll-agent --bootstrap ABS_PATH --state-directory ABS_PATH [--insecure-http-test] [--timeout 15m]. Invitation input is hidden; there is no invitation argument, environment or stdin mode.")
@@ -35,13 +39,25 @@ func run(ctx context.Context, args []string, out, errOut io.Writer) int {
 		fmt.Fprintln(errOut, "Guided enrollment is currently Linux-only.")
 		return 2
 	}
+	if *validateService && (*claimOnly || *timeout != 15*time.Minute || !agentidentity.Validate(*serviceIdentity)) || !*validateService && *serviceIdentity != "" {
+		fmt.Fprintln(errOut, "Service validation identity or flags rejected before private-state access.")
+		return 2
+	}
 	b, e := enrollmentclient.LoadBootstrap(*bootstrap)
 	if e != nil {
 		fmt.Fprintln(errOut, "Public bootstrap rejected. Obtain the exact trusted bootstrap from your manager.")
 		return 2
 	}
+	if *validateService {
+		if _, e := enrollmentclient.InspectService(b, *state, *insecure); e != nil {
+			fmt.Fprintln(errOut, "Retained service enrollment is invalid or stopped; preserve all state.")
+			return 2
+		}
+		fmt.Fprintln(out, "Retained service enrollment validated locally; no network, collection or initialization performed.")
+		return 0
+	}
 	lastPhase := ""
-	result, e := enrollmentclient.Run(ctx, b, enrollmentclient.Options{StateDirectory: *state, InsecureHTTPAcknowledged: *insecure, Timeout: *timeout, Display: func(d enrollmentclient.TrustDisplay) error {
+	result, e := enrollmentclient.Run(ctx, b, enrollmentclient.Options{ClaimOnly: *claimOnly, StateDirectory: *state, InsecureHTTPAcknowledged: *insecure, Timeout: *timeout, Display: func(d enrollmentclient.TrustDisplay) error {
 		if _, e := fmt.Fprintf(out, "Manager: %s\nProfile: %s\nEnrollment destination: %s\nAgent destination: %s\nCollection: %s\nInvitation: %s\n", d.ManagerInstanceID, d.Profile, d.EnrollmentOrigin, d.AgentOrigin, d.CollectionProfile, d.InvitationID); e != nil {
 			return e
 		}
@@ -124,6 +140,13 @@ func run(ctx context.Context, args []string, out, errOut io.Writer) int {
 		}
 		fmt.Fprintln(errOut, text)
 		return 1
+	}
+	if result.Pending {
+		if !result.ServerAuthenticated {
+			fmt.Fprintln(out, "WARNING: HTTP-test commitment was reported by an unauthenticated manager.")
+		}
+		fmt.Fprintln(out, "Committed enrollment is saved for the selected pending-service installer. Approval, activation and reporting have not been established by this command.")
+		return 0
 	}
 	if !result.ServerAuthenticated {
 		fmt.Fprintln(out, "WARNING: HTTP-test activation was reported by an unauthenticated manager. This is not verified server activation.")
