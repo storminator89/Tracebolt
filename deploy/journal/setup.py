@@ -175,21 +175,29 @@ def agent_unit(template, m):
     return raw.encode()
 
 
-def unit_state(raw):
+def unit_fields(name):
+    require(name in (AGENT_UNIT, SERVICE, SOCKET), "fixed-unit")
     fields = ("LoadState", "ActiveState", "FragmentPath", "DropInPaths", "Transient", "Names", "MainPID", "UnitFileState")
+    # MainPID is a service property; sockets do not expose it, even with --all.
+    return tuple(k for k in fields if k != "MainPID" or name != SOCKET)
+
+
+def unit_state(raw, name):
+    fields = unit_fields(name)
     out = {}
     for line in raw.decode("ascii").strip().splitlines():
         key, sep, value = line.partition("=")
         require(sep and key in fields and key not in out, "systemd-unit-status")
         out[key] = value
-    require(set(out) == set(fields) and re.fullmatch(r"[0-9]+", out["MainPID"]), "systemd-unit-status")
+    require(set(out) == set(fields) and
+            (name == SOCKET or re.fullmatch(r"[0-9]+", out["MainPID"])), "systemd-unit-status")
     return out
 
 
 def absent_unit(s, name):
     return (s["LoadState"] == "not-found" and s["ActiveState"] == "inactive" and
             s["FragmentPath"] == s["DropInPaths"] == "" and s["Transient"] == "no" and
-            s["Names"] in ("", name) and s["MainPID"] == "0" and
+            s["Names"] in ("", name) and (name == SOCKET or s["MainPID"] == "0") and
             s["UnitFileState"] in ("", "not-found"))
 
 
@@ -300,9 +308,9 @@ class Effects:
             child.stdout.close()
 
     def status(self, name):
-        require(name in (AGENT_UNIT, SERVICE, SOCKET), "fixed-unit")
+        fields = unit_fields(name)
         return unit_state(self.command(["/usr/bin/systemctl", "show", name,
-            "--property=LoadState,ActiveState,FragmentPath,DropInPaths,Transient,Names,MainPID,UnitFileState", "--no-pager"], timeout=5))
+            "--property=" + ",".join(fields), "--all", "--no-pager"], timeout=5), name)
 
     @contextlib.contextmanager
     def lock(self):

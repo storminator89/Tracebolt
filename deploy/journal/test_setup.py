@@ -20,10 +20,24 @@ def meta(mode, uid=0, gid=0, ino=1):
 
 
 def status(name, loaded=False, active="inactive", enabled=False):
-    return dict(LoadState="loaded" if loaded else "not-found", ActiveState=active,
+    out = dict(LoadState="loaded" if loaded else "not-found", ActiveState=active,
                 FragmentPath=s.UNIT_DIR + "/" + name if loaded else "", DropInPaths="",
-                Transient="no", Names=name, MainPID="123" if active == "active" and name == s.AGENT_UNIT else "0",
+                Transient="no", Names=name,
                 UnitFileState=("enabled" if enabled else "disabled") if loaded else "not-found")
+    if name != s.SOCKET:
+        out["MainPID"] = "123" if active == "active" and name == s.AGENT_UNIT else "0"
+    return out
+
+
+def status_output(name, loaded=False, active="inactive"):
+    # Synthetic equivalents of systemd's selected-property output. Absent unit
+    # files may have an empty UnitFileState; sockets never have a MainPID.
+    raw = ("MainPID=123\n" if loaded and active == "active" else "MainPID=0\n") if name != s.SOCKET else ""
+    return (raw + "Names=" + name + "\nLoadState=" + ("loaded" if loaded else "not-found") +
+            "\nActiveState=" + active + "\nFragmentPath=" +
+            (s.UNIT_DIR + "/" + name if loaded else "") +
+            "\nDropInPaths=\nUnitFileState=" + ("enabled" if loaded else "") +
+            "\nTransient=no\n").encode("ascii")
 
 
 class Fixture:
@@ -155,6 +169,73 @@ class Fixture:
 
 
 class SetupTests(unittest.TestCase):
+    def test_status_parses_installed_and_absent_fixed_unit_types(self):
+        for name in (s.AGENT_UNIT, s.SERVICE, s.SOCKET):
+            for loaded, active in ((False, "inactive"), (True, "inactive"), (True, "active")):
+                with self.subTest(name=name, loaded=loaded, active=active):
+                    result = s.unit_state(status_output(name, loaded, active), name)
+                    self.assertEqual(len(result), 7 if name == s.SOCKET else 8)
+                    self.assertEqual("MainPID" in result, name != s.SOCKET)
+                    if loaded:
+                        self.assertTrue(s.owned_unit(result, name, active))
+                        self.assertFalse(s.absent_unit(result, name))
+                    else:
+                        self.assertEqual(result["UnitFileState"], "")
+                        self.assertTrue(s.absent_unit(result, name))
+                        result["UnitFileState"] = "not-found"
+                        self.assertTrue(s.absent_unit(result, name))
+
+    def test_status_rejects_missing_duplicate_unknown_and_invalid_pid(self):
+        for name in (s.AGENT_UNIT, s.SERVICE, s.SOCKET):
+            raw = status_output(name)
+            lines = raw.splitlines(keepends=True)
+            for line in lines:
+                for bad in (raw.replace(line, b"", 1), raw + line):
+                    with self.subTest(name=name, bad=bad), self.assertRaisesRegex(s.Rejected, "^systemd-unit-status$"):
+                        s.unit_state(bad, name)
+            for extra in (b"Unknown=0\n", b"ControlPID=0\n", b"malformed\n"):
+                with self.subTest(name=name, extra=extra), self.assertRaises(s.Rejected):
+                    s.unit_state(raw + extra, name)
+            if name == s.SOCKET:
+                with self.assertRaises(s.Rejected):
+                    s.unit_state(raw + b"MainPID=0\n", name)
+            else:
+                for pid in (b"", b"-1", b"abc", b"1 2"):
+                    with self.subTest(name=name, pid=pid), self.assertRaises(s.Rejected):
+                        s.unit_state(raw.replace(b"MainPID=0", b"MainPID=" + pid), name)
+                result = s.unit_state(raw.replace(b"MainPID=0", b"MainPID=123"), name)
+                self.assertFalse(s.absent_unit(result, name))
+
+    def test_status_command_has_fixed_type_specific_property_allowlist(self):
+        common = "LoadState,ActiveState,FragmentPath,DropInPaths,Transient,Names,"
+        for name in (s.AGENT_UNIT, s.SERVICE, s.SOCKET):
+            e = s.Effects()
+            properties = common + ("" if name == s.SOCKET else "MainPID,") + "UnitFileState"
+            with mock.patch.object(e, "command", return_value=status_output(name)) as command:
+                self.assertTrue(s.absent_unit(e.status(name), name))
+            command.assert_called_once_with(["/usr/bin/systemctl", "show", name,
+                "--property=" + properties, "--all", "--no-pager"], timeout=5)
+        for name in ("other.service", "other.socket", "*.service", "--all"):
+            e = s.Effects()
+            with mock.patch.object(e, "command") as command, self.assertRaisesRegex(s.Rejected, "^fixed-unit$"):
+                e.status(name)
+            command.assert_not_called()
+
+    def test_stopped_service_pid_check_remains_required(self):
+        f = Fixture()
+        original = f.command
+        def command(args, **kwargs):
+            result = original(args, **kwargs)
+            if args == ["/usr/bin/systemctl", "stop", s.AGENT_UNIT]:
+                f.units[s.AGENT_UNIT]["MainPID"] = "123"
+            return result
+        f.command = command
+        result = f.apply()
+        self.assertFalse(result["configured"])
+        self.assertEqual(result["failureStage"], "stopped-agent")
+        self.assertTrue(result["agentRestarted"])
+        self.assertFalse(any(x[0] in ("mkdir", "create") for x in f.actions))
+
     def test_plan_is_read_only_and_binds_explicit_risks(self):
         f = Fixture()
         before = copy.deepcopy(f.files)

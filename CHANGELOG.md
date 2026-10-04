@@ -2,6 +2,12 @@
 
 Meaningful development checkpoints are recorded here. These are prototype milestones, not production releases.
 
+## 2026-10-04 — Validate journal socket status using its unit type
+
+- An actual read-only helper plan stopped at systemd status validation because the socket unit does not expose the service-only `MainPID` property. The service/agent status fields were valid, and the rejected plan did not proceed to setup.
+- Require the exact property set for each fixed service or socket role and request empty properties explicitly. Preserve strict duplicate/unknown/missing-field rejection and all existing ownership, account, unit, consent and apply guards.
+- Add inert parser and command fixtures for the real unit-property distinction. This changes only the setup script and tests; existing manager and agent binaries do not need rebuilding. A successful plan or source check does not substitute for the separate reviewed host apply and journal-access acceptance.
+
 ## 2026-10-04 — Match browser checks to journal controls and unassessed health
 
 - The first journal checkpoint's browser report recorded 9/10 inherited HTTP-test cases and 1/6 new journal cases passing, with zero browser runtime errors. Five journal cases timed out in their shared capture setup; the endpoint target did not execute after the earlier failure. Those results remain failed/pending evidence, not complete acceptance.
