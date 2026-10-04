@@ -10,6 +10,7 @@ import (
 	"localrmm/internal/analysis"
 	"localrmm/internal/api"
 	"localrmm/internal/enrollmentconfig"
+	"localrmm/internal/enrollmentcrypto"
 	"localrmm/internal/enrollmentservice"
 	"localrmm/internal/enrollmentstore"
 	"localrmm/internal/enrollmenttransport"
@@ -34,6 +35,7 @@ type prepared struct {
 	operator, agent       http.Handler
 	operatorTLS, agentTLS *tls.Config
 	close                 func()
+	maintenance           *enrollmentservice.Service
 }
 
 func prepare(m lanconfig.Material) (*prepared, error) { return prepareWithEnrollment(m, nil) }
@@ -84,6 +86,11 @@ func prepareWithEnrollment(m lanconfig.Material, enrollment *enrollmentconfig.Ma
 		enrolledStore, e = enrollmentstore.Open(filepath.Join(c.StateDirectory, enrollmentconfig.DatabaseFile), enrollment.StoreConfig(), enrollment.Issuer().IssuerDER())
 		if e != nil {
 			return fail(e)
+		}
+		if enrolledStore.Config().Binding.CollectionProfile == enrollmentcrypto.CollectionProfileComplete {
+			if e = enrolledStore.InitializeOverview(context.Background()); e != nil {
+				return fail(e)
+			}
 		}
 		enrolledService, e = enrollmentservice.New(enrolledStore, enrollment.Issuer(), nil)
 		if e != nil {
@@ -155,7 +162,7 @@ func prepareWithEnrollment(m lanconfig.Material, enrollment *enrollmentconfig.Ma
 		closeAll()
 		return nil, e
 	}
-	return &prepared{operator: operator, agent: agent, operatorTLS: operatorTLS, agentTLS: agentTLS, close: closeAll}, nil
+	return &prepared{operator: operator, agent: agent, operatorTLS: operatorTLS, agentTLS: agentTLS, close: closeAll, maintenance: enrolledService}, nil
 }
 
 func server(handler http.Handler) *http.Server {
@@ -181,6 +188,18 @@ func runWithEnrollment(ctx context.Context, m lanconfig.Material, enrollment *en
 	if p.operatorTLS != nil {
 		operator = tls.NewListener(operator, p.operatorTLS)
 		agent = tls.NewListener(agent, p.agentTLS)
+	}
+	// Maintenance stops before store closure, including listener/server failures.
+	if p.maintenance != nil && p.maintenance.Binding().CollectionProfile == enrollmentcrypto.CollectionProfileComplete {
+		maintenanceCtx, stopMaintenance := context.WithCancel(ctx)
+		maintenanceDone := make(chan struct{})
+		go func() {
+			defer close(maintenanceDone)
+			_ = p.maintenance.RunInventoryMaintenance(maintenanceCtx, func() {
+				log.Print("Complete inventory maintenance is unavailable; retained observations are preserved.")
+			})
+		}()
+		defer func() { stopMaintenance(); <-maintenanceDone }()
 	}
 	operators, agents := server(p.operator), server(p.agent)
 	results := make(chan error, 2)

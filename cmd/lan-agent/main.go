@@ -34,6 +34,8 @@ func main() {
 	insecurePending := flag.Bool("insecure-http-test", false, "Explicit unauthenticated HTTP pending-service acknowledgement")
 	endpointConsentMode := flag.String("endpoint-identity-consent", "", "Local-only preview, enable, or disable of the explicit hostname/interface-address extension; stop the sender first")
 	endpointConsentAck := flag.Bool("ack-endpoint-identity", false, "Acknowledge reporting hostname and all visible interface IPv4/IPv6 addresses to the configured manager")
+	overviewConsentMode := flag.String("complete-overview-consent", "", "Local-only preview, enable, or disable of full visible processes/mounted filesystems; stop the sender first")
+	overviewConsentAck := flag.Bool("ack-complete-overview", false, "Acknowledge full visible processes/mounts, potentially sensitive names, mount paths and filesystem labels in the agent Linux namespaces, at a fixed 60-second cadence; HTTP-test is unencrypted and unauthenticated")
 	journalConsentMode := flag.String("journal-content-consent", "", "Local-only preview or create-only initialize of on-demand journal consent; stop the sender first")
 	journalConsentAck := flag.Bool("ack-journal-content", false, "Acknowledge allowlisted service journal messages may contain credentials, personal data or other secrets")
 	journalPlaintextAck := flag.Bool("ack-journal-http-plaintext", false, "Separately acknowledge unencrypted journal content visible on the LAN with an unauthenticated manager")
@@ -45,6 +47,13 @@ func main() {
 	if runtime.GOOS != "linux" {
 		fmt.Fprintln(os.Stderr, "Tracebolt LAN sender state is currently supported on Linux only; native ACL validation is pending for other platforms.")
 		os.Exit(2)
+	}
+	if *overviewConsentMode != "" || *overviewConsentAck {
+		if *foreground || *validate || *interval != 30*time.Second || *enrollmentBootstrap != "" || *enrollmentState != "" || *insecurePending || *endpointConsentMode != "" || *endpointConsentAck || *journalConsentMode != "" || *journalConsentAck || *journalPlaintextAck {
+			fmt.Fprintln(os.Stderr, "Complete overview consent cannot be combined with reporting, validation, enrollment or other consent modes.")
+			os.Exit(2)
+		}
+		os.Exit(runOverviewConsent(overviewConsentOptions{Path: *path, Mode: *overviewConsentMode, Identity: *identity, Acknowledged: *overviewConsentAck}, overviewConsentHooks{identity: serviceIdentity, configure: lanclient.ConfigureCompleteOverview}, os.Stdout, os.Stderr))
 	}
 	if *journalConsentMode != "" || *journalConsentAck || *journalPlaintextAck {
 		if *foreground || *validate || *interval != 30*time.Second || *enrollmentBootstrap != "" || *enrollmentState != "" || *insecurePending || *endpointConsentMode != "" || *endpointConsentAck {

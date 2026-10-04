@@ -130,6 +130,12 @@ func Run(ctx context.Context, cfg Config, deps Dependencies) (Summary, error) {
 }
 
 func valid(r Result) bool {
+	if !validOverviewStatus(r.Metadata.ProcessesStatus, r.Metadata.ProcessesSequence) || !validOverviewStatus(r.Metadata.VolumesStatus, r.Metadata.VolumesSequence) || r.Metadata.OverviewOperations > 64 {
+		return false
+	}
+	if r.Metadata.ProcessesStatus == "" && r.Metadata.VolumesStatus == "" && r.Metadata.OverviewOperations != 0 {
+		return false
+	}
 	switch r.Metadata.JournalStatus {
 	case "", "disabled", "denied", "unavailable", "state_unavailable", "idle", "result_lost", "expired", "helper_unavailable", "pending_retained", "acknowledged":
 	default:
@@ -280,4 +286,17 @@ func (c *monotonicClock) Now() time.Time {
 	}
 	c.last, c.seen = at, true
 	return at
+}
+
+func validOverviewStatus(status string, sequence uint64) bool {
+	switch status {
+	case "":
+		return sequence == 0
+	case "disabled", "not_due", "pending_retained":
+		return true
+	case "acknowledged", "failure_acknowledged", "aborted":
+		return sequence > 0
+	default:
+		return false
+	}
 }

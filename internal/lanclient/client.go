@@ -36,6 +36,11 @@ type receipt struct {
 	Duplicate     bool      `json:"duplicate"`
 }
 type Report struct {
+	ProcessesStatus             string `json:"processesStatus,omitempty"`
+	ProcessesSequence           uint64 `json:"processesSequence,omitempty"`
+	VolumesStatus               string `json:"volumesStatus,omitempty"`
+	VolumesSequence             uint64 `json:"volumesSequence,omitempty"`
+	OverviewOperations          uint8  `json:"overviewOperations,omitempty"`
 	JournalStatus               string `json:"journalStatus,omitempty"`
 	SchemaVersion               string `json:"schemaVersion"`
 	Status                      string `json:"status"`
@@ -56,9 +61,12 @@ type Report struct {
 }
 
 // Run preserves the legacy one-shot collection/delivery behavior. The explicitly
-// complete profile additionally performs one serialized, bounded inventory
-// capture/delivery burst. Pending exact bytes survive uncertain delivery. It
-// never switches origin, refreshes source timestamps, enrolls or installs.
+// complete profile adds serialized system/package work with separate cooperative
+// stage budgets. Explicit overview consent adds one shared 20s/64-operation
+// process-and-volume burst before the existing journal stage. The caller's own
+// deadline still bounds the one-shot call; these stage budgets are not a hard
+// overall cycle deadline. Pending bytes and original source times survive retry.
+// This path never switches origin, enrolls or installs.
 func Run(ctx context.Context, m Material) (Report, error) {
 	report := Report{SchemaVersion: "tracebolt.agent-run.v1", Status: "failed", Profile: m.config.Profile}
 	if ctx.Err() != nil {
@@ -92,11 +100,16 @@ func Run(ctx context.Context, m Material) (Report, error) {
 		// foreground attempts retain their original20s budget separately.
 		return runUsingState(ctx, m, state)
 	}
+	overview, e := openOverviewSender(m)
+	if e != nil {
+		return report, e
+	}
+	defer overview.Close()
 	journal := openJournalSender(m)
 	defer journal.Close()
 	report, err := runPreparedAttemptWithSystem(ctx, m, state, system, inventory, runUsingState)
 	if err == nil {
-		report.JournalStatus = runJournalAttempt(ctx, journal)
+		err = runOverviewAndJournal(ctx, overview, &report, func(parent context.Context) string { return runJournalAttempt(parent, journal) })
 	}
 	return report, err
 }

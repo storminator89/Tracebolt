@@ -1,0 +1,21 @@
+.complete-overview { padding: 0; min-width: 0; }
+.complete-overview .overview-totals { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.complete-overview .package-heading { align-items: flex-start; gap: 12px; }
+.complete-overview .package-heading h2 { font-size: 16px; }
+.complete-overview .package-note { line-height: 1.5; }
+.overview-attempt { border-left: 3px solid #ad8140; padding: 8px 12px; margin: 12px 0; font-size: 12px; overflow-wrap: anywhere; }
+.overview-attempt p { margin: 5px 0 0; }
+.overview-coverage, .overview-progress { display: flex; flex-wrap: wrap; gap: 10px 20px; margin: 12px 0; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.overview-coverage dt, .overview-progress dt { font-size: 11px; color: var(--secondary); }
+.overview-coverage dd, .overview-progress dd { margin: 4px 0 0; font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.overview-provenance { margin: 12px 0; padding: 10px; border: 1px solid var(--line); border-radius: 7px; }
+.overview-provenance summary { cursor: pointer; font-size: 12px; font-weight: 600; }
+.overview-provenance .package-facts { margin-top: 12px; }
+.overview-independent { overflow-wrap: anywhere; }
+.complete-overview .package-table-scroll { margin-top: 12px; }
+.complete-overview table { min-width: 860px; width: 100%; font-size: 12px; }
+.complete-overview td, .complete-overview th { vertical-align: top; overflow-wrap: anywhere; }
+.complete-overview td small, .complete-overview th small { display: block; color: var(--secondary); font-weight: 400; margin-top: 3px; }
+.complete-overview .overview-group th { background: var(--panel); border-top: 2px solid var(--line); font-size: 12px; }
+.complete-overview .overview-group small { display: inline; margin-left: 6px; }
+@media (max-width: 640px) { .complete-overview .overview-totals { grid-template-columns: 1fr; } .complete-overview .package-heading { flex-direction: column; } .overview-coverage { gap: 12px; } }

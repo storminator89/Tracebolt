@@ -46,7 +46,7 @@ import (
 // reboot. Claim and pending continuation use the production enrollment library;
 // manager and reporting use actual binaries built offline from this tree.
 func TestCompleteMVPPendingApprovalNativeRestart(t *testing.T) {
-	enabled, positive, endpointIdentity, err := completeMVPEndpointGateSelection(os.Getenv("TRACEBOLT_COMPLETE_RUNTIME_TEST"), os.Getenv("TRACEBOLT_COMPLETE_UBUNTU2404_TEST"), os.Getenv("TRACEBOLT_ENDPOINT_IDENTITY_RUNTIME_TEST"), os.Geteuid())
+	enabled, positive, endpointIdentity, overview, err := completeMVPOverviewGateSelection(os.Getenv("TRACEBOLT_COMPLETE_RUNTIME_TEST"), os.Getenv("TRACEBOLT_COMPLETE_UBUNTU2404_TEST"), os.Getenv("TRACEBOLT_ENDPOINT_IDENTITY_RUNTIME_TEST"), os.Getenv("TRACEBOLT_COMPLETE_OVERVIEW_RUNTIME_TEST"), os.Geteuid())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -88,7 +88,7 @@ func TestCompleteMVPPendingApprovalNativeRestart(t *testing.T) {
 	}
 	for _, profile := range []string{lanconfig.TLS, lanconfig.HTTPTest} {
 		t.Run(profile, func(t *testing.T) {
-			completeMVPProfile(t, gate, profile, binaries, inspect, endpointIdentity)
+			completeMVPProfile(t, gate, profile, binaries, inspect, endpointIdentity, overview)
 		})
 	}
 	if positive && checked != 4 {
@@ -123,7 +123,7 @@ type completeMVPObservation struct {
 	system                         enrollmentstore.SystemView
 }
 
-func completeMVPProfile(t *testing.T, gate context.Context, profile string, binaries map[string]string, inspect func(*testing.T, completeMVPObservation), endpointIdentity bool) {
+func completeMVPProfile(t *testing.T, gate context.Context, profile string, binaries map[string]string, inspect func(*testing.T, completeMVPObservation), endpointIdentity, overview bool) {
 	t.Helper()
 	run, cancel := context.WithTimeout(gate, 2*time.Minute)
 	defer cancel()
@@ -191,7 +191,11 @@ func completeMVPProfile(t *testing.T, gate context.Context, profile string, bina
 			t.Fatal("complete operator request")
 		}
 		defer response.Body.Close()
-		bodyBytes, e := io.ReadAll(io.LimitReader(response.Body, 192<<10))
+		limit := int64(192 << 10)
+		if overview && strings.HasSuffix(path, "/inventory/overview/query") {
+			limit = (256 << 10) + 1
+		}
+		bodyBytes, e := io.ReadAll(io.LimitReader(response.Body, limit))
 		if e != nil {
 			t.Fatal("complete operator response")
 		}
@@ -354,6 +358,12 @@ func completeMVPProfile(t *testing.T, gate context.Context, profile string, bina
 			t.Fatal("complete_endpoint_consent_collected_before_sender")
 		}
 	}
+	if overview {
+		completeMVPOverviewNotCollected(t, get, c.AgentID)
+		completeMVPOverviewConsent(t, run, binaries["lan-agent"], activated.ConfigPath, stateDir, c.StateDirectory, "preview", false)
+		completeMVPOverviewConsent(t, run, binaries["lan-agent"], activated.ConfigPath, stateDir, c.StateDirectory, "enable", true)
+		completeMVPOverviewNotCollected(t, get, c.AgentID)
+	}
 	start := func() (*exec.Cmd, <-chan error, <-chan agentloop.Event) {
 		sender := packageGateCommand(run, binaries["lan-agent"], "--config", activated.ConfigPath, "--foreground", "--interval", "15s")
 		stream, e := sender.StdoutPipe()
@@ -398,7 +408,9 @@ func completeMVPProfile(t *testing.T, gate context.Context, profile string, bina
 		event := completeMVPNext(t, run, events)
 		first = completeMVPRead(t, get, c.AgentID, event, first)
 		if first.packages.Complete != nil || first.packages.Failure != nil {
-			break
+			if !overview || completeMVPOverviewReady(t, get, c.AgentID) {
+				break
+			}
 		}
 	}
 	if inspect != nil {
@@ -413,9 +425,16 @@ func completeMVPProfile(t *testing.T, gate context.Context, profile string, bina
 	if lanclient.ValidateGuidedHandoff(activated.ConfigPath) != nil || completeMVPIdentity(t, stateDir) != identityBefore {
 		t.Fatal("complete first process changed enrollment identity")
 	}
+	var firstOverview completeMVPOverviewObservation
+	if overview {
+		firstOverview = completeMVPOverviewRead(t, get, call, session.CSRFToken, c.AgentID)
+	}
 	firstCounters := completeMVPCounters(t, c.StateDirectory)
 	if firstCounters[0] != first.metricSequence || firstCounters[1] != first.systemSequence || firstCounters[2] == 0 {
 		t.Fatal("complete first process counters not durable")
+	}
+	if overview && !time.Now().UTC().Before(firstOverview.view.Processes.Complete.Manifest.CollectedAt.Add(time.Minute)) {
+		t.Fatal("complete_overview_restart_must_be_within_capture_interval")
 	}
 	sender, done, events = start()
 	stopped = false
@@ -435,6 +454,10 @@ func completeMVPProfile(t *testing.T, gate context.Context, profile string, bina
 	}
 	stopPackageGateProcess(t, sender, done)
 	stopped = true
+	var secondOverview completeMVPOverviewObservation
+	if overview {
+		secondOverview = completeMVPOverviewRetained(t, get, c.AgentID, firstOverview, first, second, "restart")
+	}
 	secondCounters := completeMVPCounters(t, c.StateDirectory)
 	if secondCounters[0] != second.metricSequence || secondCounters[1] != second.systemSequence || secondCounters[2] != firstCounters[2] || !reflect.DeepEqual(second.packages, first.packages) || completeMVPIdentity(t, stateDir) != identityBefore || lanclient.ValidateGuidedHandoff(activated.ConfigPath) != nil {
 		t.Fatal("complete restart changed identity or recaptured the package generation")
@@ -442,6 +465,9 @@ func completeMVPProfile(t *testing.T, gate context.Context, profile string, bina
 	if endpointIdentity {
 		// Administration is performed only after the sender has stopped. It does
 		// not assert remote disablement: the last delivered metadata must age.
+		if overview {
+			completeMVPOverviewConsent(t, run, binaries["lan-agent"], activated.ConfigPath, stateDir, c.StateDirectory, "disable", false)
+		}
 		completeMVPEndpointConsent(t, run, binaries["lan-agent"], activated.ConfigPath, stateDir, c.StateDirectory, "disable", false)
 		sender, done, events = start()
 		stopped = false
@@ -456,6 +482,9 @@ func completeMVPProfile(t *testing.T, gate context.Context, profile string, bina
 		}
 		stopPackageGateProcess(t, sender, done)
 		stopped = true
+		if overview {
+			completeMVPOverviewRetained(t, get, c.AgentID, secondOverview, second, ordinary, "disabled_restart")
+		}
 		ordinaryCounters := completeMVPCounters(t, c.StateDirectory)
 		if ordinaryCounters[0] != ordinary.metricSequence || ordinaryCounters[1] != ordinary.systemSequence || ordinaryCounters[2] != secondCounters[2] || !reflect.DeepEqual(ordinary.packages, second.packages) || completeMVPIdentity(t, stateDir) != identityBefore || lanclient.ValidateGuidedHandoff(activated.ConfigPath) != nil {
 			t.Fatal("complete_endpoint_disabled_restart_changed_identity_or_package_domain")
@@ -613,4 +642,10 @@ func completeMVPCounters(t *testing.T, state string) [3]uint64 {
 		}
 	}
 	return counters
+}
+
+// Inert caller-prefix probe for the hosted marker validator. This never enters
+// the opt-in native gate or starts a source, binary, listener, or state domain.
+func TestCompleteMVPOverviewMarkerCaller(t *testing.T) {
+	t.Run("inert", func(t *testing.T) { completeMVPOverviewMarkerProbe(t) })
 }

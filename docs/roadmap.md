@@ -4,6 +4,21 @@ This is the ordered plan for making the Linux pilot easier to install and useful
 for everyday device inspection. An item being planned or implemented does not
 mean it has passed its release or host checks.
 
+## Current MVP priorities
+
+1. Make the on-demand Logs flow readable, searchable and actually testable from
+   request through the separately granted local helper to the result view.
+2. Make the everyday overview complete for supported visible processes, mounted
+   filesystems and dpkg software. UI paging is welcome; silent successful capture
+   truncation and contradictory sample/full totals are not.
+3. Simplify the installer command the user copies. Keep provenance, environment,
+   identity/state, permission and consent checks inside the supported flow, while
+   reducing manual staging/build/hash steps. This follows Logs and complete
+   inventory; it must not delay them or relax those checks.
+
+The later update/CVE adapters and minor visual polish remain queued behind these
+three practical milestones. A prepared source patch is not a deployed feature.
+
 ## Available and observed
 
 - The repository contains the Docker/native manager, guided Linux enrollment,
@@ -47,15 +62,17 @@ The [full-width device-page checkpoint](https://github.com/storminator89/Tracebo
    narrow wrapper correction is tracked separately. Do not interpret a wrapper
    failure as permission to reinstall or reset an already committed identity.
    Existing pilot.2 binaries do not include the later journal feature.
-4. **Useful on-demand service logs — current integration priority.** The current
-   source candidate connects exact service/time/severity requests, a separate
+4. **Useful on-demand service logs — published source, host grant pending.**
+   The [d3628dc checkpoint](https://github.com/storminator89/Tracebolt/actions/runs/37228371588)
+   passed all 13 CI jobs and 104 required browser checks, including six journal
+   scenarios. The source connects exact service/time/severity requests, a separate
    least-privileged helper, original-expiry results, paged display and literal
    text search over the captured snapshot. Critical authority/retention checks
    and source review precede rollout. A concrete local helper/content permission
    grant and actual host acceptance remain separate. See the
    [log boundary](journal-content-mvp.md) and [setup plan](linux-journal-helper.md).
    Minor visual polish does not block a usable, correctly bounded MVP.
-5. **Complete everyday inventory overview — next functional slice.**
+5. **Complete everyday inventory overview — current integration candidate.**
    - Use the completed dpkg generation for software totals and overview links,
      avoiding a contradictory bounded-preview count beside complete inventory.
    - Capture all supported visible process rows into a generation-bound paged
@@ -82,7 +99,7 @@ The [full-width device-page checkpoint](https://github.com/storminator89/Tracebo
 
 ## Requested usability and diagnostic follow-ups
 
-These remain visible without growing the active log slice:
+These remain visible without widening the current complete-inventory slice:
 
 - Separate fresh contact from overall health, which is not yet assessed. Keep
   navigation stable without caching private log content across sessions/devices.

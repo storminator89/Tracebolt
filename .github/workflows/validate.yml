@@ -205,11 +205,14 @@ jobs:
           python3 tests/security/test_complete_mvp_reporter.py
           python3 tests/security/test_endpoint_identity_gate.py
           python3 -O tests/security/test_endpoint_identity_gate.py
+          python3 tests/security/test_complete_overview_native_gate.py
+          python3 -O tests/security/test_complete_overview_native_gate.py
       - name: Require positive v3 data through approval and process restart
         env:
           TRACEBOLT_COMPLETE_RUNTIME_TEST: '1'
           TRACEBOLT_COMPLETE_UBUNTU2404_TEST: '1'
           TRACEBOLT_ENDPOINT_IDENTITY_RUNTIME_TEST: '1'
+          TRACEBOLT_COMPLETE_OVERVIEW_RUNTIME_TEST: '1'
           GOTOOLCHAIN: local
           GOPROXY: 'off'
           GOSUMDB: 'off'
@@ -238,6 +241,7 @@ jobs:
             GOTOOLCHAIN=local GOPROXY=off GOSUMDB=off \
             TRACEBOLT_COMPLETE_RUNTIME_TEST=1 TRACEBOLT_COMPLETE_UBUNTU2404_TEST=1 \
             TRACEBOLT_ENDPOINT_IDENTITY_RUNTIME_TEST=1 \
+            TRACEBOLT_COMPLETE_OVERVIEW_RUNTIME_TEST=1 \
             "$TRACEBOLT_GO_BINARY" test -json -buildvcs=false ./cmd/lan-manager \
             -run '^TestCompleteMVPPendingApprovalNativeRestart$' -count=1 -timeout=8m \
             > "$RUNNER_TEMP/complete-v3-native.jsonl" 2> "$RUNNER_TEMP/complete-v3-native.stderr"; then
@@ -245,7 +249,7 @@ jobs:
             python3 tests/security/report_complete_mvp.py "$RUNNER_TEMP/complete-v3-native.jsonl" || true
             exit 1
           fi
-          python3 tests/security/check_endpoint_identity_gate.py "$RUNNER_TEMP/complete-v3-native.jsonl"
+          python3 tests/security/check_endpoint_identity_gate.py --require-complete-overview "$RUNNER_TEMP/complete-v3-native.jsonl"
 
   backend:
     name: Go tests and build-only platform checks
@@ -510,6 +514,16 @@ jobs:
           python3 -O tests/security/test_journal_browser_gate.py
           node tests/e2e-review/journal-browser.mjs
           python3 tests/security/check_journal_browser_gate.py artifacts/review/journal-browser-results.json
+      - name: Complete process, mount and software overview browser acceptance
+        if: ${{ !cancelled() }}
+        env:
+          TRACEBOLT_SOURCE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          python3 tests/security/test_complete_overview_browser_gate.py
+          python3 -O tests/security/test_complete_overview_browser_gate.py
+          node tests/e2e-review/complete-overview-browser.mjs
+          python3 tests/security/check_complete_overview_browser_gate.py artifacts/review/complete-overview-browser-results.json
       - name: Keep browser review evidence briefly
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -532,6 +546,8 @@ jobs:
             artifacts/review/endpoint-browser-manifest.json
             artifacts/review/journal-browser-results.json
             artifacts/review/journal-browser-manifest.json
+            artifacts/review/complete-overview-browser-results.json
+            artifacts/review/complete-overview-browser-manifest.json
           if-no-files-found: warn
           retention-days: 3
 

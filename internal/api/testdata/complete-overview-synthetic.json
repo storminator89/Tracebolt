@@ -1,0 +1,733 @@
+{
+  "view": {
+    "schemaVersion": "tracebolt.complete-overview-view.v1",
+    "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "serverNow": "2026-10-04T18:35:00Z",
+    "collectionProfile": "managed-operations-v3",
+    "status": "available",
+    "processes": {
+      "status": "available",
+      "complete": {
+        "binding": {
+          "section": "processes",
+          "sequence": "4",
+          "generationId": "sample_dd80a0044f2a201035ab41d026b78f25",
+          "manifestHash": "1f667045ea2f3178f32132e261836ff2b3548ac455f7dca0689e5c5b5e9a9db8"
+        },
+        "manifest": {
+          "schemaVersion": "tracebolt.complete-overview-generation.v1",
+          "scope": "agent-visible-linux-namespaces",
+          "generationId": "sample_dd80a0044f2a201035ab41d026b78f25",
+          "captureGenerationId": "sample_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "section": "processes",
+          "captureStartedAt": "2026-10-04T18:30:00Z",
+          "captureFinishedAt": "2026-10-04T18:30:00.75Z",
+          "collectedAt": "2026-10-04T18:30:00Z",
+          "processes": {
+            "generationId": "sample_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "coverage": "complete",
+            "reason": "none",
+            "observedCount": 5,
+            "countExact": true,
+            "fieldCoverage": {
+              "observed": 2,
+              "denied": 1,
+              "exited": 1,
+              "invalid": 0,
+              "unsupported": 0,
+              "unavailable": 1,
+              "notApplicable": 0
+            }
+          },
+          "volumes": {
+            "generationId": "sample_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "coverage": "failed",
+            "reason": "not_collected",
+            "observedCount": null,
+            "countExact": false,
+            "fieldCoverage": {
+              "observed": 0,
+              "denied": 0,
+              "exited": 0,
+              "invalid": 0,
+              "unsupported": 0,
+              "unavailable": 0,
+              "notApplicable": 0
+            }
+          },
+          "observedCount": 5,
+          "chunkCount": 1,
+          "canonicalRowBytes": 962,
+          "canonicalSnapshotBytes": 1642,
+          "canonicalSectionBytes": 1098,
+          "rowsSha256": "0c7d1f975e4ae8706314e0d8e53f941904d2b44e51de1e1c814331db69c27b10"
+        },
+        "state": "complete",
+        "completedAt": "2026-10-04T18:30:01.75Z",
+        "retainedUntil": "2026-10-05T18:30:00Z"
+      },
+      "transfer": null,
+      "failure": {
+        "sequence": "5",
+        "generationId": "sample_2b10377547ff40ba650afed9963e1947",
+        "attemptedAt": "2026-10-04T18:34:00Z",
+        "receivedAt": "2026-10-04T18:34:01Z",
+        "reason": "timeout"
+      }
+    },
+    "volumes": {
+      "status": "available",
+      "complete": {
+        "binding": {
+          "section": "volumes",
+          "sequence": "2",
+          "generationId": "sample_a822f0ed99c8acb257b106591878ebc1",
+          "manifestHash": "1d037953af17f78c36d1120d3b2b85c1ff9fd501ee8f0821d73422f48d470ea6"
+        },
+        "manifest": {
+          "schemaVersion": "tracebolt.complete-overview-generation.v1",
+          "scope": "agent-visible-linux-namespaces",
+          "generationId": "sample_a822f0ed99c8acb257b106591878ebc1",
+          "captureGenerationId": "sample_cccccccccccccccccccccccccccccccc",
+          "section": "volumes",
+          "captureStartedAt": "2026-10-04T18:15:00Z",
+          "captureFinishedAt": "2026-10-04T18:15:00.4Z",
+          "collectedAt": "2026-10-04T18:15:00Z",
+          "processes": {
+            "generationId": "sample_cccccccccccccccccccccccccccccccc",
+            "coverage": "failed",
+            "reason": "permission_denied",
+            "observedCount": null,
+            "countExact": false,
+            "fieldCoverage": {
+              "observed": 0,
+              "denied": 0,
+              "exited": 0,
+              "invalid": 0,
+              "unsupported": 0,
+              "unavailable": 0,
+              "notApplicable": 0
+            }
+          },
+          "volumes": {
+            "generationId": "sample_cccccccccccccccccccccccccccccccc",
+            "coverage": "complete",
+            "reason": "none",
+            "observedCount": 7,
+            "countExact": true,
+            "fieldCoverage": {
+              "observed": 3,
+              "denied": 1,
+              "exited": 0,
+              "invalid": 0,
+              "unsupported": 2,
+              "unavailable": 0,
+              "notApplicable": 1
+            }
+          },
+          "observedCount": 7,
+          "chunkCount": 1,
+          "canonicalRowBytes": 2009,
+          "canonicalSnapshotBytes": 2640,
+          "canonicalSectionBytes": 2093,
+          "rowsSha256": "3c143cab14a221aa80d07e7c06ebcb25a4860db0a911e618aea1d0b6e86004f6"
+        },
+        "state": "complete",
+        "completedAt": "2026-10-04T18:15:01.4Z",
+        "retainedUntil": "2026-10-05T18:15:00Z"
+      },
+      "transfer": {
+        "binding": {
+          "section": "volumes",
+          "sequence": "2",
+          "generationId": "sample_a822f0ed99c8acb257b106591878ebc1",
+          "manifestHash": "1d037953af17f78c36d1120d3b2b85c1ff9fd501ee8f0821d73422f48d470ea6"
+        },
+        "manifest": {
+          "schemaVersion": "tracebolt.complete-overview-generation.v1",
+          "scope": "agent-visible-linux-namespaces",
+          "generationId": "sample_a822f0ed99c8acb257b106591878ebc1",
+          "captureGenerationId": "sample_cccccccccccccccccccccccccccccccc",
+          "section": "volumes",
+          "captureStartedAt": "2026-10-04T18:15:00Z",
+          "captureFinishedAt": "2026-10-04T18:15:00.4Z",
+          "collectedAt": "2026-10-04T18:15:00Z",
+          "processes": {
+            "generationId": "sample_cccccccccccccccccccccccccccccccc",
+            "coverage": "failed",
+            "reason": "permission_denied",
+            "observedCount": null,
+            "countExact": false,
+            "fieldCoverage": {
+              "observed": 0,
+              "denied": 0,
+              "exited": 0,
+              "invalid": 0,
+              "unsupported": 0,
+              "unavailable": 0,
+              "notApplicable": 0
+            }
+          },
+          "volumes": {
+            "generationId": "sample_cccccccccccccccccccccccccccccccc",
+            "coverage": "complete",
+            "reason": "none",
+            "observedCount": 7,
+            "countExact": true,
+            "fieldCoverage": {
+              "observed": 3,
+              "denied": 1,
+              "exited": 0,
+              "invalid": 0,
+              "unsupported": 2,
+              "unavailable": 0,
+              "notApplicable": 1
+            }
+          },
+          "observedCount": 7,
+          "chunkCount": 1,
+          "canonicalRowBytes": 2009,
+          "canonicalSnapshotBytes": 2640,
+          "canonicalSectionBytes": 2093,
+          "rowsSha256": "3c143cab14a221aa80d07e7c06ebcb25a4860db0a911e618aea1d0b6e86004f6"
+        },
+        "state": "complete",
+        "declaredRows": 7,
+        "acceptedRows": 7,
+        "expectedChunks": 1,
+        "acceptedChunks": 1,
+        "collectedAt": "2026-10-04T18:15:00Z",
+        "startedAt": "2026-10-04T18:15:00.4Z",
+        "expiresAt": "2026-10-05T18:15:00Z"
+      },
+      "failure": null
+    }
+  },
+  "processPage": {
+    "schemaVersion": "tracebolt.complete-overview-page.v1",
+    "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "serverNow": "2026-10-04T18:35:00Z",
+    "section": "processes",
+    "binding": {
+      "section": "processes",
+      "sequence": "4",
+      "generationId": "sample_dd80a0044f2a201035ab41d026b78f25",
+      "manifestHash": "1f667045ea2f3178f32132e261836ff2b3548ac455f7dca0689e5c5b5e9a9db8"
+    },
+    "manifest": {
+      "schemaVersion": "tracebolt.complete-overview-generation.v1",
+      "scope": "agent-visible-linux-namespaces",
+      "generationId": "sample_dd80a0044f2a201035ab41d026b78f25",
+      "captureGenerationId": "sample_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "section": "processes",
+      "captureStartedAt": "2026-10-04T18:30:00Z",
+      "captureFinishedAt": "2026-10-04T18:30:00.75Z",
+      "collectedAt": "2026-10-04T18:30:00Z",
+      "processes": {
+        "generationId": "sample_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "coverage": "complete",
+        "reason": "none",
+        "observedCount": 5,
+        "countExact": true,
+        "fieldCoverage": {
+          "observed": 2,
+          "denied": 1,
+          "exited": 1,
+          "invalid": 0,
+          "unsupported": 0,
+          "unavailable": 1,
+          "notApplicable": 0
+        }
+      },
+      "volumes": {
+        "generationId": "sample_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "coverage": "failed",
+        "reason": "not_collected",
+        "observedCount": null,
+        "countExact": false,
+        "fieldCoverage": {
+          "observed": 0,
+          "denied": 0,
+          "exited": 0,
+          "invalid": 0,
+          "unsupported": 0,
+          "unavailable": 0,
+          "notApplicable": 0
+        }
+      },
+      "observedCount": 5,
+      "chunkCount": 1,
+      "canonicalRowBytes": 962,
+      "canonicalSnapshotBytes": 1642,
+      "canonicalSectionBytes": 1098,
+      "rowsSha256": "0c7d1f975e4ae8706314e0d8e53f941904d2b44e51de1e1c814331db69c27b10"
+    },
+    "collectedAt": "2026-10-04T18:30:00Z",
+    "completedAt": "2026-10-04T18:30:01.75Z",
+    "retainedUntil": "2026-10-05T18:30:00Z",
+    "totalRows": 5,
+    "items": [
+      {
+        "process": {
+          "pid": 1,
+          "parentPid": 0,
+          "name": "fixture-idle",
+          "state": "sleeping",
+          "rssBytes": 0,
+          "cpuTimeSeconds": 0,
+          "threads": 1,
+          "observation": {
+            "status": "observed",
+            "reason": "none"
+          }
+        },
+        "volume": null
+      },
+      {
+        "process": {
+          "pid": 20,
+          "parentPid": 1,
+          "name": "fixture-worker",
+          "state": "running",
+          "rssBytes": 65536,
+          "cpuTimeSeconds": 1.25,
+          "threads": 2,
+          "observation": {
+            "status": "observed",
+            "reason": "none"
+          }
+        },
+        "volume": null
+      },
+      {
+        "process": {
+          "pid": 30,
+          "parentPid": null,
+          "name": null,
+          "state": null,
+          "rssBytes": null,
+          "cpuTimeSeconds": null,
+          "threads": null,
+          "observation": {
+            "status": "denied",
+            "reason": "permission_denied"
+          }
+        },
+        "volume": null
+      },
+      {
+        "process": {
+          "pid": 40,
+          "parentPid": null,
+          "name": null,
+          "state": null,
+          "rssBytes": null,
+          "cpuTimeSeconds": null,
+          "threads": null,
+          "observation": {
+            "status": "exited",
+            "reason": "process_gone"
+          }
+        },
+        "volume": null
+      },
+      {
+        "process": {
+          "pid": 50,
+          "parentPid": null,
+          "name": null,
+          "state": null,
+          "rssBytes": null,
+          "cpuTimeSeconds": null,
+          "threads": null,
+          "observation": {
+            "status": "unavailable",
+            "reason": "read_failed"
+          }
+        },
+        "volume": null
+      }
+    ],
+    "scannedRows": 5,
+    "exhausted": true,
+    "searchIncomplete": false,
+    "nextCursor": "",
+    "cursorExpiresAt": "2026-10-04T18:50:00Z"
+  },
+  "volumePage": {
+    "schemaVersion": "tracebolt.complete-overview-page.v1",
+    "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "serverNow": "2026-10-04T18:35:00Z",
+    "section": "volumes",
+    "binding": {
+      "section": "volumes",
+      "sequence": "2",
+      "generationId": "sample_a822f0ed99c8acb257b106591878ebc1",
+      "manifestHash": "1d037953af17f78c36d1120d3b2b85c1ff9fd501ee8f0821d73422f48d470ea6"
+    },
+    "manifest": {
+      "schemaVersion": "tracebolt.complete-overview-generation.v1",
+      "scope": "agent-visible-linux-namespaces",
+      "generationId": "sample_a822f0ed99c8acb257b106591878ebc1",
+      "captureGenerationId": "sample_cccccccccccccccccccccccccccccccc",
+      "section": "volumes",
+      "captureStartedAt": "2026-10-04T18:15:00Z",
+      "captureFinishedAt": "2026-10-04T18:15:00.4Z",
+      "collectedAt": "2026-10-04T18:15:00Z",
+      "processes": {
+        "generationId": "sample_cccccccccccccccccccccccccccccccc",
+        "coverage": "failed",
+        "reason": "permission_denied",
+        "observedCount": null,
+        "countExact": false,
+        "fieldCoverage": {
+          "observed": 0,
+          "denied": 0,
+          "exited": 0,
+          "invalid": 0,
+          "unsupported": 0,
+          "unavailable": 0,
+          "notApplicable": 0
+        }
+      },
+      "volumes": {
+        "generationId": "sample_cccccccccccccccccccccccccccccccc",
+        "coverage": "complete",
+        "reason": "none",
+        "observedCount": 7,
+        "countExact": true,
+        "fieldCoverage": {
+          "observed": 3,
+          "denied": 1,
+          "exited": 0,
+          "invalid": 0,
+          "unsupported": 2,
+          "unavailable": 0,
+          "notApplicable": 1
+        }
+      },
+      "observedCount": 7,
+      "chunkCount": 1,
+      "canonicalRowBytes": 2009,
+      "canonicalSnapshotBytes": 2640,
+      "canonicalSectionBytes": 2093,
+      "rowsSha256": "3c143cab14a221aa80d07e7c06ebcb25a4860db0a911e618aea1d0b6e86004f6"
+    },
+    "collectedAt": "2026-10-04T18:15:00Z",
+    "completedAt": "2026-10-04T18:15:01.4Z",
+    "retainedUntil": "2026-10-05T18:15:00Z",
+    "totalRows": 7,
+    "items": [
+      {
+        "process": null,
+        "volume": {
+          "id": "mount_20",
+          "mountPoint": "/",
+          "filesystem": "ext4",
+          "kind": "local",
+          "filesystemGroup": "fs_8_1",
+          "capacityScope": "agent-mount-namespace",
+          "totalBytes": 1000,
+          "availableBytes": 400,
+          "usedPercent": 60,
+          "measurement": {
+            "status": "observed",
+            "reason": "none"
+          }
+        }
+      },
+      {
+        "process": null,
+        "volume": {
+          "id": "mount_10",
+          "mountPoint": "/data",
+          "filesystem": "ext4",
+          "kind": "local",
+          "filesystemGroup": "fs_8_1",
+          "capacityScope": "agent-mount-namespace",
+          "totalBytes": 0,
+          "availableBytes": 0,
+          "usedPercent": null,
+          "measurement": {
+            "status": "observed",
+            "reason": "none"
+          }
+        }
+      },
+      {
+        "process": null,
+        "volume": {
+          "id": "mount_30",
+          "mountPoint": "/locked",
+          "filesystem": "ext4",
+          "kind": "local",
+          "filesystemGroup": "fs_8_1",
+          "capacityScope": "agent-mount-namespace",
+          "totalBytes": null,
+          "availableBytes": null,
+          "usedPercent": null,
+          "measurement": {
+            "status": "denied",
+            "reason": "permission_denied"
+          }
+        }
+      },
+      {
+        "process": null,
+        "volume": {
+          "id": "mount_40",
+          "mountPoint": "/run",
+          "filesystem": "tmpfs",
+          "kind": "memory",
+          "filesystemGroup": "fs_8_1",
+          "capacityScope": "agent-mount-namespace",
+          "totalBytes": 100,
+          "availableBytes": 75,
+          "usedPercent": 25,
+          "measurement": {
+            "status": "observed",
+            "reason": "none"
+          }
+        }
+      },
+      {
+        "process": null,
+        "volume": {
+          "id": "mount_50",
+          "mountPoint": "/remote",
+          "filesystem": "nfs4",
+          "kind": "remote",
+          "filesystemGroup": "fs_8_1",
+          "capacityScope": "agent-mount-namespace",
+          "totalBytes": null,
+          "availableBytes": null,
+          "usedPercent": null,
+          "measurement": {
+            "status": "unsupported",
+            "reason": "remote_filesystem_skipped"
+          }
+        }
+      },
+      {
+        "process": null,
+        "volume": {
+          "id": "mount_60",
+          "mountPoint": "/unknown",
+          "filesystem": "fixturefs",
+          "kind": "unknown",
+          "filesystemGroup": "fs_8_1",
+          "capacityScope": "agent-mount-namespace",
+          "totalBytes": null,
+          "availableBytes": null,
+          "usedPercent": null,
+          "measurement": {
+            "status": "unsupported",
+            "reason": "not_supported"
+          }
+        }
+      },
+      {
+        "process": null,
+        "volume": {
+          "id": "mount_70",
+          "mountPoint": "/proc",
+          "filesystem": "proc",
+          "kind": "virtual",
+          "filesystemGroup": "fs_8_1",
+          "capacityScope": "agent-mount-namespace",
+          "totalBytes": null,
+          "availableBytes": null,
+          "usedPercent": null,
+          "measurement": {
+            "status": "not_applicable",
+            "reason": "not_applicable"
+          }
+        }
+      }
+    ],
+    "scannedRows": 7,
+    "exhausted": true,
+    "searchIncomplete": false,
+    "nextCursor": "",
+    "cursorExpiresAt": "2026-10-04T18:50:00Z"
+  },
+  "unicodeSearch": {
+    "search": "id",
+    "processPage": {
+      "schemaVersion": "tracebolt.complete-overview-page.v1",
+      "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "serverNow": "2026-10-04T18:35:00Z",
+      "section": "processes",
+      "binding": {
+        "section": "processes",
+        "sequence": "6",
+        "generationId": "sample_bc0ceffb5b87c38ca0c3b6fa226b0963",
+        "manifestHash": "21aa254656a5b6de2ed7c78b6bc92272d07810999425bdc73fc6dddd7e70b722"
+      },
+      "manifest": {
+        "schemaVersion": "tracebolt.complete-overview-generation.v1",
+        "scope": "agent-visible-linux-namespaces",
+        "generationId": "sample_bc0ceffb5b87c38ca0c3b6fa226b0963",
+        "captureGenerationId": "sample_dddddddddddddddddddddddddddddddd",
+        "section": "processes",
+        "captureStartedAt": "2026-10-04T18:30:00Z",
+        "captureFinishedAt": "2026-10-04T18:30:00.75Z",
+        "collectedAt": "2026-10-04T18:30:00Z",
+        "processes": {
+          "generationId": "sample_dddddddddddddddddddddddddddddddd",
+          "coverage": "complete",
+          "reason": "none",
+          "observedCount": 5,
+          "countExact": true,
+          "fieldCoverage": {
+            "observed": 2,
+            "denied": 1,
+            "exited": 1,
+            "invalid": 0,
+            "unsupported": 0,
+            "unavailable": 1,
+            "notApplicable": 0
+          }
+        },
+        "volumes": {
+          "generationId": "sample_dddddddddddddddddddddddddddddddd",
+          "coverage": "failed",
+          "reason": "not_collected",
+          "observedCount": null,
+          "countExact": false,
+          "fieldCoverage": {
+            "observed": 0,
+            "denied": 0,
+            "exited": 0,
+            "invalid": 0,
+            "unsupported": 0,
+            "unavailable": 0,
+            "notApplicable": 0
+          }
+        },
+        "observedCount": 5,
+        "chunkCount": 1,
+        "canonicalRowBytes": 960,
+        "canonicalSnapshotBytes": 1640,
+        "canonicalSectionBytes": 1096,
+        "rowsSha256": "395edc20ef3b422ec61bf7feb5c3bd022553c48a25c5f38ab372787240563fa1"
+      },
+      "collectedAt": "2026-10-04T18:30:00Z",
+      "completedAt": "2026-10-04T18:30:01.75Z",
+      "retainedUntil": "2026-10-05T18:30:00Z",
+      "totalRows": 5,
+      "items": [
+        {
+          "process": {
+            "pid": 1,
+            "parentPid": 0,
+            "name": "İd-worker",
+            "state": "sleeping",
+            "rssBytes": 0,
+            "cpuTimeSeconds": 0,
+            "threads": 1,
+            "observation": {
+              "status": "observed",
+              "reason": "none"
+            }
+          },
+          "volume": null
+        }
+      ],
+      "scannedRows": 5,
+      "exhausted": true,
+      "searchIncomplete": false,
+      "nextCursor": "",
+      "cursorExpiresAt": "2026-10-04T18:50:00Z"
+    },
+    "volumePage": {
+      "schemaVersion": "tracebolt.complete-overview-page.v1",
+      "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "serverNow": "2026-10-04T18:35:00Z",
+      "section": "volumes",
+      "binding": {
+        "section": "volumes",
+        "sequence": "3",
+        "generationId": "sample_2ad0a07d09838baa24138f4fe7cf2dfa",
+        "manifestHash": "5748dc5d22ea8aa3c5741fc6064a3f74811f53c16256d56e8246b5fb76d826b2"
+      },
+      "manifest": {
+        "schemaVersion": "tracebolt.complete-overview-generation.v1",
+        "scope": "agent-visible-linux-namespaces",
+        "generationId": "sample_2ad0a07d09838baa24138f4fe7cf2dfa",
+        "captureGenerationId": "sample_eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "section": "volumes",
+        "captureStartedAt": "2026-10-04T18:15:00Z",
+        "captureFinishedAt": "2026-10-04T18:15:00.4Z",
+        "collectedAt": "2026-10-04T18:15:00Z",
+        "processes": {
+          "generationId": "sample_eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+          "coverage": "failed",
+          "reason": "permission_denied",
+          "observedCount": null,
+          "countExact": false,
+          "fieldCoverage": {
+            "observed": 0,
+            "denied": 0,
+            "exited": 0,
+            "invalid": 0,
+            "unsupported": 0,
+            "unavailable": 0,
+            "notApplicable": 0
+          }
+        },
+        "volumes": {
+          "generationId": "sample_eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+          "coverage": "complete",
+          "reason": "none",
+          "observedCount": 7,
+          "countExact": true,
+          "fieldCoverage": {
+            "observed": 3,
+            "denied": 1,
+            "exited": 0,
+            "invalid": 0,
+            "unsupported": 2,
+            "unavailable": 0,
+            "notApplicable": 1
+          }
+        },
+        "observedCount": 7,
+        "chunkCount": 1,
+        "canonicalRowBytes": 2008,
+        "canonicalSnapshotBytes": 2639,
+        "canonicalSectionBytes": 2092,
+        "rowsSha256": "d5c750efbe794668383136f073d40dff4cb5400cea525d82653cf483a5d8d08a"
+      },
+      "collectedAt": "2026-10-04T18:15:00Z",
+      "completedAt": "2026-10-04T18:15:01.4Z",
+      "retainedUntil": "2026-10-05T18:15:00Z",
+      "totalRows": 7,
+      "items": [
+        {
+          "process": null,
+          "volume": {
+            "id": "mount_10",
+            "mountPoint": "/İd",
+            "filesystem": "ext4",
+            "kind": "local",
+            "filesystemGroup": "fs_8_1",
+            "capacityScope": "agent-mount-namespace",
+            "totalBytes": 0,
+            "availableBytes": 0,
+            "usedPercent": null,
+            "measurement": {
+              "status": "observed",
+              "reason": "none"
+            }
+          }
+        }
+      ],
+      "scannedRows": 7,
+      "exhausted": true,
+      "searchIncomplete": false,
+      "nextCursor": "",
+      "cursorExpiresAt": "2026-10-04T18:50:00Z"
+    }
+  }
+}

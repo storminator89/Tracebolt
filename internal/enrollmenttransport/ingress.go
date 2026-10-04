@@ -32,6 +32,7 @@ import (
 	"localrmm/internal/journalwire"
 	"localrmm/internal/lanstore"
 	"localrmm/internal/lantrust"
+	"localrmm/internal/overviewwire"
 	"localrmm/internal/signedhttp"
 	"localrmm/internal/systemwire"
 )
@@ -135,6 +136,10 @@ func (h *Ingress) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if r != nil && r.URL != nil && r.URL.Path == systemwire.Path {
 		h.systemObservation(w, r)
+		return
+	}
+	if r != nil && r.URL != nil && strings.HasPrefix(r.URL.Path, overviewwire.PathPrefix) {
+		h.overview(w, r)
 		return
 	}
 	if r != nil && r.URL != nil && strings.HasPrefix(r.URL.Path, inventorywire.PathPrefix) {

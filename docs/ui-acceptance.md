@@ -1,14 +1,15 @@
-> Current accepted source `74a5236e17c8ad22aaea65715c1932070077f0ac`
-> passed [all 13 CI jobs](https://github.com/storminator89/Tracebolt/actions/runs/37223233263)
-> and all 98 required browser checks, with three retained enrollment skips and no
-> runtime/setup errors. Its active download-command gate also passed 832 component,
-> nine supplemental DOM and seven inert command checks. Earlier images below retain
-> their original source attribution.
+> Current accepted source `d3628dc87a06786de220ff65953945f06aca73e8`
+> passed [all 13 CI jobs](https://github.com/storminator89/Tracebolt/actions/runs/37228371588)
+> and all 104 required browser checks, with three retained enrollment skips and
+> zero runtime/setup errors. Independent review cleared all six journal cases and
+> the two original synthetic journal captures. Their mobile view is bounded and
+> scrollable; it does not show every column or control at once.
 >
-> The later journal candidate adds six real-handler synthetic cases with a strict
-> exact-source completeness gate. Its hosted browser result and original pixel
-> review are pending. It does not establish local journal permission, helper setup,
-> native capture or installed-service acceptance.
+> The later complete-overview candidate adds six synthetic cases for full process,
+> mount and software views, while retaining the prior 104 case identities and five
+> lifecycle cycles. Its hosted browser and positive native-source gate are pending.
+> Synthetic page admission does not establish host collection, local consent,
+> journal helper access, installation or reboot behavior.
 
 # Tracebolt UI acceptance
 

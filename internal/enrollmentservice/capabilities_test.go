@@ -109,3 +109,30 @@ func TestOptionalJournalContentNeedsSeparatePermissionAndDoesNotPromoteDeniedMet
 		t.Fatal("source slice changed")
 	}
 }
+
+func TestCompleteOverviewCapabilitiesRequireOptInWithoutInventedSuccess(t *testing.T) {
+	in := []model.Capability{{ID: "complete_process_inventory", Status: "denied", Detail: "inert fixture denial"}}
+	for _, profile := range []string{enrollmentcrypto.CollectionProfile, enrollmentcrypto.CollectionProfileOperational, enrollmentcrypto.CollectionProfilePackages, "unknown"} {
+		for _, row := range profileCapabilities(nil, profile) {
+			if row.ID == "complete_process_inventory" || row.ID == "complete_mount_inventory" {
+				t.Fatal("older profile widened")
+			}
+		}
+	}
+	found := 0
+	for _, row := range profileCapabilities(in, enrollmentcrypto.CollectionProfileComplete) {
+		if row.ID != "complete_process_inventory" && row.ID != "complete_mount_inventory" {
+			continue
+		}
+		found++
+		if !strings.Contains(row.Detail, "explicit local complete-overview consent") || !strings.Contains(row.Detail, "namespace") || row.Status == "supported" {
+			t.Fatal("optional overview promoted to source success")
+		}
+		if row.ID == "complete_process_inventory" && row.Status != "denied" {
+			t.Fatal("denied source promoted")
+		}
+	}
+	if found != 2 || in[0].Detail != "inert fixture denial" {
+		t.Fatal("missing optional scope or source mutation")
+	}
+}

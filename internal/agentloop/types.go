@@ -39,6 +39,11 @@ const (
 // Counts must each be at most three and their sum must be at most three. Sequence
 // is an opaque unsigned counter; there is no device identity or observation data.
 type Metadata struct {
+	ProcessesStatus             string `json:"processesStatus,omitempty"`
+	ProcessesSequence           uint64 `json:"processesSequence,omitempty"`
+	VolumesStatus               string `json:"volumesStatus,omitempty"`
+	VolumesSequence             uint64 `json:"volumesSequence,omitempty"`
+	OverviewOperations          uint8  `json:"overviewOperations,omitempty"`
 	JournalStatus               string `json:"journalStatus,omitempty"`
 	Sequence                    uint64 `json:"sequence,omitempty"`
 	Duplicate                   bool   `json:"duplicate"`

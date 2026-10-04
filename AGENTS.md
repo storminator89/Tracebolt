@@ -48,6 +48,12 @@ file as navigation and project constraints, never as permission to act on a host
   separate HTTP plaintext-content acknowledgement, durable consume-once floors,
   original expiry and operator-only content boundaries. Source/fixture checks do
   not authorize account, group, unit or socket changes or an actual journal read.
+- Complete visible process/mount generations are a separate default-off local
+  extension under an existing activated v3 identity. Read
+  `docs/complete-overview-extension.md` before opt-in. Keep the stopped-service
+  identity guard, explicit full-scope disclosure, independent durable floors and
+  original capture age. No automatic collection, re-enrollment, manager reset or
+  host permission grant follows from a manager upgrade or schema initialization.
 - Follow Go/Node versions and dependency locks in this revision. Validate commands
   against actual flags/config. Distinguish runtime tests from cross-builds, skipped
   container tests, and proposed functionality. Never invent install/enroll flags.

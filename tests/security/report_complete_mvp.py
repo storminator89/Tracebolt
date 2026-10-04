@@ -344,6 +344,53 @@ FAILURES.update({
 })
 
 
+# Exact source-owned overview test failures; no raw marker or inventory values.
+FAILURES.update({
+    'complete_overview_bad_metadata_accepted_or_leaked': {"category": 'complete_overview_bad_metadata_accepted_or_leaked', "stage": "complete_overview"},
+    'complete_overview_bad_page_accepted': {"category": 'complete_overview_bad_page_accepted', "stage": "complete_overview"},
+    'complete_overview_bad_rows_accepted': {"category": 'complete_overview_bad_rows_accepted', "stage": "complete_overview"},
+    'complete_overview_changed_existing_gate_selection': {"category": 'complete_overview_changed_existing_gate_selection', "stage": "complete_overview"},
+    'complete_overview_collected_before_sender': {"category": 'complete_overview_collected_before_sender', "stage": "complete_overview"},
+    'complete_overview_consent_changed_endpoint_consent': {"category": 'complete_overview_consent_changed_endpoint_consent', "stage": "complete_overview"},
+    'complete_overview_consent_changed_existing_state': {"category": 'complete_overview_consent_changed_existing_state', "stage": "complete_overview"},
+    'complete_overview_consent_cli_contract': {"category": 'complete_overview_consent_cli_contract', "stage": "complete_overview"},
+    'complete_overview_consent_cli_failed': {"category": 'complete_overview_consent_cli_failed', "stage": "complete_overview"},
+    'complete_overview_consent_sidecar_not_absent': {"category": 'complete_overview_consent_sidecar_not_absent', "stage": "complete_overview"},
+    'complete_overview_delivered_metadata_invalid': {"category": 'complete_overview_delivered_metadata_invalid', "stage": "complete_overview"},
+    'complete_overview_disable_changed_consumed_floor': {"category": 'complete_overview_disable_changed_consumed_floor', "stage": "complete_overview"},
+    'complete_overview_domain_contract': {"category": 'complete_overview_domain_contract', "stage": "complete_overview"},
+    'complete_overview_domain_missing': {"category": 'complete_overview_domain_missing', "stage": "complete_overview"},
+    'complete_overview_enable_collected_before_sender': {"category": 'complete_overview_enable_collected_before_sender', "stage": "complete_overview"},
+    'complete_overview_expected_fresh_domains': {"category": 'complete_overview_expected_fresh_domains', "stage": "complete_overview"},
+    'complete_overview_fixture_build': {"category": 'complete_overview_fixture_build', "stage": "complete_overview"},
+    'complete_overview_full_rows_manifest_mismatch': {"category": 'complete_overview_full_rows_manifest_mismatch', "stage": "complete_overview"},
+    'complete_overview_invalid_consent_mode': {"category": 'complete_overview_invalid_consent_mode', "stage": "complete_overview"},
+    'complete_overview_invalid_opt_in': {"category": 'complete_overview_invalid_opt_in', "stage": "complete_overview"},
+    'complete_overview_invalid_retained_stage': {"category": 'complete_overview_invalid_retained_stage', "stage": "complete_overview"},
+    'complete_overview_opt_in_guard_failed': {"category": 'complete_overview_opt_in_guard_failed', "stage": "complete_overview"},
+    'complete_overview_opt_in_not_selected': {"category": 'complete_overview_opt_in_not_selected', "stage": "complete_overview"},
+    'complete_overview_original_age_rejected': {"category": 'complete_overview_original_age_rejected', "stage": "complete_overview"},
+    'complete_overview_page_bytes_exceeded': {"category": 'complete_overview_page_bytes_exceeded', "stage": "complete_overview"},
+    'complete_overview_page_contract': {"category": 'complete_overview_page_contract', "stage": "complete_overview"},
+    'complete_overview_page_count_mismatch': {"category": 'complete_overview_page_count_mismatch', "stage": "complete_overview"},
+    'complete_overview_page_cursor_repeated': {"category": 'complete_overview_page_cursor_repeated', "stage": "complete_overview"},
+    'complete_overview_page_metadata_invalid': {"category": 'complete_overview_page_metadata_invalid', "stage": "complete_overview"},
+    'complete_overview_page_row_bound': {"category": 'complete_overview_page_row_bound', "stage": "complete_overview"},
+    'complete_overview_positive_capture_required': {"category": 'complete_overview_positive_capture_required', "stage": "complete_overview"},
+    'complete_overview_precollection_view_contract': {"category": 'complete_overview_precollection_view_contract', "stage": "complete_overview"},
+    'complete_overview_preview_created_domain': {"category": 'complete_overview_preview_created_domain', "stage": "complete_overview"},
+    'complete_overview_probe_decode': {"category": 'complete_overview_probe_decode', "stage": "complete_overview"},
+    'complete_overview_probe_path': {"category": 'complete_overview_probe_path', "stage": "complete_overview"},
+    'complete_overview_refreshed_or_late_restart_accepted': {"category": 'complete_overview_refreshed_or_late_restart_accepted', "stage": "complete_overview"},
+    'complete_overview_requires_existing_endpoint_consent': {"category": 'complete_overview_requires_existing_endpoint_consent', "stage": "complete_overview"},
+    'complete_overview_requires_runtime_positive_endpoint_opt_ins': {"category": 'complete_overview_requires_runtime_positive_endpoint_opt_ins', "stage": "complete_overview"},
+    'complete_overview_restart_must_be_within_capture_interval': {"category": 'complete_overview_restart_must_be_within_capture_interval', "stage": "complete_overview"},
+    'complete_overview_restart_refreshed_or_replaced_generation': {"category": 'complete_overview_restart_refreshed_or_replaced_generation', "stage": "complete_overview"},
+    'complete_overview_valid_evidence_rejected': {"category": 'complete_overview_valid_evidence_rejected', "stage": "complete_overview"},
+    'complete_overview_valid_page_rejected': {"category": 'complete_overview_valid_page_rejected', "stage": "complete_overview"},
+})
+
+
 def unique_object(pairs):
     value = {}
     for key, item in pairs:

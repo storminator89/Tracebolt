@@ -7,7 +7,7 @@ import { useCompletePackages } from './complete-packages-resource';
 import './package-observations.css';
 import './complete-packages.css';
 
-const copy = {
+export const completePackageCopy = {
     en: {
         disclosure: 'Complete dpkg inventory', title: 'Complete package generation', access: 'Authenticated LAN operator access is required.',
         intro: 'Installed and incomplete dpkg rows from the agent-visible namespace, read in bounded pages. Snap, Flatpak and other software sources are separate and are not included. This is not evidence of available updates, affected CVEs or host-wide software coverage.',
@@ -41,17 +41,17 @@ const copy = {
 };
 export function CompletePackagesPanel({ deviceId, sessionKey, inline = false }: { deviceId: string; sessionKey?: string | number; inline?: boolean }) {
     const operator = useOperator(), [locale] = useLocale();
-    if (!operator || operator.mode !== 'lan' || !operator.authenticated) return <p>{copy[locale].access}</p>;
+    if (!operator || operator.mode !== 'lan' || !operator.authenticated) return <p>{completePackageCopy[locale].access}</p>;
     // A renewed/replaced private session cannot reuse a disclosure, request or cursor.
     if (inline) return <CompletePackages key={`${deviceId}:${sessionKey ?? operator.expiresAt ?? ''}`} deviceId={deviceId}/>;
     return <CompleteDisclosure key={`${deviceId}:${sessionKey ?? ''}:${operator.expiresAt ?? ''}`} deviceId={deviceId}/>;
 }
 function CompleteDisclosure({ deviceId }: { deviceId: string }) {
     const [open, setOpen] = useState(false), [locale] = useLocale(), id = useId();
-    return <section className="package-disclosure"><button className="package-disclosure-toggle" type="button" aria-expanded={open} aria-controls={id} onClick={() => setOpen(value => !value)}>{copy[locale].disclosure}<ChevronDown size={16}/></button><div id={id}>{open && <CompletePackages deviceId={deviceId}/>}</div></section>;
+    return <section className="package-disclosure"><button className="package-disclosure-toggle" type="button" aria-expanded={open} aria-controls={id} onClick={() => setOpen(value => !value)}>{completePackageCopy[locale].disclosure}<ChevronDown size={16}/></button><div id={id}>{open && <CompletePackages deviceId={deviceId}/>}</div></section>;
 }
 function CompletePackages({ deviceId }: { deviceId: string }) {
-    const [locale] = useLocale(), labels = copy[locale], id = useId(), resource = useCompletePackages(deviceId);
+    const [locale] = useLocale(), labels = completePackageCopy[locale], id = useId(), resource = useCompletePackages(deviceId);
     const { view, page } = resource, selected = view?.complete, visible = view && completeGenerationVisible(view, resource.elapsed);
     const number = (value: number) => new Intl.NumberFormat(locale).format(value);
     const field = (name: string, value: string) => <div><dt>{name}</dt><dd>{value}</dd></div>;

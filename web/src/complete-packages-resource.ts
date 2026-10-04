@@ -13,7 +13,7 @@ function elapsed(anchor: Anchor): number {
 }
 type Data = { view: CompletePackageView | null; page: CompletePackagePage | null; scanned: number; matches: number };
 const empty = (): Data => ({ view: null, page: null, scanned: 0, matches: 0 });
-export function useCompletePackages(deviceId: string) {
+export function useCompletePackages(deviceId: string, metadataOnly = false) {
     const [data, setData] = useState<Data>(empty), [loading, setLoading] = useState(false), [error, setError] = useState<CompleteFailure | null>(null), [search, setSearch] = useState(''), [, tick] = useState(0);
     const alive = useRef(false), locked = useRef(false), suspended = useRef(false), epoch = useRef(0), state = useRef<Data>(empty());
     const anchor = useRef<Anchor | null>(null), pageAnchor = useRef<Anchor | null>(null), lastRow = useRef<PackageRow | null>(null);
@@ -52,7 +52,8 @@ export function useCompletePackages(deviceId: string) {
                 latestServerTime.current = response.serverNow;
                 view = response; anchor.current = started; install({ ...empty(), view });
             }
-            if (!view || !anchor.current || !completeGenerationVisible(view, elapsed(anchor.current)) || !view.complete) return;
+            // Overview reads only the existing status ledger; it never starts a page query.
+            if (metadataOnly || !view || !anchor.current || !completeGenerationVisible(view, elapsed(anchor.current)) || !view.complete) return;
             const selected = view.complete;
             const response = await mutateRaw<unknown>(`/devices/${encodeURIComponent(deviceId)}/inventory/packages/query`, JSON.stringify({ generationId: selected.binding.generationId, cursor, search: currentQuery, limit: COMPLETE_PAGE_ROWS }), {}, controller.signal, COMPLETE_PAGE_BYTES);
             if (!active()) return;
@@ -73,7 +74,7 @@ export function useCompletePackages(deviceId: string) {
         } finally {
             if (revision === epoch.current) { window.clearTimeout(pending.current?.timeout); pending.current = null; if (alive.current) setLoading(false); }
         }
-    }, [cancel, clear, deviceId, install]);
+    }, [cancel, clear, deviceId, install, metadataOnly]);
     const changeSearch = useCallback((value: string) => {
         cancel(); query.current = value; setSearch(value); pageAnchor.current = null; lastRow.current = null; seenCursors.current.clear(); retryCursor.current = '';
         install({ ...state.current, page: null, scanned: 0, matches: 0 }); setError(null);

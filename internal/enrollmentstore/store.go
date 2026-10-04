@@ -31,6 +31,7 @@ import (
 	"localrmm/internal/inventoryledger"
 	"localrmm/internal/keyvalidation"
 	"localrmm/internal/lanstore"
+	"localrmm/internal/overviewledger"
 	_ "modernc.org/sqlite"
 )
 
@@ -89,6 +90,10 @@ type transaction struct {
 	inventory           map[string]inventoryRecord
 	originalInventory   map[string][]byte
 	inventoryKey        inventoryledger.CursorKey
+	overview            map[string]overviewRecord
+	originalOverview    map[string][]byte
+	overviewKey         overviewledger.CursorKey
+	overviewEnabled     bool
 	system              map[string]systemRecord
 }
 
@@ -344,7 +349,7 @@ func (s *Store) load(ctx context.Context, conn *sql.Conn) (*transaction, error) 
 	if err != nil {
 		return nil, ErrStorage
 	}
-	t := &transaction{conn: conn, engine: engine, credentials: make(map[string]credential), originalLedger: raw, originalCredentials: make(map[string][]byte), operational: map[string]operationalRecord{}, originalOperational: map[string][]byte{}, inventory: map[string]inventoryRecord{}, originalInventory: map[string][]byte{}}
+	t := &transaction{conn: conn, engine: engine, credentials: make(map[string]credential), originalLedger: raw, originalCredentials: make(map[string][]byte), operational: map[string]operationalRecord{}, originalOperational: map[string][]byte{}, inventory: map[string]inventoryRecord{}, originalInventory: map[string][]byte{}, overview: map[string]overviewRecord{}, originalOverview: map[string][]byte{}}
 	if conn.QueryRowContext(ctx, "SELECT count(*),coalesce(max(length(body)),0) FROM enrollment_credentials").Scan(&count, &n) != nil || count > s.config.RecordLimit || n > maxCredentialBytes {
 		return nil, ErrStorage
 	}
@@ -395,6 +400,9 @@ func (s *Store) load(ctx context.Context, conn *sql.Conn) (*transaction, error) 
 		return nil, ErrStorage
 	}
 	if err = s.loadInventory(ctx, t); err != nil {
+		return nil, ErrStorage
+	}
+	if err = s.loadOverview(ctx, t); err != nil {
 		return nil, ErrStorage
 	}
 	if err = s.loadSystemMetadata(ctx, t); err != nil {
@@ -490,6 +498,15 @@ func (s *Store) transact(ctx context.Context, action func(*transaction) error) e
 	if err = s.saveInventory(ctx, t); err != nil {
 		return storageError(ctx)
 	}
+	if err = s.saveOverview(ctx, t); err != nil {
+		return storageError(ctx)
+	}
+	if err = sharedInventoryBudget(ctx, t); err != nil {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		return err
+	}
 	if validateSystemRecords(t) != nil {
 		return ErrStorage
 	}
@@ -524,6 +541,15 @@ func validateSchema(ctx context.Context, conn *sql.Conn, profile string) error {
 		expected["enrollment_inventory_meta"] = inventoryledger.SchemaObject{Type: "table", Name: "enrollment_inventory_meta", SQL: inventoryMetaSchema}
 		expected["enrollment_inventory_authority"] = inventoryledger.SchemaObject{Type: "table", Name: "enrollment_inventory_authority", SQL: inventoryAuthoritySchema}
 		expected["enrollment_inventory_generations"] = inventoryledger.SchemaObject{Type: "table", Name: "enrollment_inventory_generations", SQL: inventoryGenerationsSchema}
+		enabled, e := overviewSchemaPresent(ctx, conn)
+		if e != nil {
+			return e
+		}
+		if enabled {
+			for _, obj := range overviewSchemaObjects() {
+				expected[obj.Name] = obj
+			}
+		}
 		for _, obj := range systemSchemaObjects() {
 			expected[obj.Name] = obj
 		}

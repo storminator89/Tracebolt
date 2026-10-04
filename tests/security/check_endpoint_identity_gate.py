@@ -28,6 +28,36 @@ OBSERVATION = re.compile(
 )
 
 
+OVERVIEW_ORDER = ("preview", "enable", "first", "restart", "disable", "disabled_restart")
+OVERVIEW_FIXED = {
+    "complete overview consent: stage=preview enabled=false existingState=unchanged": "preview",
+    "complete overview consent: stage=enable enabled=true existingState=unchanged": "enable",
+    "complete overview consent: stage=disable enabled=false existingState=unchanged": "disable",
+    "complete overview retained: stage=restart ordinary=advanced generations=unchanged capture=original_age receipt=unchanged expiry=unchanged rows=unchanged": "restart",
+    "complete overview retained: stage=disabled_restart ordinary=advanced generations=unchanged capture=original_age receipt=unchanged expiry=unchanged rows=unchanged": "disabled_restart",
+}
+OVERVIEW_COUNT = r"(0|[1-9][0-9]{0,4})"
+OVERVIEW_OBSERVATION = re.compile(
+    r"complete overview observation: stage=first processes=complete countExact=true processRows="
+    + OVERVIEW_COUNT + r" volumes=complete countExact=true volumeRows=" + OVERVIEW_COUNT
+    + r" processPages=" + OVERVIEW_COUNT + r" volumePages=" + OVERVIEW_COUNT + r" manifest=validated"
+)
+
+
+def overview_evidence_stage(payload):
+    if payload in OVERVIEW_FIXED:
+        return OVERVIEW_FIXED[payload]
+    match = OVERVIEW_OBSERVATION.fullmatch(payload)
+    if match is None:
+        raise ValueError("invalid complete-overview evidence")
+    processes, volumes, process_pages, volume_pages = map(int, match.groups())
+    if not (1 <= processes <= 32768 and 1 <= volumes <= 16384
+            and (processes + 99) // 100 <= process_pages <= processes
+            and (volumes + 99) // 100 <= volume_pages <= volumes):
+        raise ValueError("invalid complete-overview counts")
+    return "first"
+
+
 def evidence_stage(payload):
     if payload in FIXED:
         return FIXED[payload]
@@ -41,10 +71,11 @@ def evidence_stage(payload):
     return match.group(1)
 
 
-def validate(events):
+def validate(events, require_overview=False):
     passed = set()
     package_passed = False
     stages = {leaf: [] for leaf in LEAVES}
+    overview_stages = {leaf: [] for leaf in LEAVES}
     for event in events:
         if not isinstance(event, dict):
             raise ValueError("invalid event")
@@ -63,6 +94,8 @@ def validate(events):
                     raise ValueError("premature root completion")
                 if test in LEAVES and tuple(stages[test]) != ORDER:
                     raise ValueError("incomplete endpoint evidence")
+                if test in LEAVES and require_overview and tuple(overview_stages[test]) != OVERVIEW_ORDER:
+                    raise ValueError("incomplete complete-overview evidence")
                 passed.add(test)
         if package == PACKAGE and "Test" not in event and action == "pass":
             if package_passed or passed != REQUIRED:
@@ -74,16 +107,26 @@ def validate(events):
         if not isinstance(output, str):
             raise ValueError("invalid output")
         match = PREFIX.fullmatch(output)
-        if match is None or not match.group(1).startswith("endpoint identity "):
+        if match is None:
+            continue
+        payload = match.group(1)
+        if payload.startswith("endpoint identity "):
+            selected_stages, selected_order = stages, ORDER
+            stage = evidence_stage(payload)
+        elif require_overview and payload.startswith("complete overview "):
+            selected_stages, selected_order = overview_stages, OVERVIEW_ORDER
+            stage = overview_evidence_stage(payload)
+        else:
             continue
         if test not in LEAVES or test in passed or package_passed:
-            raise ValueError("endpoint evidence outside live profile")
-        stage = evidence_stage(match.group(1))
-        if len(stages[test]) >= len(ORDER) or stage != ORDER[len(stages[test])]:
-            raise ValueError("missing, duplicate or reordered endpoint evidence")
-        stages[test].append(stage)
+            raise ValueError("evidence outside live profile")
+        if len(selected_stages[test]) >= len(selected_order) or stage != selected_order[len(selected_stages[test])]:
+            raise ValueError("missing, duplicate or reordered native evidence")
+        selected_stages[test].append(stage)
     if passed != REQUIRED or not package_passed or any(tuple(v) != ORDER for v in stages.values()):
         raise ValueError("incomplete native result")
+    if require_overview and any(tuple(v) != OVERVIEW_ORDER for v in overview_stages.values()):
+        raise ValueError("incomplete complete-overview result")
 
 
 def read_events(path):
@@ -107,15 +150,22 @@ def read_events(path):
 
 
 def main(argv):
+    require_overview = len(argv) == 3 and argv[1] == "--require-complete-overview"
     try:
-        if len(argv) != 2:
+        if len(argv) != 2 and not require_overview:
             raise ValueError("invalid arguments")
-        with closing(read_events(argv[1])) as events:
-            validate(events)
+        with closing(read_events(argv[2] if require_overview else argv[1])) as events:
+            validate(events, require_overview=require_overview)
     except Exception:
-        print("FAIL: missing, skipped, malformed or incomplete endpoint-identity native evidence.")
+        if require_overview:
+            print("FAIL: missing, skipped, malformed or incomplete endpoint/complete-overview native evidence.")
+        else:
+            print("FAIL: missing, skipped, malformed or incomplete endpoint-identity native evidence.")
         return 1
-    print("PASS: TLS and HTTP-test consent preview, enable, fresh reporting, restart and disable retain the original endpoint metadata age; no raw identity data exported.")
+    if require_overview:
+        print("PASS: TLS and HTTP-test endpoint and complete-overview consent, positive delivered process/mount pages, restart and disable retention; no raw inventory data exported.")
+    else:
+        print("PASS: TLS and HTTP-test consent preview, enable, fresh reporting, restart and disable retain the original endpoint metadata age; no raw identity data exported.")
     return 0
 
 

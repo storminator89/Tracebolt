@@ -1,0 +1,8 @@
+.software-overview { padding: 18px; border: 1px solid var(--line); border-radius: 10px; margin-bottom: 18px; background: var(--panel); }
+.software-overview h2 { display: flex; align-items: center; gap: 8px; font-size: 15px; }
+.software-overview h3 { font-size: 12px; margin: 16px 0 8px; }
+.software-overview .software-total { margin: 14px 0; }
+.software-historical { margin: 12px 0; padding: 10px; border: 1px solid var(--line); border-radius: 7px; color: var(--secondary); }
+.software-historical summary { cursor: pointer; font-weight: 600; }
+.software-historical p { margin-top: 10px; }
+.software-overview > .button { margin-top: 12px; }

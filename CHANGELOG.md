@@ -2,6 +2,14 @@
 
 Meaningful development checkpoints are recorded here. These are prototype milestones, not production releases.
 
+## 2026-10-04 — Add complete visible process and mount generations
+
+- Add a separately acknowledged, default-off extension for an existing activated v3 identity. Capture supported visible processes and mounted filesystems into bounded independent generations, preserving field failures, exact enumeration scope, durable counters and original capture/retention times. No command lines, environments or additional OS privilege are introduced.
+- Atomically promote validated complete generations, retain an independently successful sibling across failures, and page/search by immutable generation. Put measured local filesystems before virtual mounts, preserve namespace/sandbox and capacity limitations, and use completed supported dpkg metadata for Software overview counts instead of the bounded preview.
+- Keep metric and journal progress independent of overview delivery failures while retaining the shared transfer budget and trusted local-state guards. Source fixtures exercise real TLS and signed-HTTP sender/store admission, lost responses, restart, complete paging, revocation and trusted-clock/output boundaries without collecting host data.
+- Add six synthetic browser cases and an explicitly enabled extension to the existing nonroot, group-clean Ubuntu native test. The native gate requires all prior opt-ins, actual positive process/mount pages, explicit stopped-agent consent and original-age retention after restart/disable. Its private evidence is checked using finite markers and counts; raw process, mount and identity values are not exported.
+- The preceding `d3628dc` journal checkpoint passed all 13 CI jobs and 104 required browser cases, with three documented enrollment skips. This candidate passes 964 frontend tests, type checking/build and all-Go compile/vet; exact composed hosted native/browser/aggregate results remain pending. Existing 104 identities, three skips, five lifecycle cycles and immutable pilot.2 assets/pin are preserved.
+
 ## 2026-10-04 — Validate journal socket status using its unit type
 
 - An actual read-only helper plan stopped at systemd status validation because the socket unit does not expose the service-only `MainPID` property. The service/agent status fields were valid, and the rejected plan did not proceed to setup.
