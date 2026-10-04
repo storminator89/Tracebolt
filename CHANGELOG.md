@@ -2,6 +2,12 @@
 
 Meaningful development checkpoints are recorded here. These are prototype milestones, not production releases.
 
+## 2026-10-04 — Efficient large-list test queries and bounded native diagnostics
+
+- Scope the large service/socket traversal tests to semantic table cells instead of repeatedly computing every row's accessible name. Retain complete row ordering, pagination, visibility, request bounds and scope checks; strengthen exact socket endpoint/owner ordering. The owner's three full709-test runs pass with unchanged runtime assets and test timeouts.
+- On a failed positive v3 native command, project only exact fixed test categories and allowlisted source-status enums from its private Go JSON. Limit file/record/projection sizes, reject duplicate JSON keys and special files, and never print raw output, stderr, paths, identifiers, counts or telemetry. The command still fails and all positive-data/success assertions remain mandatory.
+- The first hosted v3 run passed707/709 UI tests, with a service-list timeout and a following socket assertion failure; the native positive-data command also failed before a bounded reason was available. No production cause is claimed yet. This test/workflow-only checkpoint requires a new exact-source native/browser result.
+
 ## 2026-10-04 — Fresh v3 Linux inventory and pending-service onboarding
 
 - Add explicitly consented `managed-operations-v3` supported-dpkg generations, bounded chunk transfer and generation-pinned package pages, plus system-service and locally observed socket state with honest permission/source/attribution limits. Preserve basic/v2 identities and their narrower collection scopes.

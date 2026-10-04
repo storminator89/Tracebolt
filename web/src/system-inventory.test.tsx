@@ -20,21 +20,31 @@ afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.useRealTimers(); });
 
 describe('system inventory bounded service/socket browsing', () => {
     it('enumerates every one of 350 services in 100-row pages without a global prefix limit', async () => {
-        await open(); const seen: string[] = [];
+        const rendered = await open(), queries = within(rendered.container), seen: string[] = [];
         for (let i = 0; i < 4; i++) {
-            await screen.findByRole('rowheader', { name: `fixture-${String(i * 100).padStart(6, '0')}.service` });
-            const rows = within(screen.getByRole('table')).getAllByRole('rowheader'); expect(rows.length).toBeLessThanOrEqual(100); seen.push(...rows.map(row => row.textContent!));
-            if (i < 3) fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
+            const name = `fixture-${String(i * 100).padStart(6, '0')}.service`;
+            // Wait for the exact semantic cell without recomputing accessible names
+            // for every row on every poll. Keep role/visibility assertions below.
+            const first = await queries.findByText(name, { selector: 'th[scope="row"]' });
+            expect(first).toHaveRole('rowheader'); expect(first).toHaveAccessibleName(name); expect(first).toBeVisible();
+            const rows = within(queries.getByRole('table')).getAllByRole('rowheader'); expect(rows.length).toBeLessThanOrEqual(100); seen.push(...rows.map(row => row.textContent!));
+            if (i < 3) fireEvent.click(queries.getByRole('button', { name: 'Next page' }));
         }
-        expect(seen).toEqual(services.map(row => row.name)); expect(screen.getByText('350 / 350')).toBeVisible(); expect(screen.getByText('The entire retained section has been scanned.')).toBeVisible();
+        expect(seen).toEqual(services.map(row => row.name)); expect(queries.getByText('350 / 350')).toBeVisible(); expect(queries.getByText('The entire retained section has been scanned.')).toBeVisible();
         for (const [path, raw, , , maximum] of vi.mocked(mutateRaw).mock.calls) { expect(path).toBe(`/devices/${systemDevice}/inventory/system/query`); expect(JSON.parse(raw)).toMatchObject({ section: 'services', limit: 100, filter: 'all' }); expect(maximum).toBe(262144); }
     });
     it('enumerates sockets in 25-row pages and retains numeric endpoints and attribution', async () => {
-        await open('sockets'); const seen: string[] = [];
+        const rendered = await open('sockets'), queries = within(rendered.container), seen: string[] = [], owners: string[] = [];
         for (let i = 0; i < 3; i++) {
-            await screen.findByText(`127.0.0.1:${10000 + i * 25}`); const rows = within(screen.getByRole('table')).getAllByRole('row').slice(1); expect(rows.length).toBe(25); seen.push(...rows.map(row => row.querySelectorAll('td')[0].textContent!)); if (i < 2) fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
+            // Scope the entire traversal to its own render so a canceled/timed-out
+            // test cannot find or click a subsequent test's pagination controls.
+            await queries.findByText(`127.0.0.1:${10000 + i * 25}`, { selector: 'td' });
+            const rows = within(queries.getByRole('table')).getAllByRole('row').slice(1); expect(rows.length).toBe(25);
+            seen.push(...rows.map(row => row.querySelectorAll('td')[0].textContent!)); owners.push(...rows.map(row => row.querySelectorAll('td')[4].textContent!));
+            if (i < 2) fireEvent.click(queries.getByRole('button', { name: 'Next page' }));
         }
-        expect(new Set(seen).size).toBe(75); expect(screen.getByText('75 / 75')).toBeVisible(); expect(screen.getByText(/does not establish external reachability/)).toBeVisible(); expect(JSON.parse(vi.mocked(mutateRaw).mock.calls[0][1]).limit).toBe(25);
+        expect(new Set(seen).size).toBe(75); expect(seen).toEqual(sockets.map(row => `${row.local.address}:${row.local.port}`)); expect(owners).toEqual(sockets.map(row => `${row.owners[0].pid} / ${row.owners[0].processName}`));
+        expect(queries.getByText('75 / 75')).toBeVisible(); expect(queries.getByText(/does not establish external reachability/)).toBeVisible(); expect(JSON.parse(vi.mocked(mutateRaw).mock.calls[0][1]).limit).toBe(25);
     });
     it.each(['active', 'failed', 'enabled'] as const)('uses the fixed %s service filter and starts from a new cursor', async filter => {
         await open(); fireEvent.change(screen.getByLabelText('Section filter'), { target: { value: filter } }); expect(screen.queryByRole('table')).not.toBeInTheDocument(); fireEvent.click(screen.getByRole('button', { name: 'Apply search and filter' })); await screen.findByRole('table');
