@@ -23,15 +23,15 @@ describe('Independent source/DOM regressions',()=>{
  it('skip-to-content preserves inventory route and moves DOM focus',async()=>{render(<App/>);await screen.findByRole('heading',{name:'Geräte',exact:true,level:1});fireEvent.click(screen.getByRole('link',{name:'Zum Inhalt'}));expect(location.hash).toBe('#/devices');expect(document.activeElement?.id).toBe('main-content');});
  it('initial API failure presents explicit failure with no fake inventory',async()=>{vi.stubGlobal('fetch',fetchMock(()=>response({error:{message:'controlled unavailable'}},503)));render(<App/>);expect(await screen.findByRole('alert')).toHaveTextContent('keine Ersatz-Demodaten');expect(screen.queryByText('REVIEW-DEMO')).toBeNull();});
  it('literal name markup is never interpreted as HTML',async()=>{const payload='<img src=x onerror="window.reviewXss=1">';vi.stubGlobal('fetch',fetchMock(()=>response({...overview,devices:[{...device,name:payload}]})));const {container}=render(<App/>);expect(await screen.findByText(payload)).toBeInTheDocument();expect(container.querySelector('img')).toBeNull();});
- it('shortcuts invoked from a device dialog do not let Escape close both layers',async()=>{
+ it('help modal owns Escape before the device page returns to the focused inventory',async()=>{
   vi.stubGlobal('fetch',fetchMock((url:string)=>response(url.includes('/devices/')?device:overview)));
-  render(<App/>);await screen.findByRole('heading',{name:'Geräte',exact:true,level:1});fireEvent.click(screen.getByRole('button',{name:'REVIEW-DEMO: Details öffnen'}));await screen.findByRole('dialog',{name:'Gerät REVIEW-DEMO'});
-  fireEvent.keyDown(window,{key:'?'});
-  if(screen.queryByRole('dialog',{name:'Tastenkürzel'})) {
-   fireEvent.keyDown(document,{key:'Escape'});
-   await new Promise(resolve=>setTimeout(resolve,40));
-   await waitFor(()=>expect(screen.getByRole('dialog',{name:'Gerät REVIEW-DEMO'})).toBeInTheDocument());
-  } else { expect(screen.getByRole('dialog',{name:'Gerät REVIEW-DEMO'})).toBeInTheDocument(); }
+  render(<App/>);await screen.findByRole('heading',{name:'Geräte',exact:true,level:1});fireEvent.click(screen.getByRole('button',{name:'REVIEW-DEMO: Details öffnen'}));
+  const detail=await screen.findByRole('region',{name:'Gerät REVIEW-DEMO'});expect(detail).toHaveFocus();expect(screen.queryByRole('dialog')).toBeNull();expect(document.querySelector('.inventory-panel')).toBeNull();
+  fireEvent.keyDown(window,{key:'?'});await screen.findByRole('dialog',{name:'Tastenkürzel'});
+  fireEvent.keyDown(document,{key:'Escape'});await waitFor(()=>expect(screen.queryByRole('dialog')).toBeNull());
+  expect(screen.getByRole('region',{name:'Gerät REVIEW-DEMO'})).toBeInTheDocument();expect(location.hash).toBe('#/devices/review-device');
+  fireEvent.keyDown(document,{key:'Escape'});await waitFor(()=>expect(screen.queryByRole('region',{name:'Gerät REVIEW-DEMO'})).toBeNull());
+  expect(location.hash).toBe('#/devices');expect(document.activeElement?.id).toBe('main-content');
  });
  it('malformed saved-view shape must not crash the inventory',async()=>{localStorage.setItem('local-rmm-saved-view',JSON.stringify({...defaultFilters,query:null}));render(<App/>);await screen.findByRole('heading',{name:'Geräte',exact:true,level:1});fireEvent.click(screen.getByRole('button',{name:'Gespeicherte Ansicht'}));await waitFor(()=>expect(screen.getByRole('heading',{name:'Geräte',exact:true,level:1})).toBeInTheDocument());});
 });

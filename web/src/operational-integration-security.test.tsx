@@ -80,8 +80,8 @@ describe('actual App routing and access boundary',()=>{
  it.each(['device','close','auth'] as const)('aborts the operational read on %s transition and suppresses late old data',async interruption=>{
   await navigate(firstID);let resolve!:(value:OperationalView)=>void;let signal:AbortSignal|undefined;vi.mocked(request).mockImplementation(async(path,options)=>{if(path==='/auth/session')return session;if(path==='/enrollment')return listing();if(path==='/overview')return overview();if(path===`/devices/${firstID}/operational`)return new Promise<OperationalView>(done=>{resolve=done;signal=options?.signal as AbortSignal;});return makeDevice(path.includes(secondID)?secondID:firstID);});
   render(<App/>);fireEvent.click(await screen.findByRole('tab',{name:'Inventory'}));await waitFor(()=>expect(signal).toBeDefined());
-  if(interruption==='device'){await navigate(secondID);await screen.findByRole('dialog',{name:'Device Synthetic second device'});expect(screen.getByRole('tab',{name:'Overview'})).toHaveAttribute('aria-selected','true');}
-  if(interruption==='close'){fireEvent.keyDown(document,{key:'Escape'});await waitFor(()=>expect(screen.queryByRole('dialog')).not.toBeInTheDocument());}
+  if(interruption==='device'){await navigate(secondID);await screen.findByRole('region',{name:'Device Synthetic second device'});expect(screen.getByRole('tab',{name:'Overview'})).toHaveAttribute('aria-selected','true');}
+  if(interruption==='close'){fireEvent.keyDown(document,{key:'Escape'});await waitFor(()=>expect(screen.queryByRole('region',{name:'Device Synthetic first device'})).not.toBeInTheDocument());expect(window.location.hash).toBe('#/devices');}
   if(interruption==='auth'){act(()=>window.dispatchEvent(new Event(AUTH_REQUIRED_EVENT)));await screen.findByLabelText('Operator password');}
   expect(signal!.aborted).toBe(true);await act(async()=>resolve(view()));expect(screen.queryByText('Operational inventory')).not.toBeInTheDocument();expect(request).not.toHaveBeenCalledWith(`/devices/${secondID}/operational`,expect.anything());
  });

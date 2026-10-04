@@ -27,9 +27,9 @@ try {
   await snap('inventory-1440-dark.png','Synthetic device inventory, dark mode',{fullPage:false});
   await page.getByRole('button',{name:'Helles Design aktivieren'}).click();
   await page.locator('.device-name-button').filter({hasText:'BER-DC-01'}).click();
-  await page.getByRole('dialog',{name:'Gerät BER-DC-01'}).waitFor();
-  await snap('device-1440-light.png','Synthetic Windows device drawer',{fullPage:false});
-  await page.getByRole('button',{name:'Schließen',exact:true}).click();
+  await page.getByRole('region',{name:'Gerät BER-DC-01',exact:true}).waitFor();
+  await snap('device-1440-light.png','Synthetic Windows full-width device page',{fullPage:false});
+  await page.getByRole('button',{name:'Zurück zu Geräten',exact:true}).click();
   await page.goto(`${base}/#/cases/case-demo-win-01-service`);
   await page.getByRole('heading',{name:'Was die Daten zeigen'}).waitFor();
   await page.locator('.evidence-card summary').first().click();

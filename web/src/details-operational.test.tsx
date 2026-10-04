@@ -17,7 +17,7 @@ beforeEach(()=>{setLocale('en',false);localStorage.clear();sessionStorage.clear(
 afterEach(()=>{cleanup();vi.restoreAllMocks();});
 function detail(){return <AuthBoundary><DeviceDetail id={selected.id} onClose={vi.fn()} onCase={vi.fn()}/></AuthBoundary>;}
 async function inventory(){render(detail());const tab=await screen.findByRole('tab',{name:'Inventory'});fireEvent.click(tab);return tab;}
-describe('actual device drawer operational integration',()=>{
+describe('actual device page operational integration',()=>{
  it('loads the protected read model only when the Inventory tab is selected',async()=>{
   render(detail());const tab=await screen.findByRole('tab',{name:'Inventory'});expect(request).not.toHaveBeenCalledWith(expect.stringContaining('/operational'),expect.anything());fireEvent.click(tab);
   await screen.findByText('This device is not enrolled for the Linux operational profile. No operational inventory has been collected.');
@@ -35,7 +35,7 @@ describe('actual device drawer operational integration',()=>{
   await inventory();await waitFor(()=>expect(signal).toBeDefined());fireEvent.click(screen.getByRole('tab',{name:'Overview'}));expect(signal!.aborted).toBe(true);await act(async()=>resolve(view()));expect(screen.queryByText('Operational inventory')).not.toBeInTheDocument();expect(screen.getByRole('tab',{name:'Overview'})).toHaveAttribute('aria-selected','true');
  });
  it('clears the operational panel when operator access expires',async()=>{
-  await inventory();await screen.findByText('Operational inventory');act(()=>window.dispatchEvent(new Event(AUTH_REQUIRED_EVENT)));await screen.findByLabelText('Operator password');expect(screen.queryByRole('dialog')).not.toBeInTheDocument();expect(screen.queryByText('Operational inventory')).not.toBeInTheDocument();
+  await inventory();await screen.findByText('Operational inventory');act(()=>window.dispatchEvent(new Event(AUTH_REQUIRED_EVENT)));await screen.findByLabelText('Operator password');expect(screen.queryByRole('region',{name:'Device Synthetic integration fixture'})).not.toBeInTheDocument();expect(screen.queryByText('Operational inventory')).not.toBeInTheDocument();
  });
  it('renders a fixed error with no fabricated inventory on operational GET failure',async()=>{
   vi.mocked(request).mockImplementation(async path=>{if(path==='/auth/session')return session;if(path.endsWith('/operational'))throw new Error('private raw failure');return selected;});await inventory();const alert=await screen.findByRole('alert');expect(alert).not.toHaveTextContent('private raw failure');expect(screen.queryByRole('table')).not.toBeInTheDocument();

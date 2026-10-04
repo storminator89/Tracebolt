@@ -112,8 +112,8 @@ describe('Security coverage in the real device drawer', () => {
         vi.mocked(request).mockImplementation(async (path, options) => path === `/devices/${firstID}/security` ? new Promise<SecurityCoverageView>(done => { resolve = done; signal = options?.signal as AbortSignal; }) : answer(path));
         await navigate(`devices/${firstID}`); render(<App/>); await openSecurity(); await waitFor(() => expect(signal).toBeDefined());
         if (transition === 'tab') fireEvent.click(screen.getByRole('tab', { name: 'Overview' }));
-        if (transition === 'device') { await navigate(`devices/${secondID}`); await screen.findByRole('dialog', { name: 'Device Synthetic second fixture' }); }
-        if (transition === 'close') { fireEvent.keyDown(document, { key: 'Escape' }); await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument()); }
+        if (transition === 'device') { await navigate(`devices/${secondID}`); await screen.findByRole('region', { name: 'Device Synthetic second fixture' }); }
+        if (transition === 'close') { fireEvent.keyDown(document, { key: 'Escape' }); await waitFor(() => expect(screen.queryByRole('region', { name: 'Device Synthetic first fixture' })).not.toBeInTheDocument()); expect(window.location.hash).toBe('#/devices'); }
         if (transition === 'auth') { act(() => window.dispatchEvent(new Event(AUTH_REQUIRED_EVENT))); await screen.findByLabelText('Operator password'); }
         expect(signal!.aborted).toBe(true); await act(async () => resolve(coverage()));
         expect(screen.queryByRole('heading', { name: 'Security coverage' })).not.toBeInTheDocument(); expect(readPaths()).not.toContain(`/devices/${secondID}/security`);

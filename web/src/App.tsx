@@ -19,6 +19,7 @@ export default function App() { useLocale(); return <AuthBoundary><WorkspaceApp 
 function WorkspaceApp() {
     const operator = useOperator()!;
     const route = useRoute();
+    const previousRoute = useRef(route);
     const [data, setData] = useState<Overview | null>(null);
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(true);
@@ -47,7 +48,7 @@ function WorkspaceApp() {
     }, []);
     useEffect(() => { void load(); }, [load]);
     useEffect(() => { setMobileNav(false); }, [route.view, route.id]);
-    useEffect(() => { const main = document.getElementById("main-content"); if(main) main.scrollTop = 0; }, [route.view, route.view === "cases" ? route.id : null]);
+    useEffect(() => { const main = document.getElementById("main-content"), previous = previousRoute.current; if(main) { main.scrollTop = 0; if(previous.view === "devices" && previous.id && route.view === "devices" && !route.id) main.focus({preventScroll:true}); } previousRoute.current = route; }, [route.view, route.id]);
     useEffect(() => {
         const key = (event: KeyboardEvent) => {
             if (event.key !== 'Escape' && document.querySelector('[role="dialog"]'))
@@ -100,10 +101,10 @@ function WorkspaceApp() {
     <div className="main-shell">
       <header className="topbar"><div className="breadcrumb"><button className="icon-button mobile-menu" aria-label={t("Men\u00FC \u00F6ffnen")} aria-expanded={mobileNav} onClick={() => setMobileNav(!mobileNav)}><Menu size={20}/></button><PanelLeftClose size={17} className="desktop-sidebar-icon"/><span className="breadcrumb-root">{t("Arbeitsbereich")}</span><ChevronRight size={13}/><strong>{ui(title || "")}</strong>{route.view === 'cases' && route.id && <><ChevronRight size={13} className="breadcrumb-case-divider"/><span className="breadcrumb-id">{route.id}</span></>}</div><div className="topbar-actions"><LanguageSelector /><span className="environment-badge"><span /> {operator.mode === "lan" ? "LAN" : t("Lokal")}</span><span className="topbar-divider"/><button className="icon-button" onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')} aria-label={theme === 'light' ? t("Dunkles Design aktivieren") : t("Helles Design aktivieren")} title={theme === 'light' ? t("Dunkles Design") : t("Helles Design")}>{theme === 'light' ? <Moon size={17}/> : <Sun size={17}/>}</button></div></header>
       {operator.insecureTestMode && <TransportWarning />}
-      <main id="main-content" tabIndex={-1} className={`main-content ${route.view === 'cases' && route.id ? 'case-main' : ''}`}>
+      <main id="main-content" tabIndex={-1} className={`main-content ${route.view === 'cases' && route.id ? 'case-main' : route.view === 'devices' && route.id ? 'device-main' : ''}`}>
         <div className="demo-banner"><span className="demo-banner-label"><Database size={14}/>{" " + (operator.mode === "lan" ? t("LAN-PILOT") : t("DEMO + LOKAL"))}</span><span>{operator.mode === "lan" ? t("Freigegebene LAN-Agenten: {0}.", {0:lanCount}) : sourceCount ? t("Demo-Geräte: {0} · lokale Quellen: {1}.", { "0": data?.devices.filter(device => device.synthetic).length ?? 0, "1": sourceCount }) : t("Synthetische Beispieldaten. Noch keine lokalen Daten.")}{" " + (operator.mode === "lan" ? t("Kein Produktivbetrieb.") : t("Keine angebundene Produktivflotte."))}</span><button onClick={() => changeView('settings')} aria-label={t("\u00DCber Datenquellen und Grenzen")}><ChevronRight size={16}/></button></div>
         {error && <div className="error-banner" role="alert"><TriangleAlert size={20}/><div><strong>{data ? t("Aktualisierung fehlgeschlagen") : t("Keine Verbindung zum lokalen Manager")}</strong><p>{ui(error)} {data ? t("Die angezeigten Daten stammen aus dem letzten erfolgreichen Abruf.") : t("Es werden keine Ersatz-Demodaten eingeblendet.")}</p></div><button className="button small" onClick={() => void load()} disabled={loading}>{t("Erneut versuchen")}</button></div>}
-        {!data && loading ? <div className="initial-loading"><Loading /><div className="skeleton-row"><i /><i /><i /></div><div className="skeleton-panel"/></div> : !data ? <EmptyState title={t("Dein Kontrollraum wartet auf Daten")} detail={t("Starte den lokalen Manager und lade diese Ansicht erneut.")}/> : <>
+        {route.view === 'devices' && route.id ? <DeviceDetail key={route.id} id={route.id} onClose={() => navigate('devices')} onCase={id => navigate('cases', id)}/> : !data && loading ? <div className="initial-loading"><Loading /><div className="skeleton-row"><i /><i /><i /></div><div className="skeleton-panel"/></div> : !data ? <EmptyState title={t("Dein Kontrollraum wartet auf Daten")} detail={t("Starte den lokalen Manager und lade diese Ansicht erneut.")}/> : <>
         {route.view === 'overview' && <>
           <div className="page-heading"><div><div className="eyebrow">{t("BETRIEBS\u00DCBERSICHT")}</div><h1>{t("\u00DCbersicht")}</h1><p>{t("Offene F\u00E4lle, Ger\u00E4tezust\u00E4nde und letzte \u00C4nderungen.")}</p></div><button className="button" onClick={() => changeView('devices')}>{t("Zum Ger\u00E4teinventar")}<ArrowRight size={15}/></button></div>
           <div className="summary-strip"><button onClick={() => { setFilters(defaultFilters); changeView('devices'); }}><span className="summary-label"><Monitor size={16}/>{" " + t("Ger\u00E4te gesamt")}</span><div><strong>{data.stats.totalDevices}</strong><span>{operator.mode === "lan" ? t("LAN-Agenten: {0}",{0:lanCount}) : <>{demoCount}{" " + t("Demo \u00B7") + " "}{sourceCount}{" " + t("lokal")}</>}</span></div></button><button onClick={() => { setFilters({ ...defaultFilters, status: 'healthy' }); changeView('devices'); }}><span className="summary-label"><span className="dot green"/>{" " + t("Unauff\u00E4llig")}</span><div><strong>{data.stats.healthyDevices}</strong><span>{t("beobachteter Zustand")}</span></div></button><button onClick={() => { setFilters({ ...defaultFilters, status: 'needs-attention' }); changeView('devices'); }}><span className="summary-label"><span className="dot amber"/>{" " + t("Aufmerksamkeit")}</span><div><strong>{data.stats.attentionDevices}</strong><span>{t("Warnung oder kritisch")}</span></div></button><button onClick={() => changeView('cases')}><span className="summary-label"><Activity size={16}/>{" " + t("Offene Untersuchungen")}</span><div><strong>{data.stats.openCases}</strong><span>{data.stats.criticalCases}{" " + t("kritisch")}</span></div></button></div>
@@ -122,7 +123,6 @@ function WorkspaceApp() {
         </>}
       </main>
     </div>
-    {route.view === 'devices' && route.id && <DeviceDetail key={route.id} id={route.id} onClose={() => navigate('devices')} onCase={id => navigate('cases', id)}/>}
     {shortcuts && <Dialog title={t("Tastenk\u00FCrzel")} onClose={() => setShortcuts(false)} className="shortcuts-modal"><div className="eyebrow">{t("SCHNELLER NAVIGIEREN")}</div><h2>{t("Tastenk\u00FCrzel")}</h2><p>{t("Dein Kontrollraum, direkt erreichbar.")}</p><dl><div><dt>{t("Ger\u00E4te suchen")}</dt><dd><kbd>{t("\u2318 / Strg")}</kbd> <kbd>K</kbd> {t("oder")} <kbd>/</kbd></dd></div><div><dt>{t("Dialog schlie\u00DFen")}</dt><dd><kbd>Esc</kbd></dd></div><div><dt>{t("Diese \u00DCbersicht")}</dt><dd><kbd>?</kbd></dd></div><div><dt>{t("Elemente ansteuern")}</dt><dd><kbd>Tab</kbd></dd></div></dl></Dialog>}
   </div>;
 }

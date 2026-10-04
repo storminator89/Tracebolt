@@ -2,6 +2,13 @@
 
 Meaningful development checkpoints are recorded here. These are prototype milestones, not production releases.
 
+## 2026-10-04 — Give device details a full page and simplify invitations
+
+- Open device details in the available main-content width, with Back/Escape navigation, browser-history handling and focus return. Preserve protected-data concealment, keyed cancellation and late-response rejection across navigation and authentication changes.
+- Show the invitation flow progressively while retaining explicit collection consent, hidden secret handling, public-command checks and deliberate fingerprint/comparison approval.
+- Adapt the existing browser checks to page navigation and retain modal checks on keyboard help. All 92 case identities, three documented enrollment skips and five lifecycle cycles remain; two new invitation captures are taken before any secret exists.
+- Add the ordered Linux pilot roadmap, distinguishing observed pilot behavior from planned identity metadata, verified release distribution, scoped diagnostics and update/CVE work. The owner's 722 component tests, type check and build pass; exact-source hosted browser acceptance remains required for this checkpoint.
+
 ## 2026-10-04 — Correct managed capability descriptions and source-archive permissions
 
 - Describe managed inventory capabilities from the server's selected collection profile. Keep current coverage, failures and ages in their dedicated views, preserve denied states, and avoid treating supported inventory or service code as proof of successful collection, installation or reboot.

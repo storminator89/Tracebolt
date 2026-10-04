@@ -112,31 +112,39 @@ try {
  await test('Source filter and unknown data never become healthy', async()=>{
   const page=await pageAt('/devices'); await loaded(page); await page.locator('.inventory-tabs button').filter({hasText:'Lokale Quellen'}).click(); await expect(await rows(page)).toHaveCount(1); await expect((await rows(page)).first()).toContainText('Lokal');
   const sandbox=data.devices.find(d=>!d.synthetic); expect(sandbox.status).toBe('unknown'); await expect((await rows(page)).first()).toContainText('Unbekannt');
-  await page.locator('.device-name-button').click(); await expect(page.getByRole('dialog')).toContainText('Lokale Linux-Umgebung. Messwerte werden nur angezeigt, wenn ein Collector sie geliefert hat.'); await shot(page,'sandbox-provenance');
+  await page.locator('.device-name-button').click(); await expect(page.locator('.device-page')).toContainText('Lokale Linux-Umgebung. Messwerte werden nur angezeigt, wenn ein Collector sie geliefert hat.'); await shot(page,'sandbox-provenance');
  });
  await test('Device details → evidence → case, history Back/Forward', async()=>{
   const page=await pageAt('/devices'); await loaded(page);
-  await page.getByRole('button',{name:`${device.name}: Details öffnen`}).click(); await expect(page.getByRole('dialog')).toHaveAttribute('aria-label',`Gerät ${device.name}`);
-  await expect(page.getByRole('dialog')).toContainText('Synthetisches Beispielgerät');
-  await page.getByRole('tab',{name:/Belege/}).click(); await page.locator('.dialog .evidence-card summary').first().click(); await expect(page.locator('.dialog .evidence-content').first()).toBeVisible(); await shot(page,'desktop-device-evidence');
+  await page.getByRole('button',{name:`${device.name}: Details öffnen`}).click(); await expect(page.getByRole('region',{name:`Gerät ${device.name}`,exact:true})).toBeVisible();
+  await expect(page.locator('.device-page')).toContainText('Synthetisches Beispielgerät');
+  await page.getByRole('tab',{name:/Belege/}).click(); await page.locator('.device-page .evidence-card summary').first().click(); await expect(page.locator('.device-page .evidence-content').first()).toBeVisible(); await shot(page,'desktop-device-evidence');
   await page.getByRole('tab',{name:'Übersicht',exact:true}).click(); await page.locator('.linked-case').first().click(); await expect(page.locator('.case-detail-header h1')).toHaveText(caseItem.title);
   await page.locator('.evidence-card summary').first().click(); await expect(page.locator('.evidence-content').first()).toBeVisible(); await shot(page,'desktop-case-evidence');
-  await page.goBack(); await expect(page.getByRole('dialog')).toHaveAttribute('aria-label',`Gerät ${device.name}`); await page.goForward(); await expect(page.locator('.case-detail-header h1')).toHaveText(caseItem.title);
+  await page.goBack(); await expect(page.getByRole('region',{name:`Gerät ${device.name}`,exact:true})).toBeVisible(); await page.goForward(); await expect(page.locator('.case-detail-header h1')).toHaveText(caseItem.title);
  });
- await test('Dialog keyboard focus containment, Escape and backdrop dismissal', async()=>{
-  const page=await pageAt('/devices'); await loaded(page); const opener=page.getByRole('button',{name:`${device.name}: Details öffnen`}); await opener.click(); await expect(page.getByRole('dialog')).toContainText(device.name);
-  await page.keyboard.press('Shift+Tab'); expect(await page.evaluate(()=>document.activeElement?.closest('[role=dialog]')!==null)).toBe(true);
-  for(let i=0;i<16;i++) await page.keyboard.press('Tab'); expect(await page.evaluate(()=>document.activeElement?.closest('[role=dialog]')!==null)).toBe(true);
-  await page.keyboard.press('Escape'); await expect(page.getByRole('dialog')).toHaveCount(0); await expect(opener).toBeFocused();
-  await opener.click(); await page.locator('.dialog-backdrop').click({position:{x:10,y:10}}); await expect(page.getByRole('dialog')).toHaveCount(0);
-  await page.keyboard.press('?'); await expect(page.getByRole('dialog',{name:'Tastenkürzel'})).toBeVisible(); await page.keyboard.press('Escape'); await expect(page.getByRole('dialog')).toHaveCount(0);
+ await test('Device page keyboard navigation, Escape and Back return focus to inventory', async()=>{
+  const page=await pageAt('/devices'); await loaded(page); const opener=page.getByRole('button',{name:`${device.name}: Details öffnen`}); await opener.click();
+  const detail=page.getByRole('region',{name:`Gerät ${device.name}`,exact:true}); await expect(detail).toBeFocused();
+  await expect(page.getByRole('dialog')).toHaveCount(0); await expect(page.locator('.inventory-panel,.enrollment-panel')).toHaveCount(0);
+  await expect(page.locator('.device-technical')).not.toHaveAttribute('open','');const technical=page.locator('.device-technical summary');await technical.focus();await page.keyboard.press('Enter');await expect(page.locator('.device-technical')).toHaveAttribute('open','');await expect(page.locator('.device-technical .metadata-grid')).toBeVisible();await page.keyboard.press('Enter');await expect(page.locator('.device-technical')).not.toHaveAttribute('open','');await detail.focus();
+  await page.keyboard.press('Shift+Tab'); expect(await page.evaluate(()=>document.activeElement?.closest('.device-page')===null)).toBe(true);
+  await detail.focus(); await page.keyboard.press('Tab'); await expect(page.getByRole('button',{name:'Zurück zu Geräten',exact:true})).toBeFocused();
+  await page.keyboard.press('Escape'); await expect(detail).toHaveCount(0); await expect(page).toHaveURL(base+'/#/devices'); await expect(page.locator('main')).toBeFocused(); await expect(opener).toBeVisible();
+  await opener.click(); await page.getByRole('button',{name:'Zurück zu Geräten',exact:true}).click(); await expect(detail).toHaveCount(0); await expect(page.locator('main')).toBeFocused();
+  await page.goBack(); await expect(detail).toBeFocused(); await page.goForward(); await expect(detail).toHaveCount(0); await expect(page.locator('main')).toBeFocused();
   await page.keyboard.press('Control+k'); await expect(page.getByRole('textbox',{name:'Geräte durchsuchen'})).toBeFocused();
  });
- await test('Modal blocks background help/search shortcuts without losing the device', async()=>{
-  const page=await pageAt('/devices'); await loaded(page); await page.getByRole('button',{name:`${device.name}: Details öffnen`}).click(); await expect(page.getByRole('dialog')).toHaveAttribute('aria-label',`Gerät ${device.name}`);
-  await page.keyboard.press('?'); await expect(page.getByRole('dialog')).toHaveCount(1); await expect(page.getByRole('dialog')).toHaveAttribute('aria-label',`Gerät ${device.name}`);
-  await page.keyboard.press('Control+k'); await expect(page.getByRole('dialog')).toHaveAttribute('aria-label',`Gerät ${device.name}`); await expect(page).toHaveURL(new RegExp(device.id));
-  await page.keyboard.press('Escape'); await expect(page.getByRole('dialog')).toHaveCount(0);
+ await test('Help modal owns focus, shortcuts and dismissal without losing the device page', async()=>{
+  const page=await pageAt('/devices'); await loaded(page); await page.getByRole('button',{name:`${device.name}: Details öffnen`}).click();
+  const detail=page.getByRole('region',{name:`Gerät ${device.name}`,exact:true}); await expect(detail).toBeFocused();
+  await page.keyboard.press('?'); const help=page.getByRole('dialog',{name:'Tastenkürzel',exact:true}); await expect(help).toBeVisible(); await expect(page.getByRole('dialog')).toHaveCount(1);
+  await page.keyboard.press('Shift+Tab'); expect(await page.evaluate(()=>document.activeElement?.closest('[role=dialog]')!==null)).toBe(true);
+  for(let i=0;i<16;i++) await page.keyboard.press('Tab'); expect(await page.evaluate(()=>document.activeElement?.closest('[role=dialog]')!==null)).toBe(true);
+  await page.keyboard.press('?'); await page.keyboard.press('Control+k'); await expect(help).toBeVisible(); await expect(page.getByRole('dialog')).toHaveCount(1); await expect(page).toHaveURL(base+'/#/devices/'+device.id);
+  await page.keyboard.press('Escape'); await expect(help).toHaveCount(0); await expect(detail).toBeVisible(); await expect(page).toHaveURL(base+'/#/devices/'+device.id);
+  await page.keyboard.press('?'); await expect(help).toBeVisible(); await page.locator('.dialog-backdrop').click({position:{x:10,y:10}}); await expect(help).toHaveCount(0); await expect(detail).toBeVisible();
+  await page.keyboard.press('Escape'); await expect(detail).toHaveCount(0); await expect(page.locator('main')).toBeFocused();
  });
  for(const [label,viewport,mobile] of [['desktop',{width:1440,height:1000},false],['mobile',{width:390,height:844},true]]) for(const theme of ['light','dark']) await test(`Synthetic-only gallery ${label} ${theme}`, async()=>{
   const page=await pageAt('/devices',viewport,{isMobile:mobile,hasTouch:mobile,reviewLocale:null}); await loaded(page);
@@ -145,8 +153,8 @@ try {
   // All displayed inventory rows are Windows demo fixtures. Never publish the
   // overview or sandbox screenshots, which can contain the real local sample.
   await shot(page,`synthetic-inventory-${label}-${theme}`);
-  await page.getByRole('button',{name:`Open details: ${device.name}`}).click(); await expect(page.getByRole('dialog')).toHaveAttribute('aria-label',`Device ${device.name}`);
-  await page.getByRole('tab',{name:/Evidence/}).click(); await page.locator('.dialog .evidence-card summary').first().click(); await shot(page,`synthetic-device-${label}-${theme}`);
+  await page.getByRole('button',{name:`Open details: ${device.name}`}).click(); await expect(page.getByRole('region',{name:`Device ${device.name}`,exact:true})).toBeVisible();
+  await page.getByRole('tab',{name:/Evidence/}).click(); await page.locator('.device-page .evidence-card summary').first().click(); await shot(page,`synthetic-device-${label}-${theme}`);
   await page.getByRole('tab',{name:'Overview',exact:true}).click(); await page.locator('.linked-case').first().click(); await expect(page.locator('.case-detail-header h1')).toHaveText(caseItem.title);
   await page.locator('.evidence-card summary').first().click(); await shot(page,`synthetic-case-${label}-${theme}`);
  });
@@ -187,7 +195,7 @@ try {
   await page.route('**/api/overview',route=>route.abort('failed')); await page.getByRole('button',{name:'Aktualisieren',exact:true}).click(); await expect(page.getByRole('alert')).toContainText('letzten erfolgreichen Abruf'); await expect(page.locator('.device-table')).toBeVisible(); await expect(page.locator('.page-footer')).toContainText('Letzter erfolgreicher Abruf');
  });
  await test('Unknown device and case links show safe recoverable error', async()=>{
-  const page=await pageAt('/devices/does-not-exist'); await expect(page.getByRole('alert')).toContainText('Gerät nicht verfügbar'); await page.getByRole('button',{name:'Schließen',exact:true}).click(); await expect(page.getByRole('dialog')).toHaveCount(0);
+  const page=await pageAt('/devices/does-not-exist'); await expect(page.getByRole('alert')).toContainText('Gerät nicht verfügbar'); await page.getByRole('button',{name:'Zurück zu Geräten',exact:true}).click(); await expect(page.locator('.device-page')).toHaveCount(0); await expect(page.locator('main')).toBeFocused();
   await page.goto(`${base}/#/cases/does-not-exist`); await expect(page.getByRole('alert')).toContainText('Untersuchung nicht verfügbar'); await page.getByRole('button',{name:'Alle Untersuchungen'}).click(); await expect(page.getByRole('heading',{name:'Untersuchungen',exact:true,level:1})).toBeVisible();
  });
  await test('Malformed percent-encoded route cannot blank the application', async()=>{
@@ -197,10 +205,10 @@ try {
   const page=await pageAt('/devices'); await loaded(page); await page.keyboard.press('Tab'); await expect(page.getByRole('link',{name:'Zum Inhalt'})).toBeFocused(); await page.keyboard.press('Enter');
   await expect(page.getByRole('heading',{name:'Geräte',exact:true,level:1})).toBeVisible(); expect(await page.evaluate(()=>document.activeElement?.id)).toBe('main-content');
  });
- for(const theme of ['light','dark']) await test(`Mobile 390px ${theme}: inventory, navigation, case, dialog, no overflow`, async()=>{
+ for(const theme of ['light','dark']) await test(`Mobile 390px ${theme}: inventory, navigation, case, device page, no overflow`, async()=>{
   const page=await pageAt('/overview',{width:390,height:844},{isMobile:true,hasTouch:true}); await loaded(page); if(theme==='dark') await page.getByRole('button',{name:'Dunkles Design aktivieren'}).click();
   await noOverflow(page); await shot(page,`mobile-overview-${theme}`); await page.getByRole('button',{name:'Menü öffnen'}).click(); await expect(page.locator('.sidebar')).toHaveClass(/is-open/); await shot(page,`mobile-navigation-${theme}`); await page.locator('nav .nav-item').filter({hasText:'Geräte'}).click(); await expect(page.locator('.sidebar')).not.toHaveClass(/is-open/); await expect(page.getByRole('textbox',{name:'Geräte durchsuchen'})).toBeVisible(); await noOverflow(page); await shot(page,`mobile-inventory-${theme}`);
-  await page.getByRole('button',{name:`${device.name}: Details öffnen`}).click(); await expect(page.getByRole('dialog')).toHaveAttribute('aria-label',`Gerät ${device.name}`); await noOverflow(page); await shot(page,`mobile-device-${theme}`); await page.locator('.linked-case').first().click(); await expect(page.locator('.case-detail-header h1')).toHaveText(caseItem.title); await noOverflow(page); await shot(page,`mobile-case-${theme}`);
+  await page.getByRole('button',{name:`${device.name}: Details öffnen`}).click(); await expect(page.getByRole('region',{name:`Gerät ${device.name}`,exact:true})).toBeVisible(); await noOverflow(page); await shot(page,`mobile-device-${theme}`); await page.locator('.linked-case').first().click(); await expect(page.locator('.case-detail-header h1')).toHaveText(caseItem.title); await noOverflow(page); await shot(page,`mobile-case-${theme}`);
  });
  await test('Mobile primary interaction targets are at least 40×40 CSS px', async()=>{
   const page=await pageAt('/devices',{width:390,height:844},{isMobile:true,hasTouch:true}); await loaded(page);
