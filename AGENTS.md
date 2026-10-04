@@ -41,6 +41,13 @@ file as navigation and project constraints, never as permission to act on a host
   enable and disable commands; do not edit its sidecar or collect through the manager.
   Existing enrollment/counter state stays bound, and disabling does not refresh or
   erase retained metadata. See `docs/endpoint-identity-extension.md`.
+- Optional on-demand journal content needs a compatible upgraded endpoint and a
+  separate explicit local helper/content grant. Read `docs/linux-journal-helper.md`
+  and `docs/journal-content-mvp.md` before proposing setup. The main agent must not
+  become root or gain journal-group membership. Keep selected service allowlists,
+  separate HTTP plaintext-content acknowledgement, durable consume-once floors,
+  original expiry and operator-only content boundaries. Source/fixture checks do
+  not authorize account, group, unit or socket changes or an actual journal read.
 - Follow Go/Node versions and dependency locks in this revision. Validate commands
   against actual flags/config. Distinguish runtime tests from cross-builds, skipped
   container tests, and proposed functionality. Never invent install/enroll flags.

@@ -431,6 +431,15 @@ effects. Source and inert-fixture passes do not establish this runtime result;
 check the selected source's manual workflow evidence. True OS reboot, native
 Windows/macOS installation and automatic credential renewal remain separate gaps.
 
+### Optional on-demand service log content
+
+The separate [local journal helper setup](linux-journal-helper.md) supplies a
+read-only plan and an explicitly approved create-only apply command for an
+already installed, activated v3 Linux agent. It adds a distinct non-login helper
+and unit-only journal access; the main agent identity/groups stay unchanged.
+Logs require their own selected-service content grant and HTTP-only plaintext
+acknowledgement. Inert setup tests are not real source/systemd acceptance.
+
 ## 7. Acceptance: establish evidence, not just uptime
 
 On the actual approved target, confirm all of the following:

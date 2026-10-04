@@ -130,6 +130,11 @@ func Run(ctx context.Context, cfg Config, deps Dependencies) (Summary, error) {
 }
 
 func valid(r Result) bool {
+	switch r.Metadata.JournalStatus {
+	case "", "disabled", "denied", "unavailable", "state_unavailable", "idle", "result_lost", "expired", "helper_unavailable", "pending_retained", "acknowledged":
+	default:
+		return false
+	}
 	switch r.Outcome {
 	case Success, Retryable, Configuration, State, Revoked:
 	default:

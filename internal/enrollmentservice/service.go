@@ -16,6 +16,7 @@ import (
 	"localrmm/internal/enrollmentcrypto"
 	"localrmm/internal/enrollmentstate"
 	"localrmm/internal/enrollmentstore"
+	"localrmm/internal/journalcache"
 	"net/netip"
 	"sync"
 	"time"
@@ -42,6 +43,7 @@ type Signer interface {
 type Service struct{ *serviceState }
 type serviceState struct {
 	store        *enrollmentstore.Store
+	journal      *journalcache.Cache
 	signer       Signer
 	binding      enrollmentstate.Binding
 	now          func() time.Time
@@ -88,7 +90,7 @@ func New(store *enrollmentstore.Store, signer Signer, now func() time.Time) (*Se
 	if !now().Before(cert.NotAfter) || now().Before(cert.NotBefore) {
 		return nil, ErrConfiguration
 	}
-	return &Service{&serviceState{store: store, signer: signer, binding: cfg.Binding, now: now, issuerExpiry: cert.NotAfter, issuerStart: cert.NotBefore, challenges: make(map[string]challengeEntry), peers: make(map[netip.Addr]peerWindow), signing: make(chan struct{}, 1), proofs: make(chan struct{}, 2)}}, nil
+	return &Service{&serviceState{store: store, journal: journalcache.New(store, now), signer: signer, binding: cfg.Binding, now: now, issuerExpiry: cert.NotAfter, issuerStart: cert.NotBefore, challenges: make(map[string]challengeEntry), peers: make(map[netip.Addr]peerWindow), signing: make(chan struct{}, 1), proofs: make(chan struct{}, 2)}}, nil
 }
 func newID(prefix string) (string, error) {
 	var b [16]byte

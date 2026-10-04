@@ -8,6 +8,7 @@ import (
 	"flag"
 	"fmt"
 	"localrmm/internal/agentloop"
+	"localrmm/internal/journalhelper"
 	"localrmm/internal/lanclient"
 	"os"
 	"os/signal"
@@ -17,6 +18,12 @@ import (
 )
 
 func main() {
+	if selected, exclusive := journalReaderInvocation(os.Args[1:]); selected {
+		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+		defer stop()
+		os.Exit(runJournalReader(ctx, exclusive, journalhelper.Run, os.Stderr))
+	}
+
 	path := flag.String("config", "", "Absolute protected preprovided agent configuration JSON")
 	identity := flag.String("service-identity", "", "Expected numeric service UID:GID; rejects additional groups before state access")
 	validate := flag.Bool("validate-guided", false, "Validate local guided handoff and existing ledger without collection or network")
@@ -27,6 +34,9 @@ func main() {
 	insecurePending := flag.Bool("insecure-http-test", false, "Explicit unauthenticated HTTP pending-service acknowledgement")
 	endpointConsentMode := flag.String("endpoint-identity-consent", "", "Local-only preview, enable, or disable of the explicit hostname/interface-address extension; stop the sender first")
 	endpointConsentAck := flag.Bool("ack-endpoint-identity", false, "Acknowledge reporting hostname and all visible interface IPv4/IPv6 addresses to the configured manager")
+	journalConsentMode := flag.String("journal-content-consent", "", "Local-only preview or create-only initialize of on-demand journal consent; stop the sender first")
+	journalConsentAck := flag.Bool("ack-journal-content", false, "Acknowledge allowlisted service journal messages may contain credentials, personal data or other secrets")
+	journalPlaintextAck := flag.Bool("ack-journal-http-plaintext", false, "Separately acknowledge unencrypted journal content visible on the LAN with an unauthenticated manager")
 	flag.Parse()
 	if *path == "" || flag.NArg() != 0 {
 		fmt.Fprintln(os.Stderr, "Tracebolt LAN agent requires --config PATH; no service installation is performed.")
@@ -35,6 +45,13 @@ func main() {
 	if runtime.GOOS != "linux" {
 		fmt.Fprintln(os.Stderr, "Tracebolt LAN sender state is currently supported on Linux only; native ACL validation is pending for other platforms.")
 		os.Exit(2)
+	}
+	if *journalConsentMode != "" || *journalConsentAck || *journalPlaintextAck {
+		if *foreground || *validate || *interval != 30*time.Second || *enrollmentBootstrap != "" || *enrollmentState != "" || *insecurePending || *endpointConsentMode != "" || *endpointConsentAck {
+			fmt.Fprintln(os.Stderr, "Journal consent mode cannot be combined with reporting, validation, pending enrollment or endpoint consent.")
+			os.Exit(2)
+		}
+		os.Exit(runJournalConsent(journalConsentOptions{Path: *path, Mode: *journalConsentMode, Identity: *identity, Acknowledged: *journalConsentAck, Plaintext: *journalPlaintextAck}, journalConsentHooks{identity: serviceIdentity, configure: lanclient.ConfigureJournalContent}, os.Stdout, os.Stderr))
 	}
 	if *endpointConsentMode != "" || *endpointConsentAck {
 		if *foreground || *validate || *interval != 30*time.Second || *enrollmentBootstrap != "" || *enrollmentState != "" || *insecurePending {

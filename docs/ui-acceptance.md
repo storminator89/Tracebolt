@@ -1,11 +1,14 @@
-> Later endpoint/release evidence: source `dbbcfe203c6c39169d9b426991848cd8e736dfd6`
-> passed [all 13 CI jobs](https://github.com/storminator89/Tracebolt/actions/runs/37219826603)
-> and 98 required browser checks, with three retained enrollment skips and no
-> runtime/setup errors. The two new endpoint captures were independently inspected
-> at the equivalent `125a64e9` endpoint checkpoint. The active verified-download
-> command is a later source change: its 832 component and seven inert command
-> tests pass, while its exact hosted browser result remains pending. Earlier
-> screenshots below keep their own source attribution.
+> Current accepted source `74a5236e17c8ad22aaea65715c1932070077f0ac`
+> passed [all 13 CI jobs](https://github.com/storminator89/Tracebolt/actions/runs/37223233263)
+> and all 98 required browser checks, with three retained enrollment skips and no
+> runtime/setup errors. Its active download-command gate also passed 832 component,
+> nine supplemental DOM and seven inert command checks. Earlier images below retain
+> their original source attribution.
+>
+> The later journal candidate adds six real-handler synthetic cases with a strict
+> exact-source completeness gate. Its hosted browser result and original pixel
+> review are pending. It does not establish local journal permission, helper setup,
+> native capture or installed-service acceptance.
 
 # Tracebolt UI acceptance
 

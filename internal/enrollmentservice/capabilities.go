@@ -31,6 +31,8 @@ func profileCapabilities(in []model.Capability, profile string) []model.Capabili
 	set(model.Capability{ID: "journal", Name: "System log metadata", Status: "limited", Detail: "This profile attempts bounded system-journal metadata sampling. The inventory preview shows permission and visibility limits. Raw messages and log bodies are not collected."})
 	set(model.Capability{ID: "remote_actions", Name: "Remote actions", Status: "unsupported", Detail: "Remote command execution and remote control are not available. Read-only process and network observations do not grant remote actions."})
 	if profile == enrollmentcrypto.CollectionProfileComplete {
+		set(model.Capability{ID: "journal", Name: "System log metadata", Status: "limited", Detail: "The automatic inventory preview samples journal metadata only and excludes message bodies. Its permission result is separate from the optional on-demand Logs helper."})
+		set(model.Capability{ID: "journal_content", Name: "On-demand service logs", Status: "limited", Detail: "Logs can request a bounded service/time/severity snapshot only after a compatible endpoint upgrade and separate local helper/content permission. Messages may contain secrets despite masking. Request status and source coverage are shown in Logs; this capability does not establish a configured helper or successful access."})
 		for i := range out {
 			if out[i].ID == "os" {
 				out[i].Detail = "The OS release comes from the visible /etc/os-release. Optional hostname and interface addresses are separately reported after local opt-in; the device page shows their source coverage and original age."

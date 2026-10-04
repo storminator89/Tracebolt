@@ -89,7 +89,7 @@ func prepareWithEnrollment(m lanconfig.Material, enrollment *enrollmentconfig.Ma
 		if e != nil {
 			return fail(e)
 		}
-		enrolledIngress, e = enrollmenttransport.New(enrolledStore, enrollment.Issuer().IssuerDER(), c.AgentOrigin)
+		enrolledIngress, e = enrollmenttransport.New(enrolledStore, enrollment.Issuer().IssuerDER(), c.AgentOrigin, enrolledService.JournalCache())
 		if e != nil {
 			return fail(e)
 		}

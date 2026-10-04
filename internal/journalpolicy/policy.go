@@ -1,0 +1,217 @@
+// Package journalpolicy is the pure access policy for a future fixed-purpose
+// local journal helper. It does not establish file ownership, peer credentials,
+// enrollment authority, or permission to install/run a helper.
+package journalpolicy
+
+import (
+	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"io"
+	"net/url"
+	"slices"
+	"strings"
+	"time"
+	"unicode/utf8"
+
+	"localrmm/internal/journalview"
+)
+
+const Version = "tracebolt.journal-content-policy.v1"
+const Scope = "on-demand-allowlisted-system-service-log-content"
+const CollectionProfile = "managed-operations-v3"
+const MaxPolicyBytes = 8 << 10
+const MaxUnits = 32
+
+var ErrPolicy = errors.New("journal content policy is invalid")
+var ErrDenied = errors.New("journal content request is not authorized")
+var ErrChanged = errors.New("journal content policy changed before delivery")
+
+// Policy is an explicit local administrator declaration. A future loader must
+// obtain it from a protected root-owned file, never from manager input. The
+// separate helper account must not share the main agent's UID.
+type Policy struct {
+	SchemaVersion         string   `json:"schemaVersion"`
+	Scope                 string   `json:"scope"`
+	CollectionProfile     string   `json:"collectionProfile"`
+	SenderBinding         string   `json:"senderBinding"`
+	ManagerOrigin         string   `json:"managerOrigin"`
+	TransportProfile      string   `json:"transportProfile"`
+	AgentUID              uint32   `json:"agentUid"`
+	HelperUID             uint32   `json:"helperUid"`
+	AllowedUnits          []string `json:"allowedUnits"`
+	MaxWindowSeconds      uint32   `json:"maxWindowSeconds"`
+	MaxLookbackSeconds    uint32   `json:"maxLookbackSeconds"`
+	MaxPriority           int      `json:"maxPriority"`
+	Enabled               bool     `json:"enabled"`
+	ContentAcknowledged   bool     `json:"contentAcknowledged"`
+	PlaintextAcknowledged bool     `json:"plaintextAcknowledged"`
+}
+
+// Context contains facts obtained independently by the future local adapter.
+// PeerUID must come from Unix SO_PEERCRED. Other values must come from the
+// currently validated enrollment and dedicated-helper identity, never request
+// JSON. This struct alone is not proof that the facts are authoritative.
+type Context struct {
+	SenderBinding     string
+	ManagerOrigin     string
+	TransportProfile  string
+	CollectionProfile string
+	AgentUID          uint32
+	HelperUID         uint32
+	PeerUID           uint32
+}
+
+func validUID(id uint32) bool { return id != 0 && id != ^uint32(0) }
+func validBinding(s string) bool {
+	if len(s) != 64 {
+		return false
+	}
+	b, err := hex.DecodeString(s)
+	return err == nil && hex.EncodeToString(b) == s && strings.Trim(s, "0") != ""
+}
+
+// Origin is display/binding metadata, never a destination used by this package.
+// It must additionally equal the exact origin from the current trusted context.
+func validOrigin(raw, profile string) bool {
+	if len(raw) == 0 || len(raw) > 512 || strings.ContainsAny(raw, "\\%\r\n\t ") {
+		return false
+	}
+	u, err := url.Parse(raw)
+	if err != nil || u.User != nil || u.Host == "" || u.Path != "" || u.RawQuery != "" || u.ForceQuery || u.Fragment != "" || u.Opaque != "" || u.Host != strings.ToLower(u.Host) || raw != u.Scheme+"://"+u.Host {
+		return false
+	}
+	return profile == "tls" && u.Scheme == "https" || profile == "http-test" && u.Scheme == "http"
+}
+
+func Validate(p Policy) error {
+	if p.SchemaVersion != Version || p.Scope != Scope || p.CollectionProfile != CollectionProfile || !validBinding(p.SenderBinding) || !validOrigin(p.ManagerOrigin, p.TransportProfile) || !validUID(p.AgentUID) || !validUID(p.HelperUID) || p.AgentUID == p.HelperUID || len(p.AllowedUnits) == 0 || len(p.AllowedUnits) > MaxUnits || p.MaxWindowSeconds == 0 || p.MaxWindowSeconds > 3600 || p.MaxLookbackSeconds < p.MaxWindowSeconds || p.MaxLookbackSeconds > 86400 || p.MaxPriority < 0 || p.MaxPriority > 7 || !p.ContentAcknowledged || p.TransportProfile == "http-test" && !p.PlaintextAcknowledged || p.TransportProfile == "tls" && p.PlaintextAcknowledged {
+		return ErrPolicy
+	}
+	// Reuse the reader's exact unit grammar; do not create a second permissive
+	// interpretation of service names. Only the unit varies in this pure check.
+	now := time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC)
+	for i, unit := range p.AllowedUnits {
+		if i > 0 && p.AllowedUnits[i-1] >= unit {
+			return ErrPolicy
+		}
+		if journalview.ValidateQuery(journalview.Query{Unit: unit, Start: now.Add(-time.Minute), End: now, MaxPriority: p.MaxPriority}, now) != nil {
+			return ErrPolicy
+		}
+	}
+	return nil
+}
+
+func Encode(p Policy) ([]byte, error) {
+	if Validate(p) != nil {
+		return nil, ErrPolicy
+	}
+	b, err := json.Marshal(p)
+	if err != nil || len(b) > MaxPolicyBytes {
+		return nil, ErrPolicy
+	}
+	return b, nil
+}
+
+// Decode requires every member and rejects unknown, duplicate, null, wrongly
+// typed and oversized values. No root policy is inferred from an empty file.
+func Decode(raw []byte) (Policy, error) {
+	bad := func() (Policy, error) { return Policy{}, ErrPolicy }
+	if len(raw) == 0 || len(raw) > MaxPolicyBytes || !utf8.Valid(raw) {
+		return bad()
+	}
+	fields := map[string]string{"schemaVersion": "s", "scope": "s", "collectionProfile": "s", "senderBinding": "s", "managerOrigin": "s", "transportProfile": "s", "agentUid": "n", "helperUid": "n", "allowedUnits": "a", "maxWindowSeconds": "n", "maxLookbackSeconds": "n", "maxPriority": "n", "enabled": "b", "contentAcknowledged": "b", "plaintextAcknowledged": "b"}
+	d := json.NewDecoder(bytes.NewReader(raw))
+	t, err := d.Token()
+	if err != nil || t != json.Delim('{') {
+		return bad()
+	}
+	seen := map[string]bool{}
+	for d.More() {
+		t, err = d.Token()
+		if err != nil {
+			return bad()
+		}
+		key, ok := t.(string)
+		kind, known := fields[key]
+		if !ok || !known || seen[key] {
+			return bad()
+		}
+		seen[key] = true
+		var v json.RawMessage
+		if d.Decode(&v) != nil {
+			return bad()
+		}
+		v = bytes.TrimSpace(v)
+		if len(v) == 0 || bytes.Equal(v, []byte("null")) {
+			return bad()
+		}
+		switch kind {
+		case "s":
+			if v[0] != '"' {
+				return bad()
+			}
+		case "b":
+			if !bytes.Equal(v, []byte("true")) && !bytes.Equal(v, []byte("false")) {
+				return bad()
+			}
+		case "a":
+			if v[0] != '[' {
+				return bad()
+			}
+		case "n":
+			if len(v) > 10 || len(v) > 1 && v[0] == '0' {
+				return bad()
+			}
+			for _, c := range v {
+				if c < '0' || c > '9' {
+					return bad()
+				}
+			}
+		}
+	}
+	t, err = d.Token()
+	if err != nil || t != json.Delim('}') || len(seen) != len(fields) {
+		return bad()
+	}
+	if _, err = d.Token(); err != io.EOF {
+		return bad()
+	}
+	var p Policy
+	if json.Unmarshal(raw, &p) != nil || Validate(p) != nil {
+		return bad()
+	}
+	return p, nil
+}
+
+// Permit is a detached, content-free authorization for one exact query. It is
+// not a reusable lease: current policy/context must be checked before capture
+// and again before releasing any content. It does not authorize remote routing.
+type Permit struct {
+	query      journalview.Query
+	policyHash [32]byte
+}
+
+func (p Permit) Query() journalview.Query { return p.query }
+func (p Permit) PolicyDigest() string     { return "sha256:" + hex.EncodeToString(p.policyHash[:]) }
+
+func Authorize(p Policy, c Context, q journalview.Query, now time.Time) (Permit, error) {
+	if Validate(p) != nil || !p.Enabled || c.SenderBinding != p.SenderBinding || c.ManagerOrigin != p.ManagerOrigin || c.TransportProfile != p.TransportProfile || c.CollectionProfile != p.CollectionProfile || c.AgentUID != p.AgentUID || c.HelperUID != p.HelperUID || c.PeerUID != p.AgentUID || journalview.ValidateQuery(q, now) != nil || !slices.Contains(p.AllowedUnits, q.Unit) || q.End.Sub(q.Start) > time.Duration(p.MaxWindowSeconds)*time.Second || now.Sub(q.Start) > time.Duration(p.MaxLookbackSeconds)*time.Second || q.MaxPriority > p.MaxPriority {
+		return Permit{}, ErrDenied
+	}
+	raw, err := Encode(p)
+	if err != nil {
+		return Permit{}, ErrDenied
+	}
+	return Permit{query: q, policyHash: sha256.Sum256(raw)}, nil
+}
+
+func (p Permit) Recheck(current Policy, c Context, now time.Time) error {
+	next, err := Authorize(current, c, p.query, now)
+	if err != nil || next.policyHash != p.policyHash {
+		return ErrChanged
+	}
+	return nil
+}

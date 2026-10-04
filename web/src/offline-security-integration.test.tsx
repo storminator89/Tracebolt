@@ -88,7 +88,7 @@ describe('Security coverage in the real device drawer', () => {
     it('allows unknown-platform LAN identities without asserting Linux collection', async () => {
         currentDevice = device(firstID, { platform: 'unknown' }); renderDetail(); await openSecurity();
         await screen.findByText('Client source-package mapping is missing.');
-        expect(document.querySelector('.detail-badges .status-unknown')).toHaveTextContent('Unknown');
+        expect(document.querySelector('.detail-badges .status-unknown')).toHaveTextContent('Not assessed');
     });
     it('does not add coverage to development mode even for a LAN-shaped fixture', async () => {
         currentSession = developmentSession; renderDetail(); await screen.findByRole('tab', { name: 'Overview' });

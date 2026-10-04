@@ -14,6 +14,7 @@ import (
 	"localrmm/internal/enrollmentcrypto"
 	"localrmm/internal/enrollmentstate"
 	"localrmm/internal/inventoryledger"
+	"localrmm/internal/journalrequest"
 	"localrmm/internal/systeminventory"
 	"localrmm/internal/systemwire"
 )
@@ -74,6 +75,7 @@ type systemRecord struct {
 	Sockets          *systemComplete         `json:"sockets"`
 	MaintenanceAt    *time.Time              `json:"maintenanceAt"`
 	EndpointIdentity *endpointIdentityRecord `json:"endpointIdentity,omitempty"`
+	JournalRequest   *journalrequest.Record  `json:"journalRequest,omitempty"`
 }
 
 type endpointIdentityRecord struct {
@@ -175,6 +177,9 @@ func validSystemRecord(snap enrollmentstate.Snapshot, r systemRecord) bool {
 		} else if (r.MaintenanceAt == nil || r.MaintenanceAt.Before(p.CollectedAt.Add(SystemRetention))) && r.Receipt.ReceivedAt.Before(p.CollectedAt.Add(SystemRetention)) {
 			return false
 		}
+	}
+	if r.JournalRequest != nil && !validJournalRecord(snap, *r.JournalRequest) {
+		return false
 	}
 	return true
 }

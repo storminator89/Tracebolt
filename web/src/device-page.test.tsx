@@ -51,7 +51,7 @@ describe('dedicated device page', () => {
   expect(page).toHaveClass('device-page'); expect(screen.getByRole('main')).toHaveClass('device-main');
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument(); expect(document.body.style.overflow).not.toBe('hidden');
   expect(within(page).getByRole('heading', { name: 'Synthetic Linux fixture', level: 1 })).toBeVisible();
-  expect(within(page).getByText('Unknown', { selector: '.status' })).toBeVisible();
+  expect(within(page).getByText('Not assessed', { selector: '.status' })).toBeVisible();
   expect(within(page).getByText('Time unknown', { selector: '.detail-time' })).toBeVisible(); expect(page).not.toHaveTextContent('0001');
   expect(screen.queryByLabelText('Search devices')).not.toBeInTheDocument(); expect(screen.queryByRole('button', { name: 'Add device' })).not.toBeInTheDocument();
   const technical = within(page).getByText('Device profile & technical details').closest('details')!;
@@ -103,4 +103,17 @@ describe('dedicated device page', () => {
   expect(within(page).getByRole('button', { name: 'Back to devices' })).toBeEnabled();
   expect(screen.getByRole('alert')).toHaveTextContent('Synthetic overview unavailable');
  });
+});
+
+it('keeps shell and loaded fleet data on ordinary menu navigation without reauth or document reload', async () => {
+ await navigate('devices'); render(<App/>); await screen.findByLabelText('Search devices');
+ expect(screen.getByRole('columnheader', { name: 'Overall health' })).toBeVisible();
+ fireEvent.change(screen.getByLabelText('Search devices'), { target: { value: 'Synthetic' } });
+ const sidebar = screen.getByRole('complementary', { name: 'Main navigation' });
+ fireEvent.click(within(sidebar).getByRole('button', { name: 'Overview' })); await screen.findByRole('heading', { name: 'Overview', level: 1 });
+ fireEvent.click(within(sidebar).getByRole('button', { name: /Devices/ })); await screen.findByLabelText('Search devices');
+ expect(screen.getByLabelText('Search devices')).toHaveValue('Synthetic');
+ expect(screen.getByRole('complementary', { name: 'Main navigation' })).toBe(sidebar);
+ expect(vi.mocked(request).mock.calls.filter(([path]) => path === '/overview')).toHaveLength(1);
+ expect(vi.mocked(request).mock.calls.filter(([path]) => path === '/auth/session')).toHaveLength(1);
 });

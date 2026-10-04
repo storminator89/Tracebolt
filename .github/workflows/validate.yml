@@ -259,6 +259,10 @@ jobs:
         with:
           go-version-file: go.mod
           cache: false
+      - name: Check release cleanup and journal setup with inert fixtures
+        run: |
+          python3 -B -m unittest discover -s tests/release -p 'test_*.py' -v
+          python3 -B -m unittest discover -s deploy/journal -p 'test_*.py' -v
       - name: Vet
         run: go vet -p 1 ./...
       - name: Unit and race tests
@@ -496,6 +500,16 @@ jobs:
           python3 -O tests/security/test_endpoint_browser_gate.py
           node tests/e2e-review/endpoint-identity-browser.mjs
           python3 tests/security/check_endpoint_browser_gate.py artifacts/review/endpoint-browser-results.json
+      - name: Journal request, snapshot and lifecycle browser acceptance
+        if: ${{ !cancelled() }}
+        env:
+          TRACEBOLT_SOURCE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          python3 tests/security/test_journal_browser_gate.py
+          python3 -O tests/security/test_journal_browser_gate.py
+          node tests/e2e-review/journal-browser.mjs
+          python3 tests/security/check_journal_browser_gate.py artifacts/review/journal-browser-results.json
       - name: Keep browser review evidence briefly
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -516,6 +530,8 @@ jobs:
             artifacts/review/v3-mvp-browser-manifest.json
             artifacts/review/endpoint-browser-results.json
             artifacts/review/endpoint-browser-manifest.json
+            artifacts/review/journal-browser-results.json
+            artifacts/review/journal-browser-manifest.json
           if-no-files-found: warn
           retention-days: 3
 

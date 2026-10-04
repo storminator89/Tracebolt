@@ -36,6 +36,7 @@ type receipt struct {
 	Duplicate     bool      `json:"duplicate"`
 }
 type Report struct {
+	JournalStatus               string `json:"journalStatus,omitempty"`
 	SchemaVersion               string `json:"schemaVersion"`
 	Status                      string `json:"status"`
 	Profile                     string `json:"profile"`
@@ -91,7 +92,13 @@ func Run(ctx context.Context, m Material) (Report, error) {
 		// foreground attempts retain their original20s budget separately.
 		return runUsingState(ctx, m, state)
 	}
-	return runPreparedAttemptWithSystem(ctx, m, state, system, inventory, runUsingState)
+	journal := openJournalSender(m)
+	defer journal.Close()
+	report, err := runPreparedAttemptWithSystem(ctx, m, state, system, inventory, runUsingState)
+	if err == nil {
+		report.JournalStatus = runJournalAttempt(ctx, journal)
+	}
+	return report, err
 }
 
 // Complete-profile work is serialized: a bounded metric attempt followed by a

@@ -48,8 +48,18 @@ func runForeground(ctx context.Context, m Material, interval time.Duration, obse
 		}
 		defer system.Close()
 	}
+	var journal *journalSender
+	if m.config.complete() {
+		journal = openJournalSender(m)
+		defer journal.Close()
+	}
 	return agentloop.Run(ctx, agentloop.Config{Interval: interval}, agentloop.Dependencies{Clock: clock, Random: random, Observe: observe, Attempt: func(parent context.Context) agentloop.Result {
+		journal.prune()
 		report, err := runPreparedAttemptWithSystem(parent, m, state, system, inventory, runUsingState)
+		report.JournalStatus = journal.prune()
+		if err == nil && journal != nil {
+			report.JournalStatus = runJournalAttempt(parent, journal)
+		}
 		outcome := agentloop.Retryable
 		switch {
 		case err == nil:
@@ -61,6 +71,6 @@ func runForeground(ctx context.Context, m Material, interval time.Duration, obse
 		}
 		// Transport/receipt failures retain exact pending data. A generic transport
 		// error cannot establish revocation and never triggers automatic enrollment.
-		return agentloop.Result{Outcome: outcome, Metadata: agentloop.Metadata{Sequence: report.Sequence, Duplicate: report.Duplicate, RetriedPending: report.RetriedPending, DiscardedStale: report.DiscardedStale, AvailablePercentageFields: uint8(report.AvailablePercentageFields), UnavailablePercentageFields: uint8(report.UnavailablePercentageFields), InventoryStatus: report.InventoryStatus, InventorySequence: report.InventorySequence, InventoryOperations: report.InventoryOperations, SystemStatus: report.SystemStatus, SystemSequence: report.SystemSequence, SystemRetriedPending: report.SystemRetriedPending, SystemDiscardedStale: report.SystemDiscardedStale}}
+		return agentloop.Result{Outcome: outcome, Metadata: agentloop.Metadata{JournalStatus: report.JournalStatus, Sequence: report.Sequence, Duplicate: report.Duplicate, RetriedPending: report.RetriedPending, DiscardedStale: report.DiscardedStale, AvailablePercentageFields: uint8(report.AvailablePercentageFields), UnavailablePercentageFields: uint8(report.UnavailablePercentageFields), InventoryStatus: report.InventoryStatus, InventorySequence: report.InventorySequence, InventoryOperations: report.InventoryOperations, SystemStatus: report.SystemStatus, SystemSequence: report.SystemSequence, SystemRetriedPending: report.SystemRetriedPending, SystemDiscardedStale: report.SystemDiscardedStale}}
 	}})
 }

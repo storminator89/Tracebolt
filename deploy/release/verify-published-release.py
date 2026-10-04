@@ -6,12 +6,12 @@ are downloaded privately, checked as bytes and never extracted or executed.
 """
 import argparse
 import hashlib
-import importlib.util
 import json
 import os
 from pathlib import Path
 import stat
 import tempfile
+import types
 
 HERE = Path(__file__).resolve().parent
 VERSION = "v0.1.0-pilot.2"
@@ -70,12 +70,19 @@ def check_context(output, opt_in):
 
 
 def load_bootstrap():
-    path = HERE / "linux-bootstrap.py"
-    template = path.read_bytes()
+    # This check belongs to the immutable pilot.2 source, even after the reusable
+    # template is corrected for a later release. Check both hashes before loading
+    # the exact captured bytes, with its executable release pin disabled.
+    path = HERE / "published" / f"{VERSION}.py"
+    published = path.read_bytes()
+    require((len(published), hashlib.sha256(published).hexdigest()) == EXPECTED["bootstrap.py"], "FAIL_TEMPLATE")
+    configured = ("RELEASE_PIN = " + repr(PIN)).encode()
+    require(published.count(configured) == 1, "FAIL_TEMPLATE")
+    template = published.replace(configured, b"RELEASE_PIN = None", 1)
     require(hashlib.sha256(template).hexdigest() == TEMPLATE_SHA256, "FAIL_TEMPLATE")
-    spec = importlib.util.spec_from_file_location("pilot2_bootstrap", path)
-    b = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(b)
+    b = types.ModuleType("pilot2_bootstrap")
+    b.__file__ = str(path)
+    exec(compile(template, str(path), "exec"), b.__dict__)
     original_url = b.asset_url
 
     def fixed_url(version, name):

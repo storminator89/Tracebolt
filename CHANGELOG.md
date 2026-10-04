@@ -2,6 +2,14 @@
 
 Meaningful development checkpoints are recorded here. These are prototype milestones, not production releases.
 
+## 2026-10-04 — Connect bounded on-demand service logs
+
+- Add explicit service/time/severity requests, one-time native claim/consumption, authenticated result transport and operator-only Logs pages. Results keep their original expiry, immutable snapshot identity and coverage; paging and literal search operate on captured content. Expiry, cancellation, revocation and restart loss never become healthy empty data.
+- Keep journal access behind a separately acknowledged local content policy and dedicated least-privileged helper. The main agent retains its existing identity and group boundary. The create-only setup provides preview and a deliberate administrator apply; source and browser fixtures perform no helper installation, permission change or real journal read.
+- Add six synthetic real-handler browser cases while preserving the previous 98 required cases, three named enrollment skips and five review lifecycle cycles. The journal source owner's 14-package combined race checks, all-Go compilation, 891 frontend tests/type checking/build and 21 inert setup tests passed. Exact composed-source hosted browser/native/aggregate acceptance remains pending.
+- Correct the reusable release bootstrap's cleanup: the pinned verifier creates private state, so flat cleanup could mask an already committed installer's successful exit. Fixed-name descriptor-based cleanup preserves installer status and leaves unknown/protected entries alone. All 66 inert release fixtures pass; the original and corrected behavior were reproduced with the real offline verifier and an inert installer. The historical pilot.2 verifier remains bound to its original immutable bytes.
+- The preceding `74a5236` download-command source completed all 13 CI jobs and 98 browser checks. Official pilot.2 assets and the active bootstrap pin remain unchanged and contain no journal feature; their known post-upgrade cleanup warning is not corrected by this source checkpoint. A fresh verified binary release and explicit host helper/content grant are still required for download-based journal use.
+
 ## 2026-10-04 — Pin the verified pilot.2 dashboard download
 
 - The exact binary source `dbbcfe203` passed all 13 CI jobs and 98 required browser checks, with three existing enrollment skips. The official pilot.2 build/publication succeeded, and a separate read-only hosted check downloaded and verified all ten public assets, their keyless provenance and the generated bootstrap template.

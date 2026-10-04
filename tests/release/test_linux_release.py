@@ -63,6 +63,7 @@ class Fixture(unittest.TestCase):
             self.assertIn("--bundle", args)
             self.assertIn("--custom-trusted-root", args)
             self.assertEqual(kwargs["env"]["GH_CONFIG_DIR"], str(directory))
+            self.assertEqual(kwargs["env"]["XDG_STATE_HOME"], str(directory / "verifier-state"))
             self.assertNotIn("GH_TOKEN", kwargs["env"])
             self.assertNotIn("HTTPS_PROXY", kwargs["env"])
             return SimpleNamespace(returncode=getattr(self, "verifier_result", 0))
@@ -245,6 +246,112 @@ class VerifierArchive(unittest.TestCase):
         self.assertIn("certificateAuthorities", json.loads(b.TRUSTED_ROOT_JSON))
         self.assertEqual(b.SIGNER_WORKFLOW, "storminator89/Tracebolt/.github/workflows/linux-release-candidate.yml")
 
+
+
+class BootstrapCleanup(unittest.TestCase):
+    def setUp(self):
+        self.fixture = Fixture("test_source_is_never_extracted_or_executed")
+        self.fixture.setUp()
+        self.addCleanup(self.fixture.doCleanups)
+
+    def apply(self, exit_code=0, after_prepare=None, prepare_error=None, unlink_error=False):
+        f = self.fixture
+        prepare = b.prepare_release
+        fixture_uid = os.geteuid()
+        def verified_with_state(directory, pin, verifier):
+            f.verify(directory, pin, verifier)
+            state = directory / "verifier-state" / "gh"
+            state.mkdir(parents=True, mode=0o700)
+            with b.open_private(state / "device-id") as stream:
+                stream.write(b"inert verifier state")
+        def prepare_fixture(directory, pin, arch):
+            if prepare_error:
+                raise b.Rejected(prepare_error)
+            # Only the CLI root preflight is simulated. Staging ownership is
+            # still checked against the real unprivileged fixture owner.
+            with patch.object(b.os, "geteuid", return_value=fixture_uid):
+                manifest = prepare(directory, pin, arch, f.fetch, f.verifier, verified_with_state)
+            if after_prepare:
+                after_prepare(directory)
+            return manifest
+        stdout, stderr = io.StringIO(), io.StringIO()
+        old_umask = os.umask(0o077)
+        try:
+            with contextlib.ExitStack() as stack:
+                for owner, name, value in ((b, "RELEASE_PIN", f.pin),):
+                    stack.enter_context(patch.object(owner, name, value))
+                stack.enter_context(patch.object(b, "inspect_host", return_value="amd64"))
+                stack.enter_context(patch.object(b.os, "getuid", return_value=0))
+                stack.enter_context(patch.object(b.os, "geteuid", return_value=0))
+                stack.enter_context(patch.object(b.sys.stdin, "isatty", return_value=True))
+                stack.enter_context(patch.object(b.tempfile, "mkdtemp", return_value=str(f.stage)))
+                stack.enter_context(patch.object(b, "prepare_release", side_effect=prepare_fixture))
+                installer = stack.enter_context(patch.object(b, "run_installer", return_value=exit_code))
+                if unlink_error:
+                    stack.enter_context(patch.object(b.os, "unlink", side_effect=PermissionError("inert protected staging")))
+                stack.enter_context(contextlib.redirect_stdout(stdout))
+                stack.enter_context(contextlib.redirect_stderr(stderr))
+                result = b.main(["--action", "upgrade", "--apply", "--insecure-http-test"])
+        finally:
+            os.umask(old_umask)
+        return result, stderr.getvalue(), installer.call_count
+
+    def test_successful_installer_and_verifier_state_are_cleaned(self):
+        result, error, calls = self.apply()
+        self.assertEqual((result, error, calls), (0, "", 1))
+        self.assertFalse(self.fixture.stage.exists())
+
+    def test_nonzero_installer_status_is_preserved(self):
+        result, error, calls = self.apply(exit_code=7)
+        self.assertEqual((result, error, calls), (7, "", 1))
+        self.assertFalse(self.fixture.stage.exists())
+
+    def test_readonly_artifact_modes_do_not_require_permission_changes(self):
+        def readonly(directory):
+            for path in directory.iterdir():
+                if path.is_file():
+                    path.chmod(0o400)
+        result, error, calls = self.apply(after_prepare=readonly)
+        self.assertEqual((result, error, calls), (0, "", 1))
+        self.assertFalse(self.fixture.stage.exists())
+
+    def test_protected_staging_does_not_turn_success_into_preparation_failure(self):
+        result, error, calls = self.apply(unlink_error=True)
+        self.assertEqual((result, calls), (0, 1))
+        self.assertIn("Installer exit status is preserved", error)
+        self.assertNotIn("Release preparation failed", error)
+        self.assertTrue(self.fixture.stage.exists())
+
+    def test_original_preparation_error_is_not_masked_by_cleanup(self):
+        (self.fixture.stage / "unknown").write_text("retain me")
+        result, error, calls = self.apply(prepare_error="inert original failure")
+        self.assertEqual((result, calls), (1, 0))
+        self.assertIn("Tracebolt: inert original failure", error)
+        self.assertIn("original operation error is preserved", error)
+        self.assertEqual((self.fixture.stage / "unknown").read_text(), "retain me")
+
+    def test_unknown_nested_state_is_retained_without_recursive_cleanup(self):
+        def extra(directory):
+            (directory / "verifier-state" / "gh" / "unknown").write_text("retain me")
+        result, error, calls = self.apply(after_prepare=extra)
+        self.assertEqual((result, calls), (0, 1))
+        self.assertIn("cleanup was incomplete", error)
+        self.assertEqual((self.fixture.stage / "verifier-state" / "gh" / "unknown").read_text(), "retain me")
+
+    def test_cleanup_does_not_follow_state_directory_symlink(self):
+        outside = self.fixture.root / "outside"
+        (outside / "gh").mkdir(parents=True)
+        sentinel = outside / "gh" / "device-id"
+        sentinel.write_text("outside")
+        (self.fixture.stage / "verifier-state").symlink_to(outside, target_is_directory=True)
+        self.assertFalse(b.cleanup_release(self.fixture.stage, set()))
+        self.assertEqual(sentinel.read_text(), "outside")
+
+    def test_cleanup_rejects_nonleaf_names(self):
+        sentinel = self.fixture.root / "outside"
+        sentinel.write_text("outside")
+        self.assertFalse(b.cleanup_release(self.fixture.stage, {"../outside"}))
+        self.assertEqual(sentinel.read_text(), "outside")
 
 
 class Preflight(unittest.TestCase):

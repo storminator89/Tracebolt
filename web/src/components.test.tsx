@@ -15,3 +15,8 @@ describe('accessible dialog',()=>{
   it('closes with Escape and restores prior focus',()=>{const close=vi.fn();const before=document.createElement('button');document.body.append(before);before.focus();const {unmount}=render(<Dialog title="Test" onClose={close}><button>Action</button></Dialog>);expect(screen.getByRole('dialog')).toHaveFocus();fireEvent.keyDown(document,{key:'Escape'});expect(close).toHaveBeenCalledOnce();unmount();expect(before).toHaveFocus();before.remove();});
   it('does not close when clicking content',()=>{const close=vi.fn();render(<Dialog title="Test" onClose={close}><p>Inside</p></Dialog>);fireEvent.mouseDown(screen.getByText('Inside'));expect(close).not.toHaveBeenCalled();});
 });
+
+describe('LAN health is separate from observation contact',()=>{
+  it('labels unassessed real LAN health without pretending it is healthy or disconnected',()=>{render(<Status status="unknown" source="lan" synthetic={false}/>);expect(screen.getByText('Nicht bewertet')).toBeVisible();expect(screen.getByText('Nicht bewertet')).toHaveAttribute('title',expect.stringContaining('letzten Beobachtung'));expect(screen.queryByText('Unauffällig')).not.toBeInTheDocument();expect(screen.queryByText('Offline')).not.toBeInTheDocument();});
+  it('preserves unknown for synthetic and non-LAN sources',()=>{render(<><Status status="unknown" source="lan" synthetic/><Status status="unknown" source="sandbox"/></>);expect(screen.getAllByText('Unbekannt')).toHaveLength(2);});
+});

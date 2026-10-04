@@ -1,0 +1,62 @@
+# Rendered only by the separately approved fixed-path journal setup.
+# Source templates and fixture tests are not host/runtime acceptance.
+[Unit]
+Description=Tracebolt isolated on-demand journal reader (candidate)
+Requires=tracebolt-journal-reader.socket
+After=tracebolt-journal-reader.socket
+
+[Service]
+Type=simple
+# Dedicated non-login account and primary group, never tracebolt-agent/root.
+# The account itself must have no supplementary membership. Only this unit gets
+# the reviewed systemd-journal group, matched to protected numeric metadata.
+User=@HELPER_UID@
+Group=@HELPER_GID@
+SupplementaryGroups=@JOURNAL_GID@
+Sockets=tracebolt-journal-reader.socket
+ExecStart=/opt/tracebolt-agent/lan-agent --journal-reader
+WorkingDirectory=/
+UMask=0077
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+PrivateNetwork=yes
+RestrictAddressFamilies=AF_UNIX
+IPAddressDeny=any
+SocketBindDeny=any
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectProc=invisible
+ProcSubset=pid
+RestrictNamespaces=yes
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+RemoveIPC=yes
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@mount @privileged @resources @reboot @swap @debug
+# Current packaging keeps sender enrollment/state/private keys here. A later
+# installer must verify and hide every actual private-key/state directory;
+# nonstandard layouts require a separately reviewed matching template.
+InaccessiblePaths=-/var/lib/tracebolt-agent -/etc/tracebolt-agent -/var/lib/tracebolt-agent-installer -/root -/home
+ReadOnlyPaths=/etc/tracebolt/journal-helper.json /etc/tracebolt/journal-content-policy.json
+ReadOnlyPaths=-/run/log/journal -/var/log/journal
+StandardInput=null
+StandardOutput=null
+StandardError=journal
+Restart=no
+TimeoutStopSec=10s
+TasksMax=32
+MemoryMax=128M
+LimitNOFILE=32
+
+# No [Install] section: only the separately approved socket activates this helper.

@@ -21,7 +21,7 @@ func TestGuidedCapabilitiesDescribeShippedScopeWithoutInstallationClaim(t *testi
 		t.Fatal("invalid capabilities or remote execution enabled")
 	}
 	text := strings.Join(got.Limitations, "\n")
-	for _, want := range []string{"UNENCRYPTED LAN TEST", "does not establish service installation", "v3 profile supports complete dpkg", "original ages", "rather than confirmed CVE", "Managed inventory is excluded from AI"} {
+	for _, want := range []string{"UNENCRYPTED LAN TEST", "does not establish service installation", "v3 profile supports complete dpkg", "original ages", "rather than confirmed CVE", "Managed inventory is excluded from AI", "separate local helper/content permission", "excluded from AI, exports and diagnostics"} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("missing scope boundary %q", want)
 		}

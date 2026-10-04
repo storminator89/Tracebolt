@@ -311,6 +311,7 @@ def verify_attestation(directory, pin, verifier, runner=subprocess.run):
     # fetching. The pinned CLI performs offline signature, certificate, log and
     # identity verification without reading the user's gh config or credentials.
     env = dict(SAFE_ENV, HOME=str(directory), GH_CONFIG_DIR=str(directory), XDG_CONFIG_HOME=str(directory),
+               XDG_STATE_HOME=str(directory / "verifier-state"),
                GH_PROMPT_DISABLED="1", GH_NO_UPDATE_NOTIFIER="1", GH_NO_EXTENSION_UPDATE_NOTIFIER="1", GH_HOST="github.com")
     args = [str(verifier), "attestation", "verify", str(directory / "manifest.json"),
             "--bundle", str(directory / "manifest.sigstore.json"), "--custom-trusted-root", str(rootfile),
@@ -445,6 +446,61 @@ def run_installer(command):
             signal.signal(signum, handler)
 
 
+def cleanup_release(directory, known):
+    """Remove only our named files and the pinned verifier's known state leaf.
+
+    Directory descriptors reject symlink traversal. Unknown/protected entries are
+    retained; cleanup never recurses and never changes installer exit status.
+    """
+    complete = True
+    flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+    try:
+        root = os.open(directory, flags)
+    except OSError:
+        return False
+    try:
+        for name in known:
+            if not isinstance(name, str) or name in ("", ".", "..") or "/" in name:
+                complete = False
+                continue
+            try:
+                os.unlink(name, dir_fd=root)
+            except FileNotFoundError:
+                pass
+            except OSError:
+                complete = False
+        try:
+            state = os.open("verifier-state", flags, dir_fd=root)
+            try:
+                try:
+                    gh = os.open("gh", flags, dir_fd=state)
+                except FileNotFoundError:
+                    gh = None
+                if gh is not None:
+                    try:
+                        try:
+                            os.unlink("device-id", dir_fd=gh)
+                        except FileNotFoundError:
+                            pass
+                    finally:
+                        os.close(gh)
+                    os.rmdir("gh", dir_fd=state)
+            finally:
+                os.close(state)
+            os.rmdir("verifier-state", dir_fd=root)
+        except FileNotFoundError:
+            pass
+        except OSError:
+            complete = False
+    finally:
+        os.close(root)
+    try:
+        directory.rmdir()
+    except OSError:
+        complete = False
+    return complete
+
+
 def main(argv=None):
     try:
         args = parse_args(sys.argv[1:] if argv is None else argv)
@@ -460,19 +516,18 @@ def main(argv=None):
         os.umask(0o077)
         directory = Path(tempfile.mkdtemp(prefix="tracebolt-release-", dir="/tmp"))
         known = asset_names(pin["version"]) | {"manifest.json", "manifest.sigstore.json", "sigstore-trusted-root.jsonl", "gh-verifier", f"gh_{GH_VERSION}_linux_{arch}.tar.gz"}
+        installer_result = None
         try:
             manifest = prepare_release(directory, pin, arch)
             print("Pinned GitHub workflow provenance and all selected file hashes verified. Starting the existing fixed-path service installer; enter any invitation only at its hidden terminal prompt.", flush=True)
-            return run_installer(installer_command(args, directory, manifest, arch))
+            installer_result = run_installer(installer_command(args, directory, manifest, arch))
+            return installer_result
         finally:
-            # No recursive cleanup or user-selected paths. Retained installer
-            # identity/state is outside this private download directory.
-            for name in known:
-                try:
-                    (directory / name).unlink()
-                except FileNotFoundError:
-                    pass
-            directory.rmdir()
+            if not cleanup_release(directory, known):
+                if installer_result is not None:
+                    print("Tracebolt warning: Installer exit status is preserved, but private temporary download cleanup was incomplete. Do not repeat installation solely for this warning.", file=sys.stderr)
+                else:
+                    print("Tracebolt warning: Private temporary download cleanup was incomplete; the original operation error is preserved. No recursive cleanup or installation retry was attempted.", file=sys.stderr)
     except (Rejected, OSError, ValueError, http.client.HTTPException, subprocess.SubprocessError, tarfile.TarError) as error:
         message = str(error) if isinstance(error, Rejected) else "Release preparation failed. Check required tools, supported host, official HTTPS access and the selected release; no automatic recovery or trust downgrade was attempted."
         print("Tracebolt: " + message, file=sys.stderr)

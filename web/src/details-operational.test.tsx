@@ -28,7 +28,7 @@ describe('actual device page operational integration',()=>{
   selected=device(overrides);render(detail());await screen.findByRole('tab',{name:'Overview'});expect(screen.queryByRole('tab',{name:'Inventory'})).not.toBeInTheDocument();expect(request).not.toHaveBeenCalledWith(expect.stringContaining('/operational'),expect.anything());
  });
  it('permits an unsampled LAN identity to show its explicit awaiting state',async()=>{
-  selected=device({platform:'unknown'});vi.mocked(request).mockImplementation(async path=>path==='/auth/session'?session:path.endsWith('/operational')?view(id,'awaiting'):selected);await inventory();await screen.findByText('The operational profile is selected. Waiting for its first accepted observation.');expect(screen.queryByText(/739\d+ days/)).not.toBeInTheDocument();expect(document.querySelector('.detail-badges .status-unknown')).toHaveTextContent('Unknown');
+  selected=device({platform:'unknown'});vi.mocked(request).mockImplementation(async path=>path==='/auth/session'?session:path.endsWith('/operational')?view(id,'awaiting'):selected);await inventory();await screen.findByText('The operational profile is selected. Waiting for its first accepted observation.');expect(screen.queryByText(/739\d+ days/)).not.toBeInTheDocument();expect(document.querySelector('.detail-badges .status-unknown')).toHaveTextContent('Not assessed');
  });
  it('aborts and suppresses a late response after leaving the operational tab',async()=>{
   let resolve!:(value:OperationalView)=>void;let signal:AbortSignal|undefined;vi.mocked(request).mockImplementation(async(path,options)=>path==='/auth/session'?session:path.endsWith('/operational')?new Promise<OperationalView>(done=>{resolve=done;signal=options?.signal as AbortSignal;}):selected);

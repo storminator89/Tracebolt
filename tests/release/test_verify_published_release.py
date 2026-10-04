@@ -116,6 +116,28 @@ class PublicReadback(unittest.TestCase):
         with patch.object(v, "TEMPLATE_SHA256", "0" * 64), self.assertRaisesRegex(v.Failed, "^FAIL_TEMPLATE$"):
             v.load_bootstrap()
 
+    def test_old_release_uses_its_immutable_template_with_pin_disabled(self):
+        published = (v.HERE / "published" / f"{v.VERSION}.py").read_bytes()
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            (root / "published").mkdir()
+            selected = root / "published" / f"{v.VERSION}.py"
+            selected.write_bytes(published)
+            (root / "linux-bootstrap.py").write_text("raise AssertionError('mutable template must not run')\n")
+            with patch.object(v, "HERE", root):
+                loaded, template = v.load_bootstrap()
+                self.assertIsNone(loaded.RELEASE_PIN)
+                self.assertEqual(loaded.digest(template), v.TEMPLATE_SHA256)
+                selected.write_bytes(published + b"\nraise AssertionError('tampered source must not run')\n")
+                with self.assertRaisesRegex(v.Failed, "^FAIL_TEMPLATE$"):
+                    v.load_bootstrap()
+
+    def test_wrong_historical_pin_cannot_select_template_code(self):
+        for key in ("version", "sourceCommit", "manifestSHA256", "bundleSHA256"):
+            with self.subTest(key=key), patch.object(v, "PIN", dict(v.PIN, **{key: "wrong"})), \
+                 self.assertRaisesRegex(v.Failed, "^FAIL_TEMPLATE$"):
+                v.load_bootstrap()
+
     def test_default_arguments_wrong_context_and_root_never_load_or_download(self):
         for arguments in ([], ["--output", str(self.output)], ["--output", str(self.output), "--verify-published-pilot2"], ["--secret=do-not-print"]):
             stream = io.StringIO()

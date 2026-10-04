@@ -28,6 +28,8 @@ import (
 	"localrmm/internal/enrollmentstate"
 	"localrmm/internal/enrollmentstore"
 	"localrmm/internal/inventorywire"
+	"localrmm/internal/journalcache"
+	"localrmm/internal/journalwire"
 	"localrmm/internal/lanstore"
 	"localrmm/internal/lantrust"
 	"localrmm/internal/signedhttp"
@@ -43,6 +45,7 @@ var ErrConfiguration = errors.New("enrollment ingress configuration is invalid")
 // Construct one per listener; sharing its address preserves the admission bound.
 type Ingress struct {
 	store                      *enrollmentstore.Store
+	journal                    *journalcache.Cache
 	issuer                     *x509.Certificate
 	roots                      *x509.CertPool
 	origin, authority, profile string
@@ -54,7 +57,7 @@ type Ingress struct {
 // New accepts public DER from a prevalidated enrollmentissuer authority. The
 // store's pinned issuer must match. No missing authority is generated or learned
 // from requests. The first integrated runtime retains at most 25 lifecycle rows.
-func New(store *enrollmentstore.Store, issuerDER []byte, agentOrigin string) (*Ingress, error) {
+func New(store *enrollmentstore.Store, issuerDER []byte, agentOrigin string, caches ...*journalcache.Cache) (*Ingress, error) {
 	if store == nil || len(issuerDER) == 0 || len(issuerDER) > enrollmentcrypto.MaxCertificateBytes {
 		return nil, ErrConfiguration
 	}
@@ -67,9 +70,23 @@ func New(store *enrollmentstore.Store, issuerDER []byte, agentOrigin string) (*I
 	if err != nil || certErr != nil || lantrust.Fingerprint(issuer) != cfg.Binding.IssuerFingerprint || !issuer.IsCA || !issuer.BasicConstraintsValid || !issuer.MaxPathLenZero || issuer.MaxPathLen != 0 || issuer.KeyUsage&x509.KeyUsageCertSign == 0 || len(issuer.ExtKeyUsage) != 1 || issuer.ExtKeyUsage[0] != x509.ExtKeyUsageClientAuth {
 		return nil, ErrConfiguration
 	}
+	if len(caches) > 1 {
+		return nil, ErrConfiguration
+	}
+	var cache *journalcache.Cache
+	if len(caches) == 1 {
+		if !caches[0].Matches(store) {
+			return nil, ErrConfiguration
+		}
+		cache = caches[0]
+	}
 	roots := x509.NewCertPool()
 	roots.AddCert(issuer)
-	return &Ingress{store: store, issuer: issuer, roots: roots, origin: agentOrigin, authority: authority, profile: cfg.Binding.Profile, slots: make(chan struct{}, MaxInFlight), admission: &certificateAdmission{active: make(map[[32]byte]bool)}, now: time.Now}, nil
+	h := &Ingress{store: store, journal: cache, issuer: issuer, roots: roots, origin: agentOrigin, authority: authority, profile: cfg.Binding.Profile, slots: make(chan struct{}, MaxInFlight), admission: &certificateAdmission{active: make(map[[32]byte]bool)}, now: time.Now}
+	if h.journal == nil {
+		h.journal = journalcache.New(store, func() time.Time { return h.now() })
+	}
+	return h, nil
 }
 
 // TLSConfig retains normal Go chain verification and TLS1.3. ONLY the exact
@@ -110,6 +127,10 @@ func (h *Ingress) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	default:
 		w.Header().Set("Retry-After", "15")
 		failure(w, http.StatusTooManyRequests, "ingress_busy")
+		return
+	}
+	if r != nil && r.URL != nil && strings.HasPrefix(r.URL.Path, journalwire.PathPrefix) {
+		h.journalRequest(w, r)
 		return
 	}
 	if r != nil && r.URL != nil && r.URL.Path == systemwire.Path {
