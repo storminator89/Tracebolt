@@ -2,6 +2,14 @@
 
 Meaningful development checkpoints are recorded here. These are prototype milestones, not production releases.
 
+## 2026-10-04 — Add explicitly consented endpoint hostname and interface observations
+
+- Add a separately versioned, bounded hostname/interface-address extension for the existing managed-v3 identity. Local preview/enable/disable requires the exact nonroot service identity, a stopped sender and explicit scope acknowledgement. Default collection stays off, and existing keys and counter domains are preserved.
+- Admit typed optional frames and retain the endpoint attempt's original generation, collection time, receipt and expiry when ordinary reports omit it. Disable does not refresh old observations; failed or denied attempts do not become healthy last-good values.
+- Show reported hostname separately from stable cryptographic identity, with independent per-interface IPv4/IPv6 coverage, permission gaps and original ages. Render values as inert text without primary-IP, external-reachability or remote-action claims. Auth, navigation and visibility changes clear protected data and cancel late reads.
+- Keep the accepted 92 browser cases, three documented enrollment skips and five lifecycle cycles. Add six real-handler synthetic browser cases and a native opt-in consent/report/restart/disable gate. Its hosted process drops to the same existing nonroot UID/GID with no supplementary groups or capabilities; it creates no host account or persistent permission change. Success requires fixed complete evidence, and raw identity data stays out of CI output/artifacts.
+- Source/component and inert gate checks passed; the new exact-source native/browser results and user opt-in remain separate pending acceptance. The preceding full-page checkpoint `a9a9d4e` completed all 13 CI jobs and focused pixel review. No release-download installer, broader diagnostic privilege or confirmed update/CVE coverage is added here.
+
 ## 2026-10-04 — Give device details a full page and simplify invitations
 
 - Open device details in the available main-content width, with Back/Escape navigation, browser-history handling and focus return. Preserve protected-data concealment, keyed cancellation and late-response rejection across navigation and authentication changes.

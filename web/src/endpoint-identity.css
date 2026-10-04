@@ -1,0 +1,35 @@
+.endpoint-identity { margin-block: 24px; min-width: 0; }
+.endpoint-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 10px; }
+.endpoint-heading h2 { font-size: 17px; margin: 0; }
+.endpoint-identity h3 { font-size: 14px; margin: 0 0 8px; }
+.endpoint-note, .endpoint-family-status { color: var(--secondary); font-size: 12px; line-height: 1.6; }
+.endpoint-status { font-size: 12px; font-weight: 600; margin-block: 14px; }
+.endpoint-status-stale, .endpoint-failure { color: var(--warning); }
+.endpoint-failure { font-size: 13px; display: flex; align-items: center; gap: 7px; }
+.endpoint-hostname { background: var(--panel-soft); border: 1px solid var(--line); border-radius: 8px; padding: 16px; margin-block: 16px; }
+.endpoint-hostname-value { font-size: 20px; font-weight: 600; overflow-wrap: anywhere; margin: 0; }
+.endpoint-hostname .endpoint-note { margin-bottom: 0; }
+.endpoint-interfaces-heading { margin: 22px 0 12px; }
+.endpoint-interfaces { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 390px), 1fr)); gap: 14px; }
+.endpoint-interface { min-width: 0; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.endpoint-interface > header { background: var(--panel-soft); padding: 14px 16px; }
+.endpoint-interface h4 { display: flex; flex-wrap: wrap; align-items: baseline; gap: 12px; margin: 0; font-size: 14px; }
+.endpoint-interface h4 > span:last-child { color: var(--secondary); font-size: 11px; font-weight: 400; }
+.endpoint-interface header p { font-size: 12px; margin: 8px 0 0; overflow-wrap: anywhere; }
+.endpoint-families { display: grid; gap: 12px; padding: 16px; }
+.endpoint-family { min-width: 0; }
+.endpoint-family h5 { font-size: 12px; margin: 0 0 6px; }
+.endpoint-family-status { margin: 0 0 6px; }
+.endpoint-family ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 7px; }
+.endpoint-family li { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 10px; row-gap: 2px; font-size: 13px; }
+.endpoint-family li .mono { overflow-wrap: anywhere; min-width: 0; }
+.endpoint-scope { color: var(--secondary); font-size: 11px; }
+.endpoint-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 225px), 1fr)); gap: 14px; margin: 20px 0; }
+.endpoint-facts dt { color: var(--secondary); font-size: 11px; margin-bottom: 5px; }
+.endpoint-facts dd { font-family: var(--font-mono); font-size: 11px; margin: 0; overflow-wrap: anywhere; }
+.endpoint-source { border-top: 1px solid var(--line); padding-top: 12px; margin-top: 16px; font-size: 12px; color: var(--secondary); line-height: 1.6; }
+.endpoint-source summary { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+.device-stable-identity { display: flex; flex-wrap: wrap; gap: 4px 8px; font-size: 11px !important; color: var(--secondary); }
+.device-stable-identity code { overflow-wrap: anywhere; }
+.device-detail-heading h1 { overflow-wrap: anywhere; }
+@media (max-width: 640px) { .endpoint-heading { align-items: flex-start; } .endpoint-heading .button { width: 100%; justify-content: center; } .endpoint-hostname-value { font-size: 17px; } }

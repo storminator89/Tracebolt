@@ -36,6 +36,11 @@ file as navigation and project constraints, never as permission to act on a host
   The public command fetches bootstrap metadata and selects `--pending-service`;
   invitation input remains hidden and no collection begins before approval and
   activation. Helper/source checks do not establish actual service or reboot acceptance.
+- The separate hostname/interface-address extension stays off until explicit local
+  consent under the existing stopped service identity. Use the documented preview,
+  enable and disable commands; do not edit its sidecar or collect through the manager.
+  Existing enrollment/counter state stays bound, and disabling does not refresh or
+  erase retained metadata. See `docs/endpoint-identity-extension.md`.
 - Follow Go/Node versions and dependency locks in this revision. Validate commands
   against actual flags/config. Distinguish runtime tests from cross-builds, skipped
   container tests, and proposed functionality. Never invent install/enroll flags.

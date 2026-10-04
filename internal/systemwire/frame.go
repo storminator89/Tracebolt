@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"localrmm/internal/endpointidentity"
 	"localrmm/internal/enrollmentcrypto"
 	"localrmm/internal/systeminventory"
 	"strconv"
@@ -13,14 +14,17 @@ import (
 )
 
 const FrameVersion = "tracebolt.agent-system-inventory.v1"
+const EndpointFrameVersion = "tracebolt.agent-system-inventory.v2"
 const ReceiptVersion = "tracebolt.system-inventory-receipt.v1"
 const MaxBodyBytes = systeminventory.MaxSnapshotBytes + 4096
 const MaxReceiptBytes = 4096
 
 type Frame struct {
-	SchemaVersion string                   `json:"schemaVersion"`
-	Sequence      uint64                   `json:"sequence,string"`
-	Snapshot      systeminventory.Snapshot `json:"snapshot"`
+	SchemaVersion    string                     `json:"schemaVersion"`
+	Sequence         uint64                     `json:"sequence,string"`
+	Snapshot         systeminventory.Snapshot   `json:"snapshot"`
+	EndpointIdentity *endpointidentity.Snapshot `json:"endpointIdentity,omitempty"`
+	ConsentScope     string                     `json:"consentScope,omitempty"`
 }
 type Receipt struct {
 	SchemaVersion string    `json:"schemaVersion"`
@@ -38,11 +42,16 @@ func Decode(raw []byte) (Frame, error) {
 		return bad()
 	}
 	fields, e := object(raw, "schemaVersion", "sequence", "snapshot")
+	extended := false
+	if e != nil {
+		fields, e = object(raw, "schemaVersion", "sequence", "snapshot", "endpointIdentity", "consentScope")
+		extended = true
+	}
 	if e != nil {
 		return bad()
 	}
 	var version, seq string
-	if json.Unmarshal(fields["schemaVersion"], &version) != nil || version != FrameVersion || json.Unmarshal(fields["sequence"], &seq) != nil {
+	if json.Unmarshal(fields["schemaVersion"], &version) != nil || (version != FrameVersion && !extended || version != EndpointFrameVersion && extended) || json.Unmarshal(fields["sequence"], &seq) != nil {
 		return bad()
 	}
 	sequence, ok := canonicalSequence(seq)
@@ -53,13 +62,26 @@ func Decode(raw []byte) (Frame, error) {
 	if e != nil {
 		return bad()
 	}
-	return Frame{FrameVersion, sequence, snapshot}, nil
+	out := Frame{SchemaVersion: version, Sequence: sequence, Snapshot: snapshot}
+	if extended {
+		var scope string
+		if json.Unmarshal(fields["consentScope"], &scope) != nil || scope != endpointidentity.Scope {
+			return bad()
+		}
+		identity, err := endpointidentity.DecodeStrict(fields["endpointIdentity"])
+		if err != nil || identity.GenerationID != snapshot.GenerationID || !identity.CollectedAt.Equal(snapshot.CollectedAt) {
+			return bad()
+		}
+		out.EndpointIdentity = &identity
+		out.ConsentScope = scope
+	}
+	return out, nil
 }
 func Encode(sequence uint64, snapshot systeminventory.Snapshot) ([]byte, error) {
 	if systeminventory.Validate(snapshot) != nil {
 		return nil, ErrContract
 	}
-	raw, e := json.Marshal(Frame{FrameVersion, sequence, snapshot})
+	raw, e := json.Marshal(Frame{SchemaVersion: FrameVersion, Sequence: sequence, Snapshot: snapshot})
 	if e != nil {
 		return nil, ErrContract
 	}
@@ -130,4 +152,20 @@ func DecodeReceipt(raw []byte, deviceID string, request []byte) (Receipt, error)
 		return bad()
 	}
 	return out, nil
+}
+
+// EncodeEndpoint adds only the explicitly acknowledged endpoint scope. It keeps
+// the existing total body ceiling, sequence and exact-byte receipt domain.
+func EncodeEndpoint(sequence uint64, snapshot systeminventory.Snapshot, identity endpointidentity.Snapshot) ([]byte, error) {
+	if systeminventory.Validate(snapshot) != nil || endpointidentity.Validate(identity) != nil {
+		return nil, ErrContract
+	}
+	raw, e := json.Marshal(Frame{SchemaVersion: EndpointFrameVersion, Sequence: sequence, Snapshot: snapshot, EndpointIdentity: &identity, ConsentScope: endpointidentity.Scope})
+	if e != nil {
+		return nil, ErrContract
+	}
+	if _, e = Decode(raw); e != nil {
+		return nil, e
+	}
+	return raw, nil
 }

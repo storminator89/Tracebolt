@@ -311,6 +311,39 @@ FAILURES = {
     }
 }
 
+# Exact endpoint-extension failures retain the same closed diagnostic projection.
+FAILURES.update({
+    "complete_endpoint_addresses_required": {"category": "complete_endpoint_addresses_required", "stage": "endpoint_identity"},
+    "complete_endpoint_collected_before_sender": {"category": "complete_endpoint_collected_before_sender", "stage": "endpoint_identity"},
+    "complete_endpoint_consent_changed_existing_state": {"category": "complete_endpoint_consent_changed_existing_state", "stage": "endpoint_identity"},
+    "complete_endpoint_consent_cli_contract": {"category": "complete_endpoint_consent_cli_contract", "stage": "endpoint_identity"},
+    "complete_endpoint_consent_cli_failed": {"category": "complete_endpoint_consent_cli_failed", "stage": "endpoint_identity"},
+    "complete_endpoint_consent_collected_before_sender": {"category": "complete_endpoint_consent_collected_before_sender", "stage": "endpoint_identity"},
+    "complete_endpoint_consent_sidecar_not_absent": {"category": "complete_endpoint_consent_sidecar_not_absent", "stage": "endpoint_identity"},
+    "complete_endpoint_disabled_restart_changed_identity_or_package_domain": {"category": "complete_endpoint_disabled_restart_changed_identity_or_package_domain", "stage": "endpoint_identity"},
+    "complete_endpoint_disabled_restart_refreshed_or_replaced_metadata": {"category": "complete_endpoint_disabled_restart_refreshed_or_replaced_metadata", "stage": "endpoint_identity"},
+    "complete_endpoint_fixture_generation": {"category": "complete_endpoint_fixture_generation", "stage": "endpoint_identity"},
+    "complete_endpoint_hostname_required": {"category": "complete_endpoint_hostname_required", "stage": "endpoint_identity"},
+    "complete_endpoint_interfaces_required": {"category": "complete_endpoint_interfaces_required", "stage": "endpoint_identity"},
+    "complete_endpoint_invalid_consent_test_mode": {"category": "complete_endpoint_invalid_consent_test_mode", "stage": "endpoint_identity"},
+    "complete_endpoint_invalid_evidence_stage": {"category": "complete_endpoint_invalid_evidence_stage", "stage": "endpoint_identity"},
+    "complete_endpoint_invalid_fixture_accepted_or_evidence_not_fixed": {"category": "complete_endpoint_invalid_fixture_accepted_or_evidence_not_fixed", "stage": "endpoint_identity"},
+    "complete_endpoint_invalid_opt_in": {"category": "complete_endpoint_invalid_opt_in", "stage": "endpoint_identity"},
+    "complete_endpoint_original_age_stale_fixture_rejected": {"category": "complete_endpoint_original_age_stale_fixture_rejected", "stage": "endpoint_identity"},
+    "complete_endpoint_protected_state_unavailable": {"category": "complete_endpoint_protected_state_unavailable", "stage": "endpoint_identity"},
+    "complete_endpoint_refreshed_fixture_accepted": {"category": "complete_endpoint_refreshed_fixture_accepted", "stage": "endpoint_identity"},
+    "complete_endpoint_requires_group_clean_service_identity": {"category": "complete_endpoint_requires_group_clean_service_identity", "stage": "endpoint_identity"},
+    "complete_endpoint_requires_runtime_and_positive_opt_ins": {"category": "complete_endpoint_requires_runtime_and_positive_opt_ins", "stage": "endpoint_identity"},
+    "complete_endpoint_restart_did_not_advance_generation_time_and_sequence": {"category": "complete_endpoint_restart_did_not_advance_generation_time_and_sequence", "stage": "endpoint_identity"},
+    "complete_endpoint_restart_fixture_contract": {"category": "complete_endpoint_restart_fixture_contract", "stage": "endpoint_identity"},
+    "complete_endpoint_retained_fixture_rejected": {"category": "complete_endpoint_retained_fixture_rejected", "stage": "endpoint_identity"},
+    "complete_endpoint_selection_contract_changed": {"category": "complete_endpoint_selection_contract_changed", "stage": "endpoint_identity"},
+    "complete_endpoint_snapshot_invalid_or_unbound": {"category": "complete_endpoint_snapshot_invalid_or_unbound", "stage": "endpoint_identity"},
+    "complete_endpoint_valid_fixture_rejected": {"category": "complete_endpoint_valid_fixture_rejected", "stage": "endpoint_identity"},
+    "complete_endpoint_view_unavailable_or_unbound": {"category": "complete_endpoint_view_unavailable_or_unbound", "stage": "endpoint_identity"},
+})
+
+
 def unique_object(pairs):
     value = {}
     for key, item in pairs:

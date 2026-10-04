@@ -181,7 +181,7 @@ jobs:
           PYTHON
 
   complete-v3-native:
-    name: Positive v3 Ubuntu inventory, pending approval and native restart
+    name: Positive v3 Ubuntu inventory, endpoint consent and native restart
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -201,11 +201,15 @@ jobs:
           go mod download
           go mod verify
       - name: Verify bounded diagnostic projection with inert records
-        run: python3 tests/security/test_complete_mvp_reporter.py
+        run: |
+          python3 tests/security/test_complete_mvp_reporter.py
+          python3 tests/security/test_endpoint_identity_gate.py
+          python3 -O tests/security/test_endpoint_identity_gate.py
       - name: Require positive v3 data through approval and process restart
         env:
           TRACEBOLT_COMPLETE_RUNTIME_TEST: '1'
           TRACEBOLT_COMPLETE_UBUNTU2404_TEST: '1'
+          TRACEBOLT_ENDPOINT_IDENTITY_RUNTIME_TEST: '1'
           GOTOOLCHAIN: local
           GOPROXY: 'off'
           GOSUMDB: 'off'
@@ -213,40 +217,35 @@ jobs:
         run: |
           set -euo pipefail
           (umask 077; : > "$RUNNER_TEMP/complete-v3-native.jsonl"; : > "$RUNNER_TEMP/complete-v3-native.stderr")
-          if ! go test -json -buildvcs=false ./cmd/lan-manager \
+          TRACEBOLT_RUN_UID=$(id -ru)
+          TRACEBOLT_RUN_GID=$(id -rg)
+          test "$TRACEBOLT_RUN_UID" -ne 0
+          test "$TRACEBOLT_RUN_GID" -ne 0
+          test "$(id -u)" = "$TRACEBOLT_RUN_UID"
+          test "$(id -g)" = "$TRACEBOLT_RUN_GID"
+          test -x /usr/bin/sudo && test -x /usr/bin/setpriv && test -x /usr/bin/env
+          TRACEBOLT_GO_BINARY=$(command -v go)
+          TRACEBOLT_GO_CACHE=$(go env GOCACHE)
+          TRACEBOLT_GO_MODULES=$(go env GOMODCACHE)
+          TRACEBOLT_GO_PATH=$(go env GOPATH)
+          # Only setpriv starts privileged. It drops to this same runner identity
+          # before env/Go or any repository code; no host account/settings change.
+          if ! /usr/bin/sudo -n /usr/bin/setpriv \
+            --reuid "$TRACEBOLT_RUN_UID" --regid "$TRACEBOLT_RUN_GID" --clear-groups \
+            --inh-caps=-all --ambient-caps=-all --bounding-set=-all --no-new-privs \
+            -- /usr/bin/env -i PATH="$PATH" \
+            GOCACHE="$TRACEBOLT_GO_CACHE" GOMODCACHE="$TRACEBOLT_GO_MODULES" GOPATH="$TRACEBOLT_GO_PATH" \
+            GOTOOLCHAIN=local GOPROXY=off GOSUMDB=off \
+            TRACEBOLT_COMPLETE_RUNTIME_TEST=1 TRACEBOLT_COMPLETE_UBUNTU2404_TEST=1 \
+            TRACEBOLT_ENDPOINT_IDENTITY_RUNTIME_TEST=1 \
+            "$TRACEBOLT_GO_BINARY" test -json -buildvcs=false ./cmd/lan-manager \
             -run '^TestCompleteMVPPendingApprovalNativeRestart$' -count=1 -timeout=8m \
             > "$RUNNER_TEMP/complete-v3-native.jsonl" 2> "$RUNNER_TEMP/complete-v3-native.stderr"; then
             echo 'FAIL: positive v3 native gate; raw source and runtime output withheld.'
             python3 tests/security/report_complete_mvp.py "$RUNNER_TEMP/complete-v3-native.jsonl" || true
             exit 1
           fi
-          python3 - "$RUNNER_TEMP/complete-v3-native.jsonl" <<'PYTHON'
-          import json, sys
-          root = 'TestCompleteMVPPendingApprovalNativeRestart'
-          required = {root, root + '/tls', root + '/http-test'}
-          passed = set()
-          package_passed = False
-          try:
-              with open(sys.argv[1], encoding='utf-8') as stream:
-                  for line in stream:
-                      event = json.loads(line)
-                      if event.get('Action') == 'fail':
-                          raise ValueError('failed event')
-                      if event.get('Test') in required:
-                          if event.get('Package') != 'localrmm/cmd/lan-manager':
-                              raise ValueError('wrong package')
-                          if event.get('Action') == 'skip':
-                              raise ValueError('skipped case')
-                          if event.get('Action') == 'pass':
-                              passed.add(event['Test'])
-                      if event.get('Package') == 'localrmm/cmd/lan-manager' and 'Test' not in event and event.get('Action') == 'pass':
-                          package_passed = True
-              if passed != required or not package_passed:
-                  raise ValueError('incomplete result')
-          except Exception:
-              raise SystemExit('FAIL: missing, skipped or invalid v3-native completion evidence.')
-          print('PASS: positive Ubuntu v3 package/service/socket observations across TLS and HTTP-test approval and process restart; no installed-service or reboot claim.')
-          PYTHON
+          python3 tests/security/check_endpoint_identity_gate.py "$RUNNER_TEMP/complete-v3-native.jsonl"
 
   backend:
     name: Go tests and build-only platform checks
@@ -485,6 +484,15 @@ jobs:
               raise SystemExit('FAIL: missing, partial, mismatched or unsafe v3-browser evidence.')
           print('PASS:8 unique v3 browser cases on the exact commit; invented data, zero runtime errors and no native/installer/VM execution.')
           PYTHON
+      - name: Endpoint hostname and interface browser acceptance
+        env:
+          TRACEBOLT_SOURCE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          python3 tests/security/test_endpoint_browser_gate.py
+          python3 -O tests/security/test_endpoint_browser_gate.py
+          node tests/e2e-review/endpoint-identity-browser.mjs
+          python3 tests/security/check_endpoint_browser_gate.py artifacts/review/endpoint-browser-results.json
       - name: Keep browser review evidence briefly
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -503,6 +511,8 @@ jobs:
             artifacts/review/conditional-browser-manifest.json
             artifacts/review/v3-mvp-browser-results.json
             artifacts/review/v3-mvp-browser-manifest.json
+            artifacts/review/endpoint-browser-results.json
+            artifacts/review/endpoint-browser-manifest.json
           if-no-files-found: warn
           retention-days: 3
 

@@ -64,3 +64,18 @@ func TestProfileCapabilitiesOlderManagedScopeDoesNotClaimCompleteInventory(t *te
 		}
 	}
 }
+
+func TestProfileCapabilitiesOptionalIdentityDoesNotChangeOSQuality(t *testing.T) {
+	for _, status := range []string{"supported", "limited", "denied", "unsupported"} {
+		in := []model.Capability{{ID: "os", Name: "Operating system", Status: status, Detail: "No hostname is collected."}}
+		out := profileCapabilities(in, enrollmentcrypto.CollectionProfileComplete)
+		if out[0].Status != status || out[0].Name != in[0].Name || !strings.Contains(out[0].Detail, "after local opt-in") || !strings.Contains(out[0].Detail, "original age") || in[0].Detail != "No hostname is collected." {
+			t.Fatal("optional identity description changed source quality or retained obsolete scope")
+		}
+		for _, profile := range []string{enrollmentcrypto.CollectionProfile, enrollmentcrypto.CollectionProfileOperational, enrollmentcrypto.CollectionProfilePackages} {
+			if profileCapabilities(in, profile)[0] != in[0] {
+				t.Fatal("older profile acquired optional identity scope")
+			}
+		}
+	}
+}

@@ -10,6 +10,7 @@ import (
 	"errors"
 	"time"
 
+	"localrmm/internal/endpointidentity"
 	"localrmm/internal/enrollmentcrypto"
 	"localrmm/internal/enrollmentstate"
 	"localrmm/internal/inventoryledger"
@@ -67,11 +68,17 @@ type systemComplete struct {
 	PayloadBytes int                         `json:"payloadBytes"`
 }
 type systemRecord struct {
-	Receipt       systemwire.Receipt  `json:"receipt"`
-	Latest        *systemSnapshotMeta `json:"latest"`
-	Services      *systemComplete     `json:"services"`
-	Sockets       *systemComplete     `json:"sockets"`
-	MaintenanceAt *time.Time          `json:"maintenanceAt"`
+	Receipt          systemwire.Receipt      `json:"receipt"`
+	Latest           *systemSnapshotMeta     `json:"latest"`
+	Services         *systemComplete         `json:"services"`
+	Sockets          *systemComplete         `json:"sockets"`
+	MaintenanceAt    *time.Time              `json:"maintenanceAt"`
+	EndpointIdentity *endpointIdentityRecord `json:"endpointIdentity,omitempty"`
+}
+
+type endpointIdentityRecord struct {
+	Receipt  systemwire.Receipt         `json:"receipt"`
+	Snapshot *endpointidentity.Snapshot `json:"snapshot"`
 }
 
 func snapshotMetadata(s systeminventory.Snapshot) *systemSnapshotMeta {
@@ -148,6 +155,24 @@ func validSystemRecord(snap enrollmentstate.Snapshot, r systemRecord) bool {
 		}
 		expected, e := systemwire.GenerationID(snap.Approval.DeviceID, c.Sequence)
 		if e != nil || c.Sequence > p.Sequence || c.Meta.GenerationID != expected || !validSystemMeta(c.Meta) || c.Meta.Coverage != systeminventory.Complete || c.Meta.ObservedAt.After(p.CollectedAt) || *c.Meta.ObservedCount > uint64(sectionRowLimit(name)) || c.PayloadBytes <= 0 || c.PayloadBytes > systeminventory.MaxSectionBytes {
+			return false
+		}
+	}
+	if r.EndpointIdentity != nil {
+		identity := r.EndpointIdentity
+		p := identity.Receipt
+		expected, e := systemwire.GenerationID(snap.Approval.DeviceID, p.Sequence)
+		if e != nil || p.SchemaVersion != systemwire.ReceiptVersion || p.DeviceID != snap.Approval.DeviceID || p.GenerationID != expected || !enrollmentcrypto.ValidHash(p.BodyHash) || !validStoreTime(p.CollectedAt) || !validStoreTime(p.ReceivedAt) || p.CollectedAt.Location() != time.UTC || p.ReceivedAt.Location() != time.UTC || p.CollectedAt.After(p.ReceivedAt) || p.ReceivedAt.Sub(p.CollectedAt) > SystemMaxAge || p.Sequence > r.Receipt.Sequence || p.CollectedAt.After(r.Receipt.CollectedAt) || p.ReceivedAt.After(r.Receipt.ReceivedAt) || p.ReceivedAt.Unix() < snap.Activation.At || p.ReceivedAt.Unix() >= snap.Intent.NotAfter {
+			return false
+		}
+		if p.Sequence == r.Receipt.Sequence && p != r.Receipt {
+			return false
+		}
+		if identity.Snapshot != nil {
+			if endpointidentity.Validate(*identity.Snapshot) != nil || identity.Snapshot.GenerationID != p.GenerationID || !identity.Snapshot.CollectedAt.Equal(p.CollectedAt) {
+				return false
+			}
+		} else if (r.MaintenanceAt == nil || r.MaintenanceAt.Before(p.CollectedAt.Add(SystemRetention))) && r.Receipt.ReceivedAt.Before(p.CollectedAt.Add(SystemRetention)) {
 			return false
 		}
 	}
@@ -351,6 +376,10 @@ func (s *Store) SaveSystemObservation(ctx context.Context, id, hash string, raw 
 		record.Receipt = out
 		record.MaintenanceAt = nil
 		record.Latest = snapshotMetadata(frame.Snapshot)
+		if frame.EndpointIdentity != nil {
+			record.EndpointIdentity = &endpointIdentityRecord{Receipt: out, Snapshot: frame.EndpointIdentity}
+		}
+		// Ordinary v1 reports never refresh a prior endpoint snapshot or receipt.
 		// Insert the authority parent first; all subsequent failure paths roll back.
 		if !exists {
 			placeholder, _ := json.Marshal(record)

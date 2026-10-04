@@ -25,13 +25,15 @@ mean it has passed its release or host checks.
   successful reads. The source-archive commands preserve private permissions and
   refuse to overwrite an existing archive.
 
+The [full-width device-page checkpoint](https://github.com/storminator89/Tracebolt/actions/runs/37210508045) also passed all 13 CI jobs and the same 92 required browser checks, with focused desktop/mobile page and consent-dialog review.
+
 ## Delivery order
 
-1. **Clear device page and shorter enrollment flow — in progress.** Give device
+1. **Clear device page and shorter enrollment flow — delivered in `a9a9d4e`.** Give device
    details enough room, simplify the invitation dialog, and keep capability and
    unavailable-state descriptions accurate. Preserve explicit consent, hidden
    secret entry and deliberate device approval.
-2. **Opt-in hostname and interface addresses — planned.** Add a clear collection
+2. **Opt-in hostname and interface addresses — in progress.** Add a clear collection
    choice for hostname and local interface IPv4/IPv6 addresses. Show source and
    visibility limits. Local addresses do not prove external reachability; this
    does not add network scanning.

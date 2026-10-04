@@ -1,6 +1,67 @@
 # Tracebolt UI acceptance
 
-## Current review-read recovery checkpoint
+## Endpoint metadata candidate
+
+The optional reported-hostname/interface extension adds six real-handler synthetic
+browser cases, described in [its acceptance contract](../tests/e2e-review/ENDPOINT_IDENTITY.md).
+The composed component, build and API-fixture checks pass; its new exact-source
+hosted browser and native consent/collection gates remain pending. The 92-case
+acceptance below belongs to the preceding `a9a9d4e` source and does not establish
+acceptance of the added endpoint panel or actual hostname/address collection.
+
+## Current full-width device page and compact invitation checkpoint
+
+Exact source **`a9a9d4e08233ed8b0e968e074da1fa7cf7916121`** passed all **92 required browser cases** in [CI run 37210508045](https://github.com/storminator89/Tracebolt/actions/runs/37210508045). Independent readback verified all six report source pins, unique case identities, PASS/failure/skip counts and zero setup/runtime errors. This acceptance is limited to the browser flows and original synthetic pixels below. At this review, the final Go/race job was still running; native service, installation and deployment evidence remain separate.
+
+The subsequent final run result is **all 13 CI jobs passed**. That completion does
+not broaden the browser fixture/pixel scope or imply installed-service or reboot
+acceptance on an arbitrary host.
+
+| Required target | Result |
+| --- | --- |
+| General UI, AI, language and bounded shell | 40 PASS |
+| Actual two-process Linux managed preview | 6 PASS; no telemetry/screenshot export |
+| Operator loopback HTTP-test UI | 10 PASS |
+| Guided enrollment reduced gate | 10 PASS, 3 named SKIPPED; full enrollment acceptance remains false |
+| Operational/package/catalog/conditional review | 18 PASS, including five persisted-page cycles |
+| Complete v3 inventory and public command | 8 PASS |
+| Browser runtime errors | 0 across all six targets |
+
+### Changed-flow verification
+
+Device routes now render a named main-page region occupying the available workspace width. The underlying inventory list and enrollment panel are absent on selected-device routes. Hosted checks establish device-entry focus, keyboard access to the technical disclosure, normal focus movement out of the device region, Back/Escape/browser history, main-focus restoration, and unchanged device-to-evidence-to-case navigation. First-Tab skip-link behavior passes. Keyboard help remains a real modal: focus containment, background-shortcut suppression, Escape and backdrop dismissal remain checked without also dismissing the device page.
+
+Document scrolling and viewport overflow stay bounded while long content scrolls inside main. Real API-backed device identity, lazy selected source requests, interrupted request cleanup, status/provenance, complete package/service/socket paging, zero/unknown/retained states and English/German source navigation all pass. Mobile table keyboard scrolling remains checked.
+
+The shortened invitation retains the HTTP risk warning and unchecked explicit collection consent. Native disclosures reveal the detailed scope/limits and exact public command through keyboard interaction. The public `--pending-service` command, public-bootstrap checksum, credential rejection, cookie-free retrieval and invitation-secret exclusion remain verified without running an installer. Existing secret lifetime, expiry and authorization cleanup tests pass within the reduced enrollment gate. Three quarantined termination scenarios have not been restored and are not counted as passed.
+
+All five injected lifecycle cycles restored exactly one review row with no review alert and a visible, non-inert private view. Cycles 1, 2 and 4 recorded actual `429 storage_busy` followed by the bounded retry's `200`; cycles 3 and 5 returned review `200` directly. Coverage reads still recorded 429 in cycles 3 and 5. The previously documented coverage-panel manual-refresh gap remains backlog; these results do not claim automatic recovery of every surrounding resource or real OS/BFCache suspension acceptance.
+
+### Focused pixel readback
+
+Nine original PNGs were inspected at original resolution: 1440×1000 desktop and 390×844 mobile, all viewport-only. The full-width device evidence layout is intact in light and dark themes, with persistent desktop navigation/topbar and no background inventory behind the device page. Synthetic-source labels and unknown/uncollected fields remain readable. The complete service table uses the expanded main width and preserves runtime versus enablement and uncollected Main PID.
+
+The English desktop v3 consent capture shows the warning, collection scope, closed detailed disclosure, unchecked checkbox and disabled creation action together. The German mobile dialog remains contained and internally scrollable; its initial screenshot shows the warning and scope, while the checkbox/actions are below that initial viewport. It is not evidence that the entire form is visible at once. The mobile socket image is a deliberately scrolled table fragment with horizontal keyboard scrolling, not a new primary gallery image. No material visual blocker was identified, and no gallery expansion or screenshot replacement is part of this update.
+
+All changed-flow captures contain only invented fixtures, and the new consent captures precede invitation creation. No invitation secret, comparison value, password or real telemetry appears. The direct synthetic store fixtures do not prove native collection, transport, installer/service execution, user-VM behavior or trusted-TLS browser deployment. The explicit unencrypted HTTP-test warnings remain visible. The v2 fixture's operational-v1 component label is its inherited contract, not a fresh v3 collector claim.
+
+Artifact ID: `11306796762`. Publisher-verified archive SHA-256: `a797d0342c2210b20cea9d0f5732b4b53eeb5fe13feb242d5da9b0fd129778eb`. Exact source manifest SHA-256: `7874483e78ddd68ba2c7808a0ea3f7e2fe33f1319ce9c750b60f2616f9adc87b`. Original reviewed PNG byte hashes:
+
+| Original PNG | SHA-256 |
+| --- | --- |
+| `synthetic-device-desktop-light.png` | `16a3373da23118c58ebac57fbbbdff9266dcded9e86065eec5452650d845824b` |
+| `synthetic-device-desktop-dark.png` | `367c1cddebd45367a78adc3da7703d39835d83856f23c7179dd01259f007f8e7` |
+| `synthetic-device-mobile-light.png` | `4b84d6c97126b5a9281ec097b22bb6617289507b909eba5dfd4291f1d9690a2a` |
+| `synthetic-device-mobile-dark.png` | `69d1bea4be975aa39db87141c2ed69cbd63b9fc448d9896ae2753061c5dcf1c4` |
+| `synthetic-v3-consent-desktop-en.png` | `5c4f8bd0e241727c7929bd8a581c948668119ea013e35714dd7a737c7e8c8b6e` |
+| `synthetic-v3-consent-mobile-de.png` | `0c29d9860057cc574cf14a668beeb930d6344496411825b6682cf95d48e6a0f2` |
+| `synthetic-v3-services-desktop-en.png` | `f8e95772cf53ab11d57a58610e35d49aadfa7579a4ac36ffeec8056a684e8655` |
+| `synthetic-v3-sockets-mobile-en.png` | `4d13fdc07741d455c65dc6912ffee3dbc1ae7e2e9f3238af34b812de6b28f364` |
+| `synthetic-conditional-inventory-desktop-en.png` | `8bd8abc526aed021a3d12886c5ca82c631068e543fbc06ac60801077e279ac37` |
+
+The earlier checkpoints below are historical evidence for their exact revisions. Their former drawer framing does not describe this page-based UI.
+
+## Historical review-read recovery checkpoint
 
 Exact source **`2641448162d2d9d53fc17db6c4cb8865fcebc7cb`** passed the required browser targets in [CI run 37198507471](https://github.com/storminator89/Tracebolt/actions/runs/37198507471). Independent readback verified exact source identities, all 18 unique conditional case results, the five lifecycle attempts, report totals and runtime-error counts. This acceptance covers the described browser flows and original synthetic pixels; it does not declare every CI job, native/service behavior or every panel-recovery path complete.
 

@@ -398,8 +398,9 @@ func (s *Store) SystemPage(ctx context.Context, device string, req SystemPageReq
 }
 
 type SystemCleanupResult struct {
-	ClearedLatest   bool `json:"clearedLatest"`
-	ClearedSections int  `json:"clearedSections"`
+	ClearedLatest           bool `json:"clearedLatest"`
+	ClearedSections         int  `json:"clearedSections"`
+	ClearedEndpointIdentity bool `json:"clearedEndpointIdentity,omitempty"`
 }
 
 // SystemCleanup is privileged local maintenance, with no agent endpoint. It
@@ -446,7 +447,11 @@ func (s *Store) SystemCleanup(ctx context.Context, device string, now time.Time)
 				out.ClearedSections++
 			}
 		}
-		if !out.ClearedLatest && out.ClearedSections == 0 {
+		if r.EndpointIdentity != nil && r.EndpointIdentity.Snapshot != nil && !now.Before(r.EndpointIdentity.Receipt.CollectedAt.Add(SystemRetention)) {
+			r.EndpointIdentity.Snapshot = nil
+			out.ClearedEndpointIdentity = true
+		}
+		if !out.ClearedLatest && out.ClearedSections == 0 && !out.ClearedEndpointIdentity {
 			return nil
 		}
 		r.MaintenanceAt = &now

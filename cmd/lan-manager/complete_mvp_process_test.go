@@ -12,6 +12,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"io"
+	"localrmm/internal/agentidentity"
 	"localrmm/internal/agentloop"
 	"localrmm/internal/api"
 	"localrmm/internal/enrollmentclient"
@@ -45,12 +46,17 @@ import (
 // reboot. Claim and pending continuation use the production enrollment library;
 // manager and reporting use actual binaries built offline from this tree.
 func TestCompleteMVPPendingApprovalNativeRestart(t *testing.T) {
-	enabled, positive, err := completeMVPGateSelection(os.Getenv("TRACEBOLT_COMPLETE_RUNTIME_TEST"), os.Getenv("TRACEBOLT_COMPLETE_UBUNTU2404_TEST"), os.Geteuid())
+	enabled, positive, endpointIdentity, err := completeMVPEndpointGateSelection(os.Getenv("TRACEBOLT_COMPLETE_RUNTIME_TEST"), os.Getenv("TRACEBOLT_COMPLETE_UBUNTU2404_TEST"), os.Getenv("TRACEBOLT_ENDPOINT_IDENTITY_RUNTIME_TEST"), os.Geteuid())
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !enabled {
 		t.Skip("explicit complete read-only runtime gate is not enabled")
+	}
+	// Match the production consent CLI guard before builds, listeners or state.
+	// The hosted runner must already have a group-clean nonprivileged identity.
+	if endpointIdentity && !agentidentity.Validate(completeMVPEndpointServiceIdentity()) {
+		t.Fatal("complete_endpoint_requires_group_clean_service_identity")
 	}
 	checked := 0
 	var inspect func(*testing.T, completeMVPObservation)
@@ -82,7 +88,7 @@ func TestCompleteMVPPendingApprovalNativeRestart(t *testing.T) {
 	}
 	for _, profile := range []string{lanconfig.TLS, lanconfig.HTTPTest} {
 		t.Run(profile, func(t *testing.T) {
-			completeMVPProfile(t, gate, profile, binaries, inspect)
+			completeMVPProfile(t, gate, profile, binaries, inspect, endpointIdentity)
 		})
 	}
 	if positive && checked != 4 {
@@ -117,7 +123,7 @@ type completeMVPObservation struct {
 	system                         enrollmentstore.SystemView
 }
 
-func completeMVPProfile(t *testing.T, gate context.Context, profile string, binaries map[string]string, inspect func(*testing.T, completeMVPObservation)) {
+func completeMVPProfile(t *testing.T, gate context.Context, profile string, binaries map[string]string, inspect func(*testing.T, completeMVPObservation), endpointIdentity bool) {
 	t.Helper()
 	run, cancel := context.WithTimeout(gate, 2*time.Minute)
 	defer cancel()
@@ -339,6 +345,15 @@ func completeMVPProfile(t *testing.T, gate context.Context, profile string, bina
 		t.Fatal("complete fresh handoff did not start with three unused domains")
 	}
 	identityBefore := completeMVPIdentity(t, stateDir)
+	if endpointIdentity {
+		completeMVPEndpointNotCollected(t, get, c.AgentID)
+		completeMVPEndpointConsent(t, run, binaries["lan-agent"], activated.ConfigPath, stateDir, c.StateDirectory, "preview", false)
+		completeMVPEndpointConsent(t, run, binaries["lan-agent"], activated.ConfigPath, stateDir, c.StateDirectory, "enable", true)
+		completeMVPEndpointNotCollected(t, get, c.AgentID)
+		if completeMVPCounters(t, c.StateDirectory) != [3]uint64{} {
+			t.Fatal("complete_endpoint_consent_collected_before_sender")
+		}
+	}
 	start := func() (*exec.Cmd, <-chan error, <-chan agentloop.Event) {
 		sender := packageGateCommand(run, binaries["lan-agent"], "--config", activated.ConfigPath, "--foreground", "--interval", "15s")
 		stream, e := sender.StdoutPipe()
@@ -389,6 +404,10 @@ func completeMVPProfile(t *testing.T, gate context.Context, profile string, bina
 	if inspect != nil {
 		inspect(t, first)
 	}
+	var firstEndpoint enrollmentstore.EndpointIdentityView
+	if endpointIdentity {
+		firstEndpoint = completeMVPEndpointRead(t, get, first.system, "first")
+	}
 	stopPackageGateProcess(t, sender, done)
 	stopped = true
 	if lanclient.ValidateGuidedHandoff(activated.ConfigPath) != nil || completeMVPIdentity(t, stateDir) != identityBefore {
@@ -404,6 +423,13 @@ func completeMVPProfile(t *testing.T, gate context.Context, profile string, bina
 	if inspect != nil {
 		inspect(t, second)
 	}
+	var secondEndpoint enrollmentstore.EndpointIdentityView
+	if endpointIdentity {
+		secondEndpoint = completeMVPEndpointRead(t, get, second.system, "restart")
+		if err := completeMVPEndpointAdvanced(firstEndpoint, secondEndpoint); err != nil {
+			t.Fatal(err)
+		}
+	}
 	if second.metricSequence != first.metricSequence+1 || second.systemSequence != first.systemSequence+1 || !second.metricAt.After(first.metricAt) || !second.systemAt.After(first.systemAt) {
 		t.Fatal("complete restart did not advance original metric and system domains")
 	}
@@ -412,6 +438,29 @@ func completeMVPProfile(t *testing.T, gate context.Context, profile string, bina
 	secondCounters := completeMVPCounters(t, c.StateDirectory)
 	if secondCounters[0] != second.metricSequence || secondCounters[1] != second.systemSequence || secondCounters[2] != firstCounters[2] || !reflect.DeepEqual(second.packages, first.packages) || completeMVPIdentity(t, stateDir) != identityBefore || lanclient.ValidateGuidedHandoff(activated.ConfigPath) != nil {
 		t.Fatal("complete restart changed identity or recaptured the package generation")
+	}
+	if endpointIdentity {
+		// Administration is performed only after the sender has stopped. It does
+		// not assert remote disablement: the last delivered metadata must age.
+		completeMVPEndpointConsent(t, run, binaries["lan-agent"], activated.ConfigPath, stateDir, c.StateDirectory, "disable", false)
+		sender, done, events = start()
+		stopped = false
+		ordinary := completeMVPRead(t, get, c.AgentID, completeMVPNext(t, run, events), second)
+		if _, err := completeMVPUbuntu2404Evidence(ordinary.packages, ordinary.system); err != nil {
+			t.Fatal(err)
+		}
+		var retained enrollmentstore.EndpointIdentityView
+		get("/api/devices/"+c.AgentID+"/inventory/endpoint-identity", &retained)
+		if err := completeMVPEndpointRetained(secondEndpoint, retained, ordinary.system); err != nil {
+			t.Fatal(err)
+		}
+		stopPackageGateProcess(t, sender, done)
+		stopped = true
+		ordinaryCounters := completeMVPCounters(t, c.StateDirectory)
+		if ordinaryCounters[0] != ordinary.metricSequence || ordinaryCounters[1] != ordinary.systemSequence || ordinaryCounters[2] != secondCounters[2] || !reflect.DeepEqual(ordinary.packages, second.packages) || completeMVPIdentity(t, stateDir) != identityBefore || lanclient.ValidateGuidedHandoff(activated.ConfigPath) != nil {
+			t.Fatal("complete_endpoint_disabled_restart_changed_identity_or_package_domain")
+		}
+		t.Log("endpoint identity retained: stage=disabled_restart ordinary=advanced endpoint=original_age sequence=unchanged receipt=unchanged expiry=unchanged payload=unchanged")
 	}
 	get("/api/enrollment", &pending)
 	if len(pending.Items) != 1 || pending.Items[0].State != enrollmentstate.Activated || pending.Items[0].InvitationID != committed.InvitationID || pending.Items[0].Claim.KeyFingerprint != claim.KeyFingerprint || pending.Items[0].Approval.DeviceID != c.AgentID {

@@ -25,6 +25,8 @@ func main() {
 	enrollmentBootstrap := flag.String("enrollment-bootstrap", "", "Fixed public bootstrap for explicit pending-service mode")
 	enrollmentState := flag.String("enrollment-state-directory", "", "Existing private pending-service enrollment directory")
 	insecurePending := flag.Bool("insecure-http-test", false, "Explicit unauthenticated HTTP pending-service acknowledgement")
+	endpointConsentMode := flag.String("endpoint-identity-consent", "", "Local-only preview, enable, or disable of the explicit hostname/interface-address extension; stop the sender first")
+	endpointConsentAck := flag.Bool("ack-endpoint-identity", false, "Acknowledge reporting hostname and all visible interface IPv4/IPv6 addresses to the configured manager")
 	flag.Parse()
 	if *path == "" || flag.NArg() != 0 {
 		fmt.Fprintln(os.Stderr, "Tracebolt LAN agent requires --config PATH; no service installation is performed.")
@@ -33,6 +35,13 @@ func main() {
 	if runtime.GOOS != "linux" {
 		fmt.Fprintln(os.Stderr, "Tracebolt LAN sender state is currently supported on Linux only; native ACL validation is pending for other platforms.")
 		os.Exit(2)
+	}
+	if *endpointConsentMode != "" || *endpointConsentAck {
+		if *foreground || *validate || *interval != 30*time.Second || *enrollmentBootstrap != "" || *enrollmentState != "" || *insecurePending {
+			fmt.Fprintln(os.Stderr, "Endpoint consent mode cannot be combined with reporting, validation or pending-enrollment modes.")
+			os.Exit(2)
+		}
+		os.Exit(runEndpointConsent(endpointConsentOptions{Path: *path, Mode: *endpointConsentMode, Identity: *identity, Acknowledged: *endpointConsentAck}, endpointConsentHooks{identity: serviceIdentity, configure: lanclient.ConfigureEndpointIdentity}, os.Stdout, os.Stderr))
 	}
 	if *identity != "" && (!*foreground || *validate || !serviceIdentity(*identity)) {
 		fmt.Fprintln(os.Stderr, "Tracebolt service identity rejected before private-state access.")

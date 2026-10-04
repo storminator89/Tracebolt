@@ -6,6 +6,7 @@ import { AUTH_REQUIRED_EVENT, request } from './api';
 import { setLocale } from './i18n';
 import type { Device, Metric, Overview } from './types';
 import type { OperationalView } from './operational-types';
+import { emptyEndpointView } from './endpoint-identity-fixtures';
 
 vi.mock('./api', async original => ({ ...await original<typeof import('./api')>(), request: vi.fn() }));
 const id = `agent_${'7'.repeat(32)}`, secondID = `agent_${'8'.repeat(32)}`;
@@ -23,6 +24,8 @@ function answer(path: string) {
  if (path === '/enrollment') return { schemaVersion: 'tracebolt.enrollment-operator.v2', serverNow: now, enabled: false, platforms: [], recordLimit: 25, items: [] };
  if (path === '/overview') return { product: 'Synthetic Tracebolt', mode: 'lan', generatedAt: now, stats: { totalDevices: 2, healthyDevices: 0, attentionDevices: 0, unknownDevices: 2, openCases: 0, criticalCases: 0 }, devices: [device(), device(secondID)], cases: [], activity: [] } satisfies Overview;
  if (path === `/devices/${id}/operational`) return operational();
+ if (path === `/devices/${id}/inventory/endpoint-identity`) return emptyEndpointView();
+ if (path === `/devices/${secondID}/inventory/endpoint-identity`) return { ...emptyEndpointView(), deviceId: secondID };
  if (path === `/devices/${id}`) return device();
  if (path === `/devices/${secondID}`) return device(secondID);
  throw new Error('Unexpected synthetic route');
@@ -52,9 +55,10 @@ describe('dedicated device page', () => {
   expect(within(page).getByText('Time unknown', { selector: '.detail-time' })).toBeVisible(); expect(page).not.toHaveTextContent('0001');
   expect(screen.queryByLabelText('Search devices')).not.toBeInTheDocument(); expect(screen.queryByRole('button', { name: 'Add device' })).not.toBeInTheDocument();
   const technical = within(page).getByText('Device profile & technical details').closest('details')!;
-  expect(technical).not.toHaveAttribute('open'); expect(within(technical).getByText('IP address')).not.toBeVisible();
+  expect(technical).not.toHaveAttribute('open'); expect(within(technical).queryByText('IP address')).not.toBeInTheDocument();
+  expect(within(page).getByRole('heading', { name: 'Hostname & interface addresses' })).toBeVisible();
   fireEvent.click(within(technical).getByText('Device profile & technical details'));
-  expect(technical).toHaveAttribute('open'); expect(within(technical).getByText('Not collected')).toBeVisible();
+  expect(technical).toHaveAttribute('open'); expect(within(technical).getByText('Device name')).toBeVisible();
   fireEvent.click(within(page).getByRole('tab', { name: /^Capabilities/ }));
   expect(within(page).getByText('Raw logs')).toBeVisible(); expect(within(page).getByText('Unavailable', { selector: '.capability-state' })).toBeVisible();
  });

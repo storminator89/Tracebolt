@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"localrmm/internal/endpointidentity"
 	"localrmm/internal/systeminventory"
 	"localrmm/internal/systemstate"
 	"localrmm/internal/systemwire"
@@ -22,11 +23,12 @@ type systemReport struct {
 }
 type systemSource func(context.Context, string, time.Time) (systeminventory.Snapshot, error)
 type systemSender struct {
-	material Material
-	state    *systemstate.State
-	client   *http.Client
-	collect  systemSource
-	now      func() time.Time
+	material        Material
+	state           *systemstate.State
+	client          *http.Client
+	collect         systemSource
+	now             func() time.Time
+	identityCollect endpointSource
 }
 
 func openSystemSender(m Material) (*systemSender, error) {
@@ -40,7 +42,7 @@ func openSystemSenderWithSource(m Material, source systemSource, now func() time
 	if e != nil {
 		return nil, ErrState
 	}
-	return &systemSender{m, state, newHTTPClient(m.tlsConfig, m.config.Profile == "http-test"), source, now}, nil
+	return &systemSender{material: m, state: state, client: newHTTPClient(m.tlsConfig, m.config.Profile == "http-test"), collect: source, now: now, identityCollect: endpointidentity.Collect}, nil
 }
 func (s *systemSender) Close() error {
 	if s == nil {
@@ -66,6 +68,7 @@ func (s *systemSender) Run(ctx context.Context) (systemReport, error) {
 	if ctx.Err() != nil {
 		return out, ctx.Err()
 	}
+	_, identityEnabled := readEndpointConsent(s.material)
 	pending, e := s.state.Pending()
 	if e != nil {
 		return out, ErrState
@@ -77,10 +80,14 @@ func (s *systemSender) Run(ctx context.Context) (systemReport, error) {
 			return out, ErrState
 		}
 		now := s.now().UTC()
-		if now.Before(frame.Snapshot.CollectedAt) {
+		if frame.EndpointIdentity != nil && !identityEnabled {
+			if s.state.Discard(pending.Digest) != nil {
+				return out, ErrState
+			}
+			pending = nil
+		} else if now.Before(frame.Snapshot.CollectedAt) {
 			return out, ErrSystemTransport
-		}
-		if now.Sub(frame.Snapshot.CollectedAt) > 2*time.Minute {
+		} else if now.Sub(frame.Snapshot.CollectedAt) > 2*time.Minute {
 			if s.state.Discard(pending.Digest) != nil {
 				return out, ErrState
 			}
@@ -108,6 +115,26 @@ func (s *systemSender) Run(ctx context.Context) (systemReport, error) {
 			return out, ErrObservation
 		}
 		raw, e := systemwire.Encode(sequence, snapshot)
+		currentConsent, stillEnabled := readEndpointConsent(s.material)
+		if identityEnabled && stillEnabled {
+			if s.identityCollect == nil {
+				return out, ErrConfiguration
+			}
+			identity, err := s.identityCollect(ctx, generation, at, currentConsent, s.material.binding)
+			if ctx.Err() != nil {
+				return out, ctx.Err()
+			}
+			if err != nil || identity.GenerationID != generation || !identity.CollectedAt.Equal(at) || endpointidentity.Validate(identity) != nil {
+				return out, ErrObservation
+			}
+			raw, e = systemwire.EncodeEndpoint(sequence, snapshot, identity)
+			if e != nil {
+				// Keep the existing total request/state cap. Do not truncate
+				// interface rows or increase the reviewed storage ceiling.
+				identity = endpointidentity.Empty(generation, at, endpointidentity.ReasonByteLimit)
+				raw, e = systemwire.EncodeEndpoint(sequence, snapshot, identity)
+			}
+		}
 		if e != nil {
 			return out, ErrObservation
 		}
@@ -120,6 +147,21 @@ func (s *systemSender) Run(ctx context.Context) (systemReport, error) {
 	out.Sequence = pending.Sequence
 	if ctx.Err() != nil {
 		return out, ctx.Err()
+	}
+	// Recheck immediately before network. Supported administration requires a
+	// stopped sender; this additionally fails closed for removed/corrupt consent.
+	prepared, e := systemwire.Decode(pending.Body())
+	if e != nil {
+		return out, ErrState
+	}
+	if prepared.EndpointIdentity != nil {
+		if _, ok := readEndpointConsent(s.material); !ok {
+			if s.state.Discard(pending.Digest) != nil {
+				return out, ErrState
+			}
+			out.Status = "endpoint_identity_disabled"
+			return out, nil
+		}
 	}
 	var request *http.Request
 	if s.material.config.Profile == "http-test" {
