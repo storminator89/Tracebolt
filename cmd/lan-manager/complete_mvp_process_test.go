@@ -502,8 +502,8 @@ func completeMVPNext(t *testing.T, ctx context.Context, events <-chan agentloop.
 	t.Helper()
 	select {
 	case event, ok := <-events:
-		if !ok || event.Outcome != agentloop.Success || event.Metadata.Sequence == 0 || event.Metadata.SystemStatus != "acknowledged" || event.Metadata.SystemSequence == 0 {
-			t.Fatal("complete native report not acknowledged")
+		if category := completeMVPSenderFailure(event, ok); category != "" {
+			t.Fatal(category)
 		}
 		switch event.Metadata.InventoryStatus {
 		case "acknowledged", "failure_acknowledged", "not_due", "pending_retained":

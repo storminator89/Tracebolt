@@ -22,6 +22,23 @@ const apiSmoke=process.argv.includes('--api-smoke');
 const results=[],screenshots=[];
 let browser,server,context,pipe,waiting,devices,currentTest='',stage='setup',runtimeErrorCount=0,fatal=false;
 const mark=value=>{stage=value;};
+// Fixed projection only: no request URLs, identifiers, headers, response text or rows.
+let readOutcomes=[],readTasks=[];
+async function exactStorageBusy(response){
+ if(response.status()!==429||response.headers()['retry-after']!=='2')return false;
+ try{const raw=await response.body();return raw.length<=2048&&JSON.parse(raw.toString('utf8'))?.error?.code==='storage_busy';}catch{return false;}
+}
+function observeReads(page){
+ page.on('response',response=>{
+  if(response.request().method()!=='GET'||!response.url().startsWith(base+'/api/devices/'))return;
+  const resource=['endpoint-identity','packages','overview'].find(name=>response.url().endsWith('/inventory/'+name));
+  if(!resource||readTasks.length>=24)return;
+  const status=response.status();const value={resource,status:Number.isInteger(status)&&status>=100&&status<=599?status:0,storageBusy:false};readOutcomes.push(value);
+  readTasks.push(exactStorageBusy(response).then(busy=>{value.storageBusy=busy;}).catch(()=>{}));
+ });
+}
+async function readEvidence(){const outcomes=readOutcomes.slice(),tasks=readTasks.slice();await Promise.allSettled(tasks);return JSON.stringify(outcomes);}
+
 const endpoint=(label='alpha',action='')=>`/api/devices/${devices[label]}/inventory/overview${action?'/'+action:''}`;
 const rows=page=>page.locator('.complete-overview tbody tr:not(.overview-group)');
 const panel=page=>page.locator('.complete-overview');
@@ -55,7 +72,7 @@ async function start(){
 }
 async function pageAt({mobile=false}={}){
  context=await browser.newContext({viewport:mobile?{width:390,height:844}:{width:1440,height:1000},locale:'en-GB'});
- const page=await context.newPage();page.on('pageerror',()=>runtimeErrorCount++);
+ const page=await context.newPage();observeReads(page);page.on('pageerror',()=>runtimeErrorCount++);
  mark('open signed-out overview fixture');await page.goto(base+'/#/devices');
  mark('sign in to overview fixture');await page.getByLabel('Operator password',{exact:true}).fill(password);
  await page.getByRole('button',{name:'Sign in',exact:true}).click();
@@ -86,9 +103,9 @@ async function shot(page,name){
  await clean(page);await bounds(page);const file=name+'.png';await page.screenshot({path:path.join(out,file),fullPage:false,animations:'disabled'});
  screenshots.push({file,sourceSha,sha256:createHash('sha256').update(await fs.readFile(path.join(out,file))).digest('hex'),viewport:page.viewportSize(),locale:await page.locator('html').getAttribute('lang'),fullPage:false,publicSafe:true,fixtureDisclosure:'Invented process and mount rows, directly admitted through typed generation begin/append/finalize and the real operator HTTP-test handler. No host inventory read or native ingress.',test:currentTest});
 }
-async function held(page,url,run){
+async function held(page,url,run,{releaseBusy=false}={}){
  let release,arrived=0,completed=0;const statuses=[];const gate=new Promise(r=>release=r);
- const handler=async route=>{try{const response=await route.fetch();statuses.push(response.status());arrived++;await gate;await route.fulfill({response});}catch{}finally{completed++;}};
+ const handler=async route=>{try{const response=await route.fetch();if(releaseBusy&&route.request().method()==='GET'&&await exactStorageBusy(response)){await route.fulfill({response});return;}statuses.push(response.status());arrived++;await gate;await route.fulfill({response});}catch{}finally{completed++;}};
  await page.route(url,handler);try{await run({arrived:()=>arrived,completed:()=>completed,statuses:()=>statuses,release});}finally{release();await page.unroute(url,handler);}
 }
 async function pageAction(page,action,expected={}){
@@ -98,7 +115,7 @@ async function pageAction(page,action,expected={}){
  await expect(rows(page)).toHaveCount(value.items.length);await settled(page);return value;
 }
 async function search(page,text){await page.getByRole('searchbox',{name:'Search this complete section',exact:true}).fill(text);await expect(rows(page)).toHaveCount(0);return pageAction(page,()=>page.getByRole('button',{name:'Search from first page',exact:true}).click());}
-async function check(name,run){currentTest=name;mark('fixture setup');const began=Date.now();try{await start();await run();results.push({name,status:'PASS',durationMs:Date.now()-began});console.log(`PASS ${name}`);}catch{results.push({name,status:'FAIL',stage,durationMs:Date.now()-began,error:'Bounded assertion failure; raw rows, responses, credentials and state withheld.'});console.log(`FAIL ${name} (${stage})`);}finally{if(context)await context.close();context=null;await stop();}}
+async function check(name,run){currentTest=name;readOutcomes=[];readTasks=[];mark('fixture setup');const began=Date.now();try{await start();await run();console.log('READ_OUTCOMES '+await readEvidence());results.push({name,status:'PASS',durationMs:Date.now()-began});console.log(`PASS ${name}`);}catch{results.push({name,status:'FAIL',stage,durationMs:Date.now()-began,error:'Bounded assertion failure. Fixed read outcomes: '+await readEvidence()});console.log(`FAIL ${name} (${stage})`);}finally{if(context)await context.close();context=null;await stop();}}
 
 try{
  mark('compile complete overview fixture');execFileSync(process.env.GO_BIN||'go',['build','-buildvcs=false','-o',path.join(temporary,'overviewfixture'),'./tests/e2e-review/overviewfixture'],{cwd:root,stdio:'ignore'});
@@ -141,7 +158,7 @@ try{
   });
   await check('Visibility and device changes clear held overview rows and real Sign out removes private state',async()=>{
    const page=await pageAt();await open(page);await expect(rows(page)).toHaveCount(100);mark('hidden visibility clears private overview');await page.evaluate(()=>{Object.defineProperty(document,'visibilityState',{configurable:true,value:'hidden'});document.dispatchEvent(new Event('visibilitychange'));});await expect(rows(page)).toHaveCount(0);
-   await held(page,'**'+endpoint(),async gate=>{mark('visible restore waits for fresh overview metadata');await page.evaluate(()=>{Object.defineProperty(document,'visibilityState',{configurable:true,value:'visible'});document.dispatchEvent(new Event('visibilitychange'));});await expect.poll(gate.arrived).toBeGreaterThan(0);expect(gate.statuses().every(value=>value===200)).toBe(true);await expect(rows(page)).toHaveCount(0);gate.release();await expect(rows(page)).toHaveCount(100);await settled(page);});
+   await held(page,'**'+endpoint(),async gate=>{mark('visible restore waits for fresh overview metadata');await page.evaluate(()=>{Object.defineProperty(document,'visibilityState',{configurable:true,value:'visible'});document.dispatchEvent(new Event('visibilitychange'));});await expect.poll(gate.arrived).toBeGreaterThan(0);expect(gate.statuses().every(value=>value===200)).toBe(true);await expect(rows(page)).toHaveCount(0);gate.release();await expect(rows(page)).toHaveCount(100);await settled(page);},{releaseBusy:true});
    await held(page,'**'+endpoint('alpha','query'),async gate=>{mark('device navigation discards old held process page');await page.getByRole('button',{name:'Next page',exact:true}).click();await expect.poll(gate.arrived).toBe(1);expect(gate.statuses()).toEqual([200]);await expect(rows(page)).toHaveCount(0);await page.evaluate(id=>{location.hash='/devices/'+id;},devices.beta);await expect(page.getByRole('region',{name:'Device QA synthetic overview beta',exact:true})).toBeVisible();await page.getByRole('tab',{name:'Inventory',exact:true}).click();await settled(page);gate.release();await expect.poll(gate.completed).toBe(1);await expect(rows(page)).toHaveCount(0);await expect(panel(page)).toContainText('Successful complete enumeration contained zero rows');});
    await open(page);await expect(rows(page)).toHaveCount(100);const cookie=(await context.cookies()).map(c=>`${c.name}=${c.value}`).join('; ');await held(page,'**/api/auth/logout',async gate=>{mark('actual logout clears content before server response');await page.getByRole('button',{name:'Sign out',exact:true}).click();await expect.poll(gate.arrived).toBe(1);expect(gate.statuses()).toEqual([200]);await expect(page.locator('.app-shell,.complete-overview')).toHaveCount(0);gate.release();await expect(page.getByRole('heading',{name:'Sign in',exact:true})).toBeVisible();});expect((await context.request.get(base+endpoint(),{headers:{Cookie:cookie}})).status()).toBe(401);await clean(page);await page.reload();await expect(page.getByRole('heading',{name:'Sign in',exact:true})).toBeVisible();
   });

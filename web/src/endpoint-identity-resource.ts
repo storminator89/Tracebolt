@@ -12,10 +12,10 @@ function elapsed(anchor: Anchor): number {
 }
 export function useEndpointIdentity(deviceId: string, enabled: boolean, sessionKey: string | null = null) {
     const key = `${deviceId}:${sessionKey ?? ''}:${enabled}`;
-    const [data, setData] = useState<{ key: string; view: EndpointIdentityView } | null>(null), [loading, setLoading] = useState(false), [error, setError] = useState<EndpointFailure | null>(null), [, tick] = useState(0);
+    const [data, setData] = useState<{ key: string; view: EndpointIdentityView } | null>(null), [loading, setLoading] = useState(false), [recovering, setRecovering] = useState(false), [error, setError] = useState<EndpointFailure | null>(null), [, tick] = useState(0);
     const alive = useRef(false), locked = useRef(false), suspended = useRef(false), epoch = useRef(0), current = useRef<EndpointIdentityView | null>(null);
     const anchor = useRef<Anchor | null>(null), latestServer = useRef<string | null>(null), pending = useRef<{ controller: AbortController; timeout: number; started: Anchor } | null>(null);
-    const cancel = useCallback(() => { epoch.current++; pending.current?.controller.abort(); window.clearTimeout(pending.current?.timeout); pending.current = null; if (alive.current) setLoading(false); }, []);
+    const cancel = useCallback(() => { epoch.current++; pending.current?.controller.abort(); window.clearTimeout(pending.current?.timeout); pending.current = null; if (alive.current) { setLoading(false); setRecovering(false); } }, []);
     const clear = useCallback((failure: EndpointFailure | null = null) => { cancel(); anchor.current = null; current.current = null; if (alive.current) { setData(null); setError(failure); } }, [cancel]);
     const read = useCallback(async () => {
         if (!enabled || !alive.current || locked.current || suspended.current || document.visibilityState === 'hidden') return;
@@ -23,13 +23,34 @@ export function useEndpointIdentity(deviceId: string, enabled: boolean, sessionK
         const revision = epoch.current, controller = new AbortController(), started = capture(), protectedEpoch = getProtectedRequestEpoch();
         setLoading(true); pending.current = { controller, started, timeout: window.setTimeout(() => { if (revision === epoch.current) clear('timeout'); }, 10000) };
         const active = () => {
-            if (!alive.current || locked.current || suspended.current || controller.signal.aborted || revision !== epoch.current || protectedEpoch !== getProtectedRequestEpoch()) return false;
+            if (!alive.current || locked.current || suspended.current || controller.signal.aborted || revision !== epoch.current) return false;
+            if (protectedEpoch !== getProtectedRequestEpoch()) { locked.current = true; clear('session'); return false; }
             if (!Number.isFinite(elapsed(started))) { clear('clock'); return false; }
             if (elapsed(started) >= 10000) { clear('timeout'); return false; }
             return true;
         };
         try {
-            const response = await request<unknown>(`/devices/${encodeURIComponent(deviceId)}/inventory/endpoint-identity`, { signal: controller.signal }, ENDPOINT_VIEW_BYTES);
+            let response: unknown;
+            // Retry only this exact GET once. Keep the original controller,
+            // access epoch, capture anchor and total ten-second deadline.
+            for (let attempt = 0; attempt < 2; attempt++) {
+                try {
+                    response = await request<unknown>(`/devices/${encodeURIComponent(deviceId)}/inventory/endpoint-identity`, { signal: controller.signal }, ENDPOINT_VIEW_BYTES);
+                    break;
+                } catch (caught) {
+                    if (!active()) return;
+                    if (attempt !== 0 || !(caught instanceof APIError) || caught.status !== 429 || caught.code !== 'storage_busy') throw caught;
+                    setRecovering(true);
+                    await new Promise<void>(resolve => {
+                        const finish = () => { window.clearTimeout(delay); controller.signal.removeEventListener('abort', finish); resolve(); };
+                        const delay = window.setTimeout(finish, 2000);
+                        controller.signal.addEventListener('abort', finish, { once: true });
+                        if (controller.signal.aborted) finish();
+                    });
+                    if (!active()) return;
+                    setRecovering(false);
+                }
+            }
             if (!active()) return;
             if (!validEndpointView(response, deviceId)) { clear('invalid'); return; }
             if (latestServer.current && inventoryAge(response.serverNow, latestServer.current) < 0) { clear('clock'); return; }
@@ -39,7 +60,7 @@ export function useEndpointIdentity(deviceId: string, enabled: boolean, sessionK
             if (caught instanceof APIError && caught.status === 401) { locked.current = true; clear('session'); }
             else clear(caught instanceof APIError && caught.status === 429 ? 'busy' : 'loadError');
         } finally {
-            if (revision === epoch.current) { window.clearTimeout(pending.current?.timeout); pending.current = null; if (alive.current) setLoading(false); }
+            if (revision === epoch.current) { window.clearTimeout(pending.current?.timeout); pending.current = null; if (alive.current) { setLoading(false); setRecovering(false); } }
         }
     }, [clear, deviceId, enabled, key]);
     useEffect(() => {
@@ -65,6 +86,6 @@ export function useEndpointIdentity(deviceId: string, enabled: boolean, sessionK
         return () => { alive.current = false; clear(); window.clearInterval(timer); window.removeEventListener(AUTH_REQUIRED_EVENT, lock); window.removeEventListener('pagehide', suspend); window.removeEventListener('pageshow', show); window.removeEventListener('blur', suspend); window.removeEventListener('focus', restore); window.removeEventListener('hashchange', suspend); document.removeEventListener('visibilitychange', visibility); };
     }, [clear, enabled, key, read]);
     const view = enabled && data?.key === key ? data.view : null, age = anchor.current ? elapsed(anchor.current) : Infinity;
-    return { view, snapshot: view && endpointSnapshotVisible(view, age) ? view.latest : null, loading: enabled && loading, error: enabled ? error : null, elapsed: age, refresh: () => void read() };
+    return { view, snapshot: view && endpointSnapshotVisible(view, age) ? view.latest : null, loading: enabled && loading, recovering: enabled && recovering, error: enabled ? error : null, elapsed: age, refresh: () => void read() };
 }
 export type EndpointIdentityResource = ReturnType<typeof useEndpointIdentity>;

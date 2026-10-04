@@ -51,7 +51,7 @@ function SoftwareOverviewSession({ deviceId, onOpenPackages }: { deviceId: strin
     return <section className="software-overview package-observations" aria-labelledby={id} aria-busy={resource.loading}>
         <header className="package-heading"><h2 id={id}><Boxes size={18}/>{labels.title}</h2><button className="button small" type="button" disabled={resource.loading || resource.error === 'session'} onClick={resource.refresh}><RefreshCw size={14}/>{labels.refresh}</button></header>
         <p className="package-note">{labels.scope}</p>
-        {resource.loading && <p role="status">{facts.loading}</p>}
+        {resource.loading && <p role="status">{resource.recovering ? locale === 'de' ? 'Der Speicher ist ausgelastet. Ein automatischer Leseversuch folgt in 2 Sekunden.' : 'Storage is busy. One automatic read retry in 2 seconds.' : facts.loading}</p>}
         {resource.error && <p role="alert" className="package-error">{facts[resource.error]}</p>}
         <dl className="package-counts software-total">{field(labels.rows, visible && generation ? number(generation.manifest.observedCount) : '—')}{visible && generation && <>{field(facts.installed, number(generation.manifest.installedCount))}{field(labels.incomplete, number(generation.manifest.observedCount - generation.manifest.installedCount))}</>}</dl>
         {view && <>

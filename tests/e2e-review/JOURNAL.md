@@ -44,7 +44,13 @@ target or establish any screenshot result.
 4. Cancel clears rows immediately. A deliberately lost response after the real
    cancellation commits triggers status reconciliation without mutation replay.
    Reload preserves the canceled state and consumed request floor.
-5. Injected hidden visibility clears content until a fresh real read completes.
+5. Idle timer checks retain the selected draft service, UTC window and severity.
+   A visible blur clears rows/search and shows an explicit paused state with the
+   same disabled form controls. Explicit Refresh status rechecks the real operator
+   session, holds the original status response behind the privacy assertions,
+   and restores the same identity, digest and original observation/expiry without
+   creating or canceling another capture. Acknowledgements and search reset.
+   Injected hidden visibility still clears content until a fresh real read completes.
    A capture delivered120 seconds after creation still expires at the original
    fifteen-minute deadline. Fixture clock advancement is not elapsed wall time
    or actual browser BFCache acceptance.

@@ -14,14 +14,14 @@ function elapsed(anchor: Anchor): number {
 type Data = { view: OverviewView | null; page: OverviewPage | null; scanned: number; matches: number };
 const empty = (): Data => ({ view: null, page: null, scanned: 0, matches: 0 });
 export function useCompleteOverview(deviceId: string, section: OverviewSection) {
-    const [data, setData] = useState<Data>(empty), [loading, setLoading] = useState(false), [error, setError] = useState<OverviewFailure | null>(null), [search, setSearch] = useState(''), [, tick] = useState(0);
+    const [data, setData] = useState<Data>(empty), [loading, setLoading] = useState(false), [recovering, setRecovering] = useState(false), [error, setError] = useState<OverviewFailure | null>(null), [search, setSearch] = useState(''), [, tick] = useState(0);
     const alive = useRef(false), locked = useRef(false), suspended = useRef(false), epoch = useRef(0), state = useRef<Data>(empty());
     const anchor = useRef<Anchor | null>(null), pageAnchor = useRef<Anchor | null>(null), lastRow = useRef<OverviewRow | null>(null);
     const query = useRef(''), retryCursor = useRef(''), seenCursors = useRef(new Set<string>()), cursorDeadline = useRef<string | null>(null);
     const latestServerTime = useRef<string | null>(null);
     const pending = useRef<{ controller: AbortController; timeout: number; started: Anchor } | null>(null);
     const install = useCallback((value: Data) => { state.current = value; if (alive.current) setData(value); }, []);
-    const cancel = useCallback(() => { epoch.current++; pending.current?.controller.abort(); window.clearTimeout(pending.current?.timeout); pending.current = null; if (alive.current) setLoading(false); }, []);
+    const cancel = useCallback(() => { epoch.current++; pending.current?.controller.abort(); window.clearTimeout(pending.current?.timeout); pending.current = null; if (alive.current) { setLoading(false); setRecovering(false); } }, []);
     const clear = useCallback((failure: OverviewFailure | null = null) => {
         cancel(); anchor.current = null; pageAnchor.current = null; lastRow.current = null; cursorDeadline.current = null; seenCursors.current.clear(); install(empty()); if (alive.current) setError(failure);
     }, [cancel, install]);
@@ -37,7 +37,8 @@ export function useCompleteOverview(deviceId: string, section: OverviewSection) 
             if (revision === epoch.current) { cancel(); install({ ...state.current, page: null }); setError('timeout'); }
         }, 10000) };
         const active = () => {
-            if (!alive.current || locked.current || suspended.current || controller.signal.aborted || revision !== epoch.current || protectedEpoch !== getProtectedRequestEpoch()) return false;
+            if (!alive.current || locked.current || suspended.current || controller.signal.aborted || revision !== epoch.current) return false;
+            if (protectedEpoch !== getProtectedRequestEpoch()) { locked.current = true; clear('session'); return false; }
             if (!Number.isFinite(elapsed(started)) || anchor.current && !Number.isFinite(elapsed(anchor.current))) { clear('clock'); return false; }
             if (elapsed(started) >= 10000) { cancel(); install({ ...state.current, page: null }); setError('timeout'); return false; }
             return true;
@@ -45,7 +46,27 @@ export function useCompleteOverview(deviceId: string, section: OverviewSection) 
         try {
             let view = state.current.view;
             if (refresh) {
-                const response = await request<unknown>(`/devices/${encodeURIComponent(deviceId)}/inventory/overview`, { signal: controller.signal }, OVERVIEW_STATUS_BYTES);
+                let response: unknown;
+                // Retry only this exact GET once. Keep the original controller,
+                // access epoch, capture anchor and total ten-second deadline.
+                for (let attempt = 0; attempt < 2; attempt++) {
+                    try {
+                        response = await request<unknown>(`/devices/${encodeURIComponent(deviceId)}/inventory/overview`, { signal: controller.signal }, OVERVIEW_STATUS_BYTES);
+                        break;
+                    } catch (caught) {
+                        if (!active()) return;
+                        if (attempt !== 0 || !(caught instanceof APIError) || caught.status !== 429 || caught.code !== 'storage_busy') throw caught;
+                        setRecovering(true);
+                        await new Promise<void>(resolve => {
+                            const finish = () => { window.clearTimeout(delay); controller.signal.removeEventListener('abort', finish); resolve(); };
+                            const delay = window.setTimeout(finish, 2000);
+                            controller.signal.addEventListener('abort', finish, { once: true });
+                            if (controller.signal.aborted) finish();
+                        });
+                        if (!active()) return;
+                        setRecovering(false);
+                    }
+                }
                 if (!active()) return;
                 if (!validOverviewView(response, deviceId)) { clear('invalid'); return; }
                 if (latestServerTime.current && inventoryAge(response.serverNow, latestServerTime.current) < 0) { clear('clock'); return; }
@@ -73,7 +94,7 @@ export function useCompleteOverview(deviceId: string, section: OverviewSection) 
             else if (caught instanceof APIError && caught.status === 409) clear('restart');
             else { install({ ...state.current, page: null }); setError(caught instanceof APIError && caught.status === 429 ? 'busy' : 'loadError'); }
         } finally {
-            if (revision === epoch.current) { window.clearTimeout(pending.current?.timeout); pending.current = null; if (alive.current) setLoading(false); }
+            if (revision === epoch.current) { window.clearTimeout(pending.current?.timeout); pending.current = null; if (alive.current) { setLoading(false); setRecovering(false); } }
         }
     }, [cancel, clear, deviceId, install, section]);
     const changeSearch = useCallback((value: string) => {
@@ -105,5 +126,5 @@ export function useCompleteOverview(deviceId: string, section: OverviewSection) 
         void read(true);
         return () => { alive.current = false; clear(); window.clearInterval(timer); window.removeEventListener(AUTH_REQUIRED_EVENT, lock); window.removeEventListener('pagehide', suspend); window.removeEventListener('pageshow', show); window.removeEventListener('blur', suspend); window.removeEventListener('focus', restore); window.removeEventListener('hashchange', navigate); document.removeEventListener('visibilitychange', visibility); };
     }, [cancel, clear, install, read, section]);
-    return { ...data, loading, error, search, changeSearch, startSearch, refresh: () => { query.current = ''; setSearch(''); void read(true); }, next: () => { if (state.current.page?.nextCursor) void read(false, state.current.page.nextCursor); }, retry: () => void read(!state.current.view, retryCursor.current), elapsed: anchor.current ? elapsed(anchor.current) : Infinity };
+    return { ...data, loading, recovering, error, search, changeSearch, startSearch, refresh: () => { query.current = ''; setSearch(''); void read(true); }, next: () => { if (state.current.page?.nextCursor) void read(false, state.current.page.nextCursor); }, retry: () => void read(!state.current.view, retryCursor.current), elapsed: anchor.current ? elapsed(anchor.current) : Infinity };
 }

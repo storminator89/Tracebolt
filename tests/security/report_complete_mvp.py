@@ -17,6 +17,17 @@ STATUS = re.compile(r"native report: sequence=[0-9]{1,19} systemSequence=[0-9]{1
 PACKAGE_FAILURE = re.compile(r"native complete package attempt: failure=(source_missing|source_invalid|source_changed|resource_limit|collection_failed); no complete package count claimed")
 # Exact immutable source payloads map to constants; input text is never emitted.
 FAILURES = {
+    "complete_native_event_stream_closed": {"category": "complete_native_event_stream_closed", "stage": "sender"},
+    "complete_native_outcome_retryable": {"category": "complete_native_outcome_retryable", "stage": "sender"},
+    "complete_native_outcome_configuration": {"category": "complete_native_outcome_configuration", "stage": "sender"},
+    "complete_native_outcome_state": {"category": "complete_native_outcome_state", "stage": "sender"},
+    "complete_native_outcome_revoked": {"category": "complete_native_outcome_revoked", "stage": "sender"},
+    "complete_native_outcome_invalid": {"category": "complete_native_outcome_invalid", "stage": "sender"},
+    "complete_native_metric_sequence_missing": {"category": "complete_native_metric_sequence_missing", "stage": "sender"},
+    "complete_native_system_pending_retained": {"category": "complete_native_system_pending_retained", "stage": "sender"},
+    "complete_native_system_status_missing": {"category": "complete_native_system_status_missing", "stage": "sender"},
+    "complete_native_system_status_invalid": {"category": "complete_native_system_status_invalid", "stage": "sender"},
+    "complete_native_system_sequence_missing": {"category": "complete_native_system_sequence_missing", "stage": "sender"},
     "complete acknowledged report did not advance source times and domains": {
         "category": "complete_acknowledged_report_did_not_advance_source_times_and_domains",
         "stage": "observation"

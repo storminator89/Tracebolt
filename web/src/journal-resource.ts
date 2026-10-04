@@ -11,7 +11,7 @@ function elapsed(a: Anchor) { const m = performance.now() - a.mono, w = Date.now
 export function useJournal(deviceId: string, insecureTestMode: boolean, sessionKey: string | null) {
     const key = `${deviceId}:${sessionKey ?? ''}:${insecureTestMode}`;
     const [data, setData] = useState<{ key: string; view: JournalView } | null>(null), [result, setResult] = useState<{ key: string; page: JournalPage } | null>(null);
-    const [busy, setBusy] = useState(false), [failure, setFailure] = useState<JournalFailure | null>(null), [uncertain, setUncertain] = useState(false), [reset, setReset] = useState(0);
+    const [busy, setBusy] = useState(false), [paused, setPaused] = useState(false), [failure, setFailure] = useState<JournalFailure | null>(null), [uncertain, setUncertain] = useState(false), [reset, setReset] = useState(0);
     const protectedScope = useRef(getProtectedRequestEpoch());
     const alive = useRef(false), locked = useRef(false), suspended = useRef(false), epoch = useRef(0), pending = useRef<{ controller: AbortController; started: Anchor; timeout: number } | null>(null);
     const latestRequest = useRef<JournalRequest | null>(null), retention = useRef<{ id: string; deadline: number } | null>(null), sessionDeadline = useRef(Infinity);
@@ -98,14 +98,20 @@ export function useJournal(deviceId: string, insecureTestMode: boolean, sessionK
         catch (caught) { if (op.active()) fail(caught, true); } finally { op.finish(); }
     }, [acceptView, begin, clearRows, deviceId, fail, insecureTestMode, sessionKey, uncertain]);
     useEffect(() => {
-        alive.current = true; protectedScope.current = getProtectedRequestEpoch(); locked.current = false; suspended.current = document.visibilityState === 'hidden'; latestTime.current = null; latestRequest.current = null; retention.current = null; sessionDeadline.current = Infinity; floor.current = '0'; setUncertain(false); clear();
-        const lock = () => { locked.current = true; clear('session'); };
-        const suspend = () => { suspended.current = true; clear(); };
-        const restore = () => { if (locked.current || document.visibilityState === 'hidden' || hasLogoutIntent()) return; suspended.current = false; void refresh(); };
+        alive.current = true; protectedScope.current = getProtectedRequestEpoch(); locked.current = false; suspended.current = document.visibilityState === 'hidden'; setPaused(suspended.current); latestTime.current = null; latestRequest.current = null; retention.current = null; sessionDeadline.current = Infinity; floor.current = '0'; setUncertain(false); clear();
+        const lock = () => { locked.current = true; setPaused(false); clear('session'); };
+        const suspend = () => {
+            suspended.current = true;
+            // Later background events must not erase a denied/expired session.
+            if (locked.current) { clear('session'); setPaused(false); return; }
+            clear(); setPaused(true);
+        };
+        const restore = () => { if (locked.current || document.visibilityState === 'hidden' || hasLogoutIntent()) return; suspended.current = false; setPaused(false); void refresh(); };
         const visibility = () => document.visibilityState === 'hidden' ? suspend() : restore();
         const show = (event: PageTransitionEvent) => { if (event.persisted || suspended.current) restore(); };
         window.addEventListener(AUTH_REQUIRED_EVENT, lock); window.addEventListener('pagehide', suspend); window.addEventListener('pageshow', show); window.addEventListener('blur', suspend); window.addEventListener('focus', restore); window.addEventListener('hashchange', suspend); document.addEventListener('visibilitychange', visibility);
         const timer = window.setInterval(() => {
+            if (locked.current) return;
             const base = anchor.current ?? pending.current?.started;
             if (hasLogoutIntent() || protectedScope.current !== getProtectedRequestEpoch()) { lock(); return; }
             if (base && !Number.isFinite(elapsed(base))) { clear('clock'); return; }
@@ -134,7 +140,12 @@ export function useJournal(deviceId: string, insecureTestMode: boolean, sessionK
     // Only a safe status read follows an uncertain mutation. Never replay create/cancel.
     useEffect(() => { if (uncertain && failure === 'uncertain') void refresh(); }, [failure, refresh, uncertain]);
     return {
-        view, page: scopeActive && result?.key === key ? result.page : null, busy, failure, uncertain, reset, refresh: () => void refresh(),
+        view, page: scopeActive && result?.key === key ? result.page : null, busy, paused, failure, uncertain, reset, refresh: () => {
+            // Explicit visible-page refresh may resume a lost/unpaired focus event.
+            // It still rechecks the session/status; never replay create or cancel.
+            if (!alive.current || locked.current || document.visibilityState === 'hidden' || hasLogoutIntent() || protectedScope.current !== getProtectedRequestEpoch()) return;
+            suspended.current = false; setPaused(false); void refresh();
+        },
         create, cancelRequest: () => void cancelRequest(), search: (text: string) => void loadPage(text, 0, []),
         next: () => { const p = page.current; if (p?.nextOffset != null) void loadPage(p.search, p.nextOffset, [...history.current, p.offset]); },
         previous: () => { const p = page.current, previous = history.current; if (p && previous.length) void loadPage(p.search, previous[previous.length - 1], previous.slice(0, -1)); },

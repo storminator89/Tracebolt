@@ -152,7 +152,15 @@ func (c *Cache) status(ctx context.Context, device string, now time.Time) (journ
 	c.prune(now)
 	s, err := c.readStatus(ctx, device, now)
 	if err != nil {
-		c.remove(device)
+		// A temporary inability to revalidate authority withholds all output,
+		// but does not destroy still-live, already accepted content. Keep the
+		// original timer/receipt/bytes; the next read must authorize afresh.
+		// The awaited read may cross expiry while holding this mutex, so prune
+		// again with trusted time even when it returns a transient error.
+		c.prune(c.freshNow(now))
+		if err != enrollmentstore.ErrInventoryBusy && err != enrollmentstore.ErrBusy && err != context.Canceled && err != context.DeadlineExceeded {
+			c.remove(device)
+		}
 		return journalrequest.Status{}, "unknown", err
 	}
 

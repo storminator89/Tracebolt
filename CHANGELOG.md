@@ -2,6 +2,20 @@
 
 Meaningful development checkpoints are recorded here. These are prototype milestones, not production releases.
 
+## 2026-10-04 — Preserve Logs state across temporary interruptions
+
+- A manual journal pilot configured its separate helper and returned a first captured result. Subsequent loss exposed two reproducible defects: a temporary authority-read failure erased accepted in-memory content, and a visible-window blur left the Logs view silently suspended. Retain cached bytes only across explicitly transient authority failures without returning them before fresh authorization; preserve original expiry and deletion on definitive invalidation.
+- Make the paused state explicit after blur, clear private rows immediately, and offer a deliberate refresh of the original snapshot. Cancel stale work, prevent query replay, and retain the original lifetime across resume. Extend the existing browser lifecycle case with blur and refresh assertions; no case or privacy/expiry assertion is removed.
+- The `fccc4b00` hosted run confirms the Docker fixture correction through an actual image build and both container profiles. It also exposed a UTC-default test timing failure and a native HTTP sender acknowledgement failure. Keep the native positive predicate and all time budgets intact; project only fixed sender categories and source-known Go package/root-test identities from private failure logs so the next run can identify a cause without exporting runtime output.
+- Local source, fixture and composed checks are recorded separately from the required hosted rerun. The unresolved earlier Go aggregate failure remains open. Official pilot.2 assets and the active bootstrap pin remain unchanged and contain neither journal nor complete-overview features; this source repair is not a new verified binary release.
+
+## 2026-10-04 — Recover bounded inventory metadata reads after admission contention
+
+- Exact `9df28a6` passed the positive native complete-overview gate and frontend checks, but its first browser run recorded four endpoint failures and one overview visibility-restoration failure. Original reports did not capture the precise HTTP response; separate real-handler synthetic probes reproduced shared-slot `429 storage_busy` contention.
+- Permit one fixed two-second retry only for exact busy metadata GET responses, retaining the original controller, protected epoch, total deadline and freshness anchor. Clear private data during interruption/recovery, expose retry progress, cancel delayed work on scope changes, and keep mutations/page operations outside automatic replay.
+- Preserve every browser assertion and case identity. In the two visibility holds, deliver only an exact busy GET response so recovery can happen, continue holding the eventual successful response, and require rows to stay cleared. Diagnostics project only capped fixed route/status/code facts; no raw response or identity values are exported.
+- The owner reports 1,095 frontend tests, type checking/build and focused independent reviews passing. Exact composed hosted confirmation remains pending. A separate Go aggregate failure on `9df28a6` remains under investigation; this UI correction does not resolve or weaken that gate. Preserve the helper recovery and Docker correction from immutable `fccc4b00`. These source checks do not establish hosted acceptance, actual host recovery or a new verified binary release.
+
 ## 2026-10-04 — Repair the pilot helper account command and preserve the failed attempt
 
 - The observed helper apply stopped when the local useradd parser rejected the unsupported `CREATE_MAIL_SPOOL` override. Read-only inspection found no helper account or group creation; the protected attempt marker was retained and the existing agent was restarted. Remove only the unsupported override and report finite command-failure stages while preserving all setup guards.

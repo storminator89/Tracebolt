@@ -269,14 +269,23 @@ jobs:
           python3 -B -m unittest discover -s deploy/journal -p 'test_*.py' -v
       - name: Vet
         run: go vet -p 1 ./...
+      - name: Validate bounded Go failure projection with inert fixtures
+        run: python3 -B tests/security/test_go_failure_reporter.py
       - name: Unit and race tests
+        shell: bash
         run: |
-          (umask 077; : > "$RUNNER_TEMP/go-tests.log")
-          if ! go test -race -json -p 1 -buildvcs=false ./... -skip '^TestIndependentPackageStoreDenseCapacityAndActualIngress$' -count=1 -timeout=15m > "$RUNNER_TEMP/go-tests.log" 2>&1; then
+          set -euo pipefail
+          (umask 077; : > "$RUNNER_TEMP/go-tests.jsonl"; : > "$RUNNER_TEMP/go-tests.stderr")
+          tracebolt_test_start=$SECONDS
+          if go test -race -json -p 1 -buildvcs=false ./... -skip '^TestIndependentPackageStoreDenseCapacityAndActualIngress$' -count=1 -timeout=15m > "$RUNNER_TEMP/go-tests.jsonl" 2> "$RUNNER_TEMP/go-tests.stderr"; then
+            echo 'PASS: Go unit and race tests.'
+          else
+            tracebolt_test_status=$?
+            tracebolt_test_elapsed=$((SECONDS - tracebolt_test_start))
             echo 'FAIL: Go race tests; raw runtime output withheld.'
+            python3 -I -B tests/security/report_go_failure.py --events "$RUNNER_TEMP/go-tests.jsonl" --stderr "$RUNNER_TEMP/go-tests.stderr" --exit-code "$tracebolt_test_status" --elapsed-seconds "$tracebolt_test_elapsed" || true
             exit 1
           fi
-          echo 'PASS: Go unit and race tests.'
 
       - name: Build local binaries
         run: make build

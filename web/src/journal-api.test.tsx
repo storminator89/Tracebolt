@@ -89,7 +89,12 @@ describe('bounded journal API and lifetime', () => {
         let queries = 0; server(url => url === `${root}/query` && ++queries === 2 ? json({}, 409) : undefined); open(); await screen.findByText('Synthetic fixture message'); fireEvent.click(screen.getByRole('button', { name: 'Search capture' })); await screen.findByRole('alert'); expect(screen.queryByRole('table')).not.toBeInTheDocument(); expect(screen.queryByText('The complete capture contains no matching journal entries.')).not.toBeInTheDocument();
     });
     it('uses the fixed server time for UTC query defaults', async () => {
-        server(url => url === root ? json(journalView('awaiting')) : undefined); open(); await screen.findByText('Awaiting a request'); expect(screen.getByLabelText('To (UTC)')).toHaveValue(journalNow.slice(0, 16));
+        server(url => url === root ? json(journalView('awaiting')) : undefined); open(); await screen.findByText('Awaiting a request');
+        // The status commit precedes the effect that initializes UTC fields.
+        await waitFor(() => {
+            expect(screen.getByLabelText('To (UTC)')).toHaveValue(journalNow.slice(0, 16));
+            expect(screen.getByLabelText('From (UTC)')).toHaveValue('2026-10-04T11:45');
+        });
     });
 });
 

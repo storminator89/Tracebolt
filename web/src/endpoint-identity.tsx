@@ -8,7 +8,7 @@ import './endpoint-identity.css';
 
 const copy = {
     en: {
-        title: 'Hostname & interface addresses', refresh: 'Refresh reported identity', loading: 'Reading reported identity…',
+        title: 'Hostname & interface addresses', refresh: 'Refresh reported identity', loading: 'Reading reported identity…', recovering: 'Storage is busy. One automatic read retry in 2 seconds.',
         intro: 'Reported from local Linux sources in the agent-visible namespaces. These display values are untrusted observations, not proof of identity or reachability.',
         permission: 'Collection is off by default and requires a protected, identity-bound acknowledgement by a local administrator. The manager cannot remotely verify whether local collection is currently enabled or disabled.',
         source: 'Sources: local uname hostname, bounded procfs interface/IPv6 reads and read-only IPv4/interface ioctls. No socket-peer inference, DNS lookup or network scan.',
@@ -26,7 +26,7 @@ const copy = {
         none: 'No failure reported', source_missing: 'Source unavailable', permission_denied: 'Permission denied', not_supported: 'Not supported', collectionTimeout: 'Collection timed out', invalid_source: 'Invalid source', read_failed: 'Read failed', item_limit: 'Row rejection limit reached', byte_limit: 'Byte rejection limit reached', collector_busy: 'Collector busy', notCollectedReason: 'Not collected', address_unavailable: 'One or more address families could not be read',
     },
     de: {
-        title: 'Hostname & Schnittstellen-Adressen', refresh: 'Gemeldete Identität aktualisieren', loading: 'Gemeldete Identität wird gelesen…',
+        title: 'Hostname & Schnittstellen-Adressen', refresh: 'Gemeldete Identität aktualisieren', loading: 'Gemeldete Identität wird gelesen…', recovering: 'Der Speicher ist ausgelastet. Ein automatischer Leseversuch folgt in 2 Sekunden.',
         intro: 'Aus lokalen Linux-Quellen in den für den Agent sichtbaren Namensräumen gemeldet. Diese Anzeigewerte sind unvertraute Beobachtungen und kein Nachweis für Identität oder Erreichbarkeit.',
         permission: 'Die Erfassung ist standardmäßig aus und erfordert eine geschützte, identitätsgebundene Bestätigung durch einen lokalen Administrator. Der Manager kann nicht aus der Ferne bestätigen, ob die lokale Erfassung gerade aktiviert oder deaktiviert ist.',
         source: 'Quellen: lokaler uname-Hostname, begrenzte procfs-Lesezugriffe für Schnittstellen/IPv6 und lesende IPv4-/Schnittstellen-ioctls. Keine Ableitung aus Socket-Gegenstellen, DNS-Abfrage oder Netzwerkscan.',
@@ -58,7 +58,7 @@ export function EndpointIdentityPanel({ resource }: { resource: EndpointIdentity
     return <section className="detail-section endpoint-identity" aria-labelledby={id} aria-busy={resource.loading}>
         <header className="endpoint-heading"><h2 id={id}>{labels.title}</h2><button className="button small" disabled={resource.loading || resource.error === 'session'} onClick={resource.refresh}><RefreshCw size={14}/>{labels.refresh}</button></header>
         <p className="endpoint-note">{labels.intro}</p>
-        {resource.loading && <p role="status"><LoaderCircle size={16} className="spin"/>{labels.loading}</p>}
+        {resource.loading && <p role="status"><LoaderCircle size={16} className="spin"/>{resource.recovering ? labels.recovering : labels.loading}</p>}
         {resource.error && <p className="endpoint-failure" role="alert"><TriangleAlert size={16}/>{labels[resource.error]}</p>}
         {status && <p className={`endpoint-status endpoint-status-${status}`}>{labels[status]}</p>}
         {view && !snapshot && <p>{labels.hidden}</p>}
