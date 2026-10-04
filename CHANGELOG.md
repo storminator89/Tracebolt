@@ -2,6 +2,13 @@
 
 Meaningful development checkpoints are recorded here. These are prototype milestones, not production releases.
 
+## 2026-10-04 — Choose observed services and validate supported native retries
+
+- Make Logs easier to request with a searchable selector backed by bounded, generation-pinned observed service pages, while retaining exact manual entry. Selecting an observed name never changes or proves the endpoint's separately granted local allowlist. Show empty, stale, denied and failed source states explicitly; no selection automatically captures content.
+- Offer five-, fifteen-, thirty- and sixty-minute windows relative to the displayed checked UTC reference, with a nearby explicit refresh. Preserve typed drafts, acknowledgements and source age; clear private state on session, device and lifecycle boundaries. Extend the existing synthetic consent scenario and typed service fixture without removing prior assertions, cases or artifact limits.
+- Repeated native CI classified a retryable HTTP sender outcome. Real-authority synthetic lost-response cases proved that the old first-Finished and single-step counter assumptions rejected supported retry recovery. Track every independent pending/acknowledged metric and system step, require exact replay flags, reject gaps/regressions/fatal/stale/malformed results, and bind final views to stopped durable counters.
+- Keep all four required positive native samples, both transports, restart, original source-age and no-recapture checks under the existing contexts and time budgets. The underlying transport cause of the historical hosted failure remains unproven; this corrects the demonstrated acceptance-fixture assumptions without changing production sender behavior. The new exact-source native/browser/full regression run remains required; official pilot.2 assets and bootstrap pin are unchanged.
+
 ## 2026-10-04 — Keep expired inventory retries from recreating invalid generations
 
 - Disposable-store fixtures reproduced a data-integrity failure after a lost Begin response, original transfer expiry and complete cleanup: retrying the same Begin could recreate an unbound generation and make later reads or reopening fail. The same cleanup prevented an authenticated pending Abort from reaching a terminal state.

@@ -2,3 +2,5 @@
 .journal-form-title{font-size:13px;margin:0 0 12px}.journal-capture-summary{font-family:var(--font-mono);font-size:11px;overflow-wrap:anywhere;color:var(--secondary);margin-bottom:12px;line-height:1.7}
 
 .journal-capture fieldset{border:0;padding:0;margin:0;min-width:0}.journal-capture fieldset:disabled{opacity:.7}
+
+.journal-time-presets{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}.journal-time-presets [aria-pressed="true"]{border-color:var(--accent);font-weight:600}.journal-preset-hint{margin:6px 0 12px}.journal-filter-help .text-button{flex-shrink:0}

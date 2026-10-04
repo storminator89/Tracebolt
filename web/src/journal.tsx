@@ -1,14 +1,15 @@
-import { useEffect, useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight, LoaderCircle, RefreshCw, Search, TriangleAlert } from 'lucide-react';
 import { useLocale } from './i18n';
+import { JournalServicePicker } from './journal-service-picker';
 import { useJournal } from './journal-resource';
 import type { JournalResource } from './journal-resource';
-import { journalBytes, journalFold, JOURNAL_SEARCH_BYTES, validJournalQuery } from './journal-types';
+import { journalBytes, journalFold, JOURNAL_SEARCH_BYTES, validJournalQuery, validJournalUnit } from './journal-types';
 import type { JournalQuery } from './journal-types';
 import './journal.css';
 const copy = {
     en: {
-        title: 'Service logs', newCapture: 'New capture', applied: 'Applied search', refresh: 'Refresh status', intro: 'Capture a short journal window from one explicitly allowlisted service.', service: 'Exact service unit', start: 'From (UTC)', end: 'To (UTC)', severity: 'Include severity through', recent: 'Last 15 minutes', capture: 'Capture logs', cancel: 'Cancel request / discard content',
+        title: 'Service logs', newCapture: 'New capture', applied: 'Applied search', refresh: 'Refresh status', refreshReference: 'Refresh status and reference time', intro: 'Capture a short journal window from one explicitly allowlisted service.', service: 'Exact service unit', start: 'From (UTC)', end: 'To (UTC)', severity: 'Include severity through', recent: '15 minutes ending at reference time', recent5: '5 minutes ending at reference time', recent30: '30 minutes ending at reference time', recent60: '1 hour ending at reference time', presets: 'Windows ending at the displayed reference time', presetHint: 'The reference stays fixed between reads and may be old. Refresh status to update it, then choose a window. Selecting a window does not capture logs.', managerTime: 'Reference time (UTC, last checked manager time)', chooseService: 'Choose observed service', manualService: 'Or enter one exact service unit manually. Observed names do not establish local allowlist permission.', capture: 'Capture logs', cancel: 'Cancel request / discard content',
         limits: 'Up to 1 hour within the last 24 hours. At most 500 captured rows / 512 KiB. Content expires 15 minutes after the request was created.',
         allowlist: 'The unit must match the endpoint’s local allowlist exactly. This page cannot enable local access or verify the allowlist.',
         ack: 'I understand that log messages may contain credentials, personal data or other secrets. Masking is best effort and does not make them safe or anonymous.',
@@ -20,7 +21,7 @@ const copy = {
         none: 'No failure reported', permission_denied: 'Permission denied', source_missing: 'Journal source missing', invalid_source: 'Invalid journal source', read_failed: 'Journal read failed', sourceTimeout: 'Collection timed out', item_limit: 'Row limit reached', byte_limit: 'Byte limit reached', visibility_restricted: 'Source visibility restricted', not_supported: 'Source not supported', collector_busy: 'Collector busy',
     },
     de: {
-        title: 'Service-Logs', newCapture: 'Neue Erfassung', applied: 'Angewendete Suche', refresh: 'Status aktualisieren', intro: 'Ein kurzes Journal-Zeitfenster für genau einen lokal freigegebenen Dienst erfassen.', service: 'Exakte Service-Unit', start: 'Von (UTC)', end: 'Bis (UTC)', severity: 'Schweregrade bis einschließlich', recent: 'Letzte 15 Minuten', capture: 'Logs erfassen', cancel: 'Anfrage abbrechen / Inhalt verwerfen',
+        title: 'Service-Logs', newCapture: 'Neue Erfassung', applied: 'Angewendete Suche', refresh: 'Status aktualisieren', refreshReference: 'Status und Referenzzeit aktualisieren', intro: 'Ein kurzes Journal-Zeitfenster für genau einen lokal freigegebenen Dienst erfassen.', service: 'Exakte Service-Unit', start: 'Von (UTC)', end: 'Bis (UTC)', severity: 'Schweregrade bis einschließlich', recent: '15 Minuten bis zur Referenzzeit', recent5: '5 Minuten bis zur Referenzzeit', recent30: '30 Minuten bis zur Referenzzeit', recent60: '1 Stunde bis zur Referenzzeit', presets: 'Zeitfenster bis zur angezeigten Referenzzeit', presetHint: 'Die Referenzzeit bleibt zwischen Lesevorgängen unverändert und kann veraltet sein. Den Status aktualisieren und dann ein Zeitfenster wählen. Die Auswahl erfasst keine Logs.', managerTime: 'Referenzzeit (UTC, zuletzt geprüfte Managerzeit)', chooseService: 'Beobachteten Dienst wählen', manualService: 'Alternativ eine exakte Service-Unit manuell eingeben. Beobachtete Namen belegen keine lokale Allowlist-Freigabe.', capture: 'Logs erfassen', cancel: 'Anfrage abbrechen / Inhalt verwerfen',
         limits: 'Höchstens 1 Stunde innerhalb der letzten 24 Stunden. Maximal 500 erfasste Zeilen / 512 KiB. Inhalte laufen 15 Minuten nach Erstellung der Anfrage ab.',
         allowlist: 'Die Unit muss exakt in der lokalen Freigabeliste des Endpunkts stehen. Diese Seite kann lokalen Zugriff weder aktivieren noch die Liste prüfen.',
         ack: 'Ich verstehe, dass Log-Nachrichten Zugangsdaten, personenbezogene Daten oder andere Geheimnisse enthalten können. Maskierung ist nur bestmöglich und macht sie nicht sicher oder anonym.',
@@ -34,7 +35,9 @@ const copy = {
 };
 const priorityNames = ['0 · Emergency', '1 · Alert', '2 · Critical', '3 · Error', '4 · Warning', '5 · Notice', '6 · Info', '7 · Debug'];
 const inputTime = (s: string) => new Date(s).toISOString().slice(0, 19);
-const utcInput = (s: string) => /^\d{4}-\d\d-\d\dT\d\d:\d\d(?::\d\d)?$/.test(s) ? `${s.length === 16 ? `${s}:00` : s}Z` : '';
+// datetime-local may normalize a whole second with a fractional .000 suffix.
+// Keep explicit UTC and the journal contract's maximum microsecond precision.
+const utcInput = (s: string) => /^\d{4}-\d\d-\d\dT\d\d:\d\d(?::\d\d(?:\.\d{1,6})?)?$/.test(s) ? `${s.length === 16 ? `${s}:00` : s}Z` : '';
 export function JournalHighlight({ text, search }: { text: string; search: string }) {
     if (!search) return <>{text}</>;
     const folded = journalFold(text), needle = journalFold(search), nodes = []; let at = 0, found = folded.indexOf(needle);
@@ -46,14 +49,20 @@ export function JournalPanel(props: JournalPanelProps) {
     return <JournalSession key={`${props.deviceId}:${props.sessionKey ?? ''}:${props.insecureTestMode}`} {...props}/>;
 }
 function JournalSession({ deviceId, insecureTestMode, sessionKey }: JournalPanelProps) {
-    return <JournalContent resource={useJournal(deviceId, insecureTestMode, sessionKey)} insecureTestMode={insecureTestMode}/>;
+    return <JournalContent resource={useJournal(deviceId, insecureTestMode, sessionKey)} insecureTestMode={insecureTestMode} sessionKey={sessionKey}/>;
 }
-export function JournalContent({ resource: r, insecureTestMode }: { resource: JournalResource; insecureTestMode: boolean }) {
-    const [locale] = useLocale(), c = copy[locale], id = useId(), [unit, setUnit] = useState(''), [start, setStart] = useState(''), [end, setEnd] = useState(''), [priority, setPriority] = useState(6), [ack, setAck] = useState(false), [plainAck, setPlainAck] = useState(false), [search, setSearch] = useState('');
+export function JournalContent({ resource: r, insecureTestMode, sessionKey = null }: { resource: JournalResource; insecureTestMode: boolean; sessionKey?: string | null }) {
+    const [locale] = useLocale(), c = copy[locale], id = useId(), [unit, setUnit] = useState(''), [start, setStart] = useState(''), [end, setEnd] = useState(''), [priority, setPriority] = useState(6), [ack, setAck] = useState(false), [plainAck, setPlainAck] = useState(false), [search, setSearch] = useState(''), [pickerOpen, setPickerOpen] = useState(false), [preset, setPreset] = useState<number | null>(15);
+    const unitInput = useRef<HTMLInputElement>(null), pickerButton = useRef<HTMLButtonElement>(null), focusAfterPicker = useRef<'unit' | 'button' | null>(null);
     const view = r.view, request = view?.request, page = r.page;
-    useEffect(() => { setAck(false); setPlainAck(false); setSearch(''); }, [r.reset]);
+    useEffect(() => { setAck(false); setPlainAck(false); setSearch(''); setPickerOpen(false); focusAfterPicker.current = null; }, [r.reset]);
+    useEffect(() => { if (!pickerOpen && focusAfterPicker.current) { (focusAfterPicker.current === 'unit' ? unitInput : pickerButton).current?.focus(); focusAfterPicker.current = null; } }, [pickerOpen]);
     useEffect(() => { if (view && !start && !end) { setEnd(inputTime(view.serverNow)); setStart(inputTime(new Date(Date.parse(view.serverNow) - 900000).toISOString())); } }, [end, start, view]);
+    const chooseWindow = (minutes: number) => { if (!view?.configured) return; setEnd(inputTime(view.serverNow)); setStart(inputTime(new Date(Date.parse(view.serverNow) - minutes * 60000).toISOString())); setPreset(minutes); };
+    const chooseService = (name: string) => { if (!validJournalUnit(name)) return; setUnit(name); focusAfterPicker.current = 'unit'; setPickerOpen(false); };
+    const closePicker = () => { focusAfterPicker.current = 'button'; setPickerOpen(false); };
     const query: JournalQuery = { unit, start: utcInput(start), end: utcInput(end), maxPriority: priority };
+    const selectedPreset = view && preset !== null && end === inputTime(view.serverNow) && start === inputTime(new Date(Date.parse(view.serverNow) - preset * 60000).toISOString()) ? preset : null;
     const valid = !!view && validJournalQuery(query, view.serverNow), active = !!request && ['pending', 'claimed'].includes(request.state);
     const state = !view ? null : !view.configured ? 'configured' : !request ? 'awaiting' : request.state === 'expired' || request.state === 'canceled' ? request.state : ['disabled', 'denied', 'helper_unavailable', 'result_lost'].includes(view.localStatus) ? view.localStatus as 'disabled' | 'denied' | 'helper_unavailable' | 'result_lost' : page?.coverage === 'failed' ? 'failed' : view.contentStatus === 'available' ? 'available' : request.state === 'accepted' ? 'unavailable' : request.state;
     const hint = state === 'configured' ? c.configuredHint : state === 'awaiting' ? c.awaitingHint : state === 'pending' ? c.pendingHint : state === 'claimed' ? c.claimedHint : state === 'expired' ? c.expiredHint : state === 'canceled' ? c.canceledHint : state === 'result_lost' || state === 'unavailable' ? c.lostHint : null;
@@ -66,9 +75,15 @@ export function JournalContent({ resource: r, insecureTestMode }: { resource: Jo
         {!view && !r.paused && !r.busy && !r.failure && <p role="status" className="journal-muted">{c.waiting}</p>}
         {r.busy && <p role="status" className="journal-muted"><LoaderCircle size={14} className="spin"/>{c.loading}</p>}
         {state && <div className={`journal-state journal-state-${state}`}><strong>{c[state]}</strong>{hint && <p>{hint}</p>}</div>}
-        {view?.configured !== false && r.failure !== 'session' && <form className="journal-capture" onSubmit={event => { event.preventDefault(); if (valid && ack && (!insecureTestMode || plainAck)) { void r.create(query, ack, plainAck); setAck(false); setPlainAck(false); } }}>
-            <h3 className="journal-form-title">{c.newCapture}</h3><fieldset disabled={!view?.configured || r.busy || r.paused}><div className="journal-filters"><label>{c.service}<input value={unit} onChange={event => setUnit(event.target.value)} placeholder="example.service" maxLength={255} autoComplete="off" spellCheck={false} aria-describedby={`${id}-unit`}/></label><label>{c.start}<input type="datetime-local" step="1" value={start} onChange={event => setStart(event.target.value)}/></label><label>{c.end}<input type="datetime-local" step="1" value={end} onChange={event => setEnd(event.target.value)}/></label><label>{c.severity}<select value={priority} onChange={event => setPriority(Number(event.target.value))}>{priorityNames.map((name, n) => <option value={n} key={n}>{name}</option>)}</select></label></div>
-            <div className="journal-filter-help"><span id={`${id}-unit`}>{c.unitHint}</span><button type="button" className="text-button" onClick={() => { if (!view) return; setEnd(inputTime(view.serverNow)); setStart(inputTime(new Date(Date.parse(view.serverNow) - 900000).toISOString())); }}>{c.recent}</button></div>
+        {view?.configured !== false && r.failure !== 'session' && <form className="journal-capture" onSubmit={event => { event.preventDefault(); if (valid && ack && (!insecureTestMode || plainAck)) { setPickerOpen(false); void r.create(query, ack, plainAck); setAck(false); setPlainAck(false); } }}>
+            <h3 className="journal-form-title">{c.newCapture}</h3><fieldset disabled={!view?.configured || r.busy || r.paused}><div className="journal-filters"><label>{c.service}<input ref={unitInput} value={unit} onChange={event => setUnit(event.target.value)} placeholder="example.service" maxLength={255} autoComplete="off" spellCheck={false} aria-describedby={`${id}-unit`}/></label><label>{c.start}<input type="datetime-local" step="1" value={start} onChange={event => { setStart(event.target.value); setPreset(null); }}/></label><label>{c.end}<input type="datetime-local" step="1" value={end} onChange={event => { setEnd(event.target.value); setPreset(null); }}/></label><label>{c.severity}<select value={priority} onChange={event => setPriority(Number(event.target.value))}>{priorityNames.map((name, n) => <option value={n} key={n}>{name}</option>)}</select></label></div>
+            <div className="journal-filter-help"><span id={`${id}-unit`}>{c.unitHint} {c.manualService}</span><button ref={pickerButton} type="button" className="text-button" aria-expanded={pickerOpen} onClick={() => setPickerOpen(open => !open)}>{c.chooseService}</button></div>
+            {pickerOpen && view?.configured && <JournalServicePicker deviceId={view.deviceId} sessionKey={sessionKey} onSelect={chooseService} onClose={closePicker}/>}
+            <div role="group" aria-label={c.presets}>
+                {view && <p id={`${id}-preset-reference`}><strong>{c.managerTime}:</strong> <time dateTime={view.serverNow}>{view.serverNow}</time></p>}
+                <div className="journal-time-presets">{([[5, c.recent5], [15, c.recent], [30, c.recent30], [60, c.recent60]] as const).map(([minutes, label]) => <button key={minutes} type="button" className="button small" aria-describedby={view ? `${id}-preset-reference` : undefined} aria-pressed={selectedPreset === minutes} onClick={() => chooseWindow(minutes)}>{label}</button>)}</div>
+                <p className="journal-muted journal-preset-hint">{c.presetHint} <button type="button" className="text-button" onClick={r.refresh}>{c.refreshReference}</button></p>
+            </div>
             <label className="journal-ack"><input type="checkbox" checked={ack} onChange={event => setAck(event.target.checked)}/><span>{c.ack}</span></label>
             {insecureTestMode && <label className="journal-ack journal-warning"><input type="checkbox" checked={plainAck} onChange={event => setPlainAck(event.target.checked)}/><span>{c.plaintext}</span></label>}
             <div className="journal-actions"><button className="button primary" disabled={!valid || !ack || insecureTestMode && !plainAck || r.busy || r.uncertain || active}>{c.capture}</button>{request && ['pending', 'claimed', 'accepted'].includes(request.state) && <button type="button" className="button" disabled={r.busy || r.uncertain} onClick={r.cancelRequest}>{c.cancel}</button>}</div>

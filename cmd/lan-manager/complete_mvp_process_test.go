@@ -404,9 +404,10 @@ func completeMVPProfile(t *testing.T, gate context.Context, profile string, bina
 		}
 	}()
 	var first completeMVPObservation
+	progress := completeMVPSenderProgress{}
 	for {
-		event := completeMVPNext(t, run, events)
-		first = completeMVPRead(t, get, c.AgentID, event, first)
+		event := completeMVPNext(t, run, events, &progress)
+		first = completeMVPRead(t, get, c.AgentID, event, first, progress)
 		if first.packages.Complete != nil || first.packages.Failure != nil {
 			if !overview || completeMVPOverviewReady(t, get, c.AgentID) {
 				break
@@ -430,7 +431,7 @@ func completeMVPProfile(t *testing.T, gate context.Context, profile string, bina
 		firstOverview = completeMVPOverviewRead(t, get, call, session.CSRFToken, c.AgentID)
 	}
 	firstCounters := completeMVPCounters(t, c.StateDirectory)
-	if firstCounters[0] != first.metricSequence || firstCounters[1] != first.systemSequence || firstCounters[2] == 0 {
+	if firstCounters != progress.counters() || firstCounters[0] != first.metricSequence || firstCounters[1] != first.systemSequence || firstCounters[2] == 0 {
 		t.Fatal("complete first process counters not durable")
 	}
 	if overview && !time.Now().UTC().Before(firstOverview.view.Processes.Complete.Manifest.CollectedAt.Add(time.Minute)) {
@@ -438,28 +439,29 @@ func completeMVPProfile(t *testing.T, gate context.Context, profile string, bina
 	}
 	sender, done, events = start()
 	stopped = false
-	second := completeMVPRead(t, get, c.AgentID, completeMVPNext(t, run, events), first)
+	secondEvent := completeMVPNext(t, run, events, &progress)
+	second := completeMVPRead(t, get, c.AgentID, secondEvent, first, progress)
 	if inspect != nil {
 		inspect(t, second)
 	}
 	var secondEndpoint enrollmentstore.EndpointIdentityView
 	if endpointIdentity {
 		secondEndpoint = completeMVPEndpointRead(t, get, second.system, "restart")
-		if err := completeMVPEndpointAdvanced(firstEndpoint, secondEndpoint); err != nil {
+		if err := completeMVPEndpointAdvanced(firstEndpoint, secondEndpoint, progress.system.sequence); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if second.metricSequence != first.metricSequence+1 || second.systemSequence != first.systemSequence+1 || !second.metricAt.After(first.metricAt) || !second.systemAt.After(first.systemAt) {
+	if second.metricSequence <= first.metricSequence || second.systemSequence <= first.systemSequence || !second.metricAt.After(first.metricAt) || !second.systemAt.After(first.systemAt) {
 		t.Fatal("complete restart did not advance original metric and system domains")
 	}
 	stopPackageGateProcess(t, sender, done)
 	stopped = true
 	var secondOverview completeMVPOverviewObservation
 	if overview {
-		secondOverview = completeMVPOverviewRetained(t, get, c.AgentID, firstOverview, first, second, "restart")
+		secondOverview = completeMVPOverviewRetained(t, get, c.AgentID, firstOverview, first, second, "restart", progress.metrics.sequence)
 	}
 	secondCounters := completeMVPCounters(t, c.StateDirectory)
-	if secondCounters[0] != second.metricSequence || secondCounters[1] != second.systemSequence || secondCounters[2] != firstCounters[2] || !reflect.DeepEqual(second.packages, first.packages) || completeMVPIdentity(t, stateDir) != identityBefore || lanclient.ValidateGuidedHandoff(activated.ConfigPath) != nil {
+	if secondCounters != progress.counters() || secondCounters[0] != second.metricSequence || secondCounters[1] != second.systemSequence || secondCounters[2] != firstCounters[2] || !reflect.DeepEqual(second.packages, first.packages) || completeMVPIdentity(t, stateDir) != identityBefore || lanclient.ValidateGuidedHandoff(activated.ConfigPath) != nil {
 		t.Fatal("complete restart changed identity or recaptured the package generation")
 	}
 	if endpointIdentity {
@@ -471,22 +473,23 @@ func completeMVPProfile(t *testing.T, gate context.Context, profile string, bina
 		completeMVPEndpointConsent(t, run, binaries["lan-agent"], activated.ConfigPath, stateDir, c.StateDirectory, "disable", false)
 		sender, done, events = start()
 		stopped = false
-		ordinary := completeMVPRead(t, get, c.AgentID, completeMVPNext(t, run, events), second)
+		ordinaryEvent := completeMVPNext(t, run, events, &progress)
+		ordinary := completeMVPRead(t, get, c.AgentID, ordinaryEvent, second, progress)
 		if _, err := completeMVPUbuntu2404Evidence(ordinary.packages, ordinary.system); err != nil {
 			t.Fatal(err)
 		}
 		var retained enrollmentstore.EndpointIdentityView
 		get("/api/devices/"+c.AgentID+"/inventory/endpoint-identity", &retained)
-		if err := completeMVPEndpointRetained(secondEndpoint, retained, ordinary.system); err != nil {
+		if err := completeMVPEndpointRetained(secondEndpoint, retained, ordinary.system, progress.system.sequence); err != nil {
 			t.Fatal(err)
 		}
 		stopPackageGateProcess(t, sender, done)
 		stopped = true
 		if overview {
-			completeMVPOverviewRetained(t, get, c.AgentID, secondOverview, second, ordinary, "disabled_restart")
+			completeMVPOverviewRetained(t, get, c.AgentID, secondOverview, second, ordinary, "disabled_restart", progress.metrics.sequence)
 		}
 		ordinaryCounters := completeMVPCounters(t, c.StateDirectory)
-		if ordinaryCounters[0] != ordinary.metricSequence || ordinaryCounters[1] != ordinary.systemSequence || ordinaryCounters[2] != secondCounters[2] || !reflect.DeepEqual(ordinary.packages, second.packages) || completeMVPIdentity(t, stateDir) != identityBefore || lanclient.ValidateGuidedHandoff(activated.ConfigPath) != nil {
+		if ordinaryCounters != progress.counters() || ordinaryCounters[0] != ordinary.metricSequence || ordinaryCounters[1] != ordinary.systemSequence || ordinaryCounters[2] != secondCounters[2] || !reflect.DeepEqual(ordinary.packages, second.packages) || completeMVPIdentity(t, stateDir) != identityBefore || lanclient.ValidateGuidedHandoff(activated.ConfigPath) != nil {
 			t.Fatal("complete_endpoint_disabled_restart_changed_identity_or_package_domain")
 		}
 		t.Log("endpoint identity retained: stage=disabled_restart ordinary=advanced endpoint=original_age sequence=unchanged receipt=unchanged expiry=unchanged payload=unchanged")
@@ -498,26 +501,16 @@ func completeMVPProfile(t *testing.T, gate context.Context, profile string, bina
 	t.Log("PASS: fresh complete profile; exact public bootstrap digest; committed pending claim without sender state; explicit approval; activated three-domain handoff; actual native reports; one process restart preserved identity and counters; no installed-service or reboot claim")
 }
 
-func completeMVPNext(t *testing.T, ctx context.Context, events <-chan agentloop.Event) agentloop.Event {
+func completeMVPNext(t *testing.T, ctx context.Context, events <-chan agentloop.Event, progress *completeMVPSenderProgress) agentloop.Event {
 	t.Helper()
-	select {
-	case event, ok := <-events:
-		if category := completeMVPSenderFailure(event, ok); category != "" {
-			t.Fatal(category)
-		}
-		switch event.Metadata.InventoryStatus {
-		case "acknowledged", "failure_acknowledged", "not_due", "pending_retained":
-		default:
-			t.Fatal("complete native package status contract")
-		}
-		return event
-	case <-ctx.Done():
-		t.Fatal("complete native report deadline")
+	event, category := completeMVPWait(ctx, events, progress)
+	if category != "" {
+		t.Fatal(category)
 	}
-	return agentloop.Event{}
+	return event
 }
 
-func completeMVPRead(t *testing.T, get func(string, any), device string, event agentloop.Event, previous completeMVPObservation) completeMVPObservation {
+func completeMVPRead(t *testing.T, get func(string, any), device string, event agentloop.Event, previous completeMVPObservation, progress completeMVPSenderProgress) completeMVPObservation {
 	t.Helper()
 	var devices struct{ Items []model.Device }
 	get("/api/devices", &devices)
@@ -534,7 +527,7 @@ func completeMVPRead(t *testing.T, get func(string, any), device string, event a
 	if system.SchemaVersion != "tracebolt.system-inventory-view.v1" || system.CollectionProfile != enrollmentcrypto.CollectionProfileComplete || system.DeviceID != device || system.Status != "fresh" || system.Sequence == nil || *system.Sequence != event.Metadata.SystemSequence || system.Latest == nil || system.ReceivedAt == nil || system.Latest.CollectedAt.IsZero() {
 		t.Fatal("complete system metadata unavailable")
 	}
-	if event.Metadata.Sequence != previous.metricSequence+1 || event.Metadata.SystemSequence != previous.systemSequence+1 || !metrics.Snapshot.CollectedAt.After(previous.metricAt) || !system.Latest.CollectedAt.After(previous.systemAt) {
+	if event.Metadata.Sequence != progress.metrics.sequence || event.Metadata.SystemSequence != progress.system.sequence || progress.metrics.pending || progress.system.pending || event.Metadata.Sequence <= previous.metricSequence || event.Metadata.SystemSequence <= previous.systemSequence || !metrics.Snapshot.CollectedAt.After(previous.metricAt) || !system.Latest.CollectedAt.After(previous.systemAt) {
 		t.Fatal("complete acknowledged report did not advance source times and domains")
 	}
 	for _, section := range []struct {

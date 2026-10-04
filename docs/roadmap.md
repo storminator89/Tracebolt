@@ -62,17 +62,27 @@ The [full-width device-page checkpoint](https://github.com/storminator89/Tracebo
    narrow wrapper correction is tracked separately. Do not interpret a wrapper
    failure as permission to reinstall or reset an already committed identity.
    Existing pilot.2 binaries do not include the later journal feature.
-4. **Useful on-demand service logs — published source, host grant pending.**
+4. **Useful on-demand service logs — published and observed on one granted pilot.**
    The [d3628dc checkpoint](https://github.com/storminator89/Tracebolt/actions/runs/37228371588)
    passed all 13 CI jobs and 104 required browser checks, including six journal
    scenarios. The source connects exact service/time/severity requests, a separate
    least-privileged helper, original-expiry results, paged display and literal
    text search over the captured snapshot. Critical authority/retention checks
-   and source review precede rollout. A concrete local helper/content permission
-   grant and actual host acceptance remain separate. See the
+   and source review precede rollout. A manually approved, dedicated helper has
+   returned real service-log content to the dashboard on one Debian pilot. That
+   establishes the first capture path, not fleet or uninterrupted-retention
+   assurance. Published corrections for a subsequent temporary-read cache-loss bug and
+   silent paused-view bug pass expanded browser lifecycle checks. Full combined
+   regression and target-host confirmation remain separate. See the
    [log boundary](journal-content-mvp.md) and [setup plan](linux-journal-helper.md).
    Minor visual polish does not block a usable, correctly bounded MVP.
-5. **Complete everyday inventory overview — current integration candidate.**
+5. **Complete everyday inventory overview — published pilot source; hardening in progress.**
+   The native Ubuntu overview gate has passed, while the source checkpoint's
+   combined acceptance exposed container-fixture and concurrent-read UI defects.
+   The Docker/container and 110 required browser checks pass on coherent
+   follow-ups. An expired-cleanup retry corruption path is corrected with
+   dedicated store regressions. Full aggregate and native-retry acceptance still
+   gate a completely green checkpoint.
    - Use the completed dpkg generation for software totals and overview links,
      avoiding a contradictory bounded-preview count beside complete inventory.
    - Capture all supported visible process rows into a generation-bound paged
@@ -101,6 +111,13 @@ The [full-width device-page checkpoint](https://github.com/storminator89/Tracebo
 
 These remain visible without widening the current complete-inventory slice:
 
+- The source now offers a searchable observed-service selector and explicit UTC
+  reference-window presets, preserving manual entry and stable drafts. Hosted
+  acceptance of this latest UI remains required. An observed name does not
+  prove permission in the endpoint's separately managed local allowlist.
+- Keep temporary read contention recoverable without discarding a live accepted
+  snapshot. Expiry, session loss and revoked device authority still suppress
+  content; no failed or lost request is automatically recollected.
 - Separate fresh contact from overall health, which is not yet assessed. Keep
   navigation stable without caching private log content across sessions/devices.
 - Show metric sample times, measurement windows, formulas and absolute memory

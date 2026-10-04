@@ -146,6 +146,16 @@ func (f *fixture) seedSystem(which string) error {
 		return err
 	}
 	snapshot := systeminventory.Empty(generation, at, systeminventory.ReasonNotCollected)
+	services := []systeminventory.Service{
+		{Name: "invented-backup.service", Runtime: &systeminventory.ServiceRuntime{LoadState: "loaded", ActiveState: "inactive", SubState: "dead"}},
+		{Name: "invented.service", Runtime: &systeminventory.ServiceRuntime{LoadState: "loaded", ActiveState: "active", SubState: "running"}},
+		{Name: "invented:unsupported.service", Runtime: &systeminventory.ServiceRuntime{LoadState: "loaded", ActiveState: "active", SubState: "running"}},
+	}
+	count := uint64(len(services))
+	snapshot.Services = systeminventory.ServiceSection{
+		Meta:  systeminventory.SectionMeta{GenerationID: generation, ObservedAt: at, Coverage: systeminventory.Complete, Reason: systeminventory.ReasonNone, ObservedCount: &count, CountExact: true},
+		Items: services,
+	}
 	raw, err := systemwire.Encode(1, snapshot)
 	if err != nil {
 		return err

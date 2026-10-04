@@ -17,6 +17,12 @@ STATUS = re.compile(r"native report: sequence=[0-9]{1,19} systemSequence=[0-9]{1
 PACKAGE_FAILURE = re.compile(r"native complete package attempt: failure=(source_missing|source_invalid|source_changed|resource_limit|collection_failed); no complete package count claimed")
 # Exact immutable source payloads map to constants; input text is never emitted.
 FAILURES = {
+    "complete_native_event_phase_invalid": {"category": "complete_native_event_phase_invalid", "stage": "sender"},
+    "complete_native_discarded_stale": {"category": "complete_native_discarded_stale", "stage": "sender"},
+    "complete_native_retry_metadata_invalid": {"category": "complete_native_retry_metadata_invalid", "stage": "sender"},
+    "complete_native_metric_progress_invalid": {"category": "complete_native_metric_progress_invalid", "stage": "sender"},
+    "complete_native_system_progress_invalid": {"category": "complete_native_system_progress_invalid", "stage": "sender"},
+    "complete_native_package_progress_invalid": {"category": "complete_native_package_progress_invalid", "stage": "sender"},
     "complete_native_event_stream_closed": {"category": "complete_native_event_stream_closed", "stage": "sender"},
     "complete_native_outcome_retryable": {"category": "complete_native_outcome_retryable", "stage": "sender"},
     "complete_native_outcome_configuration": {"category": "complete_native_outcome_configuration", "stage": "sender"},

@@ -153,19 +153,19 @@ func completeMVPEndpointEvidence(v enrollmentstore.EndpointIdentityView, s enrol
 	return fmt.Sprintf("hostname=complete interfaces=complete countExact=true observedRows=%d addresses=complete countExact=true ipv4Rows=%d ipv6Rows=%d assignedRows=%d", len(latest.Interfaces.Items), ipv4, ipv6, ipv4+ipv6), nil
 }
 
-func completeMVPEndpointAdvanced(before, after enrollmentstore.EndpointIdentityView) error {
-	if before.Sequence == nil || after.Sequence == nil || before.Latest == nil || after.Latest == nil || before.ReceivedAt == nil || after.ReceivedAt == nil || *after.Sequence != *before.Sequence+1 || after.Latest.GenerationID == before.Latest.GenerationID || !after.Latest.CollectedAt.After(before.Latest.CollectedAt) || !after.ReceivedAt.After(*before.ReceivedAt) {
+func completeMVPEndpointAdvanced(before, after enrollmentstore.EndpointIdentityView, trackedSequence uint64) error {
+	if before.Sequence == nil || after.Sequence == nil || before.Latest == nil || after.Latest == nil || before.ReceivedAt == nil || after.ReceivedAt == nil || *after.Sequence != trackedSequence || *after.Sequence <= *before.Sequence || after.Latest.GenerationID == before.Latest.GenerationID || !after.Latest.CollectedAt.After(before.Latest.CollectedAt) || !after.ReceivedAt.After(*before.ReceivedAt) {
 		return errors.New("complete_endpoint_restart_did_not_advance_generation_time_and_sequence")
 	}
 	return nil
 }
 
-func completeMVPEndpointRetained(before, after enrollmentstore.EndpointIdentityView, ordinary enrollmentstore.SystemView) error {
+func completeMVPEndpointRetained(before, after enrollmentstore.EndpointIdentityView, ordinary enrollmentstore.SystemView, trackedSequence uint64) error {
 	fail := func() error { return errors.New("complete_endpoint_disabled_restart_refreshed_or_replaced_metadata") }
 	if before.Sequence == nil || before.Latest == nil || before.ReceivedAt == nil || before.ExpiresAt == nil || after.Sequence == nil || after.Latest == nil || after.ReceivedAt == nil || after.ExpiresAt == nil || ordinary.Sequence == nil || ordinary.Latest == nil {
 		return fail()
 	}
-	if after.SchemaVersion != before.SchemaVersion || after.DeviceID != before.DeviceID || after.DeviceID != ordinary.DeviceID || after.MaxAgeSeconds != before.MaxAgeSeconds || *after.Sequence != *before.Sequence || !after.ReceivedAt.Equal(*before.ReceivedAt) || !after.ExpiresAt.Equal(*before.ExpiresAt) || !reflect.DeepEqual(after.Latest, before.Latest) || !after.ServerNow.After(before.ServerNow) || *ordinary.Sequence != *before.Sequence+1 || !ordinary.Latest.CollectedAt.After(before.Latest.CollectedAt) || ordinary.Latest.GenerationID == before.Latest.GenerationID {
+	if after.SchemaVersion != before.SchemaVersion || after.DeviceID != before.DeviceID || after.DeviceID != ordinary.DeviceID || after.MaxAgeSeconds != before.MaxAgeSeconds || *after.Sequence != *before.Sequence || !after.ReceivedAt.Equal(*before.ReceivedAt) || !after.ExpiresAt.Equal(*before.ExpiresAt) || !reflect.DeepEqual(after.Latest, before.Latest) || !after.ServerNow.After(before.ServerNow) || *ordinary.Sequence != trackedSequence || *ordinary.Sequence <= *before.Sequence || !ordinary.Latest.CollectedAt.After(before.Latest.CollectedAt) || ordinary.Latest.GenerationID == before.Latest.GenerationID {
 		return fail()
 	}
 	status := "fresh"
@@ -265,7 +265,7 @@ func TestCompleteMVPEndpointEvidence(t *testing.T) {
 func TestCompleteMVPEndpointRestartAndRetainedAge(t *testing.T) {
 	first, _ := completeMVPEndpointFixture(t, 1)
 	second, _ := completeMVPEndpointFixture(t, 2)
-	if completeMVPEndpointAdvanced(first, second) != nil || completeMVPEndpointAdvanced(first, first) == nil {
+	if completeMVPEndpointAdvanced(first, second, 2) != nil || completeMVPEndpointAdvanced(first, first, 2) == nil {
 		t.Fatal("complete_endpoint_restart_fixture_contract")
 	}
 	_, ordinary := completeMVPEndpointFixture(t, 3)
@@ -287,11 +287,11 @@ func TestCompleteMVPEndpointRestartAndRetainedAge(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			retained, _ := completeMVPEndpointFixture(t, 2)
 			retained.ServerNow = retained.ServerNow.Add(time.Second)
-			if completeMVPEndpointRetained(second, retained, ordinary) != nil {
+			if completeMVPEndpointRetained(second, retained, ordinary, 3) != nil {
 				t.Fatal("complete_endpoint_retained_fixture_rejected")
 			}
 			tc.mutate(&retained)
-			if completeMVPEndpointRetained(second, retained, ordinary) == nil {
+			if completeMVPEndpointRetained(second, retained, ordinary, 3) == nil {
 				t.Fatal("complete_endpoint_refreshed_fixture_accepted")
 			}
 		})
@@ -299,7 +299,7 @@ func TestCompleteMVPEndpointRestartAndRetainedAge(t *testing.T) {
 	retained, _ := completeMVPEndpointFixture(t, 2)
 	retained.ServerNow = retained.ServerNow.Add(3 * time.Minute)
 	retained.Status = "stale"
-	if completeMVPEndpointRetained(second, retained, ordinary) != nil {
+	if completeMVPEndpointRetained(second, retained, ordinary, 3) != nil {
 		t.Fatal("complete_endpoint_original_age_stale_fixture_rejected")
 	}
 }

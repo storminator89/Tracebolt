@@ -332,20 +332,20 @@ func completeMVPOverviewValidateRows(v completeMVPOverviewView, processes, volum
 	}
 	return nil
 }
-func completeMVPOverviewRetained(t *testing.T, get func(string, any), device string, before completeMVPOverviewObservation, prior, ordinary completeMVPObservation, stage string) completeMVPOverviewObservation {
+func completeMVPOverviewRetained(t *testing.T, get func(string, any), device string, before completeMVPOverviewObservation, prior, ordinary completeMVPObservation, stage string, trackedSequence uint64) completeMVPOverviewObservation {
 	t.Helper()
 	if stage != "restart" && stage != "disabled_restart" {
 		t.Fatal("complete_overview_invalid_retained_stage")
 	}
 	var after completeMVPOverviewView
 	get("/api/devices/"+device+"/inventory/overview", &after)
-	if e := completeMVPOverviewRetainedEvidence(before.view, after, prior.metricSequence, ordinary.metricSequence, prior.metricAt, ordinary.metricAt, stage); e != nil {
+	if e := completeMVPOverviewRetainedEvidence(before.view, after, prior.metricSequence, ordinary.metricSequence, prior.metricAt, ordinary.metricAt, stage, trackedSequence); e != nil {
 		t.Fatal(e)
 	}
 	t.Logf("complete overview retained: stage=%s ordinary=advanced generations=unchanged capture=original_age receipt=unchanged expiry=unchanged rows=unchanged", stage)
 	return completeMVPOverviewObservation{after, before.processPages, before.volumePages}
 }
-func completeMVPOverviewRetainedEvidence(before, after completeMVPOverviewView, oldSeq, newSeq uint64, oldAt, newAt time.Time, stage string) error {
+func completeMVPOverviewRetainedEvidence(before, after completeMVPOverviewView, oldSeq, newSeq uint64, oldAt, newAt time.Time, stage string, trackedSequence uint64) error {
 	bad := errors.New("complete_overview_restart_refreshed_or_replaced_generation")
 	if stage != "restart" && stage != "disabled_restart" {
 		return bad
@@ -356,7 +356,7 @@ func completeMVPOverviewRetainedEvidence(before, after completeMVPOverviewView, 
 	if _, e := completeMVPOverviewEvidence(after); e != nil {
 		return bad
 	}
-	if before.DeviceID != after.DeviceID || !after.ServerNow.After(before.ServerNow) || newSeq != oldSeq+1 || !newAt.After(oldAt) || !reflect.DeepEqual(before.Processes, after.Processes) || !reflect.DeepEqual(before.Volumes, after.Volumes) {
+	if before.DeviceID != after.DeviceID || !after.ServerNow.After(before.ServerNow) || newSeq != trackedSequence || newSeq <= oldSeq || !newAt.After(oldAt) || !reflect.DeepEqual(before.Processes, after.Processes) || !reflect.DeepEqual(before.Volumes, after.Volumes) {
 		return bad
 	}
 	if stage == "restart" && !after.ServerNow.Before(before.Processes.Complete.Manifest.CollectedAt.Add(time.Minute)) {
@@ -486,7 +486,7 @@ func TestCompleteMVPOverviewRetainedAge(t *testing.T) {
 	for _, stage := range []string{"restart", "disabled_restart"} {
 		after, _, _ := completeMVPOverviewFixture(t)
 		after.ServerNow = after.ServerNow.Add(time.Second)
-		if completeMVPOverviewRetainedEvidence(before, after, 1, 2, oldAt, newAt, stage) != nil {
+		if completeMVPOverviewRetainedEvidence(before, after, 1, 2, oldAt, newAt, stage, 2) != nil {
 			t.Fatal("complete_overview_original_age_rejected")
 		}
 	}
@@ -500,7 +500,7 @@ func TestCompleteMVPOverviewRetainedAge(t *testing.T) {
 		after, _, _ := completeMVPOverviewFixture(t)
 		after.ServerNow = after.ServerNow.Add(time.Second)
 		mutate(&after)
-		if completeMVPOverviewRetainedEvidence(before, after, 1, 2, oldAt, newAt, "restart") == nil {
+		if completeMVPOverviewRetainedEvidence(before, after, 1, 2, oldAt, newAt, "restart", 2) == nil {
 			t.Fatal("complete_overview_refreshed_or_late_restart_accepted")
 		}
 	}
@@ -536,9 +536,9 @@ func completeMVPOverviewMarkerProbe(t *testing.T) {
 	prior := completeMVPObservation{metricSequence: 1, metricAt: view.ServerNow}
 	ordinary := completeMVPObservation{metricSequence: 2, metricAt: view.ServerNow.Add(time.Second)}
 	view.ServerNow = view.ServerNow.Add(time.Second)
-	observed = completeMVPOverviewRetained(t, get, view.DeviceID, observed, prior, ordinary, "restart")
+	observed = completeMVPOverviewRetained(t, get, view.DeviceID, observed, prior, ordinary, "restart", 2)
 	prior = ordinary
 	ordinary = completeMVPObservation{metricSequence: 3, metricAt: view.ServerNow.Add(time.Second)}
 	view.ServerNow = view.ServerNow.Add(time.Second)
-	completeMVPOverviewRetained(t, get, view.DeviceID, observed, prior, ordinary, "disabled_restart")
+	completeMVPOverviewRetained(t, get, view.DeviceID, observed, prior, ordinary, "disabled_restart", 3)
 }

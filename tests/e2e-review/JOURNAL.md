@@ -34,8 +34,16 @@ target or establish any screenshot result.
 
 ## Six required browser cases
 
-1. Logs load only when the tab opens. Separate content and HTTP acknowledgements
-   gate one request; pending remains explicitly without captured content.
+1. Logs load only when the tab opens. The observed-service picker lazily reads
+   the real protected service inventory, discloses that observation does not prove
+   local allowlist permission, and only fills the manual field. Escape and selection
+   close it and restore the appropriate focus; unsupported unit syntax is disabled.
+   Time presets edit exact whole-second UTC windows ending at the displayed checked
+   reference. Ordinary idle preserves that fixed reference and the draft. Explicit
+   reference refresh performs a protected status read and preserves the draft until
+   another preset is chosen. Selection/presets never acknowledge or capture logs.
+   Separate content and HTTP acknowledgements gate one request; pending remains
+   explicitly without captured content.
 2. Complete and partial invented rows remain inert text. English desktop and
    German mobile retain truthful coverage and bounded viewport framing.
 3. Case-insensitive literal search covers only the captured snapshot. Pagination
@@ -58,7 +66,7 @@ target or establish any screenshot result.
    logout rejects protected reads and removes private content through reload.
 
 The fixture generates disposable activated v3 identities using ordinary proofs,
-admits an invented typed system frame, then consumes only the request created by
+admits an invented typed system frame with three synthetic service rows, then consumes only the request created by
 the operator through store Peek/Claim and JournalCache.Accept. Results round-trip
 the typed journal wire format. Controls are bounded stdin messages, never an
 HTTP test endpoint. The service clock can move forward; the operator clock stays
