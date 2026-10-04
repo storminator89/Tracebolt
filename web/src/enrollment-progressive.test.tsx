@@ -2,6 +2,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { EnrollmentSection } from './enrollment';
 import { preparedEnrollmentCommand } from './enrollment-command';
+import * as downloadCommands from './verified-download-command';
 import { mutate, request } from './api';
 import { groupedHex } from './enrollment-types';
 import type { EnrollmentList, EnrollmentSnapshot, EnrollmentState, InvitationCreation } from './enrollment-types';
@@ -56,7 +57,8 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
 describe('progressive invitation disclosure', () => {
- it('keeps HTTP risk, sensitive scope, retention, fresh enrollment and unchecked consent visible before creation', async () => {
+ it('keeps HTTP risk, consent and the explicit disabled preparation notice visible before creation', async () => {
+  vi.spyOn(downloadCommands, 'verifiedLinuxDownloadAvailable').mockReturnValue(false);
   operator.insecureTestMode = true; const dialog = await add();
   expect(currentStep(dialog)).toHaveTextContent('Install');
   expect(within(dialog).getByRole('note')).toBeVisible(); expect(within(dialog).getByRole('note')).toHaveTextContent('Passwords and data');
@@ -72,7 +74,10 @@ describe('progressive invitation disclosure', () => {
   expect(disclosure).toHaveAttribute('open'); expect(within(disclosure).getByText(/without the older 128-row export prefix/)).toBeVisible();
   expect(consent).not.toBeChecked(); expect(mutate).not.toHaveBeenCalled();
  });
- it('shows public copy and masked secret, with hashes and command preview collapsed until requested', async () => {
+ it('keeps the explicit disabled/manual command preview collapsed without hiding its prerequisites or secret rules', async () => {
+  const response = creation(), manual = preparedEnrollmentCommand(response.bootstrap, response.snapshot, response.bootstrapSHA256)!;
+  vi.spyOn(downloadCommands, 'verifiedLinuxDownloadAvailable').mockReturnValue(false);
+  vi.spyOn(downloadCommands, 'selectEnrollmentCommand').mockReturnValue({ kind: 'prepared-local', command: manual });
   const dialog = await create(); const disclosure = details(dialog, 'Command and technical prerequisites');
   expect(disclosure).not.toHaveAttribute('open'); expect(within(disclosure).getByText(/do not verify the publisher/)).not.toBeVisible();
   expect(within(dialog).getByText(/This command does not download binaries/)).toBeVisible();

@@ -1,10 +1,15 @@
-# Disabled dashboard download seam
+# Verified dashboard Linux download
 
-The invitation dialog still emits exactly the existing prepared-local-checkout
-command. `OFFICIAL_LINUX_BOOTSTRAP_PIN` in
-`web/src/verified-download-command.ts` is **null**. No release, download or host
-acceptance is implied by this source change. Older responses without a public
-bootstrap checksum still offer the existing public configuration file only.
+The invitation dialog selects the verified download command for `v0.1.0-pilot.2`.
+Its source-owned pin names bootstrap publication commit
+`1011c6b8d38cf85d77a342addf0493cbe1f828ca` and SHA-256
+`ba0cf2b8bb25868782bbf9f7a2ae228a982895dd45f865314c6620af30731457`.
+The binary/source build commit is separately pinned to
+`dbbcfe203c6c39169d9b426991848cd8e736dfd6`.
+Older responses without a public bootstrap checksum still offer the existing
+public configuration file only. This command is for a fresh approved installation;
+existing installed agents use the separately reviewed upgrade action and retain
+identity/state.
 
 The optional serializer is inert: it returns text and does not download or run
 anything. Only the source-owned selector is called by the dialog. There is no
@@ -15,7 +20,7 @@ never be connected to operator-response data.
 
 ## Command boundary
 
-Once separately activated, the first stage will:
+The first stage:
 
 1. Start a foreground POSIX shell with a fixed tool path and clean environment,
    preserving terminal stdin. Require deliberate root execution and terminal
@@ -57,23 +62,31 @@ entire command and checksum. The command must be obtained from an independently
 trusted reviewed reference. A checksum displayed by a tampered page does not
 authenticate that page. Existing disposable HTTP and collection notices remain.
 
-## Later activation requires real evidence
+## Recorded release and activation evidence
 
-Follow `docs/linux-release-distribution.md` from the reviewed release tooling.
-Verify the exact successful official workflow, release assets and provenance.
-Publish that run's generated bootstrap as `deploy/release/published/VERSION.py`
-in a separately reviewed immutable commit, then read back its exact official
-HTTPS bytes and SHA-256 using the real downloader. The bootstrap publication
-commit is distinct from the binary/source build commit. Record both.
+- The [binary-source CI](https://github.com/storminator89/Tracebolt/actions/runs/37219826603)
+  completed all 13 jobs, including 98 required browser cases, three retained
+  enrollment skips and native endpoint consent/report/restart/disable checks.
+- The [pilot.2 build and publication](https://github.com/storminator89/Tracebolt/actions/runs/37220222635)
+  succeeded from that exact source. Its [official release](https://github.com/storminator89/Tracebolt/releases/tag/v0.1.0-pilot.2)
+  has ten selected assets; the earlier partial pilot.1 draft is retained.
+- The [independent public-byte check](https://github.com/storminator89/Tracebolt/actions/runs/37222069014)
+  downloaded and verified all ten official assets through the strict downloader,
+  checked keyless provenance and reproduced the exact bootstrap from its source
+  template. It executed no Tracebolt binary or installer.
+- The immutable official bootstrap source URL was read back and matched the exact
+  verified 32,677 bytes and digest before selecting the UI pin.
 
-Only after those gates, replace the one null source constant with a frozen
-literal containing `version`, `publicationCommit` (full lowercase 40-hex SHA)
-and `bootstrapSHA256` (full lowercase 64-hex digest). Use real verified values,
-never the inert fixtures. Update the deliberate null/fallback assertion in the
-source test as part of that same reviewed activation delta, retaining separate
-disabled/fail-closed fixture coverage. No API or deployment-config change is
-needed. A generated command still does not establish real install/restart/reboot
-acceptance; those require the separately authorized disposable-host gates.
+The activation source passes 832 frontend tests, type checking/build and seven
+inert command-contract tests. Its exact hosted browser check remains required;
+none of these results establishes a download-based host installation, upgrade or
+OS reboot. Those remain separately observed pilot operations.
+
+Future versions must repeat the release/provenance/public-byte checks in
+[the distribution guide](linux-release-distribution.md), publish a separate
+immutable bootstrap source commit, then update the source-owned literal. Never
+use fixture pins, manager responses or deployment configuration to choose trust.
+Keep disabled/manual fallback and fail-closed tests when updating an active pin.
 
 ## Inert checks
 

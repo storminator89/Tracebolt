@@ -2,6 +2,13 @@
 
 Meaningful development checkpoints are recorded here. These are prototype milestones, not production releases.
 
+## 2026-10-04 — Pin the verified pilot.2 dashboard download
+
+- The exact binary source `dbbcfe203` passed all 13 CI jobs and 98 required browser checks, with three existing enrollment skips. The official pilot.2 build/publication succeeded, and a separate read-only hosted check downloaded and verified all ten public assets, their keyless provenance and the generated bootstrap template.
+- Publish the exact verified bootstrap in immutable commit `1011c6b8d38cf85d77a342addf0493cbe1f828ca`, then select that full commit and its SHA-256 in the source-owned dashboard pin. Keep the binary build commit distinct from the bootstrap publication commit; API responses, environment and storage cannot choose executable trust.
+- Preserve exact manual fallback coverage and add activation-aware inert command assertions. All 832 frontend tests, type checking/build and seven command-contract tests pass with the real pin. Retain all 98 browser identities, three enrollment skips and five lifecycle cycles; exact hosted activation results remain pending.
+- Download verification does not execute Tracebolt or install a service. A human still approves and runs the copied command; existing installations use the upgrade action without new enrollment, and host installation/restart/reboot observations remain separate.
+
 ## 2026-10-04 — Independently verify published Linux release bytes
 
 - The actual `v0.1.0-pilot.2` candidate and publication jobs succeeded from source `dbbcfe203`. The release contains the exact ten expected assets with final version URLs; the earlier partial `v0.1.0-pilot.1` draft and tag remain retained.

@@ -286,7 +286,10 @@ describe('public prepared-checkout command', () => {
   vi.stubGlobal('window', { location: { origin } });
   try { const command = preparedEnrollmentCommand(response.bootstrap, response.snapshot, 'b'.repeat(64)); expect(command).toContain("--manager-origin 'http://manager.test:8080'"); expect(command).toMatch(/ --insecure-http-test$/); expect(command).not.toContain('--server-ca-base64'); } finally { vi.unstubAllGlobals(); }
  });
- it('copies the public command only on an explicit click, separately from the hidden invitation', async () => {
+ it('copies the explicit disabled/manual fallback only on a click, separately from the hidden invitation', async () => {
+  const response = creation(v3), manual = preparedEnrollmentCommand(response.bootstrap, response.snapshot, 'b'.repeat(64))!;
+  vi.spyOn(downloadCommands, 'verifiedLinuxDownloadAvailable').mockReturnValue(false);
+  vi.spyOn(downloadCommands, 'selectEnrollmentCommand').mockReturnValue({ kind: 'prepared-local', command: manual });
   const clipboard = vi.fn().mockResolvedValue(undefined); Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: clipboard } });
   current = listing(v3); vi.mocked(mutate).mockResolvedValue({ ...creation(v3), bootstrapSHA256: 'b'.repeat(64) }); const dialog = await add(); acknowledgeAndCreate(dialog); await screen.findByLabelText('One-time invitation secret');
   expect(clipboard).not.toHaveBeenCalled(); expect(within(dialog).getByText('Run as root from the prepared local checkout')).toBeVisible(); expect(dialog.textContent).toContain('do not verify the publisher'); expect(dialog.textContent).toContain('No inventory is collected before approval and activation.');
@@ -308,15 +311,48 @@ describe('source-owned verified download command (inert fixtures only)', () => {
   const quoted = command.slice(prefix.length); expect(quoted[0]).toBe("'"); expect(quoted.at(-1)).toBe("'");
   return quoted.slice(1, -1).replaceAll("'\\''", "'");
  };
- it('keeps production null and the exact manual fallback regardless of ambient or response pins', () => {
+ it('requires a null or strictly valid source pin and ignores ambient or response pins', () => {
   const response = creation(v3), manual = preparedEnrollmentCommand(response.bootstrap, response.snapshot, checksum);
+  const pin = downloadCommands.OFFICIAL_LINUX_BOOTSTRAP_PIN;
+  if (pin !== null) {
+   expect(Object.keys(pin).sort()).toEqual(['bootstrapSHA256', 'publicationCommit', 'version']);
+   expect(pin.version).toMatch(/^v[0-9]+\.[0-9]+\.[0-9]+(?:-[a-z0-9]+(?:[.-][a-z0-9]+)*)?$/);
+   expect(pin.version).toBe(pin.version.trim()); expect(pin.version.length).toBeLessThanOrEqual(64);
+   expect(pin.publicationCommit).toMatch(/^[0-9a-f]{40}$/); expect(pin.publicationCommit).toHaveLength(40);
+   expect(pin.bootstrapSHA256).toMatch(/^[0-9a-f]{64}$/); expect(pin.bootstrapSHA256).toHaveLength(64);
+   expect(pin).not.toEqual(fixturePin);
+  }
+  const selected = pin === null ? { kind: 'prepared-local', command: manual } : { kind: 'verified-download', command: downloadCommands.verifiedDownloadCommand(pin, response.bootstrap, response.snapshot, checksum) };
+  expect(selected.command).not.toBeNull();
   vi.stubGlobal('TRACEBOLT_RELEASE_PIN', fixturePin); vi.stubEnv('VITE_TRACEBOLT_RELEASE_PIN', JSON.stringify(fixturePin));
   localStorage.setItem('releasePin', JSON.stringify(fixturePin));
   try {
-   expect(downloadCommands.OFFICIAL_LINUX_BOOTSTRAP_PIN).toBeNull(); expect(downloadCommands.verifiedLinuxDownloadAvailable()).toBe(false);
-   expect(downloadCommands.selectEnrollmentCommand(response.bootstrap, { ...response.snapshot, releasePin: fixturePin } as EnrollmentSnapshot, checksum)).toEqual({ kind: 'prepared-local', command: manual });
+   expect(downloadCommands.verifiedLinuxDownloadAvailable()).toBe(pin !== null);
+   expect(downloadCommands.selectEnrollmentCommand(response.bootstrap, { ...response.snapshot, releasePin: fixturePin } as EnrollmentSnapshot, checksum)).toEqual(selected);
    expect(downloadCommands.selectEnrollmentCommand({ ...response.bootstrap, releasePin: fixturePin }, response.snapshot, checksum)).toBeNull();
   } finally { vi.unstubAllEnvs(); }
+ });
+ it('copies the actual source-selected command without a selector mock or secret transfer', async () => {
+  const response = { ...creation(v3), bootstrapSHA256: checksum }, pin = downloadCommands.OFFICIAL_LINUX_BOOTSTRAP_PIN;
+  const clipboard = vi.fn().mockResolvedValue(undefined); Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: clipboard } });
+  current = listing(v3); vi.mocked(mutate).mockResolvedValue(response); const dialog = await add();
+  expect(within(dialog).getByText(pin === null ? 'Public bootstrap configuration; reviewed native binaries must be prepared separately.' : 'A public source-pinned download command is available after creation. Review prerequisites and service permissions before running it.')).toBeVisible();
+  expect(within(dialog).getByRole('checkbox')).not.toBeChecked(); expect(within(dialog).getByRole('button', { name: 'Create invitation' })).toBeDisabled();
+  acknowledgeAndCreate(dialog); await screen.findByLabelText('One-time invitation secret');
+  expect(within(dialog).getByText(pin === null ? 'Run as root from the prepared local checkout' : 'Run the verified download as root in a local terminal')).toBeVisible();
+  expect(clipboard).not.toHaveBeenCalled(); fireEvent.click(within(dialog).getByRole('button', { name: 'Copy public installation command' }));
+  await waitFor(() => expect(clipboard).toHaveBeenCalledTimes(1)); const command = clipboard.mock.calls[0][0] as string;
+  if (pin === null) {
+   expect(command).toBe(preparedEnrollmentCommand(response.bootstrap, response.snapshot, checksum)); expect(command).not.toMatch(/curl|raw\.githubusercontent\.com/);
+  } else {
+   const script = decodedScript(command);
+   expect(script).toContain(`https://raw.githubusercontent.com/storminator89/Tracebolt/${pin.publicationCommit}/deploy/release/published/${pin.version}.py`);
+   expect(script).toContain(`printf '%s  %s\\n' '${pin.bootstrapSHA256}' "$stage/bootstrap.py" | sha256sum --check --status`);
+   expect(script).toContain(`--invitation-id '${invitation}' --bootstrap-sha256 '${checksum}'`);
+   expect(within(dialog).getByText(/A tampered HTTP-test dashboard can replace the whole command/)).toBeVisible();
+  }
+  expect(command).not.toContain(secret); expect(screen.getByLabelText('One-time invitation secret')).toHaveAttribute('type', 'password');
+  expect(mutate).toHaveBeenCalledExactlyOnceWith('/enrollment/invitations', { requestId: expect.any(String), platform: 'linux', collectionAcknowledged: true }, expect.any(AbortSignal));
  });
  it('rejects absent, partial, malformed, mutable-ref and shell-bearing source pins', () => {
   const response = creation(v3);

@@ -356,6 +356,9 @@ jobs:
       - name: Independent UI regression tests
         working-directory: .
         run: ./web/node_modules/.bin/vitest run --config tests/e2e-review/vitest.config.mts
+      - name: Verify public installation command contracts without executing commands
+        working-directory: .
+        run: node --test tests/e2e-review/public-command-contract.test.mjs
       - name: Production build
         run: npm run build
 

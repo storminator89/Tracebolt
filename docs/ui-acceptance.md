@@ -1,3 +1,12 @@
+> Later endpoint/release evidence: source `dbbcfe203c6c39169d9b426991848cd8e736dfd6`
+> passed [all 13 CI jobs](https://github.com/storminator89/Tracebolt/actions/runs/37219826603)
+> and 98 required browser checks, with three retained enrollment skips and no
+> runtime/setup errors. The two new endpoint captures were independently inspected
+> at the equivalent `125a64e9` endpoint checkpoint. The active verified-download
+> command is a later source change: its 832 component and seven inert command
+> tests pass, while its exact hosted browser result remains pending. Earlier
+> screenshots below keep their own source attribution.
+
 # Tracebolt UI acceptance
 
 ## Endpoint metadata candidate

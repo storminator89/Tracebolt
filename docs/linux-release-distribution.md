@@ -1,8 +1,9 @@
 # Linux release distribution candidate
 
-Status: source and inert-fixture candidate. There is no active production release
-pin in this revision. A successful source test or arm64 cross-build is not a
-published download, real systemd installation, or OS reboot acceptance.
+Status: official `v0.1.0-pilot.2` is published and independently verified. The
+[dashboard pin](dashboard-verified-download.md) selects its immutable bootstrap
+source. Actual download-based host installation, upgrade and OS reboot acceptance
+remain separate pilot operations; arm64 is cross-built only.
 
 The endpoint does not build Go programs or transfer a source archive manually.
 A pinned bootstrap downloads the matching reviewed binaries and source archive,
@@ -163,9 +164,10 @@ Before activation, the authorized publisher must:
    Record actual restart and actual OS reboot independently. Do not run these
    privileged acceptance operations on an unapproved host.
 
-Source artifacts remain deliberately disabled at `RELEASE_PIN = None` until these
-publication inputs exist. There is no private-key setup step for this chosen
-keyless path.
+The reusable template remains at `RELEASE_PIN = None`. The separately published
+`deploy/release/published/v0.1.0-pilot.2.py` contains the verified immutable release
+pin; the dashboard names that bootstrap publication commit and digest. There is
+no private-key setup step for this chosen keyless path.
 
 ## Verification evidence and limits
 
