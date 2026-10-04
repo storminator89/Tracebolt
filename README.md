@@ -14,7 +14,7 @@ For the fresh Linux inventory MVP, use the **[short manager and background-agent
 
 An optional [reported hostname and interface-address extension](docs/endpoint-identity-extension.md) adds explicitly consented endpoint metadata. It remains off until local consent is enabled under the stopped service identity; the dedicated UI distinguishes current, partial, denied, retained and expired observations. It does not infer a primary or externally reachable IP.
 
-The [verified Linux release distribution candidate](docs/linux-release-distribution.md) adds a manual attested build and an explicitly selected fresh-version publication job. The [dashboard download command](docs/dashboard-verified-download.md) remains disabled until real official artifacts and immutable bootstrap pins are verified; the current source-build instructions remain the usable path.
+The [verified Linux release distribution candidate](docs/linux-release-distribution.md) has published [pilot.2 from source `dbbcfe203`](https://github.com/storminator89/Tracebolt/releases/tag/v0.1.0-pilot.2) through its attested build and fresh-version publication job. The [dashboard download command](docs/dashboard-verified-download.md) remains disabled pending independent public-byte verification and immutable bootstrap activation; the current source-build instructions remain the usable path.
 
 The [earlier bounded v2 pilot](docs/http-inventory-first-start.md) and [basic HTTP guide](docs/http-test-first-start.md) retain their narrower policies. Existing identities are not relabeled or migrated to v3.
 

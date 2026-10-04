@@ -2,6 +2,12 @@
 
 Meaningful development checkpoints are recorded here. These are prototype milestones, not production releases.
 
+## 2026-10-04 — Independently verify published Linux release bytes
+
+- The actual `v0.1.0-pilot.2` candidate and publication jobs succeeded from source `dbbcfe203`. The release contains the exact ten expected assets with final version URLs; the earlier partial `v0.1.0-pilot.1` draft and tag remain retained.
+- Add a separate read-only, ordinary-user GitHub check that downloads all ten fixed official assets, verifies their bounds and hashes, checks keyless provenance with the existing pinned verifier, and compares the bootstrap against the exact source template. It has no repository write, attestation grant, installer execution or user-host access.
+- Export only the verified public bootstrap, manifest, signature bundle and closed verification result after success. Production download pins remain disabled until this independent public-byte gate completes; source checks and the earlier successful publication do not substitute for it.
+
 ## 2026-10-04 — Validate temporary GitHub draft asset URLs
 
 - The first actual release candidate build and keyless verification passed on `79cef736`, but publication stopped after the first asset because GitHub returned a temporary draft URL instead of the final version URL. The existing `v0.1.0-pilot.1` tag and partial draft are retained for inspection; no release was published and no production download pin was activated.
