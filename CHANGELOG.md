@@ -2,6 +2,13 @@
 
 Meaningful development checkpoints are recorded here. These are prototype milestones, not production releases.
 
+## 2026-10-04 — Handle bracketed paste in the hidden enrollment prompt
+
+- Recognize the terminal's standard bracketed-paste framing around one complete invitation. Keep input hidden and require an explicit Enter after the closing delimiter.
+- Preserve the exact 43-character invitation format, bounded input, rejection of malformed framing/control characters and cancellation/terminal restoration. No argument, environment, file or visible-input fallback is added.
+- Add inert pseudo-terminal regressions for wrapped paste, rejection, explicit-submit behavior and restored terminal settings. Focused normal/race/vet checks and the native client build pass; the specific real terminal still needs a successful retry to establish the user-facing outcome.
+- Rebuild only `cmd/enroll-agent` for this change. The manager image, UI, credentials, bootstrap and existing enrollment state are unchanged; an expired invitation still requires the normal explicit recovery flow.
+
 ## 2026-10-04 — Manual disposable HTTP setup and Docker first start
 
 - Add a default-plan-only Linux helper for a new fixed private HTTP-test configuration directory. Explicit apply requires a root controlling terminal, hidden confirmed disposable password input, and a selected private IPv4 address.

@@ -35,6 +35,11 @@ func readInvitation(ctx context.Context, prompt func() error) ([]byte, error) {
 	}
 	secret := make([]byte, 0, 43)
 	success := false
+	// Recognize only standard bracketed-paste delimiters. They frame input;
+	// they are never part of the invitation and do not submit it.
+	var delimiter string
+	delimiterAt := 0
+	pasting, pasted := false, false
 	defer func() {
 		if !success {
 			clear(secret)
@@ -64,6 +69,42 @@ func readInvitation(ctx context.Context, prompt func() error) ([]byte, error) {
 			return nil, enrollmentclient.ErrInput
 		}
 		c := one[0]
+		if delimiterAt != 0 {
+			if c != delimiter[delimiterAt] {
+				return nil, enrollmentclient.ErrInput
+			}
+			delimiterAt++
+			if delimiterAt == len(delimiter) {
+				delimiterAt = 0
+				if pasting {
+					if len(secret) != 43 {
+						return nil, enrollmentclient.ErrInput
+					}
+					pasting, pasted = false, true
+				} else {
+					pasting = true
+				}
+			}
+			continue
+		}
+		if c == 27 {
+			switch {
+			case pasting:
+				delimiter = "\x1b[201~"
+			case len(secret) == 0 && !pasted:
+				delimiter = "\x1b[200~"
+			default:
+				return nil, enrollmentclient.ErrInput
+			}
+			delimiterAt = 1
+			continue
+		}
+		if pasting && (c == '\n' || c == '\r' || c == 127 || c == 8) {
+			return nil, enrollmentclient.ErrInput
+		}
+		if pasted && c != '\n' && c != '\r' {
+			return nil, enrollmentclient.ErrInput
+		}
 		if c == '\n' || c == '\r' {
 			if len(secret) != 43 {
 				return nil, enrollmentclient.ErrInput
