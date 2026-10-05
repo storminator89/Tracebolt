@@ -174,6 +174,14 @@ func Fresh(at, now time.Time) bool { return !at.IsZero() && !at.After(now) && no
 // pending transitions but never resolve an existing incident. Manager gaps reset
 // timers too; history does not invent events while the manager was stopped.
 func (s *State) Evaluate(in Input, now time.Time) {
+	_ = s.EvaluateTransitions(in, now)
+}
+
+// EvaluateTransitions returns only transitions created by this evaluation, before
+// bounded UI history pruning. Persistence may atomically retain their delivery
+// intent without reconstructing transitions from potentially pruned history.
+func (s *State) EvaluateTransitions(in Input, now time.Time) []Incident {
+	transitions := []Incident{}
 	now = now.UTC()
 	if s.EvaluatedAt != nil && now.Before(*s.EvaluatedAt) {
 		for i := range s.Checks {
@@ -181,7 +189,7 @@ func (s *State) Evaluate(in Input, now time.Time) {
 			s.Checks[i].BadSince = nil
 			s.Checks[i].GoodSince = nil
 		}
-		return
+		return nil
 	}
 	gap := s.EvaluatedAt == nil || now.Before(*s.EvaluatedAt) || now.Sub(*s.EvaluatedAt) > 3*Interval
 	maintenance := s.MaintenanceUntil != nil && now.Before(*s.MaintenanceUntil)
@@ -283,6 +291,7 @@ func (s *State) Evaluate(in Input, now time.Time) {
 			if at.Sub(*c.BadSince) >= duration {
 				s.NextID++
 				s.Incidents = append([]Incident{{ID: fmt.Sprintf("health_%016x", s.NextID), Key: c.Key, Kind: c.Kind, Target: c.Target, OpenedAt: now, LastObservedAt: at}}, s.Incidents...)
+				transitions = append(transitions, s.Incidents[0])
 				c.BadSince = nil
 				c.State = "open"
 			}
@@ -300,6 +309,7 @@ func (s *State) Evaluate(in Input, now time.Time) {
 				open.ResolvedAt = stamp(now)
 				open.ClosedReason = "recovered"
 				open.LastObservedAt = at
+				transitions = append(transitions, *open)
 				c.GoodSince = nil
 				c.State = "ok"
 			}
@@ -307,6 +317,7 @@ func (s *State) Evaluate(in Input, now time.Time) {
 	}
 	s.EvaluatedAt = stamp(now)
 	s.prune(now)
+	return transitions
 }
 func (s *State) open(key string) *Incident {
 	for i := range s.Incidents {

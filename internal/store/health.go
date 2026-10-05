@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"localrmm/internal/health"
+	"time"
 )
 
 const healthSchema = `CREATE TABLE IF NOT EXISTS health_devices(id TEXT PRIMARY KEY, body BLOB NOT NULL CHECK(length(body)>0 AND length(body)<=131072 AND json_valid(body)))`
@@ -55,6 +56,14 @@ func (s *Store) HealthStates(ctx context.Context) (map[string]health.State, erro
 	return out, rows.Err()
 }
 func (s *Store) UpdateHealth(ctx context.Context, id string, fn func(*health.State) error) (health.State, error) {
+	return s.updateHealth(ctx, id, func(h *health.State) ([]health.Incident, error) { return nil, fn(h) })
+}
+
+// EvaluateHealth captures exact evaluator transitions before history pruning.
+func (s *Store) EvaluateHealth(ctx context.Context, input health.Input, now time.Time) (health.State, error) {
+	return s.updateHealth(ctx, input.DeviceID, func(h *health.State) ([]health.Incident, error) { return h.EvaluateTransitions(input, now), nil })
+}
+func (s *Store) updateHealth(ctx context.Context, id string, fn func(*health.State) ([]health.Incident, error)) (health.State, error) {
 	tx, e := s.db.BeginTx(ctx, nil)
 	if e != nil {
 		return health.State{}, e
@@ -79,7 +88,9 @@ func (s *Store) UpdateHealth(ctx context.Context, id string, fn func(*health.Sta
 			return state, e
 		}
 	}
-	if e = fn(&state); e != nil {
+	before := append([]health.Incident{}, state.Incidents...)
+	transitions, e := fn(&state)
+	if e != nil {
 		return state, e
 	}
 	if e = state.Validate(); e != nil {
@@ -90,6 +101,9 @@ func (s *Store) UpdateHealth(ctx context.Context, id string, fn func(*health.Sta
 		return state, health.ErrInvalid
 	}
 	if _, e = tx.ExecContext(ctx, "INSERT INTO health_devices(id,body) VALUES(?,?) ON CONFLICT(id) DO UPDATE SET body=excluded.body", id, body); e != nil {
+		return state, e
+	}
+	if e = enqueueHealthAlarms(ctx, tx, id, before, state, transitions); e != nil {
 		return state, e
 	}
 	if e = tx.Commit(); e != nil {

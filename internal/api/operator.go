@@ -357,6 +357,10 @@ func (h *operatorHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		fail(w, 403, "operator_capability_required", "This named account does not have permission for this administrative operation.")
 		return
 	}
+	if r.URL.Path == "/api/alerts/status" {
+		h.alarmStatus(w, r)
+		return
+	}
 	if r.URL.Path == "/api/lan/agents" && r.Method == "GET" {
 		agents := h.registry.List()
 		write(w, 200, map[string]any{"items": agents, "total": len(agents)})

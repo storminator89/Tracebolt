@@ -1,5 +1,5 @@
 {
-  "goSourceSha256": "f305ca6f60c18daaed08535bfbe5d47a29bc25b41a8226f7ff4d68e161148cf5",
+  "goSourceSha256": "8c9b30879bdeb306af7fcd3a913a75c1c724f749b3084a72f23d6f297fd46e2f",
   "packages": {
     "localrmm/cmd/agent": [
       "TestHelp",
@@ -67,6 +67,7 @@
     ],
     "localrmm/cmd/lan-manager": [
       "TestActualLANRuntimeProfiles",
+      "TestAlarmManagerOmittedConfigurationIsDisabled",
       "TestApprovedDisposableSystemdInstallation",
       "TestApprovedManagedDisposableSystemdInstallation",
       "TestBuiltLANManagerCLI",
@@ -204,6 +205,21 @@
       "TestSlowAttemptsNeverOverlapOrCatchUp",
       "TestTerminalOutcomesStopWithoutRetry"
     ],
+    "localrmm/internal/alarmdelivery": [
+      "TestWebhookAllDNSAnswersMustBePublic",
+      "TestWebhookBoundedPayloadAndResponse",
+      "TestWebhookClassificationAndNoHiddenRetry",
+      "TestWebhookConfigRequiresExplicitBoundConsent",
+      "TestWebhookDefaultOff",
+      "TestWebhookEndpointAndBearerGrammar",
+      "TestWebhookExactPinnedRequestNoProxyOrRedirect",
+      "TestWebhookFingerprintBindsExactDestination",
+      "TestWebhookLiteralAddressHasNoSecondResolution",
+      "TestWebhookPreSendFailureVersusUncertainWrite",
+      "TestWebhookProtectedFilesAndTokenSnapshot",
+      "TestWebhookPublicAddressPolicy",
+      "TestWebhookTLSVerificationAndSnapshotIntegrity"
+    ],
     "localrmm/internal/analysis": [
       "TestCitationIdentityDoesNotClaimEntailment",
       "TestEndpointDefaultBoundaryAndAllowlist",
@@ -243,6 +259,7 @@
       "TestAIReplacementCancelsOldRequestAndKeepsGlobalSlot",
       "TestAITimeoutAndInvalidProviderResponsesAreExplicit",
       "TestAIUnconfiguredAndMemoryOnlyConfiguration",
+      "TestAlarmStatusAuthenticationReadOnlyAndRedaction",
       "TestBootstrapAdmissionBoundedAndFailClosedClock",
       "TestBoundaryGuards",
       "TestCachedUpdatesOperatorGuardsAndBoundedUnknown",
@@ -1505,6 +1522,19 @@
       "TestTranscriptTamperingCannotAuthenticate"
     ],
     "localrmm/internal/store": [
+      "TestAlarmAtomicRollbackOnOutboxFailure",
+      "TestAlarmBoundedBackoffRateAndExpiry",
+      "TestAlarmCapacityPersistsVisibleGapWithoutFreezingHealth",
+      "TestAlarmDisabledNoHistoricalBroadcastAndDeviceKeys",
+      "TestAlarmExactTransitionsSurviveFullHistoryPruning",
+      "TestAlarmInjectedWorkerAndNoOutboundWhileDisabled",
+      "TestAlarmMaintenanceStaleAndFlapCooldown",
+      "TestAlarmQueuedRestartAndTotalRecordBound",
+      "TestAlarmRecoveryBeforeDuringAndAfterSend",
+      "TestAlarmRecoveryDuringMaintenanceAndMonitoringStopped",
+      "TestAlarmRecoveryForLongLivedAcceptedIncident",
+      "TestAlarmRestartUncertainAndDestinationBinding",
+      "TestAlarmWorkerShutdownPersistsUncertaintyBeforeReturn",
       "TestDurableMutationAndSeed",
       "TestHealthDurableHistoryAndAtomicMutation",
       "TestHealthStateCorruptionIsNotEmptySuccess",

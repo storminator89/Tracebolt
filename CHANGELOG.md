@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-10-05 — Add default-off external alarm delivery foundation
+
+- Atomically capture exact new health transitions and bounded delivery intent, including transitions pruned from UI history. Preserve existing health behavior and authentication; add a read-only status endpoint.
+- Add a single bounded injected worker and explicit protected public-HTTPS webhook opt-in, destination binding, no redirects/proxies, cooldown/backoff and honest accepted/failed/uncertain states. Never replay uncertain sends or broadcast old history.
+- Cover failure, restart, capacity, recovery/maintenance, privacy and SSRF with deterministic fixtures. No recipient, credentials, live send, browser sender controls, SMTP, host change or installed-service acceptance is included.
+
 ## 2026-10-05 — Shorten primary device copy without hiding important state
 
 - Use concise primary labels and remove repeated page subtitles. Keep interpretation notes in accessible disclosures while retaining original observation time, unknown/partial states and source facts in Details.

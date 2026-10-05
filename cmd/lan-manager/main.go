@@ -7,6 +7,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"flag"
+	"localrmm/internal/alarmdelivery"
 	"localrmm/internal/analysis"
 	"localrmm/internal/api"
 	"localrmm/internal/enrollmentconfig"
@@ -38,10 +39,17 @@ type prepared struct {
 	close                 func()
 	maintenance           *enrollmentservice.Service
 	health                *api.Server
+	alarms                *alarmdelivery.Worker
 }
 
 func prepare(m lanconfig.Material) (*prepared, error) { return prepareWithEnrollment(m, nil) }
 func prepareWithEnrollment(m lanconfig.Material, enrollment *enrollmentconfig.Material) (*prepared, error) {
+	return prepareWithAlarms(m, enrollment, alarmdelivery.Config{})
+}
+func prepareWithAlarms(m lanconfig.Material, enrollment *enrollmentconfig.Material, alarms alarmdelivery.Config) (*prepared, error) {
+	if alarms.Enabled() && (enrollment == nil || enrollment.StoreConfig().Binding.CollectionProfile != enrollmentcrypto.CollectionProfileComplete || alarms.Binding().ManagerInstanceID != enrollment.StoreConfig().Binding.InstanceID || alarms.Binding().Profile != m.Config.Profile) {
+		return nil, alarmdelivery.ErrInvalid
+	}
 	c := m.Config
 	if e := c.Validate(); e != nil {
 		return nil, e
@@ -126,6 +134,26 @@ func prepareWithEnrollment(m lanconfig.Material, enrollment *enrollmentconfig.Ma
 	if e != nil {
 		return fail(e)
 	}
+	var alarmWorker *alarmdelivery.Worker
+	var alarmBinding *alarmdelivery.Binding
+	if alarms.Enabled() {
+		b := alarms.Binding()
+		alarmBinding = &b
+		transport, err := alarmdelivery.NewWebhook(alarms)
+		if err != nil {
+			appStore.Close()
+			return fail(err)
+		}
+		alarmWorker, err = alarmdelivery.NewWorker(appStore, b, transport, nil)
+		if err != nil {
+			appStore.Close()
+			return fail(err)
+		}
+	}
+	if e = appStore.ConfigureAlarms(context.Background(), alarmBinding, time.Now().UTC()); e != nil {
+		appStore.Close()
+		return fail(e)
+	}
 	var once sync.Once
 	var cveCache *linuxcvefeed.Cache
 	closeAll := func() {
@@ -179,7 +207,7 @@ func prepareWithEnrollment(m lanconfig.Material, enrollment *enrollmentconfig.Ma
 		closeAll()
 		return nil, e
 	}
-	return &prepared{operator: operator, agent: agent, operatorTLS: operatorTLS, agentTLS: agentTLS, close: closeAll, maintenance: enrolledService, health: app}, nil
+	return &prepared{operator: operator, agent: agent, operatorTLS: operatorTLS, agentTLS: agentTLS, close: closeAll, maintenance: enrolledService, health: app, alarms: alarmWorker}, nil
 }
 
 func server(handler http.Handler) *http.Server {
@@ -187,7 +215,10 @@ func server(handler http.Handler) *http.Server {
 }
 func run(ctx context.Context, m lanconfig.Material) error { return runWithEnrollment(ctx, m, nil) }
 func runWithEnrollment(ctx context.Context, m lanconfig.Material, enrollment *enrollmentconfig.Material) error {
-	p, err := prepareWithEnrollment(m, enrollment)
+	return runWithAlarms(ctx, m, enrollment, alarmdelivery.Config{})
+}
+func runWithAlarms(ctx context.Context, m lanconfig.Material, enrollment *enrollmentconfig.Material, alarms alarmdelivery.Config) error {
+	p, err := prepareWithAlarms(m, enrollment, alarms)
 	if err != nil {
 		return err
 	}
@@ -216,6 +247,15 @@ func runWithEnrollment(ctx context.Context, m lanconfig.Material, enrollment *en
 			})
 		}()
 		defer func() { stopHealth(); <-healthDone }()
+	}
+	if p.alarms != nil {
+		alarmCtx, stopAlarms := context.WithCancel(ctx)
+		alarmDone := make(chan struct{})
+		go func() {
+			defer close(alarmDone)
+			_ = p.alarms.Run(alarmCtx, func() { log.Print("External alarm delivery is unavailable; inspect authenticated alarm status.") })
+		}()
+		defer func() { stopAlarms(); <-alarmDone }()
 	}
 	// Maintenance stops before store closure, including listener/server failures.
 	if p.maintenance != nil && p.maintenance.Binding().CollectionProfile == enrollmentcrypto.CollectionProfileComplete {
@@ -257,6 +297,7 @@ func runWithEnrollment(ctx context.Context, m lanconfig.Material, enrollment *en
 func main() {
 	path := flag.String("lan-config", "", "Explicit protected LAN profile JSON (required); HTTPS is the default")
 	enrollmentPath := flag.String("enrollment-config", "", "Optional protected guided-enrollment v2 profile; requires a dedicated preprovided issuer and empty legacy registry")
+	alarmPath := flag.String("alarm-config", "", "Optional protected opt-in HTTPS alarm delivery configuration; disabled when omitted")
 	flag.Parse()
 	if *path == "" || flag.NArg() != 0 {
 		log.Fatal("Tracebolt LAN manager requires --lan-config PATH")
@@ -273,9 +314,17 @@ func main() {
 		}
 		enrollment = &loaded
 	}
+	managerID := ""
+	if enrollment != nil {
+		managerID = enrollment.StoreConfig().Binding.InstanceID
+	}
+	alarms, e := alarmdelivery.Load(*alarmPath, managerID, material.Config.Profile)
+	if e != nil {
+		log.Fatal("Tracebolt alarm configuration rejected; verify explicit destination, sharing acknowledgement, identity and protected material")
+	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	if runWithEnrollment(ctx, material, enrollment) != nil {
+	if runWithAlarms(ctx, material, enrollment, alarms) != nil {
 		log.Fatal("Tracebolt LAN manager failed closed")
 	}
 }

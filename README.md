@@ -126,6 +126,10 @@ The package profile adds protected read-only OS-release and dpkg observations fo
 
 The latest local integration checks cover571 UI tests, bounded native/API flows and targeted race reviews. Exact-source hosted Chromium, positive Ubuntu package collection and container results are separate gates for this checkpoint. Cached-APT foundation work is not enabled here; no update installation, automatic remediation or real deployment is claimed.
 
+## Optional external alarms
+
+The [default-off alarm delivery slice](docs/alarm-delivery.md) adds one explicitly provisioned public HTTPS webhook, atomic health-transition outbox and authenticated read-only delivery status. No upgrade enables sending; destination/data approval, protected material and live recipient acceptance remain separate gates.
+
 ## Optional previews
 
 - [AI-assisted investigation](docs/ai-diagnostics.md): configure an OpenAI-compatible provider, inspect the bounded evidence packet and destination, then explicitly approve an analysis. Provider configuration and keys are memory-only. Suggestions remain unconfirmed and cannot execute actions. Validation so far uses a deterministic loopback test provider, not a real model.

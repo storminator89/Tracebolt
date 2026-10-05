@@ -42,7 +42,7 @@ func (m *healthMonitor) evaluate(ctx context.Context) error {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
-		_, e = m.store.UpdateHealth(ctx, input.DeviceID, func(s *health.State) error { s.Evaluate(input, now); return nil })
+		_, e = m.store.EvaluateHealth(ctx, input, now)
 		if e != nil {
 			return e
 		}
