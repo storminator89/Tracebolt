@@ -112,12 +112,12 @@ try {
  await test('Source filter and unknown data never become healthy', async()=>{
   const page=await pageAt('/devices'); await loaded(page); await page.locator('.inventory-tabs button').filter({hasText:'Lokale Quellen'}).click(); await expect(await rows(page)).toHaveCount(1); await expect((await rows(page)).first()).toContainText('Lokal');
   const sandbox=data.devices.find(d=>!d.synthetic); expect(sandbox.status).toBe('unknown'); await expect((await rows(page)).first()).toContainText('Unbekannt');
-  await page.locator('.device-name-button').click(); await expect(page.locator('.device-page')).toContainText('Lokale Linux-Umgebung. Messwerte werden nur angezeigt, wenn ein Collector sie geliefert hat.'); await shot(page,'sandbox-provenance');
+  await page.locator('.device-name-button').click(); await page.getByRole('tab',{name:'Details',exact:true}).click(); await expect(page.locator('.device-page')).toContainText('Lokale Linux-Umgebung. Messwerte werden nur angezeigt, wenn ein Collector sie geliefert hat.'); await shot(page,'sandbox-provenance');
  });
  await test('Device details → evidence → case, history Back/Forward', async()=>{
   const page=await pageAt('/devices'); await loaded(page);
   await page.getByRole('button',{name:`${device.name}: Details öffnen`}).click(); await expect(page.getByRole('region',{name:`Gerät ${device.name}`,exact:true})).toBeVisible();
-  await expect(page.locator('.device-page')).toContainText('Synthetisches Beispielgerät');
+  await page.getByRole('tab',{name:'Details',exact:true}).click(); await expect(page.locator('.device-page')).toContainText('Synthetisches Beispielgerät');
   await page.getByRole('tab',{name:/Belege/}).click(); await page.locator('.device-page .evidence-card summary').first().click(); await expect(page.locator('.device-page .evidence-content').first()).toBeVisible(); await shot(page,'desktop-device-evidence');
   await page.getByRole('tab',{name:'Übersicht',exact:true}).click(); await page.locator('.linked-case').first().click(); await expect(page.locator('.case-detail-header h1')).toHaveText(caseItem.title);
   await page.locator('.evidence-card summary').first().click(); await expect(page.locator('.evidence-content').first()).toBeVisible(); await shot(page,'desktop-case-evidence');

@@ -2,6 +2,11 @@
 
 Meaningful development checkpoints are recorded here. These are prototype milestones, not production releases.
 
+## 2026-10-05 — Align browser evidence and improve Contact readability
+
+- Keep provenance assertions intact after explicitly opening the new Details view. Require the exact seventh source-guidance journal case in the closed browser gate; the previous six cases, identity/privacy checks and deadlines remain mandatory.
+- Stop the Contact summary value inheriting compact header-time styling. Keep card values at 22 px desktop / 18 px mobile, raise mobile supporting copy to 11 px, and add real-browser typography checks. Preserve the three-card layout; exact-source screenshot review remains required.
+
 ## 2026-10-05 — Focus device summaries and clarify Linux log sources
 
 - Lead the device overview with compact Contact, Warnings and Updates cards plus resource observations. Keep unknown, stale, partial and original-age states explicit; move full source and identity facts into Details. Serialize cancellation-aware metadata summaries after identity readiness, without new polling or collection.

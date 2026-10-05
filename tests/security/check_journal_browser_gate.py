@@ -1,4 +1,4 @@
-"""Check the six fixed synthetic browser cases without printing report contents."""
+"""Check the seven fixed synthetic browser cases without printing report contents."""
 import json
 import os
 import re
@@ -10,6 +10,7 @@ from report_complete_mvp import unique_object, reject_constant
 MAX_BYTES = 131072
 CASES = {
     'Explicit content and HTTP acknowledgements gate one lazy journal request and honest pending state',
+    'Source guidance and recognizable search shortcuts never expand local journal permission',
     'Complete and partial invented messages render inertly with honest English and German mobile coverage',
     'Literal case-insensitive captured-snapshot search and hundred-row pages preserve digest and original times',
     'Cancel clears rows immediately and a lost committed response reconciles without mutation replay',
@@ -44,10 +45,10 @@ def validate(value, source_sha):
     summary = value["summary"]
     if not isinstance(summary, dict) or set(summary) != {"passed", "failed", "setupFailure"}:
         raise ValueError("invalid summary")
-    if type(summary["passed"]) is not int or summary["passed"] != 6 or type(summary["failed"]) is not int or summary["failed"] != 0 or summary["setupFailure"] is not False:
+    if type(summary["passed"]) is not int or summary["passed"] != 7 or type(summary["failed"]) is not int or summary["failed"] != 0 or summary["setupFailure"] is not False:
         raise ValueError("incomplete summary")
     results = value["results"]
-    if not isinstance(results, list) or len(results) != 6:
+    if not isinstance(results, list) or len(results) != 7:
         raise ValueError("wrong case count")
     names = set()
     for result in results:
@@ -86,7 +87,7 @@ def main(argv):
     except Exception:
         print("FAIL: missing, partial, mismatched or unsafe journal-browser evidence.")
         return 1
-    print("PASS: six exact journal browser cases on the selected commit; invented data and no host journal, helper, permission, collector, installer or user-VM execution.")
+    print("PASS: seven exact journal browser cases on the selected commit; invented data and no host journal, helper, permission, collector, installer or user-VM execution.")
     return 0
 
 

@@ -71,6 +71,9 @@ async function overviewLayout(page,mobile=false){
  const geometry=await page.locator('.device-essentials-status').evaluate(el=>[...el.children].map(card=>{const r=card.getBoundingClientRect();return{x:r.x,y:r.y,width:r.width};}));
  expect(geometry).toHaveLength(3);expect(Math.abs(geometry[0].y-geometry[2].y)).toBeLessThanOrEqual(1);expect(geometry[2].x).toBeGreaterThan(geometry[0].x);
  await expect(page.locator('.device-essential-card[aria-busy=true]')).toHaveCount(0);
+ const typography=await page.locator('.device-essential-value').evaluateAll(values=>values.map(el=>{const style=getComputedStyle(el);return{size:parseFloat(style.fontSize),margin:parseFloat(style.marginLeft),display:style.display};}));
+ expect(typography).toHaveLength(3);for(const value of typography){expect(value.size).toBe(mobile?18:22);expect(value.margin).toBe(0);expect(value.display).toBe('block');}
+ if(mobile){const sizes=await page.locator('.device-essential-card p,.device-essential-card time,.device-essential-card>.text-button').evaluateAll(values=>values.map(el=>parseFloat(getComputedStyle(el).fontSize)));expect(sizes.length).toBeGreaterThan(0);for(const size of sizes)expect(size).toBeGreaterThanOrEqual(11);}
  await page.locator('main').evaluate(el=>{el.scrollTop=0;});await shot(page,`synthetic-v3-device-overview-${mobile?'mobile':'desktop'}-en`);
  mark('explicit Details exposes original source facts and native disclosure');
  await page.getByRole('tab',{name:'Details',exact:true}).click();await settled(page,'.software-overview');

@@ -32,7 +32,7 @@ partial coverage, original expiry and logout. It also passes the actual handler
 DTOs through the production frontend decoders. This does not pass the browser
 target or establish any screenshot result.
 
-## Six required browser cases
+## Seven required browser cases
 
 1. Logs load only when the tab opens. The observed-service picker lazily reads
    the real protected service inventory, discloses that observation does not prove
@@ -70,6 +70,10 @@ target or establish any screenshot result.
    or actual browser BFCache acceptance.
 6. Device navigation cancels or discards a held old-device result. Real operator
    logout rejects protected reads and removes private content through reload.
+7. Source guidance distinguishes unsupported broader log scopes from observed
+   services. Recognizable literal-search shortcuts never create/cancel a capture
+   or grant access; English desktop and German mobile retain explicit permission
+   uncertainty and the original content/HTTP acknowledgement boundary.
 
 The fixture generates disposable activated v3 identities using ordinary proofs,
 admits an invented typed system frame with three synthetic service rows, then consumes only the request created by
@@ -82,7 +86,7 @@ consent grant, permission change, service installation or user VM is exercised.
 
 ## Evidence and gate
 
-CI must require exactly six uniquely named PASS results, zero FAIL results,
+CI must require exactly seven uniquely named PASS results, zero FAIL results,
 `summary.setupFailure === false`, `runtimeErrorCount === 0`, and `sourceSha`
 equal to the exact tested GitHub commit. None of the inherited three enrollment
 skips is restored or counted as passed.
