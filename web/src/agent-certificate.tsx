@@ -15,6 +15,7 @@ const copy = {
         manual: 'Plan a separately authorized certificate replacement and new manual approval. A new approval receives a new device ID.',
         guided: 'Ask an administrator to plan a separately authorized replacement enrollment. Existing identity and history are not automatically renewed or merged.',
         renewal: 'Automatic renewal is unavailable.',
+        atCheck: 'Status at manager check', details: 'Certificate details', nextStep: 'Ask an administrator to plan a separately authorized certificate replacement.',
     },
     de: {
         title: 'Agent-Zertifikat', unknown: 'Ablauf unbekannt', current: 'Mehr als 48 Stunden verbleibend', expiring: 'Läuft innerhalb von 48 Stunden ab', expired: 'Abgelaufen',
@@ -23,6 +24,7 @@ const copy = {
         manual: 'Separat freigegebenen Zertifikatsaustausch mit neuer manueller Freigabe planen. Eine neue Freigabe erhält eine neue Geräte-ID.',
         guided: 'Eine separat freigegebene Neuanmeldung mit einem Administrator planen. Bestehende Identität und Historie werden nicht automatisch erneuert oder zusammengeführt.',
         renewal: 'Automatische Erneuerung ist nicht verfügbar.',
+        atCheck: 'Status bei Managerprüfung', details: 'Zertifikatsdetails', nextStep: 'Einen separat freigegebenen Zertifikatsaustausch mit einem Administrator planen.',
     },
 };
 
@@ -46,12 +48,22 @@ export function AgentCertificatePanel({ value }: { value: unknown }) {
     const [locale] = useLocale(), labels = copy[locale], id = useId();
     const { state, certificate } = certificateExpiry(value);
     return <section className={`agent-certificate ${state}`} aria-labelledby={id}>
-        <header><h2 id={id}><Clock3 size={17}/>{labels.title}</h2><strong className="certificate-status">{labels[state]}</strong></header>
+        <header>
+            <h2 id={id}><Clock3 size={17}/>{labels.title}</h2>
+            <div className="certificate-status-group">
+                {certificate && <span>{labels.atCheck}</span>}
+                <strong className="certificate-status">{labels[state]}</strong>
+            </div>
+        </header>
         {certificate && <dl>
             <div><dt>{labels.expiry}</dt><dd>{certificate.expiresAt ? <time dateTime={certificate.expiresAt}>{fullDate(certificate.expiresAt)}</time> : '—'}</dd></div>
             <div><dt>{labels.checked}</dt><dd><time dateTime={certificate.checkedAt}>{fullDate(certificate.checkedAt)}</time></dd></div>
         </dl>}
-        {certificate && <p>{labels.scope}</p>}
-        <p className="certificate-guidance">{state === 'unknown' ? labels.unknownHelp : certificate?.source === 'manual-approval' ? labels.manual : labels.guided} {labels.renewal}</p>
+        <p className="certificate-guidance">{state === 'unknown' ? labels.unknownHelp : state !== 'current' ? labels.nextStep : null} {labels.renewal}</p>
+        {certificate && <details className="certificate-details">
+            <summary>{labels.details}</summary>
+            <p>{labels.scope}</p>
+            <p>{certificate.source === 'manual-approval' ? labels.manual : labels.guided}</p>
+        </details>}
     </section>;
 }

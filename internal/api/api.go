@@ -30,6 +30,7 @@ import (
 )
 
 type Server struct {
+	linuxCVE            *linuxCVEState
 	health              *healthMonitor
 	store               *store.Store
 	port                int

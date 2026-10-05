@@ -318,6 +318,8 @@ func run() {
 	state, e := enrollmentstore.Open(filepath.Join(*dir, "enrollment", "state.db"), cfg, issuer.IssuerDER())
 	must(e)
 	defer state.Close()
+	// Match current manager schema setup only; no endpoint collection grant.
+	must(state.InitializeCompleteUpdates(context.Background()))
 	f := &fixture{store: state, devices: map[string]enrollmentstate.Snapshot{}, seq: map[string]uint64{}}
 	f.service, e = enrollmentservice.New(state, issuer, f.now)
 	must(e)

@@ -20,8 +20,24 @@ export function DeviceInventoryWorkspace({ deviceId, initialSource = 'processes'
     return <div className="inventory-workspace"><div className="inventory-source-tabs" role="tablist" aria-label={locale === 'de' ? 'Inventarquelle' : 'Inventory source'}>{tabs.map((tab, index) => <button key={tab.key} id={`${id}-${tab.key}`} role="tab" aria-selected={selected === tab.key} aria-controls={`${id}-panel`} tabIndex={selected === tab.key ? 0 : -1} onClick={() => setSelected(tab.key)} onKeyDown={event => { const next = event.key === 'ArrowRight' ? (index + 1) % tabs.length : event.key === 'ArrowLeft' ? (index + tabs.length - 1) % tabs.length : event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : null; if (next !== null) { event.preventDefault(); setSelected(tabs[next].key); document.getElementById(`${id}-${tabs[next].key}`)?.focus(); } }}>{tab.text}</button>)}</div><div role="tabpanel" id={`${id}-panel`} aria-labelledby={`${id}-${selected}`}>
         {selected === 'preview' && <><SoftwareOverview deviceId={deviceId} onOpenPackages={() => { setSelected('packages'); document.getElementById(`${id}-packages`)?.focus(); }}/><p className="package-note inventory-preview-note">{locale === 'de' ? 'Diese ältere Betriebsvorschau enthält begrenzte Ausschnitte. Die separaten Registerkarten zeigen vollständig empfangene Prozess-, Mount-, Paket-, Dienst- und Socket-Abschnitte mit begrenztem Blättern.' : 'This legacy operational preview contains bounded selections. The separate tabs show complete received process, mount, package, service and socket sections using bounded pagination.'}</p><OperationalInventoryPanel deviceId={deviceId}/></>}
         {authorized && (selected === 'processes' || selected === 'volumes') && <CompleteOverviewPanel deviceId={deviceId} section={selected} sessionKey={operator.expiresAt ?? undefined}/>}
-        {authorized && selected === 'packages' && <><CompletePackagesPanel deviceId={deviceId} sessionKey={operator.expiresAt ?? undefined} inline/><DeviceCachedUpdates key={`${deviceId}:${operator.expiresAt ?? ''}`} deviceId={deviceId} sessionKey={operator.expiresAt ?? null}/></>}
-        {authorized && selected === 'updates' && <CompleteUpdatesPanel deviceId={deviceId} sessionKey={operator.expiresAt ?? undefined}/> }
+        {authorized && selected === 'packages' && <CompletePackagesPanel deviceId={deviceId} sessionKey={operator.expiresAt ?? undefined} inline/>}
+        {authorized && selected === 'updates' && <DeviceUpdatesWorkspace key={`${deviceId}:${operator.expiresAt ?? ''}`} deviceId={deviceId} sessionKey={operator.expiresAt ?? null}/>}
         {authorized && (selected === 'services' || selected === 'sockets') && <SystemInventoryPanel deviceId={deviceId} section={selected} sessionKey={operator.expiresAt ?? undefined}/>}
     </div></div>;
+}
+
+/** The separately consented complete generation and older bounded preview share
+ * storage admission. Mount only the chosen reader, just as the source tabs do. */
+function DeviceUpdatesWorkspace({ deviceId, sessionKey }: { deviceId: string; sessionKey: string | null }) {
+    const [source, setSource] = useState('complete'), [locale] = useLocale(), id = useId();
+    return <>
+        <div className="complete-package-search">
+            <label htmlFor={id}>{locale === 'de' ? 'Updateansicht' : 'Update view'}</label>
+            <select id={id} value={source} onChange={event => setSource(event.target.value)}>
+                <option value="complete">{locale === 'de' ? 'Vollständige Kandidaten' : 'Complete candidates'}</option>
+                <option value="preview">{locale === 'de' ? 'Begrenzte Vorschau' : 'Limited preview'}</option>
+            </select>
+        </div>
+        {source === 'complete' ? <CompleteUpdatesPanel deviceId={deviceId} sessionKey={sessionKey ?? undefined}/> : <DeviceCachedUpdates deviceId={deviceId} sessionKey={sessionKey}/>}
+    </>;
 }

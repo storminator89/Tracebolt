@@ -32,6 +32,18 @@ That smoke checks actual package/system status and query handlers, sparse-search
 continuation, filters, retained pending/failed state, and the exact public bootstrap
 checksum. Its report explicitly states that no browser ran.
 
+A separate React/request-handler integration regression runs without Chromium:
+
+```sh
+./web/node_modules/.bin/vitest run --config tests/e2e-review/v3-dom.config.mts
+```
+
+It uses the same disposable Go fixture and real cookie/CSRF-protected HTTP reads.
+It checks nonempty, successful-empty and awaiting package data, no adjacent
+update reads on Packages, and mutually exclusive complete/limited update views.
+Only the surrounding React session context is supplied; this is jsdom integration,
+not hosted browser or pixel acceptance. `V3_DOM_REVIEW_PORT` overrides port 19898.
+
 ## Eight required cases
 
 1. Fresh v3 metadata consent gates invitation creation. The public dashboard

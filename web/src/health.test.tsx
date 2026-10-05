@@ -82,9 +82,33 @@ describe('selected health checks and controls', () => {
         render(<HealthPanel deviceId={id}/>); await screen.findByText('Selected checks need attention.');
         const checks = screen.getByRole('list', { name: 'Current checks' });
         expect(checks).toHaveTextContent('Unknown'); expect(checks).toHaveTextContent('94.0% used'); expect(checks).toHaveTextContent('Time unknown');
-        expect(screen.getByText(/manager must be running/)).toBeVisible(); expect(document.body).not.toHaveTextContent('Device is healthy');
+        expect(screen.getByText(/manager must be running/)).not.toBeVisible(); expect(screen.getByText('Agent contact · root filesystem / · selected services')).toBeVisible(); expect(document.body).not.toHaveTextContent('Device is healthy');
         expect(screen.getByRole('list', { name: 'Alert history' })).toHaveTextContent('Opened'); expect(document.querySelector(`time[datetime="${now}"]`)).not.toBeNull();
         expect(request).toHaveBeenCalledWith(`/devices/${id}/health`, expect.objectContaining({ signal: expect.any(AbortSignal) }), 131072);
+    });
+    it('opens scope details through native disclosure without changing the service draft or saving', async () => {
+        render(<HealthPanel deviceId={id}/>);
+        const editor = await screen.findByRole('textbox', { name: 'Add an exact systemd service manually' });
+        fireEvent.change(editor, { target: { value: 'edited.service' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Add service' }));
+        const summary = screen.getByText('Check scope & limits', { selector: 'summary' });
+        expect(summary.parentElement).not.toHaveAttribute('open');
+        expect(screen.getByText('Selected checks need attention.')).toBeVisible();
+        expect(within(screen.getByRole('list', { name: 'Current checks' })).getByText('Unknown')).toBeVisible();
+        summary.focus();
+        fireEvent.click(summary);
+        expect(summary.parentElement).toHaveAttribute('open');
+        expect(screen.getByText(/manager must be running/)).toBeVisible();
+        fireEvent.click(summary);
+        expect(summary.parentElement).not.toHaveAttribute('open');
+        expect(summary).toHaveFocus();
+        expect(screen.getByRole('list', { name: 'Selected services' })).toHaveTextContent('edited.service');
+        expect(screen.getByRole('button', { name: 'Save service selection' })).toBeEnabled();
+        expect(request).toHaveBeenCalledTimes(1);
+        expect(mutate).not.toHaveBeenCalled();
+        act(() => setLocale('de', false));
+        expect(screen.getByText('Prüfumfang & Grenzen', { selector: 'summary' })).toBe(summary);
+        expect(screen.getByRole('list', { name: 'Ausgewählte Dienste' })).toHaveTextContent('edited.service');
     });
     it('acknowledges exactly one incident and does not locally resolve it', async () => {
         const result = fixture(); result.incidents[0].acknowledgedAt = now; vi.mocked(mutate).mockResolvedValue(result);
@@ -164,7 +188,9 @@ describe('health lifecycle and freshness', () => {
     it('refreshes every30s, preserves a dirty service draft, and clears values after a read timeout', async () => {
         vi.useFakeTimers(); const wall = Date.now(); vi.spyOn(performance, 'now').mockImplementation(() => Date.now() - wall);
         render(<HealthPanel deviceId={id}/>); await act(async () => {}); fireEvent.change(screen.getByRole('textbox'), { target: { value: 'edited.service' } }); fireEvent.click(screen.getByRole('button', { name: 'Add service' }));
-        await act(async () => { vi.advanceTimersByTime(30000); }); expect(request).toHaveBeenCalledTimes(2); expect(screen.getByRole('list', { name: 'Selected services' })).toHaveTextContent('edited.service');
+        const summary = screen.getByText('Check scope & limits', { selector: 'summary' }); fireEvent.click(summary);
+        const editor = screen.getByRole('textbox'); editor.focus();
+        await act(async () => { vi.advanceTimersByTime(30000); }); expect(summary.parentElement).toHaveAttribute('open'); expect(editor).toHaveFocus(); expect(request).toHaveBeenCalledTimes(2); expect(screen.getByRole('list', { name: 'Selected services' })).toHaveTextContent('edited.service');
         vi.mocked(request).mockReturnValue(new Promise(() => {})); await act(async () => { vi.advanceTimersByTime(30000); }); await act(async () => { vi.advanceTimersByTime(10000); });
         expect(screen.getByRole('alert')).toHaveTextContent('not responding'); expect(screen.queryByRole('list', { name: 'Current checks' })).not.toBeInTheDocument();
     });

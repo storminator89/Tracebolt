@@ -134,8 +134,7 @@ export function HealthPanel({ deviceId, sessionKey = null }: { deviceId: string;
     const saveServices = async () => { if (services === null || disabled) return; if (await resource.change('services', { services })) setDirty(false); };
     return <section className="health-panel" aria-labelledby={`${uid}-heading`}>
         <header className="health-heading"><h2 id={`${uid}-heading`}>{t('Health & Verlauf')}</h2><button type="button" className="button small" disabled={resource.pending || resource.locked} onClick={resource.refresh}><RefreshCw size={14} className={resource.pending ? 'spin' : undefined}/>{t('Health aktualisieren')}</button></header>
-        <p className="health-note">{t('Nur Agent-Kontakt, Root-Dateisystem / und ausdrücklich ausgewählte Dienste. Der Manager muss für die Auswertung laufen.')}</p>
-        <p className="health-note">{t('Die sichtbare Ansicht wird alle 30 Sekunden neu gelesen. Fehlende oder veraltete Beobachtungen bleiben unbekannt.')}</p>
+        <p className="health-note">{t('Agent-Kontakt · Root-Dateisystem / · ausgewählte Dienste')}</p>
         {resource.pending && <p className="health-note" role="status">{t('Health-Daten werden geprüft …')}</p>}
         {resource.failure && <p className="health-failure" role="alert">{errorText(resource.failure)}</p>}
         {view && <>
@@ -161,8 +160,14 @@ export function HealthPanel({ deviceId, sessionKey = null }: { deviceId: string;
                 <dl><div><dt>{t('Begonnen')}</dt><dd><Time value={incident.openedAt}/></dd></div><div><dt>{t('Zuletzt beobachtet')}</dt><dd><Time value={incident.lastObservedAt}/></dd></div>{incident.resolvedAt && <div><dt>{incident.closedReason === 'monitoring_stopped' ? t('Geschlossen') : t('Erholt')}</dt><dd><Time value={incident.resolvedAt}/></dd></div>}{incident.acknowledgedAt && <div><dt>{t('Bestätigt')}</dt><dd><Time value={incident.acknowledgedAt}/></dd></div>}</dl>
                 {!incident.acknowledgedAt && <button type="button" className="button small" disabled={disabled} onClick={() => void resource.change('acknowledge', { incidentId: incident.id })} aria-label={t('Warnung bestätigen: {0}', { 0: label(incident.kind, incident.target) })}>{t('Warnung bestätigen')}</button>}
             </li>)}</ul>}
-            <p className="health-note">{t('Bestätigen dokumentiert die Kenntnisnahme; es behebt oder schließt keinen Vorfall. Gespeicherter Verlauf: höchstens 100 Vorfälle pro Gerät.')}</p>
+            <p className="health-note">{t('Bestätigen dokumentiert die Kenntnisnahme; es behebt oder schließt keinen Vorfall.')}</p>
         </>}
-        <details className="health-policy"><summary>{t('Schwellen & Grenzen')}</summary><p className="health-note">{t('Kontakt: nach mehr als 2 Minuten ohne Übertragung und weiteren 60 Sekunden Bestätigung. Root-Dateisystem: ab 90 % für 120 Sekunden; Erholung bei höchstens 85 % für 60 Sekunden. Ausgewählte Dienste: inaktiv für 120 Sekunden; Erholung nach 60 Sekunden aktiv. Fehlende Beobachtungen bestätigen keine Erholung.')}</p></details>
+        <details className="health-policy">
+            <summary>{t('Prüfumfang & Grenzen')}</summary>
+            <p className="health-note">{t('Nur Agent-Kontakt, Root-Dateisystem / und ausdrücklich ausgewählte Dienste. Der Manager muss für die Auswertung laufen.')}</p>
+            <p className="health-note">{t('Die sichtbare Ansicht wird alle 30 Sekunden neu gelesen. Fehlende oder veraltete Beobachtungen bleiben unbekannt.')}</p>
+            <p className="health-note">{t('Gespeicherter Verlauf: höchstens 100 Vorfälle pro Gerät.')}</p>
+            <p className="health-note">{t('Kontakt: nach mehr als 2 Minuten ohne Übertragung und weiteren 60 Sekunden Bestätigung. Root-Dateisystem: ab 90 % für 120 Sekunden; Erholung bei höchstens 85 % für 60 Sekunden. Ausgewählte Dienste: inaktiv für 120 Sekunden; Erholung nach 60 Sekunden aktiv. Fehlende Beobachtungen bestätigen keine Erholung.')}</p>
+        </details>
     </section>;
 }

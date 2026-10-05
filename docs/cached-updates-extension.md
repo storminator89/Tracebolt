@@ -126,8 +126,11 @@ or remotely confirm the current local grant state.
 
 GET `/api/devices/{stable-device-id}/inventory/cached-updates` is a bounded,
 operator-only same-origin read. It never starts a collection or refresh. The
-Packages tab renders escaped inert text, observation age, independent metadata
-age, installed/candidate versions, holds, unknown status and preview truncation.
+Updates tab offers this report under **Update view → Limited preview**. It
+renders escaped inert text, observation age, independent metadata age,
+installed/candidate versions, holds, unknown status and preview truncation.
+The default complete-candidates view is a separately consented source. Only the
+selected update reader mounts; opening Packages never starts an update read.
 Reports do not enter general Device identity, AI evidence, routing, shell commands
 or public feeds.
 

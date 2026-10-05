@@ -1,0 +1,3 @@
+.complete-updates .update-details { border-top: 1px solid var(--line); margin: 12px 0; padding-top: 8px; }
+.complete-updates .update-details summary { cursor: pointer; color: var(--secondary); font-size: 12px; padding: 4px 0; }
+.complete-updates .update-details summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 3px; }

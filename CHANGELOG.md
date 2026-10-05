@@ -2,6 +2,13 @@
 
 Meaningful development checkpoints are recorded here. These are prototype milestones, not production releases.
 
+## 2026-10-05 — Add distribution CVE warnings and simplify admin diagnostics
+
+- Add an explicit fixed-origin Debian security-data sync with a protected persistent last-good cache and local source-package/version assessment over complete DPKG inventory. Show published-fix CVE matches, advisory links, feed age and coverage gaps without uploading inventory. Ubuntu OSV bundle import remains a limited fallback; full official Ubuntu archive sync is not implemented.
+- Keep health, update and certificate summaries visible while moving technical scope and provenance into accessible disclosures. Preserve critical stale, unknown, partial and revoked warnings and explicit operator actions.
+- Fix package-panel admission contention by mounting only the selected package/update reader. Add a real React-to-Go regression for nonempty, zero and awaiting inventory plus mutually exclusive update sources. Preserve all browser assertions and timeout budgets.
+- Add an independently reported hosted check of the fixed public Debian feed, with no endpoint data or raw-feed artifact. Native deployment and exact composed hosted acceptance remain separate gates; regenerate the source-bound Go failure vocabulary.
+
 ## 2026-10-05 — Narrow retained-package browser failure diagnostics
 
 - Split device-navigation and package-source phases and attach the existing bounded failure observer to the retained-package scenario. Keep all original assertions, routes, timeouts and case identities. This improves diagnosis of the hosted failure; it does not establish its cause or change product behavior.

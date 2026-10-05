@@ -87,6 +87,10 @@ export const english = {
   "Warnung bestätigen": "Acknowledge alert",
   "Bestätigen dokumentiert die Kenntnisnahme; es behebt oder schließt keinen Vorfall. Gespeicherter Verlauf: höchstens 100 Vorfälle pro Gerät.": "Acknowledging records awareness; it does not fix or close an incident. Stored history: at most 100 incidents per device.",
   "Schwellen & Grenzen": "Thresholds & limits",
+  "Prüfumfang & Grenzen": "Check scope & limits",
+  "Agent-Kontakt · Root-Dateisystem / · ausgewählte Dienste": "Agent contact · root filesystem / · selected services",
+  "Bestätigen dokumentiert die Kenntnisnahme; es behebt oder schließt keinen Vorfall.": "Acknowledging records awareness; it does not fix or close an incident.",
+  "Gespeicherter Verlauf: höchstens 100 Vorfälle pro Gerät.": "Stored history: at most 100 incidents per device.",
   "Kontakt: nach mehr als 2 Minuten ohne Übertragung und weiteren 60 Sekunden Bestätigung. Root-Dateisystem: ab 90 % für 120 Sekunden; Erholung bei höchstens 85 % für 60 Sekunden. Ausgewählte Dienste: inaktiv für 120 Sekunden; Erholung nach 60 Sekunden aktiv. Fehlende Beobachtungen bestätigen keine Erholung.": "Contact: more than 2 minutes without a report, then 60 seconds of confirmation. Root filesystem: at least 90% for 120 seconds; recovery at 85% or below for 60 seconds. Selected services: down for 120 seconds; recovery after 60 seconds active. Missing observations do not confirm recovery.",
 
   'Übersicht':'Overview','Geräte':'Devices','Untersuchungen':'Investigations','Einstellungen':'Settings','Arbeitsbereich':'Workspace','ARBEITSBEREICH':'WORKSPACE','WORKSPACE':'WORKSPACE','OPERATORZUGANG':'OPERATOR ACCESS','UNTERSUCHUNGEN':'INVESTIGATIONS','EINSTELLUNGEN':'SETTINGS','EXTERN':'EXTERNAL',

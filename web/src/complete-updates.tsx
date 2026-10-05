@@ -1,11 +1,12 @@
 import { useId } from 'react';
-import { Info, LoaderCircle, RefreshCw, Search, TriangleAlert } from 'lucide-react';
+import { LoaderCircle, RefreshCw, Search, TriangleAlert } from 'lucide-react';
 import { useOperator } from './auth';
 import { useLocale } from './i18n';
 import { completeUpdatesGenerationVisible, completeUpdatesTransferExpired } from './complete-updates-types';
 import { useCompleteUpdates } from './complete-updates-resource';
 import './complete-packages.css';
 import './cached-updates.css';
+import './complete-updates.css';
 const copy = {
     en: {
         title: 'Updates · all known cached APT candidates', access: 'Authenticated LAN operator access is required.', refresh: 'Refresh complete update inventory', loading: 'Reading complete update inventory…',
@@ -22,6 +23,9 @@ const copy = {
         zero: 'No newer candidates in the successfully compared cached scope.', zeroUnknown: 'No known newer candidates; some package comparisons are unknown.', continuing: 'No matches in this scan window. Continue to check remaining rows.', noMatches: 'No matches in the complete known-candidate generation.', noPageMatches: 'No further matches. Earlier pages contained matches.', done: 'The entire selected generation has been scanned.', more: 'More candidate rows remain.',
         package: 'Package', architecture: 'Architecture', installedVersion: 'Installed version', candidateVersion: 'Native candidate', state: 'Candidate state', candidate_only: 'Candidate only', heldState: 'Held by dpkg',
         loadError: 'The manager could not be read. Retry the request or refresh.', invalid: 'Inconsistent or unsupported update data was returned. Rows were cleared.', timeout: 'The request timed out. Retry or refresh.', session: 'Your session has ended. Sign in again.', clock: 'The time anchor is no longer reliable. Refresh before continuing.', busy: 'The manager is busy. Retry shortly.', restart: 'The selected generation or paging session expired or changed. Refresh to restart; prior pages were cleared.', searchInvalid: 'Use at most 128 printable ASCII characters.',
+        summary: 'Stored APT candidates. Refresh reads manager data; it does not query APT or install updates.',
+        securitySummary: 'Cached candidates do not establish security or patch status.',
+        captureDetails: 'Capture details', transferDetails: 'Transfer details', scopeDetails: 'Scope & limits',
         retention: 'Rows expire 24 hours after their original capture. Refresh and pagination only read stored manager data; they never initiate a native query or refresh metadata.',
     },
     de: {
@@ -39,6 +43,9 @@ const copy = {
         zero: 'Keine neueren Kandidaten im erfolgreich verglichenen Cache-Umfang.', zeroUnknown: 'Keine bekannten neueren Kandidaten; einige Paketvergleiche sind unbekannt.', continuing: 'Keine Treffer in diesem Abschnitt. Weitere Zeilen prüfen.', noMatches: 'Keine Treffer in der vollständigen Generation bekannter Kandidaten.', noPageMatches: 'Keine weiteren Treffer. Frühere Seiten enthielten Treffer.', done: 'Die gesamte ausgewählte Generation wurde durchsucht.', more: 'Weitere Kandidatenzeilen stehen aus.',
         package: 'Paket', architecture: 'Architektur', installedVersion: 'Installierte Version', candidateVersion: 'Nativer Kandidat', state: 'Kandidatenstatus', candidate_only: 'Nur Kandidat', heldState: 'Von dpkg zurückgehalten',
         loadError: 'Der Manager konnte nicht gelesen werden. Anfrage wiederholen oder aktualisieren.', invalid: 'Widersprüchliche oder nicht unterstützte Updatedaten erhalten. Zeilen wurden entfernt.', timeout: 'Die Anfrage hat das Zeitlimit überschritten. Wiederholen oder aktualisieren.', session: 'Die Sitzung ist beendet. Erneut anmelden.', clock: 'Der Zeitanker ist nicht mehr verlässlich. Vor dem Fortfahren aktualisieren.', busy: 'Der Manager ist ausgelastet. Gleich erneut versuchen.', restart: 'Die ausgewählte Generation oder Seitensitzung ist abgelaufen oder geändert. Zum Neustart aktualisieren; vorherige Seiten wurden entfernt.', searchInvalid: 'Höchstens 128 druckbare ASCII-Zeichen verwenden.',
+        summary: 'Gespeicherte APT-Kandidaten. Aktualisieren liest Managerdaten, fragt APT nicht ab und installiert keine Updates.',
+        securitySummary: 'Cache-Kandidaten belegen weder Sicherheit noch einen vollständigen Patchstand.',
+        captureDetails: 'Erfassungsdetails', transferDetails: 'Übertragungsdetails', scopeDetails: 'Umfang & Grenzen',
         retention: 'Zeilen laufen 24 Stunden nach ihrer ursprünglichen Erfassung ab. Aktualisieren und Blättern lesen nur gespeicherte Managerdaten und starten weder eine native Abfrage noch eine Metadaten-Aktualisierung.',
     },
 };
@@ -51,9 +58,9 @@ function CompleteUpdates({ deviceId }: { deviceId: string }) {
     const [locale] = useLocale(), labels = copy[locale], id = useId(), resource = useCompleteUpdates(deviceId), { view, page } = resource;
     const selected = view?.complete, visible = view && completeUpdatesGenerationVisible(view, resource.elapsed), manifest = selected?.manifest;
     const number = (value: number) => new Intl.NumberFormat(locale).format(value), field = (label: string, value: string | number) => <div><dt>{label}</dt><dd>{value}</dd></div>;
-    return <section className="package-observations complete-packages" aria-labelledby={id} aria-busy={resource.loading}>
+    return <section className="package-observations complete-packages complete-updates" aria-labelledby={id} aria-busy={resource.loading}>
         <header className="package-heading"><h3 id={id}>{labels.title}</h3><button type="button" className="button small" disabled={resource.loading || resource.error === 'session'} onClick={resource.refresh}><RefreshCw size={14}/>{labels.refresh}</button></header>
-        <p className="package-note">{labels.intro}</p>
+        <p className="package-note">{labels.summary}</p>
         {resource.loading && <p role="status"><LoaderCircle size={16} className="spin"/>{labels.loading}</p>}
         {resource.error && <p className="package-error" role="alert"><TriangleAlert size={16}/>{labels[resource.error]}</p>}
         {['busy', 'timeout', 'loadError'].includes(resource.error ?? '') && <button type="button" className="button small" disabled={resource.loading} onClick={resource.retry}>{labels.retry}</button>}
@@ -61,18 +68,44 @@ function CompleteUpdates({ deviceId }: { deviceId: string }) {
             {manifest && <>
                 {!visible && <p className="package-error" role="status">{view.status === 'revoked' ? labels.revoked : labels.expired}</p>}
                 <dl className="package-counts">{field(labels.candidates, number(manifest.candidateCount))}{field(labels.held, number(manifest.heldCount))}{field(labels.unknown, number(manifest.unknownCount))}</dl>
-                <dl className="package-facts">{field(labels.installed, number(manifest.installedCount))}{field(labels.checked, number(manifest.checkedCount))}{field(labels.collected, manifest.collectedAt)}{field(labels.completed, selected!.completedAt)}{field(labels.retained, selected!.retainedUntil)}{manifest.metadata.oldestIndexModifiedAt && field(labels.sourceTime, manifest.metadata.oldestIndexModifiedAt)}{manifest.metadata.ageSeconds !== null && field(labels.sourceAge, new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }).format(manifest.metadata.ageSeconds / 3600))}</dl>
+                <dl className="package-facts">{field(labels.collected, manifest.collectedAt)}{field(labels.retained, selected!.retainedUntil)}</dl>
                 <p className={manifest.metadata.freshness === 'stale' ? 'package-error' : 'package-note'}>{manifest.metadata.freshness === 'stale' ? labels.stale : labels.freshness}</p>{manifest.unknownCount > 0 && <p className="package-note">{labels.partial}</p>}
+                <details className="update-details">
+                    <summary>{labels.captureDetails}</summary>
+                    <dl className="package-facts">
+                        {field(labels.installed, number(manifest.installedCount))}
+                        {field(labels.checked, number(manifest.checkedCount))}
+                        {field(labels.completed, selected!.completedAt)}
+                        {manifest.metadata.oldestIndexModifiedAt && field(labels.sourceTime, manifest.metadata.oldestIndexModifiedAt)}
+                        {manifest.metadata.ageSeconds !== null && field(labels.sourceAge, new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }).format(manifest.metadata.ageSeconds / 3600))}
+                    </dl>
+                </details>
             </>}
-            {view.transfer && <section aria-label={labels.transfer}><h4>{labels.transfer}</h4><p>{labels[view.transfer.state === 'expired' || completeUpdatesTransferExpired(view, resource.elapsed) ? 'transferExpired' : view.transfer.state]}</p><dl className="package-facts">{field(labels.accepted, `${number(view.transfer.acceptedRows)} / ${number(view.transfer.declaredRows)}`)}{field(labels.chunks, `${number(view.transfer.acceptedChunks)} / ${number(view.transfer.expectedChunks)}`)}</dl><p className="package-note">{labels.transferNote}</p></section>}
-            {view.failure && <section aria-label={labels.failure}><h4>{labels.failure}</h4><p>{labels[view.failure.reason]}</p>{field(labels.attempted, view.failure.attemptedAt)}</section>}
-            {visible && <section><form className="complete-package-search" onSubmit={event => { event.preventDefault(); resource.startSearch(); }}><label htmlFor={`${id}-search`}>{labels.search}</label><div><input id={`${id}-search`} type="search" value={resource.search} maxLength={128} onChange={event => resource.changeSearch(event.target.value)} autoComplete="off" spellCheck={false}/><button type="submit" className="button" disabled={resource.loading}><Search size={15}/>{labels.submit}</button></div><p className="package-note">{labels.hint}</p></form>
+            {view.transfer && <section aria-label={labels.transfer}>
+                <h4>{labels.transfer}</h4>
+                <p>{labels[view.transfer.state === 'expired' || completeUpdatesTransferExpired(view, resource.elapsed) ? 'transferExpired' : view.transfer.state]}</p>
+                <dl className="package-facts">{field(labels.accepted, `${number(view.transfer.acceptedRows)} / ${number(view.transfer.declaredRows)}`)}</dl>
+                <details className="update-details">
+                    <summary>{labels.transferDetails}</summary>
+                    <dl className="package-facts">{field(labels.chunks, `${number(view.transfer.acceptedChunks)} / ${number(view.transfer.expectedChunks)}`)}</dl>
+                    <p className="package-note">{labels.transferNote}</p>
+                </details>
+            </section>}
+            {view.failure && <section aria-label={labels.failure}><h4>{labels.failure}</h4><p>{labels[view.failure.reason]}</p><dl className="package-facts">{field(labels.attempted, view.failure.attemptedAt)}</dl></section>}
+            {visible && <section><form className="complete-package-search" onSubmit={event => { event.preventDefault(); resource.startSearch(); }}><label htmlFor={`${id}-search`}>{labels.search}</label><div><input id={`${id}-search`} type="search" value={resource.search} maxLength={128} onChange={event => resource.changeSearch(event.target.value)} autoComplete="off" spellCheck={false}/><button type="submit" className="button" disabled={resource.loading}><Search size={15}/>{labels.submit}</button></div></form>
                 {page && <><dl className="package-counts">{field(labels.scanned, `${number(resource.scanned)} / ${number(page.totalRows)}`)}{field(labels.matches, number(resource.matches))}{field(labels.shown, number(page.items.length))}</dl>
                     {page.items.length > 0 ? <div className="package-table-scroll" role="region" aria-label={labels.title} tabIndex={0}><table><caption className="sr-only">{labels.title}</caption><thead><tr>{[labels.package, labels.architecture, labels.installedVersion, labels.candidateVersion, labels.state].map(label => <th key={label} scope="col">{label}</th>)}</tr></thead><tbody>{page.items.map(row => <tr key={`${row.name}:${row.architecture}`}><th scope="row">{row.name}</th><td>{row.architecture}</td><td>{row.installedVersion}</td><td>{row.candidateVersion}</td><td>{row.state === 'held' ? labels.heldState : labels.candidate_only}</td></tr>)}</tbody></table></div> : <p role="status">{!page.exhausted ? labels.continuing : page.totalRows === 0 ? manifest!.unknownCount > 0 ? labels.zeroUnknown : labels.zero : resource.matches === 0 ? labels.noMatches : labels.noPageMatches}</p>}
                     <div className="complete-package-pagination"><p>{page.exhausted ? labels.done : labels.more}</p>{!page.exhausted && <button type="button" className="button" disabled={resource.loading} onClick={resource.next}>{resource.search.trim() ? labels.continue : labels.next}</button>}</div>
                 </>}
             </section>}
         </>}
-        <p className="package-note">{labels.noSecurity}</p><p className="package-note package-retention"><Info size={16}/>{labels.retention}</p>
+        <p className="package-note">{labels.securitySummary}</p>
+        <details className="update-details">
+            <summary>{labels.scopeDetails}</summary>
+            <p className="package-note">{labels.intro}</p>
+            <p className="package-note">{labels.hint}</p>
+            <p className="package-note">{labels.noSecurity}</p>
+            <p className="package-note">{labels.retention}</p>
+        </details>
     </section>;
 }

@@ -12,6 +12,7 @@ import (
 	"localrmm/internal/enrollmentservice"
 	"localrmm/internal/enrollmentstore"
 	"localrmm/internal/lantrust"
+	"localrmm/internal/linuxcvefeed"
 	"localrmm/internal/model"
 	"localrmm/internal/offlinecatalog"
 	"localrmm/internal/operatorauth"
@@ -33,6 +34,8 @@ type LANOperatorConfig struct {
 	InsecureHTTPTest    bool
 	Enrollment          *enrollmentservice.Service
 	EnrollmentBootstrap EnrollmentBootstrap
+	// CVECache contains only explicitly synchronized public advisory records.
+	CVECache *linuxcvefeed.Cache
 }
 type operatorHandler struct {
 	app                 *Server
@@ -101,6 +104,7 @@ func NewLANOperatorHandler(app *Server, c LANOperatorConfig) (http.Handler, erro
 	app.lanOperational = nil
 	app.lanPackages = nil
 	app.health = nil
+	app.linuxCVE = nil
 	app.aiCollectionProfile = "basic-readonly-v1"
 	app.catalogStore = nil
 	app.catalogImports = nil
@@ -117,6 +121,15 @@ func NewLANOperatorHandler(app *Server, c LANOperatorConfig) (http.Handler, erro
 		app.aiCollectionProfile = c.Enrollment.Binding().CollectionProfile
 		if app.aiCollectionProfile == enrollmentcrypto.CollectionProfileComplete {
 			app.health = &healthMonitor{store: app.store, source: c.Enrollment}
+			app.linuxCVE = newLinuxCVEState(c.Enrollment, c.Enrollment.Now)
+			app.linuxCVE.cache = c.CVECache
+			if c.CVECache != nil {
+				ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+				if err := c.CVECache.Load(ctx, &app.linuxCVE.feeds, c.Enrollment.Now()); err != nil {
+					app.linuxCVE.feeds.RecordFailure(c.Enrollment.Now(), "cache_load_failed")
+				}
+				cancel()
+			}
 		}
 		if enrollmentcrypto.ManagedCollectionProfile(app.aiCollectionProfile) {
 			app.catalogStore = offlinecatalog.New()
@@ -348,6 +361,10 @@ func (h *operatorHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if strings.HasPrefix(r.URL.Path, "/api/devices/") && strings.Contains(r.URL.Path, "/journal") {
 		h.journal(w, r)
+		return
+	}
+	if strings.HasPrefix(r.URL.Path, "/api/security/cves") || strings.HasPrefix(r.URL.Path, "/api/devices/") && strings.Contains(r.URL.Path, "/security/cves") {
+		h.linuxCVEAPI(w, r)
 		return
 	}
 	if strings.HasPrefix(r.URL.Path, "/api/devices/") && strings.Contains(r.URL.Path, "/inventory/overview") {

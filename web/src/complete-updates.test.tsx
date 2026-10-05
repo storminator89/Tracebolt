@@ -22,10 +22,63 @@ describe('complete known cached update rows', () => {
         expect(seen).toEqual(rows.map(row => row.name)); expect(new Set(seen).size).toBe(1213); expect(screen.getByText('The entire selected generation has been scanned.')).toBeVisible(); expect(mutateRaw).toHaveBeenCalledTimes(13);
         for (const [path, raw, , , limit] of vi.mocked(mutateRaw).mock.calls) { expect(path).toBe(`/devices/${updateDevice}/inventory/complete-updates/query`); expect(JSON.parse(raw)).toMatchObject({ generationId: view.complete!.binding.generationId, limit: 100 }); expect(limit).toBe(262144); }
     });
+    it('reveals provenance and scope through native disclosure without querying or clearing the search draft', async () => {
+        await open();
+        const search = screen.getByRole('searchbox', { name: 'Search all candidate rows' });
+        fireEvent.change(search, { target: { value: 'fixture-update-0012' } });
+        const reads = vi.mocked(request).mock.calls.length, queries = vi.mocked(mutateRaw).mock.calls.length;
+        const capture = screen.getByText('Capture details', { selector: 'summary' });
+        expect(capture.parentElement).not.toHaveAttribute('open');
+        expect(screen.getByText('Installed packages')).not.toBeVisible();
+        expect(screen.getByText(view.complete!.manifest.collectedAt)).toBeVisible();
+        expect(screen.getByText(view.complete!.retainedUntil)).toBeVisible();
+        capture.focus();
+        fireEvent.click(capture);
+        expect(screen.getByText('Installed packages')).toBeVisible();
+        fireEvent.click(capture);
+        expect(capture.parentElement).not.toHaveAttribute('open');
+        expect(capture).toHaveFocus();
+        const scope = screen.getByText('Scope & limits', { selector: 'summary' });
+        scope.focus();
+        fireEvent.click(scope);
+        expect(screen.getByText(/No CVE or installability assessment/)).toBeVisible();
+        expect(screen.getByText(/Search checks up to 2,048 rows/)).toBeVisible();
+        expect(screen.getByText(/Rows expire 24 hours/)).toBeVisible();
+        expect(search).toHaveValue('fixture-update-0012');
+        act(() => setLocale('de', false));
+        expect(screen.getByText('Umfang & Grenzen', { selector: 'summary' })).toBe(scope);
+        expect(scope.parentElement).toHaveAttribute('open');
+        expect(search).toHaveValue('fixture-update-0012');
+        expect(request).toHaveBeenCalledTimes(reads);
+        expect(mutateRaw).toHaveBeenCalledTimes(queries);
+    });
+    it('keeps unknown freshness visible with provenance collapsed', async () => {
+        view.complete!.manifest.metadata = { ...view.complete!.manifest.metadata, freshness: 'unknown', oldestIndexModifiedAt: '2026-10-05T03:00:00Z', ageSeconds: 3600 };
+        await open();
+        expect(screen.getByText(/Source freshness unknown/)).toBeVisible();
+        expect(screen.getByText('Capture details', { selector: 'summary' }).parentElement).not.toHaveAttribute('open');
+    });
+    it('keeps revocation visible and hides rows even with details collapsed', async () => {
+        view.status = 'revoked';
+        render(<CompleteUpdatesPanel deviceId={updateDevice}/>);
+        await screen.findAllByText('Device identity revoked');
+        for (const warning of screen.getAllByText('Device identity revoked')) expect(warning).toBeVisible();
+        expect(screen.queryByRole('table')).not.toBeInTheDocument();
+        expect(mutateRaw).not.toHaveBeenCalled();
+        expect(screen.getByText('Capture details', { selector: 'summary' }).parentElement).not.toHaveAttribute('open');
+    });
+    it('keeps an expired generation warning visible while source details stay collapsed', async () => {
+        view.complete!.state = 'expired'; view.serverNow = view.complete!.retainedUntil;
+        render(<CompleteUpdatesPanel deviceId={updateDevice}/>);
+        expect(await screen.findByText('This generation has expired. Its rows are no longer available.')).toBeVisible();
+        expect(screen.queryByRole('table')).not.toBeInTheDocument();
+        expect(screen.getByText('Capture details', { selector: 'summary' }).parentElement).not.toHaveAttribute('open');
+        expect(mutateRaw).not.toHaveBeenCalled();
+    });
     it('searches past an empty 2,048-row window without claiming no matches early', async () => {
         view = updateView(2300); rows = updateRows(2300); await open(); fireEvent.change(screen.getByLabelText('Search all candidate rows'), { target: { value: 'fixture-update-002299' } }); fireEvent.click(screen.getByRole('button', { name: 'Search' })); await screen.findByText('No matches in this scan window. Continue to check remaining rows.'); expect(screen.queryByText('No matches in the complete known-candidate generation.')).not.toBeInTheDocument(); fireEvent.click(screen.getByRole('button', { name: 'Continue search' })); await screen.findByText('fixture-update-002299', { selector: 'th' }); expect(screen.getByText('2,300 / 2,300')).toBeVisible();
     });
-    it('keeps metadata stale and unknown comparisons partial despite complete known rows', async () => { view.complete!.manifest.checkedCount--; view.complete!.manifest.unknownCount = 1; view.complete!.manifest.comparisonCoverage = 'partial'; view.complete!.manifest.comparisonReason = 'candidate_unknown'; await open(); expect(screen.getByText(/metadata is stale/)).toBeVisible(); expect(screen.getByText(/lower bound/)).toBeVisible(); expect(screen.getByText(/No CVE or installability assessment/)).toBeVisible(); });
+    it('keeps metadata stale and unknown comparisons partial despite complete known rows', async () => { view.complete!.manifest.checkedCount--; view.complete!.manifest.unknownCount = 1; view.complete!.manifest.comparisonCoverage = 'partial'; view.complete!.manifest.comparisonReason = 'candidate_unknown'; await open(); expect(screen.getByText(/metadata is stale/)).toBeVisible(); expect(screen.getByText(/lower bound/)).toBeVisible(); expect(screen.getByText('Cached candidates do not establish security or patch status.')).toBeVisible(); expect(screen.getByText(/No CVE or installability assessment/)).not.toBeVisible(); });
     it('does not show a zero candidate claim for absent complete data', async () => { view = { ...view, status: 'awaiting', complete: null }; render(<CompleteUpdatesPanel deviceId={updateDevice}/>); await screen.findByText('Awaiting a complete update generation'); expect(mutateRaw).not.toHaveBeenCalled(); expect(screen.queryByText(/No newer candidates in/)).not.toBeInTheDocument(); expect(screen.getByText(/preview consent does not enable/)).toBeVisible(); });
     it('retains prior complete rows and timestamps after a failed newer capture', async () => { view.failure = { sequence: '9223372036854775807', generationId: `sample_${'d'.repeat(32)}`, attemptedAt: '2026-10-05T04:00:06Z', receivedAt: '2026-10-05T04:00:07Z', reason: 'source_missing' }; await open(); expect(screen.getByText('Latest capture failed')).toBeVisible(); expect(screen.getByText('2026-10-05T04:00:00Z')).toBeVisible(); expect(screen.getByText('fixture-update-000000', { selector: 'th' })).toBeVisible(); });
     it.each(['close', 'pagehide', 'blur', 'auth', 'session', 'device'] as const)('aborts and hides a delayed page after %s', async transition => {
@@ -53,7 +106,7 @@ describe('complete known cached update rows', () => {
         mono.mockReturnValue(1000 + milliseconds); wall.mockReturnValue(100000 + milliseconds);
         act(() => vi.advanceTimersByTime(1000));
         expect(screen.getByText('Transfer expired')).toBeVisible(); expect(screen.queryByText('Transfer pending')).not.toBeInTheDocument();
-        expect(screen.getByText('128 / 1,213')).toBeVisible(); expect(screen.getByText('1 / 10')).toBeVisible();
+        expect(screen.getByText('128 / 1,213')).toBeVisible(); expect(screen.getByText('1 / 10')).not.toBeVisible(); fireEvent.click(screen.getByText('Transfer details', { selector: 'summary' })); expect(screen.getByText('1 / 10')).toBeVisible();
         if (view.complete) { expect(screen.getByRole('table')).toBeVisible(); expect(screen.getByText(view.complete.manifest.collectedAt)).toBeVisible(); }
         expect(request).toHaveBeenCalledTimes(reads); expect(mutateRaw).toHaveBeenCalledTimes(pages); expect(JSON.stringify(view)).toBe(original);
     });

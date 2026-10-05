@@ -17,6 +17,7 @@ import (
 	"localrmm/internal/lanconfig"
 	"localrmm/internal/lanstore"
 	"localrmm/internal/lantrust"
+	"localrmm/internal/linuxcvefeed"
 	"localrmm/internal/model"
 	"localrmm/internal/operatorauth"
 	"localrmm/internal/store"
@@ -126,8 +127,12 @@ func prepareWithEnrollment(m lanconfig.Material, enrollment *enrollmentconfig.Ma
 		return fail(e)
 	}
 	var once sync.Once
+	var cveCache *linuxcvefeed.Cache
 	closeAll := func() {
 		once.Do(func() {
+			if cveCache != nil {
+				_ = cveCache.Close()
+			}
 			appStore.Close()
 			trustStore.Close()
 			if enrolledStore != nil {
@@ -145,6 +150,14 @@ func prepareWithEnrollment(m lanconfig.Material, enrollment *enrollmentconfig.Ma
 	}}
 	if enrolledService != nil {
 		binding := enrolledService.Binding()
+		if binding.CollectionProfile == enrollmentcrypto.CollectionProfileComplete {
+			cveCache, e = linuxcvefeed.New(filepath.Join(c.StateDirectory, "security-data"))
+			if e != nil {
+				closeAll()
+				return nil, e
+			}
+			operatorConfig.CVECache = cveCache
+		}
 		operatorConfig.Enrollment = enrolledService
 		operatorConfig.EnrollmentBootstrap = api.EnrollmentBootstrap{SchemaVersion: "tracebolt.enrollment-bootstrap.v2", ManagerInstanceID: binding.InstanceID, Profile: binding.Profile, EnrollmentOrigin: c.OperatorOrigin, AgentOrigin: c.AgentOrigin, CollectionProfile: binding.CollectionProfile, ServerCAPEM: enrollment.ServerCAPEM(), IssuerRootPEM: enrollment.RootPEM(), IssuerPEM: enrollment.IssuerPEM()}
 		operatorConfig.Devices = func() ([]model.Device, error) { return enrolledService.Devices(context.Background(), time.Now().UTC()) }

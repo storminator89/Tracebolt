@@ -1,4 +1,4 @@
-import { act, cleanup, render, screen, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { AgentCertificatePanel, certificateExpiry } from './agent-certificate';
 import { setLocale } from './i18n';
@@ -47,11 +47,41 @@ describe('operator-owned certificate expiry', () => {
         expect(within(region).queryByRole('button')).not.toBeInTheDocument();
         expect(within(region).queryByRole('link')).not.toBeInTheDocument();
     });
+    it('keeps current certificate details collapsed and supports native disclosure', async () => {
+        render(<AgentCertificatePanel value={certificate(72 * 3600000)}/>);
+        const summary = screen.getByText('Certificate details', { selector: 'summary' });
+        expect(summary.parentElement).not.toHaveAttribute('open');
+        expect(screen.getByText('More than 48 hours remaining')).toBeVisible();
+        expect(screen.getByText('Manager checked')).toBeVisible();
+        expect(screen.getByText('Status at manager check')).toBeVisible();
+        expect(screen.getByText('Automatic renewal is unavailable.')).toBeVisible();
+        expect(screen.getByText(/Expiry status at the manager check above/)).not.toBeVisible();
+        expect(screen.getByText(/Existing identity and history/)).not.toBeVisible();
+        summary.focus();
+        expect(summary).toHaveFocus();
+        fireEvent.click(summary);
+        expect(summary.parentElement).toHaveAttribute('open');
+        expect(screen.getByText(/Existing identity and history/)).toBeVisible();
+        act(() => setLocale('de', false));
+        expect(screen.getByText('Zertifikatsdetails', { selector: 'summary' })).toBe(summary);
+        expect(summary.parentElement).toHaveAttribute('open');
+        fireEvent.click(summary);
+        expect(summary.parentElement).not.toHaveAttribute('open');
+        expect(summary).toHaveFocus();
+    });
+    it.each([0, 3600000])('keeps expiry warning and the authorized next step visible at %s', offset => {
+        render(<AgentCertificatePanel value={certificate(offset)}/>);
+        expect(screen.getByText(offset === 0 ? 'Expired' : 'Expires within 48 hours')).toBeVisible();
+        expect(screen.getByText(/Ask an administrator to plan a separately authorized certificate replacement/)).toBeVisible();
+        expect(screen.getByText('Certificate details', { selector: 'summary' }).parentElement).not.toHaveAttribute('open');
+        expect(screen.queryByRole('button')).not.toBeInTheDocument();
+    });
     it('refreshing the check time cannot extend the recorded expiry or infer renewal', () => {
         const value = certificate(1000), mounted = render(<AgentCertificatePanel value={value}/>);
         expect(screen.getByText('Expires within 48 hours')).toBeVisible();
         mounted.rerender(<AgentCertificatePanel value={{ ...value, checkedAt: value.expiresAt }}/>);
         expect(screen.getByText('Expired')).toBeVisible();
+        expect(screen.getByText('Status at manager check')).toBeVisible();
         expect(document.querySelector('time')).toHaveAttribute('datetime', value.expiresAt);
     });
     it('localizes the full expiry warning and guidance without changing its date', () => {

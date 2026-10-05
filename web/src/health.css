@@ -23,5 +23,6 @@
 .health-incidents dd { margin: 0; }
 .health-panel time { font-variant-numeric: tabular-nums; }
 .health-policy { border-top: 1px solid var(--line); padding-top: 12px; margin-top: 20px; }
-.health-policy summary { cursor: pointer; font-size: 12px; color: var(--secondary); }
+.health-policy summary { cursor: pointer; font-size: 12px; color: var(--secondary); padding: 4px 0; }
+.health-policy summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 3px; }
 @media (max-width: 640px) { .health-controls { grid-template-columns: 1fr; gap: 0; } .health-heading .button { width: 100%; justify-content: center; } }

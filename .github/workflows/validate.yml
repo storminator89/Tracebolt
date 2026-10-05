@@ -13,6 +13,25 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  debian-security-feed:
+    name: Official Debian security feed compatibility
+    if: github.event_name == 'push'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Validate the fixed public feed without endpoint inventory
+        env:
+          TRACEBOLT_CVE_FEED_SMOKE: '1'
+          GOTOOLCHAIN: local
+        run: go test ./internal/linuxcvefeed -run '^TestOfficialDebianFeedSmoke$' -count=1 -timeout=3m -v
+
   native-agent:
     name: Native agent runtime (${{ matrix.platform }}/${{ matrix.arch }})
     runs-on: ${{ matrix.runner }}
@@ -533,6 +552,9 @@ jobs:
           python3 -O tests/security/test_complete_overview_browser_gate.py
           node tests/e2e-review/complete-overview-browser.mjs
           python3 tests/security/check_complete_overview_browser_gate.py artifacts/review/complete-overview-browser-results.json
+      - name: Real React and v3 handler read-coordination regression
+        if: ${{ !cancelled() }}
+        run: ./web/node_modules/.bin/vitest run --config tests/e2e-review/v3-dom.config.mts
       - name: Keep browser review evidence briefly
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
