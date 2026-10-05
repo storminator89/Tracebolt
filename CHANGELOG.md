@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-10-05 — Connect the default-off controlled service action workflow
+
+- Add named-operator preview and explicit approval for one locally allowlisted service try-restart, bound to durable manager jobs, signed permits, one-time agent delivery and independent root-helper admission.
+- Keep ambiguous delivery and execution outcomes visible, preserve original expiry and replay floors, and expose bounded status without permits or credentials. UI availability remains an agent-reported hint; a completed systemctl operation does not prove a restart or service health.
+- Add synthetic TLS/HTTP workflow and failure-path tests. Production provisioning, command keys, local grants, helper service/socket installation and native service acceptance remain separate unfinished gates; this source checkpoint performs none of them.
+
 ## 2026-10-05 — Add an explicit broad journal profile and guided migration
 
 - Add a separately confirmed local profile for supported current and future system services, while each central Logs request still selects one exact service and retains its original scope, budget and replay guards.

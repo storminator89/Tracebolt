@@ -1,4 +1,4 @@
-// lan-agent is a Linux read-only sender with optional foreground scheduling.
+// lan-agent is read-only by default; controlled actions need separate local grants.
 package main
 
 import (
@@ -7,6 +7,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"localrmm/internal/actionhelper"
 	"localrmm/internal/agentloop"
 	"localrmm/internal/journalhelper"
 	"localrmm/internal/lanclient"
@@ -18,6 +19,12 @@ import (
 )
 
 func main() {
+	if selected, exclusive := actionHelperInvocation(os.Args[1:]); selected {
+		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+		defer stop()
+		os.Exit(runActionHelper(ctx, exclusive, actionhelper.Run, os.Stderr))
+	}
+
 	if selected, exclusive := journalCapabilitiesInvocation(os.Args[1:]); selected {
 		os.Exit(runJournalCapabilities(exclusive, os.Stdout, os.Stderr))
 	}

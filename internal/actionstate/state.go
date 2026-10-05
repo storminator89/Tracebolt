@@ -1,6 +1,6 @@
-// Package actionstate is an inert, durable action-consumption/status core.
-// It has no executor, launch permission, transport, policy loader or host setup.
-// Admission is metadata only and cannot be wired directly to a privileged start.
+// Package actionstate is a durable action-consumption and runner lifecycle core.
+// It has no executor, transport, policy loader or host setup. Status is metadata;
+// only a fresh Begin can issue an ephemeral, non-reconstructable Attempt.
 package actionstate
 
 import (
@@ -14,12 +14,16 @@ import (
 )
 
 const (
-	Version           = "tracebolt.action-consumption.v1"
-	MaxJobs           = 64
-	MaxStateBytes     = 512 << 10
-	Admitted          = "admitted"
-	Expired           = "expired"
-	NeedsIntervention = "needs_intervention"
+	Version            = "tracebolt.action-consumption.v1"
+	RunnerVersion      = "tracebolt.action-consumption.v2"
+	MaxJobs            = 64
+	MaxStateBytes      = 512 << 10
+	Admitted           = "admitted"
+	Expired            = "expired"
+	NeedsIntervention  = "needs_intervention"
+	Dispatching        = "dispatching"
+	NotStarted         = "not_started"
+	OperationCompleted = "operation_completed"
 )
 
 var (
@@ -37,16 +41,23 @@ var (
 	ErrClosed      = errors.New("action_state_closed")
 	ErrCanceled    = errors.New("action_state_canceled")
 	ErrUncertain   = errors.New("action_state_uncertain_preserve_for_inspection")
+	ErrAttempt     = errors.New("action_state_invalid_or_used_attempt")
+	ErrTransition  = errors.New("action_state_invalid_transition")
 )
 
 // Status is immutable approval/admission metadata, never an execution permit.
-// Admitted does not claim that anything was started. This slice cannot report
-// running, succeeded, failed, canceled or a host outcome it cannot establish.
+// Admitted and Dispatching do not claim that anything was started. A completed
+// operation is separate from the bounded service state observed afterwards.
 type Status struct {
 	Permit         actionpermit.Permit
 	EnvelopeDigest string
 	Phase          string
 	ConsumedAt     time.Time
+	DispatchAt     time.Time
+	TransitionAt   time.Time
+	Reason         NotStartedReason
+	Outcome        Outcome
+	ObservedState  ObservedState
 }
 
 // State copies share one exclusive OS lifetime lock and poisoned-state flag.
@@ -58,6 +69,7 @@ type state struct {
 	record   diskRecord
 	closed   bool
 	failed   error
+	active   *attempt
 }
 type storage interface {
 	verify() error
@@ -68,8 +80,8 @@ type storage interface {
 // Initialize is create-only and is not connected to a runtime. Its eventual
 // authorized local setup must establish a fresh action domain and independently
 // trusted pins. Never use it to recover a missing ledger or reset a used floor.
-// Storage is protected for the current UID; only a future root-owned adapter
-// may claim it is root-protected. Tests use unprivileged disposable directories.
+// Storage is protected for the current UID; only an independently checked root
+// runtime may claim root protection. Tests use unprivileged disposable directories.
 func Initialize(ctx context.Context, dir string, verifier actionpermit.Verifier) (*State, error) {
 	return open(ctx, dir, verifier, true)
 }
@@ -106,8 +118,14 @@ func open(ctx context.Context, dir string, verifier actionpermit.Verifier, initi
 	}
 	changed := initialize
 	for i := range r.Jobs {
-		if r.Jobs[i].Phase == Admitted {
+		if r.Jobs[i].Phase == Admitted || r.Jobs[i].Phase == Dispatching {
 			r.Jobs[i].Phase = NeedsIntervention
+			if r.Jobs[i].Lifecycle != nil {
+				// Recovery cannot establish when or whether an invocation ran.
+				// Preserve the last recorded clock rather than inventing a time.
+				r.Jobs[i].Lifecycle.Outcome = OutcomeUnknown
+				r.Jobs[i].Lifecycle.ObservedState = ObservedUnknown
+			}
 			changed = true
 		}
 	}
@@ -151,53 +169,67 @@ func (s *state) check(ctx context.Context) error {
 // New admissions stop behind any unresolved admission or uncertain outcome.
 // Authenticated expired permits consume their sequence, preventing clock revival.
 func (s State) Admit(ctx context.Context, raw []byte, now time.Time) (Status, error) {
+	got, _, err := s.begin(ctx, raw, now, false)
+	return got, err
+}
+
+// Begin durably admits a fresh permit and issues its sole live Attempt. Exact
+// duplicates (including Admit's legacy admissions), expired permits and every
+// failure return a nil Attempt. Neither Status nor reopening can mint one.
+// A caller must still enforce live authority and resample its trusted clock
+// after every durability wait, immediately before invoking its fixed backend.
+func (s State) Begin(ctx context.Context, raw []byte, now time.Time) (Status, *Attempt, error) {
+	return s.begin(ctx, raw, now, true)
+}
+
+func (s State) begin(ctx context.Context, raw []byte, now time.Time, runner bool) (Status, *Attempt, error) {
 	if s.inner == nil {
-		return Status{}, ErrClosed
+		return Status{}, nil, ErrClosed
 	}
 	x := s.inner
 	x.mu.Lock()
 	defer x.mu.Unlock()
 	if err := x.check(ctx); err != nil {
-		return Status{}, err
+		return Status{}, nil, err
 	}
 	if len(raw) == 0 || len(raw) > actionpermit.MaxPermitBytes {
-		return Status{}, actionpermit.ErrInvalid
+		return Status{}, nil, actionpermit.ErrInvalid
 	}
 	raw = bytes.Clone(raw)
 	p, err := actionpermit.Decode(raw)
 	if err != nil {
-		return Status{}, err
+		return Status{}, nil, err
 	}
 	for _, job := range x.record.Jobs {
 		old, _ := actionpermit.Decode(job.Envelope)
 		if old.JobID == p.JobID {
 			if !bytes.Equal(raw, job.Envelope) {
-				return Status{}, ErrConflict
+				return Status{}, nil, ErrConflict
 			}
-			return status(job), nil
+			return status(job), nil, nil
 		}
 	}
 	p, err = x.verifier.Verify(raw)
 	if err != nil {
-		return Status{}, err
+		return Status{}, nil, err
 	}
 	if p.Sequence <= x.record.Floor {
-		return Status{}, ErrReplay
+		return Status{}, nil, ErrReplay
 	}
 	if now.Location() != time.UTC || now.Year() < 1970 || now.Year() > 9999 || now.UnixMicro() < x.record.HighWater {
-		return Status{}, actionpermit.ErrClock
+		return Status{}, nil, actionpermit.ErrClock
 	}
 	timeErr := x.verifier.CheckTime(p, now)
 	if timeErr != nil && !errors.Is(timeErr, actionpermit.ErrExpired) {
-		return Status{}, timeErr
+		return Status{}, nil, timeErr
 	}
 	for _, job := range x.record.Jobs {
-		if job.Phase == Admitted || job.Phase == NeedsIntervention {
-			return Status{}, ErrBusy
+		if job.Phase == Admitted || job.Phase == Dispatching || job.Phase == NeedsIntervention {
+			return Status{}, nil, ErrBusy
 		}
 	}
 	if len(x.record.Jobs) >= MaxJobs {
-		return Status{}, ErrCapacity
+		return Status{}, nil, ErrCapacity
 	}
 	phase := Admitted
 	if timeErr != nil {
@@ -205,22 +237,31 @@ func (s State) Admit(ctx context.Context, raw []byte, now time.Time) (Status, er
 	}
 	job := diskJob{Envelope: append([]byte(nil), raw...), Phase: phase, ConsumedAt: now.UnixMicro()}
 	next := x.record
+	if runner && phase == Admitted {
+		next.Version = RunnerVersion
+		job.Lifecycle = &diskLifecycle{TransitionAt: now.UnixMicro()}
+	}
 	next.Jobs = append(append([]diskJob(nil), x.record.Jobs...), job)
 	next.Floor, next.HighWater = p.Sequence, now.UnixMicro()
 	encoded, err := encodeRecord(next)
 	if err != nil {
-		return Status{}, err
+		return Status{}, nil, err
 	}
 	if err = x.store.replace(ctx, encoded); err != nil {
 		// Conservatively poison all write failures, including pre-write failures.
 		x.failed = err
-		return Status{}, err
+		return Status{}, nil, err
 	}
 	x.record = next
 	if canceled(ctx) {
-		return Status{}, ErrCanceled
+		return Status{}, nil, ErrCanceled
 	}
-	return status(job), timeErr
+	if runner && phase == Admitted {
+		token := &attempt{owner: x, index: len(next.Jobs) - 1}
+		x.active = token
+		return status(job), &Attempt{inner: token}, nil
+	}
+	return status(job), nil, timeErr
 }
 
 // Status looks up only original metadata. It never issues a permit, changes a
@@ -244,6 +285,21 @@ func (s State) Status(ctx context.Context, jobID string) (Status, error) {
 	return Status{}, ErrNotFound
 }
 
+// BindingDigest returns the original manager/key/endpoint/incarnation binding.
+// Policy or transport-profile changes never create a new consumption domain.
+func (s State) BindingDigest(ctx context.Context) (string, error) {
+	if s.inner == nil {
+		return "", ErrClosed
+	}
+	x := s.inner
+	x.mu.Lock()
+	defer x.mu.Unlock()
+	if err := x.check(ctx); err != nil {
+		return "", err
+	}
+	return x.record.BindingDigest, nil
+}
+
 func (s State) Close() error {
 	if s.inner == nil {
 		return ErrClosed
@@ -256,4 +312,19 @@ func (s State) Close() error {
 	}
 	x.closed = true
 	return x.store.close()
+}
+
+// RootPolicyDigest describes the verifier opened with this live State handle.
+// It does not update policy, reset history or mint an Attempt.
+func (s State) RootPolicyDigest(ctx context.Context) (string, error) {
+	if s.inner == nil {
+		return "", ErrClosed
+	}
+	x := s.inner
+	x.mu.Lock()
+	defer x.mu.Unlock()
+	if err := x.check(ctx); err != nil {
+		return "", err
+	}
+	return x.verifier.RootPolicyDigest()
 }

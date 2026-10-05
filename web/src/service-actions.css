@@ -1,0 +1,9 @@
+.service-action-panel{border:1px solid var(--line);border-radius:8px;padding:12px;margin:12px 0;min-width:0}
+.service-action-panel>header{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.service-action-panel h4{margin:0;font-size:13px}.service-action-panel p{font-size:12px;line-height:1.6}
+.service-action-panel dl{display:grid;gap:7px;margin:12px 0;font-size:12px}.service-action-panel dl>div{display:grid;grid-template-columns:130px minmax(0,1fr);gap:10px}.service-action-panel dt{color:var(--muted)}.service-action-panel dd{margin:0;overflow-wrap:anywhere}
+.service-action-review{border:1px solid var(--line);border-radius:6px;padding:14px;margin-top:12px}.service-action-review:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+.service-action-warning{display:flex;gap:8px;align-items:flex-start}.service-action-warning svg{flex-shrink:0;margin-top:3px}
+.service-action-consent{display:flex;align-items:flex-start;gap:9px;font-size:12px;margin:16px 0}.service-action-consent input{margin-top:2px;flex-shrink:0}
+.service-action-buttons{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}.service-action-job{margin-top:12px;padding-top:12px;border-top:1px solid var(--line);font-size:12px}.service-action-panel details{font-size:12px}.service-action-panel summary{cursor:pointer}
+@media(max-width:600px){.service-action-panel dl>div{grid-template-columns:1fr;gap:2px}.service-action-buttons button{flex:1}.service-action-review{padding:10px}}

@@ -41,7 +41,8 @@ var (
 
 // Plan is deliberately a single typed action. UnitPolicyDigest commits to the
 // locally reviewed effective unit, dependencies and execution inputs. A digest
-// does not itself validate those inputs; that live host check is not implemented.
+// does not itself validate those inputs; the helper separately checks reviewed
+// pins and current unit state. It does not prove local review completeness.
 // There are no arbitrary commands, paths, options, environment or extension maps.
 type Plan struct {
 	Version          string `json:"version"`
@@ -51,7 +52,7 @@ type Plan struct {
 }
 
 // Permit is an immutable description, never proof of authorization on its own.
-// The future manager must derive OperatorID and ApprovalDigest from authenticated
+// The manager must derive OperatorID and ApprovalDigest from authenticated
 // server state. IncarnationDigest must identify the locally pinned enrollment
 // incarnation, not a reusable hostname or manager-controlled display label.
 type Permit struct {
@@ -79,8 +80,9 @@ type envelope struct {
 
 // LocalPins is trusted local-adapter input, NEVER a request body. Constructing
 // it is not evidence of root protection, consent, peer identity or TLS. The
-// future helper must independently load/revalidate those facts before any start.
-// No production adapter exists in this foundation. Enabled defaults to false.
+// helper must independently load/revalidate those facts before any start.
+// The actionhelper runtime supplies that adapter; these Go inputs alone remain
+// no proof of root authority or transport security. Enabled defaults to false.
 type LocalPins struct {
 	Enabled              bool
 	ManagerID            string
@@ -307,4 +309,14 @@ func (v Verifier) CheckTime(p Permit, now time.Time) error {
 		return ErrExpired
 	}
 	return nil
+}
+
+// RootPolicyDigest returns immutable verifier-snapshot metadata, never authority
+// to start an action. Runtimes use it to avoid advertising a newer live policy
+// while their durable state's verifier still holds an older grant snapshot.
+func (v Verifier) RootPolicyDigest() (string, error) {
+	if v.pins == nil {
+		return "", ErrInvalid
+	}
+	return v.pins.RootPolicyDigest, nil
 }

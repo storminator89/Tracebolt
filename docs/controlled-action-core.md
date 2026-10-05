@@ -1,13 +1,18 @@
 # Controlled-action contract and consumption foundation
 
-Status: inert source foundation, not an update or troubleshooting feature.
-Base: `4def163cf9d879f3b91360de41754d8aa299b639`.
+Status: inert permit/consumption foundation, now used by the default-off
+[controlled-action helper](controlled-action-helper.md) and the narrow
+[manager/agent/UI service workflow](service-action-workflow.md). The contract
+below remains valid for legacy v1 admissions; the helper document owns the v2
+fresh-only durable attempt/result lifecycle and concrete runtime checks.
+Original foundation base: `4def163cf9d879f3b91360de41754d8aa299b639`.
 
-This adds only `internal/actionpermit` and `internal/actionstate`. Nothing in
-the manager, API, UI, agent, helpers, CLI, installer or deployment imports them.
-There is no execution callback, launch token, subprocess, network route, socket,
-credential provisioning or host setup. The existing read-only release is
-unchanged. No service restart or package installation is implemented or claimed.
+The original `internal/actionpermit` and legacy `Admit` API remain inert and have
+no execution callback. The integrated helper adds a fresh-only Attempt, fixed
+systemd adapter and existing-only inherited-socket runtime. The workflow adds
+separate named-operator approval, command signing and first-claim-only delivery.
+It is default-off; host provisioning and native acceptance remain separate gates.
+No real service restart or package installation is claimed.
 
 ## Implemented contract
 
@@ -41,13 +46,13 @@ case-folded and null fields, alternate escaping/number spelling/base64, whitespa
 trailing bytes and unsupported versions are rejected. Input is at most 4096 bytes.
 
 `SigningMessage` and `Encode` do not sign or generate keys. The test files alone
-construct deterministic inert fixture keys. The future manager must obtain an
-independently provisioned command signer, distinct from the enrollment issuer,
-and derive the operator/approval from authenticated server-side state. A valid
+construct deterministic inert fixture keys. The integrated manager requires an
+independently provisioned command signer, distinct from enrollment/TLS keys,
+and derives the operator/approval from authenticated server-side state. A valid
 signature means that this pinned signer signed the description; it does not
 independently prove human approval or protect against a compromised signer.
 
-## Local authority is still an integration gate
+## Local authority stays independent
 
 `NewVerifier(LocalPins)` defensively copies a separately supplied public key and
 allowlist. It never takes a key or local policy from permit bytes. Pins bind the
@@ -59,11 +64,11 @@ is enforced without early-start skew. An expired deadline never stops a running
 process; this core cannot start any process in the first place.
 
 The constructor and these Go types prove no root ownership, administrator opt-in,
-Unix peer identity, operator capabilities or transport protection. There is no
-production adapter. The eventual helper must independently load protected current
-identity, command-key pin and policy, authenticate its local peer, and recheck
+Unix peer identity, operator capabilities or transport protection. The helper
+production adapter independently loads protected current
+identity, command-key pin and policy, authenticates its local peer, and rechecks
 current policy, unit state/configuration and original deadline immediately before
-start and after waiting for an execution slot. This core does not queue work or
+start. This core does not queue work or
 observe policy-file changes. Its verifier is a snapshot; reopening with updated
 pins preserves consumption. Never wire `Verify` or an `admitted` status directly
 to an executor.
@@ -73,8 +78,8 @@ does not check enabled state, current policy, expiry or replay. `CheckTime` also
 does not establish authority. Neither method returns execution permission.
 
 Production browser/manager and agent/manager action paths still require verified
-TLS. A separately enabled, isolated disposable HTTP test profile is a future
-integration task, not an insecure fallback in this core. Its one explicit local
+TLS. The workflow also supports a separately enabled, isolated disposable HTTP
+test profile, with no insecure fallback in this core. Its one explicit local
 machine opt-in must bound test identity, fixed action scope and policy separately
 from production, with a conspicuous warning: stolen HTTP operator sessions can
 cause the manager to authorize actions inside that scope. Signatures do not fix
@@ -91,10 +96,10 @@ changes. It never repairs unsafe modes, follows symlinks, adopts hardlinks or
 accepts unknown directory entries. Storage code is deliberately separate from
 the established read-only journal implementation; that package is unchanged.
 
-`Initialize` is create-only, for a future explicitly authorized fresh local action
-domain. `Open` is existing-only. Neither is connected to a command or installer.
-Storage is protected for the current effective UID. Only a future independently
-verified root-owned runtime may claim root-protected storage. Fixtures use
+`Initialize` is create-only, for separately authorized fresh local action setup.
+It is not connected to a provisioning command or installer. `Open` is existing-only
+and is used by the root helper runtime. Storage is protected for the current
+effective UID; the helper separately verifies its full root identity. Fixtures use
 ordinary-user temporary directories. A missing ledger is a hard stop, not an
 invitation to reinitialize. Key rotation/incarnation migration is not implemented.
 
@@ -124,10 +129,10 @@ already admitted job into a retryable job. Status remains readable after policy
 disable or a policy revision, provided the manager/key/incarnation binding still
 matches. Historical records are rechecked against the pinned signing key.
 
-An admitted or needs-intervention record blocks every subsequent new job. There
-is intentionally no completion, cancellation, retry or reconciliation API yet.
-A future runner/status extension needs its own reviewed state machine; it cannot
-infer success from consumption or clear uncertainty based on elapsed time.
+An admitted, dispatching or needs-intervention record blocks every subsequent
+new job. The reviewed runner extension adds fresh-only dispatch and bounded result
+transitions; see the helper document. No old admission can acquire an Attempt.
+There is still no external cancellation, retry or reconciliation API.
 
 The persisted microsecond clock high-water prevents a backward clock from
 admitting later work before its last consumption time. Authenticated expired
@@ -155,7 +160,9 @@ Implemented and fixture-tested: strict signed contract, pinned verifier snapshot
 default-off allowlist checks, time bounds, dedicated durable floor, duplicate and
 conflict status, crash uncertainty, private-state protection and failure poisoning.
 
-Still pending before a user can approve a real action:
+The linked helper document supersedes items 3, 5 and 6 at the source/fixture
+level only; native acceptance and end-to-end integration remain pending. Original
+integration checklist before a user can approve a real action:
 
 1. Named authenticated operators/capabilities and protected provisioning
 2. Immutable manager approval/jobs, short authorization gates, audit/retention
@@ -190,3 +197,10 @@ fault injection for disk-full/short-write and file-sync/rename/directory-sync/
 cancellation boundaries.
 Tests use only fixture keys, inert temporary files and injected storage faults.
 Builds/cross-builds and fixtures cannot prove real-machine action acceptance.
+
+## Service workflow integration
+
+The default-off manager/agent/UI candidate is documented in
+[service-action-workflow.md](service-action-workflow.md). It preserves the permit
+contract and independent helper ledger. Existing-only local setup, separately
+provisioned command trust and native disposable-host acceptance remain required.

@@ -18,6 +18,8 @@ import (
 // one shared 20s/64-operation process-and-volume burst, followed by the existing
 // journal stage. These are per-stage limits, not a hard overall cycle deadline.
 // Synchronous OS I/O and observers still require a supervisor for a hard limit.
+// A separately preprovisioned action-client grant enables an independent joined
+// controlled-action poll loop; default telemetry remains read-only.
 func RunForeground(ctx context.Context, m Material, interval time.Duration, observe func(agentloop.Event) error) (agentloop.Summary, error) {
 	return runForeground(ctx, m, interval, observe, nil, nil)
 }
@@ -71,6 +73,16 @@ func runForeground(ctx context.Context, m Material, interval time.Duration, obse
 	if m.config.complete() {
 		journal = openJournalSender(m)
 		defer journal.Close()
+	}
+	// Controlled actions use a distinct, default-off root-local grant and loop.
+	// Keep them outside the read-only telemetry scheduler callback. The sender
+	// ownership lock is held first and until both loops have finished.
+	if m.config.complete() {
+		actions := openActionSender(m)
+		actionContext, stopActions := context.WithCancel(ctx)
+		actionsDone := make(chan struct{})
+		go func() { defer close(actionsDone); runActionLoop(actionContext, actions) }()
+		defer func() { stopActions(); <-actionsDone; actions.Close() }()
 	}
 	return agentloop.Run(ctx, agentloop.Config{Interval: interval}, agentloop.Dependencies{Clock: clock, Random: random, Observe: observe, Attempt: func(parent context.Context) agentloop.Result {
 		journal.prune()

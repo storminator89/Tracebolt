@@ -24,6 +24,7 @@ import (
 	"sync"
 	"time"
 
+	"localrmm/internal/actionmanager"
 	"localrmm/internal/enrollmentcrypto"
 	"localrmm/internal/enrollmentstate"
 	"localrmm/internal/enrollmentstore"
@@ -45,6 +46,7 @@ var ErrConfiguration = errors.New("enrollment ingress configuration is invalid")
 // Ingress is fixed to one store, profile, exact agent origin and dedicated issuer.
 // Construct one per listener; sharing its address preserves the admission bound.
 type Ingress struct {
+	actions                    *actionmanager.Manager
 	store                      *enrollmentstore.Store
 	journal                    *journalcache.Cache
 	issuer                     *x509.Certificate
@@ -128,6 +130,10 @@ func (h *Ingress) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	default:
 		w.Header().Set("Retry-After", "15")
 		failure(w, http.StatusTooManyRequests, "ingress_busy")
+		return
+	}
+	if r != nil && r.URL != nil && strings.HasPrefix(r.URL.Path, "/v3/service-actions/") {
+		h.serviceActions(w, r)
 		return
 	}
 	if r != nil && r.URL != nil && strings.HasPrefix(r.URL.Path, journalwire.PathPrefix) {

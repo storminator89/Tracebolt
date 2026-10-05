@@ -8,6 +8,7 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"errors"
+	"localrmm/internal/actionmanager"
 	"localrmm/internal/enrollmentcrypto"
 	"localrmm/internal/enrollmentservice"
 	"localrmm/internal/enrollmentstore"
@@ -26,10 +27,11 @@ import (
 )
 
 type LANOperatorConfig struct {
-	Origin   string
-	Auth     *operatorauth.Manager
-	Registry *lantrust.Registry
-	Devices  func() ([]model.Device, error)
+	ServiceActions *actionmanager.Manager
+	Origin         string
+	Auth           *operatorauth.Manager
+	Registry       *lantrust.Registry
+	Devices        func() ([]model.Device, error)
 	// InsecureHTTPTest is a separate, explicitly opted-in plaintext profile.
 	InsecureHTTPTest    bool
 	Enrollment          *enrollmentservice.Service
@@ -38,6 +40,7 @@ type LANOperatorConfig struct {
 	CVECache *linuxcvefeed.Cache
 }
 type operatorHandler struct {
+	actions             serviceActionManager
 	app                 *Server
 	origin, authority   string
 	auth                *operatorauth.Manager
@@ -97,6 +100,13 @@ func NewLANOperatorHandler(app *Server, c LANOperatorConfig) (http.Handler, erro
 	if c.Enrollment != nil && !validEnrollmentBootstrap(c.Enrollment, c.EnrollmentBootstrap, c.Origin, c.InsecureHTTPTest) {
 		return nil, errors.New("enrollment public bootstrap does not match configured authority")
 	}
+	profile := "tls"
+	if c.InsecureHTTPTest {
+		profile = "http-test"
+	}
+	if c.ServiceActions != nil && (c.Enrollment == nil || !c.Auth.Named() || !c.ServiceActions.MatchesBinding(c.Enrollment.Binding()) || c.ServiceActions.TransportProfile() != actionmanager.Profile(profile)) {
+		return nil, errors.New("service action authority does not match the named operator enrollment boundary")
+	}
 	app.mu.Lock()
 	app.lanOnly = true
 	app.guidedEnrollment = c.Enrollment != nil
@@ -144,7 +154,11 @@ func NewLANOperatorHandler(app *Server, c LANOperatorConfig) (http.Handler, erro
 		}
 	}
 	app.mu.Unlock()
-	return &operatorHandler{app: app, origin: c.Origin, authority: u.Host, auth: c.Auth, registry: c.Registry, insecureHTTPTest: c.InsecureHTTPTest, cookieName: cookieName, enrollment: c.Enrollment, enrollmentBootstrap: c.EnrollmentBootstrap}, nil
+	var actions serviceActionManager
+	if c.ServiceActions != nil {
+		actions = c.ServiceActions
+	}
+	return &operatorHandler{actions: actions, app: app, origin: c.Origin, authority: u.Host, auth: c.Auth, registry: c.Registry, insecureHTTPTest: c.InsecureHTTPTest, cookieName: cookieName, enrollment: c.Enrollment, enrollmentBootstrap: c.EnrollmentBootstrap}, nil
 }
 func (s *Server) developmentAuthView() authView {
 	token := s.csrf
@@ -359,6 +373,10 @@ func (h *operatorHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.app.cancelSessionAnalysis(session.ID)
 		clearNamedOperatorCookie(w, h.cookieName, !h.insecureHTTPTest)
 		write(w, 200, h.view(nil))
+		return
+	}
+	if _, _, ok := serviceActionRoute(r); ok {
+		h.serviceActions(w, r)
 		return
 	}
 	if session.Named() && !namedReadRoute(r) {

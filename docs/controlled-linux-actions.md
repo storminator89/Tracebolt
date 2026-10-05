@@ -1,22 +1,28 @@
 # Controlled Linux actions
 
-Status: architecture draft with independent review amendments. The narrow source
-slices below are implemented; the controlled execution path is not implemented or
-deployed. Baseline:
-`4def163cf9d879f3b91360de41754d8aa299b639` (2026-10-05).
+Status: reviewed architecture with a default-off service-only source integration
+candidate. The [root-helper runtime](controlled-action-helper.md) and
+[durable manager/agent/UI workflow](service-action-workflow.md) are now connected.
+No real deployment, host provisioning or native service execution is claimed.
+Original design baseline: `4def163cf9d879f3b91360de41754d8aa299b639` (2026-10-05).
 
-## Current source foundation and remaining integration
+## Current source foundation and remaining acceptance
 
-The later source checkpoint `841d5fee56f94b764088e2c6abce725f327d8ed4` adds
-only the inert `internal/actionpermit` / `internal/actionstate` foundation
-[documented here](controlled-action-core.md). It is not connected to the manager,
-API, UI, agent, helper or installer and cannot execute a service or package action.
-The optional [named-operator authentication slice](named-operator-auth.md) now
-provides protected static actor/capability configuration and a current-session
-admission seam. It does not connect this core to an action API or executor. Signed
-transport-profile separation, protected live policy loading, dispatch, privileged
-execution and native acceptance remain future integration work. The transport-profile binding specified below is a requirement
-for that future versioned integration, not a field shipped by the narrow core.
+The inert `internal/actionpermit` / `internal/actionstate` foundation is
+[documented here](controlled-action-core.md). Optional
+[named-operator authentication](named-operator-auth.md) supplies protected static
+actor/capability configuration and a current-session admission lease. The narrow
+workflow connects that lease to an immutable service preview, explicit approval,
+separately provisioned command signer, durable history, first-claim-only agent
+delivery and independent helper dispatch/result state. The UI reports unavailable
+until the required separately configured local helper/client grants and existing
+state are present. HTTP test authority is bound transitively by the signed root
+policy digest; there is no separate replay domain or production TLS fallback.
+
+Host key/state/policy/socket/unit provisioning, actual Unix writer-credential
+acceptance and a disposable real systemd service test remain separate gates.
+Package actions, reconciliation and fleet scheduling below remain design work;
+this service-only implementation does not claim those capabilities.
 
 ## Decision and first deliverable
 
@@ -39,7 +45,8 @@ automatic repair of a broken package database. No certification is claimed.
 - `internal/api/operator.go` and `internal/operatorauth/auth.go`: sessions,
   origin/CSRF checks, expiry and short mutation admission. Current auth has one
   password verifier and session IDs in legacy mode. Optional static v2 configuration
-  adds named actors and explicit maintenance grants; action routes remain unwired.
+  adds named actors and explicit maintenance grants; the service workflow uses only
+  its exact typed preview/approval routes.
 - `internal/journalrequest`, `internal/enrollmentstore/journal_storage.go`,
   `internal/journalstate`, `internal/lanclient/journal.go`: bounded typed work,
   endpoint binding, CAS/sequence floors and consumption before execution.
@@ -94,16 +101,17 @@ service/package scope. Prefer one harmless locally reviewed test service first.
 Show the limitation plainly: anyone who steals the unencrypted HTTP operator
 session may authorize actions within that enabled test scope. Manager-signed
 jobs prevent forgery without the signing authority but do not repair browser
-transport security or make HTTP production-safe. Bind transport profile into
-the signed permit and root policy; production must reject HTTP-test permits,
-state and grants. Permission to test over HTTP does not authorize installation
+transport security or make HTTP production-safe. Bind transport profile through the complete signed RootPolicyDigest and
+root policy; production must reject test-policy permits and grants while retaining the
+shared consumption history. Permission to test over HTTP does not authorize installation
 of a helper, signing keys or privileges on any host.
 
 Recommended execution boundary: a manager-signed, domain-separated permit
 checked by the helper against a root-pinned public command key. It contains the
-schema/domain, manager key ID, immutable endpoint incarnation, transport profile,
+schema/domain, manager key ID, immutable endpoint incarnation,
 job/execution ID, dedicated action sequence, canonical plan bytes/hash, authenticated approval
-actor, root-policy digest, issued-at/not-before and start deadline. The helper
+actor, root-policy digest, issued-at/not-before and start deadline. The transport
+profile is committed transitively through that signed root-policy digest. The helper
 enforces a local maximum validity and rejects clock reversal or future validity
 beyond its allowed skew. Production requires TLS. Do not reuse the
 enrollment issuer CA as a command-signing key.
@@ -319,3 +327,13 @@ installation and real-machine behavior. No earlier gate proves the later one.
 - [Debian dpkg lock guidance](https://wiki.debian.org/Teams/Dpkg/FAQ)
 - [dpkg configuration-file behavior](https://manpages.debian.org/trixie/dpkg/dpkg.1.en.html)
 - [Ubuntu update and service-restart behavior](https://ubuntu.com/server/docs/how-to/software/automatic-updates/)
+
+## UI-approved service-action candidate
+
+The narrow service-only vertical slice now has source integration for durable
+preview/approval, first-claim-only delivery, independent root-helper execution
+and agent-reported result status. See [service-action-workflow.md](service-action-workflow.md).
+It remains default-off and requires separately authorized existing local trust,
+policy, state and socket/service provisioning plus native disposable-host
+acceptance. No APT action, shell, automatic retry or operational deployment is
+implied.

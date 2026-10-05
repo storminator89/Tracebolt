@@ -20,6 +20,8 @@ A separate [complete visible process and mount overview](docs/complete-overview-
 
 The [on-demand service log source checkpoint](docs/journal-content-mvp.md) connects explicit service/time/severity requests, bounded original-expiry snapshots, paging and literal search. It requires compatible new endpoint binaries and a separately acknowledged [local helper/content grant](docs/linux-journal-helper.md). Hosted synthetic acceptance and actual helper/host checks remain separate. The active pilot.2 download does not contain this later feature; its known cleanup warning after a committed upgrade is corrected only in the reusable source for a future immutable release.
 
+The optional [UI-approved service try-restart workflow](docs/service-action-workflow.md) now has a default-off source candidate. It connects named-operator approval, durable consume-once jobs and a separately granted root helper for one allowlisted service. Existing command trust/local policy/state and separate native acceptance are required; no upgrade automatically enables privileged actions or creates keys.
+
 The [earlier bounded v2 pilot](docs/http-inventory-first-start.md) and [basic HTTP guide](docs/http-test-first-start.md) retain their narrower policies. Existing identities are not relabeled or migrated to v3.
 
 Start with the **[installation runbook for humans and automation agents](docs/installation.md)**. It covers Docker/native Linux setup, manual public-certificate approval, the Linux one-shot/foreground sender, optional guided enrollment, verification, recovery and explicit permission boundaries. [AGENTS.md](AGENTS.md) is the repository entry guide.

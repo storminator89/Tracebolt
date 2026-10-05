@@ -2,6 +2,16 @@
 
 `cmd/lan-agent` is a foreground **Linux-only sender milestone**. It collects the existing bounded read-only observation and attempts one delivery. Optional `--foreground --interval 30s` schedules sequential bounded reports. The sender does not install a service, enroll a device, issue credentials, discover the network, download models or run arbitrary commands; guided enrollment is the separate `enroll-agent` command. Original `cmd/agent` remains stdout-only; `cmd/dev-agent` remains a localhost developer transport.
 
+Controlled service actions are a separate default-off source feature: a complete-profile
+foreground sender may run one independent action poll loop only when an existing
+root-owned client grant, compatible root helper and manager action configuration
+have been separately provisioned. The ordinary observation scheduler remains
+read-only. The exclusive `--action-helper` mode is root-only and cannot be mixed
+with sender flags; it installs or provisions nothing. See
+[controlled-action helper](controlled-action-helper.md) and
+[service-action workflow](service-action-workflow.md). Native host acceptance and
+administrator authorization remain separate from these source checks.
+
 Build: `go build -buildvcs=false -trimpath -o bin/lan-agent ./cmd/lan-agent`.
 
 Run contract: `bin/lan-agent --config /absolute/path/agent.json`. The examples in `docs/examples/lan-agent.*.json` contain deliberately invalid placeholder IDs; replace them with the opaque ID returned by the administrator's manual certificate approval. No example contains a private key or usable password. These are configuration templates, not performed deployment steps.

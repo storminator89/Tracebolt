@@ -411,6 +411,9 @@ func (s *Store) load(ctx context.Context, conn *sql.Conn) (*transaction, error) 
 	if err = s.loadCompleteUpdates(ctx, t); err != nil {
 		return nil, ErrStorage
 	}
+	if err = s.loadServiceActionRecords(ctx, t); err != nil {
+		return nil, err
+	}
 	if err = s.loadSystemMetadata(ctx, t); err != nil {
 		return nil, ErrStorage
 	}
@@ -516,6 +519,9 @@ func (s *Store) transact(ctx context.Context, action func(*transaction) error) e
 		}
 		return err
 	}
+	if err = s.loadServiceActionRecords(ctx, t); err != nil {
+		return storageError(ctx)
+	}
 	if validateSystemRecords(t) != nil {
 		return ErrStorage
 	}
@@ -565,6 +571,15 @@ func validateSchema(ctx context.Context, conn *sql.Conn, profile string) error {
 		}
 		if updatesEnabled {
 			for _, obj := range completeUpdatesSchemaObjects() {
+				expected[obj.Name] = obj
+			}
+		}
+		actionsEnabled, e := serviceActionSchemaPresent(ctx, conn)
+		if e != nil {
+			return e
+		}
+		if actionsEnabled {
+			for _, obj := range serviceActionSchemaObjects() {
 				expected[obj.Name] = obj
 			}
 		}

@@ -148,3 +148,17 @@ and [execution](https://raw.githubusercontent.com/systemd/systemd/main/man/syste
 contracts. Account arguments follow the upstream
 [useradd](https://raw.githubusercontent.com/shadow-maint/shadow/master/man/useradd.8.xml)
 contract; runtime acceptance still depends on the selected supported host.
+
+
+## Separate controlled-action scope
+
+The installed agent's reporting behavior remains read-only by default. A later
+source workflow can add a separate, joined service-action polling loop only for
+an explicitly provisioned complete-profile action-client grant and compatible
+root helper. This service installer does not create the grant, command signer,
+root action ledger, action-helper socket/unit or any new account/group privilege.
+It never changes the main agent to root. Existing service/journal setup is not an
+action grant; updating the binary alone cannot enable actions. Read
+[controlled-action helper](controlled-action-helper.md) before considering this
+scope, and keep native systemd acceptance and actual host setup separately
+reviewed and authorized.

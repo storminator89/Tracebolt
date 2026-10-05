@@ -107,6 +107,15 @@ The [full-width device-page checkpoint](https://github.com/storminator89/Tracebo
    Unknown coverage must not become zero missing updates or zero vulnerabilities.
    Current offline review candidates remain candidate evidence.
 
+7. **Explicit service try-restart — default-off source candidate.** The narrow
+   [service-action workflow](service-action-workflow.md) connects named-operator
+   preview/approval, durable first-claim-only delivery and a separately granted
+   root helper. UI completion remains agent-reported and distinct from service
+   health; ambiguous outcomes block another action. Existing protected command
+   trust/local policy/state and independently authorized native disposable-host
+   acceptance are still required. No manager upgrade creates keys or enables
+   privileged execution. Package execution remains outside this slice.
+
 ## Requested usability and diagnostic follow-ups
 
 These remain visible without widening the current complete-inventory slice:

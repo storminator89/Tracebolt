@@ -4,9 +4,12 @@ package main
 
 import (
 	"context"
+	"crypto/ed25519"
 	"crypto/tls"
+	"crypto/x509"
 	"errors"
 	"flag"
+	"localrmm/internal/actionmanager"
 	"localrmm/internal/alarmdelivery"
 	"localrmm/internal/analysis"
 	"localrmm/internal/api"
@@ -76,10 +79,14 @@ func prepareWithAlarms(m lanconfig.Material, enrollment *enrollmentconfig.Materi
 		trustStore.Close()
 		return nil, e
 	}
+	var actions *actionmanager.Manager
 	var enrolledStore *enrollmentstore.Store
 	var enrolledService *enrollmentservice.Service
 	var enrolledIngress *enrollmenttransport.Ingress
 	fail := func(err error) (*prepared, error) {
+		if actions != nil {
+			actions.Close()
+		}
 		if enrolledStore != nil {
 			enrolledStore.Close()
 		}
@@ -111,6 +118,28 @@ func prepareWithAlarms(m lanconfig.Material, enrollment *enrollmentconfig.Materi
 		}
 		enrolledIngress, e = enrollmenttransport.New(enrolledStore, enrollment.Issuer().IssuerDER(), c.AgentOrigin, enrolledService.JournalCache())
 		if e != nil {
+			return fail(e)
+		}
+	}
+	if c.ServiceActionsConfigFile != "" {
+		if enrolledStore == nil || !auth.Named() {
+			return fail(actionmanager.ErrConfiguration)
+		}
+		forbidden := []ed25519.PublicKey{}
+		for _, der := range append([][]byte{enrollment.Issuer().IssuerDER(), enrollment.Issuer().RootDER()}, m.Server.Certificate...) {
+			cert, err := x509.ParseCertificate(der)
+			if err != nil {
+				return fail(actionmanager.ErrConfiguration)
+			}
+			if pub, ok := cert.PublicKey.(ed25519.PublicKey); ok {
+				forbidden = append(forbidden, pub)
+			}
+		}
+		actions, e = actionmanager.Load(context.Background(), enrolledStore, c.ServiceActionsConfigFile, forbidden...)
+		if e != nil {
+			return fail(e)
+		}
+		if e = enrolledIngress.ConfigureServiceActions(actions); e != nil {
 			return fail(e)
 		}
 	}
@@ -158,6 +187,9 @@ func prepareWithAlarms(m lanconfig.Material, enrollment *enrollmentconfig.Materi
 	var cveCache *linuxcvefeed.Cache
 	closeAll := func() {
 		once.Do(func() {
+			if actions != nil {
+				actions.Close()
+			}
 			if cveCache != nil {
 				_ = cveCache.Close()
 			}
@@ -173,7 +205,7 @@ func prepareWithAlarms(m lanconfig.Material, enrollment *enrollmentconfig.Materi
 		closeAll()
 		return nil, e
 	}
-	operatorConfig := api.LANOperatorConfig{Origin: c.OperatorOrigin, Auth: auth, Registry: registry, InsecureHTTPTest: c.Profile == lanconfig.HTTPTest, Devices: func() ([]model.Device, error) {
+	operatorConfig := api.LANOperatorConfig{ServiceActions: actions, Origin: c.OperatorOrigin, Auth: auth, Registry: registry, InsecureHTTPTest: c.Profile == lanconfig.HTTPTest, Devices: func() ([]model.Device, error) {
 		return trustStore.Devices(context.Background(), registry.List(), time.Now().UTC())
 	}}
 	if enrolledService != nil {
