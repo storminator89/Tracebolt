@@ -22,6 +22,9 @@ func TestOfficialDebianFeedSmoke(t *testing.T) {
 	now := time.Now().UTC()
 	candidate, err := c.FetchDebian(context.Background(), now)
 	if err != nil {
+		if code, items, depth, ok := linuxcve.InvalidDiagnostic(err); ok {
+			t.Logf("PARSER_INVALID code=%s items=%d depth=%d", code, items, depth)
+		}
 		var limit *responseLimitError
 		if errors.As(err, &limit) {
 			t.Logf("RESPONSE_SIZE_LIMIT layer=%s reason=%s declaredLength=%d observedBytes=%d maxBytes=%d", limit.layer, limit.reason, limit.declaredLength, limit.observedBytes, limit.maxBytes)

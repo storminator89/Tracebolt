@@ -1,5 +1,5 @@
 {
-  "goSourceSha256": "7880c20cbdc74f0cf42932ac5002caac0d036ff68aaa21cab91b1d5622648ce1",
+  "goSourceSha256": "fcda7570980261b11877c883fcd5d63a0afa7a4d93cd0979c3ea341a9ab04117",
   "packages": {
     "localrmm/cmd/agent": [
       "TestHelp",
@@ -1157,6 +1157,7 @@
       "TestDebianPublishedFixUsesMappedSourceAndDeduplicates",
       "TestExcludedVersionsAndIncompleteRows",
       "TestFreshnessIndependentAndHistoricalFindingsRetained",
+      "TestInvalidDiagnosticsPreserveRejectionWithoutInputDisclosure",
       "TestInventoryMustBeCompleteBoundGeneration",
       "TestNativeDebianOrdering",
       "TestOfficialDecodedBudgetDoesNotExpandManualImport",

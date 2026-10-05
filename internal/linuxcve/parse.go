@@ -94,7 +94,7 @@ func parseSnapshot(ctx context.Context, provider string, payload []byte, fetched
 		return nil, ErrCanceled
 	}
 	if s.metadata.RecordCount == 0 || len(s.rules) == 0 {
-		return nil, ErrInvalid
+		return nil, invalidAt(invalidTargetScope, s.metadata.RecordCount, 0)
 	}
 	for name, rules := range s.rules {
 		sort.Slice(rules, func(i, j int) bool { return rules[i].cve < rules[j].cve })
@@ -142,7 +142,7 @@ func ParseOfficialDebianBytes(ctx context.Context, raw []byte, fetchedAt, now ti
 		return nil, ErrLimit
 	}
 	if !utf8.Valid(raw) {
-		return nil, ErrInvalid
+		return nil, invalidAt(invalidJSONUTF8, 0, 0)
 	}
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
@@ -219,7 +219,7 @@ func validateJSONAt(ctx context.Context, data []byte, startDepth, initialCount i
 		}
 		t, err := d.Token()
 		if err != nil {
-			return ErrInvalid
+			return invalidAt(invalidJSONToken, count, depth)
 		}
 		if str, ok := t.(string); ok && len(str) > 1<<20 {
 			return ErrLimit
@@ -234,14 +234,14 @@ func validateJSONAt(ctx context.Context, data []byte, startDepth, initialCount i
 			for d.More() {
 				key, err := d.Token()
 				if err != nil {
-					return ErrInvalid
+					return invalidAt(invalidJSONKey, count, depth)
 				}
 				k, ok := key.(string)
 				if !ok || len(k) > 512 {
-					return ErrInvalid
+					return invalidAt(invalidJSONKey, count, depth)
 				}
 				if _, exists := seen[strings.ToLower(k)]; exists {
-					return ErrInvalid
+					return invalidAt(invalidJSONDuplicate, count, depth)
 				}
 				seen[strings.ToLower(k)] = struct{}{}
 				if len(seen) > MaxRecords {
@@ -253,7 +253,7 @@ func validateJSONAt(ctx context.Context, data []byte, startDepth, initialCount i
 			}
 			t, err = d.Token()
 			if err != nil || t != json.Delim('}') {
-				return ErrInvalid
+				return invalidAt(invalidJSONClose, count, depth)
 			}
 		case '[':
 			for d.More() {
@@ -263,10 +263,10 @@ func validateJSONAt(ctx context.Context, data []byte, startDepth, initialCount i
 			}
 			t, err = d.Token()
 			if err != nil || t != json.Delim(']') {
-				return ErrInvalid
+				return invalidAt(invalidJSONClose, count, depth)
 			}
 		default:
-			return ErrInvalid
+			return invalidAt(invalidJSONClose, count, depth)
 		}
 		return nil
 	}
@@ -274,7 +274,7 @@ func validateJSONAt(ctx context.Context, data []byte, startDepth, initialCount i
 		return err
 	}
 	if _, err := d.Token(); err != io.EOF {
-		return ErrInvalid
+		return invalidAt(invalidJSONTrailing, count, startDepth)
 	}
 	return nil
 }
@@ -283,7 +283,7 @@ func parseDebian(ctx context.Context, raw []byte, s *Snapshot) error {
 	d := json.NewDecoder(bytes.NewReader(raw))
 	t, err := d.Token()
 	if err != nil || t != json.Delim('{') {
-		return ErrInvalid
+		return invalidAt(invalidDebianRoot, 0, 0)
 	}
 	total := 0
 	for d.More() {
@@ -293,11 +293,14 @@ func parseDebian(ctx context.Context, raw []byte, s *Snapshot) error {
 		t, err = d.Token()
 		name, ok := t.(string)
 		if err != nil || !ok || !packagePattern.MatchString(name) {
-			return ErrInvalid
+			return invalidAt(invalidDebianSourceName, total, 0)
 		}
 		var records map[string]json.RawMessage
-		if d.Decode(&records) != nil || len(records) == 0 {
-			return ErrInvalid
+		if d.Decode(&records) != nil {
+			return invalidAt(invalidDebianSourceRecords, total, 0)
+		}
+		if len(records) == 0 {
+			return invalidAt(invalidDebianEmptySource, total, 0)
 		}
 		for id, record := range records {
 			total++
@@ -310,8 +313,11 @@ func parseDebian(ctx context.Context, raw []byte, s *Snapshot) error {
 			var issue struct {
 				Releases map[string]json.RawMessage `json:"releases"`
 			}
-			if json.Unmarshal(record, &issue) != nil || issue.Releases == nil {
-				return ErrInvalid
+			if json.Unmarshal(record, &issue) != nil {
+				return invalidAt(invalidDebianIssue, total, 0)
+			}
+			if issue.Releases == nil {
+				return invalidAt(invalidDebianReleases, total, 0)
 			}
 			if !cvePattern.MatchString(id) {
 				continue
@@ -324,12 +330,15 @@ func parseDebian(ctx context.Context, raw []byte, s *Snapshot) error {
 				Status string `json:"status"`
 				Fixed  string `json:"fixed_version"`
 			}
-			if json.Unmarshal(release, &v) != nil || v.Status == "" {
-				return ErrInvalid
+			if json.Unmarshal(release, &v) != nil {
+				return invalidAt(invalidDebianRelease, total, 0)
+			}
+			if v.Status == "" {
+				return invalidAt(invalidDebianStatus, total, 0)
 			}
 			rule := rule{cve: id, advisoryURL: "https://security-tracker.debian.org/tracker/" + id}
 			if v.Fixed != "" && !assessment.ValidDebianVersion(v.Fixed) {
-				return ErrInvalid
+				return invalidAt(invalidDebianFixedVersion, total, 0)
 			}
 			switch {
 			case v.Status == "resolved" && v.Fixed == "0":

@@ -2,6 +2,11 @@
 
 Meaningful development checkpoints are recorded here. These are prototype milestones, not production releases.
 
+## 2026-10-05 — Locate official-feed parser rejections
+
+- Add closed parser-stage codes and bounded counters to the opt-in official-feed smoke failure. Preserve every rejection condition, limit, ordinary error string and wrapped error classification. No source/package/CVE name, response value or decoder text is retained or exported.
+- Add input-disclosure and rejection-contract regressions and regenerate the exact-source Go diagnostic vocabulary. This narrows the real-feed incompatibility; it does not claim a compatible feed or change acceptance.
+
 ## 2026-10-05 — Handle bounded larger official Debian feeds
 
 - Respond to the measured 81,530,876-byte official feed with validated gzip transport/cache support and a separate 96 MiB decoded-JSON ceiling for the fixed official source. Compressed bytes and cached payloads retain their existing 32 MiB bound; manual imports retain their 32 MiB limit.
