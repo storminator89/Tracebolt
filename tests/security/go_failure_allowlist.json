@@ -1,5 +1,5 @@
 {
-  "goSourceSha256": "a4f3fcd95ead1fb458882e20c69451707d7780af84ae79d2fba2af67b0069462",
+  "goSourceSha256": "40485970ec9835963390e6788619a13059fa1a374c881a205420c6a1408c1738",
   "packages": {
     "localrmm/cmd/agent": [
       "TestHelp",
@@ -48,6 +48,8 @@
       "TestTerminalRestoreAndNoEcho"
     ],
     "localrmm/cmd/lan-agent": [
+      "TestAmendmentCLIExplicitModes",
+      "TestAmendmentCLIRejectsBeforePrivateAccess",
       "TestCachedUpdatesConsentIdentityBeforePrivateReadAndExplicitAck",
       "TestCompleteUpdatesConsentIdentityBeforePrivateReadAndExplicitAck",
       "TestEndpointConsentIdentityBeforePrivateReadAndExplicitAck",
@@ -273,6 +275,7 @@
       "TestHealthOperatorAuthenticationCSRFAndDeviceAuthority",
       "TestInventoryMaintenanceBusyResponseContract",
       "TestInvitationCreationAdvertisesExactPublicDownloadChecksum",
+      "TestJournalExpectedGenerationShape",
       "TestJournalExplicitAcknowledgementsAndNestedContracts",
       "TestJournalIdentityRejectsAmbiguousCAS",
       "TestJournalOperatorRealTLSGuardsAndUnavailable",
@@ -712,6 +715,14 @@
       "TestJournalExactQueryPolicyLeafAndCancellationBinding",
       "TestJournalExpiryCommitFailureIsNotReportedAsExpiry",
       "TestJournalExpiryFloorAndOrdinaryReportPreservation",
+      "TestJournalGenerationAcceptedContentMetadataKeepsOriginalExpiry",
+      "TestJournalGenerationCorruptionNeverFallsBack",
+      "TestJournalGenerationForeignLeafAndCanceledTransaction",
+      "TestJournalGenerationMigrationCASAndRestart",
+      "TestJournalGenerationRejectsReplayConflictAndOldTimeWithoutMutation",
+      "TestJournalGenerationReplaysCannotReplaceHigherTupleOrReuseGeneration",
+      "TestJournalGenerationRetriesNeverRefreshAndExpiryLatches",
+      "TestJournalGenerationSerializesClaimAndResultRaces",
       "TestJournalMetadataOverflowRollsBackWithoutFloor",
       "TestJournalNotReadyDoesNotInventSystemReceipt",
       "TestJournalObservedExpirySurvivesRestartAndClockReversal",
@@ -772,6 +783,7 @@
       "TestCompleteUpdatesRequiresFreshMatchingCollectionProfile",
       "TestCopiedIngressHandlesShareCertificateAdmission",
       "TestEndpointIdentityTLSHTTPActivationReplayAndRevocation",
+      "TestJournalGenerationRealTransportAndOperatorCAS",
       "TestJournalOperatorCreationAndPageRechecksBodyTimeAndSession",
       "TestJournalRealTransportPurposeAndTerminalExpiry",
       "TestJournalRealTransportResultSearchRetryAndRevocation",
@@ -893,6 +905,12 @@
       "TestOriginalPackageSignatureTranscriptBytes",
       "TestUnsupportedFailureIsExplicitAndUpdateDomainOnly"
     ],
+    "localrmm/internal/journalactivation": [
+      "TestAcceptRequiresPendingAndRuntimeRequiresCommitted",
+      "TestCanonicalNoMissingUnknownDuplicateOrNull",
+      "TestRequiresExactCommittedTuple",
+      "TestRootActivationMetadataAndAmbiguousStageDeny"
+    ],
     "localrmm/internal/journalcache": [
       "TestJournalCacheAdmissionBoundsAndCancellation",
       "TestJournalCacheBoundAndExpiryDoNotRefresh",
@@ -904,6 +922,18 @@
       "TestJournalCacheTransientReadCrossingExpiryErasesOriginalBytes",
       "TestJournalCacheTransientReadThenAuthorityDenialErasesContent",
       "TestJournalPageAndCacheDiagnosticFormattingRedacts"
+    ],
+    "localrmm/internal/journalgeneration": [
+      "TestReportCanonicalFreshnessMetadataOnly",
+      "TestTupleExactUint64CanonicalDetachedRoundTrip",
+      "TestTupleRejectsMalformedJSONAndInvalidValues"
+    ],
+    "localrmm/internal/journalgenerationstate": [
+      "TestCanonicalAndInvalidTime",
+      "TestFailureReturnsNoReportAndPoisonsCopies",
+      "TestFloorsSurviveReopen",
+      "TestRejectResetConflictsAndMissingState",
+      "TestUnsafeModesLinksAndTemporaries"
     ],
     "localrmm/internal/journalhelper": [
       "TestAllDenialsPrecedeCapture",
@@ -924,10 +954,19 @@
       "TestRevocationDuringResponseLeavesOnlyAnIncompleteDiscardedFrame",
       "TestServeAcceptFailureAndZeroServerAreFixed",
       "TestServeWaitsForCleanupAndClosesListener",
+      "TestTBJ2ExactBinaryRoundTripAndLegacyFrameUnchanged",
+      "TestTBJ2MalformedTupleLengthVersionAndOperationsReject",
+      "TestV2AuthorityRequiresMigratedDeploymentAndCommittedExactTuple",
+      "TestV2HelperBindsCaptureAndMetadataVerification",
+      "TestV2HelperDeniesPredecessorLegacyAndConflictingRequestsBeforeCapture",
+      "TestV2HelperFinalReleaseDeniesGenerationChange",
       "TestWriteAllRejectsBadWriter"
     ],
     "localrmm/internal/journalpolicy": [
       "TestDisableOrPolicyRevisionInvalidatesUnsentContent",
+      "TestGenerationPolicyCanonicalAndLegacyCompatibility",
+      "TestGenerationPolicyRejectsMissingWrongStaleAndConflictBindings",
+      "TestGenerationPolicyStrictJSONVersionsAndBounds",
       "TestPeerBindingFiltersAndBudgetsAreIndependent",
       "TestPolicyDecodingDetachesInput",
       "TestPolicyRequiresSeparateIdentityExactAllowlistAndConsent",
@@ -936,8 +975,12 @@
     ],
     "localrmm/internal/journalrequest": [
       "TestExpiredRecordRequiresDurableTerminalTime",
+      "TestNestedGenerationRejectsMalformedAndDuplicateJSON",
       "TestQueryDigestExactAndBoundedRecord",
       "TestRecordValidationRejectsRebindingAndImpossibleStates",
+      "TestRequestDigestBindsEveryGenerationAndQueryDimension",
+      "TestRequestGenerationClaimReceiptAndTerminalExpiryAreExact",
+      "TestRequestGenerationPreservesLegacyCanonicalBytesAndComparableDescriptions",
       "TestResultLifecycleValidation"
     ],
     "localrmm/internal/journalstate": [
@@ -985,6 +1028,7 @@
       "TestTrustedPID1ManagerBranchAndSharedFilters"
     ],
     "localrmm/internal/journalwire": [
+      "TestGenerationReportCanonicalBoundsAndV2Description",
       "TestJournalCanonicalObjectsAndBoundedSnapshots",
       "TestJournalSignaturePurposePathAndFraming"
     ],
@@ -993,6 +1037,8 @@
       "TestInvalidAndNonPrimeOrderKeysAreRejected"
     ],
     "localrmm/internal/lanclient": [
+      "TestAmendmentAcceptPreservesOriginalIdentityAndConsumption",
+      "TestAmendmentInvalidModesAndRootNeverReadState",
       "TestBootstrapTransportPinsOriginPathAndRejectsRedirect",
       "TestBootstrapTransportUsesExplicitServerTrustWithoutClientIdentity",
       "TestBuiltAgentCLIExactRetry",
@@ -1031,6 +1077,10 @@
       "TestForegroundInvalidConfigDoesNotOpenState",
       "TestForegroundKeepsExclusiveLockAcrossWaits",
       "TestFrameShapeAndCollectionIsolation",
+      "TestGenerationBoundSenderRejectsOldRequestsWithoutCapture",
+      "TestGenerationChangedAfterCaptureDiscardsOldBody",
+      "TestGenerationFailureKeepsOrdinaryAgentLoopRunning",
+      "TestGenerationReportFailureCannotReachClaim",
       "TestGuidedSenderNeverInitializesMissingLedger",
       "TestGuidedSenderRejectsMissingFilesAndBinding",
       "TestHTTPMaterialRejectsExpiredAndWrongRoleBeforeState",

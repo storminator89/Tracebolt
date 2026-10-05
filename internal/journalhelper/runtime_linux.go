@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"golang.org/x/sys/unix"
+	"localrmm/internal/journalactivation"
 	"localrmm/internal/journalpolicy"
 	"localrmm/internal/journalview"
 )
@@ -168,6 +169,10 @@ func loadState() (State, error) {
 		return State{}, ErrRejected
 	}
 	defer unix.Close(fd)
+	activation, present, activationRevision, ae := journalactivation.Read()
+	if ae != nil || !journalactivation.Gate(activation, present, false) {
+		return State{}, ErrRejected
+	}
 	deploymentRaw, ds, e := protectedRead(fd, "journal-helper.json", MaxDeploymentBytes)
 	if e != nil {
 		return State{}, ErrRejected
@@ -182,6 +187,17 @@ func loadState() (State, error) {
 	}
 	p, e := journalpolicy.Decode(policyRaw)
 	if e != nil || p.HelperUID != d.HelperUID || p.AgentUID != d.AgentUID {
+		return State{}, ErrRejected
+	}
+	generation, ge := journalpolicy.PolicyGeneration(p)
+	if ge != nil {
+		return State{}, ErrRejected
+	}
+	if p.SchemaVersion == journalpolicy.Version {
+		if present || d.SchemaVersion != DeploymentVersion || d.PolicyGenerationRequired {
+			return State{}, ErrRejected
+		}
+	} else if !present || activation.SenderBinding != p.SenderBinding || activation.PolicyGeneration != generation || d.SchemaVersion != DeploymentVersionV2 || !d.PolicyGenerationRequired {
 		return State{}, ErrRejected
 	}
 	sock, e := socketMetadata(d)
@@ -212,7 +228,11 @@ func loadState() (State, error) {
 		}{uint64(s.Dev), uint64(s.Ino), s.Uid, s.Gid, s.Mode, uint64(s.Nlink), s.Size, s.Mtim.Sec, s.Mtim.Nsec, s.Ctim.Sec, s.Ctim.Nsec})
 		return b
 	}
-	return State{Policy: p, Deployment: d, Revision: revision(deploymentRaw, policyRaw, metadata(ds), metadata(ps), metadata(sock))}, nil
+	again, presentAgain, activationAgain, err := journalactivation.Read()
+	if err != nil || presentAgain != present || again != activation || activationAgain != activationRevision {
+		return State{}, ErrRejected
+	}
+	return State{Policy: p, Deployment: d, PolicyGeneration: generation, Revision: revision(deploymentRaw, policyRaw, metadata(ds), metadata(ps), metadata(sock), []byte(activationRevision))}, nil
 }
 func inheritedListener(d Deployment) (net.Listener, error) {
 	if os.Getenv("LISTEN_PID") != strconv.Itoa(os.Getpid()) || os.Getenv("LISTEN_FDS") != "1" || os.Getenv("LISTEN_FDNAMES") != "journal-reader" {

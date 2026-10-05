@@ -4,6 +4,7 @@ package lanclient
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -14,6 +15,8 @@ import (
 
 	"golang.org/x/sys/unix"
 	"localrmm/internal/agentidentity"
+	"localrmm/internal/journalactivation"
+	"localrmm/internal/journalgenerationstate"
 	"localrmm/internal/journalhelper"
 	"localrmm/internal/journalpolicy"
 )
@@ -72,11 +75,23 @@ func loadJournalLocal(m Material) (journalLocal, error) {
 	return readJournalLocal(m, uid, gid)
 }
 func readJournalLocal(m Material, uid, gid uint32) (journalLocal, error) {
+	return readJournalLocalPolicyMode(m, uid, gid, false, false)
+}
+
+// Administrative inspection may describe a disabled policy; it never enables it.
+func readJournalLocalMode(m Material, uid, gid uint32, pending bool) (journalLocal, error) {
+	return readJournalLocalPolicyMode(m, uid, gid, pending, true)
+}
+func readJournalLocalPolicyMode(m Material, uid, gid uint32, pending, inspect bool) (journalLocal, error) {
 	dir, e := journalRootDirectory([]string{"etc", "tracebolt"})
 	if e != nil {
 		return journalLocal{}, e
 	}
 	defer dir.Close()
+	activation, present, activationRevision, ae := journalactivation.Read()
+	if ae != nil || !journalactivation.Gate(activation, present, pending) {
+		return journalLocal{}, errJournalDenied
+	}
 	fd, e := unix.Openat(int(dir.Fd()), "journal-client-policy.json", unix.O_RDONLY|unix.O_NONBLOCK|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
 	if errors.Is(e, unix.ENOENT) {
 		return journalLocal{}, errJournalDisabled
@@ -113,7 +128,7 @@ func readJournalLocal(m Material, uid, gid uint32) (journalLocal, error) {
 	}
 	canonical, _ := json.Marshal(dep)
 	validID := func(id uint32) bool { return id > 0 && id != ^uint32(0) }
-	if !bytes.Equal(deploymentRaw, canonical) || dep.SchemaVersion != journalhelper.DeploymentVersion || dep.AgentUID != uid || dep.AgentGID != gid || !validID(dep.HelperUID) || !validID(dep.HelperGID) || !validID(dep.JournalGID) || dep.HelperUID == uid || dep.HelperGID == gid || dep.HelperGID == dep.JournalGID || dep.JournalGID == gid {
+	if !bytes.Equal(deploymentRaw, canonical) || (dep.SchemaVersion != journalhelper.DeploymentVersion && dep.SchemaVersion != journalhelper.DeploymentVersionV2) || dep.AgentUID != uid || dep.AgentGID != gid || !validID(dep.HelperUID) || !validID(dep.HelperGID) || !validID(dep.JournalGID) || dep.HelperUID == uid || dep.HelperGID == gid || dep.HelperGID == dep.JournalGID || dep.JournalGID == gid {
 		return journalLocal{}, errJournalDenied
 	}
 	if unix.Fstatat(int(dir.Fd()), "journal-client-policy.json", &named, unix.AT_SYMLINK_NOFOLLOW) != nil || !journalSame(after, named) {
@@ -123,7 +138,37 @@ func readJournalLocal(m Material, uid, gid uint32) (journalLocal, error) {
 	if e != nil || p.SenderBinding != m.binding || p.ManagerOrigin != m.config.ManagerOrigin || p.TransportProfile != m.config.Profile || p.CollectionProfile != m.config.CollectionProfile || p.AgentUID != uid || p.HelperUID != dep.HelperUID {
 		return journalLocal{}, errJournalDenied
 	}
-	if !p.Enabled {
+	generation, ge := journalpolicy.PolicyGeneration(p)
+	if ge != nil {
+		return journalLocal{}, errJournalDenied
+	}
+	if p.SchemaVersion == journalpolicy.Version {
+		if present || dep.SchemaVersion != journalhelper.DeploymentVersion || dep.PolicyGenerationRequired {
+			return journalLocal{}, errJournalDenied
+		}
+		// A surviving private migration floor forbids restoring legacy authority even
+		// if root policy/deployment files were accidentally rolled back together.
+		if _, err := os.Lstat(journalGenerationDirectory(m.config)); !errors.Is(err, os.ErrNotExist) {
+			return journalLocal{}, errJournalDenied
+		}
+
+	} else {
+		if !present || dep.SchemaVersion != journalhelper.DeploymentVersionV2 || !dep.PolicyGenerationRequired || activation.SenderBinding != m.binding || activation.DeviceID != m.config.AgentID || activation.CertificateHash != journalLeaf(m) || activation.PolicyGeneration != generation || !journalactivation.Gate(activation, present, pending) {
+			return journalLocal{}, errJournalDenied
+		}
+		if !pending {
+			state, err := journalgenerationstate.Open(context.Background(), journalGenerationDirectory(m.config))
+			if err != nil {
+				return journalLocal{}, errJournalDenied
+			}
+			record, err := state.Record()
+			closeErr := state.Close()
+			if err != nil || closeErr != nil || record.SenderBinding != m.binding || record.DeviceID != m.config.AgentID || record.CertificateHash != journalLeaf(m) || record.PolicyGeneration != generation {
+				return journalLocal{}, errJournalDenied
+			}
+		}
+	}
+	if !p.Enabled && !inspect {
 		return journalLocal{}, errJournalDisabled
 	}
 	lastDir, e := journalRootDirectory([]string{"etc", "tracebolt"})
@@ -152,7 +197,12 @@ func readJournalLocal(m Material, uid, gid uint32) (journalLocal, error) {
 		Mtime, Ctime   unix.Timespec
 	}{uint64(ds.Dev), uint64(ds.Ino), ds.Uid, ds.Gid, ds.Mode, ds.Mtim, ds.Ctim})
 	h.Write(dsRaw)
-	return journalLocal{policy: p, revision: hex.EncodeToString(h.Sum(nil)), deployment: dep}, nil
+	again, presentAgain, activationAgain, err := journalactivation.Read()
+	if err != nil || presentAgain != present || again != activation || activationAgain != activationRevision {
+		return journalLocal{}, errJournalDenied
+	}
+	h.Write([]byte(activationRevision))
+	return journalLocal{policy: p, revision: hex.EncodeToString(h.Sum(nil)), deployment: dep, generation: generation, activationPhase: activation.Phase}, nil
 }
 
 func journalProtectedFile(dir *os.File, name string, max int, gid uint32) ([]byte, unix.Stat_t, error) {

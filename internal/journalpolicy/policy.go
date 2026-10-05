@@ -16,10 +16,12 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"localrmm/internal/journalgeneration"
 	"localrmm/internal/journalview"
 )
 
 const Version = "tracebolt.journal-content-policy.v1"
+const VersionV2 = "tracebolt.journal-content-policy.v2"
 const Scope = "on-demand-allowlisted-system-service-log-content"
 const CollectionProfile = "managed-operations-v3"
 const MaxPolicyBytes = 8 << 10
@@ -34,6 +36,8 @@ var ErrChanged = errors.New("journal content policy changed before delivery")
 // separate helper account must not share the main agent's UID.
 type Policy struct {
 	SchemaVersion         string   `json:"schemaVersion"`
+	Revision              uint64   `json:"revision,string,omitempty"`
+	Generation            string   `json:"generation,omitempty"`
 	Scope                 string   `json:"scope"`
 	CollectionProfile     string   `json:"collectionProfile"`
 	SenderBinding         string   `json:"senderBinding"`
@@ -87,7 +91,7 @@ func validOrigin(raw, profile string) bool {
 }
 
 func Validate(p Policy) error {
-	if p.SchemaVersion != Version || p.Scope != Scope || p.CollectionProfile != CollectionProfile || !validBinding(p.SenderBinding) || !validOrigin(p.ManagerOrigin, p.TransportProfile) || !validUID(p.AgentUID) || !validUID(p.HelperUID) || p.AgentUID == p.HelperUID || len(p.AllowedUnits) == 0 || len(p.AllowedUnits) > MaxUnits || p.MaxWindowSeconds == 0 || p.MaxWindowSeconds > 3600 || p.MaxLookbackSeconds < p.MaxWindowSeconds || p.MaxLookbackSeconds > 86400 || p.MaxPriority < 0 || p.MaxPriority > 7 || !p.ContentAcknowledged || p.TransportProfile == "http-test" && !p.PlaintextAcknowledged || p.TransportProfile == "tls" && p.PlaintextAcknowledged {
+	if p.SchemaVersion != Version && p.SchemaVersion != VersionV2 || p.SchemaVersion == Version && (p.Revision != 0 || p.Generation != "") || p.SchemaVersion == VersionV2 && (p.Revision == 0 || !journalgeneration.ValidGeneration(p.Generation)) || p.Scope != Scope || p.CollectionProfile != CollectionProfile || !validBinding(p.SenderBinding) || !validOrigin(p.ManagerOrigin, p.TransportProfile) || !validUID(p.AgentUID) || !validUID(p.HelperUID) || p.AgentUID == p.HelperUID || len(p.AllowedUnits) == 0 || len(p.AllowedUnits) > MaxUnits || p.MaxWindowSeconds == 0 || p.MaxWindowSeconds > 3600 || p.MaxLookbackSeconds < p.MaxWindowSeconds || p.MaxLookbackSeconds > 86400 || p.MaxPriority < 0 || p.MaxPriority > 7 || !p.ContentAcknowledged || p.TransportProfile == "http-test" && !p.PlaintextAcknowledged || p.TransportProfile == "tls" && p.PlaintextAcknowledged {
 		return ErrPolicy
 	}
 	// Reuse the reader's exact unit grammar; do not create a second permissive
@@ -122,7 +126,7 @@ func Decode(raw []byte) (Policy, error) {
 	if len(raw) == 0 || len(raw) > MaxPolicyBytes || !utf8.Valid(raw) {
 		return bad()
 	}
-	fields := map[string]string{"schemaVersion": "s", "scope": "s", "collectionProfile": "s", "senderBinding": "s", "managerOrigin": "s", "transportProfile": "s", "agentUid": "n", "helperUid": "n", "allowedUnits": "a", "maxWindowSeconds": "n", "maxLookbackSeconds": "n", "maxPriority": "n", "enabled": "b", "contentAcknowledged": "b", "plaintextAcknowledged": "b"}
+	fields := map[string]string{"schemaVersion": "s", "scope": "s", "collectionProfile": "s", "senderBinding": "s", "managerOrigin": "s", "transportProfile": "s", "agentUid": "n", "helperUid": "n", "allowedUnits": "a", "maxWindowSeconds": "n", "maxLookbackSeconds": "n", "maxPriority": "n", "enabled": "b", "contentAcknowledged": "b", "plaintextAcknowledged": "b", "revision": "r", "generation": "s"}
 	d := json.NewDecoder(bytes.NewReader(raw))
 	t, err := d.Token()
 	if err != nil || t != json.Delim('{') {
@@ -149,6 +153,16 @@ func Decode(raw []byte) (Policy, error) {
 			return bad()
 		}
 		switch kind {
+		case "r":
+			var revision string
+			if json.Unmarshal(v, &revision) != nil || len(revision) == 0 || len(revision) > 20 || revision[0] < '1' || revision[0] > '9' || !bytes.Equal(v, []byte(`"`+revision+`"`)) {
+				return bad()
+			}
+			for _, c := range revision {
+				if c < '0' || c > '9' {
+					return bad()
+				}
+			}
 		case "s":
 			if v[0] != '"' {
 				return bad()
@@ -173,7 +187,7 @@ func Decode(raw []byte) (Policy, error) {
 		}
 	}
 	t, err = d.Token()
-	if err != nil || t != json.Delim('}') || len(seen) != len(fields) {
+	if err != nil || t != json.Delim('}') {
 		return bad()
 	}
 	if _, err = d.Token(); err != io.EOF {
@@ -182,6 +196,15 @@ func Decode(raw []byte) (Policy, error) {
 	var p Policy
 	if json.Unmarshal(raw, &p) != nil || Validate(p) != nil {
 		return bad()
+	}
+	for key := range fields {
+		if key == "revision" || key == "generation" {
+			if seen[key] != (p.SchemaVersion == VersionV2) {
+				return bad()
+			}
+		} else if !seen[key] {
+			return bad()
+		}
 	}
 	return p, nil
 }
@@ -192,12 +215,39 @@ func Decode(raw []byte) (Policy, error) {
 type Permit struct {
 	query      journalview.Query
 	policyHash [32]byte
+	generation journalgeneration.Tuple
 }
 
 func (p Permit) Query() journalview.Query { return p.query }
 func (p Permit) PolicyDigest() string     { return "sha256:" + hex.EncodeToString(p.policyHash[:]) }
 
+// PolicyGeneration computes the full canonical policy binding. Legacy v1 has
+// no generation and returns zero; callers must not treat zero as v2 permission.
+func PolicyGeneration(p Policy) (journalgeneration.Tuple, error) {
+	raw, err := Encode(p)
+	if err != nil {
+		return journalgeneration.Tuple{}, ErrPolicy
+	}
+	if p.SchemaVersion == Version {
+		return journalgeneration.Tuple{}, nil
+	}
+	hash := sha256.Sum256(raw)
+	return journalgeneration.Tuple{Revision: p.Revision, Generation: p.Generation, PolicyDigest: "sha256:" + hex.EncodeToString(hash[:])}, nil
+}
+
+func (p Permit) Generation() journalgeneration.Tuple { return p.generation }
+
+// Authorize preserves the legacy v1-only boundary. A v2 caller must supply its
+// exact current generation through AuthorizeBound rather than silently upgrade.
 func Authorize(p Policy, c Context, q journalview.Query, now time.Time) (Permit, error) {
+	return AuthorizeBound(p, c, q, journalgeneration.Tuple{}, now)
+}
+
+func AuthorizeBound(p Policy, c Context, q journalview.Query, generation journalgeneration.Tuple, now time.Time) (Permit, error) {
+	expected, err := PolicyGeneration(p)
+	if err != nil || expected != generation {
+		return Permit{}, ErrDenied
+	}
 	if Validate(p) != nil || !p.Enabled || c.SenderBinding != p.SenderBinding || c.ManagerOrigin != p.ManagerOrigin || c.TransportProfile != p.TransportProfile || c.CollectionProfile != p.CollectionProfile || c.AgentUID != p.AgentUID || c.HelperUID != p.HelperUID || c.PeerUID != p.AgentUID || journalview.ValidateQuery(q, now) != nil || !slices.Contains(p.AllowedUnits, q.Unit) || q.End.Sub(q.Start) > time.Duration(p.MaxWindowSeconds)*time.Second || now.Sub(q.Start) > time.Duration(p.MaxLookbackSeconds)*time.Second || q.MaxPriority > p.MaxPriority {
 		return Permit{}, ErrDenied
 	}
@@ -205,11 +255,11 @@ func Authorize(p Policy, c Context, q journalview.Query, now time.Time) (Permit,
 	if err != nil {
 		return Permit{}, ErrDenied
 	}
-	return Permit{query: q, policyHash: sha256.Sum256(raw)}, nil
+	return Permit{query: q, policyHash: sha256.Sum256(raw), generation: generation}, nil
 }
 
 func (p Permit) Recheck(current Policy, c Context, now time.Time) error {
-	next, err := Authorize(current, c, p.query, now)
+	next, err := AuthorizeBound(current, c, p.query, p.generation, now)
 	if err != nil || next.policyHash != p.policyHash {
 		return ErrChanged
 	}

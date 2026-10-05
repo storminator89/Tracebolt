@@ -72,7 +72,7 @@ func newJournalFixture(t *testing.T) *journalFixture {
 	}
 	f.s = &journalSender{material: m, state: state, now: func() time.Time { return f.now }, local: func(Material) (journalLocal, error) { return f.local, nil }}
 	f.s.helper = func(_ context.Context, _ journalLocal, req journalhelper.Request) (journalhelper.Response, error) {
-		permit, e := journalpolicy.Authorize(f.local.policy, journalContext(m, f.local), req.Query, f.now)
+		permit, e := journalpolicy.AuthorizeBound(f.local.policy, journalContext(m, f.local), req.Query, req.PolicyGeneration, f.now)
 		if e != nil {
 			return journalhelper.Response{}, e
 		}

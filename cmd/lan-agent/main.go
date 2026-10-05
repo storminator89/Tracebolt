@@ -40,6 +40,7 @@ func main() {
 	endpointConsentAck := flag.Bool("ack-endpoint-identity", false, "Acknowledge reporting hostname and all visible interface IPv4/IPv6 addresses to the configured manager")
 	overviewConsentMode := flag.String("complete-overview-consent", "", "Local-only preview, enable, or disable of full visible processes/mounted filesystems; stop the sender first")
 	overviewConsentAck := flag.Bool("ack-complete-overview", false, "Acknowledge full visible processes/mounts, potentially sensitive names, mount paths and filesystem labels in the agent Linux namespaces, at a fixed 60-second cadence; HTTP-test is unencrypted and unauthenticated")
+	journalAmendmentMode := flag.String("journal-policy-amendment", "", "Local-only preview or accept of a separately staged journal policy generation; stop sender first")
 	journalConsentMode := flag.String("journal-content-consent", "", "Local-only preview or create-only initialize of on-demand journal consent; stop the sender first")
 	journalConsentAck := flag.Bool("ack-journal-content", false, "Acknowledge allowlisted service journal messages may contain credentials, personal data or other secrets")
 	journalPlaintextAck := flag.Bool("ack-journal-http-plaintext", false, "Separately acknowledge unencrypted journal content visible on the LAN with an unauthenticated manager")
@@ -51,6 +52,13 @@ func main() {
 	if runtime.GOOS != "linux" {
 		fmt.Fprintln(os.Stderr, "Tracebolt LAN sender state is currently supported on Linux only; native ACL validation is pending for other platforms.")
 		os.Exit(2)
+	}
+	if *journalAmendmentMode != "" {
+		if *foreground || *validate || *interval != 30*time.Second || *enrollmentBootstrap != "" || *enrollmentState != "" || *insecurePending || *completeUpdatesConsentMode != "" || *completeUpdatesConsentAck || *cachedUpdatesConsentMode != "" || *cachedUpdatesConsentAck || *endpointConsentMode != "" || *endpointConsentAck || *overviewConsentMode != "" || *overviewConsentAck || *journalConsentMode != "" {
+			fmt.Fprintln(os.Stderr, "Journal amendment cannot be combined with reporting, enrollment or another consent mode.")
+			os.Exit(2)
+		}
+		os.Exit(runJournalAmendment(journalAmendmentOptions{Path: *path, Mode: *journalAmendmentMode, Identity: *identity, Acknowledged: *journalConsentAck, Plaintext: *journalPlaintextAck}, journalAmendmentHooks{identity: serviceIdentity, configure: lanclient.ConfigureJournalAmendment}, os.Stdout, os.Stderr))
 	}
 	if *completeUpdatesConsentMode != "" || *completeUpdatesConsentAck {
 		if *foreground || *validate || *interval != 30*time.Second || *enrollmentBootstrap != "" || *enrollmentState != "" || *insecurePending || *cachedUpdatesConsentMode != "" || *cachedUpdatesConsentAck || *endpointConsentMode != "" || *endpointConsentAck || *overviewConsentMode != "" || *overviewConsentAck || *journalConsentMode != "" || *journalConsentAck || *journalPlaintextAck {

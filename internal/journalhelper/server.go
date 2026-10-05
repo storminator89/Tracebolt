@@ -51,7 +51,7 @@ func (s *Server) state() (State, Identity, error) {
 }
 func (s *Server) recheck(r Request, permit journalpolicy.Permit, initial State, p Peer) (State, error) {
 	state, i, e := s.state()
-	if e != nil || state.Revision != initial.Revision {
+	if e != nil || state.Revision != initial.Revision || state.PolicyGeneration != initial.PolicyGeneration {
 		return State{}, ErrRejected
 	}
 	c, e := authorityContext(state, i, p, r.SenderBinding)
@@ -128,7 +128,7 @@ func (s *Server) handleReserved(ctx context.Context, c net.Conn) {
 		return
 	}
 	now := s.runtime.deps.Now().UTC()
-	permit, e := journalpolicy.Authorize(state.Policy, trusted, r.Query, now)
+	permit, e := journalpolicy.AuthorizeBound(state.Policy, trusted, r.Query, r.PolicyGeneration, now)
 	if e != nil {
 		s.failure(c, StatusDenied)
 		return

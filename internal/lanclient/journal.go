@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"localrmm/internal/journalgeneration"
 	"localrmm/internal/journalhelper"
 	"localrmm/internal/journalpolicy"
 	"localrmm/internal/journalrequest"
@@ -111,6 +112,11 @@ func (s *journalSender) Run(ctx context.Context) string {
 			return "state_unavailable"
 		}
 	}
+	if local.generation != (journalgeneration.Tuple{}) {
+		if s.reportGeneration(ctx, local) != nil {
+			return "unavailable"
+		}
+	}
 	if s.pending != nil {
 		return s.deliver(ctx, local)
 	}
@@ -150,7 +156,7 @@ func (s *journalSender) Run(ctx context.Context) string {
 		s.status(ctx, desc.Identity, "result_lost")
 		return "result_lost"
 	}
-	permit, e := journalpolicy.Authorize(local.policy, journalContext(s.material, local), desc.Query, now)
+	permit, e := journalpolicy.AuthorizeBound(local.policy, journalContext(s.material, local), desc.Query, desc.PolicyGeneration, now)
 	if e != nil {
 		s.status(ctx, desc.Identity, "denied")
 		return "denied"
@@ -204,7 +210,7 @@ func (s *journalSender) Run(ctx context.Context) string {
 			return errJournalDenied
 		}
 		var callErr error
-		response, callErr = s.helper(c, latest, journalhelper.Request{Operation: journalhelper.QueryOperation, SenderBinding: s.material.binding, Query: g.Description.Query})
+		response, callErr = s.helper(c, latest, journalhelper.Request{Operation: journalhelper.QueryOperation, SenderBinding: s.material.binding, Query: g.Description.Query, PolicyGeneration: g.Description.PolicyGeneration})
 		helperDenied = response.Status == journalhelper.StatusDenied
 		if callErr != nil || response.Status != journalhelper.StatusSnapshot || response.PolicyDigest != permit.PolicyDigest() {
 			return errJournalHelper
@@ -263,7 +269,7 @@ func (s *journalSender) deliver(ctx context.Context, local journalLocal) string 
 		s.discard()
 		return "denied"
 	}
-	response, e := s.helper(ctx, local, journalhelper.Request{Operation: journalhelper.VerifyOperation, SenderBinding: s.material.binding, Query: p.grant.Description.Query, PolicyDigest: p.grant.PolicyDigest, Revision: p.helperRevision})
+	response, e := s.helper(ctx, local, journalhelper.Request{Operation: journalhelper.VerifyOperation, SenderBinding: s.material.binding, Query: p.grant.Description.Query, PolicyGeneration: p.grant.Description.PolicyGeneration, PolicyDigest: p.grant.PolicyDigest, Revision: p.helperRevision})
 	if e != nil {
 		return "pending_retained"
 	}

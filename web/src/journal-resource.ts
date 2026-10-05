@@ -2,8 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { APIError, AUTH_REQUIRED_EVENT, getProtectedRequestEpoch } from './api';
 import { hasLogoutIntent } from './auth';
 import { cancelJournal, createJournal, queryJournal, readJournal } from './journal-api';
-import { journalAge, journalBytes, JOURNAL_SEARCH_BYTES, validJournalDevice, validJournalPage, validJournalQuery, validJournalView, sameJournalIdentity } from './journal-types';
-import type { JournalPage, JournalQuery, JournalRequest, JournalView } from './journal-types';
+import { journalAge, journalBytes, JOURNAL_SEARCH_BYTES, validJournalDevice, validJournalPage, validJournalQuery, validJournalView, sameJournalIdentity, sameJournalGeneration } from './journal-types';
+import type { JournalPage, JournalQuery, JournalRequest, JournalView, JournalGenerationView } from './journal-types';
 export type JournalFailure = 'load' | 'invalid' | 'timeout' | 'session' | 'clock' | 'conflict' | 'uncertain';
 type Anchor = { mono: number; wall: number };
 const capture = (): Anchor => ({ mono: performance.now(), wall: Date.now() });
@@ -14,6 +14,7 @@ export function useJournal(deviceId: string, insecureTestMode: boolean, sessionK
     const [busy, setBusy] = useState(false), [paused, setPaused] = useState(false), [failure, setFailure] = useState<JournalFailure | null>(null), [uncertain, setUncertain] = useState(false), [reset, setReset] = useState(0);
     const protectedScope = useRef(getProtectedRequestEpoch());
     const alive = useRef(false), locked = useRef(false), suspended = useRef(false), epoch = useRef(0), pending = useRef<{ controller: AbortController; started: Anchor; timeout: number } | null>(null);
+    const latestGeneration = useRef<JournalGenerationView | null>(null);
     const latestRequest = useRef<JournalRequest | null>(null), retention = useRef<{ id: string; deadline: number } | null>(null), sessionDeadline = useRef(Infinity);
     const current = useRef<JournalView | null>(null), page = useRef<JournalPage | null>(null), anchor = useRef<Anchor | null>(null), latestTime = useRef<string | null>(null), floor = useRef('0'), history = useRef<number[]>([]);
     const cancel = useCallback(() => { epoch.current++; pending.current?.controller.abort(); window.clearTimeout(pending.current?.timeout); pending.current = null; if (alive.current) setBusy(false); }, []);
@@ -37,6 +38,14 @@ export function useJournal(deviceId: string, insecureTestMode: boolean, sessionK
     const acceptView = useCallback((value: unknown, started: Anchor) => {
         if (!validJournalView(value, deviceId)) { clear('invalid'); return false; }
         if (latestTime.current && journalAge(value.serverNow, latestTime.current) < 0 || BigInt(value.expectedFloor) < BigInt(floor.current)) { clear('clock'); return false; }
+        const priorGeneration = latestGeneration.current, nextGeneration = value.generation;
+        if (priorGeneration) {
+            if (!nextGeneration || BigInt(nextGeneration.policyGeneration.revision) < BigInt(priorGeneration.policyGeneration.revision) || BigInt(nextGeneration.sequence) < BigInt(priorGeneration.sequence) || nextGeneration.policyGeneration.revision === priorGeneration.policyGeneration.revision && !sameJournalGeneration(nextGeneration.policyGeneration, priorGeneration.policyGeneration)) { clear('conflict'); return false; }
+            if (nextGeneration.sequence === priorGeneration.sequence && (nextGeneration.observedAt !== priorGeneration.observedAt || nextGeneration.receivedAt !== priorGeneration.receivedAt || !sameJournalGeneration(nextGeneration.policyGeneration, priorGeneration.policyGeneration) || !priorGeneration.fresh && nextGeneration.fresh)) { clear('conflict'); return false; }
+            if (nextGeneration.sequence !== priorGeneration.sequence && (journalAge(nextGeneration.observedAt, priorGeneration.observedAt) <= 0 || journalAge(nextGeneration.receivedAt, priorGeneration.receivedAt) < 0)) { clear('conflict'); return false; }
+        }
+        if (nextGeneration && (!priorGeneration || !sameJournalGeneration(nextGeneration.policyGeneration, priorGeneration.policyGeneration))) { clearRows(); setReset(n => n + 1); }
+        if (nextGeneration) latestGeneration.current = nextGeneration;
         const prior = latestRequest.current, next = value.request;
         if (prior && next && prior.description.identity.sequence === next.description.identity.sequence) {
             const rank = { pending: 0, claimed: 1, accepted: 2, canceled: 3, expired: 3 };
@@ -52,7 +61,7 @@ export function useJournal(deviceId: string, insecureTestMode: boolean, sessionK
         if (next && ['pending', 'claimed', 'accepted'].includes(next.state) && performance.now() >= retention.current!.deadline) { latestRequest.current = { ...next, state: 'expired', contentStatus: 'unavailable' }; clear('conflict'); return false; }
         if (sessionKey && performance.now() >= sessionDeadline.current) { locked.current = true; clear('session'); return false; }
         latestTime.current = value.serverNow; floor.current = value.expectedFloor; anchor.current = started; current.current = value; setData({ key, view: value }); return true;
-    }, [clear, deviceId, key, sessionKey]);
+    }, [clear, clearRows, deviceId, key, sessionKey]);
     const fail = useCallback((caught: unknown, mutation: boolean) => {
         if (caught instanceof APIError && caught.status === 401) { locked.current = true; clear('session'); return; }
         clear(mutation ? 'uncertain' : caught instanceof APIError && [404, 409, 410].includes(caught.status ?? 0) ? 'conflict' : 'load');
@@ -85,9 +94,9 @@ export function useJournal(deviceId: string, insecureTestMode: boolean, sessionK
     }, [begin, clear, clearRows, deviceId, fail, insecureTestMode, key, sessionKey]);
     const create = useCallback(async (query: JournalQuery, acknowledgeLogContent: boolean, acknowledgePlaintext: boolean) => {
         const view = current.current;
-        if (!view?.configured || !acknowledgeLogContent || insecureTestMode !== acknowledgePlaintext || uncertain || !validJournalQuery(query, view.serverNow) || pending.current || view.request && ['pending', 'claimed'].includes(view.request.state)) return;
+        if (!view?.configured || view.generation && (!view.generation.fresh || !anchor.current || journalAge(view.generation.expiresAt, view.serverNow) <= elapsed(anchor.current)) || !acknowledgeLogContent || insecureTestMode !== acknowledgePlaintext || uncertain || !validJournalQuery(query, view.serverNow) || pending.current || view.request && ['pending', 'claimed'].includes(view.request.state)) return;
         clearRows(); const op = begin(true); if (!op) return;
-        try { const value = await createJournal(deviceId, view.expectedFloor, query, acknowledgePlaintext, op.signal, insecureTestMode, sessionKey); if (op.active()) acceptView(value, op.started); }
+        try { const value = await createJournal(deviceId, view.expectedFloor, query, acknowledgePlaintext, op.signal, insecureTestMode, sessionKey, view.generation?.policyGeneration); if (op.active()) acceptView(value, op.started); }
         catch (caught) { if (op.active()) fail(caught, true); } finally { op.finish(); }
     }, [acceptView, begin, clearRows, deviceId, fail, insecureTestMode, sessionKey, uncertain]);
     const cancelRequest = useCallback(async () => {
@@ -98,7 +107,7 @@ export function useJournal(deviceId: string, insecureTestMode: boolean, sessionK
         catch (caught) { if (op.active()) fail(caught, true); } finally { op.finish(); }
     }, [acceptView, begin, clearRows, deviceId, fail, insecureTestMode, sessionKey, uncertain]);
     useEffect(() => {
-        alive.current = true; protectedScope.current = getProtectedRequestEpoch(); locked.current = false; suspended.current = document.visibilityState === 'hidden'; setPaused(suspended.current); latestTime.current = null; latestRequest.current = null; retention.current = null; sessionDeadline.current = Infinity; floor.current = '0'; setUncertain(false); clear();
+        alive.current = true; protectedScope.current = getProtectedRequestEpoch(); locked.current = false; suspended.current = document.visibilityState === 'hidden'; setPaused(suspended.current); latestTime.current = null; latestRequest.current = null; latestGeneration.current = null; retention.current = null; sessionDeadline.current = Infinity; floor.current = '0'; setUncertain(false); clear();
         const lock = () => { locked.current = true; setPaused(false); clear('session'); };
         const suspend = () => {
             suspended.current = true;
@@ -121,8 +130,11 @@ export function useJournal(deviceId: string, insecureTestMode: boolean, sessionK
                 if (latestRequest.current && ['pending', 'claimed', 'accepted'].includes(latestRequest.current.state) && retention.current && performance.now() >= retention.current.deadline) { latestRequest.current = { ...latestRequest.current, state: 'expired', contentStatus: 'unavailable' }; clear('conflict'); }
                 return;
             }
+            if (view.generation?.fresh && journalAge(view.generation.expiresAt, view.serverNow) <= elapsed(anchor.current)) {
+                const stale = { ...view, generation: { ...view.generation, fresh: false } }; current.current = stale; latestGeneration.current = stale.generation; setData({ key, view: stale }); setReset(n => n + 1);
+            }
             if (view.request && retention.current && performance.now() >= retention.current.deadline && view.request.state !== 'expired') {
-                cancel(); clearRows(); const expired: JournalView = { ...view, contentStatus: 'unavailable', request: { ...view.request, state: 'expired', contentStatus: 'unavailable' } }; current.current = expired; latestRequest.current = expired.request; setData({ key, view: expired }); setReset(n => n + 1);
+                cancel(); clearRows(); const expired: JournalView = { ...(current.current ?? view), contentStatus: 'unavailable', request: { ...view.request, state: 'expired', contentStatus: 'unavailable' } }; current.current = expired; latestRequest.current = expired.request; setData({ key, view: expired }); setReset(n => n + 1);
             }
         }, 250);
         void refresh();

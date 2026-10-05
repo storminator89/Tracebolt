@@ -9,7 +9,7 @@ import (
 )
 
 func fixtureState() State {
-	return State{Deployment: Deployment{DeploymentVersion, 1201, 1201, 190, 1200, 1200}, Policy: journalpolicy.Policy{SchemaVersion: journalpolicy.Version, Scope: journalpolicy.Scope, CollectionProfile: journalpolicy.CollectionProfile, SenderBinding: strings.Repeat("a", 64), ManagerOrigin: "https://manager.example.test:8443", TransportProfile: "tls", AgentUID: 1200, HelperUID: 1201, AllowedUnits: []string{"demo.service"}, MaxWindowSeconds: 3600, MaxLookbackSeconds: 86400, MaxPriority: 4, Enabled: true, ContentAcknowledged: true}, Revision: "sha256:" + strings.Repeat("f", 64)}
+	return State{Deployment: Deployment{SchemaVersion: DeploymentVersion, HelperUID: 1201, HelperGID: 1201, JournalGID: 190, AgentUID: 1200, AgentGID: 1200}, Policy: journalpolicy.Policy{SchemaVersion: journalpolicy.Version, Scope: journalpolicy.Scope, CollectionProfile: journalpolicy.CollectionProfile, SenderBinding: strings.Repeat("a", 64), ManagerOrigin: "https://manager.example.test:8443", TransportProfile: "tls", AgentUID: 1200, HelperUID: 1201, AllowedUnits: []string{"demo.service"}, MaxWindowSeconds: 3600, MaxLookbackSeconds: 86400, MaxPriority: 4, Enabled: true, ContentAcknowledged: true}, Revision: "sha256:" + strings.Repeat("f", 64)}
 }
 func fixtureIdentity() Identity {
 	return Identity{1201, 1201, 1201, 1201, 1201, 1201, []uint32{190}, true}

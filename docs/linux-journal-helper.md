@@ -1,6 +1,9 @@
 # Local Linux journal helper setup
 
 This is the create-only setup path for the Linux on-demand service-log MVP.
+For an already installed helper, exact-unit additions use the separate
+[add-only amendment workflow](linux-journal-amendment.md); never rerun setup to
+replace an existing allowlist.
 Read [installation.md](installation.md) and the existing
 [agent service contract](linux-agent-service.md) first. The script and tests are
 source work: no real account, journal source, socket activation or reboot gate

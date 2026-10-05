@@ -1,0 +1,39 @@
+{
+  "sourceSha": "ab5de596e79e92ad89376364953cd4cf9e78a016",
+  "workflowRun": 37328086463,
+  "workflowURL": "https://github.com/storminator89/Tracebolt/actions/runs/37328086463",
+  "artifactID": 11353162295,
+  "artifactArchiveSHA256": "c1548cfc4c0bd43eef05da9d9273bd274e76d30dbf366ac06c1e8525c9296a8e",
+  "sourceManifestSHA256": "2aee6637a2e5ad592047b4abb904f596dae11bfa8f53f94e514c086180c9a9c4",
+  "selection": "Two unmodified overview screenshots from the exact-source browser artifact",
+  "images": [
+    {
+      "file": "overview-desktop-synthetic.png",
+      "originalArtifactFile": "synthetic-v3-device-overview-desktop-en.png",
+      "sha256": "dde0f983b69a956ff41a501f8481a2ab5e2461992e58e832aa873e1e95f76de8",
+      "sizeBytes": 93388,
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "fullPage": false,
+      "syntheticData": true,
+      "fixtureDisclosure": "Invented v3 inventory on an explicit loopback HTTP-test operator fixture. No native collector, VM, installation, service lifecycle, real endpoint or invitation material is shown.",
+      "test": "Device source tabs load only the selected real v3 package or system source"
+    },
+    {
+      "file": "overview-mobile-synthetic.png",
+      "originalArtifactFile": "synthetic-v3-device-overview-mobile-en.png",
+      "sha256": "7d74bbcaadc62547da221f791df9ef26b365f7bf1ec17ac1502bee235b5d5960",
+      "sizeBytes": 47472,
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "fullPage": false,
+      "syntheticData": true,
+      "fixtureDisclosure": "Invented v3 inventory on an explicit loopback HTTP-test operator fixture. No native collector, VM, installation, service lifecycle, real endpoint or invitation material is shown.",
+      "test": "Mobile complete inventory keeps bounded keyboard scrolling and German source navigation usable"
+    }
+  ]
+}

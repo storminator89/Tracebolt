@@ -9,6 +9,7 @@ import (
 	"localrmm/internal/enrollmentstate"
 	"localrmm/internal/enrollmentstore"
 	"localrmm/internal/journalcache"
+	"localrmm/internal/journalgeneration"
 	"localrmm/internal/journalrequest"
 	"localrmm/internal/journalview"
 	"localrmm/internal/journalwire"
@@ -19,14 +20,15 @@ import (
 )
 
 type journalView struct {
-	SchemaVersion string                 `json:"schemaVersion"`
-	DeviceID      string                 `json:"deviceId"`
-	ServerNow     time.Time              `json:"serverNow"`
-	Configured    bool                   `json:"configured"`
-	ExpectedFloor string                 `json:"expectedFloor"`
-	Request       *journalrequest.Status `json:"request"`
-	LocalStatus   string                 `json:"localStatus"`
-	ContentStatus string                 `json:"contentStatus"`
+	SchemaVersion string                                 `json:"schemaVersion"`
+	DeviceID      string                                 `json:"deviceId"`
+	ServerNow     time.Time                              `json:"serverNow"`
+	Configured    bool                                   `json:"configured"`
+	ExpectedFloor string                                 `json:"expectedFloor"`
+	Request       *journalrequest.Status                 `json:"request"`
+	LocalStatus   string                                 `json:"localStatus"`
+	ContentStatus string                                 `json:"contentStatus"`
+	Generation    *enrollmentstore.JournalGenerationView `json:"generation,omitempty"`
 }
 
 func (h *operatorHandler) journal(w http.ResponseWriter, r *http.Request) {
@@ -79,7 +81,7 @@ func (h *operatorHandler) journal(w http.ResponseWriter, r *http.Request) {
 	}
 	switch action {
 	case "create":
-		floor, q, ok := readJournalCreate(w, r, h.enrollment.Now().UTC(), h.insecureHTTPTest)
+		floor, q, generation, ok := readJournalCreate(w, r, h.enrollment.Now().UTC(), h.insecureHTTPTest)
 		if !ok {
 			return
 		}
@@ -88,7 +90,7 @@ func (h *operatorHandler) journal(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		defer release()
-		_, err := h.enrollment.CreateJournalRequest(r.Context(), parts[3], floor, q, h.enrollment.Now().UTC())
+		_, err := h.enrollment.CreateJournalRequestWithGeneration(r.Context(), parts[3], floor, q, generation, h.enrollment.Now().UTC())
 		release()
 		if err != nil {
 			journalOperatorError(w, err)
@@ -197,6 +199,24 @@ func (h *operatorHandler) writeJournalView(w http.ResponseWriter, r *http.Reques
 		v.ExpectedFloor = strconv.FormatUint(s.Description.Identity.Sequence, 10)
 		v.ContentStatus = s.ContentStatus
 	}
+	generation, generationErr := h.enrollment.JournalGenerationStatus(r.Context(), device, now)
+	if generationErr != nil && !errors.Is(generationErr, journalrequest.ErrNotReady) {
+		journalOperatorError(w, generationErr)
+		return
+	}
+	if generation != nil {
+		v.SchemaVersion = "tracebolt.journal-view.v2"
+		v.Generation = generation
+	}
+	// Status and report reads independently recheck authority. A report racing
+	// between them may cancel old work; never publish a hybrid active view.
+	if v.Request != nil {
+		d := v.Request.Description
+		if d.SchemaVersion == journalrequest.SchemaVersionV2 && (generation == nil || d.PolicyGeneration.Revision > generation.PolicyGeneration.Revision || d.PolicyGeneration.Revision == generation.PolicyGeneration.Revision && d.PolicyGeneration != generation.PolicyGeneration) || generation != nil && (v.Request.State == journalrequest.Pending || v.Request.State == journalrequest.Claimed) && (d.SchemaVersion != journalrequest.SchemaVersionV2 || d.PolicyGeneration != generation.PolicyGeneration) {
+			journalOperatorError(w, journalrequest.ErrConflict)
+			return
+		}
+	}
 	if !operatorStillActive(w, r) {
 		return
 	}
@@ -210,6 +230,8 @@ func journalOperatorError(w http.ResponseWriter, err error) {
 		fail(w, 409, "journal_conflict", "The journal request changed. Refresh before continuing.")
 	case errors.Is(err, journalrequest.ErrExpired), errors.Is(err, journalrequest.ErrCanceled), errors.Is(err, journalcache.ErrUnavailable):
 		fail(w, 409, "journal_unavailable", "Captured journal content is expired, canceled or unavailable; it will not be recollected automatically.")
+	case errors.Is(err, enrollmentstore.ErrJournalGenerationStale):
+		fail(w, 409, "journal_generation_stale", "A fresh endpoint policy report is required. Refresh before an explicit new capture.")
 	case errors.Is(err, journalrequest.ErrNotReady):
 		fail(w, 409, "journal_not_ready", "A current system observation is required before creating a journal request.")
 	case errors.Is(err, journalrequest.ErrNotFound), errors.Is(err, enrollmentstate.ErrNotFound):
@@ -270,29 +292,61 @@ func journalIdentity(raw []byte, id *journalrequest.Identity) bool {
 	return json.Unmarshal(v["sequence"], &seq) == nil && seq == strconv.FormatUint(id.Sequence, 10)
 }
 
-func readJournalCreate(w http.ResponseWriter, r *http.Request, now time.Time, insecure bool) (uint64, journalview.Query, bool) {
+func readJournalCreate(w http.ResponseWriter, r *http.Request, now time.Time, insecure bool) (uint64, journalview.Query, journalgeneration.Tuple, bool) {
 	var in struct {
-		ExpectedFloor         string          `json:"expectedFloor"`
-		Query                 json.RawMessage `json:"query"`
-		AcknowledgeLogContent bool            `json:"acknowledgeLogContent"`
-		AcknowledgePlaintext  bool            `json:"acknowledgePlaintext"`
+		ExpectedFloor            string          `json:"expectedFloor"`
+		ExpectedPolicyGeneration json.RawMessage `json:"expectedPolicyGeneration"`
+		Query                    json.RawMessage `json:"query"`
+		AcknowledgeLogContent    bool            `json:"acknowledgeLogContent"`
+		AcknowledgePlaintext     bool            `json:"acknowledgePlaintext"`
 	}
-	if !readObject(w, r, 4096, []string{"expectedFloor", "query", "acknowledgeLogContent", "acknowledgePlaintext"}, &in) {
-		return 0, journalview.Query{}, false
+	// Choose the explicitly versioned optional shape, then use the existing
+	// singleton-key/null/unknown-field parser over the same bounded bytes.
+	raw, readErr := io.ReadAll(http.MaxBytesReader(w, r.Body, 4096))
+	if readErr != nil {
+		var maximum *http.MaxBytesError
+		if errors.As(readErr, &maximum) {
+			fail(w, 413, "body_too_large", "Request body exceeds this endpoint's byte limit.")
+		} else {
+			fail(w, 400, "invalid_journal_request", "The journal request body is invalid.")
+		}
+		return 0, journalview.Query{}, journalgeneration.Tuple{}, false
+	}
+	var fields map[string]json.RawMessage
+	if json.Unmarshal(raw, &fields) != nil {
+		fail(w, 400, "invalid_journal_request", "The journal request body is invalid.")
+		return 0, journalview.Query{}, journalgeneration.Tuple{}, false
+	}
+	keys := []string{"expectedFloor", "query", "acknowledgeLogContent", "acknowledgePlaintext"}
+	if _, exists := fields["expectedPolicyGeneration"]; exists {
+		keys = append(keys, "expectedPolicyGeneration")
+	}
+	r.Body = io.NopCloser(bytes.NewReader(raw))
+	if !readObject(w, r, 4096, keys, &in) {
+		return 0, journalview.Query{}, journalgeneration.Tuple{}, false
 	}
 	floor, err := strconv.ParseUint(in.ExpectedFloor, 10, 64)
 	var q journalview.Query
 	if err != nil || strconv.FormatUint(floor, 10) != in.ExpectedFloor || !journalObject(in.Query, []string{"unit", "start", "end", "maxPriority"}, &q) || journalview.ValidateQuery(q, now) != nil {
 		fail(w, 400, "invalid_journal_request", "Use one exact service, a past UTC time range up to one hour, and priority 0–7.")
-		return 0, journalview.Query{}, false
+		return 0, journalview.Query{}, journalgeneration.Tuple{}, false
 	}
 	if !in.AcknowledgeLogContent {
 		fail(w, 400, "journal_acknowledgement_required", "Acknowledge that journal messages may contain credentials, personal data or other secrets despite best-effort masking.")
-		return 0, journalview.Query{}, false
+		return 0, journalview.Query{}, journalgeneration.Tuple{}, false
 	}
 	if insecure && !in.AcknowledgePlaintext {
 		fail(w, 400, "journal_plaintext_acknowledgement_required", "Acknowledge that this HTTP test sends log content unencrypted without server authentication.")
-		return 0, journalview.Query{}, false
+		return 0, journalview.Query{}, journalgeneration.Tuple{}, false
 	}
-	return floor, q, true
+	var generation journalgeneration.Tuple
+	if len(in.ExpectedPolicyGeneration) != 0 {
+		var e error
+		generation, e = journalgeneration.Decode(in.ExpectedPolicyGeneration)
+		if e != nil {
+			fail(w, 400, "invalid_journal_request", "The expected policy generation is invalid.")
+			return 0, journalview.Query{}, journalgeneration.Tuple{}, false
+		}
+	}
+	return floor, q, generation, true
 }

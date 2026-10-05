@@ -7,6 +7,7 @@ import (
 	"errors"
 	"path/filepath"
 
+	"localrmm/internal/journalgeneration"
 	"localrmm/internal/journalhelper"
 	"localrmm/internal/journalpolicy"
 	"localrmm/internal/journalstate"
@@ -20,9 +21,11 @@ var errJournalDenied = errors.New("journal_denied")
 var errJournalHelper = errors.New("journal_helper_unavailable")
 
 type journalLocal struct {
-	policy     journalpolicy.Policy
-	revision   string
-	deployment journalhelper.Deployment
+	policy          journalpolicy.Policy
+	revision        string
+	deployment      journalhelper.Deployment
+	generation      journalgeneration.Tuple
+	activationPhase string
 }
 
 func journalStateDirectory(c Config) string { return filepath.Join(c.StateDirectory, "journal") }

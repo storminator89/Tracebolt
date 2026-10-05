@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"localrmm/internal/enrollmentstate"
+	"localrmm/internal/journalgeneration"
 	"localrmm/internal/journalrequest"
 	"localrmm/internal/journalview"
 )
@@ -60,6 +61,9 @@ func (s *Store) saveJournalRecord(ctx context.Context, t *transaction, snap enro
 		return journalrequest.ErrInvalid
 	}
 	system.JournalRequest = &query
+	return s.saveJournalSystem(ctx, t, snap, system)
+}
+func (s *Store) saveJournalSystem(ctx context.Context, t *transaction, snap enrollmentstate.Snapshot, system systemRecord) error {
 	b, err := json.Marshal(system)
 	if err != nil {
 		return ErrStorage
@@ -116,8 +120,8 @@ func (s *Store) journalTransaction(ctx context.Context, now time.Time, action fu
 	var outcome error
 	err = s.transact(ctx, func(t *transaction) error {
 		err := action(t)
-		if errors.Is(err, journalrequest.ErrExpired) {
-			outcome = journalrequest.ErrExpired
+		if errors.Is(err, journalrequest.ErrExpired) || errors.Is(err, ErrJournalGenerationStale) {
+			outcome = err
 			return nil
 		}
 		return err
@@ -134,11 +138,20 @@ func (s *Store) journalTransaction(ctx context.Context, now time.Time, action fu
 // Each successful call advances the per-device floor; it is not a retry API.
 // No request is issued automatically when content or a claim response is lost.
 func (s *Store) CreateJournalRequest(ctx context.Context, device string, expectedFloor uint64, q journalview.Query, now time.Time) (journalrequest.Description, error) {
+	return s.CreateJournalRequestWithGeneration(ctx, device, expectedFloor, q, journalgeneration.Tuple{}, now)
+}
+
+// A zero expected generation is permitted only before any generation report.
+// The generation and sequence compare-and-swap guards share the write transaction.
+func (s *Store) CreateJournalRequestWithGeneration(ctx context.Context, device string, expectedFloor uint64, q journalview.Query, expected journalgeneration.Tuple, now time.Time) (journalrequest.Description, error) {
 	var out journalrequest.Description
 	now = now.UTC()
 	err := s.journalTransaction(ctx, now, func(t *transaction) error {
 		snap, system, err := s.journalOperatorAuthority(t, device, now)
 		if err != nil {
+			return err
+		}
+		if err = s.checkJournalGenerationCreate(ctx, t, snap, system, expected, now); err != nil {
 			return err
 		}
 		floor := uint64(0)
@@ -160,7 +173,12 @@ func (s *Store) CreateJournalRequest(ctx context.Context, device string, expecte
 			return ErrSystemCapacity
 		}
 		sequence := floor + 1
-		query, err := journalrequest.New(device, snap.Issuance.CertificateHash, sequence, q, now)
+		var query journalrequest.Record
+		if expected == (journalgeneration.Tuple{}) {
+			query, err = journalrequest.New(device, snap.Issuance.CertificateHash, sequence, q, now)
+		} else {
+			query, err = journalrequest.NewWithGeneration(device, snap.Issuance.CertificateHash, sequence, q, expected, now)
+		}
 		if err != nil {
 			return err
 		}
@@ -188,6 +206,9 @@ func (s *Store) PeekJournalRequest(ctx context.Context, id, hash string, now tim
 		}
 		query, err := currentJournal(system, snap, nil)
 		if err != nil {
+			return err
+		}
+		if err = currentJournalGeneration(system, snap, query.Description); err != nil {
 			return err
 		}
 		expired, err := s.journalExpired(ctx, t, snap, system, query, now)
@@ -227,6 +248,9 @@ func (s *Store) ClaimJournalRequest(ctx context.Context, id, hash string, claim 
 		if err != nil {
 			return err
 		}
+		if err = currentJournalGeneration(system, snap, query.Description); err != nil {
+			return err
+		}
 		expired, err := s.journalExpired(ctx, t, snap, system, query, now)
 		if err != nil {
 			return err
@@ -237,7 +261,7 @@ func (s *Store) ClaimJournalRequest(ctx context.Context, id, hash string, claim 
 		if err = journalrequest.CheckTime(query, now); err != nil {
 			return err
 		}
-		if !journalrequest.ValidDigest(claim.PolicyDigest) {
+		if !journalrequest.ValidDigest(claim.PolicyDigest) || query.Description.SchemaVersion == journalrequest.SchemaVersionV2 && claim.PolicyDigest != query.Description.PolicyGeneration.PolicyDigest {
 			return journalrequest.ErrInvalid
 		}
 		if query.State != journalrequest.Pending {
@@ -269,6 +293,9 @@ func (s *Store) AcceptJournalResult(ctx context.Context, id, hash string, result
 		}
 		query, err := currentJournal(system, snap, &result.Claim.Identity)
 		if err != nil {
+			return err
+		}
+		if err = currentJournalGeneration(system, snap, query.Description); err != nil {
 			return err
 		}
 		expired, err := s.journalExpired(ctx, t, snap, system, query, now)

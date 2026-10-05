@@ -90,7 +90,7 @@ func TestJournalExplicitAcknowledgementsAndNestedContracts(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			r := httptest.NewRequest("POST", "/journal/create", strings.NewReader(tc.body))
 			w := httptest.NewRecorder()
-			_, _, ok := readJournalCreate(w, r, now, tc.plaintext)
+			_, _, _, ok := readJournalCreate(w, r, now, tc.plaintext)
 			if ok != tc.success {
 				t.Fatal("unexpected acknowledgement/contract outcome")
 			}
@@ -108,5 +108,21 @@ func TestJournalIdentityRejectsAmbiguousCAS(t *testing.T) {
 		if journalIdentity([]byte(b), &got) {
 			t.Fatal("ambiguous identity accepted")
 		}
+	}
+}
+
+func TestJournalExpectedGenerationShape(t *testing.T) {
+	now := time.Date(2026, 10, 4, 12, 0, 0, 0, time.UTC)
+	tuple := `{"revision":"1","generation":"` + strings.Repeat("a", 64) + `","policyDigest":"sha256:` + strings.Repeat("b", 64) + `"}`
+	base := `{"expectedFloor":"0","query":{"unit":"fixture.service","start":"2026-10-04T11:59:00Z","end":"2026-10-04T12:00:00Z","maxPriority":3},"acknowledgeLogContent":true,"acknowledgePlaintext":false,"expectedPolicyGeneration":` + tuple + `}`
+	for name, body := range map[string]string{"valid": base, "numeric revision": strings.Replace(base, `"revision":"1"`, `"revision":1`, 1), "alias": strings.Replace(base, `"expectedPolicyGeneration"`, `"ExpectedPolicyGeneration"`, 1), "null": strings.Replace(base, tuple, `null`, 1), "duplicate tuple field": strings.Replace(base, `"revision":"1"`, `"revision":"1","revision":"1"`, 1), "extra scope": strings.Replace(base, `"revision":"1"`, `"revision":"1","unit":"other.service"`, 1), "missing tuple field": strings.Replace(base, `"revision":"1",`, "", 1), "zero tuple": strings.Replace(base, `"revision":"1"`, `"revision":"0"`, 1)} {
+		t.Run(name, func(t *testing.T) {
+			r := httptest.NewRequest("POST", "/journal/create", strings.NewReader(body))
+			w := httptest.NewRecorder()
+			_, _, generation, ok := readJournalCreate(w, r, now, false)
+			if ok != (name == "valid") || ok && generation.Revision != 1 {
+				t.Fatal("generation contract", ok, w.Code)
+			}
+		})
 	}
 }

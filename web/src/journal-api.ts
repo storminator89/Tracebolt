@@ -1,7 +1,7 @@
 import { APIError, getProtectedRequestEpoch, mutateRaw, request } from './api';
 import { hasLogoutIntent, validOperatorSession } from './auth';
 import { JOURNAL_PAGE_BYTES, JOURNAL_VIEW_BYTES, validJournalDevice, journalAge, journalTime } from './journal-types';
-import type { JournalIdentity, JournalQuery } from './journal-types';
+import type { JournalIdentity, JournalQuery, JournalPolicyGeneration } from './journal-types';
 const path = (deviceId: string) => { if (!validJournalDevice(deviceId)) throw new APIError('Invalid journal device.'); return `/devices/${encodeURIComponent(deviceId)}/journal`; };
 /** Every content read rechecks the operator. Queries carry text in bounded POST bodies, never URLs. */
 async function session(signal: AbortSignal, insecureTestMode: boolean, sessionKey: string | null) {
@@ -18,12 +18,12 @@ export async function readJournal(deviceId: string, signal: AbortSignal, insecur
     if (signal.aborted || epoch !== getProtectedRequestEpoch() || hasLogoutIntent()) throw new DOMException('Aborted', 'AbortError');
     return request<unknown>(path(deviceId), { signal }, JOURNAL_VIEW_BYTES);
 }
-export async function createJournal(deviceId: string, expectedFloor: string, query: JournalQuery, acknowledgePlaintext: boolean, signal: AbortSignal, insecureTestMode: boolean, sessionKey: string | null) {
+export async function createJournal(deviceId: string, expectedFloor: string, query: JournalQuery, acknowledgePlaintext: boolean, signal: AbortSignal, insecureTestMode: boolean, sessionKey: string | null, expectedPolicyGeneration?: JournalPolicyGeneration) {
     const epoch = getProtectedRequestEpoch();
     await session(signal, insecureTestMode, sessionKey);
     if (signal.aborted || epoch !== getProtectedRequestEpoch() || hasLogoutIntent()) throw new DOMException('Aborted', 'AbortError');
     if (insecureTestMode !== acknowledgePlaintext) throw new APIError('Plaintext acknowledgement does not match this session.');
-    return mutateRaw<unknown>(`${path(deviceId)}/create`, JSON.stringify({ expectedFloor, query, acknowledgeLogContent: true, acknowledgePlaintext }), {}, signal, JOURNAL_VIEW_BYTES);
+    return mutateRaw<unknown>(`${path(deviceId)}/create`, JSON.stringify({ expectedFloor, query, acknowledgeLogContent: true, acknowledgePlaintext, ...(expectedPolicyGeneration ? { expectedPolicyGeneration } : {}) }), {}, signal, JOURNAL_VIEW_BYTES);
 }
 export async function cancelJournal(deviceId: string, identity: JournalIdentity, signal: AbortSignal, insecureTestMode: boolean, sessionKey: string | null) {
     const epoch = getProtectedRequestEpoch();

@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"localrmm/internal/enrollmentstore"
+	"localrmm/internal/journalgeneration"
 	"localrmm/internal/journalrequest"
 	"localrmm/internal/journalview"
 	"localrmm/internal/journalwire"
@@ -118,6 +119,9 @@ func (c *Cache) add(device string, d journalrequest.Description, now time.Time) 
 	return e, nil
 }
 func (c *Cache) Create(ctx context.Context, device string, floor uint64, q journalview.Query, now time.Time) (journalrequest.Description, error) {
+	return c.CreateWithGeneration(ctx, device, floor, q, journalgeneration.Tuple{}, now)
+}
+func (c *Cache) CreateWithGeneration(ctx context.Context, device string, floor uint64, q journalview.Query, expected journalgeneration.Tuple, now time.Time) (journalrequest.Description, error) {
 	unlock, lockErr := c.lock(ctx)
 	if lockErr != nil {
 		err := lockErr
@@ -126,7 +130,7 @@ func (c *Cache) Create(ctx context.Context, device string, floor uint64, q journ
 	defer unlock()
 	now = c.freshNow(now)
 	c.prune(now)
-	d, e := c.store.CreateJournalRequest(ctx, device, floor, q, now)
+	d, e := c.store.CreateJournalRequestWithGeneration(ctx, device, floor, q, expected, now)
 	if e == nil {
 		c.remove(device)
 	}

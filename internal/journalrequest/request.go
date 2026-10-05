@@ -12,18 +12,20 @@ import (
 	"time"
 
 	"localrmm/internal/enrollmentcrypto"
+	"localrmm/internal/journalgeneration"
 	"localrmm/internal/journalview"
 )
 
 const (
-	SchemaVersion  = "tracebolt.journal-request.v1"
-	Lifetime       = 15 * time.Minute
-	MaxRecordBytes = 4 << 10
-	Pending        = "pending"
-	Claimed        = "claimed"
-	Accepted       = "accepted"
-	Canceled       = "canceled"
-	Expired        = "expired"
+	SchemaVersion   = "tracebolt.journal-request.v1"
+	SchemaVersionV2 = "tracebolt.journal-request.v2"
+	Lifetime        = 15 * time.Minute
+	MaxRecordBytes  = 4 << 10
+	Pending         = "pending"
+	Claimed         = "claimed"
+	Accepted        = "accepted"
+	Canceled        = "canceled"
+	Expired         = "expired"
 )
 
 var (
@@ -60,14 +62,15 @@ type Identity struct {
 
 // Description is unclaimed work metadata, never collection permission.
 type Description struct {
-	SchemaVersion   string            `json:"schemaVersion"`
-	Identity        Identity          `json:"identity"`
-	DeviceID        string            `json:"deviceId"`
-	CertificateHash string            `json:"certificateHash"`
-	Query           journalview.Query `json:"query"`
-	Budgets         Budgets           `json:"budgets"`
-	CreatedAt       time.Time         `json:"createdAt"`
-	ExpiresAt       time.Time         `json:"expiresAt"`
+	SchemaVersion    string                  `json:"schemaVersion"`
+	Identity         Identity                `json:"identity"`
+	DeviceID         string                  `json:"deviceId"`
+	CertificateHash  string                  `json:"certificateHash"`
+	Query            journalview.Query       `json:"query"`
+	Budgets          Budgets                 `json:"budgets"`
+	CreatedAt        time.Time               `json:"createdAt"`
+	ExpiresAt        time.Time               `json:"expiresAt"`
+	PolicyGeneration journalgeneration.Tuple `json:"policyGeneration,omitzero"`
 }
 type Claim struct {
 	Identity     Identity `json:"identity"`
@@ -140,11 +143,47 @@ func QueryDigest(q journalview.Query, now time.Time) (string, error) {
 	sum := sha256.Sum256(b)
 	return "sha256:" + hex.EncodeToString(sum[:]), nil
 }
+
+// QueryDigestWithGeneration uses a distinct domain and commits every tuple
+// field alongside the exact unchanged service query and fixed reader budgets.
+func QueryDigestWithGeneration(q journalview.Query, generation journalgeneration.Tuple, now time.Time) (string, error) {
+	if journalgeneration.Validate(generation) != nil || journalview.ValidateQuery(q, now) != nil {
+		return "", ErrInvalid
+	}
+	b, err := json.Marshal(struct {
+		Domain           string                  `json:"domain"`
+		Query            journalview.Query       `json:"query"`
+		Budgets          Budgets                 `json:"budgets"`
+		PolicyGeneration journalgeneration.Tuple `json:"policyGeneration"`
+	}{SchemaVersionV2, q, FixedBudgets(), generation})
+	if err != nil {
+		return "", ErrInvalid
+	}
+	sum := sha256.Sum256(b)
+	return "sha256:" + hex.EncodeToString(sum[:]), nil
+}
+
 func New(device, leaf string, sequence uint64, q journalview.Query, now time.Time) (Record, error) {
+	return newRecord(device, leaf, sequence, q, journalgeneration.Tuple{}, now)
+}
+
+func NewWithGeneration(device, leaf string, sequence uint64, q journalview.Query, generation journalgeneration.Tuple, now time.Time) (Record, error) {
+	if journalgeneration.Validate(generation) != nil {
+		return Record{}, ErrInvalid
+	}
+	return newRecord(device, leaf, sequence, q, generation, now)
+}
+
+func newRecord(device, leaf string, sequence uint64, q journalview.Query, generation journalgeneration.Tuple, now time.Time) (Record, error) {
 	if !validTime(now) || now.Add(Lifetime).Year() > 9999 || !enrollmentcrypto.ValidID(device, "agent_") || !enrollmentcrypto.ValidHash(leaf) || sequence == 0 {
 		return Record{}, ErrInvalid
 	}
 	digest, err := QueryDigest(q, now)
+	version := SchemaVersion
+	if generation != (journalgeneration.Tuple{}) {
+		version = SchemaVersionV2
+		digest, err = QueryDigestWithGeneration(q, generation, now)
+	}
 	if err != nil {
 		return Record{}, err
 	}
@@ -152,13 +191,26 @@ func New(device, leaf string, sequence uint64, q journalview.Query, now time.Tim
 	if _, err := rand.Read(random[:]); err != nil {
 		return Record{}, ErrInvalid
 	}
-	d := Description{SchemaVersion, Identity{"journal_" + hex.EncodeToString(random[:]), sequence, digest}, device, leaf, q, FixedBudgets(), now, now.Add(Lifetime)}
+	d := Description{SchemaVersion: version, Identity: Identity{"journal_" + hex.EncodeToString(random[:]), sequence, digest}, DeviceID: device, CertificateHash: leaf, Query: q, Budgets: FixedBudgets(), CreatedAt: now, ExpiresAt: now.Add(Lifetime), PolicyGeneration: generation}
 	return Record{Description: d, State: Pending}, nil
 }
 func Validate(r Record) error {
 	d := r.Description
 	digest, err := QueryDigest(d.Query, d.CreatedAt)
-	if err != nil || !validTime(d.CreatedAt) || !validTime(d.ExpiresAt) || d.SchemaVersion != SchemaVersion || !enrollmentcrypto.ValidID(d.Identity.ID, "journal_") || d.Identity.Sequence == 0 || digest != d.Identity.QueryDigest || !enrollmentcrypto.ValidID(d.DeviceID, "agent_") || !enrollmentcrypto.ValidHash(d.CertificateHash) || d.Budgets != FixedBudgets() || !d.ExpiresAt.Equal(d.CreatedAt.Add(Lifetime)) {
+	switch d.SchemaVersion {
+	case SchemaVersion:
+		if d.PolicyGeneration != (journalgeneration.Tuple{}) {
+			return ErrInvalid
+		}
+	case SchemaVersionV2:
+		digest, err = QueryDigestWithGeneration(d.Query, d.PolicyGeneration, d.CreatedAt)
+	default:
+		return ErrInvalid
+	}
+	if err != nil || !validTime(d.CreatedAt) || !validTime(d.ExpiresAt) || !enrollmentcrypto.ValidID(d.Identity.ID, "journal_") || d.Identity.Sequence == 0 || digest != d.Identity.QueryDigest || !enrollmentcrypto.ValidID(d.DeviceID, "agent_") || !enrollmentcrypto.ValidHash(d.CertificateHash) || d.Budgets != FixedBudgets() || !d.ExpiresAt.Equal(d.CreatedAt.Add(Lifetime)) {
+		return ErrInvalid
+	}
+	if r.ClaimedAt != nil && d.SchemaVersion == SchemaVersionV2 && r.PolicyDigest != d.PolicyGeneration.PolicyDigest {
 		return ErrInvalid
 	}
 	if r.ClaimedAt != nil && (!validTime(*r.ClaimedAt) || r.ClaimedAt.Before(d.CreatedAt) || !r.ClaimedAt.Before(d.ExpiresAt) || !ValidDigest(r.PolicyDigest)) {

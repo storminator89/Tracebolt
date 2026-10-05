@@ -44,3 +44,29 @@ it('accepts final Go request/cache JSON including case-insensitive snapshot sear
     expect(validJournalView(status, goFixture.status.deviceId)).toBe(true);
     if (validJournalView(status, goFixture.status.deviceId)) expect(validJournalPage(goFixture.page, status, 'needle', 0)).toBe(true);
 });
+
+import type { JournalGenerationView } from './journal-types';
+export function generationFixture(): JournalGenerationView {
+    return { schemaVersion: 'tracebolt.journal-generation-view.v1', policyGeneration: { revision: '1', generation: 'a'.repeat(64), policyDigest: `sha256:${'d'.repeat(64)}` }, sequence: '1', observedAt: journalNow, receivedAt: journalNow, expiresAt: '2026-10-04T12:05:00Z', fresh: true };
+}
+describe('generation-bound journal views', () => {
+    it('requires explicit view/request versions and exact bounded tuples', () => {
+        const v = journalView('pending'); v.schemaVersion = 'tracebolt.journal-view.v2'; v.generation = generationFixture();
+        expect(validJournalView(v, journalDevice)).toBe(false);
+        v.request!.description.schemaVersion = 'tracebolt.journal-request.v2'; v.request!.description.policyGeneration = { ...v.generation.policyGeneration };
+        expect(validJournalView(v, journalDevice)).toBe(true);
+        for (const tuple of [{ ...v.generation.policyGeneration, revision: '01' }, { ...v.generation.policyGeneration, revision: '18446744073709551616' }, { ...v.generation.policyGeneration, generation: '0'.repeat(64) }, { ...v.generation.policyGeneration, extra: true }]) {
+            expect(validJournalView({ ...v, generation: { ...v.generation, policyGeneration: tuple } }, journalDevice)).toBe(false);
+        }
+        expect(validJournalView({ ...v, schemaVersion: 'tracebolt.journal-view.v1' }, journalDevice)).toBe(false);
+        expect(validJournalView({ ...v, generation: undefined }, journalDevice)).toBe(false);
+        expect(validJournalView({ ...v, generation: { ...v.generation, policyGeneration: { ...v.generation.policyGeneration, revision: '2' } } }, journalDevice)).toBe(false);
+    });
+    it('accepts stale floor metadata without upgrading freshness and retains old accepted content', () => {
+        const v = journalView(); v.schemaVersion = 'tracebolt.journal-view.v2'; v.generation = generationFixture();
+        expect(validJournalView(v, journalDevice)).toBe(true);
+        v.serverNow = '2026-10-04T12:05:00Z'; expect(validJournalView(v, journalDevice)).toBe(false);
+        v.generation.fresh = false; expect(validJournalView(v, journalDevice)).toBe(true);
+        v.generation.expiresAt = '2026-10-04T12:06:00Z'; expect(validJournalView(v, journalDevice)).toBe(false);
+    });
+});

@@ -2,7 +2,9 @@ package enrollmentservice
 
 import (
 	"context"
+	"localrmm/internal/enrollmentstore"
 	"localrmm/internal/journalcache"
+	"localrmm/internal/journalgeneration"
 	"localrmm/internal/journalrequest"
 	"localrmm/internal/journalview"
 	"time"
@@ -39,4 +41,17 @@ func (s *Service) JournalPage(ctx context.Context, device string, q journalcache
 		return journalcache.Page{}, ErrConfiguration
 	}
 	return s.journal.Page(ctx, device, q, now)
+}
+
+func (s *Service) CreateJournalRequestWithGeneration(ctx context.Context, device string, floor uint64, q journalview.Query, expected journalgeneration.Tuple, now time.Time) (journalrequest.Description, error) {
+	if s.JournalCache() == nil {
+		return journalrequest.Description{}, ErrConfiguration
+	}
+	return s.journal.CreateWithGeneration(ctx, device, floor, q, expected, now)
+}
+func (s *Service) JournalGenerationStatus(ctx context.Context, device string, now time.Time) (*enrollmentstore.JournalGenerationView, error) {
+	if s == nil || s.serviceState == nil || s.store == nil {
+		return nil, ErrConfiguration
+	}
+	return s.store.JournalGenerationStatus(ctx, device, now)
 }

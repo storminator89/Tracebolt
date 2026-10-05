@@ -91,6 +91,13 @@ func (h *Ingress) journalRequest(w http.ResponseWriter, r *http.Request) {
 	var out any
 	var err error
 	switch r.URL.Path {
+	case journalwire.GenerationPath:
+		report, e := journalwire.DecodeGenerationReport(raw)
+		if e != nil || !match(report.Sequence) {
+			failure(w, 400, "invalid_journal_generation")
+			return
+		}
+		out, err = h.store.AcceptJournalGeneration(r.Context(), identity.InvitationID, identity.Issuance.CertificateHash, report, h.now().UTC())
 	case journalwire.PeekPath:
 		if journalwire.DecodePeek(raw) != nil || !match(1) {
 			failure(w, 400, "invalid_journal_request")
@@ -165,6 +172,8 @@ func journalFailure(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, journalrequest.ErrNotFound):
 		failure(w, 404, "journal_not_found")
+	case errors.Is(err, enrollmentstore.ErrJournalGenerationStale):
+		failure(w, 409, "journal_generation_stale")
 	case errors.Is(err, journalrequest.ErrNotReady):
 		failure(w, 409, "journal_not_ready")
 	case errors.Is(err, journalrequest.ErrConsumed):

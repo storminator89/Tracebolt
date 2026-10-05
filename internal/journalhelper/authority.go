@@ -8,22 +8,25 @@ import (
 	"io"
 	"slices"
 
+	"localrmm/internal/journalgeneration"
 	"localrmm/internal/journalpolicy"
 )
 
 const DeploymentVersion = "tracebolt.journal-helper-deployment.v1"
+const DeploymentVersionV2 = "tracebolt.journal-helper-deployment.v2"
 const MaxDeploymentBytes = 1024
 
 // Deployment is root-protected numeric metadata, not an account-provisioner.
 // The dedicated non-login UID must not be the agent. Its only supplementary
 // group is the exact journal GID declared here; the existing agent is unchanged.
 type Deployment struct {
-	SchemaVersion string `json:"schemaVersion"`
-	HelperUID     uint32 `json:"helperUid"`
-	HelperGID     uint32 `json:"helperGid"`
-	JournalGID    uint32 `json:"journalGid"`
-	AgentUID      uint32 `json:"agentUid"`
-	AgentGID      uint32 `json:"agentGid"`
+	SchemaVersion            string `json:"schemaVersion"`
+	HelperUID                uint32 `json:"helperUid"`
+	HelperGID                uint32 `json:"helperGid"`
+	JournalGID               uint32 `json:"journalGid"`
+	AgentUID                 uint32 `json:"agentUid"`
+	AgentGID                 uint32 `json:"agentGid"`
+	PolicyGenerationRequired bool   `json:"policyGenerationRequired,omitempty"`
 }
 
 type Identity struct {
@@ -43,11 +46,13 @@ type State struct {
 	Policy     journalpolicy.Policy
 	Deployment Deployment
 	Revision   string
+	// PolicyGeneration comes only from an exact committed protected activation.
+	PolicyGeneration journalgeneration.Tuple
 }
 
 func validID(id uint32) bool { return id != 0 && id != ^uint32(0) }
 func validateDeployment(d Deployment) error {
-	if d.SchemaVersion != DeploymentVersion || !validID(d.HelperUID) || !validID(d.HelperGID) || !validID(d.JournalGID) || !validID(d.AgentUID) || !validID(d.AgentGID) || d.HelperUID == d.AgentUID || d.HelperGID == d.AgentGID || d.HelperGID == d.JournalGID || d.AgentGID == d.JournalGID {
+	if d.SchemaVersion != DeploymentVersion && d.SchemaVersion != DeploymentVersionV2 || d.PolicyGenerationRequired != (d.SchemaVersion == DeploymentVersionV2) || !validID(d.HelperUID) || !validID(d.HelperGID) || !validID(d.JournalGID) || !validID(d.AgentUID) || !validID(d.AgentGID) || d.HelperUID == d.AgentUID || d.HelperGID == d.AgentGID || d.HelperGID == d.JournalGID || d.AgentGID == d.JournalGID {
 		return ErrRejected
 	}
 	return nil
@@ -92,6 +97,10 @@ func validateIdentity(d Deployment, i Identity) error {
 	return nil
 }
 func validateState(s State, i Identity) error {
+	generation, err := journalpolicy.PolicyGeneration(s.Policy)
+	if err != nil || generation != s.PolicyGeneration || s.Deployment.PolicyGenerationRequired != (s.Policy.SchemaVersion == journalpolicy.VersionV2) {
+		return ErrRejected
+	}
 	_, ok := taggedDigest(s.Revision)
 	if !ok || journalpolicy.Validate(s.Policy) != nil || validateIdentity(s.Deployment, i) != nil || s.Policy.HelperUID != s.Deployment.HelperUID || s.Policy.AgentUID != s.Deployment.AgentUID {
 		return ErrRejected

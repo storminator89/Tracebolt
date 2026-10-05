@@ -36,6 +36,7 @@ const (
 	ClaimPath                 = PathPrefix + "claim"
 	ResultPath                = PathPrefix + "result"
 	StatusPath                = PathPrefix + "status"
+	GenerationPath            = PathPrefix + "generation"
 	MaxCertificateHeaderBytes = 4096
 	MaxHeaderBytes            = 8192
 	MaxAge                    = 2 * time.Minute

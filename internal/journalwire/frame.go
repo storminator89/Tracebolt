@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"localrmm/internal/enrollmentcrypto"
+	"localrmm/internal/journalgeneration"
 	"localrmm/internal/journalrequest"
 	"localrmm/internal/journalview"
 	"time"
@@ -32,7 +33,7 @@ func (Result) String() string               { return "journalwire.Result{content
 func (r Result) GoString() string           { return r.String() }
 func (r Result) Format(f fmt.State, _ rune) { _, _ = io.WriteString(f, r.String()) }
 func validPath(path string) bool {
-	return path == PeekPath || path == ClaimPath || path == ResultPath || path == StatusPath
+	return path == PeekPath || path == ClaimPath || path == ResultPath || path == StatusPath || path == GenerationPath
 }
 func BodyLimit(path string) int64 {
 	if path == ResultPath {
@@ -210,3 +211,20 @@ func validateDescription(v journalrequest.Description) (journalrequest.Descripti
 func (Verified) String() string               { return "journalwire.Verified{content redacted}" }
 func (v Verified) GoString() string           { return v.String() }
 func (v Verified) Format(f fmt.State, _ rune) { _, _ = io.WriteString(f, v.String()) }
+
+// Generation reports are public metadata only, with an independent monotonic
+// sequence. They do not grant permission to read any service or journal source.
+func EncodeGenerationReport(r journalgeneration.Report) ([]byte, error) {
+	b, err := journalgeneration.EncodeReport(r)
+	if err != nil {
+		return nil, ErrContract
+	}
+	return b, nil
+}
+func DecodeGenerationReport(b []byte) (journalgeneration.Report, error) {
+	r, err := journalgeneration.DecodeReport(b)
+	if err != nil {
+		return journalgeneration.Report{}, ErrContract
+	}
+	return r, nil
+}

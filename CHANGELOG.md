@@ -2,6 +2,12 @@
 
 Meaningful development checkpoints are recorded here. These are prototype milestones, not production releases.
 
+## 2026-10-05 — Prepare bounded journal allowlist amendment and document the pilot plan
+
+- Add a separately administered, add-only journal helper allowlist amendment with versioned local activation and durable generation reporting. Bind requests and results to the acknowledged generation, reject stale or mismatched work, and preserve endpoint identity, consume-once floors and original content expiry. No manager update or UI click grants local log access.
+- Document the single-internal-customer delivery order: finish UI/logs, then external alarms, real approved service/APT actions, application checks and bounded diagnostic history. The controlled-action core remains inert and unintegrated; no service restart or package execution is exposed.
+- Retain unmodified synthetic desktop/mobile browser previews from exact `ab5de596e79e92ad89376364953cd4cf9e78a016`, with viewport, source, workflow and image-hash evidence. Regenerate the exact-source Go vocabulary. Current rc.1 release/bootstrap pins stay fixed; source checks and screenshots do not establish host-helper amendment, installation or reboot acceptance.
+
 ## 2026-10-05 — Align browser evidence and improve Contact readability
 
 - Keep provenance assertions intact after explicitly opening the new Details view. Require the exact seventh source-guidance journal case in the closed browser gate; the previous six cases, identity/privacy checks and deadlines remain mandatory.

@@ -1,8 +1,10 @@
 # Linux log sources: current chooser and expansion design
 
-Status: the source chooser is implemented; the amendment lifecycle and broader
-collectors below are a design, not installed or enabled functionality. No fixture
-or browser test changes a Linux host or proves real journal visibility.
+Status: the source chooser and separate add-only amendment workflow are
+implemented source/fixture candidates. See [local amendment](linux-journal-amendment.md)
+for the exact plan/apply contract and remaining native acceptance gate. The broader
+collectors below remain a design. No fixture or browser test changes a Linux host
+or proves real journal visibility.
 
 ## What works now
 
@@ -33,14 +35,13 @@ An endpoint whose current approved list is `ssh.service`, `docker.service` and
 unit, and `systemd-journald.service` is the journal daemon's own diagnostics,
 not the whole journal. Existing source and policy bytes are unchanged.
 
-## Locally grantable service expansion: next implementation
+## Locally grantable service expansion
 
 The create-only [helper setup](linux-journal-helper.md) cannot edit an existing
 installation. Do not rerun it, hand-edit policy copies, remove setup evidence, or
-reinitialize consent to make an amendment pass. Add a separate reviewed
-`deploy/journal/amend.py` workflow; the following is its proposed contract, not a
-command currently shipped. First implementation supports adding exact service
-units only. Explicit removals/revocation remain a separately reviewed operation;
+reinitialize consent to make an amendment pass. The separate
+`deploy/journal/amend.py` workflow implements the reviewed contract below as a
+source/fixture candidate. It supports adding exact service units only. Explicit removals/revocation remain a separately reviewed operation;
 a caller cannot accidentally replace the original list with a shorter list.
 
 ### Read-only plan
@@ -72,14 +73,14 @@ a caller cannot accidentally replace the original list with a shorter list.
 A replacement with the same policy bytes must never revive a former revision.
 Use `tracebolt.journal-content-policy.v2` for amended policies, retaining the
 exact v1 service scope plus a positive monotonic `revision` and a fresh random
-256-bit `grantGeneration`. First amendment starts at revision 1; later amendments
+256-bit `generation`. First amendment starts at revision 1; later amendments
 increment it, with overflow rejected. The generation is public binding metadata,
 not a credential. No v1 grant implies v2. Restoring old bytes is not a rollback.
 
 Pending v1 requests currently acquire their policy digest only when claimed.
 Changing an allowlist alone therefore cannot reject all requests queued before
 an amendment. A local timestamp compared with manager `CreatedAt` also cannot
-prove this under clock skew. The first amendment must add explicit generation
+prove this under clock skew. The amendment uses explicit generation
 binding across the full request path:
 
 - The upgraded endpoint publishes a fixed metadata-only capability report over
@@ -113,10 +114,10 @@ binding across the full request path:
   be recalled by a local policy update and keeps its original expiry. Claimed
   and consumed requests retain their original one-shot semantics.
 
-This requires coordinated manager/agent/helper compatibility. Keep policy
-amendment apply default-off until this entire binding path and durable floors
-are implemented and independently tested. A partial pure planner is not
-permission to replace live policy files.
+This requires coordinated manager/agent/helper compatibility. The coordinated binding path and durable floors are implemented and tested
+with fixtures. Actual host use remains gated on explicit local permission and
+separately authorized native acceptance. Source work does not permit replacing
+live policy files.
 
 ### Apply, transaction and recovery
 
@@ -222,7 +223,7 @@ this host-ready.
 ## Broader source contracts after the amendment lifecycle
 
 Kernel, whole-system and system-wide authentication sources stay unavailable.
-They need a separately acknowledged typed v2 content contract across policy,
+They need a separately acknowledged, newly versioned source-kind contract across policy,
 request digest, helper framing, parser, transport, cache and operator validators.
 Do not encode them as fake `.service` names or interpret a missing/empty service
 as an unrestricted query. No generic journalctl arguments, fields, shell,

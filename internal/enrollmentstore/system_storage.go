@@ -70,14 +70,15 @@ type systemComplete struct {
 	PayloadBytes int                         `json:"payloadBytes"`
 }
 type systemRecord struct {
-	Receipt          systemwire.Receipt      `json:"receipt"`
-	Latest           *systemSnapshotMeta     `json:"latest"`
-	Services         *systemComplete         `json:"services"`
-	Sockets          *systemComplete         `json:"sockets"`
-	MaintenanceAt    *time.Time              `json:"maintenanceAt"`
-	EndpointIdentity *endpointIdentityRecord `json:"endpointIdentity,omitempty"`
-	JournalRequest   *journalrequest.Record  `json:"journalRequest,omitempty"`
-	CachedUpdates    *cachedUpdatesRecord    `json:"cachedUpdates,omitempty"`
+	Receipt           systemwire.Receipt       `json:"receipt"`
+	Latest            *systemSnapshotMeta      `json:"latest"`
+	Services          *systemComplete          `json:"services"`
+	Sockets           *systemComplete          `json:"sockets"`
+	MaintenanceAt     *time.Time               `json:"maintenanceAt"`
+	EndpointIdentity  *endpointIdentityRecord  `json:"endpointIdentity,omitempty"`
+	JournalRequest    *journalrequest.Record   `json:"journalRequest,omitempty"`
+	JournalGeneration *journalGenerationRecord `json:"journalGeneration,omitempty"`
+	CachedUpdates     *cachedUpdatesRecord     `json:"cachedUpdates,omitempty"`
 }
 
 type endpointIdentityRecord struct {
@@ -203,8 +204,21 @@ func validSystemRecord(snap enrollmentstate.Snapshot, r systemRecord) bool {
 			return false
 		}
 	}
+	if r.JournalGeneration != nil && !validJournalGeneration(snap, *r.JournalGeneration) {
+		return false
+	}
 	if r.JournalRequest != nil && !validJournalRecord(snap, *r.JournalRequest) {
 		return false
+	}
+	if r.JournalRequest != nil && r.JournalRequest.Description.SchemaVersion == journalrequest.SchemaVersionV2 {
+		q := r.JournalRequest
+		if r.JournalGeneration == nil {
+			return false
+		}
+		current, bound := r.JournalGeneration.Report.Tuple, q.Description.PolicyGeneration
+		if bound.Revision > current.Revision || bound.Revision == current.Revision && bound != current || (q.State == journalrequest.Pending || q.State == journalrequest.Claimed) && bound != current {
+			return false
+		}
 	}
 	return true
 }
