@@ -149,3 +149,10 @@ they do not establish effective host permissions or installed-service behavior.
 - [Linux process access checks](https://man7.org/linux/man-pages/man2/ptrace.2.html)
   support the separate-UID isolation requirement; filesystem hiding alone is
   not treated as separation from another same-UID process.
+
+## Finding sources and future scope changes
+
+The [Linux log source chooser and expansion design](linux-log-source-expansion.md)
+separates observed services from local grants and documents the proposed amendment
+lifecycle. Additional kernel/system/authentication scopes and existing-policy
+amendment apply are not implemented by this chooser increment.

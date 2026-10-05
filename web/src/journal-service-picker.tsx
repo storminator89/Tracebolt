@@ -2,6 +2,7 @@ import { useId } from 'react';
 import { useOperator } from './auth';
 import { useLocale } from './i18n';
 import { validJournalUnit } from './journal-types';
+import { journalServiceLabel, journalServiceSearches } from './journal-sources';
 import { useSystemInventory } from './system-inventory-resource';
 import { systemAgeStatus, systemSectionVisible, validSystemSearch } from './system-inventory-types';
 import './journal-service-picker.css';
@@ -18,6 +19,7 @@ const copy = {
         fresh: 'Within the observation window', stale: 'Stale / historical service observations',
         prior: 'Showing the last complete service inventory. The newer failed attempt does not refresh its original observation time.', failed: 'The latest service inventory attempt failed.',
         observed: 'Original observation time', whole: 'Whole retained service inventory', scanned: 'Rows scanned so far', matches: 'Matches found so far', shown: 'Rows on this page',
+        suggestions: 'Find a service by purpose', suggestionsHint: 'Shortcuts search observed service names. They do not prove that a service is installed or permitted, and do not cover every Linux distribution.', all: 'All services', observedOnly: 'Observed service · log permission not verified',
         select: 'Use', unsupported: 'This observed name is not supported by the exact service-unit syntax for log capture.',
         next: 'Next service page', continue: 'Continue search', emptyWindow: 'No matches in this scan window. More rows remain; continue searching.',
         zero: 'The complete service inventory contained zero services.', noMatches: 'No matches in the complete service inventory.', noMore: 'No further matches; earlier pages contained matches.', finished: 'The whole retained service inventory has been scanned.',
@@ -34,6 +36,7 @@ const copy = {
         fresh: 'Im Beobachtungszeitfenster', stale: 'Veraltete / historische Dienstbeobachtungen',
         prior: 'Das letzte vollständige Dienstinventar wird angezeigt. Der neuere fehlgeschlagene Versuch erneuert den ursprünglichen Beobachtungszeitpunkt nicht.', failed: 'Die neueste Dienstinventar-Erfassung ist fehlgeschlagen.',
         observed: 'Ursprünglicher Beobachtungszeitpunkt', whole: 'Gesamtes gespeichertes Dienstinventar', scanned: 'Bisher geprüfte Zeilen', matches: 'Bisher gefundene Treffer', shown: 'Zeilen auf dieser Seite',
+        suggestions: 'Dienste nach Aufgabe finden', suggestionsHint: 'Kurzsuchen durchsuchen beobachtete Dienstnamen. Sie belegen weder Installation noch Freigabe und decken nicht jede Linux-Distribution ab.', all: 'Alle Dienste', observedOnly: 'Beobachteter Dienst · Log-Freigabe nicht verifiziert',
         select: 'Übernehmen', unsupported: 'Dieser beobachtete Name wird von der exakten Service-Unit-Syntax für die Log-Erfassung nicht unterstützt.',
         next: 'Nächste Dienstseite', continue: 'Suche fortsetzen', emptyWindow: 'Keine Treffer in diesem Suchabschnitt. Weitere Zeilen stehen aus; Suche fortsetzen.',
         zero: 'Das vollständige Dienstinventar enthielt keine Dienste.', noMatches: 'Keine Treffer im vollständigen Dienstinventar.', noMore: 'Keine weiteren Treffer; frühere Seiten enthielten Treffer.', finished: 'Das gesamte gespeicherte Dienstinventar wurde durchsucht.',
@@ -75,6 +78,10 @@ function ObservedServices({ deviceId, onSelect }: Pick<JournalServicePickerProps
                 {view.latest?.services.coverage === 'failed' && <p className="journal-picker-warning">{c.failed} {c.prior}</p>}
                 <p className="journal-picker-note">{systemAgeStatus(view.serverNow, complete.meta.observedAt, resource.elapsed) === 'fresh' ? c.fresh : c.stale}</p>
                 <dl className="journal-picker-facts">{fact(c.observed, complete.meta.observedAt)}{fact(c.whole, number(complete.meta.observedCount!))}</dl>
+                <div className="journal-picker-shortcuts" role="group" aria-label={c.suggestions}>
+                    <strong>{c.suggestions}</strong><div>{journalServiceSearches.map(shortcut => <button key={shortcut.term} type="button" className="button small" disabled={resource.loading} onClick={() => { resource.changeSearch(shortcut.term); resource.startSearch(); }}>{shortcut.label[locale]}</button>)}<button type="button" className="button small" disabled={resource.loading} onClick={() => { resource.changeSearch(''); resource.startSearch(); }}>{c.all}</button></div>
+                    <p className="journal-picker-note">{c.suggestionsHint}</p>
+                </div>
                 <div className="journal-picker-search">
                     <label htmlFor={`${id}-search`}>{c.search}</label>
                     <div><input id={`${id}-search`} type="search" value={resource.search} onChange={event => resource.changeSearch(event.target.value)} onKeyDown={event => {
@@ -88,8 +95,8 @@ function ObservedServices({ deviceId, onSelect }: Pick<JournalServicePickerProps
                     <dl className="journal-picker-facts">{fact(c.scanned, `${number(resource.scanned)} / ${number(page.totalRows)}`)}{fact(c.matches, number(resource.matches))}{fact(c.shown, number(page.returnedCount))}</dl>
                     {page.returnedCount > 0 ? <ul className="journal-picker-rows" aria-label={c.title}>
                         {page.services.map((row, index) => {
-                            const supported = validJournalUnit(row.name), reasonId = `${id}-unsupported-${index}`;
-                            return <li key={row.name}><span className="journal-picker-unit">{row.name}</span><button type="button" className="button small" disabled={!supported} aria-label={`${c.select} ${row.name}`} aria-describedby={supported ? undefined : reasonId} onClick={() => { if (validJournalUnit(row.name)) onSelect(row.name); }}>{c.select}</button>{!supported && <p id={reasonId} className="journal-picker-warning">{c.unsupported}</p>}</li>;
+                            const supported = validJournalUnit(row.name), label = journalServiceLabel(row.name, locale), reasonId = `${id}-unsupported-${index}`;
+                            return <li key={row.name}><div>{label && <strong className="journal-picker-label">{label}</strong>}<span className="journal-picker-unit">{row.name}</span><span className="journal-picker-access">{c.observedOnly}</span></div><button type="button" className="button small" disabled={!supported} aria-label={`${c.select} ${row.name}`} aria-describedby={supported ? undefined : reasonId} onClick={() => { if (validJournalUnit(row.name)) onSelect(row.name); }}>{c.select}</button>{!supported && <p id={reasonId} className="journal-picker-warning">{c.unsupported}</p>}</li>;
                         })}
                     </ul> : <p role="status">{!page.exhausted ? c.emptyWindow : page.totalRows === 0 ? c.zero : resource.matches === 0 ? c.noMatches : c.noMore}</p>}
                     {page.exhausted ? <p className="journal-picker-note">{c.finished}</p> : <button type="button" className="button small" disabled={resource.loading} onClick={resource.next}>{resource.search.trim() ? c.continue : c.next}</button>}

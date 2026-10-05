@@ -25,8 +25,8 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
 describe('inventory source tabs in the authenticated device drawer', () => {
-    it('opens Packages directly from the device Overview without eagerly reading any rows', async () => {
-        render(detail()); const summary = await screen.findByRole('region', { name: 'Software · complete dpkg inventory' });
+    it('opens Packages directly from explicit device Details without eagerly reading any rows', async () => {
+        render(detail()); fireEvent.click(await screen.findByRole('tab', { name: 'Details' })); const summary = await screen.findByRole('region', { name: 'Software · complete dpkg inventory' });
         await within(summary).findByText('Complete generation available'); expect(mutateRaw).not.toHaveBeenCalled();
         fireEvent.click(within(summary).getByRole('button', { name: 'Open Packages' }));
         await screen.findByRole('rowheader', { name: 'fixture-000000' });

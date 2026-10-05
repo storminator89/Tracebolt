@@ -52,6 +52,7 @@ describe('explicit device metadata refresh', () => {
         const expiresAt = '2026-10-04T12:01:00Z';
         vi.mocked(request).mockImplementation(async path => path === `/devices/${id}` ? { ...device(), agentCertificate: { source: 'guided-enrollment', expiresAt, checkedAt: journalNow } } : answer(path));
         await start();
+        fireEvent.click(screen.getByRole('tab', { name: 'Details' })); await flush();
         const region = screen.getByRole('region', { name: 'Agent certificate' });
         expect(within(region).getByText('Expires within 48 hours')).toBeVisible();
         const calls = vi.mocked(request).mock.calls.length, held = holdRefresh();
@@ -65,8 +66,9 @@ describe('explicit device metadata refresh', () => {
         expect(screen.queryByRole('region', { name: 'Agent certificate' })).not.toBeInTheDocument();
     });
 
-    it('updates metrics and contact from one bounded GET without remounting the overview or expanding its details', async () => {
+    it('updates metrics and contact from one bounded GET without remounting Details or collapsing its disclosure', async () => {
         await start();
+        fireEvent.click(screen.getByRole('tab', { name: 'Details' })); await flush();
         const metrics = document.querySelector('.device-metrics')!, technical = screen.getByText('Device profile & technical details').closest('details')!;
         fireEvent.click(within(technical).getByText('Device profile & technical details'));
         expect(technical).toHaveAttribute('open'); expect(metrics.textContent).toContain('11%');
@@ -81,7 +83,7 @@ describe('explicit device metadata refresh', () => {
         expect(document.querySelector('.detail-time')).toHaveTextContent(relativeTime(newContact));
         expect(within(technical).getByText(fullDate(newContact))).toBeVisible(); expect(technical).toHaveAttribute('open');
         expect(document.querySelector('#device-metadata-status time')!.getAttribute('datetime')).not.toBe(lastCheck);
-        expect(refresh()).toBeEnabled(); expect(screen.getByRole('tab', { name: 'Overview' })).toHaveAttribute('aria-selected', 'true');
+        expect(refresh()).toBeEnabled(); expect(screen.getByRole('tab', { name: 'Details' })).toHaveAttribute('aria-selected', 'true');
         await advance(30000); expect(metadataCalls()).toHaveLength(2); expect(mutateRaw).not.toHaveBeenCalled();
     });
     it('preserves the actual Logs form instance, unit/window/severity/consent and active tab through metadata refresh', async () => {

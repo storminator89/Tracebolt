@@ -100,7 +100,7 @@ describe('endpoint identity lifecycle', () => {
 describe('roomy device page identity integration', () => {
     it('uses a reported hostname in the header while keeping stable cryptographic ID and suppressing legacy single-IP', async () => {
         vi.mocked(request).mockImplementation(async path => path.endsWith('/inventory/endpoint-identity') ? endpointView() : device()); render(<DeviceDetail id={endpointDevice} onClose={vi.fn()} onCase={vi.fn()}/>);
-        await screen.findByRole('heading', { name: 'fixture-linux', level: 1 }); expect(screen.getByText('Stable cryptographic device ID')).toBeVisible(); expect(screen.getAllByText(endpointDevice).length).toBeGreaterThan(0); expect(document.body).not.toHaveTextContent('198.51.100.250'); expect(screen.queryByText('IP address')).not.toBeInTheDocument();
+        await screen.findByRole('heading', { name: 'fixture-linux', level: 1 }); fireEvent.click(screen.getByRole('tab', { name: 'Details' })); expect(screen.getByText('Stable cryptographic device ID')).toBeVisible(); expect(screen.getAllByText(endpointDevice).length).toBeGreaterThan(0); expect(document.body).not.toHaveTextContent('198.51.100.250'); expect(screen.queryByText('IP address')).not.toBeInTheDocument();
         act(() => window.dispatchEvent(new Event('blur'))); expect(screen.queryByRole('heading', { name: 'fixture-linux', level: 1 })).not.toBeInTheDocument(); expect(screen.getByRole('heading', { name: endpointDevice, level: 1 })).toBeVisible();
     });
     it.each(['unauthenticated', 'development', 'synthetic', 'non-linux'] as const)('does not acquire the extension for %s pages', async state => {

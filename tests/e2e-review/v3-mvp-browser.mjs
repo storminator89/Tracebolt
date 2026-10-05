@@ -54,21 +54,26 @@ async function device(page,label='alpha'){
  mark('navigate to fixture device');await page.goto(`${base}/#/devices/${devices[label]}`);
  mark('fixture device region is visible');await expect(page.getByRole('region',{name:`Device QA synthetic v3 ${label}`,exact:true})).toBeVisible();
  mark('fixture device excludes list and enrollment panels');await expect(page.locator('.inventory-panel,.enrollment-panel')).toHaveCount(0);
- mark('fixture software overview settles');await expect(page.locator('.software-overview')).toHaveAttribute('aria-busy','false');
+ mark('fixture essentials view is visible');await expect(page.locator('.device-essentials')).toBeVisible();
  mark('select fixture Inventory tab');await page.getByRole('tab',{name:'Inventory',exact:true}).click();
  mark('fixture Inventory selects Processes');await expect(page.getByRole('tablist',{name:'Inventory source',exact:true}).getByRole('tab',{name:'Processes',exact:true})).toHaveAttribute('aria-selected','true');
  mark('fixture complete overview settles');await expect(page.locator('.complete-overview')).toHaveAttribute('aria-busy','false');
 }
 async function overviewLayout(page,mobile=false){
- mark('metrics first and responsive device summaries');
- await page.getByRole('tab',{name:'Overview',exact:true}).click();await settled(page,'.software-overview');
- const geometry=await page.locator('.device-overview-summary').evaluate(el=>{
-  const software=el.querySelector('.software-overview').getBoundingClientRect(),certificate=el.querySelector('.agent-certificate').getBoundingClientRect();
-  return{metricsFirst:el.previousElementSibling?.classList.contains('device-metrics'),software:{x:software.x,y:software.y,width:software.width},certificate:{x:certificate.x,y:certificate.y,width:certificate.width}};
- });
- expect(geometry.metricsFirst).toBe(true);
- if(mobile){expect(Math.abs(geometry.software.x-geometry.certificate.x)).toBeLessThanOrEqual(1);expect(geometry.certificate.y).toBeGreaterThan(geometry.software.y);}
- else{expect(Math.abs(geometry.software.y-geometry.certificate.y)).toBeLessThanOrEqual(1);expect(geometry.certificate.x).toBeGreaterThan(geometry.software.x);}
+ mark('compact icon-led essentials precede technical detail');
+ await page.getByRole('tab',{name:'Overview',exact:true}).click();
+ await expect(page.getByRole('region',{name:'Contact',exact:true})).toBeVisible();
+ await expect(page.getByRole('region',{name:'Warnings',exact:true})).toBeVisible();
+ await expect(page.getByRole('region',{name:'Updates',exact:true})).toBeVisible();
+ await expect(page.getByRole('region',{name:'Resources',exact:true})).toBeVisible();
+ await expect(page.locator('.software-overview,.endpoint-identity,.device-technical')).toHaveCount(0);
+ await expect(page.getByRole('region',{name:'Contact',exact:true})).toContainText('Live reachability is not checked.');
+ const geometry=await page.locator('.device-essentials-status').evaluate(el=>[...el.children].map(card=>{const r=card.getBoundingClientRect();return{x:r.x,y:r.y,width:r.width};}));
+ expect(geometry).toHaveLength(3);expect(Math.abs(geometry[0].y-geometry[2].y)).toBeLessThanOrEqual(1);expect(geometry[2].x).toBeGreaterThan(geometry[0].x);
+ await expect(page.locator('.device-essential-card[aria-busy=true]')).toHaveCount(0);
+ await page.locator('main').evaluate(el=>{el.scrollTop=0;});await shot(page,`synthetic-v3-device-overview-${mobile?'mobile':'desktop'}-en`);
+ mark('explicit Details exposes original source facts and native disclosure');
+ await page.getByRole('tab',{name:'Details',exact:true}).click();await settled(page,'.software-overview');
  const details=page.locator('.software-generation-details'),summary=details.locator('summary');
  await expect(details).not.toHaveAttribute('open');await expect(page.locator('.software-total')).toContainText('2,052');
  await expect(page.locator('.software-overview > .package-facts')).toContainText('Original collection time');
@@ -77,7 +82,6 @@ async function overviewLayout(page,mobile=false){
  await page.getByRole('button',{name:'Refresh device metadata',exact:true}).click();expect((await metadata).status()).toBe(200);
  await expect(page.getByRole('button',{name:'Refresh device metadata',exact:true})).toBeEnabled();await expect(details).toHaveAttribute('open','');
  await summary.focus();await page.keyboard.press('Enter');await expect(details).not.toHaveAttribute('open');
- await page.locator('main').evaluate(el=>{el.scrollTop=0;});await shot(page,`synthetic-v3-device-overview-${mobile?'mobile':'desktop'}-en`);
  await page.getByRole('tab',{name:'Inventory',exact:true}).click();await expect(page.locator('.complete-overview')).toHaveAttribute('aria-busy','false');
 }
 async function source(page,name){await page.getByRole('tablist',{name:'Inventory source',exact:true}).getByRole('tab',{name,exact:true}).click();await settled(page,name==='Packages'?'.complete-packages':'.system-inventory');}

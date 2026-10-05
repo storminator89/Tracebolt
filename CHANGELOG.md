@@ -2,6 +2,13 @@
 
 Meaningful development checkpoints are recorded here. These are prototype milestones, not production releases.
 
+## 2026-10-05 — Focus device summaries and clarify Linux log sources
+
+- Lead the device overview with compact Contact, Warnings and Updates cards plus resource observations. Keep unknown, stale, partial and original-age states explicit; move full source and identity facts into Details. Serialize cancellation-aware metadata summaries after identity readiness, without new polling or collection.
+- Add a Linux log-source chooser that distinguishes existing service journal capture from unsupported broader sources. Supported service shortcuts only prepare a validated unit draft; content/HTTP acknowledgement and local helper grants still apply. Broader host, kernel, application-file and container-content sources remain design work.
+- Add an inert controlled-action contract and durable consumption foundation with focused signature, policy, deadline, replay and storage regressions. No manager, agent, API, UI, helper or installer invokes it; it cannot start an action, restart a service or install an update. Production authority and execution remain separate work.
+- Extend focused and browser regression coverage and regenerate the exact-source Go diagnostic vocabulary. Preserve the verified rc.1 release and bootstrap pins; exact combined hosted acceptance remains required.
+
 ## 2026-10-05 — Activate verified rc.1 downloads and simplify device diagnosis
 
 - Select the verified `v0.1.0-rc.1` installer through its separate immutable bootstrap publication commit `458fc072a73946032446c0d9e63220ea29cca355`. The existing strict hosted check downloaded all ten assets, verified keyless source/workflow provenance and reproduced the exact bootstrap. Preserve the old release; installed-service, upgrade and OS reboot acceptance remain separate.

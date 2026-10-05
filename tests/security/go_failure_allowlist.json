@@ -1,5 +1,5 @@
 {
-  "goSourceSha256": "ac23570a405d12e5f0ae0bcd4f73cd5dbfe2d74377452026072b545e14717a96",
+  "goSourceSha256": "a4f3fcd95ead1fb458882e20c69451707d7780af84ae79d2fba2af67b0069462",
   "packages": {
     "localrmm/cmd/agent": [
       "TestHelp",
@@ -118,6 +118,30 @@
     "localrmm/cmd/manager": [
       "TestHTTPWriteBudgetOutlastsAnalysis",
       "TestRealManagerReturnsDelayedFakeProviderResult"
+    ],
+    "localrmm/internal/actionpermit": [
+      "TestAllSignedFieldsBound",
+      "TestContractAndPlanLimits",
+      "TestInvalidPinsAndClockBounds",
+      "TestPinnedPolicyAndDefaultOff",
+      "TestSignedRoundTripAndDomain",
+      "TestStrictCanonicalParser"
+    ],
+    "localrmm/internal/actionstate": [
+      "TestAdmissionDuplicateAndRecovery",
+      "TestCapacityRetainsEveryConsumedSequence",
+      "TestConcurrentCopiesConsumeOneRecord",
+      "TestCrashTemporaryPreserved",
+      "TestDurabilityBarriersBeforeAdmission",
+      "TestExpiredSequenceAndClockCannotRevive",
+      "TestInitializeExistingOnlyLockAndClosedCopies",
+      "TestLiveMutationsPoisonCopies",
+      "TestPolicyDisableChangesPreserveHistoricalStatusAndFloor",
+      "TestProtectedModesNumericOwnerAndLinks",
+      "TestRecordStrictnessAndSignatureValidation",
+      "TestRejectedPermitsNeverAdvanceState",
+      "TestUnsafePathsRefusedWithoutRepair",
+      "TestWriteFaultsAndCancellationNeverReturnAdmission"
     ],
     "localrmm/internal/agentidentity": [],
     "localrmm/internal/agentinstall": [

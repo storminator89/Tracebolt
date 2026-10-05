@@ -20,7 +20,7 @@ function elapsed(anchor: Anchor): number {
     const mono = performance.now() - anchor.mono, wall = Date.now() - anchor.wall;
     return Number.isFinite(mono) && mono >= 0 && Math.abs(wall - mono) <= 1500 ? mono : Infinity;
 }
-function useHealth(deviceId: string, sessionKey: string | null) {
+export function useHealth(deviceId: string, sessionKey: string | null, autoRefresh = true) {
     const scope = JSON.stringify([deviceId, sessionKey]);
     const [snapshot, setSnapshot] = useState<{ scope: string; epoch: number; view: HealthView } | null>(null);
     const [pending, setPending] = useState(false), [failure, setFailure] = useState<Failure | null>(null), [locked, setLocked] = useState(false);
@@ -68,14 +68,14 @@ function useHealth(deviceId: string, sessionKey: string | null) {
             }
         };
         const suspend = () => { const mutation = operation?.mutation; suspended = true; clear(mutation ? 'change' : 'interrupted'); };
-        const restore = () => { if (accessEnded || document.visibilityState === 'hidden') return; suspended = false; void run(); };
+        const restore = () => { if (accessEnded || document.visibilityState === 'hidden') return; suspended = false; if (autoRefresh) void run(); };
         const visibility = () => document.visibilityState === 'hidden' ? suspend() : restore();
         const show = (event: PageTransitionEvent) => { if (event.persisted || suspended) restore(); };
         commands.current = { refresh: () => { void run(); }, change: run };
         setLocked(false); setSnapshot(null); setFailure(null); setPending(false);
         window.addEventListener(AUTH_REQUIRED_EVENT, lock); window.addEventListener('pagehide', suspend); window.addEventListener('pageshow', show);
         window.addEventListener('blur', suspend); window.addEventListener('focus', restore); window.addEventListener('hashchange', suspend); document.addEventListener('visibilitychange', visibility);
-        const poll = window.setInterval(() => { void run(); }, 30000);
+        const poll = autoRefresh ? window.setInterval(() => { void run(); }, 30000) : undefined;
         const timer = window.setInterval(() => {
             if (accessEpoch !== getProtectedRequestEpoch() || hasLogoutIntent()) { if (!accessEnded) lock(); return; }
             const anchor = observed ?? operation?.started;
@@ -85,7 +85,7 @@ function useHealth(deviceId: string, sessionKey: string | null) {
                 // Original source age continues advancing between reads. An old
                 // successful response must not look current until the next poll.
                 const now = Date.parse(currentView.serverNow) + elapsed(observed);
-                if (currentView.maintenanceUntil && Date.parse(currentView.maintenanceUntil) <= now) { clear(null); void run(); return; }
+                if (currentView.maintenanceUntil && Date.parse(currentView.maintenanceUntil) <= now) { clear(null); if (autoRefresh) void run(); return; }
                 const evaluationExpired = currentView.evaluatedAt === null || now - Date.parse(currentView.evaluatedAt) > 120000;
                 const checks = currentView.checks.map(check => {
                     const agesOut = check.kind !== 'offline' || check.state === 'ok';
@@ -105,7 +105,7 @@ function useHealth(deviceId: string, sessionKey: string | null) {
             window.removeEventListener(AUTH_REQUIRED_EVENT, lock); window.removeEventListener('pagehide', suspend); window.removeEventListener('pageshow', show);
             window.removeEventListener('blur', suspend); window.removeEventListener('focus', restore); window.removeEventListener('hashchange', suspend); document.removeEventListener('visibilitychange', visibility);
         };
-    }, [deviceId, scope]);
+    }, [deviceId, scope, autoRefresh]);
     const view = snapshot?.scope === scope && snapshot.epoch === getProtectedRequestEpoch() && !hasLogoutIntent() ? snapshot.view : null;
     return { view, pending, failure, locked, refresh: () => commands.current.refresh(), change: (action: Action, body: unknown) => commands.current.change(action, body) };
 }

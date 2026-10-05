@@ -14,7 +14,7 @@ function elapsed(anchor: Anchor): number {
 }
 type Data = { view: CompleteUpdateView | null; page: CompleteUpdatePage | null; scanned: number; matches: number };
 const empty = (): Data => ({ view: null, page: null, scanned: 0, matches: 0 });
-export function useCompleteUpdates(deviceId: string, metadataOnly = false) {
+export function useCompleteUpdates(deviceId: string, metadataOnly = false, autoResume = true) {
     const [data, setData] = useState<Data>(empty), [loading, setLoading] = useState(false), [recovering, setRecovering] = useState(false), [error, setError] = useState<CompleteFailure | null>(null), [search, setSearch] = useState(''), [, tick] = useState(0);
     const alive = useRef(false), locked = useRef(false), suspended = useRef(false), epoch = useRef(0), state = useRef<Data>(empty());
     const anchor = useRef<Anchor | null>(null), pageAnchor = useRef<Anchor | null>(null), lastRow = useRef<CachedUpdateRow | null>(null);
@@ -109,7 +109,7 @@ export function useCompleteUpdates(deviceId: string, metadataOnly = false) {
         alive.current = true; locked.current = false; suspended.current = document.visibilityState === 'hidden';
         const lock = () => { locked.current = true; clear('session'); query.current = ''; setSearch(''); };
         const suspend = () => { suspended.current = true; clear(); };
-        const restore = () => { if (locked.current || document.visibilityState === 'hidden') return; suspended.current = false; void read(true); };
+        const restore = () => { if (locked.current || document.visibilityState === 'hidden') return; suspended.current = false; if (autoResume) void read(true); };
         const visibility = () => document.visibilityState === 'hidden' ? suspend() : restore();
         const show = (event: PageTransitionEvent) => { if (event.persisted || suspended.current) restore(); };
         const navigate = () => { suspended.current = true; clear(); };
@@ -125,6 +125,6 @@ export function useCompleteUpdates(deviceId: string, metadataOnly = false) {
         }, 1000);
         void read(true);
         return () => { alive.current = false; clear(); window.clearInterval(timer); window.removeEventListener(AUTH_REQUIRED_EVENT, lock); window.removeEventListener('pagehide', suspend); window.removeEventListener('pageshow', show); window.removeEventListener('blur', suspend); window.removeEventListener('focus', restore); window.removeEventListener('hashchange', navigate); document.removeEventListener('visibilitychange', visibility); };
-    }, [cancel, clear, install, read]);
+    }, [autoResume, cancel, clear, install, read]);
     return { ...data, loading, recovering, error, search, changeSearch, startSearch, refresh: () => void read(true), next: () => { if (state.current.page?.nextCursor) void read(false, state.current.page.nextCursor); }, retry: () => void read(!state.current.view, retryCursor.current), elapsed: anchor.current ? elapsed(anchor.current) : Infinity };
 }

@@ -68,10 +68,20 @@ Approval requires the operator to compare both the complete SHA-256 key fingerpr
 
 ### Device diagnosis navigation
 
-The full-width overview leads with CPU, memory and disk observations. Software and
-certificate summaries share the desktop width and stack on small screens. Complete
-software counts, original collection time, age and status stay visible; generation
-identifiers and retention details expand on request.
+The full-width overview presents compact icon-labelled Contact, Warnings and Updates
+cards above CPU, memory and disk observations. Contact is the last accepted report,
+not a live reachability test. Warnings cover the existing selected Health checks;
+unknown checks never become zero warnings. Updates use only the existing complete
+cached-candidate ledger, with original age, stale/unknown cache freshness and partial
+comparisons visible. Counts are not an installability or security assessment.
+
+Overview reads are cancellation-aware and serial: existing identity metadata, then
+one metadata-only update read, then one Health read when supported. Summary readers
+add no polling, update-page query or collection. On restoration they wait for a fresh
+identity read again. Full Health/Updates subviews retain their existing behavior.
+Software inventory, full certificate/identity information and measurement sources
+are in **Details**. Certificate expiry warnings remain on Overview. Metadata refresh
+preserves the current subview, drafts, disclosures and scroll position.
 
 For journal-compatible service units, **Open logs** in Services or Health opens the
 existing Logs tab with only the exact-unit draft filled in. It does not create or
@@ -81,8 +91,8 @@ Logs and refreshing device metadata preserve the current form instance and draft
 leaving the tab or device discards the handoff.
 
 The hosted journal and v3 browser cases include service handoff/back navigation and
-responsive overview checks. They also capture the invented desktop/mobile device
-overview as `synthetic-v3-device-overview-{desktop,mobile}-en.png`. These are required
+responsive overview checks. They also capture the rendered desktop/mobile device
+overview with clearly synthetic fixture data as `synthetic-v3-device-overview-{desktop,mobile}-en.png`. These are required
 on the final published source; source tests alone do not establish browser acceptance.
 
 ### Operational device inventory candidate

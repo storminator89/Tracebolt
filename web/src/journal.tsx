@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight, LoaderCircle, RefreshCw, Search, TriangleAlert } from 'lucide-react';
 import { useLocale } from './i18n';
 import { JournalServicePicker } from './journal-service-picker';
+import { JournalSourceOptions, JournalSelectedSource } from './journal-source-options';
 import { useJournal } from './journal-resource';
 import type { JournalResource } from './journal-resource';
 import { journalBytes, journalFold, JOURNAL_SEARCH_BYTES, validJournalQuery, validJournalUnit } from './journal-types';
@@ -69,6 +70,7 @@ export function JournalContent({ resource: r, insecureTestMode, sessionKey = nul
     const reason = page ? c[page.reason === 'timeout' ? 'sourceTimeout' : page.reason] : null;
     return <section className="journal-panel detail-section" aria-labelledby={id} aria-busy={r.busy}>
         <header className="journal-heading"><div><h2 id={id}>{c.title}</h2><p className="journal-muted">{c.intro}</p></div><button className="button small" disabled={r.busy || r.failure === 'session'} onClick={r.refresh}><RefreshCw size={14}/>{c.refresh}</button></header>
+        <JournalSourceOptions/>
         {r.failure && <p role="alert" className="journal-warning"><TriangleAlert size={16}/>{c[r.failure]}</p>}
         {r.uncertain && r.failure !== 'uncertain' && <p className="journal-warning">{c.uncertainHeld}</p>}
         {r.paused && !r.busy && !r.failure && <p role="status" className="journal-muted">{c.paused}</p>}
@@ -77,8 +79,9 @@ export function JournalContent({ resource: r, insecureTestMode, sessionKey = nul
         {state && <div className={`journal-state journal-state-${state}`}><strong>{c[state]}</strong>{hint && <p>{hint}</p>}</div>}
         {view?.configured !== false && r.failure !== 'session' && <form className="journal-capture" onSubmit={event => { event.preventDefault(); if (valid && ack && (!insecureTestMode || plainAck)) { setPickerOpen(false); void r.create(query, ack, plainAck); setAck(false); setPlainAck(false); } }}>
             <h3 className="journal-form-title">{c.newCapture}</h3><fieldset disabled={!view?.configured || r.busy || r.paused}><div className="journal-filters"><label>{c.service}<input ref={unitInput} value={unit} onChange={event => setUnit(event.target.value)} placeholder="example.service" maxLength={255} autoComplete="off" spellCheck={false} aria-describedby={`${id}-unit`}/></label><label>{c.start}<input type="datetime-local" step="1" value={start} onChange={event => { setStart(event.target.value); setPreset(null); }}/></label><label>{c.end}<input type="datetime-local" step="1" value={end} onChange={event => { setEnd(event.target.value); setPreset(null); }}/></label><label>{c.severity}<select value={priority} onChange={event => setPriority(Number(event.target.value))}>{priorityNames.map((name, n) => <option value={n} key={n}>{name}</option>)}</select></label></div>
-            <div className="journal-filter-help"><span id={`${id}-unit`}>{c.unitHint} {c.manualService}</span><button ref={pickerButton} type="button" className="text-button" aria-expanded={pickerOpen} onClick={() => setPickerOpen(open => !open)}>{c.chooseService}</button></div>
+            <div className="journal-filter-help"><span id={`${id}-unit`}>{c.unitHint} {c.manualService}</span><button ref={pickerButton} type="button" className="button small" aria-expanded={pickerOpen} onClick={() => setPickerOpen(open => !open)}>{c.chooseService}</button></div>
             {pickerOpen && view?.configured && <JournalServicePicker deviceId={view.deviceId} sessionKey={sessionKey} onSelect={chooseService} onClose={closePicker}/>}
+            <JournalSelectedSource unit={unit} view={view}/>
             <div role="group" aria-label={c.presets}>
                 {view && <p id={`${id}-preset-reference`}><strong>{c.managerTime}:</strong> <time dateTime={view.serverNow}>{view.serverNow}</time></p>}
                 <div className="journal-time-presets">{([[5, c.recent5], [15, c.recent], [30, c.recent30], [60, c.recent60]] as const).map(([minutes, label]) => <button key={minutes} type="button" className="button small" aria-describedby={view ? `${id}-preset-reference` : undefined} aria-pressed={selectedPreset === minutes} onClick={() => chooseWindow(minutes)}>{label}</button>)}</div>

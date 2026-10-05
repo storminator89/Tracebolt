@@ -265,6 +265,33 @@ try{
 
   });
 
+  await check('Source guidance and recognizable search shortcuts never expand local journal permission',async()=>{
+   const page=await pageAt();const tally=counts(page);await open(page);
+   const sources=page.getByRole('region',{name:'Log sources',exact:true});
+   await expect(sources).toBeVisible();await sources.getByText('Other Linux log sources',{exact:true}).click();
+   await expect(sources.getByText('Not supported by this collector',{exact:true})).toHaveCount(3);
+   for(const label of ['Kernel & hardware','Whole system journal','System-wide authentication'])await expect(sources.getByText(label,{exact:true})).toBeVisible();
+   await expect(sources.getByRole('button')).toHaveCount(0);expect(tally.create).toBe(0);expect(tally.cancel).toBe(0);
+   await page.getByRole('button',{name:'Choose observed service',exact:true}).click();
+   const picker=page.getByRole('region',{name:'Observed services',exact:true});await expect(picker.getByRole('button',{name:'Use invented.service',exact:true})).toBeVisible();
+   await picker.getByRole('button',{name:'SSH logins',exact:true}).click();
+   await expect(picker.getByLabel('Search observed services',{exact:true})).toHaveValue('ssh');
+   await expect(picker.getByText('No matches in the complete service inventory.',{exact:true})).toBeVisible();
+   await expect(picker.getByRole('button',{name:'Use ssh.service',exact:true})).toHaveCount(0);
+   await picker.getByRole('button',{name:'All services',exact:true}).click();
+   await expect(picker.getByRole('button',{name:'Use invented.service',exact:true})).toBeVisible();
+   await expect(picker.getByText('Observed service · log permission not verified',{exact:true})).toHaveCount(3);
+   await picker.scrollIntoViewIfNeeded();await shot(page,'synthetic-journal-source-picker-desktop-en');
+   await picker.getByRole('button',{name:'Use invented.service',exact:true}).click();
+   await expect(page.locator('.journal-source-selection')).toContainText('Permission not verified.');
+   for(const box of await page.getByRole('checkbox').all())await expect(box).not.toBeChecked();
+   expect(tally.create).toBe(0);expect(tally.cancel).toBe(0);expect(tally.query).toBe(0);
+   await page.setViewportSize({width:390,height:844});await page.getByLabel('Language').selectOption('de');
+   await page.getByRole('region',{name:'Log-Quellen',exact:true}).scrollIntoViewIfNeeded();
+   await expect(page.getByText('Kernel & Hardware',{exact:true})).toBeVisible();await shot(page,'synthetic-journal-source-options-mobile-de');
+   await clean(page);
+  });
+
   await check('Complete and partial invented messages render inertly with honest English and German mobile coverage',async()=>{
    const page=await pageAt();await open(page);await capture(page);await deliver(page);
    mark('complete capture renders text without HTML or navigation');await expect(state(page)).toHaveText('Captured snapshot available');await expect(page.locator('.journal-count')).toContainText('205 matches · 205 captured');await expect(page.locator('.journal-count')).toContainText('Complete coverage for the requested window visible to the agent');
