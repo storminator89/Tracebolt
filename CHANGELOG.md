@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-10-05 — Align browser contracts with the reviewed device workspace
+
+- Navigate complete and legacy inventory sources explicitly, preserving lazy-read, consent, cancellation, source-binding, count and expiry assertions after the Packages default and separated legacy views.
+- Compare actual sample metrics using the displayed German fractional-number contract. Keep all browser case identities, evidence gates and deadlines unchanged; no production or fixture behavior changes.
+
 ## 2026-10-05 — Simplify Logs and align current device data
 
 - Separate journal source selection, query controls, explicit capture review and results into a clearer workspace. Preserve original request/snapshot scope and timestamps, consent, bounded paging and no automatic capture; add desktop/mobile browser captures.
