@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -27,7 +29,7 @@ func TestJournalGenerationRealTransportAndOperatorCAS(t *testing.T) {
 			}
 			got := response(t, client, f.journalRequestFixture(t, origin, journalwire.GenerationPath, report.Sequence, raw), 200)
 			echo, err := journalwire.DecodeGenerationReport(got)
-			if err != nil || echo != report || !bytes.Equal(raw, got) {
+			if err != nil || !journalgeneration.EqualReport(echo, report) || !bytes.Equal(raw, got) {
 				t.Fatal("report response", err)
 			}
 			retry := response(t, client, f.journalRequestFixture(t, origin, journalwire.GenerationPath, report.Sequence, raw), 200)
@@ -120,5 +122,44 @@ func TestJournalGenerationRealTransportAndOperatorCAS(t *testing.T) {
 			}
 			response(t, client, f.journalRequestFixture(t, origin, journalwire.GenerationPath, 2, newerRaw), 403)
 		})
+	}
+}
+
+func TestJournalGenerationV2ScopeAuthenticatedTransportAndOperatorView(t *testing.T) {
+	for _, profile := range []string{"tls", "http-test"} {
+		for _, scope := range []journalgeneration.ServiceAuthorization{journalgeneration.ExactUnits, journalgeneration.AllSystemServices} {
+			t.Run(profile+"-"+string(scope), func(t *testing.T) {
+				f, h, origin, client, old := prepareJournalTransportFixture(t, profile)
+				r := journalgeneration.Report{SchemaVersion: journalgeneration.ReportVersionV2, Tuple: journalgeneration.Tuple{Revision: 1, Generation: strings.Repeat("a", 64), PolicyDigest: "sha256:" + strings.Repeat("b", 64)}, Sequence: 1, ObservedAt: time.Now().UTC(), PolicyEnabled: true, ServiceAuthorization: scope, AllowedUnits: []string{}}
+				if scope == journalgeneration.ExactUnits {
+					for i := 0; i < 24; i++ {
+						r.AllowedUnits = append(r.AllowedUnits, fmt.Sprintf("%02d", i)+strings.Repeat("x", 240)+".service")
+					}
+				}
+				raw, err := journalwire.EncodeGenerationReport(r)
+				if err != nil {
+					t.Fatal(err)
+				}
+				got := response(t, client, f.journalRequestFixture(t, origin, journalwire.GenerationPath, r.Sequence, raw), 200)
+				if !bytes.Equal(got, raw) {
+					t.Fatal("scope echo changed")
+				}
+				o := journalOperatorFixtureNew(t, f, h)
+				input := map[string]any{"expectedFloor": "1", "query": old.Query, "expectedPolicyGeneration": r.Tuple, "acknowledgeLogContent": true, "acknowledgePlaintext": profile == "http-test"}
+				out := o.call(t, "/api/devices/"+old.DeviceID+"/journal/create", input, nil)
+				var view struct {
+					Generation *enrollmentstore.JournalGenerationView `json:"generation"`
+				}
+				if out.Code != 200 || json.Unmarshal(out.Body.Bytes(), &view) != nil || view.Generation == nil || view.Generation.SchemaVersion != "tracebolt.journal-generation-view.v2" || view.Generation.PolicyGeneration != r.Tuple || view.Generation.PolicyEnabled == nil || !*view.Generation.PolicyEnabled || view.Generation.ServiceAuthorization != scope || view.Generation.AllowedUnits == nil || !slices.Equal(*view.Generation.AllowedUnits, r.AllowedUnits) {
+					t.Fatal("operator summary mismatch", out.Code)
+				}
+				changed := journalgeneration.CloneReport(r)
+				changed.Sequence++
+				changed.ObservedAt = time.Now().UTC()
+				changed.PolicyEnabled = false
+				bad, _ := journalwire.EncodeGenerationReport(changed)
+				response(t, client, f.journalRequestFixture(t, origin, journalwire.GenerationPath, changed.Sequence, bad), 409)
+			})
+		}
 	}
 }

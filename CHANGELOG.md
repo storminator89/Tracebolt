@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-10-05 — Add an explicit broad journal profile and guided migration
+
+- Add a separately confirmed local profile for supported current and future system services, while each central Logs request still selects one exact service and retains its original scope, budget and replay guards.
+- Report fresh permission-scope metadata and add a guided migration with installed-component compatibility checks and one digest-bound terminal confirmation. Older releases stop for an upgrade; no host upgrade, grant or log read is performed by publication.
+- Prepare a command only after verifying all seven public source files against the exact immutable commit. Focused source/fixture checks do not establish installed-service or live-grant acceptance.
+
 ## 2026-10-05 — Add default-off external alarm delivery foundation
 
 - Atomically capture exact new health transitions and bounded delivery intent, including transitions pruned from UI history. Preserve existing health behavior and authentication; add a read-only status endpoint.

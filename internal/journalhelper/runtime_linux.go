@@ -197,7 +197,7 @@ func loadState() (State, error) {
 		if present || d.SchemaVersion != DeploymentVersion || d.PolicyGenerationRequired {
 			return State{}, ErrRejected
 		}
-	} else if !present || activation.SenderBinding != p.SenderBinding || activation.PolicyGeneration != generation || d.SchemaVersion != DeploymentVersionV2 || !d.PolicyGenerationRequired {
+	} else if !journalpolicy.IsGenerationPolicy(p.SchemaVersion) || !present || activation.SenderBinding != p.SenderBinding || activation.PolicyGeneration != generation || d.SchemaVersion != DeploymentVersionV2 || !d.PolicyGenerationRequired {
 		return State{}, ErrRejected
 	}
 	sock, e := socketMetadata(d)

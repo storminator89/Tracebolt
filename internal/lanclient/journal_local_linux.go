@@ -153,7 +153,7 @@ func readJournalLocalPolicyMode(m Material, uid, gid uint32, pending, inspect bo
 		}
 
 	} else {
-		if !present || dep.SchemaVersion != journalhelper.DeploymentVersionV2 || !dep.PolicyGenerationRequired || activation.SenderBinding != m.binding || activation.DeviceID != m.config.AgentID || activation.CertificateHash != journalLeaf(m) || activation.PolicyGeneration != generation || !journalactivation.Gate(activation, present, pending) {
+		if !journalpolicy.IsGenerationPolicy(p.SchemaVersion) || !present || dep.SchemaVersion != journalhelper.DeploymentVersionV2 || !dep.PolicyGenerationRequired || activation.SenderBinding != m.binding || activation.DeviceID != m.config.AgentID || activation.CertificateHash != journalLeaf(m) || activation.PolicyGeneration != generation || !journalactivation.Gate(activation, present, pending) {
 			return journalLocal{}, errJournalDenied
 		}
 		if !pending {
@@ -168,7 +168,10 @@ func readJournalLocalPolicyMode(m Material, uid, gid uint32, pending, inspect bo
 			}
 		}
 	}
-	if !p.Enabled && !inspect {
+	// V3 explicitly permits reporting its scope metadata, including disabled
+	// state. The sender must stop before any query operation when disabled;
+	// policy authorization independently continues to reject every such query.
+	if !p.Enabled && !inspect && p.SchemaVersion != journalpolicy.VersionV3 {
 		return journalLocal{}, errJournalDisabled
 	}
 	lastDir, e := journalRootDirectory([]string{"etc", "tracebolt"})

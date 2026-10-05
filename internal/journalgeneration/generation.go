@@ -9,6 +9,8 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"localrmm/internal/journalview"
+	"slices"
 	"strings"
 	"time"
 )
@@ -16,7 +18,9 @@ import (
 const (
 	ReportVersion       = "tracebolt.journal-generation-report.v1"
 	ReportSchemaVersion = ReportVersion
-	MaxReportBytes      = 4096
+	ReportVersionV2     = "tracebolt.journal-generation-report.v2"
+	MaxReportBytes      = 12 << 10
+	MaxAllowedUnits     = 32
 	MaxTupleBytes       = 256
 )
 
@@ -69,20 +73,82 @@ func (t *Tuple) UnmarshalJSON(raw []byte) error {
 	return nil
 }
 
-// Report carries only public binding metadata. Observation age and sequence
-// floors are enforced by the authenticated receiver and durable sender state.
+// ServiceAuthorization describes a locally acknowledged service scope. It is
+// presentation metadata, never independent authority for a capture.
+type ServiceAuthorization string
+
+const (
+	ExactUnits        ServiceAuthorization = "exact-units"
+	AllSystemServices ServiceAuthorization = "all-system-services"
+)
+
+// Report v1 preserves its original bytes and carries no permission information.
+// Only a freshly acknowledged v3 policy may produce a v2 permission summary.
 type Report struct {
+	SchemaVersion        string
+	Tuple                Tuple
+	Sequence             uint64
+	ObservedAt           time.Time
+	PolicyEnabled        bool
+	ServiceAuthorization ServiceAuthorization
+	AllowedUnits         []string
+}
+type reportV1 struct {
 	SchemaVersion string    `json:"schemaVersion"`
 	Tuple         Tuple     `json:"policyGeneration"`
 	Sequence      uint64    `json:"sequence,string"`
 	ObservedAt    time.Time `json:"observedAt"`
 }
+type reportV2 struct {
+	reportV1
+	PolicyEnabled        bool                 `json:"policyEnabled"`
+	ServiceAuthorization ServiceAuthorization `json:"serviceAuthorization"`
+	AllowedUnits         []string             `json:"allowedUnits"`
+}
 
+func ValidateServiceAuthorization(scope ServiceAuthorization, units []string) error {
+	if units == nil || len(units) > MaxAllowedUnits {
+		return ErrInvalid
+	}
+	if scope == AllSystemServices {
+		if len(units) != 0 {
+			return ErrInvalid
+		}
+		return nil
+	}
+	if scope != ExactUnits || len(units) == 0 {
+		return ErrInvalid
+	}
+	at := time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC)
+	for i, unit := range units {
+		if i > 0 && units[i-1] >= unit || journalview.ValidateQuery(journalview.Query{Unit: unit, Start: at.Add(-time.Minute), End: at, MaxPriority: 7}, at) != nil {
+			return ErrInvalid
+		}
+	}
+	return nil
+}
 func ValidateReport(r Report) error {
-	if r.SchemaVersion != ReportSchemaVersion || Validate(r.Tuple) != nil || r.Sequence == 0 || r.ObservedAt.Location() != time.UTC || r.ObservedAt.Unix() <= 0 || r.ObservedAt.Year() > 9999 {
+	if Validate(r.Tuple) != nil || r.Sequence == 0 || r.ObservedAt.Location() != time.UTC || r.ObservedAt.Unix() <= 0 || r.ObservedAt.Year() > 9999 {
+		return ErrInvalid
+	}
+	switch r.SchemaVersion {
+	case ReportVersion:
+		if r.PolicyEnabled || r.ServiceAuthorization != "" || r.AllowedUnits != nil {
+			return ErrInvalid
+		}
+	case ReportVersionV2:
+		return ValidateServiceAuthorization(r.ServiceAuthorization, r.AllowedUnits)
+	default:
 		return ErrInvalid
 	}
 	return nil
+}
+func (r Report) MarshalJSON() ([]byte, error) {
+	base := reportV1{r.SchemaVersion, r.Tuple, r.Sequence, r.ObservedAt}
+	if r.SchemaVersion == ReportVersion {
+		return json.Marshal(base)
+	}
+	return json.Marshal(reportV2{base, r.PolicyEnabled, r.ServiceAuthorization, r.AllowedUnits})
 }
 func EncodeReport(r Report) ([]byte, error) {
 	if ValidateReport(r) != nil {
@@ -95,12 +161,33 @@ func EncodeReport(r Report) ([]byte, error) {
 	return b, nil
 }
 func DecodeReport(raw []byte) (Report, error) {
-	type plain Report
-	var r plain
-	if strict(raw, &r, MaxReportBytes) != nil || ValidateReport(Report(r)) != nil {
+	var version struct {
+		SchemaVersion string `json:"schemaVersion"`
+	}
+	if len(raw) == 0 || len(raw) > MaxReportBytes || json.Unmarshal(raw, &version) != nil {
 		return Report{}, ErrInvalid
 	}
-	return Report(r), nil
+	var r Report
+	switch version.SchemaVersion {
+	case ReportVersion:
+		var v reportV1
+		if strict(raw, &v, 4096) != nil {
+			return Report{}, ErrInvalid
+		}
+		r = Report{SchemaVersion: v.SchemaVersion, Tuple: v.Tuple, Sequence: v.Sequence, ObservedAt: v.ObservedAt}
+	case ReportVersionV2:
+		var v reportV2
+		if strict(raw, &v, MaxReportBytes) != nil {
+			return Report{}, ErrInvalid
+		}
+		r = Report{SchemaVersion: v.SchemaVersion, Tuple: v.Tuple, Sequence: v.Sequence, ObservedAt: v.ObservedAt, PolicyEnabled: v.PolicyEnabled, ServiceAuthorization: v.ServiceAuthorization, AllowedUnits: v.AllowedUnits}
+	default:
+		return Report{}, ErrInvalid
+	}
+	if ValidateReport(r) != nil {
+		return Report{}, ErrInvalid
+	}
+	return r, nil
 }
 func (r *Report) UnmarshalJSON(raw []byte) error {
 	p, err := DecodeReport(raw)
@@ -110,6 +197,13 @@ func (r *Report) UnmarshalJSON(raw []byte) error {
 	*r = p
 	return nil
 }
+func SameAuthorization(a, b Report) bool {
+	return a.SchemaVersion == b.SchemaVersion && a.PolicyEnabled == b.PolicyEnabled && a.ServiceAuthorization == b.ServiceAuthorization && slices.Equal(a.AllowedUnits, b.AllowedUnits)
+}
+func EqualReport(a, b Report) bool {
+	return a.Tuple == b.Tuple && a.Sequence == b.Sequence && a.ObservedAt == b.ObservedAt && SameAuthorization(a, b)
+}
+func CloneReport(r Report) Report { r.AllowedUnits = slices.Clone(r.AllowedUnits); return r }
 func strict(raw []byte, target any, max int) error {
 	if len(raw) == 0 || len(raw) > max {
 		return ErrInvalid

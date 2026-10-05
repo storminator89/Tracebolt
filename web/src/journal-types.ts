@@ -6,7 +6,7 @@ export const JOURNAL_WARNING = 'Best-effort masking only. Messages may still con
 export interface JournalQuery { unit: string; start: string; end: string; maxPriority: number }
 export interface JournalIdentity { id: string; sequence: string; queryDigest: string }
 export interface JournalPolicyGeneration { revision: string; generation: string; policyDigest: string }
-export interface JournalGenerationView { schemaVersion: 'tracebolt.journal-generation-view.v1'; policyGeneration: JournalPolicyGeneration; sequence: string; observedAt: string; receivedAt: string; expiresAt: string; fresh: boolean }
+export interface JournalGenerationView { schemaVersion: 'tracebolt.journal-generation-view.v1' | 'tracebolt.journal-generation-view.v2'; policyEnabled?: boolean; serviceAuthorization?: 'exact-units' | 'all-system-services'; allowedUnits?: string[]; policyGeneration: JournalPolicyGeneration; sequence: string; observedAt: string; receivedAt: string; expiresAt: string; fresh: boolean }
 export interface JournalDescription {
     schemaVersion: 'tracebolt.journal-request.v1' | 'tracebolt.journal-request.v2'; policyGeneration?: JournalPolicyGeneration; identity: JournalIdentity; deviceId: string; certificateHash: string;
     query: JournalQuery; budgets: { maxRows: number; maxSnapshotBytes: number; maxMessageBytes: number; maxRawBytes: number; maxLineBytes: number; maxScannedRows: number; timeoutMs: number };
@@ -58,8 +58,16 @@ export function validJournalGeneration(v: unknown): v is JournalPolicyGeneration
     return exact(v, ['revision', 'generation', 'policyDigest']) && sequence(v.revision) && v.revision !== '0' && typeof v.generation === 'string' && /^[a-f0-9]{64}$/.test(v.generation) && v.generation !== '0'.repeat(64) && digest(v.policyDigest) && v.policyDigest !== `sha256:${'0'.repeat(64)}`;
 }
 export const sameJournalGeneration = (a: JournalPolicyGeneration, b: JournalPolicyGeneration) => a.revision === b.revision && a.generation === b.generation && a.policyDigest === b.policyDigest;
+export function sameJournalAuthorization(a: JournalGenerationView, b: JournalGenerationView): boolean {
+    return a.schemaVersion === b.schemaVersion && a.policyEnabled === b.policyEnabled && a.serviceAuthorization === b.serviceAuthorization && JSON.stringify(a.allowedUnits) === JSON.stringify(b.allowedUnits);
+}
 function generationView(v: unknown, now: string): v is JournalGenerationView {
-    return exact(v, ['schemaVersion', 'policyGeneration', 'sequence', 'observedAt', 'receivedAt', 'expiresAt', 'fresh']) && v.schemaVersion === 'tracebolt.journal-generation-view.v1' && validJournalGeneration(v.policyGeneration) && sequence(v.sequence) && v.sequence !== '0' && journalTime(v.observedAt) && journalTime(v.receivedAt) && journalTime(v.expiresAt) && journalAge(v.receivedAt, v.observedAt) >= 0 && journalAge(v.receivedAt, v.observedAt) < 300000 && journalAge(now, v.receivedAt) >= 0 && journalAge(v.expiresAt, v.observedAt) === 300000 && typeof v.fresh === 'boolean' && (!v.fresh || journalAge(v.expiresAt, now) > 0);
+    const v2 = record(v) && v.schemaVersion === 'tracebolt.journal-generation-view.v2';
+    if (!exact(v, ['schemaVersion', 'policyGeneration', 'sequence', 'observedAt', 'receivedAt', 'expiresAt', 'fresh', ...(v2 ? ['policyEnabled', 'serviceAuthorization', 'allowedUnits'] : [])]) || !v2 && v.schemaVersion !== 'tracebolt.journal-generation-view.v1' || !validJournalGeneration(v.policyGeneration) || !sequence(v.sequence) || v.sequence === '0' || !journalTime(v.observedAt) || !journalTime(v.receivedAt) || !journalTime(v.expiresAt) || journalAge(v.receivedAt, v.observedAt) < 0 || journalAge(v.receivedAt, v.observedAt) >= 300000 || journalAge(now, v.receivedAt) < 0 || journalAge(v.expiresAt, v.observedAt) !== 300000 || typeof v.fresh !== 'boolean' || v.fresh && journalAge(v.expiresAt, now) <= 0) return false;
+    if (!v2) return true;
+    if (typeof v.policyEnabled !== 'boolean' || !Array.isArray(v.allowedUnits) || v.allowedUnits.length > 32) return false;
+    if (v.serviceAuthorization === 'all-system-services') return v.allowedUnits.length === 0;
+    return v.serviceAuthorization === 'exact-units' && v.allowedUnits.length > 0 && v.allowedUnits.every((unit: unknown, index: number, units: unknown[]) => validJournalUnit(unit) && (index === 0 || typeof units[index - 1] === 'string' && (units[index - 1] as string) < unit));
 }
 function identity(v: unknown): v is JournalIdentity { return exact(v, ['id', 'sequence', 'queryDigest']) && typeof v.id === 'string' && /^journal_[A-Za-z0-9_-]{1,120}$/.test(v.id) && sequence(v.sequence) && v.sequence !== '0' && digest(v.queryDigest); }
 export const sameJournalIdentity = (a: JournalIdentity, b: JournalIdentity) => a.id === b.id && a.sequence === b.sequence && a.queryDigest === b.queryDigest;

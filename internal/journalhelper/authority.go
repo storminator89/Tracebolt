@@ -98,7 +98,7 @@ func validateIdentity(d Deployment, i Identity) error {
 }
 func validateState(s State, i Identity) error {
 	generation, err := journalpolicy.PolicyGeneration(s.Policy)
-	if err != nil || generation != s.PolicyGeneration || s.Deployment.PolicyGenerationRequired != (s.Policy.SchemaVersion == journalpolicy.VersionV2) {
+	if err != nil || generation != s.PolicyGeneration || s.Deployment.PolicyGenerationRequired != journalpolicy.IsGenerationPolicy(s.Policy.SchemaVersion) {
 		return ErrRejected
 	}
 	_, ok := taggedDigest(s.Revision)

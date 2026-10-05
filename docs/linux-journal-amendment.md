@@ -1,12 +1,53 @@
 # Add exact Linux journal service permissions locally
 
-`deploy/journal/amend.py` is the separate **add-only** plan/apply workflow for an
+`deploy/journal/amend.py` is the separate **add-only/profile-expansion** plan/apply workflow for an
 already-owned journal helper installation. It never reruns create-only setup,
 creates an account, changes group membership, enables a unit, or queries a log
 source. It preserves all previously allowed units, numeric identities, policy
 limits, content acknowledgements, policy `enabled`, unit enablement, enrollment,
 and consumed-request floors. Removing units, toggling policy enablement,
 repairing a partial transaction, and rollback are not implemented by this tool.
+
+## Guided one-time profile migration
+
+For an existing helper installation, the guided command offers **all supported
+system services, including services installed later**. This is one local grant;
+normal requests then run centrally from Logs by device, exact service, time and
+severity. Existing v1/v2 grants remain narrow until that explicit migration.
+
+The reviewed `guide.py` command downloads a fixed source set from one immutable
+publication commit and checks its pinned manifest/file hashes before loading it.
+It checks the manifest-owned installed agent's read-only capability mode and the
+bound manager's public capability response before presenting the plan. Missing
+or older components stop with upgrade/setup guidance; no upgrade or helper
+installation is performed. For HTTP-test, the manager response is an
+unauthenticated observation; the final warning covers plaintext and impersonation.
+
+One terminal confirmation binds the full plan digest, destination, all-current
+and future-service grant and content/HTTP acknowledgement. Only then does the
+existing amendment stop the owned units and commit a fresh policy generation.
+Before confirmation, source staging and bounded metadata inspection are the only
+effects. Cancellation makes no installed-policy/service change. Existing partial
+transaction evidence is retained and blocks automatic retries or resets.
+
+The one-line command is prepared from `prepare-guide-command.py` **after** the
+reviewed source commit is published, using that full commit and the reviewed local
+guide/manifest bytes. A moving branch, checksum fetched from an unpinned location,
+or blind `curl | sh` command is not an equivalent verification path. Source hashes
+identify reviewed bytes; this does not claim a newly signed binary release.
+
+The manual read-only equivalent is:
+
+```sh
+sudo /usr/bin/python3 -I /root/tracebolt-journal-amendment/deploy/journal/amend.py --all-system-services
+```
+
+The v3 policy keeps identity, budget, enabled-state and replay boundaries. It
+changes the service authorization explicitly and includes permission-summary
+metadata in the normal authenticated generation report. Each capture remains
+one exact supported `.service`; kernel, whole-system and system-wide authentication
+are not included. A disabled existing policy stays disabled. Fresh installations
+still require the separately approved helper setup; this guide is a migration.
 
 This is source and inert-fixture functionality. It is not evidence of successful
 Debian/systemd deployment, journal visibility, reboot behavior, or a live grant.

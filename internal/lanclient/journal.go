@@ -106,6 +106,10 @@ func (s *journalSender) Run(ctx context.Context) string {
 		}
 		return "denied"
 	}
+	disabled := local.policy.SchemaVersion == journalpolicy.VersionV3 && !local.policy.Enabled
+	if disabled {
+		s.discard()
+	}
 	if s.state == nil {
 		s.state, e = journalstate.Open(ctx, journalStateDirectory(s.material.config), s.material.binding)
 		if e != nil {
@@ -113,9 +117,16 @@ func (s *journalSender) Run(ctx context.Context) string {
 		}
 	}
 	if local.generation != (journalgeneration.Tuple{}) {
-		if s.reportGeneration(ctx, local) != nil {
+		reportErr := s.reportGeneration(ctx, local)
+		if disabled {
+			return "disabled"
+		}
+		if reportErr != nil {
 			return "unavailable"
 		}
+	}
+	if disabled {
+		return "disabled"
 	}
 	if s.pending != nil {
 		return s.deliver(ctx, local)
@@ -339,8 +350,12 @@ func (s *journalSender) request(ctx context.Context, path string, sequence uint6
 	if len(response.Header.Values("Content-Encoding")) != 0 || len(response.Header.Values("Content-Type")) != 1 || (response.Header.Get("Content-Type") != "application/json" && response.Header.Get("Content-Type") != "application/json; charset=utf-8") {
 		return nil, 0, errJournalHelper
 	}
-	raw, e := io.ReadAll(io.LimitReader(response.Body, 4097))
-	if e != nil || len(raw) > 4096 {
+	limit := int64(4096)
+	if path == journalwire.GenerationPath {
+		limit = journalgeneration.MaxReportBytes
+	}
+	raw, e := io.ReadAll(io.LimitReader(response.Body, limit+1))
+	if e != nil || int64(len(raw)) > limit {
 		return nil, 0, errJournalHelper
 	}
 	return raw, response.StatusCode, nil

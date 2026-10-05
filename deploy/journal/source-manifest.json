@@ -1,0 +1,25 @@
+{
+  "schemaVersion": "tracebolt.journal-guide-source.v1",
+  "files": {
+    "deploy/journal/amend.py": {
+      "sha256": "458ed9694a850638b967c67b5faeb6715359fb2e20a55fdf752ffd115853eb7a",
+      "size": 42743
+    },
+    "deploy/journal/setup.py": {
+      "sha256": "abdea35026d4ff56b88bbbdd413f70a4a9f52d01089a05e7ba86336e7ed12b5a",
+      "size": 31359
+    },
+    "deploy/systemd/tracebolt-agent.service.in": {
+      "sha256": "0bc6374c36f6252e42751f4692464429165b512bcb196486b81ff4785671ea0c",
+      "size": 1024
+    },
+    "deploy/systemd/tracebolt-journal-reader.service.in": {
+      "sha256": "13859165f9316faf0993db666feb1ef24348e04fb40dbefaa3c36ceabbc11e86",
+      "size": 2081
+    },
+    "deploy/systemd/tracebolt-journal-reader.socket.in": {
+      "sha256": "d38c782fe7b2e6a0f058b97fe870c9fee8035cc022ca22a7ffa1ce102758867c",
+      "size": 650
+    }
+  }
+}

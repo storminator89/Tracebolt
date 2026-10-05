@@ -56,3 +56,45 @@ describe('generation-aware explicit capture', () => {
         expect(fetch.mock.calls.some(([url]) => url === `${root}/create`)).toBe(false);
     });
 });
+
+function scopeView(scope: 'exact-units' | 'all-system-services' = 'all-system-services'): JournalView {
+    const view = generationView();
+    view.generation = { ...view.generation!, schemaVersion: 'tracebolt.journal-generation-view.v2', policyEnabled: true, serviceAuthorization: scope, allowedUnits: scope === 'exact-units' ? ['fixture.service'] : [] };
+    return view;
+}
+describe('reported local service grant', () => {
+    it('shows the broad grant without inventory or automatic capture and retains explicit consent', async () => {
+        const view = scopeView(), fetch = server(() => view); open(); await screen.findByText('Awaiting a request');
+        expect(screen.getByText(/All current and future system services/)).toBeVisible();
+        expect(screen.queryByRole('list')).not.toBeInTheDocument();
+        fireEvent.change(screen.getByLabelText('Exact service unit'), { target: { value: 'future.service' } });
+        expect(screen.getByText('Included in the last reported local grant.')).toBeVisible();
+        expect(screen.getByRole('button', { name: 'Capture logs' })).toBeDisabled();
+        fireEvent.click(screen.getByRole('checkbox'));
+        expect(screen.getByRole('button', { name: 'Capture logs' })).toBeEnabled();
+        expect(fetch.mock.calls.some(([url]) => url === `${root}/create`)).toBe(false);
+    });
+    it.each(['disabled', 'outside', 'stale'] as const)('does not capture a %s reported grant', async kind => {
+        const view = scopeView('exact-units');
+        if (kind === 'disabled') view.generation!.policyEnabled = false;
+        if (kind === 'stale') { view.generation!.fresh = false; view.serverNow = '2026-10-04T12:05:00Z'; }
+        const fetch = server(() => view); open(); await screen.findByText('Awaiting a request');
+        fireEvent.change(screen.getByLabelText('Exact service unit'), { target: { value: kind === 'outside' ? 'other.service' : 'fixture.service' } });
+        fireEvent.click(screen.getByRole('checkbox'));
+        expect(screen.getByRole('button', { name: 'Capture logs' })).toBeDisabled();
+        await act(async () => { fireEvent.submit(screen.getByRole('button', { name: 'Capture logs' }).closest('form')!); });
+        expect(fetch.mock.calls.some(([url]) => url === `${root}/create`)).toBe(false);
+        if (kind === 'stale') { expect(screen.getByText(/Stale · current permission unknown/)).toBeVisible(); expect(screen.queryByText('Included in the last reported local grant.')).not.toBeInTheDocument(); }
+    });
+    it.each(['changed-summary', 'same-tuple-enrichment', 'downgrade'] as const)('rejects %s on refresh', async kind => {
+        let view = kind === 'same-tuple-enrichment' ? generationView() : scopeView();
+        server(() => view); open(); await screen.findByText('Awaiting a request');
+        view = kind === 'same-tuple-enrichment' ? scopeView() : structuredClone(view);
+        view.serverNow = '2026-10-04T12:00:01Z'; view.generation!.sequence = '2'; view.generation!.observedAt = view.serverNow; view.generation!.receivedAt = view.serverNow; view.generation!.expiresAt = '2026-10-04T12:05:01Z';
+        if (kind === 'changed-summary') view.generation!.policyEnabled = false;
+        if (kind === 'downgrade') { view = generationView('2'); }
+        fireEvent.click(screen.getByRole('button', { name: 'Refresh status' }));
+        await screen.findByRole('alert');
+        expect(screen.getByRole('button', { name: 'Capture logs' })).toBeDisabled();
+    });
+});

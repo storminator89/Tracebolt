@@ -98,3 +98,17 @@ describe('Linux log source guidance is discovery, never authority', () => {
         expect(screen.getAllByText('Beobachteter Dienst · Log-Freigabe nicht verifiziert')).toHaveLength(2);
     });
 });
+
+it('labels observed inventory separately from the reported exact grant and loses permission on stale reports', async () => {
+    const permission = journalView('awaiting'); permission.schemaVersion = 'tracebolt.journal-view.v2';
+    permission.generation = { schemaVersion: 'tracebolt.journal-generation-view.v2', policyGeneration: { revision: '1', generation: 'a'.repeat(64), policyDigest: `sha256:${'b'.repeat(64)}` }, sequence: '1', observedAt: permission.serverNow, receivedAt: permission.serverNow, expiresAt: '2026-10-04T12:05:00Z', fresh: true, policyEnabled: true, serviceAuthorization: 'exact-units', allowedUnits: ['ssh.service'] };
+    const pickerWithGrant = () => <JournalServicePicker deviceId={systemDevice} sessionKey="reported-source" journalView={permission} onSelect={select} onClose={vi.fn()}/>;
+    const rendered = render(pickerWithGrant()); await screen.findByText('ssh.service');
+    expect(screen.getByText('Observed service · included in reported local grant')).toBeVisible();
+    expect(screen.getAllByText('Observed service · outside reported local grant')).toHaveLength(names.length - 1);
+    expect(select).not.toHaveBeenCalled();
+    permission.generation = { ...permission.generation, fresh: false };
+    rendered.rerender(pickerWithGrant());
+    expect(screen.getAllByText('Observed service · log permission not verified')).toHaveLength(names.length);
+    expect(screen.queryByText('Observed service · included in reported local grant')).not.toBeInTheDocument();
+});

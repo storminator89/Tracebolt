@@ -284,6 +284,14 @@ func (h *operatorHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	if r.URL.Path == journalCapabilitiesPath {
+		if h.enrollment == nil {
+			fail(w, 404, "enrollment_unavailable", "Enrollment is not configured.")
+			return
+		}
+		serveJournalCapabilities(w, r, h.enrollmentBootstrap, &h.bootstrapAdmission)
+		return
+	}
 	if strings.HasPrefix(r.URL.Path, publicBootstrapPrefix) {
 		if h.enrollment == nil {
 			fail(w, 404, "enrollment_unavailable", "Enrollment is not configured.")

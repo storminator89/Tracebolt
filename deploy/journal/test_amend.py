@@ -168,7 +168,7 @@ class Fixture(base.Fixture):
                 self.private_generation = g
             else:
                 a.require(args[7:] == [] and (g is None or json.loads(self.files[a.ACTIVATION])["phase"] == "committed" and self.private_generation == g), "fixture-preview-gate")
-            out = dict(schemaVersion="tracebolt.journal-amendment-result.v1", mode=mode, scope=s.SCOPE,
+            out = dict(schemaVersion="tracebolt.journal-amendment-result.v1", mode=mode, scope=p["scope"],
                 senderBinding=self.preview["senderBinding"], managerOrigin=self.preview["managerOrigin"],
                 transportProfile=self.preview["transportProfile"], collectionProfile=s.PROFILE,
                 deviceId=self.preview["deviceId"], certificateHash=self.preview["certificateHash"], agentUid=200, agentGid=201,
@@ -199,6 +199,128 @@ class Fixture(base.Fixture):
             plaintext = self.manifest["profile"] == "http-test"
         expected = expected or a.digest(a.canonical(self.plan(additions)))
         return a.apply(s, self, list(additions), self.templates, expected, content, plaintext)
+
+
+class AllServiceProfileTests(unittest.TestCase):
+    def plan(self, f):
+        return a.preflight(s, f, [], f.templates, all_system_services=True)[1]
+
+    def apply(self, f, expected=None, content=True, plaintext=None):
+        expected = expected or a.digest(a.canonical(self.plan(f)))
+        plain = f.manifest["profile"] == "http-test" if plaintext is None else plaintext
+        return a.apply(s, f, [], f.templates, expected, content, plain, all_system_services=True)
+
+    def test_one_time_profile_plan_does_not_change_or_read_private_state(self):
+        f = Fixture()
+        before = copy.deepcopy((f.files, f.meta, f.units))
+        plan = self.plan(f)
+        self.assertEqual(f.actions, [])
+        self.assertEqual(before, (f.files, f.meta, f.units))
+        self.assertEqual(plan["operation"], "grant-all-system-services")
+        self.assertEqual(plan["schemaVersion"], "tracebolt.journal-amendment-plan.v2")
+        self.assertEqual(plan["serviceAuthorization"], a.ALL_SERVICES)
+        self.assertTrue(plan["includesFutureServices"])
+        self.assertEqual(plan["oldUnits"], ["docker.service", "ssh.service"])
+        self.assertEqual(plan["newUnits"], [])
+        self.assertNotIn("scope", plan["preservedPolicy"])
+        self.assertIn("authorized service scope", plan["generationReport"])
+        self.assertFalse(any(x.startswith(s.STATE_DIR + "/") for x in f.reads))
+
+    def test_v1_migration_preserves_identity_limits_floors_and_backup(self):
+        for profile in ("tls", "http-test"):
+            with self.subTest(profile=profile):
+                f = Fixture(profile, helper=True)
+                before = f.files[a.POLICY]
+                old = a.policy(s, before)
+                floors = f.floors, f.other_private
+                result = self.apply(f)
+                self.assertTrue(result["committed"], result)
+                p = a.policy(s, f.files[a.POLICY])
+                self.assertEqual(p["schemaVersion"], a.V3)
+                self.assertEqual(p["scope"], a.SCOPE_V3)
+                self.assertEqual(p["serviceAuthorization"], a.ALL_SERVICES)
+                self.assertEqual(p["allowedUnits"], [])
+                self.assertEqual(p["revision"], "1")
+                for k in a.POLICY_FIELDS:
+                    if k not in ("scope", "allowedUnits"):
+                        self.assertEqual(p[k], old[k])
+                self.assertEqual(f.files[a.CLIENT_POLICY], f.files[a.POLICY])
+                self.assertEqual(f.files[a.transaction_path(1, True) + "/" + Path(a.POLICY).name], before)
+                self.assertEqual((f.floors, f.other_private), floors)
+                self.assertEqual(f.private_generation, a.generation(p))
+                self.assertFalse(result["contentRead"] or result["sourceVerified"])
+
+    def test_v2_migration_uses_new_generation_and_existing_replay_floor(self):
+        f = Fixture()
+        self.assertTrue(f.apply()["committed"])
+        old_generation = f.private_generation
+        self.assertTrue(self.apply(f)["committed"])
+        p = a.policy(s, f.files[a.POLICY])
+        self.assertEqual(p["revision"], "2")
+        self.assertNotEqual(f.private_generation, old_generation)
+        self.assertEqual(f.private_generation, a.generation(p))
+        self.assertFalse(f.absent(a.transaction_path(1, True)))
+
+    def test_broad_profile_is_not_an_enablement_or_restart_permission(self):
+        f = Fixture(active=False, socket=False, enabled=False, policy_enabled=False)
+        r = self.apply(f)
+        self.assertTrue(r["committed"], r)
+        self.assertFalse(r["agentRestarted"] or r["socketRestarted"])
+        self.assertFalse(a.policy(s, f.files[a.POLICY])["enabled"])
+
+    def test_no_implicit_broadness_and_conflicting_or_repeat_requests_rejected(self):
+        for additions, broad in (([], False), (["*.service"], False), (["cron.service"], True), ([], "true")):
+            f = Fixture()
+            with self.assertRaises((a.Rejected, s.Rejected)):
+                a.preflight(s, f, additions, f.templates, all_system_services=broad)
+            self.assertEqual(f.actions, [])
+        f = Fixture()
+        self.assertTrue(self.apply(f)["committed"])
+        f.actions.clear()
+        for additions, broad in (([], True), (["new.service"], False)):
+            with self.assertRaisesRegex(a.Rejected, "already-authorized"):
+                a.preflight(s, f, additions, f.templates, all_system_services=broad)
+            self.assertEqual(f.actions, [])
+
+    def test_profile_confirmation_binds_mode_and_full_plan(self):
+        f = Fixture()
+        exact_hash = a.digest(a.canonical(f.plan()))
+        with self.assertRaisesRegex(a.Rejected, "reviewed-plan-changed"):
+            self.apply(f, expected=exact_hash)
+        self.assertFalse(any(x[0].startswith("command.") for x in f.actions))
+        for profile, content, plain in (("tls", False, False), ("tls", True, True), ("http-test", True, False)):
+            f = Fixture(profile)
+            with self.assertRaisesRegex(a.Rejected, "acknowledgement"):
+                self.apply(f, content=content, plaintext=plain)
+            self.assertFalse(any(x[0].startswith("command.") for x in f.actions))
+
+    def test_v3_requires_explicit_canonical_mode_and_list(self):
+        old = a.policy(s, Fixture().files[a.POLICY])
+        valid = a.amended_policy(old, [], 1, "a" * 64, True)
+        self.assertEqual(a.policy(s, a.canonical(valid)), valid)
+        for update in ({"serviceAuthorization": "*"}, {"serviceAuthorization": None}, {"allowedUnits": None},
+                       {"allowedUnits": ["cron.service"]}, {"scope": s.SCOPE}, {"schemaVersion": "tracebolt.journal-content-policy.v2"}):
+            with self.subTest(update=update), self.assertRaises((a.Rejected, s.Rejected)):
+                a.policy(s, a.canonical(dict(valid, **update)))
+        del valid["serviceAuthorization"]
+        with self.assertRaises(a.Rejected):
+            a.policy(s, a.canonical(valid))
+
+    def test_broad_write_failure_retains_evidence_and_never_activates(self):
+        # Exercise every real authority replacement stage for the broad mode.
+        success = Fixture()
+        self.assertTrue(self.apply(success)["committed"])
+        labels = ["pending-activation"] + [Path(p).name for p in a.REPLACEMENTS] + ["commit-activation"]
+        stages = [x[0] for x in success.actions if any(x[0].startswith(label + ".") for label in labels)]
+        self.assertTrue(stages)
+        for stage in stages:
+            f = Fixture()
+            f.failpoint = stage
+            r = self.apply(f)
+            self.assertIn("failureStage", r, stage)
+            self.assertTrue(r["retainedEvidence"], stage)
+            self.assertFalse(r["agentRestarted"] or r["socketRestarted"], stage)
+
 
 
 class AmendmentTests(unittest.TestCase):

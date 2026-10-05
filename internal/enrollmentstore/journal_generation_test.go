@@ -21,7 +21,7 @@ func TestJournalGenerationMigrationCASAndRestart(t *testing.T) {
 	ctx := context.Background()
 	d := createJournal(t, s, snap, at, 0)
 	report := generationReport(at, 1, 1)
-	if got, err := s.AcceptJournalGeneration(ctx, snap.InvitationID, cert.CertificateHash(), report, at); err != nil || got != report {
+	if got, err := s.AcceptJournalGeneration(ctx, snap.InvitationID, cert.CertificateHash(), report, at); err != nil || !journalgeneration.EqualReport(got, report) {
 		t.Fatal("report", err)
 	}
 	status, err := s.JournalRequestStatus(ctx, snap.Approval.DeviceID, at)
@@ -72,12 +72,12 @@ func TestJournalGenerationRetriesNeverRefreshAndExpiryLatches(t *testing.T) {
 	}
 	original := journalBody(t, s, snap.InvitationID)
 	for _, now := range []time.Time{at.Add(time.Minute), at.Add(2 * time.Minute)} {
-		if got, err := s.AcceptJournalGeneration(ctx, snap.InvitationID, cert.CertificateHash(), report, now); err != nil || got != report || !bytes.Equal(original, journalBody(t, s, snap.InvitationID)) {
+		if got, err := s.AcceptJournalGeneration(ctx, snap.InvitationID, cert.CertificateHash(), report, now); err != nil || !journalgeneration.EqualReport(got, report) || !bytes.Equal(original, journalBody(t, s, snap.InvitationID)) {
 			t.Fatal("retry refreshed metadata", err)
 		}
 	}
 	stale := at.Add(JournalGenerationMaxAge)
-	if got, err := s.AcceptJournalGeneration(ctx, snap.InvitationID, cert.CertificateHash(), report, stale); err != nil || got != report {
+	if got, err := s.AcceptJournalGeneration(ctx, snap.InvitationID, cert.CertificateHash(), report, stale); err != nil || !journalgeneration.EqualReport(got, report) {
 		t.Fatal("expired exact report retry", err)
 	}
 	var latched journalGenerationRecord
@@ -86,7 +86,7 @@ func TestJournalGenerationRetriesNeverRefreshAndExpiryLatches(t *testing.T) {
 		t.Fatal(err)
 	}
 	latched = *full.JournalGeneration
-	if latched.Report != report || !latched.ReceivedAt.Equal(at) || latched.ExpiredAt == nil || !latched.ExpiredAt.Equal(stale) {
+	if !journalgeneration.EqualReport(latched.Report, report) || !latched.ReceivedAt.Equal(at) || latched.ExpiredAt == nil || !latched.ExpiredAt.Equal(stale) {
 		t.Fatal("retry changed age or failed to latch expiry")
 	}
 	if _, err := s.CreateJournalRequestWithGeneration(ctx, snap.Approval.DeviceID, 0, journalQuery(stale), report.Tuple, stale); !errors.Is(err, ErrJournalGenerationStale) {
@@ -298,5 +298,90 @@ func TestJournalGenerationReplaysCannotReplaceHigherTupleOrReuseGeneration(t *te
 	}
 	if _, err := s.AcceptJournalGeneration(ctx, snap.InvitationID, cert.CertificateHash(), old, next.ObservedAt); !errors.Is(err, journalrequest.ErrConflict) {
 		t.Fatal("lower revision retry accepted", err)
+	}
+}
+
+func TestJournalGenerationPermissionSummaryIsBoundDurableAndDetached(t *testing.T) {
+	f, s, path, snap, cert, at := journalFixture(t)
+	ctx := context.Background()
+	report := generationReport(at, 1, 1)
+	report.SchemaVersion = journalgeneration.ReportVersionV2
+	report.PolicyEnabled = true
+	report.ServiceAuthorization = journalgeneration.ExactUnits
+	report.AllowedUnits = []string{"a.service", "b.service"}
+	accepted, err := s.AcceptJournalGeneration(ctx, snap.InvitationID, cert.CertificateHash(), report, at)
+	if err != nil {
+		t.Fatal(err)
+	}
+	accepted.AllowedUnits[0] = "mutated.service"
+	if err = s.Close(); err != nil {
+		t.Fatal(err)
+	}
+	s = f.open(t, path)
+	view, err := s.JournalGenerationStatus(ctx, snap.Approval.DeviceID, at)
+	if err != nil || view.SchemaVersion != "tracebolt.journal-generation-view.v2" || view.PolicyEnabled == nil || !*view.PolicyEnabled || view.AllowedUnits == nil || (*view.AllowedUnits)[0] != "a.service" {
+		t.Fatal("summary lost/aliased", err)
+	}
+	(*view.AllowedUnits)[0] = "mutated.service"
+	before := journalBody(t, s, snap.InvitationID)
+	for _, change := range []func(*journalgeneration.Report){
+		func(r *journalgeneration.Report) { r.PolicyEnabled = false }, func(r *journalgeneration.Report) { r.AllowedUnits = []string{"a.service"} },
+		func(r *journalgeneration.Report) {
+			r.ServiceAuthorization = journalgeneration.AllSystemServices
+			r.AllowedUnits = []string{}
+		},
+		func(r *journalgeneration.Report) {
+			r.SchemaVersion = journalgeneration.ReportVersion
+			r.PolicyEnabled = false
+			r.ServiceAuthorization = ""
+			r.AllowedUnits = nil
+		},
+	} {
+		next := journalgeneration.CloneReport(report)
+		next.Sequence++
+		next.ObservedAt = at.Add(time.Second)
+		change(&next)
+		if _, err = s.AcceptJournalGeneration(ctx, snap.InvitationID, cert.CertificateHash(), next, next.ObservedAt); !errors.Is(err, journalrequest.ErrConflict) {
+			t.Fatal("same tuple summary changed", err)
+		}
+		if !bytes.Equal(before, journalBody(t, s, snap.InvitationID)) {
+			t.Fatal("conflict changed durable report")
+		}
+	}
+	next := generationReport(at.Add(time.Second), 2, 2)
+	if _, err = s.AcceptJournalGeneration(ctx, snap.InvitationID, cert.CertificateHash(), next, next.ObservedAt); !errors.Is(err, journalrequest.ErrConflict) {
+		t.Fatal("v2 downgraded", err)
+	}
+	next.SchemaVersion = journalgeneration.ReportVersionV2
+	next.PolicyEnabled = true
+	next.ServiceAuthorization = journalgeneration.AllSystemServices
+	next.AllowedUnits = []string{}
+	if _, err = s.AcceptJournalGeneration(ctx, snap.InvitationID, cert.CertificateHash(), next, next.ObservedAt); err != nil {
+		t.Fatal("explicit new tuple broad scope rejected", err)
+	}
+	view, err = s.JournalGenerationStatus(ctx, snap.Approval.DeviceID, next.ObservedAt.Add(JournalGenerationMaxAge))
+	if err != nil || view.Fresh || view.AllowedUnits == nil || *view.AllowedUnits == nil || len(*view.AllowedUnits) != 0 {
+		t.Fatal("stale/broad metadata", err)
+	}
+	_, err = s.JournalRequestStatus(ctx, snap.Approval.DeviceID, next.ObservedAt.Add(JournalGenerationMaxAge))
+	if !errors.Is(err, journalrequest.ErrNotFound) {
+		t.Fatal("report automatically created capture", err)
+	}
+}
+
+func TestJournalGenerationLegacySummaryCannotEnrichSameTuple(t *testing.T) {
+	_, s, _, snap, cert, at := journalFixture(t)
+	ctx := context.Background()
+	r := generationReport(at, 1, 1)
+	if _, err := s.AcceptJournalGeneration(ctx, snap.InvitationID, cert.CertificateHash(), r, at); err != nil {
+		t.Fatal(err)
+	}
+	r.Sequence++
+	r.ObservedAt = at.Add(time.Second)
+	r.SchemaVersion = journalgeneration.ReportVersionV2
+	r.ServiceAuthorization = journalgeneration.ExactUnits
+	r.AllowedUnits = []string{"a.service"}
+	if _, err := s.AcceptJournalGeneration(ctx, snap.InvitationID, cert.CertificateHash(), r, r.ObservedAt); !errors.Is(err, journalrequest.ErrConflict) {
+		t.Fatal("silent same-policy disclosure migration", err)
 	}
 }

@@ -52,6 +52,23 @@ Retain the selected device/service, source provenance and original observation
 time. Bound query windows and result sizes. Show an actionable next step only
 when the corresponding endpoint capability and local consent actually exist.
 
+The normal administration model is one explicit local diagnostic grant at setup
+or migration, followed by central queries: select the device, service, time and
+severity in Logs; the agent captures that requested window. Routine queries and
+new services inside that approved scope must not require another terminal command.
+The first broader profile is **all supported system services, including future
+services**. Each request still selects one exact canonical service; this profile
+does not continuously upload logs or allow arbitrary journal filters or paths.
+
+The source candidate introduces an explicitly acknowledged v3 policy for this
+profile. Existing v1/v2 three-service grants keep their original meaning. Its
+guided one-command migration checks the installed agent and manager, shows the
+bound destination and content/HTTP risks, and requires one confirmation of the
+exact plan before using the existing atomic amendment lifecycle. It does not
+upgrade binaries or install a missing helper. Fresh-install integration of this
+same one-time profile follows after migration acceptance. The UI distinguishes
+observed services from the last freshly reported permission scope.
+
 Acceptance:
 
 - Exercise the real manager/agent path for the supported source and UI flow
@@ -59,6 +76,11 @@ Acceptance:
   missing local log permission, expired queries and service-selection changes
 - Verify that an unavailable/partial source cannot become a successful empty log
 - Record source checks and actual pilot-machine acceptance separately
+- Accept the one-command migration on a disposable already configured endpoint;
+  verify a newly installed service can subsequently be queried centrally without
+  another grant, and old pending requests cannot cross the policy generation
+- Integrate the same explicit profile into fresh setup without making binary
+  upgrades, missing helpers or old narrow consent implicit permission
 
 ## Phase 2: external alarms that can be trusted
 
@@ -170,8 +192,12 @@ results. Add service-state and package-version changes from comparable inventory
 generations. Preserve missing-data gaps and clock uncertainty; correlation does
 not prove that an observed change caused an incident.
 
-Expand logs one explicitly selected source at a time, after the service-journal
-path is accepted. File/application/database logs need source-specific allowlists,
+After the all-service profile is accepted, add separately typed kernel and
+system/authentication sources to the diagnostic profile when needed. This is a
+profile boundary expansion requiring a new one-time local approval, not a local
+approval for each subsequent query. Kernel, whole-system and system-wide
+authentication collection are not implemented by the all-service profile.
+File/application/database logs need source-specific allowlists,
 local consent, size/time bounds and sensitive-content handling. Do not add a
 generic file reader or continuously ship every log by default.
 

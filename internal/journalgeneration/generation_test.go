@@ -3,6 +3,7 @@ package journalgeneration
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -76,7 +77,7 @@ func TestReportCanonicalFreshnessMetadataOnly(t *testing.T) {
 		t.Fatal(err)
 	}
 	got, err := DecodeReport(raw)
-	if err != nil || got != r {
+	if err != nil || !EqualReport(got, r) {
 		t.Fatalf("report roundtrip %v", err)
 	}
 	if len(raw) > MaxReportBytes || bytes.Contains(raw, []byte("allowedUnits")) || bytes.Contains(raw, []byte("message")) {
@@ -120,4 +121,81 @@ func FuzzGenerationMetadata(f *testing.F) {
 			}
 		}
 	})
+}
+
+func TestReportV2ScopeStrictCanonicalAndLegacyBytes(t *testing.T) {
+	at := time.Date(2026, 10, 5, 13, 0, 0, 0, time.UTC)
+	legacy := Report{SchemaVersion: ReportVersion, Tuple: fixtureTuple(), Sequence: 1, ObservedAt: at}
+	raw, err := EncodeReport(legacy)
+	want := `{"schemaVersion":"tracebolt.journal-generation-report.v1","policyGeneration":{"revision":"1","generation":"` + strings.Repeat("a", 64) + `","policyDigest":"sha256:` + strings.Repeat("b", 64) + `"},"sequence":"1","observedAt":"2026-10-05T13:00:00Z"}`
+	if err != nil || string(raw) != want {
+		t.Fatal("legacy wire bytes changed", err)
+	}
+	for _, enabled := range []bool{true, false} {
+		for _, scope := range []ServiceAuthorization{ExactUnits, AllSystemServices} {
+			r := legacy
+			r.SchemaVersion = ReportVersionV2
+			r.PolicyEnabled = enabled
+			r.ServiceAuthorization = scope
+			r.AllowedUnits = []string{}
+			if scope == ExactUnits {
+				r.AllowedUnits = []string{"a.service", "z@instance.service"}
+			}
+			b, e := EncodeReport(r)
+			if e != nil {
+				t.Fatal(e)
+			}
+			got, e := DecodeReport(b)
+			if e != nil || !EqualReport(got, r) {
+				t.Fatal("v2 roundtrip", e)
+			}
+			for _, bad := range [][]byte{
+				bytes.Replace(b, []byte(`"policyEnabled":`), []byte(`"policyEnabled":false,"policyEnabled":`), 1),
+				bytes.Replace(b, []byte(`"serviceAuthorization":"`+string(scope)+`",`), nil, 1),
+				bytes.Replace(b, []byte(`"policyEnabled":true,`), nil, 1),
+				bytes.Replace(b, []byte(`"policyEnabled":false,`), nil, 1),
+			} {
+				if bytes.Equal(b, bad) {
+					continue
+				}
+				if _, e = DecodeReport(bad); e == nil {
+					t.Fatal("missing/duplicate summary accepted")
+				}
+			}
+		}
+	}
+	badSets := []struct {
+		scope ServiceAuthorization
+		units []string
+	}{
+		{ExactUnits, nil}, {ExactUnits, []string{}}, {ExactUnits, []string{"b.service", "a.service"}}, {ExactUnits, []string{"a.service", "a.service"}},
+		{ExactUnits, []string{"*.service"}}, {AllSystemServices, nil}, {AllSystemServices, []string{"a.service"}}, {"all", []string{}},
+	}
+	for _, bad := range badSets {
+		r := legacy
+		r.SchemaVersion = ReportVersionV2
+		r.ServiceAuthorization = bad.scope
+		r.AllowedUnits = bad.units
+		if _, e := EncodeReport(r); e == nil {
+			t.Fatal("ambiguous scope accepted")
+		}
+	}
+	maximum := legacy
+	maximum.SchemaVersion = ReportVersionV2
+	maximum.ServiceAuthorization = ExactUnits
+	maximum.AllowedUnits = []string{}
+	for i := 0; i < 32; i++ {
+		maximum.AllowedUnits = append(maximum.AllowedUnits, fmt.Sprintf("%02d", i)+strings.Repeat("x", 245)+".service")
+	}
+	b, e := EncodeReport(maximum)
+	if e != nil || len(b) <= 4096 {
+		t.Fatal("maximum exact summary limit", e)
+	}
+	if _, e = DecodeReport(b); e != nil {
+		t.Fatal(e)
+	}
+	maximum.AllowedUnits = append(maximum.AllowedUnits, "zz.service")
+	if _, e = EncodeReport(maximum); e == nil {
+		t.Fatal("33 units accepted")
+	}
 }

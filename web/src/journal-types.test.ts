@@ -70,3 +70,15 @@ describe('generation-bound journal views', () => {
         v.generation.expiresAt = '2026-10-04T12:06:00Z'; expect(validJournalView(v, journalDevice)).toBe(false);
     });
 });
+
+it('requires a canonical explicit scope for v2 permission summaries and keeps old reports unknown', () => {
+    const v = journalView('awaiting'); v.schemaVersion = 'tracebolt.journal-view.v2';
+    v.generation = { ...generationFixture(), schemaVersion: 'tracebolt.journal-generation-view.v2', policyEnabled: true, serviceAuthorization: 'all-system-services', allowedUnits: [] };
+    expect(validJournalView(v, journalDevice)).toBe(true);
+    const summary = v.generation;
+    for (const change of [{ allowedUnits: null }, { allowedUnits: ['a.service'] }, { allowedUnits: undefined }, { policyEnabled: undefined }, { serviceAuthorization: undefined }, { serviceAuthorization: 'all' }, { schemaVersion: 'tracebolt.journal-generation-view.v1' }]) expect(validJournalView({ ...v, generation: { ...summary, ...change } }, journalDevice)).toBe(false);
+    v.generation = { ...summary, serviceAuthorization: 'exact-units', allowedUnits: ['a.service', 'z@instance.service'] };
+    expect(validJournalView(v, journalDevice)).toBe(true);
+    for (const units of [[], ['b.service', 'a.service'], ['a.service', 'a.service'], ['*.service'], Array(33).fill('a.service')]) expect(validJournalView({ ...v, generation: { ...v.generation, allowedUnits: units } }, journalDevice)).toBe(false);
+    v.generation = generationFixture(); expect(validJournalView(v, journalDevice)).toBe(true);
+});

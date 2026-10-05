@@ -1,6 +1,6 @@
 # Linux log sources: current chooser and expansion design
 
-Status: the source chooser and separate add-only amendment workflow are
+Status: the source chooser, add-only amendment and explicit all-system-service profile are
 implemented source/fixture candidates. See [local amendment](linux-journal-amendment.md)
 for the exact plan/apply contract and remaining native acceptance gate. The broader
 collectors below remain a design. No fixture or browser test changes a Linux host
@@ -25,15 +25,34 @@ Three independent facts must stay separate:
    that it is still installed, running, emitting logs or readable.
 2. **Supported:** its exact name fits the existing service-only collector.
 3. **Authorized:** the endpoint's current root-protected policy permits this
-   query. The manager does not receive that allowlist in v1. The chooser therefore
-   says permission is unverified, never guesses from inventory or past success.
+   query. Legacy reports do not disclose that allowlist. Newly acknowledged v3
+   policies report the enabled state and exact/all-service scope, bound to the
+   policy generation and report freshness. The chooser labels that last reported
+   grant; missing or stale metadata is unknown, never inferred from inventory.
    A displayed denial is explicitly the last request for the selected service;
    it is not attributed to another selected service.
 
 An endpoint whose current approved list is `ssh.service`, `docker.service` and
 `tracebolt-agent.service` continues to allow only those three. No preset adds a
 unit, and `systemd-journald.service` is the journal daemon's own diagnostics,
-not the whole journal. Existing source and policy bytes are unchanged.
+not the whole journal. Existing policy bytes are not changed by a binary upgrade.
+
+## One-time diagnostic profile, central queries
+
+The v3 policy explicitly chooses `serviceAuthorization: all-system-services`
+under `on-demand-system-service-log-content`, with an explicitly present empty
+`allowedUnits` array. The enum is the grant: an empty legacy list or `*` never
+means broad permission. The grant covers current and future services whose exact
+names fit the supported canonical grammar. Each query still names just one
+service and preserves the existing window, lookback, severity, row/byte budgets,
+trusted attribution, projected fields and retention. Kernel and whole-journal
+requests remain unsupported.
+
+The guided migration is a one-time local administration operation. Afterwards,
+an operator chooses device/service/time in Logs and the agent performs the bounded
+request; no terminal command is needed for another service inside the approved
+profile. Source labels and observed inventory do not determine authority. See
+[the guided command](linux-journal-amendment.md#guided-one-time-profile-migration).
 
 ## Locally grantable service expansion
 
@@ -41,7 +60,8 @@ The create-only [helper setup](linux-journal-helper.md) cannot edit an existing
 installation. Do not rerun it, hand-edit policy copies, remove setup evidence, or
 reinitialize consent to make an amendment pass. The separate
 `deploy/journal/amend.py` workflow implements the reviewed contract below as a
-source/fixture candidate. It supports adding exact service units only. Explicit removals/revocation remain a separately reviewed operation;
+source/fixture candidate. It supports adding exact service units or explicitly
+migrating to the all-system-service profile. Explicit removals/revocation remain a separately reviewed operation;
 a caller cannot accidentally replace the original list with a shorter list.
 
 ### Read-only plan
@@ -229,7 +249,8 @@ Do not encode them as fake `.service` names or interpret a missing/empty service
 as an unrestricted query. No generic journalctl arguments, fields, shell,
 paths, regexes, user journals, namespaces or container selection are accepted.
 
-- `service`: one exact allowlisted unit with the existing trusted attribution
+- `service`: one exact unit permitted by the allowlist or explicit all-service
+  profile, with the existing trusted attribution
   rules (`_SYSTEMD_UNIT`, or PID 1/UID 0 plus `UNIT`); no `-u` expansion into
   coredump/object/slice branches.
 - `kernel`: one explicit new scope, fixed `_TRANSPORT=kernel` match in the system
@@ -248,8 +269,9 @@ paths, regexes, user journals, namespaces or container selection are accepted.
   authentication-event classification. Availability varies by logger. Any audit
   transport or extra service union needs its own explicit typed scope and tests.
 
-A future read-only capability report must separately identify collector support,
-observed inventory, local policy permission and actual source-read outcome, with
+The v3 permission summary and public compatibility report separately identify
+collector support and the last reported local service permission. Observed
+inventory and actual source-read outcome remain separate, with
 identity, revision and freshness. Missing/old reports mean unknown, never allowed.
 Do not use `journalctl -F` as a permission probe or invent successful empty results.
 

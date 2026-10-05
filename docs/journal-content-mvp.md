@@ -18,6 +18,13 @@ application-supplied unit claims, coredump/object/slice branches are excluded.
 The validating PID/UID fields are then discarded. Raw cursors, boot IDs,
 machine IDs, account fields and other metadata are discarded.
 
+The service permission may be an exact allowlist or the separately acknowledged
+v3 **all current and future supported system services** profile. This changes
+which exact services may be requested, not the query shape or data projection.
+Normal queries run from the central UI after that one local grant. Existing
+v1/v2 consent is never reinterpreted as the broader profile. See the
+[guided migration](linux-journal-amendment.md#guided-one-time-profile-migration).
+
 The typed reader has a maximum one-hour window within the preceding 24 hours,
 500 retained rows, 512 KiB encoded snapshot, 4 KiB per message, 8 MiB raw source,
 4,096 scanned rows and 64 KiB JSON lines. A limit becomes an explicit partial or
@@ -52,7 +59,7 @@ processes. No group name or NSS resolution is accepted as a numeric identity
 proof; the eventual deployment must resolve and verify exact local IDs.
 
 The protected root-owned policy declares the exact destination and bound v3
-sender, helper and agent UIDs, sorted service allowlist, window/lookback/severity
+sender, helper and agent UIDs, explicit service scope, window/lookback/severity
 limits and explicit content acknowledgement. The helper can read the policy;
 the agent must not be able to replace it. HTTP-test log content needs a separate
 plaintext-content acknowledgement. The existing telemetry consent is not that

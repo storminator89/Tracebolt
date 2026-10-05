@@ -1,5 +1,5 @@
 {
-  "goSourceSha256": "8c9b30879bdeb306af7fcd3a913a75c1c724f749b3084a72f23d6f297fd46e2f",
+  "goSourceSha256": "44c9efee22384c9e595764c10cabd7d09798f748d8278ed78598cb445d035a33",
   "packages": {
     "localrmm/cmd/agent": [
       "TestHelp",
@@ -53,6 +53,7 @@
       "TestCachedUpdatesConsentIdentityBeforePrivateReadAndExplicitAck",
       "TestCompleteUpdatesConsentIdentityBeforePrivateReadAndExplicitAck",
       "TestEndpointConsentIdentityBeforePrivateReadAndExplicitAck",
+      "TestJournalCapabilitiesExclusiveBeforeSenderState",
       "TestJournalConsentCLIPreviewAndInitializeContract",
       "TestJournalConsentCLIRejectsBeforePrivateAccess",
       "TestJournalReaderExclusiveBeforeSenderState",
@@ -293,6 +294,8 @@
       "TestHealthOperatorAuthenticationCSRFAndDeviceAuthority",
       "TestInventoryMaintenanceBusyResponseContract",
       "TestInvitationCreationAdvertisesExactPublicDownloadChecksum",
+      "TestJournalCapabilitiesPublicStaticBoundedAndGuarded",
+      "TestJournalCapabilitiesUnavailableOnDeveloperSurface",
       "TestJournalExpectedGenerationShape",
       "TestJournalExplicitAcknowledgementsAndNestedContracts",
       "TestJournalIdentityRejectsAmbiguousCAS",
@@ -741,7 +744,9 @@
       "TestJournalGenerationAcceptedContentMetadataKeepsOriginalExpiry",
       "TestJournalGenerationCorruptionNeverFallsBack",
       "TestJournalGenerationForeignLeafAndCanceledTransaction",
+      "TestJournalGenerationLegacySummaryCannotEnrichSameTuple",
       "TestJournalGenerationMigrationCASAndRestart",
+      "TestJournalGenerationPermissionSummaryIsBoundDurableAndDetached",
       "TestJournalGenerationRejectsReplayConflictAndOldTimeWithoutMutation",
       "TestJournalGenerationReplaysCannotReplaceHigherTupleOrReuseGeneration",
       "TestJournalGenerationRetriesNeverRefreshAndExpiryLatches",
@@ -807,6 +812,7 @@
       "TestCopiedIngressHandlesShareCertificateAdmission",
       "TestEndpointIdentityTLSHTTPActivationReplayAndRevocation",
       "TestJournalGenerationRealTransportAndOperatorCAS",
+      "TestJournalGenerationV2ScopeAuthenticatedTransportAndOperatorView",
       "TestJournalOperatorCreationAndPageRechecksBodyTimeAndSession",
       "TestJournalRealTransportPurposeAndTerminalExpiry",
       "TestJournalRealTransportResultSearchRetryAndRevocation",
@@ -948,6 +954,7 @@
     ],
     "localrmm/internal/journalgeneration": [
       "TestReportCanonicalFreshnessMetadataOnly",
+      "TestReportV2ScopeStrictCanonicalAndLegacyBytes",
       "TestTupleExactUint64CanonicalDetachedRoundTrip",
       "TestTupleRejectsMalformedJSONAndInvalidValues"
     ],
@@ -983,9 +990,12 @@
       "TestV2HelperBindsCaptureAndMetadataVerification",
       "TestV2HelperDeniesPredecessorLegacyAndConflictingRequestsBeforeCapture",
       "TestV2HelperFinalReleaseDeniesGenerationChange",
+      "TestV3HelperAllowsFutureExactServiceThroughExistingTBJ2Protocol",
+      "TestV3HelperDeniesLegacyRequestsAndScopeChangesBeforeRelease",
       "TestWriteAllRejectsBadWriter"
     ],
     "localrmm/internal/journalpolicy": [
+      "TestAllSystemServicesStillRequiresOneExactBoundedServiceQuery",
       "TestDisableOrPolicyRevisionInvalidatesUnsentContent",
       "TestGenerationPolicyCanonicalAndLegacyCompatibility",
       "TestGenerationPolicyRejectsMissingWrongStaleAndConflictBindings",
@@ -994,7 +1004,9 @@
       "TestPolicyDecodingDetachesInput",
       "TestPolicyRequiresSeparateIdentityExactAllowlistAndConsent",
       "TestPolicyStrictJSONRejectsAmbiguity",
-      "TestStrictPolicyRoundTripAndExactScope"
+      "TestStrictPolicyRoundTripAndExactScope",
+      "TestV3ScopeRejectsAmbiguousOrDowngradedAuthority",
+      "TestV3ServiceAuthorizationIsExplicitAndLegacyBytesStayExact"
     ],
     "localrmm/internal/journalrequest": [
       "TestExpiredRecordRequiresDurableTerminalTime",
@@ -1090,6 +1102,7 @@
       "TestCompleteUpdatesWithdrawalDuringCaptureAndTransferSendsNoMoreRows",
       "TestConfigChangeCannotReusePendingState",
       "TestDestinationPolicy",
+      "TestDisabledV3ReportsScopeDiscardsPendingAndNeverQueries",
       "TestEndpointConsentAdminIsQuiescentLocalAndPreservesLedgers",
       "TestEndpointConsentMalformedForeignUnsafeAndMissingStateFailClosed",
       "TestEndpointConsentRemovedBeforeSourcePreventsEndpointRead",
@@ -1104,6 +1117,8 @@
       "TestGenerationChangedAfterCaptureDiscardsOldBody",
       "TestGenerationFailureKeepsOrdinaryAgentLoopRunning",
       "TestGenerationReportFailureCannotReachClaim",
+      "TestGenerationResponseLimitDoesNotWidenOtherReplies",
+      "TestGenerationSummaryOnlyForNewlyAcknowledgedPolicyV3",
       "TestGuidedSenderNeverInitializesMissingLedger",
       "TestGuidedSenderRejectsMissingFilesAndBinding",
       "TestHTTPMaterialRejectsExpiredAndWrongRoleBeforeState",

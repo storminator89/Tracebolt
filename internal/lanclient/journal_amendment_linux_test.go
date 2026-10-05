@@ -15,6 +15,12 @@ import (
 )
 
 func TestAmendmentAcceptPreservesOriginalIdentityAndConsumption(t *testing.T) {
+	for _, mode := range []journalpolicy.ServiceAuthorization{"", journalpolicy.ExactUnits, journalpolicy.AllSystemServices} {
+		t.Run("authorization="+string(mode), func(t *testing.T) { testAmendmentAcceptPreservesOriginalIdentityAndConsumption(t, mode) })
+	}
+}
+
+func testAmendmentAcceptPreservesOriginalIdentityAndConsumption(t *testing.T, mode journalpolicy.ServiceAuthorization) {
 	f := integrationFixture(t, "http-test", nil)
 	m, path := prepareEndpointHandoff(t, f.material)
 	consumed, e := journalstate.Initialize(context.Background(), journalStateDirectory(m.config), m.binding)
@@ -55,6 +61,14 @@ func TestAmendmentAcceptPreservesOriginalIdentityAndConsumption(t *testing.T) {
 	local.policy.Revision = 1
 	local.policy.Generation = strings.Repeat("c", 64)
 	local.policy.AllowedUnits = append([]string{"cron.service"}, local.policy.AllowedUnits...)
+	if mode != "" {
+		local.policy.SchemaVersion = journalpolicy.VersionV3
+		local.policy.Scope = journalpolicy.ScopeV3
+		local.policy.ServiceAuthorization = mode
+		if mode == journalpolicy.AllSystemServices {
+			local.policy.AllowedUnits = []string{}
+		}
+	}
 	local.generation, e = journalpolicy.PolicyGeneration(local.policy)
 	if e != nil {
 		t.Fatal(e)
@@ -65,7 +79,7 @@ func TestAmendmentAcceptPreservesOriginalIdentityAndConsumption(t *testing.T) {
 		t.Fatal("HTTP ack omitted")
 	}
 	result, e := configureJournalAmendment(path, "accept", true, true, identity, loader)
-	if e != nil || !result.Accepted || result.PolicyGeneration != local.generation {
+	if e != nil || !result.Accepted || result.PolicyGeneration != local.generation || result.Scope != local.policy.Scope {
 		t.Fatal(e)
 	}
 	if _, e = configureJournalAmendment(path, "accept", true, true, identity, loader); e == nil {

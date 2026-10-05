@@ -17,7 +17,7 @@ func TestGenerationReportCanonicalBoundsAndV2Description(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got, err := DecodeGenerationReport(raw); err != nil || got != r {
+	if got, err := DecodeGenerationReport(raw); err != nil || !journalgeneration.EqualReport(got, r) {
 		t.Fatal(err)
 	}
 	for _, bad := range [][]byte{append(raw, '\n'), append(raw, raw...), []byte("null"), bytes.Replace(raw, []byte(`"sequence":"1"`), []byte(`"sequence":"01"`), 1), bytes.Replace(raw, []byte(`"sequence":"1"`), []byte(`"sequence":1`), 1), bytes.Replace(raw, []byte(`"sequence":"1"`), []byte(`"sequence":"1","sequence":"1"`), 1), bytes.Replace(raw, []byte(`"observedAt":`), []byte(`"ObservedAt":`), 1), bytes.Replace(raw, []byte(`"revision":"1"`), []byte(`"revision":"1","unit":"secret.service"`), 1), bytes.Repeat([]byte(" "), 4097)} {
@@ -25,7 +25,7 @@ func TestGenerationReportCanonicalBoundsAndV2Description(t *testing.T) {
 			t.Fatal("ambiguous/unbounded report accepted")
 		}
 	}
-	if BodyLimit(GenerationPath) != 4096 || !validPath(GenerationPath) {
+	if BodyLimit(GenerationPath) != journalgeneration.MaxReportBytes || !validPath(GenerationPath) {
 		t.Fatal("route bounds")
 	}
 	q := journalview.Query{Unit: "fixture.service", Start: at.Add(-time.Minute), End: at, MaxPriority: 3}

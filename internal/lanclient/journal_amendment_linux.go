@@ -56,7 +56,7 @@ func configureJournalAmendment(path, mode string, ack, plain bool, identity func
 	}
 	sum := sha256.Sum256(raw)
 	digest := "sha256:" + hex.EncodeToString(sum[:])
-	out = JournalAmendmentResult{SchemaVersion: "tracebolt.journal-amendment-result.v1", Mode: mode, Scope: journalpolicy.Scope, SenderBinding: m.binding, ManagerOrigin: m.config.ManagerOrigin, TransportProfile: m.config.Profile, CollectionProfile: m.config.CollectionProfile, DeviceID: m.config.AgentID, CertificateHash: journalLeaf(m), AgentUID: uid, AgentGID: gid, PolicyDigest: digest, PolicyGeneration: current.generation, ExistingStatePreserved: true}
+	out = JournalAmendmentResult{SchemaVersion: "tracebolt.journal-amendment-result.v1", Mode: mode, Scope: current.policy.Scope, SenderBinding: m.binding, ManagerOrigin: m.config.ManagerOrigin, TransportProfile: m.config.Profile, CollectionProfile: m.config.CollectionProfile, DeviceID: m.config.AgentID, CertificateHash: journalLeaf(m), AgentUID: uid, AgentGID: gid, PolicyDigest: digest, PolicyGeneration: current.generation, ExistingStatePreserved: true}
 	if mode == "preview" {
 		return out, nil
 	}

@@ -2,10 +2,13 @@ package lanclient
 
 import (
 	"context"
+	"localrmm/internal/journalgeneration"
 	"localrmm/internal/journalgenerationstate"
+	"localrmm/internal/journalpolicy"
 	"localrmm/internal/journalwire"
 	"net/http"
 	"path/filepath"
+	"slices"
 )
 
 func journalGenerationDirectory(c Config) string {
@@ -39,6 +42,13 @@ func (s *journalSender) reportGeneration(ctx context.Context, local journalLocal
 	if e != nil || fresh.revision != local.revision {
 		return errJournalDenied
 	}
+	// Older policy consent never authorized disclosure of its service allowlist.
+	if local.policy.SchemaVersion == journalpolicy.VersionV3 {
+		report.SchemaVersion = journalgeneration.ReportVersionV2
+		report.PolicyEnabled = local.policy.Enabled
+		report.ServiceAuthorization = journalgeneration.ServiceAuthorization(local.policy.ServiceAuthorization)
+		report.AllowedUnits = slices.Clone(local.policy.AllowedUnits)
+	}
 	raw, e := journalwire.EncodeGenerationReport(report)
 	if e != nil {
 		return e
@@ -51,7 +61,7 @@ func (s *journalSender) reportGeneration(ctx context.Context, local journalLocal
 		return errJournalDenied
 	}
 	echoed, e := journalwire.DecodeGenerationReport(reply)
-	if e != nil || echoed != report {
+	if e != nil || !journalgeneration.EqualReport(echoed, report) {
 		return errJournalDenied
 	}
 	return nil

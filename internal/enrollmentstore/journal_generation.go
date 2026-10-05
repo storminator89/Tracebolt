@@ -3,6 +3,7 @@ package enrollmentstore
 import (
 	"context"
 	"errors"
+	"slices"
 	"time"
 
 	"localrmm/internal/enrollmentcrypto"
@@ -25,16 +26,20 @@ type journalGenerationRecord struct {
 	ExpiredAt       *time.Time               `json:"expiredAt,omitempty"`
 }
 
-// JournalGenerationView discloses only binding metadata, never allowed units.
+// JournalGenerationView exposes the acknowledged, generation-bound summary.
+// Legacy v1 reports have no summary. Historical metadata is never live authority.
 // Fresh means eligible for a generation-bound request, not permission to read.
 type JournalGenerationView struct {
-	SchemaVersion    string                  `json:"schemaVersion"`
-	PolicyGeneration journalgeneration.Tuple `json:"policyGeneration"`
-	Sequence         uint64                  `json:"sequence,string"`
-	ObservedAt       time.Time               `json:"observedAt"`
-	ReceivedAt       time.Time               `json:"receivedAt"`
-	ExpiresAt        time.Time               `json:"expiresAt"`
-	Fresh            bool                    `json:"fresh"`
+	SchemaVersion        string                                 `json:"schemaVersion"`
+	PolicyGeneration     journalgeneration.Tuple                `json:"policyGeneration"`
+	Sequence             uint64                                 `json:"sequence,string"`
+	ObservedAt           time.Time                              `json:"observedAt"`
+	ReceivedAt           time.Time                              `json:"receivedAt"`
+	ExpiresAt            time.Time                              `json:"expiresAt"`
+	Fresh                bool                                   `json:"fresh"`
+	PolicyEnabled        *bool                                  `json:"policyEnabled,omitempty"`
+	ServiceAuthorization journalgeneration.ServiceAuthorization `json:"serviceAuthorization,omitempty"`
+	AllowedUnits         *[]string                              `json:"allowedUnits,omitempty"`
 }
 
 func validJournalGeneration(snap enrollmentstate.Snapshot, r journalGenerationRecord) bool {
@@ -72,6 +77,7 @@ func currentJournalGeneration(system systemRecord, snap enrollmentstate.Snapshot
 func (s *Store) AcceptJournalGeneration(ctx context.Context, id, hash string, report journalgeneration.Report, now time.Time) (journalgeneration.Report, error) {
 	var out journalgeneration.Report
 	now = now.UTC()
+	report = journalgeneration.CloneReport(report)
 	err := s.journalTransaction(ctx, now, func(t *transaction) error {
 		snap, system, err := s.journalAuthority(t, id, hash, now)
 		if err != nil {
@@ -86,6 +92,9 @@ func (s *Store) AcceptJournalGeneration(ctx context.Context, id, hash string, re
 		}
 		if prior != nil {
 			old := prior.Report
+			if report.Tuple == old.Tuple && !journalgeneration.SameAuthorization(report, old) || old.SchemaVersion == journalgeneration.ReportVersionV2 && report.SchemaVersion != journalgeneration.ReportVersionV2 {
+				return journalrequest.ErrConflict
+			}
 			if report.Sequence < old.Sequence || report.Tuple.Revision < old.Tuple.Revision || report.Tuple.Revision == old.Tuple.Revision && report.Tuple != old.Tuple {
 				return journalrequest.ErrConflict
 			}
@@ -93,7 +102,7 @@ func (s *Store) AcceptJournalGeneration(ctx context.Context, id, hash string, re
 				return journalrequest.ErrConflict
 			}
 			if report.Sequence == old.Sequence {
-				if report != old {
+				if !journalgeneration.EqualReport(report, old) {
 					return journalrequest.ErrConflict
 				}
 				// Receipt and report bytes stay original. A safely observed
@@ -101,7 +110,7 @@ func (s *Store) AcceptJournalGeneration(ctx context.Context, id, hash string, re
 				if _, err = s.journalGenerationFresh(ctx, t, snap, system, now); err != nil {
 					return err
 				}
-				out = old
+				out = journalgeneration.CloneReport(old)
 				return nil
 			}
 			if !report.ObservedAt.After(old.ObservedAt) || now.Before(prior.ReceivedAt) || prior.ExpiredAt != nil && now.Before(*prior.ExpiredAt) {
@@ -130,7 +139,7 @@ func (s *Store) AcceptJournalGeneration(ctx context.Context, id, hash string, re
 		if err = s.saveJournalSystem(ctx, t, snap, system); err != nil {
 			return err
 		}
-		out = report
+		out = journalgeneration.CloneReport(report)
 		return nil
 	})
 	if err != nil {
@@ -201,6 +210,11 @@ func (s *Store) JournalGenerationStatus(ctx context.Context, device string, now 
 			return err
 		}
 		out = &JournalGenerationView{SchemaVersion: "tracebolt.journal-generation-view.v1", PolicyGeneration: r.Report.Tuple, Sequence: r.Report.Sequence, ObservedAt: r.Report.ObservedAt, ReceivedAt: r.ReceivedAt, ExpiresAt: r.Report.ObservedAt.Add(JournalGenerationMaxAge), Fresh: fresh}
+		if r.Report.SchemaVersion == journalgeneration.ReportVersionV2 {
+			out.SchemaVersion = "tracebolt.journal-generation-view.v2"
+			enabled, units := r.Report.PolicyEnabled, slices.Clone(r.Report.AllowedUnits)
+			out.PolicyEnabled, out.ServiceAuthorization, out.AllowedUnits = &enabled, r.Report.ServiceAuthorization, &units
+		}
 		return nil
 	})
 	if err != nil {

@@ -53,3 +53,13 @@ export function journalSourceAccess(view: JournalView | null, unit: string): Jou
     if (['denied', 'disabled', 'helper_unavailable'].includes(view.localStatus)) return view.localStatus as JournalSourceAccess;
     return 'unknown';
 }
+
+/** Local root-policy metadata is independent of observed service inventory.
+ * Stale reports and pre-summary schemas establish no current permission. */
+export type JournalReportedAccess = 'unknown' | 'reported_disabled' | 'reported_allowed' | 'outside_reported_scope';
+export function journalReportedAccess(view: JournalView | null, unit: string): JournalReportedAccess {
+    const generation = view?.generation;
+    if (!view?.configured || !generation?.fresh || generation.schemaVersion !== 'tracebolt.journal-generation-view.v2' || !validJournalUnit(unit)) return 'unknown';
+    if (!generation.policyEnabled) return 'reported_disabled';
+    return generation.serviceAuthorization === 'all-system-services' || generation.allowedUnits?.includes(unit) ? 'reported_allowed' : 'outside_reported_scope';
+}

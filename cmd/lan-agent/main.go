@@ -18,6 +18,9 @@ import (
 )
 
 func main() {
+	if selected, exclusive := journalCapabilitiesInvocation(os.Args[1:]); selected {
+		os.Exit(runJournalCapabilities(exclusive, os.Stdout, os.Stderr))
+	}
 	if selected, exclusive := journalReaderInvocation(os.Args[1:]); selected {
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 		defer stop()
@@ -42,7 +45,7 @@ func main() {
 	overviewConsentAck := flag.Bool("ack-complete-overview", false, "Acknowledge full visible processes/mounts, potentially sensitive names, mount paths and filesystem labels in the agent Linux namespaces, at a fixed 60-second cadence; HTTP-test is unencrypted and unauthenticated")
 	journalAmendmentMode := flag.String("journal-policy-amendment", "", "Local-only preview or accept of a separately staged journal policy generation; stop sender first")
 	journalConsentMode := flag.String("journal-content-consent", "", "Local-only preview or create-only initialize of on-demand journal consent; stop the sender first")
-	journalConsentAck := flag.Bool("ack-journal-content", false, "Acknowledge allowlisted service journal messages may contain credentials, personal data or other secrets")
+	journalConsentAck := flag.Bool("ack-journal-content", false, "Acknowledge service journal messages authorized by the local policy may contain credentials, personal data or other secrets")
 	journalPlaintextAck := flag.Bool("ack-journal-http-plaintext", false, "Separately acknowledge unencrypted journal content visible on the LAN with an unauthenticated manager")
 	flag.Parse()
 	if *path == "" || flag.NArg() != 0 {

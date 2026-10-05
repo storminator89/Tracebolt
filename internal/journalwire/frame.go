@@ -36,6 +36,9 @@ func validPath(path string) bool {
 	return path == PeekPath || path == ClaimPath || path == ResultPath || path == StatusPath || path == GenerationPath
 }
 func BodyLimit(path string) int64 {
+	if path == GenerationPath {
+		return journalgeneration.MaxReportBytes
+	}
 	if path == ResultPath {
 		return MaxBodyBytes
 	}

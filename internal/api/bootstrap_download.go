@@ -99,28 +99,10 @@ func servePublicBootstrap(w http.ResponseWriter, r *http.Request, b EnrollmentBo
 		fail(w, 404, "not_found", "Public bootstrap route is unavailable.")
 		return
 	}
-	if r.URL.RawQuery != "" || r.URL.ForceQuery || r.URL.EscapedPath() != r.URL.Path || r.ContentLength != 0 || (r.Body != nil && r.Body != http.NoBody) || len(r.TransferEncoding) > 0 || len(r.Trailer) > 0 {
-		fail(w, 400, "invalid_bootstrap_framing", "A bodyless canonical public request is required.")
+	if !admitPublicMetadata(w, r, admission) {
 		return
-	}
-	for name := range r.Header {
-		lower := strings.ToLower(name)
-		denied := strings.HasPrefix(lower, "x-forwarded-") || lower == "x-real-ip"
-		switch lower {
-		case "cookie", "origin", "authorization", "proxy-authorization", "forwarded", "x-csrf-token", "content-type", "content-encoding", "range", "if-none-match", "if-modified-since", "if-match", "if-unmodified-since", "if-range":
-			denied = true
-		}
-		if denied {
-			fail(w, 400, "invalid_bootstrap_headers", "Public bootstrap does not accept credentials or conditional requests.")
-			return
-		}
 	}
 
-	if admission == nil || !admission.allow(r.RemoteAddr, time.Now().UTC()) {
-		w.Header().Set("Retry-After", "60")
-		fail(w, 429, "bootstrap_busy", "Public bootstrap is temporarily busy.")
-		return
-	}
 	raw, _, err := publicBootstrapBytes(b, id)
 	if err != nil {
 		fail(w, 503, "bootstrap_unavailable", "Public bootstrap is unavailable.")
@@ -131,4 +113,31 @@ func servePublicBootstrap(w http.ResponseWriter, r *http.Request, b EnrollmentBo
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write(raw)
+}
+
+// Shared public metadata guard: bodyless, credential-free, bounded admission.
+func admitPublicMetadata(w http.ResponseWriter, r *http.Request, admission *bootstrapAdmission) bool {
+	if r.URL.RawQuery != "" || r.URL.ForceQuery || r.URL.EscapedPath() != r.URL.Path || r.ContentLength != 0 || (r.Body != nil && r.Body != http.NoBody) || len(r.TransferEncoding) > 0 || len(r.Trailer) > 0 {
+		fail(w, 400, "invalid_bootstrap_framing", "A bodyless canonical public request is required.")
+		return false
+	}
+	for name := range r.Header {
+		lower := strings.ToLower(name)
+		denied := strings.HasPrefix(lower, "x-forwarded-") || lower == "x-real-ip"
+		switch lower {
+		case "cookie", "origin", "authorization", "proxy-authorization", "forwarded", "x-csrf-token", "content-type", "content-encoding", "range", "if-none-match", "if-modified-since", "if-match", "if-unmodified-since", "if-range":
+			denied = true
+		}
+		if denied {
+			fail(w, 400, "invalid_bootstrap_headers", "Public bootstrap does not accept credentials or conditional requests.")
+			return false
+		}
+	}
+
+	if admission == nil || !admission.allow(r.RemoteAddr, time.Now().UTC()) {
+		w.Header().Set("Retry-After", "60")
+		fail(w, 429, "bootstrap_busy", "Public bootstrap is temporarily busy.")
+		return false
+	}
+	return true
 }

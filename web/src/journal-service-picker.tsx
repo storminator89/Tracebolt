@@ -1,8 +1,9 @@
 import { useId } from 'react';
 import { useOperator } from './auth';
 import { useLocale } from './i18n';
+import type { JournalView } from './journal-types';
 import { validJournalUnit } from './journal-types';
-import { journalServiceLabel, journalServiceSearches } from './journal-sources';
+import { journalReportedAccess, journalServiceLabel, journalServiceSearches } from './journal-sources';
 import { useSystemInventory } from './system-inventory-resource';
 import { systemAgeStatus, systemSectionVisible, validSystemSearch } from './system-inventory-types';
 import './journal-service-picker.css';
@@ -19,7 +20,7 @@ const copy = {
         fresh: 'Within the observation window', stale: 'Stale / historical service observations',
         prior: 'Showing the last complete service inventory. The newer failed attempt does not refresh its original observation time.', failed: 'The latest service inventory attempt failed.',
         observed: 'Original observation time', whole: 'Whole retained service inventory', scanned: 'Rows scanned so far', matches: 'Matches found so far', shown: 'Rows on this page',
-        suggestions: 'Find a service by purpose', suggestionsHint: 'Shortcuts search observed service names. They do not prove that a service is installed or permitted, and do not cover every Linux distribution.', all: 'All services', observedOnly: 'Observed service · log permission not verified',
+        suggestions: 'Find a service by purpose', suggestionsHint: 'Shortcuts search observed service names. They do not prove that a service is installed or permitted, and do not cover every Linux distribution.', all: 'All services', observedOnly: 'Observed service · log permission not verified', reported_allowed: 'Observed service · included in reported local grant', reported_disabled: 'Observed service · reported policy disabled', outside_reported_scope: 'Observed service · outside reported local grant',
         select: 'Use', unsupported: 'This observed name is not supported by the exact service-unit syntax for log capture.',
         next: 'Next service page', continue: 'Continue search', emptyWindow: 'No matches in this scan window. More rows remain; continue searching.',
         zero: 'The complete service inventory contained zero services.', noMatches: 'No matches in the complete service inventory.', noMore: 'No further matches; earlier pages contained matches.', finished: 'The whole retained service inventory has been scanned.',
@@ -36,7 +37,7 @@ const copy = {
         fresh: 'Im Beobachtungszeitfenster', stale: 'Veraltete / historische Dienstbeobachtungen',
         prior: 'Das letzte vollständige Dienstinventar wird angezeigt. Der neuere fehlgeschlagene Versuch erneuert den ursprünglichen Beobachtungszeitpunkt nicht.', failed: 'Die neueste Dienstinventar-Erfassung ist fehlgeschlagen.',
         observed: 'Ursprünglicher Beobachtungszeitpunkt', whole: 'Gesamtes gespeichertes Dienstinventar', scanned: 'Bisher geprüfte Zeilen', matches: 'Bisher gefundene Treffer', shown: 'Zeilen auf dieser Seite',
-        suggestions: 'Dienste nach Aufgabe finden', suggestionsHint: 'Kurzsuchen durchsuchen beobachtete Dienstnamen. Sie belegen weder Installation noch Freigabe und decken nicht jede Linux-Distribution ab.', all: 'Alle Dienste', observedOnly: 'Beobachteter Dienst · Log-Freigabe nicht verifiziert',
+        suggestions: 'Dienste nach Aufgabe finden', suggestionsHint: 'Kurzsuchen durchsuchen beobachtete Dienstnamen. Sie belegen weder Installation noch Freigabe und decken nicht jede Linux-Distribution ab.', all: 'Alle Dienste', observedOnly: 'Beobachteter Dienst · Log-Freigabe nicht verifiziert', reported_allowed: 'Beobachteter Dienst · in gemeldeter lokaler Freigabe', reported_disabled: 'Beobachteter Dienst · gemeldete Richtlinie deaktiviert', outside_reported_scope: 'Beobachteter Dienst · außerhalb der gemeldeten lokalen Freigabe',
         select: 'Übernehmen', unsupported: 'Dieser beobachtete Name wird von der exakten Service-Unit-Syntax für die Log-Erfassung nicht unterstützt.',
         next: 'Nächste Dienstseite', continue: 'Suche fortsetzen', emptyWindow: 'Keine Treffer in diesem Suchabschnitt. Weitere Zeilen stehen aus; Suche fortsetzen.',
         zero: 'Das vollständige Dienstinventar enthielt keine Dienste.', noMatches: 'Keine Treffer im vollständigen Dienstinventar.', noMore: 'Keine weiteren Treffer; frühere Seiten enthielten Treffer.', finished: 'Das gesamte gespeicherte Dienstinventar wurde durchsucht.',
@@ -44,10 +45,10 @@ const copy = {
     },
 };
 
-type JournalServicePickerProps = { deviceId: string; sessionKey: string | null; onSelect: (unit: string) => void; onClose: () => void };
+type JournalServicePickerProps = { deviceId: string; sessionKey: string | null; journalView?: JournalView | null; onSelect: (unit: string) => void; onClose: () => void };
 
 /** Read-only inventory picker: selecting a name never requests journal content. */
-export function JournalServicePicker({ deviceId, sessionKey, onSelect, onClose }: JournalServicePickerProps) {
+export function JournalServicePicker({ deviceId, sessionKey, journalView = null, onSelect, onClose }: JournalServicePickerProps) {
     const operator = useOperator(), [locale] = useLocale(), c = copy[locale], id = useId();
     return <section className="journal-service-picker" aria-labelledby={id} onKeyDown={event => {
         if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); onClose(); }
@@ -55,13 +56,13 @@ export function JournalServicePicker({ deviceId, sessionKey, onSelect, onClose }
         <header><h4 id={id}>{c.title}</h4><button autoFocus type="button" className="button small" onClick={onClose}>{c.close}</button></header>
         <p className="journal-picker-note">{c.permission}</p>
         {operator?.mode === 'lan' && operator.authenticated
-            ? <ObservedServices key={JSON.stringify([deviceId, sessionKey, operator.expiresAt])} deviceId={deviceId} onSelect={onSelect}/>
+            ? <ObservedServices key={JSON.stringify([deviceId, sessionKey, operator.expiresAt])} deviceId={deviceId} journalView={journalView} onSelect={onSelect}/>
             : <p role="status">{c.access}</p>}
         <p className="journal-picker-note">{c.manual}</p>
     </section>;
 }
 
-function ObservedServices({ deviceId, onSelect }: Pick<JournalServicePickerProps, 'deviceId' | 'onSelect'>) {
+function ObservedServices({ deviceId, journalView = null, onSelect }: Pick<JournalServicePickerProps, 'deviceId' | 'journalView' | 'onSelect'>) {
     const [locale] = useLocale(), c = copy[locale], id = useId(), resource = useSystemInventory(deviceId, 'services');
     const { view, page } = resource, complete = view?.lastComplete.services;
     const visible = !!view && systemSectionVisible(view, 'services', resource.elapsed), searchValid = validSystemSearch(resource.search);
@@ -95,8 +96,8 @@ function ObservedServices({ deviceId, onSelect }: Pick<JournalServicePickerProps
                     <dl className="journal-picker-facts">{fact(c.scanned, `${number(resource.scanned)} / ${number(page.totalRows)}`)}{fact(c.matches, number(resource.matches))}{fact(c.shown, number(page.returnedCount))}</dl>
                     {page.returnedCount > 0 ? <ul className="journal-picker-rows" aria-label={c.title}>
                         {page.services.map((row, index) => {
-                            const supported = validJournalUnit(row.name), label = journalServiceLabel(row.name, locale), reasonId = `${id}-unsupported-${index}`;
-                            return <li key={row.name}><div>{label && <strong className="journal-picker-label">{label}</strong>}<span className="journal-picker-unit">{row.name}</span><span className="journal-picker-access">{c.observedOnly}</span></div><button type="button" className="button small" disabled={!supported} aria-label={`${c.select} ${row.name}`} aria-describedby={supported ? undefined : reasonId} onClick={() => { if (validJournalUnit(row.name)) onSelect(row.name); }}>{c.select}</button>{!supported && <p id={reasonId} className="journal-picker-warning">{c.unsupported}</p>}</li>;
+                            const access = journalReportedAccess(journalView, row.name), supported = validJournalUnit(row.name), label = journalServiceLabel(row.name, locale), reasonId = `${id}-unsupported-${index}`;
+                            return <li key={row.name}><div>{label && <strong className="journal-picker-label">{label}</strong>}<span className="journal-picker-unit">{row.name}</span><span className="journal-picker-access">{access === 'unknown' ? c.observedOnly : c[access]}</span></div><button type="button" className="button small" disabled={!supported} aria-label={`${c.select} ${row.name}`} aria-describedby={supported ? undefined : reasonId} onClick={() => { if (validJournalUnit(row.name)) onSelect(row.name); }}>{c.select}</button>{!supported && <p id={reasonId} className="journal-picker-warning">{c.unsupported}</p>}</li>;
                         })}
                     </ul> : <p role="status">{!page.exhausted ? c.emptyWindow : page.totalRows === 0 ? c.zero : resource.matches === 0 ? c.noMatches : c.noMore}</p>}
                     {page.exhausted ? <p className="journal-picker-note">{c.finished}</p> : <button type="button" className="button small" disabled={resource.loading} onClick={resource.next}>{resource.search.trim() ? c.continue : c.next}</button>}

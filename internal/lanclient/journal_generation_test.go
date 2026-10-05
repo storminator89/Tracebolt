@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"localrmm/internal/agentloop"
 	"localrmm/internal/journalgeneration"
 	"localrmm/internal/journalgenerationstate"
@@ -164,5 +165,137 @@ func TestGenerationFailureKeepsOrdinaryAgentLoopRunning(t *testing.T) {
 	}})
 	if !errors.Is(err, context.Canceled) || summary.Reason != agentloop.Cancelled || summary.Attempts != 2 || ordinary != 2 || waits != 2 || f.captures != 0 || f.claims != 0 {
 		t.Fatal(summary, err, ordinary, waits)
+	}
+}
+
+func TestGenerationSummaryOnlyForNewlyAcknowledgedPolicyV3(t *testing.T) {
+	for _, broad := range []bool{false, true} {
+		f := newJournalFixture(t)
+		migrateFixture(t, f)
+		if broad {
+			f.local.policy.SchemaVersion = journalpolicy.VersionV3
+			f.local.policy.Scope = journalpolicy.ScopeV3
+			f.local.policy.ServiceAuthorization = journalpolicy.AllSystemServices
+			f.local.policy.AllowedUnits = []string{}
+			f.local.policy.Revision++
+			f.local.policy.Generation = strings.Repeat("f", 64)
+			next, err := journalpolicy.PolicyGeneration(f.local.policy)
+			if err != nil {
+				t.Fatal(err)
+			}
+			st, err := journalgenerationstate.Open(context.Background(), journalGenerationDirectory(f.s.material.config))
+			if err != nil {
+				t.Fatal(err)
+			}
+			rec, _ := st.Record()
+			if err = st.Advance(context.Background(), rec, next); err != nil {
+				t.Fatal(err)
+			}
+			st.Close()
+			f.local.generation = next
+		}
+		reports := 0
+		f.s.exchange = func(_ context.Context, path string, _ uint64, raw []byte) ([]byte, int, error) {
+			if path != journalwire.GenerationPath {
+				t.Fatal("unexpected request or capture")
+			}
+			reports++
+			r, err := journalwire.DecodeGenerationReport(raw)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if broad {
+				if r.SchemaVersion != journalgeneration.ReportVersionV2 || !r.PolicyEnabled || r.ServiceAuthorization != journalgeneration.AllSystemServices || r.AllowedUnits == nil || len(r.AllowedUnits) != 0 {
+					t.Fatal("broad summary missing")
+				}
+			} else if r.SchemaVersion != journalgeneration.ReportVersion || r.ServiceAuthorization != "" || r.AllowedUnits != nil {
+				t.Fatal("legacy permission leaked")
+			}
+			return raw, 200, nil
+		}
+		if err := f.s.reportGeneration(context.Background(), f.local); err != nil {
+			t.Fatal(err)
+		}
+		if reports != 1 || f.claims != 0 || f.captures != 0 {
+			t.Fatal("summary caused capture")
+		}
+	}
+}
+
+func TestDisabledV3ReportsScopeDiscardsPendingAndNeverQueries(t *testing.T) {
+	for _, failReport := range []bool{false, true} {
+		f := newJournalFixture(t)
+		migrateFixture(t, f)
+		f.record, _ = journalrequest.NewWithGeneration(f.s.material.config.AgentID, journalLeaf(f.s.material), 9, f.record.Description.Query, f.local.generation, f.now)
+		if status := f.s.Run(context.Background()); status != "pending_retained" {
+			t.Fatal(status)
+		}
+		beforeClaims, beforeCaptures, beforeSends := f.claims, f.captures, f.sends
+		f.local.policy.SchemaVersion = journalpolicy.VersionV3
+		f.local.policy.Scope = journalpolicy.ScopeV3
+		f.local.policy.ServiceAuthorization = journalpolicy.AllSystemServices
+		f.local.policy.AllowedUnits = []string{}
+		f.local.policy.Enabled = false
+		f.local.policy.Revision++
+		f.local.policy.Generation = strings.Repeat("f", 64)
+		next, err := journalpolicy.PolicyGeneration(f.local.policy)
+		if err != nil {
+			t.Fatal(err)
+		}
+		st, err := journalgenerationstate.Open(context.Background(), journalGenerationDirectory(f.s.material.config))
+		if err != nil {
+			t.Fatal(err)
+		}
+		rec, _ := st.Record()
+		if err = st.Advance(context.Background(), rec, next); err != nil {
+			t.Fatal(err)
+		}
+		st.Close()
+		f.local.generation = next
+		f.s.exchange = func(_ context.Context, path string, _ uint64, raw []byte) ([]byte, int, error) {
+			if path != journalwire.GenerationPath || f.s.pending != nil {
+				t.Fatal("disabled policy reached logs or retained pending content")
+			}
+			r, err := journalwire.DecodeGenerationReport(raw)
+			if err != nil || r.PolicyEnabled || r.SchemaVersion != journalgeneration.ReportVersionV2 {
+				t.Fatal("disabled summary", err)
+			}
+			if failReport {
+				return nil, 503, nil
+			}
+			return raw, 200, nil
+		}
+		if status := f.s.Run(context.Background()); status != "disabled" || f.s.pending != nil || f.claims != beforeClaims || f.captures != beforeCaptures || f.sends != beforeSends {
+			t.Fatal("disabled policy reached log operations", status)
+		}
+		st, err = journalgenerationstate.Open(context.Background(), journalGenerationDirectory(f.s.material.config))
+		if err != nil {
+			t.Fatal(err)
+		}
+		after, _ := st.Record()
+		st.Close()
+		if after.ReportSequence != rec.ReportSequence+1 {
+			t.Fatal("report floor was reset")
+		}
+	}
+}
+
+type generationReplyTransport func(*http.Request) (*http.Response, error)
+
+func (f generationReplyTransport) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
+func TestGenerationResponseLimitDoesNotWidenOtherReplies(t *testing.T) {
+	for _, tc := range []struct {
+		path    string
+		size    int
+		allowed bool
+	}{{journalwire.GenerationPath, 8192, true}, {journalwire.GenerationPath, journalgeneration.MaxReportBytes + 1, false}, {journalwire.PeekPath, 4097, false}} {
+		f := newJournalFixture(t)
+		f.s.client = &http.Client{Transport: generationReplyTransport(func(*http.Request) (*http.Response, error) {
+			return &http.Response{StatusCode: 200, Header: http.Header{"Content-Type": []string{"application/json"}}, Body: io.NopCloser(strings.NewReader(strings.Repeat("x", tc.size)))}, nil
+		})}
+		raw, _, err := f.s.request(context.Background(), tc.path, 1, []byte("{}"))
+		if tc.allowed && (err != nil || len(raw) != tc.size) || !tc.allowed && err == nil {
+			t.Fatal("response limit", tc.path, tc.size, err)
+		}
 	}
 }

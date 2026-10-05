@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Add exact units to an existing local Linux journal grant. Default: read-only plan.
+"""Expand an existing local Linux service-journal grant. Default: read-only plan.
 
 Inert on import: setup.py is read, verified and compiled only by main(), after
 protected-source checks. Tests inject that module and synthetic Effects.
@@ -34,6 +34,10 @@ POLICY_FIELDS = ("scope", "collectionProfile", "senderBinding", "managerOrigin",
                  "maxPriority", "enabled", "contentAcknowledged", "plaintextAcknowledged")
 DEPLOY_FIELDS = ("helperUid", "helperGid", "journalGid", "agentUid", "agentGid")
 MAX_REVISION = 2**64 - 1
+V3 = "tracebolt.journal-content-policy.v3"
+SCOPE_V3 = "on-demand-system-service-log-content"
+ALL_SERVICES = "all-system-services"
+EXACT_UNITS = "exact-units"
 
 
 class Rejected(Exception):
@@ -67,21 +71,28 @@ def revision(value):
 def policy(s, raw):
     require(0 < len(raw) <= 8192, "policy-byte-limit")
     p = s.strict_json(raw)
-    v2 = p.get("schemaVersion") == "tracebolt.journal-content-policy.v2"
-    require(p.get("schemaVersion") in ("tracebolt.journal-content-policy.v1", "tracebolt.journal-content-policy.v2") and
-            set(p) == set(("schemaVersion",) + POLICY_FIELDS + (("revision", "generation") if v2 else ())), "policy-members")
+    v3 = p.get("schemaVersion") == V3
+    bound = p.get("schemaVersion") in ("tracebolt.journal-content-policy.v2", V3)
+    require(p.get("schemaVersion") in ("tracebolt.journal-content-policy.v1", "tracebolt.journal-content-policy.v2", V3) and
+            set(p) == set(("schemaVersion",) + POLICY_FIELDS + (("revision", "generation") if bound else ()) + (("serviceAuthorization",) if v3 else ())), "policy-members")
     out = dict(schemaVersion=p["schemaVersion"])
-    if v2:
+    if bound:
         revision(p["revision"])
         require(s.valid_digest(p["generation"]), "policy-generation")
         out.update(revision=p["revision"], generation=p["generation"])
-    out.update({k: p[k] for k in POLICY_FIELDS})
+    for k in POLICY_FIELDS:
+        out[k] = p[k]
+        if k == "scope" and v3:
+            out["serviceAuthorization"] = p["serviceAuthorization"]
     require(raw in (canonical(out), canonical(out) + b"\n"), "canonical-policy")
-    require(p["scope"] == s.SCOPE and p["collectionProfile"] == s.PROFILE and
+    broad = v3 and p["serviceAuthorization"] == ALL_SERVICES
+    require((not v3 or p["serviceAuthorization"] in (EXACT_UNITS, ALL_SERVICES)) and
+            p["scope"] == (SCOPE_V3 if v3 else s.SCOPE) and p["collectionProfile"] == s.PROFILE and
             s.valid_digest(p["senderBinding"]) and p["transportProfile"] in ("tls", "http-test") and
             s.valid_origin(p["managerOrigin"], p["transportProfile"]) and
             s.valid_id(p["agentUid"]) and s.valid_id(p["helperUid"]) and p["agentUid"] != p["helperUid"] and
-            type(p["allowedUnits"]) is list and s.selected_units(p["allowedUnits"]) == p["allowedUnits"] and
+            type(p["allowedUnits"]) is list and
+            (p["allowedUnits"] == [] if broad else s.selected_units(p["allowedUnits"]) == p["allowedUnits"]) and
             all(type(p[k]) is int for k in ("maxWindowSeconds", "maxLookbackSeconds", "maxPriority")) and
             0 < p["maxWindowSeconds"] <= 3600 and p["maxWindowSeconds"] <= p["maxLookbackSeconds"] <= 86400 and
             0 <= p["maxPriority"] <= 7 and type(p["enabled"]) is bool and
@@ -144,7 +155,7 @@ def inspect(s, e, templates, *, check_transactions=True, activation_phase="commi
     require([d[k] for k in DEPLOY_FIELDS] == [hu, hg, jg, facts["uid"], facts["gid"]] and
             p["agentUid"] == facts["uid"] and p["helperUid"] == hu and
             p["managerOrigin"] == facts["origin"] and p["transportProfile"] == facts["profile"] and
-            p["schemaVersion"].endswith(".v2") == d["schemaVersion"].endswith(".v2"), "bound-declarations")
+            (p["schemaVersion"] != "tracebolt.journal-content-policy.v1") == d["schemaVersion"].endswith(".v2"), "bound-declarations")
     attempt = snapshot(e, s.ATTEMPT, 0, 0o600)
     a = s.strict_json(attempt["raw"], ("schemaVersion", "planSHA256", "senderBinding", "deviceId", "certificateHash"))
     require(a["schemaVersion"] == "tracebolt.journal-setup-attempt.v1" and s.valid_digest(a["planSHA256"]) and
@@ -203,19 +214,38 @@ def inspect(s, e, templates, *, check_transactions=True, activation_phase="commi
     return facts
 
 
-def preflight(s, e, additions, templates):
-    additions = s.selected_units(additions)
+def amended_policy(p, units, next_revision, nonce, all_system_services=False):
+    # A broader grant is a distinct, explicit v3 profile. Never infer it from a
+    # wildcard, missing list, inventory result, or older policy's empty array.
+    v3 = all_system_services or p["schemaVersion"] == V3
+    out = dict(schemaVersion=V3 if v3 else "tracebolt.journal-content-policy.v2",
+               revision=str(next_revision), generation=nonce)
+    for key in POLICY_FIELDS:
+        out[key] = p[key]
+        if key == "scope" and v3:
+            out[key] = SCOPE_V3
+            out["serviceAuthorization"] = ALL_SERVICES if all_system_services else p["serviceAuthorization"]
+    out["allowedUnits"] = units
+    return out
+
+
+def preflight(s, e, additions, templates, *, all_system_services=False):
+    require(type(all_system_services) is bool, "explicit-service-profile")
     facts = inspect(s, e, templates)
     p = facts["policy"]
-    require(not set(additions) & set(p["allowedUnits"]), "addition-already-authorized")
-    units = s.selected_units(p["allowedUnits"] + additions)
+    require(p.get("serviceAuthorization") != ALL_SERVICES, "all-system-services-already-authorized")
+    if all_system_services:
+        require(additions == [], "profile-and-units-are-exclusive")
+        units = []
+    else:
+        additions = s.selected_units(additions)
+        require(not set(additions) & set(p["allowedUnits"]), "addition-already-authorized")
+        units = s.selected_units(p["allowedUnits"] + additions)
     old_revision = int(p.get("revision", "0"))
     require(old_revision < MAX_REVISION, "policy-revision-overflow")
     next_revision = old_revision + 1
-    prospective = dict(schemaVersion="tracebolt.journal-content-policy.v2", revision=str(next_revision), generation="f" * 64)
-    prospective.update({k: p[k] for k in POLICY_FIELDS})
-    prospective["allowedUnits"] = units
-    policy(s, canonical(prospective))  # Size is exact even before random generation.
+    prospective = amended_policy(p, units, next_revision, "f" * 64, all_system_services)
+    policy(s, canonical(prospective))
     pending, archive = transaction_path(next_revision), transaction_path(next_revision, True)
     require(e.absent(pending) and e.absent(archive), "existing-transaction-target")
     plan = dict(schemaVersion="tracebolt.journal-amendment-plan.v1", operation="add-only", managerOrigin=facts["origin"],
@@ -240,6 +270,11 @@ def preflight(s, e, additions, templates):
                 warning="Additional service log messages may contain credentials and personal data; masking is best effort, never secret-free.",
                 plaintextWarning="HTTP content is observable and the manager can be impersonated." if facts["profile"] == "http-test" else "",
                 sourceVerified=False, contentRead=False)
+    if all_system_services:
+        plan.update(schemaVersion="tracebolt.journal-amendment-plan.v2", operation="grant-all-system-services",
+                    serviceAuthorization=ALL_SERVICES, includesFutureServices=True,
+                    preservedPolicy={k: p[k] for k in POLICY_FIELDS if k not in ("allowedUnits", "scope")},
+                    generationReport="normal agent cycle sends public identity, revision, generation, policy digest, enabled state and authorized service scope to the bound manager after commit")
     return facts, plan
 
 
@@ -261,7 +296,7 @@ def command(s, e, facts, mode, expected_policy):
     g = generation(expected_policy)
     p = s.strict_json(raw, fields + (("policyGeneration",) if g else ()))
     require(p["schemaVersion"] == "tracebolt.journal-amendment-result.v1" and p["mode"] == mode and
-            p["scope"] == s.SCOPE and p["collectionProfile"] == s.PROFILE and p["managerOrigin"] == facts["origin"] and
+            p["scope"] == expected_policy["scope"] and p["collectionProfile"] == s.PROFILE and p["managerOrigin"] == facts["origin"] and
             p["transportProfile"] == facts["profile"] and type(p["agentUid"]) is int and type(p["agentGid"]) is int and
             p["agentUid"] == facts["uid"] and p["agentGid"] == facts["gid"] and
             all(p[k] == facts["identity"][k] for k in ("senderBinding", "deviceId", "certificateHash")) and
@@ -285,12 +320,12 @@ def unchanged(s, e, facts, templates):
     require(all(e.absent(x) for x in STAGES.values()), "stage-appeared")
 
 
-def apply(s, e, additions, templates, expected_plan, content_ack, plaintext_ack):
+def apply(s, e, additions, templates, expected_plan, content_ack, plaintext_ack, *, all_system_services=False):
     require(content_ack is True, "content-acknowledgement-required")
     result = None
     try:
         with e.lock():
-            result = _apply_locked(s, e, additions, templates, expected_plan, plaintext_ack)
+            result = _apply_locked(s, e, additions, templates, expected_plan, plaintext_ack, all_system_services=all_system_services)
     except Exception:
         if result is None:
             raise
@@ -303,8 +338,8 @@ def apply(s, e, additions, templates, expected_plan, content_ack, plaintext_ack)
     return result
 
 
-def _apply_locked(s, e, additions, templates, expected_plan, plaintext_ack):
-    facts, plan = preflight(s, e, additions, templates)
+def _apply_locked(s, e, additions, templates, expected_plan, plaintext_ack, *, all_system_services=False):
+    facts, plan = preflight(s, e, additions, templates, all_system_services=all_system_services)
     require(s.valid_digest(expected_plan) and digest(canonical(plan)) == expected_plan, "reviewed-plan-changed")
     require(plaintext_ack is (facts["profile"] == "http-test"), "transport-specific-acknowledgement")
     result = dict(committed=False, commitState="not-started", retainedEvidence=False, sourceVerified=False,
@@ -327,9 +362,7 @@ def _apply_locked(s, e, additions, templates, expected_plan, plaintext_ack):
         stage = "prepare-new-generation"
         nonce = e.nonce()
         require(s.valid_digest(nonce) and nonce != facts["policy"].get("generation"), "fresh-generation")
-        new_policy = dict(schemaVersion="tracebolt.journal-content-policy.v2", revision=plan["nextRevision"], generation=nonce)
-        new_policy.update({k: facts["policy"][k] for k in POLICY_FIELDS})
-        new_policy["allowedUnits"] = plan["newUnits"]
+        new_policy = amended_policy(facts["policy"], plan["newUnits"], plan["nextRevision"], nonce, all_system_services)
         policy_raw = canonical(new_policy)
         policy(s, policy_raw)
         new_deployment = dict(schemaVersion="tracebolt.journal-helper-deployment.v2", **{k: facts["deployment"][k] for k in DEPLOY_FIELDS}, policyGenerationRequired=True)
@@ -652,7 +685,10 @@ def real_effects(s, sources):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--add-unit", action="append", required=True)
+    selection = parser.add_mutually_exclusive_group(required=True)
+    selection.add_argument("--add-unit", action="append")
+    selection.add_argument("--all-system-services", action="store_true",
+                           help="Explicitly grant on-demand logs for all supported current and future system services")
     parser.add_argument("--apply", action="store_true")
     parser.add_argument("--expected-plan-sha256")
     parser.add_argument("--ack-journal-content", action="store_true")
@@ -668,13 +704,14 @@ def main(argv=None):
         e = real_effects(s, sources)
         templates = s.read_templates(e)
         if args.apply:
-            result = apply(s, e, args.add_unit, templates, args.expected_plan_sha256,
-                           args.ack_journal_content, args.ack_journal_http_plaintext)
+            result = apply(s, e, args.add_unit or [], templates, args.expected_plan_sha256,
+                           args.ack_journal_content, args.ack_journal_http_plaintext,
+                           all_system_services=args.all_system_services)
             print(json.dumps(result, indent=2))
             return 0 if result["committed"] and "failureStage" not in result and "restartFailureStage" not in result else 1
         require(not args.expected_plan_sha256 and not args.ack_journal_content and not args.ack_journal_http_plaintext,
                 "plan-does-not-accept-apply-flags")
-        _, plan = preflight(s, e, args.add_unit, templates)
+        _, plan = preflight(s, e, args.add_unit or [], templates, all_system_services=args.all_system_services)
         print(json.dumps(dict(plan=plan, planSHA256=digest(canonical(plan))), indent=2))
         return 0
     except Exception as exc:

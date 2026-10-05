@@ -22,10 +22,23 @@ import (
 
 const Version = "tracebolt.journal-content-policy.v1"
 const VersionV2 = "tracebolt.journal-content-policy.v2"
+const VersionV3 = "tracebolt.journal-content-policy.v3"
 const Scope = "on-demand-allowlisted-system-service-log-content"
+const ScopeV3 = "on-demand-system-service-log-content"
 const CollectionProfile = "managed-operations-v3"
 const MaxPolicyBytes = 8 << 10
 const MaxUnits = 32
+
+// ServiceAuthorization is required in v3. Legacy policies always authorize
+// only their explicit exact-unit allowlist and cannot carry this field.
+type ServiceAuthorization string
+
+const ExactUnits ServiceAuthorization = "exact-units"
+const AllSystemServices ServiceAuthorization = "all-system-services"
+
+// IsGenerationPolicy enumerates the supported generation-bound versions.
+// An unknown future schema must never inherit generation authority implicitly.
+func IsGenerationPolicy(version string) bool { return version == VersionV2 || version == VersionV3 }
 
 var ErrPolicy = errors.New("journal content policy is invalid")
 var ErrDenied = errors.New("journal content request is not authorized")
@@ -35,23 +48,24 @@ var ErrChanged = errors.New("journal content policy changed before delivery")
 // obtain it from a protected root-owned file, never from manager input. The
 // separate helper account must not share the main agent's UID.
 type Policy struct {
-	SchemaVersion         string   `json:"schemaVersion"`
-	Revision              uint64   `json:"revision,string,omitempty"`
-	Generation            string   `json:"generation,omitempty"`
-	Scope                 string   `json:"scope"`
-	CollectionProfile     string   `json:"collectionProfile"`
-	SenderBinding         string   `json:"senderBinding"`
-	ManagerOrigin         string   `json:"managerOrigin"`
-	TransportProfile      string   `json:"transportProfile"`
-	AgentUID              uint32   `json:"agentUid"`
-	HelperUID             uint32   `json:"helperUid"`
-	AllowedUnits          []string `json:"allowedUnits"`
-	MaxWindowSeconds      uint32   `json:"maxWindowSeconds"`
-	MaxLookbackSeconds    uint32   `json:"maxLookbackSeconds"`
-	MaxPriority           int      `json:"maxPriority"`
-	Enabled               bool     `json:"enabled"`
-	ContentAcknowledged   bool     `json:"contentAcknowledged"`
-	PlaintextAcknowledged bool     `json:"plaintextAcknowledged"`
+	SchemaVersion         string               `json:"schemaVersion"`
+	Revision              uint64               `json:"revision,string,omitempty"`
+	Generation            string               `json:"generation,omitempty"`
+	Scope                 string               `json:"scope"`
+	ServiceAuthorization  ServiceAuthorization `json:"serviceAuthorization,omitempty"`
+	CollectionProfile     string               `json:"collectionProfile"`
+	SenderBinding         string               `json:"senderBinding"`
+	ManagerOrigin         string               `json:"managerOrigin"`
+	TransportProfile      string               `json:"transportProfile"`
+	AgentUID              uint32               `json:"agentUid"`
+	HelperUID             uint32               `json:"helperUid"`
+	AllowedUnits          []string             `json:"allowedUnits"`
+	MaxWindowSeconds      uint32               `json:"maxWindowSeconds"`
+	MaxLookbackSeconds    uint32               `json:"maxLookbackSeconds"`
+	MaxPriority           int                  `json:"maxPriority"`
+	Enabled               bool                 `json:"enabled"`
+	ContentAcknowledged   bool                 `json:"contentAcknowledged"`
+	PlaintextAcknowledged bool                 `json:"plaintextAcknowledged"`
 }
 
 // Context contains facts obtained independently by the future local adapter.
@@ -91,7 +105,23 @@ func validOrigin(raw, profile string) bool {
 }
 
 func Validate(p Policy) error {
-	if p.SchemaVersion != Version && p.SchemaVersion != VersionV2 || p.SchemaVersion == Version && (p.Revision != 0 || p.Generation != "") || p.SchemaVersion == VersionV2 && (p.Revision == 0 || !journalgeneration.ValidGeneration(p.Generation)) || p.Scope != Scope || p.CollectionProfile != CollectionProfile || !validBinding(p.SenderBinding) || !validOrigin(p.ManagerOrigin, p.TransportProfile) || !validUID(p.AgentUID) || !validUID(p.HelperUID) || p.AgentUID == p.HelperUID || len(p.AllowedUnits) == 0 || len(p.AllowedUnits) > MaxUnits || p.MaxWindowSeconds == 0 || p.MaxWindowSeconds > 3600 || p.MaxLookbackSeconds < p.MaxWindowSeconds || p.MaxLookbackSeconds > 86400 || p.MaxPriority < 0 || p.MaxPriority > 7 || !p.ContentAcknowledged || p.TransportProfile == "http-test" && !p.PlaintextAcknowledged || p.TransportProfile == "tls" && p.PlaintextAcknowledged {
+	if p.SchemaVersion != Version && !IsGenerationPolicy(p.SchemaVersion) || p.SchemaVersion == Version && (p.Revision != 0 || p.Generation != "") || IsGenerationPolicy(p.SchemaVersion) && (p.Revision == 0 || !journalgeneration.ValidGeneration(p.Generation)) || p.CollectionProfile != CollectionProfile || !validBinding(p.SenderBinding) || !validOrigin(p.ManagerOrigin, p.TransportProfile) || !validUID(p.AgentUID) || !validUID(p.HelperUID) || p.AgentUID == p.HelperUID || p.MaxWindowSeconds == 0 || p.MaxWindowSeconds > 3600 || p.MaxLookbackSeconds < p.MaxWindowSeconds || p.MaxLookbackSeconds > 86400 || p.MaxPriority < 0 || p.MaxPriority > 7 || !p.ContentAcknowledged || p.TransportProfile == "http-test" && !p.PlaintextAcknowledged || p.TransportProfile == "tls" && p.PlaintextAcknowledged {
+		return ErrPolicy
+	}
+	if p.SchemaVersion == VersionV3 {
+		if p.Scope != ScopeV3 || p.ServiceAuthorization != ExactUnits && p.ServiceAuthorization != AllSystemServices {
+			return ErrPolicy
+		}
+	} else if p.Scope != Scope || p.ServiceAuthorization != "" {
+		return ErrPolicy
+	}
+	if p.ServiceAuthorization == AllSystemServices {
+		// An explicit [] is mandatory. No wildcard, omitted/null allowlist, or
+		// legacy empty allowlist can be interpreted as broad authorization.
+		if p.AllowedUnits == nil || len(p.AllowedUnits) != 0 {
+			return ErrPolicy
+		}
+	} else if len(p.AllowedUnits) == 0 || len(p.AllowedUnits) > MaxUnits {
 		return ErrPolicy
 	}
 	// Reuse the reader's exact unit grammar; do not create a second permissive
@@ -126,7 +156,7 @@ func Decode(raw []byte) (Policy, error) {
 	if len(raw) == 0 || len(raw) > MaxPolicyBytes || !utf8.Valid(raw) {
 		return bad()
 	}
-	fields := map[string]string{"schemaVersion": "s", "scope": "s", "collectionProfile": "s", "senderBinding": "s", "managerOrigin": "s", "transportProfile": "s", "agentUid": "n", "helperUid": "n", "allowedUnits": "a", "maxWindowSeconds": "n", "maxLookbackSeconds": "n", "maxPriority": "n", "enabled": "b", "contentAcknowledged": "b", "plaintextAcknowledged": "b", "revision": "r", "generation": "s"}
+	fields := map[string]string{"schemaVersion": "s", "scope": "s", "serviceAuthorization": "s", "collectionProfile": "s", "senderBinding": "s", "managerOrigin": "s", "transportProfile": "s", "agentUid": "n", "helperUid": "n", "allowedUnits": "a", "maxWindowSeconds": "n", "maxLookbackSeconds": "n", "maxPriority": "n", "enabled": "b", "contentAcknowledged": "b", "plaintextAcknowledged": "b", "revision": "r", "generation": "s"}
 	d := json.NewDecoder(bytes.NewReader(raw))
 	t, err := d.Token()
 	if err != nil || t != json.Delim('{') {
@@ -199,7 +229,11 @@ func Decode(raw []byte) (Policy, error) {
 	}
 	for key := range fields {
 		if key == "revision" || key == "generation" {
-			if seen[key] != (p.SchemaVersion == VersionV2) {
+			if seen[key] != IsGenerationPolicy(p.SchemaVersion) {
+				return bad()
+			}
+		} else if key == "serviceAuthorization" {
+			if seen[key] != (p.SchemaVersion == VersionV3) {
 				return bad()
 			}
 		} else if !seen[key] {
@@ -222,7 +256,7 @@ func (p Permit) Query() journalview.Query { return p.query }
 func (p Permit) PolicyDigest() string     { return "sha256:" + hex.EncodeToString(p.policyHash[:]) }
 
 // PolicyGeneration computes the full canonical policy binding. Legacy v1 has
-// no generation and returns zero; callers must not treat zero as v2 permission.
+// no generation and returns zero; callers must not treat zero as v2/v3 permission.
 func PolicyGeneration(p Policy) (journalgeneration.Tuple, error) {
 	raw, err := Encode(p)
 	if err != nil {
@@ -237,7 +271,7 @@ func PolicyGeneration(p Policy) (journalgeneration.Tuple, error) {
 
 func (p Permit) Generation() journalgeneration.Tuple { return p.generation }
 
-// Authorize preserves the legacy v1-only boundary. A v2 caller must supply its
+// Authorize preserves the legacy v1-only boundary. A v2/v3 caller must supply its
 // exact current generation through AuthorizeBound rather than silently upgrade.
 func Authorize(p Policy, c Context, q journalview.Query, now time.Time) (Permit, error) {
 	return AuthorizeBound(p, c, q, journalgeneration.Tuple{}, now)
@@ -248,7 +282,7 @@ func AuthorizeBound(p Policy, c Context, q journalview.Query, generation journal
 	if err != nil || expected != generation {
 		return Permit{}, ErrDenied
 	}
-	if Validate(p) != nil || !p.Enabled || c.SenderBinding != p.SenderBinding || c.ManagerOrigin != p.ManagerOrigin || c.TransportProfile != p.TransportProfile || c.CollectionProfile != p.CollectionProfile || c.AgentUID != p.AgentUID || c.HelperUID != p.HelperUID || c.PeerUID != p.AgentUID || journalview.ValidateQuery(q, now) != nil || !slices.Contains(p.AllowedUnits, q.Unit) || q.End.Sub(q.Start) > time.Duration(p.MaxWindowSeconds)*time.Second || now.Sub(q.Start) > time.Duration(p.MaxLookbackSeconds)*time.Second || q.MaxPriority > p.MaxPriority {
+	if Validate(p) != nil || !p.Enabled || c.SenderBinding != p.SenderBinding || c.ManagerOrigin != p.ManagerOrigin || c.TransportProfile != p.TransportProfile || c.CollectionProfile != p.CollectionProfile || c.AgentUID != p.AgentUID || c.HelperUID != p.HelperUID || c.PeerUID != p.AgentUID || journalview.ValidateQuery(q, now) != nil || p.ServiceAuthorization != AllSystemServices && !slices.Contains(p.AllowedUnits, q.Unit) || q.End.Sub(q.Start) > time.Duration(p.MaxWindowSeconds)*time.Second || now.Sub(q.Start) > time.Duration(p.MaxLookbackSeconds)*time.Second || q.MaxPriority > p.MaxPriority {
 		return Permit{}, ErrDenied
 	}
 	raw, err := Encode(p)
