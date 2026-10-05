@@ -2,6 +2,11 @@
 
 Meaningful development checkpoints are recorded here. These are prototype milestones, not production releases.
 
+## 2026-10-05 — Prepare independent verification of the published rc.1 release
+
+- Capture the exact public `v0.1.0-rc.1` bootstrap built from `ccac65e7a61f0b5f0e325c3616a93273ab1e8eb1`. Its bytes match the reviewed source template and official release digests; preserve the previous pilot.2 bootstrap and dashboard selection.
+- Point the existing read-only hosted verifier at all ten rc.1 assets and exact provenance pins. Retain its download, context, integrity and no-installer-execution guards; add release-selection and prior-bootstrap regressions. Independent public-byte verification must pass before dashboard activation. No installed-service or reboot acceptance is implied.
+
 ## 2026-10-05 — Observe journal acceptance through the primary response reader
 
 - Replace the browser fixture’s secondary CDP body retrieval with an exact-route, 65,536-byte bounded observation of bytes consumed by the application’s original reader. Preserve response values, errors, cancellation and all HTTP, snapshot, paging, search, time and accepted-UI assertions.

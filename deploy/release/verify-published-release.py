@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Read-only, explicitly gated hosted verification of the published pilot.2.
+"""Read-only, explicitly gated hosted verification of the published rc.1.
 
 Only the independently pinned official gh verifier is executed. Tracebolt files
 are downloaded privately, checked as bytes and never extracted or executed.
@@ -14,24 +14,24 @@ import tempfile
 import types
 
 HERE = Path(__file__).resolve().parent
-VERSION = "v0.1.0-pilot.2"
-SOURCE = "dbbcfe203c6c39169d9b426991848cd8e736dfd6"
+VERSION = "v0.1.0-rc.1"
+SOURCE = "ccac65e7a61f0b5f0e325c3616a93273ab1e8eb1"
 REPOSITORY = "storminator89/Tracebolt"
-TEMPLATE_SHA256 = "3f6f305e461a4c871b5db8447e6acfafdf2b1f8ace6f147af4d10dcf9d2e6d04"
+TEMPLATE_SHA256 = "1e86e83a937f8cf99c63c1f2142c4be6aa899bf351790d12436c19ef9c73c3dd"
 PIN = {"version": VERSION, "sourceCommit": SOURCE,
-       "manifestSHA256": "d893ca6c896e788a943be6c930321a3264d0d3e646a769da9a2531b585b89279",
-       "bundleSHA256": "b7ae8fe0eb25baf44750af6cde5f3c38cdb64f5f9514c274f33ba7b37acb6778"}
+       "manifestSHA256": "6b1419a63c0ae9be89c9ebdd44b3cd0fcdf2bcdf699dd5ca48eb991246fb6d4e",
+       "bundleSHA256": "33751393e57e4d600e7b55337b36b27cc73574efda919a01c9252f76ca68363e"}
 EXPECTED = {
-    "bootstrap.py": (32677, "ba0cf2b8bb25868782bbf9f7a2ae228a982895dd45f865314c6620af30731457"),
-    "manifest.json": (1211, PIN["manifestSHA256"]),
-    "manifest.sigstore.json": (11052, PIN["bundleSHA256"]),
-    f"tracebolt-{VERSION}-linux-amd64-agent-service": (11461139, "3c1dcf359cd5a5f5ad6cd210ee770a6f0a7d36fc4f47b9815727e25dfade458a"),
-    f"tracebolt-{VERSION}-linux-amd64-enroll-agent": (11762241, "841895906128368fa71099b91753a432cff2dd7ad12c7e1bb448328cc66933d4"),
-    f"tracebolt-{VERSION}-linux-amd64-lan-agent": (12949390, "50f9f1308e177bc74a15889c5a880cb740cda8df73eab32486eb2353aa5a8906"),
-    f"tracebolt-{VERSION}-linux-arm64-agent-service": (10614011, "66e0f34dbd4619ee1a0dd85a8a406c090d9eef156b4261ac16e4fe3809c8c4d2"),
-    f"tracebolt-{VERSION}-linux-arm64-enroll-agent": (10911816, "e9c15a527c55870f71f08e02ad790f5ffbd3c78a64722e256ff343d3c098d372"),
-    f"tracebolt-{VERSION}-linux-arm64-lan-agent": (11924015, "6f060c8c4ec3407da6ccff1833823462dc8ae78db5fab1dcab88d8bf44afebca"),
-    f"tracebolt-{VERSION}-source.tar": (9543680, "7745052bfb8b08032286551d7c10accb7fef4adc89d275e3e9bc31253b374f59"),
+    "bootstrap.py": (37461, "85bd2c01beb3012d5d042d88448d892a270cf527786a73e7a0a67867cac47f61"),
+    "manifest.json": (1188, PIN["manifestSHA256"]),
+    "manifest.sigstore.json": (11377, PIN["bundleSHA256"]),
+    f"tracebolt-{VERSION}-linux-amd64-agent-service": (11474848, "b291112832beab473c07fed160dfb3f9f45a4d9949de0ae027b90ea8ec3dd049"),
+    f"tracebolt-{VERSION}-linux-amd64-enroll-agent": (11865991, "3ca1f5b3d2c416e776657666bb65598af7cc09e89059b2b69e2ea27773adcf44"),
+    f"tracebolt-{VERSION}-linux-amd64-lan-agent": (14335384, "0b6ebf0d893776c4a32381ebc2cd6aea587ccc10abfd40d06258fca32f688bdd"),
+    f"tracebolt-{VERSION}-linux-arm64-agent-service": (10683272, "3d0bf75ba746862acd5acb5555faa42e935b7a604c5e10b38fbb4ab911bff5c0"),
+    f"tracebolt-{VERSION}-linux-arm64-enroll-agent": (11005142, "b1ab10b8510544c5e5cf9d919e9c3fdddb345972278daf1b369c97ed76fa1d2b"),
+    f"tracebolt-{VERSION}-linux-arm64-lan-agent": (13184761, "1363ee3323077eb9522bf42848142bbb2dfb0ff24d16e10aeb3e4611d8402436"),
+    f"tracebolt-{VERSION}-source.tar": (13158400, "88ba5ca4bfb0a0819c936479c443b4b86241e8579155ffce82a302ac0e3e7af9"),
 }
 PUBLIC_FILES = ("bootstrap.py", "manifest.json", "manifest.sigstore.json")
 RESULT_FILE = "verification-result.json"
@@ -58,7 +58,7 @@ def check_context(output, opt_in):
         "GITHUB_REF": "refs/heads/main", "GITHUB_EVENT_NAME": "push",
         "GITHUB_JOB": "verify-published-release",
         "GITHUB_WORKFLOW_REF": REPOSITORY + "/.github/workflows/verify-published-release.yml@refs/heads/main",
-        "TRACEBOLT_VERIFY_PUBLISHED_PILOT2": "1", "RUNNER_OS": "Linux", "RUNNER_ARCH": "X64",
+        "TRACEBOLT_VERIFY_PUBLISHED_RC1": "1", "RUNNER_OS": "Linux", "RUNNER_ARCH": "X64",
     }
     require(opt_in and all(os.environ.get(k) == v for k, v in expected.items()) and
             os.getuid() != 0 and os.geteuid() == os.getuid(), "FAIL_CONTEXT")
@@ -70,7 +70,7 @@ def check_context(output, opt_in):
 
 
 def load_bootstrap():
-    # This check belongs to the immutable pilot.2 source, even after the reusable
+    # This check belongs to the pinned rc.1 source, even after the reusable
     # template is corrected for a later release. Check both hashes before loading
     # the exact captured bytes, with its executable release pin disabled.
     path = HERE / "published" / f"{VERSION}.py"
@@ -80,7 +80,7 @@ def load_bootstrap():
     require(published.count(configured) == 1, "FAIL_TEMPLATE")
     template = published.replace(configured, b"RELEASE_PIN = None", 1)
     require(hashlib.sha256(template).hexdigest() == TEMPLATE_SHA256, "FAIL_TEMPLATE")
-    b = types.ModuleType("pilot2_bootstrap")
+    b = types.ModuleType("rc1_bootstrap")
     b.__file__ = str(path)
     exec(compile(template, str(path), "exec"), b.__dict__)
     original_url = b.asset_url
@@ -168,11 +168,11 @@ def verify(output, b, template):
 
 def main():
     parser = SafeParser(allow_abbrev=False, add_help=False)
-    parser.add_argument("--verify-published-pilot2", action="store_true")
+    parser.add_argument("--verify-published-rc1", action="store_true")
     parser.add_argument("--output", type=Path, required=True)
     try:
         args = parser.parse_args()
-        check_context(args.output, args.verify_published_pilot2)
+        check_context(args.output, args.verify_published_rc1)
         b, template = load_bootstrap()
         verify(args.output, b, template)
     except Failed as error:

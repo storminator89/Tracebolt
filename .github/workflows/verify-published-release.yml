@@ -6,6 +6,7 @@ on:
     paths:
       - '.github/workflows/verify-published-release.yml'
       - 'deploy/release/verify-published-release.py'
+      - 'deploy/release/published/v0.1.0-rc.1.py'
       - 'deploy/release/linux-bootstrap.py'
       - 'deploy/release/publish-linux-release.py'
       - 'tests/release/test_verify_published_release.py'
@@ -14,7 +15,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: tracebolt-public-readback-pilot2
+  group: tracebolt-public-readback-rc1
   cancel-in-progress: false
 
 jobs:
@@ -30,17 +31,17 @@ jobs:
           persist-credentials: false
       - name: Check the bounded verifier using inert fixtures
         run: python3 -I -B -m unittest discover -s tests/release -v
-      - name: Verify the published pilot without executing Tracebolt or installing a service
+      - name: Verify the published release candidate without executing Tracebolt or installing a service
         env:
-          TRACEBOLT_VERIFY_PUBLISHED_PILOT2: '1'
+          TRACEBOLT_VERIFY_PUBLISHED_RC1: '1'
         run: >-
           python3 -I -B deploy/release/verify-published-release.py
-          --verify-published-pilot2
+          --verify-published-rc1
           --output "$RUNNER_TEMP/tracebolt-public-readback"
       - name: Preserve only verified public metadata and the fixed verification result
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
         with:
-          name: verified-public-linux-pilot2
+          name: verified-public-linux-rc1
           path: |
             ${{ runner.temp }}/tracebolt-public-readback/bootstrap.py
             ${{ runner.temp }}/tracebolt-public-readback/manifest.json
