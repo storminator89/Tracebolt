@@ -120,3 +120,16 @@ it('keeps shell and loaded fleet data on ordinary menu navigation without reauth
  expect(vi.mocked(request).mock.calls.filter(([path]) => path === '/overview')).toHaveLength(1);
  expect(vi.mocked(request).mock.calls.filter(([path]) => path === '/auth/session')).toHaveLength(1);
 });
+
+it('removes duplicate overview/list explanations while retaining explicit source and unassessed-state labels', async () => {
+ await navigate('overview'); render(<App/>); await screen.findByRole('heading', { name: 'Overview', level: 1 });
+ expect(document.querySelector('.page-heading .eyebrow')).toBeNull(); expect(document.querySelector('.page-heading p')).toBeNull();
+ expect(screen.queryByText('Rule-based findings. Sources included.')).not.toBeInTheDocument(); expect(screen.queryByText('Sources clearly labelled')).not.toBeInTheDocument();
+ expect(screen.getByText('No automated device assessment yet. Missing findings do not mean healthy devices.')).toBeVisible();
+ expect(screen.getAllByText('LAN agent').length).toBeGreaterThan(0); expect(screen.getByRole('columnheader', { name: 'Overall health' })).toBeVisible();
+ const sidebar = screen.getByRole('complementary', { name: 'Main navigation' }); fireEvent.click(within(sidebar).getByRole('button', { name: /Devices/ })); await screen.findByLabelText('Search devices');
+ expect(document.querySelector('.page-heading .eyebrow')).toBeNull(); expect(document.querySelector('.page-heading p')).toBeNull();
+ expect(screen.queryByText('Sources and data quality stay visible.')).not.toBeInTheDocument(); expect(document.querySelector('.inventory-panel .table-footer')).toHaveTextContent('2 of 2 devices');
+ expect(screen.getByLabelText('Filter by operating system')).toBeVisible(); expect(screen.getByLabelText('Filter by status')).toBeVisible(); expect(screen.getByLabelText('Sort devices')).toBeVisible();
+ expect(vi.mocked(request).mock.calls.filter(([path]) => path === '/overview')).toHaveLength(1);
+});

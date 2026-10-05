@@ -1,5 +1,17 @@
 # Changelog
 
+## 2026-10-05 — Shorten primary device copy without hiding important state
+
+- Use concise primary labels and remove repeated page subtitles. Keep interpretation notes in accessible disclosures while retaining original observation time, unknown/partial states and source facts in Details.
+- Preserve established tab order, keyboard navigation, HTTP warnings, consent labels and the verified rc.1 download pin. Extend focused disclosure tests and the actual browser checks; exact composed hosted acceptance remains required.
+
+## 2026-10-05 — Add optional named operator authority
+
+- Preserve legacy shared login and existing administration. Add a strict protected, profile-bound v2 named-only configuration with stable actor IDs, explicit read/planning/execution/restart grants, no fallback and no credential provisioning. Configuration changes require manager restart and invalidate all sessions.
+- Derive actor and capabilities exclusively on the server, retain login/hash/session/CSRF/logout boundaries, and add current-session capability admission for future typed action integration. Named accounts can read existing views and exact bounded query routes; existing administrative writes are not implicitly granted.
+- Add a conditional username field, defensive session metadata validation and focused auth/config/API/UI regressions. No action endpoint, privileged helper, permit signer, service restart, package execution, host opt-in or installed-machine acceptance is provided.
+
+
 Meaningful development checkpoints are recorded here. These are prototype milestones, not production releases.
 
 ## 2026-10-05 — Prepare bounded journal allowlist amendment and document the pilot plan

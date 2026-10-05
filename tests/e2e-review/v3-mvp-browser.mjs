@@ -62,12 +62,12 @@ async function device(page,label='alpha'){
 async function overviewLayout(page,mobile=false){
  mark('compact icon-led essentials precede technical detail');
  await page.getByRole('tab',{name:'Overview',exact:true}).click();
- await expect(page.getByRole('region',{name:'Contact',exact:true})).toBeVisible();
+ await expect(page.getByRole('region',{name:'Last report',exact:true})).toBeVisible();
  await expect(page.getByRole('region',{name:'Warnings',exact:true})).toBeVisible();
  await expect(page.getByRole('region',{name:'Updates',exact:true})).toBeVisible();
  await expect(page.getByRole('region',{name:'Resources',exact:true})).toBeVisible();
  await expect(page.locator('.software-overview,.endpoint-identity,.device-technical')).toHaveCount(0);
- await expect(page.getByRole('region',{name:'Contact',exact:true})).toContainText('Live reachability is not checked.');
+ await expect(page.getByRole('region',{name:'Last report',exact:true}).locator('p')).toHaveCount(0);
  const geometry=await page.locator('.device-essentials-status').evaluate(el=>[...el.children].map(card=>{const r=card.getBoundingClientRect();return{x:r.x,y:r.y,width:r.width};}));
  expect(geometry).toHaveLength(3);expect(Math.abs(geometry[0].y-geometry[2].y)).toBeLessThanOrEqual(1);expect(geometry[2].x).toBeGreaterThan(geometry[0].x);
  await expect(page.locator('.device-essential-card[aria-busy=true]')).toHaveCount(0);
@@ -77,6 +77,7 @@ async function overviewLayout(page,mobile=false){
  await page.locator('main').evaluate(el=>{el.scrollTop=0;});await shot(page,`synthetic-v3-device-overview-${mobile?'mobile':'desktop'}-en`);
  mark('explicit Details exposes original source facts and native disclosure');
  await page.getByRole('tab',{name:'Details',exact:true}).click();await settled(page,'.software-overview');
+ const interpretation=page.locator('.device-observation-notes');await expect(interpretation).not.toHaveAttribute('open');await interpretation.locator('summary').focus();await page.keyboard.press('Enter');await expect(interpretation).toHaveAttribute('open','');await expect(interpretation).toContainText('Live reachability is not checked.');await expect(interpretation).toContainText('Unknown checks are not a healthy result.');await expect(interpretation).toContainText('existing APT cache');await page.keyboard.press('Enter');await expect(interpretation).not.toHaveAttribute('open');
  const details=page.locator('.software-generation-details'),summary=details.locator('summary');
  await expect(details).not.toHaveAttribute('open');await expect(page.locator('.software-total')).toContainText('2,052');
  await expect(page.locator('.software-overview > .package-facts')).toContainText('Original collection time');

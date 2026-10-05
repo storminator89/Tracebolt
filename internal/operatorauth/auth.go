@@ -26,6 +26,7 @@ const CookieName = "__Host-tracebolt-session"
 const DefaultTTL = 30 * time.Minute
 
 var (
+	ErrForbidden       = errors.New("operator capability is not granted")
 	ErrConfiguration   = errors.New("operator authentication configuration is invalid")
 	ErrCredentials     = errors.New("operator credentials are invalid")
 	ErrUnauthenticated = errors.New("operator session is missing or expired")
@@ -89,7 +90,8 @@ func parseHash(encoded string) (verifier, error) {
 }
 
 type Config struct {
-	PasswordHash string `json:"-"`
+	PasswordHash string     `json:"-"`
+	Operators    []Operator `json:"-"` // Optional named-only mode; mutually exclusive with PasswordHash.
 	TTL          time.Duration
 	// Now is a deterministic test seam. Production callers leave it nil.
 	Now func() time.Time `json:"-"`
@@ -103,6 +105,7 @@ type Session struct {
 	Token     string    `json:"-"` // Only a successful Login returns this; never retained in the session map.
 	CSRFToken string    `json:"-"`
 	ExpiresAt time.Time `json:"expiresAt"`
+	actor     principal // Immutable, private authority; never filled from request fields.
 	revoke    context.CancelFunc
 	lifetime  context.Context
 	gate      *sessionGate
@@ -124,7 +127,9 @@ func (s Session) markRevoked() {
 	}
 }
 
-// BeginMutation linearizes short privileged work against Logout. Release before
+// BeginMutation is a session-lifetime gate, not a capability grant. New controlled
+// actions must use BeginCapability. It linearizes short admitted work against
+// Logout. Release before
 // writing a response or waiting on provider/network I/O. Existing admitted work
 // finishes before Logout returns; no new work is admitted after revocation/expiry.
 func (s Session) BeginMutation(ctx context.Context) (func(), error) {
@@ -147,14 +152,15 @@ type attempts struct {
 	count int
 }
 type managerState struct {
-	mu       sync.Mutex
-	verifier verifier
-	now      func() time.Time
-	ttl      time.Duration
-	sessions map[[32]byte]Session
-	peers    map[netip.Addr]attempts
-	global   attempts
-	hashing  chan struct{}
+	mu        sync.Mutex
+	verifier  verifier
+	operators map[string]principal
+	now       func() time.Time
+	ttl       time.Duration
+	sessions  map[[32]byte]Session
+	peers     map[netip.Addr]attempts
+	global    attempts
+	hashing   chan struct{}
 }
 
 // Copies share state and its mutex; diagnostic formatting redacts both values and pointers.
@@ -163,7 +169,20 @@ type Manager struct{ *managerState }
 func (Manager) String() string   { return "operatorauth.Manager{secrets:redacted}" }
 func (Manager) GoString() string { return "operatorauth.Manager{secrets:redacted}" }
 func New(config Config) (*Manager, error) {
-	v, err := parseHash(config.PasswordHash)
+	var v verifier
+	var operators map[string]principal
+	var err error
+	if config.Operators != nil {
+		if config.PasswordHash != "" {
+			return nil, ErrConfiguration
+		}
+		operators, err = namedPrincipals(config.Operators)
+		if err == nil {
+			v = operators[config.Operators[0].Username].verifier
+		}
+	} else {
+		v, err = parseHash(config.PasswordHash)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -178,7 +197,7 @@ func New(config Config) (*Manager, error) {
 	if now == nil {
 		now = time.Now
 	}
-	return &Manager{managerState: &managerState{verifier: v, now: now, ttl: ttl, sessions: map[[32]byte]Session{}, peers: map[netip.Addr]attempts{}, hashing: make(chan struct{}, 1)}}, nil
+	return &Manager{managerState: &managerState{verifier: v, operators: operators, now: now, ttl: ttl, sessions: map[[32]byte]Session{}, peers: map[netip.Addr]attempts{}, hashing: make(chan struct{}, 1)}}, nil
 }
 func randomHex(size int) (string, error) {
 	value := make([]byte, size)
@@ -249,6 +268,9 @@ func (m *Manager) attempt(peer string) error {
 
 // Login uses RemoteAddr-derived peer IP only. Header/query values are not peer identity.
 func (m *Manager) Login(ctx context.Context, peer, password string) (Session, error) {
+	return m.login(ctx, peer, "", password, false)
+}
+func (m *Manager) login(ctx context.Context, peer, username, password string, named bool) (Session, error) {
 	if err := ctx.Err(); err != nil {
 		return Session{}, err
 	}
@@ -264,12 +286,20 @@ func (m *Manager) Login(ctx context.Context, peer, password string) (Session, er
 	default:
 		return Session{}, ErrBusy
 	}
+	v := m.verifier // Dummy workload for an unknown user or wrong login mode.
+	actor := principal{grants: capabilityBit(Read)}
+	known := !named && !m.Named()
+	if named && m.Named() && validUsername(username) {
+		if configured, exists := m.operators[username]; exists {
+			v, actor, known = configured.verifier, configured, true
+		}
+	}
 	secret := []byte(password)
-	derived := argon2.IDKey(secret, m.verifier.salt, m.verifier.iterations, m.verifier.memory, m.verifier.parallelism, 32)
+	derived := argon2.IDKey(secret, v.salt, v.iterations, v.memory, v.parallelism, 32)
 	clear(secret)
-	valid := subtle.ConstantTimeCompare(derived, m.verifier.hash) == 1
+	valid := subtle.ConstantTimeCompare(derived, v.hash) == 1
 	clear(derived)
-	if !valid {
+	if !valid || !known {
 		return Session{}, ErrCredentials
 	}
 	if err := ctx.Err(); err != nil {
@@ -289,7 +319,8 @@ func (m *Manager) Login(ctx context.Context, peer, password string) (Session, er
 	}
 	now := m.now()
 	life, revoke := context.WithCancel(context.Background())
-	session := Session{ID: id, CSRFToken: csrf, ExpiresAt: now.Add(m.ttl), lifetime: life, revoke: revoke, gate: &sessionGate{now: m.now, expires: now.Add(m.ttl)}}
+	actor.verifier = verifier{} // Never retain password material in session state.
+	session := Session{actor: actor, ID: id, CSRFToken: csrf, ExpiresAt: now.Add(m.ttl), lifetime: life, revoke: revoke, gate: &sessionGate{now: m.now, expires: now.Add(m.ttl)}}
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.purgeLocked(now)

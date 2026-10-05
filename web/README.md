@@ -68,9 +68,12 @@ Approval requires the operator to compare both the complete SHA-256 key fingerpr
 
 ### Device diagnosis navigation
 
-The full-width overview presents compact icon-labelled Contact, Warnings and Updates
+The full-width overview presents compact icon-labelled Last report, Warnings and Updates
 cards above CPU, memory and disk observations. Contact is the last accepted report,
-not a live reachability test. Warnings cover the existing selected Health checks;
+not a live reachability test. Optional interpretation is available through the
+keyboard- and touch-accessible **Details → About these values** disclosure. Main
+views keep meaningful labels and explicit warning states without repeated explanatory
+subtitles or source promises. Warnings cover the existing selected Health checks;
 unknown checks never become zero warnings. Updates use only the existing complete
 cached-candidate ledger, with original age, stale/unknown cache freshness and partial
 comparisons visible. Counts are not an installability or security assessment.

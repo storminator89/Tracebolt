@@ -56,16 +56,19 @@ type operatorRequest struct {
 }
 
 type authView struct {
-	Mode                   string     `json:"mode"`
-	Transport              string     `json:"transport"`
-	InsecureTestMode       bool       `json:"insecureTestMode"`
-	TransportWarning       *string    `json:"transportWarning"`
-	AuthenticationRequired bool       `json:"authenticationRequired"`
-	Authenticated          bool       `json:"authenticated"`
-	CSRFToken              *string    `json:"csrfToken"`
-	ServerNow              time.Time  `json:"serverNow"`
-	ExpiresAt              *time.Time `json:"expiresAt"`
-	ExpiresInSeconds       *int       `json:"expiresInSeconds"`
+	LoginMode              string                    `json:"loginMode"`
+	ActorID                *string                   `json:"actorId"`
+	Capabilities           []operatorauth.Capability `json:"capabilities"`
+	Mode                   string                    `json:"mode"`
+	Transport              string                    `json:"transport"`
+	InsecureTestMode       bool                      `json:"insecureTestMode"`
+	TransportWarning       *string                   `json:"transportWarning"`
+	AuthenticationRequired bool                      `json:"authenticationRequired"`
+	Authenticated          bool                      `json:"authenticated"`
+	CSRFToken              *string                   `json:"csrfToken"`
+	ServerNow              time.Time                 `json:"serverNow"`
+	ExpiresAt              *time.Time                `json:"expiresAt"`
+	ExpiresInSeconds       *int                      `json:"expiresInSeconds"`
 }
 
 // NewLANOperatorHandler is a separate TLS+session boundary. The underlying
@@ -145,11 +148,14 @@ func NewLANOperatorHandler(app *Server, c LANOperatorConfig) (http.Handler, erro
 }
 func (s *Server) developmentAuthView() authView {
 	token := s.csrf
-	return authView{Mode: "development", Transport: "http", CSRFToken: &token, ServerNow: time.Now().UTC()}
+	return authView{LoginMode: "shared", Capabilities: []operatorauth.Capability{}, Mode: "development", Transport: "http", CSRFToken: &token, ServerNow: time.Now().UTC()}
 }
 func (h *operatorHandler) view(session *operatorauth.Session) authView {
 	now := h.auth.Now()
-	view := authView{Mode: "lan", Transport: "https", AuthenticationRequired: true, ServerNow: now.UTC()}
+	view := authView{LoginMode: "shared", Capabilities: []operatorauth.Capability{}, Mode: "lan", Transport: "https", AuthenticationRequired: true, ServerNow: now.UTC()}
+	if h.auth.Named() {
+		view.LoginMode = "named"
+	}
 	if h.insecureHTTPTest {
 		warning := "unencrypted_lan_test"
 		view.Transport = "http"
@@ -158,6 +164,11 @@ func (h *operatorHandler) view(session *operatorauth.Session) authView {
 	}
 	if session != nil {
 		view.Authenticated = true
+		view.Capabilities = session.Capabilities()
+		if session.Named() {
+			actorID := session.ActorID()
+			view.ActorID = &actorID
+		}
 		csrf := session.CSRFToken
 		expires := session.ExpiresAt.UTC()
 		seconds := int(math.Ceil(session.ExpiresAt.Sub(now).Seconds()))
@@ -342,6 +353,10 @@ func (h *operatorHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		write(w, 200, h.view(nil))
 		return
 	}
+	if session.Named() && !namedReadRoute(r) {
+		fail(w, 403, "operator_capability_required", "This named account does not have permission for this administrative operation.")
+		return
+	}
 	if r.URL.Path == "/api/lan/agents" && r.Method == "GET" {
 		agents := h.registry.List()
 		write(w, 200, map[string]any{"items": agents, "total": len(agents)})
@@ -407,9 +422,14 @@ func (h *operatorHandler) login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var input struct {
+		Username string `json:"username"`
 		Password string `json:"password"`
 	}
-	if !readObject(w, r, 4096, []string{"password"}, &input) {
+	fields := []string{"password"}
+	if h.auth.Named() {
+		fields = append(fields, "username")
+	}
+	if !readObject(w, r, 4096, fields, &input) {
 		return
 	}
 	defer func() { input.Password = "" }()
@@ -418,7 +438,12 @@ func (h *operatorHandler) login(w http.ResponseWriter, r *http.Request) {
 		fail(w, 401, "invalid_credentials", "Sign-in failed.")
 		return
 	}
-	session, err := h.auth.Login(r.Context(), peer, input.Password)
+	var session operatorauth.Session
+	if h.auth.Named() {
+		session, err = h.auth.LoginNamed(r.Context(), peer, input.Username, input.Password)
+	} else {
+		session, err = h.auth.Login(r.Context(), peer, input.Password)
+	}
 	if err != nil {
 		switch {
 		case errors.Is(err, operatorauth.ErrRateLimited):

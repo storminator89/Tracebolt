@@ -1,5 +1,5 @@
 {
-  "version": "tracebolt.operator-auth.v1",
+  "version": "tracebolt.operator-auth.v2",
   "scope": "Code/test-only LAN pilot; no deployment or credential provisioning performed.",
   "routes": {
     "GET /api/auth/session": {
@@ -12,16 +12,25 @@
       "expiresInSeconds": null,
       "transport": "http|https",
       "insecureTestMode": false,
-      "transportWarning": null
+      "transportWarning": null,
+      "loginMode": "shared|named",
+      "actorId": null,
+      "capabilities": []
     },
     "POST /api/auth/login": {
-      "body": {
-        "password": "12..1024 UTF-8 bytes; never persisted or logged"
-      },
-      "requirements": "Dedicated LAN operator surface. TLS by default; explicit HTTP-test profile only with independent test auth/state. Exact configured Origin/Host, application/json, <=4096 raw bytes; no pre-login CSRF token needed. No CORS.",
-      "response": "Session view above, authenticated=true, per-session csrfToken, expiresAt and expiresInSeconds.",
+      "requirements": "Dedicated LAN operator surface. TLS by default; explicit HTTP-test profile only with independent test auth/state. Exact configured Origin/Host, application/json, <=4096 raw bytes; no pre-login CSRF token needed. No CORS. Named mode requires both username and password; shared mode requires password only. Unknown, duplicate, missing or client-supplied actor/role/capability fields are rejected. Unknown names perform bounded dummy hashing and never fall back to shared authentication.",
+      "response": "Session view above, authenticated=true, per-session csrfToken, expiresAt and expiresInSeconds. Named sessions carry a server-derived stable actorId and explicit capabilities; shared sessions carry null actorId and read-only display capability, with existing legacy administration semantics. Anonymous views disclose only loginMode, null actorId and an empty capability list.",
       "cookie": "TLS: __Host-tracebolt-session, Secure, HttpOnly, SameSite=Strict, Path=/, no Domain. HTTP test: tracebolt-http-test-session, same properties except Secure=false. Token only in Set-Cookie, never JSON.",
-      "semantics": "Existing cookie session revoked on successful login; session and CSRF both rotate. Default absolute expiry30min, no silent sliding extension."
+      "semantics": "Existing cookie session revoked on successful login; session and CSRF both rotate. Default absolute expiry30min, no silent sliding extension.",
+      "bodyByLoginMode": {
+        "shared": {
+          "password": "12..1024 UTF-8 bytes; never persisted or logged"
+        },
+        "named": {
+          "username": "1..64 ASCII bytes; exact configured lowercase username",
+          "password": "12..1024 UTF-8 bytes; never persisted or logged"
+        }
+      }
     },
     "POST /api/auth/logout": {
       "body": {},
@@ -37,21 +46,22 @@
         "label": "1..120 UTF-8 bytes",
         "expectedFingerprintSHA256": "exact lowercase leaf SHA256 from an independently checked source"
       },
-      "requirements": "Authenticated session mutation lease + exact Origin/CSRF + strict JSON <=65536 bytes; registry validates chain, role, expiry and key strength. HTTP test transport accepts Ed25519 leaf keys directly issued by configured roots."
+      "requirements": "Legacy shared v1 mode only. Authenticated session mutation lease + exact Origin/CSRF + strict JSON <=65536 bytes; registry validates chain, role, expiry and key strength. HTTP test transport accepts Ed25519 leaf keys directly issued by configured roots."
     },
     "POST /api/lan/agents/{id}/revoke": {
       "body": {},
-      "requirements": "Same authenticated mutation boundary; durable tombstone; later telemetry commits rejected."
+      "requirements": "Legacy shared v1 mode only. Same authenticated mutation boundary; durable tombstone; later telemetry commits rejected."
     }
   },
   "modeBehavior": {
     "development": "Existing loopback-only guard remains unchanged. GET auth/session explicitly says authenticationRequired=false, authenticated=false, csrfToken=current process token, expiry=null. No fake authentication. Login/logout routes are disabled.",
-    "lan": "Dedicated authenticated operator handler. Unauthenticated auth/session is200, protected APIs401. Static assets may load without data. Actual TLS required in the default profile, never inferred from forwarded headers. HTTP test accepts plaintext only, has its own cookie/state/auth profile and permanent warning. Developer ingress is unavailable in either profile."
+    "lan": "Dedicated authenticated operator handler. Unauthenticated auth/session is200, protected APIs401. Static assets may load without data. Actual TLS required in the default profile, never inferred from forwarded headers. HTTP test accepts plaintext only, has its own cookie/state/auth profile and permanent warning. Developer ingress is unavailable in either profile.",
+    "named": "Static protected v2 named-only configuration. All operators explicitly require read. Existing GET/HEAD views and exact journal/query or inventory/{system,overview,packages,complete-updates}/query POSTs are readable; these POSTs retain Origin/CSRF checks. Logout is allowed. Other legacy administrative writes are denied; none of the new grants implies those rights. No account-management, action or execution route exists. Config changes take effect only after manager restart; all in-memory sessions then disappear."
   },
   "errors": {
     "400": "invalid typed or duplicate-key body",
     "401": "invalid_credentials or authentication_required; response never echoes password",
-    "403": "wrong Origin/Host/CSRF or insecure transport",
+    "403": "wrong Origin/Host/CSRF or insecure transport or operator_capability_required for ungranted administrative/maintenance operation",
     "404": "developer route unavailable on LAN",
     "409": "existing data/config conflicts unchanged",
     "413": "body cap",
@@ -66,7 +76,9 @@
     "Clear password input when submitting; never persist secrets in browser storage or repopulate from responses.",
     "Render logout as a real CSRF-protected POST; abort and clear session-owned UI state.",
     "Configured LAN mode is not deployment evidence. Tests use temporary loopback TLS fixtures only.",
-    "Show a permanent localized plaintext credentials/data and server-impersonation warning on sign-in and throughout the app when insecureTestMode=true."
+    "Show a permanent localized plaintext credentials/data and server-impersonation warning on sign-in and throughout the app when insecureTestMode=true.",
+    "Render username only when validated loginMode is named; keep that mode through session-expiry and lock paths. Shared login stays password-only.",
+    "Actor/capability metadata is display-only and never sent as proof of authorization. Older session payloads may omit the entire metadata tuple; partially present or contradictory metadata is invalid."
   ],
   "transportMetadata": {
     "development": {
@@ -84,5 +96,15 @@
       "insecureTestMode": true,
       "transportWarning": "unencrypted_lan_test"
     }
+  },
+  "authFileVersions": [
+    "tracebolt.operator-auth.v1",
+    "tracebolt.operator-auth.v2"
+  ],
+  "capabilities": {
+    "read": "Explicit read/query access as mapped above. No new collection or unrelated administration.",
+    "plan_updates": "Future typed package planning; currently inert.",
+    "execute_updates": "Future approved typed package execution; currently inert.",
+    "restart_service": "Future approved typed service restart; currently inert."
   }
 }

@@ -52,7 +52,7 @@ func prepareWithEnrollment(m lanconfig.Material, enrollment *enrollmentconfig.Ma
 	if enrollment == nil && enrollmentconfig.RejectEnrollmentMode(c.StateDirectory) != nil {
 		return nil, enrollmentconfig.ErrConfiguration
 	}
-	auth, e := operatorauth.New(operatorauth.Config{PasswordHash: m.PasswordHash})
+	auth, e := operatorauth.New(operatorauth.Config{PasswordHash: m.PasswordHash, Operators: m.Operators})
 	if e != nil {
 		return nil, e
 	}

@@ -1,7 +1,8 @@
 # Controlled Linux actions
 
-Status: architecture draft with independent review amendments, not implemented
-or deployed. Baseline:
+Status: architecture draft with independent review amendments. The narrow source
+slices below are implemented; the controlled execution path is not implemented or
+deployed. Baseline:
 `4def163cf9d879f3b91360de41754d8aa299b639` (2026-10-05).
 
 ## Current source foundation and remaining integration
@@ -10,9 +11,11 @@ The later source checkpoint `841d5fee56f94b764088e2c6abce725f327d8ed4` adds
 only the inert `internal/actionpermit` / `internal/actionstate` foundation
 [documented here](controlled-action-core.md). It is not connected to the manager,
 API, UI, agent, helper or installer and cannot execute a service or package action.
-Named operator authority, signed transport-profile separation, protected live
-policy loading, dispatch, privileged execution and native acceptance remain future
-integration work. The transport-profile binding specified below is a requirement
+The optional [named-operator authentication slice](named-operator-auth.md) now
+provides protected static actor/capability configuration and a current-session
+admission seam. It does not connect this core to an action API or executor. Signed
+transport-profile separation, protected live policy loading, dispatch, privileged
+execution and native acceptance remain future integration work. The transport-profile binding specified below is a requirement
 for that future versioned integration, not a field shipped by the narrow core.
 
 ## Decision and first deliverable
@@ -35,7 +38,8 @@ automatic repair of a broken package database. No certification is claimed.
 
 - `internal/api/operator.go` and `internal/operatorauth/auth.go`: sessions,
   origin/CSRF checks, expiry and short mutation admission. Current auth has one
-  password verifier and session IDs, not named human actors or action roles.
+  password verifier and session IDs in legacy mode. Optional static v2 configuration
+  adds named actors and explicit maintenance grants; action routes remain unwired.
 - `internal/journalrequest`, `internal/enrollmentstore/journal_storage.go`,
   `internal/journalstate`, `internal/lanclient/journal.go`: bounded typed work,
   endpoint binding, CAS/sequence floors and consumption before execution.
@@ -64,6 +68,10 @@ Derive actor and capabilities from authenticated server-side state. A supplied
 actor name, role, request digest or UI checkbox is never identity proof. Existing
 shared-login configuration receives no new action permission automatically.
 Provisioning new credentials and migration remain explicit administration steps.
+The implemented static v2 mode applies account removal or grant changes only after
+a manager restart, invalidating all in-memory sessions. Existing v1 administration
+remains unchanged; named read/query access is documented separately and does not
+implicitly grant legacy administration.
 
 Every mutation requires a current authorized operator and explicit approval of
 one immutable, expiring plan. Approval binds endpoint, action, exact parameters,
@@ -282,7 +290,8 @@ is needed.
 
 ## Implementation and acceptance phases
 
-1. Implement named operator/action permissions, production TLS admission and
+1. The optional static named operator/capability slice is implemented separately;
+   complete production action TLS admission and
    profile-separated disposable HTTP-test admission, immutable approved-job
    contract, durable storage and replay/restart rejection tests.
 2. Implement the real fixed service-restart backend, local policy/permit checks

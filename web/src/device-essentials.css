@@ -16,3 +16,10 @@
 .device-page .device-metadata-refresh{margin-top:12px;margin-bottom:0}
 .device-main .demo-banner{margin-bottom:18px}
 @media(max-width:760px){.device-essentials-status{gap:8px}.device-essential-card{padding:12px 10px;gap:6px}.device-essential-card h2{font-size:11px;gap:5px}.device-essential-card h2 svg{width:14px}.device-essential-card>.device-essential-value{font-size:18px}.device-essential-card p,.device-essential-card time,.device-essential-card>.text-button{font-size:11px}.device-essential-card>.text-button{flex-wrap:wrap;gap:4px}.device-page .drawer-content{padding-top:14px}.device-page .device-metrics{grid-template-columns:repeat(3,minmax(0,1fr))}.device-page .device-metric-card{padding:12px 10px}.device-page .device-metric-label{align-items:flex-start;overflow-wrap:anywhere}.device-page .metric-value{font-size:24px}.device-page .metric-quality{white-space:normal;line-height:1.4}.device-page .device-detail-heading h1{font-size:22px}.device-page .detail-badges{gap:8px}.device-page>.back-link{margin-bottom:12px}}
+
+.device-observation-notes{margin-bottom:18px;border:1px solid var(--line);border-radius:8px;padding:12px 14px;font-size:12px}
+.device-observation-notes>summary{display:flex;align-items:center;gap:8px;cursor:pointer;color:var(--secondary)}
+.device-observation-notes>summary:focus-visible{outline:2px solid var(--accent);outline-offset:4px}
+.device-observation-notes dl{margin:12px 0 0;display:grid;gap:12px}
+.device-observation-notes dt{font-weight:600;margin-bottom:4px}
+.device-observation-notes dd{margin:0;color:var(--secondary);line-height:1.6}

@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"localrmm/internal/operatorauth"
 	"net"
 	"net/url"
 	"path/filepath"
@@ -42,7 +43,8 @@ type Material struct {
 	Config       Config
 	Server       tls.Certificate `json:"-"`
 	ClientCA     []byte
-	PasswordHash string `json:"-"`
+	PasswordHash string                  `json:"-"`
+	Operators    []operatorauth.Operator `json:"-"`
 }
 
 func (Material) MarshalJSON() ([]byte, error) { return []byte(`{"redacted":true}`), nil }
@@ -181,24 +183,20 @@ func Load(path string) (Material, error) {
 	if StrictObject(raw, &c, "schemaVersion", "profile", "operatorListen", "agentListen", "operatorOrigin", "agentOrigin", "tlsCertificateFile", "tlsPrivateKeyFile", "agentClientCAFile", "operatorAuthFile", "stateDirectory", "webDirectory", "insecureHTTPAcknowledged") != nil || c.Validate() != nil {
 		return fail()
 	}
-	auth, e := ReadProtected(c.OperatorAuthFile, true, 4096)
+	auth, e := ReadProtected(c.OperatorAuthFile, true, 32768)
 	if e != nil {
 		return fail()
 	}
 	defer clear(auth)
-	var a struct {
-		SchemaVersion string `json:"schemaVersion"`
-		Profile       string `json:"profile"`
-		PasswordHash  string `json:"passwordHash"`
-	}
-	if StrictObject(auth, &a, "schemaVersion", "profile", "passwordHash") != nil || a.SchemaVersion != "tracebolt.operator-auth.v1" || a.Profile != c.Profile || a.PasswordHash == "" {
+	passwordHash, operators, e := loadOperatorAuth(auth, c.Profile)
+	if e != nil {
 		return fail()
 	}
 	ca, e := ReadProtected(c.AgentClientCAFile, false, 65536)
 	if e != nil {
 		return fail()
 	}
-	m := Material{Config: c, ClientCA: ca, PasswordHash: a.PasswordHash}
+	m := Material{Config: c, ClientCA: ca, PasswordHash: passwordHash, Operators: operators}
 	if c.Profile == TLS {
 		cert, e := ReadProtected(c.TLSCertificateFile, false, 65536)
 		if e != nil {

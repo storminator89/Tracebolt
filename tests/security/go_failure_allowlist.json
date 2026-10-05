@@ -1,5 +1,5 @@
 {
-  "goSourceSha256": "40485970ec9835963390e6788619a13059fa1a374c881a205420c6a1408c1738",
+  "goSourceSha256": "f305ca6f60c18daaed08535bfbe5d47a29bc25b41a8226f7ff4d68e161148cf5",
   "packages": {
     "localrmm/cmd/agent": [
       "TestHelp",
@@ -114,6 +114,7 @@
       "TestPackagePositiveGateSelection",
       "TestPackageThreeBinaryEnrollmentAndForeground",
       "TestPackageUbuntu2404PositiveNative",
+      "TestPreparedNamedOperatorProfilesAndRestartRevocation",
       "TestProfileStateIsolation",
       "TestSystemdDiagnosticStageAllowlist"
     ],
@@ -298,6 +299,11 @@
       "TestManagedPreviewHTTPGuardsAndRealSample",
       "TestManagedSourcePolicyCannotBeRelabeledForAIExport",
       "TestMutationValidationAndPersistence",
+      "TestNamedCapabilitySeamRequiresCSRFCurrentSessionAndServerActor",
+      "TestNamedHTTPTestKeepsSeparateCookieAndPlaintextWarning",
+      "TestNamedLANLoginMetadataAndLegacyCompatibility",
+      "TestNamedReadRouteShapeAndCapabilityExpiry",
+      "TestNamedReadRoutesDenyAdministrativeWritesButKeepQueries",
       "TestOfflineCatalogAdmissionAndClearInvalidateInFlightImport",
       "TestOfflineCatalogIsDisabledOutsideSelectedProfile",
       "TestOfflineCatalogLogoutDuringBodyNeverMutates",
@@ -1195,6 +1201,8 @@
       "TestValidateExistingPreservesSenderTemporary"
     ],
     "localrmm/internal/lanconfig": [
+      "TestNamedAuthStrictVersionProfileAndNestedParsing",
+      "TestNamedProtectedConfigLoadAndSnapshotIsolation",
       "TestProfileValidation",
       "TestProtectedFiles",
       "TestStrictConfigAndSecretDiagnostics"
@@ -1379,6 +1387,13 @@
       "TestLoginLookupExpiryLogoutAndSecretRedaction",
       "TestLogoutLinearizesAfterAdmittedMutation",
       "TestManagerValueAndPointerFormattingAndCopies",
+      "TestNamedAccountsDoNotSharePasswordsIdentityOrCapabilities",
+      "TestNamedCapabilityRevocationWaitsForAdmittedWork",
+      "TestNamedConfigurationFailClosed",
+      "TestNamedExpiryAndRestartInvalidateAuthority",
+      "TestNamedLoginIdentityCapabilitiesAndDefensiveCopies",
+      "TestNamedUnknownUserAndWrongModeCannotFallback",
+      "TestNamedUnknownUsersShareHashConcurrencyAndRateLimits",
       "TestSessionAndPeerMapsAreBounded"
     ],
     "localrmm/internal/overviewgeneration": [

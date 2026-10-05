@@ -67,7 +67,7 @@ describe('compact device essentials', () => {
         expect(card('Updates').getByText('0+')).toBeVisible(); expect(card('Updates').getByText('Partial comparison · 2 comparisons unknown')).toBeVisible();
         expect(card('Warnings').getByText('Unknown')).toBeVisible(); expect(card('Warnings').queryByText('0 open')).not.toBeInTheDocument();
         const resources = screen.getByRole('region', { name: 'Resources' }); expect(resources).toHaveTextContent('Stale'); expect(resources).toHaveTextContent('Unavailable'); expect(resources).toHaveTextContent('Access denied');
-        expect(card('Contact').getByText('Live reachability is not checked.')).toBeVisible(); expect(screen.getByRole('button', { name: /Certificate: Expired/ })).toBeVisible();
+        expect(card('Last report').queryByText('Live reachability is not checked.')).not.toBeInTheDocument(); expect(screen.getByRole('button', { name: /Certificate: Expired/ })).toBeVisible();
         expect(screen.queryByText('Invented original source')).not.toBeInTheDocument();
     });
     it('shows zero only for a complete available candidate generation and fully known selected checks', async () => {
@@ -88,7 +88,7 @@ describe('compact device essentials', () => {
     });
     it('makes Details explicit, preserves disclosure/scroll during metadata refresh and keeps sources accessible', async () => {
         render(panel()); await flush(); expect(screen.queryByRole('region', { name: 'Agent certificate' })).not.toBeInTheDocument();
-        fireEvent.click(card('Contact').getByRole('button', { name: 'Device details' })); await flush();
+        fireEvent.click(card('Last report').getByRole('button', { name: 'Device details' })); await flush();
         expect(screen.getByRole('tab', { name: 'Details' })).toHaveFocus(); expect(screen.getByRole('region', { name: 'Agent certificate' })).toBeVisible(); expect(calls('/inventory/packages')).toHaveLength(1);
         expect(screen.getAllByText('Invented original source').length).toBe(3); expect(screen.getByText('Stable cryptographic device ID')).toBeVisible();
         const summary = screen.getByText('Device profile & technical details'), disclosure = summary.closest('details')!, main = screen.getByRole('main'); fireEvent.click(summary); main.scrollTop = 240;
@@ -109,6 +109,29 @@ describe('compact device essentials', () => {
         await act(async () => held.resolve(answer(`/devices/${id}/inventory/endpoint-identity`))); expect(calls('/inventory/complete-updates')).toHaveLength(updateReads + 1); expect(calls('/health')).toHaveLength(warningReads + 1);
         act(() => window.dispatchEvent(new Event(AUTH_REQUIRED_EVENT))); expect(screen.queryByRole('region', { name: 'Updates' })).not.toBeInTheDocument();
         const reads = vi.mocked(request).mock.calls.length; act(() => window.dispatchEvent(new Event('focus'))); await flush(); expect(request).toHaveBeenCalledTimes(reads);
+    });
+    it('keeps the first view concise and exposes interpretation through a native, state-preserving Details disclosure', async () => {
+        render(panel()); await flush();
+        const report = screen.getByRole('region', { name: 'Last report' });
+        expect(within(report).getByRole('heading', { name: 'Last report' })).toBeVisible(); expect(report.querySelectorAll('p')).toHaveLength(0);
+        expect(screen.queryByText(/Live reachability is not checked/)).not.toBeInTheDocument();
+        expect(card('Warnings').getByText('Selected checks')).toBeVisible(); expect(card('Warnings').getByText('1 unknown')).toBeVisible();
+        expect(card('Updates').getByText('cached candidates')).toBeVisible(); expect(card('Updates').getByText('Cache is stale')).toBeVisible();
+        expect(screen.queryByText('No investigation for this device.')).not.toBeInTheDocument();
+        const related = screen.getByRole('heading', { name: /^Related investigations/ }).closest('.section-head')!; expect(related).toHaveTextContent('0');
+        expect(screen.getByText('Read-only', { selector: '.drawer-footer span' })).toBeVisible();
+        fireEvent.click(within(report).getByRole('button', { name: 'Device details' })); await flush();
+        const summary = screen.getByText('About these values', { selector: 'summary' }), disclosure = summary.closest('details')!;
+        expect(disclosure).not.toHaveAttribute('open'); expect(within(disclosure).getByText(/Live reachability is not checked/)).not.toBeVisible();
+        const reads = vi.mocked(request).mock.calls.length; summary.focus(); fireEvent.click(summary);
+        expect(summary).toHaveFocus(); expect(disclosure).toHaveAttribute('open');
+        expect(within(disclosure).getByText(/Live reachability is not checked/)).toBeVisible();
+        expect(within(disclosure).getByText(/Unknown checks are not a healthy result/)).toBeVisible(); expect(within(disclosure).getByText(/existing APT cache/)).toBeVisible();
+        fireEvent.click(screen.getByRole('button', { name: 'Refresh device metadata' })); await flush();
+        expect(disclosure).toHaveAttribute('open'); expect(request).toHaveBeenCalledTimes(reads + 1);
+        act(() => setLocale('de', false)); expect(screen.getByText('Hinweise zu den Werten', { selector: 'summary' })).toBe(summary);
+        expect(disclosure).toHaveAttribute('open'); expect(within(disclosure).getByText(/Aktuelle Erreichbarkeit wird nicht geprüft/)).toBeVisible();
+        fireEvent.click(summary); expect(disclosure).not.toHaveAttribute('open'); expect(request).toHaveBeenCalledTimes(reads + 1); expect(mutate).not.toHaveBeenCalled(); expect(mutateRaw).not.toHaveBeenCalled();
     });
     it('preserves first-view selection and does not repeat summary reads on metadata refresh', async () => {
         render(panel()); await flush(); const updatesCard = screen.getByRole('region', { name: 'Updates' }), warningsCard = screen.getByRole('region', { name: 'Warnings' });
