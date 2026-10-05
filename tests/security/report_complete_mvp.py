@@ -15,6 +15,10 @@ PREFIX = re.compile(r"    complete_mvp_process_test\.go:[1-9][0-9]{0,5}: (.*)\n"
 REASONS = r"none|source_missing|permission_denied|not_supported|timeout|invalid_source|read_failed|item_limit|byte_limit|collector_busy|not_collected"
 STATUS = re.compile(r"native report: sequence=[0-9]{1,19} systemSequence=[0-9]{1,19} packageStatus=(acknowledged|failure_acknowledged|not_due|pending_retained) servicesCoverage=(complete|failed) servicesReason=(" + REASONS + r") socketsCoverage=(complete|failed) socketsReason=(" + REASONS + r")")
 PACKAGE_FAILURE = re.compile(r"native complete package attempt: failure=(source_missing|source_invalid|source_changed|resource_limit|collection_failed); no complete package count claimed")
+OPERATOR_RESOURCE = r"enrollment|devices|operational|system|packages|endpoint_identity|overview|other"
+OPERATOR_FAILURE = r"request|deadline|transport|body|oversize|decode|http_400|http_401|http_403|http_404|http_409|http_429|http_503|http_other"
+OPERATOR_READ = re.compile(r"complete operator read diagnostic: resource=(" + OPERATOR_RESOURCE + r") failure=(" + OPERATOR_FAILURE + r")")
+OPERATOR_RETRY = re.compile(r"complete operator busy retry: resource=(" + OPERATOR_RESOURCE + r") outcome=(recovered|failed)")
 # Exact immutable source payloads map to constants; input text is never emitted.
 FAILURES = {
     "complete_native_event_phase_invalid": {"category": "complete_native_event_phase_invalid", "stage": "sender"},
@@ -439,6 +443,12 @@ def project(event):
     profile = PROFILES[test]
     if payload in FAILURES:
         return {"profile": profile, "stage": FAILURES[payload]["stage"], "category": FAILURES[payload]["category"]}
+    match = OPERATOR_READ.fullmatch(payload)
+    if match is not None:
+        return {"profile": profile, "stage": "operator", "category": "operator_read", "resource": match.group(1), "failure": match.group(2)}
+    match = OPERATOR_RETRY.fullmatch(payload)
+    if match is not None:
+        return {"profile": profile, "stage": "operator", "category": "operator_busy_retry", "resource": match.group(1), "outcome": match.group(2)}
     match = STATUS.fullmatch(payload)
     if match is not None:
         return {"profile": profile, "stage": "observation", "category": "native_report", "packageStatus": match.group(1), "servicesCoverage": match.group(2), "servicesReason": match.group(3), "socketsCoverage": match.group(4), "socketsReason": match.group(5)}

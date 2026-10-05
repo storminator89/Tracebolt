@@ -203,13 +203,17 @@ func completeMVPProfile(t *testing.T, gate context.Context, profile string, bina
 	}
 	get := func(path string, out any) {
 		t.Helper()
-		request, _ := http.NewRequestWithContext(run, http.MethodGet, m.Config.OperatorOrigin+path, nil)
-		response, e := operator.Do(request)
-		if e != nil {
-			t.Fatal("complete operator read")
+		result := completeMVPOperatorGet(run, operator, m.Config.OperatorOrigin, path, out, completeMVPOperatorWait)
+		resource := completeMVPOperatorResource(path)
+		if result.retried {
+			outcome := "recovered"
+			if result.failure != "" {
+				outcome = "failed"
+			}
+			t.Logf("complete operator busy retry: resource=%s outcome=%s", resource, outcome)
 		}
-		defer response.Body.Close()
-		if response.StatusCode != http.StatusOK || json.NewDecoder(io.LimitReader(response.Body, 192<<10)).Decode(out) != nil {
+		if result.failure != "" {
+			t.Logf("complete operator read diagnostic: resource=%s failure=%s", resource, result.failure)
 			t.Fatal("complete operator read contract")
 		}
 	}

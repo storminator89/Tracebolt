@@ -28,6 +28,17 @@ class ProjectionTests(unittest.TestCase):
         self.assertNotIn("123", json.dumps(value)); self.assertNotIn("456", json.dumps(value))
         self.assertEqual(reporter.project(event("native complete package attempt: failure=source_invalid; no complete package count claimed"))["reason"], "source_invalid")
 
+    def test_operator_diagnostics_project_only_fixed_resources_and_failures(self):
+        for resource in reporter.OPERATOR_RESOURCE.split("|"):
+            for failure in reporter.OPERATOR_FAILURE.split("|"):
+                self.assertEqual(reporter.project(event(f"complete operator read diagnostic: resource={resource} failure={failure}")), {"profile": "tls", "stage": "operator", "category": "operator_read", "resource": resource, "failure": failure})
+            for outcome in ["recovered", "failed"]:
+                self.assertEqual(reporter.project(event(f"complete operator busy retry: resource={resource} outcome={outcome}")), {"profile": "tls", "stage": "operator", "category": "operator_busy_retry", "resource": resource, "outcome": outcome})
+        for payload in ["complete operator read diagnostic: resource=/private/path failure=http_429", "complete operator read diagnostic: resource=overview failure=private-token", "complete operator busy retry: resource=overview outcome=recovered private-token", "complete operator read diagnostic: resource=overview failure=http_429\nprivate-token"]:
+            value = reporter.project(event(payload))
+            self.assertNotIn("private", json.dumps(value))
+            self.assertTrue(value is None or value["category"] == "unclassified")
+
     def test_exact_scope_and_full_source_line_only(self):
         good = event("complete_positive_package_required")
         for key, value in [("Package", "other"), ("Action", "pass"), ("Test", reporter.ROOT + "/tls/extra"), ("Test", []), ("Output", "prefix" + good["Output"]), ("Output", good["Output"] + "private-fixture\n"), ("Output", good["Output"].replace("complete_mvp_process_test.go", "private.go")), ("Output", good["Output"].replace(":123:", ":0:")), ("Output", good["Output"].rstrip("\n"))]:

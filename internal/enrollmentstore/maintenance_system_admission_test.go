@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"localrmm/internal/systemwire"
+	"reflect"
 	"testing"
 	"time"
 )
@@ -16,6 +17,9 @@ func TestCompleteMaintenanceAdmissionRetainsSystemRetryContract(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	at := time.Unix(testNow+10, 0).UTC()
+	if e := s.InitializeOverview(ctx); e != nil {
+		t.Fatal("fixture overview schema")
+	}
 	raw := systemRaw(t, 1, systemFixtureSnapshot(t, snap.Approval.DeviceID, 1, 1, at))
 	conn, e := s.db.Conn(ctx)
 	if e != nil {
@@ -34,6 +38,12 @@ func TestCompleteMaintenanceAdmissionRetainsSystemRetryContract(t *testing.T) {
 		case <-time.After(time.Millisecond):
 		}
 	}
+	// The same maintenance admission also protects operator metadata reads.
+	packages, packageErr := s.InventoryView(ctx, snap.Approval.DeviceID, at)
+	overview, overviewErr := s.OverviewView(ctx, snap.Approval.DeviceID, at)
+	if !errors.Is(packageErr, ErrInventoryBusy) || !reflect.DeepEqual(packages, InventoryStatus{}) || !errors.Is(overviewErr, ErrInventoryBusy) || !reflect.DeepEqual(overview, OverviewStatus{}) {
+		t.Fatal("maintenance contention did not preserve empty typed operator backpressure")
+	}
 	receipt, e := s.SaveSystemObservation(ctx, snap.InvitationID, cert.CertificateHash(), raw, at)
 	if !errors.Is(e, ErrInventoryBusy) || receipt != (systemwire.Receipt{}) {
 		t.Fatal("maintenance contention did not return empty typed busy result")
@@ -48,6 +58,11 @@ func TestCompleteMaintenanceAdmissionRetainsSystemRetryContract(t *testing.T) {
 		}
 	case <-ctx.Done():
 		t.Fatal("controlled maintenance did not finish")
+	}
+	packages, packageErr = s.InventoryView(ctx, snap.Approval.DeviceID, at)
+	overview, overviewErr = s.OverviewView(ctx, snap.Approval.DeviceID, at)
+	if packageErr != nil || overviewErr != nil || packages.DeviceID != snap.Approval.DeviceID || packages.Complete != nil || overview.DeviceID != snap.Approval.DeviceID || overview.Processes.Complete != nil || overview.Volumes.Complete != nil {
+		t.Fatal("operator retry did not preserve authorized awaiting state")
 	}
 	receipt, e = s.SaveSystemObservation(ctx, snap.InvitationID, cert.CertificateHash(), raw, at)
 	if e != nil || receipt.Sequence != 1 || !receipt.CollectedAt.Equal(at) {

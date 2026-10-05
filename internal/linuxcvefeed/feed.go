@@ -45,6 +45,42 @@ var (
 	ErrUncertain   = errors.New("linux_cve_cache_commit_uncertain")
 )
 
+type responseLimitReason uint8
+
+const (
+	responseLimitDeclaredLength responseLimitReason = iota + 1
+	responseLimitRead
+)
+
+func (r responseLimitReason) String() string {
+	switch r {
+	case responseLimitDeclaredLength:
+		return "declared_length"
+	case responseLimitRead:
+		return "read_limit"
+	default:
+		return "unknown"
+	}
+}
+
+// responseLimitError carries only bounded counts and a closed reason enum for
+// the opt-in smoke test. Error deliberately retains the generic public text.
+// No response body, URL, or arbitrary header value is retained.
+type responseLimitError struct {
+	declaredLength int64
+	observedBytes  int64
+	maxBytes       int64
+	reason         responseLimitReason
+}
+
+func (*responseLimitError) Error() string {
+	return "linux_cve_response_invalid: linux_cve_limit_exceeded"
+}
+
+func (*responseLimitError) Is(target error) bool {
+	return target == ErrResponse || target == linuxcve.ErrLimit
+}
+
 // Candidate contains parsed immutable records and their exact original bytes.
 // Neither an HTTP request nor an imported JSON member can set its provenance.
 // Prepare before the operator commit lease; Commit is the only state mutation.
@@ -166,18 +202,9 @@ func (c *Cache) FetchDebian(ctx context.Context, now time.Time) (*Candidate, err
 	if resp.StatusCode != http.StatusOK || typeErr != nil || contentType != "application/json" || (encoding != "" && encoding != "identity") || resp.Uncompressed {
 		return nil, ErrResponse
 	}
-	if resp.ContentLength > MaxFeedBytes {
-		return nil, fmt.Errorf("%w: %w", ErrResponse, linuxcve.ErrLimit)
-	}
-	raw, err := readBounded(ctx, resp.Body, MaxFeedBytes)
+	raw, err := readFeedBody(ctx, resp, MaxFeedBytes)
 	if err != nil {
-		if errors.Is(err, linuxcve.ErrLimit) {
-			return nil, fmt.Errorf("%w: %w", ErrResponse, err)
-		}
 		return nil, err
-	}
-	if resp.ContentLength >= 0 && int64(len(raw)) != resp.ContentLength {
-		return nil, ErrResponse
 	}
 	snapshot, err := linuxcve.ParseOfficialDebian(ctx, bytes.NewReader(raw), now, now)
 	if err != nil {
@@ -188,6 +215,29 @@ func (c *Cache) FetchDebian(ctx context.Context, now time.Time) (*Candidate, err
 		return nil, fmt.Errorf("%w: %w", ErrParse, err)
 	}
 	return candidate, nil
+}
+
+func readFeedBody(ctx context.Context, resp *http.Response, max int64) ([]byte, error) {
+	declared := resp.ContentLength
+	if declared < -1 {
+		declared = -1
+	}
+	if declared > max {
+		return nil, &responseLimitError{declaredLength: declared, maxBytes: max, reason: responseLimitDeclaredLength}
+	}
+	raw, err := readBounded(ctx, resp.Body, max)
+	if errors.Is(err, linuxcve.ErrLimit) {
+		// readBounded reports this error only after reading exactly max+1
+		// bytes through its LimitReader; it never reads the remaining body.
+		return nil, &responseLimitError{declaredLength: declared, observedBytes: max + 1, maxBytes: max, reason: responseLimitRead}
+	}
+	if err != nil {
+		return nil, err
+	}
+	if declared >= 0 && int64(len(raw)) != declared {
+		return nil, ErrResponse
+	}
+	return raw, nil
 }
 
 // PrepareImport retains the parser's unverified operator-import provenance.

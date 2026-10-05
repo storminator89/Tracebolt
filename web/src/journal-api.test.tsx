@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { abortProtectedRequests, AUTH_REQUIRED_EVENT } from './api';
 import { LOGOUT_INTENT_KEY } from './auth';
@@ -23,6 +23,63 @@ function open(deviceId = journalDevice) { return render(<JournalPanel deviceId={
 beforeEach(() => { setLocale('en', false); localStorage.clear(); sessionStorage.clear(); });
 afterEach(() => { cleanup(); abortProtectedRequests(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 describe('bounded journal API and lifetime', () => {
+    it.each(['valid', 'malformed', 'invalid', 'disconnected'] as const)('accepts a reference refresh only after a complete validated body (%s)', async outcome => {
+        const initial = journalView('awaiting'), refreshed = { ...initial, serverNow: '2026-10-04T12:01:00Z' };
+        let refreshing = false, body!: ReadableStreamDefaultController<Uint8Array>, signal: AbortSignal | undefined;
+        const fetch = server((url, init) => {
+            if (url !== root) return;
+            if (!refreshing) return json(initial);
+            signal = init?.signal ?? undefined;
+            return new Response(new ReadableStream<Uint8Array>({ start(controller) { body = controller; } }), { status: 200 });
+        });
+        open(); await screen.findByText('Awaiting a request');
+        const group = screen.getByRole('group', { name: 'Windows ending at the displayed reference time' });
+        fireEvent.change(screen.getByLabelText('Exact service unit'), { target: { value: 'draft.service' } });
+        fireEvent.change(screen.getByLabelText('Include severity through'), { target: { value: '4' } });
+        fireEvent.click(within(group).getByRole('button', { name: '1 hour ending at reference time' }));
+        const from = screen.getByLabelText('From (UTC)'), to = screen.getByLabelText('To (UTC)');
+        expect(group.querySelector('time')).toHaveAttribute('datetime', journalNow);
+        expect(from).toHaveValue('2026-10-04T11:00'); expect(to).toHaveValue('2026-10-04T12:00');
+        refreshing = true;
+        fireEvent.click(within(group).getByRole('button', { name: 'Refresh status and reference time' }));
+        await waitFor(() => expect(body).toBeDefined());
+        const bytes = new TextEncoder().encode(JSON.stringify(outcome === 'invalid' ? { ...refreshed, expectedFloor: '-1' } : refreshed));
+        const split = Math.floor(bytes.length / 2);
+        await act(async () => { body.enqueue(bytes.slice(0, split)); });
+        // HTTP 200 and a partial body cannot install a reference or enable the
+        // form. These assertions use the production request decoder and hook.
+        expect(screen.getByRole('status')).toHaveTextContent('Reading journal status');
+        expect(group.querySelector('time')).toBeNull();
+        expect(screen.getByLabelText('Exact service unit')).toBeDisabled();
+        expect(from).toHaveValue('2026-10-04T11:00'); expect(to).toHaveValue('2026-10-04T12:00');
+        expect(signal?.aborted).toBe(false);
+        await act(async () => {
+            if (outcome === 'disconnected') body.error(new TypeError('Synthetic interrupted body'));
+            else { body.enqueue(bytes.slice(split, outcome === 'malformed' ? bytes.length - 1 : undefined)); body.close(); }
+        });
+        if (outcome === 'valid') {
+            await waitFor(() => expect(group.querySelector('time')).toHaveAttribute('datetime', refreshed.serverNow));
+            expect(screen.getByLabelText('Exact service unit')).toBeEnabled();
+            expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+            expect(signal?.aborted).toBe(false);
+            expect(group.querySelectorAll('button[aria-pressed=true]')).toHaveLength(0);
+        } else {
+            await screen.findByRole('alert');
+            expect(group.querySelector('time')).toBeNull();
+            expect(screen.getByLabelText('Exact service unit')).toBeDisabled();
+        }
+        expect(screen.getByLabelText('Exact service unit')).toHaveValue('draft.service');
+        expect(screen.getByLabelText('Include severity through')).toHaveValue('4');
+        expect(from).toHaveValue('2026-10-04T11:00'); expect(to).toHaveValue('2026-10-04T12:00');
+        expect(screen.getByRole('checkbox')).not.toBeChecked();
+        expect(fetch.mock.calls.map(([url]) => url)).toEqual(['/api/auth/session', root, '/api/auth/session', root]);
+        expect(fetch.mock.calls.every(([, init]) => !init?.method || init.method === 'GET')).toBe(true);
+        if (outcome === 'valid') {
+            fireEvent.click(within(group).getByRole('button', { name: '15 minutes ending at reference time' }));
+            expect(from).toHaveValue('2026-10-04T11:46'); expect(to).toHaveValue('2026-10-04T12:01');
+            expect(fetch).toHaveBeenCalledTimes(4);
+        }
+    });
     it('rechecks operator session for every page, pins identity/digest and keeps query text out of URLs', async () => {
         const fetch = server((url, init) => {
             if (url !== `${root}/query`) return;

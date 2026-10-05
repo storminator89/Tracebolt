@@ -159,6 +159,61 @@ func TestFetchCancellationAndSanitizedNetworkError(t *testing.T) {
 	}
 }
 
+func TestFeedResponseLimitDiagnostics(t *testing.T) {
+	const max int64 = 4
+	for _, tc := range []struct {
+		name     string
+		declared int64
+		want     responseLimitError
+	}{
+		{"declared length", 9, responseLimitError{declaredLength: 9, maxBytes: max, reason: responseLimitDeclaredLength}},
+		{"unknown length", -1, responseLimitError{declaredLength: -1, observedBytes: 5, maxBytes: max, reason: responseLimitRead}},
+		{"invalid unknown length", -2, responseLimitError{declaredLength: -1, observedBytes: 5, maxBytes: max, reason: responseLimitRead}},
+		{"underreported length", 2, responseLimitError{declaredLength: 2, observedBytes: 5, maxBytes: max, reason: responseLimitRead}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			body := strings.NewReader("sensitive body must never be logged")
+			before := body.Len()
+			r := response("")
+			r.Body = io.NopCloser(body)
+			r.ContentLength = tc.declared
+			if tc.declared < 0 {
+				r.TransferEncoding = []string{"chunked"}
+			}
+			raw, err := readFeedBody(context.Background(), r, max)
+			if raw != nil || !errors.Is(err, ErrResponse) || !errors.Is(err, linuxcve.ErrLimit) {
+				t.Fatalf("unexpected result: bytes=%d err=%v", len(raw), err)
+			}
+			var limit *responseLimitError
+			if !errors.As(err, &limit) || *limit != tc.want {
+				t.Fatalf("diagnostic=%+v, want %+v", limit, tc.want)
+			}
+			if read := int64(before - body.Len()); read != limit.observedBytes || read > max+1 {
+				t.Fatalf("actual read=%d, reported=%d", read, limit.observedBytes)
+			}
+			if err.Error() != "linux_cve_response_invalid: linux_cve_limit_exceeded" {
+				t.Fatal("limit error text is not the generic public error")
+			}
+		})
+	}
+	if responseLimitDeclaredLength.String() != "declared_length" || responseLimitRead.String() != "read_limit" || responseLimitReason(255).String() != "unknown" {
+		t.Fatal("limit reason is not a closed enum")
+	}
+}
+
+func TestFetchPreservesResponseLimitDiagnostics(t *testing.T) {
+	c := fetchCache(func(*http.Request) (*http.Response, error) {
+		r := response("")
+		r.ContentLength = MaxFeedBytes + 1
+		return r, nil
+	})
+	_, err := c.FetchDebian(context.Background(), testNow)
+	var limit *responseLimitError
+	if !errors.As(err, &limit) || limit.declaredLength != MaxFeedBytes+1 || limit.observedBytes != 0 || limit.maxBytes != MaxFeedBytes || limit.reason != responseLimitDeclaredLength {
+		t.Fatalf("missing fetch limit diagnostic: %v", err)
+	}
+}
+
 func TestBoundedReader(t *testing.T) {
 	if _, err := readBounded(context.Background(), strings.NewReader("12345"), 4); !errors.Is(err, linuxcve.ErrLimit) {
 		t.Fatal(err)

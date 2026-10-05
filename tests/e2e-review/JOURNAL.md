@@ -41,7 +41,13 @@ target or establish any screenshot result.
    Time presets edit exact whole-second UTC windows ending at the displayed checked
    reference. Ordinary idle preserves that fixed reference and the draft. Explicit
    reference refresh performs a protected status read and preserves the draft until
-   another preset is chosen. Selection/presets never acknowledge or capture logs.
+   another preset is chosen. It requires one new authentication/status read pair,
+   an actual HTTP200 status and a displayed reference at least as recent as the
+   advanced fixture clock. The reference is read from the production-rendered UI,
+   rather than retrieving the already-consumed response body again through CDP.
+   Streamed-response React regressions independently require a complete valid body
+   before exposing that reference; partial, malformed, invalid and interrupted
+   bodies cannot enable the form. Selection/presets never acknowledge or capture logs.
    Separate content and HTTP acknowledgements gate one request; pending remains
    explicitly without captured content.
 2. Complete and partial invented rows remain inert text. English desktop and

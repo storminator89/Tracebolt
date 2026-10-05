@@ -22,6 +22,10 @@ func TestOfficialDebianFeedSmoke(t *testing.T) {
 	now := time.Now().UTC()
 	candidate, err := c.FetchDebian(context.Background(), now)
 	if err != nil {
+		var limit *responseLimitError
+		if errors.As(err, &limit) {
+			t.Logf("RESPONSE_SIZE_LIMIT reason=%s declaredLength=%d observedBytes=%d maxBytes=%d", limit.reason, limit.declaredLength, limit.observedBytes, limit.maxBytes)
+		}
 		t.Fatalf("%s: %v", smokeFailureStage(err), err)
 	}
 	m := candidate.Metadata(now)
@@ -53,6 +57,8 @@ func TestSmokeFailureStage(t *testing.T) {
 		{ErrFetch, "NETWORK_UNAVAILABLE"},
 		{linuxcve.ErrCanceled, "NETWORK_UNAVAILABLE"},
 		{ErrResponse, "RESPONSE_INVALID"},
+		{&responseLimitError{reason: responseLimitDeclaredLength}, "RESPONSE_INVALID"},
+		{&responseLimitError{reason: responseLimitRead}, "RESPONSE_INVALID"},
 		{fmt.Errorf("%w: %w", ErrParse, linuxcve.ErrCanceled), "PARSER_FAILED"},
 		{fmt.Errorf("%w: %w", ErrParse, linuxcve.ErrInvalid), "PARSER_FAILED"},
 	} {

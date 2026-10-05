@@ -2,6 +2,12 @@
 
 Meaningful development checkpoints are recorded here. These are prototype milestones, not production releases.
 
+## 2026-10-05 — Diagnose feed limits and align acceptance reads
+
+- Add bounded numeric and fixed-enum feed-size diagnostics without raising limits, changing fetch behavior or exporting raw response content. Official-feed compatibility still requires the hosted check.
+- Align the native acceptance client with the exact single-retry storage-busy GET contract, retaining its original five-second deadline and strict malformed-response rejection. Add fixed diagnostic categories; the historical generic operator-read failure does not establish its HTTP status.
+- Check the journal reference accepted by the rendered UI after a successful protected read rather than re-reading its consumed body through browser instrumentation. Add streamed-body regressions for partial, malformed, invalid and interrupted responses. Production journal behavior, browser assertions and timeout budgets remain; regenerate the exact-source Go diagnostic vocabulary.
+
 ## 2026-10-05 — Add distribution CVE warnings and simplify admin diagnostics
 
 - Add an explicit fixed-origin Debian security-data sync with a protected persistent last-good cache and local source-package/version assessment over complete DPKG inventory. Show published-fix CVE matches, advisory links, feed age and coverage gaps without uploading inventory. Ubuntu OSV bundle import remains a limited fallback; full official Ubuntu archive sync is not implemented.

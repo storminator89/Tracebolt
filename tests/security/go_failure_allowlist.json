@@ -1,5 +1,5 @@
 {
-  "goSourceSha256": "602a47cb6b721adc9529f00f0e4f9a3cea25bcd58ac026f0c18ba1b98dc4bbc7",
+  "goSourceSha256": "45969cecf4f4eca8eda2de8057fd2cb8fdaee6fbb899b1499f17b135b12056dd",
   "packages": {
     "localrmm/cmd/agent": [
       "TestHelp",
@@ -72,6 +72,12 @@
       "TestCompleteMVPEndpointGateSelection",
       "TestCompleteMVPEndpointRestartAndRetainedAge",
       "TestCompleteMVPGateSelection",
+      "TestCompleteMVPOperatorReadCancellationAndOriginalParentDeadline",
+      "TestCompleteMVPOperatorReadExactBusyThenCertificateDTO",
+      "TestCompleteMVPOperatorReadRejectsAmbiguousBackoffHeaders",
+      "TestCompleteMVPOperatorReadRejectsNonRetryableContractFailures",
+      "TestCompleteMVPOperatorReadStopsAfterOneBusyRetry",
+      "TestCompleteMVPOperatorReadTransportFailureHasNoRawDiagnostic",
       "TestCompleteMVPOptionalEvidenceRequiresAccountedRetryAdvance",
       "TestCompleteMVPOverviewEvidence",
       "TestCompleteMVPOverviewGateSelection",
@@ -241,6 +247,7 @@
       "TestGuidedCapabilitiesDescribeShippedScopeWithoutInstallationClaim",
       "TestHealthMonitorPersistsWithoutUIAndPreservesHistoryOnSourceFailure",
       "TestHealthOperatorAuthenticationCSRFAndDeviceAuthority",
+      "TestInventoryMaintenanceBusyResponseContract",
       "TestInvitationCreationAdvertisesExactPublicDownloadChecksum",
       "TestJournalExplicitAcknowledgementsAndNestedContracts",
       "TestJournalIdentityRejectsAmbiguousCAS",
@@ -1169,7 +1176,9 @@
       "TestDirectoryLockAndUnsafePaths",
       "TestFailedFirstPromotionDoesNotLeavePublishedCache",
       "TestFailedPromotionPreservesMemoryAndDisk",
+      "TestFeedResponseLimitDiagnostics",
       "TestFetchCancellationAndSanitizedNetworkError",
+      "TestFetchPreservesResponseLimitDiagnostics",
       "TestFetchRejectsRedirectWithoutFollowing",
       "TestFetchRejectsResponseAndParseFailures",
       "TestFixedFetchContainsNoHostInventoryOrAmbientCredentials",
