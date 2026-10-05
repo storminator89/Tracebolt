@@ -4,3 +4,68 @@
 .journal-capture fieldset{border:0;padding:0;margin:0;min-width:0}.journal-capture fieldset:disabled{opacity:.7}
 
 .journal-time-presets{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}.journal-time-presets [aria-pressed="true"]{border-color:var(--accent);font-weight:600}.journal-preset-hint{margin:6px 0 12px}.journal-filter-help .text-button{flex-shrink:0}
+
+/* Source → period → explicit request review → retained results. */
+.journal-panel{margin-top:0!important;min-width:0}
+.journal-heading{align-items:center;margin-bottom:18px}
+.journal-heading h2{font-size:20px}
+.journal-capture{margin:0;padding:18px;border:1px solid var(--line);border-radius:12px;background:var(--panel)}
+.journal-query-bar{display:grid;grid-template-columns:minmax(230px,1.2fr) minmax(265px,1.2fr) auto;gap:20px;align-items:start}
+.journal-query-bar h3{display:flex;align-items:center;gap:7px;font-size:12px;font-weight:600;color:var(--secondary);margin:0 0 10px}
+.journal-query-bar h3 svg{color:var(--accent);flex-shrink:0}
+.journal-source-control,.journal-period-control{min-width:0}
+.journal-source-choice{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:44px}
+.journal-source-choice>div{min-width:0}
+.journal-source-choice strong{display:block;font-size:14px;line-height:1.4;overflow-wrap:anywhere}
+.journal-source-choice code{display:block;font-size:11px;color:var(--secondary);overflow-wrap:anywhere;margin-top:3px}
+.journal-source-choice>.button{flex-shrink:0;min-height:38px}
+.journal-permission-summary{margin:8px 0 0;font-size:11px;line-height:1.5}
+.journal-time-presets{gap:6px;margin:0}
+.journal-time-presets .button{min-height:38px;font-size:12px;padding:8px 12px}
+.journal-time-presets [aria-pressed=true]{background:var(--accent-soft);color:var(--accent);border-color:var(--accent)}
+.journal-preset-hint{display:flex;align-items:center;gap:8px;margin:8px 0 0;color:var(--secondary);font-size:11px;line-height:1.4;flex-wrap:wrap}
+.journal-preset-hint time{white-space:nowrap}
+.journal-preset-hint .icon-button{min-height:28px;min-width:28px}
+.journal-fetch-control{padding-top:26px}
+.journal-fetch-control .button{min-height:44px;white-space:nowrap;padding-inline:16px}
+.journal-custom-window{font-size:10px;font-weight:400;margin-left:auto}
+.journal-advanced{border-top:1px solid var(--line);margin-top:16px;padding-top:12px;font-size:12px}
+.journal-advanced>summary{display:flex;align-items:center;gap:7px;width:fit-content;cursor:pointer;color:var(--secondary);min-height:30px}
+.journal-advanced[open]>.journal-filters{margin-top:14px}
+.journal-advanced>p{margin:10px 0 0}
+.journal-state{display:flex;align-items:center;justify-content:space-between;gap:16px;margin:14px 0;padding:12px 14px;border-radius:8px}
+.journal-state strong{font-size:12px;font-weight:600}
+.journal-state p{font-size:11px;line-height:1.5;margin:3px 0 0}
+.journal-state>.button{flex-shrink:0}
+.journal-state-denied,.journal-state-disabled,.journal-state-helper_unavailable,.journal-state-failed,.journal-state-result_lost,.journal-state-expired{border-left:3px solid var(--warning)}
+.journal-search{margin-top:22px;padding-top:0;border-top:0}
+.journal-results-heading{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+.journal-results-heading h3{font-size:15px;margin:0}
+.journal-results-heading .journal-capture-summary{margin:0}
+.journal-search-details,.journal-context-details{font-size:12px;color:var(--secondary);line-height:1.6}
+.journal-search-details{margin-top:8px}
+.journal-search-details summary,.journal-context-details summary,.journal-details summary{cursor:pointer;width:fit-content}
+.journal-supporting-details{display:flex;gap:12px 24px;flex-wrap:wrap;border-top:1px solid var(--line);margin-top:22px;padding-top:14px}
+.journal-supporting-details>details{flex:1 1 260px;min-width:0;margin:0;padding:0;border:0}
+.journal-count{flex-direction:row;flex-wrap:wrap;justify-content:space-between;gap:8px;margin-top:16px}
+.journal-panel summary:focus-visible{outline:2px solid var(--accent);outline-offset:4px;border-radius:3px}
+.journal-picker-modal .dialog{width:min(780px,calc(100vw - 32px));max-width:780px;padding:24px}
+.journal-picker-modal .journal-service-picker{padding:0;border:0;background:none;margin:0}
+.journal-picker-modal .journal-service-picker>header{padding-right:28px;margin-bottom:14px}
+.journal-picker-modal .journal-picker-rows{max-height:40vh}
+.journal-picker-modal .journal-picker-search input{min-height:42px}
+.journal-review-modal .dialog{width:min(560px,calc(100vw - 32px));padding:26px}
+.journal-review-modal h2{font-size:19px;margin:0 24px 18px 0}
+.journal-review-summary{display:grid;gap:12px;margin:0 0 14px}
+.journal-review-summary dt{font-size:11px;color:var(--secondary);margin-bottom:4px}
+.journal-review-summary dd{font-size:13px;margin:0;overflow-wrap:anywhere;line-height:1.6}
+.journal-review-modal .journal-ack{padding:12px;border:1px solid var(--line);border-radius:8px;font-size:12px;line-height:1.6;cursor:pointer;max-width:none}
+.journal-review-modal .journal-ack input{height:18px;width:18px;margin-top:2px}
+.journal-review-modal .journal-actions{justify-content:flex-end;margin-top:18px}
+.journal-review-modal .journal-actions .button{min-height:42px}
+@media(max-width:1100px){.journal-query-bar{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.journal-fetch-control{grid-column:1/-1;padding-top:0;display:flex;justify-content:flex-end}}
+@media(max-width:620px){.journal-capture{padding:14px}.journal-query-bar{grid-template-columns:minmax(0,1fr);gap:16px}.journal-fetch-control .button{width:100%;justify-content:center}.journal-time-presets{display:grid;grid-template-columns:repeat(4,minmax(0,1fr))}.journal-time-presets .button{padding:8px 4px;min-height:42px;font-size:11px;justify-content:center}.journal-state{align-items:flex-start;flex-wrap:wrap}.journal-state>.button{min-height:38px}.journal-review-modal .dialog,.journal-picker-modal .dialog{padding:20px}.journal-picker-modal .journal-picker-rows{max-height:36vh}.journal-review-modal .journal-actions .button{flex:1;justify-content:center}.journal-heading h2{font-size:18px}.journal-heading .button{min-height:38px}}
+
+.journal-captured-window{display:flex;align-items:center;gap:6px;flex-wrap:wrap;color:var(--secondary);font-size:11px;margin:0 0 14px;line-height:1.5}
+
+.journal-request-summary{overflow-wrap:anywhere}.journal-request-summary code{font-size:11px}

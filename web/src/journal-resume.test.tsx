@@ -18,7 +18,7 @@ function server(unavailable = () => false, override?: (url: string) => Response 
         throw new Error('Unexpected synthetic route');
     }); vi.stubGlobal('fetch', fetch); return fetch;
 }
-async function mount() { const r = render(<JournalPanel deviceId={journalDevice} insecureTestMode={false} sessionKey={journalSessionExpiry}/>); await flush(); return r; }
+async function mount() { const r = render(<JournalPanel deviceId={journalDevice} insecureTestMode={false} sessionKey={journalSessionExpiry}/>); await flush(); openAdvanced(); return r; }
 function noMutation(fetch: ReturnType<typeof server>) { expect(fetch.mock.calls.some(([url]) => url.endsWith('/create') || url.endsWith('/cancel'))).toBe(false); }
 beforeEach(() => { vi.useFakeTimers(); setLocale('en', false); localStorage.clear(); sessionStorage.clear(); });
 afterEach(() => { cleanup(); abortProtectedRequests(); vi.useRealTimers(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
@@ -28,8 +28,8 @@ describe('journal visible suspension and safe resume, synthetic only', () => {
         await advance(240000); expect(screen.getByText('Invented row 0')).toBeVisible(); expect(screen.getByLabelText('Exact service unit')).toBeVisible(); expect(screen.getByText('Captured snapshot available')).toBeVisible(); expect(fetch).toHaveBeenCalledTimes(calls); noMutation(fetch);
     });
     it('preserves disabled inputs and shows paused status after blur; explicit refresh resumes without a focus event', async () => {
-        const fetch = server(); await mount(); fireEvent.change(screen.getByLabelText('Exact service unit'), { target: { value: 'draft.service' } }); await advance(60000); const calls = fetch.mock.calls.length;
-        act(() => window.dispatchEvent(new Event('blur'))); expect(document.visibilityState).toBe('visible'); expect(screen.getByRole('heading', { name: 'Service logs' })).toBeVisible(); expect(screen.getByLabelText('Exact service unit')).toHaveValue('draft.service'); expect(screen.getByLabelText('Exact service unit')).toBeDisabled(); expect(screen.queryByRole('table')).not.toBeInTheDocument(); expect(screen.getByRole('status')).toHaveTextContent('Log content is paused'); expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+        const fetch = server(); await mount(); openAdvanced(); fireEvent.change(screen.getByLabelText('Exact service unit'), { target: { value: 'draft.service' } }); await advance(60000); const calls = fetch.mock.calls.length;
+        act(() => window.dispatchEvent(new Event('blur'))); expect(document.visibilityState).toBe('visible'); expect(screen.getByRole('heading', { name: 'Logs' })).toBeVisible(); expect(screen.getByLabelText('Exact service unit')).toHaveValue('draft.service'); expect(screen.getByLabelText('Exact service unit')).toBeDisabled(); expect(screen.queryByRole('table')).not.toBeInTheDocument(); expect(screen.getByRole('status')).toHaveTextContent('Log content is paused'); expect(screen.queryByRole('alert')).not.toBeInTheDocument();
         await advance(60000); expect(fetch).toHaveBeenCalledTimes(calls); noMutation(fetch);
         fireEvent.click(screen.getByRole('button', { name: 'Refresh status' })); await flush(); expect(screen.getByLabelText('Exact service unit')).toHaveValue('draft.service'); expect(screen.getByLabelText('Exact service unit')).toBeEnabled(); expect(screen.getByText('Invented row 0')).toBeVisible(); expect(fetch.mock.calls.filter(([url]) => url === root)).toHaveLength(2); noMutation(fetch);
     });
@@ -39,10 +39,10 @@ describe('journal visible suspension and safe resume, synthetic only', () => {
     });
     it('keeps the disabled draft form while resumed status is held, and clears search and acknowledgements', async () => {
         let hold = false, finish!: (value: Response) => void; const fetch = server(() => false, url => hold && url === root ? new Promise<Response>(resolve => { finish = resolve; }) : undefined); await mount();
-        fireEvent.change(screen.getByLabelText('Exact service unit'), { target: { value: 'draft.service' } }); fireEvent.change(screen.getByLabelText('Literal text in captured messages'), { target: { value: 'private search draft' } }); fireEvent.click(screen.getByRole('checkbox'));
+        openAdvanced(); fireEvent.change(screen.getByLabelText('Exact service unit'), { target: { value: 'draft.service' } }); fireEvent.change(screen.getByLabelText('Literal text in captured messages'), { target: { value: 'private search draft' } }); fireEvent.click(screen.getByRole('button', { name: 'Fetch logs' })); fireEvent.click(screen.getByRole('checkbox'));
         act(() => window.dispatchEvent(new Event('blur'))); hold = true; fireEvent.click(screen.getByRole('button', { name: 'Refresh status' })); await flush();
-        expect(screen.getByRole('status')).toHaveTextContent('Reading journal status'); expect(screen.getByLabelText('Exact service unit')).toHaveValue('draft.service'); expect(screen.getByLabelText('Exact service unit')).toBeDisabled(); expect(screen.getByRole('checkbox')).not.toBeChecked(); expect(screen.queryByRole('table')).not.toBeInTheDocument(); expect(screen.queryByLabelText('Literal text in captured messages')).not.toBeInTheDocument();
-        await act(async () => finish(json(journalView()))); expect(screen.getByText('Invented row 0')).toBeVisible(); expect(screen.getByLabelText('Literal text in captured messages')).toHaveValue(''); noMutation(fetch);
+        expect(screen.getByRole('status')).toHaveTextContent('Reading journal status'); expect(screen.getByLabelText('Exact service unit')).toHaveValue('draft.service'); expect(screen.getByLabelText('Exact service unit')).toBeDisabled(); expect(screen.queryByRole('dialog', { name: 'Review log request' })).not.toBeInTheDocument(); expect(screen.queryByRole('checkbox')).not.toBeInTheDocument(); expect(screen.queryByRole('table')).not.toBeInTheDocument(); expect(screen.queryByLabelText('Literal text in captured messages')).not.toBeInTheDocument();
+        await act(async () => finish(json(journalView()))); expect(screen.getByText('Invented row 0')).toBeVisible(); expect(screen.getByLabelText('Literal text in captured messages')).toHaveValue(''); fireEvent.click(screen.getByRole('button', { name: 'Fetch logs' })); expect(screen.getByRole('checkbox')).not.toBeChecked(); fireEvent.click(screen.getByRole('button', { name: 'Back' })); noMutation(fetch);
     });
     it('never refreshes while hidden and rechecks access before visibility restoration', async () => {
         const fetch = server(); await mount(); const calls = fetch.mock.calls.length, visibility = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden'); act(() => document.dispatchEvent(new Event('visibilitychange')));
@@ -59,7 +59,7 @@ describe('journal visible suspension and safe resume, synthetic only', () => {
         expect(screen.getByRole('alert')).toHaveTextContent('session has ended'); expect(screen.queryByRole('table')).not.toBeInTheDocument(); expect(screen.queryByLabelText('Exact service unit')).not.toBeInTheDocument(); const calls = fetch.mock.calls.length; for (const event of ['blur', 'pagehide', 'hashchange']) { act(() => window.dispatchEvent(new Event(event))); expect(screen.getByRole('alert')).toHaveTextContent('session has ended'); expect(screen.queryByLabelText('Exact service unit')).not.toBeInTheDocument(); expect(screen.getByRole('button', { name: 'Refresh status' })).toBeDisabled(); } act(() => window.dispatchEvent(new Event('focus'))); fireEvent.click(screen.getByRole('button', { name: 'Refresh status' })); await advance(901000); expect(fetch).toHaveBeenCalledTimes(calls); expect(screen.getByRole('alert')).toHaveTextContent('session has ended'); expect(screen.queryByLabelText('Exact service unit')).not.toBeInTheDocument(); expect(screen.getByRole('button', { name: 'Refresh status' })).toBeDisabled(); noMutation(fetch);
     });
     it('resets draft inputs on a new device or session scope rather than carrying them across', async () => {
-        const fetch = server(); const mounted = await mount(); fireEvent.change(screen.getByLabelText('Exact service unit'), { target: { value: 'draft.service' } }); mounted.rerender(<JournalPanel deviceId={journalDevice} insecureTestMode={false} sessionKey={null}/>); await flush(); expect(screen.getByLabelText('Exact service unit')).toHaveValue(''); noMutation(fetch);
+        const fetch = server(); const mounted = await mount(); openAdvanced(); fireEvent.change(screen.getByLabelText('Exact service unit'), { target: { value: 'draft.service' } }); mounted.rerender(<JournalPanel deviceId={journalDevice} insecureTestMode={false} sessionKey={null}/>); await flush(); expect(screen.getByLabelText('Exact service unit')).toHaveValue(''); noMutation(fetch);
     });
     it('shows explicit German pause guidance', async () => {
         setLocale('de', false); const fetch = server(); await mount(); act(() => window.dispatchEvent(new Event('blur'))); expect(screen.getByRole('status')).toHaveTextContent('Log-Inhalte sind pausiert'); expect(screen.getByLabelText('Exakte Service-Unit')).toBeDisabled(); noMutation(fetch);
@@ -75,3 +75,8 @@ describe('journal visible suspension and safe resume, synthetic only', () => {
         expect(screen.getByText('Captured content unavailable')).toBeVisible(); expect(screen.getByText(/The manager reports that retained content is unavailable/)).toBeVisible(); expect(document.body.textContent).not.toContain('restart'); expect(screen.getByLabelText('Exact service unit')).toBeVisible(); expect(screen.queryByRole('table')).not.toBeInTheDocument(); expect(fetch.mock.calls.filter(([url]) => url === `${root}/query`)).toHaveLength(1); noMutation(fetch);
     });
 });
+
+function openAdvanced() {
+    const summary = screen.getByText(/^(Advanced|Erweitert)$/, { selector: 'summary' });
+    if (!summary.closest('details')!.open) fireEvent.click(summary);
+}

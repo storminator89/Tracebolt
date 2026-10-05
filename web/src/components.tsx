@@ -33,12 +33,14 @@ export function EmptyState({ title, detail, action }: {
 export function Loading({ label = t("Lokale Daten werden geladen \u2026") }: {
     label?: string;
 }) { return <div className="loading" role="status"><LoaderCircle size={21} className="spin"/><span>{label}</span></div>; }
-export function MetricValue({ metric, compact = false }: {
+export function MetricValue({ metric, compact = false, precision = 0 }: {
     metric: Metric;
     compact?: boolean;
+    precision?: 0 | 1;
 }) {
+    const [locale] = useLocale();
     const valid = metric.value !== null && Number.isFinite(metric.value);
-    return <div className={`metric ${compact ? 'compact' : ''}`} title={`${qualityLabels[metric.quality]} · ${metric.source} · ${fullDate(metric.collectedAt)}`}><div className="metric-value">{valid ? <>{Math.round(metric.value!)}<span>{metric.unit}</span></> : <span className="unavailable">—</span>}{!compact && <span className={`metric-quality quality-${metric.quality}`}>{qualityLabels[metric.quality]}</span>}</div>{valid && <div className="meter-track"><span className={metric.quality !== 'healthy' ? 'muted' : metric.value! >= 90 ? 'danger' : metric.value! >= 75 ? 'warning' : ''} style={{ width: `${Math.max(0, Math.min(100, metric.value!))}%` }}/></div>}{compact && metric.quality !== 'healthy' && <small className="metric-note">{qualityLabels[metric.quality]}</small>}</div>;
+    return <div className={`metric ${compact ? 'compact' : ''}`} title={`${qualityLabels[metric.quality]} · ${metric.source} · ${fullDate(metric.collectedAt)}`}><div className="metric-value">{valid ? <>{new Intl.NumberFormat(locale, { maximumFractionDigits: precision }).format(metric.value!)}<span>{metric.unit}</span></> : <span className="unavailable">—</span>}{!compact && <span className={`metric-quality quality-${metric.quality}`}>{qualityLabels[metric.quality]}</span>}</div>{valid && <div className="meter-track"><span className={metric.quality !== 'healthy' ? 'muted' : metric.value! >= 90 ? 'danger' : metric.value! >= 75 ? 'warning' : ''} style={{ width: `${Math.max(0, Math.min(100, metric.value!))}%` }}/></div>}{compact && metric.quality !== 'healthy' && <small className="metric-note">{qualityLabels[metric.quality]}</small>}</div>;
 }
 export function DeviceTable({ devices, onSelect, overview = false }: {
     devices: Device[];

@@ -47,7 +47,7 @@ beforeEach(() => {
 afterEach(() => { cleanup(); abortProtectedRequests(); vi.useRealTimers(); vi.restoreAllMocks(); });
 
 describe('compact device essentials', () => {
-    it('serializes identity, cached update metadata and selected warning reads without inventory pages or polling', async () => {
+    it('serializes identity, cached update metadata and selected warning reads without inventory pages or summary polling', async () => {
         const identity = deferred<unknown>(), update = deferred<unknown>(), warnings = deferred<unknown>();
         vi.mocked(request).mockImplementation(async path => path.endsWith('/inventory/endpoint-identity') ? identity.promise : path.endsWith('/inventory/complete-updates') ? update.promise : path.endsWith('/health') ? warnings.promise : answer(path));
         render(panel()); await flush(); expect(calls('/inventory/endpoint-identity')).toHaveLength(1); expect(calls('/inventory/complete-updates')).toHaveLength(0); expect(calls('/health')).toHaveLength(0);
@@ -57,8 +57,8 @@ describe('compact device essentials', () => {
         expect(card('Updates').getByText('12')).toBeVisible(); expect(card('Warnings').getByText('1 open')).toBeVisible(); expect(card('Warnings').getByText('1 unknown')).toBeVisible();
         expect(card('Updates').getByText('Cache is stale')).toBeVisible(); expect(card('Updates').getByText('Observed 0 min ago')).toBeVisible();
         expect(calls('/inventory/packages')).toHaveLength(0); expect(mutateRaw).not.toHaveBeenCalled(); expect(mutate).not.toHaveBeenCalled();
-        const reads = vi.mocked(request).mock.calls.length; await act(async () => vi.advanceTimersByTimeAsync(31000)); expect(request).toHaveBeenCalledTimes(reads);
-        await act(async () => vi.advanceTimersByTimeAsync(15000)); expect(card('Warnings').getByText('Unknown')).toBeVisible(); expect(card('Warnings').queryByText('0 open')).not.toBeInTheDocument(); expect(request).toHaveBeenCalledTimes(reads);
+        const reads = vi.mocked(request).mock.calls.length; await act(async () => vi.advanceTimersByTimeAsync(31000)); expect(request).toHaveBeenCalledTimes(reads + 2); expect(calls('/inventory/complete-updates')).toHaveLength(1); expect(calls('/health')).toHaveLength(1);
+        await act(async () => vi.advanceTimersByTimeAsync(15000)); expect(card('Warnings').getByText('Unknown')).toBeVisible(); expect(card('Warnings').queryByText('0 open')).not.toBeInTheDocument(); expect(request).toHaveBeenCalledTimes(reads + 3); expect(calls('/inventory/complete-updates')).toHaveLength(1); expect(calls('/health')).toHaveLength(1);
     });
     it('keeps unknown comparisons and stale/denied resource states visible instead of implying zero warnings or a patched device', async () => {
         updates = updateView(0); updates.complete!.manifest.unknownCount = 2; updates.complete!.manifest.checkedCount -= 2; updates.complete!.manifest.comparisonCoverage = 'partial'; updates.complete!.manifest.comparisonReason = 'candidate_unknown';

@@ -34,7 +34,7 @@ describe('bounded journal API and lifetime', () => {
         });
         open(); await screen.findByText('Awaiting a request');
         const group = screen.getByRole('group', { name: 'Windows ending at the displayed reference time' });
-        fireEvent.change(screen.getByLabelText('Exact service unit'), { target: { value: 'draft.service' } });
+        openAdvanced(); fireEvent.change(screen.getByLabelText('Exact service unit'), { target: { value: 'draft.service' } });
         fireEvent.change(screen.getByLabelText('Include severity through'), { target: { value: '4' } });
         fireEvent.click(within(group).getByRole('button', { name: '1 hour ending at reference time' }));
         const from = screen.getByLabelText('From (UTC)'), to = screen.getByLabelText('To (UTC)');
@@ -71,7 +71,7 @@ describe('bounded journal API and lifetime', () => {
         expect(screen.getByLabelText('Exact service unit')).toHaveValue('draft.service');
         expect(screen.getByLabelText('Include severity through')).toHaveValue('4');
         expect(from).toHaveValue('2026-10-04T11:00'); expect(to).toHaveValue('2026-10-04T12:00');
-        expect(screen.getByRole('checkbox')).not.toBeChecked();
+        expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
         expect(fetch.mock.calls.map(([url]) => url)).toEqual(['/api/auth/session', root, '/api/auth/session', root]);
         expect(fetch.mock.calls.every(([, init]) => !init?.method || init.method === 'GET')).toBe(true);
         if (outcome === 'valid') {
@@ -127,15 +127,16 @@ describe('bounded journal API and lifetime', () => {
     it('requires unchecked content acknowledgement and submits expectedFloor exactly once', async () => {
         let created = false;
         const fetch = server((url) => { if (url === root) return json(journalView(created ? 'pending' : 'awaiting')); if (url === `${root}/create`) { created = true; return json(journalView('pending')); } });
-        open(); await screen.findByText('Awaiting a request'); const ack = screen.getByRole('checkbox'); expect(ack).not.toBeChecked(); fireEvent.change(screen.getByLabelText('Exact service unit'), { target: { value: 'fixture.service' } });
-        expect(screen.getByRole('button', { name: 'Capture logs' })).toBeDisabled(); fireEvent.click(ack); fireEvent.click(screen.getByRole('button', { name: 'Capture logs' })); fireEvent.click(screen.getByRole('button', { name: 'Capture logs' })); await screen.findByText('Pending');
-        const creates = fetch.mock.calls.filter(([url]) => url === `${root}/create`); expect(creates).toHaveLength(1); expect(JSON.parse(String(creates[0][1]?.body))).toMatchObject({ expectedFloor: '0', acknowledgeLogContent: true, acknowledgePlaintext: false }); expect(screen.getByRole('checkbox')).not.toBeChecked();
+        open(); await screen.findByText('Awaiting a request'); openAdvanced(); fireEvent.change(screen.getByLabelText('Exact service unit'), { target: { value: 'fixture.service' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Fetch logs' })); expect(fetch.mock.calls.some(([url]) => url.endsWith('/create'))).toBe(false); const ack = screen.getByRole('checkbox'); expect(ack).not.toBeChecked();
+        const submit = screen.getByRole('button', { name: 'Capture logs' }); expect(submit).toBeDisabled(); fireEvent.click(ack); fireEvent.click(submit); fireEvent.click(submit); await screen.findByText('Pending');
+        const creates = fetch.mock.calls.filter(([url]) => url === `${root}/create`); expect(creates).toHaveLength(1); expect(JSON.parse(String(creates[0][1]?.body))).toMatchObject({ expectedFloor: '0', acknowledgeLogContent: true, acknowledgePlaintext: false }); expect(screen.queryByRole('checkbox')).not.toBeInTheDocument(); expect(screen.getByRole('button', { name: 'Fetch logs' })).toBeDisabled();
     });
     it('does not replay an uncertain create and refreshes status before another action', async () => {
         let tried = false;
         const fetch = server((url) => { if (url === root) return json(journalView(tried ? 'pending' : 'awaiting')); if (url === `${root}/create`) { tried = true; return Promise.reject(new Error('Synthetic disconnected response')); } });
-        open(); await screen.findByText('Awaiting a request'); fireEvent.change(screen.getByLabelText('Exact service unit'), { target: { value: 'fixture.service' } }); fireEvent.click(screen.getByRole('checkbox')); fireEvent.click(screen.getByRole('button', { name: 'Capture logs' })); await screen.findByText('Pending');
-        expect(fetch.mock.calls.filter(([url]) => url === `${root}/create`)).toHaveLength(1); expect(fetch.mock.calls.filter(([url]) => url === root)).toHaveLength(2); expect(screen.getByRole('checkbox')).not.toBeChecked();
+        open(); await screen.findByText('Awaiting a request'); openAdvanced(); fireEvent.change(screen.getByLabelText('Exact service unit'), { target: { value: 'fixture.service' } }); fireEvent.click(screen.getByRole('button', { name: 'Fetch logs' })); fireEvent.click(screen.getByRole('checkbox')); fireEvent.click(screen.getByRole('button', { name: 'Capture logs' })); await screen.findByText('Pending');
+        expect(fetch.mock.calls.filter(([url]) => url === `${root}/create`)).toHaveLength(1); expect(fetch.mock.calls.filter(([url]) => url === root)).toHaveLength(2); expect(screen.queryByRole('checkbox')).not.toBeInTheDocument(); expect(screen.getByRole('button', { name: 'Fetch logs' })).toBeDisabled();
     });
     it('clears captured content on cancel without replaying it', async () => {
         const fetch = server(url => url === `${root}/cancel` ? json(journalView('canceled')) : undefined); open(); await screen.findByText('Synthetic fixture message'); fireEvent.click(screen.getByRole('button', { name: 'Cancel request / discard content' })); expect(screen.queryByText('Synthetic fixture message')).not.toBeInTheDocument(); await screen.findByText('Canceled'); expect(fetch.mock.calls.filter(([url]) => url === `${root}/cancel`)).toHaveLength(1);
@@ -174,6 +175,7 @@ describe('bounded journal API and lifetime', () => {
     });
     it('uses the fixed server time for UTC query defaults', async () => {
         server(url => url === root ? json(journalView('awaiting')) : undefined); open(); await screen.findByText('Awaiting a request');
+        openAdvanced();
         // The status commit precedes the effect that initializes UTC fields.
         await waitFor(() => {
             expect(screen.getByLabelText('To (UTC)')).toHaveValue(journalNow.slice(0, 16));
@@ -211,7 +213,12 @@ it('never slides original retention on repeated equal-server-time reads before e
 
 it('blocks a stale create immediately when the protected epoch changes, before the timer ticks', async () => {
     const fetch = server(url => url === root ? json(journalView('awaiting')) : undefined); open(); await screen.findByText('Awaiting a request');
-    fireEvent.change(screen.getByLabelText('Exact service unit'), { target: { value: 'fixture.service' } }); fireEvent.click(screen.getByRole('checkbox'));
-    act(() => abortProtectedRequests()); fireEvent.click(screen.getByRole('button', { name: 'Capture logs' }));
+    openAdvanced(); fireEvent.change(screen.getByLabelText('Exact service unit'), { target: { value: 'fixture.service' } }); fireEvent.click(screen.getByRole('button', { name: 'Fetch logs' })); fireEvent.click(screen.getByRole('checkbox'));
+    const submit = screen.getByRole('button', { name: 'Capture logs' }); act(() => abortProtectedRequests()); fireEvent.click(submit);
     await act(async () => undefined); expect(fetch.mock.calls.filter(([url]) => url === `${root}/create`)).toHaveLength(0);
 });
+
+function openAdvanced() {
+    const summary = screen.getByText(/^(Advanced|Erweitert)$/, { selector: 'summary' });
+    if (!summary.closest('details')!.open) fireEvent.click(summary);
+}

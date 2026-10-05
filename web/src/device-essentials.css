@@ -23,3 +23,7 @@
 .device-observation-notes dl{margin:12px 0 0;display:grid;gap:12px}
 .device-observation-notes dt{font-weight:600;margin-bottom:4px}
 .device-observation-notes dd{margin:0;color:var(--secondary);line-height:1.6}
+
+.device-metric-time{display:block;margin-top:9px;font-size:10px;line-height:1.4;color:var(--secondary)}
+.device-auto-refresh{font-size:11px;color:var(--secondary);white-space:nowrap}
+.device-auto-refresh:empty{display:none}

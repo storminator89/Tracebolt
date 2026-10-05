@@ -48,7 +48,7 @@ function answer(path: string): unknown {
 function readPaths() { return vi.mocked(request).mock.calls.map(([path]) => path); }
 async function navigate(hash: string) { await act(async () => { window.history.replaceState({}, '', `/#/${hash}`); window.dispatchEvent(new HashChangeEvent('hashchange')); }); }
 function renderDetail() { return render(<AuthBoundary><DeviceDetail id={currentDevice.id} onClose={vi.fn()} onCase={vi.fn()}/></AuthBoundary>); }
-async function openSecurity() { fireEvent.click(await screen.findByRole('tab', { name: 'Security coverage' })); }
+async function openSecurity() { fireEvent.click(await screen.findByRole('tab', { name: 'Security coverage' })); fireEvent.click(screen.getByText('Legacy diagnostics', { selector: 'summary' })); fireEvent.change(screen.getByLabelText('Diagnostic source'), { target: { value: 'legacy-coverage' } }); }
 async function openCatalog() {
     await navigate('settings'); render(<App/>);
     await screen.findByText('Import a normalized JSON catalog');
@@ -72,9 +72,9 @@ describe('Security coverage in the real device drawer', () => {
         renderDetail(); const tab = await screen.findByRole('tab', { name: 'Security coverage' });
         expect(screen.getByRole('tab', { name: 'Inventory' })).toBeInTheDocument();
         expect(readPaths().some(path => path.endsWith('/security') || path === '/security/catalog')).toBe(false);
-        fireEvent.click(tab);
+        fireEvent.click(tab); fireEvent.click(screen.getByText('Legacy diagnostics', { selector: 'summary' })); fireEvent.change(screen.getByLabelText('Diagnostic source'), { target: { value: 'legacy-coverage' } });
         const panel = screen.getByRole('tabpanel');
-        await within(panel).findByRole('heading', { name: 'Security coverage' });
+        await within(panel).findByRole('heading', { name: 'Legacy inventory evidence' });
         await within(panel).findByText('Client source-package mapping is missing.');
         expect(tab).toHaveAttribute('aria-selected', 'true'); expect(panel).toHaveAttribute('aria-labelledby', tab.id); expect(tab).toHaveAttribute('aria-controls', panel.id);
         expect(within(panel).getAllByText('Unknown').length).toBeGreaterThanOrEqual(3);
@@ -95,10 +95,10 @@ describe('Security coverage in the real device drawer', () => {
         expect(screen.queryByRole('tab', { name: 'Security coverage' })).not.toBeInTheDocument(); expect(readPaths().some(path => path.endsWith('/security'))).toBe(false);
     });
     it('switches tab and panel copy when the locale changes', async () => {
-        renderDetail(); await openSecurity(); await screen.findByRole('heading', { name: 'Security coverage' });
+        renderDetail(); await openSecurity(); await screen.findByRole('heading', { name: 'Legacy inventory evidence' });
         act(() => setLocale('de', false));
         expect(screen.getByRole('tab', { name: 'Sicherheitsabdeckung' })).toHaveAttribute('aria-selected', 'true');
-        expect(screen.getByRole('heading', { name: 'Sicherheitsabdeckung' })).toBeInTheDocument();
+        expect(screen.getByRole('heading', { name: 'Ältere Inventarbelege' })).toBeInTheDocument();
         expect(screen.getByRole('button', { name: 'Sicherheitsabdeckung aktualisieren' })).toBeInTheDocument();
     });
     it('includes coverage in keyboard navigation without moving the operational tab', async () => {
@@ -116,7 +116,7 @@ describe('Security coverage in the real device drawer', () => {
         if (transition === 'close') { fireEvent.keyDown(document, { key: 'Escape' }); await waitFor(() => expect(screen.queryByRole('region', { name: 'Device Synthetic first fixture' })).not.toBeInTheDocument()); expect(window.location.hash).toBe('#/devices'); }
         if (transition === 'auth') { act(() => window.dispatchEvent(new Event(AUTH_REQUIRED_EVENT))); await screen.findByLabelText('Operator password'); }
         expect(signal!.aborted).toBe(true); await act(async () => resolve(coverage()));
-        expect(screen.queryByRole('heading', { name: 'Security coverage' })).not.toBeInTheDocument(); expect(readPaths()).not.toContain(`/devices/${secondID}/security`);
+        expect(screen.queryByRole('heading', { name: 'Legacy inventory evidence' })).not.toBeInTheDocument(); expect(readPaths()).not.toContain(`/devices/${secondID}/security`);
     });
 });
 

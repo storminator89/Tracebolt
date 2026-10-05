@@ -44,7 +44,7 @@ describe('system inventory bounded service/socket browsing', () => {
             if (i < 2) fireEvent.click(queries.getByRole('button', { name: 'Next page' }));
         }
         expect(new Set(seen).size).toBe(75); expect(seen).toEqual(sockets.map(row => `${row.local.address}:${row.local.port}`)); expect(owners).toEqual(sockets.map(row => `${row.owners[0].pid} / ${row.owners[0].processName}`));
-        expect(queries.getByText('75 / 75')).toBeVisible(); expect(queries.getByText(/does not establish external reachability/)).toBeVisible(); expect(JSON.parse(vi.mocked(mutateRaw).mock.calls[0][1]).limit).toBe(25);
+        expect(queries.getByText('75 / 75')).toBeVisible(); expect(queries.getByText(/does not establish external reachability/)).not.toBeVisible(); fireEvent.click(queries.getByText('Source and collection details', { selector: 'summary' })); expect(queries.getByText(/does not establish external reachability/)).toBeVisible(); expect(JSON.parse(vi.mocked(mutateRaw).mock.calls[0][1]).limit).toBe(25);
     });
     it.each(['active', 'failed', 'enabled'] as const)('uses the fixed %s service filter and starts from a new cursor', async filter => {
         await open(); fireEvent.change(screen.getByLabelText('Section filter'), { target: { value: filter } }); expect(screen.queryByRole('table')).not.toBeInTheDocument(); fireEvent.click(screen.getByRole('button', { name: 'Apply search and filter' })); await screen.findByRole('table');
@@ -92,7 +92,24 @@ describe('system inventory bounded service/socket browsing', () => {
         vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] }); const mono = vi.spyOn(performance, 'now').mockReturnValue(1000), wall = vi.spyOn(Date, 'now').mockReturnValue(100000); await open(); wall.mockReturnValue(200000); act(() => vi.advanceTimersByTime(1000)); expect(screen.queryByRole('table')).not.toBeInTheDocument(); expect(screen.getByRole('alert')).toHaveTextContent('time anchor');
         mono.mockReturnValue(2000); wall.mockReturnValue(101000); view.serverNow = '2026-10-04T00:00:09Z'; fireEvent.click(screen.getByRole('button', { name: 'Refresh section and restart' })); await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('time anchor')); expect(screen.queryByRole('table')).not.toBeInTheDocument();
     });
+    it('distinguishes a denied socket collection from denied owner attribution', async () => {
+        view.lastComplete.sockets = null;
+        view.latest!.sockets = { ...view.latest!.sockets, coverage: 'failed', reason: 'permission_denied', observedCount: null, countExact: false };
+        render(panel('sockets')); await screen.findByText('Latest section collection failed: Permission denied');
+        expect(screen.getByText('No retained complete section is available. Missing or failed data is not a successful zero-row observation.')).toBeVisible();
+        expect(screen.queryByRole('table')).not.toBeInTheDocument(); expect(mutateRaw).not.toHaveBeenCalled();
+        expect(screen.getByText(/check the section status for collection failures/)).toBeVisible();
+    });
+    it('keeps a complete 14-row socket section while owner access is denied', async () => {
+        view = systemView(350, 14); sockets = socketRows(14).map(row => ({ ...row, owners: [], attribution: { coverage: 'partial', reason: 'permission_denied' } }));
+        await open('sockets'); await screen.findByText('14 / 14');
+        expect(screen.getByText('Whole retained section').nextElementSibling).toHaveTextContent('14');
+        expect(screen.getAllByText('Owner unknown')).toHaveLength(14); expect(screen.getAllByText('Partial · Permission denied')).toHaveLength(14);
+        expect(screen.getByText(/in the Attribution column describes that owner field/)).toBeVisible();
+        expect(screen.queryByText('No retained complete section is available. Missing or failed data is not a successful zero-row observation.')).not.toBeInTheDocument();
+        expect(vi.mocked(mutateRaw).mock.calls.every(([path]) => path.endsWith('/inventory/system/query'))).toBe(true);
+    });
     it('renders German source/attribution limits without invented health counts', async () => {
-        setLocale('de', false); render(panel('sockets')); await screen.findByRole('table'); expect(screen.getByText(/keine Erreichbarkeit von außen/)).toBeVisible(); expect(screen.getByRole('columnheader', { name: 'PID / Prozessname' })).toBeVisible(); expect(document.body.textContent).not.toMatch(/0 CVEs|0 Updates/);
+        setLocale('de', false); render(panel('sockets')); await screen.findByRole('table'); expect(screen.getByText(/keine Erreichbarkeit von außen/)).not.toBeVisible(); fireEvent.click(screen.getByText('Quelle und Erfassungsdetails', { selector: 'summary' })); expect(screen.getByText(/keine Erreichbarkeit von außen/)).toBeVisible(); expect(screen.getByRole('columnheader', { name: 'PID / Prozessname' })).toBeVisible(); expect(document.body.textContent).not.toMatch(/0 CVEs|0 Updates/);
     });
 });

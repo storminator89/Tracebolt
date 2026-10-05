@@ -125,3 +125,19 @@ install a service, or turn unknown update/CVE assessment into a health claim.
 
 Component and integration checks are local. Real-handler Chromium and safe synthetic
 viewport captures must be run against the exact publication candidate separately.
+
+### Compact service-log workspace
+
+Logs use a service chooser, fixed-reference period presets and a Fetch logs action.
+Advanced retains manual unit entry, exact UTC times and severity. Fetch only opens
+an exact request review with the existing unchecked content and HTTP consent; final
+Capture logs is the sole creation action. Dismissal clears review consent. Draft
+edits invalidate an older review, and same-device metadata refresh preserves it.
+Policy freshness, reported scope, session, paused/uncertain state and active-request
+checks remain unchanged. Selecting a service or time never collects logs.
+
+Permission status remains visible; verbose source/limit explanations are in native
+accessible disclosures. Pending requests and captured results keep their original
+service/window independently of draft edits. The resource/API/collector protocol
+and local permissions are unchanged. The hosted journal runner validates real
+rendering and produces exact-source desktop/mobile workspace and review captures.

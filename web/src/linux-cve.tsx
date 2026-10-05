@@ -22,7 +22,7 @@ export function groupLinuxCVEWarnings(rows: LinuxCVEFinding[]): LinuxCVEFinding[
     for (const row of rows) { const key = `${row.cveId}:${row.sourcePackage}`, group = groups.get(key) ?? []; group.push(row); groups.set(key, group); }
     return [...groups.values()];
 }
-/** Mounted only by the selected device's CVE tab. No request on unopened tabs. */
+/** Mounted by the selected device's Security or CVE tab, never both. */
 export function LinuxCVEPanel({ deviceId, sessionKey }: { deviceId: string; sessionKey?: string | number }) {
     const operator = useOperator(), [locale] = useLocale();
     if (!operator || operator.mode !== 'lan' || !operator.authenticated) return <p>{copy[locale].access}</p>;
@@ -51,7 +51,7 @@ function LinuxCVESession({ deviceId }: { deviceId: string }) {
                 <p>{stale ? labels.stale : activeReport ? labels.partial : labels.subtitle}</p>{report?.truncated && <p className="linux-cve-warning">{labels.truncated}</p>}
             </div></div>
             {view.feeds.outcome === 'failed' && <p className="linux-cve-notice caution">{cacheUncertain ? labels.cacheUncertain : labels.feedFailed}</p>}
-            <dl className="linux-cve-times"><div><dt>{labels.assessed}</dt><dd>{report ? <time dateTime={report.assessedAt}>{date(report.assessedAt, locale)}</time> : labels.unknown}</dd></div><div><dt>{labels.inventoryAge}</dt><dd>{age(inventoryAge, labels)}{view.inventory && inventoryAge >= LINUX_CVE_INVENTORY_TTL_MS && ` · ${labels.staleLabel}`}</dd></div><div><dt>{labels.feedAge}</dt><dd>{age(feedAge, labels)}{report?.feed && feedAge >= LINUX_CVE_FEED_TTL_MS && ` · ${labels.staleLabel}`}</dd></div></dl>
+            <dl className="linux-cve-times"><div><dt>{labels.inventoryRows}</dt><dd>{view.inventory ? new Intl.NumberFormat(locale).format(view.inventory.rowCount) : labels.unknown}</dd></div><div><dt>{labels.assessed}</dt><dd>{report ? <time dateTime={report.assessedAt}>{date(report.assessedAt, locale)}</time> : labels.unknown}</dd></div><div><dt>{labels.inventoryAge}</dt><dd>{age(inventoryAge, labels)}{view.inventory && inventoryAge >= LINUX_CVE_INVENTORY_TTL_MS && ` · ${labels.staleLabel}`}</dd></div><div><dt>{labels.feedAge}</dt><dd>{age(feedAge, labels)}{report?.feed && feedAge >= LINUX_CVE_FEED_TTL_MS && ` · ${labels.staleLabel}`}</dd></div></dl>
             {warnings && (warnings.length ? <ol className="linux-cve-list">{warnings.map(group => {
                 const first = group[0];
                 return <li key={`${first.cveId}:${first.sourcePackage}`}><article aria-label={`${first.cveId}: ${first.sourcePackage}`}><h3><a href={first.advisoryUrl} target="_blank" rel="noopener noreferrer" referrerPolicy="no-referrer">{first.cveId}</a><span>{first.sourcePackage}</span></h3>

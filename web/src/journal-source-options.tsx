@@ -72,3 +72,24 @@ export function JournalReportedPermission({ view }: { view: JournalView | null }
         </details>
     </div>;
 }
+
+/** Compact display only. The unchanged query and generation gates own admission. */
+export function JournalPermissionSummary({ unit, view }: { unit: string; view: JournalView | null }) {
+    const [locale] = useLocale(), generation = view?.generation;
+    const historical = journalSourceAccess(view, unit), reported = journalReportedAccess(view, unit);
+    const known = generation?.schemaVersion === 'tracebolt.journal-generation-view.v2';
+    const access = !unit && known && generation.fresh ? generation.policyEnabled ? 'reported_scope' : 'reported_disabled' : reported === 'unknown' ? historical : reported;
+    const stale = Boolean(generation && !generation.fresh);
+    const label = stale ? (locale === 'de' ? 'Freigabemeldung veraltet · Zugriff unbekannt' : 'Policy report stale · permission unknown') : ({
+        reported_scope: locale === 'de' ? (known && generation.serviceAuthorization === 'all-system-services' ? 'Alle Dienst-Units · gemeldete Freigabe' : 'Exakte Dienstfreigabe gemeldet') : (known && generation.serviceAuthorization === 'all-system-services' ? 'All service units · reported grant' : 'Exact service grant reported'),
+        unknown: locale === 'de' ? 'Freigabe nicht verifiziert' : 'Permission not verified',
+        not_configured: locale === 'de' ? 'Nicht eingerichtet' : 'Not configured',
+        denied: locale === 'de' ? 'Zugriff verweigert' : 'Access denied',
+        disabled: locale === 'de' ? 'Lokaler Zugriff deaktiviert' : 'Local access disabled',
+        helper_unavailable: locale === 'de' ? 'Log-Helper nicht verfügbar' : 'Log helper unavailable',
+        reported_allowed: locale === 'de' ? 'Lokal freigegeben laut Meldung' : 'Included in reported grant',
+        reported_disabled: locale === 'de' ? 'Lokale Richtlinie deaktiviert' : 'Local policy disabled',
+        outside_reported_scope: locale === 'de' ? 'Außerhalb der gemeldeten Freigabe' : 'Outside reported grant',
+    })[access];
+    return <p className={`journal-permission-summary ${stale || !['unknown', 'reported_allowed', 'reported_scope'].includes(access) ? 'journal-warning' : 'journal-muted'}`}>{label}</p>;
+}

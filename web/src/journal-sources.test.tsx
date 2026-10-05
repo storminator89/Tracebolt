@@ -62,7 +62,7 @@ describe('Linux log source guidance is discovery, never authority', () => {
         expect(screen.getAllByText('SSH remote login')).toHaveLength(2);
         expect(screen.getByText('Docker daemon')).toBeVisible();
         expect(screen.queryByText('Nginx web server')).not.toBeInTheDocument();
-        expect(screen.getAllByText('Observed service · log permission not verified')).toHaveLength(names.length);
+        expect(screen.getAllByText('Permission unknown')).toHaveLength(names.length);
         fireEvent.click(screen.getByRole('button', { name: 'Use sshd.service' }));
         expect(select).toHaveBeenCalledExactlyOnceWith('sshd.service');
         expect(mutateRaw).toHaveBeenCalledTimes(1);
@@ -82,8 +82,8 @@ describe('Linux log source guidance is discovery, never authority', () => {
     it('shortcut selection inside a ready capture form does not submit or acknowledge a new source', async () => {
         const resource: JournalResource = { view: { ...journalView('awaiting'), deviceId: systemDevice }, page: null, busy: false, paused: false, failure: null, uncertain: false, reset: 0, refresh: vi.fn(), create: vi.fn(async () => undefined), cancelRequest: vi.fn(), search: vi.fn(), next: vi.fn(), previous: vi.fn(), canPrevious: false };
         render(<JournalContent resource={resource} insecureTestMode={false} sessionKey="source-form"/>);
-        fireEvent.change(screen.getByLabelText('Exact service unit'), { target: { value: 'manual.service' } });
-        fireEvent.click(screen.getByRole('checkbox')); expect(screen.getByRole('button', { name: 'Capture logs' })).toBeEnabled();
+        openAdvanced(); fireEvent.change(screen.getByLabelText('Exact service unit'), { target: { value: 'manual.service' } });
+        expect(screen.getByRole('button', { name: 'Fetch logs' })).toBeEnabled(); expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
         fireEvent.click(screen.getByRole('button', { name: 'Choose observed service' })); await screen.findByText('ssh.service');
         fireEvent.click(screen.getByRole('button', { name: 'SSH logins' })); await screen.findByText('sshd.service');
         expect(screen.getByLabelText('Exact service unit')).toHaveValue('manual.service');
@@ -95,7 +95,7 @@ describe('Linux log source guidance is discovery, never authority', () => {
         expect(screen.getAllByText('SSH-Fernzugriff')).toHaveLength(2);
         fireEvent.click(screen.getByRole('button', { name: 'SSH-Anmeldungen' })); await screen.findByText('sshd.service');
         expect(screen.getByLabelText('Beobachtete Dienste durchsuchen')).toHaveValue('ssh');
-        expect(screen.getAllByText('Beobachteter Dienst · Log-Freigabe nicht verifiziert')).toHaveLength(2);
+        expect(screen.getAllByText('Freigabe unbekannt')).toHaveLength(2);
     });
 });
 
@@ -104,11 +104,16 @@ it('labels observed inventory separately from the reported exact grant and loses
     permission.generation = { schemaVersion: 'tracebolt.journal-generation-view.v2', policyGeneration: { revision: '1', generation: 'a'.repeat(64), policyDigest: `sha256:${'b'.repeat(64)}` }, sequence: '1', observedAt: permission.serverNow, receivedAt: permission.serverNow, expiresAt: '2026-10-04T12:05:00Z', fresh: true, policyEnabled: true, serviceAuthorization: 'exact-units', allowedUnits: ['ssh.service'] };
     const pickerWithGrant = () => <JournalServicePicker deviceId={systemDevice} sessionKey="reported-source" journalView={permission} onSelect={select} onClose={vi.fn()}/>;
     const rendered = render(pickerWithGrant()); await screen.findByText('ssh.service');
-    expect(screen.getByText('Observed service · included in reported local grant')).toBeVisible();
-    expect(screen.getAllByText('Observed service · outside reported local grant')).toHaveLength(names.length - 1);
+    expect(screen.getByText('In reported grant')).toBeVisible();
+    expect(screen.getAllByText('Outside reported grant')).toHaveLength(names.length - 1);
     expect(select).not.toHaveBeenCalled();
     permission.generation = { ...permission.generation, fresh: false };
     rendered.rerender(pickerWithGrant());
-    expect(screen.getAllByText('Observed service · log permission not verified')).toHaveLength(names.length);
-    expect(screen.queryByText('Observed service · included in reported local grant')).not.toBeInTheDocument();
+    expect(screen.getAllByText('Permission unknown')).toHaveLength(names.length);
+    expect(screen.queryByText('In reported grant')).not.toBeInTheDocument();
 });
+
+function openAdvanced() {
+    const summary = screen.getByText(/^(Advanced|Erweitert)$/, { selector: 'summary' });
+    if (!summary.closest('details')!.open) fireEvent.click(summary);
+}

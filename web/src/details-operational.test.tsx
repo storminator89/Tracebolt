@@ -16,10 +16,10 @@ let selected:Device;
 beforeEach(()=>{setLocale('en',false);localStorage.clear();sessionStorage.clear();selected=device();vi.mocked(request).mockReset().mockImplementation(async path=>path==='/auth/session'?session:path.endsWith('/operational')?view(selected.id):selected);});
 afterEach(()=>{cleanup();vi.restoreAllMocks();});
 function detail(){return <AuthBoundary><DeviceDetail id={selected.id} onClose={vi.fn()} onCase={vi.fn()}/></AuthBoundary>;}
-async function inventory(){render(detail());const tab=await screen.findByRole('tab',{name:'Inventory'});fireEvent.click(tab);fireEvent.click(screen.getByRole('tab',{name:'Bounded preview'}));return tab;}
+async function inventory(){render(detail());const tab=await screen.findByRole('tab',{name:'Inventory'});fireEvent.click(tab);fireEvent.click(screen.getByText('Legacy inventory source', { selector: 'summary' })); fireEvent.click(screen.getByRole('button', { name: 'Open bounded preview' }));return tab;}
 describe('actual device page operational integration',()=>{
  it('loads the protected read model only when the Inventory tab is selected',async()=>{
-  render(detail());const tab=await screen.findByRole('tab',{name:'Inventory'});expect(request).not.toHaveBeenCalledWith(expect.stringContaining('/operational'),expect.anything());fireEvent.click(tab);fireEvent.click(screen.getByRole('tab',{name:'Bounded preview'}));
+  render(detail());const tab=await screen.findByRole('tab',{name:'Inventory'});expect(request).not.toHaveBeenCalledWith(expect.stringContaining('/operational'),expect.anything());fireEvent.click(tab);fireEvent.click(screen.getByText('Legacy inventory source', { selector: 'summary' })); fireEvent.click(screen.getByRole('button', { name: 'Open bounded preview' }));
   await screen.findByText('This device is not enrolled for the Linux operational profile. No operational inventory has been collected.');
   expect(tab).toHaveAttribute('aria-selected','true');expect(screen.getByRole('tabpanel',{name:'Inventory'})).toHaveAttribute('aria-labelledby',tab.id);expect(request).toHaveBeenCalledWith(`/devices/${id}/operational`,expect.objectContaining({signal:expect.any(AbortSignal)}));
   expect(screen.getByText('Available updates')).toBeVisible();expect(screen.getByText('Vulnerabilities / CVEs')).toBeVisible();expect(screen.queryByText('Secure')).not.toBeInTheDocument();
@@ -44,6 +44,6 @@ describe('actual device page operational integration',()=>{
   render(detail());const overview=await screen.findByRole('tab',{name:'Overview'});overview.focus();fireEvent.keyDown(overview,{key:'ArrowRight'});const inventory=screen.getByRole('tab',{name:'Inventory'});expect(inventory).toHaveFocus();expect(inventory).toHaveAttribute('aria-selected','true');fireEvent.keyDown(inventory,{key:'End'});expect(screen.getByRole('tab',{name:/^Capabilities/})).toHaveFocus();fireEvent.keyDown(screen.getByRole('tab',{name:/^Capabilities/}),{key:'Home'});expect(overview).toHaveFocus();expect(overview).toHaveAttribute('aria-selected','true');
  });
  it('retains German tab and operational labels',async()=>{
-  setLocale('de',false);render(detail());fireEvent.click(await screen.findByRole('tab',{name:'Inventar'}));fireEvent.click(screen.getByRole('tab',{name:'Begrenzte Vorschau'}));const panel=screen.getByRole('tabpanel',{name:'Inventar'});await within(panel).findByText('Betriebsinventar');expect(within(panel).getByRole('button',{name:'Beobachtungen aktualisieren'})).toBeInTheDocument();
+  setLocale('de',false);render(detail());fireEvent.click(await screen.findByRole('tab',{name:'Inventar'}));fireEvent.click(screen.getByText('Ältere Inventarquelle', { selector: 'summary' })); fireEvent.click(screen.getByRole('button', { name: 'Begrenzte Vorschau öffnen' }));const panel=screen.getByRole('tabpanel',{name:'Inventar'});await within(panel).findByText('Betriebsinventar');expect(within(panel).getByRole('button',{name:'Beobachtungen aktualisieren'})).toBeInTheDocument();
  });
 });

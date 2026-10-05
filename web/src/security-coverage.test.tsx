@@ -134,7 +134,7 @@ describe('coverage presentation and request lifecycle', () => {
     });
     it('translates component-local labels through the existing locale context', async () => {
         setLocale('de', false); vi.mocked(request).mockResolvedValue(coverage()); render(<SecurityCoveragePanel deviceId="agent_fixture"/>);
-        await screen.findByText('Teilweise erfasst'); expect(screen.getByRole('heading', { name: 'Sicherheitsabdeckung' })).toBeVisible(); expect(screen.getByRole('heading', { name: 'Angebotene Updates' })).toBeVisible();
+        await screen.findByText('Teilweise erfasst'); expect(screen.getByRole('heading', { name: 'Ältere Inventarbelege' })).toBeVisible(); expect(screen.getByRole('heading', { name: 'Angebotene Updates' })).toBeVisible();
     });
 });
 

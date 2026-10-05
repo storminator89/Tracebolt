@@ -32,6 +32,23 @@ partial coverage, original expiry and logout. It also passes the actual handler
 DTOs through the production frontend decoders. This does not pass the browser
 target or establish any screenshot result.
 
+## Compact request workspace
+
+The primary surface is service selection, fixed-reference period presets, and
+Fetch logs. The observed-service picker is a dialog and remains an explicit lazy
+inventory read. Manual unit, exact UTC range and severity live in Advanced.
+Fetch opens a request review; it does not create or cancel a capture. The exact
+service/window/severity and unchanged unchecked content/HTTP acknowledgements are
+reviewed before the final Capture logs action. Back, Close and Escape clear review
+consent and restore focus without changing the draft or any existing capture.
+Editing a request field invalidates its old review. Duplicate final clicks cannot
+issue an extra capture. Captured results and pending-request context keep their
+original service/window independently of the draft.
+
+The hosted cases require the genuine compact desktop/mobile workspace, picker and
+review dialog to render. Source tests and script parsing do not establish browser
+acceptance. No screenshot has been fabricated or generated from a design mockup.
+
 ## Seven required browser cases
 
 1. Logs load only when the tab opens. The observed-service picker lazily reads
@@ -97,6 +114,12 @@ Only these files under `artifacts/review/` are allowlisted for this target:
 - `journal-browser-manifest.json`
 - `synthetic-journal-desktop-en.png`
 - `synthetic-journal-mobile-de.png`
+- `synthetic-journal-source-picker-desktop-en.png`
+- `synthetic-journal-source-options-mobile-de.png`
+- `synthetic-journal-workspace-desktop-en.png`
+- `synthetic-journal-workspace-mobile-de.png`
+- `synthetic-journal-review-desktop-en.png`
+- `synthetic-journal-review-mobile-de.png`
 
 Reports contain fixed scenario names, PASS/FAIL, bounded phase names, duration,
 source identity and explicit scope. Errors never contain raw exceptions,

@@ -4,6 +4,8 @@ export class APIError extends Error {
 }
 export const AUTH_REQUIRED_EVENT = 'tracebolt:authentication-required';
 const pendingRequests = new Map<AbortController, boolean>();
+/** Background metadata reads yield to both private reads and access revalidation. */
+export function hasPendingAPIRequests(): boolean { return [...pendingRequests.keys()].some(controller => !controller.signal.aborted); }
 let protectedEpoch = 0;
 /** A delayed read remains bound to the access scope in which it started. */
 export function getProtectedRequestEpoch(): number { return protectedEpoch; }

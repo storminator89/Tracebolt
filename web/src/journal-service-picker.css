@@ -24,3 +24,12 @@
 .journal-picker-label,.journal-picker-access{display:block}
 .journal-picker-label{font-size:12px}
 .journal-picker-access{color:var(--secondary);font-size:10px;margin-top:3px}
+.journal-picker-details{margin:10px 0;color:var(--secondary);font-size:11px}
+.journal-picker-details>summary{cursor:pointer;width:fit-content;min-height:28px;line-height:28px}
+.journal-picker-details>summary:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+.journal-picker-count{font-size:11px;color:var(--secondary);margin:10px 0}
+.journal-picker-access{font-size:11px}
+.journal-picker-rows li{padding:10px 12px}
+.journal-picker-rows .button{min-height:36px}
+.journal-picker-shortcuts>strong{font-weight:500;color:var(--secondary);font-size:11px}
+.journal-picker-search{margin:14px 0}

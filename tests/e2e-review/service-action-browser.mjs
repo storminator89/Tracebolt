@@ -163,13 +163,23 @@ try{
 
  await check(1,async()=>{
   mark('fresh exact preview');await control('refresh');approval=await preview();await status(0,0,0);expect(approveRequests).toBe(0);
-  mark('explicit interruption approval');await review().getByRole('checkbox',{name:'I accept the interruption risk for this exact action.',exact:true}).check();
+  mark('check interruption consent');await review().getByRole('checkbox',{name:'I accept the interruption risk for this exact action.',exact:true}).check();
+  mark('submit exact approval');
   const [received]=await Promise.all([
    page.waitForResponse(value=>value.url()===base+endpoint()+'/approve'&&value.request().method()==='POST'),
    review().getByRole('button',{name:'Approve try-restart',exact:true}).click(),
-  ]);expect(received.status()).toBe(200);expect(received.request().postDataJSON()).toEqual(approval);
-  const approved=await body(received);savedJob=approved.job;expect(savedJob.id).toBe(approval.previewId);expect(savedJob.actorId).toBe(actor);expect(savedJob.unit).toBe('fixture.service');expect(savedJob.state).toBe('approved');
-  await expect(review()).toHaveCount(0);await expect(saved()).toContainText('Approved; awaiting agent delivery. Execution is unconfirmed.');await status(0,0,1,'approved');expect(approveRequests).toBe(1);
+  ]);
+  mark('assert approval HTTP status');expect(received.status()).toBe(200);
+  mark('assert exact approval request');expect(received.request().postDataJSON()).toEqual(approval);
+  mark('read approval response');const approved=await body(received);savedJob=approved.job;
+  mark('assert approved job identity');expect(savedJob.id).toBe(approval.previewId);
+  mark('assert approved job actor');expect(savedJob.actorId).toBe(actor);
+  mark('assert approved job unit');expect(savedJob.unit).toBe('fixture.service');
+  mark('assert approved job state');expect(savedJob.state).toBe('approved');
+  mark('await preview dismissal');await expect(review()).toHaveCount(0);
+  mark('await approved pending label');await expect(saved()).toContainText('Approved; awaiting agent delivery. Execution is unconfirmed.');
+  mark('assert approved fixture counters');await status(0,0,1,'approved');
+  mark('assert single browser approval request');expect(approveRequests).toBe(1);
   mark('hold real helper protocol in fake backend');const dispatched=await control('dispatch');counters(dispatched,1,1,1);expect(dispatched.pending).toBe(true);
   await expect(saved()).toContainText('Claimed for delivery. Delivery, execution and outcome are unconfirmed until a result arrives.');
   await expect(saved()).toContainText('No automatic retry.');await expect(saved()).not.toContainText('Agent reports that the command completed.');await expect(selector()).toBeDisabled();

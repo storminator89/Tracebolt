@@ -82,7 +82,7 @@ describe('dedicated device page', () => {
  it('aborts an inventory read on Back and discards late data after reopening from its hash', async () => {
   let finish!: (value: OperationalView) => void; let signal: AbortSignal | undefined;
   vi.mocked(request).mockImplementation(async (path, options) => path === `/devices/${id}/operational` ? new Promise<OperationalView>(resolve => { finish = resolve; signal = options?.signal as AbortSignal; }) : answer(path));
-  const page = await open(); fireEvent.click(within(page).getByRole('tab', { name: 'Inventory' })); fireEvent.click(within(page).getByRole('tab', { name: 'Bounded preview' })); await waitFor(() => expect(signal).toBeDefined());
+  const page = await open(); fireEvent.click(within(page).getByRole('tab', { name: 'Inventory' })); fireEvent.click(screen.getByText('Legacy inventory source', { selector: 'summary' })); fireEvent.click(screen.getByRole('button', { name: 'Open bounded preview' })); await waitFor(() => expect(signal).toBeDefined());
   fireEvent.click(within(page).getByRole('button', { name: 'Back to devices' })); await screen.findByLabelText('Search devices');
   expect(signal!.aborted).toBe(true); await act(async () => finish(operational())); expect(screen.queryByText('Operational inventory')).not.toBeInTheDocument();
   await navigate(`devices/${id}`); const restored = await screen.findByRole('region', { name: 'Device Synthetic Linux fixture' });

@@ -88,12 +88,13 @@ describe('explicit device metadata refresh', () => {
     });
     it('preserves the actual Logs form instance, unit/window/severity/consent and active tab through metadata refresh', async () => {
         await start(); fireEvent.click(screen.getByRole('tab', { name: 'Logs' })); await flush();
-        const unit = screen.getByLabelText('Exact service unit');
+        openAdvanced(); const unit = screen.getByLabelText('Exact service unit');
         fireEvent.change(unit, { target: { value: 'draft.service' } });
         fireEvent.change(screen.getByLabelText('From (UTC)'), { target: { value: '2026-10-04T11:42' } });
         fireEvent.change(screen.getByLabelText('To (UTC)'), { target: { value: '2026-10-04T11:58' } });
-        fireEvent.change(screen.getByLabelText('Include severity through'), { target: { value: '3' } }); fireEvent.click(screen.getByRole('checkbox'));
+        fireEvent.change(screen.getByLabelText('Include severity through'), { target: { value: '3' } });
         const calls = vi.mocked(request).mock.calls.length, held = holdRefresh();
+        fireEvent.click(screen.getByRole('button', { name: 'Fetch logs' })); fireEvent.click(screen.getByRole('checkbox'));
         expect(screen.getByLabelText('Exact service unit')).toBe(unit); expect(unit).toHaveValue('draft.service');
         await act(async () => held.resolve(device(id, true)));
         expect(screen.getByLabelText('Exact service unit')).toBe(unit); expect(unit).toHaveValue('draft.service');
@@ -117,14 +118,15 @@ describe('explicit device metadata refresh', () => {
     it('keeps the actual nested inventory selection and instance without rerunning child requests', async () => {
         await start(); fireEvent.click(screen.getByRole('tab', { name: 'Inventory' })); await flush();
         fireEvent.click(screen.getByRole('tab', { name: 'Mounts' })); await flush();
-        const inventory = document.querySelector('.inventory-workspace'), mounts = screen.getByRole('tab', { name: 'Mounts' }), calls = vi.mocked(request).mock.calls.length;
+        const inventory = document.querySelector('.inventory-workspace'), mounts = screen.getByRole('tab', { name: 'Mounts' }), calls = vi.mocked(request).mock.calls.length, queries = vi.mocked(mutateRaw).mock.calls.length;
         const held = holdRefresh(); await act(async () => held.resolve(device(id, true)));
         expect(document.querySelector('.inventory-workspace')).toBe(inventory); expect(screen.getByRole('tab', { name: 'Mounts' })).toBe(mounts);
         expect(mounts).toHaveAttribute('aria-selected', 'true'); expect(screen.getByRole('tab', { name: 'Inventory' })).toHaveAttribute('aria-selected', 'true');
-        expect(request).toHaveBeenCalledTimes(calls + 1); expect(mutateRaw).not.toHaveBeenCalled();
+        expect(request).toHaveBeenCalledTimes(calls + 1); expect(mutateRaw).toHaveBeenCalledTimes(queries);
+        expect(vi.mocked(mutateRaw).mock.calls.every(([path]) => path.endsWith('/inventory/packages/query'))).toBe(true);
     });
-    it('retains the previous snapshot and successful-check time honestly on an ordinary refresh failure, then permits a fresh click', async () => {
-        await start(); const time = document.querySelector('#device-metadata-status time')!.getAttribute('datetime');
+    it('retains the previous snapshot and successful-check time outside Overview on a refresh failure, then permits a fresh click', async () => {
+        await start(); fireEvent.click(screen.getByRole('tab', { name: 'Details' })); await flush(); const time = document.querySelector('#device-metadata-status time')!.getAttribute('datetime');
         const held = holdRefresh(); await act(async () => held.reject(new APIError('Synthetic unavailable', 503)));
         expect(screen.getByRole('alert')).toHaveTextContent('Refresh failed. Displayed device metadata is unchanged.');
         expect(document.querySelector('.device-metrics')).toHaveTextContent('11%'); expect(document.querySelector('#device-metadata-status time')).toHaveAttribute('datetime', time);
@@ -132,8 +134,8 @@ describe('explicit device metadata refresh', () => {
         vi.mocked(request).mockImplementation(async path => path === `/devices/${id}` ? device(id, true) : answer(path)); fireEvent.click(refresh()); await flush();
         expect(screen.queryByRole('alert')).not.toBeInTheDocument(); expect(document.querySelector('.device-metrics')).toHaveTextContent('42%'); expect(metadataCalls()).toHaveLength(3);
     });
-    it('aborts at ten seconds, unlocks explicit retry and rejects a late reply without polling', async () => {
-        await start(); const held = holdRefresh(), signal = metadataCalls()[1][1]!.signal as AbortSignal;
+    it('aborts at ten seconds, unlocks explicit retry and rejects a late reply without polling outside Overview', async () => {
+        await start(); fireEvent.click(screen.getByRole('tab', { name: 'Details' })); await flush(); const held = holdRefresh(), signal = metadataCalls()[1][1]!.signal as AbortSignal;
         await advance(9999); expect(signal.aborted).toBe(false); expect(refresh()).toBeDisabled();
         await advance(1); expect(signal.aborted).toBe(true); expect(refresh()).toBeEnabled(); expect(screen.getByRole('alert')).toHaveTextContent(/not responding/i);
         await act(async () => held.resolve(device(id, true))); expect(document.querySelector('.device-metrics')).toHaveTextContent('11%');
@@ -148,7 +150,7 @@ describe('explicit device metadata refresh', () => {
         expect(refresh()).toBeEnabled(); expect(metadataCalls()).toHaveLength(2);
     });
     it.each([403, 404, 410])('clears existing metadata and child drafts on HTTP %s', async status => {
-        await start(); fireEvent.click(screen.getByRole('tab', { name: 'Logs' })); await flush(); fireEvent.change(screen.getByLabelText('Exact service unit'), { target: { value: 'private-draft.service' } });
+        await start(); fireEvent.click(screen.getByRole('tab', { name: 'Logs' })); await flush(); openAdvanced(); fireEvent.change(screen.getByLabelText('Exact service unit'), { target: { value: 'private-draft.service' } });
         const held = holdRefresh(); await act(async () => held.reject(new APIError('Unavailable', status)));
         expect(screen.queryByRole('heading', { name: 'Synthetic metadata fixture' })).not.toBeInTheDocument(); expect(screen.queryByLabelText('Exact service unit')).not.toBeInTheDocument();
         expect(screen.getByRole('alert')).toHaveTextContent('Device unavailable');
@@ -173,7 +175,7 @@ describe('explicit device metadata refresh', () => {
         await act(async () => held.resolve(device(id, true))); expect(screen.queryByText('Refreshed Linux fixture')).not.toBeInTheDocument();
     });
     it('discards a pending response and private draft when the operator session changes', async () => {
-        const mounted = await start(); fireEvent.click(screen.getByRole('tab', { name: 'Logs' })); await flush(); fireEvent.change(screen.getByLabelText('Exact service unit'), { target: { value: 'private-draft.service' } });
+        const mounted = await start(); fireEvent.click(screen.getByRole('tab', { name: 'Logs' })); await flush(); openAdvanced(); fireEvent.change(screen.getByLabelText('Exact service unit'), { target: { value: 'private-draft.service' } });
         const held = holdRefresh(), signal = metadataCalls()[1][1]!.signal as AbortSignal;
         vi.mocked(useOperator).mockReturnValue({ ...operator, expiresAt: '2026-10-04T14:00:00Z' }); vi.mocked(request).mockImplementation(async path => answer(path));
         mounted.rerender(panel()); await flush(); expect(signal.aborted).toBe(true); expect(screen.queryByLabelText('Exact service unit')).not.toBeInTheDocument();
@@ -200,3 +202,8 @@ describe('explicit device metadata refresh', () => {
         expect(document.querySelector('#device-metadata-status time')).toHaveAttribute('datetime', time);
     });
 });
+
+function openAdvanced() {
+    const summary = screen.getByText(/^(Advanced|Erweitert)$/, { selector: 'summary' });
+    if (!summary.closest('details')!.open) fireEvent.click(summary);
+}

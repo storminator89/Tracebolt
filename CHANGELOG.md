@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-10-05 — Simplify Logs and align current device data
+
+- Separate journal source selection, query controls, explicit capture review and results into a clearer workspace. Preserve original request/snapshot scope and timestamps, consent, bounded paging and no automatic capture; add desktop/mobile browser captures.
+- Refresh visible focused Overview metadata every fifteen seconds, yielding to active API requests and preserving drafts, navigation, original sample age and honest stale states. Show supplied fractional CPU/RAM values without changing collection cadence or permissions.
+- Default Inventory to complete Packages where supported and distinguish observed service enablement, socket-owner limitations and legacy previews. Align Security with current inventory/coverage instead of presenting unrelated legacy values as current findings.
+- Add fixed approval-substage labels for the unresolved intermittent service-action browser failure; keep assertions, deadlines and privacy bounds unchanged.
+- Preserve source/permission boundaries and add focused integration regressions. Local timing-limited component runs and unavailable local Chromium are recorded separately from exact hosted acceptance.
+
 ## 2026-10-05 — Fix journal rename verification and preserve early-abort evidence
 
 - Accept the legitimate ctime change caused by atomic rename while retaining all other metadata, inode, content and stable-read checks.

@@ -1,5 +1,5 @@
 {
-  "goSourceSha256": "12c611bdcfdfaad8ba7690769ab1cd6f4899ae2475cabc2230fad48f2e2e4818",
+  "goSourceSha256": "f90a25225c72c3e83829ea0528dc5b2e1ef2cf0a0ac3e7b867a44d8ac1e3a35e",
   "packages": {
     "localrmm/cmd/agent": [
       "TestHelp",

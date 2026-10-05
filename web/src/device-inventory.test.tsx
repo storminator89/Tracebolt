@@ -16,7 +16,7 @@ const session = { mode: 'lan', transport: 'https', insecureTestMode: false, tran
 const operational = { schemaVersion: 'tracebolt.operational-view.v1', deviceId: systemDevice, status: 'not_configured', serverNow: systemNow, receivedAt: null, sequence: null, maxAgeSeconds: 120, snapshot: null, lastGood: { volumes: null, network: null, services: null, processes: null, software: null, events: null }, assessments: { updates: { quality: 'unknown', reason: 'not_implemented' }, vulnerabilities: { quality: 'unknown', reason: 'not_implemented' } } };
 function packageView() { return { ...completeView(), deviceId: systemDevice }; }
 function detail() { return <AuthBoundary><DeviceDetail id={systemDevice} onClose={vi.fn()} onCase={vi.fn()}/></AuthBoundary>; }
-async function inventory() { render(detail()); fireEvent.click(await screen.findByRole('tab', { name: 'Inventory' })); fireEvent.click(screen.getByRole('tab', { name: 'Bounded preview' })); return screen.getByRole('tablist', { name: 'Inventory source' }); }
+async function inventory() { render(detail()); fireEvent.click(await screen.findByRole('tab', { name: 'Inventory' })); fireEvent.click(screen.getByText('Legacy inventory source', { selector: 'summary' })); fireEvent.click(screen.getByRole('button', { name: 'Open bounded preview' })); return screen.getByRole('tablist', { name: 'Inventory source' }); }
 beforeEach(() => {
     setLocale('en', false); localStorage.clear(); sessionStorage.clear();
     vi.mocked(request).mockReset().mockImplementation(async path => path === '/auth/session' ? session : path.endsWith('/operational') ? operational : path.endsWith('/inventory/system') ? systemView() : path.endsWith('/inventory/packages') ? packageView() : device);
@@ -37,17 +37,17 @@ describe('inventory source tabs in the authenticated device drawer', () => {
         expect(vi.mocked(request).mock.calls.filter(([path]) => path.endsWith('/inventory/packages'))).toHaveLength(2);
         expect(screen.queryByRole('region', { name: 'Software · complete dpkg inventory' })).not.toBeInTheDocument();
         fireEvent.click(screen.getByRole('tab', { name: 'Overview' })); expect(screen.queryByRole('table')).not.toBeInTheDocument();
-        fireEvent.click(screen.getByRole('tab', { name: 'Inventory' })); expect(screen.getByRole('tab', { name: 'Processes' })).toHaveAttribute('aria-selected', 'true');
+        fireEvent.click(screen.getByRole('tab', { name: 'Inventory' })); expect(screen.getByRole('tab', { name: 'Packages' })).toHaveAttribute('aria-selected', 'true');
     });
     it('keeps legacy preview bounded, lazily loads only selected sources, and replaces rather than stacks them', async () => {
-        const tabs = await inventory(); expect(within(tabs).getByRole('tab', { name: 'Bounded preview' })).toHaveAttribute('aria-selected', 'true'); expect(vi.mocked(request).mock.calls.some(([path]) => path.endsWith('/inventory/system'))).toBe(false);
+        const tabs = await inventory(); expect(screen.getByRole('button', { name: 'Open bounded preview' })).toHaveAttribute('aria-pressed', 'true'); expect(vi.mocked(request).mock.calls.some(([path]) => path.endsWith('/inventory/system'))).toBe(false);
         fireEvent.click(within(tabs).getByRole('tab', { name: 'Services' })); await screen.findByRole('table'); expect(screen.queryByRole('heading', { name: 'Operational inventory' })).not.toBeInTheDocument(); expect(screen.getByRole('tabpanel', { name: 'Services' })).toHaveAttribute('aria-labelledby', within(tabs).getByRole('tab', { name: 'Services' }).id);
         fireEvent.click(within(tabs).getByRole('tab', { name: 'Connections' })); await screen.findByText('127.0.0.1:10000'); expect(screen.queryByRole('columnheader', { name: 'Service unit' })).not.toBeInTheDocument();
         fireEvent.click(within(tabs).getByRole('tab', { name: 'Packages' })); await screen.findByRole('rowheader', { name: 'fixture-000000' }); expect(screen.queryByRole('columnheader', { name: 'Local endpoint' })).not.toBeInTheDocument(); expect(screen.getAllByRole('table')).toHaveLength(1);
     });
     it('supports keyboard source navigation and resets source selection after leaving Inventory', async () => {
-        const tabs = await inventory(), preview = within(tabs).getByRole('tab', { name: 'Bounded preview' }); preview.focus(); fireEvent.keyDown(preview, { key: 'ArrowLeft' }); expect(within(tabs).getByRole('tab', { name: 'Connections' })).toHaveFocus(); await screen.findByRole('table');
-        fireEvent.click(screen.getByRole('tab', { name: 'Overview' })); expect(screen.queryByRole('table')).not.toBeInTheDocument(); fireEvent.click(screen.getByRole('tab', { name: 'Inventory' })); expect(screen.getByRole('tab', { name: 'Processes' })).toHaveAttribute('aria-selected', 'true');
+        const tabs = await inventory(), services = within(tabs).getByRole('tab', { name: 'Services' }); services.focus(); fireEvent.keyDown(services, { key: 'ArrowRight' }); expect(within(tabs).getByRole('tab', { name: 'Connections' })).toHaveFocus(); await screen.findByRole('table');
+        fireEvent.click(screen.getByRole('tab', { name: 'Overview' })); expect(screen.queryByRole('table')).not.toBeInTheDocument(); fireEvent.click(screen.getByRole('tab', { name: 'Inventory' })); expect(screen.getByRole('tab', { name: 'Packages' })).toHaveAttribute('aria-selected', 'true');
     });
     it.each(['tab', 'auth', 'pagehide'] as const)('aborts pending system pages on %s and never installs late private results', async transition => {
         const tabs = await inventory(); let finish!: (value: SystemPage) => void, signal!: AbortSignal; vi.mocked(mutateRaw).mockImplementationOnce(async (_path, _raw, _headers, provided) => { signal = provided!; return new Promise<SystemPage>(resolve => { finish = resolve; }); });

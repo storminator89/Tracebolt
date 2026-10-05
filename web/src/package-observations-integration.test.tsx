@@ -21,7 +21,7 @@ function coverage(): SecurityCoverageView { return { schemaVersion: 'tracebolt.s
 let currentSession: OperatorSession, currentDevice: Device;
 function answer(path: string) { if (path === '/auth/session') return currentSession; if (path === `/devices/${id}`) return currentDevice; if (path.endsWith('/security')) return coverage(); if (path === `/devices/${id}/inventory/packages`) return { schemaVersion: 'tracebolt.complete-package-view.v1', deviceId: id, serverNow: now, collectionProfile: 'managed-operations-v2', status: 'not_configured', complete: null, transfer: null, failure: null }; if (path === `/devices/${id}/packages`) return packages(); throw new Error('Unexpected synthetic fixture route'); }
 function detail() { return <AuthBoundary><DeviceDetail id={id} onClose={vi.fn()} onCase={vi.fn()}/></AuthBoundary>; }
-async function openSecurity() { fireEvent.click(await screen.findByRole('tab', { name: 'Security coverage' })); }
+async function openSecurity() { fireEvent.click(await screen.findByRole('tab', { name: 'Security coverage' })); fireEvent.click(screen.getByText('Legacy diagnostics', { selector: 'summary' })); fireEvent.change(screen.getByLabelText('Diagnostic source'), { target: { value: 'legacy-packages' } }); }
 async function openPackages() { await openSecurity(); fireEvent.click(await screen.findByRole('button', { name: 'Release and source-package observations' })); }
 beforeEach(() => { setLocale('en', false); localStorage.clear(); sessionStorage.clear(); currentSession = { ...session }; currentDevice = device(); vi.mocked(request).mockReset().mockImplementation(async path => answer(path)); });
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
@@ -29,9 +29,9 @@ afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 describe('package details in the authenticated device Security tab', () => {
     it('remains lazy inside the Security tab and preserves the independent inventory and coverage views', async () => {
         render(detail()); await screen.findByRole('tab', { name: 'Inventory' }); expect(vi.mocked(request).mock.calls.some(([path]) => path === `/devices/${id}/packages`)).toBe(false); await openSecurity();
-        await screen.findByText('Source-package mapping is not evaluated by this assessment.'); expect(vi.mocked(request).mock.calls.some(([path]) => path === `/devices/${id}/packages`)).toBe(false);
+        await screen.findByRole('button', { name: 'Release and source-package observations' }); expect(vi.mocked(request).mock.calls.some(([path]) => path === `/devices/${id}/packages`)).toBe(false);
         fireEvent.click(screen.getByRole('button', { name: 'Release and source-package observations' })); await screen.findByRole('table'); expect(screen.getByText('Absent Source field: binary default')).toBeVisible(); expect(screen.getByText('Exact Ubuntu 24.04 / Noble identifiers observed')).toBeVisible();
-        expect(screen.getAllByText('1.0+b1')).toHaveLength(2); expect(screen.getByRole('heading', { name: 'CVE coverage' })).toBeVisible(); expect(screen.queryByText('Client source-package mapping is missing.')).not.toBeInTheDocument();
+        expect(screen.getAllByText('1.0+b1')).toHaveLength(2); expect(screen.queryByRole('heading', { name: 'CVE coverage' })).not.toBeInTheDocument(); expect(screen.queryByText('Client source-package mapping is missing.')).not.toBeInTheDocument();
     });
     it.each([{ synthetic: true }, { source: 'sandbox' as const }, { source: 'local' as const }, { platform: 'windows' as const }, { platform: 'macos' as const }])('never mounts package details for ineligible device %j', async overrides => {
         currentDevice = device(overrides); render(detail()); await screen.findByRole('tab', { name: 'Overview' }); expect(screen.queryByRole('tab', { name: 'Security coverage' })).not.toBeInTheDocument(); expect(vi.mocked(request).mock.calls.some(([path]) => path === `/devices/${id}/packages`)).toBe(false);

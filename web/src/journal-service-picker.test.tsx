@@ -33,15 +33,16 @@ describe('observed-service picker uses only bounded protected inventory reads', 
         };
         render(<JournalContent resource={resource} insecureTestMode sessionKey="picker-integration"/>);
         expect(request).not.toHaveBeenCalled(); expect(mutateRaw).not.toHaveBeenCalled();
-        fireEvent.change(screen.getByLabelText('Exact service unit'), { target: { value: 'manual.service' } });
-        fireEvent.click(screen.getByRole('button', { name: 'Choose observed service' })); await screen.findByText(services[0].name);
+        openAdvanced(); fireEvent.change(screen.getByLabelText('Exact service unit'), { target: { value: 'manual.service' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Choose observed service' })); await within(screen.getByRole('region', { name: 'Observed services' })).findByText(services[0].name); expect(screen.getByRole('dialog')).toBeVisible();
         expect(screen.getByLabelText('Exact service unit')).toHaveValue('manual.service');
         fireEvent.click(screen.getByRole('button', { name: `Use ${services[0].name}` }));
         expect(screen.queryByRole('region', { name: 'Observed services' })).not.toBeInTheDocument();
-        expect(screen.getByLabelText('Exact service unit')).toHaveValue(services[0].name); expect(screen.getByLabelText('Exact service unit')).toHaveFocus();
+        expect(screen.getByLabelText('Exact service unit')).toHaveValue(services[0].name); expect(screen.getByRole('button', { name: 'Choose observed service' })).toHaveFocus();
+        expect(screen.queryByRole('checkbox')).not.toBeInTheDocument(); fireEvent.click(screen.getByRole('button', { name: 'Fetch logs' }));
         for (const checkbox of screen.getAllByRole('checkbox')) expect(checkbox).not.toBeChecked();
-        expect(screen.getByRole('button', { name: 'Capture logs' })).toBeDisabled(); expect(resource.create).not.toHaveBeenCalled(); expect(resource.cancelRequest).not.toHaveBeenCalled();
-        fireEvent.click(screen.getByRole('button', { name: 'Choose observed service' })); await screen.findByText(services[0].name);
+        expect(screen.getByRole('button', { name: 'Capture logs' })).toBeDisabled(); expect(resource.create).not.toHaveBeenCalled(); expect(resource.cancelRequest).not.toHaveBeenCalled(); fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Choose observed service' })); await within(screen.getByRole('region', { name: 'Observed services' })).findByText(services[0].name);
         expect(request).toHaveBeenCalledTimes(2); fireEvent.keyDown(document.activeElement!, { key: 'Escape' });
         expect(screen.queryByRole('region', { name: 'Observed services' })).not.toBeInTheDocument(); expect(screen.getByRole('button', { name: 'Choose observed service' })).toHaveFocus();
         expect(screen.getByLabelText('Exact service unit')).toHaveValue(services[0].name); expect(resource.create).not.toHaveBeenCalled();
@@ -57,7 +58,7 @@ describe('observed-service picker uses only bounded protected inventory reads', 
         }
         expect(seen).toEqual(services.map(row => row.name));
         expect(ui.queryByText('fixture-000000.service')).not.toBeInTheDocument();
-        expect(ui.getByText('350 / 350')).toBeVisible();
+        expect(ui.getByText('50 shown · 350 / 350 scanned · 350 matches so far')).toBeVisible();
         const before = vi.mocked(mutateRaw).mock.calls.length;
         fireEvent.click(ui.getByRole('button', { name: 'Use fixture-000349.service' }));
         expect(select).toHaveBeenCalledExactlyOnceWith('fixture-000349.service'); expect(close).not.toHaveBeenCalled();
@@ -67,6 +68,7 @@ describe('observed-service picker uses only bounded protected inventory reads', 
             expect(path).toBe(`/devices/${systemDevice}/inventory/system/query`); expect(headers).toEqual({}); expect(signal).toBeInstanceOf(AbortSignal); expect(maximum).toBe(262144);
             expect(JSON.parse(raw)).toMatchObject({ section: 'services', generationId: systemGeneration, limit: 100, filter: 'all' });
         }
+        fireEvent.click(ui.getByText('Selection & permission', { selector: 'summary' }));
         expect(ui.getByText(/does not confirm local journal allowlist membership or grant access/)).toBeVisible();
         expect(ui.getByText(/enter an exact service unit manually/)).toBeVisible();
     });
@@ -78,14 +80,13 @@ describe('observed-service picker uses only bounded protected inventory reads', 
         fireEvent.click(screen.getByRole('button', { name: 'Search services' }));
         await screen.findByText('No matches in this scan window. More rows remain; continue searching.');
         expect(screen.queryByText('No matches in the complete service inventory.')).not.toBeInTheDocument();
+        fireEvent.click(screen.getByText('Inventory details', { selector: 'summary' }));
         expect(screen.getByText('Whole retained service inventory').nextElementSibling).toHaveTextContent('2,300');
-        expect(screen.getByText('Rows scanned so far').nextElementSibling).toHaveTextContent('2,048 / 2,300');
-        expect(screen.getByText('Matches found so far').nextElementSibling).toHaveTextContent('0');
+        expect(screen.getByText('0 shown · 2,048 / 2,300 scanned · 0 matches so far')).toBeVisible();
         expect(JSON.parse(vi.mocked(mutateRaw).mock.calls.at(-1)![1])).toMatchObject({ cursor: '', search: 'fixture-002299', generationId: systemGeneration });
         fireEvent.click(screen.getByRole('button', { name: 'Continue search' }));
         await screen.findByText('fixture-002299.service');
-        expect(screen.getByText('Rows scanned so far').nextElementSibling).toHaveTextContent('2,300 / 2,300');
-        expect(screen.getByText('Matches found so far').nextElementSibling).toHaveTextContent('1');
+        expect(screen.getByText('1 shown · 2,300 / 2,300 scanned · 1 matches so far')).toBeVisible();
         expect(screen.queryByRole('button', { name: 'Continue search' })).not.toBeInTheDocument();
     });
 
@@ -224,7 +225,12 @@ describe('observed-service picker uses only bounded protected inventory reads', 
 
     it('provides German picker labels and permission limitations', async () => {
         setLocale('de', false); await open(); expect(screen.getByRole('region', { name: 'Beobachtete Dienste' })).toBeVisible();
-        expect(screen.getByLabelText('Beobachtete Dienste durchsuchen')).toBeVisible(); expect(screen.getByText(/bestätigt weder die lokale Journal-Freigabeliste/)).toBeVisible();
+        expect(screen.getByLabelText('Beobachtete Dienste durchsuchen')).toBeVisible(); fireEvent.click(screen.getByText('Auswahl & Freigabe', { selector: 'summary' })); expect(screen.getByText(/bestätigt weder die lokale Journal-Freigabeliste/)).toBeVisible();
         fireEvent.click(screen.getByRole('button', { name: 'Übernehmen fixture-000000.service' })); expect(select).toHaveBeenCalledExactlyOnceWith('fixture-000000.service');
     });
 });
+
+function openAdvanced() {
+    const summary = screen.getByText(/^(Advanced|Erweitert)$/, { selector: 'summary' });
+    if (!summary.closest('details')!.open) fireEvent.click(summary);
+}

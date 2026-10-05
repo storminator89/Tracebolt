@@ -45,6 +45,7 @@ func TestCPUPercent(t *testing.T) {
 		ok            bool
 	}{
 		{"half", cpuCounters{1000, 400}, cpuCounters{1100, 450}, 50, true},
+		{"sub-percent utilization stays fractional", cpuCounters{1000, 400}, cpuCounters{2000, 1396}, 0.4, true},
 		{"idle", cpuCounters{1000, 400}, cpuCounters{1100, 500}, 0, true},
 		{"busy", cpuCounters{1000, 400}, cpuCounters{1100, 400}, 100, true},
 		{"unchanged", cpuCounters{1000, 400}, cpuCounters{1000, 400}, 0, false},
@@ -69,6 +70,7 @@ func TestMemoryPercent(t *testing.T) {
 		ok         bool
 	}{
 		{"normal", "MemTotal: 1000 kB\nMemFree: 100 kB\nMemAvailable: 250 kB\n", 75, true},
+		{"fractional utilization", "MemTotal: 10000 kB\nMemAvailable: 7655 kB\n", 23.45, true},
 		{"empty", "", 0, false},
 		{"no available", "MemTotal: 1000 kB\nMemFree: 100 kB", 0, false},
 		{"invalid unit", "MemTotal: 1000 MB\nMemAvailable: 250 kB", 0, false},

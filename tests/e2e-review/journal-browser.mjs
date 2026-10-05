@@ -98,9 +98,13 @@ async function open(page,label='alpha'){
  mark('read initial journal status');await expect(state(page)).toBeVisible();await settled(page);
 }
 async function refresh(page){await page.getByRole('button',{name:'Refresh status',exact:true}).click();await expect(state(page)).toBeVisible();await settled(page);}
+async function openAdvanced(page){const details=page.locator('.journal-advanced');if(await details.getAttribute('open')===null)await details.locator('summary').click();}
+async function review(page){await page.getByRole('button',{name:'Fetch logs',exact:true}).click();await expect(page.getByRole('dialog',{name:'Review log request',exact:true})).toBeVisible();}
 async function capture(page){
+ await openAdvanced(page);
  mark('choose exact journal service');await page.getByLabel('Exact service unit',{exact:true}).fill('invented.service');
  mark('choose journal severity');const severity=page.getByRole('combobox',{name:'Include severity through',exact:true});await severity.selectOption('7');await expect(severity).toHaveValue('7');
+ mark('review exact journal request');await review(page);
  mark('acknowledge journal content');await page.getByRole('checkbox',{name:/^I understand that log messages/}).check();
  mark('acknowledge plaintext journal transport');await page.getByRole('checkbox',{name:/^I also accept that this HTTP test/}).check();
  mark('create explicit journal capture');await page.getByRole('button',{name:'Capture logs',exact:true}).click();
@@ -206,17 +210,18 @@ try{
    mark('journal stays lazy before selecting Logs');expect(tally.status).toBe(0);expect(tally.create).toBe(0);
    await page.getByRole('tab',{name:'Logs',exact:true}).click();await expect(state(page)).toHaveText('Awaiting a request');await settled(page);
    mark('observed service inventory stays lazy until picker opens');expect(inventoryReads).toBe(0);
+   mark('compact query workspace excludes manual fields and preemptive consent');await expect(page.locator('.journal-advanced')).not.toHaveAttribute('open');await expect(page.getByLabel('Exact service unit',{exact:true})).not.toBeVisible();await expect(page.getByRole('checkbox')).toHaveCount(0);await page.locator('.journal-query-bar').scrollIntoViewIfNeeded();await shot(page,'synthetic-journal-workspace-desktop-en');
    const chooser=page.getByRole('button',{name:'Choose observed service',exact:true}),picker=page.getByRole('region',{name:'Observed services',exact:true}),unit=page.getByLabel('Exact service unit',{exact:true});
    const statusReply=page.waitForResponse(response=>response.url()===systemEndpoint&&response.request().method()==='GET'),serviceReply=page.waitForResponse(response=>response.url()===systemEndpoint+'/query'&&response.request().method()==='POST');
    await chooser.click();const statusResponse=await statusReply;expect(statusResponse.status()).toBe(200);const system=await statusResponse.json();expect(system.deviceId).toBe(devices.alpha);expect(system.lastComplete.services.meta.observedCount).toBe(3);
    const serviceResponse=await serviceReply;expect(serviceResponse.status()).toBe(200);const services=await serviceResponse.json();expect(services.services.map(row=>row.name)).toEqual(['invented-backup.service','invented.service','invented:unsupported.service']);expect(services.section).toBe('services');
-   await expect(picker).toBeVisible();await expect(picker).toContainText('Observed inventory does not confirm local journal allowlist membership or grant access.');await expect(picker).toContainText('Selecting a service only fills the exact-unit field; it does not capture logs.');await expect(picker.getByRole('button',{name:'Use invented:unsupported.service',exact:true})).toBeDisabled();expect(inventoryReads).toBe(2);expect(tally.create).toBe(0);expect(tally.cancel).toBe(0);
+   await expect(picker).toBeVisible();await picker.getByText('Selection & permission',{exact:true}).click();await expect(picker).toContainText('Observed inventory does not confirm local journal allowlist membership or grant access.');await expect(picker).toContainText('Selecting a service only fills the exact-unit field; it does not capture logs.');await expect(picker.getByRole('button',{name:'Use invented:unsupported.service',exact:true})).toBeDisabled();expect(inventoryReads).toBe(2);expect(tally.create).toBe(0);expect(tally.cancel).toBe(0);
    mark('picker Escape closes locally and restores its trigger focus');await picker.getByRole('button',{name:'Close service picker',exact:true}).focus();await page.keyboard.press('Escape');await expect(picker).toHaveCount(0);await expect(chooser).toBeFocused();await expect(page).toHaveURL(base+'/#/devices/'+devices.alpha);await expect(unit).toHaveValue('');
-   mark('observed service selection fills only the manual field');await chooser.click();await picker.getByRole('button',{name:'Use invented.service',exact:true}).click();await expect(picker).toHaveCount(0);await expect(unit).toHaveValue('invented.service');await expect(unit).toBeFocused();await expect(chooser).toHaveAttribute('aria-expanded','false');await expect(page.getByRole('checkbox',{name:/^I understand that log messages/})).not.toBeChecked();await expect(page.getByRole('checkbox',{name:/^I also accept that this HTTP test/})).not.toBeChecked();expect(tally.create).toBe(0);expect(tally.cancel).toBe(0);
-   mark('presets use the displayed checked reference without any journal request');const group=page.getByRole('group',{name:'Windows ending at the displayed reference time',exact:true}),from=page.getByLabel('From (UTC)',{exact:true}),to=page.getByLabel('To (UTC)',{exact:true}),severity=page.getByRole('combobox',{name:'Include severity through',exact:true});await severity.selectOption('4');const reference=await group.locator('time').getAttribute('datetime');expect(Number.isFinite(Date.parse(reference))).toBe(true);const beforePresets={...tally};
+   mark('observed service selection fills only the manual field');await chooser.click();await picker.getByRole('button',{name:'Use invented.service',exact:true}).click();await expect(picker).toHaveCount(0);await expect(unit).toHaveValue('invented.service');await expect(chooser).toBeFocused();await expect(chooser).toHaveAttribute('aria-expanded','false');await expect(page.getByRole('checkbox',{name:/^I understand that log messages/})).toHaveCount(0);await expect(page.getByRole('checkbox',{name:/^I also accept that this HTTP test/})).toHaveCount(0);expect(tally.create).toBe(0);expect(tally.cancel).toBe(0);
+   mark('presets use the displayed checked reference without any journal request');await openAdvanced(page);const group=page.getByRole('group',{name:'Windows ending at the displayed reference time',exact:true}),from=page.getByLabel('From (UTC)',{exact:true}),to=page.getByLabel('To (UTC)',{exact:true}),severity=page.getByRole('combobox',{name:'Include severity through',exact:true});await severity.selectOption('4');const reference=await group.locator('time').getAttribute('datetime');expect(Number.isFinite(Date.parse(reference))).toBe(true);const beforePresets={...tally};
    const windowMatches=async(ref,minutes)=>{const start=Date.parse((await from.inputValue())+'Z'),end=Date.parse((await to.inputValue())+'Z');expect(end).toBe(Math.floor(Date.parse(ref)/1000)*1000);expect(end-start).toBe(minutes*60000);};
    for(const [minutes,label]of [[5,'5 minutes ending at reference time'],[15,'15 minutes ending at reference time'],[30,'30 minutes ending at reference time'],[60,'1 hour ending at reference time']]){const button=group.getByRole('button',{name:label,exact:true});await button.click();await expect(button).toHaveAttribute('aria-pressed','true');await expect(button).toHaveAccessibleDescription('Reference time (UTC, last checked manager time): '+reference);await windowMatches(reference,minutes);expect(tally).toEqual(beforePresets);}
-   await expect(group).toContainText('The reference stays fixed between reads and may be old.');await expect(unit).toHaveValue('invented.service');await expect(severity).toHaveValue('4');await expect(page.getByRole('button',{name:'Capture logs',exact:true})).toBeDisabled();
+   await expect(panel(page)).toContainText('The reference stays fixed between reads and may be old.');await expect(unit).toHaveValue('invented.service');await expect(severity).toHaveValue('4');await expect(page.getByRole('button',{name:'Capture logs',exact:true})).toHaveCount(0);await expect(page.getByRole('button',{name:'Fetch logs',exact:true})).toBeEnabled();
    mark('ordinary idle keeps the selected draft and reference time');await page.evaluate(()=>new Promise(resolve=>window.setTimeout(resolve,1100)));await windowMatches(reference,60);await expect(group.locator('time')).toHaveAttribute('datetime',reference);await expect(unit).toHaveValue('invented.service');await expect(severity).toHaveValue('4');expect(tally).toEqual(beforePresets);
    mark('advance fixture reference clock');const advanced=await control('advance',{seconds:60}),priorAuthReads=authReads,priorStatusReads=tally.status;const refreshed=page.waitForResponse(response=>response.url()===base+endpoint()&&response.request().method()==='GET');
    mark('click exact journal reference refresh');await group.getByRole('button',{name:'Refresh status and reference time',exact:true}).click();
@@ -230,12 +235,22 @@ try{
    mark('journal reference refresh preserves the old draft window');await windowMatches(reference,60);await expect(group.locator('button[aria-pressed=true]')).toHaveCount(0);
    mark('journal reference refresh preserves service and severity');await expect(unit).toHaveValue('invented.service');await expect(severity).toHaveValue('4');
    mark('journal reference refresh performs no capture cancel or query');expect(tally.create).toBe(0);expect(tally.cancel).toBe(0);expect(tally.query).toBe(0);
-   mark('choose fifteen-minute window at refreshed reference');await group.getByRole('button',{name:'15 minutes ending at reference time',exact:true}).click();await windowMatches(checkedReference,15);const chosenStart=new Date(Date.parse((await from.inputValue())+'Z')).toISOString(),chosenEnd=new Date(Date.parse((await to.inputValue())+'Z')).toISOString();await expect(page.getByRole('checkbox',{name:/^I understand that log messages/})).not.toBeChecked();await expect(page.getByRole('checkbox',{name:/^I also accept that this HTTP test/})).not.toBeChecked();
-   mark('both journal acknowledgements still gate capture');await page.getByLabel('Exact service unit',{exact:true}).fill('invented.service');const submit=page.getByRole('button',{name:'Capture logs',exact:true});await expect(submit).toBeDisabled();
+   mark('choose fifteen-minute window at refreshed reference');await group.getByRole('button',{name:'15 minutes ending at reference time',exact:true}).click();await windowMatches(checkedReference,15);const chosenStart=new Date(Date.parse((await from.inputValue())+'Z')).toISOString(),chosenEnd=new Date(Date.parse((await to.inputValue())+'Z')).toISOString();await expect(page.getByRole('checkbox',{name:/^I understand that log messages/})).toHaveCount(0);await expect(page.getByRole('checkbox',{name:/^I also accept that this HTTP test/})).toHaveCount(0);
+   mark('both journal acknowledgements still gate capture');await page.getByLabel('Exact service unit',{exact:true}).fill('invented.service');await review(page);expect(tally.create).toBe(0);expect(tally.cancel).toBe(0);await expect(page.getByRole('checkbox',{name:/^I understand that log messages/})).not.toBeChecked();await expect(page.getByRole('checkbox',{name:/^I also accept that this HTTP test/})).not.toBeChecked();const submit=page.getByRole('button',{name:'Capture logs',exact:true});await expect(submit).toBeDisabled();
+   mark('review dismissals discard consent without changing the draft or existing request');
+   const reviewDialog=page.getByRole('dialog',{name:'Review log request',exact:true});
+   await shot(page,'synthetic-journal-review-desktop-en');
+   await expect(reviewDialog).toContainText('invented.service');await expect(reviewDialog).toContainText('4 · Warning');expect(Date.parse(await reviewDialog.locator('time').nth(0).getAttribute('datetime'))).toBe(Date.parse(chosenStart));expect(Date.parse(await reviewDialog.locator('time').nth(1).getAttribute('datetime'))).toBe(Date.parse(chosenEnd));
+   for(const action of ['Back','Close','Escape']){
+    await page.getByRole('checkbox',{name:/^I understand that log messages/}).check();await page.getByRole('checkbox',{name:/^I also accept that this HTTP test/}).check();await expect(submit).toBeEnabled();
+    if(action==='Escape')await page.keyboard.press('Escape');else await reviewDialog.getByRole('button',{name:action,exact:true}).click();
+    await expect(reviewDialog).toHaveCount(0);await expect(page.getByRole('button',{name:'Fetch logs',exact:true})).toBeFocused();await expect(unit).toHaveValue('invented.service');await windowMatches(checkedReference,15);expect(tally.create).toBe(0);expect(tally.cancel).toBe(0);
+    await review(page);await expect(page.getByRole('checkbox',{name:/^I understand that log messages/})).not.toBeChecked();await expect(page.getByRole('checkbox',{name:/^I also accept that this HTTP test/})).not.toBeChecked();await expect(submit).toBeDisabled();
+   }
    await page.getByRole('checkbox',{name:/^I understand that log messages/}).check();await expect(submit).toBeDisabled();expect(tally.create).toBe(0);
    await page.getByRole('checkbox',{name:/^I also accept that this HTTP test/}).check();await expect(submit).toBeEnabled();
-   await held(page,'**'+endpoint('alpha','create'),async gate=>{mark('single consented creation waits for exact committed response');await submit.click();await expect.poll(gate.arrived).toBe(1);expect(gate.statuses()).toEqual([200]);await expect(submit).toBeDisabled();expect(tally.create).toBe(1);await expect(rows(page)).toHaveCount(0);gate.release();await expect(state(page)).toHaveText('Pending');await settled(page);});
-   await expect(submit).toBeDisabled();await expect(panel(page)).toContainText('No content is available yet');await expect(panel(page)).not.toContainText('Complete coverage');
+   await held(page,'**'+endpoint('alpha','create'),async gate=>{mark('single consented creation waits for exact committed response');await submit.click();await expect.poll(gate.arrived).toBe(1);expect(gate.statuses()).toEqual([200]);await expect(submit).toHaveCount(0);await expect(page.getByRole('button',{name:'Fetch logs',exact:true})).toBeDisabled();expect(tally.create).toBe(1);await expect(rows(page)).toHaveCount(0);gate.release();await expect(state(page)).toHaveText('Pending');await settled(page);});
+   await expect(submit).toHaveCount(0);await expect(page.getByRole('button',{name:'Fetch logs',exact:true})).toBeDisabled();await expect(panel(page)).toContainText('No content is available yet');await expect(panel(page)).not.toContainText('Complete coverage');
    const current=await get(endpoint());expect(current.request.state).toBe('pending');expect(current.expectedFloor).toBe('1');expect(current.contentStatus).toBe('unavailable');expect(tally.create).toBe(1);expect(current.request.description.query).toEqual({unit:'invented.service',start:chosenStart.replace('.000Z','Z'),end:chosenEnd.replace('.000Z','Z'),maxPriority:4});expect(tally.cancel).toBe(0);await clean(page);
    mark('service table opens Logs without creating or canceling a capture');
    await page.getByRole('tab',{name:'Inventory',exact:true}).click();
@@ -245,11 +260,11 @@ try{
    await page.getByRole('button',{name:'Open logs: invented-backup.service',exact:true}).click();
    await expect(page.getByRole('tab',{name:'Logs',exact:true})).toBeFocused();await settled(page);
    await expect(unit).toHaveValue('invented-backup.service');await expect(state(page)).toHaveText('Pending');
-   await expect(page.getByRole('checkbox',{name:/^I understand that log messages/})).not.toBeChecked();
-   await expect(page.getByRole('checkbox',{name:/^I also accept that this HTTP test/})).not.toBeChecked();
+   await expect(page.getByRole('checkbox',{name:/^I understand that log messages/})).toHaveCount(0);
+   await expect(page.getByRole('checkbox',{name:/^I also accept that this HTTP test/})).toHaveCount(0);
    expect(tally.create).toBe(1);expect(tally.cancel).toBe(0);expect(tally.query).toBe(0);
    mark('repeated Logs selection and metadata refresh preserve the service draft');
-   await unit.fill('draft.service');const actions=()=>({create:tally.create,cancel:tally.cancel,query:tally.query}),beforeRepeated=actions();
+   await openAdvanced(page);await unit.fill('draft.service');const actions=()=>({create:tally.create,cancel:tally.cancel,query:tally.query}),beforeRepeated=actions();
    await page.getByRole('tab',{name:'Logs',exact:true}).click();await page.getByRole('tab',{name:'Logs',exact:true}).click();
    await expect(unit).toHaveValue('draft.service');expect(actions()).toEqual(beforeRepeated);
    await unit.evaluate(el=>{el.dataset.diagnosisProbe='same';});
@@ -267,7 +282,7 @@ try{
 
   await check('Source guidance and recognizable search shortcuts never expand local journal permission',async()=>{
    const page=await pageAt();const tally=counts(page);await open(page);
-   const sources=page.getByRole('region',{name:'Log sources',exact:true});
+   await page.getByText('Permissions & sources',{exact:true}).click();const sources=page.getByRole('region',{name:'Log sources',exact:true});
    await expect(sources).toBeVisible();await sources.getByText('Other Linux log sources',{exact:true}).click();
    await expect(sources.getByText('Not supported by this collector',{exact:true})).toHaveCount(3);
    for(const label of ['Kernel & hardware','Whole system journal','System-wide authentication'])await expect(sources.getByText(label,{exact:true})).toBeVisible();
@@ -280,15 +295,16 @@ try{
    await expect(picker.getByRole('button',{name:'Use ssh.service',exact:true})).toHaveCount(0);
    await picker.getByRole('button',{name:'All services',exact:true}).click();
    await expect(picker.getByRole('button',{name:'Use invented.service',exact:true})).toBeVisible();
-   await expect(picker.getByText('Observed service · log permission not verified',{exact:true})).toHaveCount(3);
+   await expect(picker.getByText('Permission unknown',{exact:true})).toHaveCount(3);
    await picker.scrollIntoViewIfNeeded();await shot(page,'synthetic-journal-source-picker-desktop-en');
    await picker.getByRole('button',{name:'Use invented.service',exact:true}).click();
    await expect(page.locator('.journal-source-selection')).toContainText('Permission not verified.');
-   for(const box of await page.getByRole('checkbox').all())await expect(box).not.toBeChecked();
+   await expect(page.getByRole('checkbox')).toHaveCount(0);await review(page);for(const box of await page.getByRole('checkbox').all())await expect(box).not.toBeChecked();await page.getByRole('button',{name:'Back',exact:true}).click();
    expect(tally.create).toBe(0);expect(tally.cancel).toBe(0);expect(tally.query).toBe(0);
    await page.setViewportSize({width:390,height:844});await page.getByLabel('Language').selectOption('de');
    await page.getByRole('region',{name:'Log-Quellen',exact:true}).scrollIntoViewIfNeeded();
    await expect(page.getByText('Kernel & Hardware',{exact:true})).toBeVisible();await shot(page,'synthetic-journal-source-options-mobile-de');
+   mark('compact German mobile query and unchecked request-time consent');await page.getByText('Freigabe & Quellen',{exact:true}).click();await expect(page.locator('.journal-context-details')).not.toHaveAttribute('open');await page.locator('.journal-query-bar').scrollIntoViewIfNeeded();await shot(page,'synthetic-journal-workspace-mobile-de');await page.getByRole('button',{name:'Logs abrufen',exact:true}).click();const mobileReview=page.getByRole('dialog',{name:'Log-Anfrage prüfen',exact:true});await expect(mobileReview).toBeVisible();for(const box of await mobileReview.getByRole('checkbox').all())await expect(box).not.toBeChecked();await expect(mobileReview.getByRole('button',{name:'Logs erfassen',exact:true})).toBeDisabled();await shot(page,'synthetic-journal-review-mobile-de');await mobileReview.getByRole('button',{name:'Zurück',exact:true}).click();expect(tally.create).toBe(0);expect(tally.cancel).toBe(0);expect(tally.query).toBe(0);
    await clean(page);
   });
 
@@ -298,7 +314,7 @@ try{
    await expect(page.locator('.journal-message').nth(1)).toContainText('<img');await expect(page.locator('.journal-results img,.journal-results script,.journal-results a')).toHaveCount(0);expect(await page.evaluate(()=>window.__journalFixtureHTMLExecuted??false)).toBe(false);
    await page.locator('.journal-count').scrollIntoViewIfNeeded();await shot(page,'synthetic-journal-desktop-en');
    await open(page,'beta');await capture(page);await deliver(page,'beta','partial');mark('partial source remains partial in German mobile');
-   await page.setViewportSize({width:390,height:844});await page.getByLabel('Language').selectOption('de');await expect(page.getByRole('heading',{name:'Service-Logs',exact:true})).toBeVisible();
+   await page.setViewportSize({width:390,height:844});await page.getByLabel('Language').selectOption('de');await expect(page.getByRole('heading',{name:'Logs',exact:true})).toBeVisible();
    await expect(page.locator('.journal-count')).toContainText('Teilweise Abdeckung');await expect(page.locator('.journal-count')).toContainText('Quellensichtbarkeit eingeschränkt');
    await page.getByRole('button',{name:'Dunkles Design aktivieren',exact:true}).click();await page.locator('.journal-count').scrollIntoViewIfNeeded();await shot(page,'synthetic-journal-mobile-de');
    await expect(rows(page)).toHaveCount(100);await clean(page);
@@ -332,16 +348,17 @@ try{
    const unit=page.getByLabel('Exact service unit',{exact:true}),from=page.getByLabel('From (UTC)',{exact:true}),to=page.getByLabel('To (UTC)',{exact:true}),severity=page.getByRole('combobox',{name:'Include severity through',exact:true});
    const contentAck=page.getByRole('checkbox',{name:/^I understand that log messages/}),httpAck=page.getByRole('checkbox',{name:/^I also accept that this HTTP test/});
    const selected=async()=>{await expect(unit).toHaveValue(draft.unit);await expect(from).toHaveValue(draft.start);await expect(to).toHaveValue(draft.end);await expect(severity).toHaveValue(draft.priority);};
-   await unit.fill(draft.unit);await from.fill(draft.start);await to.fill(draft.end);await severity.selectOption(draft.priority);await contentAck.check();await httpAck.check();const searchDraft=page.getByLabel('Literal text in captured messages',{exact:true});await searchDraft.fill('Needle[.*]');
+   await openAdvanced(page);await unit.fill(draft.unit);await from.fill(draft.start);await to.fill(draft.end);await severity.selectOption(draft.priority);const searchDraft=page.getByLabel('Literal text in captured messages',{exact:true});await searchDraft.fill('Needle[.*]');await review(page);await contentAck.check();await httpAck.check();
    // Cross multiple real 250 ms idle checks without changing browser clocks.
    await page.evaluate(()=>new Promise(resolve=>window.setTimeout(resolve,1100)));await selected();await expect(contentAck).toBeChecked();await expect(httpAck).toBeChecked();await expect(searchDraft).toHaveValue('Needle[.*]');await expect(rows(page)).toHaveCount(100);
+   await page.getByRole('button',{name:'Back',exact:true}).click();
    mark('explicit device metadata refresh preserves the selected live Logs subtree');
    const metadataURL=`${base}/api/devices/${devices.alpha}`,oldMetadata=await get(`/api/devices/${devices.alpha}`),journalBefore={...tally};let metadataReads=0;
    const countMetadata=request=>{if(request.url()===metadataURL&&request.method()==='GET')metadataReads++;};page.on('request',countMetadata);
    await expect(page.locator('.device-page h1')).toHaveText('QA synthetic journal alpha');await control('metadata',{device:'alpha'});
    await held(page,metadataURL,async gate=>{
     const update=page.getByRole('button',{name:'Refresh device metadata',exact:true});await update.click();await expect.poll(gate.arrived).toBe(1);expect(gate.statuses()).toEqual([200]);
-    await expect(update).toBeDisabled();await expect(page.locator('#device-metadata-status')).toContainText('Checking device metadata');await expect(page.locator('.device-page h1')).toHaveText(oldMetadata.name);
+    await review(page);await contentAck.check();await httpAck.check();await expect(update).toBeDisabled();await expect(page.locator('#device-metadata-status')).toContainText('Checking device metadata');await expect(page.locator('.device-page h1')).toHaveText(oldMetadata.name);
     await expect(page.getByRole('tab',{name:'Logs',exact:true})).toHaveAttribute('aria-selected','true');await selected();for(const field of [unit,from,to,severity])await expect(field).toBeEnabled();await expect(contentAck).toBeChecked();await expect(httpAck).toBeChecked();await expect(searchDraft).toHaveValue('Needle[.*]');await expect(rows(page)).toHaveCount(100);expect(tally).toEqual(journalBefore);
     gate.release();await expect.poll(gate.completed).toBe(1);await expect(page.locator('.device-page h1')).toHaveText('QA synthetic journal alpha refreshed');await expect(update).toBeEnabled();await expect(page.locator('#device-metadata-status')).toContainText('Last successful check:');
    });page.off('request',countMetadata);
@@ -349,14 +366,15 @@ try{
    const refreshedMetadata=await get(`/api/devices/${devices.alpha}`);expect(refreshedMetadata.id).toBe(oldMetadata.id);expect(refreshedMetadata.name).toBe('QA synthetic journal alpha refreshed');expect(refreshedMetadata.lastSeen).toBe(oldMetadata.lastSeen);
    mark('visible blur exposes paused status with retained disabled controls');expect(await page.evaluate(()=>document.visibilityState)).toBe('visible');await page.evaluate(()=>window.dispatchEvent(new Event('blur')));
    await expect(panel(page).getByRole('status')).toContainText('Log content is paused while this page is inactive.');await expect(panel(page)).toContainText('No new capture is started.');await expect(rows(page)).toHaveCount(0);await expect(page.locator('.journal-results,.journal-search')).toHaveCount(0);await expect(page.locator('.journal-capture')).toBeVisible();await selected();
-   for(const field of [unit,from,to,severity])await expect(field).toBeDisabled();await expect(contentAck).not.toBeChecked();await expect(httpAck).not.toBeChecked();await expect(page.getByRole('button',{name:'Refresh status',exact:true})).toBeEnabled();expect(tally.create).toBe(1);expect(tally.cancel).toBe(0);
+   for(const field of [unit,from,to,severity])await expect(field).toBeDisabled();await expect(contentAck).toHaveCount(0);await expect(httpAck).toHaveCount(0);await expect(page.getByRole('button',{name:'Refresh status',exact:true})).toBeEnabled();expect(tally.create).toBe(1);expect(tally.cancel).toBe(0);
    await page.evaluate(()=>new Promise(resolve=>window.setTimeout(resolve,1100)));await selected();await expect(panel(page).getByRole('status')).toContainText('Log content is paused');await expect(rows(page)).toHaveCount(0);
    let authReads=0;const countAuth=request=>{if(request.url()===base+'/api/auth/session'&&request.method()==='GET')authReads++;};page.on('request',countAuth);
    await held(page,'**'+endpoint(),async gate=>{
     mark('explicit paused refresh rechecks access before held original status');await page.getByRole('button',{name:'Refresh status',exact:true}).click();await expect.poll(gate.arrived).toBe(1);expect(gate.statuses()).toEqual([200]);expect(authReads).toBeGreaterThan(0);await expect(panel(page).getByRole('status')).toContainText('Reading journal status or captured content');await expect(rows(page)).toHaveCount(0);await selected();for(const field of [unit,from,to,severity])await expect(field).toBeDisabled();
     mark('explicit refresh restores the same accepted snapshot without replay');await queryAction(page,async()=>gate.release(),{identity:created.request.description.identity,snapshotDigest:proof.snapshotDigest,observedAt:proof.observedAt,expiresAt:proof.expiresAt,search:'',offset:0,totalCapturedRows:205});
    });page.off('request',countAuth);
-   await selected();for(const field of [unit,from,to,severity])await expect(field).toBeEnabled();await expect(contentAck).not.toBeChecked();await expect(httpAck).not.toBeChecked();await expect(page.getByLabel('Literal text in captured messages',{exact:true})).toHaveValue('');expect(tally.create).toBe(1);expect(tally.cancel).toBe(0);
+   await selected();for(const field of [unit,from,to,severity])await expect(field).toBeEnabled();await expect(contentAck).toHaveCount(0);await expect(httpAck).toHaveCount(0);await expect(page.getByLabel('Literal text in captured messages',{exact:true})).toHaveValue('');expect(tally.create).toBe(1);expect(tally.cancel).toBe(0);
+   await review(page);await expect(contentAck).not.toBeChecked();await expect(httpAck).not.toBeChecked();await page.getByRole('button',{name:'Back',exact:true}).click();
    const resumed=await get(endpoint());expect(resumed.request.description).toEqual(created.request.description);expect(resumed.request.receipt.resultDigest).toBe(proof.snapshotDigest);expect(resumed.contentStatus).toBe('available');
    await control('advance',{seconds:700});mark('injected hidden visibility clears captured rows');await page.evaluate(()=>{Object.defineProperty(document,'visibilityState',{configurable:true,value:'hidden'});document.dispatchEvent(new Event('visibilitychange'));});await expect(rows(page)).toHaveCount(0);await expect(page.locator('.journal-search')).toHaveCount(0);
    await held(page,'**'+endpoint(),async gate=>{mark('visible restore waits for a fresh real status');await page.evaluate(()=>{Object.defineProperty(document,'visibilityState',{configurable:true,value:'visible'});document.dispatchEvent(new Event('visibilitychange'));});await expect.poll(gate.arrived).toBeGreaterThan(0);expect(gate.statuses().every(value=>value===200)).toBe(true);await expect(rows(page)).toHaveCount(0);gate.release();await expect(rows(page)).toHaveCount(100);await settled(page);});

@@ -26,6 +26,12 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
 describe('package and update source isolation', () => {
+    it('defaults to Packages without opening any legacy, process or update source', async () => {
+        render(<DeviceInventoryWorkspace deviceId={completeDevice}/>); await screen.findByRole('rowheader', { name: 'fixture-000000' });
+        expect(screen.getByRole('tab', { name: 'Packages' })).toHaveAttribute('aria-selected', 'true');
+        expect(vi.mocked(request).mock.calls.map(([path]) => path)).toEqual([`/devices/${completeDevice}/inventory/packages`]);
+        expect(screen.getByText('Legacy inventory source', { selector: 'summary' }).closest('details')).not.toHaveAttribute('open');
+    });
     it('opens package rows without any cached or complete update reads', async () => {
         mount(); await screen.findByRole('rowheader', { name: 'fixture-000000' });
         expect(request).toHaveBeenCalledTimes(1); expect(vi.mocked(request).mock.calls[0][0]).toBe(`/devices/${completeDevice}/inventory/packages`);

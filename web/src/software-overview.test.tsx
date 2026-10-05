@@ -35,22 +35,21 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.useRealTimers(); });
 
 describe('complete software overview', () => {
-    it('shows 1,472 complete rows above a clearly secondary 211-row sample and opens Packages directly', async () => {
+    it('keeps the legacy 211-row preview separate and opens complete Packages without concurrent metadata reads', async () => {
         expect(validOperationalView(preview(), completeDevice)).toBe(true);
         render(<DeviceInventoryWorkspace deviceId={completeDevice} initialSource="preview"/>);
-        await waitFor(() => expect(total()).toHaveTextContent('1,472'));
         const sample = await screen.findByRole('button', { name: /^Software sample/ });
         expect(within(sample).getByText('211')).toBeVisible(); expect(mutateRaw).not.toHaveBeenCalled();
-        expect(request).toHaveBeenCalledWith(`/devices/${completeDevice}/inventory/packages`, { signal: expect.any(AbortSignal) }, 16384);
+        expect(request).toHaveBeenCalledTimes(1); expect(vi.mocked(request).mock.calls[0][0]).toBe(`/devices/${completeDevice}/operational`);
+        expect(screen.queryByText('Complete dpkg rows')).not.toBeInTheDocument();
         fireEvent.click(sample); expect(screen.getByText(/Legacy bounded sample of installed packages/)).toBeVisible();
-        fireEvent.click(screen.getByRole('button', { name: 'Open Packages' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Open complete Packages' }));
         await screen.findByRole('rowheader', { name: 'fixture-000000' });
         expect(screen.getByRole('tab', { name: 'Packages' })).toHaveAttribute('aria-selected', 'true');
         expect(screen.getByRole('tab', { name: 'Packages' })).toHaveFocus();
         expect(screen.queryByRole('button', { name: /^Software sample/ })).not.toBeInTheDocument();
         expect(JSON.parse(vi.mocked(mutateRaw).mock.calls[0][1]).generationId).toBe(view.complete!.binding.generationId);
-        expect(vi.mocked(request).mock.calls.filter(([path]) => path.endsWith('/inventory/packages'))).toHaveLength(2);
-        expect(screen.queryByRole('region', { name: 'Software · complete dpkg inventory' })).not.toBeInTheDocument();
+        expect(vi.mocked(request).mock.calls.filter(([path]) => path.endsWith('/inventory/packages'))).toHaveLength(1);
     });
     it.each(['pending', 'failed'] as const)('keeps the original complete count, generation and age separate from a newer %s attempt', async state => {
         view.complete!.binding.sequence = '1'; view.transfer = transfer(state); view.serverNow = '2026-10-04T01:00:10Z';
