@@ -60,6 +60,10 @@ file as navigation and project constraints, never as permission to act on a host
   independent durable floor, exact retry bytes, cached-only command policy,
   original metadata age and operator-only bounded paging. Fixture tests do not
   establish native Debian/Ubuntu or installed-service acceptance.
+- For one-time existing-agent inventory consent, read
+  `docs/guided-inventory-setup.md`. Its preview is nonmutating until explicit
+  confirmation; existing identity-bound scope CLIs remain authoritative. Do not
+  turn setup into a manager grant, journal recovery or host acceptance claim.
 - Follow Go/Node versions and dependency locks in this revision. Validate commands
   against actual flags/config. Distinguish runtime tests from cross-builds, skipped
   container tests, and proposed functionality. Never invent install/enroll flags.

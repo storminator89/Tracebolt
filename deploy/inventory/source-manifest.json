@@ -1,0 +1,13 @@
+{
+  "schemaVersion": "tracebolt.inventory-guide-source.v1",
+  "files": {
+    "deploy/journal/setup.py": {
+      "sha256": "abdea35026d4ff56b88bbbdd413f70a4a9f52d01089a05e7ba86336e7ed12b5a",
+      "size": 31359
+    },
+    "deploy/systemd/tracebolt-agent.service.in": {
+      "sha256": "0bc6374c36f6252e42751f4692464429165b512bcb196486b81ff4785671ea0c",
+      "size": 1024
+    }
+  }
+}

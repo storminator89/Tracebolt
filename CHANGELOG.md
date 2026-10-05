@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-10-05 — Verify socket source disclosures
+
+- Open the existing source-details disclosure in the browser check and verify its visible external-reachability limitation alongside the owner-attribution warning. Preserve all socket paging, field and expiry assertions; production copy and behavior are unchanged.
+
+## Guided local inventory consent (source candidate)
+
+- One local confirmation groups existing full process/mount and complete cached APT scopes, with separately selected optional hostname/interfaces. Installed capability checks, honest partial results and safe service-activity restoration preserve the existing consent authority. No host acceptance is claimed.
+
 ## 2026-10-05 — Align browser contracts with the reviewed device workspace
 
 - Navigate complete and legacy inventory sources explicitly, preserving lazy-read, consent, cancellation, source-binding, count and expiry assertions after the Packages default and separated legacy views.

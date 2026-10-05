@@ -1,5 +1,7 @@
 # Complete cached APT candidate rows
 
+For an existing compatible installed agent, the [one-time inventory guide](guided-inventory-setup.md) groups full process/mount and cached APT consent into one local confirmation. It preserves the existing separate scope boundaries.
+
 This source candidate extends the bounded [cached-update preview](cached-updates-extension.md)
 with a separately consented, immutable full-known-candidate generation. It reuses
 the package transfer state machine through a fixed cached-update codec. It does

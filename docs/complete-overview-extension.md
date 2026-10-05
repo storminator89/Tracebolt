@@ -1,5 +1,7 @@
 # Complete visible process and mount overview
 
+For an existing compatible installed agent, the [one-time inventory guide](guided-inventory-setup.md) groups full process/mount and cached APT consent into one local confirmation. It preserves the existing separate scope boundaries.
+
 This source adds full-generation process and mounted-filesystem views to an
 existing activated Linux `managed-operations-v3` device. It is default-off until
 an administrator explicitly enables its local scope. Existing package, metric,

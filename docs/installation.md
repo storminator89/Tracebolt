@@ -37,6 +37,12 @@ still require their own explicit approval. The detailed manual and default ready
 paths below remain valid for their stated scopes; source checks and a started pending
 process do not establish approved reporting or actual reboot acceptance.
 
+For an existing activated v3 agent, the [one-time inventory collection guide](guided-inventory-setup.md)
+can group the existing full process/mount and full cached APT grants into one
+explicit local confirmation. It checks actual installed CLI support, preserves
+the identity and counters, and does not upgrade the agent or configure journals.
+Hostname/interfaces remain a separate optional selection.
+
 ## 1. Choose the correct milestone
 
 | Component | Available now | Not provided by this milestone |
