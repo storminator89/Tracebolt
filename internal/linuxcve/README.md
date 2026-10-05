@@ -58,7 +58,11 @@ fixed-URL HTTPS adapter (or restoration of its protected cache). Its metadata is
 `https_origin_only` / `official_feed_records`. This still does not prove the
 origin of an installed package or comprehensive vulnerability coverage.
 
-Imports are bounded at 32 MiB, 250,000 raw records, 32 nesting levels, 16 million
+Manual imports are bounded at 32 MiB. The fixed-origin official Debian parser
+has a separate 96 MiB decoded JSON budget, based on the hosted 81,530,876-byte
+identity response. It parses that JSON directly without constructing another
+full-sized import envelope. Structural budgets remain unchanged: 250,000 raw
+records, 32 nesting levels, 16 million
 JSON values, and 30 seconds of parser work. Reads check cancellation between
 underlying reader calls; the caller must supply a deadline-aware body if a read
 can block. Oversized, empty-target, duplicate-key (including case aliases),

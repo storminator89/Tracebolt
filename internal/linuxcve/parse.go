@@ -6,7 +6,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"fmt"
 	"io"
 	"localrmm/internal/assessment"
 	"localrmm/internal/linuxpackages"
@@ -64,21 +63,27 @@ func Parse(ctx context.Context, r io.Reader, now time.Time) (*Snapshot, error) {
 	if d.Decode(&envelope) != nil || envelope.SchemaVersion != BundleSchemaVersion || !validTime(envelope.FetchedAt) || envelope.FetchedAt.After(now) || len(envelope.Payload) == 0 {
 		return nil, ErrInvalid
 	}
-	s := &Snapshot{metadata: FeedMetadata{Provider: envelope.Provider, FetchedAt: envelope.FetchedAt.UTC(), ValidatedAt: now.UTC(), ExpiresAt: envelope.FetchedAt.Add(FeedTTL).UTC(), Trust: "operator_imported_unverified", Coverage: "imported_records_only"}, rules: make(map[string][]rule)}
+	return parseSnapshot(ctx, envelope.Provider, envelope.Payload, envelope.FetchedAt, now)
+}
+
+// parseSnapshot receives JSON already checked for encoding, framing and duplicate keys.
+func parseSnapshot(ctx context.Context, provider string, payload []byte, fetchedAt, now time.Time) (*Snapshot, error) {
+	s := &Snapshot{metadata: FeedMetadata{Provider: provider, FetchedAt: fetchedAt.UTC(), ValidatedAt: now.UTC(), ExpiresAt: fetchedAt.Add(FeedTTL).UTC(), Trust: "operator_imported_unverified", Coverage: "imported_records_only"}, rules: make(map[string][]rule)}
+	var err error
 	if !validTime(s.metadata.ExpiresAt) {
 		return nil, ErrInvalid
 	}
-	switch envelope.Provider {
+	switch provider {
 	case DebianProvider:
 		s.metadata.Target = linuxpackages.Debian13
 		s.metadata.SourceURL = "https://security-tracker.debian.org/tracker/data/json"
 		s.metadata.License = "not_verified"
-		err = parseDebian(ctx, envelope.Payload, s)
+		err = parseDebian(ctx, payload, s)
 	case UbuntuProvider:
 		s.metadata.Target = linuxpackages.Ubuntu2404
 		s.metadata.SourceURL = "https://security-metadata.canonical.com/osv/"
 		s.metadata.License = "CC-BY-SA-4.0"
-		err = parseUbuntu(ctx, envelope.Payload, s, envelope.FetchedAt)
+		err = parseUbuntu(ctx, payload, s, fetchedAt)
 	default:
 		return nil, ErrInvalid
 	}
@@ -95,7 +100,7 @@ func Parse(ctx context.Context, r io.Reader, now time.Time) (*Snapshot, error) {
 		sort.Slice(rules, func(i, j int) bool { return rules[i].cve < rules[j].cve })
 		s.rules[name] = rules
 	}
-	h := sha256.Sum256(envelope.Payload)
+	h := sha256.Sum256(payload)
 	s.metadata.SHA256 = hex.EncodeToString(h[:])
 	s.metadata.SourceCount = len(s.rules)
 	s.metadata.Freshness = freshness(s.metadata.FetchedAt, s.metadata.ExpiresAt, now)
@@ -108,18 +113,62 @@ func Parse(ctx context.Context, r io.Reader, now time.Time) (*Snapshot, error) {
 // adapter's protected cache. The JSON bundle importer cannot grant this trust.
 // It proves transport origin only, never a signature or package provenance.
 func ParseOfficialDebian(ctx context.Context, r io.Reader, fetchedAt, now time.Time) (*Snapshot, error) {
-	if r == nil || !validTime(fetchedAt) {
+	if ctx == nil || ctx.Err() != nil {
+		return nil, ErrCanceled
+	}
+	if r == nil || !validTime(fetchedAt) || !validTime(fetchedAt.UTC()) || !validTime(now) || fetchedAt.UTC().After(now) {
 		return nil, ErrInvalid
 	}
-	at, _ := json.Marshal(fetchedAt.UTC())
-	prefix := fmt.Sprintf(`{"schemaVersion":%q,"provider":%q,"fetchedAt":%s,"payload":`, BundleSchemaVersion, DebianProvider, at)
-	s, err := Parse(ctx, io.MultiReader(strings.NewReader(prefix), r, strings.NewReader("}")), now)
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	raw, err := readBounded(ctx, r, officialPayloadLimit(fetchedAt))
+	if err != nil {
+		return nil, err
+	}
+	return ParseOfficialDebianBytes(ctx, raw, fetchedAt, now)
+}
+
+// ParseOfficialDebianBytes avoids copying an already bounded HTTP/cache body
+// into a second envelope. Its contract and trust are identical to the reader
+// entry point; the returned immutable snapshot retains no caller-owned bytes.
+func ParseOfficialDebianBytes(ctx context.Context, raw []byte, fetchedAt, now time.Time) (*Snapshot, error) {
+	if ctx == nil || ctx.Err() != nil {
+		return nil, ErrCanceled
+	}
+	if !validTime(fetchedAt) || !validTime(fetchedAt.UTC()) || !validTime(now) || fetchedAt.UTC().After(now) {
+		return nil, ErrInvalid
+	}
+	if int64(len(raw)) > officialPayloadLimit(fetchedAt) {
+		return nil, ErrLimit
+	}
+	if !utf8.Valid(raw) {
+		return nil, ErrInvalid
+	}
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	// Preserve the former envelope's depth and four fixed header values in the
+	// token budget; the optimization must not broaden structural admission.
+	if err := validateJSONAt(ctx, raw, 1, 4); err != nil {
+		return nil, err
+	}
+	// Validate before trimming. Non-JSON Unicode whitespace must not be repaired.
+	// This matches RawMessage payload hashing, preserving existing cache hashes.
+	payload := bytes.Trim(raw, " \t\r\n")
+	s, err := parseSnapshot(ctx, DebianProvider, payload, fetchedAt.UTC(), now)
 	if err != nil {
 		return nil, err
 	}
 	s.metadata.Trust = "https_origin_only"
 	s.metadata.Coverage = "official_feed_records"
 	return s, nil
+}
+
+func officialPayloadLimit(fetchedAt time.Time) int64 {
+	// Preserve the former reader entry point's exact byte budget without ever
+	// building its feed-sized envelope. Both callers validate the time first.
+	at, _ := json.Marshal(fetchedAt.UTC())
+	prefix := `{"schemaVersion":"` + BundleSchemaVersion + `","provider":"` + DebianProvider + `","fetchedAt":`
+	return MaxOfficialJSONBytes - int64(len(prefix)+len(at)+len(`,"payload":`)+1)
 }
 
 func readBounded(ctx context.Context, r io.Reader, limit int64) ([]byte, error) {
@@ -152,9 +201,13 @@ func (r contextReader) Read(p []byte) (int, error) {
 // ignored provider fields. Unknown provider fields are harmless and preserved
 // only by the digest; an unknown envelope member is rejected separately.
 func validateJSON(ctx context.Context, data []byte) error {
+	return validateJSONAt(ctx, data, 0, 0)
+}
+
+func validateJSONAt(ctx context.Context, data []byte, startDepth, initialCount int) error {
 	d := json.NewDecoder(bytes.NewReader(data))
 	d.UseNumber()
-	count := 0
+	count := initialCount
 	var walk func(int) error
 	walk = func(depth int) error {
 		count++
@@ -217,7 +270,7 @@ func validateJSON(ctx context.Context, data []byte) error {
 		}
 		return nil
 	}
-	if err := walk(0); err != nil {
+	if err := walk(startDepth); err != nil {
 		return err
 	}
 	if _, err := d.Token(); err != io.EOF {

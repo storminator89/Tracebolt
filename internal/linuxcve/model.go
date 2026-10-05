@@ -14,11 +14,14 @@ import (
 )
 
 const (
-	BundleSchemaVersion   = "linux-cve-bundle-1"
-	ResultSchemaVersion   = "tracebolt.linux-cve-result.v1"
-	DebianProvider        = "debian-security-tracker"
-	UbuntuProvider        = "canonical-ubuntu-osv"
-	MaxBundleBytes        = 32 << 20
+	BundleSchemaVersion = "linux-cve-bundle-1"
+	ResultSchemaVersion = "tracebolt.linux-cve-result.v1"
+	DebianProvider      = "debian-security-tracker"
+	UbuntuProvider      = "canonical-ubuntu-osv"
+	MaxBundleBytes      = 32 << 20
+	// The measured official Debian identity response is 81,530,876 bytes.
+	// This scoped decoded JSON bound does not enlarge manual import budgets.
+	MaxOfficialJSONBytes  = 96 << 20
 	MaxRecords            = 250000
 	MaxFindings           = 100
 	MaxBinariesPerFinding = 20

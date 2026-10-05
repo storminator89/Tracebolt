@@ -2,6 +2,12 @@
 
 Meaningful development checkpoints are recorded here. These are prototype milestones, not production releases.
 
+## 2026-10-05 — Handle bounded larger official Debian feeds
+
+- Respond to the measured 81,530,876-byte official feed with validated gzip transport/cache support and a separate 96 MiB decoded-JSON ceiling for the fixed official source. Compressed bytes and cached payloads retain their existing 32 MiB bound; manual imports retain their 32 MiB limit.
+- Preserve fixed-origin HTTPS, finite deadlines, structural/record limits, gzip integrity and single-member checks, legacy cache compatibility, original age/provenance and atomic last-good retention. Add boundary, corruption and protected-cache restart regressions.
+- Synthetic large-feed and focused race checks passed in the reviewed source; actual official response/schema compatibility still requires its exact hosted gate. Regenerate the source-bound Go diagnostic vocabulary.
+
 ## 2026-10-05 — Diagnose feed limits and align acceptance reads
 
 - Add bounded numeric and fixed-enum feed-size diagnostics without raising limits, changing fetch behavior or exporting raw response content. Official-feed compatibility still requires the hosted check.

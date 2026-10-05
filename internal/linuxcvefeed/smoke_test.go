@@ -24,7 +24,7 @@ func TestOfficialDebianFeedSmoke(t *testing.T) {
 	if err != nil {
 		var limit *responseLimitError
 		if errors.As(err, &limit) {
-			t.Logf("RESPONSE_SIZE_LIMIT reason=%s declaredLength=%d observedBytes=%d maxBytes=%d", limit.reason, limit.declaredLength, limit.observedBytes, limit.maxBytes)
+			t.Logf("RESPONSE_SIZE_LIMIT layer=%s reason=%s declaredLength=%d observedBytes=%d maxBytes=%d", limit.layer, limit.reason, limit.declaredLength, limit.observedBytes, limit.maxBytes)
 		}
 		t.Fatalf("%s: %v", smokeFailureStage(err), err)
 	}

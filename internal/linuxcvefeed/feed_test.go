@@ -59,7 +59,7 @@ func TestFixedFetchContainsNoHostInventoryOrAmbientCredentials(t *testing.T) {
 		if r.Method != "GET" || r.URL.String() != DebianURL || r.URL.RawQuery != "" || r.URL.User != nil || r.Body != nil || r.Host != "security-tracker.debian.org" {
 			t.Fatalf("unexpected request shape: %s %s", r.Method, r.URL)
 		}
-		if len(r.Header) != 3 || r.Header.Get("User-Agent") != "Tracebolt-CVE-Feed/1" || r.Header.Get("Accept") != "application/json" || r.Header.Get("Accept-Encoding") != "identity" {
+		if len(r.Header) != 3 || r.Header.Get("User-Agent") != "Tracebolt-CVE-Feed/1" || r.Header.Get("Accept") != "application/json" || r.Header.Get("Accept-Encoding") != "gzip" {
 			t.Fatalf("unexpected request headers: %v", r.Header)
 		}
 		if _, ok := r.Context().Deadline(); !ok {
@@ -79,12 +79,17 @@ func TestFixedFetchContainsNoHostInventoryOrAmbientCredentials(t *testing.T) {
 		t.Fatalf("bad metadata: %+v", m)
 	}
 	var envelope cacheEnvelope
-	if json.Unmarshal(candidate.encoded, &envelope) != nil || string(envelope.Data) != raw {
+	if json.Unmarshal(candidate.encoded, &envelope) != nil || envelope.Kind != officialGzipKind {
+		t.Fatal("official cache is not compressed")
+	}
+	decoded, err := decodeOfficialGzip(context.Background(), envelope.Data, MaxOfficialFeedBytes)
+	if err != nil || string(decoded) != raw {
 		t.Fatal("cache changed original bytes")
 	}
 	h := sha256.Sum256([]byte(raw))
-	if envelope.SHA256 != hex.EncodeToString(h[:]) {
-		t.Fatal("raw hash missing")
+	storedHash := sha256.Sum256(envelope.Data)
+	if envelope.DecodedSHA256 != hex.EncodeToString(h[:]) || envelope.SHA256 != hex.EncodeToString(storedHash[:]) || envelope.PayloadSHA256 != m.SHA256 {
+		t.Fatal("stored, decoded or payload hash missing")
 	}
 	transport := newHTTPClient().Transport.(*http.Transport)
 	if transport.Proxy != nil || !transport.DisableCompression || transport.TLSClientConfig.InsecureSkipVerify || transport.TLSHandshakeTimeout <= 0 || transport.ResponseHeaderTimeout <= 0 || transport.MaxResponseHeaderBytes <= 0 {
@@ -116,9 +121,9 @@ func TestFetchRejectsResponseAndParseFailures(t *testing.T) {
 		{"not modified", func(r *http.Response) { r.StatusCode = 304 }, ErrResponse},
 		{"html", func(r *http.Response) { r.Header.Set("Content-Type", "text/html") }, ErrResponse},
 		{"missing type", func(r *http.Response) { r.Header.Del("Content-Type") }, ErrResponse},
-		{"compressed", func(r *http.Response) { r.Header.Set("Content-Encoding", "gzip") }, ErrResponse},
+		{"gzip header with invalid body", func(r *http.Response) { r.Header.Set("Content-Encoding", "gzip") }, ErrResponse},
 		{"implicit decompress", func(r *http.Response) { r.Uncompressed = true }, ErrResponse},
-		{"oversized declared", func(r *http.Response) { r.ContentLength = MaxFeedBytes + 1 }, linuxcve.ErrLimit},
+		{"oversized declared", func(r *http.Response) { r.ContentLength = MaxOfficialFeedBytes + 1 }, linuxcve.ErrLimit},
 		{"short body", func(r *http.Response) { r.ContentLength++ }, ErrResponse},
 		{"invalid json", func(r *http.Response) { r.Body = io.NopCloser(strings.NewReader("{")); r.ContentLength = 1 }, linuxcve.ErrInvalid},
 		{"empty target", func(r *http.Response) { r.Body = io.NopCloser(strings.NewReader("{}")); r.ContentLength = 2 }, linuxcve.ErrInvalid},
@@ -180,7 +185,7 @@ func TestFeedResponseLimitDiagnostics(t *testing.T) {
 			if tc.declared < 0 {
 				r.TransferEncoding = []string{"chunked"}
 			}
-			raw, err := readFeedBody(context.Background(), r, max)
+			raw, err := readFeedBody(context.Background(), r, max, responseLimitDecoded)
 			if raw != nil || !errors.Is(err, ErrResponse) || !errors.Is(err, linuxcve.ErrLimit) {
 				t.Fatalf("unexpected result: bytes=%d err=%v", len(raw), err)
 			}
@@ -204,12 +209,12 @@ func TestFeedResponseLimitDiagnostics(t *testing.T) {
 func TestFetchPreservesResponseLimitDiagnostics(t *testing.T) {
 	c := fetchCache(func(*http.Request) (*http.Response, error) {
 		r := response("")
-		r.ContentLength = MaxFeedBytes + 1
+		r.ContentLength = MaxOfficialFeedBytes + 1
 		return r, nil
 	})
 	_, err := c.FetchDebian(context.Background(), testNow)
 	var limit *responseLimitError
-	if !errors.As(err, &limit) || limit.declaredLength != MaxFeedBytes+1 || limit.observedBytes != 0 || limit.maxBytes != MaxFeedBytes || limit.reason != responseLimitDeclaredLength {
+	if !errors.As(err, &limit) || limit.declaredLength != MaxOfficialFeedBytes+1 || limit.observedBytes != 0 || limit.maxBytes != MaxOfficialFeedBytes || limit.reason != responseLimitDeclaredLength {
 		t.Fatalf("missing fetch limit diagnostic: %v", err)
 	}
 }
