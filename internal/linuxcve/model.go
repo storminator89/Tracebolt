@@ -108,18 +108,19 @@ type Finding struct {
 // Status is unavailable, partial, or stale; imported subsets and unverified
 // installed origin intentionally cannot produce a complete coverage state.
 type Result struct {
-	SchemaVersion        string        `json:"schemaVersion"`
-	Status               string        `json:"status"`
-	Freshness            string        `json:"freshness"`
-	InventoryFreshness   string        `json:"inventoryFreshness"`
-	AssessedAt           time.Time     `json:"assessedAt"`
-	GenerationID         string        `json:"generationId"`
-	Feed                 *FeedMetadata `json:"feed"`
-	Findings             []Finding     `json:"findings"`
-	ReasonCodes          []string      `json:"reasonCodes"`
-	EvaluatedSourceCount int           `json:"evaluatedSourceCount"`
-	SkippedPackageCount  int           `json:"skippedPackageCount"`
-	Truncated            bool          `json:"truncated"`
+	SchemaVersion         string        `json:"schemaVersion"`
+	Status                string        `json:"status"`
+	Freshness             string        `json:"freshness"`
+	InventoryFreshness    string        `json:"inventoryFreshness"`
+	AssessedAt            time.Time     `json:"assessedAt"`
+	GenerationID          string        `json:"generationId"`
+	Feed                  *FeedMetadata `json:"feed"`
+	Findings              []Finding     `json:"findings"`
+	ReasonCodes           []string      `json:"reasonCodes"`
+	EvaluatedSourceCount  int           `json:"evaluatedSourceCount"`
+	SkippedPackageCount   int           `json:"skippedPackageCount"`
+	UnassessedRecordCount int           `json:"unassessedRecordCount"`
+	Truncated             bool          `json:"truncated"`
 }
 
 type StoreView struct {

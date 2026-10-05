@@ -134,6 +134,8 @@ func Evaluate(ctx context.Context, snapshot *Snapshot, manifest fullinventory.Ma
 		return v, nil
 	}
 	evaluated := map[string]bool{}
+	type advisoryKey struct{ source, cve string }
+	unassessed := map[advisoryKey]struct{}{}
 	findingGroups := []*group{}
 	stopped := false
 	for _, key := range keys {
@@ -152,6 +154,7 @@ func Evaluate(ctx context.Context, snapshot *Snapshot, manifest fullinventory.Ma
 		evaluatedGroup := false
 		for _, rule := range rules {
 			if ctx.Err() != nil {
+				unassessed[advisoryKey{g.source, rule.cve}] = struct{}{}
 				reason("evaluation_canceled_or_timed_out")
 				result.Truncated = true
 				stopped = true
@@ -161,12 +164,14 @@ func Evaluate(ctx context.Context, snapshot *Snapshot, manifest fullinventory.Ma
 				if rule.reason == "vendor_not_affected" {
 					evaluatedGroup = true
 				} else {
+					unassessed[advisoryKey{g.source, rule.cve}] = struct{}{}
 					reason(rule.reason)
 				}
 				continue
 			}
 			fixed, applied, err := matchRule(rule, g.version, compare)
 			if err != nil {
+				unassessed[advisoryKey{g.source, rule.cve}] = struct{}{}
 				switch {
 				case errors.Is(err, ErrLimit):
 					reason("comparison_limit_exceeded")
@@ -207,6 +212,7 @@ func Evaluate(ctx context.Context, snapshot *Snapshot, manifest fullinventory.Ma
 		}
 	}
 	result.EvaluatedSourceCount = len(evaluated)
+	result.UnassessedRecordCount = len(unassessed)
 	// First reserve one installed binary per finding; distribute remaining space
 	// only afterward. Every visible finding remains tied to an installed row.
 	binaryRows := 0

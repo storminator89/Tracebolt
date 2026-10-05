@@ -1,5 +1,5 @@
 {
-  "goSourceSha256": "fcda7570980261b11877c883fcd5d63a0afa7a4d93cd0979c3ea341a9ab04117",
+  "goSourceSha256": "3a712f8a68c593030f24d1533e9d7afc83ba30c950264d4e30ae3056d474e88c",
   "packages": {
     "localrmm/cmd/agent": [
       "TestHelp",
@@ -1171,9 +1171,13 @@
       "TestRejectMalformedEmptyDuplicateAndInvalidTimes",
       "TestStoreConcurrentImmutableReads",
       "TestStoreLastGoodPerProviderAntiRollbackAndAtomicPersistence",
+      "TestTrackerVersionTokensRemainUnassessedWithoutComparison",
       "TestUbuntuExactEcosystemSourceAndExplicitFix",
       "TestUbuntuIntroducedBoundsAndSafeLinks",
-      "TestUbuntuMalformedRangesAndWithdrawnAreNotConfirmed"
+      "TestUbuntuMalformedRangesAndWithdrawnAreNotConfirmed",
+      "TestUnassessedRecordCounterIncludesKnownGapsAndIsZeroWithoutPrerequisites",
+      "TestUnsupportedFixDoesNotDiscardSupportedRecordsOrDuplicateCounts",
+      "TestUnsupportedVersionFallbackDoesNotAdmitMalformedData"
     ],
     "localrmm/internal/linuxcvefeed": [
       "TestBoundedReader",

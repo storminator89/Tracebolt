@@ -7,7 +7,7 @@ and persist exact source bytes; this package only parses and evaluates them.
 ## Supported inputs and meaning
 
 - Debian 13 / trixie: Security Tracker JSON source package -> CVE ->
-  `releases.trixie`. Only `resolved` with a nonzero `fixed_version` creates a
+  `releases.trixie`. Only `resolved` with a supported nonzero `fixed_version` creates a
   comparison. `resolved` describes the archive, so an older installed source
   version still matches. `fixed_version: "0"` means vendor-not-affected.
   Open, undetermined, and uninterpretable records produce coverage gaps.
@@ -26,6 +26,17 @@ Provider documentation:
 - https://documentation.ubuntu.com/security/security-updates/osv/
 - https://security-metadata.canonical.com/osv/
 - https://github.com/canonical/ubuntu-security-notices
+- https://salsa.debian.org/security-tracker-team/security-tracker/-/blob/master/lib/python/bugs.py
+- https://salsa.debian.org/security-tracker-team/security-tracker/-/blob/master/lib/python/debian_support.py
+
+The tracker accepts historical version tokens matching `[A-Za-z0-9:.+~-]+`;
+its version wrapper does not enforce this application's stricter comparison
+grammar. A tracker-style token within the existing 512-byte field bound that
+cannot be compared is retained as `vendor_fixed_version_unsupported`, with no
+fixed-version threshold. It is never normalized, compared or turned into a
+warning/fixed result. Wrong types, whitespace/control text, out-of-grammar
+punctuation and oversized fields still reject the snapshot. The tracker maps
+not-affected separately to `"0"`; literal sentinel text is not accepted as a fix.
 
 No vendor prose, raw imported URLs, urgency, inferred severity, or CVSS is
 included in a finding. Advisory links are constructed from validated CVE IDs and
@@ -97,6 +108,13 @@ Result rows are version matches deduplicated by CVE + source + installed source
 version. This preserves mixed-version multiarch observations. The UI groups
 these rows by CVE + source for one warning with all version/fix pairs; row count
 is not a distinct warning count.
+
+`unassessedRecordCount` counts distinct source-package/CVE records encountered
+for supported installed sources that could not be fully evaluated. Multiple
+installed source versions do not multiply this count. It includes unsupported
+fix/status/range interpretations and failed comparisons; a not-affected `0`
+record is not an unassessed record. The UI shows this number even when there are
+zero warning matches. With interrupted or truncated work it is a lower bound.
 
 The evaluator bounds work at 3 seconds and 2,000 memoized Debian comparisons.
 It emits at most 100 version matches, 20 binaries per match, 128 binaries total,

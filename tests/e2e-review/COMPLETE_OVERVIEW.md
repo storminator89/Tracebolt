@@ -84,7 +84,13 @@ manifest. Pixel acceptance is separate from script preparation.
 
 Reports retain only fixed test names/phases, duration, source and scoped
 provenance. Raw exceptions, responses, process/mount data, cookies, passwords and
-private state paths are withheld. Partial completed results are preserved and
+private state paths are withheld. On failure, the runner additionally records
+fixed query substeps, allowlisted asserted field names, at most eight query
+request identities numbered locally with at most 32 lifecycle/status events,
+and bounded DOM counts/booleans. Match and no-match searches have separate phases.
+This distinguishes an HTTP refusal, response-body inspection failure and UI or
+contract assertion without removing any response-body, paging or search checks.
+Partial completed results are preserved and
 failures exit nonzero. Report and manifest must have all these flags false:
 `secretsExported`, `realTelemetryExported`, `hostInventoryRead`,
 `collectorExecuted`, `permissionChanges`, `installerExecuted`, `userVmAccessed`.

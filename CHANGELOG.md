@@ -2,6 +2,12 @@
 
 Meaningful development checkpoints are recorded here. These are prototype milestones, not production releases.
 
+## 2026-10-05 — Preserve unassessed advisory records and narrow overview diagnostics
+
+- Retain bounded tracker-style fixed-version tokens outside the strict comparison grammar as explicitly unassessed records. Never normalize or compare them or turn them into a warning/fixed conclusion; malformed types, control text, punctuation and oversized fields still reject the snapshot. Show a deduplicated unassessed-record count and coverage gaps even when no warning matches exist.
+- Add privacy-bounded overview query phases, status/lifecycle events and DOM counts to locate the intermittent literal-search failure. Keep production behavior, response-body checks, paging/search/binding/age assertions, case identities and deadlines unchanged; strengthen the real-handler and hook search regressions.
+- Regenerate the source-bound Go diagnostic vocabulary. Official-feed acceptance and exact composed hosted validation remain separate pending gates.
+
 ## 2026-10-05 — Locate official-feed parser rejections
 
 - Add closed parser-stage codes and bounded counters to the opt-in official-feed smoke failure. Preserve every rejection condition, limit, ordinary error string and wrapped error classification. No source/package/CVE name, response value or decoder text is retained or exported.

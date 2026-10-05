@@ -19,7 +19,7 @@ func TestInvalidDiagnosticsPreserveRejectionWithoutInputDisclosure(t *testing.T)
 		{`{"private-marker":{"CVE-2099-1000":{}}}`, "debian_releases"},
 		{`{"private-marker":{"CVE-2099-1000":{"releases":{"trixie":[]}}}}`, "debian_release"},
 		{`{"private-marker":{"CVE-2099-1000":{"releases":{"trixie":{}}}}}`, "debian_status"},
-		{`{"private-marker":{"CVE-2099-1000":{"releases":{"trixie":{"status":"resolved","fixed_version":"private-marker"}}}}}`, "debian_fixed_version"},
+		{`{"private-marker":{"CVE-2099-1000":{"releases":{"trixie":{"status":"resolved","fixed_version":"private marker"}}}}}`, "debian_fixed_version"},
 		{`{"private-marker":{},"PRIVATE-MARKER":{}}`, "json_duplicate_key"},
 		{"\xff", "json_utf8"},
 	} {

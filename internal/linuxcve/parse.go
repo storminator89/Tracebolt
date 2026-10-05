@@ -20,6 +20,11 @@ import (
 var packagePattern = regexp.MustCompile(`^[a-z0-9][a-z0-9+.-]{1,255}$`)
 var cvePattern = regexp.MustCompile(`^CVE-[0-9]{4}-[0-9]{4,19}$`)
 
+// The tracker input grammar accepts these historical version tokens even when
+// Debian Policy/native-comparator eligibility is narrower. Keep the existing
+// 512-byte identity bound; never normalize or compare an unsupported token.
+var trackerVersionToken = regexp.MustCompile(`^[A-Za-z0-9:.+~-]{1,512}$`)
+
 // Parse accepts a local, operator-supplied envelope, not a URL or fetch request.
 // A syntactically valid subset is intentionally represented as imported records
 // only. JSON truncation, duplicate keys, trailing bytes, oversized input, empty
@@ -338,7 +343,13 @@ func parseDebian(ctx context.Context, raw []byte, s *Snapshot) error {
 			}
 			rule := rule{cve: id, advisoryURL: "https://security-tracker.debian.org/tracker/" + id}
 			if v.Fixed != "" && !assessment.ValidDebianVersion(v.Fixed) {
-				return invalidAt(invalidDebianFixedVersion, total, 0)
+				if !trackerVersionToken.MatchString(v.Fixed) {
+					return invalidAt(invalidDebianFixedVersion, total, 0)
+				}
+				rule.reason = "vendor_fixed_version_unsupported"
+				s.rules[name] = append(s.rules[name], rule)
+				s.metadata.RecordCount++
+				continue
 			}
 			switch {
 			case v.Status == "resolved" && v.Fixed == "0":

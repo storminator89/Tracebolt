@@ -5,7 +5,7 @@ import { useOperator } from './auth';
 import { setLocale } from './i18n';
 import { LinuxCVEPanel } from './linux-cve';
 import { LINUX_CVE_BUNDLE_BYTES, LINUX_CVE_VIEW_BYTES } from './linux-cve-types';
-import { linuxCVEDeviceId as id, linuxCVEView, missingLinuxCVEView, staleLinuxCVEView } from './linux-cve-fixtures';
+import { linuxCVEDeviceId as id, linuxCVEView, missingLinuxCVEView, staleLinuxCVEView, unassessedLinuxCVEView } from './linux-cve-fixtures';
 vi.mock('./api', async original => ({ ...await original<typeof import('./api')>(), request: vi.fn() }));
 vi.mock('./auth', async original => ({ ...await original<typeof import('./auth')>(), useOperator: vi.fn() }));
 const operator = { mode: 'lan' as const, authenticated: true, expiresAt: '2026-10-05T08:00:00Z', insecureTestMode: false, logout: vi.fn(), theme: 'light' as const, setTheme: vi.fn() };
@@ -39,6 +39,22 @@ describe('Linux CVE warnings panel', () => {
     it('distinguishes evaluated empty output and stale retained matches', async () => {
         const empty = linuxCVEView(); empty.report!.findings = []; const rendered = await show(empty); expect(screen.getByText(/No package\/version matches/)).toBeVisible(); expect(screen.getByText('Package warnings').previousElementSibling).toHaveTextContent('0');
         rendered.unmount(); await show(staleLinuxCVEView()); expect(screen.getByText(/Old data: these matches describe earlier snapshots/)).toBeVisible(); expect(screen.getByRole('article')).toBeVisible(); expect(screen.getByText('3 d · Stale')).toBeVisible();
+    });
+    it.each([
+        ['en', '1 advisory record could not be fully evaluated.', 'Some published-fix versions are unsupported. Those records could not be fully evaluated.', 'Data sources and coverage'],
+        ['de', '1 Sicherheitshinweis konnte nicht vollständig bewertet werden.', 'Einige veröffentlichte Fix-Versionen werden nicht unterstützt. Die zugehörigen Einträge konnten nicht vollständig bewertet werden.', 'Datenquellen und Abdeckung'],
+    ] as const)('shows zero matches with an explicit unassessed record warning in %s', async (locale, warning, reason, details) => {
+        setLocale(locale, false); vi.mocked(request).mockResolvedValue(unassessedLinuxCVEView()); render(<LinuxCVEPanel deviceId={id}/>);
+        expect(await screen.findByText(warning)).toBeVisible(); expect(screen.queryByRole('article')).not.toBeInTheDocument();
+        expect(screen.getByText(warning).closest('.linux-cve-summary')!.querySelector('strong')).toHaveTextContent('0');
+        expect(screen.getByText(reason)).not.toBeVisible(); fireEvent.click(screen.getByText(details)); expect(screen.getByText(reason)).toBeVisible();
+    });
+    it('keeps warning groups distinct from unassessed records and labels a truncated count as a lower bound', async () => {
+        const view = linuxCVEView(); view.report!.unassessedRecordCount = 2; view.report!.feed!.recordCount = 3; view.feeds.snapshots[0].recordCount = 3; view.report!.reasonCodes.push('vendor_fixed_version_unsupported'); view.report!.truncated = true;
+        await show(view); expect(screen.getByText('At least 2 advisory records could not be fully evaluated.')).toBeVisible(); expect(screen.getByText('Package warnings').previousElementSibling).toHaveTextContent('1'); expect(screen.getAllByRole('article')).toHaveLength(1);
+    });
+    it('omits the unassessed warning when the count is zero', async () => {
+        await show(); expect(screen.queryByText(/advisory records? could not be fully evaluated/)).not.toBeInTheDocument();
     });
     it('shows failed update with retained previous matches', async () => {
         const view = linuxCVEView(); view.feeds.outcome = 'failed'; view.feeds.failureReason = 'import_failed'; await show(view); expect(screen.getByText(/last data update failed/)).toBeVisible(); expect(screen.getByRole('article')).toBeVisible();

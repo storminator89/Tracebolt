@@ -44,7 +44,12 @@ function LinuxCVESession({ deviceId }: { deviceId: string }) {
         {resource.error && <p role="alert" className="linux-cve-notice caution"><TriangleAlert size={16}/>{labels[resource.error]}</p>}
         {resource.notice && !(resource.notice === 'uncertain' && resource.error === 'uncertain') && <p role="status" className="linux-cve-notice">{labels[resource.notice]}</p>}
         {view && <>
-            <div className="linux-cve-summary"><div className="linux-cve-count"><strong>{warnings === null ? '—' : new Intl.NumberFormat(locale).format(warnings.length)}</strong><span>{warnings === null ? labels.unavailableCount : labels.warnings}</span></div><div><p className="linux-cve-state">{labels[view.status]}</p>{activeReport && <p>{new Intl.NumberFormat(locale).format(report.findings.length)} {labels.matches}</p>}<p>{stale ? labels.stale : activeReport ? labels.partial : labels.subtitle}</p>{report?.truncated && <p className="linux-cve-warning">{labels.truncated}</p>}</div></div>
+            <div className="linux-cve-summary"><div className="linux-cve-count"><strong>{warnings === null ? '—' : new Intl.NumberFormat(locale).format(warnings.length)}</strong><span>{warnings === null ? labels.unavailableCount : labels.warnings}</span></div><div>
+                <p className="linux-cve-state">{labels[view.status]}</p>
+                {activeReport && <p>{new Intl.NumberFormat(locale).format(report.findings.length)} {labels.matches}</p>}
+                {activeReport && report.unassessedRecordCount > 0 && <p className="linux-cve-warning">{report.truncated && `${labels.atLeast} `}{new Intl.NumberFormat(locale).format(report.unassessedRecordCount)} {report.unassessedRecordCount === 1 ? labels.unassessedSingle : labels.unassessed}</p>}
+                <p>{stale ? labels.stale : activeReport ? labels.partial : labels.subtitle}</p>{report?.truncated && <p className="linux-cve-warning">{labels.truncated}</p>}
+            </div></div>
             {view.feeds.outcome === 'failed' && <p className="linux-cve-notice caution">{cacheUncertain ? labels.cacheUncertain : labels.feedFailed}</p>}
             <dl className="linux-cve-times"><div><dt>{labels.assessed}</dt><dd>{report ? <time dateTime={report.assessedAt}>{date(report.assessedAt, locale)}</time> : labels.unknown}</dd></div><div><dt>{labels.inventoryAge}</dt><dd>{age(inventoryAge, labels)}{view.inventory && inventoryAge >= LINUX_CVE_INVENTORY_TTL_MS && ` · ${labels.staleLabel}`}</dd></div><div><dt>{labels.feedAge}</dt><dd>{age(feedAge, labels)}{report?.feed && feedAge >= LINUX_CVE_FEED_TTL_MS && ` · ${labels.staleLabel}`}</dd></div></dl>
             {warnings && (warnings.length ? <ol className="linux-cve-list">{warnings.map(group => {

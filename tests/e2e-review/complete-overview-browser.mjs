@@ -23,13 +23,20 @@ const results=[],screenshots=[];
 let browser,server,context,pipe,waiting,devices,currentTest='',stage='setup',runtimeErrorCount=0,fatal=false;
 const mark=value=>{stage=value;};
 // Fixed projection only: no request URLs, identifiers, headers, response text or rows.
-let readOutcomes=[],readTasks=[];
+let readOutcomes=[],readTasks=[],queryEvents=[],failurePage=null,queryStep='not started',queryField=null;
 async function exactStorageBusy(response){
  if(response.status()!==429||response.headers()['retry-after']!=='2')return false;
  try{const raw=await response.body();return raw.length<=2048&&JSON.parse(raw.toString('utf8'))?.error?.code==='storage_busy';}catch{return false;}
 }
 function observeReads(page){
+ failurePage=page;
+ const queries=new WeakMap();let count=0;
+ const record=(request,phase,status=0)=>{const id=queries.get(request);if(id&&queryEvents.length<32)queryEvents.push({id,phase,status:Number.isInteger(status)&&status>=0&&status<=599?status:0});};
+ page.on('request',request=>{if(count<8&&request.method()==='POST'&&request.url()===base+endpoint('alpha','query')){queries.set(request,++count);record(request,'request');}});
+ page.on('requestfinished',request=>record(request,'finished'));
+ page.on('requestfailed',request=>record(request,request.failure()?.errorText==='net::ERR_ABORTED'?'aborted':'failed'));
  page.on('response',response=>{
+  record(response.request(),'response',response.status());
   if(response.request().method()!=='GET'||!response.url().startsWith(base+'/api/devices/'))return;
   const resource=['endpoint-identity','packages','overview'].find(name=>response.url().endsWith('/inventory/'+name));
   if(!resource||readTasks.length>=24)return;
@@ -38,6 +45,19 @@ function observeReads(page){
  });
 }
 async function readEvidence(){const outcomes=readOutcomes.slice(),tasks=readTasks.slice();await Promise.allSettled(tasks);return JSON.stringify(outcomes);}
+async function failureEvidence(caught){
+ const kind=['Error','TimeoutError','AssertionError','TypeError','SyntaxError','AbortError'].includes(caught?.name)?caught.name:'other';
+ const detail={kind,queryStep,queryField,queryEvents:queryEvents.slice()};
+ if(!failurePage)return JSON.stringify(detail);
+ let timer;
+ try{
+  const view=await Promise.race([failurePage.evaluate(()=>{
+   const panel=document.querySelector('.complete-overview'),search=panel?.querySelector('input[type=search]'),button=panel?.querySelector('.complete-package-search button');
+   return{present:Boolean(panel),busy:panel?.getAttribute('aria-busy')==='true',alertPresent:Boolean(panel?.querySelector('[role=alert]')),rows:Math.min(100,panel?.querySelectorAll('tbody tr:not(.overview-group)').length??0),searchPresent:Boolean(search),searchButtonDisabled:button?.matches(':disabled')??false,progressPresent:Boolean(panel?.querySelector('.overview-progress')),documentVisible:document.visibilityState==='visible',privateInert:Boolean(document.querySelector('.auth-private-view[inert]'))};
+  }),new Promise(resolve=>{timer=setTimeout(()=>resolve({unavailable:true}),1000);})]);
+  return JSON.stringify({...detail,view});
+ }catch{return JSON.stringify({...detail,view:{unavailable:true}});}finally{clearTimeout(timer);}
+}
 
 const endpoint=(label='alpha',action='')=>`/api/devices/${devices[label]}/inventory/overview${action?'/'+action:''}`;
 const rows=page=>page.locator('.complete-overview tbody tr:not(.overview-group)');
@@ -109,13 +129,14 @@ async function held(page,url,run,{releaseBusy=false}={}){
  await page.route(url,handler);try{await run({arrived:()=>arrived,completed:()=>completed,statuses:()=>statuses,release});}finally{release();await page.unroute(url,handler);}
 }
 async function pageAction(page,action,expected={}){
+ queryField=null;queryStep='perform action';
  const reply=page.waitForResponse(r=>r.url()===base+endpoint('alpha','query')&&r.request().method()==='POST');
- await action();const response=await reply;expect(response.status()).toBe(200);const value=await response.json();
- for(const [key,want]of Object.entries(expected))expect(value[key]).toEqual(want);
- await expect(rows(page)).toHaveCount(value.items.length);await settled(page);return value;
+ await action();queryStep='await response headers';const response=await reply;queryStep='require HTTP200';expect(response.status()).toBe(200);queryStep='read response JSON';const value=await response.json();
+ queryStep='assert response fields';for(const [key,want]of Object.entries(expected)){queryField=['section','totalRows','exhausted','binding','collectedAt','retainedUntil','cursorExpiresAt'].includes(key)?key:'other';expect(value[key]).toEqual(want);}
+ queryField=null;queryStep='wait for rendered row count';await expect(rows(page)).toHaveCount(value.items.length);queryStep='wait for settled view';await settled(page);queryStep='page action complete';return value;
 }
-async function search(page,text){await page.getByRole('searchbox',{name:'Search this complete section',exact:true}).fill(text);await expect(rows(page)).toHaveCount(0);return pageAction(page,()=>page.getByRole('button',{name:'Search from first page',exact:true}).click());}
-async function check(name,run){currentTest=name;readOutcomes=[];readTasks=[];mark('fixture setup');const began=Date.now();try{await start();await run();console.log('READ_OUTCOMES '+await readEvidence());results.push({name,status:'PASS',durationMs:Date.now()-began});console.log(`PASS ${name}`);}catch{results.push({name,status:'FAIL',stage,durationMs:Date.now()-began,error:'Bounded assertion failure. Fixed read outcomes: '+await readEvidence()});console.log(`FAIL ${name} (${stage})`);}finally{if(context)await context.close();context=null;await stop();}}
+async function search(page,text){queryField=null;queryStep='fill search input';await page.getByRole('searchbox',{name:'Search this complete section',exact:true}).fill(text);queryStep='wait for prior rows to clear';await expect(rows(page)).toHaveCount(0);return pageAction(page,()=>page.getByRole('button',{name:'Search from first page',exact:true}).click());}
+async function check(name,run){currentTest=name;readOutcomes=[];readTasks=[];queryEvents=[];failurePage=null;queryStep='not started';queryField=null;mark('fixture setup');const began=Date.now();try{await start();await run();console.log('READ_OUTCOMES '+await readEvidence());results.push({name,status:'PASS',durationMs:Date.now()-began});console.log(`PASS ${name}`);}catch(caught){results.push({name,status:'FAIL',stage,durationMs:Date.now()-began,error:'Bounded assertion failure. Fixed read outcomes: '+await readEvidence()+'. Fixed query evidence: '+await failureEvidence(caught)});console.log(`FAIL ${name} (${stage})`);}finally{if(context)await context.close();context=null;await stop();}}
 
 try{
  mark('compile complete overview fixture');execFileSync(process.env.GO_BIN||'go',['build','-buildvcs=false','-o',path.join(temporary,'overviewfixture'),'./tests/e2e-review/overviewfixture'],{cwd:root,stdio:'ignore'});
@@ -127,7 +148,8 @@ try{
   const initial=await call(endpoint());expect(validOverviewView(initial,devices.alpha)).toBe(true);expect(initial.processes.complete.manifest.observedCount).toBe(205);expect(initial.volumes.complete.manifest.observedCount).toBe(125);
   const q={section:'processes',generationId:initial.processes.complete.binding.generationId,cursor:'',search:'',limit:100};
   mark('real generation page and frontend decoder');const first=await call(endpoint('alpha','query'),q);expect(validOverviewPage(first,devices.alpha,'processes',initial.processes.complete,'','')).toBe(true);expect(first.items).toHaveLength(100);const second=await call(endpoint('alpha','query'),{...q,cursor:first.nextCursor});expect(second.items).toHaveLength(100);const third=await call(endpoint('alpha','query'),{...q,cursor:second.nextCursor});expect(third.items).toHaveLength(5);expect(third.exhausted).toBe(true);expect(third.retainedUntil).toBe(first.retainedUntil);
-  const found=await call(endpoint('alpha','query'),{...q,search:'nEeDlE[.*]'});expect(found.items).toHaveLength(3);expect(found.exhausted).toBe(true);
+  const found=await call(endpoint('alpha','query'),{...q,search:'nEeDlE[.*]'});expect(validOverviewPage(found,devices.alpha,'processes',initial.processes.complete,'nEeDlE[.*]','')).toBe(true);expect(found.items).toHaveLength(3);expect(found.exhausted).toBe(true);expect(found.binding).toEqual(first.binding);expect(found.collectedAt).toBe(first.collectedAt);expect(found.retainedUntil).toBe(first.retainedUntil);
+  const missing=await call(endpoint('alpha','query'),{...q,search:'^does-not-match$'});expect(validOverviewPage(missing,devices.alpha,'processes',initial.processes.complete,'^does-not-match$','')).toBe(true);expect(missing.items).toHaveLength(0);expect(missing.exhausted).toBe(true);expect(missing.binding).toEqual(first.binding);expect(missing.collectedAt).toBe(first.collectedAt);expect(missing.retainedUntil).toBe(first.retainedUntil);
   const mounts=await call(endpoint('alpha','query'),{...q,section:'volumes',generationId:initial.volumes.complete.binding.generationId});expect(validOverviewPage(mounts,devices.alpha,'volumes',initial.volumes.complete,'','')).toBe(true);expect(mounts.items).toHaveLength(100);
   mark('real independent failed and current siblings');await control('advance',{seconds:121});await control('fail',{device:'alpha',section:'processes',reason:'timeout'});await control('sample',{device:'alpha',section:'volumes',mode:'replace'});const mixed=await call(endpoint());expect(mixed.processes.complete).toEqual(initial.processes.complete);expect(mixed.processes.failure.reason).toBe('timeout');expect(mixed.volumes.complete.binding.generationId).not.toBe(initial.volumes.complete.binding.generationId);
   mark('successful zero and missing generations');const zero=await call(endpoint('beta'));expect(zero.processes.complete.manifest.observedCount).toBe(0);expect((await call(endpoint('awaiting'))).processes.complete).toBeNull();
@@ -140,7 +162,7 @@ try{
    const page=await pageAt();await open(page);mark('complete process totals and unknown field outcomes');await expect(rows(page)).toHaveCount(100);await expect(fact(page,'.overview-totals','Complete enumeration rows')).toHaveText('205');await expect(processRow(page,1).locator('td').nth(3)).toHaveText('0 B');await expect(processRow(page,1).locator('td').nth(4)).toHaveText('0');await expect(processRow(page,2)).toContainText('Permission denied');await expect(processRow(page,3)).toContainText('Exited during capture');await expect(processRow(page,4)).toContainText('Unavailable');await expect(panel(page)).toContainText('CPU time is cumulative, not current utilization');
    const initial=await get(endpoint());await page.locator('.complete-overview .package-table-scroll').scrollIntoViewIfNeeded();await shot(page,'synthetic-complete-overview-processes-en');
    mark('second and third complete process pages');const second=await pageAction(page,()=>page.getByRole('button',{name:'Next page',exact:true}).click(),{totalRows:205,binding:initial.processes.complete.binding,retainedUntil:initial.processes.complete.retainedUntil});expect(second.items).toHaveLength(100);const third=await pageAction(page,()=>page.getByRole('button',{name:'Next page',exact:true}).click(),{totalRows:205,exhausted:true,binding:second.binding,collectedAt:second.collectedAt,retainedUntil:second.retainedUntil,cursorExpiresAt:second.cursorExpiresAt});expect(third.items).toHaveLength(5);await expect(fact(page,'.overview-progress','Rows scanned so far')).toHaveText('205 / 205');await expect(page.getByRole('button',{name:'Next page',exact:true})).toHaveCount(0);
-   mark('literal search traverses exact pinned generation');const found=await search(page,'nEeDlE[.*]');expect(found.items).toHaveLength(3);expect(found.items.every(row=>row.process.name.toLowerCase().includes('needle[.*]'))).toBe(true);expect(found.binding).toEqual(second.binding);await expect(fact(page,'.overview-progress','Matches found so far')).toHaveText('3');const missing=await search(page,'^does-not-match$');expect(missing.items).toHaveLength(0);expect(missing.exhausted).toBe(true);await expect(panel(page)).toContainText('No matches in the complete generation.');await clean(page);
+   mark('literal match search traverses exact pinned generation');const found=await search(page,'nEeDlE[.*]');mark('literal match search returns three rows');expect(found.items).toHaveLength(3);mark('literal match search preserves metacharacters');expect(found.items.every(row=>row.process.name.toLowerCase().includes('needle[.*]'))).toBe(true);mark('literal match search preserves generation binding');expect(found.binding).toEqual(second.binding);mark('literal match search displays three matches');await expect(fact(page,'.overview-progress','Matches found so far')).toHaveText('3');mark('literal no-match search traverses exact pinned generation');const missing=await search(page,'^does-not-match$');mark('literal no-match search returns zero rows');expect(missing.items).toHaveLength(0);mark('literal no-match search exhausts generation');expect(missing.exhausted).toBe(true);mark('literal no-match search displays explicit empty result');await expect(panel(page)).toContainText('No matches in the complete generation.');await clean(page);
   });
   await check('Complete Mounts paginates truthful capacity groups and remains usable in German mobile',async()=>{
    const page=await pageAt();await open(page);await source(page,'Mounts');mark('mount counts and observed zero capacity');await expect(rows(page)).toHaveCount(100);await expect(fact(page,'.overview-totals','Complete enumeration rows')).toHaveText('125');await expect(panel(page)).toContainText('N/A · zero capacity');await expect(panel(page)).toContainText('do not sum capacities');await expect(page.locator('.overview-group')).toContainText('Measured local filesystems');
