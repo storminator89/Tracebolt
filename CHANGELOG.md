@@ -2,6 +2,13 @@
 
 Meaningful development checkpoints are recorded here. These are prototype milestones, not production releases.
 
+## 2026-10-04 — Reuse validated overview frames and copy one physical installer-command line
+
+- Exact `f9aed37` completed 12 CI jobs and all 110 required browser checks; the Go aggregate identified `TestOverviewSharedBurstBudgetAndFairness` as its only failing root. An untouched local reproduction reached the unchanged 20-second burst deadline after 32 process operations. Profiling found redundant decoding and validation of already-validated chunk JSON; the hosted report itself did not expose the failed assertion.
+- Retain private Work descriptors over immutable, fully validated pack bytes. Stage and reopen still validate untrusted frames and complete generations, and state/disk/lock verification, durable ordering, receipt/body binding and detached public Body copies remain. Reuse avoids repeated identical-row decoding during NextWork and acknowledgement without changing sender budgets or collection scope.
+- Preserve the original 64/64 burst-operation assertions, all 9,000 process and 9,000 mount rows, and one capture. Three final measured race repetitions completed first bursts in approximately 15 seconds under the original 20-second limit. These machine-specific timings do not guarantee a result under arbitrary hosted contention; exact-source full CI remains required.
+- Serialize the verified-download wrapper as one physical shell line using equivalent statement separators. Keep quoting, traps, fixed HTTPS source/hash, descriptor handoff and explicit public arguments intact; add independent exact HTTP/TLS syntax and no-newline checks. The source-owned pilot.2 pin and immutable release files remain unchanged, so this formatting fix does not distribute the newer journal/overview binaries or grant helper access.
+
 ## 2026-10-04 — Choose observed services and validate supported native retries
 
 - Make Logs easier to request with a searchable selector backed by bounded, generation-pinned observed service pages, while retaining exact manual entry. Selecting an observed name never changes or proves the endpoint's separately granted local allowlist. Show empty, stale, denied and failed source states explicitly; no selection automatically captures content.

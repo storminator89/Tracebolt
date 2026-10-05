@@ -374,17 +374,10 @@ func (v *state) next() (Work, bool, error) {
 		}
 		return makeWork("abort", raw), true, nil
 	case "ready":
-		if v.pack == nil || int(r.Next) >= len(v.pack.frames) {
+		if v.pack == nil || int(r.Next) >= len(v.pack.work) {
 			return Work{}, false, ErrCorrupt
 		}
-		op := "append"
-		if r.Next == 0 {
-			op = "begin"
-		}
-		if r.Next == r.Count+1 {
-			op = "finalize"
-		}
-		return makeWork(op, v.pack.frames[r.Next]), true, nil
+		return v.pack.work[r.Next], true, nil
 	}
 	return Work{}, false, ErrCorrupt
 }

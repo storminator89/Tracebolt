@@ -32,6 +32,7 @@ export function verifiedDownloadCommand(pin: unknown, value: unknown, snapshot: 
     // check uses a pipe; downloaded bytes never become shell input. Open the verified
     // bytes on fd 3, remove staging, then replace the shell so cancellation is owned
     // by the reviewed bootstrap. No wrapper timeout or background installer.
+    // Keep clipboard text on one physical line; validated public PEM is base64.
     const script = [
         'set -eu',
         'umask 077',
@@ -51,7 +52,7 @@ export function verifiedDownloadCommand(pin: unknown, value: unknown, snapshot: 
         'rmdir -- "$stage"',
         'trap - 0 HUP INT TERM',
         `exec python3 -I -B /proc/self/fd/3 --action install --apply --pending-service${publicArguments}`,
-    ].join('\n');
+    ].join('; ');
     // A clean environment also excludes ambient curl CA/proxy configuration and
     // Python startup variables. curl -q must remain its first option.
     return '/usr/bin/env -i PATH=/usr/sbin:/usr/bin:/sbin:/bin LANG=C.UTF-8 LC_ALL=C.UTF-8 /bin/sh -c ' + shellQuote(script);

@@ -15,18 +15,18 @@ const packMagic = "tracebolt.overview-spool.pack.v1\n"
 type generationPack struct {
 	raw    []byte
 	frames [][]byte
+	work   []Work
 }
 
-func encodePayload(operation string, r diskRecord, hash string, payload []byte) ([]byte, error) {
+func encodePayload(r diskRecord, hash string, payload []byte) []byte {
 	// All framing strings are validated generated identifiers. Keep payload exact;
 	// encoding/json.RawMessage would compact whitespace in caller-provided bytes.
 	raw := []byte(`{"schemaVersion":` + strconv.Quote(overviewwire.MessageVersion) + `,"section":` + strconv.Quote(r.Section) + `,"sequence":` + strconv.Quote(strconv.FormatUint(r.Floor, 10)) + `,"generationId":` + strconv.Quote(r.Generation) + `,"manifestHash":` + strconv.Quote(hash) + `,"payload":`)
 	raw = append(raw, payload...)
 	raw = append(raw, '}')
-	if _, e := overviewwire.DecodeMessage(operation, raw); e != nil {
-		return nil, ErrBody
-	}
-	return raw, nil
+	// buildPack strictly decodes and validates every complete frame below,
+	// before publication. Do not decode the same payload again while framing it.
+	return raw
 }
 func buildPack(ctx context.Context, r diskRecord, manifest []byte, chunks [][]byte) (*generationPack, string, error) {
 	if len(manifest) == 0 || len(manifest) > overviewgeneration.MaxManifestBytes || len(chunks) > overviewgeneration.MaxGenerationChunks {
@@ -76,11 +76,8 @@ func buildPack(ctx context.Context, r diskRecord, manifest []byte, chunks [][]by
 	var b bytes.Buffer
 	b.Grow(total + (len(chunks)+2)*512)
 	b.WriteString(packMagic)
-	add := func(op string, payload []byte) error {
-		raw, e := encodePayload(op, r, hash, payload)
-		if e != nil {
-			return e
-		}
+	add := func(payload []byte) error {
+		raw := encodePayload(r, hash, payload)
 		if len(raw)+4 > MaxPackBytes-b.Len() {
 			return ErrBody
 		}
@@ -90,18 +87,18 @@ func buildPack(ctx context.Context, r diskRecord, manifest []byte, chunks [][]by
 		b.Write(raw)
 		return nil
 	}
-	if e = add("begin", manifest); e != nil {
+	if e = add(manifest); e != nil {
 		return nil, "", e
 	}
 	for _, raw := range chunks {
 		if canceled(ctx) {
 			return nil, "", ErrCanceled
 		}
-		if e = add("append", raw); e != nil {
+		if e = add(raw); e != nil {
 			return nil, "", e
 		}
 	}
-	if e = add("finalize", []byte(`{}`)); e != nil {
+	if e = add([]byte(`{}`)); e != nil {
 		return nil, "", e
 	}
 	check := r
@@ -170,6 +167,14 @@ func decodePack(ctx context.Context, raw []byte, r diskRecord) (*generationPack,
 			}
 		}
 		p.frames = append(p.frames, body)
+		ordinal := -1
+		if m.Chunk != nil {
+			ordinal = int(m.Chunk.Ordinal)
+		}
+		// The pack owns these immutable bytes. Work exposes only value metadata
+		// and Body returns a copy, so cursor reads can reuse this validated
+		// descriptor without decoding the same rows for every acknowledgment.
+		p.work = append(p.work, Work{op, m.Section, m.Sequence, m.GenerationID, m.ManifestHash, ordinal, digest(body), &workBody{body}})
 	}
 	if len(rest) != 0 || validator == nil {
 		return nil, ErrCorrupt

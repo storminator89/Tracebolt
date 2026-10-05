@@ -9,10 +9,16 @@ The binary/source build commit is separately pinned to
 Older responses without a public bootstrap checksum still offer the existing
 public configuration file only. This command is for a fresh approved installation;
 existing installed agents use the separately reviewed upgrade action and retain
-identity/state.
+identity/state. The selected pilot.2 predates Logs and complete process/mount
+overview; it must not be used to downgrade a newer manually built pilot. Those
+features require a newly verified release and pin before the download supplies them.
+Existing journal-helper grants remain in place on compatible updates; the downloader
+does not provision that helper or repeat its create-only setup.
 
 The optional serializer is inert: it returns text and does not download or run
-anything. Only the source-owned selector is called by the dialog. There is no
+anything. Its copied output is one physical line, with semicolon-separated shell
+statements and base64 public CA bytes; no backslash continuation is required.
+Only the source-owned selector is called by the dialog. There is no
 API field, manager configuration, environment variable, browser storage value or
 user-selectable URL that can activate executable trust. The explicit pin argument
 on the low-level serializer exists for source review and inert fixtures; it must

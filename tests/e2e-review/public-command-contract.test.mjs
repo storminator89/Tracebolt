@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import path from 'node:path';
 import {createRequire} from 'node:module';
 import {fileURLToPath} from 'node:url';
+import {spawnSync} from 'node:child_process';
 import {assertPublicCommand,parseSourceOwnedPin,readSourceOwnedPin} from './public-command-contract.mjs';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../..');
 const require=createRequire(path.join(root,'web/package.json'));
@@ -21,13 +22,51 @@ const bootstrap={schemaVersion:'tracebolt.enrollment-bootstrap.v2',managerInstan
 const originalWindow=globalThis.window;globalThis.window={location:{origin:managerOrigin}};
 const manual=production.verifiedDownloadCommand(null,bootstrap,snapshot,bootstrapSHA256) ?? (await import('data:text/javascript;base64,'+Buffer.from((await build({entryPoints:[path.join(root,'web/src/enrollment-command.ts')],bundle:true,platform:'node',format:'esm',write:false,logLevel:'silent'})).outputFiles[0].text).toString('base64'))).preparedEnrollmentCommand(bootstrap,snapshot,bootstrapSHA256);
 const verified=production.verifiedDownloadCommand(pin,bootstrap,snapshot,bootstrapSHA256);
+const tlsOrigin='https://manager.example.test:9443';
+const tlsSnapshot={...snapshot,binding:{...snapshot.binding,origin:tlsOrigin,profile:'tls'}};
+const tlsBootstrap={...bootstrap,profile:'tls',enrollmentOrigin:tlsOrigin,agentOrigin:'https://agent.example.test:9444',serverCaPem:certificate};
+globalThis.window={location:{origin:tlsOrigin}};
+const verifiedTLS=production.verifiedDownloadCommand(pin,tlsBootstrap,tlsSnapshot,bootstrapSHA256);
 if(originalWindow===undefined)delete globalThis.window;else globalThis.window=originalWindow;
 const quote=value=>"'"+value.split("'").join("'\\''")+"'";
+// Decode only the serializer's single shell-quoted argument as inert text.
+// Neither this decoder nor /bin/sh -n evaluates the displayed command.
+const wrapper='/usr/bin/env -i PATH=/usr/sbin:/usr/bin:/sbin:/bin LANG=C.UTF-8 LC_ALL=C.UTF-8 /bin/sh -c ';
+function innerScript(command){
+ assert.equal(typeof command,'string');assert.ok(command.startsWith(wrapper));
+ const encoded=command.slice(wrapper.length);assert.ok(encoded.startsWith("'")&&encoded.endsWith("'"));
+ const segments=encoded.slice(1,-1).split("'\\''");
+ for(const segment of segments)assert.ok(!segment.includes("'"));
+ const decoded=segments.join("'");assert.equal(quote(decoded),encoded);return decoded;
+}
 const declaration=value=>`export const OFFICIAL_LINUX_BOOTSTRAP_PIN: unknown = ${value};`;
 const literal=`{version:'${pin.version}',publicationCommit:'${pin.publicationCommit}',bootstrapSHA256:'${pin.bootstrapSHA256}'}`;
 
 test('reads the current source-owned literal without changing it',()=>{assert.deepEqual(readSourceOwnedPin(root),production.OFFICIAL_LINUX_BOOTSTRAP_PIN);});
 test('accepts the exact reviewed manual and nested verified strings from production serializers',()=>{assert.equal(assertPublicCommand(manual,{pin:null,...context}),'prepared-local');assert.equal(assertPublicCommand(verified,{pin,...context}),'verified-download');});
+test('TLS preserves the exact reviewed wrapper and public CA binding',()=>{
+ const script=innerScript(verifiedTLS);
+ const common=` --invitation-id ${quote(invitationId)} --bootstrap-sha256 ${quote(bootstrapSHA256)}`;
+ const tlsArgs=` --manager-origin ${quote(tlsOrigin)}${common} --server-ca-base64 ${quote(Buffer.from(certificate,'utf8').toString('base64'))}`;
+ const httpArgs=` --manager-origin ${quote(managerOrigin)}${common} --insecure-http-test`;
+ assert.ok(script.endsWith(tlsArgs));assert.equal(script.split(tlsArgs).length,2);
+ // Substitute only the independently checked public TLS tail, then apply the
+ // unchanged byte-for-byte HTTP wrapper contract to every remaining character.
+ const normalized=wrapper+quote(script.slice(0,-tlsArgs.length)+httpArgs);
+ assert.equal(assertPublicCommand(normalized,{pin,...context}),'verified-download');
+});
+test('HTTP and TLS copied commands have no CR/LF and both shell layers parse without execution',()=>{
+ for(const command of [verified,verifiedTLS]){
+  assert.equal(typeof command,'string');assert.doesNotMatch(command,/[\r\n]/);
+  const script=innerScript(command);assert.doesNotMatch(script,/[\r\n]/);
+  for(const text of [command,script]){
+   const parsed=spawnSync('/bin/sh',['-n','-c',text],{encoding:'utf8',timeout:5000});
+   assert.equal(parsed.error,undefined);assert.equal(parsed.signal,null);assert.equal(parsed.status,0,parsed.stderr);
+  }
+ }
+ assert.doesNotMatch(manual,/[\r\n]/);
+ for(const newline of ['\r','\n'])assert.throws(()=>assertPublicCommand(verified.replace('set -eu; ',`set -eu${newline}`),{pin,...context}),/PUBLIC_COMMAND_CONTRACT_MISMATCH/);
+});
 test('the source pin controls selection; command text cannot choose another branch',()=>{assert.throws(()=>assertPublicCommand(verified,{pin:null,...context}),/PUBLIC_COMMAND_CONTRACT_MISMATCH/);assert.throws(()=>assertPublicCommand(manual,{pin,...context}),/PUBLIC_COMMAND_CONTRACT_MISMATCH/);});
 test('requires exact public origin, invitation and bootstrap checksum inside nested shell quoting',()=>{for(const contextChange of [{managerOrigin:'http://127.0.0.1:19893'},{invitationId:'invite_'+'2'.repeat(32)},{bootstrapSHA256:'e'.repeat(64)}])assert.throws(()=>assertPublicCommand(verified,{pin,...context,...contextChange}),/PUBLIC_COMMAND_CONTRACT_MISMATCH/);assert.throws(()=>assertPublicCommand(verified,{pin:{...pin,publicationCommit:'f'.repeat(40)},...context}),/PUBLIC_COMMAND_CONTRACT_MISMATCH/);});
 test('rejects alternate URL, weak download, altered hash/order, command suffix and quote corruption',()=>{for(const bad of [verified.replace('raw.githubusercontent.com','example.invalid'),verified.replace(' --max-redirs 0',' --location'),verified.replace('curl -q','curl'),verified.replace('sha256sum --check --status','true'),verified.replace('exec python3 -I -B','exec python3'),verified.replace(quote(pin.bootstrapSHA256).split("'").join("'\\''"),'bogus'),verified+'; echo EXTRA',verified.slice(0,-1)])assert.throws(()=>assertPublicCommand(bad,{pin,...context}),/PUBLIC_COMMAND_CONTRACT_MISMATCH/);});

@@ -10,13 +10,29 @@ adds explicit service operations; its actual disposable-VM gate is tracked separ
 A repository link alone does not authorize a deployment or
 provide credentials. Read the checklist before executing the quickstart.
 
-For the fresh v3 Linux MVP, follow the shorter **[manager and background-agent
-startup guide](http-complete-first-start.md)**. It prepares local binaries first,
-then uses the dashboard public command with explicit `--pending-service` and
-hidden invitation entry. The new manager/profile/identity is separate from any
-existing basic/v2 state. The detailed manual and default ready-only paths below
-remain valid for their stated scopes; neither source checks nor a started pending
-process establish approved reporting or actual reboot acceptance.
+For a fresh supported Linux endpoint, the normal published-release path is the
+**[verified dashboard download](dashboard-verified-download.md)**: copy one public
+installation command, run it deliberately as root in a local terminal after
+approving account/service and persistent identity creation, enter the invitation
+only at the hidden prompt, then compare and approve the device in the dashboard.
+Downloads, release verification and artifact checks are internal to that command;
+no endpoint Go build, file transfer or manual checksum step is needed. Review the
+supported platform and existing prerequisites first; dependencies are not installed.
+
+**Current release limit:** the dashboard still pins `v0.1.0-pilot.2`, which predates
+Logs and the complete process/mount overview. Do not use it as an upgrade for a
+newer manually built pilot. Those features need a newly verified release and pin;
+until then, retain the exact reviewed-source fallback for the selected revision.
+The **[manager and background-agent startup guide](http-complete-first-start.md)**
+contains that fresh-v3 source path. Manager startup remains separate. Its fresh
+manager/profile/identity must not replace an existing installation or basic/v2 state.
+
+Compatible updates preserve existing identity and explicit collection/helper grants.
+The release does not provision the separately authorized journal helper; do not
+repeat its create-only setup on an already configured endpoint. New optional scopes
+still require their own explicit approval. The detailed manual and default ready-only
+paths below remain valid for their stated scopes; source checks and a started pending
+process do not establish approved reporting or actual reboot acceptance.
 
 ## 1. Choose the correct milestone
 

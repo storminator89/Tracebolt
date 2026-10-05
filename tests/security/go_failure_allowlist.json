@@ -1,5 +1,5 @@
 {
-  "goSourceSha256": "08c818d87827d728259632e98d272a269618b7a68ae1d24a95ef44198d5bf0c3",
+  "goSourceSha256": "793a72d2d0dd0b3f3a6edb47fbaec4c7137f2938e52e8bfa1edb5b3d9a6f62ac",
   "packages": {
     "localrmm/cmd/agent": [
       "TestHelp",
@@ -1120,6 +1120,8 @@
       "TestStrictOwnLedgerSchema",
       "TestStrictReceiptBindingAndOriginalTimes",
       "TestUnsupportedPlatformNeverCreatesState",
+      "TestValidatedPackCursorReusesWork",
+      "TestValidatedPackWorkRemainsDetached",
       "TestValidationAndWrongBindingNeverCleanTemporaries",
       "TestVolumeSpoolKeepsOriginalCaptureContextAndEmptyComplete"
     ],

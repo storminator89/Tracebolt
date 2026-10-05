@@ -1,7 +1,7 @@
 """Local inert execution-tail checks. No download, real bootstrap or installer.
 
-Only an unprivileged temporary fixture program executes. The production pin stays
-null. These checks establish fd/terminal/signal handoff, not service acceptance.
+Only an unprivileged temporary fixture program executes. The production pin is
+unchanged. These checks establish fd/terminal/signal handoff, not service acceptance.
 """
 import ast
 import hashlib
@@ -28,7 +28,8 @@ def execution_tail():
     final = lines[first + 4].strip()
     assert final == '`exec python3 -I -B /proc/self/fd/3 --action install --apply --pending-service${publicArguments}`,'
     tail.append(final[1:-2].replace("${publicArguments}", ""))
-    return "\n".join(tail)
+    assert "    ].join('; ');" in lines
+    return "; ".join(tail)
 
 
 @unittest.skipUnless(sys.platform == "linux" and Path("/proc/self/fd").is_dir(), "Linux proc-fd fixture")
@@ -58,9 +59,10 @@ class DashboardExecutionTail(unittest.TestCase):
                 path.chmod(0o600)
                 inode = path.stat().st_ino
                 digest = hashlib.sha256(contents).hexdigest()
-                script = ("set -eu\numask 077\n" + f"stage={shlex.quote(str(stage))}\n" +
-                          f"printf '%s  %s\\n' {shlex.quote(digest)} \"$stage/bootstrap.py\" | sha256sum --check --status\n" +
+                script = ("set -eu; umask 077; " + f"stage={shlex.quote(str(stage))}; " +
+                          f"printf '%s  %s\\n' {shlex.quote(digest)} \"$stage/bootstrap.py\" | sha256sum --check --status; " +
                           execution_tail())
+                self.assertNotRegex(script, r"[\r\n]")
                 master, terminal = os.openpty()
                 child = None
                 try:

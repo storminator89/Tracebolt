@@ -1,3 +1,4 @@
+import type {} from 'vitest/jsdom';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { EnrollmentSection } from './enrollment';
@@ -55,7 +56,7 @@ beforeEach(() => {
  setLocale('en', false); current = listing(); localStorage.clear(); sessionStorage.clear(); changed.mockClear();
  vi.mocked(request).mockReset().mockImplementation(async () => structuredClone(current)); vi.mocked(mutate).mockReset();
 });
-afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); vi.useRealTimers(); });
+afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); vi.useRealTimers(); jsdom.reconfigure({ url: 'https://localhost/' }); });
 
 describe('exact package-source enrollment consent', () => {
  it('accepts only coherent explicit managed pairs and the unchanged basic omission', () => {
@@ -332,8 +333,11 @@ describe('source-owned verified download command (inert fixtures only)', () => {
    expect(downloadCommands.selectEnrollmentCommand({ ...response.bootstrap, releasePin: fixturePin }, response.snapshot, checksum)).toBeNull();
   } finally { vi.unstubAllEnvs(); }
  });
- it('copies the actual source-selected command without a selector mock or secret transfer', async () => {
+ it.each(['tls', 'http-test'] as const)('copies the exact source-selected %s command on one physical line without a selector mock or secret transfer', async profile => {
+  jsdom.reconfigure({ url: profile === 'tls' ? 'https://localhost/' : 'http://localhost:8080/' });
   const response = { ...creation(v3), bootstrapSHA256: checksum }, pin = downloadCommands.OFFICIAL_LINUX_BOOTSTRAP_PIN;
+  response.snapshot.binding.profile = profile; response.bootstrap.profile = profile;
+  if (profile === 'http-test') { response.bootstrap.agentOrigin = 'http://localhost:8081'; response.bootstrap.serverCaPem = ''; }
   const clipboard = vi.fn().mockResolvedValue(undefined); Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: clipboard } });
   current = listing(v3); vi.mocked(mutate).mockResolvedValue(response); const dialog = await add();
   expect(within(dialog).getByText(pin === null ? 'Public bootstrap configuration; reviewed native binaries must be prepared separately.' : 'A public source-pinned download command is available after creation. Review prerequisites and service permissions before running it.')).toBeVisible();
@@ -342,6 +346,7 @@ describe('source-owned verified download command (inert fixtures only)', () => {
   expect(within(dialog).getByText(pin === null ? 'Run as root from the prepared local checkout' : 'Run the verified download as root in a local terminal')).toBeVisible();
   expect(clipboard).not.toHaveBeenCalled(); fireEvent.click(within(dialog).getByRole('button', { name: 'Copy public installation command' }));
   await waitFor(() => expect(clipboard).toHaveBeenCalledTimes(1)); const command = clipboard.mock.calls[0][0] as string;
+  expect(command).toBe(downloadCommands.selectEnrollmentCommand(response.bootstrap, response.snapshot, checksum)?.command);
   if (pin === null) {
    expect(command).toBe(preparedEnrollmentCommand(response.bootstrap, response.snapshot, checksum)); expect(command).not.toMatch(/curl|raw\.githubusercontent\.com/);
   } else {
@@ -349,9 +354,12 @@ describe('source-owned verified download command (inert fixtures only)', () => {
    expect(script).toContain(`https://raw.githubusercontent.com/storminator89/Tracebolt/${pin.publicationCommit}/deploy/release/published/${pin.version}.py`);
    expect(script).toContain(`printf '%s  %s\\n' '${pin.bootstrapSHA256}' "$stage/bootstrap.py" | sha256sum --check --status`);
    expect(script).toContain(`--invitation-id '${invitation}' --bootstrap-sha256 '${checksum}'`);
+   expect(script).toContain(publicEnrollmentArguments(response.bootstrap, response.snapshot, checksum));
+   if (profile === 'tls') expect(script).toContain(`--server-ca-base64 '${btoa(certificate)}'`);
+   else { expect(script).toMatch(/ --insecure-http-test$/); expect(script).not.toContain('--server-ca-base64'); }
    expect(within(dialog).getByText(/A tampered HTTP-test dashboard can replace the whole command/)).toBeVisible();
   }
-  expect(command).not.toContain(secret); expect(screen.getByLabelText('One-time invitation secret')).toHaveAttribute('type', 'password');
+  expect(command).not.toMatch(/[\r\n]/); expect(command).not.toContain(secret); expect(screen.getByLabelText('One-time invitation secret')).toHaveAttribute('type', 'password');
   expect(mutate).toHaveBeenCalledExactlyOnceWith('/enrollment/invitations', { requestId: expect.any(String), platform: 'linux', collectionAcknowledged: true }, expect.any(AbortSignal));
  });
  it('rejects absent, partial, malformed, mutable-ref and shell-bearing source pins', () => {
@@ -374,7 +382,9 @@ describe('source-owned verified download command (inert fixtures only)', () => {
   expect(script.indexOf('umask 077')).toBeLessThan(script.indexOf('mktemp -d /tmp/tracebolt-bootstrap.XXXXXXXXXX'));
   expect(script.indexOf('sha256sum --check --status')).toBeLessThan(script.indexOf('python3 -I -B'));
   expect(script).toContain('SHA-256 mismatch. Nothing was executed.'); expect(fetch).not.toHaveBeenCalled(); expect(command).not.toContain(secret);
-  expect(script).not.toMatch(/--location|--insecure(?: |$)|curl[^\n]*\|\s*(?:sh|bash)|sudo|apt-get|pip install|wget/);
+  const unsafeDownload = /--location|--insecure(?: |$)|curl[^;\r\n]*\|\s*(?:sh|bash)(?:\s|$)|sudo|apt-get|pip install|wget/;
+  expect(script).not.toMatch(unsafeDownload);
+  for (const unsafe of ['curl https://example.invalid | sh', 'curl https://example.invalid | bash -s', 'curl --insecure https://example.invalid', 'curl --location https://example.invalid']) expect(unsafe).toMatch(unsafeDownload);
  });
  it('keeps stdin and foreground execution for the hidden prompt and cleans only its own staging file', () => {
   const response = creation(v3), script = decodedScript(downloadCommands.verifiedDownloadCommand(fixturePin, response.bootstrap, response.snapshot, checksum)!);
@@ -382,11 +392,13 @@ describe('source-owned verified download command (inert fixtures only)', () => {
   expect(script).toContain('for tool in curl sha256sum python3 mktemp rm rmdir;');
   expect(script).toContain('trap \'status=$?; trap - 0; rm -f -- "$stage/bootstrap.py"; rmdir -- "$stage"; exit "$status"\' 0');
   for (const [signal, status] of [['HUP', 129], ['INT', 130], ['TERM', 143]]) expect(script).toContain(`trap 'exit ${status}' ${signal}`);
-  expect(script.split('\n').at(-1)).toBe('exec python3 -I -B /proc/self/fd/3 --action install --apply --pending-service' + publicEnrollmentArguments(response.bootstrap, response.snapshot, checksum));
+  expect(script.split('; ').at(-1)).toBe('exec python3 -I -B /proc/self/fd/3 --action install --apply --pending-service' + publicEnrollmentArguments(response.bootstrap, response.snapshot, checksum));
   expect(script).toContain('exec 3< "$stage/bootstrap.py"'); expect(script).toContain('trap - 0 HUP INT TERM');
   expect(script.indexOf('sha256sum --check --status')).toBeLessThan(script.indexOf('exec 3<'));
   expect(script.lastIndexOf('rmdir -- "$stage"')).toBeLessThan(script.indexOf('exec python3'));
-  expect(script).not.toMatch(/<<|<\s*\/dev\/null|rm -rf|invitation-secret|timeout .*python|python[^\n]*&\s*$/);
+  const unsafeExecution = /<<|<\s*\/dev\/null|rm -rf|invitation-secret|(?:^|[;\s])timeout [^;\r\n]*python|python[^;\r\n]*&\s*$/;
+  expect(script).not.toMatch(unsafeExecution);
+  for (const unsafe of ['timeout 60 python3 -I -B /fixture.py', 'exec python3 -I -B /fixture.py &', 'exec python3 /fixture.py < /dev/null', 'rm -rf /fixture', '--invitation-secret fixture']) expect(unsafe).toMatch(unsafeExecution);
  });
  it('preserves exact validated public TLS arguments and the separate public bootstrap digest', () => {
   const response = creation(v3), script = decodedScript(downloadCommands.verifiedDownloadCommand(fixturePin, response.bootstrap, response.snapshot, checksum)!);

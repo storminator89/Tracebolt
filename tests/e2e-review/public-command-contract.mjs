@@ -58,7 +58,7 @@ function download(pin,args){
   'trap - 0 HUP INT TERM',
   `exec python3 -I -B /proc/self/fd/3 --action install --apply --pending-service${args}`,
  ];
- return '/usr/bin/env -i PATH=/usr/sbin:/usr/bin:/sbin:/bin LANG=C.UTF-8 LC_ALL=C.UTF-8 /bin/sh -c '+quote(lines.join('\n'));
+ return '/usr/bin/env -i PATH=/usr/sbin:/usr/bin:/sbin:/bin LANG=C.UTF-8 LC_ALL=C.UTF-8 /bin/sh -c '+quote(lines.join('; '));
 }
 /** Only the source-owned pin selects the branch; a command cannot choose its own. */
 export function assertPublicCommand(command,{pin,...context}){
