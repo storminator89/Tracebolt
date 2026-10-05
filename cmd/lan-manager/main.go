@@ -36,6 +36,7 @@ type prepared struct {
 	operatorTLS, agentTLS *tls.Config
 	close                 func()
 	maintenance           *enrollmentservice.Service
+	health                *api.Server
 }
 
 func prepare(m lanconfig.Material) (*prepared, error) { return prepareWithEnrollment(m, nil) }
@@ -162,7 +163,7 @@ func prepareWithEnrollment(m lanconfig.Material, enrollment *enrollmentconfig.Ma
 		closeAll()
 		return nil, e
 	}
-	return &prepared{operator: operator, agent: agent, operatorTLS: operatorTLS, agentTLS: agentTLS, close: closeAll, maintenance: enrolledService}, nil
+	return &prepared{operator: operator, agent: agent, operatorTLS: operatorTLS, agentTLS: agentTLS, close: closeAll, maintenance: enrolledService, health: app}, nil
 }
 
 func server(handler http.Handler) *http.Server {
@@ -188,6 +189,17 @@ func runWithEnrollment(ctx context.Context, m lanconfig.Material, enrollment *en
 	if p.operatorTLS != nil {
 		operator = tls.NewListener(operator, p.operatorTLS)
 		agent = tls.NewListener(agent, p.agentTLS)
+	}
+	if p.health != nil {
+		healthCtx, stopHealth := context.WithCancel(ctx)
+		healthDone := make(chan struct{})
+		go func() {
+			defer close(healthDone)
+			_ = p.health.RunHealthMonitor(healthCtx, func() {
+				log.Print("Health evaluation is unavailable; existing incident history is preserved.")
+			})
+		}()
+		defer func() { stopHealth(); <-healthDone }()
 	}
 	// Maintenance stops before store closure, including listener/server failures.
 	if p.maintenance != nil && p.maintenance.Binding().CollectionProfile == enrollmentcrypto.CollectionProfileComplete {

@@ -30,6 +30,7 @@ import (
 )
 
 type Server struct {
+	health              *healthMonitor
 	store               *store.Store
 	port                int
 	web                 string

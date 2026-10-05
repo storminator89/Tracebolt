@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"localrmm/internal/cachedupdates"
 	"localrmm/internal/endpointidentity"
 	"localrmm/internal/systeminventory"
 	"localrmm/internal/systemstate"
@@ -29,6 +30,7 @@ type systemSender struct {
 	collect         systemSource
 	now             func() time.Time
 	identityCollect endpointSource
+	updatesCollect  cachedUpdatesSource
 }
 
 func openSystemSender(m Material) (*systemSender, error) {
@@ -42,7 +44,7 @@ func openSystemSenderWithSource(m Material, source systemSource, now func() time
 	if e != nil {
 		return nil, ErrState
 	}
-	return &systemSender{material: m, state: state, client: newHTTPClient(m.tlsConfig, m.config.Profile == "http-test"), collect: source, now: now, identityCollect: endpointidentity.Collect}, nil
+	return &systemSender{material: m, state: state, client: newHTTPClient(m.tlsConfig, m.config.Profile == "http-test"), collect: source, now: now, identityCollect: endpointidentity.Collect, updatesCollect: cachedupdates.Collect}, nil
 }
 func (s *systemSender) Close() error {
 	if s == nil {
@@ -59,7 +61,8 @@ func (s *systemSender) Close() error {
 
 // Run is synchronous and called only under the foreground owner. It neither
 // starts background jobs nor initializes missing state. Pending exact bytes are
-// discarded only when locally stale, preserving the consumed sequence floor.
+// discarded when locally stale or extension consent is withdrawn, preserving
+// the consumed sequence floor.
 func (s *systemSender) Run(ctx context.Context) (systemReport, error) {
 	out := systemReport{Status: "pending_retained"}
 	if s == nil || ctx == nil || !s.material.valid() || s.state == nil || s.collect == nil || s.now == nil {
@@ -69,6 +72,7 @@ func (s *systemSender) Run(ctx context.Context) (systemReport, error) {
 		return out, ctx.Err()
 	}
 	_, identityEnabled := readEndpointConsent(s.material)
+	_, updatesEnabled := readCachedUpdatesConsent(s.material)
 	pending, e := s.state.Pending()
 	if e != nil {
 		return out, ErrState
@@ -80,7 +84,7 @@ func (s *systemSender) Run(ctx context.Context) (systemReport, error) {
 			return out, ErrState
 		}
 		now := s.now().UTC()
-		if frame.EndpointIdentity != nil && !identityEnabled {
+		if frame.EndpointIdentity != nil && !identityEnabled || frame.CachedUpdates != nil && !updatesEnabled {
 			if s.state.Discard(pending.Digest) != nil {
 				return out, ErrState
 			}
@@ -115,6 +119,7 @@ func (s *systemSender) Run(ctx context.Context) (systemReport, error) {
 			return out, ErrObservation
 		}
 		raw, e := systemwire.Encode(sequence, snapshot)
+		var identitySnapshot *endpointidentity.Snapshot
 		currentConsent, stillEnabled := readEndpointConsent(s.material)
 		if identityEnabled && stillEnabled {
 			if s.identityCollect == nil {
@@ -133,6 +138,31 @@ func (s *systemSender) Run(ctx context.Context) (systemReport, error) {
 				// interface rows or increase the reviewed storage ceiling.
 				identity = endpointidentity.Empty(generation, at, endpointidentity.ReasonByteLimit)
 				raw, e = systemwire.EncodeEndpoint(sequence, snapshot, identity)
+			}
+			identitySnapshot = &identity
+		}
+		currentUpdatesConsent, updatesStillEnabled := readCachedUpdatesConsent(s.material)
+		if updatesEnabled && updatesStillEnabled {
+			if s.updatesCollect == nil {
+				return out, ErrConfiguration
+			}
+			updates, err := s.collectCachedUpdates(ctx, generation, at, currentUpdatesConsent)
+			if ctx.Err() != nil {
+				return out, ctx.Err()
+			}
+			if err != nil || updates.GenerationID != generation || !updates.CollectedAt.Equal(at) || cachedupdates.Validate(updates) != nil {
+				return out, ErrObservation
+			}
+			raw, e = systemwire.EncodeCachedUpdates(sequence, snapshot, updates, identitySnapshot)
+			if e != nil {
+				// Never enlarge the existing request/state cap or disguise a prefix as
+				// complete. A bounded explicit failure replaces only extension payloads.
+				updates = cachedupdates.Empty(generation, at, cachedupdates.ReasonByteLimit)
+				raw, e = systemwire.EncodeCachedUpdates(sequence, snapshot, updates, identitySnapshot)
+				if e != nil && identitySnapshot != nil {
+					identity := endpointidentity.Empty(generation, at, endpointidentity.ReasonByteLimit)
+					raw, e = systemwire.EncodeCachedUpdates(sequence, snapshot, updates, &identity)
+				}
 			}
 		}
 		if e != nil {
@@ -160,6 +190,15 @@ func (s *systemSender) Run(ctx context.Context) (systemReport, error) {
 				return out, ErrState
 			}
 			out.Status = "endpoint_identity_disabled"
+			return out, nil
+		}
+	}
+	if prepared.CachedUpdates != nil {
+		if _, ok := readCachedUpdatesConsent(s.material); !ok {
+			if s.state.Discard(pending.Digest) != nil {
+				return out, ErrState
+			}
+			out.Status = "cached_updates_disabled"
 			return out, nil
 		}
 	}
@@ -199,4 +238,37 @@ func (s *systemSender) Run(ctx context.Context) (systemReport, error) {
 	}
 	out.Status = "acknowledged"
 	return out, nil
+}
+
+const cachedUpdatesAttemptBudget = 5 * time.Second
+const cachedUpdatesSendReserve = time.Second
+
+// collectCachedUpdates limits this optional extension independently of the
+// ordinary system attempt. Leave time for staging, consent checks and delivery;
+// a child timeout is observation data, while parent cancellation remains fatal.
+// Collection stays synchronous and relies on the source's context-aware bounds.
+func (s *systemSender) collectCachedUpdates(ctx context.Context, generation string, at time.Time, consent cachedupdates.LocalConsent) (cachedupdates.Snapshot, error) {
+	if err := ctx.Err(); err != nil {
+		return cachedupdates.Snapshot{}, err
+	}
+	budget := cachedUpdatesAttemptBudget
+	if deadline, ok := ctx.Deadline(); ok {
+		if remaining := time.Until(deadline) - cachedUpdatesSendReserve; remaining < budget {
+			budget = remaining
+		}
+	}
+	if budget <= 0 {
+		return cachedupdates.Empty(generation, at, cachedupdates.ReasonTimeout), nil
+	}
+	child, cancel := context.WithTimeout(ctx, budget)
+	updates, err := s.updatesCollect(child, generation, at, consent, s.material.binding)
+	childErr := child.Err()
+	cancel()
+	if parentErr := ctx.Err(); parentErr != nil {
+		return cachedupdates.Snapshot{}, parentErr
+	}
+	if errors.Is(childErr, context.DeadlineExceeded) {
+		return cachedupdates.Empty(generation, at, cachedupdates.ReasonTimeout), nil
+	}
+	return updates, err
 }

@@ -1,5 +1,5 @@
 {
-  "goSourceSha256": "3a48728ae39b85b3a6cb906698f530e9a42f866326c3ed72f1dadfff5052a22b",
+  "goSourceSha256": "c6cab00e242524b8db49d90ffb69ac6c06e678c77fd5b9279847cea902fcc0ca",
   "packages": {
     "localrmm/cmd/agent": [
       "TestHelp",
@@ -48,6 +48,7 @@
       "TestTerminalRestoreAndNoEcho"
     ],
     "localrmm/cmd/lan-agent": [
+      "TestCachedUpdatesConsentIdentityBeforePrivateReadAndExplicitAck",
       "TestEndpointConsentIdentityBeforePrivateReadAndExplicitAck",
       "TestJournalConsentCLIPreviewAndInitializeContract",
       "TestJournalConsentCLIRejectsBeforePrivateAccess",
@@ -154,6 +155,7 @@
       "TestClockFailuresStopSafely",
       "TestCountersAndBackoffCannotOverflow",
       "TestDeadlineAndCancellationCauseAreSafe",
+      "TestExtensionConsentWithdrawalStatusRemainsBounded",
       "TestInvalidConfigurationHasNoSideEffects",
       "TestInvalidResultsNeverEscape",
       "TestInventoryMetadataIsFixedBoundedAndOptional",
@@ -208,6 +210,8 @@
       "TestAIUnconfiguredAndMemoryOnlyConfiguration",
       "TestBootstrapAdmissionBoundedAndFailClosedClock",
       "TestBoundaryGuards",
+      "TestCachedUpdatesOperatorGuardsAndBoundedUnknown",
+      "TestCachedUpdatesRechecksSessionAfterRead",
       "TestCollectionInvitationAcknowledgementIsProfileBound",
       "TestCompleteOverviewConfiguredQueryRequiresOperatorCSRF",
       "TestCompleteOverviewDTOIndependentTimesAndFailure",
@@ -228,6 +232,8 @@
       "TestEndpointIdentityOperatorGuardsAndBoundedUnknown",
       "TestEndpointIdentityRechecksSessionAfterRead",
       "TestGuidedCapabilitiesDescribeShippedScopeWithoutInstallationClaim",
+      "TestHealthMonitorPersistsWithoutUIAndPreservesHistoryOnSourceFailure",
+      "TestHealthOperatorAuthenticationCSRFAndDeviceAuthority",
       "TestInvitationCreationAdvertisesExactPublicDownloadChecksum",
       "TestJournalExplicitAcknowledgementsAndNestedContracts",
       "TestJournalIdentityRejectsAmbiguousCAS",
@@ -308,6 +314,30 @@
       "TestRejectUnexpectedData",
       "TestSafeEnvelope",
       "TestValidateObservationLeavesInputUnchanged"
+    ],
+    "localrmm/internal/cachedupdates": [
+      "TestAPTDirectoryRedirectionFailsClosed",
+      "TestBusyAndCanceledDoNotOpenSource",
+      "TestCollectorReadOnlyDependencyBoundary",
+      "TestDpkgQueryHoldsResidualAndMalformed",
+      "TestFailureAndUnsupportedNeverProduceZeroCounts",
+      "TestFixedNativeCommandsHaveNoRefreshOrWritableCache",
+      "TestFixedPolicyRejectsPackageArgumentInjectionBeforeCommand",
+      "TestLocalConsentExactBindingAndScope",
+      "TestMetadataAgeDoesNotSaturateAcrossRFC3339Range",
+      "TestMissingPolicyIsUnknownNotZeroSuccess",
+      "TestNestedAPTConfigDirectivesFailClosed",
+      "TestNoSourceAccessWithoutConsentOrIdentity",
+      "TestOnlyPackageIndexNamesContributeModificationAge",
+      "TestPolicyOnlyRetainsSelectedNativeFields",
+      "TestPreviewBoundRetainsExactCounts",
+      "TestReleaseMetadataIsPinnedSeparatelyFromAge",
+      "TestSnapshotCountOverflowRejected",
+      "TestStaleSourceAgeIsNotRefreshedByRead",
+      "TestStrictSnapshotRejectsContradictionsAndExtraFields",
+      "TestSupportedDebianAndUbuntuCandidatesAndHolds",
+      "TestUnknownCandidateAndCompleteZeroRemainDistinct",
+      "TestVersionEpochAndTildeNativeSemantics"
     ],
     "localrmm/internal/collector": [
       "TestBoundedReadAndErrors",
@@ -515,6 +545,11 @@
     "localrmm/internal/enrollmentstore": [
       "TestAuthorizeCertificateRequiresExactActivatedCurrentDurableIdentity",
       "TestAuthorizeCertificateUnavailableNeverMeansUnauthorized",
+      "TestCachedUpdatesAndEndpointIdentityRetainIndependentOriginalAges",
+      "TestCachedUpdatesExactRetryRestartOrdinaryReportsDoNotRefresh",
+      "TestCachedUpdatesExpiredCleanupSurvivesLaterOrdinaryFrame",
+      "TestCachedUpdatesExpiryCleanupAndRevocation",
+      "TestCachedUpdatesPreservesOldAuthorityJSON",
       "TestChangedLiveSchemaOrFilesystemFailsClosed",
       "TestCompleteInventoryAdmissionAndWALReservation",
       "TestCompleteInventoryAuthorityBindingsAndRevocation",
@@ -571,6 +606,8 @@
       "TestEndpointIdentityPreservesOldAuthorityJSON",
       "TestExpiryAtBoundaryAndQuotaAcrossRestart",
       "TestFilesystemProtectionAndRedaction",
+      "TestHealthReadsOriginalAcceptedAgeAndExplicitServices",
+      "TestHealthRejectsClockBeforeCurrentIdentityAuthority",
       "TestIndependentIssuerAndRevocationRace",
       "TestIndependentProcessHelper",
       "TestIndependentProcessesSerializeTerminalRetry",
@@ -626,6 +663,7 @@
       "TestTwentyFivePopulatedRecordsRetainFrames"
     ],
     "localrmm/internal/enrollmenttransport": [
+      "TestCachedUpdatesTLSHTTPActivationReplayAndRevocation",
       "TestCertificateAdmissionReservesOtherIdentityCapacity",
       "TestCompleteInventoryIngressFailureNeverBecomesEmptyComplete",
       "TestCompleteInventoryRealIngressAllChunksAtomicRetryRevocation",
@@ -673,6 +711,18 @@
       "TestStrictDecodersAndCanonicalization",
       "TestTypedIntegerAndChunkLimitRejection",
       "TestValidatorRejectsCrossChunkTamperingAndPoison"
+    ],
+    "localrmm/internal/health": [
+      "TestExplicitServiceUnknownAndRemoval",
+      "TestFilesystemMinimumDurationHysteresisAndOneIncident",
+      "TestHealthDelayedSamplesDoNotCreditMaintenanceOrDisabledTime",
+      "TestHealthViewGoFixture",
+      "TestMaintenanceIsBoundedSuppressesOnlyNewIncidents",
+      "TestManagerGapClockRollbackAndAuthorityLoss",
+      "TestOfflineUsesAcceptedReceiptNotOldCaptureOrPageReads",
+      "TestRepeatedStaleMissingAndInvalidSamplesNeverEarnDuration",
+      "TestSettingsValidationAndHistoryBound",
+      "TestViewOriginalAgeOutlivesEvaluationFreshness"
     ],
     "localrmm/internal/inventoryledger": [
       "TestAllSupportedRowsHaveReachableTail",
@@ -834,6 +884,17 @@
       "TestBootstrapTransportPinsOriginPathAndRejectsRedirect",
       "TestBootstrapTransportUsesExplicitServerTrustWithoutClientIdentity",
       "TestBuiltAgentCLIExactRetry",
+      "TestCachedUpdatesAndEndpointConsentRemainIndependent",
+      "TestCachedUpdatesBudgetCapsAnUnboundedParent",
+      "TestCachedUpdatesConsentAdminIsQuiescentLocalAndPreservesLedgers",
+      "TestCachedUpdatesConsentMalformedForeignUnsafeAndMissingStateFailClosed",
+      "TestCachedUpdatesConsentRemovedBeforeSourcePreventsCachedRead",
+      "TestCachedUpdatesConsentUnsafeModesAndHardlinksFailClosed",
+      "TestCachedUpdatesDefaultOffAndStalePendingRequiresFreshCapture",
+      "TestCachedUpdatesNativeConsentRemovedDuringCollectionPreventsAnySend",
+      "TestCachedUpdatesNativeExactRetryAndDisablePreserveSystemFloor",
+      "TestCachedUpdatesParentCancellationRemainsFatal",
+      "TestCachedUpdatesTimeoutPreservesOrdinarySystemAndEndpointReport",
       "TestCompleteConfigInitializesBothBoundLedgersAndRejectsLoss",
       "TestCompleteMetricsUseOperationsWithoutTruncatedPackageCapture",
       "TestCompleteSyntheticAuthorityRetryStagesAndRestart",
@@ -1190,6 +1251,8 @@
     ],
     "localrmm/internal/store": [
       "TestDurableMutationAndSeed",
+      "TestHealthDurableHistoryAndAtomicMutation",
+      "TestHealthStateCorruptionIsNotEmptySuccess",
       "TestNoteLimit"
     ],
     "localrmm/internal/systeminventory": [
@@ -1249,6 +1312,7 @@
       "TestValidateExistingPreservesSenderTemporary"
     ],
     "localrmm/internal/systemwire": [
+      "TestCachedUpdatesFrameStrictVariantAndCoexistence",
       "TestEndpointVariantPreservesLegacyBytesAndStrictVersions",
       "TestSystemWireHTTPProofAndFraming",
       "TestSystemWireStrictFrameReceiptAndSeparateDomain"

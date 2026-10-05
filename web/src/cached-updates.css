@@ -1,0 +1,5 @@
+.cached-updates { margin-top: 1rem; border-top: 1px solid var(--line); padding-top: 1rem; }
+.cached-updates h4 { margin-bottom: .25rem; }
+.cached-updates details { margin-top: 1rem; font-size: .85rem; color: var(--secondary); }
+.cached-updates summary { cursor: pointer; display: flex; align-items: center; gap: .4rem; }
+.cached-updates .package-heading { flex-wrap: wrap; }

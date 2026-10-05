@@ -10,6 +10,7 @@ import (
 	"errors"
 	"time"
 
+	"localrmm/internal/cachedupdates"
 	"localrmm/internal/endpointidentity"
 	"localrmm/internal/enrollmentcrypto"
 	"localrmm/internal/enrollmentstate"
@@ -76,11 +77,17 @@ type systemRecord struct {
 	MaintenanceAt    *time.Time              `json:"maintenanceAt"`
 	EndpointIdentity *endpointIdentityRecord `json:"endpointIdentity,omitempty"`
 	JournalRequest   *journalrequest.Record  `json:"journalRequest,omitempty"`
+	CachedUpdates    *cachedUpdatesRecord    `json:"cachedUpdates,omitempty"`
 }
 
 type endpointIdentityRecord struct {
 	Receipt  systemwire.Receipt         `json:"receipt"`
 	Snapshot *endpointidentity.Snapshot `json:"snapshot"`
+}
+
+type cachedUpdatesRecord struct {
+	Receipt  systemwire.Receipt      `json:"receipt"`
+	Snapshot *cachedupdates.Snapshot `json:"snapshot"`
 }
 
 func snapshotMetadata(s systeminventory.Snapshot) *systemSnapshotMeta {
@@ -172,6 +179,24 @@ func validSystemRecord(snap enrollmentstate.Snapshot, r systemRecord) bool {
 		}
 		if identity.Snapshot != nil {
 			if endpointidentity.Validate(*identity.Snapshot) != nil || identity.Snapshot.GenerationID != p.GenerationID || !identity.Snapshot.CollectedAt.Equal(p.CollectedAt) {
+				return false
+			}
+		} else if (r.MaintenanceAt == nil || r.MaintenanceAt.Before(p.CollectedAt.Add(SystemRetention))) && r.Receipt.ReceivedAt.Before(p.CollectedAt.Add(SystemRetention)) {
+			return false
+		}
+	}
+	if r.CachedUpdates != nil {
+		updates := r.CachedUpdates
+		p := updates.Receipt
+		expected, e := systemwire.GenerationID(snap.Approval.DeviceID, p.Sequence)
+		if e != nil || p.SchemaVersion != systemwire.ReceiptVersion || p.DeviceID != snap.Approval.DeviceID || p.GenerationID != expected || !enrollmentcrypto.ValidHash(p.BodyHash) || !validStoreTime(p.CollectedAt) || !validStoreTime(p.ReceivedAt) || p.CollectedAt.Location() != time.UTC || p.ReceivedAt.Location() != time.UTC || p.CollectedAt.After(p.ReceivedAt) || p.ReceivedAt.Sub(p.CollectedAt) > SystemMaxAge || p.Sequence > r.Receipt.Sequence || p.CollectedAt.After(r.Receipt.CollectedAt) || p.ReceivedAt.After(r.Receipt.ReceivedAt) || p.ReceivedAt.Unix() < snap.Activation.At || p.ReceivedAt.Unix() >= snap.Intent.NotAfter {
+			return false
+		}
+		if p.Sequence == r.Receipt.Sequence && p != r.Receipt {
+			return false
+		}
+		if updates.Snapshot != nil {
+			if cachedupdates.Validate(*updates.Snapshot) != nil || updates.Snapshot.GenerationID != p.GenerationID || !updates.Snapshot.CollectedAt.Equal(p.CollectedAt) {
 				return false
 			}
 		} else if (r.MaintenanceAt == nil || r.MaintenanceAt.Before(p.CollectedAt.Add(SystemRetention))) && r.Receipt.ReceivedAt.Before(p.CollectedAt.Add(SystemRetention)) {
@@ -384,7 +409,10 @@ func (s *Store) SaveSystemObservation(ctx context.Context, id, hash string, raw 
 		if frame.EndpointIdentity != nil {
 			record.EndpointIdentity = &endpointIdentityRecord{Receipt: out, Snapshot: frame.EndpointIdentity}
 		}
-		// Ordinary v1 reports never refresh a prior endpoint snapshot or receipt.
+		if frame.CachedUpdates != nil {
+			record.CachedUpdates = &cachedUpdatesRecord{Receipt: out, Snapshot: frame.CachedUpdates}
+		}
+		// Frames without an extension never refresh its prior snapshot or receipt.
 		// Insert the authority parent first; all subsequent failure paths roll back.
 		if !exists {
 			placeholder, _ := json.Marshal(record)

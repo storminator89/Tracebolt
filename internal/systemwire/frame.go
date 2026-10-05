@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"localrmm/internal/cachedupdates"
 	"localrmm/internal/endpointidentity"
 	"localrmm/internal/enrollmentcrypto"
 	"localrmm/internal/systeminventory"
@@ -15,16 +16,19 @@ import (
 
 const FrameVersion = "tracebolt.agent-system-inventory.v1"
 const EndpointFrameVersion = "tracebolt.agent-system-inventory.v2"
+const CachedUpdatesFrameVersion = "tracebolt.agent-system-inventory.v3"
 const ReceiptVersion = "tracebolt.system-inventory-receipt.v1"
 const MaxBodyBytes = systeminventory.MaxSnapshotBytes + 4096
 const MaxReceiptBytes = 4096
 
 type Frame struct {
-	SchemaVersion    string                     `json:"schemaVersion"`
-	Sequence         uint64                     `json:"sequence,string"`
-	Snapshot         systeminventory.Snapshot   `json:"snapshot"`
-	EndpointIdentity *endpointidentity.Snapshot `json:"endpointIdentity,omitempty"`
-	ConsentScope     string                     `json:"consentScope,omitempty"`
+	SchemaVersion             string                     `json:"schemaVersion"`
+	Sequence                  uint64                     `json:"sequence,string"`
+	Snapshot                  systeminventory.Snapshot   `json:"snapshot"`
+	EndpointIdentity          *endpointidentity.Snapshot `json:"endpointIdentity,omitempty"`
+	ConsentScope              string                     `json:"consentScope,omitempty"`
+	CachedUpdates             *cachedupdates.Snapshot    `json:"cachedUpdates,omitempty"`
+	CachedUpdatesConsentScope string                     `json:"cachedUpdatesConsentScope,omitempty"`
 }
 type Receipt struct {
 	SchemaVersion string    `json:"schemaVersion"`
@@ -42,16 +46,24 @@ func Decode(raw []byte) (Frame, error) {
 		return bad()
 	}
 	fields, e := object(raw, "schemaVersion", "sequence", "snapshot")
-	extended := false
+	expectedVersion := FrameVersion
 	if e != nil {
 		fields, e = object(raw, "schemaVersion", "sequence", "snapshot", "endpointIdentity", "consentScope")
-		extended = true
+		expectedVersion = EndpointFrameVersion
+	}
+	if e != nil {
+		fields, e = object(raw, "schemaVersion", "sequence", "snapshot", "cachedUpdates", "cachedUpdatesConsentScope")
+		expectedVersion = CachedUpdatesFrameVersion
+	}
+	if e != nil {
+		fields, e = object(raw, "schemaVersion", "sequence", "snapshot", "endpointIdentity", "consentScope", "cachedUpdates", "cachedUpdatesConsentScope")
+		expectedVersion = CachedUpdatesFrameVersion
 	}
 	if e != nil {
 		return bad()
 	}
 	var version, seq string
-	if json.Unmarshal(fields["schemaVersion"], &version) != nil || (version != FrameVersion && !extended || version != EndpointFrameVersion && extended) || json.Unmarshal(fields["sequence"], &seq) != nil {
+	if json.Unmarshal(fields["schemaVersion"], &version) != nil || version != expectedVersion || json.Unmarshal(fields["sequence"], &seq) != nil {
 		return bad()
 	}
 	sequence, ok := canonicalSequence(seq)
@@ -63,7 +75,7 @@ func Decode(raw []byte) (Frame, error) {
 		return bad()
 	}
 	out := Frame{SchemaVersion: version, Sequence: sequence, Snapshot: snapshot}
-	if extended {
+	if fields["endpointIdentity"] != nil {
 		var scope string
 		if json.Unmarshal(fields["consentScope"], &scope) != nil || scope != endpointidentity.Scope {
 			return bad()
@@ -74,6 +86,18 @@ func Decode(raw []byte) (Frame, error) {
 		}
 		out.EndpointIdentity = &identity
 		out.ConsentScope = scope
+	}
+	if fields["cachedUpdates"] != nil {
+		var scope string
+		if json.Unmarshal(fields["cachedUpdatesConsentScope"], &scope) != nil || scope != cachedupdates.Scope {
+			return bad()
+		}
+		updates, err := cachedupdates.DecodeStrict(fields["cachedUpdates"])
+		if err != nil || updates.GenerationID != snapshot.GenerationID || !updates.CollectedAt.Equal(snapshot.CollectedAt) {
+			return bad()
+		}
+		out.CachedUpdates = &updates
+		out.CachedUpdatesConsentScope = scope
 	}
 	return out, nil
 }
@@ -166,6 +190,31 @@ func EncodeEndpoint(sequence uint64, snapshot systeminventory.Snapshot, identity
 	}
 	if _, e = Decode(raw); e != nil {
 		return nil, e
+	}
+	return raw, nil
+}
+
+// EncodeCachedUpdates carries only the separately acknowledged cached APT scope.
+// Endpoint identity may coexist only with its own consent scope. The existing
+// body ceiling and exact-byte system sequence/receipt domain are unchanged.
+func EncodeCachedUpdates(sequence uint64, snapshot systeminventory.Snapshot, updates cachedupdates.Snapshot, identity *endpointidentity.Snapshot) ([]byte, error) {
+	if systeminventory.Validate(snapshot) != nil || cachedupdates.Validate(updates) != nil {
+		return nil, ErrContract
+	}
+	frame := Frame{SchemaVersion: CachedUpdatesFrameVersion, Sequence: sequence, Snapshot: snapshot, CachedUpdates: &updates, CachedUpdatesConsentScope: cachedupdates.Scope}
+	if identity != nil {
+		if endpointidentity.Validate(*identity) != nil {
+			return nil, ErrContract
+		}
+		frame.EndpointIdentity = identity
+		frame.ConsentScope = endpointidentity.Scope
+	}
+	raw, err := json.Marshal(frame)
+	if err != nil {
+		return nil, ErrContract
+	}
+	if _, err = Decode(raw); err != nil {
+		return nil, err
 	}
 	return raw, nil
 }

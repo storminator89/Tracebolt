@@ -100,6 +100,7 @@ func NewLANOperatorHandler(app *Server, c LANOperatorConfig) (http.Handler, erro
 	app.lanDevices = c.Devices
 	app.lanOperational = nil
 	app.lanPackages = nil
+	app.health = nil
 	app.aiCollectionProfile = "basic-readonly-v1"
 	app.catalogStore = nil
 	app.catalogImports = nil
@@ -114,6 +115,9 @@ func NewLANOperatorHandler(app *Server, c LANOperatorConfig) (http.Handler, erro
 			return c.Enrollment.PackageView(ctx, id, c.Enrollment.Now())
 		}
 		app.aiCollectionProfile = c.Enrollment.Binding().CollectionProfile
+		if app.aiCollectionProfile == enrollmentcrypto.CollectionProfileComplete {
+			app.health = &healthMonitor{store: app.store, source: c.Enrollment}
+		}
 		if enrollmentcrypto.ManagedCollectionProfile(app.aiCollectionProfile) {
 			app.catalogStore = offlinecatalog.New()
 			app.catalogImports = make(chan struct{}, 1)
@@ -354,12 +358,20 @@ func (h *operatorHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.completePackages(w, r)
 		return
 	}
+	if strings.HasPrefix(r.URL.Path, "/api/devices/") && strings.Contains(r.URL.Path, "/inventory/cached-updates") {
+		h.cachedUpdates(w, r)
+		return
+	}
 	if strings.HasPrefix(r.URL.Path, "/api/devices/") && strings.Contains(r.URL.Path, "/inventory/endpoint-identity") {
 		h.endpointIdentity(w, r)
 		return
 	}
 	if strings.HasPrefix(r.URL.Path, "/api/devices/") && strings.Contains(r.URL.Path, "/inventory/system") {
 		h.systemInventory(w, r)
+		return
+	}
+	if strings.HasPrefix(r.URL.Path, "/api/devices/") && strings.Contains(r.URL.Path, "/health") {
+		h.healthAPI(w, r)
 		return
 	}
 	h.app.api(w, r)

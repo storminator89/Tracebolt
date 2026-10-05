@@ -169,7 +169,7 @@ func valid(r Result) bool {
 			return false
 		}
 	case "pending_retained":
-	case "acknowledged":
+	case "acknowledged", "endpoint_identity_disabled", "cached_updates_disabled":
 		if r.Metadata.SystemSequence == 0 {
 			return false
 		}

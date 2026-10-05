@@ -1,0 +1,16 @@
+.health-service-picker { min-width: 0; }
+.health-service-chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 0; margin: 10px 0; list-style: none; }
+.health-service-chips li { display: flex; align-items: center; gap: 6px; max-width: 100%; padding: 3px 6px 3px 9px; background: var(--panel-soft); border: 1px solid var(--line); border-radius: 12px; font-size: 12px; }
+.health-service-chips span { min-width: 0; overflow-wrap: anywhere; font-family: var(--font-mono); }
+.health-service-chips button { flex: none; border: 0; border-radius: 8px; background: transparent; color: var(--text); font: inherit; font-size: 18px; cursor: pointer; padding: 0 4px; }
+.health-service-search { display: flex; flex-wrap: wrap; gap: 8px; }
+.health-service-search input { flex: 1; min-width: 100px; width: 100%; border: 1px solid var(--line); border-radius: 6px; background: var(--panel-soft); color: var(--text); font: inherit; font-size: 12px; padding: 9px; }
+.health-service-options { max-height: 250px; overflow: auto; padding: 0; list-style: none; border: 1px solid var(--line); border-radius: 6px; }
+.health-service-options li { padding: 8px 10px; border-bottom: 1px solid var(--line); }
+.health-service-options li:last-child { border-bottom: 0; }
+.health-service-options label { display: flex; align-items: baseline; gap: 8px; margin: 0; overflow-wrap: anywhere; font-family: var(--font-mono); cursor: pointer; }
+.health-service-options label span { min-width: 0; }
+.health-service-options small { display: block; margin: 4px 0 0 24px; color: var(--secondary); font-size: 11px; }
+.health-service-manual { margin: 12px 0; }
+.health-service-picker button:disabled { cursor: not-allowed; opacity: .55; }
+.health-service-picker :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }

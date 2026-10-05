@@ -1,0 +1,27 @@
+.health-panel { min-width: 0; }
+.health-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.health-heading h2 { margin: 0; font-size: 17px; }
+.health-panel h3 { font-size: 14px; margin: 20px 0 10px; }
+.health-note { font-size: 12px; line-height: 1.6; color: var(--secondary); }
+.health-summary { font-size: 13px; font-weight: 600; }
+.health-checks, .health-incidents { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
+.health-checks li, .health-incidents li { border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; min-width: 0; overflow-wrap: anywhere; }
+.health-check-line, .health-incident-line { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 12px; font-size: 13px; }
+.health-state { font-size: 12px; color: var(--secondary); }
+.health-state-open, .health-status-attention, .health-failure { color: var(--warning); }
+.health-state-ok { color: var(--accent); }
+.health-checks p { margin: 6px 0 0; }
+.health-failure { font-size: 13px; line-height: 1.6; }
+.health-controls { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 22px; border-top: 1px solid var(--line); }
+.health-controls label { display: block; font-size: 12px; font-weight: 600; margin: 0 0 8px; }
+.health-control-row { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.health-controls select, .health-controls textarea { border: 1px solid var(--line); border-radius: 6px; color: var(--text); background: var(--panel-soft); padding: 9px; font: inherit; font-size: 12px; }
+.health-controls textarea { display: block; width: 100%; resize: vertical; margin-bottom: 8px; font-family: var(--font-mono); }
+.health-controls p { margin-bottom: 10px; }
+.health-incidents dl { display: flex; flex-wrap: wrap; gap: 8px 20px; margin: 12px 0; font-size: 11px; }
+.health-incidents dt { color: var(--secondary); margin-bottom: 3px; }
+.health-incidents dd { margin: 0; }
+.health-panel time { font-variant-numeric: tabular-nums; }
+.health-policy { border-top: 1px solid var(--line); padding-top: 12px; margin-top: 20px; }
+.health-policy summary { cursor: pointer; font-size: 12px; color: var(--secondary); }
+@media (max-width: 640px) { .health-controls { grid-template-columns: 1fr; gap: 0; } .health-heading .button { width: 100%; justify-content: center; } }

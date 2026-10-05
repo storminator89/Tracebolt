@@ -1,0 +1,49 @@
+{
+  "schemaVersion": "tracebolt.health-view.v1",
+  "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "serverNow": "2026-10-05T00:02:30Z",
+  "status": "attention",
+  "evaluatedAt": "2026-10-05T00:02:30Z",
+  "maintenanceUntil": null,
+  "monitoredServices": [
+    "sshd.service"
+  ],
+  "checks": [
+    {
+      "key": "offline:contact",
+      "kind": "offline",
+      "target": "agent",
+      "state": "ok",
+      "observedAt": "2026-10-05T00:02:30Z",
+      "value": null
+    },
+    {
+      "key": "filesystem:root",
+      "kind": "filesystem",
+      "target": "/",
+      "state": "open",
+      "observedAt": "2026-10-05T00:02:20Z",
+      "value": 95
+    },
+    {
+      "key": "service:sshd.service",
+      "kind": "service",
+      "target": "sshd.service",
+      "state": "ok",
+      "observedAt": "2026-10-05T00:02:20Z",
+      "value": null
+    }
+  ],
+  "incidents": [
+    {
+      "id": "health_0000000000000001",
+      "key": "filesystem:root",
+      "kind": "filesystem",
+      "target": "/",
+      "openedAt": "2026-10-05T00:02:30Z",
+      "lastObservedAt": "2026-10-05T00:02:20Z",
+      "resolvedAt": null,
+      "acknowledgedAt": null
+    }
+  ]
+}

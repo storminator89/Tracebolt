@@ -2,6 +2,12 @@
 
 Meaningful development checkpoints are recorded here. These are prototype milestones, not production releases.
 
+## 2026-10-05 — Add Linux health incidents and cached update visibility
+
+- Add manager-side contact, root-filesystem and explicitly selected service checks from existing authenticated observations, with duration thresholds, recovery, acknowledgement, bounded maintenance and durable incident history. Unknown and stale data remain explicit; this does not add resource charts, notifications or repair actions.
+- Add a default-off, explicitly consented Debian/Ubuntu cached-APT extension with authenticated transfer and an operator Packages panel. It performs no repository refresh or installation. Full-query totals accompany a bounded candidate preview; omitted rows are explicitly partial and complete candidate paging remains future work. Cache timestamps do not prove repository freshness or CVE coverage.
+- Add focused collector, consent, transport, storage, API and UI regressions and deployment documentation. Regenerate the exact-source Go failure vocabulary. Combined-source and hosted acceptance are verified separately from isolated feature tests; native host activation remains a manual acceptance step.
+
 ## 2026-10-05 — Align the independent copied-command contract
 
 - Update the independently held exact shell-text contract for the reviewed grouped prerequisite messages. Keep byte-for-byte comparison, all trust checks, and negative tampering cases. HTTP/TLS contract tests and shell syntax checks pass without executing installer commands.

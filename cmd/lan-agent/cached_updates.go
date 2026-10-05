@@ -1,0 +1,40 @@
+package main
+
+import (
+	"encoding/json"
+	"fmt"
+	"io"
+	"localrmm/internal/lanclient"
+)
+
+type cachedUpdatesConsentOptions struct {
+	Path, Mode, Identity string
+	Acknowledged         bool
+}
+type cachedUpdatesConsentHooks struct {
+	identity  func(string) bool
+	configure func(string, string, bool) (lanclient.CachedUpdatesConsentResult, error)
+}
+
+func runCachedUpdatesConsent(o cachedUpdatesConsentOptions, h cachedUpdatesConsentHooks, out, errOut io.Writer) int {
+	if o.Path == "" || o.Identity == "" || o.Mode != "preview" && o.Mode != "enable" && o.Mode != "disable" || o.Acknowledged != (o.Mode == "enable") || h.identity == nil || h.configure == nil {
+		fmt.Fprintln(errOut, "Cached update consent requires exactly preview, enable, or disable; enable additionally requires --ack-cached-updates. No collection or network occurs in this mode.")
+		return 2
+	}
+	if !h.identity(o.Identity) {
+		fmt.Fprintln(errOut, "Cached update consent service identity rejected before private-state access.")
+		return 2
+	}
+	result, e := h.configure(o.Path, o.Mode, o.Acknowledged)
+	if e != nil {
+		fmt.Fprintln(errOut, "Cached update consent configuration was not confirmed. Stop the sender and check existing protected v3 handoff/state; no ledger is initialized or reset.")
+		return 2
+	}
+	if json.NewEncoder(out).Encode(result) != nil {
+		return 2
+	}
+	if o.Mode == "disable" {
+		fmt.Fprintln(errOut, "Local cached update collection is disabled. Any retained cached update request will be discarded before the next send, preserving its consumed sequence. Previously delivered metadata remains subject to its original retention expiry.")
+	}
+	return 0
+}
