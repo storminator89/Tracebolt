@@ -30,7 +30,9 @@ The first stage:
 
 1. Start a foreground POSIX shell with a fixed tool path and clean environment,
    preserving terminal stdin. Require deliberate root execution and terminal
-   input before staging. It never invokes sudo or installs dependencies.
+   input before staging. Missing initial tools are listed together with a
+   supported Debian/Ubuntu package command to review and run manually after
+   administrator approval. It never invokes sudo or installs dependencies.
 2. Create a new private directory below `/tmp` with umask 077. Fetch one exact
    `https://raw.githubusercontent.com/storminator89/Tracebolt/FULL_COMMIT/deploy/release/published/VERSION.py`
    into its private file. Curl ignores its startup configuration, bypasses proxies,

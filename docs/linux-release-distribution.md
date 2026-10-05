@@ -27,6 +27,43 @@ remote scan, manager deployment or host execution during source validation.
 An administrator runs the approved apply operation deliberately as root in a
 real local terminal. Without `--apply`, no download or temporary staging occurs.
 
+## Prerequisite and result guidance in current source
+
+The reusable bootstrap now checks the fixed native system tools (`systemctl`,
+`useradd`, `nologin`) as well as curl, Python 3.11+, sha256sum and the system CA
+bundle before release-asset downloads. Missing tools are listed together with one
+explicitly manual `apt-get update && apt-get install -- ...` suggestion for the
+supported Debian/Ubuntu hosts. The `nologin` tool maps to `login` in both
+[Debian 13](https://packages.debian.org/trixie/amd64/login/filelist) and
+[Ubuntu 24.04](https://packages.ubuntu.com/noble/amd64/login/filelist).
+It does not execute that command, invoke sudo,
+change trust, install packages or alter permissions. A damaged CA bundle is a
+separate inspection error, not an invitation to bypass certificate checks.
+
+Applied operations also reject a missing/background controlling terminal and a
+non-writable or `noexec` `/tmp` before private release staging. These checks do not
+replace the native installer's later artifact, ownership, collision and retained
+identity checks. Disk/network availability and service startup can still fail;
+passing prerequisites is not a guarantee of installation success.
+
+Four progress phases distinguish host checks, provenance download, verified agent
+file download and entry into the native installer. Its JSON result remains on
+stdout; human-readable outcome/recovery guidance is on stderr. A committed fresh
+installation confirms startup enablement and an observed active process. For
+`--pending-service`, approval, activation and the first successful report remain
+separate dashboard observations. An actual OS reboot still needs the manual VM
+gate. A failed transaction preserves identity and explains whether rollback was
+confirmed; do not blindly repeat a fresh install or append `--resume` to the
+copied outer shell command. Use the reviewed bootstrap's explicit resume flow
+only after inspecting a compatible retained preparation and retaining the exact
+release, public bootstrap and identity.
+
+**Release boundary:** these reusable-bootstrap and native-installer improvements
+require a newly built, independently verified immutable release and a deliberate
+UI pin update. The published pilot.2 bootstrap and binaries are unchanged. The
+current source's first-stage copied wrapper already has the grouped missing-tool
+message and manual prerequisite suggestion; it still downloads pilot.2.
+
 ## Exact trust chain
 
 1. The command pins a full immutable commit and SHA-256 for a standalone Python

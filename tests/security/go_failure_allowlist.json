@@ -1,5 +1,5 @@
 {
-  "goSourceSha256": "7b76a1205a125e78564e0733d6a9371aba1c5dfde7b16ff813a36d3cd44433eb",
+  "goSourceSha256": "3a48728ae39b85b3a6cb906698f530e9a42f866326c3ed72f1dadfff5052a22b",
   "packages": {
     "localrmm/cmd/agent": [
       "TestHelp",
@@ -14,7 +14,8 @@
       "TestCLIRejectsSecretAndCommandArgumentsWithoutEcho",
       "TestOnlinePreparationCancellationAndBadFetchDoNotStage",
       "TestOnlinePreparationGateBeforeFetchAndProtectedPublicSnapshot",
-      "TestOnlinePreparationRejectsBeforeFetch"
+      "TestOnlinePreparationRejectsBeforeFetch",
+      "TestOperationGuidancePreservesPendingAndRecoveryBoundaries"
     ],
     "localrmm/cmd/dev-agent": [
       "TestHelpAndFailClosedArguments"

@@ -345,10 +345,49 @@ def inspect_host():
     require("linux-" + architecture in RUNTIME_TARGETS, "Linux arm64 is build-only; runtime installation is not enabled yet.")
     require(Path("/proc/1/comm").read_text().strip() == "systemd" and Path("/run/systemd/system").is_dir() and
             Path("/sys/fs/cgroup/cgroup.controllers").is_file(), "A running systemd host with cgroup v2 is required.")
-    for path in ("/usr/bin/curl", "/usr/bin/python3", "/usr/bin/systemctl"):
-        require(Path(path).is_file() and os.access(path, os.X_OK), f"Missing required tool {path}; install it deliberately, then retry. No dependency was installed.")
-    require(Path("/etc/ssl/certs/ca-certificates.crt").is_file(), "The system HTTPS CA bundle is missing; no trust settings were changed.")
+    require(sys.version_info >= (3, 11), "Python 3.11 or newer is required. Use the supported distribution's python3 package; no dependency was installed.")
+    # Include the native installer's fixed system tools before any release asset
+    # download. The installer still performs its own ownership/state checks.
+    prerequisites = (("/usr/bin/curl", "curl"), ("/usr/bin/python3", "python3"),
+                     ("/usr/bin/sha256sum", "coreutils"), ("/usr/bin/systemctl", "systemd"),
+                     ("/usr/sbin/useradd", "passwd"), ("/usr/sbin/nologin", "login"))
+    missing = [(path, package) for path, package in prerequisites
+               if not Path(path).is_file() or not os.access(path, os.X_OK)]
+    if not Path("/etc/ssl/certs/ca-certificates.crt").is_file():
+        missing.append(("/etc/ssl/certs/ca-certificates.crt", "ca-certificates"))
+    if missing:
+        packages = " ".join(sorted({package for _, package in missing}))
+        raise Rejected("Missing prerequisites: " + ", ".join(path for path, _ in missing) +
+                       ". No dependency was installed. After administrator approval, run manually as root:\n" +
+                       "apt-get update && apt-get install -- " + packages +
+                       "\nThen retry the same reviewed command.")
+    # Validate the fixed distribution CA bundle now, before staging or downloads.
+    try:
+        release_context()
+    except (OSError, ssl.SSLError):
+        raise Rejected("The system HTTPS CA bundle could not be loaded. Ask the administrator to inspect ca-certificates; no trust setting was changed.") from None
     return architecture
+
+
+def inspect_terminal():
+    require(sys.stdin.isatty(), "A real foreground terminal is required; no invitation is accepted through a pipe.")
+    try:
+        require(os.tcgetpgrp(sys.stdin.fileno()) == os.getpgrp(),
+                "Run this command in the foreground of its local terminal, then retry. No installer was started.")
+        terminal = os.open("/dev/tty", os.O_RDONLY | os.O_NOCTTY | os.O_CLOEXEC | os.O_NONBLOCK)
+        try:
+            require(os.isatty(terminal), "The controlling terminal is unavailable; no installer was started.")
+        finally:
+            os.close(terminal)
+    except (OSError, ValueError):
+        raise Rejected("A usable local controlling terminal is required. Open a terminal and retry there; no installer was started.") from None
+
+
+def inspect_staging():
+    require(Path("/tmp").is_dir() and os.access("/tmp", os.W_OK | os.X_OK),
+            "The fixed /tmp staging directory is unavailable or not writable. Ask the administrator to inspect it; no permissions were changed.")
+    require(not os.statvfs("/tmp").f_flag & os.ST_NOEXEC,
+            "The fixed /tmp staging filesystem is mounted noexec. This installer cannot run verified programs there; no mount or security setting was changed.")
 
 
 def parse_args(argv):
@@ -399,12 +438,14 @@ def prepare_release(directory, pin, arch, fetch=download, verifier_factory=prepa
     validate_pin(pin)
     require("linux-" + arch in RUNTIME_TARGETS, "This architecture is build-only; runtime installation is not enabled.")
     version = pin["version"]
+    print("[2/4] Downloading the pinned release manifest and provenance verifier.", flush=True)
     fetch(version, "manifest.json", directory / "manifest.json", MAX_MANIFEST, expected_digest=pin["manifestSHA256"])
     fetch(version, "manifest.sigstore.json", directory / "manifest.sigstore.json", MAX_BUNDLE, expected_digest=pin["bundleSHA256"])
     raw = (directory / "manifest.json").read_bytes()
     verifier = verifier_factory(directory, arch, fetch)
     verify(directory, pin, verifier)
     manifest = parse_manifest(raw, pin)
+    print("[3/4] Release provenance verified. Downloading and checking the selected agent files.", flush=True)
     names = [f"tracebolt-{version}-linux-{arch}-{role}" for role in ROLES] + [f"tracebolt-{version}-source.tar"]
     for name in names:
         spec = manifest["assets"][name]
@@ -511,15 +552,16 @@ def main(argv=None):
             print("Read-only preflight passed. No download, temporary file, enrollment or service change was made. Repeat with --apply only after authorizing the operation.")
             return 0
         require(os.getuid() == 0 and os.geteuid() == 0, "Explicit root execution is required for --apply; this program will not invoke sudo.")
-        require(sys.stdin.isatty(), "A real foreground terminal is required; no invitation is accepted through a pipe.")
-        print(f"Verifying official Tracebolt {pin['version']} for Linux {arch}. The manager cannot select executable URLs or release trust.", flush=True)
+        inspect_terminal()
+        inspect_staging()
+        print(f"[1/4] Host prerequisites passed for Tracebolt {pin['version']} on Linux {arch}. No dependency was installed. Keep this terminal open until installation finishes.", flush=True)
         os.umask(0o077)
         directory = Path(tempfile.mkdtemp(prefix="tracebolt-release-", dir="/tmp"))
         known = asset_names(pin["version"]) | {"manifest.json", "manifest.sigstore.json", "sigstore-trusted-root.jsonl", "gh-verifier", f"gh_{GH_VERSION}_linux_{arch}.tar.gz"}
         installer_result = None
         try:
             manifest = prepare_release(directory, pin, arch)
-            print("Pinned GitHub workflow provenance and all selected file hashes verified. Starting the existing fixed-path service installer; enter any invitation only at its hidden terminal prompt.", flush=True)
+            print("[4/4] Provenance and all selected file hashes verified. Starting the fixed-path service installer. Enter the invitation only at its hidden terminal prompt; device approval remains a separate dashboard step.", flush=True)
             installer_result = run_installer(installer_command(args, directory, manifest, arch))
             return installer_result
         finally:

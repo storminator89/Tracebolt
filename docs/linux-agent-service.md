@@ -113,6 +113,22 @@ no automatic reset or patch execution. Generic remote transport failures remain
 bounded retries; they are not asserted to be authenticated revocation notices.
 `ConditionPathExists` is only a hint: the sender enforces the guided state.
 
+## Reading the installer result
+
+The CLI keeps its structured JSON result on stdout and adds fixed human-readable
+guidance on stderr. `committed: true` for a fresh installation means the owned
+unit was enabled and an active process was observed. A pending-service process
+can still be waiting for approval; verify activation and incoming reports in the
+dashboard. Startup enablement is not a test of an actual OS reboot.
+
+On failure, the guidance names the safe operation stage and gives a read-only
+service-status command. Confirmed rollback still retains the account and identity,
+and may leave the service stopped. An unconfirmed recovery is an inspection
+blocker. Neither result authorizes deleting state, making a fresh identity or
+blindly retrying with `--resume`; that flag is only for the exact compatible
+retained preparation described above. Current-source outcome messages require
+new binaries and are not retroactively present in the pinned pilot.2 download.
+
 ## Evidence and remaining acceptance
 
 Fixture tests cover orchestration, cancellation, same-identity resume, ownership,

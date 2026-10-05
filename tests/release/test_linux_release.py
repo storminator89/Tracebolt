@@ -91,7 +91,10 @@ class Fixture(unittest.TestCase):
         self.assertIn("not activated", stderr.getvalue())
 
     def test_keyless_policy_pass_precedes_all_program_downloads_and_executable_modes(self):
-        result = self.prepare()
+        with contextlib.redirect_stdout(io.StringIO()) as progress:
+            result = self.prepare()
+        self.assertLess(progress.getvalue().index("[2/4]"), progress.getvalue().index("[3/4]"))
+        self.assertNotIn("[4/4]", progress.getvalue())
         self.assertEqual(result, self.manifest)
         self.assertFalse(any("arm64" in path.name for path in self.stage.iterdir()))
         for role in b.ROLES:
@@ -100,8 +103,10 @@ class Fixture(unittest.TestCase):
 
     def test_rejected_provenance_prevents_any_tracebolt_program_download(self):
         self.verifier_result = 1
-        with self.assertRaises(b.Rejected):
+        with contextlib.redirect_stdout(io.StringIO()) as progress, self.assertRaises(b.Rejected):
             self.prepare()
+        self.assertIn("[2/4]", progress.getvalue())
+        self.assertNotIn("[3/4]", progress.getvalue())
         self.assertFalse(any("linux-amd64" in p.name for p in self.stage.iterdir()))
 
     def test_changed_attestation_bundle_fails_before_verifier_or_program(self):
@@ -283,7 +288,8 @@ class BootstrapCleanup(unittest.TestCase):
                 stack.enter_context(patch.object(b, "inspect_host", return_value="amd64"))
                 stack.enter_context(patch.object(b.os, "getuid", return_value=0))
                 stack.enter_context(patch.object(b.os, "geteuid", return_value=0))
-                stack.enter_context(patch.object(b.sys.stdin, "isatty", return_value=True))
+                stack.enter_context(patch.object(b, "inspect_terminal"))
+                stack.enter_context(patch.object(b, "inspect_staging"))
                 stack.enter_context(patch.object(b.tempfile, "mkdtemp", return_value=str(f.stage)))
                 stack.enter_context(patch.object(b, "prepare_release", side_effect=prepare_fixture))
                 installer = stack.enter_context(patch.object(b, "run_installer", return_value=exit_code))
@@ -384,6 +390,84 @@ class Preflight(unittest.TestCase):
             self.assertIn("will not invoke sudo", stderr.getvalue())
             run.assert_not_called()
             temp.assert_not_called()
+
+    @contextlib.contextmanager
+    def supported_host(self):
+        with contextlib.ExitStack() as stack:
+            stack.enter_context(patch.object(b.sys, "platform", "linux"))
+            stack.enter_context(patch.object(b.sys, "version_info", (3, 12)))
+            stack.enter_context(patch.object(b.platform, "machine", return_value="x86_64"))
+            stack.enter_context(patch.object(b.Path, "read_text", side_effect=['ID=ubuntu\nVERSION_ID="24.04"', 'systemd']))
+            stack.enter_context(patch.object(b.Path, "is_dir", return_value=True))
+            stack.enter_context(patch.object(b.Path, "is_file", return_value=True))
+            stack.enter_context(patch.object(b.os, "access", return_value=True))
+            stack.enter_context(patch.object(b, "release_context"))
+            yield
+
+    def test_full_fixed_tool_preflight_is_read_only(self):
+        with self.supported_host(), patch.object(b.subprocess, "run") as run, patch.object(b, "download") as download:
+            self.assertEqual(b.inspect_host(), "amd64")
+        run.assert_not_called()
+        download.assert_not_called()
+
+    def test_missing_dependencies_are_collected_with_one_manual_command(self):
+        missing = {"/usr/bin/curl", "/usr/sbin/useradd", "/usr/sbin/nologin", "/etc/ssl/certs/ca-certificates.crt"}
+        with self.supported_host(), patch.object(b.Path, "is_file", new=lambda p: str(p) not in missing), patch.object(b.subprocess, "run") as run:
+            with self.assertRaises(b.Rejected) as error:
+                b.inspect_host()
+        message = str(error.exception)
+        for path in missing:
+            self.assertIn(path, message)
+        self.assertIn("No dependency was installed", message)
+        self.assertIn("After administrator approval, run manually as root:\napt-get update && apt-get install -- ca-certificates curl login passwd\n", message)
+        self.assertNotIn("-y", message)
+        self.assertNotIn("sudo", message)
+        run.assert_not_called()
+
+    def test_nonexecutable_tool_is_missing_and_ca_load_failure_is_clear(self):
+        with self.supported_host(), patch.object(b.os, "access", side_effect=lambda path, mode: path != "/usr/bin/systemctl"):
+            with self.assertRaisesRegex(b.Rejected, "apt-get install -- systemd"):
+                b.inspect_host()
+        with self.supported_host(), patch.object(b, "release_context", side_effect=b.ssl.SSLError("inert private detail")):
+            with self.assertRaisesRegex(b.Rejected, "CA bundle could not be loaded") as error:
+                b.inspect_host()
+        self.assertNotIn("inert private detail", str(error.exception))
+
+    def test_unsupported_python_fails_before_download(self):
+        with self.supported_host(), patch.object(b.sys, "version_info", (3, 10)), patch.object(b, "download") as download:
+            with self.assertRaisesRegex(b.Rejected, "Python 3.11"):
+                b.inspect_host()
+        download.assert_not_called()
+
+    def test_preflight_rejection_does_not_stage_or_run_installer(self):
+        pin = {"version": VERSION, "sourceCommit": "a" * 40, "manifestSHA256": "b" * 64, "bundleSHA256": "c" * 64}
+        with patch.object(b, "RELEASE_PIN", pin), patch.object(b, "inspect_host", side_effect=b.Rejected("Missing prerequisites: inert")), patch.object(b.tempfile, "mkdtemp") as temp, patch.object(b, "prepare_release") as prepare, patch.object(b, "run_installer") as run, contextlib.redirect_stderr(io.StringIO()):
+            self.assertEqual(b.main(["--action", "upgrade", "--apply"]), 1)
+        temp.assert_not_called()
+        prepare.assert_not_called()
+        run.assert_not_called()
+
+    def test_terminal_check_rejects_pipes_and_background_without_opening_tty(self):
+        with patch.object(b.sys.stdin, "isatty", return_value=False), patch.object(b.os, "open") as opened:
+            with self.assertRaisesRegex(b.Rejected, "foreground terminal"):
+                b.inspect_terminal()
+            opened.assert_not_called()
+        with patch.object(b.sys.stdin, "isatty", return_value=True), patch.object(b.os, "tcgetpgrp", return_value=1), patch.object(b.os, "getpgrp", return_value=2), patch.object(b.os, "open") as opened:
+            with self.assertRaisesRegex(b.Rejected, "foreground of its local terminal"):
+                b.inspect_terminal()
+            opened.assert_not_called()
+
+    def test_controlling_terminal_is_read_only_and_closed(self):
+        with patch.object(b.sys.stdin, "isatty", return_value=True), patch.object(b.os, "tcgetpgrp", return_value=2), patch.object(b.os, "getpgrp", return_value=2), patch.object(b.os, "open", return_value=23) as opened, patch.object(b.os, "isatty", return_value=True), patch.object(b.os, "close") as closed:
+            b.inspect_terminal()
+        opened.assert_called_once_with("/dev/tty", os.O_RDONLY | os.O_NOCTTY | os.O_CLOEXEC | os.O_NONBLOCK)
+        closed.assert_called_once_with(23)
+
+    def test_noexec_staging_has_a_specific_nonmutating_blocker(self):
+        with patch.object(b.Path, "is_dir", return_value=True), patch.object(b.os, "access", return_value=True), patch.object(b.os, "statvfs", return_value=SimpleNamespace(f_flag=os.ST_NOEXEC)), patch.object(b.os, "chmod") as chmod:
+            with self.assertRaisesRegex(b.Rejected, "mounted noexec"):
+                b.inspect_staging()
+        chmod.assert_not_called()
 
     def test_untrusted_download_root_secret_and_short_flags_do_not_exist(self):
         for args in (["--url", "https://evil.test"], ["--invitation-secret", "example"], ["--app"]):

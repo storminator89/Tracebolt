@@ -32,6 +32,31 @@ def execution_tail():
     return "; ".join(tail)
 
 
+class DashboardPrerequisiteMessage(unittest.TestCase):
+    def test_all_missing_tools_are_listed_without_running_manual_package_command(self):
+        lines = SOURCE.read_text().splitlines()
+        first = lines.index('        \'missing=""\',')
+        script = "; ".join(ast.literal_eval(line.strip().removesuffix(",")) for line in lines[first:first + 3])
+        self.assertNotRegex(script, r"[\r\n]")
+        # Execute only the prerequisite fragment with an empty tool path. There
+        # is no root check, download, real bootstrap, package or service action.
+        with tempfile.TemporaryDirectory(prefix="tracebolt-inert-prerequisite-") as temp:
+            sentinel = Path(temp) / "package-command-was-run"
+            for name in ("apt-get", "sudo"):
+                program = Path(temp) / name
+                program.write_text("#!/bin/sh\nprintf forbidden > " + shlex.quote(str(sentinel)) + "\n")
+                program.chmod(0o700)
+            result = subprocess.run(["/bin/sh", "-c", script + "; printf SHOULD_NOT_CONTINUE"],
+                                    env={"PATH": temp}, capture_output=True, text=True, timeout=5)
+            self.assertFalse(sentinel.exists())
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(result.stdout, "")
+        self.assertIn("Missing prerequisites: curl sha256sum python3 mktemp rm rmdir", result.stderr)
+        self.assertIn("after administrator approval, run manually as root:", result.stderr)
+        self.assertIn("apt-get update && apt-get install -- curl python3 ca-certificates coreutils", result.stderr)
+        self.assertIn("Then retry the same reviewed installation command.", result.stderr)
+
+
 @unittest.skipUnless(sys.platform == "linux" and Path("/proc/self/fd").is_dir(), "Linux proc-fd fixture")
 class DashboardExecutionTail(unittest.TestCase):
     def test_verified_inode_terminal_and_direct_signals(self):

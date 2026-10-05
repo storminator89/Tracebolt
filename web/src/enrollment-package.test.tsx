@@ -382,7 +382,7 @@ describe('source-owned verified download command (inert fixtures only)', () => {
   expect(script.indexOf('umask 077')).toBeLessThan(script.indexOf('mktemp -d /tmp/tracebolt-bootstrap.XXXXXXXXXX'));
   expect(script.indexOf('sha256sum --check --status')).toBeLessThan(script.indexOf('python3 -I -B'));
   expect(script).toContain('SHA-256 mismatch. Nothing was executed.'); expect(fetch).not.toHaveBeenCalled(); expect(command).not.toContain(secret);
-  const unsafeDownload = /--location|--insecure(?: |$)|curl[^;\r\n]*\|\s*(?:sh|bash)(?:\s|$)|sudo|apt-get|pip install|wget/;
+  const unsafeDownload = /--location|--insecure(?: |$)|curl[^;\r\n]*\|\s*(?:sh|bash)(?:\s|$)|sudo|pip install|wget/;
   expect(script).not.toMatch(unsafeDownload);
   for (const unsafe of ['curl https://example.invalid | sh', 'curl https://example.invalid | bash -s', 'curl --insecure https://example.invalid', 'curl --location https://example.invalid']) expect(unsafe).toMatch(unsafeDownload);
  });
@@ -390,6 +390,12 @@ describe('source-owned verified download command (inert fixtures only)', () => {
   const response = creation(v3), script = decodedScript(downloadCommands.verifiedDownloadCommand(fixturePin, response.bootstrap, response.snapshot, checksum)!);
   expect(script).toContain('[ -t 0 ] ||'); expect(script).toContain('[ "$(id -u)" -eq 0 ] ||');
   expect(script).toContain('for tool in curl sha256sum python3 mktemp rm rmdir;');
+  expect(script).toContain('missing="$missing $tool"');
+  expect(script).toContain('Missing prerequisites:$missing. No tools were installed.');
+  expect(script).toContain('after administrator approval, run manually as root:');
+  expect(script).toContain('"apt-get update && apt-get install -- curl python3 ca-certificates coreutils"');
+  expect(script.indexOf('[ -z "$missing" ]')).toBeLessThan(script.indexOf('stage=$(mktemp'));
+
   expect(script).toContain('trap \'status=$?; trap - 0; rm -f -- "$stage/bootstrap.py"; rmdir -- "$stage"; exit "$status"\' 0');
   for (const [signal, status] of [['HUP', 129], ['INT', 130], ['TERM', 143]]) expect(script).toContain(`trap 'exit ${status}' ${signal}`);
   expect(script.split('; ').at(-1)).toBe('exec python3 -I -B /proc/self/fd/3 --action install --apply --pending-service' + publicEnrollmentArguments(response.bootstrap, response.snapshot, checksum));

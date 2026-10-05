@@ -69,13 +69,71 @@ func run(ctx context.Context, args []string, out, errOut io.Writer, backend agen
 			}
 		}()
 	}
+	fmt.Fprintln(errOut, "Checking fixed paths, artifact integrity, service ownership and retained identity before the requested operation.")
 	result, e := agentinstall.Execute(ctx, r, backend)
 	if json.NewEncoder(out).Encode(result) != nil {
 		return 2
 	}
+	reportOperation(r, result, e, errOut)
 	if e != nil {
-		fmt.Fprintln(errOut, "Tracebolt service operation did not complete. Inspect the safe failure stage, retain identity/state and resolve preflight or transaction recovery before retrying.")
 		return 1
 	}
 	return 0
+}
+
+// Keep stdout's machine-readable result unchanged. Human guidance uses only
+// fixed strings and already validated action/state, never invitation or key data.
+func reportOperation(r agentinstall.Request, result agentinstall.Result, err error, out io.Writer) {
+	if err != nil {
+		fmt.Fprintln(out, "Tracebolt service operation did not complete. Preserve the account and all identity/state files.")
+		stages := map[agentinstall.Operation]string{
+			agentinstall.OpPrepare:  "preparing the dedicated account and paths",
+			agentinstall.OpStage:    "staging verified artifacts",
+			agentinstall.OpEnroll:   "hidden-terminal enrollment",
+			agentinstall.OpStop:     "stopping the owned service",
+			agentinstall.OpValidate: "validating retained enrollment and sender state",
+			agentinstall.OpPublish:  "publishing owned binaries and unit",
+			agentinstall.OpStart:    "starting and checking the service",
+			agentinstall.OpDisable:  "disabling the owned service",
+			agentinstall.OpRemove:   "removing owned installation files",
+			"commit":                "recording the durable installation result",
+		}
+		if stage, ok := stages[result.FailureStage]; ok {
+			fmt.Fprintln(out, "Stopped while "+stage+".")
+		} else {
+			fmt.Fprintln(out, "Preflight or retained installer-state checks did not complete.")
+		}
+		if result.RolledBack {
+			fmt.Fprintln(out, "Owned transaction changes were rolled back; the service may remain stopped. A retained preparation needs the explicit --resume flow with exactly the same release, bootstrap and identity, after inspection. Do not create a new identity or blindly repeat the fresh-install command.")
+		} else {
+			fmt.Fprintln(out, "Recovery was not confirmed. Inspect the preflight/failure stage before retrying; do not add --resume, remove installer records or reset identity automatically.")
+		}
+		fmt.Fprintln(out, "Read-only service check: systemctl status --no-pager tracebolt-agent.service")
+		return
+	}
+	if result.Plan.DryRun {
+		fmt.Fprintln(out, "Read-only preflight passed. No account or service changes were made. Review the plan before deliberately using --apply.")
+		return
+	}
+	if !result.Committed {
+		return
+	}
+	switch r.Action {
+	case agentinstall.Install:
+		fmt.Fprintln(out, "Installation committed. tracebolt-agent.service is enabled for startup and its active process was checked.")
+		if r.PendingService {
+			fmt.Fprintln(out, "The service can wait for approval in the background. Compare the full local fingerprint and comparison value in the dashboard, then approve this device. Approval, activation and the first successful report must be checked there separately.")
+		} else {
+			fmt.Fprintln(out, "Check the first successful report in the dashboard separately.")
+		}
+	case agentinstall.Upgrade:
+		fmt.Fprintln(out, "Upgrade committed. The active service process was checked; its previous startup enablement and existing identity were retained. Check fresh reporting in the dashboard.")
+	case agentinstall.Restart:
+		fmt.Fprintln(out, "Restart committed. The active service process was checked with the existing identity. Check fresh reporting in the dashboard.")
+	case agentinstall.Uninstall:
+		fmt.Fprintln(out, "Uninstall committed. Owned service files were removed; the account, public bootstrap and private identity/state were retained.")
+	}
+	if r.Action != agentinstall.Uninstall {
+		fmt.Fprintln(out, "This result does not establish successful reporting or an actual operating-system reboot.")
+	}
 }

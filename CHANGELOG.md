@@ -2,6 +2,12 @@
 
 Meaningful development checkpoints are recorded here. These are prototype milestones, not production releases.
 
+## 2026-10-05 — Explain Linux installer prerequisites and outcomes
+
+- Group missing initial command tools and show one manually reviewed prerequisite-package command. Keep the copied installer on one physical line, with the same immutable source/checksum pin, terminal handoff and no automatic package installation or privilege elevation.
+- Extend the reusable bootstrap's early checks for native system tools, Python version, CA loading, foreground terminal and executable temporary staging. Add four progress phases and native installer guidance that distinguishes committed service startup, pending dashboard approval, first reporting and unresolved recovery without resetting retained identity.
+- Add inert prerequisite/command checks and outcome regressions; regenerate the finite Go failure vocabulary from these exact sources without changing reporter policy. Scoped Python, frontend, Go and race checks pass. Hosted exact-source acceptance and manual VM/reboot observations remain separate. The published pilot.2 bootstrap, binaries and active release pin are unchanged; reusable-bootstrap/native improvements require a new independently verified immutable release before the dashboard distributes them.
+
 ## 2026-10-05 — Require initial package rows and localize browser failures
 
 - Exact `e596b427` passed the two newly extended browser cases for coverage-busy recovery and device metadata refresh preserving Logs. Separate existing journal reference-refresh and v3 second-page checks failed; their broad stages did not establish a production cause. The other recorded cases passed, and the endpoint browser step did not run after the v3 failure.
