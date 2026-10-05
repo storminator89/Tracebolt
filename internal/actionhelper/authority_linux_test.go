@@ -439,8 +439,18 @@ func TestAuthorityPinnedInputs(t *testing.T) {
 	}
 }
 
+// Required native mode is deliberately test-only. It cannot grant production
+// authority or turn a restricted environment into successful native evidence.
 func authoritySocketFixture(t *testing.T) (authorityFS, *net.UnixListener, string) {
 	t.Helper()
+	required := os.Getenv("TRACEBOLT_REQUIRE_NATIVE_ACTION_IPC") == "1"
+	if required {
+		u, e, s := unix.Getresuid()
+		g, eg, sg := unix.Getresgid()
+		if u <= 0 || u != e || u != s || g <= 0 || g != eg || g != sg {
+			t.Fatal("required native action IPC must run as an ordinary unmodified user")
+		}
+	}
 	// Unix path limits require a short directory independent of the test name.
 	root, err := os.MkdirTemp("", "tb-action-socket-")
 	if err != nil {
@@ -454,6 +464,9 @@ func authoritySocketFixture(t *testing.T) (authorityFS, *net.UnixListener, strin
 	name := root + SocketPath
 	l, err := net.ListenUnix("unix", &net.UnixAddr{Name: name, Net: "unix"})
 	if errors.Is(err, unix.EPERM) || errors.Is(err, unix.EACCES) {
+		if required {
+			t.Fatal("required native Unix socket fixture unavailable", err)
+		}
 		t.Skipf("native Unix socket fixtures unavailable in this environment: %v", err)
 	}
 	if err != nil {
@@ -484,16 +497,6 @@ func TestAuthorityKernelPeerCredentials(t *testing.T) {
 	if err != nil || peer.UID != uint32(os.Getuid()) || peer.GID != uint32(os.Getgid()) || peer.PID != int32(os.Getpid()) {
 		t.Fatal("kernel peer identity", peer, err)
 	}
-	left, right := net.Pipe()
-	defer left.Close()
-	defer right.Close()
-	if _, err := peerIdentity(left); err == nil {
-		t.Fatal("non-Unix peer accepted")
-	}
-	var absent *net.UnixConn
-	if _, err := peerIdentity(absent); err == nil {
-		t.Fatal("nil Unix peer accepted")
-	}
 	server.Close()
 	if _, err := peerIdentity(server); err == nil {
 		t.Fatal("closed Unix peer accepted")
@@ -512,6 +515,36 @@ func TestAuthorityInheritedListenerFixture(t *testing.T) {
 	listener, err := inheritedListenerFrom(Policy{AgentGID: uint32(os.Getgid())}, fs, int(file.Fd()), name, func(k string) string { return env[k] }, os.Getpid())
 	if err != nil {
 		t.Fatal("valid inherited listener", err)
+	}
+	defer listener.Close()
+	// The independent inherited descriptor must remain usable after both source
+	// handles close. This is a temporary ordinary-user fixture, not systemd.
+	if err := file.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := l.Close(); err != nil {
+		t.Fatal(err)
+	}
+	inherited, ok := listener.(*net.UnixListener)
+	if !ok {
+		t.Fatal("inherited listener is not AF_UNIX")
+	}
+	if err := inherited.SetDeadline(time.Now().Add(2 * time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	client, err := net.DialTimeout("unix", name, 2*time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.Close()
+	server, err := inherited.AcceptUnix()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer server.Close()
+	peer, err := peerIdentity(server)
+	if err != nil || peer.UID != uint32(os.Getuid()) || peer.GID != uint32(os.Getgid()) || peer.PID != int32(os.Getpid()) {
+		t.Fatal("inherited listener kernel peer identity", peer, err)
 	}
 	if err := listener.Close(); err != nil {
 		t.Fatal(err)

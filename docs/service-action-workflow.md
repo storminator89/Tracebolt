@@ -183,3 +183,8 @@ Native AF_UNIX tests remain explicitly skipped in this container where socket
 creation is denied. Full aggregate checks, exact patch identity and any remaining
 resource/time-budget failures are reported with the implementation handoff;
 focused checks alone are not claimed as complete deployment acceptance.
+
+The dedicated [service-action verification gates](service-action-verification.md)
+require exact no-skip hosted Unix evidence and a new real Playwright action flow
+with a fake executor. Their scoped results are separate from existing browser
+coverage and from installed root/systemd acceptance.

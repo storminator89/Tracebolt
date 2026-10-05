@@ -5,7 +5,11 @@ package actionclient
 import (
 	"errors"
 	"io"
+	"net"
+	"os"
+	"path/filepath"
 	"testing"
+	"time"
 
 	"golang.org/x/sys/unix"
 )
@@ -66,6 +70,8 @@ func TestProtectedSocketAndDirectoryMetadata(t *testing.T) {
 		t.Fatal("changed metadata accepted")
 	}
 }
+
+// This is a constructed ancillary-metadata unit test, not a kernel exchange.
 func TestCredentialReaderRequiresActualRootWriterEveryChunk(t *testing.T) {
 	good := unix.UnixCredentials(&unix.Ucred{Pid: 123, Uid: 0, Gid: 0})
 	r := &credentialReader{}
@@ -145,5 +151,106 @@ func TestRootSocketPeerRequiresRootUIDGIDAndPID(t *testing.T) {
 	r := &credentialReader{}
 	if _, err := r.validateMessage(0, nil, unix.MSG_CTRUNC, io.EOF); err == io.EOF {
 		t.Fatal("truncated control frame accepted as EOF")
+	}
+}
+
+// TestCredentialReaderNativePasscredRejectsNonRootWriter exchanges actual bytes
+// over AF_UNIX. No credentials are constructed or supplied by the writer: Linux
+// supplies SCM_CREDENTIALS because the receiver enables SO_PASSCRED. This proves
+// ordinary-user writer rejection, never installed-helper/root-writer acceptance.
+func TestCredentialReaderNativePasscredRejectsNonRootWriter(t *testing.T) {
+	required := os.Getenv("TRACEBOLT_REQUIRE_NATIVE_ACTION_IPC") == "1"
+	u, e, s := unix.Getresuid()
+	g, eg, sg := unix.Getresgid()
+	if u <= 0 || u != e || u != s || g <= 0 || g != eg || g != sg {
+		if required {
+			t.Fatal("required native action IPC must run as an ordinary unmodified user")
+		}
+		t.Skip("native non-root writer test requires an ordinary unmodified user")
+	}
+	// Keep AF_UNIX's pathname short independently of the Go test name.
+	root, err := os.MkdirTemp("", "tb-action-client-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.RemoveAll(root) })
+	name := filepath.Join(root, "action.sock")
+	listener, err := net.ListenUnix("unix", &net.UnixAddr{Name: name, Net: "unix"})
+	if errors.Is(err, unix.EPERM) || errors.Is(err, unix.EACCES) {
+		if required {
+			t.Fatal("required native Unix socket fixture unavailable", err)
+		}
+		t.Skipf("native Unix socket fixture unavailable in this environment: %v", err)
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listener.Close()
+	if err := listener.SetDeadline(time.Now().Add(2 * time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	conn, err := net.DialTimeout("unix", name, 2*time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	receiver, ok := conn.(*net.UnixConn)
+	if !ok {
+		t.Fatal("receiver is not AF_UNIX")
+	}
+	writer, err := listener.AcceptUnix()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer writer.Close()
+	for _, conn := range []*net.UnixConn{receiver, writer} {
+		if err := conn.SetDeadline(time.Now().Add(2 * time.Second)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	raw, err := receiver.SyscallConn()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var optionErr error
+	var enabled int
+	if err := raw.Control(func(fd uintptr) {
+		optionErr = unix.SetsockoptInt(int(fd), unix.SOL_SOCKET, unix.SO_PASSCRED, 1)
+		if optionErr == nil {
+			enabled, optionErr = unix.GetsockoptInt(int(fd), unix.SOL_SOCKET, unix.SO_PASSCRED)
+		}
+	}); err != nil || optionErr != nil || enabled != 1 {
+		t.Fatal("enable kernel per-message credentials", err, optionErr)
+	}
+	// First establish that actual bytes arrive with exactly the kernel's current
+	// PID/UID/GID, independently of the production reader's root-only predicate.
+	if n, err := writer.Write([]byte{'a'}); n != 1 || err != nil {
+		t.Fatal("native writer", n, err)
+	}
+	data := make([]byte, 1)
+	oob := make([]byte, unix.CmsgSpace(unix.SizeofUcred))
+	n, on, flags, _, err := receiver.ReadMsgUnix(data, oob)
+	if n != 1 || data[0] != 'a' || flags&(unix.MSG_CTRUNC|unix.MSG_TRUNC) != 0 || err != nil {
+		t.Fatal("native message", n, flags, err)
+	}
+	messages, err := unix.ParseSocketControlMessage(oob[:on])
+	if err != nil || len(messages) != 1 || messages[0].Header.Level != unix.SOL_SOCKET || messages[0].Header.Type != unix.SCM_CREDENTIALS {
+		t.Fatal("missing or unexpected kernel credential message", err)
+	}
+	credential, err := unix.ParseUnixCredentials(&messages[0])
+	if err != nil || credential == nil || credential.Pid != int32(os.Getpid()) || credential.Uid != uint32(u) || credential.Gid != uint32(g) {
+		t.Fatal("kernel writer credentials do not match the ordinary process", err)
+	}
+	// Now call the real Read method, not validateMessage with constructed bytes.
+	// The buffer confirms each byte arrived, but n=0 prevents its authorization.
+	reader := &credentialReader{conn: receiver}
+	for _, payload := range []byte{'b', 'c'} {
+		if n, err := writer.Write([]byte{payload}); n != 1 || err != nil {
+			t.Fatal("native writer", n, err)
+		}
+		data[0] = 0
+		if n, err := reader.Read(data); n != 0 || !errors.Is(err, ErrRejected) || data[0] != payload || reader.pid != 0 {
+			t.Fatal("production reader did not reject the actual non-root writer", n, err)
+		}
 	}
 }

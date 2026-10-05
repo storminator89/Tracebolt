@@ -552,6 +552,17 @@ jobs:
           python3 -O tests/security/test_complete_overview_browser_gate.py
           node tests/e2e-review/complete-overview-browser.mjs
           python3 tests/security/check_complete_overview_browser_gate.py artifacts/review/complete-overview-browser-results.json
+      - name: Synthetic service-action preview, approval and status browser acceptance
+        if: ${{ !cancelled() }}
+        env:
+          TRACEBOLT_SOURCE_SHA: ${{ github.sha }}
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: |
+          set -euo pipefail
+          python3 tests/security/test_service_action_browser_gate.py
+          python3 -O tests/security/test_service_action_browser_gate.py
+          node tests/e2e-review/service-action-browser.mjs
+          python3 tests/security/check_service_action_browser_gate.py artifacts/review/service-action-browser-results.json
       - name: Real React and v3 handler read-coordination regression
         if: ${{ !cancelled() }}
         run: ./web/node_modules/.bin/vitest run --config tests/e2e-review/v3-dom.config.mts
@@ -579,6 +590,7 @@ jobs:
             artifacts/review/journal-browser-manifest.json
             artifacts/review/complete-overview-browser-results.json
             artifacts/review/complete-overview-browser-manifest.json
+            artifacts/review/service-action-browser-results.json
           if-no-files-found: warn
           retention-days: 3
 
@@ -604,3 +616,47 @@ jobs:
             exit 1
           fi
           echo 'PASS: TLS and explicit HTTP-test container lifecycle, durable approval/replay/revocation and nonroot runtime.'
+
+  action-native-ipc:
+    name: Required Linux service-action IPC (no skips)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Verify the strict native IPC evidence checker
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: |
+          set -euo pipefail
+          python3 tests/security/test_action_ipc_gate.py
+          python3 -O tests/security/test_action_ipc_gate.py
+      - name: Prepare pinned dependencies as the ordinary hosted user
+        run: |
+          set -euo pipefail
+          test "$(id -u)" -ne 0
+          test "$(id -g)" -ne 0
+          go mod download
+          go mod verify
+      - name: Require real Unix credentials and inherited listeners without skips
+        env:
+          TRACEBOLT_REQUIRE_NATIVE_ACTION_IPC: '1'
+          GOTOOLCHAIN: local
+          GOPROXY: 'off'
+          GOSUMDB: 'off'
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: |
+          set -euo pipefail
+          test "$(id -u)" -ne 0
+          test "$(id -g)" -ne 0
+          SOURCE_SHA=$(git rev-parse --verify HEAD)
+          test "$SOURCE_SHA" = "$GITHUB_SHA"
+          (umask 077; : > "$RUNNER_TEMP/action-ipc.jsonl"; : > "$RUNNER_TEMP/action-ipc.stderr")
+          status=0
+          go test -race -json -buildvcs=false ./internal/actionhelper ./internal/actionclient -run '^(TestAuthorityKernelPeerCredentials|TestAuthorityInheritedListenerFixture|TestAuthorityInheritedListenerRejectsMismatch|TestCredentialReaderNativePasscredRejectsNonRootWriter)$' -count=1 -timeout=2m > "$RUNNER_TEMP/action-ipc.jsonl" 2> "$RUNNER_TEMP/action-ipc.stderr" || status=$?
+          python3 tests/security/check_action_ipc_gate.py "$RUNNER_TEMP/action-ipc.jsonl" --go-exit-code "$status" --source-sha "$SOURCE_SHA"

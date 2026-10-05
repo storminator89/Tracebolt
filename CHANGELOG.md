@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-10-05 — Require explicit native IPC and service-action browser evidence
+
+- Add a required Linux gate for thirteen exact Unix peer, response-writer and inherited-listener test events; skipped, failed or missing evidence cannot pass.
+- Add four distinct real-browser service-action cases through named approval, actual API and transport handlers, a framed synthetic helper and fake executor. Keep fixture scope and unconfirmed delivery visible; preserve existing browser gates.
+- Add adversarial evidence-checker tests and exact-source checks. This verification change does not provision runtime keys, grants, helper services or sockets and does not execute a real service action.
+
 ## 2026-10-05 — Connect the default-off controlled service action workflow
 
 - Add named-operator preview and explicit approval for one locally allowlisted service try-restart, bound to durable manager jobs, signed permits, one-time agent delivery and independent root-helper admission.

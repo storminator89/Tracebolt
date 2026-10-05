@@ -1,5 +1,5 @@
 {
-  "goSourceSha256": "2a931432b22945a84aca4b8b1916dc132cd443a94d2cb43489a65e81fd4fd552",
+  "goSourceSha256": "12c611bdcfdfaad8ba7690769ab1cd6f4899ae2475cabc2230fad48f2e2e4818",
   "packages": {
     "localrmm/cmd/agent": [
       "TestHelp",
@@ -135,6 +135,7 @@
       "TestClientRejectsInvalidInputBeforeConnecting",
       "TestClientStructuredDenialAndOperationConfusion",
       "TestClientSubmitAndStatusBindExactImmutableEnvelope",
+      "TestCredentialReaderNativePasscredRejectsNonRootWriter",
       "TestCredentialReaderRejectsAndClosesPassedDescriptors",
       "TestCredentialReaderRequiresActualRootWriterEveryChunk",
       "TestProtectedSocketAndDirectoryMetadata",
@@ -1788,6 +1789,7 @@
       "TestHTTPTestContainerLifecycle",
       "TestTLSContainerLifecycle"
     ],
+    "localrmm/tests/e2e-review/actionfixture": [],
     "localrmm/tests/e2e-review/conditionalfixture": [],
     "localrmm/tests/e2e-review/endpointfixture": [],
     "localrmm/tests/e2e-review/enrollmentfixture": [],
