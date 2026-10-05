@@ -23,6 +23,29 @@ const apiSmoke=process.argv.includes('--api-smoke');
 const results=[],screenshots=[];
 let browser,server,context,pipe,waiting,devices,currentTest='',stage='setup',runtimeErrorCount=0,fatal=false;
 const mark=value=>{stage=value;};
+let failureSnapshot=null,failureEvents=null;
+async function boundedFailure(caught){
+ const kind=['TimeoutError','AssertionError','Error'].includes(caught?.name)?caught.name:'other';
+ if(!failureSnapshot)return JSON.stringify({kind});
+ const events=failureEvents?failureEvents():[];
+ let timer;try{const detail=await Promise.race([failureSnapshot(),new Promise(resolve=>{timer=setTimeout(()=>resolve({unavailable:true}),1000);})]);return JSON.stringify({kind,events,...detail});}catch{return JSON.stringify({kind,events,unavailable:true});}finally{clearTimeout(timer);}
+}
+// Fixed route categories/statuses and DOM booleans only; no URLs, IDs, bodies,
+// input values, exception messages or response text enter the failure report.
+function observeFailure(page,kind){
+ const events=[];
+ const resource=url=>{const pathname=new URL(url).pathname;if(pathname==='/api/auth/session')return'auth';const prefix=`/api/devices/${devices.alpha}`;if(kind==='journal'&&pathname===prefix+'/journal')return'journal-status';if(kind==='journal'&&pathname===prefix+'/journal/create')return'journal-create';if(kind==='journal'&&pathname===prefix+'/journal/cancel')return'journal-cancel';if(kind==='journal'&&pathname===prefix+'/journal/query')return'journal-query';if(kind==='packages'&&pathname===prefix+'/inventory/packages')return'package-status';if(kind==='packages'&&pathname===prefix+'/inventory/packages/query')return'package-query';return null;};
+ const record=(request,phase,status=0)=>{const route=resource(request.url());if(route&&events.length<32&&['GET','POST'].includes(request.method())&&Number.isInteger(status)&&status>=0&&status<=599)events.push({resource:route,method:request.method(),phase,status});};
+ page.on('request',request=>record(request,'request'));page.on('response',response=>record(response.request(),'response',response.status()));page.on('requestfailed',request=>record(request,'failed'));
+ failureEvents=()=>events.slice();
+ failureSnapshot=async()=>({view:await page.evaluate(kind=>{
+  const section=document.querySelector(kind==='journal'?'.journal-panel':'.complete-packages');
+  const buttons=section?.querySelectorAll(kind==='journal'?'.journal-preset-hint button':'.complete-package-pagination button')??[];
+  const button=buttons[0],rect=button?.getBoundingClientRect();
+  return{present:Boolean(section),busy:section?.getAttribute('aria-busy')==='true',alertPresent:Boolean(section?.querySelector('[role=alert]')),rows:Math.min(500,section?.querySelectorAll('tbody tr').length??0),actionCount:Math.min(10,buttons.length),actionDisabled:button?.matches(':disabled')??false,actionVisible:Boolean(rect&&rect.width>0&&rect.height>0&&getComputedStyle(button).visibility==='visible'),privateInert:Boolean(document.querySelector('.auth-private-view[inert]')),documentVisible:document.visibilityState==='visible'};
+ },kind)});
+}
+
 const endpoint=(label='alpha',action='')=>`/api/devices/${devices[label]}/journal${action?'/'+action:''}`;
 const rows=page=>page.locator('.journal-table tbody tr');
 const panel=page=>page.locator('.journal-panel');
@@ -121,9 +144,9 @@ async function queryAction(page,action,expected){
  await expect(rows(page)).toHaveCount(body.rows.length);await settled(page);return body;
 }
 async function check(name,run){
- currentTest=name;mark('fixture setup');const began=Date.now();
+ failureSnapshot=null;failureEvents=null;currentTest=name;mark('fixture setup');const began=Date.now();
  try{await start();await run();results.push({name,status:'PASS',durationMs:Date.now()-began});console.log(`PASS ${name}`);}
- catch{results.push({name,status:'FAIL',stage,durationMs:Date.now()-began,error:'Bounded assertion failure; raw content, responses, credentials and state withheld.'});console.log(`FAIL ${name} (${stage})`);}
+ catch(caught){results.push({name,status:'FAIL',stage,durationMs:Date.now()-began,error:'Bounded assertion failure; fixed diagnostics: '+await boundedFailure(caught)});console.log(`FAIL ${name} (${stage})`);}
  finally{if(context)await context.close();context=null;await stop();}
 }
 
@@ -166,7 +189,7 @@ try{
   mark('hosted Chromium launch');browser=await chromium.launch(launch);
 
   await check('Explicit content and HTTP acknowledgements gate one lazy journal request and honest pending state',async()=>{
-   const page=await pageAt();const tally=counts(page);let inventoryReads=0,authReads=0;
+   const page=await pageAt();observeFailure(page,'journal');const tally=counts(page);let inventoryReads=0,authReads=0;
    const systemEndpoint=`${base}/api/devices/${devices.alpha}/inventory/system`;
    page.on('request',request=>{if([systemEndpoint,systemEndpoint+'/query'].includes(request.url()))inventoryReads++;if(request.url()===base+'/api/auth/session'&&request.method()==='GET')authReads++;});
    await page.goto(`${base}/#/devices/${devices.alpha}`);await expect(page.getByRole('region',{name:'Device QA synthetic journal alpha',exact:true})).toBeVisible();
@@ -185,9 +208,17 @@ try{
    for(const [minutes,label]of [[5,'5 minutes ending at reference time'],[15,'15 minutes ending at reference time'],[30,'30 minutes ending at reference time'],[60,'1 hour ending at reference time']]){const button=group.getByRole('button',{name:label,exact:true});await button.click();await expect(button).toHaveAttribute('aria-pressed','true');await expect(button).toHaveAccessibleDescription('Reference time (UTC, last checked manager time): '+reference);await windowMatches(reference,minutes);expect(tally).toEqual(beforePresets);}
    await expect(group).toContainText('The reference stays fixed between reads and may be old.');await expect(unit).toHaveValue('invented.service');await expect(severity).toHaveValue('4');await expect(page.getByRole('button',{name:'Capture logs',exact:true})).toBeDisabled();
    mark('ordinary idle keeps the selected draft and reference time');await page.evaluate(()=>new Promise(resolve=>window.setTimeout(resolve,1100)));await windowMatches(reference,60);await expect(group.locator('time')).toHaveAttribute('datetime',reference);await expect(unit).toHaveValue('invented.service');await expect(severity).toHaveValue('4');expect(tally).toEqual(beforePresets);
-   mark('explicit reference refresh rechecks protected status and preserves the old draft');await control('advance',{seconds:60});const priorAuthReads=authReads;const refreshed=page.waitForResponse(response=>response.url()===base+endpoint()&&response.request().method()==='GET');await group.getByRole('button',{name:'Refresh status and reference time',exact:true}).click();const refreshedResponse=await refreshed;expect(refreshedResponse.status()).toBe(200);const checked=await refreshedResponse.json();await settled(page);expect(authReads).toBeGreaterThan(priorAuthReads);expect(Date.parse(checked.serverNow)).toBeGreaterThan(Date.parse(reference));await expect(group.locator('time')).toHaveAttribute('datetime',checked.serverNow);await windowMatches(reference,60);await expect(group.locator('button[aria-pressed=true]')).toHaveCount(0);await expect(unit).toHaveValue('invented.service');await expect(severity).toHaveValue('4');expect(tally.create).toBe(0);expect(tally.cancel).toBe(0);expect(tally.query).toBe(0);
-   await group.getByRole('button',{name:'15 minutes ending at reference time',exact:true}).click();await windowMatches(checked.serverNow,15);const chosenStart=new Date(Date.parse((await from.inputValue())+'Z')).toISOString(),chosenEnd=new Date(Date.parse((await to.inputValue())+'Z')).toISOString();await expect(page.getByRole('checkbox',{name:/^I understand that log messages/})).not.toBeChecked();await expect(page.getByRole('checkbox',{name:/^I also accept that this HTTP test/})).not.toBeChecked();
-   await page.getByLabel('Exact service unit',{exact:true}).fill('invented.service');const submit=page.getByRole('button',{name:'Capture logs',exact:true});await expect(submit).toBeDisabled();
+   mark('advance fixture reference clock');await control('advance',{seconds:60});const priorAuthReads=authReads;const refreshed=page.waitForResponse(response=>response.url()===base+endpoint()&&response.request().method()==='GET');
+   mark('click exact journal reference refresh');await group.getByRole('button',{name:'Refresh status and reference time',exact:true}).click();
+   mark('journal reference refresh returns HTTP200');const refreshedResponse=await refreshed;expect(refreshedResponse.status()).toBe(200);const checked=await refreshedResponse.json();
+   mark('journal reference refresh settles without alert');await settled(page);
+   mark('journal reference refresh rechecked authorization');expect(authReads).toBeGreaterThan(priorAuthReads);
+   mark('journal reference time advances from prior read');expect(Date.parse(checked.serverNow)).toBeGreaterThan(Date.parse(reference));await expect(group.locator('time')).toHaveAttribute('datetime',checked.serverNow);
+   mark('journal reference refresh preserves the old draft window');await windowMatches(reference,60);await expect(group.locator('button[aria-pressed=true]')).toHaveCount(0);
+   mark('journal reference refresh preserves service and severity');await expect(unit).toHaveValue('invented.service');await expect(severity).toHaveValue('4');
+   mark('journal reference refresh performs no capture cancel or query');expect(tally.create).toBe(0);expect(tally.cancel).toBe(0);expect(tally.query).toBe(0);
+   mark('choose fifteen-minute window at refreshed reference');await group.getByRole('button',{name:'15 minutes ending at reference time',exact:true}).click();await windowMatches(checked.serverNow,15);const chosenStart=new Date(Date.parse((await from.inputValue())+'Z')).toISOString(),chosenEnd=new Date(Date.parse((await to.inputValue())+'Z')).toISOString();await expect(page.getByRole('checkbox',{name:/^I understand that log messages/})).not.toBeChecked();await expect(page.getByRole('checkbox',{name:/^I also accept that this HTTP test/})).not.toBeChecked();
+   mark('both journal acknowledgements still gate capture');await page.getByLabel('Exact service unit',{exact:true}).fill('invented.service');const submit=page.getByRole('button',{name:'Capture logs',exact:true});await expect(submit).toBeDisabled();
    await page.getByRole('checkbox',{name:/^I understand that log messages/}).check();await expect(submit).toBeDisabled();expect(tally.create).toBe(0);
    await page.getByRole('checkbox',{name:/^I also accept that this HTTP test/}).check();await expect(submit).toBeEnabled();
    await held(page,'**'+endpoint('alpha','create'),async gate=>{mark('single consented creation waits for exact committed response');await submit.click();await expect.poll(gate.arrived).toBe(1);expect(gate.statuses()).toEqual([200]);await expect(submit).toBeDisabled();expect(tally.create).toBe(1);await expect(rows(page)).toHaveCount(0);gate.release();await expect(state(page)).toHaveText('Pending');await settled(page);});

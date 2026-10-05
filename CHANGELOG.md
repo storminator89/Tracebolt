@@ -2,6 +2,12 @@
 
 Meaningful development checkpoints are recorded here. These are prototype milestones, not production releases.
 
+## 2026-10-05 — Require initial package rows and localize browser failures
+
+- Exact `e596b427` passed the two newly extended browser cases for coverage-busy recovery and device metadata refresh preserving Logs. Separate existing journal reference-refresh and v3 second-page checks failed; their broad stages did not establish a production cause. The other recorded cases passed, and the endpoint browser step did not run after the v3 failure.
+- Require the first complete package page to contain exactly 100 rows and its expected first record before the independent baseline read and next-page click. Split both failing scenarios into precise phases while preserving every prior assertion, case identity and original timeout. This strengthens readiness but is not proof of the historical failure's cause.
+- On failure only, record capped fixed route/method/phase/status categories and DOM booleans/counts, with a one-second renderer-inspection limit. Exclude raw URLs, identifiers, bodies, form values, exception text and credentials. Ten inert checks and source review validate this projection; application, fixtures, workflow gates and immutable pilot.2 assets remain unchanged. Exact-source hosted confirmation remains required.
+
 ## 2026-10-05 — Recover coverage reads and refresh device metadata in place
 
 - Exact `5197056` completed all 13 CI jobs, including the full Go/race and positive native gates, with 110 required browser checks passing and three retained enrollment skips. Preserve that tested source as the preceding accepted checkpoint; this new UI follow-up requires its own full hosted run.
