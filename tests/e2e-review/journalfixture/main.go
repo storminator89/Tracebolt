@@ -63,10 +63,11 @@ func id(prefix string) string {
 func jsonBytes(v any) []byte { b, e := json.Marshal(v); must(e); return b }
 
 type fixture struct {
-	service *enrollmentservice.Service
-	store   *enrollmentstore.Store
-	offset  atomic.Int64
-	devices map[string]enrollmentstate.Snapshot
+	service              *enrollmentservice.Service
+	store                *enrollmentstore.Store
+	offset               atomic.Int64
+	alphaMetadataUpdated atomic.Bool
+	devices              map[string]enrollmentstate.Snapshot
 }
 
 func (f *fixture) now() time.Time { return time.Now().UTC().Add(time.Duration(f.offset.Load())) }
@@ -302,6 +303,9 @@ func run() {
 			for label, identity := range f.devices {
 				if devices[i].ID == identity.Approval.DeviceID {
 					devices[i].Name = "QA synthetic journal " + label
+					if label == "alpha" && f.alphaMetadataUpdated.Load() {
+						devices[i].Name = "QA synthetic journal alpha refreshed"
+					}
 				}
 			}
 		}
@@ -342,6 +346,13 @@ func run() {
 				result, err = f.deliver(c.Device, c.Mode)
 				for key, value := range result {
 					out[key] = value
+				}
+			case "metadata":
+				// A fixed invented display-name change only; no observation or clock update.
+				if c.Device != "alpha" || c.Mode != "" || c.Seconds != 0 {
+					err = errors.New("invalid_metadata_control")
+				} else {
+					f.alphaMetadataUpdated.Store(true)
 				}
 			case "advance":
 				if c.Seconds < 0 || c.Seconds > 90000 {

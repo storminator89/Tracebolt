@@ -2,6 +2,13 @@
 
 Meaningful development checkpoints are recorded here. These are prototype milestones, not production releases.
 
+## 2026-10-05 — Recover coverage reads and refresh device metadata in place
+
+- Exact `5197056` completed all 13 CI jobs, including the full Go/race and positive native gates, with 110 required browser checks passing and three retained enrollment skips. Preserve that tested source as the preceding accepted checkpoint; this new UI follow-up requires its own full hosted run.
+- Recover one qualified coverage `storage_busy` GET response inside the original controller, epoch, total deadline and freshness anchor. Clear obsolete counts while recovering, cancel late work on protected-scope changes, and keep catalog operations and mutations outside automatic replay.
+- Add an explicit bounded device metadata refresh that preserves the selected same-device tab and existing Logs/inventory form instances. Authority, session and device failures clear stale state; ordinary failures stay visibly labeled without changing the original check time. No periodic polling or new collection grant is introduced.
+- Extend two existing synthetic browser cases to verify actual coverage-busy recovery and metadata refresh while retaining Logs state. Preserve all 110 required case identities, three enrollment skips, five review lifecycle cycles, report schemas and artifact limits. Regenerate the finite Go diagnostic digest for the changed invented-data fixture only; backend runtime, workflow permissions and immutable pilot.2 assets/pin remain unchanged. Source and local checks do not establish a host upgrade or a newer binary release.
+
 ## 2026-10-04 — Reuse validated overview frames and copy one physical installer-command line
 
 - Exact `f9aed37` completed 12 CI jobs and all 110 required browser checks; the Go aggregate identified `TestOverviewSharedBurstBudgetAndFairness` as its only failing root. An untouched local reproduction reached the unchanged 20-second burst deadline after 32 process operations. Profiling found redundant decoding and validation of already-validated chunk JSON; the hosted report itself did not expose the failed assertion.

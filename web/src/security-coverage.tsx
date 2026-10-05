@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Boxes, Database, FileJson, Info, LoaderCircle, RefreshCw, ShieldQuestion, TriangleAlert, Upload, X } from 'lucide-react';
-import { APIError, AUTH_REQUIRED_EVENT, mutateRaw, request } from './api';
+import { APIError, AUTH_REQUIRED_EVENT, getProtectedRequestEpoch, mutateRaw, request } from './api';
 import { useOperator } from './auth';
 import { useLocale } from './i18n';
 import type { Locale } from './i18n';
@@ -13,7 +13,7 @@ import { AdvisoryReviewPanel } from './advisory-review';
 const copy = {
     en: {
         title: 'Security coverage', subtitle: 'Separate observations, update offers and CVE evidence', catalogTitle: 'Offline advisory catalog', catalogSubtitle: 'Operator-supplied Debian 13 / Trixie interchange file',
-        refresh: 'Refresh security coverage', refreshCatalog: 'Refresh catalog status', loading: 'Checking the manager…', unknown: 'Unknown', unverified: 'Unverified origin',
+        refresh: 'Refresh security coverage', refreshCatalog: 'Refresh catalog status', loading: 'Checking the manager…', recovering: 'Storage is busy. One automatic read retry in 2 seconds.', readBusy: 'Storage is busy. Refresh security coverage to try again.', unknown: 'Unknown', unverified: 'Unverified origin',
         access: 'Authenticated LAN operator access is required.', disabled: 'Offline catalogs require the managed-operations profile. Import is unavailable on this manager.',
         loadError: 'Current status could not be confirmed. Refresh before continuing.', invalid: 'The manager returned an unsupported or inconsistent response. No previous data is used.', timeout: 'The manager did not respond in time. Refresh status.', session: 'Your session has ended. Sign in again.', expired: 'Status needs refreshing. Previous information is no longer shown.',
         changed: 'The catalog changed. Refresh and review the current revision before choosing a file again.', busy: 'Another catalog import is in progress. Refresh status before trying again.', tooLarge: 'The file exceeds the 2 MiB limit.', invalidFile: 'Choose a non-empty UTF-8 JSON file no larger than 2 MiB.', rejected: 'The catalog was rejected. Check the normalized format and Debian 13 / Trixie release, then refresh status.', unavailable: 'Offline catalogs are unavailable. Refresh manager status.', uncertain: 'The action was not confirmed and may already have completed. Refresh status before deciding again. It will not be replayed.',
@@ -30,7 +30,7 @@ const copy = {
     },
     de: {
         title: 'Sicherheitsabdeckung', subtitle: 'Beobachtungen, Update-Angebote und CVE-Belege getrennt', catalogTitle: 'Offline-Hinweiskatalog', catalogSubtitle: 'Vom Operator gelieferte Austauschdatei für Debian 13 / Trixie',
-        refresh: 'Sicherheitsabdeckung aktualisieren', refreshCatalog: 'Katalogstatus aktualisieren', loading: 'Manager wird geprüft…', unknown: 'Unbekannt', unverified: 'Herkunft unbestätigt',
+        refresh: 'Sicherheitsabdeckung aktualisieren', refreshCatalog: 'Katalogstatus aktualisieren', loading: 'Manager wird geprüft…', recovering: 'Der Speicher ist ausgelastet. Ein automatischer Leseversuch folgt in 2 Sekunden.', readBusy: 'Der Speicher ist ausgelastet. Die Sicherheitsabdeckung für einen neuen Versuch aktualisieren.', unknown: 'Unbekannt', unverified: 'Herkunft unbestätigt',
         access: 'Ein authentifizierter LAN-Operator-Zugang ist erforderlich.', disabled: 'Offline-Kataloge erfordern das Profil managed-operations. Der Import ist auf diesem Manager nicht verfügbar.',
         loadError: 'Der aktuelle Status konnte nicht bestätigt werden. Vor dem Fortfahren aktualisieren.', invalid: 'Der Manager lieferte eine nicht unterstützte oder widersprüchliche Antwort. Frühere Daten werden nicht verwendet.', timeout: 'Der Manager hat nicht rechtzeitig geantwortet. Status aktualisieren.', session: 'Die Sitzung ist beendet. Erneut anmelden.', expired: 'Der Status muss aktualisiert werden. Frühere Informationen werden nicht mehr angezeigt.',
         changed: 'Der Katalog wurde geändert. Den aktuellen Stand aktualisieren und prüfen, bevor erneut eine Datei gewählt wird.', busy: 'Ein anderer Katalogimport läuft. Vor einem neuen Versuch den Status aktualisieren.', tooLarge: 'Die Datei überschreitet das Limit von 2 MiB.', invalidFile: 'Eine nicht leere UTF-8-JSON-Datei mit höchstens 2 MiB auswählen.', rejected: 'Der Katalog wurde abgelehnt. Normalisiertes Format und Debian 13 / Trixie prüfen, dann den Status aktualisieren.', unavailable: 'Offline-Kataloge sind nicht verfügbar. Managerstatus aktualisieren.', uncertain: 'Die Aktion wurde nicht bestätigt und kann bereits abgeschlossen sein. Vor einer neuen Entscheidung den Status aktualisieren. Keine automatische Wiederholung.',
@@ -47,16 +47,17 @@ const copy = {
     },
 };
 type Labels = typeof copy.en;
-type Failure = 'loadError' | 'invalid' | 'timeout' | 'session' | 'expired' | 'changed' | 'busy' | 'tooLarge' | 'rejected' | 'unavailable' | 'uncertain';
+type Failure = 'loadError' | 'invalid' | 'timeout' | 'session' | 'expired' | 'changed' | 'busy' | 'readBusy' | 'tooLarge' | 'rejected' | 'unavailable' | 'uncertain';
 type View = OfflineCatalogView | SecurityCoverageView;
 function date(value: string, locale: Locale): string { return new Intl.DateTimeFormat(locale === 'de' ? 'de-DE' : 'en-GB', { dateStyle: 'medium', timeStyle: 'medium', timeZone: 'UTC' }).format(new Date(value)) + ' UTC'; }
 function count(value: number | null, locale: Locale, labels: Labels): string { return value === null ? labels.unknown : new Intl.NumberFormat(locale).format(value); }
 function Notice({ children, error = false }: { children: ReactNode; error?: boolean }) { return <div className={`security-notice${error ? ' error' : ''}`} role={error ? 'alert' : undefined}>{error ? <TriangleAlert size={16}/> : <Info size={16}/>}<p>{children}</p></div>; }
 
 /** One current request/configuration lease. Invalidation happens before React renders. */
-function useSecurityResource<T extends View>(path: string, validate: (value: unknown) => value is T, clearLocal: () => void, recheckWindowFocus = true) {
+function useSecurityResource<T extends View>(path: string, validate: (value: unknown) => value is T, clearLocal: () => void, { recheckWindowFocus = true, recoverStorageBusy = false } = {}) {
     const [value, setValue] = useState<T | null>(null);
     const [loading, setLoading] = useState(false);
+    const [recovering, setRecovering] = useState(false);
     const [pending, setPending] = useState<'import' | 'clear' | null>(null);
     const [error, setError] = useState<Failure | null>(null);
     const [notice, setNotice] = useState<'importedNotice' | 'clearedNotice' | 'uncertain' | null>(null);
@@ -69,7 +70,7 @@ function useSecurityResource<T extends View>(path: string, validate: (value: unk
         const uncertain = operation.current?.kind === 'import' || operation.current?.kind === 'clear';
         operation.current?.controller.abort(); operation.current = null; current.current = null;
         window.clearTimeout(deadline.current); reset.current();
-        if (alive.current) { setValue(null); setLoading(false); setPending(null); setError(failure); if (uncertain) setNotice(failure === 'uncertain' ? null : 'uncertain'); else if (!preserveNotice) setNotice(null); }
+        if (alive.current) { setValue(null); setLoading(false); setRecovering(false); setPending(null); setError(failure); if (uncertain) setNotice(failure === 'uncertain' ? null : 'uncertain'); else if (!preserveNotice) setNotice(null); }
     }, []);
     const install = useCallback((next: T, started: number, wallStarted: number) => {
         const anchor = performance.now();
@@ -90,20 +91,45 @@ function useSecurityResource<T extends View>(path: string, validate: (value: unk
     const load = useCallback(async () => {
         if (!alive.current || locked.current || suspended.current || document.visibilityState === 'hidden') return;
         invalidate(null, true);
-        const controller = new AbortController(); const started = performance.now(), wallStarted = Date.now();
+        const controller = new AbortController(); const started = performance.now(), wallStarted = Date.now(), protectedEpoch = getProtectedRequestEpoch();
         operation.current = { controller, kind: 'read', started, wallStarted }; setLoading(true);
         const timeout = window.setTimeout(() => { if (active(controller)) invalidate('timeout', true); }, 10_000);
+        const activeRead = () => {
+            if (!active(controller)) return false;
+            if (recoverStorageBusy && protectedEpoch !== getProtectedRequestEpoch()) { locked.current = true; invalidate('session'); return false; }
+            return true;
+        };
         try {
-            const next = await request<unknown>(path, { signal: controller.signal }, SECURITY_RESPONSE_MAX_BYTES);
-            if (!active(controller)) return;
+            let next: unknown;
+            // Only device coverage opts into one exact GET retry. Keep its original
+            // controller, access epoch, freshness anchor and ten-second deadline.
+            for (let attempt = 0; attempt < 2; attempt++) {
+                try {
+                    next = await request<unknown>(path, { signal: controller.signal }, SECURITY_RESPONSE_MAX_BYTES);
+                    break;
+                } catch (caught) {
+                    if (!activeRead()) return;
+                    if (!recoverStorageBusy || attempt !== 0 || !(caught instanceof APIError) || caught.status !== 429 || caught.code !== 'storage_busy') throw caught;
+                    setRecovering(true);
+                    await new Promise<void>(resolve => {
+                        const finish = () => { window.clearTimeout(delay); controller.signal.removeEventListener('abort', finish); resolve(); };
+                        const delay = window.setTimeout(finish, 2000);
+                        controller.signal.addEventListener('abort', finish, { once: true });
+                        if (controller.signal.aborted) finish();
+                    });
+                    if (!activeRead()) return;
+                    setRecovering(false);
+                }
+            }
+            if (!activeRead()) return;
             if (!validate(next)) { invalidate('invalid', true); return; }
             operation.current = null; install(next, started, wallStarted); setLoading(false);
         } catch (caught) {
-            if (!active(controller)) return;
+            if (!activeRead()) return;
             if (caught instanceof APIError && caught.status === 401) locked.current = true;
-            invalidate(caught instanceof APIError && caught.status === 401 ? 'session' : 'loadError', true);
+            invalidate(caught instanceof APIError && caught.status === 401 ? 'session' : recoverStorageBusy && caught instanceof APIError && caught.status === 429 ? 'readBusy' : 'loadError', true);
         } finally { window.clearTimeout(timeout); }
-    }, [active, install, invalidate, path, validate]);
+    }, [active, install, invalidate, path, recoverStorageBusy, validate]);
     useEffect(() => {
         alive.current = true; locked.current = false; suspended.current = document.visibilityState === 'hidden';
         const lock = () => { locked.current = true; invalidate('session'); };
@@ -145,7 +171,7 @@ function useSecurityResource<T extends View>(path: string, validate: (value: unk
             invalidate(failure);
         } finally { window.clearTimeout(timeout); }
     }, [active, install, invalidate, ready, validate]);
-    return { value, loading, pending, error, notice, load, ready, mutate, cancel: () => invalidate('uncertain'), elapsed: () => current.current ? Math.max(0, performance.now() - current.current.anchor) : Number.POSITIVE_INFINITY };
+    return { value, loading, recovering, pending, error, notice, load, ready, mutate, cancel: () => invalidate('uncertain'), elapsed: () => current.current ? Math.max(0, performance.now() - current.current.anchor) : Number.POSITIVE_INFINITY };
 }
 
 const noop = () => {};
@@ -157,7 +183,7 @@ export function SecurityCoveragePanel({ deviceId, sessionKey }: { deviceId: stri
 function SecurityCoverageSession({ deviceId }: { deviceId: string }) {
     const [locale] = useLocale(); const labels = copy[locale]; const heading = useId();
     const validate = useCallback((value: unknown): value is SecurityCoverageView => validSecurityCoverageView(value, deviceId), [deviceId]);
-    const resource = useSecurityResource(`/devices/${encodeURIComponent(deviceId)}/security`, validate, noop);
+    const resource = useSecurityResource(`/devices/${encodeURIComponent(deviceId)}/security`, validate, noop, { recoverStorageBusy: true });
     const view = resource.value;
     const [, tick] = useState(0);
     useEffect(() => { if (!view) return; const timer = window.setInterval(() => tick(value => value + 1), 1000); return () => window.clearInterval(timer); }, [view]);
@@ -166,7 +192,7 @@ function SecurityCoverageSession({ deviceId }: { deviceId: string }) {
     const statusLabel = status === 'fresh' ? labels.freshStatus : status === 'stale' ? labels.staleStatus : status === 'unavailable' ? labels.unavailableStatus : status ? labels[status] : '';
     return <section className="security-panel" aria-labelledby={heading} aria-busy={resource.loading}>
         <header className="security-heading"><span className="security-symbol"><ShieldQuestion size={20}/></span><div><h2 id={heading}>{labels.title}</h2><p>{labels.subtitle}</p></div><button type="button" className="button small" disabled={resource.loading || resource.error === 'session'} onClick={() => void resource.load()}><RefreshCw size={14}/>{labels.refresh}</button></header>
-        {resource.loading && <div className="security-loading" role="status"><LoaderCircle className="spin" size={17}/>{labels.loading}</div>}
+        {resource.loading && <div className="security-loading" role="status"><LoaderCircle className="spin" size={17}/>{resource.recovering ? labels.recovering : labels.loading}</div>}
         {resource.error && <Notice error>{labels[resource.error]}</Notice>}
         {view && <><div className="security-status-line"><span className="security-badge">{statusLabel}</span><span>{labels.checked}: <time dateTime={view.serverNow}>{date(view.serverNow, locale)}</time></span></div>
             <div className="security-grid">
@@ -192,7 +218,7 @@ function OfflineCatalogSession() {
     const input = useRef<HTMLInputElement | null>(null), reader = useRef<FileReader | null>(null), raw = useRef<string | null>(null);
     const [selectedBytes, setSelectedBytes] = useState<number | null>(null), [reading, setReading] = useState(false), [fileError, setFileError] = useState<'invalidFile' | 'tooLarge' | null>(null), [confirmClear, setConfirmClear] = useState(false);
     const clearLocal = useCallback(() => { reader.current?.abort(); reader.current = null; raw.current = null; if (input.current) input.current.value = ''; setSelectedBytes(null); setReading(false); setFileError(null); setConfirmClear(false); }, []);
-    const resource = useSecurityResource('/security/catalog', validOfflineCatalogView, clearLocal, false);
+    const resource = useSecurityResource('/security/catalog', validOfflineCatalogView, clearLocal, { recheckWindowFocus: false });
     const view = resource.value, catalog = view?.catalog;
     const selectFile = (file: File | undefined) => {
         clearLocal();

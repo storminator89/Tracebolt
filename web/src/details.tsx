@@ -1,7 +1,7 @@
-import { t, ui, useLocale } from './i18n';
+import { getLocale, t, ui, useLocale } from './i18n';
 import { useEffect, useRef, useState } from 'react';
-import { ArrowLeft, ArrowRight, Check, CheckCircle2, ChevronRight, Clock3, Database, FileText, HardDrive, Info, ListFilter, LoaderCircle, MemoryStick, MessageSquare, Monitor, Play, ShieldCheck, Terminal, TriangleAlert } from 'lucide-react';
-import { mutate, request } from './api';
+import { ArrowLeft, ArrowRight, Check, CheckCircle2, ChevronRight, Clock3, Database, FileText, HardDrive, Info, ListFilter, LoaderCircle, MemoryStick, MessageSquare, Monitor, Play, RefreshCw, ShieldCheck, Terminal, TriangleAlert } from 'lucide-react';
+import { APIError, AUTH_REQUIRED_EVENT, getProtectedRequestEpoch, mutate, request } from './api';
 import { AIAnalysisPanel } from './ai';
 import { DeviceInventoryWorkspace } from './device-inventory';
 import { SoftwareOverview } from './software-overview';
@@ -10,7 +10,7 @@ import { EndpointHostnameStatus, EndpointIdentityPanel } from './endpoint-identi
 import { useEndpointIdentity } from './endpoint-identity-resource';
 import { SecurityCoveragePanel } from './security-coverage';
 import { PackageObservationsPanel } from './package-observations';
-import { useOperator } from './auth';
+import { hasLogoutIntent, useOperator } from './auth';
 import { ActivityList, CaseStatus, EvidenceCard, Loading, MetricValue, OSIcon, SectionHead, Severity, Source, Status } from './components';
 import type { Case, Device } from './types';
 import { fullDate, relativeTime, noteBytes, platformLabels } from './utils';
@@ -21,13 +21,16 @@ export function DeviceDetail({ id, onClose, onCase }: {
 }) {
     const operator = useOperator();
     const [locale] = useLocale();
-    const [device, setDevice] = useState<Device | null>(null);
+    const scope = JSON.stringify([id, operator?.mode, operator?.authenticated, operator?.expiresAt]);
+    const [snapshot, setSnapshot] = useState<{ scope: string; epoch: number; device: Device; checkedAt: string } | null>(null);
+    const device = snapshot?.scope === scope && snapshot.epoch === getProtectedRequestEpoch() && !hasLogoutIntent() ? snapshot.device : null;
+    const [refreshing, setRefreshing] = useState(false), [accessEnded, setAccessEnded] = useState(false);
+    const refreshRef = useRef<() => void>(() => {});
     const [error, setError] = useState('');
     const [tab, setTab] = useState('overview');
     const [inventorySource, setInventorySource] = useState<'processes' | 'preview' | 'packages'>('processes');
     const selectTab = (value: string) => { setInventorySource('processes'); setTab(value); };
     const openPackages = () => { setInventorySource('packages'); setTab('inventory'); };
-    const [retry, setRetry] = useState(0);
     const pageRef = useRef<HTMLElement>(null), closeRef = useRef(onClose);
     closeRef.current = onClose;
     useEffect(() => {
@@ -43,30 +46,76 @@ export function DeviceDetail({ id, onClose, onCase }: {
     }, [id]);
 
     useEffect(() => {
-        let active = true;
-        const controller = new AbortController();
-        setDevice(null);
-        setError('');
-        setTab('overview');
-        setInventorySource('processes');
-        request<Device>(`/devices/${encodeURIComponent(id)}`, { signal: controller.signal }).then(value => {
-            if (active) {
-                if (!value || value.id !== id) { setError(t('Der Manager hat keine gültigen JSON-Daten zurückgegeben.')); return; }
-                setDevice(value);
+        let alive = true, locked = false;
+        const accessEpoch = getProtectedRequestEpoch(), hidden = () => document.visibilityState === 'hidden';
+        let pending: { controller: AbortController; timeout: number } | null = null;
+        const cancel = () => { pending?.controller.abort(); window.clearTimeout(pending?.timeout); pending = null; };
+        const lock = () => {
+            locked = true; cancel(); setSnapshot(null); setRefreshing(false); setAccessEnded(true);
+            setError(t('Die Sitzung ist abgelaufen. Bitte erneut anmelden.'));
+        };
+        // Identity/access changes discard the old subtree. An explicit same-device
+        // read only replaces metadata, leaving its selected tab and form instances intact.
+        setSnapshot(null); setError(''); setRefreshing(false); setAccessEnded(false);
+        setTab('overview'); setInventorySource('processes');
+        const read = async () => {
+            if (!alive || locked || pending) return;
+            if (accessEpoch !== getProtectedRequestEpoch() || hasLogoutIntent()) { lock(); return; }
+            if (hidden()) {
+                setError(getLocale() === 'de' ? 'Lesen pausiert. Im sichtbaren Fenster erneut versuchen.' : 'Read paused. Try again when this window is visible.'); return;
             }
-        }).catch(err => {
-            if (active)
-                setError(err.message);
-        });
-        return () => { active = false; controller.abort(); };
-    }, [id, retry]);
+            const controller = new AbortController(), epoch = getProtectedRequestEpoch(), started = performance.now(), wallStarted = Date.now();
+            const active = () => {
+                if (!alive || locked || controller.signal.aborted) return false;
+                if (epoch !== getProtectedRequestEpoch() || hasLogoutIntent()) { lock(); return false; }
+                return true;
+            };
+            const fail = (message: string) => { cancel(); setRefreshing(false); setError(message); };
+            const timeoutMessage = () => t('Der Manager antwortet nicht. Erneut versuchen.');
+            setRefreshing(true); setError('');
+            pending = { controller, timeout: window.setTimeout(() => { if (active()) fail(timeoutMessage()); }, 10000) };
+            try {
+                const value = await request<Device>(`/devices/${encodeURIComponent(id)}`, { signal: controller.signal }, 262144);
+                if (!active()) return;
+                if (hidden()) { suspend(); return; }
+                const elapsed = performance.now() - started;
+                if (!Number.isFinite(elapsed) || elapsed < 0 || Math.abs(Date.now() - wallStarted - elapsed) > 1500 || elapsed >= 10000) { fail(timeoutMessage()); return; }
+                if (!value || value.id !== id) throw new APIError(t('Der Manager hat keine gültigen JSON-Daten zurückgegeben.'));
+                setSnapshot({ scope, epoch, device: value, checkedAt: new Date().toISOString() });
+            } catch (caught) {
+                if (!active()) return;
+                if (caught instanceof APIError && caught.status === 401) { lock(); return; }
+                // A revoked/missing device must never fall back to its prior private data.
+                if (caught instanceof APIError && [403, 404, 410].includes(caught.status ?? 0)) setSnapshot(null);
+                setError(caught instanceof Error ? caught.message : t('Der Manager antwortet nicht. Erneut versuchen.'));
+            } finally {
+                if (alive && pending?.controller === controller) { window.clearTimeout(pending.timeout); pending = null; setRefreshing(false); }
+            }
+        };
+        const suspend = () => {
+            if (!pending) return;
+            cancel(); setRefreshing(false);
+            setError(getLocale() === 'de' ? 'Lesen unterbrochen. Erneut versuchen.' : 'Read interrupted. Try again.');
+        };
+        const visibility = () => { if (hidden()) suspend(); };
+        refreshRef.current = () => { void read(); };
+        window.addEventListener(AUTH_REQUIRED_EVENT, lock);
+        window.addEventListener('pagehide', suspend); document.addEventListener('visibilitychange', visibility);
+        void read();
+        return () => {
+            alive = false; cancel(); refreshRef.current = () => {};
+            window.removeEventListener(AUTH_REQUIRED_EVENT, lock);
+            window.removeEventListener('pagehide', suspend); document.removeEventListener('visibilitychange', visibility);
+        };
+        // Locale changes must not reset an active device workspace.
+    }, [id, scope]);
     const inventoryAvailable = Boolean(device && device.id === id && !device.synthetic && device.source === 'lan' && (device.platform === 'linux' || device.platform === 'unknown'));
     const securityAvailable = inventoryAvailable && operator?.mode === 'lan' && operator.authenticated;
     const endpoint = useEndpointIdentity(id, securityAvailable, operator?.expiresAt ?? null);
     const reportedHostname = endpoint.snapshot?.reportedHostname.value;
     const securityTabLabel = locale === 'de' ? 'Sicherheitsabdeckung' : 'Security coverage';
     const tabs: {id:string;name:string;count?:number}[] = device ? [{ id: 'overview', name: t("\u00DCbersicht") }, ...(inventoryAvailable ? [{ id: 'inventory', name: t('Inventar') }] : []), ...(securityAvailable ? [{ id: 'security', name: securityTabLabel }, { id: 'logs', name: 'Logs' }] : []), { id: 'evidence', name: t("Belege"), count: device.evidence.length }, { id: 'capabilities', name: t("F\u00E4higkeiten"), count: device.capabilities.length }] : [];
-    return <section ref={pageRef} tabIndex={-1} aria-label={device ? t("Ger\u00E4t {0}", { "0": device.name }) : t("Ger\u00E4tedetails")} className="device-page"><button className="back-link" onClick={onClose}><ArrowLeft size={15}/>{locale==='de'?'Zurück zu Geräten':'Back to devices'}</button>{error ? <div className="detail-error" role="alert"><TriangleAlert size={25}/><h2>{t("Ger\u00E4t nicht verf\u00FCgbar")}</h2><p>{ui(error)}</p><button className="button" onClick={() => setRetry(v => v + 1)}>{t("Erneut versuchen")}</button></div> : !device ? <Loading /> : <><header className="device-page-header"><div className="device-detail-heading"><OSIcon platform={device.platform}/><div><h1>{reportedHostname ?? device.name}</h1><EndpointHostnameStatus resource={endpoint}/><p>{device.os}</p>{device.source === 'lan' && !device.synthetic && <p className="device-stable-identity"><span>{locale === 'de' ? 'Stabile kryptografische Geräte-ID' : 'Stable cryptographic device ID'}</span><code>{device.id}</code></p>}</div></div><div className="detail-badges"><Status status={device.status} source={device.source} synthetic={device.synthetic}/><Source synthetic={device.synthetic} source={device.source}/><span className="detail-time"><Clock3 size={13}/>{relativeTime(device.lastSeen)}</span></div></header><div className={`provenance-notice ${device.synthetic ? '' : 'real'}`}><Database size={16}/><p>{device.synthetic ? t("Synthetisches Beispielger\u00E4t. Messwerte, Ereignisse und Belege dienen der Demonstration.") : device.source === "lan" ? t("Freigegebener LAN-Agent. Messwerte werden erst nach einer akzeptierten Übertragung angezeigt.") : t("Lokale {0}-Umgebung. Messwerte werden nur angezeigt, wenn ein Collector sie geliefert hat.", { "0": platformLabels[device.platform] })}</p></div><div className="drawer-tabs" role="tablist" aria-label={t("Ger\u00E4tedaten")}>{tabs.map(item => <button key={item.id} role="tab" tabIndex={tab === item.id ? 0 : -1} aria-selected={tab === item.id} aria-controls={`device-${item.id}`} id={`tab-${item.id}`} onClick={() => selectTab(item.id)} onKeyDown={event => { const index=tabs.findIndex(entry=>entry.id===item.id); const target=event.key==='ArrowRight'?(index+1)%tabs.length:event.key==='ArrowLeft'?(index+tabs.length-1)%tabs.length:event.key==='Home'?0:event.key==='End'?tabs.length-1:null; if(target!==null){event.preventDefault();selectTab(tabs[target].id);document.getElementById(`tab-${tabs[target].id}`)?.focus();} }}>{item.name}{item.count !== undefined && <span>{item.count}</span>}</button>)}</div><div className="drawer-content" role="tabpanel" id={`device-${tab}`} aria-labelledby={`tab-${tab}`}>
+    return <section ref={pageRef} tabIndex={-1} aria-label={device ? t("Ger\u00E4t {0}", { "0": device.name }) : t("Ger\u00E4tedetails")} className="device-page"><button className="back-link" onClick={onClose}><ArrowLeft size={15}/>{locale==='de'?'Zurück zu Geräten':'Back to devices'}</button>{!device && error ? <div className="detail-error" role="alert"><TriangleAlert size={25}/><h2>{t("Ger\u00E4t nicht verf\u00FCgbar")}</h2><p>{ui(error)}</p><button className="button" disabled={refreshing || accessEnded} onClick={() => refreshRef.current()}>{t("Erneut versuchen")}</button></div> : !device ? <Loading /> : <><header className="device-page-header"><div className="device-detail-heading"><OSIcon platform={device.platform}/><div><h1>{reportedHostname ?? device.name}</h1><EndpointHostnameStatus resource={endpoint}/><p>{device.os}</p>{device.source === 'lan' && !device.synthetic && <p className="device-stable-identity"><span>{locale === 'de' ? 'Stabile kryptografische Geräte-ID' : 'Stable cryptographic device ID'}</span><code>{device.id}</code></p>}</div></div><div className="detail-badges"><Status status={device.status} source={device.source} synthetic={device.synthetic}/><Source synthetic={device.synthetic} source={device.source}/><span className="detail-time"><Clock3 size={13}/>{relativeTime(device.lastSeen)}</span></div></header><div className="device-metadata-refresh"><button type="button" className="button small" disabled={refreshing || accessEnded} onClick={() => refreshRef.current()} aria-describedby="device-metadata-status"><RefreshCw size={14} className={refreshing ? 'spin' : undefined}/>{locale === 'de' ? 'Gerätedaten aktualisieren' : 'Refresh device metadata'}</button><p id="device-metadata-status" role="status">{refreshing ? (locale === 'de' ? 'Gerätedaten werden geprüft …' : 'Checking device metadata…') : (locale === 'de' ? 'Zuletzt erfolgreich geprüft: ' : 'Last successful check: ')}{!refreshing && snapshot && <time dateTime={snapshot.checkedAt}>{fullDate(snapshot.checkedAt)}</time>}<span>{locale === 'de' ? ' Kontaktzeit und Messwerte stammen aus der letzten akzeptierten Übertragung.' : ' Contact time and metrics come from the last accepted report.'}</span></p></div>{error && <div className="error-banner" role="alert"><TriangleAlert size={17}/><p>{locale === 'de' ? 'Aktualisierung fehlgeschlagen. Angezeigte Gerätedaten bleiben unverändert. ' : 'Refresh failed. Displayed device metadata is unchanged. '}{ui(error)}</p></div>}<div className={`provenance-notice ${device.synthetic ? '' : 'real'}`}><Database size={16}/><p>{device.synthetic ? t("Synthetisches Beispielger\u00E4t. Messwerte, Ereignisse und Belege dienen der Demonstration.") : device.source === "lan" ? t("Freigegebener LAN-Agent. Messwerte werden erst nach einer akzeptierten Übertragung angezeigt.") : t("Lokale {0}-Umgebung. Messwerte werden nur angezeigt, wenn ein Collector sie geliefert hat.", { "0": platformLabels[device.platform] })}</p></div><div className="drawer-tabs" role="tablist" aria-label={t("Ger\u00E4tedaten")}>{tabs.map(item => <button key={item.id} role="tab" tabIndex={tab === item.id ? 0 : -1} aria-selected={tab === item.id} aria-controls={`device-${item.id}`} id={`tab-${item.id}`} onClick={() => selectTab(item.id)} onKeyDown={event => { const index=tabs.findIndex(entry=>entry.id===item.id); const target=event.key==='ArrowRight'?(index+1)%tabs.length:event.key==='ArrowLeft'?(index+tabs.length-1)%tabs.length:event.key==='Home'?0:event.key==='End'?tabs.length-1:null; if(target!==null){event.preventDefault();selectTab(tabs[target].id);document.getElementById(`tab-${tabs[target].id}`)?.focus();} }}>{item.name}{item.count !== undefined && <span>{item.count}</span>}</button>)}</div><div className="drawer-content" role="tabpanel" id={`device-${tab}`} aria-labelledby={`tab-${tab}`}>
     {tab === 'overview' && <>{securityAvailable && <EndpointIdentityPanel resource={endpoint}/>}{securityAvailable && <SoftwareOverview deviceId={device.id} onOpenPackages={openPackages}/>}<div className="device-metrics">{[{ label: 'CPU', metric: device.cpu, icon: Terminal }, { label: t("Arbeitsspeicher"), metric: device.memory, icon: MemoryStick }, { label: t("Datentr\u00E4ger"), metric: device.disk, icon: HardDrive }].map(item => <div className="device-metric-card" key={item.label}><span className="device-metric-label"><item.icon size={14}/>{ui(item.label)}</span><MetricValue metric={item.metric}/><span className="metric-source">{item.metric.source}</span></div>)}</div><details className="detail-section device-technical"><summary>{locale==='de'?'Geräteprofil & technische Details':'Device profile & technical details'}<ChevronRight size={15}/></summary><dl className="metadata-grid"><div><dt>{t("Ger\u00E4tename")}</dt><dd className="mono">{device.name}</dd></div><div><dt>{t("Standort")}</dt><dd>{device.site}</dd></div><div><dt>{t("Gruppe")}</dt><dd>{device.group}</dd></div>{device.source !== 'lan' && <div><dt>{t("IP-Adresse")}</dt><dd className="mono">{device.ip || t("Nicht erfasst")}</dd></div>}<div><dt>{t("Laufzeit")}</dt><dd>{device.uptime || t("Nicht verf\u00FCgbar")}</dd></div><div><dt>{t("Collector-Version")}</dt><dd className="mono">{device.agentVersion || t("Nicht verf\u00FCgbar")}</dd></div><div className="metadata-wide"><dt>{t("Letzter Kontakt")}</dt><dd>{fullDate(device.lastSeen)}</dd></div></dl>{device.tags.length > 0 && <div className="device-tags">{device.tags.map(tag => <span key={tag}>{tag}</span>)}</div>}</details><section className="detail-section"><SectionHead title={t("Verkn\u00FCpfte Untersuchungen")} count={device.caseIds.length}/>{device.caseIds.length ? device.caseIds.map(caseId => <button className="linked-case" key={caseId} onClick={() => onCase(caseId)}><span><FileText size={16}/><strong>{caseId}</strong></span><span>{t("Untersuchen")}<ArrowRight size={15}/></span></button>) : <p className="quiet-empty"><CheckCircle2 size={16}/>{t("Keine Untersuchung zu diesem Ger\u00E4t.")}</p>}</section><div className="quality-explainer"><Info size={16}/><p><strong>{t("Datenqualit\u00E4t ist Teil der Diagnose.")}</strong>{" " + t("Veraltete, verweigerte oder fehlende Werte sind ausdr\u00FCcklich markiert. Fehlende Daten bedeuten keinen gesunden Zustand.")}</p></div></>}
     {tab === 'inventory' && inventoryAvailable && <DeviceInventoryWorkspace key={device.id} deviceId={device.id} initialSource={inventorySource}/> }
     {tab === 'logs' && securityAvailable && <JournalPanel key={device.id} deviceId={device.id} insecureTestMode={operator.insecureTestMode} sessionKey={operator.expiresAt}/> }
