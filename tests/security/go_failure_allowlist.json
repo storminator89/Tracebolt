@@ -1,5 +1,5 @@
 {
-  "goSourceSha256": "3a712f8a68c593030f24d1533e9d7afc83ba30c950264d4e30ae3056d474e88c",
+  "goSourceSha256": "ac23570a405d12e5f0ae0bcd4f73cd5dbfe2d74377452026072b545e14717a96",
   "packages": {
     "localrmm/cmd/agent": [
       "TestHelp",
@@ -290,7 +290,9 @@
       "TestReadContract",
       "TestSecurityCoverageLegitimateEmptyInventoryIsNotZeroCVEs",
       "TestSecurityCoveragePartialStaleUnknownAndRetainedRemainDistinct",
-      "TestSecurityCoverageSeparatesInventoryFromUnknownAssessments"
+      "TestSecurityCoverageSeparatesInventoryFromUnknownAssessments",
+      "TestSystemInventoryMetadataFairReadPreservesOperatorGuards",
+      "TestSystemInventoryMetadataFinalOutputRechecksIdentityAndSession"
     ],
     "localrmm/internal/assessment": [
       "TestAmbiguousVendorStatesStayCandidates",
@@ -546,7 +548,8 @@
       "TestProfileCapabilitiesCompleteScopeIsNotObservedSuccess",
       "TestProfileCapabilitiesOlderManagedScopeDoesNotClaimCompleteInventory",
       "TestProfileCapabilitiesOptionalIdentityDoesNotChangeOSQuality",
-      "TestProfileCapabilitiesPreserveBasicAndUnknownScope"
+      "TestProfileCapabilitiesPreserveBasicAndUnknownScope",
+      "TestSystemInventoryServicePropagatesTrustedClockAcrossReadBoundaries"
     ],
     "localrmm/internal/enrollmentstate": [
       "TestApprovalCASAndExactRetry",
@@ -704,6 +707,13 @@
       "TestRejectExistingEmptyOrForeignDatabaseWithoutMutation",
       "TestReopenExactStatesAndIssuanceAtomicity",
       "TestReopenRejectsCorruptOrPartialCredentialsAndBinding",
+      "TestSystemMetadataAdmissionCancellationAndTimeout",
+      "TestSystemMetadataAdmissionIsSingleSharedWaiterAndHandsOff",
+      "TestSystemMetadataHandoffPrecedesNewNonblockingInventoryWork",
+      "TestSystemMetadataPermitCoversSQLWaitAndCancellation",
+      "TestSystemMetadataReadWaitsBehindMaintenance",
+      "TestSystemMetadataRechecksClockAfterSQLAndCommit",
+      "TestSystemMetadataWaitKeepsAuthorityAndOriginalAge",
       "TestSystemObservationCleanupPreservesFloorReceiptAndAuthority",
       "TestSystemObservationConcurrentExactSequenceConflictIsAtomic",
       "TestSystemObservationCrossHandleAuthorityAndFloor",

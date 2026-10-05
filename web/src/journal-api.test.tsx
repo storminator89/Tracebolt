@@ -97,6 +97,33 @@ describe('bounded journal API and lifetime', () => {
         open(); await screen.findByText('First fixture row'); fireEvent.click(screen.getByRole('button', { name: 'Next page' })); expect(screen.queryByText('First fixture row')).not.toBeInTheDocument(); await screen.findByText('Second fixture row'); fireEvent.click(screen.getByRole('button', { name: 'Previous page' })); await screen.findByText('First fixture row');
         expect(fetch.mock.calls.filter(([url]) => url === `${root}/query`).map(([, init]) => JSON.parse(String(init?.body)).offset)).toEqual([0, 1, 0]);
     });
+    it('preserves the snapshot through 100/100/5 pages, previous, literal matches and zero matches', async () => {
+        const messages = Array.from({ length: 205 }, (_, index) => `Synthetic pagination row ${index}${[0, 100, 200].includes(index) ? ' Needle[.*]' : ''}`);
+        const pages: ReturnType<typeof journalPage>[] = [];
+        const fetch = server((url, init) => {
+            if (url !== `${root}/query`) return;
+            const query = JSON.parse(String(init?.body)), matches = messages.filter(message => message.toLowerCase().includes(query.search.toLowerCase()));
+            const page = { ...journalPage(matches.slice(query.offset, query.offset + 100), query.search, query.offset, matches.length), totalCapturedRows: 205, observedCount: 205 };
+            pages.push(page); return json(page);
+        }); open(); await screen.findByText('Synthetic pagination row 99');
+        fireEvent.click(screen.getByRole('button', { name: 'Next page' })); await screen.findByText('Synthetic pagination row 199');
+        fireEvent.click(screen.getByRole('button', { name: 'Next page' })); await screen.findByText('Synthetic pagination row 204');
+        expect(screen.getByRole('button', { name: 'Next page' })).toBeDisabled();
+        fireEvent.click(screen.getByRole('button', { name: 'Previous page' })); await screen.findByText('Synthetic pagination row 199');
+        const search = screen.getByLabelText('Literal text in captured messages');
+        fireEvent.change(search, { target: { value: 'nEeDlE[.*]' } }); fireEvent.click(screen.getByRole('button', { name: 'Search capture' }));
+        await waitFor(() => expect(screen.getAllByText('Needle[.*]', { selector: 'mark' })).toHaveLength(3));
+        expect(screen.getByText('3 matches · 205 captured')).toBeVisible(); expect(screen.getByRole('button', { name: 'Previous page' })).toBeDisabled();
+        fireEvent.change(search, { target: { value: '^does-not-match$' } }); fireEvent.click(screen.getByRole('button', { name: 'Search capture' }));
+        await screen.findByText('No literal matches in this captured snapshot.'); expect(screen.queryByRole('table')).not.toBeInTheDocument(); expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+        expect(pages.map(page => page.rows.length)).toEqual([100, 100, 5, 100, 3, 0]);
+        for (const page of pages) { expect(page.identity).toEqual(pages[0].identity); expect(page.snapshotDigest).toBe(pages[0].snapshotDigest); expect(page.observedAt).toBe(pages[0].observedAt); expect(page.expiresAt).toBe(pages[0].expiresAt); }
+        const queries = fetch.mock.calls.filter(([url]) => url === `${root}/query`).map(([, init]) => JSON.parse(String(init?.body)));
+        expect(queries.map(query => [query.offset, query.search])).toEqual([[0, ''], [100, ''], [200, ''], [100, ''], [0, 'nEeDlE[.*]'], [0, '^does-not-match$']]);
+        for (const query of queries) { expect(query.identity).toEqual(journalIdentity); expect(query.snapshotDigest).toBe(pages[0].snapshotDigest); }
+        expect(fetch.mock.calls.filter(([url]) => url === '/api/auth/session')).toHaveLength(7);
+        expect(fetch.mock.calls.some(([url]) => url.endsWith('/create') || url.endsWith('/cancel'))).toBe(false);
+    });
     it('requires unchecked content acknowledgement and submits expectedFloor exactly once', async () => {
         let created = false;
         const fetch = server((url) => { if (url === root) return json(journalView(created ? 'pending' : 'awaiting')); if (url === `${root}/create`) { created = true; return json(journalView('pending')); } });

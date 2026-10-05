@@ -58,6 +58,11 @@ func (h *operatorHandler) systemInventory(w http.ResponseWriter, r *http.Request
 		if !operatorStillActive(w, r) {
 			return
 		}
+		view, e = view.RecheckAt(h.enrollment.Now().UTC())
+		if e != nil {
+			systemInventoryError(w, e)
+			return
+		}
 		write(w, 200, view)
 		return
 	}

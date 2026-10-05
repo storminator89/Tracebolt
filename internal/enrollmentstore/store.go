@@ -45,13 +45,14 @@ const credentialSchema = `CREATE TABLE enrollment_credentials(invitation_id TEXT
 
 type Store struct{ *storeState }
 type storeState struct {
-	db               *sql.DB
-	path             string
-	info             os.FileInfo
-	config           enrollmentstate.Config
-	issuerDER        []byte
-	operationalReads chan struct{}
-	inventoryCalls   chan struct{}
+	db                  *sql.DB
+	path                string
+	info                os.FileInfo
+	config              enrollmentstate.Config
+	issuerDER           []byte
+	operationalReads    chan struct{}
+	inventoryCalls      chan struct{}
+	systemMetadataReads chan struct{}
 }
 
 func (Store) String() string               { return "enrollmentstore.Store{contents:redacted}" }
@@ -141,7 +142,7 @@ func Open(path string, config enrollmentstate.Config, issuerDER []byte) (*Store,
 		if info.Size() == 0 {
 			return nil, ErrStorage
 		}
-		candidate := &Store{&storeState{path: absolute, info: info, config: config, issuerDER: bytes.Clone(issuerDER), operationalReads: make(chan struct{}, 1), inventoryCalls: make(chan struct{}, 1)}}
+		candidate := &Store{&storeState{path: absolute, info: info, config: config, issuerDER: bytes.Clone(issuerDER), operationalReads: make(chan struct{}, 1), inventoryCalls: make(chan struct{}, 1), systemMetadataReads: make(chan struct{}, 1)}}
 		if candidate.preflightExisting() != nil {
 			return nil, ErrStorage
 		}
@@ -156,7 +157,7 @@ func Open(path string, config enrollmentstate.Config, issuerDER []byte) (*Store,
 		return nil, ErrStorage
 	}
 	db.SetMaxOpenConns(1)
-	s := &Store{&storeState{db: db, path: absolute, info: info, config: config, issuerDER: bytes.Clone(issuerDER), operationalReads: make(chan struct{}, 1), inventoryCalls: make(chan struct{}, 1)}}
+	s := &Store{&storeState{db: db, path: absolute, info: info, config: config, issuerDER: bytes.Clone(issuerDER), operationalReads: make(chan struct{}, 1), inventoryCalls: make(chan struct{}, 1), systemMetadataReads: make(chan struct{}, 1)}}
 	fail := func() (*Store, error) { db.Close(); return nil, ErrStorage }
 	pragmas := []string{"PRAGMA busy_timeout=5000", "PRAGMA journal_mode=WAL", "PRAGMA synchronous=FULL", "PRAGMA foreign_keys=ON", "PRAGMA trusted_schema=OFF", "PRAGMA max_page_count=49152"}
 	if completeProfile(config.Binding.CollectionProfile) {

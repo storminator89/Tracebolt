@@ -45,6 +45,7 @@ type SystemLastComplete struct {
 	Sockets  *SystemSectionSummary `json:"sockets"`
 }
 type SystemView struct {
+	readState         *systemViewReadState
 	CollectionProfile string                 `json:"collectionProfile"`
 	SchemaVersion     string                 `json:"schemaVersion"`
 	DeviceID          string                 `json:"deviceId"`
@@ -100,7 +101,7 @@ func systemIdentityStatus(snap enrollmentstate.Snapshot, now time.Time) string {
 // silently treats corruption as no data, or changes collection timestamps.
 func (s *Store) SystemView(ctx context.Context, device string, now time.Time) (SystemView, error) {
 	zero := SystemView{}
-	release, e := s.inventoryAdmission(ctx)
+	release, e := s.systemReadAdmission(ctx)
 	if e != nil {
 		return zero, e
 	}
@@ -111,10 +112,18 @@ func (s *Store) SystemView(ctx context.Context, device string, now time.Time) (S
 	now = now.UTC()
 	out := SystemView{CollectionProfile: s.config.Binding.CollectionProfile, SchemaVersion: "tracebolt.system-inventory-view.v1", DeviceID: device, Status: "unknown", ServerNow: now, MaxAgeSeconds: int64(SystemMaxAge / time.Second)}
 	e = s.transact(ctx, func(t *transaction) error {
+		// Queueing for admission or SQL must not preserve pre-wait authority age.
+		var err error
+		now, err = systemViewNow(ctx, now)
+		if err != nil {
+			return err
+		}
+		out.ServerNow = now
 		snap, e := systemDevice(t, device)
 		if e != nil {
 			return e
 		}
+		out.readState = &systemViewReadState{checkedAt: now, certificateNotAfter: snap.Intent.NotAfter}
 		out.Status = systemIdentityStatus(snap, now)
 		r, ok := t.system[snap.InvitationID]
 		if !ok {
@@ -129,6 +138,7 @@ func (s *Store) SystemView(ctx context.Context, device string, now time.Time) (S
 		if _, e = s.systemAuthority(t, snap.InvitationID, snap.Issuance.CertificateHash, now); e != nil {
 			return e
 		}
+		out.readState.observationAt = r.Receipt.CollectedAt
 		out.Status = systemAge(r.Receipt.CollectedAt, now)
 		if r.Latest != nil && out.Status != "expired" {
 			m := r.Latest
@@ -155,7 +165,14 @@ func (s *Store) SystemView(ctx context.Context, device string, now time.Time) (S
 	if e != nil {
 		return zero, e
 	}
-	return out, nil
+	if err := ctx.Err(); err != nil {
+		return zero, err
+	}
+	now, e = systemViewNow(ctx, now)
+	if e != nil {
+		return zero, e
+	}
+	return out.RecheckAt(now)
 }
 
 type SystemPageRequest struct {

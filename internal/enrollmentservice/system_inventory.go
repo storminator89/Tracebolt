@@ -10,7 +10,7 @@ func (s *Service) SystemInventoryView(ctx context.Context, id string, now time.T
 	if s == nil || s.store == nil {
 		return enrollmentstore.SystemView{}, ErrConfiguration
 	}
-	return s.store.SystemView(ctx, id, now)
+	return s.store.SystemView(enrollmentstore.WithSystemViewClock(ctx, s.Now), id, now)
 }
 func (s *Service) SystemInventoryPage(ctx context.Context, id string, q enrollmentstore.SystemPageRequest, now time.Time) (enrollmentstore.SystemPageResult, error) {
 	if s == nil || s.store == nil {

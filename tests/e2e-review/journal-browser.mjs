@@ -23,20 +23,20 @@ const apiSmoke=process.argv.includes('--api-smoke');
 const results=[],screenshots=[];
 let browser,server,context,pipe,waiting,devices,currentTest='',stage='setup',runtimeErrorCount=0,fatal=false;
 const mark=value=>{stage=value;};
-let failureSnapshot=null,failureEvents=null;
+let failureSnapshot=null,failureEvents=null,queryStep='not started',queryField=null,queryNumber=0;
 async function boundedFailure(caught){
- const kind=['TimeoutError','AssertionError','Error'].includes(caught?.name)?caught.name:'other';
- if(!failureSnapshot)return JSON.stringify({kind});
+ const kind=['TimeoutError','AssertionError','Error','TypeError','SyntaxError','AbortError'].includes(caught?.name)?caught.name:'other',query={number:queryNumber,step:queryStep,field:queryField};
+ if(!failureSnapshot)return JSON.stringify({kind,query});
  const events=failureEvents?failureEvents():[];
- let timer;try{const detail=await Promise.race([failureSnapshot(),new Promise(resolve=>{timer=setTimeout(()=>resolve({unavailable:true}),1000);})]);return JSON.stringify({kind,events,...detail});}catch{return JSON.stringify({kind,events,unavailable:true});}finally{clearTimeout(timer);}
+ let timer;try{const detail=await Promise.race([failureSnapshot(),new Promise(resolve=>{timer=setTimeout(()=>resolve({unavailable:true}),1000);})]);return JSON.stringify({kind,query,events,...detail});}catch{return JSON.stringify({kind,query,events,unavailable:true});}finally{clearTimeout(timer);}
 }
 // Fixed route categories/statuses and DOM booleans only; no URLs, IDs, bodies,
 // input values, exception messages or response text enter the failure report.
 function observeFailure(page,kind){
  const events=[];
- const resource=url=>{const pathname=new URL(url).pathname;if(pathname==='/api/auth/session')return'auth';const prefix=`/api/devices/${devices.alpha}`;if(kind==='journal'&&pathname===prefix+'/journal')return'journal-status';if(kind==='journal'&&pathname===prefix+'/journal/create')return'journal-create';if(kind==='journal'&&pathname===prefix+'/journal/cancel')return'journal-cancel';if(kind==='journal'&&pathname===prefix+'/journal/query')return'journal-query';if(kind==='packages'&&pathname===prefix+'/inventory/packages')return'package-status';if(kind==='packages'&&pathname===prefix+'/inventory/packages/query')return'package-query';return null;};
- const record=(request,phase,status=0)=>{const route=resource(request.url());if(route&&events.length<32&&['GET','POST'].includes(request.method())&&Number.isInteger(status)&&status>=0&&status<=599)events.push({resource:route,method:request.method(),phase,status});};
- page.on('request',request=>record(request,'request'));page.on('response',response=>record(response.request(),'response',response.status()));page.on('requestfailed',request=>record(request,'failed'));
+ const resource=url=>{const pathname=new URL(url).pathname;if(pathname==='/api/auth/session')return'auth';if(pathname==='/api/session')return'csrf';const prefix=`/api/devices/${devices.alpha}`;if(kind==='journal'&&pathname===prefix+'/journal')return'journal-status';if(kind==='journal'&&pathname===prefix+'/journal/create')return'journal-create';if(kind==='journal'&&pathname===prefix+'/journal/cancel')return'journal-cancel';if(kind==='journal'&&pathname===prefix+'/journal/query')return'journal-query';if(kind==='packages'&&pathname===prefix+'/inventory/packages')return'package-status';if(kind==='packages'&&pathname===prefix+'/inventory/packages/query')return'package-query';return null;};
+ const record=(request,phase,status=0)=>{const route=resource(request.url());if(route&&['GET','POST'].includes(request.method())&&Number.isInteger(status)&&status>=0&&status<=599){if(events.length===32)events.shift();events.push({resource:route,method:request.method(),phase,status});}};
+ page.on('request',request=>record(request,'request'));page.on('response',response=>record(response.request(),'response',response.status()));page.on('requestfinished',request=>record(request,'finished'));page.on('requestfailed',request=>record(request,request.failure()?.errorText==='net::ERR_ABORTED'?'aborted':'failed'));
  failureEvents=()=>events.slice();
  failureSnapshot=async()=>({view:await page.evaluate(kind=>{
   const section=document.querySelector(kind==='journal'?'.journal-panel':'.complete-packages');
@@ -80,7 +80,7 @@ async function start(){
 }
 async function pageAt({mobile=false}={}){
  context=await browser.newContext({viewport:mobile?{width:390,height:844}:{width:1440,height:1000},locale:'en-GB'});
- const page=await context.newPage();page.on('pageerror',()=>runtimeErrorCount++);
+ const page=await context.newPage();observeFailure(page,'journal');page.on('pageerror',()=>runtimeErrorCount++);
  mark('open signed-out journal fixture');await page.goto(base+'/#/devices');
  mark('sign in to journal fixture');await page.getByLabel('Operator password',{exact:true}).fill(password);
  await page.getByRole('button',{name:'Sign in',exact:true}).click();
@@ -138,13 +138,14 @@ function counts(page){
  }});return tally;
 }
 async function queryAction(page,action,expected){
+ queryNumber=Math.min(100,queryNumber+1);queryField=null;queryStep='perform action';
  const reply=page.waitForResponse(r=>r.url()===base+endpoint('alpha','query')&&r.request().method()==='POST');
- await action();const response=await reply;expect(response.status()).toBe(200);const body=await response.json();
- for(const [key,value]of Object.entries(expected))expect(body[key]).toEqual(value);
- await expect(rows(page)).toHaveCount(body.rows.length);await settled(page);return body;
+ await action();queryStep='await response headers';const response=await reply;queryStep='require HTTP200';expect(response.status()).toBe(200);queryStep='read response JSON';const body=await response.json();
+ queryStep='assert response fields';for(const [key,value]of Object.entries(expected)){queryField=['offset','nextOffset','totalCapturedRows','matchedRows','snapshotDigest','identity','expiresAt','observedAt','search','searchScope'].includes(key)?key:'other';expect(body[key]).toEqual(value);}
+ queryField=null;queryStep='wait for rendered row count';await expect(rows(page)).toHaveCount(body.rows.length);queryStep='wait for settled view';await settled(page);queryStep='query action complete';return body;
 }
 async function check(name,run){
- failureSnapshot=null;failureEvents=null;currentTest=name;mark('fixture setup');const began=Date.now();
+ failureSnapshot=null;failureEvents=null;queryStep='not started';queryField=null;queryNumber=0;currentTest=name;mark('fixture setup');const began=Date.now();
  try{await start();await run();results.push({name,status:'PASS',durationMs:Date.now()-began});console.log(`PASS ${name}`);}
  catch(caught){results.push({name,status:'FAIL',stage,durationMs:Date.now()-began,error:'Bounded assertion failure; fixed diagnostics: '+await boundedFailure(caught)});console.log(`FAIL ${name} (${stage})`);}
  finally{if(context)await context.close();context=null;await stop();}
@@ -174,7 +175,9 @@ try{
   const accepted=await call(endpoint());expect(validJournalView(accepted,devices.alpha)).toBe(true);expect(accepted.request.state).toBe('accepted');
   const pageInput={identity:accepted.request.description.identity,snapshotDigest:accepted.request.receipt.resultDigest,search:'',offset:0,limit:100};
   const page=await call(endpoint('alpha','query'),pageInput);expect(validJournalPage(page,accepted,'',0)).toBe(true);expect(page.rows).toHaveLength(100);expect(page.totalCapturedRows).toBe(205);expect(page.nextOffset).toBe(100);expect(page.snapshotDigest).toBe(proof.snapshotDigest);
+  for(const [offset,length,next]of [[100,100,200],[200,5,null],[100,100,200]]){const paged=await call(endpoint('alpha','query'),{...pageInput,offset});expect(validJournalPage(paged,accepted,'',offset)).toBe(true);expect(paged.rows).toHaveLength(length);expect(paged.nextOffset).toBe(next);expect(paged.identity).toEqual(page.identity);expect(paged.snapshotDigest).toBe(page.snapshotDigest);expect(paged.observedAt).toBe(page.observedAt);expect(paged.expiresAt).toBe(page.expiresAt);}
   const found=await call(endpoint('alpha','query'),{...pageInput,search:'nEeDlE[.*]'});expect(found.rows).toHaveLength(3);expect(found.searchScope).toBe('captured_snapshot_only');expect(found.observedAt).toBe(page.observedAt);
+  const missing=await call(endpoint('alpha','query'),{...pageInput,search:'^does-not-match$'});expect(validJournalPage(missing,accepted,'^does-not-match$',0)).toBe(true);expect(missing.rows).toHaveLength(0);expect(missing.totalCapturedRows).toBe(205);expect(missing.identity).toEqual(page.identity);expect(missing.snapshotDigest).toBe(page.snapshotDigest);expect(missing.observedAt).toBe(page.observedAt);expect(missing.expiresAt).toBe(page.expiresAt);
   mark('cancel clears cache and preserves consumed floor');await call(endpoint('alpha','cancel'),{identity:pageInput.identity});expect((await call(endpoint())).request.state).toBe('canceled');await call(endpoint('alpha','query'),pageInput,409);
   const beta=await call(endpoint('beta'));const betaQuery={...query,end:new Date(beta.serverNow).toISOString(),start:new Date(Date.parse(beta.serverNow)-60000).toISOString()};
   const second=await call(endpoint('beta','create'),{...input,query:betaQuery,acknowledgeLogContent:true,acknowledgePlaintext:true});await control('advance',{seconds:120});await control('deliver',{device:'beta',mode:'partial'});
@@ -189,7 +192,7 @@ try{
   mark('hosted Chromium launch');browser=await chromium.launch(launch);
 
   await check('Explicit content and HTTP acknowledgements gate one lazy journal request and honest pending state',async()=>{
-   const page=await pageAt();observeFailure(page,'journal');const tally=counts(page);let inventoryReads=0,authReads=0;
+   const page=await pageAt();const tally=counts(page);let inventoryReads=0,authReads=0;
    const systemEndpoint=`${base}/api/devices/${devices.alpha}/inventory/system`;
    page.on('request',request=>{if([systemEndpoint,systemEndpoint+'/query'].includes(request.url()))inventoryReads++;if(request.url()===base+'/api/auth/session'&&request.method()==='GET')authReads++;});
    await page.goto(`${base}/#/devices/${devices.alpha}`);await expect(page.getByRole('region',{name:'Device QA synthetic journal alpha',exact:true})).toBeVisible();
@@ -244,12 +247,12 @@ try{
   await check('Literal case-insensitive captured-snapshot search and hundred-row pages preserve digest and original times',async()=>{
    const page=await pageAt();const tally=counts(page);await open(page);await capture(page);const proof=await deliver(page);
    const status=await get(endpoint());const identity=status.request.description.identity,digest=status.request.receipt.resultDigest;
-   mark('pagination binds one original snapshot');const second=await queryAction(page,()=>page.getByRole('button',{name:'Next page',exact:true}).click(),{offset:100,nextOffset:200,totalCapturedRows:205,matchedRows:205,snapshotDigest:digest,identity,expiresAt:proof.expiresAt});
-   const third=await queryAction(page,()=>page.getByRole('button',{name:'Next page',exact:true}).click(),{offset:200,nextOffset:null,totalCapturedRows:205,matchedRows:205,snapshotDigest:digest,identity,observedAt:second.observedAt,expiresAt:second.expiresAt});expect(third.rows).toHaveLength(5);await expect(page.getByRole('button',{name:'Next page',exact:true})).toBeDisabled();
-   await queryAction(page,()=>page.getByRole('button',{name:'Previous page',exact:true}).click(),{offset:100,snapshotDigest:digest,observedAt:second.observedAt,expiresAt:second.expiresAt});
+   mark('second page binds one original snapshot');const second=await queryAction(page,()=>page.getByRole('button',{name:'Next page',exact:true}).click(),{offset:100,nextOffset:200,totalCapturedRows:205,matchedRows:205,snapshotDigest:digest,identity,expiresAt:proof.expiresAt});
+   mark('third page binds original snapshot and times');const third=await queryAction(page,()=>page.getByRole('button',{name:'Next page',exact:true}).click(),{offset:200,nextOffset:null,totalCapturedRows:205,matchedRows:205,snapshotDigest:digest,identity,observedAt:second.observedAt,expiresAt:second.expiresAt});mark('third page contains final five rows');expect(third.rows).toHaveLength(5);mark('final page disables Next page');await expect(page.getByRole('button',{name:'Next page',exact:true})).toBeDisabled();
+   mark('previous page preserves snapshot and times');await queryAction(page,()=>page.getByRole('button',{name:'Previous page',exact:true}).click(),{offset:100,snapshotDigest:digest,observedAt:second.observedAt,expiresAt:second.expiresAt});
    mark('literal metacharacters across the captured snapshot');await page.getByLabel('Literal text in captured messages',{exact:true}).fill('nEeDlE[.*]');
    const found=await queryAction(page,()=>page.getByRole('button',{name:'Search capture',exact:true}).click(),{search:'nEeDlE[.*]',searchScope:'captured_snapshot_only',offset:0,matchedRows:3,totalCapturedRows:205,snapshotDigest:digest,identity,observedAt:second.observedAt,expiresAt:second.expiresAt});expect(found.rows.every(row=>row.message.toLowerCase().includes('needle[.*]'))).toBe(true);await expect(page.locator('.journal-message mark')).toHaveCount(3);await expect(page.getByRole('button',{name:'Previous page',exact:true})).toBeDisabled();
-   await page.getByLabel('Literal text in captured messages',{exact:true}).fill('^does-not-match$');await queryAction(page,()=>page.getByRole('button',{name:'Search capture',exact:true}).click(),{matchedRows:0,totalCapturedRows:205});await expect(panel(page)).toContainText('No literal matches in this captured snapshot.');expect(tally.create).toBe(1);await clean(page);
+   mark('literal no-match search preserves captured total');await page.getByLabel('Literal text in captured messages',{exact:true}).fill('^does-not-match$');await queryAction(page,()=>page.getByRole('button',{name:'Search capture',exact:true}).click(),{matchedRows:0,totalCapturedRows:205});await expect(panel(page)).toContainText('No literal matches in this captured snapshot.');expect(tally.create).toBe(1);await clean(page);
   });
 
   await check('Cancel clears rows immediately and a lost committed response reconciles without mutation replay',async()=>{

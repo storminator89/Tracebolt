@@ -2,6 +2,12 @@
 
 Meaningful development checkpoints are recorded here. These are prototype milestones, not production releases.
 
+## 2026-10-05 — Bound system metadata waits and trace journal paging failures
+
+- Give system metadata reads one store-global permit and a bounded 750 ms queued wait for the existing inventory admission slot. Preserve the active-operation ceiling, caller cancellation, explicit busy outcomes under sustained contention, and paging/write/maintenance limits. Deterministic contention fixtures cover the previously nonblocking read failure.
+- Recheck trusted time after authority loading, commit and immediately before API output. Certificate expiry and original retention still clear observations, and clock rollback cannot revive them. Original capture/receipt times and sequence remain unchanged.
+- Add fixed, bounded journal query lifecycle/substep diagnostics and stronger pagination/search fixtures without changing response-body, identity/digest/expiry assertions, retries or deadlines. Regenerate the exact-source Go vocabulary; composed hosted acceptance remains pending.
+
 ## 2026-10-05 — Preserve unassessed advisory records and narrow overview diagnostics
 
 - Retain bounded tracker-style fixed-version tokens outside the strict comparison grammar as explicitly unassessed records. Never normalize or compare them or turn them into a warning/fixed conclusion; malformed types, control text, punctuation and oversized fields still reject the snapshot. Show a deduplicated unassessed-record count and coverage gaps even when no warning matches exist.

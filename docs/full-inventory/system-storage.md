@@ -66,6 +66,21 @@ at 24 hours source metadata and rows become invisible. Revoked or expired
 identities expose no source metadata or pages. Neither retries nor read queries
 refresh original collection or receipt time.
 
+Metadata reads have one store-global permit, held for the entire read. That one
+reader may wait up to 750 ms for the existing inventory admission slot, including
+when periodic maintenance is waiting for SQLite. Its queued channel handoff is
+served before newly arriving nonblocking work. No extra SQL transaction is active;
+additional metadata readers and exhausted admission waits still return typed busy.
+Caller cancellation remains cancellation, not retryable busy. Paging, writes and
+maintenance keep their existing admission, cadence and batch bounds.
+
+Trusted service time is reacquired after SQL authority loading, after commit, and
+immediately before API output. Certificate expiry clears source metadata, original
+24-hour retention still applies, and fresh/stale labels age without changing the
+original collection time, receipt or sequence. A clock rollback cannot revive
+expired observations. This short wait avoids requiring a later HTTP retry merely
+to cross a routine maintenance burst; sustained overload remains explicit.
+
 `Store.SystemPage` takes section, explicit generation ID, search, fixed filter,
 limit and cursor as request-body values, never URL values. It scans at most 2,048
 indexed rows and returns at most 100 rows. Stable ordinal ordering persists for

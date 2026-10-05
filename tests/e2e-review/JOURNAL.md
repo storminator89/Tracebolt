@@ -97,6 +97,12 @@ Only these files under `artifacts/review/` are allowlisted for this target:
 Reports contain fixed scenario names, PASS/FAIL, bounded phase names, duration,
 source identity and explicit scope. Errors never contain raw exceptions,
 response bodies, generated device IDs, cookies, fixture state paths or messages.
+Every browser case attaches the same bounded observer. Failures include the
+latest 32 fixed route/method/status/lifecycle events, a capped query ordinal,
+fixed query substep and allowlisted asserted-field name, plus DOM counts and
+booleans. Second, third, previous and no-match pages have distinct phases.
+The HTTP200, response JSON, identity/digest, original-time and rendered-row
+assertions remain unchanged; diagnostics do not retry or suppress failed reads.
 On failure, already completed results and safe captures remain available and the
 runner exits nonzero. The manifest contains each original image's SHA256,
 viewport, locale, source identity and synthetic fixture disclosure. Captures are
