@@ -1,17 +1,17 @@
 # Verified dashboard Linux download
 
-The invitation dialog selects the verified download command for `v0.1.0-pilot.2`.
+The invitation dialog selects the verified download command for `v0.1.0-rc.1`.
 Its source-owned pin names bootstrap publication commit
-`1011c6b8d38cf85d77a342addf0493cbe1f828ca` and SHA-256
-`ba0cf2b8bb25868782bbf9f7a2ae228a982895dd45f865314c6620af30731457`.
+`458fc072a73946032446c0d9e63220ea29cca355` and SHA-256
+`85bd2c01beb3012d5d042d88448d892a270cf527786a73e7a0a67867cac47f61`.
 The binary/source build commit is separately pinned to
-`dbbcfe203c6c39169d9b426991848cd8e736dfd6`.
+`ccac65e7a61f0b5f0e325c3616a93273ab1e8eb1`.
 Older responses without a public bootstrap checksum still offer the existing
 public configuration file only. This command is for a fresh approved installation;
 existing installed agents use the separately reviewed upgrade action and retain
-identity/state. The selected pilot.2 predates Logs and complete process/mount
-overview; it must not be used to downgrade a newer manually built pilot. Those
-features require a newly verified release and pin before the download supplies them.
+identity/state. The selected source includes Logs and the complete process/mount
+extension. Their separate local helper/collection grants remain required; selecting
+this release does not enable new collection scopes or authorize a host upgrade.
 Existing journal-helper grants remain in place on compatible updates; the downloader
 does not provision that helper or repeat its create-only setup.
 
@@ -72,23 +72,25 @@ authenticate that page. Existing disposable HTTP and collection notices remain.
 
 ## Recorded release and activation evidence
 
-- The [binary-source CI](https://github.com/storminator89/Tracebolt/actions/runs/37219826603)
-  completed all 13 jobs, including 98 required browser cases, three retained
-  enrollment skips and native endpoint consent/report/restart/disable checks.
-- The [pilot.2 build and publication](https://github.com/storminator89/Tracebolt/actions/runs/37220222635)
-  succeeded from that exact source. Its [official release](https://github.com/storminator89/Tracebolt/releases/tag/v0.1.0-pilot.2)
-  has ten selected assets; the earlier partial pilot.1 draft is retained.
-- The [independent public-byte check](https://github.com/storminator89/Tracebolt/actions/runs/37222069014)
+- The [rc.1 build and publication](https://github.com/storminator89/Tracebolt/actions/runs/37310793781)
+  succeeded from the exact binary/source commit above. Its
+  [official release](https://github.com/storminator89/Tracebolt/releases/tag/v0.1.0-rc.1)
+  has ten selected assets. Previously published pilot.2 bytes remain unchanged.
+- The [independent public-byte check](https://github.com/storminator89/Tracebolt/actions/runs/37312386248)
   downloaded and verified all ten official assets through the strict downloader,
-  checked keyless provenance and reproduced the exact bootstrap from its source
-  template. It executed no Tracebolt binary or installer.
-- The immutable official bootstrap source URL was read back and matched the exact
-  verified 32,677 bytes and digest before selecting the UI pin.
+  checked exact source/workflow keyless provenance and reproduced the exact
+  bootstrap from its source template. It executed no Tracebolt binary or installer.
+- The [commit-pinned official bootstrap source](https://raw.githubusercontent.com/storminator89/Tracebolt/458fc072a73946032446c0d9e63220ea29cca355/deploy/release/published/v0.1.0-rc.1.py)
+  was read back and matched the exact verified 37,461 bytes and digest before
+  selecting the UI pin.
+- GitHub reports `immutable: false` for this release. The fixed source, manifest,
+  bundle and asset hashes are the verification boundary; platform-level release
+  locking is not claimed.
 
-The activation source passes 832 frontend tests, type checking/build and seven
-inert command-contract tests. Its exact hosted browser check remains required;
-none of these results establishes a download-based host installation, upgrade or
-OS reboot. Those remain separately observed pilot operations.
+The activation change is checked with type checking/build, the command/enrollment
+UI fixtures and nine inert public-command contract tests. Its exact hosted browser
+check remains required; none of these results establishes a download-based host
+installation, upgrade or OS reboot. Those remain separately observed pilot operations.
 
 Future versions must repeat the release/provenance/public-byte checks in
 [the distribution guide](linux-release-distribution.md), publish a separate

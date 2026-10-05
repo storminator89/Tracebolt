@@ -104,3 +104,18 @@ describe('journal parent form integration and trusted time presets', () => {
         setLocale('de', false); const r = resource(); render(ui(r)); fireEvent.click(screen.getByRole('button', { name: '30 Minuten bis zur Referenzzeit' })); expect(screen.getByLabelText('Von (UTC)')).toHaveValue('2026-10-04T11:30'); expect(screen.getByText(/Beobachtete Namen belegen keine lokale Allowlist-Freigabe/)).toBeVisible(); expect(r.create).not.toHaveBeenCalled();
     });
 });
+
+it('uses a valid service handoff only as the initial draft, preserving edits on rerender with no capture or consent', () => {
+    const r = resource(), rendered = render(<JournalContent resource={r} insecureTestMode initialUnit="chosen.service"/>);
+    expect(screen.getByLabelText('Exact service unit')).toHaveValue('chosen.service');
+    for (const checkbox of screen.getAllByRole('checkbox')) expect(checkbox).not.toBeChecked();
+    expect(screen.getByRole('button', { name: 'Capture logs' })).toBeDisabled();
+    fireEvent.change(screen.getByLabelText('Exact service unit'), { target: { value: 'edited.service' } });
+    rendered.rerender(<JournalContent resource={r} insecureTestMode initialUnit="different.service"/>);
+    expect(screen.getByLabelText('Exact service unit')).toHaveValue('edited.service');
+    expect(r.create).not.toHaveBeenCalled(); expect(r.cancelRequest).not.toHaveBeenCalled(); expect(mutateRaw).not.toHaveBeenCalled();
+});
+it.each(['*.service', '../unsafe.service', 'example.socket', '<script>.service'])('rejects unsupported initial log unit %s', initialUnit => {
+    const r = resource(); render(<JournalContent resource={r} insecureTestMode={false} initialUnit={initialUnit}/>);
+    expect(screen.getByLabelText('Exact service unit')).toHaveValue(''); expect(r.create).not.toHaveBeenCalled();
+});

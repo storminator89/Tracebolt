@@ -66,6 +66,25 @@ Only a whitelisted public bootstrap schema can be downloaded, on an explicit cli
 Approval requires the operator to compare both the complete SHA-256 key fingerprint and context-bound comparison value on the device. Confirmation is bound to the displayed key, comparison value and revision. Lifecycle mutations carry that revision, require CSRF, do not automatically replay, and cannot replace newer revoked state with a delayed older response. Cancel/reject/revoke actions are phase-specific and require a visible final confirmation. Issued/activated identity states do not establish online status, ongoing collection, an installed service or device health. Deadlines use the validated server clock plus monotonic elapsed time, with a conservative request-duration allowance; browser wall-clock changes cannot extend an invitation. Expired approval stays disabled and the displayed secret is removed at its deadline. Hiding or leaving the page invalidates the clock anchor; approval waits for a fresh server response and a new comparison after return. The 25-record cap includes retained terminal records.
 
 
+### Device diagnosis navigation
+
+The full-width overview leads with CPU, memory and disk observations. Software and
+certificate summaries share the desktop width and stack on small screens. Complete
+software counts, original collection time, age and status stay visible; generation
+identifiers and retention details expand on request.
+
+For journal-compatible service units, **Open logs** in Services or Health opens the
+existing Logs tab with only the exact-unit draft filled in. It does not create or
+cancel a capture, grant local access, or acknowledge content/plaintext consent.
+Existing captures keep their own service and query labels. Repeatedly selecting
+Logs and refreshing device metadata preserve the current form instance and draft;
+leaving the tab or device discards the handoff.
+
+The hosted journal and v3 browser cases include service handoff/back navigation and
+responsive overview checks. They also capture the invented desktop/mobile device
+overview as `synthetic-v3-device-overview-{desktop,mobile}-en.png`. These are required
+on the final published source; source tests alone do not establish browser acceptance.
+
 ### Operational device inventory candidate
 
 The authenticated device drawer exposes an **Inventory** tab for Linux LAN devices

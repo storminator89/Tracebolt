@@ -44,15 +44,15 @@ export function JournalHighlight({ text, search }: { text: string; search: strin
     while (found >= 0) { nodes.push(text.slice(at, found), <mark key={found}>{text.slice(found, found + needle.length)}</mark>); at = found + needle.length; found = folded.indexOf(needle, at); }
     nodes.push(text.slice(at)); return <>{nodes}</>;
 }
-type JournalPanelProps = { deviceId: string; insecureTestMode: boolean; sessionKey: string | null };
+type JournalPanelProps = { deviceId: string; insecureTestMode: boolean; sessionKey: string | null; initialUnit?: string };
 export function JournalPanel(props: JournalPanelProps) {
     return <JournalSession key={`${props.deviceId}:${props.sessionKey ?? ''}:${props.insecureTestMode}`} {...props}/>;
 }
-function JournalSession({ deviceId, insecureTestMode, sessionKey }: JournalPanelProps) {
-    return <JournalContent resource={useJournal(deviceId, insecureTestMode, sessionKey)} insecureTestMode={insecureTestMode} sessionKey={sessionKey}/>;
+function JournalSession({ deviceId, insecureTestMode, sessionKey, initialUnit }: JournalPanelProps) {
+    return <JournalContent resource={useJournal(deviceId, insecureTestMode, sessionKey)} insecureTestMode={insecureTestMode} sessionKey={sessionKey} initialUnit={initialUnit}/>;
 }
-export function JournalContent({ resource: r, insecureTestMode, sessionKey = null }: { resource: JournalResource; insecureTestMode: boolean; sessionKey?: string | null }) {
-    const [locale] = useLocale(), c = copy[locale], id = useId(), [unit, setUnit] = useState(''), [start, setStart] = useState(''), [end, setEnd] = useState(''), [priority, setPriority] = useState(6), [ack, setAck] = useState(false), [plainAck, setPlainAck] = useState(false), [search, setSearch] = useState(''), [pickerOpen, setPickerOpen] = useState(false), [preset, setPreset] = useState<number | null>(15);
+export function JournalContent({ resource: r, insecureTestMode, sessionKey = null, initialUnit = '' }: { resource: JournalResource; insecureTestMode: boolean; sessionKey?: string | null; initialUnit?: string }) {
+    const [locale] = useLocale(), c = copy[locale], id = useId(), [unit, setUnit] = useState(() => validJournalUnit(initialUnit) ? initialUnit : ''), [start, setStart] = useState(''), [end, setEnd] = useState(''), [priority, setPriority] = useState(6), [ack, setAck] = useState(false), [plainAck, setPlainAck] = useState(false), [search, setSearch] = useState(''), [pickerOpen, setPickerOpen] = useState(false), [preset, setPreset] = useState<number | null>(15);
     const unitInput = useRef<HTMLInputElement>(null), pickerButton = useRef<HTMLButtonElement>(null), focusAfterPicker = useRef<'unit' | 'button' | null>(null);
     const view = r.view, request = view?.request, page = r.page;
     useEffect(() => { setAck(false); setPlainAck(false); setSearch(''); setPickerOpen(false); focusAfterPicker.current = null; }, [r.reset]);

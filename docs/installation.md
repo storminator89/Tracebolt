@@ -19,12 +19,15 @@ Downloads, release verification and artifact checks are internal to that command
 no endpoint Go build, file transfer or manual checksum step is needed. Review the
 supported platform and existing prerequisites first; dependencies are not installed.
 
-**Current release limit:** the dashboard still pins `v0.1.0-pilot.2`, which predates
-Logs and the complete process/mount overview. Do not use it as an upgrade for a
-newer manually built pilot. Those features need a newly verified release and pin;
-until then, retain the exact reviewed-source fallback for the selected revision.
+**Current release:** the dashboard pins `v0.1.0-rc.1`, built from
+`ccac65e7a61f0b5f0e325c3616a93273ab1e8eb1`. Its
+[build/publication](https://github.com/storminator89/Tracebolt/actions/runs/37310793781)
+and [independent public-byte/provenance check](https://github.com/storminator89/Tracebolt/actions/runs/37312386248)
+passed. This source includes Logs and the complete process/mount extension;
+their separate local helper/collection grants remain required. Download-based
+installation, upgrade and actual OS reboot acceptance remain separate host gates.
 The **[manager and background-agent startup guide](http-complete-first-start.md)**
-contains that fresh-v3 source path. Manager startup remains separate. Its fresh
+contains the fresh-v3 reviewed-source path. Manager startup remains separate. Its fresh
 manager/profile/identity must not replace an existing installation or basic/v2 state.
 
 Compatible updates preserve existing identity and explicit collection/helper grants.

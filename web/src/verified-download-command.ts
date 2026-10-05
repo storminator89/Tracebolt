@@ -6,7 +6,7 @@ type BootstrapPublicationPin = Readonly<{ version: string; publicationCommit: st
 // Activation is a reviewed source change after official publication and readback.
 // This is the bootstrap publication commit, NOT the binary/source build commit.
 // Never populate it from API data, manager configuration, environment or storage.
-export const OFFICIAL_LINUX_BOOTSTRAP_PIN: BootstrapPublicationPin | null = { version: 'v0.1.0-pilot.2', publicationCommit: '1011c6b8d38cf85d77a342addf0493cbe1f828ca', bootstrapSHA256: 'ba0cf2b8bb25868782bbf9f7a2ae228a982895dd45f865314c6620af30731457' };
+export const OFFICIAL_LINUX_BOOTSTRAP_PIN: BootstrapPublicationPin | null = { version: 'v0.1.0-rc.1', publicationCommit: '458fc072a73946032446c0d9e63220ea29cca355', bootstrapSHA256: '85bd2c01beb3012d5d042d88448d892a270cf527786a73e7a0a67867cac47f61' };
 
 const shellQuote = (value: string): string => `'${value.replaceAll("'", "'\\''")}'`;
 function validPin(value: unknown): value is BootstrapPublicationPin {

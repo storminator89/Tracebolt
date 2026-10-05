@@ -12,7 +12,7 @@ import './complete-packages.css';
 
 /** Only the selected inventory source is mounted. Switching a tab destroys its
  * private request/cursor state instead of stacking multiple partial previews. */
-export function DeviceInventoryWorkspace({ deviceId, initialSource = 'processes' }: { deviceId: string; initialSource?: 'processes' | 'preview' | 'packages' }) {
+export function DeviceInventoryWorkspace({ deviceId, initialSource = 'processes', onOpenLogs }: { deviceId: string; initialSource?: 'processes' | 'preview' | 'packages'; onOpenLogs?: (unit: string) => void }) {
     const operator = useOperator(), [locale] = useLocale(), [selected, setSelected] = useState<string>(operator?.mode === 'lan' && operator.authenticated ? initialSource : 'preview'), id = useId();
     const authorized = operator?.mode === 'lan' && operator.authenticated;
     useEffect(() => { if (initialSource === 'packages') document.getElementById(`${id}-packages`)?.focus(); }, [id, initialSource]);
@@ -22,7 +22,7 @@ export function DeviceInventoryWorkspace({ deviceId, initialSource = 'processes'
         {authorized && (selected === 'processes' || selected === 'volumes') && <CompleteOverviewPanel deviceId={deviceId} section={selected} sessionKey={operator.expiresAt ?? undefined}/>}
         {authorized && selected === 'packages' && <CompletePackagesPanel deviceId={deviceId} sessionKey={operator.expiresAt ?? undefined} inline/>}
         {authorized && selected === 'updates' && <DeviceUpdatesWorkspace key={`${deviceId}:${operator.expiresAt ?? ''}`} deviceId={deviceId} sessionKey={operator.expiresAt ?? null}/>}
-        {authorized && (selected === 'services' || selected === 'sockets') && <SystemInventoryPanel deviceId={deviceId} section={selected} sessionKey={operator.expiresAt ?? undefined}/>}
+        {authorized && (selected === 'services' || selected === 'sockets') && <SystemInventoryPanel deviceId={deviceId} section={selected} sessionKey={operator.expiresAt ?? undefined} onOpenLogs={onOpenLogs}/>}
     </div></div>;
 }
 

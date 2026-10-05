@@ -5,6 +5,7 @@ import { hasLogoutIntent } from './auth';
 import { t, useLocale } from './i18n';
 import { fullDate } from './utils';
 import { HEALTH_VIEW_BYTES, parseHealthServices, validHealthDeviceId, validHealthView } from './health-types';
+import { validJournalUnit } from './journal-types';
 import { HealthServicePicker } from './health-service-picker';
 import type { HealthKind, HealthView } from './health-types';
 import './health.css';
@@ -123,8 +124,8 @@ function errorText(failure: Failure): string {
         default: return t('Health-Daten konnten nicht gelesen werden. Keine aktuellen Prüfwerte verfügbar.');
     }
 }
-export function HealthPanel({ deviceId, sessionKey = null }: { deviceId: string; sessionKey?: string | null }) {
-    useLocale();
+export function HealthPanel({ deviceId, sessionKey = null, onOpenLogs }: { deviceId: string; sessionKey?: string | null; onOpenLogs?: (unit: string) => void }) {
+    const [locale] = useLocale();
     const resource = useHealth(deviceId, sessionKey), view = resource.view, uid = useId();
     const [minutes, setMinutes] = useState<0 | 15 | 60 | 240>(60), [draft, setDraft] = useState<string[]>([]), [dirty, setDirty] = useState(false);
     const services = parseHealthServices(draft.join('\n')), configured = view?.monitoredServices.join('\n');
@@ -143,6 +144,7 @@ export function HealthPanel({ deviceId, sessionKey = null }: { deviceId: string;
             <h3>{t('Aktuelle Prüfungen')}</h3><ul className="health-checks" aria-label={t('Aktuelle Prüfungen')}>{view.checks.map(check => <li key={check.key}>
                 <div className="health-check-line"><strong>{label(check.kind, check.target)}</strong><span className={`health-state health-state-${check.state}`}>{check.state === 'ok' ? t('Schwelle nicht verletzt') : check.state === 'open' ? t('Warnung offen') : check.state === 'pending' ? t('Bestätigung ausstehend') : t('Unbekannt')}</span></div>
                 <p className="health-note">{check.state !== 'unknown' && check.kind === 'filesystem' && check.value !== null && <>{check.value.toFixed(1)}{t('% belegt · ')}</>}{t('Beobachtet:')} <Time value={check.observedAt}/></p>
+                {check.kind === 'service' && onOpenLogs && validJournalUnit(check.target) && <button type="button" className="text-button service-logs-link" aria-label={`${locale === 'de' ? 'Logs öffnen' : 'Open logs'}: ${check.target}`} onClick={() => onOpenLogs(check.target)}>{locale === 'de' ? 'Logs öffnen' : 'Open logs'}</button>}
             </li>)}</ul>
             <div className="health-controls">
                 <form onSubmit={event => { event.preventDefault(); if (!disabled) void resource.change('maintenance', { minutes }); }}><h3>{t('Wartungsfenster')}</h3>

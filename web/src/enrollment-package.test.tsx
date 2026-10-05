@@ -312,6 +312,13 @@ describe('source-owned verified download command (inert fixtures only)', () => {
   const quoted = command.slice(prefix.length); expect(quoted[0]).toBe("'"); expect(quoted.at(-1)).toBe("'");
   return quoted.slice(1, -1).replaceAll("'\\''", "'");
  };
+ it('selects the independently verified rc.1 bootstrap publication and exact bytes', () => {
+  expect(downloadCommands.OFFICIAL_LINUX_BOOTSTRAP_PIN).toEqual({
+   version: 'v0.1.0-rc.1',
+   publicationCommit: '458fc072a73946032446c0d9e63220ea29cca355',
+   bootstrapSHA256: '85bd2c01beb3012d5d042d88448d892a270cf527786a73e7a0a67867cac47f61',
+  });
+ });
  it('requires a null or strictly valid source pin and ignores ambient or response pins', () => {
   const response = creation(v3), manual = preparedEnrollmentCommand(response.bootstrap, response.snapshot, checksum);
   const pin = downloadCommands.OFFICIAL_LINUX_BOOTSTRAP_PIN;

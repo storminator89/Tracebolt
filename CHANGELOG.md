@@ -2,6 +2,12 @@
 
 Meaningful development checkpoints are recorded here. These are prototype milestones, not production releases.
 
+## 2026-10-05 — Activate verified rc.1 downloads and simplify device diagnosis
+
+- Select the verified `v0.1.0-rc.1` installer through its separate immutable bootstrap publication commit `458fc072a73946032446c0d9e63220ea29cca355`. The existing strict hosted check downloaded all ten assets, verified keyless source/workflow provenance and reproduced the exact bootstrap. Preserve the old release; installed-service, upgrade and OS reboot acceptance remain separate.
+- Put current measurements before detailed identity and generation information, with expandable technical details. Add a service-table shortcut that opens Logs with that service selected while preserving separate content/HTTP confirmations and local permission requirements.
+- Keep repeated tab selection and same-device metadata refresh from resetting the active draft. Add unit and hosted-browser checks for service handoff, interrupted navigation, inert unsupported service names and preserved capture boundaries; final combined hosted acceptance remains required.
+
 ## 2026-10-05 — Prepare independent verification of the published rc.1 release
 
 - Capture the exact public `v0.1.0-rc.1` bootstrap built from `ccac65e7a61f0b5f0e325c3616a93273ab1e8eb1`. Its bytes match the reviewed source template and official release digests; preserve the previous pilot.2 bootstrap and dashboard selection.

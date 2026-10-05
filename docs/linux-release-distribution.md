@@ -1,6 +1,6 @@
 # Linux release distribution candidate
 
-Status: official `v0.1.0-pilot.2` is published and independently verified. The
+Status: official `v0.1.0-rc.1` is published and independently verified. The
 [dashboard pin](dashboard-verified-download.md) selects its immutable bootstrap
 source. Actual download-based host installation, upgrade and OS reboot acceptance
 remain separate pilot operations; arm64 is cross-built only.
@@ -58,11 +58,13 @@ copied outer shell command. Use the reviewed bootstrap's explicit resume flow
 only after inspecting a compatible retained preparation and retaining the exact
 release, public bootstrap and identity.
 
-**Release boundary:** these reusable-bootstrap and native-installer improvements
-require a newly built, independently verified immutable release and a deliberate
-UI pin update. The published pilot.2 bootstrap and binaries are unchanged. The
-current source's first-stage copied wrapper already has the grouped missing-tool
-message and manual prerequisite suggestion; it still downloads pilot.2.
+**Release boundary:** these bootstrap and native-installer improvements are included
+in the independently verified `v0.1.0-rc.1` from source
+`ccac65e7a61f0b5f0e325c3616a93273ab1e8eb1`, now selected by the dashboard pin.
+The published pilot.2 bootstrap and binaries are unchanged. GitHub reports
+`immutable: false` for rc.1; the exact source, manifest, bundle and asset hashes
+remain fixed, without claiming platform-level release locking. This selection
+does not establish download-based installation, upgrade or reboot acceptance.
 
 ## Exact trust chain
 
@@ -202,11 +204,23 @@ Before activation, the authorized publisher must:
    privileged acceptance operations on an unapproved host.
 
 The reusable template remains at `RELEASE_PIN = None`. The separately published
-`deploy/release/published/v0.1.0-pilot.2.py` contains the verified immutable release
-pin; the dashboard names that bootstrap publication commit and digest. There is
-no private-key setup step for this chosen keyless path.
+`deploy/release/published/v0.1.0-rc.1.py` contains the verified fixed release pin;
+the dashboard names bootstrap publication commit
+`458fc072a73946032446c0d9e63220ea29cca355` and the exact bootstrap digest.
+The earlier pilot.2 source is retained unchanged. There is no private-key setup
+step for this chosen keyless path.
 
 ## Verification evidence and limits
+
+The [rc.1 build/publication](https://github.com/storminator89/Tracebolt/actions/runs/37310793781)
+succeeded from the exact source above. The
+[independent public-byte check](https://github.com/storminator89/Tracebolt/actions/runs/37312386248)
+verified all ten assets, exact source/workflow keyless provenance and the bootstrap's
+source reconstruction without executing a Tracebolt program or installer. The
+commit-pinned bootstrap source was independently read back before the UI pin update;
+its exact size/hash and selection are recorded in the
+[dashboard download guide](dashboard-verified-download.md). Host/service, upgrade
+and actual OS reboot acceptance remain separate authorized pilot gates.
 
 Default fixtures cover disabled production pins, read-only preflight, platform
 rejection, root/terminal boundaries, strict manifest/asset validation, tampering,

@@ -6,3 +6,5 @@
 .software-historical summary { cursor: pointer; font-weight: 600; }
 .software-historical p { margin-top: 10px; }
 .software-overview > .button { margin-top: 12px; }
+.software-generation-details { margin-top: 10px; border-top: 1px solid var(--line); padding-top: 10px; }
+.software-generation-details > summary { cursor: pointer; font-size: 12px; color: var(--secondary); }

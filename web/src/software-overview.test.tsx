@@ -59,6 +59,8 @@ describe('complete software overview', () => {
         render(summary()); await waitFor(() => expect(total()).toHaveTextContent('1,472'));
         expect(screen.getByText('Observation age (minutes)').nextElementSibling).toHaveTextContent('60');
         expect(screen.getByText('2026-10-04T00:00:00Z')).toBeVisible();
+        expect(screen.getByText(view.complete!.binding.generationId)).not.toBeVisible();
+        fireEvent.click(screen.getByText('Generation details', { selector: 'summary' }));
         expect(screen.getByText(view.complete!.binding.generationId)).toBeVisible();
         expect(screen.getByText(`Transfer ${state}`)).toBeVisible(); expect(screen.getByText('128 / 2,000')).toBeVisible();
         expect(screen.getByText('Latest collection attempt failed')).toBeVisible(); expect(mutateRaw).not.toHaveBeenCalled();

@@ -49,6 +49,10 @@ describe('dedicated device page', () => {
  it('replaces inventory with a full-width page, compact identity/status and collapsed technical details', async () => {
   const page = await open(); expect(screen.getByRole('main')).toContainElement(page);
   expect(page).toHaveClass('device-page'); expect(screen.getByRole('main')).toHaveClass('device-main');
+  const metrics = page.querySelector('.device-metrics')!, summaries = page.querySelector('.device-overview-summary')!;
+  expect(metrics.nextElementSibling).toBe(summaries);
+  expect(summaries.querySelector('.software-overview')).not.toBeNull(); expect(summaries.querySelector('.agent-certificate')).not.toBeNull();
+  expect(summaries.nextElementSibling).toHaveClass('endpoint-identity');
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument(); expect(document.body.style.overflow).not.toBe('hidden');
   expect(within(page).getByRole('heading', { name: 'Synthetic Linux fixture', level: 1 })).toBeVisible();
   expect(within(page).getByText('Not assessed', { selector: '.status' })).toBeVisible();

@@ -237,6 +237,32 @@ try{
    await held(page,'**'+endpoint('alpha','create'),async gate=>{mark('single consented creation waits for exact committed response');await submit.click();await expect.poll(gate.arrived).toBe(1);expect(gate.statuses()).toEqual([200]);await expect(submit).toBeDisabled();expect(tally.create).toBe(1);await expect(rows(page)).toHaveCount(0);gate.release();await expect(state(page)).toHaveText('Pending');await settled(page);});
    await expect(submit).toBeDisabled();await expect(panel(page)).toContainText('No content is available yet');await expect(panel(page)).not.toContainText('Complete coverage');
    const current=await get(endpoint());expect(current.request.state).toBe('pending');expect(current.expectedFloor).toBe('1');expect(current.contentStatus).toBe('unavailable');expect(tally.create).toBe(1);expect(current.request.description.query).toEqual({unit:'invented.service',start:chosenStart.replace('.000Z','Z'),end:chosenEnd.replace('.000Z','Z'),maxPriority:4});expect(tally.cancel).toBe(0);await clean(page);
+   mark('service table opens Logs without creating or canceling a capture');
+   await page.getByRole('tab',{name:'Inventory',exact:true}).click();
+   await page.getByRole('tablist',{name:'Inventory source'}).getByRole('tab',{name:'Services',exact:true}).click();
+   await expect(page.locator('.system-inventory tbody tr')).toHaveCount(3);
+   await expect(page.getByRole('button',{name:'Open logs: invented:unsupported.service',exact:true})).toHaveCount(0);
+   await page.getByRole('button',{name:'Open logs: invented-backup.service',exact:true}).click();
+   await expect(page.getByRole('tab',{name:'Logs',exact:true})).toBeFocused();await settled(page);
+   await expect(unit).toHaveValue('invented-backup.service');await expect(state(page)).toHaveText('Pending');
+   await expect(page.getByRole('checkbox',{name:/^I understand that log messages/})).not.toBeChecked();
+   await expect(page.getByRole('checkbox',{name:/^I also accept that this HTTP test/})).not.toBeChecked();
+   expect(tally.create).toBe(1);expect(tally.cancel).toBe(0);expect(tally.query).toBe(0);
+   mark('repeated Logs selection and metadata refresh preserve the service draft');
+   await unit.fill('draft.service');const actions=()=>({create:tally.create,cancel:tally.cancel,query:tally.query}),beforeRepeated=actions();
+   await page.getByRole('tab',{name:'Logs',exact:true}).click();await page.getByRole('tab',{name:'Logs',exact:true}).click();
+   await expect(unit).toHaveValue('draft.service');expect(actions()).toEqual(beforeRepeated);
+   await unit.evaluate(el=>{el.dataset.diagnosisProbe='same';});
+   const metadata=page.waitForResponse(response=>response.url()===`${base}/api/devices/${devices.alpha}`&&response.request().method()==='GET');
+   await page.getByRole('button',{name:'Refresh device metadata',exact:true}).click();expect((await metadata).status()).toBe(200);
+   await expect(page.getByRole('button',{name:'Refresh device metadata',exact:true})).toBeEnabled();
+   await expect(unit).toHaveValue('draft.service');await expect(unit).toHaveAttribute('data-diagnosis-probe','same');expect(actions()).toEqual(beforeRepeated);
+   mark('Back and browser history discard the service handoff');
+   await page.getByRole('button',{name:'Back to devices',exact:true}).click();await expect(page).toHaveURL(base+'/#/devices');await expect(panel(page)).toHaveCount(0);
+   await page.goBack();await expect(page.getByRole('tab',{name:'Overview',exact:true})).toHaveAttribute('aria-selected','true');
+   await page.getByRole('tab',{name:'Logs',exact:true}).click();await settled(page);await expect(unit).toHaveValue('');
+   expect(tally.create).toBe(1);expect(tally.cancel).toBe(0);await clean(page);
+
   });
 
   await check('Complete and partial invented messages render inertly with honest English and German mobile coverage',async()=>{

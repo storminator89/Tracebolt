@@ -10,13 +10,13 @@ import './software-overview.css';
 const copy = {
     en: {
         title: 'Software · complete dpkg inventory', rows: 'Complete dpkg rows', incomplete: 'Incomplete rows',
-        open: 'Open Packages', refresh: 'Refresh software overview', historical: 'Historical generation details',
+        open: 'Open Packages', refresh: 'Refresh software overview', historical: 'Historical generation details', details: 'Generation details',
         unavailable: 'No currently available complete generation. A bounded sample or declared transfer count is not a complete software total.',
         scope: 'Installed and incomplete dpkg rows in the agent-visible namespace. Snap, Flatpak and other software sources are not included.',
     },
     de: {
         title: 'Software · vollständiges dpkg-Inventar', rows: 'Vollständige dpkg-Zeilen', incomplete: 'Unvollständige Zeilen',
-        open: 'Pakete öffnen', refresh: 'Softwareübersicht aktualisieren', historical: 'Historische Generationsdetails',
+        open: 'Pakete öffnen', refresh: 'Softwareübersicht aktualisieren', historical: 'Historische Generationsdetails', details: 'Generationsdetails',
         unavailable: 'Derzeit keine vollständige Generation verfügbar. Eine begrenzte Stichprobe oder deklarierte Übertragungszahl ist keine vollständige Softwareanzahl.',
         scope: 'Installierte und unvollständige dpkg-Einträge im für den Agent sichtbaren Namensraum. Snap, Flatpak und andere Softwarequellen sind nicht enthalten.',
     },
@@ -40,13 +40,13 @@ function SoftwareOverviewSession({ deviceId, onOpenPackages }: { deviceId: strin
     const field = (label: string, value: string) => <div><dt>{label}</dt><dd>{value}</dd></div>;
     const generationFacts = generation && view && <>
         <dl className="package-facts">
-            {field(facts.generation, generation.binding.generationId)}
-            {field(facts.sequence, generation.binding.sequence)}
             {field(facts.collected, generation.manifest.collectedAt)}
             {Number.isFinite(resource.elapsed) && field(facts.age, number(Math.floor(Math.max(0, inventoryAge(view.serverNow, generation.manifest.collectedAt) + resource.elapsed) / 60000)))}
-            {field(facts.retained, generation.retainedUntil)}
         </dl>
-        <p className="package-note">{facts.retention}</p>
+        <details className="software-generation-details"><summary>{labels.details}</summary>
+            <dl className="package-facts">{field(facts.generation, generation.binding.generationId)}{field(facts.sequence, generation.binding.sequence)}{field(facts.retained, generation.retainedUntil)}</dl>
+            <p className="package-note">{facts.retention}</p>
+        </details>
     </>;
     return <section className="software-overview package-observations" aria-labelledby={id} aria-busy={resource.loading}>
         <header className="package-heading"><h2 id={id}><Boxes size={18}/>{labels.title}</h2><button className="button small" type="button" disabled={resource.loading || resource.error === 'session'} onClick={resource.refresh}><RefreshCw size={14}/>{labels.refresh}</button></header>
