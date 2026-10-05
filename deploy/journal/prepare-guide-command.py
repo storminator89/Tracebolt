@@ -28,8 +28,10 @@ if sys.platform!="linux" or os.getuid()!=0 or os.geteuid()!=0:
     raise SystemExit("Run this reviewed command deliberately in a root terminal on the intended Linux endpoint. No automatic privilege escalation is performed.")
 require(len(sys.argv)==6)
 try:
-    with open("/dev/tty","r+") as tty:
-        if not tty.isatty(): raise OSError()
+    tty_fd=os.open("/dev/tty",os.O_RDWR|os.O_NOCTTY|os.O_CLOEXEC)
+    try:
+        if not os.isatty(tty_fd): raise OSError()
+    finally: os.close(tty_fd)
 except OSError:
     raise SystemExit("A local interactive root terminal is required before any source download or staging.") from None
 rev,gh,gs,mh,ms=sys.argv[1:]

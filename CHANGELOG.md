@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-10-05 — Fix journal guide use of a real controlling terminal
+
+- Open the controlling terminal without a seek requirement in the download bootstrap, guide check and explicit confirmation path, so genuine Linux root terminals are accepted.
+- Keep root, TTY, immutable source, size/hash and exact confirmation guards; add controlling-PTY regressions. No grant or service action follows from downloading the corrected source.
+
 ## 2026-10-05 — Require explicit native IPC and service-action browser evidence
 
 - Add a required Linux gate for thirteen exact Unix peer, response-writer and inherited-listener test events; skipped, failed or missing evidence cannot pass.

@@ -4,6 +4,11 @@ import importlib.util
 import io
 import json
 import os
+import pty
+import select
+import signal
+import sys
+import time
 from pathlib import Path
 import shlex
 import stat
@@ -280,15 +285,25 @@ class GuideTests(unittest.TestCase):
         self.assertEqual(f.actions, [])
         f.source_hashes = original
 
-    def test_terminal_answer_is_exact_once(self):
-        class TTY(io.StringIO):
-            def isatty(self):
-                return True
-            def write(self, value):
-                return len(value)
-        for text, expected in (("GRANT ALL SYSTEM SERVICES\n", True), ("yes\n", False), ("GRANT ALL SYSTEM SERVICES", False)):
-            with self.subTest(text=text), mock.patch("builtins.open", return_value=TTY(text)):
+    def test_terminal_answer_is_exact_once_and_descriptor_closed(self):
+        for text, expected in ((b"GRANT ALL SYSTEM SERVICES\n", True), (b"yes\n", False), (b"GRANT ALL SYSTEM SERVICES", False), (b"x" * 128, False)):
+            data = io.BytesIO(text)
+            with self.subTest(text=text), mock.patch.object(g.os, "open", return_value=99) as opened, \
+                 mock.patch.object(g.os, "isatty", return_value=True), \
+                 mock.patch.object(g.os, "write", side_effect=lambda fd, value: min(3, len(value))), \
+                 mock.patch.object(g.os, "read", side_effect=lambda fd, size: data.read(size)), \
+                 mock.patch.object(g.os, "close") as closed:
                 self.assertEqual(g.terminal_confirm("GRANT ALL SYSTEM SERVICES"), expected)
+                opened.assert_called_once_with("/dev/tty", os.O_RDWR | os.O_NOCTTY | os.O_CLOEXEC)
+                closed.assert_called_once_with(99)
+
+    def test_non_terminal_descriptor_rejected_and_closed(self):
+        with mock.patch.object(g.os, "open", return_value=99), \
+             mock.patch.object(g.os, "isatty", return_value=False), mock.patch.object(g.os, "close") as closed:
+            with self.assertRaisesRegex(g.Rejected, "local-terminal-required"):
+                g.require_terminal()
+            closed.assert_called_once_with(99)
+
 
     def test_main_output_failure_retains_returned_commit(self):
         sources = Sources()
@@ -341,11 +356,13 @@ class BootstrapFixture:
         self.remote = dict(self.sources.remote, **self.sources.files)
         self.put("/", stat.S_IFDIR | 0o755)
         self.put("/root", stat.S_IFDIR | 0o700)
+        self.put("/dev/tty", stat.S_IFCHR | 0o600)
         self.os = types.SimpleNamespace(**{key: getattr(os, key) for key in
-            ("O_RDONLY", "O_DIRECTORY", "O_NOFOLLOW", "O_CLOEXEC", "O_NONBLOCK", "O_WRONLY", "O_CREAT", "O_EXCL")})
+            ("O_RDONLY", "O_RDWR", "O_NOCTTY", "O_DIRECTORY", "O_NOFOLLOW", "O_CLOEXEC", "O_NONBLOCK", "O_WRONLY", "O_CREAT", "O_EXCL")})
         for method in ("open", "mkdir", "fstat", "stat", "lstat", "fchown", "fchmod", "fsync", "listdir", "read", "write", "close", "execv"):
             setattr(self.os, method, getattr(self, method))
         self.os.getuid = self.os.geteuid = lambda: 0
+        self.os.isatty = lambda fd: self.handles[fd][0] == "/dev/tty"
         request = types.SimpleNamespace(HTTPRedirectHandler=object, ProxyHandler=lambda *args: None,
             HTTPSHandler=lambda **kwargs: None, build_opener=lambda *args: types.SimpleNamespace(open=self.download),
             Request=lambda url, **kwargs: url)
@@ -547,11 +564,83 @@ class GeneratorTests(unittest.TestCase):
     def test_bootstrap_no_tty_stops_before_filesystem_and_network(self):
         with mock.patch("sys.argv", ["bootstrap", REVISION, "b" * 64, "20", "c" * 64, "30"]), \
              mock.patch("os.getuid", return_value=0), mock.patch("os.geteuid", return_value=0), \
-             mock.patch("builtins.open", side_effect=OSError("no local terminal")), \
-             mock.patch("os.open", side_effect=AssertionError("must not open host files")), \
+             mock.patch("os.open", side_effect=OSError("no local terminal")) as opened, \
              mock.patch("urllib.request.build_opener", side_effect=AssertionError("must not contact network")):
             with self.assertRaisesRegex(SystemExit, "local interactive root terminal"):
                 exec(compile(c.BOOTSTRAP, "inert-bootstrap-test", "exec"), {})
+            opened.assert_called_once_with("/dev/tty", os.O_RDWR | os.O_NOCTTY | os.O_CLOEXEC)
+
+
+@unittest.skipUnless(sys.platform == "linux", "Linux controlling terminal regression")
+class RealTerminalTests(unittest.TestCase):
+    def test_real_controlling_pty_bootstrap_guard_and_exact_confirmation(self):
+        # Only terminal helpers execute. The full bootstrap is stopped at its
+        # first filesystem access after the terminal check, before any staging
+        # or network. No UID change or actual root privilege is required.
+        for phrase, answer, expected in (("GRANT ALL SYSTEM SERVICES", b"GRANT ALL SYSTEM SERVICES\n", True),
+                                         ("GRANT ALL SYSTEM SERVICES OVER HTTP", b"GRANT ALL SYSTEM SERVICES OVER HTTP\n", True),
+                                         ("GRANT ALL SYSTEM SERVICES", b"\n", False),
+                                         ("GRANT ALL SYSTEM SERVICES", b"yes\n", False)):
+            with self.subTest(answer=answer):
+                pid, master = pty.fork()
+                if pid == 0:
+                    try:
+                        self.assertTrue(os.isatty(0))
+                        # This is the real failure mode that StringIO missed.
+                        with self.assertRaises(io.UnsupportedOperation):
+                            with open("/dev/tty", "r+"):
+                                pass
+                        g.require_terminal()
+                        original_open = os.open
+                        class GuardPassed(Exception):
+                            pass
+                        def stop_before_files(path, *args, **kwargs):
+                            if path == "/dev/tty":
+                                return original_open(path, *args, **kwargs)
+                            if path == "/":
+                                raise GuardPassed()
+                            raise AssertionError("unexpected filesystem access")
+                        with mock.patch("sys.argv", ["bootstrap", REVISION, "b" * 64, "20", "c" * 64, "30"]), \
+                             mock.patch("os.getuid", return_value=0), mock.patch("os.geteuid", return_value=0), \
+                             mock.patch("os.open", side_effect=stop_before_files), \
+                             mock.patch("urllib.request.build_opener", side_effect=AssertionError("network forbidden")):
+                            with self.assertRaises(GuardPassed):
+                                exec(compile(c.BOOTSTRAP, "real-pty-bootstrap", "exec"), {})
+                        print("GUARDS_PASSED", flush=True)
+                        actual = g.terminal_confirm(phrase)
+                        print("RESULT=" + str(actual), flush=True)
+                        os._exit(0 if actual is expected else 2)
+                    except BaseException as exc:
+                        print("CHILD_ERROR=" + repr(exc), flush=True)
+                        os._exit(3)
+                output = bytearray()
+                status = None
+                try:
+                    deadline = time.monotonic() + 5
+                    sent = False
+                    while time.monotonic() < deadline:
+                        if select.select([master], [], [], 0.05)[0]:
+                            try:
+                                chunk = os.read(master, 8192)
+                            except OSError:
+                                chunk = b""
+                            output.extend(chunk)
+                            if not sent and b"to approve, or press Enter to cancel: " in output:
+                                os.write(master, answer)
+                                sent = True
+                        done, value = os.waitpid(pid, os.WNOHANG)
+                        if done:
+                            status = value
+                            break
+                    self.assertIsNotNone(status, output.decode(errors="replace"))
+                    self.assertEqual(os.waitstatus_to_exitcode(status), 0, output.decode(errors="replace"))
+                    self.assertIn(b"GUARDS_PASSED", output)
+                    self.assertTrue(sent)
+                finally:
+                    if status is None:
+                        os.kill(pid, signal.SIGKILL)
+                        os.waitpid(pid, 0)
+                    os.close(master)
 
 
 if __name__ == "__main__":

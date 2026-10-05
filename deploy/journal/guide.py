@@ -333,21 +333,43 @@ def run(a, s, e, templates, revision, probe, confirm, emit, download=fetch):
     return a.apply(s, e, [], templates, plan_digest, True, facts["profile"] == "http-test", all_system_services=True)
 
 
+@contextlib.contextmanager
+def terminal_descriptor():
+    # Buffered text update mode ("r+") requires a seekable stream. A terminal
+    # is not seekable; keep its checked descriptor unbuffered in both directions.
+    fd = None
+    try:
+        fd = os.open("/dev/tty", os.O_RDWR | os.O_NOCTTY | os.O_CLOEXEC)
+        require(os.isatty(fd), "local-terminal-required")
+        yield fd
+    except OSError as exc:
+        raise Rejected("local-terminal-required") from exc
+    finally:
+        if fd is not None:
+            os.close(fd)
+
+
 def terminal_confirm(phrase):
-    with open("/dev/tty", "r+", encoding="utf-8", errors="strict") as tty:
-        require(tty.isatty(), "local-terminal-required")
-        tty.write("Type " + phrase + " to approve, or press Enter to cancel: ")
-        tty.flush()
-        answer = tty.readline(128)
-        return answer == phrase + "\n"
+    with terminal_descriptor() as fd:
+        prompt = ("Type " + phrase + " to approve, or press Enter to cancel: ").encode("utf-8")
+        while prompt:
+            written = os.write(fd, prompt)
+            require(written > 0, "terminal-write-failed")
+            prompt = prompt[written:]
+        answer = bytearray()
+        while len(answer) < 128:
+            part = os.read(fd, 1)
+            if not part:
+                break
+            answer.extend(part)
+            if part == b"\n":
+                break
+        return bytes(answer) == phrase.encode("utf-8") + b"\n"
 
 
 def require_terminal():
-    try:
-        with open("/dev/tty", "r+", encoding="utf-8", errors="strict") as tty:
-            require(tty.isatty(), "local-terminal-required")
-    except OSError as exc:
-        raise Rejected("local-terminal-required") from exc
+    with terminal_descriptor():
+        pass
 
 
 def outcome_text(result):
