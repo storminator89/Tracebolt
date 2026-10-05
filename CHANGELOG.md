@@ -2,6 +2,10 @@
 
 Meaningful development checkpoints are recorded here. These are prototype milestones, not production releases.
 
+## 2026-10-05 — Align the independent copied-command contract
+
+- Update the independently held exact shell-text contract for the reviewed grouped prerequisite messages. Keep byte-for-byte comparison, all trust checks, and negative tampering cases. HTTP/TLS contract tests and shell syntax checks pass without executing installer commands.
+
 ## 2026-10-05 — Explain Linux installer prerequisites and outcomes
 
 - Group missing initial command tools and show one manually reviewed prerequisite-package command. Keep the copied installer on one physical line, with the same immutable source/checksum pin, terminal handoff and no automatic package installation or privilege elevation.
