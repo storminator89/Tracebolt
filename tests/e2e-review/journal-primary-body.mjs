@@ -1,0 +1,62 @@
+/** Test-only observation of the fixture's primary fetch consumer. Never imported
+ * by the application. No response clone, second reader, body prefetch or CDP
+ * body retrieval; the original Response, read results and errors are preserved. */
+export function installJournalPrimaryBody({ url }) {
+ const target=new URL(url),maximum=65536;
+ if(target.protocol!=='http:'||!['127.0.0.1','localhost'].includes(target.hostname)||!/^\/api\/devices\/agent_[a-f0-9]{32}\/journal\/query$/.test(target.pathname)||target.search||target.hash)throw new Error('Invalid synthetic journal observation scope');
+ const originalFetch=globalThis.fetch;
+ let serial=0,current=null;
+ const discard=(entry,phase)=>{entry.phase=phase;entry.chunks=[];entry.body=null;};
+ const matches=(input,init)=>{
+  const method=String(init?.method??(typeof input==='object'?input.method:undefined)??'GET').toUpperCase();
+  return method==='POST'&&new URL(typeof input==='object'?input.url:String(input),globalThis.location.href).href===target.href;
+ };
+ const frozen=value=>{const queue=[value];while(queue.length){const item=queue.pop();if(item&&typeof item==='object'){for(const child of Object.values(item))queue.push(child);Object.freeze(item);}}return value;};
+ async function observedFetch(input,init){
+  const entry=current&&matches(input,init)?current:null;
+  if(entry){entry.requests++;if(entry.requests!==1)discard(entry,'duplicate');else entry.phase='waiting';}
+  let response;
+  try{response=await Reflect.apply(originalFetch,this,[input,init]);}
+  catch(error){if(entry)discard(entry,'failed');throw error;}
+  if(!entry||entry.phase!=='waiting')return response;
+  entry.status=response.status;
+  const stream=response.body;
+  if(!stream){discard(entry,'missing');return response;}
+  entry.phase='reading';
+  const getReader=stream.getReader.bind(stream),cancelStream=stream.cancel.bind(stream);
+  stream.cancel=(...args)=>{discard(entry,'cancelled');return cancelStream(...args);};
+  stream.getReader=(...args)=>{
+   const reader=getReader(...args),read=reader.read.bind(reader),cancel=reader.cancel.bind(reader);
+   reader.cancel=(...values)=>{discard(entry,'cancelled');return cancel(...values);};
+   reader.read=async(...values)=>{
+    let result;
+    try{result=await read(...values);}catch(error){discard(entry,'failed');throw error;}
+    if(entry.phase!=='reading')return result;
+    try{
+     if(!result.done){
+      entry.bytes+=result.value.byteLength;
+      if(entry.bytes>maximum)discard(entry,'oversized');
+      else entry.chunks.push(result.value.slice());
+     }else{
+      const bytes=new Uint8Array(entry.bytes);let offset=0;
+      for(const chunk of entry.chunks){bytes.set(chunk,offset);offset+=chunk.byteLength;}
+      entry.body=frozen(JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(bytes)));
+      entry.chunks=[];entry.phase='complete';
+     }
+    }catch{discard(entry,'invalid');}
+    return result;
+   };
+   return reader;
+  };
+  return response;
+ }
+ const observer=Object.freeze({
+  arm(){if(current)discard(current,'superseded');current={id:++serial,phase:'armed',requests:0,status:0,bytes:0,chunks:[],body:null};return serial;},
+  state(id){return current?.id===id?current.phase:'missing';},
+  take(id){if(current?.id!==id||current.phase!=='complete'||current.requests!==1)return null;const entry=current,body=entry.body;entry.body=null;current=null;return Object.freeze({status:entry.status,body});},
+  clear(){if(current)discard(current,'cleared');current=null;},
+ });
+ Object.defineProperty(globalThis,'__traceboltJournalBody',{configurable:true,value:observer});
+ globalThis.fetch=observedFetch;
+ return()=>{observer.clear();if(globalThis.fetch===observedFetch)globalThis.fetch=originalFetch;delete globalThis.__traceboltJournalBody;};
+}

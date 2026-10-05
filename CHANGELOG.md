@@ -2,6 +2,11 @@
 
 Meaningful development checkpoints are recorded here. These are prototype milestones, not production releases.
 
+## 2026-10-05 — Observe journal acceptance through the primary response reader
+
+- Replace the browser fixture’s secondary CDP body retrieval with an exact-route, 65,536-byte bounded observation of bytes consumed by the application’s original reader. Preserve response values, errors, cancellation and all HTTP, snapshot, paging, search, time and accepted-UI assertions.
+- Add streamed, malformed, oversized, interrupted and duplicate-response regressions to the independent UI gate. Production code and acceptance deadlines remain unchanged; exact hosted Chromium acceptance is still required.
+
 ## 2026-10-05 — Bound system metadata waits and trace journal paging failures
 
 - Give system metadata reads one store-global permit and a bounded 750 ms queued wait for the existing inventory admission slot. Preserve the active-operation ceiling, caller cancellation, explicit busy outcomes under sustained contention, and paging/write/maintenance limits. Deterministic contention fixtures cover the previously nonblocking read failure.

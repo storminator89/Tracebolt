@@ -103,6 +103,16 @@ fixed query substep and allowlisted asserted-field name, plus DOM counts and
 booleans. Second, third, previous and no-match pages have distinct phases.
 The HTTP200, response JSON, identity/digest, original-time and rendered-row
 assertions remain unchanged; diagnostics do not retry or suppress failed reads.
+For explicit page actions, a test-only initialization script observes the original
+fetch body reader at the exact loopback fixture query URL. It copies at most
+65,536 bytes, only as the application consumes them, and exposes one immutable,
+one-use JSON result after successful end-of-stream. It does not clone, prefetch,
+retry, replace the Response, or retrieve the body through CDP. Incomplete,
+cancelled, oversized, duplicate and malformed observations cannot supply a result.
+The production decoder and accepted UI state are still required separately;
+complete JSON with an invalid snapshot identity must fail the normal UI checks.
+The independent UI regression target covers these streamed/disconnected paths.
+Captured bodies stay in fixture memory only and never enter reports or artifacts.
 On failure, already completed results and safe captures remain available and the
 runner exits nonzero. The manifest contains each original image's SHA256,
 viewport, locale, source identity and synthetic fixture disclosure. Captures are

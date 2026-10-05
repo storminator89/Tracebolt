@@ -9,6 +9,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import {fileURLToPath,pathToFileURL} from 'node:url';
+import {installJournalPrimaryBody} from './journal-primary-body.mjs';
 
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../..');
 const require=createRequire(path.join(root,'web/package.json'));
@@ -81,6 +82,7 @@ async function start(){
 async function pageAt({mobile=false}={}){
  context=await browser.newContext({viewport:mobile?{width:390,height:844}:{width:1440,height:1000},locale:'en-GB'});
  const page=await context.newPage();observeFailure(page,'journal');page.on('pageerror',()=>runtimeErrorCount++);
+ await page.addInitScript(installJournalPrimaryBody,{url:base+endpoint('alpha','query')});
  mark('open signed-out journal fixture');await page.goto(base+'/#/devices');
  mark('sign in to journal fixture');await page.getByLabel('Operator password',{exact:true}).fill(password);
  await page.getByRole('button',{name:'Sign in',exact:true}).click();
@@ -139,8 +141,13 @@ function counts(page){
 }
 async function queryAction(page,action,expected){
  queryNumber=Math.min(100,queryNumber+1);queryField=null;queryStep='perform action';
+ const capture=await page.evaluate(()=>window.__traceboltJournalBody.arm());
  const reply=page.waitForResponse(r=>r.url()===base+endpoint('alpha','query')&&r.request().method()==='POST');
- await action();queryStep='await response headers';const response=await reply;queryStep='require HTTP200';expect(response.status()).toBe(200);queryStep='read response JSON';const body=await response.json();
+ await action();queryStep='await response headers';const response=await reply;queryStep='require HTTP200';expect(response.status()).toBe(200);
+ // Observe only bytes consumed by the application's original bounded reader.
+ // CDP may lose a body after fetch has consumed it; never fetch or clone it again.
+ queryStep='await primary response consumption';await expect.poll(()=>page.evaluate(id=>window.__traceboltJournalBody.state(id),capture)).not.toMatch(/^(armed|waiting|reading)$/);
+ queryStep='require complete primary response';expect(await page.evaluate(id=>window.__traceboltJournalBody.state(id),capture)).toBe('complete');const consumed=await page.evaluate(id=>window.__traceboltJournalBody.take(id),capture);expect(consumed).not.toBeNull();expect(consumed.status).toBe(200);const body=consumed.body;
  queryStep='assert response fields';for(const [key,value]of Object.entries(expected)){queryField=['offset','nextOffset','totalCapturedRows','matchedRows','snapshotDigest','identity','expiresAt','observedAt','search','searchScope'].includes(key)?key:'other';expect(body[key]).toEqual(value);}
  queryField=null;queryStep='wait for rendered row count';await expect(rows(page)).toHaveCount(body.rows.length);queryStep='wait for settled view';await settled(page);queryStep='query action complete';return body;
 }
