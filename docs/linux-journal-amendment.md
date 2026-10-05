@@ -253,9 +253,25 @@ activity restoration; it does not prove a real journal read or host acceptance.
   A socket may already be restored while the agent stays stopped. Do not describe
   the entire policy transaction as uncommitted merely because a restart failed.
 
-Recovery is inspection-only in this release; an authorized administrator must
-review evidence and choose a separately approved recovery plan. Any future
-recovery grant must issue a fresh revision/generation and preserve all floors.
+`recover.py` supports only the verified first-migration failure before any policy
+or deployment replacement, using the pinned `18819d9` source already staged on
+the endpoint. Its default operation is read-only and requires the original
+approved plan SHA-256. It rejects changed original files, ambiguous evidence,
+later stages, or a running journal socket/helper. The ordinary agent may be
+running; its planned stop is included in the returned verification digest.
+
+Separately approved `--apply --expected-verification-sha256 ...` archives the
+pending activation, verifies the unchanged v1 grant through the existing nonroot
+preview, and preserves every original file in a completed-abort archive before
+restoring previously active socket/agent units. It neither accepts a generation
+nor edits policy or private state. Partial failures retain evidence and stop
+recovery. Only a fully validated completed-abort archive permits a new, separately
+approved corrected amendment with a fresh generation. Keep the old staged source
+until recovery is complete; do not delete evidence or blindly repeat either tool.
+
+Other recovery states remain inspection-only; an authorized administrator must
+review evidence and choose a separately approved plan. A recovery grant must
+issue a fresh revision/generation and preserve all floors.
 Restoring old bytes is not a rollback. Already delivered manager RAM content
 cannot be recalled and retains its original expiry.
 

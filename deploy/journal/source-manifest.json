@@ -2,8 +2,8 @@
   "schemaVersion": "tracebolt.journal-guide-source.v1",
   "files": {
     "deploy/journal/amend.py": {
-      "sha256": "458ed9694a850638b967c67b5faeb6715359fb2e20a55fdf752ffd115853eb7a",
-      "size": 42743
+      "sha256": "ee3913d96c886710eabb39766af152590ae526c8fb18c5760f7328eef7b5e9dc",
+      "size": 50955
     },
     "deploy/journal/setup.py": {
       "sha256": "abdea35026d4ff56b88bbbdd413f70a4a9f52d01089a05e7ba86336e7ed12b5a",

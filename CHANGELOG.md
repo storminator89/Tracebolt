@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-10-05 — Fix journal rename verification and preserve early-abort evidence
+
+- Accept the legitimate ctime change caused by atomic rename while retaining all other metadata, inode, content and stable-read checks.
+- Add a read-only verifier for the exact original188 first-migration failure before policy writes. A separate digest-bound abort archives the verified pending gate and transaction, preserves the original grants and private state, and restores prior owned activity only after rechecks.
+- Recognize only fully validated completed-abort archives for a later separately approved corrected grant. Add actual-filesystem and interruption/integration regressions; never reset or delete recovery evidence automatically.
+
 ## 2026-10-05 — Fix journal guide use of a real controlling terminal
 
 - Open the controlling terminal without a seek requirement in the download bootstrap, guide check and explicit confirmation path, so genuine Linux root terminals are accepted.

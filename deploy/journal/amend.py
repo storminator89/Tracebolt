@@ -62,6 +62,12 @@ def pin(st):
             ("dev", "ino", "uid", "gid", "mode", "nlink", "size", "mtime_ns", "ctime_ns")}
 
 
+def renamed_pin_matches(before, after):
+    # Linux rename updates ctime even when the inode and content are unchanged.
+    # Permit that one transition only; stable reads still compare complete pins.
+    return set(before) == set(after) and all(after[k] == value for k, value in before.items() if k != "ctime_ns")
+
+
 def revision(value):
     require(type(value) is str and re.fullmatch(r"[1-9][0-9]{0,19}", value) is not None and
             int(value) <= MAX_REVISION, "policy-revision")
@@ -135,6 +141,104 @@ def transaction_path(next_revision, committed=False):
     return INSTALLER_DIR + "/" + PREFIX + str(next_revision) + (".committed" if committed else ".pending")
 
 
+def validate_completed_abort(s, e, name, identity, current_policy):
+    """Recognize only a fully evidenced abort before the first policy write.
+
+    This is historical proof, never policy authority or permission to recover.
+    Partial/foreign archives still block every new amendment.
+    """
+    match = re.fullmatch(re.escape(PREFIX) + r"1\.aborted-([0-9a-f]{64})", name)
+    require(match is not None, "unresolved-amendment-transaction")
+    approved = match[1]
+    directory = INSTALLER_DIR + "/" + name
+    st = e.metadata(directory)
+    require(stat.S_ISDIR(st.st_mode) and stat.S_IMODE(st.st_mode) == 0o700 and st.st_uid == st.st_gid == 0,
+            "abort-archive-metadata")
+    expected_names = {"transaction.json", "activation-absent.json", "nonroot-public-preview.json", "abort-completed.json"} | {
+        Path(path).name for path in REPLACEMENTS}
+    require(set(e.listdir(directory)) == expected_names, "abort-archive-members")
+    receipt_raw = snapshot(e, directory + "/abort-completed.json", 0, 0o600, 8192)["raw"]
+    fields = ("schemaVersion", "operation", "planSHA256", "transactionSHA256", "oldPolicySHA256",
+              "originalPreviewSHA256", "archivedActivationSHA256", "archivedActivationFile", "senderBinding",
+              "deviceId", "certificateHash", "legacyPreviewVerified", "privateGenerationChanged")
+    receipt = s.strict_json(receipt_raw, fields)
+    gate_path = CONFIG_DIR + "/.journal-activation-1.aborted-" + approved + ".json"
+    require(receipt_raw == canonical(receipt) and receipt["schemaVersion"] == "tracebolt.journal-early-abort.v1" and
+            receipt["operation"] == "abort-before-policy-write" and receipt["planSHA256"] == approved and
+            receipt["archivedActivationFile"] == gate_path and receipt["legacyPreviewVerified"] is True and
+            receipt["privateGenerationChanged"] is False and
+            all(receipt[k] == identity[k] for k in ("senderBinding", "deviceId", "certificateHash")),
+            "abort-receipt-contract")
+    transaction_raw = snapshot(e, directory + "/transaction.json", 0, 0o600, 131072)["raw"]
+    transaction = s.strict_json(transaction_raw, ("schemaVersion", "planSHA256", "plan", "oldPublicState",
+                                                "newPolicyGeneration", "policySHA256", "deploymentSHA256",
+                                                "pendingActivationSHA256", "committedActivationSHA256"))
+    plan = transaction["plan"]
+    require(transaction_raw == canonical(transaction) and digest(transaction_raw) == receipt["transactionSHA256"] and
+            transaction["schemaVersion"] == "tracebolt.journal-amendment-evidence.v1" and
+            transaction["planSHA256"] == approved and digest(canonical(plan)) == approved and
+            plan["nextRevision"] == "1" and plan["activationWasAbsent"] is True and
+            plan["oldPolicyGeneration"] is None and plan["pendingDirectory"] == transaction_path(1) and
+            plan["archiveDirectory"] == transaction_path(1, True) and
+            all(plan[k] == identity[k] for k in ("senderBinding", "deviceId", "certificateHash")),
+            "abort-original-transaction")
+    require(snapshot(e, directory + "/activation-absent.json", 0, 0o600, 4096)["raw"] == canonical(dict(absent=True)),
+            "abort-original-activation")
+    backups = {}
+    for path in REPLACEMENTS:
+        raw = snapshot(e, directory + "/" + Path(path).name, 0, 0o600)["raw"]
+        require(digest(raw) == plan["oldFiles"][path]["sha256"], "abort-original-backup")
+        backups[path] = raw
+    old = policy(s, backups[POLICY])
+    old_deployment = deployment(s, backups[DEPLOYMENT])
+    require(old["schemaVersion"] == "tracebolt.journal-content-policy.v1" and
+            old_deployment["schemaVersion"] == "tracebolt.journal-helper-deployment.v1" and
+            backups[POLICY] == backups[CLIENT_POLICY] and backups[DEPLOYMENT] == backups[CLIENT_DEPLOYMENT] and
+            digest(canonical(old)) == receipt["oldPolicySHA256"] == plan["oldPolicySHA256"] and
+            all(old[k] == current_policy[k] for k in ("senderBinding", "managerOrigin", "transportProfile", "agentUid", "helperUid")),
+            "abort-legacy-authority")
+    preview_raw = snapshot(e, directory + "/nonroot-public-preview.json", 0, 0o600, 8192)["raw"]
+    preview = s.strict_json(preview_raw, ("schemaVersion", "mode", "scope", "senderBinding", "managerOrigin", "transportProfile",
+                                         "collectionProfile", "deviceId", "certificateHash", "agentUid", "agentGid",
+                                         "policyDigest", "accepted", "existingStatePreserved"))
+    require(preview_raw == canonical(transaction["oldPublicState"]) and
+            digest(preview_raw) == receipt["originalPreviewSHA256"] and
+            preview["schemaVersion"] == "tracebolt.journal-amendment-result.v1" and preview["mode"] == "preview" and
+            preview["accepted"] is False and preview["existingStatePreserved"] is True and
+            preview["policyDigest"] == "sha256:" + receipt["oldPolicySHA256"] and
+            preview["scope"] == old["scope"] and preview["collectionProfile"] == s.PROFILE and
+            preview["managerOrigin"] == old["managerOrigin"] and preview["transportProfile"] == old["transportProfile"] and
+            preview["agentUid"] == old["agentUid"] and preview["agentGid"] == old_deployment["agentGid"] and
+            all(preview[k] == identity[k] for k in ("senderBinding", "deviceId", "certificateHash")),
+            "abort-original-preview")
+    gate = snapshot(e, gate_path, 0, 0o644, 4096)["raw"]
+    g = transaction["newPolicyGeneration"]
+    require(type(g) is dict and set(g) == {"revision", "generation", "policyDigest"} and g["revision"] == "1" and
+            s.valid_digest(g["generation"]), "abort-abandoned-generation")
+    broad = plan["operation"] == "grant-all-system-services"
+    require(plan["operation"] in ("add-only", "grant-all-system-services") and
+            plan["schemaVersion"] == ("tracebolt.journal-amendment-plan.v2" if broad else "tracebolt.journal-amendment-plan.v1"),
+            "abort-original-operation")
+    if broad:
+        require(plan["addUnits"] == plan["newUnits"] == [] and plan["serviceAuthorization"] == ALL_SERVICES and
+                plan["includesFutureServices"] is True, "abort-original-broad-scope")
+    else:
+        additions = s.selected_units(plan["addUnits"])
+        require(not set(additions) & set(old["allowedUnits"]) and
+                plan["newUnits"] == s.selected_units(old["allowedUnits"] + additions), "abort-original-exact-scope")
+    proposed = amended_policy(old, plan["newUnits"], "1", g["generation"], broad)
+    proposed_raw = canonical(proposed)
+    policy(s, proposed_raw)
+    proposed_deployment = canonical(dict(schemaVersion="tracebolt.journal-helper-deployment.v2",
+                                        **{k: old_deployment[k] for k in DEPLOY_FIELDS}, policyGenerationRequired=True))
+    require(g == generation(proposed) and transaction["policySHA256"] == digest(proposed_raw) and
+            transaction["deploymentSHA256"] == digest(proposed_deployment) and
+            transaction["committedActivationSHA256"] == digest(canonical(activation_record(identity, g, "committed"))) and
+            gate == canonical(activation_record(identity, g, "pending")) and
+            digest(gate) == receipt["archivedActivationSHA256"] == transaction["pendingActivationSHA256"],
+            "abort-archived-activation")
+
+
 def inspect(s, e, templates, *, check_transactions=True, activation_phase="committed"):
     facts = s.inspect_agent(e, templates)
     e.protected_dir(CONFIG_DIR)
@@ -204,6 +308,9 @@ def inspect(s, e, templates, *, check_transactions=True, activation_phase="commi
         require(all(e.absent(v) for v in STAGES.values()), "unresolved-amendment-stage")
         for name in e.listdir(INSTALLER_DIR):
             if name.startswith(PREFIX):
+                if ".aborted-" in name:
+                    validate_completed_abort(s, e, name, a, p)
+                    continue
                 match = re.fullmatch(re.escape(PREFIX) + r"([1-9][0-9]{0,19})\.committed", name)
                 require(match is not None and int(match[1]) <= int(p.get("revision", "0")), "unresolved-amendment-transaction")
                 archive = e.metadata(INSTALLER_DIR + "/" + name)
@@ -555,7 +662,8 @@ def real_effects(s, sources):
                 return True
 
         def listdir(self, path):
-            require(path == INSTALLER_DIR, "fixed-directory-list")
+            require(path == INSTALLER_DIR or re.fullmatch(re.escape(INSTALLER_DIR + "/" + PREFIX) +
+                                                         r"1\.aborted-[0-9a-f]{64}", path), "fixed-directory-list")
             with _directory(path) as fd:
                 return sorted(os.listdir(fd))
 
@@ -669,7 +777,9 @@ def real_effects(s, sources):
                 self._step(label + ".rename", lambda: os.replace(Path(stage).name, Path(path).name, src_dir_fd=fd, dst_dir_fd=fd))
                 # Failure here is commit-uncertain for the final activation.
                 self._step(label + ".directory-fsync", lambda: os.fsync(fd))
-                require(snapshot(self, path, gid, mode)["raw"] == raw and pin(os.stat(Path(path).name, dir_fd=fd, follow_symlinks=False)) == staged, "replacement-readback")
+                published = snapshot(self, path, gid, mode)
+                require(published["raw"] == raw and renamed_pin_matches(staged, published["pin"]) and
+                        pin(os.stat(Path(path).name, dir_fd=fd, follow_symlinks=False)) == published["pin"], "replacement-readback")
 
         def archive(self, pending, archived):
             require(self._transaction(pending) == self._transaction(archived, True), "archive-revision")

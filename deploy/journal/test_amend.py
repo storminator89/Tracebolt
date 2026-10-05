@@ -6,6 +6,8 @@ import importlib.util
 import json
 from pathlib import Path
 import stat
+import tempfile
+import types
 import unittest
 from unittest import mock
 
@@ -628,6 +630,7 @@ class AdapterTests(unittest.TestCase):
                 raise OSError("synthetic rename uncertainty")
             source, target = a.CONFIG_DIR + "/" + src, a.CONFIG_DIR + "/" + dst
             files[target], metas[target] = files.pop(source), metas.pop(source)
+            metas[target].st_ctime_ns += 1  # Real Linux rename changes ctime.
         def read(path, limit=65536, mode=None):
             st = metas[path]
             a.require(stat.S_IMODE(st.st_mode) == mode and st.st_uid == 0, "synthetic-file-metadata")
@@ -702,6 +705,84 @@ class AdapterTests(unittest.TestCase):
             with self.assertRaisesRegex(a.Rejected, "unsafe-sibling"):
                 a.load_setup()
             compile_.assert_not_called()
+
+
+class FilesystemRenameTests(unittest.TestCase):
+    def test_real_replace_accepts_rename_ctime_but_rejects_other_drift(self):
+        # Run the actual replacement adapter against private temporary files.
+        # Only ownership is virtualized for an unprivileged test user; file
+        # descriptors, writes, chmod, rename, fsync, bytes and timestamps are real.
+        for mutation in (None, "mode", "size", "mtime", "content", "links", "inode"):
+            with self.subTest(mutation=mutation), tempfile.TemporaryDirectory(prefix="tracebolt-rename-") as temp:
+                directory_path = Path(temp)
+                original_stat, original_fstat, original_replace = os.stat, os.fstat, os.replace
+                before_after = []
+                def root_metadata(st):
+                    values = {name: getattr(st, name) for name in dir(st) if name.startswith("st_")}
+                    values.update(st_uid=0, st_gid=0)
+                    return types.SimpleNamespace(**values)
+                @contextlib.contextmanager
+                def directory(path):
+                    self.assertEqual(path, a.CONFIG_DIR)
+                    fd = os.open(temp, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+                    try:
+                        yield fd
+                    finally:
+                        os.close(fd)
+                def rename(src, dst, **kwargs):
+                    before = original_stat(src, dir_fd=kwargs["src_dir_fd"], follow_symlinks=False)
+                    original_replace(src, dst, **kwargs)
+                    after = original_stat(dst, dir_fd=kwargs["dst_dir_fd"], follow_symlinks=False)
+                    before_after.append((before, after))
+                    target = directory_path / dst
+                    if mutation == "mode":
+                        os.chmod(target, 0o600)
+                    elif mutation == "size":
+                        target.write_bytes(b"different length")
+                    elif mutation == "content":
+                        target.write_bytes(b"PENDING")
+                        os.utime(target, ns=(after.st_atime_ns, after.st_mtime_ns))
+                    elif mutation == "mtime":
+                        os.utime(target, ns=(after.st_atime_ns, after.st_mtime_ns + 1000000))
+                    elif mutation == "links":
+                        os.link(target, directory_path / "retained-link")
+                    elif mutation == "inode":
+                        replacement = directory_path / "different-inode"
+                        replacement.write_bytes(b"pending")
+                        os.chmod(replacement, 0o644)
+                        os.utime(replacement, ns=(after.st_atime_ns, after.st_mtime_ns))
+                        original_replace(replacement, target)
+                e = a.real_effects(s, {})
+                with mock.patch.object(a, "_directory", directory), \
+                     mock.patch.object(a.os, "fchown", return_value=None), \
+                     mock.patch.object(a.os, "fstat", side_effect=lambda fd: root_metadata(original_fstat(fd))), \
+                     mock.patch.object(a.os, "stat", side_effect=lambda *args, **kw: root_metadata(original_stat(*args, **kw))), \
+                     mock.patch.object(a.os, "replace", side_effect=rename):
+                    if mutation is None:
+                        e.replace(a.ACTIVATION, b"pending", 0, 0o644, None, "pending-activation")
+                    else:
+                        with self.assertRaises(a.Rejected):
+                            e.replace(a.ACTIVATION, b"pending", 0, 0o644, None, "pending-activation")
+                self.assertEqual(len(before_after), 1)
+                before, after = before_after[0]
+                self.assertEqual(before.st_ino, after.st_ino)
+                self.assertNotEqual(before.st_ctime_ns, after.st_ctime_ns)
+                if mutation is None:
+                    self.assertEqual((directory_path / "journal-activation.json").read_bytes(), b"pending")
+                    self.assertFalse((directory_path / ".journal-activation.tmp").exists())
+
+    def test_only_ctime_is_ignored_across_rename(self):
+        before = dict(dev=1, ino=2, uid=0, gid=0, mode=stat.S_IFREG | 0o644, nlink=1, size=7, mtime_ns=3, ctime_ns=4)
+        self.assertTrue(a.renamed_pin_matches(before, dict(before, ctime_ns=5)))
+        for field in before:
+            if field == "ctime_ns":
+                continue
+            changed = dict(before)
+            changed[field] += 1
+            self.assertFalse(a.renamed_pin_matches(before, changed), field)
+        missing = dict(before)
+        del missing["ino"]
+        self.assertFalse(a.renamed_pin_matches(before, missing))
 
 
 if __name__ == "__main__":
