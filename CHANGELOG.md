@@ -2,6 +2,17 @@
 
 Meaningful development checkpoints are recorded here. These are prototype milestones, not production releases.
 
+## 2026-10-05 — Narrow retained-package browser failure diagnostics
+
+- Split device-navigation and package-source phases and attach the existing bounded failure observer to the retained-package scenario. Keep all original assertions, routes, timeouts and case identities. This improves diagnosis of the hosted failure; it does not establish its cause or change product behavior.
+
+## 2026-10-05 — Add complete cached APT candidate generations
+
+- Add a separate default-off full-row acknowledgement and independent cached-update replay/spool domain. Preserve the bounded preview grant, old dpkg wire/disk bytes and existing activation. Reuse the same durable transfer engine with fixed typed codecs rather than adding another state machine.
+- Capture all known newer candidates before preview trimming, transfer immutable bounded chunks, and atomically promote only a fully validated generation. Unknown comparisons, holds, unsupported/missing sources and original cache age remain explicit; this performs no APT refresh, download, installation, CVE assessment or remote command.
+- Add optional normalized manager storage, shared quota accounting, bounded cleanup, exact retry/restart/expiry recovery and authenticated generation-pinned paging/search. The Updates tab can traverse the entire known-candidate generation without an overall preview limit; each displayed page stays bounded to 100 rows.
+- Add source, separate-consent, compatibility, transport, atomic-storage, cursor/retention, API/Go-DTO and bilingual UI fixtures. Real sender/ingress/store fixtures recover a lost acknowledgment across sender and manager restarts and page all 1,100 rows over TLS and signed HTTP; additional ingress fixtures exercise 1,201 rows, while UI fixtures traverse 1,213 rows and search beyond row 2,048. These are synthetic source checks, not populated native Debian/Ubuntu, installed-service or reboot acceptance. Exact-source hosted acceptance remains separate.
+
 ## 2026-10-05 — Add Linux health incidents and cached update visibility
 
 - Add manager-side contact, root-filesystem and explicitly selected service checks from existing authenticated observations, with duration thresholds, recovery, acknowledgement, bounded maintenance and durable incident history. Unknown and stale data remain explicit; this does not add resource charts, notifications or repair actions.

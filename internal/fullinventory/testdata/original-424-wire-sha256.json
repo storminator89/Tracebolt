@@ -1,0 +1,90 @@
+[
+  {
+    "name": "boundary-plus-one",
+    "sha256": "46bfcaef1789d9fa64413c0f004727ad61e92656268771d072ebbf710e91c1ae",
+    "manifestSha256": "8ee0b7654d51418cdea5a63b5eb890d9f8b43f395e7d66e0917e83ca1e8d1e63",
+    "bytes": 26286,
+    "chunkRows": [
+      128,
+      1
+    ]
+  },
+  {
+    "name": "byte-boundary",
+    "sha256": "6e9fba166591c5cf5843a17c1bda4233c8b1b0706cf3235dafad72ab3ec2059a",
+    "manifestSha256": "2acb35b638c202c620284e8afc0f0af86fdf3fad8999a9cf26ab1df8890a9f8d",
+    "bytes": 155181,
+    "chunkRows": [
+      53,
+      53,
+      23
+    ]
+  },
+  {
+    "name": "denied-release-empty",
+    "sha256": "13f90803bd115f0333c8d36e6e71a2866737b1c491f4a5358f780625bd4e13bc",
+    "manifestSha256": "8894ccee83a68a540b8af1bac2b2af7173a654a2cab381b7976de7805a62f293",
+    "bytes": 481,
+    "chunkRows": []
+  },
+  {
+    "name": "empty",
+    "sha256": "c3c90d6c9b2d046be67d6191aa63ec22de03f9e4d968864aa4c42ce655f77135",
+    "manifestSha256": "6b599bcac90e8286069b72f68fd53a208e8034d28ae7467989cfae7929b0ae7d",
+    "bytes": 477,
+    "chunkRows": []
+  },
+  {
+    "name": "many",
+    "sha256": "cde3798e77411649d21fcbd905b0a055fcef9a0f9a73caee09f774af83b03e23",
+    "manifestSha256": "e501dfc0952226c4502fa5f4b1f79f440eba51b1966dbce8de5b233ac48b3b78",
+    "bytes": 102070,
+    "chunkRows": [
+      128,
+      128,
+      128,
+      128,
+      1
+    ]
+  },
+  {
+    "name": "one",
+    "sha256": "a2874ce7137da5bae864bf9ccedc95377282d3a162b9ad2730383eafe2f42d8e",
+    "manifestSha256": "ea7412b5328c5c6fde125893da03dd642776733e67875c3ed3e7c4e2dfe132fa",
+    "bytes": 1019,
+    "chunkRows": [
+      1
+    ]
+  },
+  {
+    "name": "reversed",
+    "sha256": "cde3798e77411649d21fcbd905b0a055fcef9a0f9a73caee09f774af83b03e23",
+    "manifestSha256": "e501dfc0952226c4502fa5f4b1f79f440eba51b1966dbce8de5b233ac48b3b78",
+    "bytes": 102070,
+    "chunkRows": [
+      128,
+      128,
+      128,
+      128,
+      1
+    ]
+  },
+  {
+    "name": "row-boundary",
+    "sha256": "11c70b7d4f30d621923d3cde52693ee20e110d128eb65874498c11041bf08880",
+    "manifestSha256": "05212f2b282ed3058b346c11036ac67f1024b0e6e5329fa1e397026d4e9d68a3",
+    "bytes": 25681,
+    "chunkRows": [
+      128
+    ]
+  },
+  {
+    "name": "unknown-release",
+    "sha256": "e27bf36bcba01d285cd77b43e5f1607901d129d5af8306989ab5c61e5761e0ad",
+    "manifestSha256": "6faf1ce31d3fc9a44206e987c8e78b1d8389835482a1a26cc855bae1043af6b6",
+    "bytes": 1215,
+    "chunkRows": [
+      2
+    ]
+  }
+]

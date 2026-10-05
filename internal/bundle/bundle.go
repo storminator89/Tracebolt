@@ -71,7 +71,7 @@ func Encode(d model.Device) ([]byte, error) {
 // policy without generating an envelope or consulting the clock. Callers must
 // additionally enforce their actual enclosing contract's aggregate byte bound.
 func ValidateObservation(d model.Device) error {
-	if d.Synthetic || d.IP != nil || len(d.CaseIDs) != 0 || len(d.Trend) != 0 {
+	if d.AgentCertificate != nil || d.Synthetic || d.IP != nil || len(d.CaseIDs) != 0 || len(d.Trend) != 0 {
 		return errors.New("support bundles accept only identifier-free local observations")
 	}
 	if err := validateMetadata(d); err != nil {

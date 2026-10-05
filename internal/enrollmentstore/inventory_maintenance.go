@@ -21,10 +21,11 @@ type InventoryMaintenanceResult struct {
 }
 
 // MaintainInventoryStep selects one of at most 25 freshly resolved issued
-// identities and three fixed domains. The caller's rolling slot only chooses
-// fairness, never authority. At most one eligible noncurrent generation batch
-// (256 rows,16 chunks) is reclaimed in this one current-authority transaction.
-// Current generations, replay floors and original receipt ages are untouched.
+// identities and three fixed domains, plus cached updates when that optional
+// schema is installed. The caller's rolling slot only chooses fairness, never
+// authority. At most one eligible generation batch (256 rows,16 chunks) is
+// reclaimed in this transaction. Cached-update rows also expire after their
+// original 24-hour retention. Replay floors and original receipt ages survive.
 func (s *Store) MaintainInventoryStep(ctx context.Context, slot uint64, now time.Time) (InventoryMaintenanceResult, error) {
 	zero := InventoryMaintenanceResult{}
 	release, e := s.inventoryAdmission(ctx)
@@ -51,9 +52,19 @@ func (s *Store) MaintainInventoryStep(ctx context.Context, slot uint64, now time
 			return nil
 		}
 		sort.Strings(devices)
-		device := devices[(slot/3)%uint64(len(devices))]
-		section := []string{"packages", "processes", "volumes"}[slot%3]
+		domains := []string{"packages", "processes", "volumes"}
+		if t.completeUpdatesEnabled {
+			domains = append(domains, "cached_updates")
+		}
+		width := uint64(len(domains))
+		device := devices[(slot/width)%uint64(len(devices))]
+		section := domains[slot%width]
 		out.DeviceID, out.Section = device, section
+		if section == "cached_updates" {
+			var e error
+			out, e = s.maintainCompleteUpdates(ctx, t, device, now)
+			return e
+		}
 		if section == "packages" {
 			snap, e := s.inventoryMaintenanceAuthority(t, device, now)
 			if errors.Is(e, inventoryledger.ErrNotFound) {

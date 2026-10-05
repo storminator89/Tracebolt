@@ -147,6 +147,9 @@ func valid(r Result) bool {
 		return false
 	}
 	a, u := r.Metadata.AvailablePercentageFields, r.Metadata.UnavailablePercentageFields
+	if !validOverviewStatus(r.Metadata.CachedUpdatesStatus, r.Metadata.CachedUpdatesSequence) || r.Metadata.CachedUpdatesOperations > 64 || r.Metadata.CachedUpdatesStatus == "" && r.Metadata.CachedUpdatesOperations != 0 {
+		return false
+	}
 	switch r.Metadata.InventoryStatus {
 	case "":
 		if r.Metadata.InventorySequence != 0 || r.Metadata.InventoryOperations != 0 {

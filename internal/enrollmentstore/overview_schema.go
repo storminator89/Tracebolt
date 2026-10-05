@@ -204,11 +204,21 @@ func validateOverviewBudgets(ctx context.Context, t *transaction) error {
 // so interleaving domains cannot each spend the global allowance independently.
 // The existing DB/WAL/SHM physical bounds apply to this same database unchanged.
 func sharedInventoryBudget(ctx context.Context, t *transaction) error {
-	if !t.overviewEnabled {
+	if !t.overviewEnabled && !t.completeUpdatesEnabled {
 		return nil
 	}
 	var rows, chunks, stored, generations, systemBytes int64
-	q := `SELECT sum(held_rows),sum(held_chunks),sum(stored_bytes),sum(generations) FROM (SELECT * FROM fi_budget WHERE scope='' UNION ALL SELECT * FROM co_budget WHERE scope='')`
+	tables := `SELECT scope,held_rows,held_chunks,stored_bytes,generations FROM fi_budget`
+	if t.overviewEnabled {
+		tables += ` UNION ALL SELECT scope,held_rows,held_chunks,stored_bytes,generations FROM co_budget`
+	}
+	if t.completeUpdatesEnabled {
+		if e := completeUpdatesBudgets(ctx, t, false); e != nil {
+			return e
+		}
+		tables += ` UNION ALL SELECT device,sum(declared_rows),sum(declared_chunks),sum(stored_bytes),count(*) FROM enrollment_complete_updates_generations GROUP BY device UNION ALL SELECT '',coalesce(sum(declared_rows),0),coalesce(sum(declared_chunks),0),coalesce(sum(stored_bytes),0),count(*) FROM enrollment_complete_updates_generations`
+	}
+	q := `SELECT sum(held_rows),sum(held_chunks),sum(stored_bytes),sum(generations) FROM (` + tables + `) WHERE scope=''`
 	if t.conn.QueryRowContext(ctx, q).Scan(&rows, &chunks, &stored, &generations) != nil {
 		return ErrStorage
 	}
@@ -219,7 +229,7 @@ func sharedInventoryBudget(ctx context.Context, t *transaction) error {
 	if rows > l.GlobalRows || chunks > l.GlobalChunks || stored+systemBytes > l.GlobalBytes || generations > l.GlobalGenerations {
 		return inventoryledger.ErrQuota
 	}
-	byDevice, e := t.conn.QueryContext(ctx, `SELECT substr(scope,1,38),sum(held_rows),sum(held_chunks),sum(stored_bytes) FROM (SELECT * FROM fi_budget WHERE scope<>'' UNION ALL SELECT * FROM co_budget WHERE scope<>'') GROUP BY substr(scope,1,38)`)
+	byDevice, e := t.conn.QueryContext(ctx, `SELECT substr(scope,1,38),sum(held_rows),sum(held_chunks),sum(stored_bytes) FROM (`+tables+`) WHERE scope<>'' GROUP BY substr(scope,1,38)`)
 	if e != nil {
 		return ErrStorage
 	}

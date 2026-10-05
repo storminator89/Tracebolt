@@ -12,7 +12,9 @@ import (
 // service, re-enrolls, changes a credential or queues additional observations.
 // Each metric attempt has its own cooperative 20s context. The complete profile
 // adds serialized system and package work with separate existing 20s budgets;
-// package delivery has a 64-operation cap. Explicit local overview consent adds
+// package delivery has a 64-operation cap. Separate full-update consent adds
+// another 20s/64-operation burst on its independent six-hour capture domain.
+// Explicit local overview consent adds
 // one shared 20s/64-operation process-and-volume burst, followed by the existing
 // journal stage. These are per-stage limits, not a hard overall cycle deadline.
 // Synchronous OS I/O and observers still require a supervisor for a hard limit.
@@ -49,6 +51,14 @@ func runForeground(ctx context.Context, m Material, interval time.Duration, obse
 		}
 		defer system.Close()
 	}
+	var updates *inventorySender
+	if m.config.complete() {
+		updates, e = openCompleteUpdatesSender(m)
+		if e != nil {
+			return agentloop.Summary{Reason: agentloop.InvalidState}, agentloop.ErrState
+		}
+		defer updates.Close()
+	}
 	var overview *overviewSender
 	if m.config.complete() {
 		overview, e = openOverviewSender(m)
@@ -65,6 +75,9 @@ func runForeground(ctx context.Context, m Material, interval time.Duration, obse
 	return agentloop.Run(ctx, agentloop.Config{Interval: interval}, agentloop.Dependencies{Clock: clock, Random: random, Observe: observe, Attempt: func(parent context.Context) agentloop.Result {
 		journal.prune()
 		report, err := runPreparedAttemptWithSystem(parent, m, state, system, inventory, runUsingState)
+		if err == nil {
+			err = runCompleteUpdatesAttempt(parent, updates, &report)
+		}
 		if err == nil {
 			err = runOverviewAndJournal(parent, overview, &report, func(ctx context.Context) string {
 				status := journal.prune()
@@ -88,6 +101,6 @@ func runForeground(ctx context.Context, m Material, interval time.Duration, obse
 		}
 		// Transport/receipt failures retain exact pending data. A generic transport
 		// error cannot establish revocation and never triggers automatic enrollment.
-		return agentloop.Result{Outcome: outcome, Metadata: agentloop.Metadata{ProcessesStatus: report.ProcessesStatus, ProcessesSequence: report.ProcessesSequence, VolumesStatus: report.VolumesStatus, VolumesSequence: report.VolumesSequence, OverviewOperations: report.OverviewOperations, JournalStatus: report.JournalStatus, Sequence: report.Sequence, Duplicate: report.Duplicate, RetriedPending: report.RetriedPending, DiscardedStale: report.DiscardedStale, AvailablePercentageFields: uint8(report.AvailablePercentageFields), UnavailablePercentageFields: uint8(report.UnavailablePercentageFields), InventoryStatus: report.InventoryStatus, InventorySequence: report.InventorySequence, InventoryOperations: report.InventoryOperations, SystemStatus: report.SystemStatus, SystemSequence: report.SystemSequence, SystemRetriedPending: report.SystemRetriedPending, SystemDiscardedStale: report.SystemDiscardedStale}}
+		return agentloop.Result{Outcome: outcome, Metadata: agentloop.Metadata{CachedUpdatesStatus: report.CachedUpdatesStatus, CachedUpdatesSequence: report.CachedUpdatesSequence, CachedUpdatesOperations: report.CachedUpdatesOperations, ProcessesStatus: report.ProcessesStatus, ProcessesSequence: report.ProcessesSequence, VolumesStatus: report.VolumesStatus, VolumesSequence: report.VolumesSequence, OverviewOperations: report.OverviewOperations, JournalStatus: report.JournalStatus, Sequence: report.Sequence, Duplicate: report.Duplicate, RetriedPending: report.RetriedPending, DiscardedStale: report.DiscardedStale, AvailablePercentageFields: uint8(report.AvailablePercentageFields), UnavailablePercentageFields: uint8(report.UnavailablePercentageFields), InventoryStatus: report.InventoryStatus, InventorySequence: report.InventorySequence, InventoryOperations: report.InventoryOperations, SystemStatus: report.SystemStatus, SystemSequence: report.SystemSequence, SystemRetriedPending: report.SystemRetriedPending, SystemDiscardedStale: report.SystemDiscardedStale}}
 	}})
 }

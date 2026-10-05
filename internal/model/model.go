@@ -29,6 +29,14 @@ type Evidence struct {
 	Value             string    `json:"value"`
 	Synthetic         bool      `json:"synthetic"`
 }
+
+// AgentCertificate is manager-owned, public expiry metadata for operator reads.
+// It is never part of an endpoint observation or evidence of live connectivity.
+type AgentCertificate struct {
+	Source    string     `json:"source"`
+	ExpiresAt *time.Time `json:"expiresAt"`
+	CheckedAt time.Time  `json:"checkedAt"`
+}
 type Device struct {
 	ID           string       `json:"id"`
 	Name         string       `json:"name"`
@@ -51,6 +59,8 @@ type Device struct {
 	Evidence     []Evidence   `json:"evidence"`
 	Trend        []float64    `json:"trend"`
 	CaseIDs      []string     `json:"caseIds"`
+
+	AgentCertificate *AgentCertificate `json:"agentCertificate,omitempty"`
 }
 type Activity struct {
 	ID       string    `json:"id"`

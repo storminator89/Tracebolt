@@ -142,6 +142,10 @@ func (h *Ingress) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.overview(w, r)
 		return
 	}
+	if r != nil && r.URL != nil && strings.HasPrefix(r.URL.Path, inventorywire.CachedUpdatesPathPrefix) {
+		h.completeUpdates(w, r)
+		return
+	}
 	if r != nil && r.URL != nil && strings.HasPrefix(r.URL.Path, inventorywire.PathPrefix) {
 		h.inventory(w, r)
 		return

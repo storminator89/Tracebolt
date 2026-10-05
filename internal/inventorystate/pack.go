@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/binary"
 	"encoding/json"
-	"localrmm/internal/fullinventory"
 	"localrmm/internal/inventorywire"
 	"strconv"
 )
@@ -20,34 +19,31 @@ type generationPack struct {
 func encodePayload(operation string, r diskRecord, hash string, payload []byte) ([]byte, error) {
 	// All framing strings are validated generated identifiers. Keep payload exact;
 	// encoding/json.RawMessage would compact whitespace in caller-provided bytes.
-	raw := []byte(`{"schemaVersion":` + strconv.Quote(inventorywire.MessageVersion) + `,"sequence":` + strconv.Quote(strconv.FormatUint(r.Floor, 10)) + `,"generationId":` + strconv.Quote(r.Generation) + `,"manifestHash":` + strconv.Quote(hash) + `,"payload":`)
+	raw := []byte(`{"schemaVersion":` + strconv.Quote(r.kind.messageVersion()) + `,"sequence":` + strconv.Quote(strconv.FormatUint(r.Floor, 10)) + `,"generationId":` + strconv.Quote(r.Generation) + `,"manifestHash":` + strconv.Quote(hash) + `,"payload":`)
 	raw = append(raw, payload...)
 	raw = append(raw, '}')
-	if _, e := inventorywire.DecodeMessage(operation, raw); e != nil {
+	if _, e := r.kind.decodeMessage(operation, raw); e != nil {
 		return nil, ErrBody
 	}
 	return raw, nil
 }
 func buildPack(ctx context.Context, r diskRecord, manifest []byte, chunks [][]byte) (*generationPack, string, error) {
-	if len(manifest) == 0 || len(manifest) > fullinventory.MaxManifestBytes || len(chunks) > fullinventory.MaxGenerationChunks {
+	if len(manifest) == 0 || len(manifest) > r.kind.maxManifestBytes() || len(chunks) > r.kind.maxChunks() {
 		return nil, "", ErrBody
 	}
 	total := len(manifest)
 	for _, raw := range chunks {
-		if len(raw) == 0 || len(raw) > fullinventory.MaxChunkBytes || len(raw) > MaxRawBytes-total {
+		if len(raw) == 0 || len(raw) > r.kind.maxChunkBytes() || len(raw) > MaxRawBytes-total {
 			return nil, "", ErrBody
 		}
 		total += len(raw)
 	}
-	m, e := fullinventory.DecodeManifest(manifest)
-	if e != nil || m.GenerationID != r.Generation || m.CollectedAt.Format("2006-01-02T15:04:05.999999999Z07:00") != r.AttemptedAt || int(m.ChunkCount) != len(chunks) {
+	m, hash, e := r.kind.decodeManifest(manifest)
+	collectedAt, chunkCount, _, valid := m.ManifestFacts()
+	if e != nil || !valid || m.GenerationID != r.Generation || collectedAt.Format("2006-01-02T15:04:05.999999999Z07:00") != r.AttemptedAt || int(chunkCount) != len(chunks) {
 		return nil, "", ErrBody
 	}
-	hash, e := fullinventory.ManifestDigest(m)
-	if e != nil {
-		return nil, "", ErrBody
-	}
-	validator, e := fullinventory.NewValidator(ctx, m)
+	validator, e := newTransferValidator(ctx, m)
 	if e != nil {
 		return nil, "", ErrCanceled
 	}
@@ -56,18 +52,14 @@ func buildPack(ctx context.Context, r diskRecord, manifest []byte, chunks [][]by
 		if canceled(ctx) {
 			return nil, "", ErrCanceled
 		}
-		c, e := fullinventory.DecodeChunk(raw)
-		if e != nil {
-			return nil, "", ErrBody
-		}
-		if e = validator.Add(c); e != nil {
+		if e = validator.addRaw(r.kind, raw); e != nil {
 			if canceled(ctx) {
 				return nil, "", ErrCanceled
 			}
 			return nil, "", ErrBody
 		}
 	}
-	if _, e = validator.Finish(); e != nil {
+	if e = validator.finish(); e != nil {
 		if canceled(ctx) {
 			return nil, "", ErrCanceled
 		}
@@ -75,7 +67,7 @@ func buildPack(ctx context.Context, r diskRecord, manifest []byte, chunks [][]by
 	}
 	var b bytes.Buffer
 	b.Grow(total + (len(chunks)+2)*512)
-	b.WriteString(packMagic)
+	b.WriteString(r.kind.packMagic())
 	add := func(op string, payload []byte) error {
 		raw, e := encodePayload(op, r, hash, payload)
 		if e != nil {
@@ -106,17 +98,17 @@ func buildPack(ctx context.Context, r diskRecord, manifest []byte, chunks [][]by
 	}
 	check := r
 	check.ManifestHash = hash
-	check.Count = m.ChunkCount
+	check.Count = chunkCount
 	pack, e := decodePack(ctx, b.Bytes(), check)
 	return pack, hash, e
 }
 func decodePack(ctx context.Context, raw []byte, r diskRecord) (*generationPack, error) {
-	if len(raw) > MaxPackBytes || !bytes.HasPrefix(raw, []byte(packMagic)) {
+	if len(raw) > MaxPackBytes || !bytes.HasPrefix(raw, []byte(r.kind.packMagic())) {
 		return nil, ErrCorrupt
 	}
 	p := &generationPack{raw: raw}
-	rest := raw[len(packMagic):]
-	var validator *fullinventory.Validator
+	rest := raw[len(r.kind.packMagic()):]
+	var validator *transferValidator
 	total := 0
 	for index := uint32(0); index < r.Count+2; index++ {
 		if canceled(ctx) {
@@ -139,7 +131,7 @@ func decodePack(ctx context.Context, raw []byte, r diskRecord) (*generationPack,
 		if index == r.Count+1 {
 			op = "finalize"
 		}
-		m, e := inventorywire.DecodeMessage(op, body)
+		m, e := r.kind.decodeMessage(op, body)
 		if e != nil || m.Sequence != r.Floor || m.GenerationID != r.Generation || m.ManifestHash != r.ManifestHash {
 			return nil, ErrCorrupt
 		}
@@ -157,15 +149,16 @@ func decodePack(ctx context.Context, raw []byte, r diskRecord) (*generationPack,
 			total += len(envelope.Payload)
 		}
 		if op == "begin" {
-			if m.Manifest == nil || m.Manifest.ChunkCount != r.Count || m.Manifest.CollectedAt.Format("2006-01-02T15:04:05.999999999Z07:00") != r.AttemptedAt {
+			collectedAt, chunks, _, valid := m.ManifestFacts()
+			if !valid || chunks != r.Count || collectedAt.Format("2006-01-02T15:04:05.999999999Z07:00") != r.AttemptedAt {
 				return nil, ErrCorrupt
 			}
-			validator, e = fullinventory.NewValidator(ctx, *m.Manifest)
+			validator, e = newTransferValidator(ctx, m)
 			if e != nil {
 				return nil, ErrCorrupt
 			}
 		} else if op == "append" {
-			if m.Chunk == nil || validator.Add(*m.Chunk) != nil {
+			if validator.add(m) != nil {
 				return nil, ErrCorrupt
 			}
 		}
@@ -174,7 +167,7 @@ func decodePack(ctx context.Context, raw []byte, r diskRecord) (*generationPack,
 	if len(rest) != 0 || validator == nil {
 		return nil, ErrCorrupt
 	}
-	if _, e := validator.Finish(); e != nil {
+	if e := validator.finish(); e != nil {
 		return nil, ErrCorrupt
 	}
 	if r.Last != nil && r.Last.Sequence == r.Floor && r.Next > 0 && r.Last.Operation != "abort" {
@@ -182,7 +175,7 @@ func decodePack(ctx context.Context, raw []byte, r diskRecord) (*generationPack,
 		if int(index) >= len(p.frames) || digest(p.frames[index]) != r.Last.Digest {
 			return nil, ErrCorrupt
 		}
-		receipt, e := inventorywire.DecodeReceipt(r.Last.Receipt, r.Last.Operation, p.frames[index])
+		receipt, e := r.kind.decodeReceipt(r.Last.Receipt, r.Last.Operation, p.frames[index])
 		if e != nil || !receiptContext(r, receipt) {
 			return nil, ErrCorrupt
 		}

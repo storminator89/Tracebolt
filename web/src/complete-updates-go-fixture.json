@@ -1,0 +1,87 @@
+{
+  "view": {
+    "schemaVersion": "tracebolt.complete-update-view.v1",
+    "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "serverNow": "2026-10-05T04:00:10.123456789Z",
+    "collectionProfile": "managed-operations-v3",
+    "status": "available",
+    "complete": {
+      "binding": {
+        "sequence": "7",
+        "generationId": "sample_3bba4ceb1fe697221bed9ce836d23ccd",
+        "manifestHash": "9488284e87f6272b13263e66baf892eb59f7837efb26f3c296503b43ef9e2765"
+      },
+      "manifest": {
+        "schemaVersion": "tracebolt.complete-cached-apt-updates.v1",
+        "scope": "agent-visible-complete-known-cached-apt-candidate-rows",
+        "generationId": "sample_3bba4ceb1fe697221bed9ce836d23ccd",
+        "collectedAt": "2026-10-05T04:00:00.123456789Z",
+        "durationMs": 8,
+        "release": {
+          "id": "debian",
+          "versionId": "13",
+          "versionCodename": "trixie"
+        },
+        "metadata": {
+          "freshness": "stale",
+          "oldestIndexModifiedAt": "2026-10-02T04:00:00.123456789Z",
+          "ageSeconds": 259200,
+          "ageBasis": "oldest-local-package-index-mtime",
+          "refresh": "not_attempted"
+        },
+        "comparisonCoverage": "partial",
+        "comparisonReason": "candidate_unknown",
+        "installedCount": 4,
+        "checkedCount": 3,
+        "candidateCount": 2,
+        "heldCount": 1,
+        "unknownCount": 1,
+        "chunkCount": 1,
+        "canonicalRowBytes": 330,
+        "rowsSha256": "dae5ba27086f15290a8bd9f17f20abcc3d525fefca2b05e017a613406eae1d83"
+      },
+      "state": "complete",
+      "completedAt": "2026-10-05T04:00:05.123456789Z",
+      "retainedUntil": "2026-10-06T04:00:00.123456789Z"
+    },
+    "transfer": null,
+    "failure": null
+  },
+  "page": {
+    "schemaVersion": "tracebolt.complete-update-page.v1",
+    "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "serverNow": "2026-10-05T04:00:10.123456789Z",
+    "binding": {
+      "sequence": "7",
+      "generationId": "sample_3bba4ceb1fe697221bed9ce836d23ccd",
+      "manifestHash": "9488284e87f6272b13263e66baf892eb59f7837efb26f3c296503b43ef9e2765"
+    },
+    "collectedAt": "2026-10-05T04:00:00.123456789Z",
+    "completedAt": "2026-10-05T04:00:05.123456789Z",
+    "retainedUntil": "2026-10-06T04:00:00.123456789Z",
+    "totalRows": 2,
+    "items": [
+      {
+        "name": "fixture-curl",
+        "architecture": "amd64",
+        "installedVersion": "1:8.14.1-2",
+        "candidateVersion": "1:8.14.1-2+deb13u1",
+        "state": "candidate_only",
+        "installability": "not_evaluated"
+      },
+      {
+        "name": "fixture-held",
+        "architecture": "amd64",
+        "installedVersion": "2.0~rc1-1",
+        "candidateVersion": "2.0-1",
+        "state": "held",
+        "installability": "not_evaluated"
+      }
+    ],
+    "scannedRows": 2,
+    "exhausted": true,
+    "searchIncomplete": false,
+    "nextCursor": "",
+    "cursorExpiresAt": "2026-10-05T04:15:10.123456789Z"
+  }
+}

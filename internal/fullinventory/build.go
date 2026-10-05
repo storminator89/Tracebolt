@@ -3,8 +3,9 @@ package fullinventory
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"localrmm/internal/bulkrows"
 	"localrmm/internal/linuxpackages"
-	"sort"
 )
 
 // Build accepts only an entire completed local source operation. sourceErr must
@@ -24,58 +25,38 @@ func Build(ctx context.Context, source SourceInventory, sourceErr error) (Manife
 	if err := validateMetadata(source.GenerationID, source.CollectedAt, source.DurationMS, source.Release); err != nil {
 		return Manifest{}, nil, err
 	}
-	var rowBytes, installed uint64
-	// Validate and budget before sorting/allocating the detached row descriptors.
-	for _, p := range source.Rows {
+	plan, err := bulkrows.Plan(ctx, source.Rows, bulkrows.Config[linuxpackages.PackageRow]{
+		MaxRows: MaxGenerationRows, MaxChunkRows: MaxChunkRows,
+		MaxPayloadBytes: MaxChunkBytes - chunkEnvelopeReserve, MaxChunks: MaxGenerationChunks,
+		MaxCanonicalBytes: MaxCanonicalRowBytes, Domain: rowDomain,
+		Validate: ValidateRow, Less: rowLess, Canonical: canonicalRow,
+	})
+	if err != nil {
+		switch {
+		case errors.Is(err, bulkrows.ErrCanceled):
+			err = ErrCanceled
+		case errors.Is(err, bulkrows.ErrLimit):
+			err = ErrLimit
+		case errors.Is(err, bulkrows.ErrInvalid):
+			err = ErrInvalid
+		}
+		return Manifest{}, nil, err
+	}
+	rows, boundaries := plan.Rows, plan.Boundaries
+	count := len(boundaries) - 1
+	var installed uint64
+	for _, row := range rows {
 		if ctx.Err() != nil {
 			return Manifest{}, nil, ErrCanceled
 		}
-		if err := ValidateRow(p); err != nil {
-			return Manifest{}, nil, err
-		}
-		size := uint64(len(canonicalRow(p)))
-		if size > MaxCanonicalRowBytes-rowBytes {
-			return Manifest{}, nil, ErrLimit
-		}
-		rowBytes += size
-		if p.InstallState == "installed" {
+		if row.InstallState == "installed" {
 			installed++
 		}
-	}
-	rows := append(make([]linuxpackages.PackageRow, 0, len(source.Rows)), source.Rows...)
-	sort.Slice(rows, func(i, j int) bool { return rowLess(rows[i], rows[j]) })
-	if ctx.Err() != nil {
-		return Manifest{}, nil, ErrCanceled
-	}
-	h := newRowsHash()
-	boundaries := []int{0}
-	start, payloadBytes := 0, 0
-	for i, p := range rows {
-		if ctx.Err() != nil {
-			return Manifest{}, nil, ErrCanceled
-		}
-		if i > 0 && !rowLess(rows[i-1], p) {
-			return Manifest{}, nil, ErrInvalid
-		}
-		b := canonicalRow(p)
-		if i-start == MaxChunkRows || payloadBytes+len(b) > MaxChunkBytes-chunkEnvelopeReserve {
-			boundaries = append(boundaries, i)
-			start, payloadBytes = i, 0
-		}
-		payloadBytes += len(b)
-		_, _ = h.Write(b)
-	}
-	if len(rows) > 0 {
-		boundaries = append(boundaries, len(rows))
-	}
-	count := len(boundaries) - 1
-	if count > MaxGenerationChunks {
-		return Manifest{}, nil, ErrLimit
 	}
 	m := cloneManifest(Manifest{SchemaVersion: SchemaVersion, Scope: Scope, GenerationID: source.GenerationID,
 		CollectedAt: source.CollectedAt, DurationMS: source.DurationMS, Release: source.Release,
 		ObservedCount: uint64(len(rows)), InstalledCount: installed, ChunkCount: uint32(count),
-		CanonicalRowBytes: rowBytes, RowsSHA256: hashHex(h)})
+		CanonicalRowBytes: plan.CanonicalBytes, RowsSHA256: plan.RowsSHA256})
 	md, err := ManifestDigest(m)
 	if err != nil {
 		return Manifest{}, nil, err

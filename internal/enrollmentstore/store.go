@@ -79,22 +79,24 @@ type credential struct {
 	Frame    []byte   `json:"frame"`
 }
 type transaction struct {
-	conn                *sql.Conn
-	engine              *enrollmentstate.Engine
-	credentials         map[string]credential
-	originalLedger      []byte
-	originalCredentials map[string][]byte
-	operational         map[string]operationalRecord
-	originalOperational map[string][]byte
-	validatedFrames     map[frameValidationKey]lanstore.Frame
-	inventory           map[string]inventoryRecord
-	originalInventory   map[string][]byte
-	inventoryKey        inventoryledger.CursorKey
-	overview            map[string]overviewRecord
-	originalOverview    map[string][]byte
-	overviewKey         overviewledger.CursorKey
-	overviewEnabled     bool
-	system              map[string]systemRecord
+	conn                   *sql.Conn
+	engine                 *enrollmentstate.Engine
+	credentials            map[string]credential
+	originalLedger         []byte
+	originalCredentials    map[string][]byte
+	operational            map[string]operationalRecord
+	originalOperational    map[string][]byte
+	validatedFrames        map[frameValidationKey]lanstore.Frame
+	inventory              map[string]inventoryRecord
+	originalInventory      map[string][]byte
+	inventoryKey           inventoryledger.CursorKey
+	overview               map[string]overviewRecord
+	originalOverview       map[string][]byte
+	overviewKey            overviewledger.CursorKey
+	overviewEnabled        bool
+	completeUpdatesEnabled bool
+	completeUpdatesKey     completeUpdatesCursorKey
+	system                 map[string]systemRecord
 }
 
 // Open rejects existing insecure paths; it never chmods or adopts them. The
@@ -405,6 +407,9 @@ func (s *Store) load(ctx context.Context, conn *sql.Conn) (*transaction, error) 
 	if err = s.loadOverview(ctx, t); err != nil {
 		return nil, ErrStorage
 	}
+	if err = s.loadCompleteUpdates(ctx, t); err != nil {
+		return nil, ErrStorage
+	}
 	if err = s.loadSystemMetadata(ctx, t); err != nil {
 		return nil, ErrStorage
 	}
@@ -501,6 +506,9 @@ func (s *Store) transact(ctx context.Context, action func(*transaction) error) e
 	if err = s.saveOverview(ctx, t); err != nil {
 		return storageError(ctx)
 	}
+	if err = validateCompleteUpdatesRecords(ctx, t); err != nil {
+		return storageError(ctx)
+	}
 	if err = sharedInventoryBudget(ctx, t); err != nil {
 		if ctx.Err() != nil {
 			return ctx.Err()
@@ -547,6 +555,15 @@ func validateSchema(ctx context.Context, conn *sql.Conn, profile string) error {
 		}
 		if enabled {
 			for _, obj := range overviewSchemaObjects() {
+				expected[obj.Name] = obj
+			}
+		}
+		updatesEnabled, e := completeUpdatesSchemaPresent(ctx, conn)
+		if e != nil {
+			return e
+		}
+		if updatesEnabled {
+			for _, obj := range completeUpdatesSchemaObjects() {
 				expected[obj.Name] = obj
 			}
 		}

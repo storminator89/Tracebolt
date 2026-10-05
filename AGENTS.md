@@ -54,6 +54,12 @@ file as navigation and project constraints, never as permission to act on a host
   identity guard, explicit full-scope disclosure, independent durable floors and
   original capture age. No automatic collection, re-enrollment, manager reset or
   host permission grant follows from a manager upgrade or schema initialization.
+- Complete cached APT update rows are a separate default-off local scope;
+  preview consent never authorizes the full generation. Before enabling or
+  changing it, read `docs/complete-cached-updates-extension.md`. Preserve the
+  independent durable floor, exact retry bytes, cached-only command policy,
+  original metadata age and operator-only bounded paging. Fixture tests do not
+  establish native Debian/Ubuntu or installed-service acceptance.
 - Follow Go/Node versions and dependency locks in this revision. Validate commands
   against actual flags/config. Distinguish runtime tests from cross-builds, skipped
   container tests, and proposed functionality. Never invent install/enroll flags.

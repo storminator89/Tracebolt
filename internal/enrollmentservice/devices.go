@@ -57,6 +57,13 @@ func (s *Service) Devices(ctx context.Context, now time.Time) ([]model.Device, e
 				}
 			}
 		}
+		// An issuance intent alone is not evidence that a certificate was issued.
+		// Always overwrite any observation metadata with the committed ledger view.
+		d.AgentCertificate = &model.AgentCertificate{Source: "guided-enrollment", CheckedAt: now.UTC()}
+		if snapshot.Issuance.CertificateHash != "" && snapshot.Issuance.At > 0 && snapshot.Intent.NotAfter > 0 {
+			expires := time.Unix(snapshot.Intent.NotAfter, 0).UTC()
+			d.AgentCertificate.ExpiresAt = &expires
+		}
 		trust, detail := "limited", "Approval is recorded; credential activation and a first observation are still required."
 		if snapshot.State == enrollmentstate.Activated {
 			trust = "supported"

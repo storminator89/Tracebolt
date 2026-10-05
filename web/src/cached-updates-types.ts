@@ -49,6 +49,9 @@ export function cachedDebianCompare(a: unknown, b: unknown): number | null {
     const left = debianParts(a), right = debianParts(b); if (!left || !right) return null;
     return decimalCompare(left[0], right[0]) || partCompare(left[1], right[1]) || partCompare(left[2], right[2]);
 }
+export function validCachedUpdateRow(row: unknown): row is CachedUpdateRow {
+    return record(row, ['name', 'architecture', 'installedVersion', 'candidateVersion', 'state', 'installability']) && typeof row.name === 'string' && /^[a-z0-9][a-z0-9+.-]{1,255}$/.test(row.name) && typeof row.architecture === 'string' && /^[a-z0-9][a-z0-9-]{0,63}$/.test(row.architecture) && row.installability === 'not_evaluated' && member(row.state, ['candidate_only', 'held']) && cachedDebianCompare(row.installedVersion, row.candidateVersion) === -1;
+}
 export function validCachedUpdatesSnapshot(v: unknown): v is CachedUpdatesSnapshot {
     if (!record(v, ['schemaVersion', 'scope', 'generationId', 'collectedAt', 'durationMs', 'release', 'coverage', 'reason', 'metadata', 'installedCount', 'checkedCount', 'candidateCount', 'heldCount', 'unknownCount', 'truncated', 'items']) || v.schemaVersion !== 'tracebolt.cached-apt-updates.v1' || v.scope !== 'agent-visible-dpkg-and-existing-apt-cache' || typeof v.generationId !== 'string' || !/^sample_[a-f0-9]{32}$/.test(v.generationId) || !timestamp(v.collectedAt) || !integer(v.durationMs) || !Array.isArray(v.items) || v.items.length > 16 || typeof v.truncated !== 'boolean') return false;
     const r = v.release, m = v.metadata;
@@ -65,7 +68,7 @@ export function validCachedUpdatesSnapshot(v: unknown): v is CachedUpdatesSnapsh
         if (v.coverage === 'complete' ? v.reason !== 'none' || v.truncated || v.unknownCount !== 0 : v.coverage !== 'partial' || !v.truncated && v.unknownCount === 0 || !member(v.reason, ['item_limit', 'byte_limit', 'candidate_unknown']) || !v.truncated && v.reason !== 'candidate_unknown' || v.reason === 'candidate_unknown' && v.unknownCount === 0) return false;
         let previous = '', held = 0;
         for (const row of v.items) {
-            if (!record(row, ['name', 'architecture', 'installedVersion', 'candidateVersion', 'state', 'installability']) || typeof row.name !== 'string' || !/^[a-z0-9][a-z0-9+.-]{1,255}$/.test(row.name) || typeof row.architecture !== 'string' || !/^[a-z0-9][a-z0-9-]{0,63}$/.test(row.architecture) || row.installability !== 'not_evaluated' || !member(row.state, ['candidate_only', 'held']) || cachedDebianCompare(row.installedVersion, row.candidateVersion) !== -1) return false;
+            if (!validCachedUpdateRow(row)) return false;
             const key = `${row.name}\0${row.architecture}`; if (key <= previous) return false; previous = key; if (row.state === 'held') held++;
         }
         if (held > v.heldCount || v.heldCount - held > v.candidateCount - v.items.length) return false;

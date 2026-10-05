@@ -8,6 +8,9 @@ import (
 
 // ValidateShape is framing only, never identity or possession authorization.
 func ValidateShape(r *http.Request, authority, profile string) error {
+	return validateShape(packageTransfer, r, authority, profile)
+}
+func validateShape(kind transferKind, r *http.Request, authority, profile string) error {
 	if profile != "tls" && profile != "http-test" {
 		return ErrConfiguration
 	}
@@ -15,7 +18,7 @@ func ValidateShape(r *http.Request, authority, profile string) error {
 	if profile == "http-test" {
 		scheme = "http"
 	}
-	if r == nil || r.URL == nil || r.Method != http.MethodPost || r.Host != authority || !validInventoryPath(r.URL.Path) || r.URL.RawPath != "" || r.URL.RawQuery != "" || r.URL.ForceQuery || r.URL.Fragment != "" || r.URL.RawFragment != "" || r.URL.Opaque != "" || r.URL.User != nil || (r.URL.Scheme != "" && r.URL.Scheme != scheme) || (r.URL.Host != "" && r.URL.Host != authority) || (r.RequestURI != "" && r.RequestURI != r.URL.Path) || len(r.TransferEncoding) != 0 || len(r.Trailer) != 0 || r.Body == nil || r.ContentLength <= 0 || !requestHeaders(r.Header) {
+	if r == nil || r.URL == nil || r.Method != http.MethodPost || r.Host != authority || !kind.validPath(r.URL.Path) || r.URL.RawPath != "" || r.URL.RawQuery != "" || r.URL.ForceQuery || r.URL.Fragment != "" || r.URL.RawFragment != "" || r.URL.Opaque != "" || r.URL.User != nil || (r.URL.Scheme != "" && r.URL.Scheme != scheme) || (r.URL.Host != "" && r.URL.Host != authority) || (r.RequestURI != "" && r.RequestURI != r.URL.Path) || len(r.TransferEncoding) != 0 || len(r.Trailer) != 0 || r.Body == nil || r.ContentLength <= 0 || !requestHeaders(r.Header) {
 		return ErrRequest
 	}
 	if r.ContentLength > MaxBodyBytes {

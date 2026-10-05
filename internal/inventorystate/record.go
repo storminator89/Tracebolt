@@ -8,6 +8,7 @@ import (
 )
 
 type diskRecord struct {
+	kind         transferKind
 	Version      int      `json:"version"`
 	Binding      string   `json:"binding"`
 	AgentID      string   `json:"agentId"`
@@ -48,7 +49,10 @@ func (a diskAck) matches(w Work) bool {
 	return a.Operation == w.Operation && a.Sequence == w.Sequence && a.GenerationID == w.GenerationID && a.ManifestHash == w.ManifestHash && a.Ordinal == w.Ordinal && a.Digest == w.Digest && w.body != nil && digest(w.body.raw) == a.Digest
 }
 func (a diskAck) valid(agent string, floor uint64) bool {
-	gid, e := inventorywire.GenerationID(agent, a.Sequence)
+	return a.validKind(packageTransfer, agent, floor)
+}
+func (a diskAck) validKind(kind transferKind, agent string, floor uint64) bool {
+	gid, e := kind.generationID(agent, a.Sequence)
 	if e != nil || a.Sequence > floor || gid != a.GenerationID || !validDigest(a.Digest) || len(a.Receipt) == 0 || len(a.Receipt) > MaxReceiptBytes || !json.Valid(a.Receipt) || bytes.Equal(bytes.TrimSpace(a.Receipt), []byte("null")) {
 		return false
 	}
@@ -56,7 +60,7 @@ func (a diskAck) valid(agent string, floor uint64) bool {
 		if len(a.Request) == 0 || len(a.Request) > 2048 {
 			return false
 		}
-		r, e := inventorywire.DecodeReceipt(a.Receipt, a.Operation, a.Request)
+		r, e := kind.decodeReceipt(a.Receipt, a.Operation, a.Request)
 		if e != nil || r.Sequence != a.Sequence || r.GenerationID != a.GenerationID || r.ManifestHash != a.ManifestHash || r.RequestSHA256 != a.Digest {
 			return false
 		}
@@ -81,7 +85,10 @@ func encodeRecord(r diskRecord) ([]byte, error) {
 	return raw, nil
 }
 func decodeRecord(raw []byte) (diskRecord, error) {
-	var r diskRecord
+	return decodeRecordKind(packageTransfer, raw)
+}
+func decodeRecordKind(kind transferKind, raw []byte) (diskRecord, error) {
+	r := diskRecord{kind: kind}
 	if len(raw) == 0 || len(raw) > MaxStateBytes || json.Unmarshal(raw, &r) != nil {
 		return r, ErrCorrupt
 	}
@@ -92,13 +99,13 @@ func decodeRecord(raw []byte) (diskRecord, error) {
 	if e != nil || !bytes.Equal(canonical, raw) {
 		return r, ErrCorrupt
 	}
-	if r.Version != stateVersion || !validDigest(r.Binding) || r.Floor > MaxSequence {
+	if r.Version != kind.stateVersion() || !validDigest(r.Binding) || r.Floor > MaxSequence {
 		return r, ErrCorrupt
 	}
-	if _, e = inventorywire.GenerationID(r.AgentID, 1); e != nil {
+	if _, e = kind.generationID(r.AgentID, 1); e != nil {
 		return r, ErrCorrupt
 	}
-	if r.Last != nil && !r.Last.valid(r.AgentID, r.Floor) {
+	if r.Last != nil && !r.Last.validKind(kind, r.AgentID, r.Floor) {
 		return r, ErrCorrupt
 	}
 	if r.Phase != "idle" {
@@ -120,7 +127,7 @@ func decodeRecord(raw []byte) (diskRecord, error) {
 		}
 		return r, nil
 	}
-	gid, e := inventorywire.GenerationID(r.AgentID, r.Floor)
+	gid, e := kind.generationID(r.AgentID, r.Floor)
 	if e != nil || r.Generation != gid {
 		return r, ErrCorrupt
 	}
@@ -130,7 +137,7 @@ func decodeRecord(raw []byte) (diskRecord, error) {
 	}
 	switch r.Phase {
 	case "allocated", "failure":
-		m, e := inventorywire.DecodeMessage("failure", r.Failure)
+		m, e := kind.decodeMessage("failure", r.Failure)
 		if e != nil || m.Sequence != r.Floor || m.GenerationID != r.Generation || m.FailureAt.Format(time.RFC3339Nano) != r.AttemptedAt || r.ManifestHash != "" || r.Count != 0 || r.PackSHA256 != "" || r.PackBytes != 0 || r.Next != 0 {
 			return r, ErrCorrupt
 		}
@@ -159,7 +166,7 @@ func decodeRecord(raw []byte) (diskRecord, error) {
 		return r, ErrCorrupt
 	}
 	if r.Phase == "retiring" {
-		receipt, e := inventorywire.DecodeReceipt(r.Last.Receipt, r.Last.Operation, r.Last.Request)
+		receipt, e := kind.decodeReceipt(r.Last.Receipt, r.Last.Operation, r.Last.Request)
 		if e != nil || !receiptContext(r, receipt) {
 			return r, ErrCorrupt
 		}

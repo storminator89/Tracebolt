@@ -48,6 +48,23 @@ beforeEach(() => {
 afterEach(() => { cleanup(); abortProtectedRequests(); vi.useRealTimers(); vi.restoreAllMocks(); });
 
 describe('explicit device metadata refresh', () => {
+    it('refreshes only the read-only certificate check and never treats new contact as renewal', async () => {
+        const expiresAt = '2026-10-04T12:01:00Z';
+        vi.mocked(request).mockImplementation(async path => path === `/devices/${id}` ? { ...device(), agentCertificate: { source: 'guided-enrollment', expiresAt, checkedAt: journalNow } } : answer(path));
+        await start();
+        const region = screen.getByRole('region', { name: 'Agent certificate' });
+        expect(within(region).getByText('Expires within 48 hours')).toBeVisible();
+        const calls = vi.mocked(request).mock.calls.length, held = holdRefresh();
+        await act(async () => held.resolve({ ...device(id, true), agentCertificate: { source: 'guided-enrollment', expiresAt, checkedAt: expiresAt } }));
+        expect(within(region).getByText('Expired')).toBeVisible();
+        expect(region.querySelector('time')).toHaveAttribute('datetime', expiresAt);
+        expect(region.querySelector('button')).toBeNull();
+        expect(request).toHaveBeenCalledTimes(calls + 1); expect(mutateRaw).not.toHaveBeenCalled();
+        expect(document.querySelector('.detail-time')).toHaveTextContent(relativeTime(newContact));
+        act(() => window.dispatchEvent(new Event(AUTH_REQUIRED_EVENT)));
+        expect(screen.queryByRole('region', { name: 'Agent certificate' })).not.toBeInTheDocument();
+    });
+
     it('updates metrics and contact from one bounded GET without remounting the overview or expanding its details', async () => {
         await start();
         const metrics = document.querySelector('.device-metrics')!, technical = screen.getByText('Device profile & technical details').closest('details')!;

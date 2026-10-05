@@ -44,13 +44,15 @@ type inventorySource func(context.Context, string, time.Time) (fullinventory.Sou
 // It creates no directory, identity, background job, retry timer or credential.
 // Its caller serializes telemetry and Burst and supplies a cooperative deadline.
 type inventorySender struct {
-	mu       sync.Mutex
-	material Material
-	state    *inventorystate.State
-	client   *http.Client
-	now      func() time.Time
-	collect  inventorySource
-	closed   bool
+	mu              sync.Mutex
+	material        Material
+	state           *inventorystate.State
+	client          *http.Client
+	now             func() time.Time
+	collect         inventorySource
+	completeUpdates bool
+	collectUpdates  completeUpdatesSource
+	closed          bool
 }
 
 func (*inventorySender) String() string               { return "complete inventory sender (contents redacted)" }
@@ -114,11 +116,17 @@ func (s *inventorySender) Burst(ctx context.Context) (inventoryReport, error) {
 	if s.closed || s.state == nil {
 		return r, ErrState
 	}
-	if !s.material.valid() || !s.material.config.complete() || s.now == nil || s.collect == nil || s.client == nil {
+	if !s.material.valid() || !s.material.config.complete() || s.now == nil || (!s.completeUpdates && s.collect == nil) || (s.completeUpdates && s.collectUpdates == nil) || s.client == nil {
 		return r, ErrConfiguration
 	}
 	if ctx.Err() != nil {
 		return r, ctx.Err()
+	}
+	if s.completeUpdates {
+		if _, ok := readCompleteUpdatesConsent(s.material); !ok {
+			r.Status = "disabled"
+			return r, nil
+		}
 	}
 	w, pending, err := s.state.NextWork()
 	if err != nil {
@@ -141,6 +149,10 @@ func (s *inventorySender) Burst(ctx context.Context) (inventoryReport, error) {
 		}
 		r.Sequence, r.Captured = a.Sequence, true
 		if err := s.capture(ctx, a); err != nil {
+			if errors.Is(err, errCompleteUpdatesDisabled) {
+				r.Status = "disabled"
+				return r, nil
+			}
 			return r, err
 		}
 		w, pending, err = s.state.NextWork()
@@ -159,6 +171,10 @@ func (s *inventorySender) Burst(ctx context.Context) (inventoryReport, error) {
 		r.Operations++
 		raw, conflict, err := s.deliver(ctx, w)
 		if err != nil {
+			if errors.Is(err, errCompleteUpdatesDisabled) {
+				r.Status = "disabled"
+				return r, nil
+			}
 			return r, err
 		}
 		if conflict {
@@ -175,6 +191,10 @@ func (s *inventorySender) Burst(ctx context.Context) (inventoryReport, error) {
 			r.Operations++
 			statusRaw, statusConflict, err := s.deliver(ctx, status)
 			if err != nil {
+				if errors.Is(err, errCompleteUpdatesDisabled) {
+					r.Status = "disabled"
+					return r, nil
+				}
 				return r, err
 			}
 			if statusConflict {
@@ -242,6 +262,9 @@ func inventoryStateError(ctx context.Context) error {
 }
 
 func (s *inventorySender) capture(ctx context.Context, a inventorystate.Allocation) error {
+	if s.completeUpdates {
+		return s.captureCompleteUpdates(ctx, a)
+	}
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}

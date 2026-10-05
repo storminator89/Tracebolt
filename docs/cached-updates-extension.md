@@ -4,9 +4,11 @@ Status: unpublished, default-off source candidate based on
 `424bff2f8f9a10ca1ba68a889a71039b2bd7a525`. This is a bounded preview, **not the
 completed all-update inventory feature**. A successful enumeration records exact
 candidate and hold totals, but only a 2 KiB / at-most-16-row candidate preview is
-retained. Omitted candidate rows are not available elsewhere. Truncation is always
-`partial`, `truncated=true`, and `item_limit` or `byte_limit`. Complete generation
-transport and authenticated paging for every candidate remain a separate gate.
+retained. Preview consent alone does not make omitted rows available. The separately acknowledged
+[complete cached-update extension](complete-cached-updates-extension.md) adds a
+distinct full-known-row path; it never reinterprets this preview grant. Truncation is always
+`partial`, `truncated=true`, and `item_limit` or `byte_limit`. This page documents only the preserved preview contract. Native source and deployment
+acceptance remain separate gates for both extensions.
 
 ## Collection and meaning
 

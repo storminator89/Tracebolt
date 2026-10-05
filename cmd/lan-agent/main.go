@@ -32,6 +32,8 @@ func main() {
 	enrollmentBootstrap := flag.String("enrollment-bootstrap", "", "Fixed public bootstrap for explicit pending-service mode")
 	enrollmentState := flag.String("enrollment-state-directory", "", "Existing private pending-service enrollment directory")
 	insecurePending := flag.Bool("insecure-http-test", false, "Explicit unauthenticated HTTP pending-service acknowledgement")
+	completeUpdatesConsentMode := flag.String("complete-cached-updates-consent", "", "Local-only preview, enable, or disable of all known cached APT candidate rows; stop the sender first")
+	completeUpdatesConsentAck := flag.Bool("ack-complete-cached-updates", false, "Acknowledge transmitting all known cached APT candidate rows, installed/candidate versions, holds, unknown comparisons and original index age every six hours; no refresh/install/privilege change; HTTP-test is plaintext")
 	cachedUpdatesConsentMode := flag.String("cached-updates-consent", "", "Local-only preview, enable, or disable of cached APT update status; stop the sender first")
 	cachedUpdatesConsentAck := flag.Bool("ack-cached-updates", false, "Acknowledge package names/architectures/versions, cached APT candidates, dpkg holds, bounded sample/counts and index modification age; no refresh/install/privilege change; HTTP-test is plaintext")
 	endpointConsentMode := flag.String("endpoint-identity-consent", "", "Local-only preview, enable, or disable of the explicit hostname/interface-address extension; stop the sender first")
@@ -49,6 +51,13 @@ func main() {
 	if runtime.GOOS != "linux" {
 		fmt.Fprintln(os.Stderr, "Tracebolt LAN sender state is currently supported on Linux only; native ACL validation is pending for other platforms.")
 		os.Exit(2)
+	}
+	if *completeUpdatesConsentMode != "" || *completeUpdatesConsentAck {
+		if *foreground || *validate || *interval != 30*time.Second || *enrollmentBootstrap != "" || *enrollmentState != "" || *insecurePending || *cachedUpdatesConsentMode != "" || *cachedUpdatesConsentAck || *endpointConsentMode != "" || *endpointConsentAck || *overviewConsentMode != "" || *overviewConsentAck || *journalConsentMode != "" || *journalConsentAck || *journalPlaintextAck {
+			fmt.Fprintln(os.Stderr, "Complete cached update consent cannot be combined with reporting, validation, enrollment or other consent modes.")
+			os.Exit(2)
+		}
+		os.Exit(runCompleteUpdatesConsent(completeUpdatesConsentOptions{Path: *path, Mode: *completeUpdatesConsentMode, Identity: *identity, Acknowledged: *completeUpdatesConsentAck}, completeUpdatesConsentHooks{identity: serviceIdentity, configure: lanclient.ConfigureCompleteCachedUpdates}, os.Stdout, os.Stderr))
 	}
 	if *cachedUpdatesConsentMode != "" || *cachedUpdatesConsentAck {
 		if *foreground || *validate || *interval != 30*time.Second || *enrollmentBootstrap != "" || *enrollmentState != "" || *insecurePending || *endpointConsentMode != "" || *endpointConsentAck || *overviewConsentMode != "" || *overviewConsentAck || *journalConsentMode != "" || *journalConsentAck || *journalPlaintextAck {

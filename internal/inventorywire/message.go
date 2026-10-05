@@ -6,6 +6,7 @@ import (
 	"io"
 	"localrmm/internal/enrollmentcrypto"
 	"localrmm/internal/fullinventory"
+	"localrmm/internal/updategeneration"
 	"strconv"
 	"time"
 	"unicode/utf8"
@@ -19,6 +20,8 @@ type Message struct {
 	GenerationID, ManifestHash string
 	Manifest                   *fullinventory.Manifest
 	Chunk                      *fullinventory.Chunk
+	UpdateManifest             *updategeneration.Manifest
+	UpdateChunk                *updategeneration.Chunk
 	FailureAt                  time.Time
 	FailureReason              string
 }
@@ -68,6 +71,9 @@ func object(raw []byte, keys ...string) (map[string]json.RawMessage, error) {
 	return out, nil
 }
 func DecodeMessage(operation string, raw []byte) (Message, error) {
+	return decodeMessage(packageTransfer, operation, raw)
+}
+func decodeMessage(kind transferKind, operation string, raw []byte) (Message, error) {
 	bad := func() (Message, error) { return Message{}, ErrContract }
 	if !ValidOperation(operation) || len(raw) == 0 || len(raw) > MaxBodyBytes {
 		return bad()
@@ -80,7 +86,7 @@ func DecodeMessage(operation string, raw []byte) (Message, error) {
 	if json.Unmarshal(fields["schemaVersion"], &wire.SchemaVersion) != nil || json.Unmarshal(fields["sequence"], &wire.Sequence) != nil || json.Unmarshal(fields["generationId"], &wire.GenerationID) != nil || json.Unmarshal(fields["manifestHash"], &wire.ManifestHash) != nil {
 		return bad()
 	}
-	if wire.SchemaVersion != MessageVersion || !enrollmentcrypto.ValidID(wire.GenerationID, "sample_") {
+	if wire.SchemaVersion != kind.messageVersion() || !enrollmentcrypto.ValidID(wire.GenerationID, "sample_") {
 		return bad()
 	}
 	sequence, ok := canonicalSequence(wire.Sequence)
@@ -98,6 +104,18 @@ func DecodeMessage(operation string, raw []byte) (Message, error) {
 	payload := fields["payload"]
 	switch operation {
 	case "begin":
+		if kind == cachedUpdatesTransfer {
+			m, e := updategeneration.DecodeManifest(payload)
+			if e != nil || m.GenerationID != out.GenerationID {
+				return bad()
+			}
+			hash, e := updategeneration.ManifestDigest(m)
+			if e != nil || hash != out.ManifestHash {
+				return bad()
+			}
+			out.UpdateManifest = &m
+			break
+		}
 		m, e := fullinventory.DecodeManifest(payload)
 		if e != nil || m.GenerationID != out.GenerationID {
 			return bad()
@@ -108,6 +126,14 @@ func DecodeMessage(operation string, raw []byte) (Message, error) {
 		}
 		out.Manifest = &m
 	case "append":
+		if kind == cachedUpdatesTransfer {
+			c, e := updategeneration.DecodeChunk(payload)
+			if e != nil || c.GenerationID != out.GenerationID || c.ManifestSHA256 != out.ManifestHash {
+				return bad()
+			}
+			out.UpdateChunk = &c
+			break
+		}
 		c, e := fullinventory.DecodeChunk(payload)
 		if e != nil || c.GenerationID != out.GenerationID || c.ManifestSHA256 != out.ManifestHash {
 			return bad()
@@ -128,6 +154,10 @@ func DecodeMessage(operation string, raw []byte) (Message, error) {
 		}
 		switch out.FailureReason {
 		case "source_missing", "source_invalid", "source_changed", "resource_limit", "collection_failed":
+		case "not_supported":
+			if kind != cachedUpdatesTransfer {
+				return bad()
+			}
 		default:
 			return bad()
 		}
@@ -139,15 +169,18 @@ func DecodeMessage(operation string, raw []byte) (Message, error) {
 	return out, nil
 }
 func EncodeMessage(operation string, sequence uint64, generation, manifestHash string, payload any) ([]byte, error) {
+	return encodeMessage(packageTransfer, operation, sequence, generation, manifestHash, payload)
+}
+func encodeMessage(kind transferKind, operation string, sequence uint64, generation, manifestHash string, payload any) ([]byte, error) {
 	data, e := json.Marshal(payload)
 	if e != nil {
 		return nil, ErrContract
 	}
-	raw, e := json.Marshal(wireMessage{MessageVersion, strconv.FormatUint(sequence, 10), generation, manifestHash, data})
+	raw, e := json.Marshal(wireMessage{kind.messageVersion(), strconv.FormatUint(sequence, 10), generation, manifestHash, data})
 	if e != nil {
 		return nil, ErrContract
 	}
-	if _, e = DecodeMessage(operation, raw); e != nil {
+	if _, e = decodeMessage(kind, operation, raw); e != nil {
 		return nil, e
 	}
 	return raw, nil

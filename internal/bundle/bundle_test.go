@@ -36,6 +36,7 @@ func TestRejectUnexpectedData(t *testing.T) {
 		name   string
 		change func(*model.Device)
 	}{
+		{"operator certificate metadata", func(d *model.Device) { d.AgentCertificate = &model.AgentCertificate{} }},
 		{"hostname field", func(d *model.Device) { d.Name = "private-hostname" }},
 		{"account field", func(d *model.Device) { d.Site = "private-account" }},
 		{"arbitrary tag", func(d *model.Device) { d.Tags = []string{"private-value"} }},

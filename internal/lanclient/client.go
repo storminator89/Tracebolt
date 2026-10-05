@@ -36,6 +36,9 @@ type receipt struct {
 	Duplicate     bool      `json:"duplicate"`
 }
 type Report struct {
+	CachedUpdatesStatus         string `json:"cachedUpdatesStatus,omitempty"`
+	CachedUpdatesSequence       uint64 `json:"cachedUpdatesSequence,omitempty"`
+	CachedUpdatesOperations     uint8  `json:"cachedUpdatesOperations,omitempty"`
 	ProcessesStatus             string `json:"processesStatus,omitempty"`
 	ProcessesSequence           uint64 `json:"processesSequence,omitempty"`
 	VolumesStatus               string `json:"volumesStatus,omitempty"`
@@ -62,7 +65,8 @@ type Report struct {
 
 // Run preserves the legacy one-shot collection/delivery behavior. The explicitly
 // complete profile adds serialized system/package work with separate cooperative
-// stage budgets. Explicit overview consent adds one shared 20s/64-operation
+// stage budgets. Separate full-update consent adds a 20s/64-operation burst;
+// explicit overview consent adds one shared 20s/64-operation
 // process-and-volume burst before the existing journal stage. The caller's own
 // deadline still bounds the one-shot call; these stage budgets are not a hard
 // overall cycle deadline. Pending bytes and original source times survive retry.
@@ -100,6 +104,11 @@ func Run(ctx context.Context, m Material) (Report, error) {
 		// foreground attempts retain their original20s budget separately.
 		return runUsingState(ctx, m, state)
 	}
+	updates, e := openCompleteUpdatesSender(m)
+	if e != nil {
+		return report, e
+	}
+	defer updates.Close()
 	overview, e := openOverviewSender(m)
 	if e != nil {
 		return report, e
@@ -108,6 +117,9 @@ func Run(ctx context.Context, m Material) (Report, error) {
 	journal := openJournalSender(m)
 	defer journal.Close()
 	report, err := runPreparedAttemptWithSystem(ctx, m, state, system, inventory, runUsingState)
+	if err == nil {
+		err = runCompleteUpdatesAttempt(ctx, updates, &report)
+	}
 	if err == nil {
 		err = runOverviewAndJournal(ctx, overview, &report, func(parent context.Context) string { return runJournalAttempt(parent, journal) })
 	}

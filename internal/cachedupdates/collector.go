@@ -41,12 +41,19 @@ func Collect(ctx context.Context, generation string, at time.Time, consent Local
 	return collectWith(ctx, generation, at, consent, binding, &admitted, newNativeSource)
 }
 func collectWith(ctx context.Context, generation string, at time.Time, consent LocalConsent, binding string, slot *atomic.Bool, factory func() (nativeSource, error)) (Snapshot, error) {
+	if _, e := EncodeLocalConsent(consent, binding); e != nil {
+		return Snapshot{}, ErrInvalidInput
+	}
+	return collectCore(ctx, generation, at, slot, factory, nil)
+}
+
+// collectCore is reachable only through an exact scope-specific consent check.
+// Full rows are copied before preview trimming and only after the final source
+// recheck; failed or interrupted operations never expose a prefix as complete.
+func collectCore(ctx context.Context, generation string, at time.Time, slot *atomic.Bool, factory func() (nativeSource, error), fullRows *[]Candidate) (Snapshot, error) {
 	start := time.Now()
 	s := Empty(generation, at, ReasonReadFailed)
 	if ctx == nil || Validate(s) != nil {
-		return Snapshot{}, ErrInvalidInput
-	}
-	if _, e := EncodeLocalConsent(consent, binding); e != nil {
 		return Snapshot{}, ErrInvalidInput
 	}
 	if ctx.Err() != nil {
@@ -201,7 +208,11 @@ func collectWith(ctx context.Context, generation string, at time.Time, consent L
 		return s.Items[i].Architecture < s.Items[j].Architecture
 	})
 	s.DurationMS = time.Since(start).Milliseconds()
-	return trim(s)
+	preview, e := trim(s)
+	if e == nil && fullRows != nil {
+		*fullRows = append([]Candidate{}, s.Items...)
+	}
+	return preview, e
 }
 func reason(e error) Reason {
 	var r sourceFailure

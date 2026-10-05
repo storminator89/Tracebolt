@@ -1,0 +1,15 @@
+import type { CachedUpdateRow } from './cached-updates-types';
+import type { CompleteUpdatePage, CompleteUpdateView } from './complete-updates-types';
+// Synthetic fixtures. Production never imports or substitutes these for a device.
+export const updateDevice = 'agent_complete_updates_fixture';
+export function updateRows(count = 1213): CachedUpdateRow[] { return Array.from({ length: count }, (_, i) => ({ name: `fixture-update-${String(i).padStart(6, '0')}`, architecture: 'amd64', installedVersion: '1:1.0~rc1-1', candidateVersion: '2:1.0-1', state: i % 7 === 0 ? 'held' : 'candidate_only', installability: 'not_evaluated' })); }
+export function updateView(count = 1213): CompleteUpdateView {
+    return { schemaVersion: 'tracebolt.complete-update-view.v1', deviceId: updateDevice, serverNow: '2026-10-05T04:00:10Z', collectionProfile: 'managed-operations-v3', status: 'available', complete: { binding: { sequence: '9223372036854775807', generationId: `sample_${'a'.repeat(32)}`, manifestHash: 'b'.repeat(64) }, state: 'complete', completedAt: '2026-10-05T04:00:05Z', retainedUntil: '2026-10-06T04:00:00Z', manifest: { schemaVersion: 'tracebolt.complete-cached-apt-updates.v1', scope: 'agent-visible-complete-known-cached-apt-candidate-rows', generationId: `sample_${'a'.repeat(32)}`, collectedAt: '2026-10-05T04:00:00Z', durationMs: 3, release: { id: 'debian', versionId: '13', versionCodename: 'trixie' }, metadata: { freshness: 'stale', oldestIndexModifiedAt: '2026-10-02T04:00:00Z', ageSeconds: 259200, ageBasis: 'oldest-local-package-index-mtime', refresh: 'not_attempted' }, comparisonCoverage: 'complete', comparisonReason: 'none', installedCount: count + 3, checkedCount: count + 3, candidateCount: count, heldCount: Math.ceil(count / 7), unknownCount: 0, chunkCount: Math.ceil(count / 128), canonicalRowBytes: count * 200, rowsSha256: count ? 'c'.repeat(64) : '172fd0ef0e5dcad6987433bf5815d9d77d4cb2ddd4ef403cfd451a316defa9af' } }, transfer: null, failure: null };
+}
+export function updatePage(view: CompleteUpdateView, rows: CachedUpdateRow[], raw = ''): CompleteUpdatePage {
+    const input = raw ? JSON.parse(raw) as { cursor: string; search: string; limit: number } : { cursor: '', search: '', limit: 100 };
+    let index = input.cursor ? Number(input.cursor.slice(7)) : 0, scanned = 0;
+    const items: CachedUpdateRow[] = [], search = input.search.trim().toLowerCase();
+    for (; index < rows.length && scanned < 2048 && items.length < input.limit; index++) { const row = rows[index]; scanned++; if (!search || Object.values(row).join(' ').toLowerCase().includes(search)) items.push(row); }
+    return { schemaVersion: 'tracebolt.complete-update-page.v1', deviceId: view.deviceId, serverNow: view.serverNow, binding: view.complete!.binding, collectedAt: view.complete!.manifest.collectedAt, completedAt: view.complete!.completedAt, retainedUntil: view.complete!.retainedUntil, totalRows: rows.length, items, scannedRows: scanned, exhausted: index === rows.length, searchIncomplete: Boolean(search) && index < rows.length, nextCursor: index === rows.length ? '' : `cursor_${index}`, cursorExpiresAt: '2026-10-05T04:15:10Z' };
+}

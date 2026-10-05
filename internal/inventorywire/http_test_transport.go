@@ -64,6 +64,7 @@ type Config struct {
 	Registry PublicCertificateAuthorizer
 }
 type Verifier struct {
+	kind              transferKind
 	origin, authority string
 	registry          PublicCertificateAuthorizer
 	now               func() time.Time
@@ -83,11 +84,14 @@ type Verified struct {
 }
 
 func New(config Config) (*Verifier, error) {
+	return newVerifier(packageTransfer, config)
+}
+func newVerifier(kind transferKind, config Config) (*Verifier, error) {
 	authority, err := canonicalOrigin(config.Origin)
 	if err != nil || config.Registry == nil || (reflect.ValueOf(config.Registry).Kind() == reflect.Pointer && reflect.ValueOf(config.Registry).IsNil()) {
 		return nil, ErrConfiguration
 	}
-	return &Verifier{origin: config.Origin, authority: authority, registry: config.Registry, now: func() time.Time { return time.Now().UTC() }}, nil
+	return &Verifier{kind: kind, origin: config.Origin, authority: authority, registry: config.Registry, now: func() time.Time { return time.Now().UTC() }}, nil
 }
 
 func canonicalOrigin(origin string) (string, error) {
@@ -185,9 +189,12 @@ func decodeBase64(text string, limit int) ([]byte, bool) {
 	return raw, err == nil && base64.RawStdEncoding.EncodeToString(raw) == text
 }
 func transcript(origin, path, fingerprint, sequence, signedAt string, body []byte) []byte {
+	return domainTranscript(domain, origin, path, fingerprint, sequence, signedAt, body)
+}
+func domainTranscript(signatureDomain, origin, path, fingerprint, sequence, signedAt string, body []byte) []byte {
 	digest := sha256.Sum256(body)
 	var message bytes.Buffer
-	for _, field := range []string{domain, origin, http.MethodPost, path, "application/json", fingerprint, sequence, signedAt, hex.EncodeToString(digest[:])} {
+	for _, field := range []string{signatureDomain, origin, http.MethodPost, path, "application/json", fingerprint, sequence, signedAt, hex.EncodeToString(digest[:])} {
 		var size [4]byte
 		binary.BigEndian.PutUint32(size[:], uint32(len(field)))
 		message.Write(size[:])
@@ -203,7 +210,7 @@ func (v *Verifier) Verify(req *http.Request) (Verified, error) {
 	if v == nil || v.registry == nil || v.now == nil {
 		return bad(ErrRequest)
 	}
-	if err := ValidateShape(req, v.authority, "http-test"); err != nil {
+	if err := validateShape(v.kind, req, v.authority, "http-test"); err != nil {
 		return bad(err)
 	}
 	certText, ok1 := singleton(req.Header, CertificateHeader)
@@ -254,7 +261,7 @@ func (v *Verifier) Verify(req *http.Request) (Verified, error) {
 	if int64(len(body)) != req.ContentLength {
 		return bad(ErrRequest)
 	}
-	if !ed25519.Verify(publicKey, transcript(v.origin, req.URL.Path, lantrust.Fingerprint(cert), sequenceText, timeText, body), signature) {
+	if !ed25519.Verify(publicKey, domainTranscript(v.kind.signatureDomain(), v.origin, req.URL.Path, lantrust.Fingerprint(cert), sequenceText, timeText, body), signature) {
 		return bad(ErrUnauthorized)
 	}
 	// A slow body may cross expiry/revocation/time boundaries; recheck before
@@ -277,6 +284,9 @@ func (v *Verifier) Verify(req *http.Request) (Verified, error) {
 // request is plaintext; a caller must explicitly choose the insecure HTTP test
 // profile, disable proxies/redirects and accept that the server is unauthenticated.
 func NewSignedRequest(ctx context.Context, origin string, certificate tls.Certificate, operation string, sequence uint64, signedAt time.Time, body []byte) (*http.Request, error) {
+	return newSignedRequest(packageTransfer, ctx, origin, certificate, operation, sequence, signedAt, body)
+}
+func newSignedRequest(kind transferKind, ctx context.Context, origin string, certificate tls.Certificate, operation string, sequence uint64, signedAt time.Time, body []byte) (*http.Request, error) {
 	if _, err := canonicalOrigin(origin); err != nil {
 		return nil, err
 	}
@@ -306,8 +316,8 @@ func NewSignedRequest(ctx context.Context, origin string, certificate tls.Certif
 	}
 	sequenceText := strconv.FormatUint(sequence, 10)
 	bodyCopy := bytes.Clone(body)
-	signature := ed25519.Sign(key, transcript(origin, PathPrefix+operation, lantrust.Fingerprint(cert), sequenceText, timeText, bodyCopy))
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, origin+PathPrefix+operation, bytes.NewReader(bodyCopy))
+	signature := ed25519.Sign(key, domainTranscript(kind.signatureDomain(), origin, kind.pathPrefix()+operation, lantrust.Fingerprint(cert), sequenceText, timeText, bodyCopy))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, origin+kind.pathPrefix()+operation, bytes.NewReader(bodyCopy))
 	if err != nil {
 		return nil, ErrRequest
 	}

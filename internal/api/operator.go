@@ -358,6 +358,10 @@ func (h *operatorHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.completePackages(w, r)
 		return
 	}
+	if strings.HasPrefix(r.URL.Path, "/api/devices/") && strings.Contains(r.URL.Path, "/inventory/complete-updates") {
+		h.completeUpdates(w, r)
+		return
+	}
 	if strings.HasPrefix(r.URL.Path, "/api/devices/") && strings.Contains(r.URL.Path, "/inventory/cached-updates") {
 		h.cachedUpdates(w, r)
 		return

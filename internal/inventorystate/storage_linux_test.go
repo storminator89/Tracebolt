@@ -201,9 +201,15 @@ func TestSequenceExhaustionPreservesFloor(t *testing.T) {
 func generationID(seq uint64) (string, error) { return inventorywire.GenerationID(fixtureAgent, seq) }
 
 func TestAllocationFaultPhasesPreserveUncertainty(t *testing.T) {
+	testAllocationFaultPhasesPreserveUncertainty(t, newFixture, OpenExisting)
+}
+func TestCachedUpdatesAllocationFaultPhasesPreserveUncertainty(t *testing.T) {
+	testAllocationFaultPhasesPreserveUncertainty(t, newUpdateFixture, OpenCachedUpdatesExisting)
+}
+func testAllocationFaultPhasesPreserveUncertainty(t *testing.T, create func(*testing.T) (*State, string), openExisting func(string, string, string) (*State, error)) {
 	for _, phase := range []string{"marker-sync", "file-sync", "rename", "directory-sync"} {
 		t.Run(phase, func(t *testing.T) {
-			s, dir := newFixture(t)
+			s, dir := create(t)
 			store := s.inner.store.(*linuxStorage)
 			calls := 0
 			if phase == "rename" {
@@ -225,7 +231,7 @@ func TestAllocationFaultPhasesPreserveUncertainty(t *testing.T) {
 			}
 			s.Close()
 			before := directoryBytes(t, dir)
-			other, e := OpenExisting(dir, fixtureBinding, fixtureAgent)
+			other, e := openExisting(dir, fixtureBinding, fixtureAgent)
 			if phase == "directory-sync" {
 				if e != nil {
 					t.Fatal(e)
@@ -248,11 +254,17 @@ func TestAllocationFaultPhasesPreserveUncertainty(t *testing.T) {
 	}
 }
 func TestStageFaultPhasesNeverRecollectOrExposePrefix(t *testing.T) {
+	testStageFaultPhasesNeverRecollectOrExposePrefix(t, newFixture, payloads, OpenExisting)
+}
+func TestCachedUpdatesStageFaultPhasesNeverRecollectOrExposePrefix(t *testing.T) {
+	testStageFaultPhasesNeverRecollectOrExposePrefix(t, newUpdateFixture, updatePayloads, OpenCachedUpdatesExisting)
+}
+func testStageFaultPhasesNeverRecollectOrExposePrefix(t *testing.T, create func(*testing.T) (*State, string), encode func(*testing.T, Allocation, int) ([]byte, [][]byte), openExisting func(string, string, string) (*State, error)) {
 	for _, phase := range []string{"pack-marker-sync", "pack-file-sync", "pack-rename", "pack-directory-sync", "ledger-marker-sync", "ledger-file-sync", "ledger-rename", "ledger-directory-sync"} {
 		t.Run(phase, func(t *testing.T) {
-			s, dir := newFixture(t)
+			s, dir := create(t)
 			a := reserve(t, s)
-			m, c := payloads(t, a, 513)
+			m, c := encode(t, a, 513)
 			store := s.inner.store.(*linuxStorage)
 			calls := 0
 			if strings.HasSuffix(phase, "rename") {
@@ -277,7 +289,7 @@ func TestStageFaultPhasesNeverRecollectOrExposePrefix(t *testing.T) {
 			}
 			s.Close()
 			before := directoryBytes(t, dir)
-			other, e := OpenExisting(dir, fixtureBinding, fixtureAgent)
+			other, e := openExisting(dir, fixtureBinding, fixtureAgent)
 			if phase == "ledger-directory-sync" {
 				if e != nil {
 					t.Fatal(e)
@@ -300,14 +312,24 @@ func TestStageFaultPhasesNeverRecollectOrExposePrefix(t *testing.T) {
 	}
 }
 func TestRetirementRecoversAfterDeletionFsyncFailure(t *testing.T) {
-	s, dir := newFixture(t)
-	stageFixture(t, s, 0)
+	testRetirementRecoversAfterDeletionFsyncFailure(t, newFixture, payloads, receipt, OpenExisting, ValidateExisting)
+}
+func TestCachedUpdatesRetirementRecoversAfterDeletionFsyncFailure(t *testing.T) {
+	testRetirementRecoversAfterDeletionFsyncFailure(t, newUpdateFixture, updatePayloads, updateReceipt, OpenCachedUpdatesExisting, ValidateCachedUpdatesExisting)
+}
+func testRetirementRecoversAfterDeletionFsyncFailure(t *testing.T, create func(*testing.T) (*State, string), encode func(*testing.T, Allocation, int) ([]byte, [][]byte), response func(*testing.T, Work) []byte, openExisting func(string, string, string) (*State, error), validateExisting func(string, string, string) error) {
+	s, dir := create(t)
+	a := reserve(t, s)
+	m, chunks := encode(t, a, 0)
+	if err := s.Stage(context.Background(), a, m, chunks); err != nil {
+		t.Fatal(err)
+	}
 	w := next(t, s)
-	if e := s.Acknowledge(w, receipt(t, w)); e != nil {
+	if e := s.Acknowledge(w, response(t, w)); e != nil {
 		t.Fatal(e)
 	}
 	w = next(t, s)
-	ack := receipt(t, w)
+	ack := response(t, w)
 	store := s.inner.store.(*linuxStorage)
 	calls := 0
 	store.ops.sync = func(fd int) error {
@@ -322,11 +344,11 @@ func TestRetirementRecoversAfterDeletionFsyncFailure(t *testing.T) {
 	}
 	s.Close()
 	before := directoryBytes(t, dir)
-	if e := ValidateExisting(dir, fixtureBinding, fixtureAgent); e != nil {
+	if e := validateExisting(dir, fixtureBinding, fixtureAgent); e != nil {
 		t.Fatal("read-only validation of retiring state", e)
 	}
 	unchanged(t, dir, before)
-	s, e := OpenExisting(dir, fixtureBinding, fixtureAgent)
+	s, e := openExisting(dir, fixtureBinding, fixtureAgent)
 	if e != nil {
 		t.Fatal(e)
 	}

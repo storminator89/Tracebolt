@@ -1,6 +1,10 @@
 # From cached-update preview to complete rows
 
-Design assessment only. The current cached-update candidate still exports only a
+Historical design assessment. The implementation is documented in
+[the complete cached-update extension](complete-cached-updates-extension.md); its
+separate consent does not change the preview checkpoint described here.
+
+At the preview checkpoint the cached-update candidate exported only a
 bounded preview and exact full-query counts. This note does not claim that omitted
 rows can already be requested, nor authorize any endpoint action or local grant.
 

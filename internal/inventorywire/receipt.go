@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"localrmm/internal/fullinventory"
+	"localrmm/internal/updategeneration"
 	"strconv"
 	"time"
 )
@@ -31,11 +32,14 @@ type Receipt struct {
 // exact request digest. The caller additionally checks retained manifest facts
 // (especially final collection time and status counts) before changing state.
 func DecodeReceipt(raw []byte, operation string, exactRequestBody []byte) (Receipt, error) {
+	return decodeReceipt(packageTransfer, raw, operation, exactRequestBody)
+}
+func decodeReceipt(kind transferKind, raw []byte, operation string, exactRequestBody []byte) (Receipt, error) {
 	bad := func() (Receipt, error) { return Receipt{}, ErrContract }
 	if len(raw) == 0 || len(raw) > MaxReceiptBytes {
 		return bad()
 	}
-	m, e := DecodeMessage(operation, exactRequestBody)
+	m, e := decodeMessage(kind, operation, exactRequestBody)
 	if e != nil {
 		return bad()
 	}
@@ -45,7 +49,7 @@ func DecodeReceipt(raw []byte, operation string, exactRequestBody []byte) (Recei
 	}
 	get := func(k string) (string, bool) { var s string; e := json.Unmarshal(f[k], &s); return s, e == nil }
 	version, ok := get("schemaVersion")
-	if !ok || version != ReceiptVersion {
+	if !ok || version != kind.receiptVersion() {
 		return bad()
 	}
 	op, ok := get("operation")
@@ -69,6 +73,12 @@ func DecodeReceipt(raw []byte, operation string, exactRequestBody []byte) (Recei
 	if !ok || digest != hex.EncodeToString(sum[:]) {
 		return bad()
 	}
+	maxChunks, maxChunkRows, maxRows := uint64(fullinventory.MaxGenerationChunks), uint64(fullinventory.MaxChunkRows), uint64(fullinventory.MaxGenerationRows)
+	if kind == cachedUpdatesTransfer {
+		maxChunks, maxChunkRows, maxRows = updategeneration.MaxGenerationChunks, updategeneration.MaxChunkRows, updategeneration.MaxGenerationRows
+	}
+	collectedAt, _, _, _ := m.ManifestFacts()
+	ordinal, chunkRows, _ := m.ChunkFacts()
 	r := Receipt{Operation: op, Sequence: m.Sequence, GenerationID: gen, ManifestHash: hash, RequestSHA256: digest}
 	var fields map[string]json.RawMessage
 	switch op {
@@ -113,17 +123,17 @@ func DecodeReceipt(raw []byte, operation string, exactRequestBody []byte) (Recei
 			return bad()
 		}
 		r.ExpiresAt, ok = timestamp("expiresAt", false)
-		if !ok || r.ExpiresAt.Sub(r.StartedAt) != 15*time.Minute || r.StartedAt.Before(m.Manifest.CollectedAt) {
+		if !ok || r.ExpiresAt.Sub(r.StartedAt) != 15*time.Minute || r.StartedAt.Before(collectedAt) {
 			return bad()
 		}
 	case "append":
-		v, valid := integer("ordinal", fullinventory.MaxGenerationChunks-1)
-		if !valid || uint32(v) != m.Chunk.Ordinal {
+		v, valid := integer("ordinal", maxChunks-1)
+		if !valid || uint32(v) != ordinal {
 			return bad()
 		}
 		r.Ordinal = uint32(v)
-		r.Rows, ok = integer("rows", fullinventory.MaxChunkRows)
-		if !ok || r.Rows != uint64(len(m.Chunk.Items)) {
+		r.Rows, ok = integer("rows", maxChunkRows)
+		if !ok || r.Rows != chunkRows {
 			return bad()
 		}
 		r.ReceivedAt, ok = timestamp("receivedAt", false)
@@ -164,17 +174,17 @@ func DecodeReceipt(raw []byte, operation string, exactRequestBody []byte) (Recei
 		default:
 			return bad()
 		}
-		v, valid := integer("acceptedChunks", fullinventory.MaxGenerationChunks)
+		v, valid := integer("acceptedChunks", maxChunks)
 		if !valid {
 			return bad()
 		}
 		r.AcceptedChunks = uint32(v)
-		v, valid = integer("expectedChunks", fullinventory.MaxGenerationChunks)
+		v, valid = integer("expectedChunks", maxChunks)
 		if !valid {
 			return bad()
 		}
 		r.ExpectedChunks = uint32(v)
-		r.AcceptedRows, ok = integer("acceptedRows", fullinventory.MaxGenerationRows)
+		r.AcceptedRows, ok = integer("acceptedRows", maxRows)
 		if !ok || r.AcceptedChunks > r.ExpectedChunks {
 			return bad()
 		}

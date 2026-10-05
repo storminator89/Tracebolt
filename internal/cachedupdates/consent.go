@@ -27,6 +27,9 @@ type LocalConsent struct {
 // an implied opt-in. Neither a manager setting nor an unknown future version
 // may stand in for this acknowledgement. It accepts no path or credentials.
 func DecodeLocalConsent(raw []byte, expectedBinding string) (LocalConsent, error) {
+	return decodeLocalConsent(raw, expectedBinding, ConsentVersion, SchemaVersion, Scope)
+}
+func decodeLocalConsent(raw []byte, expectedBinding, version, extension, scope string) (LocalConsent, error) {
 	bad := func() (LocalConsent, error) { return LocalConsent{}, ErrInvalidInput }
 	if len(raw) == 0 || len(raw) > MaxConsentBytes || !utf8.Valid(raw) || !validConsentBinding(expectedBinding) {
 		return bad()
@@ -44,7 +47,7 @@ func DecodeLocalConsent(raw []byte, expectedBinding string) (LocalConsent, error
 	if !ok || len(m) != 5 {
 		return bad()
 	}
-	expected := map[string]any{"schemaVersion": ConsentVersion, "extensionVersion": SchemaVersion, "scope": Scope, "senderBinding": expectedBinding, "acknowledged": true}
+	expected := map[string]any{"schemaVersion": version, "extensionVersion": extension, "scope": scope, "senderBinding": expectedBinding, "acknowledged": true}
 	for key, want := range expected {
 		got, ok := m[key]
 		if !ok {
@@ -65,7 +68,7 @@ func DecodeLocalConsent(raw []byte, expectedBinding string) (LocalConsent, error
 			return bad()
 		}
 	}
-	return LocalConsent{ConsentVersion, SchemaVersion, Scope, expectedBinding, true}, nil
+	return LocalConsent{version, extension, scope, expectedBinding, true}, nil
 }
 
 // EncodeLocalConsent constructs no acknowledgement on the caller's behalf.

@@ -92,6 +92,9 @@ func prepareWithEnrollment(m lanconfig.Material, enrollment *enrollmentconfig.Ma
 			if e = enrolledStore.InitializeOverview(context.Background()); e != nil {
 				return fail(e)
 			}
+			if e = enrolledStore.InitializeCompleteUpdates(context.Background()); e != nil {
+				return fail(e)
+			}
 		}
 		enrolledService, e = enrollmentservice.New(enrolledStore, enrollment.Issuer(), nil)
 		if e != nil {

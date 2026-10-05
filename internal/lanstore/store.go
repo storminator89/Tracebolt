@@ -279,6 +279,12 @@ func (s *Store) Devices(ctx context.Context, agents []lantrust.Agent, now time.T
 		} else if !errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrStorage
 		}
+		// Registry expiry comes from the approved leaf certificate, never telemetry.
+		d.AgentCertificate = &model.AgentCertificate{Source: "manual-approval", CheckedAt: now.UTC()}
+		if !agent.ExpiresAt.IsZero() {
+			expires := agent.ExpiresAt.UTC()
+			d.AgentCertificate.ExpiresAt = &expires
+		}
 		trust := "supported"
 		detail := "Manually approved certificate; identity is assigned by this manager. This does not establish overall device health."
 		if !agent.RevokedAt.IsZero() || !now.Before(agent.ExpiresAt) {

@@ -106,7 +106,7 @@ func shape(raw []byte, t reflect.Type) error {
 			return err
 		}
 		expected := t.NumField()
-		if t == reflect.TypeOf(model.Evidence{}) {
+		if t == reflect.TypeOf(model.Evidence{}) || t == reflect.TypeOf(model.Device{}) {
 			expected--
 		}
 		if len(obj) != expected {
@@ -115,10 +115,10 @@ func shape(raw []byte, t reflect.Type) error {
 		for i := 0; i < t.NumField(); i++ {
 			f := t.Field(i)
 			name := strings.Split(f.Tag.Get("json"), ",")[0]
-			// Internal AI provenance is deliberately absent from bundle-v1.
-			if t == reflect.TypeOf(model.Evidence{}) && name == "collectionProfile" {
+			// Manager-owned metadata is deliberately absent from bundle-v1.
+			if t == reflect.TypeOf(model.Evidence{}) && name == "collectionProfile" || t == reflect.TypeOf(model.Device{}) && name == "agentCertificate" {
 				if _, present := obj[name]; present {
-					return errors.New("internal-only evidence field")
+					return errors.New("internal-only observation field")
 				}
 				continue
 			}

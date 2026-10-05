@@ -257,9 +257,9 @@ func shape(value any, t reflect.Type) bool {
 			if name == "" {
 				name = field.Name
 			}
-			// Case/evidence provenance is persisted internally for AI export policy.
-			// It is not a new support-bundle-v1 wire field.
-			if t == reflect.TypeOf(model.Evidence{}) && name == "collectionProfile" {
+			// Manager-owned expiry and evidence provenance are operator-only.
+			// They do not extend the support-bundle-v1 wire contract.
+			if t == reflect.TypeOf(model.Evidence{}) && name == "collectionProfile" || t == reflect.TypeOf(model.Device{}) && name == "agentCertificate" {
 				if _, present := object[name]; present {
 					return false
 				}

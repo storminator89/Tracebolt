@@ -134,10 +134,13 @@ func ValidateExisting(dir, binding, agentID string) error {
 	return s.Close()
 }
 func open(dir, binding, agentID string, fresh, recover bool) (*State, error) {
+	return openKind(packageTransfer, dir, binding, agentID, fresh, recover)
+}
+func openKind(kind transferKind, dir, binding, agentID string, fresh, recover bool) (*State, error) {
 	if !validDigest(binding) {
 		return nil, ErrBinding
 	}
-	if _, e := inventorywire.GenerationID(agentID, 1); e != nil {
+	if _, e := kind.generationID(agentID, 1); e != nil {
 		return nil, ErrBinding
 	}
 	store, raw, isNew, e := newStorageMode(dir, fresh)
@@ -147,7 +150,7 @@ func open(dir, binding, agentID string, fresh, recover bool) (*State, error) {
 	fail := func(e error) (*State, error) { _ = store.close(); return nil, e }
 	var r diskRecord
 	if isNew {
-		r = diskRecord{Version: stateVersion, Binding: binding, AgentID: agentID, Phase: "idle"}
+		r = diskRecord{kind: kind, Version: kind.stateVersion(), Binding: binding, AgentID: agentID, Phase: "idle"}
 		raw, e = encodeRecord(r)
 		if e == nil {
 			e = store.replace(raw)
@@ -156,7 +159,7 @@ func open(dir, binding, agentID string, fresh, recover bool) (*State, error) {
 			return fail(e)
 		}
 	} else {
-		r, e = decodeRecord(raw)
+		r, e = decodeRecordKind(kind, raw)
 		if e != nil {
 			return fail(e)
 		}
@@ -275,7 +278,7 @@ func (s *State) Allocate(ctx context.Context, at time.Time) (Allocation, error) 
 	r := v.record
 	r.Floor++
 	r.Phase = "allocated"
-	r.Generation, _ = inventorywire.GenerationID(r.AgentID, r.Floor)
+	r.Generation, _ = r.kind.generationID(r.AgentID, r.Floor)
 	r.AttemptedAt = at.Format(time.RFC3339Nano)
 	r.Failure, e = failureBody(r, "collection_failed")
 	if e != nil {
@@ -365,13 +368,13 @@ func (v *state) next() (Work, bool, error) {
 	case "idle", "retiring":
 		return Work{}, false, nil
 	case "allocated", "failure":
-		return makeWork("failure", r.Failure), true, nil
+		return makeWorkKind(r.kind, "failure", r.Failure), true, nil
 	case "abort":
-		raw, e := inventorywire.EncodeMessage("abort", r.Floor, r.Generation, r.ManifestHash, struct{}{})
+		raw, e := r.kind.encodeMessage("abort", r.Floor, r.Generation, r.ManifestHash, struct{}{})
 		if e != nil {
 			return Work{}, false, ErrCorrupt
 		}
-		return makeWork("abort", raw), true, nil
+		return makeWorkKind(r.kind, "abort", raw), true, nil
 	case "ready":
 		if v.pack == nil || int(r.Next) >= len(v.pack.frames) {
 			return Work{}, false, ErrCorrupt
@@ -383,7 +386,7 @@ func (v *state) next() (Work, bool, error) {
 		if r.Next == r.Count+1 {
 			op = "finalize"
 		}
-		return makeWork(op, v.pack.frames[r.Next]), true, nil
+		return makeWorkKind(r.kind, op, v.pack.frames[r.Next]), true, nil
 	}
 	return Work{}, false, ErrCorrupt
 }
@@ -400,13 +403,16 @@ func (s *State) NextWork() (Work, bool, error) {
 	return v.next()
 }
 func makeWork(op string, raw []byte) Work {
-	m, e := inventorywire.DecodeMessage(op, raw)
+	return makeWorkKind(packageTransfer, op, raw)
+}
+func makeWorkKind(kind transferKind, op string, raw []byte) Work {
+	m, e := kind.decodeMessage(op, raw)
 	if e != nil {
 		return Work{}
 	}
 	ordinal := -1
-	if m.Chunk != nil {
-		ordinal = int(m.Chunk.Ordinal)
+	if n, _, ok := m.ChunkFacts(); ok {
+		ordinal = int(n)
 	}
 	return Work{op, m.Sequence, m.GenerationID, m.ManifestHash, ordinal, digest(raw), &workBody{bytes.Clone(raw)}}
 }
@@ -426,15 +432,15 @@ func (s *State) Acknowledge(work Work, receipt []byte) error {
 	if len(receipt) == 0 || len(receipt) > MaxReceiptBytes || !json.Valid(receipt) || bytes.Equal(bytes.TrimSpace(receipt), []byte("null")) {
 		return ErrAcknowledgment
 	}
-	decoded, e := inventorywire.DecodeReceipt(receipt, work.Operation, work.body.raw)
-	if e != nil {
-		return ErrAcknowledgment
-	}
 	v, e := s.locked()
 	if e != nil {
 		return e
 	}
 	defer v.mu.Unlock()
+	decoded, e := v.record.kind.decodeReceipt(receipt, work.Operation, work.body.raw)
+	if e != nil {
+		return ErrAcknowledgment
+	}
 	if a := v.record.Last; a != nil && a.matches(work) {
 		if bytes.Equal(a.Receipt, receipt) {
 			return nil
@@ -503,11 +509,11 @@ func (s *State) StatusWork() (Work, error) {
 	if r.Phase != "ready" && r.Phase != "abort" {
 		return Work{}, ErrPending
 	}
-	raw, e := inventorywire.EncodeMessage("status", r.Floor, r.Generation, r.ManifestHash, struct{}{})
+	raw, e := r.kind.encodeMessage("status", r.Floor, r.Generation, r.ManifestHash, struct{}{})
 	if e != nil {
 		return Work{}, ErrCorrupt
 	}
-	return makeWork("status", raw), nil
+	return makeWorkKind(r.kind, "status", raw), nil
 }
 
 // RequestAbort requests only a purpose-bound abort. The caller must first verify
@@ -542,7 +548,7 @@ func (v *state) finishRetirement() error {
 	return nil
 }
 func idleRecord(r diskRecord) diskRecord {
-	return diskRecord{Version: r.Version, Binding: r.Binding, AgentID: r.AgentID, Floor: r.Floor, Phase: "idle", AttemptedAt: r.AttemptedAt, Last: r.Last}
+	return diskRecord{kind: r.kind, Version: r.Version, Binding: r.Binding, AgentID: r.AgentID, Floor: r.Floor, Phase: "idle", AttemptedAt: r.AttemptedAt, Last: r.Last}
 }
 func (s *State) Close() error {
 	if s == nil || s.inner == nil {
@@ -575,7 +581,7 @@ func validTime(t time.Time) bool {
 	return !t.IsZero() && t.Location() == time.UTC && t.Year() >= 1970 && t.Year() <= 9999
 }
 func failureBody(r diskRecord, reason string) ([]byte, error) {
-	raw, e := inventorywire.EncodeMessage("failure", r.Floor, r.Generation, "", struct {
+	raw, e := r.kind.encodeMessage("failure", r.Floor, r.Generation, "", struct {
 		AttemptedAt string `json:"attemptedAt"`
 		Reason      string `json:"reason"`
 	}{r.AttemptedAt, reason})
@@ -593,15 +599,15 @@ func (s *State) ValidateStatus(work Work, raw []byte) (inventorywire.Receipt, er
 	if work.Operation != "status" || work.body == nil {
 		return bad()
 	}
-	receipt, e := inventorywire.DecodeReceipt(raw, "status", work.body.raw)
-	if e != nil {
-		return bad()
-	}
 	v, e := s.locked()
 	if e != nil {
 		return inventorywire.Receipt{}, e
 	}
 	defer v.mu.Unlock()
+	receipt, e := v.record.kind.decodeReceipt(raw, "status", work.body.raw)
+	if e != nil {
+		return bad()
+	}
 	return v.validateStatus(work, receipt)
 }
 func (v *state) validateStatus(work Work, receipt inventorywire.Receipt) (inventorywire.Receipt, error) {
@@ -610,25 +616,26 @@ func (v *state) validateStatus(work Work, receipt inventorywire.Receipt) (invent
 	if (r.Phase != "ready" && r.Phase != "abort") || v.pack == nil {
 		return bad()
 	}
-	body, e := inventorywire.EncodeMessage("status", r.Floor, r.Generation, r.ManifestHash, struct{}{})
-	if e != nil || !sameWork(work, makeWork("status", body)) {
+	body, e := r.kind.encodeMessage("status", r.Floor, r.Generation, r.ManifestHash, struct{}{})
+	if e != nil || !sameWork(work, makeWorkKind(r.kind, "status", body)) {
 		return bad()
 	}
-	first, e := inventorywire.DecodeMessage("begin", v.pack.frames[0])
-	if e != nil || first.Manifest == nil {
+	first, e := r.kind.decodeMessage("begin", v.pack.frames[0])
+	collectedAt, chunkCount, observedCount, valid := first.ManifestFacts()
+	if e != nil || !valid {
 		return bad()
 	}
-	manifest := *first.Manifest
-	if receipt.ExpectedChunks != manifest.ChunkCount || receipt.AcceptedRows > manifest.ObservedCount || receipt.StartedAt.Before(manifest.CollectedAt) {
+	if receipt.ExpectedChunks != chunkCount || receipt.AcceptedRows > observedCount || receipt.StartedAt.Before(collectedAt) {
 		return bad()
 	}
 	var rows uint64
 	for i := uint32(0); i < receipt.AcceptedChunks; i++ {
-		m, e := inventorywire.DecodeMessage("append", v.pack.frames[i+1])
-		if e != nil || m.Chunk == nil {
+		m, e := r.kind.decodeMessage("append", v.pack.frames[i+1])
+		_, count, valid := m.ChunkFacts()
+		if e != nil || !valid {
 			return bad()
 		}
-		rows += uint64(len(m.Chunk.Items))
+		rows += count
 	}
 	if rows != receipt.AcceptedRows {
 		return bad()
@@ -644,7 +651,7 @@ func (v *state) validateStatus(work Work, receipt inventorywire.Receipt) (invent
 			return bad()
 		}
 	} else {
-		if receipt.State != "complete" && receipt.State != "expired" || receipt.AcceptedRows != manifest.ObservedCount || receipt.AcceptedChunks != manifest.ChunkCount || !receipt.CompletedAt.Before(receipt.StartedAt.Add(15*time.Minute)) || !receipt.ExpiresAt.Equal(manifest.CollectedAt.Add(24*time.Hour)) {
+		if receipt.State != "complete" && receipt.State != "expired" || receipt.AcceptedRows != observedCount || receipt.AcceptedChunks != chunkCount || !receipt.CompletedAt.Before(receipt.StartedAt.Add(15*time.Minute)) || !receipt.ExpiresAt.Equal(collectedAt.Add(24*time.Hour)) {
 			return bad()
 		}
 	}
@@ -679,15 +686,15 @@ func (s *State) RequestAbortAfterStatus(work Work, raw []byte) error {
 	if work.Operation != "status" || work.body == nil {
 		return ErrAcknowledgment
 	}
-	receipt, e := inventorywire.DecodeReceipt(raw, "status", work.body.raw)
-	if e != nil {
-		return ErrAcknowledgment
-	}
 	v, e := s.locked()
 	if e != nil {
 		return e
 	}
 	defer v.mu.Unlock()
+	receipt, e := v.record.kind.decodeReceipt(raw, "status", work.body.raw)
+	if e != nil {
+		return ErrAcknowledgment
+	}
 	receipt, e = v.validateStatus(work, receipt)
 	if e != nil {
 		return e

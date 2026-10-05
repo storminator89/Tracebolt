@@ -21,11 +21,14 @@ const MaxSequence uint64 = math.MaxInt64
 // prevent counter concatenation ambiguity; current profile/credential and floor
 // checks remain required at every store operation.
 func GenerationID(agentID string, sequence uint64) (string, error) {
+	return generationID("tracebolt.complete-inventory.generation.v1\x00", agentID, sequence)
+}
+func generationID(domain string, agentID string, sequence uint64) (string, error) {
 	if !enrollmentcrypto.ValidID(agentID, "agent_") || sequence == 0 || sequence > MaxSequence {
 		return "", ErrContract
 	}
 	h := sha256.New()
-	h.Write([]byte("tracebolt.complete-inventory.generation.v1\x00"))
+	h.Write([]byte(domain))
 	h.Write([]byte(agentID))
 	var counter [8]byte
 	binary.BigEndian.PutUint64(counter[:], sequence)

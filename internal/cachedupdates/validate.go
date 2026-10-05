@@ -71,14 +71,10 @@ func Validate(s Snapshot) error {
 		}
 		shownHeld := uint32(0)
 		for i, row := range s.Items {
-			if !packagePattern.MatchString(row.Name) || !architecturePattern.MatchString(row.Architecture) || !assessment.ValidDebianVersion(row.InstalledVersion) || !assessment.ValidDebianVersion(row.CandidateVersion) || row.Installability != "not_evaluated" || (row.State != "candidate_only" && row.State != "held") {
+			if ValidateCandidate(row) != nil {
 				return bad
 			}
 			if i > 0 && (s.Items[i-1].Name > row.Name || s.Items[i-1].Name == row.Name && s.Items[i-1].Architecture >= row.Architecture) {
-				return bad
-			}
-			cmp, e := (debianversion.Comparator{}).Compare(context.Background(), row.InstalledVersion, row.CandidateVersion)
-			if e != nil || cmp >= 0 {
 				return bad
 			}
 			if row.State == "held" {
@@ -133,4 +129,19 @@ func metadataAgeSeconds(at, then time.Time) uint64 {
 		seconds--
 	}
 	return uint64(seconds)
+}
+
+// ValidateCandidate is the existing pure per-row grammar and newer-version
+// check, independent of the bounded preview's row/byte/count limits. It grants
+// no collection or full-row transmission consent and makes no installability,
+// repository freshness or CVE assertion.
+func ValidateCandidate(row Candidate) error {
+	if !packagePattern.MatchString(row.Name) || !architecturePattern.MatchString(row.Architecture) || !assessment.ValidDebianVersion(row.InstalledVersion) || !assessment.ValidDebianVersion(row.CandidateVersion) || row.Installability != "not_evaluated" || (row.State != "candidate_only" && row.State != "held") {
+		return ErrInvalidSnapshot
+	}
+	cmp, err := (debianversion.Comparator{}).Compare(context.Background(), row.InstalledVersion, row.CandidateVersion)
+	if err != nil || cmp >= 0 {
+		return ErrInvalidSnapshot
+	}
+	return nil
 }

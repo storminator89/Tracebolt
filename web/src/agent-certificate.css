@@ -1,0 +1,10 @@
+.agent-certificate { margin-bottom: 16px; padding: 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); }
+.agent-certificate header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
+.agent-certificate h2 { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 14px; }
+.agent-certificate .certificate-status { font-size: 12px; }
+.agent-certificate.expiring .certificate-status { color: var(--warning); }
+.agent-certificate.expired .certificate-status { color: var(--danger); }
+.agent-certificate dl { display: flex; flex-wrap: wrap; gap: 12px 32px; margin: 12px 0; }
+.agent-certificate dt, .agent-certificate p { color: var(--secondary); font-size: 12px; line-height: 1.6; }
+.agent-certificate dd { margin: 3px 0 0; font-size: 12px; overflow-wrap: anywhere; }
+.agent-certificate p { margin: 8px 0 0; }

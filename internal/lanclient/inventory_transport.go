@@ -19,23 +19,37 @@ func (s *inventorySender) deliver(ctx context.Context, w inventorystate.Work) ([
 	if ctx.Err() != nil {
 		return nil, false, ctx.Err()
 	}
+	if s.completeUpdates {
+		if _, ok := readCompleteUpdatesConsent(s.material); !ok {
+			return nil, false, errCompleteUpdatesDisabled
+		}
+	}
+	decode, sign, receiptDecode, prefix := inventorywire.DecodeMessage, inventorywire.NewSignedRequest, inventorywire.DecodeReceipt, inventorywire.PathPrefix
+	if s.completeUpdates {
+		decode, sign, receiptDecode, prefix = inventorywire.DecodeCachedUpdatesMessage, inventorywire.NewCachedUpdatesSignedRequest, inventorywire.DecodeCachedUpdatesReceipt, inventorywire.CachedUpdatesPathPrefix
+	}
 	body := w.Body()
-	if _, err := inventorywire.DecodeMessage(w.Operation, body); err != nil {
+	if _, err := decode(w.Operation, body); err != nil {
 		return nil, false, ErrState
 	}
 	var req *http.Request
 	var err error
 	m := s.material
 	if m.config.Profile == "http-test" {
-		req, err = inventorywire.NewSignedRequest(ctx, m.config.ManagerOrigin, m.certificate, w.Operation, w.Sequence, s.now().UTC(), body)
+		req, err = sign(ctx, m.config.ManagerOrigin, m.certificate, w.Operation, w.Sequence, s.now().UTC(), body)
 	} else {
-		req, err = http.NewRequestWithContext(ctx, http.MethodPost, m.config.ManagerOrigin+inventorywire.PathPrefix+w.Operation, bytes.NewReader(body))
+		req, err = http.NewRequestWithContext(ctx, http.MethodPost, m.config.ManagerOrigin+prefix+w.Operation, bytes.NewReader(body))
 		if err == nil {
 			req.Header.Set("Content-Type", "application/json")
 		}
 	}
 	if err != nil {
 		return nil, false, ErrConfiguration
+	}
+	if s.completeUpdates {
+		if _, ok := readCompleteUpdatesConsent(s.material); !ok {
+			return nil, false, errCompleteUpdatesDisabled
+		}
 	}
 	response, err := s.client.Do(req)
 	if err != nil {
@@ -62,12 +76,12 @@ func (s *inventorySender) deliver(ctx context.Context, w inventorystate.Work) ([
 		return nil, false, ErrInventoryReceipt
 	}
 	if response.StatusCode == http.StatusConflict {
-		if !inventoryConflictResponse(raw) {
+		if !inventoryDomainConflictResponse(raw, s.completeUpdates) {
 			return nil, false, ErrInventoryTransport
 		}
 		return nil, true, nil
 	}
-	receipt, err := inventorywire.DecodeReceipt(raw, w.Operation, body)
+	receipt, err := receiptDecode(raw, w.Operation, body)
 	if err != nil {
 		return nil, false, ErrInventoryReceipt
 	}
@@ -82,7 +96,8 @@ func (s *inventorySender) deliver(ctx context.Context, w inventorystate.Work) ([
 	return raw, false, nil
 }
 
-func inventoryConflictResponse(raw []byte) bool {
+func inventoryConflictResponse(raw []byte) bool { return inventoryDomainConflictResponse(raw, false) }
+func inventoryDomainConflictResponse(raw []byte, updates bool) bool {
 	// StrictObject deliberately disallows nested values; decode precisely one
 	// outer member here, then apply it to the fixed scalar error object.
 	d := json.NewDecoder(bytes.NewReader(raw))
@@ -109,5 +124,9 @@ func inventoryConflictResponse(raw []byte) bool {
 		Code    string `json:"code"`
 		Message string `json:"message"`
 	}
-	return lanconfig.StrictObject(inner, &conflict, "code", "message") == nil && conflict.Code == "inventory_state_conflict" && conflict.Message == "Agent telemetry could not be accepted."
+	code := "inventory_state_conflict"
+	if updates {
+		code = "cached_updates_state_conflict"
+	}
+	return lanconfig.StrictObject(inner, &conflict, "code", "message") == nil && conflict.Code == code && conflict.Message == "Agent telemetry could not be accepted."
 }

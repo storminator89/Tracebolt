@@ -115,7 +115,8 @@ func exactShape(d *json.Decoder, typ reflect.Type, depth int) error {
 		for i := 0; i < typ.NumField(); i++ {
 			f := typ.Field(i)
 			name := strings.Split(f.Tag.Get("json"), ",")[0]
-			if typ == reflect.TypeOf(model.Evidence{}) && name == "collectionProfile" {
+			// Operator-owned expiry/provenance never extends endpoint wire fields.
+			if typ == reflect.TypeOf(model.Evidence{}) && name == "collectionProfile" || typ == reflect.TypeOf(model.Device{}) && name == "agentCertificate" {
 				continue
 			}
 			fields[name] = f.Type
