@@ -236,9 +236,11 @@ def main(argv=None):
             os.close(fd)
             raise
 
+    checkpoint = 'acceptance-launcher-input'
     try:
         argv = sys.argv[1:] if argv is None else argv
         require(len(argv) == 1 and type(argv[0]) is str)
+        checkpoint = 'acceptance-launcher-config'
         config = Path(argv[0])
         parent = directory_fd(str(config.parent))
         try:
@@ -267,6 +269,7 @@ def main(argv=None):
         require(type(arguments) is list and 0 < len(arguments) <= 32 and
             all(type(v) is str and '\x00' not in v for v in arguments) and
             sum(len(v) for v in arguments) <= 100000)
+        checkpoint = 'acceptance-launcher-artifacts'
         stage = directory_fd(cfg['directory'], private=True)
         try:
             for name in names:
@@ -297,23 +300,29 @@ def main(argv=None):
             os.close(stage)
         # This is selected local-source acceptance, never signed-release proof.
         # Do not set RELEASE_PIN, create an attestation, or call prepare_release.
+        checkpoint = 'acceptance-launcher-source-loader'
         b = types.ModuleType('tracebolt_acceptance_bootstrap')
         b.__file__ = '/selected-source/deploy/release/linux-bootstrap.py'
         exec(compile(bootstrap, b.__file__, 'exec'), b.__dict__)
+        checkpoint = 'acceptance-launcher-arguments'
         args = b.parse_args(arguments)
         require(args.apply and args.read_admin and args.action == 'install' and not args.resume and
             args.insecure_http_test == (transport == 'http-test'))
         directory = Path(cfg['directory'])
         if operation == 'install':
+            checkpoint = 'acceptance-launcher-terminal'
             b.inspect_terminal()
+        checkpoint = 'acceptance-launcher-host'
         arch = b.inspect_host()
         require(arch == 'amd64')
+        checkpoint = 'acceptance-launcher-components'
         workflow, inventory, setup, amendment, journal_guide, socket_setup, templates = b.read_admin_sources(directory, manifest)
         require(workflow.PROFILE == 'tracebolt.linux-read-admin.v2' and workflow.PHASES == ('inventory','journal','socket'))
         if operation != 'install':
             result = socket_native_operation(operation, scenario, workflow, inventory, setup, amendment, socket_setup, templates, manifest)
             print(json.dumps(result), flush=True)
             return 0
+        checkpoint = 'acceptance-launcher-workflow'
         plan = workflow.make_plan(args, manifest, arch)
         helper = directory / f'tracebolt-{version}-linux-amd64-socket-owner-reader'
         artifact = dict(manifest['assets'][helper.name], path=str(helper))
@@ -339,7 +348,7 @@ def main(argv=None):
         return 0 if result['configurationComplete'] is True or result['canceled'] is True else 1
     except (Exception, SystemExit):
         # Never expose untrusted exception text, paths, source or private state.
-        print(json.dumps(failure_result('acceptance-launcher-rejected')), flush=True)
+        print(json.dumps(failure_result(checkpoint)), flush=True)
         return 1
 
 
@@ -365,7 +374,8 @@ FAILURES = frozenset(('install-or-device-approval-incomplete','acceptance-inject
     'installation-changed','installation-changed-after-inventory','installation-changed-after-journal',
     'installed-release-or-bootstrap-changed','approved-installation-changed',
     'readback-agent-not-stopped','readback-resume-identity-changed','readback-resume-unconfirmed',
-    'broad-journal-not-ready'))
+    'broad-journal-not-ready',
+    'supported-linux-amd64-kernel', 'systemd-pid1-required', 'cgroup-v2-required', 'platform-file', 'platform-read-limit', 'local-account-database', 'local-nss-only', 'existing-socket-owner-account', 'alternate-unit-fragment', 'unit-dropin', 'existing-socket-owner-state', 'fixed-command-failed', 'systemd-unit-inspection-command-failed', 'systemd-status-members', 'preexisting-loaded-unit', 'protected-directory', 'protected-file', 'changed-protected-file', 'command-timeout', 'command-output-limit', 'acceptance-launcher-input', 'acceptance-launcher-config', 'acceptance-launcher-artifacts', 'acceptance-launcher-source-loader', 'acceptance-launcher-arguments', 'acceptance-launcher-terminal', 'acceptance-launcher-host', 'acceptance-launcher-components', 'acceptance-launcher-workflow'))
 
 
 def require_gate(env, system, uid, euid):

@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-10-06 — Explain native preflight rejection and observe primary browser reads
+
+- Retain the failed fresh-V2 run as unpassed and add only closed initial-probe diagnostics: fixed rejection codes, an exit bucket and a scope-prompt boolean. Preserve native execution, approval guards and cancellation assertions; the underlying early failure is not yet established.
+- Validate manual workflow inputs in an ordinary permission-free job and report fixed missing-approval/profile/source reasons. Keep exact source spelling and every privileged guard; never echo submitted input or private runtime logs.
+- Observe the journal service-picker response through the application's existing bounded primary reader. Preserve the original HTTP/body/identity/consent checks and separate service/journal byte caps; the previous secondary browser-body read failed after HTTP200, with the exact cancellation cause still unproven.
+
 ## 2026-10-06 — Prepare one-command fresh read-admin V2 installation
 
 - Compose the optional socket-owner helper and real sender/manager/UI provenance path with fresh read-admin V2 provisioning. Keep the main agent unprivileged; bind exact artifacts, activated identity, local approval and original source age. The combined approval explicitly includes the helper's broad CAP_SYS_PTRACE authority, which is not intrinsically limited to metadata by the OS.

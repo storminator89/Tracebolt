@@ -41,6 +41,48 @@ type readAdminNativeChecks struct {
 type readAdminNativeOptions struct {
 	profile, scenario, source string
 	checks                    readAdminNativeChecks
+	initialProbe              readAdminProbeDiagnostic
+}
+
+// Closed diagnostic only: never copy private transcript, command, path or error text.
+type readAdminProbeDiagnostic struct {
+	Failure         string `json:"failure"`
+	ChildExit       string `json:"childExit"`
+	ScopePromptSeen bool   `json:"scopePromptSeen"`
+}
+
+func readAdminProbeReason(value string) string {
+	switch value {
+	case "not_attempted", "none", "driver-execution-failed", "driver-output-invalid", "unexpected-cancellation-result", "acceptance-gate-rejected", "acceptance-launcher-rejected", "acceptance-driver-rejected", "acceptance-deadline-exceeded", "acceptance-capture-exceeded", "read-admin-result-unavailable", "read-admin-result-invalid", "read-admin-phase-incomplete", "existing-installation-use-upgrade-or-recovery", "existing-journal-state-retained", "supported-linux-amd64-kernel", "systemd-pid1-required", "cgroup-v2-required", "platform-file", "platform-read-limit", "local-account-database", "local-nss-only", "existing-socket-owner-account", "alternate-unit-fragment", "unit-dropin", "existing-socket-owner-state", "fixed-command-failed", "systemd-unit-inspection-command-failed", "systemd-status-members", "preexisting-loaded-unit", "protected-directory", "protected-file", "changed-protected-file", "command-timeout", "command-output-limit", "acceptance-launcher-input", "acceptance-launcher-config", "acceptance-launcher-artifacts", "acceptance-launcher-source-loader", "acceptance-launcher-arguments", "acceptance-launcher-terminal", "acceptance-launcher-host", "acceptance-launcher-components", "acceptance-launcher-workflow":
+		return value
+	default:
+		return "read-admin-phase-incomplete"
+	}
+}
+func (o *readAdminNativeOptions) probeDiagnostic() readAdminProbeDiagnostic {
+	if o.initialProbe.Failure == "" {
+		return readAdminProbeDiagnostic{"not_attempted", "not_observed", false}
+	}
+	d := o.initialProbe
+	d.Failure = readAdminProbeReason(d.Failure)
+	if d.ChildExit != "zero" && d.ChildExit != "nonzero" {
+		d.ChildExit = "not_observed"
+	}
+	return d
+}
+func readAdminProbeEventDiagnostic(event ptyEvent) readAdminProbeDiagnostic {
+	reason := event.ReadAdminFailure
+	if reason == "" {
+		reason = "unexpected-cancellation-result"
+		if event.ExitCode == 0 && event.ReadAdminCanceled && !event.ReadAdminComplete && event.ScopeApprovals == 1 {
+			reason = "none"
+		}
+	}
+	exit := "nonzero"
+	if event.ExitCode == 0 {
+		exit = "zero"
+	}
+	return readAdminProbeDiagnostic{readAdminProbeReason(reason), exit, event.ScopeApprovals == 1}
 }
 
 // Pure gate: ordinary tests skip before filesystem, identity, credential,
@@ -304,14 +346,32 @@ func readAdminProbe(t *testing.T, c *readAdminNativeCommand, resume, cancel bool
 	cmd := exec.Command(c.python, "-I", "-c", readAdminPTY)
 	cmd.Env = c.environment()
 	cmd.Stdin = bytes.NewReader(raw)
+	if cancel {
+		c.options.initialProbe = readAdminProbeDiagnostic{"driver-execution-failed", "not_observed", false}
+	}
 	output, err := cmd.Output()
-	if err != nil || len(output) > 8192 {
+	defer clear(output)
+	if len(output) > 8192 {
+		if cancel {
+			c.options.initialProbe.Failure = "driver-output-invalid"
+		}
 		t.Fatal("read-admin bounded PTY probe failed")
 	}
-	defer clear(output)
 	var event ptyEvent
 	if json.Unmarshal(bytes.TrimSpace(output), &event) != nil || event.Phase != "exit" || event.SecretEcho {
+		if cancel && !(err != nil && len(output) == 0) {
+			c.options.initialProbe.Failure = "driver-output-invalid"
+		}
 		t.Fatal("read-admin probe produced unexpected prompt or data")
+	}
+	if cancel {
+		c.options.initialProbe = readAdminProbeEventDiagnostic(event)
+	}
+	if err != nil {
+		if cancel && c.options.initialProbe.Failure == "none" {
+			c.options.initialProbe.Failure = "driver-execution-failed"
+		}
+		t.Fatal("read-admin bounded PTY probe failed")
 	}
 	return event
 }
@@ -579,4 +639,30 @@ func readAdminStopOwnedHelper(t *testing.T, c *readAdminNativeCommand) bool {
 		return false
 	}
 	return true
+}
+
+func TestReadAdminInitialProbeDiagnosticIsClosed(t *testing.T) {
+	raw := "private-token-or-output"
+	event := ptyEvent{Phase: "exit", ExitCode: 1, ReadAdminFailure: raw, ScopeApprovals: 99, Fingerprint: raw, Comparison: raw}
+	got := readAdminProbeEventDiagnostic(event)
+	if got != (readAdminProbeDiagnostic{"read-admin-phase-incomplete", "nonzero", false}) {
+		t.Fatal("unbounded event exported")
+	}
+	event.ReadAdminFailure = "systemd-status-members"
+	if got := readAdminProbeEventDiagnostic(event); got.Failure != "systemd-status-members" {
+		t.Fatal("fixed preflight reason lost")
+	}
+	event = ptyEvent{Phase: "exit", ExitCode: 0, ReadAdminCanceled: true, ScopeApprovals: 1}
+	if got := readAdminProbeEventDiagnostic(event); got != (readAdminProbeDiagnostic{"none", "zero", true}) {
+		t.Fatal("valid cancellation diagnostic")
+	}
+	o := &readAdminNativeOptions{}
+	if o.probeDiagnostic() != (readAdminProbeDiagnostic{"not_attempted", "not_observed", false}) {
+		t.Fatal("unset probe")
+	}
+	o.initialProbe = readAdminProbeDiagnostic{raw, raw, false}
+	b, _ := json.Marshal(o.probeDiagnostic())
+	if bytes.Contains(b, []byte(raw)) {
+		t.Fatal("arbitrary output exported")
+	}
 }

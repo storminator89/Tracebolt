@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "sourceCommit": "fccc4b00cd8a144afd58e4b995747afab7a10022",
-  "goSourceSha256": "d8e423daffbea71d91651da920cda2f2c961a33be76aca57392a7f80bcbdb448",
+  "goSourceSha256": "ab823a657f04d52098230b88546087c92a3f8c8e53f460e093e5ba7f02b2b021",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -143,6 +143,7 @@
       "TestPreparedNamedOperatorProfilesAndRestartRevocation",
       "TestProfileStateIsolation",
       "TestReadAdminFixtureOwner",
+      "TestReadAdminInitialProbeDiagnosticIsClosed",
       "TestReadAdminJournalReady",
       "TestReadAdminNativeSelection",
       "TestReadAdminPTYInput",

@@ -60,6 +60,19 @@ def encoded(value, **kwargs):
 
 
 class InertScriptTests(unittest.TestCase):
+    def test_cancel_preflight_diagnostics_remain_closed(self):
+        for stage in ('systemd-status-members', 'fixed-command-failed', 'unit-dropin',
+                      'supported-linux-amd64-kernel', 'acceptance-launcher-host',
+                      'acceptance-launcher-components'):
+            event = PTY.exit_event(encoded(LAUNCHER.failure_result(stage)), 1, '', 0)
+            self.assertEqual(event['readAdminFailure'], stage)
+            self.assertEqual(event['scopeApprovals'], 0)
+            self.assertFalse(event['readAdminCanceled'])
+        secret = 'untrusted-private-error-value'
+        event = PTY.exit_event(encoded(LAUNCHER.failure_result(secret)), 1, '', 0)
+        self.assertEqual(event['readAdminFailure'], 'read-admin-phase-incomplete')
+        self.assertNotIn(secret, json.dumps(event))
+
     def test_scripts_are_linux_test_only_and_compile(self):
         self.assertTrue(SOURCE.read_text().startswith('//go:build linux\n'))
         for name in ('readAdminLauncher', 'readAdminPTY'):

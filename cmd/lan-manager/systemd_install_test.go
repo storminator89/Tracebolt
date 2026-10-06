@@ -146,6 +146,7 @@ func runApprovedSystemdInstallationMode(t *testing.T, profile, collectionProfile
 			result["sourceCommit"] = readAdmin.source
 			result["ptraceRiskAcknowledged"] = true
 			result["socketNativeChecks"] = readAdmin.checks
+			result["initialProbe"] = readAdmin.probeDiagnostic()
 			result["collectionProfile"] = collectionProfile
 			result["scenario"] = readAdmin.scenario
 		}

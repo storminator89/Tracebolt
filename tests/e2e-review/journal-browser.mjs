@@ -212,6 +212,7 @@ try{
    mark('observed service inventory stays lazy until picker opens');expect(inventoryReads).toBe(0);
    mark('compact query workspace excludes manual fields and preemptive consent');await expect(page.locator('.journal-advanced')).not.toHaveAttribute('open');await expect(page.getByLabel('Exact service unit',{exact:true})).not.toBeVisible();await expect(page.getByRole('checkbox')).toHaveCount(0);await page.locator('.journal-query-bar').scrollIntoViewIfNeeded();await shot(page,'synthetic-journal-workspace-desktop-en');
    const chooser=page.getByRole('button',{name:'Choose observed service',exact:true}),picker=page.getByRole('region',{name:'Observed services',exact:true}),unit=page.getByLabel('Exact service unit',{exact:true});
+   const serviceCapture=await page.evaluate(()=>window.__traceboltJournalBody.arm('services'));
    const statusReply=page.waitForResponse(response=>response.url()===systemEndpoint&&response.request().method()==='GET'),serviceReply=page.waitForResponse(response=>response.url()===systemEndpoint+'/query'&&response.request().method()==='POST');
    mark('open observed service picker');await chooser.click();
    mark('await observed service inventory response headers');const statusResponse=await statusReply;
@@ -221,7 +222,10 @@ try{
    mark('observed service inventory retains three services');expect(system.lastComplete.services.meta.observedCount).toBe(3);
    mark('await observed service query response headers');const serviceResponse=await serviceReply;
    mark('observed service query returns HTTP200');expect(serviceResponse.status()).toBe(200);
-   mark('read observed service query response JSON');const services=await serviceResponse.json();
+   // Keep the real HTTP/body assertions while observing only the application's
+   // bounded primary reader; a later CDP body retrieval can lose consumed bytes.
+   mark('await observed service query primary consumption');await expect.poll(()=>page.evaluate(id=>window.__traceboltJournalBody.state(id),serviceCapture)).not.toMatch(/^(armed|waiting|reading)$/);
+   mark('require complete observed service query body');expect(await page.evaluate(id=>window.__traceboltJournalBody.state(id),serviceCapture)).toBe('complete');const consumedServices=await page.evaluate(id=>window.__traceboltJournalBody.take(id),serviceCapture);expect(consumedServices).not.toBeNull();expect(consumedServices.status).toBe(200);const services=consumedServices.body;
    mark('observed service query returns exact invented rows');expect(services.services.map(row=>row.name)).toEqual(['invented-backup.service','invented.service','invented:unsupported.service']);
    mark('observed service query matches services section');expect(services.section).toBe('services');
    mark('observed service picker is visible');await expect(picker).toBeVisible();

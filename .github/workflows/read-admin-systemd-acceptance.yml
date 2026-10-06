@@ -44,8 +44,45 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  validate-inputs:
+    if: ${{ github.event_name == 'workflow_dispatch' }}
+    name: Validate dispatch approvals
+    runs-on: ubuntu-24.04
+    timeout-minutes: 1
+    permissions: {}
+    steps:
+      - name: Report fixed reasons for missing dispatch approval
+        shell: bash
+        run: |
+          python3 - <<'PYTHON_INPUTS'
+          import json, os
+          try:
+              with open(os.environ['GITHUB_EVENT_PATH'], encoding='utf-8') as stream:
+                  inputs = json.load(stream)['inputs']
+              if type(inputs) is not dict:
+                  raise ValueError('invalid inputs')
+          except (OSError, KeyError, TypeError, ValueError):
+              raise SystemExit('::error::INVALID_DISPATCH_INPUTS')
+          source = os.environ.get('GITHUB_SHA', '')
+          checks = (
+              (inputs.get('read_profile') == 'tracebolt.linux-read-admin.v2', 'READ_PROFILE_MISMATCH'),
+              (len(source) == 40 and all(c in '0123456789abcdef' for c in source)
+               and inputs.get('reviewed_source_commit') == source, 'REVIEWED_SOURCE_MISMATCH'),
+              (inputs.get('approved_fresh_v2_read_admin_systemd') is True
+               or inputs.get('approved_fresh_v2_read_admin_systemd') == 'true', 'FRESH_V2_APPROVAL_MISSING'),
+              (inputs.get('approved_cap_sys_ptrace_process_memory') is True
+               or inputs.get('approved_cap_sys_ptrace_process_memory') == 'true', 'CAP_SYS_PTRACE_APPROVAL_MISSING'),
+          )
+          for accepted, reason in checks:
+              if not accepted:
+                  print('::error::' + reason)
+          if not all(accepted for accepted, _ in checks):
+              raise SystemExit(1)
+          print('PASS: dispatch input approvals validated.')
+          PYTHON_INPUTS
   disposable-systemd:
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.approved_fresh_v2_read_admin_systemd && inputs.approved_cap_sys_ptrace_process_memory && inputs.read_profile == 'tracebolt.linux-read-admin.v2' && inputs.reviewed_source_commit == github.sha }}
+    needs: validate-inputs
+    if: ${{ needs.validate-inputs.result == 'success' && github.event_name == 'workflow_dispatch' && inputs.approved_fresh_v2_read_admin_systemd && inputs.approved_cap_sys_ptrace_process_memory && inputs.read_profile == 'tracebolt.linux-read-admin.v2' && inputs.reviewed_source_commit == github.sha }}
     name: Fresh read-admin V2 ${{ inputs.transport }} / ${{ matrix.scenario }}
     runs-on: ubuntu-24.04
     timeout-minutes: 20
@@ -170,7 +207,7 @@ jobs:
               check(0 < len(raw) <= 4096 and len(raw) == info.st_size)
               value = json.loads(raw, object_pairs_hook=unique_object)
               check(type(value) is dict)
-              check(set(value) == {'schemaVersion', 'status', 'stage', 'profile', 'collectionProfile', 'scenario', 'osRebootTested', 'telemetryExported', 'readProfile', 'sourceCommit', 'ptraceRiskAcknowledged', 'socketNativeChecks'})
+              check(set(value) == {'schemaVersion', 'status', 'stage', 'profile', 'collectionProfile', 'scenario', 'osRebootTested', 'telemetryExported', 'readProfile', 'sourceCommit', 'ptraceRiskAcknowledged', 'socketNativeChecks', 'initialProbe'})
               check(value['schemaVersion'] == 'tracebolt.read-admin-systemd-acceptance.v2')
               check(value['profile'] == sys.argv[2])
               check(value['collectionProfile'] == 'managed-operations-v3')
@@ -188,6 +225,11 @@ jobs:
               expected = (True,) * len(keys) if value['scenario'] == 'complete' else (False,) * len(keys)
               check(value['status'] != 'pass' or value['stage'] == 'complete')
               check(value['status'] != 'pass' or tuple(checks[key] for key in keys) == expected)
+              probe = value['initialProbe']
+              check(type(probe) is dict and set(probe) == {'failure', 'childExit', 'scopePromptSeen'})
+              check(probe['failure'] in {'existing-socket-owner-state', 'cgroup-v2-required', 'existing-installation-use-upgrade-or-recovery', 'systemd-unit-inspection-command-failed', 'existing-journal-state-retained', 'systemd-pid1-required', 'preexisting-loaded-unit', 'acceptance-launcher-workflow', 'acceptance-launcher-config', 'driver-output-invalid', 'platform-read-limit', 'acceptance-launcher-input', 'read-admin-result-invalid', 'acceptance-deadline-exceeded', 'acceptance-launcher-source-loader', 'read-admin-result-unavailable', 'none', 'fixed-command-failed', 'protected-directory', 'alternate-unit-fragment', 'changed-protected-file', 'acceptance-capture-exceeded', 'platform-file', 'supported-linux-amd64-kernel', 'command-timeout', 'acceptance-driver-rejected', 'protected-file', 'acceptance-launcher-rejected', 'read-admin-phase-incomplete', 'not_attempted', 'local-nss-only', 'acceptance-launcher-components', 'acceptance-launcher-terminal', 'unit-dropin', 'acceptance-launcher-host', 'driver-execution-failed', 'command-output-limit', 'local-account-database', 'acceptance-launcher-artifacts', 'systemd-status-members', 'acceptance-gate-rejected', 'existing-socket-owner-account', 'unexpected-cancellation-result', 'acceptance-launcher-arguments'})
+              check(probe['childExit'] in {'not_observed', 'zero', 'nonzero'} and type(probe['scopePromptSeen']) is bool)
+              check(value['status'] != 'pass' or probe == {'failure': 'none', 'childExit': 'zero', 'scopePromptSeen': True})
               print(json.dumps(value, indent=2))
           except Exception:
               raise SystemExit('FAIL: missing or invalid sanitized read-admin acceptance evidence.')

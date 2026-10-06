@@ -1,7 +1,7 @@
 """Inert wrapper checks: inspect YAML text and validate in-memory fake evidence.
 
 No workflow shell, native program, collector, account or service is executed.
-Only the two embedded JSON readers run, with every file operation replaced.
+Only embedded input validation and JSON readers run, with fake inputs and files.
 """
 import contextlib
 import io
@@ -47,7 +47,8 @@ def result(transport="tls", scenario="complete", **changes):
         "collectionProfile": "managed-operations-v3", "scenario": scenario,
         "osRebootTested": False, "telemetryExported": False,
         "readProfile": READ_PROFILE, "sourceCommit": SOURCE,
-        "ptraceRiskAcknowledged": True, "socketNativeChecks": dict(zip(CHECKS, expected)), **changes,
+        "ptraceRiskAcknowledged": True, "socketNativeChecks": dict(zip(CHECKS, expected)),
+        "initialProbe": {"failure": "none", "childExit": "zero", "scopePromptSeen": True}, **changes,
     }
 
 
@@ -64,6 +65,76 @@ class ReadAdminWrapperTests(unittest.TestCase):
         if len(blocks) != 2:
             raise ValueError("expected exactly two isolated JSON readers")
         cls.readers = tuple(compile(textwrap.dedent(block), "<fixed-result-reader>", "exec") for block in blocks)
+        validation = cls.source.split("  validate-inputs:\n", 1)[1].split("  disposable-systemd:\n", 1)[0]
+        cls.input_script = textwrap.dedent(validation.split("          python3 - <<'PYTHON_INPUTS'\n", 1)[1]
+                                          .split("          PYTHON_INPUTS\n", 1)[0])
+        cls.input_validator = compile(cls.input_script, "<fixed-input-validator>", "exec")
+
+    def dispatch_inputs(self, changes=None, *, source=SOURCE, raw=None):
+        values = {"read_profile": READ_PROFILE, "reviewed_source_commit": SOURCE,
+                  "approved_fresh_v2_read_admin_systemd": "true",
+                  "approved_cap_sys_ptrace_process_memory": "true"}
+        values.update(changes or {})
+        event = json.dumps({"inputs": values}).encode() if raw is None else raw
+        fake_os = SimpleNamespace(environ={"GITHUB_EVENT_PATH": "fake-event.json", "GITHUB_SHA": source})
+        output, error = io.StringIO(), None
+        with contextlib.redirect_stdout(output), mock.patch.dict(sys.modules, {"os": fake_os}), \
+                mock.patch("builtins.open", return_value=FakeFile(event)) as opened:
+            try:
+                exec(self.input_validator, {"__name__": "__main__"})
+            except SystemExit as exc:
+                error = exc.code
+        opened.assert_called_once_with("fake-event.json", encoding="utf-8")
+        return output.getvalue(), error
+
+    def test_input_validation_job_is_isolated_and_required(self):
+        validation = self.source.split("jobs:\n", 1)[1].split("  disposable-systemd:\n", 1)[0]
+        prefix, script = validation.split("        run: |\n", 1)
+        self.assertEqual(prefix, """  validate-inputs:
+    if: ${{ github.event_name == 'workflow_dispatch' }}
+    name: Validate dispatch approvals
+    runs-on: ubuntu-24.04
+    timeout-minutes: 1
+    permissions: {}
+    steps:
+      - name: Report fixed reasons for missing dispatch approval
+        shell: bash
+""")
+        self.assertEqual(script, "          python3 - <<'PYTHON_INPUTS'\n" +
+                         textwrap.indent(self.input_script, "          ") + "          PYTHON_INPUTS\n")
+        self.assertNotIn("${{", script)
+        self.assertNotRegex(script, r"\b(?:sudo|secrets|token|subprocess|eval|exec)\b")
+        self.assertIn("  disposable-systemd:\n    needs: validate-inputs\n", self.source)
+
+    def test_input_validation_accepts_only_exact_provider_approvals(self):
+        for fresh, cap in itertools.product((True, "true"), repeat=2):
+            with self.subTest(fresh=fresh, cap=cap):
+                self.assertEqual(self.dispatch_inputs({"approved_fresh_v2_read_admin_systemd": fresh,
+                                                       "approved_cap_sys_ptrace_process_memory": cap}),
+                                 ("PASS: dispatch input approvals validated.\n", None))
+        reasons = {"read_profile": "READ_PROFILE_MISMATCH",
+                   "reviewed_source_commit": "REVIEWED_SOURCE_MISMATCH",
+                   "approved_fresh_v2_read_admin_systemd": "FRESH_V2_APPROVAL_MISSING",
+                   "approved_cap_sys_ptrace_process_memory": "CAP_SYS_PTRACE_APPROVAL_MISSING"}
+        hostile = (None, False, 1, "", "false", "True", [], {}, "*", "$(echo injected)",
+                   "`echo injected`", "'; echo injected; #", "${{ secrets.EXAMPLE }}", "::error::injected\n")
+        for field, reason in reasons.items():
+            for value in hostile:
+                with self.subTest(field=field, value=value):
+                    self.assertEqual(self.dispatch_inputs({field: value}), ("::error::" + reason + "\n", 1))
+
+    def test_input_validation_never_normalizes_profile_or_source(self):
+        for field, correct, reason in (("read_profile", READ_PROFILE, "READ_PROFILE_MISMATCH"),
+                                       ("reviewed_source_commit", SOURCE, "REVIEWED_SOURCE_MISMATCH")):
+            for value in (correct.upper(), " " + correct, correct + "\n", correct[:8] + "-" + correct[8:]):
+                with self.subTest(field=field, value=value):
+                    self.assertEqual(self.dispatch_inputs({field: value}), ("::error::" + reason + "\n", 1))
+        self.assertEqual(self.dispatch_inputs(source=""), ("::error::REVIEWED_SOURCE_MISMATCH\n", 1))
+
+    def test_input_validation_has_fixed_errors_for_malformed_event(self):
+        for raw in (b"hostile invalid JSON", b"{}", b"[]", b'{"inputs":null}', b'{"inputs":[]}'):
+            with self.subTest(raw=raw):
+                self.assertEqual(self.dispatch_inputs(raw=raw), ("", "::error::INVALID_DISPATCH_INPUTS"))
 
     def validate(self, raw, transport="tls", scenario="complete", *, read_profile=READ_PROFILE,
                  source=SOURCE, mode=stat.S_IFREG | 0o600,
@@ -101,6 +172,23 @@ class ReadAdminWrapperTests(unittest.TestCase):
         self.assertEqual(output, "")
         self.assertEqual(error, INVALID)
 
+    def test_initial_probe_diagnostic_is_closed_and_cannot_grant_pass(self):
+        for failure in ('systemd-status-members', 'fixed-command-failed', 'unit-dropin',
+                        'acceptance-launcher-host', 'acceptance-launcher-components'):
+            value = result(status='fail', stage='read_admin_cancel', initialProbe={
+                'failure': failure, 'childExit': 'nonzero', 'scopePromptSeen': False})
+            output, error, _, _ = self.validate(json.dumps(value).encode())
+            self.assertIsNone(error)
+            self.assertEqual(json.loads(output)['initialProbe'], value['initialProbe'])
+            value['status'] = 'pass'
+            value['stage'] = 'complete'
+            self.assert_rejected(json.dumps(value).encode())
+        for bad in ({'failure': 'secret', 'childExit': 'zero', 'scopePromptSeen': False},
+                    {'failure': 'none', 'childExit': 'secret', 'scopePromptSeen': True},
+                    {'failure': 'none', 'childExit': 'zero', 'scopePromptSeen': 1},
+                    {'failure': 'none', 'childExit': 'zero', 'scopePromptSeen': True, 'raw': 'secret'}):
+            self.assert_rejected(json.dumps(result(initialProbe=bad)).encode())
+
     def test_manual_only_fresh_v2_approval_source_and_transport_choice(self):
         source = self.source
         self.assertEqual(re.findall(r"^([a-z][a-z-]*):", source, re.M),
@@ -124,7 +212,7 @@ class ReadAdminWrapperTests(unittest.TestCase):
         self.assertIn("        default: tls\n        type: choice\n        options:\n          - tls\n          - http-test\n", triggers)
         self.assertIn("plaintext passwords, sessions, telemetry and journal content", triggers)
         self.assertIn("server/UI impersonation", triggers)
-        self.assertIn("    if: ${{ github.event_name == 'workflow_dispatch' && inputs.approved_fresh_v2_read_admin_systemd && inputs.approved_cap_sys_ptrace_process_memory && inputs.read_profile == 'tracebolt.linux-read-admin.v2' && inputs.reviewed_source_commit == github.sha }}\n", source)
+        self.assertIn("    if: ${{ needs.validate-inputs.result == 'success' && github.event_name == 'workflow_dispatch' && inputs.approved_fresh_v2_read_admin_systemd && inputs.approved_cap_sys_ptrace_process_memory && inputs.read_profile == 'tracebolt.linux-read-admin.v2' && inputs.reviewed_source_commit == github.sha }}\n", source)
         self.assertNotIn("approved_disposable_read_admin_systemd", source)
         self.assertNotIn("TRACEBOLT_APPROVED_READ_ADMIN_SYSTEMD_TEST", source)
         self.assertIn("permissions:\n  contents: read\n", source)
@@ -132,7 +220,7 @@ class ReadAdminWrapperTests(unittest.TestCase):
 
     def test_each_scenario_has_fresh_hosted_runner_and_exact_source_build(self):
         source = self.source
-        self.assertEqual(re.findall(r"^  ([a-z-]+):", source.split("jobs:\n", 1)[1], re.M), ["disposable-systemd"])
+        self.assertEqual(re.findall(r"^  ([a-z-]+):", source.split("jobs:\n", 1)[1], re.M), ["validate-inputs", "disposable-systemd"])
         self.assertIn("    runs-on: ubuntu-24.04\n", source)
         self.assertIn("      fail-fast: false\n      matrix:\n        scenario: [complete, cancel-enrollment, retained-journal]\n", source)
         self.assertIn('test "$RUNNER_ENVIRONMENT" = github-hosted', source)
@@ -143,7 +231,7 @@ class ReadAdminWrapperTests(unittest.TestCase):
         self.assertIn('git archive --format=tar --output="$STAGE/source.tar" "$GITHUB_SHA"', source)
         for name in ("agent-service", "lan-manager", "enroll-agent", "lan-agent", "socket-owner-reader"):
             self.assertIn(f'go build -buildvcs=false -o "$STAGE/{name}" ./cmd/{name}', source)
-        self.assertNotIn("-upgrade", source)
+        self.assertNotIn("-upgrade", source.split("      - name: Build", 1)[1].split("      - name: Validate", 1)[0])
         self.assertIn('go test -c -o "$STAGE/systemd.test" ./cmd/lan-manager', source)
         for action in re.findall(r"uses: ([^\s]+)", source):
             self.assertRegex(action, r"^actions/(checkout|setup-go|upload-artifact)@[0-9a-f]{40}$")
@@ -171,7 +259,7 @@ class ReadAdminWrapperTests(unittest.TestCase):
         execution = source.split("      - name: Execute", 1)[1].split("      - name: Validate", 1)[0]
         self.assertIn("        id: native_acceptance\n", execution)
         self.assertNotIn("always()", execution)
-        evidence = source.split("      - name: Validate", 1)[1].split("      - name: Upload", 1)[0]
+        evidence = source.split("      - name: Validate the bounded result", 1)[1].split("      - name: Upload", 1)[0]
         self.assertIn("        if: ${{ always() && !cancelled() && steps.approval_gate.outcome == 'success' && steps.native_acceptance.outcome != 'skipped' }}\n", evidence)
         self.assertIn("      TRACEBOLT_APPROVED_SYSTEMD_TEST: '1'\n", source)
         self.assertIn("      TRACEBOLT_APPROVED_READ_ADMIN_V2_SYSTEMD_TEST: ${{ inputs.approved_fresh_v2_read_admin_systemd && '1' || '0' }}\n", source)

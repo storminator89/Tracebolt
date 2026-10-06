@@ -41,7 +41,12 @@ privileged invocation:
   impersonation risk, within the isolated loopback fixture. There is no TLS
   downgrade, external exposure or global CA grant.
 
-The job condition and a separate early authorization step bind these selections.
+A separate ordinary-runner input-validation job reads the existing GitHub event
+payload without checkout, credentials or raw input logging. Fixed error codes
+identify a profile mismatch, exact source mismatch or either missing approval;
+source spelling and whitespace are never normalized. The native job requires
+successful validation as well as its existing job condition and early
+authorization step. These checks bind the selections above.
 A failed early gate prevents both build and privileged execution, including the
 otherwise-always-run sanitized evidence reader. The old read-admin opt-in does
 not select this gate. Editing this workflow does not provide approval to run it.
@@ -199,8 +204,9 @@ suitability.
 
 ## Safe source checks and remaining gates
 
-The wrapper-contract tests inspect source text and execute only the two embedded
-JSON readers with in-memory fake files and mocked file operations. They cover
+The wrapper-contract tests inspect source text and execute only the embedded
+input validator and two JSON readers with in-memory fake inputs/files and mocked
+file operations. They cover
 gate ordering, exact source/profile binding, every scenario check vector, strict
 schema/boolean validation, nested duplicate rejection, bounded file reads and
 failure-versus-success handling. They never execute workflow shell, a native
