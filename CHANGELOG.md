@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-10-06 — Correct socket setup's offline validation arguments
+
+- Remove the foreground-only --service-identity argument from socket setup's --validate-guided invocation. The actual subprocess still drops to the verified service UID/GID with no supplementary groups. Preserve the agent's argument guard, protected state checks, binary ownership, deadlines and failure containment. An actual CLI regression proves the old combination is rejected and the corrected combination reaches the local validator.
+- Keep fixed per-mode socket setup failure labels for any remaining rejection, without exporting private CLI output. Preselect the supported fresh V2 profile in the manual test form; both specific approval checkboxes remain false and exact source binding stays mandatory.
+- Cancellation and retained-journal native scenarios passed on the preceding source. This corrects a guaranteed blocker in the complete path; the next approved native run must establish full onboarding, owner/log evidence and restart acceptance.
+
 ## 2026-10-06 — Make the disposable TLS fixture verifiable across clients
 
 - Give the test root and leaf certificates distinct fixed subjects. The previous empty names were accepted by Go but rejected as self-signed by Python/OpenSSL, blocking the real socket-manager capability check. Share the exact fixture generator with an offline TLS 1.3 handshake regression; wrong CA and hostname remain rejected. Production TLS, certificate verification and capability routes are unchanged.

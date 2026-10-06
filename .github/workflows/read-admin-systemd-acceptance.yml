@@ -8,7 +8,7 @@ on:
       read_profile:
         description: 'Select the independently reviewed fresh read profile; unapproved performs no work'
         required: true
-        default: unapproved
+        default: tracebolt.linux-read-admin.v2
         type: choice
         options:
           - unapproved
@@ -587,6 +587,7 @@ jobs:
               fixed-helper-template
               fixed-inventory-command
               fixed-launcher-path
+              fixed-offline-failure-stage
               fixed-offline-mode
               fixed-phase
               fixed-platform-path
@@ -878,17 +879,23 @@ jobs:
               nonroot-command-identity
               nonroot-offline-identity
               not_attempted
+              offline-capabilities-cli-failed
               offline-cli-failed
               offline-cli-output-limit
               offline-cli-timeout
               offline-consent-result
               offline-consent-state
+              offline-disable-cli-failed
               offline-endpoint-identity
+              offline-identity-cli-failed
+              offline-initialize-cli-failed
               offline-mutation-readback
               offline-policy-binding
               offline-policy-write
+              offline-preview-cli-failed
               offline-unexpected-discard
               offline-unexpected-mutation
+              offline-validate-cli-failed
               original-artifact-evidence
               original-deployment-changed
               original-deployment-evidence

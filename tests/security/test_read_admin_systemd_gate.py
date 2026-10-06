@@ -292,7 +292,7 @@ class ReadAdminWrapperTests(unittest.TestCase):
         for approval in ("approved_fresh_v2_read_admin_systemd", "approved_cap_sys_ptrace_process_memory"):
             self.assertRegex(triggers, rf"      {approval}:\n        description: [^\n]+\n"
                              r"        required: true\n        default: false\n        type: boolean\n")
-        self.assertIn("        default: unapproved\n        type: choice\n        options:\n"
+        self.assertIn("        default: tracebolt.linux-read-admin.v2\n        type: choice\n        options:\n"
                       "          - unapproved\n          - tracebolt.linux-read-admin.v2\n", triggers)
         self.assertRegex(triggers, r"      reviewed_source_commit:\n        description: [^\n]+\n"
                          r"        required: true\n        type: string\n")

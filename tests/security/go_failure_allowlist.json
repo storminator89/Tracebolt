@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "sourceCommit": "fccc4b00cd8a144afd58e4b995747afab7a10022",
-  "goSourceSha256": "90fb12c394a01af279395eaa2bb1e047b11535fcaf32bd23a72f0ec7fc7dc10a",
+  "goSourceSha256": "57fdeb49e31d0b63e5213a6f9ebdc4653feb22dc69cf379f9fa13b3034cc0327",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -63,6 +63,7 @@
       "TestCachedUpdatesConsentIdentityBeforePrivateReadAndExplicitAck",
       "TestCompleteUpdatesConsentIdentityBeforePrivateReadAndExplicitAck",
       "TestEndpointConsentIdentityBeforePrivateReadAndExplicitAck",
+      "TestGuidedValidationCLIArgumentContract",
       "TestJournalCapabilitiesExclusiveBeforeSenderState",
       "TestJournalConsentCLIPreviewAndInitializeContract",
       "TestJournalConsentCLIRejectsBeforePrivateAccess",

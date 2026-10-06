@@ -520,7 +520,8 @@ def real_effects(s):
             kw.pop("failure_stage", None)
             return super().command(args, failure_stage="fixed-command-failed", **kw)
 
-        def _agent(self, args, facts, body=None, *, limit=16384, timeout=45):
+        def _agent(self, args, facts, body=None, *, limit=16384, timeout=45, failure_stage="offline-cli-failed"):
+            require(failure_stage in ("offline-cli-failed", "offline-capabilities-cli-failed", "offline-identity-cli-failed", "offline-preview-cli-failed", "offline-initialize-cli-failed", "offline-disable-cli-failed", "offline-validate-cli-failed"), "fixed-offline-failure-stage")
             require(s.valid_id(facts["uid"]) and s.valid_id(facts["gid"]), "nonroot-offline-identity")
             self.read(AGENT_BINARY, 128 << 20, 0o555)
             child = subprocess.Popen(args, stdin=subprocess.PIPE if body is not None else subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, env=s.ENV, cwd="/", close_fds=True, start_new_session=True, user=facts["uid"], group=facts["gid"], extra_groups=[])
@@ -550,7 +551,7 @@ def real_effects(s):
                                     selector.unregister(child.stdout)
                                 out.extend(chunk)
                                 require(len(out) <= limit, "offline-cli-output-limit")
-                require(child.wait(timeout=max(.01, deadline - time.monotonic())) == 0, "offline-cli-failed")
+                require(child.wait(timeout=max(.01, deadline - time.monotonic())) == 0, failure_stage)
                 return bytes(out)
             finally:
                 if child.poll() is None:
@@ -561,7 +562,7 @@ def real_effects(s):
                 child.stdout.close()
 
         def capabilities(self, facts):
-            return self._agent([AGENT_BINARY, "--socket-owner-setup-capabilities"], facts, timeout=5)
+            return self._agent([AGENT_BINARY, "--socket-owner-setup-capabilities"], facts, timeout=5, failure_stage="offline-capabilities-cli-failed")
 
         def consent(self, mode, facts, body=None):
             require(mode in ("identity", "preview", "initialize", "disable") and ((body is None) == (mode in ("identity", "preview"))), "fixed-offline-mode")
@@ -572,10 +573,12 @@ def real_effects(s):
                 args += ["--ack-socket-owner-metadata", "--ack-socket-owner-ptrace-risk"]
                 if facts["profile"] == "http-test":
                     args += ["--ack-socket-owner-http-plaintext"]
-            return self._agent(args, facts, body)
+            return self._agent(args, facts, body, failure_stage="offline-" + mode + "-cli-failed")
 
         def validate(self, facts):
-            return self._agent([AGENT_BINARY, "--config", s.CONFIG, "--service-identity", f"{facts['uid']}:{facts['gid']}", "--validate-guided"], facts)
+            # --service-identity is a foreground-only flag in lan-agent. The
+            # existing offline validator runs under _agent's actual UID/GID drop.
+            return self._agent([AGENT_BINARY, "--config", s.CONFIG, "--validate-guided"], facts, failure_stage="offline-validate-cli-failed")
 
         def config_names(self):
             exact_dir(self, CONFIG_DIR)

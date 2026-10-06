@@ -185,6 +185,62 @@ class Fixture(f.Fixture):
 
 
 class SetupTests(unittest.TestCase):
+    def test_guided_validation_uses_supported_offline_args_and_dropped_identity(self):
+        real = x.real_effects(s)
+        facts = dict(uid=200, gid=201, profile="tls")
+        child = mock.Mock()
+        child.wait.return_value = 0
+        child.poll.return_value = 0
+        child.stdin = None
+        selector = mock.MagicMock()
+        selector.__enter__.return_value.get_map.return_value = {}
+        with mock.patch.object(real, "read", return_value=b"inert"), \
+                mock.patch.object(x.subprocess, "Popen", return_value=child) as launch, \
+                mock.patch.object(x.os, "set_blocking"), \
+                mock.patch.object(x.selectors, "DefaultSelector", return_value=selector):
+            real.validate(facts)
+        self.assertEqual(launch.call_args.args[0], [x.AGENT_BINARY, "--config", s.CONFIG, "--validate-guided"])
+        self.assertEqual(launch.call_args.kwargs["user"], 200)
+        self.assertEqual(launch.call_args.kwargs["group"], 201)
+        self.assertEqual(launch.call_args.kwargs["extra_groups"], [])
+        # Bind the regression to the real CLI's unchanged rejection predicate.
+        # The old invocation set identity and validate, so was always rejected
+        # before the identity reader or local handoff validator could run.
+        cli = (ROOT / "cmd/lan-agent/main.go").read_text()
+        self.assertIn('if *identity != "" && (!*foreground || *validate || !serviceIdentity(*identity)) {', cli)
+        self.assertLess(cli.index('if *identity != ""'), cli.index('if *validate {'))
+
+    def test_offline_failure_identifies_only_the_fixed_mode(self):
+        real = x.real_effects(s)
+        facts = dict(uid=200, gid=201, profile="tls")
+        for mode in ("capabilities", "identity", "preview", "initialize", "disable", "validate"):
+            with self.subTest(mode=mode), mock.patch.object(real, "_agent", return_value=b"fixture") as invoke:
+                if mode == "capabilities":
+                    real.capabilities(facts)
+                elif mode == "validate":
+                    real.validate(facts)
+                else:
+                    real.consent(mode, facts, b"{}" if mode in ("initialize", "disable") else None)
+                self.assertEqual(invoke.call_args.kwargs["failure_stage"], "offline-" + mode + "-cli-failed")
+        # Exercise the real nonzero-exit branch with all process/filesystem
+        # effects replaced. No executable, private state or descriptor is used.
+        child = mock.Mock()
+        child.wait.return_value = 2
+        child.poll.return_value = 2
+        child.stdin = None
+        selector = mock.MagicMock()
+        selector.__enter__.return_value.get_map.return_value = {}
+        with mock.patch.object(real, "read", return_value=b"inert"), \
+                mock.patch.object(x.subprocess, "Popen", return_value=child), \
+                mock.patch.object(x.os, "set_blocking"), \
+                mock.patch.object(x.selectors, "DefaultSelector", return_value=selector):
+            with self.assertRaisesRegex(x.Rejected, "^offline-identity-cli-failed$"):
+                real._agent([x.AGENT_BINARY, "--socket-owner-setup-identity"], facts,
+                            failure_stage="offline-identity-cli-failed")
+        with mock.patch.object(x.subprocess, "Popen", side_effect=AssertionError("unexpected execution")):
+            with self.assertRaisesRegex(x.Rejected, "^fixed-offline-failure-stage$"):
+                real._agent([], facts, failure_stage="private arbitrary error")
+
     def test_import_and_effect_construction_inert(self):
         with mock.patch.object(x.os, "open", side_effect=AssertionError("host access")), mock.patch.object(x.os, "lstat", side_effect=AssertionError("host access")), mock.patch.object(x.subprocess, "Popen", side_effect=AssertionError("command")):
             load("inert_socket_setup", Path(__file__).with_name("setup.py"))
