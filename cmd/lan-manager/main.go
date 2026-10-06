@@ -23,6 +23,7 @@ import (
 	"localrmm/internal/lanstore"
 	"localrmm/internal/lantrust"
 	"localrmm/internal/linuxcvefeed"
+	"localrmm/internal/linuxcveprogress"
 	"localrmm/internal/model"
 	"localrmm/internal/operatorauth"
 	"localrmm/internal/store"
@@ -197,10 +198,14 @@ func prepareWithApplicationChecks(m lanconfig.Material, enrollment *enrollmentco
 	}
 	var once sync.Once
 	var cveCache *linuxcvefeed.Cache
+	var cveProgress *linuxcveprogress.Cache
 	closeAll := func() {
 		once.Do(func() {
 			if actions != nil {
 				actions.Close()
+			}
+			if cveProgress != nil {
+				_ = cveProgress.Close()
 			}
 			if cveCache != nil {
 				_ = cveCache.Close()
@@ -236,6 +241,12 @@ func prepareWithApplicationChecks(m lanconfig.Material, enrollment *enrollmentco
 				return nil, e
 			}
 			operatorConfig.CVECache = cveCache
+			// Checkpoints are optional derived state, not manager authority.
+			// Unsafe/unavailable storage disables CVE reads with an explicit
+			// 503; it must not stop unrelated monitoring or fall back to
+			// non-durable continuation.
+			cveProgress, _ = linuxcveprogress.Open(filepath.Join(c.StateDirectory, "cve-assessments"))
+			operatorConfig.CVEProgress = cveProgress
 		}
 		operatorConfig.Enrollment = enrolledService
 		operatorConfig.EnrollmentBootstrap = api.EnrollmentBootstrap{SchemaVersion: "tracebolt.enrollment-bootstrap.v2", ManagerInstanceID: binding.InstanceID, Profile: binding.Profile, EnrollmentOrigin: c.OperatorOrigin, AgentOrigin: c.AgentOrigin, CollectionProfile: binding.CollectionProfile, ServerCAPEM: enrollment.ServerCAPEM(), IssuerRootPEM: enrollment.RootPEM(), IssuerPEM: enrollment.IssuerPEM()}

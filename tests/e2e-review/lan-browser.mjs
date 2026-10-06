@@ -10,6 +10,7 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {applicationChecksBrowserCase} from './application-checks-browser.mjs';
 import {alarmStatusBrowserCase} from './alarm-status-browser.mjs';
+import {cveContinuationBrowserCase,cveContinuationCaseName} from './cve-continuation-browser.mjs';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../..');
 const require=createRequire(path.join(root,'web/package.json'));
 const {chromium,expect}=require('@playwright/test');
@@ -81,6 +82,7 @@ try {
  },'10m');
  await check('Read-only application status separates retained HTTP and verified-leaf expiry, ages samples and clears access loss',()=>applicationChecksBrowserCase({pageAt,login,expect,base,shot}));
  await check('Synthetic read-only alarm status preserves snapshot meaning and clears interrupted access without replay',()=>alarmStatusBrowserCase({pageAt,login,expect,base,shot}));
+ await check(cveContinuationCaseName,()=>cveContinuationBrowserCase({pageAt,login,expect,base,shot}));
  await check('Real CSRF-protected logout removes private content and rejects later protected API reads',async()=>{
   const page=await pageAt('/settings');await login(page);let logoutRequest;page.on('request',r=>{if(r.url().endsWith('/api/auth/logout'))logoutRequest=r;});await page.getByRole('button',{name:'Sign out',exact:true}).click();await expect(page.getByRole('heading',{name:'Sign in',exact:true})).toBeVisible();expect(logoutRequest.method()).toBe('POST');expect(Boolean((await logoutRequest.allHeaders())['x-csrf-token'])).toBe(true);await expect(page.locator('.app-shell')).toHaveCount(0);expect((await context.request.get(`${base}/api/overview`)).status()).toBe(401);await page.reload();await expect(page.getByRole('heading',{name:'Sign in',exact:true})).toBeVisible();await cleanStorage(page);
  });
@@ -102,6 +104,6 @@ try {
 } catch {fatal=true;console.log('LAN browser setup failed; raw diagnostics intentionally withheld.');}
 finally {
  if(context)await context.close();await stop();if(browser)await browser.close();
- const report={sourceSha,createdAt:new Date().toISOString(),scope:'Real LAN operator HTTP-test handler on loopback with synthetic contract data; not the production CLI, real enrollment or trusted TLS browser acceptance',faultInjection:'Explicit malformed bootstrap, protected 401, interrupted logout and invented metadata samples/503 for live Overview UI checks; invented application-status DTOs and 503/401 for retained HTTP/verified-leaf expiry UI checks, not target probes; invented exact GET /api/alerts/status aggregates, malformed/503/401 and held replies for alarm UI snapshot/lifecycle checks, with injected visibility/page lifecycle events; no alarm sends or configuration',credentialMaterial:'Disposable known fixture only; never persisted or exported',screenshots:'Viewport-only synthetic contract/login screens',runtimeErrorCount,results,summary:{passed:results.filter(r=>r.status==='PASS').length,failed:results.filter(r=>r.status==='FAIL').length,setupFailure:fatal}};
+ const report={sourceSha,createdAt:new Date().toISOString(),scope:'Real LAN operator HTTP-test handler on loopback with synthetic contract data; not the production CLI, real enrollment or trusted TLS browser acceptance',faultInjection:'Explicit malformed bootstrap, protected 401, interrupted logout and invented metadata samples/503 for live Overview UI checks; invented application-status DTOs and 503/401 for retained HTTP/verified-leaf expiry UI checks, not target probes; invented exact GET /api/alerts/status aggregates, malformed/503/401 and held replies for alarm UI snapshot/lifecycle checks, with injected visibility/page lifecycle events; no alarm sends or configuration; production-validated Go synthetic CVE continuation and coherent selected-device identity, held/blocked/changed/stale responses and metadata 401 for lifecycle checks; no inventory collection, vendor fetch, feed import or host operation',credentialMaterial:'Disposable known fixture only; never persisted or exported',screenshots:'Viewport-only synthetic contract/login screens',runtimeErrorCount,results,summary:{passed:results.filter(r=>r.status==='PASS').length,failed:results.filter(r=>r.status==='FAIL').length,setupFailure:fatal}};
  await fs.writeFile(path.join(out,'lan-browser-results.json'),JSON.stringify(report,null,2));await fs.writeFile(path.join(out,'lan-browser-manifest.json'),JSON.stringify({sourceSha,screenshots},null,2));await fs.rm(temporary,{recursive:true,force:true});process.exitCode=fatal||runtimeErrorCount||results.some(r=>r.status==='FAIL')?1:0;
 }

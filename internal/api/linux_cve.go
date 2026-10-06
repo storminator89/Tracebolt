@@ -12,6 +12,7 @@ import (
 	"localrmm/internal/inventoryledger"
 	"localrmm/internal/linuxcve"
 	"localrmm/internal/linuxcvefeed"
+	"localrmm/internal/linuxcveprogress"
 	"localrmm/internal/linuxpackages"
 	"net/http"
 	"strings"
@@ -23,9 +24,15 @@ type linuxCVEInventorySource interface {
 	CompleteInventoryPage(context.Context, string, inventoryledger.PageRequest, time.Time) (enrollmentstore.InventoryPageResult, error)
 }
 
+type cveProgressStore interface {
+	Load(string, time.Time) ([]byte, error)
+	Save(string, time.Time, time.Time, []byte) error
+}
+
 type linuxCVEState struct {
 	feeds                linuxcve.Store
 	cache                *linuxcvefeed.Cache
+	progress             cveProgressStore
 	source               linuxCVEInventorySource
 	now                  func() time.Time
 	imports, assessments chan struct{}
@@ -110,7 +117,7 @@ func (h *operatorHandler) linuxCVEAPI(w http.ResponseWriter, r *http.Request) {
 	if state != nil {
 		now = state.now().UTC()
 	}
-	out := linuxCVEView{SchemaVersion: "tracebolt.linux-cve-view.v1", DeviceID: parts[3], ServerNow: now, Status: "not_configured", ReasonCodes: []string{"complete_inventory_required"}, Feeds: (&linuxcve.Store{}).View(now)}
+	out := linuxCVEView{SchemaVersion: "tracebolt.linux-cve-view.v2", DeviceID: parts[3], ServerNow: now, Status: "not_configured", ReasonCodes: []string{"complete_inventory_required"}, Feeds: (&linuxcve.Store{}).View(now)}
 	if state == nil {
 		devices, err := h.app.devices()
 		if err != nil {
@@ -189,28 +196,89 @@ func (h *operatorHandler) linuxCVEAPI(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
+
 	now = state.now().UTC()
-	result := linuxcve.Evaluate(ctx, snapshot, m, rows, state.comparator, now)
+	if state.progress == nil {
+		fail(w, 503, "cve_progress_unavailable", "The private assessment cache is unavailable.")
+		return
+	}
+	identity := linuxcve.AssessmentIdentity{DeviceID: parts[3], Sequence: view.CompleteBinding.Sequence}
+	key, err := linuxcve.AssessmentID(snapshot, m, identity)
+	if err != nil {
+		h.app.internal(w)
+		return
+	}
+	prior, err := state.progress.Load(key, now)
+	if err != nil {
+		cveProgressError(w, err)
+		return
+	}
+	result, next, err := linuxcve.EvaluateStep(ctx, snapshot, m, rows, state.comparator, now, identity, prior)
+	if err != nil {
+		cveProgressError(w, err)
+		return
+	}
 	out.Status = "evaluated"
 	out.ReasonCodes = []string{}
 	out.Report = &result
 	if result.Status == "unavailable" {
 		out.Status = "unavailable"
 		out.ReasonCodes = append([]string{}, result.ReasonCodes...)
+		out.Report = nil
 	}
-	// Recheck endpoint authority/current generation after all pages/comparisons.
-	latest, err := state.source.CompleteInventoryView(ctx, parts[3], state.now().UTC())
-	if err != nil {
-		if operatorStillActive(w, r) {
-			completeInventoryError(w, err)
+	// Cached progress never grants authority. Revalidate the current inventory,
+	// original retention and session before committing any private derived state.
+	checkCurrent := func() bool {
+		if !operatorStillActive(w, r) {
+			return false
 		}
+		latest, e := state.source.CompleteInventoryView(ctx, parts[3], state.now().UTC())
+		if e != nil {
+			if operatorStillActive(w, r) {
+				completeInventoryError(w, e)
+			}
+			return false
+		}
+		digest := ""
+		if latest.Complete != nil {
+			digest, _ = fullinventory.ManifestDigest(latest.Complete.Manifest)
+		}
+		if latest.DeviceID != parts[3] || latest.Complete == nil || latest.Complete.State != "complete" || latest.CompleteBinding != view.CompleteBinding || digest != view.CompleteBinding.ManifestHash || !state.now().UTC().Before(m.CollectedAt.Add(inventoryledger.ObservationTTL)) {
+			fail(w, 409, "inventory_generation_expired", "The package generation changed; refresh the assessment.")
+			return false
+		}
+		if state.feeds.Snapshot(target) != snapshot {
+			fail(w, 409, "cve_feed_changed", "Security data changed; refresh the assessment.")
+			return false
+		}
+		if ctx.Err() != nil {
+			fail(w, 503, "cve_assessment_interrupted", "The assessment was interrupted; refresh to resume saved progress.")
+			return false
+		}
+		return true
+	}
+	if !checkCurrent() {
 		return
 	}
-	if latest.DeviceID != parts[3] || latest.Complete == nil || latest.Complete.State != "complete" || latest.CompleteBinding != view.CompleteBinding {
-		fail(w, 409, "inventory_generation_expired", "The package generation changed; refresh the assessment.")
-		return
+	if len(next) > 0 && (len(prior) == 0 || result.Continuation.AdvancedCheckCount > 0) {
+		if err = state.progress.Save(key, m.CollectedAt.Add(inventoryledger.ObservationTTL), state.now().UTC(), next); err != nil {
+			cveProgressError(w, err)
+			return
+		}
+		if !checkCurrent() {
+			return
+		}
 	}
+
 	writeLinuxCVE(w, r, out, state)
+}
+
+func cveProgressError(w http.ResponseWriter, err error) {
+	if errors.Is(err, linuxcveprogress.ErrUncertain) {
+		fail(w, 503, "cve_progress_uncertain", "The assessment save could not be confirmed. Restart the manager before resuming.")
+		return
+	}
+	fail(w, 503, "cve_progress_unavailable", "The private assessment checkpoint is unavailable or invalid; no saved totals were trusted.")
 }
 
 func readLinuxCVERows(ctx context.Context, state *linuxCVEState, id string, view enrollmentstore.InventoryStatus) ([]linuxpackages.PackageRow, error) {

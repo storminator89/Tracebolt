@@ -1,6 +1,7 @@
 import { t, apiErrorText } from './i18n';
+const retainedErrorCodes = ['storage_busy', 'cve_progress_unavailable', 'cve_progress_uncertain', 'cve_feed_changed', 'cve_assessment_interrupted', 'inventory_generation_expired', 'cve_clock_changed'] as const;
 export class APIError extends Error {
-    constructor(message: string, public status?: number, public code?: 'storage_busy') { super(message); this.name = 'APIError'; }
+    constructor(message: string, public status?: number, public code?: typeof retainedErrorCodes[number]) { super(message); this.name = 'APIError'; }
 }
 export const AUTH_REQUIRED_EVENT = 'tracebolt:authentication-required';
 const pendingRequests = new Map<AbortController, boolean>();
@@ -84,7 +85,7 @@ export async function request<T>(path: string, options?: RequestInit, maxRespons
             let code: APIError['code'];
             try {
                 const data = maxResponseBytes === undefined ? await response.json() : await boundedJSON(response, maxResponseBytes) as { error?: { code?: string; message?: string } };
-                if (data.error?.code === 'storage_busy') code = 'storage_busy';
+                if (typeof data.error?.code === 'string' && (retainedErrorCodes as readonly string[]).includes(data.error.code)) code = data.error.code as APIError['code'];
                 message = apiErrorText(data.error?.code, typeof data.error?.message === "string" ? data.error.message : message);
             }
             catch { /* Preserve status if response is not JSON. */ }

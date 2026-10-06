@@ -9,6 +9,7 @@ import (
 	"localrmm/internal/inventoryledger"
 	"localrmm/internal/linuxcve"
 	"localrmm/internal/linuxcvefeed"
+	"localrmm/internal/linuxcveprogress"
 	"localrmm/internal/linuxpackages"
 	"localrmm/internal/model"
 	"net/http"
@@ -77,6 +78,22 @@ func cveBundle(at time.Time) string {
 func fixtureCVEPackages() []linuxpackages.PackageRow {
 	return []linuxpackages.PackageRow{{Name: "libfixture", Version: "2:1.0-1+b1", Architecture: "amd64", SourcePackage: "fixture", SourceVersion: "2:1.0-1", SourceMapping: "source-field", InstallState: "installed"}}
 }
+func newTestLinuxCVEState(t *testing.T, f linuxCVEInventorySource, now func() time.Time) *linuxCVEState {
+	t.Helper()
+	parent := t.TempDir()
+	if err := os.Chmod(parent, 0700); err != nil {
+		t.Fatal(err)
+	}
+	cache, err := linuxcveprogress.Open(filepath.Join(parent, "cve-assessments"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = cache.Close() })
+	state := newLinuxCVEState(f, now)
+	state.progress = cache
+	return state
+}
+
 func readCVEFixture(t *testing.T, f *cveInventoryFixture, state *linuxCVEState, active func() bool) (*httptest.ResponseRecorder, linuxCVEView) {
 	t.Helper()
 	app := setup(t)
@@ -98,12 +115,12 @@ func readCVEFixture(t *testing.T, f *cveInventoryFixture, state *linuxCVEState, 
 func TestLinuxCVEVerticalSliceUsesCompleteSourceVersions(t *testing.T) {
 	now := time.Now().UTC()
 	f := cveFixture(t, now, fixtureCVEPackages())
-	state := newLinuxCVEState(f, func() time.Time { return now })
+	state := newTestLinuxCVEState(t, f, func() time.Time { return now })
 	if _, err := state.feeds.Import(context.Background(), strings.NewReader(cveBundle(now.Add(-time.Hour))), now); err != nil {
 		t.Fatal(err)
 	}
 	w, out := readCVEFixture(t, f, state, nil)
-	if w.Code != 200 || out.Status != "evaluated" || out.Report == nil || out.Report.Status != "partial" || len(out.Report.Findings) != 1 || f.pages != 1 || f.reads != 2 {
+	if w.Code != 200 || out.Status != "evaluated" || out.Report == nil || out.Report.Status != "partial" || len(out.Report.Findings) != 1 || f.pages != 1 || f.reads != 3 {
 		t.Fatal("vertical slice", w.Code, w.Body.String())
 	}
 	finding := out.Report.Findings[0]
@@ -124,7 +141,7 @@ func TestLinuxCVEMissingAndEmptyRemainDifferent(t *testing.T) {
 				rows = []linuxpackages.PackageRow{}
 			}
 			f := cveFixture(t, now, rows)
-			state := newLinuxCVEState(f, func() time.Time { return now })
+			state := newTestLinuxCVEState(t, f, func() time.Time { return now })
 			if kind == "missing_inventory" {
 				f.view.Complete = nil
 			}
@@ -153,7 +170,7 @@ func TestLinuxCVERejectsMixedOrTruncatedInventory(t *testing.T) {
 	for _, kind := range []string{"binding", "count", "prefix", "changed_generation", "revoked"} {
 		t.Run(kind, func(t *testing.T) {
 			f := cveFixture(t, now, fixtureCVEPackages())
-			state := newLinuxCVEState(f, func() time.Time { return now })
+			state := newTestLinuxCVEState(t, f, func() time.Time { return now })
 			if _, err := state.feeds.Import(context.Background(), strings.NewReader(cveBundle(now)), now); err != nil {
 				t.Fatal(err)
 			}
@@ -257,7 +274,7 @@ func TestLinuxCVEGoFixtures(t *testing.T) {
 	for _, provenance := range []string{"manual", "official"} {
 		t.Run(provenance, func(t *testing.T) {
 			f := cveFixture(t, now, fixtureCVEPackages())
-			state := newLinuxCVEState(f, func() time.Time { return now })
+			state := newTestLinuxCVEState(t, f, func() time.Time { return now })
 			raw := cveBundle(now.Add(-time.Hour))
 			if provenance == "manual" {
 				if _, err := state.feeds.Import(context.Background(), strings.NewReader(raw), now); err != nil {
@@ -305,7 +322,7 @@ func TestLinuxCVERecomputesOutgoingFeedAge(t *testing.T) {
 	now := time.Now().UTC()
 	clock := now
 	f := cveFixture(t, now, fixtureCVEPackages())
-	state := newLinuxCVEState(f, func() time.Time { return clock })
+	state := newTestLinuxCVEState(t, f, func() time.Time { return clock })
 	if _, err := state.feeds.Import(context.Background(), strings.NewReader(cveBundle(now.Add(-linuxcve.FeedTTL+time.Second))), now); err != nil {
 		t.Fatal(err)
 	}
@@ -323,7 +340,7 @@ func TestLinuxCVERecomputesOutgoingFeedAge(t *testing.T) {
 func TestLinuxCVEAdmissionIsBounded(t *testing.T) {
 	now := time.Now().UTC()
 	f := cveFixture(t, now, fixtureCVEPackages())
-	state := newLinuxCVEState(f, func() time.Time { return now })
+	state := newTestLinuxCVEState(t, f, func() time.Time { return now })
 	state.assessments <- struct{}{}
 	w, _ := readCVEFixture(t, f, state, nil)
 	if w.Code != 429 || f.reads != 0 || w.Header().Get("Retry-After") != "2" {
@@ -344,7 +361,7 @@ func TestLinuxCVEImportedFeedPersistsThroughAPIAndRestart(t *testing.T) {
 		t.Fatal(err)
 	}
 	f := cveFixture(t, now, fixtureCVEPackages())
-	state := newLinuxCVEState(f, func() time.Time { return now })
+	state := newTestLinuxCVEState(t, f, func() time.Time { return now })
 	state.cache = cache
 	if err = cache.Load(context.Background(), &state.feeds, now); err != nil {
 		t.Fatal(err)
@@ -365,7 +382,7 @@ func TestLinuxCVEImportedFeedPersistsThroughAPIAndRestart(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer reopened.Close()
-	state = newLinuxCVEState(f, func() time.Time { return now })
+	state = newTestLinuxCVEState(t, f, func() time.Time { return now })
 	state.cache = reopened
 	if err = reopened.Load(context.Background(), &state.feeds, now.Add(time.Minute)); err != nil {
 		t.Fatal(err)
@@ -383,7 +400,7 @@ func TestLinuxCVECoverageUsesEveryInventoryPageWithoutConflatingDisplayLimits(t 
 		rows[i] = linuxpackages.PackageRow{Name: "fixture-binary-" + fmt.Sprintf("%04d", i), Version: "2:1.0-1+b1", Architecture: "amd64", SourcePackage: "fixture", SourceVersion: "2:1.0-1", SourceMapping: "source-field", InstallState: "installed"}
 	}
 	f := cveFixture(t, now, rows)
-	state := newLinuxCVEState(f, func() time.Time { return now })
+	state := newTestLinuxCVEState(t, f, func() time.Time { return now })
 	if _, err := state.feeds.Import(context.Background(), strings.NewReader(cveBundle(now.Add(-time.Hour))), now); err != nil {
 		t.Fatal(err)
 	}
@@ -392,10 +409,10 @@ func TestLinuxCVECoverageUsesEveryInventoryPageWithoutConflatingDisplayLimits(t 
 		t.Fatal("complete generation was not read", w.Code, f.pages)
 	}
 	r := out.Report
-	if r.SchemaVersion != "tracebolt.linux-cve-result.v2" || !r.Coverage.EvaluationComplete || r.Coverage.TotalCheckCount != 1 || r.Coverage.CompletedCheckCount != 1 || r.Coverage.MatchedWarningCount != 1 || !r.Truncated || len(r.Findings) != 1 || !r.Findings[0].BinariesTruncated || r.UnassessedRecordCount != 0 {
+	if r.SchemaVersion != "tracebolt.linux-cve-result.v3" || !r.Coverage.EvaluationComplete || r.Coverage.TotalCheckCount != 1 || r.Coverage.CompletedCheckCount != 1 || r.Coverage.MatchedWarningCount != 1 || !r.Truncated || len(r.Findings) != 1 || !r.Findings[0].BinariesTruncated || r.UnassessedRecordCount != 0 {
 		t.Fatalf("binary display limit changed processing coverage: %+v", r)
 	}
-	if len(w.Body.Bytes()) > 256<<10 || f.reads != 2 {
+	if len(w.Body.Bytes()) > 256<<10 || f.reads != 3 {
 		t.Fatal("response budget or authority recheck changed")
 	}
 }

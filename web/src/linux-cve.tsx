@@ -28,14 +28,14 @@ function LinuxCVECoverageDetails({ report, locale }: { report: LinuxCVEResult; l
     const omitted = coverage.matchedFindingCount > report.findings.length || report.findings.some(row => row.binariesTruncated);
     return <>
         <dl className="linux-cve-facts">
-            <div><dt>{labels.processing}</dt><dd>{report.status === 'unavailable' ? labels.unavailable : coverage.evaluationComplete ? labels.processingComplete : labels.processingIncomplete}</dd></div>
+            <div><dt>{labels.processing}</dt><dd>{coverage.evaluationComplete ? labels.processingComplete : labels.processingIncomplete}</dd></div>
             <div><dt>{labels.checks}</dt><dd>{format(coverage.completedCheckCount)} / {format(coverage.totalCheckCount)}</dd></div>
             <div><dt>{labels.comparisons}</dt><dd>{format(coverage.comparisonCount)}</dd></div>
             <div><dt>{labels.checkedSources}</dt><dd>{format(report.evaluatedSourceCount)}</dd></div>
-            <div><dt>{labels.matchedVersions}</dt><dd>{!coverage.evaluationComplete && report.status !== 'unavailable' && `${labels.atLeast} `}{format(coverage.matchedFindingCount)}</dd></div>
+            <div><dt>{labels.matchedVersions}</dt><dd>{!coverage.evaluationComplete && `${labels.atLeast} `}{format(coverage.matchedFindingCount)}</dd></div>
             <div><dt>{labels.shownVersions}</dt><dd>{format(report.findings.length)}</dd></div>
             <div><dt>{labels.shownWarnings}</dt><dd>{format(shownWarnings)}</dd></div>
-            <div><dt>{labels.unassessedRecords}</dt><dd>{!coverage.evaluationComplete && report.status !== 'unavailable' && `${labels.atLeast} `}{format(report.unassessedRecordCount)}</dd></div>
+            <div><dt>{labels.unassessedRecords}</dt><dd>{!coverage.evaluationComplete && `${labels.atLeast} `}{format(report.unassessedRecordCount)}</dd></div>
             <div><dt>{labels.skipped}</dt><dd>{format(report.skippedPackageCount)}</dd></div>
             <div><dt>{labels.installationGaps}</dt><dd>{format(coverage.packageGaps.installationIncomplete)}</dd></div>
             <div><dt>{labels.versionGaps}</dt><dd>{format(coverage.packageGaps.nonstandardVersion)}</dd></div>
@@ -52,10 +52,10 @@ function LinuxCVECoverageDetails({ report, locale }: { report: LinuxCVEResult; l
 export function LinuxCVEPanel({ deviceId, sessionKey }: { deviceId: string; sessionKey?: string | number }) {
     const operator = useOperator(), [locale] = useLocale();
     if (!operator || operator.mode !== 'lan' || !operator.authenticated) return <p>{copy[locale].access}</p>;
-    return <LinuxCVESession key={`${deviceId}:${String(sessionKey ?? '')}:${operator.expiresAt ?? ''}`} deviceId={deviceId} sessionExpiresAt={operator.expiresAt} canWrite={operator.hasExplicitMetadata === true && operator.loginMode === 'shared' && operator.actorId === null && operator.capabilities?.length === 1 && operator.capabilities[0] === 'read'}/>;
+    return <LinuxCVESession key={`${deviceId}:${String(sessionKey ?? '')}:${operator.expiresAt ?? ''}`} deviceId={deviceId} sessionExpiresAt={operator.expiresAt} authorityKey={JSON.stringify([operator.loginMode, operator.actorId, operator.capabilities, operator.hasExplicitMetadata])} canWrite={operator.hasExplicitMetadata === true && operator.loginMode === 'shared' && operator.actorId === null && operator.capabilities?.length === 1 && operator.capabilities[0] === 'read'}/>;
 }
-function LinuxCVESession({ deviceId, canWrite, sessionExpiresAt }: { deviceId: string; canWrite: boolean; sessionExpiresAt: string | null }) {
-    const [locale] = useLocale(), labels = copy[locale], resource = useLinuxCVE(deviceId, canWrite, sessionExpiresAt), heading = useId(), fileId = useId();
+function LinuxCVESession({ deviceId, canWrite, sessionExpiresAt, authorityKey }: { deviceId: string; canWrite: boolean; sessionExpiresAt: string | null; authorityKey: string }) {
+    const [locale] = useLocale(), labels = copy[locale], resource = useLinuxCVE(deviceId, canWrite, sessionExpiresAt, authorityKey), heading = useId(), fileId = useId();
     const view = resource.view, report = view?.report, activeReport = view?.status === 'evaluated' && report;
     const disabled = resource.loading || resource.writing !== null || resource.error === 'session';
     const cacheUncertain = view?.feeds.failureReason === 'cache_commit_uncertain', writeDisabled = disabled || !view || cacheUncertain;
@@ -68,7 +68,7 @@ function LinuxCVESession({ deviceId, canWrite, sessionExpiresAt }: { deviceId: s
     return <section className="linux-cve" aria-labelledby={heading} aria-busy={resource.loading || resource.writing !== null}>
         <header className="linux-cve-heading"><div><h2 id={heading}>{labels.title}</h2><p>{labels.subtitle}</p></div><button type="button" className="button small" disabled={disabled} onClick={() => void resource.load()}><RefreshCw size={14}/>{labels.refresh}</button></header>
         {resource.canWrite && <div className="linux-cve-update"><button type="button" className="button primary" disabled={writeDisabled} onClick={() => void resource.sync()}><Download size={15}/>{labels.sync}</button><p>{labels.syncNote}</p></div>}
-        {(resource.loading || resource.writing) && <p role="status" className="linux-cve-notice">{resource.writing === 'sync' ? labels.syncing : resource.writing === 'import' ? labels.importing : resource.recovering ? labels.recovering : labels.loading}</p>}
+        {(resource.loading || resource.writing) && <p role="status" className="linux-cve-notice">{resource.writing === 'sync' ? labels.syncing : resource.writing === 'import' ? labels.importing : resource.recovering ? labels.recovering : report?.continuation.state === 'pending' ? labels.continuing : labels.loading}</p>}
         {resource.error && <p role="alert" className="linux-cve-notice caution"><TriangleAlert size={16}/>{labels[resource.error]}</p>}
         {resource.notice && !(resource.notice === 'uncertain' && resource.error === 'uncertain') && <p role="status" className="linux-cve-notice">{labels[resource.notice]}</p>}
         {view && <>
@@ -79,7 +79,7 @@ function LinuxCVESession({ deviceId, canWrite, sessionExpiresAt }: { deviceId: s
                 {(stale || activeReport && report.coverage.evaluationComplete) && <p>{stale ? labels.stale : labels.partial}</p>}
                 {activeReport && warnings && warnings.length > 0 && (report.coverage.matchedWarningCount > warnings.length ? <p>{labels.warningCardsOmitted}</p> : report.coverage.matchedFindingCount > report.findings.length && <p>{labels.versionsOmitted}</p>)}
             </div></div>
-            {activeReport && !report.coverage.evaluationComplete && <p role="alert" className="linux-cve-notice caution"><TriangleAlert size={16}/><span>{labels.incomplete} {format(pending)} {pending === 1 ? labels.pendingSingle : labels.pending} {report.reasonCodes.includes('comparison_limit_exceeded') ? labels.processingLimit : labels.retryProcessing}</span></p>}
+            {activeReport && !report.coverage.evaluationComplete && <p className="linux-cve-notice caution"><TriangleAlert size={16}/><span>{labels.incomplete} {format(report.coverage.completedCheckCount)} / {format(report.coverage.totalCheckCount)} · {format(pending)} {pending === 1 ? labels.pendingSingle : labels.pending} {resource.loading ? labels.automaticProcessing : labels.retryProcessing}<progress className="linux-cve-progress" aria-label={labels.checks} max={report.coverage.totalCheckCount} value={report.coverage.completedCheckCount}/></span></p>}
             {view.feeds.outcome === 'failed' && <p className="linux-cve-notice caution">{cacheUncertain ? labels.cacheUncertain : labels.feedFailed}</p>}
             <dl className="linux-cve-times"><div><dt>{labels.assessed}</dt><dd>{report ? <time dateTime={report.assessedAt}>{date(report.assessedAt, locale)}</time> : labels.unknown}</dd></div><div><dt>{labels.inventoryAge}</dt><dd>{age(inventoryAge, labels)}{view.inventory && inventoryAge >= LINUX_CVE_INVENTORY_TTL_MS && ` · ${labels.staleLabel}`}</dd></div><div><dt>{labels.feedAge}</dt><dd>{age(feedAge, labels)}{report?.feed && feedAge >= LINUX_CVE_FEED_TTL_MS && ` · ${labels.staleLabel}`}</dd></div></dl>
             {warnings && (warnings.length ? <ol className="linux-cve-list">{warnings.map(group => {

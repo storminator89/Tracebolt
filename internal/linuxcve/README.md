@@ -119,8 +119,8 @@ A bounded binary list or omitted warning detail does not change that count's
 completeness. Interrupted or budget-blocked checks remain pending, rather than
 being counted as uninterpretable vendor data.
 
-The v2 result adds `coverage`: exact planned/completed source-version/advisory
-check counts; executed non-memoized comparator calls (including failed calls); total matching rows and unique
+The v3 result retains `coverage`: exact planned/completed source-version/advisory
+check counts; last-step executed non-memoized comparator calls (including failed and retried calls); total matching rows and unique
 source/CVE warnings before display trimming; separate skipped-installation,
 nonstandard-version and missing-source package counts; and deduplicated vendor
 reason counts. One record can have different comparison outcomes for multiple
@@ -135,13 +135,63 @@ means complete vulnerability coverage or a secure endpoint. No matching-release
 feed record is a source gap, not a not-affected conclusion. Partial planning is
 unavailable and cannot publish invented exact progress totals.
 
-The evaluator bounds work at 3 seconds and 2,000 memoized Debian comparisons.
+The evaluator bounds each step at 3 seconds, 2,000 actual Debian comparator calls
+(with per-step memoization), and 4,000 visited checks. The separate check limit
+bounds unsupported/not-affected records that need no comparator.
 It emits at most 100 version matches, 20 binaries per match, 128 binaries total,
 and 230 KiB of serialized result, with explicit truncation. Display limits do not
 stop assessment; totals continue under the same CPU/comparison budgets. A true
 comparison/time cutoff reports incomplete processing and exact remaining checks.
-This first slice does not yet resume such interrupted processing. Each visible match
+`EvaluateStep` resumes such interrupted processing from a validated checkpoint.
+Each visible match
 retains at least one installed binary. Coverage is always partial. Feed freshness
 (48 hours) and inventory freshness (24 hours) are independent; stale evidence
 retains historical matches with stale labels. Missing or invalid prerequisites
 never become a green zero-warning/secure verdict.
+
+
+## Durable continuation contract
+
+A plan is deterministic: source package, CVE, then installed source version.
+The cursor identifies the next whole check. Current-source/current-CVE flags
+count each interpreted source, warning and unassessed record exactly once even
+when a step ends between two installed versions of the same advisory. A check
+interrupted part-way through its interval comparisons is retried whole; its
+completion, warning and gap counters are not advanced. Memoization is per step
+and bounded by the unchanged comparator-call limit. Planning uses only the
+already bounded and revalidated complete inventory and immutable feed.
+
+`continuation` is required in a valid planned v3 result:
+
+- `assessmentId`: 64 lowercase hex digits binding evaluator version, device,
+  inventory sequence, full manifest digest (including release and original
+  collection time), provider/target/payload hash, original fetched/expiry times,
+  trust and coverage. Parser `validatedAt` is excluded so restart revalidation
+  does not invalidate matching progress or renew evidence.
+- `state`: `pending`, `complete`, or `blocked`. Pending always advances at least
+  one whole check. Blocked advances none and must not be automatically retried.
+- `revision`: durable commit count, from zero to total check count plus one.
+  The first successful complete empty plan has revision one. A blocked first
+  step has revision zero. Cached complete reads keep revision unchanged.
+- `advancedCheckCount`: whole checks completed in this step, at most 4,000.
+  Cumulative progress remains `coverage.completedCheckCount`.
+- `reason`: empty for complete; otherwise `comparison_limit_exceeded`,
+  `visited_check_limit_exceeded`, or `evaluation_canceled_or_timed_out`.
+  Transient processing reasons are removed when later steps complete.
+
+A checkpoint contains only the bounded cursor, current-record flags, cumulative
+counters, last successful assessment time and capped visible findings. It does
+not store raw inventory/feed bytes, a growing seen-CVE map or comparison memo.
+Exact canonical JSON, required non-null slices, immutable binding, prefix counts,
+flags, source-bound findings and exact vendor fixed endpoints are revalidated.
+Retained findings must occur before the cursor and contain only their first
+mapped binary; the response reconstructs its bounded binary projection.
+
+The API uses the separate `internal/linuxcveprogress` private cache. All steps
+must commit before progress is acknowledged. Save failure or uncertainty yields
+an explicit error, with no report or trusted new totals. A canceled request does
+not commit. API admission serializes reads, and operator authority, original
+inventory expiry/current binding, and current feed are checked before and after
+save. Complete reads perform no comparator calls and do not renew evidence age.
+View schema v2 uses `report: null` for unavailable prerequisites, rather than
+inventing a planned assessment ID or totals.

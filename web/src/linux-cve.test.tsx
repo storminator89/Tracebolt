@@ -14,7 +14,7 @@ const operator: NonNullable<ReturnType<typeof useOperator>> = { hasExplicitMetad
 const path = `/devices/${id}/security/cves`;
 function defer<T>() { let resolve!: (v: T) => void; return { promise: new Promise<T>(done => { resolve = done; }), resolve }; }
 const flush = () => act(async () => { await Promise.resolve(); await Promise.resolve(); });
-async function show(view = linuxCVEView()) { vi.mocked(request).mockResolvedValue(view); const rendered = render(<LinuxCVEPanel deviceId={id} sessionKey="one"/>); await screen.findByText('Limited coverage'); return rendered; }
+async function show(view = linuxCVEView()) { vi.mocked(request).mockResolvedValue(view); if (view.report?.continuation.state === 'pending') vi.mocked(request).mockResolvedValueOnce(view).mockReturnValue(new Promise(() => {})); const rendered = render(<LinuxCVEPanel deviceId={id} sessionKey="one"/>); await screen.findByText('Limited coverage'); return rendered; }
 function choose(file = new File(['{"schemaVersion":"first","schemaVersion":"second"}'], 'private-file-name.json')) { fireEvent.click(screen.getByText('Manual JSON bundle import')); fireEvent.change(screen.getByLabelText('Choose JSON bundle'), { target: { files: [file] } }); return file; }
 beforeEach(() => { setLocale('en', false); vi.mocked(request).mockReset(); vi.mocked(useOperator).mockReturnValue(operator); });
 afterEach(() => { cleanup(); vi.useRealTimers(); vi.restoreAllMocks(); });
@@ -82,26 +82,26 @@ describe('Linux CVE warnings panel', () => {
         expect(screen.getByRole('list', { name: 'Unassessed records by reason' })).toHaveTextContent('627'); expect(screen.getByText(/Display details were omitted/)).toBeVisible();
     });
     it.each([
-        ['en', 'Processing incomplete:', '17 checks pending.', 'Comparison limit reached.', 'Data sources and coverage'],
-        ['de', 'Verarbeitung unvollständig:', '17 Prüfungen ausstehend.', 'Vergleichsgrenze erreicht.', 'Datenquellen und Abdeckung'],
+        ['en', 'Processing incomplete:', '17 checks pending.', 'Checks continue automatically', 'Data sources and coverage'],
+        ['de', 'Verarbeitung unvollständig:', '17 Prüfungen ausstehend.', 'Prüfungen laufen automatisch weiter', 'Datenquellen und Abdeckung'],
     ] as const)('shows a compact actionable processing alert with accurate pending checks in %s', async (locale, title, pending, action, details) => {
-        setLocale(locale, false); vi.mocked(request).mockResolvedValue(incompleteLinuxCVEView()); render(<LinuxCVEPanel deviceId={id}/>);
-        const alert = await screen.findByRole('alert'); expect(alert).toHaveTextContent(title); expect(alert).toHaveTextContent(pending); expect(alert).toHaveTextContent(action);
+        setLocale(locale, false); vi.mocked(request).mockResolvedValueOnce(incompleteLinuxCVEView()).mockReturnValue(new Promise(() => {})); render(<LinuxCVEPanel deviceId={id}/>);
+        const alert = await screen.findByText(new RegExp(title)); expect(alert).toHaveTextContent(title); expect(alert).toHaveTextContent(pending); expect(alert).toHaveTextContent(action);
         expect(screen.getByRole('article')).toBeVisible(); expect(screen.getByLabelText(locale === 'en' ? 'At least 1' : 'Mindestens 1')).toHaveTextContent('≥ 1');
         expect(screen.queryByText(/advisory records? (?:has|have) (?:a )?data or comparison gap/)).not.toBeInTheDocument();
         const disclosure = screen.getByText(details).closest('details')!; expect(disclosure).not.toHaveAttribute('open');
         fireEvent.click(screen.getByText(details)); expect(disclosure).toHaveAttribute('open');
     });
-    it('describes refresh as a new assessment only after an interruption, never as budget resumption', async () => {
-        const view = incompleteLinuxCVEView(); view.report!.reasonCodes = view.report!.reasonCodes.filter(reason => reason !== 'comparison_limit_exceeded'); view.report!.reasonCodes.push('evaluation_canceled_or_timed_out');
-        const rendered = await show(view); expect(screen.getByRole('alert')).toHaveTextContent('Refresh to start a new assessment.');
-        rendered.unmount(); await show(incompleteLinuxCVEView()); expect(screen.getByRole('alert')).not.toHaveTextContent('Refresh'); expect(screen.getByRole('alert')).toHaveTextContent('Comparison limit reached.');
+    it('keeps a blocked saved assessment explicit without automatic retries', async () => {
+        const view = incompleteLinuxCVEView(); view.report!.continuation.state = 'blocked'; view.report!.continuation.advancedCheckCount = 0;
+        await show(view); expect(screen.getByRole('alert')).toHaveTextContent('Processing cannot advance');
+        expect(screen.getByText(/Refresh to recheck the saved assessment/)).toBeVisible(); expect(request).toHaveBeenCalledTimes(1);
     });
     it('uses lower bounds for vendor gaps only while checks remain pending', async () => {
         const view = incompleteLinuxCVEView(); view.report!.unassessedRecordCount = 2; view.report!.reasonCodes.push('vendor_fixed_version_unsupported');
         view.report!.coverage.unassessedReasons = [{ reason: 'vendor_fixed_version_unsupported', count: 2 }];
         await show(view); expect(screen.getByText('At least 2 advisory records have data or comparison gaps.')).toBeVisible(); expect(screen.getByText('Package warnings').previousElementSibling).toHaveTextContent('≥ 1');
-        expect(screen.getByRole('alert')).toHaveTextContent('17 checks pending.');
+        expect(screen.getByText(/Processing incomplete:/)).toHaveTextContent('17 checks pending.');
     });
     it('does not claim checked records or an evaluated zero when processing is incomplete', async () => {
         const view = incompleteLinuxCVEView(); view.report!.findings = []; view.report!.coverage.matchedFindingCount = 0; view.report!.coverage.matchedWarningCount = 0;
@@ -126,7 +126,7 @@ describe('Linux CVE warnings panel', () => {
     });
     it('discloses package gaps compactly and keeps their breakdown collapsed', async () => {
         const view = emptyLinuxCVEView(); view.inventory!.rowCount = 3; view.report!.skippedPackageCount = 3; view.report!.evaluatedSourceCount = 0;
-        Object.assign(view.report!.coverage, { totalCheckCount: 0, completedCheckCount: 0, comparisonCount: 0, packageGaps: { installationIncomplete: 1, nonstandardVersion: 1, sourceMissing: 1 } });
+        view.report!.continuation.advancedCheckCount = 0; Object.assign(view.report!.coverage, { totalCheckCount: 0, completedCheckCount: 0, comparisonCount: 0, packageGaps: { installationIncomplete: 1, nonstandardVersion: 1, sourceMissing: 1 } });
         view.report!.reasonCodes.push('package_installation_incomplete', 'nonstandard_package_version', 'source_package_not_in_import');
         await show(view); expect(screen.getByText('3 package rows could not be assessed.')).toBeVisible(); expect(screen.queryByRole('alert')).not.toBeInTheDocument();
         expect(screen.getByText('Rows without matching-release records')).not.toBeVisible(); fireEvent.click(screen.getByText('Data sources and coverage'));
@@ -235,11 +235,12 @@ describe('explicit local-manager feed writes', () => {
         const rendered = await show(); choose();
         vi.mocked(useOperator).mockReturnValue({ ...operator, loginMode: 'named', actorId: 'operator_0123456789abcdef0123456789abcdef' });
         rendered.rerender(<LinuxCVEPanel deviceId={id} sessionKey="one"/>);
-        expect(screen.getByRole('article')).toBeVisible(); expect(screen.queryByText(/Selected bundle/)).not.toBeInTheDocument();
+        expect(screen.queryByRole('article')).not.toBeInTheDocument(); expect(screen.getByRole('alert')).toHaveTextContent('Operator access changed'); expect(screen.queryByText(/Selected bundle/)).not.toBeInTheDocument();
         expect(screen.queryByRole('button', { name: 'Update security data' })).not.toBeInTheDocument();
         vi.mocked(useOperator).mockReturnValue(operator); rendered.rerender(<LinuxCVEPanel deviceId={id} sessionKey="one"/>);
+        fireEvent.click(screen.getByRole('button', { name: 'Refresh assessment' })); await screen.findByRole('article');
         fireEvent.click(screen.getByText('Manual JSON bundle import')); expect(screen.getByRole('button', { name: 'Import bundle' })).toBeDisabled();
-        expect(request).toHaveBeenCalledTimes(1);
+        expect(request).toHaveBeenCalledTimes(2);
     });
     it.each(['permission', 'pagehide', 'timeout'] as const)('does not label an undispatched preflight as uncertain after %s', async transition => {
         vi.useFakeTimers(); vi.mocked(request).mockResolvedValue(linuxCVEView());

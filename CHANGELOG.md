@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-10-06 — Resume bounded CVE assessment after durable checkpoints
+
+- Traverse source, advisory and installed version deterministically across bounded steps, retaining exact deduplicated progress/warning/vendor-gap totals without a growing seen-record map. Keep the three-second and 2,000-comparator limits, add a 4,000-visited-check limit, and preserve capped findings and binary details.
+- Bind private four-slot restart-safe checkpoints to device, inventory sequence/full manifest/release, original feed identity/provenance and evaluator version. Persist before acknowledging advancement, recheck authority/current evidence around save, and fail closed on corrupt, unsafe or uncertain state. Public feed caches and endpoint consent/authority ledgers remain separate.
+- Add v3 result continuation and view-v2 unavailable envelopes, bounded visible-view continuation with lifecycle cancellation, and handwritten restart/mid-record/>2,000-check, cache-failure, changed-binding and 1,396-row/six-warning/627-gap regressions. No new endpoint collection, inventory transmission, feed download, host operation or native deployment claim follows.
+- Add one bounded synthetic hosted browser case for advancing, completed, blocked, changed and stale assessment state, with late-response isolation and desktop/mobile captures. Preserve every existing case and deadline; this adds no live inventory or vendor access.
+
 ## 2026-10-06 — Prepare one-confirmation fresh read-admin onboarding
 
 - Add an explicit source-only fresh-install profile that combines the supported read scopes and bounded journal helper under one local content/HTTP disclosure and confirmation. Bind the exact bootstrap, manager ingress, installed identity and native complete-profile guard before progressing through existing consent adapters.

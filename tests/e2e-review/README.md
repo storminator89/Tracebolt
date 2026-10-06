@@ -56,7 +56,7 @@ Run after the normal and managed targets:
 node tests/e2e-review/lan-browser.mjs
 ```
 
-This adds thirteen scenarios against the real `NewLANOperatorHandler` with explicit `InsecureHTTPTest:true`, bound only to 127.0.0.1 (port 19886, overridable with `LAN_REVIEW_PORT`). The test fixture uses a known synthetic password, an in-memory ephemeral CA and the safe awaiting-agent contract from `docs/lan-api-examples.json`. It starts fresh disposable state for each scenario and tests real login, cookie/CSRF boundaries, logout and actual short expiry. Malformed bootstrap, protected 401 and interrupted logout are explicitly injected fault paths. Nothing calls a real model or enrolls a device.
+This adds fourteen scenarios against the real `NewLANOperatorHandler` with explicit `InsecureHTTPTest:true`, bound only to 127.0.0.1 (port 19886, overridable with `LAN_REVIEW_PORT`). The test fixture uses a known synthetic password, an in-memory ephemeral CA and the safe awaiting-agent contract from `docs/lan-api-examples.json`. It starts fresh disposable state for each scenario and tests real login, cookie/CSRF boundaries, logout and actual short expiry. Malformed bootstrap, protected 401 and interrupted logout are explicitly injected fault paths. Nothing calls a real model or enrolls a device.
 
 Upload only `lan-browser-results.json`, `lan-browser-manifest.json` and `synthetic-http-test-*.png` from `artifacts/review`. These contain bounded outcomes and labelled synthetic UI fixtures, no raw cookies, passwords, private keys or real telemetry. Login screenshots are captured before password entry. The target does not run the production LAN CLI or validate real trusted TLS browser deployment. It never uses `ignoreHTTPSErrors`, certificate-error launch flags, a certificate-warning bypass, a public listener or a tunnel.
 
@@ -117,7 +117,8 @@ captures are produced only by the upcoming hosted browser run, not source tests.
 ## Read-only alarm status in Settings
 
 `alarm-status-browser.mjs` adds exactly one required case through the existing
-`lan-browser.mjs` runner, for thirteen total LAN cases. All previous case names,
+`lan-browser.mjs` runner, bringing the pre-continuation runner to thirteen LAN
+cases. All previous case names,
 assertions, fixture session lifetimes, timeouts and browser launch options are
 unchanged. The existing hosted browser step and artifact upload already include
 this runner and its new `synthetic-http-test-alarm-status-*.png` captures; no
@@ -149,3 +150,39 @@ source-SHA manifest are evidence only after a successful hosted run and pixel
 review. Local source, syntax and DOM checks do not execute a browser or produce
 screenshots. Nothing probes a target, sends a webhook or test alarm, changes
 configuration, or establishes production/native delivery acceptance.
+
+
+## Bounded CVE continuation
+
+`cve-continuation-browser.mjs` adds one required synthetic case for fourteen LAN
+cases total. The thirteen existing cases, fixture TTLs, assertion deadlines,
+launch options and hosted workflow are unchanged. The case reads the exact
+Go-generated `web/src/linux-cve-go-fixture-continuation.json` projection, validates
+every DTO with the production validator and adapts the surrounding synthetic
+device list/detail identity to the Go fixture's device ID. Real fixture login and
+authentication endpoints remain intact. A request guard aborts unexpected
+mutations and all external requests before forwarding them.
+
+The case holds the second protected GET after 2,000 of 2,017 checks, verifies
+retained warning cards and progress, then completes with exactly 2,017 warnings
+and 100 bounded cards with an omission notice. Completion stops automatic reads;
+an explicit refresh uses the unchanged cached projection with zero comparisons.
+A fresh panel scope displays a blocked saved prefix and resumes on deliberate
+refresh. Duplicate progress, changed assessment/generation/feed bindings and
+stale inventory each stop the chain and clear old totals. Held responses released
+after navigation or a protected metadata 401 cannot restore the old view; a
+fresh login gets a new explicit panel read.
+
+Two viewport-only captures use the existing source-SHA manifest:
+`synthetic-http-test-cve-continuation-pending-desktop-en.png` (1440×1000) and
+`synthetic-http-test-cve-continuation-complete-mobile-en.png` (390×844). Their
+fixture disclosure identifies invented data, exact cumulative totals and capped
+details. Geometry checks cover large counts, primary warning cards, versions and
+expanded source/coverage text without horizontal overflow. Captures become
+evidence only after the publisher's successful hosted run and pixel review.
+
+Local source acceptance is `node --check tests/e2e-review/cve-continuation-browser.mjs`
+and `node --test tests/e2e-review/cve-continuation-fixtures.test.mjs`. These pure
+checks do not launch a browser/server or produce screenshots. No real inventory,
+vendor fetch, feed import, command, host operation, held Setup/socket work or
+native deployment acceptance is included.

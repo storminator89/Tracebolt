@@ -15,7 +15,7 @@ import (
 
 const (
 	BundleSchemaVersion = "linux-cve-bundle-1"
-	ResultSchemaVersion = "tracebolt.linux-cve-result.v2"
+	ResultSchemaVersion = "tracebolt.linux-cve-result.v3"
 	DebianProvider      = "debian-security-tracker"
 	UbuntuProvider      = "canonical-ubuntu-osv"
 	MaxBundleBytes      = 32 << 20
@@ -27,6 +27,7 @@ const (
 	MaxBinariesPerFinding = 20
 	MaxBinaryRows         = 128
 	MaxComparisons        = 2000
+	MaxVisitedChecks      = 4000
 	MaxResultBytes        = 230 << 10
 	FeedTTL               = 48 * time.Hour
 	InventoryTTL          = 24 * time.Hour
@@ -148,6 +149,7 @@ type Result struct {
 	UnassessedRecordCount int                `json:"unassessedRecordCount"`
 	Truncated             bool               `json:"truncated"`
 	Coverage              EvaluationCoverage `json:"coverage"`
+	Continuation          Continuation       `json:"continuation"`
 }
 
 type StoreView struct {
@@ -178,4 +180,14 @@ func (s *Store) Import(ctx context.Context, r io.Reader, now time.Time) (FeedMet
 		return FeedMetadata{}, err
 	}
 	return snapshot.Metadata(now), nil
+}
+
+// Continuation describes the current bounded step, not evidence coverage.
+// Revision advances only when durable API progress is successfully committed.
+type Continuation struct {
+	AssessmentID       string `json:"assessmentId"`
+	State              string `json:"state"`
+	Revision           uint64 `json:"revision"`
+	AdvancedCheckCount uint64 `json:"advancedCheckCount"`
+	Reason             string `json:"reason"`
 }

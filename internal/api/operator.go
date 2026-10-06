@@ -15,6 +15,7 @@ import (
 	"localrmm/internal/enrollmentstore"
 	"localrmm/internal/lantrust"
 	"localrmm/internal/linuxcvefeed"
+	"localrmm/internal/linuxcveprogress"
 	"localrmm/internal/model"
 	"localrmm/internal/offlinecatalog"
 	"localrmm/internal/operatorauth"
@@ -41,6 +42,8 @@ type LANOperatorConfig struct {
 	EnrollmentBootstrap EnrollmentBootstrap
 	// CVECache contains only explicitly synchronized public advisory records.
 	CVECache *linuxcvefeed.Cache
+	// CVEProgress is private derived state, separate from public advisory data.
+	CVEProgress *linuxcveprogress.Cache
 }
 type operatorHandler struct {
 	applicationChecks   *applicationcheck.Monitor
@@ -147,6 +150,7 @@ func NewLANOperatorHandler(app *Server, c LANOperatorConfig) (http.Handler, erro
 			app.health = &healthMonitor{store: app.store, source: c.Enrollment}
 			app.linuxCVE = newLinuxCVEState(c.Enrollment, c.Enrollment.Now)
 			app.linuxCVE.cache = c.CVECache
+			app.linuxCVE.progress = c.CVEProgress
 			if c.CVECache != nil {
 				ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 				if err := c.CVECache.Load(ctx, &app.linuxCVE.feeds, c.Enrollment.Now()); err != nil {
