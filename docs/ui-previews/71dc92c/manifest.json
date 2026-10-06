@@ -1,0 +1,59 @@
+{
+  "sourceSha": "71dc92cfac754cb33994405669b9274d9bed96c7",
+  "sourceTree": "00e54e96cee44307f1eb670abaa601f80bdeb10e",
+  "runId": 37389446960,
+  "runURL": "https://github.com/storminator89/Tracebolt/actions/runs/37389446960",
+  "jobId": 112031547344,
+  "artifactId": 11381050817,
+  "archiveSHA256": "4fbe40f4c6abb805d2766ce2d0ee97eade2ef40507302bf030ded1931ad7f5ed",
+  "all15JobsPassed": true,
+  "journalCasesPassed": 7,
+  "browserCasesPassed": 116,
+  "existingEnrollmentQuarantines": 3,
+  "imagesUnmodified": true,
+  "syntheticDataOnly": true,
+  "screenshots": [
+    {
+      "file": "logs-desktop-synthetic.png",
+      "originalFile": "synthetic-journal-workspace-desktop-en.png",
+      "sha256": "949157e4717433347795dcc4c8b598f0a09497b0fd22ee951b3e951ee112a008",
+      "width": 1440,
+      "height": 1000,
+      "capture": {
+        "file": "synthetic-journal-workspace-desktop-en.png",
+        "sourceSha": "71dc92cfac754cb33994405669b9274d9bed96c7",
+        "sha256": "949157e4717433347795dcc4c8b598f0a09497b0fd22ee951b3e951ee112a008",
+        "viewport": {
+          "width": 1440,
+          "height": 1000
+        },
+        "locale": "en",
+        "fullPage": false,
+        "publicSafe": true,
+        "fixtureDisclosure": "Entirely invented journal messages admitted through typed cache/store calls and the real operator HTTP-test handler. No host log read, helper, local grant or native journal transport.",
+        "test": "Explicit content and HTTP acknowledgements gate one lazy journal request and honest pending state"
+      }
+    },
+    {
+      "file": "logs-mobile-synthetic.png",
+      "originalFile": "synthetic-journal-workspace-mobile-de.png",
+      "sha256": "1c83de8b9a48642971834ea46919addfb8d6a0670d891935bc1c918c8240cc91",
+      "width": 390,
+      "height": 844,
+      "capture": {
+        "file": "synthetic-journal-workspace-mobile-de.png",
+        "sourceSha": "71dc92cfac754cb33994405669b9274d9bed96c7",
+        "sha256": "1c83de8b9a48642971834ea46919addfb8d6a0670d891935bc1c918c8240cc91",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "locale": "de",
+        "fullPage": false,
+        "publicSafe": true,
+        "fixtureDisclosure": "Entirely invented journal messages admitted through typed cache/store calls and the real operator HTTP-test handler. No host log read, helper, local grant or native journal transport.",
+        "test": "Source guidance and recognizable search shortcuts never expand local journal permission"
+      }
+    }
+  ]
+}

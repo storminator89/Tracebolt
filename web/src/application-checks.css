@@ -1,0 +1,26 @@
+.application-checks{margin:0 0 23px;overflow:hidden}
+.application-checks-heading{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:17px 20px}
+.application-checks-heading p{font-size:11px;color:var(--secondary);margin-top:5px}
+.application-checks-heading .text-button{flex-shrink:0;min-height:36px}
+.application-checks-notice{border-top:1px solid var(--line);padding:13px 20px;color:var(--secondary);font-size:12px}
+.application-checks-notice[role=alert]{color:var(--warning)}
+.application-checks-table{overflow-x:auto}
+.application-checks table{width:100%;border-collapse:collapse;text-align:left;font-size:12px}
+.application-checks th,.application-checks td{padding:11px 20px;border-top:1px solid var(--line);vertical-align:middle}
+.application-checks thead th{color:var(--secondary);font-size:10px;font-weight:500;background:var(--panel-soft);white-space:nowrap}
+.application-checks tbody th{font-weight:500;max-width:280px}
+.application-id{display:block;overflow-wrap:anywhere;font-family:var(--font-mono);font-size:11px}
+.application-checks tbody th small{display:block;color:var(--secondary);font-size:10px;margin-top:5px;font-weight:400}
+.application-checks tbody th .application-plaintext{color:var(--warning)}
+.application-result{display:inline-flex;align-items:center;gap:6px;line-height:1.5}
+.application-result:before{content:'';width:5px;height:5px;border-radius:50%;background:currentColor;flex-shrink:0}
+.application-ok,.application-tls-valid{color:var(--accent)}
+.application-failed,.application-tls-expired{color:var(--danger)}
+.application-tls-expiring{color:var(--warning)}
+.application-unknown,.application-tls-unknown,.application-tls-not_applicable{color:var(--secondary)}
+.application-expiry{display:block;color:var(--secondary);font-size:10px;margin-top:4px}
+.application-checks td:last-child{white-space:nowrap;color:var(--secondary);font-size:11px}
+.application-checks-details{border-top:1px solid var(--line);padding:0 20px;color:var(--secondary);font-size:11px}
+.application-checks-details summary{cursor:pointer;padding:11px 0;min-height:36px}
+.application-checks-details p{padding-bottom:13px;max-width:720px}
+@media(max-width:760px){.application-checks-heading{padding:14px 17px}.application-checks-heading p{font-size:12px}.application-checks-heading .text-button{min-height:40px}.application-checks th,.application-checks td{padding:11px 14px}.application-checks table{min-width:550px}.application-checks-details{padding:0 17px;font-size:12px}.application-checks-details summary{min-height:40px}.application-checks-notice{padding:13px 17px}}

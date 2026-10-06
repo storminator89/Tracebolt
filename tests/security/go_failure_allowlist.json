@@ -1,7 +1,5 @@
 {
-  "schemaVersion": 1,
-  "sourceCommit": "fccc4b00cd8a144afd58e4b995747afab7a10022",
-  "goSourceSha256": "2e39895d6c59ced7e0b5c710548c7042e57397e5473f8c283e3254d55be9e373",
+  "goSourceSha256": "776eab280119a37b4c4a57b3ca2142c1e547181293c8e82564dfbbe93b5afc09",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -79,6 +77,11 @@
     "localrmm/cmd/lan-manager": [
       "TestActualLANRuntimeProfiles",
       "TestAlarmManagerOmittedConfigurationIsDisabled",
+      "TestApplicationChecksManagerDefaultOff",
+      "TestApplicationChecksManagerExplicitDisabled",
+      "TestApplicationChecksManagerPrepareIsInertInManualMode",
+      "TestApplicationChecksManagerRejectsMismatchedBindingBeforeStateCreation",
+      "TestApplicationChecksManagerUsesEnrollmentBinding",
       "TestApprovedDisposableSystemdInstallation",
       "TestApprovedManagedDisposableSystemdInstallation",
       "TestBuiltLANManagerCLI",
@@ -395,6 +398,12 @@
       "TestAITimeoutAndInvalidProviderResponsesAreExplicit",
       "TestAIUnconfiguredAndMemoryOnlyConfiguration",
       "TestAlarmStatusAuthenticationReadOnlyAndRedaction",
+      "TestApplicationCheckOperatorConstructorRejectsMismatchedBinding",
+      "TestApplicationCheckStatusDefaultOffAndAuthentication",
+      "TestApplicationCheckStatusIsAnInertRedactedSnapshot",
+      "TestApplicationCheckStatusIsNotADevelopmentRoute",
+      "TestApplicationCheckStatusOriginHostAndCrossSiteBoundary",
+      "TestApplicationCheckStatusRechecksSession",
       "TestBootstrapAdmissionBoundedAndFailClosedClock",
       "TestBoundaryGuards",
       "TestCachedUpdatesOperatorGuardsAndBoundedUnknown",
@@ -485,6 +494,40 @@
       "TestSharedSessionCannotAuthorizeServiceAction",
       "TestSystemInventoryMetadataFairReadPreservesOperatorGuards",
       "TestSystemInventoryMetadataFinalOutputRechecksIdentityAndSession"
+    ],
+    "localrmm/internal/applicationcheck": [
+      "TestApplicationConfigOmittedDisabledAndBinding",
+      "TestApplicationConfigProtectedAndRedacted",
+      "TestApplicationConfigStrictBoundsAndConsent",
+      "TestApplicationConfigTargetTransportIndependent",
+      "TestApplicationDestinationPermanentExclusions",
+      "TestApplicationURLGrammar",
+      "TestMonitorAgesVerifiedCertificateWithoutRefreshingHTTP",
+      "TestMonitorBindingMatchesExactManagerIdentity",
+      "TestMonitorCancellationBeforeStartOrWhileWaiting",
+      "TestMonitorClonesProbeResultsAndRedactsPrivateConfiguration",
+      "TestMonitorConcurrentStatusAndPublication",
+      "TestMonitorConstructionAndStatusAreInert",
+      "TestMonitorFreshnessDoesNotRefreshStoredEvidence",
+      "TestMonitorNilAndDisabledDoNoWork",
+      "TestMonitorRejectsConcurrentRunAndCanRestartAfterCancellation",
+      "TestMonitorSequentialCompletionBasedCadence",
+      "TestMonitorSnapshotCopiesAllPointers",
+      "TestProbeCancellation",
+      "TestProbeCancellationClearsPreviouslyVerifiedTLS",
+      "TestProbeFailuresNeverDialFallback",
+      "TestProbeHTTPStatusesAndRequestBoundary",
+      "TestProbeIgnoresProxyEnvironment",
+      "TestProbeLiteralDestinationsAndPrivateOptIn",
+      "TestProbeRejectsAnyUnapprovedOrBlockedDNSAnswer",
+      "TestProbeRejectsCredentialBearingOrUnacknowledgedURLsBeforeNetwork",
+      "TestProbeRequiresTLS12AndNormalVerification",
+      "TestProbeResolvesOnceAndPinsAllAnswers",
+      "TestProbeResponseLimits",
+      "TestProbeSingleLabelNamePreservesAuthorityAndBlocksLoopback",
+      "TestProbeTLSValidityIndependentOfHTTPStatus",
+      "TestProbeTLSVerificationAndExpiry",
+      "TestTransportAddressPolicyPermanentlyExcludesSpecialNetworks"
     ],
     "localrmm/internal/assessment": [
       "TestAmbiguousVendorStatesStayCandidates",
@@ -2032,5 +2075,7 @@
       "TestSupportBundleRejectsUnavailableHealthyMetric",
       "TestSystemInventoryOperatorActualTLSHTTPAllPagesAndDelayedExpiry"
     ]
-  }
+  },
+  "schemaVersion": 1,
+  "sourceCommit": "fccc4b00cd8a144afd58e4b995747afab7a10022"
 }

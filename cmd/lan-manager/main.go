@@ -13,6 +13,7 @@ import (
 	"localrmm/internal/alarmdelivery"
 	"localrmm/internal/analysis"
 	"localrmm/internal/api"
+	"localrmm/internal/applicationcheck"
 	"localrmm/internal/enrollmentconfig"
 	"localrmm/internal/enrollmentcrypto"
 	"localrmm/internal/enrollmentservice"
@@ -43,6 +44,7 @@ type prepared struct {
 	maintenance           *enrollmentservice.Service
 	health                *api.Server
 	alarms                *alarmdelivery.Worker
+	applicationChecks     *applicationcheck.Monitor
 }
 
 func prepare(m lanconfig.Material) (*prepared, error) { return prepareWithEnrollment(m, nil) }
@@ -50,6 +52,16 @@ func prepareWithEnrollment(m lanconfig.Material, enrollment *enrollmentconfig.Ma
 	return prepareWithAlarms(m, enrollment, alarmdelivery.Config{})
 }
 func prepareWithAlarms(m lanconfig.Material, enrollment *enrollmentconfig.Material, alarms alarmdelivery.Config) (*prepared, error) {
+	return prepareWithApplicationChecks(m, enrollment, alarms, applicationcheck.Config{})
+}
+func prepareWithApplicationChecks(m lanconfig.Material, enrollment *enrollmentconfig.Material, alarms alarmdelivery.Config, checks applicationcheck.Config) (*prepared, error) {
+	managerID := ""
+	if enrollment != nil {
+		managerID = enrollment.StoreConfig().Binding.InstanceID
+	}
+	if checks.Enabled() && !checks.Matches(managerID, m.Config.OperatorOrigin, m.Config.Profile) {
+		return nil, applicationcheck.ErrConfiguration
+	}
 	if alarms.Enabled() && (enrollment == nil || enrollment.StoreConfig().Binding.CollectionProfile != enrollmentcrypto.CollectionProfileComplete || alarms.Binding().ManagerInstanceID != enrollment.StoreConfig().Binding.InstanceID || alarms.Binding().Profile != m.Config.Profile) {
 		return nil, alarmdelivery.ErrInvalid
 	}
@@ -205,7 +217,11 @@ func prepareWithAlarms(m lanconfig.Material, enrollment *enrollmentconfig.Materi
 		closeAll()
 		return nil, e
 	}
-	operatorConfig := api.LANOperatorConfig{ServiceActions: actions, Origin: c.OperatorOrigin, Auth: auth, Registry: registry, InsecureHTTPTest: c.Profile == lanconfig.HTTPTest, Devices: func() ([]model.Device, error) {
+	var applicationChecks *applicationcheck.Monitor
+	if checks.Enabled() {
+		applicationChecks = applicationcheck.New(checks)
+	}
+	operatorConfig := api.LANOperatorConfig{ApplicationChecks: applicationChecks, ServiceActions: actions, Origin: c.OperatorOrigin, Auth: auth, Registry: registry, InsecureHTTPTest: c.Profile == lanconfig.HTTPTest, Devices: func() ([]model.Device, error) {
 		return trustStore.Devices(context.Background(), registry.List(), time.Now().UTC())
 	}}
 	if enrolledService != nil {
@@ -239,7 +255,7 @@ func prepareWithAlarms(m lanconfig.Material, enrollment *enrollmentconfig.Materi
 		closeAll()
 		return nil, e
 	}
-	return &prepared{operator: operator, agent: agent, operatorTLS: operatorTLS, agentTLS: agentTLS, close: closeAll, maintenance: enrolledService, health: app, alarms: alarmWorker}, nil
+	return &prepared{operator: operator, agent: agent, operatorTLS: operatorTLS, agentTLS: agentTLS, close: closeAll, maintenance: enrolledService, health: app, alarms: alarmWorker, applicationChecks: applicationChecks}, nil
 }
 
 func server(handler http.Handler) *http.Server {
@@ -250,7 +266,10 @@ func runWithEnrollment(ctx context.Context, m lanconfig.Material, enrollment *en
 	return runWithAlarms(ctx, m, enrollment, alarmdelivery.Config{})
 }
 func runWithAlarms(ctx context.Context, m lanconfig.Material, enrollment *enrollmentconfig.Material, alarms alarmdelivery.Config) error {
-	p, err := prepareWithAlarms(m, enrollment, alarms)
+	return runWithApplicationChecks(ctx, m, enrollment, alarms, applicationcheck.Config{})
+}
+func runWithApplicationChecks(ctx context.Context, m lanconfig.Material, enrollment *enrollmentconfig.Material, alarms alarmdelivery.Config, checks applicationcheck.Config) error {
+	p, err := prepareWithApplicationChecks(m, enrollment, alarms, checks)
 	if err != nil {
 		return err
 	}
@@ -268,6 +287,18 @@ func runWithAlarms(ctx context.Context, m lanconfig.Material, enrollment *enroll
 	if p.operatorTLS != nil {
 		operator = tls.NewListener(operator, p.operatorTLS)
 		agent = tls.NewListener(agent, p.agentTLS)
+	}
+	if p.applicationChecks != nil {
+		checksCtx, stopChecks := context.WithCancel(ctx)
+		checksDone := make(chan struct{})
+		go func() {
+			defer close(checksDone)
+			if p.applicationChecks.Run(checksCtx) != nil && checksCtx.Err() == nil {
+				log.Print("Application checks are unavailable; inspect authenticated application check status.")
+			}
+		}()
+		// Join the in-memory worker before the prepared manager closes its stores.
+		defer func() { stopChecks(); <-checksDone }()
 	}
 	if p.health != nil {
 		healthCtx, stopHealth := context.WithCancel(ctx)
@@ -330,6 +361,7 @@ func main() {
 	path := flag.String("lan-config", "", "Explicit protected LAN profile JSON (required); HTTPS is the default")
 	enrollmentPath := flag.String("enrollment-config", "", "Optional protected guided-enrollment v2 profile; requires a dedicated preprovided issuer and empty legacy registry")
 	alarmPath := flag.String("alarm-config", "", "Optional protected opt-in HTTPS alarm delivery configuration; disabled when omitted")
+	applicationChecksPath := flag.String("application-checks-config", "", "Optional protected opt-in manager-origin application check configuration; disabled when omitted")
 	flag.Parse()
 	if *path == "" || flag.NArg() != 0 {
 		log.Fatal("Tracebolt LAN manager requires --lan-config PATH")
@@ -354,9 +386,13 @@ func main() {
 	if e != nil {
 		log.Fatal("Tracebolt alarm configuration rejected; verify explicit destination, sharing acknowledgement, identity and protected material")
 	}
+	checks, e := applicationcheck.Load(*applicationChecksPath, managerID, material.Config.OperatorOrigin, material.Config.Profile)
+	if e != nil {
+		log.Fatal("Tracebolt application check configuration rejected; verify explicit targets, manager-origin acknowledgement, identity and protected material")
+	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	if runWithAlarms(ctx, material, enrollment, alarms) != nil {
+	if runWithApplicationChecks(ctx, material, enrollment, alarms, checks) != nil {
 		log.Fatal("Tracebolt LAN manager failed closed")
 	}
 }

@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-10-06 — Require service-identity setup evidence and application UI checks
+
+- Keep production identity guards unchanged while testing fixture state independently of ambient runner groups; require a separate same-user, privilege-reduced CI read with all nine cases and seven actual public-reader evidence markers. Missing activation and ledgers must reach their state rejection, with no writes or manager requests.
+- Add a hosted application-status UI case using explicit synthetic responses for retained HTTP/TLS expiry, original-age staleness, read errors and access loss. Preserve the existing browser cases, session defaults and launch settings; no real target is probed by this case.
+- Preserve original desktop/mobile Logs captures from fully tested source71dc92c, with synthetic-data labels and exact artifact/image provenance.
+
+## 2026-10-06 — Opt-in manager-side application observations
+
+- Add a protected, default-off HTTP/HTTPS target list with explicit address binding, private-LAN/plaintext acknowledgement, bounded checks and verified leaf TLS expiry. Report only latest manager-side observations behind the read-only operator boundary and in a compact LAN Overview panel.
+- Keep unknown/stale results honest and leave device health, alerts and existing device pages unchanged. Injected/local TLS fixtures do not establish real target reachability or native deployment; no target, host trust or network configuration is provisioned.
+
 ## 2026-10-05 — Inert selected-package plan and hook observation core
 
 - Added a bounded canonical selected-upgrade description, original-age checks, exact binary/source/archive/index bindings and a pure APT v3 observation matcher. Strict fixtures cover malformed protocols, multiarch, repeated operations, stale or unknown evidence and archive mismatches.

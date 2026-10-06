@@ -8,6 +8,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
+import {applicationChecksBrowserCase} from './application-checks-browser.mjs';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../..');
 const require=createRequire(path.join(root,'web/package.json'));
 const {chromium,expect}=require('@playwright/test');
@@ -29,7 +30,7 @@ async function login(page){await page.getByLabel('Operator password',{exact:true
 async function check(name,run,ttl='60s'){
  currentTest=name;const begin=Date.now();try{await start(ttl);await run();results.push({name,status:'PASS',durationMs:Date.now()-begin});console.log(`PASS ${name}`);}catch{results.push({name,status:'FAIL',durationMs:Date.now()-begin,error:'Assertion failed; raw state and credential-bearing diagnostics intentionally withheld.'});console.log(`FAIL ${name}`);}finally{if(context)await context.close();context=null;await stop();}
 }
-async function shot(page,name){await page.screenshot({path:path.join(out,`${name}.png`),fullPage:false,animations:'disabled'});screenshots.push({file:`${name}.png`,sourceSha,publicSafe:true,fullPage:false,viewport:page.viewportSize(),locale:await page.locator('html').getAttribute('lang'),fixtureDisclosure:name.includes('live-metrics')?'Real fixture login with explicitly intercepted invented metric samples; no native collection or deployed endpoint':'Loopback HTTP-test UI; synthetic awaiting-agent contract; no deployed endpoint or trusted TLS browser validation',test:currentTest});}
+async function shot(page,name,fixtureDisclosure=name.includes('live-metrics')?'Real fixture login with explicitly intercepted invented metric samples; no native collection or deployed endpoint':'Loopback HTTP-test UI; synthetic awaiting-agent contract; no deployed endpoint or trusted TLS browser validation'){await page.screenshot({path:path.join(out,`${name}.png`),fullPage:false,animations:'disabled'});screenshots.push({file:`${name}.png`,sourceSha,publicSafe:true,fullPage:false,viewport:page.viewportSize(),locale:await page.locator('html').getAttribute('lang'),fixtureDisclosure,test:currentTest});}
 async function cleanStorage(page){const value=await page.evaluate(()=>JSON.stringify({local:{...localStorage},session:{...sessionStorage}}));expect(value.includes(password)||value.includes(fakeKey)).toBe(false);const cookies=await context.cookies();for(const cookie of cookies)expect(value.includes(cookie.value)).toBe(false);}
 try {
  execFileSync(process.env.GO_BIN||'go',['build','-buildvcs=false','-o',path.join(temporary,'lanfixture'),'./tests/e2e-review/lanfixture'],{cwd:root,stdio:'inherit'});
@@ -77,6 +78,7 @@ try {
   await expect(resources).toContainText('Stale');await expect(resources.locator('time').first()).toHaveAttribute('datetime',nextAt);
   phase='expired';await page.getByRole('button',{name:'Refresh device metadata'}).click();await expect(page.getByRole('heading',{name:'Sign in',exact:true})).toBeVisible();const stopped=metadataReads;await page.clock.runFor(180000);expect(metadataReads).toBe(stopped);await expect(page.locator('.device-essential-resources')).toHaveCount(0);
  },'10m');
+ await check('Read-only application status separates retained HTTP and verified-leaf expiry, ages samples and clears access loss',()=>applicationChecksBrowserCase({pageAt,login,expect,base,shot}));
  await check('Real CSRF-protected logout removes private content and rejects later protected API reads',async()=>{
   const page=await pageAt('/settings');await login(page);let logoutRequest;page.on('request',r=>{if(r.url().endsWith('/api/auth/logout'))logoutRequest=r;});await page.getByRole('button',{name:'Sign out',exact:true}).click();await expect(page.getByRole('heading',{name:'Sign in',exact:true})).toBeVisible();expect(logoutRequest.method()).toBe('POST');expect(Boolean((await logoutRequest.allHeaders())['x-csrf-token'])).toBe(true);await expect(page.locator('.app-shell')).toHaveCount(0);expect((await context.request.get(`${base}/api/overview`)).status()).toBe(401);await page.reload();await expect(page.getByRole('heading',{name:'Sign in',exact:true})).toBeVisible();await cleanStorage(page);
  });
@@ -98,6 +100,6 @@ try {
 } catch {fatal=true;console.log('LAN browser setup failed; raw diagnostics intentionally withheld.');}
 finally {
  if(context)await context.close();await stop();if(browser)await browser.close();
- const report={sourceSha,createdAt:new Date().toISOString(),scope:'Real LAN operator HTTP-test handler on loopback with synthetic contract data; not the production CLI, real enrollment or trusted TLS browser acceptance',faultInjection:'Explicit malformed bootstrap, protected 401, interrupted logout and invented metadata samples/503 for live Overview UI checks',credentialMaterial:'Disposable known fixture only; never persisted or exported',screenshots:'Viewport-only synthetic contract/login screens',runtimeErrorCount,results,summary:{passed:results.filter(r=>r.status==='PASS').length,failed:results.filter(r=>r.status==='FAIL').length,setupFailure:fatal}};
+ const report={sourceSha,createdAt:new Date().toISOString(),scope:'Real LAN operator HTTP-test handler on loopback with synthetic contract data; not the production CLI, real enrollment or trusted TLS browser acceptance',faultInjection:'Explicit malformed bootstrap, protected 401, interrupted logout and invented metadata samples/503 for live Overview UI checks; invented application-status DTOs and 503/401 for retained HTTP/verified-leaf expiry UI checks, not target probes',credentialMaterial:'Disposable known fixture only; never persisted or exported',screenshots:'Viewport-only synthetic contract/login screens',runtimeErrorCount,results,summary:{passed:results.filter(r=>r.status==='PASS').length,failed:results.filter(r=>r.status==='FAIL').length,setupFailure:fatal}};
  await fs.writeFile(path.join(out,'lan-browser-results.json'),JSON.stringify(report,null,2));await fs.writeFile(path.join(out,'lan-browser-manifest.json'),JSON.stringify({sourceSha,screenshots},null,2));await fs.rm(temporary,{recursive:true,force:true});process.exitCode=fatal||runtimeErrorCount||results.some(r=>r.status==='FAIL')?1:0;
 }

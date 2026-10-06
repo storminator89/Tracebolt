@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"localrmm/internal/inventorystate"
 	"localrmm/internal/lanclientstate"
 	"localrmm/internal/systemstate"
@@ -66,12 +67,44 @@ func setupSnapshot(t *testing.T, dir string) map[string][]byte {
 	return snapshot
 }
 
+// The fixture reader and projection are useful to test under any ordinary test
+// account. The public reader additionally requires the narrower service-process
+// identity, which a developer or hosted runner may not have. Always exercise
+// both paths; the dedicated CI gate requires the real public-reader evidence.
+func readSetupFixtureIdentity(t *testing.T, path string) (ActionSetupIdentity, error) {
+	t.Helper()
+	m, err := loadActionSetupMaterial(path)
+	got, publicErr := ReadActionSetupIdentity(path)
+	uid, gid, serviceProcess := journalAgentIdentity()
+	if !serviceProcess {
+		if publicErr != errActionDenied || got != (ActionSetupIdentity{}) {
+			t.Fatal("public reader accepted a non-service process")
+		}
+	} else if err != nil {
+		if !errors.Is(publicErr, err) || got != (ActionSetupIdentity{}) {
+			t.Fatal("public reader did not preserve fixture rejection")
+		}
+		if err == ErrState {
+			t.Log("action setup identity: public_reader=state_rejected")
+		}
+	} else {
+		if publicErr != nil || got != projectActionSetupIdentity(m, uid, gid) {
+			t.Fatal("public reader rejected or changed the service identity")
+		}
+		t.Log("action setup identity: public_reader=accepted")
+	}
+	if err != nil {
+		return ActionSetupIdentity{}, err
+	}
+	return projectActionSetupIdentity(m, uint32(os.Geteuid()), uint32(os.Getegid())), nil
+}
+
 func TestActionSetupIdentityLocalCompleteAndNoWrites(t *testing.T) {
 	for _, profile := range []string{"tls", "http-test"} {
 		t.Run(profile, func(t *testing.T) {
 			path, m, calls := setupIdentityFixture(t, profile)
 			before := setupSnapshot(t, filepath.Dir(path))
-			identity, err := ReadActionSetupIdentity(path)
+			identity, err := readSetupFixtureIdentity(t, path)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -108,8 +141,8 @@ func TestActionSetupIdentityRejectsMissingActivationOrLedgers(t *testing.T) {
 				t.Fatal("fixture remove")
 			}
 			before := setupSnapshot(t, filepath.Dir(path))
-			if _, err := ReadActionSetupIdentity(path); err == nil {
-				t.Fatal("incomplete sender accepted")
+			if _, err := readSetupFixtureIdentity(t, path); err != ErrState {
+				t.Fatal("incomplete sender did not reach the state check")
 			}
 			if !reflect.DeepEqual(before, setupSnapshot(t, filepath.Dir(path))) || calls.Load() != 0 {
 				t.Fatal("failure repaired state or contacted manager")
@@ -136,7 +169,7 @@ func TestActionSetupIdentityWorksWhileSenderOwnsAllLedgers(t *testing.T) {
 	}
 	defer system.Close()
 	before := setupSnapshot(t, filepath.Dir(path))
-	got, err := ReadActionSetupIdentity(path)
+	got, err := readSetupFixtureIdentity(t, path)
 	if err != nil || got.SenderBinding != m.binding {
 		t.Fatal("active sender probe rejected", err)
 	}

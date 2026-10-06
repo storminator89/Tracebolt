@@ -9,6 +9,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"localrmm/internal/actionmanager"
+	"localrmm/internal/applicationcheck"
 	"localrmm/internal/enrollmentcrypto"
 	"localrmm/internal/enrollmentservice"
 	"localrmm/internal/enrollmentstore"
@@ -27,11 +28,13 @@ import (
 )
 
 type LANOperatorConfig struct {
-	ServiceActions *actionmanager.Manager
-	Origin         string
-	Auth           *operatorauth.Manager
-	Registry       *lantrust.Registry
-	Devices        func() ([]model.Device, error)
+	// ApplicationChecks is an inert, read-only view of the explicit startup worker.
+	ApplicationChecks *applicationcheck.Monitor
+	ServiceActions    *actionmanager.Manager
+	Origin            string
+	Auth              *operatorauth.Manager
+	Registry          *lantrust.Registry
+	Devices           func() ([]model.Device, error)
 	// InsecureHTTPTest is a separate, explicitly opted-in plaintext profile.
 	InsecureHTTPTest    bool
 	Enrollment          *enrollmentservice.Service
@@ -40,6 +43,7 @@ type LANOperatorConfig struct {
 	CVECache *linuxcvefeed.Cache
 }
 type operatorHandler struct {
+	applicationChecks   *applicationcheck.Monitor
 	actions             serviceActionManager
 	app                 *Server
 	origin, authority   string
@@ -107,6 +111,13 @@ func NewLANOperatorHandler(app *Server, c LANOperatorConfig) (http.Handler, erro
 	if c.ServiceActions != nil && (c.Enrollment == nil || !c.Auth.Named() || !c.ServiceActions.MatchesBinding(c.Enrollment.Binding()) || c.ServiceActions.TransportProfile() != actionmanager.Profile(profile)) {
 		return nil, errors.New("service action authority does not match the named operator enrollment boundary")
 	}
+	managerID := ""
+	if c.Enrollment != nil {
+		managerID = c.Enrollment.Binding().InstanceID
+	}
+	if !c.ApplicationChecks.Matches(managerID, c.Origin, profile) {
+		return nil, applicationcheck.ErrConfiguration
+	}
 	app.mu.Lock()
 	app.lanOnly = true
 	app.guidedEnrollment = c.Enrollment != nil
@@ -158,7 +169,7 @@ func NewLANOperatorHandler(app *Server, c LANOperatorConfig) (http.Handler, erro
 	if c.ServiceActions != nil {
 		actions = c.ServiceActions
 	}
-	return &operatorHandler{actions: actions, app: app, origin: c.Origin, authority: u.Host, auth: c.Auth, registry: c.Registry, insecureHTTPTest: c.InsecureHTTPTest, cookieName: cookieName, enrollment: c.Enrollment, enrollmentBootstrap: c.EnrollmentBootstrap}, nil
+	return &operatorHandler{applicationChecks: c.ApplicationChecks, actions: actions, app: app, origin: c.Origin, authority: u.Host, auth: c.Auth, registry: c.Registry, insecureHTTPTest: c.InsecureHTTPTest, cookieName: cookieName, enrollment: c.Enrollment, enrollmentBootstrap: c.EnrollmentBootstrap}, nil
 }
 func (s *Server) developmentAuthView() authView {
 	token := s.csrf
@@ -381,6 +392,10 @@ func (h *operatorHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if session.Named() && !namedReadRoute(r) {
 		fail(w, 403, "operator_capability_required", "This named account does not have permission for this administrative operation.")
+		return
+	}
+	if r.URL.Path == "/api/application-checks/status" {
+		h.applicationCheckStatus(w, r)
 		return
 	}
 	if r.URL.Path == "/api/alerts/status" {

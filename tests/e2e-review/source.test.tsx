@@ -3,6 +3,8 @@ import { beforeEach, afterEach, describe, expect, it, vi } from '../../web/node_
 import { cleanup, render, screen, fireEvent, waitFor } from '../../web/node_modules/@testing-library/react/dist/index.js';
 import App from '../../web/src/App';
 import { defaultFilters, filterDevices, decodeRouteId, csvCell, noteBytes } from '../../web/src/utils';
+import { applicationStatusFixture } from './application-checks-browser.mjs';
+import { applicationObservationAge, projectApplicationCheck, validApplicationChecksView } from '../../web/src/application-checks-types';
 const at='2026-10-03T12:00:00Z';
 const metric={value:25,unit:'%',quality:'healthy',source:'synthetic-fixture',collectedAt:at};
 const device={id:'review-device',name:'REVIEW-DEMO',platform:'windows',os:'Windows demo',site:'Synthetic',group:'Review',ip:null,status:'critical',source:'synthetic',synthetic:true,lastSeen:at,agentVersion:'demo',cpu:metric,memory:metric,disk:metric,uptime:'demo',tags:[],capabilities:[],evidence:[],trend:[],caseIds:[]};
@@ -34,4 +36,20 @@ describe('Independent source/DOM regressions',()=>{
   expect(location.hash).toBe('#/devices');expect(document.activeElement?.id).toBe('main-content');
  });
  it('malformed saved-view shape must not crash the inventory',async()=>{localStorage.setItem('local-rmm-saved-view',JSON.stringify({...defaultFilters,query:null}));render(<App/>);await screen.findByRole('heading',{name:'Geräte',exact:true,level:1});fireEvent.click(screen.getByRole('button',{name:'Gespeicherte Ansicht'}));await waitFor(()=>expect(screen.getByRole('heading',{name:'Geräte',exact:true,level:1})).toBeInTheDocument());});
+});
+
+describe('Hosted application-status fault-injection contract',()=>{
+ it('uses valid retained DTOs with independent HTTP outcomes and verified-leaf expiry',()=>{
+  const view=applicationStatusFixture();expect(validApplicationChecksView(view)).toBe(true);expect(view.maxAgeSeconds).toBe(85);
+  expect(view.items.map(row=>[row.httpStatus,row.tls.state])).toEqual([[204,'expiring'],[503,'valid'],[204,'expired'],[null,'unknown']]);
+  const expired=view.items[2];expect(Date.parse(expired.observedAt)).toBeLessThan(Date.parse(expired.tls.expiresAt));expect(Date.parse(expired.tls.expiresAt)).toBeLessThan(Date.parse(view.serverNow));
+  for(const row of view.items){expect(applicationObservationAge(view,row,0)).toBe(65000);expect(projectApplicationCheck(view,row,0)).toEqual(row);}
+ });
+ it('cannot portray a leaf as verified when it was already expired at the original observation',()=>{
+  const view=applicationStatusFixture();view.items[2].observedAt=view.serverNow;expect(validApplicationChecksView(view)).toBe(false);
+ });
+ it('ages the unchanged browser fixture past the real stale boundary without changing observation times',()=>{
+  const view=applicationStatusFixture();
+  for(const row of view.items){expect(projectApplicationCheck(view,row,20000).state).toBe(row.state);expect(projectApplicationCheck(view,row,21000)).toEqual({...row,state:'unknown',reason:'stale',httpStatus:null,tls:{state:'unknown',expiresAt:null}});expect(applicationObservationAge(view,row,21000)).toBe(86000);}
+ });
 });

@@ -292,7 +292,45 @@ jobs:
       - name: Vet
         run: go vet -p 1 ./...
       - name: Validate bounded Go failure projection with inert fixtures
-        run: python3 -B tests/security/test_go_failure_reporter.py
+        run: |
+          python3 -B tests/security/test_go_failure_reporter.py
+          python3 -B tests/security/test_action_setup_identity_gate.py
+          python3 -O -B tests/security/test_action_setup_identity_gate.py
+      - name: Require read-only action setup under the existing runner service identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          go mod download
+          go mod verify
+          (umask 077; : > "$RUNNER_TEMP/action-setup-identity.jsonl"; : > "$RUNNER_TEMP/action-setup-identity.stderr")
+          TRACEBOLT_RUN_UID=$(id -ru)
+          TRACEBOLT_RUN_GID=$(id -rg)
+          test "$TRACEBOLT_RUN_UID" -ne 0
+          test "$TRACEBOLT_RUN_GID" -ne 0
+          test "$(id -u)" = "$TRACEBOLT_RUN_UID"
+          test "$(id -g)" = "$TRACEBOLT_RUN_GID"
+          test -x /usr/bin/sudo && test -x /usr/bin/setpriv && test -x /usr/bin/env
+          TRACEBOLT_GO_BINARY=$(command -v go)
+          TRACEBOLT_GO_CACHE=$(go env GOCACHE)
+          TRACEBOLT_GO_MODULES=$(go env GOMODCACHE)
+          TRACEBOLT_GO_PATH=$(go env GOPATH)
+          # Same privilege-drop boundary as complete-v3-native: only setpriv
+          # starts privileged; Go and repository code use the same nonroot
+          # runner UID/GID without supplementary groups or capabilities.
+          if ! /usr/bin/sudo -n /usr/bin/setpriv \
+            --reuid "$TRACEBOLT_RUN_UID" --regid "$TRACEBOLT_RUN_GID" --clear-groups \
+            --inh-caps=-all --ambient-caps=-all --bounding-set=-all --no-new-privs \
+            -- /usr/bin/env -i PATH="$PATH" \
+            GOCACHE="$TRACEBOLT_GO_CACHE" GOMODCACHE="$TRACEBOLT_GO_MODULES" GOPATH="$TRACEBOLT_GO_PATH" \
+            GOTOOLCHAIN=local GOPROXY=off GOSUMDB=off \
+            "$TRACEBOLT_GO_BINARY" test -race -json -buildvcs=false ./internal/lanclient \
+            -run '^TestActionSetupIdentity(LocalCompleteAndNoWrites|RejectsMissingActivationOrLedgers|WorksWhileSenderOwnsAllLedgers)$' \
+            -count=1 -timeout=3m \
+            > "$RUNNER_TEMP/action-setup-identity.jsonl" 2> "$RUNNER_TEMP/action-setup-identity.stderr"; then
+            echo 'FAIL: action-setup service-identity tests; raw fixture output withheld.'
+            exit 1
+          fi
+          python3 -B tests/security/check_action_setup_identity_gate.py "$RUNNER_TEMP/action-setup-identity.jsonl"
       - name: Unit and race tests
         shell: bash
         run: |
