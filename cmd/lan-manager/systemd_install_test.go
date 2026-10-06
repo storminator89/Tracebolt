@@ -251,31 +251,27 @@ func runApprovedSystemdInstallationMode(t *testing.T, profile, collectionProfile
 	}
 	call := func(path string, body any, csrf string) (int, []byte) {
 		raw, _ := json.Marshal(body)
-		r, _ := http.NewRequest("POST", m.Config.OperatorOrigin+path, bytes.NewReader(raw))
-		r.Header.Set("Content-Type", "application/json")
-		r.Header.Set("Origin", m.Config.OperatorOrigin)
-		if csrf != "" {
-			r.Header.Set("X-CSRF-Token", csrf)
+		defer clear(raw)
+		status, response, diagnostic := readAdminOperatorRequest(context.Background(), operator, m.Config.OperatorOrigin, path, http.MethodPost, raw, csrf, completeMVPOperatorWait)
+		diagnostic.log(operatorTest)
+		if diagnostic.failure != "" && diagnostic.failure != "status" {
+			operatorTest.Fatal("operator fixture contract")
 		}
-		response, e := operator.Do(r)
-		if e != nil {
-			operatorTest.Fatal("operator fixture request")
-		}
-		defer response.Body.Close()
-		b, e := io.ReadAll(io.LimitReader(response.Body, 128*1024))
-		if e != nil {
-			operatorTest.Fatal("operator fixture response")
-		}
-		return response.StatusCode, b
+		return status, response
 	}
 	get := func(path string, out any) {
-		response, e := operator.Get(m.Config.OperatorOrigin + path)
-		if e != nil {
-			operatorTest.Fatal("operator fixture read")
+		status, raw, diagnostic := readAdminOperatorRequest(context.Background(), operator, m.Config.OperatorOrigin, path, http.MethodGet, nil, "", completeMVPOperatorWait)
+		defer clear(raw)
+		if diagnostic.failure == "" {
+			if status != 200 {
+				diagnostic.failure = "status"
+			} else {
+				diagnostic = readAdminOperatorDecode(raw, out, diagnostic)
+			}
 		}
-		defer response.Body.Close()
-		if response.StatusCode != 200 || json.NewDecoder(io.LimitReader(response.Body, 128*1024)).Decode(out) != nil {
-			operatorTest.Fatal("operator fixture read contract")
+		diagnostic.log(operatorTest)
+		if diagnostic.failure != "" {
+			operatorTest.Fatal("operator fixture contract")
 		}
 	}
 	stage = "operator_login"
@@ -287,8 +283,13 @@ func runApprovedSystemdInstallationMode(t *testing.T, profile, collectionProfile
 	query := func(path string, input, output any) {
 		status, raw := call(path, input, session.CSRFToken)
 		defer clear(raw)
-		if status != 200 || json.Unmarshal(raw, output) != nil {
-			operatorTest.Fatal("bounded operator query contract")
+		if status != 200 {
+			operatorTest.Fatal("operator fixture contract")
+		}
+		diagnostic := readAdminOperatorDecode(raw, output, readAdminOperatorDiagnostic{method: "post", resource: readAdminOperatorResource(path), status: "http_200", code: "none"})
+		diagnostic.log(operatorTest)
+		if diagnostic.failure != "" {
+			operatorTest.Fatal("operator fixture contract")
 		}
 	}
 	invitation := map[string]any{"requestId": "request_" + strings.Repeat("8", 32), "platform": "linux"}

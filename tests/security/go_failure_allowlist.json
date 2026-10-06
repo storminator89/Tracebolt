@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "sourceCommit": "fccc4b00cd8a144afd58e4b995747afab7a10022",
-  "goSourceSha256": "d67343ff2d14f5eacb56daf14d6ab7154ce434f9e8252f73710d877a2a7dcd75",
+  "goSourceSha256": "c17132c5a7001e9befa2984c3f144cb4dd5586e20a963b92800ca890d748a6be",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -149,6 +149,8 @@
       "TestReadAdminJournalReady",
       "TestReadAdminMaintenanceFailurePreservesPrimary",
       "TestReadAdminNativeSelection",
+      "TestReadAdminOperatorContract",
+      "TestReadAdminOperatorFailureBounds",
       "TestReadAdminOptFixturePreparationIsNarrow",
       "TestReadAdminPTYInput",
       "TestReadAdminRestartRequiresNewOrdinaryGeneration",
@@ -2137,7 +2139,9 @@
     "localrmm/tests/e2e-review/conditionalfixture": [],
     "localrmm/tests/e2e-review/endpointfixture": [],
     "localrmm/tests/e2e-review/enrollmentfixture": [],
-    "localrmm/tests/e2e-review/journalfixture": [],
+    "localrmm/tests/e2e-review/journalfixture": [
+      "TestJournalHandlerReadinessBusyAndEndpointBinding"
+    ],
     "localrmm/tests/e2e-review/lanfixture": [],
     "localrmm/tests/e2e-review/overviewfixture": [],
     "localrmm/tests/e2e-review/v3fixture": [],

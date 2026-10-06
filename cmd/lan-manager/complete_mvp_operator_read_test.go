@@ -82,35 +82,42 @@ func completeMVPOperatorGet(ctx context.Context, client *http.Client, origin, pa
 // Match the existing strict-object pattern: exactly one outer error member and
 // exact, non-null string fields inside it. Ambiguous error codes cannot retry.
 func completeMVPStorageBusy(raw []byte) bool {
+	return completeMVPOperatorErrorCode(raw) == "storage_busy"
+}
+
+func completeMVPOperatorErrorCode(raw []byte) string {
 	if len(raw) > 4096 {
-		return false
+		return ""
 	}
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	start, err := decoder.Token()
 	if err != nil || start != json.Delim('{') {
-		return false
+		return ""
 	}
 	key, err := decoder.Token()
 	if err != nil || key != "error" {
-		return false
+		return ""
 	}
 	var body json.RawMessage
 	if decoder.Decode(&body) != nil {
-		return false
+		return ""
 	}
 	defer clear(body)
 	end, err := decoder.Token()
 	if err != nil || end != json.Delim('}') {
-		return false
+		return ""
 	}
 	if _, err = decoder.Token(); err != io.EOF {
-		return false
+		return ""
 	}
 	var value struct {
 		Code    string `json:"code"`
 		Message string `json:"message"`
 	}
-	return lanconfig.StrictObject(body, &value, "code", "message") == nil && value.Code == "storage_busy" && value.Message != ""
+	if lanconfig.StrictObject(body, &value, "code", "message") != nil || value.Message == "" {
+		return ""
+	}
+	return value.Code
 }
 
 func completeMVPStorageBackoff(header http.Header) bool {

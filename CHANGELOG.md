@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-10-06 — Honor native journal read backpressure and retain precise evidence
+
+- Correct the native acceptance client to honor one exact documented GET storage_busy or journal_busy response with Retry-After: 2, within the existing five-second total deadline and 128-KiB response cap. Mutations remain single-shot; all log identity, content, time, restart and revocation assertions stay required.
+- Exercise the actual journal handler with synthetic authenticated state: readiness, pending status, exact generation-bound delivery/query, device isolation and a real held SQLite writer. The busy response and unchanged receipt/expiry after release are reproduced; the historical afec native HTTP response is still unknown.
+- Export at most eight distinct closed method/resource/status/failure/API-code tuples from bounded private test output, without raw paths, identifiers, bodies or errors. Successful native evidence contains no failure tuples.
+- The preceding fresh native run proved installed TCP/UDP owners and v4 provenance; journal content, restart and revocation remain unpassed. Its separate ordinary positive-v3 package-read 429 failure also remains open. This checkpoint changes test code only and performs no user-host or release activation.
+
 ## 2026-10-06 — Correct native namespace traversal and retain independent checks
 
 - Open only the fixed proc namespace parent with O_PATH instead of requesting directory listing access. Linux exposes that parent as 0511; keep the existing procfs/directory checks, fixed child opens, ptrace/nsfs/PIDFD verification, identity binding and unchanged helper capabilities. Generic process-directory enumeration is unchanged.

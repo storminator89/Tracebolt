@@ -190,11 +190,12 @@ class ReadAdminWrapperTests(unittest.TestCase):
 
     def validate(self, raw, transport="tls", scenario="complete", *, read_profile=READ_PROFILE,
                  source=SOURCE, mode=stat.S_IFREG | 0o600,
-                 size=None, open_error=None, private_log=None):
+                 size=None, open_error=None, private_log=None, log_mode=stat.S_IFREG | 0o600, log_size=None):
         stream = FakeFile(raw)
         stream.read = mock.Mock(wraps=stream.read)
         log_stream = FakeFile(private_log or b'')
         log_stream.fileno = lambda: 124
+        log_stream.read = mock.Mock(wraps=log_stream.read)
         def opened(path, flags):
             if open_error is not None:
                 raise open_error
@@ -208,7 +209,7 @@ class ReadAdminWrapperTests(unittest.TestCase):
             O_NONBLOCK=os.O_NONBLOCK, O_CLOEXEC=os.O_CLOEXEC,
             open=mock.Mock(side_effect=opened),
             fdopen=mock.Mock(side_effect=lambda fd, mode: stream if fd == 123 else log_stream),
-            fstat=mock.Mock(side_effect=lambda fd: SimpleNamespace(st_mode=mode, st_size=len(raw) if size is None else size) if fd == 123 else SimpleNamespace(st_mode=stat.S_IFREG | 0o600, st_size=len(private_log))),
+            fstat=mock.Mock(side_effect=lambda fd: SimpleNamespace(st_mode=mode, st_size=len(raw) if size is None else size) if fd == 123 else SimpleNamespace(st_mode=log_mode, st_size=len(private_log) if log_size is None else log_size)),
         )
         output, error = io.StringIO(), None
         with contextlib.redirect_stdout(output), mock.patch.dict(sys.modules, {"os": fake_os}), \
@@ -217,6 +218,7 @@ class ReadAdminWrapperTests(unittest.TestCase):
                 exec(self.readers[0], {"__name__": "__main__"})
             except SystemExit as exc:
                 error = str(exc)
+        fake_os.log_stream = log_stream
         return output.getvalue(), error, fake_os, stream
 
     def complete(self, raw):
@@ -279,6 +281,105 @@ class ReadAdminWrapperTests(unittest.TestCase):
             self.assertIsNone(error)
             self.assertIn(json.loads(output)['nativeAssertion'], ('no-known-native-assertion', 'private-diagnostic-unavailable'))
             self.assertNotIn('private secret', output)
+
+    def operator_line(self, **changes):
+        values = dict(method='get', resource='journal', status='http_500', failure='status', code='journal_unavailable')
+        values.update(changes)
+        text = '    systemd_install_test.go:300: native_operator ' + ' '.join(f'{key}={value}' for key, value in values.items())
+        return (text + '\n').encode(), values
+
+    def test_operator_diagnostics_share_one_bounded_private_read(self):
+        line, expected = self.operator_line()
+        raw = json.dumps(result(status='fail', stage='read_admin_journal_content')).encode()
+        log = (b'private secret and raw telemetry\n' + line +
+               b'    systemd_install_test.go:301: operator fixture contract\n' +
+               b'    systemd_install_test.go:302: operator fixture read contract\n')
+        output, error, fake_os, _ = self.validate(raw, private_log=log)
+        self.assertIsNone(error)
+        projected = json.loads(output)
+        self.assertEqual(projected['nativeAssertion'], 'operator fixture contract')
+        self.assertEqual(projected['operatorFailures'], [expected])
+        self.assertNotIn('private secret', output)
+        self.assertEqual(fake_os.open.call_count, 2)
+        self.assertEqual(fake_os.open.call_args_list[1].args[1], os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC)
+        fake_os.log_stream.read.assert_called_once_with(1048577)
+        self.assertEqual(self.complete(output.encode()), ('', INCOMPLETE))
+        self.assert_rejected(json.dumps(result(operatorFailures=[expected])).encode())
+
+    def test_operator_diagnostics_accept_only_closed_enums(self):
+        enums = {
+            'method': 'get post',
+            'resource': 'auth enrollment invitation approval devices packages operational system system_query journal journal_create journal_query other',
+            'status': 'not_received http_200 http_201 http_400 http_401 http_403 http_404 http_405 http_409 http_429 http_500 http_503 http_other',
+            'failure': 'request transport deadline body oversize status decode',
+            'code': 'none unknown invalid storage_busy journal_busy authentication_required journal_not_configured invalid_journal_request journal_conflict journal_unavailable journal_generation_stale journal_not_ready journal_not_found not_found method_not_allowed forbidden invalid_request',
+        }
+        raw = json.dumps(result(status='fail')).encode()
+        for field, allowed in enums.items():
+            for value in allowed.split():
+                with self.subTest(field=field, value=value):
+                    line, expected = self.operator_line(**{field: value})
+                    output, error, _, _ = self.validate(raw, private_log=line)
+                    self.assertIsNone(error)
+                    self.assertEqual(json.loads(output)['operatorFailures'], [expected])
+            for invalid in ('', 'PRIVATE_SECRET', 'private_secret', 'private-token', '/private/path', 'http_418', 'GET'):
+                with self.subTest(field=field, invalid=invalid):
+                    line, _ = self.operator_line(**{field: invalid})
+                    output, error, _, _ = self.validate(raw, private_log=line)
+                    self.assertIsNone(error)
+                    self.assertEqual(json.loads(output)['operatorFailures'], [])
+                    self.assertNotIn('PRIVATE_SECRET', output)
+                    self.assertNotIn('private_secret', output)
+                    self.assertNotIn('/private/path', output)
+
+    def test_operator_diagnostics_are_anchored_deduplicated_and_capped(self):
+        raw = json.dumps(result(status='fail')).encode()
+        line, _ = self.operator_line()
+        for malformed in (line.lstrip(), b'private ' + line, line.replace(b'.go:', b'.txt:'),
+                          line.replace(b'systemd_install_test.go', b'/private/systemd_install_test.go'),
+                          line.replace(b'method=get', b'method=get method=post'),
+                          line.replace(b' resource=', b'  resource='),
+                          line.rstrip() + b' private-secret\n',
+                          line.replace(b'failure=status', b'failure=status\x00')):
+            output, error, _, _ = self.validate(raw, private_log=malformed)
+            self.assertIsNone(error)
+            self.assertEqual(json.loads(output)['operatorFailures'], [])
+            self.assertNotIn('private-secret', output)
+        lines, expected = [], []
+        for resource in 'auth enrollment invitation approval devices packages operational system system_query journal journal_create journal_query other'.split():
+            current, values = self.operator_line(resource=resource)
+            lines.extend([current, current])
+            expected.append(values)
+        log = b''.join(lines) + b'    systemd_install_test.go:999: operator fixture contract\n'
+        output, error, _, _ = self.validate(raw, private_log=log)
+        self.assertIsNone(error)
+        self.assertEqual(json.loads(output)['operatorFailures'], expected[:8])
+        self.assertEqual(json.loads(output)['nativeAssertion'], 'operator fixture contract')
+        self.assertLess(len(output.encode()), 4096)
+
+    def test_operator_diagnostics_unavailable_is_empty_and_never_read_for_pass(self):
+        raw = json.dumps(result(status='fail')).encode()
+        line, expected = self.operator_line()
+        for options in ({}, {'private_log': b''}, {'private_log': b'x' * 1048577},
+                        {'private_log': line, 'log_mode': stat.S_IFIFO | 0o600},
+                        {'private_log': line, 'log_mode': stat.S_IFLNK | 0o600},
+                        {'private_log': line, 'log_size': len(line) + 1},
+                        {'private_log': line, 'log_size': 1048577}):
+            output, error, _, _ = self.validate(raw, **options)
+            self.assertIsNone(error)
+            self.assertEqual(json.loads(output)['operatorFailures'], [])
+            self.assertEqual(json.loads(output)['nativeAssertion'], 'private-diagnostic-unavailable')
+        boundary_log = b'x' * (1048576 - len(line) - 1) + b'\n' + line
+        output, error, _, _ = self.validate(raw, private_log=boundary_log)
+        self.assertIsNone(error)
+        self.assertEqual(json.loads(output)['operatorFailures'], [expected])
+        for scenario in SCENARIOS:
+            output, error, fake_os, _ = self.validate(json.dumps(result(scenario=scenario)).encode(), scenario=scenario, private_log=line)
+            self.assertIsNone(error)
+            self.assertEqual(json.loads(output)['operatorFailures'], [])
+            self.assertEqual(json.loads(output)['nativeAssertion'], 'none')
+            self.assertEqual(fake_os.open.call_count, 1)
+            fake_os.log_stream.read.assert_not_called()
 
     def test_manual_only_fresh_v2_approval_source_and_transport_choice(self):
         source = self.source
@@ -404,7 +505,7 @@ class ReadAdminWrapperTests(unittest.TestCase):
                     raw = json.dumps(expected).encode()
                     output, error, fake_os, stream = self.validate(raw, transport, scenario)
                     self.assertIsNone(error)
-                    self.assertEqual(json.loads(output), dict(expected, nativeAssertion="none"))
+                    self.assertEqual(json.loads(output), dict(expected, nativeAssertion="none", operatorFailures=[]))
                     fake_os.open.assert_called_once_with("private-fixture-path", os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC)
                     fake_os.fdopen.assert_called_once_with(123, "rb")
                     fake_os.fstat.assert_called_once_with(123)
@@ -455,12 +556,9 @@ class ReadAdminWrapperTests(unittest.TestCase):
     def test_independent_operator_errors_target_active_child(self):
         root = WORKFLOW.parents[2]
         driver = (root / 'cmd/lan-manager/systemd_install_test.go').read_text()
-        callbacks = driver.split('call := func(path string, body any, csrf string)', 1)[1].split('invitation := ', 1)[0]
-        for assertion in ('operator fixture request', 'operator fixture response',
-                          'operator fixture read', 'operator fixture read contract',
-                          'bounded operator query contract'):
-            self.assertIn('operatorTest.Fatal("' + assertion + '")', callbacks)
-            self.assertNotRegex(callbacks, r'\bt\.Fatal\("' + re.escape(assertion) + r'"\)')
+        operator = driver.split('operatorTest := t', 1)[1].split('invitation := ', 1)[0]
+        self.assertIn('operatorTest.Fatal("operator fixture contract")', operator)
+        self.assertNotRegex(operator, r'\bt\.Fatal\("operator fixture contract"\)')
         binding = driver.split('bindOperatorTest := ', 1)[1].split('call := ', 1)[0]
         self.assertIn('previous := operatorTest', binding)
         self.assertIn('operatorTest = current', binding)
@@ -477,7 +575,7 @@ class ReadAdminWrapperTests(unittest.TestCase):
                 raw = json.dumps(result(status="fail", stage=stage)).encode()
                 output, error, _, _ = self.validate(raw)
                 self.assertIsNone(error)
-                self.assertEqual(json.loads(output), dict(json.loads(raw), nativeAssertion="private-diagnostic-unavailable"))
+                self.assertEqual(json.loads(output), dict(json.loads(raw), nativeAssertion="private-diagnostic-unavailable", operatorFailures=[]))
                 self.assertEqual(self.complete(output.encode()), ("", INCOMPLETE))
                 if stage != "complete":
                     self.assert_rejected(json.dumps(result(stage=stage)).encode())

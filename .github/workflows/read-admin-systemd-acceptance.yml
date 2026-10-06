@@ -194,7 +194,7 @@ jobs:
                       raise ValueError('duplicate field')
                   value[key] = item
               return value
-          def native_assertion(path):
+          def native_diagnostics(path):
               allowed = {
                   'PID1 namespace unavailable',
                   'PTY helper failed',
@@ -287,6 +287,7 @@ jobs:
                   'new ordinary online report not observed after revoke/restart',
                   'nonroot enabled gate silently accepted',
                   'old sequence, generation or pre-operation collection accepted',
+                  'operator fixture contract',
                   'operator fixture login',
                   'operator fixture read',
                   'operator fixture read contract',
@@ -390,22 +391,38 @@ jobs:
                   'valid cancellation diagnostic',
                   'wrong fixture owner accepted',
               }
+              fields = ('method', 'resource', 'status', 'failure', 'code')
+              choices = (
+                  frozenset('get post'.split()),
+                  frozenset('auth enrollment invitation approval devices packages operational system system_query journal journal_create journal_query other'.split()),
+                  frozenset('not_received http_200 http_201 http_400 http_401 http_403 http_404 http_405 http_409 http_429 http_500 http_503 http_other'.split()),
+                  frozenset('request transport deadline body oversize status decode'.split()),
+                  frozenset('none unknown invalid storage_busy journal_busy authentication_required journal_not_configured invalid_journal_request journal_conflict journal_unavailable journal_generation_stale journal_not_ready journal_not_found not_found method_not_allowed forbidden invalid_request'.split()),
+              )
+              pattern = re.compile(r'[ \t]+[A-Za-z0-9_]+\.go:[0-9]+: native_operator method=([a-z]+) resource=([a-z_]+) status=([a-z0-9_]+) failure=([a-z]+) code=([a-z_]+)')
               try:
                   fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC)
                   with os.fdopen(fd, 'rb') as stream:
                       info = os.fstat(stream.fileno())
                       if not stat.S_ISREG(info.st_mode) or not 0 < info.st_size <= 1048576:
-                          return 'private-diagnostic-unavailable'
+                          return 'private-diagnostic-unavailable', []
                       raw = stream.read(1048577)
                   if len(raw) != info.st_size or len(raw) > 1048576:
-                      return 'private-diagnostic-unavailable'
+                      return 'private-diagnostic-unavailable', []
+                  assertion, failures, seen = 'no-known-native-assertion', [], set()
                   for line in raw.decode('utf-8', errors='replace').splitlines():
                       match = re.fullmatch(r'\s+[^\s/]+\.go:[0-9]+: (.+)', line)
-                      if match and match[1] in allowed:
-                          return match[1]
-                  return 'no-known-native-assertion'
+                      if assertion == 'no-known-native-assertion' and match and match[1] in allowed:
+                          assertion = match[1]
+                      diagnostic = pattern.fullmatch(line)
+                      if diagnostic and len(failures) < 8:
+                          values = diagnostic.groups()
+                          if values not in seen and all(value in allowed_values for value, allowed_values in zip(values, choices)):
+                              failures.append(dict(zip(fields, values)))
+                              seen.add(values)
+                  return assertion, failures
               except Exception:
-                  return 'private-diagnostic-unavailable'
+                  return 'private-diagnostic-unavailable', []
           try:
               check(len(sys.argv) == 6)
               check(sys.argv[2] in {'tls', 'http-test'})
@@ -1058,8 +1075,10 @@ jobs:
               check(probe['failure'] in {'existing-socket-owner-state', 'cgroup-v2-required', 'existing-installation-use-upgrade-or-recovery', 'systemd-unit-inspection-command-failed', 'existing-journal-state-retained', 'systemd-pid1-required', 'preexisting-loaded-unit', 'acceptance-launcher-workflow', 'acceptance-launcher-config', 'driver-output-invalid', 'platform-read-limit', 'acceptance-launcher-input', 'read-admin-result-invalid', 'acceptance-deadline-exceeded', 'acceptance-launcher-source-loader', 'read-admin-result-unavailable', 'none', 'fixed-command-failed', 'protected-directory', 'alternate-unit-fragment', 'changed-protected-file', 'acceptance-capture-exceeded', 'platform-file', 'supported-linux-amd64-kernel', 'command-timeout', 'acceptance-driver-rejected', 'protected-file', 'acceptance-launcher-rejected', 'read-admin-phase-incomplete', 'not_attempted', 'local-nss-only', 'acceptance-launcher-components', 'acceptance-launcher-terminal', 'unit-dropin', 'acceptance-launcher-host', 'driver-execution-failed', 'command-output-limit', 'local-account-database', 'acceptance-launcher-artifacts', 'systemd-status-members', 'acceptance-gate-rejected', 'existing-socket-owner-account', 'unexpected-cancellation-result', 'acceptance-launcher-arguments'})
               check(probe['childExit'] in {'not_observed', 'zero', 'nonzero'} and type(probe['scopePromptSeen']) is bool)
               check(value['status'] != 'pass' or probe == {'failure': 'none', 'childExit': 'zero', 'scopePromptSeen': True})
-              # Only an exact source-literal assertion can leave the private log.
-              value['nativeAssertion'] = native_assertion(sys.argv[1].rsplit('/', 1)[0] + '/private-test.log') if value['status'] == 'fail' else 'none'
+              # One bounded private read exports only closed assertion/enum values.
+              assertion, failures = native_diagnostics(sys.argv[1].rsplit('/', 1)[0] + '/private-test.log') if value['status'] == 'fail' else ('none', [])
+              value['nativeAssertion'] = assertion
+              value['operatorFailures'] = failures
               print(json.dumps(value, indent=2))
           except Exception:
               raise SystemExit('FAIL: missing or invalid sanitized read-admin acceptance evidence.')
