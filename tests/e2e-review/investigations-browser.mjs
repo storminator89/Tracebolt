@@ -23,6 +23,21 @@ export function investigationsDeviceFixture(){
  return {id:investigationsFixtureDevice,name:'Investigation fixture <Linux>',platform:'linux',os:'Linux fixture',site:'Fixture',group:'Fixture',ip:null,status:'unknown',source:'lan',synthetic:false,lastSeen:originTime,agentVersion:'fixture',cpu:metric,memory:metric,disk:metric,uptime:'',tags:[],capabilities:[],evidence:[],trend:[],caseIds:[]};
 }
 async function layout(page,expect){
+ // Inline text and <time> children must stay in block-flow paragraphs. The old
+ // demo .investigation-note mobile grid split labels and timestamps into cells.
+ const notes=page.locator('.investigations-note');expect(await notes.count()).toBeGreaterThan(0);
+ for(const note of await notes.all()){
+  if(!await note.isVisible())continue;
+  const geometry=await note.evaluate(element=>{
+   const style=getComputedStyle(element),parent=element.parentElement,parentStyle=getComputedStyle(parent),box=element.getBoundingClientRect();
+   const availableWidth=parent.clientWidth-parseFloat(parentStyle.paddingLeft)-parseFloat(parentStyle.paddingRight),fragments=[];
+   const walker=document.createTreeWalker(element,NodeFilter.SHOW_TEXT);let node,ordinal=0;
+   while((node=walker.nextNode())){if(!node.textContent.trim())continue;const range=document.createRange();range.selectNodeContents(node);for(const rect of range.getClientRects())if(rect.width>0&&rect.height>0)fragments.push({node:ordinal,left:rect.left,right:rect.right,top:rect.top,bottom:rect.bottom});ordinal++;}
+   let overlaps=0;for(let i=0;i<fragments.length;i++)for(let j=i+1;j<fragments.length;j++){const a=fragments[i],b=fragments[j];if(a.node!==b.node&&Math.min(a.right,b.right)-Math.max(a.left,b.left)>0.5&&Math.min(a.bottom,b.bottom)-Math.max(a.top,b.top)>0.5)overlaps++;}
+   return {display:style.display,gridColumns:style.gridTemplateColumns,width:box.width,availableWidth,overlaps};
+  });
+  expect(geometry.display).toBe('block');expect(geometry.gridColumns).toBe('none');expect(Number.isFinite(geometry.width)&&Number.isFinite(geometry.availableWidth)).toBe(true);expect(geometry.width).toBeGreaterThanOrEqual(geometry.availableWidth-1);expect(geometry.width).toBeLessThanOrEqual(geometry.availableWidth+1);expect(geometry.overlaps).toBe(0);
+ }
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1&&document.body.scrollWidth<=innerWidth+1)).toBe(true);
  for(const item of await page.locator('.investigation-item,.investigation-paging,.investigation-toolbar').all()){
   if(!await item.isVisible())continue;const box=await item.boundingBox();expect(box).not.toBe(null);expect(box.x).toBeGreaterThanOrEqual(0);expect(box.x+box.width).toBeLessThanOrEqual(page.viewportSize().width+1);expect(await item.evaluate(el=>el.scrollWidth<=el.clientWidth+1)).toBe(true);

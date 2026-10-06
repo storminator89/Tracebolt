@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-10-06 — Readable mobile investigation evidence
+
+- Isolate the new investigation paragraphs from an older demo note grid, so mobile warning labels and original timestamps retain normal text flow. Add hosted checks for full paragraph width and non-overlapping label/time text.
+- Update the real awaiting-agent browser contract to require the actual unavailable Health response, an unavailable case count and no successful empty-state claim. Keep its unknown-device and unavailable-metric assertions.
+- The preceding 3f2 hosted run passed all new alarm, fleet and Investigations interaction cases; screenshot inspection nevertheless found the mobile text collision. The corrected rendering remains subject to the next hosted gate.
+- Allow the existing aggregate Go job 60 minutes: its full serial race suite passed after 34m49s in 3f2, but the 40-minute job cap interrupted the following build. Keep all per-package deadlines, tests and assertions unchanged; later runtime steps still require the next complete run.
+
 ## 2026-10-06 — Read-only LAN health investigations
 
 - Populate LAN Investigations from the existing durable Health incident history, with separate open, recovered and monitoring-stopped counts, original incident times, separately aged current checks and explicit undetermined cause. Keep acknowledgement distinct from recovery and leave the demo case/AI/note engine unchanged.

@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "sourceCommit": "fccc4b00cd8a144afd58e4b995747afab7a10022",
-  "goSourceSha256": "17a0a226d086a3dc8158d5061bdc7101fdd49f8937f041381fa28c8bcc699ff3",
+  "goSourceSha256": "57bf856db4150d48568425fa1de31396e87a5431841fc14d50b37fb2c2d7d461",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -515,6 +515,7 @@
       "TestInvestigationsQueryExceptionDoesNotChangeOtherRoutes",
       "TestInvestigationsReadsRealDurableTransitionsWithoutMutation",
       "TestInvestigationsSecondReadExpiryAndClockBoundary",
+      "TestInvestigationsUnavailableWithoutHealthMonitor",
       "TestInvestigationsUnknownFreshnessAndBoundedPaging",
       "TestInvitationCreationAdvertisesExactPublicDownloadChecksum",
       "TestJournalCapabilitiesPublicStaticBoundedAndGuarded",

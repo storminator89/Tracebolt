@@ -290,3 +290,30 @@ func TestInvestigationsMissingAuthorityDeadlineFailsClosed(t *testing.T) {
 		t.Fatal("missing deadline disclosed history", r.StatusCode)
 	}
 }
+
+// The loopback browser's manual awaiting-agent fixture calls api.New without a
+// managed enrollment/Health monitor. Exercise that same real operator handler
+// boundary: lack of assessment is an error, not an empty successful history.
+func TestInvestigationsUnavailableWithoutHealthMonitor(t *testing.T) {
+	o := newOperatorFixture(t, time.Hour)
+	if o.app.health != nil {
+		t.Fatal("fixture unexpectedly configured Health")
+	}
+	if r, _ := o.call(t, "GET", "/api/investigations?scope=open&offset=0", nil, "", nil); r.StatusCode != 401 {
+		t.Fatal("anonymous investigation read", r.StatusCode)
+	}
+	_, _ = o.login(t)
+	r, body := o.call(t, "GET", "/api/investigations?scope=open&offset=0", nil, "", nil)
+	if r.StatusCode != 409 {
+		t.Fatal("missing Health monitor became success", r.StatusCode)
+	}
+	failure, ok := body["error"].(map[string]any)
+	if !ok || failure["code"] != "health_unavailable" {
+		t.Fatal("wrong unavailable contract", body)
+	}
+	for _, field := range []string{"items", "devices", "counts", "total"} {
+		if _, ok := body[field]; ok {
+			t.Fatal("unavailable response contained assessment data", field)
+		}
+	}
+}
