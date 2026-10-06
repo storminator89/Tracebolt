@@ -1,5 +1,7 @@
 """Inert embedded-script checks. Never fork a PTY, run a launcher, or touch hosts."""
 import ast
+import importlib.util
+import sys
 import json
 from pathlib import Path
 import re
@@ -319,6 +321,119 @@ class InertScriptTests(unittest.TestCase):
         self.assertNotIn('open(', source)
         self.assertNotIn('sys.stderr', source)
         self.assertNotIn('sys.stdout.buffer', source)
+
+
+class NativeCleanupCommandBoundaryTests(unittest.TestCase):
+    @staticmethod
+    def load(name, relative):
+        spec = importlib.util.spec_from_file_location(name, ROOT / relative)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+
+    def fixture(self):
+        socket_fixture = self.load('cleanup_socket_fixture', 'deploy/socket-owner/test_setup.py')
+        workflow = self.load('cleanup_workflow', 'deploy/onboarding/read_admin.py')
+        inventory = self.load('cleanup_inventory', 'deploy/inventory/guide.py')
+        # The journal fixture's ordinary import resolves to its inert sibling.
+        with mock.patch.dict(sys.modules, {'test_setup': socket_fixture.f}):
+            journal_fixture = self.load('cleanup_journal_fixture', 'deploy/journal/test_amend.py')
+        setup, socket_setup = socket_fixture.s, socket_fixture.x
+        host = socket_fixture.Fixture()
+        facts = dict(host.expected, configHash='f' * 64)
+        bound = dict(schemaVersion='tracebolt.read-admin-intent.v2', readProfile=workflow.PROFILE,
+            installation=facts['manifest'], ownerHash=facts['ownerHash'], configHash=facts['configHash'],
+            deviceId=facts['deviceId'], managerOrigin=facts['origin'], agentUid=facts['uid'], agentGid=facts['gid'])
+        host.files[workflow.RECEIPT] = workflow.canonical(bound)
+        host.meta[workflow.RECEIPT].st_size = len(host.files[workflow.RECEIPT])
+        host.intent = workflow.digest(host.files[workflow.RECEIPT])
+        for phase in ('journal', 'socket'):
+            for state in (('started', 'complete') if phase == 'journal' else ('started',)):
+                path = workflow.phase_path(phase, state)
+                host.files[path] = workflow.phase_record(bound, phase, state)
+                host.meta[path].st_size = len(host.files[path])
+        host.configure()
+        host.parent_complete()
+        self.assertTrue(host.revoke()['revoked'])
+        self.assertFalse(host.policy['enabled'])
+        self.assertIn(socket_setup.REVOKE_COMPLETE, host.files)
+        journal = journal_fixture.Fixture(helper=True)
+        amendment = journal_fixture.a
+        readback = amendment.real_effects(setup, {})
+        # Keep BOTH actual command adapters. Only filesystem/process effects are
+        # replaced; the production command and failure-stage allowlists run.
+        for name in ('protected_dir', 'metadata', 'absent', 'listdir', 'link', 'status'):
+            setattr(readback, name, getattr(journal, name))
+        readback.read = lambda path, *args: b'inert executable' if path == '/usr/bin/systemctl' else journal.read(path, *args)
+        host.meta[setup.SOCKET_PATH] = journal.meta[setup.SOCKET_PATH]
+        release = dict(version='v1.2.3', assets={'tracebolt-v1.2.3-source.tar': dict(sha256=facts['manifest']['sourceHash'])})
+        return host, journal, setup, socket_setup, amendment, readback, workflow, inventory, facts, release
+
+    def cleanup(self, fail_unit=None):
+        host, journal, setup, socket_setup, amendment, readback, workflow, inventory, facts, release = self.fixture()
+        before = {path: host.files[path] for path in (socket_setup.COMPLETE, socket_setup.REVOKE_STARTED,
+            socket_setup.REVOKE_COMPLETE, socket_setup.POLICY)}
+        calls = []
+        def popen(args, **kwargs):
+            self.assertEqual(args[:2], ['/usr/bin/systemctl', 'stop'])
+            self.assertIn(args[2], (setup.SOCKET, setup.SERVICE))
+            self.assertEqual(kwargs['stderr'], setup.subprocess.DEVNULL)
+            calls.append(args[:])
+            code = 3 if args[2] == fail_unit else 0
+            if code == 0:
+                with journal.lock():
+                    journal.command(args)
+                if args[2] == setup.SOCKET:
+                    host.meta.pop(setup.SOCKET_PATH, None)
+            child = mock.Mock()
+            child.wait.return_value = child.poll.return_value = code
+            return child
+        with mock.patch.object(socket_setup, 'real_effects', return_value=host), \
+             mock.patch.object(inventory, 'real_effects', return_value=host), \
+             mock.patch.object(inventory, 'inspect', return_value=facts), \
+             mock.patch.object(amendment, 'real_effects', return_value=readback), \
+             mock.patch.object(setup.subprocess, 'Popen', side_effect=popen), \
+             mock.patch.object(setup.selectors, 'DefaultSelector') as selectors, \
+             mock.patch.object(setup.os, 'open', side_effect=AssertionError('native filesystem access forbidden')):
+            selectors.return_value.__enter__.return_value.get_map.return_value = {}
+            # The full cleanup branch executes real immutable socket ownership,
+            # full journal inspection and both command adapters over inert data.
+            with host.lock():
+                if fail_unit is None:
+                    result = LAUNCHER.socket_native_operation('cleanup', 'complete', workflow, inventory,
+                        setup, amendment, socket_setup, host.templates, release)
+                    self.assertTrue(result['cleanupConfirmed'])
+                else:
+                    with self.assertRaisesRegex(setup.Rejected, '^fixed-command-failed$'):
+                        LAUNCHER.socket_native_operation('cleanup', 'complete', workflow, inventory,
+                            setup, amendment, socket_setup, host.templates, release)
+        self.assertEqual(before, {path: host.files[path] for path in before})
+        return calls, setup
+
+    def test_revoked_socket_cleanup_runs_both_journal_stops_through_real_adapters(self):
+        calls, setup = self.cleanup()
+        self.assertEqual(calls, [['/usr/bin/systemctl', 'stop', setup.SOCKET],
+                                 ['/usr/bin/systemctl', 'stop', setup.SERVICE]])
+
+    def test_revoked_socket_cleanup_rejects_actual_nonzero_journal_stop(self):
+        for unit in ('tracebolt-journal-reader.socket', 'tracebolt-journal-reader.service'):
+            with self.subTest(unit=unit):
+                calls, setup = self.cleanup(unit)
+                self.assertEqual(calls[-1], ['/usr/bin/systemctl', 'stop', unit])
+                self.assertEqual(len(calls), 1 if unit == setup.SOCKET else 2)
+
+    def test_obsolete_cleanup_failure_stage_is_rejected_before_popen(self):
+        setup = self.load('cleanup_real_setup', 'deploy/journal/setup.py')
+        amendment = self.load('cleanup_real_amendment', 'deploy/journal/amend.py')
+        readback = amendment.real_effects(setup, {})
+        self.assertNotIn('native-owned-helper-stop', setup.COMMAND_FAILURE_STAGES)
+        with mock.patch.object(readback, 'read') as read, \
+             mock.patch.object(setup.subprocess, 'Popen') as popen:
+            for name in (setup.SOCKET, setup.SERVICE):
+                with self.assertRaisesRegex(setup.Rejected, '^fixed-command-stage$'):
+                    readback.command(['/usr/bin/systemctl', 'stop', name], failure_stage='native-owned-helper-stop')
+            read.assert_not_called()
+            popen.assert_not_called()
 
 
 if __name__ == '__main__':

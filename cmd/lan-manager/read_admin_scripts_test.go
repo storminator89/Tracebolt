@@ -86,7 +86,7 @@ def socket_native_operation(operation, scenario, workflow, inventory, s, amendme
             # units must validate. Existence of an attempt marker is insufficient.
             amendment.inspect(s, readback, templates)
             for name in (s.SOCKET, s.SERVICE):
-                readback.command(['/usr/bin/systemctl', 'stop', name], failure_stage='native-owned-helper-stop')
+                readback.command(['/usr/bin/systemctl', 'stop', name], failure_stage='fixed-command-failed')
                 state = readback.status(name)
                 require(s.owned_unit(state, name, 'inactive') and (name == s.SOCKET or state['MainPID'] == '0'))
             require(e.absent(s.SOCKET_PATH))

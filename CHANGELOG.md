@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-10-06 — Correct the final native journal-cleanup command stage
+
+- Use the existing supported fixed-command-failed label when the native cleanup harness stops the owned journal helper and socket. The invented native-owned-helper-stop label was rejected by the production command adapter before execution, causing the final cleanup failure. Production command allowlists, ownership, drain and status checks are unchanged.
+- Exercise the entire already-revoked cleanup branch with the real command wrapper and inert host/process adapters. Both journal stop commands must execute; either nonzero command still fails, and policy/tombstone bytes remain unchanged. The original label reproduces fixed-command-stage before executable inspection or process creation.
+- The approved native run on 8707963 proved all six functional checks: installed owners, provenance, journal content, restart, revocation and no authority afterward. Its final cleanup still failed, so overall acceptance remains unpassed until the corrected complete scenario and full hosted checks succeed. This checkpoint changes tests only and performs no host action, dispatch or release activation.
+
 ## 2026-10-06 — Complete bounded readiness reads and owned helper shutdown
 
 - Put complete Overview, endpoint identity, cached-update metadata and read-only system/socket pages through the same existing 750-ms single-reader gate. Keep active-operation limits, all mutation admission, client retry/deadline budgets and authority checks. Recheck original certificate/source/cursor expiry after waiting, commit and final response encoding; retain original collection/receipt times.
