@@ -42,6 +42,13 @@ describe('bounded fleet identity', () => {
   expect(filterDevices([source, other], { ...defaultFilters, sort: 'name' }, display).map(d => d.id)).toEqual([other.id, source.id]); expect(JSON.stringify(source)).toBe(before);
   expect(fleetIdentityProjection(fleet(), 121000).get(source.id)?.status).toBe('stale'); expect(filterDevices([source], { ...defaultFilters, query: 'fixture-linux' }, fleetIdentityProjection(fleet(), 86400000))).toEqual([]);
  });
+ it('keeps endpoint hostname and IP metadata separate from an unknown observed platform', () => {
+  const source: Device = { ...device(), platform: 'unknown', os: 'Awaiting agent' }, identities = fleetIdentityProjection(fleet(), 0);
+  expect(filterDevices([source], { ...defaultFilters, query: 'fixture-linux', platform: 'linux' }, identities)).toEqual([]);
+  expect(filterDevices([source], { ...defaultFilters, query: 'fixture-linux', platform: 'unknown' }, identities)).toEqual([source]);
+  expect(filterDevices([source], { ...defaultFilters, platform: 'all' }, identities)).toEqual([source]);
+  expect(source.platform).toBe('unknown');
+ });
  it('makes one protected batch request, shows primary hostname and scoped multiple addresses, and selects the original stable Device', async () => {
   const fetch = vi.fn().mockResolvedValue(response(fleet())), onSelect = vi.fn(); vi.stubGlobal('fetch', fetch); render(<Harness onSelect={onSelect}/>); await screen.findByText('fixture-linux');
   expect(fetch).toHaveBeenCalledTimes(1); expect(fetch.mock.calls[0][0]).toBe('/api/fleet/endpoint-identities'); expect(fetch.mock.calls[0][1]).toMatchObject({ credentials: 'same-origin', headers: { Accept: 'application/json' } }); expect(fetch.mock.calls[0][1].method).toBeUndefined(); expect(fetch.mock.calls[0][1].body).toBeUndefined();

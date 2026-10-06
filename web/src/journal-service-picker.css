@@ -33,3 +33,7 @@
 .journal-picker-rows .button{min-height:36px}
 .journal-picker-shortcuts>strong{font-weight:500;color:var(--secondary);font-size:11px}
 .journal-picker-search{margin:14px 0}
+
+.journal-picker-unit{display:block;font-weight:600}
+.journal-picker-label{color:var(--secondary)}
+.journal-picker-alias{display:block;color:var(--warning,#bd6a16);font-size:11px;margin-top:3px}

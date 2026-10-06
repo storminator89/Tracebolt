@@ -1,3 +1,6 @@
+import {createAlarmBrowserDiagnostics} from './alarm-browser-diagnostics.mjs';
+const diagnostics=createAlarmBrowserDiagnostics();
+export const alarmSettingsFailureDetails=()=>diagnostics.details();
 import {validAlarmSettings} from '../../web/src/alarm-settings-types.ts';
 import {validAlarmStatus} from '../../web/src/alarm-status-types.ts';
 
@@ -43,18 +46,23 @@ export function createAlarmSettingsFixture(createdAt='2026-10-06T12:00:00Z') {
 }
 
 async function alarmSettingsLayout({page,panel,expect}) {
+ diagnostics.step('document-width');
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth&&document.body.scrollWidth<=innerWidth)).toBe(true);
+ diagnostics.track(panel,-1);diagnostics.step('panel-width');
  expect(await panel.evaluate(el=>el.scrollWidth<=el.clientWidth+1)).toBe(true);
+ let ordinal=0;
  for(const element of await panel.locator('h2,.alarm-settings-readback,button,input,label,time,dt,dd,p').all()){
+  diagnostics.track(element,ordinal++);diagnostics.step('visibility');
   if(!await element.isVisible())continue;
-  await element.scrollIntoViewIfNeeded();await expect(element).toBeInViewport({ratio:1});
-  const box=await element.boundingBox();expect(box).not.toBe(null);expect(box.x).toBeGreaterThanOrEqual(0);expect(box.x+box.width).toBeLessThanOrEqual(page.viewportSize().width+1);
-  expect(await element.evaluate(el=>el.scrollWidth<=el.clientWidth+1)).toBe(true);
+  diagnostics.step('scroll-stability');await element.scrollIntoViewIfNeeded();diagnostics.step('viewport-ratio');await expect(element).toBeInViewport({ratio:1});
+  diagnostics.step('bounding-box');const box=await element.boundingBox();expect(box).not.toBe(null);diagnostics.step('horizontal-bounds');expect(box.x).toBeGreaterThanOrEqual(0);expect(box.x+box.width).toBeLessThanOrEqual(page.viewportSize().width+1);
+  diagnostics.step('element-width');expect(await element.evaluate(el=>el.scrollWidth<=el.clientWidth+1)).toBe(true);
  }
 }
 
 /** Reuses the repository's browser, fixture login, context, and screenshot runner. */
 export async function alarmSettingsBrowserCase({pageAt,login,expect,base,shot}) {
+ diagnostics.reset();diagnostics.mark('setup-bootstrap');
  const page=await pageAt('/settings'),clockStart=Date.now();
  await page.clock.install({time:new Date(clockStart)});await page.clock.pauseAt(new Date(clockStart+10000));
  const fixture=createAlarmSettingsFixture(new Date(clockStart+10000).toISOString()),requests=[],unexpected=[],external=[];
@@ -79,6 +87,7 @@ export async function alarmSettingsBrowserCase({pageAt,login,expect,base,shot}) 
   return route.continue();
  });
  const panel=page.locator('.alarm-settings'),aggregate=page.locator('.alarm-status');
+ diagnostics.reset(panel);diagnostics.mark('setup-bootstrap');
  const toggle=()=>panel.getByRole('button',{name:/^(Alarm setup|Alarme einrichten)$/});
  const refresh=()=>panel.getByRole('button',{name:/^(Refresh alarm setup|Alarmeinrichtung aktualisieren)$/});
  const field=()=>panel.locator('input[type=password]');
@@ -94,8 +103,21 @@ export async function alarmSettingsBrowserCase({pageAt,login,expect,base,shot}) 
   expect(await page.evaluate(()=>JSON.stringify({local:{...localStorage},session:{...sessionStorage}}).includes('NOT_A_REAL_SECRET'))).toBe(false);
  };
  const reload=async()=>{const before=fixture.counts.settingsReads;await refresh().click();await expect.poll(()=>fixture.counts.settingsReads).toBe(before+1);await expect(refresh()).toBeEnabled();};
- const capture=async(name)=>{await alarmSettingsLayout({page,panel,expect});await panel.scrollIntoViewIfNeeded();await shot(page,name,alarmSettingsFixtureDisclosure);};
+ const refreshAggregate=async()=>{
+  diagnostics.step('aggregate-refresh');
+  await expect(aggregate.getByRole('button',{name:/^(Refresh alarm status|Alarmstatus aktualisieren)$/})).toBeEnabled();
+  const before=fixture.counts.statusReads;
+  await aggregate.getByRole('button',{name:/^(Refresh alarm status|Alarmstatus aktualisieren)$/}).click();
+  await expect.poll(()=>fixture.counts.statusReads).toBe(before+1);
+  await expect(aggregate.getByRole('button',{name:/^(Refresh alarm status|Alarmstatus aktualisieren)$/})).toBeEnabled();
+  const german=await page.locator('html').getAttribute('lang')==='de',state=fixture.status();
+  await expect(aggregate.locator('.alarm-mode')).toHaveText(state.enabled?(german?'Ein':'On'):(german?'Aus':'Off'));
+  if(state.enabled||state.queued+state.inFlight+state.providerAccepted+state.failed+state.uncertain+state.suppressed>0)await expect(aggregate.locator('.alarm-counts dd')).toHaveText([state.providerAccepted,state.queued+state.inFlight,state.failed,state.uncertain].map(String));
+  else await expect(aggregate.locator('.alarm-counts')).toHaveCount(0);
+ };
+ const capture=async(name)=>{diagnostics.mark(name.replace('synthetic-http-test-alarm-',''));await refreshAggregate();await alarmSettingsLayout({page,panel,expect});diagnostics.step('capture');diagnostics.track(panel,-1);diagnostics.step('capture');await panel.scrollIntoViewIfNeeded();await shot(page,name,alarmSettingsFixtureDisclosure);};
  await expect(page.getByRole('heading',{name:'Sign in',exact:true})).toBeVisible();expect(fixture.counts.settingsReads).toBe(0);await login(page);
+ diagnostics.mark('setup-initial');
  await expect(panel).toBeVisible();await expect(panel.locator('.alarm-settings-readback')).toHaveText('No destination');await expect(toggle()).toHaveAttribute('aria-expanded','false');
  expect(fixture.counts.settingsReads).toBe(1);await expect(panel.locator('input,form')).toHaveCount(0);
  await capture('synthetic-http-test-alarm-setup-collapsed-desktop-en');
@@ -104,24 +126,33 @@ export async function alarmSettingsBrowserCase({pageAt,login,expect,base,shot}) 
  await expect(panel.getByRole('button',{name:'Save and enable',exact:true})).toBeDisabled();await expect(panel).toContainText('isolated HTTP-test connection exposes the webhook URL');
  await panel.getByRole('checkbox',{name:/^I understand this isolated HTTP-test/}).check();await expect(panel.getByRole('button',{name:'Save and enable',exact:true})).toBeEnabled();
  await capture('synthetic-http-test-alarm-setup-form-desktop-en');
+ diagnostics.mark('setup-cancel');
  await panel.getByRole('button',{name:'Cancel',exact:true}).click();await expect(panel.locator('input')).toHaveCount(0);expect(fixture.counts.settingsWrites).toBe(0);expect(fixture.counts.testWrites).toBe(0);await noReadback();
+ diagnostics.mark('setup-escape');
  await chooseReplace();await expect(panel.getByRole('checkbox').first()).not.toBeChecked();await field().fill(alarmSettingsFixtureEndpoint);await acknowledge();await field().press('Escape');
  await expect(toggle()).toHaveAttribute('aria-expanded','false');await expect(toggle()).toBeFocused();await expect(panel.locator('input')).toHaveCount(0);expect(fixture.counts.settingsWrites).toBe(0);await noReadback();
  await open();await chooseReplace();await expect(panel.getByRole('checkbox').first()).not.toBeChecked();await field().fill(alarmSettingsFixtureEndpoint);await acknowledge();
+ diagnostics.mark('setup-save');
  await panel.getByRole('button',{name:'Save and enable',exact:true}).click();await expect(panel.locator('.alarm-settings-readback')).toHaveText(`${fixtureHost} · On`);
  expect(fixture.counts.settingsWrites).toBe(1);expect(fixture.settings().revision).toBe('b'.repeat(32));expect(fixture.counts.testWrites).toBe(0);await expect(panel).toContainText('Settings saved. No test was sent.');await noReadback();
+ diagnostics.mark('setup-test-consent');
  await panel.getByRole('button',{name:'Test destination',exact:true}).click();await expect(panel).toContainText('fixed synthetic test payload');await expect(panel).toContainText('no live device information');
  await expect(panel.getByRole('button',{name:'Confirm and send test',exact:true})).toBeDisabled();expect(fixture.counts.testWrites).toBe(0);
  await panel.getByRole('checkbox',{name:'Send this synthetic test to the saved destination now.',exact:true}).check();expect(fixture.counts.testWrites).toBe(0);
+ diagnostics.mark('setup-test-send');
  await panel.getByRole('button',{name:'Confirm and send test',exact:true}).click();await expect(panel.locator('.alarm-test-result dd').first()).toHaveText('Queued');
  expect(fixture.counts.testWrites).toBe(1);await expect(panel.getByRole('button',{name:'Test destination',exact:true})).toBeDisabled();await noReadback();
  await capture('synthetic-http-test-alarm-setup-test-queued-desktop-en');
+ diagnostics.mark('setup-accepted-refresh');
  fixture.setTestState('provider_accepted');await expect(panel.locator('.alarm-test-result dd').first()).toHaveText('Queued');await reload();await expect(panel.locator('.alarm-test-result dd').first()).toHaveText('Provider accepted');
  await expect(panel).toContainText('does not confirm receipt by a person');expect(fixture.counts.testWrites).toBe(1);await capture('synthetic-http-test-alarm-setup-test-accepted-desktop-en');
+ diagnostics.mark('setup-uncertain-refresh');
  fixture.setTestState('uncertain');await reload();await expect(panel.locator('.alarm-test-result dd').first()).toHaveText('Uncertain');await expect(panel).toContainText('Uncertain tests are never automatically replayed.');
+ diagnostics.mark('setup-idle-guard');
  const beforeIdle={...fixture.counts};await page.clock.runFor(1000);expect(fixture.counts).toEqual(beforeIdle);
  await page.setViewportSize({width:390,height:844});
  for(const locale of ['en','de']){
+  diagnostics.mark(`setup-mobile-${locale}`);
   if(locale==='de')await page.getByLabel('Language',{exact:true}).selectOption('de');
   await expect(page.locator('html')).toHaveAttribute('lang',locale);await expect(panel.locator('.alarm-test-result dd').first()).toHaveText(locale==='de'?'Ungewiss':'Uncertain');await noReadback();
   await capture(`synthetic-http-test-alarm-setup-test-uncertain-mobile-${locale}`);
@@ -129,11 +160,13 @@ export async function alarmSettingsBrowserCase({pageAt,login,expect,base,shot}) 
   await panel.getByRole('button',{name:locale==='de'?'Abbrechen':'Cancel',exact:true}).click();expect(fixture.counts.settingsWrites).toBe(1);expect(fixture.counts.testWrites).toBe(1);await noReadback();
  }
  await page.setViewportSize({width:1440,height:1000});await capture('synthetic-http-test-alarm-setup-test-uncertain-desktop-de');
+ diagnostics.mark('setup-disable');
  await panel.getByRole('button',{name:'Alarme deaktivieren',exact:true}).click();expect(fixture.counts.settingsWrites).toBe(1);await expect(panel.locator('input')).toHaveCount(0);
  await panel.getByRole('button',{name:'Deaktivierung bestätigen',exact:true}).click();await expect(panel.locator('.alarm-settings-readback')).toHaveText(`${fixtureHost} · Aus`);
  expect(fixture.counts.settingsWrites).toBe(2);expect(fixture.counts.testWrites).toBe(1);expect(fixture.settings().enabled).toBe(false);await noReadback();
  await aggregate.getByRole('button',{name:'Alarmstatus aktualisieren',exact:true}).click();await expect(aggregate.locator('.alarm-mode')).toHaveText('Aus');
  await page.setViewportSize({width:390,height:844});await capture('synthetic-http-test-alarm-setup-disabled-mobile-de');
+ diagnostics.mark('setup-final-guards');
  expect(requests.filter(value=>value==='POST /api/alerts/settings')).toHaveLength(2);expect(requests.filter(value=>value==='POST /api/alerts/test')).toHaveLength(1);
  expect(requests.every(value=>['GET /api/alerts/settings','GET /api/alerts/status','POST /api/alerts/settings','POST /api/alerts/test'].includes(value))).toBe(true);expect(unexpected).toEqual([]);expect(external).toEqual([]);
 }

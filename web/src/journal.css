@@ -69,3 +69,7 @@
 .journal-captured-window{display:flex;align-items:center;gap:6px;flex-wrap:wrap;color:var(--secondary);font-size:11px;margin:0 0 14px;line-height:1.5}
 
 .journal-request-summary{overflow-wrap:anywhere}.journal-request-summary code{font-size:11px}
+
+.journal-service-label{display:block;font-size:12px;color:var(--secondary);margin-top:3px}
+.journal-snapshot-age{font-size:11px;color:var(--secondary);line-height:1.6;margin:12px 0 0}
+.journal-preset-hint .button{min-height:30px;white-space:nowrap}

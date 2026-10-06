@@ -41,7 +41,7 @@ describe('bounded journal API and lifetime', () => {
         expect(group.querySelector('time')).toHaveAttribute('datetime', journalNow);
         expect(from).toHaveValue('2026-10-04T11:00'); expect(to).toHaveValue('2026-10-04T12:00');
         refreshing = true;
-        fireEvent.click(within(group).getByRole('button', { name: 'Refresh status and reference time' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Refresh status and reference time' }));
         await waitFor(() => expect(body).toBeDefined());
         const bytes = new TextEncoder().encode(JSON.stringify(outcome === 'invalid' ? { ...refreshed, expectedFloor: '-1' } : refreshed));
         const split = Math.floor(bytes.length / 2);
@@ -58,7 +58,8 @@ describe('bounded journal API and lifetime', () => {
             else { body.enqueue(bytes.slice(split, outcome === 'malformed' ? bytes.length - 1 : undefined)); body.close(); }
         });
         if (outcome === 'valid') {
-            await waitFor(() => expect(group.querySelector('time')).toHaveAttribute('datetime', refreshed.serverNow));
+            await waitFor(() => expect(document.querySelector('.journal-advanced time')).toHaveAttribute('datetime', refreshed.serverNow));
+            expect(group.querySelector('time')).toHaveAttribute('datetime', journalNow);
             expect(screen.getByLabelText('Exact service unit')).toBeEnabled();
             expect(screen.queryByRole('alert')).not.toBeInTheDocument();
             expect(signal?.aborted).toBe(false);
@@ -222,3 +223,76 @@ function openAdvanced() {
     const summary = screen.getByText(/^(Advanced|Erweitert)$/, { selector: 'summary' });
     if (!summary.closest('details')!.open) fireEvent.click(summary);
 }
+
+describe('explicit last-15-minute preparation', () => {
+    it('gets fresh manager time while preserving service, severity, search, page and original snapshot age', async () => {
+        let now = journalNow;
+        const fetch = server((url, init) => {
+            if (url === '/api/auth/session') return json({ ...journalSession, serverNow: now });
+            if (url === root) return json({ ...journalView(), serverNow: now });
+            if (url === `${root}/query`) {
+                const body = JSON.parse(String(init?.body));
+                return json({ ...journalPage([body.offset === 0 ? 'First synthetic row' : 'Second synthetic row'], body.search, body.offset, 2), serverNow: now });
+            }
+        });
+        open(); await screen.findByText('First synthetic row');
+        fireEvent.change(screen.getByLabelText('Literal text in captured messages'), { target: { value: 'synthetic' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Search capture' })); await waitFor(() => expect(screen.getByText('Applied search: “synthetic”')).toBeVisible());
+        fireEvent.click(screen.getByRole('button', { name: 'Next page' })); await screen.findByText('Second', { exact: false, selector: '.journal-message' });
+        openAdvanced(); fireEvent.change(screen.getByLabelText('Exact service unit'), { target: { value: 'sshd.service' } });
+        fireEvent.change(screen.getByLabelText('Include severity through'), { target: { value: '4' } });
+        const calls = fetch.mock.calls.length, queries = fetch.mock.calls.filter(([url]) => url === `${root}/query`).length;
+        now = '2026-10-04T12:04:00Z';
+        fireEvent.click(screen.getByRole('button', { name: 'Last 15 min' }));
+        await waitFor(() => expect(screen.getByLabelText('To (UTC)')).toHaveValue('2026-10-04T12:04'));
+        expect(screen.getByLabelText('From (UTC)')).toHaveValue('2026-10-04T11:49');
+        expect(screen.getByLabelText('Exact service unit')).toHaveValue('sshd.service');
+        expect(screen.getByLabelText('Include severity through')).toHaveValue('4');
+        expect(screen.getByLabelText('Literal text in captured messages')).toHaveValue('synthetic');
+        expect(screen.getByText('Second', { exact: false, selector: '.journal-message' })).toBeVisible();
+        expect(screen.getByRole('button', { name: 'Previous page' })).toBeEnabled();
+        expect(document.querySelector('.journal-snapshot-age')).toHaveTextContent('Age at last status check: 4 min');
+        expect(document.querySelector('.journal-snapshot-age time')).toHaveAttribute('datetime', journalNow);
+        expect(fetch.mock.calls.slice(calls).map(([url]) => url)).toEqual(['/api/auth/session', root]);
+        expect(fetch.mock.calls.filter(([url]) => url === `${root}/query`)).toHaveLength(queries);
+        expect(fetch.mock.calls.some(([url]) => url.endsWith('/create') || url.endsWith('/cancel') || url.includes('renew'))).toBe(false);
+        expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: 'Fetch logs' }));
+        expect(screen.getByRole('dialog')).toHaveTextContent('sshd.service');
+        expect(screen.getByRole('checkbox')).not.toBeChecked();
+        expect(screen.getByRole('button', { name: 'Capture logs' })).toBeDisabled();
+    });
+    it.each(['malformed', 'regressed', 'changed', 'changed-query', 'changed-certificate', 'changed-policy', 'changed-receipt', 'expired', 'session', 'interrupted'] as const)('does not update the draft or read new content after a %s status response', async outcome => {
+        let updating = false, finish!: (value: Response) => void;
+        const fetch = server(url => {
+            if (url === root && updating) return new Promise<Response>(resolve => { finish = resolve; });
+        });
+        open(); await screen.findByText('Synthetic fixture message');
+        openAdvanced(); fireEvent.change(screen.getByLabelText('Exact service unit'), { target: { value: 'draft.service' } });
+        const queries = fetch.mock.calls.filter(([url]) => url === `${root}/query`).length;
+        updating = true; fireEvent.click(screen.getByRole('button', { name: 'Last 15 min' }));
+        await waitFor(() => expect(finish).toBeDefined());
+        fireEvent.click(screen.getByRole('button', { name: 'Last 15 min' }));
+        if (outcome === 'interrupted') act(() => window.dispatchEvent(new Event('blur')));
+        const value = journalView(outcome === 'expired' ? 'expired' : 'accepted');
+        if (outcome === 'changed-query') value.request!.description.query.unit = 'different.service';
+        if (outcome === 'changed-certificate') value.request!.description.certificateHash = '1'.repeat(64);
+        if (outcome === 'changed-policy') value.request!.receipt!.policyDigest = `sha256:${'1'.repeat(64)}`;
+        if (outcome === 'changed-receipt') { value.serverNow = '2026-10-04T12:01:00Z'; value.request!.receipt!.acceptedAt = value.serverNow; }
+        if (outcome === 'regressed') value.serverNow = '2026-10-04T11:59:00Z';
+        if (outcome === 'changed') { value.request!.description.identity.sequence = '2'; value.expectedFloor = '2'; value.request!.receipt!.identity.sequence = '2'; }
+        await act(async () => finish(outcome === 'malformed' ? new Response('{') : outcome === 'session' ? json({}, 401) : json(value)));
+        if (outcome !== 'interrupted') await screen.findByRole('alert');
+        if (outcome === 'session') {
+            expect(screen.queryByRole('button', { name: 'Last 15 min' })).not.toBeInTheDocument();
+            expect(screen.queryByRole('button', { name: 'Fetch logs' })).not.toBeInTheDocument();
+        } else {
+            expect(screen.getByLabelText('To (UTC)')).toHaveValue('2026-10-04T12:00');
+            expect(screen.getByLabelText('From (UTC)')).toHaveValue('2026-10-04T11:45');
+            expect(screen.getByLabelText('Exact service unit')).toHaveValue('draft.service');
+        }
+        expect(fetch.mock.calls.filter(([url]) => url === root)).toHaveLength(2);
+        expect(fetch.mock.calls.filter(([url]) => url === `${root}/query`)).toHaveLength(queries);
+        expect(fetch.mock.calls.some(([url]) => url.endsWith('/create') || url.endsWith('/cancel') || url.includes('renew'))).toBe(false);
+    });
+});

@@ -5,7 +5,7 @@ import { journalNow, journalPage, journalView } from './journal-fixtures';
 import type { JournalResource } from './journal-resource';
 import { setLocale } from './i18n';
 function resource(change: Partial<JournalResource> = {}): JournalResource {
-    return { view: journalView('awaiting'), page: null, busy: false, paused: false, failure: null, uncertain: false, reset: 0, refresh: vi.fn(), create: vi.fn(async () => {}), cancelRequest: vi.fn(), search: vi.fn(), next: vi.fn(), previous: vi.fn(), canPrevious: false, ...change };
+    return { view: journalView('awaiting'), page: null, busy: false, paused: false, failure: null, uncertain: false, reset: 0, refresh: vi.fn(), refreshWindow: vi.fn(async () => null), create: vi.fn(async () => {}), cancelRequest: vi.fn(), search: vi.fn(), next: vi.fn(), previous: vi.fn(), canPrevious: false, ...change };
 }
 beforeEach(() => setLocale('en', false));
 afterEach(cleanup);
@@ -70,5 +70,32 @@ describe('compact log workspace presentation', () => {
         fireEvent.click(screen.getByRole('button', { name: 'Fetch logs' })); const dialog = screen.getByRole('dialog', { name: 'Review log request' });
         expect(within(dialog).getByText(/00\.001 UTC/)).toBeVisible(); expect(within(dialog).getByText(/00\.002 UTC/)).toBeVisible();
         expect(within(dialog).getByRole('checkbox')).not.toBeChecked(); expect(r.create).not.toHaveBeenCalled();
+    });
+});
+
+describe('fresh capture drafts and retained snapshot context', () => {
+    it('shows the exact selected unit ahead of a shared human label', () => {
+        render(<JournalContent resource={resource()} insecureTestMode={false} initialUnit="sshd.service"/>);
+        expect(document.querySelector('.journal-source-choice strong')).toHaveTextContent('sshd.service');
+        expect(document.querySelector('.journal-source-choice')).toHaveTextContent('SSH remote login');
+        expect(screen.getByLabelText('Exact service unit')).toHaveValue('sshd.service');
+    });
+    it('keeps the draft end visible when a status read advances the reference clock', () => {
+        const r = resource(), rendered = render(<JournalContent resource={r} insecureTestMode={false}/>);
+        rendered.rerender(<JournalContent resource={{ ...r, view: { ...r.view!, serverNow: '2026-10-04T12:04:00Z' } }} insecureTestMode={false}/>);
+        expect(document.querySelector('.journal-preset-hint')).toHaveTextContent('Draft ends');
+        expect(document.querySelector('.journal-preset-hint time')).toHaveAttribute('datetime', journalNow);
+        expect(r.refreshWindow).not.toHaveBeenCalled();
+    });
+    it('uses the immutable capture observation for age and shows empty-unit guidance only for a complete empty capture', () => {
+        const r = resource({ view: { ...journalView(), serverNow: '2026-10-04T12:04:00Z' }, page: journalPage([]) });
+        const rendered = render(<JournalContent resource={r} insecureTestMode={false} initialUnit="different.service"/>);
+        const age = document.querySelector('.journal-snapshot-age')!;
+        expect(age).toHaveTextContent('Age at last status check: 4 min');
+        expect(age.querySelector('time')).toHaveAttribute('datetime', journalNow);
+        expect(screen.getByText(/Alias targets are not reported here/)).toBeVisible();
+        rendered.rerender(<JournalContent resource={{ ...r, page: { ...r.page!, coverage: 'partial', reason: 'item_limit' } }} insecureTestMode={false}/>);
+        expect(screen.queryByText(/Alias targets are not reported here/)).not.toBeInTheDocument();
+        expect(r.create).not.toHaveBeenCalled(); expect(r.search).not.toHaveBeenCalled();
     });
 });

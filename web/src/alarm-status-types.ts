@@ -1,3 +1,5 @@
+/** Local notification only; listeners re-read status and never trust event data. */
+export const ALARM_DELIVERY_CHANGED_EVENT = 'tracebolt:alarm-delivery-changed';
 /** The existing read-only aggregate contract; no event or destination data. */
 export const ALARM_STATUS_BYTES = 4096;
 const counts = ['queued', 'inFlight', 'providerAccepted', 'failed', 'uncertain', 'suppressed', 'dropped'] as const;

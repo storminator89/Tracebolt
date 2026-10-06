@@ -80,7 +80,7 @@ describe('Linux log source guidance is discovery, never authority', () => {
         await screen.findByText('ssh.service'); expect(screen.getByLabelText('Search observed services')).toHaveValue('');
     });
     it('shortcut selection inside a ready capture form does not submit or acknowledge a new source', async () => {
-        const resource: JournalResource = { view: { ...journalView('awaiting'), deviceId: systemDevice }, page: null, busy: false, paused: false, failure: null, uncertain: false, reset: 0, refresh: vi.fn(), create: vi.fn(async () => undefined), cancelRequest: vi.fn(), search: vi.fn(), next: vi.fn(), previous: vi.fn(), canPrevious: false };
+        const resource: JournalResource = { view: { ...journalView('awaiting'), deviceId: systemDevice }, page: null, busy: false, paused: false, failure: null, uncertain: false, reset: 0, refresh: vi.fn(), refreshWindow: vi.fn(async () => null), create: vi.fn(async () => undefined), cancelRequest: vi.fn(), search: vi.fn(), next: vi.fn(), previous: vi.fn(), canPrevious: false };
         render(<JournalContent resource={resource} insecureTestMode={false} sessionKey="source-form"/>);
         openAdvanced(); fireEvent.change(screen.getByLabelText('Exact service unit'), { target: { value: 'manual.service' } });
         expect(screen.getByRole('button', { name: 'Fetch logs' })).toBeEnabled(); expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();

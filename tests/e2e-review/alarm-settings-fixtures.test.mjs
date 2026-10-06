@@ -62,3 +62,12 @@ test('the existing read-only alarm case allows only extra setup GETs and retains
  const module=read('./alarm-status-browser.mjs');assert.match(module,/url.pathname==='\/api\/alerts\/status'/);assert.match(module,/setupRequests.every\(value=>value==='GET \/api\/alerts\/settings'\)/);
  assert.match(module,/expect\(mutations\)\.toEqual\(\[\]\)/);assert.match(module,/expect\(externalRequests\)\.toEqual\(\[\]\)/);assert.match(module,/expect\(alarmRequests.length\)\.toBe\(reads\)/);
 });
+
+
+test('captures reconcile the independent aggregate snapshot using only its explicit read control',()=>{
+ const source=read('./alarm-settings-browser.mjs');
+ assert.match(source,/const refreshAggregate=async/);assert.match(source,/const capture=async[^\n]*await refreshAggregate\(\)/);
+ assert.match(source,/fixture.counts.statusReads/);assert.match(source,/const german=.*state=fixture.status\(\)/);
+ assert.match(source,/aggregate.locator\('\.alarm-mode'\)/);assert.match(source,/aggregate.locator\('\.alarm-counts dd'\)/);
+ assert.match(source,/enabled:current.enabled/);assert.match(source,/expect\(fixture.counts.testWrites\).toBe\(1\)/);
+});

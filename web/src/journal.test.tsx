@@ -4,7 +4,7 @@ import { JournalContent, JournalHighlight } from './journal';
 import type { JournalResource } from './journal-resource';
 import { journalPage, journalView } from './journal-fixtures';
 import { setLocale } from './i18n';
-function resource(change: Partial<JournalResource> = {}): JournalResource { return { view: journalView('awaiting'), page: null, busy: false, paused: false, failure: null, uncertain: false, reset: 0, refresh: vi.fn(), create: vi.fn(async () => undefined), cancelRequest: vi.fn(), search: vi.fn(), next: vi.fn(), previous: vi.fn(), canPrevious: false, ...change }; }
+function resource(change: Partial<JournalResource> = {}): JournalResource { return { view: journalView('awaiting'), page: null, busy: false, paused: false, failure: null, uncertain: false, reset: 0, refresh: vi.fn(), refreshWindow: vi.fn(async () => null), create: vi.fn(async () => undefined), cancelRequest: vi.fn(), search: vi.fn(), next: vi.fn(), previous: vi.fn(), canPrevious: false, ...change }; }
 beforeEach(() => setLocale('en', false));
 afterEach(cleanup);
 describe('compact journal controls and truthful states', () => {

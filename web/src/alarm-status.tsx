@@ -3,7 +3,7 @@ import { Bell, BellOff, Check, ChevronDown, CircleHelp, Clock3, RefreshCw, Trian
 import { APIError, AUTH_REQUIRED_EVENT, getProtectedRequestEpoch, request } from './api';
 import { hasLogoutIntent, LOGOUT_INTENT_KEY, useOperator } from './auth';
 import { useLocale } from './i18n';
-import { ALARM_STATUS_BYTES, validAlarmStatus } from './alarm-status-types';
+import { ALARM_DELIVERY_CHANGED_EVENT, ALARM_STATUS_BYTES, validAlarmStatus } from './alarm-status-types';
 import type { AlarmStatus } from './alarm-status-types';
 import './alarm-status.css';
 
@@ -81,7 +81,14 @@ function useAlarmStatus() {
         const visibility = () => document.visibilityState === 'hidden' ? suspend() : resume();
         const navigate = () => { cancel(); setSnapshot(null); setLoading(false); setFailure('paused'); };
         const storage = (event: StorageEvent) => { if ((event.key === LOGOUT_INTENT_KEY || event.key === null) && hasLogoutIntent()) lock(); };
+        const localChange = () => {
+            if (!authorized() || suspended || hidden()) return;
+            // A read started before the change must not win over its fresh read.
+            // Keep the last valid snapshot; loading/failure marks it previous.
+            cancel(); void read();
+        };
         refresh.current = () => { void read(); };
+        window.addEventListener(ALARM_DELIVERY_CHANGED_EVENT, localChange);
         window.addEventListener(AUTH_REQUIRED_EVENT, lock); window.addEventListener('pagehide', suspend); window.addEventListener('pageshow', resume);
         window.addEventListener('hashchange', navigate); window.addEventListener('storage', storage); document.addEventListener('visibilitychange', visibility);
         // No network polling: only clear visible private data if access is revoked.
@@ -89,6 +96,7 @@ function useAlarmStatus() {
         void read();
         return () => {
             alive = false; cancel(); window.clearInterval(guard); refresh.current = () => {};
+            window.removeEventListener(ALARM_DELIVERY_CHANGED_EVENT, localChange);
             window.removeEventListener(AUTH_REQUIRED_EVENT, lock); window.removeEventListener('pagehide', suspend); window.removeEventListener('pageshow', resume);
             window.removeEventListener('hashchange', navigate); window.removeEventListener('storage', storage); document.removeEventListener('visibilitychange', visibility);
         };

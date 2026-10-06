@@ -4,6 +4,7 @@ import { abortProtectedRequests, APIError, AUTH_REQUIRED_EVENT, mutateRaw, reque
 import { LOGOUT_INTENT_KEY, useOperator } from './auth';
 import { setLocale } from './i18n';
 import { AlarmSettingsPanel } from './alarm-settings';
+import { AlarmStatusPanel } from './alarm-status';
 import { ALARM_ENDPOINT_MAX, ALARM_SETTINGS_BYTES, createAlarmTestRequestId, validAlarmEndpoint, validAlarmSettings } from './alarm-settings-types';
 import type { AlarmSettings } from './alarm-settings-types';
 
@@ -212,5 +213,47 @@ describe('real same-origin API transport', () => {
         await replace(); const real = await vi.importActual<typeof import('./api')>('./api'); vi.mocked(mutateRaw).mockImplementation(real.mutateRaw); const held = deferred<Response>(); const fetch = vi.fn().mockReturnValue(held.promise); vi.stubGlobal('fetch', fetch);
         fireEvent.click(button('Save and enable')); act(() => abortProtectedRequests()); await act(async () => held.resolve(new Response(JSON.stringify({ csrfToken: 'fixture-csrf' }), { status: 200 }))); await advance(1000);
         expect(fetch).toHaveBeenCalledTimes(1); expect(refresh()).toBeDisabled(); expect(panel()).not.toHaveTextContent('Settings saved');
+    });
+});
+
+
+describe('composed alarm panels after confirmed local mutations', () => {
+    const status = (enabled = false, queuedCount = 0, accepted = 0) => ({ schemaVersion: 'tracebolt.alarm-status.v1', enabled, queued: queuedCount, inFlight: 0, providerAccepted: accepted, failed: 0, uncertain: 0, suppressed: 0, dropped: 0 });
+    const delivery = () => screen.getByRole('region', { name: 'Alarm delivery' });
+    const mode = () => delivery().querySelector('.alarm-mode');
+    const statusReads = () => vi.mocked(request).mock.calls.filter(call => call[0] === '/alerts/status');
+    const compose = async () => { render(<><AlarmStatusPanel/><AlarmSettingsPanel/></>); await flush(); };
+    const fillNew = () => { open(); fireEvent.click(button('Add destination')); fireEvent.change(input(), { target: { value: destination } }); acknowledgePayload(); };
+    it('reads actual status after a confirmed save, shows no optimistic On, and never replays the write', async () => {
+        const fresh = deferred<unknown>(), saved = deferred<AlarmSettings>(); let reads = 0;
+        vi.mocked(request).mockImplementation(async path => path === '/alerts/settings' ? empty() : ++reads === 1 ? status() : fresh.promise);
+        vi.mocked(mutateRaw).mockReturnValue(saved.promise); await compose(); expect(mode()).toHaveTextContent('Off'); fillNew();
+        fireEvent.click(button('Save and enable')); await flush(); expect(statusReads()).toHaveLength(1); expect(mode()).toHaveTextContent('Off'); expect(mutateRaw).toHaveBeenCalledTimes(1);
+        await act(async () => saved.resolve({ ...configured(), revision: nextRevision })); expect(statusReads()).toHaveLength(2); expect(mode()).toHaveTextContent('Unknown'); expect(delivery()).toHaveTextContent('Previous snapshot');
+        expect(mutateRaw).toHaveBeenCalledTimes(1); expect(vi.mocked(mutateRaw).mock.calls[0][0]).toBe('/alerts/settings');
+        await act(async () => fresh.resolve(status(true, 2))); expect(mode()).toHaveTextContent('On'); expect(delivery().querySelector('.alarm-counts div:nth-child(2) dd')).toHaveTextContent('2');
+        await advance(1000); expect(statusReads()).toHaveLength(2); expect(mutateRaw).toHaveBeenCalledTimes(1); expect(panel().querySelector('input')).toBeNull();
+    });
+    it('keeps previous counts and unknown current status when the follow-up read fails, with read-only explicit recovery', async () => {
+        let reads = 0;
+        vi.mocked(request).mockImplementation(async path => { if (path === '/alerts/settings') return empty(); reads++; if (reads === 2) throw new APIError('Synthetic status failure', 503); return status(reads > 1, 0, 7); });
+        vi.mocked(mutateRaw).mockResolvedValue({ ...configured(), revision: nextRevision }); await compose(); fillNew(); fireEvent.click(button('Save and enable')); await flush();
+        expect(mode()).toHaveTextContent('Unknown'); expect(delivery()).toHaveTextContent('Previous snapshot'); expect(delivery()).toHaveTextContent('Alarm status could not be confirmed'); expect(delivery().querySelector('.alarm-counts dd')).toHaveTextContent('7');
+        await advance(1000); expect(statusReads()).toHaveLength(2); expect(mutateRaw).toHaveBeenCalledTimes(1);
+        fireEvent.click(button('Refresh alarm status')); await flush(); expect(statusReads()).toHaveLength(3); expect(mode()).toHaveTextContent('On'); expect(mutateRaw).toHaveBeenCalledTimes(1);
+    });
+    it('cancels a pre-change read so its late result cannot overwrite the confirmed mutation status', async () => {
+        const old = deferred<unknown>(); let reads = 0;
+        vi.mocked(request).mockImplementation(async path => path === '/alerts/settings' ? empty() : ++reads === 1 ? old.promise : status(true, 1));
+        vi.mocked(mutateRaw).mockResolvedValue({ ...configured(), revision: nextRevision }); await compose(); const oldSignal = statusReads()[0][1]?.signal;
+        fillNew(); fireEvent.click(button('Save and enable')); await flush(); expect(oldSignal?.aborted).toBe(true); expect(statusReads()).toHaveLength(2); expect(mode()).toHaveTextContent('On');
+        await act(async () => old.resolve(status(false))); expect(mode()).toHaveTextContent('On'); expect(delivery().querySelector('.alarm-counts div:nth-child(2) dd')).toHaveTextContent('1'); expect(mutateRaw).toHaveBeenCalledTimes(1);
+    });
+    it('refreshes counts only after the explicit test mutation is confirmed and does not send another test', async () => {
+        let reads = 0; vi.mocked(request).mockImplementation(async path => path === '/alerts/settings' ? configured() : status(true, ++reads > 1 ? 1 : 0));
+        vi.mocked(mutateRaw).mockResolvedValue(queued()); await compose(); open(); fireEvent.click(button('Test destination')); expect(statusReads()).toHaveLength(1); expect(mutateRaw).not.toHaveBeenCalled();
+        fireEvent.click(screen.getByRole('checkbox', { name: 'Send this synthetic test to the saved destination now.' })); fireEvent.click(button('Confirm and send test')); await flush();
+        expect(statusReads()).toHaveLength(2); expect(delivery().querySelector('.alarm-counts div:nth-child(2) dd')).toHaveTextContent('1'); expect(mutateRaw).toHaveBeenCalledTimes(1); expect(vi.mocked(mutateRaw).mock.calls[0][0]).toBe('/alerts/test');
+        await advance(1000); expect(statusReads()).toHaveLength(2); expect(mutateRaw).toHaveBeenCalledTimes(1);
     });
 });

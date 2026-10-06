@@ -39,6 +39,29 @@ text, outside AI packets, diagnostics, exports and automatic notifications.
 Source tests are deliberately invented and do not demonstrate effective journal
 permissions or real source completeness.
 
+## Choosing the exact unit and capture window
+
+The service picker leads with the exact observed unit name, with a human-readable
+purpose label underneath. An `alias` unit-file state is shown only when the
+retained systemd inventory reports it. The inventory does not contain alias
+targets: the UI does not infer a target, rewrite a selection or expand a grant.
+A complete empty capture suggests checking the exact unit, time and severity;
+it is not proof that an alias target has no journal entries.
+
+**Last 15 min** explicitly checks the current manager time and prepares that
+window in the draft. It does not capture content, renew the operator session or
+approve either content acknowledgement. Service and severity remain selected;
+the retained snapshot, search and page remain unchanged when the status read
+confirms the same request and authority. A changed request or invalid/interrupted
+read fails closed and does not apply a new time window. Fetch logs still opens
+review for the exact unit, window and severity, with unchecked acknowledgements.
+
+The main time label is the **draft end**, not a moving reference clock. Results
+keep their original requested window and source observation time; snapshot age
+is explicitly measured at the last status check. Refreshing status never makes
+old content a newer capture. These are synthetic UI/contract checks, not native
+journal, Debian alias-resolution or installed-service acceptance.
+
 ## Permission design: dedicated helper, no root agent
 
 The main agent keeps its existing numeric identity and group guard. The

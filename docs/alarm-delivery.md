@@ -179,8 +179,12 @@ visible. Details explain the individual states and retained-history limits.
 Provider acceptance is never described as receipt by a person. These aggregate
 counts cannot confirm any individual opening or recovery event.
 
-The panel performs only the existing status GET on entry or explicit refresh,
-with no polling, automatic retry, send or configuration action. Loading time is
+The panel performs only the existing status GET on entry, explicit refresh, or
+a confirmed local settings/test mutation. A local notification carries no state;
+the panel cancels an older pending read and fetches actual counts through its
+existing session, visibility and cancellation guards. No optimistic On/Off, polling,
+automatic retry, send or configuration action is introduced. A failed follow-up
+read keeps the prior snapshot marked previous with current status unknown. Loading time is
 labelled using the browser clock, because the API has no server observation time.
 A failed refresh keeps the last valid snapshot visibly marked as previous, with
 its original loading time and unknown current status. Session loss, navigation or

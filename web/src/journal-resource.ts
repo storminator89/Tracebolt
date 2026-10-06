@@ -69,12 +69,36 @@ export function useJournal(deviceId: string, insecureTestMode: boolean, sessionK
         clear(mutation ? 'uncertain' : caught instanceof APIError && [404, 409, 410].includes(caught.status ?? 0) ? 'conflict' : 'load');
         if (mutation) setUncertain(true);
     }, [clear]);
-    const refresh = useCallback(async (quiet = false) => {
-        if (pending.current) return;
-        if (!quiet) clear(); if (!validJournalDevice(deviceId)) { setFailure('invalid'); return; }
-        const op = begin(false); if (!op) return;
-        try { const value = await readJournal(deviceId, op.signal, insecureTestMode, sessionKey); if (op.active() && acceptView(value, op.started)) setUncertain(false); }
-        catch (caught) { if (op.active()) fail(caught, false); } finally { op.finish(); }
+    const refresh = useCallback(async (quiet = false, preserveCapture = false): Promise<string | null> => {
+        if (pending.current) return null;
+        if (!quiet) clear(); if (!validJournalDevice(deviceId)) { setFailure('invalid'); return null; }
+        const op = begin(false); if (!op) return null;
+        try {
+            const value = await readJournal(deviceId, op.signal, insecureTestMode, sessionKey);
+            if (!op.active()) return null;
+            // Preparing a fresh draft is a status-only read. Keep the retained
+            // page/search/history only while it is still the same capture.
+            // A changed request needs the ordinary explicit refresh flow.
+            const prior = current.current;
+            if (preserveCapture && validJournalView(value, deviceId) && prior && (
+                value.configured !== prior.configured || value.contentStatus !== prior.contentStatus || value.localStatus !== prior.localStatus ||
+                Boolean(value.request) !== Boolean(prior.request) || value.request && prior.request && (
+                    !sameJournalIdentity(value.request.description.identity, prior.request.description.identity) ||
+                    value.request.description.certificateHash !== prior.request.description.certificateHash ||
+                    Boolean(value.request.description.policyGeneration) !== Boolean(prior.request.description.policyGeneration) ||
+                    value.request.description.policyGeneration && prior.request.description.policyGeneration && !sameJournalGeneration(value.request.description.policyGeneration, prior.request.description.policyGeneration) ||
+                    value.request.description.query.unit !== prior.request.description.query.unit ||
+                    value.request.description.query.start !== prior.request.description.query.start ||
+                    value.request.description.query.end !== prior.request.description.query.end ||
+                    value.request.description.query.maxPriority !== prior.request.description.query.maxPriority ||
+                    value.request.state !== prior.request.state || value.request.receipt?.acceptedAt !== prior.request.receipt?.acceptedAt ||
+                    value.request.receipt?.policyDigest !== prior.request.receipt?.policyDigest ||
+                    value.request.receipt?.resultDigest !== prior.request.receipt?.resultDigest
+                )
+            )) { clear('conflict'); return null; }
+            if (acceptView(value, op.started)) { setUncertain(false); return current.current!.serverNow; }
+        } catch (caught) { if (op.active()) fail(caught, false); } finally { op.finish(); }
+        return null;
     }, [acceptView, begin, clear, deviceId, fail, insecureTestMode, sessionKey]);
     const loadPage = useCallback(async (search: string, offset: number, previous: number[]) => {
         const view = current.current;
@@ -161,6 +185,7 @@ export function useJournal(deviceId: string, insecureTestMode: boolean, sessionK
             if (!alive.current || locked.current || document.visibilityState === 'hidden' || hasLogoutIntent() || protectedScope.current !== getProtectedRequestEpoch()) return;
             suspended.current = false; setPaused(false); void refresh();
         },
+        refreshWindow: () => refresh(true, true),
         create, cancelRequest: () => void cancelRequest(), search: (text: string) => void loadPage(text, 0, []),
         next: () => { const p = page.current; if (p?.nextOffset != null) void loadPage(p.search, p.nextOffset, [...history.current, p.offset]); },
         previous: () => { const p = page.current, previous = history.current; if (p && previous.length) void loadPage(p.search, previous[previous.length - 1], previous.slice(0, -1)); },

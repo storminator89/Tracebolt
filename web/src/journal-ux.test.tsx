@@ -11,7 +11,7 @@ import { setLocale } from './i18n';
 vi.mock('./api', async original => ({ ...await original<typeof import('./api')>(), request: vi.fn(), mutateRaw: vi.fn() }));
 vi.mock('./auth', async original => ({ ...await original<typeof import('./auth')>(), useOperator: vi.fn() }));
 function resource(change: Partial<JournalResource> = {}): JournalResource {
-    return { view: journalView('awaiting'), page: null, busy: false, paused: false, failure: null, uncertain: false, reset: 0, refresh: vi.fn(), create: vi.fn(async () => undefined), cancelRequest: vi.fn(), search: vi.fn(), next: vi.fn(), previous: vi.fn(), canPrevious: false, ...change };
+    return { view: journalView('awaiting'), page: null, busy: false, paused: false, failure: null, uncertain: false, reset: 0, refresh: vi.fn(), refreshWindow: vi.fn(async () => null), create: vi.fn(async () => undefined), cancelRequest: vi.fn(), search: vi.fn(), next: vi.fn(), previous: vi.fn(), canPrevious: false, ...change };
 }
 function servicesView() { return { ...systemView(250), deviceId: journalDevice }; }
 const ui = (r: JournalResource, plaintext = false) => <JournalContent resource={r} insecureTestMode={plaintext} sessionKey={journalSessionExpiry}/>;
@@ -97,7 +97,7 @@ describe('journal parent form integration and trusted time presets', () => {
         const reads = vi.mocked(request).mock.calls.length; await act(async () => { await vi.advanceTimersByTimeAsync(14 * 60000); });
         expect(screen.getByText('Reference-time retained synthetic row')).toBeVisible(); expect(screen.getByLabelText('From (UTC)')).toHaveValue('2026-10-04T11:30'); expect(screen.getByLabelText('To (UTC)')).toHaveValue('2026-10-04T11:40');
         const group = screen.getByRole('group', { name: 'Windows ending at the displayed reference time' }), button = within(group).getByRole('button', { name: '15 minutes ending at reference time' });
-        expect(button).toHaveAccessibleDescription(`Reference time (UTC, last checked manager time): ${journalNow}`); expect(within(group).getByRole('button', { name: 'Refresh status and reference time' })).toHaveAttribute('type', 'button'); expect(screen.queryByRole('button', { name: /^Last / })).not.toBeInTheDocument();
+        expect(button).toHaveAccessibleDescription(`Reference time (UTC, last checked manager time): ${journalNow}`); expect(screen.getByRole('button', { name: 'Refresh status and reference time' })).toHaveAttribute('type', 'button'); expect(screen.getByRole('button', { name: 'Last 15 min' })).toBeVisible();
         fireEvent.click(button); expect(screen.getByLabelText('From (UTC)')).toHaveValue('2026-10-04T11:45'); expect(screen.getByLabelText('To (UTC)')).toHaveValue('2026-10-04T12:00'); expect(screen.getByLabelText('Exact service unit')).toHaveValue('next-draft.service'); expect(screen.getByLabelText('Include severity through')).toHaveValue('3'); expect(screen.getByText('Reference-time retained synthetic row')).toBeVisible(); expect(button).toHaveAttribute('aria-pressed', 'true'); expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
         expect(request).toHaveBeenCalledTimes(reads); expect(mutateRaw).toHaveBeenCalledTimes(1); expect(vi.mocked(mutateRaw).mock.calls[0][0]).toBe(`/devices/${journalDevice}/journal/query`);
     });

@@ -5,6 +5,7 @@ import { hasLogoutIntent, LOGOUT_INTENT_KEY, useOperator } from './auth';
 import { useLocale } from './i18n';
 import { ALARM_ENDPOINT_MAX, ALARM_SETTINGS_BYTES, createAlarmTestRequestId, validAlarmEndpoint, validAlarmSettings } from './alarm-settings-types';
 import type { AlarmSettings, AlarmSettingsChange, AlarmTestRequest } from './alarm-settings-types';
+import { ALARM_DELIVERY_CHANGED_EVENT } from './alarm-status-types';
 import './alarm-settings.css';
 
 const copy = {
@@ -102,7 +103,13 @@ function useAlarmSettings(canManage: boolean, clearForm: () => void, conceal: ()
                 const elapsed = performance.now() - mono;
                 if (elapsed < 0 || elapsed >= 10000 || Math.abs(Date.now() - wall - elapsed) > 1500) { fail(write ? 'writeUncertain' : 'timeout'); return; }
                 if (!validAlarmSettings(value)) { fail(write ? 'writeUncertain' : 'invalid'); return; }
-                latest = value; setView(value); if (write) setNotice(write.kind === 'test' ? 'testQueued' : 'saved');
+                latest = value; setView(value);
+                if (write) {
+                    setNotice(write.kind === 'test' ? 'testQueued' : 'saved');
+                    // Only a verified, current local mutation prompts a new read.
+                    // No settings data becomes an optimistic delivery snapshot.
+                    window.dispatchEvent(new Event(ALARM_DELIVERY_CHANGED_EVENT));
+                }
             } catch (error) {
                 if (!active()) return;
                 if (error instanceof APIError && [401, 403].includes(error.status ?? 0)) { lock(); return; }

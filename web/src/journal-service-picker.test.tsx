@@ -29,7 +29,7 @@ describe('observed-service picker uses only bounded protected inventory reads', 
     it('integrates lazily with the capture form and preserves acknowledgement and manual-entry boundaries', async () => {
         const resource: JournalResource = {
             view: { ...journalView('awaiting'), deviceId: systemDevice }, page: null, busy: false, paused: false, failure: null, uncertain: false, reset: 0,
-            refresh: vi.fn(), create: vi.fn(async () => undefined), cancelRequest: vi.fn(), search: vi.fn(), next: vi.fn(), previous: vi.fn(), canPrevious: false,
+            refresh: vi.fn(), refreshWindow: vi.fn(async () => null), create: vi.fn(async () => undefined), cancelRequest: vi.fn(), search: vi.fn(), next: vi.fn(), previous: vi.fn(), canPrevious: false,
         };
         render(<JournalContent resource={resource} insecureTestMode sessionKey="picker-integration"/>);
         expect(request).not.toHaveBeenCalled(); expect(mutateRaw).not.toHaveBeenCalled();
@@ -235,3 +235,25 @@ function openAdvanced() {
     const summary = screen.getByText(/^(Advanced|Erweitert)$/, { selector: 'summary' });
     if (!summary.closest('details')!.open) fireEvent.click(summary);
 }
+
+it('marks only metadata-reported aliases and never guesses or rewrites their targets', async () => {
+    services = [
+        { ...serviceRows(1)[0], name: 'ssh.service', enablement: 'enabled' },
+        { ...serviceRows(1)[0], name: 'sshd.service', enablement: 'alias', runtime: null },
+        { ...serviceRows(1)[0], name: 'unknown.service', enablement: 'alias', runtime: null },
+    ];
+    view = systemView(services.length); await open();
+    const ssh = screen.getByText('ssh.service').closest('li')!, sshd = screen.getByText('sshd.service').closest('li')!;
+    expect(ssh.querySelector('strong')).toHaveTextContent('ssh.service');
+    expect(within(ssh).queryByText('Reported alias · target unavailable')).not.toBeInTheDocument();
+    expect(within(sshd).getByText('Reported alias · target unavailable')).toBeVisible();
+    expect(screen.getAllByText('Reported alias · target unavailable')).toHaveLength(2);
+    const before = vi.mocked(mutateRaw).mock.calls.length;
+    fireEvent.click(screen.getByRole('button', { name: 'Use sshd.service' }));
+    expect(select).toHaveBeenCalledExactlyOnceWith('sshd.service');
+    expect(mutateRaw).toHaveBeenCalledTimes(before);
+    services[1] = { ...services[1], enablement: null, runtime: serviceRows(1)[0].runtime };
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh service list' }));
+    await waitFor(() => expect(screen.getAllByText('Reported alias · target unavailable')).toHaveLength(1));
+    expect(within(screen.getByText('sshd.service').closest('li')!).queryByText('Reported alias · target unavailable')).not.toBeInTheDocument();
+});

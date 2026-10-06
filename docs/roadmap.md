@@ -39,11 +39,13 @@ not activate a feature or change consent on an installed host:
   cases from supported observations with their original evidence and timestamps.
   Keep incomplete/stale input and unknown health explicit. The current LAN Cases
   page does not yet create these investigations and has no hidden setup switch.
-- **Service-log selection that handles aliases and time clearly.** Prefer observed
-  canonical service names, explain aliases such as ssh.service versus sshd.service,
-  and make a new capture window distinct from searching an older snapshot. Avoid
-  requiring users to guess an internal unit name. Preserve the exact service/time
-  request, explicit content approval and existing local scope boundaries.
+- **Service-log selection and capture time — implemented in source.** Exact
+  observed unit names and reported-alias hints reduce guesswork; an alias target
+  is never inferred. Last 15 min explicitly prepares a new draft window while
+  retained rows keep their original capture window and age. Empty capture and
+  empty search remain distinct. Exact service/time review, unchecked content
+  approval and local scope boundaries are preserved. New hosted layout/interaction
+  acceptance and native Debian service evidence remain separate pending gates.
 
 ## Current MVP priorities
 

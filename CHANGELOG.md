@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-10-06 — Clear log capture windows and confirmed alarm readback
+
+- Lead log selection with the exact observed service unit and a human-purpose label. Report aliases only when the observation says alias; do not infer a target, rewrite the selected name or broaden a grant. Empty complete captures now explain the exact unit, window and severity checks without confusing them with an empty text search.
+- Add an explicit Last 15 min action that validates a fresh status response before changing only the draft window. Keep existing captured service/window, rows, search, paging and original retention distinct; reset safely if immutable query or authority context changes. Fetch logs still requires the existing exact request review and unchecked content acknowledgements. Move manager-reference-only refresh into Advanced.
+- Refresh the read-only alarm delivery snapshot after a verified settings change or deliberate test response. Cancel older reads, preserve session and visibility guards, and retain previous counts with unknown status if the new read fails. No optimistic delivery result, automatic test or mutation replay is introduced.
+- Correct the hosted fleet test to respect its actual unknown OS observation: Linux filtering must exclude that row, and unknown/all must restore it. Capture the actual mobile hostname/IP rows. Keep existing alarm-browser assertions and deadlines while adding closed stage and finite geometry diagnostics; the historical mobile failure is not claimed fixed. The separate overview response-body abort was not reproduced by the focused application tests, and its production code and browser assertions remain unchanged.
+- The composed frontend suite passes 2,304 tests with unchanged deadlines, followed by TypeScript/production build and pure browser-contract checks. Hosted acceptance of the new log controls and alarm/mobile correction remains pending. The previous source checkpoint passed all non-browser CI jobs; its identified browser failures remain recorded.
+
 ## 2026-10-06 — Reported fleet identity and explicit alarm setup
 
 - Show reported computer hostnames and interface-scoped IP addresses in the fleet table, with compact multiple-address counts, original freshness, truthful missing/denied/expired states and stable device-ID navigation. A bounded authenticated batch read covers the existing 25-record managed fleet limit without per-device HTTP requests or new collection authority. Encode once and recheck session and observation authority before returning those exact bytes.
