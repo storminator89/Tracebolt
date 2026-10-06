@@ -23,8 +23,9 @@ function record(state: EnrollmentState = 'created', revision = 1): EnrollmentSna
   intent: { intentID: '', requestID: '', serialHex: '', templateVersion: '', deviceID: '', keyFingerprint: '', notBefore: 0, notAfter: 0, at: 0 }, issuance: { requestID: '', certificateHash: '', at: 0 }, activation: { requestID: '', at: 0 }, termination: { requestID: '', from: '', at: 0 },
  };
 }
-function creation(): InvitationCreation {
+function creation(complete = true): InvitationCreation {
  const snapshot = record();
+ if (!complete) snapshot.binding.collectionProfile = 'managed-operations-v2';
  return { schemaVersion: 'tracebolt.enrollment-invitation.v2', serverNow, snapshot, invitationSecret: secret, bootstrapSHA256: 'b'.repeat(64), bootstrap: { schemaVersion: 'tracebolt.enrollment-bootstrap.v2', managerInstanceId: snapshot.binding.instanceID, profile: 'tls', enrollmentOrigin: window.location.origin, agentOrigin: 'https://localhost:9443', collectionProfile: snapshot.binding.collectionProfile, invitationId: invitation, serverCaPem: certificate, issuerRootPem: certificate, issuerPem: certificate } };
 }
 let current: EnrollmentList;
@@ -34,8 +35,9 @@ async function add() {
  render(section()); await waitFor(() => expect(screen.getByRole('button', { name: 'Add device' })).toBeEnabled());
  fireEvent.click(screen.getByRole('button', { name: 'Add device' })); return screen.getByRole('dialog', { name: 'Add device' });
 }
-async function create() {
- vi.mocked(mutate).mockResolvedValue(creation()); const dialog = await add();
+async function create(complete = true) {
+ if (!complete) { current.collectionProfile = 'managed-operations-v2'; current.collectionPrivacy = 'package_source_metadata_may_be_sensitive'; }
+ vi.mocked(mutate).mockResolvedValue(creation(complete)); const dialog = await add();
  fireEvent.click(within(dialog).getByRole('checkbox')); fireEvent.click(within(dialog).getByRole('button', { name: 'Create invitation' }));
  await within(dialog).findByLabelText('One-time invitation secret'); return dialog;
 }
@@ -65,7 +67,7 @@ describe('progressive invitation disclosure', () => {
   expect(within(dialog).getByText(/connection metadata may reveal private network topology/)).toBeVisible();
   expect(within(dialog).getByText(/Inventory is available for up to 24 hours/)).toBeVisible();
   expect(within(dialog).getByText(/Requires a fresh managed-operations-v3 store/)).toBeVisible();
-  expect(within(dialog).getByText(/reviewed native binaries must be prepared separately/)).toBeVisible();
+  expect(within(dialog).getByText(/complete read-admin command is unavailable/)).toBeVisible();
   const disclosure = details(dialog, 'Collection, retention and limits'); expect(disclosure).not.toHaveAttribute('open');
   expect(within(disclosure).getByText(/without the older 128-row export prefix/)).not.toBeVisible();
   const consent = within(dialog).getByRole('checkbox'); expect(consent).toBeVisible(); expect(consent).not.toBeChecked();
@@ -75,10 +77,10 @@ describe('progressive invitation disclosure', () => {
   expect(consent).not.toBeChecked(); expect(mutate).not.toHaveBeenCalled();
  });
  it('keeps the explicit disabled/manual command preview collapsed without hiding its prerequisites or secret rules', async () => {
-  const response = creation(), manual = preparedEnrollmentCommand(response.bootstrap, response.snapshot, response.bootstrapSHA256)!;
+  const response = creation(false), manual = preparedEnrollmentCommand(response.bootstrap, response.snapshot, response.bootstrapSHA256)!;
   vi.spyOn(downloadCommands, 'verifiedLinuxDownloadAvailable').mockReturnValue(false);
   vi.spyOn(downloadCommands, 'selectEnrollmentCommand').mockReturnValue({ kind: 'prepared-local', command: manual });
-  const dialog = await create(); const disclosure = details(dialog, 'Command and technical prerequisites');
+  const dialog = await create(false); const disclosure = details(dialog, 'Command and technical prerequisites');
   expect(disclosure).not.toHaveAttribute('open'); expect(within(disclosure).getByText(/do not verify the publisher/)).not.toBeVisible();
   expect(within(dialog).getByText(/This command does not download binaries/)).toBeVisible();
   expect(within(dialog).getByText(/Then return here to compare the key/)).toBeVisible();
@@ -87,7 +89,7 @@ describe('progressive invitation disclosure', () => {
   expect(within(dialog).getByLabelText('One-time invitation secret')).toHaveAttribute('type', 'password');
   expect(clipboard).not.toHaveBeenCalled();
   fireEvent.click(within(dialog).getByRole('button', { name: 'Copy public installation command' }));
-  await waitFor(() => expect(clipboard).toHaveBeenCalledExactlyOnceWith(preparedEnrollmentCommand(creation().bootstrap, creation().snapshot, 'b'.repeat(64))));
+  await waitFor(() => expect(clipboard).toHaveBeenCalledExactlyOnceWith(preparedEnrollmentCommand(creation(false).bootstrap, creation(false).snapshot, 'b'.repeat(64))));
   expect(clipboard.mock.calls[0][0]).not.toContain(secret);
   fireEvent.click(within(disclosure).getByText('Command and technical prerequisites'));
   expect(disclosure).toHaveAttribute('open'); expect(disclosure.querySelector('pre')).toBeVisible();
@@ -95,7 +97,7 @@ describe('progressive invitation disclosure', () => {
  });
  it('opens the public command by default when clipboard copy is unavailable', async () => {
   Object.defineProperty(navigator, 'clipboard', { configurable: true, value: undefined });
-  const dialog = await create(); const disclosure = details(dialog, 'Command and technical prerequisites');
+  const dialog = await create(false); const disclosure = details(dialog, 'Command and technical prerequisites');
   expect(disclosure).toHaveAttribute('open'); expect(disclosure.querySelector('pre')).toBeVisible();
   expect(within(dialog).queryByRole('button', { name: 'Copy public installation command' })).not.toBeInTheDocument();
   expect(within(dialog).getByLabelText('One-time invitation secret')).toHaveAttribute('type', 'password');

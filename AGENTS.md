@@ -33,9 +33,11 @@ file as navigation and project constraints, never as permission to act on a host
 - Expanded operational/package collection requires a fresh explicitly acknowledged
   profile and identity. Never relabel or reuse a basic/v2 ledger to grant it. For the
   fresh v3 HTTP background-service MVP read `docs/http-complete-first-start.md`.
-  The public command fetches bootstrap metadata and selects `--pending-service`;
-  invitation input remains hidden and no collection begins before approval and
-  activation. Helper/source checks do not establish actual service or reboot acceptance.
+  The current rc.2 complete-profile public command selects `--read-admin` and the
+  validated ingress. One combined local scope approval configures inventory and
+  the separate helpers; invitation input remains hidden and dashboard identity
+  approval is still required. Basic/non-complete profiles retain pending-service.
+  The recorded native Ubuntu TLS pass does not establish a user host or OS reboot.
 - The separate hostname/interface-address extension stays off until explicit local
   consent under the existing stopped service identity. Use the documented preview,
   enable and disable commands; do not edit its sidecar or collect through the manager.
@@ -60,13 +62,14 @@ file as navigation and project constraints, never as permission to act on a host
   independent durable floor, exact retry bytes, cached-only command policy,
   original metadata age and operator-only bounded paging. Fixture tests do not
   establish native Debian/Ubuntu or installed-service acceptance.
-- For the fresh one-command read-admin source candidate, read
+- For the fresh one-command read-admin profile, read
   `docs/read-admin-onboarding.md`. One explicit combined approval covers the
   supported read scopes/helper only; production HTTPS remains default and HTTP
   requires its full content-risk warning. Keep the main agent nonroot, retain
   started/completed phase evidence, and never adopt existing or pending journal
-  state. The old published release does not contain this candidate; do not add
-  new source flags to its command or call source fixtures native acceptance.
+  state. Use only the verified rc.2 pin and matching manager source described there;
+  older release commands are not compatible with the combined profile. Do not
+  call fixture results native acceptance or execute any host grant without approval.
 - For one-time existing-agent inventory consent, read
   `docs/guided-inventory-setup.md`. Its preview is nonmutating until explicit
   confirmation; existing identity-bound scope CLIs remain authoritative. Do not

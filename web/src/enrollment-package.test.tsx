@@ -264,7 +264,7 @@ describe('fresh complete dpkg consent', () => {
 
 describe('public prepared-checkout command', () => {
  it('serializes only the fixed root/local-artifact command and validated public TLS fields', () => {
-  const response = creation(v3), checksum = 'b'.repeat(64);
+  const response = creation(v2), checksum = 'b'.repeat(64);
   const expected = '"$PWD/bin/agent-service" --action install --apply --pending-service' +
    ' --agent-binary "$PWD/bin/lan-agent" --agent-sha256 "$(sha256sum < "$PWD/bin/lan-agent" | cut -d \' \' -f 1)"' +
    ' --enroll-binary "$PWD/bin/enroll-agent" --enroll-sha256 "$(sha256sum < "$PWD/bin/enroll-agent" | cut -d \' \' -f 1)"' +
@@ -272,6 +272,10 @@ describe('public prepared-checkout command', () => {
    ` --manager-origin '${window.location.origin}' --invitation-id '${invitation}' --bootstrap-sha256 '${checksum}' --server-ca-base64 '${btoa(certificate)}'`;
   const command = preparedEnrollmentCommand(response.bootstrap, response.snapshot, checksum);
   expect(command).toBe(expected); expect(command).not.toContain(secret); expect(command).not.toMatch(/sudo|curl|wget|invitation-secret/);
+ });
+ it('never offers direct agent-service installation for the complete profile', () => {
+  const response = creation(v3);
+  expect(preparedEnrollmentCommand(response.bootstrap, response.snapshot, 'b'.repeat(64))).toBeNull();
  });
  it('never derives or accepts a missing, uppercase, malformed or shell-bearing digest', () => {
   const response = creation();
@@ -288,13 +292,13 @@ describe('public prepared-checkout command', () => {
   try { const command = preparedEnrollmentCommand(response.bootstrap, response.snapshot, 'b'.repeat(64)); expect(command).toContain("--manager-origin 'http://manager.test:8080'"); expect(command).toMatch(/ --insecure-http-test$/); expect(command).not.toContain('--server-ca-base64'); } finally { vi.unstubAllGlobals(); }
  });
  it('copies the explicit disabled/manual fallback only on a click, separately from the hidden invitation', async () => {
-  const response = creation(v3), manual = preparedEnrollmentCommand(response.bootstrap, response.snapshot, 'b'.repeat(64))!;
+  const response = creation(v2), manual = preparedEnrollmentCommand(response.bootstrap, response.snapshot, 'b'.repeat(64))!;
   vi.spyOn(downloadCommands, 'verifiedLinuxDownloadAvailable').mockReturnValue(false);
   vi.spyOn(downloadCommands, 'selectEnrollmentCommand').mockReturnValue({ kind: 'prepared-local', command: manual });
   const clipboard = vi.fn().mockResolvedValue(undefined); Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: clipboard } });
-  current = listing(v3); vi.mocked(mutate).mockResolvedValue({ ...creation(v3), bootstrapSHA256: 'b'.repeat(64) }); const dialog = await add(); acknowledgeAndCreate(dialog); await screen.findByLabelText('One-time invitation secret');
+  current = listing(v2); vi.mocked(mutate).mockResolvedValue({ ...creation(v2), bootstrapSHA256: 'b'.repeat(64) }); const dialog = await add(); acknowledgeAndCreate(dialog); await screen.findByLabelText('One-time invitation secret');
   expect(clipboard).not.toHaveBeenCalled(); expect(within(dialog).getByText('Run as root from the prepared local checkout')).toBeVisible(); expect(dialog.textContent).toContain('do not verify the publisher'); expect(dialog.textContent).toContain('No inventory is collected before approval and activation.');
-  fireEvent.click(within(dialog).getByRole('button', { name: 'Copy public installation command' })); await waitFor(() => expect(clipboard).toHaveBeenCalledTimes(1)); expect(clipboard.mock.calls[0][0]).toBe(preparedEnrollmentCommand(creation(v3).bootstrap, creation(v3).snapshot, 'b'.repeat(64))); expect(clipboard.mock.calls[0][0]).not.toContain(secret); expect(screen.getByLabelText('One-time invitation secret')).toHaveAttribute('type', 'password');
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Copy public installation command' })); await waitFor(() => expect(clipboard).toHaveBeenCalledTimes(1)); expect(clipboard.mock.calls[0][0]).toBe(preparedEnrollmentCommand(creation(v2).bootstrap, creation(v2).snapshot, 'b'.repeat(64))); expect(clipboard.mock.calls[0][0]).not.toContain(secret); expect(screen.getByLabelText('One-time invitation secret')).toHaveAttribute('type', 'password');
  });
  it('keeps older responses usable without presenting an invented online command', async () => {
   vi.mocked(mutate).mockResolvedValue(creation()); const dialog = await add(); acknowledgeAndCreate(dialog); await screen.findByLabelText('One-time invitation secret'); expect(within(dialog).queryByRole('button', { name: 'Copy public installation command' })).not.toBeInTheDocument(); expect(within(dialog).getByRole('button', { name: 'Download bootstrap file' })).toBeVisible();
@@ -305,6 +309,7 @@ describe('public prepared-checkout command', () => {
 describe('source-owned verified download command (inert fixtures only)', () => {
  // Synthetic values exercise string generation only. No fixture is a release pin.
  const fixturePin = Object.freeze({ version: 'v0.0.0-inert-fixture', publicationCommit: 'c'.repeat(40), bootstrapSHA256: 'd'.repeat(64) });
+ const capableFixturePin = Object.freeze({ ...fixturePin, version: 'v0.1.0-rc.2' });
  const checksum = 'b'.repeat(64);
  const decodedScript = (command: string) => {
   const prefix = '/usr/bin/env -i PATH=/usr/sbin:/usr/bin:/sbin:/bin LANG=C.UTF-8 LC_ALL=C.UTF-8 /bin/sh -c ';
@@ -312,15 +317,18 @@ describe('source-owned verified download command (inert fixtures only)', () => {
   const quoted = command.slice(prefix.length); expect(quoted[0]).toBe("'"); expect(quoted.at(-1)).toBe("'");
   return quoted.slice(1, -1).replaceAll("'\\''", "'");
  };
- it('selects the independently verified rc.1 bootstrap publication and exact bytes', () => {
-  expect(downloadCommands.OFFICIAL_LINUX_BOOTSTRAP_PIN).toEqual({
+ it('keeps the known rc.1 publication intact until reviewed rc.2 pin activation', () => {
+  const pin = downloadCommands.OFFICIAL_LINUX_BOOTSTRAP_PIN;
+  expect(['v0.1.0-rc.1', 'v0.1.0-rc.2']).toContain(pin?.version);
+  if (pin?.version !== 'v0.1.0-rc.1') return;
+  expect(pin).toEqual({
    version: 'v0.1.0-rc.1',
    publicationCommit: '458fc072a73946032446c0d9e63220ea29cca355',
    bootstrapSHA256: '85bd2c01beb3012d5d042d88448d892a270cf527786a73e7a0a67867cac47f61',
   });
  });
  it('requires a null or strictly valid source pin and ignores ambient or response pins', () => {
-  const response = creation(v3), manual = preparedEnrollmentCommand(response.bootstrap, response.snapshot, checksum);
+  const response = creation(v2), manual = preparedEnrollmentCommand(response.bootstrap, response.snapshot, checksum);
   const pin = downloadCommands.OFFICIAL_LINUX_BOOTSTRAP_PIN;
   if (pin !== null) {
    expect(Object.keys(pin).sort()).toEqual(['bootstrapSHA256', 'publicationCommit', 'version']);
@@ -342,11 +350,11 @@ describe('source-owned verified download command (inert fixtures only)', () => {
  });
  it.each(['tls', 'http-test'] as const)('copies the exact source-selected %s command on one physical line without a selector mock or secret transfer', async profile => {
   jsdom.reconfigure({ url: profile === 'tls' ? 'https://localhost/' : 'http://localhost:8080/' });
-  const response = { ...creation(v3), bootstrapSHA256: checksum }, pin = downloadCommands.OFFICIAL_LINUX_BOOTSTRAP_PIN;
+  const response = { ...creation(v2), bootstrapSHA256: checksum }, pin = downloadCommands.OFFICIAL_LINUX_BOOTSTRAP_PIN;
   response.snapshot.binding.profile = profile; response.bootstrap.profile = profile;
   if (profile === 'http-test') { response.bootstrap.agentOrigin = 'http://localhost:8081'; response.bootstrap.serverCaPem = ''; }
   const clipboard = vi.fn().mockResolvedValue(undefined); Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: clipboard } });
-  current = listing(v3); vi.mocked(mutate).mockResolvedValue(response); const dialog = await add();
+  current = listing(v2); vi.mocked(mutate).mockResolvedValue(response); const dialog = await add();
   expect(within(dialog).getByText(pin === null ? 'Public bootstrap configuration; reviewed native binaries must be prepared separately.' : 'A public source-pinned download command is available after creation. Review prerequisites and service permissions before running it.')).toBeVisible();
   expect(within(dialog).getByRole('checkbox')).not.toBeChecked(); expect(within(dialog).getByRole('button', { name: 'Create invitation' })).toBeDisabled();
   acknowledgeAndCreate(dialog); await screen.findByLabelText('One-time invitation secret');
@@ -370,7 +378,7 @@ describe('source-owned verified download command (inert fixtures only)', () => {
   expect(mutate).toHaveBeenCalledExactlyOnceWith('/enrollment/invitations', { requestId: expect.any(String), platform: 'linux', collectionAcknowledged: true }, expect.any(AbortSignal));
  });
  it('rejects absent, partial, malformed, mutable-ref and shell-bearing source pins', () => {
-  const response = creation(v3);
+  const response = creation(v2);
   const pins = [null, undefined, {}, [], Object.assign(Object.create(fixturePin), { x: 1, y: 2, z: 3 }), fixturePin.version, { ...fixturePin, url: 'https://other.example/bootstrap.py' },
    ...['main', 'c'.repeat(39), 'C'.repeat(40), 'c'.repeat(40) + '\n', "'; touch /tmp/untrusted; #"].map(publicationCommit => ({ ...fixturePin, publicationCommit })),
    ...['', 'D'.repeat(64), 'd'.repeat(63), 'd'.repeat(64) + '\n', null, 1].map(bootstrapSHA256 => ({ ...fixturePin, bootstrapSHA256 })),
@@ -378,7 +386,7 @@ describe('source-owned verified download command (inert fixtures only)', () => {
   for (const pin of pins) expect(downloadCommands.verifiedDownloadCommand(pin, response.bootstrap, response.snapshot, checksum)).toBeNull();
  });
  it('privately downloads one exact official HTTPS source and hashes it before isolated Python', () => {
-  const response = creation(v3), fetch = vi.fn(); vi.stubGlobal('fetch', fetch);
+  const response = creation(v2), fetch = vi.fn(); vi.stubGlobal('fetch', fetch);
   const command = downloadCommands.verifiedDownloadCommand(fixturePin, response.bootstrap, response.snapshot, checksum)!;
   const script = decodedScript(command);
   expect(script).toContain(`https://raw.githubusercontent.com/storminator89/Tracebolt/${fixturePin.publicationCommit}/deploy/release/published/${fixturePin.version}.py`);
@@ -394,7 +402,7 @@ describe('source-owned verified download command (inert fixtures only)', () => {
   for (const unsafe of ['curl https://example.invalid | sh', 'curl https://example.invalid | bash -s', 'curl --insecure https://example.invalid', 'curl --location https://example.invalid']) expect(unsafe).toMatch(unsafeDownload);
  });
  it('keeps stdin and foreground execution for the hidden prompt and cleans only its own staging file', () => {
-  const response = creation(v3), script = decodedScript(downloadCommands.verifiedDownloadCommand(fixturePin, response.bootstrap, response.snapshot, checksum)!);
+  const response = creation(v2), script = decodedScript(downloadCommands.verifiedDownloadCommand(fixturePin, response.bootstrap, response.snapshot, checksum)!);
   expect(script).toContain('[ -t 0 ] ||'); expect(script).toContain('[ "$(id -u)" -eq 0 ] ||');
   expect(script).toContain('for tool in curl sha256sum python3 mktemp rm rmdir;');
   expect(script).toContain('missing="$missing $tool"');
@@ -414,7 +422,7 @@ describe('source-owned verified download command (inert fixtures only)', () => {
   for (const unsafe of ['timeout 60 python3 -I -B /fixture.py', 'exec python3 -I -B /fixture.py &', 'exec python3 /fixture.py < /dev/null', 'rm -rf /fixture', '--invitation-secret fixture']) expect(unsafe).toMatch(unsafeExecution);
  });
  it('preserves exact validated public TLS arguments and the separate public bootstrap digest', () => {
-  const response = creation(v3), script = decodedScript(downloadCommands.verifiedDownloadCommand(fixturePin, response.bootstrap, response.snapshot, checksum)!);
+  const response = creation(v2), script = decodedScript(downloadCommands.verifiedDownloadCommand(fixturePin, response.bootstrap, response.snapshot, checksum)!);
   expect(script).toContain(`--manager-origin '${window.location.origin}' --invitation-id '${invitation}' --bootstrap-sha256 '${checksum}' --server-ca-base64 '${btoa(certificate)}'`);
   expect(script).not.toContain(`--bootstrap-sha256 '${fixturePin.bootstrapSHA256}'`);
   for (const badChecksum of [undefined, null, '', 'B'.repeat(64), 'x', "';echo test;#"]) expect(downloadCommands.verifiedDownloadCommand(fixturePin, response.bootstrap, response.snapshot, badChecksum)).toBeNull();
@@ -422,14 +430,15 @@ describe('source-owned verified download command (inert fixtures only)', () => {
   expect(downloadCommands.verifiedDownloadCommand(fixturePin, response.bootstrap, { ...response.snapshot, state: 'revoked' }, checksum)).toBeNull();
  });
  it('keeps disposable HTTP acknowledgement without weakening the executable HTTPS download', () => {
-  const response = creation(v3), origin = 'http://manager.test:8080'; response.snapshot.binding.profile = 'http-test'; response.snapshot.binding.origin = origin; response.bootstrap.profile = 'http-test'; response.bootstrap.enrollmentOrigin = origin; response.bootstrap.agentOrigin = 'http://manager.test:8081'; response.bootstrap.serverCaPem = '';
+  const response = creation(v2), origin = 'http://manager.test:8080'; response.snapshot.binding.profile = 'http-test'; response.snapshot.binding.origin = origin; response.bootstrap.profile = 'http-test'; response.bootstrap.enrollmentOrigin = origin; response.bootstrap.agentOrigin = 'http://manager.test:8081'; response.bootstrap.serverCaPem = '';
   vi.stubGlobal('window', { location: { origin } });
   const script = decodedScript(downloadCommands.verifiedDownloadCommand(fixturePin, response.bootstrap, response.snapshot, checksum)!);
   expect(script).toContain("--proto '=https'"); expect(script).toContain("--manager-origin 'http://manager.test:8080'"); expect(script).toMatch(/ --insecure-http-test$/); expect(script).not.toContain('--server-ca-base64');
  });
  it.each(['en', 'de'] as const)('selects future download copy through the inert UI seam in %s without bypassing consent', async locale => {
+  vi.spyOn(downloadCommands, 'verifiedLinuxDownloadAvailable').mockReturnValue(true);
   setLocale(locale, false); current = listing(v3); const response = { ...creation(v3), bootstrapSHA256: checksum }; vi.mocked(mutate).mockResolvedValue(response);
-  const command = downloadCommands.verifiedDownloadCommand(fixturePin, response.bootstrap, response.snapshot, checksum)!;
+  const command = downloadCommands.verifiedDownloadCommand(capableFixturePin, response.bootstrap, response.snapshot, checksum)!;
   vi.spyOn(downloadCommands, 'selectEnrollmentCommand').mockReturnValue({ kind: 'verified-download', command });
   const clipboard = vi.fn().mockResolvedValue(undefined); Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: clipboard } });
   render(section()); const addLabel = locale === 'en' ? 'Add device' : 'Gerät hinzufügen'; await waitFor(() => expect(screen.getByRole('button', { name: addLabel })).toBeEnabled()); fireEvent.click(screen.getByRole('button', { name: addLabel }));
@@ -440,9 +449,85 @@ describe('source-owned verified download command (inert fixtures only)', () => {
   expect(within(dialog).getByText(locale === 'en' ? 'Run the verified download as root in a local terminal' : 'Geprüften Download als root im lokalen Terminal ausführen')).toBeVisible();
   expect(dialog.textContent).toContain(locale === 'en' ? 'A tampered HTTP-test dashboard can replace the whole command' : 'Ein manipuliertes HTTP-Test-Dashboard kann den gesamten Befehl');
   expect(dialog.textContent).toContain(locale === 'en' ? 'No inventory is collected before approval and activation.' : 'Vor Freigabe und Aktivierung wird kein Inventar erfasst.');
+  expect(within(dialog).getByText(locale === 'en' ? /Read-admin requires kernel 6.5 or newer/ : /Read-Admin benötigt einen Kernel ab Version 6.5/)).toBeVisible();
+  expect(within(dialog).getByText(/CAP_SYS_PTRACE/)).toBeVisible();
+  expect(within(dialog).getByText(locale === 'en' ? /Keep this terminal open until completion/ : /Lass dieses Terminal bis zum Abschluss geöffnet/)).toBeVisible();
+  expect(dialog.textContent).not.toContain(locale === 'en' ? 'pending service waits' : 'ausstehende Dienst wartet');
+  expect(within(dialog).queryByRole('checkbox')).not.toBeInTheDocument();
   expect(dialog.textContent).not.toContain(locale === 'en' ? 'This command does not download binaries.' : 'Dieser Befehl lädt keine Programme herunter.');
   expect(clipboard).not.toHaveBeenCalled(); fireEvent.click(within(dialog).getByRole('button', { name: locale === 'en' ? 'Copy public installation command' : 'Öffentlichen Installationsbefehl kopieren' }));
   await waitFor(() => expect(clipboard).toHaveBeenCalledExactlyOnceWith(command)); expect(command).not.toContain(secret);
   fireEvent.keyDown(document, { key: 'Escape' }); expect(screen.queryByRole('dialog')).not.toBeInTheDocument(); expect(screen.queryByDisplayValue(secret)).not.toBeInTheDocument();
  });
+ it.each(['basic-readonly-v1', v1, v2] as const)('keeps %s pending-service behavior with old and capable fixture pins', profile => {
+  const response = creation(profile);
+  expect(preparedEnrollmentCommand(response.bootstrap, response.snapshot, checksum)).toContain('--pending-service');
+  for (const pin of [fixturePin, capableFixturePin]) {
+   const script = decodedScript(downloadCommands.verifiedDownloadCommand(pin, response.bootstrap, response.snapshot, checksum)!);
+   expect(script).toContain('--pending-service'); expect(script).not.toContain('--read-admin');
+  }
+ });
+ it('rejects complete fallback for old, missing, unknown and ambient pins', () => {
+  const response = creation(v3);
+  for (const pin of [null, undefined, fixturePin, { ...fixturePin, version: 'v0.1.0-rc.1' }, { ...fixturePin, version: 'v0.1.0-rc.3' }, { ...fixturePin, version: 'v0.1.0' }]) {
+   expect(downloadCommands.verifiedDownloadCommand(pin, response.bootstrap, response.snapshot, checksum)).toBeNull();
+  }
+  vi.stubGlobal('TRACEBOLT_RELEASE_PIN', capableFixturePin); vi.stubEnv('VITE_TRACEBOLT_RELEASE_PIN', JSON.stringify(capableFixturePin));
+  localStorage.setItem('releasePin', JSON.stringify(capableFixturePin));
+  try {
+   const sourcePin = downloadCommands.OFFICIAL_LINUX_BOOTSTRAP_PIN;
+   const capable = sourcePin?.version === 'v0.1.0-rc.2';
+   expect(downloadCommands.verifiedLinuxDownloadAvailable(v3)).toBe(capable);
+   expect(downloadCommands.selectEnrollmentCommand(response.bootstrap, { ...response.snapshot, releasePin: capableFixturePin } as EnrollmentSnapshot, checksum)).toEqual(capable ? { kind: 'verified-download', command: downloadCommands.verifiedDownloadCommand(sourcePin, response.bootstrap, response.snapshot, checksum) } : null);
+   expect(downloadCommands.selectEnrollmentCommand({ ...response.bootstrap, releasePin: capableFixturePin }, response.snapshot, checksum)).toBeNull();
+  } finally { vi.unstubAllEnvs(); }
+ });
+ it.each(['tls', 'http-test'] as const)('derives complete %s coordinator arguments only from a validated public bootstrap', profile => {
+  jsdom.reconfigure({ url: profile === 'tls' ? 'https://localhost/' : 'http://localhost:8080/' });
+  const response = creation(v3);
+  response.snapshot.binding.profile = profile; response.bootstrap.profile = profile;
+  if (profile === 'http-test') { response.bootstrap.agentOrigin = 'http://localhost:8081'; response.bootstrap.serverCaPem = ''; }
+  const command = downloadCommands.verifiedDownloadCommand(capableFixturePin, response.bootstrap, response.snapshot, checksum)!;
+  const script = decodedScript(command);
+  expect(script.split('; ').at(-1)).toBe(`exec python3 -I -B /proc/self/fd/3 --action install --apply --read-admin --read-admin-agent-origin '${response.bootstrap.agentOrigin}'` + publicEnrollmentArguments(response.bootstrap, response.snapshot, checksum));
+  expect(script).not.toContain('--pending-service'); expect(command).not.toContain(secret); expect(command).not.toMatch(/[\r\n]/);
+  for (const bootstrap of [
+   { ...response.bootstrap, collectionProfile: v2 },
+   { ...response.bootstrap, agentOrigin: response.bootstrap.agentOrigin + '/' },
+   { ...response.bootstrap, agentOrigin: "https://localhost';echo untrusted;#" },
+   { ...response.bootstrap, agentOrigin: profile === 'tls' ? 'http://localhost:8081' : 'https://localhost:9443' },
+   { ...response.bootstrap, readAdminAgentOrigin: 'https://untrusted.example' },
+  ]) expect(downloadCommands.verifiedDownloadCommand(capableFixturePin, bootstrap, response.snapshot, checksum)).toBeNull();
+ });
+ it.each(['en', 'de'] as const)('shows complete command unavailability before and after creation in %s', async locale => {
+  vi.spyOn(downloadCommands, 'verifiedLinuxDownloadAvailable').mockReturnValue(false);
+  vi.spyOn(downloadCommands, 'selectEnrollmentCommand').mockReturnValue(null);
+  setLocale(locale, false); current = listing(v3); vi.mocked(mutate).mockResolvedValue({ ...creation(v3), bootstrapSHA256: checksum });
+  const clipboard = vi.fn(); Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: clipboard } });
+  render(section()); const addLabel = locale === 'en' ? 'Add device' : 'Gerät hinzufügen';
+  await waitFor(() => expect(screen.getByRole('button', { name: addLabel })).toBeEnabled()); fireEvent.click(screen.getByRole('button', { name: addLabel }));
+  const dialog = screen.getByRole('dialog', { name: addLabel });
+  const unavailable = locale === 'en' ? /complete read-admin command is unavailable/ : /vollständige Read-Admin-Befehl ist erst/;
+  expect(within(dialog).getByText(unavailable)).toBeVisible(); expect(within(dialog).getAllByRole('checkbox')).toHaveLength(1);
+  fireEvent.click(within(dialog).getByRole('checkbox')); fireEvent.click(within(dialog).getByRole('button', { name: locale === 'en' ? 'Create invitation' : 'Einladung erstellen' }));
+  await within(dialog).findByLabelText(locale === 'en' ? 'One-time invitation secret' : 'Einmaliger Einladungsschlüssel');
+  expect(within(dialog).getByRole('status')).toHaveTextContent(unavailable);
+  expect(within(dialog).queryByRole('button', { name: locale === 'en' ? 'Copy public installation command' : 'Öffentlichen Installationsbefehl kopieren' })).not.toBeInTheDocument();
+  expect(within(dialog).getByRole('button', { name: locale === 'en' ? 'Download bootstrap file' : 'Bootstrap-Datei herunterladen' })).toBeVisible();
+  expect(clipboard).not.toHaveBeenCalled(); expect(dialog.querySelector('pre')).toBeNull();
+ });
+ it('shows the full HTTP read-admin risk before copying a capable fixture command', async () => {
+  jsdom.reconfigure({ url: 'http://localhost:8080/' }); current = listing(v3);
+  const response = { ...creation(v3), bootstrapSHA256: checksum };
+  response.snapshot.binding.profile = 'http-test'; response.bootstrap.profile = 'http-test'; response.bootstrap.agentOrigin = 'http://localhost:8081'; response.bootstrap.serverCaPem = '';
+  vi.mocked(mutate).mockResolvedValue(response);
+  const command = downloadCommands.verifiedDownloadCommand(capableFixturePin, response.bootstrap, response.snapshot, checksum)!;
+  vi.spyOn(downloadCommands, 'selectEnrollmentCommand').mockReturnValue({ kind: 'verified-download', command });
+  const dialog = await add(); acknowledgeAndCreate(dialog); await within(dialog).findByLabelText('One-time invitation secret');
+  expect(within(dialog).getByText(/HTTP test: approved inventory and journal content travel in plaintext/)).toBeVisible();
+  expect(within(dialog).getByText(/CAP_SYS_PTRACE/)).toBeVisible();
+  expect(within(dialog).getByText(/Keep this terminal open until completion/)).toBeVisible();
+  expect(dialog.textContent).toContain('credentials, tokens and personal information');
+ });
+
 });

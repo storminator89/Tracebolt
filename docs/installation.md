@@ -5,8 +5,8 @@ pilot, not an unattended fleet installer.** The supported path today is a
 Docker or native Linux central manager plus native Linux senders. The default
 manual-v1 mode uses preprovided approved material; optional guided-v2 adds a
 hidden-terminal bootstrap and deliberate operator approval. Reporting can run
-once or repeatedly in the foreground. A separate Linux/systemd installer candidate
-adds explicit service operations; its actual disposable-VM gate is tracked separately.
+once or repeatedly in the foreground. The Linux/systemd installer
+adds explicit service operations and the fresh combined read-admin path below.
 A repository link alone does not authorize a deployment or
 provide credentials. Read the checklist before executing the quickstart.
 
@@ -19,33 +19,30 @@ Downloads, release verification and artifact checks are internal to that command
 no endpoint Go build, file transfer or manual checksum step is needed. Review the
 supported platform and existing prerequisites first; dependencies are not installed.
 
-**Current release:** the dashboard pins `v0.1.0-rc.1`, built from
-`ccac65e7a61f0b5f0e325c3616a93273ab1e8eb1`. Its
-[build/publication](https://github.com/storminator89/Tracebolt/actions/runs/37310793781)
-and [independent public-byte/provenance check](https://github.com/storminator89/Tracebolt/actions/runs/37312386248)
-passed. This source includes Logs and the complete process/mount extension;
-their separate local helper/collection grants remain required. Download-based
-installation, upgrade and actual OS reboot acceptance remain separate host gates.
-The **[manager and background-agent startup guide](http-complete-first-start.md)**
-contains the fresh-v3 reviewed-source path. Manager startup remains separate. Its fresh
-manager/profile/identity must not replace an existing installation or basic/v2 state.
+**Current release:** the dashboard pins `v0.1.0-rc.2`, built from
+`a6368b0202b1efecdb6214dc34c4302d239854f7`. Its
+[build/publication](https://github.com/storminator89/Tracebolt/actions/runs/37511484957)
+and [all-asset public-byte/provenance check](https://github.com/storminator89/Tracebolt/actions/runs/37513100878)
+passed. The complete `managed-operations-v3` profile selects
+`--read-admin` and the validated agent ingress, with one combined terminal
+approval for inventory, network identity, current/future exact-service journals
+and isolated socket-owner metadata. The main agent remains nonroot; the separate
+socket helper's broad process-memory authority is explicitly disclosed.
 
-Compatible updates preserve existing identity and explicit collection/helper grants.
-The release does not provision the separately authorized journal helper; do not
-repeat its create-only setup on an already configured endpoint. New optional scopes
-still require their own explicit approval. The detailed manual and default ready-only
-paths below remain valid for their stated scopes; source checks and a started pending
-process do not establish approved reporting or actual reboot acceptance.
+The [one-command read-admin guide](read-admin-onboarding.md) describes that scope
+and the required hidden invitation entry and dashboard fingerprint approval.
+Keep the local terminal open until all phases finish. No endpoint Go build or
+per-view setup command is needed. Basic/non-complete profiles retain their
+ordinary pending-service behavior; a missing or incompatible release pin cannot
+silently downgrade a complete installation to it.
 
-The [one-command read-admin source candidate](read-admin-onboarding.md) groups
-fresh-install inventory, network identity and current/future exact-system-service
-journal permissions plus isolated socket-owner metadata under one explicit local
-approval. Its v2 disclosure explicitly covers the helper's broad process-memory
-authority; the main agent stays unprivileged. It reuses the existing
-installer/consent validators and preserves phase evidence. It is **not enabled in
-the pinned rc.1 release**; publication, pin activation and real-host acceptance
-remain separate. Existing installs and pending journal recovery are not migrated
-or reset by this fresh path.
+The [native Ubuntu TLS acceptance](https://github.com/storminator89/Tracebolt/actions/runs/37508637893)
+passed on c1cd23a, whose production/native bytes match the release source. This
+covers all six functional checks and final cleanup. Download-based installation
+on the user's fresh Debian/HTTP VM and actual OS reboot remain separate local
+acceptance steps. Follow the **[fresh Docker-manager and background-agent guide](http-complete-first-start.md)**;
+manager deployment remains separate from installing the endpoint. The combined
+path is for a fresh supported host and does not adopt existing installation state.
 
 For an existing activated v3 agent, the [one-time inventory collection guide](guided-inventory-setup.md)
 can group the existing full process/mount and full cached APT grants into one
@@ -63,7 +60,7 @@ compatible source/fixture tests leave native privileged acceptance outstanding.
 | Component | Available now | Not provided by this milestone |
 | --- | --- | --- |
 | Central manager | Separate `cmd/lan-manager`, Admin UI, authenticated operator API, approved agent ingress; Docker or native Linux execution | Production assurance, automatic provisioning, HA/shared SQLite writers |
-| Linux endpoint | Native `cmd/lan-agent --config …`, one-shot or bounded foreground reporting; optional `cmd/enroll-agent` with explicit guided-v2 configuration; `cmd/agent-service` candidate with explicit fixed-path operations | Verified OS reboot persistence, automatic renewal or remote updater; actual systemd acceptance requires its separate manual gate |
+| Linux endpoint | Native `cmd/lan-agent --config …`, one-shot or bounded foreground reporting; optional `cmd/enroll-agent` with explicit guided-v2 configuration; `cmd/agent-service` with explicit fixed-path operations and fresh combined read-admin setup | Verified OS reboot persistence, automatic renewal or remote updater; native Ubuntu TLS acceptance is recorded above; other host/profile combinations remain separate |
 | Windows/macOS endpoint | Native `cmd/agent` bounded stdout-only collector; limited platform reads | Supported LAN sender, native ACL/state lifecycle, installed service or fleet deployment |
 | Docker architectures | Linux amd64 TLS and explicit HTTP-test lifecycle gates; Linux arm64 cross-build support | arm64 runtime acceptance from cross-building alone |
 

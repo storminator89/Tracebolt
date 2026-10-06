@@ -6,6 +6,7 @@ unchanged. These checks establish fd/terminal/signal handoff, not service accept
 import ast
 import hashlib
 import json
+import itertools
 import os
 from pathlib import Path
 import select
@@ -20,14 +21,15 @@ import unittest
 SOURCE = Path(__file__).resolve().parents[2] / "web/src/verified-download-command.ts"
 
 
-def execution_tail():
+def execution_tail(read_admin=False):
     """Use the exact source-owned tail, never the download or root/apply flow."""
     lines = SOURCE.read_text().splitlines()
     first = lines.index('        \'exec 3< "$stage/bootstrap.py"\',')
     tail = [ast.literal_eval(line.strip().removesuffix(",")) for line in lines[first:first + 4]]
     final = lines[first + 4].strip()
-    assert final == '`exec python3 -I -B /proc/self/fd/3 --action install --apply --pending-service${publicArguments}`,'
-    tail.append(final[1:-2].replace("${publicArguments}", ""))
+    assert final == '`exec python3 -I -B /proc/self/fd/3 --action install --apply${installMode}${publicArguments}`,'
+    mode = " --read-admin --read-admin-agent-origin 'https://fixture.invalid:9443'" if read_admin else " --pending-service"
+    tail.append(final[1:-2].replace("${installMode}", mode).replace("${publicArguments}", ""))
     assert "    ].join('; ');" in lines
     return "; ".join(tail)
 
@@ -60,24 +62,26 @@ class DashboardPrerequisiteMessage(unittest.TestCase):
 @unittest.skipUnless(sys.platform == "linux" and Path("/proc/self/fd").is_dir(), "Linux proc-fd fixture")
 class DashboardExecutionTail(unittest.TestCase):
     def test_verified_inode_terminal_and_direct_signals(self):
-        for signum in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP):
-            with self.subTest(signal=signum.name), tempfile.TemporaryDirectory(prefix="tracebolt-inert-tail-") as temp:
+        for signum, read_admin in itertools.product((signal.SIGINT, signal.SIGTERM, signal.SIGHUP), (False, True)):
+            with self.subTest(signal=signum.name, read_admin=read_admin), tempfile.TemporaryDirectory(prefix="tracebolt-inert-tail-") as temp:
                 stage = Path(temp) / "stage"
                 stage.mkdir(mode=0o700)
                 path = stage / "bootstrap.py"
                 # Ignores all command arguments. This is invented fixture code,
                 # not an import or execution of the real release bootstrap.
+                # Unbuffered writes avoid re-entering TextIO when the parent
+                # signals immediately after reading the readiness line.
                 contents = ("import hashlib, json, os, signal, sys\n"
                             "def stop(signum, frame):\n"
-                            "    print(json.dumps({'signal': signum}), flush=True)\n"
+                            "    os.write(1, (json.dumps({'signal': signum}) + '\\n').encode())\n"
                             "    raise SystemExit(128 + signum)\n"
                             "for signum in (signal.SIGINT, signal.SIGTERM):\n"
                             "    signal.signal(signum, stop)\n"
                             "with open(__file__, 'rb') as stream:\n"
                             "    digest = hashlib.sha256(stream.read()).hexdigest()\n"
-                            "print(json.dumps({'pid': os.getpid(), 'tty': os.isatty(0), "
-                            "'fdInode': os.fstat(3).st_ino, 'executedInode': os.stat(__file__).st_ino, "
-                            f"'stagingRemoved': not os.path.exists({str(stage)!r}), 'sha256': digest}}), flush=True)\n"
+                            "os.write(1, (json.dumps({'pid': os.getpid(), 'tty': os.isatty(0), "
+                            "'args': sys.argv[1:], 'fdInode': os.fstat(3).st_ino, 'executedInode': os.stat(__file__).st_ino, "
+                            f"'stagingRemoved': not os.path.exists({str(stage)!r}), 'sha256': digest}}) + '\\n').encode())\n"
                             "while True:\n"
                             "    signal.pause()\n").encode()
                 path.write_bytes(contents)
@@ -86,7 +90,7 @@ class DashboardExecutionTail(unittest.TestCase):
                 digest = hashlib.sha256(contents).hexdigest()
                 script = ("set -eu; umask 077; " + f"stage={shlex.quote(str(stage))}; " +
                           f"printf '%s  %s\\n' {shlex.quote(digest)} \"$stage/bootstrap.py\" | sha256sum --check --status; " +
-                          execution_tail())
+                          execution_tail(read_admin))
                 self.assertNotRegex(script, r"[\r\n]")
                 master, terminal = os.openpty()
                 child = None
@@ -97,7 +101,10 @@ class DashboardExecutionTail(unittest.TestCase):
                     self.assertTrue(select.select([child.stdout], [], [], 5)[0], "inert fixture did not become ready")
                     ready = json.loads(child.stdout.readline())
                     self.assertEqual(ready, {"pid": child.pid, "tty": True, "fdInode": inode,
-                                             "executedInode": inode, "stagingRemoved": True, "sha256": digest})
+                                             "executedInode": inode, "stagingRemoved": True, "sha256": digest,
+                                             "args": ["--action", "install", "--apply"] +
+                                             (["--read-admin", "--read-admin-agent-origin", "https://fixture.invalid:9443"]
+                                              if read_admin else ["--pending-service"])})
                     # Target only the original shell PID. Exec must have replaced
                     # it, with no outer wrapper to intercept/delay these signals.
                     os.kill(child.pid, signum)

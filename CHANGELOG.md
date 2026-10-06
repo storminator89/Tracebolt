@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-10-06 — Activate verified rc.2 combined Linux read-admin installation
+
+- Select the publicly verified rc.2 bootstrap through immutable publication commit 08c7f0ef3bb8c3f8941a071d885bdf550c7f72c5 and its exact SHA-256. Hosted run 37513100878 passed all 12 asset checks and source/workflow keyless provenance without executing Tracebolt.
+- The complete Linux profile now copies one command selecting --read-admin and the validated public agent ingress. Its existing combined root-terminal approval covers the supported inventory, network, journal and socket-owner scopes, followed by hidden invitation entry and dashboard identity approval. Keep the terminal open until completion. Basic/non-complete profiles retain their ordinary mode; complete installations cannot silently fall back to a partial local command.
+- Preserve clean-environment, fixed-URL/hash, terminal, fd handoff, cancellation and download guards. Synchronize exact UI, browser and inert shell contracts; no manager/API field can select executable trust or helper authority.
+- Shorten the README and align fresh-install guides with the current release, native-source proof and prerequisites. The earlier c1cd TLS native run passed all scenarios, functional checks and cleanup on production-equivalent code. The user's Debian/HTTP installation, release-download runtime and OS reboot remain separate acceptance observations. No host setup or grant occurs when publishing or copying this command.
+
 ## 2026-10-06 — Pin rc.2 public release readback before installer activation
 
 - Capture the exact published rc.2 bootstrap and all 12 public asset size/SHA-256 pins for source a6368b0202b1efecdb6214dc34c4302d239854f7. Public downloads match every pin; the bootstrap reconstructs exactly from that source and the published source archive matches all 1,550 Git blobs/executable modes.

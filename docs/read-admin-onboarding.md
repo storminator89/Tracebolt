@@ -1,12 +1,15 @@
 # One-command Linux read-admin onboarding
 
-Status: **source candidate; not activated in the currently pinned release**.
-The existing published rc.1 bootstrap and dashboard pin are unchanged. A new
-reviewed release, provenance/public-byte checks and explicit activation are
-required before the dashboard can offer this workflow. Source/inert-fixture
-passes do not establish an installed-host, helper-source or reboot result.
+Status: **rc.2 is published, independently verified and selected by the dashboard
+for the complete Linux profile**. One explicit terminal approval configures its
+supported read scopes and separate helpers. The [native Ubuntu TLS run](https://github.com/storminator89/Tracebolt/actions/runs/37508637893)
+passed registration, owners/provenance, journal content, restart, revocation and
+cleanup on production-equivalent c1cd23a source. The [public rc.2 readback](https://github.com/storminator89/Tracebolt/actions/runs/37513100878)
+verified all 12 assets and exact source/workflow provenance without executing an
+installer. A user's download-based Debian/HTTP installation and actual OS reboot
+remain separate observations; source and release checks are not that host result.
 
-## Intended normal path
+## Normal path
 
 1. The administrator copies one verified installation/registration command from
    Add device and runs it deliberately in the endpoint's local root terminal.
@@ -204,7 +207,8 @@ go test -race ./internal/journalgenerationstate ./internal/journalactivation
 The manual-only [fresh V2 disposable-systemd harness](../tests/systemd/read-admin.md)
 requires an exact reviewed source revision and explicit approval of the fresh
 profile, including the socket helper's broad CAP_SYS_PTRACE authority. Ordinary
-checks skip privileged execution. Its source preparation is not a native pass.
+checks skip privileged execution. The recorded TLS native pass is linked above;
+other transport/platform runs and an actual OS reboot remain separate.
 
 The first complete scenario checks one combined approval and registration, actual
 nonroot identity, a real exact-service journal marker, controlled TCP/UDP socket

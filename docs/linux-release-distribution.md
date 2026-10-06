@@ -1,6 +1,6 @@
 # Linux release distribution candidate
 
-Status: official `v0.1.0-rc.1` is published and independently verified. The
+Status: official `v0.1.0-rc.2` is published and independently verified. The
 [dashboard pin](dashboard-verified-download.md) selects its immutable bootstrap
 source. Actual download-based host installation, upgrade and OS reboot acceptance
 remain separate pilot operations; arm64 is cross-built only.
@@ -15,7 +15,8 @@ upgrade, rollback and hidden-terminal invitation input.
 ## Target boundary
 
 The first runtime target is Linux amd64 on Debian 13 or Ubuntu 24.04, with systemd
-as PID 1 and cgroup v2. Linux arm64 is cross-built for inspection only and the
+as PID 1 and cgroup v2. The combined read-admin profile additionally requires
+kernel 6.5 or newer. Linux arm64 is cross-built for inspection only and the
 bootstrap rejects runtime installation until its own acceptance gate is recorded.
 Other distributions, architectures, Windows, macOS and non-systemd environments
 fail clearly. No fallback changes the supported platform or collection profile.
@@ -59,10 +60,10 @@ only after inspecting a compatible retained preparation and retaining the exact
 release, public bootstrap and identity.
 
 **Release boundary:** these bootstrap and native-installer improvements are included
-in the independently verified `v0.1.0-rc.1` from source
-`ccac65e7a61f0b5f0e325c3616a93273ab1e8eb1`, now selected by the dashboard pin.
-The published pilot.2 bootstrap and binaries are unchanged. GitHub reports
-`immutable: false` for rc.1; the exact source, manifest, bundle and asset hashes
+in the independently verified `v0.1.0-rc.2` from source
+`a6368b0202b1efecdb6214dc34c4302d239854f7`, now selected by the dashboard pin.
+The published rc.1 and pilot.2 bootstrap and binaries are unchanged. GitHub reports
+`immutable: false` for rc.2; the exact source, manifest, bundle and asset hashes
 remain fixed, without claiming platform-level release locking. This selection
 does not establish download-based installation, upgrade or reboot acceptance.
 
@@ -139,9 +140,10 @@ The attestation binds this manifest to the specific build workflow. It does not
 prove that two independent builds are byte-identical, and it does not substitute
 for reviewing the source, dependencies, workflow or actual runtime behavior.
 
-The new helper asset contract is source-only. The existing published rc.1 seven-asset
-manifest, captured bootstrap, public-byte verifier and dashboard release pins remain
-unchanged. An ordinary install or upgrade never grants helper access.
+The rc.2 manifest contains all nine program/source assets plus three public
+bootstrap/provenance files. The combined read-admin path selects the separate
+helper explicitly; an ordinary install or upgrade does not grant that scope.
+Historical rc.1 and pilot.2 artifacts remain unchanged.
 
 ## Candidate build and publication gates
 
@@ -212,23 +214,25 @@ Before activation, the authorized publisher must:
    privileged acceptance operations on an unapproved host.
 
 The reusable template remains at `RELEASE_PIN = None`. The separately published
-`deploy/release/published/v0.1.0-rc.1.py` contains the verified fixed release pin;
+`deploy/release/published/v0.1.0-rc.2.py` contains the verified fixed release pin;
 the dashboard names bootstrap publication commit
-`458fc072a73946032446c0d9e63220ea29cca355` and the exact bootstrap digest.
+`08c7f0ef3bb8c3f8941a071d885bdf550c7f72c5` and the exact bootstrap digest.
 The earlier pilot.2 source is retained unchanged. There is no private-key setup
 step for this chosen keyless path.
 
 ## Verification evidence and limits
 
-The [rc.1 build/publication](https://github.com/storminator89/Tracebolt/actions/runs/37310793781)
+The [rc.2 build/publication](https://github.com/storminator89/Tracebolt/actions/runs/37511484957)
 succeeded from the exact source above. The
-[independent public-byte check](https://github.com/storminator89/Tracebolt/actions/runs/37312386248)
-verified all ten assets, exact source/workflow keyless provenance and the bootstrap's
+[independent public-byte check](https://github.com/storminator89/Tracebolt/actions/runs/37513100878)
+verified all twelve assets, exact source/workflow keyless provenance and the bootstrap's
 source reconstruction without executing a Tracebolt program or installer. The
 commit-pinned bootstrap source was independently read back before the UI pin update;
 its exact size/hash and selection are recorded in the
-[dashboard download guide](dashboard-verified-download.md). Host/service, upgrade
-and actual OS reboot acceptance remain separate authorized pilot gates.
+[dashboard download guide](dashboard-verified-download.md). The [production-equivalent native Ubuntu TLS run](https://github.com/storminator89/Tracebolt/actions/runs/37508637893)
+passed fresh setup, owners, journal, restart, revoke and cleanup. A user-host
+download installation, other transports/platforms and actual OS reboot remain
+separate authorized acceptance observations.
 
 Default fixtures cover disabled production pins, read-only preflight, platform
 rejection, root/terminal boundaries, strict manifest/asset validation, tampering,

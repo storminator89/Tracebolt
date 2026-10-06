@@ -1,6 +1,6 @@
 /** Independent exact text contract for the real-handler HTTP-test browser case.
  * No shell, download, installer, VM, displayed command or source initializer is
- * executed. A source-owned literal pin selects one of two reviewed formats.
+ * executed. A source-owned literal pin selects reviewed formats or complete unavailability.
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -27,15 +27,19 @@ export function parseSourceOwnedPin(source){
 }
 export function readSourceOwnedPin(repositoryRoot=root){return parseSourceOwnedPin(fs.readFileSync(path.join(repositoryRoot,'web/src/verified-download-command.ts'),'utf8'));}
 const quote=value=>"'"+value.split("'").join("'\\''")+"'";
+function loopbackHTTPOrigin(value){
+ if(typeof value!=='string'||!/^http:\/\/127\.0\.0\.1:[0-9]{1,5}$/.test(value))return false;
+ try{const url=new URL(value);return url.origin===value&&Number(url.port)>0;}catch{return false;}
+}
 function publicArguments({managerOrigin,invitationId,bootstrapSHA256}){
- if(typeof managerOrigin!=='string'||!/^http:\/\/127\.0\.0\.1:[0-9]{1,5}$/.test(managerOrigin)||new URL(managerOrigin).origin!==managerOrigin||typeof invitationId!=='string'||invitationId.length!==39||!/^invite_[0-9a-f]{32}$/.test(invitationId)||typeof bootstrapSHA256!=='string'||bootstrapSHA256.length!==64||!/^[0-9a-f]{64}$/.test(bootstrapSHA256))reject();
+ if(!loopbackHTTPOrigin(managerOrigin)||typeof invitationId!=='string'||invitationId.length!==39||!/^invite_[0-9a-f]{32}$/.test(invitationId)||typeof bootstrapSHA256!=='string'||bootstrapSHA256.length!==64||!/^[0-9a-f]{64}$/.test(bootstrapSHA256))reject();
  return ` --manager-origin ${quote(managerOrigin)} --invitation-id ${quote(invitationId)} --bootstrap-sha256 ${quote(bootstrapSHA256)} --insecure-http-test`;
 }
 function manual(args){return '"$PWD/bin/agent-service" --action install --apply --pending-service'+
  ' --agent-binary "$PWD/bin/lan-agent" --agent-sha256 "$(sha256sum < "$PWD/bin/lan-agent" | cut -d \' \' -f 1)"'+
  ' --enroll-binary "$PWD/bin/enroll-agent" --enroll-sha256 "$(sha256sum < "$PWD/bin/enroll-agent" | cut -d \' \' -f 1)"'+
  ' --source-archive "$PWD/tracebolt-selected-source.tar" --source-sha256 "$(sha256sum < "$PWD/tracebolt-selected-source.tar" | cut -d \' \' -f 1)"'+args;}
-function download(pin,args){
+function download(pin,args,installMode){
  const url=`https://raw.githubusercontent.com/storminator89/Tracebolt/${pin.publicationCommit}/deploy/release/published/${pin.version}.py`;
  // Exact independently held shell text: changes require this contract's review.
  const lines=[
@@ -58,14 +62,23 @@ function download(pin,args){
   'rm -f -- "$stage/bootstrap.py"',
   'rmdir -- "$stage"',
   'trap - 0 HUP INT TERM',
-  `exec python3 -I -B /proc/self/fd/3 --action install --apply --pending-service${args}`,
+  `exec python3 -I -B /proc/self/fd/3 --action install --apply${installMode}${args}`,
  ];
  return '/usr/bin/env -i PATH=/usr/sbin:/usr/bin:/sbin:/bin LANG=C.UTF-8 LC_ALL=C.UTF-8 /bin/sh -c '+quote(lines.join('; '));
 }
 /** Only the source-owned pin selects the branch; a command cannot choose its own. */
 export function assertPublicCommand(command,{pin,...context}){
  const args=publicArguments(context);if(pin!==null&&!validPin(pin))reject();
+ if(!['basic-readonly-v1','managed-operations-v1','managed-operations-v2','managed-operations-v3'].includes(context.collectionProfile))reject();
+ const complete=context.collectionProfile==='managed-operations-v3';
+ let installMode=' --pending-service';
+ if(complete){
+  const {agentOrigin}=context;
+  if(!loopbackHTTPOrigin(agentOrigin))reject();
+  if(pin?.version!=='v0.1.0-rc.2'){if(command!==null)reject();return 'unavailable';}
+  installMode=` --read-admin --read-admin-agent-origin ${quote(agentOrigin)}`;
+ }
  const kind=pin===null?'prepared-local':'verified-download';
- if(typeof command!=='string'||command!==(pin===null?manual(args):download(pin,args)))reject();
+ if(typeof command!=='string'||command!==(pin===null?manual(args):download(pin,args,installMode)))reject();
  return kind;
 }

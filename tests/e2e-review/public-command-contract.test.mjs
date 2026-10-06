@@ -3,6 +3,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
+import fs from 'node:fs';
 import {createRequire} from 'node:module';
 import {fileURLToPath} from 'node:url';
 import {spawnSync} from 'node:child_process';
@@ -14,12 +15,31 @@ const compiled=await build({entryPoints:[path.join(root,'web/src/verified-downlo
 const production=await import('data:text/javascript;base64,'+Buffer.from(compiled.outputFiles[0].text).toString('base64'));
 const managerOrigin='http://127.0.0.1:19894',invitationId='invite_'+'1'.repeat(32),bootstrapSHA256='b'.repeat(64);
 const pin={version:'v0.0.0-inert-fixture',publicationCommit:'c'.repeat(40),bootstrapSHA256:'d'.repeat(64)};
-const context={managerOrigin,invitationId,bootstrapSHA256};
+const context={managerOrigin,invitationId,bootstrapSHA256,collectionProfile:'managed-operations-v2'};
 const seconds=1791039600;
-const snapshot={version:'tracebolt.enrollment-state.v2',binding:{instanceID:'manager_'+'2'.repeat(32),origin:managerOrigin,profile:'http-test',collectionProfile:'managed-operations-v3',issuerFingerprint:'a'.repeat(64)},invitationID:invitationId,createRequestID:'request_'+'3'.repeat(32),platform:'linux',revision:1,state:'created',createdAt:seconds,deadlineAt:seconds+600,updatedAt:seconds,claim:{claimID:'',requestID:'',keyFingerprint:'',csrHash:'',claimHash:'',comparisonCode:'',at:0},approval:{requestID:'',deviceID:'',keyFingerprint:'',at:0},intent:{intentID:'',requestID:'',serialHex:'',templateVersion:'',deviceID:'',keyFingerprint:'',notBefore:0,notAfter:0,at:0},issuance:{requestID:'',certificateHash:'',at:0},activation:{requestID:'',at:0},termination:{requestID:'',from:'',at:0}};
+const snapshot={version:'tracebolt.enrollment-state.v2',binding:{instanceID:'manager_'+'2'.repeat(32),origin:managerOrigin,profile:'http-test',collectionProfile:'managed-operations-v2',issuerFingerprint:'a'.repeat(64)},invitationID:invitationId,createRequestID:'request_'+'3'.repeat(32),platform:'linux',revision:1,state:'created',createdAt:seconds,deadlineAt:seconds+600,updatedAt:seconds,claim:{claimID:'',requestID:'',keyFingerprint:'',csrHash:'',claimHash:'',comparisonCode:'',at:0},approval:{requestID:'',deviceID:'',keyFingerprint:'',at:0},intent:{intentID:'',requestID:'',serialHex:'',templateVersion:'',deviceID:'',keyFingerprint:'',notBefore:0,notAfter:0,at:0},issuance:{requestID:'',certificateHash:'',at:0},activation:{requestID:'',at:0},termination:{requestID:'',from:'',at:0}};
 const certificate='-----BEGIN CERTIFICATE-----\nQUJDRA==\n-----END CERTIFICATE-----';
-const bootstrap={schemaVersion:'tracebolt.enrollment-bootstrap.v2',managerInstanceId:snapshot.binding.instanceID,profile:'http-test',enrollmentOrigin:managerOrigin,agentOrigin:'http://127.0.0.1:19893',collectionProfile:'managed-operations-v3',invitationId,serverCaPem:'',issuerRootPem:certificate,issuerPem:certificate};
+const bootstrap={schemaVersion:'tracebolt.enrollment-bootstrap.v2',managerInstanceId:snapshot.binding.instanceID,profile:'http-test',enrollmentOrigin:managerOrigin,agentOrigin:'http://127.0.0.1:19893',collectionProfile:'managed-operations-v2',invitationId,serverCaPem:'',issuerRootPem:certificate,issuerPem:certificate};
 const originalWindow=globalThis.window;globalThis.window={location:{origin:managerOrigin}};
+const completePin={...pin,version:'v0.1.0-rc.2'};
+const completeSnapshot={...snapshot,binding:{...snapshot.binding,collectionProfile:'managed-operations-v3'}};
+const completeBootstrap={...bootstrap,collectionProfile:'managed-operations-v3'};
+const completeContext={...context,collectionProfile:'managed-operations-v3',agentOrigin:bootstrap.agentOrigin};
+const complete=production.verifiedDownloadCommand(completePin,completeBootstrap,completeSnapshot,bootstrapSHA256);
+const selectedComplete=production.selectEnrollmentCommand(completeBootstrap,completeSnapshot,bootstrapSHA256);
+// Compile synthetic pin substitutions in memory only. No source/release pin is
+// written, and no generated installation text is executed or fetched.
+const selectorFixtures=[];
+const selectorSource=fs.readFileSync(path.join(root,'web/src/verified-download-command.ts'),'utf8');
+for(const selectedPin of [null,{...pin,version:'v0.1.0-rc.1'},completePin,{...pin,version:'v0.1.0-rc.3'}]){
+ const contents=selectorSource.replace(/^(export const OFFICIAL_LINUX_BOOTSTRAP_PIN: BootstrapPublicationPin \| null = ).*;$/m,(_line,prefix)=>prefix+JSON.stringify(selectedPin)+';');
+ assert.notEqual(contents,selectorSource);
+ const compiledFixture=await build({stdin:{contents,loader:'ts',resolveDir:path.join(root,'web/src')},bundle:true,platform:'node',format:'esm',write:false,logLevel:'silent'});
+ const fixture=await import('data:text/javascript;base64,'+Buffer.from(compiledFixture.outputFiles[0].text).toString('base64'));
+ selectorFixtures.push({pin:selectedPin,available:fixture.verifiedLinuxDownloadAvailable('managed-operations-v3'),complete:fixture.selectEnrollmentCommand(completeBootstrap,completeSnapshot,bootstrapSHA256),basic:fixture.selectEnrollmentCommand(bootstrap,snapshot,bootstrapSHA256)});
+}
+
+
 const manual=production.verifiedDownloadCommand(null,bootstrap,snapshot,bootstrapSHA256) ?? (await import('data:text/javascript;base64,'+Buffer.from((await build({entryPoints:[path.join(root,'web/src/enrollment-command.ts')],bundle:true,platform:'node',format:'esm',write:false,logLevel:'silent'})).outputFiles[0].text).toString('base64'))).preparedEnrollmentCommand(bootstrap,snapshot,bootstrapSHA256);
 const verified=production.verifiedDownloadCommand(pin,bootstrap,snapshot,bootstrapSHA256);
 const tlsOrigin='https://manager.example.test:9443';
@@ -56,7 +76,7 @@ test('TLS preserves the exact reviewed wrapper and public CA binding',()=>{
  assert.equal(assertPublicCommand(normalized,{pin,...context}),'verified-download');
 });
 test('HTTP and TLS copied commands have no CR/LF and both shell layers parse without execution',()=>{
- for(const command of [verified,verifiedTLS]){
+ for(const command of [verified,verifiedTLS,complete]){
   assert.equal(typeof command,'string');assert.doesNotMatch(command,/[\r\n]/);
   const script=innerScript(command);assert.doesNotMatch(script,/[\r\n]/);
   for(const text of [command,script]){
@@ -72,3 +92,34 @@ test('requires exact public origin, invitation and bootstrap checksum inside nes
 test('rejects alternate URL, weak download, altered hash/order, command suffix and quote corruption',()=>{for(const bad of [verified.replace('raw.githubusercontent.com','example.invalid'),verified.replace(' --max-redirs 0',' --location'),verified.replace('curl -q','curl'),verified.replace('sha256sum --check --status','true'),verified.replace('exec python3 -I -B','exec python3'),verified.replace(quote(pin.bootstrapSHA256).split("'").join("'\\''"),'bogus'),verified+'; echo EXTRA',verified.slice(0,-1)])assert.throws(()=>assertPublicCommand(bad,{pin,...context}),/PUBLIC_COMMAND_CONTRACT_MISMATCH/);});
 test('rejects appended local command and removed local artifact checks',()=>{assert.throws(()=>assertPublicCommand(manual+'; echo EXTRA',{pin:null,...context}),/PUBLIC_COMMAND_CONTRACT_MISMATCH/);assert.throws(()=>assertPublicCommand(manual.replace('sha256sum','echo'),{pin:null,...context}),/PUBLIC_COMMAND_CONTRACT_MISMATCH/);});
 test('parses only null or an exported const with three plain string literal fields',()=>{assert.equal(parseSourceOwnedPin(declaration('null')),null);assert.deepEqual(parseSourceOwnedPin(declaration(literal)),pin);for(const bad of [declaration(`(()=>{globalThis.__qaPinExecuted=true;return ${literal}})()`),declaration(`{...${literal}}`),declaration(literal+' as const'),declaration(literal.replace('version:',"['version']:")),declaration(literal.replace("version:","version:'v0.0.0',version:")),declaration('null')+declaration('null'),declaration(literal).replace('const','let'),declaration(literal).replace('export ',''),declaration(literal.replace(pin.publicationCommit,pin.publicationCommit+'\\n'))])assert.throws(()=>parseSourceOwnedPin(bad),/PUBLIC_COMMAND_CONTRACT_MISMATCH/);assert.equal(globalThis.__qaPinExecuted,undefined);});
+
+test('complete commands require an explicitly capable pin and never a base-only fallback',()=>{
+ assert.equal(assertPublicCommand(complete,{pin:completePin,...completeContext}),'verified-download');
+ const script=innerScript(complete);
+ assert.ok(script.includes(` --read-admin --read-admin-agent-origin ${quote(bootstrap.agentOrigin)}`));assert.ok(!script.includes('--pending-service'));
+ for(const unavailablePin of [null,pin,{...pin,version:'v0.1.0-rc.1'},{...pin,version:'v0.1.0-rc.3'}]){
+  assert.equal(assertPublicCommand(null,{pin:unavailablePin,...completeContext}),'unavailable');
+  for(const command of [manual,verified,complete])assert.throws(()=>assertPublicCommand(command,{pin:unavailablePin,...completeContext}),/PUBLIC_COMMAND_CONTRACT_MISMATCH/);
+ }
+ assert.throws(()=>assertPublicCommand(null,{pin:completePin,...completeContext}),/PUBLIC_COMMAND_CONTRACT_MISMATCH/);
+ assert.equal(assertPublicCommand(selectedComplete?.command??null,{pin:readSourceOwnedPin(root),...completeContext}),readSourceOwnedPin(root)?.version==='v0.1.0-rc.2'?'verified-download':'unavailable');
+});
+test('complete contract rejects missing or changed validated ingress and any weaker install mode',()=>{
+ for(const agentOrigin of [undefined,'http://127.0.0.1:0','http://127.0.0.1:99999','http://127.0.0.1:19892','http://127.0.0.1:19893/','https://127.0.0.1:19893',"http://127.0.0.1:19893';echo untrusted"]){
+  assert.throws(()=>assertPublicCommand(complete,{pin:completePin,...completeContext,agentOrigin}),/PUBLIC_COMMAND_CONTRACT_MISMATCH/);
+ }
+ for(const installMode of [' --pending-service',' --read-admin',' --read-admin --pending-service']){
+  const script=innerScript(complete).replace(` --read-admin --read-admin-agent-origin ${quote(bootstrap.agentOrigin)}`,installMode);
+  assert.throws(()=>assertPublicCommand(wrapper+quote(script),{pin:completePin,...completeContext}),/PUBLIC_COMMAND_CONTRACT_MISMATCH/);
+ }
+});
+
+test('a literal-only capable pin activation selects complete read-admin while disabled pins never fall back',()=>{
+ for(const fixture of selectorFixtures){
+  const capable=fixture.pin?.version==='v0.1.0-rc.2';
+  assert.equal(fixture.available,capable);
+  assert.equal(assertPublicCommand(fixture.complete?.command??null,{pin:fixture.pin,...completeContext}),capable?'verified-download':'unavailable');
+  assert.equal(fixture.complete?.kind??null,capable?'verified-download':null);
+  assert.equal(assertPublicCommand(fixture.basic.command,{pin:fixture.pin,...context}),fixture.pin===null?'prepared-local':'verified-download');
+ }
+});

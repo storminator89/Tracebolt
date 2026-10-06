@@ -1,12 +1,13 @@
 import { preparedEnrollmentCommand, publicEnrollmentArguments } from './enrollment-command';
-import type { EnrollmentSnapshot } from './enrollment-types';
+import { publicBootstrap } from './enrollment-types';
+import type { EnrollmentCollectionProfile, EnrollmentSnapshot } from './enrollment-types';
 
 type BootstrapPublicationPin = Readonly<{ version: string; publicationCommit: string; bootstrapSHA256: string }>;
 
 // Activation is a reviewed source change after official publication and readback.
 // This is the bootstrap publication commit, NOT the binary/source build commit.
 // Never populate it from API data, manager configuration, environment or storage.
-export const OFFICIAL_LINUX_BOOTSTRAP_PIN: BootstrapPublicationPin | null = { version: 'v0.1.0-rc.1', publicationCommit: '458fc072a73946032446c0d9e63220ea29cca355', bootstrapSHA256: '85bd2c01beb3012d5d042d88448d892a270cf527786a73e7a0a67867cac47f61' };
+export const OFFICIAL_LINUX_BOOTSTRAP_PIN: BootstrapPublicationPin | null = { version: 'v0.1.0-rc.2', publicationCommit: '08c7f0ef3bb8c3f8941a071d885bdf550c7f72c5', bootstrapSHA256: '10b372ed31d0b2e04d901286ed477a9e7b4fc4d1efe7faea78a5ae8a284db4ea' };
 
 const shellQuote = (value: string): string => `'${value.replaceAll("'", "'\\''")}'`;
 function validPin(value: unknown): value is BootstrapPublicationPin {
@@ -18,7 +19,13 @@ function validPin(value: unknown): value is BootstrapPublicationPin {
         typeof pin.bootstrapSHA256 === 'string' && pin.bootstrapSHA256.length === 64 && /^[0-9a-f]{64}$/.test(pin.bootstrapSHA256);
 }
 
-export function verifiedLinuxDownloadAvailable(): boolean { return validPin(OFFICIAL_LINUX_BOOTSTRAP_PIN); }
+// Only this explicitly reviewed release supports the combined read-admin v2 flow.
+// Future releases require a source review, rather than an inferred version range.
+const READ_ADMIN_RELEASE_VERSION = 'v0.1.0-rc.2';
+export function verifiedLinuxDownloadAvailable(profile: EnrollmentCollectionProfile = 'basic-readonly-v1'): boolean {
+    return validPin(OFFICIAL_LINUX_BOOTSTRAP_PIN) &&
+        (profile !== 'managed-operations-v3' || OFFICIAL_LINUX_BOOTSTRAP_PIN.version === READ_ADMIN_RELEASE_VERSION);
+}
 
 /** Inert serializer. The explicit pin parameter is for source review/fixtures;
  * the invitation UI calls only selectEnrollmentCommand, which has no pin input.
@@ -27,6 +34,13 @@ export function verifiedDownloadCommand(pin: unknown, value: unknown, snapshot: 
     if (!validPin(pin)) return null;
     const publicArguments = publicEnrollmentArguments(value, snapshot, checksum);
     if (publicArguments === null) return null;
+    const bootstrap = publicBootstrap(value, snapshot, '');
+    if (!bootstrap) return null;
+    const complete = bootstrap.collectionProfile === 'managed-operations-v3';
+    if (complete && pin.version !== READ_ADMIN_RELEASE_VERSION) return null;
+    const installMode = complete
+        ? ` --read-admin --read-admin-agent-origin ${shellQuote(bootstrap.agentOrigin)}`
+        : ' --pending-service';
     const url = `https://raw.githubusercontent.com/storminator89/Tracebolt/${pin.publicationCommit}/deploy/release/published/${pin.version}.py`;
     // The inner shell is foreground with inherited terminal stdin. Only the hash
     // check uses a pipe; downloaded bytes never become shell input. Open the verified
@@ -53,7 +67,7 @@ export function verifiedDownloadCommand(pin: unknown, value: unknown, snapshot: 
         'rm -f -- "$stage/bootstrap.py"',
         'rmdir -- "$stage"',
         'trap - 0 HUP INT TERM',
-        `exec python3 -I -B /proc/self/fd/3 --action install --apply --pending-service${publicArguments}`,
+        `exec python3 -I -B /proc/self/fd/3 --action install --apply${installMode}${publicArguments}`,
     ].join('; ');
     // A clean environment also excludes ambient curl CA/proxy configuration and
     // Python startup variables. curl -q must remain its first option.
@@ -65,6 +79,7 @@ export type EnrollmentCommand = { kind: 'prepared-local'; command: string } | { 
 export function selectEnrollmentCommand(value: unknown, snapshot: EnrollmentSnapshot, checksum: unknown): EnrollmentCommand | null {
     const downloaded = verifiedDownloadCommand(OFFICIAL_LINUX_BOOTSTRAP_PIN, value, snapshot, checksum);
     if (downloaded !== null) return { kind: 'verified-download', command: downloaded };
+    // The manual serializer also rejects complete profiles: no base-only fallback.
     const prepared = preparedEnrollmentCommand(value, snapshot, checksum);
     return prepared === null ? null : { kind: 'prepared-local', command: prepared };
 }

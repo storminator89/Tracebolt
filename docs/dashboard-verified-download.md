@@ -1,19 +1,20 @@
 # Verified dashboard Linux download
 
-The invitation dialog selects the verified download command for `v0.1.0-rc.1`.
-Its source-owned pin names bootstrap publication commit
-`458fc072a73946032446c0d9e63220ea29cca355` and SHA-256
-`85bd2c01beb3012d5d042d88448d892a270cf527786a73e7a0a67867cac47f61`.
-The binary/source build commit is separately pinned to
-`ccac65e7a61f0b5f0e325c3616a93273ab1e8eb1`.
-Older responses without a public bootstrap checksum still offer the existing
-public configuration file only. This command is for a fresh approved installation;
-existing installed agents use the separately reviewed upgrade action and retain
-identity/state. The selected source includes Logs and the complete process/mount
-extension. Their separate local helper/collection grants remain required; selecting
-this release does not enable new collection scopes or authorize a host upgrade.
-Existing journal-helper grants remain in place on compatible updates; the downloader
-does not provision that helper or repeat its create-only setup.
+The invitation dialog selects `v0.1.0-rc.2` through the source-owned bootstrap
+publication commit `08c7f0ef3bb8c3f8941a071d885bdf550c7f72c5` and SHA-256
+`10b372ed31d0b2e04d901286ed477a9e7b4fc4d1efe7faea78a5ae8a284db4ea`.
+The binary/source build is separately bound to
+`a6368b0202b1efecdb6214dc34c4302d239854f7`.
+
+For the complete `managed-operations-v3` profile, the command selects
+`--read-admin --read-admin-agent-origin` with the strictly validated public
+bootstrap ingress. It configures the supported read scopes and separate helpers
+after one explicit combined terminal approval, hidden invitation entry and the
+usual dashboard fingerprint approval. Keep the terminal open until completion.
+The main agent remains nonroot; CAP_SYS_PTRACE and log-content risks are disclosed.
+Basic/non-complete profiles keep `--pending-service`. An absent, old or unknown
+read-admin-capable pin offers no incomplete prepared-local downgrade for the
+complete profile. Invalid bootstrap identity/origin/checksum also yields no command.
 
 The optional serializer is inert: it returns text and does not download or run
 anything. Its copied output is one physical line, with semicolon-separated shell
@@ -61,8 +62,9 @@ ordinary Ctrl+C cancellation. No SIGKILL or cancellation timeout is introduced.
 
 The separately reviewed bootstrap owns platform rejection, release provenance,
 artifact verification and installer invocation. Its Linux arm64 runtime remains
-disabled. Invitation lifecycle, collection consent, comparison approval,
-activation, retention and host installation permissions are unchanged.
+disabled. Invitation identity, comparison approval, activation and retention remain
+unchanged. Complete-profile scope is granted only by the existing combined
+read-admin terminal confirmation; merely rendering or copying the command grants nothing.
 
 The visible download copy warns that running the command changes accounts,
 service and persistent identity, and that an HTTP-test dashboard can replace the
@@ -72,31 +74,24 @@ authenticate that page. Existing disposable HTTP and collection notices remain.
 
 ## Recorded release and activation evidence
 
-- The [rc.1 build and publication](https://github.com/storminator89/Tracebolt/actions/runs/37310793781)
-  succeeded from the exact binary/source commit above. Its
-  [official release](https://github.com/storminator89/Tracebolt/releases/tag/v0.1.0-rc.1)
-  has ten selected assets. Previously published pilot.2 bytes remain unchanged.
-- The [independent public-byte check](https://github.com/storminator89/Tracebolt/actions/runs/37312386248)
-  downloaded and verified all ten official assets through the strict downloader,
-  checked exact source/workflow keyless provenance and reproduced the exact
-  bootstrap from its source template. It executed no Tracebolt binary or installer.
-- The [commit-pinned official bootstrap source](https://raw.githubusercontent.com/storminator89/Tracebolt/458fc072a73946032446c0d9e63220ea29cca355/deploy/release/published/v0.1.0-rc.1.py)
-  was read back and matched the exact verified 37,461 bytes and digest before
-  selecting the UI pin.
-- GitHub reports `immutable: false` for this release. The fixed source, manifest,
-  bundle and asset hashes are the verification boundary; platform-level release
-  locking is not claimed.
+- [rc.2 build/publication](https://github.com/storminator89/Tracebolt/actions/runs/37511484957)
+  produced [12 public assets](https://github.com/storminator89/Tracebolt/releases/tag/v0.1.0-rc.2)
+  from the exact source above, including four programs for each architecture.
+- [Strict public readback](https://github.com/storminator89/Tracebolt/actions/runs/37513100878)
+  verified all 12 assets, exact source/workflow keyless provenance and the
+  reconstructed bootstrap. No Tracebolt program or installer was executed.
+- The [commit-pinned bootstrap](https://raw.githubusercontent.com/storminator89/Tracebolt/08c7f0ef3bb8c3f8941a071d885bdf550c7f72c5/deploy/release/published/v0.1.0-rc.2.py)
+  was separately read back and matched its 46,739 bytes and SHA-256.
+- [Native Ubuntu TLS acceptance](https://github.com/storminator89/Tracebolt/actions/runs/37508637893)
+  passed all scenarios, all six functional checks and cleanup on production-equivalent
+  c1cd23a source. This is not a Debian/HTTP download-installation or OS-reboot result.
+- GitHub reports `immutable: false`; fixed source, manifest, bundle and asset
+  hashes remain the boundary. Historical rc.1 and pilot.2 bytes are unchanged.
 
-The activation change is checked with type checking/build, the command/enrollment
-UI fixtures and nine inert public-command contract tests. Its exact hosted browser
-check remains required; none of these results establishes a download-based host
-installation, upgrade or OS reboot. Those remain separately observed pilot operations.
-
-Future versions must repeat the release/provenance/public-byte checks in
-[the distribution guide](linux-release-distribution.md), publish a separate
-immutable bootstrap source commit, then update the source-owned literal. Never
-use fixture pins, manager responses or deployment configuration to choose trust.
-Keep disabled/manual fallback and fail-closed tests when updating an active pin.
+Focused command, UI and actual inert shell-tail checks cover both profile modes.
+The activation revision's hosted browser acceptance remains separately recorded.
+Future versions require fresh public provenance/byte verification and an explicit
+source-owned capability/pin update; API or configuration data cannot choose trust.
 
 ## Inert checks
 

@@ -21,6 +21,9 @@ export function publicEnrollmentArguments(value: unknown, snapshot: EnrollmentSn
 export function preparedEnrollmentCommand(value: unknown, snapshot: EnrollmentSnapshot, checksum: unknown): string | null {
     const publicArguments = publicEnrollmentArguments(value, snapshot, checksum);
     if (publicArguments === null) return null;
+    const bootstrap = publicBootstrap(value, snapshot, '');
+    // Direct agent-service installation cannot provide the combined read scopes.
+    if (!bootstrap || bootstrap.collectionProfile === 'managed-operations-v3') return null;
     return '"$PWD/bin/agent-service" --action install --apply --pending-service' +
         ' --agent-binary "$PWD/bin/lan-agent" --agent-sha256 "$(sha256sum < "$PWD/bin/lan-agent" | cut -d \' \' -f 1)"' +
         ' --enroll-binary "$PWD/bin/enroll-agent" --enroll-sha256 "$(sha256sum < "$PWD/bin/enroll-agent" | cut -d \' \' -f 1)"' +
