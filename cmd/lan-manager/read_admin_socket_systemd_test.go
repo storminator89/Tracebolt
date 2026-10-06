@@ -55,7 +55,7 @@ func readAdminNativeMaintenance(t *testing.T, c *readAdminNativeCommand, operati
 	cmd.Env = c.environment()
 	raw, err := cmd.Output()
 	defer clear(raw)
-	remember := operation != "cleanup" || c.options.setupDiagnostic() == "none" || c.options.setupDiagnostic() == "not_attempted"
+	remember := readAdminRememberMaintenanceFailure(operation, t.Failed(), c.options.setupDiagnostic())
 	if len(raw) <= 4096 && err != nil && remember {
 		var failure struct {
 			SchemaVersion string `json:"schemaVersion"`
@@ -80,6 +80,11 @@ func readAdminNativeMaintenance(t *testing.T, c *readAdminNativeCommand, operati
 		c.options.setupFailure = "maintenance-operation-failed"
 	}
 	return valid
+}
+
+// Cleanup must not replace the primary failure of an already failed test.
+func readAdminRememberMaintenanceFailure(operation string, failed bool, setup string) bool {
+	return operation != "cleanup" || !failed && (setup == "none" || setup == "not_attempted")
 }
 
 // Pure parser: ordinary tests supply invented status/cgroup strings only.
@@ -176,7 +181,7 @@ func readAdminFixtureOwner(rows []systeminventory.Socket, protocol string, port 
 	return false
 }
 
-func readAdminSocketOwnersAndRevoke(t *testing.T, c *readAdminNativeCommand, get func(string, any), query func(string, any, any), stage *string) {
+func readAdminSocketOwnersAndRevoke(t *testing.T, c *readAdminNativeCommand, get func(string, any), query func(string, any, any), stage *string, uid, gid int, bindOperatorTest func(*testing.T) func()) {
 	t.Helper()
 	*stage = "read_admin_socket_owners"
 	// The ordinary installed service must attribute a DIFFERENT root principal.
@@ -242,36 +247,80 @@ func readAdminSocketOwnersAndRevoke(t *testing.T, c *readAdminNativeCommand, get
 		}
 		time.Sleep(300 * time.Millisecond)
 	}
-	if matched.Sequence == nil {
-		t.Fatal("actual installed-service fixture owners not observed")
-	}
+	failureStage := ""
+	defer func() {
+		if failureStage != "" {
+			*stage = failureStage
+		}
+	}()
 	var native readAdminSocketNativeResult
-	if !readAdminNativeMaintenance(t, c, "inspect-socket", &native) || native.GrantEpoch != matched.Latest.SocketOwnerProvenance.GrantEpoch || native.PolicyDigest != matched.Latest.SocketOwnerProvenance.PolicyDigest {
-		t.Fatal("received helper source not bound to installed grant")
+	if matched.Sequence == nil {
+		// Ownership is still required for PASS and for grant-bound revocation.
+		// Its absence does not invalidate the separately proven installation.
+		t.Error("actual installed-service fixture owners not observed")
+		failureStage = *stage
+	} else {
+		if !readAdminNativeMaintenance(t, c, "inspect-socket", &native) || native.GrantEpoch != matched.Latest.SocketOwnerProvenance.GrantEpoch || native.PolicyDigest != matched.Latest.SocketOwnerProvenance.PolicyDigest {
+			t.Fatal("received helper source not bound to installed grant")
+		}
+		readAdminCheckSocketProcess(t, native.AgentPID, native.AgentUID, native.AgentGID, 0, "tracebolt-agent.service", "/opt/tracebolt-agent/lan-agent")
+		readAdminCheckSocketProcess(t, native.HelperPID, native.HelperUID, native.HelperGID, 1<<19, "tracebolt-socket-owner-reader.service", "/opt/tracebolt-agent/socket-owner-reader")
+		c.options.checks.InstalledServiceOwners = true
+		c.options.checks.V4Provenance = true
 	}
-	readAdminCheckSocketProcess(t, native.AgentPID, native.AgentUID, native.AgentGID, 0, "tracebolt-agent.service", "/opt/tracebolt-agent/lan-agent")
-	readAdminCheckSocketProcess(t, native.HelperPID, native.HelperUID, native.HelperGID, 1<<19, "tracebolt-socket-owner-reader.service", "/opt/tracebolt-agent/socket-owner-reader")
-	c.options.checks.InstalledServiceOwners = true
-	c.options.checks.V4Provenance = true
+	// Each independent check retains its own assertions and can fail without
+	// suppressing the other. Operator errors belong to the active child too.
+	run := func(name string, check func(*testing.T)) {
+		*stage = name
+		if !t.Run(name, func(child *testing.T) {
+			restore := bindOperatorTest(child)
+			defer restore()
+			check(child)
+		}) && failureStage == "" {
+			failureStage = name
+		}
+	}
 	if c.options.scenario == "complete" {
-		*stage = "read_admin_journal_content"
-		readAdminJournalContent(t, c, device, get, query)
-		c.options.checks.JournalContent = true
+		run("read_admin_journal_content", func(t *testing.T) {
+			readAdminJournalContent(t, c, device, get, query)
+			c.options.checks.JournalContent = true
+		})
 	}
-	*stage = "read_admin_restart"
-	installer := filepath.Join(filepath.Dir(c.configs[false]), "tracebolt-"+readAdminFixtureVersion+"-linux-amd64-agent-service")
-	args := []string{"--action", "restart", "--apply"}
-	if c.options.profile == lanconfig.HTTPTest {
-		args = append(args, "--insecure-http-test")
+	var restartedSequence uint64
+	run("read_admin_restart", func(t *testing.T) {
+		installer := filepath.Join(filepath.Dir(c.configs[false]), "tracebolt-"+readAdminFixtureVersion+"-linux-amd64-agent-service")
+		args := []string{"--action", "restart"}
+		if c.options.profile == lanconfig.HTTPTest {
+			args = append(args, "--insecure-http-test")
+		}
+		// The production read-only preflight verifies loaded unit ownership,
+		// retained identity and manifest-bound artifact hashes independently of
+		// socket attribution. Apply repeats those checks before service changes.
+		cmd := exec.Command(installer, args...)
+		cmd.Env = systemdCleanEnvironment()
+		if cmd.Run() != nil {
+			t.Fatal("owned native agent restart preflight failed")
+		}
+		systemdCheckProcessIdentity(t, uid, gid)
+		var before enrollmentstore.SystemView
+		get("/api/devices/"+device+"/inventory/system", &before)
+		if before.Sequence == nil || before.Latest == nil || before.Latest.GenerationID == "" || before.Status != "fresh" {
+			t.Fatal("ordinary restart baseline unavailable")
+		}
+		cmd = exec.Command(installer, append(args, "--apply")...)
+		cmd.Env = systemdCleanEnvironment()
+		if cmd.Run() != nil {
+			t.Fatal("owned native agent restart failed")
+		}
+		restartedSequence = readAdminWaitRestartSystem(t, device, before, time.Now().UTC(), native.GrantEpoch, get)
+		systemdCheckProcessIdentity(t, uid, gid)
+		c.options.checks.ServiceRestartOnline = true
+	})
+	if failureStage != "" {
+		// Preserve the first stage and prevent the caller marking completion.
+		// In particular, no grant-dependent revoke runs without owner proof.
+		t.FailNow()
 	}
-	cmd := exec.Command(installer, args...)
-	cmd.Env = systemdCleanEnvironment()
-	if err := cmd.Run(); err != nil {
-		t.Fatal("owned native agent restart failed")
-	}
-	restartedSequence := readAdminWaitRestartSystem(t, device, *matched.Sequence, time.Now().UTC(), native.GrantEpoch, get)
-	systemdCheckProcessIdentity(t, native.AgentUID, native.AgentGID)
-	c.options.checks.ServiceRestartOnline = true
 	*stage = "read_admin_revoke"
 	before := readAdminIdentitySnapshot(t)
 	authority := readAdminAuthoritySnapshot(t)
@@ -292,19 +341,31 @@ func readAdminSocketOwnersAndRevoke(t *testing.T, c *readAdminNativeCommand, get
 
 }
 
-func readAdminWaitRestartSystem(t *testing.T, device string, afterSequence uint64, after time.Time, epoch string, get func(string, any)) uint64 {
+// Pure report predicate: neither a retained generation nor receipt time alone
+// proves a new ordinary collection after the completed restart.
+func readAdminRestartObservationAdvanced(view, before enrollmentstore.SystemView, after time.Time) bool {
+	return before.Sequence != nil && before.Latest != nil && before.Latest.GenerationID != "" &&
+		view.Sequence != nil && *view.Sequence > *before.Sequence && view.Latest != nil &&
+		view.Latest.GenerationID != "" && view.Latest.GenerationID != before.Latest.GenerationID &&
+		view.Latest.CollectedAt.After(before.Latest.CollectedAt) && view.Latest.CollectedAt.After(after) && view.Status == "fresh"
+}
+
+func readAdminWaitRestartSystem(t *testing.T, device string, before enrollmentstore.SystemView, after time.Time, epoch string, get func(string, any)) uint64 {
 	t.Helper()
 	until := time.Now().Add(120 * time.Second)
 	for time.Now().Before(until) {
 		var view enrollmentstore.SystemView
 		get("/api/devices/"+device+"/inventory/system", &view)
-		if view.Sequence != nil && *view.Sequence > afterSequence && view.Latest != nil && view.Latest.CollectedAt.After(after) && view.Status == "fresh" {
+		if readAdminRestartObservationAdvanced(view, before, after) {
 			p := view.Latest.SocketOwnerProvenance
-			if p != nil && p.GrantEpoch == epoch && systeminventory.ValidateSocketOwnerProvenance(*p, view.Latest.CollectedAt, view.Latest.DurationMS) == nil {
+			if epoch == "" || p != nil && p.GrantEpoch == epoch && systeminventory.ValidateSocketOwnerProvenance(*p, view.Latest.CollectedAt, view.Latest.DurationMS) == nil {
 				return *view.Sequence
 			}
 		}
 		time.Sleep(300 * time.Millisecond)
+	}
+	if epoch == "" {
+		t.Fatal("new ordinary online report not observed after revoke/restart")
 	}
 	t.Fatal("restarted installed service did not return online with socket provenance")
 	return 0
@@ -457,5 +518,59 @@ func TestReadAdminFixtureOwner(t *testing.T) {
 	row.Attribution.Coverage = systeminventory.AttributionPartial
 	if readAdminFixtureOwner([]systeminventory.Socket{row}, "tcp", 4321, 2345, name) {
 		t.Fatal("partial fixture passed native ownership")
+	}
+}
+
+func TestReadAdminMaintenanceFailurePreservesPrimary(t *testing.T) {
+	for _, tc := range []struct {
+		operation, setup string
+		failed, remember bool
+	}{
+		{"cleanup", "none", false, true},
+		{"cleanup", "not_attempted", false, true},
+		{"cleanup", "none", true, false},
+		{"cleanup", "not_attempted", true, false},
+		{"cleanup", "loaded-unit-ownership", false, false},
+		{"cleanup", "loaded-unit-ownership", true, false},
+		{"inspect-socket", "none", false, true},
+		{"revoke-socket", "none", true, true},
+	} {
+		if readAdminRememberMaintenanceFailure(tc.operation, tc.failed, tc.setup) != tc.remember {
+			t.Fatal("maintenance replaced primary diagnostic or lost its own failure")
+		}
+	}
+}
+
+func TestReadAdminRestartRequiresNewOrdinaryGeneration(t *testing.T) {
+	sequence := uint64(4)
+	before := enrollmentstore.SystemView{Sequence: &sequence, Status: "fresh", Latest: &enrollmentstore.SystemSnapshotSummary{GenerationID: "before", CollectedAt: time.Unix(1000, 0)}}
+	after := time.Unix(1001, 0)
+	newView := func() enrollmentstore.SystemView {
+		next := sequence + 1
+		return enrollmentstore.SystemView{Sequence: &next, Status: "fresh", Latest: &enrollmentstore.SystemSnapshotSummary{GenerationID: "after", CollectedAt: time.Unix(1002, 0)}}
+	}
+	if !readAdminRestartObservationAdvanced(newView(), before, after) {
+		t.Fatal("fresh ordinary report without socket provenance rejected")
+	}
+	for _, mutate := range []func(*enrollmentstore.SystemView){
+		func(v *enrollmentstore.SystemView) { v.Sequence = nil },
+		func(v *enrollmentstore.SystemView) { v.Sequence = before.Sequence },
+		func(v *enrollmentstore.SystemView) { v.Latest = nil },
+		func(v *enrollmentstore.SystemView) { v.Latest.GenerationID = "" },
+		func(v *enrollmentstore.SystemView) { v.Latest.GenerationID = before.Latest.GenerationID },
+		func(v *enrollmentstore.SystemView) { v.Latest.CollectedAt = after },
+		func(v *enrollmentstore.SystemView) { v.Latest.CollectedAt = before.Latest.CollectedAt },
+		func(v *enrollmentstore.SystemView) { v.Status = "stale" },
+	} {
+		view := newView()
+		mutate(&view)
+		if readAdminRestartObservationAdvanced(view, before, after) {
+			t.Fatal("retained or stale restart report accepted")
+		}
+	}
+	for _, prior := range []enrollmentstore.SystemView{{}, {Sequence: &sequence}, {Sequence: &sequence, Latest: &enrollmentstore.SystemSnapshotSummary{}}} {
+		if readAdminRestartObservationAdvanced(newView(), prior, after) {
+			t.Fatal("missing restart baseline accepted")
+		}
 	}
 }

@@ -405,6 +405,22 @@ jobs:
           fi
           echo 'PASS: 13 HTTP, six fake-provider AI and seven managed API groups; SQLite checks.'
 
+  transport-smoke:
+    name: Real two-process Linux transport and expiry
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Prepare verified dependencies before the transport smoke
+        run: |
+          go mod download
+          go mod verify
       - name: Real two-process Linux transport and 120-second expiry
         run: |
           if ! python3 tests/security/run_transport_smoke.py --wait-stale > "$RUNNER_TEMP/transport-smoke.log" 2>&1; then

@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -17,6 +18,35 @@ import (
 
 	"golang.org/x/sys/unix"
 )
+
+func TestNamespaceDirectoryUsesTraversalOnlyDescriptor(t *testing.T) {
+	expected := unix.O_PATH | unix.O_DIRECTORY | unix.O_NOFOLLOW | unix.O_CLOEXEC
+	if nativeNamespaceDirFlags != expected || nativeDirFlags&unix.O_PATH != 0 {
+		t.Fatal("namespace traversal changed directory enumeration flags")
+	}
+	// A disposable ordinary directory is enough to check descriptor semantics;
+	// no host proc directory, namespace, process or capability is inspected.
+	fd, err := unix.Open(t.TempDir(), nativeNamespaceDirFlags, 0)
+	if err != nil {
+		t.Fatal("temporary traversal descriptor")
+	}
+	defer unix.Close(fd)
+	var st unix.Stat_t
+	var fs unix.Statfs_t
+	if unix.Fstat(fd, &st) != nil || st.Mode&unix.S_IFMT != unix.S_IFDIR || unix.Fstatfs(fd, &fs) != nil {
+		t.Fatal("traversal descriptor lost metadata operations")
+	}
+	if _, err := unix.Read(fd, make([]byte, 1)); !errors.Is(err, unix.EBADF) {
+		t.Fatal("namespace traversal descriptor permits directory reads")
+	}
+	// Keep the runtime call site bound to the narrow helper, while task/PID
+	// directory callers continue using their original enumeration descriptor.
+	raw, err := os.ReadFile("native_process_linux.go")
+	if err != nil || !bytes.Contains(raw, []byte("nsdir, e := procNamespaceDirectory(dir)")) ||
+		bytes.Contains(raw, []byte("procDirectory(dir, \"ns\")")) {
+		t.Fatal("namespace traversal call site changed")
+	}
+}
 
 func fixtureStatus(uid, gid uint32, cap uint64) []byte {
 	return []byte(fmt.Sprintf("Name:\tfixture\nPid:\t100\nUid:\t%d %d %d %d\nGid:\t%d %d %d %d\nGroups:\t\nCapEff:\t%016x\nCapPrm:\t%016x\nCapInh:\t%016x\nCapAmb:\t%016x\nCapBnd:\t%016x\nNoNewPrivs:\t1\nSeccomp:\t2\n", uid, uid, uid, uid, gid, gid, gid, gid, cap, cap, cap, cap, cap))

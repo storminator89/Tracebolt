@@ -412,6 +412,65 @@ class ReadAdminWrapperTests(unittest.TestCase):
                     self.assertEqual(self.complete(output.encode()),
                                      ("PASS: selected fresh read-admin V2 scenario completed; OS reboot remains untested.\n", None))
 
+    def test_missing_owners_preserves_failure_with_independent_results(self):
+        checks = dict.fromkeys(CHECKS, False)
+        checks.update(journalContent=True, serviceRestartOnline=True)
+        raw = json.dumps(result(status="fail", stage="read_admin_socket_owners",
+                                socketNativeChecks=checks, setupFailure="none")).encode()
+        private_log = (b'    read_admin_socket_systemd_test.go:260: actual installed-service fixture owners not observed\n'
+                       b'    read_admin_systemd_test.go:1360: owned helper containment unconfirmed; preserve state and discard VM\n')
+        output, error, _, _ = self.validate(raw, private_log=private_log)
+        self.assertIsNone(error)
+        projected = json.loads(output)
+        self.assertEqual(projected['stage'], 'read_admin_socket_owners')
+        self.assertEqual(projected['setupFailure'], 'none')
+        self.assertEqual(projected['nativeAssertion'], 'actual installed-service fixture owners not observed')
+        self.assertEqual(projected['socketNativeChecks'], checks)
+        self.assertEqual(self.complete(output.encode()), ("", INCOMPLETE))
+        self.assert_rejected(json.dumps(result(socketNativeChecks=checks)).encode())
+
+    def test_missing_owners_cannot_skip_independent_checks_or_reach_revoke(self):
+        root = WORKFLOW.parents[2]
+        source = (root / 'cmd/lan-manager/read_admin_socket_systemd_test.go').read_text()
+        body = source.split('func readAdminSocketOwnersAndRevoke', 1)[1].split('func readAdminRestartObservationAdvanced', 1)[0]
+        missing, observed = body.split('if matched.Sequence == nil {', 1)[1].split('} else {', 1)
+        self.assertIn('t.Error("actual installed-service fixture owners not observed")', missing)
+        self.assertNotIn('t.Fatal', missing)
+        self.assertIn('failureStage = *stage', missing)
+        self.assertIn('"inspect-socket"', observed)
+        journal = body.index('run("read_admin_journal_content"')
+        restart = body.index('run("read_admin_restart"')
+        fail = body.index('t.FailNow()')
+        revoke = body.index('"revoke-socket"')
+        self.assertLess(journal, restart)
+        self.assertLess(restart, fail)
+        self.assertLess(fail, revoke)
+        self.assertIn('if failureStage != "" {', body)
+        self.assertIn('*stage = failureStage', body)
+        self.assertIn('args := []string{"--action", "restart"}', body)
+        self.assertLess(body.index('"owned native agent restart preflight failed"'), body.index('append(args, "--apply")'))
+        self.assertLess(body.index('"ordinary restart baseline unavailable"'), body.index('append(args, "--apply")'))
+        self.assertIn('readAdminRememberMaintenanceFailure(operation, t.Failed(), c.options.setupDiagnostic())', source)
+
+    def test_independent_operator_errors_target_active_child(self):
+        root = WORKFLOW.parents[2]
+        driver = (root / 'cmd/lan-manager/systemd_install_test.go').read_text()
+        callbacks = driver.split('call := func(path string, body any, csrf string)', 1)[1].split('invitation := ', 1)[0]
+        for assertion in ('operator fixture request', 'operator fixture response',
+                          'operator fixture read', 'operator fixture read contract',
+                          'bounded operator query contract'):
+            self.assertIn('operatorTest.Fatal("' + assertion + '")', callbacks)
+            self.assertNotRegex(callbacks, r'\bt\.Fatal\("' + re.escape(assertion) + r'"\)')
+        binding = driver.split('bindOperatorTest := ', 1)[1].split('call := ', 1)[0]
+        self.assertIn('previous := operatorTest', binding)
+        self.assertIn('operatorTest = current', binding)
+        self.assertIn('return func() { operatorTest = previous }', binding)
+        native = (root / 'cmd/lan-manager/read_admin_socket_systemd_test.go').read_text()
+        phase = native.split('run := func(name string, check func(*testing.T))', 1)[1].split('if c.options.scenario', 1)[0]
+        self.assertIn('restore := bindOperatorTest(child)', phase)
+        self.assertIn('defer restore()', phase)
+        self.assertLess(phase.index('defer restore()'), phase.index('check(child)'))
+
     def test_fail_stage_is_sanitized_but_never_success(self):
         for stage in STAGES:
             with self.subTest(stage=stage):

@@ -241,6 +241,14 @@ func runApprovedSystemdInstallationMode(t *testing.T, profile, collectionProfile
 	if !ready {
 		t.Fatal("guided runtime not ready")
 	}
+	// Sequential read-admin subtests rebind operator assertions to their own T.
+	// Restore even after FailNow; a child must never call its parent's Fatal.
+	operatorTest := t
+	bindOperatorTest := func(current *testing.T) func() {
+		previous := operatorTest
+		operatorTest = current
+		return func() { operatorTest = previous }
+	}
 	call := func(path string, body any, csrf string) (int, []byte) {
 		raw, _ := json.Marshal(body)
 		r, _ := http.NewRequest("POST", m.Config.OperatorOrigin+path, bytes.NewReader(raw))
@@ -251,23 +259,23 @@ func runApprovedSystemdInstallationMode(t *testing.T, profile, collectionProfile
 		}
 		response, e := operator.Do(r)
 		if e != nil {
-			t.Fatal("operator fixture request")
+			operatorTest.Fatal("operator fixture request")
 		}
 		defer response.Body.Close()
 		b, e := io.ReadAll(io.LimitReader(response.Body, 128*1024))
 		if e != nil {
-			t.Fatal("operator fixture response")
+			operatorTest.Fatal("operator fixture response")
 		}
 		return response.StatusCode, b
 	}
 	get := func(path string, out any) {
 		response, e := operator.Get(m.Config.OperatorOrigin + path)
 		if e != nil {
-			t.Fatal("operator fixture read")
+			operatorTest.Fatal("operator fixture read")
 		}
 		defer response.Body.Close()
 		if response.StatusCode != 200 || json.NewDecoder(io.LimitReader(response.Body, 128*1024)).Decode(out) != nil {
-			t.Fatal("operator fixture read contract")
+			operatorTest.Fatal("operator fixture read contract")
 		}
 	}
 	stage = "operator_login"
@@ -280,7 +288,7 @@ func runApprovedSystemdInstallationMode(t *testing.T, profile, collectionProfile
 		status, raw := call(path, input, session.CSRFToken)
 		defer clear(raw)
 		if status != 200 || json.Unmarshal(raw, output) != nil {
-			t.Fatal("bounded operator query contract")
+			operatorTest.Fatal("bounded operator query contract")
 		}
 	}
 	invitation := map[string]any{"requestId": "request_" + strings.Repeat("8", 32), "platform": "linux"}
@@ -451,7 +459,7 @@ func runApprovedSystemdInstallationMode(t *testing.T, profile, collectionProfile
 			t.Fatal("read-admin combined configuration not confirmed")
 		}
 		stage = "initial_reports"
-		readAdminCompleteAndRepeat(t, readAdminCommand, get, query, &stage)
+		readAdminCompleteAndRepeat(t, readAdminCommand, get, query, &stage, bindOperatorTest)
 		stage = "complete"
 		return
 	}

@@ -156,6 +156,20 @@ func readProcFile(dir int, name string, max int) ([]byte, error) {
 }
 func procDirectory(dir int, name string) (int, error) {
 	fd, e := unix.Openat(dir, name, nativeDirFlags, 0)
+	return checkedProcDirectory(fd, e)
+}
+
+const nativeNamespaceDirFlags = unix.O_PATH | unix.O_DIRECTORY | unix.O_NOFOLLOW | unix.O_CLOEXEC
+
+func procNamespaceDirectory(dir int) (int, error) {
+	// procfs ns directories are 0511. Other identities may search the fixed
+	// names, but CAP_SYS_PTRACE does not grant directory listing permission.
+	// Pin only the directory; child opens retain their ptrace access checks.
+	fd, e := unix.Openat(dir, "ns", nativeNamespaceDirFlags, 0)
+	return checkedProcDirectory(fd, e)
+}
+
+func checkedProcDirectory(fd int, e error) (int, error) {
 	if e != nil {
 		return -1, ErrRejected
 	}
@@ -192,7 +206,7 @@ func (n *pinnedNamespaces) close() {
 }
 func pinNamespaces(dir int) (pinnedNamespaces, error) {
 	n := pinnedNamespaces{FDs: [3]int{-1, -1, -1}}
-	nsdir, e := procDirectory(dir, "ns")
+	nsdir, e := procNamespaceDirectory(dir)
 	if e != nil {
 		return n, e
 	}

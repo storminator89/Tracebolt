@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "sourceCommit": "fccc4b00cd8a144afd58e4b995747afab7a10022",
-  "goSourceSha256": "57fdeb49e31d0b63e5213a6f9ebdc4653feb22dc69cf379f9fa13b3034cc0327",
+  "goSourceSha256": "d67343ff2d14f5eacb56daf14d6ab7154ce434f9e8252f73710d877a2a7dcd75",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -147,9 +147,11 @@
       "TestReadAdminFixtureOwner",
       "TestReadAdminInitialProbeDiagnosticIsClosed",
       "TestReadAdminJournalReady",
+      "TestReadAdminMaintenanceFailurePreservesPrimary",
       "TestReadAdminNativeSelection",
       "TestReadAdminOptFixturePreparationIsNarrow",
       "TestReadAdminPTYInput",
+      "TestReadAdminRestartRequiresNewOrdinaryGeneration",
       "TestReadAdminSetupDiagnosticIsClosed",
       "TestReadAdminSocketProcessMatches",
       "TestSystemdDiagnosticStageAllowlist"
@@ -1952,6 +1954,7 @@
       "TestHelperClockFailureAndEmptyEnumerationStayDistinct",
       "TestListenerWitnessInjectedSyscallsOnly",
       "TestMalformedAncillaryLengthsNeverReachUnsafeParsers",
+      "TestNamespaceDirectoryUsesTraversalOnlyDescriptor",
       "TestNativeArtifactModesMatchInstalledRoles",
       "TestNativeGroupsAllowOnlyBoundPrimaryOnce",
       "TestNativeStatusAllCredentialSets",

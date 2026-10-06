@@ -1200,7 +1200,7 @@ func readAdminRetainedJournal(t *testing.T, c *readAdminNativeCommand, event pty
 	systemdCheckProcessIdentity(t, uid, gid)
 }
 
-func readAdminCompleteAndRepeat(t *testing.T, c *readAdminNativeCommand, get func(string, any), query func(string, any, any), stage *string) {
+func readAdminCompleteAndRepeat(t *testing.T, c *readAdminNativeCommand, get func(string, any), query func(string, any, any), stage *string, bindOperatorTest func(*testing.T) func()) {
 	t.Helper()
 	before := readAdminIdentitySnapshot(t)
 	completePath := "/var/lib/tracebolt-agent-installer/read-admin-journal.complete.json"
@@ -1221,7 +1221,7 @@ func readAdminCompleteAndRepeat(t *testing.T, c *readAdminNativeCommand, get fun
 	if !reflect.DeepEqual(before, readAdminIdentitySnapshot(t)) || systemdHash(t, completePath) != completeHash || !reflect.DeepEqual(protected, readAdminAuthoritySnapshot(t)) || systemdSequence(t, agentinstall.EnrollmentDirectory) < sequence {
 		t.Fatal("fresh read-admin identity or authority changed while observing")
 	}
-	readAdminSocketOwnersAndRevoke(t, c, get, query, stage)
+	readAdminSocketOwnersAndRevoke(t, c, get, query, stage, uid, gid, bindOperatorTest)
 
 }
 

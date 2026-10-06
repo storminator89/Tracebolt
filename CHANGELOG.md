@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-10-06 — Correct native namespace traversal and retain independent checks
+
+- Open only the fixed proc namespace parent with O_PATH instead of requesting directory listing access. Linux exposes that parent as 0511; keep the existing procfs/directory checks, fixed child opens, ptrace/nsfs/PIDFD verification, identity binding and unchanged helper capabilities. Generic process-directory enumeration is unchanged.
+- Preserve a missing-owner failure while independently checking already-authorized journal content and an ownership-preflighted main-service restart. Keep every success requirement, skip grant-dependent revocation without owner proof, and preserve the primary failure through cleanup.
+- Move the unchanged real transport/expiry smoke into its own ordinary CI job with the same pinned setup and verified dependencies. The backend retains its 40-minute ceiling; no test assertion or runtime deadline is raised. Hosted completion of both jobs remains required.
+- Source review and bounded fixture checks support this correction; the next approved fresh native run must still prove actual owner capture, log content, restart and revocation. No user host or release activation is changed by publication.
+
 ## 2026-10-06 — Correct socket setup's offline validation arguments
 
 - Remove the foreground-only --service-identity argument from socket setup's --validate-guided invocation. The actual subprocess still drops to the verified service UID/GID with no supplementary groups. Preserve the agent's argument guard, protected state checks, binary ownership, deadlines and failure containment. An actual CLI regression proves the old combination is rejected and the corrected combination reaches the local validator.
