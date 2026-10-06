@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-10-06 — Settle initial journal-reader fixture effects before its single click
+
+- Await the immediate mocked authentication/status render effects before opening the service picker in the independent primary-reader stream tests. A controlled delayed passive-effect schedule reproduces the earlier lost click; the same schedule passes after the fixture setup settles.
+- Keep the original no-early-fetch, byte-limit, single-reader, disconnect/abort, identity and no-mutation assertions and all deadlines. Add explicit enabled-button and opened-dialog checks; click only once. All 33 independent UI checks pass.
+- Production and native-acceptance bytes are unchanged from c1cd23a, whose approved TLS native run 37508637893 passed every scenario, all six functional checks and final cleanup. This test-only checkpoint does not claim another native run, OS reboot validation, or an already activated new release. Its exact hosted CI remains required.
+
 ## 2026-10-06 — Correct the final native journal-cleanup command stage
 
 - Use the existing supported fixed-command-failed label when the native cleanup harness stops the owned journal helper and socket. The invented native-owned-helper-stop label was rejected by the production command adapter before execution, causing the final cleanup failure. Production command allowlists, ownership, drain and status checks are unchanged.

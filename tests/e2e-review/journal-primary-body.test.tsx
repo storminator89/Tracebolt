@@ -40,9 +40,13 @@ describe('journal fixture primary-consumer observation',()=>{
    readerSpy=vi.spyOn(stream,'getReader');vi.spyOn(response,'clone').mockImplementation(()=>{throw new Error('Secondary body consumer is forbidden');});
    return response;
   });vi.stubGlobal('fetch',fetch);uninstall=installJournalPrimaryBody({url:url()});
-  render(<AuthBoundary><JournalPanel deviceId={journalDevice} insecureTestMode={true} sessionKey={journalSessionExpiry}/></AuthBoundary>);
+  // Settle the initial session/status effects before interacting: the awaiting
+  // text can commit before the journal reset effect that closes the picker.
+  await act(async()=>{render(<AuthBoundary><JournalPanel deviceId={journalDevice} insecureTestMode={true} sessionKey={journalSessionExpiry}/></AuthBoundary>);});
   await screen.findByText('Awaiting a request');expect(fetch.mock.calls.some(([path])=>path.startsWith(systemRoot))).toBe(false);
-  const token=observer().arm('services');fireEvent.click(screen.getByRole('button',{name:'Choose observed service'}));await waitFor(()=>expect(held).toBeDefined());
+  const picker=screen.getByRole('button',{name:'Choose observed service'});expect(picker).toBeEnabled();
+  const token=observer().arm('services');fireEvent.click(picker);
+  expect(screen.getByRole('dialog',{name:'Choose observed service'})).toBeVisible();await waitFor(()=>expect(held).toBeDefined());
   expect(observer().take(token)).toBeNull();
   if(outcome==='declared oversized'){
    await screen.findByRole('alert');expect(cancelled).toBe(true);expect(readerSpy).not.toHaveBeenCalled();expect(observer().state(token)).toBe('cancelled');
