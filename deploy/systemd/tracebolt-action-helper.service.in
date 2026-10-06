@@ -1,0 +1,48 @@
+# Rendered only by separately authorized create-only action setup.
+[Unit]
+Description=Tracebolt locally granted service-action helper (candidate)
+Requires=tracebolt-action-helper.socket
+After=tracebolt-action-helper.socket
+
+[Service]
+Type=simple
+User=0
+Group=0
+SupplementaryGroups=
+Sockets=tracebolt-action-helper.socket
+ExecStart=/opt/tracebolt-agent/lan-agent --action-helper
+WorkingDirectory=/
+UMask=0077
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictAddressFamilies=AF_UNIX
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+RestrictNamespaces=yes
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+ReadWritePaths=/var/lib/tracebolt-action-helper
+ReadOnlyPaths=/etc/tracebolt/action-helper.json /etc/tracebolt/action-command.pub
+InaccessiblePaths=-/var/lib/tracebolt-agent -/etc/tracebolt-agent -/var/lib/tracebolt-agent-installer
+StandardInput=null
+StandardOutput=null
+StandardError=null
+Restart=no
+KillMode=mixed
+TimeoutStopSec=60s
+TasksMax=32
+MemoryMax=128M
+LimitNOFILE=64
+
+# Socket activation only. Never let systemd create/adopt helper state or config.

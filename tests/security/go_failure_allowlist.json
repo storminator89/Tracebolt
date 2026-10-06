@@ -1,6 +1,11 @@
 {
-  "goSourceSha256": "f90a25225c72c3e83829ea0528dc5b2e1ef2cf0a0ac3e7b867a44d8ac1e3a35e",
+  "schemaVersion": 1,
+  "sourceCommit": "fccc4b00cd8a144afd58e4b995747afab7a10022",
+  "goSourceSha256": "7611f503a251276fad0f1fc756d0682ef6e8566ad96a8d97c93d9464d0e714a4",
   "packages": {
+    "localrmm/cmd/action-setup": [
+      "TestCapabilitiesInertAndModesExclusive"
+    ],
     "localrmm/cmd/agent": [
       "TestHelp",
       "TestOneJSONObservation",
@@ -49,6 +54,10 @@
     ],
     "localrmm/cmd/lan-agent": [
       "TestActionHelperExclusiveBeforeSenderState",
+      "TestActionSetupCapabilitiesIsInert",
+      "TestActionSetupExclusiveSelection",
+      "TestActionSetupIdentityGuardPrecedesReads",
+      "TestActionSetupRoutesOnlyExplicitOperationAndRedactsFailure",
       "TestAmendmentCLIExplicitModes",
       "TestAmendmentCLIRejectsBeforePrivateAccess",
       "TestCachedUpdatesConsentIdentityBeforePrivateReadAndExplicitAck",
@@ -189,7 +198,14 @@
       "TestRuntimeFinalChecksAndConsumedNotStarted",
       "TestRuntimeInvocationUncertaintyBlocksAndNeverRetries",
       "TestRuntimeRejectsClockRollbackAfterDurableDispatch",
-      "TestRuntimeRestartNeverRecreatesAttempt"
+      "TestRuntimeRestartNeverRecreatesAttempt",
+      "TestSetupInitializationFailurePermanentlyRetainsFence",
+      "TestSetupInitializationFsyncFenceBeforeCreateOnlyLedger",
+      "TestSetupInitializationRejectsUnboundUnsafeAndExistingFences",
+      "TestSetupInitializationRequiresRootAndCanonicalPolicyBeforeFence",
+      "TestSetupInitializationRetainedCompletionBlocksLostLedgerAndStarted",
+      "TestSetupTargetCheckOnlyFixedReadOnlyBackend",
+      "TestSetupTargetFileIsProtectedAndStable"
     ],
     "localrmm/internal/actionjob": [
       "TestApprovalIsBoundAndSignsOnce",
@@ -216,6 +232,16 @@
       "TestPinnedPolicyAndDefaultOff",
       "TestSignedRoundTripAndDomain",
       "TestStrictCanonicalParser"
+    ],
+    "localrmm/internal/actionsetup": [
+      "TestFaultBeforeEveryEffectPreservesIntentAndNeverRetries",
+      "TestForbiddenKeyCannotReachPrivateWrite",
+      "TestManagerSetupLoadedFixturePlanApplyStatusPreservesOriginals",
+      "TestManagerSetupLoadedFixturePlanRefusalsAreReadOnly",
+      "TestManagerSetupLoadedFixtureStatusRejectsChangedArtifactsWithoutRepair",
+      "TestMissingOrChangedApprovalBeforeProductionReads",
+      "TestPlanDigestBindsEveryField",
+      "TestSuccessfulApplyOneKeyNoPrivateBundleAndRepeatBlocked"
     ],
     "localrmm/internal/actionstate": [
       "TestAdmissionDuplicateAndRecovery",
@@ -738,6 +764,7 @@
       "TestQuotaTombstonesNeverEvicted",
       "TestStrictCommandsAndBounds",
       "TestStrictSnapshotJSONAndAllPhases",
+      "TestTrustedLedgerConfigExactValidatedRead",
       "TestTrustedLedgerRejectsCrossRecordPrivateVerifierReuse",
       "TestTrustedLedgerRejectsPartialBindingAndPrivateCorruption",
       "TestTrustedLedgerRestoresEveryPhaseAndTombstone",
@@ -887,6 +914,17 @@
       "TestServiceActionObservedExpiryCannotRevive",
       "TestServiceActionPreviewExpiryCannotReviveAfterFailedApproval",
       "TestServiceActionRevocationKeepsJobHistoryAndDeniesGrant",
+      "TestServiceActionSetupConcurrentCreateOnlyOneCommit",
+      "TestServiceActionSetupCreateOnlyAtomicAndRuntime",
+      "TestServiceActionSetupInspectionReadOnlyLiveAndClosed",
+      "TestServiceActionSetupInspectionRefusesMissingAndPartialPaths",
+      "TestServiceActionSetupInspectionRefusesSharedWritableMapping",
+      "TestServiceActionSetupInterruptedTransactionLeavesNoArtifacts",
+      "TestServiceActionSetupLegacyCanonicalBytesUnchanged",
+      "TestServiceActionSetupLegacyDomainNotAdopted",
+      "TestServiceActionSetupMarkerImmutableWithinTransaction",
+      "TestServiceActionSetupReadOnlyProcess",
+      "TestServiceActionSetupRejectsMissingAndMismatchedFence",
       "TestServiceActionsConcurrentClaimSingleGrant",
       "TestServiceActionsDurableClaimAndStatusAfterReopen",
       "TestServiceActionsLostIdentityNeverRecreated",
@@ -1024,6 +1062,8 @@
       "TestDurableAttemptCooldownAndAtomicStatusAbort",
       "TestFailureZeroRowsAndInvalidStage",
       "TestFullContract1024ChunksAnd64KiBRawChunk",
+      "TestInspectExistingMissingInventoryNeverCreatesOrRepairs",
+      "TestInspectExistingWithLiveInventoryPackDoesNotMutate",
       "TestLifetimeLockAndReplacementFailClosed",
       "TestOriginalPackageTransferBytes",
       "TestPrivateModesSymlinkHardlinkAndFIFORefused",
@@ -1195,6 +1235,11 @@
     "localrmm/internal/lanclient": [
       "TestActionLocalProtectedReadAndStableRevision",
       "TestActionLocalRejectsUnsafeFixtures",
+      "TestActionSetupIdentityLocalCompleteAndNoWrites",
+      "TestActionSetupIdentityRejectsMissingActivationOrLedgers",
+      "TestActionSetupIdentityWorksWhileSenderOwnsAllLedgers",
+      "TestActionSetupReadinessOnlyCapabilities",
+      "TestActionSetupReadinessRejectsGrantOrCurrentIdentityChanges",
       "TestAmendmentAcceptPreservesOriginalIdentityAndConsumption",
       "TestAmendmentInvalidModesAndRootNeverReadState",
       "TestBootstrapTransportPinsOriginPathAndRejectsRedirect",
@@ -1352,6 +1397,8 @@
       "TestFreshStateRequiresEmptyDedicatedDirectory",
       "TestInitializeNewRejectsExistingWithoutCleanup",
       "TestInsecureStateLockAndTempAreRejected",
+      "TestInspectExistingMissingStateNeverCreatesOrRepairs",
+      "TestInspectExistingWithLiveWriterDoesNotMutate",
       "TestInspectionLeaseMissingStateDoesNotCreate",
       "TestInspectionLeasePreservesExistingLedgerAndTemporary",
       "TestInterruptedInitializationCannotResetSequenceLedger",
@@ -1733,6 +1780,8 @@
       "TestFreshStateRequiresEmptyDedicatedDirectory",
       "TestInitializeNewRejectsExistingWithoutCleanup",
       "TestInsecureStateLockAndTempAreRejected",
+      "TestInspectExistingMissingStateNeverCreatesOrRepairs",
+      "TestInspectExistingWithLiveWriterDoesNotMutate",
       "TestInterruptedInitializationCannotResetSequenceLedger",
       "TestLastWireSequenceCanBeConsumedOnce",
       "TestLowLevelOwnershipAndPermissionPolicy",
@@ -1965,7 +2014,5 @@
       "TestSupportBundleRejectsUnavailableHealthyMetric",
       "TestSystemInventoryOperatorActualTLSHTTPAllPagesAndDelayedExpiry"
     ]
-  },
-  "schemaVersion": 1,
-  "sourceCommit": "fccc4b00cd8a144afd58e4b995747afab7a10022"
+  }
 }

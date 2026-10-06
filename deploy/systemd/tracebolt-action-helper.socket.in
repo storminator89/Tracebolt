@@ -1,0 +1,18 @@
+# Rendered only by separately authorized create-only action setup.
+[Unit]
+Description=Tracebolt root-owned service-action socket (candidate)
+
+[Socket]
+ListenStream=/run/tracebolt-action-helper/action.sock
+SocketUser=root
+SocketGroup=@AGENT_GID@
+SocketMode=0660
+DirectoryMode=0755
+FileDescriptorName=action-helper
+Service=tracebolt-action-helper.service
+Accept=no
+Backlog=4
+RemoveOnStop=yes
+
+[Install]
+WantedBy=sockets.target

@@ -64,6 +64,11 @@ file as navigation and project constraints, never as permission to act on a host
   `docs/guided-inventory-setup.md`. Its preview is nonmutating until explicit
   confirmation; existing identity-bound scope CLIs remain authoritative. Do not
   turn setup into a manager grant, journal recovery or host acceptance claim.
+- Service-action setup is a create-only source candidate for one existing activated
+  endpoint and one reviewed service. Read `docs/guided-service-action-setup.md`.
+  Plan is read-only; manager/endpoint apply needs separate local approval. Never
+  remove intent/fences or reinitialize missing used state. The old pinned release
+  is incompatible; source fixtures do not authorize native setup or a target action.
 - Follow Go/Node versions and dependency locks in this revision. Validate commands
   against actual flags/config. Distinguish runtime tests from cross-builds, skipped
   container tests, and proposed functionality. Never invent install/enroll flags.

@@ -17,10 +17,38 @@ import (
 )
 
 const serviceActionMetaSchema = `CREATE TABLE enrollment_service_action_meta(id INTEGER PRIMARY KEY CHECK(id=1),public_key BLOB NOT NULL CHECK(length(public_key)=32)) STRICT`
+
+// Legacy records remain readable. New setup uses a distinct schema so missing
+// credential markers cannot make fenced records appear to be legacy records.
+const serviceActionFencedRecordsSchema = `CREATE TABLE enrollment_service_action_records(invitation_id TEXT PRIMARY KEY NOT NULL REFERENCES enrollment_credentials(invitation_id),body BLOB NOT NULL CHECK(length(body)>0 AND length(body)<=524288),setup_fence TEXT NOT NULL CHECK(length(setup_fence)=71)) STRICT`
 const serviceActionRecordsSchema = `CREATE TABLE enrollment_service_action_records(invitation_id TEXT PRIMARY KEY NOT NULL REFERENCES enrollment_credentials(invitation_id),body BLOB NOT NULL CHECK(length(body)>0 AND length(body)<=524288)) STRICT`
 
 func serviceActionSchemaObjects() []inventoryledger.SchemaObject {
 	return []inventoryledger.SchemaObject{{Type: "table", Name: "enrollment_service_action_meta", SQL: serviceActionMetaSchema}, {Type: "table", Name: "enrollment_service_action_records", SQL: serviceActionRecordsSchema}}
+}
+func serviceActionFencedSchemaObjects() []inventoryledger.SchemaObject {
+	return []inventoryledger.SchemaObject{{Type: "table", Name: "enrollment_service_action_meta", SQL: serviceActionMetaSchema}, {Type: "table", Name: "enrollment_service_action_records", SQL: serviceActionFencedRecordsSchema}}
+}
+func existingServiceActionSchemaObjects(ctx context.Context, c *sql.Conn) ([]inventoryledger.SchemaObject, error) {
+	var definition string
+	if c.QueryRowContext(ctx, `SELECT sql FROM sqlite_master WHERE type='table' AND name='enrollment_service_action_records'`).Scan(&definition) != nil {
+		return nil, ErrStorage
+	}
+	switch definition {
+	case serviceActionRecordsSchema:
+		return serviceActionSchemaObjects(), nil
+	case serviceActionFencedRecordsSchema:
+		return serviceActionFencedSchemaObjects(), nil
+	default:
+		return nil, ErrStorage
+	}
+}
+func serviceActionFenced(ctx context.Context, c *sql.Conn) (bool, error) {
+	objects, err := existingServiceActionSchemaObjects(ctx, c)
+	if err != nil {
+		return false, err
+	}
+	return objects[1].SQL == serviceActionFencedRecordsSchema, nil
 }
 func serviceActionSchemaPresent(ctx context.Context, c *sql.Conn) (bool, error) {
 	var n int
@@ -36,10 +64,11 @@ func serviceActionSchemaPresent(ctx context.Context, c *sql.Conn) (bool, error) 
 	return true, nil
 }
 
-// InitializeServiceActions is a trusted provisioning library seam, never called
-// by runtime startup, API, agent ingress or installers. It creates no keys. The
-// deployment must separately authorize first initialization; missing live state
-// is not a request to recreate it or reset its job floors.
+// InitializeServiceActions is the legacy provisioning seam retained for
+// existing library/fixture callers. New guided setup must instead use
+// SetupServiceActionsCreateOnly for the durable credential fence. Neither seam
+// is called by runtime startup or ingress. Missing live state is not permission
+// to recreate it or reset its job floors. This function creates no keys.
 func (s *Store) InitializeServiceActions(ctx context.Context, key ed25519.PublicKey) error {
 	if !keyvalidation.Ed25519(key) {
 		return actionjob.ErrInvalid
@@ -88,8 +117,24 @@ func (s *Store) OpenServiceActions(ctx context.Context, key ed25519.PublicKey) e
 }
 func (s *Store) loadServiceActionRecords(ctx context.Context, t *transaction) error {
 	present, e := serviceActionSchemaPresent(ctx, t.conn)
-	if e != nil || !present {
+	if e != nil {
 		return e
+	}
+	markers := map[string]*serviceActionSetupMarker{}
+	for id, credential := range t.credentials {
+		if credential.ServiceActionSetup != nil {
+			markers[id] = credential.ServiceActionSetup
+		}
+	}
+	if !present {
+		if len(markers) != 0 {
+			return ErrStorage
+		}
+		return nil
+	}
+	fenced, e := serviceActionFenced(ctx, t.conn)
+	if e != nil || (!fenced && len(markers) != 0) || (fenced && len(markers) == 0) {
+		return ErrStorage
 	}
 	var key []byte
 	var n, max int
@@ -99,16 +144,20 @@ func (s *Store) loadServiceActionRecords(ctx context.Context, t *transaction) er
 	if t.conn.QueryRowContext(ctx, `SELECT count(*),coalesce(max(length(body)),0) FROM enrollment_service_action_records`).Scan(&n, &max) != nil || n > s.config.RecordLimit || max > actionjob.MaxRecordBytes {
 		return ErrStorage
 	}
-	rows, e := t.conn.QueryContext(ctx, `SELECT invitation_id,body FROM enrollment_service_action_records`)
+	query := `SELECT invitation_id,body,'' FROM enrollment_service_action_records`
+	if fenced {
+		query = `SELECT invitation_id,body,setup_fence FROM enrollment_service_action_records`
+	}
+	rows, e := t.conn.QueryContext(ctx, query)
 	if e != nil {
 		return ErrStorage
 	}
 	defer rows.Close()
 	for rows.Next() {
-		var id string
+		var id, fence string
 		var b []byte
 		var r actionjob.Record
-		if rows.Scan(&id, &b) != nil || len(b) == 0 || len(b) > actionjob.MaxRecordBytes || json.Unmarshal(b, &r) != nil || actionjob.Validate(r) != nil || !bytes.Equal(r.PublicKey, key) {
+		if rows.Scan(&id, &b, &fence) != nil || len(b) == 0 || len(b) > actionjob.MaxRecordBytes || json.Unmarshal(b, &r) != nil || actionjob.Validate(r) != nil || !bytes.Equal(r.PublicKey, key) {
 			return ErrStorage
 		}
 		canonical, _ := json.Marshal(r)
@@ -116,8 +165,15 @@ func (s *Store) loadServiceActionRecords(ctx context.Context, t *transaction) er
 		if e != nil || !bytes.Equal(b, canonical) || r.ManagerID != s.config.Binding.InstanceID || r.DeviceID != snap.Approval.DeviceID || r.IncarnationDigest != "sha256:"+snap.Issuance.CertificateHash || snap.Activation.At == 0 || r.ClockFloor.Unix() < snap.Activation.At || r.ClockFloor.Unix() >= snap.Intent.NotAfter || (snap.Termination.At != 0 && r.ClockFloor.Unix() > snap.Termination.At) {
 			return ErrStorage
 		}
+		if fenced {
+			marker := markers[id]
+			if marker == nil || marker.KeyID != actionpermit.Digest(key) || marker.digest() != fence || r.ClockFloor.Before(marker.InitializedAt) {
+				return ErrStorage
+			}
+			delete(markers, id)
+		}
 	}
-	if rows.Err() != nil {
+	if rows.Err() != nil || len(markers) != 0 {
 		return ErrStorage
 	}
 	return nil
@@ -141,7 +197,8 @@ func (s *Store) readServiceAction(ctx context.Context, t *transaction, snap enro
 	return r, nil
 }
 
-// InitializeServiceActionIdentity is create-only separately authorized setup. No
+// InitializeServiceActionIdentity is the legacy separately authorized identity
+// provisioning seam. New setup must use SetupServiceActionsCreateOnly. No
 // manager/agent/API/runtime calls it; recovery of lost live rows is unsupported.
 func (s *Store) InitializeServiceActionIdentity(ctx context.Context, key ed25519.PublicKey, device string, now time.Time) error {
 	return s.transact(ctx, func(t *transaction) error {

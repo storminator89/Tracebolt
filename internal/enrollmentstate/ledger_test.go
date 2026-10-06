@@ -113,3 +113,28 @@ func TestTrustedLedgerRejectsCrossRecordPrivateVerifierReuse(t *testing.T) {
 		t.Fatal("accepted duplicate verifier")
 	}
 }
+
+func TestTrustedLedgerConfigExactValidatedRead(t *testing.T) {
+	e, _, _, _, _ := flowIntent(t)
+	raw, err := e.EncodeTrustedLedger()
+	if err != nil {
+		t.Fatal(err)
+	}
+	before := bytes.Clone(raw)
+	config, err := TrustedLedgerConfig(raw)
+	if err != nil || config != e.config || !bytes.Equal(raw, before) {
+		t.Fatal("exact config inspection", err)
+	}
+	for _, bad := range [][]byte{nil, raw[:len(raw)-1], append(bytes.Clone(raw), 0)} {
+		if _, err := TrustedLedgerConfig(bad); err == nil {
+			t.Fatal("config accepted incomplete or trailing ledger")
+		}
+	}
+	changed := bytes.Replace(raw, []byte(`"InvitationTTL":600`), []byte(`"InvitationTTL":601`), 1)
+	if bytes.Equal(changed, raw) {
+		t.Fatal("fixture header not found")
+	}
+	if _, err := TrustedLedgerConfig(changed); err == nil {
+		t.Fatal("config returned without validating the ledger against it")
+	}
+}

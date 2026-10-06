@@ -19,6 +19,11 @@ import (
 )
 
 func main() {
+	if selected, options, valid := actionSetupInvocation(os.Args[1:]); selected {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		os.Exit(runActionSetup(ctx, options, valid, defaultActionSetupHooks(), os.Stdout, os.Stderr))
+	}
 	if selected, exclusive := actionHelperInvocation(os.Args[1:]); selected {
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 		defer stop()

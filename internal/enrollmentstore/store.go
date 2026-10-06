@@ -45,14 +45,15 @@ const credentialSchema = `CREATE TABLE enrollment_credentials(invitation_id TEXT
 
 type Store struct{ *storeState }
 type storeState struct {
-	db                  *sql.DB
-	path                string
-	info                os.FileInfo
-	config              enrollmentstate.Config
-	issuerDER           []byte
-	operationalReads    chan struct{}
-	inventoryCalls      chan struct{}
-	systemMetadataReads chan struct{}
+	db                   *sql.DB
+	path                 string
+	info                 os.FileInfo
+	config               enrollmentstate.Config
+	issuerDER            []byte
+	operationalReads     chan struct{}
+	inventoryCalls       chan struct{}
+	systemMetadataReads  chan struct{}
+	releaseProcessWriter func()
 }
 
 func (Store) String() string               { return "enrollmentstore.Store{contents:redacted}" }
@@ -74,30 +75,32 @@ type Replay struct {
 	ReceivedAt  time.Time `json:"receivedAt"`
 }
 type credential struct {
-	DER      []byte   `json:"der"`
-	Delivery Delivery `json:"delivery"`
-	Replay   Replay   `json:"replay"`
-	Frame    []byte   `json:"frame"`
+	DER                []byte                    `json:"der"`
+	Delivery           Delivery                  `json:"delivery"`
+	Replay             Replay                    `json:"replay"`
+	Frame              []byte                    `json:"frame"`
+	ServiceActionSetup *serviceActionSetupMarker `json:"serviceActionSetup,omitempty"`
 }
 type transaction struct {
-	conn                   *sql.Conn
-	engine                 *enrollmentstate.Engine
-	credentials            map[string]credential
-	originalLedger         []byte
-	originalCredentials    map[string][]byte
-	operational            map[string]operationalRecord
-	originalOperational    map[string][]byte
-	validatedFrames        map[frameValidationKey]lanstore.Frame
-	inventory              map[string]inventoryRecord
-	originalInventory      map[string][]byte
-	inventoryKey           inventoryledger.CursorKey
-	overview               map[string]overviewRecord
-	originalOverview       map[string][]byte
-	overviewKey            overviewledger.CursorKey
-	overviewEnabled        bool
-	completeUpdatesEnabled bool
-	completeUpdatesKey     completeUpdatesCursorKey
-	system                 map[string]systemRecord
+	conn                       *sql.Conn
+	engine                     *enrollmentstate.Engine
+	credentials                map[string]credential
+	originalLedger             []byte
+	originalCredentials        map[string][]byte
+	originalServiceActionSetup map[string]serviceActionSetupMarker
+	operational                map[string]operationalRecord
+	originalOperational        map[string][]byte
+	validatedFrames            map[frameValidationKey]lanstore.Frame
+	inventory                  map[string]inventoryRecord
+	originalInventory          map[string][]byte
+	inventoryKey               inventoryledger.CursorKey
+	overview                   map[string]overviewRecord
+	originalOverview           map[string][]byte
+	overviewKey                overviewledger.CursorKey
+	overviewEnabled            bool
+	completeUpdatesEnabled     bool
+	completeUpdatesKey         completeUpdatesCursorKey
+	system                     map[string]systemRecord
 }
 
 // Open rejects existing insecure paths; it never chmods or adopts them. The
@@ -115,6 +118,13 @@ func Open(path string, config enrollmentstate.Config, issuerDER []byte) (*Store,
 	if err != nil {
 		return nil, err
 	}
+	releaseProcessWriter := registerServiceActionWriter(absolute)
+	retainedWriter := false
+	defer func() {
+		if !retainedWriter {
+			releaseProcessWriter()
+		}
+	}()
 	if err = os.MkdirAll(filepath.Dir(absolute), 0700); err != nil {
 		return nil, ErrStorage
 	}
@@ -258,6 +268,8 @@ func Open(path string, config enrollmentstate.Config, issuerDER []byte) (*Store,
 			return fail()
 		}
 	}
+	s.releaseProcessWriter = releaseProcessWriter
+	retainedWriter = true
 	return s, nil
 }
 func validateIssuer(config enrollmentstate.Config, der []byte) error {
@@ -327,7 +339,11 @@ func (s *Store) Close() error {
 	if s == nil || s.storeState == nil {
 		return ErrStorage
 	}
-	return s.db.Close()
+	err := s.db.Close()
+	if s.releaseProcessWriter != nil {
+		s.releaseProcessWriter()
+	}
+	return err
 }
 func storageError(ctx context.Context) error {
 	if ctx != nil && ctx.Err() != nil {
@@ -352,7 +368,7 @@ func (s *Store) load(ctx context.Context, conn *sql.Conn) (*transaction, error) 
 	if err != nil {
 		return nil, ErrStorage
 	}
-	t := &transaction{conn: conn, engine: engine, credentials: make(map[string]credential), originalLedger: raw, originalCredentials: make(map[string][]byte), operational: map[string]operationalRecord{}, originalOperational: map[string][]byte{}, inventory: map[string]inventoryRecord{}, originalInventory: map[string][]byte{}, overview: map[string]overviewRecord{}, originalOverview: map[string][]byte{}}
+	t := &transaction{conn: conn, engine: engine, credentials: make(map[string]credential), originalLedger: raw, originalCredentials: make(map[string][]byte), originalServiceActionSetup: make(map[string]serviceActionSetupMarker), operational: map[string]operationalRecord{}, originalOperational: map[string][]byte{}, inventory: map[string]inventoryRecord{}, originalInventory: map[string][]byte{}, overview: map[string]overviewRecord{}, originalOverview: map[string][]byte{}}
 	if conn.QueryRowContext(ctx, "SELECT count(*),coalesce(max(length(body)),0) FROM enrollment_credentials").Scan(&count, &n) != nil || count > s.config.RecordLimit || n > maxCredentialBytes {
 		return nil, ErrStorage
 	}
@@ -389,6 +405,9 @@ func (s *Store) load(ctx context.Context, conn *sql.Conn) (*transaction, error) 
 		}
 		t.credentials[id] = c
 		t.originalCredentials[id] = body
+		if c.ServiceActionSetup != nil {
+			t.originalServiceActionSetup[id] = *c.ServiceActionSetup
+		}
 	}
 	if rows.Err() != nil {
 		return nil, ErrStorage
@@ -420,6 +439,9 @@ func (s *Store) load(ctx context.Context, conn *sql.Conn) (*transaction, error) 
 	return t, nil
 }
 func (t *transaction) validMetadata(s enrollmentstate.Snapshot, c credential) bool {
+	if !validServiceActionSetupMarker(s, c.ServiceActionSetup) {
+		return false
+	}
 	d := c.Delivery
 	if d != (Delivery{}) && (!enrollmentcrypto.ValidID(d.RequestID, "request_") || d.Count == 0 || d.Count > enrollmentstate.MaxRevision || d.FirstAt < s.Issuance.At || d.LastAt < d.FirstAt || d.LastAt >= s.Intent.NotAfter) {
 		return false
@@ -475,6 +497,9 @@ func (s *Store) transact(ctx context.Context, action func(*transaction) error) e
 		return err
 	}
 	for id, c := range t.credentials {
+		if original, ok := t.originalServiceActionSetup[id]; ok && (c.ServiceActionSetup == nil || original != *c.ServiceActionSetup) {
+			return ErrStorage
+		}
 		snapshot, err := t.engine.Get(id)
 		if err != nil || !t.validMetadata(snapshot, c) {
 			return enrollmentstate.ErrInvalid
@@ -579,7 +604,11 @@ func validateSchema(ctx context.Context, conn *sql.Conn, profile string) error {
 			return e
 		}
 		if actionsEnabled {
-			for _, obj := range serviceActionSchemaObjects() {
+			objects, e := existingServiceActionSchemaObjects(ctx, conn)
+			if e != nil {
+				return e
+			}
+			for _, obj := range objects {
 				expected[obj.Name] = obj
 			}
 		}

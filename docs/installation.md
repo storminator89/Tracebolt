@@ -43,6 +43,11 @@ explicit local confirmation. It checks actual installed CLI support, preserves
 the identity and counters, and does not upgrade the agent or configure journals.
 Hostname/interfaces remain a separate optional selection.
 
+For the separate default-off service-action workflow, read the
+[guided create-only action setup candidate](guided-service-action-setup.md). Its
+manager and endpoint source commands never upgrade the installed pinned release;
+compatible source/fixture tests leave native privileged acceptance outstanding.
+
 ## 1. Choose the correct milestone
 
 | Component | Available now | Not provided by this milestone |

@@ -1,5 +1,13 @@
 # Changelog
 
+## Guided service-action setup source candidate
+
+- Add explicit read-only manager/endpoint plans and one local digest-bound approval.
+- Provision only a fresh fenced action domain for one activated endpoint and one reviewed service.
+- Add source-only Docker/systemd adapters, locally custodied command keys, nonroot readiness and fault fixtures.
+- Preserve legacy runtime bytes and refuse repair/reset of missing used action state.
+- Native privileged acceptance and compatible release deployment remain separate gates.
+
 ## 2026-10-05 — Verify socket source disclosures
 
 - Open the existing source-details disclosure in the browser check and verify its visible external-reachability limitation alongside the owner-attribution warning. Preserve all socket paging, field and expiry assertions; production copy and behavior are unchanged.

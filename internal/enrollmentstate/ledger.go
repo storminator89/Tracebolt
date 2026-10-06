@@ -76,6 +76,27 @@ func readLedgerFrame(r *bytes.Reader, limit uint32) ([]byte, error) {
 	return b, nil
 }
 
+// TrustedLedgerConfig reads the exact persisted configuration from a protected
+// local ledger and validates the complete ledger before returning it. It is an
+// inspection seam for local setup tools, not permission to import or rebind it.
+func TrustedLedgerConfig(raw []byte) (Config, error) {
+	if len(raw) < len(ledgerMagic)+8 || len(raw) > MaxTrustedLedgerBytes || string(raw[:len(ledgerMagic)]) != ledgerMagic {
+		return Config{}, ErrInvalid
+	}
+	header, err := readLedgerFrame(bytes.NewReader(raw[len(ledgerMagic):]), 2048)
+	if err != nil {
+		return Config{}, ErrInvalid
+	}
+	var config Config
+	if json.Unmarshal(header, &config) != nil {
+		return Config{}, ErrInvalid
+	}
+	if _, err = RestoreTrustedLedger(config, raw); err != nil {
+		return Config{}, ErrInvalid
+	}
+	return config, nil
+}
+
 // RestoreTrustedLedger validates a complete private ledger under an exact local
 // configuration. The adapter must hold its database write transaction from this
 // read through the transition, credential persistence and commit. The returned

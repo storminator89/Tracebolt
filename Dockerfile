@@ -20,6 +20,7 @@ RUN go mod download
 COPY cmd/ cmd/
 COPY internal/ internal/
 RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -buildvcs=false -trimpath -ldflags='-s -w' -o /out/manager ./cmd/lan-manager \
+    && CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -buildvcs=false -trimpath -ldflags='-s -w' -o /out/action-setup ./cmd/action-setup \
     && mkdir -p /out/data/state /out/run/tracebolt \
     && chmod 0700 /out/data /out/data/state \
     && chown -R 65532:65532 /out/data
@@ -27,6 +28,7 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -buildvcs=false
 # A static Go executable needs no shell, package manager or root account.
 FROM scratch AS runtime
 COPY --from=build /out/manager /tracebolt/manager
+COPY --from=build /out/action-setup /tracebolt/action-setup
 # Preserve the pinned dependency notice with the distributed static binary.
 COPY --chmod=0444 docs/dependencies/edwards25519-LICENSE.txt /tracebolt/licenses/edwards25519-LICENSE.txt
 # Public system roots support optional outbound HTTPS integrations; agent trust

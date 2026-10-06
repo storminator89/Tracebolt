@@ -110,9 +110,10 @@ Private material, raw command configuration and permits are never UI fields.
 
 The manager's `InitializeServiceActions` and create-only
 `InitializeServiceActionIdentity` functions are trusted provisioning library
-seams used by synthetic fixtures. No runtime, API, ingress, installer or CLI calls
-those initialization functions. There is intentionally no production setup or
-repair command in this slice. Existing-only `OpenServiceActions` is the runtime
+seams used by synthetic fixtures. Runtime, API and ingress never call those initialization functions. The later
+[guided create-only setup candidate](guided-service-action-setup.md) adds a
+separate fenced provisioning seam, explicit local plan approval and source-only
+production adapters. There is no repair/reset operation. Existing-only `OpenServiceActions` is the runtime
 path. Dropping a used row is a hard stop, not permission to reconstruct history.
 
 ## Transport and local consent
@@ -158,9 +159,10 @@ explicitly authorized setup and native acceptance plan:
 - Check interruption, host/agent/helper restarts, ambiguous outcomes and service
   observation honestly before considering broader use
 
-No installation or key-generation command is added here. The first operational
-setup remains unavailable until those distinct gates have been implemented,
-reviewed and explicitly authorized. Source tests and UI clicks cannot stand in
+The later [guided setup candidate](guided-service-action-setup.md) implements
+those create-only source adapters; they still need independently authorized
+installed-host acceptance. Existing pinned release installation does not enable
+this workflow or silently create a command key. Source tests and UI clicks cannot stand in
 for this native acceptance.
 
 ## Verification contract
