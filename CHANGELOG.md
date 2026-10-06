@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-10-06 — Browse every current CVE warning and mapped binary
+
+- Add exact read-only, assessment-bound warning and binary detail pages with existing named-reader, Origin, CSRF and current-evidence checks. Keep completed totals, checkpoint bytes, revision and original assessment age unchanged.
+- Reach omitted middle findings from check zero and page every eligible mapped binary without an unbounded response or retained result list. Preserve source/version mapping, deterministic comparison gaps and whole-check boundaries under existing time/comparison budgets.
+- Add compact First/Previous/Next controls with bounded history, separate page counts, preserved evidence-age/session guards and no feed-write permission dependency. Strengthen page/global count validation against inconsistent responses.
+- Cover full-set equality, more than 30 pages, over 128 binaries, byte limits, unknown comparisons, named-read access, long browsing, expiry and late responses with synthetic package/API/UI fixtures. Hosted browser and native deployed acceptance remain separate gates.
+- Add a separate bounded hosted paging case while retaining all existing continuation and wider browser checks, including omitted-middle records, exact binary-version membership, source/session isolation and English desktop/German mobile capture requirements.
+- Preserve the original [synthetic continuation previews from 81aae45](docs/ui-previews/81aae45/README.md), with immutable source/run/image provenance; these images predate full-detail paging and are not customer inventory.
+
 ## 2026-10-06 — Resume bounded CVE assessment after durable checkpoints
 
 - Traverse source, advisory and installed version deterministically across bounded steps, retaining exact deduplicated progress/warning/vendor-gap totals without a growing seen-record map. Keep the three-second and 2,000-comparator limits, add a 4,000-visited-check limit, and preserve capped findings and binary details.

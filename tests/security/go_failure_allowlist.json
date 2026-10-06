@@ -1,5 +1,5 @@
 {
-  "goSourceSha256": "9b5e8a0981a99cf4ee590e664b94efc1c0174412f141ec8227c1cd2ef1280d46",
+  "goSourceSha256": "e6a21cf9fa3b149e65cc2625a26847ffaf04af81fb21f36c27b5b325ef8768a3",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -462,6 +462,14 @@
       "TestLinuxCVEContinuationGoFixture",
       "TestLinuxCVEContinuationRechecksBindingAfterSave",
       "TestLinuxCVECoverageUsesEveryInventoryPageWithoutConflatingDisplayLimits",
+      "TestLinuxCVEDetailsConcurrentReadsShareAssessmentAdmission",
+      "TestLinuxCVEDetailsGoFixture",
+      "TestLinuxCVEDetailsIncompleteMissingWrongBindingAndContention",
+      "TestLinuxCVEDetailsNamedReadSessionBoundaryWithoutSocket",
+      "TestLinuxCVEDetailsReadLeaseKeepsOriginalEvidenceAndRetention",
+      "TestLinuxCVEDetailsRevalidateAuthorityEvidenceClockAndCache",
+      "TestLinuxCVEDetailsStrictInputAndExactNamedReadScope",
+      "TestLinuxCVEDetailsTimeoutFailsWholeRead",
       "TestLinuxCVEDurableContinuationSurvivesManagerAndFeedReparse",
       "TestLinuxCVEGoFixtures",
       "TestLinuxCVEImportSessionAndFailureRetainLastGood",
@@ -1557,6 +1565,15 @@
       "TestCoverageSeparatesPackageGapsAndDeduplicatesVendorReasons",
       "TestDebianNeverConfirmsUnfixedOrNotAffected",
       "TestDebianPublishedFixUsesMappedSourceAndDeduplicates",
+      "TestDetailBinariesExactGroupBeyond128AndExcludedRows",
+      "TestDetailMaximumFieldSingleRowAndFixedEnvelopeFit",
+      "TestDetailMaximumRowsRecoverNoncontiguousPreview",
+      "TestDetailPagesEmptyScanThenLaterFinding",
+      "TestDetailPagesFullSetStableBackwardAndMixedVersions",
+      "TestDetailPagesPreserveUninterpretableIntervalWithoutBlockingLaterMatches",
+      "TestDetailPagesPreserveUnsupportedComparatorGapsBeforeLaterWarning",
+      "TestDetailQueriesRejectMissingIncompleteChangedInvalidCheckpoints",
+      "TestDetailUbuntuInterruptedComparisonCheckAndCancellation",
       "TestExcludedVersionsAndIncompleteRows",
       "TestFindingDisplayLimitDoesNotStopCoverageOrTotals",
       "TestFreshnessIndependentAndHistoricalFindingsRetained",

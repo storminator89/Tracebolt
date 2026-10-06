@@ -195,3 +195,45 @@ inventory expiry/current binding, and current feed are checked before and after
 save. Complete reads perform no comparator calls and do not renew evidence age.
 View schema v2 uses `report: null` for unavailable prerequisites, rather than
 inventing a planned assessment ID or totals.
+
+## Read-only warning and binary pages
+
+`QueryFindings` and `QueryBinaries` reconstruct details only after validating a
+nonempty, completed checkpoint and its exact assessment ID/revision. They reuse
+inventory validation, deterministic planning, checkpoint decoding and `matchRule`.
+Neither function saves a checkpoint, changes the completed counters or replaces
+the original assessment time. Missing-source, excluded-package and vendor-unknown
+categories remain in the original summary; page exhaustion is never a new
+coverage, complete-assessment or secure verdict.
+
+A finding cursor is an unsigned check ordinal, beginning at zero. Retained
+summary findings are only a preview: byte trimming followed by later appends may
+leave a missing middle. Source-group arithmetic seeks directly to the requested
+check without comparing its prefix. Every successful page visits at most 4,000
+whole checks and makes at most 2,000 nonmemoized comparisons. A multi-comparison
+check interrupted by the comparison limit stays unconsumed for the next page.
+Timeout or cancellation of the three-second read fails the whole page rather
+than accepting a variable time-dependent boundary. Empty scan pages can advance
+over nonmatching or unassessed checks; an unexhausted successful page must advance.
+
+The finding page contains at most 100 rows, each with its check index, exact
+binary count and one preview binary. Rows are admitted whole into a fixed data
+budget of `MaxResultBytes - 4096`; the reserved envelope makes boundaries
+independent of serialized clock length. A matching row that does not fit remains
+at `nextCheck`. Both page responses fit the unchanged 230 KiB result limit. The
+closed stop reasons are `exhausted`, `finding_limit_exceeded`,
+`response_byte_limit_exceeded`, `visited_check_limit_exceeded` and
+`comparison_limit_exceeded`.
+
+Binary pages accept only a check index, not caller-selected source/CVE/version
+identity. The server resolves the exact eligible source/version group, verifies
+that the advisory matches, and returns at most 20 binaries in inventory order.
+Other installed versions, substring source matches and excluded rows cannot
+enter that group. The terminal finding/binary offset yields an empty exhausted
+suffix; an out-of-range offset or nonmatching binary check is rejected.
+
+Production uses the existing pure Debian comparator; its semantics and evaluator
+version are unchanged. Stateful or inconsistent test comparators do not establish
+replay equivalence. Unsupported installed epochs/upstream-colon versions and deterministically
+uninterpretable Ubuntu intervals remain unassessed and do not obstruct later matches. Unexpected comparator failure makes
+the detail read unavailable rather than silently dropping a warning.

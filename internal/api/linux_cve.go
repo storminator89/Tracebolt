@@ -98,6 +98,10 @@ func (h *operatorHandler) linuxCVEAPI(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	parts := strings.Split(r.URL.Path, "/")
+	if len(parts) == 8 && parts[1] == "api" && parts[2] == "devices" && enrollmentcrypto.ValidID(parts[3], "agent_") && parts[4] == "security" && parts[5] == "cves" && (parts[6] == "findings" || parts[6] == "binaries") && parts[7] == "query" {
+		h.queryLinuxCVEDetails(w, r, state, parts[3], parts[6])
+		return
+	}
 	if len(parts) != 6 || parts[1] != "api" || parts[2] != "devices" || !enrollmentcrypto.ValidID(parts[3], "agent_") || parts[4] != "security" || parts[5] != "cves" {
 		fail(w, 404, "not_found", "CVE assessment is unavailable.")
 		return

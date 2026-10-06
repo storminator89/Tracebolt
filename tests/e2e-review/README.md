@@ -186,3 +186,52 @@ and `node --test tests/e2e-review/cve-continuation-fixtures.test.mjs`. These pur
 checks do not launch a browser/server or produce screenshots. No real inventory,
 vendor fetch, feed import, command, host operation, held Setup/socket work or
 native deployment acceptance is included.
+
+## Bounded complete CVE detail pages
+
+`cve-detail-pages-browser.mjs` adds one disjoint required case after the original
+continuation case, for fifteen LAN cases total. All fourteen earlier case bodies
+and guards remain byte-identical, as do the fixture TTLs, assertion deadlines,
+launch options and hosted workflow. The original continuation fixture test's
+runner-count assertion is updated from fourteen to fifteen.
+
+The new case uses `linux-cve-go-fixture-details.json` and both production detail
+DTO validators. It starts with a real fixture login and a completed 145-warning /
+435-version summary. No detail POST occurs before explicit browsing; the first
+cursor is zero even though the preview contains 100 rows. A short page sequence
+covers Next, Previous and First. Eleven maximum-field pages reach checks 100–109,
+which were absent from the cached preview, and Previous also reaches the omitted
+middle checks 96–99. The selected version's eight binary pages render and compare
+all 146 exact names/architectures, including those beyond 128, with the other
+installed version excluded. Global counts stay unchanged. A held response after
+the empty 0→4000 scan proves that the preview stays visible without a fabricated
+empty final result; the 4000→4001 result completes without repeating the cursor.
+
+Only the two exact same-origin read-query POST paths are allowed after explicit
+UI actions, with exact binding, cursor, limit and body-key checks, a 64-query cap,
+and the original real CSRF/session preflight. Other mutations and external
+requests are aborted. Auth responses are forwarded unchanged. Synthetic evidence
+timestamps are shifted together once per scope to the real fixture clock; page
+server time follows the real preflight while inventory/feed evidence timestamps
+stay fixed. All other Go-projected DTO fields, bindings and counts remain intact.
+A changed page revision and an expired retained generation clear details. Held
+pages cannot reappear after navigation or protected metadata access loss; fresh
+login and explicit browsing start from zero without replay. This shared-login
+browser case does not establish named-role server authorization.
+
+The existing source-SHA manifest records two new viewport-only captures:
+`synthetic-http-test-cve-detail-pages-desktop-en.png` (1440×1000) and
+`synthetic-http-test-cve-detail-pages-mobile-de.png` (390×844). The German view
+checks the actual Erste/Vorherige/Nächste controls. Both views check navigation,
+256-character source names, 512-character versions and horizontal overflow.
+Captures are evidence only after successful hosted execution and pixel review.
+
+Local checks are `node --check tests/e2e-review/cve-detail-pages-browser.mjs`,
+`node --check tests/e2e-review/lan-browser.mjs` and
+`node --test tests/e2e-review/cve-detail-pages-fixtures.test.mjs tests/e2e-review/cve-continuation-fixtures.test.mjs`.
+They use Node 24's built-in TypeScript stripping to load the production validator
+with its sole extensionless import resolved to the existing TS source. These
+syntax and pure fixture/guard checks never start a browser/server, create sockets
+or produce screenshots. Hosted acceptance and pixel review remain publisher
+owned. No real inventory, vendor fetch, feed import, command, host action or
+native deployment acceptance is included.

@@ -2,3 +2,5 @@
 @media(max-width:700px){.linux-cve-update{align-items:flex-start;flex-direction:column;gap:10px}.linux-cve-heading,.linux-cve-list>li{padding:16px}.linux-cve-summary{align-items:flex-start;gap:16px;margin-left:16px;margin-right:16px}.linux-cve-count{min-width:85px}.linux-cve-count strong{font-size:29px}.linux-cve-times{grid-template-columns:1fr}.linux-cve-heading .button,.linux-cve-file .button,.linux-cve-update .button{min-height:40px}.linux-cve-facts{grid-template-columns:1fr}.linux-cve-list{padding-left:16px;padding-right:16px}}
 
 .linux-cve-progress{display:block;width:100%;min-width:120px;height:6px;margin-top:10px;accent-color:var(--accent)}
+
+.linux-cve-paging{padding:0 20px 14px}.linux-cve-paging p,.linux-cve-binary-pages p{color:var(--secondary);font-size:11px;margin:0 0 8px}.linux-cve-paging nav,.linux-cve-binary-pages nav{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0}.linux-cve-binary-pages{margin-top:10px}.linux-cve-paging .button,.linux-cve-binary-pages .button{min-height:36px}

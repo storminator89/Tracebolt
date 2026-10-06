@@ -32,6 +32,9 @@ func namedReadRoute(r *http.Request) bool {
 			return true
 		}
 	}
+	if len(parts) == 8 && parts[4] == "security" && parts[5] == "cves" && (parts[6] == "findings" || parts[6] == "binaries") && parts[7] == "query" {
+		return true
+	}
 	return false
 }
 

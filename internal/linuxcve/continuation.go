@@ -20,8 +20,8 @@ const MaxCheckpointBytes = 240 << 10
 
 var ErrCheckpoint = errors.New("linux_cve_checkpoint_invalid")
 
-// AssessmentIdentity is supplied only from revalidated manager authority. No
-// caller-controlled cursor is accepted by the HTTP surface.
+// AssessmentIdentity is supplied only from revalidated manager authority.
+// Caller-supplied detail positions never provide or override this binding.
 type AssessmentIdentity struct {
 	DeviceID string
 	Sequence uint64

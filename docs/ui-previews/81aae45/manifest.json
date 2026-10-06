@@ -1,0 +1,41 @@
+{
+  "sourceCommit": "81aae451da392e63e0611bf16869665fa1c85d09",
+  "sourceTree": "3713a5b00fcf7bc28a077215dab41e4f84b54201",
+  "workflowRun": 37422354151,
+  "browserJob": 112135454863,
+  "artifactId": 11394082122,
+  "artifactSHA256": "3e6772b991252d0925d5ddc08b20e621b9f1f96bf47664224b3a228a9cb9de22",
+  "browserEvidence": {
+    "passed": 119,
+    "lanCases": 14,
+    "existingEnrollmentQuarantines": 3,
+    "runtimeErrors": 0
+  },
+  "data": "Invented Go/API fixture projections; no customer inventory or real vulnerability assessment.",
+  "transformation": "None; original viewport PNG bytes copied from the verified artifact.",
+  "scope": "Continuation before later warning/binary detail pagination; not native installation or deployment acceptance.",
+  "images": [
+    {
+      "file": "cve-pending-desktop-synthetic.png",
+      "artifactFile": "synthetic-http-test-cve-continuation-pending-desktop-en.png",
+      "sha256": "bd50de353cd04ba8feb03fdad76878d4075b5717d961a3345e948b8bbc0cff50",
+      "bytes": 91692,
+      "dimensions": [
+        1440,
+        1000
+      ],
+      "pixelReview": "Count, progress/completion distinction and first warning card are readable; no observed horizontal clipping."
+    },
+    {
+      "file": "cve-complete-mobile-synthetic.png",
+      "artifactFile": "synthetic-http-test-cve-continuation-complete-mobile-en.png",
+      "sha256": "ac091d4b2d50b677f051515c0f32cdff1fbeaeb9bba1c79de2bb1ebf118a7197",
+      "bytes": 43932,
+      "dimensions": [
+        390,
+        844
+      ],
+      "pixelReview": "Count, progress/completion distinction and first warning card are readable; no observed horizontal clipping."
+    }
+  ]
+}
