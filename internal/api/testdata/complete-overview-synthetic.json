@@ -12,7 +12,7 @@
           "section": "processes",
           "sequence": "4",
           "generationId": "sample_dd80a0044f2a201035ab41d026b78f25",
-          "manifestHash": "1f667045ea2f3178f32132e261836ff2b3548ac455f7dca0689e5c5b5e9a9db8"
+          "manifestHash": "f6a28b336233a144efd3ee47580db326c441e39f022589327b8a331916990762"
         },
         "manifest": {
           "schemaVersion": "tracebolt.complete-overview-generation.v1",
@@ -57,10 +57,10 @@
           },
           "observedCount": 5,
           "chunkCount": 1,
-          "canonicalRowBytes": 962,
-          "canonicalSnapshotBytes": 1642,
-          "canonicalSectionBytes": 1098,
-          "rowsSha256": "0c7d1f975e4ae8706314e0d8e53f941904d2b44e51de1e1c814331db69c27b10"
+          "canonicalRowBytes": 958,
+          "canonicalSnapshotBytes": 1638,
+          "canonicalSectionBytes": 1094,
+          "rowsSha256": "8dbbe7aebef70ba75257fdf20c0a24a7d5253ddee49f0693c1d355879bcdd3a2"
         },
         "state": "complete",
         "completedAt": "2026-10-04T18:30:01.75Z",
@@ -212,7 +212,7 @@
       "section": "processes",
       "sequence": "4",
       "generationId": "sample_dd80a0044f2a201035ab41d026b78f25",
-      "manifestHash": "1f667045ea2f3178f32132e261836ff2b3548ac455f7dca0689e5c5b5e9a9db8"
+      "manifestHash": "f6a28b336233a144efd3ee47580db326c441e39f022589327b8a331916990762"
     },
     "manifest": {
       "schemaVersion": "tracebolt.complete-overview-generation.v1",
@@ -257,10 +257,10 @@
       },
       "observedCount": 5,
       "chunkCount": 1,
-      "canonicalRowBytes": 962,
-      "canonicalSnapshotBytes": 1642,
-      "canonicalSectionBytes": 1098,
-      "rowsSha256": "0c7d1f975e4ae8706314e0d8e53f941904d2b44e51de1e1c814331db69c27b10"
+      "canonicalRowBytes": 958,
+      "canonicalSnapshotBytes": 1638,
+      "canonicalSectionBytes": 1094,
+      "rowsSha256": "8dbbe7aebef70ba75257fdf20c0a24a7d5253ddee49f0693c1d355879bcdd3a2"
     },
     "collectedAt": "2026-10-04T18:30:00Z",
     "completedAt": "2026-10-04T18:30:01.75Z",
@@ -271,8 +271,8 @@
         "process": {
           "pid": 1,
           "parentPid": 0,
-          "name": "fixture-idle",
-          "state": "sleeping",
+          "name": "kworker/0:0",
+          "state": "idle",
           "rssBytes": 0,
           "cpuTimeSeconds": 0,
           "threads": 1,
@@ -287,7 +287,7 @@
         "process": {
           "pid": 20,
           "parentPid": 1,
-          "name": "fixture-worker",
+          "name": "fixture\\worker",
           "state": "running",
           "rssBytes": 65536,
           "cpuTimeSeconds": 1.25,
@@ -562,7 +562,7 @@
         "section": "processes",
         "sequence": "6",
         "generationId": "sample_bc0ceffb5b87c38ca0c3b6fa226b0963",
-        "manifestHash": "21aa254656a5b6de2ed7c78b6bc92272d07810999425bdc73fc6dddd7e70b722"
+        "manifestHash": "51b4c2a0bb63975635fe7db56b673afdac3409d84a1a7acfd76c57af0ffe8048"
       },
       "manifest": {
         "schemaVersion": "tracebolt.complete-overview-generation.v1",
@@ -607,10 +607,10 @@
         },
         "observedCount": 5,
         "chunkCount": 1,
-        "canonicalRowBytes": 960,
-        "canonicalSnapshotBytes": 1640,
-        "canonicalSectionBytes": 1096,
-        "rowsSha256": "395edc20ef3b422ec61bf7feb5c3bd022553c48a25c5f38ab372787240563fa1"
+        "canonicalRowBytes": 957,
+        "canonicalSnapshotBytes": 1637,
+        "canonicalSectionBytes": 1093,
+        "rowsSha256": "d38e37b9b66f7d22709e35b315e17cfb0567d010e1391c9cde016ba8f8bcbebd"
       },
       "collectedAt": "2026-10-04T18:30:00Z",
       "completedAt": "2026-10-04T18:30:01.75Z",
@@ -622,7 +622,7 @@
             "pid": 1,
             "parentPid": 0,
             "name": "İd-worker",
-            "state": "sleeping",
+            "state": "idle",
             "rssBytes": 0,
             "cpuTimeSeconds": 0,
             "threads": 1,

@@ -58,7 +58,9 @@ func ParseProcessStat(data []byte, pid uint32, pageBytes, ticks uint64) (Process
 		return Process{}, ErrInvalidSource
 	}
 	name := text[left+1 : right]
-	if !validText(name, MaxProcessNameBytes) || strings.ContainsAny(name, "/\\") {
+	// Linux comm is a display label, not a path. Kernel threads routinely
+	// contain slashes (for example kworker/0:0); preserve the bounded text.
+	if !validText(name, MaxProcessNameBytes) {
 		return Process{}, ErrInvalidSource
 	}
 	f := strings.Fields(text[right+1:])

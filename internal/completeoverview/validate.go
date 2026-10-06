@@ -129,7 +129,7 @@ func validProcess(p Process) bool {
 		}
 		return validMissing(p.Observation, true)
 	}
-	if p.Observation.Reason != ReasonNone || p.ParentPID == nil || *p.ParentPID > 2147483647 || p.Name == nil || !validText(*p.Name, MaxProcessNameBytes) || strings.ContainsAny(*p.Name, "/\\") || p.State == nil || p.RSSBytes == nil || *p.RSSBytes > MaxSafeInteger || p.CPUTimeSeconds == nil || math.IsNaN(*p.CPUTimeSeconds) || math.IsInf(*p.CPUTimeSeconds, 0) || *p.CPUTimeSeconds < 0 || *p.CPUTimeSeconds > float64(MaxSafeInteger) || p.Threads == nil || *p.Threads == 0 || *p.Threads > 2147483647 {
+	if p.Observation.Reason != ReasonNone || p.ParentPID == nil || *p.ParentPID > 2147483647 || p.Name == nil || !validText(*p.Name, MaxProcessNameBytes) || p.State == nil || p.RSSBytes == nil || *p.RSSBytes > MaxSafeInteger || p.CPUTimeSeconds == nil || math.IsNaN(*p.CPUTimeSeconds) || math.IsInf(*p.CPUTimeSeconds, 0) || *p.CPUTimeSeconds < 0 || *p.CPUTimeSeconds > float64(MaxSafeInteger) || p.Threads == nil || *p.Threads == 0 || *p.Threads > 2147483647 {
 		return false
 	}
 	switch *p.State {

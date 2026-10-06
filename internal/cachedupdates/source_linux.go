@@ -180,14 +180,22 @@ func (s *linuxSource) rememberDirectory(ctx context.Context, path string, option
 // fails closed rather than following arbitrary include paths. Directive mentions
 // inside comments/strings also conservatively reject that configuration. Dir
 // and RootDir settings (flat or nested) can redirect later config loads before
-// command-line options are applied; reject them rather than follow untracked paths.
+// command-line options are applied. Only three syntax-checked Debian defaults
+// unused by apt-cache policy have narrow exceptions; all other tokens fail closed.
 var configDirectivePattern = regexp.MustCompile(`(?i)#\s*(include|clear)\b`)
 var configDirectoryPattern = regexp.MustCompile(`(?i)(^|[^a-z0-9_])(rootdir|dir)([^a-z0-9_]|$)`)
 
 func unsupportedConfigDirective(raw []byte) bool {
 	// APT concatenates text around block comments (D/**/ir). Reject block
 	// markers instead of pretending a raw token regex is a complete APT lexer.
-	return bytes.Contains(raw, []byte("/*")) || bytes.Contains(raw, []byte("*/")) || configDirectivePattern.Match(raw) || configDirectoryPattern.Match(raw)
+	if bytes.Contains(raw, []byte("/*")) || bytes.Contains(raw, []byte("*/")) || configDirectivePattern.Match(raw) {
+		return true
+	}
+	if !configDirectoryPattern.Match(raw) {
+		return false
+	}
+	masked, ok := maskInactiveDebianDefaults(raw)
+	return !ok || configDirectoryPattern.Match(masked)
 }
 func (s *linuxSource) checkPolicyConfig(path string) error {
 	const maxConfigBytes = 64 << 10

@@ -35,7 +35,7 @@ beforeEach(() => {
 });
 afterEach(() => { cleanup(); abortProtectedRequests(); vi.useRealTimers(); vi.restoreAllMocks(); });
 
-describe('live device Overview metadata', () => {
+describe('live device metadata', () => {
     it('updates only metadata every 15 seconds, retaining cards, scroll and original measurement time', async () => {
         await start(); const card = resources(), main = screen.getByRole('main'); main.scrollTop = 240;
         expect(card).toHaveTextContent('0.4%'); expect(card).toHaveTextContent('23.4%');
@@ -48,6 +48,21 @@ describe('live device Overview metadata', () => {
         expect(screen.getByRole('tab', { name: 'Overview' })).toHaveAttribute('aria-selected', 'true');
         expect(vi.mocked(request).mock.calls.filter(([path]) => path !== `/devices/${id}`)).toHaveLength(auxiliaryReads);
         expect(reads()[1][1]).toEqual({ signal: expect.any(AbortSignal) }); expect(reads()[1][2]).toBe(262144);
+        expect(mutate).not.toHaveBeenCalled(); expect(mutateRaw).not.toHaveBeenCalled();
+    });
+    it.each(['Inventory', 'Details', 'Logs'])('keeps the header current on %s without remounting the active panel or resetting scroll', async tab => {
+        await start(); fireEvent.click(screen.getByRole('tab', { name: tab })); await flush();
+        const selected = screen.getByRole('tab', { name: tab }), main = screen.getByRole('main');
+        const content = document.getElementById(selected.getAttribute('aria-controls')!)!;
+        const subtree = content.firstElementChild, auxiliaryReads = vi.mocked(request).mock.calls.filter(([path]) => path !== `/devices/${id}`).length;
+        main.scrollTop = 240;
+        latest = device(12.6, '2026-10-05T12:00:10Z'); latest.agentCertificate!.checkedAt = '2026-10-05T12:00:15Z';
+        await advance(15000);
+        expect(reads()).toHaveLength(2);
+        expect(document.querySelector('#device-metadata-status time')).toHaveAttribute('datetime', '2026-10-05T12:00:15.000Z');
+        expect(document.querySelector('.detail-time')).toHaveTextContent('just now');
+        expect(selected).toHaveAttribute('aria-selected', 'true'); expect(content.firstElementChild).toBe(subtree); expect(main.scrollTop).toBe(240);
+        expect(vi.mocked(request).mock.calls.filter(([path]) => path !== `/devices/${id}`)).toHaveLength(auxiliaryReads);
         expect(mutate).not.toHaveBeenCalled(); expect(mutateRaw).not.toHaveBeenCalled();
     });
     it('keeps an unchanged sample time through successful checks and marks it stale using manager time', async () => {
@@ -95,14 +110,16 @@ describe('live device Overview metadata', () => {
         await start(); vi.mocked(hasPendingAPIRequests).mockReturnValue(true); await advance(30000); expect(reads()).toHaveLength(1);
         vi.mocked(hasPendingAPIRequests).mockReturnValue(false); await advance(1000); expect(reads()).toHaveLength(2);
     });
-    it('cancels an automatic request when leaving Overview and preserves the new tab and disclosure', async () => {
+    it('continues one in-flight metadata check across device tabs without resetting the new disclosure', async () => {
         await start(); const held = deferred<Device>(); vi.mocked(request).mockImplementation(path => path === `/devices/${id}` ? held.promise : Promise.resolve(answer(path)));
         await advance(15000); const signal = reads()[1][1]!.signal as AbortSignal;
-        fireEvent.click(screen.getByRole('tab', { name: 'Details' })); await flush(); expect(signal.aborted).toBe(true);
+        fireEvent.click(screen.getByRole('tab', { name: 'Details' })); await flush(); expect(signal.aborted).toBe(false);
         const details = screen.getByText('Device profile & technical details').closest('details')!; fireEvent.click(screen.getByText('Device profile & technical details'));
-        await act(async () => held.resolve(device(99))); await advance(180000);
+        await act(async () => held.resolve(device(99)));
         expect(screen.getByRole('tab', { name: 'Details' })).toHaveAttribute('aria-selected', 'true'); expect(details).toHaveAttribute('open'); expect(reads()).toHaveLength(2);
-        vi.mocked(request).mockImplementation(async path => answer(path)); fireEvent.click(screen.getByRole('tab', { name: 'Overview' })); await flush(); await advance(15000); expect(reads()).toHaveLength(3);
+        expect(document.querySelector('.device-metrics')).toHaveTextContent('99%');
+        vi.mocked(request).mockImplementation(async path => answer(path)); await advance(15000); expect(reads()).toHaveLength(3); expect(details).toHaveAttribute('open');
+        fireEvent.click(screen.getByRole('tab', { name: 'Overview' })); await flush(); await advance(15000); expect(reads()).toHaveLength(4);
     });
     it.each(['hidden', 'pagehide', 'blur', 'unmount'] as const)('cancels automatic reads on %s without accepting a late sample', async transition => {
         const mounted = await start(), held = deferred<Device>(); vi.mocked(request).mockImplementation(path => path === `/devices/${id}` ? held.promise : Promise.resolve(answer(path)));

@@ -253,7 +253,7 @@ func TestParsersPreserveAllowedMetricsAndRejectUnsafeValues(t *testing.T) {
 	if e != nil || *p.RSSBytes != 32768 || *p.CPUTimeSeconds != 2 || *p.Threads != 3 {
 		t.Fatal("stat metrics")
 	}
-	for _, raw := range []string{statFixture(41, "other pid"), statFixture(42, "bad/name"), statFixture(42, "bad\nname"), strings.Replace(statFixture(42, "bad rss"), "0 8 ", "0 -8 ", 1)} {
+	for _, raw := range []string{statFixture(41, "other pid"), statFixture(42, "bad\nname"), strings.Replace(statFixture(42, "bad rss"), "0 8 ", "0 -8 ", 1)} {
 		if _, e := ParseProcessStat([]byte(raw), 42, 4096, 100); e == nil {
 			t.Fatal("unsafe stat accepted")
 		}

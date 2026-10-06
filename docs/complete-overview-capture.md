@@ -52,6 +52,10 @@ A section contains `meta` and `items`. `meta` contains exactly `generationId`,
 
 Process rows contain only `pid`, nullable `parentPid`, `name`, `state`, `rssBytes`,
 `cpuTimeSeconds`, `threads`, and an `observation` with `status`/`reason`.
+`name` is the kernel-provided `comm` display label, not a filesystem path.
+Printable slashes and backslashes are preserved (for example `kworker/0:0`);
+the existing 64-byte, valid-UTF-8 and control/format-character exclusions apply.
+Names are never opened, executed or used to select a procfs source.
 `cpuTimeSeconds` is cumulative user + system CPU time, never utilization percent.
 All seven allowed process fields are present; on a detail failure only PID remains
 populated. Expected per-row outcomes retain denied, exited, invalid, unsupported

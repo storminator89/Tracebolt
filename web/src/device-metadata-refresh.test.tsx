@@ -84,7 +84,8 @@ describe('explicit device metadata refresh', () => {
         expect(within(technical).getByText(fullDate(newContact))).toBeVisible(); expect(technical).toHaveAttribute('open');
         expect(document.querySelector('#device-metadata-status time')!.getAttribute('datetime')).not.toBe(lastCheck);
         expect(refresh()).toBeEnabled(); expect(screen.getByRole('tab', { name: 'Details' })).toHaveAttribute('aria-selected', 'true');
-        await advance(30000); expect(metadataCalls()).toHaveLength(2); expect(mutateRaw).not.toHaveBeenCalled();
+        await advance(30000); expect(metadataCalls()).toHaveLength(4); expect(mutateRaw).not.toHaveBeenCalled();
+        expect(document.querySelector('.device-metrics')).toBe(metrics); expect(technical).toHaveAttribute('open');
     });
     it('preserves the actual Logs form instance, unit/window/severity/consent and active tab through metadata refresh', async () => {
         await start(); fireEvent.click(screen.getByRole('tab', { name: 'Logs' })); await flush();
@@ -103,6 +104,11 @@ describe('explicit device metadata refresh', () => {
         expect(screen.getByRole('tab', { name: 'Logs' })).toHaveAttribute('aria-selected', 'true');
         expect(screen.getByText('Refreshed Linux fixture')).toBeVisible(); expect(document.querySelector('.detail-time')).toHaveTextContent(relativeTime(newContact));
         expect(request).toHaveBeenCalledTimes(calls + 1); expect(mutateRaw).not.toHaveBeenCalled();
+        await advance(15000);
+        expect(screen.getByLabelText('Exact service unit')).toBe(unit); expect(unit).toHaveValue('draft.service');
+        expect(screen.getByLabelText('From (UTC)')).toHaveValue('2026-10-04T11:42'); expect(screen.getByLabelText('To (UTC)')).toHaveValue('2026-10-04T11:58');
+        expect(screen.getByLabelText('Include severity through')).toHaveValue('3'); expect(screen.getByRole('checkbox')).toBeChecked();
+        expect(request).toHaveBeenCalledTimes(calls + 2); expect(mutateRaw).not.toHaveBeenCalled();
     });
     it('does not renew the original Logs retention deadline or requery rows while refreshing metadata', async () => {
         vi.mocked(request).mockImplementation(async path => path === `/devices/${id}/journal` ? journalView() : answer(path));
@@ -113,7 +119,7 @@ describe('explicit device metadata refresh', () => {
         expect(screen.getByText('Synthetic retained row')).toBeVisible(); expect(mutateRaw).toHaveBeenCalledTimes(1);
         await advance(59999); expect(screen.getByText('Synthetic retained row')).toBeVisible();
         await advance(1); expect(screen.queryByText('Synthetic retained row')).not.toBeInTheDocument(); expect(mutateRaw).toHaveBeenCalledTimes(1);
-        expect(metadataCalls()).toHaveLength(2);
+        expect(metadataCalls()).toHaveLength(62);
     });
     it('keeps the actual nested inventory selection and instance without rerunning child requests', async () => {
         await start(); fireEvent.click(screen.getByRole('tab', { name: 'Inventory' })); await flush();
@@ -124,22 +130,26 @@ describe('explicit device metadata refresh', () => {
         expect(mounts).toHaveAttribute('aria-selected', 'true'); expect(screen.getByRole('tab', { name: 'Inventory' })).toHaveAttribute('aria-selected', 'true');
         expect(request).toHaveBeenCalledTimes(calls + 1); expect(mutateRaw).toHaveBeenCalledTimes(queries);
         expect(vi.mocked(mutateRaw).mock.calls.every(([path]) => path.endsWith('/inventory/packages/query'))).toBe(true);
+        await advance(15000);
+        expect(document.querySelector('.inventory-workspace')).toBe(inventory); expect(screen.getByRole('tab', { name: 'Mounts' })).toBe(mounts);
+        expect(mounts).toHaveAttribute('aria-selected', 'true'); expect(request).toHaveBeenCalledTimes(calls + 2); expect(mutateRaw).toHaveBeenCalledTimes(queries);
     });
     it('retains the previous snapshot and successful-check time outside Overview on a refresh failure, then permits a fresh click', async () => {
         await start(); fireEvent.click(screen.getByRole('tab', { name: 'Details' })); await flush(); const time = document.querySelector('#device-metadata-status time')!.getAttribute('datetime');
         const held = holdRefresh(); await act(async () => held.reject(new APIError('Synthetic unavailable', 503)));
         expect(screen.getByRole('alert')).toHaveTextContent('Refresh failed. Displayed device metadata is unchanged.');
         expect(document.querySelector('.device-metrics')).toHaveTextContent('11%'); expect(document.querySelector('#device-metadata-status time')).toHaveAttribute('datetime', time);
-        await advance(30000); expect(metadataCalls()).toHaveLength(2); expect(refresh()).toBeEnabled();
+        await advance(29999); expect(metadataCalls()).toHaveLength(2); expect(refresh()).toBeEnabled();
         vi.mocked(request).mockImplementation(async path => path === `/devices/${id}` ? device(id, true) : answer(path)); fireEvent.click(refresh()); await flush();
         expect(screen.queryByRole('alert')).not.toBeInTheDocument(); expect(document.querySelector('.device-metrics')).toHaveTextContent('42%'); expect(metadataCalls()).toHaveLength(3);
     });
-    it('aborts at ten seconds, unlocks explicit retry and rejects a late reply without polling outside Overview', async () => {
+    it('aborts at ten seconds, rejects a late reply and resumes polling after backoff on Details', async () => {
         await start(); fireEvent.click(screen.getByRole('tab', { name: 'Details' })); await flush(); const held = holdRefresh(), signal = metadataCalls()[1][1]!.signal as AbortSignal;
         await advance(9999); expect(signal.aborted).toBe(false); expect(refresh()).toBeDisabled();
         await advance(1); expect(signal.aborted).toBe(true); expect(refresh()).toBeEnabled(); expect(screen.getByRole('alert')).toHaveTextContent(/not responding/i);
         await act(async () => held.resolve(device(id, true))); expect(document.querySelector('.device-metrics')).toHaveTextContent('11%');
-        await advance(30000); expect(metadataCalls()).toHaveLength(2);
+        await advance(29999); expect(metadataCalls()).toHaveLength(2);
+        await advance(1); expect(metadataCalls()).toHaveLength(3);
     });
     it.each(['wall', 'monotonic', 'elapsed'] as const)('rejects a late reply after a %s clock/deadline discontinuity', async kind => {
         await start(); const held = holdRefresh();

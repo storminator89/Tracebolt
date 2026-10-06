@@ -69,3 +69,22 @@ describe('complete overview Go DTO contract', () => {
         expect(overviewSectionVisible(v, 'processes', remaining - 1)).toBe(true); expect(overviewSectionVisible(v, 'processes', remaining)).toBe(false); expect(overviewSectionVisible(v, 'processes', Infinity)).toBe(false);
     });
 });
+
+describe('Linux process comm names', () => {
+    it('accepts literal slash and backslash names through rows and paged search', () => {
+        const names = ['kworker/0:0', 'kworker/0:0H', 'kworker/u8:0-events_unbound', 'rcu_exp_par_gp_kthread_worker/0', 'migration/0', 'jbd2/sda1-8', 'literal\\name', 'name with ) paren/0'];
+        const view = overviewView(names.length, 0), rows = processRows(names.length);
+        rows.forEach((row, i) => { row.process!.name = names[i]; row.process!.state = 'idle'; expect(validOverviewProcess(row.process)).toBe(true); });
+        for (const search of ['', 'kworker/', 'literal\\', 'paren/']) {
+            const page = overviewPage(view, rows, [], JSON.stringify({ section: 'processes', cursor: '', search, limit: 100 }));
+            expect(validOverviewPage(page, overviewDevice, 'processes', view.processes.complete!, search, '')).toBe(true);
+            expect(page.items.length).toBeGreaterThan(0);
+        }
+    });
+    it('keeps byte/control/state limits and missing observations strict', () => {
+        const row = processRows(1)[0].process!;
+        for (const name of ['', 'x'.repeat(65), 'é'.repeat(33), 'bad\nname', 'bad\0name', 'bad\u202ename', 'bad\u2028name', 'bad\ufffdname']) expect(validOverviewProcess({ ...row, name })).toBe(false);
+        expect(validOverviewProcess({ ...row, name: 'kworker/0:0', state: 'unknown' })).toBe(false);
+        expect(validOverviewProcess({ ...row, name: 'kworker/0:0', observation: { status: 'invalid', reason: 'invalid_source' } })).toBe(false);
+    });
+});

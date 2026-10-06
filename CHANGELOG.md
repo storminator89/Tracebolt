@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-10-06 — Correct fresh Debian process/update observations and device status refresh
+
+- Treat Linux process comm values as bounded display names. Preserve kernel-thread slashes and literal backslashes through collection, strict wire/store validation and React rendering instead of incorrectly marking valid rows invalid. Numeric PID source selection, control/UTF-8/length limits and unknown/denied outcomes remain unchanged.
+- Accept only three exact flat Debian installer/apt-listchanges configuration defaults after bounded grammar checks. Other Dir/RootDir redirects, includes, clear directives, block comments and unsupported forms remain rejected. The fixed cached-only APT commands, disabled writable caches, protected source checks and original metadata age remain unchanged; no APT refresh or package operation is added.
+- Keep the device header current every 15 seconds on visible authenticated device tabs, using the existing bounded metadata GET. Shared request admission, original sample age, timeout/backoff, focus/session/device cancellation and selected forms/scroll remain. Paged inventory generations and journal snapshots are not re-fetched or renewed by a header check.
+- Baseline regressions reproduce the three reported seams; focused source/wire/store/UI checks and the composed production build pass. The local full enrollmentstore race package exhausted its ten-minute package ceiling and is not a full-pass claim; exact hosted CI remains the broad gate. Installed rc.2 binaries still require a new verified agent release together with compatible manager/UI source. An existing full-update attempt retains its durable six-hour cadence; no ledger reset or host configuration edit is performed.
+
 ## 2026-10-06 — Activate verified rc.2 combined Linux read-admin installation
 
 - Select the publicly verified rc.2 bootstrap through immutable publication commit 08c7f0ef3bb8c3f8941a071d885bdf550c7f72c5 and its exact SHA-256. Hosted run 37513100878 passed all 12 asset checks and source/workflow keyless provenance without executing Tracebolt.

@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "sourceCommit": "fccc4b00cd8a144afd58e4b995747afab7a10022",
-  "goSourceSha256": "edc60c95669f77df337db954bad5f5a98894260468b0bcbdbc3e3e4dbb0756da",
+  "goSourceSha256": "876d211043f7a47572dbd50eaf19b73808e542d06ceaa24d613b5487c359c170",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -682,8 +682,12 @@
       "TestBusyAndCanceledDoNotOpenSource",
       "TestCollectorReadOnlyDependencyBoundary",
       "TestCompleteCollectionKeepsAll1100RowsAndOriginalPreview",
+      "TestCompleteDebianCaptureChecksRealFixtureConfigFiles",
       "TestCompleteFailureNeverReturnsPrefixOrSuccessfulZero",
       "TestCompleteGrantRejectsPreviewAndUnknownVersionsBeforeSource",
+      "TestDebianDefaultExceptionsRequireExactTopLevelScalarGrammar",
+      "TestDebianDefaultsNeverPermitAPTPathRedirection",
+      "TestDebianNetinstAPTDefaults",
       "TestDpkgQueryHoldsResidualAndMalformed",
       "TestFailureAndUnsupportedNeverProduceZeroCounts",
       "TestFixedNativeCommandsHaveNoRefreshOrWritableCache",
@@ -743,6 +747,9 @@
       "TestMountCoherenceChecksEntireSet",
       "TestParsersPreserveAllowedMetricsAndRejectUnsafeValues",
       "TestProcSelfUsesOnlyCanonicalMountPID",
+      "TestProcessCommCollectionCoverageAndStrictRoundTrip",
+      "TestProcessCommNamesAndLinuxStates",
+      "TestProcessCommRetainsUnsafeTextAndUnknownOutcomes",
       "TestReadBoundedDistinguishesExactEOFAndExceeded",
       "TestRejectEnumerationErrorsAndSourceCeilingsWithoutPrefixes",
       "TestSectionByteRejectionDropsAllRows",
@@ -956,6 +963,7 @@
       "TestCompleteOverviewMissingRetryCannotCreateBeforeExpiry",
       "TestCompleteOverviewPostCommitBoundaryAndClockRollback",
       "TestCompleteOverviewPostCommitGETRejectsStaleLabels",
+      "TestCompleteOverviewProcessCommWireStoreRoundTrip",
       "TestCompleteOverviewQueuedActionsRecheckCertificateExpiry",
       "TestCompleteOverviewQueuedBeginImmediateUsesFreshClock",
       "TestCompleteOverviewQueuedReadRechecksCursorAndCaptureExpiry",

@@ -11,7 +11,7 @@ and service/reboot acceptance remain separate gates.
 
 ## Exact meaning and limits
 
-The source adapter routes only exact Debian 13/trixie and Ubuntu 24.04/noble identities; native compatibility is not established by fixtures. Its conservative configuration checks may reject otherwise ordinary APT configurations, including `Dir::Cache` settings, block comments or nested config directives. Those configurations remain explicitly unsupported; the reader never follows untracked configuration paths to make a result appear available.
+The source adapter routes only exact Debian 13/trixie and Ubuntu 24.04/noble identities; native compatibility is not established by fixtures. Its conservative configuration checks may reject otherwise ordinary APT configurations, including `Dir::Cache` settings, block comments or nested config directives. Those configurations remain explicitly unsupported; the reader never follows untracked configuration paths to make a result appear available. A narrow [Debian default compatibility exception](debian-cached-update-compatibility.md) accepts the exact flat installation-media and apt-listchanges defaults without weakening the tracked-source checks.
 The scope is what the existing unprivileged agent can see, including its Linux
 namespace limitations. One successful, rechecked cached-only operation supplies
 both the unchanged 2 KiB / at-most-16-row preview and all known newer candidate

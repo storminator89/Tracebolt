@@ -78,7 +78,7 @@ function validMissing(v: unknown, process: boolean): boolean {
 export function validOverviewProcess(v: unknown): v is ProcessRow {
     if (!record(v, ['pid', 'parentPid', 'name', 'state', 'rssBytes', 'cpuTimeSeconds', 'threads', 'observation']) || !integer(v.pid, 2147483647) || v.pid === 0 || !record(v.observation, ['status', 'reason'])) return false;
     if (v.observation.status !== 'observed') return ['parentPid', 'name', 'state', 'rssBytes', 'cpuTimeSeconds', 'threads'].every(k => v[k] === null) && validMissing(v.observation, true);
-    return v.observation.reason === 'none' && integer(v.parentPid, 2147483647) && safeText(v.name, 64) && !/[\\/]/.test(v.name) && member(v.state, ['running', 'sleeping', 'disk_sleep', 'stopped', 'tracing_stop', 'zombie', 'dead', 'idle', 'parked']) && integer(v.rssBytes) && number(v.cpuTimeSeconds) && integer(v.threads, 2147483647) && v.threads > 0;
+    return v.observation.reason === 'none' && integer(v.parentPid, 2147483647) && safeText(v.name, 64) && member(v.state, ['running', 'sleeping', 'disk_sleep', 'stopped', 'tracing_stop', 'zombie', 'dead', 'idle', 'parked']) && integer(v.rssBytes) && number(v.cpuTimeSeconds) && integer(v.threads, 2147483647) && v.threads > 0;
 }
 function filesystemKind(fs: string): VolumeRow['kind'] {
     if (['ext2', 'ext3', 'ext4', 'xfs', 'btrfs', 'f2fs', 'jfs', 'reiserfs', 'vfat', 'exfat', 'ntfs3', 'zfs', 'bcachefs', 'erofs', 'squashfs'].includes(fs)) return 'local';

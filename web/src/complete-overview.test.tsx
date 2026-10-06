@@ -28,11 +28,18 @@ describe('complete process and mount panels', () => {
     });
     it('renders actual Go process zero values, missing outcomes, latest failure, and original independent ages', async () => {
         const f = overviewGolden(); view = f.view; vi.mocked(mutateRaw).mockResolvedValue(f.processPage); open(); await screen.findByRole('table');
+        expect(screen.getByText('kworker/0:0')).toBeVisible(); expect(screen.getByText('fixture\\worker')).toBeVisible();
         expect(screen.getByText('Latest collection attempt failed')).toBeVisible(); expect(screen.getByText('Collection timed out', { exact: false })).toBeVisible(); expect(screen.getByText('Original observation age (minutes)').nextElementSibling).toHaveTextContent('5');
         expect(screen.getByText(/Mixed captures:/)).toHaveTextContent('2026-10-04T18:15:00Z'); expect(screen.getByText('Denied').nextElementSibling).toHaveTextContent('1'); expect(screen.getByText('Exited').nextElementSibling).toHaveTextContent('1');
         const observed = f.processPage.items.find(row => row.process!.observation.status === 'observed')!.process!;
         const row = screen.getByRole('rowheader', { name: String(observed.pid) }).closest('tr')!; expect(within(row).getByText('0 B')).toBeVisible(); expect(within(row).getAllByText('0')).toHaveLength(2);
         expect(screen.getByRole('columnheader', { name: 'CPU time (s), cumulative' })).toBeVisible(); expect(screen.getAllByText('Exited during capture').length).toBeGreaterThan(0);
+    });
+    it('renders path-like process labels as inert text', async () => {
+        const rows = processRows(2); rows[0].process!.name = '../label'; rows[1].process!.name = '<img/onerror=alert(1)>';
+        view = overviewView(2, 0); vi.mocked(mutateRaw).mockImplementation(async (_path, raw) => overviewPage(view, rows, [], raw));
+        open(); await screen.findByText('../label'); expect(screen.getByText('<img/onerror=alert(1)>')).toBeVisible();
+        expect(screen.queryByRole('img')).not.toBeInTheDocument();
     });
     it('renders actual Go volume classes and N/A separately from denied and unsupported capacities', async () => {
         const f = overviewGolden(); view = f.view; vi.mocked(mutateRaw).mockResolvedValue(f.volumePage); open('volumes'); await screen.findByRole('table');

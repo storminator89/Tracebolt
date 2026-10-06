@@ -21,8 +21,8 @@ function agedMetric(metric: Metric, managerNow: number, age: number): Metric {
     return old ? { ...metric, quality: 'stale' } : metric;
 }
 
-/** One bounded metadata GET at a time. Only the visible authenticated Overview
- * polls; auxiliary summaries and collection grants are never refreshed here. */
+/** One bounded metadata GET at a time. Only visible authenticated device pages
+ * poll; auxiliary summaries and collection grants are never refreshed here. */
 export function useDeviceMetadata(id: string, scope: string, automatic: boolean) {
     const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
     const [refreshing, setRefreshing] = useState(false), [accessEnded, setAccessEnded] = useState(false), [error, setError] = useState('');
@@ -110,7 +110,7 @@ export function useDeviceMetadata(id: string, scope: string, automatic: boolean)
         const resume = () => { if (!alive || locked || hidden()) return; suspended = false; schedule(); };
         const visibility = () => hidden() ? suspend() : resume();
         reconcileRef.current = () => {
-            // Switching tabs stops the poll without remounting selected forms.
+            // Eligibility changes stop the poll without remounting selected forms.
             if (!automaticRef.current && pending?.automatic) { cancel(); setRefreshing(false); }
             schedule();
         };
