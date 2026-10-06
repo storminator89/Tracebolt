@@ -113,7 +113,7 @@ func TestReadAdminOperatorFailureBounds(t *testing.T) {
 	if d.failure != "decode" || d.status != "http_200" || d.code != "none" {
 		t.Fatal("decode diagnostic lost")
 	}
-	for path, want := range map[string]string{"/api/devices/private-id/journal": "journal", "/api/devices/private-id/journal/create": "journal_create", "/api/devices/private-id/journal/query": "journal_query", "/api/devices/private-id/inventory/system/query": "system_query", "/api/enrollment/private-id/approve": "approval", "/api/devices/private-id/secret": "other"} {
+	for path, want := range map[string]string{"/api/devices/private-id/inventory/overview": "overview", "/api/devices/private-id/inventory/endpoint-identity": "endpoint_identity", "/api/devices/private-id/journal": "journal", "/api/devices/private-id/journal/create": "journal_create", "/api/devices/private-id/journal/query": "journal_query", "/api/devices/private-id/inventory/system/query": "system_query", "/api/enrollment/private-id/approve": "approval", "/api/devices/private-id/secret": "other"} {
 		if readAdminOperatorResource(path) != want {
 			t.Fatal("route diagnostic not closed")
 		}

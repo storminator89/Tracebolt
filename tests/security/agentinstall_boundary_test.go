@@ -95,7 +95,7 @@ func installBoundaryOperations(action agentinstall.Action) []agentinstall.Operat
 	case agentinstall.Upgrade:
 		return []agentinstall.Operation{agentinstall.OpStage, agentinstall.OpStop, agentinstall.OpValidate, agentinstall.OpPublish, agentinstall.OpStart}
 	case agentinstall.Restart:
-		return []agentinstall.Operation{agentinstall.OpStop, agentinstall.OpValidate, agentinstall.OpStart}
+		return []agentinstall.Operation{agentinstall.OpStop, agentinstall.OpValidate, agentinstall.OpResetRestartState, agentinstall.OpStart}
 	case agentinstall.Uninstall:
 		return []agentinstall.Operation{agentinstall.OpStop, agentinstall.OpDisable, agentinstall.OpRemove}
 	default:

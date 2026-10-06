@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-10-06 — Complete bounded readiness reads and owned helper shutdown
+
+- Put complete Overview, endpoint identity, cached-update metadata and read-only system/socket pages through the same existing 750-ms single-reader gate. Keep active-operation limits, all mutation admission, client retry/deadline budgets and authority checks. Recheck original certificate/source/cursor expiry after waiting, commit and final response encoding; retain original collection/receipt times.
+- A complete authenticated handler sequence now covers the native polling order, concurrent startup writes, periodic maintenance, refresh, three socket pages and journal creation/delivery/query. The unchanged baseline reproduces the omitted Overview/endpoint/page admission failures. Distinguish Overview and endpoint identity in fixed diagnostics; the historical 1abc readiness response identifies one of those two GETs, not an exact route.
+- Treat only the helper's own coordinated cancellation as clean exit after worker shutdown. Failed helper shutdown is accepted only with full immutable receipt/unit ownership, terminal state, zero MainPID and repeated confirmed cgroup drain. Preserve failure history, disabled policy, floors, pending-state checks and all unrelated-error failures.
+- Update the independent restart contract to include the already-approved reset operation, extending its existing intent/apply/completion failure tests. No assertion or timeout is removed.
+- The 1abc native run failed during readiness before reaching the restart correction; its cleanup failure was recorded separately. Source reviews and inert end-to-end/race checks support this checkpoint, but full hosted and newly approved native acceptance remain required. No host action, grant, dispatch or release activation occurs on publication.
+
 ## 2026-10-06 — Restore the owned service's explicit maintenance restart budget
 
 - A composed fresh read-admin installation starts the agent five times. The e45 native test reached its next explicit restart inside a 92-second execution window, against the unchanged systemd limit of five starts per 300 seconds. This reconstructs a guaranteed start-budget conflict; the failed run did not capture systemd's precise Result.

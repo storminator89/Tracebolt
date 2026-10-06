@@ -394,10 +394,10 @@ jobs:
               fields = ('method', 'resource', 'status', 'failure', 'code')
               choices = (
                   frozenset('get post'.split()),
-                  frozenset('auth enrollment invitation approval devices packages operational system system_query journal journal_create journal_query other'.split()),
+                  frozenset('auth enrollment invitation approval devices packages operational system system_query overview endpoint_identity journal journal_create journal_query other'.split()),
                   frozenset('not_received http_200 http_201 http_400 http_401 http_403 http_404 http_405 http_409 http_429 http_500 http_503 http_other'.split()),
                   frozenset('request transport deadline body oversize status decode'.split()),
-                  frozenset('none unknown invalid storage_busy journal_busy authentication_required journal_not_configured invalid_journal_request journal_conflict journal_unavailable journal_generation_stale journal_not_ready journal_not_found not_found method_not_allowed forbidden invalid_request'.split()),
+                  frozenset('none unknown invalid storage_busy journal_busy authentication_required journal_not_configured invalid_journal_request journal_conflict journal_unavailable journal_generation_stale journal_not_ready journal_not_found not_found method_not_allowed forbidden invalid_request inventory_not_configured invalid_inventory_query inventory_page_limit inventory_generation_expired inventory_unavailable invalid_query overview_not_configured overview_page_limit invalid_overview_query overview_resource_limit overview_generation_expired overview_unavailable complete_updates_not_configured'.split()),
               )
               pattern = re.compile(r'[ \t]+[A-Za-z0-9_]+\.go:[0-9]+: native_operator method=([a-z]+) resource=([a-z_]+) status=([a-z0-9_]+) failure=([a-z]+) code=([a-z_]+)')
               lifecycle_fields = ('operation', 'failureStage', 'committed', 'rolledBack', 'identityRetained', 'unit', 'activeState', 'subState', 'result')

@@ -10,5 +10,5 @@ func (s *Service) EndpointIdentityView(ctx context.Context, id string, now time.
 	if s == nil || s.store == nil {
 		return enrollmentstore.EndpointIdentityView{}, ErrConfiguration
 	}
-	return s.store.EndpointIdentityView(ctx, id, now)
+	return s.store.EndpointIdentityView(enrollmentstore.WithSystemViewClock(ctx, s.Now), id, now)
 }

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"localrmm/internal/enrollmentstore"
 	"localrmm/internal/overviewledger"
 	"net/http/httptest"
 	"sync/atomic"
@@ -25,6 +26,14 @@ func (f overviewEncodingBoundaryFixture) MarshalJSON() ([]byte, error) {
 }
 
 func TestCompleteOverviewFinalOutputRechecksAfterEncodingAndSession(t *testing.T) {
+	testInventoryFinalOutput(t, false)
+}
+
+func TestSystemPageFinalOutputRechecksAfterEncodingAndSession(t *testing.T) {
+	testInventoryFinalOutput(t, true)
+}
+
+func testInventoryFinalOutput(t *testing.T, system bool) {
 	for _, crossing := range []string{"encoding_expiry", "session_expiry", "session_revoked", "success"} {
 		t.Run(crossing, func(t *testing.T) {
 			start := time.Now().UTC()
@@ -57,10 +66,17 @@ func TestCompleteOverviewFinalOutputRechecksAfterEncodingAndSession(t *testing.T
 				if at.Before(expiry) {
 					return nil
 				}
+				if system {
+					return enrollmentstore.ErrSystemCursorExpired
+				}
 				return overviewledger.ErrCursorExpired
 			}
 			w := httptest.NewRecorder()
-			h.writeOverviewResponse(w, r, value, check)
+			if system {
+				h.writeSystemPageResponse(w, r, value, check)
+			} else {
+				h.writeOverviewResponse(w, r, value, check)
+			}
 			if encodes.Load() != 1 {
 				t.Fatal("checked page was encoded again before output")
 			}

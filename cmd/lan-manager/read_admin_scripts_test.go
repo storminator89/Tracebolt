@@ -72,7 +72,7 @@ def socket_native_operation(operation, scenario, workflow, inventory, s, amendme
             receipt = socket_setup.ownership_proof(s, e, templates, facts, parent)
             socket_setup.loaded(e, socket_setup.SERVICE, receipt['helperUid'], receipt['helperGid'], [socket_setup.BINARY], allow_failed=True)
             socket_setup.loaded(e, socket_setup.SOCKET, 0, facts['gid'], [])
-            socket_setup.revoke_safety_shutdown(e, ValueError('native-cleanup'), disable_admission=True)
+            socket_setup.revoke_safety_shutdown(e, ValueError('native-cleanup'), disable_admission=True, helper_identity=(receipt['helperUid'], receipt['helperGid']))
         else:
             require(all(e.absent(p) for p in (socket_setup.BINARY, socket_setup.POLICY, socket_setup.DEPLOYMENT,
                 socket_setup.UNIT_DIR + '/' + socket_setup.SERVICE, socket_setup.UNIT_DIR + '/' + socket_setup.SOCKET, socket_setup.RUNTIME)))
@@ -95,7 +95,7 @@ def socket_native_operation(operation, scenario, workflow, inventory, s, amendme
     maintenance = workflow.real_maintenance(s, inventory, socket_setup, templates, release)
     require(maintenance.inspect() == bound)
     receipt = socket_setup.proof(s, e, templates, facts, parent)
-    socket_setup.runtime_configuration(e, facts, receipt)
+    socket_setup.runtime_configuration(e, facts, receipt, allow_failed_helper=operation == 'revoke-socket')
     out.update(grantEpoch=receipt['policy']['epoch'], policyDigest=receipt['policySHA256'],
         agentUID=facts['uid'], agentGID=facts['gid'], helperUID=receipt['helperUid'], helperGID=receipt['helperGid'])
     if operation == 'inspect-socket':
@@ -158,10 +158,11 @@ def socket_native_operation(operation, scenario, workflow, inventory, s, amendme
         socket_setup.real_effects = original_factory
     require(result.get('revoked') is True and not result.get('stopUnconfirmed') and evidence == dict(floorPreserved=True, pendingChecked=True))
     socket_setup.proof(s, e, templates, facts, parent, disabled=True)
-    socket_setup.runtime_configuration(e, facts, receipt, enabled=False)
-    helper = e.status(socket_setup.SERVICE)
-    require(socket_setup.owned(helper, socket_setup.SERVICE, 'inactive') and helper['MainPID'] == '0')
+    socket_setup.runtime_configuration(e, facts, receipt, enabled=False, allow_failed_helper=True)
+    helper_identity = (receipt['helperUid'], receipt['helperGid'])
+    socket_setup.stopped(e, socket_setup.SERVICE, helper_identity=helper_identity)
     e.drain(socket_setup.SERVICE)
+    socket_setup.stopped(e, socket_setup.SERVICE, helper_identity=helper_identity)
     require(not e.absent(socket_setup.REVOKE_STARTED) and not e.absent(socket_setup.REVOKE_COMPLETE))
     out.update(revoked=True, **evidence)
     return out

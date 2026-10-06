@@ -316,10 +316,10 @@ class ReadAdminWrapperTests(unittest.TestCase):
     def test_operator_diagnostics_accept_only_closed_enums(self):
         enums = {
             'method': 'get post',
-            'resource': 'auth enrollment invitation approval devices packages operational system system_query journal journal_create journal_query other',
+            'resource': 'auth enrollment invitation approval devices packages operational system system_query overview endpoint_identity journal journal_create journal_query other',
             'status': 'not_received http_200 http_201 http_400 http_401 http_403 http_404 http_405 http_409 http_429 http_500 http_503 http_other',
             'failure': 'request transport deadline body oversize status decode',
-            'code': 'none unknown invalid storage_busy journal_busy authentication_required journal_not_configured invalid_journal_request journal_conflict journal_unavailable journal_generation_stale journal_not_ready journal_not_found not_found method_not_allowed forbidden invalid_request',
+            'code': 'none unknown invalid storage_busy journal_busy authentication_required journal_not_configured invalid_journal_request journal_conflict journal_unavailable journal_generation_stale journal_not_ready journal_not_found not_found method_not_allowed forbidden invalid_request inventory_not_configured invalid_inventory_query inventory_page_limit inventory_generation_expired inventory_unavailable invalid_query overview_not_configured overview_page_limit invalid_overview_query overview_resource_limit overview_generation_expired overview_unavailable complete_updates_not_configured',
         }
         raw = json.dumps(result(status='fail')).encode()
         for field, allowed in enums.items():
@@ -353,7 +353,7 @@ class ReadAdminWrapperTests(unittest.TestCase):
             self.assertEqual(json.loads(output)['operatorFailures'], [])
             self.assertNotIn('private-secret', output)
         lines, expected = [], []
-        for resource in 'auth enrollment invitation approval devices packages operational system system_query journal journal_create journal_query other'.split():
+        for resource in 'auth enrollment invitation approval devices packages operational system system_query overview endpoint_identity journal journal_create journal_query other'.split():
             current, values = self.operator_line(resource=resource)
             lines.extend([current, current])
             expected.append(values)

@@ -16,5 +16,5 @@ func (s *Service) SystemInventoryPage(ctx context.Context, id string, q enrollme
 	if s == nil || s.store == nil {
 		return enrollmentstore.SystemPageResult{}, ErrConfiguration
 	}
-	return s.store.SystemPage(ctx, id, q, now)
+	return s.store.SystemPage(enrollmentstore.WithSystemViewClock(ctx, s.Now), id, q, now)
 }

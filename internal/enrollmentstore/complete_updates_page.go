@@ -151,7 +151,7 @@ func (s *Store) CompleteUpdatesStatus(ctx context.Context, id, hash string, b In
 }
 func (s *Store) CompleteUpdatesView(ctx context.Context, device string, now time.Time) (CompleteUpdatesStatus, error) {
 	zero := CompleteUpdatesStatus{}
-	release, e := s.inventoryAdmission(ctx)
+	release, e := s.systemReadAdmission(ctx)
 	if e != nil {
 		return zero, e
 	}

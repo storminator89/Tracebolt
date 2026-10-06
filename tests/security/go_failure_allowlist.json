@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "sourceCommit": "fccc4b00cd8a144afd58e4b995747afab7a10022",
-  "goSourceSha256": "5ef032fae5130fc42b140668fe699c0b67eab3cb3ab9d5b11593c84a0c9fcd18",
+  "goSourceSha256": "2f1044de67cc1e40ff76d33bafe1a193d371ba897f1226ddea05e978ef9b92c9",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -168,6 +168,8 @@
     ],
     "localrmm/cmd/socket-owner-reader": [
       "TestArgumentBoundaryIsInert",
+      "TestCancellationDoesNotFinishBeforeRuntimeCleanup",
+      "TestCoordinatedCancellationExitsCleanly",
       "TestEntryUsesOnlyInjectedRuntime"
     ],
     "localrmm/internal/actionclient": [
@@ -473,6 +475,7 @@
       "TestConditionalReviewFixedErrorsAndOperatorRecheck",
       "TestConditionalReviewOperationalReadBusyHasFixedRetryContract",
       "TestConditionalReviewSuppressesNonfreshAndBusy",
+      "TestEndpointIdentityFinalOutputRechecksIdentityAndSession",
       "TestEndpointIdentityOperatorGuardsAndBoundedUnknown",
       "TestEndpointIdentityRechecksSessionAfterRead",
       "TestGuidedCapabilitiesDescribeShippedScopeWithoutInstallationClaim",
@@ -558,7 +561,8 @@
       "TestSocketOwnerCapabilitiesSharesPublicMetadataBudget",
       "TestSocketOwnerCapabilitiesUnavailableOnDeveloperSurface",
       "TestSystemInventoryMetadataFairReadPreservesOperatorGuards",
-      "TestSystemInventoryMetadataFinalOutputRechecksIdentityAndSession"
+      "TestSystemInventoryMetadataFinalOutputRechecksIdentityAndSession",
+      "TestSystemPageFinalOutputRechecksAfterEncodingAndSession"
     ],
     "localrmm/internal/applicationcheck": [
       "TestApplicationConfigOmittedDisabledAndBinding",
@@ -869,6 +873,8 @@
       "TestCompleteOverviewServiceRequiresStore",
       "TestDevicesCertificateExpiryUsesCommittedIssuanceOnly",
       "TestDurableServiceApprovalIssuanceDeliveryActivation",
+      "TestEndpointIdentityServiceCancellationSuppressesMetadata",
+      "TestEndpointIdentityServicePropagatesTrustedClockAcrossReadBoundaries",
       "TestOptionalJournalContentNeedsSeparatePermissionAndDoesNotPromoteDeniedMetadata",
       "TestProfileCapabilitiesCompleteScopeIsNotObservedSuccess",
       "TestProfileCapabilitiesOlderManagedScopeDoesNotClaimCompleteInventory",
@@ -994,6 +1000,8 @@
       "TestEndpointIdentityExactRetryRestartOrdinaryReportsDoNotRefresh",
       "TestEndpointIdentityExpiryCleanupAndRevocation",
       "TestEndpointIdentityPreservesOldAuthorityJSON",
+      "TestEndpointMetadataOriginalAgeAcrossReadBoundaries",
+      "TestEndpointMetadataQueuedRevocationAndUntrustedOutput",
       "TestExpiryAtBoundaryAndQuotaAcrossRestart",
       "TestFilesystemProtectionAndRedaction",
       "TestHealthReadsOriginalAcceptedAgeAndExplicitServices",
@@ -1032,6 +1040,8 @@
       "TestJournalSequenceExhaustionFailsWithoutWrap",
       "TestJournalStaleRecordedLeafCannotAuthorizeAfterLeafChange",
       "TestJournalStatusReadAdmissionAndClock",
+      "TestMetadataReadCohortCancellationAndCertificateWait",
+      "TestMetadataReadCohortSharesMaintenanceHandoff",
       "TestNoInvalidProofStaleCASOrCanceledMutation",
       "TestOperationalAndPackageViewsShareBoundedAdmission",
       "TestOperationalProfileRetentionReplayExpiryAndReopen",
@@ -1089,6 +1099,7 @@
       "TestSystemObservationPaginationSearchFiltersAndCursorBinding",
       "TestSystemObservationSectionByteCeilingIsAtomic",
       "TestSystemObservationTargetLazyCorruptionIsNotHealthyEmpty",
+      "TestSystemPageReadAdmissionPreservesOriginalBoundaries",
       "TestTelemetryRejectsWrongCertificateAndPartialActivation",
       "TestTelemetryReplayFloorAndExactReceiptSurviveRestart",
       "TestTransactionFrameCloneDetachesEveryPointerCategory",
@@ -2154,7 +2165,8 @@
     "localrmm/tests/e2e-review/endpointfixture": [],
     "localrmm/tests/e2e-review/enrollmentfixture": [],
     "localrmm/tests/e2e-review/journalfixture": [
-      "TestJournalHandlerReadinessBusyAndEndpointBinding"
+      "TestJournalHandlerReadinessBusyAndEndpointBinding",
+      "TestReadAdminFullReadinessSequenceDuringMaintenance"
     ],
     "localrmm/tests/e2e-review/lanfixture": [],
     "localrmm/tests/e2e-review/overviewfixture": [],

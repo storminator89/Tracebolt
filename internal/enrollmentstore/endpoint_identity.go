@@ -10,6 +10,7 @@ import (
 // EndpointIdentityView is operator-only, untrusted display metadata. It is
 // separate from Device, so it cannot become a device routing key or AI packet.
 type EndpointIdentityView struct {
+	readState     *systemViewReadState
 	SchemaVersion string                     `json:"schemaVersion"`
 	DeviceID      string                     `json:"deviceId"`
 	Status        string                     `json:"status"`
@@ -23,7 +24,7 @@ type EndpointIdentityView struct {
 
 func (s *Store) EndpointIdentityView(ctx context.Context, device string, now time.Time) (EndpointIdentityView, error) {
 	zero := EndpointIdentityView{}
-	release, e := s.inventoryAdmission(ctx)
+	release, e := s.systemReadAdmission(ctx)
 	if e != nil {
 		return zero, e
 	}
@@ -34,10 +35,17 @@ func (s *Store) EndpointIdentityView(ctx context.Context, device string, now tim
 	now = now.UTC()
 	out := EndpointIdentityView{SchemaVersion: "tracebolt.endpoint-identity-view.v1", DeviceID: device, Status: "unknown", ServerNow: now, MaxAgeSeconds: int64(SystemMaxAge / time.Second)}
 	e = s.transact(ctx, func(t *transaction) error {
+		var err error
+		now, err = systemViewNow(ctx, now)
+		if err != nil {
+			return err
+		}
+		out.ServerNow = now
 		snap, e := systemDevice(t, device)
 		if e != nil {
 			return e
 		}
+		out.readState = &systemViewReadState{checkedAt: now, certificateNotAfter: snap.Intent.NotAfter}
 		status := systemIdentityStatus(snap, now)
 		if status != "awaiting" {
 			out.Status = status
@@ -57,6 +65,7 @@ func (s *Store) EndpointIdentityView(ctx context.Context, device string, now tim
 		out.Sequence = &seq
 		out.ReceivedAt = &received
 		out.ExpiresAt = &expires
+		out.readState.observationAt = p.CollectedAt
 		out.Status = systemAge(p.CollectedAt, now)
 		if out.Status == "fresh" || out.Status == "stale" {
 			out.Latest = identity.Snapshot
@@ -66,5 +75,46 @@ func (s *Store) EndpointIdentityView(ctx context.Context, device string, now tim
 	if e != nil {
 		return zero, e
 	}
-	return out, nil
+	if err := ctx.Err(); err != nil {
+		return zero, err
+	}
+	now, e = systemViewNow(ctx, now)
+	if e != nil {
+		return zero, e
+	}
+	if err := ctx.Err(); err != nil {
+		return zero, err
+	}
+	return out.RecheckAt(now)
+}
+
+// RecheckAt ages only authorized metadata using its original capture time and
+// certificate boundary. It does not refresh receipts, retention or stored floors.
+func (v EndpointIdentityView) RecheckAt(now time.Time) (EndpointIdentityView, error) {
+	if v.readState == nil || !validStoreTime(now) || !validStoreTime(v.readState.checkedAt) || !validStoreTime(v.ServerNow) {
+		return EndpointIdentityView{}, ErrStorage
+	}
+	now = now.UTC()
+	if now.Before(v.readState.checkedAt) {
+		now = v.readState.checkedAt
+	}
+	if now.Before(v.ServerNow) {
+		now = v.ServerNow
+	}
+	v.ServerNow = now
+	if v.Status == "revoked" {
+		return v, nil
+	}
+	if v.readState.certificateNotAfter > 0 && now.Unix() >= v.readState.certificateNotAfter {
+		v.Status = "expired"
+		v.Latest = nil
+		return v, nil
+	}
+	if !v.readState.observationAt.IsZero() {
+		v.Status = systemAge(v.readState.observationAt, now)
+		if v.Status != "fresh" && v.Status != "stale" {
+			v.Latest = nil
+		}
+	}
+	return v, nil
 }

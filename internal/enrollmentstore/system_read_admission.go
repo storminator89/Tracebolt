@@ -6,9 +6,10 @@ import (
 	"time"
 )
 
-// One system/package metadata or journal-status read may wait through a short
-// maintenance burst. Keep its permit until the whole read finishes: further
-// readers cannot build a queue behind it.
+// System, package, overview, endpoint-identity and complete-update metadata,
+// plus journal status, share one total waiting/read permit through a short
+// maintenance burst. Keep it until the whole read finishes: further readers
+// cannot build a queue behind it.
 // The existing gate still permits exactly one inventory operation, and all
 // writers/maintenance retain their nonblocking admission policy.
 const systemMetadataAdmissionWait = 750 * time.Millisecond

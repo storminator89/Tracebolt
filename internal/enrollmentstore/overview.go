@@ -731,7 +731,7 @@ func (s *Store) OverviewStatus(ctx context.Context, id, certificateHash string, 
 }
 func (s *Store) OverviewView(ctx context.Context, device string, now time.Time) (OverviewStatus, error) {
 	zero := OverviewStatus{}
-	release, e := s.overviewAdmission(ctx)
+	release, e := s.systemReadAdmission(ctx)
 	if e != nil {
 		return zero, e
 	}

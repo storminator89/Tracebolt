@@ -133,7 +133,9 @@ class Fixture(f.Fixture):
             self.units[x.SOCKET]["ActiveState"] = "inactive"
             self.meta.pop(x.SOCKET_PATH, None)
         elif args[1] in ("stop", "start"):
-            self.units[args[2]]["ActiveState"] = "inactive" if args[1] == "stop" else "active"
+            # systemctl stop need not erase an existing failed service state.
+            sticky = args[2] == x.SERVICE and self.units[args[2]]["ActiveState"] == "failed"
+            self.units[args[2]]["ActiveState"] = ("failed" if sticky else "inactive") if args[1] == "stop" else "active"
             self.units[args[2]]["MainPID"] = "0" if args[1] == "stop" else "123"
             self.units[args[2]]["ControlGroup"] = "" if args[1] == "stop" else "/system.slice/" + args[2]
         return b""
@@ -532,7 +534,77 @@ class SetupTests(unittest.TestCase):
                 self.assertEqual(e.units[x.SOCKET]["ActiveState"], "inactive")
             else:
                 self.assertTrue(e.revoke()["revoked"])
-            self.assertEqual(e.units[x.SERVICE]["ActiveState"], "inactive")
+            self.assertEqual(e.units[x.SERVICE]["ActiveState"], "failed" if failed else "inactive")
+
+
+    def test_failed_helper_containment_preserves_failure_and_proves_drain(self):
+        for operation in ("revoke", "containment", "cleanup"):
+            with self.subTest(operation=operation):
+                e = Fixture()
+                e.configure()
+                e.parent_complete()
+                e.units[x.SERVICE] = e.make_state(x.SERVICE, active="failed")
+                original = e.files[x.COMPLETE]
+                e.events.clear()
+                if operation == "revoke":
+                    self.assertTrue(e.revoke()["revoked"])
+                    x.proof(s, e, e.templates, e.expected, e.intent, disabled=True)
+                    x.runtime_configuration(e, e.expected, json.loads(original), enabled=False, allow_failed_helper=True)
+                elif operation == "containment":
+                    x.fail_closed(s, e, e.templates, e.expected, e.intent, contain_helper=True)
+                else:
+                    with e.lock():
+                        receipt = x.ownership_proof(s, e, e.templates, e.expected, e.intent)
+                        x.loaded(e, x.SERVICE, receipt["helperUid"], receipt["helperGid"], [x.BINARY], allow_failed=True)
+                        x.revoke_safety_shutdown(e, ValueError("inert cleanup"), disable_admission=True, helper_identity=(receipt["helperUid"], receipt["helperGid"]))
+                self.assertEqual(e.units[x.SERVICE]["ActiveState"], "failed")
+                self.assertEqual(e.units[x.SERVICE]["MainPID"], "0")
+                self.assertEqual(e.files[x.COMPLETE], original)
+                self.assertIn("drain:" + x.SERVICE, e.events)
+                self.assertEqual(e.units[x.SOCKET]["UnitFileState"], "disabled")
+                self.assertNotIn(x.SOCKET_PATH, e.meta)
+                self.assertFalse(any("reset-failed" in event for event in e.events))
+                if operation != "revoke":
+                    self.assertNotIn(x.REVOKE_COMPLETE, e.files)
+                    self.assertTrue(e.policy["enabled"])
+
+    def test_failed_helper_shutdown_still_rejects_unproven_or_live_state(self):
+        for change in ("wrong-unit", "wrong-user", "populated", "raced-pid", "raced-cgroup", "raced-executable"):
+            with self.subTest(change=change):
+                e = Fixture()
+                e.configure()
+                e.parent_complete()
+                e.units[x.SERVICE] = e.make_state(x.SERVICE, active="failed")
+                e.events.clear()
+                original_drain = e.drain
+                def drain(name):
+                    original_drain(name)
+                    if name == x.SERVICE:
+                        if change == "populated":
+                            raise x.Rejected("fixed-cgroup-not-drained")
+                        field, value = {"raced-pid": ("MainPID", "321"), "raced-cgroup": ("ControlGroup", "/foreign.slice"), "raced-executable": ("ExecStart", exec_state(["/foreign/helper"]))}.get(change, ("MainPID", "0"))
+                        e.units[name][field] = value
+                e.drain = drain
+                if change == "wrong-unit":
+                    e.units[x.SERVICE]["FragmentPath"] = "/foreign/helper.service"
+                elif change == "wrong-user":
+                    e.units[x.SERVICE]["User"] = "999"
+                with self.assertRaises(x.Rejected):
+                    e.revoke()
+                self.assertNotIn(x.REVOKE_COMPLETE, e.files)
+                if change.startswith("wrong-"):
+                    self.assertNotIn("stop " + x.SERVICE, e.events)
+                else:
+                    self.assertIn("drain:" + x.SERVICE, e.events)
+
+    def test_failed_helper_ordinary_stop_still_requires_inactive(self):
+        e = Fixture()
+        e.configure()
+        e.parent_complete()
+        e.units[x.SERVICE] = e.make_state(x.SERVICE, active="failed")
+        with e.lock(), self.assertRaisesRegex(x.Rejected, "unit-stop-unconfirmed"):
+            x.stop(e, x.SERVICE)
+        self.assertEqual(e.units[x.SERVICE]["ActiveState"], "failed")
 
     def test_revoke_helper_stop_failure_is_explicitly_unconfirmed(self):
         e = Fixture()

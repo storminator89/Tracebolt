@@ -101,7 +101,7 @@ func readAdminOperatorCode(raw []byte) string {
 	switch code {
 	case "":
 		return "invalid"
-	case "storage_busy", "journal_busy", "authentication_required", "journal_not_configured", "invalid_journal_request", "journal_conflict", "journal_unavailable", "journal_generation_stale", "journal_not_ready", "journal_not_found", "not_found", "method_not_allowed", "forbidden", "invalid_request":
+	case "storage_busy", "journal_busy", "authentication_required", "journal_not_configured", "invalid_journal_request", "journal_conflict", "journal_unavailable", "journal_generation_stale", "journal_not_ready", "journal_not_found", "not_found", "method_not_allowed", "forbidden", "invalid_request", "inventory_not_configured", "invalid_inventory_query", "inventory_page_limit", "inventory_generation_expired", "inventory_unavailable", "invalid_query", "overview_not_configured", "overview_page_limit", "invalid_overview_query", "overview_resource_limit", "overview_generation_expired", "overview_unavailable", "complete_updates_not_configured":
 		return code
 	default:
 		return "unknown"
@@ -156,7 +156,7 @@ func readAdminOperatorResource(path string) string {
 		}
 	}
 	switch label := completeMVPOperatorResource(path); label {
-	case "enrollment", "devices", "operational", "system", "packages":
+	case "enrollment", "devices", "operational", "system", "packages", "overview", "endpoint_identity":
 		return label
 	default:
 		return "other"

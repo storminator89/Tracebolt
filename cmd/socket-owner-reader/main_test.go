@@ -39,3 +39,60 @@ func TestEntryUsesOnlyInjectedRuntime(t *testing.T) {
 		}
 	}
 }
+
+func TestCoordinatedCancellationExitsCleanly(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		canceled bool
+		err      error
+		code     int
+	}{
+		{"coordinated", true, context.Canceled, 0},
+		{"unrelated", true, errors.New("prerequisite failure"), 1},
+		{"unowned-cancellation", false, context.Canceled, 1},
+		{"deadline", true, context.DeadlineExceeded, 1},
+		{"mixed-failure", true, errors.Join(context.Canceled, errors.New("failure")), 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			var out, diagnostic bytes.Buffer
+			code := run(ctx, nil, &out, &diagnostic, func(context.Context) error {
+				if tc.canceled {
+					cancel()
+				}
+				return tc.err
+			})
+			if code != tc.code || (diagnostic.Len() == 0) != (tc.code == 0) {
+				t.Fatalf("code=%d diagnostic=%q", code, diagnostic.String())
+			}
+		})
+	}
+}
+
+func TestCancellationDoesNotFinishBeforeRuntimeCleanup(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	entered, cleanup := make(chan struct{}), make(chan struct{})
+	finished := make(chan int, 1)
+	go func() {
+		var out, diagnostic bytes.Buffer
+		finished <- run(ctx, nil, &out, &diagnostic, func(ctx context.Context) error {
+			close(entered)
+			<-ctx.Done()
+			<-cleanup
+			return ctx.Err()
+		})
+	}()
+	<-entered
+	cancel()
+	select {
+	case <-finished:
+		t.Fatal("shutdown abandoned runtime cleanup")
+	default:
+	}
+	close(cleanup)
+	if code := <-finished; code != 0 {
+		t.Fatalf("exit=%d", code)
+	}
+}

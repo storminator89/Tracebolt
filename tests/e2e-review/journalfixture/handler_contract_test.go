@@ -54,7 +54,19 @@ func (c *journalAdmissionContext) Err() error {
 // Only the production handler and existing synthetic fixture helpers execute.
 // Recorder requests open no listener and never invoke run, a collector, a
 // journal reader, systemd, or native setup. SQLite contention is local to TempDir.
-func TestJournalHandlerReadinessBusyAndEndpointBinding(t *testing.T) {
+type journalHandlerFixture struct {
+	t              *testing.T
+	f              *fixture
+	state          *enrollmentstore.Store
+	dbPath, origin string
+	handler        http.Handler
+	clock          func() time.Time
+	cookie         *http.Cookie
+	csrf           string
+}
+
+func newJournalHandlerFixture(t *testing.T) *journalHandlerFixture {
+	t.Helper()
 	ctx := context.Background()
 	origin := "http://127.0.0.1:19897"
 	issuer, err := makeIssuer(time.Now().UTC())
@@ -71,17 +83,16 @@ func TestJournalHandlerReadinessBusyAndEndpointBinding(t *testing.T) {
 	dbPath := filepath.Join(dir, "enrollment", "state.db")
 	state, err := enrollmentstore.Open(dbPath, cfg, issuer.IssuerDER())
 	check(err)
-	defer state.Close()
+	t.Cleanup(func() { state.Close() })
 	f := &fixture{store: state, devices: map[string]enrollmentstate.Snapshot{}}
-	clock := f.now
-	f.service, err = enrollmentservice.New(state, issuer, func() time.Time { return clock() })
+	client := &journalHandlerFixture{t: t, f: f, state: state, dbPath: dbPath, origin: origin}
+	client.clock = f.now
+	f.service, err = enrollmentservice.New(state, issuer, func() time.Time { return client.clock() })
 	check(err)
 	f.devices["alpha"], f.devices["beta"] = f.seed(true), f.seed(true)
-	alpha, beta := f.devices["alpha"], f.devices["beta"]
-	path := "/api/devices/" + alpha.Approval.DeviceID + "/journal"
 	appDB, err := store.Open(filepath.Join(dir, "app.db"))
 	check(err)
-	defer appDB.Close()
+	t.Cleanup(func() { appDB.Close() })
 	app, err := api.New(appDB, 19897, dir, model.Device{})
 	check(err)
 	salt := []byte("browser-test-salt")
@@ -95,58 +106,78 @@ func TestJournalHandlerReadinessBusyAndEndpointBinding(t *testing.T) {
 	check(err)
 	handler, err := api.NewLANOperatorHandler(app, api.LANOperatorConfig{Origin: origin, Auth: auth, Registry: registry, InsecureHTTPTest: true, Enrollment: f.service, EnrollmentBootstrap: api.EnrollmentBootstrap{SchemaVersion: "tracebolt.enrollment-bootstrap.v2", ManagerInstanceID: cfg.Binding.InstanceID, Profile: cfg.Binding.Profile, EnrollmentOrigin: origin, AgentOrigin: "http://127.0.0.1:19893", CollectionProfile: cfg.Binding.CollectionProfile, IssuerRootPEM: rootPEM, IssuerPEM: issuerPEM}, Devices: func() ([]model.Device, error) { return f.service.Devices(ctx, f.now()) }})
 	check(err)
-	var cookie *http.Cookie
-	var csrf string
-	call := func(method, path string, body any) *httptest.ResponseRecorder {
-		t.Helper()
-		var raw []byte
-		if body != nil {
-			raw = jsonBytes(body)
-		}
-		r := httptest.NewRequest(method, origin+path, bytes.NewReader(raw))
-		r.RemoteAddr = "127.0.0.1:1234"
-		if cookie != nil {
-			r.AddCookie(cookie)
-		}
-		if method == "POST" {
-			r.Header.Set("Origin", origin)
-			r.Header.Set("Content-Type", "application/json")
-			if csrf != "" {
-				r.Header.Set("X-CSRF-Token", csrf)
-			}
-		}
-		w := httptest.NewRecorder()
-		handler.ServeHTTP(w, r)
-		return w
+	client.handler = handler
+	return client
+}
+
+func (c *journalHandlerFixture) call(method, path string, body any) *httptest.ResponseRecorder {
+	var raw []byte
+	if body != nil {
+		raw = jsonBytes(body)
 	}
-	decode := func(w *httptest.ResponseRecorder, status int, out any) {
-		t.Helper()
-		if w.Code != status {
-			t.Fatalf("HTTP status = %d, want %d", w.Code, status)
-		}
-		if w.Header().Get("Cache-Control") != "no-store" {
-			t.Fatal("cacheable response")
-		}
-		if err := json.Unmarshal(w.Body.Bytes(), out); err != nil {
-			t.Fatal("response JSON decode failed", err)
+	r := httptest.NewRequest(method, c.origin+path, bytes.NewReader(raw))
+	r.RemoteAddr = "127.0.0.1:1234"
+	if c.cookie != nil {
+		r.AddCookie(c.cookie)
+	}
+	if method == "POST" {
+		r.Header.Set("Origin", c.origin)
+		r.Header.Set("Content-Type", "application/json")
+		if c.csrf != "" {
+			r.Header.Set("X-CSRF-Token", c.csrf)
 		}
 	}
-	errorCode := func(w *httptest.ResponseRecorder, status int, code string) {
-		t.Helper()
-		var body struct{ Error struct{ Code string } }
-		decode(w, status, &body)
-		if body.Error.Code != code {
-			t.Fatalf("error code = %q, want %q", body.Error.Code, code)
-		}
+	w := httptest.NewRecorder()
+	c.handler.ServeHTTP(w, r)
+	return w
+}
+func (c *journalHandlerFixture) decode(w *httptest.ResponseRecorder, status int, out any) {
+	c.t.Helper()
+	if w.Code != status {
+		c.t.Fatalf("HTTP status = %d, want %d: %s", w.Code, status, w.Body.String())
 	}
-	errorCode(call("GET", path, nil), 401, "authentication_required")
-	login := call("POST", "/api/auth/login", map[string]string{"password": fixturePassword})
+	if w.Header().Get("Cache-Control") != "no-store" {
+		c.t.Fatal("cacheable response")
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), out); err != nil {
+		c.t.Fatal("response JSON decode failed", err)
+	}
+}
+func (c *journalHandlerFixture) errorCode(w *httptest.ResponseRecorder, status int, code string) {
+	c.t.Helper()
+	var body struct{ Error struct{ Code string } }
+	c.decode(w, status, &body)
+	if body.Error.Code != code {
+		c.t.Fatalf("error code = %q, want %q", body.Error.Code, code)
+	}
+}
+func (c *journalHandlerFixture) login() {
+	c.t.Helper()
+	w := c.call("POST", "/api/auth/login", map[string]string{"password": fixturePassword})
 	var session struct{ CSRFToken string }
-	decode(login, 200, &session)
-	if session.CSRFToken == "" || len(login.Result().Cookies()) != 1 {
-		t.Fatal("fixture login contract")
+	c.decode(w, 200, &session)
+	if session.CSRFToken == "" || len(w.Result().Cookies()) != 1 {
+		c.t.Fatal("fixture login contract")
 	}
-	cookie, csrf = login.Result().Cookies()[0], session.CSRFToken
+	c.cookie, c.csrf = w.Result().Cookies()[0], session.CSRFToken
+}
+
+func TestJournalHandlerReadinessBusyAndEndpointBinding(t *testing.T) {
+	client := newJournalHandlerFixture(t)
+	ctx := context.Background()
+	f, state, dbPath := client.f, client.state, client.dbPath
+	alpha, beta := f.devices["alpha"], f.devices["beta"]
+	path := "/api/devices/" + alpha.Approval.DeviceID + "/journal"
+	check := func(err error) {
+		t.Helper()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	call, decode, errorCode := client.call, client.decode, client.errorCode
+	errorCode(call("GET", path, nil), 401, "authentication_required")
+	client.login()
+	var err error
 	type view struct {
 		SchemaVersion, DeviceID, ExpectedFloor, LocalStatus, ContentStatus string
 		Configured                                                         bool
@@ -285,7 +316,7 @@ func TestJournalHandlerReadinessBusyAndEndpointBinding(t *testing.T) {
 	}
 	// The final API check runs after both request and generation store reads.
 	checked, clockCalls := f.now(), 0
-	clock = func() time.Time {
+	client.clock = func() time.Time {
 		clockCalls++
 		if clockCalls >= 9 {
 			return accepted.Request.Description.ExpiresAt
@@ -297,7 +328,7 @@ func TestJournalHandlerReadinessBusyAndEndpointBinding(t *testing.T) {
 	if clockCalls < 9 || bytes.Contains(crossed.Body.Bytes(), []byte("Synthetic alpha journal")) || bytes.Contains(crossed.Body.Bytes(), []byte("tracebolt.journal-view")) {
 		t.Fatal("final expiry boundary was missed or exposed content")
 	}
-	clock = func() time.Time { return checked }
+	client.clock = func() time.Time { return checked }
 	expired := read()
 	if expired.Request == nil || expired.Request.State != journalrequest.Expired || !reflect.DeepEqual(expired.Request.Description, accepted.Request.Description) || expired.Request.Receipt != nil || expired.ContentStatus != "unavailable" {
 		t.Fatal("clock rollback revived content or changed expired request identity/expiry")

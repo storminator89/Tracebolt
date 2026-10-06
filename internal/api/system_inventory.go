@@ -88,11 +88,17 @@ func (h *operatorHandler) systemInventory(w http.ResponseWriter, r *http.Request
 		systemInventoryError(w, e)
 		return
 	}
-	if !operatorStillActive(w, r) {
+	page, e = page.RecheckAt(h.enrollment.Now().UTC())
+	if e != nil {
+		systemInventoryError(w, e)
 		return
 	}
-	dto := systemInventoryPage{SchemaVersion: "tracebolt.system-inventory-page.v1", DeviceID: parts[3], CollectionProfile: enrollmentcrypto.CollectionProfileComplete, ServerNow: now, SystemPageResult: page}
-	raw, e := json.Marshal(dto)
+	dto := systemInventoryPage{SchemaVersion: "tracebolt.system-inventory-page.v1", DeviceID: parts[3], CollectionProfile: enrollmentcrypto.CollectionProfileComplete, ServerNow: page.CheckedAt(), SystemPageResult: page}
+	h.writeSystemPageResponse(w, r, dto, func(at time.Time) error { _, err := page.RecheckAt(at); return err })
+}
+
+func (h *operatorHandler) writeSystemPageResponse(w http.ResponseWriter, r *http.Request, value any, validate func(time.Time) error) {
+	raw, e := json.Marshal(value)
 	if e != nil {
 		h.app.internal(w)
 		return
@@ -101,7 +107,19 @@ func (h *operatorHandler) systemInventory(w http.ResponseWriter, r *http.Request
 		fail(w, 409, "inventory_page_limit", "Reduce the page size before continuing.")
 		return
 	}
-	write(w, 200, dto)
+	// Emit the same bounded bytes only after final session/lifetime checks;
+	// encoding must not let an original cursor or certificate expire unnoticed.
+	defer clear(raw)
+	if !operatorStillActive(w, r) {
+		return
+	}
+	if e = validate(h.enrollment.Now().UTC()); e != nil {
+		systemInventoryError(w, e)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(append(raw, '\n'))
 }
 func systemInventoryError(w http.ResponseWriter, e error) {
 	switch {

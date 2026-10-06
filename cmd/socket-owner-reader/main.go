@@ -30,7 +30,10 @@ func run(ctx context.Context, args []string, out, errOut io.Writer, start func(c
 		fmt.Fprintln(errOut, "socket-owner-reader: only no-argument socket activation or --build-info is supported")
 		return 2
 	}
-	if e := start(ctx); e != nil {
+	// The native runtime returns cancellation only after listener shutdown and
+	// its admitted workers have joined. Startup/authority errors and deadlines
+	// remain failures; cancellation must belong to this signal context.
+	if e := start(ctx); e != nil && !(e == context.Canceled && ctx != nil && ctx.Err() == context.Canceled) {
 		fmt.Fprintln(errOut, "socket-owner-reader: unavailable; protected authority or native prerequisite not verified")
 		return 1
 	}

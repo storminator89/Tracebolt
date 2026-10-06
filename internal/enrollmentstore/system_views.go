@@ -186,6 +186,7 @@ type SystemPageRequest struct {
 	Limit        int    `json:"limit"`
 }
 type SystemPageResult struct {
+	boundary              overviewOutputBoundary                 // private committed lifetime; never serialized
 	SocketOwnerProvenance *systeminventory.SocketOwnerProvenance `json:"socketOwnerProvenance,omitempty"`
 	CursorExpiresAt       *time.Time                             `json:"cursorExpiresAt"`
 	Section               string                                 `json:"section"`
@@ -291,7 +292,7 @@ func socketSearch(row systeminventory.Socket) string {
 // legitimate continuation after the bounded scan of a sparse search window.
 func (s *Store) SystemPage(ctx context.Context, device string, req SystemPageRequest, now time.Time) (SystemPageResult, error) {
 	zero := SystemPageResult{}
-	release, e := s.inventoryAdmission(ctx)
+	release, e := s.systemReadAdmission(ctx)
 	if e != nil {
 		return zero, e
 	}
@@ -306,6 +307,11 @@ func (s *Store) SystemPage(ctx context.Context, device string, req SystemPageReq
 	now = now.UTC()
 	var out SystemPageResult
 	e = s.transact(ctx, func(t *transaction) error {
+		var clockErr error
+		now, clockErr = systemViewNow(ctx, now)
+		if clockErr != nil {
+			return clockErr
+		}
 		snap, e := systemDevice(t, device)
 		if e != nil {
 			return e
@@ -344,6 +350,9 @@ func (s *Store) SystemPage(ctx context.Context, device string, req SystemPageReq
 			return ErrSystemCursor
 		}
 		out = SystemPageResult{SocketOwnerProvenance: section.SocketOwnerProvenance, Section: req.Section, GenerationID: req.GenerationID, Meta: section.Meta, Status: systemAge(section.Meta.ObservedAt, now), TotalRows: *section.Meta.ObservedCount, Services: []systeminventory.Service{}, Sockets: []systeminventory.Socket{}}
+		out.boundary = overviewBoundary(now, snap.Intent.NotAfter)
+		out.boundary.limit(section.Meta.ObservedAt.Add(SystemRetention), ErrSystemConflict)
+		out.boundary.limit(cursor.ExpiresAt, ErrSystemCursorExpired)
 		rows, e := t.conn.QueryContext(ctx, `SELECT ordinal,body FROM enrollment_system_rows WHERE invitation_id=? AND section=? AND ordinal>=? ORDER BY ordinal LIMIT ?`, snap.InvitationID, req.Section, cursor.Next, SystemPageScanRows)
 		if e != nil {
 			return ErrStorage
@@ -414,8 +423,34 @@ func (s *Store) SystemPage(ctx context.Context, device string, req SystemPageReq
 	if e != nil {
 		return zero, e
 	}
+	if err := ctx.Err(); err != nil {
+		return zero, err
+	}
+	now, e = systemViewNow(ctx, now)
+	if e != nil {
+		return zero, e
+	}
+	if err := ctx.Err(); err != nil {
+		return zero, err
+	}
+	return out.RecheckAt(now)
+}
+
+// RecheckAt preserves the original generation and cursor lifetime after a
+// bounded read wait and immediately before output. It cannot refresh rows.
+func (out SystemPageResult) RecheckAt(now time.Time) (SystemPageResult, error) {
+	if err := out.boundary.validate(now); err != nil {
+		return SystemPageResult{}, err
+	}
+	if now.Before(out.boundary.checkedAt) {
+		now = out.boundary.checkedAt
+	}
+	out.boundary.checkedAt = now.UTC()
+	out.Status = systemAge(out.Meta.ObservedAt, now)
 	return out, nil
 }
+
+func (out SystemPageResult) CheckedAt() time.Time { return out.boundary.checkedAt }
 
 type SystemCleanupResult struct {
 	ClearedLatest           bool `json:"clearedLatest"`

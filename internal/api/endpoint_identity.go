@@ -51,6 +51,14 @@ func (h *operatorHandler) endpointIdentity(w http.ResponseWriter, r *http.Reques
 	if !operatorStillActive(w, r) {
 		return
 	}
+	view, e = view.RecheckAt(h.enrollment.Now().UTC())
+	if e != nil {
+		systemInventoryError(w, e)
+		return
+	}
+	if !operatorStillActive(w, r) {
+		return
+	}
 	raw, e := json.Marshal(view)
 	if e != nil || len(raw) > 16*1024-1 {
 		fail(w, 503, "inventory_unavailable", "Stored endpoint display metadata is unavailable.")

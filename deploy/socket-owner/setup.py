@@ -235,14 +235,31 @@ def inspect(s, e, templates, expected, *, allow_failed_agent=False):
     return dict(facts, **{k: expected[k] for k in ("deviceId",) if k in expected})
 
 
-def stop(e, name):
+def stopped(e, name, *, helper_identity=None, stage="unit-stop-unconfirmed"):
     require(name in (AGENT, SERVICE), "fixed-drain-unit")
+    if helper_identity is not None:
+        # Only callers holding the full immutable receipt may supply this pair.
+        # Repeat every loaded-unit security check; failed is a terminal state,
+        # not evidence that its cgroup is empty or that authority was revoked.
+        require(name == SERVICE and type(helper_identity) is tuple and len(helper_identity) == 2, "loaded-unit-ownership")
+        state = loaded(e, name, *helper_identity, [BINARY], allow_failed=True)
+        terminal = state["ActiveState"] in ("inactive", "failed")
+    else:
+        state = e.status(name)
+        terminal = owned(state, name, "inactive")
+    require(terminal and state["MainPID"] == "0" and state["ControlGroup"] in ("", "/system.slice/" + name), stage)
+    return state
+
+
+def stop(e, name, *, helper_identity=None):
+    require(name in (AGENT, SERVICE), "fixed-drain-unit")
+    if helper_identity is not None:
+        require(name == SERVICE and type(helper_identity) is tuple and len(helper_identity) == 2, "loaded-unit-ownership")
+        loaded(e, name, *helper_identity, [BINARY], allow_failed=True)
     e.command(["/usr/bin/systemctl", "stop", name])
-    state = e.status(name)
-    require(owned(state, name, "inactive") and state["MainPID"] == "0", "unit-stop-unconfirmed")
+    stopped(e, name, helper_identity=helper_identity)
     e.drain(name)
-    state = e.status(name)
-    require(owned(state, name, "inactive") and state["MainPID"] == "0", "unit-drain-unconfirmed")
+    stopped(e, name, helper_identity=helper_identity, stage="unit-drain-unconfirmed")
 
 
 def restore(s, e, templates, facts, identity, journal, active):
@@ -302,6 +319,10 @@ def runtime_configuration(e, facts, receipt, *, enabled=True, allow_failed_helpe
         require(stat.S_ISSOCK(st.st_mode) and stat.S_IMODE(st.st_mode) == 0o660 and st.st_uid == 0 and st.st_gid == facts["gid"] and st.st_nlink == 1, "socket-metadata")
     else:
         require(e.absent(WANTS) and e.absent(SOCKET_PATH), "socket-admission-not-disabled")
+        helper_identity = (hu, hg) if allow_failed_helper else None
+        stopped(e, SERVICE, helper_identity=helper_identity)
+        e.drain(SERVICE)
+        stopped(e, SERVICE, helper_identity=helper_identity, stage="unit-drain-unconfirmed")
 
 
 def configure(s, e, templates, helper_artifact, expected_facts, parent_intent_sha256, *, verify_only=False):
@@ -377,7 +398,7 @@ def revoke(s, e, templates, expected_facts, parent_intent_sha256):
             e.create(REVOKE_STARTED, canonical(dict(evidence, state="started")), 0, 0o600)
         except Exception as cause:
             # Even an uncertain receipt write may have left evidence.
-            revoke_safety_shutdown(e, cause)
+            revoke_safety_shutdown(e, cause, helper_identity=(r["helperUid"], r["helperGid"]))
             raise
         try:
             stop(e, AGENT)
@@ -389,13 +410,13 @@ def revoke(s, e, templates, expected_facts, parent_intent_sha256):
             disabled = dict(r["policy"], enabled=False)
             e.disable_policy(canonical(r["policy"]), canonical(disabled), r["helperGid"])
             require(exact_file(e, POLICY, 0o640, r["helperGid"]) == canonical(disabled), "disabled-root-policy-readback")
-            stop(e, SERVICE)
+            stop(e, SERVICE, helper_identity=(r["helperUid"], r["helperGid"]))
             result = cli(s, e, facts, "disable", disabled)
             require(result["identity"] == r["identity"], "disabled-private-identity-changed")
             check = cli(s, e, facts, "preview")
             require(check["identity"] == r["identity"] and check["state"] == "disabled" and check["policy"] == disabled, "disabled-private-readback")
             proof(s, e, templates, facts, parent_intent_sha256, disabled=True)
-            runtime_configuration(e, facts, r, enabled=False)
+            runtime_configuration(e, facts, r, enabled=False, allow_failed_helper=True)
             journal_unchanged(e, journal)
             e.validate(inspect(s, e, templates, expected_facts))
             completed = canonical(dict(evidence, state="complete", taggedPendingDiscarded=result["taggedPendingDiscarded"]))
@@ -404,12 +425,12 @@ def revoke(s, e, templates, expected_facts, parent_intent_sha256):
             restore(s, e, templates, facts, r["identity"], journal, was_active)
             return dict(revoked=True, agentRestarted=was_active, taggedPendingDiscarded=result["taggedPendingDiscarded"], configurationOnly=True, nativeAcceptance="not-established")
         except Exception as cause:
-            revoke_safety_shutdown(e, cause)
+            revoke_safety_shutdown(e, cause, helper_identity=(r["helperUid"], r["helperGid"]))
             raise
 
 
 
-def revoke_safety_shutdown(e, cause, *, disable_admission=False):
+def revoke_safety_shutdown(e, cause, *, disable_admission=False, helper_identity=None):
     # These are independent safety attempts, never authority-write retries.
     # Preserve the original error as the cause of an explicit unconfirmed stop.
     uncertain = False
@@ -429,7 +450,7 @@ def revoke_safety_shutdown(e, cause, *, disable_admission=False):
     except Exception:
         uncertain = True
     try:
-        stop(e, SERVICE)
+        stop(e, SERVICE, helper_identity=helper_identity)
     except Exception:
         uncertain = True
     if uncertain:
@@ -462,7 +483,7 @@ def fail_closed(s, e, templates, expected_facts, parent_intent_sha256, *, contai
                 raise Rejected("revoke-helper-shutdown-unconfirmed") from cause
             # Current policy/deployment bytes are deliberately never read,
             # rewritten or adopted by this independently guarded containment.
-            revoke_safety_shutdown(e, Rejected("revoke-incomplete"), disable_admission=True)
+            revoke_safety_shutdown(e, Rejected("revoke-incomplete"), disable_admission=True, helper_identity=(r["helperUid"], r["helperGid"]))
 
 
 def real_effects(s):
