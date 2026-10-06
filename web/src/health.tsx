@@ -127,12 +127,25 @@ function errorText(failure: Failure): string {
 export function HealthPanel({ deviceId, sessionKey = null, onOpenLogs }: { deviceId: string; sessionKey?: string | null; onOpenLogs?: (unit: string) => void }) {
     const [locale] = useLocale();
     const resource = useHealth(deviceId, sessionKey), view = resource.view, uid = useId();
-    const [minutes, setMinutes] = useState<0 | 15 | 60 | 240>(60), [draft, setDraft] = useState<string[]>([]), [dirty, setDirty] = useState(false);
+    const scope = JSON.stringify([deviceId, sessionKey]);
+    const [minutes, setMinutes] = useState<0 | 15 | 60 | 240>(60);
+    const [selection, setSelection] = useState({ scope, draft: [] as string[], dirty: false, revision: 0 });
+    const { draft, dirty, revision } = selection;
     const services = parseHealthServices(draft.join('\n')), configured = view?.monitoredServices.join('\n');
-    useEffect(() => { setDraft([]); setDirty(false); setMinutes(60); }, [deviceId, sessionKey]);
-    useEffect(() => { if (!dirty && configured !== undefined) setDraft(configured ? configured.split('\n') : []); }, [configured, dirty]);
+    useEffect(() => { setSelection(current => ({ scope, draft: [], dirty: false, revision: current.revision + 1 })); setMinutes(60); }, [scope]);
+    useEffect(() => {
+        if (configured === undefined) return;
+        // Read dirty from the queued state, not the response render: an edit may
+        // have arrived after that commit but before this passive effect runs.
+        setSelection(current => current.scope === scope && !current.dirty ? { ...current, draft: configured ? configured.split('\n') : [] } : current);
+    }, [configured, dirty, scope]);
     const disabled = resource.pending || resource.locked || !view;
-    const saveServices = async () => { if (services === null || disabled) return; if (await resource.change('services', { services })) setDirty(false); };
+    const saveServices = async () => {
+        if (services === null || disabled) return;
+        if (await resource.change('services', { services })) {
+            setSelection(current => current.scope === scope && current.revision === revision ? { ...current, dirty: false } : current);
+        }
+    };
     return <section className="health-panel" aria-labelledby={`${uid}-heading`}>
         <header className="health-heading"><h2 id={`${uid}-heading`}>{t('Health & Verlauf')}</h2><button type="button" className="button small" disabled={resource.pending || resource.locked} onClick={resource.refresh}><RefreshCw size={14} className={resource.pending ? 'spin' : undefined}/>{t('Health aktualisieren')}</button></header>
         <p className="health-note">{t('Agent-Kontakt · Root-Dateisystem / · ausgewählte Dienste')}</p>
@@ -153,7 +166,7 @@ export function HealthPanel({ deviceId, sessionKey = null, onOpenLogs }: { devic
                     <p className="health-note">{t('Wartung unterdrückt neue Warnungen. Bestehende Vorfälle bleiben sichtbar.')}</p>
                 </form>
                 <form onSubmit={event => { event.preventDefault(); void saveServices(); }}><h3>{t('Dienste auswählen')}</h3>
-                    <HealthServicePicker deviceId={deviceId} sessionKey={sessionKey} selected={draft} disabled={resource.locked || !view} onChange={next => { setDirty(true); setDraft(next); }}/>
+                    <HealthServicePicker deviceId={deviceId} sessionKey={sessionKey} selected={draft} disabled={resource.locked || !view} onChange={next => setSelection(current => current.scope === scope ? { ...current, draft: next, dirty: true, revision: current.revision + 1 } : current)}/>
                     <button className="button small" disabled={disabled || services === null || !dirty} type="submit">{t('Dienstauswahl speichern')}</button>
                 </form>
             </div>

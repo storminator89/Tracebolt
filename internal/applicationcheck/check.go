@@ -9,7 +9,6 @@ import (
 	"net"
 	"net/http"
 	"net/netip"
-	"sort"
 	"sync/atomic"
 	"time"
 )
@@ -35,7 +34,7 @@ func newProbe() *probe {
 func verifiedTLSConfig(host string, roots *x509.CertPool) *tls.Config {
 	return &tls.Config{MinVersion: tls.VersionTLS12, ServerName: host, RootCAs: roots, NextProtos: []string{"http/1.1"}}
 }
-func (p *probe) check(parent context.Context, t target, profile string, now time.Time) (result Result) {
+func (p *probe) checkHTTP(parent context.Context, t target, profile string, now time.Time) (result Result) {
 	result = Result{ID: t.ID, State: "unknown", Reason: "not_checked", TLS: TLSResult{State: "unknown"}}
 	u, e := parseURL(t.URL, profile, t.PlaintextHTTPAcknowledged)
 	if e != nil {
@@ -61,43 +60,15 @@ func (p *probe) check(parent context.Context, t target, profile string, now time
 	}
 	ctx, cancel := context.WithTimeout(parent, CheckTimeout)
 	defer cancel()
-	var addresses []netip.Addr
 	host := u.Hostname()
-	if literal, e := netip.ParseAddr(host); e == nil {
-		addresses = []netip.Addr{literal}
-	} else {
-		addresses, e = p.resolve(ctx, host)
-		if e != nil || len(addresses) == 0 {
+	addresses, reason := p.resolveAllowed(ctx, host, t)
+	if reason != "" {
+		result.Reason = reason
+		if reason == "dns_failed" || reason == "timeout" {
 			result.State = "network_error"
-			result.Reason = "dns_failed"
-			if ctx.Err() != nil {
-				result.Reason = "timeout"
-			}
-			return result
 		}
-	}
-	allowed := map[netip.Addr]bool{}
-	for _, s := range t.AllowedAddresses {
-		ip, e := netip.ParseAddr(s)
-		if e != nil {
-			result.Reason = "invalid_configuration"
-			return result
-		}
-		allowed[ip] = true
-	}
-	if len(addresses) > MaxAddresses {
-		result.Reason = "destination_blocked"
 		return result
 	}
-	for _, ip := range addresses {
-		if !allowedAddress(ip, t.AllowPrivateLAN) || !allowed[ip.Unmap()] {
-			result.Reason = "destination_blocked"
-			return result
-		}
-	}
-	addresses = append([]netip.Addr(nil), addresses...)
-	// Stable choice; there is deliberately no fallback dial or retry in one check.
-	sort.Slice(addresses, func(i, j int) bool { return addresses[i].Compare(addresses[j]) < 0 })
 	port := u.Port()
 	if port == "" {
 		port = "443"

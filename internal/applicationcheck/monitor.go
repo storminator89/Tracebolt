@@ -2,6 +2,7 @@ package applicationcheck
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"sync"
 	"sync/atomic"
@@ -9,6 +10,7 @@ import (
 )
 
 const SchemaVersion = "tracebolt.application-checks.v1"
+const SchemaVersionV2 = "tracebolt.application-checks.v2"
 
 var ErrRunning = errors.New("application_checks_already_running")
 
@@ -17,6 +19,7 @@ type TLSResult struct {
 	ExpiresAt *time.Time `json:"expiresAt"`
 }
 type Result struct {
+	Kind       string     `json:"kind,omitempty"`
 	Scheme     string     `json:"targetScheme"`
 	ID         string     `json:"id"`
 	State      string     `json:"state"`
@@ -25,6 +28,27 @@ type Result struct {
 	HTTPStatus *int       `json:"httpStatus"`
 	TLS        TLSResult  `json:"tls"`
 }
+
+// MarshalJSON emits genuinely per-kind wire rows. DNS/TCP have no HTTP or TLS
+// members, including when unknown or stale; the legacy HTTP shape is unchanged.
+func (r Result) MarshalJSON() ([]byte, error) {
+	switch r.Kind {
+	case "", kindHTTP:
+		type httpResult Result
+		return json.Marshal(httpResult(r))
+	case kindDNS, kindTCP:
+		return json.Marshal(struct {
+			Kind       string     `json:"kind"`
+			ID         string     `json:"id"`
+			State      string     `json:"state"`
+			Reason     string     `json:"reason"`
+			ObservedAt *time.Time `json:"observedAt"`
+		}{r.Kind, r.ID, r.State, r.Reason, r.ObservedAt})
+	default:
+		return nil, ErrConfiguration
+	}
+}
+
 type View struct {
 	SchemaVersion   string    `json:"schemaVersion"`
 	Enabled         bool      `json:"enabled"`
@@ -56,13 +80,27 @@ func (*Monitor) MarshalJSON() ([]byte, error) { return []byte(`{"redacted":true}
 func New(c Config) *Monitor {
 	m := &Monitor{config: c, items: []Result{}, check: newProbe().check, now: time.Now, wait: wait}
 	for _, t := range c.targets {
-		scheme, tlsState := "https", "unknown"
-		if len(t.URL) >= 7 && t.URL[:7] == "http://" {
-			scheme, tlsState = "http", "not_applicable"
+		r := Result{Kind: wireKind(c, t), ID: t.ID, State: "unknown", Reason: "not_checked"}
+		if t.Kind == "" || t.Kind == kindHTTP {
+			r.Scheme = "https"
+			r.TLS.State = "unknown"
+			if len(t.URL) >= 7 && t.URL[:7] == "http://" {
+				r.Scheme = "http"
+				r.TLS.State = "not_applicable"
+			}
 		}
-		m.items = append(m.items, Result{ID: t.ID, Scheme: scheme, State: "unknown", Reason: "not_checked", TLS: TLSResult{State: tlsState}})
+		m.items = append(m.items, r)
 	}
 	return m
+}
+func wireKind(c Config, t target) string {
+	if c.schema != ConfigSchemaVersionV2 {
+		return ""
+	}
+	if t.Kind == "" {
+		return kindHTTP
+	}
+	return t.Kind
 }
 func wait(ctx context.Context, d time.Duration) bool {
 	timer := time.NewTimer(d)
@@ -94,6 +132,7 @@ func (m *Monitor) Run(ctx context.Context) error {
 			}
 			// Record the start of the bounded observation, never refresh on API reads.
 			r.ID = t.ID
+			r.Kind = wireKind(m.config, t)
 			r.ObservedAt = &start
 			m.mu.Lock()
 			m.items[i] = clone(r)
@@ -124,7 +163,11 @@ func (m *Monitor) Status() View {
 	if m != nil {
 		now = m.now().UTC()
 	}
-	v := View{SchemaVersion: SchemaVersion, Vantage: "management_server", ServerNow: now, Items: []Result{}}
+	schema := SchemaVersion
+	if m != nil && m.config.schema == ConfigSchemaVersionV2 {
+		schema = SchemaVersionV2
+	}
+	v := View{SchemaVersion: schema, Vantage: "management_server", ServerNow: now, Items: []Result{}}
 	if m == nil || !m.config.enabled {
 		return v
 	}
@@ -139,15 +182,17 @@ func (m *Monitor) Status() View {
 		if r.ObservedAt != nil && (r.ObservedAt.After(now) || now.Sub(*r.ObservedAt) > maxAge) {
 			r.State = "unknown"
 			r.Reason = "stale"
-			r.HTTPStatus = nil
-			r.TLS = TLSResult{State: "unknown"}
-			if r.Scheme == "http" {
-				r.TLS.State = "not_applicable"
+			if r.Kind == "" || r.Kind == kindHTTP {
+				r.HTTPStatus = nil
+				r.TLS = TLSResult{State: "unknown"}
+				if r.Scheme == "http" {
+					r.TLS.State = "not_applicable"
+				}
 			}
 		}
 		// Reclassify only the known expiry of the last verified leaf. This
 		// neither refreshes HTTP evidence nor proves a new TLS handshake.
-		if r.Scheme == "https" && r.TLS.ExpiresAt != nil {
+		if (r.Kind == "" || r.Kind == kindHTTP) && r.Scheme == "https" && r.TLS.ExpiresAt != nil {
 			switch {
 			case !r.TLS.ExpiresAt.After(now):
 				r.TLS.State = "expired"

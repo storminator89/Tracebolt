@@ -4,13 +4,13 @@ import { APIError, AUTH_REQUIRED_EVENT, getProtectedRequestEpoch, hasPendingAPIR
 import { hasLogoutIntent, LOGOUT_INTENT_KEY, useOperator } from './auth';
 import { dateLocale, t, useLocale } from './i18n';
 import type { TranslationKey } from './translations';
-import { APPLICATION_CHECKS_BYTES, applicationObservationAge, projectApplicationCheck, validApplicationChecksView } from './application-checks-types';
-import type { ApplicationCheck, ApplicationChecksView } from './application-checks-types';
+import { APPLICATION_CHECKS_BYTES, applicationObservationAge, isHTTPApplicationCheck, projectApplicationCheck, validApplicationChecksView } from './application-checks-types';
+import type { ApplicationCheckRow, ApplicationChecksStatus } from './application-checks-types';
 import './application-checks.css';
 
 const POLL_MS = 15000, TIMEOUT_MS = 10000;
 type Anchor = { mono: number; wall: number };
-type Snapshot = { view: ApplicationChecksView; epoch: number; anchor: Anchor; offset: number };
+type Snapshot = { view: ApplicationChecksStatus; epoch: number; anchor: Anchor; offset: number };
 const capture = (): Anchor => ({ mono: performance.now(), wall: Date.now() });
 function elapsed(anchor: Anchor, at = capture()): number {
     const mono = at.mono - anchor.mono, wall = at.wall - anchor.wall;
@@ -105,9 +105,10 @@ function useApplicationChecks() {
     const visible = snapshot?.epoch === getProtectedRequestEpoch() && !hasLogoutIntent() ? snapshot : null;
     return { snapshot: visible, elapsed: visible ? elapsed(visible.anchor) + visible.offset : 0, refreshing, locked, notice, refresh: () => refresh.current() };
 }
-function httpLabel(row: ApplicationCheck): string {
-    if (row.httpStatus !== null) return `${row.httpStatus} · ${row.state === 'ok' ? '2xx' : row.reason === 'redirect_blocked' ? t('Weiterleitung gesperrt') : t('HTTP-Fehler')}`;
-    const labels: Partial<Record<ApplicationCheck['reason'], TranslationKey>> = {
+function resultLabel(row: ApplicationCheckRow): string {
+    if (isHTTPApplicationCheck(row) && row.httpStatus !== null) return `${row.httpStatus} · ${row.state === 'ok' ? '2xx' : row.reason === 'redirect_blocked' ? t('Weiterleitung gesperrt') : t('HTTP-Fehler')}`;
+    const labels: Partial<Record<ApplicationCheckRow['reason'], TranslationKey>> = {
+        dns_resolved: 'Aufgelöst', tcp_connected: 'Verbunden', tcp_failed: 'TCP-Verbindung fehlgeschlagen', cancelled: 'Abgebrochen', invalid_configuration: 'Ungültige Konfiguration',
         dns_failed: 'DNS fehlgeschlagen', timeout: 'Zeitüberschreitung', request_failed: 'Netzwerkfehler', tls_verification_failed: 'TLS-Verifizierung fehlgeschlagen', tls_handshake_failed: 'TLS-Verbindung fehlgeschlagen', destination_blocked: 'Ziel gesperrt', stale: 'Unbekannt · veraltet', not_checked: 'Noch nicht beobachtet',
     };
     return t(labels[row.reason] ?? 'Unbekannt');
@@ -117,25 +118,27 @@ function ageLabel(age: number | null): string {
     const seconds = Math.floor(age / 1000);
     return seconds < 60 ? t('vor {0} s', { 0: seconds }) : seconds < 3600 ? t('vor {0} min', { 0: Math.floor(seconds / 60) }) : seconds < 86400 ? t('vor {0} h', { 0: Math.floor(seconds / 3600) }) : t('vor {0} Tagen', { 0: Math.floor(seconds / 86400) });
 }
-function CheckRow({ row, view, elapsedMs }: { row: ApplicationCheck; view: ApplicationChecksView; elapsedMs: number }) {
-    const result = projectApplicationCheck(view, row, elapsedMs), tls = result.tls;
-    const certificate = tls.state === 'not_applicable' ? t('Kein TLS') : tls.state === 'unknown' ? t('Unbekannt') : tls.state === 'expired' ? t('Abgelaufen') : tls.state === 'expiring' ? t('Läuft bald ab') : t('Ablauf > 30 Tage');
-    return <tr>
-        <th scope="row"><span className="application-id">{row.id}</span><small className={row.targetScheme === 'http' ? 'application-plaintext' : ''}>{row.targetScheme === 'http' ? t('HTTP · unverschlüsselt') : 'HTTPS'}</small></th>
-        <td><span className={`application-result application-${result.state === 'ok' ? 'ok' : result.state === 'unknown' ? 'unknown' : 'failed'}`}>{httpLabel(result)}</span></td>
-        <td><span className={`application-result application-tls-${tls.state}`}>{certificate}</span>{tls.expiresAt && <time className="application-expiry" dateTime={tls.expiresAt} title={new Date(tls.expiresAt).toLocaleString(dateLocale())}>{new Date(tls.expiresAt).toLocaleDateString(dateLocale())}</time>}</td>
-        <td>{row.observedAt ? <time dateTime={row.observedAt} title={new Date(row.observedAt).toLocaleString(dateLocale())}>{ageLabel(applicationObservationAge(view, row, elapsedMs))}</time> : <span>—</span>}</td>
+function CheckRow({ row, view, elapsedMs }: { row: ApplicationCheckRow; view: ApplicationChecksStatus; elapsedMs: number }) {
+    const result = projectApplicationCheck(view, row, elapsedMs), tls = isHTTPApplicationCheck(result) ? result.tls : null;
+    const rowHeaderId = `application-check-${row.id}`;
+    const kindLabel = isHTTPApplicationCheck(row) ? row.targetScheme === 'http' ? t('HTTP · unverschlüsselt') : 'HTTPS' : row.kind.toUpperCase();
+    const certificate = tls === null ? '—' : tls.state === 'not_applicable' ? t('Kein TLS') : tls.state === 'unknown' ? t('Unbekannt') : tls.state === 'expired' ? t('Abgelaufen') : tls.state === 'expiring' ? t('Läuft bald ab') : t('Ablauf > 30 Tage');
+    return <tr role="row">
+        <th id={rowHeaderId} scope="row" role="rowheader" headers="application-checks-application"><span className="application-id">{row.id}</span><small className={isHTTPApplicationCheck(row) && row.targetScheme === 'http' ? 'application-plaintext' : ''}>{kindLabel}</small></th>
+        <td role="cell" headers={`${rowHeaderId} application-checks-result`}><span className="application-mobile-label" aria-hidden="true">{t(view.schemaVersion === 'tracebolt.application-checks.v2' ? 'Prüfergebnis' : 'HTTP-Ergebnis')}</span><span className="application-cell-value"><span className={`application-result application-${result.state === 'ok' ? 'ok' : result.state === 'unknown' ? 'unknown' : 'failed'}`}>{resultLabel(result)}</span></span></td>
+        <td role="cell" headers={`${rowHeaderId} application-checks-certificate`}><span className="application-mobile-label" aria-hidden="true">{t('Blattzertifikat')}</span><span className="application-cell-value"><span className={`application-result application-tls-${tls?.state ?? 'not_applicable'}`} role={tls === null ? 'img' : undefined} aria-label={tls === null ? t('Zertifikat nicht Teil dieser Prüfung') : undefined}>{tls === null ? <><span className="application-certificate-mark">{certificate}</span><span className="application-mobile-certificate" aria-hidden="true">{t('Zertifikat nicht Teil dieser Prüfung')}</span></> : certificate}</span>{tls?.expiresAt && <time className="application-expiry" dateTime={tls.expiresAt} title={new Date(tls.expiresAt).toLocaleString(dateLocale())}>{new Date(tls.expiresAt).toLocaleDateString(dateLocale())}</time>}</span></td>
+        <td role="cell" headers={`${rowHeaderId} application-checks-observed`}><span className="application-mobile-label" aria-hidden="true">{t('Beobachtet')}</span><span className="application-cell-value">{row.observedAt ? <time dateTime={row.observedAt} title={new Date(row.observedAt).toLocaleString(dateLocale())}>{ageLabel(applicationObservationAge(view, row, elapsedMs))}</time> : <span>—</span>}</span></td>
     </tr>;
 }
 function ApplicationChecksContent() {
     const { snapshot, elapsed, refreshing, locked, notice, refresh } = useApplicationChecks();
     const view = snapshot?.view;
     return <section className="panel application-checks" aria-labelledby="application-checks-heading">
-        <div className="application-checks-heading"><div><h2 id="application-checks-heading">{t('Anwendungsprüfungen')}</h2><p>{t('HTTP/TLS-Beobachtungen vom Managementserver.')}</p></div><button className="text-button" onClick={refresh} disabled={refreshing || locked} aria-label={t('Anwendungsstatus neu laden')} title={t('Gespeicherte Ergebnisse neu laden')}><RefreshCw size={14} className={refreshing ? 'spin' : ''}/>{t('Neu laden')}</button></div>
+        <div className="application-checks-heading"><div><h2 id="application-checks-heading">{t('Anwendungsprüfungen')}</h2><p>{t(view?.schemaVersion === 'tracebolt.application-checks.v2' ? 'HTTP/TLS-, DNS- und TCP-Beobachtungen vom Managementserver.' : 'HTTP/TLS-Beobachtungen vom Managementserver.')}</p></div><button className="text-button" onClick={refresh} disabled={refreshing || locked} aria-label={t('Anwendungsstatus neu laden')} title={t('Gespeicherte Ergebnisse neu laden')}><RefreshCw size={14} className={refreshing ? 'spin' : ''}/>{t('Neu laden')}</button></div>
         {notice && <p className="application-checks-notice" role={notice === interrupted ? 'status' : 'alert'}>{t(notice)}</p>}
         {!view && !notice && <p className="application-checks-notice" role="status">{t('Anwendungsstatus wird geladen …')}</p>}
         {view?.enabled === false && <p className="application-checks-notice">{t('Deaktiviert · keine Anwendungsprüfungen konfiguriert.')}</p>}
-        {view?.enabled && <><div className="application-checks-table"><table><thead><tr><th scope="col">{t('Anwendung')}</th><th scope="col">{t('HTTP-Ergebnis')}</th><th scope="col">{t('Blattzertifikat')}</th><th scope="col">{t('Beobachtet')}</th></tr></thead><tbody>{view.items.map(row => <CheckRow key={row.id} row={row} view={view} elapsedMs={elapsed}/>)}</tbody></table></div><details className="application-checks-details"><summary>{t('Beobachtungsumfang')}</summary><p>{t('2xx beschreibt nur den HTTP-Status. Zertifikatsdaten stammen aus dieser Beobachtung. Neu laden liest nur gespeicherte Ergebnisse.')}</p></details></>}
+        {view?.enabled && <><div className="application-checks-table"><table role="table"><thead role="rowgroup"><tr role="row"><th id="application-checks-application" scope="col" role="columnheader">{t('Anwendung')}</th><th id="application-checks-result" scope="col" role="columnheader">{t(view.schemaVersion === 'tracebolt.application-checks.v2' ? 'Prüfergebnis' : 'HTTP-Ergebnis')}</th><th id="application-checks-certificate" scope="col" role="columnheader">{t('Blattzertifikat')}</th><th id="application-checks-observed" scope="col" role="columnheader">{t('Beobachtet')}</th></tr></thead><tbody role="rowgroup">{view.items.map(row => <CheckRow key={row.id} row={row} view={view} elapsedMs={elapsed}/>)}</tbody></table></div><details className="application-checks-details"><summary>{t('Beobachtungsumfang')}</summary><p>{t('2xx beschreibt nur den HTTP-Status. Zertifikatsdaten stammen aus dieser Beobachtung. Neu laden liest nur gespeicherte Ergebnisse.')}</p>{view.schemaVersion === 'tracebolt.application-checks.v2' && <><p>{t('DNS: System-Namensauflösung, ggf. über Hosts-Datei, Cache oder Suchdomänen. Alle zurückgegebenen Adressen müssen freigegeben sein; kein autoritativer oder vollständiger DNS-Datensatz.')}</p><p>{t('TCP: eine Verbindung zu einer numerischen Adresse und schließen, ohne Daten oder TLS. Dies bestätigt keine Anwendungsfunktion.')}</p></>}</details></>}
     </section>;
 }
 /** Development and signed-out pages must never issue this LAN-only read. */

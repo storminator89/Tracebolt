@@ -16,6 +16,10 @@ import (
 )
 
 const ConfigSchemaVersion = "tracebolt.application-checks-config.v1"
+const ConfigSchemaVersionV2 = "tracebolt.application-checks-config.v2"
+const kindHTTP = "http"
+const kindDNS = "dns"
+const kindTCP = "tcp"
 const MaxTargets = 8
 const MaxAddresses = 16
 const CheckTimeout = 5 * time.Second
@@ -25,6 +29,9 @@ const MaxHeaderBytes = 16384
 var ErrConfiguration = errors.New("application_checks_configuration_invalid")
 
 type target struct {
+	Kind                      string   `json:"kind,omitempty"`
+	Host                      string   `json:"host,omitempty"`
+	Port                      int      `json:"port,omitempty"`
 	ID                        string   `json:"id"`
 	URL                       string   `json:"url"`
 	AllowedAddresses          []string `json:"allowedAddresses"`
@@ -34,6 +41,7 @@ type target struct {
 
 // Config is an immutable startup snapshot. Configuration never comes from the API.
 type Config struct {
+	schema                     string
 	enabled                    bool
 	managerID, origin, profile string
 	interval                   time.Duration
@@ -99,14 +107,14 @@ func Load(path, managerID, origin, profile string) (Config, error) {
 	f, e := object(raw, "schemaVersion", "enabled", "managerInstanceId", "operatorOrigin", "profile", "intervalSeconds", "checksFromManagerAcknowledged", "targets")
 	var schema string
 	var enabled bool
-	if e != nil || !decode(f, "schemaVersion", &schema) || schema != ConfigSchemaVersion || !decode(f, "enabled", &enabled) {
+	if e != nil || !decode(f, "schemaVersion", &schema) || (schema != ConfigSchemaVersion && schema != ConfigSchemaVersionV2) || !decode(f, "enabled", &enabled) {
 		return Config{}, ErrConfiguration
 	}
 	if !enabled {
 		if len(f) != 2 {
 			return Config{}, ErrConfiguration
 		}
-		return Config{}, nil
+		return Config{schema: schema}, nil
 	}
 	var id, o, p string
 	var interval int
@@ -115,33 +123,96 @@ func Load(path, managerID, origin, profile string) (Config, error) {
 	if !decode(f, "managerInstanceId", &id) || !decode(f, "operatorOrigin", &o) || !decode(f, "profile", &p) || !decode(f, "intervalSeconds", &interval) || !decode(f, "checksFromManagerAcknowledged", &acknowledged) || !decode(f, "targets", &targets) || !acknowledged || interval < 60 || interval > 3600 || len(targets) == 0 || len(targets) > MaxTargets || id != managerID || o != origin || p != profile || (p != lanconfig.TLS && p != lanconfig.HTTPTest) || o == "" {
 		return Config{}, ErrConfiguration
 	}
-	c := Config{enabled: true, managerID: id, origin: o, profile: p, interval: time.Duration(interval) * time.Second}
+	c := Config{schema: schema, enabled: true, managerID: id, origin: o, profile: p, interval: time.Duration(interval) * time.Second}
 	seen := map[string]bool{}
 	for _, rawTarget := range targets {
-		f, e := object(rawTarget, "id", "url", "allowedAddresses", "allowPrivateLAN", "plaintextHTTPAcknowledged")
-		var t target
-		if e != nil || !decode(f, "id", &t.ID) || !decode(f, "url", &t.URL) || !decode(f, "allowedAddresses", &t.AllowedAddresses) || !decode(f, "allowPrivateLAN", &t.AllowPrivateLAN) || !decode(f, "plaintextHTTPAcknowledged", &t.PlaintextHTTPAcknowledged) || !validID(t.ID) || seen[t.ID] {
-			return Config{}, ErrConfiguration
-		}
-		u, e := parseURL(t.URL, p, t.PlaintextHTTPAcknowledged)
-		if e != nil || len(t.AllowedAddresses) == 0 || len(t.AllowedAddresses) > MaxAddresses {
-			return Config{}, ErrConfiguration
-		}
-		addresses := map[netip.Addr]bool{}
-		for _, rawIP := range t.AllowedAddresses {
-			ip, e := netip.ParseAddr(rawIP)
-			if e != nil || ip.String() != rawIP || ip.Is4In6() || !allowedAddress(ip, t.AllowPrivateLAN) || addresses[ip] {
-				return Config{}, ErrConfiguration
-			}
-			addresses[ip] = true
-		}
-		if literal, e := netip.ParseAddr(u.Hostname()); e == nil && !addresses[literal] {
+		t, e := parseTarget(rawTarget, schema, p)
+		if e != nil || seen[t.ID] {
 			return Config{}, ErrConfiguration
 		}
 		seen[t.ID] = true
 		c.targets = append(c.targets, t)
 	}
 	return c, nil
+}
+
+// Each version and kind has an exact key set. A v1 file cannot silently grant
+// a newly introduced kind, and unrelated protocol fields are always rejected.
+func parseTarget(raw []byte, schema, profile string) (target, error) {
+	kind := kindHTTP
+	keys := []string{"id", "url", "allowedAddresses", "allowPrivateLAN", "plaintextHTTPAcknowledged"}
+	if schema == ConfigSchemaVersionV2 {
+		preliminary, err := object(raw, "kind", "id", "url", "host", "port", "allowedAddresses", "allowPrivateLAN", "plaintextHTTPAcknowledged")
+		if err != nil || !decode(preliminary, "kind", &kind) {
+			return target{}, ErrConfiguration
+		}
+		switch kind {
+		case kindHTTP:
+			keys = append(keys, "kind")
+		case kindDNS:
+			keys = []string{"kind", "id", "host", "allowedAddresses", "allowPrivateLAN"}
+		case kindTCP:
+			keys = []string{"kind", "id", "host", "port", "allowedAddresses", "allowPrivateLAN"}
+		default:
+			return target{}, ErrConfiguration
+		}
+	}
+	f, err := object(raw, keys...)
+	t := target{Kind: kind}
+	if err != nil || !decode(f, "id", &t.ID) || !decode(f, "allowedAddresses", &t.AllowedAddresses) || !decode(f, "allowPrivateLAN", &t.AllowPrivateLAN) || !validID(t.ID) || len(t.AllowedAddresses) == 0 || len(t.AllowedAddresses) > MaxAddresses {
+		return target{}, ErrConfiguration
+	}
+	host := ""
+	switch kind {
+	case kindHTTP:
+		if !decode(f, "url", &t.URL) || !decode(f, "plaintextHTTPAcknowledged", &t.PlaintextHTTPAcknowledged) {
+			return target{}, ErrConfiguration
+		}
+		u, err := parseURL(t.URL, profile, t.PlaintextHTTPAcknowledged)
+		if err != nil {
+			return target{}, ErrConfiguration
+		}
+		host = u.Hostname()
+	case kindDNS, kindTCP:
+		if !decode(f, "host", &t.Host) || !validHost(t.Host, kind == kindTCP) {
+			return target{}, ErrConfiguration
+		}
+		host = t.Host
+		if kind == kindTCP && (!decode(f, "port", &t.Port) || t.Port < 1 || t.Port > 65535) {
+			return target{}, ErrConfiguration
+		}
+	}
+	addresses := map[netip.Addr]bool{}
+	for _, rawIP := range t.AllowedAddresses {
+		ip, err := netip.ParseAddr(rawIP)
+		if err != nil || ip.String() != rawIP || ip.Is4In6() || !allowedAddress(ip, t.AllowPrivateLAN) || addresses[ip] {
+			return target{}, ErrConfiguration
+		}
+		addresses[ip] = true
+	}
+	if literal, err := netip.ParseAddr(host); err == nil && !addresses[literal] {
+		return target{}, ErrConfiguration
+	}
+	return t, nil
+}
+func validHost(host string, allowLiteral bool) bool {
+	if ip, err := netip.ParseAddr(host); err == nil {
+		return allowLiteral && ip.Zone() == "" && !ip.Is4In6() && ip.String() == host
+	}
+	if len(host) == 0 || len(host) > 253 || strings.HasSuffix(host, ".") {
+		return false
+	}
+	for _, label := range strings.Split(host, ".") {
+		if len(label) == 0 || len(label) > 63 || label[0] == '-' || label[len(label)-1] == '-' {
+			return false
+		}
+		for _, r := range label {
+			if !(r >= 'a' && r <= 'z' || r >= '0' && r <= '9' || r == '-') {
+				return false
+			}
+		}
+	}
+	return true
 }
 func validID(s string) bool {
 	if len(s) < 1 || len(s) > 48 {
@@ -171,24 +242,8 @@ func parseURL(raw, _ string, httpAcknowledged bool) (*url.URL, error) {
 		return nil, ErrConfiguration
 	}
 	host := u.Hostname()
-	if ip, e := netip.ParseAddr(host); e == nil {
-		if ip.Zone() != "" || ip.Is4In6() || ip.String() != host {
-			return nil, ErrConfiguration
-		}
-	} else {
-		if len(host) == 0 || len(host) > 253 || strings.HasSuffix(host, ".") {
-			return nil, ErrConfiguration
-		}
-		for _, label := range strings.Split(host, ".") {
-			if len(label) == 0 || len(label) > 63 || label[0] == '-' || label[len(label)-1] == '-' {
-				return nil, ErrConfiguration
-			}
-			for _, r := range label {
-				if !(r >= 'a' && r <= 'z' || r >= '0' && r <= '9' || r == '-') {
-					return nil, ErrConfiguration
-				}
-			}
-		}
+	if !validHost(host, true) {
+		return nil, ErrConfiguration
 	}
 	if port := u.Port(); port != "" {
 		n, e := strconv.Atoi(port)

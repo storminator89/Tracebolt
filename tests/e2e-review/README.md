@@ -87,3 +87,28 @@ responses and excludes actual management-server target probes, a new TLS
 handshake and native acceptance. These are UI fault-injection previews; they
 require an actual successful hosted-browser run and pixel review before use as
 visual evidence. Source/DOM checks alone do not generate or validate screenshots.
+
+The same application-status case also checks actual row geometry at 390×844 and
+1440×1000: every result, certificate value and original observation age must be
+visible inside its viewport and the table must have no horizontal overflow. It
+checks the mobile labels and explicit row/column header associations, plus
+aligned desktop columns. Exact value assertions target the value span so hidden
+mobile labels cannot contaminate desktop text comparisons.
+
+Additional phases use invented v1 HTTPS/plaintext HTTP and v2 DNS/TCP/HTTPS DTOs,
+validated by the production validator in the source suite and the real browser
+UI. They have the same original 65-second sample age and a declared 75-second
+interval, with the production row-count freshness bounds. DNS/TCP rows have no
+HTTP or certificate fields; their certificate cell explicitly says that the
+certificate is not part of this check on mobile. The observation disclosure
+qualifies system name resolution and connect-and-close TCP without application
+health or TLS claims. Each phase rechecks unchanged age on reload, stale
+projection, 503 clearing/recovery and 401 removal/stopped reads. The runner's
+twelve case names/count, session lifetime, assertion timeouts and launch options
+remain unchanged. No real application target or probe is introduced.
+
+Additional desktop/mobile screenshot names include `v1-http-https` or
+`v2-dns-tcp-https` under the existing synthetic prefix; a second v2 mobile capture
+shows the HTTPS row below the DNS/TCP rows. Capture metadata labels these as
+invented retained DTOs with no actual target probe or TLS handshake. These new
+captures are produced only by the upcoming hosted browser run, not source tests.

@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-10-06 — Preserve Health drafts and show complete mobile check results
+
+- Keep explicit service deselection and edits made during a pending Health save; ignore obsolete scope/revision completions instead of replacing the newer draft with saved values.
+- Stack application results, certificate details and original observation age on narrow screens while retaining the desktop table and accessible header associations.
+- Extend the existing hosted browser case with synthetic v1/v2 status and mobile/desktop checks; no real application target is configured or probed by those fixtures.
+
+## 2026-10-06 — Bounded DNS and TCP observation source candidate
+
+- Add strict opt-in v2 DNS-resolution and single-port TCP connection targets while preserving v1 HTTP/HTTPS configuration and status. Reuse exact-address policy, deadlines and manager-side freshness; TCP exchanges no application data.
+- Extend the compact Overview panel with typed results and neutral certificate cells. Injected fixtures cover late completion, cancellation, connection cleanup and per-kind schemas; no real target, resolver/host configuration, network scan or deployment is performed.
+
 ## 2026-10-06 — Require service-identity setup evidence and application UI checks
 
 - Keep production identity guards unchanged while testing fixture state independently of ambient runner groups; require a separate same-user, privilege-reduced CI read with all nine cases and seven actual public-reader evidence markers. Missing activation and ledgers must reach their state rejection, with no writes or manager requests.

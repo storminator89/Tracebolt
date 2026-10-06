@@ -2,6 +2,15 @@
 export const english = {
   // Read-only manager-side application observations.
   "Anwendungsprüfungen": "Application checks",
+  "HTTP/TLS-, DNS- und TCP-Beobachtungen vom Managementserver.": "HTTP/TLS, DNS and TCP observations from the management server.",
+  "Prüfergebnis": "Result",
+  "Aufgelöst": "Resolved",
+  "Verbunden": "Connected",
+  "TCP-Verbindung fehlgeschlagen": "TCP connection failed",
+  "Ungültige Konfiguration": "Invalid configuration",
+  "Zertifikat nicht Teil dieser Prüfung": "Certificate is not part of this check",
+  "DNS: System-Namensauflösung, ggf. über Hosts-Datei, Cache oder Suchdomänen. Alle zurückgegebenen Adressen müssen freigegeben sein; kein autoritativer oder vollständiger DNS-Datensatz.": "DNS: system hostname resolution, which may use a hosts file, cache or search domains. All returned addresses must be approved; this is not an authoritative or complete DNS record set.",
+  "TCP: eine Verbindung zu einer numerischen Adresse und schließen, ohne Daten oder TLS. Dies bestätigt keine Anwendungsfunktion.": "TCP: one connection to a numeric address and close, without data or TLS. This does not establish application health.",
   "HTTP/TLS-Beobachtungen vom Managementserver.": "HTTP/TLS observations from the management server.",
   "Anwendungsstatus neu laden": "Reload application status",
   "Gespeicherte Ergebnisse neu laden": "Reload retained results",

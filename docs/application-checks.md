@@ -11,6 +11,10 @@ configuration, constructing the monitor and polling status perform no DNS lookup
 or check. This source change supplies no real targets and changes no host,
 network, certificate, permission or service configuration.
 
+An optional [v2 DNS/TCP extension](application-network-checks.md) adds bounded
+manager-side resolution and connect-only observations. V1 HTTP configuration and
+wire status remain unchanged; v2 keeps each protocol's result fields distinct.
+
 ## Explicit target authority
 
 A local operator may separately provision a private, manager-owned configuration
@@ -140,7 +144,7 @@ a prior observation with a synthetic failure.
 ## Scope and remaining gates
 
 Results exist only in memory. There is no history, alert delivery, incident
-creation, endpoint association, general DNS/TCP/DB/backup check, content matching,
+creation, endpoint association, DB/backup check, content matching,
 credential support or target-configuration UI. Existing device pages, health incidents and
 external alarm behavior are unchanged.
 

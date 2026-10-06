@@ -1,5 +1,7 @@
 {
-  "goSourceSha256": "776eab280119a37b4c4a57b3ca2142c1e547181293c8e82564dfbbe93b5afc09",
+  "schemaVersion": 1,
+  "sourceCommit": "fccc4b00cd8a144afd58e4b995747afab7a10022",
+  "goSourceSha256": "1dc16b0d8426cba0704f95108d32f78dec75bf5177de3220628b32c2cf6d7cef",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -82,6 +84,8 @@
       "TestApplicationChecksManagerPrepareIsInertInManualMode",
       "TestApplicationChecksManagerRejectsMismatchedBindingBeforeStateCreation",
       "TestApplicationChecksManagerUsesEnrollmentBinding",
+      "TestApplicationChecksV2ManagerDisabledSchemaWithoutWorker",
+      "TestApplicationChecksV2ManagerMixedStatusIsInert",
       "TestApprovedDisposableSystemdInstallation",
       "TestApprovedManagedDisposableSystemdInstallation",
       "TestBuiltLANManagerCLI",
@@ -404,6 +408,7 @@
       "TestApplicationCheckStatusIsNotADevelopmentRoute",
       "TestApplicationCheckStatusOriginHostAndCrossSiteBoundary",
       "TestApplicationCheckStatusRechecksSession",
+      "TestApplicationChecksV2NamedReadAndPrivateFieldBoundary",
       "TestBootstrapAdmissionBoundedAndFailClosedClock",
       "TestBoundaryGuards",
       "TestCachedUpdatesOperatorGuardsAndBoundedUnknown",
@@ -502,6 +507,22 @@
       "TestApplicationConfigTargetTransportIndependent",
       "TestApplicationDestinationPermanentExclusions",
       "TestApplicationURLGrammar",
+      "TestDNSAndTCPAcceptMaximumReturnedAddresses",
+      "TestDNSAndTCPCancellationRejectsLateSuccess",
+      "TestDNSAndTCPDeadlinesRejectLateCompletion",
+      "TestDNSAndTCPDisabledV2PreservesSchemaWithoutWork",
+      "TestDNSAndTCPJSONExcludesHTTPFieldsEvenIfPopulated",
+      "TestDNSAndTCPMonitorCancellationDoesNotPublishLateProbeSuccess",
+      "TestDNSAndTCPMonitorFreshnessPreservesKindsAndSnapshotIsolation",
+      "TestDNSAndTCPMonitorMixedSequentialCadenceAndKindAuthority",
+      "TestDNSAndTCPMonitorV1HTTPJSONRemainsCompatible",
+      "TestDNSAndTCPMonitorV2InitialViewIsInertAndKindSpecific",
+      "TestDNSAndTCPRequirePrivateLANOptIn",
+      "TestDNSAndTCPResolutionFailuresNeverDial",
+      "TestDNSAndTCPRevalidateEachObservation",
+      "TestDNSAndTCPValidateEveryReturnedAddress",
+      "TestDNSProbeResolvesOnlyReturnedSystemAddresses",
+      "TestHTTPSharedResolutionBehaviorRemainsCompatible",
       "TestMonitorAgesVerifiedCertificateWithoutRefreshingHTTP",
       "TestMonitorBindingMatchesExactManagerIdentity",
       "TestMonitorCancellationBeforeStartOrWhileWaiting",
@@ -527,7 +548,15 @@
       "TestProbeSingleLabelNamePreservesAuthorityAndBlocksLoopback",
       "TestProbeTLSValidityIndependentOfHTTPStatus",
       "TestProbeTLSVerificationAndExpiry",
-      "TestTransportAddressPolicyPermanentlyExcludesSpecialNetworks"
+      "TestTCPProbeFailuresNeverRetryAndCloseReturnedConnection",
+      "TestTCPProbeLiteralHostNeverResolves",
+      "TestTCPProbePinsOneStableAddressAndSendsNoTraffic",
+      "TestTCPResolutionAndDialShareOneDeadline",
+      "TestTransportAddressPolicyPermanentlyExcludesSpecialNetworks",
+      "TestV2ConfigDisabledPreservesSchemaAndInertState",
+      "TestV2ConfigPerKindAndV1Compatibility",
+      "TestV2ConfigRejectsCrossKindFieldsAndUnsafeTargets",
+      "TestV2ConfigSharedTargetBudgetAndLiteralPrivatePolicy"
     ],
     "localrmm/internal/assessment": [
       "TestAmbiguousVendorStatesStayCandidates",
@@ -2075,7 +2104,5 @@
       "TestSupportBundleRejectsUnavailableHealthyMetric",
       "TestSystemInventoryOperatorActualTLSHTTPAllPagesAndDelayedExpiry"
     ]
-  },
-  "schemaVersion": 1,
-  "sourceCommit": "fccc4b00cd8a144afd58e4b995747afab7a10022"
+  }
 }

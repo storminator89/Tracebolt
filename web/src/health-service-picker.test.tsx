@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { Profiler, useState } from 'react';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -224,6 +224,85 @@ describe('real health form integration', () => {
         await waitFor(() => expect(mutate).toHaveBeenCalledTimes(2)); expect(vi.mocked(mutate).mock.calls[1][1]).toEqual({ services: [] });
         await waitFor(() => expect(screen.getByRole('button', { name: 'Save service selection' })).toBeDisabled());
         expect(vi.mocked(mutateRaw).mock.calls.every(([path]) => path.endsWith('/inventory/system/query'))).toBe(true);
+    });
+
+    it('preserves an immediate removal when a deferred Save response commits', async () => {
+        view = systemView(2); rows = serviceRows(2);
+        let saved = health(), release!: () => void;
+        const response = new Promise<void>(resolve => { release = resolve; });
+        vi.mocked(request).mockImplementation(async path => path.endsWith('/health') ? saved : view);
+        vi.mocked(mutate).mockImplementation(async (_path, body) => {
+            await response;
+            const services = (body as { services: string[] }).services;
+            saved = { ...saved, monitoredServices: services, checks: [...saved.checks.filter(check => check.kind !== 'service'), ...services.map(unit => ({ key: `service:${unit}`, kind: 'service' as const, target: unit, state: 'unknown' as const, observedAt: null, value: null }))] }; return saved;
+        });
+        let armed = false, removed = false;
+        render(<Profiler id="save-response" onRender={() => {
+            const remove = screen.queryByRole('button', { name: `Remove service: ${rows[0].name}` });
+            if (armed && remove && !removed) {
+                removed = true; expect(remove).toBeEnabled();
+                // Exercise the response-commit / passive-effect boundary without a timing delay.
+                // The outer async act owns this native event and all queued updates.
+                (remove as HTMLButtonElement).click();
+            }
+        }}><HealthPanel deviceId={systemDevice} sessionKey="first"/></Profiler>);
+        await screen.findByRole('checkbox', { name: rows[0].name });
+        fireEvent.click(screen.getByRole('checkbox', { name: rows[0].name }));
+        fireEvent.click(screen.getByRole('button', { name: 'Save service selection' }));
+        expect(mutate).toHaveBeenCalledExactlyOnceWith(`/devices/${systemDevice}/health/services`, { services: [rows[0].name, 'sshd.service'] }, expect.any(AbortSignal));
+        expect(screen.queryByRole('button', { name: `Remove service: ${rows[0].name}` })).not.toBeInTheDocument();
+        armed = true; await act(async () => { release(); });
+        expect(removed).toBe(true);
+        expect(screen.getByRole('list', { name: 'Selected services' })).not.toHaveTextContent(rows[0].name);
+        expect(screen.getByRole('list', { name: 'Selected services' })).toHaveTextContent('sshd.service');
+        expect(screen.getByRole('button', { name: 'Save service selection' })).toBeEnabled();
+        expect(saved.monitoredServices).toEqual([rows[0].name, 'sshd.service']);
+        fireEvent.click(screen.getByRole('button', { name: 'Remove service: sshd.service' }));
+        expect(screen.getByText('No services selected. Saving stops existing service checks.')).toBeVisible();
+        await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Save service selection' })); });
+        expect(mutate).toHaveBeenCalledTimes(2); expect(vi.mocked(mutate).mock.calls[1][1]).toEqual({ services: [] });
+        expect(saved.monitoredServices).toEqual([]); expect(screen.getByRole('button', { name: 'Save service selection' })).toBeDisabled();
+    });
+
+    it.each(['rejected', 'invalid'] as const)('retains the unsaved selection after a %s Save response and refresh', async failure => {
+        view = systemView(2); rows = serviceRows(2);
+        vi.mocked(request).mockImplementation(async path => path.endsWith('/health') ? health() : view);
+        if (failure === 'rejected') vi.mocked(mutate).mockRejectedValueOnce(new Error('fixture failure'));
+        else vi.mocked(mutate).mockResolvedValueOnce({});
+        render(<HealthPanel deviceId={systemDevice} sessionKey="first"/>);
+        await screen.findByRole('checkbox', { name: rows[0].name });
+        fireEvent.click(screen.getByRole('checkbox', { name: rows[0].name }));
+        await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Save service selection' })); });
+        expect(screen.getByRole('alert')).toHaveTextContent('Change not confirmed');
+        await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Refresh health' })); });
+        expect(screen.getByRole('list', { name: 'Selected services' })).toHaveTextContent(rows[0].name);
+        expect(screen.getByRole('button', { name: 'Save service selection' })).toBeEnabled();
+        expect(screen.getByRole('list', { name: 'Current checks' })).not.toHaveTextContent(rows[0].name);
+        expect(mutate).toHaveBeenCalledTimes(1);
+    });
+
+    it.each(['device', 'session'] as const)('ignores an old Save response after a new %s selection', async transition => {
+        view = systemView(2); rows = serviceRows(2);
+        let current = health(), finish!: (value: HealthView) => void;
+        vi.mocked(request).mockImplementation(async path => path.endsWith('/health') ? current : view);
+        vi.mocked(mutate).mockImplementationOnce(() => new Promise<HealthView>(resolve => { finish = resolve; }));
+        const rendered = render(<HealthPanel deviceId={systemDevice} sessionKey="first"/>);
+        await screen.findByRole('checkbox', { name: rows[0].name });
+        fireEvent.click(screen.getByRole('checkbox', { name: rows[0].name }));
+        fireEvent.click(screen.getByRole('button', { name: 'Save service selection' }));
+        expect(mutate).toHaveBeenCalledTimes(1);
+        const signal = vi.mocked(mutate).mock.calls[0][2]!;
+        const oldResponse: HealthView = { ...current, monitoredServices: [rows[0].name, 'sshd.service'], checks: [...current.checks, { key: `service:${rows[0].name}`, kind: 'service', target: rows[0].name, state: 'unknown', observedAt: null, value: null }] };
+        if (transition === 'device') { current = { ...health(), deviceId: 'agent_replacement' }; view = { ...view, deviceId: current.deviceId }; }
+        rendered.rerender(<HealthPanel deviceId={current.deviceId} sessionKey={transition === 'session' ? 'second' : 'first'}/>);
+        await screen.findByRole('checkbox', { name: rows[1].name });
+        expect(signal.aborted).toBe(true);
+        fireEvent.click(screen.getByRole('checkbox', { name: rows[1].name }));
+        await act(async () => { finish(oldResponse); });
+        expect(screen.getByRole('list', { name: 'Selected services' })).toHaveTextContent(rows[1].name);
+        expect(screen.getByRole('list', { name: 'Selected services' })).not.toHaveTextContent(rows[0].name);
+        expect(screen.getByRole('button', { name: 'Save service selection' })).toBeEnabled();
+        expect(mutate).toHaveBeenCalledTimes(1);
     });
 
     it('preserves focus and draft selection while the ordinary health poll is pending', async () => {

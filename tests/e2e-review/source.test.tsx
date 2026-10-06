@@ -3,7 +3,7 @@ import { beforeEach, afterEach, describe, expect, it, vi } from '../../web/node_
 import { cleanup, render, screen, fireEvent, waitFor } from '../../web/node_modules/@testing-library/react/dist/index.js';
 import App from '../../web/src/App';
 import { defaultFilters, filterDevices, decodeRouteId, csvCell, noteBytes } from '../../web/src/utils';
-import { applicationStatusFixture } from './application-checks-browser.mjs';
+import { applicationStatusFixture, applicationHTTPStatusFixture, applicationMixedStatusFixture } from './application-checks-browser.mjs';
 import { applicationObservationAge, projectApplicationCheck, validApplicationChecksView } from '../../web/src/application-checks-types';
 const at='2026-10-03T12:00:00Z';
 const metric={value:25,unit:'%',quality:'healthy',source:'synthetic-fixture',collectedAt:at};
@@ -44,12 +44,36 @@ describe('Hosted application-status fault-injection contract',()=>{
   expect(view.items.map(row=>[row.httpStatus,row.tls.state])).toEqual([[204,'expiring'],[503,'valid'],[204,'expired'],[null,'unknown']]);
   const expired=view.items[2];expect(Date.parse(expired.observedAt)).toBeLessThan(Date.parse(expired.tls.expiresAt));expect(Date.parse(expired.tls.expiresAt)).toBeLessThan(Date.parse(view.serverNow));
   for(const row of view.items){expect(applicationObservationAge(view,row,0)).toBe(65000);expect(projectApplicationCheck(view,row,0)).toEqual(row);}
+  const plain=applicationHTTPStatusFixture(),mixed=applicationMixedStatusFixture();
+  for(const fixture of [plain,mixed]){
+   expect(validApplicationChecksView(fixture)).toBe(true);expect(fixture.maxAgeSeconds).toBe(fixture.intervalSeconds+(fixture.items.length+1)*5);
+   for(const row of fixture.items){expect(applicationObservationAge(fixture,row,0)).toBe(65000);expect(projectApplicationCheck(fixture,row,0)).toEqual(row);}
+  }
+  expect(plain.items.map(row=>[row.targetScheme,row.tls.state])).toEqual([['https','expiring'],['http','not_applicable']]);
+  expect(mixed.items.map(row=>[row.kind,row.reason])).toEqual([['dns','dns_resolved'],['tcp','tcp_connected'],['http','http_2xx']]);
+  for(const row of mixed.items.slice(0,2))expect(Object.keys(row).sort()).toEqual(['id','kind','observedAt','reason','state']);
  });
  it('cannot portray a leaf as verified when it was already expired at the original observation',()=>{
   const view=applicationStatusFixture();view.items[2].observedAt=view.serverNow;expect(validApplicationChecksView(view)).toBe(false);
+  for(const index of [0,1]){
+   const mixed=applicationMixedStatusFixture();mixed.items[index]={...mixed.items[index],tls:{state:'valid',expiresAt:'2026-12-01T12:00:00Z'}};
+   expect(validApplicationChecksView(mixed)).toBe(false);
+  }
+  const crossed=applicationMixedStatusFixture();crossed.items[0].reason='tcp_connected';expect(validApplicationChecksView(crossed)).toBe(false);
  });
  it('ages the unchanged browser fixture past the real stale boundary without changing observation times',()=>{
   const view=applicationStatusFixture();
   for(const row of view.items){expect(projectApplicationCheck(view,row,20000).state).toBe(row.state);expect(projectApplicationCheck(view,row,21000)).toEqual({...row,state:'unknown',reason:'stale',httpStatus:null,tls:{state:'unknown',expiresAt:null}});expect(applicationObservationAge(view,row,21000)).toBe(86000);}
+  for(const fixture of [applicationHTTPStatusFixture(),applicationMixedStatusFixture()]){
+   const boundaryMs=fixture.maxAgeSeconds*1000-65000;
+   for(const row of fixture.items){
+    expect(projectApplicationCheck(fixture,row,boundaryMs)).toEqual(row);
+    const stale=projectApplicationCheck(fixture,row,boundaryMs+1000);
+    expect(stale).toMatchObject({state:'unknown',reason:'stale',observedAt:row.observedAt});
+    expect(applicationObservationAge(fixture,row,boundaryMs+1000)).toBe((fixture.maxAgeSeconds+1)*1000);
+    if(row.kind==='dns'||row.kind==='tcp')expect(Object.keys(stale).sort()).toEqual(['id','kind','observedAt','reason','state']);
+    else expect(stale).toMatchObject({httpStatus:null,tls:{state:row.targetScheme==='http'?'not_applicable':'unknown',expiresAt:null}});
+   }
+  }
  });
 });

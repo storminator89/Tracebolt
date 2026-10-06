@@ -217,11 +217,14 @@ func prepareWithApplicationChecks(m lanconfig.Material, enrollment *enrollmentco
 		closeAll()
 		return nil, e
 	}
+	// Keep the configured status schema even when disabled; only the enabled
+	// monitor is assigned to the worker lifecycle below. Construction is inert.
+	applicationStatus := applicationcheck.New(checks)
 	var applicationChecks *applicationcheck.Monitor
 	if checks.Enabled() {
-		applicationChecks = applicationcheck.New(checks)
+		applicationChecks = applicationStatus
 	}
-	operatorConfig := api.LANOperatorConfig{ApplicationChecks: applicationChecks, ServiceActions: actions, Origin: c.OperatorOrigin, Auth: auth, Registry: registry, InsecureHTTPTest: c.Profile == lanconfig.HTTPTest, Devices: func() ([]model.Device, error) {
+	operatorConfig := api.LANOperatorConfig{ApplicationChecks: applicationStatus, ServiceActions: actions, Origin: c.OperatorOrigin, Auth: auth, Registry: registry, InsecureHTTPTest: c.Profile == lanconfig.HTTPTest, Devices: func() ([]model.Device, error) {
 		return trustStore.Devices(context.Background(), registry.List(), time.Now().UTC())
 	}}
 	if enrolledService != nil {
