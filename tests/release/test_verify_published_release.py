@@ -61,13 +61,13 @@ class PublicReadback(unittest.TestCase):
              patch.object(self.b, "run_installer", side_effect=AssertionError("installer forbidden")):
             return v.verify(self.output, self.b, self.template)
 
-    def test_all_ten_assets_verified_before_only_four_public_files_are_retained(self):
+    def test_all_twelve_assets_verified_before_only_four_public_files_are_retained(self):
         result = self.run_fixture()
         self.assertEqual(self.calls[:3], ["manifest.json", "manifest.sigstore.json", "PROVENANCE"])
         self.assertEqual(set(self.calls) - {"PROVENANCE"}, set(self.expected))
         self.assertEqual({path.name for path in self.output.iterdir()}, set(v.PUBLIC_FILES) | {v.RESULT_FILE})
         self.assertEqual(set(result), {"schema", "status", "version", "sourceCommit", "assetsVerified", "publicArtifacts", "traceboltProgramsExecuted", "installerExecuted"})
-        self.assertEqual((result["status"], result["assetsVerified"]), ("PASS", 10))
+        self.assertEqual((result["status"], result["assetsVerified"]), ("PASS", 12))
         self.assertFalse(result["traceboltProgramsExecuted"])
         self.assertFalse(result["installerExecuted"])
         for name in v.PUBLIC_FILES:
@@ -107,7 +107,7 @@ class PublicReadback(unittest.TestCase):
 
     def test_source_template_and_network_destinations_are_fixed(self):
         self.assertEqual(self.b.digest(self.real_template), v.TEMPLATE_SHA256)
-        self.assertEqual(len(v.EXPECTED), 10)
+        self.assertEqual(len(v.EXPECTED), 12)
         for version, name in (("v0.1.0-other", "manifest.json"), (v.VERSION, "other.py"), (v.VERSION, "../bootstrap.py")):
             with self.assertRaises(v.Failed):
                 self.b.asset_url(version, name)
@@ -116,27 +116,29 @@ class PublicReadback(unittest.TestCase):
         with patch.object(v, "TEMPLATE_SHA256", "0" * 64), self.assertRaisesRegex(v.Failed, "^FAIL_TEMPLATE$"):
             v.load_bootstrap()
 
-    def test_selected_release_is_exact_rc1_and_pilot2_bytes_are_preserved(self):
-        self.assertEqual(v.VERSION, "v0.1.0-rc.1")
-        self.assertEqual(v.SOURCE, "ccac65e7a61f0b5f0e325c3616a93273ab1e8eb1")
+    def test_selected_release_is_exact_rc2_and_pilot2_bytes_are_preserved(self):
+        self.assertEqual(v.VERSION, "v0.1.0-rc.2")
+        self.assertEqual(v.SOURCE, "a6368b0202b1efecdb6214dc34c4302d239854f7")
         self.assertEqual(v.PIN["version"], v.VERSION)
         self.assertEqual(v.PIN["sourceCommit"], v.SOURCE)
         self.assertIsNone(self.b.RELEASE_PIN)
+        rc1 = (v.HERE / "published" / "v0.1.0-rc.1.py").read_bytes()
+        self.assertEqual((len(rc1), self.b.digest(rc1)), (37461, "85bd2c01beb3012d5d042d88448d892a270cf527786a73e7a0a67867cac47f61"))
         historical = (v.HERE / "published" / "v0.1.0-pilot.2.py").read_bytes()
         self.assertEqual((len(historical), self.b.digest(historical)),
                          (32677, "ba0cf2b8bb25868782bbf9f7a2ae228a982895dd45f865314c6620af30731457"))
 
-    def test_existing_readback_workflow_is_read_only_and_selects_exact_rc1(self):
+    def test_existing_readback_workflow_is_read_only_and_selects_exact_rc2(self):
         workflow = (ROOT / ".github/workflows/verify-published-release.yml").read_text()
         self.assertEqual(workflow.count("permissions:"), 1)
         self.assertIn("permissions:\n  contents: read\n", workflow)
         self.assertNotIn(": write", workflow)
         self.assertNotIn("workflow_dispatch:", workflow)
         self.assertIn("on:\n  push:\n    branches: [main]\n", workflow)
-        self.assertIn("      - 'deploy/release/published/v0.1.0-rc.1.py'\n", workflow)
-        self.assertIn("TRACEBOLT_VERIFY_PUBLISHED_RC1: '1'", workflow)
-        self.assertIn("--verify-published-rc1", workflow)
-        self.assertIn("name: verified-public-linux-rc1", workflow)
+        self.assertIn("      - 'deploy/release/published/v0.1.0-rc.2.py'\n", workflow)
+        self.assertIn("TRACEBOLT_VERIFY_PUBLISHED_RC2: '1'", workflow)
+        self.assertIn("--verify-published-rc2", workflow)
+        self.assertIn("name: verified-public-linux-rc2", workflow)
         self.assertNotIn("pilot2", workflow.lower())
 
     def test_selected_release_uses_its_captured_template_with_pin_disabled(self):
@@ -162,7 +164,7 @@ class PublicReadback(unittest.TestCase):
                 v.load_bootstrap()
 
     def test_default_arguments_wrong_context_and_root_never_load_or_download(self):
-        for arguments in ([], ["--output", str(self.output)], ["--output", str(self.output), "--verify-published-rc1"],
+        for arguments in ([], ["--output", str(self.output)], ["--output", str(self.output), "--verify-published-rc2"],
                           ["--output", str(self.output), "--verify-published-pilot2"], ["--secret=do-not-print"]):
             stream = io.StringIO()
             with patch("sys.argv", ["verify-published-release.py", *arguments]), \
@@ -171,7 +173,7 @@ class PublicReadback(unittest.TestCase):
                 loader.assert_not_called()
             self.assertIn(stream.getvalue(), ("FAIL_ARGUMENTS\n", "FAIL_CONTEXT\n"))
         env = {"GITHUB_ACTIONS": "true", "GITHUB_REPOSITORY": v.REPOSITORY, "GITHUB_REF": "refs/heads/main",
-               "GITHUB_EVENT_NAME": "push", "GITHUB_JOB": "verify-published-release", "TRACEBOLT_VERIFY_PUBLISHED_RC1": "1",
+               "GITHUB_EVENT_NAME": "push", "GITHUB_JOB": "verify-published-release", "TRACEBOLT_VERIFY_PUBLISHED_RC2": "1",
                "GITHUB_WORKFLOW_REF": v.REPOSITORY + "/.github/workflows/verify-published-release.yml@refs/heads/main",
                "RUNNER_OS": "Linux", "RUNNER_ARCH": "X64", "RUNNER_TEMP": str(self.parent)}
         with patch.dict(os.environ, env, clear=True), patch.object(v.os, "getuid", return_value=0), self.assertRaisesRegex(v.Failed, "^FAIL_CONTEXT$"):
@@ -187,7 +189,7 @@ class PublicReadback(unittest.TestCase):
 
     def test_only_exact_nonroot_hosted_context_and_output_are_allowed(self):
         env = {"GITHUB_ACTIONS": "true", "GITHUB_REPOSITORY": v.REPOSITORY, "GITHUB_REF": "refs/heads/main",
-               "GITHUB_EVENT_NAME": "push", "GITHUB_JOB": "verify-published-release", "TRACEBOLT_VERIFY_PUBLISHED_RC1": "1",
+               "GITHUB_EVENT_NAME": "push", "GITHUB_JOB": "verify-published-release", "TRACEBOLT_VERIFY_PUBLISHED_RC2": "1",
                "GITHUB_WORKFLOW_REF": v.REPOSITORY + "/.github/workflows/verify-published-release.yml@refs/heads/main",
                "RUNNER_OS": "Linux", "RUNNER_ARCH": "X64", "RUNNER_TEMP": str(self.parent)}
         original_stat = Path.stat
@@ -210,7 +212,7 @@ class PublicReadback(unittest.TestCase):
                     v.check_context(self.output, True)
             with self.assertRaisesRegex(v.Failed, "^FAIL_CONTEXT$"):
                 v.check_context(self.output, False)
-            with patch.dict(os.environ, {"TRACEBOLT_VERIFY_PUBLISHED_RC1": "", "TRACEBOLT_VERIFY_PUBLISHED_PILOT2": "1"}), \
+            with patch.dict(os.environ, {"TRACEBOLT_VERIFY_PUBLISHED_RC2": "", "TRACEBOLT_VERIFY_PUBLISHED_PILOT2": "1"}), \
                  self.assertRaisesRegex(v.Failed, "^FAIL_CONTEXT$"):
                 v.check_context(self.output, True)
             with self.assertRaisesRegex(v.Failed, "^FAIL_OUTPUT$"):

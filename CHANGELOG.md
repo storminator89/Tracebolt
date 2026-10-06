@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-10-06 — Pin rc.2 public release readback before installer activation
+
+- Capture the exact published rc.2 bootstrap and all 12 public asset size/SHA-256 pins for source a6368b0202b1efecdb6214dc34c4302d239854f7. Public downloads match every pin; the bootstrap reconstructs exactly from that source and the published source archive matches all 1,550 Git blobs/executable modes.
+- Move the existing read-only hosted verifier to explicit rc.2 context and require keyless provenance, the full manifest, both architectures' four programs and the source archive before a PASS result. No Tracebolt program or installer is executed by readback. Preserve historical rc.1 and pilot.2 bootstrap bytes.
+- GitHub reports the prerelease as mutable; fixed source/hash/provenance checks remain mandatory. Strict hosted public readback is still pending, and the dashboard remains on its prior pin until that result is verified. No host configuration or new grant is performed by this preparation.
+
 ## 2026-10-06 — Settle initial journal-reader fixture effects before its single click
 
 - Await the immediate mocked authentication/status render effects before opening the service picker in the independent primary-reader stream tests. A controlled delayed passive-effect schedule reproduces the earlier lost click; the same schedule passes after the fixture setup settles.
