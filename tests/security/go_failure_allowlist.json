@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "sourceCommit": "fccc4b00cd8a144afd58e4b995747afab7a10022",
-  "goSourceSha256": "7ee4d2dea8fd404184f9febe8e3582b6d2be9757d031a725d9af083ee73ffdf4",
+  "goSourceSha256": "90fb12c394a01af279395eaa2bb1e047b11535fcaf32bd23a72f0ec7fc7dc10a",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -130,6 +130,7 @@
       "TestGuidedRuntimeRejectsUnmarkedPartialState",
       "TestGuidedThreeBinaryEnrollmentAndForeground",
       "TestManagedServiceObservationRequiresPostActionCollection",
+      "TestManagerFixtureTLSWorksWithPythonVerification",
       "TestOperationalThreeBinaryEnrollmentAndForeground",
       "TestPackagePositiveEvidenceAcceptsBoundedObservations",
       "TestPackagePositiveEvidenceAcceptsMixedOperationalMeasurements",

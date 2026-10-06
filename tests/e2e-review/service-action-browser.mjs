@@ -88,19 +88,31 @@ async function openServices(){
  await expect(selector()).toBeVisible();
 }
 async function preview(){
+ mark('await preview selector enabled');
  await expect(selector()).toBeEnabled();
+ mark('request exact preview');
  const [received]=await Promise.all([
   page.waitForResponse(value=>value.url()===base+endpoint()+'/preview'&&value.request().method()==='POST'),
   selector().click(),
- ]);expect(received.status()).toBe(200);expect(received.request().postDataJSON()).toEqual({unit:'fixture.service'});
- const value=await body(received);expect(value.preview).not.toBeNull();
+ ]);
+ mark('assert preview HTTP status');expect(received.status()).toBe(200);
+ mark('assert exact preview request');expect(received.request().postDataJSON()).toEqual({unit:'fixture.service'});
+ mark('read preview response');const value=await body(received);
+ mark('assert preview present');expect(value.preview).not.toBeNull();
  const p=value.preview;
+ mark('assert preview identity');
  expect(p.deviceId).toBe(device.deviceId);expect(p.actorId).toBe(actor);
+ mark('assert preview service action');
  expect(p.plan.unit).toBe('fixture.service');expect(p.plan.action).toBe('service.try-restart');
+ mark('assert preview transport profile');
  expect(p.transportProfile).toBe('disposable-http-test');
- await expect(review()).toBeVisible();await expect(review()).toBeFocused();
+ mark('await preview visible');await expect(review()).toBeVisible();
+ mark('await preview focused');await expect(review()).toBeFocused();
+ mark('assert preview disclosure');
  for(const text of [device.deviceId,actor,'fixture.service','service.try-restart','interrupt the service and its dependents','Disposable HTTP test'])await expect(review()).toContainText(text);
+ mark('assert fresh preview consent');
  await expect(review().getByRole('checkbox',{name:'I accept the interruption risk for this exact action.',exact:true})).not.toBeChecked();
+ mark('assert unapproved preview disabled');
  await expect(review().getByRole('button',{name:'Approve try-restart',exact:true})).toBeDisabled();
  return {previewId:p.id,previewDigest:p.digest};
 }
@@ -156,13 +168,15 @@ try{
   await expect(page.locator('.app-shell')).toBeVisible();
   const session=await read('/api/auth/session');expect(session.authenticated).toBe(true);expect(session.loginMode).toBe('named');expect(session.insecureTestMode).toBe(true);expect(session.capabilities).toContain('restart_service');actor=session.actorId;expect(actor).toMatch(/^operator_[a-f0-9]{32}$/);
   mark('open selected inventory service');await openServices();await status(0,0,0);expect(approveRequests).toBe(0);
-  mark('review without execution');await preview();await status(0,0,0);expect(approveRequests).toBe(0);
+  mark('review without execution');await preview();mark('assert unapproved preview zero counters');await status(0,0,0);expect(approveRequests).toBe(0);
   mark('close without execution');await review().getByRole('button',{name:'Close preview',exact:true}).click();await expect(review()).toHaveCount(0);await status(0,0,0);
-  mark('escape without execution');await preview();await review().getByRole('checkbox').check();await page.keyboard.press('Escape');await expect(review()).toHaveCount(0);await status(0,0,0);expect(approveRequests).toBe(0);await clean();
+  mark('escape without execution');await preview();mark('escape without execution');await review().getByRole('checkbox').check();await page.keyboard.press('Escape');await expect(review()).toHaveCount(0);await status(0,0,0);expect(approveRequests).toBe(0);await clean();
  });
 
  await check(1,async()=>{
-  mark('fresh exact preview');await control('refresh');approval=await preview();await status(0,0,0);expect(approveRequests).toBe(0);
+  mark('refresh fixture capabilities');await control('refresh');approval=await preview();
+  mark('assert fresh preview zero fixture counters');await status(0,0,0);
+  mark('assert fresh preview zero approval requests');expect(approveRequests).toBe(0);
   mark('check interruption consent');await review().getByRole('checkbox',{name:'I accept the interruption risk for this exact action.',exact:true}).check();
   mark('submit exact approval');
   const [received]=await Promise.all([

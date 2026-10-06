@@ -9,6 +9,7 @@ import (
 	"crypto/rand"
 	"crypto/tls"
 	"crypto/x509"
+	"crypto/x509/pkix"
 	"encoding/base64"
 	"encoding/json"
 	"encoding/pem"
@@ -31,23 +32,24 @@ import (
 	"time"
 )
 
-func fixture(t *testing.T, profile string) (lanconfig.Material, tls.Certificate, []byte, *x509.CertPool) {
+// Generated test-only material is shared by the native manager fixture and the
+// offline OpenSSL interoperability regression. No listener is created here.
+func fixtureTLS(t *testing.T) (caPEM, cert, keyPEM []byte, client tls.Certificate, clientPEM []byte, roots *x509.CertPool) {
 	t.Helper()
-	dir := t.TempDir()
 	now := time.Now()
 	pub, key, _ := ed25519.GenerateKey(rand.Reader)
-	ca := &x509.Certificate{SerialNumber: big.NewInt(1), NotBefore: now.Add(-time.Hour), NotAfter: now.Add(time.Hour), IsCA: true, BasicConstraintsValid: true, KeyUsage: x509.KeyUsageCertSign | x509.KeyUsageDigitalSignature}
+	ca := &x509.Certificate{Subject: pkix.Name{CommonName: "Ephemeral Tracebolt test root"}, SerialNumber: big.NewInt(1), NotBefore: now.Add(-time.Hour), NotAfter: now.Add(time.Hour), IsCA: true, BasicConstraintsValid: true, KeyUsage: x509.KeyUsageCertSign | x509.KeyUsageDigitalSignature}
 	der, e := x509.CreateCertificate(rand.Reader, ca, ca, pub, key)
 	if e != nil {
 		t.Fatal("fixture CA")
 	}
 	ca, _ = x509.ParseCertificate(der)
-	caPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der})
-	roots := x509.NewCertPool()
+	caPEM = pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der})
+	roots = x509.NewCertPool()
 	roots.AddCert(ca)
 	issue := func(n int64, role x509.ExtKeyUsage) (tls.Certificate, []byte, []byte) {
 		p, k, _ := ed25519.GenerateKey(rand.Reader)
-		leaf := &x509.Certificate{SerialNumber: big.NewInt(n), NotBefore: now.Add(-time.Minute), NotAfter: now.Add(time.Hour), KeyUsage: x509.KeyUsageDigitalSignature, ExtKeyUsage: []x509.ExtKeyUsage{role}, IPAddresses: []net.IP{net.ParseIP("127.0.0.1")}}
+		leaf := &x509.Certificate{Subject: pkix.Name{CommonName: "Ephemeral Tracebolt test leaf"}, SerialNumber: big.NewInt(n), NotBefore: now.Add(-time.Minute), NotAfter: now.Add(time.Hour), KeyUsage: x509.KeyUsageDigitalSignature, ExtKeyUsage: []x509.ExtKeyUsage{role}, IPAddresses: []net.IP{net.ParseIP("127.0.0.1")}}
 		d, e := x509.CreateCertificate(rand.Reader, leaf, ca, p, key)
 		if e != nil {
 			t.Fatal("fixture leaf")
@@ -61,8 +63,15 @@ func fixture(t *testing.T, profile string) (lanconfig.Material, tls.Certificate,
 		}
 		return pair, cp, kp
 	}
-	_, cert, keyPEM := issue(2, x509.ExtKeyUsageServerAuth)
-	client, clientPEM, _ := issue(3, x509.ExtKeyUsageClientAuth)
+	_, cert, keyPEM = issue(2, x509.ExtKeyUsageServerAuth)
+	client, clientPEM, _ = issue(3, x509.ExtKeyUsageClientAuth)
+	return
+}
+
+func fixture(t *testing.T, profile string) (lanconfig.Material, tls.Certificate, []byte, *x509.CertPool) {
+	t.Helper()
+	dir := t.TempDir()
+	caPEM, cert, keyPEM, client, clientPEM, roots := fixtureTLS(t)
 	port := func() string {
 		l, e := net.Listen("tcp4", "127.0.0.1:0")
 		if e != nil {

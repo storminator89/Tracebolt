@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-10-06 — Make the disposable TLS fixture verifiable across clients
+
+- Give the test root and leaf certificates distinct fixed subjects. The previous empty names were accepted by Go but rejected as self-signed by Python/OpenSSL, blocking the real socket-manager capability check. Share the exact fixture generator with an offline TLS 1.3 handshake regression; wrong CA and hostname remain rejected. Production TLS, certificate verification and capability routes are unchanged.
+- Refine only fixed browser diagnostic marks around the existing service-action refresh/preview checks. Every assertion, operation and deadline remains unchanged.
+- The cancellation native scenario passed on the preceding source. Complete onboarding and helper/log/restart acceptance still require the corrected native run; no user host or release pin changes are included.
+
 ## 2026-10-06 — Preserve native setup and assertion failure categories
 
 - Keep the coordinator's existing fixed failure reason in the sanitized native result across setup, interrupted enrollment, replay and helper maintenance. Retain the primary failure when cleanup also runs.
