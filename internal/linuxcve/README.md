@@ -114,11 +114,33 @@ for supported installed sources that could not be fully evaluated. Multiple
 installed source versions do not multiply this count. It includes unsupported
 fix/status/range interpretations and failed comparisons; a not-affected `0`
 record is not an unassessed record. The UI shows this number even when there are
-zero warning matches. With interrupted or truncated work it is a lower bound.
+zero warning matches. It is a lower bound only if processing is incomplete.
+A bounded binary list or omitted warning detail does not change that count's
+completeness. Interrupted or budget-blocked checks remain pending, rather than
+being counted as uninterpretable vendor data.
+
+The v2 result adds `coverage`: exact planned/completed source-version/advisory
+check counts; executed non-memoized comparator calls (including failed calls); total matching rows and unique
+source/CVE warnings before display trimming; separate skipped-installation,
+nonstandard-version and missing-source package counts; and deduplicated vendor
+reason counts. One record can have different comparison outcomes for multiple
+installed versions, so reason subtotals can overlap. The sum of package gaps is
+`skippedPackageCount`; an eligible package with an unassessed advisory is not a
+skipped package. `evaluatedSourceCount` still means sources with at least one
+interpretable record, not fully covered source packages.
+
+`evaluationComplete` means every planned check was visited, including records
+that remain unassessed because vendor data or comparison is unusable. It never
+means complete vulnerability coverage or a secure endpoint. No matching-release
+feed record is a source gap, not a not-affected conclusion. Partial planning is
+unavailable and cannot publish invented exact progress totals.
 
 The evaluator bounds work at 3 seconds and 2,000 memoized Debian comparisons.
 It emits at most 100 version matches, 20 binaries per match, 128 binaries total,
-and 230 KiB of serialized result, with explicit truncation. Each visible match
+and 230 KiB of serialized result, with explicit truncation. Display limits do not
+stop assessment; totals continue under the same CPU/comparison budgets. A true
+comparison/time cutoff reports incomplete processing and exact remaining checks.
+This first slice does not yet resume such interrupted processing. Each visible match
 retains at least one installed binary. Coverage is always partial. Feed freshness
 (48 hours) and inventory freshness (24 hours) are independent; stale evidence
 retains historical matches with stale labels. Missing or invalid prerequisites

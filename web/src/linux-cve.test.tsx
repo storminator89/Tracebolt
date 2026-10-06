@@ -6,7 +6,7 @@ import { useLinuxCVE } from './linux-cve-resource';
 import { setLocale } from './i18n';
 import { LinuxCVEPanel } from './linux-cve';
 import { LINUX_CVE_BUNDLE_BYTES, LINUX_CVE_VIEW_BYTES } from './linux-cve-types';
-import { linuxCVEDeviceId as id, linuxCVEView, missingLinuxCVEView, staleLinuxCVEView, unassessedLinuxCVEView } from './linux-cve-fixtures';
+import { linuxCVEDeviceId as id, linuxCVEView, emptyLinuxCVEView, incompleteLinuxCVEView, missingLinuxCVEView, staleLinuxCVEView, unavailableLinuxCVEView, unassessedLinuxCVEView } from './linux-cve-fixtures';
 vi.mock('./api', async original => ({ ...await original<typeof import('./api')>(), request: vi.fn() }));
 vi.mock('./auth', async original => ({ ...await original<typeof import('./auth')>(), useOperator: vi.fn() }));
 const writeSession = { mode: 'lan', transport: 'https', insecureTestMode: false, transportWarning: null, authenticationRequired: true, authenticated: true, csrfToken: 'fixture-token', serverNow: '2026-10-05T07:00:00Z', expiresAt: '2026-10-05T08:00:00Z', expiresInSeconds: 3600, loginMode: 'shared', actorId: null, capabilities: ['read'] };
@@ -47,7 +47,8 @@ describe('Linux CVE warnings panel', () => {
     });
     it('groups multiple installed versions into one CVE/source package warning', async () => {
         const view = linuxCVEView(), row = structuredClone(view.report!.findings[0]); row.installedSourceVersion = '2:1.0-0'; row.binaries[0].architecture = 'arm64'; row.binaries[0].version = '2:1.0-0'; row.publishedFixedVersion = '2:1.0-3'; view.report!.findings.push(row); view.report!.evaluatedSourceCount = 1; view.inventory!.rowCount = 2;
-        await show(view); expect(screen.getAllByRole('article')).toHaveLength(1); expect(screen.getByText('Package warnings').previousElementSibling).toHaveTextContent('1'); expect(screen.getByText('2 distribution package/version matches')).toBeVisible();
+        Object.assign(view.report!.coverage, { totalCheckCount: 2, completedCheckCount: 2, comparisonCount: 2, matchedFindingCount: 2 });
+        await show(view); expect(screen.getAllByRole('article')).toHaveLength(1); expect(screen.getByText('Package warnings').previousElementSibling).toHaveTextContent('1'); expect(screen.getByText('Matched version rows')).not.toBeVisible(); fireEvent.click(screen.getByText('Data sources and coverage')); expect(screen.getByText('Matched version rows').nextElementSibling).toHaveTextContent('2');
         expect(screen.getByText('2:1.0-0', { selector: 'dd' })).toBeVisible(); expect(screen.getByText('2:1.0-3')).toBeVisible();
     });
     it.each(['feed_missing', 'inventory_unavailable', 'not_configured', 'unsupported'] as const)('does not present unknown %s state as zero warnings', async status => {
@@ -55,24 +56,90 @@ describe('Linux CVE warnings panel', () => {
         vi.mocked(request).mockResolvedValue(view); render(<LinuxCVEPanel deviceId={id}/>); expect(await screen.findByText('Warnings unavailable')).toBeVisible(); expect(screen.queryByText(/No package\/version matches/)).not.toBeInTheDocument(); expect(screen.queryByRole('article')).not.toBeInTheDocument();
     });
     it('distinguishes evaluated empty output and stale retained matches', async () => {
-        const empty = linuxCVEView(); empty.report!.findings = []; const rendered = await show(empty); expect(screen.getByText(/No package\/version matches/)).toBeVisible(); expect(screen.getByText('Package warnings').previousElementSibling).toHaveTextContent('0');
+        const empty = emptyLinuxCVEView(); const rendered = await show(empty); expect(screen.getByText(/No package\/version matches/)).toBeVisible(); expect(screen.getByText('Package warnings').previousElementSibling).toHaveTextContent('0');
         rendered.unmount(); await show(staleLinuxCVEView()); expect(screen.getByText(/Old data: these matches describe earlier snapshots/)).toBeVisible(); expect(screen.getByRole('article')).toBeVisible(); expect(screen.getByText('3 d · Stale')).toBeVisible();
     });
     it.each([
-        ['en', '1 advisory record could not be fully evaluated.', 'Some published-fix versions are unsupported. Those records could not be fully evaluated.', 'Data sources and coverage'],
-        ['de', '1 Sicherheitshinweis konnte nicht vollständig bewertet werden.', 'Einige veröffentlichte Fix-Versionen werden nicht unterstützt. Die zugehörigen Einträge konnten nicht vollständig bewertet werden.', 'Datenquellen und Abdeckung'],
+        ['en', '1 advisory record has a data or comparison gap.', 'Some published-fix versions are unsupported. Those records could not be fully evaluated.', 'Data sources and coverage'],
+        ['de', '1 Sicherheitshinweis mit Daten- oder Vergleichslücke.', 'Einige veröffentlichte Fix-Versionen werden nicht unterstützt. Die zugehörigen Einträge konnten nicht vollständig bewertet werden.', 'Datenquellen und Abdeckung'],
     ] as const)('shows zero matches with an explicit unassessed record warning in %s', async (locale, warning, reason, details) => {
         setLocale(locale, false); vi.mocked(request).mockResolvedValue(unassessedLinuxCVEView()); render(<LinuxCVEPanel deviceId={id}/>);
         expect(await screen.findByText(warning)).toBeVisible(); expect(screen.queryByRole('article')).not.toBeInTheDocument();
         expect(screen.getByText(warning).closest('.linux-cve-summary')!.querySelector('strong')).toHaveTextContent('0');
         expect(screen.getByText(reason)).not.toBeVisible(); fireEvent.click(screen.getByText(details)); expect(screen.getByText(reason)).toBeVisible();
     });
-    it('keeps warning groups distinct from unassessed records and labels a truncated count as a lower bound', async () => {
-        const view = linuxCVEView(); view.report!.unassessedRecordCount = 2; view.report!.feed!.recordCount = 3; view.feeds.snapshots[0].recordCount = 3; view.report!.reasonCodes.push('vendor_fixed_version_unsupported'); view.report!.truncated = true;
-        await show(view); expect(screen.getByText('At least 2 advisory records could not be fully evaluated.')).toBeVisible(); expect(screen.getByText('Package warnings').previousElementSibling).toHaveTextContent('1'); expect(screen.getAllByRole('article')).toHaveLength(1);
+    it('keeps completed vendor gaps exact when binary details are omitted', async () => {
+        const view = linuxCVEView(); view.inventory!.rowCount = 1396;
+        const row = view.report!.findings[0]; view.report!.findings = Array.from({ length: 6 }, (_, index) => ({ ...structuredClone(row), cveId: `CVE-2026-${999990 + index}`, advisoryUrl: `https://security-tracker.debian.org/tracker/CVE-2026-${999990 + index}`, binariesTruncated: true }));
+        view.report!.unassessedRecordCount = 627; view.report!.feed!.recordCount = 633; view.feeds.snapshots[0].recordCount = 633;
+        view.report!.reasonCodes.push('vendor_fixed_version_unsupported', 'binary_limit_exceeded'); view.report!.truncated = true;
+        Object.assign(view.report!.coverage, { totalCheckCount: 633, completedCheckCount: 633, matchedFindingCount: 6, matchedWarningCount: 6, unassessedReasons: [{ reason: 'vendor_fixed_version_unsupported', count: 627 }] });
+        await show(view); expect(screen.getByText('627 advisory records have data or comparison gaps.')).toBeVisible(); expect(screen.getByText('Package warnings').previousElementSibling).toHaveTextContent(/^6$/); expect(screen.getAllByRole('article')).toHaveLength(6);
+        expect(screen.queryByRole('alert')).not.toBeInTheDocument(); expect(screen.queryByText(/lower bound|At least|Processing incomplete/)).not.toBeInTheDocument();
+        expect(screen.getByText('Completed / planned checks')).not.toBeVisible(); expect(screen.getByText('Received dpkg rows')).not.toBeVisible();
+        fireEvent.click(screen.getByText('Data sources and coverage'));
+        expect(screen.getByText('Completed / planned checks').nextElementSibling).toHaveTextContent('633 / 633'); expect(screen.getByText('Received dpkg rows').nextElementSibling).toHaveTextContent('1,396');
+        expect(screen.getByRole('list', { name: 'Unassessed records by reason' })).toHaveTextContent('627'); expect(screen.getByText(/Display details were omitted/)).toBeVisible();
+    });
+    it.each([
+        ['en', 'Processing incomplete:', '17 checks pending.', 'Comparison limit reached.', 'Data sources and coverage'],
+        ['de', 'Verarbeitung unvollständig:', '17 Prüfungen ausstehend.', 'Vergleichsgrenze erreicht.', 'Datenquellen und Abdeckung'],
+    ] as const)('shows a compact actionable processing alert with accurate pending checks in %s', async (locale, title, pending, action, details) => {
+        setLocale(locale, false); vi.mocked(request).mockResolvedValue(incompleteLinuxCVEView()); render(<LinuxCVEPanel deviceId={id}/>);
+        const alert = await screen.findByRole('alert'); expect(alert).toHaveTextContent(title); expect(alert).toHaveTextContent(pending); expect(alert).toHaveTextContent(action);
+        expect(screen.getByRole('article')).toBeVisible(); expect(screen.getByLabelText(locale === 'en' ? 'At least 1' : 'Mindestens 1')).toHaveTextContent('≥ 1');
+        expect(screen.queryByText(/advisory records? (?:has|have) (?:a )?data or comparison gap/)).not.toBeInTheDocument();
+        const disclosure = screen.getByText(details).closest('details')!; expect(disclosure).not.toHaveAttribute('open');
+        fireEvent.click(screen.getByText(details)); expect(disclosure).toHaveAttribute('open');
+    });
+    it('describes refresh as a new assessment only after an interruption, never as budget resumption', async () => {
+        const view = incompleteLinuxCVEView(); view.report!.reasonCodes = view.report!.reasonCodes.filter(reason => reason !== 'comparison_limit_exceeded'); view.report!.reasonCodes.push('evaluation_canceled_or_timed_out');
+        const rendered = await show(view); expect(screen.getByRole('alert')).toHaveTextContent('Refresh to start a new assessment.');
+        rendered.unmount(); await show(incompleteLinuxCVEView()); expect(screen.getByRole('alert')).not.toHaveTextContent('Refresh'); expect(screen.getByRole('alert')).toHaveTextContent('Comparison limit reached.');
+    });
+    it('uses lower bounds for vendor gaps only while checks remain pending', async () => {
+        const view = incompleteLinuxCVEView(); view.report!.unassessedRecordCount = 2; view.report!.reasonCodes.push('vendor_fixed_version_unsupported');
+        view.report!.coverage.unassessedReasons = [{ reason: 'vendor_fixed_version_unsupported', count: 2 }];
+        await show(view); expect(screen.getByText('At least 2 advisory records have data or comparison gaps.')).toBeVisible(); expect(screen.getByText('Package warnings').previousElementSibling).toHaveTextContent('≥ 1');
+        expect(screen.getByRole('alert')).toHaveTextContent('17 checks pending.');
+    });
+    it('does not claim checked records or an evaluated zero when processing is incomplete', async () => {
+        const view = incompleteLinuxCVEView(); view.report!.findings = []; view.report!.coverage.matchedFindingCount = 0; view.report!.coverage.matchedWarningCount = 0;
+        await show(view); expect(screen.getByText('No matches found so far. Checks remain pending.')).toBeVisible();
+        expect(screen.queryByText(/Planned checks finished|No package\/version matches in the loaded records/)).not.toBeInTheDocument();
+        expect(screen.getByText('Package warnings').previousElementSibling).toHaveTextContent('≥ 0');
+    });
+    it.each([false, true])('uses total warning counts when matched rows are omitted (all=%s)', async all => {
+        const view = linuxCVEView(); view.report!.truncated = true; view.report!.reasonCodes.push('finding_limit_exceeded');
+        view.report!.feed!.recordCount = 110; view.feeds.snapshots[0].recordCount = 110;
+        Object.assign(view.report!.coverage, { totalCheckCount: 110, completedCheckCount: 110, matchedFindingCount: 110, matchedWarningCount: 110 });
+        if (all) view.report!.findings = [];
+        await show(view); expect(screen.getByText('Package warnings').previousElementSibling).toHaveTextContent(/^110$/);
+        expect(screen.getByText(all ? 'Warning details were omitted from this response.' : 'Some warning cards are omitted from this response.')).toBeVisible();
+        expect(screen.queryByText(/No package\/version matches|At least|lower bound/)).not.toBeInTheDocument(); expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    });
+    it('distinguishes omitted versions within a displayed warning from omitted warning cards', async () => {
+        const view = linuxCVEView(); view.inventory!.rowCount = 2; view.report!.truncated = true; view.report!.reasonCodes.push('response_byte_limit_exceeded');
+        Object.assign(view.report!.coverage, { totalCheckCount: 2, completedCheckCount: 2, matchedFindingCount: 2 });
+        await show(view); expect(screen.getByText('Some matched version details are omitted.')).toBeVisible(); expect(screen.queryByText('Some warning cards are omitted from this response.')).not.toBeInTheDocument();
+        expect(screen.getByText('Package warnings').previousElementSibling).toHaveTextContent(/^1$/);
+    });
+    it('discloses package gaps compactly and keeps their breakdown collapsed', async () => {
+        const view = emptyLinuxCVEView(); view.inventory!.rowCount = 3; view.report!.skippedPackageCount = 3; view.report!.evaluatedSourceCount = 0;
+        Object.assign(view.report!.coverage, { totalCheckCount: 0, completedCheckCount: 0, comparisonCount: 0, packageGaps: { installationIncomplete: 1, nonstandardVersion: 1, sourceMissing: 1 } });
+        view.report!.reasonCodes.push('package_installation_incomplete', 'nonstandard_package_version', 'source_package_not_in_import');
+        await show(view); expect(screen.getByText('3 package rows could not be assessed.')).toBeVisible(); expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+        expect(screen.getByText('Rows without matching-release records')).not.toBeVisible(); fireEvent.click(screen.getByText('Data sources and coverage'));
+        for (const label of ['Incomplete installation rows', 'Nonstandard version rows', 'Rows without matching-release records']) expect(screen.getByText(label).nextElementSibling).toHaveTextContent(/^1$/);
+        expect(screen.getByText('A missing vendor record does not mean the package is safe.')).toBeVisible();
+    });
+    it('keeps zero unavailable coverage distinct from incomplete active processing', async () => {
+        vi.mocked(request).mockResolvedValue(unavailableLinuxCVEView()); render(<LinuxCVEPanel deviceId={id}/>);
+        expect(await screen.findByText('Warnings unavailable')).toBeVisible(); expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+        expect(screen.queryByText(/No package\/version matches|Processing incomplete/)).not.toBeInTheDocument();
     });
     it('omits the unassessed warning when the count is zero', async () => {
-        await show(); expect(screen.queryByText(/advisory records? could not be fully evaluated/)).not.toBeInTheDocument();
+        await show(); expect(screen.queryByText(/advisory records? (?:has|have) (?:a )?data or comparison gap/)).not.toBeInTheDocument();
     });
     it('shows failed update with retained previous matches', async () => {
         const view = linuxCVEView(); view.feeds.outcome = 'failed'; view.feeds.failureReason = 'import_failed'; await show(view); expect(screen.getByText(/last data update failed/)).toBeVisible(); expect(screen.getByRole('article')).toBeVisible();

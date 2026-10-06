@@ -16,7 +16,8 @@ SPEC.loader.exec_module(s)
 
 def meta(mode, uid=0, gid=0, ino=1):
     return types.SimpleNamespace(st_mode=mode, st_uid=uid, st_gid=gid,
-                                 st_ino=ino, st_dev=1, st_nlink=1)
+                                 st_ino=ino, st_dev=1, st_nlink=1,
+                                 st_size=0, st_mtime_ns=1, st_ctime_ns=1)
 
 
 def status(name, loaded=False, active="inactive", enabled=False):
@@ -51,6 +52,7 @@ class Fixture:
         self.actions = []
         self.fail = None
         self.init = False
+        self.private_generation = None
         self.locked = False
         self.units = {s.AGENT_UNIT: status(s.AGENT_UNIT, True, "active" if active else "inactive", True),
                       s.SERVICE: status(s.SERVICE), s.SOCKET: status(s.SOCKET)}
@@ -115,9 +117,24 @@ class Fixture:
 
     def create(self, path, raw, gid, mode):
         self.effect("create", path)
-        s.require(path in s.CREATED_FILES and self.absent(path), "fixture-create-file")
+        s.require(path in s.BROAD_CREATED_FILES and self.absent(path), "fixture-create-file")
         self.files[path] = raw
         self.meta[path] = meta(stat.S_IFREG | mode, gid=gid)
+        self.meta[path].st_size = len(raw)
+
+    def nonce(self):
+        return "f" * 64
+
+    def commit_activation(self, pending, committed):
+        self.commit_uncertain = False
+        s.require(self.files[s.ACTIVATION] == pending, "fixture-pending-activation")
+        self.create(s.ACTIVATION_STAGE, committed, 0, 0o644)
+        self.effect("activation", "stage-fsync")
+        self.commit_uncertain = True
+        self.effect("activation", "rename")
+        self.files[s.ACTIVATION] = self.files.pop(s.ACTIVATION_STAGE)
+        self.meta[s.ACTIVATION] = self.meta.pop(s.ACTIVATION_STAGE)
+        self.effect("activation", "directory-fsync")
 
     def effect(self, kind, target):
         s.require(self.locked, "mutation-without-installer-lock")
@@ -141,6 +158,15 @@ class Fixture:
             if mode == "initialize":
                 s.require(not self.init, "create-only-consent-marker")
                 self.init = True
+                policy = json.loads(self.files[s.CLIENT_POLICY])
+                if policy["schemaVersion"] == "tracebolt.journal-content-policy.v3":
+                    gate = json.loads(self.files[s.ACTIVATION])
+                    g = dict(revision=policy["revision"], generation=policy["generation"],
+                             policyDigest="sha256:" + s.digest(self.files[s.CLIENT_POLICY]))
+                    s.require(gate["phase"] == "pending" and gate["policyGeneration"] == g and
+                              self.absent(s.ACTIVATION_STAGE) and self.private_generation is None, "fixture-initial-generation")
+                    self.private_generation = g
+                    p.update(scope=s.SCOPE_V3, policyGeneration=g)
             return s.canonical(p) + b"\n"
         elif args == ("/usr/bin/systemctl", "stop", s.AGENT_UNIT):
             self.units[s.AGENT_UNIT]["ActiveState"] = "inactive"
@@ -159,17 +185,283 @@ class Fixture:
             raise AssertionError("Unreviewed fixture command: " + repr(args))
         return b""
 
-    def plan(self, units=("demo.service",)):
-        return s.preflight(self, list(units), self.templates)[1]
+    def plan(self, units=("demo.service",), *, all_system_services=False):
+        return s.preflight(self, list(units), self.templates, all_system_services=all_system_services)[1]
 
-    def apply(self, units=("demo.service",), content=True, plaintext=None):
+    def apply(self, units=("demo.service",), content=True, plaintext=None, *, all_system_services=False):
         if plaintext is None:
             plaintext = self.manifest["profile"] == "http-test"
-        plan_hash = s.digest(s.canonical(self.plan(units)))
-        return s.apply(self, list(units), self.templates, plan_hash, content, plaintext)
+        plan_hash = s.digest(s.canonical(self.plan(units, all_system_services=all_system_services)))
+        return s.apply(self, list(units), self.templates, plan_hash, content, plaintext,
+                       all_system_services=all_system_services)
 
 
 class SetupTests(unittest.TestCase):
+    def test_broad_plan_is_explicit_read_only_and_separate_from_legacy(self):
+        f = Fixture()
+        before = copy.deepcopy(f.files)
+        plan = f.plan([], all_system_services=True)
+        self.assertEqual(f.files, before)
+        self.assertEqual(f.actions, [])
+        self.assertEqual(plan["schemaVersion"], "tracebolt.journal-helper-plan.v2")
+        self.assertEqual(plan["serviceAuthorization"], "all-system-services")
+        self.assertEqual(plan["allowUnits"], [])
+        self.assertTrue(plan["currentAndFutureSystemServices"])
+        self.assertTrue(plan["generationMetadataReported"])
+        self.assertIn("system-wide-authentication", plan["excludedSources"])
+        self.assertIn("credentials", plan["warning"])
+        self.assertEqual(set(plan["createFiles"]), s.BROAD_CREATED_FILES)
+        self.assertEqual(set(f.plan()["createFiles"]), s.CREATED_FILES)
+        for units, broad in (([], False), (["a.service"], True), ([], 1), ([], "true")):
+            with self.subTest(units=units, broad=broad), self.assertRaises(s.Rejected):
+                f.plan(units, all_system_services=broad)
+
+    def test_broad_success_initializes_pending_then_commits_before_socket(self):
+        for profile in ("tls", "http-test"):
+            f = Fixture(profile)
+            out = f.apply([], all_system_services=True)
+            with self.subTest(profile=profile):
+                self.assertTrue(out["configured"], out)
+                self.assertTrue(out["activationCommitted"])
+                self.assertEqual(out["commitState"], "committed")
+                self.assertTrue(out["agentRestarted"])
+                self.assertFalse(out["sourceVerified"])
+                self.assertFalse(out["contentRead"])
+                self.assertEqual(f.files[s.POLICY], f.files[s.CLIENT_POLICY])
+                self.assertEqual(f.files[s.DEPLOYMENT], f.files[s.CLIENT_DEPLOYMENT])
+                p = json.loads(f.files[s.POLICY])
+                self.assertEqual(p["schemaVersion"], "tracebolt.journal-content-policy.v3")
+                self.assertEqual(p["scope"], s.SCOPE_V3)
+                self.assertEqual(p["serviceAuthorization"], s.ALL_SERVICES)
+                self.assertEqual(p["allowedUnits"], [])
+                self.assertEqual(p["revision"], "1")
+                self.assertEqual(p["plaintextAcknowledged"], profile == "http-test")
+                d = json.loads(f.files[s.DEPLOYMENT])
+                self.assertEqual(d["schemaVersion"], "tracebolt.journal-helper-deployment.v2")
+                self.assertTrue(d["policyGenerationRequired"])
+                gate = json.loads(f.files[s.ACTIVATION])
+                self.assertEqual(gate["policyGeneration"], f.private_generation)
+                self.assertEqual(gate["policyGeneration"], out["policyGeneration"])
+                self.assertEqual(gate["phase"], "committed")
+                self.assertTrue(f.absent(s.ACTIVATION_STAGE))
+                self.assertLess(f.actions.index(("create", s.ACTIVATION)), f.actions.index(("create", s.POLICY)))
+                initialize = next(i for i, x in enumerate(f.actions) if x[0] == "command" and "initialize" in x[1])
+                committed = f.actions.index(("activation", "directory-fsync"))
+                enabled = f.actions.index(("command", ("/usr/bin/systemctl", "enable", "--now", s.SOCKET)))
+                self.assertLess(initialize, committed)
+                self.assertLess(committed, enabled)
+                with self.assertRaises(s.Rejected):
+                    f.plan([], all_system_services=True)
+
+    def test_broad_content_and_transport_acks_required_before_mutation(self):
+        for profile, content, plaintext in (("tls", False, False), ("tls", True, True),
+                                            ("http-test", False, True), ("http-test", True, False)):
+            f = Fixture(profile)
+            with self.subTest(profile=profile, content=content, plaintext=plaintext), self.assertRaises(s.Rejected):
+                f.apply([], content=content, plaintext=plaintext, all_system_services=True)
+            self.assertFalse(any(x[0] in ("command", "create", "mkdir", "activation") for x in f.actions))
+
+    def test_broad_initialization_requires_matching_generation_readback(self):
+        for corruption in ("missing-generation", "different-generation", "wrong-scope"):
+            f = Fixture()
+            original = f.command
+            def command(args, **kwargs):
+                raw = original(args, **kwargs)
+                if args[0] == s.BINARY and "initialize" in args:
+                    p = json.loads(raw)
+                    if corruption == "missing-generation":
+                        p.pop("policyGeneration")
+                    elif corruption == "different-generation":
+                        p["policyGeneration"]["generation"] = "a" * 64
+                    else:
+                        p["scope"] = s.SCOPE
+                    return s.canonical(p)
+                return raw
+            f.command = command
+            out = f.apply([], all_system_services=True)
+            with self.subTest(corruption=corruption):
+                self.assertFalse(out["configured"])
+                self.assertFalse(out["activationCommitted"])
+                self.assertTrue(out["retainedPartialState"])
+                self.assertFalse(out["agentRestarted"])
+                self.assertEqual(json.loads(f.files[s.ACTIVATION])["phase"], "pending")
+                self.assertNotIn(("command", ("/usr/bin/systemctl", "enable", "--now", s.SOCKET)), f.actions)
+
+    def test_broad_partial_creation_and_commit_uncertainty_retain_evidence(self):
+        for fault in (("create", s.ACTIVATION), ("create", s.CLIENT_POLICY),
+                      ("create", s.ACTIVATION_STAGE), ("activation", "stage-fsync"),
+                      ("activation", "rename"), ("activation", "directory-fsync")):
+            f = Fixture()
+            f.fail = fault
+            out = f.apply([], all_system_services=True)
+            with self.subTest(fault=fault):
+                self.assertFalse(out["configured"])
+                self.assertFalse(out["activationCommitted"])
+                self.assertTrue(out["retainedPartialState"])
+                self.assertFalse(out["agentRestarted"])
+                self.assertIn(s.ATTEMPT, f.files)
+                self.assertEqual(f.units[s.AGENT_UNIT]["ActiveState"], "inactive")
+                self.assertNotIn(("command", ("/usr/bin/systemctl", "enable", "--now", s.SOCKET)), f.actions)
+                if fault in (("activation", "rename"), ("activation", "directory-fsync")):
+                    self.assertEqual(out["commitState"], "commit-uncertain")
+                if fault == ("activation", "directory-fsync"):
+                    self.assertEqual(json.loads(f.files[s.ACTIVATION])["phase"], "committed")
+                with self.assertRaises(s.Rejected):
+                    f.plan([], all_system_services=True)
+
+    def test_broad_post_commit_failure_keeps_commit_distinct_from_configuration(self):
+        f = Fixture()
+        f.fail = ("command", ("/usr/bin/systemctl", "daemon-reload"))
+        out = f.apply([], all_system_services=True)
+        self.assertFalse(out["configured"])
+        self.assertTrue(out["activationCommitted"])
+        self.assertEqual(out["commitState"], "committed")
+        self.assertTrue(out["retainedPartialState"])
+        self.assertFalse(out["agentRestarted"])
+
+    def test_broad_created_files_are_rechecked_before_commit(self):
+        for path in (s.POLICY, s.CLIENT_POLICY, s.DEPLOYMENT, s.ACTIVATION):
+            f = Fixture()
+            original = f.command
+            def command(args, **kwargs):
+                raw = original(args, **kwargs)
+                if args[0] == s.BINARY and "initialize" in args:
+                    f.files[path] += b" "
+                return raw
+            f.command = command
+            out = f.apply([], all_system_services=True)
+            with self.subTest(path=path):
+                self.assertFalse(out["activationCommitted"])
+                self.assertFalse(out["agentRestarted"])
+                self.assertNotIn(("activation", "rename"), f.actions)
+
+    def test_broad_account_or_activity_drift_blocks_activation(self):
+        for kind in ("helper-membership", "agent-active", "helper-active", "socket-active"):
+            f = Fixture()
+            original = f.command
+            def command(args, **kwargs):
+                raw = original(args, **kwargs)
+                if args[0] == s.BINARY and "initialize" in args:
+                    if kind == "helper-membership":
+                        f.files["/etc/group"] += b"unexpected:x:399:tracebolt-journal-reader\n"
+                    else:
+                        unit = {"agent-active": s.AGENT_UNIT, "helper-active": s.SERVICE, "socket-active": s.SOCKET}[kind]
+                        f.units[unit] = status(unit, loaded=True, active="active")
+                return raw
+            f.command = command
+            out = f.apply([], all_system_services=True)
+            with self.subTest(kind=kind):
+                self.assertFalse(out["configured"])
+                self.assertFalse(out["activationCommitted"])
+                self.assertTrue(out["retainedPartialState"])
+                self.assertFalse(out["agentRestarted"])
+                self.assertNotIn(("activation", "rename"), f.actions)
+
+    def test_broad_creation_compatible_with_existing_amendment_readiness(self):
+        import test_amend
+        f = Fixture(active=False)
+        self.assertTrue(f.apply([], all_system_services=True)["configured"])
+        # Reuse the established strict ownership/readback fixture against exactly
+        # the bytes created above, with no prior amendment transaction or archive.
+        ready = test_amend.Fixture(active=False)
+        ready.files = copy.deepcopy(f.files)
+        ready.meta = copy.deepcopy(f.meta)
+        ready.units = copy.deepcopy(f.units)
+        ready.units[s.SERVICE]["UnitFileState"] = "static"
+        for path, raw in ready.files.items():
+            if path not in ready.meta:
+                mode = 0o600 if path in (s.INSTALLER_DIR + "/ownership", s.INSTALLER_DIR + "/install.lock", s.INSTALLER_DIR + "/installation-owner.json") else 0o644
+                ready.setmeta(path, stat.S_IFREG | mode, size=len(raw))
+        link = s.UNIT_DIR + "/sockets.target.wants/" + s.SOCKET
+        ready.links = {link: s.UNIT_DIR + "/" + s.SOCKET}
+        ready.setmeta(link, stat.S_IFLNK | 0o777)
+        ready.private_generation = f.private_generation
+        a = test_amend.a
+        facts = a.inspect(s, ready, ready.templates)
+        self.assertEqual(facts["policy"]["serviceAuthorization"], s.ALL_SERVICES)
+        # The established inert amendment command fixture conservatively asks
+        # for all three units inactive; the production CLI needs only sender lock.
+        ready.units[s.SOCKET]["ActiveState"] = "inactive"
+        with ready.lock():
+            dto = a.command(s, ready, facts, "preview", facts["policy"])
+        self.assertEqual(dto["policyGeneration"], f.private_generation)
+        self.assertFalse(dto["accepted"])
+        self.assertFalse(any("journal-amendment-" in p for p in ready.meta))
+
+    def test_real_fixed_activation_commit_syscalls_and_uncertainty(self):
+        for fault in (None, "replace", "fsync", "stage-pin", "old-pin", "parent-pin"):
+            f = Fixture(active=False)
+            f.commit_activation = types.MethodType(s.Effects.commit_activation, f)
+            opened, renames, syncs = [], [], []
+            def open_dir(path, flags):
+                self.assertEqual(path, s.CONFIG_DIR)
+                self.assertEqual(flags, s.os.O_RDONLY | s.os.O_DIRECTORY | s.os.O_NOFOLLOW | s.os.O_CLOEXEC)
+                opened.append(path)
+                return 42
+            def stat_at(name, **kwargs):
+                self.assertEqual(kwargs, dict(dir_fd=42, follow_symlinks=False))
+                path = s.CONFIG_DIR + "/" + name
+                value = copy.deepcopy(f.meta[path])
+                if fault == "stage-pin" and path == s.ACTIVATION_STAGE or fault == "old-pin" and path == s.ACTIVATION:
+                    value.st_ino += 1
+                return value
+            def replace(src, dst, **kwargs):
+                self.assertEqual((src, dst, kwargs), (Path(s.ACTIVATION_STAGE).name, Path(s.ACTIVATION).name,
+                                                     dict(src_dir_fd=42, dst_dir_fd=42)))
+                renames.append((src, dst))
+                if fault == "replace":
+                    raise OSError("synthetic rename failure")
+                f.files[s.ACTIVATION] = f.files.pop(s.ACTIVATION_STAGE)
+                f.meta[s.ACTIVATION] = f.meta.pop(s.ACTIVATION_STAGE)
+                # Real rename changes ctime; it must not invalidate an otherwise
+                # identical newly published inode.
+                f.meta[s.ACTIVATION].st_ctime_ns += 1
+            def fsync(fd):
+                self.assertEqual(fd, 42)
+                syncs.append(fd)
+                if fault == "fsync":
+                    raise OSError("synthetic directory fsync failure")
+            def lstat(path):
+                self.assertEqual(path, s.CONFIG_DIR)
+                result = copy.deepcopy(f.meta[path])
+                if fault == "parent-pin":
+                    result.st_ino += 1
+                return result
+            with mock.patch.object(s.os, "open", side_effect=open_dir), \
+                 mock.patch.object(s.os, "fstat", side_effect=lambda fd: copy.deepcopy(f.meta[s.CONFIG_DIR])), \
+                 mock.patch.object(s.os, "lstat", side_effect=lstat), \
+                 mock.patch.object(s.os, "stat", side_effect=stat_at), \
+                 mock.patch.object(s.os, "replace", side_effect=replace), \
+                 mock.patch.object(s.os, "fsync", side_effect=fsync), \
+                 mock.patch.object(s.os, "close") as close:
+                result = f.apply([], all_system_services=True)
+            with self.subTest(fault=fault):
+                self.assertEqual(opened, [s.CONFIG_DIR])
+                close.assert_called_once_with(42)
+                self.assertEqual(result["configured"], fault is None, result)
+                self.assertEqual(result["activationCommitted"], fault is None)
+                self.assertEqual(len(renames), int(fault in (None, "replace", "fsync")))
+                self.assertEqual(len(syncs), int(fault in (None, "fsync")))
+                if fault is not None:
+                    self.assertTrue(result["retainedPartialState"])
+                    self.assertEqual(result["commitState"], "commit-uncertain" if fault in ("replace", "fsync") else "pending")
+                if fault == "fsync":
+                    self.assertEqual(json.loads(f.files[s.ACTIVATION])["phase"], "committed")
+
+    def test_real_activation_commit_rejects_non_phase_changes_without_writes(self):
+        f = Fixture()
+        pending = s.activation_record(f.preview, dict(revision="1", generation="f" * 64,
+                                                     policyDigest="sha256:" + "d" * 64), "pending")
+        for changed in (dict(pending, phase="pending"), dict(pending, phase="committed", deviceId="agent_" + "a" * 32)):
+            with self.subTest(changed=changed), self.assertRaises(s.Rejected):
+                s.Effects.commit_activation(f, s.canonical(pending), s.canonical(changed))
+        self.assertEqual(f.actions, [])
+
+    def test_cli_requires_exclusive_explicit_service_selection(self):
+        for argv in ([], ["--all-system-services", "--allow-unit", "demo.service"]):
+            with self.subTest(argv=argv), mock.patch.object(s.sys, "stderr"), self.assertRaises(SystemExit):
+                s.main(argv)
+
     def test_status_parses_installed_and_absent_fixed_unit_types(self):
         for name in (s.AGENT_UNIT, s.SERVICE, s.SOCKET):
             for loaded, active in ((False, "inactive"), (True, "inactive"), (True, "active")):

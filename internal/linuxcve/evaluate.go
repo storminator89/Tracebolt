@@ -19,7 +19,7 @@ import (
 // mistaken for an empty result. Only source-version comparisons are relevant;
 // a newer binary version cannot hide an older mapped source version.
 func Evaluate(ctx context.Context, snapshot *Snapshot, manifest fullinventory.Manifest, rows []linuxpackages.PackageRow, comparator assessment.VersionComparator, now time.Time) Result {
-	result := Result{SchemaVersion: ResultSchemaVersion, Status: "unavailable", Freshness: "unknown", InventoryFreshness: InventoryFreshness(manifest.CollectedAt, now), AssessedAt: now.UTC(), Findings: []Finding{}, ReasonCodes: []string{}}
+	result := Result{SchemaVersion: ResultSchemaVersion, Status: "unavailable", Freshness: "unknown", InventoryFreshness: InventoryFreshness(manifest.CollectedAt, now), AssessedAt: now.UTC(), Findings: []Finding{}, ReasonCodes: []string{}, Coverage: EvaluationCoverage{UnassessedReasons: []UnassessedReasonCount{}}}
 	reason := func(code string) { result.ReasonCodes = appendUnique(result.ReasonCodes, code) }
 	if ctx == nil || ctx.Err() != nil {
 		reason("evaluation_canceled_or_timed_out")
@@ -82,17 +82,23 @@ func Evaluate(ctx context.Context, snapshot *Snapshot, manifest fullinventory.Ma
 	groups := map[string]*group{}
 	for _, p := range rows {
 		if ctx.Err() != nil {
-			result.Truncated = true
+			// No complete work plan exists yet. Do not publish partial totals as
+			// an assessed inventory or invent an exact remaining-check count.
+			result.Status = "unavailable"
+			result.SkippedPackageCount = 0
+			result.Coverage.PackageGaps = PackageGapCounts{}
 			reason("evaluation_canceled_or_timed_out")
 			return result
 		}
 		if p.InstallState != "installed" {
 			result.SkippedPackageCount++
+			result.Coverage.PackageGaps.InstallationIncomplete++
 			reason("package_installation_incomplete")
 			continue
 		}
 		if excludedVersion(p.Version) || excludedVersion(p.SourceVersion) {
 			result.SkippedPackageCount++
+			result.Coverage.PackageGaps.NonstandardVersion++
 			reason("nonstandard_package_version")
 			continue
 		}
@@ -105,8 +111,16 @@ func Evaluate(ctx context.Context, snapshot *Snapshot, manifest fullinventory.Ma
 		g.binaries = append(g.binaries, Binary{Name: p.Name, Version: p.Version, Architecture: p.Architecture})
 	}
 	keys := make([]string, 0, len(groups))
-	for key := range groups {
+	for key, g := range groups {
 		keys = append(keys, key)
+		// Counts are derived from bounded, already validated input before any
+		// comparison starts. Different installed versions require distinct checks.
+		result.Coverage.TotalCheckCount += uint64(len(snapshot.rules[g.source]))
+		if len(snapshot.rules[g.source]) == 0 {
+			result.SkippedPackageCount += len(g.binaries)
+			result.Coverage.PackageGaps.SourceMissing += len(g.binaries)
+			reason("source_package_not_in_import")
+		}
 	}
 	sort.Strings(keys)
 	memo := map[string]int{}
@@ -136,9 +150,25 @@ func Evaluate(ctx context.Context, snapshot *Snapshot, manifest fullinventory.Ma
 	evaluated := map[string]bool{}
 	type advisoryKey struct{ source, cve string }
 	unassessed := map[advisoryKey]struct{}{}
+	unassessedByReason := map[string]map[advisoryKey]struct{}{}
+	unassessedRecord := func(key advisoryKey, code string) {
+		unassessed[key] = struct{}{}
+		if unassessedByReason[code] == nil {
+			unassessedByReason[code] = map[advisoryKey]struct{}{}
+		}
+		unassessedByReason[code][key] = struct{}{}
+		reason(code)
+	}
+	matchedWarnings := map[advisoryKey]struct{}{}
 	findingGroups := []*group{}
 	stopped := false
 	for _, key := range keys {
+		// Source gaps were already counted during planning. Once every actual
+		// check is done, do not turn a later cancellation while skipping empty
+		// sources into a contradictory completed-but-interrupted report.
+		if result.Coverage.CompletedCheckCount == result.Coverage.TotalCheckCount {
+			break
+		}
 		g := groups[key]
 		if ctx.Err() != nil {
 			reason("evaluation_canceled_or_timed_out")
@@ -147,31 +177,27 @@ func Evaluate(ctx context.Context, snapshot *Snapshot, manifest fullinventory.Ma
 		}
 		rules := snapshot.rules[g.source]
 		if len(rules) == 0 {
-			result.SkippedPackageCount += len(g.binaries)
-			reason("source_package_not_in_import")
 			continue
 		}
 		evaluatedGroup := false
 		for _, rule := range rules {
 			if ctx.Err() != nil {
-				unassessed[advisoryKey{g.source, rule.cve}] = struct{}{}
 				reason("evaluation_canceled_or_timed_out")
 				result.Truncated = true
 				stopped = true
 				break
 			}
 			if rule.reason != "" {
+				result.Coverage.CompletedCheckCount++
 				if rule.reason == "vendor_not_affected" {
 					evaluatedGroup = true
 				} else {
-					unassessed[advisoryKey{g.source, rule.cve}] = struct{}{}
-					reason(rule.reason)
+					unassessedRecord(advisoryKey{g.source, rule.cve}, rule.reason)
 				}
 				continue
 			}
 			fixed, applied, err := matchRule(rule, g.version, compare)
 			if err != nil {
-				unassessed[advisoryKey{g.source, rule.cve}] = struct{}{}
 				switch {
 				case errors.Is(err, ErrLimit):
 					reason("comparison_limit_exceeded")
@@ -182,30 +208,33 @@ func Evaluate(ctx context.Context, snapshot *Snapshot, manifest fullinventory.Ma
 					result.Truncated = true
 					stopped = true
 				default:
-					reason("debian_comparator_unavailable")
+					result.Coverage.CompletedCheckCount++
+					unassessedRecord(advisoryKey{g.source, rule.cve}, "debian_comparator_unavailable")
 				}
 				if stopped {
 					break
 				}
 				continue
 			}
+			result.Coverage.CompletedCheckCount++
 			evaluatedGroup = true
 			if !applied {
 				continue
 			}
+			result.Coverage.MatchedFindingCount++
+			matchedWarnings[advisoryKey{g.source, rule.cve}] = struct{}{}
 			if len(result.Findings) >= MaxFindings {
+				// Presentation capacity must never stop the remaining assessment.
+				// Keep counting under the unchanged comparison/time budgets.
 				reason("finding_limit_exceeded")
 				result.Truncated = true
-				stopped = true
-				break
+				continue
 			}
 			result.Findings = append(result.Findings, Finding{CVEID: rule.cve, SourcePackage: g.source, InstalledSourceVersion: g.version, PublishedFixedVersion: fixed, Basis: "distribution_package_version_match", AdvisoryURL: rule.advisoryURL, Binaries: []Binary{}})
 			findingGroups = append(findingGroups, g)
 		}
 		if evaluatedGroup {
 			evaluated[g.source] = true
-		} else {
-			result.SkippedPackageCount += len(g.binaries)
 		}
 		if stopped {
 			break
@@ -213,6 +242,15 @@ func Evaluate(ctx context.Context, snapshot *Snapshot, manifest fullinventory.Ma
 	}
 	result.EvaluatedSourceCount = len(evaluated)
 	result.UnassessedRecordCount = len(unassessed)
+	result.Coverage.EvaluationComplete = result.Coverage.CompletedCheckCount == result.Coverage.TotalCheckCount
+	result.Coverage.ComparisonCount = comparisons
+	result.Coverage.MatchedWarningCount = len(matchedWarnings)
+	for code, records := range unassessedByReason {
+		result.Coverage.UnassessedReasons = append(result.Coverage.UnassessedReasons, UnassessedReasonCount{Reason: code, Count: len(records)})
+	}
+	sort.Slice(result.Coverage.UnassessedReasons, func(i, j int) bool {
+		return result.Coverage.UnassessedReasons[i].Reason < result.Coverage.UnassessedReasons[j].Reason
+	})
 	// First reserve one installed binary per finding; distribute remaining space
 	// only afterward. Every visible finding remains tied to an installed row.
 	binaryRows := 0
@@ -234,7 +272,7 @@ func Evaluate(ctx context.Context, snapshot *Snapshot, manifest fullinventory.Ma
 	}
 	// Field lengths are independently bounded, but many maximum-length Debian
 	// versions can still exceed the UI budget. Trim only whole match rows and
-	// expose the lower bound; never silently shorten an identity or version.
+	// retain the pre-trim totals; never silently shorten an identity or version.
 	for {
 		encoded, err := json.Marshal(result)
 		if err == nil && len(encoded) <= MaxResultBytes {

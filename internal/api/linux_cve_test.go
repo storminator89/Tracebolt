@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"localrmm/internal/enrollmentstore"
 	"localrmm/internal/fullinventory"
 	"localrmm/internal/inventoryledger"
@@ -372,5 +373,29 @@ func TestLinuxCVEImportedFeedPersistsThroughAPIAndRestart(t *testing.T) {
 	after := state.feeds.View(now.Add(time.Minute)).Snapshots[0]
 	if before.SHA256 != after.SHA256 || !before.FetchedAt.Equal(after.FetchedAt) || !before.ExpiresAt.Equal(after.ExpiresAt) || after.Trust != "operator_imported_unverified" {
 		t.Fatal("restart reset source identity, age or trust")
+	}
+}
+
+func TestLinuxCVECoverageUsesEveryInventoryPageWithoutConflatingDisplayLimits(t *testing.T) {
+	now := time.Now().UTC()
+	rows := make([]linuxpackages.PackageRow, 1396)
+	for i := range rows {
+		rows[i] = linuxpackages.PackageRow{Name: "fixture-binary-" + fmt.Sprintf("%04d", i), Version: "2:1.0-1+b1", Architecture: "amd64", SourcePackage: "fixture", SourceVersion: "2:1.0-1", SourceMapping: "source-field", InstallState: "installed"}
+	}
+	f := cveFixture(t, now, rows)
+	state := newLinuxCVEState(f, func() time.Time { return now })
+	if _, err := state.feeds.Import(context.Background(), strings.NewReader(cveBundle(now.Add(-time.Hour))), now); err != nil {
+		t.Fatal(err)
+	}
+	w, out := readCVEFixture(t, f, state, nil)
+	if w.Code != 200 || out.Report == nil || out.Inventory == nil || out.Inventory.RowCount != 1396 || f.pages != (1396+inventoryledger.MaxPageRows-1)/inventoryledger.MaxPageRows {
+		t.Fatal("complete generation was not read", w.Code, f.pages)
+	}
+	r := out.Report
+	if r.SchemaVersion != "tracebolt.linux-cve-result.v2" || !r.Coverage.EvaluationComplete || r.Coverage.TotalCheckCount != 1 || r.Coverage.CompletedCheckCount != 1 || r.Coverage.MatchedWarningCount != 1 || !r.Truncated || len(r.Findings) != 1 || !r.Findings[0].BinariesTruncated || r.UnassessedRecordCount != 0 {
+		t.Fatalf("binary display limit changed processing coverage: %+v", r)
+	}
+	if len(w.Body.Bytes()) > 256<<10 || f.reads != 2 {
+		t.Fatal("response budget or authority recheck changed")
 	}
 }

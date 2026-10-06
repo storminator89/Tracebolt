@@ -12,8 +12,10 @@ const operator = { mode: 'lan' as const, authenticated: true, expiresAt: '2026-1
 const path = `/devices/${linuxCVEDeviceId}/security/cves`, packages = vi.fn(), updates = vi.fn();
 function current() {
     const value = linuxCVEView(true); value.inventory!.rowCount = 1396;
-    value.report!.findings = Array.from({ length: 6 }, (_, index) => ({ ...structuredClone(value.report!.findings[0]), cveId: `CVE-2026-99999${index}`, advisoryUrl: `https://security-tracker.debian.org/tracker/CVE-2026-99999${index}` }));
-    value.report!.feed!.recordCount = value.feeds.snapshots[0].recordCount = 6;
+    value.report!.findings = Array.from({ length: 6 }, (_, index) => ({ ...structuredClone(value.report!.findings[0]), cveId: `CVE-2026-99999${index}`, advisoryUrl: `https://security-tracker.debian.org/tracker/CVE-2026-99999${index}`, binariesTruncated: true }));
+    value.report!.feed!.recordCount = value.feeds.snapshots[0].recordCount = 633;
+    value.report!.unassessedRecordCount = 627; value.report!.truncated = true; value.report!.reasonCodes.push('vendor_fixed_version_unsupported', 'binary_limit_exceeded');
+    Object.assign(value.report!.coverage, { totalCheckCount: 633, completedCheckCount: 633, matchedFindingCount: 6, matchedWarningCount: 6, unassessedReasons: [{ reason: 'vendor_fixed_version_unsupported', count: 627 }] });
     return value;
 }
 const workspace = (sessionKey = 'first') => <DeviceSecurityWorkspace deviceId={linuxCVEDeviceId} sessionKey={sessionKey} onOpenPackages={packages} onOpenUpdates={updates}/>;
@@ -25,9 +27,12 @@ describe('one current Security source', () => {
     it('shows the complete 1,396-row inventory and six current warnings without the contradictory 222-row legacy summary', async () => {
         render(workspace()); await screen.findByRole('article', { name: 'CVE-2026-999990: fixture' });
         expect(screen.getByText('Received dpkg rows').nextElementSibling).toHaveTextContent('1,396');
+        expect(screen.getByText('Received dpkg rows')).not.toBeVisible();
         expect(screen.getByText('Package warnings').previousElementSibling).toHaveTextContent('6');
         expect(screen.getByText('Inventory age').nextElementSibling).toHaveTextContent('1 min');
-        expect(screen.getByText('Only the loaded records were checked.')).toBeVisible();
+        expect(screen.getByText('Planned checks finished. Coverage remains limited.')).toBeVisible();
+        expect(screen.getByText('627 advisory records have data or comparison gaps.')).toBeVisible(); expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+        fireEvent.click(screen.getByText('Data sources and coverage')); expect(screen.getByText('Completed / planned checks').nextElementSibling).toHaveTextContent('633 / 633');
         expect(screen.queryByText('222')).not.toBeInTheDocument(); expect(document.body.textContent).not.toMatch(/adapter is not implemented|No package matching/);
         expect(vi.mocked(request).mock.calls.map(([target]) => target)).toEqual([path]); expect(mutateRaw).not.toHaveBeenCalled();
         fireEvent.click(screen.getByRole('button', { name: 'Open Packages' })); expect(packages).toHaveBeenCalledOnce();
@@ -77,6 +82,7 @@ describe('one current Security source', () => {
     it('uses German navigation, authoritative counts and coverage labels', async () => {
         setLocale('de', false); render(workspace()); await screen.findByText('Paketwarnungen');
         expect(screen.getByText('Empfangene dpkg-Zeilen').nextElementSibling).toHaveTextContent('1.396');
+        expect(screen.getByText('Empfangene dpkg-Zeilen')).not.toBeVisible(); expect(screen.getByText('627 Sicherheitshinweise mit Daten- oder Vergleichslücken.')).toBeVisible();
         expect(screen.getByRole('button', { name: 'Pakete öffnen' })).toBeVisible(); expect(screen.getByRole('button', { name: 'Updates öffnen' })).toBeVisible();
         expect(screen.queryByRole('heading', { name: 'Ältere Inventarbelege' })).not.toBeInTheDocument();
     });

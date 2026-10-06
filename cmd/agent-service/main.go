@@ -27,6 +27,8 @@ func run(ctx context.Context, args []string, out, errOut io.Writer, backend agen
 	f := flag.NewFlagSet("agent-service", flag.ContinueOnError)
 	f.SetOutput(io.Discard)
 	action := f.String("action", "install", "install, upgrade, restart or uninstall")
+	expectedAgentOrigin := f.String("require-agent-origin", "", "Bind the read-admin preflight to its explicitly approved public agent ingress origin; requires --require-complete-profile")
+	requireComplete := f.Bool("require-complete-profile", false, "Require a fresh managed-operations-v3 bootstrap before account or service changes; this validation does not grant optional scopes")
 	pendingService := f.Bool("pending-service", false, "Explicit fresh v2 installation whose saved committed claim can wait for approval in the background; no observations before activation")
 	resume := f.Bool("resume", false, "Resume the exact owned retained installation; never reset identity or change its bootstrap")
 	apply := f.Bool("apply", false, "Explicitly apply the reviewed system account/service/file changes; default is read-only preflight")
@@ -46,7 +48,7 @@ func run(ctx context.Context, args []string, out, errOut io.Writer, backend agen
 		fmt.Fprintln(errOut, "Tracebolt service request rejected. Use the documented fixed-path flags; no shell command or invitation argument is accepted.")
 		return 2
 	}
-	r := agentinstall.Request{Action: agentinstall.Action(*action), Apply: *apply, PendingService: *pendingService, Resume: *resume, AgentBinary: *agent, AgentSHA256: *agentHash, EnrollBinary: *enroll, EnrollSHA256: *enrollHash, SourceArchive: *source, SourceSHA256: *sourceHash, BootstrapFile: *bootstrap, BootstrapSHA256: *bootstrapHash, InsecureHTTPTest: *insecure}
+	r := agentinstall.Request{Action: agentinstall.Action(*action), Apply: *apply, PendingService: *pendingService, RequireCompleteProfile: *requireComplete, ExpectedAgentOrigin: *expectedAgentOrigin, Resume: *resume, AgentBinary: *agent, AgentSHA256: *agentHash, EnrollBinary: *enroll, EnrollSHA256: *enrollHash, SourceArchive: *source, SourceSHA256: *sourceHash, BootstrapFile: *bootstrap, BootstrapSHA256: *bootstrapHash, InsecureHTTPTest: *insecure}
 	online := *managerOrigin != "" || *invitationID != "" || *serverCA != ""
 	if online && (!*apply || r.Action != agentinstall.Install || *bootstrap != "" || *managerOrigin == "" || *invitationID == "") {
 		fmt.Fprintln(errOut, "Online public bootstrap retrieval requires explicit --apply, install action, exact manager origin and public invitation ID; it cannot be combined with --bootstrap. No download or temporary file was created. Use a local --bootstrap for read-only planning.")

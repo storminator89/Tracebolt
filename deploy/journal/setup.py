@@ -12,6 +12,7 @@ import json
 import os
 from pathlib import Path
 import re
+import secrets
 import selectors
 import signal
 import stat
@@ -40,13 +41,18 @@ CLIENT_POLICY = CONFIG_DIR + "/journal-client-policy.json"
 DEPLOYMENT = CONFIG_DIR + "/journal-helper.json"
 CLIENT_DEPLOYMENT = CONFIG_DIR + "/journal-client-helper.json"
 ATTEMPT = CONFIG_DIR + "/journal-setup-attempt.json"
+ACTIVATION = CONFIG_DIR + "/journal-activation.json"
+ACTIVATION_STAGE = CONFIG_DIR + "/.journal-activation.tmp"
 # Frozen direct-write allowlist. Account database and socket/enablement effects
 # belong only to the fixed useradd/systemctl calls below; no arbitrary commands.
 CREATED_FILES = frozenset((ATTEMPT, POLICY, CLIENT_POLICY, DEPLOYMENT,
                           CLIENT_DEPLOYMENT, UNIT_DIR + "/" + SERVICE,
                           UNIT_DIR + "/" + SOCKET))
+BROAD_CREATED_FILES = CREATED_FILES | frozenset((ACTIVATION, ACTIVATION_STAGE))
 CREATE_DIRS = frozenset((CONFIG_DIR,))
 SCOPE = "on-demand-allowlisted-system-service-log-content"
+SCOPE_V3 = "on-demand-system-service-log-content"
+ALL_SERVICES = "all-system-services"
 PROFILE = "managed-operations-v3"
 ENV = {"PATH": "/usr/sbin:/usr/bin:/sbin:/bin", "LANG": "C", "LC_ALL": "C",
        "SYSTEMD_PAGER": "cat", "SYSTEMD_COLORS": "0"}
@@ -214,13 +220,13 @@ def owned_unit(s, name, active=None):
             s["ActiveState"] in ((active,) if active else ("active", "inactive", "failed")))
 
 
-def preview(raw, expected, mode="preview"):
+def preview(raw, expected, mode="preview", *, policy_generation=None):
     fields = ("schemaVersion", "mode", "scope", "senderBinding", "managerOrigin", "transportProfile",
               "collectionProfile", "deviceId", "certificateHash", "agentUid", "agentGid",
               "initialized", "existingStatePreserved")
-    p = strict_json(raw, fields)
+    p = strict_json(raw, fields + (("policyGeneration",) if policy_generation else ()))
     require(p["schemaVersion"] == "tracebolt.journal-consent-result.v1" and p["mode"] == mode and
-            p["scope"] == SCOPE and p["collectionProfile"] == PROFILE and
+            p["scope"] == (SCOPE_V3 if policy_generation else SCOPE) and p["collectionProfile"] == PROFILE and
             p["transportProfile"] == expected["profile"] and p["managerOrigin"] == expected["origin"] and
             p["agentUid"] == expected["uid"] and p["agentGid"] == expected["gid"] and
             type(p["agentUid"]) is int and type(p["agentGid"]) is int and
@@ -228,22 +234,46 @@ def preview(raw, expected, mode="preview"):
             valid_digest(p["senderBinding"]) and valid_digest(p["certificateHash"]) and
             isinstance(p["deviceId"], str) and re.fullmatch(r"agent_[0-9a-f]{32}", p["deviceId"]),
             "stopped-agent-preview")
+    require(p.get("policyGeneration") == policy_generation, "initialized-policy-generation")
     return p
 
 
-def declarations(p, helper_uid, helper_gid, journal_gid, units):
+def declarations(p, helper_uid, helper_gid, journal_gid, units, *, all_system_services=False, generation=None):
+    require(type(all_system_services) is bool and
+            (not units and valid_digest(generation) if all_system_services else generation is None),
+            "explicit-service-profile")
     require(all(valid_id(n) for n in (helper_uid, helper_gid, journal_gid)) and
             helper_uid != p["agentUid"] and len({helper_gid, journal_gid, p["agentGid"]}) == 3,
             "helper-numeric-identity")
     d = dict(schemaVersion="tracebolt.journal-helper-deployment.v1", helperUid=helper_uid,
              helperGid=helper_gid, journalGid=journal_gid, agentUid=p["agentUid"], agentGid=p["agentGid"])
-    policy = dict(schemaVersion="tracebolt.journal-content-policy.v1", scope=SCOPE,
-                  collectionProfile=PROFILE, senderBinding=p["senderBinding"], managerOrigin=p["managerOrigin"],
+    policy = dict(schemaVersion="tracebolt.journal-content-policy.v1")
+    if all_system_services:
+        d.update(schemaVersion="tracebolt.journal-helper-deployment.v2", policyGenerationRequired=True)
+        policy.update(schemaVersion="tracebolt.journal-content-policy.v3", revision="1", generation=generation,
+                      scope=SCOPE_V3, serviceAuthorization=ALL_SERVICES)
+    else:
+        policy["scope"] = SCOPE
+    policy.update(collectionProfile=PROFILE, senderBinding=p["senderBinding"], managerOrigin=p["managerOrigin"],
                   transportProfile=p["transportProfile"], agentUid=p["agentUid"], helperUid=helper_uid,
-                  allowedUnits=selected_units(units), maxWindowSeconds=3600, maxLookbackSeconds=86400,
+                  allowedUnits=[] if all_system_services else selected_units(units), maxWindowSeconds=3600, maxLookbackSeconds=86400,
                   maxPriority=7, enabled=True, contentAcknowledged=True,
                   plaintextAcknowledged=p["transportProfile"] == "http-test")
     return canonical(d), canonical(policy)
+
+
+def activation_record(p, generation, phase):
+    return dict(schemaVersion="tracebolt.journal-activation.v1", phase=phase,
+                senderBinding=p["senderBinding"], deviceId=p["deviceId"],
+                certificateHash=p["certificateHash"], policyGeneration=generation)
+
+
+def checked_created_file(e, path, raw, gid, mode):
+    before = e.metadata(path)
+    require(stat.S_ISREG(before.st_mode) and before.st_uid == 0 and before.st_gid == gid and
+            stat.S_IMODE(before.st_mode) == mode and before.st_nlink == 1 and
+            e.read(path, 16384, mode) == raw and same_file(before, e.metadata(path)), "created-artifact-changed")
+    return before
 
 
 class Effects:
@@ -348,7 +378,7 @@ class Effects:
             os.close(fd)
 
     def create(self, path, raw, gid, mode):
-        require(path in CREATED_FILES and len(raw) <= 16384 and mode in (0o600, 0o640, 0o644), "fixed-create-file")
+        require(path in BROAD_CREATED_FILES and len(raw) <= 16384 and mode in (0o600, 0o640, 0o644), "fixed-create-file")
         self.protected_dir(str(Path(path).parent))
         fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600)
         try:
@@ -367,6 +397,39 @@ class Effects:
             os.fsync(d)
         finally:
             os.close(d)
+
+    def nonce(self):
+        return secrets.token_hex(32)
+
+    def commit_activation(self, pending, committed):
+        # Only this newly created activation can be replaced. No policy edit,
+        # recovery/adoption path or caller-selected destination is exposed.
+        self.commit_uncertain = False
+        old, new = strict_json(pending), strict_json(committed)
+        require(old.get("phase") == "pending" and new == dict(old, phase="committed"), "fixed-activation-commit")
+        before = checked_created_file(self, ACTIVATION, pending, 0, 0o644)
+        self.create(ACTIVATION_STAGE, committed, 0, 0o644)
+        staged = checked_created_file(self, ACTIVATION_STAGE, committed, 0, 0o644)
+        require(same_file(before, checked_created_file(self, ACTIVATION, pending, 0, 0o644)), "pending-activation-changed")
+        self.protected_dir(CONFIG_DIR)
+        directory = os.open(CONFIG_DIR, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC)
+        try:
+            parent = os.fstat(directory)
+            require(same_file(parent, os.lstat(CONFIG_DIR)) and
+                    same_file(staged, os.stat(Path(ACTIVATION_STAGE).name, dir_fd=directory, follow_symlinks=False)) and
+                    same_file(before, os.stat(Path(ACTIVATION).name, dir_fd=directory, follow_symlinks=False)),
+                    "activation-commit-changed")
+            self.commit_uncertain = True
+            os.replace(Path(ACTIVATION_STAGE).name, Path(ACTIVATION).name,
+                       src_dir_fd=directory, dst_dir_fd=directory)
+            os.fsync(directory)
+            actual = checked_created_file(self, ACTIVATION, committed, 0, 0o644)
+            require(all(getattr(staged, key) == getattr(actual, key) for key in
+                        ("st_dev", "st_ino", "st_uid", "st_gid", "st_mode", "st_nlink", "st_size", "st_mtime_ns")) and
+                    same_file(os.fstat(directory), os.lstat(CONFIG_DIR)) and self.absent(ACTIVATION_STAGE),
+                    "committed-activation-changed")
+        finally:
+            os.close(directory)
 
 
 def read_templates(e):
@@ -427,7 +490,9 @@ def inspect_agent(e, templates):
                 active=s["ActiveState"] == "active", users=users, groups=groups)
 
 
-def preflight(e, units, templates):
+def preflight(e, units, templates, *, all_system_services=False):
+    require(type(all_system_services) is bool and (not units if all_system_services else True), "explicit-service-profile")
+    units = [] if all_system_services else selected_units(units)
     existing = inspect_agent(e, templates)
     require(HELPER not in existing["users"] and HELPER not in existing["groups"], "existing-helper-account")
     groups = existing["groups"]
@@ -452,7 +517,7 @@ def preflight(e, units, templates):
     plan = dict(schemaVersion="tracebolt.journal-helper-plan.v1", managerOrigin=existing["origin"],
                 transportProfile=existing["profile"], agentUid=existing["uid"], agentGid=existing["gid"],
                 agentManifest=existing["manifest"], ownerHash=existing["ownerHash"],
-                allowUnits=selected_units(units), maxWindowSeconds=3600, maxLookbackSeconds=86400,
+                allowUnits=units, maxWindowSeconds=3600, maxLookbackSeconds=86400,
                 maxPriority=7, helperAccount=HELPER, helperIds="allocated-by-system-useradd",
                 journalGid=journal_gid, senderBinding="resolved-from-stopped-nonroot-preview-during-apply",
                 templateHashes={k: digest(v) for k, v in templates.items()},
@@ -461,10 +526,18 @@ def preflight(e, units, templates):
                 warning="Log messages may contain credentials and personal data. Masking is best effort, never secret-free.",
                 plaintextWarning=("HTTP log content is observable and the manager can be impersonated."
                                   if existing["profile"] == "http-test" else ""))
+    if all_system_services:
+        plan.update(schemaVersion="tracebolt.journal-helper-plan.v2", scope=SCOPE_V3,
+                    serviceAuthorization=ALL_SERVICES, currentAndFutureSystemServices=True,
+                    excludedSources=["kernel", "whole-system", "system-wide-authentication"],
+                    generationMetadataReported=True,
+                    failureAfterCreationKeepsAgentStopped=True,
+                    createFiles=sorted(BROAD_CREATED_FILES),
+                    warning="All current and future supported exact system services are authorized. " + plan["warning"])
     return existing, plan
 
 
-def consent_command(e, mode, facts):
+def consent_command(e, mode, facts, *, policy_generation=None):
     args = [BINARY, "--config", CONFIG, "--service-identity", f"{facts['uid']}:{facts['gid']}",
             "--journal-content-consent", mode]
     if mode == "initialize":
@@ -473,22 +546,24 @@ def consent_command(e, mode, facts):
             args.append("--ack-journal-http-plaintext")
     stage = "journal-initialize-command-failed" if mode == "initialize" else "journal-preview-command-failed"
     return preview(e.command(args, uid=facts["uid"], gid=facts["gid"], limit=8192,
-                             failure_stage=stage), facts, mode)
+                             failure_stage=stage), facts, mode, policy_generation=policy_generation)
 
 
 def same_agent(a, b):
     return all(a[k] == b[k] for k in ("manifest", "ownerHash", "uid", "gid", "profile", "origin"))
 
 
-def apply(e, units, templates, expected_plan, content_ack, plaintext_ack):
+def apply(e, units, templates, expected_plan, content_ack, plaintext_ack, *, all_system_services=False):
     require(content_ack, "content-acknowledgement-required")
     with e.lock():
-        facts, plan = preflight(e, units, templates)
+        facts, plan = preflight(e, units, templates, all_system_services=all_system_services)
         require(valid_digest(expected_plan) and digest(canonical(plan)) == expected_plan, "reviewed-plan-changed")
         require(plaintext_ack == (facts["profile"] == "http-test"), "transport-specific-acknowledgement")
         stopped = False
         result = dict(configured=False, sourceVerified=False, contentRead=False,
                       retainedPartialState=False, agentRestarted=False)
+        if all_system_services:
+            result.update(activationCommitted=False, commitState="not-started")
         error = None
         try:
             # Remember before attempting: even an uncertain stop must be reconciled.
@@ -498,6 +573,10 @@ def apply(e, units, templates, expected_plan, content_ack, plaintext_ack):
                     e.status(AGENT_UNIT)["MainPID"] == "0", "stopped-agent")
             require(same_agent(facts, inspect_agent(e, templates)), "agent-changed-after-stop")
             p = consent_command(e, "preview", facts)
+            if all_system_services:
+                # A failing mkdir/fsync can still leave a directory. Retain it
+                # and keep the sender stopped rather than infer no effects.
+                result["retainedPartialState"] = True
             e.mkdir(CONFIG_DIR)
             result["retainedPartialState"] = True
             e.create(ATTEMPT, canonical(dict(schemaVersion="tracebolt.journal-setup-attempt.v1",
@@ -511,10 +590,22 @@ def apply(e, units, templates, expected_plan, content_ack, plaintext_ack):
             hu, hg = account(users, groups, HELPER, "/nonexistent")
             require(account(users, groups, AGENT, STATE_DIR) == (facts["uid"], facts["gid"]) and
                     groups["systemd-journal"] == facts["groups"]["systemd-journal"], "unchanged-existing-accounts")
-            deployment, policy = declarations(p, hu, hg, plan["journalGid"], units)
+            nonce = e.nonce() if all_system_services else None
+            deployment, policy = declarations(p, hu, hg, plan["journalGid"], units,
+                                              all_system_services=all_system_services, generation=nonce)
+            generation = None
+            artifacts = []
+            if all_system_services:
+                generation = dict(revision="1", generation=nonce, policyDigest="sha256:" + digest(policy))
+                pending = canonical(activation_record(p, generation, "pending"))
+                committed = canonical(activation_record(p, generation, "committed"))
+                result["commitState"] = "pending"
+                e.create(ACTIVATION, pending, 0, 0o644)
+                artifacts.append((ACTIVATION, pending, 0, 0o644))
             for path, raw, gid in ((DEPLOYMENT, deployment, hg), (CLIENT_DEPLOYMENT, deployment, facts["gid"]),
                                    (POLICY, policy, hg), (CLIENT_POLICY, policy, facts["gid"])):
                 e.create(path, raw, gid, 0o640)
+                artifacts.append((path, raw, gid, 0o640))
             service = templates[SERVICE + ".in"].replace(b"@HELPER_UID@", str(hu).encode()).replace(
                 b"@HELPER_GID@", str(hg).encode()).replace(b"@JOURNAL_GID@", str(plan["journalGid"]).encode())
             socket = templates[SOCKET + ".in"].replace(b"@AGENT_GID@", str(facts["gid"]).encode())
@@ -522,8 +613,34 @@ def apply(e, units, templates, expected_plan, content_ack, plaintext_ack):
             # '@system-service' syscall groups are literal systemd syntax.
             e.create(UNIT_DIR + "/" + SERVICE, service, 0, 0o644)
             e.create(UNIT_DIR + "/" + SOCKET, socket, 0, 0o644)
-            initialized = consent_command(e, "initialize", facts)
+            if all_system_services:
+                artifacts.extend(((UNIT_DIR + "/" + SERVICE, service, 0, 0o644),
+                                  (UNIT_DIR + "/" + SOCKET, socket, 0, 0o644)))
+                pins = [checked_created_file(e, *artifact) for artifact in artifacts]
+            initialized = consent_command(e, "initialize", facts, policy_generation=generation)
             require(all(initialized[k] == p[k] for k in ("senderBinding", "deviceId", "certificateHash")), "consent-identity-changed")
+            if all_system_services:
+                fresh = inspect_agent(e, templates)
+                require(same_agent(facts, fresh) and
+                        account(fresh["users"], fresh["groups"], HELPER, "/nonexistent") == (hu, hg) and
+                        fresh["groups"]["systemd-journal"] == facts["groups"]["systemd-journal"],
+                        "agent-changed-before-activation")
+                state = e.status(AGENT_UNIT)
+                require(owned_unit(state, AGENT_UNIT, "inactive") and state["MainPID"] == "0", "stopped-agent")
+                for name in (SERVICE, SOCKET):
+                    state = e.status(name)
+                    require(absent_unit(state, name) or owned_unit(state, name, "inactive") and
+                            (name == SOCKET or state["MainPID"] == "0"), "inactive-new-helper")
+                require(all(same_file(pin, checked_created_file(e, *artifact)) for pin, artifact in zip(pins, artifacts)),
+                        "created-artifact-changed")
+                try:
+                    e.commit_activation(pending, committed)
+                    checked_created_file(e, ACTIVATION, committed, 0, 0o644)
+                except Exception:
+                    if getattr(e, "commit_uncertain", True):
+                        result["commitState"] = "commit-uncertain"
+                    raise
+                result.update(activationCommitted=True, commitState="committed", policyGeneration=generation)
             e.command(["/usr/bin/systemctl", "daemon-reload"], failure_stage="systemd-reload-command-failed")
             require(owned_unit(e.status(SERVICE), SERVICE, "inactive") and
                     owned_unit(e.status(SOCKET), SOCKET, "inactive"), "published-helper-units")
@@ -538,7 +655,7 @@ def apply(e, units, templates, expected_plan, content_ack, plaintext_ack):
         except (Rejected, OSError, ValueError, TypeError, KeyError, UnicodeError, subprocess.SubprocessError) as exc:
             error = exc if isinstance(exc, Rejected) else Rejected("local-operation-failed")
         finally:
-            if stopped and facts["active"]:
+            if stopped and facts["active"] and (not all_system_services or not result["retainedPartialState"]):
                 try:
                     # Never start over a new/uncertain installer transaction, changed
                     # ownership/identity or foreign unit. Do not bypass failed checks.
@@ -559,7 +676,10 @@ def interrupted(_signum, _frame):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--allow-unit", action="append", required=True)
+    selection = parser.add_mutually_exclusive_group(required=True)
+    selection.add_argument("--allow-unit", action="append")
+    selection.add_argument("--all-system-services", action="store_true",
+                           help="explicitly authorize all current and future supported exact system services")
     parser.add_argument("--apply", action="store_true")
     parser.add_argument("--expected-plan-sha256")
     parser.add_argument("--ack-journal-content", action="store_true")
@@ -569,7 +689,7 @@ def main(argv=None):
     signal.signal(signal.SIGTERM, interrupted)
     try:
         require(sys.platform == "linux" and os.geteuid() == 0, "root-linux-local-administration")
-        units = selected_units(args.allow_unit)
+        units = [] if args.all_system_services else selected_units(args.allow_unit)
         e = Effects()
         # Apply only a reviewed root-owned script/templates in protected ancestors.
         # Plan also needs root to inspect existing installer ownership, never keys.
@@ -577,12 +697,13 @@ def main(argv=None):
         templates = read_templates(e)
         if args.apply:
             result = apply(e, units, templates, args.expected_plan_sha256,
-                           args.ack_journal_content, args.ack_journal_http_plaintext)
+                           args.ack_journal_content, args.ack_journal_http_plaintext,
+                           all_system_services=args.all_system_services)
             print(json.dumps(result, indent=2))
             return 0 if result["configured"] and "failureStage" not in result else 1
         require(not args.expected_plan_sha256 and not args.ack_journal_content and
                 not args.ack_journal_http_plaintext, "plan-does-not-accept-apply-flags")
-        _, plan = preflight(e, units, templates)
+        _, plan = preflight(e, units, templates, all_system_services=args.all_system_services)
         print(json.dumps(dict(plan=plan, planSHA256=digest(canonical(plan))), indent=2))
         return 0
     except (Rejected, OSError, ValueError, TypeError, KeyError, UnicodeError, subprocess.SubprocessError) as exc:

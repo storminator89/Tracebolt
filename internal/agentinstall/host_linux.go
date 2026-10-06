@@ -169,6 +169,15 @@ func (b *LinuxBackend) Inspect(ctx context.Context, r Request) (HostFacts, error
 			facts.Profile = bootstrap.Profile
 		}
 	}
+	if r.Action == Install && r.RequireCompleteProfile {
+		raw, bootstrap, err := readBootstrap(ctx, r.BootstrapFile, r.BootstrapSHA256)
+		clear(raw)
+		if err != nil || bootstrap.CollectionProfile != "managed-operations-v3" || r.ExpectedAgentOrigin != "" && bootstrap.AgentOrigin != r.ExpectedAgentOrigin {
+			return facts, ErrContract
+		}
+		facts.CollectionProfile = bootstrap.CollectionProfile
+		facts.AgentOrigin = bootstrap.AgentOrigin
+	}
 	if r.Action == Install || r.Action == Upgrade {
 		v, e := VerifyInputs(ctx, r)
 		if e != nil {

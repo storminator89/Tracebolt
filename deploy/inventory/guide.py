@@ -256,9 +256,10 @@ def safe_stage(s, exc):
     return str(exc) if isinstance(exc, (Rejected, s.Rejected)) else "inventory-operation-failed"
 
 
-def run(s, e, templates, include_identity, confirm, emit):
+def run(s, e, templates, include_identity, confirm, emit, *, verify_only=False, expected_facts=None):
     keys = selected_scopes(include_identity)
     facts = inspect(s, e, templates, keys)  # No sender locks, stop or consent CLI.
+    require(expected_facts is None or unchanged(s, expected_facts, facts), "approved-installation-changed")
     result = dict(schemaVersion="tracebolt.inventory-setup-result.v1", completed=False, canceled=False,
         originalActivity=facts["active"], activity="unchanged", collectionPerformed=False,
         scopes={key: dict(before="unknown", outcome="not_attempted") for key in keys})
@@ -285,6 +286,8 @@ def run(s, e, templates, include_identity, confirm, emit):
                 require(s.owned_unit(state, s.AGENT_UNIT, "inactive") and state["MainPID"] == "0",
                         "agent-not-confirmed-stopped")
                 previews = all_previews(s, e, facts, keys, result)
+                if verify_only:
+                    require(all(p["enabled"] for p in previews.values()), "previously-completed-scope-changed")
                 # Preview is read-only; each existing enable still owns deeper
                 # spool validation. No atomic cross-scope commit is promised.
                 for key in keys:

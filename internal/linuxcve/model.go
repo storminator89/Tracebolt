@@ -15,7 +15,7 @@ import (
 
 const (
 	BundleSchemaVersion = "linux-cve-bundle-1"
-	ResultSchemaVersion = "tracebolt.linux-cve-result.v1"
+	ResultSchemaVersion = "tracebolt.linux-cve-result.v2"
 	DebianProvider      = "debian-security-tracker"
 	UbuntuProvider      = "canonical-ubuntu-osv"
 	MaxBundleBytes      = 32 << 20
@@ -100,6 +100,32 @@ type Finding struct {
 	BinariesTruncated      bool     `json:"binariesTruncated"`
 }
 
+// EvaluationCoverage separates processing progress from evidence limitations and
+// presentation bounds. A check is one installed source version / advisory pair.
+// EvaluationComplete only means every planned check was visited. It does not
+// establish vulnerability coverage or turn uninterpretable records into safe ones.
+type EvaluationCoverage struct {
+	EvaluationComplete  bool                    `json:"evaluationComplete"`
+	TotalCheckCount     uint64                  `json:"totalCheckCount"`
+	CompletedCheckCount uint64                  `json:"completedCheckCount"`
+	ComparisonCount     int                     `json:"comparisonCount"`
+	MatchedFindingCount uint64                  `json:"matchedFindingCount"`
+	MatchedWarningCount int                     `json:"matchedWarningCount"`
+	PackageGaps         PackageGapCounts        `json:"packageGaps"`
+	UnassessedReasons   []UnassessedReasonCount `json:"unassessedReasons"`
+}
+
+type PackageGapCounts struct {
+	InstallationIncomplete int `json:"installationIncomplete"`
+	NonstandardVersion     int `json:"nonstandardVersion"`
+	SourceMissing          int `json:"sourceMissing"`
+}
+
+type UnassessedReasonCount struct {
+	Reason string `json:"reason"`
+	Count  int    `json:"count"`
+}
+
 // Result rows are lossless version matches, not a distinct warning count. A UI
 // groups rows by CVEID and SourcePackage to display one warning with every
 // installed-source/fixed-version pair.
@@ -108,19 +134,20 @@ type Finding struct {
 // Status is unavailable, partial, or stale; imported subsets and unverified
 // installed origin intentionally cannot produce a complete coverage state.
 type Result struct {
-	SchemaVersion         string        `json:"schemaVersion"`
-	Status                string        `json:"status"`
-	Freshness             string        `json:"freshness"`
-	InventoryFreshness    string        `json:"inventoryFreshness"`
-	AssessedAt            time.Time     `json:"assessedAt"`
-	GenerationID          string        `json:"generationId"`
-	Feed                  *FeedMetadata `json:"feed"`
-	Findings              []Finding     `json:"findings"`
-	ReasonCodes           []string      `json:"reasonCodes"`
-	EvaluatedSourceCount  int           `json:"evaluatedSourceCount"`
-	SkippedPackageCount   int           `json:"skippedPackageCount"`
-	UnassessedRecordCount int           `json:"unassessedRecordCount"`
-	Truncated             bool          `json:"truncated"`
+	SchemaVersion         string             `json:"schemaVersion"`
+	Status                string             `json:"status"`
+	Freshness             string             `json:"freshness"`
+	InventoryFreshness    string             `json:"inventoryFreshness"`
+	AssessedAt            time.Time          `json:"assessedAt"`
+	GenerationID          string             `json:"generationId"`
+	Feed                  *FeedMetadata      `json:"feed"`
+	Findings              []Finding          `json:"findings"`
+	ReasonCodes           []string           `json:"reasonCodes"`
+	EvaluatedSourceCount  int                `json:"evaluatedSourceCount"`
+	SkippedPackageCount   int                `json:"skippedPackageCount"`
+	UnassessedRecordCount int                `json:"unassessedRecordCount"`
+	Truncated             bool               `json:"truncated"`
+	Coverage              EvaluationCoverage `json:"coverage"`
 }
 
 type StoreView struct {

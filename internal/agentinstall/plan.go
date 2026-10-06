@@ -37,19 +37,21 @@ const (
 )
 
 type Request struct {
-	Action           Action
-	Apply            bool
-	PendingService   bool
-	Resume           bool
-	AgentBinary      string
-	AgentSHA256      string
-	EnrollBinary     string
-	EnrollSHA256     string
-	BootstrapFile    string
-	InsecureHTTPTest bool
-	SourceArchive    string
-	SourceSHA256     string
-	BootstrapSHA256  string
+	Action                 Action
+	Apply                  bool
+	PendingService         bool
+	RequireCompleteProfile bool
+	ExpectedAgentOrigin    string
+	Resume                 bool
+	AgentBinary            string
+	AgentSHA256            string
+	EnrollBinary           string
+	EnrollSHA256           string
+	BootstrapFile          string
+	InsecureHTTPTest       bool
+	SourceArchive          string
+	SourceSHA256           string
+	BootstrapSHA256        string
 }
 
 // HostFacts are observations made by a trusted local preflight, never network or
@@ -57,6 +59,8 @@ type Request struct {
 type HostFacts struct {
 	Linux, SystemdAvailable, Root, AccountCompatible, InstallationOwned, EnrollmentReady bool
 	Profile                                                                              string
+	CollectionProfile                                                                    string
+	AgentOrigin                                                                          string
 	RetainedPreparation, InstallationRemoved                                             bool
 	PendingService                                                                       bool
 }
@@ -92,6 +96,12 @@ func BuildPlan(r Request, h HostFacts) (Plan, error) {
 		return Plan{}, ErrPreflight
 	}
 	if h.Profile == "tls" && r.InsecureHTTPTest {
+		return Plan{}, ErrContract
+	}
+	if r.ExpectedAgentOrigin != "" && (!r.RequireCompleteProfile || h.AgentOrigin != r.ExpectedAgentOrigin) {
+		return Plan{}, ErrContract
+	}
+	if r.RequireCompleteProfile && (r.Action != Install || h.CollectionProfile != "managed-operations-v3") {
 		return Plan{}, ErrContract
 	}
 	if r.PendingService && r.Action != Install {

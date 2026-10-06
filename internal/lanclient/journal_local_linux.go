@@ -74,6 +74,21 @@ func loadJournalLocal(m Material) (journalLocal, error) {
 	}
 	return readJournalLocal(m, uid, gid)
 }
+
+// Creation may inspect a fresh pending v3 activation without an already-created
+// generation floor. Ordinary readers still require committed activation and its
+// matching floor. Legacy creation continues to require proven activation absence.
+func loadJournalInitialLocal(m Material) (journalLocal, error) {
+	uid, gid, ok := journalAgentIdentity()
+	if !ok {
+		return journalLocal{}, errJournalDenied
+	}
+	activation, present, _, err := journalactivation.Read()
+	if err != nil || present && activation.Phase != "pending" {
+		return journalLocal{}, errJournalDenied
+	}
+	return readJournalLocalPolicyMode(m, uid, gid, present, false)
+}
 func readJournalLocal(m Material, uid, gid uint32) (journalLocal, error) {
 	return readJournalLocalPolicyMode(m, uid, gid, false, false)
 }

@@ -1,7 +1,5 @@
 {
-  "schemaVersion": 1,
-  "sourceCommit": "fccc4b00cd8a144afd58e4b995747afab7a10022",
-  "goSourceSha256": "1dc16b0d8426cba0704f95108d32f78dec75bf5177de3220628b32c2cf6d7cef",
+  "goSourceSha256": "db31a71611fc3a6b4ad5a7fbce7a58b5c4442be47752acd99e4266bb5dd51bc1",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -315,6 +313,8 @@
       "TestPendingServicePlanRequiresExplicitFreshModeAndStableResume",
       "TestPendingServiceUnitPinsModeProfileAndNumericIdentity",
       "TestPlanGatesAndRetainedIdentity",
+      "TestReadAdminNativePreflightRejectsOlderBootstrapWithoutEffects",
+      "TestReadAdminRequiresExplicitCompleteProfileBeforeEffects",
       "TestTransactionJournalAndEnrollmentBeforeStart",
       "TestUninstallNeverRequestsIdentityOrAccountDeletion",
       "TestUnitHasNoDynamicShellOrPrivilegeGrant",
@@ -454,6 +454,7 @@
       "TestLANOperatorPublicCertificateApprovalRequiresFingerprint",
       "TestLANOperatorRealTLSLoginCookieCSRFAndLogout",
       "TestLinuxCVEAdmissionIsBounded",
+      "TestLinuxCVECoverageUsesEveryInventoryPageWithoutConflatingDisplayLimits",
       "TestLinuxCVEGoFixtures",
       "TestLinuxCVEImportSessionAndFailureRetainLastGood",
       "TestLinuxCVEImportedFeedPersistsThroughAPIAndRestart",
@@ -1374,6 +1375,9 @@
       "TestInventoryNativeRejectsUnsafeResponsesWithoutStatusOrPayloadLeak",
       "TestInventoryNativeTLSAndHTTPExactRestartAll513Rows",
       "TestJournalConsentAdminCreateOnlyAndExistingLedgersUntouched",
+      "TestJournalConsentFreshBroadInitializesBothFloorsCreateOnly",
+      "TestJournalConsentFreshBroadRejectsEitherExistingDomainAndRetainsChangedAttempt",
+      "TestJournalConsentFreshBroadRejectsInvalidAuthorityBeforeFloorCreation",
       "TestJournalConsentRootOrInvalidIdentityRejected",
       "TestJournalNativeConsumesThenExactMemoryRetry",
       "TestJournalNativeDefaultOffDoesNoWork",
@@ -1529,12 +1533,17 @@
     ],
     "localrmm/internal/linuxcve": [
       "TestByteLimitAndMaximumOutputIdentities",
+      "TestCancellationAfterLastCompletedCheckDoesNotInventPendingWork",
       "TestCapsAndStableDedup",
       "TestComparisonBudgetAndCancellation",
+      "TestCompleteAssessmentWith1396PackagesAnd627VendorGaps",
+      "TestCoverageSeparatesPackageGapsAndDeduplicatesVendorReasons",
       "TestDebianNeverConfirmsUnfixedOrNotAffected",
       "TestDebianPublishedFixUsesMappedSourceAndDeduplicates",
       "TestExcludedVersionsAndIncompleteRows",
+      "TestFindingDisplayLimitDoesNotStopCoverageOrTotals",
       "TestFreshnessIndependentAndHistoricalFindingsRetained",
+      "TestInterruptedCheckRemainsPending",
       "TestInvalidDiagnosticsPreserveRejectionWithoutInputDisclosure",
       "TestInventoryMustBeCompleteBoundGeneration",
       "TestNativeDebianOrdering",
@@ -1545,6 +1554,7 @@
       "TestOfficialDirectParserPreservesUTCYearValidation",
       "TestOfficialDirectParserRejectsInvalidInput",
       "TestOfficialTrustCannotBeClaimedByImport",
+      "TestProcessingLimitReportsExactPendingChecksNotVendorGaps",
       "TestReadFailureNeverParsesPrefix",
       "TestRejectMalformedEmptyDuplicateAndInvalidTimes",
       "TestStoreConcurrentImmutableReads",
@@ -2104,5 +2114,7 @@
       "TestSupportBundleRejectsUnavailableHealthyMetric",
       "TestSystemInventoryOperatorActualTLSHTTPAllPagesAndDelayedExpiry"
     ]
-  }
+  },
+  "schemaVersion": 1,
+  "sourceCommit": "fccc4b00cd8a144afd58e4b995747afab7a10022"
 }

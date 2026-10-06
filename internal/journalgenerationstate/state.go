@@ -78,7 +78,7 @@ func decode(b []byte) (Record, error) {
 	return r, nil
 }
 
-// Initialize is create-only, and only the explicit stopped-agent amendment CLI
+// Initialize is create-only. Explicit stopped-agent initial setup or amendment
 // may call it after validating a pending root activation with the same tuple.
 func Initialize(ctx context.Context, dir string, r Record) (*State, error) {
 	if !valid(r) || r.PolicyGeneration.Revision != 1 || r.ReportSequence != 0 {

@@ -37,6 +37,14 @@ still require their own explicit approval. The detailed manual and default ready
 paths below remain valid for their stated scopes; source checks and a started pending
 process do not establish approved reporting or actual reboot acceptance.
 
+The [one-command read-admin source candidate](read-admin-onboarding.md) groups
+fresh-install inventory, network identity and current/future exact-system-service
+journal permissions under one explicit local approval. It reuses the existing
+installer/consent validators and preserves phase evidence. It is **not enabled in
+the pinned rc.1 release**; publication, pin activation and real-host acceptance
+remain separate. Existing installs and pending journal recovery are not migrated
+or reset by this fresh path.
+
 For an existing activated v3 agent, the [one-time inventory collection guide](guided-inventory-setup.md)
 can group the existing full process/mount and full cached APT grants into one
 explicit local confirmation. It checks actual installed CLI support, preserves

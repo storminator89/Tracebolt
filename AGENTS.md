@@ -60,6 +60,13 @@ file as navigation and project constraints, never as permission to act on a host
   independent durable floor, exact retry bytes, cached-only command policy,
   original metadata age and operator-only bounded paging. Fixture tests do not
   establish native Debian/Ubuntu or installed-service acceptance.
+- For the fresh one-command read-admin source candidate, read
+  `docs/read-admin-onboarding.md`. One explicit combined approval covers the
+  supported read scopes/helper only; production HTTPS remains default and HTTP
+  requires its full content-risk warning. Keep the main agent nonroot, retain
+  started/completed phase evidence, and never adopt existing or pending journal
+  state. The old published release does not contain this candidate; do not add
+  new source flags to its command or call source fixtures native acceptance.
 - For one-time existing-agent inventory consent, read
   `docs/guided-inventory-setup.md`. Its preview is nonmutating until explicit
   confirmation; existing identity-bound scope CLIs remain authoritative. Do not

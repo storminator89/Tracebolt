@@ -1,0 +1,157 @@
+# One-command Linux read-admin onboarding
+
+Status: **source candidate; not activated in the currently pinned release**.
+The existing published rc.1 bootstrap and dashboard pin are unchanged. A new
+reviewed release, provenance/public-byte checks and explicit activation are
+required before the dashboard can offer this workflow. Source/inert-fixture
+passes do not establish an installed-host, helper-source or reboot result.
+
+## Intended normal path
+
+1. The administrator copies one verified installation/registration command from
+   Add device and runs it deliberately in the endpoint's local root terminal.
+2. The command shows **one combined read-admin scope** and its exact manager,
+   source/release, expected bootstrap, account/service effects and content risks.
+   HTTPS is the default. An explicitly selected disposable HTTP test has a
+   distinct `OVER HTTP` approval including journal plaintext and impersonation.
+3. After that approval, the existing installer creates the dedicated nonroot
+   identity. The invitation is entered only at its hidden local terminal prompt.
+   The administrator compares the full public fingerprint/comparison value and
+   approves the device in the dashboard. Keep the terminal open while waiting.
+4. The same command verifies activation and installer ownership, configures the
+   existing inventory scopes and creates the separate bounded journal helper.
+   There are no per-view permission commands or additional ordinary scope prompts.
+5. The result names the installed read profile and confirmed phases. Incoming
+   reports, timestamps and actual source coverage still need the normal dashboard
+   acceptance checks. The result does not call root installation universal access.
+
+The source bootstrap's `--read-admin` option selects this path. Its required
+`--read-admin-agent-origin` is copied from the validated public bootstrap and
+shown as the exact inventory/journal destination before approval. The native
+installer checks that exact ingress alongside the bootstrap profile before any
+account/service change. The public bootstrap SHA-256 is also shown; confirmation
+uses the short `INSTALL READ ADMIN` phrase, with `OVER HTTP` only for HTTP tests. It deliberately
+uses the existing approval-waiting installer, rather than returning as soon as a
+pending background process starts. If `--pending-service` is also present in the
+source wrapper, it is not forwarded for read-admin. `agent-service` receives
+`--require-complete-profile`, a preflight-only guard requiring an exact
+`managed-operations-v3` public bootstrap before account/service changes. This
+flag does not itself authorize or configure any optional read permission.
+
+Do not add these flags to the older published rc.1 command; that bootstrap does
+not contain this implementation. No moving-branch or unverified download is a
+substitute for publishing and verifying the new release.
+
+## Exactly what the one approval covers
+
+- Dedicated non-login account, persistent endpoint identity and owned background
+  service, still running as its recorded nonroot UID/GID with empty supplementary
+  groups.
+- Existing v3 installed dpkg software, system services and visible socket
+  inventory; full visible process and mounted-filesystem generations.
+- Full cached APT candidate rows and comparison/unknown metadata. Cached-only:
+  no repository refresh, package installation or installability guarantee.
+- Hostname and visible interface names and IPv4/IPv6 addresses.
+- A separate non-login journal helper with unit-scoped access to the existing
+  systemd-journal group. Its v3 policy authorizes all supported current and
+  future **exact system-service** requests. Each request remains one supported
+  `.service`, at most one hour within the preceding 24 hours, severity 0–7.
+  Kernel, whole-system and system-wide authentication sources are excluded.
+- Transmission of these approved observations/content to the exact bound manager.
+  Journal messages may contain credentials, tokens and personal information;
+  best-effort masking is not a secret-free guarantee.
+
+Full process/mount captures retain the existing 60-second cadence; full cached
+APT retains its six-hour cadence. Original capture age, independent durable
+floors and exact retry bytes remain owned by the existing implementations.
+
+Socket-to-process visibility still has no additional privileged attribution
+helper in this candidate. It may legitimately be unavailable. Controlled service
+actions are not provisioned by this read profile; their exact target manifests,
+manager signer/trust and explicit bounded grant remain a distinct capability.
+There is no arbitrary shell, root-running main agent, sudoers, polkit, broad main
+agent group or automatic `CAP_SYS_PTRACE` grant. These capability details belong
+in the result, not repeated permission prompts on every inventory view.
+
+## Reuse, trust and bounded phases
+
+The verified bootstrap loads only a fixed set of regular source members from the
+already checksum- and provenance-verified release archive. It rechecks source
+inode, owner, mode, size and SHA-256, refuses duplicate/missing/link members, and
+loads modules in memory. It never extracts an archive path or downloads a second
+mutable implementation. No installed source dependency or new general workflow
+framework is introduced.
+
+The native installer and its existing ownership/transaction receipts remain
+responsible for installation, enrollment and activation. After installation,
+read-admin binds a small immutable intent to the exact release/manifest,
+bootstrap, installer owner, device/config identity and manager origin. It checks
+all inventory flags and the endpoint/manager journal capability contracts before
+optional grants. The existing inventory guide validates every selected preview
+before enabling any missing selection; its existing nonroot CLIs own private
+consent and spool initialization. Fresh journal setup owns its distinct account,
+policy, socket and durable activation/floor ordering.
+
+Two additional fixed phase pairs under the existing protected installer directory
+record `inventory` and `journal` as started and complete. Started is durable
+before an effect; complete is durable only after its validator/readback succeeds.
+These are completion evidence, not permission to invent missing state or roll
+back unrelated data. There is no atomic transaction spanning all filesystem,
+systemd and private-state effects. Earlier successful scopes remain recorded if a
+later phase fails. No claim of whole-backup rollback resistance is added.
+
+The final journal readback uses the existing amendment inspector and nonroot
+preview to verify paired policy/deployment copies, committed activation and the
+original identity/generation/consume-once floors. It briefly stops only the owned
+agent under the existing installer lock and restores prior activity after
+unchanged-identity/baseline validation. No actual log query or action is used as
+an onboarding probe.
+
+## Existing hosts, interruption and recovery
+
+Fresh mode refuses any existing installed or retained installer domain and any
+existing journal configuration/evidence. It never treats an older/basic/v2 grant
+as approval for this profile. Upgrading a binary alone cannot activate it.
+Existing installations keep their explicit upgrade/recovery workflows; this
+candidate intentionally does not turn an unresolved pending journal transaction
+into a fresh helper installation.
+
+An explicitly selected `--resume-read-admin` together with the same `--read-admin`
+public inputs only operates on an exact retained read-admin intent. It does not
+invoke native installation/enrollment again. Fully completed phases are
+revalidated; a revoked/disabled completed inventory scope is not silently
+re-enabled. A phase not yet started can proceed under the renewed combined plan
+approval. A started phase without a complete receipt is **uncertain** and stops
+before replay. Missing/malformed receipts, changed device, origin, release,
+bootstrap, ownership, policy copies, activation or floors are retained blockers.
+
+If interruption happened during native installation, use that installer's own
+reviewed same-identity recovery procedure. If installation committed but the
+read-admin intent was never durably created, this read-admin resume mode cannot
+adopt it. Report that narrow receipt gap and inspect the retained installation;
+do not re-enroll or delete the account/state to make the fresh command work.
+SIGKILL/power loss can interrupt a write or leave the service stopped. Status and
+failure phase must be checked; neither elapsed time nor an old receipt is proof
+that a current service or source is working.
+
+## Inert gates and remaining acceptance
+
+Tests replace all account, service, installation, source, permission and
+collection adapters. Relevant checks are:
+
+```sh
+python3 -B -m unittest discover -s deploy/onboarding -p 'test_*.py' -v
+python3 -O -B -m unittest discover -s deploy/onboarding -p 'test_*.py' -v
+python3 -B -m unittest discover -s tests/release -p 'test_*.py' -v
+python3 -B -m unittest discover -s deploy/inventory -p 'test_*.py' -v
+python3 -B -m unittest discover -s deploy/journal -p 'test_*.py' -v
+go test -race ./internal/agentinstall ./cmd/agent-service
+go test -race ./internal/journalgenerationstate ./internal/journalactivation
+```
+
+After independent review, the separately authorized disposable Linux/systemd gate
+must cover fresh HTTPS and explicit HTTP flows, cancellation, dashboard approval
+waiting, actual nonroot identity, helper readiness, incoming reports, exact-service
+visibility, interrupted phases, completed rerun, original activity restoration,
+upgrade compatibility and actual reboot. Real secrets, source log content and
+private runtime state must not appear in repository fixtures or artifacts.

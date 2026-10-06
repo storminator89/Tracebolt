@@ -287,6 +287,8 @@ jobs:
           python3 -B -m unittest discover -s tests/release -p 'test_*.py' -v
           python3 -B -m unittest discover -s deploy/journal -p 'test_*.py' -v
           python3 -B -m unittest discover -s deploy/inventory -p 'test_*.py' -v
+          python3 -B -m unittest discover -s deploy/onboarding -p 'test_*.py' -v
+          python3 -O -B -m unittest discover -s deploy/onboarding -p 'test_*.py' -v
           python3 -B -m unittest discover -s deploy/actions -p 'test_*.py' -v
           python3 -O -B -m unittest discover -s deploy/actions -p 'test_*.py' -v
       - name: Vet

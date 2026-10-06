@@ -27,6 +27,7 @@ import sys
 import tempfile
 import tarfile
 import time
+import types
 from urllib.parse import urlsplit
 
 # Set only in a reviewed immutable official bootstrap after keyless attestation.
@@ -395,6 +396,9 @@ def parse_args(argv):
     parser.add_argument("--action", choices=("install", "upgrade"), default="install")
     parser.add_argument("--apply", action="store_true", help="Explicitly authorize the existing installer operation after verification")
     parser.add_argument("--pending-service", action="store_true")
+    parser.add_argument("--read-admin", action="store_true", help="Fresh install with one explicit combined read-profile approval; wait for device approval and configure supported read scopes/helper")
+    parser.add_argument("--read-admin-agent-origin", help="Exact public bootstrap agent ingress origin included in the combined approval")
+    parser.add_argument("--resume-read-admin", action="store_true", help="Reconcile only completed phases of this exact owned read-admin installation; never replay an uncertain phase")
     parser.add_argument("--resume", action="store_true")
     parser.add_argument("--manager-origin")
     parser.add_argument("--invitation-id")
@@ -402,6 +406,20 @@ def parse_args(argv):
     parser.add_argument("--server-ca-base64")
     parser.add_argument("--insecure-http-test", action="store_true")
     args = parser.parse_args(argv)
+    require(not args.resume_read_admin or args.read_admin, "Read-admin resume requires the same explicit read-admin profile.")
+    require(not args.read_admin or args.action == "install" and not args.resume, "Read-admin is a fresh installation path; existing upgrades/native installer recovery stay separate.")
+    require(bool(args.read_admin_agent_origin) == args.read_admin, "Read-admin requires its explicit public agent ingress origin; other operations cannot add that scope.")
+    if args.read_admin:
+        ingress = urlsplit(args.read_admin_agent_origin)
+        require(len(args.read_admin_agent_origin) <= 512 and args.read_admin_agent_origin.isascii() and
+                all(32 < ord(c) < 127 for c in args.read_admin_agent_origin) and
+                (ingress.port is None or 0 < ingress.port <= 65535) and
+                not any(c in args.read_admin_agent_origin for c in "\\%\r\n\t ") and
+                ingress.scheme == ("http" if args.insecure_http_test else "https") and ingress.hostname and
+                ingress.netloc == ingress.netloc.lower() and not ingress.username and not ingress.password and
+                not ingress.path and not ingress.query and not ingress.fragment and
+                args.read_admin_agent_origin == ingress.scheme + "://" + ingress.netloc,
+                "Invalid explicitly approved agent ingress origin.")
     online = (args.manager_origin, args.invitation_id, args.bootstrap_sha256, args.server_ca_base64)
     if args.action == "install":
         require(all(online[:3]), "Installation requires the exact manager origin, public invitation ID and bootstrap SHA-256.")
@@ -428,8 +446,10 @@ def installer_command(args, directory, manifest, arch):
     for name in ("manager_origin", "invitation_id", "bootstrap_sha256", "server_ca_base64"):
         if getattr(args, name):
             command.extend(["--" + name.replace("_", "-"), getattr(args, name)])
+    if args.read_admin:
+        command.extend(["--require-complete-profile", "--require-agent-origin", args.read_admin_agent_origin])
     for name in ("pending_service", "resume", "insecure_http_test"):
-        if getattr(args, name):
+        if getattr(args, name) and not (name == "pending_service" and args.read_admin):
             command.append("--" + name.replace("_", "-"))
     return command
 
@@ -460,6 +480,86 @@ def prepare_release(directory, pin, arch, fetch=download, verifier_factory=prepa
     for name in names[:-1]:
         os.chmod(directory / name, 0o500)
     return manifest
+
+
+READ_ADMIN_SOURCES = (
+    "deploy/onboarding/read_admin.py", "deploy/inventory/guide.py", "deploy/journal/setup.py",
+    "deploy/journal/amend.py", "deploy/journal/guide.py",
+    "deploy/systemd/tracebolt-agent.service.in", "deploy/systemd/tracebolt-journal-reader.service.in",
+    "deploy/systemd/tracebolt-journal-reader.socket.in",
+)
+
+
+def read_admin_sources(directory, manifest):
+    """Load only fixed regular members from the already provenance-verified tar.
+
+    No archive extraction, extra download, arbitrary module/path or trust input.
+    Reverify the exact source inode and hash before compiling any member.
+    """
+    path = directory / f"tracebolt-{manifest['version']}-source.tar"
+    expected = manifest["assets"][path.name]
+    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC | os.O_NONBLOCK)
+    with os.fdopen(fd, "rb") as stream:
+        before = os.fstat(stream.fileno())
+        require(stat.S_ISREG(before.st_mode) and before.st_uid == os.geteuid() and before.st_nlink == 1 and
+                stat.S_IMODE(before.st_mode) == 0o600 and before.st_size == expected["size"] and
+                hashlib.file_digest(stream, "sha256").hexdigest() == expected["sha256"], "Read-admin source integrity failed.")
+        stream.seek(0)
+        contents, seen = {}, set()
+        with tarfile.open(fileobj=stream, mode="r:") as archive:
+            for member in archive:
+                require(member.name not in seen and len(seen) < 10000, "Repeated or oversized source archive rejected.")
+                seen.add(member.name)
+                if member.name not in READ_ADMIN_SOURCES:
+                    continue
+                require(member.isreg() and not member.issparse() and 0 < member.size <= 131072,
+                        "Read-admin source member rejected.")
+                source = archive.extractfile(member)
+                require(source is not None, "Read-admin source member unavailable.")
+                with source:
+                    raw = source.read(131073)
+                require(len(raw) == member.size, "Read-admin source member truncated.")
+                contents[member.name] = raw
+        after = os.fstat(stream.fileno())
+        require(all(getattr(before, k) == getattr(after, k) == getattr(os.lstat(path), k)
+                    for k in ("st_dev", "st_ino", "st_mode", "st_uid", "st_gid", "st_nlink", "st_size", "st_mtime_ns", "st_ctime_ns")),
+                "Read-admin source changed during verification.")
+    require(set(contents) == set(READ_ADMIN_SOURCES), "This release does not contain the complete reviewed read-admin workflow. No installer was run.")
+    modules = []
+    for name in READ_ADMIN_SOURCES[:5]:
+        module = types.ModuleType("tracebolt_verified_" + name.replace("/", "_").replace(".", "_"))
+        module.__file__ = "/verified-source/" + name
+        exec(compile(contents[name], module.__file__, "exec"), module.__dict__)
+        modules.append(module)
+    templates = {Path(name).name: contents[name] for name in READ_ADMIN_SOURCES[5:]}
+    return (*modules, templates)
+
+
+def run_read_admin(args, directory, manifest, arch, installer=None):
+    workflow, inventory, setup, amendment, journal_guide, templates = read_admin_sources(directory, manifest)
+    plan = workflow.make_plan(args, manifest, arch)
+    adapter = workflow.real_adapter(setup, inventory, amendment, journal_guide, templates, plan)
+    command = installer_command(args, directory, manifest, arch)
+    def interrupted(_signum, _frame):
+        # Existing setup cleanup/retain-state handlers recognize this exception.
+        # The installer temporarily replaces it with its own graceful forwarding.
+        raise setup.Rejected("interrupted")
+    previous = {signum: signal.signal(signum, interrupted) for signum in (signal.SIGINT, signal.SIGTERM)}
+    try:
+        result = workflow.run(plan, adapter, lambda: (installer or run_installer)(command),
+            inventory.confirm_terminal, inventory.emit_terminal, resume=args.resume_read_admin)
+    finally:
+        for signum, handler in previous.items():
+            signal.signal(signum, handler)
+    print(json.dumps(result, indent=2))
+    if result["canceled"]:
+        print("Canceled before installing or granting read scopes.")
+        return 0
+    if result["configurationComplete"]:
+        print("Read-admin configuration confirmed: inventory, network identity and all supported system-service journal permissions. Check incoming reports in the dashboard; capability details remain in the result above.")
+        return 0
+    print("Read-admin setup is incomplete. Keep all installation and journal evidence; inspect the reported phase before recovery.", file=sys.stderr)
+    return 1
 
 
 def run_installer(command):
@@ -562,7 +662,10 @@ def main(argv=None):
         try:
             manifest = prepare_release(directory, pin, arch)
             print("[4/4] Provenance and all selected file hashes verified. Starting the fixed-path service installer. Enter the invitation only at its hidden terminal prompt; device approval remains a separate dashboard step.", flush=True)
-            installer_result = run_installer(installer_command(args, directory, manifest, arch))
+            if args.read_admin:
+                installer_result = run_read_admin(args, directory, manifest, arch)
+            else:
+                installer_result = run_installer(installer_command(args, directory, manifest, arch))
             return installer_result
         finally:
             if not cleanup_release(directory, known):

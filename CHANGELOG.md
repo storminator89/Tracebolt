@@ -1,5 +1,17 @@
 # Changelog
 
+## 2026-10-06 — Prepare one-confirmation fresh read-admin onboarding
+
+- Add an explicit source-only fresh-install profile that combines the supported read scopes and bounded journal helper under one local content/HTTP disclosure and confirmation. Bind the exact bootstrap, manager ingress, installed identity and native complete-profile guard before progressing through existing consent adapters.
+- Preserve started/completed phase evidence, reject existing or pending journal state, initialize fresh private replay floors as the ordinary agent and keep the main agent nonroot. Completion means local configuration only, not received reports, full socket-owner visibility, service actions or native reboot acceptance.
+- Keep the published release and dashboard command pins unchanged. This candidate requires a new compatible release, verified public readback, deliberate command activation and separate native acceptance before it becomes a supported installation command.
+
+## 2026-10-06 — Separate CVE processing progress from evidence gaps
+
+- Keep the existing 2,000-comparison, three-second and response-size budgets while continuing assessment beyond display-only finding limits. Report all matched warning/version totals separately from the bounded visible details.
+- Introduce v2 coverage counters for planned and completed source-version/advisory checks, genuine pending work, package eligibility gaps and deduplicated vendor-data reasons. Binary-detail truncation no longer labels completed assessments or unassessed-record totals as lower bounds.
+- Preserve exact-release source mapping and Debian version comparison, shared-administrator feed writes and read-only assessment access. Add synthetic 1,396-package/six-warning/627-gap, real budget-cutoff and multi-page API regressions. Actual resumable processing remains a separate follow-on; no endpoint inventory is collected or sent to a vendor.
+
 ## 2026-10-06 — Read-only alarm delivery status in Settings
 
 - Show existing retained provider-accepted, pending, failed, uncertain and dropped counts for authenticated LAN readers, with explicit provider-acceptance versus human-receipt limits. Settings performs only the existing status GET on entry or deliberate refresh; it cannot configure or send alarms.

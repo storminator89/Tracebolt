@@ -361,8 +361,8 @@ func TestCapsAndStableDedup(t *testing.T) {
 	}
 	other := row("openssl-old", "openssl", "0.9-1")
 	r = evaluate(t, parse(t, DebianProvider, debianPayload("2.0-1", "resolved")), linuxpackages.Debian13, rows[0], other)
-	if len(r.Findings) != 2 {
-		t.Fatal("distinct installed source versions collapsed", r)
+	if len(r.Findings) != 2 || r.Coverage.MatchedFindingCount != 2 || r.Coverage.MatchedWarningCount != 1 || !r.Coverage.EvaluationComplete {
+		t.Fatal("distinct installed source versions or unique warning totals collapsed", r)
 	}
 }
 func TestComparisonBudgetAndCancellation(t *testing.T) {
@@ -421,6 +421,9 @@ func TestByteLimitAndMaximumOutputIdentities(t *testing.T) {
 	}
 	if !r.Truncated || !hasReason(r, "response_byte_limit_exceeded") {
 		t.Fatalf("missing explicit byte truncation: %d %+v", len(encoded), r.ReasonCodes)
+	}
+	if !r.Coverage.EvaluationComplete || r.Coverage.MatchedWarningCount != MaxFindings || r.Coverage.MatchedFindingCount != MaxFindings || r.Coverage.CompletedCheckCount != MaxFindings || len(r.Findings) >= MaxFindings {
+		t.Fatalf("byte trimming changed complete assessment totals: %+v", r.Coverage)
 	}
 }
 

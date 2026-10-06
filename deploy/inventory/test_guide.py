@@ -147,6 +147,27 @@ class Fixture(f.Fixture):
 
 
 class WorkflowTests(unittest.TestCase):
+    def test_read_admin_verify_only_never_reenables_revoked_scope(self):
+        x = Fixture()
+        x.grant("overview")
+        x.grant("identity")
+        before = x.enabled.copy()
+        result = g.run(s, x, x.templates, True, x.confirm, x.output.append, verify_only=True)
+        self.assertFalse(result["completed"])
+        self.assertEqual(result["failureStage"], "previously-completed-scope-changed")
+        self.assertEqual(x.enabled, before)
+        self.assertFalse(any(event.endswith(":enable") for event in x.events))
+        self.assertEqual(result["activity"], "restored_active")
+
+    def test_read_admin_expected_identity_checked_before_pause(self):
+        x = Fixture()
+        expected = g.inspect(s, x, x.templates, g.selected_scopes(True))
+        expected["deviceId"] = "agent_" + "f" * 32
+        with self.assertRaisesRegex(g.Rejected, "approved-installation-changed"):
+            g.run(s, x, x.templates, True, x.confirm, x.output.append, expected_facts=expected)
+        self.assertNotIn("stop", x.events)
+        self.assertEqual(x.prompts, [])
+
     def test_cancel_no_stop_lock_preview_or_validation(self):
         x = Fixture()
         x.confirm_result = False
