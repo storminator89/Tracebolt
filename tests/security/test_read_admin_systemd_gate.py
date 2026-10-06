@@ -27,7 +27,7 @@ CHECKS = ("installedServiceOwners", "v4Provenance", "revocationCompleted", "revo
           "journalContent", "serviceRestartOnline")
 STAGES = {
     "preflight", "manager_start", "operator_login", "install_enroll", "approval",
-    "initial_reports", "read_admin_cancel", "read_admin_inventory", "read_admin_journal",
+    "initial_reports", "read_admin_cancel", "read_admin_fixture_opt", "read_admin_inventory", "read_admin_journal",
     "read_admin_repeat", "read_admin_retained", "read_admin_readiness", "complete",
     "read_admin_socket", "read_admin_socket_owners", "read_admin_revoke",
     "read_admin_post_revoke",
@@ -123,6 +123,21 @@ class ReadAdminWrapperTests(unittest.TestCase):
                 error = exc.code
         opened.assert_called_once_with("fake-event.json", encoding="utf-8")
         return output.getvalue(), error
+
+    def test_opt_fixture_is_explicit_bounded_and_native_only(self):
+        self.assertIn('root-owned hosted /opt directory inode from 0777 to 0755 (no recursion)', self.source)
+        root = WORKFLOW.parents[2]
+        native = (root / 'cmd/lan-manager/read_admin_systemd_test.go').read_text()
+        helper = native.split('func readAdminPrepareDisposableOpt', 1)[1].split('func TestReadAdminOptFixturePreparationIsNarrow', 1)[0]
+        self.assertIn('unix.O_RDONLY|unix.O_DIRECTORY|unix.O_NOFOLLOW|unix.O_CLOEXEC', helper)
+        self.assertIn('unix.Fchmod(fd, 0755)', helper)
+        self.assertIn('current.Ino != after.Ino', helper)
+        self.assertNotIn('Chown', helper)
+        self.assertNotIn('Walk', helper)
+        self.assertNotIn('Remove', helper)
+        driver = (root / 'cmd/lan-manager/systemd_install_test.go').read_text()
+        self.assertIn('if readAdmin != nil {\n\t\tstage = "read_admin_fixture_opt"\n\t\treadAdminPrepareDisposableOpt(t)\n\t}', driver)
+        self.assertLess(driver.index('t.Cleanup(func()'), driver.index('readAdminPrepareDisposableOpt(t)'))
 
     def test_input_validation_job_is_isolated_and_required(self):
         validation = self.source.split("jobs:\n", 1)[1].split("  disposable-systemd:\n", 1)[0]

@@ -28,7 +28,68 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"golang.org/x/sys/unix"
 )
+
+// Only the explicitly approved fresh hosted-VM test calls the effectful helper.
+// Ordinary tests exercise this metadata decision without reading the host.
+func readAdminOptFixtureMode(mode uint32, uid, gid uint32) (bool, error) {
+	if uid != 0 || gid != 0 || mode != unix.S_IFDIR|0755 && mode != unix.S_IFDIR|0777 {
+		return false, errors.New("unsupported disposable opt fixture")
+	}
+	return mode == unix.S_IFDIR|0777, nil
+}
+
+func readAdminPrepareDisposableOpt(t *testing.T) {
+	t.Helper()
+	// GitHub's image deliberately makes /opt world-writable. Tighten only this
+	// known root-owned top inode, never its children or production installer rules.
+	fd, err := unix.Open("/opt", unix.O_RDONLY|unix.O_DIRECTORY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
+	if err != nil {
+		t.Fatal("disposable opt fixture open rejected")
+	}
+	defer unix.Close(fd)
+	var before unix.Stat_t
+	if unix.Fstat(fd, &before) != nil {
+		t.Fatal("disposable opt fixture metadata unavailable")
+	}
+	change, err := readAdminOptFixtureMode(before.Mode, before.Uid, before.Gid)
+	if err != nil {
+		t.Fatal("disposable opt fixture is not the approved root-owned directory shape")
+	}
+	if change && unix.Fchmod(fd, 0755) != nil {
+		t.Fatal("disposable opt fixture preparation failed")
+	}
+	var after, current unix.Stat_t
+	if unix.Fstat(fd, &after) != nil || unix.Lstat("/opt", &current) != nil ||
+		after.Dev != before.Dev || after.Ino != before.Ino || current.Dev != after.Dev || current.Ino != after.Ino ||
+		after.Mode != unix.S_IFDIR|0755 || current.Mode != after.Mode ||
+		after.Uid != 0 || after.Gid != 0 || current.Uid != 0 || current.Gid != 0 {
+		t.Fatal("disposable opt fixture readback failed")
+	}
+}
+
+func TestReadAdminOptFixturePreparationIsNarrow(t *testing.T) {
+	for _, tc := range []struct {
+		mode, uid, gid uint32
+		change, valid  bool
+	}{
+		{unix.S_IFDIR | 0777, 0, 0, true, true},
+		{unix.S_IFDIR | 0755, 0, 0, false, true},
+		{unix.S_IFDIR | 0775, 0, 0, false, false},
+		{unix.S_IFDIR | 01777, 0, 0, false, false},
+		{unix.S_IFDIR | 0777, 1001, 0, false, false},
+		{unix.S_IFDIR | 0777, 0, 1001, false, false},
+		{unix.S_IFLNK | 0777, 0, 0, false, false},
+		{unix.S_IFREG | 0777, 0, 0, false, false},
+	} {
+		change, err := readAdminOptFixtureMode(tc.mode, tc.uid, tc.gid)
+		if (err == nil) != tc.valid || change != tc.change {
+			t.Fatal("disposable directory fixture policy changed")
+		}
+	}
+}
 
 type readAdminNativeChecks struct {
 	InstalledServiceOwners bool `json:"installedServiceOwners"`

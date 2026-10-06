@@ -167,6 +167,10 @@ func runApprovedSystemdInstallationMode(t *testing.T, profile, collectionProfile
 		}
 		return arguments
 	}
+	if readAdmin != nil {
+		stage = "read_admin_fixture_opt"
+		readAdminPrepareDisposableOpt(t)
+	}
 	var readAdminCommand *readAdminNativeCommand
 	t.Cleanup(func() {
 		if readAdmin != nil && !readAdminStopOwnedHelper(t, readAdminCommand) {

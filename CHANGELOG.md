@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-10-06 — Prepare the approved disposable runner's installation parent
+
+- Correct the fresh native test fixture for GitHub's intentionally world-writable /opt. After explicit source-bound approval, accept only a real root:root top-level directory in mode 0777 or 0755, tighten the same open inode to 0755 when needed, and verify its owner, mode and path identity. No recursive changes or ownership changes.
+- Keep production installer checks unchanged. All three prior native scenarios identified the /opt preflight rejection; the updated manual workflow now discloses this extra disposable-VM preparation before approval. Complete fresh installation and later native checks remain pending.
+
 ## 2026-10-06 — Identify the failing installer preflight checkpoint
 
 - Carry fixed, closed preflight categories through the existing installer failureStage and sanitized native acceptance result. Distinguish tool, directory, unit-parser, bootstrap, artifact, plan and transaction-begin checks without exporting host values or raw errors.

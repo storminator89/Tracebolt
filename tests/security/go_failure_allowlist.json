@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "sourceCommit": "fccc4b00cd8a144afd58e4b995747afab7a10022",
-  "goSourceSha256": "dfeed4bd2c823e4f6cf4aab37c47973af608daf064c761efa46cf5a334612a01",
+  "goSourceSha256": "c0e70f4c5524cfabafa7375ae642fd988f4dc7272f7c57f782fac73f2e49c73c",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -146,6 +146,7 @@
       "TestReadAdminInitialProbeDiagnosticIsClosed",
       "TestReadAdminJournalReady",
       "TestReadAdminNativeSelection",
+      "TestReadAdminOptFixturePreparationIsNarrow",
       "TestReadAdminPTYInput",
       "TestReadAdminSocketProcessMatches",
       "TestSystemdDiagnosticStageAllowlist"

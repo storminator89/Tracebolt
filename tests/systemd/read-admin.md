@@ -25,7 +25,9 @@ privileged invocation:
 - `reviewed_source_commit`: the independently reviewed lowercase 40-hex source
   commit, exactly equal to the dispatched `GITHUB_SHA` and checked-out HEAD.
 - `approved_fresh_v2_read_admin_systemd`: defaults to false. Its approval covers
-  the fresh dedicated account, persistent endpoint identity, owned main service,
+  tightening only the root-owned hosted `/opt` directory inode from mode `0777`
+  to `0755` (no recursive change), then the fresh dedicated account, persistent
+  endpoint identity, owned main service,
   inventory/network grants, journal/socket-owner helper accounts/units/grants,
   bounded root-owned loopback TCP/UDP fixtures, a deliberately created bounded
   fixture log service and its exact-service content query, owned-main-service
@@ -89,11 +91,30 @@ inherited. Invitation entry stays inside the hidden local PTY path. The native
 harness must refuse missing/wrong explicit approvals, mismatched read profile or
 reviewed source, non-hosted/nonroot targets, unsupported kernel/systemd/cgroup
 conditions, unsafe fixed parents, and existing account, installer, journal or
-socket-helper domains before effects. Ordinary invocation skips before effects;
-a selected but unsupported host fails rather than silently skipping or repairing
-permissions. The native release staging directory must satisfy the production
+socket-helper domains before installation effects. Ordinary invocation skips before effects;
+a selected but unsupported host fails rather than silently skipping. The only
+explicit test-fixture preparation is the bounded `/opt` change described below;
+no general permission repair is performed. The native release staging directory must satisfy the production
 contract `/tmp/tracebolt-release-[a-z0-9_]{8}`; the runner's private build/output
 directory is a separate input.
+
+## Explicit hosted-image prerequisite
+
+The GitHub Ubuntu image's [official configuration script](https://github.com/actions/runner-images/blob/main/images/ubuntu/scripts/build/configure-system.sh)
+makes `/opt` world-writable. The production installer correctly refuses that
+writable parent for root-owned installed binaries. The source-bound fresh native
+approval now explicitly includes tightening **only the existing `/opt` directory
+inode** from root:root `0777` to `0755` on each disposable hosted VM. It is not
+permission to change a user VM, recurse into children, change ownership, or
+weaken the production installer check. An older dispatch does not approve this
+new preparation; review the updated source and checkbox before running it.
+
+The test accepts exactly root:root directory mode `0777`, or already `0755`.
+It opens the fixed path with no symlink following, changes permissions through
+that descriptor only when needed, and verifies the same inode/path, owner and
+exact final mode. Any other shape or failed readback reports
+`read_admin_fixture_opt` and stops. It never restores world-write access; the
+entire disposable VM is discarded after the run. Production code is unchanged.
 
 ## Scenario boundaries and proof limits
 
