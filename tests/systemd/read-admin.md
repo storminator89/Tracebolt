@@ -203,6 +203,17 @@ The exact twelve-field schema is:
 - `telemetryExported`: false
 - `readProfile`: exactly `tracebolt.linux-read-admin.v2`
 - `sourceCommit`: exactly the approved `GITHUB_SHA`
+- `setupFailure`: exact frozen source-literal coordinator/helper reason, `none`,
+  or `not_attempted`; arbitrary strings map to one fixed unknown-stage value.
+  Main outcome, interrupted enrollment, resumed setup and helper maintenance
+  retain the latest reason before their assertions. Passing complete setup must
+  report `none`; expected cancel/retained refusals keep their existing assertions.
+- `nativeAssertion`: on failure, the first exact allowlisted static native-test
+  assertion found in at most 1 MiB of private test output, or a fixed unavailable/
+  unknown label. Its file path, line number and all unmatched text are discarded.
+  This covers socket, journal content, service restart and cleanup assertions.
+  Successful runs report `none` without reading private output. No diagnostic
+  relaxes a scenario or acceptance check.
 - `ptraceRiskAcknowledged`: true
 - `socketNativeChecks`: exactly six strict JSON booleans, with keys
   `installedServiceOwners`, `v4Provenance`, `revocationCompleted`,
@@ -216,7 +227,8 @@ A failure may record completed partial checks using the same
 strict boolean fields but can never be interpreted as success. Relabeling an old
 schema or changing a scenario while retaining its check vector is rejected.
 
-All runtime output stays in the private VM. No wildcard upload, raw terminal or
+Raw runtime output stays in the private VM. The bounded reader projects only
+preselected static assertion labels, never arbitrary log text or errors. No wildcard upload, raw terminal or
 journal content, manager log, endpoint/socket/process metadata, key, config,
 consent, ledger, activation receipt, screenshot or crash dump is exported.
 Inspect sensitive diagnostics only within the separately authorized disposable

@@ -88,6 +88,14 @@ class InertScriptTests(unittest.TestCase):
             self.assertEqual(event['installerStage'], stage if stage in stages else '')
             self.assertNotIn('untrusted', json.dumps(event))
 
+    def test_full_setup_failure_vocabulary_survives_private_exit_event(self):
+        for stage in PTY.FAILURES - {'none', 'not_attempted'}:
+            event = PTY.exit_event(encoded(LAUNCHER.failure_result(stage)), 1, '', 1)
+            self.assertEqual(event['readAdminFailure'], stage)
+        event = PTY.exit_event(encoded(LAUNCHER.failure_result('private arbitrary detail')), 1, '', 1)
+        self.assertEqual(event['readAdminFailure'], 'read-admin-phase-incomplete')
+        self.assertNotIn('private arbitrary detail', json.dumps(event))
+
     def test_scripts_are_linux_test_only_and_compile(self):
         self.assertTrue(SOURCE.read_text().startswith('//go:build linux\n'))
         for name in ('readAdminLauncher', 'readAdminPTY'):

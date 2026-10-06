@@ -175,7 +175,8 @@ jobs:
         run: |
           set -euo pipefail
           # Only the normalized fixed-schema result can leave the VM. Root may
-          # read its umask-077 result; no private runtime log is read or exported.
+          # read its result and project exact fixed assertion labels from bounded private
+          # test output. No raw private log or arbitrary error is exported.
           TARGET="$RUNNER_TEMP/read-admin-systemd-result.json"
           if ! sudo env -i PATH=/usr/sbin:/usr/bin:/sbin:/bin LANG=C LC_ALL=C \
             /usr/bin/python3 - "$RUNNER_TEMP/tracebolt-read-admin-systemd-acceptance/read-admin-systemd-result.json" \
@@ -193,6 +194,216 @@ jobs:
                       raise ValueError('duplicate field')
                   value[key] = item
               return value
+          def native_assertion(path):
+              allowed = {
+                  'PID1 namespace unavailable',
+                  'PTY helper failed',
+                  'PTY input omitted command',
+                  'PTY input omitted required cancellation field',
+                  'actual bounded journal content request did not complete',
+                  'actual installed-service fixture owners not observed',
+                  'actual journal fixture content not returned for exact request',
+                  'actual process capability/identity/cgroup contract',
+                  'actual service observation deadline',
+                  'arbitrary output exported',
+                  'bounded TCP fixture unavailable',
+                  'bounded UDP fixture unavailable',
+                  'bounded operator query contract',
+                  'canceled enrollment published follow-on authority',
+                  'canceled installation lost its retained nonroot account',
+                  'cgroup v2 required',
+                  'confirmed setup success lost',
+                  'controlled owner rejected',
+                  'credential shape',
+                  'dedicated account missing',
+                  'default gate performed work',
+                  'disabled journal policy accepted',
+                  'disposable directory fixture policy changed',
+                  'disposable opt fixture is not the approved root-owned directory shape',
+                  'disposable opt fixture metadata unavailable',
+                  'disposable opt fixture open rejected',
+                  'disposable opt fixture preparation failed',
+                  'disposable opt fixture readback failed',
+                  'durable sequence did not advance',
+                  'explicit gate requires the approved fresh root Linux hosted runner',
+                  'explicit operator root',
+                  'explicit prebuilt artifact paths required',
+                  'explicit sanitized result path required',
+                  'explicit selection rejected',
+                  'fixed installer stage unavailable',
+                  'fixed preflight reason lost',
+                  'fixed setup reason lost',
+                  'fixture artifact bounds',
+                  'fixture artifact unavailable',
+                  'fixture process identity unavailable',
+                  'fixture state invalid',
+                  'fresh bounded journal fixture creation failed',
+                  'fresh device identity unavailable',
+                  'fresh independent collection rejected',
+                  'fresh private source staging unavailable',
+                  'fresh read-admin identity or authority changed while observing',
+                  'generation-bearing v2 journal view rejected',
+                  'graceful read-admin enrollment cancellation did not retain identity',
+                  'guided runtime not ready',
+                  'identity changed across service operation',
+                  'incorrect native process fixture accepted',
+                  'installed executable unavailable',
+                  'installer completion timeout',
+                  'interrupted journal step created or completed authority',
+                  'invalid explicit read-admin acceptance gate; no host work started',
+                  'invalid opt-in accepted',
+                  'invitation fixture failed',
+                  'journal fixture cleanup ownership changed',
+                  'journal fixture did not complete',
+                  'journal fixture entropy unavailable',
+                  'journal fixture ownership changed',
+                  'legacy journal view accepted as broad generation readiness',
+                  'local comparison does not match pending claim',
+                  'maintenance fixture config creation',
+                  'maintenance fixture config write',
+                  'maintenance fixture encoding',
+                  'managed fixture configuration',
+                  'managed fixture configuration load',
+                  'managed fixture configuration write',
+                  'managed service identity is unavailable',
+                  'managed service observation readback did not advance consistently',
+                  'managed service requires positive bounded Ubuntu package and operational observations',
+                  'managed systemd acceptance requires both explicit opt-ins',
+                  'missing collection accepted',
+                  'missing event claimed success',
+                  'missing journal generation accepted',
+                  'missing setup diagnostic changed',
+                  'native PTY fixture start',
+                  'native enrollment or private terminal boundary failed',
+                  'native fixture approval',
+                  'native hidden prompt timeout',
+                  'native manager start',
+                  'native process absent',
+                  'native process outside PID1-local namespace',
+                  'native process status unavailable',
+                  'native revoke verification failed',
+                  'native trust display or hidden prompt failed',
+                  'new helper authority reported after revocation',
+                  'new ordinary online report not observed after revoke/restart',
+                  'nonroot enabled gate silently accepted',
+                  'old sequence, generation or pre-operation collection accepted',
+                  'operator fixture login',
+                  'operator fixture read',
+                  'operator fixture read contract',
+                  'operator fixture request',
+                  'operator fixture response',
+                  'out-of-cgroup fixture accepted',
+                  'owned fixture state unavailable',
+                  'owned fixture stop failed',
+                  'owned helper containment unconfirmed; preserve state and discard VM',
+                  'owned installation file survived uninstall',
+                  'owned native agent restart failed',
+                  'owned service cleanup incomplete; discard this VM without exporting state',
+                  'partial fixture passed native ownership',
+                  'primary-only fixture rejected',
+                  'private PTY helper required',
+                  'private handoff permissions',
+                  'private setup error escaped',
+                  'private source staging entropy unavailable',
+                  'public bootstrap fixture',
+                  'public fixture encoding failed',
+                  'read-admin account already exists',
+                  'read-admin account lookup uncertain',
+                  'read-admin approved device unavailable',
+                  'read-admin artifact staging failed',
+                  'read-admin bounded PTY probe failed',
+                  'read-admin cancellation did not precede host changes',
+                  'read-admin cancellation signal failed',
+                  'read-admin combined configuration not confirmed',
+                  'read-admin committed journal authority unavailable',
+                  'read-admin dedicated agent missing',
+                  'read-admin fixture config creation',
+                  'read-admin fixture config write',
+                  'read-admin graceful cancellation timeout',
+                  'read-admin group already exists',
+                  'read-admin group lookup uncertain',
+                  'read-admin journal authority bounds',
+                  'read-admin journal authority not fresh committed v3',
+                  'read-admin privileged follow-on preceded device approval',
+                  'read-admin probe produced unexpected prompt or data',
+                  'read-admin public bootstrap scope is invalid',
+                  'read-admin public fixture encoding',
+                  'read-admin received v3 inventory or broad-journal readiness deadline; no log content queried',
+                  'read-admin requires exactly one combined local approval',
+                  'read-admin selected artifact unavailable',
+                  'read-admin selected bytes changed while staging',
+                  'read-admin sent observations before explicit device approval',
+                  'read-admin target is not fresh; preserve existing state',
+                  'read-admin test interruption not confirmed',
+                  'real installer lifecycle operation failed',
+                  'received helper source not bound to installed grant',
+                  'received socket provenance invalid',
+                  'repeated uninstall changed counter',
+                  'restart reset or failed sequence',
+                  'restarted installed service did not return online with socket provenance',
+                  'retained agent missing',
+                  'retained enrollment fixture invalid',
+                  'retained enrollment fixture missing',
+                  'retained enrollment identity missing',
+                  'retained identity comparison failed',
+                  'revoke private floor/pending/tombstone contract unconfirmed',
+                  'runner is not a fresh installation target',
+                  'running executable differs from installed artifact',
+                  'running systemd is required',
+                  'runtime config fixture',
+                  'sanitized result creation failed',
+                  'sanitized result write failed',
+                  'selected native artifact unavailable',
+                  'sender ledger invalid',
+                  'sender ledger missing',
+                  'service PID unavailable',
+                  'service account is privileged',
+                  'service credential fields missing',
+                  'service credential status unavailable',
+                  'service did not send two distinct observations',
+                  'service inactive',
+                  'service retained another real/effective/saved identity',
+                  'service retained extra supplementary groups',
+                  'socket authority predates fresh device approval',
+                  'socket helper account lookup uncertain',
+                  'socket helper account predates approval',
+                  'socket helper group lookup uncertain',
+                  'socket helper group predates approval',
+                  'socket page did not advance',
+                  'socket page/provenance generation changed',
+                  'socket revoke changed identity or journal/inventory authority',
+                  'stale journal report accepted',
+                  'test account already exists',
+                  'test account lookup failed',
+                  'test group already exists',
+                  'test group lookup failed',
+                  'unbound generation accepted',
+                  'unbounded event exported',
+                  'uncertain read-admin phase replayed or changed retained identity',
+                  'uninstall deleted retained account',
+                  'unrecognized diagnostic leaked',
+                  'unset probe',
+                  'upgrade artifacts must have different selected bytes',
+                  'upgrade reset or failed sequence',
+                  'valid cancellation diagnostic',
+                  'wrong fixture owner accepted',
+              }
+              try:
+                  fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC)
+                  with os.fdopen(fd, 'rb') as stream:
+                      info = os.fstat(stream.fileno())
+                      if not stat.S_ISREG(info.st_mode) or not 0 < info.st_size <= 1048576:
+                          return 'private-diagnostic-unavailable'
+                      raw = stream.read(1048577)
+                  if len(raw) != info.st_size or len(raw) > 1048576:
+                      return 'private-diagnostic-unavailable'
+                  for line in raw.decode('utf-8', errors='replace').splitlines():
+                      match = re.fullmatch(r'\s+[^\s/]+\.go:[0-9]+: (.+)', line)
+                      if match and match[1] in allowed:
+                          return match[1]
+                  return 'no-known-native-assertion'
+              except Exception:
+                  return 'private-diagnostic-unavailable'
           try:
               check(len(sys.argv) == 6)
               check(sys.argv[2] in {'tls', 'http-test'})
@@ -207,7 +418,7 @@ jobs:
               check(0 < len(raw) <= 4096 and len(raw) == info.st_size)
               value = json.loads(raw, object_pairs_hook=unique_object)
               check(type(value) is dict)
-              check(set(value) == {'schemaVersion', 'status', 'stage', 'profile', 'collectionProfile', 'scenario', 'osRebootTested', 'telemetryExported', 'readProfile', 'sourceCommit', 'ptraceRiskAcknowledged', 'socketNativeChecks', 'initialProbe'})
+              check(set(value) == {'schemaVersion', 'status', 'stage', 'profile', 'collectionProfile', 'scenario', 'osRebootTested', 'telemetryExported', 'readProfile', 'sourceCommit', 'ptraceRiskAcknowledged', 'socketNativeChecks', 'initialProbe', 'setupFailure'})
               check(value['schemaVersion'] == 'tracebolt.read-admin-systemd-acceptance.v2')
               check(value['profile'] == sys.argv[2])
               check(value['collectionProfile'] == 'managed-operations-v3')
@@ -225,11 +436,621 @@ jobs:
               expected = (True,) * len(keys) if value['scenario'] == 'complete' else (False,) * len(keys)
               check(value['status'] != 'pass' or value['stage'] == 'complete')
               check(value['status'] != 'pass' or tuple(checks[key] for key in keys) == expected)
+              setup_failures = frozenset('''              abort-abandoned-generation
+              abort-archive-members
+              abort-archive-metadata
+              abort-archived-activation
+              abort-legacy-authority
+              abort-original-activation
+              abort-original-backup
+              abort-original-broad-scope
+              abort-original-exact-scope
+              abort-original-operation
+              abort-original-preview
+              abort-original-transaction
+              abort-receipt-contract
+              absolute-protected-path
+              acceptance-capture-exceeded
+              acceptance-deadline-exceeded
+              acceptance-driver-rejected
+              acceptance-gate-rejected
+              acceptance-injected-before-journal
+              acceptance-launcher-arguments
+              acceptance-launcher-artifacts
+              acceptance-launcher-components
+              acceptance-launcher-config
+              acceptance-launcher-host
+              acceptance-launcher-input
+              acceptance-launcher-rejected
+              acceptance-launcher-source-loader
+              acceptance-launcher-terminal
+              acceptance-launcher-workflow
+              account-membership
+              activation-appeared
+              activation-commit-changed
+              activation-migration-mismatch
+              activation-stage-present
+              active-socket-missing
+              addition-already-authorized
+              agent-changed-after-stop
+              agent-changed-before-activation
+              agent-config-changed
+              agent-directory-changed
+              agent-executable-template
+              agent-not-confirmed-stopped
+              agent-restart-blocked-retain-state
+              agent-restart-command-failed
+              agent-restart-ownership
+              agent-restart-status
+              agent-resume-failed
+              agent-resume-not-confirmed
+              agent-stop-command-failed
+              agent-stop-failed
+              agent-upgrade-required
+              all-system-services-already-authorized
+              alternate-unit-fragment
+              approved-installation-changed
+              archive-already-exists
+              archive-metadata
+              archive-readback
+              archive-revision
+              archive-source-metadata
+              artifact-hashes
+              asymmetric-declaration-copies
+              backup-verification
+              bound-declarations
+              bounded-json
+              bounded-offline-policy
+              broad-journal-not-ready
+              canonical-policy
+              cgroup-event-limit
+              cgroup-v2-required
+              changed-protected-file
+              command-output-limit
+              command-timeout
+              committed-activation-changed
+              committed-activation-mismatch
+              compatibility-changed
+              completion-readback
+              configuration-directory
+              consent-disclosure-contract
+              consent-enable-failed
+              consent-identity-changed
+              consent-preview-failed
+              consent-result-contract
+              content-acknowledgement-required
+              create-parent-changed
+              create-parent-replaced
+              created-artifact-changed
+              created-artifact-readback
+              dedicated-account
+              deployment-members
+              deployment-migration-required
+              disable-original-policy
+              disable-policy-changed
+              disabled-policy-unconfirmed
+              disabled-private-identity-changed
+              disabled-private-readback
+              disabled-root-policy-readback
+              driver-execution-failed
+              driver-output-invalid
+              duplicate-json-member
+              enable-link-changed
+              enable-link-metadata
+              enable-not-confirmed
+              enable-readback-disabled
+              enablement-link-changed
+              enablement-link-metadata
+              existing-activated-v3-config
+              existing-deployment
+              existing-helper-account
+              existing-helper-path
+              existing-installation-use-upgrade-or-recovery
+              existing-journal-group
+              existing-journal-state-retained
+              existing-policy
+              existing-policy-disabled-separate-enable-required
+              existing-read-admin-intent
+              existing-revoke-evidence
+              existing-socket-owner-account
+              existing-socket-owner-state
+              existing-state-domain
+              existing-systemd-journal-group
+              existing-transaction-target
+              explicit-service-allowlist
+              explicit-service-profile
+              fail-stop-parent-intent
+              file-write
+              fixed-activation-commit
+              fixed-agent-unit
+              fixed-amendment-command
+              fixed-artifact-changed
+              fixed-artifact-metadata
+              fixed-artifact-write
+              fixed-backup-file
+              fixed-cgroup-changed
+              fixed-cgroup-not-drained
+              fixed-command
+              fixed-command-failed
+              fixed-command-stage
+              fixed-consent-mode
+              fixed-control-group
+              fixed-create-directory
+              fixed-create-file
+              fixed-create-metadata
+              fixed-directory-list
+              fixed-drain-unit
+              fixed-enable-link
+              fixed-enablement-link
+              fixed-file-changed
+              fixed-file-metadata
+              fixed-helper-template
+              fixed-inventory-command
+              fixed-launcher-path
+              fixed-offline-mode
+              fixed-phase
+              fixed-platform-path
+              fixed-policy-disable
+              fixed-public-source
+              fixed-receipt
+              fixed-replacement
+              fixed-root-command
+              fixed-socket-command
+              fixed-source-create
+              fixed-source-path
+              fixed-transaction-directory
+              fixed-unit
+              foreign-helper-systemd-unit
+              fresh-generation
+              fresh-grant-epoch-or-identity
+              fresh-read-admin-only
+              helper-account-changed
+              helper-account-command-failed
+              helper-enablement
+              helper-identity
+              helper-numeric-identity
+              helper-socket-start-command-failed
+              helper-source-changed
+              helper-source-changed-after-copy
+              helper-source-metadata
+              helper-source-private-parent
+              helper-source-root
+              helper-source-temporary-parent
+              immutable-source-pins
+              immutable-source-revision
+              inactive-new-helper
+              initialized-identity-changed
+              initialized-policy-generation
+              install-or-device-approval-incomplete
+              installation-changed
+              installation-changed-after-inventory
+              installation-changed-after-journal
+              installation-changed-after-socket
+              installation-changed-after-stop
+              installed-agent-capabilities-unavailable
+              installed-agent-changed
+              installed-agent-upgrade-required
+              installed-artifact-changed
+              installed-helper-artifact
+              installed-manifest
+              installed-owner-record
+              installed-release-or-bootstrap-changed
+              installed-socket-cli-incompatible
+              installed-unit-template-changed
+              installer-lock-changed
+              interrupted
+              invalid-json
+              invalid-json-number
+              inventory-account-membership
+              inventory-activation-commit-changed
+              inventory-agent-changed-after-stop
+              inventory-agent-changed-before-activation
+              inventory-agent-config-changed
+              inventory-agent-directory-changed
+              inventory-agent-not-confirmed-stopped
+              inventory-agent-restart-blocked-retain-state
+              inventory-agent-restart-command-failed
+              inventory-agent-restart-ownership
+              inventory-agent-restart-status
+              inventory-agent-resume-failed
+              inventory-agent-resume-not-confirmed
+              inventory-agent-stop-command-failed
+              inventory-agent-stop-failed
+              inventory-ambiguous-apt-consent
+              inventory-ambiguous-identity-consent
+              inventory-ambiguous-overview-consent
+              inventory-approved-installation-changed
+              inventory-bounded-json
+              inventory-changed-protected-file
+              inventory-command-output-limit
+              inventory-command-timeout
+              inventory-committed-activation-changed
+              inventory-consent-disclosure-contract
+              inventory-consent-enable-failed
+              inventory-consent-identity-changed
+              inventory-consent-preview-failed
+              inventory-consent-result-contract
+              inventory-content-acknowledgement-required
+              inventory-created-artifact-changed
+              inventory-dedicated-account
+              inventory-duplicate-json-member
+              inventory-enable-not-confirmed
+              inventory-enable-readback-disabled
+              inventory-existing-activated-v3-config
+              inventory-existing-helper-account
+              inventory-existing-helper-path
+              inventory-existing-state-domain
+              inventory-existing-systemd-journal-group
+              inventory-explicit-service-allowlist
+              inventory-explicit-service-profile
+              inventory-file-write
+              inventory-fixed-activation-commit
+              inventory-fixed-agent-unit
+              inventory-fixed-command
+              inventory-fixed-command-stage
+              inventory-fixed-consent-mode
+              inventory-fixed-create-directory
+              inventory-fixed-create-file
+              inventory-fixed-inventory-command
+              inventory-fixed-public-source
+              inventory-fixed-unit
+              inventory-foreign-helper-systemd-unit
+              inventory-helper-account-command-failed
+              inventory-helper-numeric-identity
+              inventory-helper-socket-start-command-failed
+              inventory-immutable-source-pins
+              inventory-inactive-new-helper
+              inventory-initialized-policy-generation
+              inventory-installation-changed-after-stop
+              inventory-installed-agent-capabilities-unavailable
+              inventory-installed-agent-upgrade-required
+              inventory-installed-manifest
+              inventory-installed-owner-record
+              inventory-installer-lock-changed
+              inventory-interrupted
+              inventory-invalid-json
+              inventory-invalid-json-number
+              inventory-inventory-command-output-limit
+              inventory-inventory-command-timeout
+              inventory-inventory-operation-failed
+              inventory-journal-group-identity
+              inventory-json-members
+              inventory-local-account-database
+              inventory-local-nss-only
+              inventory-local-operation-failed
+              inventory-local-root-linux-required
+              inventory-local-root-terminal-required
+              inventory-missing-apt-spools
+              inventory-missing-identity-spools
+              inventory-missing-overview-spools
+              inventory-nonroot-command-identity
+              inventory-operation-failed
+              inventory-owned-agent-systemd-unit
+              inventory-owned-artifact-hash
+              inventory-partial-apt-spools
+              inventory-partial-identity-spools
+              inventory-partial-overview-spools
+              inventory-pending-activation-changed
+              inventory-plan-does-not-accept-apply-flags
+              inventory-previously-completed-scope-changed
+              inventory-protected-agent-config
+              inventory-protected-agent-directory
+              inventory-protected-apt-state
+              inventory-protected-directory
+              inventory-protected-file
+              inventory-protected-identity-state
+              inventory-protected-overview-state
+              inventory-public-bootstrap-scope
+              inventory-published-helper-units
+              inventory-resume-ownership-changed
+              inventory-resume-protected-state-unverified
+              inventory-reviewed-installation-changed
+              inventory-reviewed-plan-changed
+              inventory-root-linux-local-administration
+              inventory-socket-activation
+              inventory-socket-ownership
+              inventory-source-deadline
+              inventory-source-hash
+              inventory-source-manifest-entry
+              inventory-source-manifest-hash
+              inventory-source-manifest-members
+              inventory-source-redirect-rejected
+              inventory-source-response
+              inventory-source-size
+              inventory-state-shape-contract
+              inventory-stopped-agent
+              inventory-stopped-agent-preview
+              inventory-systemd-reload-command-failed
+              inventory-systemd-unit-inspection-command-failed
+              inventory-systemd-unit-status
+              inventory-terminal-write-failed
+              inventory-transport-specific-acknowledgement
+              inventory-uncertain-apt-initialization
+              inventory-uncertain-identity-initialization
+              inventory-uncertain-overview-initialization
+              inventory-unchanged-agent-identity
+              inventory-unchanged-existing-accounts
+              inventory-unresolved-installer-ownership
+              inventory-unresolved-template-placeholder
+              inventory-validation-or-enable-incomplete
+              journal-account-membership
+              journal-activation-commit-changed
+              journal-agent-changed-after-stop
+              journal-agent-changed-before-activation
+              journal-agent-restart-blocked-retain-state
+              journal-agent-restart-command-failed
+              journal-agent-restart-ownership
+              journal-agent-restart-status
+              journal-agent-stop-command-failed
+              journal-changed-protected-file
+              journal-command-output-limit
+              journal-command-timeout
+              journal-committed-activation-changed
+              journal-consent-identity-changed
+              journal-content-acknowledgement-required
+              journal-created-artifact-changed
+              journal-creation-incomplete
+              journal-dedicated-account
+              journal-duplicate-json-member
+              journal-existing-helper-account
+              journal-existing-helper-path
+              journal-existing-state-domain
+              journal-existing-systemd-journal-group
+              journal-explicit-service-allowlist
+              journal-explicit-service-profile
+              journal-file-write
+              journal-fixed-activation-commit
+              journal-fixed-agent-unit
+              journal-fixed-command
+              journal-fixed-command-stage
+              journal-fixed-create-directory
+              journal-fixed-create-file
+              journal-fixed-unit
+              journal-foreign-helper-systemd-unit
+              journal-group-identity
+              journal-helper-account-command-failed
+              journal-helper-numeric-identity
+              journal-helper-socket-start-command-failed
+              journal-inactive-new-helper
+              journal-initialized-policy-generation
+              journal-installed-manifest
+              journal-installed-owner-record
+              journal-installer-lock-changed
+              journal-interrupted
+              journal-invalid-json
+              journal-journal-group-identity
+              journal-json-members
+              journal-local-account-database
+              journal-local-nss-only
+              journal-local-operation-failed
+              journal-owned-agent-systemd-unit
+              journal-owned-artifact-hash
+              journal-pending-activation-changed
+              journal-plan-does-not-accept-apply-flags
+              journal-preview-command-failed
+              journal-protected-directory
+              journal-protected-file
+              journal-public-bootstrap-scope
+              journal-published-helper-units
+              journal-reviewed-plan-changed
+              journal-root-linux-local-administration
+              journal-socket-activation
+              journal-socket-ownership
+              journal-state-changed
+              journal-stopped-agent
+              journal-stopped-agent-preview
+              journal-systemd-reload-command-failed
+              journal-systemd-unit-inspection-command-failed
+              journal-systemd-unit-status
+              journal-transport-specific-acknowledgement
+              journal-unchanged-agent-identity
+              journal-unchanged-existing-accounts
+              journal-unresolved-installer-ownership
+              journal-unresolved-template-placeholder
+              json-members
+              loaded-executable-arguments
+              loaded-pid-namespace
+              loaded-unit-mainpid
+              loaded-unit-ownership
+              loaded-unit-security-contract
+              local-account-database
+              local-nss-only
+              local-operation-failed
+              local-root-linux-required
+              local-root-terminal-required
+              local-terminal-required
+              maintenance-operation-failed
+              manager-capability-origin
+              manager-capability-unavailable-or-upgrade-required
+              manager-public-ca
+              manager-upgrade-required
+              native-directory-contract
+              network-content-encoding
+              network-content-length
+              network-deadline
+              network-redirect-rejected
+              network-response-limit
+              network-response-size
+              network-status-or-origin
+              network-transport
+              none
+              nonroot-amendment-result
+              nonroot-command-identity
+              nonroot-offline-identity
+              not_attempted
+              offline-cli-failed
+              offline-cli-output-limit
+              offline-cli-timeout
+              offline-consent-result
+              offline-consent-state
+              offline-endpoint-identity
+              offline-mutation-readback
+              offline-policy-binding
+              offline-policy-write
+              offline-unexpected-discard
+              offline-unexpected-mutation
+              original-artifact-evidence
+              original-deployment-changed
+              original-deployment-evidence
+              original-files-changed
+              original-grant-changed-or-disabled
+              original-identity-evidence
+              original-install-receipt
+              original-policy-evidence
+              original-private-grant-changed
+              owned-agent-systemd-unit
+              owned-artifact-hash
+              owned-fixed-unit
+              owned-read-admin-receipt-required
+              owned-socket-enablement-link
+              parent-intent-changed
+              parent-phase-evidence
+              partial-or-foreign-source-cache
+              pending-activation-changed
+              phase-receipt-changed
+              phase-receipt-mismatch
+              phase-start-receipt-missing
+              plaintext-ca-rejected
+              plan-does-not-accept-apply-flags
+              platform-file
+              platform-read-limit
+              policy-byte-limit
+              policy-generation
+              policy-members
+              policy-revision
+              policy-revision-overflow
+              preexisting-loaded-unit
+              preexisting-private-socket-consent
+              previously-completed-scope-changed
+              private-consent-readback
+              profile-and-units-are-exclusive
+              protected-agent-config
+              protected-agent-directory
+              protected-directory
+              protected-file
+              protected-file-changed
+              protected-parent-changed
+              protected-source-directory
+              protected-source-file
+              protected-source-path
+              public-bootstrap-changed
+              public-bootstrap-scope
+              published-helper-units
+              read-admin-phase-incomplete
+              read-admin-receipt-mismatch
+              read-admin-result-invalid
+              read-admin-result-unavailable
+              readback-agent-not-stopped
+              readback-resume-identity-changed
+              readback-resume-unconfirmed
+              receipt-parent
+              receipt-readback
+              receipt-write
+              replacement-expected-absence
+              replacement-old-file-changed
+              replacement-readback
+              replacement-stage-changed
+              replacement-target-appeared
+              restart-enablement-changed
+              restart-ownership-changed
+              restart-unit-status
+              resume-identity-changed
+              resume-ownership-changed
+              resume-protected-state-unverified
+              reviewed-installation-changed
+              reviewed-launcher-hashes
+              reviewed-plan-changed
+              reviewed-source-changed
+              revoke-completion-readback
+              revoke-helper-shutdown-unconfirmed
+              revoke-incomplete
+              revoke-incomplete-shutdown-unconfirmed
+              revoke-private-identity-changed
+              revoke-socket-admission
+              revoked-or-uncertain-grant
+              root-linux-local-administration
+              runtime-directory
+              safety-socket-disable-unconfirmed
+              safety-socket-stop-unconfirmed
+              setup-provenance
+              socket-activation
+              socket-admission-not-disabled
+              socket-configuration-unconfirmed
+              socket-enablement
+              socket-enablement-link
+              socket-maintenance-source-changed
+              socket-manager-capability-origin
+              socket-manager-capability-unavailable-or-upgrade-required
+              socket-manager-upgrade-required
+              socket-metadata
+              socket-ownership
+              socket-parent-identity-changed
+              socket-parent-intent-required
+              socket-parent-phase-required
+              socket-revocation-unconfirmed
+              source-deadline
+              source-download-verification
+              source-file-changed
+              source-hash
+              source-manifest-entry
+              source-manifest-hash
+              source-manifest-members
+              source-parent-changed
+              source-redirect-rejected
+              source-response
+              source-revision
+              source-short-write
+              source-size
+              source-stage-readback
+              source-staging-changed
+              stage-appeared
+              stage-metadata
+              stage-write
+              staged-declarations-changed
+              staged-installation-changed
+              staging-remnant
+              state-shape-contract
+              stopped-agent
+              stopped-agent-preview
+              stopped-installation-changed
+              supported-linux-amd64-kernel
+              systemd-pid1-required
+              systemd-reload-command-failed
+              systemd-status-members
+              systemd-unit-inspection-command-failed
+              systemd-unit-status
+              terminal-write-failed
+              transaction-metadata
+              transaction-revision
+              transport-specific-acknowledgement
+              uncertain-inventory-phase-retained
+              uncertain-journal-phase-retained
+              uncertain-socket-phase-retained
+              unchanged-agent-identity
+              unchanged-existing-accounts
+              unchanged-main-artifacts
+              unexpected-account-change
+              unexpected-socket-enablement-link
+              unit-drain-unconfirmed
+              unit-dropin
+              unit-stop-unconfirmed
+              units-not-stopped
+              unowned-configuration-state
+              unresolved-amendment-stage
+              unresolved-amendment-transaction
+              unresolved-installer-ownership
+              unresolved-template-placeholder
+              unresolved-unit-placeholder
+              verified-helper-artifact'''.split())
+              check(value['setupFailure'] in setup_failures)
+              check(value['status'] != 'pass' or value['scenario'] != 'complete' or value['setupFailure'] == 'none')
               probe = value['initialProbe']
               check(type(probe) is dict and set(probe) == {'failure', 'childExit', 'scopePromptSeen'})
               check(probe['failure'] in {'existing-socket-owner-state', 'cgroup-v2-required', 'existing-installation-use-upgrade-or-recovery', 'systemd-unit-inspection-command-failed', 'existing-journal-state-retained', 'systemd-pid1-required', 'preexisting-loaded-unit', 'acceptance-launcher-workflow', 'acceptance-launcher-config', 'driver-output-invalid', 'platform-read-limit', 'acceptance-launcher-input', 'read-admin-result-invalid', 'acceptance-deadline-exceeded', 'acceptance-launcher-source-loader', 'read-admin-result-unavailable', 'none', 'fixed-command-failed', 'protected-directory', 'alternate-unit-fragment', 'changed-protected-file', 'acceptance-capture-exceeded', 'platform-file', 'supported-linux-amd64-kernel', 'command-timeout', 'acceptance-driver-rejected', 'protected-file', 'acceptance-launcher-rejected', 'read-admin-phase-incomplete', 'not_attempted', 'local-nss-only', 'acceptance-launcher-components', 'acceptance-launcher-terminal', 'unit-dropin', 'acceptance-launcher-host', 'driver-execution-failed', 'command-output-limit', 'local-account-database', 'acceptance-launcher-artifacts', 'systemd-status-members', 'acceptance-gate-rejected', 'existing-socket-owner-account', 'unexpected-cancellation-result', 'acceptance-launcher-arguments'})
               check(probe['childExit'] in {'not_observed', 'zero', 'nonzero'} and type(probe['scopePromptSeen']) is bool)
               check(value['status'] != 'pass' or probe == {'failure': 'none', 'childExit': 'zero', 'scopePromptSeen': True})
+              # Only an exact source-literal assertion can leave the private log.
+              value['nativeAssertion'] = native_assertion(sys.argv[1].rsplit('/', 1)[0] + '/private-test.log') if value['status'] == 'fail' else 'none'
               print(json.dumps(value, indent=2))
           except Exception:
               raise SystemExit('FAIL: missing or invalid sanitized read-admin acceptance evidence.')

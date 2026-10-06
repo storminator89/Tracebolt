@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-10-06 — Preserve native setup and assertion failure categories
+
+- Keep the coordinator's existing fixed failure reason in the sanitized native result across setup, interrupted enrollment, replay and helper maintenance. Retain the primary failure when cleanup also runs.
+- For a failed native test, project only exact preselected static assertion labels from at most 1 MiB of private output. Export no raw logs, observed host values, secrets, paths or arbitrary error strings. Production source, native success requirements and approvals are unchanged.
+- The approved disposable-parent preparation now permits the full cancellation scenario to pass. Complete and retained-journal scenarios still fail later; this diagnostic checkpoint does not claim their cause or successful fresh installation.
+
 ## 2026-10-06 — Prepare the approved disposable runner's installation parent
 
 - Correct the fresh native test fixture for GitHub's intentionally world-writable /opt. After explicit source-bound approval, accept only a real root:root top-level directory in mode 0777 or 0755, tighten the same open inode to 0755 when needed, and verify its owner, mode and path identity. No recursive changes or ownership changes.

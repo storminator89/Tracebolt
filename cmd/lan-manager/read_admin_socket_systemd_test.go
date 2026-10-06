@@ -55,12 +55,31 @@ func readAdminNativeMaintenance(t *testing.T, c *readAdminNativeCommand, operati
 	cmd.Env = c.environment()
 	raw, err := cmd.Output()
 	defer clear(raw)
+	remember := operation != "cleanup" || c.options.setupDiagnostic() == "none" || c.options.setupDiagnostic() == "not_attempted"
+	if len(raw) <= 4096 && err != nil && remember {
+		var failure struct {
+			SchemaVersion string `json:"schemaVersion"`
+			FailureStage  string `json:"failureStage"`
+		}
+		if json.Unmarshal(raw, &failure) == nil && failure.SchemaVersion == "tracebolt.read-admin-result.v2" {
+			c.options.setupFailure = readAdminSetupFailure(failure.FailureStage)
+		} else {
+			c.options.setupFailure = "maintenance-operation-failed"
+		}
+	}
+	if len(raw) > 4096 && remember {
+		c.options.setupFailure = "driver-output-invalid"
+	}
 	if err != nil || len(raw) > 4096 {
 		return false
 	}
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.DisallowUnknownFields()
-	return decoder.Decode(result) == nil && result.SchemaVersion == "tracebolt.read-admin-socket-native.v1" && result.Operation == operation
+	valid := decoder.Decode(result) == nil && result.SchemaVersion == "tracebolt.read-admin-socket-native.v1" && result.Operation == operation
+	if !valid && remember {
+		c.options.setupFailure = "maintenance-operation-failed"
+	}
+	return valid
 }
 
 // Pure parser: ordinary tests supply invented status/cgroup strings only.

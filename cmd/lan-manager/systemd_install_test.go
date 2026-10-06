@@ -147,6 +147,7 @@ func runApprovedSystemdInstallationMode(t *testing.T, profile, collectionProfile
 			result["ptraceRiskAcknowledged"] = true
 			result["socketNativeChecks"] = readAdmin.checks
 			result["initialProbe"] = readAdmin.probeDiagnostic()
+			result["setupFailure"] = readAdmin.setupDiagnostic()
 			result["collectionProfile"] = collectionProfile
 			result["scenario"] = readAdmin.scenario
 		}
@@ -361,6 +362,9 @@ func runApprovedSystemdInstallationMode(t *testing.T, profile, collectionProfile
 	case <-time.After(30 * time.Second):
 		t.Fatal("native hidden prompt timeout")
 	}
+	if readAdmin != nil && prompt.Phase == "exit" {
+		readAdmin.observeSetup(prompt)
+	}
 	if prompt.Phase == "exit" {
 		stage = systemdInstallerStage(prompt.InstallerStage)
 	}
@@ -400,6 +404,7 @@ func runApprovedSystemdInstallationMode(t *testing.T, profile, collectionProfile
 			}
 			enrollmentWaited = true
 			<-enrollmentDone
+			readAdmin.observeSetup(canceled)
 			readAdminCanceledEnrollment(t, canceled, before)
 			stage = "complete"
 			return
@@ -419,6 +424,9 @@ func runApprovedSystemdInstallationMode(t *testing.T, profile, collectionProfile
 	case outcome = <-events:
 	case <-time.After(completionWait):
 		t.Fatal("installer completion timeout")
+	}
+	if readAdmin != nil {
+		readAdmin.observeSetup(outcome)
 	}
 	if readAdmin != nil && readAdmin.scenario == "retained-journal" {
 		enrollmentWaited = true

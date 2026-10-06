@@ -85,7 +85,7 @@ def result(transport="tls", scenario="complete", **changes):
         "osRebootTested": False, "telemetryExported": False,
         "readProfile": READ_PROFILE, "sourceCommit": SOURCE,
         "ptraceRiskAcknowledged": True, "socketNativeChecks": dict(zip(CHECKS, expected)),
-        "initialProbe": {"failure": "none", "childExit": "zero", "scopePromptSeen": True}, **changes,
+        "initialProbe": {"failure": "none", "childExit": "zero", "scopePromptSeen": True}, "setupFailure": "none", **changes,
     }
 
 
@@ -190,15 +190,25 @@ class ReadAdminWrapperTests(unittest.TestCase):
 
     def validate(self, raw, transport="tls", scenario="complete", *, read_profile=READ_PROFILE,
                  source=SOURCE, mode=stat.S_IFREG | 0o600,
-                 size=None, open_error=None):
+                 size=None, open_error=None, private_log=None):
         stream = FakeFile(raw)
         stream.read = mock.Mock(wraps=stream.read)
+        log_stream = FakeFile(private_log or b'')
+        log_stream.fileno = lambda: 124
+        def opened(path, flags):
+            if open_error is not None:
+                raise open_error
+            if path == 'private-fixture-path':
+                return 123
+            if path.endswith('/private-test.log') and private_log is not None:
+                return 124
+            raise FileNotFoundError()
         fake_os = SimpleNamespace(
             O_RDONLY=os.O_RDONLY, O_NOFOLLOW=os.O_NOFOLLOW,
             O_NONBLOCK=os.O_NONBLOCK, O_CLOEXEC=os.O_CLOEXEC,
-            open=mock.Mock(return_value=123, side_effect=open_error),
-            fdopen=mock.Mock(return_value=stream),
-            fstat=mock.Mock(return_value=SimpleNamespace(st_mode=mode, st_size=len(raw) if size is None else size)),
+            open=mock.Mock(side_effect=opened),
+            fdopen=mock.Mock(side_effect=lambda fd, mode: stream if fd == 123 else log_stream),
+            fstat=mock.Mock(side_effect=lambda fd: SimpleNamespace(st_mode=mode, st_size=len(raw) if size is None else size) if fd == 123 else SimpleNamespace(st_mode=stat.S_IFREG | 0o600, st_size=len(private_log))),
         )
         output, error = io.StringIO(), None
         with contextlib.redirect_stdout(output), mock.patch.dict(sys.modules, {"os": fake_os}), \
@@ -241,6 +251,35 @@ class ReadAdminWrapperTests(unittest.TestCase):
                     {'failure': 'none', 'childExit': 'zero', 'scopePromptSeen': True, 'raw': 'secret'}):
             self.assert_rejected(json.dumps(result(initialProbe=bad)).encode())
 
+    def test_all_setup_codes_and_native_assertions_are_closed(self):
+        root = WORKFLOW.parents[2]
+        go = (root / 'cmd/lan-manager/read_admin_systemd_test.go').read_text()
+        codes = set(re.search(r'const readAdminSetupFailureCodes = `([^`]*)`', go).group(1).split())
+        self.assertEqual(codes, set(re.search(r"setup_failures = frozenset\('''(.*?)'''\.split\(\)\)", self.source, re.S).group(1).split()))
+        scripts = (root / 'cmd/lan-manager/read_admin_scripts_test.go').read_text()
+        self.assertEqual(codes, set(re.search(r"FAILURES = frozenset\('''(.*?)'''\.split\(\)\)", scripts, re.S).group(1).split()))
+        for code in codes:
+            raw = json.dumps(result(status='fail', setupFailure=code)).encode()
+            output, error, _, _ = self.validate(raw)
+            self.assertIsNone(error)
+            self.assertEqual(json.loads(output)['setupFailure'], code)
+        self.assert_rejected(json.dumps(result(status='fail', setupFailure='private arbitrary reason')).encode())
+        self.assert_rejected(json.dumps(result(setupFailure='installed-owner-record')).encode())
+        for scenario in ('cancel-enrollment', 'retained-journal'):
+            value = result(scenario=scenario, setupFailure='uncertain-journal-phase-retained')
+            self.assertIsNone(self.validate(json.dumps(value).encode(), scenario=scenario)[1])
+        known = b'    read_admin_socket_systemd_test.go:402: actual bounded journal content request did not complete\n'
+        raw = json.dumps(result(status='fail', stage='read_admin_journal_content')).encode()
+        output, error, _, _ = self.validate(raw, private_log=b'private secret and raw telemetry\n' + known)
+        self.assertIsNone(error)
+        self.assertEqual(json.loads(output)['nativeAssertion'], 'actual bounded journal content request did not complete')
+        self.assertNotIn('private secret', output)
+        for log in (b'    arbitrary.go:1: private secret and raw telemetry\n', b'not a test assertion', b'x' * 1048577):
+            output, error, _, _ = self.validate(raw, private_log=log)
+            self.assertIsNone(error)
+            self.assertIn(json.loads(output)['nativeAssertion'], ('no-known-native-assertion', 'private-diagnostic-unavailable'))
+            self.assertNotIn('private secret', output)
+
     def test_manual_only_fresh_v2_approval_source_and_transport_choice(self):
         source = self.source
         self.assertEqual(re.findall(r"^([a-z][a-z-]*):", source, re.M),
@@ -268,7 +307,7 @@ class ReadAdminWrapperTests(unittest.TestCase):
         self.assertNotIn("approved_disposable_read_admin_systemd", source)
         self.assertNotIn("TRACEBOLT_APPROVED_READ_ADMIN_SYSTEMD_TEST", source)
         self.assertIn("permissions:\n  contents: read\n", source)
-        self.assertNotIn("write", source)
+        self.assertNotRegex(source, r"(?m)^\s*(?:contents|actions|id-token): write$")
 
     def test_each_scenario_has_fresh_hosted_runner_and_exact_source_build(self):
         source = self.source
@@ -365,7 +404,7 @@ class ReadAdminWrapperTests(unittest.TestCase):
                     raw = json.dumps(expected).encode()
                     output, error, fake_os, stream = self.validate(raw, transport, scenario)
                     self.assertIsNone(error)
-                    self.assertEqual(json.loads(output), expected)
+                    self.assertEqual(json.loads(output), dict(expected, nativeAssertion="none"))
                     fake_os.open.assert_called_once_with("private-fixture-path", os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC)
                     fake_os.fdopen.assert_called_once_with(123, "rb")
                     fake_os.fstat.assert_called_once_with(123)
@@ -379,7 +418,7 @@ class ReadAdminWrapperTests(unittest.TestCase):
                 raw = json.dumps(result(status="fail", stage=stage)).encode()
                 output, error, _, _ = self.validate(raw)
                 self.assertIsNone(error)
-                self.assertEqual(json.loads(output), json.loads(raw))
+                self.assertEqual(json.loads(output), dict(json.loads(raw), nativeAssertion="private-diagnostic-unavailable"))
                 self.assertEqual(self.complete(output.encode()), ("", INCOMPLETE))
                 if stage != "complete":
                     self.assert_rejected(json.dumps(result(stage=stage)).encode())
