@@ -62,6 +62,43 @@ def encoded(value, **kwargs):
 
 
 class InertScriptTests(unittest.TestCase):
+    def test_upgrade_failure_projects_only_closed_phase_without_child_values(self):
+        private="private-host-or-command-output"
+        failed=dict(schemaVersion="tracebolt.read-admin-upgrade-result.v1",completed=False,canceled=False,identityRetained=True,
+                    scopesChanged=False,participantsStopped=True,rollbackConfirmed=False,restartBookkeepingReset=False,
+                    nativeAcceptance="not-established",failureStage="drain",failureReason=private,recovery=private)
+        for phase in ("preflight","prepare","drain","retained-state","native-upgrade","helper-rebind","same-scope-validation","restore-runtime","commit","lock-release"):
+            event=PTY.exit_event(encoded(dict(failed,failureStage=phase)),1,"",1,upgrade=True)
+            self.assertEqual(event["readAdminFailure"],"read-admin-upgrade-"+phase)
+            self.assertIn(event["readAdminFailure"],PTY.FAILURES)
+            self.assertFalse(event["readAdminComplete"])
+            self.assertEqual(event["exitCode"],1)
+            self.assertNotIn(private,json.dumps(event))
+        for phase in (private,"unknown",None,[],{}):
+            event=PTY.exit_event(encoded(dict(failed,failureStage=phase)),1,"",1,upgrade=True)
+            self.assertEqual(event["readAdminFailure"],"read-admin-phase-incomplete")
+            self.assertNotIn(private,json.dumps(event))
+        self.assertFalse(PTY.exit_event(encoded(failed),0,"",1,upgrade=True)["readAdminComplete"])
+
+    def test_upgrade_driver_requires_separate_approval_and_complete_same_scope_result(self):
+        value = dict(schemaVersion="tracebolt.read-admin-upgrade-result.v1",completed=True,canceled=False,identityRetained=True,
+                     scopesChanged=False,participantsStopped=False,rollbackConfirmed=False,restartBookkeepingReset=True,
+                     nativeAcceptance="not-established",agentActivityRestored=True,agentActive=True)
+        event = PTY.exit_event(encoded(value),0,"",1,upgrade=True)
+        self.assertTrue(event["readAdminComplete"])
+        self.assertFalse(PTY.exit_event(encoded(value),0,"",1)["readAdminComplete"])
+        for field in ("completed","identityRetained","restartBookkeepingReset","agentActivityRestored","agentActive"):
+            self.assertFalse(PTY.exit_event(encoded(dict(value, **{field:False})),0,"",1,upgrade=True)["readAdminComplete"])
+        for field in ("scopesChanged","participantsStopped","rollbackConfirmed","canceled"):
+            self.assertFalse(PTY.exit_event(encoded(dict(value, **{field:True})),0,"",1,upgrade=True)["readAdminComplete"])
+        for raw in (None, b"", encoded(dict(value, extra=True)), encoded(value)+encoded(value), encoded(value)[:-3], b"x"*(PTY.MAX_CAPTURE+1)):
+            self.assertFalse(PTY.parse_upgrade_result(raw)["readAdminComplete"])
+        cfg = dict(args=["/inert/python","-I"],secret="",approval="UPGRADE READ ADMIN",cancelApproval=False)
+        with mock.patch.dict(PTY.os.environ, {}, clear=True), self.assertRaises(ValueError):
+            PTY.parse_config(encoded(cfg),"tls")
+        with mock.patch.dict(PTY.os.environ,approved_env(TRACEBOLT_APPROVED_READ_ADMIN_UPGRADE="true"),clear=True):
+            self.assertEqual(PTY.parse_config(encoded(cfg),"tls")[1],"UPGRADE READ ADMIN")
+
     def test_cancel_preflight_diagnostics_remain_closed(self):
         for stage in ('systemd-status-members', 'fixed-command-failed', 'unit-dropin',
                       'supported-linux-amd64-kernel', 'acceptance-launcher-host',

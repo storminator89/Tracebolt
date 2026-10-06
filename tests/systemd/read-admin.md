@@ -4,8 +4,11 @@ This source-only gate targets the fresh one-command
 [read-admin onboarding candidate](../../docs/read-admin-onboarding.md), with read
 profile `tracebolt.linux-read-admin.v2` and collection profile
 `managed-operations-v3`. It adds no ordinary user setup steps. This gate does not
-preserve an older read-admin test path, migrate installations or run an upgrade
-scenario. The separate basic TLS and managed-v2 gates are unchanged.
+preserve an older read-admin test path or migrate unrelated installations. The
+separate explicit `approved_read_admin_upgrade` option adds one same-profile
+rc.2-to-reviewed-source update inside the complete scenario; see
+[the exact update contract](../../docs/read-admin-upgrade.md). Without that
+additional approval this remains the fresh-install gate. The separate basic TLS and managed-v2 gates are unchanged.
 
 Preparation, compilation, default-skipped tests and synthetic wrapper checks are
 **not native acceptance**. No workflow dispatch, account/service/capability change,

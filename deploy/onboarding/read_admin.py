@@ -382,7 +382,10 @@ def real_maintenance(s, inventory, socket_setup, templates, release):
             require(type(bound) is dict and set(bound) == {"schemaVersion", "planSHA256", "readProfile", "ownerHash", "configHash", "deviceId", "managerOrigin", "agentUid", "agentGid", "installation"} and
                     bound["schemaVersion"] == "tracebolt.read-admin-intent.v2" and bound["readProfile"] == PROFILE and
                     inventory.valid_hash(bound["planSHA256"]) and canonical(bound) == raw, "socket-parent-intent-required")
-            require(bound["installation"] == facts["manifest"] and bound["ownerHash"] == facts["ownerHash"] and
+            current_receipt = bound
+            if not e.absent("/var/lib/tracebolt-agent-installer/read-admin-upgrade-current.json"):
+                current_receipt = socket_setup.ownership_proof(s, socket_effects, templates, facts, digest(raw))
+            require(current_receipt["installation"] == facts["manifest"] and current_receipt["ownerHash"] == facts["ownerHash"] and
                     bound["configHash"] == facts["configHash"] and bound["deviceId"] == facts["deviceId"] and
                     bound["managerOrigin"] == facts["origin"] and bound["agentUid"] == facts["uid"] and bound["agentGid"] == facts["gid"], "socket-parent-identity-changed")
             source = release["assets"]["tracebolt-" + release["version"] + "-source.tar"]["sha256"]

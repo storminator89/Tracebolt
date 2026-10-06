@@ -38,6 +38,7 @@ const (
 
 type Request struct {
 	Action                 Action
+	UpgradeCoordinatorFD   int // Borrowed existing installer lock; full read-admin upgrade only.
 	Apply                  bool
 	PendingService         bool
 	RequireCompleteProfile bool
@@ -81,6 +82,9 @@ type Plan struct {
 }
 
 func BuildPlan(r Request, h HostFacts) (Plan, error) {
+	if r.UpgradeCoordinatorFD != 0 && (r.UpgradeCoordinatorFD < 3 || r.Action != Upgrade || !r.Apply) {
+		return Plan{}, ErrContract
+	}
 	if r.Action != Install && r.Action != Upgrade && r.Action != Restart && r.Action != Uninstall {
 		return Plan{}, ErrContract
 	}
@@ -150,6 +154,9 @@ func BuildPlan(r Request, h HostFacts) (Plan, error) {
 		p.Steps = append(p.Steps, Step{"stop", "Stop the owned service."}, Step{"validate", "Validate the existing guided-v2 identity and bound ledger without resetting it."}, Step{"reset-restart-state", "Clear only the owned service's systemd failed status and start/restart counters after validation; automatic restart limits stay unchanged. Cleared bookkeeping is not restored if a later step fails."}, Step{"service", "Restart only after validation succeeds."})
 	case Uninstall:
 		p.Steps = append(p.Steps, Step{"stop", "Disable and stop only the owned Tracebolt service."}, Step{"remove-owned", "Remove only manifest-owned unit and binaries; retain the dedicated account, bootstrap and all private identity/counter data."})
+	}
+	if r.UpgradeCoordinatorFD != 0 {
+		p.Steps[len(p.Steps)-1] = Step{"replace-left-stopped", "Replace only verified owned binaries/unit under the borrowed coordinator lock; leave the service stopped until same-scope helper bindings are validated."}
 	}
 	if pending && r.Action == Install {
 		p.Steps = []Step{{"preflight", "Check fixed paths, exact local artifacts, immutable v2 mode and retained state."}, {"prepare", "Prepare the dedicated non-login account and private paths."}, {"artifacts", "Stage and reverify only selected local native binaries."}, {"claim", "Use hidden local invitation entry and save only a status-confirmed same-key claim; no observations collected."}, {"validate", "Validate the existing bound service enrollment locally with no network or initialization."}, {"service", "Publish the v2 waiting-capable unit and observe process start. Approval, activation and reporting remain separate phases."}}

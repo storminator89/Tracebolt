@@ -166,7 +166,8 @@ There is no re-enable, renewal or rebind path.
 Fresh mode refuses any existing installed or retained installer domain and any
 existing journal configuration/evidence. It never treats an older/basic/v2 grant
 as approval for this profile. Upgrading a binary alone cannot activate it.
-Existing installations keep their explicit upgrade/recovery workflows; this
+Completed v2 installations use the explicit [same-scope update](read-admin-upgrade.md)
+when it is present in the selected verified release. Existing installations retain their recovery workflows; this
 candidate intentionally does not turn an unresolved pending journal transaction
 into a fresh helper installation.
 

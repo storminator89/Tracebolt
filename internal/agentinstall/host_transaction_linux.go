@@ -46,6 +46,7 @@ type linuxTransaction struct {
 	installationVersion, profile                              string
 	stopped, started, enabled, disabled, published, committed bool
 	validated                                                 bool
+	borrowedLock                                              bool
 }
 
 func (t *linuxTransaction) Inspect(ctx context.Context, r Request) (HostFacts, error) {
@@ -114,7 +115,9 @@ func (t *linuxTransaction) Close() error {
 	}
 	clear(t.bootstrap)
 	if t.lock != nil {
-		unix.Flock(int(t.lock.Fd()), unix.LOCK_UN)
+		if !t.borrowedLock {
+			unix.Flock(int(t.lock.Fd()), unix.LOCK_UN)
+		}
 		return t.lock.Close()
 	}
 	return nil

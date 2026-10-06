@@ -397,6 +397,7 @@ def parse_args(argv):
     parser.add_argument("--action", choices=("install", "upgrade", "revoke-socket-owners"), default="install")
     parser.add_argument("--apply", action="store_true", help="Explicitly authorize the selected installation or maintenance operation after verification")
     parser.add_argument("--pending-service", action="store_true")
+    parser.add_argument("--upgrade-read-admin", action="store_true", help="Explicit same-identity, same-scope update of an already completed read-admin v2 installation")
     parser.add_argument("--read-admin", action="store_true", help="Fresh install with one explicit combined read-profile approval; wait for device approval and configure supported read scopes/helper")
     parser.add_argument("--read-admin-agent-origin", help="Exact public bootstrap agent ingress origin included in the combined approval")
     parser.add_argument("--resume-read-admin", action="store_true", help="Reconcile only completed phases of this exact owned read-admin installation; never replay an uncertain phase")
@@ -407,6 +408,7 @@ def parse_args(argv):
     parser.add_argument("--server-ca-base64")
     parser.add_argument("--insecure-http-test", action="store_true")
     args = parser.parse_args(argv)
+    require(not args.upgrade_read_admin or args.action == "upgrade" and not args.read_admin and not args.resume_read_admin, "Read-admin upgrade requires the upgrade action and cannot install, resume or add scopes.")
     require(not args.resume_read_admin or args.read_admin, "Read-admin resume requires the same explicit read-admin profile.")
     require(not args.read_admin or args.action == "install" and not args.resume, "Read-admin is a fresh installation path; existing upgrades/native installer recovery stay separate.")
     require(bool(args.read_admin_agent_origin) == args.read_admin, "Read-admin requires its explicit public agent ingress origin; other operations cannot add that scope.")
@@ -500,12 +502,16 @@ READ_ADMIN_SOURCES = (
 )
 
 
-def read_admin_sources(directory, manifest):
+UPGRADE_SOURCE = "deploy/onboarding/upgrade.py"
+
+
+def read_admin_sources(directory, manifest, *, upgrade=False):
     """Load only fixed regular members from the already provenance-verified tar.
 
     No archive extraction, extra download, arbitrary module/path or trust input.
     Reverify the exact source inode and hash before compiling any member.
     """
+    selected_sources = READ_ADMIN_SOURCES + ((UPGRADE_SOURCE,) if upgrade else ())
     path = directory / f"tracebolt-{manifest['version']}-source.tar"
     expected = manifest["assets"][path.name]
     fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC | os.O_NONBLOCK)
@@ -520,7 +526,7 @@ def read_admin_sources(directory, manifest):
             for member in archive:
                 require(member.name not in seen and len(seen) < 10000, "Repeated or oversized source archive rejected.")
                 seen.add(member.name)
-                if member.name not in READ_ADMIN_SOURCES:
+                if member.name not in selected_sources:
                     continue
                 require(member.isreg() and not member.issparse() and 0 < member.size <= 131072,
                         "Read-admin source member rejected.")
@@ -534,7 +540,7 @@ def read_admin_sources(directory, manifest):
         require(all(getattr(before, k) == getattr(after, k) == getattr(os.lstat(path), k)
                     for k in ("st_dev", "st_ino", "st_mode", "st_uid", "st_gid", "st_nlink", "st_size", "st_mtime_ns", "st_ctime_ns")),
                 "Read-admin source changed during verification.")
-    require(set(contents) == set(READ_ADMIN_SOURCES), "This release does not contain the complete reviewed read-admin workflow. No installer was run.")
+    require(set(contents) == set(selected_sources), "This release does not contain the complete reviewed read-admin workflow. No installer was run.")
     modules = []
     for name in READ_ADMIN_SOURCES[:6]:
         module = types.ModuleType("tracebolt_verified_" + name.replace("/", "_").replace(".", "_"))
@@ -542,6 +548,11 @@ def read_admin_sources(directory, manifest):
         exec(compile(contents[name], module.__file__, "exec"), module.__dict__)
         modules.append(module)
     templates = {Path(name).name: contents[name] for name in READ_ADMIN_SOURCES[6:]}
+    if upgrade:
+        module = types.ModuleType("tracebolt_verified_upgrade")
+        module.__file__ = "/verified-source/" + UPGRADE_SOURCE
+        exec(compile(contents[UPGRADE_SOURCE], module.__file__, "exec"), module.__dict__)
+        return (*modules, templates, module)
     return (*modules, templates)
 
 
@@ -571,6 +582,30 @@ def run_read_admin(args, directory, manifest, arch, installer=None):
         print("Read-admin configuration confirmed: inventory, network identity, all supported system-service journals and socket-owner metadata configuration. Check incoming reports in the dashboard; capability details remain in the result above.")
         return 0
     print("Read-admin setup is incomplete. Keep all installation and journal evidence; inspect the reported phase before recovery.", file=sys.stderr)
+    return 1
+
+
+def run_upgrade_read_admin(args, directory, manifest, arch):
+    require(arch == "amd64", "Read-admin upgrade requires the supported amd64 profile.")
+    workflow, inventory, setup, amendment, _guide, socket_setup, templates, upgrade = read_admin_sources(directory, manifest, upgrade=True)
+    adapter = upgrade.real_adapter(workflow, setup, inventory, amendment, socket_setup, templates, manifest, directory,
+                                   installer_command(args, directory, manifest, arch))
+    def interrupted(_signum, _frame):
+        raise upgrade.Rejected("interrupted")
+    previous = {signum: signal.signal(signum, interrupted) for signum in (signal.SIGINT, signal.SIGTERM)}
+    try:
+        result = upgrade.run(adapter, inventory.confirm_terminal, inventory.emit_terminal)
+    finally:
+        for signum, handler in previous.items():
+            signal.signal(signum, handler)
+    print(json.dumps(result, indent=2))
+    if result["canceled"]:
+        print("Canceled before stopping services or changing installed files.")
+        return 0
+    if result["completed"]:
+        print("Read-admin update completed with the same identity and approved scopes. Systemd failed/start-limit bookkeeping was reset. Check new reports, journal requests and socket owners in the dashboard; native acceptance and reboot are separate.")
+        return 0
+    print("Read-admin update is incomplete. Preserve all receipts, upgrade evidence and private state; inspect the reported phase before recovery.", file=sys.stderr)
     return 1
 
 
@@ -691,9 +726,11 @@ def main(argv=None):
                 manifest = prepare_release(directory, pin, arch, maintenance=True)
                 installer_result = run_revoke_socket_owners(directory, manifest)
                 return installer_result
-            manifest = prepare_release(directory, pin, arch, read_admin=True) if args.read_admin else prepare_release(directory, pin, arch)
+            manifest = prepare_release(directory, pin, arch, read_admin=True) if args.read_admin or args.upgrade_read_admin else prepare_release(directory, pin, arch)
             print("[4/4] Provenance and all selected file hashes verified. Starting the fixed-path service installer. Enter the invitation only at its hidden terminal prompt; device approval remains a separate dashboard step.", flush=True)
-            if args.read_admin:
+            if args.upgrade_read_admin:
+                installer_result = run_upgrade_read_admin(args, directory, manifest, arch)
+            elif args.read_admin:
                 installer_result = run_read_admin(args, directory, manifest, arch)
             else:
                 installer_result = run_installer(installer_command(args, directory, manifest, arch))

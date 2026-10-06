@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-10-06 — Coordinated same-profile read-admin upgrade candidate
+
+- Add an explicit verified-release --action upgrade --upgrade-read-admin path for a completed read-admin v2 installation. It verifies the existing identity and receipts, stages trusted artifacts, holds the installer lock continuously, disables startup/admission and drains the agent plus both helper/socket pairs before replacement. The native installer borrows that exact lock and leaves the agent stopped until same-scope bindings and private-state preservation are verified.
+- Preserve original receipts, device identity, consent/epoch and counters/floors. Record immutable update history with an explicit current executable binding; keep supported socket revocation valid afterward. Restore original enablement/activity after validation and disclose the owned systemd failed/start-limit reset. Failure containment attempts every independently proven participant, retains evidence and permits only bounded owned-public-artifact rollback; no private-state repair, reenrollment or new capability is introduced.
+- Refuse ordinary installer upgrades of this full profile, which would otherwise invalidate hash-bound helpers. The old rc.2 bootstrap does not contain the new coordinated path; publishing this source is not an installed endpoint update or a new release activation.
+- Extend the manually approved disposable native gate with a separate approved_read_admin_upgrade flag. The complete scenario verifies the immutable rc.2 artifact contract, installs it, observes the local upgrade approval, proves different current-source executable bytes and retained authority, then requires all six existing journal/socket/report/restart/revoke checks. Closed phase-only diagnostics preserve a failed upgrade without exporting child values. Actual native upgrade execution and release/public-byte verification remain pending.
+- Correct the stale browser expectation that Details paused header polling, retaining the original bounded time windows and all sample-age, snapshot, disclosure and access-loss checks. Record requested certificate renewal/revocation, hostname/IP rows, alarm setup, LAN investigations and log alias/window usability as planned or in source development; these are not activated features in this checkpoint.
+
 ## 2026-10-06 — Correct fresh Debian process/update observations and device status refresh
 
 - Treat Linux process comm values as bounded display names. Preserve kernel-thread slashes and literal backslashes through collection, strict wire/store validation and React rendering instead of incorrectly marking valid rows invalid. Numeric PID source selection, control/UTF-8/length limits and unknown/denied outcomes remain unchanged.

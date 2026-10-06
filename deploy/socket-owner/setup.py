@@ -36,6 +36,9 @@ REVOKE_STARTED = INSTALLER_DIR + "/socket-owner-revoke-started.json"
 REVOKE_COMPLETE = INSTALLER_DIR + "/socket-owner-revoke-complete.json"
 DISABLE_STAGE = CONFIG_DIR + "/.socket-owner-policy.disable.tmp"
 PARENT_INTENT = INSTALLER_DIR + "/read-admin-intent.json"
+CURRENT_BINDING = INSTALLER_DIR + "/read-admin-upgrade-current.json"
+UPGRADE_TRANSACTION = INSTALLER_DIR + "/read-admin-upgrade-transaction.json"
+BINDING_FIELDS = ("schemaVersion", "originalParentSHA256", "originalSocketSHA256", "previousBindingSHA256", "installation", "ownerHash", "deployment", "artifactSHA256", "releaseManifestSHA256")
 SCOPE = "systemd-pid1-local-tcp-udp-socket-owners"
 CLIENT_CONTRACT = "tracebolt.socket-owner-activated-identity-client.v1"
 POLICY_FIELDS = ("version", "scope", "senderBinding", "managerOrigin", "transportProfile", "collectionProfile", "agentUid", "agentGid", "helperUid", "helperGid", "epoch", "enabled", "metadataAcknowledged", "ptraceRiskAcknowledged", "httpAcknowledged")
@@ -119,6 +122,7 @@ def fresh_preflight(s, e):
 
 
 def parent_proof(s, e, intent_digest, *, complete=False):
+    require(e.absent(UPGRADE_TRANSACTION), "unresolved-read-admin-upgrade")
     require(valid_hash(intent_digest) and digest(e.read(PARENT_INTENT, 16384, 0o600)) == intent_digest, "parent-intent-changed")
     for phase in ("journal", "socket"):
         states = ("started", "complete") if phase == "journal" or complete else ("started",)
@@ -276,11 +280,57 @@ def restore(s, e, templates, facts, identity, journal, active):
             raise
 
 
+def current_binding(s, e, original, original_raw, intent_digest):
+    """Resolve only an explicit, immutable-history-backed same-scope update.
+
+    Original installation and phase receipts are never rewritten. Every current
+    executable binding is backed by a distinct protected completion record.
+    """
+    if e.absent(CURRENT_BINDING):
+        return original
+    raw = exact_file(e, CURRENT_BINDING, 0o600, 0)
+    latest = None
+    seen = set()
+    for _ in range(64):
+        h = digest(raw)
+        require(h not in seen, "upgrade-binding-cycle")
+        seen.add(h)
+        record = strict(s, raw, BINDING_FIELDS)
+        require(raw == canonical(record) and record["schemaVersion"] == "tracebolt.read-admin-upgrade-binding.v1" and
+                record["originalParentSHA256"] == intent_digest and record["originalSocketSHA256"] == digest(original_raw) and
+                valid_hash(record["ownerHash"]) and valid_hash(record["releaseManifestSHA256"]), "upgrade-binding-evidence")
+        archive = INSTALLER_DIR + "/read-admin-upgrade-" + h + ".complete.json"
+        require(exact_file(e, archive, 0o600, 0) == raw, "upgrade-history-evidence")
+        m = record["installation"]
+        old = original["installation"]
+        require(type(m) is dict and set(m) == set(old) and
+                all(m[k] == old[k] for k in ("version", "profile", "uid", "gid", "bootstrapHash", "unitHash")) and
+                all(valid_hash(m[k]) for k in ("agentHash", "enrollHash", "sourceHash")), "upgrade-identity-or-profile-changed")
+        hashes = record["artifactSHA256"]
+        require(type(hashes) is dict and set(hashes) == set(original["artifactSHA256"]) and
+                all(valid_hash(v) for v in hashes.values()) and hashes[AGENT_BINARY] == m["agentHash"] and
+                all(hashes[p] == original["artifactSHA256"][p] for p in hashes if p not in (BINARY, AGENT_BINARY)) and
+                record["deployment"] == deployment(original["policy"], hashes), "upgrade-grant-or-unit-changed")
+        if latest is None:
+            latest = record
+        previous = record["previousBindingSHA256"]
+        if previous == "":
+            return dict(original, ownerHash=latest["ownerHash"], installation=latest["installation"],
+                        deployment=latest["deployment"], deploymentSHA256=digest(canonical(latest["deployment"])),
+                        artifactSHA256=latest["artifactSHA256"])
+        require(valid_hash(previous), "upgrade-history-link")
+        raw = exact_file(e, INSTALLER_DIR + "/read-admin-upgrade-" + previous + ".complete.json", 0o600, 0)
+        require(digest(raw) == previous, "upgrade-history-link")
+    raise Rejected("upgrade-history-limit")
+
+
 def ownership_proof(s, e, templates, facts, intent_digest):
     """Original immutable authority evidence, independent of current declarations."""
     raw = exact_file(e, COMPLETE, 0o600, 0)
     r = strict(s, raw, ("schemaVersion", "parentIntentSHA256", "identity", "ownerHash", "installation", "helperUid", "helperGid", "policy", "deployment", "policySHA256", "deploymentSHA256", "artifactSHA256"))
-    require(raw == canonical(r) and r["schemaVersion"] == "tracebolt.socket-owner-install-complete.v1" and r["parentIntentSHA256"] == intent_digest and r["ownerHash"] == facts["ownerHash"] and r["installation"] == facts["manifest"], "original-install-receipt")
+    require(raw == canonical(r) and r["schemaVersion"] == "tracebolt.socket-owner-install-complete.v1" and r["parentIntentSHA256"] == intent_digest, "original-install-receipt")
+    r = current_binding(s, e, r, raw, intent_digest)
+    require(r["ownerHash"] == facts["ownerHash"] and r["installation"] == facts["manifest"], "current-install-receipt")
     i = r["identity"]
     require(type(i) is dict and set(i) == set(IDENTITY_FIELDS) and i["schemaVersion"] == "tracebolt.socket-owner-setup-identity.v1" and valid_hash(i["senderBinding"]) and type(i["incarnationDigest"]) is str and i["incarnationDigest"].startswith("sha256:") and valid_hash(i["incarnationDigest"][7:]) and i["managerOrigin"] == facts["origin"] and i["transportProfile"] == facts["profile"] and type(i["agentUid"]) is int and type(i["agentGid"]) is int and (i["agentUid"], i["agentGid"]) == (facts["uid"], facts["gid"]) and type(i["endpointId"]) is str and re.fullmatch(r"agent_[0-9a-f]{32}", i["endpointId"]) and ("deviceId" not in facts or i["endpointId"] == facts["deviceId"]), "original-identity-evidence")
     hu, hg = s.account(*local_accounts(s, e), HELPER, "/nonexistent")

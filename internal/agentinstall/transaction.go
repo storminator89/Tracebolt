@@ -54,11 +54,12 @@ type Transaction interface {
 	Close() error
 }
 type Result struct {
-	Plan             Plan      `json:"plan"`
-	Committed        bool      `json:"committed"`
-	RolledBack       bool      `json:"rolledBack"`
-	IdentityRetained bool      `json:"identityRetained"`
-	FailureStage     Operation `json:"failureStage,omitempty"`
+	Plan               Plan      `json:"plan"`
+	Committed          bool      `json:"committed"`
+	ServiceLeftStopped bool      `json:"serviceLeftStopped,omitempty"`
+	RolledBack         bool      `json:"rolledBack"`
+	IdentityRetained   bool      `json:"identityRetained"`
+	FailureStage       Operation `json:"failureStage,omitempty"`
 }
 
 // preflightFailure carries only a fixed checkpoint; the original error identity
@@ -159,6 +160,9 @@ func Execute(ctx context.Context, r Request, backend Backend) (Result, error) {
 		operations = []Operation{OpPrepare, OpStage, OpEnroll, OpValidate, OpPublish, OpStart}
 	case Upgrade:
 		operations = []Operation{OpStage, OpStop, OpValidate, OpPublish, OpStart}
+		if r.UpgradeCoordinatorFD != 0 {
+			operations = []Operation{OpStage, OpStop, OpValidate, OpPublish}
+		}
 	case Restart:
 		operations = []Operation{OpStop, OpValidate, OpResetRestartState, OpStart}
 	case Uninstall:
@@ -189,6 +193,7 @@ func Execute(ctx context.Context, r Request, backend Backend) (Result, error) {
 		return rollback()
 	}
 	out.Committed = true
+	out.ServiceLeftStopped = r.UpgradeCoordinatorFD != 0
 	out.FailureStage = ""
 	return out, nil
 }

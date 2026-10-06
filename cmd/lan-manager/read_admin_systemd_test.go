@@ -600,6 +600,16 @@ public-bootstrap-changed
 public-bootstrap-scope
 published-helper-units
 read-admin-phase-incomplete
+read-admin-upgrade-preflight
+read-admin-upgrade-prepare
+read-admin-upgrade-drain
+read-admin-upgrade-retained-state
+read-admin-upgrade-native-upgrade
+read-admin-upgrade-helper-rebind
+read-admin-upgrade-same-scope-validation
+read-admin-upgrade-restore-runtime
+read-admin-upgrade-commit
+read-admin-upgrade-lock-release
 read-admin-receipt-mismatch
 read-admin-result-invalid
 read-admin-result-unavailable
@@ -744,6 +754,8 @@ type readAdminNativeOptions struct {
 	checks                    readAdminNativeChecks
 	initialProbe              readAdminProbeDiagnostic
 	setupFailure              string
+	upgrade                   bool
+	upgradeChecks             *readAdminUpgradeNativeChecks
 }
 
 // Closed diagnostic only: never copy private transcript, command, path or error text.
@@ -816,6 +828,11 @@ func TestApprovedReadAdminDisposableSystemdInstallation(t *testing.T) {
 	if options == nil {
 		t.Skip("read-admin privileged acceptance not enabled; no native acceptance claimed")
 	}
+	selection := os.Getenv("TRACEBOLT_APPROVED_READ_ADMIN_UPGRADE")
+	if selection != "" && selection != "false" && selection != "true" {
+		t.Fatal("invalid explicit read-admin upgrade gate")
+	}
+	options.upgrade = selection == "true" && options.scenario == "complete"
 	runApprovedSystemdInstallationMode(t, options.profile, enrollmentcrypto.CollectionProfileComplete, options)
 }
 
@@ -921,6 +938,7 @@ type readAdminNativeCommand struct {
 	configs     map[bool]string
 	options     *readAdminNativeOptions
 	maintenance map[string]string
+	replacement *readAdminNativeCommand
 }
 
 func (c *readAdminNativeCommand) args(resume bool) []string {
@@ -934,10 +952,14 @@ func (c *readAdminNativeCommand) approval() string {
 }
 func (c *readAdminNativeCommand) environment() []string {
 	return append(systemdCleanEnvironment(), "GITHUB_ACTIONS=true", "RUNNER_ENVIRONMENT=github-hosted", "RUNNER_OS=Linux", "GITHUB_SHA="+c.options.source,
-		"TRACEBOLT_APPROVED_SYSTEMD_TEST=1", "TRACEBOLT_APPROVED_READ_ADMIN_V2_SYSTEMD_TEST=1", "TRACEBOLT_READ_ADMIN_PROFILE=tracebolt.linux-read-admin.v2", "TRACEBOLT_APPROVED_READ_ADMIN_PTRACE=true", "TRACEBOLT_READ_ADMIN_REVIEWED_SOURCE="+c.options.source, "TRACEBOLT_READ_ADMIN_TRANSPORT="+c.options.profile, "TRACEBOLT_READ_ADMIN_SCENARIO="+c.options.scenario)
+		"TRACEBOLT_APPROVED_SYSTEMD_TEST=1", "TRACEBOLT_APPROVED_READ_ADMIN_V2_SYSTEMD_TEST=1", "TRACEBOLT_READ_ADMIN_PROFILE=tracebolt.linux-read-admin.v2", "TRACEBOLT_APPROVED_READ_ADMIN_PTRACE=true", "TRACEBOLT_READ_ADMIN_REVIEWED_SOURCE="+c.options.source, "TRACEBOLT_READ_ADMIN_TRANSPORT="+c.options.profile, "TRACEBOLT_READ_ADMIN_SCENARIO="+c.options.scenario, "TRACEBOLT_APPROVED_READ_ADMIN_UPGRADE="+strconv.FormatBool(c.options.upgrade))
 }
 
 func prepareReadAdminNativeCommand(t *testing.T, python string, binaries map[string]string, archive, profile string, bootstrap api.EnrollmentBootstrap, bootstrapHash string, options *readAdminNativeOptions) *readAdminNativeCommand {
+	return prepareReadAdminNativeCommandSource(t, python, binaries, archive, profile, bootstrap, bootstrapHash, options, options.source)
+}
+
+func prepareReadAdminNativeCommandSource(t *testing.T, python string, binaries map[string]string, archive, profile string, bootstrap api.EnrollmentBootstrap, bootstrapHash string, options *readAdminNativeOptions, artifactSource string) *readAdminNativeCommand {
 	t.Helper()
 	if !regexp.MustCompile(`^[0-9a-f]{64}$`).MatchString(bootstrapHash) || bootstrap.CollectionProfile != enrollmentcrypto.CollectionProfileComplete || bootstrap.Profile != profile {
 		t.Fatal("read-admin public bootstrap scope is invalid")
@@ -975,7 +997,25 @@ func prepareReadAdminNativeCommand(t *testing.T, python string, binaries map[str
 		copyArtifact(binaries[role], "tracebolt-"+readAdminFixtureVersion+"-linux-amd64-"+role, 0500)
 	}
 	copyArtifact(archive, "tracebolt-"+readAdminFixtureVersion+"-source.tar", 0600)
-	manifest := map[string]any{"version": readAdminFixtureVersion, "sourceCommit": options.source, "assets": assets}
+	if artifactSource != options.source {
+		if !options.upgrade || artifactSource != readAdminPriorSource {
+			t.Fatal("unapproved prior release source")
+		}
+		for role, expected := range readAdminPriorHashes {
+			name := "tracebolt-" + readAdminFixtureVersion + "-linux-amd64-" + role
+			if role == "source" {
+				name = "tracebolt-" + readAdminFixtureVersion + "-source.tar"
+			}
+			if assets[name].(map[string]any)["sha256"] != expected {
+				t.Fatal("staged prior release artifact changed")
+			}
+		}
+	}
+	manifest := map[string]any{"version": readAdminFixtureVersion, "sourceCommit": artifactSource, "assets": assets}
+	manifestRaw, _ := json.Marshal(manifest)
+	if err := os.WriteFile(filepath.Join(stage, "manifest.json"), manifestRaw, 0600); err != nil {
+		t.Fatal("read-admin fixture manifest write")
+	}
 	arguments := []string{"--action", "install", "--apply", "--read-admin", "--read-admin-agent-origin", bootstrap.AgentOrigin, "--manager-origin", bootstrap.EnrollmentOrigin, "--invitation-id", bootstrap.InvitationID, "--bootstrap-sha256", bootstrapHash}
 	if profile == lanconfig.HTTPTest {
 		arguments = append(arguments, "--insecure-http-test")
@@ -1002,8 +1042,15 @@ func prepareReadAdminNativeCommand(t *testing.T, python string, binaries map[str
 		}
 		command.configs[resume] = name
 	}
-	for _, operation := range []string{"inspect-socket", "revoke-socket", "cleanup"} {
-		raw, err := json.Marshal(map[string]any{"directory": stage, "manifest": manifest, "arguments": arguments, "scenario": options.scenario, "operation": operation})
+	for _, operation := range []string{"inspect-socket", "revoke-socket", "cleanup", "upgrade"} {
+		selectedArguments := arguments
+		if operation == "upgrade" {
+			selectedArguments = []string{"--action", "upgrade", "--upgrade-read-admin", "--apply"}
+			if profile == lanconfig.HTTPTest {
+				selectedArguments = append(selectedArguments, "--insecure-http-test")
+			}
+		}
+		raw, err := json.Marshal(map[string]any{"directory": stage, "manifest": manifest, "arguments": selectedArguments, "scenario": options.scenario, "operation": operation})
 		if err != nil {
 			t.Fatal("maintenance fixture encoding")
 		}
@@ -1220,6 +1267,10 @@ func readAdminCompleteAndRepeat(t *testing.T, c *readAdminNativeCommand, get fun
 	systemdCheckProcessIdentity(t, uid, gid)
 	if !reflect.DeepEqual(before, readAdminIdentitySnapshot(t)) || systemdHash(t, completePath) != completeHash || !reflect.DeepEqual(protected, readAdminAuthoritySnapshot(t)) || systemdSequence(t, agentinstall.EnrollmentDirectory) < sequence {
 		t.Fatal("fresh read-admin identity or authority changed while observing")
+	}
+	if c.options.upgrade {
+		readAdminRunApprovedUpgrade(t, c, stage)
+		readAdminWaitViews(t, get)
 	}
 	readAdminSocketOwnersAndRevoke(t, c, get, query, stage, uid, gid, bindOperatorTest)
 

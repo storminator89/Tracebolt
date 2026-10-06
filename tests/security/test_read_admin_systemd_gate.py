@@ -31,7 +31,7 @@ STAGES = {
     "read_admin_repeat", "read_admin_retained", "read_admin_readiness", "complete",
     "read_admin_socket", "read_admin_socket_owners", "read_admin_revoke",
     "read_admin_post_revoke",
-    "read_admin_journal_content", "read_admin_restart",
+    "read_admin_journal_content", "read_admin_restart", "read_admin_upgrade",
     'installer_preflight_inspect',
     'installer_preflight_systemd',
     'installer_preflight_terminal',
@@ -189,7 +189,7 @@ class ReadAdminWrapperTests(unittest.TestCase):
                 self.assertEqual(self.dispatch_inputs(raw=raw), ("", "::error::INVALID_DISPATCH_INPUTS"))
 
     def validate(self, raw, transport="tls", scenario="complete", *, read_profile=READ_PROFILE,
-                 source=SOURCE, mode=stat.S_IFREG | 0o600,
+                 source=SOURCE, mode=stat.S_IFREG | 0o600, upgrade_requested=None,
                  size=None, open_error=None, private_log=None, log_mode=stat.S_IFREG | 0o600, log_size=None,
                  log_open_error=None, log_read_error=None):
         stream = FakeFile(raw)
@@ -217,7 +217,7 @@ class ReadAdminWrapperTests(unittest.TestCase):
         )
         output, error = io.StringIO(), None
         with contextlib.redirect_stdout(output), mock.patch.dict(sys.modules, {"os": fake_os}), \
-                mock.patch.object(sys, "argv", ["validator", "private-fixture-path", transport, scenario, read_profile, source]):
+                mock.patch.object(sys, "argv", ["validator", "private-fixture-path", transport, scenario, read_profile, source] + ([] if upgrade_requested is None else [upgrade_requested])):
             try:
                 exec(self.readers[0], {"__name__": "__main__"})
             except SystemExit as exc:
@@ -556,6 +556,33 @@ class ReadAdminWrapperTests(unittest.TestCase):
         self.assertIn('raw = stream.read(16385)', self.source)
         self.assertIn("check(len(normalized.encode('utf-8')) + 1 <= 16384)", self.source)
 
+    def test_upgrade_failed_phase_survives_sanitized_reader_without_private_text(self):
+        for phase in ("preflight","prepare","drain","retained-state","native-upgrade","helper-rebind","same-scope-validation","restore-runtime","commit","lock-release"):
+            value=result(status="fail",stage="read_admin_upgrade",upgradeNativeChecks=None,setupFailure="read-admin-upgrade-"+phase)
+            output,error,_,_=self.validate(json.dumps(value).encode(),upgrade_requested="true")
+            self.assertIsNone(error)
+            self.assertEqual(json.loads(output)["setupFailure"],"read-admin-upgrade-"+phase)
+            self.assertEqual(self.complete(output.encode())[1],INCOMPLETE)
+        for failure in ("private-host-value","read-admin-upgrade-unknown"):
+            value=result(status="fail",stage="read_admin_upgrade",upgradeNativeChecks=None,setupFailure=failure)
+            self.assertEqual(self.validate(json.dumps(value).encode(),upgrade_requested="true")[1],INVALID)
+
+    def test_upgrade_proof_requires_selection_prior_contract_and_all_checks(self):
+        evidence = dict(priorVersion="v0.1.0-rc.2", priorSourceCommit="a6368b0202b1efecdb6214dc34c4302d239854f7",
+                        priorAgentSHA256="6e1ac6ca7b50ae11141b1d345dc69cd59e0ff97583aa3cefd52152b209509bb5", candidateAgentSHA256="c" * 64,
+                        artifactReplaced=True, identityAndScopesRetained=True, privateStateVerified=True, localApprovalObserved=True)
+        value = result(upgradeNativeChecks=evidence)
+        self.assertIsNone(self.validate(json.dumps(value).encode(), upgrade_requested="true")[1])
+        self.assertEqual(self.validate(json.dumps(value).encode(), upgrade_requested="false")[1], INVALID)
+        self.assertEqual(self.validate(json.dumps(result()).encode(), upgrade_requested="true")[1], INVALID)
+        for field in ("artifactReplaced", "identityAndScopesRetained", "privateStateVerified", "localApprovalObserved"):
+            changed = dict(value, upgradeNativeChecks=dict(evidence, **{field:False}))
+            self.assertEqual(self.validate(json.dumps(changed).encode(), upgrade_requested="true")[1], INVALID)
+        for changes in (dict(priorVersion="moving"), dict(priorSourceCommit="a" * 40), dict(candidateAgentSHA256=evidence["priorAgentSHA256"]), dict(extra=True)):
+            changed = dict(value, upgradeNativeChecks=dict(evidence, **changes))
+            self.assertEqual(self.validate(json.dumps(changed).encode(), upgrade_requested="true")[1], INVALID)
+        self.assertIsNone(self.validate(json.dumps(result(status="fail",stage="read_admin_upgrade",upgradeNativeChecks=None)).encode(), upgrade_requested="true")[1])
+
     def test_manual_only_fresh_v2_approval_source_and_transport_choice(self):
         source = self.source
         self.assertEqual(re.findall(r"^([a-z][a-z-]*):", source, re.M),
@@ -564,8 +591,8 @@ class ReadAdminWrapperTests(unittest.TestCase):
         self.assertEqual(re.findall(r"^  (\w+):", triggers, re.M), ["workflow_dispatch"])
         self.assertEqual(re.findall(r"^      ([a-z0-9_]+):", triggers, re.M),
                          ["read_profile", "reviewed_source_commit", "approved_fresh_v2_read_admin_systemd",
-                          "approved_cap_sys_ptrace_process_memory", "transport"])
-        for approval in ("approved_fresh_v2_read_admin_systemd", "approved_cap_sys_ptrace_process_memory"):
+                          "approved_cap_sys_ptrace_process_memory", "approved_read_admin_upgrade", "transport"])
+        for approval in ("approved_fresh_v2_read_admin_systemd", "approved_cap_sys_ptrace_process_memory", "approved_read_admin_upgrade"):
             self.assertRegex(triggers, rf"      {approval}:\n        description: [^\n]+\n"
                              r"        required: true\n        default: false\n        type: boolean\n")
         self.assertIn("        default: tracebolt.linux-read-admin.v2\n        type: choice\n        options:\n"
@@ -599,7 +626,9 @@ class ReadAdminWrapperTests(unittest.TestCase):
         self.assertIn('git archive --format=tar --output="$STAGE/source.tar" "$GITHUB_SHA"', source)
         for name in ("agent-service", "lan-manager", "enroll-agent", "lan-agent", "socket-owner-reader"):
             self.assertIn(f'go build -buildvcs=false -o "$STAGE/{name}" ./cmd/{name}', source)
-        self.assertNotIn("-upgrade", source.split("      - name: Build", 1)[1].split("      - name: Validate", 1)[0])
+        self.assertNotIn('"$STAGE/lan-agent-upgrade"', source)
+        self.assertIn('if test "$TRACEBOLT_APPROVED_READ_ADMIN_UPGRADE" = true && test "$TRACEBOLT_READ_ADMIN_SCENARIO" = complete; then', source)
+        self.assertIn('prepare-read-admin-upgrade-fixture.py --directory "$STAGE/prior-rc2"', source)
         self.assertIn('go test -c -o "$STAGE/systemd.test" ./cmd/lan-manager', source)
         for action in re.findall(r"uses: ([^\s]+)", source):
             self.assertRegex(action, r"^actions/(checkout|setup-go|upload-artifact)@[0-9a-f]{40}$")

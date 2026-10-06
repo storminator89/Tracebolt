@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "sourceCommit": "fccc4b00cd8a144afd58e4b995747afab7a10022",
-  "goSourceSha256": "876d211043f7a47572dbd50eaf19b73808e542d06ceaa24d613b5487c359c170",
+  "goSourceSha256": "6da951db17835745d82dc23484fa9b14e2f8191776a41721d47693968532a357",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -17,6 +17,7 @@
       "TestCLIIsReadOnlyUnlessExplicitApply",
       "TestCLIOnlineFlagsRequireApplyBeforeAnyBackendActivity",
       "TestCLIRejectsSecretAndCommandArgumentsWithoutEcho",
+      "TestCoordinatedUpgradeReportsStoppedHandoff",
       "TestOnlinePreparationCancellationAndBadFetchDoNotStage",
       "TestOnlinePreparationGateBeforeFetchAndProtectedPublicSnapshot",
       "TestOnlinePreparationRejectsBeforeFetch",
@@ -157,9 +158,11 @@
       "TestReadAdminOperatorFailureBounds",
       "TestReadAdminOptFixturePreparationIsNarrow",
       "TestReadAdminPTYInput",
+      "TestReadAdminPriorReleaseContractIsImmutable",
       "TestReadAdminRestartRequiresNewOrdinaryGeneration",
       "TestReadAdminSetupDiagnosticIsClosed",
       "TestReadAdminSocketProcessMatches",
+      "TestReadAdminUpgradeClosedFailureProjection",
       "TestSystemdDiagnosticStageAllowlist"
     ],
     "localrmm/cmd/manager": [
@@ -345,14 +348,19 @@
       "TestManagedPackageBootstrapInstallerCompatibility",
       "TestNewPublicDirectoryNeverAdoptsExisting",
       "TestOnlineBootstrapPreparationRejectsIncompleteContract",
+      "TestOrdinaryUpgradeRejectsCompletedReadAdmin",
       "TestPendingInstallerCanceledStartStopsAndRetainsIdentity",
       "TestPendingInstallerUncertainClaimNeverPublishesService",
       "TestPendingInstallerVersionedLifecycleAndNoModeConversion",
       "TestPendingServicePlanRequiresExplicitFreshModeAndStableResume",
       "TestPendingServiceUnitPinsModeProfileAndNumericIdentity",
       "TestPlanGatesAndRetainedIdentity",
+      "TestReadAdminBorrowedLockRetainsExclusionAfterNativeClose",
+      "TestReadAdminCoordinatorLeavesServiceStopped",
       "TestReadAdminNativePreflightRejectsOlderBootstrapWithoutEffects",
+      "TestReadAdminNativeTransactionKeepsCoordinatorLockAtEveryOperation",
       "TestReadAdminRequiresExplicitCompleteProfileBeforeEffects",
+      "TestReadAdminValidationChildDoesNotInheritLock",
       "TestRestartResetFailuresNeverReachStart",
       "TestTransactionJournalAndEnrollmentBeforeStart",
       "TestUninstallNeverRequestsIdentityOrAccountDeletion",

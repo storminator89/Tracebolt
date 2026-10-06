@@ -181,6 +181,10 @@ func (b *LinuxBackend) Inspect(ctx context.Context, r Request) (HostFacts, error
 			facts.Profile = bootstrap.Profile
 		}
 	}
+	if e := h.readAdminUpgradeGuard(r); e != nil {
+		facts.inspectionStage = "preflight_installation_state"
+		return facts, e
+	}
 	facts.inspectionStage = "preflight_complete_profile"
 	if r.Action == Install && r.RequireCompleteProfile {
 		raw, bootstrap, err := readBootstrap(ctx, r.BootstrapFile, r.BootstrapSHA256)
@@ -429,7 +433,16 @@ func (b *LinuxBackend) Begin(ctx context.Context, r Request, p Plan) (result Tra
 		return nil, e
 	}
 	checkpoint = "preflight_begin_lock"
-	lock, e := unix.Open(filepath.Join(dir, "install.lock"), unix.O_RDWR|unix.O_CREAT|unix.O_NOFOLLOW|unix.O_CLOEXEC|unix.O_NONBLOCK, 0600)
+	var lock int
+	var e error
+	if r.UpgradeCoordinatorFD != 0 {
+		if e = h.readAdminUpgradeGuard(r); e != nil {
+			return nil, e
+		}
+		lock, e = unix.FcntlInt(uintptr(r.UpgradeCoordinatorFD), unix.F_DUPFD_CLOEXEC, 3)
+	} else {
+		lock, e = unix.Open(filepath.Join(dir, "install.lock"), unix.O_RDWR|unix.O_CREAT|unix.O_NOFOLLOW|unix.O_CLOEXEC|unix.O_NONBLOCK, 0600)
+	}
 	if e != nil {
 		return nil, ErrState
 	}
@@ -468,7 +481,7 @@ func (b *LinuxBackend) Begin(ctx context.Context, r Request, p Plan) (result Tra
 			return fail()
 		}
 	}
-	t := &linuxTransaction{h: h, lock: f, dir: dir, r: r, installationVersion: version, profile: profile, j: installJournal{ID: hex.EncodeToString(nonce[:]), Version: transactionVersion(version), Action: r.Action, Phase: "begun", Changes: []fileChange{}}}
+	t := &linuxTransaction{h: h, lock: f, borrowedLock: r.UpgradeCoordinatorFD != 0, dir: dir, r: r, installationVersion: version, profile: profile, j: installJournal{ID: hex.EncodeToString(nonce[:]), Version: transactionVersion(version), Action: r.Action, Phase: "begun", Changes: []fileChange{}}}
 	checkpoint = "preflight_begin_unit"
 	status, se := h.unit(ctx)
 	if se != nil {

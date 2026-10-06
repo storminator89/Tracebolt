@@ -150,6 +150,9 @@ func runApprovedSystemdInstallationMode(t *testing.T, profile, collectionProfile
 			result["setupFailure"] = readAdmin.setupDiagnostic()
 			result["collectionProfile"] = collectionProfile
 			result["scenario"] = readAdmin.scenario
+			if readAdmin.upgrade {
+				result["upgradeNativeChecks"] = readAdmin.upgradeChecks
+			}
 		}
 		raw, _ := json.Marshal(result)
 		f, e := os.OpenFile(resultPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0644)
@@ -324,6 +327,12 @@ func runApprovedSystemdInstallationMode(t *testing.T, profile, collectionProfile
 	script := enrollmentPTY
 	if readAdmin != nil {
 		readAdminCommand = prepareReadAdminNativeCommand(t, python, binaries, sourceArchive, profile, created.Bootstrap, created.BootstrapSHA256, readAdmin)
+		if readAdmin.upgrade {
+			replacement := readAdminCommand
+			prior, priorArchive := readAdminPriorArtifacts(t)
+			readAdminCommand = prepareReadAdminNativeCommandSource(t, python, prior, priorArchive, profile, created.Bootstrap, created.BootstrapSHA256, readAdmin, readAdminPriorSource)
+			readAdminCommand.replacement = replacement
+		}
 		stage = "read_admin_cancel"
 		readAdminCancelBeforeInstall(t, readAdminCommand)
 		stage = "install_enroll"

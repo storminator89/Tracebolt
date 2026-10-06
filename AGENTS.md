@@ -70,6 +70,10 @@ file as navigation and project constraints, never as permission to act on a host
   state. Use only the verified rc.2 pin and matching manager source described there;
   older release commands are not compatible with the combined profile. Do not
   call fixture results native acceptance or execute any host grant without approval.
+- For a completed read-admin v2 update, read `docs/read-admin-upgrade.md`. Use only
+  the explicit verified coordinator; never substitute ordinary binary upgrade.
+  Preserve original receipts, private state and same-scope grant bindings; require
+  the separately approved native old-release-to-new-artifacts gate before release.
 - For one-time existing-agent inventory consent, read
   `docs/guided-inventory-setup.md`. Its preview is nonmutating until explicit
   confirmation; existing identity-bound scope CLIs remain authoritative. Do not

@@ -58,9 +58,12 @@ def socket_native_operation(operation, scenario, workflow, inventory, s, amendme
     facts = inventory.inspect(s, inventory.real_effects(s), templates, inventory.selected_scopes(True))
     raw = e.read(workflow.RECEIPT, 16384, 0o600)
     bound = inventory.strict_json(raw, 16384)
+    current_binding = bound
+    if not e.absent('/var/lib/tracebolt-agent-installer/read-admin-upgrade-current.json'):
+        current_binding = socket_setup.ownership_proof(s, e, templates, facts, workflow.digest(raw))
     require(type(bound) is dict and bound.get('schemaVersion') == 'tracebolt.read-admin-intent.v2' and
         bound.get('readProfile') == workflow.PROFILE and workflow.canonical(bound) == raw and
-        bound.get('installation') == facts['manifest'] and bound.get('ownerHash') == facts['ownerHash'] and
+        current_binding.get('installation') == facts['manifest'] and current_binding.get('ownerHash') == facts['ownerHash'] and
         bound.get('configHash') == facts['configHash'] and bound.get('deviceId') == facts['deviceId'] and
         bound.get('managerOrigin') == facts['origin'] and bound.get('agentUid') == facts['uid'] and bound.get('agentGid') == facts['gid'] and
         facts['manifest']['sourceHash'] == release['assets']['tracebolt-' + release['version'] + '-source.tar']['sha256'])
@@ -254,10 +257,12 @@ def main(argv=None):
         require(type(cfg) is dict and set(cfg) == {'directory','manifest','arguments','scenario','operation'} and cfg['scenario'] == scenario)
         manifest, arguments = cfg['manifest'], cfg['arguments']
         operation = cfg['operation']
-        require(operation in ('install','inspect-socket','revoke-socket','cleanup'))
+        require(operation in ('install','inspect-socket','revoke-socket','cleanup','upgrade'))
         version = 'v0.0.0-read-admin-acceptance'
         require(type(manifest) is dict and set(manifest) == {'version','sourceCommit','assets'} and
-            manifest['version'] == version and manifest['sourceCommit'] == source_commit)
+            manifest['version'] == version and (manifest['sourceCommit'] == source_commit or
+            os.environ.get('TRACEBOLT_APPROVED_READ_ADMIN_UPGRADE') == 'true' and scenario == 'complete' and operation != 'upgrade' and
+            manifest['sourceCommit'] == 'a6368b0202b1efecdb6214dc34c4302d239854f7'))
         roles = ('agent-service','enroll-agent','lan-agent','socket-owner-reader')
         names = [f'tracebolt-{version}-linux-amd64-{role}' for role in roles]
         source_name = f'tracebolt-{version}-source.tar'
@@ -268,6 +273,13 @@ def main(argv=None):
             require(type(item) is dict and set(item) == {'size','sha256'} and type(item['size']) is int and
                 0 < item['size'] <= limit and type(item['sha256']) is str and
                 re.fullmatch(r'[0-9a-f]{64}', item['sha256']) and item['sha256'] != '0' * 64)
+        if manifest['sourceCommit'] != source_commit:
+            expected_prior = {'agent-service':'2b4e8f3174ab831bab3522d7119c0973819e214d2800d9328e7be72282e207e0',
+                'enroll-agent':'44a2235072459cc73fc918c9596e51fe441407b721f3d7cfc2b796fc1bbe645c',
+                'lan-agent':'6e1ac6ca7b50ae11141b1d345dc69cd59e0ff97583aa3cefd52152b209509bb5',
+                'socket-owner-reader':'5e360633dbc1acda24acd5b24317f3ce7619af7598dd7ed6119f5d5c4e5585f8'}
+            require(all(assets[f'tracebolt-{version}-linux-amd64-{role}']['sha256'] == expected for role, expected in expected_prior.items()) and
+                assets[source_name]['sha256'] == '3813b61b0565e9becd8c6921769b8448437d5c0adca4348ba4cbff8510356856')
         require(type(arguments) is list and 0 < len(arguments) <= 32 and
             all(type(v) is str and '\x00' not in v for v in arguments) and
             sum(len(v) for v in arguments) <= 100000)
@@ -308,10 +320,14 @@ def main(argv=None):
         exec(compile(bootstrap, b.__file__, 'exec'), b.__dict__)
         checkpoint = 'acceptance-launcher-arguments'
         args = b.parse_args(arguments)
-        require(args.apply and args.read_admin and args.action == 'install' and not args.resume and
-            args.insecure_http_test == (transport == 'http-test'))
+        if operation == 'upgrade':
+            require(os.environ.get('TRACEBOLT_APPROVED_READ_ADMIN_UPGRADE') == 'true' and scenario == 'complete' and manifest['sourceCommit'] == source_commit and
+                args.apply and args.action == 'upgrade' and args.upgrade_read_admin and not args.read_admin and args.insecure_http_test == (transport == 'http-test'))
+        else:
+            require(args.apply and args.read_admin and args.action == 'install' and not args.resume and
+                args.insecure_http_test == (transport == 'http-test'))
         directory = Path(cfg['directory'])
-        if operation == 'install':
+        if operation in ('install','upgrade'):
             checkpoint = 'acceptance-launcher-terminal'
             b.inspect_terminal()
         checkpoint = 'acceptance-launcher-host'
@@ -321,6 +337,8 @@ def main(argv=None):
         workflow, inventory, setup, amendment, journal_guide, socket_setup, templates = b.read_admin_sources(directory, manifest)
         rejection_types = (workflow.Rejected, inventory.Rejected, setup.Rejected, amendment.Rejected, journal_guide.Rejected, socket_setup.Rejected)
         require(workflow.PROFILE == 'tracebolt.linux-read-admin.v2' and workflow.PHASES == ('inventory','journal','socket'))
+        if operation == 'upgrade':
+            return b.run_upgrade_read_admin(args, directory, manifest, arch)
         if operation != 'install':
             result = socket_native_operation(operation, scenario, workflow, inventory, setup, amendment, socket_setup, templates, manifest)
             print(json.dumps(result), flush=True)
@@ -876,6 +894,16 @@ public-bootstrap-changed
 public-bootstrap-scope
 published-helper-units
 read-admin-phase-incomplete
+read-admin-upgrade-preflight
+read-admin-upgrade-prepare
+read-admin-upgrade-drain
+read-admin-upgrade-retained-state
+read-admin-upgrade-native-upgrade
+read-admin-upgrade-helper-rebind
+read-admin-upgrade-same-scope-validation
+read-admin-upgrade-restore-runtime
+read-admin-upgrade-commit
+read-admin-upgrade-lock-release
 read-admin-receipt-mismatch
 read-admin-result-invalid
 read-admin-result-unavailable
@@ -1088,12 +1116,51 @@ def parse_result(raw):
     return result
 
 
-def exit_event(raw, status, secret, approvals, failure=''):
+UPGRADE_FAILURE_PHASES = frozenset(('preflight','prepare','drain','retained-state','native-upgrade','helper-rebind','same-scope-validation','restore-runtime','commit','lock-release'))
+
+
+def parse_upgrade_result(raw):
+    result = dict(readAdminComplete=False, readAdminCanceled=False,
+        readAdminFailure='read-admin-phase-incomplete', readAdminPhasesComplete=False)
+    if type(raw) is not bytes or len(raw) > MAX_CAPTURE:
+        return result
+    try:
+        roots = [v for v in terminal_objects(raw) if v.get('schemaVersion') == 'tracebolt.read-admin-upgrade-result.v1']
+        if len(roots) != 1:
+            raise ValueError()
+        value = roots[0]
+        if value.get('completed') is False:
+            required = {'schemaVersion','completed','canceled','identityRetained','scopesChanged','participantsStopped','rollbackConfirmed','restartBookkeepingReset','nativeAcceptance','failureStage','failureReason'}
+            optional = {'recovery','agentActivityRestored','agentActive'}
+            phase = value.get('failureStage')
+            booleans = ('completed','canceled','identityRetained','scopesChanged','participantsStopped','rollbackConfirmed','restartBookkeepingReset')
+            if (not required <= set(value) or not set(value) <= required | optional or
+                any(type(value.get(key)) is not bool for key in booleans) or value['canceled'] is not False or
+                value.get('nativeAcceptance') != 'not-established' or type(phase) is not str or phase not in UPGRADE_FAILURE_PHASES):
+                raise ValueError()
+            # Project only this source-owned enum. Reason/recovery text and all
+            # other child data are deliberately omitted from the native result.
+            result['readAdminFailure'] = 'read-admin-upgrade-' + phase
+            return result
+        if (set(value) != {'schemaVersion','completed','canceled','identityRetained','scopesChanged','participantsStopped','rollbackConfirmed','restartBookkeepingReset','nativeAcceptance','agentActivityRestored','agentActive'} or
+            value.get('completed') is not True or value.get('canceled') is not False or
+            value.get('identityRetained') is not True or value.get('scopesChanged') is not False or
+            value.get('participantsStopped') is not False or value.get('rollbackConfirmed') is not False or
+            value.get('restartBookkeepingReset') is not True or value.get('nativeAcceptance') != 'not-established' or
+            value.get('agentActivityRestored') is not True or value.get('agentActive') is not True or 'failureStage' in value):
+            raise ValueError()
+        result.update(readAdminComplete=True, readAdminFailure='', readAdminPhasesComplete=True)
+    except (ValueError, UnicodeError, RecursionError):
+        pass
+    return result
+
+
+def exit_event(raw, status, secret, approvals, failure='', upgrade=False):
     event = dict(phase='exit', exitCode=status, secretEcho=secret.encode() in raw if secret else False,
         ready=b'Enrollment handoff is ready.' in raw,
         httpWarning=b'UNENCRYPTED HTTP TEST' in raw or b'WARNING: disposable HTTP test only.' in raw,
         installerStage='', installerRolledBack=False, installerIdentityRetained=False,
-        scopeApprovals=approvals, **parse_result(raw))
+        scopeApprovals=approvals, **(parse_upgrade_result(raw) if upgrade else parse_result(raw)))
     try:
         for value in terminal_objects(raw):
             stage = value.get('failureStage','preflight')
@@ -1117,7 +1184,10 @@ def parse_config(raw, transport):
     if type(raw) is not bytes or len(raw) > 131072 or transport not in ('tls','http-test'):
         raise ValueError()
     cfg = json.loads(raw.decode('utf-8'), object_pairs_hook=unique_object, parse_constant=no_constant)
-    approval = 'INSTALL READ ADMIN' + (' OVER HTTP' if transport == 'http-test' else '')
+    upgrade = type(cfg) is dict and type(cfg.get('approval')) is str and cfg['approval'].startswith('UPGRADE READ ADMIN')
+    if upgrade and (os.environ.get('TRACEBOLT_APPROVED_READ_ADMIN_UPGRADE') != 'true' or os.environ.get('TRACEBOLT_READ_ADMIN_SCENARIO') != 'complete'):
+        raise ValueError()
+    approval = ('UPGRADE READ ADMIN' if upgrade else 'INSTALL READ ADMIN') + (' OVER HTTP' if transport == 'http-test' else '')
     if (type(cfg) is not dict or set(cfg) != {'args','secret','approval','cancelApproval'} or
         type(cfg['args']) is not list or not 1 <= len(cfg['args']) <= 16 or
         any(type(v) is not str or '\x00' in v for v in cfg['args']) or
@@ -1133,10 +1203,12 @@ def main():
     buf, secret, approvals, failure = b'', '', 0, ''
     previous = {}
     reported = False
+    upgrade = False
     try:
         transport, _, _ = require_gate(os.environ, sys.platform, os.getuid(), os.geteuid())
         raw = sys.stdin.buffer.read(131073)
         cfg, approval = parse_config(raw, transport)
+        upgrade = approval.startswith('UPGRADE READ ADMIN')
         secret = cfg['secret']
         prompt = ('Type ' + approval + ' to confirm, or press Enter to cancel: ').encode('ascii')
         pid, fd = pty.fork()
@@ -1204,7 +1276,7 @@ def main():
             # Drain the final bounded result before reporting the child status.
             if status is not None and (eof or not ready):
                 break
-        print(json.dumps(exit_event(buf,status,secret,approvals,failure)), flush=True)
+        print(json.dumps(exit_event(buf,status,secret,approvals,failure,upgrade)), flush=True)
         reported = True
         return 0 if not failure else 1
     except (Exception, KeyboardInterrupt):
@@ -1224,7 +1296,7 @@ def main():
             except ChildProcessError:
                 status = 1
         if not reported:
-            print(json.dumps(exit_event(buf,status if status is not None else 1,secret,approvals,failure)), flush=True)
+            print(json.dumps(exit_event(buf,status if status is not None else 1,secret,approvals,failure,upgrade)), flush=True)
         for signum,handler in previous.items():
             signal.signal(signum,handler)
         if fd is not None:

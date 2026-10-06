@@ -83,3 +83,11 @@ func TestOperationGuidancePreservesPendingAndRecoveryBoundaries(t *testing.T) {
 		})
 	}
 }
+
+func TestCoordinatedUpgradeReportsStoppedHandoff(t *testing.T) {
+	var out bytes.Buffer
+	reportOperation(agentinstall.Request{Action: agentinstall.Upgrade, UpgradeCoordinatorFD: 7}, agentinstall.Result{Committed: true, ServiceLeftStopped: true}, nil, &out)
+	if !strings.Contains(out.String(), "service remains stopped") || strings.Contains(out.String(), "active service process was checked") {
+		t.Fatal("incorrect coordinator handoff", out.String())
+	}
+}

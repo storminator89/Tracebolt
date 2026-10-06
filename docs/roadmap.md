@@ -4,6 +4,42 @@ This is the ordered plan for making the Linux pilot easier to install and useful
 for everyday device inspection. An item being planned or implemented does not
 mean it has passed its release or host checks.
 
+## Immediate delivery and approved follow-ups
+
+The current priority is delivering the three reported Debian fixes (process
+names, cached APT configuration and device-header refresh) through a verified
+update of the existing full read-admin installation. The update must preserve
+identity, history, consent and private counters while coordinating both helpers.
+Publishing source or rebuilding the manager alone does not update the endpoint.
+Other feature work must not delay that maintenance path and its acceptance.
+
+The following requests are **planned or in source development, not completed or
+activated on an installed host**:
+
+- **Automatic certificate renewal with UI revocation.** Renew before expiry while
+  keeping the same device identity and history. Existing revocation must block
+  ingestion and renewal across every certificate generation. Preserve local
+  helper/consent bindings and counters; show failures and an explicit recovery
+  path if a device misses expiry. Do not silently grant perpetual credentials.
+- **Recognizable device rows.** Show the actually reported computer hostname and
+  interface IP addresses in the main device table. Distinguish multiple addresses,
+  stale and missing observations; keep the stable cryptographic ID in technical
+  details instead of presenting it as a reported computer name. Reuse the already
+  approved identity source without adding a new collection grant.
+- **Usable alarm setup in Settings.** Add reviewed configuration and activation
+  controls for supported delivery destinations, explicit payload disclosure and
+  deliberate test delivery. The existing read-only status panel does not configure
+  a provider or send anything; provider acceptance is not proof a person received it.
+- **Automatic investigations for real LAN devices.** Create useful, explainable
+  cases from supported observations with their original evidence and timestamps.
+  Keep incomplete/stale input and unknown health explicit. The current LAN Cases
+  page does not yet create these investigations and has no hidden setup switch.
+- **Service-log selection that handles aliases and time clearly.** Prefer observed
+  canonical service names, explain aliases such as ssh.service versus sshd.service,
+  and make a new capture window distinct from searching an older snapshot. Avoid
+  requiring users to guess an internal unit name. Preserve the exact service/time
+  request, explicit content approval and existing local scope boundaries.
+
 ## Current MVP priorities
 
 1. Make the on-demand Logs flow readable, searchable and actually testable from
@@ -56,13 +92,15 @@ The [full-width device-page checkpoint](https://github.com/storminator89/Tracebo
    passed; see [the fully green binary-source checkpoint](https://github.com/storminator89/Tracebolt/actions/runs/37219826603).
    Local addresses show their source and original age and do not establish
    external reachability. No network scan is implied.
-3. **Verified release-download installer — official rc.1 verified and pinned.**
+3. **Verified release-download installer — rc.2 verified and activated.**
    The [dashboard command](dashboard-verified-download.md) pins bootstrap
-   publication `458fc072` for rc.1, built from source `ccac65e7`. This immutable
-   release predates the latest source features; updating the manager does not
-   upgrade an endpoint. Earlier pilot.2 upgrade observations remain historical
-   [release checkpoints](../CHANGELOG.md), not a reason to reinstall or reset an
-   already committed identity.
+   publication `08c7f0e` for rc.2, built from source `a6368b0`. Its release and
+   all twelve public asset/provenance checks passed; hashes and immutable source
+   references bind the bytes, rather than a claim that GitHub locked the release.
+   The complete profile uses one combined local read-admin approval, hidden
+   invitation entry and dashboard identity approval. Updating the manager does
+   not upgrade the endpoint. A supported update of the installed full profile is
+   the immediate delivery work above; no identity reset or reinstall is implied.
 4. **Useful on-demand service logs — published and observed on one granted pilot.**
    The [d3628dc checkpoint](https://github.com/storminator89/Tracebolt/actions/runs/37228371588)
    passed all 13 CI jobs and 104 required browser checks, including six journal
@@ -141,6 +179,8 @@ These remain visible without widening the current complete-inventory slice:
   no manual bootstrap-file transfer. Each new runtime feature needs compatible
   verified binaries; a manager-only update cannot upgrade an endpoint implicitly.
 
-Windows/macOS LAN installation, automatic remediation, credential renewal and
-production fleet assurance are outside this Linux delivery sequence. Published
+Windows/macOS LAN installation, automatic remediation and production fleet
+assurance remain outside this Linux delivery sequence. Certificate renewal is
+now an explicitly requested Linux follow-up above, with release and host
+acceptance still outstanding. Published
 checkpoints and their validation limits are recorded in the [changelog](../CHANGELOG.md).

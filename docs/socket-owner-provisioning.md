@@ -101,9 +101,11 @@ removes evidence. A safety failure handler attempts to stop the socket and helpe
 without replaying authority changes. A failed stop is a blocker, not confirmed
 shutdown. Baseline identity validation and exact disabled readback must complete
 before restoring only the sender's prior activity; helper/socket remain disabled.
-Same-epoch re-enable, renewal, migration and replay of uncertain revoke are not
-supported. An ordinary agent upgrade changes the hash-bound deployment and fails
-closed; this adapter must not silently rewrite that binding.
+Same-epoch re-enable, renewal and replay of uncertain revoke are not supported.
+The explicit [same-scope read-admin update](read-admin-upgrade.md) uses a separate
+verified current-binding record and immutable upgrade history while preserving
+these original receipts. An ordinary agent upgrade cannot rewrite that binding
+and is rejected for a read-admin installation.
 
 If explicit revoke is blocked by corrupt current policy/deployment bytes, its
 failure path can still contain an independently proven owned helper: it checks

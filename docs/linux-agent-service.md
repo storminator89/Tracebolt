@@ -83,6 +83,7 @@ terminal recovery; it is not a transactional terminal guarantee across host loss
 ## Operations and retained state
 
 - `--action upgrade`: requires selected replacement binary/source paths and hashes.
+  Completed read-admin installations require the [coordinated same-scope update](read-admin-upgrade.md); ordinary upgrade rejects them. Its internal upgrade-only borrowed-lock seam leaves the service stopped for verified helper rebinding.
   Stops/drains the exact owned service, validates the existing identity/ledger,
   replaces only owned binaries/unit, and starts the service. Previous enablement
   is preserved. It never resets keys, pending bytes or sequence state.
