@@ -90,8 +90,9 @@ Acceptance:
 
 The [current source slice](alarm-delivery.md) wires a default-off public HTTPS
 generic webhook, persistent health-transition outbox, bounded retries and
-authenticated read-only API status. It has no delivery UI, test-send or
-Slack/Teams/SMTP adapter. Destination/data approval, protected setup and one live
+authenticated read-only API status with a compact Settings summary. Details explain
+retained counts and provider acceptance; individual events are not reconciled.
+There is no test-send or Slack/Teams/SMTP adapter. Destination/data approval, protected setup and one live
 alarm/recovery acceptance pair remain outstanding. The following is the fuller
 pilot target, including still-missing per-rule maintenance and test-send behavior.
 

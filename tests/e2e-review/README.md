@@ -56,7 +56,7 @@ Run after the normal and managed targets:
 node tests/e2e-review/lan-browser.mjs
 ```
 
-This adds twelve scenarios against the real `NewLANOperatorHandler` with explicit `InsecureHTTPTest:true`, bound only to 127.0.0.1 (port 19886, overridable with `LAN_REVIEW_PORT`). The test fixture uses a known synthetic password, an in-memory ephemeral CA and the safe awaiting-agent contract from `docs/lan-api-examples.json`. It starts fresh disposable state for each scenario and tests real login, cookie/CSRF boundaries, logout and actual short expiry. Malformed bootstrap, protected 401 and interrupted logout are explicitly injected fault paths. Nothing calls a real model or enrolls a device.
+This adds thirteen scenarios against the real `NewLANOperatorHandler` with explicit `InsecureHTTPTest:true`, bound only to 127.0.0.1 (port 19886, overridable with `LAN_REVIEW_PORT`). The test fixture uses a known synthetic password, an in-memory ephemeral CA and the safe awaiting-agent contract from `docs/lan-api-examples.json`. It starts fresh disposable state for each scenario and tests real login, cookie/CSRF boundaries, logout and actual short expiry. Malformed bootstrap, protected 401 and interrupted logout are explicitly injected fault paths. Nothing calls a real model or enrolls a device.
 
 Upload only `lan-browser-results.json`, `lan-browser-manifest.json` and `synthetic-http-test-*.png` from `artifacts/review`. These contain bounded outcomes and labelled synthetic UI fixtures, no raw cookies, passwords, private keys or real telemetry. Login screenshots are captured before password entry. The target does not run the production LAN CLI or validate real trusted TLS browser deployment. It never uses `ignoreHTTPSErrors`, certificate-error launch flags, a certificate-warning bypass, a public listener or a tunnel.
 
@@ -103,12 +103,49 @@ HTTP or certificate fields; their certificate cell explicitly says that the
 certificate is not part of this check on mobile. The observation disclosure
 qualifies system name resolution and connect-and-close TCP without application
 health or TLS claims. Each phase rechecks unchanged age on reload, stale
-projection, 503 clearing/recovery and 401 removal/stopped reads. The runner's
-twelve case names/count, session lifetime, assertion timeouts and launch options
-remain unchanged. No real application target or probe is introduced.
+projection, 503 clearing/recovery and 401 removal/stopped reads. That application extension preserves its twelve case names/count, session
+lifetime, assertion timeouts and launch options. The alarm-status case described
+below adds one required case, bringing this runner to thirteen. No real application target or probe is introduced.
 
 Additional desktop/mobile screenshot names include `v1-http-https` or
 `v2-dns-tcp-https` under the existing synthetic prefix; a second v2 mobile capture
 shows the HTTPS row below the DNS/TCP rows. Capture metadata labels these as
 invented retained DTOs with no actual target probe or TLS handshake. These new
 captures are produced only by the upcoming hosted browser run, not source tests.
+
+
+## Read-only alarm status in Settings
+
+`alarm-status-browser.mjs` adds exactly one required case through the existing
+`lan-browser.mjs` runner, for thirteen total LAN cases. All previous case names,
+assertions, fixture session lifetimes, timeouts and browser launch options are
+unchanged. The existing hosted browser step and artifact upload already include
+this runner and its new `synthetic-http-test-alarm-status-*.png` captures; no
+alternate launcher or browser route is introduced.
+
+Real fixture authentication and all other handlers remain intact. Only the exact
+existing `GET /api/alerts/status` is intercepted with invented aggregates,
+validated against `web/src/alarm-status-types.ts` using the pinned Node 24 runtime.
+It checks quiet Off, retained On and disabled historical counts, Pending as queued
+plus in flight, separate Failed/Uncertain/Dropped meanings, and the qualification
+that provider acceptance does not establish human receipt. The API supplies no
+event or server timestamps: Loaded is explicitly the browser's clock. Failed,
+malformed and timed-out refreshes keep the original Loaded value and retained
+counts marked Previous snapshot with Unknown current state.
+
+The case covers explicit refresh, duplicate clicks, no polling/retries, a held
+late response after a newer refresh, navigation, visibility/page suspension,
+real session revalidation, protected 401 clearing and fresh-login isolation.
+Browser time is advanced within the existing session lifetime; authentication
+routes, server clocks and session duration are not stubbed or extended. Request
+accounting allows the fixture login POST only, requires all alarm requests to be
+body-free status GETs, and forbids external requests and mutations.
+
+English and German 390×844 layout checks measure panel and element clipping,
+verify labelled Details with keyboard activation, and use the existing genuine
+viewport capture helper. Desktop captures use 1440×1000. The disabled German
+case includes the maximum safe dropped counter. Captures and their existing
+source-SHA manifest are evidence only after a successful hosted run and pixel
+review. Local source, syntax and DOM checks do not execute a browser or produce
+screenshots. Nothing probes a target, sends a webhook or test alarm, changes
+configuration, or establishes production/native delivery acceptance.

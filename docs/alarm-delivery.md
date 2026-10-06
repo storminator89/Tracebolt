@@ -4,7 +4,7 @@ This optional manager-side slice sends a small JSON event to one explicitly
 configured **public HTTPS webhook**. It is a generic Tracebolt protocol, not a
 Slack/Teams adapter. No recipient, credentials or external service is provisioned
 by an upgrade. SMTP, browser recipient administration, test-send/replay actions,
-per-rule maintenance and a delivery UI remain unimplemented.
+per-rule maintenance and per-event delivery reconciliation remain unimplemented.
 
 ## Activation boundary
 
@@ -113,8 +113,23 @@ Authenticated `GET /api/alerts/status` returns only enabled and state counts,
 including `inFlight`, `providerAccepted`, `failed`, `uncertain`, `suppressed` and
 `dropped`. Named read accounts can inspect it. POST is not a send operation.
 Counts include retained previous destination generations. No URL, token, provider
-body or raw error is exposed. UI presentation and per-event reconciliation remain
-pending; operators must inspect the authenticated status during this pilot.
+body or raw error is exposed.
+
+Settings now exposes a compact read-only **Alarm delivery** panel for authenticated
+LAN accounts, including named read accounts. It shows retained provider acceptance,
+pending (queued plus in flight), failed and uncertain counts; nonzero dropped gaps
+remain separate. Disabled delivery stays quiet, while retained counts remain
+visible. Details explain the individual states and retained-history limits.
+Provider acceptance is never described as receipt by a person. These aggregate
+counts cannot confirm any individual opening or recovery event.
+
+The panel performs only the existing status GET on entry or explicit refresh,
+with no polling, automatic retry, send or configuration action. Loading time is
+labelled using the browser clock, because the API has no server observation time.
+A failed refresh keeps the last valid snapshot visibly marked as previous, with
+its original loading time and unknown current status. Session loss, navigation or
+page suspension clears the snapshot and cancels its read; returning requires a
+fresh read. Unknown or malformed responses never become zero counts.
 
 Changing the exact endpoint, manager/profile, destination ID or generation changes
 the binding. Old unsent jobs are suppressed, never redirected. Bearer rotation

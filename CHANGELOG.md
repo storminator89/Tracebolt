@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-10-06 — Read-only alarm delivery status in Settings
+
+- Show existing retained provider-accepted, pending, failed, uncertain and dropped counts for authenticated LAN readers, with explicit provider-acceptance versus human-receipt limits. Settings performs only the existing status GET on entry or deliberate refresh; it cannot configure or send alarms.
+- Label loading time as browser time because the API has no event/server timestamps. Failed refreshes preserve the original previous snapshot with unknown current status; access loss and suspension clear it and cancel late reads.
+- Add hosted synthetic status/lifecycle and desktop/mobile capture coverage without configuring a destination, replaying events or performing a live delivery.
+
 ## 2026-10-06 — Align CVE controls with current session authority
 
 - Show CVE feed sync/import controls only for an explicitly confirmed current shared-administrator session, matching the existing server capability. Named accounts retain read access; unknown authority fails closed. Recheck each write and discard stale selected-file state when the session changes, without expanding server permissions.

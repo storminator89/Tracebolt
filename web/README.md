@@ -141,3 +141,18 @@ accessible disclosures. Pending requests and captured results keep their origina
 service/window independently of draft edits. The resource/API/collector protocol
 and local permissions are unchanged. The hosted journal runner validates real
 rendering and produces exact-source desktop/mobile workspace and review captures.
+
+### Alarm delivery status
+
+Authenticated LAN Settings includes a compact read-only alarm panel using the
+existing aggregate `/api/alerts/status` contract. Provider acceptance, pending,
+failed, uncertain and dropped gaps stay distinct; Details breaks pending down
+into queued/in-flight and explains suppression and retained-history scope.
+Acceptance never proves receipt by a person. Disabled configuration stays quiet
+without hiding retained failures. English is the default, with German labels.
+
+Entry and explicit refresh read saved counts only. There is no polling, automatic
+retry, sender control, destination editor or event replay. Failed refreshes retain
+the previous snapshot with its original browser loading time and unknown current
+status. Losing access, navigating away or suspending the page clears it and aborts
+late reads. These source/component checks do not establish real webhook delivery.
