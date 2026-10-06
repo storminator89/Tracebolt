@@ -1,0 +1,17 @@
+# DirectoryMode leaves the fixed parent root:root, required by native loading.
+[Unit]
+Description=Tracebolt fixed socket-owner reader socket (candidate)
+
+[Socket]
+ListenStream=/run/tracebolt-socket-owner-reader/reader.sock
+SocketUser=0
+SocketGroup=@AGENT_GID@
+SocketMode=0660
+DirectoryMode=0755
+FileDescriptorName=socket-owner-reader
+Service=tracebolt-socket-owner-reader.service
+Accept=no
+RemoveOnStop=yes
+
+[Install]
+WantedBy=sockets.target

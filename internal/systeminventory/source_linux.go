@@ -297,214 +297,59 @@ func osFailure(e error) error {
 }
 
 // Attribute scans only numeric agent-visible /proc PID/fd entries, one process
-// at a time. It does not open any target of an fd link. All non-socket link text
-// is discarded immediately. It never claims global or atomic owner coverage.
+// at a time. The source seam changes no production permission or source path.
 func (p *linuxProvider) Attribute(ctx context.Context, inodes []uint64) (map[uint64]AttributionResult, error) {
 	if err := p.initProc(); err != nil {
 		return nil, err
 	}
-	if len(inodes) > MaxSocketRows {
-		return nil, ErrItemLimit
-	}
-	wanted := make(map[uint64]bool, len(inodes))
-	out := make(map[uint64]AttributionResult, len(inodes))
-	for _, inode := range inodes {
-		if inode > 0 {
-			wanted[inode] = true
-			out[inode] = AttributionResult{Owners: []Owner{}, Attribution: Attribution{AttributionUnavailable, ReasonNoMatch}}
-		}
-	}
-	// Reopen the directory descriptor for independent enumeration offset.
-	proc, e := openProcDir(int(p.proc.Fd()), ".")
-	if e != nil {
-		return nil, e
-	}
-	defer proc.Close()
-	global := ReasonNone
-	processes, entries, totalFD := 0, 0, 0
-loop:
-	for {
-		if ctx.Err() != nil {
-			global = ReasonTimeout
-			break
-		}
-		batch, e := proc.Readdirnames(128)
-		if e != nil && e != io.EOF {
-			global = ReasonReadFailed
-			break
-		}
-		for _, name := range batch {
-			entries++
-			if entries > MaxDirectoryEntries {
-				global = ReasonWorkLimit
-				break loop
-			}
-			pid, ok := numericPID(name)
-			if !ok {
-				continue
-			}
-			processes++
-			if processes > MaxProcessEntries {
-				global = ReasonWorkLimit
-				break loop
-			}
-			reason := p.attributePID(ctx, pid, wanted, out, &totalFD)
-			if reason != ReasonNone {
-				global = preferAttributionReason(global, reason)
-			}
-			if reason == ReasonTimeout || totalFD >= MaxTotalFDEntries {
-				if reason != ReasonTimeout {
-					global = ReasonWorkLimit
-				}
-				break loop
-			}
-		}
-		if e == io.EOF {
-			break
-		}
-	}
-	for inode, a := range out {
-		if global != ReasonNone {
-			a.Attribution = Attribution{AttributionPartial, global}
-		} else if len(a.Owners) > 0 && a.Attribution.Reason == ReasonNoMatch {
-			a.Attribution = Attribution{AttributionObserved, ReasonNone}
-		}
-		out[inode] = a
-	}
-	return out, nil
+	return attributeOwners(ctx, inodes, procOwnerSource{p.proc})
 }
-func numericPID(s string) (uint32, bool) {
-	if len(s) == 0 || s[0] == '0' {
-		return 0, false
-	}
-	for _, c := range s {
-		if c < '0' || c > '9' {
-			return 0, false
-		}
-	}
-	n, e := strconv.ParseUint(s, 10, 31)
-	return uint32(n), e == nil && n > 0
+
+type procOwnerSource struct{ proc *os.File }
+
+func (s procOwnerSource) openProcesses() (ownerEntries, error) {
+	return openProcDir(int(s.proc.Fd()), ".")
 }
-func (p *linuxProvider) attributePID(ctx context.Context, pid uint32, wanted map[uint64]bool, out map[uint64]AttributionResult, total *int) Reason {
-	if ctx.Err() != nil {
-		return ReasonTimeout
+func (s procOwnerSource) openProcess(pid uint32) (ownerProcess, error) {
+	process, err := openProcDir(int(s.proc.Fd()), strconv.FormatUint(uint64(pid), 10))
+	if err != nil {
+		return nil, err
 	}
-	process, e := openProcDir(int(p.proc.Fd()), strconv.FormatUint(uint64(pid), 10))
-	if e != nil {
-		return attributionReason(e)
-	}
-	defer process.Close()
-	fds, e := openProcDir(int(process.Fd()), "fd")
-	if e != nil {
-		return attributionReason(e)
-	}
-	defer fds.Close()
-	matched := map[uint64]bool{}
-	reason := ReasonNone
-	count := 0
-loop:
-	for {
-		if ctx.Err() != nil {
-			reason = ReasonTimeout
-			break
-		}
-		batch, e := fds.Readdirnames(128)
-		if e != nil && e != io.EOF {
-			reason = ReasonReadFailed
-			break
-		}
-		for _, name := range batch {
-			count++
-			*total++
-			if count > MaxFDEntriesPerProcess || *total > MaxTotalFDEntries {
-				reason = ReasonWorkLimit
-				break loop
-			}
-			if _, err := strconv.ParseUint(name, 10, 31); err != nil {
-				reason = ReasonInvalidSource
-				continue
-			}
-			var target [128]byte
-			n, e := unix.Readlinkat(int(fds.Fd()), name, target[:])
-			if e != nil {
-				reason = preferAttributionReason(reason, attributionReason(osFailure(e)))
-				continue
-			}
-			if n == len(target) {
-				continue
-			}
-			text := string(target[:n])
-			if !strings.HasPrefix(text, "socket:[") || !strings.HasSuffix(text, "]") {
-				continue
-			}
-			inode, e := strconv.ParseUint(text[8:len(text)-1], 10, 64)
-			if e != nil {
-				reason = ReasonInvalidSource
-				continue
-			}
-			if wanted[inode] {
-				matched[inode] = true
-			}
-		}
-		if e == io.EOF {
-			break
-		}
-	}
-	if len(matched) == 0 {
-		return reason
-	}
-	var processName *string
-	nameReason := ReasonNone
-	comm, e := openProcFile(int(process.Fd()), "comm")
-	if e != nil {
-		nameReason = attributionReason(e)
-	} else {
-		b, err := io.ReadAll(io.LimitReader(&contextReader{ctx, comm}, MaxProcessNameBytes+2))
-		ce := comm.Close()
-		if err == nil {
-			err = ce
-		}
-		if err != nil {
-			nameReason = attributionReason(err)
-		} else {
-			s := strings.TrimSuffix(string(b), "\n")
-			if !validProcessName(s) {
-				nameReason = ReasonInvalidSource
-			} else {
-				processName = &s
-			}
-		}
-	}
-	for inode := range matched {
-		a := out[inode]
-		if len(a.Owners) >= MaxOwnersPerSocket {
-			a.Attribution = Attribution{AttributionPartial, ReasonOwnerLimit}
-		} else {
-			a.Owners = append(a.Owners, Owner{pid, processName, nameReason})
-			if nameReason != ReasonNone {
-				a.Attribution = Attribution{AttributionPartial, nameReason}
-			}
-		}
-		out[inode] = a
-	}
-	return reason
+	return procOwnerProcess{process}, nil
 }
-func attributionReason(e error) Reason {
-	if errors.Is(e, context.Canceled) || errors.Is(e, context.DeadlineExceeded) {
-		return ReasonTimeout
+
+type procOwnerProcess struct{ *os.File }
+
+func (p procOwnerProcess) openFDs() (ownerFDs, error) {
+	fds, err := openProcDir(int(p.Fd()), "fd")
+	if err != nil {
+		return nil, err
 	}
-	r := failureReason(e)
-	if r == ReasonSourceMissing {
-		return ReasonProcessGone
-	}
-	if !validAttributionFailure(r) {
-		return ReasonReadFailed
-	}
-	return r
+	return procOwnerFDs{fds}, nil
 }
-func preferAttributionReason(old, next Reason) Reason {
-	if old == ReasonNone || next == ReasonTimeout || next == ReasonWorkLimit || next == ReasonPermissionDenied {
-		return next
+func (p procOwnerProcess) openComm() (io.ReadCloser, error) {
+	return openProcFile(int(p.Fd()), "comm")
+}
+
+type procOwnerFDs struct{ *os.File }
+
+func (f procOwnerFDs) socketInode(name string) (uint64, bool, error) {
+	// Never follow/open an FD target. Non-socket link text is discarded locally.
+	var target [128]byte
+	n, err := unix.Readlinkat(int(f.Fd()), name, target[:])
+	if err != nil {
+		return 0, false, osFailure(err)
 	}
-	return old
+	if n == len(target) {
+		return 0, false, nil
+	}
+	text := string(target[:n])
+	if !strings.HasPrefix(text, "socket:[") || !strings.HasSuffix(text, "]") {
+		return 0, false, nil
+	}
+	inode, err := strconv.ParseUint(text[8:len(text)-1], 10, 64)
+	if err != nil {
+		return 0, true, ErrInvalidSource
+	}
+	return inode, true, nil
 }

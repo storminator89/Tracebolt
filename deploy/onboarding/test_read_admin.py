@@ -23,7 +23,7 @@ def plan(http=False):
         invitation_id="invite_" + "e" * 32, insecure_http_test=http,
         read_admin_agent_origin="http://192.168.1.2:8788" if http else "https://manager.example:8444")
     assets = {f"tracebolt-{VERSION}-linux-amd64-{role}": {"sha256": (str(i) * 64)}
-              for i, role in enumerate(("agent-service", "enroll-agent", "lan-agent"), 1)}
+              for i, role in enumerate(("agent-service", "enroll-agent", "lan-agent", "socket-owner-reader"), 1)}
     assets[f"tracebolt-{VERSION}-source.tar"] = {"sha256": "c" * 64}
     return w.make_plan(args, dict(version=VERSION, sourceCommit="a" * 40, assets=assets), "amd64")
 
@@ -44,13 +44,17 @@ class Fixture:
             uid=200, gid=201, profile="http-test" if http else "tls")
         self.selected = set()
         self.output = []
+        self.stopped = False
 
     def preflight(self, p, resume):
         self.events.append("preflight")
         if resume:
             w.require(w.RECEIPT in self.files, "owned-read-admin-receipt-required")
+            w.require(self.files[w.RECEIPT] == w.canonical(w.identity(p, self.facts)), "read-admin-receipt-mismatch")
         else:
             w.require(not self.installed, "existing-installation-use-upgrade-or-recovery")
+        if self.failed == "platform":
+            raise w.Rejected("socket-owner-linux-amd64-kernel-6.5-required")
         if self.failed == "preflight":
             raise w.Rejected("existing-journal-state-retained")
 
@@ -104,6 +108,10 @@ class Fixture:
         if self.failed == phase:
             raise w.Rejected("injected-" + phase + "-uncertainty")
 
+    def fail_socket(self, bound):
+        self.stopped = True
+        self.events.append("stop-socket-failure")
+
     def run(self, resume=False):
         return w.run(self.plan, self, self.install, self.confirm, self.output.append, resume=resume)
 
@@ -118,9 +126,9 @@ class Tests(unittest.TestCase):
         self.assertIn(f.plan["bootstrapSHA256"], f.output[0])
         self.assertEqual(f.events[:2], ["preflight", "install"])
         self.assertLess(f.events.index("ready"), f.events.index(("inventory", False)))
-        self.assertEqual(f.selected, {"inventory", "journal"})
-        self.assertEqual(result["phases"], dict(inventory="configured_confirmed", journal="configured_confirmed"))
-        self.assertEqual(len(f.files), 5)
+        self.assertEqual(f.selected, {"inventory", "journal", "socket"})
+        self.assertEqual(result["phases"], dict(inventory="configured_confirmed", journal="configured_confirmed", socket="configured_confirmed"))
+        self.assertEqual(len(f.files), 7)
         self.assertFalse(result["collectionPerformed"])
         self.assertEqual(result["nativeAcceptance"], "not-established")
         self.assertIn("socketProcessAttribution", result["limitations"])
@@ -208,7 +216,7 @@ class Tests(unittest.TestCase):
         before = copy.deepcopy(f.files)
         result = f.run(resume=True)
         self.assertTrue(result["configurationComplete"])
-        self.assertEqual(result["phases"], dict(inventory="verified_existing", journal="verified_existing"))
+        self.assertEqual(result["phases"], dict(inventory="verified_existing", journal="verified_existing", socket="verified_existing"))
         self.assertEqual(f.files, before)
         self.assertEqual(f.events.count("install"), 1)
         self.assertEqual(f.events.count(("journal", False)), 1)
@@ -235,7 +243,8 @@ class Tests(unittest.TestCase):
 
     def test_after_effect_receipt_failure_never_invokes_automatic_retry(self):
         for path in (w.RECEIPT, w.phase_path("inventory", "started"), w.phase_path("inventory", "complete"),
-                     w.phase_path("journal", "started"), w.phase_path("journal", "complete")):
+                     w.phase_path("journal", "started"), w.phase_path("journal", "complete"),
+                     w.phase_path("socket", "started"), w.phase_path("socket", "complete")):
             f = Fixture(); f.failed = path
             result = f.run()
             self.assertFalse(result["configurationComplete"])
@@ -246,6 +255,107 @@ class Tests(unittest.TestCase):
         f = Fixture(); f.installed = True
         self.assertEqual(f.run(resume=True)["failureStage"], "owned-read-admin-receipt-required")
         self.assertEqual(f.prompts, [])
+
+    def test_old_v1_intent_never_authorizes_new_scope(self):
+        f = Fixture(); f.run()
+        f.files[w.RECEIPT] = f.files[w.RECEIPT].replace(b"read-admin-intent.v2", b"read-admin-intent.v1").replace(b"linux-read-admin.v2", b"linux-read-admin.v1")
+        f.prompts.clear(); f.events.clear()
+        before = dict(f.files)
+        result = f.run(resume=True)
+        self.assertEqual(result["failureStage"], "read-admin-receipt-mismatch")
+        self.assertEqual(f.events, ["preflight"])
+        self.assertEqual(f.prompts, [])
+        self.assertEqual(f.files, before)
+
+    def test_platform_rejected_before_install_or_approval(self):
+        f = Fixture(); f.failed = "platform"
+        self.assertIn("6.5", f.run()["failureStage"])
+        self.assertEqual(f.events, ["preflight"])
+        self.assertEqual(f.prompts, [])
+        self.assertEqual(f.files, {})
+
+    def test_socket_disclosure_is_one_explicit_combined_approval(self):
+        f = Fixture(); self.assertTrue(f.run()["configurationComplete"])
+        text = f.output[0]
+        self.assertEqual(text.count("CAP_SYS_PTRACE"), 1)
+        for wording in ("broad process-memory authority", "code policy", "not an OS read-only confidentiality boundary", "no weaker fallback"):
+            self.assertIn(wording, text)
+        self.assertEqual(len(f.prompts), 1)
+        self.assertEqual(f.plan["readProfile"], "tracebolt.linux-read-admin.v2")
+        self.assertEqual(f.plan["artifacts"]["socket-owner-reader"], "4" * 64)
+
+    def test_socket_partial_receipt_gap_and_revoked_scope_are_fail_stopped(self):
+        for failed in ("socket", w.phase_path("socket", "started"), w.phase_path("socket", "complete")):
+            f = Fixture(); f.failed = failed
+            self.assertFalse(f.run()["configurationComplete"])
+            self.assertTrue(f.stopped)
+            self.assertIn(w.phase_path("socket", "started"), f.files)
+        f = Fixture(); f.run(); f.selected.remove("socket")
+        self.assertFalse(f.run(resume=True)["configurationComplete"])
+        self.assertNotIn("socket", f.selected)
+        self.assertTrue(f.stopped)
+        self.assertEqual(f.events.count(("socket", False)), 1)
+
+    def test_uncertain_socket_evidence_is_stopped_before_network_compatibility(self):
+        f = Fixture(); f.failed = "socket"; f.run()
+        f.failed = "ready"; f.events.clear(); f.stopped = False
+        result = f.run(resume=True)
+        self.assertEqual(result["failureStage"], "uncertain-socket-phase-retained")
+        self.assertTrue(f.stopped)
+        self.assertNotIn("ready", f.events)
+        self.assertNotIn(("socket", False), f.events)
+
+    def test_completed_socket_resume_later_failure_is_fail_stopped(self):
+        f = Fixture(); f.run(); f.failed = "ready"
+        result = f.run(resume=True)
+        self.assertEqual(result["failureStage"], "manager-upgrade-required")
+        self.assertTrue(f.stopped)
+        self.assertEqual(f.events.count(("socket", False)), 1)
+
+    def test_cancel_resume_with_socket_evidence_never_stops_or_replays(self):
+        f = Fixture(); f.run(); f.confirm_result = False; f.events.clear()
+        self.assertTrue(f.run(resume=True)["canceled"])
+        self.assertFalse(f.stopped)
+        self.assertEqual(f.events, ["preflight"])
+
+    def test_failed_approved_revoke_stops_and_keeps_evidence(self):
+        class Maintenance:
+            def __init__(self): self.stopped = False
+            def inspect(self): return dict(deviceId="agent_fixture", managerOrigin="https://manager.example")
+            def revoke(self, bound): raise w.Rejected("root-policy-corrupt")
+            def fail_socket(self, bound): self.stopped = True
+        m = Maintenance()
+        result = w.run_revoke(m, lambda _: True, lambda _: None)
+        self.assertEqual(result["failureStage"], "root-policy-corrupt")
+        self.assertFalse(result["revoked"])
+        self.assertTrue(m.stopped)
+        self.assertNotIn("stopUnconfirmed", result)
+
+    def test_revoke_cannot_claim_helper_shutdown_when_containment_proof_fails(self):
+        class Maintenance:
+            def inspect(self): return dict(deviceId="agent_fixture", managerOrigin="https://manager.example")
+            def revoke(self, bound): raise w.Rejected("root-policy-corrupt")
+            def fail_socket(self, bound): raise w.Rejected("helper-shutdown-unconfirmed")
+        result = w.run_revoke(Maintenance(), lambda _: True, lambda _: None)
+        self.assertEqual(result["failureStage"], "root-policy-corrupt")
+        self.assertTrue(result["helperShutdownUnconfirmed"])
+        self.assertEqual(result["containmentFailureStage"], "helper-shutdown-unconfirmed")
+        self.assertFalse(result["revoked"])
+
+    def test_revoke_is_separate_deliberate_maintenance_approval(self):
+        class Maintenance:
+            def __init__(self): self.calls = []
+            def inspect(self): return dict(deviceId="agent_fixture", managerOrigin="https://manager.example")
+            def revoke(self, bound): self.calls.append(bound)
+        m = Maintenance(); prompts = []; output = []
+        result = w.run_revoke(m, lambda phrase: prompts.append(phrase) or True, output.append)
+        self.assertTrue(result["revoked"])
+        self.assertEqual(prompts, ["REVOKE SOCKET OWNERS"])
+        self.assertEqual(len(m.calls), 1)
+        m = Maintenance()
+        result = w.run_revoke(m, lambda _: False, output.append)
+        self.assertTrue(result["canceled"])
+        self.assertEqual(m.calls, [])
 
 if __name__ == "__main__":
     unittest.main()

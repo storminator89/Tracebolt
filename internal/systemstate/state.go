@@ -109,6 +109,13 @@ func InitializeNew(dir, binding string) (*State, error) {
 // replacement directory. Guided enrollment uses this after its durable handoff.
 func OpenExisting(dir, binding string) (*State, error) { return open(dir, binding, false, true) }
 
+// OpenExistingNoRecovery retains the existing exclusive lock without creating
+// state or cleaning crash temporaries. Offline consent setup uses this to fail
+// closed on incomplete state rather than silently perform sender recovery.
+func OpenExistingNoRecovery(dir, binding string) (*State, error) {
+	return open(dir, binding, false, false)
+}
+
 // ValidateExisting verifies a bound existing ledger under its exclusive lock,
 // then closes it without creating files or cleaning sender-owned temporaries.
 func ValidateExisting(dir, binding string) error {

@@ -56,18 +56,22 @@ func initializeSystemObservations(ctx context.Context, c *sql.Conn) error {
 // The latest complete section and its last-complete cache are one normalized
 // row set. Failed latest attempts have no rows and cannot erase that set.
 type systemSnapshotMeta struct {
-	SchemaVersion string                      `json:"schemaVersion"`
-	GenerationID  string                      `json:"generationId"`
-	CollectedAt   time.Time                   `json:"collectedAt"`
-	DurationMS    int64                       `json:"durationMs"`
-	Scope         string                      `json:"scope"`
-	Services      systeminventory.SectionMeta `json:"services"`
-	Sockets       systeminventory.SectionMeta `json:"sockets"`
+	SocketOwnerProvenance *systeminventory.SocketOwnerProvenance `json:"socketOwnerProvenance,omitempty"`
+	SchemaVersion         string                                 `json:"schemaVersion"`
+	GenerationID          string                                 `json:"generationId"`
+	CollectedAt           time.Time                              `json:"collectedAt"`
+	DurationMS            int64                                  `json:"durationMs"`
+	Scope                 string                                 `json:"scope"`
+	Services              systeminventory.SectionMeta            `json:"services"`
+	Sockets               systeminventory.SectionMeta            `json:"sockets"`
 }
 type systemComplete struct {
-	Sequence     uint64                      `json:"sequence"`
-	Meta         systeminventory.SectionMeta `json:"meta"`
-	PayloadBytes int                         `json:"payloadBytes"`
+	SocketOwnerProvenance *systeminventory.SocketOwnerProvenance `json:"socketOwnerProvenance,omitempty"`
+	// Retain the original batch bound independently of the latest attempt.
+	SocketOwnerBatchDurationMS *int64                      `json:"socketOwnerBatchDurationMs,omitempty"`
+	Sequence                   uint64                      `json:"sequence"`
+	Meta                       systeminventory.SectionMeta `json:"meta"`
+	PayloadBytes               int                         `json:"payloadBytes"`
 }
 type systemRecord struct {
 	Receipt           systemwire.Receipt       `json:"receipt"`
@@ -92,7 +96,7 @@ type cachedUpdatesRecord struct {
 }
 
 func snapshotMetadata(s systeminventory.Snapshot) *systemSnapshotMeta {
-	return &systemSnapshotMeta{s.SchemaVersion, s.GenerationID, s.CollectedAt, s.DurationMS, s.Scope, s.Services.Meta, s.Sockets.Meta}
+	return &systemSnapshotMeta{SchemaVersion: s.SchemaVersion, GenerationID: s.GenerationID, CollectedAt: s.CollectedAt, DurationMS: s.DurationMS, Scope: s.Scope, Services: s.Services.Meta, Sockets: s.Sockets.Meta}
 }
 func (r systemRecord) section(name string) *systemComplete {
 	if name == "services" {
@@ -143,6 +147,9 @@ func validSystemRecord(snap enrollmentstate.Snapshot, r systemRecord) bool {
 		if m.SchemaVersion != systeminventory.SchemaVersion || m.Scope != systeminventory.SnapshotScope || m.GenerationID != p.GenerationID || !m.CollectedAt.Equal(p.CollectedAt) || m.DurationMS < 0 || m.DurationMS > systeminventory.MaxSafeInteger {
 			return false
 		}
+		if m.SocketOwnerProvenance != nil && (m.Sockets.Coverage != systeminventory.Complete || systeminventory.ValidateSocketOwnerProvenance(*m.SocketOwnerProvenance, m.CollectedAt, m.DurationMS) != nil || m.SocketOwnerProvenance.FinishedAt.After(p.ReceivedAt)) {
+			return false
+		}
 		for _, item := range []struct {
 			name string
 			meta systeminventory.SectionMeta
@@ -155,6 +162,9 @@ func validSystemRecord(snap enrollmentstate.Snapshot, r systemRecord) bool {
 				if c == nil || c.Sequence != p.Sequence || !equalSystemMeta(c.Meta, item.meta) {
 					return false
 				}
+				if item.name == "sockets" && (!equalSocketOwnerProvenance(c.SocketOwnerProvenance, m.SocketOwnerProvenance) || c.SocketOwnerBatchDurationMS != nil && *c.SocketOwnerBatchDurationMS != m.DurationMS) {
+					return false
+				}
 			}
 		}
 	}
@@ -162,6 +172,12 @@ func validSystemRecord(snap enrollmentstate.Snapshot, r systemRecord) bool {
 		c := r.section(name)
 		if c == nil {
 			continue
+		}
+		if (c.SocketOwnerProvenance == nil) != (c.SocketOwnerBatchDurationMS == nil) {
+			return false
+		}
+		if c.SocketOwnerProvenance != nil && (name != "sockets" || systeminventory.ValidateSocketOwnerProvenance(*c.SocketOwnerProvenance, c.Meta.ObservedAt, *c.SocketOwnerBatchDurationMS) != nil || c.SocketOwnerProvenance.FinishedAt.After(p.ReceivedAt)) {
+			return false
 		}
 		expected, e := systemwire.GenerationID(snap.Approval.DeviceID, c.Sequence)
 		if e != nil || c.Sequence > p.Sequence || c.Meta.GenerationID != expected || !validSystemMeta(c.Meta) || c.Meta.Coverage != systeminventory.Complete || c.Meta.ObservedAt.After(p.CollectedAt) || *c.Meta.ObservedCount > uint64(sectionRowLimit(name)) || c.PayloadBytes <= 0 || c.PayloadBytes > systeminventory.MaxSectionBytes {
@@ -221,6 +237,12 @@ func validSystemRecord(snap enrollmentstate.Snapshot, r systemRecord) bool {
 		}
 	}
 	return true
+}
+func equalSocketOwnerProvenance(a, b *systeminventory.SocketOwnerProvenance) bool {
+	if a == nil || b == nil {
+		return a == nil && b == nil
+	}
+	return *a == *b
 }
 func equalSystemMeta(a, b systeminventory.SectionMeta) bool {
 	x, _ := json.Marshal(a)
@@ -409,7 +431,7 @@ func (s *Store) SaveSystemObservation(ctx context.Context, id, hash string, raw 
 			return nil
 		}
 		at := frame.Snapshot.CollectedAt
-		if at.After(receivedAt) || receivedAt.Sub(at) > SystemMaxAge {
+		if at.After(receivedAt) || receivedAt.Sub(at) > SystemMaxAge || frame.SocketOwnerProvenance != nil && frame.SocketOwnerProvenance.FinishedAt.After(receivedAt) {
 			return enrollmentstate.ErrInvalid
 		}
 		if exists && !at.After(old.Receipt.CollectedAt) {
@@ -420,6 +442,7 @@ func (s *Store) SaveSystemObservation(ctx context.Context, id, hash string, raw 
 		record.Receipt = out
 		record.MaintenanceAt = nil
 		record.Latest = snapshotMetadata(frame.Snapshot)
+		record.Latest.SocketOwnerProvenance = frame.SocketOwnerProvenance
 		if frame.EndpointIdentity != nil {
 			record.EndpointIdentity = &endpointIdentityRecord{Receipt: out, Snapshot: frame.EndpointIdentity}
 		}
@@ -492,7 +515,15 @@ func (s *Store) SaveSystemObservation(ctx context.Context, id, hash string, raw 
 			if statement.Close() != nil {
 				return ErrStorage
 			}
-			record.setSection(name, &systemComplete{Sequence: frame.Sequence, Meta: meta, PayloadBytes: len(sectionBytes)})
+			complete := &systemComplete{Sequence: frame.Sequence, Meta: meta, PayloadBytes: len(sectionBytes)}
+			if name == "sockets" && frame.SocketOwnerProvenance != nil {
+				complete.SocketOwnerProvenance = frame.SocketOwnerProvenance
+				duration := frame.Snapshot.DurationMS
+				complete.SocketOwnerBatchDurationMS = &duration
+			}
+			// A complete ordinary fallback replaces its own rows without adopting
+			// old helper provenance. A failed attempt never reaches this block.
+			record.setSection(name, complete)
 		}
 		b, e := json.Marshal(record)
 		if e != nil || len(b) > systemMetadataLimit || !validSystemRecord(snap, record) {

@@ -58,6 +58,7 @@ type Config struct {
 // Material is opaque loaded credential/trust state. A zero value is unusable.
 type Material struct {
 	config      Config
+	configPath  string // protected origin for current activated-material rereads; never serialized
 	certificate tls.Certificate
 	tlsConfig   *tls.Config
 	binding     string
@@ -173,7 +174,11 @@ func Load(path string) (Material, error) {
 	if lanconfig.StrictObject(raw, &c, "schemaVersion", "profile", "managerOrigin", "agentId", "certificateFile", "privateKeyFile", "serverCAFile", "stateDirectory", "insecureHTTPAcknowledged", "collectionProfile") != nil || c.Validate() != nil {
 		return fail()
 	}
-	return loadConfig(c)
+	m, err := loadConfig(c)
+	if err == nil {
+		m.configPath = path
+	}
+	return m, err
 }
 func loadConfig(c Config) (Material, error) {
 	fail := func() (Material, error) { return Material{}, ErrConfiguration }

@@ -28,17 +28,19 @@ const (
 )
 
 type SystemSnapshotSummary struct {
-	GenerationID string                      `json:"generationId"`
-	CollectedAt  time.Time                   `json:"collectedAt"`
-	DurationMS   int64                       `json:"durationMs"`
-	Scope        string                      `json:"scope"`
-	Services     systeminventory.SectionMeta `json:"services"`
-	Sockets      systeminventory.SectionMeta `json:"sockets"`
+	SocketOwnerProvenance *systeminventory.SocketOwnerProvenance `json:"socketOwnerProvenance,omitempty"`
+	GenerationID          string                                 `json:"generationId"`
+	CollectedAt           time.Time                              `json:"collectedAt"`
+	DurationMS            int64                                  `json:"durationMs"`
+	Scope                 string                                 `json:"scope"`
+	Services              systeminventory.SectionMeta            `json:"services"`
+	Sockets               systeminventory.SectionMeta            `json:"sockets"`
 }
 type SystemSectionSummary struct {
-	Sequence uint64                      `json:"sequence,string"`
-	Meta     systeminventory.SectionMeta `json:"meta"`
-	Status   string                      `json:"status"`
+	SocketOwnerProvenance *systeminventory.SocketOwnerProvenance `json:"socketOwnerProvenance,omitempty"`
+	Sequence              uint64                                 `json:"sequence,string"`
+	Meta                  systeminventory.SectionMeta            `json:"meta"`
+	Status                string                                 `json:"status"`
 }
 type SystemLastComplete struct {
 	Services *SystemSectionSummary `json:"services"`
@@ -142,7 +144,7 @@ func (s *Store) SystemView(ctx context.Context, device string, now time.Time) (S
 		out.Status = systemAge(r.Receipt.CollectedAt, now)
 		if r.Latest != nil && out.Status != "expired" {
 			m := r.Latest
-			out.Latest = &SystemSnapshotSummary{m.GenerationID, m.CollectedAt, m.DurationMS, m.Scope, m.Services, m.Sockets}
+			out.Latest = &SystemSnapshotSummary{GenerationID: m.GenerationID, CollectedAt: m.CollectedAt, DurationMS: m.DurationMS, Scope: m.Scope, Services: m.Services, Sockets: m.Sockets, SocketOwnerProvenance: m.SocketOwnerProvenance}
 		}
 		for _, name := range []string{"services", "sockets"} {
 			c := r.section(name)
@@ -153,7 +155,7 @@ func (s *Store) SystemView(ctx context.Context, device string, now time.Time) (S
 			if status == "expired" {
 				continue
 			}
-			summary := &SystemSectionSummary{c.Sequence, c.Meta, status}
+			summary := &SystemSectionSummary{Sequence: c.Sequence, Meta: c.Meta, Status: status, SocketOwnerProvenance: c.SocketOwnerProvenance}
 			if name == "services" {
 				out.LastComplete.Services = summary
 			} else {
@@ -184,18 +186,19 @@ type SystemPageRequest struct {
 	Limit        int    `json:"limit"`
 }
 type SystemPageResult struct {
-	CursorExpiresAt *time.Time                  `json:"cursorExpiresAt"`
-	Section         string                      `json:"section"`
-	GenerationID    string                      `json:"generationId"`
-	Meta            systeminventory.SectionMeta `json:"meta"`
-	Status          string                      `json:"status"`
-	TotalRows       uint64                      `json:"totalRows"`
-	ReturnedCount   int                         `json:"returnedCount"`
-	ScannedCount    int                         `json:"scannedCount"`
-	Exhausted       bool                        `json:"exhausted"`
-	NextCursor      string                      `json:"nextCursor"`
-	Services        []systeminventory.Service   `json:"services"`
-	Sockets         []systeminventory.Socket    `json:"sockets"`
+	SocketOwnerProvenance *systeminventory.SocketOwnerProvenance `json:"socketOwnerProvenance,omitempty"`
+	CursorExpiresAt       *time.Time                             `json:"cursorExpiresAt"`
+	Section               string                                 `json:"section"`
+	GenerationID          string                                 `json:"generationId"`
+	Meta                  systeminventory.SectionMeta            `json:"meta"`
+	Status                string                                 `json:"status"`
+	TotalRows             uint64                                 `json:"totalRows"`
+	ReturnedCount         int                                    `json:"returnedCount"`
+	ScannedCount          int                                    `json:"scannedCount"`
+	Exhausted             bool                                   `json:"exhausted"`
+	NextCursor            string                                 `json:"nextCursor"`
+	Services              []systeminventory.Service              `json:"services"`
+	Sockets               []systeminventory.Socket               `json:"sockets"`
 }
 type systemCursor struct {
 	Filter       string    `json:"filter"`
@@ -340,7 +343,7 @@ func (s *Store) SystemPage(ctx context.Context, device string, req SystemPageReq
 		if cursor.Next > total {
 			return ErrSystemCursor
 		}
-		out = SystemPageResult{Section: req.Section, GenerationID: req.GenerationID, Meta: section.Meta, Status: systemAge(section.Meta.ObservedAt, now), TotalRows: *section.Meta.ObservedCount, Services: []systeminventory.Service{}, Sockets: []systeminventory.Socket{}}
+		out = SystemPageResult{SocketOwnerProvenance: section.SocketOwnerProvenance, Section: req.Section, GenerationID: req.GenerationID, Meta: section.Meta, Status: systemAge(section.Meta.ObservedAt, now), TotalRows: *section.Meta.ObservedCount, Services: []systeminventory.Service{}, Sockets: []systeminventory.Socket{}}
 		rows, e := t.conn.QueryContext(ctx, `SELECT ordinal,body FROM enrollment_system_rows WHERE invitation_id=? AND section=? AND ordinal>=? ORDER BY ordinal LIMIT ?`, snap.InvitationID, req.Section, cursor.Next, SystemPageScanRows)
 		if e != nil {
 			return ErrStorage

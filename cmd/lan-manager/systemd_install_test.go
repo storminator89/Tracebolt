@@ -107,7 +107,13 @@ func runApprovedSystemdInstallationMode(t *testing.T, profile, collectionProfile
 		t.Fatal("explicit prebuilt artifact paths required")
 	}
 	binaries := map[string]string{}
-	for _, name := range []string{"agent-service", "lan-manager", "enroll-agent", "lan-agent", "enroll-agent-upgrade", "lan-agent-upgrade"} {
+	roles := []string{"agent-service", "lan-manager", "enroll-agent", "lan-agent"}
+	if readAdmin != nil {
+		roles = append(roles, "socket-owner-reader")
+	} else {
+		roles = append(roles, "enroll-agent-upgrade", "lan-agent-upgrade")
+	}
+	for _, name := range roles {
 		p := filepath.Join(dir, name)
 		i, e := os.Lstat(p)
 		if e != nil || !i.Mode().IsRegular() || i.Mode().Perm()&0022 != 0 {
@@ -115,7 +121,7 @@ func runApprovedSystemdInstallationMode(t *testing.T, profile, collectionProfile
 		}
 		binaries[name] = p
 	}
-	if systemdHash(t, binaries["lan-agent"]) == systemdHash(t, binaries["lan-agent-upgrade"]) || systemdHash(t, binaries["enroll-agent"]) == systemdHash(t, binaries["enroll-agent-upgrade"]) {
+	if readAdmin == nil && (systemdHash(t, binaries["lan-agent"]) == systemdHash(t, binaries["lan-agent-upgrade"]) || systemdHash(t, binaries["enroll-agent"]) == systemdHash(t, binaries["enroll-agent-upgrade"])) {
 		t.Fatal("upgrade artifacts must have different selected bytes")
 	}
 	_ = systemdHash(t, sourceArchive)
@@ -135,7 +141,11 @@ func runApprovedSystemdInstallationMode(t *testing.T, profile, collectionProfile
 			result["collectionProfile"] = collectionProfile
 		}
 		if readAdmin != nil {
-			result["schemaVersion"] = "tracebolt.read-admin-systemd-acceptance.v1"
+			result["schemaVersion"] = "tracebolt.read-admin-systemd-acceptance.v2"
+			result["readProfile"] = "tracebolt.linux-read-admin.v2"
+			result["sourceCommit"] = readAdmin.source
+			result["ptraceRiskAcknowledged"] = true
+			result["socketNativeChecks"] = readAdmin.checks
 			result["collectionProfile"] = collectionProfile
 			result["scenario"] = readAdmin.scenario
 		}
@@ -156,9 +166,10 @@ func runApprovedSystemdInstallationMode(t *testing.T, profile, collectionProfile
 		}
 		return arguments
 	}
+	var readAdminCommand *readAdminNativeCommand
 	t.Cleanup(func() {
-		if readAdmin != nil {
-			readAdminStopOwnedHelper(t)
+		if readAdmin != nil && !readAdminStopOwnedHelper(t, readAdminCommand) {
+			return
 		}
 		if _, e := os.Lstat(agentinstall.ManifestPath); e == nil {
 			ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
@@ -259,6 +270,13 @@ func runApprovedSystemdInstallationMode(t *testing.T, profile, collectionProfile
 	if status != 200 || json.Unmarshal(body, &session) != nil || session.CSRFToken == "" {
 		t.Fatal("operator fixture login")
 	}
+	query := func(path string, input, output any) {
+		status, raw := call(path, input, session.CSRFToken)
+		defer clear(raw)
+		if status != 200 || json.Unmarshal(raw, output) != nil {
+			t.Fatal("bounded operator query contract")
+		}
+	}
 	invitation := map[string]any{"requestId": "request_" + strings.Repeat("8", 32), "platform": "linux"}
 	if collectionProfile != enrollmentcrypto.CollectionProfile {
 		invitation["collectionAcknowledged"] = true
@@ -283,7 +301,6 @@ func runApprovedSystemdInstallationMode(t *testing.T, profile, collectionProfile
 	args := []string{binaries["agent-service"], "--action", "install", "--apply", "--agent-binary", binaries["lan-agent"], "--agent-sha256", systemdHash(t, binaries["lan-agent"]), "--enroll-binary", binaries["enroll-agent"], "--enroll-sha256", systemdHash(t, binaries["enroll-agent"]), "--source-archive", sourceArchive, "--source-sha256", systemdHash(t, sourceArchive), "--bootstrap", bootstrapPath, "--bootstrap-sha256", systemdHash(t, bootstrapPath)}
 	args = profileArguments(args)
 	script := enrollmentPTY
-	var readAdminCommand *readAdminNativeCommand
 	if readAdmin != nil {
 		readAdminCommand = prepareReadAdminNativeCommand(t, python, binaries, sourceArchive, profile, created.Bootstrap, created.BootstrapSHA256, readAdmin)
 		stage = "read_admin_cancel"
@@ -421,7 +438,7 @@ func runApprovedSystemdInstallationMode(t *testing.T, profile, collectionProfile
 			t.Fatal("read-admin combined configuration not confirmed")
 		}
 		stage = "initial_reports"
-		readAdminCompleteAndRepeat(t, readAdminCommand, get, &stage)
+		readAdminCompleteAndRepeat(t, readAdminCommand, get, query, &stage)
 		stage = "complete"
 		return
 	}

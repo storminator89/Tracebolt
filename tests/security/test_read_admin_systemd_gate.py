@@ -5,6 +5,7 @@ Only the two embedded JSON readers run, with every file operation replaced.
 """
 import contextlib
 import io
+import itertools
 import json
 import os
 from pathlib import Path
@@ -20,10 +21,17 @@ from unittest import mock
 WORKFLOW = Path(__file__).resolve().parents[2] / ".github/workflows/read-admin-systemd-acceptance.yml"
 TRANSPORTS = ("tls", "http-test")
 SCENARIOS = ("complete", "cancel-enrollment", "retained-journal")
+READ_PROFILE = "tracebolt.linux-read-admin.v2"
+SOURCE = "a" * 40
+CHECKS = ("installedServiceOwners", "v4Provenance", "revocationCompleted", "revokedNoAuthority",
+          "journalContent", "serviceRestartOnline")
 STAGES = {
     "preflight", "manager_start", "operator_login", "install_enroll", "approval",
     "initial_reports", "read_admin_cancel", "read_admin_inventory", "read_admin_journal",
     "read_admin_repeat", "read_admin_retained", "read_admin_readiness", "complete",
+    "read_admin_socket", "read_admin_socket_owners", "read_admin_revoke",
+    "read_admin_post_revoke",
+    "read_admin_journal_content", "read_admin_restart",
     "installer_preflight", "installer_prepare", "installer_stage", "installer_enroll",
     "installer_validate", "installer_publish", "installer_start", "installer_commit",
 }
@@ -32,11 +40,14 @@ INCOMPLETE = "FAIL: sanitized read-admin acceptance records an incomplete or fai
 
 
 def result(transport="tls", scenario="complete", **changes):
+    expected = (True,) * len(CHECKS) if scenario == "complete" else (False,) * len(CHECKS)
     return {
-        "schemaVersion": "tracebolt.read-admin-systemd-acceptance.v1",
+        "schemaVersion": "tracebolt.read-admin-systemd-acceptance.v2",
         "status": "pass", "stage": "complete", "profile": transport,
         "collectionProfile": "managed-operations-v3", "scenario": scenario,
-        "osRebootTested": False, "telemetryExported": False, **changes,
+        "osRebootTested": False, "telemetryExported": False,
+        "readProfile": READ_PROFILE, "sourceCommit": SOURCE,
+        "ptraceRiskAcknowledged": True, "socketNativeChecks": dict(zip(CHECKS, expected)), **changes,
     }
 
 
@@ -54,7 +65,8 @@ class ReadAdminWrapperTests(unittest.TestCase):
             raise ValueError("expected exactly two isolated JSON readers")
         cls.readers = tuple(compile(textwrap.dedent(block), "<fixed-result-reader>", "exec") for block in blocks)
 
-    def validate(self, raw, transport="tls", scenario="complete", *, mode=stat.S_IFREG | 0o600,
+    def validate(self, raw, transport="tls", scenario="complete", *, read_profile=READ_PROFILE,
+                 source=SOURCE, mode=stat.S_IFREG | 0o600,
                  size=None, open_error=None):
         stream = FakeFile(raw)
         stream.read = mock.Mock(wraps=stream.read)
@@ -67,7 +79,7 @@ class ReadAdminWrapperTests(unittest.TestCase):
         )
         output, error = io.StringIO(), None
         with contextlib.redirect_stdout(output), mock.patch.dict(sys.modules, {"os": fake_os}), \
-                mock.patch.object(sys, "argv", ["validator", "private-fixture-path", transport, scenario]):
+                mock.patch.object(sys, "argv", ["validator", "private-fixture-path", transport, scenario, read_profile, source]):
             try:
                 exec(self.readers[0], {"__name__": "__main__"})
             except SystemExit as exc:
@@ -89,18 +101,32 @@ class ReadAdminWrapperTests(unittest.TestCase):
         self.assertEqual(output, "")
         self.assertEqual(error, INVALID)
 
-    def test_manual_only_approval_and_transport_choice(self):
+    def test_manual_only_fresh_v2_approval_source_and_transport_choice(self):
         source = self.source
         self.assertEqual(re.findall(r"^([a-z][a-z-]*):", source, re.M),
                          ["name", "on", "permissions", "concurrency", "jobs"])
         triggers = source.split("on:\n", 1)[1].split("\npermissions:", 1)[0]
         self.assertEqual(re.findall(r"^  (\w+):", triggers, re.M), ["workflow_dispatch"])
-        self.assertIn("      approved_disposable_read_admin_systemd:\n", triggers)
-        self.assertIn("        required: true\n        default: false\n        type: boolean\n", triggers)
+        self.assertEqual(re.findall(r"^      ([a-z0-9_]+):", triggers, re.M),
+                         ["read_profile", "reviewed_source_commit", "approved_fresh_v2_read_admin_systemd",
+                          "approved_cap_sys_ptrace_process_memory", "transport"])
+        for approval in ("approved_fresh_v2_read_admin_systemd", "approved_cap_sys_ptrace_process_memory"):
+            self.assertRegex(triggers, rf"      {approval}:\n        description: [^\n]+\n"
+                             r"        required: true\n        default: false\n        type: boolean\n")
+        self.assertIn("        default: unapproved\n        type: choice\n        options:\n"
+                      "          - unapproved\n          - tracebolt.linux-read-admin.v2\n", triggers)
+        self.assertRegex(triggers, r"      reviewed_source_commit:\n        description: [^\n]+\n"
+                         r"        required: true\n        type: string\n")
+        self.assertIn("broad process-memory authority", triggers)
+        self.assertIn("metadata-only code is not an OS confidentiality boundary", triggers)
+        self.assertIn("owned-helper stop/drain and owned-main-service cleanup", triggers)
+        self.assertIn("fixture log service/content query, owned-main-service restart", triggers)
         self.assertIn("        default: tls\n        type: choice\n        options:\n          - tls\n          - http-test\n", triggers)
         self.assertIn("plaintext passwords, sessions, telemetry and journal content", triggers)
         self.assertIn("server/UI impersonation", triggers)
-        self.assertIn("    if: ${{ github.event_name == 'workflow_dispatch' && inputs.approved_disposable_read_admin_systemd }}\n", source)
+        self.assertIn("    if: ${{ github.event_name == 'workflow_dispatch' && inputs.approved_fresh_v2_read_admin_systemd && inputs.approved_cap_sys_ptrace_process_memory && inputs.read_profile == 'tracebolt.linux-read-admin.v2' && inputs.reviewed_source_commit == github.sha }}\n", source)
+        self.assertNotIn("approved_disposable_read_admin_systemd", source)
+        self.assertNotIn("TRACEBOLT_APPROVED_READ_ADMIN_SYSTEMD_TEST", source)
         self.assertIn("permissions:\n  contents: read\n", source)
         self.assertNotIn("write", source)
 
@@ -115,25 +141,54 @@ class ReadAdminWrapperTests(unittest.TestCase):
         self.assertIn("          ref: ${{ github.sha }}\n          persist-credentials: false\n", source)
         self.assertIn("          go-version-file: go.mod\n          cache: false\n", source)
         self.assertIn('git archive --format=tar --output="$STAGE/source.tar" "$GITHUB_SHA"', source)
-        for name in ("agent-service", "lan-manager", "enroll-agent", "lan-agent"):
+        for name in ("agent-service", "lan-manager", "enroll-agent", "lan-agent", "socket-owner-reader"):
             self.assertIn(f'go build -buildvcs=false -o "$STAGE/{name}" ./cmd/{name}', source)
-        for name in ("enroll-agent", "lan-agent"):
-            self.assertIn(f'go build -buildvcs=false -trimpath -ldflags=-buildid=tracebolt-disposable-upgrade -o "$STAGE/{name}-upgrade" ./cmd/{name}', source)
+        self.assertNotIn("-upgrade", source)
         self.assertIn('go test -c -o "$STAGE/systemd.test" ./cmd/lan-manager', source)
         for action in re.findall(r"uses: ([^\s]+)", source):
             self.assertRegex(action, r"^actions/(checkout|setup-go|upload-artifact)@[0-9a-f]{40}$")
         self.assertNotRegex(source, r"\b(?:container|services|environment):")
         self.assertNotIn("self-hosted", source)
 
+    def test_authorization_gate_precedes_build_and_every_privileged_invocation(self):
+        source = self.source
+        gate = source.split("        id: approval_gate\n", 1)[1].split("      - uses: actions/setup-go", 1)[0]
+        self.assertLess(source.index("        id: approval_gate\n"), source.index("      - uses: actions/setup-go"))
+        self.assertLess(source.index("        id: approval_gate\n"), source.index("          go mod verify"))
+        for field, value in (("GITHUB_ACTIONS", "true"), ("RUNNER_ENVIRONMENT", "github-hosted"),
+                             ("RUNNER_OS", "Linux"), ("TRACEBOLT_APPROVED_SYSTEMD_TEST", "1"),
+                             ("TRACEBOLT_APPROVED_READ_ADMIN_V2_SYSTEMD_TEST", "1"),
+                             ("TRACEBOLT_READ_ADMIN_PROFILE", READ_PROFILE),
+                             ("TRACEBOLT_APPROVED_READ_ADMIN_PTRACE", "true")):
+            self.assertIn(f'test "${field}" = {value}', gate)
+        self.assertIn('[[ "$GITHUB_SHA" =~ ^[0-9a-f]{40}$ ]]', gate)
+        self.assertIn('test "$TRACEBOLT_READ_ADMIN_REVIEWED_SOURCE" = "$GITHUB_SHA"', gate)
+        self.assertIn('test "$(git rev-parse HEAD)" = "$GITHUB_SHA"', gate)
+        self.assertIn('case "$TRACEBOLT_READ_ADMIN_TRANSPORT" in tls|http-test) ;; *) exit 1 ;; esac', gate)
+        self.assertIn('case "$TRACEBOLT_READ_ADMIN_SCENARIO" in complete|cancel-enrollment|retained-journal) ;; *) exit 1 ;; esac', gate)
+        self.assertEqual(source.count("sudo env -i"), 2)
+        self.assertNotIn("sudo", source[:source.index("      - name: Execute")])
+        execution = source.split("      - name: Execute", 1)[1].split("      - name: Validate", 1)[0]
+        self.assertIn("        id: native_acceptance\n", execution)
+        self.assertNotIn("always()", execution)
+        evidence = source.split("      - name: Validate", 1)[1].split("      - name: Upload", 1)[0]
+        self.assertIn("        if: ${{ always() && !cancelled() && steps.approval_gate.outcome == 'success' && steps.native_acceptance.outcome != 'skipped' }}\n", evidence)
+        self.assertIn("      TRACEBOLT_APPROVED_SYSTEMD_TEST: '1'\n", source)
+        self.assertIn("      TRACEBOLT_APPROVED_READ_ADMIN_V2_SYSTEMD_TEST: ${{ inputs.approved_fresh_v2_read_admin_systemd && '1' || '0' }}\n", source)
+        for field, selected in (("PROFILE", "read_profile"), ("REVIEWED_SOURCE", "reviewed_source_commit")):
+            self.assertIn(f"      TRACEBOLT_READ_ADMIN_{field}: ${{{{ inputs.{selected} }}}}\n", source)
+        self.assertIn("      TRACEBOLT_APPROVED_READ_ADMIN_PTRACE: ${{ inputs.approved_cap_sys_ptrace_process_memory }}\n", source)
+
     def test_only_exact_harness_gets_bounded_privileged_environment(self):
         source = self.source
         execution = source.split("      - name: Execute", 1)[1].split("      - name: Validate", 1)[0]
         self.assertEqual(execution.count("sudo env -i"), 1)
         self.assertIn("          umask 077\n", execution)
-        self.assertIn("            TRACEBOLT_APPROVED_SYSTEMD_TEST=1 \\\n", execution)
-        self.assertIn("            TRACEBOLT_APPROVED_READ_ADMIN_SYSTEMD_TEST=1 \\\n", execution)
+        for field in ("TRACEBOLT_APPROVED_SYSTEMD_TEST", "TRACEBOLT_APPROVED_READ_ADMIN_V2_SYSTEMD_TEST",
+                      "TRACEBOLT_APPROVED_READ_ADMIN_PTRACE"):
+            self.assertIn(f'{field}="${field}"', execution)
         self.assertIn('            GITHUB_SHA="$GITHUB_SHA" \\\n', execution)
-        for field in ("TRANSPORT", "SCENARIO"):
+        for field in ("TRANSPORT", "SCENARIO", "PROFILE", "REVIEWED_SOURCE"):
             self.assertIn(f'TRACEBOLT_READ_ADMIN_{field}="$TRACEBOLT_READ_ADMIN_{field}"', execution)
         for field, value in (("BINARY_DIRECTORY", "$STAGE"), ("SOURCE_ARCHIVE", "$STAGE/source.tar"),
                              ("RESULT_FILE", "$STAGE/read-admin-systemd-result.json")):
@@ -150,7 +205,7 @@ class ReadAdminWrapperTests(unittest.TestCase):
         artifact = source.split("      - name: Upload", 1)[1]
         self.assertEqual(source.count("uses: actions/upload-artifact@"), 1)
         self.assertIn("        if: ${{ always() && !cancelled() }}\n", artifact)
-        self.assertIn("          name: read-admin-systemd-acceptance-${{ inputs.transport }}-${{ matrix.scenario }}-${{ github.sha }}\n", artifact)
+        self.assertIn("          name: read-admin-v2-systemd-acceptance-${{ inputs.transport }}-${{ matrix.scenario }}-${{ github.sha }}\n", artifact)
         self.assertIn("          path: ${{ runner.temp }}/read-admin-systemd-result.json\n", artifact)
         self.assertNotIn("*", artifact)
         self.assertNotIn("private", artifact)
@@ -159,6 +214,7 @@ class ReadAdminWrapperTests(unittest.TestCase):
         self.assertIn('TARGET="$RUNNER_TEMP/read-admin-systemd-result.json"', source)
         self.assertIn('> "$TARGET" <<\'PYTHON\'; then', source)
         self.assertIn('"$TRACEBOLT_READ_ADMIN_TRANSPORT" "$TRACEBOLT_READ_ADMIN_SCENARIO"', source)
+        self.assertIn('"$TRACEBOLT_READ_ADMIN_PROFILE" "$GITHUB_SHA"', source)
         self.assertNotRegex(source, r"(?m)^\s*(?:cat|tee|tail|journalctl|reboot)\b")
 
     def test_all_profile_scenario_completions_and_fixed_read_flags(self):
@@ -175,7 +231,7 @@ class ReadAdminWrapperTests(unittest.TestCase):
                     fake_os.fstat.assert_called_once_with(123)
                     stream.read.assert_called_once_with(4097)
                     self.assertEqual(self.complete(output.encode()),
-                                     ("PASS: selected read-admin scenario completed; OS reboot remains untested.\n", None))
+                                     ("PASS: selected fresh read-admin V2 scenario completed; OS reboot remains untested.\n", None))
 
     def test_fail_stage_is_sanitized_but_never_success(self):
         for stage in STAGES:
@@ -200,8 +256,11 @@ class ReadAdminWrapperTests(unittest.TestCase):
                     self.assert_rejected(json.dumps(result(**{field: invalid})).encode())
         for field in ("osRebootTested", "telemetryExported"):
             self.assert_rejected(json.dumps(result(**{field: True})).encode())
+        self.assert_rejected(json.dumps(result(ptraceRiskAcknowledged=False)).encode())
         for field, value in (("private", "private-fixture-value"), ("collectionProfile", "managed-operations-v2"),
                              ("schemaVersion", "tracebolt.managed-systemd-acceptance.v1"),
+                             ("schemaVersion", "tracebolt.read-admin-systemd-acceptance.v1"),
+                             ("readProfile", "tracebolt.linux-read-admin.v1"),
                              ("status", "skip"), ("stage", "restart"), ("stage", "read_admin_unknown")):
             self.assert_rejected(json.dumps(result(**{field: value})).encode())
 
@@ -215,11 +274,53 @@ class ReadAdminWrapperTests(unittest.TestCase):
                 for other in SCENARIOS:
                     if other != scenario:
                         self.assert_rejected(raw, transport=transport, scenario=other)
-        for field in ("transport", "scenario"):
+        for field in ("transport", "scenario", "read_profile", "source"):
             for value in ("", "other", "private-fixture-value"):
                 output, error, fake_os, _ = self.validate(json.dumps(result()).encode(), **{field: value})
                 self.assertEqual((output, error), ("", INVALID))
                 fake_os.open.assert_not_called()
+
+    def test_reviewed_source_binding_rejects_other_or_malformed_commits(self):
+        raw = json.dumps(result()).encode()
+        self.assert_rejected(raw, source="b" * 40)
+        for source in ("A" * 40, "a" * 39, "a" * 41, "a" * 39 + "\n", "unapproved"):
+            output, error, fake_os, _ = self.validate(raw, source=source)
+            self.assertEqual((output, error), ("", INVALID))
+            fake_os.open.assert_not_called()
+        self.assert_rejected(json.dumps(result(sourceCommit="b" * 40)).encode())
+        self.assert_rejected(json.dumps(result(readProfile="unapproved")).encode())
+
+    def test_scenario_specific_check_vectors_are_required_for_pass(self):
+        for scenario in SCENARIOS:
+            expected = result(scenario=scenario)["socketNativeChecks"]
+            for flags in itertools.product((False, True), repeat=len(CHECKS)):
+                checks = dict(zip(CHECKS, flags))
+                with self.subTest(scenario=scenario, checks=checks):
+                    raw = json.dumps(result(scenario=scenario, socketNativeChecks=checks)).encode()
+                    if checks != expected:
+                        self.assert_rejected(raw, scenario=scenario)
+                    else:
+                        self.assertIsNone(self.validate(raw, scenario=scenario)[1])
+                    failed = json.dumps(result(scenario=scenario, status="fail", socketNativeChecks=checks)).encode()
+                    output, error, _, _ = self.validate(failed, scenario=scenario)
+                    self.assertIsNone(error)
+                    self.assertEqual(self.complete(output.encode()), ("", INCOMPLETE))
+
+    def test_check_object_is_fixed_strict_and_duplicate_free(self):
+        valid = result()
+        for field in CHECKS:
+            changed = dict(valid["socketNativeChecks"])
+            del changed[field]
+            self.assert_rejected(json.dumps(result(socketNativeChecks=changed)).encode())
+            for invalid in (None, 0, 1, [], {}, "true", "private-fixture-value"):
+                changed = {**valid["socketNativeChecks"], field: invalid}
+                self.assert_rejected(json.dumps(result(socketNativeChecks=changed)).encode())
+            # The duplicate hook must also reject nested duplicate check keys.
+            raw = json.dumps(valid).encode()
+            duplicated = raw[:-2] + b", " + json.dumps(field).encode() + b": true}}"
+            self.assert_rejected(duplicated)
+        changed = {**valid["socketNativeChecks"], "independentSyscallDenial": True}
+        self.assert_rejected(json.dumps(result(socketNativeChecks=changed)).encode())
 
     def test_malformed_duplicate_truncated_and_oversized_results_reject(self):
         valid = json.dumps(result()).encode()

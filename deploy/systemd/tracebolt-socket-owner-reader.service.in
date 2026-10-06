@@ -1,0 +1,57 @@
+# Source candidate only. Native capability/seccomp/LSM acceptance is separate.
+[Unit]
+Description=Tracebolt fixed local socket-owner reader (candidate)
+Requires=tracebolt-socket-owner-reader.socket
+After=tracebolt-socket-owner-reader.socket
+
+[Service]
+Type=simple
+User=@HELPER_UID@
+Group=@HELPER_GID@
+SupplementaryGroups=
+Sockets=tracebolt-socket-owner-reader.socket
+ExecStart=/opt/tracebolt-agent/socket-owner-reader
+WorkingDirectory=/
+KillMode=control-group
+Delegate=no
+UMask=0077
+NoNewPrivileges=yes
+CapabilityBoundingSet=CAP_SYS_PTRACE
+AmbientCapabilities=CAP_SYS_PTRACE
+# The runtime independently requires exactly CAP_SYS_PTRACE in all five sets.
+# CAP_SYS_PTRACE grants broad process-memory authority; this is NOT OS read-only.
+# No private network/user/PID namespace, proc hiding, or RuntimeDirectory chown.
+PrivateNetwork=no
+PrivateUsers=no
+ProtectProc=default
+ProcSubset=all
+RestrictNamespaces=yes
+RestrictAddressFamilies=AF_UNIX
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+# No process-memory/debug syscall is part of this helper protocol.
+# These denies reduce syscall surface; they do not make CAP_SYS_PTRACE read-only.
+SystemCallFilter=~@reboot @swap @mount ptrace process_vm_readv process_vm_writev
+InaccessiblePaths=-/var/lib/tracebolt-agent -/etc/tracebolt-agent -/var/lib/tracebolt-agent-installer
+ReadOnlyPaths=/etc/tracebolt/socket-owner-policy.json /etc/tracebolt/socket-owner-deployment.json
+StandardInput=null
+StandardOutput=null
+StandardError=journal
+Restart=no
+TimeoutStopSec=10s
+TasksMax=32
+MemoryMax=128M
+LimitNOFILE=256
+
+# Socket activation only; no service enablement.

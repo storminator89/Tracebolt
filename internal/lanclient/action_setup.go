@@ -116,6 +116,7 @@ func loadActionSetupMaterial(path string) (Material, error) {
 	if err != nil || !current.valid() || current.binding != m.binding || journalLeaf(current) != journalLeaf(m) {
 		return Material{}, ErrConfiguration
 	}
+	current.configPath = path
 	return current, nil
 }
 
@@ -153,4 +154,11 @@ func checkActionSetupReadiness(ctx context.Context, path string,
 		return ActionSetupReadiness{}, errActionDenied
 	}
 	return ActionSetupReadiness{SchemaVersion: ActionSetupReadinessVersion, Identity: projectActionSetupIdentity(m, uid, gid), Capabilities: c}, nil
+}
+
+// readActivatedMaterial reuses the single authoritative activated sender producer.
+// Socket ownership uses this inside the unprivileged process at every capture,
+// stage and transmission checkpoint; no public identity mirror is created.
+func readActivatedMaterial(path string) (Material, uint32, uint32, error) {
+	return readActionSetupMaterial(path)
 }

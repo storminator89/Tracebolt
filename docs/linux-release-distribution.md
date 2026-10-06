@@ -102,10 +102,14 @@ does not establish download-based installation, upgrade or reboot acceptance.
    GitHub-hosted runner and `https://slsa.dev/provenance/v1` predicate. The source
    and signer checks use certificate-backed policy, not just a claimed JSON field.
 7. Only after that verification does the bootstrap accept the strict manifest and
-   download the three selected binaries plus the explicit source archive. Exact
+   download only the three ordinary installer binaries plus the explicit source archive.
+   The fresh read-admin v2 path alone also stages the attested socket-owner helper;
+   explicit socket-owner maintenance stages only the source archive. Exact
    names, sizes and SHA-256 values must match. All files are private mode 0600;
    every selected artifact is rechecked before any Tracebolt binary becomes
-   executable. The source archive is never extracted or executed.
+   executable. The source archive is never extracted. Read-admin/maintenance load only the fixed
+   reviewed Python modules and unit templates in memory after source inode/owner/
+   mode/size/hash checks; there is no second mutable implementation download.
 8. The existing installer receives the verified files and digest values directly
    as an argument list, never a shell interpolation. Ordinary interruption is
    forwarded to the installer and awaited so its existing cancellation/rollback
@@ -125,15 +129,19 @@ GitHub account/build workflow or a malicious newly approved bootstrap.
 ## Reproducible selection, not a reproducible-build guarantee
 
 `deploy/release/build-linux-release.py` requires a clean exact Git checkout and
-its declared Go version. It cross-builds `agent-service`, `enroll-agent` and
-`lan-agent` with CGO disabled, baseline amd64/arm64 settings, trimmed paths and
+its declared Go version. The new source contract cross-builds `agent-service`, `enroll-agent`,
+`lan-agent` and `socket-owner-reader` with CGO disabled, baseline amd64/arm64 settings, trimmed paths and
 recorded VCS metadata. It makes an explicit `git archive` from that full source
-SHA. The strict manifest contains the chosen version/source, seven file hashes
+SHA. The strict new manifest contains the chosen version/source, nine file hashes
 and sizes, and only `linux-amd64` as the runtime target.
 
 The attestation binds this manifest to the specific build workflow. It does not
 prove that two independent builds are byte-identical, and it does not substitute
 for reviewing the source, dependencies, workflow or actual runtime behavior.
+
+The new helper asset contract is source-only. The existing published rc.1 seven-asset
+manifest, captured bootstrap, public-byte verifier and dashboard release pins remain
+unchanged. An ordinary install or upgrade never grants helper access.
 
 ## Candidate build and publication gates
 
@@ -157,14 +165,14 @@ only the exact artifact ID emitted by the candidate in this same workflow run.
 Version-scoped concurrency queues duplicate requests instead of canceling a write
 mid-publication.
 
-Before any GitHub mutation, `publish-linux-release.py` snapshots the exact ten
+Before any GitHub mutation, `publish-linux-release.py` snapshots the exact twelve
 candidate files privately, independently verifies their keyless provenance again,
 checks every manifest size/hash and compares `bootstrap.py` with the exact local
 reviewed template plus the verified release pin. It then verifies the repository's
 numeric identity, current `main` source SHA, and absence of the selected version
 from tags, release-by-tag and authenticated draft/release listings. It refuses
 uncertain or unbounded freshness results. It creates only that fresh tag and a
-new draft, uploads only the expected seven artifacts, manifest, bundle and
+new draft, uploads only the expected nine artifacts, manifest, bundle and
 bootstrap, and checks all returned and listed asset digests before publishing it
 as a prerelease without changing the repository's `latest` release. Final release,
 tag and complete asset metadata are read back once more.

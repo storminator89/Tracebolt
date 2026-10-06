@@ -97,9 +97,33 @@ class Fixture(unittest.TestCase):
         self.assertNotIn("[4/4]", progress.getvalue())
         self.assertEqual(result, self.manifest)
         self.assertFalse(any("arm64" in path.name for path in self.stage.iterdir()))
-        for role in b.ROLES:
+        for role in b.INSTALL_ROLES:
             self.assertEqual(stat.S_IMODE((self.stage / f"tracebolt-{VERSION}-linux-amd64-{role}").stat().st_mode), 0o500)
         self.assertEqual(stat.S_IMODE((self.stage / f"tracebolt-{VERSION}-source.tar").stat().st_mode), 0o600)
+
+    def test_ordinary_prepare_never_stages_optional_helper(self):
+        self.prepare()
+        self.assertFalse((self.stage / f"tracebolt-{VERSION}-linux-amd64-socket-owner-reader").exists())
+        self.assertEqual(len(b.asset_names(VERSION)), 9)
+        for arch in b.ARCHES:
+            self.assertIn(f"tracebolt-{VERSION}-linux-{arch}-socket-owner-reader", self.manifest["assets"])
+
+    def test_read_admin_only_stages_attested_helper_and_checks_its_integrity(self):
+        b.prepare_release(self.stage, self.pin, "amd64", self.fetch, self.verifier, self.verify, read_admin=True)
+        path = self.stage / f"tracebolt-{VERSION}-linux-amd64-socket-owner-reader"
+        self.assertEqual(path.read_bytes(), self.artifacts[path.name])
+        self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o500)
+
+    def test_maintenance_stages_source_and_never_a_tracebolt_program(self):
+        b.prepare_release(self.stage, self.pin, "amd64", self.fetch, self.verifier, self.verify, maintenance=True)
+        self.assertTrue((self.stage / f"tracebolt-{VERSION}-source.tar").exists())
+        self.assertFalse(any(p.name.startswith(f"tracebolt-{VERSION}-linux-") for p in self.stage.iterdir()))
+
+    def test_tampered_helper_blocks_before_programs_executable(self):
+        self.artifacts[f"tracebolt-{VERSION}-linux-amd64-socket-owner-reader"] = b"wrong helper"
+        with self.assertRaises(b.Rejected):
+            b.prepare_release(self.stage, self.pin, "amd64", self.fetch, self.verifier, self.verify, read_admin=True)
+        self.assertTrue(all(not p.stat().st_mode & 0o111 for p in self.stage.iterdir()))
 
     def test_rejected_provenance_prevents_any_tracebolt_program_download(self):
         self.verifier_result = 1

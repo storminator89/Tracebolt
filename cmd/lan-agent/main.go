@@ -19,6 +19,11 @@ import (
 )
 
 func main() {
+	if selected, options, valid := socketOwnerSetupInvocation(os.Args[1:]); selected {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		os.Exit(runSocketOwnerSetup(ctx, options, valid, defaultSocketOwnerSetupHooks(), os.Stdin, os.Stdout, os.Stderr))
+	}
 	if selected, options, valid := actionSetupInvocation(os.Args[1:]); selected {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()

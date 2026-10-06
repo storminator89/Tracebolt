@@ -9,8 +9,10 @@ const readAdminLauncher = `import os,sys
 
 def require_gate(env, system, uid, euid):
     expected = {'TRACEBOLT_APPROVED_SYSTEMD_TEST':'1',
-        'TRACEBOLT_APPROVED_READ_ADMIN_SYSTEMD_TEST':'1', 'GITHUB_ACTIONS':'true',
-        'RUNNER_ENVIRONMENT':'github-hosted', 'RUNNER_OS':'Linux'}
+        'TRACEBOLT_APPROVED_READ_ADMIN_V2_SYSTEMD_TEST':'1', 'GITHUB_ACTIONS':'true',
+        'RUNNER_ENVIRONMENT':'github-hosted', 'RUNNER_OS':'Linux',
+        'TRACEBOLT_READ_ADMIN_PROFILE':'tracebolt.linux-read-admin.v2',
+        'TRACEBOLT_APPROVED_READ_ADMIN_PTRACE':'true'}
     if any(env.get(k) != v for k,v in expected.items()):
         raise ValueError('acceptance-gate-rejected')
     transport, scenario, source = (env.get(k) for k in
@@ -19,17 +21,150 @@ def require_gate(env, system, uid, euid):
         transport not in ('tls','http-test') or
         scenario not in ('complete','cancel-enrollment','retained-journal') or
         type(source) is not str or len(source) != 40 or
-        any(c not in '0123456789abcdef' for c in source)):
+        any(c not in '0123456789abcdef' for c in source) or
+        env.get('TRACEBOLT_READ_ADMIN_REVIEWED_SOURCE') != source):
         raise ValueError('acceptance-gate-rejected')
     return transport, scenario, source
 
 
 def failure_result(stage):
-    return dict(schemaVersion='tracebolt.read-admin-result.v1',
-        readProfile='tracebolt.linux-read-admin.v1', configurationComplete=False,
+    return dict(schemaVersion='tracebolt.read-admin-result.v2',
+        readProfile='tracebolt.linux-read-admin.v2', configurationComplete=False,
         canceled=False, installation='not_attempted',
-        phases={'inventory':'not_attempted','journal':'not_attempted'},
+        phases={'inventory':'not_attempted','journal':'not_attempted','socket':'not_attempted'},
         collectionPerformed=False, nativeAcceptance='not-established', failureStage=stage)
+
+
+def socket_native_operation(operation, scenario, workflow, inventory, s, amendment, socket_setup, templates, release):
+    # Native-only. Callers passed the exact reviewed fresh-v2 gate and selected
+    # protected source archive. Inert tests never invoke this function.
+    import base64, json, stat
+    def require(ok):
+        if not ok:
+            raise ValueError('acceptance-launcher-rejected')
+    e = socket_setup.real_effects(s)
+    out = dict(schemaVersion='tracebolt.read-admin-socket-native.v1', operation=operation,
+        grantEpoch='', policyDigest='', agentPID=0, helperPID=0, agentUID=0, agentGID=0,
+        helperUID=0, helperGID=0, revoked=False,
+        cleanupConfirmed=False, floorPreserved=False, pendingChecked=False)
+    # No marker alone authorizes cleanup. A failed pre-parent installation can
+    # only report that helper authority is absent, never guess at its ownership.
+    if operation == 'cleanup' and e.absent(workflow.RECEIPT):
+        require(all(e.absent(p) for p in (s.CONFIG_DIR, socket_setup.BINARY,
+            socket_setup.UNIT_DIR + '/' + socket_setup.SERVICE,
+            socket_setup.UNIT_DIR + '/' + socket_setup.SOCKET, socket_setup.RUNTIME)))
+        out['cleanupConfirmed'] = True
+        return out
+    facts = inventory.inspect(s, inventory.real_effects(s), templates, inventory.selected_scopes(True))
+    raw = e.read(workflow.RECEIPT, 16384, 0o600)
+    bound = inventory.strict_json(raw, 16384)
+    require(type(bound) is dict and bound.get('schemaVersion') == 'tracebolt.read-admin-intent.v2' and
+        bound.get('readProfile') == workflow.PROFILE and workflow.canonical(bound) == raw and
+        bound.get('installation') == facts['manifest'] and bound.get('ownerHash') == facts['ownerHash'] and
+        bound.get('configHash') == facts['configHash'] and bound.get('deviceId') == facts['deviceId'] and
+        bound.get('managerOrigin') == facts['origin'] and bound.get('agentUid') == facts['uid'] and bound.get('agentGid') == facts['gid'] and
+        facts['manifest']['sourceHash'] == release['assets']['tracebolt-' + release['version'] + '-source.tar']['sha256'])
+    parent = workflow.digest(raw)
+    if operation == 'cleanup':
+        # Immutable production ownership proof precedes every helper stop. A
+        # partial unproved helper fails cleanup; retain it and discard the VM.
+        if not e.absent(socket_setup.COMPLETE):
+            receipt = socket_setup.ownership_proof(s, e, templates, facts, parent)
+            socket_setup.loaded(e, socket_setup.SERVICE, receipt['helperUid'], receipt['helperGid'], [socket_setup.BINARY], allow_failed=True)
+            socket_setup.loaded(e, socket_setup.SOCKET, 0, facts['gid'], [])
+            socket_setup.revoke_safety_shutdown(e, ValueError('native-cleanup'), disable_admission=True)
+        else:
+            require(all(e.absent(p) for p in (socket_setup.BINARY, socket_setup.POLICY, socket_setup.DEPLOYMENT,
+                socket_setup.UNIT_DIR + '/' + socket_setup.SERVICE, socket_setup.UNIT_DIR + '/' + socket_setup.SOCKET, socket_setup.RUNTIME)))
+            # Stopping the sender is allowed only after actual installer proof.
+            require(socket_setup.digest(socket_setup.exact_file(e, socket_setup.AGENT_BINARY, 0o555, 0, limit=128 << 20)) == facts['manifest']['agentHash'])
+            socket_setup.loaded(e, socket_setup.AGENT, facts['uid'], facts['gid'], socket_setup.agent_argv(s, templates, facts))
+            socket_setup.stop(e, socket_setup.AGENT)
+        if not e.absent(s.CONFIG_DIR):
+            readback = amendment.real_effects(s, {})
+            # Full immutable journal declarations, identities and exact rendered
+            # units must validate. Existence of an attempt marker is insufficient.
+            amendment.inspect(s, readback, templates)
+            for name in (s.SOCKET, s.SERVICE):
+                readback.command(['/usr/bin/systemctl', 'stop', name], failure_stage='native-owned-helper-stop')
+                state = readback.status(name)
+                require(s.owned_unit(state, name, 'inactive') and (name == s.SOCKET or state['MainPID'] == '0'))
+            require(e.absent(s.SOCKET_PATH))
+        out['cleanupConfirmed'] = True
+        return out
+    maintenance = workflow.real_maintenance(s, inventory, socket_setup, templates, release)
+    require(maintenance.inspect() == bound)
+    receipt = socket_setup.proof(s, e, templates, facts, parent)
+    socket_setup.runtime_configuration(e, facts, receipt)
+    out.update(grantEpoch=receipt['policy']['epoch'], policyDigest=receipt['policySHA256'],
+        agentUID=facts['uid'], agentGID=facts['gid'], helperUID=receipt['helperUid'], helperGID=receipt['helperGid'])
+    if operation == 'inspect-socket':
+        agent = socket_setup.loaded(e, socket_setup.AGENT, facts['uid'], facts['gid'], socket_setup.agent_argv(s, templates, facts), active='active')
+        helper = socket_setup.loaded(e, socket_setup.SERVICE, receipt['helperUid'], receipt['helperGid'], [socket_setup.BINARY], active='active')
+        out.update(agentPID=int(agent['MainPID']), helperPID=int(helper['MainPID']))
+        return out
+    require(operation == 'revoke-socket' and scenario == 'complete')
+    original_factory = socket_setup.real_effects
+    evidence = {}
+    def private_state():
+        # Fixed new-install state; root inspection never exposes body bytes.
+        path = '/var/lib/tracebolt-agent/enrollment/telemetry/system/system-state.json'
+        parent_fd = os.open('/', os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC)
+        try:
+            for part in path.split('/')[1:-1]:
+                next_fd = os.open(part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC, dir_fd=parent_fd)
+                os.close(parent_fd); parent_fd = next_fd
+                info = os.fstat(parent_fd)
+                require(info.st_uid in (0, facts['uid']) and not stat.S_IMODE(info.st_mode) & 0o022)
+            fd = os.open('system-state.json', os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC, dir_fd=parent_fd)
+            with os.fdopen(fd, 'rb') as stream:
+                info = os.fstat(stream.fileno())
+                require(stat.S_ISREG(info.st_mode) and info.st_nlink == 1 and info.st_uid == facts['uid'] and
+                    info.st_gid == facts['gid'] and stat.S_IMODE(info.st_mode) == 0o600 and 0 < info.st_size <= 2 << 20)
+                raw = stream.read((2 << 20) + 1)
+                require(len(raw) == info.st_size)
+            return s.strict_json(raw, ('version','binding','lastSequence','pending'))
+        finally:
+            os.close(parent_fd)
+    def checked_effects(module):
+        effect = original_factory(module)
+        original_consent = effect.consent
+        def consent(mode, selected, body=None):
+            if mode != 'disable':
+                return original_consent(mode, selected, body)
+            before = private_state()
+            result = original_consent(mode, selected, body)
+            after = private_state()
+            require(all(before[k] == after[k] for k in ('version','binding','lastSequence')))
+            pending = before['pending']
+            tagged = False
+            if pending is not None:
+                require(type(pending) is dict and set(pending) == {'sequence','digest','body'})
+                frame_raw = base64.b64decode(pending['body'], validate=True)
+                require(socket_setup.digest(frame_raw) == pending['digest'])
+                frame = s.strict_json(frame_raw)
+                tagged = frame.get('schemaVersion') == 'tracebolt.agent-system-inventory.v4' and type(frame.get('socketOwnerProvenance')) is dict
+            require(after['pending'] is None if tagged else after['pending'] == pending)
+            require(s.strict_json(result)['taggedPendingDiscarded'] is tagged)
+            evidence.update(floorPreserved=True, pendingChecked=True)
+            return result
+        effect.consent = consent
+        return effect
+    socket_setup.real_effects = checked_effects
+    try:
+        maintenance = workflow.real_maintenance(s, inventory, socket_setup, templates, release)
+        result = workflow.run_revoke(maintenance, lambda phrase: phrase == 'REVOKE SOCKET OWNERS', lambda _: None)
+    finally:
+        socket_setup.real_effects = original_factory
+    require(result.get('revoked') is True and not result.get('stopUnconfirmed') and evidence == dict(floorPreserved=True, pendingChecked=True))
+    socket_setup.proof(s, e, templates, facts, parent, disabled=True)
+    socket_setup.runtime_configuration(e, facts, receipt, enabled=False)
+    helper = e.status(socket_setup.SERVICE)
+    require(socket_setup.owned(helper, socket_setup.SERVICE, 'inactive') and helper['MainPID'] == '0')
+    e.drain(socket_setup.SERVICE)
+    require(not e.absent(socket_setup.REVOKE_STARTED) and not e.absent(socket_setup.REVOKE_COMPLETE))
+    out.update(revoked=True, **evidence)
+    return out
 
 
 def main(argv=None):
@@ -112,12 +247,14 @@ def main(argv=None):
         finally:
             os.close(parent)
         cfg = json.loads(raw.decode('utf-8'), object_pairs_hook=unique, parse_constant=no_constant)
-        require(type(cfg) is dict and set(cfg) == {'directory','manifest','arguments','scenario'} and cfg['scenario'] == scenario)
+        require(type(cfg) is dict and set(cfg) == {'directory','manifest','arguments','scenario','operation'} and cfg['scenario'] == scenario)
         manifest, arguments = cfg['manifest'], cfg['arguments']
+        operation = cfg['operation']
+        require(operation in ('install','inspect-socket','revoke-socket','cleanup'))
         version = 'v0.0.0-read-admin-acceptance'
         require(type(manifest) is dict and set(manifest) == {'version','sourceCommit','assets'} and
             manifest['version'] == version and manifest['sourceCommit'] == source_commit)
-        roles = ('agent-service','enroll-agent','lan-agent')
+        roles = ('agent-service','enroll-agent','lan-agent','socket-owner-reader')
         names = [f'tracebolt-{version}-linux-amd64-{role}' for role in roles]
         source_name = f'tracebolt-{version}-source.tar'
         assets = manifest['assets']
@@ -167,12 +304,20 @@ def main(argv=None):
         require(args.apply and args.read_admin and args.action == 'install' and not args.resume and
             args.insecure_http_test == (transport == 'http-test'))
         directory = Path(cfg['directory'])
-        b.inspect_terminal()
+        if operation == 'install':
+            b.inspect_terminal()
         arch = b.inspect_host()
         require(arch == 'amd64')
-        workflow, inventory, setup, amendment, journal_guide, templates = b.read_admin_sources(directory, manifest)
+        workflow, inventory, setup, amendment, journal_guide, socket_setup, templates = b.read_admin_sources(directory, manifest)
+        require(workflow.PROFILE == 'tracebolt.linux-read-admin.v2' and workflow.PHASES == ('inventory','journal','socket'))
+        if operation != 'install':
+            result = socket_native_operation(operation, scenario, workflow, inventory, setup, amendment, socket_setup, templates, manifest)
+            print(json.dumps(result), flush=True)
+            return 0
         plan = workflow.make_plan(args, manifest, arch)
-        adapter = workflow.real_adapter(setup, inventory, amendment, journal_guide, templates, plan)
+        helper = directory / f'tracebolt-{version}-linux-amd64-socket-owner-reader'
+        artifact = dict(manifest['assets'][helper.name], path=str(helper))
+        adapter = workflow.real_adapter(setup, inventory, amendment, journal_guide, socket_setup, templates, plan, artifact)
         if scenario == 'retained-journal':
             configure = adapter.configure
             def retain_before_journal(phase, bound, *, verify_only):
@@ -225,8 +370,10 @@ FAILURES = frozenset(('install-or-device-approval-incomplete','acceptance-inject
 
 def require_gate(env, system, uid, euid):
     expected = {'TRACEBOLT_APPROVED_SYSTEMD_TEST':'1',
-        'TRACEBOLT_APPROVED_READ_ADMIN_SYSTEMD_TEST':'1', 'GITHUB_ACTIONS':'true',
-        'RUNNER_ENVIRONMENT':'github-hosted', 'RUNNER_OS':'Linux'}
+        'TRACEBOLT_APPROVED_READ_ADMIN_V2_SYSTEMD_TEST':'1', 'GITHUB_ACTIONS':'true',
+        'RUNNER_ENVIRONMENT':'github-hosted', 'RUNNER_OS':'Linux',
+        'TRACEBOLT_READ_ADMIN_PROFILE':'tracebolt.linux-read-admin.v2',
+        'TRACEBOLT_APPROVED_READ_ADMIN_PTRACE':'true'}
     if any(env.get(k) != v for k,v in expected.items()):
         raise ValueError('acceptance-gate-rejected')
     transport, scenario, source = (env.get(k) for k in
@@ -235,7 +382,8 @@ def require_gate(env, system, uid, euid):
         transport not in ('tls','http-test') or
         scenario not in ('complete','cancel-enrollment','retained-journal') or
         type(source) is not str or len(source) != 40 or
-        any(c not in '0123456789abcdef' for c in source)):
+        any(c not in '0123456789abcdef' for c in source) or
+        env.get('TRACEBOLT_READ_ADMIN_REVIEWED_SOURCE') != source):
         raise ValueError('acceptance-gate-rejected')
     return transport, scenario, source
 
@@ -269,7 +417,7 @@ def terminal_objects(raw):
             try:
                 value, consumed = decoder.raw_decode(text, start)
             except ValueError:
-                if 'tracebolt.read-admin-result.v1' in text[start:]:
+                if 'tracebolt.read-admin-result.v2' in text[start:]:
                     raise ValueError('read-admin-result-invalid') from None
             else:
                 if type(value) is dict:
@@ -291,18 +439,18 @@ def parse_result(raw):
         result['readAdminFailure'] = 'read-admin-result-invalid'
         return result
     try:
-        roots = [v for v in terminal_objects(raw) if v.get('schemaVersion') == 'tracebolt.read-admin-result.v1']
+        roots = [v for v in terminal_objects(raw) if v.get('schemaVersion') == 'tracebolt.read-admin-result.v2']
         if not roots:
             return result
         if len(roots) != 1:
             raise ValueError()
         value = roots[0]
         phases = value.get('phases')
-        if (value.get('readProfile') != 'tracebolt.linux-read-admin.v1' or
+        if (value.get('readProfile') != 'tracebolt.linux-read-admin.v2' or
             type(value.get('configurationComplete')) is not bool or type(value.get('canceled')) is not bool or
             value.get('collectionPerformed') is not False or value.get('nativeAcceptance') != 'not-established' or
             value.get('installation') not in ('not_attempted','uncertain','committed','existing_owned_installation') or
-            type(phases) is not dict or set(phases) != {'inventory','journal'} or
+            type(phases) is not dict or set(phases) != {'inventory','journal','socket'} or
             any(type(v) is not str or v not in ('not_attempted','uncertain','verification_pending',
                 'configured_confirmed','verified_existing') for v in phases.values())):
             raise ValueError()

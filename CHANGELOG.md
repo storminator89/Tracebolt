@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-10-06 — Prepare one-command fresh read-admin V2 installation
+
+- Compose the optional socket-owner helper and real sender/manager/UI provenance path with fresh read-admin V2 provisioning. Keep the main agent unprivileged; bind exact artifacts, activated identity, local approval and original source age. The combined approval explicitly includes the helper's broad CAP_SYS_PTRACE authority, which is not intrinsically limited to metadata by the OS.
+- Build and verify four native release roles, require receiver-v4 support before grants, install create-only helper declarations, and retain exact state/sequence evidence through explicit revocation and drain. Align agent artifact checks with the installer's exact 0555 mode; the separate helper remains 0755.
+- Replace the manual acceptance gate with explicit fresh-V2, CAP-risk and exact-source approval. The complete disposable scenario requires a real journal marker, controlled TCP/UDP owners, agent service restart and later ordinary reporting after revocation. Source/fixture checks are not native acceptance; no workflow dispatch, host grant, published installer activation or OS reboot is performed by this checkpoint.
+
 ## 2026-10-06 — Keep CVE paging controls readable on desktop
 
 - Correct the CVE paging selector so later shared small-button styles cannot reduce its desktop height from 36px to 30px. Built-style checks reproduce the defect and verify 36px desktop controls, unchanged 42px mobile controls and unchanged unrelated small buttons.

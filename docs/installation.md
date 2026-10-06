@@ -39,7 +39,9 @@ process do not establish approved reporting or actual reboot acceptance.
 
 The [one-command read-admin source candidate](read-admin-onboarding.md) groups
 fresh-install inventory, network identity and current/future exact-system-service
-journal permissions under one explicit local approval. It reuses the existing
+journal permissions plus isolated socket-owner metadata under one explicit local
+approval. Its v2 disclosure explicitly covers the helper's broad process-memory
+authority; the main agent stays unprivileged. It reuses the existing
 installer/consent validators and preserves phase evidence. It is **not enabled in
 the pinned rc.1 release**; publication, pin activation and real-host acceptance
 remain separate. Existing installs and pending journal recovery are not migrated

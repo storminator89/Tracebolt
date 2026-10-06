@@ -163,7 +163,7 @@ class Publication(unittest.TestCase):
     def test_fresh_version_uploads_exact_assets_and_only_then_publishes(self):
         self.assertEqual(self.publish(), f"https://github.com/{p.b.REPOSITORY}/releases/tag/{VERSION}")
         operations = self.mutations()
-        self.assertEqual([item[0] for item in operations], ["POST"] * 12 + ["PATCH"])
+        self.assertEqual([item[0] for item in operations], ["POST"] * (len(self.expected) + 2) + ["PATCH"])
         self.assertEqual(operations[0][2], {"ref": "refs/tags/" + VERSION, "sha": SOURCE})
         self.assertTrue(operations[1][2]["draft"])
         self.assertTrue(operations[1][2]["prerelease"])

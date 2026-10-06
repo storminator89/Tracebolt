@@ -7,6 +7,7 @@ import (
 	"io"
 	"localrmm/internal/cachedupdates"
 	"localrmm/internal/endpointidentity"
+	"localrmm/internal/socketowner"
 	"localrmm/internal/systeminventory"
 	"localrmm/internal/systemstate"
 	"localrmm/internal/systemwire"
@@ -31,6 +32,9 @@ type systemSender struct {
 	now             func() time.Time
 	identityCollect endpointSource
 	updatesCollect  cachedUpdatesSource
+	socketIdentity  activatedMaterialReader
+	socketConsent   socketOwnerConsentReader
+	socketHelper    socketOwnerHelper
 }
 
 func openSystemSender(m Material) (*systemSender, error) {
@@ -44,7 +48,7 @@ func openSystemSenderWithSource(m Material, source systemSource, now func() time
 	if e != nil {
 		return nil, ErrState
 	}
-	return &systemSender{material: m, state: state, client: newHTTPClient(m.tlsConfig, m.config.Profile == "http-test"), collect: source, now: now, identityCollect: endpointidentity.Collect, updatesCollect: cachedupdates.Collect}, nil
+	return &systemSender{material: m, state: state, client: newHTTPClient(m.tlsConfig, m.config.Profile == "http-test"), collect: source, now: now, identityCollect: endpointidentity.Collect, updatesCollect: cachedupdates.Collect, socketIdentity: readActivatedMaterial, socketConsent: readSocketOwnerConsent, socketHelper: socketowner.Client{}}, nil
 }
 func (s *systemSender) Close() error {
 	if s == nil {
@@ -84,7 +88,7 @@ func (s *systemSender) Run(ctx context.Context) (systemReport, error) {
 			return out, ErrState
 		}
 		now := s.now().UTC()
-		if frame.EndpointIdentity != nil && !identityEnabled || frame.CachedUpdates != nil && !updatesEnabled {
+		if frame.SocketOwnerProvenance != nil && !s.verifySocketOwners(ctx, *frame.SocketOwnerProvenance, frame.Snapshot) || frame.EndpointIdentity != nil && !identityEnabled || frame.CachedUpdates != nil && !updatesEnabled {
 			if s.state.Discard(pending.Digest) != nil {
 				return out, ErrState
 			}
@@ -168,6 +172,26 @@ func (s *systemSender) Run(ctx context.Context) (systemReport, error) {
 		if e != nil {
 			return out, ErrObservation
 		}
+		// Only a fully authenticated helper capture may replace ordinary socket
+		// rows. Keep ordinary bytes available until the final pre-stage check.
+		ordinaryRaw := raw
+		enriched, provenance := s.collectSocketOwners(ctx, snapshot)
+		if ctx.Err() != nil {
+			return out, ctx.Err()
+		}
+		if provenance != nil {
+			base, decodeErr := systemwire.Decode(ordinaryRaw)
+			if decodeErr != nil {
+				return out, ErrObservation
+			}
+			tagged, encodeErr := systemwire.EncodeSocketOwners(sequence, enriched, *provenance, base.EndpointIdentity, base.CachedUpdates)
+			if encodeErr == nil && s.verifySocketOwners(ctx, *provenance, enriched) {
+				raw = tagged
+			}
+		}
+		if ctx.Err() != nil {
+			return out, ctx.Err()
+		}
 		staged, e := s.state.Stage(sequence, raw)
 		if e != nil {
 			return out, ErrState
@@ -201,6 +225,13 @@ func (s *systemSender) Run(ctx context.Context) (systemReport, error) {
 			out.Status = "cached_updates_disabled"
 			return out, nil
 		}
+	}
+	if prepared.SocketOwnerProvenance != nil && !s.verifySocketOwners(ctx, *prepared.SocketOwnerProvenance, prepared.Snapshot) {
+		if s.state.Discard(pending.Digest) != nil {
+			return out, ErrState
+		}
+		out.Status = "socket_owners_disabled"
+		return out, nil
 	}
 	var request *http.Request
 	if s.material.config.Profile == "http-test" {

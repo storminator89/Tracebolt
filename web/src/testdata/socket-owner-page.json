@@ -1,0 +1,80 @@
+{
+  "schemaVersion": "tracebolt.system-inventory-page.v1",
+  "deviceId": "agent_00000000000000000000000000000001",
+  "collectionProfile": "managed-operations-v3",
+  "serverNow": "2027-01-15T08:00:12.123456789Z",
+  "socketOwnerProvenance": {
+    "schemaVersion": "tracebolt.socket-owner-source.v1",
+    "scope": "systemd-pid1-local-tcp-udp-socket-owners",
+    "grantEpoch": "1111111111111111111111111111111111111111111111111111111111111111",
+    "policyDigest": "2222222222222222222222222222222222222222222222222222222222222222",
+    "authorityRevision": "3333333333333333333333333333333333333333333333333333333333333333",
+    "contextId": "4444444444444444444444444444444444444444444444444444444444444444",
+    "startedAt": "2027-01-15T08:00:11.123456789Z",
+    "finishedAt": "2027-01-15T08:00:12.123456789Z"
+  },
+  "cursorExpiresAt": null,
+  "section": "sockets",
+  "generationId": "sample_390d9af73eeb7101fd1e16bcbea4c995",
+  "meta": {
+    "generationId": "sample_390d9af73eeb7101fd1e16bcbea4c995",
+    "observedAt": "2027-01-15T08:00:10.123456789Z",
+    "coverage": "complete",
+    "reason": "none",
+    "observedCount": 2,
+    "countExact": true
+  },
+  "status": "fresh",
+  "totalRows": 2,
+  "returnedCount": 2,
+  "scannedCount": 2,
+  "exhausted": true,
+  "nextCursor": "",
+  "services": [],
+  "sockets": [
+    {
+      "protocol": "tcp",
+      "family": "ipv4",
+      "kind": "listener",
+      "local": {
+        "address": "127.0.0.1",
+        "port": 8080
+      },
+      "remote": {
+        "address": "0.0.0.0",
+        "port": 0
+      },
+      "state": "listen",
+      "owners": [
+        {
+          "pid": 42,
+          "processName": "fixture-server",
+          "nameReason": "none"
+        }
+      ],
+      "attribution": {
+        "coverage": "observed",
+        "reason": "none"
+      }
+    },
+    {
+      "protocol": "udp",
+      "family": "ipv4",
+      "kind": "bound",
+      "local": {
+        "address": "0.0.0.0",
+        "port": 1234
+      },
+      "remote": {
+        "address": "0.0.0.0",
+        "port": 0
+      },
+      "state": "bound",
+      "owners": [],
+      "attribution": {
+        "coverage": "unavailable",
+        "reason": "no_match"
+      }
+    }
+  ]
+}

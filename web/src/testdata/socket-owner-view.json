@@ -1,0 +1,78 @@
+{
+  "collectionProfile": "managed-operations-v3",
+  "schemaVersion": "tracebolt.system-inventory-view.v1",
+  "deviceId": "agent_00000000000000000000000000000001",
+  "status": "fresh",
+  "serverNow": "2027-01-15T08:00:12.123456789Z",
+  "maxAgeSeconds": 120,
+  "sequence": "1",
+  "receivedAt": "2027-01-15T08:00:12.123456789Z",
+  "latest": {
+    "socketOwnerProvenance": {
+      "schemaVersion": "tracebolt.socket-owner-source.v1",
+      "scope": "systemd-pid1-local-tcp-udp-socket-owners",
+      "grantEpoch": "1111111111111111111111111111111111111111111111111111111111111111",
+      "policyDigest": "2222222222222222222222222222222222222222222222222222222222222222",
+      "authorityRevision": "3333333333333333333333333333333333333333333333333333333333333333",
+      "contextId": "4444444444444444444444444444444444444444444444444444444444444444",
+      "startedAt": "2027-01-15T08:00:11.123456789Z",
+      "finishedAt": "2027-01-15T08:00:12.123456789Z"
+    },
+    "generationId": "sample_390d9af73eeb7101fd1e16bcbea4c995",
+    "collectedAt": "2027-01-15T08:00:10.123456789Z",
+    "durationMs": 2000,
+    "scope": "agent-visible-linux-system",
+    "services": {
+      "generationId": "sample_390d9af73eeb7101fd1e16bcbea4c995",
+      "observedAt": "2027-01-15T08:00:10.123456789Z",
+      "coverage": "complete",
+      "reason": "none",
+      "observedCount": 1,
+      "countExact": true
+    },
+    "sockets": {
+      "generationId": "sample_390d9af73eeb7101fd1e16bcbea4c995",
+      "observedAt": "2027-01-15T08:00:10.123456789Z",
+      "coverage": "complete",
+      "reason": "none",
+      "observedCount": 2,
+      "countExact": true
+    }
+  },
+  "lastComplete": {
+    "services": {
+      "sequence": "1",
+      "meta": {
+        "generationId": "sample_390d9af73eeb7101fd1e16bcbea4c995",
+        "observedAt": "2027-01-15T08:00:10.123456789Z",
+        "coverage": "complete",
+        "reason": "none",
+        "observedCount": 1,
+        "countExact": true
+      },
+      "status": "fresh"
+    },
+    "sockets": {
+      "socketOwnerProvenance": {
+        "schemaVersion": "tracebolt.socket-owner-source.v1",
+        "scope": "systemd-pid1-local-tcp-udp-socket-owners",
+        "grantEpoch": "1111111111111111111111111111111111111111111111111111111111111111",
+        "policyDigest": "2222222222222222222222222222222222222222222222222222222222222222",
+        "authorityRevision": "3333333333333333333333333333333333333333333333333333333333333333",
+        "contextId": "4444444444444444444444444444444444444444444444444444444444444444",
+        "startedAt": "2027-01-15T08:00:11.123456789Z",
+        "finishedAt": "2027-01-15T08:00:12.123456789Z"
+      },
+      "sequence": "1",
+      "meta": {
+        "generationId": "sample_390d9af73eeb7101fd1e16bcbea4c995",
+        "observedAt": "2027-01-15T08:00:10.123456789Z",
+        "coverage": "complete",
+        "reason": "none",
+        "observedCount": 2,
+        "countExact": true
+      },
+      "status": "fresh"
+    }
+  }
+}

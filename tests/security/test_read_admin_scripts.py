@@ -39,16 +39,17 @@ PTY = inert_module('readAdminPTY')
 
 def approved_env(**updates):
     return dict(TRACEBOLT_APPROVED_SYSTEMD_TEST='1',
-                TRACEBOLT_APPROVED_READ_ADMIN_SYSTEMD_TEST='1', GITHUB_ACTIONS='true',
+                TRACEBOLT_APPROVED_READ_ADMIN_V2_SYSTEMD_TEST='1', GITHUB_ACTIONS='true',
                 RUNNER_ENVIRONMENT='github-hosted', RUNNER_OS='Linux',
                 TRACEBOLT_READ_ADMIN_TRANSPORT='tls', TRACEBOLT_READ_ADMIN_SCENARIO='complete',
-                GITHUB_SHA='a' * 40, **updates)
+                GITHUB_SHA='a' * 40, TRACEBOLT_READ_ADMIN_PROFILE='tracebolt.linux-read-admin.v2',
+                TRACEBOLT_APPROVED_READ_ADMIN_PTRACE='true', TRACEBOLT_READ_ADMIN_REVIEWED_SOURCE='a' * 40, **updates)
 
 
 def complete(**updates):
-    result = dict(schemaVersion='tracebolt.read-admin-result.v1', readProfile='tracebolt.linux-read-admin.v1',
+    result = dict(schemaVersion='tracebolt.read-admin-result.v2', readProfile='tracebolt.linux-read-admin.v2',
                   configurationComplete=True, canceled=False, installation='committed',
-                  phases={'inventory': 'configured_confirmed', 'journal': 'configured_confirmed'},
+                  phases={'inventory': 'configured_confirmed', 'journal': 'configured_confirmed', 'socket': 'configured_confirmed'},
                   collectionPerformed=False, nativeAcceptance='not-established')
     result.update(updates)
     return result
@@ -116,14 +117,15 @@ class InertScriptTests(unittest.TestCase):
                          'member.isreg() and not member.issparse()', "mode='r:'",
                          'hashlib.file_digest', 'os.O_NOFOLLOW', 'st_nlink == 1',
                          'b.read_admin_sources(directory, manifest)', 'workflow.make_plan(args, manifest, arch)',
-                         'workflow.real_adapter(setup, inventory, amendment, journal_guide, templates, plan)',
+                         'workflow.real_adapter(setup, inventory, amendment, journal_guide, socket_setup, templates, plan, artifact)',
                          'lambda: b.run_installer(b.installer_command(args, directory, manifest, arch))',
                          'inventory.confirm_terminal, inventory.emit_terminal', "raise setup.Rejected('interrupted')",
                          "phase == 'journal' and not verify_only",
                          "raise workflow.Rejected('acceptance-injected-before-journal')"):
             self.assertIn(required, source)
         tree = ast.parse(source)
-        calls = [node for node in ast.walk(tree) if isinstance(node, ast.Call)]
+        main = next(node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == 'main')
+        calls = [node for node in ast.walk(main) if isinstance(node, ast.Call)]
         called = [node.func.attr for node in calls if isinstance(node.func, ast.Attribute)]
         for forbidden in ('prepare_release', 'verify_attestation', 'extractall', 'extract', 'unlink', 'remove',
                           'chmod', 'chown', 'run_read_admin', 'system'):
@@ -140,14 +142,14 @@ class InertScriptTests(unittest.TestCase):
         self.assertEqual(result, dict(readAdminComplete=True, readAdminCanceled=False,
                                      readAdminFailure='', readAdminPhasesComplete=True))
         resumed = complete(installation='existing_owned_installation',
-                           phases={'inventory': 'verified_existing', 'journal': 'verified_existing'})
+                           phases={'inventory': 'verified_existing', 'journal': 'verified_existing', 'socket': 'verified_existing'})
         self.assertTrue(PTY.parse_result(encoded(resumed))['readAdminComplete'])
         nested = encoded({'nested': complete()})
         self.assertEqual(PTY.parse_result(nested)['readAdminFailure'], 'read-admin-result-unavailable')
 
     def test_cancellation_and_retained_failure_are_distinct(self):
         canceled = complete(configurationComplete=False, canceled=True, installation='not_attempted',
-                            phases={'inventory': 'not_attempted', 'journal': 'not_attempted'})
+                            phases={'inventory': 'not_attempted', 'journal': 'not_attempted', 'socket': 'not_attempted'})
         value = PTY.parse_result(encoded(canceled))
         self.assertTrue(value['readAdminCanceled'])
         self.assertFalse(value['readAdminComplete'])
@@ -156,7 +158,7 @@ class InertScriptTests(unittest.TestCase):
         for stage in ('acceptance-injected-before-journal', 'uncertain-journal-phase-retained',
                       'install-or-device-approval-incomplete', 'interrupted'):
             failed = complete(configurationComplete=False, failureStage=stage,
-                              phases={'inventory': 'configured_confirmed', 'journal': 'uncertain'})
+                              phases={'inventory': 'configured_confirmed', 'journal': 'uncertain', 'socket': 'not_attempted'})
             value = PTY.parse_result(encoded(failed))
             self.assertEqual(value['readAdminFailure'], stage)
             self.assertFalse(value['readAdminComplete'])
@@ -167,7 +169,7 @@ class InertScriptTests(unittest.TestCase):
         sentinel = 'invented-private-path-secret-value'
         raw = encoded(complete(configurationComplete=False, failureStage=sentinel,
                                recovery=sentinel, deviceId=sentinel, limitations={'private': sentinel},
-                               phases={'inventory': 'uncertain', 'journal': 'not_attempted'}))
+                               phases={'inventory': 'uncertain', 'journal': 'not_attempted', 'socket': 'not_attempted'}))
         event = PTY.exit_event(raw, 1, '', 1)
         self.assertEqual(set(event), FINAL_FIELDS)
         self.assertEqual(event['readAdminFailure'], 'read-admin-phase-incomplete')
@@ -185,12 +187,12 @@ class InertScriptTests(unittest.TestCase):
                      complete(nativeAcceptance='established'), complete(readProfile='other'),
                      complete(installation='not_attempted'), complete(phases=[]),
                      complete(phases={'inventory': 'configured_confirmed'}),
-                     complete(phases={'inventory': ['configured_confirmed'], 'journal': 'configured_confirmed'}),
-                     complete(phases={'inventory': 'uncertain', 'journal': 'configured_confirmed'}),
+                     complete(phases={'inventory': ['configured_confirmed'], 'journal': 'configured_confirmed', 'socket': 'configured_confirmed'}),
+                     complete(phases={'inventory': 'uncertain', 'journal': 'configured_confirmed', 'socket': 'configured_confirmed'}),
                      complete(configurationComplete=False), complete(configurationComplete=False, failureStage=[]),
                      complete(configurationComplete=False, canceled=True),
                      complete(configurationComplete=False, canceled=True, installation='not_attempted',
-                              phases={'inventory': 'not_attempted', 'journal': 'not_attempted'}, failureStage='interrupted')]
+                              phases={'inventory': 'not_attempted', 'journal': 'not_attempted', 'socket': 'not_attempted'}, failureStage='interrupted')]
         bad.extend(encoded(value) for value in malformed)
         raw = encoded(complete())
         bad += [raw.replace(b'"configurationComplete": true', b'"configurationComplete": false, "configurationComplete": true'),
@@ -209,7 +211,7 @@ class InertScriptTests(unittest.TestCase):
         installer = dict(committed=False, rolledBack=True, identityRetained=True, plan={'private': secret},
                          failureStage='enroll_as_dedicated_account')
         failed = complete(configurationComplete=False, failureStage='install-or-device-approval-incomplete',
-                          installation='uncertain', phases={'inventory': 'not_attempted', 'journal': 'not_attempted'})
+                          installation='uncertain', phases={'inventory': 'not_attempted', 'journal': 'not_attempted', 'socket': 'not_attempted'})
         event = PTY.exit_event(encoded(installer) + encoded(failed) + b'UNENCRYPTED HTTP TEST\n', 1, secret, 1)
         self.assertEqual(set(event), FINAL_FIELDS)
         self.assertTrue(event['secretEcho'])

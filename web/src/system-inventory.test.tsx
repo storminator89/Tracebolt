@@ -2,7 +2,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { APIError, AUTH_REQUIRED_EVENT, mutateRaw, request } from './api';
 import { SystemInventoryPanel } from './system-inventory';
-import { serviceRows, socketRows, systemDevice, systemPage, systemView } from './system-inventory-fixtures';
+import { serviceRows, socketRows, socketOwnerSource, systemDevice, systemPage, systemView } from './system-inventory-fixtures';
 import { setLocale } from './i18n';
 import type { SystemPage, SystemSection } from './system-inventory-types';
 
@@ -108,6 +108,26 @@ describe('system inventory bounded service/socket browsing', () => {
         expect(screen.getByText(/in the Attribution column describes that owner field/)).toBeVisible();
         expect(screen.queryByText('No retained complete section is available. Missing or failed data is not a successful zero-row observation.')).not.toBeInTheDocument();
         expect(vi.mocked(mutateRaw).mock.calls.every(([path]) => path.endsWith('/inventory/system/query'))).toBe(true);
+    });
+    it.each(['en', 'de'] as const)('shows original helper source in %s without promising complete owners or current permission', async locale => {
+        const source = socketOwnerSource(); view.latest!.socketOwnerProvenance = source; view.lastComplete.sockets!.socketOwnerProvenance = source;
+        sockets[0] = { ...sockets[0], owners: [], attribution: { coverage: 'partial', reason: 'permission_denied' } };
+        setLocale(locale, false); await open('sockets');
+        fireEvent.click(screen.getByText(locale === 'en' ? 'Source and collection details' : 'Quelle und Erfassungsdetails', { selector: 'summary' }));
+        expect(screen.getByText(locale === 'en' ? 'Socket owner source: locally approved metadata helper' : 'Quelle der Socket-Zuordnung: lokal freigegebener Metadaten-Helper')).toBeVisible();
+        expect(screen.getByText(source.finishedAt)).toBeVisible();
+        expect(screen.getByText(locale === 'en' ? /does not guarantee every owner/ : /garantiert weder die Sichtbarkeit/)).toBeVisible();
+        expect(screen.getByText(locale === 'en' ? 'Partial · Permission denied' : 'Teilweise · Berechtigung verweigert')).toBeVisible();
+        fireEvent.click(screen.getByRole('button', { name: locale === 'en' ? 'Next page' : 'Nächste Seite' }));
+        await screen.findByText('127.0.0.1:10025', { selector: 'td' }); expect(screen.getByText(source.finishedAt)).toBeVisible();
+    });
+    it('clears socket rows when a page changes or strips selected helper source', async () => {
+        const source = socketOwnerSource(); view.latest!.socketOwnerProvenance = source; view.lastComplete.sockets!.socketOwnerProvenance = source;
+        await open('sockets');
+        vi.mocked(mutateRaw).mockImplementationOnce(async (_path, raw) => { const page = systemPage(view, services, sockets, raw); delete page.socketOwnerProvenance; return page; });
+        fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
+        await screen.findByText('The manager returned inconsistent or unsupported system inventory. Rows were cleared.');
+        expect(screen.queryByRole('table')).not.toBeInTheDocument();
     });
     it('renders German source/attribution limits without invented health counts', async () => {
         setLocale('de', false); render(panel('sockets')); await screen.findByRole('table'); expect(screen.getByText(/keine Erreichbarkeit von außen/)).not.toBeVisible(); fireEvent.click(screen.getByText('Quelle und Erfassungsdetails', { selector: 'summary' })); expect(screen.getByText(/keine Erreichbarkeit von außen/)).toBeVisible(); expect(screen.getByRole('columnheader', { name: 'PID / Prozessname' })).toBeVisible(); expect(document.body.textContent).not.toMatch(/0 CVEs|0 Updates/);

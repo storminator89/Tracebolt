@@ -1,12 +1,29 @@
-name: Approved disposable read-admin systemd acceptance
+name: Approved disposable fresh read-admin V2 systemd acceptance
 
 # Manual-only. Each scenario owns a fresh hosted VM; never reuse a host or erase
 # retained state to make it fresh. Discard the entire VM regardless of outcome.
 on:
   workflow_dispatch:
     inputs:
-      approved_disposable_read_admin_systemd:
-        description: 'Approve fresh v3 read-admin account/service, identity, inventory/network grants and exact-service journal helper on each disposable VM (no reboot); HTTP exposes content and permits impersonation'
+      read_profile:
+        description: 'Select the independently reviewed fresh read profile; unapproved performs no work'
+        required: true
+        default: unapproved
+        type: choice
+        options:
+          - unapproved
+          - tracebolt.linux-read-admin.v2
+      reviewed_source_commit:
+        description: 'Exact independently reviewed 40-hex source commit; must equal the dispatched GITHUB_SHA'
+        required: true
+        type: string
+      approved_fresh_v2_read_admin_systemd:
+        description: 'Approve fresh V2 identity/account/service, inventory/network grants, journal/socket-owner helpers, cancellation, bounded root-owned loopback TCP/UDP fixtures, fixture log service/content query, owned-main-service restart, explicit revoke, owned-helper stop/drain and owned-main-service cleanup on each disposable VM; no reboot'
+        required: true
+        default: false
+        type: boolean
+      approved_cap_sys_ptrace_process_memory:
+        description: 'Acknowledge unit-scoped CAP_SYS_PTRACE grants broad process-memory authority; metadata-only code is not an OS confidentiality boundary'
         required: true
         default: false
         type: boolean
@@ -28,8 +45,8 @@ concurrency:
 
 jobs:
   disposable-systemd:
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.approved_disposable_read_admin_systemd }}
-    name: Read-admin ${{ inputs.transport }} / ${{ matrix.scenario }}
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.approved_fresh_v2_read_admin_systemd && inputs.approved_cap_sys_ptrace_process_memory && inputs.read_profile == 'tracebolt.linux-read-admin.v2' && inputs.reviewed_source_commit == github.sha }}
+    name: Fresh read-admin V2 ${{ inputs.transport }} / ${{ matrix.scenario }}
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     strategy:
@@ -37,6 +54,11 @@ jobs:
       matrix:
         scenario: [complete, cancel-enrollment, retained-journal]
     env:
+      TRACEBOLT_APPROVED_SYSTEMD_TEST: '1'
+      TRACEBOLT_APPROVED_READ_ADMIN_V2_SYSTEMD_TEST: ${{ inputs.approved_fresh_v2_read_admin_systemd && '1' || '0' }}
+      TRACEBOLT_READ_ADMIN_PROFILE: ${{ inputs.read_profile }}
+      TRACEBOLT_READ_ADMIN_REVIEWED_SOURCE: ${{ inputs.reviewed_source_commit }}
+      TRACEBOLT_APPROVED_READ_ADMIN_PTRACE: ${{ inputs.approved_cap_sys_ptrace_process_memory }}
       TRACEBOLT_READ_ADMIN_TRANSPORT: ${{ inputs.transport }}
       TRACEBOLT_READ_ADMIN_SCENARIO: ${{ matrix.scenario }}
     steps:
@@ -44,6 +66,23 @@ jobs:
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
+      - name: Check the exact fresh V2 authorization before build or privileged work
+        id: approval_gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_ACTIONS" = true
+          test "$RUNNER_ENVIRONMENT" = github-hosted
+          test "$RUNNER_OS" = Linux
+          test "$TRACEBOLT_APPROVED_SYSTEMD_TEST" = 1
+          test "$TRACEBOLT_APPROVED_READ_ADMIN_V2_SYSTEMD_TEST" = 1
+          test "$TRACEBOLT_READ_ADMIN_PROFILE" = tracebolt.linux-read-admin.v2
+          test "$TRACEBOLT_APPROVED_READ_ADMIN_PTRACE" = true
+          [[ "$GITHUB_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$TRACEBOLT_READ_ADMIN_REVIEWED_SOURCE" = "$GITHUB_SHA"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          case "$TRACEBOLT_READ_ADMIN_TRANSPORT" in tls|http-test) ;; *) exit 1 ;; esac
+          case "$TRACEBOLT_READ_ADMIN_SCENARIO" in complete|cancel-enrollment|retained-journal) ;; *) exit 1 ;; esac
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
@@ -52,9 +91,6 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$RUNNER_ENVIRONMENT" = github-hosted
-          test "$RUNNER_OS" = Linux
-          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           STAGE="$RUNNER_TEMP/tracebolt-read-admin-systemd-acceptance"
           mkdir -m 0700 "$STAGE"
           go mod verify
@@ -62,11 +98,11 @@ jobs:
           go build -buildvcs=false -o "$STAGE/lan-manager" ./cmd/lan-manager
           go build -buildvcs=false -o "$STAGE/enroll-agent" ./cmd/enroll-agent
           go build -buildvcs=false -o "$STAGE/lan-agent" ./cmd/lan-agent
-          go build -buildvcs=false -trimpath -ldflags=-buildid=tracebolt-disposable-upgrade -o "$STAGE/enroll-agent-upgrade" ./cmd/enroll-agent
-          go build -buildvcs=false -trimpath -ldflags=-buildid=tracebolt-disposable-upgrade -o "$STAGE/lan-agent-upgrade" ./cmd/lan-agent
+          go build -buildvcs=false -o "$STAGE/socket-owner-reader" ./cmd/socket-owner-reader
           go test -c -o "$STAGE/systemd.test" ./cmd/lan-manager
           git archive --format=tar --output="$STAGE/source.tar" "$GITHUB_SHA"
       - name: Execute the approved test once with a minimal root environment
+        id: native_acceptance
         shell: bash
         run: |
           set -euo pipefail
@@ -79,8 +115,11 @@ jobs:
             GITHUB_SHA="$GITHUB_SHA" \
             RUNNER_ENVIRONMENT="$RUNNER_ENVIRONMENT" \
             RUNNER_OS="$RUNNER_OS" \
-            TRACEBOLT_APPROVED_SYSTEMD_TEST=1 \
-            TRACEBOLT_APPROVED_READ_ADMIN_SYSTEMD_TEST=1 \
+            TRACEBOLT_APPROVED_SYSTEMD_TEST="$TRACEBOLT_APPROVED_SYSTEMD_TEST" \
+            TRACEBOLT_APPROVED_READ_ADMIN_V2_SYSTEMD_TEST="$TRACEBOLT_APPROVED_READ_ADMIN_V2_SYSTEMD_TEST" \
+            TRACEBOLT_READ_ADMIN_PROFILE="$TRACEBOLT_READ_ADMIN_PROFILE" \
+            TRACEBOLT_READ_ADMIN_REVIEWED_SOURCE="$TRACEBOLT_READ_ADMIN_REVIEWED_SOURCE" \
+            TRACEBOLT_APPROVED_READ_ADMIN_PTRACE="$TRACEBOLT_APPROVED_READ_ADMIN_PTRACE" \
             TRACEBOLT_READ_ADMIN_TRANSPORT="$TRACEBOLT_READ_ADMIN_TRANSPORT" \
             TRACEBOLT_READ_ADMIN_SCENARIO="$TRACEBOLT_READ_ADMIN_SCENARIO" \
             TRACEBOLT_SYSTEMD_BINARY_DIRECTORY="$STAGE" \
@@ -94,7 +133,7 @@ jobs:
           fi
           echo 'Native test returned successfully; sanitized completion evidence is checked next.'
       - name: Validate the bounded result and require complete acceptance
-        if: ${{ always() && !cancelled() }}
+        if: ${{ always() && !cancelled() && steps.approval_gate.outcome == 'success' && steps.native_acceptance.outcome != 'skipped' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -104,8 +143,9 @@ jobs:
           if ! sudo env -i PATH=/usr/sbin:/usr/bin:/sbin:/bin LANG=C LC_ALL=C \
             /usr/bin/python3 - "$RUNNER_TEMP/tracebolt-read-admin-systemd-acceptance/read-admin-systemd-result.json" \
             "$TRACEBOLT_READ_ADMIN_TRANSPORT" "$TRACEBOLT_READ_ADMIN_SCENARIO" \
+            "$TRACEBOLT_READ_ADMIN_PROFILE" "$GITHUB_SHA" \
             > "$TARGET" <<'PYTHON'; then
-          import json, os, stat, sys
+          import json, os, re, stat, sys
           def check(condition):
               if not condition:
                   raise ValueError('invalid fixed result')
@@ -117,9 +157,11 @@ jobs:
                   value[key] = item
               return value
           try:
-              check(len(sys.argv) == 4)
+              check(len(sys.argv) == 6)
               check(sys.argv[2] in {'tls', 'http-test'})
               check(sys.argv[3] in {'complete', 'cancel-enrollment', 'retained-journal'})
+              check(sys.argv[4] == 'tracebolt.linux-read-admin.v2')
+              check(re.fullmatch(r'[0-9a-f]{40}', sys.argv[5]) is not None)
               fd = os.open(sys.argv[1], os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC)
               with os.fdopen(fd, 'rb') as stream:
                   info = os.fstat(stream.fileno())
@@ -128,15 +170,24 @@ jobs:
               check(0 < len(raw) <= 4096 and len(raw) == info.st_size)
               value = json.loads(raw, object_pairs_hook=unique_object)
               check(type(value) is dict)
-              check(set(value) == {'schemaVersion', 'status', 'stage', 'profile', 'collectionProfile', 'scenario', 'osRebootTested', 'telemetryExported'})
-              check(value['schemaVersion'] == 'tracebolt.read-admin-systemd-acceptance.v1')
+              check(set(value) == {'schemaVersion', 'status', 'stage', 'profile', 'collectionProfile', 'scenario', 'osRebootTested', 'telemetryExported', 'readProfile', 'sourceCommit', 'ptraceRiskAcknowledged', 'socketNativeChecks'})
+              check(value['schemaVersion'] == 'tracebolt.read-admin-systemd-acceptance.v2')
               check(value['profile'] == sys.argv[2])
               check(value['collectionProfile'] == 'managed-operations-v3')
               check(value['scenario'] == sys.argv[3])
+              check(value['readProfile'] == sys.argv[4])
+              check(value['sourceCommit'] == sys.argv[5])
+              check(value['ptraceRiskAcknowledged'] is True)
               check(value['osRebootTested'] is False and value['telemetryExported'] is False)
               check(value['status'] in {'pass', 'fail'})
-              check(value['stage'] in {'preflight', 'manager_start', 'operator_login', 'install_enroll', 'approval', 'initial_reports', 'read_admin_cancel', 'read_admin_inventory', 'read_admin_journal', 'read_admin_repeat', 'read_admin_retained', 'read_admin_readiness', 'complete', 'installer_preflight', 'installer_prepare', 'installer_stage', 'installer_enroll', 'installer_validate', 'installer_publish', 'installer_start', 'installer_commit'})
+              check(value['stage'] in {'preflight', 'manager_start', 'operator_login', 'install_enroll', 'approval', 'initial_reports', 'read_admin_cancel', 'read_admin_inventory', 'read_admin_journal', 'read_admin_repeat', 'read_admin_retained', 'read_admin_readiness', 'read_admin_socket', 'read_admin_socket_owners', 'read_admin_revoke', 'read_admin_post_revoke', 'read_admin_journal_content', 'read_admin_restart', 'complete', 'installer_preflight', 'installer_prepare', 'installer_stage', 'installer_enroll', 'installer_validate', 'installer_publish', 'installer_start', 'installer_commit'})
+              keys = ('installedServiceOwners', 'v4Provenance', 'revocationCompleted', 'revokedNoAuthority', 'journalContent', 'serviceRestartOnline')
+              checks = value['socketNativeChecks']
+              check(type(checks) is dict and set(checks) == set(keys))
+              check(all(type(checks[key]) is bool for key in keys))
+              expected = (True,) * len(keys) if value['scenario'] == 'complete' else (False,) * len(keys)
               check(value['status'] != 'pass' or value['stage'] == 'complete')
+              check(value['status'] != 'pass' or tuple(checks[key] for key in keys) == expected)
               print(json.dumps(value, indent=2))
           except Exception:
               raise SystemExit('FAIL: missing or invalid sanitized read-admin acceptance evidence.')
@@ -151,13 +202,13 @@ jobs:
               value = json.loads(stream.read(4097))
           if value['status'] != 'pass' or value['stage'] != 'complete':
               raise SystemExit('FAIL: sanitized read-admin acceptance records an incomplete or failing run.')
-          print('PASS: selected read-admin scenario completed; OS reboot remains untested.')
+          print('PASS: selected fresh read-admin V2 scenario completed; OS reboot remains untested.')
           PYTHON
       - name: Upload only the validated sanitized result
         if: ${{ always() && !cancelled() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
         with:
-          name: read-admin-systemd-acceptance-${{ inputs.transport }}-${{ matrix.scenario }}-${{ github.sha }}
+          name: read-admin-v2-systemd-acceptance-${{ inputs.transport }}-${{ matrix.scenario }}-${{ github.sha }}
           path: ${{ runner.temp }}/read-admin-systemd-result.json
           if-no-files-found: ignore
           retention-days: 3

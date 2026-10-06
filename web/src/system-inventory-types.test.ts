@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { serviceRows, socketRows, systemDevice, systemPage, systemView } from './system-inventory-fixtures';
+import helperView from './testdata/socket-owner-view.json';
+import helperPage from './testdata/socket-owner-page.json';
+import { serviceRows, socketRows, socketOwnerSource, systemDevice, systemPage, systemView } from './system-inventory-fixtures';
 import { systemAgeStatus, systemSectionVisible, validServiceRow, validSocketRow, validSystemPage, validSystemSearch, validSystemView } from './system-inventory-types';
 
 describe('system inventory strict operator contracts', () => {
@@ -43,6 +45,52 @@ describe('system inventory strict operator contracts', () => {
             expect(validSystemPage(page, systemDevice, section, view.lastComplete[section]!, '')).toBe(true);
             for (const bad of [{ ...page, cursorExpiresAt: null }, { ...page, generationId: `sample_${'b'.repeat(32)}` }, { ...page, scannedCount: 2049 }, { ...page, returnedCount: 101 }, { ...page, nextCursor: 'x'.repeat(2049) }, { ...page, status: 'freshness-invented' }]) expect(validSystemPage(bad, systemDevice, section, view.lastComplete[section]!, '')).toBe(false);
         }
+    });
+    it('accepts the exact Go-produced manager view and page fixture', () => {
+        expect(validSystemView(helperView, helperView.deviceId)).toBe(true);
+        if (!validSystemView(helperView, helperView.deviceId)) throw new Error('invalid Go view fixture');
+        expect(validSystemPage(helperPage, helperView.deviceId, 'sockets', helperView.lastComplete.sockets!, '')).toBe(true);
+    });
+    it('accepts exact optional helper source without widening ordinary contracts', () => {
+        const view = systemView(), source = socketOwnerSource();
+        view.latest!.socketOwnerProvenance = source; view.lastComplete.sockets!.socketOwnerProvenance = { ...source };
+        expect(validSystemView(view, systemDevice)).toBe(true);
+        const page = systemPage(view, serviceRows(), socketRows(), JSON.stringify({ section: 'sockets', cursor: '', search: '', filter: 'all', limit: 25 }));
+        expect(validSystemPage(page, systemDevice, 'sockets', view.lastComplete.sockets!, '')).toBe(true);
+        for (const bad of [null, { ...source, uid: 1 }, { ...source, schemaVersion: 'future' }, { ...source, scope: 'host' }, { ...source, grantEpoch: '0'.repeat(64) }, { ...source, policyDigest: 'B'.repeat(64) }, { ...source, contextId: 'e'.repeat(63) }, { ...source, startedAt: '2026-10-04T00:00:00.000Z' }, { ...source, finishedAt: '2026-10-04T00:00:00.002Z' }, { ...source, startedAt: '2026-10-03T23:59:59.999999999Z' }, { ...source, startedAt: '2026-10-04T00:00:00.001000001Z' }]) {
+            expect(validSystemView({ ...view, latest: { ...view.latest, socketOwnerProvenance: bad } }, systemDevice)).toBe(false);
+        }
+        expect(validSystemView({ ...view, lastComplete: { ...view.lastComplete, services: { ...view.lastComplete.services, socketOwnerProvenance: source } } }, systemDevice)).toBe(false);
+        expect(validSystemView({ ...view, latest: { ...view.latest, sockets: { ...view.latest!.sockets, coverage: 'failed', reason: 'timeout', countExact: false, observedCount: null } } }, systemDevice)).toBe(false);
+        const { socketOwnerProvenance: _, ...untagged } = page;
+        expect(validSystemPage(untagged, systemDevice, 'sockets', view.lastComplete.sockets!, '')).toBe(false);
+        expect(validSystemPage({ ...page, socketOwnerProvenance: { ...source, contextId: 'e'.repeat(64) } }, systemDevice, 'sockets', view.lastComplete.sockets!, '')).toBe(false);
+        const plain = systemView();
+        expect(validSystemPage(page, systemDevice, 'sockets', plain.lastComplete.sockets!, '')).toBe(false);
+        const servicePage = systemPage(view, serviceRows(), socketRows(), JSON.stringify({ section: 'services', cursor: '', search: '', filter: 'all', limit: 100 }));
+        expect(validSystemPage({ ...servicePage, socketOwnerProvenance: source }, systemDevice, 'services', view.lastComplete.services!, '')).toBe(false);
+    });
+    it('preserves nanosecond interval bounds and rejects future helper finish', () => {
+        const view = systemView(), source = socketOwnerSource();
+        const tagged = (value: typeof source) => ({ ...view, latest: { ...view.latest!, socketOwnerProvenance: value }, lastComplete: { ...view.lastComplete, sockets: { ...view.lastComplete.sockets!, socketOwnerProvenance: value } } });
+        expect(validSystemView(tagged({ ...source, finishedAt: '2026-10-04T00:00:00.001999999Z' }), systemDevice)).toBe(true);
+        expect(validSystemView(tagged({ ...source, finishedAt: '2026-10-04T00:00:00.002Z' }), systemDevice)).toBe(false);
+        view.latest!.durationMs = 6000;
+        expect(validSystemView(tagged({ ...source, finishedAt: '2026-10-04T00:00:05Z' }), systemDevice)).toBe(true);
+        expect(validSystemView(tagged({ ...source, finishedAt: '2026-10-04T00:00:05.000000001Z' }), systemDevice)).toBe(false);
+        view.receivedAt = '2026-10-04T00:00:04Z';
+        expect(validSystemView(tagged({ ...source, finishedAt: '2026-10-04T00:00:05Z' }), systemDevice)).toBe(false);
+    });
+    it('keeps prior helper source through an ordinary failed attempt and clears it for new ordinary complete rows', () => {
+        const view = systemView(), source = socketOwnerSource(); view.lastComplete.sockets!.socketOwnerProvenance = source;
+        view.serverNow = '2026-10-04T00:05:10Z'; view.receivedAt = '2026-10-04T00:05:05Z'; view.sequence = '9007199254740994'; view.latest!.generationId = `sample_${'b'.repeat(32)}`; view.latest!.collectedAt = '2026-10-04T00:05:00Z';
+        for (const section of ['services', 'sockets'] as const) { view.latest![section] = { generationId: view.latest!.generationId, observedAt: view.latest!.collectedAt, coverage: 'failed', reason: 'timeout', countExact: false, observedCount: null }; view.lastComplete[section]!.status = 'stale'; }
+        expect(validSystemView(view, systemDevice)).toBe(true);
+        const page = systemPage(view, serviceRows(), socketRows(), JSON.stringify({ section: 'sockets', cursor: '', search: '', filter: 'all', limit: 25 }));
+        expect(page.socketOwnerProvenance).toEqual(source); expect(validSystemPage(page, systemDevice, 'sockets', view.lastComplete.sockets!, '')).toBe(true);
+        const current = systemView(); current.lastComplete.sockets!.socketOwnerProvenance = source;
+        expect(validSystemView(current, systemDevice)).toBe(false);
+        delete current.lastComplete.sockets!.socketOwnerProvenance; expect(validSystemView(current, systemDevice)).toBe(true);
     });
     it('permits bounded UTF-8 process-name searches but rejects control/format/unpaired-surrogate input', () => {
         for (const value of ['ä', 'имя', 'proc 👋', 'a'.repeat(128)]) expect(validSystemSearch(value)).toBe(true);

@@ -48,9 +48,9 @@ class Tests(unittest.TestCase):
         with mock.patch.object(b.subprocess, "Popen", side_effect=AssertionError("unexpected child")), \
              mock.patch.object(b, "download", side_effect=AssertionError("unexpected download")), \
              mock.patch.object(tarfile.TarFile, "extractall", side_effect=AssertionError("unexpected extraction")):
-            workflow, inventory, setup, amend, guide, templates = b.read_admin_sources(self.root, self.manifest)
-        self.assertEqual(workflow.PROFILE, "tracebolt.linux-read-admin.v1")
-        self.assertEqual(set(templates), {Path(p).name for p in b.READ_ADMIN_SOURCES[5:]})
+            workflow, inventory, setup, amend, guide, socket_setup, templates = b.read_admin_sources(self.root, self.manifest)
+        self.assertEqual(workflow.PROFILE, "tracebolt.linux-read-admin.v2")
+        self.assertEqual(set(templates), {Path(p).name for p in b.READ_ADMIN_SOURCES[6:]})
         self.assertEqual(sorted(p.name for p in self.root.iterdir()), [self.archive.name])
 
     def test_missing_source_or_link_never_compiles_or_extracts(self):
@@ -115,6 +115,92 @@ class Tests(unittest.TestCase):
         published = (ROOT / "deploy/release/published/v0.1.0-rc.1.py").read_text()
         self.assertNotIn("--read-admin", published)
         self.assertNotIn("read_admin_sources", published)
+
+    def test_each_fixed_socket_source_member_is_required_and_never_a_link(self):
+        paths = ("deploy/socket-owner/setup.py", "deploy/systemd/tracebolt-socket-owner-reader.service.in",
+                 "deploy/systemd/tracebolt-socket-owner-reader.socket.in")
+        for selected in paths:
+            def missing(path, info, raw): return (None, raw) if path == selected else (info, raw)
+            self.package(missing)
+            with self.subTest(member=selected, mutation="missing"), self.assertRaisesRegex(b.Rejected, "does not contain"):
+                b.read_admin_sources(self.root, self.manifest)
+            def link(path, info, raw):
+                if path == selected:
+                    info.type = tarfile.LNKTYPE; info.linkname = "deploy/onboarding/read_admin.py"; info.size = 0
+                return info, raw
+            self.package(link)
+            with self.subTest(member=selected, mutation="link"), self.assertRaisesRegex(b.Rejected, "member rejected"):
+                b.read_admin_sources(self.root, self.manifest)
+
+    def test_read_admin_dispatch_passes_only_exact_manifest_helper_spec(self):
+        workflow, inventory, setup, amendment, journal, socket_setup = (mock.Mock() for _ in range(6))
+        workflow.run.return_value = dict(canceled=False, configurationComplete=True)
+        templates = {"fixed": b"fixture"}
+        public = args()
+        self.manifest["assets"][f"tracebolt-{VERSION}-source.tar"] = dict(size=1, sha256="d" * 64)
+        with mock.patch.object(b, "read_admin_sources", return_value=(workflow, inventory, setup, amendment, journal, socket_setup, templates)), \
+             mock.patch.object(b, "run_installer", side_effect=AssertionError("native installer forbidden")), \
+             contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(b.run_read_admin(public, self.root, self.manifest, "amd64"), 0)
+        helper = self.root / f"tracebolt-{VERSION}-linux-amd64-socket-owner-reader"
+        expected = dict(self.manifest["assets"][helper.name], path=str(helper))
+        workflow.real_adapter.assert_called_once_with(setup, inventory, amendment, journal, socket_setup, templates,
+                                                      workflow.make_plan.return_value, expected)
+        call = workflow.run.call_args
+        self.assertEqual(call.kwargs, dict(resume=False))
+        self.assertIs(call.args[3], inventory.confirm_terminal)
+        self.assertIs(call.args[4], inventory.emit_terminal)
+
+    def test_ordinary_upgrade_command_keeps_three_role_contract(self):
+        public = b.parse_args(["--action", "upgrade"])
+        source_name = f"tracebolt-{VERSION}-source.tar"
+        self.manifest["assets"][source_name] = dict(size=1, sha256="d" * 64)
+        command = b.installer_command(public, self.root, self.manifest, "amd64")
+        self.assertFalse(any("socket-owner" in value for value in command))
+        self.assertNotIn("--require-complete-profile", command)
+        self.assertNotIn("--require-agent-origin", command)
+
+    def test_revoke_rejects_enrollment_and_grant_flags_and_installer_dispatch(self):
+        public = b.parse_args(["--action", "revoke-socket-owners", "--apply"])
+        self.assertEqual(public.action, "revoke-socket-owners")
+        for flags in (["--manager-origin", "https://manager.example"], ["--invitation-id", "invite_" + "a" * 32],
+                      ["--read-admin"], ["--read-admin-agent-origin", "https://manager.example"], ["--resume"],
+                      ["--resume-read-admin"], ["--pending-service"], ["--insecure-http-test"],
+                      ["--bootstrap-sha256", "b" * 64], ["--server-ca-base64", "PUBLIC"]):
+            with self.subTest(flags=flags), self.assertRaises(b.Rejected):
+                b.parse_args(["--action", "revoke-socket-owners", *flags])
+        with self.assertRaisesRegex(b.Rejected, "Maintenance cannot invoke"):
+            b.installer_command(public, self.root, self.manifest, "amd64")
+
+    def test_main_revoke_stages_only_source_and_never_dispatches_installer(self):
+        pin = dict(version=VERSION, sourceCommit="a" * 40, manifestSHA256="b" * 64, bundleSHA256="c" * 64)
+        with contextlib.ExitStack() as stack:
+            for owner, name, value in ((b, "RELEASE_PIN", pin), (b, "inspect_host", mock.Mock(return_value="amd64")),
+                                     (b.os, "getuid", mock.Mock(return_value=0)), (b.os, "geteuid", mock.Mock(return_value=0)),
+                                     (b, "inspect_terminal", mock.Mock()), (b, "inspect_staging", mock.Mock()),
+                                     (b.tempfile, "mkdtemp", mock.Mock(return_value=str(self.root))),
+                                     (b, "cleanup_release", mock.Mock(return_value=True))):
+                stack.enter_context(mock.patch.object(owner, name, value))
+            prepare = stack.enter_context(mock.patch.object(b, "prepare_release", return_value=self.manifest))
+            revoke = stack.enter_context(mock.patch.object(b, "run_revoke_socket_owners", return_value=0))
+            installer = stack.enter_context(mock.patch.object(b, "run_installer", side_effect=AssertionError("installer forbidden")))
+            stack.enter_context(contextlib.redirect_stdout(io.StringIO()))
+            self.assertEqual(b.main(["--action", "revoke-socket-owners", "--apply"]), 0)
+        prepare.assert_called_once_with(self.root, pin, "amd64", maintenance=True)
+        revoke.assert_called_once_with(self.root, self.manifest)
+        installer.assert_not_called()
+
+    def test_revoke_dispatch_uses_only_verified_source_and_no_artifact_install(self):
+        workflow = mock.Mock(); inventory = mock.Mock(); setup = mock.Mock(); socket_setup = mock.Mock()
+        workflow.run_revoke.return_value = dict(revoked=True, canceled=False)
+        templates = {"fixed": b"fixture"}
+        with mock.patch.object(b, "read_admin_sources", return_value=(workflow, inventory, setup, None, None, socket_setup, templates)) as loader, \
+             mock.patch.object(b, "installer_command", side_effect=AssertionError("installer forbidden")), \
+             contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(b.run_revoke_socket_owners(self.root, self.manifest), 0)
+        loader.assert_called_once_with(self.root, self.manifest)
+        workflow.real_maintenance.assert_called_once_with(setup, inventory, socket_setup, templates, self.manifest)
+        workflow.run_revoke.assert_called_once_with(workflow.real_maintenance.return_value, inventory.confirm_terminal, inventory.emit_terminal)
 
 if __name__ == "__main__":
     unittest.main()

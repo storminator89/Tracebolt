@@ -4,6 +4,7 @@ package main
 
 import (
 	"bytes"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
@@ -29,16 +30,30 @@ import (
 	"time"
 )
 
-type readAdminNativeOptions struct{ profile, scenario, source string }
+type readAdminNativeChecks struct {
+	InstalledServiceOwners bool `json:"installedServiceOwners"`
+	V4Provenance           bool `json:"v4Provenance"`
+	RevocationCompleted    bool `json:"revocationCompleted"`
+	RevokedNoAuthority     bool `json:"revokedNoAuthority"`
+	JournalContent         bool `json:"journalContent"`
+	ServiceRestartOnline   bool `json:"serviceRestartOnline"`
+}
+type readAdminNativeOptions struct {
+	profile, scenario, source string
+	checks                    readAdminNativeChecks
+}
 
 // Pure gate: ordinary tests skip before filesystem, identity, credential,
 // listener, collector or service work. A selected but invalid gate fails.
-func readAdminNativeSelection(base, approval, profile, scenario, source, actions, runner, runnerOS string, euid int) (*readAdminNativeOptions, error) {
+func readAdminNativeSelection(base, approval, profile, scenario, source, actions, runner, runnerOS, readProfile, ptraceApproval, reviewedSource string, euid int) (*readAdminNativeOptions, error) {
 	if approval == "" {
 		return nil, nil
 	}
 	if approval != "1" || base != "1" || actions != "true" || runner != "github-hosted" || runnerOS != "Linux" || euid != 0 || !regexp.MustCompile(`^[0-9a-f]{40}$`).MatchString(source) {
 		return nil, errors.New("read_admin_invalid_explicit_host_gate")
+	}
+	if readProfile != "tracebolt.linux-read-admin.v2" || ptraceApproval != "true" || reviewedSource != source {
+		return nil, errors.New("read_admin_fresh_v2_scope_and_reviewed_source_required")
 	}
 	if profile != lanconfig.TLS && profile != lanconfig.HTTPTest {
 		return nil, errors.New("read_admin_explicit_transport_required")
@@ -46,11 +61,11 @@ func readAdminNativeSelection(base, approval, profile, scenario, source, actions
 	if scenario != "complete" && scenario != "cancel-enrollment" && scenario != "retained-journal" {
 		return nil, errors.New("read_admin_explicit_scenario_required")
 	}
-	return &readAdminNativeOptions{profile, scenario, source}, nil
+	return &readAdminNativeOptions{profile: profile, scenario: scenario, source: source}, nil
 }
 
 func TestApprovedReadAdminDisposableSystemdInstallation(t *testing.T) {
-	options, err := readAdminNativeSelection(os.Getenv("TRACEBOLT_APPROVED_SYSTEMD_TEST"), os.Getenv("TRACEBOLT_APPROVED_READ_ADMIN_SYSTEMD_TEST"), os.Getenv("TRACEBOLT_READ_ADMIN_TRANSPORT"), os.Getenv("TRACEBOLT_READ_ADMIN_SCENARIO"), os.Getenv("GITHUB_SHA"), os.Getenv("GITHUB_ACTIONS"), os.Getenv("RUNNER_ENVIRONMENT"), os.Getenv("RUNNER_OS"), os.Geteuid())
+	options, err := readAdminNativeSelection(os.Getenv("TRACEBOLT_APPROVED_SYSTEMD_TEST"), os.Getenv("TRACEBOLT_APPROVED_READ_ADMIN_V2_SYSTEMD_TEST"), os.Getenv("TRACEBOLT_READ_ADMIN_TRANSPORT"), os.Getenv("TRACEBOLT_READ_ADMIN_SCENARIO"), os.Getenv("GITHUB_SHA"), os.Getenv("GITHUB_ACTIONS"), os.Getenv("RUNNER_ENVIRONMENT"), os.Getenv("RUNNER_OS"), os.Getenv("TRACEBOLT_READ_ADMIN_PROFILE"), os.Getenv("TRACEBOLT_APPROVED_READ_ADMIN_PTRACE"), os.Getenv("TRACEBOLT_READ_ADMIN_REVIEWED_SOURCE"), os.Geteuid())
 	if err != nil {
 		t.Fatal("invalid explicit read-admin acceptance gate; no host work started")
 	}
@@ -61,9 +76,9 @@ func TestApprovedReadAdminDisposableSystemdInstallation(t *testing.T) {
 }
 
 func TestReadAdminNativeSelection(t *testing.T) {
-	valid := []string{"1", "1", "tls", "complete", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "true", "github-hosted", "Linux"}
+	valid := []string{"1", "1", "tls", "complete", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "true", "github-hosted", "Linux", "tracebolt.linux-read-admin.v2", "true", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}
 	selectGate := func(v []string, uid int) (*readAdminNativeOptions, error) {
-		return readAdminNativeSelection(v[0], v[1], v[2], v[3], v[4], v[5], v[6], v[7], uid)
+		return readAdminNativeSelection(v[0], v[1], v[2], v[3], v[4], v[5], v[6], v[7], v[8], v[9], v[10], uid)
 	}
 	off := append([]string{}, valid...)
 	off[1] = ""
@@ -93,8 +108,41 @@ func TestReadAdminNativeSelection(t *testing.T) {
 	}
 }
 
+func readAdminNoSocketAuthority(t *testing.T) {
+	t.Helper()
+	for _, path := range []string{
+		"/opt/tracebolt-agent/socket-owner-reader", "/run/tracebolt-socket-owner-reader",
+		"/etc/tracebolt/socket-owner-policy.json", "/etc/tracebolt/socket-owner-deployment.json",
+		"/etc/systemd/system/tracebolt-socket-owner-reader.service", "/etc/systemd/system/tracebolt-socket-owner-reader.socket",
+		"/etc/systemd/system/tracebolt-socket-owner-reader.service.d", "/etc/systemd/system/tracebolt-socket-owner-reader.socket.d",
+		"/etc/systemd/system/sockets.target.wants/tracebolt-socket-owner-reader.socket",
+		"/var/lib/tracebolt-agent-installer/socket-owner-install-complete.json",
+	} {
+		if _, err := os.Lstat(path); !os.IsNotExist(err) {
+			t.Fatal("socket authority predates fresh device approval")
+		}
+	}
+	if _, err := user.Lookup("tracebolt-socket-owner-reader"); err == nil {
+		t.Fatal("socket helper account predates approval")
+	} else {
+		var unknown user.UnknownUserError
+		if !errors.As(err, &unknown) {
+			t.Fatal("socket helper account lookup uncertain")
+		}
+	}
+	if _, err := user.LookupGroup("tracebolt-socket-owner-reader"); err == nil {
+		t.Fatal("socket helper group predates approval")
+	} else {
+		var unknown user.UnknownGroupError
+		if !errors.As(err, &unknown) {
+			t.Fatal("socket helper group lookup uncertain")
+		}
+	}
+}
+
 func readAdminFreshHost(t *testing.T) {
 	t.Helper()
+	readAdminNoSocketAuthority(t)
 	for _, path := range []string{agentinstall.InstallDirectory, agentinstall.StateDirectory, "/etc/tracebolt-agent", "/var/lib/tracebolt-agent-installer", agentinstall.UnitPath,
 		"/etc/tracebolt", "/run/tracebolt-journal-reader", "/etc/systemd/system/tracebolt-journal-reader.service", "/etc/systemd/system/tracebolt-journal-reader.socket",
 		"/etc/systemd/system/tracebolt-journal-reader.service.d", "/etc/systemd/system/tracebolt-journal-reader.socket.d", "/etc/systemd/system/sockets.target.wants/tracebolt-journal-reader.socket"} {
@@ -125,9 +173,10 @@ func readAdminFreshHost(t *testing.T) {
 const readAdminFixtureVersion = "v0.0.0-read-admin-acceptance"
 
 type readAdminNativeCommand struct {
-	python  string
-	configs map[bool]string
-	options *readAdminNativeOptions
+	python      string
+	configs     map[bool]string
+	options     *readAdminNativeOptions
+	maintenance map[string]string
 }
 
 func (c *readAdminNativeCommand) args(resume bool) []string {
@@ -141,7 +190,7 @@ func (c *readAdminNativeCommand) approval() string {
 }
 func (c *readAdminNativeCommand) environment() []string {
 	return append(systemdCleanEnvironment(), "GITHUB_ACTIONS=true", "RUNNER_ENVIRONMENT=github-hosted", "RUNNER_OS=Linux", "GITHUB_SHA="+c.options.source,
-		"TRACEBOLT_APPROVED_SYSTEMD_TEST=1", "TRACEBOLT_APPROVED_READ_ADMIN_SYSTEMD_TEST=1", "TRACEBOLT_READ_ADMIN_TRANSPORT="+c.options.profile, "TRACEBOLT_READ_ADMIN_SCENARIO="+c.options.scenario)
+		"TRACEBOLT_APPROVED_SYSTEMD_TEST=1", "TRACEBOLT_APPROVED_READ_ADMIN_V2_SYSTEMD_TEST=1", "TRACEBOLT_READ_ADMIN_PROFILE=tracebolt.linux-read-admin.v2", "TRACEBOLT_APPROVED_READ_ADMIN_PTRACE=true", "TRACEBOLT_READ_ADMIN_REVIEWED_SOURCE="+c.options.source, "TRACEBOLT_READ_ADMIN_TRANSPORT="+c.options.profile, "TRACEBOLT_READ_ADMIN_SCENARIO="+c.options.scenario)
 }
 
 func prepareReadAdminNativeCommand(t *testing.T, python string, binaries map[string]string, archive, profile string, bootstrap api.EnrollmentBootstrap, bootstrapHash string, options *readAdminNativeOptions) *readAdminNativeCommand {
@@ -149,7 +198,16 @@ func prepareReadAdminNativeCommand(t *testing.T, python string, binaries map[str
 	if !regexp.MustCompile(`^[0-9a-f]{64}$`).MatchString(bootstrapHash) || bootstrap.CollectionProfile != enrollmentcrypto.CollectionProfileComplete || bootstrap.Profile != profile {
 		t.Fatal("read-admin public bootstrap scope is invalid")
 	}
-	stage := t.TempDir()
+	// Match the production helper's fixed verified-release staging contract.
+	// Keep this owned private staging evidence until the disposable VM is gone.
+	var nonce [4]byte
+	if _, err := rand.Read(nonce[:]); err != nil {
+		t.Fatal("private source staging entropy unavailable")
+	}
+	stage := fmt.Sprintf("/tmp/tracebolt-release-%x", nonce)
+	if err := os.Mkdir(stage, 0700); err != nil {
+		t.Fatal("fresh private source staging unavailable")
+	}
 	assets := map[string]any{}
 	copyArtifact := func(src, name string, mode os.FileMode) {
 		expected := systemdHash(t, src)
@@ -169,7 +227,7 @@ func prepareReadAdminNativeCommand(t *testing.T, python string, binaries map[str
 		}
 		assets[name] = map[string]any{"size": n, "sha256": expected}
 	}
-	for _, role := range []string{"agent-service", "enroll-agent", "lan-agent"} {
+	for _, role := range []string{"agent-service", "enroll-agent", "lan-agent", "socket-owner-reader"} {
 		copyArtifact(binaries[role], "tracebolt-"+readAdminFixtureVersion+"-linux-amd64-"+role, 0500)
 	}
 	copyArtifact(archive, "tracebolt-"+readAdminFixtureVersion+"-source.tar", 0600)
@@ -180,13 +238,13 @@ func prepareReadAdminNativeCommand(t *testing.T, python string, binaries map[str
 	} else {
 		arguments = append(arguments, "--server-ca-base64", base64.StdEncoding.EncodeToString([]byte(bootstrap.ServerCAPEM)))
 	}
-	command := &readAdminNativeCommand{python: python, configs: map[bool]string{}, options: options}
+	command := &readAdminNativeCommand{python: python, configs: map[bool]string{}, maintenance: map[string]string{}, options: options}
 	for _, resume := range []bool{false, true} {
 		selected := append([]string{}, arguments...)
 		if resume {
 			selected = append(selected, "--resume-read-admin")
 		}
-		raw, err := json.Marshal(map[string]any{"directory": stage, "manifest": manifest, "arguments": selected, "scenario": options.scenario})
+		raw, err := json.Marshal(map[string]any{"directory": stage, "manifest": manifest, "arguments": selected, "scenario": options.scenario, "operation": "install"})
 		if err != nil {
 			t.Fatal("read-admin public fixture encoding")
 		}
@@ -199,6 +257,21 @@ func prepareReadAdminNativeCommand(t *testing.T, python string, binaries map[str
 			t.Fatal("read-admin fixture config write")
 		}
 		command.configs[resume] = name
+	}
+	for _, operation := range []string{"inspect-socket", "revoke-socket", "cleanup"} {
+		raw, err := json.Marshal(map[string]any{"directory": stage, "manifest": manifest, "arguments": arguments, "scenario": options.scenario, "operation": operation})
+		if err != nil {
+			t.Fatal("maintenance fixture encoding")
+		}
+		name := filepath.Join(stage, operation+".json")
+		f, err := os.OpenFile(name, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
+		if err != nil {
+			t.Fatal("maintenance fixture config creation")
+		}
+		if _, err = f.Write(raw); err != nil || f.Sync() != nil || f.Close() != nil {
+			t.Fatal("maintenance fixture config write")
+		}
+		command.maintenance[operation] = name
 	}
 	return command
 }
@@ -254,6 +327,7 @@ func readAdminCancelBeforeInstall(t *testing.T, c *readAdminNativeCommand) {
 
 func readAdminBeforeDeviceApproval(t *testing.T, get func(string, any)) {
 	t.Helper()
+	readAdminNoSocketAuthority(t)
 	var devices struct{ Items []model.Device }
 	get("/api/devices", &devices)
 	if len(devices.Items) != 0 {
@@ -299,6 +373,7 @@ func readAdminEnrollmentIdentity(t *testing.T) string {
 
 func readAdminCanceledEnrollment(t *testing.T, event ptyEvent, before string) {
 	t.Helper()
+	readAdminNoSocketAuthority(t)
 	if event.Phase != "exit" || event.ExitCode == 0 || event.SecretEcho || event.ReadAdminComplete || event.ScopeApprovals != 1 || !event.InstallerRolledBack || !event.InstallerIdentityRetained || readAdminEnrollmentIdentity(t) != before {
 		t.Fatal("graceful read-admin enrollment cancellation did not retain identity")
 	}
@@ -350,7 +425,7 @@ func readAdminRetainedJournal(t *testing.T, c *readAdminNativeCommand, event pty
 	systemdCheckProcessIdentity(t, uid, gid)
 }
 
-func readAdminCompleteAndRepeat(t *testing.T, c *readAdminNativeCommand, get func(string, any), stage *string) {
+func readAdminCompleteAndRepeat(t *testing.T, c *readAdminNativeCommand, get func(string, any), query func(string, any, any), stage *string) {
 	t.Helper()
 	before := readAdminIdentitySnapshot(t)
 	completePath := "/var/lib/tracebolt-agent-installer/read-admin-journal.complete.json"
@@ -368,16 +443,11 @@ func readAdminCompleteAndRepeat(t *testing.T, c *readAdminNativeCommand, get fun
 	uid, _ := strconv.Atoi(account.Uid)
 	gid, _ := strconv.Atoi(account.Gid)
 	systemdCheckProcessIdentity(t, uid, gid)
-	*stage = "read_admin_repeat"
-	repeat := readAdminProbe(t, c, true, false)
-	if repeat.ExitCode != 0 || !repeat.ReadAdminComplete || !repeat.ReadAdminPhasesComplete || repeat.ScopeApprovals != 1 || !reflect.DeepEqual(before, readAdminIdentitySnapshot(t)) || systemdHash(t, completePath) != completeHash || !reflect.DeepEqual(protected, readAdminAuthoritySnapshot(t)) || systemdSequence(t, agentinstall.EnrollmentDirectory) < sequence {
-		t.Fatal("completed read-admin repeat changed identity or authority")
+	if !reflect.DeepEqual(before, readAdminIdentitySnapshot(t)) || systemdHash(t, completePath) != completeHash || !reflect.DeepEqual(protected, readAdminAuthoritySnapshot(t)) || systemdSequence(t, agentinstall.EnrollmentDirectory) < sequence {
+		t.Fatal("fresh read-admin identity or authority changed while observing")
 	}
-	fresh := readAdminProbe(t, c, false, false)
-	if fresh.ExitCode == 0 || fresh.ScopeApprovals != 0 || fresh.ReadAdminFailure != "existing-installation-use-upgrade-or-recovery" || !reflect.DeepEqual(before, readAdminIdentitySnapshot(t)) {
-		t.Fatal("fresh read-admin adopted an existing installation")
-	}
-	systemdCheckProcessIdentity(t, uid, gid)
+	readAdminSocketOwnersAndRevoke(t, c, get, query, stage)
+
 }
 
 type readAdminJournalView struct {
@@ -498,27 +568,15 @@ func readAdminExpectedGeneration(t *testing.T) journalgeneration.Tuple {
 	return activation.PolicyGeneration
 }
 
-func readAdminStopOwnedHelper(t *testing.T) {
+func readAdminStopOwnedHelper(t *testing.T, c *readAdminNativeCommand) bool {
 	t.Helper()
-	// Never invent cleanup when creation did not begin. The test began on a
-	// verified fresh disposable VM; keep every declaration/floor for inspection.
-	if _, err := os.Lstat("/etc/tracebolt/journal-setup-attempt.json"); os.IsNotExist(err) {
-		return
-	} else if err != nil {
-		t.Error("read-admin helper cleanup ownership unavailable")
-		return
+	if c == nil {
+		return true
 	}
-	for _, name := range []string{"tracebolt-journal-reader.socket", "tracebolt-journal-reader.service"} {
-		if _, err := os.Lstat("/etc/systemd/system/" + name); os.IsNotExist(err) {
-			continue
-		} else if err != nil {
-			t.Error("read-admin helper cleanup path unavailable")
-			continue
-		}
-		cmd := exec.Command("/usr/bin/systemctl", "stop", name)
-		cmd.Env = systemdCleanEnvironment()
-		if cmd.Run() != nil {
-			t.Error("read-admin owned helper stop incomplete; discard VM")
-		}
+	var result readAdminSocketNativeResult
+	if !readAdminNativeMaintenance(t, c, "cleanup", &result) || !result.CleanupConfirmed {
+		t.Error("owned helper containment unconfirmed; preserve state and discard VM")
+		return false
 	}
+	return true
 }

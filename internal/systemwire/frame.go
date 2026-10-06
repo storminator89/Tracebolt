@@ -17,18 +17,20 @@ import (
 const FrameVersion = "tracebolt.agent-system-inventory.v1"
 const EndpointFrameVersion = "tracebolt.agent-system-inventory.v2"
 const CachedUpdatesFrameVersion = "tracebolt.agent-system-inventory.v3"
+const SocketOwnerFrameVersion = "tracebolt.agent-system-inventory.v4"
 const ReceiptVersion = "tracebolt.system-inventory-receipt.v1"
 const MaxBodyBytes = systeminventory.MaxSnapshotBytes + 4096
 const MaxReceiptBytes = 4096
 
 type Frame struct {
-	SchemaVersion             string                     `json:"schemaVersion"`
-	Sequence                  uint64                     `json:"sequence,string"`
-	Snapshot                  systeminventory.Snapshot   `json:"snapshot"`
-	EndpointIdentity          *endpointidentity.Snapshot `json:"endpointIdentity,omitempty"`
-	ConsentScope              string                     `json:"consentScope,omitempty"`
-	CachedUpdates             *cachedupdates.Snapshot    `json:"cachedUpdates,omitempty"`
-	CachedUpdatesConsentScope string                     `json:"cachedUpdatesConsentScope,omitempty"`
+	SocketOwnerProvenance     *systeminventory.SocketOwnerProvenance `json:"socketOwnerProvenance,omitempty"`
+	SchemaVersion             string                                 `json:"schemaVersion"`
+	Sequence                  uint64                                 `json:"sequence,string"`
+	Snapshot                  systeminventory.Snapshot               `json:"snapshot"`
+	EndpointIdentity          *endpointidentity.Snapshot             `json:"endpointIdentity,omitempty"`
+	ConsentScope              string                                 `json:"consentScope,omitempty"`
+	CachedUpdates             *cachedupdates.Snapshot                `json:"cachedUpdates,omitempty"`
+	CachedUpdatesConsentScope string                                 `json:"cachedUpdatesConsentScope,omitempty"`
 }
 type Receipt struct {
 	SchemaVersion string    `json:"schemaVersion"`
@@ -60,6 +62,22 @@ func Decode(raw []byte) (Frame, error) {
 		expectedVersion = CachedUpdatesFrameVersion
 	}
 	if e != nil {
+		// Four exact v4 shapes, never an open extension map. Each optional
+		// existing extension remains paired with its own consent scope.
+		for _, keys := range [][]string{
+			{"schemaVersion", "sequence", "snapshot", "socketOwnerProvenance"},
+			{"schemaVersion", "sequence", "snapshot", "socketOwnerProvenance", "endpointIdentity", "consentScope"},
+			{"schemaVersion", "sequence", "snapshot", "socketOwnerProvenance", "cachedUpdates", "cachedUpdatesConsentScope"},
+			{"schemaVersion", "sequence", "snapshot", "socketOwnerProvenance", "endpointIdentity", "consentScope", "cachedUpdates", "cachedUpdatesConsentScope"},
+		} {
+			fields, e = object(raw, keys...)
+			if e == nil {
+				expectedVersion = SocketOwnerFrameVersion
+				break
+			}
+		}
+	}
+	if e != nil {
 		return bad()
 	}
 	var version, seq string
@@ -75,6 +93,16 @@ func Decode(raw []byte) (Frame, error) {
 		return bad()
 	}
 	out := Frame{SchemaVersion: version, Sequence: sequence, Snapshot: snapshot}
+	if fields["socketOwnerProvenance"] != nil {
+		if snapshot.Sockets.Meta.Coverage != systeminventory.Complete {
+			return bad()
+		}
+		provenance, err := systeminventory.DecodeSocketOwnerProvenance(fields["socketOwnerProvenance"], snapshot.CollectedAt, snapshot.DurationMS)
+		if err != nil {
+			return bad()
+		}
+		out.SocketOwnerProvenance = &provenance
+	}
 	if fields["endpointIdentity"] != nil {
 		var scope string
 		if json.Unmarshal(fields["consentScope"], &scope) != nil || scope != endpointidentity.Scope {
@@ -208,6 +236,32 @@ func EncodeCachedUpdates(sequence uint64, snapshot systeminventory.Snapshot, upd
 		}
 		frame.EndpointIdentity = identity
 		frame.ConsentScope = endpointidentity.Scope
+	}
+	raw, err := json.Marshal(frame)
+	if err != nil {
+		return nil, ErrContract
+	}
+	if _, err = Decode(raw); err != nil {
+		return nil, err
+	}
+	return raw, nil
+}
+
+// EncodeSocketOwners carries the immutable helper-source marker in strict v4.
+// Existing optional extensions retain their own exact consent pairs; total body
+// ceiling, sequence, signing and exact-byte receipt domains do not change.
+func EncodeSocketOwners(sequence uint64, snapshot systeminventory.Snapshot, provenance systeminventory.SocketOwnerProvenance, identity *endpointidentity.Snapshot, updates *cachedupdates.Snapshot) ([]byte, error) {
+	if systeminventory.Validate(snapshot) != nil || systeminventory.ValidateSocketOwnerProvenance(provenance, snapshot.CollectedAt, snapshot.DurationMS) != nil {
+		return nil, ErrContract
+	}
+	frame := Frame{SchemaVersion: SocketOwnerFrameVersion, Sequence: sequence, Snapshot: snapshot, SocketOwnerProvenance: &provenance}
+	if identity != nil {
+		frame.EndpointIdentity = identity
+		frame.ConsentScope = endpointidentity.Scope
+	}
+	if updates != nil {
+		frame.CachedUpdates = updates
+		frame.CachedUpdatesConsentScope = cachedupdates.Scope
 	}
 	raw, err := json.Marshal(frame)
 	if err != nil {

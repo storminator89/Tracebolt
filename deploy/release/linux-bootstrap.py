@@ -46,7 +46,8 @@ GH_ARCHIVES = {
 TRUSTED_ROOT_JSON = "{\"mediaType\":\"application/vnd.dev.sigstore.trustedroot+json;version=0.1\",\"tlogs\":[{\"baseUrl\":\"https://rekor.sigstore.dev\",\"hashAlgorithm\":\"SHA2_256\",\"publicKey\":{\"rawBytes\":\"MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE2G2Y+2tabdTV5BcGiBIx0a9fAFwrkBbmLSGtks4L3qX6yYY0zufBnhC8Ur/iy55GhWP/9A/bY2LhC30M9+RYtw==\",\"keyDetails\":\"PKIX_ECDSA_P256_SHA_256\",\"validFor\":{\"start\":\"2021-01-12T11:53:27Z\"}},\"logId\":{\"keyId\":\"wNI9atQGlz+VWfO6LRygH4QUfY/8W4RFwiT5i5WRgB0=\"}},{\"baseUrl\":\"https://log2025-1.rekor.sigstore.dev\",\"hashAlgorithm\":\"SHA2_256\",\"publicKey\":{\"rawBytes\":\"MCowBQYDK2VwAyEAt8rlp1knGwjfbcXAYPYAkn0XiLz1x8O4t0YkEhie244=\",\"keyDetails\":\"PKIX_ED25519\",\"validFor\":{\"start\":\"2025-09-23T00:00:00Z\"}},\"logId\":{\"keyId\":\"zxGZFVvd0FEmjR8WrFwMdcAJ9vtaY/QXf44Y1wUeP6A=\"}}],\"certificateAuthorities\":[{\"subject\":{\"organization\":\"sigstore.dev\",\"commonName\":\"sigstore\"},\"uri\":\"https://fulcio.sigstore.dev\",\"certChain\":{\"certificates\":[{\"rawBytes\":\"MIIB+DCCAX6gAwIBAgITNVkDZoCiofPDsy7dfm6geLbuhzAKBggqhkjOPQQDAzAqMRUwEwYDVQQKEwxzaWdzdG9yZS5kZXYxETAPBgNVBAMTCHNpZ3N0b3JlMB4XDTIxMDMwNzAzMjAyOVoXDTMxMDIyMzAzMjAyOVowKjEVMBMGA1UEChMMc2lnc3RvcmUuZGV2MREwDwYDVQQDEwhzaWdzdG9yZTB2MBAGByqGSM49AgEGBSuBBAAiA2IABLSyA7Ii5k+pNO8ZEWY0ylemWDowOkNa3kL+GZE5Z5GWehL9/A9bRNA3RbrsZ5i0JcastaRL7Sp5fp/jD5dxqc/UdTVnlvS16an+2Yfswe/QuLolRUCrcOE2+2iA5+tzd6NmMGQwDgYDVR0PAQH/BAQDAgEGMBIGA1UdEwEB/wQIMAYBAf8CAQEwHQYDVR0OBBYEFMjFHQBBmiQpMlEk6w2uSu1KBtPsMB8GA1UdIwQYMBaAFMjFHQBBmiQpMlEk6w2uSu1KBtPsMAoGCCqGSM49BAMDA2gAMGUCMH8liWJfMui6vXXBhjDgY4MwslmN/TJxVe/83WrFomwmNf056y1X48F9c4m3a3ozXAIxAKjRay5/aj/jsKKGIkmQatjI8uupHr/+CxFvaJWmpYqNkLDGRU+9orzh5hI2RrcuaQ==\"}]},\"validFor\":{\"start\":\"2021-03-07T03:20:29Z\",\"end\":\"2022-12-31T23:59:59.999Z\"}},{\"subject\":{\"organization\":\"sigstore.dev\",\"commonName\":\"sigstore\"},\"uri\":\"https://fulcio.sigstore.dev\",\"certChain\":{\"certificates\":[{\"rawBytes\":\"MIICGjCCAaGgAwIBAgIUALnViVfnU0brJasmRkHrn/UnfaQwCgYIKoZIzj0EAwMwKjEVMBMGA1UEChMMc2lnc3RvcmUuZGV2MREwDwYDVQQDEwhzaWdzdG9yZTAeFw0yMjA0MTMyMDA2MTVaFw0zMTEwMDUxMzU2NThaMDcxFTATBgNVBAoTDHNpZ3N0b3JlLmRldjEeMBwGA1UEAxMVc2lnc3RvcmUtaW50ZXJtZWRpYXRlMHYwEAYHKoZIzj0CAQYFK4EEACIDYgAE8RVS/ysH+NOvuDZyPIZtilgUF9NlarYpAd9HP1vBBH1U5CV77LSS7s0ZiH4nE7Hv7ptS6LvvR/STk798LVgMzLlJ4HeIfF3tHSaexLcYpSASr1kS0N/RgBJz/9jWCiXno3sweTAOBgNVHQ8BAf8EBAMCAQYwEwYDVR0lBAwwCgYIKwYBBQUHAwMwEgYDVR0TAQH/BAgwBgEB/wIBADAdBgNVHQ4EFgQU39Ppz1YkEZb5qNjpKFWixi4YZD8wHwYDVR0jBBgwFoAUWMAeX5FFpWapesyQoZMi0CrFxfowCgYIKoZIzj0EAwMDZwAwZAIwPCsQK4DYiZYDPIaDi5HFKnfxXx6ASSVmERfsynYBiX2X6SJRnZU84/9DZdnFvvxmAjBOt6QpBlc4J/0DxvkTCqpclvziL6BCCPnjdlIB3Pu3BxsPmygUY7Ii2zbdCdliiow=\"},{\"rawBytes\":\"MIIB9zCCAXygAwIBAgIUALZNAPFdxHPwjeDloDwyYChAO/4wCgYIKoZIzj0EAwMwKjEVMBMGA1UEChMMc2lnc3RvcmUuZGV2MREwDwYDVQQDEwhzaWdzdG9yZTAeFw0yMTEwMDcxMzU2NTlaFw0zMTEwMDUxMzU2NThaMCoxFTATBgNVBAoTDHNpZ3N0b3JlLmRldjERMA8GA1UEAxMIc2lnc3RvcmUwdjAQBgcqhkjOPQIBBgUrgQQAIgNiAAT7XeFT4rb3PQGwS4IajtLk3/OlnpgangaBclYpsYBr5i+4ynB07ceb3LP0OIOZdxexX69c5iVuyJRQ+Hz05yi+UF3uBWAlHpiS5sh0+H2GHE7SXrk1EC5m1Tr19L9gg92jYzBhMA4GA1UdDwEB/wQEAwIBBjAPBgNVHRMBAf8EBTADAQH/MB0GA1UdDgQWBBRYwB5fkUWlZql6zJChkyLQKsXF+jAfBgNVHSMEGDAWgBRYwB5fkUWlZql6zJChkyLQKsXF+jAKBggqhkjOPQQDAwNpADBmAjEAj1nHeXZp+13NWBNa+EDsDP8G1WWg1tCMWP/WHPqpaVo0jhsweNFZgSs0eE7wYI4qAjEA2WB9ot98sIkoF3vZYdd3/VtWB5b9TNMea7Ix/stJ5TfcLLeABLE4BNJOsQ4vnBHJ\"}]},\"validFor\":{\"start\":\"2022-04-13T20:06:15Z\"}}],\"ctlogs\":[{\"baseUrl\":\"https://ctfe.sigstore.dev/test\",\"hashAlgorithm\":\"SHA2_256\",\"publicKey\":{\"rawBytes\":\"MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEbfwR+RJudXscgRBRpKX1XFDy3PyudDxz/SfnRi1fT8ekpfBd2O1uoz7jr3Z8nKzxA69EUQ+eFCFI3zeubPWU7w==\",\"keyDetails\":\"PKIX_ECDSA_P256_SHA_256\",\"validFor\":{\"start\":\"2021-03-14T00:00:00Z\",\"end\":\"2022-10-31T23:59:59.999Z\"}},\"logId\":{\"keyId\":\"CGCS8ChS/2hF0dFrJ4ScRWcYrBY9wzjSbea8IgY2b3I=\"}},{\"baseUrl\":\"https://ctfe.sigstore.dev/2022\",\"hashAlgorithm\":\"SHA2_256\",\"publicKey\":{\"rawBytes\":\"MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEiPSlFi0CmFTfEjCUqF9HuCEcYXNKAaYalIJmBZ8yyezPjTqhxrKBpMnaocVtLJBI1eM3uXnQzQGAJdJ4gs9Fyw==\",\"keyDetails\":\"PKIX_ECDSA_P256_SHA_256\",\"validFor\":{\"start\":\"2022-10-20T00:00:00Z\"}},\"logId\":{\"keyId\":\"3T0wasbHETJjGR4cmWc3AqJKXrjePK3/h4pygC8p7o4=\"}}],\"timestampAuthorities\":[{\"subject\":{\"organization\":\"sigstore.dev\",\"commonName\":\"sigstore-tsa-selfsigned\"},\"uri\":\"https://timestamp.sigstore.dev/api/v1/timestamp\",\"certChain\":{\"certificates\":[{\"rawBytes\":\"MIICEDCCAZagAwIBAgIUOhNULwyQYe68wUMvy4qOiyojiwwwCgYIKoZIzj0EAwMwOTEVMBMGA1UEChMMc2lnc3RvcmUuZGV2MSAwHgYDVQQDExdzaWdzdG9yZS10c2Etc2VsZnNpZ25lZDAeFw0yNTA0MDgwNjU5NDNaFw0zNTA0MDYwNjU5NDNaMC4xFTATBgNVBAoTDHNpZ3N0b3JlLmRldjEVMBMGA1UEAxMMc2lnc3RvcmUtdHNhMHYwEAYHKoZIzj0CAQYFK4EEACIDYgAE4ra2Z8hKNig2T9kFjCAToGG30jky+WQv3BzL+mKvh1SKNR/UwuwsfNCg4sryoYAd8E6isovVA3M4aoNdm9QDi50Z8nTEyvqgfDPtTIwXItfiW/AFf1V7uwkbkAoj0xxco2owaDAOBgNVHQ8BAf8EBAMCB4AwHQYDVR0OBBYEFIn9eUOHz9BlRsMCRscsc1t9tOsDMB8GA1UdIwQYMBaAFJjsAe9/u1H/1JUeb4qImFMHic6/MBYGA1UdJQEB/wQMMAoGCCsGAQUFBwMIMAoGCCqGSM49BAMDA2gAMGUCMDtpsV/6KaO0qyF/UMsX2aSUXKQFdoGTptQGc0ftq1csulHPGG6dsmyMNd3JB+G3EQIxAOajvBcjpJmKb4Nv+2Taoj8Uc5+b6ih6FXCCKraSqupe07zqswMcXJTe1cExvHvvlw==\"},{\"rawBytes\":\"MIIB9zCCAXygAwIBAgIUV7f0GLDOoEzIh8LXSW80OJiUp14wCgYIKoZIzj0EAwMwOTEVMBMGA1UEChMMc2lnc3RvcmUuZGV2MSAwHgYDVQQDExdzaWdzdG9yZS10c2Etc2VsZnNpZ25lZDAeFw0yNTA0MDgwNjU5NDNaFw0zNTA0MDYwNjU5NDNaMDkxFTATBgNVBAoTDHNpZ3N0b3JlLmRldjEgMB4GA1UEAxMXc2lnc3RvcmUtdHNhLXNlbGZzaWduZWQwdjAQBgcqhkjOPQIBBgUrgQQAIgNiAAQUQNtfRT/ou3YATa6wB/kKTe70cfJwyRIBovMnt8RcJph/COE82uyS6FmppLLL1VBPGcPfpQPYJNXzWwi8icwhKQ6W/Qe2h3oebBb2FHpwNJDqo+TMaC/tdfkv/ElJB72jRTBDMA4GA1UdDwEB/wQEAwIBBjASBgNVHRMBAf8ECDAGAQH/AgEAMB0GA1UdDgQWBBSY7AHvf7tR/9SVHm+KiJhTB4nOvzAKBggqhkjOPQQDAwNpADBmAjEAwGEGrfGZR1cen1R8/DTVMI943LssZmJRtDp/i7SfGHmGRP6gRbuj9vOK3b67Z0QQAjEAuT2H673LQEaHTcyQSZrkp4mX7WwkmF+sVbkYY5mXN+RMH13KUEHHOqASaemYWK/E\"}]},\"validFor\":{\"start\":\"2025-07-04T00:00:00Z\"}}]}\n"
 REPOSITORY = "storminator89/Tracebolt"
 SCHEMA = "tracebolt.linux-release.v1"
-ROLES = ("agent-service", "enroll-agent", "lan-agent")
+INSTALL_ROLES = ("agent-service", "enroll-agent", "lan-agent")
+ROLES = INSTALL_ROLES + ("socket-owner-reader",)
 ARCHES = ("amd64", "arm64")
 RUNTIME_TARGETS = ("linux-amd64",)  # arm64 remains build-only.
 MAX_MANIFEST = 32 * 1024
@@ -393,8 +394,8 @@ def inspect_staging():
 
 def parse_args(argv):
     parser = argparse.ArgumentParser(allow_abbrev=False, description="Download and verify the pinned official Tracebolt release. No automatic elevation or dependency installation.")
-    parser.add_argument("--action", choices=("install", "upgrade"), default="install")
-    parser.add_argument("--apply", action="store_true", help="Explicitly authorize the existing installer operation after verification")
+    parser.add_argument("--action", choices=("install", "upgrade", "revoke-socket-owners"), default="install")
+    parser.add_argument("--apply", action="store_true", help="Explicitly authorize the selected installation or maintenance operation after verification")
     parser.add_argument("--pending-service", action="store_true")
     parser.add_argument("--read-admin", action="store_true", help="Fresh install with one explicit combined read-profile approval; wait for device approval and configure supported read scopes/helper")
     parser.add_argument("--read-admin-agent-origin", help="Exact public bootstrap agent ingress origin included in the combined approval")
@@ -420,6 +421,10 @@ def parse_args(argv):
                 not ingress.path and not ingress.query and not ingress.fragment and
                 args.read_admin_agent_origin == ingress.scheme + "://" + ingress.netloc,
                 "Invalid explicitly approved agent ingress origin.")
+    if args.action == "revoke-socket-owners":
+        require(not any((args.read_admin, args.read_admin_agent_origin, args.resume_read_admin, args.resume, args.pending_service,
+                         args.manager_origin, args.invitation_id, args.bootstrap_sha256, args.server_ca_base64, args.insecure_http_test)),
+                "Socket-owner revocation accepts no enrollment, upgrade, resume or grant flags.")
     online = (args.manager_origin, args.invitation_id, args.bootstrap_sha256, args.server_ca_base64)
     if args.action == "install":
         require(all(online[:3]), "Installation requires the exact manager origin, public invitation ID and bootstrap SHA-256.")
@@ -436,6 +441,7 @@ def parse_args(argv):
 
 
 def installer_command(args, directory, manifest, arch):
+    require(args.action in ("install", "upgrade"), "Maintenance cannot invoke the installer.")
     version = manifest["version"]
     path = lambda role: directory / f"tracebolt-{version}-linux-{arch}-{role}"
     source = directory / f"tracebolt-{version}-source.tar"
@@ -454,7 +460,7 @@ def installer_command(args, directory, manifest, arch):
     return command
 
 
-def prepare_release(directory, pin, arch, fetch=download, verifier_factory=prepare_verifier, verify=verify_attestation):
+def prepare_release(directory, pin, arch, fetch=download, verifier_factory=prepare_verifier, verify=verify_attestation, *, read_admin=False, maintenance=False):
     validate_pin(pin)
     require("linux-" + arch in RUNTIME_TARGETS, "This architecture is build-only; runtime installation is not enabled.")
     version = pin["version"]
@@ -465,8 +471,10 @@ def prepare_release(directory, pin, arch, fetch=download, verifier_factory=prepa
     verifier = verifier_factory(directory, arch, fetch)
     verify(directory, pin, verifier)
     manifest = parse_manifest(raw, pin)
-    print("[3/4] Release provenance verified. Downloading and checking the selected agent files.", flush=True)
-    names = [f"tracebolt-{version}-linux-{arch}-{role}" for role in ROLES] + [f"tracebolt-{version}-source.tar"]
+    print("[3/4] Release provenance verified. Downloading and checking the selected release files.", flush=True)
+    require(not (read_admin and maintenance), "Ambiguous release operation.")
+    selected_roles = () if maintenance else ROLES if read_admin else INSTALL_ROLES
+    names = [f"tracebolt-{version}-linux-{arch}-{role}" for role in selected_roles] + [f"tracebolt-{version}-source.tar"]
     for name in names:
         spec = manifest["assets"][name]
         fetch(version, name, directory / name, spec["size"], expected_size=spec["size"], expected_digest=spec["sha256"])
@@ -484,9 +492,11 @@ def prepare_release(directory, pin, arch, fetch=download, verifier_factory=prepa
 
 READ_ADMIN_SOURCES = (
     "deploy/onboarding/read_admin.py", "deploy/inventory/guide.py", "deploy/journal/setup.py",
-    "deploy/journal/amend.py", "deploy/journal/guide.py",
+    "deploy/journal/amend.py", "deploy/journal/guide.py", "deploy/socket-owner/setup.py",
     "deploy/systemd/tracebolt-agent.service.in", "deploy/systemd/tracebolt-journal-reader.service.in",
     "deploy/systemd/tracebolt-journal-reader.socket.in",
+    "deploy/systemd/tracebolt-socket-owner-reader.service.in",
+    "deploy/systemd/tracebolt-socket-owner-reader.socket.in",
 )
 
 
@@ -526,19 +536,21 @@ def read_admin_sources(directory, manifest):
                 "Read-admin source changed during verification.")
     require(set(contents) == set(READ_ADMIN_SOURCES), "This release does not contain the complete reviewed read-admin workflow. No installer was run.")
     modules = []
-    for name in READ_ADMIN_SOURCES[:5]:
+    for name in READ_ADMIN_SOURCES[:6]:
         module = types.ModuleType("tracebolt_verified_" + name.replace("/", "_").replace(".", "_"))
         module.__file__ = "/verified-source/" + name
         exec(compile(contents[name], module.__file__, "exec"), module.__dict__)
         modules.append(module)
-    templates = {Path(name).name: contents[name] for name in READ_ADMIN_SOURCES[5:]}
+    templates = {Path(name).name: contents[name] for name in READ_ADMIN_SOURCES[6:]}
     return (*modules, templates)
 
 
 def run_read_admin(args, directory, manifest, arch, installer=None):
-    workflow, inventory, setup, amendment, journal_guide, templates = read_admin_sources(directory, manifest)
+    workflow, inventory, setup, amendment, journal_guide, socket_setup, templates = read_admin_sources(directory, manifest)
     plan = workflow.make_plan(args, manifest, arch)
-    adapter = workflow.real_adapter(setup, inventory, amendment, journal_guide, templates, plan)
+    helper_path = directory / f"tracebolt-{manifest['version']}-linux-{arch}-socket-owner-reader"
+    helper_spec = dict(manifest["assets"][helper_path.name], path=str(helper_path))
+    adapter = workflow.real_adapter(setup, inventory, amendment, journal_guide, socket_setup, templates, plan, helper_spec)
     command = installer_command(args, directory, manifest, arch)
     def interrupted(_signum, _frame):
         # Existing setup cleanup/retain-state handlers recognize this exception.
@@ -556,10 +568,25 @@ def run_read_admin(args, directory, manifest, arch, installer=None):
         print("Canceled before installing or granting read scopes.")
         return 0
     if result["configurationComplete"]:
-        print("Read-admin configuration confirmed: inventory, network identity and all supported system-service journal permissions. Check incoming reports in the dashboard; capability details remain in the result above.")
+        print("Read-admin configuration confirmed: inventory, network identity, all supported system-service journals and socket-owner metadata configuration. Check incoming reports in the dashboard; capability details remain in the result above.")
         return 0
     print("Read-admin setup is incomplete. Keep all installation and journal evidence; inspect the reported phase before recovery.", file=sys.stderr)
     return 1
+
+
+def run_revoke_socket_owners(directory, manifest):
+    workflow, inventory, setup, _amendment, _journal_guide, socket_setup, templates = read_admin_sources(directory, manifest)
+    adapter = workflow.real_maintenance(setup, inventory, socket_setup, templates, manifest)
+    def interrupted(_signum, _frame):
+        raise setup.Rejected("interrupted")
+    previous = {sig: signal.signal(sig, interrupted) for sig in (signal.SIGINT, signal.SIGTERM)}
+    try:
+        result = workflow.run_revoke(adapter, inventory.confirm_terminal, inventory.emit_terminal)
+    finally:
+        for sig, handler in previous.items():
+            signal.signal(sig, handler)
+    print(json.dumps(result, indent=2))
+    return 0 if result["revoked"] or result["canceled"] else 1
 
 
 def run_installer(command):
@@ -660,7 +687,11 @@ def main(argv=None):
         known = asset_names(pin["version"]) | {"manifest.json", "manifest.sigstore.json", "sigstore-trusted-root.jsonl", "gh-verifier", f"gh_{GH_VERSION}_linux_{arch}.tar.gz"}
         installer_result = None
         try:
-            manifest = prepare_release(directory, pin, arch)
+            if args.action == "revoke-socket-owners":
+                manifest = prepare_release(directory, pin, arch, maintenance=True)
+                installer_result = run_revoke_socket_owners(directory, manifest)
+                return installer_result
+            manifest = prepare_release(directory, pin, arch, read_admin=True) if args.read_admin else prepare_release(directory, pin, arch)
             print("[4/4] Provenance and all selected file hashes verified. Starting the fixed-path service installer. Enter the invitation only at its hidden terminal prompt; device approval remains a separate dashboard step.", flush=True)
             if args.read_admin:
                 installer_result = run_read_admin(args, directory, manifest, arch)
