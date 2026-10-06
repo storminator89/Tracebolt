@@ -309,7 +309,7 @@ func (h *operatorHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		fail(w, 400, "invalid_framing", "Chunked request bodies are not accepted.")
 		return
 	}
-	if strings.Contains(r.URL.Path, "//") || strings.Contains(r.URL.Path, "\\") || strings.Contains(r.URL.EscapedPath(), "%") || r.URL.RawQuery != "" || r.URL.ForceQuery {
+	if strings.Contains(r.URL.Path, "//") || strings.Contains(r.URL.Path, "\\") || strings.Contains(r.URL.EscapedPath(), "%") || (r.URL.Path != "/api/investigations" && r.URL.RawQuery != "") || r.URL.ForceQuery {
 		fail(w, 400, "invalid_path", "Path is not canonical.")
 		return
 	}
@@ -463,6 +463,10 @@ func (h *operatorHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if strings.HasPrefix(r.URL.Path, "/api/devices/") && strings.Contains(r.URL.Path, "/inventory/cached-updates") {
 		h.cachedUpdates(w, r)
+		return
+	}
+	if r.URL.Path == "/api/investigations" {
+		h.investigations(w, r)
 		return
 	}
 	if r.URL.Path == "/api/fleet/endpoint-identities" {

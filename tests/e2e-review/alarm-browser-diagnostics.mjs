@@ -5,7 +5,7 @@ const stages=new Set([
  'setup-bootstrap','setup-initial','setup-cancel','setup-escape','setup-save','setup-test-consent','setup-test-send','setup-accepted-refresh','setup-uncertain-refresh','setup-idle-guard','setup-mobile-en','setup-mobile-de','setup-disable','setup-final-guards',
  'setup-collapsed-desktop-en','setup-form-desktop-en','setup-test-queued-desktop-en','setup-test-accepted-desktop-en','setup-test-uncertain-mobile-en','setup-test-uncertain-mobile-de','setup-form-mobile-en','setup-form-mobile-de','setup-test-uncertain-desktop-de','setup-disabled-mobile-de'
 ]);
-const steps=new Set(['action','document-width','panel-width','visibility','scroll-stability','viewport-ratio','bounding-box','horizontal-bounds','element-width','capture','aggregate-refresh']);
+const steps=new Set(['action','document-width','panel-width','visibility','scroll-stability','scroll-center','viewport-ratio','bounding-box','horizontal-bounds','element-width','capture','aggregate-refresh']);
 const categories=new Set(['panel','heading','button','input','label','time','term','definition','summary','paragraph','readback','mode','other','none']);
 const numericKeys=['viewportWidth','viewportHeight','documentClientWidth','documentScrollWidth','bodyScrollWidth','elementLeft','elementTop','elementWidth','elementHeight','elementClientWidth','elementClientHeight','elementScrollWidth','elementScrollHeight','mainLeft','mainTop','mainWidth','mainHeight','mainClientWidth','mainClientHeight','mainScrollWidth','mainScrollHeight','mainScrollLeft','mainScrollTop'];
 const bounded=n=>typeof n==='number'&&Number.isFinite(n)&&Math.abs(n)<=100000?Math.round(n*1000)/1000:null;

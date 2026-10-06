@@ -27,6 +27,9 @@ func TestHealthReadsOriginalAcceptedAgeAndExplicitServices(t *testing.T) {
 		t.Fatal(e)
 	}
 	in := inputs[0]
+	if !in.AuthorityUntil.Equal(time.Unix(snap.Intent.NotAfter, 0).UTC()) {
+		t.Fatal("health read lost original certificate deadline")
+	}
 	if !in.Authorized || !in.ReceivedAt.Equal(receipt.ReceivedAt) || len(in.Services) != 1 || in.Services["fixture-00000.service"].State != "failed" || !in.Services["fixture-00000.service"].ObservedAt.Equal(at) {
 		t.Fatalf("bad source: %+v", in)
 	}

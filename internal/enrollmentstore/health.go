@@ -39,6 +39,9 @@ func (s *Store) HealthInputs(ctx context.Context, services map[string][]string, 
 					return authorityErr
 				}
 				in.Authorized = authorityErr == nil
+				if in.Authorized {
+					in.AuthorityUntil = time.Unix(snap.Intent.NotAfter, 0).UTC()
+				}
 			}
 			if !in.Authorized {
 				out = append(out, in)

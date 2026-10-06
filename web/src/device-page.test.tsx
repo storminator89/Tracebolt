@@ -22,6 +22,7 @@ function operational(): OperationalView {
 function answer(path: string) {
  if (path === '/auth/session') return session;
  if (path === '/enrollment') return { schemaVersion: 'tracebolt.enrollment-operator.v2', serverNow: now, enabled: false, platforms: [], recordLimit: 25, items: [] };
+ if (path === '/investigations?scope=open&offset=0') return { schemaVersion: 'tracebolt.investigations.v1', serverNow: now, scope: 'open', offset: 0, total: 0, counts: { open: 0, recovered: 0, closed: 0, all: 0 }, devices: [], items: [] };
  if (path === '/overview') return { product: 'Synthetic Tracebolt', mode: 'lan', generatedAt: now, stats: { totalDevices: 2, healthyDevices: 0, attentionDevices: 0, unknownDevices: 2, openCases: 0, criticalCases: 0 }, devices: [device(), device(secondID)], cases: [], activity: [] } satisfies Overview;
  if (path === `/devices/${id}/operational`) return operational();
  if (path === `/devices/${id}/inventory/endpoint-identity`) return emptyEndpointView();
@@ -101,7 +102,8 @@ describe('dedicated device page', () => {
   expect(screen.queryByRole('tab')).not.toBeInTheDocument();
  });
  it('keeps a direct device route readable even when the separate fleet overview request fails', async () => {
-  vi.mocked(request).mockImplementation(async path => { if (path === '/overview') throw new Error('Synthetic overview unavailable'); return answer(path); });
+  vi.mocked(request).mockImplementation(async path => { if (path === '/investigations?scope=open&offset=0') return { schemaVersion: 'tracebolt.investigations.v1', serverNow: now, scope: 'open', offset: 0, total: 0, counts: { open: 0, recovered: 0, closed: 0, all: 0 }, devices: [], items: [] };
+ if (path === '/overview') throw new Error('Synthetic overview unavailable'); return answer(path); });
   const page = await open(); expect(within(page).getByRole('heading', { name: 'Synthetic Linux fixture' })).toBeVisible();
   expect(within(page).getByRole('button', { name: 'Back to devices' })).toBeEnabled();
   expect(screen.getByRole('alert')).toHaveTextContent('Synthetic overview unavailable');
@@ -125,7 +127,7 @@ it('removes duplicate overview/list explanations while retaining explicit source
  await navigate('overview'); render(<App/>); await screen.findByRole('heading', { name: 'Overview', level: 1 });
  expect(document.querySelector('.page-heading .eyebrow')).toBeNull(); expect(document.querySelector('.page-heading p')).toBeNull();
  expect(screen.queryByText('Rule-based findings. Sources included.')).not.toBeInTheDocument(); expect(screen.queryByText('Sources clearly labelled')).not.toBeInTheDocument();
- expect(screen.getByText('No automated device assessment yet. Missing findings do not mean healthy devices.')).toBeVisible();
+ expect(await screen.findByText('No open health incidents in the retained history. Missing cases do not mean a healthy device.')).toBeVisible();
  expect(screen.getAllByText('LAN agent').length).toBeGreaterThan(0); expect(screen.getByRole('columnheader', { name: 'Overall health' })).toBeVisible();
  const sidebar = screen.getByRole('complementary', { name: 'Main navigation' }); fireEvent.click(within(sidebar).getByRole('button', { name: /Devices/ })); await screen.findByLabelText('Search devices');
  expect(document.querySelector('.page-heading .eyebrow')).toBeNull(); expect(document.querySelector('.page-heading p')).toBeNull();

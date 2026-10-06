@@ -54,10 +54,37 @@ incidents are preserved. At most the existing 25-device pilot limit is stored.
 No external notification, automatic remediation, update installation or agent
 command is sent. There is no timeseries archive of raw telemetry.
 
+## Fleet investigations
+
+The LAN **Investigations** page is a read-only projection of these same durable
+incidents. It does not create a second case, import demo cases, run an AI model or
+change a warning's state. Open, recovered and monitoring-stopped counts are
+separate. Acknowledged warnings remain open until the evaluator confirms recovery.
+Overview uses the same open count instead of the empty development case feed.
+
+Each card explains the deterministic threshold that opened the incident, shows
+its original timestamps, and separates that history from the latest check value
+and observation time. The root cause is explicitly undetermined. Earlier raw
+samples and log lines are not archived with an incident. An unknown current check
+never resolves an old incident or proves recovery; zero cases does not mean the
+device is healthy. Device Health/history, details, and exact-service log links
+open existing views. Following a logs link prepares the unit selection only and
+does not request a new capture.
+
+The UI reads while visible every 30 seconds, ages observations from their original
+timestamps, and clears data on session loss, interruption, failed refresh or an
+unreliable clock. The endpoint returns at most 50 records per page from the
+existing 25-device × 100-incident bounds. Counts cover all retained incidents for
+currently authorized Linux devices. New events can change page order; this is
+live paging rather than a pinned export. No usable evaluator or a source failure
+is an unavailable result, never an empty successful assessment.
+
 ## API and authority
 
 Only the authenticated operator surface exposes:
 
+- `GET /api/investigations?scope=open&offset=0` (`open`, `recovered`,
+  `closed`, `all`; nonnegative offset in steps of 50, at most 2500)
 - `GET /api/devices/{id}/health`
 - `POST /api/devices/{id}/health/acknowledge` with `incidentId`
 - `POST /api/devices/{id}/health/maintenance` with `minutes` (0, 15, 60, 240)
@@ -65,7 +92,10 @@ Only the authenticated operator surface exposes:
 
 Mutations retain same-origin, session lifetime and CSRF checks. Reads and writes
 check current activated device authority. Revoked/expired devices expose no
-health history through this surface. Source/storage errors preserve the last
+health history through this surface. Fleet investigation output rechecks device
+authority and operator access after reading/encoding, then checks original
+certificate deadlines and trusted elapsed time immediately before output.
+Unrelated operator paths still reject query parameters. Source/storage errors preserve the last
 persisted incident history; a stopped evaluator becomes unknown in the view.
 
 ## Acceptance and limits

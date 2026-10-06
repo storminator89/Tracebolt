@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-10-06 — Read-only LAN health investigations
+
+- Populate LAN Investigations from the existing durable Health incident history, with separate open, recovered and monitoring-stopped counts, original incident times, separately aged current checks and explicit undetermined cause. Keep acknowledgement distinct from recovery and leave the demo case/AI/note engine unchanged.
+- Connect Overview counts and real device Health/history, details and exact-service logs. A logs link only selects the unit; existing capture permission and review remain required. Remove the misleading zero related-demo-case count on the Linux device overview.
+- Add a bounded read-only operator API with live paging, strict input/output validation, session and enrolled-device rechecks, original certificate-expiry checks at output, and fail-closed source/storage/time behavior. No collection, case copy, health mutation, new permission, remediation or external request is introduced.
+- Source/fixture validation is separate from hosted browser and native-host acceptance. This manager/frontend change does not update installed endpoints or establish a full health assessment or raw-evidence archive.
+- Preserve exact browser assertions while centering measured alarm elements before full-visibility checks, addressing the observed subpixel nearest-scroll mismatch. Require a rendered fleet hostname/IP snapshot before testing logout, so the test proves private data was present before it is cleared. Neither correction changes production behavior, deadlines or retries.
+- Add a hosted read-only Investigations case using explicitly invented intercepted DTOs, with separate real API/store proof. Archive two inspected, unedited synthetic fleet/log screenshots from their passing a6c8 scenarios, with exact source/run provenance and the overall browser-failure limit. New hosted acceptance remains pending.
+
 ## 2026-10-06 — Clear log capture windows and confirmed alarm readback
 
 - Lead log selection with the exact observed service unit and a human-purpose label. Report aliases only when the observation says alias; do not infer a target, rewrite the selected name or broaden a grant. Empty complete captures now explain the exact unit, window and severity checks without confusing them with an empty text search.

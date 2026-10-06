@@ -118,7 +118,7 @@ describe('compact device essentials', () => {
         expect(card('Warnings').getByText('Selected checks')).toBeVisible(); expect(card('Warnings').getByText('1 unknown')).toBeVisible();
         expect(card('Updates').getByText('cached candidates')).toBeVisible(); expect(card('Updates').getByText('Cache is stale')).toBeVisible();
         expect(screen.queryByText('No investigation for this device.')).not.toBeInTheDocument();
-        const related = screen.getByRole('heading', { name: /^Related investigations/ }).closest('.section-head')!; expect(related).toHaveTextContent('0');
+        expect(screen.getByRole('heading', { name: 'Investigations' })).toBeVisible(); expect(screen.getByRole('link', { name: 'All investigations' })).toHaveAttribute('href', '#/cases'); expect(screen.queryByRole('heading', { name: /^Related investigations/ })).not.toBeInTheDocument();
         expect(screen.getByText('Read-only', { selector: '.drawer-footer span' })).toBeVisible();
         fireEvent.click(within(report).getByRole('button', { name: 'Device details' })); await flush();
         const summary = screen.getByText('About these values', { selector: 'summary' }), disclosure = summary.closest('details')!;

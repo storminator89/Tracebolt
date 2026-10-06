@@ -54,7 +54,11 @@ async function alarmSettingsLayout({page,panel,expect}) {
  for(const element of await panel.locator('h2,.alarm-settings-readback,button,input,label,time,dt,dd,p').all()){
   diagnostics.track(element,ordinal++);diagnostics.step('visibility');
   if(!await element.isVisible())continue;
-  diagnostics.step('scroll-stability');await element.scrollIntoViewIfNeeded();diagnostics.step('viewport-ratio');await expect(element).toBeInViewport({ratio:1});
+  diagnostics.step('scroll-stability');await element.scrollIntoViewIfNeeded();
+  // Nearest scrolling can round a subpixel bottom edge outside the viewport.
+  // Center the measured target, then retain the full visibility assertion.
+  diagnostics.step('scroll-center');await element.evaluate(el=>el.scrollIntoView({block:'center',inline:'nearest',behavior:'instant'}));
+  diagnostics.step('viewport-ratio');await expect(element).toBeInViewport({ratio:1});
   diagnostics.step('bounding-box');const box=await element.boundingBox();expect(box).not.toBe(null);diagnostics.step('horizontal-bounds');expect(box.x).toBeGreaterThanOrEqual(0);expect(box.x+box.width).toBeLessThanOrEqual(page.viewportSize().width+1);
   diagnostics.step('element-width');expect(await element.evaluate(el=>el.scrollWidth<=el.clientWidth+1)).toBe(true);
  }

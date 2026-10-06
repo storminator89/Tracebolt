@@ -77,3 +77,11 @@ describe('Hosted application-status fault-injection contract',()=>{
   }
  });
 });
+
+import { investigationsFixture } from './investigations-browser.mjs';
+import { validInvestigationsView } from '../../web/src/investigations-types';
+describe('Hosted Investigations DTO contract',()=>{
+ it('accepts exact invented issue, stale, unknown and renewed DTOs with the production validator',()=>{
+  for(const phase of ['issue','stale','unknown','renewed']) expect(validInvestigationsView(investigationsFixture(phase),'open',0)).toBe(true);
+ });
+});

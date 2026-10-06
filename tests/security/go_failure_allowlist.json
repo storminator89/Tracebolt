@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "sourceCommit": "fccc4b00cd8a144afd58e4b995747afab7a10022",
-  "goSourceSha256": "5a668b7482d465018d2b472a646abc46403295420fe092009160638e3564e42d",
+  "goSourceSha256": "17a0a226d086a3dc8158d5061bdc7101fdd49f8937f041381fa28c8bcc699ff3",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -509,6 +509,13 @@
       "TestHealthMonitorPersistsWithoutUIAndPreservesHistoryOnSourceFailure",
       "TestHealthOperatorAuthenticationCSRFAndDeviceAuthority",
       "TestInventoryMaintenanceBusyResponseContract",
+      "TestInvestigationsAuthorityErrorsAndReadOnlyBoundary",
+      "TestInvestigationsMissingAuthorityDeadlineFailsClosed",
+      "TestInvestigationsNamedReaderCanReadWithoutAdminGrant",
+      "TestInvestigationsQueryExceptionDoesNotChangeOtherRoutes",
+      "TestInvestigationsReadsRealDurableTransitionsWithoutMutation",
+      "TestInvestigationsSecondReadExpiryAndClockBoundary",
+      "TestInvestigationsUnknownFreshnessAndBoundedPaging",
       "TestInvitationCreationAdvertisesExactPublicDownloadChecksum",
       "TestJournalCapabilitiesPublicStaticBoundedAndGuarded",
       "TestJournalCapabilitiesUnavailableOnDeveloperSurface",

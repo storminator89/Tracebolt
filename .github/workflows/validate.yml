@@ -459,7 +459,7 @@ jobs:
         working-directory: .
         run: |
           node --test tests/e2e-review/public-command-contract.test.mjs
-          node --test tests/e2e-review/alarm-browser-diagnostics.test.mjs tests/e2e-review/alarm-settings-fixtures.test.mjs tests/e2e-review/cve-continuation-fixtures.test.mjs tests/e2e-review/cve-detail-pages-fixtures.test.mjs
+          node --test tests/e2e-review/investigations-fixtures.test.mjs tests/e2e-review/alarm-browser-diagnostics.test.mjs tests/e2e-review/alarm-settings-fixtures.test.mjs tests/e2e-review/cve-continuation-fixtures.test.mjs tests/e2e-review/cve-detail-pages-fixtures.test.mjs
       - name: Production build
         run: npm run build
 

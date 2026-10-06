@@ -35,10 +35,15 @@ not activate a feature or change consent on an installed host:
   capability. The complete URL is write-only and protected at rest. No provider was
   configured or contacted during source validation; new hosted UI acceptance remains
   pending. Provider acceptance does not confirm human receipt. See [alarm delivery](alarm-delivery.md).
-- **Automatic investigations for real LAN devices.** Create useful, explainable
-  cases from supported observations with their original evidence and timestamps.
-  Keep incomplete/stale input and unknown health explicit. The current LAN Cases
-  page does not yet create these investigations and has no hidden setup switch.
+- **Rule-based investigations for real LAN devices — implemented in source.**
+  Investigations and Overview now project the existing durable Health incidents:
+  contact loss, root-filesystem capacity and explicitly selected services. Open,
+  recovered and monitoring-stopped history remain distinct, with original incident
+  timestamps and separately aged current checks. Device Health, details and exact
+  service-log links support read-only triage. This is not a new diagnosis engine,
+  raw-evidence archive, AI root-cause analysis or separate case workflow. Native
+  deployment and hosted browser acceptance remain pending. See
+  [Health investigations](linux-health-checks.md#fleet-investigations).
 - **Service-log selection and capture time — implemented in source.** Exact
   observed unit names and reported-alias hints reduce guesswork; an alias target
   is never inferred. Last 15 min explicitly prepares a new draft window while

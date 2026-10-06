@@ -34,9 +34,11 @@ type ServiceSample struct {
 type Input struct {
 	DeviceID   string
 	Authorized bool
-	ReceivedAt time.Time
-	Disk       model.Metric
-	Services   map[string]ServiceSample
+	// AuthorityUntil is a read-boundary certificate deadline, not observation freshness.
+	AuthorityUntil time.Time `json:"-"`
+	ReceivedAt     time.Time
+	Disk           model.Metric
+	Services       map[string]ServiceSample
 }
 type Check struct {
 	Key        string     `json:"key"`
