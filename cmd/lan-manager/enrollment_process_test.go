@@ -74,15 +74,22 @@ finally:
 `
 
 type ptyEvent struct {
-	Phase          string `json:"phase"`
-	InstallerStage string `json:"installerStage"`
-	EchoDisabled   bool   `json:"echoDisabled"`
-	Fingerprint    string `json:"fingerprint"`
-	Comparison     string `json:"comparison"`
-	ExitCode       int    `json:"exitCode"`
-	SecretEcho     bool   `json:"secretEcho"`
-	Ready          bool   `json:"ready"`
-	HTTPWarning    bool   `json:"httpWarning"`
+	Phase                     string `json:"phase"`
+	InstallerStage            string `json:"installerStage"`
+	EchoDisabled              bool   `json:"echoDisabled"`
+	Fingerprint               string `json:"fingerprint"`
+	Comparison                string `json:"comparison"`
+	ExitCode                  int    `json:"exitCode"`
+	SecretEcho                bool   `json:"secretEcho"`
+	Ready                     bool   `json:"ready"`
+	HTTPWarning               bool   `json:"httpWarning"`
+	ScopeApprovals            int    `json:"scopeApprovals"`
+	ReadAdminComplete         bool   `json:"readAdminComplete"`
+	ReadAdminCanceled         bool   `json:"readAdminCanceled"`
+	ReadAdminFailure          string `json:"readAdminFailure"`
+	ReadAdminPhasesComplete   bool   `json:"readAdminPhasesComplete"`
+	InstallerRolledBack       bool   `json:"installerRolledBack"`
+	InstallerIdentityRetained bool   `json:"installerIdentityRetained"`
 }
 
 func stopFixtureProcess(t *testing.T, cmd *exec.Cmd, done <-chan error) {

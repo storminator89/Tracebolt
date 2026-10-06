@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-10-06 — Keep CVE paging controls readable on desktop
+
+- Correct the CVE paging selector so later shared small-button styles cannot reduce its desktop height from 36px to 30px. Built-style checks reproduce the defect and verify 36px desktop controls, unchanged 42px mobile controls and unchanged unrelated small buttons.
+- Add only fixed failure-stage labels to the new synthetic paging browser case. Preserve every existing assertion, request, guard and deadline; the original hosted assertion was sanitized, so full browser and screenshot acceptance remain required.
+
+## 2026-10-06 — Prepare manual fresh read-admin systemd acceptance
+
+- Add a manual, explicitly approved disposable-VM workflow for TLS by default or separately selected HTTP, covering fresh completion, enrollment cancellation and retained journal-phase refusal. Preserve selected-source checks, one local combined approval, nonroot sender identity and bounded sanitized evidence.
+- Add inert selection, embedded-script and workflow-wrapper fixtures to ordinary validation. Default runs skip all privileged systemd gates; no native scenario, journal-content read, reboot, release provenance or published command activation is established by these source checks.
+
 ## 2026-10-06 — Browse every current CVE warning and mapped binary
 
 - Add exact read-only, assessment-bound warning and binary detail pages with existing named-reader, Origin, CSRF and current-evidence checks. Keep completed totals, checkpoint bytes, revision and original assessment age unchanged.

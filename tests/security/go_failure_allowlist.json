@@ -1,5 +1,7 @@
 {
-  "goSourceSha256": "e6a21cf9fa3b149e65cc2625a26847ffaf04af81fb21f36c27b5b325ef8768a3",
+  "schemaVersion": 1,
+  "sourceCommit": "fccc4b00cd8a144afd58e4b995747afab7a10022",
+  "goSourceSha256": "9ca58403abf957c84ca65d6f14a49f0575bd400d611b124b591c2d9f46c6f9bb",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -86,6 +88,7 @@
       "TestApplicationChecksV2ManagerMixedStatusIsInert",
       "TestApprovedDisposableSystemdInstallation",
       "TestApprovedManagedDisposableSystemdInstallation",
+      "TestApprovedReadAdminDisposableSystemdInstallation",
       "TestBuiltLANManagerCLI",
       "TestCompleteMVPEndpointEvidence",
       "TestCompleteMVPEndpointGateSelection",
@@ -133,6 +136,9 @@
       "TestPackageUbuntu2404PositiveNative",
       "TestPreparedNamedOperatorProfilesAndRestartRevocation",
       "TestProfileStateIsolation",
+      "TestReadAdminJournalReady",
+      "TestReadAdminNativeSelection",
+      "TestReadAdminPTYInput",
       "TestSystemdDiagnosticStageAllowlist"
     ],
     "localrmm/cmd/manager": [
@@ -2170,7 +2176,5 @@
       "TestSupportBundleRejectsUnavailableHealthyMetric",
       "TestSystemInventoryOperatorActualTLSHTTPAllPagesAndDelayedExpiry"
     ]
-  },
-  "schemaVersion": 1,
-  "sourceCommit": "fccc4b00cd8a144afd58e4b995747afab7a10022"
+  }
 }

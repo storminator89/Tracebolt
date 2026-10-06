@@ -1,0 +1,163 @@
+name: Approved disposable read-admin systemd acceptance
+
+# Manual-only. Each scenario owns a fresh hosted VM; never reuse a host or erase
+# retained state to make it fresh. Discard the entire VM regardless of outcome.
+on:
+  workflow_dispatch:
+    inputs:
+      approved_disposable_read_admin_systemd:
+        description: 'Approve fresh v3 read-admin account/service, identity, inventory/network grants and exact-service journal helper on each disposable VM (no reboot); HTTP exposes content and permits impersonation'
+        required: true
+        default: false
+        type: boolean
+      transport:
+        description: 'TLS is the default. http-test explicitly accepts plaintext passwords, sessions, telemetry and journal content, and server/UI impersonation on isolated loopback only'
+        required: true
+        default: tls
+        type: choice
+        options:
+          - tls
+          - http-test
+
+permissions:
+  contents: read
+
+concurrency:
+  group: approved-read-admin-systemd-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  disposable-systemd:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.approved_disposable_read_admin_systemd }}
+    name: Read-admin ${{ inputs.transport }} / ${{ matrix.scenario }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        scenario: [complete, cancel-enrollment, retained-journal]
+    env:
+      TRACEBOLT_READ_ADMIN_TRANSPORT: ${{ inputs.transport }}
+      TRACEBOLT_READ_ADMIN_SCENARIO: ${{ matrix.scenario }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Build exact selected source as the ordinary runner user
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$RUNNER_ENVIRONMENT" = github-hosted
+          test "$RUNNER_OS" = Linux
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          STAGE="$RUNNER_TEMP/tracebolt-read-admin-systemd-acceptance"
+          mkdir -m 0700 "$STAGE"
+          go mod verify
+          go build -buildvcs=false -o "$STAGE/agent-service" ./cmd/agent-service
+          go build -buildvcs=false -o "$STAGE/lan-manager" ./cmd/lan-manager
+          go build -buildvcs=false -o "$STAGE/enroll-agent" ./cmd/enroll-agent
+          go build -buildvcs=false -o "$STAGE/lan-agent" ./cmd/lan-agent
+          go build -buildvcs=false -trimpath -ldflags=-buildid=tracebolt-disposable-upgrade -o "$STAGE/enroll-agent-upgrade" ./cmd/enroll-agent
+          go build -buildvcs=false -trimpath -ldflags=-buildid=tracebolt-disposable-upgrade -o "$STAGE/lan-agent-upgrade" ./cmd/lan-agent
+          go test -c -o "$STAGE/systemd.test" ./cmd/lan-manager
+          git archive --format=tar --output="$STAGE/source.tar" "$GITHUB_SHA"
+      - name: Execute the approved test once with a minimal root environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          STAGE="$RUNNER_TEMP/tracebolt-read-admin-systemd-acceptance"
+          umask 077
+          if ! sudo env -i \
+            PATH=/usr/sbin:/usr/bin:/sbin:/bin \
+            LANG=C LC_ALL=C HOME=/ \
+            GITHUB_ACTIONS="$GITHUB_ACTIONS" \
+            GITHUB_SHA="$GITHUB_SHA" \
+            RUNNER_ENVIRONMENT="$RUNNER_ENVIRONMENT" \
+            RUNNER_OS="$RUNNER_OS" \
+            TRACEBOLT_APPROVED_SYSTEMD_TEST=1 \
+            TRACEBOLT_APPROVED_READ_ADMIN_SYSTEMD_TEST=1 \
+            TRACEBOLT_READ_ADMIN_TRANSPORT="$TRACEBOLT_READ_ADMIN_TRANSPORT" \
+            TRACEBOLT_READ_ADMIN_SCENARIO="$TRACEBOLT_READ_ADMIN_SCENARIO" \
+            TRACEBOLT_SYSTEMD_BINARY_DIRECTORY="$STAGE" \
+            TRACEBOLT_SYSTEMD_SOURCE_ARCHIVE="$STAGE/source.tar" \
+            TRACEBOLT_SYSTEMD_RESULT_FILE="$STAGE/read-admin-systemd-result.json" \
+            "$STAGE/systemd.test" \
+            -test.run '^TestApprovedReadAdminDisposableSystemdInstallation$' \
+            -test.v -test.timeout 10m > "$STAGE/private-test.log" 2>&1; then
+            echo 'FAIL: approved disposable read-admin test; private runtime output withheld.'
+            exit 1
+          fi
+          echo 'Native test returned successfully; sanitized completion evidence is checked next.'
+      - name: Validate the bounded result and require complete acceptance
+        if: ${{ always() && !cancelled() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Only the normalized fixed-schema result can leave the VM. Root may
+          # read its umask-077 result; no private runtime log is read or exported.
+          TARGET="$RUNNER_TEMP/read-admin-systemd-result.json"
+          if ! sudo env -i PATH=/usr/sbin:/usr/bin:/sbin:/bin LANG=C LC_ALL=C \
+            /usr/bin/python3 - "$RUNNER_TEMP/tracebolt-read-admin-systemd-acceptance/read-admin-systemd-result.json" \
+            "$TRACEBOLT_READ_ADMIN_TRANSPORT" "$TRACEBOLT_READ_ADMIN_SCENARIO" \
+            > "$TARGET" <<'PYTHON'; then
+          import json, os, stat, sys
+          def check(condition):
+              if not condition:
+                  raise ValueError('invalid fixed result')
+          def unique_object(items):
+              value = {}
+              for key, item in items:
+                  if key in value:
+                      raise ValueError('duplicate field')
+                  value[key] = item
+              return value
+          try:
+              check(len(sys.argv) == 4)
+              check(sys.argv[2] in {'tls', 'http-test'})
+              check(sys.argv[3] in {'complete', 'cancel-enrollment', 'retained-journal'})
+              fd = os.open(sys.argv[1], os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC)
+              with os.fdopen(fd, 'rb') as stream:
+                  info = os.fstat(stream.fileno())
+                  check(stat.S_ISREG(info.st_mode) and 0 < info.st_size <= 4096)
+                  raw = stream.read(4097)
+              check(0 < len(raw) <= 4096 and len(raw) == info.st_size)
+              value = json.loads(raw, object_pairs_hook=unique_object)
+              check(type(value) is dict)
+              check(set(value) == {'schemaVersion', 'status', 'stage', 'profile', 'collectionProfile', 'scenario', 'osRebootTested', 'telemetryExported'})
+              check(value['schemaVersion'] == 'tracebolt.read-admin-systemd-acceptance.v1')
+              check(value['profile'] == sys.argv[2])
+              check(value['collectionProfile'] == 'managed-operations-v3')
+              check(value['scenario'] == sys.argv[3])
+              check(value['osRebootTested'] is False and value['telemetryExported'] is False)
+              check(value['status'] in {'pass', 'fail'})
+              check(value['stage'] in {'preflight', 'manager_start', 'operator_login', 'install_enroll', 'approval', 'initial_reports', 'read_admin_cancel', 'read_admin_inventory', 'read_admin_journal', 'read_admin_repeat', 'read_admin_retained', 'read_admin_readiness', 'complete', 'installer_preflight', 'installer_prepare', 'installer_stage', 'installer_enroll', 'installer_validate', 'installer_publish', 'installer_start', 'installer_commit'})
+              check(value['status'] != 'pass' or value['stage'] == 'complete')
+              print(json.dumps(value, indent=2))
+          except Exception:
+              raise SystemExit('FAIL: missing or invalid sanitized read-admin acceptance evidence.')
+          PYTHON
+            # Remove only an invalid export, never installer or journal state.
+            rm -f -- "$TARGET"
+            exit 1
+          fi
+          python3 - "$TARGET" <<'PYTHON'
+          import json, sys
+          with open(sys.argv[1], 'rb') as stream:
+              value = json.loads(stream.read(4097))
+          if value['status'] != 'pass' or value['stage'] != 'complete':
+              raise SystemExit('FAIL: sanitized read-admin acceptance records an incomplete or failing run.')
+          print('PASS: selected read-admin scenario completed; OS reboot remains untested.')
+          PYTHON
+      - name: Upload only the validated sanitized result
+        if: ${{ always() && !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: read-admin-systemd-acceptance-${{ inputs.transport }}-${{ matrix.scenario }}-${{ github.sha }}
+          path: ${{ runner.temp }}/read-admin-systemd-result.json
+          if-no-files-found: ignore
+          retention-days: 3

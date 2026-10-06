@@ -3,4 +3,4 @@
 
 .linux-cve-progress{display:block;width:100%;min-width:120px;height:6px;margin-top:10px;accent-color:var(--accent)}
 
-.linux-cve-paging{padding:0 20px 14px}.linux-cve-paging p,.linux-cve-binary-pages p{color:var(--secondary);font-size:11px;margin:0 0 8px}.linux-cve-paging nav,.linux-cve-binary-pages nav{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0}.linux-cve-binary-pages{margin-top:10px}.linux-cve-paging .button,.linux-cve-binary-pages .button{min-height:36px}
+.linux-cve-paging{padding:0 20px 14px}.linux-cve-paging p,.linux-cve-binary-pages p{color:var(--secondary);font-size:11px;margin:0 0 8px}.linux-cve-paging nav,.linux-cve-binary-pages nav{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0}.linux-cve-binary-pages{margin-top:10px}.linux-cve-paging .button.small,.linux-cve-binary-pages .button.small{min-height:36px}

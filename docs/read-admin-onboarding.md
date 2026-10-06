@@ -149,6 +149,11 @@ go test -race ./internal/agentinstall ./cmd/agent-service
 go test -race ./internal/journalgenerationstate ./internal/journalactivation
 ```
 
+A manual-only [integrated disposable-systemd harness](../tests/systemd/read-admin.md)
+is prepared for later explicit execution. Ordinary checks skip its privileged path;
+its source preparation is not a native pass. Its journal coverage is configuration,
+private-floor and reported-permission readiness, not log-content/source acceptance.
+
 After independent review, the separately authorized disposable Linux/systemd gate
 must cover fresh HTTPS and explicit HTTP flows, cancellation, dashboard approval
 waiting, actual nonroot identity, helper readiness, incoming reports, exact-service

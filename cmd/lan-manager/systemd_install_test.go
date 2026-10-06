@@ -58,6 +58,10 @@ func TestApprovedManagedDisposableSystemdInstallation(t *testing.T) {
 }
 
 func runApprovedSystemdInstallation(t *testing.T, profile, collectionProfile string) {
+	runApprovedSystemdInstallationMode(t, profile, collectionProfile, nil)
+}
+
+func runApprovedSystemdInstallationMode(t *testing.T, profile, collectionProfile string, readAdmin *readAdminNativeOptions) {
 	t.Helper()
 	if os.Geteuid() != 0 || os.Getenv("GITHUB_ACTIONS") != "true" || os.Getenv("RUNNER_ENVIRONMENT") != "github-hosted" || os.Getenv("RUNNER_OS") != "Linux" {
 		t.Fatal("explicit gate requires the approved fresh root Linux hosted runner")
@@ -89,6 +93,9 @@ func runApprovedSystemdInstallation(t *testing.T, profile, collectionProfile str
 		if !errors.As(e, &unknown) {
 			t.Fatal("test group lookup failed")
 		}
+	}
+	if readAdmin != nil {
+		readAdminFreshHost(t)
 	}
 	python, e := exec.LookPath("python3")
 	if e != nil {
@@ -127,6 +134,11 @@ func runApprovedSystemdInstallation(t *testing.T, profile, collectionProfile str
 			result["schemaVersion"] = "tracebolt.managed-systemd-acceptance.v1"
 			result["collectionProfile"] = collectionProfile
 		}
+		if readAdmin != nil {
+			result["schemaVersion"] = "tracebolt.read-admin-systemd-acceptance.v1"
+			result["collectionProfile"] = collectionProfile
+			result["scenario"] = readAdmin.scenario
+		}
 		raw, _ := json.Marshal(result)
 		f, e := os.OpenFile(resultPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0644)
 		if e != nil {
@@ -145,6 +157,9 @@ func runApprovedSystemdInstallation(t *testing.T, profile, collectionProfile str
 		return arguments
 	}
 	t.Cleanup(func() {
+		if readAdmin != nil {
+			readAdminStopOwnedHelper(t)
+		}
 		if _, e := os.Lstat(agentinstall.ManifestPath); e == nil {
 			ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 			defer cancel()
@@ -156,7 +171,7 @@ func runApprovedSystemdInstallation(t *testing.T, profile, collectionProfile str
 		}
 	})
 	m, enrolled, enrollmentPath := guidedFixture(t, profile)
-	if collectionProfile == enrollmentcrypto.CollectionProfilePackages {
+	if collectionProfile != enrollmentcrypto.CollectionProfile {
 		raw, err := os.ReadFile(enrollmentPath)
 		var configured enrollmentconfig.Config
 		if err != nil || json.Unmarshal(raw, &configured) != nil {
@@ -245,7 +260,7 @@ func runApprovedSystemdInstallation(t *testing.T, profile, collectionProfile str
 		t.Fatal("operator fixture login")
 	}
 	invitation := map[string]any{"requestId": "request_" + strings.Repeat("8", 32), "platform": "linux"}
-	if collectionProfile == enrollmentcrypto.CollectionProfilePackages {
+	if collectionProfile != enrollmentcrypto.CollectionProfile {
 		invitation["collectionAcknowledged"] = true
 	}
 	status, body = call("/api/enrollment/invitations", invitation, session.CSRFToken)
@@ -253,6 +268,7 @@ func runApprovedSystemdInstallation(t *testing.T, profile, collectionProfile str
 		Snapshot         enrollmentstate.Snapshot `json:"snapshot"`
 		InvitationSecret string                   `json:"invitationSecret"`
 		Bootstrap        api.EnrollmentBootstrap  `json:"bootstrap"`
+		BootstrapSHA256  string                   `json:"bootstrapSHA256"`
 	}
 	if status != 201 || json.Unmarshal(body, &created) != nil || len(created.InvitationSecret) != 43 {
 		t.Fatal("invitation fixture failed")
@@ -266,9 +282,26 @@ func runApprovedSystemdInstallation(t *testing.T, profile, collectionProfile str
 	stage = "install_enroll"
 	args := []string{binaries["agent-service"], "--action", "install", "--apply", "--agent-binary", binaries["lan-agent"], "--agent-sha256", systemdHash(t, binaries["lan-agent"]), "--enroll-binary", binaries["enroll-agent"], "--enroll-sha256", systemdHash(t, binaries["enroll-agent"]), "--source-archive", sourceArchive, "--source-sha256", systemdHash(t, sourceArchive), "--bootstrap", bootstrapPath, "--bootstrap-sha256", systemdHash(t, bootstrapPath)}
 	args = profileArguments(args)
-	input, _ := json.Marshal(map[string]any{"args": args, "secret": created.InvitationSecret})
+	script := enrollmentPTY
+	var readAdminCommand *readAdminNativeCommand
+	if readAdmin != nil {
+		readAdminCommand = prepareReadAdminNativeCommand(t, python, binaries, sourceArchive, profile, created.Bootstrap, created.BootstrapSHA256, readAdmin)
+		stage = "read_admin_cancel"
+		readAdminCancelBeforeInstall(t, readAdminCommand)
+		stage = "install_enroll"
+		args, script = readAdminCommand.args(false), readAdminPTY
+	}
+	inputFields := map[string]any{"args": args, "secret": created.InvitationSecret}
+	if readAdminCommand != nil {
+		inputFields = readAdminPTYInput(args, created.InvitationSecret, readAdminCommand.approval(), false)
+	}
+	input, _ := json.Marshal(inputFields)
 	defer clear(input)
-	enrollment := exec.Command(python, "-c", enrollmentPTY)
+	enrollment := exec.Command(python, "-c", script)
+	if readAdminCommand != nil {
+		enrollment = exec.Command(python, "-I", "-c", script)
+		enrollment.Env = readAdminCommand.environment()
+	}
 	enrollment.Stdin = bytes.NewReader(input)
 	stdout, e := enrollment.StdoutPipe()
 	if e != nil || enrollment.Start() != nil {
@@ -312,6 +345,9 @@ func runApprovedSystemdInstallation(t *testing.T, profile, collectionProfile str
 	if prompt.Phase != "prompt" || !prompt.EchoDisabled || len(prompt.Fingerprint) != 64 || len(prompt.Comparison) != 32 {
 		t.Fatal("native trust display or hidden prompt failed")
 	}
+	if readAdmin != nil && prompt.ScopeApprovals != 1 {
+		t.Fatal("read-admin requires exactly one combined local approval")
+	}
 	var pending enrollmentstate.Snapshot
 	deadline = time.Now().Add(10 * time.Second)
 	for time.Now().Before(deadline) {
@@ -326,16 +362,49 @@ func runApprovedSystemdInstallation(t *testing.T, profile, collectionProfile str
 	if pending.State != enrollmentstate.ClaimedPending || pending.Claim.KeyFingerprint != prompt.Fingerprint || pending.Claim.ComparisonCode != prompt.Comparison {
 		t.Fatal("local comparison does not match pending claim")
 	}
+	if readAdmin != nil {
+		readAdminBeforeDeviceApproval(t, get)
+		if readAdmin.scenario == "cancel-enrollment" {
+			stage = "read_admin_retained"
+			before := readAdminEnrollmentIdentity(t)
+			if enrollment.Process.Signal(os.Interrupt) != nil {
+				t.Fatal("read-admin cancellation signal failed")
+			}
+			var canceled ptyEvent
+			select {
+			case canceled = <-events:
+			case <-time.After(45 * time.Second):
+				t.Fatal("read-admin graceful cancellation timeout")
+			}
+			enrollmentWaited = true
+			<-enrollmentDone
+			readAdminCanceledEnrollment(t, canceled, before)
+			stage = "complete"
+			return
+		}
+	}
 	stage = "approval"
 	status, _ = call("/api/enrollment/"+pending.InvitationID+"/approve", map[string]any{"requestId": "request_" + strings.Repeat("9", 32), "expectedRevision": pending.Revision, "expectedKeyFingerprint": prompt.Fingerprint}, session.CSRFToken)
 	if status != 200 {
 		t.Fatal("native fixture approval")
 	}
 	var outcome ptyEvent
+	completionWait := 30 * time.Second
+	if readAdmin != nil {
+		completionWait = 240 * time.Second
+	}
 	select {
 	case outcome = <-events:
-	case <-time.After(30 * time.Second):
+	case <-time.After(completionWait):
 		t.Fatal("installer completion timeout")
+	}
+	if readAdmin != nil && readAdmin.scenario == "retained-journal" {
+		enrollmentWaited = true
+		<-enrollmentDone
+		stage = "read_admin_retained"
+		readAdminRetainedJournal(t, readAdminCommand, outcome)
+		stage = "complete"
+		return
 	}
 	if outcome.ExitCode != 0 {
 		stage = systemdInstallerStage(outcome.InstallerStage)
@@ -346,6 +415,15 @@ func runApprovedSystemdInstallation(t *testing.T, profile, collectionProfile str
 	enrollmentWaited = true
 	if e := <-enrollmentDone; e != nil {
 		t.Fatal("PTY helper failed")
+	}
+	if readAdmin != nil {
+		if !outcome.ReadAdminComplete || !outcome.ReadAdminPhasesComplete || outcome.ScopeApprovals != 1 {
+			t.Fatal("read-admin combined configuration not confirmed")
+		}
+		stage = "initial_reports"
+		readAdminCompleteAndRepeat(t, readAdminCommand, get, &stage)
+		stage = "complete"
+		return
 	}
 	managedSequence := uint64(0)
 	managedGeneration := ""

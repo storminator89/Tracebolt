@@ -11,7 +11,7 @@ import {fileURLToPath} from 'node:url';
 import {applicationChecksBrowserCase} from './application-checks-browser.mjs';
 import {alarmStatusBrowserCase} from './alarm-status-browser.mjs';
 import {cveContinuationBrowserCase,cveContinuationCaseName} from './cve-continuation-browser.mjs';
-import {cveDetailPagesBrowserCase,cveDetailPagesCaseName} from './cve-detail-pages-browser.mjs';
+import {cveDetailPagesBrowserCase,cveDetailPagesCaseName,cveDetailPagesFailureStage} from './cve-detail-pages-browser.mjs';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../..');
 const require=createRequire(path.join(root,'web/package.json'));
 const {chromium,expect}=require('@playwright/test');
@@ -31,7 +31,7 @@ async function start(ttl='60s'){
 async function pageAt(route='/overview',viewport={width:1440,height:1000}){context=await browser.newContext({viewport,locale:'en-GB'});const page=await context.newPage();page.on('pageerror',()=>runtimeErrorCount++);await page.goto(`${base}/#${route}`);return page;}
 async function login(page){await page.getByLabel('Operator password',{exact:true}).fill(password);await page.getByRole('button',{name:'Sign in',exact:true}).click();await expect(page.locator('.app-shell')).toBeVisible();}
 async function check(name,run,ttl='60s'){
- currentTest=name;const begin=Date.now();try{await start(ttl);await run();results.push({name,status:'PASS',durationMs:Date.now()-begin});console.log(`PASS ${name}`);}catch{results.push({name,status:'FAIL',durationMs:Date.now()-begin,error:'Assertion failed; raw state and credential-bearing diagnostics intentionally withheld.'});console.log(`FAIL ${name}`);}finally{if(context)await context.close();context=null;await stop();}
+ currentTest=name;const begin=Date.now();try{await start(ttl);await run();results.push({name,status:'PASS',durationMs:Date.now()-begin});console.log(`PASS ${name}`);}catch{results.push({name,status:'FAIL',...(name===cveDetailPagesCaseName?{stage:cveDetailPagesFailureStage()}:{}),durationMs:Date.now()-begin,error:'Assertion failed; raw state and credential-bearing diagnostics intentionally withheld.'});console.log(`FAIL ${name}`);}finally{if(context)await context.close();context=null;await stop();}
 }
 async function shot(page,name,fixtureDisclosure=name.includes('live-metrics')?'Real fixture login with explicitly intercepted invented metric samples; no native collection or deployed endpoint':'Loopback HTTP-test UI; synthetic awaiting-agent contract; no deployed endpoint or trusted TLS browser validation'){await page.screenshot({path:path.join(out,`${name}.png`),fullPage:false,animations:'disabled'});screenshots.push({file:`${name}.png`,sourceSha,publicSafe:true,fullPage:false,viewport:page.viewportSize(),locale:await page.locator('html').getAttribute('lang'),fixtureDisclosure,test:currentTest});}
 async function cleanStorage(page){const value=await page.evaluate(()=>JSON.stringify({local:{...localStorage},session:{...sessionStorage}}));expect(value.includes(password)||value.includes(fakeKey)).toBe(false);const cookies=await context.cookies();for(const cookie of cookies)expect(value.includes(cookie.value)).toBe(false);}

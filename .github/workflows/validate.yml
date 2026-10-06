@@ -289,6 +289,10 @@ jobs:
           python3 -B -m unittest discover -s deploy/inventory -p 'test_*.py' -v
           python3 -B -m unittest discover -s deploy/onboarding -p 'test_*.py' -v
           python3 -O -B -m unittest discover -s deploy/onboarding -p 'test_*.py' -v
+          python3 -B tests/security/test_read_admin_scripts.py
+          python3 -O -B tests/security/test_read_admin_scripts.py
+          python3 -B tests/security/test_read_admin_systemd_gate.py
+          python3 -O -B tests/security/test_read_admin_systemd_gate.py
           python3 -B -m unittest discover -s deploy/actions -p 'test_*.py' -v
           python3 -O -B -m unittest discover -s deploy/actions -p 'test_*.py' -v
       - name: Vet

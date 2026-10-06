@@ -1,0 +1,524 @@
+//go:build linux
+
+package main
+
+import (
+	"bytes"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"localrmm/internal/agentinstall"
+	"localrmm/internal/api"
+	"localrmm/internal/enrollmentcrypto"
+	"localrmm/internal/enrollmentstore"
+	"localrmm/internal/journalgeneration"
+	"localrmm/internal/lanconfig"
+	"localrmm/internal/model"
+	"os"
+	"os/exec"
+	"os/user"
+	"path/filepath"
+	"reflect"
+	"regexp"
+	"strconv"
+	"strings"
+	"testing"
+	"time"
+)
+
+type readAdminNativeOptions struct{ profile, scenario, source string }
+
+// Pure gate: ordinary tests skip before filesystem, identity, credential,
+// listener, collector or service work. A selected but invalid gate fails.
+func readAdminNativeSelection(base, approval, profile, scenario, source, actions, runner, runnerOS string, euid int) (*readAdminNativeOptions, error) {
+	if approval == "" {
+		return nil, nil
+	}
+	if approval != "1" || base != "1" || actions != "true" || runner != "github-hosted" || runnerOS != "Linux" || euid != 0 || !regexp.MustCompile(`^[0-9a-f]{40}$`).MatchString(source) {
+		return nil, errors.New("read_admin_invalid_explicit_host_gate")
+	}
+	if profile != lanconfig.TLS && profile != lanconfig.HTTPTest {
+		return nil, errors.New("read_admin_explicit_transport_required")
+	}
+	if scenario != "complete" && scenario != "cancel-enrollment" && scenario != "retained-journal" {
+		return nil, errors.New("read_admin_explicit_scenario_required")
+	}
+	return &readAdminNativeOptions{profile, scenario, source}, nil
+}
+
+func TestApprovedReadAdminDisposableSystemdInstallation(t *testing.T) {
+	options, err := readAdminNativeSelection(os.Getenv("TRACEBOLT_APPROVED_SYSTEMD_TEST"), os.Getenv("TRACEBOLT_APPROVED_READ_ADMIN_SYSTEMD_TEST"), os.Getenv("TRACEBOLT_READ_ADMIN_TRANSPORT"), os.Getenv("TRACEBOLT_READ_ADMIN_SCENARIO"), os.Getenv("GITHUB_SHA"), os.Getenv("GITHUB_ACTIONS"), os.Getenv("RUNNER_ENVIRONMENT"), os.Getenv("RUNNER_OS"), os.Geteuid())
+	if err != nil {
+		t.Fatal("invalid explicit read-admin acceptance gate; no host work started")
+	}
+	if options == nil {
+		t.Skip("read-admin privileged acceptance not enabled; no native acceptance claimed")
+	}
+	runApprovedSystemdInstallationMode(t, options.profile, enrollmentcrypto.CollectionProfileComplete, options)
+}
+
+func TestReadAdminNativeSelection(t *testing.T) {
+	valid := []string{"1", "1", "tls", "complete", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "true", "github-hosted", "Linux"}
+	selectGate := func(v []string, uid int) (*readAdminNativeOptions, error) {
+		return readAdminNativeSelection(v[0], v[1], v[2], v[3], v[4], v[5], v[6], v[7], uid)
+	}
+	off := append([]string{}, valid...)
+	off[1] = ""
+	for _, uid := range []int{0, 1000} {
+		if got, err := selectGate(off, uid); got != nil || err != nil {
+			t.Fatal("default gate performed work")
+		}
+	}
+	for _, profile := range []string{"tls", "http-test"} {
+		for _, scenario := range []string{"complete", "cancel-enrollment", "retained-journal"} {
+			v := append([]string{}, valid...)
+			v[2], v[3] = profile, scenario
+			if got, err := selectGate(v, 0); err != nil || got.profile != profile || got.scenario != scenario {
+				t.Fatal("explicit selection rejected")
+			}
+		}
+	}
+	for index := range valid {
+		v := append([]string{}, valid...)
+		v[index] = "invalid"
+		if _, err := selectGate(v, 0); err == nil {
+			t.Fatal("invalid opt-in accepted")
+		}
+	}
+	if _, err := selectGate(valid, 1000); err == nil {
+		t.Fatal("nonroot enabled gate silently accepted")
+	}
+}
+
+func readAdminFreshHost(t *testing.T) {
+	t.Helper()
+	for _, path := range []string{agentinstall.InstallDirectory, agentinstall.StateDirectory, "/etc/tracebolt-agent", "/var/lib/tracebolt-agent-installer", agentinstall.UnitPath,
+		"/etc/tracebolt", "/run/tracebolt-journal-reader", "/etc/systemd/system/tracebolt-journal-reader.service", "/etc/systemd/system/tracebolt-journal-reader.socket",
+		"/etc/systemd/system/tracebolt-journal-reader.service.d", "/etc/systemd/system/tracebolt-journal-reader.socket.d", "/etc/systemd/system/sockets.target.wants/tracebolt-journal-reader.socket"} {
+		if _, err := os.Lstat(path); !os.IsNotExist(err) {
+			t.Fatal("read-admin target is not fresh; preserve existing state")
+		}
+	}
+	for _, name := range []string{agentinstall.Account, "tracebolt-journal-reader"} {
+		if _, err := user.Lookup(name); err == nil {
+			t.Fatal("read-admin account already exists")
+		} else {
+			var unknown user.UnknownUserError
+			if !errors.As(err, &unknown) {
+				t.Fatal("read-admin account lookup uncertain")
+			}
+		}
+		if _, err := user.LookupGroup(name); err == nil {
+			t.Fatal("read-admin group already exists")
+		} else {
+			var unknown user.UnknownGroupError
+			if !errors.As(err, &unknown) {
+				t.Fatal("read-admin group lookup uncertain")
+			}
+		}
+	}
+}
+
+const readAdminFixtureVersion = "v0.0.0-read-admin-acceptance"
+
+type readAdminNativeCommand struct {
+	python  string
+	configs map[bool]string
+	options *readAdminNativeOptions
+}
+
+func (c *readAdminNativeCommand) args(resume bool) []string {
+	return []string{c.python, "-I", "-c", readAdminLauncher, c.configs[resume]}
+}
+func (c *readAdminNativeCommand) approval() string {
+	if c.options.profile == lanconfig.HTTPTest {
+		return "INSTALL READ ADMIN OVER HTTP"
+	}
+	return "INSTALL READ ADMIN"
+}
+func (c *readAdminNativeCommand) environment() []string {
+	return append(systemdCleanEnvironment(), "GITHUB_ACTIONS=true", "RUNNER_ENVIRONMENT=github-hosted", "RUNNER_OS=Linux", "GITHUB_SHA="+c.options.source,
+		"TRACEBOLT_APPROVED_SYSTEMD_TEST=1", "TRACEBOLT_APPROVED_READ_ADMIN_SYSTEMD_TEST=1", "TRACEBOLT_READ_ADMIN_TRANSPORT="+c.options.profile, "TRACEBOLT_READ_ADMIN_SCENARIO="+c.options.scenario)
+}
+
+func prepareReadAdminNativeCommand(t *testing.T, python string, binaries map[string]string, archive, profile string, bootstrap api.EnrollmentBootstrap, bootstrapHash string, options *readAdminNativeOptions) *readAdminNativeCommand {
+	t.Helper()
+	if !regexp.MustCompile(`^[0-9a-f]{64}$`).MatchString(bootstrapHash) || bootstrap.CollectionProfile != enrollmentcrypto.CollectionProfileComplete || bootstrap.Profile != profile {
+		t.Fatal("read-admin public bootstrap scope is invalid")
+	}
+	stage := t.TempDir()
+	assets := map[string]any{}
+	copyArtifact := func(src, name string, mode os.FileMode) {
+		expected := systemdHash(t, src)
+		in, err := os.Open(src)
+		if err != nil {
+			t.Fatal("read-admin selected artifact unavailable")
+		}
+		defer in.Close()
+		output := filepath.Join(stage, name)
+		out, err := os.OpenFile(output, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
+		if err != nil {
+			t.Fatal("read-admin artifact staging failed")
+		}
+		n, err := io.Copy(out, io.LimitReader(in, (256<<20)+1))
+		if err != nil || n <= 0 || n > 256<<20 || out.Sync() != nil || out.Close() != nil || systemdHash(t, output) != expected || os.Chmod(output, mode) != nil {
+			t.Fatal("read-admin selected bytes changed while staging")
+		}
+		assets[name] = map[string]any{"size": n, "sha256": expected}
+	}
+	for _, role := range []string{"agent-service", "enroll-agent", "lan-agent"} {
+		copyArtifact(binaries[role], "tracebolt-"+readAdminFixtureVersion+"-linux-amd64-"+role, 0500)
+	}
+	copyArtifact(archive, "tracebolt-"+readAdminFixtureVersion+"-source.tar", 0600)
+	manifest := map[string]any{"version": readAdminFixtureVersion, "sourceCommit": options.source, "assets": assets}
+	arguments := []string{"--action", "install", "--apply", "--read-admin", "--read-admin-agent-origin", bootstrap.AgentOrigin, "--manager-origin", bootstrap.EnrollmentOrigin, "--invitation-id", bootstrap.InvitationID, "--bootstrap-sha256", bootstrapHash}
+	if profile == lanconfig.HTTPTest {
+		arguments = append(arguments, "--insecure-http-test")
+	} else {
+		arguments = append(arguments, "--server-ca-base64", base64.StdEncoding.EncodeToString([]byte(bootstrap.ServerCAPEM)))
+	}
+	command := &readAdminNativeCommand{python: python, configs: map[bool]string{}, options: options}
+	for _, resume := range []bool{false, true} {
+		selected := append([]string{}, arguments...)
+		if resume {
+			selected = append(selected, "--resume-read-admin")
+		}
+		raw, err := json.Marshal(map[string]any{"directory": stage, "manifest": manifest, "arguments": selected, "scenario": options.scenario})
+		if err != nil {
+			t.Fatal("read-admin public fixture encoding")
+		}
+		name := filepath.Join(stage, fmt.Sprintf("configuration-%t.json", resume))
+		f, err := os.OpenFile(name, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
+		if err != nil {
+			t.Fatal("read-admin fixture config creation")
+		}
+		if _, err = f.Write(raw); err != nil || f.Sync() != nil || f.Close() != nil {
+			t.Fatal("read-admin fixture config write")
+		}
+		command.configs[resume] = name
+	}
+	return command
+}
+
+func readAdminPTYInput(args []string, secret, approval string, cancel bool) map[string]any {
+	return map[string]any{"args": args, "secret": secret, "approval": approval, "cancelApproval": cancel}
+}
+
+func TestReadAdminPTYInput(t *testing.T) {
+	for _, cancel := range []bool{false, true} {
+		value := readAdminPTYInput([]string{"/usr/bin/python3", "-I", "-c", "inert fixture"}, "", "INSTALL READ ADMIN", cancel)
+		raw, err := json.Marshal(value)
+		if err != nil {
+			t.Fatal("public fixture encoding failed")
+		}
+		var decoded map[string]any
+		if json.Unmarshal(raw, &decoded) != nil || len(decoded) != 4 || decoded["cancelApproval"] != cancel || decoded["approval"] != "INSTALL READ ADMIN" || decoded["secret"] != "" {
+			t.Fatal("PTY input omitted required cancellation field")
+		}
+		if _, ok := decoded["args"]; !ok {
+			t.Fatal("PTY input omitted command")
+		}
+	}
+}
+
+func readAdminProbe(t *testing.T, c *readAdminNativeCommand, resume, cancel bool) ptyEvent {
+	t.Helper()
+	raw, _ := json.Marshal(readAdminPTYInput(c.args(resume), "", c.approval(), cancel))
+	defer clear(raw)
+	cmd := exec.Command(c.python, "-I", "-c", readAdminPTY)
+	cmd.Env = c.environment()
+	cmd.Stdin = bytes.NewReader(raw)
+	output, err := cmd.Output()
+	if err != nil || len(output) > 8192 {
+		t.Fatal("read-admin bounded PTY probe failed")
+	}
+	defer clear(output)
+	var event ptyEvent
+	if json.Unmarshal(bytes.TrimSpace(output), &event) != nil || event.Phase != "exit" || event.SecretEcho {
+		t.Fatal("read-admin probe produced unexpected prompt or data")
+	}
+	return event
+}
+
+func readAdminCancelBeforeInstall(t *testing.T, c *readAdminNativeCommand) {
+	t.Helper()
+	event := readAdminProbe(t, c, false, true)
+	if event.ExitCode != 0 || !event.ReadAdminCanceled || event.ReadAdminComplete || event.ScopeApprovals != 1 {
+		t.Fatal("read-admin cancellation did not precede host changes")
+	}
+	readAdminFreshHost(t)
+}
+
+func readAdminBeforeDeviceApproval(t *testing.T, get func(string, any)) {
+	t.Helper()
+	var devices struct{ Items []model.Device }
+	get("/api/devices", &devices)
+	if len(devices.Items) != 0 {
+		t.Fatal("read-admin sent observations before explicit device approval")
+	}
+	for _, path := range []string{agentinstall.UnitPath, "/etc/tracebolt", "/var/lib/tracebolt-agent-installer/read-admin-intent.json"} {
+		if _, err := os.Lstat(path); !os.IsNotExist(err) {
+			t.Fatal("read-admin privileged follow-on preceded device approval")
+		}
+	}
+}
+
+func readAdminEnrollmentIdentity(t *testing.T) string {
+	t.Helper()
+	raw, err := os.ReadFile(filepath.Join(agentinstall.EnrollmentDirectory, "ledger.json"))
+	if err != nil || len(raw) > 65536 {
+		t.Fatal("retained enrollment fixture missing")
+	}
+	defer clear(raw)
+	var value map[string]json.RawMessage
+	if json.Unmarshal(raw, &value) != nil {
+		t.Fatal("retained enrollment fixture invalid")
+	}
+	defer func() {
+		for _, raw := range value {
+			clear(raw)
+		}
+	}()
+	selected := map[string]json.RawMessage{}
+	for _, key := range []string{"bootstrap", "seed", "csr", "claimId"} {
+		if len(value[key]) == 0 {
+			t.Fatal("retained enrollment identity missing")
+		}
+		selected[key] = value[key]
+	}
+	stable, err := json.Marshal(selected)
+	if err != nil {
+		t.Fatal("retained identity comparison failed")
+	}
+	defer clear(stable)
+	return fmt.Sprintf("%x", sha256.Sum256(stable))
+}
+
+func readAdminCanceledEnrollment(t *testing.T, event ptyEvent, before string) {
+	t.Helper()
+	if event.Phase != "exit" || event.ExitCode == 0 || event.SecretEcho || event.ReadAdminComplete || event.ScopeApprovals != 1 || !event.InstallerRolledBack || !event.InstallerIdentityRetained || readAdminEnrollmentIdentity(t) != before {
+		t.Fatal("graceful read-admin enrollment cancellation did not retain identity")
+	}
+	if account, err := user.Lookup(agentinstall.Account); err != nil || account.Uid == "0" {
+		t.Fatal("canceled installation lost its retained nonroot account")
+	}
+	for _, path := range []string{agentinstall.UnitPath, "/etc/tracebolt", "/var/lib/tracebolt-agent-installer/read-admin-intent.json"} {
+		if _, err := os.Lstat(path); !os.IsNotExist(err) {
+			t.Fatal("canceled enrollment published follow-on authority")
+		}
+	}
+}
+
+func readAdminIdentitySnapshot(t *testing.T) map[string]string {
+	t.Helper()
+	snapshot := map[string]string{}
+	for _, name := range []string{"agent-key.pem", "agent-cert.pem", "agent.json", "ready.json"} {
+		path := filepath.Join(agentinstall.EnrollmentDirectory, name)
+		snapshot[path] = systemdHash(t, path)
+	}
+	for _, name := range []string{"read-admin-intent.json", "read-admin-inventory.started.json", "read-admin-inventory.complete.json", "read-admin-journal.started.json"} {
+		path := "/var/lib/tracebolt-agent-installer/" + name
+		snapshot[path] = systemdHash(t, path)
+	}
+	return snapshot
+}
+
+func readAdminRetainedJournal(t *testing.T, c *readAdminNativeCommand, event ptyEvent) {
+	t.Helper()
+	if event.Phase != "exit" || event.ExitCode == 0 || event.SecretEcho || event.ReadAdminComplete || event.ScopeApprovals != 1 || event.ReadAdminFailure != "acceptance-injected-before-journal" {
+		t.Fatal("read-admin test interruption not confirmed")
+	}
+	before := readAdminIdentitySnapshot(t)
+	for _, path := range []string{"/etc/tracebolt", "/var/lib/tracebolt-agent-installer/read-admin-journal.complete.json"} {
+		if _, err := os.Lstat(path); !os.IsNotExist(err) {
+			t.Fatal("interrupted journal step created or completed authority")
+		}
+	}
+	replay := readAdminProbe(t, c, true, false)
+	if replay.ExitCode == 0 || replay.ReadAdminComplete || replay.ScopeApprovals != 1 || replay.ReadAdminFailure != "uncertain-journal-phase-retained" || !reflect.DeepEqual(before, readAdminIdentitySnapshot(t)) {
+		t.Fatal("uncertain read-admin phase replayed or changed retained identity")
+	}
+	account, err := user.Lookup(agentinstall.Account)
+	if err != nil {
+		t.Fatal("retained agent missing")
+	}
+	uid, _ := strconv.Atoi(account.Uid)
+	gid, _ := strconv.Atoi(account.Gid)
+	systemdCheckProcessIdentity(t, uid, gid)
+}
+
+func readAdminCompleteAndRepeat(t *testing.T, c *readAdminNativeCommand, get func(string, any), stage *string) {
+	t.Helper()
+	before := readAdminIdentitySnapshot(t)
+	completePath := "/var/lib/tracebolt-agent-installer/read-admin-journal.complete.json"
+	completeHash := systemdHash(t, completePath)
+	protected := readAdminAuthoritySnapshot(t)
+	sequence := systemdSequence(t, agentinstall.EnrollmentDirectory)
+	first := systemdWaitObservation(t, get, time.Time{})
+	_ = systemdWaitObservation(t, get, first)
+	*stage = "read_admin_readiness"
+	readAdminWaitViews(t, get)
+	account, err := user.Lookup(agentinstall.Account)
+	if err != nil {
+		t.Fatal("read-admin dedicated agent missing")
+	}
+	uid, _ := strconv.Atoi(account.Uid)
+	gid, _ := strconv.Atoi(account.Gid)
+	systemdCheckProcessIdentity(t, uid, gid)
+	*stage = "read_admin_repeat"
+	repeat := readAdminProbe(t, c, true, false)
+	if repeat.ExitCode != 0 || !repeat.ReadAdminComplete || !repeat.ReadAdminPhasesComplete || repeat.ScopeApprovals != 1 || !reflect.DeepEqual(before, readAdminIdentitySnapshot(t)) || systemdHash(t, completePath) != completeHash || !reflect.DeepEqual(protected, readAdminAuthoritySnapshot(t)) || systemdSequence(t, agentinstall.EnrollmentDirectory) < sequence {
+		t.Fatal("completed read-admin repeat changed identity or authority")
+	}
+	fresh := readAdminProbe(t, c, false, false)
+	if fresh.ExitCode == 0 || fresh.ScopeApprovals != 0 || fresh.ReadAdminFailure != "existing-installation-use-upgrade-or-recovery" || !reflect.DeepEqual(before, readAdminIdentitySnapshot(t)) {
+		t.Fatal("fresh read-admin adopted an existing installation")
+	}
+	systemdCheckProcessIdentity(t, uid, gid)
+}
+
+type readAdminJournalView struct {
+	SchemaVersion, DeviceID string
+	Configured              bool
+	Generation              *enrollmentstore.JournalGenerationView
+}
+
+func readAdminJournalReady(view readAdminJournalView, device string, expected journalgeneration.Tuple) bool {
+	generation := view.Generation
+	return view.SchemaVersion == "tracebolt.journal-view.v2" && view.DeviceID == device && view.Configured &&
+		journalgeneration.Validate(expected) == nil && generation != nil && generation.SchemaVersion == "tracebolt.journal-generation-view.v2" &&
+		generation.Fresh && generation.PolicyGeneration == expected && generation.Sequence > 0 &&
+		!generation.ObservedAt.IsZero() && !generation.ReceivedAt.IsZero() && generation.PolicyEnabled != nil && *generation.PolicyEnabled &&
+		generation.ServiceAuthorization == journalgeneration.AllSystemServices && generation.AllowedUnits != nil && len(*generation.AllowedUnits) == 0
+}
+
+func TestReadAdminJournalReady(t *testing.T) {
+	enabled := true
+	units := []string{}
+	expected := journalgeneration.Tuple{Revision: 1, Generation: strings.Repeat("1", 64), PolicyDigest: "sha256:" + strings.Repeat("2", 64)}
+	generation := enrollmentstore.JournalGenerationView{SchemaVersion: "tracebolt.journal-generation-view.v2", PolicyGeneration: expected,
+		Sequence: 1, ObservedAt: time.Unix(1000, 0).UTC(), ReceivedAt: time.Unix(1001, 0).UTC(), Fresh: true, PolicyEnabled: &enabled,
+		ServiceAuthorization: journalgeneration.AllSystemServices, AllowedUnits: &units}
+	view := readAdminJournalView{SchemaVersion: "tracebolt.journal-view.v2", DeviceID: "agent_" + strings.Repeat("a", 32), Configured: true, Generation: &generation}
+	if !readAdminJournalReady(view, view.DeviceID, expected) {
+		t.Fatal("generation-bearing v2 journal view rejected")
+	}
+	legacy := view
+	legacy.SchemaVersion = "tracebolt.journal-view.v1"
+	if readAdminJournalReady(legacy, view.DeviceID, expected) {
+		t.Fatal("legacy journal view accepted as broad generation readiness")
+	}
+	missing := view
+	missing.Generation = nil
+	if readAdminJournalReady(missing, view.DeviceID, expected) {
+		t.Fatal("missing journal generation accepted")
+	}
+	wrong := expected
+	wrong.Generation = strings.Repeat("3", 64)
+	if readAdminJournalReady(view, view.DeviceID, wrong) || readAdminJournalReady(view, "agent_other", expected) {
+		t.Fatal("unbound generation accepted")
+	}
+	generation.Fresh = false
+	if readAdminJournalReady(view, view.DeviceID, expected) {
+		t.Fatal("stale journal report accepted")
+	}
+	generation.Fresh = true
+	enabled = false
+	if readAdminJournalReady(view, view.DeviceID, expected) {
+		t.Fatal("disabled journal policy accepted")
+	}
+}
+
+func readAdminWaitViews(t *testing.T, get func(string, any)) {
+	t.Helper()
+	var devices struct{ Items []model.Device }
+	get("/api/devices", &devices)
+	if len(devices.Items) != 1 {
+		t.Fatal("read-admin approved device unavailable")
+	}
+	device := devices.Items[0].ID
+	expectedGeneration := readAdminExpectedGeneration(t)
+	until := time.Now().Add(120 * time.Second)
+	for time.Now().Before(until) {
+		var packages completeMVPPackageView
+		var system enrollmentstore.SystemView
+		var overview completeMVPOverviewView
+		var endpoint enrollmentstore.EndpointIdentityView
+		var journal readAdminJournalView
+		get("/api/devices/"+device+"/inventory/packages", &packages)
+		get("/api/devices/"+device+"/inventory/system", &system)
+		get("/api/devices/"+device+"/inventory/overview", &overview)
+		get("/api/devices/"+device+"/inventory/endpoint-identity", &endpoint)
+		get("/api/devices/"+device+"/journal", &journal)
+		_, positive := completeMVPUbuntu2404Evidence(packages, system)
+		if positive == nil && overview.DeviceID == device && overview.Processes.Complete != nil && overview.Volumes.Complete != nil && overview.Processes.Complete.State == "complete" && overview.Volumes.Complete.State == "complete" && endpoint.DeviceID == device && endpoint.Status == "fresh" && endpoint.Latest != nil && readAdminJournalReady(journal, device, expectedGeneration) {
+			return
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+	t.Fatal("read-admin received v3 inventory or broad-journal readiness deadline; no log content queried")
+}
+
+func readAdminAuthoritySnapshot(t *testing.T) map[string]string {
+	t.Helper()
+	result := map[string]string{}
+	for _, path := range []string{
+		"/etc/tracebolt/journal-content-policy.json", "/etc/tracebolt/journal-client-policy.json",
+		"/etc/tracebolt/journal-helper.json", "/etc/tracebolt/journal-client-helper.json", "/etc/tracebolt/journal-activation.json",
+		agentinstall.EnrollmentDirectory + "/telemetry/complete-overview-consent.json",
+		agentinstall.EnrollmentDirectory + "/telemetry/complete-cached-updates-consent.json",
+		agentinstall.EnrollmentDirectory + "/telemetry/endpoint-identity-consent.json",
+	} {
+		result[path] = systemdHash(t, path)
+	}
+	return result
+}
+
+func readAdminExpectedGeneration(t *testing.T) journalgeneration.Tuple {
+	t.Helper()
+	file, err := os.Open("/etc/tracebolt/journal-activation.json")
+	if err != nil {
+		t.Fatal("read-admin committed journal authority unavailable")
+	}
+	defer file.Close()
+	raw, err := io.ReadAll(io.LimitReader(file, 4097))
+	if err != nil || len(raw) > 4096 {
+		t.Fatal("read-admin journal authority bounds")
+	}
+	var activation struct {
+		SchemaVersion, Phase string
+		PolicyGeneration     journalgeneration.Tuple
+	}
+	if json.Unmarshal(raw, &activation) != nil || activation.SchemaVersion != "tracebolt.journal-activation.v1" || activation.Phase != "committed" || journalgeneration.Validate(activation.PolicyGeneration) != nil || activation.PolicyGeneration.Revision != 1 {
+		t.Fatal("read-admin journal authority not fresh committed v3")
+	}
+	return activation.PolicyGeneration
+}
+
+func readAdminStopOwnedHelper(t *testing.T) {
+	t.Helper()
+	// Never invent cleanup when creation did not begin. The test began on a
+	// verified fresh disposable VM; keep every declaration/floor for inspection.
+	if _, err := os.Lstat("/etc/tracebolt/journal-setup-attempt.json"); os.IsNotExist(err) {
+		return
+	} else if err != nil {
+		t.Error("read-admin helper cleanup ownership unavailable")
+		return
+	}
+	for _, name := range []string{"tracebolt-journal-reader.socket", "tracebolt-journal-reader.service"} {
+		if _, err := os.Lstat("/etc/systemd/system/" + name); os.IsNotExist(err) {
+			continue
+		} else if err != nil {
+			t.Error("read-admin helper cleanup path unavailable")
+			continue
+		}
+		cmd := exec.Command("/usr/bin/systemctl", "stop", name)
+		cmd.Env = systemdCleanEnvironment()
+		if cmd.Run() != nil {
+			t.Error("read-admin owned helper stop incomplete; discard VM")
+		}
+	}
+}
