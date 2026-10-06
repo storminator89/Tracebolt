@@ -14,6 +14,7 @@ const (
 	PlanUpdates    Capability = "plan_updates"
 	ExecuteUpdates Capability = "execute_updates"
 	RestartService Capability = "restart_service"
+	ManageAlarms   Capability = "manage_alarms"
 	MaxOperators              = 32
 )
 
@@ -46,6 +47,8 @@ func capabilityBit(c Capability) uint8 {
 		return 4
 	case RestartService:
 		return 8
+	case ManageAlarms:
+		return 16
 	default:
 		return 0
 	}
@@ -117,8 +120,8 @@ func (s Session) Named() bool     { return s.actor.id != "" }
 // Capabilities returns a defensive display snapshot, not a mutation permit.
 // Call BeginCapability immediately before short privileged dispatch work.
 func (s Session) Capabilities() []Capability {
-	out := make([]Capability, 0, 4)
-	for _, c := range []Capability{Read, PlanUpdates, ExecuteUpdates, RestartService} {
+	out := make([]Capability, 0, 5)
+	for _, c := range []Capability{Read, PlanUpdates, ExecuteUpdates, RestartService, ManageAlarms} {
 		if s.actor.grants&capabilityBit(c) != 0 {
 			out = append(out, c)
 		}

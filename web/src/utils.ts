@@ -1,3 +1,4 @@
+import type { FleetIdentityMap } from './fleet-identity-types';
 import { t, translatedLabels, dateLocale, getLocale } from './i18n';
 import type { Device, DeviceStatus, Platform } from './types';
 export const statusLabels = translatedLabels({healthy:'Unauffällig',attention:'Prüfen',critical:'Kritisch',stale:'Veraltet',unknown:'Unbekannt'});
@@ -35,9 +36,12 @@ export interface Filters {
     sort: string;
 }
 export const defaultFilters: Filters = { query: '', platform: 'all', status: 'all', source: 'all', sort: 'priority' };
-export function filterDevices(devices: Device[], filters: Filters): Device[] {
+export function filterDevices(devices: Device[], filters: Filters, identities?: FleetIdentityMap): Device[] {
+    const identity = (d: Device) => d.source === 'lan' && !d.synthetic ? identities?.get(d.id) : undefined;
+    const name = (d: Device) => identity(d)?.hostname ?? d.name;
+    const extra = (d: Device) => `${identity(d)?.hostname ?? ''} ${identity(d)?.addresses.map(a => a.address).join(' ') ?? ''}`;
     const priority: Record<DeviceStatus, number> = { critical: 0, attention: 1, stale: 2, unknown: 3, healthy: 4 };
-    return devices.filter(d => (filters.platform === 'all' || d.platform === filters.platform) && (filters.status === 'all' || (filters.status === 'needs-attention' ? ['critical', 'attention'].includes(d.status) : d.status === filters.status)) && (filters.source === 'all' || (filters.source === 'local' ? ['sandbox','local'].includes(d.source) : d.source === filters.source)) && `${d.name} ${d.os} ${d.site} ${d.group} ${d.tags.join(' ')} ${d.ip || ''}`.toLocaleLowerCase(getLocale()).includes(filters.query.trim().toLocaleLowerCase(getLocale()))).sort((a, b) => filters.sort === 'name' ? a.name.localeCompare(b.name,getLocale()) : filters.sort === 'seen' ? new Date(b.lastSeen).getTime() - new Date(a.lastSeen).getTime() : priority[a.status] - priority[b.status] || a.name.localeCompare(b.name,getLocale()));
+    return devices.filter(d => (filters.platform === 'all' || d.platform === filters.platform) && (filters.status === 'all' || (filters.status === 'needs-attention' ? ['critical', 'attention'].includes(d.status) : d.status === filters.status)) && (filters.source === 'all' || (filters.source === 'local' ? ['sandbox','local'].includes(d.source) : d.source === filters.source)) && `${extra(d)} ${d.id} ${d.name} ${d.os} ${d.site} ${d.group} ${d.tags.join(' ')} ${d.source === 'lan' && !d.synthetic ? '' : d.ip || ''}`.toLocaleLowerCase(getLocale()).includes(filters.query.trim().toLocaleLowerCase(getLocale()))).sort((a, b) => filters.sort === 'name' ? name(a).localeCompare(name(b),getLocale()) : filters.sort === 'seen' ? new Date(b.lastSeen).getTime() - new Date(a.lastSeen).getTime() : priority[a.status] - priority[b.status] || name(a).localeCompare(name(b),getLocale()));
 }
 export function readSaved<T>(key: string, fallback: T): T {
     try {

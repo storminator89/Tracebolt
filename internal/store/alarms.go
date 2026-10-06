@@ -15,12 +15,22 @@ import (
 const alarmSchema = `CREATE TABLE IF NOT EXISTS alarm_settings(id INTEGER PRIMARY KEY CHECK(id=1), binding TEXT NOT NULL, enabled INTEGER NOT NULL CHECK(enabled IN (0,1)), last_send INTEGER NOT NULL DEFAULT 0, dropped INTEGER NOT NULL DEFAULT 0);
 INSERT OR IGNORE INTO alarm_settings(id,binding,enabled) VALUES(1,'',0);
 CREATE TABLE IF NOT EXISTS alarm_outbox(id TEXT PRIMARY KEY, binding TEXT NOT NULL, device TEXT NOT NULL, incident TEXT NOT NULL, rule TEXT NOT NULL, transition TEXT NOT NULL CHECK(transition IN ('opened','recovered')), body BLOB NOT NULL CHECK(length(body)>0 AND length(body)<=2048 AND json_valid(body)), state TEXT NOT NULL CHECK(state IN ('queued','in_flight','provider_accepted','failed','uncertain','suppressed')), attempts INTEGER NOT NULL DEFAULT 0 CHECK(attempts>=0 AND attempts<=5), created INTEGER NOT NULL, due INTEGER NOT NULL, last_attempt INTEGER NOT NULL DEFAULT 0, finished INTEGER NOT NULL DEFAULT 0, code TEXT NOT NULL DEFAULT '', UNIQUE(binding,device,incident,transition));
-CREATE INDEX IF NOT EXISTS alarm_due ON alarm_outbox(state,due);`
+CREATE INDEX IF NOT EXISTS alarm_due ON alarm_outbox(state,due);
+CREATE TABLE IF NOT EXISTS alarm_config_audit(id INTEGER PRIMARY KEY AUTOINCREMENT,revision TEXT NOT NULL UNIQUE,actor TEXT NOT NULL,action TEXT NOT NULL,at INTEGER NOT NULL);`
 
-// ConfigureAlarms is called once before starting health/worker goroutines. It
-// never scans history. No configuration means disabled, including after restart.
+// ConfigureAlarms runs at startup or while the controller has stopped dispatch.
+// It never scans history. No configuration means disabled, including after restart.
 // Destination changes suppress old pending records rather than redirecting them.
 func (s *Store) ConfigureAlarms(ctx context.Context, b *alarmdelivery.Binding, now time.Time) error {
+	return s.configureAlarms(ctx, b, nil, now)
+}
+func (s *Store) ConfigureAlarmsAudited(ctx context.Context, b *alarmdelivery.Binding, audit alarmdelivery.SettingsAudit, now time.Time) error {
+	if !validAlarmAudit(audit) {
+		return alarmdelivery.ErrInvalid
+	}
+	return s.configureAlarms(ctx, b, &audit, now)
+}
+func (s *Store) configureAlarms(ctx context.Context, b *alarmdelivery.Binding, audit *alarmdelivery.SettingsAudit, now time.Time) error {
 	if now.IsZero() || b != nil && !b.Valid() {
 		return alarmdelivery.ErrInvalid
 	}
@@ -47,6 +57,11 @@ func (s *Store) ConfigureAlarms(ctx context.Context, b *alarmdelivery.Binding, n
 	}
 	if _, e = tx.ExecContext(ctx, `UPDATE alarm_settings SET binding=?,enabled=? WHERE id=1`, key, enabled); e != nil {
 		return e
+	}
+	if audit != nil {
+		if e = insertAlarmAudit(ctx, tx, *audit); e != nil {
+			return e
+		}
 	}
 	return tx.Commit()
 }
@@ -199,71 +214,76 @@ func (s *Store) ClaimAlarm(ctx context.Context, b alarmdelivery.Binding, now tim
 		return nil, closeErr
 	}
 	for _, r := range candidates {
-		var raw []byte
-		if e = tx.QueryRowContext(ctx, `SELECT body FROM health_devices WHERE id=?`, r.device).Scan(&raw); e != nil {
-			return nil, e
-		}
-		hs, e := decodeHealth(raw)
-		if e != nil {
-			return nil, e
-		}
-		var incident *health.Incident
-		for i := range hs.Incidents {
-			if hs.Incidents[i].ID == r.incident {
-				incident = &hs.Incidents[i]
-				break
+		if r.rule != alarmdelivery.TestRule {
+			var raw []byte
+			if e = tx.QueryRowContext(ctx, `SELECT body FROM health_devices WHERE id=?`, r.device).Scan(&raw); e != nil {
+				return nil, e
 			}
-		}
-		suppress := ""
-		if r.transition == "opened" {
-			if incident == nil || incident.ResolvedAt != nil {
-				suppress = "no_longer_open"
-			} else if hs.MaintenanceUntil != nil && now.Before(*hs.MaintenanceUntil) {
-				suppress = "maintenance"
+			hs, e := decodeHealth(raw)
+			if e != nil {
+				return nil, e
 			}
-			if suppress == "" {
-				// Stale/unauthorized inputs become unknown, never a healthy recovery.
-				current := false
-				for _, c := range hs.View(r.device, now).Checks {
-					if c.Key == incident.Key && c.State == "open" {
-						current = true
+			var incident *health.Incident
+			for i := range hs.Incidents {
+				if hs.Incidents[i].ID == r.incident {
+					incident = &hs.Incidents[i]
+					break
+				}
+			}
+			suppress := ""
+			if r.transition == "opened" {
+				if incident == nil || incident.ResolvedAt != nil {
+					suppress = "no_longer_open"
+				} else if hs.MaintenanceUntil != nil && now.Before(*hs.MaintenanceUntil) {
+					suppress = "maintenance"
+				}
+				if suppress == "" {
+					// Stale/unauthorized inputs become unknown, never a healthy recovery.
+					current := false
+					for _, c := range hs.View(r.device, now).Checks {
+						if c.Key == incident.Key && c.State == "open" {
+							current = true
+						}
 					}
-				}
-				if !current {
-					continue
-				}
-				var previous sql.NullInt64
-				if e = tx.QueryRowContext(ctx, `SELECT max(last_attempt) FROM alarm_outbox WHERE binding=? AND device=? AND rule=? AND transition='opened' AND id<>? AND last_attempt>0`, key, r.device, r.rule, r.id).Scan(&previous); e != nil {
-					return nil, e
-				}
-				if previous.Valid && ms < previous.Int64+alarmdelivery.OpeningCooldown.Milliseconds() {
-					if _, e = tx.ExecContext(ctx, `UPDATE alarm_outbox SET due=? WHERE id=?`, previous.Int64+alarmdelivery.OpeningCooldown.Milliseconds(), r.id); e != nil {
+					if !current {
+						continue
+					}
+					var previous sql.NullInt64
+					if e = tx.QueryRowContext(ctx, `SELECT max(last_attempt) FROM alarm_outbox WHERE binding=? AND device=? AND rule=? AND transition='opened' AND id<>? AND last_attempt>0`, key, r.device, r.rule, r.id).Scan(&previous); e != nil {
 						return nil, e
 					}
+					if previous.Valid && ms < previous.Int64+alarmdelivery.OpeningCooldown.Milliseconds() {
+						if _, e = tx.ExecContext(ctx, `UPDATE alarm_outbox SET due=? WHERE id=?`, previous.Int64+alarmdelivery.OpeningCooldown.Milliseconds(), r.id); e != nil {
+							return nil, e
+						}
+						continue
+					}
+				}
+			} else {
+				var opening string
+				e = tx.QueryRowContext(ctx, `SELECT state FROM alarm_outbox WHERE binding=? AND device=? AND incident=? AND transition='opened'`, key, r.device, r.incident).Scan(&opening)
+				if e != nil && !errors.Is(e, sql.ErrNoRows) {
+					return nil, e
+				}
+				if opening == "in_flight" {
 					continue
 				}
+				if opening != "provider_accepted" {
+					suppress = "opening_not_accepted"
+				}
 			}
-		} else {
-			var opening string
-			e = tx.QueryRowContext(ctx, `SELECT state FROM alarm_outbox WHERE binding=? AND device=? AND incident=? AND transition='opened'`, key, r.device, r.incident).Scan(&opening)
-			if e != nil && !errors.Is(e, sql.ErrNoRows) {
-				return nil, e
-			}
-			if opening == "in_flight" {
+			if suppress != "" {
+				if _, e = tx.ExecContext(ctx, `UPDATE alarm_outbox SET state='suppressed',code=?,finished=? WHERE id=?`, suppress, ms, r.id); e != nil {
+					return nil, e
+				}
 				continue
 			}
-			if opening != "provider_accepted" {
-				suppress = "opening_not_accepted"
-			}
-		}
-		if suppress != "" {
-			if _, e = tx.ExecContext(ctx, `UPDATE alarm_outbox SET state='suppressed',code=?,finished=? WHERE id=?`, suppress, ms, r.id); e != nil {
-				return nil, e
-			}
-			continue
 		}
 		var p alarmdelivery.Payload
 		if json.Unmarshal(r.body, &p) != nil || p.EventID != r.id || len(r.body) > alarmdelivery.MaxPayloadBytes {
+			return nil, alarmdelivery.ErrInvalid
+		}
+		if r.rule == alarmdelivery.TestRule && !alarmdelivery.IsTestPayload(p) {
 			return nil, alarmdelivery.ErrInvalid
 		}
 		if _, e = tx.ExecContext(ctx, `UPDATE alarm_outbox SET state='in_flight',attempts=attempts+1,last_attempt=? WHERE id=?`, ms, r.id); e != nil {

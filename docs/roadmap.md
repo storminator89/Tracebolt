@@ -13,23 +13,28 @@ identity, history, consent and private counters while coordinating both helpers.
 Publishing source or rebuilding the manager alone does not update the endpoint.
 Other feature work must not delay that maintenance path and its acceptance.
 
-The following requests are **planned or in source development, not completed or
-activated on an installed host**:
+The following requests have the individual source status below. Source work does
+not activate a feature or change consent on an installed host:
 
 - **Automatic certificate renewal with UI revocation.** Renew before expiry while
   keeping the same device identity and history. Existing revocation must block
   ingestion and renewal across every certificate generation. Preserve local
   helper/consent bindings and counters; show failures and an explicit recovery
   path if a device misses expiry. Do not silently grant perpetual credentials.
-- **Recognizable device rows.** Show the actually reported computer hostname and
-  interface IP addresses in the main device table. Distinguish multiple addresses,
-  stale and missing observations; keep the stable cryptographic ID in technical
-  details instead of presenting it as a reported computer name. Reuse the already
-  approved identity source without adding a new collection grant.
-- **Usable alarm setup in Settings.** Add reviewed configuration and activation
-  controls for supported delivery destinations, explicit payload disclosure and
-  deliberate test delivery. The existing read-only status panel does not configure
-  a provider or send anything; provider acceptance is not proof a person received it.
+- **Recognizable device rows — implemented in source.** The main table shows the
+  reported hostname and interface-scoped IP addresses, including multiple-address,
+  stale and missing states. Stable IDs still bind navigation and remain visible
+  as technical details. One bounded operator read reuses existing approved identity
+  observations; it creates no collection grant. Hosted desktop/mobile acceptance
+  of this new table remains pending. See [the display contract](fleet-endpoint-identity.md).
+- **Usable alarm setup in Settings — implemented in source, off by default.**
+  Administrators can review and save one generic public HTTPS webhook, explicitly
+  approve the disclosed payload, enable or disable delivery, and deliberately
+  enqueue a synthetic test. Named users need the existing configured administrator
+  to grant the new manage_alarms capability; source publication grants nobody that
+  capability. The complete URL is write-only and protected at rest. No provider was
+  configured or contacted during source validation; new hosted UI acceptance remains
+  pending. Provider acceptance does not confirm human receipt. See [alarm delivery](alarm-delivery.md).
 - **Automatic investigations for real LAN devices.** Create useful, explainable
   cases from supported observations with their original evidence and timestamps.
   Keep incomplete/stale input and unknown health explicit. The current LAN Cases

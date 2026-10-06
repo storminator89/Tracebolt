@@ -1,0 +1,94 @@
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { APIError, AUTH_REQUIRED_EVENT, getProtectedRequestEpoch, request } from './api';
+import { inventoryAge } from './complete-packages-types';
+import { endpointSnapshotVisible } from './endpoint-identity-types';
+import { FLEET_IDENTITY_BYTES, fleetIdentityProjection, validFleetIdentityView } from './fleet-identity-types';
+import type { FleetIdentityView } from './fleet-identity-types';
+export type FleetIdentityFailure = 'loadError' | 'invalid' | 'timeout' | 'session' | 'clock' | 'busy';
+type Anchor = { mono: number; wall: number };
+const capture = (): Anchor => ({ mono: performance.now(), wall: Date.now() });
+function elapsed(anchor: Anchor): number {
+    const mono = performance.now() - anchor.mono, wall = Date.now() - anchor.wall;
+    return Number.isFinite(mono) && mono >= 0 && Number.isFinite(wall) && Math.abs(wall - mono) <= 1500 ? mono : Infinity;
+}
+export function useFleetIdentity(enabled: boolean, sessionKey: string | null = null, revision = '') {
+    const key = `${revision}:${sessionKey ?? ''}:${enabled}`;
+    const [data, setData] = useState<{ key: string; view: FleetIdentityView } | null>(null), [loading, setLoading] = useState(false), [recovering, setRecovering] = useState(false), [error, setError] = useState<FleetIdentityFailure | null>(null), [, tick] = useState(0);
+    const alive = useRef(false), locked = useRef(false), suspended = useRef(false), epoch = useRef(0), current = useRef<FleetIdentityView | null>(null);
+    const anchor = useRef<Anchor | null>(null), latestServer = useRef<string | null>(null), pending = useRef<{ controller: AbortController; timeout: number; started: Anchor } | null>(null);
+    const cancel = useCallback(() => { epoch.current++; pending.current?.controller.abort(); window.clearTimeout(pending.current?.timeout); pending.current = null; if (alive.current) { setLoading(false); setRecovering(false); } }, []);
+    const clear = useCallback((failure: FleetIdentityFailure | null = null) => { cancel(); anchor.current = null; current.current = null; if (alive.current) { setData(null); setError(failure); } }, [cancel]);
+    const read = useCallback(async () => {
+        if (!enabled || !alive.current || locked.current || suspended.current || document.visibilityState === 'hidden') return;
+        clear();
+        const revision = epoch.current, controller = new AbortController(), started = capture(), protectedEpoch = getProtectedRequestEpoch();
+        setLoading(true); pending.current = { controller, started, timeout: window.setTimeout(() => { if (revision === epoch.current) clear('timeout'); }, 10000) };
+        const active = () => {
+            if (!alive.current || locked.current || suspended.current || controller.signal.aborted || revision !== epoch.current) return false;
+            if (protectedEpoch !== getProtectedRequestEpoch()) { locked.current = true; clear('session'); return false; }
+            if (!Number.isFinite(elapsed(started))) { clear('clock'); return false; }
+            if (elapsed(started) >= 10000) { clear('timeout'); return false; }
+            return true;
+        };
+        try {
+            let response: unknown;
+            // Retry only this exact GET once. Keep the original controller,
+            // access epoch, capture anchor and total ten-second deadline.
+            for (let attempt = 0; attempt < 2; attempt++) {
+                try {
+                    response = await request<unknown>('/fleet/endpoint-identities', { signal: controller.signal }, FLEET_IDENTITY_BYTES);
+                    break;
+                } catch (caught) {
+                    if (!active()) return;
+                    if (attempt !== 0 || !(caught instanceof APIError) || caught.status !== 429 || caught.code !== 'storage_busy') throw caught;
+                    setRecovering(true);
+                    await new Promise<void>(resolve => {
+                        const finish = () => { window.clearTimeout(delay); controller.signal.removeEventListener('abort', finish); resolve(); };
+                        const delay = window.setTimeout(finish, 2000);
+                        controller.signal.addEventListener('abort', finish, { once: true });
+                        if (controller.signal.aborted) finish();
+                    });
+                    if (!active()) return;
+                    setRecovering(false);
+                }
+            }
+            if (!active()) return;
+            if (!validFleetIdentityView(response)) { clear('invalid'); return; }
+            if (latestServer.current && inventoryAge(response.serverNow, latestServer.current) < 0) { clear('clock'); return; }
+            latestServer.current = response.serverNow; anchor.current = started; current.current = response; setData({ key, view: response });
+        } catch (caught) {
+            if (!active()) return;
+            if (caught instanceof APIError && caught.status === 401) { locked.current = true; clear('session'); }
+            else clear(caught instanceof APIError && caught.status === 429 ? 'busy' : 'loadError');
+        } finally {
+            if (revision === epoch.current) { window.clearTimeout(pending.current?.timeout); pending.current = null; if (alive.current) { setLoading(false); setRecovering(false); } }
+        }
+    }, [clear, enabled, key]);
+    useEffect(() => {
+        alive.current = true; locked.current = false; suspended.current = document.visibilityState === 'hidden'; latestServer.current = null; clear();
+        if (!enabled) return () => { alive.current = false; clear(); };
+        const lock = () => { locked.current = true; clear('session'); };
+        const suspend = () => { suspended.current = true; clear(); };
+        const restore = () => { if (locked.current || document.visibilityState === 'hidden') return; suspended.current = false; void read(); };
+        const visibility = () => document.visibilityState === 'hidden' ? suspend() : restore();
+        const show = (event: PageTransitionEvent) => { if (event.persisted || suspended.current) restore(); };
+        window.addEventListener(AUTH_REQUIRED_EVENT, lock); window.addEventListener('pagehide', suspend); window.addEventListener('pageshow', show); window.addEventListener('blur', suspend); window.addEventListener('focus', restore); window.addEventListener('hashchange', suspend); document.addEventListener('visibilitychange', visibility);
+        const timer = window.setInterval(() => {
+            const base = anchor.current ?? pending.current?.started;
+            if (base && !Number.isFinite(elapsed(base))) { clear('clock'); return; }
+            const view = current.current;
+            if (view && anchor.current) {
+                const age = elapsed(anchor.current);
+                if (view.items.some(item => item.latest && !endpointSnapshotVisible(item, age))) {
+                    current.current = { ...view, items: view.items.map(item => item.latest && !endpointSnapshotVisible(item, age) ? { ...item, status: 'expired', latest: null } : item) }; setData({ key, view: current.current });
+                }
+            }
+            if (base) tick(n => n + 1);
+        }, 1000);
+        void read();
+        return () => { alive.current = false; clear(); window.clearInterval(timer); window.removeEventListener(AUTH_REQUIRED_EVENT, lock); window.removeEventListener('pagehide', suspend); window.removeEventListener('pageshow', show); window.removeEventListener('blur', suspend); window.removeEventListener('focus', restore); window.removeEventListener('hashchange', suspend); document.removeEventListener('visibilitychange', visibility); };
+    }, [clear, enabled, key, read]);
+    const view = enabled && data?.key === key ? data.view : null, age = anchor.current ? elapsed(anchor.current) : Infinity;
+    return { view, identities: fleetIdentityProjection(view, age), loading: enabled && loading, recovering: enabled && recovering, error: enabled ? error : null, elapsed: age, refresh: () => void read() };
+}
+export type FleetIdentityResource = ReturnType<typeof useFleetIdentity>;

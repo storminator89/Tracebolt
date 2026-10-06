@@ -9,6 +9,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"localrmm/internal/actionmanager"
+	"localrmm/internal/alarmdelivery"
 	"localrmm/internal/applicationcheck"
 	"localrmm/internal/enrollmentcrypto"
 	"localrmm/internal/enrollmentservice"
@@ -29,6 +30,7 @@ import (
 )
 
 type LANOperatorConfig struct {
+	AlarmSettings *alarmdelivery.Settings
 	// ApplicationChecks is an inert, read-only view of the explicit startup worker.
 	ApplicationChecks *applicationcheck.Monitor
 	ServiceActions    *actionmanager.Manager
@@ -46,6 +48,7 @@ type LANOperatorConfig struct {
 	CVEProgress *linuxcveprogress.Cache
 }
 type operatorHandler struct {
+	alarmSettings       *alarmdelivery.Settings
 	applicationChecks   *applicationcheck.Monitor
 	actions             serviceActionManager
 	app                 *Server
@@ -118,6 +121,9 @@ func NewLANOperatorHandler(app *Server, c LANOperatorConfig) (http.Handler, erro
 	if c.Enrollment != nil {
 		managerID = c.Enrollment.Binding().InstanceID
 	}
+	if c.AlarmSettings != nil && (c.Enrollment == nil || c.Enrollment.Binding().CollectionProfile != enrollmentcrypto.CollectionProfileComplete || !c.AlarmSettings.Matches(managerID, profile)) {
+		return nil, alarmdelivery.ErrConfiguration
+	}
 	if !c.ApplicationChecks.Matches(managerID, c.Origin, profile) {
 		return nil, applicationcheck.ErrConfiguration
 	}
@@ -173,7 +179,7 @@ func NewLANOperatorHandler(app *Server, c LANOperatorConfig) (http.Handler, erro
 	if c.ServiceActions != nil {
 		actions = c.ServiceActions
 	}
-	return &operatorHandler{applicationChecks: c.ApplicationChecks, actions: actions, app: app, origin: c.Origin, authority: u.Host, auth: c.Auth, registry: c.Registry, insecureHTTPTest: c.InsecureHTTPTest, cookieName: cookieName, enrollment: c.Enrollment, enrollmentBootstrap: c.EnrollmentBootstrap}, nil
+	return &operatorHandler{alarmSettings: c.AlarmSettings, applicationChecks: c.ApplicationChecks, actions: actions, app: app, origin: c.Origin, authority: u.Host, auth: c.Auth, registry: c.Registry, insecureHTTPTest: c.InsecureHTTPTest, cookieName: cookieName, enrollment: c.Enrollment, enrollmentBootstrap: c.EnrollmentBootstrap}, nil
 }
 func (s *Server) developmentAuthView() authView {
 	token := s.csrf
@@ -402,6 +408,10 @@ func (h *operatorHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.serviceActions(w, r)
 		return
 	}
+	if r.URL.Path == "/api/alerts/settings" || r.URL.Path == "/api/alerts/test" {
+		h.alarmSettingsAPI(w, r)
+		return
+	}
 	if session.Named() && !namedReadRoute(r) {
 		fail(w, 403, "operator_capability_required", "This named account does not have permission for this administrative operation.")
 		return
@@ -453,6 +463,10 @@ func (h *operatorHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if strings.HasPrefix(r.URL.Path, "/api/devices/") && strings.Contains(r.URL.Path, "/inventory/cached-updates") {
 		h.cachedUpdates(w, r)
+		return
+	}
+	if r.URL.Path == "/api/fleet/endpoint-identities" {
+		h.fleetEndpointIdentity(w, r)
 		return
 	}
 	if strings.HasPrefix(r.URL.Path, "/api/devices/") && strings.Contains(r.URL.Path, "/inventory/endpoint-identity") {

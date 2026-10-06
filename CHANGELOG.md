@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-10-06 — Reported fleet identity and explicit alarm setup
+
+- Show reported computer hostnames and interface-scoped IP addresses in the fleet table, with compact multiple-address counts, original freshness, truthful missing/denied/expired states and stable device-ID navigation. A bounded authenticated batch read covers the existing 25-record managed fleet limit without per-device HTTP requests or new collection authority. Encode once and recheck session and observation authority before returning those exact bytes.
+- Add administrator alarm configuration for one generic public HTTPS webhook, with a protected write-only destination, explicit payload approval, revision-bound changes, enable/disable controls and a separately confirmed synthetic delivery test. Reuse the guarded outbox, DNS/address checks, bounded transport, uncertainty handling and deduplication. Named users need an explicit manage_alarms capability; command-line configuration keeps precedence. No destination, credential or actual delivery is configured by publishing this source.
+- Add hosted fleet desktop/mobile acceptance and rendered alarm-settings acceptance using invented same-origin API responses. The latter proves the UI flow; separate API and fake-transport tests cover the backend. Preserve the device-tab metadata timing contract and the existing read-only alarm-status checks.
+- The composed 2,284-test frontend suite, TypeScript/production build, affected backend race tests and 16 pure browser-fixture contracts pass locally. Component broad runs with existing dense-store time limits remain recorded as failed; the exact hosted aggregate and new rendered browser checks are separate pending gates. This checkpoint does not publish a new agent release, prove the coordinated rc.2 upgrade, enable automatic renewal or activate a webhook on a user host.
+
 ## 2026-10-06 — Coordinated same-profile read-admin upgrade candidate
 
 - Add an explicit verified-release --action upgrade --upgrade-read-admin path for a completed read-admin v2 installation. It verifies the existing identity and receipts, stages trusted artifacts, holds the installer lock continuously, disables startup/admission and drains the agent plus both helper/socket pairs before replacement. The native installer borrows that exact lock and leaves the agent stopped until same-scope bindings and private-state preservation are verified.

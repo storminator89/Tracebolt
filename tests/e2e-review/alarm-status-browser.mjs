@@ -28,7 +28,7 @@ export async function alarmStatusBrowserCase({pageAt,login,expect,base,shot}) {
  const page=await pageAt('/settings'),clockStart=Date.now();
  // Pause before login; the existing real server TTL and relative auth timer stay intact.
  await page.clock.install({time:new Date(clockStart)});await page.clock.pauseAt(new Date(clockStart+10000));
- const statusURL=`${base}/api/alerts/status`, mutations=[],alarmRequests=[],externalRequests=[],routeErrors=[];
+ const statusURL=`${base}/api/alerts/status`, mutations=[],alarmRequests=[],setupRequests=[],externalRequests=[],routeErrors=[];
  let reads=0,sessionReads=0,phase='snapshot',activeFixture=fixtures.off,held=null;
  page.on('request',request=>{
   const url=new URL(request.url()),method=request.method();
@@ -36,7 +36,8 @@ export async function alarmStatusBrowserCase({pageAt,login,expect,base,shot}) {
   if(!url.pathname.startsWith('/api/'))return;
   if(!['GET','HEAD'].includes(method)&&!(url.pathname==='/api/auth/login'&&method==='POST'))mutations.push(`${method} ${url.pathname}`);
   if(url.pathname==='/api/auth/session')sessionReads++;
-  if(url.pathname.startsWith('/api/alerts'))alarmRequests.push(`${method} ${url.pathname}${url.search}`);
+  if(url.pathname==='/api/alerts/status')alarmRequests.push(`${method} ${url.pathname}${url.search}`);
+  else if(url.pathname.startsWith('/api/alerts'))setupRequests.push(`${method} ${url.pathname}${url.search}`);
  });
  // Intercept this exact existing GET only; auth and every other handler stay real.
  await page.route(statusURL,async route=>{
@@ -150,6 +151,7 @@ export async function alarmStatusBrowserCase({pageAt,login,expect,base,shot}) {
   await page.clock.runFor(1000);expect(reads).toBe(lockedReads+1);
   expect(mutations).toEqual([]);expect(externalRequests).toEqual([]);expect(routeErrors).toEqual([]);
   expect(alarmRequests.length).toBe(reads);expect(alarmRequests.every(value=>value==='GET /api/alerts/status')).toBe(true);
+  expect(setupRequests.length).toBeGreaterThan(0);expect(setupRequests.every(value=>value==='GET /api/alerts/settings')).toBe(true);
  }finally{
   if(held){held.cancelled=true;held.release();}
  }

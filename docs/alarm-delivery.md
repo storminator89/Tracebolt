@@ -2,25 +2,81 @@
 
 This optional manager-side slice sends a small JSON event to one explicitly
 configured **public HTTPS webhook**. It is a generic Tracebolt protocol, not a
-Slack/Teams adapter. No recipient, credentials or external service is provisioned
-by an upgrade. SMTP, browser recipient administration, test-send/replay actions,
-per-rule maintenance and per-event delivery reconciliation remain unimplemented.
+Slack/Teams adapter. No recipient, credential or external service is provisioned
+by an upgrade. SMTP, per-rule maintenance and event replay remain unimplemented.
 
-## Activation boundary
+## Browser setup and activation boundary
 
-Omitting `--alarm-config` means no alarm worker, DNS lookup or external request.
-The existing health evaluator, authentication and collection permissions stay
-unchanged. Enabled delivery requires guided enrollment with the complete Linux
-collection profile and the configured manager identity. The development manager
-and manual-v1 manager have no alarm sender.
+Settings contains a collapsed **Alarm setup** panel beside the retained read-only
+**Alarm delivery** counts. Browser setup is available only on the Linux guided
+manager with the complete collection profile. A new installation starts disabled:
+construction, status reads, saving and startup validation perform no DNS lookup,
+provider contact or automatic test. Once enabled, the existing worker may send
+future qualifying health transitions. Existing incidents are never backfilled.
+The development and manual-v1 managers have no alarm sender or setup authority.
 
-An administrator must separately approve the exact destination and the outgoing
-data, then provision a private local configuration and optional bearer-token
-file. Configuration requires an explicit `enabled: true` and
-`payloadSharingAcknowledged: true`; existing operator login, acknowledgement or
-maintenance permissions do not enable sending. There is no send/configuration
-HTTP endpoint. Restart the manager to change or disable configuration; removing
-the startup argument disables delivery and suppresses unsent queued work.
+The existing shared administrator can configure alarms. Named accounts require the
+new explicit `manage_alarms` capability; `read`, update and service-action grants do
+not imply it. Named readers can still inspect sanitized settings and status.
+No upgrade modifies an operator file, creates an account or grants a capability.
+All writes use the current session, exact Origin/Host, CSRF token, strict JSON and
+an expected settings revision. Stale approvals and changed destinations are rejected.
+
+- **Add/replace destination:** enter the complete new URL (up to 4096 ASCII bytes)
+  and explicitly approve the bounded payload below, then save and enable. The URL
+  is write-only, with a password-style field, no browser persistence and no response
+  echo. Only the destination host is displayed afterward. Blank input cannot erase
+  or reuse a destination. This MVP has no bearer-token entry field.
+- **Disable:** explicitly confirm. The saved URL remains private for later use;
+  queued work is suppressed. Messages already accepted cannot be recalled.
+- **Enable:** review the retained host and explicitly approve future payload sharing
+  again. Replacing or re-enabling creates a fresh generated destination generation;
+  old unsent work and unpaired recoveries are not redirected to it.
+- **HTTP-test:** the separately opted-in isolated test profile additionally requires
+  an explicit acknowledgement that entering the URL exposes it and any embedded
+  secret on the browser-to-manager plaintext connection. Public webhook requests
+  still use verified HTTPS. Production HTTPS remains the supported default.
+
+Managed settings live in `alarm-settings.json` under the existing protected manager
+state directory, mode 0600, with trusted ancestors and no symlinks/hardlinks. This
+uses the existing writable state volume, including standard read-only-root Compose
+setups; it never writes under the read-only `/run/tracebolt` configuration mount.
+Atomic temporary-file write, file sync, replacement and directory sync happen before
+outbox activation. Settings changes and send attempts are serialized; an in-flight
+attempt returns a busy response to changes, and every attempt is followed by a full
+two-second idle window. No session mutation gate is held during provider I/O or a
+request-body read. A failed/uncertain persistence step stops dispatch and marks the
+controller blocked. A bounded best-effort emergency stop also suppresses queued
+work; it does not invent an approved disable or modify the saved file. The status
+API cannot report delivery enabled while the controller is blocked. Review the
+state before restarting: startup reconciles whichever file was durably published
+and may resume that previously approved delivery choice.
+A missing managed file starts disabled; malformed or insecure files fail startup.
+
+Only fixed action, server-derived actor, revision and time enter the bounded local
+settings audit (latest 200 records). The protected file retains the last mutation
+and enabling approval. Startup idempotently reconciles that mutation with the
+outbox/audit transaction, including after a crash between file and database commit.
+Neither audit nor public settings/status contains URL paths, queries, bearer values,
+provider response bodies or raw errors. Protect backups containing this private file.
+
+## Existing CLI configuration and precedence
+
+Supplying `--alarm-config` takes precedence, even when that file explicitly disables
+alarms. Its configuration remains externally managed and read-only in the browser;
+UI changes and test sends are unavailable. The manager does not edit that supplied
+file or any optional bearer-token file. Restart to change an external file.
+
+The CLI override leaves a previously saved browser configuration untouched.
+**Removing the flag resumes that saved browser choice, which may be enabled.**
+Removing it is therefore not a universal disable command. To keep delivery off
+while switching modes, retain an explicitly disabled CLI override, or explicitly
+disable browser-managed delivery after switching in an appropriately controlled
+maintenance window. With no saved browser destination, removing the flag starts off.
+
+An administrator must separately approve the exact CLI destination and outgoing
+data before provisioning private configuration and optional bearer-token files.
+Explicit `enabled: true` and `payloadSharingAcknowledged: true` are still required.
 
 The startup flag is `--alarm-config /absolute/protected/alarm.json`. A safe,
 minimal disabled file contains:
@@ -112,10 +168,10 @@ not successful queuing. There is no automatic gap replay or remediation.
 Authenticated `GET /api/alerts/status` returns only enabled and state counts,
 including `inFlight`, `providerAccepted`, `failed`, `uncertain`, `suppressed` and
 `dropped`. Named read accounts can inspect it. POST is not a send operation.
-Counts include retained previous destination generations. No URL, token, provider
+Counts include synthetic tests and retained previous destination generations. No URL, token, provider
 body or raw error is exposed.
 
-Settings now exposes a compact read-only **Alarm delivery** panel for authenticated
+Settings also exposes a compact read-only **Alarm delivery** panel for authenticated
 LAN accounts, including named read accounts. It shows retained provider acceptance,
 pending (queued plus in flight), failed and uncertain counts; nonzero dropped gaps
 remain separate. Disabled delivery stays quiet, while retained counts remain
@@ -139,10 +195,45 @@ or intended recipient behind the same URL, the administrator must change
 relationship from a token. Ordinary restart with the same enabled
 binding preserves definite queued retries; uncertain work remains terminal.
 
+## Explicit synthetic test and settings API
+
+`GET /api/alerts/settings` returns only the settings schema/version, mode
+(`managed`, `external`, `unavailable`), revision, configured/enabled/blocked flags,
+destination host and last test ID/state/time for the current destination generation.
+Unavailable surfaces return an empty disabled view; they have no write authority.
+No polling occurs. Closing, navigation, suspension or session loss clears drafts and
+invalidates pending responses. Any uncertain write requires an explicit fresh read;
+there is no automatic retry after failure or reauthentication.
+
+`POST /api/alerts/settings` accepts exactly `expectedRevision`, `operation`
+(`replace`, `enable`, `disable`), `endpoint`, `payloadSharingAcknowledged` and
+`plaintextAcknowledged`, with a 6144-byte body cap. Only replacement accepts a
+nonempty endpoint; disable accepts neither acknowledgement. Fields never select
+manager identity, profile, actor, token file or storage path.
+
+**Test destination** opens a separate payload/destination confirmation. Its explicit
+confirmation posts `expectedRevision`, a generated 128-bit `requestId` and
+`testAcknowledged: true` to `/api/alerts/test` (512-byte body cap). It requires enabled
+managed delivery. It queues one `tracebolt.alarm-test.v1` record using the existing
+outbox, transport, bounds, retry and uncertainty rules. A repeated request ID resolves
+to the same retained record. No endpoint URL is stored in that record. Only one
+outstanding test and one new test per minute are allowed, globally across destination
+changes; a full queue declines the test without dropping a real health event.
+
+The test contains a generated event ID and timestamps, with fixed `synthetic`
+device/incident markers, `delivery-test` rule, `configured-webhook` target, `info`
+severity, `test` transition/state and `operator_requested_test` reason. It contains
+no live device information. The claim path revalidates this exact synthetic shape;
+it cannot submit a custom message or imitate an actual incident. Tests appear in
+the aggregate delivery counters. Read their individual latest result with explicit
+refresh; queued/in-flight is pending, and **provider accepted is not human receipt**.
+Failed/uncertain/suppressed remain distinct, and uncertain tests are not replayed.
+
 ## Verification and separate live gate
 
 Deterministic fake transports and in-memory connection fixtures cover atomic
-rollback, disabled/no-outbound behavior, restart, deduplication across devices,
+rollback, disabled/no-outbound behavior, restart, browser configuration/secret redaction and permissions, explicit synthetic
+test deduplication/rate limits, crash/audit reconciliation, deduplication across devices,
 destination changes, bounded retry/rate/capacity, recovery ordering, long-lived
 incidents/history pruning, maintenance, stale/unknown evidence, SSRF, redirects,
 redaction, protected files and unchanged authenticated read-only access. These

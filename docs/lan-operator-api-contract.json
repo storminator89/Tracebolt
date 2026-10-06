@@ -51,12 +51,36 @@
     "POST /api/lan/agents/{id}/revoke": {
       "body": {},
       "requirements": "Legacy shared v1 mode only. Same authenticated mutation boundary; durable tombstone; later telemetry commits rejected."
+    },
+    "GET /api/alerts/settings": {
+      "requirements": "Authenticated LAN session. Sanitized host/status only; no URL path/query or credentials. Complete guided Linux profile supports managed setup; CLI alarm-config is read-only and takes precedence.",
+      "response": "tracebolt.alarm-settings.v1: mode, revision, configured, enabled, destinationHost, test (eventId/state/createdAt or null), blocked."
+    },
+    "POST /api/alerts/settings": {
+      "requirements": "Legacy shared administrator or explicit named manage_alarms grant; exact Origin/Host, CSRF, strict JSON <=6144 bytes; current revision; explicit destination/payload acknowledgement; separate plaintext acknowledgement for isolated HTTP-test. No provider I/O during request.",
+      "body": {
+        "expectedRevision": "32 lowercase hex",
+        "operation": "replace|enable|disable",
+        "endpoint": "write-only public HTTPS443 URL only for replace, empty otherwise",
+        "payloadSharingAcknowledged": "true for replace/enable, false for disable",
+        "plaintextAcknowledged": "required true on HTTP-test replace/enable, false for disable"
+      },
+      "response": "Sanitized settings view; settings persist in private manager state. Saving enables only future eligible transitions and sends no automatic test."
+    },
+    "POST /api/alerts/test": {
+      "requirements": "Same explicit alarm-admin/session/Origin/CSRF boundary, enabled browser-managed settings; strict JSON <=512 bytes. One outstanding test and one new test/minute.",
+      "body": {
+        "expectedRevision": "current settings revision",
+        "requestId": "32 lowercase hex, retained-record deduplication",
+        "testAcknowledged": true
+      },
+      "response": "Sanitized settings view with queued fixed synthetic test. Worker later uses guarded outbox/HTTPS transport. Provider acceptance does not prove human receipt; uncertain attempts are not replayed."
     }
   },
   "modeBehavior": {
     "development": "Existing loopback-only guard remains unchanged. GET auth/session explicitly says authenticationRequired=false, authenticated=false, csrfToken=current process token, expiry=null. No fake authentication. Login/logout routes are disabled.",
     "lan": "Dedicated authenticated operator handler. Unauthenticated auth/session is200, protected APIs401. Static assets may load without data. Actual TLS required in the default profile, never inferred from forwarded headers. HTTP test accepts plaintext only, has its own cookie/state/auth profile and permanent warning. Developer ingress is unavailable in either profile.",
-    "named": "Static protected v2 named-only configuration. All operators explicitly require read. Existing GET/HEAD views and exact journal/query or inventory/{system,overview,packages,complete-updates}/query POSTs are readable; these POSTs retain Origin/CSRF checks. Logout is allowed. Other legacy administrative writes are denied; none of the new grants implies those rights. No account-management, action or execution route exists. Config changes take effect only after manager restart; all in-memory sessions then disappear."
+    "named": "Static protected v2 named-only configuration. All operators explicitly require read. Existing GET/HEAD views and exact journal/query or inventory/{system,overview,packages,complete-updates}/query POSTs are readable; these POSTs retain Origin/CSRF checks. Logout is allowed. Other legacy administrative writes are denied; none of the new grants implies those rights. No account-management, action or execution route exists. Config changes take effect only after manager restart; all in-memory sessions then disappear. Explicit manage_alarms additionally admits the exact alarm settings/test routes; unrelated administrative routes remain denied."
   },
   "errors": {
     "400": "invalid typed or duplicate-key body",
@@ -105,6 +129,7 @@
     "read": "Explicit read/query access as mapped above. No new collection or unrelated administration.",
     "plan_updates": "Future typed package planning; currently inert.",
     "execute_updates": "Future approved typed package execution; currently inert.",
-    "restart_service": "Future approved typed service restart; currently inert."
+    "restart_service": "Future approved typed service restart; currently inert.",
+    "manage_alarms": "Explicit alarm configuration and synthetic-test permission, with separately acknowledged destination/payload and complete-profile managed setup."
   }
 }

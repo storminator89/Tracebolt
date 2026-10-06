@@ -10,6 +10,7 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {applicationChecksBrowserCase} from './application-checks-browser.mjs';
 import {alarmStatusBrowserCase} from './alarm-status-browser.mjs';
+import {alarmSettingsBrowserCase,alarmSettingsCaseName} from './alarm-settings-browser.mjs';
 import {cveContinuationBrowserCase,cveContinuationCaseName} from './cve-continuation-browser.mjs';
 import {cveDetailPagesBrowserCase,cveDetailPagesCaseName,cveDetailPagesFailureStage} from './cve-detail-pages-browser.mjs';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../..');
@@ -90,6 +91,7 @@ try {
  },'10m');
  await check('Read-only application status separates retained HTTP and verified-leaf expiry, ages samples and clears access loss',()=>applicationChecksBrowserCase({pageAt,login,expect,base,shot}));
  await check('Synthetic read-only alarm status preserves snapshot meaning and clears interrupted access without replay',()=>alarmStatusBrowserCase({pageAt,login,expect,base,shot}));
+ await check(alarmSettingsCaseName,()=>alarmSettingsBrowserCase({pageAt,login,expect,base,shot}),'10m');
  await check(cveContinuationCaseName,()=>cveContinuationBrowserCase({pageAt,login,expect,base,shot}));
  await check(cveDetailPagesCaseName,()=>cveDetailPagesBrowserCase({pageAt,login,expect,base,shot}));
  await check('Real CSRF-protected logout removes private content and rejects later protected API reads',async()=>{

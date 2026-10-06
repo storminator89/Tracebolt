@@ -44,7 +44,7 @@ type prepared struct {
 	close                 func()
 	maintenance           *enrollmentservice.Service
 	health                *api.Server
-	alarms                *alarmdelivery.Worker
+	alarms                *alarmdelivery.Settings
 	applicationChecks     *applicationcheck.Monitor
 }
 
@@ -176,23 +176,14 @@ func prepareWithApplicationChecks(m lanconfig.Material, enrollment *enrollmentco
 	if e != nil {
 		return fail(e)
 	}
-	var alarmWorker *alarmdelivery.Worker
-	var alarmBinding *alarmdelivery.Binding
-	if alarms.Enabled() {
-		b := alarms.Binding()
-		alarmBinding = &b
-		transport, err := alarmdelivery.NewWebhook(alarms)
-		if err != nil {
+	var alarmWorker *alarmdelivery.Settings
+	if enrollment != nil && enrollment.StoreConfig().Binding.CollectionProfile == enrollmentcrypto.CollectionProfileComplete {
+		alarmWorker, e = alarmdelivery.NewSettings(appStore, c.StateDirectory, managerID, c.Profile, alarms)
+		if e != nil {
 			appStore.Close()
-			return fail(err)
+			return fail(e)
 		}
-		alarmWorker, err = alarmdelivery.NewWorker(appStore, b, transport, nil)
-		if err != nil {
-			appStore.Close()
-			return fail(err)
-		}
-	}
-	if e = appStore.ConfigureAlarms(context.Background(), alarmBinding, time.Now().UTC()); e != nil {
+	} else if e = appStore.ConfigureAlarms(context.Background(), nil, time.Now().UTC()); e != nil {
 		appStore.Close()
 		return fail(e)
 	}
@@ -229,7 +220,7 @@ func prepareWithApplicationChecks(m lanconfig.Material, enrollment *enrollmentco
 	if checks.Enabled() {
 		applicationChecks = applicationStatus
 	}
-	operatorConfig := api.LANOperatorConfig{ApplicationChecks: applicationStatus, ServiceActions: actions, Origin: c.OperatorOrigin, Auth: auth, Registry: registry, InsecureHTTPTest: c.Profile == lanconfig.HTTPTest, Devices: func() ([]model.Device, error) {
+	operatorConfig := api.LANOperatorConfig{AlarmSettings: alarmWorker, ApplicationChecks: applicationStatus, ServiceActions: actions, Origin: c.OperatorOrigin, Auth: auth, Registry: registry, InsecureHTTPTest: c.Profile == lanconfig.HTTPTest, Devices: func() ([]model.Device, error) {
 		return trustStore.Devices(context.Background(), registry.List(), time.Now().UTC())
 	}}
 	if enrolledService != nil {
@@ -374,7 +365,7 @@ func runWithApplicationChecks(ctx context.Context, m lanconfig.Material, enrollm
 func main() {
 	path := flag.String("lan-config", "", "Explicit protected LAN profile JSON (required); HTTPS is the default")
 	enrollmentPath := flag.String("enrollment-config", "", "Optional protected guided-enrollment v2 profile; requires a dedicated preprovided issuer and empty legacy registry")
-	alarmPath := flag.String("alarm-config", "", "Optional protected opt-in HTTPS alarm delivery configuration; disabled when omitted")
+	alarmPath := flag.String("alarm-config", "", "Optional protected HTTPS alarm config; overrides browser-managed settings as read-only. Without this flag, saved browser settings apply (initially off).")
 	applicationChecksPath := flag.String("application-checks-config", "", "Optional protected opt-in manager-origin application check configuration; disabled when omitted")
 	flag.Parse()
 	if *path == "" || flag.NArg() != 0 {

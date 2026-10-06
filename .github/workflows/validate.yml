@@ -595,6 +595,44 @@ jobs:
           python3 -O tests/security/test_endpoint_browser_gate.py
           node tests/e2e-review/endpoint-identity-browser.mjs
           python3 tests/security/check_endpoint_browser_gate.py artifacts/review/endpoint-browser-results.json
+      - name: Fleet hostname and scoped IP browser acceptance
+        if: ${{ !cancelled() }}
+        env:
+          TRACEBOLT_SOURCE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          node tests/e2e-review/fleet-identity-browser.mjs
+          python3 - <<'PYTHON'
+          import json, os
+          from pathlib import Path
+          try:
+              raw = Path('artifacts/review/fleet-identity-browser-results.json').read_bytes()
+              if not 0 < len(raw) <= 1024 * 1024:
+                  raise ValueError('invalid size')
+              value = json.loads(raw)
+              if value.get('sourceSha') != os.environ['TRACEBOLT_SOURCE_SHA']:
+                  raise ValueError('wrong source')
+              if type(value.get('runtimeErrorCount')) is not int or value['runtimeErrorCount'] != 0:
+                  raise ValueError('runtime errors')
+              for key in ('secretsExported', 'realTelemetryExported', 'collectorExecuted', 'consentFilesWritten', 'installerExecuted', 'userVmAccessed'):
+                  if value.get(key) is not False:
+                      raise ValueError('invalid scope')
+              summary = value.get('summary', {})
+              if type(summary.get('passed')) is not int or summary['passed'] != 5 or type(summary.get('failed')) is not int or summary['failed'] != 0 or summary.get('setupFailure') is not False:
+                  raise ValueError('incomplete summary')
+              cases = value.get('results')
+              if not isinstance(cases, list) or len(cases) != 5:
+                  raise ValueError('wrong case count')
+              names = set()
+              for case in cases:
+                  name = case.get('name')
+                  if case.get('status') != 'PASS' or not isinstance(name, str) or not name or name in names:
+                      raise ValueError('invalid case')
+                  names.add(name)
+          except Exception:
+              raise SystemExit('FAIL: incomplete, mismatched or unsafe fleet browser evidence.')
+          print('PASS: five fleet identity browser cases on the exact source; invented metadata only.')
+          PYTHON
       - name: Journal request, snapshot and lifecycle browser acceptance
         if: ${{ !cancelled() }}
         env:
@@ -649,6 +687,8 @@ jobs:
             artifacts/review/v3-mvp-browser-manifest.json
             artifacts/review/endpoint-browser-results.json
             artifacts/review/endpoint-browser-manifest.json
+            artifacts/review/fleet-identity-browser-results.json
+            artifacts/review/fleet-identity-browser-manifest.json
             artifacts/review/journal-browser-results.json
             artifacts/review/journal-browser-manifest.json
             artifacts/review/complete-overview-browser-results.json

@@ -20,6 +20,7 @@ var ErrConfiguration = errors.New("alarm_delivery_configuration_invalid")
 // Config is an immutable startup snapshot. Its endpoint may itself contain a
 // provider secret, so both endpoint and bearer material stay out of diagnostics.
 type Config struct {
+	external bool
 	enabled  bool
 	binding  Binding
 	endpoint string
@@ -65,7 +66,7 @@ func Load(path, managerID, profile string) (Config, error) {
 	}
 	// A minimal disabled file is valid. Partially supplied destinations are not.
 	if !*f.Enabled && f.ManagerInstanceID == "" && f.Profile == "" && f.DestinationID == "" && f.Generation == "" && f.Endpoint == "" && f.BearerTokenFile == "" {
-		return Config{}, nil
+		return Config{external: true}, nil
 	}
 	if f.ManagerInstanceID != managerID || f.Profile != profile || (*f.Enabled && !f.PayloadSharingAcknowledged) {
 		return Config{}, ErrConfiguration
@@ -78,7 +79,7 @@ func Load(path, managerID, profile string) (Config, error) {
 	if !b.Valid() {
 		return Config{}, ErrConfiguration
 	}
-	c := Config{enabled: *f.Enabled, binding: b, endpoint: f.Endpoint}
+	c := Config{external: true, enabled: *f.Enabled, binding: b, endpoint: f.Endpoint}
 	if !c.enabled || f.BearerTokenFile == "" {
 		return c, nil
 	}

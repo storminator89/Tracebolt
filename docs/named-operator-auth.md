@@ -64,7 +64,10 @@ Git, terminal output, screenshots, logs and support artifacts.
   the existing Origin, CSRF, profile, identity, generation and expiry checks.
 - `plan_updates`: a future explicit package planning permission. Inert now.
 - `execute_updates`: a future approved package execution permission. Inert now.
-- `restart_service`: a future approved service try-restart permission. Inert now.
+- `restart_service`: the separately configured, approved typed service-action permission.
+- `manage_alarms`: explicit browser alarm configuration and synthetic-test permission.
+  It does not enable delivery by itself; destination/payload approval and the protected
+  complete-profile manager settings are required. See [alarm delivery](alarm-delivery.md).
 
 No grant implies another. A named account is not an existing shared-login
 administrator. Named accounts cannot create/cancel journal collection, change

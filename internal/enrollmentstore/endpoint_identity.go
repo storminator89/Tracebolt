@@ -45,32 +45,8 @@ func (s *Store) EndpointIdentityView(ctx context.Context, device string, now tim
 		if e != nil {
 			return e
 		}
-		out.readState = &systemViewReadState{checkedAt: now, certificateNotAfter: snap.Intent.NotAfter}
-		status := systemIdentityStatus(snap, now)
-		if status != "awaiting" {
-			out.Status = status
-			return nil
-		}
-		if _, e = s.systemAuthority(t, snap.InvitationID, snap.Issuance.CertificateHash, now); e != nil {
-			return e
-		}
-		out.Status = "not_collected"
-		r, ok := t.system[snap.InvitationID]
-		if !ok || r.EndpointIdentity == nil {
-			return nil
-		}
-		identity := r.EndpointIdentity
-		p := identity.Receipt
-		seq, received, expires := p.Sequence, p.ReceivedAt, p.CollectedAt.Add(SystemRetention)
-		out.Sequence = &seq
-		out.ReceivedAt = &received
-		out.ExpiresAt = &expires
-		out.readState.observationAt = p.CollectedAt
-		out.Status = systemAge(p.CollectedAt, now)
-		if out.Status == "fresh" || out.Status == "stale" {
-			out.Latest = identity.Snapshot
-		}
-		return nil
+		out, e = s.endpointIdentityFromSnapshot(t, snap, now)
+		return e
 	})
 	if e != nil {
 		return zero, e
@@ -117,4 +93,36 @@ func (v EndpointIdentityView) RecheckAt(now time.Time) (EndpointIdentityView, er
 		}
 	}
 	return v, nil
+}
+
+// endpointIdentityFromSnapshot is shared by the single-device and bounded fleet
+// reads. Call only within an admitted transaction; retain original authority/age.
+func (s *Store) endpointIdentityFromSnapshot(t *transaction, snap enrollmentstate.Snapshot, now time.Time) (EndpointIdentityView, error) {
+	out := EndpointIdentityView{SchemaVersion: "tracebolt.endpoint-identity-view.v1", DeviceID: snap.Approval.DeviceID, Status: "unknown", ServerNow: now, MaxAgeSeconds: int64(SystemMaxAge / time.Second)}
+	out.readState = &systemViewReadState{checkedAt: now, certificateNotAfter: snap.Intent.NotAfter}
+	status := systemIdentityStatus(snap, now)
+	if status != "awaiting" {
+		out.Status = status
+		return out, nil
+	}
+	if _, e := s.systemAuthority(t, snap.InvitationID, snap.Issuance.CertificateHash, now); e != nil {
+		return EndpointIdentityView{}, e
+	}
+	out.Status = "not_collected"
+	r, ok := t.system[snap.InvitationID]
+	if !ok || r.EndpointIdentity == nil {
+		return out, nil
+	}
+	identity := r.EndpointIdentity
+	p := identity.Receipt
+	seq, received, expires := p.Sequence, p.ReceivedAt, p.CollectedAt.Add(SystemRetention)
+	out.Sequence = &seq
+	out.ReceivedAt = &received
+	out.ExpiresAt = &expires
+	out.readState.observationAt = p.CollectedAt
+	out.Status = systemAge(p.CollectedAt, now)
+	if out.Status == "fresh" || out.Status == "stale" {
+		out.Latest = identity.Snapshot
+	}
+	return out, nil
 }
