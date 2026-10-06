@@ -45,6 +45,7 @@ type linuxTransaction struct {
 	account                                                   accountRecord
 	installationVersion, profile                              string
 	stopped, started, enabled, disabled, published, committed bool
+	validated                                                 bool
 }
 
 func (t *linuxTransaction) Inspect(ctx context.Context, r Request) (HostFacts, error) {
@@ -167,13 +168,29 @@ func (t *linuxTransaction) Apply(ctx context.Context, op Operation, r Request) e
 			if t.profile == "http-test" {
 				args = append(args, "--insecure-http-test")
 			}
-			return t.h.run(ctx, binary, args, &t.account, false)
+			if e := t.h.run(ctx, binary, args, &t.account, false); e != nil {
+				return e
+			}
+			t.validated = true
+			return nil
 		}
 		binary := t.h.path(AgentPath)
 		if t.staged != "" {
 			binary = filepath.Join(t.staged, "lan-agent")
 		}
-		return t.h.run(ctx, binary, []string{"--config", t.h.path(ConfigPath), "--validate-guided"}, &t.account, false)
+		if e := t.h.run(ctx, binary, []string{"--config", t.h.path(ConfigPath), "--validate-guided"}, &t.account, false); e != nil {
+			return e
+		}
+		t.validated = true
+		return nil
+	case OpResetRestartState:
+		// Deliberate owned restart is separate from automatic crash recovery.
+		// All manual starts count toward systemd's unchanged 5/300s limit.
+		// Reset only after this transaction stopped and validated retained state.
+		if r.Action != Restart || t.r.Action != Restart || !t.stopped || !t.validated {
+			return ErrState
+		}
+		return t.systemctl(ctx, "reset-failed", UnitName)
 	case OpPublish:
 		return t.publish(ctx)
 	case OpStart:

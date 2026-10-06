@@ -53,8 +53,14 @@ func readAdminNativeMaintenance(t *testing.T, c *readAdminNativeCommand, operati
 	defer cancel()
 	cmd := exec.CommandContext(ctx, c.python, "-I", "-c", readAdminLauncher, path)
 	cmd.Env = c.environment()
-	raw, err := cmd.Output()
+	raw, err := readAdminCaptureLifecycle(cmd)
 	defer clear(raw)
+	valid := false
+	defer func() {
+		if !valid {
+			readAdminLogLifecycleFailure(t, operation, readAdminParseMaintenanceFailure(raw))
+		}
+	}()
 	remember := readAdminRememberMaintenanceFailure(operation, t.Failed(), c.options.setupDiagnostic())
 	if len(raw) <= 4096 && err != nil && remember {
 		var failure struct {
@@ -75,7 +81,7 @@ func readAdminNativeMaintenance(t *testing.T, c *readAdminNativeCommand, operati
 	}
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.DisallowUnknownFields()
-	valid := decoder.Decode(result) == nil && result.SchemaVersion == "tracebolt.read-admin-socket-native.v1" && result.Operation == operation
+	valid = decoder.Decode(result) == nil && result.SchemaVersion == "tracebolt.read-admin-socket-native.v1" && result.Operation == operation
 	if !valid && remember {
 		c.options.setupFailure = "maintenance-operation-failed"
 	}
@@ -298,7 +304,7 @@ func readAdminSocketOwnersAndRevoke(t *testing.T, c *readAdminNativeCommand, get
 		// socket attribution. Apply repeats those checks before service changes.
 		cmd := exec.Command(installer, args...)
 		cmd.Env = systemdCleanEnvironment()
-		if cmd.Run() != nil {
+		if readAdminRunLifecycle(t, cmd, "restart_preflight") != nil {
 			t.Fatal("owned native agent restart preflight failed")
 		}
 		systemdCheckProcessIdentity(t, uid, gid)
@@ -309,7 +315,7 @@ func readAdminSocketOwnersAndRevoke(t *testing.T, c *readAdminNativeCommand, get
 		}
 		cmd = exec.Command(installer, append(args, "--apply")...)
 		cmd.Env = systemdCleanEnvironment()
-		if cmd.Run() != nil {
+		if readAdminRunLifecycle(t, cmd, "restart_apply") != nil {
 			t.Fatal("owned native agent restart failed")
 		}
 		restartedSequence = readAdminWaitRestartSystem(t, device, before, time.Now().UTC(), native.GrantEpoch, get)
@@ -332,6 +338,7 @@ func readAdminSocketOwnersAndRevoke(t *testing.T, c *readAdminNativeCommand, get
 		t.Fatal("socket revoke changed identity or journal/inventory authority")
 	}
 	if !revoked.Revoked || !revoked.FloorPreserved || !revoked.PendingChecked {
+		readAdminLogLifecycleFailure(t, "revoke-socket", readAdminLifecycleDiagnostic{"maintenance-operation-failed", "unavailable", "unavailable", "unavailable"})
 		t.Fatal("revoke private floor/pending/tombstone contract unconfirmed")
 	}
 	c.options.checks.RevocationCompleted = true

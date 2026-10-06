@@ -179,11 +179,13 @@ Only `read-admin-systemd-result.json` may be uploaded, under an artifact name
 bound to V2, selected transport, scenario and SHA. The wrapper reads the root
 result without following symlinks or blocking on special files; it requires a
 regular nonempty file of at most 4096 bytes, rejects duplicate JSON keys at every
-depth and unknown fields, and emits normalized JSON through the ordinary runner.
+depth and unknown fields. The bounded diagnostic projection emits normalized JSON
+of at most 16 KiB through the ordinary runner; the native source result remains
+limited to 4096 bytes and private test output to 1 MiB.
 Invalid or missing evidence fails and removes only the invalid export. A
 well-formed failure result may be exported for diagnosis but cannot pass the job.
 
-The exact twelve-field schema is:
+The source fields and bounded projected diagnostic fields are:
 
 - `schemaVersion`: `tracebolt.read-admin-systemd-acceptance.v2`
 - `status`: `pass` or `fail`; `pass` requires `stage: complete`
@@ -214,6 +216,16 @@ The exact twelve-field schema is:
   This covers socket, journal content, service restart and cleanup assertions.
   Successful runs report `none` without reading private output. No diagnostic
   relaxes a scenario or acceptance check.
+- `operatorFailures`: up to eight deduplicated closed method/resource/HTTP-status/
+  failure/API-code records. Paths, identifiers and response/error bodies are omitted.
+- `lifecycleFailures`: up to eight deduplicated closed operation/failure-stage
+  records with the existing CLI's committed/rolledBack/identityRetained booleans
+  (null when unavailable) and fixed-unit ActiveState/SubState/Result labels.
+  This preserves restart, revoke and cleanup failures, including start-limit-hit
+  only when actually sampled. Unit state is sampled after command failure and
+  rollback, so it may differ from the original failure instant. Successful runs
+  export empty diagnostic lists without reading private output.
+- `initialProbe`: closed failure/childExit/scopePromptSeen cancellation evidence.
 - `ptraceRiskAcknowledged`: true
 - `socketNativeChecks`: exactly six strict JSON booleans, with keys
   `installedServiceOwners`, `v4Provenance`, `revocationCompleted`,

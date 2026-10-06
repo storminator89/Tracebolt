@@ -147,7 +147,7 @@ func BuildPlan(r Request, h HostFacts) (Plan, error) {
 	case Upgrade:
 		p.Steps = append(p.Steps, Step{"stage", "Stage verified replacement binaries without changing identity or pending observations."}, Step{"stop", "Stop the owned service before validating its exclusive sender ledger."}, Step{"validate", "Validate the existing guided-v2 identity/counter; never initialize missing state."}, Step{"replace", "Atomically replace owned binaries/unit and restart; retain the previous version for bounded rollback."})
 	case Restart:
-		p.Steps = append(p.Steps, Step{"stop", "Stop the owned service."}, Step{"validate", "Validate the existing guided-v2 identity and bound ledger without resetting it."}, Step{"service", "Restart only after validation succeeds."})
+		p.Steps = append(p.Steps, Step{"stop", "Stop the owned service."}, Step{"validate", "Validate the existing guided-v2 identity and bound ledger without resetting it."}, Step{"reset-restart-state", "Clear only the owned service's systemd failed status and start/restart counters after validation; automatic restart limits stay unchanged. Cleared bookkeeping is not restored if a later step fails."}, Step{"service", "Restart only after validation succeeds."})
 	case Uninstall:
 		p.Steps = append(p.Steps, Step{"stop", "Disable and stop only the owned Tracebolt service."}, Step{"remove-owned", "Remove only manifest-owned unit and binaries; retain the dedicated account, bootstrap and all private identity/counter data."})
 	}

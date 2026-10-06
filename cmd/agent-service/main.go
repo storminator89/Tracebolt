@@ -89,21 +89,25 @@ func reportOperation(r agentinstall.Request, result agentinstall.Result, err err
 	if err != nil {
 		fmt.Fprintln(out, "Tracebolt service operation did not complete. Preserve the account and all identity/state files.")
 		stages := map[agentinstall.Operation]string{
-			agentinstall.OpPrepare:  "preparing the dedicated account and paths",
-			agentinstall.OpStage:    "staging verified artifacts",
-			agentinstall.OpEnroll:   "hidden-terminal enrollment",
-			agentinstall.OpStop:     "stopping the owned service",
-			agentinstall.OpValidate: "validating retained enrollment and sender state",
-			agentinstall.OpPublish:  "publishing owned binaries and unit",
-			agentinstall.OpStart:    "starting and checking the service",
-			agentinstall.OpDisable:  "disabling the owned service",
-			agentinstall.OpRemove:   "removing owned installation files",
-			"commit":                "recording the durable installation result",
+			agentinstall.OpPrepare:           "preparing the dedicated account and paths",
+			agentinstall.OpStage:             "staging verified artifacts",
+			agentinstall.OpEnroll:            "hidden-terminal enrollment",
+			agentinstall.OpStop:              "stopping the owned service",
+			agentinstall.OpValidate:          "validating retained enrollment and sender state",
+			agentinstall.OpResetRestartState: "clearing the owned service failed status and start/restart counters",
+			agentinstall.OpPublish:           "publishing owned binaries and unit",
+			agentinstall.OpStart:             "starting and checking the service",
+			agentinstall.OpDisable:           "disabling the owned service",
+			agentinstall.OpRemove:            "removing owned installation files",
+			"commit":                         "recording the durable installation result",
 		}
 		if stage, ok := stages[result.FailureStage]; ok {
 			fmt.Fprintln(out, "Stopped while "+stage+".")
 		} else {
 			fmt.Fprintln(out, "Preflight or retained installer-state checks did not complete.")
+		}
+		if r.Action == agentinstall.Restart && (result.FailureStage == agentinstall.OpResetRestartState || result.FailureStage == agentinstall.OpStart || result.FailureStage == "commit") {
+			fmt.Fprintln(out, "The owned service failed status and start/restart counters may already have been cleared; rollback does not restore this systemd bookkeeping.")
 		}
 		if result.RolledBack {
 			fmt.Fprintln(out, "Owned transaction changes were rolled back; the service may remain stopped. A retained preparation needs the explicit --resume flow with exactly the same release, bootstrap and identity, after inspection. Do not create a new identity or blindly repeat the fresh-install command.")

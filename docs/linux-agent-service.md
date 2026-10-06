@@ -86,7 +86,14 @@ terminal recovery; it is not a transactional terminal guarantee across host loss
   Stops/drains the exact owned service, validates the existing identity/ledger,
   replaces only owned binaries/unit, and starts the service. Previous enablement
   is preserved. It never resets keys, pending bytes or sequence state.
-- `--action restart`: stops/drains, validates and restarts the owned service.
+- `--action restart`: stops/drains and validates the owned service, then clears only
+  its systemd failed status and start/restart counters before starting it. This
+  deliberate maintenance step prevents the onboarding phase starts from using
+  up the service's start budget. The automatic five-starts-per-300-seconds limit
+  is unchanged. Systemd failure/restart bookkeeping is cleared; retained identity,
+  sender state and historical journal entries are not reset. If a later start or
+  commit fails, rollback cannot restore the cleared systemd Result, NRestarts or
+  start-limit bookkeeping; it retains identity/state and may leave the unit stopped.
 - `--action uninstall`: stops/disables and removes only owned unit/binaries/manifest.
   The account, public bootstrap and all private identity/counter data remain.
   Repeating a completed owned uninstall invokes no service/account command.

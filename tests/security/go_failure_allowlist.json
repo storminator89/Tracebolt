@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "sourceCommit": "fccc4b00cd8a144afd58e4b995747afab7a10022",
-  "goSourceSha256": "10d2521d22e5aa8ddff2441da96bc9180385a935e24336a03acf29344daa9b09",
+  "goSourceSha256": "5ef032fae5130fc42b140668fe699c0b67eab3cb3ab9d5b11593c84a0c9fcd18",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -147,7 +147,11 @@
       "TestReadAdminFixtureOwner",
       "TestReadAdminInitialProbeDiagnosticIsClosed",
       "TestReadAdminJournalReady",
+      "TestReadAdminLifecycleCaptureIsBounded",
+      "TestReadAdminLifecycleResultIsClosed",
+      "TestReadAdminLifecycleUnitStatusIsClosed",
       "TestReadAdminMaintenanceFailurePreservesPrimary",
+      "TestReadAdminMaintenanceLifecycleFailureIsClosed",
       "TestReadAdminNativeSelection",
       "TestReadAdminOperatorContract",
       "TestReadAdminOperatorFailureBounds",
@@ -326,6 +330,7 @@
       "TestInstallerPreflightDiagnosticIsClosedAndNonGranting",
       "TestInstallerTerminalRestoresAfterKilledInertChild",
       "TestLinuxAdapterDisposableFilesystemLifecycle",
+      "TestLinuxAdapterExplicitRestartResetsExhaustedStartBudget",
       "TestLinuxAdapterPublicDirectoriesIgnoreRestrictiveUmask",
       "TestLinuxAdapterRefusesForeignControlAndFailedValidation",
       "TestLinuxAdapterRejectsAlteredOwnedArtifacts",
@@ -334,6 +339,7 @@
       "TestLinuxAdapterRetainedResumeAndRepeatedUninstall",
       "TestLinuxAdapterRollbackRestoresEnablementAndPreservesIdentity",
       "TestLinuxAdapterUncertainUseraddRetainsEvidence",
+      "TestLinuxRestartResetRequiresStoppedValidatedRestart",
       "TestManagedPackageBootstrapInstallerCompatibility",
       "TestNewPublicDirectoryNeverAdoptsExisting",
       "TestOnlineBootstrapPreparationRejectsIncompleteContract",
@@ -345,6 +351,7 @@
       "TestPlanGatesAndRetainedIdentity",
       "TestReadAdminNativePreflightRejectsOlderBootstrapWithoutEffects",
       "TestReadAdminRequiresExplicitCompleteProfileBeforeEffects",
+      "TestRestartResetFailuresNeverReachStart",
       "TestTransactionJournalAndEnrollmentBeforeStart",
       "TestUninstallNeverRequestsIdentityOrAccountDeletion",
       "TestUnitHasNoDynamicShellOrPrivilegeGrant",

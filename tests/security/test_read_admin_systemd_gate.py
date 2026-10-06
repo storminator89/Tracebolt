@@ -190,19 +190,23 @@ class ReadAdminWrapperTests(unittest.TestCase):
 
     def validate(self, raw, transport="tls", scenario="complete", *, read_profile=READ_PROFILE,
                  source=SOURCE, mode=stat.S_IFREG | 0o600,
-                 size=None, open_error=None, private_log=None, log_mode=stat.S_IFREG | 0o600, log_size=None):
+                 size=None, open_error=None, private_log=None, log_mode=stat.S_IFREG | 0o600, log_size=None,
+                 log_open_error=None, log_read_error=None):
         stream = FakeFile(raw)
         stream.read = mock.Mock(wraps=stream.read)
         log_stream = FakeFile(private_log or b'')
         log_stream.fileno = lambda: 124
-        log_stream.read = mock.Mock(wraps=log_stream.read)
+        log_stream.read = mock.Mock(wraps=log_stream.read, side_effect=log_read_error)
         def opened(path, flags):
             if open_error is not None:
                 raise open_error
             if path == 'private-fixture-path':
                 return 123
-            if path.endswith('/private-test.log') and private_log is not None:
-                return 124
+            if path.endswith('/private-test.log'):
+                if log_open_error is not None:
+                    raise log_open_error
+                if private_log is not None:
+                    return 124
             raise FileNotFoundError()
         fake_os = SimpleNamespace(
             O_RDONLY=os.O_RDONLY, O_NOFOLLOW=os.O_NOFOLLOW,
@@ -223,12 +227,15 @@ class ReadAdminWrapperTests(unittest.TestCase):
 
     def complete(self, raw):
         output, error = io.StringIO(), None
-        with contextlib.redirect_stdout(output), mock.patch("builtins.open", return_value=FakeFile(raw)), \
+        stream = FakeFile(raw)
+        stream.read = mock.Mock(wraps=stream.read)
+        with contextlib.redirect_stdout(output), mock.patch("builtins.open", return_value=stream), \
                 mock.patch.object(sys, "argv", ["validator", "normalized-fixture-path"]):
             try:
                 exec(self.readers[1], {"__name__": "__main__"})
             except SystemExit as exc:
                 error = str(exc)
+        stream.read.assert_called_once_with(16385)
         return output.getvalue(), error
 
     def assert_rejected(self, raw, **options):
@@ -368,7 +375,10 @@ class ReadAdminWrapperTests(unittest.TestCase):
             output, error, _, _ = self.validate(raw, **options)
             self.assertIsNone(error)
             self.assertEqual(json.loads(output)['operatorFailures'], [])
+            self.assertEqual(json.loads(output)['lifecycleFailures'], [])
             self.assertEqual(json.loads(output)['nativeAssertion'], 'private-diagnostic-unavailable')
+            self.assertNotIn('/private/path', output)
+            self.assertNotIn('private secret', output)
         boundary_log = b'x' * (1048576 - len(line) - 1) + b'\n' + line
         output, error, _, _ = self.validate(raw, private_log=boundary_log)
         self.assertIsNone(error)
@@ -377,9 +387,174 @@ class ReadAdminWrapperTests(unittest.TestCase):
             output, error, fake_os, _ = self.validate(json.dumps(result(scenario=scenario)).encode(), scenario=scenario, private_log=line)
             self.assertIsNone(error)
             self.assertEqual(json.loads(output)['operatorFailures'], [])
+            self.assertEqual(json.loads(output)['lifecycleFailures'], [])
             self.assertEqual(json.loads(output)['nativeAssertion'], 'none')
             self.assertEqual(fake_os.open.call_count, 1)
             fake_os.log_stream.read.assert_not_called()
+
+    def lifecycle_enums(self):
+        transaction = (WORKFLOW.parents[2] / 'internal/agentinstall/transaction.go').read_text()
+        inspection = transaction.split('func inspectionFailureStage', 1)[1].split('default:', 1)[0]
+        stages = set(re.findall(r'"(preflight_[a-z_]+)"', inspection))
+        stages.update('stop_owned_service validate_existing_guided_state start_owned_service disable_owned_service remove_owned_installation_files commit reset_owned_service_restart_state none invalid'.split())
+        maintenance = set(re.search(r"setup_failures = frozenset\('\'\'(.*?)'\'\'\.split\(\)\)", self.source, re.S).group(1).split())
+        frozen = set(re.search(r"lifecycle_stages = frozenset\('\'\'(.*?)'\'\'\.split\(\)\)", self.source, re.S).group(1).split())
+        self.assertEqual(frozen, stages)
+        return {
+            'operation': set('restart_preflight restart_apply uninstall_cleanup inspect_socket revoke_socket helper_cleanup'.split()),
+            'failureStage': stages | maintenance,
+            'committed': {'true', 'false', 'unavailable'},
+            'rolledBack': {'true', 'false', 'unavailable'},
+            'identityRetained': {'true', 'false', 'unavailable'},
+            'unit': set('agent socket_helper socket_listener'.split()),
+            'activeState': set('active reloading inactive failed activating deactivating maintenance refreshing unknown unavailable invalid'.split()),
+            'subState': set('dead running exited failed auto-restart auto-restart-queued start-pre start start-post stop stop-sigterm stop-sigkill stop-post final-sigterm final-sigkill reload reload-signal reload-notify listening start-chown stop-pre stop-pre-sigterm stop-pre-sigkill unknown unavailable invalid'.split()),
+            'result': set('success resources protocol timeout exit-code signal core-dump watchdog start-limit-hit oom-kill exec-condition skip-condition unknown unavailable invalid'.split()),
+        }
+
+    def lifecycle_line(self, **changes):
+        values = dict(operation='restart_apply', failureStage='start_owned_service', committed='false',
+                      rolledBack='true', identityRetained='true', unit='agent', activeState='failed',
+                      subState='auto-restart', result='start-limit-hit')
+        values.update(changes)
+        line = '    read_admin_socket_systemd_test.go:300: native_lifecycle ' + ' '.join(f'{key}={value}' for key, value in values.items())
+        expected = dict(values)
+        for field in ('committed', 'rolledBack', 'identityRetained'):
+            expected[field] = {'true': True, 'false': False, 'unavailable': None}.get(values[field])
+        return (line + '\n').encode(), expected
+
+    def test_lifecycle_and_operator_diagnostics_share_one_bounded_private_read(self):
+        lifecycle, lifecycle_expected = self.lifecycle_line()
+        operator, operator_expected = self.operator_line()
+        raw = json.dumps(result(status='fail', stage='read_admin_restart')).encode()
+        log = (b'private secret and raw telemetry\n' + lifecycle + operator +
+               b'    read_admin_socket_systemd_test.go:302: owned native agent restart failed\n')
+        output, error, fake_os, stream = self.validate(raw, private_log=log)
+        self.assertIsNone(error)
+        projected = json.loads(output)
+        self.assertEqual(projected['nativeAssertion'], 'owned native agent restart failed')
+        self.assertEqual(projected['operatorFailures'], [operator_expected])
+        self.assertEqual(projected['lifecycleFailures'], [lifecycle_expected])
+        self.assertNotIn('private secret', output)
+        self.assertNotIn('.go:', output)
+        self.assertEqual(fake_os.open.call_count, 2)
+        self.assertEqual(fake_os.open.call_args_list[1].args[1], os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC)
+        stream.read.assert_called_once_with(4097)
+        fake_os.log_stream.read.assert_called_once_with(1048577)
+        self.assertEqual(self.complete(output.encode()), ('', INCOMPLETE))
+        for status in ('pass', 'fail'):
+            self.assert_rejected(json.dumps(result(status=status, lifecycleFailures=[lifecycle_expected])).encode())
+
+    def test_lifecycle_diagnostics_accept_only_closed_enums_and_boolean_lexemes(self):
+        raw = json.dumps(result(status='fail')).encode()
+        for field, allowed in self.lifecycle_enums().items():
+            for value in sorted(allowed):
+                with self.subTest(field=field, value=value):
+                    line, expected = self.lifecycle_line(**{field: value})
+                    output, error, _, _ = self.validate(raw, private_log=line)
+                    self.assertIsNone(error)
+                    self.assertEqual(json.loads(output)['lifecycleFailures'], [expected])
+            for invalid in ('', 'PRIVATE_SECRET', 'private_secret', 'private-token', '/private/path',
+                            'https://private.invalid', '1', '0', 'True', 'null'):
+                with self.subTest(field=field, invalid=invalid):
+                    line, _ = self.lifecycle_line(**{field: invalid})
+                    output, error, _, _ = self.validate(raw, private_log=line)
+                    self.assertIsNone(error)
+                    self.assertEqual(json.loads(output)['lifecycleFailures'], [])
+                    for secret in ('PRIVATE_SECRET', 'private_secret', 'private-token', '/private/path', 'https://private.invalid'):
+                        self.assertNotIn(secret, output)
+
+    def test_lifecycle_diagnostics_are_exact_anchored_deduplicated_and_capped(self):
+        raw = json.dumps(result(status='fail')).encode()
+        line, _ = self.lifecycle_line()
+        for malformed in (line.lstrip(), b'private ' + line, line.replace(b'.go:', b'.txt:'),
+                          line.replace(b'read_admin_socket_systemd_test.go', b'/private/read_admin_socket_systemd_test.go'),
+                          line.replace(b'operation=restart_apply', b'operation=restart_apply operation=helper_cleanup'),
+                          line.replace(b' failureStage=', b'  failureStage='),
+                          line.replace(b'committed=false rolledBack=true', b'rolledBack=true committed=false'),
+                          line.replace(b' committed=false', b''),
+                          line.replace(b'failureStage=', b'failure_stage='),
+                          line.replace(b'committed=false', b'committed=false\x00'),
+                          line.replace(b'committed=false', b'committed=false\xff'),
+                          line.rstrip() + b' private-secret\n'):
+            output, error, _, _ = self.validate(raw, private_log=malformed)
+            self.assertIsNone(error)
+            self.assertEqual(json.loads(output)['lifecycleFailures'], [])
+            self.assertNotIn('private-secret', output)
+        lines, expected = [], []
+        for failure_stage in sorted(self.lifecycle_enums()['failureStage'])[:12]:
+            current, values = self.lifecycle_line(failureStage=failure_stage)
+            lines.extend([current, current])
+            expected.append(values)
+        operator, operator_expected = self.operator_line()
+        log = b''.join(lines) + operator + b'    systemd_install_test.go:999: operator fixture contract\n'
+        output, error, _, _ = self.validate(raw, private_log=log)
+        self.assertIsNone(error)
+        self.assertEqual(json.loads(output)['lifecycleFailures'], expected[:8])
+        self.assertEqual(json.loads(output)['operatorFailures'], [operator_expected])
+        self.assertEqual(json.loads(output)['nativeAssertion'], 'operator fixture contract')
+
+    def test_lifecycle_diagnostics_private_bounds_and_no_pass_read(self):
+        raw = json.dumps(result(status='fail')).encode()
+        line, expected = self.lifecycle_line()
+        for options in ({}, {'private_log': b''}, {'private_log': b'x' * 1048577},
+                        {'private_log': line, 'log_mode': stat.S_IFIFO | 0o600},
+                        {'private_log': line, 'log_mode': stat.S_IFLNK | 0o600},
+                        {'private_log': line, 'log_size': len(line) + 1},
+                        {'private_log': line, 'log_size': len(line) - 1},
+                        {'private_log': line, 'log_open_error': PermissionError('/private/path')},
+                        {'private_log': line, 'log_read_error': OSError('private secret')},
+                        {'private_log': line, 'log_size': 1048577}):
+            output, error, _, _ = self.validate(raw, **options)
+            self.assertIsNone(error)
+            self.assertEqual(json.loads(output)['lifecycleFailures'], [])
+            self.assertEqual(json.loads(output)['nativeAssertion'], 'private-diagnostic-unavailable')
+            self.assertNotIn('/private/path', output)
+            self.assertNotIn('private secret', output)
+        boundary_log = b'x' * (1048576 - len(line) - 1) + b'\n' + line
+        output, error, fake_os, _ = self.validate(raw, private_log=boundary_log)
+        self.assertIsNone(error)
+        self.assertEqual(json.loads(output)['lifecycleFailures'], [expected])
+        fake_os.log_stream.read.assert_called_once_with(1048577)
+        for scenario in SCENARIOS:
+            output, error, fake_os, _ = self.validate(json.dumps(result(scenario=scenario)).encode(), scenario=scenario, private_log=line)
+            self.assertIsNone(error)
+            self.assertEqual(json.loads(output)['lifecycleFailures'], [])
+            self.assertEqual(fake_os.open.call_count, 1)
+            fake_os.log_stream.read.assert_not_called()
+
+    def test_two_maximum_diagnostic_lists_fit_bounded_normalized_export(self):
+        enums = self.lifecycle_enums()
+        widest = {field: max(choices, key=len) for field, choices in enums.items()}
+        widest.update(committed='false', rolledBack='false', identityRetained='false')
+        lines, lifecycle_expected, operator_expected = [], [], []
+        for failure_stage in sorted(enums['failureStage'], key=len, reverse=True)[:8]:
+            line, expected = self.lifecycle_line(**dict(widest, failureStage=failure_stage))
+            lines.extend([line, line])
+            lifecycle_expected.append(expected)
+        for resource in 'enrollment invitation approval devices packages operational system_query journal_create'.split():
+            line, expected = self.operator_line(method='post', resource=resource, status='not_received', failure='transport',
+                                                code='journal_generation_stale')
+            lines.extend([line, line])
+            operator_expected.append(expected)
+        lines.append(b'    read_admin_systemd_test.go:301: read-admin received v3 inventory or broad-journal readiness deadline; no log content queried\n')
+        raw = json.dumps(result(status='fail', stage=max(STAGES, key=len), setupFailure=max(enums['failureStage'], key=len),
+                                initialProbe={'failure': 'systemd-unit-inspection-command-failed',
+                                              'childExit': 'not_observed', 'scopePromptSeen': False})).encode()
+        output, error, _, _ = self.validate(raw, private_log=b''.join(lines))
+        self.assertIsNone(error)
+        projected = json.loads(output)
+        self.assertEqual(projected['operatorFailures'], operator_expected)
+        self.assertEqual(projected['lifecycleFailures'], lifecycle_expected)
+        self.assertGreater(len(output.encode()), 4096)
+        self.assertLess(len(output.encode()), 16384)
+        self.assertEqual(self.complete(output.encode()), ('', INCOMPLETE))
+        padded = output.encode().ljust(16384, b' ')
+        self.assertEqual(self.complete(padded), ('', INCOMPLETE))
+        self.assertEqual(self.complete(padded + b' '), ('', INVALID))
+        self.assert_rejected(raw.ljust(4097, b' '))
+        self.assertIn('raw = stream.read(16385)', self.source)
+        self.assertIn("check(len(normalized.encode('utf-8')) + 1 <= 16384)", self.source)
 
     def test_manual_only_fresh_v2_approval_source_and_transport_choice(self):
         source = self.source
@@ -401,6 +576,7 @@ class ReadAdminWrapperTests(unittest.TestCase):
         self.assertIn("metadata-only code is not an OS confidentiality boundary", triggers)
         self.assertIn("owned-helper stop/drain and owned-main-service cleanup", triggers)
         self.assertIn("fixture log service/content query, owned-main-service restart", triggers)
+        self.assertIn("clearing its systemd failure/start-limit bookkeeping (Result/NRestarts) after stopped identity validation", triggers)
         self.assertIn("        default: tls\n        type: choice\n        options:\n          - tls\n          - http-test\n", triggers)
         self.assertIn("plaintext passwords, sessions, telemetry and journal content", triggers)
         self.assertIn("server/UI impersonation", triggers)
@@ -505,7 +681,7 @@ class ReadAdminWrapperTests(unittest.TestCase):
                     raw = json.dumps(expected).encode()
                     output, error, fake_os, stream = self.validate(raw, transport, scenario)
                     self.assertIsNone(error)
-                    self.assertEqual(json.loads(output), dict(expected, nativeAssertion="none", operatorFailures=[]))
+                    self.assertEqual(json.loads(output), dict(expected, nativeAssertion="none", operatorFailures=[], lifecycleFailures=[]))
                     fake_os.open.assert_called_once_with("private-fixture-path", os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC)
                     fake_os.fdopen.assert_called_once_with(123, "rb")
                     fake_os.fstat.assert_called_once_with(123)
@@ -575,7 +751,7 @@ class ReadAdminWrapperTests(unittest.TestCase):
                 raw = json.dumps(result(status="fail", stage=stage)).encode()
                 output, error, _, _ = self.validate(raw)
                 self.assertIsNone(error)
-                self.assertEqual(json.loads(output), dict(json.loads(raw), nativeAssertion="private-diagnostic-unavailable", operatorFailures=[]))
+                self.assertEqual(json.loads(output), dict(json.loads(raw), nativeAssertion="private-diagnostic-unavailable", operatorFailures=[], lifecycleFailures=[]))
                 self.assertEqual(self.complete(output.encode()), ("", INCOMPLETE))
                 if stage != "complete":
                     self.assert_rejected(json.dumps(result(stage=stage)).encode())

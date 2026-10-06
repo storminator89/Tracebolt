@@ -182,7 +182,13 @@ func runApprovedSystemdInstallationMode(t *testing.T, profile, collectionProfile
 			defer cancel()
 			cmd := exec.CommandContext(ctx, binaries["agent-service"], profileArguments([]string{"--action", "uninstall", "--apply"})...)
 			cmd.Env = systemdCleanEnvironment()
-			if cmd.Run() != nil {
+			var cleanupErr error
+			if readAdmin != nil {
+				cleanupErr = readAdminRunLifecycle(t, cmd, "uninstall_cleanup")
+			} else {
+				cleanupErr = cmd.Run()
+			}
+			if cleanupErr != nil {
 				t.Error("owned service cleanup incomplete; discard this VM without exporting state")
 			}
 		}

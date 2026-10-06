@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-10-06 — Restore the owned service's explicit maintenance restart budget
+
+- A composed fresh read-admin installation starts the agent five times. The e45 native test reached its next explicit restart inside a 92-second execution window, against the unchanged systemd limit of five starts per 300 seconds. This reconstructs a guaranteed start-budget conflict; the failed run did not capture systemd's precise Result.
+- Add one journaled Restart-only operation after stopping and validating the owned service: reset only its systemd failed status and start/restart counters, then start it. Installation, upgrade, uninstall, automatic crash recovery, identities and ledgers keep their existing behavior. The automatic five-starts-per-300-seconds limit stays unchanged; cleared systemd bookkeeping cannot be restored by rollback and is disclosed in the plan and native approval.
+- Retain bounded existing CLI results and fixed unit status labels for failed restart, revoke and cleanup commands. Export only closed deduplicated diagnostics, never raw output or identities. The private source result remains 4 KiB and private log 1 MiB; the normalized closed diagnostic artifact is capped at 16 KiB.
+- The previous approved native run proved installed TCP/UDP owners, v4 provenance and actual journal content; restart and revocation remain unpassed. Inert phase composition and reviewed adapter tests support this correction. Full hosted and newly approved native acceptance remain required; no user-host action, workflow dispatch or release activation occurs on publication.
+
 ## 2026-10-06 — Keep package and journal metadata readable through brief maintenance
 
 - Reuse the existing store-global 750-ms single-reader admission gate for package metadata and both journal status reads. Short ordinary writes or maintenance can finish before the read; sustained contention and excess readers still fail busy. Keep the one-operation limit, existing channels, write/page admission and all client retry/deadline budgets unchanged.

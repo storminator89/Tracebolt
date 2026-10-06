@@ -1349,7 +1349,11 @@ func readAdminStopOwnedHelper(t *testing.T, c *readAdminNativeCommand) bool {
 		return true
 	}
 	var result readAdminSocketNativeResult
-	if !readAdminNativeMaintenance(t, c, "cleanup", &result) || !result.CleanupConfirmed {
+	ok := readAdminNativeMaintenance(t, c, "cleanup", &result)
+	if !ok || !result.CleanupConfirmed {
+		if ok {
+			readAdminLogLifecycleFailure(t, "cleanup", readAdminLifecycleDiagnostic{"maintenance-operation-failed", "unavailable", "unavailable", "unavailable"})
+		}
 		t.Error("owned helper containment unconfirmed; preserve state and discard VM")
 		return false
 	}

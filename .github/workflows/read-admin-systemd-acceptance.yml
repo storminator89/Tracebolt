@@ -18,7 +18,7 @@ on:
         required: true
         type: string
       approved_fresh_v2_read_admin_systemd:
-        description: 'Approve tightening only the root-owned hosted /opt directory inode from 0777 to 0755 (no recursion), then fresh V2 identity/account/service, inventory/network grants, journal/socket-owner helpers, cancellation, bounded root-owned loopback TCP/UDP fixtures, fixture log service/content query, owned-main-service restart, explicit revoke, owned-helper stop/drain and owned-main-service cleanup on each disposable VM; no reboot'
+        description: 'Approve tightening only the root-owned hosted /opt directory inode from 0777 to 0755 (no recursion), then fresh V2 identity/account/service, inventory/network grants, journal/socket-owner helpers, cancellation, bounded root-owned loopback TCP/UDP fixtures, fixture log service/content query, owned-main-service restart including clearing its systemd failure/start-limit bookkeeping (Result/NRestarts) after stopped identity validation, explicit revoke, owned-helper stop/drain and owned-main-service cleanup on each disposable VM; no reboot'
         required: true
         default: false
         type: boolean
@@ -400,16 +400,32 @@ jobs:
                   frozenset('none unknown invalid storage_busy journal_busy authentication_required journal_not_configured invalid_journal_request journal_conflict journal_unavailable journal_generation_stale journal_not_ready journal_not_found not_found method_not_allowed forbidden invalid_request'.split()),
               )
               pattern = re.compile(r'[ \t]+[A-Za-z0-9_]+\.go:[0-9]+: native_operator method=([a-z]+) resource=([a-z_]+) status=([a-z0-9_]+) failure=([a-z]+) code=([a-z_]+)')
+              lifecycle_fields = ('operation', 'failureStage', 'committed', 'rolledBack', 'identityRetained', 'unit', 'activeState', 'subState', 'result')
+              lifecycle_stages = frozenset('''preflight_inspect preflight_systemd preflight_terminal preflight_systemctl_tool preflight_useradd_tool preflight_nologin_tool preflight_opt_directory preflight_etc_directory preflight_state_directory preflight_unit_directory preflight_unit_status preflight_account preflight_installation_state preflight_ownership_state preflight_fresh_paths preflight_bootstrap preflight_complete_profile preflight_artifacts preflight_plan preflight_begin preflight_reinspect preflight_replan preflight_unit_command preflight_unit_members preflight_unit_pid preflight_unit_absence preflight_manifest_absence preflight_begin_request preflight_begin_control preflight_begin_lock preflight_begin_journal preflight_begin_entropy preflight_begin_ownership preflight_begin_unit preflight_begin_artifacts preflight_begin_bootstrap preflight_begin_save stop_owned_service validate_existing_guided_state start_owned_service disable_owned_service remove_owned_installation_files commit reset_owned_service_restart_state none invalid'''.split()) | setup_failures
+              lifecycle_choices = (
+                  frozenset('restart_preflight restart_apply uninstall_cleanup inspect_socket revoke_socket helper_cleanup'.split()),
+                  lifecycle_stages,
+                  frozenset('true false unavailable'.split()),
+                  frozenset('true false unavailable'.split()),
+                  frozenset('true false unavailable'.split()),
+                  frozenset('agent socket_helper socket_listener'.split()),
+                  frozenset('active reloading inactive failed activating deactivating maintenance refreshing unknown unavailable invalid'.split()),
+                  frozenset('dead running exited failed auto-restart auto-restart-queued start-pre start start-post stop stop-sigterm stop-sigkill stop-post final-sigterm final-sigkill reload reload-signal reload-notify listening start-chown stop-pre stop-pre-sigterm stop-pre-sigkill unknown unavailable invalid'.split()),
+                  frozenset('success resources protocol timeout exit-code signal core-dump watchdog start-limit-hit oom-kill exec-condition skip-condition unknown unavailable invalid'.split()),
+              )
+              lifecycle_pattern = re.compile(r'[ \t]+[A-Za-z0-9_]+\.go:[0-9]+: native_lifecycle operation=([a-z_]+) failureStage=([a-z0-9_-]+) committed=([a-z]+) rolledBack=([a-z]+) identityRetained=([a-z]+) unit=([a-z_]+) activeState=([a-z]+) subState=([a-z-]+) result=([a-z-]+)')
+              lifecycle_booleans = {'true': True, 'false': False, 'unavailable': None}
               try:
                   fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC)
                   with os.fdopen(fd, 'rb') as stream:
                       info = os.fstat(stream.fileno())
                       if not stat.S_ISREG(info.st_mode) or not 0 < info.st_size <= 1048576:
-                          return 'private-diagnostic-unavailable', []
+                          return 'private-diagnostic-unavailable', [], []
                       raw = stream.read(1048577)
                   if len(raw) != info.st_size or len(raw) > 1048576:
-                      return 'private-diagnostic-unavailable', []
+                      return 'private-diagnostic-unavailable', [], []
                   assertion, failures, seen = 'no-known-native-assertion', [], set()
+                  lifecycle_failures, lifecycle_seen = [], set()
                   for line in raw.decode('utf-8', errors='replace').splitlines():
                       match = re.fullmatch(r'\s+[^\s/]+\.go:[0-9]+: (.+)', line)
                       if assertion == 'no-known-native-assertion' and match and match[1] in allowed:
@@ -420,9 +436,18 @@ jobs:
                           if values not in seen and all(value in allowed_values for value, allowed_values in zip(values, choices)):
                               failures.append(dict(zip(fields, values)))
                               seen.add(values)
-                  return assertion, failures
+                      lifecycle = lifecycle_pattern.fullmatch(line)
+                      if lifecycle and len(lifecycle_failures) < 8:
+                          values = lifecycle.groups()
+                          if values not in lifecycle_seen and all(value in allowed_values for value, allowed_values in zip(values, lifecycle_choices)):
+                              record = dict(zip(lifecycle_fields, values))
+                              for field in ('committed', 'rolledBack', 'identityRetained'):
+                                  record[field] = lifecycle_booleans[record[field]]
+                              lifecycle_failures.append(record)
+                              lifecycle_seen.add(values)
+                  return assertion, failures, lifecycle_failures
               except Exception:
-                  return 'private-diagnostic-unavailable', []
+                  return 'private-diagnostic-unavailable', [], []
           try:
               check(len(sys.argv) == 6)
               check(sys.argv[2] in {'tls', 'http-test'})
@@ -1076,10 +1101,15 @@ jobs:
               check(probe['childExit'] in {'not_observed', 'zero', 'nonzero'} and type(probe['scopePromptSeen']) is bool)
               check(value['status'] != 'pass' or probe == {'failure': 'none', 'childExit': 'zero', 'scopePromptSeen': True})
               # One bounded private read exports only closed assertion/enum values.
-              assertion, failures = native_diagnostics(sys.argv[1].rsplit('/', 1)[0] + '/private-test.log') if value['status'] == 'fail' else ('none', [])
+              assertion, failures, lifecycle_failures = native_diagnostics(sys.argv[1].rsplit('/', 1)[0] + '/private-test.log') if value['status'] == 'fail' else ('none', [], [])
               value['nativeAssertion'] = assertion
               value['operatorFailures'] = failures
-              print(json.dumps(value, indent=2))
+              value['lifecycleFailures'] = lifecycle_failures
+              # The unchanged source input is <=4096 bytes. Two closed, capped
+              # diagnostic lists need a separate bounded normalized export.
+              normalized = json.dumps(value, separators=(',', ':'))
+              check(len(normalized.encode('utf-8')) + 1 <= 16384)
+              print(normalized)
           except Exception:
               raise SystemExit('FAIL: missing or invalid sanitized read-admin acceptance evidence.')
           PYTHON
@@ -1089,8 +1119,14 @@ jobs:
           fi
           python3 - "$TARGET" <<'PYTHON'
           import json, sys
-          with open(sys.argv[1], 'rb') as stream:
-              value = json.loads(stream.read(4097))
+          try:
+              with open(sys.argv[1], 'rb') as stream:
+                  raw = stream.read(16385)
+              if not 0 < len(raw) <= 16384:
+                  raise ValueError('invalid normalized result size')
+              value = json.loads(raw)
+          except Exception:
+              raise SystemExit('FAIL: missing or invalid sanitized read-admin acceptance evidence.')
           if value['status'] != 'pass' or value['stage'] != 'complete':
               raise SystemExit('FAIL: sanitized read-admin acceptance records an incomplete or failing run.')
           print('PASS: selected fresh read-admin V2 scenario completed; OS reboot remains untested.')

@@ -12,15 +12,16 @@ var ErrOperation = errors.New("installation transaction failed; inspect its safe
 type Operation string
 
 const (
-	OpPrepare  Operation = "prepare_account_and_paths"
-	OpStage    Operation = "stage_verified_artifacts"
-	OpEnroll   Operation = "enroll_as_dedicated_account"
-	OpStop     Operation = "stop_owned_service"
-	OpValidate Operation = "validate_existing_guided_state"
-	OpPublish  Operation = "publish_owned_binaries_and_unit"
-	OpStart    Operation = "start_owned_service"
-	OpDisable  Operation = "disable_owned_service"
-	OpRemove   Operation = "remove_owned_installation_files"
+	OpPrepare           Operation = "prepare_account_and_paths"
+	OpStage             Operation = "stage_verified_artifacts"
+	OpEnroll            Operation = "enroll_as_dedicated_account"
+	OpStop              Operation = "stop_owned_service"
+	OpValidate          Operation = "validate_existing_guided_state"
+	OpResetRestartState Operation = "reset_owned_service_restart_state"
+	OpPublish           Operation = "publish_owned_binaries_and_unit"
+	OpStart             Operation = "start_owned_service"
+	OpDisable           Operation = "disable_owned_service"
+	OpRemove            Operation = "remove_owned_installation_files"
 )
 
 // Backend is a trusted local platform adapter. Inspect must be read-only and
@@ -159,7 +160,7 @@ func Execute(ctx context.Context, r Request, backend Backend) (Result, error) {
 	case Upgrade:
 		operations = []Operation{OpStage, OpStop, OpValidate, OpPublish, OpStart}
 	case Restart:
-		operations = []Operation{OpStop, OpValidate, OpStart}
+		operations = []Operation{OpStop, OpValidate, OpResetRestartState, OpStart}
 	case Uninstall:
 		operations = []Operation{OpStop, OpDisable, OpRemove}
 	default:
