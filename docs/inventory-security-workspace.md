@@ -47,6 +47,11 @@ boundaries. Upgrading the manager or clicking a view must not silently enable an
 of them, convert an existing profile, re-enroll an endpoint, grant groups or root,
 change the service sandbox, or retry a denied owner read with extra privilege.
 
+The [one-time inventory guide](guided-inventory-setup.md) already groups full
+process/mount and complete cached-APT consent, with optional hostname/interfaces,
+for an existing compatible activated v3 agent. It does not configure journal or
+service-action helpers and does not close the unified administration gap.
+
 A future unified setup flow needs one reviewable disclosure of the exact scopes,
 identity/destination binding, transport risks, cadence/retention and helper
 permissions, followed by explicit administrator approval. It must preserve

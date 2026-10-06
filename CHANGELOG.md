@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-10-06 — Align CVE controls with current session authority
+
+- Show CVE feed sync/import controls only for an explicitly confirmed current shared-administrator session, matching the existing server capability. Named accounts retain read access; unknown authority fails closed. Recheck each write and discard stale selected-file state when the session changes, without expanding server permissions.
+- Clarify the Journal picker action as "Refresh service list" / "Dienstliste aktualisieren" and correct current feature documentation while keeping source integration, opt-in configuration and native acceptance distinct.
+
 ## 2026-10-06 — Expose APT evidence identity and narrow picker diagnostics
 
 - Show complete and transfer generation IDs/sequences, the transfer's original capture time and failed-attempt identity inside existing full-APT details. Preserve retained rows, source timestamps, request behavior and visible failure outcomes.

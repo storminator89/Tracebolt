@@ -177,21 +177,21 @@ describe('observed-service picker uses only bounded protected inventory reads', 
     it('requires an explicit generation restart after a 409 and never retries automatically', async () => {
         await open(); vi.mocked(mutateRaw).mockRejectedValueOnce(new APIError('changed', 409)); fireEvent.click(screen.getByRole('button', { name: 'Next service page' }));
         await screen.findByText(/service generation or paging session changed or expired/); expect(screen.queryByRole('list')).not.toBeInTheDocument(); expect(request).toHaveBeenCalledTimes(1);
-        fireEvent.click(screen.getByRole('button', { name: 'Refresh services and restart' })); await screen.findByText(services[0].name);
+        fireEvent.click(screen.getByRole('button', { name: 'Refresh service list' })); await screen.findByText(services[0].name);
         expect(request).toHaveBeenCalledTimes(2); expect(JSON.parse(vi.mocked(mutateRaw).mock.calls.at(-1)![1]).cursor).toBe('');
     });
 
     it('inherits session locking so focus cannot resurrect inventory after a 401', async () => {
         await open(); vi.mocked(mutateRaw).mockRejectedValueOnce(new APIError('session', 401)); fireEvent.click(screen.getByRole('button', { name: 'Next service page' }));
         await screen.findByText('Your session has ended. Sign in again.'); expect(screen.queryByRole('list')).not.toBeInTheDocument();
-        act(() => window.dispatchEvent(new Event('focus'))); expect(mutateRaw).toHaveBeenCalledTimes(2); expect(screen.getByRole('button', { name: 'Refresh services and restart' })).toBeDisabled();
+        act(() => window.dispatchEvent(new Event('focus'))); expect(mutateRaw).toHaveBeenCalledTimes(2); expect(screen.getByRole('button', { name: 'Refresh service list' })).toBeDisabled();
     });
 
     it('clears hidden inventory and restores a fresh first-page read instead of reusing rows or a cursor', async () => {
         await open(); fireEvent.click(screen.getByRole('button', { name: 'Next service page' })); await screen.findByText('fixture-000100.service');
         const visibility = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
         act(() => document.dispatchEvent(new Event('visibilitychange'))); expect(screen.queryByRole('list')).not.toBeInTheDocument();
-        const count = vi.mocked(request).mock.calls.length; fireEvent.click(screen.getByRole('button', { name: 'Refresh services and restart' })); expect(request).toHaveBeenCalledTimes(count);
+        const count = vi.mocked(request).mock.calls.length; fireEvent.click(screen.getByRole('button', { name: 'Refresh service list' })); expect(request).toHaveBeenCalledTimes(count);
         visibility.mockReturnValue('visible'); act(() => document.dispatchEvent(new Event('visibilitychange'))); await screen.findByText('fixture-000000.service');
         expect(request).toHaveBeenCalledTimes(count + 1); expect(JSON.parse(vi.mocked(mutateRaw).mock.calls.at(-1)![1]).cursor).toBe('');
     });
@@ -213,7 +213,7 @@ describe('observed-service picker uses only bounded protected inventory reads', 
         const mono = vi.spyOn(performance, 'now').mockReturnValue(1000), wall = vi.spyOn(Date, 'now').mockReturnValue(100000);
         await open(); mono.mockReturnValue(901000); wall.mockReturnValue(1000000); act(() => vi.advanceTimersByTime(1000));
         expect(screen.queryByRole('list')).not.toBeInTheDocument(); expect(screen.getByRole('alert')).toHaveTextContent('paging session changed or expired');
-        fireEvent.click(screen.getByRole('button', { name: 'Refresh services and restart' })); await screen.findByText(services[0].name);
+        fireEvent.click(screen.getByRole('button', { name: 'Refresh service list' })); await screen.findByText(services[0].name);
         wall.mockReturnValue(1100000); act(() => vi.advanceTimersByTime(1000));
         expect(screen.queryByRole('list')).not.toBeInTheDocument(); expect(screen.getByRole('alert')).toHaveTextContent('time anchor');
     });
@@ -225,6 +225,7 @@ describe('observed-service picker uses only bounded protected inventory reads', 
 
     it('provides German picker labels and permission limitations', async () => {
         setLocale('de', false); await open(); expect(screen.getByRole('region', { name: 'Beobachtete Dienste' })).toBeVisible();
+        expect(screen.getByRole('button', { name: 'Dienstliste aktualisieren' })).toBeEnabled();
         expect(screen.getByLabelText('Beobachtete Dienste durchsuchen')).toBeVisible(); fireEvent.click(screen.getByText('Auswahl & Freigabe', { selector: 'summary' })); expect(screen.getByText(/bestätigt weder die lokale Journal-Freigabeliste/)).toBeVisible();
         fireEvent.click(screen.getByRole('button', { name: 'Übernehmen fixture-000000.service' })); expect(select).toHaveBeenCalledExactlyOnceWith('fixture-000000.service');
     });

@@ -1,9 +1,9 @@
 # Shared pure bulk-row foundation
 
-This is an **unwired next-stage candidate** after the bounded cached-update
-preview. It does not make additional candidate rows available in the dashboard,
-start an endpoint query, register a new transport, initialize storage or expand
-previously granted local consent.
+This document records the pure foundation originally introduced after the
+bounded cached-update preview. The [complete cached-update extension](complete-cached-updates-extension.md)
+now wires it into separately opted-in capture, transfer, storage and dashboard
+paging. The pure planner itself performs no I/O and grants no collection scope.
 
 ## Reuse without parallel state machines
 
@@ -35,15 +35,15 @@ known-candidate set. Its input includes the original validated bounded snapshot,
 all pre-trim rows, an explicit complete-source assertion and the operation error.
 A missing/failed source, incomplete prefix, count disagreement or inconsistent
 preview prefix is rejected. The assertion is not provenance or proof of OS
-administrator consent; an eventual trusted collector/runtime boundary must supply
-it only after the source operation finishes successfully.
+administrator consent; the integrated collector/runtime supplies it only after
+the consented cached-only source operation and final source recheck succeed.
 
 Its own versioned manifest preserves original release/cache timestamps and all
 comparison counts. Unknown candidate comparisons stay explicit and partial.
 Completion means all declared known candidate rows arrived consistently; it does
 not mean every installed package was comparable, metadata is fresh, the endpoint
-is fully patched, or vulnerabilities were assessed. The future complete-row
-scope is distinct from the preview consent scope and has no runtime registration.
+is fully patched, or vulnerabilities were assessed. The integrated complete-row
+scope is distinct from preview consent and remains default-off.
 
 Bounds remain small per operation: 64 KiB chunks, at most 128 rows per chunk,
 16,384 candidate rows, 32 MiB canonical rows and 48 MiB canonical generation wire.
@@ -51,16 +51,16 @@ The adapter validates independent chunks and generation linkage and returns a
 completion receipt only for the full validated generation. Empty success is
 separate from absent or failed source data.
 
-## Next required slice
+## Current integration and remaining gates
 
-Before complete rows become visible, reuse the existing protected spool and
-manager generation/staging/cursor algorithms through a narrow fixed-domain
-abstraction, preserving old dpkg bytes and persisted state. Add a separate exact
-full-row consent version, immutable capture scheduling, durable consumed floor,
-atomic promotion, original-age retention and generation-pinned operator paging.
-Do not add four copied state machines, reinterpret preview consent, grow the
-16 KiB summary record or activate a generic remote-command/job system.
+The [complete-row runtime](complete-cached-updates-extension.md) reuses the
+protected spool and manager generation/staging/cursor algorithms through a fixed
+update codec. It adds independent full-row consent and a durable floor, six-hour
+capture cadence, exact-byte retries, atomic promotion, original-age retention and
+generation-pinned operator paging. Preview consent does not authorize full rows.
+The adapter reads existing APT metadata only; it never refreshes or installs.
 
-Native Debian 13 and Ubuntu 24.04 acceptance remains separate from pure fixture
-and compatibility tests. The current read-only preview's strict source/config
-compatibility limits continue to apply; this pure stage changes none of them.
+Native Debian 13 and Ubuntu 24.04 acceptance remains separate from source, fixture
+and compatibility tests. Strict source/config limits and explicit unknown,
+unsupported and stale outcomes remain; a complete known-candidate generation
+does not prove every installed package was comparable or an update installable.

@@ -1,7 +1,7 @@
 # Controlled-action contract and consumption foundation
 
-Status: inert permit/consumption foundation, now used by the default-off
-[controlled-action helper](controlled-action-helper.md) and the narrow
+Status: permit/consumption foundation used by the wired, default-off
+[controlled-action helper](controlled-action-helper.md) and narrow
 [manager/agent/UI service workflow](service-action-workflow.md). The contract
 below remains valid for legacy v1 admissions; the helper document owns the v2
 fresh-only durable attempt/result lifecycle and concrete runtime checks.
@@ -97,8 +97,10 @@ accepts unknown directory entries. Storage code is deliberately separate from
 the established read-only journal implementation; that package is unchanged.
 
 `Initialize` is create-only, for separately authorized fresh local action setup.
-It is not connected to a provisioning command or installer. `Open` is existing-only
-and is used by the root helper runtime. Storage is protected for the current
+The [create-only service-action setup](guided-service-action-setup.md) now calls
+it through a separately approved, permanently fenced helper initializer. Normal
+startup never initializes missing used state. `Open` is existing-only and is used
+by the root helper runtime. Storage is protected for the current
 effective UID; the helper separately verifies its full root identity. Fixtures use
 ordinary-user temporary directories. A missing ledger is a hard stop, not an
 invitation to reinitialize. Key rotation/incarnation migration is not implemented.
@@ -160,23 +162,18 @@ Implemented and fixture-tested: strict signed contract, pinned verifier snapshot
 default-off allowlist checks, time bounds, dedicated durable floor, duplicate and
 conflict status, crash uncertainty, private-state protection and failure poisoning.
 
-The linked helper document supersedes items 3, 5 and 6 at the source/fixture
-level only; native acceptance and end-to-end integration remain pending. Original
-integration checklist before a user can approve a real action:
+The [service workflow](service-action-workflow.md) wires named-operator
+capabilities, immutable approval/jobs, protected command signing, first-claim-only
+delivery, root-local policy/IPC, fixed systemd try-restart and preview/approve/status
+UI. The [fresh setup adapters](guided-service-action-setup.md) add separate local
+manager and endpoint planning/apply paths. They still require named authority,
+protected keys, a reviewed unit, local grants and native disposable-host acceptance;
+source/fixture checks do not establish an installed or executed action.
 
-1. Named authenticated operators/capabilities and protected provisioning
-2. Immutable manager approval/jobs, short authorization gates, audit/retention
-3. Root-protected live policy/key/identity loader, local peer validation and IPC
-4. Explicit production/test transport policy enforcement at every runtime layer
-5. An independently reviewed start/result lifecycle and reconcilable durable jobs
-6. Real fixed TryRestartUnit adapter, loaded unit/input/dependency verification
-7. Preview/approve/status UI and all interruption/repeated-click flows
-8. APT authenticated artifact manifests, lock/transaction fence, separate runner
-   lifetime, native hooks/triggers/maintainer-script limits and result verification
-9. Separately authorized disposable Debian/Ubuntu VM and actual host acceptance
-
-No privileged install, credential/account creation, unit/group change, real
-service restart, APT invocation or Git publication is part of this patch.
+The [selected-package plan core](selected-package-plan-core.md) remains pure and
+inert with no runtime callers. Authenticated native planning, an APT transaction
+fence/runner and real package execution/acceptance remain unimplemented. Neither
+source publication nor a manager upgrade grants host authority.
 
 ## Verification
 
@@ -202,5 +199,8 @@ Builds/cross-builds and fixtures cannot prove real-machine action acceptance.
 
 The default-off manager/agent/UI candidate is documented in
 [service-action-workflow.md](service-action-workflow.md). It preserves the permit
-contract and independent helper ledger. Existing-only local setup, separately
-provisioned command trust and native disposable-host acceptance remain required.
+contract and independent helper ledger. Runtime opening remains existing-only;
+the separate [create-only setup](guided-service-action-setup.md) provisions fresh
+manager/endpoint action state after explicit local approval. Protected command
+trust, reviewed target/local grants and native disposable-host acceptance remain
+required.

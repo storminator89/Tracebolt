@@ -1,9 +1,10 @@
-# Complete process and mount UI (held candidate)
+# Complete process and mount UI
 
-The authenticated device Inventory workspace defaults to **Processes**, followed
-by **Mounts**, Packages, Services, Connections and the secondary Bounded preview.
-The software overview count and direct Packages route remain intact. Existing
-operational-preview tests explicitly select the preview before testing that lane.
+The authenticated LAN device Inventory workspace defaults to **Packages**.
+Processes, Mounts, Updates, Services and Connections are separate source tabs;
+the legacy Bounded preview sits behind a closed disclosure. Only the selected
+reader is mounted. The software overview count and direct Packages route remain
+intact; see the [current Inventory/Security presentation](../inventory-security-workspace.md).
 
 ## Data contract and display
 
@@ -60,9 +61,9 @@ outcomes, zeros, grouping, independent capture ages, old-complete/new-failure,
 pending transfer, expiration, auth/CSRF, bounded responses, section/device/session
 changes, visibility/BFCache, cancellation and clock rollback.
 
-The existing locked dependency tree was reused only after the package-lock files
-matched. Commands use installed tools with explicit npm offline mode and update
-notifications disabled; no installation or audit was performed. Local browser,
-real host collection and deployment were not run. The existing v3 browser harness
-has only its two source-navigation assumptions updated and syntax-checked; it is
-not evidence of an executed browser gate for this candidate.
+The original held-candidate checkpoint recorded local checks with a matching
+locked dependency tree but no browser or native-host run; its browser harness
+changes were syntax-checked only. This is historical verification evidence.
+Subsequent publication and verification checkpoints are recorded in the
+[changelog](../../CHANGELOG.md). Exact-commit hosted checks and separately granted
+native collection/service acceptance must still be distinguished.

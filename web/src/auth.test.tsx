@@ -9,7 +9,7 @@ const anonymous:OperatorSession={mode:'lan',transport:'https',insecureTestMode:f
 const authenticated:OperatorSession={...anonymous,authenticated:true,csrfToken:'session-csrf',expiresAt:'2026-10-03T15:30:00Z',expiresInSeconds:1800};
 const namedAnonymous:OperatorSession={...anonymous,loginMode:'named',actorId:null,capabilities:[]};
 const namedAuthenticated:OperatorSession={...authenticated,loginMode:'named',actorId:'operator_0123456789abcdef0123456789abcdef',capabilities:['read','plan_updates']};
-function SessionMetadata(){const operator=useOperator();return <output aria-label="Session metadata">{JSON.stringify({loginMode:operator?.loginMode,actorId:operator?.actorId,capabilities:operator?.capabilities})}</output>;}
+function SessionMetadata(){const operator=useOperator();return <output aria-label="Session metadata">{JSON.stringify({loginMode:operator?.loginMode,actorId:operator?.actorId,capabilities:operator?.capabilities,hasExplicitMetadata:operator?.hasExplicitMetadata})}</output>;}
 function PrivateApp(){return <><h2>Geschützte Geräte</h2><input aria-label="Privater Entwurf" defaultValue="nicht gespeichert"/><OperatorAccount/></>;}
 beforeEach(()=>{vi.mocked(request).mockReset();vi.mocked(mutate).mockReset();vi.mocked(abortProtectedRequests).mockClear();localStorage.clear();sessionStorage.clear();});
 afterEach(()=>{cleanup();vi.restoreAllMocks();vi.unstubAllGlobals();vi.useRealTimers();});
@@ -66,13 +66,18 @@ describe('named operator display contract',()=>{
   it('exposes only the validated server actor and capability snapshot',async()=>{
     vi.mocked(request).mockResolvedValue(namedAuthenticated);
     render(<AuthBoundary><SessionMetadata/></AuthBoundary>);
-    expect(await screen.findByLabelText('Session metadata')).toHaveTextContent(JSON.stringify({loginMode:'named',actorId:namedAuthenticated.actorId,capabilities:['read','plan_updates']}));
+    expect(await screen.findByLabelText('Session metadata')).toHaveTextContent(JSON.stringify({loginMode:'named',actorId:namedAuthenticated.actorId,capabilities:['read','plan_updates'],hasExplicitMetadata:true}));
     expect(mutate).not.toHaveBeenCalled();
+  });
+  it('distinguishes explicit shared metadata from legacy display defaults',async()=>{
+    vi.mocked(request).mockResolvedValue({...authenticated,loginMode:'shared',actorId:null,capabilities:['read']});
+    render(<AuthBoundary><SessionMetadata/></AuthBoundary>);
+    expect(await screen.findByLabelText('Session metadata')).toHaveTextContent(JSON.stringify({loginMode:'shared',actorId:null,capabilities:['read'],hasExplicitMetadata:true}));
   });
   it('keeps old shared sessions actorless and without maintenance grants',async()=>{
     vi.mocked(request).mockResolvedValue(authenticated);
     render(<AuthBoundary><SessionMetadata/></AuthBoundary>);
-    expect(await screen.findByLabelText('Session metadata')).toHaveTextContent(JSON.stringify({loginMode:'shared',actorId:null,capabilities:['read']}));
+    expect(await screen.findByLabelText('Session metadata')).toHaveTextContent(JSON.stringify({loginMode:'shared',actorId:null,capabilities:['read'],hasExplicitMetadata:false}));
   });
 });
 describe('named operator sign-in',()=>{

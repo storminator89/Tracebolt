@@ -1,14 +1,16 @@
-import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, renderHook, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { APIError, AUTH_REQUIRED_EVENT, abortProtectedRequests, request } from './api';
 import { useOperator } from './auth';
+import { useLinuxCVE } from './linux-cve-resource';
 import { setLocale } from './i18n';
 import { LinuxCVEPanel } from './linux-cve';
 import { LINUX_CVE_BUNDLE_BYTES, LINUX_CVE_VIEW_BYTES } from './linux-cve-types';
 import { linuxCVEDeviceId as id, linuxCVEView, missingLinuxCVEView, staleLinuxCVEView, unassessedLinuxCVEView } from './linux-cve-fixtures';
 vi.mock('./api', async original => ({ ...await original<typeof import('./api')>(), request: vi.fn() }));
 vi.mock('./auth', async original => ({ ...await original<typeof import('./auth')>(), useOperator: vi.fn() }));
-const operator = { mode: 'lan' as const, authenticated: true, expiresAt: '2026-10-05T08:00:00Z', insecureTestMode: false, logout: vi.fn(), theme: 'light' as const, setTheme: vi.fn() };
+const writeSession = { mode: 'lan', transport: 'https', insecureTestMode: false, transportWarning: null, authenticationRequired: true, authenticated: true, csrfToken: 'fixture-token', serverNow: '2026-10-05T07:00:00Z', expiresAt: '2026-10-05T08:00:00Z', expiresInSeconds: 3600, loginMode: 'shared', actorId: null, capabilities: ['read'] };
+const operator: NonNullable<ReturnType<typeof useOperator>> = { hasExplicitMetadata: true, loginMode: 'shared', actorId: null, capabilities: ['read'], mode: 'lan' as const, authenticated: true, expiresAt: '2026-10-05T08:00:00Z', insecureTestMode: false, logout: vi.fn(), theme: 'light' as const, setTheme: vi.fn() };
 const path = `/devices/${id}/security/cves`;
 function defer<T>() { let resolve!: (v: T) => void; return { promise: new Promise<T>(done => { resolve = done; }), resolve }; }
 const flush = () => act(async () => { await Promise.resolve(); await Promise.resolve(); });
@@ -18,6 +20,22 @@ beforeEach(() => { setLocale('en', false); vi.mocked(request).mockReset(); vi.mo
 afterEach(() => { cleanup(); vi.useRealTimers(); vi.restoreAllMocks(); });
 
 describe('Linux CVE warnings panel', () => {
+    it.each([
+        ['named read', { loginMode: 'named' as const, actorId: 'operator_0123456789abcdef0123456789abcdef', capabilities: ['read'] as const }],
+        ['named maintenance', { loginMode: 'named' as const, actorId: 'operator_0123456789abcdef0123456789abcdef', capabilities: ['read', 'plan_updates', 'execute_updates', 'restart_service'] as const }],
+        ['legacy display defaults', { hasExplicitMetadata: false }],
+        ['missing metadata indicator', { hasExplicitMetadata: undefined }],
+        ['missing capabilities', { capabilities: undefined }],
+    ])('keeps CVEs readable without feed-write controls for %s', async (_name, metadata) => {
+        vi.mocked(useOperator).mockReturnValue({ ...operator, ...metadata }); await show();
+        expect(screen.getByRole('article')).toBeVisible();
+        expect(screen.getByRole('button', { name: 'Refresh assessment' })).toBeEnabled();
+        expect(screen.queryByRole('button', { name: 'Update security data' })).not.toBeInTheDocument();
+        expect(screen.queryByText('Manual JSON bundle import')).not.toBeInTheDocument();
+        expect(screen.queryByLabelText('Choose JSON bundle')).not.toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: 'Refresh assessment' })); await screen.findByRole('article');
+        expect(vi.mocked(request).mock.calls.every(([route, init]) => route === path && !init?.method)).toBe(true);
+    });
     it('reads once, shows compact warning evidence and progressively discloses binaries/import', async () => {
         const storage = vi.spyOn(Storage.prototype, 'setItem'); await show();
         expect(request).toHaveBeenCalledExactlyOnceWith(path, { signal: expect.any(AbortSignal) }, LINUX_CVE_VIEW_BYTES);
@@ -105,13 +123,145 @@ describe('Linux CVE protected lifecycle', () => {
 });
 
 describe('explicit local-manager feed writes', () => {
+    it.each(['sync', 'import'] as const)('retains a preflight denial across read refresh for %s', async kind => {
+        await show(); if (kind === 'import') choose();
+        vi.mocked(request).mockImplementation(async route => route === '/auth/session' ? { ...writeSession, loginMode: 'named', actorId: 'operator_0123456789abcdef0123456789abcdef' } : linuxCVEView());
+        fireEvent.click(screen.getByRole('button', { name: kind === 'sync' ? 'Update security data' : 'Import bundle' }));
+        expect(await screen.findByRole('alert')).toHaveTextContent('Access to update security data could not be confirmed');
+        expect(document.body.textContent).not.toContain('The data update was not confirmed');
+        expect(screen.queryByText('Selected bundle')).not.toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: 'Refresh assessment' })); await screen.findByRole('article');
+        expect(screen.queryByRole('button', { name: 'Update security data' })).not.toBeInTheDocument();
+        expect(screen.queryByText('Manual JSON bundle import')).not.toBeInTheDocument();
+        expect(vi.mocked(request).mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false);
+    });
+    it.each(['sync', 'import'] as const)('rejects a replacement shared session before %s', async kind => {
+        await show(); if (kind === 'import') choose();
+        vi.mocked(request).mockResolvedValue({ ...writeSession, expiresAt: '2026-10-05T09:00:00Z' });
+        fireEvent.click(screen.getByRole('button', { name: kind === 'sync' ? 'Update security data' : 'Import bundle' }));
+        expect(await screen.findByRole('alert')).toHaveTextContent('Access to update security data could not be confirmed');
+        expect(document.body.textContent).not.toContain('The data update was not confirmed');
+        expect(vi.mocked(request).mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false);
+    });
+    it('keeps missing fresh metadata ineligible for writes after a read refresh', async () => {
+        await show();
+        const { loginMode: _mode, actorId: _actor, capabilities: _capabilities, ...legacy } = writeSession;
+        vi.mocked(request).mockImplementation(async route => route === '/auth/session' ? legacy : linuxCVEView());
+        fireEvent.click(screen.getByRole('button', { name: 'Update security data' }));
+        expect(await screen.findByRole('alert')).toHaveTextContent('Access to update security data could not be confirmed');
+        fireEvent.click(screen.getByRole('button', { name: 'Refresh assessment' })); await screen.findByRole('article');
+        expect(screen.queryByRole('button', { name: 'Update security data' })).not.toBeInTheDocument();
+        expect(screen.queryByText('Manual JSON bundle import')).not.toBeInTheDocument();
+        expect(vi.mocked(request).mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false);
+        expect(document.body.textContent).not.toContain('The data update was not confirmed');
+    });
+    it('treats explicit POST permission denial as rejected admission without an uncertain-save notice', async () => {
+        await show();
+        vi.mocked(request).mockImplementation(async route => { if (route === '/auth/session') return writeSession; throw new APIError('private reason', 403); });
+        fireEvent.click(screen.getByRole('button', { name: 'Update security data' }));
+        expect(await screen.findByRole('alert')).toHaveTextContent('Access to update security data could not be confirmed');
+        expect(document.body.textContent).not.toContain('The data update was not confirmed'); expect(document.body.textContent).not.toContain('private reason');
+        expect(screen.queryByRole('button', { name: 'Update security data' })).not.toBeInTheDocument();
+        expect(vi.mocked(request).mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(1);
+    });
+    it('discards a selected bundle and hides controls on permission loss without blocking reads', async () => {
+        const rendered = await show(); choose();
+        vi.mocked(useOperator).mockReturnValue({ ...operator, loginMode: 'named', actorId: 'operator_0123456789abcdef0123456789abcdef' });
+        rendered.rerender(<LinuxCVEPanel deviceId={id} sessionKey="one"/>);
+        expect(screen.getByRole('article')).toBeVisible(); expect(screen.queryByText(/Selected bundle/)).not.toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'Update security data' })).not.toBeInTheDocument();
+        vi.mocked(useOperator).mockReturnValue(operator); rendered.rerender(<LinuxCVEPanel deviceId={id} sessionKey="one"/>);
+        fireEvent.click(screen.getByText('Manual JSON bundle import')); expect(screen.getByRole('button', { name: 'Import bundle' })).toBeDisabled();
+        expect(request).toHaveBeenCalledTimes(1);
+    });
+    it.each(['permission', 'pagehide', 'timeout'] as const)('does not label an undispatched preflight as uncertain after %s', async transition => {
+        vi.useFakeTimers(); vi.mocked(request).mockResolvedValue(linuxCVEView());
+        const rendered = render(<LinuxCVEPanel deviceId={id} sessionKey="one"/>); await flush();
+        const preflight = defer<unknown>(); vi.mocked(request).mockReturnValue(preflight.promise);
+        fireEvent.click(screen.getByRole('button', { name: 'Update security data' }));
+        const signal = vi.mocked(request).mock.calls.at(-1)![1]!.signal as AbortSignal;
+        if (transition === 'permission') { vi.mocked(useOperator).mockReturnValue({ ...operator, hasExplicitMetadata: false }); rendered.rerender(<LinuxCVEPanel deviceId={id} sessionKey="one"/>); }
+        else if (transition === 'pagehide') act(() => window.dispatchEvent(new Event('pagehide')));
+        else await act(async () => vi.advanceTimersByTimeAsync(60000));
+        expect(signal.aborted).toBe(true);
+        await act(async () => preflight.resolve(writeSession));
+        expect(vi.mocked(request).mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false);
+        expect(document.body.textContent).not.toContain('The data update was not confirmed');
+        expect(screen.queryByText('Debian security data updated in the local manager.')).not.toBeInTheDocument();
+    });
+    it('keeps a sent update uncertain and suppresses late success after permission loss', async () => {
+        const rendered = await show(), post = defer<unknown>();
+        vi.mocked(request).mockImplementation(async route => route === '/auth/session' ? writeSession : post.promise);
+        fireEvent.click(screen.getByRole('button', { name: 'Update security data' }));
+        await waitFor(() => expect(vi.mocked(request).mock.calls.some(([, init]) => init?.method === 'POST')).toBe(true));
+        const signal = vi.mocked(request).mock.calls.at(-1)![1]!.signal as AbortSignal;
+        vi.mocked(useOperator).mockReturnValue({ ...operator, hasExplicitMetadata: false }); rendered.rerender(<LinuxCVEPanel deviceId={id} sessionKey="one"/>);
+        expect(signal.aborted).toBe(true); expect(screen.getByRole('status')).toHaveTextContent('The data update was not confirmed');
+        await act(async () => post.resolve(linuxCVEView(true).feeds));
+        expect(screen.queryByText('Debian security data updated in the local manager.')).not.toBeInTheDocument();
+        expect(screen.queryByRole('article')).not.toBeInTheDocument();
+        expect(vi.mocked(request).mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(1);
+    });
+    it.each([
+        ['auth event', false], ['auth epoch', false], ['auth event', true], ['auth epoch', true],
+    ] as const)('retains uncertainty only after dispatch on %s (sent=%s)', async (transition, sent) => {
+        vi.useFakeTimers(); vi.mocked(request).mockResolvedValue(linuxCVEView());
+        render(<LinuxCVEPanel deviceId={id}/>); await flush();
+        const pending = defer<unknown>();
+        vi.mocked(request).mockImplementation(async route => route === '/auth/session' && sent ? writeSession : pending.promise);
+        fireEvent.click(screen.getByRole('button', { name: 'Update security data' })); await flush();
+        expect(vi.mocked(request).mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(sent ? 1 : 0);
+        const signal = vi.mocked(request).mock.calls.at(-1)![1]!.signal as AbortSignal;
+        act(() => { if (transition === 'auth event') window.dispatchEvent(new Event(AUTH_REQUIRED_EVENT)); else abortProtectedRequests(); });
+        await act(async () => vi.advanceTimersByTimeAsync(1000));
+        expect(signal.aborted).toBe(true); expect(screen.getByRole('alert')).toHaveTextContent('session has ended');
+        if (sent) expect(screen.getByRole('status')).toHaveTextContent('The data update was not confirmed');
+        else expect(screen.queryByRole('status')).not.toBeInTheDocument();
+        await act(async () => pending.resolve(sent ? linuxCVEView(true).feeds : writeSession));
+        expect(screen.queryByText('Debian security data updated in the local manager.')).not.toBeInTheDocument();
+        expect(screen.queryByRole('article')).not.toBeInTheDocument();
+        expect(vi.mocked(request).mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(sent ? 1 : 0);
+    });
+    it('does not let retained callbacks select or write after the latest guard changes', async () => {
+        vi.mocked(request).mockResolvedValue(linuxCVEView());
+        const hook = renderHook(({ allowed }) => useLinuxCVE(id, allowed, operator.expiresAt), { initialProps: { allowed: true } });
+        await waitFor(() => expect(hook.result.current.view).not.toBeNull());
+        const held = hook.result.current, file = new File(['{}'], 'private.json');
+        act(() => held.selectFile(file)); expect(hook.result.current.selectedBytes).toBe(2);
+        hook.rerender({ allowed: false }); expect(hook.result.current.selectedBytes).toBeNull();
+        await act(async () => { held.selectFile(file); await held.importSelected(); await held.sync(); });
+        expect(hook.result.current.selectedBytes).toBeNull(); expect(request).toHaveBeenCalledTimes(1);
+    });
+    it('rejects held callbacks and a deferred old preflight after the session scope changes', async () => {
+        vi.mocked(request).mockResolvedValue(linuxCVEView());
+        const hook = renderHook(({ expiry }) => useLinuxCVE(id, true, expiry), { initialProps: { expiry: operator.expiresAt } });
+        await waitFor(() => expect(hook.result.current.view).not.toBeNull());
+        const held = hook.result.current, preflight = defer<unknown>();
+        vi.mocked(request).mockReturnValue(preflight.promise); act(() => { void held.sync(); });
+        const signal = vi.mocked(request).mock.calls.at(-1)![1]!.signal as AbortSignal;
+        hook.rerender({ expiry: '2026-10-05T09:00:00Z' }); expect(signal.aborted).toBe(true);
+        await act(async () => preflight.resolve(writeSession));
+        vi.mocked(request).mockResolvedValue(linuxCVEView()); await act(async () => hook.result.current.load());
+        const reads = vi.mocked(request).mock.calls.length;
+        await act(async () => { held.selectFile(new File(['{}'], 'private.json')); await held.importSelected(); await held.sync(); });
+        expect(hook.result.current.selectedBytes).toBeNull(); expect(request).toHaveBeenCalledTimes(reads);
+        expect(hook.result.current.notice).not.toBe('uncertain');
+        expect(vi.mocked(request).mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false);
+    });
+    it('remounts on replacement session expiry even with an explicit session key', async () => {
+        const rendered = await show(); choose();
+        vi.mocked(useOperator).mockReturnValue({ ...operator, expiresAt: '2026-10-05T09:00:00Z' });
+        rendered.rerender(<LinuxCVEPanel deviceId={id} sessionKey="one"/>); await screen.findByRole('article');
+        fireEvent.click(screen.getByText('Manual JSON bundle import')); expect(screen.getByRole('button', { name: 'Import bundle' })).toBeDisabled();
+        expect(vi.mocked(request).mock.calls.filter(([route]) => route === path)).toHaveLength(2);
+    });
     it('syncs only after clicking, posts fixed empty JSON and then rereads', async () => {
-        await show(); vi.mocked(request).mockImplementation(async route => route === '/session' ? { csrfToken: 'fixture-token' } : route === '/security/cves/sync' ? linuxCVEView(true).feeds : linuxCVEView(true)); fireEvent.click(screen.getByRole('button', { name: 'Update security data' })); await screen.findByText('Debian security data updated in the local manager.'); await screen.findByRole('article');
+        await show(); vi.mocked(request).mockImplementation(async route => route === '/auth/session' ? writeSession : route === '/security/cves/sync' ? linuxCVEView(true).feeds : linuxCVEView(true)); fireEvent.click(screen.getByRole('button', { name: 'Update security data' })); await screen.findByText('Debian security data updated in the local manager.'); await screen.findByRole('article');
         expect(vi.mocked(request).mock.calls.filter(([route]) => route === '/security/cves/sync')).toHaveLength(1); expect(request).toHaveBeenCalledWith('/security/cves/sync', expect.objectContaining({ method: 'POST', body: '{}', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': 'fixture-token' }, signal: expect.any(AbortSignal) }), LINUX_CVE_VIEW_BYTES);
     });
     it('selects a file without transmitting and sends original bytes only after import', async () => {
         await show(); const file = choose(); expect(request).toHaveBeenCalledTimes(1); expect(document.body.textContent).not.toContain(file.name);
-        vi.mocked(request).mockImplementation(async route => route === '/session' ? { csrfToken: 'fixture-token' } : route === '/security/cves/import' ? linuxCVEView().feeds : linuxCVEView()); fireEvent.click(screen.getByRole('button', { name: 'Import bundle' })); await screen.findByText('Bundle imported into the local manager.'); await screen.findByRole('article');
+        vi.mocked(request).mockImplementation(async route => route === '/auth/session' ? writeSession : route === '/security/cves/import' ? linuxCVEView().feeds : linuxCVEView()); fireEvent.click(screen.getByRole('button', { name: 'Import bundle' })); await screen.findByText('Bundle imported into the local manager.'); await screen.findByRole('article');
         expect(request).toHaveBeenCalledWith('/security/cves/import', expect.objectContaining({ method: 'POST', body: file }), LINUX_CVE_VIEW_BYTES);
     });
     it('rejects empty/oversized file selection without requesting mutation', async () => {
@@ -124,10 +274,10 @@ describe('explicit local-manager feed writes', () => {
         await show(); const session = defer<unknown>(); vi.mocked(request).mockReturnValue(session.promise); fireEvent.click(screen.getByRole('button', { name: 'Update security data' })); act(() => abortProtectedRequests()); await act(async () => session.resolve({ csrfToken: 'fixture-token' })); expect(vi.mocked(request).mock.calls.some(([route]) => route === '/security/cves/sync')).toBe(false); expect(screen.getByRole('alert')).toHaveTextContent('session has ended');
     });
     it('aborts a sync on pagehide and never repeats an uncertain mutation', async () => {
-        await show(); const pending = defer<unknown>(); vi.mocked(request).mockImplementation(async route => route === '/session' ? { csrfToken: 'fixture-token' } : route === '/security/cves/sync' ? pending.promise : linuxCVEView()); fireEvent.click(screen.getByRole('button', { name: 'Update security data' })); await waitFor(() => expect(vi.mocked(request).mock.calls.some(([route]) => route === '/security/cves/sync')).toBe(true)); const signal = vi.mocked(request).mock.calls.find(([route]) => route === '/security/cves/sync')![1]!.signal as AbortSignal; act(() => window.dispatchEvent(new Event('pagehide'))); expect(signal.aborted).toBe(true); await act(async () => pending.resolve(linuxCVEView(true).feeds)); expect(screen.queryByRole('article')).not.toBeInTheDocument(); expect(screen.getByRole('status')).toHaveTextContent('not confirmed'); act(() => window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true }))); await screen.findByRole('article'); expect(vi.mocked(request).mock.calls.filter(([route]) => route === '/security/cves/sync')).toHaveLength(1);
+        await show(); const pending = defer<unknown>(); vi.mocked(request).mockImplementation(async route => route === '/auth/session' ? writeSession : route === '/security/cves/sync' ? pending.promise : linuxCVEView()); fireEvent.click(screen.getByRole('button', { name: 'Update security data' })); await waitFor(() => expect(vi.mocked(request).mock.calls.some(([route]) => route === '/security/cves/sync')).toBe(true)); const signal = vi.mocked(request).mock.calls.find(([route]) => route === '/security/cves/sync')![1]!.signal as AbortSignal; act(() => window.dispatchEvent(new Event('pagehide'))); expect(signal.aborted).toBe(true); await act(async () => pending.resolve(linuxCVEView(true).feeds)); expect(screen.queryByRole('article')).not.toBeInTheDocument(); expect(screen.getByRole('status')).toHaveTextContent('not confirmed'); act(() => window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true }))); await screen.findByRole('article'); expect(vi.mocked(request).mock.calls.filter(([route]) => route === '/security/cves/sync')).toHaveLength(1);
     });
     it('enforces the 60-second sync deadline without resubmitting', async () => {
-        vi.useFakeTimers(); const pending = defer<unknown>(); vi.mocked(request).mockImplementation(async route => route === '/session' ? { csrfToken: 'fixture-token' } : route === '/security/cves/sync' ? pending.promise : linuxCVEView()); render(<LinuxCVEPanel deviceId={id}/>); await flush();
+        vi.useFakeTimers(); const pending = defer<unknown>(); vi.mocked(request).mockImplementation(async route => route === '/auth/session' ? writeSession : route === '/security/cves/sync' ? pending.promise : linuxCVEView()); render(<LinuxCVEPanel deviceId={id}/>); await flush();
         fireEvent.click(screen.getByRole('button', { name: 'Update security data' })); await flush(); const signal = vi.mocked(request).mock.calls.find(([route]) => route === '/security/cves/sync')![1]!.signal as AbortSignal;
         await act(async () => vi.advanceTimersByTimeAsync(60000)); expect(signal.aborted).toBe(true); expect(screen.getByRole('alert')).toHaveTextContent('not confirmed'); await act(async () => pending.resolve(linuxCVEView(true).feeds)); expect(screen.queryByRole('article')).not.toBeInTheDocument(); expect(vi.mocked(request).mock.calls.filter(([route]) => route === '/security/cves/sync')).toHaveLength(1);
     });
@@ -135,6 +285,6 @@ describe('explicit local-manager feed writes', () => {
         await show(); choose(); const details = screen.getByText('Manual JSON bundle import').closest('details')!; details.open = false; fireEvent(details, new Event('toggle')); await flush(); details.open = true; fireEvent(details, new Event('toggle')); await flush(); expect(screen.getByRole('button', { name: 'Import bundle' })).toBeDisabled(); expect(request).toHaveBeenCalledTimes(1);
     });
     it('reports write errors without leaking server detail or retrying writes', async () => {
-        await show(); vi.mocked(request).mockImplementation(async route => { if (route === '/session') return { csrfToken: 'fixture-token' }; throw new APIError('/private/secret', 429, 'storage_busy'); }); fireEvent.click(screen.getByRole('button', { name: 'Update security data' })); expect(await screen.findByRole('alert')).toHaveTextContent('manager is busy'); expect(document.body.textContent).not.toContain('/private/secret'); expect(vi.mocked(request).mock.calls.filter(([route]) => route === '/security/cves/sync')).toHaveLength(1);
+        await show(); vi.mocked(request).mockImplementation(async route => { if (route === '/auth/session') return writeSession; throw new APIError('/private/secret', 429, 'storage_busy'); }); fireEvent.click(screen.getByRole('button', { name: 'Update security data' })); expect(await screen.findByRole('alert')).toHaveTextContent('manager is busy'); expect(document.body.textContent).not.toContain('/private/secret'); expect(vi.mocked(request).mock.calls.filter(([route]) => route === '/security/cves/sync')).toHaveLength(1);
     });
 });

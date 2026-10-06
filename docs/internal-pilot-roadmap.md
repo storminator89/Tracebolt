@@ -1,8 +1,9 @@
 # Internal pilot roadmap
 
-Status: proposed delivery order for one internal-customer pilot. This is a
-roadmap, not an implementation, deployment or acceptance report. No dates or
-production-readiness promise are attached to these phases.
+Status: delivery order and remaining acceptance work for one internal-customer
+pilot. Source implementation is identified below; it does not establish deployment
+or native/live acceptance. No dates or production-readiness promise are attached
+to these phases.
 
 ## Goal and current starting point
 
@@ -17,10 +18,13 @@ matching, and separately opted-in on-demand service journal reads. These are
 read/assessment capabilities. Their source tests do not establish installation
 or acceptance on this pilot's machines.
 
-The UI/log-source amendment is current work to finish and accept. External alarm
-delivery, real controlled service/package execution, application-specific health
-adapters and diagnostic change history are next work. A pure signed-permit core
-or fixture executor does not make remote actions available to an operator.
+The UI/log-source amendment still needs target-host acceptance. Source now wires
+default-off [webhook alarms](alarm-delivery.md), [service try-restart](service-action-workflow.md)
+and [manager-side application observations](application-checks.md), including
+[DNS/TCP](application-network-checks.md). Their setup and live/native gates remain
+separate. Package execution, DB/backup adapters, broader log sources and change
+history remain future work; the [package-plan core](selected-package-plan-core.md)
+is pure and inert, with no runtime callers.
 
 ## Small prerequisites, applied where needed
 
@@ -84,6 +88,13 @@ Acceptance:
 
 ## Phase 2: external alarms that can be trusted
 
+The [current source slice](alarm-delivery.md) wires a default-off public HTTPS
+generic webhook, persistent health-transition outbox, bounded retries and
+authenticated read-only API status. It has no delivery UI, test-send or
+Slack/Teams/SMTP adapter. Destination/data approval, protected setup and one live
+alarm/recovery acceptance pair remain outstanding. The following is the fuller
+pilot target, including still-missing per-rule maintenance and test-send behavior.
+
 Deliver to one explicitly configured destination first. Keep the first payload
 small: incident ID, device label, rule/severity, observation time, concise reason,
 current state and a relevant manager link. Do not include raw logs or secrets.
@@ -120,6 +131,12 @@ actor/time/result audit are the minimum, not a general remote-shell platform.
 
 ### 3a. Restart one running, allowlisted service
 
+The [manager/agent/helper/UI workflow](service-action-workflow.md) is wired in
+source, with a separate [create-only manager/endpoint setup guide](guided-service-action-setup.md).
+It stays off until named operator authority, protected keys/state, one reviewed
+unit and independent local grants are present. Source/fixture evidence does not
+establish the native acceptance below.
+
 Start with one harmless, locally reviewed test service. Preview the exact target
 and interruption, approve it, run the fixed operation and report observed state.
 Use try-restart semantics so an inactive service is not silently started. Check
@@ -132,6 +149,10 @@ production use of an HTTP-test permit. Double clicks, disconnects and restarts
 must never manufacture another execution. Report ambiguity honestly.
 
 ### 3b. Approved APT package updates
+
+The existing [selected-package plan core](selected-package-plan-core.md) only
+validates inert manifests and hook descriptions. It has no runtime callers and
+does not refresh metadata, invoke APT or install packages.
 
 Add an explicit metadata-refresh/planning step and an exact approved package
 manifest, including authenticated archive hashes and source identity. Begin
@@ -158,18 +179,23 @@ A test double or successful compile does not pass this execution gate.
 
 ### 4a. HTTP, TLS, DNS and TCP checks
 
-Start with explicitly configured targets and bounded checks. Record where the
-check ran: manager-side reachability and endpoint-local application health are
-different observations. A reachable port is not proof of application health.
+The default-off [HTTP/HTTPS and verified TLS leaf-expiry slice](application-checks.md)
+and [DNS/TCP extension](application-network-checks.md) are wired with protected
+target configuration and compact read-only Overview status. All checks run from
+the manager; reachable resources do not establish endpoint or full application
+health. HTTP reports 2xx/non-2xx, DNS checks returned addresses against an explicit
+allowlist, and TCP reports one bounded connection attempt. Unknown/stale states
+and destination restrictions remain explicit.
 
-HTTP checks use expected status and bounded response matching; TLS checks show
-verification/expiry; DNS checks validate the intended answer; TCP checks measure
-connection success/time. Configure timeouts, stale/unknown states, maintenance
-and recovery using the alarm machinery rather than a second notification system.
+Configurable expected HTTP status, content matching, latency results, history
+and alert integration are not implemented. These remain future work alongside
+maintenance/recovery integration with the existing alarm machinery. Database
+and backup adapters also remain future work.
 
-Acceptance: test healthy, failed, slow, invalid-certificate, unexpected-answer,
-disconnected and stale cases. Prevent arbitrary URL fetches, redirects to
-unapproved targets, credential leakage and unintended discovery.
+Acceptance: source/fixture checks do not establish real-target/native success.
+Verify healthy, failed, slow, invalid-certificate, unexpected-answer, disconnected
+and stale cases on separately approved targets, preserving address restrictions,
+redirect blocking and credential-free requests.
 
 ### 4b. Database and backup adapters
 

@@ -26,10 +26,10 @@ export function groupLinuxCVEWarnings(rows: LinuxCVEFinding[]): LinuxCVEFinding[
 export function LinuxCVEPanel({ deviceId, sessionKey }: { deviceId: string; sessionKey?: string | number }) {
     const operator = useOperator(), [locale] = useLocale();
     if (!operator || operator.mode !== 'lan' || !operator.authenticated) return <p>{copy[locale].access}</p>;
-    return <LinuxCVESession key={`${deviceId}:${String(sessionKey ?? operator.expiresAt ?? '')}`} deviceId={deviceId}/>;
+    return <LinuxCVESession key={`${deviceId}:${String(sessionKey ?? '')}:${operator.expiresAt ?? ''}`} deviceId={deviceId} sessionExpiresAt={operator.expiresAt} canWrite={operator.hasExplicitMetadata === true && operator.loginMode === 'shared' && operator.actorId === null && operator.capabilities?.length === 1 && operator.capabilities[0] === 'read'}/>;
 }
-function LinuxCVESession({ deviceId }: { deviceId: string }) {
-    const [locale] = useLocale(), labels = copy[locale], resource = useLinuxCVE(deviceId), heading = useId(), fileId = useId();
+function LinuxCVESession({ deviceId, canWrite, sessionExpiresAt }: { deviceId: string; canWrite: boolean; sessionExpiresAt: string | null }) {
+    const [locale] = useLocale(), labels = copy[locale], resource = useLinuxCVE(deviceId, canWrite, sessionExpiresAt), heading = useId(), fileId = useId();
     const view = resource.view, report = view?.report, activeReport = view?.status === 'evaluated' && report;
     const disabled = resource.loading || resource.writing !== null || resource.error === 'session';
     const cacheUncertain = view?.feeds.failureReason === 'cache_commit_uncertain', writeDisabled = disabled || !view || cacheUncertain;
@@ -39,7 +39,7 @@ function LinuxCVESession({ deviceId }: { deviceId: string }) {
     const warnings = activeReport ? groupLinuxCVEWarnings(report.findings) : null;
     return <section className="linux-cve" aria-labelledby={heading} aria-busy={resource.loading || resource.writing !== null}>
         <header className="linux-cve-heading"><div><h2 id={heading}>{labels.title}</h2><p>{labels.subtitle}</p></div><button type="button" className="button small" disabled={disabled} onClick={() => void resource.load()}><RefreshCw size={14}/>{labels.refresh}</button></header>
-        <div className="linux-cve-update"><button type="button" className="button primary" disabled={writeDisabled} onClick={() => void resource.sync()}><Download size={15}/>{labels.sync}</button><p>{labels.syncNote}</p></div>
+        {resource.canWrite && <div className="linux-cve-update"><button type="button" className="button primary" disabled={writeDisabled} onClick={() => void resource.sync()}><Download size={15}/>{labels.sync}</button><p>{labels.syncNote}</p></div>}
         {(resource.loading || resource.writing) && <p role="status" className="linux-cve-notice">{resource.writing === 'sync' ? labels.syncing : resource.writing === 'import' ? labels.importing : resource.recovering ? labels.recovering : labels.loading}</p>}
         {resource.error && <p role="alert" className="linux-cve-notice caution"><TriangleAlert size={16}/>{labels[resource.error]}</p>}
         {resource.notice && !(resource.notice === 'uncertain' && resource.error === 'uncertain') && <p role="status" className="linux-cve-notice">{labels[resource.notice]}</p>}
@@ -66,7 +66,7 @@ function LinuxCVESession({ deviceId }: { deviceId: string }) {
                 {report && <><dl className="linux-cve-facts"><div><dt>{labels.checkedSources}</dt><dd>{new Intl.NumberFormat(locale).format(report.evaluatedSourceCount)}</dd></div><div><dt>{labels.skipped}</dt><dd>{new Intl.NumberFormat(locale).format(report.skippedPackageCount)}</dd></div></dl><ul aria-label={labels.reasons} className="linux-cve-reasons">{report.reasonCodes.map(code => <li key={code}>{linuxCVEReasons[locale][code] ?? code}</li>)}</ul></>}
                 {view.inventory && <dl className="linux-cve-facts"><div><dt>{labels.generation}</dt><dd>{view.inventory.generationId}</dd></div></dl>}
             </details>
-            <details className="linux-cve-details" onToggle={event => { if (!event.currentTarget.open) resource.clearFile(); }}><summary>{labels.importDetails}</summary><p>{labels.importNote}</p><div className="linux-cve-file"><label htmlFor={fileId}>{labels.choose}</label><input id={fileId} type="file" accept="application/json,.json" disabled={writeDisabled} onChange={event => { const file = event.currentTarget.files?.[0]; event.currentTarget.value = ''; resource.selectFile(file); }}/>{resource.selectedBytes !== null && <span>{labels.selected}: {new Intl.NumberFormat(locale).format(resource.selectedBytes)} B</span>}<button type="button" className="button small" disabled={writeDisabled || resource.selectedBytes === null} onClick={() => void resource.importSelected()}>{labels.import}</button>{resource.selectedBytes !== null && <button type="button" className="button small" onClick={resource.clearFile}>{labels.clearFile}</button>}</div></details>
+            {resource.canWrite && <details className="linux-cve-details" onToggle={event => { if (!event.currentTarget.open) resource.clearFile(); }}><summary>{labels.importDetails}</summary><p>{labels.importNote}</p><div className="linux-cve-file"><label htmlFor={fileId}>{labels.choose}</label><input id={fileId} type="file" accept="application/json,.json" disabled={writeDisabled} onChange={event => { const file = event.currentTarget.files?.[0]; event.currentTarget.value = ''; resource.selectFile(file); }}/>{resource.selectedBytes !== null && <span>{labels.selected}: {new Intl.NumberFormat(locale).format(resource.selectedBytes)} B</span>}<button type="button" className="button small" disabled={writeDisabled || resource.selectedBytes === null} onClick={() => void resource.importSelected()}>{labels.import}</button>{resource.selectedBytes !== null && <button type="button" className="button small" onClick={resource.clearFile}>{labels.clearFile}</button>}</div></details>}
         </>}
     </section>;
 }

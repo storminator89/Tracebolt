@@ -16,8 +16,10 @@ mean it has passed its release or host checks.
    reducing manual staging/build/hash steps. This follows Logs and complete
    inventory; it must not delay them or relax those checks.
 
-The later update/CVE adapters and minor visual polish remain queued behind these
-three practical milestones. A prepared source patch is not a deployed feature.
+Complete cached-APT rows and limited distribution-version CVE warnings are now
+wired in source; their remaining limits are listed below. Compatible installed
+binaries, explicit local grants and native acceptance remain separate from source
+publication. Minor visual polish does not block these practical milestones.
 
 ## Available and observed
 
@@ -54,14 +56,13 @@ The [full-width device-page checkpoint](https://github.com/storminator89/Tracebo
    passed; see [the fully green binary-source checkpoint](https://github.com/storminator89/Tracebolt/actions/runs/37219826603).
    Local addresses show their source and original age and do not establish
    external reachability. No network scan is implied.
-3. **Verified release-download installer — official pilot.2 verified and pinned.**
-   The [attested build and fresh-version publication workflow](linux-release-distribution.md)
-   and source-pinned dashboard command are implemented. Official assets passed
-   independent public-byte and provenance checks. An observed owned upgrade
-   committed successfully but its wrapper then reported a cleanup error; that
-   narrow wrapper correction is tracked separately. Do not interpret a wrapper
-   failure as permission to reinstall or reset an already committed identity.
-   Existing pilot.2 binaries do not include the later journal feature.
+3. **Verified release-download installer — official rc.1 verified and pinned.**
+   The [dashboard command](dashboard-verified-download.md) pins bootstrap
+   publication `458fc072` for rc.1, built from source `ccac65e7`. This immutable
+   release predates the latest source features; updating the manager does not
+   upgrade an endpoint. Earlier pilot.2 upgrade observations remain historical
+   [release checkpoints](../CHANGELOG.md), not a reason to reinstall or reset an
+   already committed identity.
 4. **Useful on-demand service logs — published and observed on one granted pilot.**
    The [d3628dc checkpoint](https://github.com/storminator89/Tracebolt/actions/runs/37228371588)
    passed all 13 CI jobs and 104 required browser checks, including six journal
@@ -76,23 +77,21 @@ The [full-width device-page checkpoint](https://github.com/storminator89/Tracebo
    regression and target-host confirmation remain separate. See the
    [log boundary](journal-content-mvp.md) and [setup plan](linux-journal-helper.md).
    Minor visual polish does not block a usable, correctly bounded MVP.
-5. **Complete everyday inventory overview — published pilot source; hardening in progress.**
-   The native Ubuntu overview gate has passed, while the source checkpoint's
-   combined acceptance exposed container-fixture and concurrent-read UI defects.
-   The Docker/container and 110 required browser checks pass on coherent
-   follow-ups. An expired-cleanup retry corruption path is corrected with
-   dedicated store regressions. Full aggregate and native-retry acceptance still
-   gate a completely green checkpoint.
-   - Use the completed dpkg generation for software totals and overview links,
+5. **Complete everyday inventory overview — wired in published pilot source.**
+   [Complete process/mount capture and paging](complete-overview-extension.md)
+   preserve independent generations and original ages. Inventory now defaults to
+   Packages; [current source presentation](inventory-security-workspace.md) keeps
+   each reader and its coverage distinct. Earlier container, browser and retry
+   hardening results are [historical checkpoints](../CHANGELOG.md); exact-commit
+   aggregate checks and native acceptance must still be assessed separately.
+   - Software totals and overview links use the completed dpkg generation,
      avoiding a contradictory bounded-preview count beside complete inventory.
-   - Capture all supported visible process rows into a generation-bound paged
-     view rather than presenting the existing sample as a complete overview.
+   - Supported visible process rows use a generation-bound paged view; the
+     existing bounded sample remains a separate diagnostic source.
      Command lines, environment and unrelated account data remain excluded.
-   - Capture complete supported visible mounted-filesystem metadata with paged
-     display. Put measured local filesystems first and virtual mounts separately;
-     do not present the current 32-row preview as complete. Add the regression
-     where 32 virtual mounts precede the measured root filesystem so the useful
-     volume cannot disappear behind truncation.
+   - Complete supported visible mount metadata has paged display, with measured
+     local filesystems first and virtual mounts separately. The older 32-row
+     preview cannot establish complete coverage.
    - Label the agent-visible mount/process namespace, including systemd sandbox
      mounts. A tmpfs is not a physical disk, and the service's `/home` view may
      differ from the host's real mount. Capacity that is not applicable differs
@@ -100,21 +99,25 @@ The [full-width device-page checkpoint](https://github.com/storminator89/Tracebo
      as explicit failed/partial states, never successful complete prefixes.
    - Keep unsupported Snap, Flatpak and manual-software coverage visible. A
      complete dpkg dataset is not a universal installed-software inventory.
-6. **Offered updates and full-generation CVE coverage — after logs/inventory.**
-   Bind completed supported package generations to identified upstream advisory
-   sources and exact release/source-package provenance. Add an actual read-only
-   cached offered-update adapter separately from advisory fixed-version matching.
-   Unknown coverage must not become zero missing updates or zero vulnerabilities.
-   Current offline review candidates remain candidate evidence.
+6. **Cached APT candidates and distribution CVE warnings — wired with limits.**
+   [Complete cached candidates](complete-cached-updates-extension.md) require
+   separate local opt-in, read existing APT metadata at a six-hour cadence and
+   preserve original age, unknown comparisons and unsupported sources. No APT
+   refresh or installation occurs. [CVE warnings](linux-cve-warnings.md) compare
+   complete dpkg generations with an explicit Debian 13 feed sync or limited
+   manual Ubuntu 24.04 OSV import. They do not prove installed-artifact origin,
+   exploitability or installable fixes. Missing/stale data is not zero findings.
 
 7. **Explicit service try-restart — default-off source candidate.** The narrow
    [service-action workflow](service-action-workflow.md) connects named-operator
    preview/approval, durable first-claim-only delivery and a separately granted
    root helper. UI completion remains agent-reported and distinct from service
-   health; ambiguous outcomes block another action. Existing protected command
-   trust/local policy/state and independently authorized native disposable-host
-   acceptance are still required. No manager upgrade creates keys or enables
-   privileged execution. Package execution remains outside this slice.
+   health; ambiguous outcomes block another action. The [create-only setup
+   guide](guided-service-action-setup.md) provides fresh manager/endpoint adapters;
+   named operators, protected command trust, a reviewed unit, local grants and
+   native disposable-host acceptance remain required. No manager upgrade creates
+   keys or enables privileged execution. The separate [package-plan
+   core](selected-package-plan-core.md) remains pure and inert with no runtime callers.
 
 ## Requested usability and diagnostic follow-ups
 
@@ -122,8 +125,8 @@ These remain visible without widening the current complete-inventory slice:
 
 - The source now offers a searchable observed-service selector and explicit UTC
   reference-window presets, preserving manual entry and stable drafts. Hosted
-  acceptance of this latest UI remains required. An observed name does not
-  prove permission in the endpoint's separately managed local allowlist.
+  checks remain commit-specific; target-host setup is separate. An observed name
+  does not prove permission in the endpoint's separately managed local allowlist.
 - Keep temporary read contention recoverable without discarding a live accepted
   snapshot. Expiry, session loss and revoked device authority still suppress
   content; no failed or lost request is automatically recollected.
