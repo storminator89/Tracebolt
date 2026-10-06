@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "sourceCommit": "fccc4b00cd8a144afd58e4b995747afab7a10022",
-  "goSourceSha256": "ab823a657f04d52098230b88546087c92a3f8c8e53f460e093e5ba7f02b2b021",
+  "goSourceSha256": "dfeed4bd2c823e4f6cf4aab37c47973af608daf064c761efa46cf5a334612a01",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -313,6 +313,9 @@
       "TestCancellationNeverContinuesToServiceStart",
       "TestDryRunHasNoTransactionOrEffects",
       "TestEachFailureStopsAndRollsBackOnlyOwnedChanges",
+      "TestInstallerInspectionReportsFixedReadOnlyCheckpoint",
+      "TestInstallerPreflightDetailPreservesSafeErrors",
+      "TestInstallerPreflightDiagnosticIsClosedAndNonGranting",
       "TestInstallerTerminalRestoresAfterKilledInertChild",
       "TestLinuxAdapterDisposableFilesystemLifecycle",
       "TestLinuxAdapterPublicDirectoriesIgnoreRestrictiveUmask",

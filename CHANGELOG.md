@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-10-06 — Identify the failing installer preflight checkpoint
+
+- Carry fixed, closed preflight categories through the existing installer failureStage and sanitized native acceptance result. Distinguish tool, directory, unit-parser, bootstrap, artifact, plan and transaction-begin checks without exporting host values or raw errors.
+- Preserve all installer checks, commands, approval gates, cleanup and rollback behavior. The preceding absent-unit fix now passes the initial cancellation probe in all three hosted scenarios; the later installer blocker still needs the next native result.
+
 ## 2026-10-06 — Accept systemd's empty-array output for fresh helper units
 
 - Correct fresh socket-helper preflight for systemd's omission of empty ExecStart and Listen arrays, even with --all. Permit only the corresponding omitted array for the fixed not-found, inactive helper unit; do not invent property values.

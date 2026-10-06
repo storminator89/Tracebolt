@@ -57,6 +57,7 @@ type Request struct {
 // HostFacts are observations made by a trusted local preflight, never network or
 // bootstrap claims. BuildPlan is not authority to skip rechecking them at apply.
 type HostFacts struct {
+	inspectionStage                                                                      Operation // Fixed local diagnostic only; never a request or host value.
 	Linux, SystemdAvailable, Root, AccountCompatible, InstallationOwned, EnrollmentReady bool
 	Profile                                                                              string
 	CollectionProfile                                                                    string

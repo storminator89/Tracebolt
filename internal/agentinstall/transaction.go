@@ -60,6 +60,33 @@ type Result struct {
 	FailureStage     Operation `json:"failureStage,omitempty"`
 }
 
+// preflightFailure carries only a fixed checkpoint; the original error identity
+// remains available to local callers and is never copied into the public Result.
+type preflightFailure struct {
+	stage Operation
+	cause error
+}
+
+func (e *preflightFailure) Error() string { return e.cause.Error() }
+func (e *preflightFailure) Unwrap() error { return e.cause }
+func checkpointFailureStage(err error, fallback Operation) Operation {
+	var detail *preflightFailure
+	if errors.As(err, &detail) && detail != nil {
+		return inspectionFailureStage(detail.stage)
+	}
+	return inspectionFailureStage(fallback)
+}
+
+// inspectionFailureStage never exposes backend error text or dynamic host values.
+func inspectionFailureStage(stage Operation) Operation {
+	switch stage {
+	case "preflight_inspect", "preflight_systemd", "preflight_terminal", "preflight_systemctl_tool", "preflight_useradd_tool", "preflight_nologin_tool", "preflight_opt_directory", "preflight_etc_directory", "preflight_state_directory", "preflight_unit_directory", "preflight_unit_status", "preflight_account", "preflight_installation_state", "preflight_ownership_state", "preflight_fresh_paths", "preflight_bootstrap", "preflight_complete_profile", "preflight_artifacts", "preflight_plan", "preflight_begin", "preflight_reinspect", "preflight_replan", "preflight_unit_command", "preflight_unit_members", "preflight_unit_pid", "preflight_unit_absence", "preflight_manifest_absence", "preflight_begin_request", "preflight_begin_control", "preflight_begin_lock", "preflight_begin_journal", "preflight_begin_entropy", "preflight_begin_ownership", "preflight_begin_unit", "preflight_begin_artifacts", "preflight_begin_bootstrap", "preflight_begin_save":
+		return stage
+	default:
+		return "preflight_inspect"
+	}
+}
+
 func nilHandle(v any) bool {
 	if v == nil {
 		return true
@@ -85,10 +112,12 @@ func Execute(ctx context.Context, r Request, backend Backend) (Result, error) {
 	}
 	facts, e := backend.Inspect(ctx, r)
 	if e != nil {
+		out.FailureStage = checkpointFailureStage(e, facts.inspectionStage)
 		return out, ErrPreflight
 	}
 	plan, e := BuildPlan(r, facts)
 	if e != nil {
+		out.FailureStage = "preflight_plan"
 		return out, e
 	}
 	out.Plan = plan
@@ -100,6 +129,7 @@ func Execute(ctx context.Context, r Request, backend Backend) (Result, error) {
 	}
 	tx, e := backend.Begin(ctx, r, plan)
 	if e != nil || nilHandle(tx) {
+		out.FailureStage = checkpointFailureStage(e, "preflight_begin")
 		return out, ErrState
 	}
 	defer tx.Close()
@@ -111,10 +141,15 @@ func Execute(ctx context.Context, r Request, backend Backend) (Result, error) {
 	}
 	facts, e = tx.Inspect(ctx, r)
 	if e != nil {
+		out.FailureStage = checkpointFailureStage(e, facts.inspectionStage)
+		if out.FailureStage == "preflight_inspect" {
+			out.FailureStage = "preflight_reinspect"
+		}
 		return rollback()
 	}
 	fresh, e := BuildPlan(r, facts)
 	if e != nil || fresh.DryRun {
+		out.FailureStage = "preflight_replan"
 		return rollback()
 	}
 	operations := []Operation{}

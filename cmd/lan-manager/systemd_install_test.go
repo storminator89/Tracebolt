@@ -665,6 +665,8 @@ func systemdCheckProcessIdentity(t *testing.T, uid, gid int) {
 
 func systemdInstallerStage(raw string) string {
 	switch raw {
+	case "preflight_inspect", "preflight_systemd", "preflight_terminal", "preflight_systemctl_tool", "preflight_useradd_tool", "preflight_nologin_tool", "preflight_opt_directory", "preflight_etc_directory", "preflight_state_directory", "preflight_unit_directory", "preflight_unit_status", "preflight_account", "preflight_installation_state", "preflight_ownership_state", "preflight_fresh_paths", "preflight_bootstrap", "preflight_complete_profile", "preflight_artifacts", "preflight_plan", "preflight_begin", "preflight_reinspect", "preflight_replan", "preflight_unit_command", "preflight_unit_members", "preflight_unit_pid", "preflight_unit_absence", "preflight_manifest_absence", "preflight_begin_request", "preflight_begin_control", "preflight_begin_lock", "preflight_begin_journal", "preflight_begin_entropy", "preflight_begin_ownership", "preflight_begin_unit", "preflight_begin_artifacts", "preflight_begin_bootstrap", "preflight_begin_save":
+		return "installer_" + raw
 	case "preflight":
 		return "installer_preflight"
 	case "prepare_account_and_paths":

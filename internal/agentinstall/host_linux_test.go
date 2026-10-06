@@ -10,6 +10,7 @@ import (
 	"crypto/x509/pkix"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"localrmm/internal/enrollmentclient"
 	"localrmm/internal/enrollmentcrypto"
 	"math/big"
@@ -388,5 +389,50 @@ func TestLinuxAdapterRejectsAlteredOwnedArtifacts(t *testing.T) {
 	}
 	if _, e := Execute(context.Background(), r, b); e == nil || len(*events) != n {
 		t.Fatal("permissive artifact executed")
+	}
+}
+
+func TestInstallerInspectionReportsFixedReadOnlyCheckpoint(t *testing.T) {
+	h := &linuxHost{owner: os.Geteuid(), systemd: func() bool { return false }, terminal: func() bool { return false }}
+	backend := &LinuxBackend{host: h}
+	r := Request{Action: Install, Apply: true}
+	out, err := Execute(context.Background(), r, backend)
+	if err != ErrPreflight || out.FailureStage != "preflight_systemd" {
+		t.Fatal("systemd checkpoint lost")
+	}
+	h.systemd = func() bool { return true }
+	out, err = Execute(context.Background(), r, backend)
+	if err != ErrPreflight || out.FailureStage != "preflight_terminal" {
+		t.Fatal("terminal checkpoint lost")
+	}
+	// Missing inert tool tree, never a real host/tool inspection.
+	h.root = t.TempDir()
+	h.terminal = func() bool { return true }
+	out, err = Execute(context.Background(), r, backend)
+	if err != ErrPreflight || out.FailureStage != "preflight_systemctl_tool" {
+		t.Fatal("tool checkpoint lost")
+	}
+}
+
+func TestInstallerPreflightDetailPreservesSafeErrors(t *testing.T) {
+	for _, raw := range []string{"malformed", "LoadState=not-found\nLoadState=not-found\n"} {
+		_, err := parseUnitStatus(raw)
+		if !errors.Is(err, ErrPreflight) || checkpointFailureStage(err, "preflight_unit_status") != "preflight_unit_members" {
+			t.Fatal("unit member diagnostic lost")
+		}
+	}
+	raw := "LoadState=not-found\nActiveState=inactive\nFragmentPath=\nDropInPaths=\nTransient=no\nNames=tracebolt-agent.service\nMainPID=invalid\nUnitFileState=\n"
+	_, err := parseUnitStatus(raw)
+	if !errors.Is(err, ErrPreflight) || checkpointFailureStage(err, "preflight_unit_status") != "preflight_unit_pid" {
+		t.Fatal("unit PID diagnostic lost")
+	}
+	backend := &LinuxBackend{host: &linuxHost{root: t.TempDir(), owner: os.Geteuid()}}
+	tx, err := backend.Begin(context.Background(), Request{Action: Install, Apply: true}, Plan{})
+	if tx != nil || !errors.Is(err, ErrState) || checkpointFailureStage(err, "preflight_begin") != "preflight_begin_control" {
+		t.Fatal("begin diagnostic or original failure lost")
+	}
+	private := &preflightFailure{stage: "private host value", cause: errors.New("private underlying error")}
+	if checkpointFailureStage(private, "preflight_begin") != "preflight_inspect" {
+		t.Fatal("untrusted diagnostic escaped")
 	}
 }

@@ -73,6 +73,21 @@ class InertScriptTests(unittest.TestCase):
         self.assertEqual(event['readAdminFailure'], 'read-admin-phase-incomplete')
         self.assertNotIn(secret, json.dumps(event))
 
+    def test_installer_preflight_checkpoints_remain_closed_through_event(self):
+        transaction = (ROOT / 'internal/agentinstall/transaction.go').read_text()
+        native = (ROOT / 'cmd/lan-manager/systemd_install_test.go').read_text()
+        workflow = (ROOT / '.github/workflows/read-admin-systemd-acceptance.yml').read_text()
+        stages = set(re.findall(r'"(preflight_[a-z_]+)"', transaction))
+        self.assertEqual(stages, {v for v in PTY.INSTALLER_STAGES if v.startswith('preflight_')})
+        self.assertEqual(stages, set(re.findall(r'"(preflight_[a-z_]+)"', native)))
+        self.assertEqual({'installer_' + v for v in stages}, set(re.findall(r"'(installer_preflight_[a-z_]+)'", workflow)))
+        for stage in stages | {'untrusted/private detail'}:
+            installer = dict(committed=False, identityRetained=True, rolledBack=False,
+                             plan={}, failureStage=stage)
+            event = PTY.exit_event(encoded(installer), 1, '', 1)
+            self.assertEqual(event['installerStage'], stage if stage in stages else '')
+            self.assertNotIn('untrusted', json.dumps(event))
+
     def test_scripts_are_linux_test_only_and_compile(self):
         self.assertTrue(SOURCE.read_text().startswith('//go:build linux\n'))
         for name in ('readAdminLauncher', 'readAdminPTY'):

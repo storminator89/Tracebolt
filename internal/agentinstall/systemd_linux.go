@@ -22,7 +22,7 @@ func actualUnitStatus(ctx context.Context) (unitStatus, error) {
 	var out cappedOutput
 	cmd.Stdout = &out
 	if cmd.Run() != nil || out.exceeded {
-		return unitStatus{}, ErrPreflight
+		return unitStatus{}, &preflightFailure{"preflight_unit_command", ErrPreflight}
 	}
 	return parseUnitStatus(out.String())
 }
@@ -31,24 +31,24 @@ func parseUnitStatus(raw string) (unitStatus, error) {
 	for _, line := range strings.Split(strings.TrimSpace(raw), "\n") {
 		kv := strings.SplitN(line, "=", 2)
 		if len(kv) != 2 {
-			return unitStatus{}, ErrPreflight
+			return unitStatus{}, &preflightFailure{"preflight_unit_members", ErrPreflight}
 		}
 		if _, ok := values[kv[0]]; ok {
-			return unitStatus{}, ErrPreflight
+			return unitStatus{}, &preflightFailure{"preflight_unit_members", ErrPreflight}
 		}
 		values[kv[0]] = kv[1]
 	}
 	required := []string{"LoadState", "ActiveState", "FragmentPath", "DropInPaths", "Transient", "Names", "MainPID", "UnitFileState"}
 	if len(values) != len(required) {
-		return unitStatus{}, ErrPreflight
+		return unitStatus{}, &preflightFailure{"preflight_unit_members", ErrPreflight}
 	}
 	for _, k := range required {
 		if _, ok := values[k]; !ok {
-			return unitStatus{}, ErrPreflight
+			return unitStatus{}, &preflightFailure{"preflight_unit_members", ErrPreflight}
 		}
 	}
 	if _, e := strconv.ParseUint(values["MainPID"], 10, 32); e != nil {
-		return unitStatus{}, ErrPreflight
+		return unitStatus{}, &preflightFailure{"preflight_unit_pid", ErrPreflight}
 	}
 	return unitStatus{values["LoadState"], values["ActiveState"], values["FragmentPath"], values["DropInPaths"], values["Transient"], values["Names"], values["MainPID"], values["UnitFileState"]}, nil
 }

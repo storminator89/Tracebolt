@@ -361,7 +361,8 @@ if __name__ == '__main__':
 const readAdminPTY = `import json,os,pty,re,select,signal,sys,termios,time
 
 MAX_CAPTURE = 131072
-INSTALLER_STAGES = frozenset(('preflight','prepare_account_and_paths','stage_verified_artifacts',
+INSTALLER_STAGES = frozenset(('preflight_unit_command','preflight_unit_members','preflight_unit_pid','preflight_unit_absence','preflight_manifest_absence','preflight_begin_request','preflight_begin_control','preflight_begin_lock','preflight_begin_journal','preflight_begin_entropy','preflight_begin_ownership','preflight_begin_unit','preflight_begin_artifacts','preflight_begin_bootstrap','preflight_begin_save','preflight_inspect','preflight_systemd','preflight_terminal','preflight_systemctl_tool','preflight_useradd_tool','preflight_nologin_tool','preflight_opt_directory','preflight_etc_directory','preflight_state_directory','preflight_unit_directory','preflight_unit_status','preflight_account','preflight_installation_state','preflight_ownership_state','preflight_fresh_paths','preflight_bootstrap','preflight_complete_profile','preflight_artifacts','preflight_plan','preflight_begin','preflight_reinspect','preflight_replan',
+    'preflight','prepare_account_and_paths','stage_verified_artifacts',
     'enroll_as_dedicated_account','validate_existing_guided_state','publish_owned_binaries_and_unit',
     'start_owned_service','commit'))
 FAILURES = frozenset(('install-or-device-approval-incomplete','acceptance-injected-before-journal',

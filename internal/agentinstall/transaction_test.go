@@ -2,6 +2,7 @@ package agentinstall
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"reflect"
 	"strings"
@@ -129,5 +130,50 @@ func TestUninstallNeverRequestsIdentityOrAccountDeletion(t *testing.T) {
 		if strings.Contains(ev, "delete_identity") || strings.Contains(ev, "delete_account") || strings.Contains(ev, "enroll_as") {
 			t.Fatal("uninstall expanded scope")
 		}
+	}
+}
+
+// This backend performs no host work; its private error must never be serialized.
+type diagnosticBackend struct {
+	fakeBackend
+	inspectError bool
+}
+
+func (f *diagnosticBackend) Inspect(context.Context, Request) (HostFacts, error) {
+	if f.inspectError {
+		return f.facts, errors.New("private untrusted host detail")
+	}
+	return f.facts, nil
+}
+func (f *diagnosticBackend) Begin(context.Context, Request, Plan) (Transaction, error) {
+	f.begun++
+	return nil, errors.New("private untrusted begin detail")
+}
+func TestInstallerPreflightDiagnosticIsClosedAndNonGranting(t *testing.T) {
+	for _, stage := range []Operation{"preflight_inspect", "preflight_systemd", "preflight_terminal", "preflight_systemctl_tool", "preflight_useradd_tool", "preflight_nologin_tool", "preflight_opt_directory", "preflight_etc_directory", "preflight_state_directory", "preflight_unit_directory", "preflight_unit_status", "preflight_account", "preflight_installation_state", "preflight_ownership_state", "preflight_fresh_paths", "preflight_bootstrap", "preflight_complete_profile", "preflight_artifacts", "private untrusted host detail", ""} {
+		r, ordinary := installFixture()
+		f := &diagnosticBackend{fakeBackend: *ordinary, inspectError: true}
+		f.facts.inspectionStage = stage
+		out, err := Execute(context.Background(), r, f)
+		raw, _ := json.Marshal(out)
+		expected := stage
+		if stage == "" || stage == "private untrusted host detail" {
+			expected = "preflight_inspect"
+		}
+		if err != ErrPreflight || out.FailureStage != expected || out.Committed || out.RolledBack || !out.IdentityRetained || f.begun != 0 || strings.Contains(string(raw), "private") {
+			t.Fatal("preflight diagnostic leaked or changed effects")
+		}
+	}
+	r, ordinary := installFixture()
+	f := &diagnosticBackend{fakeBackend: *ordinary}
+	bad := r
+	bad.Action = "invalid"
+	out, err := Execute(context.Background(), bad, f)
+	if err == nil || out.FailureStage != "preflight_plan" || f.begun != 0 {
+		t.Fatal("plan failure lost")
+	}
+	out, err = Execute(context.Background(), r, f)
+	if err != ErrState || out.FailureStage != "preflight_begin" || f.begun != 1 || out.Committed || out.RolledBack {
+		t.Fatal("begin failure lost or recovery invented")
 	}
 }

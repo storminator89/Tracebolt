@@ -77,31 +77,38 @@ func (b *LinuxBackend) Inspect(ctx context.Context, r Request) (HostFacts, error
 		return HostFacts{}, ErrPreflight
 	}
 	h := b.host
-	facts := HostFacts{Linux: true, Root: os.Geteuid() == h.owner, SystemdAvailable: h.systemd()}
+	facts := HostFacts{Linux: true, Root: os.Geteuid() == h.owner, SystemdAvailable: h.systemd(), inspectionStage: "preflight_systemd"}
 	if !facts.SystemdAvailable {
 		return facts, ErrPreflight
 	}
+	facts.inspectionStage = "preflight_terminal"
 	if r.Action == Install && !h.terminal() {
 		return facts, ErrPreflight
 	}
-	for _, p := range []string{systemctlPath, useraddPath, nologinPath} {
+	for index, p := range []string{systemctlPath, useraddPath, nologinPath} {
+		facts.inspectionStage = []Operation{"preflight_systemctl_tool", "preflight_useradd_tool", "preflight_nologin_tool"}[index]
 		if h.secureFile(h.path(p), false, 16<<20) != nil {
 			return facts, ErrPreflight
 		}
 	}
-	for _, p := range []string{"/opt", "/etc", "/var/lib", "/etc/systemd/system"} {
+	for index, p := range []string{"/opt", "/etc", "/var/lib", "/etc/systemd/system"} {
+		facts.inspectionStage = []Operation{"preflight_opt_directory", "preflight_etc_directory", "preflight_state_directory", "preflight_unit_directory"}[index]
 		if h.secureDirectory(h.path(p), false) != nil {
 			return facts, ErrPreflight
 		}
 	}
+	facts.inspectionStage = "preflight_unit_status"
 	status, ue := h.unit(ctx)
 	if ue != nil {
+		facts.inspectionStage = checkpointFailureStage(ue, facts.inspectionStage)
 		return facts, ErrPreflight
 	}
+	facts.inspectionStage = "preflight_account"
 	acct, exists, e := h.account()
 	if e != nil {
 		return facts, ErrPreflight
 	}
+	facts.inspectionStage = "preflight_installation_state"
 	manifest, e := h.readInstallation()
 	if e == nil {
 		if !status.owned() {
@@ -122,13 +129,16 @@ func (b *LinuxBackend) Inspect(ctx context.Context, r Request) (HostFacts, error
 			return facts, ErrState
 		}
 	} else {
+		facts.inspectionStage = "preflight_unit_absence"
 		if !status.absent() {
 			return facts, ErrState
 		}
+		facts.inspectionStage = "preflight_manifest_absence"
 		if !os.IsNotExist(e) {
 			return facts, ErrState
 		}
 
+		facts.inspectionStage = "preflight_ownership_state"
 		owned, ownErr := h.readOwnership()
 		if ownErr == nil {
 			if !exists || acct.UID != owned.Installation.UID || acct.GID != owned.Installation.GID || h.validateRetained(owned) != nil {
@@ -152,6 +162,7 @@ func (b *LinuxBackend) Inspect(ctx context.Context, r Request) (HostFacts, error
 			if !os.IsNotExist(ownErr) || exists {
 				return facts, ErrState
 			}
+			facts.inspectionStage = "preflight_fresh_paths"
 			for _, p := range []string{InstallDirectory, publicDirectory, StateDirectory, UnitPath} {
 				if _, e := os.Lstat(h.path(p)); !os.IsNotExist(e) {
 					return facts, ErrState
@@ -161,6 +172,7 @@ func (b *LinuxBackend) Inspect(ctx context.Context, r Request) (HostFacts, error
 			if r.Action != Install {
 				return facts, ErrState
 			}
+			facts.inspectionStage = "preflight_bootstrap"
 			raw, bootstrap, e := readBootstrap(ctx, r.BootstrapFile, r.BootstrapSHA256)
 			clear(raw)
 			if e != nil {
@@ -169,6 +181,7 @@ func (b *LinuxBackend) Inspect(ctx context.Context, r Request) (HostFacts, error
 			facts.Profile = bootstrap.Profile
 		}
 	}
+	facts.inspectionStage = "preflight_complete_profile"
 	if r.Action == Install && r.RequireCompleteProfile {
 		raw, bootstrap, err := readBootstrap(ctx, r.BootstrapFile, r.BootstrapSHA256)
 		clear(raw)
@@ -178,6 +191,7 @@ func (b *LinuxBackend) Inspect(ctx context.Context, r Request) (HostFacts, error
 		facts.CollectionProfile = bootstrap.CollectionProfile
 		facts.AgentOrigin = bootstrap.AgentOrigin
 	}
+	facts.inspectionStage = "preflight_artifacts"
 	if r.Action == Install || r.Action == Upgrade {
 		v, e := VerifyInputs(ctx, r)
 		if e != nil {
@@ -185,6 +199,7 @@ func (b *LinuxBackend) Inspect(ctx context.Context, r Request) (HostFacts, error
 		}
 		v.Close()
 	}
+	facts.inspectionStage = ""
 	return facts, nil
 }
 func readBootstrap(ctx context.Context, p, digest string) ([]byte, enrollmentclient.Bootstrap, error) {
@@ -397,15 +412,23 @@ func parseAccountFiles(raw, groups []byte) (accountRecord, bool, error) {
 	return a, true, nil
 }
 
-func (b *LinuxBackend) Begin(ctx context.Context, r Request, p Plan) (Transaction, error) {
+func (b *LinuxBackend) Begin(ctx context.Context, r Request, p Plan) (result Transaction, failure error) {
+	checkpoint := Operation("preflight_begin_request")
+	defer func() {
+		if failure != nil {
+			failure = &preflightFailure{checkpoint, failure}
+		}
+	}()
 	if b == nil || b.host == nil || !r.Apply || os.Geteuid() != b.host.owner || ctx.Err() != nil {
 		return nil, ErrPreflight
 	}
 	h := b.host
 	dir := h.path(controlDirectory)
+	checkpoint = "preflight_begin_control"
 	if e := h.ensureControl(dir); e != nil {
 		return nil, e
 	}
+	checkpoint = "preflight_begin_lock"
 	lock, e := unix.Open(filepath.Join(dir, "install.lock"), unix.O_RDWR|unix.O_CREAT|unix.O_NOFOLLOW|unix.O_CLOEXEC|unix.O_NONBLOCK, 0600)
 	if e != nil {
 		return nil, ErrState
@@ -415,10 +438,12 @@ func (b *LinuxBackend) Begin(ctx context.Context, r Request, p Plan) (Transactio
 	if h.secureFile(filepath.Join(dir, "install.lock"), true, 4096) != nil || unix.Flock(lock, unix.LOCK_EX|unix.LOCK_NB) != nil {
 		return fail()
 	}
+	checkpoint = "preflight_begin_journal"
 	journalPath := filepath.Join(dir, "transaction.json")
 	if _, e := os.Lstat(journalPath); !os.IsNotExist(e) {
 		return fail()
 	} // Uncertain prior work needs explicit recovery, never automatic cleanup.
+	checkpoint = "preflight_begin_entropy"
 	var nonce [16]byte
 	if _, e := rand.Read(nonce[:]); e != nil {
 		return fail()
@@ -431,6 +456,7 @@ func (b *LinuxBackend) Begin(ctx context.Context, r Request, p Plan) (Transactio
 	if r.PendingService {
 		version = pendingInstallationVersion
 	}
+	checkpoint = "preflight_begin_ownership"
 	if r.Action != Install || r.Resume {
 		owned, oe := h.readOwnership()
 		if oe != nil {
@@ -443,18 +469,22 @@ func (b *LinuxBackend) Begin(ctx context.Context, r Request, p Plan) (Transactio
 		}
 	}
 	t := &linuxTransaction{h: h, lock: f, dir: dir, r: r, installationVersion: version, profile: profile, j: installJournal{ID: hex.EncodeToString(nonce[:]), Version: transactionVersion(version), Action: r.Action, Phase: "begun", Changes: []fileChange{}}}
+	checkpoint = "preflight_begin_unit"
 	status, se := h.unit(ctx)
 	if se != nil {
+		checkpoint = checkpointFailureStage(se, checkpoint)
 		t.Close()
 		return nil, ErrPreflight
 	}
 	t.j.EnabledBefore = status.UnitFileState == "enabled"
+	checkpoint = "preflight_begin_artifacts"
 	if r.Action == Install || r.Action == Upgrade {
 		t.inputs, e = VerifyInputs(ctx, r)
 		if e != nil {
 			return fail()
 		}
 	}
+	checkpoint = "preflight_begin_bootstrap"
 	if r.Action == Install {
 		t.bootstrap, _, e = readBootstrap(ctx, r.BootstrapFile, r.BootstrapSHA256)
 		if e != nil {
@@ -462,6 +492,7 @@ func (b *LinuxBackend) Begin(ctx context.Context, r Request, p Plan) (Transactio
 			return nil, ErrArtifact
 		}
 	}
+	checkpoint = "preflight_begin_save"
 	if e = t.save(); e != nil {
 		t.Close()
 		return nil, ErrState
