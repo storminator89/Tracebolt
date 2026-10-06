@@ -1,0 +1,11 @@
+VERSION 3
+APT::Architecture=amd64
+APT::Architectures::=amd64
+APT::Architectures::=i386
+DPkg::Options::=--force-confold
+Fixture::Value=a=b+c%20d
+
+sample-bin 1.0-1 amd64 same < 1.0-2 amd64 same /var/cache/apt/archives/sample-bin_1.0-2_amd64.deb
+sample-bin 1.0-1 i386 same < 1.0-2 i386 same /var/cache/apt/archives/sample-bin_1.0-2_i386.deb
+sample-bin 1.0-1 amd64 same < 1.0-2 amd64 same **CONFIGURE**
+sample-bin 1.0-1 i386 same < 1.0-2 i386 same **CONFIGURE**

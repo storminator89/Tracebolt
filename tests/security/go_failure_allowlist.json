@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "sourceCommit": "fccc4b00cd8a144afd58e4b995747afab7a10022",
-  "goSourceSha256": "7611f503a251276fad0f1fc756d0682ef6e8566ad96a8d97c93d9464d0e714a4",
+  "goSourceSha256": "2e39895d6c59ced7e0b5c710548c7042e57397e5473f8c283e3254d55be9e373",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -1699,6 +1699,24 @@
       "TestSingleFlightRemainsHeldUntilSynchronousWorkReturns",
       "TestUnknownProviderErrorIsFixed",
       "TestValidCallerBeforeAnyProviderWork"
+    ],
+    "localrmm/internal/packageplan": [
+      "TestBinaryRebuildAndDefaultMapping",
+      "TestCancellationAndNilContext",
+      "TestCanonicalPlanFixture",
+      "TestCanonicalTupleOrderForPrefixNames",
+      "TestConfigurationIsAnExactOrderedBlock",
+      "TestDuplicateAndReusedArchivePaths",
+      "TestEveryBindingChangesDigest",
+      "TestExactOperationAndArchiveBijection",
+      "TestFreshnessBoundaries",
+      "TestHookFixturesAndMultiarch",
+      "TestMalformedProtocol",
+      "TestNoCachedObservationCoercion",
+      "TestProtocolNoneAlias",
+      "TestRejectedPlans",
+      "TestRepeatedPureCallsDoNotPretendToConsume",
+      "TestStrictPlanWire"
     ],
     "localrmm/internal/rules": [
       "TestNativeInputsDoNotBecomeDemoEvidence",

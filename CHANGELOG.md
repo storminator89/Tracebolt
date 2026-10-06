@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-10-05 — Inert selected-package plan and hook observation core
+
+- Added a bounded canonical selected-upgrade description, original-age checks, exact binary/source/archive/index bindings and a pure APT v3 observation matcher. Strict fixtures cover malformed protocols, multiarch, repeated operations, stale or unknown evidence and archive mismatches.
+- No package installer, native evidence collector, package-action permission, runtime integration or host change is enabled. Durable runner, authenticated native evidence, mandatory hook behavior and Debian/Ubuntu acceptance remain separate gates.
+
 ## Guided service-action setup source candidate
 
 - Add explicit read-only manager/endpoint plans and one local digest-bound approval.

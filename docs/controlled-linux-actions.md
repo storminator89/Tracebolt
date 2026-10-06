@@ -21,8 +21,10 @@ policy digest; there is no separate replay domain or production TLS fallback.
 
 Host key/state/policy/socket/unit provisioning, actual Unix writer-credential
 acceptance and a disposable real systemd service test remain separate gates.
-Package actions, reconciliation and fleet scheduling below remain design work;
-this service-only implementation does not claim those capabilities.
+The [selected-package plan and hook-observation core](selected-package-plan-core.md)
+now provides an inert source/fixture contract only. Native package planning and
+execution, reconciliation and fleet scheduling below remain pending; this
+service-only integration does not claim those capabilities.
 
 ## Decision and first deliverable
 
