@@ -25,7 +25,7 @@ const copy = {
         loadError: 'The manager could not be read. Retry the request or refresh.', invalid: 'Inconsistent or unsupported update data was returned. Rows were cleared.', timeout: 'The request timed out. Retry or refresh.', session: 'Your session has ended. Sign in again.', clock: 'The time anchor is no longer reliable. Refresh before continuing.', busy: 'The manager is busy. Retry shortly.', restart: 'The selected generation or paging session expired or changed. Refresh to restart; prior pages were cleared.', searchInvalid: 'Use at most 128 printable ASCII characters.',
         summary: 'Stored APT candidates. Refresh reads manager data; it does not query APT or install updates.',
         securitySummary: 'Cached candidates do not establish security or patch status.',
-        captureDetails: 'Capture details', transferDetails: 'Transfer details', scopeDetails: 'Scope & limits',
+        captureDetails: 'Capture details', transferDetails: 'Transfer details', failureDetails: 'Failure details', scopeDetails: 'Scope & limits', generationId: 'Generation ID', sequence: 'Sequence',
         retention: 'Rows expire 24 hours after their original capture. Refresh and pagination only read stored manager data; they never initiate a native query or refresh metadata.',
     },
     de: {
@@ -45,7 +45,7 @@ const copy = {
         loadError: 'Der Manager konnte nicht gelesen werden. Anfrage wiederholen oder aktualisieren.', invalid: 'Widersprüchliche oder nicht unterstützte Updatedaten erhalten. Zeilen wurden entfernt.', timeout: 'Die Anfrage hat das Zeitlimit überschritten. Wiederholen oder aktualisieren.', session: 'Die Sitzung ist beendet. Erneut anmelden.', clock: 'Der Zeitanker ist nicht mehr verlässlich. Vor dem Fortfahren aktualisieren.', busy: 'Der Manager ist ausgelastet. Gleich erneut versuchen.', restart: 'Die ausgewählte Generation oder Seitensitzung ist abgelaufen oder geändert. Zum Neustart aktualisieren; vorherige Seiten wurden entfernt.', searchInvalid: 'Höchstens 128 druckbare ASCII-Zeichen verwenden.',
         summary: 'Gespeicherte APT-Kandidaten. Aktualisieren liest Managerdaten, fragt APT nicht ab und installiert keine Updates.',
         securitySummary: 'Cache-Kandidaten belegen weder Sicherheit noch einen vollständigen Patchstand.',
-        captureDetails: 'Erfassungsdetails', transferDetails: 'Übertragungsdetails', scopeDetails: 'Umfang & Grenzen',
+        captureDetails: 'Erfassungsdetails', transferDetails: 'Übertragungsdetails', failureDetails: 'Fehlerdetails', scopeDetails: 'Umfang & Grenzen', generationId: 'Generations-ID', sequence: 'Sequenz',
         retention: 'Zeilen laufen 24 Stunden nach ihrer ursprünglichen Erfassung ab. Aktualisieren und Blättern lesen nur gespeicherte Managerdaten und starten weder eine native Abfrage noch eine Metadaten-Aktualisierung.',
     },
 };
@@ -73,6 +73,8 @@ function CompleteUpdates({ deviceId }: { deviceId: string }) {
                 <details className="update-details">
                     <summary>{labels.captureDetails}</summary>
                     <dl className="package-facts">
+                        {field(labels.generationId, selected!.binding.generationId)}
+                        {field(labels.sequence, selected!.binding.sequence)}
                         {field(labels.installed, number(manifest.installedCount))}
                         {field(labels.checked, number(manifest.checkedCount))}
                         {field(labels.completed, selected!.completedAt)}
@@ -87,11 +89,26 @@ function CompleteUpdates({ deviceId }: { deviceId: string }) {
                 <dl className="package-facts">{field(labels.accepted, `${number(view.transfer.acceptedRows)} / ${number(view.transfer.declaredRows)}`)}</dl>
                 <details className="update-details">
                     <summary>{labels.transferDetails}</summary>
-                    <dl className="package-facts">{field(labels.chunks, `${number(view.transfer.acceptedChunks)} / ${number(view.transfer.expectedChunks)}`)}</dl>
+                    <dl className="package-facts">
+                        {field(labels.generationId, view.transfer.binding.generationId)}
+                        {field(labels.sequence, view.transfer.binding.sequence)}
+                        {field(labels.collected, view.transfer.collectedAt)}
+                        {field(labels.chunks, `${number(view.transfer.acceptedChunks)} / ${number(view.transfer.expectedChunks)}`)}
+                    </dl>
                     <p className="package-note">{labels.transferNote}</p>
                 </details>
             </section>}
-            {view.failure && <section aria-label={labels.failure}><h4>{labels.failure}</h4><p>{labels[view.failure.reason]}</p><dl className="package-facts">{field(labels.attempted, view.failure.attemptedAt)}</dl></section>}
+            {view.failure && <section aria-label={labels.failure}>
+                <h4>{labels.failure}</h4><p>{labels[view.failure.reason]}</p>
+                <dl className="package-facts">{field(labels.attempted, view.failure.attemptedAt)}</dl>
+                <details className="update-details">
+                    <summary>{labels.failureDetails}</summary>
+                    <dl className="package-facts">
+                        {field(labels.generationId, view.failure.generationId)}
+                        {field(labels.sequence, view.failure.sequence)}
+                    </dl>
+                </details>
+            </section>}
             {visible && <section><form className="complete-package-search" onSubmit={event => { event.preventDefault(); resource.startSearch(); }}><label htmlFor={`${id}-search`}>{labels.search}</label><div><input id={`${id}-search`} type="search" value={resource.search} maxLength={128} onChange={event => resource.changeSearch(event.target.value)} autoComplete="off" spellCheck={false}/><button type="submit" className="button" disabled={resource.loading}><Search size={15}/>{labels.submit}</button></div></form>
                 {page && <><dl className="package-counts">{field(labels.scanned, `${number(resource.scanned)} / ${number(page.totalRows)}`)}{field(labels.matches, number(resource.matches))}{field(labels.shown, number(page.items.length))}</dl>
                     {page.items.length > 0 ? <div className="package-table-scroll" role="region" aria-label={labels.title} tabIndex={0}><table><caption className="sr-only">{labels.title}</caption><thead><tr>{[labels.package, labels.architecture, labels.installedVersion, labels.candidateVersion, labels.state].map(label => <th key={label} scope="col">{label}</th>)}</tr></thead><tbody>{page.items.map(row => <tr key={`${row.name}:${row.architecture}`}><th scope="row">{row.name}</th><td>{row.architecture}</td><td>{row.installedVersion}</td><td>{row.candidateVersion}</td><td>{row.state === 'held' ? labels.heldState : labels.candidate_only}</td></tr>)}</tbody></table></div> : <p role="status">{!page.exhausted ? labels.continuing : page.totalRows === 0 ? manifest!.unknownCount > 0 ? labels.zeroUnknown : labels.zero : resource.matches === 0 ? labels.noMatches : labels.noPageMatches}</p>}

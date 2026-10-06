@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-10-06 — Expose APT evidence identity and narrow picker diagnostics
+
+- Show complete and transfer generation IDs/sequences, the transfer's original capture time and failed-attempt identity inside existing full-APT details. Preserve retained rows, source timestamps, request behavior and visible failure outcomes.
+- Add fixed Journal picker test stages and bounded inventory HTTP status categories while preserving every existing body, consent, row and request-count assertion. The earlier intermittent browser failure remains unexplained; this adds diagnostic evidence rather than claiming a product correction.
+
 ## 2026-10-06 — Preserve Health drafts and show complete mobile check results
 
 - Keep explicit service deselection and edits made during a pending Health save; ignore obsolete scope/revision completions instead of replacing the newer draft with saved values.
