@@ -365,13 +365,25 @@ func (s *Store) CancelJournalRequest(ctx context.Context, device string, identit
 // content access permission. Canceled/expired requests suppress the result
 // receipt. Revoke, credential expiry and leaf changes suppress all output.
 func (s *Store) JournalRequestStatus(ctx context.Context, device string, now time.Time) (journalrequest.Status, error) {
+	release, err := s.systemReadAdmission(ctx)
+	if err != nil {
+		return journalrequest.Status{}, err
+	}
+	defer release()
 	var out journalrequest.Status
+	var certificateNotAfter int64
 	now = now.UTC()
-	err := s.journalTransaction(ctx, now, func(t *transaction) error {
+	read := func(t *transaction) error {
+		var err error
+		now, err = systemViewNow(ctx, now)
+		if err != nil {
+			return err
+		}
 		snap, system, err := s.journalOperatorAuthority(t, device, now)
 		if err != nil {
 			return err
 		}
+		certificateNotAfter = snap.Intent.NotAfter
 		query, err := currentJournal(system, snap, nil)
 		if err != nil {
 			return err
@@ -389,9 +401,47 @@ func (s *Store) JournalRequestStatus(ctx context.Context, device string, now tim
 			out.Receipt = query.Receipt
 		}
 		return nil
-	})
+	}
+	err = s.transact(ctx, read)
 	if err != nil {
 		return journalrequest.Status{}, err
 	}
+	now, err = journalReadCheckedNow(ctx, now, certificateNotAfter)
+	if err != nil {
+		return journalrequest.Status{}, err
+	}
+	if out.State != journalrequest.Expired && !now.Before(out.Description.ExpiresAt) {
+		// The first COMMIT crossed expiry. Under the same held permit, commit
+		// the existing terminal latch once before reporting an expired status.
+		if err = s.transact(ctx, read); err != nil {
+			return journalrequest.Status{}, err
+		}
+		now, err = journalReadCheckedNow(ctx, now, certificateNotAfter)
+		if err != nil {
+			return journalrequest.Status{}, err
+		}
+		if out.State != journalrequest.Expired && !now.Before(out.Description.ExpiresAt) {
+			return journalrequest.Status{}, journalrequest.ErrExpired
+		}
+	}
 	return out, nil
+}
+
+// Status reads use the existing trusted clock; caller timestamps cannot keep
+// pre-wait authority alive. Direct deterministic store fixtures keep their time.
+func journalReadCheckedNow(ctx context.Context, floor time.Time, certificateNotAfter int64) (time.Time, error) {
+	if err := ctx.Err(); err != nil {
+		return time.Time{}, err
+	}
+	now, err := systemViewNow(ctx, floor)
+	if err != nil {
+		return time.Time{}, err
+	}
+	if err := ctx.Err(); err != nil {
+		return time.Time{}, err
+	}
+	if certificateNotAfter <= 0 || now.Unix() >= certificateNotAfter {
+		return time.Time{}, enrollmentstate.ErrExpired
+	}
+	return now, nil
 }

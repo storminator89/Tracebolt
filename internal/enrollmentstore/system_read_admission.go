@@ -6,8 +6,9 @@ import (
 	"time"
 )
 
-// One SystemView may wait through a short maintenance burst. Keep its permit
-// until the whole read finishes: further readers cannot build a queue behind it.
+// One system/package metadata or journal-status read may wait through a short
+// maintenance burst. Keep its permit until the whole read finishes: further
+// readers cannot build a queue behind it.
 // The existing gate still permits exactly one inventory operation, and all
 // writers/maintenance retain their nonblocking admission policy.
 const systemMetadataAdmissionWait = 750 * time.Millisecond
@@ -58,7 +59,8 @@ func (s *Store) systemReadAdmission(ctx context.Context) (func(), error) {
 type systemViewClockKey struct{}
 type systemViewTrustedClock struct{ now func() time.Time }
 
-// WithSystemViewClock is installed by the trusted service, never by request
+// WithSystemViewClock supplies the shared metadata-read clock. It is installed
+// by the trusted service, never by request
 // fields. Direct deterministic Store fixtures retain their explicit timestamp.
 func WithSystemViewClock(ctx context.Context, now func() time.Time) context.Context {
 	if ctx == nil {

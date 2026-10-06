@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "sourceCommit": "fccc4b00cd8a144afd58e4b995747afab7a10022",
-  "goSourceSha256": "c17132c5a7001e9befa2984c3f144cb4dd5586e20a963b92800ca890d748a6be",
+  "goSourceSha256": "10d2521d22e5aa8ddff2441da96bc9180385a935e24336a03acf29344daa9b09",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -453,6 +453,7 @@
       "TestCompleteOverviewOperatorGuardsAndNotConfigured",
       "TestCompleteOverviewQueryExactSectionAndBounds",
       "TestCompleteOverviewQueryRechecksSessionAfterBody",
+      "TestCompletePackageMetadataFinalOutputRechecksIdentityAndSession",
       "TestCompleteUpdatesFinalOutputRechecksAfterEncodingAndSession",
       "TestCompleteUpdatesGoDTOFixture",
       "TestCompleteUpdatesOperatorGuardsAndBoundedUnknown",
@@ -855,6 +856,7 @@
     ],
     "localrmm/internal/enrollmentservice": [
       "TestChallengeLimitsExpiryAndConfiguration",
+      "TestCompleteInventoryServicePropagatesTrustedClock",
       "TestCompleteOverviewCapabilitiesRequireOptInWithoutInventedSuccess",
       "TestCompleteOverviewMaintenanceLoopStopsBeforeAnyTick",
       "TestCompleteOverviewServiceRequiresStore",
@@ -1022,6 +1024,7 @@
       "TestJournalRevokeSuppressesEveryOperation",
       "TestJournalSequenceExhaustionFailsWithoutWrap",
       "TestJournalStaleRecordedLeafCannotAuthorizeAfterLeafChange",
+      "TestJournalStatusReadAdmissionAndClock",
       "TestNoInvalidProofStaleCASOrCanceledMutation",
       "TestOperationalAndPackageViewsShareBoundedAdmission",
       "TestOperationalProfileRetentionReplayExpiryAndReopen",
@@ -1029,6 +1032,10 @@
       "TestOperationalSchemaCannotAdoptBasicStore",
       "TestPackageFrameValidationCacheDetachesEveryMutableMember",
       "TestPackageLatestOnlyReplayReopenRevocationAndExpiry",
+      "TestPackageMetadataQueuedReadObservesRevocation",
+      "TestPackageMetadataReadCancellationTimeoutAndSQLWait",
+      "TestPackageMetadataReadRechecksAuthorityAndOriginalExpiry",
+      "TestPackageMetadataReadWaitsBehindMaintenance",
       "TestPackageProfileCannotAdoptLegacyFramesOrStores",
       "TestRealInitialBusyLeavesAuthorityUnchangedAndCanRetry",
       "TestRejectExistingEmptyOrForeignDatabaseWithoutMutation",

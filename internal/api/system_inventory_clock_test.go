@@ -27,6 +27,12 @@ import (
 // collection, listener, endpoint provisioning or external service is involved.
 func systemInventoryIssuedClockFixture(t *testing.T, service *enrollmentservice.Service, now time.Time) enrollmentstate.Snapshot {
 	t.Helper()
+	return inventoryIdentityClockFixture(t, service, now, false)
+}
+
+// Optional activation remains an in-memory proof over a synthetic identity.
+func inventoryIdentityClockFixture(t *testing.T, service *enrollmentservice.Service, now time.Time, activate bool) enrollmentstate.Snapshot {
+	t.Helper()
 	ctx := context.Background()
 	requestID := func(n string) string { return "request_" + strings.Repeat(n, 32) }
 	created, err := service.CreateInvitation(ctx, requestID("1"), "linux")
@@ -83,7 +89,33 @@ func systemInventoryIssuedClockFixture(t *testing.T, service *enrollmentservice.
 	if err != nil || issued.State != enrollmentstate.Issued || issued.Intent.NotAfter <= now.Unix() {
 		t.Fatal("fixture issuance failed", err)
 	}
-	return issued
+	if !activate {
+		return issued
+	}
+	intent := enrollmentcrypto.Intent{
+		ManagerInstanceID: issued.Binding.InstanceID, Profile: issued.Binding.Profile, Origin: issued.Binding.Origin, CollectionProfile: issued.Binding.CollectionProfile,
+		InvitationID: issued.InvitationID, ClaimID: issued.Claim.ClaimID, RequestID: issued.Intent.RequestID, DeviceID: issued.Approval.DeviceID, IntentID: issued.Intent.IntentID,
+		KeyFingerprint: issued.Claim.KeyFingerprint, PublicKeyDERBase64: base64.RawStdEncoding.EncodeToString(publicKey), CSRHash: issued.Claim.CSRHash, ClaimHash: issued.Claim.ClaimHash,
+		IssuerFingerprint: issued.Binding.IssuerFingerprint, SerialHex: issued.Intent.SerialHex, TemplateVersion: issued.Intent.TemplateVersion, KeyGeneration: 1,
+		NotBefore: issued.Intent.NotBefore, NotAfter: issued.Intent.NotAfter,
+	}
+	challenge, err = service.Challenge("127.0.0.1", invitation, claimID, "activation")
+	if err != nil {
+		t.Fatal("fixture activation challenge failed", err)
+	}
+	message, err = enrollmentcrypto.ActivationSigningMessage(challenge.Context, intent, requestID("5"), issued.Issuance.CertificateHash, now)
+	if err != nil {
+		t.Fatal("fixture activation message failed", err)
+	}
+	raw, err = json.Marshal(map[string]string{"schemaVersion": enrollmentcrypto.ActivationVersion, "managerInstanceId": challenge.Context.ManagerInstanceID, "profile": challenge.Context.Profile, "origin": challenge.Context.Origin, "deviceId": issued.Approval.DeviceID, "intentId": intent.IntentID, "certificateHash": issued.Issuance.CertificateHash, "requestId": requestID("5"), "challenge": challenge.Context.Challenge, "proof": base64.RawStdEncoding.EncodeToString(ed25519.Sign(key, message))})
+	if err != nil {
+		t.Fatal(err)
+	}
+	active, err := service.Activate(ctx, challenge.Context.Challenge, raw)
+	if err != nil || active.State != enrollmentstate.Activated {
+		t.Fatal("fixture activation failed", err)
+	}
+	return active
 }
 
 func TestSystemInventoryMetadataFinalOutputRechecksIdentityAndSession(t *testing.T) {

@@ -65,7 +65,9 @@ func New(store *enrollmentstore.Store, clocks ...func() time.Time) *Cache {
 	}
 	state := &cacheState{store: store, entries: make(map[string]*entry), slots: make(chan struct{}, 2), now: now}
 	if store != nil {
-		state.readStatus = store.JournalRequestStatus
+		state.readStatus = func(ctx context.Context, device string, at time.Time) (journalrequest.Status, error) {
+			return store.JournalRequestStatus(enrollmentstore.WithSystemViewClock(ctx, state.now), device, at)
+		}
 	}
 	return &Cache{state}
 }

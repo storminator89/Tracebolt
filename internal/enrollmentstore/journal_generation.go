@@ -194,13 +194,26 @@ func (s *Store) checkJournalGenerationCreate(ctx context.Context, t *transaction
 	return nil
 }
 func (s *Store) JournalGenerationStatus(ctx context.Context, device string, now time.Time) (*JournalGenerationView, error) {
+	release, err := s.systemReadAdmission(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
 	var out *JournalGenerationView
+	var certificateNotAfter int64
 	now = now.UTC()
-	err := s.journalTransaction(ctx, now, func(t *transaction) error {
+	read := func(t *transaction) error {
+		var err error
+		now, err = systemViewNow(ctx, now)
+		if err != nil {
+			return err
+		}
+		out = nil
 		snap, system, err := s.journalOperatorAuthority(t, device, now)
 		if err != nil {
 			return err
 		}
+		certificateNotAfter = snap.Intent.NotAfter
 		r := system.JournalGeneration
 		if r == nil {
 			return nil
@@ -216,9 +229,28 @@ func (s *Store) JournalGenerationStatus(ctx context.Context, device string, now 
 			out.PolicyEnabled, out.ServiceAuthorization, out.AllowedUnits = &enabled, r.Report.ServiceAuthorization, &units
 		}
 		return nil
-	})
+	}
+	err = s.transact(ctx, read)
 	if err != nil {
 		return nil, err
+	}
+	now, err = journalReadCheckedNow(ctx, now, certificateNotAfter)
+	if err != nil {
+		return nil, err
+	}
+	if out != nil && out.Fresh && !now.Before(out.ExpiresAt) {
+		// Latch an expiry crossed by COMMIT using the existing write, without
+		// releasing/reacquiring admission or retrying a failed transaction.
+		if err = s.transact(ctx, read); err != nil {
+			return nil, err
+		}
+		now, err = journalReadCheckedNow(ctx, now, certificateNotAfter)
+		if err != nil {
+			return nil, err
+		}
+		if out != nil && out.Fresh && !now.Before(out.ExpiresAt) {
+			return nil, ErrJournalGenerationStale
+		}
 	}
 	return out, nil
 }

@@ -217,6 +217,29 @@ func (h *operatorHandler) writeJournalView(w http.ResponseWriter, r *http.Reques
 			return
 		}
 	}
+	// The independent generation read can wait after the request read. Never
+	// emit a live request or fresh generation after its original expiry.
+	after := h.enrollment.Now().UTC()
+	if after.Before(now) {
+		after = now
+	}
+	if v.Request != nil && v.Request.State != journalrequest.Expired && !after.Before(v.Request.Description.ExpiresAt) {
+		_, _, err := h.enrollment.JournalStatus(r.Context(), device, after)
+		if err == nil {
+			err = journalrequest.ErrExpired
+		}
+		journalOperatorError(w, err)
+		return
+	}
+	if generation != nil && generation.Fresh && !after.Before(generation.ExpiresAt) {
+		_, err := h.enrollment.JournalGenerationStatus(r.Context(), device, after)
+		if err == nil {
+			err = enrollmentstore.ErrJournalGenerationStale
+		}
+		journalOperatorError(w, err)
+		return
+	}
+	v.ServerNow = after
 	if !operatorStillActive(w, r) {
 		return
 	}

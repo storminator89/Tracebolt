@@ -148,6 +148,11 @@ func (h *operatorHandler) completePackages(w http.ResponseWriter, r *http.Reques
 		if !operatorStillActive(w, r) {
 			return
 		}
+		view, err = view.RecheckAt(h.enrollment.Now().UTC())
+		if err != nil {
+			completeInventoryError(w, err)
+			return
+		}
 		dto, err := completeView(view)
 		if err != nil {
 			h.app.internal(w)

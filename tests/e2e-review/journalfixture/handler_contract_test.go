@@ -73,7 +73,8 @@ func TestJournalHandlerReadinessBusyAndEndpointBinding(t *testing.T) {
 	check(err)
 	defer state.Close()
 	f := &fixture{store: state, devices: map[string]enrollmentstate.Snapshot{}}
-	f.service, err = enrollmentservice.New(state, issuer, f.now)
+	clock := f.now
+	f.service, err = enrollmentservice.New(state, issuer, func() time.Time { return clock() })
 	check(err)
 	f.devices["alpha"], f.devices["beta"] = f.seed(true), f.seed(true)
 	alpha, beta := f.devices["alpha"], f.devices["beta"]
@@ -208,11 +209,11 @@ func TestJournalHandlerReadinessBusyAndEndpointBinding(t *testing.T) {
 		t.Fatal("exact request page contract")
 	}
 	errorCode(call("POST", "/api/devices/"+beta.Approval.DeviceID+"/journal/query", pageInput), 404, "journal_not_found")
-	// A public store operation holds the single shared inventory write slot.
-	// Another real handler GET must fail fast rather than wait for that writer.
+	// A real maintenance step holds the shared inventory write slot briefly.
+	// The authenticated handler GET must wait and preserve the accepted receipt.
 	held := &journalAdmissionContext{Context: ctx, entered: make(chan struct{}), release: make(chan struct{})}
 	done := make(chan error, 1)
-	go func() { _, err := state.JournalGenerationStatus(held, alpha.Approval.DeviceID, f.now()); done <- err }()
+	go func() { _, err := state.MaintainInventoryStep(held, 0, f.now()); done <- err }()
 	released := false
 	defer func() {
 		if !released {
@@ -225,16 +226,30 @@ func TestJournalHandlerReadinessBusyAndEndpointBinding(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("fixture did not reach write admission")
 	}
-	admissionBusy := call("GET", path, nil)
-	errorCode(admissionBusy, 429, "journal_busy")
-	if admissionBusy.Header().Get("Retry-After") != "2" {
-		t.Fatal("admission busy omitted backoff")
+	response := make(chan *httptest.ResponseRecorder, 1)
+	started := make(chan struct{})
+	go func() {
+		close(started)
+		response <- call("GET", path, nil)
+	}()
+	<-started
+	select {
+	case early := <-response:
+		t.Fatalf("journal GET returned HTTP %d before maintenance released admission", early.Code)
+	case <-time.After(20 * time.Millisecond):
 	}
 	close(held.release)
 	released = true
 	check(<-done)
-	if got := read(); !reflect.DeepEqual(got.Request, accepted.Request) || got.ContentStatus != "available" {
-		t.Fatal("admission contention changed accepted request")
+	var resumed view
+	select {
+	case w := <-response:
+		decode(w, 200, &resumed)
+	case <-time.After(5 * time.Second):
+		t.Fatal("journal GET did not resume after maintenance released admission")
+	}
+	if resumed.DeviceID != alpha.Approval.DeviceID || !reflect.DeepEqual(resumed.Request, accepted.Request) || resumed.ContentStatus != "available" {
+		t.Fatal("maintenance wait changed endpoint, request, receipt or original expiry")
 	}
 	// A real SQLite writer in this disposable DB forces production BEGIN busy.
 	// This is a demonstrated handler outcome, not attribution of a native failure.
@@ -268,5 +283,24 @@ func TestJournalHandlerReadinessBusyAndEndpointBinding(t *testing.T) {
 	if !reflect.DeepEqual(after.Request, accepted.Request) || after.ContentStatus != "available" {
 		t.Fatal("busy retry changed receipt or original expiry")
 	}
-	t.Log("real handler: not-ready create 409; status polling 200; exact generation-bound delivery 200; cross-device query 404; held shared write admission GET 429; held fixture SQLite writer GET 429 journal_busy, Retry-After 2; released writer GET 200 with unchanged request/receipt")
+	// The final API check runs after both request and generation store reads.
+	checked, clockCalls := f.now(), 0
+	clock = func() time.Time {
+		clockCalls++
+		if clockCalls >= 9 {
+			return accepted.Request.Description.ExpiresAt
+		}
+		return checked
+	}
+	crossed := call("GET", path, nil)
+	errorCode(crossed, 409, "journal_unavailable")
+	if clockCalls < 9 || bytes.Contains(crossed.Body.Bytes(), []byte("Synthetic alpha journal")) || bytes.Contains(crossed.Body.Bytes(), []byte("tracebolt.journal-view")) {
+		t.Fatal("final expiry boundary was missed or exposed content")
+	}
+	clock = func() time.Time { return checked }
+	expired := read()
+	if expired.Request == nil || expired.Request.State != journalrequest.Expired || !reflect.DeepEqual(expired.Request.Description, accepted.Request.Description) || expired.Request.Receipt != nil || expired.ContentStatus != "unavailable" {
+		t.Fatal("clock rollback revived content or changed expired request identity/expiry")
+	}
+	t.Log("real handler: not-ready create 409; status polling 200; exact generation-bound delivery 200; cross-device query 404; short maintenance admission wait GET 200; held fixture SQLite writer GET 429 journal_busy, Retry-After 2; released writer GET 200 with unchanged request/receipt; final API expiry 409 remains expired after clock rollback")
 }

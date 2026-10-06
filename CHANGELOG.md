@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-10-06 — Keep package and journal metadata readable through brief maintenance
+
+- Reuse the existing store-global 750-ms single-reader admission gate for package metadata and both journal status reads. Short ordinary writes or maintenance can finish before the read; sustained contention and excess readers still fail busy. Keep the one-operation limit, existing channels, write/page admission and all client retry/deadline budgets unchanged.
+- Recheck trusted time and identity after SQL admission and commit, preserve original capture/receipt/retention timestamps, and withhold expired output. Journal expiry crossed at commit is durably latched under the same held permit with at most one additional successful transaction; failed transactions are not retried. Per-read rollback and durable expiry are protected; a global cross-read journal clock floor is not introduced.
+- Actual authenticated handler and store regressions prove brief maintenance now yields an unchanged accepted request/receipt, while sustained SQLite contention remains429. Focused race checks cover shared admission, cancellation, authority and expiry crossings. This corrects a demonstrated production discrepancy; the precise historical afec journal response and package lock owner remain unknown.
+- Full hosted and approved fresh native acceptance remain required. This source checkpoint performs no user-host setup, new grant, workflow dispatch or release activation.
+
 ## 2026-10-06 — Honor native journal read backpressure and retain precise evidence
 
 - Correct the native acceptance client to honor one exact documented GET storage_busy or journal_busy response with Retry-After: 2, within the existing five-second total deadline and 128-KiB response cap. Mutations remain single-shot; all log identity, content, time, restart and revocation assertions stay required.

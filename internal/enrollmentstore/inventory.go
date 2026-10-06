@@ -108,6 +108,7 @@ type InventoryStatus struct {
 	Complete        *inventoryledger.GenerationStatus
 	Transfer        *inventoryledger.GenerationStatus
 	Failure         *InventoryFailureReceipt
+	readState       *inventoryViewReadState
 }
 
 func initializeInventory(ctx context.Context, conn *sql.Conn) error {
@@ -723,7 +724,7 @@ func (s *Store) InventoryStatus(ctx context.Context, id, certificateHash string,
 }
 func (s *Store) InventoryView(ctx context.Context, device string, now time.Time) (InventoryStatus, error) {
 	zero := InventoryStatus{}
-	release, e := s.inventoryAdmission(ctx)
+	release, e := s.systemReadAdmission(ctx)
 	if e != nil {
 		return zero, e
 	}
@@ -731,12 +732,18 @@ func (s *Store) InventoryView(ctx context.Context, device string, now time.Time)
 	now = now.UTC()
 	var out InventoryStatus
 	e = s.transact(ctx, func(t *transaction) error {
+		var clockErr error
+		now, clockErr = systemViewNow(ctx, now)
+		if clockErr != nil {
+			return clockErr
+		}
 		snap, e := s.inventoryOperatorAuthority(t, device, now)
 		if e != nil {
 			return e
 		}
 		out, e = inventoryStatus(ctx, t, snap, now)
 		if e == nil {
+			out.readState = &inventoryViewReadState{checkedAt: now, certificateNotAfter: snap.Intent.NotAfter}
 			touchInventory(t, snap.InvitationID, now)
 		}
 		return e
@@ -744,7 +751,14 @@ func (s *Store) InventoryView(ctx context.Context, device string, now time.Time)
 	if e != nil {
 		return zero, e
 	}
-	return out, nil
+	if err := ctx.Err(); err != nil {
+		return zero, err
+	}
+	now, e = systemViewNow(ctx, now)
+	if e != nil {
+		return zero, e
+	}
+	return out.RecheckAt(now)
 }
 func (s *Store) InventoryPage(ctx context.Context, device string, req inventoryledger.PageRequest, now time.Time) (InventoryPageResult, error) {
 	zero := InventoryPageResult{}

@@ -53,5 +53,5 @@ func (s *Service) JournalGenerationStatus(ctx context.Context, device string, no
 	if s == nil || s.serviceState == nil || s.store == nil {
 		return nil, ErrConfiguration
 	}
-	return s.store.JournalGenerationStatus(ctx, device, now)
+	return s.store.JournalGenerationStatus(enrollmentstore.WithSystemViewClock(ctx, s.Now), device, now)
 }
