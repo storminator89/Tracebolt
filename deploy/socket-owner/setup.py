@@ -499,7 +499,13 @@ def real_effects(s):
                 key, sep, value = line.partition("=")
                 require(sep and key in selected and key not in out, "systemd-status-members")
                 out[key] = value
-            require(set(out) in (set(selected), set(selected) - {"PrivatePIDs"}), "systemd-status-members")
+            optional = {"PrivatePIDs"}
+            # systemctl's complex-array printers emit no line for an empty
+            # ExecStart/Listen, even with --all. Only an absent, inactive helper
+            # may omit its array; loaded units still require every proof field.
+            if name in (SERVICE, SOCKET) and out.get("LoadState") == "not-found" and out.get("ActiveState") == "inactive":
+                optional.add("Listen" if name == SOCKET else "ExecStart")
+            require(set(selected) - set(out) <= optional, "systemd-status-members")
             return out
 
         def command(self, args, uid=None, gid=None, **kw):

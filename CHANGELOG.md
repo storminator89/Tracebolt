@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-10-06 — Accept systemd's empty-array output for fresh helper units
+
+- Correct fresh socket-helper preflight for systemd's omission of empty ExecStart and Listen arrays, even with --all. Permit only the corresponding omitted array for the fixed not-found, inactive helper unit; do not invent property values.
+- Keep loaded-unit proof, required state/ownership fields, unknown/duplicate rejection, command bounds, approvals and installation behavior unchanged. Source-derived parser/preflight fixtures pass; the next approved native run must establish progress beyond the previously demonstrated pre-prompt rejection.
+
 ## 2026-10-06 — Explain native preflight rejection and observe primary browser reads
 
 - Retain the failed fresh-V2 run as unpassed and add only closed initial-probe diagnostics: fixed rejection codes, an exit bucket and a scope-prompt boolean. Preserve native execution, approval guards and cancellation assertions; the underlying early failure is not yet established.

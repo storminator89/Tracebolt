@@ -67,11 +67,11 @@ class Fixture(f.Fixture):
         state = {k: "" for k in x.fields(name)}
         state.update(LoadState="loaded" if loaded else "not-found", ActiveState=active, FragmentPath=x.UNIT_DIR + "/" + name if loaded else "", DropInPaths="", Transient="no", Names=name, UnitFileState=("enabled" if enabled or name == x.AGENT else "disabled") if loaded else "not-found")
         if name == x.SOCKET:
-            state.update(Listen=x.SOCKET_PATH + " (Stream)", SocketUser="0", SocketGroup="201", SocketMode="0660", DirectoryMode="0755", FileDescriptorName="socket-owner-reader", Accept="no", Triggers=x.SERVICE, RemoveOnStop="yes")
+            state.update(Listen=x.SOCKET_PATH + " (Stream)" if loaded else "", SocketUser="0", SocketGroup="201", SocketMode="0660", DirectoryMode="0755", FileDescriptorName="socket-owner-reader", Accept="no", Triggers=x.SERVICE, RemoveOnStop="yes")
         else:
             helper = name == x.SERVICE
             argv = [x.BINARY] if helper else x.agent_argv(s, self.templates, {"manifest": self.manifest})
-            state.update(MainPID="123" if active == "active" else "0", ControlGroup="/system.slice/" + name if active == "active" else "", ExecStart=exec_state(argv), User="300" if helper else "200", Group="301" if helper else "201", SupplementaryGroups="", CapabilityBoundingSet="cap_sys_ptrace" if helper else "", AmbientCapabilities="cap_sys_ptrace" if helper else "", NoNewPrivileges="yes", KillMode="control-group", Delegate="no", PrivateNetwork="no", PrivateUsers="no", PrivatePIDs="no", NetworkNamespacePath="", JoinsNamespaceOf="", RootDirectory="", RootImage="", ProtectProc="default", ProcSubset="all", RuntimeDirectory="")
+            state.update(MainPID="123" if active == "active" else "0", ControlGroup="/system.slice/" + name if active == "active" else "", ExecStart=exec_state(argv) if loaded else "", User="300" if helper else "200", Group="301" if helper else "201", SupplementaryGroups="", CapabilityBoundingSet="cap_sys_ptrace" if helper else "", AmbientCapabilities="cap_sys_ptrace" if helper else "", NoNewPrivileges="yes", KillMode="control-group", Delegate="no", PrivateNetwork="no", PrivateUsers="no", PrivatePIDs="no", NetworkNamespacePath="", JoinsNamespaceOf="", RootDirectory="", RootImage="", ProtectProc="default", ProcSubset="all", RuntimeDirectory="")
         return state
 
     @contextlib.contextmanager
@@ -355,6 +355,52 @@ class SetupTests(unittest.TestCase):
                     x.loaded(real, name, 300 if name == x.SERVICE else 200, 301 if name == x.SERVICE else 201, [x.BINARY] if name == x.SERVICE else x.agent_argv(s, fixture.templates, fixture.expected) if name == x.AGENT else [])
         self.assertNotIn("Service", x.fields(x.SOCKET))
         self.assertIn("Triggers", x.fields(x.SOCKET))
+
+    def test_absent_units_omit_empty_complex_arrays_before_scope_prompt(self):
+        # v255 systemctl-show.c prints ExecStart/Listen only inside their array
+        # loops; --all does not print a line for an empty array. Replay that
+        # response through the real parser and the fresh preflight, not only
+        # the hand-built effects' status() dictionary.
+        e = Fixture()
+        real = x.real_effects(s)
+        for name in (x.SERVICE, x.SOCKET):
+            e.units[name].pop("Listen" if name == x.SOCKET else "ExecStart")
+            e.units[name].pop("PrivatePIDs", None)
+
+        def response(args, **kwargs):
+            name = args[2]
+            self.assertEqual(args, ["/usr/bin/systemctl", "show", name, "--property=" + ",".join(x.fields(name)), "--all", "--no-pager"])
+            return "".join(k + "=" + v + "\n" for k, v in e.units[name].items()).encode()
+
+        with mock.patch.object(real, "command", side_effect=response), mock.patch.object(e, "status", side_effect=real.status):
+            x.fresh_preflight(s, e)
+            self.assertFalse(e.events)
+            for key, value in (("ActiveState", "active"), ("LoadState", "loaded"), ("FragmentPath", "/foreign"), ("DropInPaths", "/override"), ("Transient", "yes"), ("Names", "foreign.service"), ("UnitFileState", "enabled"), ("MainPID", "123")):
+                with self.subTest(key=key), mock.patch.dict(e.units[x.SERVICE], {key: value}):
+                    with self.assertRaises(x.Rejected):
+                        x.fresh_preflight(s, e)
+            self.assertFalse(e.events)
+
+    def test_status_omissions_remain_narrow_and_loaded_proof_strict(self):
+        fixture = Fixture()
+        real = x.real_effects(s)
+        for name in (x.AGENT, x.SERVICE, x.SOCKET):
+            for loaded in (False, True):
+                state = fixture.make_state(name, loaded=loaded)
+                for missing in x.fields(name):
+                    if missing == "PrivatePIDs" or (not loaded and name in (x.SERVICE, x.SOCKET) and missing == ("Listen" if name == x.SOCKET else "ExecStart")):
+                        continue
+                    raw = "".join(k + "=" + v + "\n" for k, v in state.items() if k != missing).encode()
+                    with self.subTest(name=name, loaded=loaded, missing=missing), mock.patch.object(real, "command", return_value=raw):
+                        with self.assertRaisesRegex(x.Rejected, "systemd-status-members"):
+                            real.status(name)
+        state = fixture.make_state(x.SERVICE, loaded=False)
+        state.pop("ExecStart")
+        raw = "".join(k + "=" + v + "\n" for k, v in state.items()).encode()
+        for suffix in (b"LoadState=not-found\n", b"Unknown=value\n", b"malformed\n"):
+            with mock.patch.object(real, "command", return_value=raw + suffix):
+                with self.assertRaisesRegex(x.Rejected, "systemd-status-members"):
+                    real.status(x.SERVICE)
 
     def test_socket_and_helper_security_fields_are_enforced(self):
         for name, keys in ((x.SOCKET, x.SOCKET_FIELDS), (x.SERVICE, ("User", "Group", "ExecStart", "Delegate", "CapabilityBoundingSet", "AmbientCapabilities", *x.NAMESPACE_FIELDS))):
