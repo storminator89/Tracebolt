@@ -30,7 +30,7 @@ describe('one current Security source', () => {
         expect(screen.getByText('Received dpkg rows')).not.toBeVisible();
         expect(screen.getByText('Package warnings').previousElementSibling).toHaveTextContent('6');
         expect(screen.getByText('Inventory age').nextElementSibling).toHaveTextContent('1 min');
-        expect(screen.getByText('Planned checks finished. Coverage remains limited.')).toBeVisible();
+        expect(screen.getByText('Checks complete.')).toBeVisible();
         expect(screen.getByText('627 advisory records have data or comparison gaps.')).toBeVisible(); expect(screen.queryByRole('alert')).not.toBeInTheDocument();
         fireEvent.click(screen.getByText('Data sources and coverage')); expect(screen.getByText('Completed / planned checks').nextElementSibling).toHaveTextContent('633 / 633');
         expect(screen.queryByText('222')).not.toBeInTheDocument(); expect(document.body.textContent).not.toMatch(/adapter is not implemented|No package matching/);

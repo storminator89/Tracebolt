@@ -142,6 +142,7 @@ export async function alarmSettingsBrowserCase({pageAt,login,expect,base,shot}) 
  diagnostics.mark('setup-test-consent');
  await panel.getByRole('button',{name:'Test destination',exact:true}).click();await expect(panel).toContainText('fixed synthetic test payload');await expect(panel).toContainText('no live device information');
  await expect(panel.getByRole('button',{name:'Confirm and send test',exact:true})).toBeDisabled();expect(fixture.counts.testWrites).toBe(0);
+ await panel.scrollIntoViewIfNeeded();await shot(page,'synthetic-http-test-alarm-setup-test-consent-desktop-en',alarmSettingsFixtureDisclosure);
  await panel.getByRole('checkbox',{name:'Send this synthetic test to the saved destination now.',exact:true}).check();expect(fixture.counts.testWrites).toBe(0);
  diagnostics.mark('setup-test-send');
  await panel.getByRole('button',{name:'Confirm and send test',exact:true}).click();await expect(panel.locator('.alarm-test-result dd').first()).toHaveText('Queued');

@@ -79,7 +79,7 @@ export async function applicationCheckSettingsBrowserCase({pageAt,login,expect,b
  applicationSettingsDiagnostics.mark('settings-load');
  await expect(panel).toBeVisible();await expect.poll(()=>fixture.counts.reads).toBe(1);
  applicationSettingsDiagnostics.mark('open-editor');
- await toggle().click();await panel.getByRole('button',{name:'Add targets',exact:true}).click();
+ await toggle().click();await panel.scrollIntoViewIfNeeded();await shot(page,'synthetic-http-test-application-setup-empty-desktop-en',applicationCheckSettingsFixtureDisclosure);await panel.getByRole('button',{name:'Add targets',exact:true}).click();
  applicationSettingsDiagnostics.mark('initial-interval');
  await field('Interval (seconds)').fill('75');
  applicationSettingsDiagnostics.mark('http-id');
@@ -125,6 +125,7 @@ export async function applicationCheckSettingsBrowserCase({pageAt,login,expect,b
  const confirm=panel.getByRole('button',{name:'Confirm enable',exact:true});await expect(confirm).toBeDisabled();
  await expect(panel).toContainText(applicationCheckSettingsFixtureTargets[0].url);await expect(panel).toContainText('10.20.30.40');await expect(panel).toContainText('8443');
  for(const checkbox of await panel.getByRole('checkbox').all())await expect(checkbox).not.toBeChecked();
+ await panel.scrollIntoViewIfNeeded();await shot(page,'synthetic-http-test-application-setup-review-desktop-en',applicationCheckSettingsFixtureDisclosure);
  applicationSettingsDiagnostics.mark('cancel-review');
  await panel.getByRole('button',{name:'Cancel',exact:true}).click();expect(fixture.counts.enables).toBe(0);
  applicationSettingsDiagnostics.mark('enable-approvals');
@@ -152,6 +153,7 @@ export async function applicationCheckSettingsBrowserCase({pageAt,login,expect,b
  const rolePanel=page.locator('.check-settings');await expect(rolePanel).toContainText('Die Einrichtung von Anwendungsprüfungen erfordert Administratorrechte.');
  await expect(rolePanel.locator('input,button,textarea,.check-settings-snapshot')).toHaveCount(0);
  await expect(page.locator('body')).not.toContainText('fixture-check.invalid');expect(fixture.counts.reads).toBe(beforeReadOnly);
+ await rolePanel.scrollIntoViewIfNeeded();await shot(page,'synthetic-http-test-application-setup-readonly-mobile-de',applicationCheckSettingsFixtureDisclosure);
  applicationSettingsDiagnostics.mark('admin-role');
  namedCapabilities=['read','manage_application_checks'];await page.reload();await expect.poll(()=>fixture.counts.reads).toBe(beforeReadOnly+1);
  await panel.getByRole('button',{name:'Anwendungsprüfungen einrichten',exact:true}).click();

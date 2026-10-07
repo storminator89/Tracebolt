@@ -12,7 +12,7 @@ import './journal-service-picker.css';
 
 const copy = {
     en: {
-        title: 'Observed services', close: 'Close service picker', cancel: 'Cancel', placeholder: 'Search service names…', quick: 'Quick filters', keyboard: '↑ ↓ to browse · Enter on a service to select', selectionHint: 'Selection only. Logs still need your approval.', selected: 'Selected', access: 'Authenticated LAN operator access is required.',
+        title: 'Observed services', close: 'Close service picker', cancel: 'Cancel', placeholder: 'Search service names…', quick: 'Quick filters', keyboard: '↑ ↓ to browse · Enter on a service to select', selectionHint: 'Selection grants no access. Logs need separate approval.', selected: 'Selected', access: 'Authenticated LAN operator access is required.',
         permission: 'Observed inventory does not confirm local journal allowlist membership or grant access. Selecting a service only fills the exact-unit field; it does not capture logs.',
         manual: 'You can close this picker and enter an exact service unit manually.',
         search: 'Search observed services', searchButton: 'Search services', searchHint: 'Search retained service names and states, not journal content. Each request returns at most 100 rows and scans at most 2,048 rows.',
@@ -20,7 +20,7 @@ const copy = {
         not_configured: 'Service inventory is not configured.', unknown: 'Service inventory is unavailable for this identity.', awaiting: 'Awaiting observed services.', revoked: 'Device identity revoked.', expired: 'Service observations or identity expired.',
         noComplete: 'No retained complete service inventory is available. This does not mean the device has no services.',
         fresh: 'Within the observation window', stale: 'Stale / historical service observations',
-        prior: 'Showing the last complete service inventory. The newer failed attempt does not refresh its original observation time.', failed: 'The latest service inventory attempt failed.',
+        prior: 'Showing the last complete inventory with its original time.', failed: 'The latest service inventory attempt failed.',
         observed: 'Original observation time', whole: 'Whole retained service inventory', scanned: 'Rows scanned so far', matches: 'Matches found so far', shown: 'Rows on this page',
         suggestions: 'Find a service by purpose', suggestionsHint: 'Shortcuts search observed service names. They do not prove that a service is installed or permitted, and do not cover every Linux distribution.', all: 'All services', observedOnly: 'Permission unknown', reported_allowed: 'In reported grant', reported_disabled: 'Policy disabled', outside_reported_scope: 'Outside reported grant',
         alias: 'Reported alias · target unavailable', aliasHint: 'Alias targets are not included in this inventory. Choose the unit used by the journal; selecting an alias does not include its target.', select: 'Use', unsupported: 'Unsupported service-unit name.',
@@ -29,7 +29,7 @@ const copy = {
         loadError: 'Observed services could not be read. Retry or refresh.', invalid: 'The manager returned inconsistent or unsupported service inventory. Rows were cleared.', timeout: 'The service read timed out. Retry or refresh.', session: 'Your session has ended. Sign in again.', clock: 'The time anchor is no longer reliable. Refresh before continuing.', busy: 'The manager is busy. Retry in a moment.', restart: 'The service generation or paging session changed or expired. Refresh to restart; previous rows were cleared.', searchInvalid: 'Use at most 128 UTF-8 bytes without control or formatting characters.',
     },
     de: {
-        title: 'Beobachtete Dienste', close: 'Dienstauswahl schließen', cancel: 'Abbrechen', placeholder: 'Dienstnamen suchen…', quick: 'Schnellfilter', keyboard: '↑ ↓ zum Navigieren · Enter auf einem Dienst zum Auswählen', selectionHint: 'Nur Auswahl. Logs benötigen weiterhin Ihre Zustimmung.', selected: 'Ausgewählt', access: 'Ein authentifizierter LAN-Operator-Zugang ist erforderlich.',
+        title: 'Beobachtete Dienste', close: 'Dienstauswahl schließen', cancel: 'Abbrechen', placeholder: 'Dienstnamen suchen…', quick: 'Schnellfilter', keyboard: '↑ ↓ zum Navigieren · Enter auf einem Dienst zum Auswählen', selectionHint: 'Auswahl gewährt keinen Zugriff. Logs separat freigeben.', selected: 'Ausgewählt', access: 'Ein authentifizierter LAN-Operator-Zugang ist erforderlich.',
         permission: 'Das beobachtete Inventar bestätigt weder die lokale Journal-Freigabeliste noch gewährt es Zugriff. Die Auswahl trägt nur die exakte Unit ein; sie erfasst keine Logs.',
         manual: 'Die Auswahl lässt sich schließen, um eine exakte Service-Unit manuell einzugeben.',
         search: 'Beobachtete Dienste durchsuchen', searchButton: 'Dienste suchen', searchHint: 'Gespeicherte Dienstnamen und Zustände durchsuchen, keine Journal-Inhalte. Jede Anfrage liefert höchstens 100 Zeilen und prüft höchstens 2.048 Zeilen.',
@@ -37,7 +37,7 @@ const copy = {
         not_configured: 'Dienstinventar ist nicht eingerichtet.', unknown: 'Dienstinventar ist für diese Identität nicht verfügbar.', awaiting: 'Beobachtete Dienste stehen aus.', revoked: 'Geräteidentität widerrufen.', expired: 'Dienstbeobachtungen oder Identität abgelaufen.',
         noComplete: 'Kein vollständiges gespeichertes Dienstinventar verfügbar. Das bedeutet nicht, dass das Gerät keine Dienste hat.',
         fresh: 'Im Beobachtungszeitfenster', stale: 'Veraltete / historische Dienstbeobachtungen',
-        prior: 'Das letzte vollständige Dienstinventar wird angezeigt. Der neuere fehlgeschlagene Versuch erneuert den ursprünglichen Beobachtungszeitpunkt nicht.', failed: 'Die neueste Dienstinventar-Erfassung ist fehlgeschlagen.',
+        prior: 'Letztes vollständiges Inventar mit ursprünglichem Zeitpunkt.', failed: 'Die neueste Dienstinventar-Erfassung ist fehlgeschlagen.',
         observed: 'Ursprünglicher Beobachtungszeitpunkt', whole: 'Gesamtes gespeichertes Dienstinventar', scanned: 'Bisher geprüfte Zeilen', matches: 'Bisher gefundene Treffer', shown: 'Zeilen auf dieser Seite',
         suggestions: 'Dienste nach Aufgabe finden', suggestionsHint: 'Kurzsuchen durchsuchen beobachtete Dienstnamen. Sie belegen weder Installation noch Freigabe und decken nicht jede Linux-Distribution ab.', all: 'Alle Dienste', observedOnly: 'Freigabe unbekannt', reported_allowed: 'In gemeldeter Freigabe', reported_disabled: 'Richtlinie deaktiviert', outside_reported_scope: 'Außerhalb gemeldeter Freigabe',
         alias: 'Gemeldeter Alias · Ziel unbekannt', aliasHint: 'Alias-Ziele sind nicht in diesem Inventar enthalten. Die im Journal verwendete Unit wählen; die Auswahl eines Alias umfasst sein Ziel nicht.', select: 'Übernehmen', unsupported: 'Nicht unterstützter Service-Unit-Name.',
@@ -60,7 +60,6 @@ export function JournalServicePicker({ deviceId, sessionKey, journalView = null,
             ? <ObservedServices key={JSON.stringify([deviceId, sessionKey, operator.expiresAt])} deviceId={deviceId} journalView={journalView} selectedUnit={selectedUnit} onSelect={onSelect}/>
             : <p role="status">{c.access}</p>}
         <footer className="journal-picker-footer"><span>{c.selectionHint}</span><button type="button" className="button" aria-label={c.close} onClick={onClose}>{c.cancel}</button></footer>
-        <details className="journal-picker-details"><summary>{locale === 'de' ? 'Auswahl & Freigabe' : 'Selection & permission'}</summary><p className="journal-picker-note">{c.permission}</p><p className="journal-picker-note">{c.manual}</p></details>
     </section>;
 }
 

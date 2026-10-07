@@ -71,9 +71,7 @@ describe('observed-service picker uses only bounded protected inventory reads', 
             expect(path).toBe(`/devices/${systemDevice}/inventory/system/query`); expect(headers).toEqual({}); expect(signal).toBeInstanceOf(AbortSignal); expect(maximum).toBe(262144);
             expect(JSON.parse(raw)).toMatchObject({ section: 'services', generationId: systemGeneration, limit: 100, filter: 'all' });
         }
-        fireEvent.click(ui.getByText('Selection & permission', { selector: 'summary' }));
-        expect(ui.getByText(/does not confirm local journal allowlist membership or grant access/)).toBeVisible();
-        expect(ui.getByText(/enter an exact service unit manually/)).toBeVisible();
+        expect(ui.getByText('Selection grants no access. Logs need separate approval.')).toBeVisible();
     });
 
     it('continues an empty bounded search window and keeps whole-inventory and match counts distinct', async () => {
@@ -141,7 +139,7 @@ describe('observed-service picker uses only bounded protected inventory reads', 
             view.lastComplete[section]!.status = 'stale';
         }
         await open(); expect(screen.getByText('Stale / historical service observations')).toBeVisible();
-        expect(screen.getByText(/newer failed attempt does not refresh its original observation time/)).toBeVisible();
+        expect(screen.getByText(/last complete inventory with its original time/)).toBeVisible();
         expect(screen.getByText('Original observation time').nextElementSibling).toHaveTextContent('2026-10-04T00:00:00Z');
         expect(JSON.parse(vi.mocked(mutateRaw).mock.calls[0][1]).generationId).toBe(systemGeneration);
     });
@@ -229,7 +227,7 @@ describe('observed-service picker uses only bounded protected inventory reads', 
     it('provides German picker labels and permission limitations', async () => {
         setLocale('de', false); await open(); expect(screen.getByRole('region', { name: 'Beobachtete Dienste' })).toBeVisible();
         expect(screen.getByRole('button', { name: 'Dienstliste aktualisieren' })).toBeEnabled();
-        expect(screen.getByLabelText('Beobachtete Dienste durchsuchen')).toBeVisible(); fireEvent.click(screen.getByText('Auswahl & Freigabe', { selector: 'summary' })); expect(screen.getByText(/bestätigt weder die lokale Journal-Freigabeliste/)).toBeVisible();
+        expect(screen.getByLabelText('Beobachtete Dienste durchsuchen')).toBeVisible(); expect(screen.getByText('Auswahl gewährt keinen Zugriff. Logs separat freigeben.')).toBeVisible();
         fireEvent.click(screen.getByRole('button', { name: 'Übernehmen fixture-000000.service' })); expect(select).toHaveBeenCalledExactlyOnceWith('fixture-000000.service');
     });
 });
@@ -269,7 +267,7 @@ describe('search-first service selection', () => {
         expect(screen.getByText('Quick filters', { selector: 'summary' }).closest('details')).not.toHaveAttribute('open');
         expect(screen.getByText('Inventory details', { selector: 'summary' }).closest('details')).not.toHaveAttribute('open');
         expect(screen.getByRole('button', { name: `Use ${services[0].name}` })).toHaveAttribute('aria-current', 'true');
-        expect(screen.getByText('Selection only. Logs still need your approval.')).toBeVisible();
+        expect(screen.getByText('Selection grants no access. Logs need separate approval.')).toBeVisible();
         expect(select).not.toHaveBeenCalled();
     });
     it('uses Arrow keys, Home and End for exact rows, skipping unsupported units without selecting on focus', async () => {

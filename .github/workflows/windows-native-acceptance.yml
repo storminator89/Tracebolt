@@ -1,0 +1,89 @@
+name: Manual disposable Windows native acceptance subset
+
+# Source-only infrastructure until this exact revision is separately approved.
+# No automatic trigger, reusable-workflow entry or live-host fallback exists.
+on:
+  workflow_dispatch:
+    inputs:
+      expected_source_sha:
+        description: 'Exact reviewed 40-lowercase-hex source SHA; must equal the dispatched SHA and checkout'
+        required: true
+        type: string
+      services:
+        description: 'Approve fresh TraceboltWindowsAgent and separate TraceboltWindowsAcceptanceProbe SCM creation/start/stop/delete on this disposable hosted VM only'
+        required: true
+        default: false
+        type: boolean
+      identity:
+        description: 'Approve temporary endpoint key/identity creation, claim and delayed activation against the in-memory acceptance peer only'
+        required: true
+        default: false
+        type: boolean
+      app_acls:
+        description: 'Approve create-only app-owned Program Files/ProgramData directories and private service-SID state ACLs; no existing ancestor ACL repair or adoption'
+        required: true
+        default: false
+        type: boolean
+      loopback_tls:
+        description: 'Approve bounded loopback-only TLS fixture with ephemeral in-memory authority, repeated ordinary basic reports and outage/recovery; no production manager or firewall change'
+        required: true
+        default: false
+        type: boolean
+      cleanup:
+        description: 'Approve receipt/ID/hash-bound owned service/probe cleanup and exact newly owned files only; failed or unknown state is retained and the VM discarded'
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  native-subset:
+    name: Separately approved disposable Windows amd64 native subset
+    if: ${{ github.event_name == 'workflow_dispatch' && github.repository == 'storminator89/Tracebolt' }}
+    runs-on: windows-2025
+    timeout-minutes: 40
+    env:
+      TRACEBOLT_EXPECTED_SOURCE_SHA: ${{ inputs.expected_source_sha }}
+      TRACEBOLT_APPROVE_SERVICES: ${{ inputs.services }}
+      TRACEBOLT_APPROVE_IDENTITY: ${{ inputs.identity }}
+      TRACEBOLT_APPROVE_APP_ACLS: ${{ inputs.app_acls }}
+      TRACEBOLT_APPROVE_LOOPBACK_TLS: ${{ inputs.loopback_tls }}
+      TRACEBOLT_APPROVE_CLEANUP: ${{ inputs.cleanup }}
+      PYTHONDONTWRITEBYTECODE: '1'
+      GOTOOLCHAIN: local
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      - name: Require all five approvals and exact clean source before further work
+        id: approval_gate
+        shell: pwsh
+        run: python -I -B tests/windows_native_acceptance/run_acceptance.py --check-authorization
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Pure Python authorization, evidence and workflow fixtures (not native proof)
+        shell: pwsh
+        run: python -I -B -m unittest discover -s tests/windows_native_acceptance -p "test_*.py"
+      - name: Source, synthetic-clock and shutdown-handler fixtures (not native proof)
+        shell: pwsh
+        run: python -I -B tests/windows_native_acceptance/run_source_fixtures.py
+      - name: Build exact source and execute only the approved native subset
+        id: native
+        shell: pwsh
+        run: python -I -B tests/windows_native_acceptance/run_acceptance.py --run-native
+      - name: Retain only validated finite evidence
+        if: ${{ always() && !cancelled() && steps.native.outputs.report_validated == 'true' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: windows-native-acceptance-${{ github.sha }}
+          path: ${{ runner.temp }}/tracebolt-windows-native-acceptance.json
+          if-no-files-found: error
+          retention-days: 3

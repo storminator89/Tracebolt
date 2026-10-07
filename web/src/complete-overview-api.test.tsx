@@ -24,13 +24,13 @@ describe('complete overview released protected API helpers', () => {
         fireEvent.click(screen.getByRole('button', { name: 'Next page' })); await screen.findByText('fixture-process-000204');
         expect(screen.getByText('Rows scanned so far').nextElementSibling).toHaveTextContent('205 / 205');
         expect(screen.queryByRole('button', { name: 'Next page' })).not.toBeInTheDocument();
-        const search = screen.getByRole('searchbox', { name: 'Search this complete section' });
+        const search = screen.getByRole('searchbox', { name: 'Search this section' });
         fireEvent.change(search, { target: { value: 'nEeDlE[.*]' } }); expect(screen.queryByRole('table')).not.toBeInTheDocument();
-        fireEvent.click(screen.getByRole('button', { name: 'Search from first page' })); await screen.findByText('fixture-process-000200 Needle[.*]');
+        fireEvent.click(screen.getByRole('button', { name: 'Search' })); await screen.findByText('fixture-process-000200 Needle[.*]');
         expect(screen.getAllByRole('rowheader')).toHaveLength(3);
         expect(screen.getByText('Matches found so far').nextElementSibling).toHaveTextContent('3');
         fireEvent.change(search, { target: { value: '^does-not-match$' } }); expect(screen.queryByRole('table')).not.toBeInTheDocument();
-        fireEvent.click(screen.getByRole('button', { name: 'Search from first page' })); await screen.findByText('No matches in the complete generation.');
+        fireEvent.click(screen.getByRole('button', { name: 'Search' })); await screen.findByText('No matches in the complete generation.');
         expect(screen.getByText('Rows scanned so far').nextElementSibling).toHaveTextContent('205 / 205');
         expect(screen.queryByRole('table')).not.toBeInTheDocument(); expect(screen.queryByRole('alert')).not.toBeInTheDocument();
         expect(pages.map(page => page.items.length)).toEqual([100, 100, 5, 3, 0]);
@@ -45,7 +45,7 @@ describe('complete overview released protected API helpers', () => {
     });
     it('sends pinned section/search/cursor only in a CSRF protected JSON POST body', async () => {
         const v = overviewView(), fetch = vi.fn().mockImplementation(async (path: string, options?: RequestInit) => path.endsWith('/query') ? response(overviewPage(v, processRows(), volumeRows(), options!.body as string)) : path === '/api/session' ? response({ csrfToken: 'synthetic-csrf' }) : response(v)); vi.stubGlobal('fetch', fetch);
-        open(); await screen.findByRole('table'); fireEvent.change(screen.getByLabelText('Search this complete section'), { target: { value: 'fixture-process-000349' } }); fireEvent.click(screen.getByRole('button', { name: 'Search from first page' })); await screen.findByText('fixture-process-000349');
+        open(); await screen.findByRole('table'); fireEvent.change(screen.getByLabelText('Search this section'), { target: { value: 'fixture-process-000349' } }); fireEvent.click(screen.getByRole('button', { name: 'Search' })); await screen.findByText('fixture-process-000349');
         const queries = fetch.mock.calls.filter(([path]) => path.endsWith('/query')); expect(queries).toHaveLength(2); expect(queries[1][1]).toMatchObject({ method: 'POST', credentials: 'same-origin', headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-CSRF-Token': 'synthetic-csrf' } });
         expect(JSON.parse(queries[1][1].body)).toEqual({ section: 'processes', generationId: v.processes.complete!.binding.generationId, search: 'fixture-process-000349', cursor: '', limit: 100 });
         for (const [path] of fetch.mock.calls) { expect(path).not.toContain('?'); expect(path).not.toContain('fixture-process'); }

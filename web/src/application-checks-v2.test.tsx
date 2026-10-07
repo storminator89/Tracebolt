@@ -32,7 +32,7 @@ describe('compact mixed-kind retained observations', () => {
         await start(); const content = panel();
         expect(content.querySelectorAll('tbody tr')).toHaveLength(4);
         expect(within(content).getByRole('columnheader', { name: 'Result' })).toBeInTheDocument();
-        expect(content).toHaveTextContent('HTTP/TLS, DNS and TCP observations from the management server.');
+        expect(content).toHaveTextContent('Checks from the manager: HTTP/TLS, DNS, TCP.');
         expect(row('fixture-app')).toHaveTextContent('HTTPS'); expect(row('fixture-app')).toHaveTextContent('204 · 2xx'); expect(row('fixture-app')).toHaveTextContent('Expiring soon');
         expect(row('fixture-plain')).toHaveTextContent('HTTP · plaintext'); expect(row('fixture-plain')).toHaveTextContent('No TLS');
         for (const [id, kind, result] of [['fixture-dns', 'DNS', 'Resolved'], ['fixture-tcp', 'TCP', 'Connected']]) {
@@ -42,9 +42,9 @@ describe('compact mixed-kind retained observations', () => {
             expect(check.querySelectorAll('time')).toHaveLength(1); expect(check.querySelector('.application-expiry')).toBeNull(); expect(check).not.toHaveTextContent('No TLS');
             expect(check.querySelector('td:last-child time')).toHaveAttribute('datetime', applicationNow);
         }
-        expect(content).toHaveTextContent('system hostname resolution'); expect(content).toHaveTextContent('hosts file, cache or search domains');
-        expect(content).toHaveTextContent('All returned addresses must be approved'); expect(content).toHaveTextContent('not an authoritative or complete DNS record set');
-        expect(content).toHaveTextContent('one connection to a numeric address and close, without data or TLS'); expect(content).toHaveTextContent('does not establish application health');
+        expect(content).toHaveTextContent('system resolution'); expect(content).toHaveTextContent('hosts, cache or search domains');
+        expect(content).toHaveTextContent('Every returned address needs approval'); expect(content).toHaveTextContent('not a complete, authoritative DNS record');
+        expect(content).toHaveTextContent('TCP connects to the IP, then closes.'); expect(content).toHaveTextContent('No data, TLS or proof of application health');
         expect(content.querySelector('input,select')).toBeNull(); expect(within(content).getAllByRole('button')).toHaveLength(1);
         expect(vi.mocked(request).mock.calls[0]).toEqual(['/application-checks/status', { signal: expect.any(AbortSignal), cache: 'no-store' }, APPLICATION_CHECKS_BYTES]);
     });
@@ -55,8 +55,8 @@ describe('compact mixed-kind retained observations', () => {
         expect(content).toHaveTextContent('Aufgelöst'); expect(content).toHaveTextContent('Verbunden'); expect(content).toHaveTextContent('TCP-Verbindung fehlgeschlagen');
         expect(within(content).getByRole('columnheader', { name: 'Prüfergebnis' })).toBeInTheDocument();
         expect(within(content).getAllByLabelText('Zertifikat nicht Teil dieser Prüfung')).toHaveLength(3);
-        expect(content).toHaveTextContent('System-Namensauflösung'); expect(content).toHaveTextContent('kein autoritativer oder vollständiger DNS-Datensatz');
-        expect(content).toHaveTextContent('keine Anwendungsfunktion'); expect(content).toHaveTextContent('vor 0 s'); expect(request).toHaveBeenCalledTimes(1);
+        expect(content).toHaveTextContent('Systemauflösung'); expect(content).toHaveTextContent('kein vollständiger, autoritativer DNS-Datensatz');
+        expect(content).toHaveTextContent('kein Funktionsnachweis'); expect(content).toHaveTextContent('vor 0 s'); expect(request).toHaveBeenCalledTimes(1);
     });
 
     it.each([

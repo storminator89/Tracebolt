@@ -28,7 +28,7 @@ afterEach(()=>{cleanup();abortProtectedRequests();vi.unstubAllGlobals();vi.resto
 const route=(value:string)=>act(()=>{window.history.replaceState({},'', `/${value.startsWith('#') ? value : `#${value}`}`);window.dispatchEvent(new Event('hashchange'));});
 it('routes a real LAN investigation to its device Health, Details and exact-service logs without capturing logs',async()=>{
  const fetch=server();render(<App/>);await screen.findByText('fixture.service: service inactive');fireEvent.click(screen.getByText('Evidence & next check'));
- const health=screen.getByRole('link',{name:'Open Health & history'}).getAttribute('href')!;const details=screen.getByRole('link',{name:'Device details'}).getAttribute('href')!;const logs=screen.getByRole('link',{name:'Open service logs'}).getAttribute('href')!;
+ const health=screen.getByRole('link',{name:'Check Health'}).getAttribute('href')!;const details=screen.getByRole('link',{name:'Device details'}).getAttribute('href')!;const logs=screen.getByRole('link',{name:'Service logs'}).getAttribute('href')!;
  route(health);await screen.findByRole('heading',{name:'Health & history'});expect(screen.getByRole('tab',{name:'Health & history'})).toHaveAttribute('aria-selected','true');
  route(details);await screen.findByText('Stable cryptographic device ID');expect(screen.getByRole('tab',{name:'Details'})).toHaveAttribute('aria-selected','true');
  route(logs);await screen.findByText('Awaiting a request');expect(screen.getByRole('tab',{name:'Logs'})).toHaveAttribute('aria-selected','true');
@@ -40,7 +40,7 @@ it('uses durable counts on LAN Overview instead of the empty demo-case count',as
  window.history.replaceState({},'', '/#/overview');server();render(<App/>);await screen.findByText('fixture.service: service inactive');expect(screen.getByRole('button',{name:/Open investigations 1\s*Health warnings/})).toBeVisible();expect(screen.queryByText('No open investigations')).not.toBeInTheDocument();
 });
 it('does not fetch the new API or replace development cases',async()=>{
- const fetch=server('development');render(<App/>);await screen.findByRole('heading',{name:'Investigations',level:1});await waitFor(()=>expect(screen.getByText('There are no investigations in this view.')).toBeVisible());expect(fetch.mock.calls.some(([url])=>url.startsWith('/api/investigations'))).toBe(false);
+ const fetch=server('development');render(<App/>);await screen.findByRole('heading',{name:'Investigations',level:1});await waitFor(()=>expect(screen.getByText('No cases in this view.')).toBeVisible());expect(fetch.mock.calls.some(([url])=>url.startsWith('/api/investigations'))).toBe(false);
 });
 
 it('resets a previous recovered filter when opening the Overview open-investigations shortcut',async()=>{

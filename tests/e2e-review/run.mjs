@@ -11,6 +11,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runAIReview } from './ai-scenarios.mjs';
 import { runShellReview } from './shell-scenarios.mjs';
+import { conciseShellGallery } from './concise-shell-gallery.mjs';
 import { createBrowserTransportDiagnostics, reportTransportFailure } from './browser-transport-diagnostics.mjs';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const require = createRequire(path.join(root, 'web/package.json'));
@@ -80,7 +81,7 @@ async function shot(page,name,section=null) {
   reportTransportFailure(transportDiagnostics.get(page),'screenshot',error,{elapsedMs:performance.now()-captureStarted,layout});
   throw error;
  }
- screenshots.push({fullPage,file:`${name}.png`,sourceSha,publicSafe:name.startsWith('synthetic-'),fixtureDisclosure:name.includes('ai-fixture')?'Testanbieter / keine reale Modellanalyse':null,viewport:page.viewportSize(),section:section || (name.includes('ai-fixture-case')?'AI analysis':dialog?'dialog':'top'),contentScrollTop:await page.locator('.main-content').evaluate(el=>el.scrollTop).catch(()=>null),theme:await page.locator('html').getAttribute('data-theme'),locale:await page.locator('html').getAttribute('lang'),test:currentTest});
+ screenshots.push({fullPage,file:`${name}.png`,sourceSha,publicSafe:name.startsWith('synthetic-'),fixtureDisclosure:name.includes('concise-shell')?'Disposable manager restricted to built-in synthetic devices, cases and activity; no real telemetry or provider call.':name.includes('ai-fixture')?'Testanbieter / keine reale Modellanalyse':null,viewport:page.viewportSize(),section:section || (name.includes('ai-fixture-case')?'AI analysis':dialog?'dialog':'top'),contentScrollTop:await page.locator('.main-content').evaluate(el=>el.scrollTop).catch(()=>null),theme:await page.locator('html').getAttribute('data-theme'),locale:await page.locator('html').getAttribute('lang'),test:currentTest});
 }
 async function noOverflow(page) { const size=await page.evaluate(()=>({view:innerWidth,body:document.body.scrollWidth,html:document.documentElement.scrollWidth})); expect(size.body).toBeLessThanOrEqual(size.view+1); expect(size.html).toBeLessThanOrEqual(size.view+1); }
 async function rows(page) { return page.locator('.device-table tbody tr'); }
@@ -125,12 +126,12 @@ try {
  await test('Source filter and unknown data never become healthy', async()=>{
   const page=await pageAt('/devices'); await loaded(page); await page.locator('.inventory-tabs button').filter({hasText:'Lokale Quellen'}).click(); await expect(await rows(page)).toHaveCount(1); await expect((await rows(page)).first()).toContainText('Lokal');
   const sandbox=data.devices.find(d=>!d.synthetic); expect(sandbox.status).toBe('unknown'); await expect((await rows(page)).first()).toContainText('Unbekannt');
-  await page.locator('.device-name-button').click(); await page.getByRole('tab',{name:'Details',exact:true}).click(); await expect(page.locator('.device-page')).toContainText('Lokale Linux-Umgebung. Messwerte werden nur angezeigt, wenn ein Collector sie geliefert hat.'); await shot(page,'sandbox-provenance');
+  await page.locator('.device-name-button').click(); await page.getByRole('tab',{name:'Details',exact:true}).click(); await expect(page.locator('.device-page')).toContainText('Nur vom Linux-Collector erfasste Daten.'); await shot(page,'sandbox-provenance');
  });
  await test('Device details → evidence → case, history Back/Forward', async()=>{
   const page=await pageAt('/devices'); await loaded(page);
   await page.getByRole('button',{name:`${device.name}: Details öffnen`}).click(); await expect(page.getByRole('region',{name:`Gerät ${device.name}`,exact:true})).toBeVisible();
-  await page.getByRole('tab',{name:'Details',exact:true}).click(); await expect(page.locator('.device-page')).toContainText('Synthetisches Beispielgerät');
+  await page.getByRole('tab',{name:'Details',exact:true}).click(); await expect(page.locator('.device-page')).toContainText('Demodaten ohne Geräteverbindung.');
   await page.getByRole('tab',{name:/Belege/}).click(); await page.locator('.device-page .evidence-card summary').first().click(); await expect(page.locator('.device-page .evidence-content').first()).toBeVisible(); await shot(page,'desktop-device-evidence');
   await page.getByRole('tab',{name:'Übersicht',exact:true}).click(); await page.locator('.linked-case').first().click(); await expect(page.locator('.case-detail-header h1')).toHaveText(caseItem.title);
   await page.locator('.evidence-card summary').first().click(); await expect(page.locator('.evidence-content').first()).toBeVisible(); await shot(page,'desktop-case-evidence');
@@ -229,8 +230,9 @@ try {
   const small=sizes.filter(s=>s.width<40||s.height<40); expect(small,JSON.stringify(small)).toEqual([]);
  });
  await test('Settings states capability boundary without claiming native OS support', async()=>{
-  const page=await pageAt('/settings'); await loaded(page); await expect(page.getByRole('heading',{name:'Einstellungen',exact:true,level:1})).toBeVisible(); await expect(page.locator('.setting-row').filter({has:page.getByText('Manager',{exact:true})})).toContainText(`127.0.0.1:${port}`); await expect(page.locator('.main-content')).toContainText('Windows'); await expect(page.locator('.main-content')).toContainText('macOS'); await shot(page,'desktop-settings');
+  const page=await pageAt('/settings'); await loaded(page); await expect(page.getByRole('heading',{name:'Einstellungen',exact:true,level:1})).toBeVisible(); await expect(page.locator('.setting-row').filter({has:page.getByText('Manager',{exact:true})})).toContainText(`127.0.0.1:${port}`); await expect(page.locator('.main-content')).toContainText('Synthetische Beispiele, keine echten Geräte.'); await shot(page,'desktop-settings');
  });
+ await conciseShellGallery({test,pageAt,loaded,shot,expect,data});
  await runShellReview({test,pageAt,loaded,shot,expect,caseItem,cleanCase:data.cases.find(c=>c.deviceId==='demo-linux-01')});
  if(process.env.TRACEBOLT_REVIEW_AI==='1') await runAIReview({test,pageAt,loaded,shot,base,data,expect,restartManager:async()=>{await stop();start();await ready();}});
 } finally {

@@ -100,8 +100,8 @@ export async function alarmStatusBrowserCase({pageAt,login,expect,base,shot}) {
   const beforeIdle=reads;await page.clock.runFor(16000);expect(reads).toBe(beforeIdle);await expect(panel.locator('time')).toHaveAttribute('datetime',loaded);
   await summary.click();
   for(const [name,value] of [['Queued','2'],['In flight','1'],['Suppressed','9'],['Dropped','11']])await expect(count(name,true)).toHaveText(value);
-  await expect(details).toContainText('Pending is queued plus in flight.');await expect(details).toContainText('Uncertain events may have been accepted; they are not automatically replayed.');
-  await expect(details).toContainText('Dropped is a separate durable count');await expect(details).toContainText('including previous destinations.');
+  await expect(details).toContainText('Pending = queued + in flight.');await expect(details).toContainText('Uncertain events may have been accepted; they are not automatically replayed.');
+  await expect(details).toContainText('Dropped: separate durable count');await expect(details).toContainText('previous destinations and synthetic tests');
   await summary.click();await alarmLayout({page,panel,expect});diagnostics.track(panel,-1);diagnostics.step('capture');await panel.scrollIntoViewIfNeeded();
   await shot(page,'synthetic-http-test-alarm-status-retained-desktop-en',alarmFixtureDisclosure);
   await page.setViewportSize({width:390,height:844});
@@ -135,6 +135,7 @@ export async function alarmStatusBrowserCase({pageAt,login,expect,base,shot}) {
    await expect(panel.locator('time')).toHaveAttribute('datetime',previousLoaded);await expect(count('Provider accepted')).toHaveText('7');
    await expect(panel).not.toContainText('SYNTHETIC_INVALID_COUNT');await expect(panel).not.toContainText('Synthetic alarm-status fault injection');
    const beforeRetry=reads;await page.clock.runFor(1000);expect(reads).toBe(beforeRetry);
+   await panel.scrollIntoViewIfNeeded();await shot(page,`synthetic-http-test-alarm-status-${failure}-desktop-en`,alarmFixtureDisclosure);
   }
   // An aborted ten-second read cannot overwrite a newer explicit refresh.
   diagnostics.mark('status-held-read');

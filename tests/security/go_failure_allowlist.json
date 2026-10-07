@@ -1,5 +1,5 @@
 {
-  "goSourceSha256": "409b8ecb8957ad85d12e3948b5404cebec1611ec0d58d4fe03eed866f8469b92",
+  "goSourceSha256": "0e40a4442e535e9faffd22ffedca0c837ee1d39fa3f6323d01f051a2375529f5",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -184,6 +184,23 @@
       "TestInventoryAndEventConsentAreSeparate",
       "TestNativeFailuresAreSanitizedAndAtomic",
       "TestShortWriteFails"
+    ],
+    "localrmm/cmd/windows-native-acceptance": [
+      "TestAutomaticEventCannotRunApprovedLookingFlags",
+      "TestControllerAncestorFailureNeverProvisionsOrStartsPeer",
+      "TestControllerCancelledWaitStillUsesBoundedOwnedCleanup",
+      "TestControllerCloseFailureCannotPass",
+      "TestControllerFailureStopsUninstallsAndCleansOnlyOwnedReceipt",
+      "TestControllerMissingNativeEvidenceNeverPassesValidation",
+      "TestControllerPartialProvisionFailureStillRequestsBoundedCleanup",
+      "TestControllerRevokedGrantIsInert",
+      "TestControllerSyntheticCompleteSequence",
+      "TestManualAcceptanceCLIRejectsBeforeExecution"
+    ],
+    "localrmm/cmd/windows-prerequisites": [
+      "TestReadOnlyMalformedInspectorEvidenceIsWithheld",
+      "TestReadOnlyPolicyResultsCannotClaimNativeAcceptance",
+      "TestReadOnlyPrerequisitesRejectSourceAndEveryMutatingMode"
     ],
     "localrmm/cmd/windows-service": [
       "TestCLIFinitePhaseReasonDoesNotEchoCause",
@@ -2333,6 +2350,50 @@
       "TestReadinessAlwaysInactive",
       "TestReadinessFailsClosed",
       "TestVersionParsing"
+    ],
+    "localrmm/internal/windowsacceptance/fixture": [
+      "TestConcurrentSyntheticObservationAndClose",
+      "TestRedactionSecretCopiesAndClosedFixture",
+      "TestSyntheticChallengeUseExpiryAndCapacity",
+      "TestSyntheticFrameAndRequestCaps",
+      "TestSyntheticNewSequenceRequiresStrictlyLaterTimesLikeProductionStore",
+      "TestSyntheticOriginalPendingDeadlineAndCertificateRoles",
+      "TestSyntheticRealProofLifecycleAndReceipt",
+      "TestSyntheticRequestsRemainFixedAndBounded",
+      "TestSyntheticWrongProofAndPurposeConsumeChallenge"
+    ],
+    "localrmm/internal/windowsacceptance/gate": [
+      "TestBlockedReportCannotContainMutationClaim",
+      "TestGrantIsBoundedAndRevocable",
+      "TestManualSourceAuthorityDefaultsDeny",
+      "TestReportRejectsFalseFullAcceptanceAndMissingChecks"
+    ],
+    "localrmm/internal/windowsacceptance/native": [
+      "TestCanceledContextDoesNotConsultGrantOrNativeState",
+      "TestCanonicalFixedPathPolicy",
+      "TestConstructorAndFormattingAreInertAndRedacted",
+      "TestConstructorRejectsInvalidArtifactBinding",
+      "TestEveryDriverMutatorRequiresLiveGuardBeforePlatformDispatch",
+      "TestEvidenceHasOnlyFiniteStagesReasonsAndBooleans",
+      "TestNativeTokenGroupAndSIDBounds",
+      "TestNativeTokenPolicy",
+      "TestNativeTokenPrivilegeBounds",
+      "TestOSAncestorsRequireExplicitAccountReadWithoutRepair",
+      "TestOnlyNewAppDataParentIncludesRequiredDirectoryListing",
+      "TestOrderlyAcceptanceStopRejectsNativeFailureExitCodes",
+      "TestPendingDigestAndCanonicalShapeFailClosed",
+      "TestPrerequisiteObservationClassifiesPolicyNotActualTokenAccess",
+      "TestPrerequisiteObservationRejectsFalseNativeOrSuccessReasons",
+      "TestProbeAcceptsOnlyActualAccessDenied",
+      "TestProbeDescriptionExactBinding",
+      "TestProbeExactRequiredPrivileges",
+      "TestProbeFixedConfiguration",
+      "TestProbeHandlerEarlyRejectionsDoNotReachNativeChecks",
+      "TestProbeOwnStatus",
+      "TestProbeReadTargetsRequiresBothAndHonorsCancellation",
+      "TestRetainedOutageObservationNeedsSameExactBytesAndSequence",
+      "TestSenderCounterAndIdentityCannotMoveBackwards",
+      "TestTransitionObservationNeedsExistingWantedState"
     ],
     "localrmm/internal/windowsagentconfig": [
       "TestWindowsStoreSchemasRemainSeparateAndFixed"

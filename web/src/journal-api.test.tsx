@@ -88,7 +88,7 @@ describe('bounded journal API and lifetime', () => {
             const body = JSON.parse(String(init?.body));
             return json(journalPage(body.search ? ['SYNTHETIC Needle'] : ['Synthetic fixture message'], body.search));
         }); open(); await screen.findByText('Synthetic fixture message');
-        fireEvent.change(screen.getByLabelText('Literal text in captured messages'), { target: { value: 'needle' } }); fireEvent.click(screen.getByRole('button', { name: 'Search capture' })); await screen.findByText('Needle', { selector: 'mark' });
+        fireEvent.change(screen.getByLabelText('Search captured messages'), { target: { value: 'needle' } }); fireEvent.click(screen.getByRole('button', { name: 'Search capture' })); await screen.findByText('Needle', { selector: 'mark' });
         const calls = fetch.mock.calls, queries = calls.filter(([url]) => url === `${root}/query`);
         expect(queries).toHaveLength(2); expect(calls.filter(([url]) => url === '/api/auth/session')).toHaveLength(3);
         expect(JSON.parse(String(queries[1][1]?.body))).toEqual({ identity: journalIdentity, snapshotDigest: journalView().request!.receipt!.resultDigest, search: 'needle', offset: 0, limit: 100 });
@@ -96,7 +96,7 @@ describe('bounded journal API and lifetime', () => {
     });
     it('navigates next and previous with a stable search, request and digest', async () => {
         const fetch = server((url, init) => { if (url === `${root}/query`) { const body = JSON.parse(String(init?.body)); return json(journalPage([body.offset === 0 ? 'First fixture row' : 'Second fixture row'], body.search, body.offset, 2)); } });
-        open(); await screen.findByText('First fixture row'); fireEvent.click(screen.getByRole('button', { name: 'Next page' })); expect(screen.queryByText('First fixture row')).not.toBeInTheDocument(); await screen.findByText('Second fixture row'); fireEvent.click(screen.getByRole('button', { name: 'Previous page' })); await screen.findByText('First fixture row');
+        open(); await screen.findByText('First fixture row'); fireEvent.click(screen.getByRole('button', { name: 'Next' })); expect(screen.queryByText('First fixture row')).not.toBeInTheDocument(); await screen.findByText('Second fixture row'); fireEvent.click(screen.getByRole('button', { name: 'Previous' })); await screen.findByText('First fixture row');
         expect(fetch.mock.calls.filter(([url]) => url === `${root}/query`).map(([, init]) => JSON.parse(String(init?.body)).offset)).toEqual([0, 1, 0]);
     });
     it('preserves the snapshot through 100/100/5 pages, previous, literal matches and zero matches', async () => {
@@ -108,14 +108,14 @@ describe('bounded journal API and lifetime', () => {
             const page = { ...journalPage(matches.slice(query.offset, query.offset + 100), query.search, query.offset, matches.length), totalCapturedRows: 205, observedCount: 205 };
             pages.push(page); return json(page);
         }); open(); await screen.findByText('Synthetic pagination row 99');
-        fireEvent.click(screen.getByRole('button', { name: 'Next page' })); await screen.findByText('Synthetic pagination row 199');
-        fireEvent.click(screen.getByRole('button', { name: 'Next page' })); await screen.findByText('Synthetic pagination row 204');
-        expect(screen.getByRole('button', { name: 'Next page' })).toBeDisabled();
-        fireEvent.click(screen.getByRole('button', { name: 'Previous page' })); await screen.findByText('Synthetic pagination row 199');
-        const search = screen.getByLabelText('Literal text in captured messages');
+        fireEvent.click(screen.getByRole('button', { name: 'Next' })); await screen.findByText('Synthetic pagination row 199');
+        fireEvent.click(screen.getByRole('button', { name: 'Next' })); await screen.findByText('Synthetic pagination row 204');
+        expect(screen.getByRole('button', { name: 'Next' })).toBeDisabled();
+        fireEvent.click(screen.getByRole('button', { name: 'Previous' })); await screen.findByText('Synthetic pagination row 199');
+        const search = screen.getByLabelText('Search captured messages');
         fireEvent.change(search, { target: { value: 'nEeDlE[.*]' } }); fireEvent.click(screen.getByRole('button', { name: 'Search capture' }));
         await waitFor(() => expect(screen.getAllByText('Needle[.*]', { selector: 'mark' })).toHaveLength(3));
-        expect(screen.getByText('3 matches · 205 captured')).toBeVisible(); expect(screen.getByRole('button', { name: 'Previous page' })).toBeDisabled();
+        expect(screen.getByText('3 matches · 205 captured')).toBeVisible(); expect(screen.getByRole('button', { name: 'Previous' })).toBeDisabled();
         fireEvent.change(search, { target: { value: '^does-not-match$' } }); fireEvent.click(screen.getByRole('button', { name: 'Search capture' }));
         await screen.findByText('No literal matches in this captured snapshot.'); expect(screen.queryByRole('table')).not.toBeInTheDocument(); expect(screen.queryByRole('alert')).not.toBeInTheDocument();
         expect(pages.map(page => page.rows.length)).toEqual([100, 100, 5, 100, 3, 0]);
@@ -237,9 +237,9 @@ describe('explicit last-15-minute preparation', () => {
             }
         });
         open(); await screen.findByText('First synthetic row');
-        fireEvent.change(screen.getByLabelText('Literal text in captured messages'), { target: { value: 'synthetic' } });
+        fireEvent.change(screen.getByLabelText('Search captured messages'), { target: { value: 'synthetic' } });
         fireEvent.click(screen.getByRole('button', { name: 'Search capture' })); await waitFor(() => expect(screen.getByText('Applied search: “synthetic”')).toBeVisible());
-        fireEvent.click(screen.getByRole('button', { name: 'Next page' })); await screen.findByText('Second', { exact: false, selector: '.journal-message' });
+        fireEvent.click(screen.getByRole('button', { name: 'Next' })); await screen.findByText('Second', { exact: false, selector: '.journal-message' });
         openAdvanced(); fireEvent.change(screen.getByLabelText('Exact service unit'), { target: { value: 'sshd.service' } });
         fireEvent.change(screen.getByLabelText('Include severity through'), { target: { value: '4' } });
         const calls = fetch.mock.calls.length, queries = fetch.mock.calls.filter(([url]) => url === `${root}/query`).length;
@@ -249,9 +249,9 @@ describe('explicit last-15-minute preparation', () => {
         expect(screen.getByLabelText('From (UTC)')).toHaveValue('2026-10-04T11:49');
         expect(screen.getByLabelText('Exact service unit')).toHaveValue('sshd.service');
         expect(screen.getByLabelText('Include severity through')).toHaveValue('4');
-        expect(screen.getByLabelText('Literal text in captured messages')).toHaveValue('synthetic');
+        expect(screen.getByLabelText('Search captured messages')).toHaveValue('synthetic');
         expect(screen.getByText('Second', { exact: false, selector: '.journal-message' })).toBeVisible();
-        expect(screen.getByRole('button', { name: 'Previous page' })).toBeEnabled();
+        expect(screen.getByRole('button', { name: 'Previous' })).toBeEnabled();
         expect(document.querySelector('.journal-snapshot-age')).toHaveTextContent('Age at last status check: 4 min');
         expect(document.querySelector('.journal-snapshot-age time')).toHaveAttribute('datetime', journalNow);
         expect(fetch.mock.calls.slice(calls).map(([url]) => url)).toEqual(['/api/auth/session', root]);

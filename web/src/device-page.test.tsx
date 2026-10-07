@@ -127,11 +127,29 @@ it('removes duplicate overview/list explanations while retaining explicit source
  await navigate('overview'); render(<App/>); await screen.findByRole('heading', { name: 'Overview', level: 1 });
  expect(document.querySelector('.page-heading .eyebrow')).toBeNull(); expect(document.querySelector('.page-heading p')).toBeNull();
  expect(screen.queryByText('Rule-based findings. Sources included.')).not.toBeInTheDocument(); expect(screen.queryByText('Sources clearly labelled')).not.toBeInTheDocument();
- expect(await screen.findByText('No open health incidents in the retained history. Missing cases do not mean a healthy device.')).toBeVisible();
+ expect(await screen.findByText('No open health incidents. Device health may still be unknown.')).toBeVisible();
  expect(screen.getAllByText('LAN agent').length).toBeGreaterThan(0); expect(screen.getByRole('columnheader', { name: 'Overall health' })).toBeVisible();
  const sidebar = screen.getByRole('complementary', { name: 'Main navigation' }); fireEvent.click(within(sidebar).getByRole('button', { name: /Devices/ })); await screen.findByLabelText('Search devices');
  expect(document.querySelector('.page-heading .eyebrow')).toBeNull(); expect(document.querySelector('.page-heading p')).toBeNull();
  expect(screen.queryByText('Sources and data quality stay visible.')).not.toBeInTheDocument(); expect(document.querySelector('.inventory-panel .table-footer')).toHaveTextContent('2 of 2 devices');
  expect(screen.getByLabelText('Filter by operating system')).toBeVisible(); expect(screen.getByLabelText('Filter by status')).toBeVisible(); expect(screen.getByLabelText('Sort devices')).toBeVisible();
  expect(vi.mocked(request).mock.calls.filter(([path]) => path === '/overview')).toHaveLength(1);
+});
+
+it('keeps concise evidence and source context without removing uncertainty or keyboard help', async () => {
+ const page = await open();
+ expect(document.querySelector('.demo-banner')).toHaveTextContent('Not for production.');
+ expect(document.querySelector('.demo-banner')).not.toHaveTextContent('Approved LAN agents:');
+ fireEvent.click(within(page).getByRole('tab', { name: 'Evidence' }));
+ expect(page.querySelector('.tab-intro')).toBeNull();
+ expect(within(page).getByRole('tabpanel', { name: 'Evidence' })).toHaveTextContent('No evidence is available for this device.');
+ fireEvent.click(within(page).getByRole('tab', { name: 'Details' }));
+ expect(page.querySelector('.provenance-notice')).toHaveTextContent('Accepted agent reports only.');
+ expect(page.querySelector('.quality-explainer')).toHaveTextContent('Missing data does not mean the device is healthy.');
+ expect(page.querySelector('.quality-explainer strong')).toBeNull();
+ fireEvent.keyDown(window, { key: '?' });
+ const help = screen.getByRole('dialog', { name: 'Keyboard shortcuts' });
+ expect(within(help).getAllByRole('heading')).toHaveLength(1);
+ expect(help.querySelector('.eyebrow,p')).toBeNull();
+ expect(help.querySelectorAll('dt')).toHaveLength(4);
 });

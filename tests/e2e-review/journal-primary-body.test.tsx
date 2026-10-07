@@ -94,7 +94,7 @@ describe('journal fixture primary-consumer observation',()=>{
   });vi.stubGlobal('fetch',fetch);uninstall=installJournalPrimaryBody({url:url()});
   render(<JournalPanel deviceId={journalDevice} insecureTestMode={true} sessionKey={journalSessionExpiry}/>);await screen.findByText('Synthetic primary row 99');
   expect(observer().state(0)).toBe('missing');const token=observer().arm();
-  fireEvent.click(screen.getByRole('button',{name:'Next page'}));await waitFor(()=>expect(held).toBeDefined());
+  fireEvent.click(screen.getByRole('button',{name:'Next'}));await waitFor(()=>expect(held).toBeDefined());
   expect(observer().take(token)).toBeNull();
   if(outcome==='declared oversized'){
    await screen.findByRole('alert');expect(cancelled).toBe(true);expect(readerSpy).not.toHaveBeenCalled();expect(observer().state(token)).toBe('cancelled');
@@ -120,7 +120,7 @@ describe('journal fixture primary-consumer observation',()=>{
     // validator must reject this body and the browser's UI checks must fail.
     expect(observer().take(token)?.body.identity.id).toBe(value.identity.id);
    }else{
-    if(outcome==='abort'){expect(signal!.aborted).toBe(true);expect(screen.getByRole('status')).toHaveTextContent('Log content is paused');}
+    if(outcome==='abort'){expect(signal!.aborted).toBe(true);expect(screen.getByRole('status')).toHaveTextContent('Content paused');}
     else await screen.findByRole('alert');
     expect(screen.queryByRole('table')).not.toBeInTheDocument();expect(observer().take(token)).toBeNull();expect(observer().state(token)).not.toBe('complete');
     if(outcome==='oversized')expect(cancelled).toBe(true);

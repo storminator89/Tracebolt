@@ -49,11 +49,10 @@ describe('Linux log source guidance is discovery, never authority', () => {
     });
     it('keeps broader sources explicitly unsupported, with no requests or selectable collector fallback', () => {
         render(<JournalSourceOptions/>);
-        fireEvent.click(screen.getByText('Other Linux log sources'));
         for (const name of ['Kernel & hardware', 'Whole system journal', 'System-wide authentication']) expect(screen.getByText(name)).toBeVisible();
-        expect(screen.getAllByText('Not supported by this collector')).toHaveLength(3);
-        expect(screen.getByText(/journal daemon’s own service logs are not the whole journal/)).toBeVisible();
-        expect(screen.getByText(/SSH service logs cover that service only/)).toBeVisible();
+        expect(screen.getByText(/Not supported by this collector/)).toBeVisible();
+        expect(screen.getByText(/Journal-daemon logs are not the whole journal/)).toBeVisible();
+        expect(screen.getByText(/SSH logs cover SSH only/)).toBeVisible();
         expect(screen.queryByRole('button')).not.toBeInTheDocument(); expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
         expect(request).not.toHaveBeenCalled(); expect(mutateRaw).not.toHaveBeenCalled();
     });

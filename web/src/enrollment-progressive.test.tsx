@@ -66,7 +66,7 @@ describe('progressive invitation disclosure', () => {
   expect(within(dialog).getByRole('note')).toBeVisible(); expect(within(dialog).getByRole('note')).toHaveTextContent('Passwords and data');
   expect(within(dialog).getByText(/connection metadata may reveal private network topology/)).toBeVisible();
   expect(within(dialog).getByText(/Inventory is available for up to 24 hours/)).toBeVisible();
-  expect(within(dialog).getByText(/Requires a fresh managed-operations-v3 store/)).toBeVisible();
+  expect(within(dialog).getByText(/New managed-operations-v3 store and explicit enrollment consent required/)).toBeVisible();
   expect(within(dialog).getByText(/complete read-admin command is unavailable/)).toBeVisible();
   const disclosure = details(dialog, 'Collection, retention and limits'); expect(disclosure).not.toHaveAttribute('open');
   expect(within(disclosure).getByText(/without the older 128-row export prefix/)).not.toBeVisible();

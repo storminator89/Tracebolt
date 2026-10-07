@@ -110,7 +110,7 @@ describe('independent private UI and selected identity regressions', () => {
     it('renders an empty selected export as partial with known nonzero totals', async () => {
         Object.assign(packageResponse.snapshot!.inventory, { reason: 'byte_limit', complete: false, truncated: true, observedCount: 12, installedCount: 9, items: [] });
         await openPanel(); await screen.findByText('Partial exported inventory');
-        const region = screen.getByRole('region', { name: 'Parsed package inventory' });
+        const region = screen.getByRole('region', { name: 'Package sample' });
         expect(within(region).getByText('9')).toBeVisible(); expect(within(region).getAllByText('12')).toHaveLength(2); expect(within(region).getByText('0')).toBeVisible();
         expect(screen.queryByText(/successfully parsed source contains zero/)).not.toBeInTheDocument(); expect(screen.queryByText(/No package inventory evidence/)).not.toBeInTheDocument();
     });

@@ -123,6 +123,15 @@ async function bounds(page){
  const box=await page.locator('main.device-main').boundingBox();expect(box).not.toBeNull();
  expect(box.x>=0&&box.y>=0&&box.x+box.width<=page.viewportSize().width+1&&box.y+box.height<=page.viewportSize().height+1).toBe(true);
 }
+async function mobileMessageLayout(page){
+ const wrap=page.locator('.journal-table-wrap');
+ expect(await wrap.evaluate(el=>el.scrollWidth<=el.clientWidth+1)).toBe(true);
+ for(const row of await rows(page).all()){
+  const geometry=await row.evaluate(el=>{const message=el.querySelector('.journal-message').getBoundingClientRect(),meta=el.querySelector('td').getBoundingClientRect(),box=el.getBoundingClientRect();return {messageWidth:message.width,rowWidth:box.width,messageTop:message.top,metadataBottom:meta.bottom};});
+  expect(geometry.messageWidth).toBeGreaterThanOrEqual(geometry.rowWidth-1);
+  expect(geometry.messageTop).toBeGreaterThanOrEqual(geometry.metadataBottom-1);
+ }
+}
 async function shot(page,name){
  await expect(page.locator('.enrollment-secret,.enrollment-fingerprint,.enrollment-comparison')).toHaveCount(0);
  expect(await page.evaluate(value=>document.body.innerText.includes(value)||[...document.querySelectorAll('input')].some(e=>e.value.includes(value)),password)).toBe(false);
@@ -230,9 +239,8 @@ try{
    mark('observed service query matches services section');expect(services.section).toBe('services');
    mark('observed service picker is visible');await expect(picker).toBeVisible();
    mark('search-first picker focuses search and supports exact-row keyboard navigation');const pickerSearch=picker.getByLabel('Search observed services',{exact:true});await expect(pickerSearch).toBeFocused();await expect(picker.locator('.journal-picker-shortcuts')).not.toHaveAttribute('open');await pickerSearch.press('ArrowDown');await expect(picker.getByRole('button',{name:'Use invented-backup.service',exact:true})).toBeFocused();await page.keyboard.press('End');await expect(picker.getByRole('button',{name:'Use invented.service',exact:true})).toBeFocused();expect(tally.create).toBe(0);expect(tally.cancel).toBe(0);await pickerSearch.focus();await shot(page,'synthetic-journal-picker-search-desktop-en');
-   mark('open observed service permission disclosure');await picker.getByText('Selection & permission',{exact:true}).click();
-   mark('observed service picker does not imply local permission');await expect(picker).toContainText('Observed inventory does not confirm local journal allowlist membership or grant access.');
-   mark('observed service picker discloses selection does not capture');await expect(picker).toContainText('Selecting a service only fills the exact-unit field; it does not capture logs.');
+   mark('observed service picker does not imply local permission');await expect(picker).toContainText('Selection grants no access.');
+   mark('observed service picker discloses selection does not capture');await expect(picker).toContainText('Logs need separate approval.');
    mark('observed service picker rejects unsupported unit');await expect(picker.getByRole('button',{name:'Use invented:unsupported.service',exact:true})).toBeDisabled();
    mark('observed service picker performs exactly two inventory reads');expect(inventoryReads).toBe(2);
    mark('observed service picker creates no journal request');expect(tally.create).toBe(0);
@@ -307,8 +315,8 @@ try{
   await check('Source guidance and recognizable search shortcuts never expand local journal permission',async()=>{
    const page=await pageAt();const tally=counts(page);await open(page);
    await page.getByText('Permissions & sources',{exact:true}).click();const sources=page.getByRole('region',{name:'Log sources',exact:true});
-   await expect(sources).toBeVisible();await sources.getByText('Other Linux log sources',{exact:true}).click();
-   await expect(sources.getByText('Not supported by this collector',{exact:true})).toHaveCount(3);
+   await expect(sources).toBeVisible();
+   await expect(sources).toContainText('Not supported by this collector');
    for(const label of ['Kernel & hardware','Whole system journal','System-wide authentication'])await expect(sources.getByText(label,{exact:true})).toBeVisible();
    await expect(sources.getByRole('button')).toHaveCount(0);expect(tally.create).toBe(0);expect(tally.cancel).toBe(0);
    await page.getByRole('button',{name:'Choose observed service',exact:true}).click();
@@ -341,22 +349,23 @@ try{
    mark('complete capture renders text without HTML or navigation');await expect(state(page)).toHaveText('Captured snapshot available');await expect(page.locator('.journal-count')).toContainText('205 matches · 205 captured');await expect(page.locator('.journal-count')).toContainText('Complete coverage for the requested window visible to the agent');
    await expect(page.locator('.journal-message').nth(1)).toContainText('<img');await expect(page.locator('.journal-results img,.journal-results script,.journal-results a')).toHaveCount(0);expect(await page.evaluate(()=>window.__journalFixtureHTMLExecuted??false)).toBe(false);
    await page.locator('.journal-count').scrollIntoViewIfNeeded();await shot(page,'synthetic-journal-desktop-en');
+   await page.setViewportSize({width:390,height:844});await mobileMessageLayout(page);await page.locator('.journal-count').scrollIntoViewIfNeeded();await shot(page,'synthetic-journal-mobile-en');
    await open(page,'beta');await capture(page);await deliver(page,'beta','partial');mark('partial source remains partial in German mobile');
    await page.setViewportSize({width:390,height:844});await page.getByLabel('Language').selectOption('de');await expect(page.getByRole('heading',{name:'Logs',exact:true})).toBeVisible();
    await expect(page.locator('.journal-count')).toContainText('Teilweise Abdeckung');await expect(page.locator('.journal-count')).toContainText('Quellensichtbarkeit eingeschränkt');
-   await page.getByRole('button',{name:'Dunkles Design aktivieren',exact:true}).click();await page.locator('.journal-count').scrollIntoViewIfNeeded();await shot(page,'synthetic-journal-mobile-de');
+   await page.getByRole('button',{name:'Dunkles Design aktivieren',exact:true}).click();await page.locator('.journal-count').scrollIntoViewIfNeeded();await mobileMessageLayout(page);await shot(page,'synthetic-journal-mobile-de');
    await expect(rows(page)).toHaveCount(100);await clean(page);
   });
 
   await check('Literal case-insensitive captured-snapshot search and hundred-row pages preserve digest and original times',async()=>{
    const page=await pageAt();const tally=counts(page);await open(page);await capture(page);const proof=await deliver(page);
    const status=await get(endpoint());const identity=status.request.description.identity,digest=status.request.receipt.resultDigest;
-   mark('second page binds one original snapshot');const second=await queryAction(page,()=>page.getByRole('button',{name:'Next page',exact:true}).click(),{offset:100,nextOffset:200,totalCapturedRows:205,matchedRows:205,snapshotDigest:digest,identity,expiresAt:proof.expiresAt});
-   mark('third page binds original snapshot and times');const third=await queryAction(page,()=>page.getByRole('button',{name:'Next page',exact:true}).click(),{offset:200,nextOffset:null,totalCapturedRows:205,matchedRows:205,snapshotDigest:digest,identity,observedAt:second.observedAt,expiresAt:second.expiresAt});mark('third page contains final five rows');expect(third.rows).toHaveLength(5);mark('final page disables Next page');await expect(page.getByRole('button',{name:'Next page',exact:true})).toBeDisabled();
-   mark('previous page preserves snapshot and times');await queryAction(page,()=>page.getByRole('button',{name:'Previous page',exact:true}).click(),{offset:100,snapshotDigest:digest,observedAt:second.observedAt,expiresAt:second.expiresAt});
-   mark('literal metacharacters across the captured snapshot');await page.getByLabel('Literal text in captured messages',{exact:true}).fill('nEeDlE[.*]');
-   const found=await queryAction(page,()=>page.getByRole('button',{name:'Search capture',exact:true}).click(),{search:'nEeDlE[.*]',searchScope:'captured_snapshot_only',offset:0,matchedRows:3,totalCapturedRows:205,snapshotDigest:digest,identity,observedAt:second.observedAt,expiresAt:second.expiresAt});expect(found.rows.every(row=>row.message.toLowerCase().includes('needle[.*]'))).toBe(true);await expect(page.locator('.journal-message mark')).toHaveCount(3);await expect(page.getByRole('button',{name:'Previous page',exact:true})).toBeDisabled();
-   mark('literal no-match search preserves captured total');await page.getByLabel('Literal text in captured messages',{exact:true}).fill('^does-not-match$');await queryAction(page,()=>page.getByRole('button',{name:'Search capture',exact:true}).click(),{matchedRows:0,totalCapturedRows:205});await expect(panel(page)).toContainText('No literal matches in this captured snapshot.');expect(tally.create).toBe(1);await clean(page);
+   mark('second page binds one original snapshot');const second=await queryAction(page,()=>page.getByRole('button',{name:'Next',exact:true}).click(),{offset:100,nextOffset:200,totalCapturedRows:205,matchedRows:205,snapshotDigest:digest,identity,expiresAt:proof.expiresAt});
+   mark('third page binds original snapshot and times');const third=await queryAction(page,()=>page.getByRole('button',{name:'Next',exact:true}).click(),{offset:200,nextOffset:null,totalCapturedRows:205,matchedRows:205,snapshotDigest:digest,identity,observedAt:second.observedAt,expiresAt:second.expiresAt});mark('third page contains final five rows');expect(third.rows).toHaveLength(5);mark('final page disables Next');await expect(page.getByRole('button',{name:'Next',exact:true})).toBeDisabled();
+   mark('previous page preserves snapshot and times');await queryAction(page,()=>page.getByRole('button',{name:'Previous',exact:true}).click(),{offset:100,snapshotDigest:digest,observedAt:second.observedAt,expiresAt:second.expiresAt});
+   mark('literal metacharacters across the captured snapshot');await page.getByLabel('Search captured messages',{exact:true}).fill('nEeDlE[.*]');
+   const found=await queryAction(page,()=>page.getByRole('button',{name:'Search capture',exact:true}).click(),{search:'nEeDlE[.*]',searchScope:'captured_snapshot_only',offset:0,matchedRows:3,totalCapturedRows:205,snapshotDigest:digest,identity,observedAt:second.observedAt,expiresAt:second.expiresAt});expect(found.rows.every(row=>row.message.toLowerCase().includes('needle[.*]'))).toBe(true);await expect(page.locator('.journal-message mark')).toHaveCount(3);await expect(page.getByRole('button',{name:'Previous',exact:true})).toBeDisabled();
+   mark('literal no-match search preserves captured total');await page.getByLabel('Search captured messages',{exact:true}).fill('^does-not-match$');await queryAction(page,()=>page.getByRole('button',{name:'Search capture',exact:true}).click(),{matchedRows:0,totalCapturedRows:205});await expect(panel(page)).toContainText('No literal matches in this captured snapshot.');expect(tally.create).toBe(1);await clean(page);
   });
 
   await check('Cancel clears rows immediately and a lost committed response reconciles without mutation replay',async()=>{
@@ -376,7 +385,7 @@ try{
    const unit=page.getByLabel('Exact service unit',{exact:true}),from=page.getByLabel('From (UTC)',{exact:true}),to=page.getByLabel('To (UTC)',{exact:true}),severity=page.getByRole('combobox',{name:'Include severity through',exact:true});
    const contentAck=page.getByRole('checkbox',{name:/^I understand that log messages/}),httpAck=page.getByRole('checkbox',{name:/^I also accept that this HTTP test/});
    const selected=async()=>{await expect(unit).toHaveValue(draft.unit);await expect(from).toHaveValue(draft.start);await expect(to).toHaveValue(draft.end);await expect(severity).toHaveValue(draft.priority);};
-   await openAdvanced(page);await unit.fill(draft.unit);await from.fill(draft.start);await to.fill(draft.end);await severity.selectOption(draft.priority);const searchDraft=page.getByLabel('Literal text in captured messages',{exact:true});await searchDraft.fill('Needle[.*]');await review(page);await contentAck.check();await httpAck.check();
+   await openAdvanced(page);await unit.fill(draft.unit);await from.fill(draft.start);await to.fill(draft.end);await severity.selectOption(draft.priority);const searchDraft=page.getByLabel('Search captured messages',{exact:true});await searchDraft.fill('Needle[.*]');await review(page);await contentAck.check();await httpAck.check();
    // Cross multiple real 250 ms idle checks without changing browser clocks.
    await page.evaluate(()=>new Promise(resolve=>window.setTimeout(resolve,1100)));await selected();await expect(contentAck).toBeChecked();await expect(httpAck).toBeChecked();await expect(searchDraft).toHaveValue('Needle[.*]');await expect(rows(page)).toHaveCount(100);
    await page.getByRole('button',{name:'Back',exact:true}).click();
@@ -401,7 +410,7 @@ try{
     mark('explicit paused refresh rechecks access before held original status');await page.getByRole('button',{name:'Refresh status',exact:true}).click();await expect.poll(gate.arrived).toBe(1);expect(gate.statuses()).toEqual([200]);expect(authReads).toBeGreaterThan(0);await expect(panel(page).getByRole('status')).toContainText('Reading journal status or captured content');await expect(rows(page)).toHaveCount(0);await selected();for(const field of [unit,from,to,severity])await expect(field).toBeDisabled();
     mark('explicit refresh restores the same accepted snapshot without replay');await queryAction(page,async()=>gate.release(),{identity:created.request.description.identity,snapshotDigest:proof.snapshotDigest,observedAt:proof.observedAt,expiresAt:proof.expiresAt,search:'',offset:0,totalCapturedRows:205});
    });page.off('request',countAuth);
-   await selected();for(const field of [unit,from,to,severity])await expect(field).toBeEnabled();await expect(contentAck).toHaveCount(0);await expect(httpAck).toHaveCount(0);await expect(page.getByLabel('Literal text in captured messages',{exact:true})).toHaveValue('');expect(tally.create).toBe(1);expect(tally.cancel).toBe(0);
+   await selected();for(const field of [unit,from,to,severity])await expect(field).toBeEnabled();await expect(contentAck).toHaveCount(0);await expect(httpAck).toHaveCount(0);await expect(page.getByLabel('Search captured messages',{exact:true})).toHaveValue('');expect(tally.create).toBe(1);expect(tally.cancel).toBe(0);
    await review(page);await expect(contentAck).not.toBeChecked();await expect(httpAck).not.toBeChecked();await page.getByRole('button',{name:'Back',exact:true}).click();
    const resumed=await get(endpoint());expect(resumed.request.description).toEqual(created.request.description);expect(resumed.request.receipt.resultDigest).toBe(proof.snapshotDigest);expect(resumed.contentStatus).toBe('available');
    await control('advance',{seconds:700});mark('injected hidden visibility clears captured rows');await page.evaluate(()=>{Object.defineProperty(document,'visibilityState',{configurable:true,value:'hidden'});document.dispatchEvent(new Event('visibilitychange'));});await expect(rows(page)).toHaveCount(0);await expect(page.locator('.journal-search')).toHaveCount(0);
@@ -413,7 +422,7 @@ try{
 
   await check('Device navigation discards held journal pages and real operator logout removes private content',async()=>{
    const page=await pageAt();await open(page);await capture(page);await deliver(page);
-   await held(page,'**'+endpoint('alpha','query'),async gate=>{mark('device change while previous content page is held');await page.getByLabel('Literal text in captured messages',{exact:true}).fill('Needle[.*]');await page.getByRole('button',{name:'Search capture',exact:true}).click();await expect.poll(gate.arrived).toBe(1);expect(gate.statuses()).toEqual([200]);await expect(rows(page)).toHaveCount(0);
+   await held(page,'**'+endpoint('alpha','query'),async gate=>{mark('device change while previous content page is held');await page.getByLabel('Search captured messages',{exact:true}).fill('Needle[.*]');await page.getByRole('button',{name:'Search capture',exact:true}).click();await expect.poll(gate.arrived).toBe(1);expect(gate.statuses()).toEqual([200]);await expect(rows(page)).toHaveCount(0);
     await page.evaluate(id=>{location.hash='/devices/'+id;},devices.beta);await expect(page.getByRole('region',{name:'Device QA synthetic journal beta',exact:true})).toBeVisible();await page.getByRole('tab',{name:'Logs',exact:true}).click();await expect(state(page)).toHaveText('Awaiting a request');gate.release();await expect.poll(gate.completed).toBe(1);await expect(rows(page)).toHaveCount(0);await expect(panel(page)).not.toContainText('Needle[.*]');});
    await open(page);await expect(rows(page)).toHaveCount(100);const priorCookie=(await context.cookies()).map(cookie=>`${cookie.name}=${cookie.value}`).join('; ');
    await held(page,'**/api/auth/logout',async gate=>{mark('actual Sign out clears content before real CSRF logout response');await page.getByRole('button',{name:'Sign out',exact:true}).click();await expect.poll(gate.arrived).toBe(1);expect(gate.statuses()).toEqual([200]);await expect(page.locator('.app-shell,.journal-panel')).toHaveCount(0);gate.release();await expect(page.getByRole('heading',{name:'Sign in',exact:true})).toBeVisible();});

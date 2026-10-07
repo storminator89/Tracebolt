@@ -34,7 +34,7 @@ describe('read-only health investigations',()=>{
  it('renders evidence with an undetermined cause and links only to real device views',async()=>{
   const fetch=vi.fn().mockResolvedValue(response(fixture()));vi.stubGlobal('fetch',fetch);render(<Harness/>);await screen.findByText('Root filesystem nearly full');
   fireEvent.click(screen.getByText('Evidence & next check'));expect(screen.getByText(/Cause undetermined/)).toBeVisible();expect(screen.getByText('95.0 %')).toBeVisible();
-  expect(screen.getByRole('link',{name:'Open Health & history'})).toHaveAttribute('href',`#/devices/${id}/health`);expect(screen.getByRole('link',{name:'Device details'})).toHaveAttribute('href',`#/devices/${id}/details`);
+  expect(screen.getByRole('link',{name:'Check Health'})).toHaveAttribute('href',`#/devices/${id}/health`);expect(screen.getByRole('link',{name:'Device details'})).toHaveAttribute('href',`#/devices/${id}/details`);
   expect(screen.queryByRole('button',{name:/Resolve|Analyze|Acknowledge|Restart/})).not.toBeInTheDocument();expect(fetch).toHaveBeenCalledTimes(1);expect(fetch.mock.calls[0][0]).toBe('/api/investigations?scope=open&offset=0');expect(fetch.mock.calls[0][1]).toMatchObject({credentials:'same-origin'});expect(fetch.mock.calls[0][1].method).toBeUndefined();expect(fetch.mock.calls[0][1].body).toBeUndefined();
  });
  it('keeps acknowledgement separate from recovery and stopped monitoring',async()=>{
@@ -46,7 +46,7 @@ describe('read-only health investigations',()=>{
  });
  it('distinguishes an empty retained history from missing or revoked data',async()=>{
   const value=fixture();value.items=[];value.devices=[];value.counts={open:0,recovered:0,closed:0,all:0};value.total=0;
-  const fetch=vi.fn().mockResolvedValueOnce(response(value)).mockResolvedValueOnce(response({},503));vi.stubGlobal('fetch',fetch);render(<Harness/>);await screen.findByText('No cases in this view');expect(screen.getByText(/Missing cases do not mean a healthy device/)).toBeVisible();refresh();await screen.findByRole('alert');expect(screen.queryByText('No cases in this view')).not.toBeInTheDocument();expect(screen.getByRole('button',{name:'Open —'})).toBeVisible();
+  const fetch=vi.fn().mockResolvedValueOnce(response(value)).mockResolvedValueOnce(response({},503));vi.stubGlobal('fetch',fetch);render(<Harness/>);await screen.findByText('No cases in this view');expect(screen.getByText(/This does not confirm device health/)).toBeVisible();refresh();await screen.findByRole('alert');expect(screen.queryByText('No cases in this view')).not.toBeInTheDocument();expect(screen.getByRole('button',{name:'Open —'})).toBeVisible();
  });
  it('ages current evidence without resolving a stored incident or inventing historical values',async()=>{
   vi.useFakeTimers();const value=fixture();value.devices[0].checks[1].observedAt='2026-10-06T11:58:01Z';vi.stubGlobal('fetch',vi.fn().mockResolvedValue(response(value)));render(<Harness/>);await act(async()=>{await vi.advanceTimersByTimeAsync(0);});fireEvent.click(screen.getByText('Evidence & next check'));expect(screen.getByText('95.0 %')).toBeVisible();await act(async()=>{await vi.advanceTimersByTimeAsync(2100);});expect(screen.queryByText('95.0 %')).not.toBeInTheDocument();expect(screen.getByText('Unknown: current evidence is missing or stale')).toBeVisible();expect(screen.getByRole('button',{name:'Open 1'})).toBeVisible();
@@ -67,7 +67,7 @@ describe('read-only health investigations',()=>{
 });
 
 it('does not offer an exact-unit journal link when the journal API rejects that Health unit',async()=>{
- const value=fixture();value.devices[0].monitoredServices=['foo:bar.service'];value.devices[0].checks.push({key:'service:foo:bar.service',kind:'service',target:'foo:bar.service',state:'open',observedAt:now,value:null});value.items[0].incident={...value.items[0].incident,key:'service:foo:bar.service',kind:'service',target:'foo:bar.service'};vi.stubGlobal('fetch',vi.fn().mockResolvedValue(response(value)));render(<Harness/>);await screen.findByText('foo:bar.service: service inactive');fireEvent.click(screen.getByText('Evidence & next check'));expect(screen.queryByRole('link',{name:'Open service logs'})).not.toBeInTheDocument();expect(screen.getByText(/A journal link is unavailable for this unit name/)).toBeVisible();
+ const value=fixture();value.devices[0].monitoredServices=['foo:bar.service'];value.devices[0].checks.push({key:'service:foo:bar.service',kind:'service',target:'foo:bar.service',state:'open',observedAt:now,value:null});value.items[0].incident={...value.items[0].incident,key:'service:foo:bar.service',kind:'service',target:'foo:bar.service'};vi.stubGlobal('fetch',vi.fn().mockResolvedValue(response(value)));render(<Harness/>);await screen.findByText('foo:bar.service: service inactive');fireEvent.click(screen.getByText('Evidence & next check'));expect(screen.queryByRole('link',{name:'Service logs'})).not.toBeInTheDocument();expect(screen.getByText(/A journal link is unavailable for this unit name/)).toBeVisible();
 });
 it('distinguishes a live page that shrank from an empty incident history',async()=>{
  const fetch=vi.fn().mockImplementation((url:string)=>{const params=new URL(url,'https://localhost').searchParams,offset=Number(params.get('offset'));return Promise.resolve(response(pagedFixture(params.get('scope') as InvestigationScope,offset,offset?49:51)));});vi.stubGlobal('fetch',fetch);render(<Harness/>);await screen.findByText('Root filesystem nearly full');fireEvent.click(screen.getByRole('button',{name:'All cases 51'}));await screen.findByText('1–50 / 51');fireEvent.click(screen.getByRole('button',{name:'Next'}));await screen.findByText('This page has changed');expect(screen.queryByText('No cases in this view')).not.toBeInTheDocument();fireEvent.click(screen.getByRole('button',{name:'Go to first page'}));await screen.findByText('1–50 / 51');
@@ -75,4 +75,13 @@ it('distinguishes a live page that shrank from an empty incident history',async(
 it('rejects impossible history counts and duplicate open incidents for the same check',()=>{
  const empty=fixture();empty.devices=[];empty.items=[];empty.counts={open:0,recovered:2500,closed:0,all:2500};empty.total=0;expect(validInvestigationsView(empty,'open',0)).toBe(false);
  const duplicate=fixture();duplicate.items.push({...duplicate.items[0],incident:{...duplicate.items[0].incident,id:'health_0000000000000002'}});duplicate.counts.open=duplicate.counts.all=duplicate.total=2;expect(validInvestigationsView(duplicate,'open',0)).toBe(false);
+});
+
+it('shows the next destination before evidence and omits repeated page headings', async () => {
+ const fetch=vi.fn().mockResolvedValue(response(fixture()));vi.stubGlobal('fetch',fetch);render(<Harness/>);
+ const link=await screen.findByRole('link',{name:'Check Health'});expect(link).toBeVisible();
+ expect(screen.getByText('Evidence & next check').closest('details')).not.toHaveAttribute('open');
+ expect(screen.queryByRole('heading',{name:'Open'})).not.toBeInTheDocument();
+ expect(screen.queryByText('Review stored health warnings and find the next check.')).not.toBeInTheDocument();
+ expect(fetch).toHaveBeenCalledTimes(1);expect(fetch.mock.calls[0][1].method).toBeUndefined();
 });

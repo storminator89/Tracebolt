@@ -42,8 +42,8 @@ describe('complete software overview', () => {
         expect(within(sample).getByText('211')).toBeVisible(); expect(mutateRaw).not.toHaveBeenCalled();
         expect(request).toHaveBeenCalledTimes(1); expect(vi.mocked(request).mock.calls[0][0]).toBe(`/devices/${completeDevice}/operational`);
         expect(screen.queryByText('Complete dpkg rows')).not.toBeInTheDocument();
-        fireEvent.click(sample); expect(screen.getByText(/Legacy bounded sample of installed packages/)).toBeVisible();
-        fireEvent.click(screen.getByRole('button', { name: 'Open complete Packages' }));
+        fireEvent.click(sample); expect(screen.getByText(/Bounded package sample/)).toBeVisible();
+        const packagesTab = screen.getByRole('tab', { name: 'Packages' }); packagesTab.focus(); fireEvent.click(packagesTab);
         await screen.findByRole('rowheader', { name: 'fixture-000000' });
         expect(screen.getByRole('tab', { name: 'Packages' })).toHaveAttribute('aria-selected', 'true');
         expect(screen.getByRole('tab', { name: 'Packages' })).toHaveFocus();

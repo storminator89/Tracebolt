@@ -88,7 +88,7 @@ describe('selected health checks and controls', () => {
     });
     it('opens scope details through native disclosure without changing the service draft or saving', async () => {
         render(<HealthPanel deviceId={id}/>);
-        const editor = await screen.findByRole('textbox', { name: 'Add an exact systemd service manually' });
+        const editor = await screen.findByRole('textbox', { name: 'Add service manually' });
         fireEvent.change(editor, { target: { value: 'edited.service' } });
         fireEvent.click(screen.getByRole('button', { name: 'Add service' }));
         const summary = screen.getByText('Check scope & limits', { selector: 'summary' });
@@ -103,7 +103,7 @@ describe('selected health checks and controls', () => {
         expect(summary.parentElement).not.toHaveAttribute('open');
         expect(summary).toHaveFocus();
         expect(screen.getByRole('list', { name: 'Selected services' })).toHaveTextContent('edited.service');
-        expect(screen.getByRole('button', { name: 'Save service selection' })).toBeEnabled();
+        expect(screen.getByRole('button', { name: 'Save selection' })).toBeEnabled();
         expect(request).toHaveBeenCalledTimes(1);
         expect(mutate).not.toHaveBeenCalled();
         act(() => setLocale('de', false));
@@ -124,14 +124,14 @@ describe('selected health checks and controls', () => {
         const view = fixture(); view.status = 'maintenance'; view.maintenanceUntil = '2026-10-05T04:05:00Z'; vi.mocked(mutate).mockResolvedValue(view);
         render(<HealthPanel deviceId={id}/>); const select = await screen.findByRole('combobox', { name: 'Duration from now' });
         expect(within(select).getAllByRole('option').map(x => (x as HTMLOptionElement).value)).toEqual(['15', '60', '240', '0']);
-        fireEvent.change(select, { target: { value: '240' } }); fireEvent.click(screen.getByRole('button', { name: 'Apply maintenance' })); await screen.findByText('Maintenance window active.');
+        fireEvent.change(select, { target: { value: '240' } }); fireEvent.click(screen.getByRole('button', { name: 'Apply' })); await screen.findByText('Maintenance window active.');
         expect(mutate).toHaveBeenCalledWith(`/devices/${id}/health/maintenance`, { minutes: 240 }, expect.any(AbortSignal));
     });
     it('validates service edits and submits the explicit sorted selection', async () => {
         const view = fixture(); view.monitoredServices = ['nginx.service', 'sshd.service']; view.checks.push({ key: 'service:nginx.service', kind: 'service', target: 'nginx.service', state: 'unknown', observedAt: null, value: null }); vi.mocked(mutate).mockResolvedValue(view);
-        render(<HealthPanel deviceId={id}/>); const editor = await screen.findByRole('textbox', { name: 'Add an exact systemd service manually' });
-        fireEvent.change(editor, { target: { value: '*.service' } }); expect(screen.getByRole('button', { name: 'Add service' })).toBeDisabled(); expect(screen.getByRole('button', { name: 'Save service selection' })).toBeDisabled(); expect(mutate).not.toHaveBeenCalled();
-        fireEvent.change(editor, { target: { value: 'nginx.service' } }); fireEvent.click(screen.getByRole('button', { name: 'Add service' })); expect(mutate).not.toHaveBeenCalled(); fireEvent.click(screen.getByRole('button', { name: 'Save service selection' }));
+        render(<HealthPanel deviceId={id}/>); const editor = await screen.findByRole('textbox', { name: 'Add service manually' });
+        fireEvent.change(editor, { target: { value: '*.service' } }); expect(screen.getByRole('button', { name: 'Add service' })).toBeDisabled(); expect(screen.getByRole('button', { name: 'Save selection' })).toBeDisabled(); expect(mutate).not.toHaveBeenCalled();
+        fireEvent.change(editor, { target: { value: 'nginx.service' } }); fireEvent.click(screen.getByRole('button', { name: 'Add service' })); expect(mutate).not.toHaveBeenCalled(); fireEvent.click(screen.getByRole('button', { name: 'Save selection' }));
         await waitFor(() => expect(within(screen.getByRole('list', { name: 'Selected services' })).getAllByRole('listitem').map(row => row.querySelector('span')!.textContent)).toEqual(['nginx.service', 'sshd.service']));
         expect(mutate).toHaveBeenCalledWith(`/devices/${id}/health/services`, { services: ['nginx.service', 'sshd.service'] }, expect.any(AbortSignal));
     });
@@ -139,7 +139,7 @@ describe('selected health checks and controls', () => {
         vi.mocked(mutate).mockRejectedValue(new APIError('raw secret from server', 503)); render(<HealthPanel deviceId={id}/>);
         fireEvent.click(await screen.findByRole('button', { name: /Acknowledge alert:/ })); await screen.findByRole('alert');
         expect(screen.getByRole('alert')).toHaveTextContent('Change not confirmed'); expect(document.body).not.toHaveTextContent('raw secret'); expect(screen.queryByRole('button', { name: /Acknowledge alert:/ })).not.toBeInTheDocument();
-        fireEvent.click(screen.getByRole('button', { name: 'Refresh health' })); await screen.findByRole('button', { name: /Acknowledge alert:/ }); expect(request).toHaveBeenCalledTimes(2); expect(mutate).toHaveBeenCalledTimes(1);
+        fireEvent.click(screen.getByRole('button', { name: 'Refresh' })); await screen.findByRole('button', { name: /Acknowledge alert:/ }); expect(request).toHaveBeenCalledTimes(2); expect(mutate).toHaveBeenCalledTimes(1);
     });
     it('suppresses repeated mutation clicks and ignores an unmounted reply', async () => {
         const d = deferred<HealthView>(); vi.mocked(mutate).mockReturnValue(d.promise); const { unmount } = render(<HealthPanel deviceId={id}/>);
@@ -155,7 +155,7 @@ describe('selected health checks and controls', () => {
 describe('health lifecycle and freshness', () => {
     it('rejects malformed responses instead of preserving previous current checks', async () => {
         vi.mocked(request).mockResolvedValueOnce(fixture()).mockResolvedValue({ ...fixture(), extra: 'sensitive value' }); render(<HealthPanel deviceId={id}/>); await screen.findByText(/94\.0% used/);
-        fireEvent.click(screen.getByRole('button', { name: 'Refresh health' })); await screen.findByRole('alert'); expect(screen.queryByRole('list', { name: 'Current checks' })).not.toBeInTheDocument(); expect(document.body).not.toHaveTextContent('sensitive value');
+        fireEvent.click(screen.getByRole('button', { name: 'Refresh' })); await screen.findByRole('alert'); expect(screen.queryByRole('list', { name: 'Current checks' })).not.toBeInTheDocument(); expect(document.body).not.toHaveTextContent('sensitive value');
     });
     it('discards late reads after device or session changes and aborts on unmount', async () => {
         const d = deferred<HealthView>(); vi.mocked(request).mockReturnValueOnce(d.promise); const { rerender, unmount } = render(<HealthPanel deviceId={id} sessionKey="first"/>);
@@ -173,7 +173,7 @@ describe('health lifecycle and freshness', () => {
     });
     it('locks and conceals values on auth loss, without polling or focus restoring access', async () => {
         render(<HealthPanel deviceId={id}/>); await screen.findByText('Selected checks need attention.'); act(() => window.dispatchEvent(new Event(AUTH_REQUIRED_EVENT)));
-        expect(screen.queryByRole('list', { name: 'Current checks' })).not.toBeInTheDocument(); expect(screen.getByRole('button', { name: 'Refresh health' })).toBeDisabled();
+        expect(screen.queryByRole('list', { name: 'Current checks' })).not.toBeInTheDocument(); expect(screen.getByRole('button', { name: 'Refresh' })).toBeDisabled();
         act(() => window.dispatchEvent(new Event('focus'))); expect(request).toHaveBeenCalledTimes(1);
     });
     it('rejects a response after the protected request epoch changes without a window event', async () => {
@@ -204,7 +204,7 @@ describe('health lifecycle and freshness', () => {
     });
     it('fails closed on manager clock rollback', async () => {
         vi.mocked(request).mockResolvedValueOnce(fixture()).mockResolvedValue({ ...fixture(), serverNow: '2026-10-04T00:00:00Z', evaluatedAt: null }); render(<HealthPanel deviceId={id}/>);
-        await screen.findByText('Selected checks need attention.'); fireEvent.click(screen.getByRole('button', { name: 'Refresh health' })); await screen.findByRole('alert'); expect(screen.queryByRole('list', { name: 'Current checks' })).not.toBeInTheDocument();
+        await screen.findByText('Selected checks need attention.'); fireEvent.click(screen.getByRole('button', { name: 'Refresh' })); await screen.findByRole('alert'); expect(screen.queryByRole('list', { name: 'Current checks' })).not.toBeInTheDocument();
     });
     it('does not write health snapshots or controls to browser storage', async () => {
         const spy = vi.spyOn(Storage.prototype, 'setItem'); render(<HealthPanel deviceId={id}/>); await screen.findByText('Selected checks need attention.'); expect(spy).not.toHaveBeenCalled();

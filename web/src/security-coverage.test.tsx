@@ -152,7 +152,7 @@ describe('memory-only catalog import and clear', () => {
         expect(document.body.textContent).not.toContain('private-source-label'); expect(document.body.textContent).not.toContain(unusual);
         expect(JSON.stringify({ ...localStorage, ...sessionStorage })).not.toContain('private-source-label');
         expect(JSON.stringify({ ...localStorage, ...sessionStorage })).not.toContain(unusual);
-        expect(screen.getByText('Rules in file')).toBeVisible(); expect(screen.getByText(/These counts describe this file’s format/)).toBeVisible(); expect(screen.queryByText('JSON file selected')).not.toBeInTheDocument();
+        expect(screen.getByText('Rules in file')).toBeVisible(); expect(screen.getByText(/File counts and declared scope only/)).toBeVisible(); expect(screen.queryByText('JSON file selected')).not.toBeInTheDocument();
     });
     it.each(['focus-before-change', 'change-before-focus'])('keeps native picker selection for %s without renewing its lease', async order => {
         await showCatalog(); act(() => window.dispatchEvent(new Event('blur'))); expect(screen.getByLabelText('Choose JSON file')).toBeInTheDocument();

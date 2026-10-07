@@ -1,5 +1,17 @@
 # Changelog
 
+## 2026-10-07 — Shorter pages and clearer task hierarchy
+
+- Remove repeated headings and framing across login, fleet, device tabs, inventory, security, investigations and settings. Keep the information needed to act: exact destination and data scope, explicit consent, source time, uncertainty, unavailable states and retained-data limits. Replace duplicate package navigation with direct controls and give mobile log messages the available width.
+- Extend the existing synthetic browser review with missing page, language and mobile captures. Keep real action execution free of screenshots; a separate invented display gallery aborts approval and execution. Requests, hooks, backend, installer and release pins are unchanged. Complete hosted rendering and visual acceptance remain required for this candidate.
+
+## 2026-10-07 — Measure Windows prerequisites before manual native acceptance
+
+- Add an ordinary read-only Windows prerequisite measurement using a separate exact-source executable. Export only finite supported/blocked/unverified facts; do not create services, keys, listeners, token grants or ACLs. A completed measurement is not service acceptance, and a rejected conservative ancestor policy does not prove actual LocalService denial. Never repair OS-root or existing ancestor ACLs to force a pass.
+- Prepare a separate workflow_dispatch-only Windows amd64 native subset requiring the exact clean source and five explicit, false-default scope approvals. It covers fixed create-only app resources, service/probe identity and access evidence, activation/reporting against an in-memory loopback TLS peer, bounded lifecycle waits and receipt-bound cleanup. Source publication does not dispatch it or grant host access.
+- Keep the existing Windows service and all Linux production code unchanged. The in-memory peer is not the production manager, database or dashboard; hidden-console input, real pending duration, actual shutdown/reboot and desktop/ARM64 runtime remain unproved. Static/fixture review and cross-builds are separate from future approved native execution.
+
+
 ## 2026-10-07 — Keep mobile device navigation visible
 
 - Reveal the selected device tab on mount, selection and resize using horizontal-only movement. Actual German mobile screenshots showed Capabilities selected while its tab remained outside the visible strip. Add named 44px previous/more controls only when the full row cannot fit; browsing those controls does not select a panel or start a data read. Preserve arrow/Home/End focus, panel permissions and manual strip position across unchanged metadata refreshes.

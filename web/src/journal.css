@@ -101,3 +101,16 @@
 .journal-review-modal .journal-ack.journal-warning{background:var(--panel)}
 .journal-review-modal .journal-actions{border-top:1px solid var(--line);padding-top:16px}
 @media(max-width:620px){.journal-service-trigger{min-height:52px}.journal-time-presets{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));width:100%}.journal-time-presets .button{padding:7px 4px;min-height:38px}.journal-picker-modal .dialog{padding:20px}.journal-picker-modal .journal-picker-rows{max-height:32vh}.journal-filters input,.journal-filters select{font-size:16px}.journal-review-modal .journal-ack{padding:12px}}
+
+/* Read each complete message on phones without horizontal table scrolling.
+   Explicit table roles retain row/column semantics after CSS reflow. */
+@media(max-width:620px){
+ .journal-table{display:block;min-width:0;width:100%}
+ .journal-table thead{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+ .journal-table tbody{display:block;width:100%}
+ .journal-table tbody tr{display:grid;grid-template-columns:minmax(0,1fr) auto;border-bottom:1px solid var(--line)}
+ .journal-table tbody tr:last-child{border-bottom:0}
+ .journal-table td{display:block;min-width:0;padding:10px 12px 4px;border:0;overflow-wrap:anywhere}
+ .journal-table td:nth-child(2){text-align:right}
+ .journal-table .journal-message{grid-column:1/-1;padding:4px 12px 12px;line-height:1.6}
+}

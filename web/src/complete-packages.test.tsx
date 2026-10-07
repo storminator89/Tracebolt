@@ -35,13 +35,13 @@ describe('complete dpkg inventory browsing', () => {
     });
     it('continues an empty 2048-row search window and finds a match beyond row 2299', async () => {
         view = completeView(2300); rows = completeRows(2300); await open();
-        fireEvent.change(screen.getByLabelText('Search the complete dpkg generation'), { target: { value: 'fixture-002299' } });
+        fireEvent.change(screen.getByLabelText('Search packages'), { target: { value: 'fixture-002299' } });
         expect(screen.queryByRole('table')).not.toBeInTheDocument(); fireEvent.click(screen.getByRole('button', { name: 'Search' }));
         await screen.findByText('No matches in this scan window. More rows remain; continue the search.'); expect(screen.queryByText('No matches in the complete generation.')).not.toBeInTheDocument();
         fireEvent.click(screen.getByRole('button', { name: 'Continue search' })); await screen.findByText('fixture-002299', { selector: 'th' }); expect(screen.getByText('2,300 / 2,300')).toBeVisible();
     });
     it('only reports no matches after exhausting the complete generation', async () => {
-        await open(); fireEvent.change(screen.getByLabelText('Search the complete dpkg generation'), { target: { value: 'absent-fixture' } }); fireEvent.click(screen.getByRole('button', { name: 'Search' })); await screen.findByText('No matches in the complete generation.');
+        await open(); fireEvent.change(screen.getByLabelText('Search packages'), { target: { value: 'absent-fixture' } }); fireEvent.click(screen.getByRole('button', { name: 'Search' })); await screen.findByText('No matches in the complete generation.');
     });
     it('keeps prior complete rows and original age when a newer transfer is pending or a collection attempt failed', async () => {
         view.complete!.binding.sequence = '1'; view.transfer = { binding: { sequence: '2', generationId: `sample_${'d'.repeat(32)}`, manifestHash: 'e'.repeat(64) }, state: 'pending', declaredRows: 500, acceptedRows: 128, expectedChunks: 4, acceptedChunks: 1, collectedAt: '2026-10-04T00:00:06Z', startedAt: '2026-10-04T00:00:07Z', expiresAt: '2026-10-04T00:15:07Z' };
@@ -68,7 +68,7 @@ describe('complete dpkg inventory browsing', () => {
     it('query edits cancel old results and start with an empty cursor', async () => {
         await open(); let resolve!: (value: CompletePackagePage) => void, signal!: AbortSignal;
         vi.mocked(mutateRaw).mockImplementationOnce(async (_path, _raw, _headers, supplied) => { signal = supplied!; return new Promise<CompletePackagePage>(done => { resolve = done; }); });
-        fireEvent.click(screen.getByRole('button', { name: 'Next 100 rows' })); await waitFor(() => expect(signal).toBeDefined()); fireEvent.change(screen.getByLabelText('Search the complete dpkg generation'), { target: { value: 'fixture-000349' } }); expect(signal.aborted).toBe(true);
+        fireEvent.click(screen.getByRole('button', { name: 'Next 100 rows' })); await waitFor(() => expect(signal).toBeDefined()); fireEvent.change(screen.getByLabelText('Search packages'), { target: { value: 'fixture-000349' } }); expect(signal.aborted).toBe(true);
         fireEvent.click(screen.getByRole('button', { name: 'Search' })); await screen.findByText('fixture-000349', { selector: 'th' });
         await act(async () => resolve(completePage(view, rows, JSON.stringify({ cursor: 'cursor_100', search: '', limit: 100 })))); expect(screen.queryByText('fixture-000100')).not.toBeInTheDocument(); expect(JSON.parse(vi.mocked(mutateRaw).mock.calls.at(-1)![1]).cursor).toBe('');
     });
@@ -89,7 +89,7 @@ describe('complete dpkg inventory browsing', () => {
         await open(); vi.mocked(mutateRaw).mockResolvedValueOnce(completePage(view, rows)); fireEvent.click(screen.getByRole('button', { name: 'Next 100 rows' })); await screen.findByText(/inconsistent or unsupported inventory/); expect(screen.queryByRole('table')).not.toBeInTheDocument();
     });
     it('provides German inventory labels without invented update or CVE counts', async () => {
-        setLocale('de', false); render(<CompletePackagesPanel deviceId={completeDevice}/>); fireEvent.click(screen.getByRole('button', { name: 'Vollständiges dpkg-Inventar' })); await screen.findByRole('table'); expect(screen.getByText('Installierte Zeilen')).toBeVisible(); expect(screen.getByText(/Snap, Flatpak und andere Softwarequellen/)).toBeVisible(); expect(document.body.textContent).not.toMatch(/0 CVEs|0 Updates/);
+        setLocale('de', false); render(<CompletePackagesPanel deviceId={completeDevice}/>); fireEvent.click(screen.getByRole('button', { name: 'Vollständiges dpkg-Inventar' })); await screen.findByRole('table'); expect(screen.getByText('Installierte Zeilen')).toBeVisible(); expect(screen.getByText(/Snap, Flatpak und andere Quellen/)).toBeVisible(); expect(document.body.textContent).not.toMatch(/0 CVEs|0 Updates/);
     });
     it.each(['rollback', 'forward', 'backward'] as const)('invalidates clock confidence on %s instead of extending observation age', async kind => {
         vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
@@ -104,7 +104,7 @@ describe('complete dpkg inventory browsing', () => {
         expect(screen.queryByRole('table')).not.toBeInTheDocument(); expect(screen.getByRole('alert')).toHaveTextContent('paging session expired or changed'); expect(mutateRaw).toHaveBeenCalledTimes(1);
     });
     it('rejects unsupported search text without sending it and preserves the ability to correct it', async () => {
-        await open(); fireEvent.change(screen.getByLabelText('Search the complete dpkg generation'), { target: { value: 'ä' } }); fireEvent.click(screen.getByRole('button', { name: 'Search' })); expect(screen.getByRole('alert')).toHaveTextContent('128 printable ASCII'); expect(mutateRaw).toHaveBeenCalledTimes(1);
-        fireEvent.change(screen.getByLabelText('Search the complete dpkg generation'), { target: { value: 'fixture-000349' } }); fireEvent.click(screen.getByRole('button', { name: 'Search' })); await screen.findByText('fixture-000349', { selector: 'th' });
+        await open(); fireEvent.change(screen.getByLabelText('Search packages'), { target: { value: 'ä' } }); fireEvent.click(screen.getByRole('button', { name: 'Search' })); expect(screen.getByRole('alert')).toHaveTextContent('128 printable ASCII'); expect(mutateRaw).toHaveBeenCalledTimes(1);
+        fireEvent.change(screen.getByLabelText('Search packages'), { target: { value: 'fixture-000349' } }); fireEvent.click(screen.getByRole('button', { name: 'Search' })); await screen.findByText('fixture-000349', { selector: 'th' });
     });
 });

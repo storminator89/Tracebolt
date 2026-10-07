@@ -47,7 +47,7 @@ describe('compact read-only status and meanings', () => {
         await start();
         for (const [label, value] of [['Provider accepted', '7'], ['Pending', '3'], ['Failed', '4'], ['Uncertain', '5'], ['Queued', '2'], ['In flight', '1'], ['Suppressed', '9'], ['Dropped', '11']]) expect(count(label)).toHaveTextContent(new RegExp(`^${value}$`));
         expect(panel()).toHaveTextContent('Provider acceptance does not confirm receipt by a person.');
-        expect(panel()).toHaveTextContent('Retained totals combine opening and recovery events, including previous destinations.');
+        expect(panel()).toHaveTextContent('Counts include opening/recovery events, previous destinations and synthetic tests;');
         expect(panel()).toHaveTextContent('not complete delivery history or per-event confirmation');
         expect(panel()).toHaveTextContent('not automatically replayed'); expect(panel()).toHaveTextContent('separate durable count');
         expect(panel()).not.toHaveTextContent('Delivered'); expect(panel().querySelector('time')).toHaveAttribute('datetime', '2026-10-06T12:00:00.000Z');

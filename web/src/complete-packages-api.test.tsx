@@ -17,7 +17,7 @@ describe('complete inventory through real bounded protected request helpers', ()
     it('uses authenticated same-origin GET and CSRF-protected JSON POST without queries or cursors in URLs', async () => {
         const view = completeView();
         const fetch = vi.fn().mockImplementation(async (path: string, options?: RequestInit) => path.endsWith('/query') ? response(completePage(view, completeRows(), options!.body as string)) : path === '/api/session' ? response({ csrfToken: 'synthetic-csrf' }) : response(view)); vi.stubGlobal('fetch', fetch);
-        open(); await screen.findByRole('table'); fireEvent.change(screen.getByLabelText('Search the complete dpkg generation'), { target: { value: 'fixture-000349' } }); fireEvent.click(screen.getByRole('button', { name: 'Search' })); await screen.findByText('fixture-000349', { selector: 'th' });
+        open(); await screen.findByRole('table'); fireEvent.change(screen.getByLabelText('Search packages'), { target: { value: 'fixture-000349' } }); fireEvent.click(screen.getByRole('button', { name: 'Search' })); await screen.findByText('fixture-000349', { selector: 'th' });
         const requests = fetch.mock.calls.filter(([path]) => path.endsWith('/query'));
         expect(requests).toHaveLength(2); expect(requests[1][1]).toMatchObject({ method: 'POST', credentials: 'same-origin', headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-CSRF-Token': 'synthetic-csrf' } });
         expect(JSON.parse(requests[1][1].body)).toEqual({ generationId: view.complete!.binding.generationId, cursor: '', search: 'fixture-000349', limit: 100 });

@@ -147,14 +147,14 @@ export function HealthPanel({ deviceId, sessionKey = null, onOpenLogs }: { devic
         }
     };
     return <section className="health-panel" aria-labelledby={`${uid}-heading`}>
-        <header className="health-heading"><h2 id={`${uid}-heading`}>{t('Health & Verlauf')}</h2><button type="button" className="button small" disabled={resource.pending || resource.locked} onClick={resource.refresh}><RefreshCw size={14} className={resource.pending ? 'spin' : undefined}/>{t('Health aktualisieren')}</button></header>
+        <header className="health-heading"><h2 id={`${uid}-heading`}>{t('Health & Verlauf')}</h2><button type="button" className="button small" disabled={resource.pending || resource.locked} onClick={resource.refresh}><RefreshCw size={14} className={resource.pending ? 'spin' : undefined}/>{t('Aktualisieren')}</button></header>
         <p className="health-note">{t('Agent-Kontakt · Root-Dateisystem / · ausgewählte Dienste')}</p>
         {resource.pending && <p className="health-note" role="status">{t('Health-Daten werden geprüft …')}</p>}
         {resource.failure && <p className="health-failure" role="alert">{errorText(resource.failure)}</p>}
         {view && <>
             <p className={`health-summary health-status-${view.status}`}>{view.status === 'attention' ? t('Ausgewählte Prüfungen benötigen Aufmerksamkeit.') : view.status === 'clear' ? t('Keine offenen Warnungen für die ausgewählten Prüfungen.') : view.status === 'maintenance' ? t('Wartungsfenster aktiv.') : t('Ausgewählte Prüfungen sind nicht vollständig bewertbar.')}</p>
             <p className="health-note">{t('Zuletzt ausgewertet:')} <Time value={view.evaluatedAt}/></p>
-            <h3>{t('Aktuelle Prüfungen')}</h3><ul className="health-checks" aria-label={t('Aktuelle Prüfungen')}>{view.checks.map(check => <li key={check.key}>
+            <ul className="health-checks" aria-label={t('Aktuelle Prüfungen')}>{view.checks.map(check => <li key={check.key}>
                 <div className="health-check-line"><strong>{label(check.kind, check.target)}</strong><span className={`health-state health-state-${check.state}`}>{check.state === 'ok' ? t('Schwelle nicht verletzt') : check.state === 'open' ? t('Warnung offen') : check.state === 'pending' ? t('Bestätigung ausstehend') : t('Unbekannt')}</span></div>
                 <p className="health-note">{check.state !== 'unknown' && check.kind === 'filesystem' && check.value !== null && <>{check.value.toFixed(1)}{t('% belegt · ')}</>}{t('Beobachtet:')} <Time value={check.observedAt}/></p>
                 {check.kind === 'service' && onOpenLogs && validJournalUnit(check.target) && <button type="button" className="text-button service-logs-link" aria-label={`${locale === 'de' ? 'Logs öffnen' : 'Open logs'}: ${check.target}`} onClick={() => onOpenLogs(check.target)}>{locale === 'de' ? 'Logs öffnen' : 'Open logs'}</button>}
@@ -162,25 +162,25 @@ export function HealthPanel({ deviceId, sessionKey = null, onOpenLogs }: { devic
             <div className="health-controls">
                 <form onSubmit={event => { event.preventDefault(); if (!disabled) void resource.change('maintenance', { minutes }); }}><h3>{t('Wartungsfenster')}</h3>
                     <p className="health-note">{view.maintenanceUntil ? <>{t('Wartung bis:')} <Time value={view.maintenanceUntil}/></> : t('Kein Wartungsfenster aktiv.')}</p>
-                    <label htmlFor={`${uid}-maintenance`}>{t('Dauer ab jetzt')}</label><div className="health-control-row"><select id={`${uid}-maintenance`} value={minutes} disabled={resource.locked} onChange={event => setMinutes(Number(event.target.value) as typeof minutes)}><option value={15}>{t('15 Minuten')}</option><option value={60}>{t('1 Stunde')}</option><option value={240}>{t('4 Stunden')}</option><option value={0}>{t('Wartung beenden')}</option></select><button className="button small" disabled={disabled} type="submit">{t('Wartung anwenden')}</button></div>
+                    <label htmlFor={`${uid}-maintenance`}>{t('Dauer ab jetzt')}</label><div className="health-control-row"><select id={`${uid}-maintenance`} value={minutes} disabled={resource.locked} onChange={event => setMinutes(Number(event.target.value) as typeof minutes)}><option value={15}>{t('15 Minuten')}</option><option value={60}>{t('1 Stunde')}</option><option value={240}>{t('4 Stunden')}</option><option value={0}>{t('Wartung beenden')}</option></select><button className="button small" disabled={disabled} type="submit">{t('Anwenden')}</button></div>
                     <p className="health-note">{t('Wartung unterdrückt neue Warnungen. Bestehende Vorfälle bleiben sichtbar.')}</p>
                 </form>
                 <form onSubmit={event => { event.preventDefault(); void saveServices(); }}><h3>{t('Dienste auswählen')}</h3>
                     <HealthServicePicker deviceId={deviceId} sessionKey={sessionKey} selected={draft} disabled={resource.locked || !view} onChange={next => setSelection(current => current.scope === scope ? { ...current, draft: next, dirty: true, revision: current.revision + 1 } : current)}/>
-                    <button className="button small" disabled={disabled || services === null || !dirty} type="submit">{t('Dienstauswahl speichern')}</button>
+                    <button className="button small" disabled={disabled || services === null || !dirty} type="submit">{t('Auswahl speichern')}</button>
                 </form>
             </div>
-            <h3>{t('Warnungsverlauf')}</h3>{view.incidents.length === 0 ? <p className="health-note">{t('Keine Vorfälle im gespeicherten Verlauf. Dies bewertet keine weiteren Gerätefunktionen.')}</p> : <ul className="health-incidents" aria-label={t('Warnungsverlauf')}>{view.incidents.map(incident => <li key={incident.id}>
+            <h3>{t('Warnungsverlauf')}</h3>{view.incidents.length === 0 ? <p className="health-note">{t('Keine gespeicherten Vorfälle. Andere Gerätefunktionen sind nicht bewertet.')}</p> : <ul className="health-incidents" aria-label={t('Warnungsverlauf')}>{view.incidents.map(incident => <li key={incident.id}>
                 <div className="health-incident-line"><strong>{label(incident.kind, incident.target)}</strong><span className="health-state">{incident.resolvedAt ? incident.closedReason === 'monitoring_stopped' ? t('Überwachung beendet') : t('Erholt') : t('Warnung offen')}</span></div>
                 <dl><div><dt>{t('Begonnen')}</dt><dd><Time value={incident.openedAt}/></dd></div><div><dt>{t('Zuletzt beobachtet')}</dt><dd><Time value={incident.lastObservedAt}/></dd></div>{incident.resolvedAt && <div><dt>{incident.closedReason === 'monitoring_stopped' ? t('Geschlossen') : t('Erholt')}</dt><dd><Time value={incident.resolvedAt}/></dd></div>}{incident.acknowledgedAt && <div><dt>{t('Bestätigt')}</dt><dd><Time value={incident.acknowledgedAt}/></dd></div>}</dl>
                 {!incident.acknowledgedAt && <button type="button" className="button small" disabled={disabled} onClick={() => void resource.change('acknowledge', { incidentId: incident.id })} aria-label={t('Warnung bestätigen: {0}', { 0: label(incident.kind, incident.target) })}>{t('Warnung bestätigen')}</button>}
             </li>)}</ul>}
-            <p className="health-note">{t('Bestätigen dokumentiert die Kenntnisnahme; es behebt oder schließt keinen Vorfall.')}</p>
+            <p className="health-note">{t('Bestätigen schließt oder behebt den Vorfall nicht.')}</p>
         </>}
         <details className="health-policy">
             <summary>{t('Prüfumfang & Grenzen')}</summary>
             <p className="health-note">{t('Nur Agent-Kontakt, Root-Dateisystem / und ausdrücklich ausgewählte Dienste. Der Manager muss für die Auswertung laufen.')}</p>
-            <p className="health-note">{t('Die sichtbare Ansicht wird alle 30 Sekunden neu gelesen. Fehlende oder veraltete Beobachtungen bleiben unbekannt.')}</p>
+            <p className="health-note">{t('Aktualisierung alle 30 Sekunden. Fehlende oder alte Beobachtungen bleiben unbekannt.')}</p>
             <p className="health-note">{t('Gespeicherter Verlauf: höchstens 100 Vorfälle pro Gerät.')}</p>
             <p className="health-note">{t('Kontakt: nach mehr als 2 Minuten ohne Übertragung und weiteren 60 Sekunden Bestätigung. Root-Dateisystem: ab 90 % für 120 Sekunden; Erholung bei höchstens 85 % für 60 Sekunden. Ausgewählte Dienste: inaktiv für 120 Sekunden; Erholung nach 60 Sekunden aktiv. Fehlende Beobachtungen bestätigen keine Erholung.')}</p>
         </details>

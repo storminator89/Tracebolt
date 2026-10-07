@@ -88,3 +88,11 @@ body{overflow:hidden}
 @media(min-width:1100px){.device-overview-summary{grid-template-columns:repeat(2,minmax(0,1fr))}}
 
 .ai-persistence-options{padding:12px;border:1px solid var(--line);border-radius:6px;margin:0 0 17px;overflow-wrap:anywhere}.ai-persistence-options>p{font-size:10px;line-height:1.7;color:var(--secondary);margin:8px 0}.ai-persistence-options>.field-warning{color:var(--warning)}.ai-persistence-options>.check-field:not(:first-child){margin-top:10px}@media(max-width:760px){.ai-persistence-options>p{font-size:11px}}
+
+/* Compact framing: labels explain the view; repeated introductions are omitted. */
+.demo-banner{flex-wrap:nowrap;align-items:center}
+.demo-banner .demo-banner-label{flex:0 0 auto}
+.demo-banner>span:nth-child(2){order:0;flex:1 1 auto;min-width:0}
+.finding-label>h2{display:flex;align-items:center;gap:7px;margin:0}
+.finding-label{margin-bottom:12px}
+.shortcuts-modal dl{margin-top:16px}

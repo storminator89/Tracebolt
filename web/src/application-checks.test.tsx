@@ -27,7 +27,7 @@ afterEach(() => { cleanup(); abortProtectedRequests(); vi.useRealTimers(); vi.re
 describe('compact retained application observations', () => {
     it('shows independent HTTP success and expiring leaf certificate with original observation time', async () => {
         await start(); const content = panel(); expect(content).toHaveTextContent('204 · 2xx'); expect(content).toHaveTextContent('Expiring soon');
-        expect(content).toHaveTextContent('HTTP/TLS observations from the management server.'); expect(content).toHaveTextContent('0s ago');
+        expect(content).toHaveTextContent('HTTP/TLS checks from the manager.'); expect(content).toHaveTextContent('0s ago');
         expect(content.querySelector('td:last-child time')).toHaveAttribute('datetime', applicationNow); expect(content.querySelectorAll('tbody tr')).toHaveLength(1);
         expect(within(content).getAllByRole('button')).toHaveLength(1); expect(content.querySelector('input,select')).toBeNull();
         expect(vi.mocked(request).mock.calls[0]).toEqual(['/application-checks/status', { signal: expect.any(AbortSignal), cache: 'no-store' }, APPLICATION_CHECKS_BYTES]);

@@ -14,12 +14,12 @@ const copy = {
         error: 'Alarm status could not be confirmed. Refresh to try again.', invalid: 'The manager returned an unsupported alarm status. Refresh to try again.', timeout: 'The manager did not respond in time. Refresh to try again.',
         session: 'Your session has ended. Sign in again.', paused: 'Refresh alarm status to load a new snapshot.', previous: 'Previous snapshot', loaded: 'Loaded', configuration: 'Delivery in this snapshot',
         acceptance: 'Provider acceptance does not confirm receipt by a person.',
-        scope: 'Retained totals combine opening and recovery events, including previous destinations. Explicit synthetic tests are also counted. They are not complete delivery history or per-event confirmation.',
-        pendingNote: 'Pending is queued plus in flight. Queued events are waiting; in-flight events have no recorded outcome yet.',
+        scope: 'Counts include opening/recovery events, previous destinations and synthetic tests; not complete delivery history or per-event confirmation.',
+        pendingNote: 'Pending = queued + in flight. Queued events wait; in-flight outcomes are unknown.',
         failedNote: 'Failed events ended without provider acceptance. Uncertain events may have been accepted; they are not automatically replayed.',
-        suppressedNote: 'Suppressed events are no longer eligible to send. Dropped is a separate durable count of events that could not be queued at capacity, not a retained state or successful delivery.',
+        suppressedNote: 'Suppressed: no longer eligible to send. Dropped: separate durable count of events rejected at queue capacity, not a retained state or successful delivery.',
         disabled: 'Delivery is disabled in manager configuration. Retained counts, if any, remain visible.',
-        snapshot: 'Snapshot only. Loaded time uses this browser’s clock, not an event or server observation time. Refresh reads the manager’s saved counts.',
+        snapshot: 'Loaded time is this browser’s time, not an event or server observation. Refresh reads saved counts.',
     },
     de: {
         title: 'Alarmversand', on: 'Ein', off: 'Aus', unknown: 'Unbekannt', refresh: 'Alarmstatus aktualisieren', loading: 'Alarmstatus wird geladen…', details: 'Details',
@@ -27,12 +27,12 @@ const copy = {
         error: 'Der Alarmstatus konnte nicht bestätigt werden. Zum Wiederholen aktualisieren.', invalid: 'Der Manager lieferte einen nicht unterstützten Alarmstatus. Zum Wiederholen aktualisieren.', timeout: 'Der Manager hat nicht rechtzeitig geantwortet. Zum Wiederholen aktualisieren.',
         session: 'Die Sitzung ist beendet. Erneut anmelden.', paused: 'Alarmstatus aktualisieren, um einen neuen Stand zu laden.', previous: 'Vorheriger Stand', loaded: 'Geladen', configuration: 'Versand in diesem Stand',
         acceptance: 'Die Annahme durch den Anbieter bestätigt keinen Empfang durch eine Person.',
-        scope: 'Gespeicherte Summen umfassen Beginn- und Erholungsereignisse sowie frühere Ziele. Explizite synthetische Tests werden ebenfalls gezählt. Sie sind weder ein vollständiger Versandverlauf noch eine Bestätigung einzelner Ereignisse.',
-        pendingNote: 'Ausstehend umfasst Warteschlange und laufende Übertragungen. Ereignisse in der Warteschlange warten auf ihren nächsten Versuch; bei laufenden Übertragungen fehlt das Ergebnis.',
+        scope: 'Zähler umfassen Beginn/Erholung, frühere Ziele und synthetische Tests; kein vollständiger Versandverlauf oder Einzelnachweis.',
+        pendingNote: 'Ausstehend = Warteschlange + laufende Übertragungen. Bei laufenden Übertragungen fehlt das Ergebnis.',
         failedNote: 'Fehlgeschlagene Ereignisse endeten ohne Anbieterannahme. Ungewisse Ereignisse können angenommen worden sein und werden nicht automatisch wiederholt.',
-        suppressedNote: 'Unterdrückte Ereignisse werden nicht mehr zum Versand freigegeben. Verworfen zählt separat und dauerhaft Ereignisse, die bei erreichter Kapazität nicht eingereiht werden konnten, keinen gespeicherten Zustand oder erfolgreichen Versand.',
+        suppressedNote: 'Unterdrückt: nicht mehr zum Versand freigegeben. Verworfen: separater dauerhafter Zähler für bei voller Warteschlange abgewiesene Ereignisse, kein gespeicherter Zustand oder erfolgreicher Versand.',
         disabled: 'Der Versand ist in der Manager-Konfiguration deaktiviert. Vorhandene gespeicherte Zähler bleiben sichtbar.',
-        snapshot: 'Ein geladener Stand. Die Ladezeit stammt aus der Browser-Uhr, nicht vom Ereignis oder einer Manager-Beobachtung. Aktualisieren liest die gespeicherten Zähler des Managers.',
+        snapshot: 'Ladezeit laut Browser, keine Ereignis- oder Manager-Beobachtungszeit. Aktualisieren liest gespeicherte Zähler.',
     },
 };
 type Failure = 'error' | 'invalid' | 'timeout' | 'session' | 'paused';
@@ -126,7 +126,7 @@ function AlarmStatusContent() {
         </dl><p className="alarm-acceptance">{labels.acceptance}</p></>}
         <details className="alarm-details"><summary>{labels.details}<ChevronDown size={14} aria-hidden="true"/></summary><div>
             {view && <><dl className="alarm-breakdown"><div><dt>{labels.configuration}</dt><dd>{view.enabled ? labels.on : labels.off}</dd></div>{(['queued', 'inFlight', 'suppressed', 'dropped'] as const).map(key => <div key={key}><dt>{labels[key]}</dt><dd>{count(view[key])}</dd></div>)}</dl>{!view.enabled && <p>{labels.disabled}</p>}</>}
-            <p>{labels.scope}</p><p>{labels.pendingNote}</p><p>{labels.failedNote}</p><p>{labels.suppressedNote}</p><p>{labels.acceptance}</p><p>{labels.snapshot}</p>
+            <p>{labels.scope}</p><p>{labels.pendingNote}</p><p>{labels.failedNote}</p><p>{labels.suppressedNote}</p><p>{labels.snapshot}</p>
         </div></details>
     </section>;
 }

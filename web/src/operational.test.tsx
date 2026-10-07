@@ -133,7 +133,7 @@ describe('read-only operational inventory', () => {
         expect(screen.getByText(/Message text is never included/)).toBeVisible();
         expect(request).toHaveBeenCalledOnce(); expect(screen.getAllByText('Unknown · Not assessed')).toHaveLength(2);
         expect(screen.getByText(/These observations stay outside AI evidence/)).toBeVisible();
-        expect(screen.getByText('Scope: the agent-visible OS namespace. Service sandboxing can limit mount, process and journal coverage.')).toBeVisible();
+        expect(screen.getByText('Agent-visible namespace only; the service sandbox can limit mounts, processes and journals.')).toBeVisible();
     });
     it('does not replace unknown measurements with zero or imply absent vulnerabilities', async () => {
         render(<OperationalInventoryPanel deviceId="agent_fixture"/>); await screen.findByText('/fixture');
@@ -166,7 +166,7 @@ describe('read-only operational inventory', () => {
         expect(screen.queryByRole('button', { name: /next|page/i })).not.toBeInTheDocument();
         fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'missing-package' } });
         expect(screen.getByText('No received records match this filter.')).toBeVisible(); expect(screen.getByText('0 matches in this received sample')).toBeVisible();
-        expect(screen.getByText(/sample cannot prove that a package is absent/)).toBeVisible(); expect(request).toHaveBeenCalledOnce();
+        expect(screen.getByText(/sample; cannot prove absence/)).toBeVisible(); expect(request).toHaveBeenCalledOnce();
     });
     it('distinguishes loaded system services and grouped source-event counts', async () => {
         render(<OperationalInventoryPanel deviceId="agent_fixture"/>); await screen.findByText('/fixture');
@@ -196,7 +196,7 @@ describe('read-only operational inventory', () => {
     });
     it('supports German and live locale switching without another inventory request', async () => {
         setLocale('de', false); render(<OperationalInventoryPanel deviceId="agent_fixture"/>); await screen.findByText('/fixture');
-        expect(screen.getByRole('heading', { name: 'Betriebsinventar' })).toBeVisible(); expect(screen.getByText(/für den Agenten sichtbare Betriebssystem-Namensraum/)).toBeVisible(); expect(screen.getAllByText('Unbekannt · Nicht bewertet')).toHaveLength(2);
+        expect(screen.getByRole('heading', { name: 'Betriebsinventar' })).toBeVisible(); expect(screen.getByText(/sichtbarer Agent-Namensraum/)).toBeVisible(); expect(screen.getAllByText('Unbekannt · Nicht bewertet')).toHaveLength(2);
         act(() => setLocale('en', false)); expect(screen.getByRole('heading', { name: 'Operational inventory' })).toBeVisible(); expect(request).toHaveBeenCalledOnce();
     });
 });

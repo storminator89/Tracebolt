@@ -21,7 +21,7 @@ describe('compact log workspace presentation', () => {
         expect(screen.getByText('Log sources', { selector: 'h3' })).not.toBeVisible();
         expect(r.create).not.toHaveBeenCalled(); expect(r.refresh).not.toHaveBeenCalled(); expect(r.cancelRequest).not.toHaveBeenCalled();
         fireEvent.click(screen.getByText('Advanced', { selector: 'summary' })); expect(screen.getByLabelText('Exact service unit')).toBeVisible();
-        expect(screen.getByText(/Reference time \(UTC, last checked manager time\):/, { selector: '.journal-advanced p' })).toHaveTextContent(journalNow);
+        expect(screen.getByText(/Last checked manager time \(UTC\):/, { selector: '.journal-advanced p' })).toHaveTextContent(journalNow);
         fireEvent.click(screen.getByText('Permissions & sources', { selector: 'summary' })); expect(screen.getByText('Log sources', { selector: 'h3' })).toBeVisible();
     });
     it('announces one active loading status while retaining the prior snapshot status as context', () => {

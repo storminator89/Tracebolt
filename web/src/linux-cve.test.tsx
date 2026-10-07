@@ -106,7 +106,7 @@ describe('Linux CVE warnings panel', () => {
     it('does not claim checked records or an evaluated zero when processing is incomplete', async () => {
         const view = incompleteLinuxCVEView(); view.report!.findings = []; view.report!.coverage.matchedFindingCount = 0; view.report!.coverage.matchedWarningCount = 0;
         await show(view); expect(screen.getByText('No matches found so far. Checks remain pending.')).toBeVisible();
-        expect(screen.queryByText(/Planned checks finished|No package\/version matches in the loaded records/)).not.toBeInTheDocument();
+        expect(screen.queryByText(/Checks complete|No package\/version matches in the loaded records/)).not.toBeInTheDocument();
         expect(screen.getByText('Package warnings').previousElementSibling).toHaveTextContent('≥ 0');
     });
     it.each([false, true])('uses total warning counts when matched rows are omitted (all=%s)', async all => {

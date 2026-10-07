@@ -24,7 +24,7 @@ describe('complete process and mount panels', () => {
     });
     it('shows all 85 mounts with measured local grouping and namespace/sum limitations', async () => {
         open('volumes'); await screen.findByText('/fixture-000084'); expect(screen.getByText('Complete enumeration rows').nextElementSibling).toHaveTextContent('85'); expect(screen.getByText('Rows on this page').nextElementSibling).toHaveTextContent('85');
-        expect(screen.getByText(/not a physical-host disk inventory/)).toHaveTextContent('do not sum capacities'); expect(screen.getByText('Measured local filesystems')).toHaveTextContent('on this page'); expect(screen.getAllByText('N/A · zero capacity')).toHaveLength(85);
+        expect(screen.getByText(/not physical disks/)).toHaveTextContent('do not sum capacities'); expect(screen.getByText('Measured local filesystems')).toHaveTextContent('on this page'); expect(screen.getAllByText('N/A · zero capacity')).toHaveLength(85);
     });
     it('renders actual Go process zero values, missing outcomes, latest failure, and original independent ages', async () => {
         const f = overviewGolden(); view = f.view; vi.mocked(mutateRaw).mockResolvedValue(f.processPage); open(); await screen.findByRole('table');
@@ -48,7 +48,7 @@ describe('complete process and mount panels', () => {
     });
     it('searches across scan windows rather than filtering only the visible page', async () => {
         view = overviewView(2200); vi.mocked(mutateRaw).mockImplementation(async (_path, raw) => overviewPage(view, processRows(2200), volumeRows(), raw)); open(); await screen.findByRole('table');
-        fireEvent.change(screen.getByLabelText('Search this complete section'), { target: { value: 'fixture-process-002199' } }); expect(screen.queryByRole('table')).not.toBeInTheDocument(); fireEvent.click(screen.getByRole('button', { name: 'Search from first page' }));
+        fireEvent.change(screen.getByLabelText('Search this section'), { target: { value: 'fixture-process-002199' } }); expect(screen.queryByRole('table')).not.toBeInTheDocument(); fireEvent.click(screen.getByRole('button', { name: 'Search' }));
         await screen.findByText('No matches in this scan window. More rows remain; continue searching.'); expect(screen.getByText('Rows scanned so far').nextElementSibling).toHaveTextContent('2,048 / 2,200'); fireEvent.click(screen.getByRole('button', { name: 'Continue search' })); await screen.findByText('fixture-process-002199'); expect(screen.getByText('Rows scanned so far').nextElementSibling).toHaveTextContent('2,200 / 2,200');
         expect(screen.getByText('Matches found so far').nextElementSibling).toHaveTextContent('1');
     });
@@ -109,9 +109,9 @@ describe('complete process and mount panels', () => {
     it('search changes cancel an in-flight page and unsupported search is never sent', async () => {
         open(); await screen.findByRole('table'); let finish!: (value: OverviewPage) => void, signal!: AbortSignal;
         vi.mocked(mutateRaw).mockImplementationOnce(async (_p, _r, _h, s) => { signal = s!; return new Promise<OverviewPage>(resolve => { finish = resolve; }); }); fireEvent.click(screen.getByRole('button', { name: 'Next page' })); await waitFor(() => expect(finish).toBeDefined());
-        fireEvent.change(screen.getByLabelText('Search this complete section'), { target: { value: 'ä' } }); expect(signal.aborted).toBe(true); fireEvent.click(screen.getByRole('button', { name: 'Search from first page' })); expect(screen.getByRole('alert')).toHaveTextContent('128 printable ASCII'); await act(async () => finish(overviewPage(view, processRows(), volumeRows(), query('processes', 'cursor_100')))); expect(screen.queryByRole('table')).not.toBeInTheDocument(); expect(mutateRaw).toHaveBeenCalledTimes(2);
+        fireEvent.change(screen.getByLabelText('Search this section'), { target: { value: 'ä' } }); expect(signal.aborted).toBe(true); fireEvent.click(screen.getByRole('button', { name: 'Search' })); expect(screen.getByRole('alert')).toHaveTextContent('128 printable ASCII'); await act(async () => finish(overviewPage(view, processRows(), volumeRows(), query('processes', 'cursor_100')))); expect(screen.queryByRole('table')).not.toBeInTheDocument(); expect(mutateRaw).toHaveBeenCalledTimes(2);
     });
     it('does not request private rows for an unauthenticated operator and retains German UI', async () => {
-        operator.authenticated = false; const r = open(); expect(screen.getByText('Authenticated LAN operator access is required.')).toBeVisible(); expect(request).not.toHaveBeenCalled(); r.unmount(); operator.authenticated = true; setLocale('de', false); open(); await screen.findByRole('table'); expect(screen.getByRole('heading', { name: 'Prozesse · vollständige sichtbare Aufzählung' })).toBeVisible(); expect(screen.getByRole('button', { name: 'Nächste Seite' })).toBeVisible();
+        operator.authenticated = false; const r = open(); expect(screen.getByText('Authenticated LAN operator access is required.')).toBeVisible(); expect(request).not.toHaveBeenCalled(); r.unmount(); operator.authenticated = true; setLocale('de', false); open(); await screen.findByRole('table'); expect(screen.getByRole('heading', { name: 'Prozesse' })).toBeVisible(); expect(screen.getByRole('button', { name: 'Nächste Seite' })).toBeVisible();
     });
 });

@@ -76,7 +76,7 @@ describe('provider persistence contract', () => {
     });
     it('does not opt in or reuse a saved key on readback; unchecked saving explicitly replaces persisted mode', async () => {
         await start({ ...persisted, keyConfigured: true }); expect(remember()).not.toBeChecked(); expect(screen.getByLabelText('AI API key')).toHaveValue('');
-        expect(screen.getByText(/Any previously saved configuration and its proactive approval are removed/)).toBeVisible();
+        expect(screen.getByText(/Saving removes any previously saved configuration and proactive approval/)).toBeVisible();
         expect(screen.queryByText(/After a restart, the provider/)).not.toBeInTheDocument();
         vi.mocked(mutate).mockResolvedValue({ ...memory, revision: 'config-next' }); fireEvent.click(save()); await flush();
         expect(mutate).toHaveBeenCalledExactlyOnceWith('/ai/config', change(persisted), expect.any(AbortSignal));

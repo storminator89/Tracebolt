@@ -11,14 +11,14 @@ const copy = {
     en: {
         title: 'Software · complete dpkg inventory', rows: 'Complete dpkg rows', incomplete: 'Incomplete rows',
         open: 'Open Packages', refresh: 'Refresh software overview', historical: 'Historical generation details', details: 'Generation details',
-        unavailable: 'No currently available complete generation. A bounded sample or declared transfer count is not a complete software total.',
-        scope: 'Installed and incomplete dpkg rows in the agent-visible namespace. Snap, Flatpak and other software sources are not included.',
+        unavailable: 'No complete generation available. Samples and pending transfer counts are not software totals.',
+        scope: 'Installed and incomplete dpkg rows in the agent namespace. Excludes Snap, Flatpak and other sources.',
     },
     de: {
         title: 'Software · vollständiges dpkg-Inventar', rows: 'Vollständige dpkg-Zeilen', incomplete: 'Unvollständige Zeilen',
         open: 'Pakete öffnen', refresh: 'Softwareübersicht aktualisieren', historical: 'Historische Generationsdetails', details: 'Generationsdetails',
-        unavailable: 'Derzeit keine vollständige Generation verfügbar. Eine begrenzte Stichprobe oder deklarierte Übertragungszahl ist keine vollständige Softwareanzahl.',
-        scope: 'Installierte und unvollständige dpkg-Einträge im für den Agent sichtbaren Namensraum. Snap, Flatpak und andere Softwarequellen sind nicht enthalten.',
+        unavailable: 'Keine vollständige Generation verfügbar. Stichproben und laufende Übertragungen sind keine Software-Gesamtzahlen.',
+        scope: 'Installierte und unvollständige dpkg-Einträge im Agent-Namensraum. Ohne Snap, Flatpak und andere Quellen.',
     },
 };
 
@@ -49,7 +49,7 @@ function SoftwareOverviewSession({ deviceId, onOpenPackages }: { deviceId: strin
         </details>
     </>;
     return <section className="software-overview package-observations" aria-labelledby={id} aria-busy={resource.loading}>
-        <header className="package-heading"><h2 id={id}><Boxes size={18}/>{labels.title}</h2><button className="button small" type="button" disabled={resource.loading || resource.error === 'session'} onClick={resource.refresh}><RefreshCw size={14}/>{labels.refresh}</button></header>
+        <header className="package-heading"><h2 id={id}><Boxes size={18}/>{labels.title}</h2><button className="button small" type="button" disabled={resource.loading || resource.error === 'session'} onClick={resource.refresh} aria-label={labels.refresh} title={labels.refresh}><RefreshCw size={14}/>{locale === 'de' ? 'Aktualisieren' : 'Refresh'}</button></header>
         <p className="package-note">{labels.scope}</p>
         {resource.loading && <p role="status">{resource.recovering ? locale === 'de' ? 'Der Speicher ist ausgelastet. Ein automatischer Leseversuch folgt in 2 Sekunden.' : 'Storage is busy. One automatic read retry in 2 seconds.' : facts.loading}</p>}
         {resource.error && <p role="alert" className="package-error">{facts[resource.error]}</p>}

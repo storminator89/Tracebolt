@@ -2,6 +2,7 @@
 import { beforeEach, afterEach, describe, expect, it, vi } from '../../web/node_modules/vitest/dist/index.js';
 import { cleanup, render, screen, fireEvent, waitFor } from '../../web/node_modules/@testing-library/react/dist/index.js';
 import App from '../../web/src/App';
+import { conciseShellFixture } from './concise-shell-gallery.mjs';
 import { defaultFilters, filterDevices, decodeRouteId, csvCell, noteBytes } from '../../web/src/utils';
 import { applicationStatusFixture, applicationHTTPStatusFixture, applicationMixedStatusFixture } from './application-checks-browser.mjs';
 import { applicationObservationAge, projectApplicationCheck, validApplicationChecksView } from '../../web/src/application-checks-types';
@@ -83,5 +84,22 @@ import { validInvestigationsView } from '../../web/src/investigations-types';
 describe('Hosted Investigations DTO contract',()=>{
  it('accepts exact invented issue, stale, unknown and renewed DTOs with the production validator',()=>{
   for(const phase of ['issue','stale','unknown','renewed']) expect(validInvestigationsView(investigationsFixture(phase),'open',0)).toBe(true);
+ });
+});
+
+
+describe('Public-safe concise shell gallery boundary', () => {
+ it('excludes real, mixed-reference and unrelated activity and rebuilds counts from demo records only', () => {
+  const demo = {...device, id:'demo-win-01'}, real = {...device,id:'agent_private',synthetic:false,name:'PRIVATE'};
+  const sample = conciseShellFixture({...overview, privateExtra:'PRIVATE', devices:[demo,real,{...real,synthetic:true}], cases:[
+   {id:'case-demo-valid',deviceId:demo.id,synthetic:true,status:'open',severity:'critical'},
+   {id:'case-private',deviceId:real.id,synthetic:false,status:'open',severity:'critical'},
+  ],activity:[{id:'demo',deviceId:demo.id},{id:'case-demo',caseId:'case-demo-valid'},{id:'mixed',deviceId:demo.id,caseId:'case-private'}, {id:'private',deviceId:real.id},{id:'unrelated'}]});
+  expect(sample.devices.map((item:any)=>item.id)).toEqual(['demo-win-01']);
+  expect(sample.cases.map((item:any)=>item.id)).toEqual(['case-demo-valid']);
+  expect(sample.activity.map((item:any)=>item.id)).toEqual(['demo','case-demo']);
+  expect(sample.stats).toEqual({totalDevices:1,healthyDevices:0,attentionDevices:1,unknownDevices:0,openCases:1,criticalCases:1});
+  expect(JSON.stringify(sample)).not.toContain('PRIVATE');
+  expect(sample).not.toHaveProperty('privateExtra');
  });
 });

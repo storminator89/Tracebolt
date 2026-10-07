@@ -46,7 +46,7 @@ describe('independent conditional review boundary', () => {
         await screen.findByRole('article');
         expect(screen.getByText('00002:1.0~rc1-1+b7')).toBeVisible();
         expect(screen.getByText('2:1.0-1+deb13u1')).toBeVisible();
-        expect(screen.getByText(/Affected CVEs: unknown. Offered updates: unknown./)).toBeVisible();
+        expect(screen.getByText(/Affected CVEs and available updates remain unknown./)).toBeVisible();
         expect(fetch).toHaveBeenCalledExactlyOnceWith('/api/devices/agent_review_independent/security/review', expect.objectContaining({ credentials: 'same-origin', headers: { Accept: 'application/json' } }));
         expect(storage).not.toHaveBeenCalled();
     });
@@ -96,7 +96,7 @@ describe('independent conditional review boundary', () => {
         expect(validAdvisoryReviewView(value, value.deviceId)).toBe(true);
         vi.stubGlobal('fetch', vi.fn().mockResolvedValue(json(value))); mount();
         await screen.findByText('Selected-scope inspection completed');
-        expect(screen.getByText(/Affected CVEs: unknown. Offered updates: unknown./)).toBeVisible();
+        expect(screen.getByText(/Affected CVEs and available updates remain unknown./)).toBeVisible();
         expect(screen.getByText(/No review candidate rows were returned/)).toHaveTextContent('not evidence of zero affected CVEs');
         expect(screen.queryByRole('article')).not.toBeInTheDocument();
     });

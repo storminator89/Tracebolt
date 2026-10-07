@@ -47,21 +47,21 @@ describe('system inventory bounded service/socket browsing', () => {
         expect(queries.getByText('75 / 75')).toBeVisible(); expect(queries.getByText(/does not establish external reachability/)).not.toBeVisible(); fireEvent.click(queries.getByText('Source and collection details', { selector: 'summary' })); expect(queries.getByText(/does not establish external reachability/)).toBeVisible(); expect(JSON.parse(vi.mocked(mutateRaw).mock.calls[0][1]).limit).toBe(25);
     });
     it.each(['active', 'failed', 'enabled'] as const)('uses the fixed %s service filter and starts from a new cursor', async filter => {
-        await open(); fireEvent.change(screen.getByLabelText('Section filter'), { target: { value: filter } }); expect(screen.queryByRole('table')).not.toBeInTheDocument(); fireEvent.click(screen.getByRole('button', { name: 'Apply search and filter' })); await screen.findByRole('table');
+        await open(); fireEvent.change(screen.getByLabelText('Section filter'), { target: { value: filter } }); expect(screen.queryByRole('table')).not.toBeInTheDocument(); fireEvent.click(screen.getByRole('button', { name: 'Apply' })); await screen.findByRole('table');
         expect(JSON.parse(vi.mocked(mutateRaw).mock.calls.at(-1)![1])).toMatchObject({ cursor: '', filter }); const names = within(screen.getByRole('table')).getAllByRole('rowheader').map(row => row.textContent); const expected = services.filter(row => filter === 'active' ? row.runtime!.activeState === 'active' : filter === 'failed' ? row.runtime!.activeState === 'failed' : row.enablement === 'enabled').slice(0, 100).map(row => row.name); expect(names).toEqual(expected);
     });
     it.each(['tcp-listeners', 'udp', 'connections'] as const)('uses the fixed %s socket filter', async filter => {
-        await open('sockets'); fireEvent.change(screen.getByLabelText('Section filter'), { target: { value: filter } }); fireEvent.click(screen.getByRole('button', { name: 'Apply search and filter' })); await screen.findByRole('table'); expect(JSON.parse(vi.mocked(mutateRaw).mock.calls.at(-1)![1])).toMatchObject({ cursor: '', section: 'sockets', filter, limit: 25 });
+        await open('sockets'); fireEvent.change(screen.getByLabelText('Section filter'), { target: { value: filter } }); fireEvent.click(screen.getByRole('button', { name: 'Apply' })); await screen.findByRole('table'); expect(JSON.parse(vi.mocked(mutateRaw).mock.calls.at(-1)![1])).toMatchObject({ cursor: '', section: 'sockets', filter, limit: 25 });
         expect(within(screen.getByRole('table')).getAllByRole('row').length - 1).toBe(25);
     });
     it('continues an empty 2048-row scan window to the only matching service', async () => {
-        view = systemView(2300); services = serviceRows(2300); await open(); fireEvent.change(screen.getByLabelText('Search this complete section'), { target: { value: 'fixture-002299' } }); fireEvent.click(screen.getByRole('button', { name: 'Apply search and filter' }));
+        view = systemView(2300); services = serviceRows(2300); await open(); fireEvent.change(screen.getByLabelText('Search this section'), { target: { value: 'fixture-002299' } }); fireEvent.click(screen.getByRole('button', { name: 'Apply' }));
         await screen.findByText('No matches in this scan window. More rows remain; continue.'); expect(screen.queryByText('No matches in the complete section.')).not.toBeInTheDocument(); fireEvent.click(screen.getByRole('button', { name: 'Continue search or filter' })); await screen.findByRole('rowheader', { name: 'fixture-002299.service' }); expect(screen.getByText('2,300 / 2,300')).toBeVisible();
     });
     it('shows failed latest and independently stale prior complete without renewing original time', async () => {
         view.serverNow = '2026-10-04T00:05:10Z'; view.receivedAt = '2026-10-04T00:05:05Z'; view.sequence = '9007199254740994'; view.latest!.generationId = `sample_${'b'.repeat(32)}`; view.latest!.collectedAt = '2026-10-04T00:05:00Z';
         for (const section of ['services', 'sockets'] as const) { view.latest![section] = { generationId: view.latest!.generationId, observedAt: view.latest!.collectedAt, coverage: 'failed', reason: 'timeout', observedCount: null, countExact: false }; view.lastComplete[section]!.status = 'stale'; }
-        await open(); expect(screen.getByText(/Latest section collection failed/)).toBeVisible(); expect(screen.getByText(/Showing the last complete section/)).toBeVisible(); expect(screen.getByText('2026-10-04T00:00:00Z')).toBeVisible(); expect(screen.getByText('Stale / historical observations')).toBeVisible();
+        await open(); expect(screen.getByText(/Latest section collection failed/)).toBeVisible(); expect(screen.getByText(/Showing the prior complete section/)).toBeVisible(); expect(screen.getByText('2026-10-04T00:00:00Z')).toBeVisible(); expect(screen.getByText('Stale / historical observations')).toBeVisible();
     });
     it('keeps null process names and unavailable attribution distinct from no running process', async () => {
         sockets[0] = { ...sockets[0], owners: [{ pid: 100, processName: null, nameReason: 'process_gone' }], attribution: { coverage: 'partial', reason: 'process_gone' } }; sockets[1] = { ...sockets[1], owners: [], attribution: { coverage: 'unavailable', reason: 'permission_denied' } };
@@ -75,7 +75,7 @@ describe('system inventory bounded service/socket browsing', () => {
         vi.mocked(mutateRaw).mockImplementationOnce(async (_path, _raw, _headers, supplied) => { signal = supplied!; return new Promise<SystemPage>(resolve => { finish = resolve; }); }); fireEvent.click(screen.getByRole('button', { name: 'Next page' })); await waitFor(() => expect(signal).toBeDefined());
         if (transition === 'unmount') rendered.unmount(); if (transition === 'section') rendered.rerender(panel('sockets')); if (transition === 'session') rendered.rerender(panel('services', 'replacement'));
         if (transition === 'auth') act(() => window.dispatchEvent(new Event(AUTH_REQUIRED_EVENT))); if (transition === 'pagehide') act(() => window.dispatchEvent(new PageTransitionEvent('pagehide', { persisted: true }))); if (transition === 'blur') act(() => window.dispatchEvent(new Event('blur')));
-        if (transition === 'search') fireEvent.change(screen.getByLabelText('Search this complete section'), { target: { value: 'replacement' } }); if (transition === 'filter') fireEvent.change(screen.getByLabelText('Section filter'), { target: { value: 'failed' } });
+        if (transition === 'search') fireEvent.change(screen.getByLabelText('Search this section'), { target: { value: 'replacement' } }); if (transition === 'filter') fireEvent.change(screen.getByLabelText('Section filter'), { target: { value: 'failed' } });
         expect(signal.aborted).toBe(true); await act(async () => finish(systemPage(view, services, sockets, JSON.stringify({ section: 'services', cursor: 'cursor_100', search: '', filter: 'all', limit: 100 })))); expect(screen.queryByRole('rowheader', { name: 'fixture-000100.service' })).not.toBeInTheDocument();
     });
     it('409 clears previous pages and requires an explicit refreshed generation', async () => {
@@ -98,14 +98,14 @@ describe('system inventory bounded service/socket browsing', () => {
         render(panel('sockets')); await screen.findByText('Latest section collection failed: Permission denied');
         expect(screen.getByText('No retained complete section is available. Missing or failed data is not a successful zero-row observation.')).toBeVisible();
         expect(screen.queryByRole('table')).not.toBeInTheDocument(); expect(mutateRaw).not.toHaveBeenCalled();
-        expect(screen.getByText(/check the section status for collection failures/)).toBeVisible();
+        expect(screen.getByText(/Collection failures appear in the section status/)).toBeVisible();
     });
     it('keeps a complete 14-row socket section while owner access is denied', async () => {
         view = systemView(350, 14); sockets = socketRows(14).map(row => ({ ...row, owners: [], attribution: { coverage: 'partial', reason: 'permission_denied' } }));
         await open('sockets'); await screen.findByText('14 / 14');
         expect(screen.getByText('Whole retained section').nextElementSibling).toHaveTextContent('14');
         expect(screen.getAllByText('Owner unknown')).toHaveLength(14); expect(screen.getAllByText('Partial · Permission denied')).toHaveLength(14);
-        expect(screen.getByText(/in the Attribution column describes that owner field/)).toBeVisible();
+        expect(screen.getByText(/under Attribution applies to the owner field/)).toBeVisible();
         expect(screen.queryByText('No retained complete section is available. Missing or failed data is not a successful zero-row observation.')).not.toBeInTheDocument();
         expect(vi.mocked(mutateRaw).mock.calls.every(([path]) => path.endsWith('/inventory/system/query'))).toBe(true);
     });

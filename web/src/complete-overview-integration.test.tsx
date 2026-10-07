@@ -26,6 +26,6 @@ describe('complete inventory source integration', () => {
         expect(screen.queryByRole('tab', { name: 'Bounded preview' })).not.toBeInTheDocument();
         expect(screen.getByRole('button', { name: 'Open bounded preview' })).not.toBeVisible();
         fireEvent.click(screen.getByText('Legacy inventory source', { selector: 'summary' })); fireEvent.click(screen.getByRole('button', { name: 'Open bounded preview' }));
-        expect(screen.getByRole('tab', { name: 'Legacy bounded preview' })).toHaveAttribute('aria-selected', 'true'); expect(screen.getByRole('tabpanel', { name: 'Legacy bounded preview' })).toHaveAttribute('aria-labelledby', screen.getByRole('tab', { name: 'Legacy bounded preview' }).id); expect(screen.getByText(/Legacy bounded sample. These row counts/)).toBeVisible(); expect(screen.queryByRole('table')).not.toBeInTheDocument();
+        expect(screen.getByRole('tab', { name: 'Legacy bounded preview' })).toHaveAttribute('aria-selected', 'true'); expect(screen.getByRole('tabpanel', { name: 'Legacy bounded preview' })).toHaveAttribute('aria-labelledby', screen.getByRole('tab', { name: 'Legacy bounded preview' }).id); expect(screen.getByText(/Bounded sample, not full inventory totals/)).toBeVisible(); expect(screen.queryByRole('table')).not.toBeInTheDocument();
     });
 });

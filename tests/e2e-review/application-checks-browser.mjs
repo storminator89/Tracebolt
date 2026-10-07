@@ -97,7 +97,7 @@ export async function applicationChecksBrowserCase({pageAt,login,expect,base,sho
  const panel=page.getByRole('region',{name:'Application checks',exact:true}), rows=panel.locator('tbody tr');
  const row=id=>rows.filter({has:page.getByText(id,{exact:true})});
  const reload=panel.getByRole('button',{name:'Reload application status',exact:true});
- await expect(rows).toHaveCount(4);await expect(panel).toContainText('HTTP/TLS observations from the management server.');
+ await expect(rows).toHaveCount(4);await expect(panel).toContainText('HTTP/TLS checks from the manager.');
  for(const name of ['Application','HTTP result','Leaf certificate','Observed'])await expect(panel.getByRole('columnheader',{name,exact:true})).toBeVisible();
  await expect(row('fixture-expiring').locator('td').nth(0).locator('.application-cell-value')).toHaveText('204 · 2xx');
  await expect(row('fixture-expiring').locator('td').nth(1)).toContainText('Expiring soon');
@@ -114,7 +114,7 @@ export async function applicationChecksBrowserCase({pageAt,login,expect,base,sho
  await expect(panel.locator('.application-checks-timing')).toContainText('60s after each round');await expect(panel.locator('.application-checks-timing')).toContainText('85s');
  const disclosure=panel.locator('details');await disclosure.locator('summary').click();await expect(disclosure).toHaveAttribute('open','');
  await expect(disclosure.getByRole('link',{name:'Startup-file guide (GitHub)',exact:true})).toHaveAttribute('rel','noopener noreferrer');
- await expect(disclosure).toContainText('2xx describes only the HTTP status. Certificate details come from that observation. Reload only reads retained results.');
+ await expect(disclosure).toContainText('2xx is an HTTP status, not proof of health. Certificate data is from the same check. Reload starts no check.');
  await applicationRowLayout({page,panel,expect,fixture,mobile:false});
  await panel.scrollIntoViewIfNeeded();await shot(page,'synthetic-http-test-application-checks-desktop-en',applicationFixtureDisclosure);
  await page.setViewportSize({width:390,height:844});await panel.scrollIntoViewIfNeeded();
@@ -140,7 +140,7 @@ export async function applicationChecksBrowserCase({pageAt,login,expect,base,sho
   activeFixture=nextFixture;phase='retained';await login(page);
   await expect(rows).toHaveCount(nextFixture.items.length);
   const mixed=nextFixture.schemaVersion.endsWith('.v2');
-  await expect(panel).toContainText(mixed?'HTTP/TLS, DNS and TCP observations from the management server.':'HTTP/TLS observations from the management server.');
+  await expect(panel).toContainText(mixed?'Checks from the manager: HTTP/TLS, DNS, TCP.':'HTTP/TLS checks from the manager.');
   for(const item of nextFixture.items){
    const current=row(item.id), values=current.locator('.application-cell-value');
    await expect(current.locator('td:last-child time')).toHaveAttribute('datetime',item.observedAt);await expect(current.locator('td:last-child time')).toHaveText('1m ago');
@@ -158,10 +158,10 @@ export async function applicationChecksBrowserCase({pageAt,login,expect,base,sho
   }
   await expect(panel.getByRole('button')).toHaveCount(1);await expect(panel.locator('input,select,textarea,form')).toHaveCount(0);
   const details=panel.locator('details');await details.locator('summary').click();await expect(details).toHaveAttribute('open','');
-  await expect(details).toContainText('2xx describes only the HTTP status. Certificate details come from that observation. Reload only reads retained results.');
+  await expect(details).toContainText('2xx is an HTTP status, not proof of health. Certificate data is from the same check. Reload starts no check.');
   if(mixed){
-   await expect(details).toContainText('DNS: system hostname resolution, which may use a hosts file, cache or search domains. All returned addresses must be approved; this is not an authoritative or complete DNS record set.');
-   await expect(details).toContainText('TCP: one connection to a numeric address and close, without data or TLS. This does not establish application health.');
+   await expect(details).toContainText('DNS: system resolution, which may use a hosts, cache or search domains. Every returned address needs approval; this is not a complete, authoritative DNS record.');
+   await expect(details).toContainText('TCP connects to the IP, then closes. No data, TLS or proof of application health.');
   }
   const captureDisclosure=`${applicationFixtureDisclosure}; invented ${mixed?'v2 DNS/TCP/HTTPS':'v1 HTTP/HTTPS'} rows, original sample age, ${mixed?'DNS/TCP have no certificate evidence':'plaintext HTTP has no TLS'}`;
   await applicationRowLayout({page,panel,expect,fixture:nextFixture,mobile:false});await panel.scrollIntoViewIfNeeded();
@@ -200,7 +200,7 @@ export async function applicationChecksBrowserCase({pageAt,login,expect,base,sho
  await expect(panel.locator('table,dl,input,select,textarea,form')).toHaveCount(0);
  const setup=panel.locator('details');await expect(setup).not.toHaveAttribute('open','');
  await setup.locator('summary').click();await expect(setup).toHaveAttribute('open','');
- await expect(setup).toContainText('Private LAN and plaintext HTTP need separate acknowledgements.');
+ await expect(setup).toContainText('private LAN and plaintext HTTP need separate approval.');
  const guide=setup.getByRole('link',{name:'Startup-file guide (GitHub)',exact:true});
  await expect(guide).toHaveAttribute('href','https://github.com/storminator89/Tracebolt/blob/bb76d6a6b7000b244b8075d5644562ad0da94c91/docs/application-checks.md');
  await expect(guide).toHaveAttribute('referrerpolicy','no-referrer');await expect(panel.getByRole('button')).toHaveCount(1);
@@ -213,7 +213,7 @@ export async function applicationChecksBrowserCase({pageAt,login,expect,base,sho
  const germanPanel=page.getByRole('region',{name:'Anwendungsprüfungen',exact:true});
  await expect(germanPanel).toContainText('Deaktiviert · keine Anwendungsprüfungen aktiv.');
  await expect(germanPanel.locator('details')).toHaveAttribute('open','');
- await expect(germanPanel).toContainText('Privates LAN und unverschlüsseltes HTTP benötigen eigene Bestätigungen.');
+ await expect(germanPanel).toContainText('LAN und unverschlüsseltes HTTP benötigen eigene Bestätigungen.');
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth&&document.body.scrollWidth<=innerWidth)).toBe(true);
  await germanPanel.scrollIntoViewIfNeeded();await shot(page,'synthetic-application-checks-disabled-mobile-de',applicationFixtureDisclosure);
  expect(mutations).toEqual([]);expect(applicationRequests.length).toBe(reads);expect(applicationRequests.every(value=>value===`GET ${statusPath}`)).toBe(true);

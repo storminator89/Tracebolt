@@ -98,7 +98,7 @@ describe('explicit selected-service action flow', () => {
     });
     it('labels command completion as agent-reported with no health or restart proof', async () => {
         vi.mocked(readServiceActions).mockResolvedValue(actionJobView('operation_completed')); await start();
-        expect(screen.getByText(/does not prove a restart or service health/)).toBeVisible(); expect(screen.getByText(/Agent-reported result: operation_completed/)).toBeVisible(); expect(screen.getByRole('button', { name: 'Select fixture' })).toBeEnabled();
+        expect(screen.getByText(/Restart and service health remain unconfirmed/)).toBeVisible(); expect(screen.getByText(/Agent-reported result: operation_completed/)).toBeVisible(); expect(screen.getByRole('button', { name: 'Select fixture' })).toBeEnabled();
     });
     it('blocks a needs-intervention result and polls only pending status for a bounded window', async () => {
         vi.mocked(readServiceActions).mockResolvedValue(actionJobView('claimed')); await start();

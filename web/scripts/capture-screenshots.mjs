@@ -31,7 +31,7 @@ try {
   await snap('device-1440-light.png','Synthetic Windows full-width device page',{fullPage:false});
   await page.getByRole('button',{name:'Zurück zu Geräten',exact:true}).click();
   await page.goto(`${base}/#/cases/case-demo-win-01-service`);
-  await page.getByRole('heading',{name:'Was die Daten zeigen'}).waitFor();
+  await page.getByRole('heading',{name:'Regelbefund'}).waitFor();
   await page.locator('.evidence-card summary').first().click();
   await snap('investigation-1440-light.png','Synthetic evidence-backed investigation, one evidence expanded',{fullPage:false});
   await page.getByRole('button',{name:'Dunkles Design aktivieren'}).click();

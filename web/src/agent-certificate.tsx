@@ -10,8 +10,8 @@ type ExpiryState = 'unknown' | 'current' | 'expiring' | 'expired';
 const copy = {
     en: {
         title: 'Agent certificate', unknown: 'Expiry unknown', current: 'More than 48 hours remaining', expiring: 'Expires within 48 hours', expired: 'Expired',
-        expiry: 'Certificate expires', checked: 'Manager checked', scope: 'Expiry status at the manager check above. Refresh device metadata to check again. Approval, connection and device health are separate.',
-        unknownHelp: 'Refresh device metadata. If expiry stays unknown, ask an administrator to check certificate issuance or approval.',
+        expiry: 'Certificate expires', checked: 'Manager checked', scope: 'Status at the recorded manager check. Refresh device metadata to recheck. Approval, connection and health are separate.',
+        unknownHelp: 'Refresh device metadata. If expiry stays unknown, ask an administrator to check issuance or approval.',
         manual: 'Plan a separately authorized certificate replacement and new manual approval. A new approval receives a new device ID.',
         guided: 'Ask an administrator to plan a separately authorized replacement enrollment. Existing identity and history are not automatically renewed or merged.',
         renewal: 'Automatic renewal is unavailable.',
@@ -19,8 +19,8 @@ const copy = {
     },
     de: {
         title: 'Agent-Zertifikat', unknown: 'Ablauf unbekannt', current: 'Mehr als 48 Stunden verbleibend', expiring: 'Läuft innerhalb von 48 Stunden ab', expired: 'Abgelaufen',
-        expiry: 'Zertifikat läuft ab', checked: 'Vom Manager geprüft', scope: 'Ablaufstatus zum Prüfzeitpunkt oben. Für eine neue Prüfung die Gerätedaten aktualisieren. Freigabe, Verbindung und Gerätezustand sind unabhängig davon.',
-        unknownHelp: 'Gerätedaten aktualisieren. Bleibt der Ablauf unbekannt, die Ausstellung oder Freigabe durch einen Administrator prüfen lassen.',
+        expiry: 'Zertifikat läuft ab', checked: 'Vom Manager geprüft', scope: 'Status zur erfassten Managerprüfung. Gerätedaten für eine neue Prüfung aktualisieren. Freigabe, Verbindung und Zustand sind unabhängig.',
+        unknownHelp: 'Gerätedaten aktualisieren. Bleibt der Ablauf unbekannt, Ausstellung oder Freigabe durch einen Administrator prüfen lassen.',
         manual: 'Separat freigegebenen Zertifikatsaustausch mit neuer manueller Freigabe planen. Eine neue Freigabe erhält eine neue Geräte-ID.',
         guided: 'Eine separat freigegebene Neuanmeldung mit einem Administrator planen. Bestehende Identität und Historie werden nicht automatisch erneuert oder zusammengeführt.',
         renewal: 'Automatische Erneuerung ist nicht verfügbar.',

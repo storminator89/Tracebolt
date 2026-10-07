@@ -25,7 +25,7 @@ describe('operator-owned certificate expiry', () => {
         expect(certificateExpiry(value)).toEqual({ state: 'unknown', certificate: null });
         render(<AgentCertificatePanel value={value}/>);
         expect(screen.getByText('Expiry unknown')).toBeVisible();
-        expect(screen.getByText(/ask an administrator to check certificate issuance or approval/)).toBeVisible();
+        expect(screen.getByText(/ask an administrator to check issuance or approval/)).toBeVisible();
         expect(document.querySelector('time')).toBeNull();
     });
     it('shows a recorded check but no invented expiry before issuance', () => {
@@ -40,8 +40,8 @@ describe('operator-owned certificate expiry', () => {
         const region = screen.getByRole('region', { name: 'Agent certificate' });
         expect(within(region).getByText('Expires within 48 hours')).toBeVisible();
         expect(region.querySelector('time')).toHaveAttribute('datetime', value.expiresAt);
-        expect(region.textContent).toContain('Expiry status at the manager check above.');
-        expect(region.textContent).toContain('Approval, connection and device health are separate.');
+        expect(region.textContent).toContain('Status at the recorded manager check.');
+        expect(region.textContent).toContain('Approval, connection and health are separate.');
         expect(region.textContent).toContain(source === 'manual-approval' ? 'A new approval receives a new device ID.' : 'Existing identity and history are not automatically renewed or merged.');
         expect(region.textContent).toContain('Automatic renewal is unavailable.');
         expect(within(region).queryByRole('button')).not.toBeInTheDocument();
@@ -55,7 +55,7 @@ describe('operator-owned certificate expiry', () => {
         expect(screen.getByText('Manager checked')).toBeVisible();
         expect(screen.getByText('Status at manager check')).toBeVisible();
         expect(screen.getByText('Automatic renewal is unavailable.')).toBeVisible();
-        expect(screen.getByText(/Expiry status at the manager check above/)).not.toBeVisible();
+        expect(screen.getByText(/Status at the recorded manager check/)).not.toBeVisible();
         expect(screen.getByText(/Existing identity and history/)).not.toBeVisible();
         summary.focus();
         expect(summary).toHaveFocus();

@@ -210,15 +210,15 @@ try{
   mark('assert single browser approval request');expect(approveRequests).toBe(1);
   mark('hold real helper protocol in fake backend');const dispatched=await control('dispatch');counters(dispatched,1,1,1);expect(dispatched.pending).toBe(true);
   await expect(saved()).toContainText('Claimed for delivery. Delivery, execution and outcome are unconfirmed until a result arrives.');
-  await expect(saved()).toContainText('No automatic retry.');await expect(saved()).not.toContainText('Agent reports that the command completed.');await expect(selector()).toBeDisabled();
+  await expect(saved()).toContainText('No automatic retry.');await expect(saved()).not.toContainText('Agent reports command completion.');await expect(selector()).toBeDisabled();
   await status(1,1,1,'claimed');const claimed=await read(endpoint());expect(claimed.job.id).toBe(savedJob.id);expect(claimed.job.state).toBe('claimed');expect(claimed.job.result).toBeNull();expect(approveRequests).toBe(1);await clean();
  });
 
  await check(2,async()=>{
   mark('commit real result ingress');const completed=await control('complete');counters(completed,1,1,1);expect(completed.jobState).toBe('operation_completed');
-  await expect(saved()).toContainText('Agent reports that the command completed. This does not prove a restart or service health.');await expect(saved()).toContainText('Agent-reported result: operation_completed');
+  await expect(saved()).toContainText('Agent reports command completion. Restart and service health remain unconfirmed.');await expect(saved()).toContainText('Agent-reported result: operation_completed');
   const before=await read(endpoint());expect(before.job.id).toBe(savedJob.id);expect(before.job.state).toBe('operation_completed');expect(before.job.result.phase).toBe('operation_completed');
-  mark('reload durable saved action');await page.reload();await openServices();await expect(saved()).toContainText('Agent-reported result: operation_completed');await expect(saved()).toContainText('This does not prove a restart or service health.');await expect(review()).toHaveCount(0);await expect(page.locator('.service-action-consent')).toHaveCount(0);
+  mark('reload durable saved action');await page.reload();await openServices();await expect(saved()).toContainText('Agent-reported result: operation_completed');await expect(saved()).toContainText('Restart and service health remain unconfirmed.');await expect(review()).toHaveCount(0);await expect(page.locator('.service-action-consent')).toHaveCount(0);
   const after=await read(endpoint());expect(after.job).toEqual(before.job);await status(1,1,1,'operation_completed');expect(approveRequests).toBe(1);await clean();
  });
 

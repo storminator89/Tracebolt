@@ -71,7 +71,7 @@ describe('exact package-source enrollment consent', () => {
  });
  it('explains the v2 scope, sensitivity, partial bounds, durable retention and fresh-store requirement before an unchecked gate', async () => {
   vi.mocked(mutate).mockResolvedValue(creation()); const dialog = await add();
-  expect(within(dialog).getByText('Operational and package-source inventory · Linux')).toBeVisible();
+  expect(within(dialog).getByText(/Operational metadata, OS identifiers, and binary and source package names with exact versions/)).toBeVisible();
   for (const text of ['Disk, network, service, process, software and event metadata', 'ID, VERSION_ID and VERSION_CODENAME', 'binary and source package names and exact versions', 'source-mapping basis and install state', 'personal or sensitive labels', '128 rows and 16 KiB', 'may be partial', 'agent-visible namespace', 'until replaced, including after revocation', 'Age-based hiding does not delete', 'unknown package observation replaces', 'No APT execution, package installation or changes, or AI export', 'fresh store and fresh enrollment', 'not silently migrated or reset']) expect(dialog.textContent).toContain(text);
   const checkbox = within(dialog).getByRole('checkbox', { name: 'I acknowledge this operational and package-source collection for the new device.' });
   expect(checkbox).not.toBeChecked(); expect(within(dialog).getByRole('button', { name: 'Create invitation' })).toBeDisabled();
@@ -82,7 +82,7 @@ describe('exact package-source enrollment consent', () => {
  });
  it('renders German copy with the same full scope and affirmative gate', async () => {
   const dialog = await add(); act(() => setLocale('de', false));
-  expect(within(dialog).getByText('Betriebs- und Paketquelleninventar · Linux')).toBeVisible();
+  expect(within(dialog).getByText(/Betriebsmetadaten, OS-Kennungen sowie Binär- und Quellpaketnamen mit exakten Versionen/)).toBeVisible();
   for (const text of ['ID, VERSION_ID und VERSION_CODENAME', 'Binär- und Quellpaketnamen mit exakten Versionen', 'Quellpaketzuordnung und Installationszustand', 'sensible Bezeichnungen', '128 Zeilen und 16 KiB', 'unvollständig', 'auch nach einem Widerruf', 'Ausblenden löscht keine', 'Keine APT-Ausführung, Paketinstallation oder Paketänderungen und kein KI-Export', 'neuen Datenspeicher und ein neues Enrollment', 'nicht stillschweigend migriert oder zurückgesetzt']) expect(dialog.textContent).toContain(text);
   expect(within(dialog).getByRole('checkbox', { name: 'Ich bestätige diese Betriebs- und Paketquellenerfassung für das neue Gerät.' })).not.toBeChecked();
   expect(within(dialog).getByRole('button', { name: 'Einladung erstellen' })).toBeDisabled(); expect(mutate).not.toHaveBeenCalled();
@@ -246,7 +246,7 @@ describe('authoritative server-clock regression', () => {
 describe('fresh complete dpkg consent', () => {
  it('requires the separate managed-v3 acknowledgement and preserves its bootstrap binding', async () => {
   current = listing(v3); vi.mocked(mutate).mockResolvedValue({ ...creation(v3), bootstrapSHA256: 'b'.repeat(64) }); const dialog = await add();
-  for (const text of ['Complete package, service and connection inventory', 'all supported installed and incomplete dpkg rows', 'Snap, Flatpak', 'up to 24 hours', 'fresh managed-operations-v3 store', 'private network topology', 'does not prove external reachability', 'No network scan, DNS lookup or UID collection']) expect(dialog.textContent).toContain(text);
+  for (const text of ['Operational metadata, all supported dpkg packages, system services and local connections', 'all supported installed and incomplete dpkg rows', 'Snap, Flatpak', 'up to 24 hours', 'New managed-operations-v3 store and explicit enrollment consent required', 'private network topology', 'does not prove external reachability', 'No network scan, DNS lookup or UID collection']) expect(dialog.textContent).toContain(text);
   expect(within(dialog).getByRole('checkbox')).not.toBeChecked(); expect(within(dialog).getByRole('button', { name: 'Create invitation' })).toBeDisabled(); acknowledgeAndCreate(dialog); await screen.findByLabelText('One-time invitation secret');
   expect(mutate).toHaveBeenCalledExactlyOnceWith('/enrollment/invitations', { requestId: expect.any(String), platform: 'linux', collectionAcknowledged: true }, expect.any(AbortSignal));
  });
@@ -257,7 +257,7 @@ describe('fresh complete dpkg consent', () => {
   current = listing(v3); vi.mocked(mutate).mockResolvedValue({ ...creation(v3), bootstrapSHA256: 'invalid' }); const dialog = await add(); acknowledgeAndCreate(dialog); await within(dialog).findByRole('alert'); expect(screen.queryByLabelText('One-time invitation secret')).not.toBeInTheDocument();
  });
  it('renders separate complete-dpkg consent in German', async () => {
-  current = listing(v3); setLocale('de', false); render(section()); await waitFor(() => expect(screen.getByRole('button', { name: 'Gerät hinzufügen' })).toBeEnabled()); fireEvent.click(screen.getByRole('button', { name: 'Gerät hinzufügen' })); const dialog = screen.getByRole('dialog', { name: 'Gerät hinzufügen' }); expect(dialog.textContent).toContain('Vollständiges Paket-, Dienst- und Verbindungsinventar'); expect(within(dialog).getByRole('checkbox', { name: 'Ich bestätige die Erfassung von Betriebsmetadaten, allen unterstützten dpkg-Paketen, Systemdiensten und lokalen Verbindungsmetadaten für dieses neue Gerät.' })).not.toBeChecked();
+  current = listing(v3); setLocale('de', false); render(section()); await waitFor(() => expect(screen.getByRole('button', { name: 'Gerät hinzufügen' })).toBeEnabled()); fireEvent.click(screen.getByRole('button', { name: 'Gerät hinzufügen' })); const dialog = screen.getByRole('dialog', { name: 'Gerät hinzufügen' }); expect(dialog.textContent).toContain('Betriebsmetadaten, alle unterstützten dpkg-Pakete, Systemdienste und lokale Verbindungen'); expect(within(dialog).getByRole('checkbox', { name: 'Ich bestätige die Erfassung von Betriebsmetadaten, allen unterstützten dpkg-Paketen, Systemdiensten und lokalen Verbindungsmetadaten für dieses neue Gerät.' })).not.toBeChecked();
  });
 });
 
@@ -352,7 +352,7 @@ describe('source-owned verified download command (inert fixtures only)', () => {
   if (profile === 'http-test') { response.bootstrap.agentOrigin = 'http://localhost:8081'; response.bootstrap.serverCaPem = ''; }
   const clipboard = vi.fn().mockResolvedValue(undefined); Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: clipboard } });
   current = listing(v2); vi.mocked(mutate).mockResolvedValue(response); const dialog = await add();
-  expect(within(dialog).getByText(pin === null ? 'Public bootstrap configuration; reviewed native binaries must be prepared separately.' : 'A public source-pinned download command is available after creation. Review prerequisites and service permissions before running it.')).toBeVisible();
+  expect(within(dialog).getByText(pin === null ? 'Public bootstrap configuration; reviewed native binaries must be prepared separately.' : 'After creation: a public source-pinned download command. Review prerequisites and service permissions before running it.')).toBeVisible();
   expect(within(dialog).getByRole('checkbox')).not.toBeChecked(); expect(within(dialog).getByRole('button', { name: 'Create invitation' })).toBeDisabled();
   acknowledgeAndCreate(dialog); await screen.findByLabelText('One-time invitation secret');
   expect(within(dialog).getByText(pin === null ? 'Run as root from the prepared local checkout' : 'Run the verified download as root in a local terminal')).toBeVisible();

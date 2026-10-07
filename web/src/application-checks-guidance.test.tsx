@@ -26,18 +26,18 @@ describe('read-only application-check setup guidance', () => {
         vi.mocked(request).mockResolvedValue(fixture()); await start();
         expect(panel()).toHaveTextContent('Disabled · no application checks running.');
         expect(panel()).not.toHaveTextContent('no application checks configured');
-        expect(panel()).toHaveTextContent('HTTP/TLS, DNS and TCP observations from the management server.');
+        expect(panel()).toHaveTextContent('Checks from the manager: HTTP/TLS, DNS, TCP.');
         expect(panel()).toHaveTextContent('Configure up to 8 HTTP/HTTPS, DNS or TCP targets on the manager.');
         const details = panel().querySelector('details')!;
         expect(details).not.toHaveAttribute('open');
         expect(details.querySelector('summary')).toHaveTextContent('Setup and approvals');
-        expect(details).toHaveTextContent('Settings → Application check setup');
-        expect(details).toHaveTextContent('Saving alone starts no checks');
+        expect(within(panel()).getByRole('link', { name: 'Set up checks' })).toBeVisible();
+        expect(details).toHaveTextContent('Saving starts no checks');
         expect(details).not.toHaveTextContent('explicitly restart the manager');
-        expect(details).toHaveTextContent('exact IP addresses');
-        expect(details).toHaveTextContent('Private LAN and plaintext HTTP need separate acknowledgements');
-        expect(details).toHaveTextContent('side-effect-free targets without credentials');
-        expect(details).toHaveTextContent('do not create alarms');
+        expect(details).toHaveTextContent('exact targets and IPs');
+        expect(details).toHaveTextContent('private LAN and plaintext HTTP need separate approval');
+        expect(details).toHaveTextContent('Side-effect-free targets without credentials');
+        expect(details).toHaveTextContent('no alarms');
         expect(panel().querySelector('input,select,textarea,form,table,dl')).toBeNull();
         expect(within(panel()).getAllByRole('button')).toHaveLength(1);
         fireEvent.click(details.querySelector('summary')!); fireEvent.click(details.querySelector('summary')!);
@@ -47,7 +47,7 @@ describe('read-only application-check setup guidance', () => {
     it.each([disabledApplicationView, applicationView])('links only fixed source guidance without sending the operator referrer (%#)', async fixture => {
         vi.mocked(request).mockResolvedValue(fixture()); await start();
         const links = panel().querySelectorAll('a[target="_blank"]'); expect(links).toHaveLength(1);
-        if (!fixture().enabled) expect(within(panel()).getByRole('link', { name: 'Settings → Application check setup' })).toHaveAttribute('href', '#/settings');
+        if (!fixture().enabled) expect(within(panel()).getByRole('link', { name: 'Set up checks' })).toHaveAttribute('href', '#/settings');
         expect(links[0]).toHaveTextContent('Startup-file guide (GitHub)'); expect(links[0]).toHaveAttribute('href', guide);
         expect(links[0]).toHaveAttribute('target', '_blank'); expect(links[0]).toHaveAttribute('rel', 'noopener noreferrer'); expect(links[0]).toHaveAttribute('referrerpolicy', 'no-referrer');
         expect(request).toHaveBeenCalledTimes(1);
@@ -56,8 +56,8 @@ describe('read-only application-check setup guidance', () => {
     it('gives named readers an administrator hint without exposing a settings editor', async () => {
         vi.mocked(useOperator).mockReturnValue({ ...operator, loginMode: 'named', actorId: `operator_${'a'.repeat(32)}`, capabilities: ['read'] });
         vi.mocked(request).mockResolvedValue(disabledApplicationView()); await start();
-        expect(panel()).toHaveTextContent('An administrator can configure targets in Settings.');
-        expect(within(panel()).queryByRole('link', { name: 'Settings → Application check setup' })).toBeNull();
+        expect(panel()).toHaveTextContent('An administrator can set up targets.');
+        expect(within(panel()).queryByRole('link', { name: 'Set up checks' })).toBeNull();
         expect(vi.mocked(request).mock.calls.every(([path]) => path === '/application-checks/status')).toBe(true);
     });
 
@@ -67,7 +67,7 @@ describe('read-only application-check setup guidance', () => {
         act(() => setLocale('de', false));
         const content = screen.getByRole('region', { name: 'Anwendungsprüfungen' });
         expect(content).toHaveTextContent('Deaktiviert · keine Anwendungsprüfungen aktiv.');
-        expect(content).toHaveTextContent('Einrichtung und Freigaben'); expect(content).toHaveTextContent('Privates LAN und unverschlüsseltes HTTP');
+        expect(content).toHaveTextContent('Einrichtung und Freigaben'); expect(content).toHaveTextContent('LAN und unverschlüsseltes HTTP');
         expect(content.querySelector('a[target="_blank"]')).toHaveTextContent('Anleitung zur Startdatei (GitHub)');
         expect(request).toHaveBeenCalledTimes(1); expect({ local: { ...localStorage }, session: { ...sessionStorage } }).toEqual(previousStorage);
     });
@@ -80,8 +80,8 @@ describe('retained cadence, freshness and reason explanations', () => {
         const timing = panel().querySelector('dl')!;
         expect(timing).toHaveTextContent(`Check interval${intervalSeconds}s after each round`);
         expect(timing).toHaveTextContent(`Freshness limit${intervalSeconds + 15}s`);
-        expect(panel()).toHaveTextContent('The interval starts after the full round finishes');
-        expect(panel()).toHaveTextContent('their original observation time is preserved');
+        expect(panel()).toHaveTextContent('Interval starts after each round');
+        expect(panel()).toHaveTextContent('original times are preserved');
         expect(panel().querySelector('.application-checks-help')).toBeNull();
     });
 

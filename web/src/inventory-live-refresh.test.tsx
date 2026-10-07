@@ -410,11 +410,11 @@ describe.each(['overview', 'system'] as const)('%s live panel DOM continuity', k
             ? <CompleteOverviewPanel deviceId={latest.view.deviceId} section="processes" sessionKey="same-session"/>
             : <SystemInventoryPanel deviceId={latest.view.deviceId} section="services" sessionKey="same-session" onOpenLogs={openLogs}/>}</main>);
         await flush();
-        const search = screen.getByRole('searchbox', { name: 'Search this complete section' });
+        const search = screen.getByRole('searchbox', { name: 'Search this section' });
         fireEvent.change(search, { target: { value: '00000' } });
         const filter = kind === 'system' ? screen.getByRole('combobox', { name: 'Section filter' }) : null;
         if (filter) fireEvent.change(filter, { target: { value: 'active' } });
-        const submitName = kind === 'overview' ? 'Search from first page' : 'Apply search and filter';
+        const submitName = kind === 'overview' ? 'Search' : 'Apply';
         fireEvent.click(screen.getByRole('button', { name: submitName })); await flush();
         const main = screen.getByRole('main'), table = screen.getByRole('table');
         const panel = mounted.container.querySelector<HTMLElement>(kind === 'overview' ? '.complete-overview' : '.system-inventory')!;
@@ -429,7 +429,7 @@ describe.each(['overview', 'system'] as const)('%s live panel DOM continuity', k
             expect(mounted.container.querySelector(kind === 'overview' ? '.complete-overview' : '.system-inventory')).toBe(panel);
             expect(screen.getByRole('table')).toBe(table); expect(table.closest('.package-table-scroll')).toBe(scroller);
             expect(main.scrollTop).toBe(240); expect(scroller.scrollTop).toBe(120); expect(scroller.scrollLeft).toBe(77);
-            expect(screen.getByRole('searchbox', { name: 'Search this complete section' })).toBe(search);
+            expect(screen.getByRole('searchbox', { name: 'Search this section' })).toBe(search);
             expect(search).toHaveValue('00000'); expect(search).toBeEnabled();
             if (filter) { expect(screen.getByRole('combobox', { name: 'Section filter' })).toBe(filter); expect(filter).toHaveValue('active'); expect(filter).toBeEnabled(); }
             expect(screen.getByRole('button', { name: submitName })).toBeEnabled();

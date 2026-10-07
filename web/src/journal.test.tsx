@@ -78,11 +78,11 @@ describe('compact journal controls and truthful states', () => {
         result.rerender(<p><JournalHighlight text={text} search="needle"/></p>); expect(screen.getByText('NeEdLe', { selector: 'mark' })).toBeVisible();
     });
     it('bounds search by UTF-8 bytes and clearly explains its scope', () => {
-        const r = resource({ view: journalView(), page: journalPage() }); render(<JournalContent resource={r} insecureTestMode={false}/>); fireEvent.click(screen.getByText('Search scope', { selector: 'summary' })); expect(screen.getByText(/Case-insensitive literal search across this captured snapshot only/)).toBeVisible();
-        fireEvent.change(screen.getByLabelText('Literal text in captured messages'), { target: { value: '😀'.repeat(33) } }); expect(screen.getByRole('button', { name: 'Search capture' })).toBeDisabled(); expect(screen.getByRole('alert')).toHaveTextContent('128 UTF-8 bytes'); expect(r.search).not.toHaveBeenCalled();
+        const r = resource({ view: journalView(), page: journalPage() }); render(<JournalContent resource={r} insecureTestMode={false}/>); expect(screen.getByText(/Literal, case-insensitive search in this snapshot only/)).toBeVisible();
+        fireEvent.change(screen.getByLabelText('Search captured messages'), { target: { value: '😀'.repeat(33) } }); expect(screen.getByRole('button', { name: 'Search capture' })).toBeDisabled(); expect(screen.getByRole('alert')).toHaveTextContent('128 UTF-8 bytes'); expect(r.search).not.toHaveBeenCalled();
     });
     it('keeps technical details collapsed and provides German labels', () => {
-        setLocale('de', false); render(<JournalContent resource={resource()} insecureTestMode={false}/>); expect(screen.getByText('Erfassungsdetails & Grenzen').closest('details')).not.toHaveAttribute('open'); expect(screen.getByText('Erweitert', { selector: 'summary' }).closest('details')).not.toHaveAttribute('open'); openAdvanced(); expect(screen.getByLabelText('Von (UTC)')).toBeVisible(); expect(screen.getByRole('button', { name: 'Logs abrufen' })).toBeDisabled();
+        setLocale('de', false); render(<JournalContent resource={resource()} insecureTestMode={false}/>); expect(screen.getByText('Grenzen & Datenschutz').closest('details')).not.toHaveAttribute('open'); expect(screen.getByText('Erweitert', { selector: 'summary' }).closest('details')).not.toHaveAttribute('open'); openAdvanced(); expect(screen.getByLabelText('Von (UTC)')).toBeVisible(); expect(screen.getByRole('button', { name: 'Logs abrufen' })).toBeDisabled();
     });
 });
 

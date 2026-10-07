@@ -26,9 +26,9 @@ describe('endpoint identity operator view', () => {
         render(<Harness/>); await screen.findByText('fixture-linux');
         expect(screen.getByText('Recent observation')).toBeVisible();
         expect(screen.getByRole('article', { name: 'Interface lo' })).toHaveTextContent('Up · Loopback');
-        const eth = screen.getByRole('article', { name: 'Interface eth0' }); expect(within(eth).getByRole('region', { name: 'IPv4' })).toHaveTextContent('192.0.2.19'); expect(within(eth).getByRole('region', { name: 'IPv6' })).toHaveTextContent('2001:db8::19'); expect(eth).toHaveTextContent('fe80::19'); expect(eth).toHaveTextContent('Hardware kind unknown');
+        const eth = screen.getByRole('article', { name: 'Interface eth0' }); expect(within(eth).getByRole('region', { name: 'IPv4' })).toHaveTextContent('192.0.2.19'); expect(within(eth).getByRole('region', { name: 'IPv6' })).toHaveTextContent('2001:db8::19'); expect(eth).toHaveTextContent('fe80::19'); expect(screen.getByText(/Hardware kind is unknown/)).toBeVisible();
         expect(screen.queryByRole('link')).not.toBeInTheDocument(); expect(screen.getByText('2026-10-04T12:00:00Z')).toBeVisible(); expect(screen.getByText('2026-10-04T12:00:01Z')).toBeVisible();
-        fireEvent.click(screen.getByText('Source, permission & retention')); expect(screen.getByText(/Sources: local uname/)).toBeVisible(); expect(screen.getByText(/cannot remotely verify/)).toBeVisible();
+        fireEvent.click(screen.getByText('Source, permission & retention')); expect(screen.getByText(/Sources: local uname/)).toBeVisible(); expect(screen.getByText(/cannot verify the current local setting/)).toBeVisible();
         expect(vi.mocked(request)).toHaveBeenCalledWith(`/devices/${endpointDevice}/inventory/endpoint-identity`, expect.objectContaining({ signal: expect.any(AbortSignal) }), 16384);
     });
     it('renders hostname markup inertly without creating an element', async () => {
@@ -47,7 +47,7 @@ describe('endpoint identity operator view', () => {
         vi.mocked(request).mockRejectedValue(new Error('raw-sensitive-value')); fireEvent.click(screen.getByRole('button', { name: 'Refresh reported identity' })); await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('could not be read')); expect(document.body).not.toHaveTextContent('raw-sensitive-value');
     });
     it('shows German source/permission/failure states', async () => {
-        setLocale('de', false); const v = endpointView(); v.latest!.interfaces = { meta: endpointFailed(), items: [] }; vi.mocked(request).mockResolvedValue(v); render(<Harness/>); await screen.findByText('fixture-linux'); expect(screen.getByText('Erfassung fehlgeschlagen: Berechtigung verweigert')).toBeVisible(); fireEvent.click(screen.getByText('Quelle, Freigabe & Aufbewahrung')); expect(screen.getByText(/standardmäßig aus/)).toBeVisible();
+        setLocale('de', false); const v = endpointView(); v.latest!.interfaces = { meta: endpointFailed(), items: [] }; vi.mocked(request).mockResolvedValue(v); render(<Harness/>); await screen.findByText('fixture-linux'); expect(screen.getByText('Erfassung fehlgeschlagen: Berechtigung verweigert')).toBeVisible(); fireEvent.click(screen.getByText('Quelle, Freigabe & Aufbewahrung')); expect(screen.getByText(/Standardmäßig aus/)).toBeVisible();
     });
 });
 
