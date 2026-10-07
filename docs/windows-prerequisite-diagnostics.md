@@ -72,3 +72,40 @@ path-policy correction or any proposal to launch privileged native acceptance.
 Microsoft contracts: [file/directory access-right definitions](https://learn.microsoft.com/en-us/windows/win32/fileio/file-access-rights-constants),
 [GetSecurityInfo returned descriptor components](https://learn.microsoft.com/en-us/windows/win32/api/aclapi/nf-aclapi-getsecurityinfo),
 and [FILE_CASE_SENSITIVE_INFORMATION flags](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/ntifs/ns-ntifs-_file_case_sensitive_information).
+
+## Root acquisition categories (f3b7bb2 follow-on)
+
+The f3b7bb2 ordinary read-only result was `volume-root` / `open-failed`.
+Its source already resolves the first `QueryDosDevice` mapping and opens only
+`\Device\HarddiskVolume<number>\` with `RootDirectory = NULL`. It does not
+pass a DOS-drive or VolumeGUID alias to `NtCreateFile`. The old category did not
+prove that native open was reached: syntax, drive type, repeated mapping query,
+buffer validation and target validation failures all became `open-failed` too.
+
+Root failures now have a closed `root-` category, valid only at `volume-root`
+with empty rights. Pre-open categories identify syntax, drive type, device query,
+buffer, target allowlist or name encoding. Native failures distinguish access,
+sharing, reparse, invalid request, missing/invalid name/path, wrong object type,
+unsupported operation, privilege, unresolved reparse, unavailable device, I/O,
+and an explicit other category. They expose neither raw numeric status/error
+text nor the resolved device, drive letter, path, trustee, ACL or handle.
+The same native failures and policy refusals are preserved, including their
+internal error identity. There is no retry, alternate alias, new read, access
+mask change, flag removal, ACL repair or mutating fallback.
+
+The exact root request retains `0x001200a1` desired access (including
+SYNCHRONIZE), read/write sharing without delete, existing-only `FILE_OPEN`,
+`OBJ_CASE_INSENSITIVE | OBJ_DONT_REPARSE`, and directory, synchronous,
+open-reparse-point and no-recall options. The short directory-compatible-option
+list in Microsoft documentation does not establish which status occurred here;
+this amendment does not infer an invalid parameter or weaken either protection.
+
+In-memory root fixtures intercept all three APIs before a host call, verify the
+resolved physical name and every request field, and exercise failure stages and
+typed statuses. Their names are required by ordinary read-only CI. A new measured
+result is still needed to establish the actual cause. An `other` outcome remains
+unknown, and no root category proves future SCM-token access or native acceptance.
+
+Primary contracts: [QueryDosDevice current mapping](https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-querydosdevicew),
+[NtCreateFile name, access and disposition](https://learn.microsoft.com/en-us/windows/win32/api/winternl/nf-winternl-ntcreatefile),
+and [RootDirectory and OBJ_DONT_REPARSE](https://learn.microsoft.com/en-us/windows/win32/api/ntdef/ns-ntdef-_object_attributes).

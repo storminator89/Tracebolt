@@ -30,6 +30,7 @@ REPORT_FIELDS = {"schema", "source", "status", "check", "reason", "readOnly", "d
 
 DIAGNOSTIC_LOCATIONS = {"volume-root", "program-files", "program-data", "intermediate"}
 DIAGNOSTIC_FAILURES = {
+    "root-path-syntax", "root-drive-type", "root-device-query-failed", "root-device-buffer-invalid", "root-device-target-rejected", "root-name-encoding", "root-open-access-denied", "root-open-sharing-violation", "root-open-reparse", "root-open-invalid-request", "root-open-name-not-found", "root-open-path-not-found", "root-open-name-invalid", "root-open-path-invalid", "root-open-type-mismatch", "root-open-not-directory", "root-open-unsupported", "root-open-privilege", "root-open-reparse-unresolved", "root-open-device-unavailable", "root-open-io-failed", "root-open-other",
     "path-syntax", "open-access-denied", "open-sharing-violation", "open-failed",
     "metadata-query-failed", "reparse-point", "object-kind", "multiple-links",
     "final-path-query-failed", "final-path-mismatch", "case-query-denied",
@@ -113,6 +114,7 @@ def validate_report(raw: bytes, source: str) -> dict:
         require(type(diagnostic) is dict and set(diagnostic) == {"location", "failure", "rights"})
         require(type(diagnostic["location"]) is str and diagnostic["location"] in DIAGNOSTIC_LOCATIONS)
         require(type(diagnostic["failure"]) is str and diagnostic["failure"] in DIAGNOSTIC_FAILURES)
+        require(not diagnostic["failure"].startswith("root-") or diagnostic["location"] == "volume-root")
         rights = diagnostic["rights"]
         require(type(rights) is list and all(type(right) is str for right in rights))
         if diagnostic["failure"] == "untrusted-write-grant":
@@ -217,6 +219,9 @@ def run_measurement(env: dict[str, str], root: Path = ROOT) -> dict:
 
 FIXTURE_PACKAGES = ("localrmm/internal/windowsacceptance/native", "localrmm/cmd/windows-prerequisites", "localrmm/internal/windowspath")
 REQUIRED_FIXTURES = {
+    (FIXTURE_PACKAGES[2], "TestRootRequestUsesResolvedDeviceWithoutFallback"),
+    (FIXTURE_PACKAGES[2], "TestRootAcquisitionStagesFailBeforeNativeOpen"),
+    (FIXTURE_PACKAGES[2], "TestRootNativeStatusesAreFiniteAndNeverRetried"),
     (FIXTURE_PACKAGES[0], "TestCleanupFreezeReusesDeleteParentsWithoutReopeningAncestors"),
     (FIXTURE_PACKAGES[0], "TestCleanupFreezeFailureClosesOnlyAcquiredHandlesInReverse"),
     (FIXTURE_PACKAGES[0], "TestCleanupFreezeRejectsMissingParentWithoutPathFallback"),

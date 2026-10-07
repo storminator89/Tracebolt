@@ -1,5 +1,5 @@
 {
-  "goSourceSha256": "59d22b388916af07b6a47be1ff1edaced6eafc2018ddce55b7c1b2700defdba9",
+  "goSourceSha256": "6f7c31e2e5773f872f020cebe4be20934d5db5394e5b443b18bf13f2238d9805",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -2444,6 +2444,7 @@
       "TestProgramDataExceptionIsScopedAndCannotGrantChildReplacement",
       "TestProgramDataWriteMaskRetainsEveryDestructiveBit",
       "TestRetainedOutageObservationNeedsSameExactBytesAndSequence",
+      "TestRootFailureCannotDescribeChildOrRightsGrant",
       "TestSenderCounterAndIdentityCannotMoveBackwards",
       "TestTransitionObservationNeedsExistingWantedState"
     ],
@@ -2524,7 +2525,11 @@
       "TestCreateOnlyBindingFailureOrder",
       "TestRelativeNativeFailureHasNoAdoptionOrRetry",
       "TestRelativeNativeInvalidInputNeverReachesSyscall",
-      "TestRelativeNativeRequestsAreBoundAndCreateOnly"
+      "TestRelativeNativeRequestsAreBoundAndCreateOnly",
+      "TestRootAcquisitionStagesFailBeforeNativeOpen",
+      "TestRootDiagnosticKeepsCauseAndRedactsFormatting",
+      "TestRootNativeStatusesAreFiniteAndNeverRetried",
+      "TestRootRequestUsesResolvedDeviceWithoutFallback"
     ],
     "localrmm/internal/windowsservice": [
       "TestAncestorTrustAdmissionNeverClaimsEffectiveTokenReadAccess",

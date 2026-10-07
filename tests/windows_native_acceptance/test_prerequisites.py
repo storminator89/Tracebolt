@@ -179,7 +179,10 @@ class ReadOnlyReportTests(unittest.TestCase):
             for failure in probe.DIAGNOSTIC_FAILURES:
                 rights = ["add-file"] if failure == "untrusted-write-grant" else []
                 diagnostic = {"location": location, "failure": failure, "rights": rights}
-                probe.validate_report(encode(dict(value, diagnostic=diagnostic)), SOURCE)
+                if failure.startswith("root-") and location != "volume-root":
+                    self.reject(dict(value, diagnostic=diagnostic))
+                else:
+                    probe.validate_report(encode(dict(value, diagnostic=diagnostic)), SOURCE)
         full = dict(value, diagnostic=dict(value["diagnostic"], rights=list(probe.DIAGNOSTIC_RIGHTS)))
         probe.validate_report(encode(full), SOURCE)
         raw = encode(value)

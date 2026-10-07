@@ -1,5 +1,7 @@
 package native
 
+import "strings"
+
 // PrerequisiteDiagnostic identifies the first failed ancestor check without
 // exposing native paths, trustees, descriptors, masks, handles or error strings.
 // Rights are canonical finite categories of a rejected allow ACE, never an ACL.
@@ -35,7 +37,8 @@ func ancestorLocation(index, count int, programFiles bool) string {
 }
 func validDiagnosticFailure(v string) bool {
 	switch v {
-	case "path-syntax", "open-access-denied", "open-sharing-violation", "open-failed",
+	case "root-path-syntax", "root-drive-type", "root-device-query-failed", "root-device-buffer-invalid", "root-device-target-rejected", "root-name-encoding", "root-open-access-denied", "root-open-sharing-violation", "root-open-reparse", "root-open-invalid-request", "root-open-name-not-found", "root-open-path-not-found", "root-open-name-invalid", "root-open-path-invalid", "root-open-type-mismatch", "root-open-not-directory", "root-open-unsupported", "root-open-privilege", "root-open-reparse-unresolved", "root-open-device-unavailable", "root-open-io-failed", "root-open-other",
+		"path-syntax", "open-access-denied", "open-sharing-violation", "open-failed",
 		"metadata-query-failed", "reparse-point", "object-kind", "multiple-links",
 		"final-path-query-failed", "final-path-mismatch", "case-query-denied",
 		"case-query-unsupported", "case-query-invalid", "case-query-failed", "case-sensitive-directory",
@@ -49,6 +52,9 @@ func (d PrerequisiteDiagnostic) valid() bool {
 	switch d.Location {
 	case "volume-root", "program-files", "program-data", "intermediate":
 	default:
+		return false
+	}
+	if strings.HasPrefix(d.Failure, "root-") && d.Location != "volume-root" {
 		return false
 	}
 	if !validDiagnosticFailure(d.Failure) || d.Rights == nil {

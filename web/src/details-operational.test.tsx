@@ -38,8 +38,8 @@ describe('actual device page operational integration',()=>{
    }
    throw new APIError('private unavailable source',404);
   });
-  render(detail());const tab=await screen.findByRole('tab',{name:'Inventory',exact:true});fireEvent.click(tab);
-  const panel=screen.getByRole('region',{name:'Windows inventory',exact:true});
+  render(detail());const tab=await screen.findByRole('tab',{name:'Inventory'});fireEvent.click(tab);
+  const panel=screen.getByRole('region',{name:'Windows inventory'});
   await within(panel).findByText(status==='not_configured'?'Windows inventory is not configured for this identity.':'Windows inventory is unavailable.');
   expect(within(panel).queryByRole('table')).not.toBeInTheDocument();expect(within(panel).queryByText('Recent observation')).not.toBeInTheDocument();
   expect(screen.queryByText('Legacy inventory source')).not.toBeInTheDocument();expect(screen.queryByText('Operational inventory')).not.toBeInTheDocument();

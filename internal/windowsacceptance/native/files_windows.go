@@ -149,6 +149,9 @@ func openChecked(p string, directory bool, access, share uint32) (windows.Handle
 	return h, id, err
 }
 func openFailure(err error) string {
+	if code := windowspath.RootDiagnostic(err); code != "" {
+		return code
+	}
 	if errors.Is(err, windows.STATUS_REPARSE_POINT_ENCOUNTERED) {
 		return "reparse-point"
 	}

@@ -65,3 +65,23 @@ func TestProgramDataWriteMaskRetainsEveryDestructiveBit(t *testing.T) {
 		}
 	}
 }
+
+func TestRootFailureCannotDescribeChildOrRightsGrant(t *testing.T) {
+	for _, failure := range []string{"root-path-syntax", "root-device-query-failed", "root-open-invalid-request", "root-open-other"} {
+		d := PrerequisiteDiagnostic{Location: "volume-root", Failure: failure, Rights: []string{}}
+		if !d.valid() {
+			t.Fatal("finite root failure rejected")
+		}
+		for _, location := range []string{"program-files", "program-data", "intermediate"} {
+			d.Location = location
+			if d.valid() {
+				t.Fatal("root failure attributed to child")
+			}
+		}
+		d.Location = "volume-root"
+		d.Rights = []string{"add-file"}
+		if d.valid() {
+			t.Fatal("open failure treated as ACE evidence")
+		}
+	}
+}

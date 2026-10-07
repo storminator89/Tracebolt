@@ -3,6 +3,7 @@
 package windowspath
 
 import (
+	"errors"
 	"runtime"
 	"strings"
 	"unsafe"
@@ -13,25 +14,92 @@ import (
 // OpenRoot resolves a fixed local volume once, then opens its native device
 // directly. Later requests use this handle, never a mutable DOS drive mapping.
 func OpenRoot(root string) (windows.Handle, error) {
-	if !Canonical(root) || len(root) != 3 || windows.GetDriveType(windows.StringToUTF16Ptr(root)) != windows.DRIVE_FIXED {
-		return 0, ErrPath
+	return openRootWith(root, rootCalls{windows.GetDriveType, windows.QueryDosDevice, windows.NtCreateFile})
+}
+
+type rootCalls struct {
+	driveType   func(*uint16) uint32
+	queryDevice func(*uint16, *uint16, uint32) (uint32, error)
+	create      createCall
+}
+
+// Injection is used only by in-memory request/diagnostic tests. Production uses
+// the same three Windows calls, in the same order, without retries or fallback.
+func openRootWith(root string, calls rootCalls) (windows.Handle, error) {
+	if !Canonical(root) || len(root) != 3 {
+		return 0, rootRejected("root-path-syntax", ErrPath)
+	}
+	if calls.driveType(windows.StringToUTF16Ptr(root)) != windows.DRIVE_FIXED {
+		return 0, rootRejected("root-drive-type", ErrPath)
 	}
 	var target [1024]uint16
-	n, err := windows.QueryDosDevice(windows.StringToUTF16Ptr(root[:2]), &target[0], uint32(len(target)))
-	if err != nil || n == 0 || n >= uint32(len(target)) {
-		return 0, ErrPath
+	n, err := calls.queryDevice(windows.StringToUTF16Ptr(root[:2]), &target[0], uint32(len(target)))
+	if err != nil {
+		return 0, rootRejected("root-device-query-failed", ErrPath)
+	}
+	if n == 0 || n >= uint32(len(target)) {
+		return 0, rootRejected("root-device-buffer-invalid", ErrPath)
 	}
 	device := windows.UTF16ToString(target[:])
 	const prefix = `\Device\HarddiskVolume`
 	if !strings.HasPrefix(device, prefix) || len(device) == len(prefix) {
-		return 0, ErrPath
+		return 0, rootRejected("root-device-target-rejected", ErrPath)
 	}
 	for _, c := range device[len(prefix):] {
 		if c < '0' || c > '9' {
-			return 0, ErrPath
+			return 0, rootRejected("root-device-target-rejected", ErrPath)
 		}
 	}
-	return ntOpen(0, device+`\`, DirectoryAccess, DirectoryShare, windows.FILE_OPEN, true, nil)
+	h, err := ntOpenWith(0, device+`\`, DirectoryAccess, DirectoryShare, windows.FILE_OPEN, true, nil, calls.create)
+	if err != nil {
+		return 0, rootRejected(rootOpenFailure(err), err)
+	}
+	return h, nil
+}
+func rootOpenFailure(err error) string {
+	if errors.Is(err, ErrPath) {
+		return "root-name-encoding"
+	}
+	var status windows.NTStatus
+	if !errors.As(err, &status) {
+		return "root-open-other"
+	}
+	switch status {
+	case windows.STATUS_ACCESS_DENIED:
+		return "root-open-access-denied"
+	case windows.STATUS_SHARING_VIOLATION:
+		return "root-open-sharing-violation"
+	case windows.STATUS_REPARSE_POINT_ENCOUNTERED:
+		return "root-open-reparse"
+	case windows.STATUS_INVALID_PARAMETER, windows.STATUS_INVALID_PARAMETER_MIX,
+		windows.STATUS_INVALID_PARAMETER_1, windows.STATUS_INVALID_PARAMETER_2, windows.STATUS_INVALID_PARAMETER_3, windows.STATUS_INVALID_PARAMETER_4,
+		windows.STATUS_INVALID_PARAMETER_5, windows.STATUS_INVALID_PARAMETER_6, windows.STATUS_INVALID_PARAMETER_7, windows.STATUS_INVALID_PARAMETER_8,
+		windows.STATUS_INVALID_PARAMETER_9, windows.STATUS_INVALID_PARAMETER_10, windows.STATUS_INVALID_PARAMETER_11, windows.STATUS_INVALID_PARAMETER_12:
+		return "root-open-invalid-request"
+	case windows.STATUS_OBJECT_NAME_NOT_FOUND, windows.STATUS_NO_SUCH_FILE:
+		return "root-open-name-not-found"
+	case windows.STATUS_OBJECT_PATH_NOT_FOUND:
+		return "root-open-path-not-found"
+	case windows.STATUS_OBJECT_NAME_INVALID:
+		return "root-open-name-invalid"
+	case windows.STATUS_OBJECT_PATH_SYNTAX_BAD:
+		return "root-open-path-invalid"
+	case windows.STATUS_OBJECT_TYPE_MISMATCH, windows.STATUS_FILE_IS_A_DIRECTORY:
+		return "root-open-type-mismatch"
+	case windows.STATUS_NOT_A_DIRECTORY:
+		return "root-open-not-directory"
+	case windows.STATUS_NOT_SUPPORTED, windows.STATUS_INVALID_DEVICE_REQUEST, windows.STATUS_NOT_IMPLEMENTED:
+		return "root-open-unsupported"
+	case windows.STATUS_PRIVILEGE_NOT_HELD:
+		return "root-open-privilege"
+	case windows.STATUS_IO_REPARSE_TAG_NOT_HANDLED, windows.STATUS_REPARSE, windows.STATUS_REPARSE_OBJECT, windows.STATUS_STOPPED_ON_SYMLINK, windows.STATUS_REPARSE_POINT_NOT_RESOLVED, windows.STATUS_IO_REPARSE_TAG_INVALID, windows.STATUS_IO_REPARSE_TAG_MISMATCH, windows.STATUS_REPARSE_ATTRIBUTE_CONFLICT:
+		return "root-open-reparse-unresolved"
+	case windows.STATUS_NO_SUCH_DEVICE, windows.STATUS_DEVICE_NOT_READY, windows.STATUS_VOLUME_DISMOUNTED, windows.STATUS_FILE_IS_OFFLINE:
+		return "root-open-device-unavailable"
+	case windows.STATUS_IO_DEVICE_ERROR, windows.STATUS_DISK_CORRUPT_ERROR, windows.STATUS_FILE_CORRUPT_ERROR:
+		return "root-open-io-failed"
+	}
+	return "root-open-other"
 }
 
 // OpenChild accepts only one component. Attributes/EA writes are not frozen by

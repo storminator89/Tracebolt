@@ -49,12 +49,12 @@ describe('Windows inventory within the shared device UI', () => {
         const history = historyFixture(); history.deviceId = windowsDeviceId;
         vi.mocked(request).mockImplementation(async path => path === `/devices/${windowsDeviceId}` ? windowsDevice() : path.endsWith('/windows-inventory') ? value : path.endsWith('/resource-history') ? history : Promise.reject(new Error('Unexpected fixture route')));
         render(<DeviceDetail id={windowsDeviceId} onClose={vi.fn()} onCase={vi.fn()}/>);
-        await screen.findByRole('heading', { name: windowsDeviceId, exact: true });
+        await screen.findByRole('heading', { name: windowsDeviceId });
         await waitFor(() => expect(document.querySelector('.device-detail-heading .detail-time')).toHaveTextContent(locale === 'de' ? 'Inventar erfasst' : 'Inventory observed'));
         expect(document.querySelector('.device-detail-heading')).not.toHaveTextContent(/Hostname observed|Hostname erfasst|fixture-windows/);
         expect(document.querySelector('.device-detail-heading time')).toHaveAttribute('datetime', value.snapshot!.collectedAt);
-        fireEvent.click(screen.getByRole('tab', { name: locale === 'de' ? 'Inventar' : 'Inventory', exact: true }));
-        fireEvent.click(screen.getByRole('tab', { name: 'Hostname', exact: true }));
+        fireEvent.click(screen.getByRole('tab', { name: locale === 'de' ? 'Inventar' : 'Inventory' }));
+        fireEvent.click(screen.getByRole('tab', { name: 'Hostname' }));
         expect(screen.getByText(locale === 'de' ? 'Berechtigung verweigert' : 'Permission denied')).toBeVisible();
         expect(document.querySelector('.windows-inventory-table')).toBeNull();
     });
