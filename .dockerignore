@@ -9,6 +9,13 @@
 !internal/**
 !web/
 !web/**
+# Only these synthetic contract inputs may enter from tests.
+!tests/
+tests/**
+!tests/e2e-review/
+tests/e2e-review/**
+!tests/e2e-review/proactive-ai-browser.mjs
+!tests/e2e-review/proactive-ai-browser.d.mts
 # Only this required dependency notice may enter from docs.
 !docs/
 docs/**

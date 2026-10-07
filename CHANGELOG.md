@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-10-07 — Complete container inputs and order v3 fixture setup
+
+- Add only the proactive browser fixture and its TypeScript declaration to the Docker context allowlist and web build inputs. The new UI contract test imports that shared synthetic fixture; the old restricted build layout reproduced TS2307, while the corrected exact COPY layout passes the unchanged production build and fixture validator. Runtime stages, dependency pins and TypeScript/test coverage are unchanged.
+
+- Prepare the two initial synthetic retained-inventory mutations through an authenticated API-only baseline read before browser admission. A race-enabled real-fixture proof reproduces immediate write rejection behind a fleet read; ordered setup succeeds with original metadata intact. Preserve every retained-time, zero-row, awaiting and later refresh assertion and all deadlines. The historical generic setup error remains unattributed; hosted acceptance is still required.
+
+
 ## 2026-10-07 — Clear proactive device choices and bounded browser diagnostics
 
 - Label proactive AI device choices with already-collected reported hostnames and compact interface-scoped addresses through the existing operator-only fleet read. Keep stable IDs as the selection authority, show unavailable or stale identity honestly, and never add these display labels to AI export. Preserve current navigation scope when Settings uses an equivalent hash route.

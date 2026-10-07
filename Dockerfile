@@ -9,6 +9,8 @@ RUN npm ci --ignore-scripts
 COPY web/ ./
 # TypeScript checks the shared, entirely synthetic Go/UI contract fixture.
 COPY internal/api/testdata/complete-overview-synthetic.json /src/internal/api/testdata/complete-overview-synthetic.json
+# Shared proactive identity contract and its TypeScript declaration; no test runner.
+COPY tests/e2e-review/proactive-ai-browser.mjs tests/e2e-review/proactive-ai-browser.d.mts /src/tests/e2e-review/
 RUN npm run build
 
 FROM --platform=$BUILDPLATFORM golang:${GO_VERSION}-bookworm AS build
