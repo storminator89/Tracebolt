@@ -1,3 +1,4 @@
+import { actionV2View } from './service-action-v2-fixtures';
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AUTH_REQUIRED_EVENT, mutateRaw, request } from './api';
@@ -48,4 +49,23 @@ describe('service table action integration', () => {
         mounted.rerender(<SystemInventoryPanel deviceId={actionDevice} section="sockets"/>); await flush(); expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
         mounted.rerender(<SystemInventoryPanel deviceId={actionDevice} section="services"/>); await flush(); expect(screen.queryByRole('checkbox')).not.toBeInTheDocument(); expect(vi.mocked(mutateRaw).mock.calls.some(([path]) => path.endsWith('/approve'))).toBe(false);
     });
+});
+
+it('integrates v2 review with the real service table and fails closed on substituted impact', async () => {
+    vi.mocked(request).mockImplementation(async path => {
+        if (path === '/auth/session') return actionSession;
+        if (path.endsWith('/inventory/system')) return system;
+        if (path.endsWith('/service-actions')) return actionV2View();
+        throw new Error(`Unexpected path ${path}`);
+    });
+    vi.mocked(mutateRaw).mockImplementation(async (path, raw) => {
+        if (path.endsWith('/inventory/system/query')) return systemPage(system, rows, [], raw);
+        if (path.endsWith('/preview')) { const v = actionV2View(); v.preview!.affectedServices = ['fixture.service']; return v; }
+        throw new Error(`Unexpected mutation ${path}`);
+    });
+    render(<SystemInventoryPanel deviceId={actionDevice} section="services"/>); await flush();
+    expect(screen.getByRole('button', { name: 'Preview try-restart: other.service' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Preview try-restart: fixture.service' })); await flush();
+    expect(screen.getByRole('alert')).toHaveTextContent('unsupported or inconsistent'); expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+    expect(vi.mocked(mutateRaw).mock.calls.some(([path]) => path.endsWith('/approve'))).toBe(false);
 });

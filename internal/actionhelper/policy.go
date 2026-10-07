@@ -49,6 +49,7 @@ type Policy struct {
 	MaxLifetimeSeconds   int64    `json:"maxLifetimeSeconds"`
 	MaxFutureSkewSeconds int64    `json:"maxFutureSkewSeconds"`
 	Targets              []Target `json:"targets"`
+	Scope                string   `json:"scope,omitempty"`
 }
 
 // Target is the bounded result of an independent local administrator review.
@@ -60,6 +61,8 @@ type Target struct {
 	ReviewDigest string    `json:"reviewDigest"`
 	Units        []UnitPin `json:"units"`
 	Inputs       []FilePin `json:"inputs"`
+	// V2-only live dispatch input; legacy reviewed target policies reject it.
+	AffectedServicesDigest string `json:"affectedServicesDigest,omitempty"`
 }
 type UnitPin struct {
 	Unit                string `json:"unit"`
@@ -104,7 +107,7 @@ func safeInputPath(p string) bool {
 	return strings.HasPrefix(p, "/etc/") || strings.HasPrefix(p, "/usr/") || strings.HasPrefix(p, "/opt/")
 }
 func targetDigest(t Target) (string, error) {
-	if !canonicalUnit(t.Unit) || protectedUnit(t.Unit) || !actionpermit.ValidDigest(t.ReviewDigest) || len(t.Units) < 1 || len(t.Units) > 16 || len(t.Inputs) < 1 || len(t.Inputs) > 32 {
+	if t.AffectedServicesDigest != "" || !canonicalUnit(t.Unit) || protectedUnit(t.Unit) || !actionpermit.ValidDigest(t.ReviewDigest) || len(t.Units) < 1 || len(t.Units) > 16 || len(t.Inputs) < 1 || len(t.Inputs) > 32 {
 		return "", ErrRejected
 	}
 	last := ""
@@ -133,7 +136,7 @@ func targetDigest(t Target) (string, error) {
 	return actionpermit.Digest(b), nil
 }
 func policyVerifier(p Policy, key ed25519.PublicKey) (actionpermit.Verifier, error) {
-	if p.Version != PolicyVersion || p.KeyID != actionpermit.Digest(key) || p.AgentUID == 0 || p.AgentGID == 0 || p.AgentUID == ^uint32(0) || p.AgentGID == ^uint32(0) || len(p.Targets) < 1 || len(p.Targets) > 16 {
+	if (p.Version != PolicyVersion && p.Version != PolicyVersionV2) || p.KeyID != actionpermit.Digest(key) || p.AgentUID == 0 || p.AgentGID == 0 || p.AgentUID == ^uint32(0) || p.AgentGID == ^uint32(0) || (p.Version == PolicyVersion && (p.Scope != "" || len(p.Targets) < 1 || len(p.Targets) > 16)) || (p.Version == PolicyVersionV2 && (p.Scope != FullAdminServiceScope || p.Targets == nil || len(p.Targets) != 0)) {
 		return actionpermit.Verifier{}, ErrRejected
 	}
 	switch p.TransportProfile {
@@ -162,7 +165,7 @@ func policyVerifier(p Policy, key ed25519.PublicKey) (actionpermit.Verifier, err
 	if e != nil || len(raw) > MaxPolicyBytes {
 		return actionpermit.Verifier{}, ErrRejected
 	}
-	return actionpermit.NewVerifier(actionpermit.LocalPins{Enabled: p.Enabled, ManagerID: p.ManagerID, PublicKey: key, EndpointID: p.EndpointID, IncarnationDigest: p.IncarnationDigest, RootPolicyDigest: actionpermit.Digest(raw), MaxLifetimeSeconds: p.MaxLifetimeSeconds, MaxFutureSkewSeconds: p.MaxFutureSkewSeconds, Services: rules})
+	return actionpermit.NewVerifier(actionpermit.LocalPins{Enabled: p.Enabled, ManagerID: p.ManagerID, PublicKey: key, EndpointID: p.EndpointID, IncarnationDigest: p.IncarnationDigest, RootPolicyDigest: actionpermit.Digest(raw), MaxLifetimeSeconds: p.MaxLifetimeSeconds, MaxFutureSkewSeconds: p.MaxFutureSkewSeconds, Services: rules, Scope: p.Scope})
 }
 func decodePolicy(raw []byte, key ed25519.PublicKey) (Policy, error) {
 	var p Policy

@@ -1,5 +1,5 @@
 {
-  "goSourceSha256": "046a7d07793186586036587f916c2113fe59c877c568fb2a5629fa8f32c8d033",
+  "goSourceSha256": "6f4da1a01f05780bf206f4a35a44b2cdadbc70ef682994eab99496b984fb1777",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -253,6 +253,7 @@
       "TestClientLostOrMalformedSubmitResponseNeverRetries",
       "TestClientRechecksProtectedConnectionAfterResponse",
       "TestClientRejectsInvalidInputBeforeConnecting",
+      "TestClientRequiresExplicitVersionedFullAdminCapabilityExchange",
       "TestClientStructuredDenialAndOperationConfusion",
       "TestClientSubmitAndStatusBindExactImmutableEnvelope",
       "TestCredentialReaderNativePasscredRejectsNonRootWriter",
@@ -290,6 +291,15 @@
       "TestConfigurationFingerprintStableOrderAndExplicitEmptyValues",
       "TestDefaultOffPolicyCannotVerifySubmission",
       "TestFixedBackendChecksPinsAndExactTryRestart",
+      "TestFullAdminCapabilitiesV2IPCAndLegacyIsolation",
+      "TestFullAdminDigestBindsConfigurationDropinsAndRelevantGraph",
+      "TestFullAdminExecRuntimeStatusDoesNotChangeDigest",
+      "TestFullAdminOrdinaryRootDynamicServicesAndDefaultDependencies",
+      "TestFullAdminPolicyDistinctFreshScopeAndV1CanonicalBytes",
+      "TestFullAdminRejectsUnsupportedAuthorityAndGraph",
+      "TestFullAdminRootControlledSymlinksAndWritableAuthority",
+      "TestFullAdminRuntimeInspectsBeforeConsumeAndRechecksBeforeDispatch",
+      "TestFullAdminRuntimeUncertainResultRetainsFenceAndNoRetry",
       "TestHelperStartedBeforePackageScopeRefusesLaterAdmission",
       "TestIPCConnectionLimitAndCanceledPartialFrames",
       "TestIPCDisconnectedCallerCannotDiscardCompletedState",
@@ -303,6 +313,8 @@
       "TestProfileSwitchRetainsFloorAndRejectsOldPolicyPermit",
       "TestResponseAllowsAllActualLifecycleStatuses",
       "TestResponseRejectsContradictoryOrUnboundedResult",
+      "TestReviewRootHelperRejectsMisstatedApprovedAffectedProjection",
+      "TestReviewTrustedImpactRecheckedBeforeAdmissionAndFinalDispatch",
       "TestRuntimeCancelAfterInvocationRetainsResult",
       "TestRuntimeCancelDuringLastAuthorityLoadDoesNotStart",
       "TestRuntimeConcurrentDuplicateGetsOriginalDispatchStatus",
@@ -319,6 +331,16 @@
       "TestSetupInitializationRetainedCompletionBlocksLostLedgerAndStarted",
       "TestSetupTargetCheckOnlyFixedReadOnlyBackend",
       "TestSetupTargetFileIsProtectedAndStable",
+      "TestSetupTargetReviewAggregateLimitDoesNotSelectArbitrarySubset",
+      "TestSetupTargetReviewAggregatesWithoutAuthority",
+      "TestSetupTargetReviewFinalizationRequiresExactExplicitAssertion",
+      "TestSetupTargetReviewFinalizedTargetKeepsExistingRuntimeChecks",
+      "TestSetupTargetReviewInspectionRejectsDriftAndProtectionFailure",
+      "TestSetupTargetReviewInspectionUsesOnlyInjectedReadOperations",
+      "TestSetupTargetReviewPinsConfigurationBytesAndObjectRevision",
+      "TestSetupTargetReviewRejectsUnitExecutionAmbiguity",
+      "TestSetupTargetReviewRejectsUnsupportedSemantics",
+      "TestSetupTargetReviewStrictListingAndPropertyParsing",
       "TestUncertainServiceRetainsCrossActionFence"
     ],
     "localrmm/internal/actionjob": [
@@ -326,11 +348,15 @@
       "TestChangedPolicyExpiryAndBadSignerFailClosed",
       "TestClaimBeforeDeadlineHelperExpiredAfterward",
       "TestClaimIsConsumeOnceAndNeverReconstructsGrant",
+      "TestFullAdminNamedPreviewBindsScopeRiskGraphAndOriginalExpiry",
       "TestImpossibleEarlyHelperExpiryDoesNotFreeJob",
       "TestInvalidResultBindingAndFutureClock",
       "TestPolicyProfileChangeKeepsHistoryAndSequence",
       "TestReportReplayNeverRefreshesOriginalAge",
       "TestResultTransitionsIdempotencyAndUnknownBlock",
+      "TestReviewAffectedServiceProjectionIsBoundToSignedPlan",
+      "TestReviewCapabilityProjectionDriftStopsApprovalBeforeSigning",
+      "TestReviewPreviewCannotChangeVisibleProjectionWithoutSignedPlan",
       "TestSignerCannotExtendRequestedLocalDeadline"
     ],
     "localrmm/internal/actionmanager": [
@@ -340,12 +366,14 @@
       "TestSignerProtectedInputsRecheckedBeforeSigning"
     ],
     "localrmm/internal/actionpermit": [
+      "TestAffectedServicesProjectionCanonicalAndV1Unchanged",
       "TestAllSignedFieldsBound",
       "TestContractAndPlanLimits",
       "TestInvalidPinsAndClockBounds",
       "TestPinnedPolicyAndDefaultOff",
       "TestSignedRoundTripAndDomain",
-      "TestStrictCanonicalParser"
+      "TestStrictCanonicalParser",
+      "TestV2FreshScopeNeverWidensLegacyVerifier"
     ],
     "localrmm/internal/actionsetup": [
       "TestFaultBeforeEveryEffectPreservesIntentAndNeverRetries",
@@ -394,7 +422,8 @@
       "TestActionGrantMatchesSignedDescriptionIdentity",
       "TestActionSignaturePurposePathAndFraming",
       "TestActionTLSShapeNeverAcceptsProofFallback",
-      "TestActionWireBodiesRejectUnknownFieldsAndBounds"
+      "TestActionWireBodiesRejectUnknownFieldsAndBounds",
+      "TestV2CapabilityBudgetAndCodecCannotWidenV1"
     ],
     "localrmm/internal/agentidentity": [],
     "localrmm/internal/agentinstall": [
@@ -732,6 +761,8 @@
       "TestServiceActionChangedCapabilitiesSuppressObsoletePreview",
       "TestServiceActionDefaultOffAndCapabilityGuards",
       "TestServiceActionExactMutationRoutesOnly",
+      "TestServiceActionV2APIEmitsExactImpactAndPreservesV1",
+      "TestServiceActionV2ImpactDriftSuppressesPreview",
       "TestSharedSessionCannotAuthorizeServiceAction",
       "TestSocketOwnerCapabilitiesPublicStaticBoundedAndGuarded",
       "TestSocketOwnerCapabilitiesSharesPublicMetadataBudget",
@@ -935,6 +966,9 @@
       "TestDescriptorCeilingReservesExistingSoftLimit",
       "TestExactHighProcessCeilingCompletes",
       "TestMountCoherenceChecksEntireSet",
+      "TestNSFSMountRootGrammarAndPathBoundaries",
+      "TestNSFSMountRootIdentityStillFencesCoherence",
+      "TestNSFSMountRootKeepsCompleteGeneration",
       "TestParsersPreserveAllowedMetricsAndRejectUnsafeValues",
       "TestProcSelfUsesOnlyCanonicalMountPID",
       "TestProcessCommCollectionCoverageAndStrictRoundTrip",
@@ -1362,6 +1396,7 @@
       "TestSecurityReviewCopiedIngressSharesCertificateAdmission",
       "TestSecurityReviewSignedBodyDoesNotReserveIdentity",
       "TestServiceActionApprovedTransportToFakeHelperAndDurableResult",
+      "TestServiceActionV2TransportPreviewImpactBinding",
       "TestSlowBodyCannotOutrunRevocationAndAdmissionIsBounded",
       "TestSystemObservationRealTLSAndHTTPAuthorityReplayAndRetention",
       "TestSystemObservationRefusesOlderCollectionProfiles",
@@ -1679,6 +1714,7 @@
       "TestForegroundInvalidConfigDoesNotOpenState",
       "TestForegroundKeepsExclusiveLockAcrossWaits",
       "TestFrameShapeAndCollectionIsolation",
+      "TestFullAdminSenderRequiresExplicitV2GrantAndFreshInspection",
       "TestGenerationBoundSenderRejectsOldRequestsWithoutCapture",
       "TestGenerationChangedAfterCaptureDiscardsOldBody",
       "TestGenerationFailureKeepsOrdinaryAgentLoopRunning",
@@ -2780,7 +2816,9 @@
       "TestHTTPTestContainerLifecycle",
       "TestTLSContainerLifecycle"
     ],
-    "localrmm/tests/e2e-review/actionfixture": [],
+    "localrmm/tests/e2e-review/actionfixture": [
+      "TestFixtureV2FramingImpactAndSingleFakeDispatch"
+    ],
     "localrmm/tests/e2e-review/conditionalfixture": [],
     "localrmm/tests/e2e-review/endpointfixture": [],
     "localrmm/tests/e2e-review/enrollmentfixture": [],

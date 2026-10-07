@@ -19,14 +19,18 @@ import (
 )
 
 const (
-	Version              = "tracebolt.execution-permit.v1"
-	PlanVersion          = "tracebolt.action-plan.v1"
-	TryRestartService    = "service.try-restart"
-	MaxPermitBytes       = 4096
-	MaxLifetimeSeconds   = 120
-	MaxFutureSkewSeconds = 5
-	signingDomain        = "Tracebolt controlled action execution permit v1\x00"
-	maxUnix              = 253402300799
+	Version               = "tracebolt.execution-permit.v1"
+	VersionV2             = "tracebolt.execution-permit.v2"
+	PlanVersionV2         = "tracebolt.action-plan.v2"
+	FullAdminServiceScope = "control-existing-root-trusted-system-services"
+	PlanVersion           = "tracebolt.action-plan.v1"
+	TryRestartService     = "service.try-restart"
+	MaxPermitBytes        = 4096
+	MaxAffectedServices   = 64
+	MaxLifetimeSeconds    = 120
+	MaxFutureSkewSeconds  = 5
+	signingDomain         = "Tracebolt controlled action execution permit v1\x00"
+	maxUnix               = 253402300799
 )
 
 var (
@@ -45,10 +49,11 @@ var (
 // pins and current unit state. It does not prove local review completeness.
 // There are no arbitrary commands, paths, options, environment or extension maps.
 type Plan struct {
-	Version          string `json:"version"`
-	Action           string `json:"action"`
-	Unit             string `json:"unit"`
-	UnitPolicyDigest string `json:"unitPolicyDigest"`
+	Version                string `json:"version"`
+	Action                 string `json:"action"`
+	Unit                   string `json:"unit"`
+	UnitPolicyDigest       string `json:"unitPolicyDigest"`
+	AffectedServicesDigest string `json:"affectedServicesDigest,omitempty"`
 }
 
 // Permit is an immutable description, never proof of authorization on its own.
@@ -93,6 +98,8 @@ type LocalPins struct {
 	MaxLifetimeSeconds   int64
 	MaxFutureSkewSeconds int64
 	Services             []ServiceRule
+	// Scope is a separately loaded v2 root grant, never a permit field.
+	Scope string
 }
 
 type ServiceRule struct {
@@ -129,8 +136,33 @@ func validUnit(unit string) bool {
 	return true
 }
 
+// AffectedServicesDigest binds the exact canonical impact projection independently
+// of the opaque root configuration digest. V2 helpers recompute this from their
+// trusted graph; a reporter cannot shorten the visible list while retaining an
+// otherwise genuine configuration digest. No sorting/deduplication hides input.
+func AffectedServicesDigest(units []string) (string, error) {
+	if len(units) < 1 || len(units) > MaxAffectedServices {
+		return "", ErrInvalid
+	}
+	last := ""
+	for _, unit := range units {
+		if !validUnit(unit) || unit <= last {
+			return "", ErrInvalid
+		}
+		last = unit
+	}
+	raw, err := json.Marshal(struct {
+		Version  string   `json:"version"`
+		Services []string `json:"services"`
+	}{"tracebolt.service-action-affected-services.v2", units})
+	if err != nil {
+		return "", ErrInvalid
+	}
+	return Digest(raw), nil
+}
+
 func PlanDigest(p Plan) (string, error) {
-	if p.Version != PlanVersion || p.Action != TryRestartService || !validUnit(p.Unit) || !ValidDigest(p.UnitPolicyDigest) {
+	if (p.Version != PlanVersion && p.Version != PlanVersionV2) || p.Action != TryRestartService || !validUnit(p.Unit) || !ValidDigest(p.UnitPolicyDigest) || (p.Version == PlanVersion && p.AffectedServicesDigest != "") || (p.Version == PlanVersionV2 && !ValidDigest(p.AffectedServicesDigest)) {
 		return "", ErrInvalid
 	}
 	b, err := json.Marshal(p)
@@ -142,7 +174,7 @@ func PlanDigest(p Plan) (string, error) {
 
 func valid(p Permit) bool {
 	d, err := PlanDigest(p.Plan)
-	return err == nil && p.Version == Version && enrollmentcrypto.ValidID(p.ManagerID, "manager_") &&
+	return err == nil && ((p.Version == Version && p.Plan.Version == PlanVersion) || (p.Version == VersionV2 && p.Plan.Version == PlanVersionV2)) && enrollmentcrypto.ValidID(p.ManagerID, "manager_") &&
 		ValidDigest(p.KeyID) && enrollmentcrypto.ValidID(p.EndpointID, "agent_") && ValidDigest(p.IncarnationDigest) &&
 		enrollmentcrypto.ValidID(p.JobID, "action_") && p.Sequence != 0 && d == p.PlanDigest &&
 		enrollmentcrypto.ValidID(p.OperatorID, "operator_") && ValidDigest(p.ApprovalDigest) && ValidDigest(p.RootPolicyDigest) &&
@@ -160,7 +192,11 @@ func SigningMessage(p Permit) ([]byte, error) {
 	if err != nil {
 		return nil, ErrInvalid
 	}
-	return append([]byte(signingDomain), b...), nil
+	domain := signingDomain
+	if p.Version == VersionV2 {
+		domain = "Tracebolt controlled action execution permit v2\x00"
+	}
+	return append([]byte(domain), b...), nil
 }
 
 // Encode accepts an already-created signature; Decode enforces this one native
@@ -201,7 +237,7 @@ func NewVerifier(p LocalPins) (Verifier, error) {
 	if !enrollmentcrypto.ValidID(p.ManagerID, "manager_") || !keyvalidation.Ed25519(p.PublicKey) ||
 		!enrollmentcrypto.ValidID(p.EndpointID, "agent_") || !ValidDigest(p.IncarnationDigest) || !ValidDigest(p.RootPolicyDigest) ||
 		p.MaxLifetimeSeconds < 1 || p.MaxLifetimeSeconds > MaxLifetimeSeconds || p.MaxFutureSkewSeconds < 0 ||
-		p.MaxFutureSkewSeconds > MaxFutureSkewSeconds || len(p.Services) == 0 || len(p.Services) > 16 {
+		p.MaxFutureSkewSeconds > MaxFutureSkewSeconds || (p.Scope != "" && p.Scope != FullAdminServiceScope) || (p.Scope == "" && (len(p.Services) == 0 || len(p.Services) > 16)) || (p.Scope == FullAdminServiceScope && len(p.Services) != 0) {
 		return Verifier{}, ErrInvalid
 	}
 	last := ""
@@ -254,7 +290,10 @@ func (v Verifier) Verify(raw []byte) (Permit, error) {
 		p.StartDeadline-p.IssuedAt > c.MaxLifetimeSeconds {
 		return Permit{}, ErrBinding
 	}
-	allowed := false
+	allowed := c.Scope == FullAdminServiceScope && p.Version == VersionV2
+	if c.Scope == "" && p.Version != Version {
+		return Permit{}, ErrBinding
+	}
 	for _, rule := range c.Services {
 		if rule.Unit == p.Plan.Unit && rule.UnitPolicyDigest == p.Plan.UnitPolicyDigest {
 			allowed = true

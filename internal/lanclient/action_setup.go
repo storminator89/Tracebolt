@@ -127,6 +127,12 @@ func CheckActionSetupReadiness(ctx context.Context, path string) (ActionSetupRea
 	return checkActionSetupReadiness(ctx, path, readActionSetupMaterial, loadActionLocal, actionclient.Client{}.Capabilities, func() time.Time { return time.Now().UTC() })
 }
 
+// CheckFullAdminActionSetupReadiness uses only explicitly versioned helper
+// inspection under the separately installed v2 client grant.
+func CheckFullAdminActionSetupReadiness(ctx context.Context, path string) (ActionSetupReadiness, error) {
+	return checkActionSetupReadiness(ctx, path, readActionSetupMaterial, loadActionLocal, actionclient.Client{}.FullAdminCapabilities, func() time.Time { return time.Now().UTC() })
+}
+
 func checkActionSetupReadiness(ctx context.Context, path string,
 	material func(string) (Material, uint32, uint32, error), local func(Material) (actionLocal, error),
 	capabilities func(context.Context) (actionhelper.Capabilities, error), now func() time.Time) (ActionSetupReadiness, error) {

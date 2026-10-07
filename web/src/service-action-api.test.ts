@@ -1,3 +1,4 @@
+import { actionV2View, actionV2Preview } from './service-action-v2-fixtures';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { abortProtectedRequests } from './api';
 import { approveServiceAction, previewServiceAction, readServiceActions } from './service-action-api';
@@ -30,5 +31,24 @@ describe('service-action protected API', () => {
         const fetch = vi.fn().mockResolvedValueOnce(response(actionSession)).mockResolvedValueOnce(response({ ...actionView(), command: 'extra' })).mockResolvedValueOnce(response(actionSession)).mockResolvedValueOnce(response({ padding: 'x'.repeat(33000) })); vi.stubGlobal('fetch', fetch);
         await expect(readServiceActions(actionDevice, actionAccess, new AbortController().signal)).rejects.toThrow();
         await expect(readServiceActions(actionDevice, actionAccess, new AbortController().signal)).rejects.toThrow();
+    });
+});
+
+describe('v2 protected service API', () => {
+    it('verifies full impact and submits only the reviewed ID and digest', async () => {
+        const fetch = vi.fn().mockResolvedValueOnce(response(actionSession)).mockResolvedValueOnce(response({ csrfToken: 'fixture-token' })).mockResolvedValueOnce(response({ ...actionV2View(), preview: null, job: actionJobView().job, available: false, reason: 'action_in_progress' })); vi.stubGlobal('fetch', fetch);
+        await approveServiceAction(actionDevice, actionV2Preview(), actionAccess, new AbortController().signal);
+        expect(JSON.parse(fetch.mock.calls[2][1].body)).toEqual({ previewId: actionID, previewDigest: actionDigest });
+    });
+    it('refuses altered impact before any approval request', () => {
+        const fetch = vi.fn(); vi.stubGlobal('fetch', fetch); const preview = actionV2Preview(); preview.affectedServices = ['fixture.service'];
+        expect(() => approveServiceAction(actionDevice, preview, actionAccess, new AbortController().signal)).toThrow(); expect(fetch).not.toHaveBeenCalled();
+    });
+    it('accepts a bounded v2 response beyond the original v1 transport cap', async () => {
+        const view = actionV2View(); view.preview = null; delete view.excludedServices;
+        view.services = Array.from({ length: 256 }, (_, i) => ({ unit: `service-${String(i).padStart(3,'0')}.service`, unitPolicyDigest: actionDigest, affectedServices: [`service-${String(i).padStart(3,'0')}.service`] }));
+        expect(JSON.stringify(view).length).toBeGreaterThan(32768);
+        const fetch = vi.fn().mockResolvedValueOnce(response(actionSession)).mockResolvedValueOnce(response(view)); vi.stubGlobal('fetch', fetch);
+        await expect(readServiceActions(actionDevice, actionAccess, new AbortController().signal)).resolves.toEqual(view);
     });
 });

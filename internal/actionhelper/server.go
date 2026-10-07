@@ -52,6 +52,9 @@ func New(d Dependencies) (*Server, error) {
 		return nil, ErrRejected
 	}
 	v, e := a.verifier()
+	if a.Policy.Version == PolicyVersionV2 && d.Fence == nil {
+		return nil, ErrRejected
+	}
 	if e != nil {
 		return nil, ErrRejected
 	}
@@ -142,6 +145,23 @@ func (s *Server) Handle(ctx context.Context, peer Peer, r Request) (actionstate.
 		return actionstate.Status{}, ErrBusy
 	}
 	defer x.busy.Store(false)
+	// Fresh v2 authority is inspected before either durable admission. Drift
+	// cannot consume a job or occupy the cross-action fence. The same digest is
+	// rechecked after admission and immediately before the fixed dispatch.
+	if initial.Policy.Version == PolicyVersionV2 {
+		if _, ok := x.deps.Backend.(fullAdminBackend); !ok {
+			return actionstate.Status{}, ErrRejected
+		}
+		checkCtx, cancel := context.WithTimeout(ctx, PreflightTimeout)
+		_, err := x.deps.Backend.Check(checkCtx, Target{Unit: p.Plan.Unit, ReviewDigest: p.Plan.UnitPolicyDigest, AffectedServicesDigest: p.Plan.AffectedServicesDigest})
+		cancel()
+		if err != nil {
+			return actionstate.Status{}, ErrRejected
+		}
+		if err = x.recheck(peer, r.Envelope, initial, x.deps.Now()); err != nil {
+			return actionstate.Status{}, err
+		}
+	}
 	fenceOwner := mutationfence.Owner{Action: mutationfence.Service, JobID: p.JobID, Sequence: p.Sequence, EnvelopeDigest: actionpermit.Digest(r.Envelope)}
 	if x.deps.Fence != nil {
 		_, fresh, err := x.deps.Fence.Acquire(ctx, fenceOwner, x.deps.Now().Unix())
@@ -185,6 +205,12 @@ func (s *Server) Handle(ctx context.Context, peer Peer, r Request) (actionstate.
 		return notStarted(reasonFor(e))
 	}
 	target, e := initial.target(p.Plan.Unit)
+	if initial.Policy.Version == PolicyVersionV2 {
+		if _, ok := x.deps.Backend.(fullAdminBackend); !ok {
+			return notStarted(actionstate.ReasonPreflight)
+		}
+		target, e = Target{Unit: p.Plan.Unit, ReviewDigest: p.Plan.UnitPolicyDigest, AffectedServicesDigest: p.Plan.AffectedServicesDigest}, nil
+	}
 	if e != nil {
 		return notStarted(actionstate.ReasonPolicyChanged)
 	}
@@ -313,7 +339,14 @@ func (s *Server) handleConn(ctx context.Context, c net.Conn) {
 			return
 		}
 		capabilities, err := s.Capabilities(ctx, peer)
-		_ = writeCapabilities(c, capabilities, err)
+		if r.Version == RequestVersionV2 {
+			if capabilities.Version != CapabilitiesVersionV2 {
+				err = ErrRejected
+			}
+			_ = writeCapabilitiesVersion(c, capabilities, err, ResponseVersionV2)
+		} else {
+			_ = writeCapabilities(c, capabilities, err)
+		}
 		return
 	}
 	st, e := s.Handle(ctx, peer, r)

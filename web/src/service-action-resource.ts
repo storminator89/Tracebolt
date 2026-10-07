@@ -45,7 +45,7 @@ export function useServiceActions(deviceId: string, access: ServiceActionAccess 
             if (kind === 'approve') void run('read');
         }, 10000) };
         try {
-            const value = kind === 'preview' ? await previewServiceAction(deviceId, unit!, credentials, controller.signal) : kind === 'approve' ? await approveServiceAction(deviceId, approval!, credentials, controller.signal) : await readServiceActions(deviceId, credentials, controller.signal);
+            const value = kind === 'preview' ? await previewServiceAction(deviceId, unit!, credentials, controller.signal, currentView.current?.schemaVersion) : kind === 'approve' ? await approveServiceAction(deviceId, approval!, credentials, controller.signal) : await readServiceActions(deviceId, credentials, controller.signal, currentView.current?.schemaVersion);
             if (!valid()) return;
             if (!Number.isFinite(elapsed(started)) || lastServerNow.current && journalAge(value.serverNow, lastServerNow.current) < 0) { discardPreview(); fail('clock'); return; }
             lastServerNow.current = value.serverNow; anchor.current = started;
@@ -86,6 +86,8 @@ export function useServiceActions(deviceId: string, access: ServiceActionAccess 
     const approve = useCallback(() => {
         const value = currentPreview.current;
         if (!value || pending.current || !canSelect(value.plan.unit) || !anchor.current || !currentView.current || journalAge(value.expiresAt, currentView.current.serverNow) <= elapsed(anchor.current)) { if (value) { discardPreview(); fail('expired'); } return; }
+        const view = currentView.current, row = view.services.find(service => service.unit === value.plan.unit);
+        if (!row || row.unitPolicyDigest !== value.plan.unitPolicyDigest || (value.version === 'tracebolt.service-action-preview.v2' ? view.schemaVersion !== 'tracebolt.service-action-view.v2' || view.scope !== value.scope || view.reviewNotice !== value.reviewNotice || JSON.stringify(row.affectedServices) !== JSON.stringify(value.affectedServices) : view.schemaVersion !== 'tracebolt.service-action-view.v1')) { discardPreview(); fail('changed'); return; }
         // Clear synchronously before yielding so repeated clicks cannot resubmit.
         currentPreview.current = null; setPreview(null); void run('approve', undefined, value);
     }, [canSelect, discardPreview, fail, run]);

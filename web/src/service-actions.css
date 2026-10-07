@@ -7,3 +7,5 @@
 .service-action-consent{display:flex;align-items:flex-start;gap:9px;font-size:12px;margin:16px 0}.service-action-consent input{margin-top:2px;flex-shrink:0}
 .service-action-buttons{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}.service-action-job{margin-top:12px;padding-top:12px;border-top:1px solid var(--line);font-size:12px}.service-action-panel details{font-size:12px}.service-action-panel summary{cursor:pointer}
 @media(max-width:600px){.service-action-panel dl>div{grid-template-columns:1fr;gap:2px}.service-action-buttons button{flex:1}.service-action-review{padding:10px}}
+
+.service-action-impact{max-height:180px;overflow:auto;overflow-wrap:anywhere;padding:8px 8px 8px 24px;font-size:12px;line-height:1.6}.service-action-impact:focus-visible{outline:2px solid var(--accent);outline-offset:2px}

@@ -7,6 +7,9 @@ export function installJournalPrimaryBody({ url }) {
  // One armed response, scoped to this fixture device. Inventory pages use the
  // production SYSTEM_PAGE_BYTES bound; journal pages retain their original cap.
  const scopes={journal:{url:target.href,maximum:65536},services:{url:target.href.replace(/\/journal\/query$/,'/inventory/system/query'),maximum:262144},overview:{url:target.href.replace(/\/journal\/query$/,'/inventory/overview/query'),maximum:262144,requestBound:true},actionPreview:{url:target.href.replace(/\/journal\/query$/,'/service-actions/preview'),maximum:32768,requestBound:true,measureBytes:true},actionApprove:{url:target.href.replace(/\/journal\/query$/,'/service-actions/approve'),maximum:32768,requestBound:true,measureBytes:true}};
+ // Explicit v2 scopes do not relax the original v1 action or journal bounds.
+ scopes.actionPreviewV2={...scopes.actionPreview,maximum:262144};
+ scopes.actionApproveV2={...scopes.actionApprove,maximum:262144};
  const originalFetch=globalThis.fetch;
  let serial=0,current=null;
  const discard=(entry,phase)=>{entry.phase=phase;entry.chunks=[];entry.body=null;entry.requestBody=null;};

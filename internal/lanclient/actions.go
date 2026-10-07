@@ -80,17 +80,34 @@ func (s *actionSender) Run(ctx context.Context) string {
 	if e != nil || !s.current(s.material) {
 		return "denied"
 	}
-	caps, capabilityErr := s.helper.Capabilities(ctx)
+	capabilities := func() (actionhelper.Capabilities, error) {
+		if local.policy.Version == ActionClientPolicyVersionV2 {
+			helper, ok := s.helper.(interface {
+				FullAdminCapabilities(context.Context) (actionhelper.Capabilities, error)
+			})
+			if !ok {
+				return actionhelper.Capabilities{}, errActionDenied
+			}
+			return helper.FullAdminCapabilities(ctx)
+		}
+		return s.helper.Capabilities(ctx)
+	}
+	caps, capabilityErr := capabilities()
 	eligible := capabilityErr == nil && matchActionCapabilities(caps, local, s.material) == nil && actionwire.CheckCapabilityTime(caps, s.now()) == nil
 	if eligible {
 		body, err := actionwire.EncodeCapabilities(caps)
+		path := actionwire.CapabilitiesPath
+		if caps.Version == actionhelper.CapabilitiesVersionV2 {
+			body, err = actionwire.EncodeCapabilitiesV2(caps)
+			path = actionwire.CapabilitiesPathV2
+		}
 		if err != nil {
 			return "denied"
 		}
 		if s.recheck(local) != nil || ctx.Err() != nil {
 			return "denied"
 		}
-		reply, code, err := s.exchange(ctx, actionwire.CapabilitiesPath, 1, body)
+		reply, code, err := s.exchange(ctx, path, 1, body)
 		eligible = err == nil && code == http.StatusOK && actionwire.DecodePeek(reply) == nil && caps.Enabled
 	}
 	// A current client grant permits bounded historical-status recovery even if
@@ -161,9 +178,20 @@ func (s *actionSender) Run(ctx context.Context) string {
 	}
 	// Re-read current kernel-authenticated helper authority after the manager
 	// claim, then check the local grant and enrollment immediately before Submit.
-	fresh, e := s.helper.Capabilities(ctx)
+	fresh, e := capabilities()
 	if e != nil || matchActionCapabilities(fresh, local, s.material) != nil || !fresh.Enabled || actionwire.CheckCapabilityTime(fresh, s.now()) != nil {
 		return "denied"
+	}
+	if caps.Version == actionhelper.CapabilitiesVersionV2 {
+		matched := false
+		for _, service := range fresh.Services {
+			if service.Unit == p.Plan.Unit && service.UnitPolicyDigest == p.Plan.UnitPolicyDigest {
+				matched = true
+			}
+		}
+		if !matched || p.Version != actionpermit.VersionV2 {
+			return "denied"
+		}
 	}
 	now := s.now()
 	if now.Unix() < p.NotBefore || now.Unix() >= p.StartDeadline {

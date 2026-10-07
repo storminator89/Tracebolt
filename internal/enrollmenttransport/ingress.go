@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"localrmm/internal/actionmanager"
+	"localrmm/internal/actionwire"
 	"localrmm/internal/enrollmentcrypto"
 	"localrmm/internal/enrollmentstate"
 	"localrmm/internal/enrollmentstore"
@@ -147,7 +148,7 @@ func (h *Ingress) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.packageActions(w, r)
 		return
 	}
-	if r != nil && r.URL != nil && strings.HasPrefix(r.URL.Path, "/v3/service-actions/") {
+	if r != nil && r.URL != nil && (strings.HasPrefix(r.URL.Path, "/v3/service-actions/") || r.URL.Path == actionwire.CapabilitiesPathV2) {
 		h.serviceActions(w, r)
 		return
 	}

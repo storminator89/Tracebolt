@@ -11,6 +11,7 @@ import (
 )
 
 const ActionClientPolicyPath = "/etc/tracebolt/action-client.json"
+const ActionClientPolicyVersionV2 = "tracebolt.action-client-policy.v2"
 const ActionClientPolicyVersion = "tracebolt.action-client-policy.v1"
 const maxActionClientPolicyBytes = 4096
 
@@ -34,6 +35,7 @@ type ActionClientPolicy struct {
 	HTTPTestAcknowledged bool   `json:"httpTestAcknowledged"`
 	AgentUID             uint32 `json:"agentUid"`
 	AgentGID             uint32 `json:"agentGid"`
+	Scope                string `json:"scope,omitempty"`
 }
 type actionLocal struct {
 	policy   ActionClientPolicy
@@ -50,7 +52,7 @@ func actionProfile(m Material) string {
 	return ""
 }
 func validateActionLocal(p ActionClientPolicy, m Material, uid, gid uint32) error {
-	if !m.config.complete() || p.Version != ActionClientPolicyVersion || !enrollmentcrypto.ValidHash(p.SenderBinding) || p.SenderBinding != m.binding || p.ManagerOrigin != m.config.ManagerOrigin || !enrollmentcrypto.ValidID(p.ManagerID, "manager_") || p.EndpointID != m.config.AgentID || p.IncarnationDigest != "sha256:"+journalLeaf(m) || !actionpermit.ValidDigest(p.KeyID) || !actionpermit.ValidDigest(p.RootPolicyDigest) || uid == 0 || gid == 0 || p.AgentUID != uid || p.AgentGID != gid || p.TransportProfile != actionProfile(m) {
+	if !m.config.complete() || ((p.Version != ActionClientPolicyVersion || p.Scope != "") && (p.Version != ActionClientPolicyVersionV2 || p.Scope != actionhelper.FullAdminServiceScope)) || !enrollmentcrypto.ValidHash(p.SenderBinding) || p.SenderBinding != m.binding || p.ManagerOrigin != m.config.ManagerOrigin || !enrollmentcrypto.ValidID(p.ManagerID, "manager_") || p.EndpointID != m.config.AgentID || p.IncarnationDigest != "sha256:"+journalLeaf(m) || !actionpermit.ValidDigest(p.KeyID) || !actionpermit.ValidDigest(p.RootPolicyDigest) || uid == 0 || gid == 0 || p.AgentUID != uid || p.AgentGID != gid || p.TransportProfile != actionProfile(m) {
 		return errActionDenied
 	}
 	if p.TransportProfile == actionhelper.DisposableHTTPTest {
@@ -81,7 +83,7 @@ func decodeActionLocal(raw []byte, m Material, uid, gid uint32) (ActionClientPol
 }
 func matchActionCapabilities(c actionhelper.Capabilities, l actionLocal, m Material) error {
 	p := l.policy
-	if actionhelper.ValidateCapabilities(c) != nil || c.ManagerID != p.ManagerID || c.KeyID != p.KeyID || c.EndpointID != p.EndpointID || c.IncarnationDigest != p.IncarnationDigest || c.RootPolicyDigest != p.RootPolicyDigest || c.TransportProfile != p.TransportProfile || c.HTTPTestAcknowledged != p.HTTPTestAcknowledged || c.EndpointID != m.config.AgentID {
+	if (p.Version == ActionClientPolicyVersion) != (c.Version == actionhelper.CapabilitiesVersion) || p.Scope != c.Scope || actionhelper.ValidateCapabilities(c) != nil || c.ManagerID != p.ManagerID || c.KeyID != p.KeyID || c.EndpointID != p.EndpointID || c.IncarnationDigest != p.IncarnationDigest || c.RootPolicyDigest != p.RootPolicyDigest || c.TransportProfile != p.TransportProfile || c.HTTPTestAcknowledged != p.HTTPTestAcknowledged || c.EndpointID != m.config.AgentID {
 		return errActionDenied
 	}
 	return nil

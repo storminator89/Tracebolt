@@ -101,8 +101,12 @@ func (h *Ingress) serviceActions(w http.ResponseWriter, r *http.Request) {
 	var out any = struct{}{}
 	var err error
 	switch r.URL.Path {
-	case actionwire.CapabilitiesPath:
-		c, e := actionwire.DecodeCapabilities(raw)
+	case actionwire.CapabilitiesPath, actionwire.CapabilitiesPathV2:
+		decode := actionwire.DecodeCapabilities
+		if r.URL.Path == actionwire.CapabilitiesPathV2 {
+			decode = actionwire.DecodeCapabilitiesV2
+		}
+		c, e := decode(raw)
 		if e != nil || !match(1) {
 			failure(w, 400, "invalid_service_action")
 			return

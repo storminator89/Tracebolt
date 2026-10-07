@@ -14,6 +14,8 @@ import (
 )
 
 const (
+	RequestVersionV2      = "tracebolt.action-helper-request.v2"
+	ResponseVersionV2     = "tracebolt.action-helper-response.v2"
 	RequestVersion        = "tracebolt.action-helper-request.v1"
 	ResponseVersion       = "tracebolt.action-helper-response.v1"
 	SubmitOperation       = "submit"
@@ -53,7 +55,7 @@ type Response struct {
 }
 
 func validateRequest(r Request) error {
-	if r.Version != RequestVersion {
+	if r.Version != RequestVersion && r.Version != RequestVersionV2 {
 		return ErrRejected
 	}
 	switch r.Operation {
@@ -65,7 +67,7 @@ func validateRequest(r Request) error {
 		if r.JobID != "" {
 			return ErrRejected
 		}
-		if _, e := actionpermit.Decode(r.Envelope); e != nil {
+		if permit, e := actionpermit.Decode(r.Envelope); e != nil || (r.Version == RequestVersion) != (permit.Version == actionpermit.Version) {
 			return ErrRejected
 		}
 	case StatusOperation:
@@ -152,18 +154,28 @@ func writeResponse(w io.Writer, st actionstate.Status, err error) error {
 }
 
 func writeCapabilities(w io.Writer, c Capabilities, err error) error {
+	if c.Version == CapabilitiesVersionV2 {
+		return ErrRejected
+	}
+	return writeCapabilitiesVersion(w, c, err, ResponseVersion)
+}
+func writeCapabilitiesVersion(w io.Writer, c Capabilities, err error, version string) error {
 	if err != nil {
 		return writeResponse(w, actionstate.Status{}, err)
 	}
 	if ValidateCapabilities(c) != nil {
 		return ErrRejected
 	}
-	return writeResponseValue(w, Response{Version: ResponseVersion, Capabilities: &c})
+	return writeResponseValue(w, Response{Version: version, Capabilities: &c})
 }
 
 func writeResponseValue(w io.Writer, r Response) error {
 	raw, e := json.Marshal(r)
-	if e != nil || len(raw) > MaxResponseBytes {
+	limit := MaxResponseBytes
+	if r.Version == ResponseVersionV2 {
+		limit = MaxCapabilitiesBytesV2 + 1024
+	}
+	if e != nil || len(raw) > limit {
 		return ErrUnavailable
 	}
 	b := frame(raw)
@@ -181,13 +193,19 @@ func writeResponseValue(w io.Writer, r Response) error {
 }
 
 // ReadResponse reads one bounded frame; incomplete responses must be discarded.
-func ReadResponse(reader io.Reader) (Response, error) {
-	raw, e := readFrame(reader, MaxResponseBytes)
+func ReadResponse(reader io.Reader) (Response, error)   { return readResponseVersion(reader, false) }
+func ReadResponseV2(reader io.Reader) (Response, error) { return readResponseVersion(reader, true) }
+func readResponseVersion(reader io.Reader, v2 bool) (Response, error) {
+	limit := MaxResponseBytes
+	if v2 {
+		limit = MaxCapabilitiesBytesV2 + 1024
+	}
+	raw, e := readFrame(reader, limit)
 	if e != nil {
 		return Response{}, e
 	}
 	var r Response
-	if json.Unmarshal(raw, &r) != nil || r.Version != ResponseVersion {
+	if json.Unmarshal(raw, &r) != nil || (r.Version != ResponseVersion && (!v2 || r.Version != ResponseVersionV2)) {
 		return Response{}, ErrRejected
 	}
 	b, _ := json.Marshal(r)
@@ -202,7 +220,7 @@ func ReadResponse(reader io.Reader) (Response, error) {
 	if r.Result != nil && (!validResult(*r.Result) || (r.Error != "" && (r.Error != "expired" || r.Result.Phase != actionstate.Expired))) {
 		return Response{}, ErrRejected
 	}
-	if r.Capabilities != nil && (ValidateCapabilities(*r.Capabilities) != nil || r.Result != nil || r.Error != "") {
+	if r.Capabilities != nil && ((!v2 && r.Capabilities.Version != CapabilitiesVersion) || (v2 && r.Capabilities.Version != CapabilitiesVersionV2) || ValidateCapabilities(*r.Capabilities) != nil || r.Result != nil || r.Error != "") {
 		return Response{}, ErrRejected
 	}
 	if r.Result == nil && r.Capabilities == nil && r.Error == "" {

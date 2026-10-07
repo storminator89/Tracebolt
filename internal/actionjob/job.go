@@ -17,15 +17,17 @@ import (
 )
 
 const (
-	Version         = "tracebolt.service-action-record.v1"
-	PreviewVersion  = "tracebolt.service-action-preview.v1"
-	ApprovalVersion = "tracebolt.service-action-approval.v1"
-	MaxJobs         = 64
-	MaxRecordBytes  = 512 << 10
-	Freshness       = 60 * time.Second
-	PreviewLifetime = 60 * time.Second
-	Approved        = "approved"
-	Claimed         = "claimed"
+	Version           = "tracebolt.service-action-record.v1"
+	PreviewVersionV2  = "tracebolt.service-action-preview.v2"
+	ApprovalVersionV2 = "tracebolt.service-action-approval.v2"
+	PreviewVersion    = "tracebolt.service-action-preview.v1"
+	ApprovalVersion   = "tracebolt.service-action-approval.v1"
+	MaxJobs           = 64
+	MaxRecordBytes    = 512 << 10
+	Freshness         = 60 * time.Second
+	PreviewLifetime   = 60 * time.Second
+	Approved          = "approved"
+	Claimed           = "claimed"
 )
 
 var (
@@ -67,6 +69,9 @@ type Preview struct {
 	CreatedAt         time.Time         `json:"createdAt"`
 	ExpiresAt         time.Time         `json:"expiresAt"`
 	Digest            string            `json:"digest"`
+	Scope             string            `json:"scope,omitempty"`
+	ReviewNotice      string            `json:"reviewNotice,omitempty"`
+	AffectedServices  []string          `json:"affectedServices,omitempty"`
 }
 type Approval struct {
 	Version       string    `json:"version"`
@@ -106,7 +111,7 @@ func PreviewDigest(p Preview) string   { p.Digest = ""; return digest(p) }
 func ApprovalDigest(a Approval) string { return digest(a) }
 func validPreview(p Preview) bool {
 	d, e := actionpermit.PlanDigest(p.Plan)
-	return e == nil && p.Version == PreviewVersion && enrollmentcrypto.ValidID(p.ID, "action_") && enrollmentcrypto.ValidID(p.DeviceID, "agent_") && enrollmentcrypto.ValidID(p.ActorID, "operator_") && p.Sequence > 0 && p.PlanDigest == d && actionpermit.ValidDigest(p.RootPolicyDigest) && actionpermit.ValidDigest(p.KeyID) && actionpermit.ValidDigest(p.IncarnationDigest) && (p.TransportProfile == actionhelper.ProductionTLS || p.TransportProfile == actionhelper.DisposableHTTPTest) && ValidTime(p.CreatedAt) && ValidTime(p.ExpiresAt) && p.ExpiresAt.Equal(p.CreatedAt.Add(PreviewLifetime)) && p.Digest == PreviewDigest(p)
+	return e == nil && validPreviewVersion(p) && enrollmentcrypto.ValidID(p.ID, "action_") && enrollmentcrypto.ValidID(p.DeviceID, "agent_") && enrollmentcrypto.ValidID(p.ActorID, "operator_") && p.Sequence > 0 && p.PlanDigest == d && actionpermit.ValidDigest(p.RootPolicyDigest) && actionpermit.ValidDigest(p.KeyID) && actionpermit.ValidDigest(p.IncarnationDigest) && (p.TransportProfile == actionhelper.ProductionTLS || p.TransportProfile == actionhelper.DisposableHTTPTest) && ValidTime(p.CreatedAt) && ValidTime(p.ExpiresAt) && p.ExpiresAt.Equal(p.CreatedAt.Add(PreviewLifetime)) && p.Digest == PreviewDigest(p)
 }
 func New(manager, device, incarnation string, key ed25519.PublicKey, now time.Time) (Record, error) {
 	r := Record{Version: Version, ManagerID: manager, DeviceID: device, IncarnationDigest: incarnation, PublicKey: bytes.Clone(key), ClockFloor: now, Jobs: []Job{}}
@@ -136,7 +141,7 @@ func Validate(r Record) error {
 		}
 		ids[p.ID] = true
 		a := j.Approval
-		if a.Version != ApprovalVersion || a.PreviewDigest != p.Digest || a.ActorID != p.ActorID || !ValidTime(a.ApprovedAt) || a.ApprovedAt.Before(p.CreatedAt) || !a.ApprovedAt.Before(p.ExpiresAt) || a.ApprovedAt.After(r.ClockFloor) {
+		if a.Version != approvalVersion(p) || a.PreviewDigest != p.Digest || a.ActorID != p.ActorID || !ValidTime(a.ApprovedAt) || a.ApprovedAt.Before(p.CreatedAt) || !a.ApprovedAt.Before(p.ExpiresAt) || a.ApprovedAt.After(r.ClockFloor) {
 			return ErrInvalid
 		}
 		permit, e := actionpermit.Decode(j.Envelope)
@@ -255,7 +260,18 @@ func (r *Record) MakePreview(id, actor, unit, profile string, now time.Time) (Pr
 	var plan actionpermit.Plan
 	for _, s := range r.Capabilities.Services {
 		if s.Unit == unit {
-			plan = actionpermit.Plan{Version: actionpermit.PlanVersion, Action: actionpermit.TryRestartService, Unit: unit, UnitPolicyDigest: s.UnitPolicyDigest}
+			planVersion := actionpermit.PlanVersion
+			if r.Capabilities.Version == actionhelper.CapabilitiesVersionV2 {
+				planVersion = actionpermit.PlanVersionV2
+			}
+			plan = actionpermit.Plan{Version: planVersion, Action: actionpermit.TryRestartService, Unit: unit, UnitPolicyDigest: s.UnitPolicyDigest}
+			if planVersion == actionpermit.PlanVersionV2 {
+				impact, err := actionpermit.AffectedServicesDigest(s.AffectedServices)
+				if err != nil {
+					return Preview{}, ErrInvalid
+				}
+				plan.AffectedServicesDigest = impact
+			}
 		}
 	}
 	d, e := actionpermit.PlanDigest(plan)
@@ -263,6 +279,16 @@ func (r *Record) MakePreview(id, actor, unit, profile string, now time.Time) (Pr
 		return Preview{}, ErrInvalid
 	}
 	p := Preview{Version: PreviewVersion, ID: id, DeviceID: r.DeviceID, ActorID: actor, Sequence: uint64(len(r.Jobs) + 1), Plan: plan, PlanDigest: d, RootPolicyDigest: r.Capabilities.RootPolicyDigest, KeyID: r.Capabilities.KeyID, IncarnationDigest: r.IncarnationDigest, TransportProfile: profile, CreatedAt: now, ExpiresAt: now.Add(PreviewLifetime)}
+	if r.Capabilities.Version == actionhelper.CapabilitiesVersionV2 {
+		p.Version = PreviewVersionV2
+		p.Scope = actionhelper.FullAdminServiceScope
+		p.ReviewNotice = actionhelper.FullAdminReviewNotice
+		for _, service := range r.Capabilities.Services {
+			if service.Unit == unit {
+				p.AffectedServices = append([]string(nil), service.AffectedServices...)
+			}
+		}
+	}
 	p.Digest = PreviewDigest(p)
 	if !validPreview(p) {
 		return Preview{}, ErrInvalid
@@ -298,18 +324,28 @@ func (r *Record) Approve(id, previewDigest, actor, profile string, now time.Time
 	match := false
 	for _, s := range r.Capabilities.Services {
 		if s.Unit == p.Plan.Unit && s.UnitPolicyDigest == p.Plan.UnitPolicyDigest {
+			if p.Plan.Version == actionpermit.PlanVersionV2 {
+				impact, err := actionpermit.AffectedServicesDigest(s.AffectedServices)
+				if err != nil || impact != p.Plan.AffectedServicesDigest {
+					continue
+				}
+			}
 			match = true
 		}
 	}
 	if !match || sign == nil {
 		return Job{}, ErrUnavailable
 	}
-	a := Approval{ApprovalVersion, p.Digest, actor, now}
+	a := Approval{approvalVersion(p), p.Digest, actor, now}
 	life := r.Capabilities.MaxLifetimeSeconds
 	if life > 60 {
 		life = 60
 	}
-	permit := actionpermit.Permit{Version: actionpermit.Version, ManagerID: r.ManagerID, KeyID: p.KeyID, EndpointID: r.DeviceID, IncarnationDigest: r.IncarnationDigest, JobID: id, Sequence: p.Sequence, Plan: p.Plan, PlanDigest: p.PlanDigest, OperatorID: actor, ApprovalDigest: ApprovalDigest(a), RootPolicyDigest: p.RootPolicyDigest, IssuedAt: now.Unix(), NotBefore: now.Unix(), StartDeadline: now.Unix() + life}
+	permitVersion := actionpermit.Version
+	if p.Version == PreviewVersionV2 {
+		permitVersion = actionpermit.VersionV2
+	}
+	permit := actionpermit.Permit{Version: permitVersion, ManagerID: r.ManagerID, KeyID: p.KeyID, EndpointID: r.DeviceID, IncarnationDigest: r.IncarnationDigest, JobID: id, Sequence: p.Sequence, Plan: p.Plan, PlanDigest: p.PlanDigest, OperatorID: actor, ApprovalDigest: ApprovalDigest(a), RootPolicyDigest: p.RootPolicyDigest, IssuedAt: now.Unix(), NotBefore: now.Unix(), StartDeadline: now.Unix() + life}
 	raw, e := sign(permit)
 	if e != nil {
 		return Job{}, ErrUnavailable
@@ -436,4 +472,28 @@ func (r *Record) ObserveExpiry(now time.Time) bool {
 		return true
 	}
 	return false
+}
+
+func approvalVersion(p Preview) string {
+	if p.Version == PreviewVersionV2 {
+		return ApprovalVersionV2
+	}
+	return ApprovalVersion
+}
+func validPreviewVersion(p Preview) bool {
+	if p.Version == PreviewVersion {
+		return p.Plan.Version == actionpermit.PlanVersion && p.Scope == "" && p.ReviewNotice == "" && len(p.AffectedServices) == 0
+	}
+	if p.Version != PreviewVersionV2 || p.Plan.Version != actionpermit.PlanVersionV2 || p.Scope != actionhelper.FullAdminServiceScope || p.ReviewNotice != actionhelper.FullAdminReviewNotice || len(p.AffectedServices) < 1 || len(p.AffectedServices) > actionhelper.MaxGraphUnitsV2 {
+		return false
+	}
+	impact, err := actionpermit.AffectedServicesDigest(p.AffectedServices)
+	if err != nil || impact != p.Plan.AffectedServicesDigest {
+		return false
+	}
+	found := false
+	for _, unit := range p.AffectedServices {
+		found = found || unit == p.Plan.Unit
+	}
+	return found
 }

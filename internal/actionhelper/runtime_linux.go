@@ -50,7 +50,11 @@ func Run(ctx context.Context) error {
 		}
 		defer fence.Close()
 	}
-	s, e := New(Dependencies{Fence: fence, FenceRequired: required, Load: loadAuthority, Identity: func() error { return fenceRuntimeIdentity(mutationfence.DefaultDirectory, fence != nil, rootIdentity) }, Peer: peerIdentity, Backend: newSystemdBackend(), State: state, Now: func() time.Time { return time.Now().UTC() }})
+	backend := newSystemdBackend()
+	if authority.Policy.Version == PolicyVersionV2 {
+		backend = newFullAdminBackend()
+	}
+	s, e := New(Dependencies{Fence: fence, FenceRequired: required, Load: loadAuthority, Identity: func() error { return fenceRuntimeIdentity(mutationfence.DefaultDirectory, fence != nil, rootIdentity) }, Peer: peerIdentity, Backend: backend, State: state, Now: func() time.Time { return time.Now().UTC() }})
 	if e != nil {
 		return e
 	}

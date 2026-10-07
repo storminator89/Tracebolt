@@ -45,8 +45,18 @@ func (c Client) clock() time.Time {
 }
 
 func (c Client) Capabilities(ctx context.Context) (actionhelper.Capabilities, error) {
+	return c.capabilities(ctx, false)
+}
+func (c Client) FullAdminCapabilities(ctx context.Context) (actionhelper.Capabilities, error) {
+	return c.capabilities(ctx, true)
+}
+func (c Client) capabilities(ctx context.Context, v2 bool) (actionhelper.Capabilities, error) {
+	version := actionhelper.RequestVersion
+	if v2 {
+		version = actionhelper.RequestVersionV2
+	}
 	started := c.clock()
-	r, err := c.exchange(ctx, actionhelper.Request{Version: actionhelper.RequestVersion, Operation: actionhelper.CapabilitiesOperation})
+	r, err := c.exchange(ctx, actionhelper.Request{Version: version, Operation: actionhelper.CapabilitiesOperation})
 	if err != nil {
 		return actionhelper.Capabilities{}, err
 	}
@@ -68,7 +78,11 @@ func (c Client) Submit(ctx context.Context, envelope []byte) (actionhelper.Respo
 	if err != nil {
 		return actionhelper.Response{}, ErrRejected
 	}
-	r, err := c.exchange(ctx, actionhelper.Request{Version: actionhelper.RequestVersion, Operation: actionhelper.SubmitOperation, Envelope: envelope})
+	version := actionhelper.RequestVersion
+	if permit.Version == actionpermit.VersionV2 {
+		version = actionhelper.RequestVersionV2
+	}
+	r, err := c.exchange(ctx, actionhelper.Request{Version: version, Operation: actionhelper.SubmitOperation, Envelope: envelope})
 	if err != nil {
 		return actionhelper.Response{}, err
 	}
@@ -147,7 +161,11 @@ func (c Client) exchange(ctx context.Context, request actionhelper.Request) (res
 		}
 		body = body[n:]
 	}
-	response, err = actionhelper.ReadResponse(conn.reader)
+	if request.Version == actionhelper.RequestVersionV2 {
+		response, err = actionhelper.ReadResponseV2(conn.reader)
+	} else {
+		response, err = actionhelper.ReadResponse(conn.reader)
+	}
 	if err != nil || ctx.Err() != nil {
 		return actionhelper.Response{}, ErrRejected
 	}

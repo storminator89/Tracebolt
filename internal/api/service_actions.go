@@ -3,8 +3,10 @@ package api
 import (
 	"context"
 	"errors"
+	"localrmm/internal/actionhelper"
 	"localrmm/internal/actionjob"
 	"localrmm/internal/actionmanager"
+	"localrmm/internal/actionpermit"
 	"localrmm/internal/actionstate"
 	"localrmm/internal/enrollmentcrypto"
 	"localrmm/internal/operatorauth"
@@ -23,8 +25,9 @@ type serviceActionManager interface {
 }
 
 type serviceActionTarget struct {
-	Unit             string `json:"unit"`
-	UnitPolicyDigest string `json:"unitPolicyDigest"`
+	Unit             string   `json:"unit"`
+	UnitPolicyDigest string   `json:"unitPolicyDigest"`
+	AffectedServices []string `json:"affectedServices,omitempty"`
 }
 type serviceActionResult struct {
 	Phase         string                       `json:"phase"`
@@ -43,15 +46,18 @@ type serviceActionJob struct {
 	Result         *serviceActionResult `json:"result"`
 }
 type serviceActionView struct {
-	SchemaVersion string                `json:"schemaVersion"`
-	DeviceID      string                `json:"deviceId"`
-	ServerNow     time.Time             `json:"serverNow"`
-	Configured    bool                  `json:"configured"`
-	Available     bool                  `json:"available"`
-	Reason        string                `json:"reason"`
-	Services      []serviceActionTarget `json:"services"`
-	Preview       *actionjob.Preview    `json:"preview"`
-	Job           *serviceActionJob     `json:"job"`
+	Scope            string                          `json:"scope,omitempty"`
+	ReviewNotice     string                          `json:"reviewNotice,omitempty"`
+	ExcludedServices []actionhelper.ServiceExclusion `json:"excludedServices,omitempty"`
+	SchemaVersion    string                          `json:"schemaVersion"`
+	DeviceID         string                          `json:"deviceId"`
+	ServerNow        time.Time                       `json:"serverNow"`
+	Configured       bool                            `json:"configured"`
+	Available        bool                            `json:"available"`
+	Reason           string                          `json:"reason"`
+	Services         []serviceActionTarget           `json:"services"`
+	Preview          *actionjob.Preview              `json:"preview"`
+	Job              *serviceActionJob               `json:"job"`
 }
 
 func serviceActionRoute(r *http.Request) (string, string, bool) {
@@ -157,8 +163,14 @@ func (h *operatorHandler) writeServiceActions(w http.ResponseWriter, r *http.Req
 			view.Preview = nil
 		}
 		if record.Capabilities != nil {
+			if record.Capabilities.Version == actionhelper.CapabilitiesVersionV2 {
+				view.SchemaVersion = "tracebolt.service-action-view.v2"
+				view.Scope = record.Capabilities.Scope
+				view.ReviewNotice = record.Capabilities.ReviewNotice
+				view.ExcludedServices = append([]actionhelper.ServiceExclusion(nil), record.Capabilities.ExcludedServices...)
+			}
 			for _, s := range record.Capabilities.Services {
-				view.Services = append(view.Services, serviceActionTarget{s.Unit, s.UnitPolicyDigest})
+				view.Services = append(view.Services, serviceActionTarget{Unit: s.Unit, UnitPolicyDigest: s.UnitPolicyDigest, AffectedServices: append([]string(nil), s.AffectedServices...)})
 			}
 		}
 		if len(record.Jobs) > 0 {
@@ -216,6 +228,15 @@ func usableServicePreview(r actionjob.Record, profile string, now time.Time) *ac
 	}
 	for _, s := range r.Capabilities.Services {
 		if s.Unit == p.Plan.Unit && s.UnitPolicyDigest == p.Plan.UnitPolicyDigest {
+			if r.Capabilities.Version == actionhelper.CapabilitiesVersionV2 {
+				currentImpact, err := actionpermit.AffectedServicesDigest(s.AffectedServices)
+				previewImpact, previewErr := actionpermit.AffectedServicesDigest(p.AffectedServices)
+				if err != nil || previewErr != nil || p.Version != actionjob.PreviewVersionV2 || p.Plan.Version != actionpermit.PlanVersionV2 || currentImpact != p.Plan.AffectedServicesDigest || previewImpact != currentImpact || p.Scope != r.Capabilities.Scope || p.ReviewNotice != r.Capabilities.ReviewNotice {
+					return nil
+				}
+			} else if p.Version != actionjob.PreviewVersion || p.Plan.Version != actionpermit.PlanVersion {
+				return nil
+			}
 			return p
 		}
 	}

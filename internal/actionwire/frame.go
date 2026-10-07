@@ -15,13 +15,18 @@ import (
 )
 
 const MaxBodyBytes = 16 << 10
+const MaxCapabilitiesBytesV2 = actionhelper.MaxCapabilitiesBytesV2
+const CapabilitiesPathV2 = "/v4/service-actions/capabilities"
 
 var ErrContract = errors.New("action_wire_invalid")
 
 func validPath(path string) bool {
-	return path == CapabilitiesPath || path == PeekPath || path == ClaimPath || path == ResultPath
+	return path == CapabilitiesPathV2 || path == CapabilitiesPath || path == PeekPath || path == ClaimPath || path == ResultPath
 }
 func BodyLimit(path string) int64 {
+	if path == CapabilitiesPathV2 {
+		return MaxCapabilitiesBytesV2
+	}
 	if path == CapabilitiesPath {
 		return MaxBodyBytes
 	}
@@ -52,14 +57,14 @@ func DecodePeek(raw []byte) error {
 	return nil
 }
 func EncodeCapabilities(c actionhelper.Capabilities) ([]byte, error) {
-	if actionhelper.ValidateCapabilities(c) != nil {
+	if c.Version != actionhelper.CapabilitiesVersion || actionhelper.ValidateCapabilities(c) != nil {
 		return nil, ErrContract
 	}
 	return encode(c)
 }
 func DecodeCapabilities(raw []byte) (actionhelper.Capabilities, error) {
 	var c actionhelper.Capabilities
-	if decode(raw, &c) != nil || actionhelper.ValidateCapabilities(c) != nil {
+	if decode(raw, &c) != nil || c.Version != actionhelper.CapabilitiesVersion || actionhelper.ValidateCapabilities(c) != nil {
 		return c, ErrContract
 	}
 	return c, nil
@@ -130,4 +135,27 @@ func CheckCapabilityTime(c actionhelper.Capabilities, now time.Time) error {
 		return ErrContract
 	}
 	return nil
+}
+
+// V2 uses an explicitly separate endpoint and byte budget; v1 codecs stay exact.
+func EncodeCapabilitiesV2(c actionhelper.Capabilities) ([]byte, error) {
+	if c.Version != actionhelper.CapabilitiesVersionV2 || actionhelper.ValidateCapabilities(c) != nil {
+		return nil, ErrContract
+	}
+	raw, e := json.Marshal(c)
+	if e != nil || len(raw) > MaxCapabilitiesBytesV2 {
+		return nil, ErrContract
+	}
+	return raw, nil
+}
+func DecodeCapabilitiesV2(raw []byte) (actionhelper.Capabilities, error) {
+	var c actionhelper.Capabilities
+	if len(raw) == 0 || len(raw) > MaxCapabilitiesBytesV2 || !utf8.Valid(raw) || json.Unmarshal(raw, &c) != nil {
+		return c, ErrContract
+	}
+	b, e := EncodeCapabilitiesV2(c)
+	if e != nil || !bytes.Equal(raw, b) {
+		return c, ErrContract
+	}
+	return c, nil
 }

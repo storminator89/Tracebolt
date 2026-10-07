@@ -9,6 +9,12 @@ const clone=v=>structuredClone(v),requireFixture=v=>{if(!v)throw Error('Unsuppor
 const exact=(v,keys)=>v&&typeof v==='object'&&!Array.isArray(v)&&Object.keys(v).sort().join(',')===[...keys].sort().join(',');
 const stages=new Set(['setup','login','direct-read','sparse-search','continuation','mobile','expiry','guards']);let stage='setup';
 export const journalBrowseFailureStage=()=>stage;
+// Observe the actual server response for both successful login and later session
+// reads. The UI mounts device data directly from login's validated response.
+export function journalFixtureAuthenticated(status,value){
+ return status===200&&value?.mode==='lan'&&value.authenticationRequired===true&&value.authenticated===true&&value.insecureTestMode===true&&Number.isFinite(Date.parse(value.serverNow))&&Number.isFinite(Date.parse(value.expiresAt))&&Date.parse(value.expiresAt)>Date.parse(value.serverNow);
+}
+
 let diagnostic=null;
 export const journalBrowseFailureDetails=()=>diagnostic;
 export function journalBrowseDiagnostic({counts={},rejected='none',state='unknown'}={}){
@@ -44,7 +50,7 @@ export async function journalBrowseBrowserCase({pageAt,login,expect,base,shot}){
  const fixture=createJournalBrowseFixture({anchor:new Date(start-5000).toISOString()}),unexpected=[],external=[];let csrf='',sessionSequence=0,consumedSession=0,authenticated=false,rejected='none',gate='payload';
  await page.route('**/*',async route=>{const request=route.request(),url=new URL(request.url()),method=request.method();const fail=(reason='payload')=>{rejected=reason;unexpected.push('rejected-fixture-request');return route.abort('blockedbyclient');};
   if(url.origin!==base){external.push('external');return route.abort('blockedbyclient');}
-  if(method==='GET'&&url.pathname==='/api/auth/session'&&url.search===''){requireFixture(request.postData()===null);const response=await route.fetch();if(response.status()===200)authenticated=(await response.json()).authenticated===true;return route.fulfill({response});}
+  if((method==='GET'&&url.pathname==='/api/auth/session'||method==='POST'&&url.pathname==='/api/auth/login')&&url.search===''){if(method==='GET')requireFixture(request.postData()===null);const response=await route.fetch();authenticated=journalFixtureAuthenticated(response.status(),response.status()===200?await response.json():null);return route.fulfill({response});}
   if(method==='GET'&&url.pathname==='/api/session'&&url.search===''){requireFixture(request.postData()===null);const response=await route.fetch();if(response.status()===200){const value=await response.json();csrf=value.csrfToken;sessionSequence++;}return route.fulfill({response});}
   if(url.pathname===`/api/devices/${fixture.device}`&&method==='GET'&&url.search===''){if(!authenticated||request.postData()!==null)return fail('device');return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(fixture.deviceView())});}
   if(url.pathname.startsWith(fixture.prefix))try{gate='authentication';requireFixture(authenticated&&url.search==='');gate='payload';if(method==='GET')requireFixture(request.postData()===null);else{const headers=await request.allHeaders();gate='csrf';requireFixture(method==='POST'&&headers['content-type']==='application/json'&&csrf!==''&&headers['x-csrf-token']===csrf&&sessionSequence>consumedSession);consumedSession=sessionSequence;}gate='payload';const body=fixture.handle(method,url.pathname,method==='GET'?null:request.postDataJSON());return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(body)});}catch{return fail(gate);}

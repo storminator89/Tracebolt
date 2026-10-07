@@ -33,6 +33,7 @@ import (
 	"golang.org/x/crypto/argon2"
 	"localrmm/internal/actionhelper"
 	"localrmm/internal/actionmanager"
+	"localrmm/internal/actionpermit"
 	"localrmm/internal/actionstate"
 	"localrmm/internal/api"
 	"localrmm/internal/enrollmentcrypto"
@@ -43,6 +44,7 @@ import (
 	"localrmm/internal/enrollmenttransport"
 	"localrmm/internal/lantrust"
 	"localrmm/internal/model"
+	"localrmm/internal/mutationfence"
 	"localrmm/internal/operatorauth"
 	"localrmm/internal/store"
 )
@@ -67,6 +69,9 @@ func id(prefix string) string {
 func jsonBytes(v any) []byte { b, e := json.Marshal(v); must(e); return b }
 
 type fixture struct {
+	lastCapabilitiesAt int64
+	serviceV2          bool
+	fence              *mutationfence.Fence
 	service            *enrollmentservice.Service
 	store              *enrollmentstore.Store
 	issuer             *enrollmentissuer.Issuer
@@ -100,6 +105,9 @@ func (f *fixture) close() {
 	if f.helperState != nil {
 		f.helperState.Close()
 	}
+	if f.fence != nil {
+		f.fence.Close()
+	}
 	if f.manager != nil {
 		f.manager.Close()
 	}
@@ -109,14 +117,41 @@ func (f *fixture) close() {
 }
 
 type fakeBackend struct {
+	excluded        atomic.Bool
+	serviceV2       bool
 	calls           atomic.Int32
 	entered         chan struct{}
 	allowCompletion chan struct{}
 	release         sync.Once
 }
 
-func (*fakeBackend) Check(context.Context, actionhelper.Target) (actionhelper.Observation, error) {
+func (b *fakeBackend) Check(_ context.Context, target actionhelper.Target) (actionhelper.Observation, error) {
+	if b.serviceV2 {
+		impact, err := actionpermit.AffectedServicesDigest(fixtureImpact())
+		if err != nil || target.Unit != fixtureUnit || target.ReviewDigest != fixtureUnitDigest() || target.AffectedServicesDigest != impact {
+			return actionhelper.Unknown, actionhelper.ErrRejected
+		}
+	}
 	return actionhelper.Active, nil
+}
+func fixtureImpact() []string {
+	units := make([]string, 0, 64)
+	for i := 0; i < 63; i++ {
+		units = append(units, fmt.Sprintf("dependent-%02d.service", i))
+	}
+	return append(units, fixtureUnit)
+}
+func fixtureUnitDigest() string {
+	return actionpermit.Digest([]byte("invented full-admin fixture graph; no native inspection"))
+}
+func (*fakeBackend) ListServices(context.Context) ([]string, error) {
+	return []string{fixtureUnit, "tracebolt-agent.service"}, nil
+}
+func (b *fakeBackend) InspectService(_ context.Context, unit string) (actionhelper.ServiceInspection, error) {
+	if !b.serviceV2 || b.excluded.Load() || unit != fixtureUnit {
+		return actionhelper.ServiceInspection{}, actionhelper.ErrRejected
+	}
+	return actionhelper.ServiceInspection{Unit: unit, UnitPolicyDigest: fixtureUnitDigest(), AffectedServices: fixtureImpact(), ObservedState: actionhelper.Active}, nil
 }
 func (b *fakeBackend) TryRestart(ctx context.Context, unit string) error {
 	if unit != fixtureUnit {
@@ -154,6 +189,7 @@ func run() {
 	listen := flag.String("listen", "127.0.0.1:19899", "loopback-only synthetic fixture")
 	dir := flag.String("state", "", "empty private disposable directory")
 	web := flag.String("web", "", "built UI directory")
+	serviceV2 := flag.Bool("service-v2", false, "explicit fresh synthetic v2 authority; no host grant")
 	flag.Parse()
 	host, portText, e := net.SplitHostPort(*listen)
 	must(e)
@@ -182,7 +218,7 @@ func run() {
 	must(e)
 	defer state.Close()
 	ctx, cancel := context.WithCancel(context.Background())
-	f := &fixture{store: state, issuer: issuer, backend: &fakeBackend{entered: make(chan struct{}), allowCompletion: make(chan struct{})}, context: ctx, cancel: cancel, client: &http.Client{Transport: &http.Transport{Proxy: nil}, Timeout: 5 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}}
+	f := &fixture{serviceV2: *serviceV2, store: state, issuer: issuer, backend: &fakeBackend{serviceV2: *serviceV2, entered: make(chan struct{}), allowCompletion: make(chan struct{})}, context: ctx, cancel: cancel, client: &http.Client{Transport: &http.Transport{Proxy: nil}, Timeout: 5 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}}
 	defer f.close()
 	f.service, e = enrollmentservice.New(state, issuer, f.now)
 	must(e)
@@ -254,6 +290,13 @@ func run() {
 			case "info", "status":
 			case "refresh":
 				err = f.refresh()
+			case "exclude-all", "restore-services":
+				if !f.serviceV2 || f.dispatchStarted {
+					err = errors.New("fixture_v2_pre_dispatch_only")
+				} else {
+					f.backend.excluded.Store(c.Action == "exclude-all")
+					err = f.refresh()
+				}
 			case "dispatch":
 				err = f.dispatch()
 			case "complete":

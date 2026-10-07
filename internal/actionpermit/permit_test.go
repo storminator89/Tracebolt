@@ -14,7 +14,7 @@ import (
 func fixture(t testing.TB) (Permit, LocalPins, ed25519.PrivateKey) {
 	t.Helper()
 	key := ed25519.NewKeyFromSeed(bytes.Repeat([]byte{37}, ed25519.SeedSize))
-	plan := Plan{PlanVersion, TryRestartService, "fixture.service", Digest([]byte("reviewed fixture unit inputs"))}
+	plan := Plan{Version: PlanVersion, Action: TryRestartService, Unit: "fixture.service", UnitPolicyDigest: Digest([]byte("reviewed fixture unit inputs"))}
 	digest, err := PlanDigest(plan)
 	if err != nil {
 		t.Fatal(err)

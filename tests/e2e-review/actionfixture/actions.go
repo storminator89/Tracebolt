@@ -19,6 +19,7 @@ import (
 	"localrmm/internal/actionpermit"
 	"localrmm/internal/actionstate"
 	"localrmm/internal/actionwire"
+	"localrmm/internal/mutationfence"
 )
 
 func (f *fixture) prepareActions(dir string) {
@@ -40,12 +41,28 @@ func (f *fixture) prepareActions(dir string) {
 	must(e)
 	target := actionhelper.Target{Unit: fixtureUnit, ReviewDigest: actionpermit.Digest([]byte("invented fixture review; no host inspection")), Units: []actionhelper.UnitPin{{Unit: fixtureUnit, ConfigurationDigest: actionpermit.Digest([]byte("invented fixture configuration"))}}, Inputs: []actionhelper.FilePin{{Path: "/usr/bin/systemctl", Digest: actionpermit.Digest([]byte("never read or executed in fixture"))}}}
 	policy := actionhelper.Policy{Version: actionhelper.PolicyVersion, Enabled: true, ManagerID: cfg.ManagerID, KeyID: actionpermit.Digest(pub), EndpointID: f.identity.Approval.DeviceID, IncarnationDigest: "sha256:" + f.identity.Issuance.CertificateHash, TransportProfile: cfg.TransportProfile, HTTPTestAcknowledged: true, AgentUID: 1001, AgentGID: 1001, MaxLifetimeSeconds: 60, MaxFutureSkewSeconds: 5, Targets: []actionhelper.Target{target}}
-	verifier, e := actionpermit.NewVerifier(actionpermit.LocalPins{Enabled: true, ManagerID: policy.ManagerID, PublicKey: pub, EndpointID: policy.EndpointID, IncarnationDigest: policy.IncarnationDigest, RootPolicyDigest: actionpermit.Digest(jsonBytes(policy)), MaxLifetimeSeconds: 60, MaxFutureSkewSeconds: 5, Services: []actionpermit.ServiceRule{{Unit: fixtureUnit, UnitPolicyDigest: actionpermit.Digest(jsonBytes(target))}}})
+	if f.serviceV2 {
+		policy.Version = actionhelper.PolicyVersionV2
+		policy.Scope = actionhelper.FullAdminServiceScope
+		policy.Targets = []actionhelper.Target{}
+	}
+	pins := actionpermit.LocalPins{Enabled: true, ManagerID: policy.ManagerID, PublicKey: pub, EndpointID: policy.EndpointID, IncarnationDigest: policy.IncarnationDigest, RootPolicyDigest: actionpermit.Digest(jsonBytes(policy)), MaxLifetimeSeconds: 60, MaxFutureSkewSeconds: 5, Services: []actionpermit.ServiceRule{{Unit: fixtureUnit, UnitPolicyDigest: actionpermit.Digest(jsonBytes(target))}}}
+	if f.serviceV2 {
+		pins.Scope = actionpermit.FullAdminServiceScope
+		pins.Services = nil
+	}
+	verifier, e := actionpermit.NewVerifier(pins)
 	must(e)
 	f.helperState, e = actionstate.Initialize(f.context, filepath.Join(dir, "invented-helper-ledger"), verifier)
 	must(e)
 	authority := actionhelper.Authority{Policy: policy, PublicKey: pub, Revision: actionpermit.Digest([]byte("invented protected authority; not native root proof"))}
-	f.helper, e = actionhelper.New(actionhelper.Dependencies{Load: func() (actionhelper.Authority, error) { return authority, nil }, Identity: func() error { return nil }, Peer: func(net.Conn) (actionhelper.Peer, error) {
+	if f.serviceV2 {
+		directory := filepath.Join(dir, "invented-shared-fence")
+		must(os.Mkdir(directory, 0700))
+		f.fence, e = mutationfence.Create(f.context, directory, mutationfence.Binding{ManagerID: policy.ManagerID, EndpointID: policy.EndpointID, IncarnationDigest: policy.IncarnationDigest}, f.now().Unix())
+		must(e)
+	}
+	f.helper, e = actionhelper.New(actionhelper.Dependencies{Fence: f.fence, FenceRequired: f.serviceV2, Load: func() (actionhelper.Authority, error) { return authority, nil }, Identity: func() error { return nil }, Peer: func(net.Conn) (actionhelper.Peer, error) {
 		return actionhelper.Peer{UID: 1001, GID: 1001, PID: 99}, nil
 	}, Backend: f.backend, State: f.helperState, Now: f.now})
 	must(e)
@@ -76,7 +93,11 @@ func (f *fixture) helperExchange(ctx context.Context, request actionhelper.Reque
 		}
 		raw = raw[n:]
 	}
-	result, e := actionhelper.ReadResponse(client)
+	readResponse := actionhelper.ReadResponse
+	if f.serviceV2 {
+		readResponse = actionhelper.ReadResponseV2
+	}
+	result, e := readResponse(client)
 	if e != nil {
 		return actionhelper.Response{}, e
 	}
@@ -103,17 +124,32 @@ func (f *fixture) agentRequest(ctx context.Context, path string, sequence uint64
 	return raw, response.StatusCode, nil
 }
 func (f *fixture) refresh() error {
+	if f.serviceV2 && f.lastCapabilitiesAt >= f.now().Unix() {
+		wait := time.Until(time.Unix(f.lastCapabilitiesAt+1, 0))
+		timer := time.NewTimer(wait)
+		defer timer.Stop()
+		select {
+		case <-timer.C:
+		case <-f.context.Done():
+			return f.context.Err()
+		}
+	}
 	ctx, cancel := context.WithTimeout(f.context, 8*time.Second)
 	defer cancel()
-	r, e := f.helperExchange(ctx, actionhelper.Request{Version: actionhelper.RequestVersion, Operation: actionhelper.CapabilitiesOperation})
+	r, e := f.helperExchange(ctx, actionhelper.Request{Version: f.requestVersion(), Operation: actionhelper.CapabilitiesOperation})
 	if e != nil || r.Capabilities == nil || r.Error != "" {
 		return errors.New("fixture_capabilities")
 	}
-	body, e := actionwire.EncodeCapabilities(*r.Capabilities)
+	encode, path := actionwire.EncodeCapabilities, actionwire.CapabilitiesPath
+	if f.serviceV2 {
+		encode, path = actionwire.EncodeCapabilitiesV2, actionwire.CapabilitiesPathV2
+	}
+	body, e := encode(*r.Capabilities)
+	f.lastCapabilitiesAt = r.Capabilities.CapturedAt
 	if e != nil {
 		return e
 	}
-	raw, code, e := f.agentRequest(ctx, actionwire.CapabilitiesPath, 1, body)
+	raw, code, e := f.agentRequest(ctx, path, 1, body)
 	if e != nil || code != 200 || actionwire.DecodePeek(raw) != nil {
 		return errors.New("fixture_report")
 	}
@@ -152,7 +188,7 @@ func (f *fixture) dispatch() error {
 	go func() {
 		ctx, cancel := context.WithTimeout(f.context, 45*time.Second)
 		defer cancel()
-		r, e := f.helperExchange(ctx, actionhelper.Request{Version: actionhelper.RequestVersion, Operation: actionhelper.SubmitOperation, Envelope: grant.Envelope})
+		r, e := f.helperExchange(ctx, actionhelper.Request{Version: f.requestVersion(), Operation: actionhelper.SubmitOperation, Envelope: grant.Envelope})
 		if e == nil {
 			e = f.reportResult(ctx, grant.Identity, r)
 		}
@@ -217,9 +253,16 @@ func (f *fixture) recoverStatus() error {
 		return errors.New("fixture_recovery_claimed_only")
 	}
 	f.recoveryPeekStatus = "claimed"
-	r, e := f.helperExchange(ctx, actionhelper.Request{Version: actionhelper.RequestVersion, Operation: actionhelper.StatusOperation, JobID: d.Identity.JobID})
+	r, e := f.helperExchange(ctx, actionhelper.Request{Version: f.requestVersion(), Operation: actionhelper.StatusOperation, JobID: d.Identity.JobID})
 	if e != nil {
 		return e
 	}
 	return f.reportResult(ctx, d.Identity, r)
+}
+
+func (f *fixture) requestVersion() string {
+	if f.serviceV2 {
+		return actionhelper.RequestVersionV2
+	}
+	return actionhelper.RequestVersion
 }

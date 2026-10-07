@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';import test from 'node:test';import fs from 'node:fs';
-import {createJournalBrowseFixture,journalBrowseCaseName,journalBrowseDisclosure,journalBrowseDiagnostic} from './journal-browse-browser.mjs';
+import {createJournalBrowseFixture,journalBrowseCaseName,journalBrowseDisclosure,journalBrowseDiagnostic,journalFixtureAuthenticated} from './journal-browse-browser.mjs';
 const body=f=>({expectedFloor:f.view().expectedFloor,query:{unit:'future.service',start:'1970-01-01T00:00:00Z',end:f.view().serverNow,maxPriority:7,browseMode:'retained-v1'},acknowledgeLogContent:false,acknowledgePlaintext:false,expectedPolicyGeneration:f.view().generation.policyGeneration});
 const read=p=>fs.readFileSync(new URL(p,import.meta.url),'utf8');
 test('synthetic receiver admits only current explicit grant and exact bounded queries',()=>{const f=createJournalBrowseFixture();assert.equal(f.view().generation.serviceAuthorization,'all-system-services');const input=body(f);f.handle('POST',f.prefix+'/create',input);assert.equal(f.counts.creates,1);assert.equal(f.page().coverage,'partial');assert.equal(f.page().rows.length,1);assert.equal(f.latestQuery.start,'1970-01-01T00:00:00Z');for(const mutate of [v=>v.expectedFloor='0',v=>v.acknowledgeLogContent=true,v=>v.query.unit='*.service',v=>v.query.cursor='s=unrelated;i=1',v=>v.query.search='x'.repeat(201),v=>v.expectedPolicyGeneration.generation='c'.repeat(64)]){const v=body(f);mutate(v);assert.throws(()=>f.handle('POST',f.prefix+'/create',v));}assert.equal(f.counts.creates,1)});
@@ -12,4 +12,15 @@ test('failure diagnostics keep only finite counts and closed state classificatio
  const result=journalBrowseDiagnostic({counts:{reads:Infinity,creates:-1,pages:'secret',cancels:101,raw:'secret'},rejected:'secret token',state:'raw DOM'});
  assert.deepEqual(result,{reads:null,creates:null,pages:null,cancels:null,rejected:'unknown',state:'unknown'});
  const source=read('./journal-browse-browser.mjs');assert.match(source,/throw error/);assert.match(source,/input\[type="password"\]/);assert.match(source,/synthetic-retained-journal-direct-read-failure/);
+});
+
+test('real login response authorizes immediate device read without requiring a second session GET',()=>{
+ const v={mode:'lan',authenticationRequired:true,authenticated:true,insecureTestMode:true,serverNow:'2026-10-07T12:00:00Z',expiresAt:'2026-10-07T12:30:00Z'};
+ assert.equal(journalFixtureAuthenticated(200,v),true);
+ for(const body of [null,{}, {...v,authenticated:false},{...v,authenticationRequired:false},{...v,mode:'development'},{...v,insecureTestMode:false},{...v,expiresAt:v.serverNow},{...v,serverNow:'invalid'}])assert.equal(journalFixtureAuthenticated(200,body),false);
+ for(const status of [401,403,500])assert.equal(journalFixtureAuthenticated(status,v),false);
+ const source=read('./journal-browse-browser.mjs');
+ assert.match(source,/method==='POST'&&url.pathname==='\/api\/auth\/login'/);
+ assert.match(source,/authenticated=journalFixtureAuthenticated\(response.status\(\)/);
+ assert.match(source,/if\(!authenticated\|\|request.postData\(\)!==null\)return fail\('device'\)/);
 });

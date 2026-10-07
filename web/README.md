@@ -230,3 +230,29 @@ Read-admin onboarding still uses one combined local approval for its supported
 read scopes. This UI does not ask for additional grants or normalize missing
 permission for an approved supported read. Technical source explanations stay
 available in keyboard-accessible, initially collapsed disclosures.
+
+### Service-action-v2 review
+
+The browser accepts both the unchanged strict v1 contract and the independent
+v2 full-admin service contract. V2 requires the exact local scope/review notice,
+up to 256 sorted eligible/excluded units, and each eligible unit's complete
+sorted affected-service list (1–64 units including the target). Before displaying
+a preview, it compares that list with the selected capability and independently
+checks SHA-256 of the canonical impact JSON against the signed plan projection.
+This browser check is not signature verification or host authorization: the
+manager and root helper independently enforce those boundaries.
+
+The review shows every affected service in a scrollable list, the exact authority
+warning, expiry and any HTTP risk before explicit interruption consent. Technical
+digests and inert exclusion reasons remain collapsed. Closing, navigation,
+access/session changes, stale replies and new preview bytes never retain consent.
+Approval still submits only the original preview ID and digest, revalidates the
+named session and never retries a service action automatically. Only service-view
+response reads use the 256 KiB v2 allowance; session reads retain the 32 KiB bound.
+Known v1 preview/approval responses retain the original 32 KiB cap; v2 preview
+responses explicitly select 256 KiB from the validated view, and approvals select
+the version of the reviewed preview. Initial status GET negotiates within 256 KiB.
+Subsequent status reads retain the discovered version/bound; responses cannot
+silently switch versions until fresh discovery.
+No setup grant, native dispatch, provider call or production acceptance follows
+from browser fixtures. Unit/API/component coverage is executable with `npm test`.

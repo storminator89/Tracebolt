@@ -1,3 +1,5 @@
+import { actionV2View } from './service-action-v2-fixtures';
+import { serviceActionReviewNotice } from './service-action-types';
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { APIError, AUTH_REQUIRED_EVENT } from './api';
@@ -113,4 +115,35 @@ describe('explicit selected-service action flow', () => {
         vi.mocked(readServiceActions).mockRejectedValueOnce(new APIError('revoked', 401)); fireEvent.click(screen.getByRole('button', { name: 'Check action status' })); await flush();
         expect(screen.getByRole('alert')).toHaveTextContent('access ended or changed'); const calls = vi.mocked(readServiceActions).mock.calls.length; act(() => window.dispatchEvent(new Event('focus'))); await flush(); expect(readServiceActions).toHaveBeenCalledTimes(calls);
     });
+});
+
+describe('v2 impact review', () => {
+    beforeEach(() => { vi.mocked(readServiceActions).mockResolvedValue(actionV2View()); vi.mocked(previewServiceAction).mockResolvedValue(actionV2View()); });
+    it('shows all impact and exact authority warning before approval; technical details and excluded reasons stay collapsed', async () => {
+        const units = ['fixture.service', ...Array.from({ length: 63 }, (_, i) => `z${String(i).padStart(3,'0')}.service`)];
+        vi.mocked(previewServiceAction).mockResolvedValue(actionV2View(units));
+        await start(); expect(screen.queryByRole('checkbox')).not.toBeInTheDocument(); await preview();
+        const impact = screen.getByRole('region', { name: 'Services that may be interrupted' });
+        expect(within(impact).getAllByRole('listitem')).toHaveLength(64); expect(within(impact).getByText('z062.service')).toBeVisible();
+        expect(screen.getByText(serviceActionReviewNotice)).toBeVisible();
+        expect(screen.getByText('Approval details').closest('details')).not.toHaveAttribute('open');
+        expect(screen.getByText('Unavailable services (1)').closest('details')).not.toHaveAttribute('open');
+        expect(screen.getByRole('button', { name: 'Approve try-restart' })).toBeDisabled();
+        await approve(); expect(approveServiceAction).toHaveBeenCalledTimes(1); expect(vi.mocked(approveServiceAction).mock.calls[0][1].affectedServices).toEqual(units);
+    });
+    it.each(['close', 'blur', 'history'] as const)('clears v2 consent after %s and ignores a late preview', async kind => {
+        await start(); await preview(); fireEvent.click(screen.getByRole('checkbox'));
+        if (kind === 'close') fireEvent.click(screen.getByRole('button', { name: 'Close preview' }));
+        else act(() => window.dispatchEvent(new Event(kind === 'blur' ? 'blur' : 'popstate')));
+        expect(screen.queryByRole('checkbox')).not.toBeInTheDocument(); expect(approveServiceAction).not.toHaveBeenCalled();
+        if (kind !== 'close') { act(() => window.dispatchEvent(new Event('focus'))); await flush(); }
+        await preview(); expect(screen.getByRole('checkbox')).not.toBeChecked(); expect(screen.getByRole('button', { name: 'Approve try-restart' })).toBeDisabled();
+    });
+});
+
+it('shows all-excluded v2 status and reasons with no selectable action', async () => {
+    const value = actionV2View(); value.services = []; value.preview = null; vi.mocked(readServiceActions).mockResolvedValue(value);
+    await start(); expect(screen.getByText(/No supported services are available/)).toBeVisible();
+    expect(screen.getByText('Unavailable services (1)')).toBeVisible(); expect(screen.getByRole('button', { name: 'Select fixture' })).toBeDisabled();
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument(); expect(previewServiceAction).not.toHaveBeenCalled();
 });

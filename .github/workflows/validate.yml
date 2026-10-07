@@ -677,6 +677,17 @@ jobs:
           python3 -O tests/security/test_service_action_browser_gate.py
           node tests/e2e-review/service-action-browser.mjs
           python3 tests/security/check_service_action_browser_gate.py artifacts/review/service-action-browser-results.json
+      - name: Synthetic service-action-v2 impact review and EN-DE desktop-mobile screenshots
+        if: ${{ !cancelled() }}
+        env:
+          TRACEBOLT_SOURCE_SHA: ${{ github.sha }}
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: |
+          set -euo pipefail
+          python3 tests/security/test_service_action_v2_browser_gate.py
+          python3 -O tests/security/test_service_action_v2_browser_gate.py
+          node tests/e2e-review/service-action-v2-browser.mjs
+          python3 tests/security/check_service_action_v2_browser_gate.py artifacts/review/service-action-v2-browser-results.json
       - name: Real React and v3 handler read-coordination regression
         if: ${{ !cancelled() }}
         run: ./web/node_modules/.bin/vitest run --config tests/e2e-review/v3-dom.config.mts
@@ -707,6 +718,8 @@ jobs:
             artifacts/review/complete-overview-browser-results.json
             artifacts/review/complete-overview-browser-manifest.json
             artifacts/review/service-action-browser-results.json
+            artifacts/review/service-action-v2-browser-results.json
+            artifacts/review/service-action-v2-*.png
           if-no-files-found: warn
           retention-days: 3
 
