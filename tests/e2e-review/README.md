@@ -201,7 +201,7 @@ native deployment acceptance is included.
 ## Bounded complete CVE detail pages
 
 `cve-detail-pages-browser.mjs` adds one disjoint required case after the original
-continuation case, within the current 25-case LAN runner. Earlier case bodies
+continuation case, within the current 26-case LAN runner. Earlier case bodies
 and guards remain unchanged, as do their fixture TTLs, assertion deadlines,
 launch options and hosted workflow. Pure fixture checks bind the current total.
 
@@ -249,7 +249,7 @@ native deployment acceptance is included.
 ## Selected package update workspace
 
 `package-updates-browser.mjs` adds one case to the existing LAN runner, for
-25 cases total. Earlier cases, fixture session lifetimes, assertion deadlines,
+26 cases total. Earlier cases, fixture session lifetimes, assertion deadlines,
 launch options and cleanup remain unchanged. The explicit Node fixture list in
 `.github/workflows/validate.yml` includes its pure guard/DTO contract test.
 
@@ -276,3 +276,9 @@ and simulation. Syntax, pure fixture and targeted UI tests do not produce these
 screenshots: the hosted browser run and pixel review are still required before
 visual acceptance. No local Chromium launch or alternative browser route is part
 of this amendment.
+
+The additive retained-journal browsing case uses production DTO guards and real
+loopback login/CSRF with invented content. It covers direct scoped service reads,
+source-wide literal search with empty nonexhausted pages, exact cursor continuation,
+content replacement, expiry, no export and desktop/mobile layout. It never reads a
+host journal or grants access. Native systemd acceptance remains separate.

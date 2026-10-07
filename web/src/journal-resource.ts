@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { APIError, AUTH_REQUIRED_EVENT, getProtectedRequestEpoch } from './api';
-import { journalReportedAccess } from './journal-sources';
+import { journalReportedAccess, journalBrowsingAllowed } from './journal-sources';
 import { hasLogoutIntent } from './auth';
 import { cancelJournal, createJournal, queryJournal, readJournal } from './journal-api';
-import { journalAge, journalBytes, JOURNAL_SEARCH_BYTES, validJournalDevice, validJournalPage, validJournalQuery, validJournalView, sameJournalIdentity, sameJournalAuthorization, sameJournalGeneration } from './journal-types';
+import { journalAge, journalBytes, JOURNAL_SEARCH_BYTES, validJournalDevice, validJournalPage, validJournalQuery, validJournalView, sameJournalIdentity, sameJournalQuery, sameJournalAuthorization, sameJournalGeneration } from './journal-types';
 import type { JournalPage, JournalQuery, JournalRequest, JournalView, JournalGenerationView } from './journal-types';
 export type JournalFailure = 'load' | 'invalid' | 'timeout' | 'session' | 'clock' | 'conflict' | 'uncertain';
 type Anchor = { mono: number; wall: number };
@@ -42,7 +42,7 @@ export function useJournal(deviceId: string, insecureTestMode: boolean, sessionK
         const priorGeneration = latestGeneration.current, nextGeneration = value.generation;
         if (priorGeneration) {
             if (!nextGeneration || BigInt(nextGeneration.policyGeneration.revision) < BigInt(priorGeneration.policyGeneration.revision) || BigInt(nextGeneration.sequence) < BigInt(priorGeneration.sequence) || nextGeneration.policyGeneration.revision === priorGeneration.policyGeneration.revision && !sameJournalGeneration(nextGeneration.policyGeneration, priorGeneration.policyGeneration)) { clear('conflict'); return false; }
-            if (sameJournalGeneration(nextGeneration.policyGeneration, priorGeneration.policyGeneration) && !sameJournalAuthorization(nextGeneration, priorGeneration) || priorGeneration.schemaVersion === 'tracebolt.journal-generation-view.v2' && nextGeneration.schemaVersion !== 'tracebolt.journal-generation-view.v2') { clear('conflict'); return false; }
+            if (sameJournalGeneration(nextGeneration.policyGeneration, priorGeneration.policyGeneration) && !sameJournalAuthorization(nextGeneration, priorGeneration) || priorGeneration.schemaVersion === 'tracebolt.journal-generation-view.v2' && nextGeneration.schemaVersion === 'tracebolt.journal-generation-view.v1' || priorGeneration.schemaVersion === 'tracebolt.journal-generation-view.v3' && nextGeneration.schemaVersion !== 'tracebolt.journal-generation-view.v3') { clear('conflict'); return false; }
             if (nextGeneration.sequence === priorGeneration.sequence && (nextGeneration.observedAt !== priorGeneration.observedAt || nextGeneration.receivedAt !== priorGeneration.receivedAt || !sameJournalGeneration(nextGeneration.policyGeneration, priorGeneration.policyGeneration) || !priorGeneration.fresh && nextGeneration.fresh)) { clear('conflict'); return false; }
             if (nextGeneration.sequence !== priorGeneration.sequence && (journalAge(nextGeneration.observedAt, priorGeneration.observedAt) <= 0 || journalAge(nextGeneration.receivedAt, priorGeneration.receivedAt) < 0)) { clear('conflict'); return false; }
         }
@@ -87,10 +87,7 @@ export function useJournal(deviceId: string, insecureTestMode: boolean, sessionK
                     value.request.description.certificateHash !== prior.request.description.certificateHash ||
                     Boolean(value.request.description.policyGeneration) !== Boolean(prior.request.description.policyGeneration) ||
                     value.request.description.policyGeneration && prior.request.description.policyGeneration && !sameJournalGeneration(value.request.description.policyGeneration, prior.request.description.policyGeneration) ||
-                    value.request.description.query.unit !== prior.request.description.query.unit ||
-                    value.request.description.query.start !== prior.request.description.query.start ||
-                    value.request.description.query.end !== prior.request.description.query.end ||
-                    value.request.description.query.maxPriority !== prior.request.description.query.maxPriority ||
+                    !sameJournalQuery(value.request.description.query, prior.request.description.query) ||
                     value.request.state !== prior.request.state || value.request.receipt?.acceptedAt !== prior.request.receipt?.acceptedAt ||
                     value.request.receipt?.policyDigest !== prior.request.receipt?.policyDigest ||
                     value.request.receipt?.resultDigest !== prior.request.receipt?.resultDigest
@@ -121,7 +118,9 @@ export function useJournal(deviceId: string, insecureTestMode: boolean, sessionK
     const create = useCallback(async (query: JournalQuery, acknowledgeLogContent: boolean, acknowledgePlaintext: boolean) => {
         const view = current.current;
         if (['reported_disabled', 'outside_reported_scope'].includes(journalReportedAccess(view, query.unit))) return;
-        if (!view?.configured || view.generation && (!view.generation.fresh || !anchor.current || journalAge(view.generation.expiresAt, view.serverNow) <= elapsed(anchor.current)) || !acknowledgeLogContent || insecureTestMode !== acknowledgePlaintext || uncertain || !validJournalQuery(query, view.serverNow) || pending.current || view.request && ['pending', 'claimed'].includes(view.request.state)) return;
+        const browse = query.browseMode === 'retained-v1';
+        if (browse && !journalBrowsingAllowed(view, query.unit)) return;
+        if (!view?.configured || view.generation && (!view.generation.fresh || !anchor.current || journalAge(view.generation.expiresAt, view.serverNow) <= elapsed(anchor.current)) || !browse && (!acknowledgeLogContent || insecureTestMode !== acknowledgePlaintext) || uncertain || !validJournalQuery(query, view.serverNow) || pending.current || view.request && ['pending', 'claimed'].includes(view.request.state)) return;
         clearRows(); const op = begin(true); if (!op) return;
         try { const value = await createJournal(deviceId, view.expectedFloor, query, acknowledgePlaintext, op.signal, insecureTestMode, sessionKey, view.generation?.policyGeneration); if (op.active()) acceptView(value, op.started); }
         catch (caught) { if (op.active()) fail(caught, true); } finally { op.finish(); }

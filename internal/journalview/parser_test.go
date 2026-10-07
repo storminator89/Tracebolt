@@ -14,7 +14,7 @@ import (
 
 func fixtureQuery() (Query, time.Time) {
 	now := time.Date(2026, 10, 4, 12, 0, 0, 0, time.UTC)
-	return Query{"demo.service", now.Add(-time.Hour), now, 7}, now
+	return Query{Unit: "demo.service", Start: now.Add(-time.Hour), End: now, MaxPriority: 7}, now
 }
 func fixtureLine(q Query, msg string) string {
 	b, _ := json.Marshal(map[string]any{"__REALTIME_TIMESTAMP": fmt.Sprint(q.Start.UnixMicro()), "_SYSTEMD_UNIT": q.Unit, "PRIORITY": "6", "MESSAGE": msg, "_UID": "1234", "ACCOUNT": "fixture-account", "_MACHINE_ID": "fixture-machine", "__CURSOR": "fixture-cursor", "_BOOT_ID": "fixture-boot"})

@@ -22,8 +22,8 @@ export async function createJournal(deviceId: string, expectedFloor: string, que
     const epoch = getProtectedRequestEpoch();
     await session(signal, insecureTestMode, sessionKey);
     if (signal.aborted || epoch !== getProtectedRequestEpoch() || hasLogoutIntent()) throw new DOMException('Aborted', 'AbortError');
-    if (insecureTestMode !== acknowledgePlaintext) throw new APIError('Plaintext acknowledgement does not match this session.');
-    return mutateRaw<unknown>(`${path(deviceId)}/create`, JSON.stringify({ expectedFloor, query, acknowledgeLogContent: true, acknowledgePlaintext, ...(expectedPolicyGeneration ? { expectedPolicyGeneration } : {}) }), {}, signal, JOURNAL_VIEW_BYTES);
+    if (query.browseMode !== 'retained-v1' && insecureTestMode !== acknowledgePlaintext) throw new APIError('Plaintext acknowledgement does not match this session.');
+    return mutateRaw<unknown>(`${path(deviceId)}/create`, JSON.stringify({ expectedFloor, query, acknowledgeLogContent: query.browseMode !== 'retained-v1', acknowledgePlaintext: query.browseMode === 'retained-v1' ? false : acknowledgePlaintext, ...(expectedPolicyGeneration ? { expectedPolicyGeneration } : {}) }), {}, signal, JOURNAL_VIEW_BYTES);
 }
 export async function cancelJournal(deviceId: string, identity: JournalIdentity, signal: AbortSignal, insecureTestMode: boolean, sessionKey: string | null) {
     const epoch = getProtectedRequestEpoch();

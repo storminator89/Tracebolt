@@ -40,6 +40,7 @@ type JournalGenerationView struct {
 	PolicyEnabled        *bool                                  `json:"policyEnabled,omitempty"`
 	ServiceAuthorization journalgeneration.ServiceAuthorization `json:"serviceAuthorization,omitempty"`
 	AllowedUnits         *[]string                              `json:"allowedUnits,omitempty"`
+	BrowsingContract     string                                 `json:"browsingContract,omitempty"`
 }
 
 func validJournalGeneration(snap enrollmentstate.Snapshot, r journalGenerationRecord) bool {
@@ -65,7 +66,7 @@ func currentJournalGeneration(system systemRecord, snap enrollmentstate.Snapshot
 		}
 		return nil
 	}
-	if d.SchemaVersion != journalrequest.SchemaVersionV2 || d.PolicyGeneration != r.Report.Tuple {
+	if (d.SchemaVersion != journalrequest.SchemaVersionV2 && d.SchemaVersion != journalrequest.SchemaVersionV3) || d.PolicyGeneration != r.Report.Tuple {
 		return journalrequest.ErrConflict
 	}
 	return nil
@@ -92,7 +93,7 @@ func (s *Store) AcceptJournalGeneration(ctx context.Context, id, hash string, re
 		}
 		if prior != nil {
 			old := prior.Report
-			if report.Tuple == old.Tuple && !journalgeneration.SameAuthorization(report, old) || old.SchemaVersion == journalgeneration.ReportVersionV2 && report.SchemaVersion != journalgeneration.ReportVersionV2 {
+			if report.Tuple == old.Tuple && !journalgeneration.SameAuthorization(report, old) || old.SchemaVersion == journalgeneration.ReportVersionV2 && report.SchemaVersion == journalgeneration.ReportVersion || old.SchemaVersion == journalgeneration.ReportVersionV3 && report.SchemaVersion != journalgeneration.ReportVersionV3 {
 				return journalrequest.ErrConflict
 			}
 			if report.Sequence < old.Sequence || report.Tuple.Revision < old.Tuple.Revision || report.Tuple.Revision == old.Tuple.Revision && report.Tuple != old.Tuple {
@@ -223,10 +224,14 @@ func (s *Store) JournalGenerationStatus(ctx context.Context, device string, now 
 			return err
 		}
 		out = &JournalGenerationView{SchemaVersion: "tracebolt.journal-generation-view.v1", PolicyGeneration: r.Report.Tuple, Sequence: r.Report.Sequence, ObservedAt: r.Report.ObservedAt, ReceivedAt: r.ReceivedAt, ExpiresAt: r.Report.ObservedAt.Add(JournalGenerationMaxAge), Fresh: fresh}
-		if r.Report.SchemaVersion == journalgeneration.ReportVersionV2 {
+		if r.Report.SchemaVersion == journalgeneration.ReportVersionV2 || r.Report.SchemaVersion == journalgeneration.ReportVersionV3 {
 			out.SchemaVersion = "tracebolt.journal-generation-view.v2"
 			enabled, units := r.Report.PolicyEnabled, slices.Clone(r.Report.AllowedUnits)
 			out.PolicyEnabled, out.ServiceAuthorization, out.AllowedUnits = &enabled, r.Report.ServiceAuthorization, &units
+		}
+		if r.Report.SchemaVersion == journalgeneration.ReportVersionV3 {
+			out.SchemaVersion = "tracebolt.journal-generation-view.v3"
+			out.BrowsingContract = r.Report.BrowsingContract
 		}
 		return nil
 	}

@@ -19,6 +19,7 @@ import (
 const (
 	SchemaVersion   = "tracebolt.journal-request.v1"
 	SchemaVersionV2 = "tracebolt.journal-request.v2"
+	SchemaVersionV3 = "tracebolt.journal-request.v3"
 	Lifetime        = 15 * time.Minute
 	MaxRecordBytes  = 4 << 10
 	Pending         = "pending"
@@ -129,7 +130,7 @@ func validTime(t time.Time) bool {
 	return t.Location() == time.UTC && t.Unix() > 0 && t.Year() <= 9999
 }
 func QueryDigest(q journalview.Query, now time.Time) (string, error) {
-	if journalview.ValidateQuery(q, now) != nil {
+	if q.BrowseMode != "" || journalview.ValidateQuery(q, now) != nil {
 		return "", ErrInvalid
 	}
 	b, err := json.Marshal(struct {
@@ -150,12 +151,16 @@ func QueryDigestWithGeneration(q journalview.Query, generation journalgeneration
 	if journalgeneration.Validate(generation) != nil || journalview.ValidateQuery(q, now) != nil {
 		return "", ErrInvalid
 	}
+	domain := SchemaVersionV2
+	if q.BrowseMode == journalview.BrowseMode {
+		domain = SchemaVersionV3
+	}
 	b, err := json.Marshal(struct {
 		Domain           string                  `json:"domain"`
 		Query            journalview.Query       `json:"query"`
 		Budgets          Budgets                 `json:"budgets"`
 		PolicyGeneration journalgeneration.Tuple `json:"policyGeneration"`
-	}{SchemaVersionV2, q, FixedBudgets(), generation})
+	}{domain, q, FixedBudgets(), generation})
 	if err != nil {
 		return "", ErrInvalid
 	}
@@ -182,6 +187,9 @@ func newRecord(device, leaf string, sequence uint64, q journalview.Query, genera
 	version := SchemaVersion
 	if generation != (journalgeneration.Tuple{}) {
 		version = SchemaVersionV2
+		if q.BrowseMode == journalview.BrowseMode {
+			version = SchemaVersionV3
+		}
 		digest, err = QueryDigestWithGeneration(q, generation, now)
 	}
 	if err != nil {
@@ -202,7 +210,10 @@ func Validate(r Record) error {
 		if d.PolicyGeneration != (journalgeneration.Tuple{}) {
 			return ErrInvalid
 		}
-	case SchemaVersionV2:
+	case SchemaVersionV2, SchemaVersionV3:
+		if (d.SchemaVersion == SchemaVersionV3) != (d.Query.BrowseMode == journalview.BrowseMode) {
+			return ErrInvalid
+		}
 		digest, err = QueryDigestWithGeneration(d.Query, d.PolicyGeneration, d.CreatedAt)
 	default:
 		return ErrInvalid
@@ -210,7 +221,7 @@ func Validate(r Record) error {
 	if err != nil || !validTime(d.CreatedAt) || !validTime(d.ExpiresAt) || !enrollmentcrypto.ValidID(d.Identity.ID, "journal_") || d.Identity.Sequence == 0 || digest != d.Identity.QueryDigest || !enrollmentcrypto.ValidID(d.DeviceID, "agent_") || !enrollmentcrypto.ValidHash(d.CertificateHash) || d.Budgets != FixedBudgets() || !d.ExpiresAt.Equal(d.CreatedAt.Add(Lifetime)) {
 		return ErrInvalid
 	}
-	if r.ClaimedAt != nil && d.SchemaVersion == SchemaVersionV2 && r.PolicyDigest != d.PolicyGeneration.PolicyDigest {
+	if r.ClaimedAt != nil && (d.SchemaVersion == SchemaVersionV2 || d.SchemaVersion == SchemaVersionV3) && r.PolicyDigest != d.PolicyGeneration.PolicyDigest {
 		return ErrInvalid
 	}
 	if r.ClaimedAt != nil && (!validTime(*r.ClaimedAt) || r.ClaimedAt.Before(d.CreatedAt) || !r.ClaimedAt.Before(d.ExpiresAt) || !ValidDigest(r.PolicyDigest)) {

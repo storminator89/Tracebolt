@@ -63,6 +63,9 @@ type Query struct {
 	Start       time.Time `json:"start"`
 	End         time.Time `json:"end"`
 	MaxPriority int       `json:"maxPriority"`
+	BrowseMode  string    `json:"browseMode,omitempty"`
+	Search      string    `json:"search,omitempty"`
+	Cursor      string    `json:"cursor,omitempty"`
 }
 type Row struct {
 	Timestamp time.Time `json:"timestamp"`
@@ -82,6 +85,8 @@ type Snapshot struct {
 	CountExact       bool      `json:"countExact"`
 	RedactionApplied bool      `json:"redactionApplied"`
 	RedactionWarning string    `json:"redactionWarning"`
+	NextCursor       string    `json:"nextCursor,omitempty"`
+	Exhausted        bool      `json:"exhausted,omitempty"`
 }
 
 // ValidateQuery accepts an intentionally small canonical service-name subset.
@@ -92,8 +97,14 @@ type Snapshot struct {
 func ValidateQuery(q Query, now time.Time) error {
 	if !validUnit(q.Unit) || !validUTC(now) || !validUTC(q.Start) || !validUTC(q.End) ||
 		q.Start.Nanosecond()%1000 != 0 || q.End.Nanosecond()%1000 != 0 || q.Start.After(q.End) ||
-		q.Start.Equal(q.End) || q.End.After(now) || now.Sub(q.Start) > MaxLookback ||
-		q.End.Sub(q.Start) > MaxSpan || q.MaxPriority < 0 || q.MaxPriority > 7 {
+		q.Start.Equal(q.End) || q.End.After(now) || q.MaxPriority < 0 || q.MaxPriority > 7 {
+		return ErrInvalidInput
+	}
+	if q.BrowseMode == "" {
+		if q.Search != "" || q.Cursor != "" || now.Sub(q.Start) > MaxLookback || q.End.Sub(q.Start) > MaxSpan {
+			return ErrInvalidInput
+		}
+	} else if q.BrowseMode != BrowseMode || !validSearch(q.Search) || q.Cursor != "" && !ValidCursor(q.Cursor) {
 		return ErrInvalidInput
 	}
 	return nil
@@ -118,18 +129,28 @@ func validUnit(s string) bool {
 }
 func validReason(r Reason) bool {
 	switch r {
-	case ReasonNone, ReasonPermissionDenied, ReasonSourceMissing, ReasonInvalidSource, ReasonReadFailed, ReasonTimeout, ReasonItemLimit, ReasonByteLimit, ReasonVisibilityRestricted, ReasonNotSupported, ReasonCollectorBusy:
+	case ReasonCursorUnavailable, ReasonNone, ReasonPermissionDenied, ReasonSourceMissing, ReasonInvalidSource, ReasonReadFailed, ReasonTimeout, ReasonItemLimit, ReasonByteLimit, ReasonVisibilityRestricted, ReasonNotSupported, ReasonCollectorBusy:
 		return true
 	}
 	return false
 }
 func empty(q Query, now time.Time) Snapshot {
-	return Snapshot{SchemaVersion: SchemaVersion, Scope: Scope, Query: q, ObservedAt: now, Coverage: Complete, Reason: ReasonNone, Rows: make([]Row, 0, MaxRows), CountExact: true, RedactionWarning: RedactionWarning}
+	version := SchemaVersion
+	if q.BrowseMode == BrowseMode {
+		version = SchemaVersionV2
+	}
+	return Snapshot{SchemaVersion: version, Scope: Scope, Query: q, ObservedAt: now, Coverage: Complete, Reason: ReasonNone, Rows: make([]Row, 0, MaxRows), CountExact: true, RedactionWarning: RedactionWarning}
 }
 func mark(s Snapshot, reason Reason) Snapshot {
+	// A cleanup, timeout or source failure cannot retain an exhaustion claim.
+	s.Exhausted = false
 	s.Reason = reason
 	s.CountExact = false
-	if reason == ReasonItemLimit || reason == ReasonByteLimit || reason == ReasonVisibilityRestricted || len(s.Rows) > 0 || s.ObservedCount > 0 {
+	// A validated cursor records source progress even if a sparse search or
+	// projection gap retained no rows. Cleanup failure must keep that partial
+	// continuation instead of producing a contradictory failed-with-cursor page.
+	continuable := s.Query.BrowseMode == BrowseMode && ValidCursor(s.NextCursor) && s.NextCursor != s.Query.Cursor
+	if reason == ReasonItemLimit || reason == ReasonByteLimit || reason == ReasonVisibilityRestricted || len(s.Rows) > 0 || s.ObservedCount > 0 || continuable {
 		s.Coverage = Partial
 	} else {
 		s.Coverage = Failed
@@ -165,6 +186,10 @@ func failureReason(err error) Reason {
 	}
 	return ReasonReadFailed
 }
+
+func (Query) String() string               { return "journalview.Query{content redacted}" }
+func (q Query) GoString() string           { return q.String() }
+func (q Query) Format(f fmt.State, _ rune) { _, _ = io.WriteString(f, q.String()) }
 
 // Formatting is content-redacted to keep accidental diagnostic formatting from
 // dumping journal messages. Encode is the deliberate validated wire serializer.

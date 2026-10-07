@@ -54,7 +54,7 @@ export function JournalSelectedSource({ unit, view }: { unit: string; view: Jour
 
 export function JournalReportedPermission({ view }: { view: JournalView | null }) {
     const [locale] = useLocale(), c = copy[locale], generation = view?.generation;
-    const known = generation?.schemaVersion === 'tracebolt.journal-generation-view.v2';
+    const known = generation?.schemaVersion === 'tracebolt.journal-generation-view.v2' || generation?.schemaVersion === 'tracebolt.journal-generation-view.v3';
     const status = !known ? (locale === 'de' ? 'Unbekannt' : 'Unknown') : !generation.fresh ? (locale === 'de' ? 'Veraltet · aktuelle Freigabe unbekannt' : 'Stale · current permission unknown') : generation.policyEnabled ? (locale === 'de' ? 'Aktuell gemeldet' : 'Fresh report') : c.policyDisabled;
     return <div className="journal-reported-permission">
         <p className={known && (!generation.fresh || !generation.policyEnabled) ? 'journal-warning' : undefined}><strong>{c.grant}:</strong> {known && <>{generation.serviceAuthorization === 'all-system-services' ? c.all : c.exact} · </>}{status}</p>
@@ -73,7 +73,7 @@ export function JournalReportedPermission({ view }: { view: JournalView | null }
 export function JournalPermissionSummary({ unit, view }: { unit: string; view: JournalView | null }) {
     const [locale] = useLocale(), generation = view?.generation;
     const historical = journalSourceAccess(view, unit), reported = journalReportedAccess(view, unit);
-    const known = generation?.schemaVersion === 'tracebolt.journal-generation-view.v2';
+    const known = generation?.schemaVersion === 'tracebolt.journal-generation-view.v2' || generation?.schemaVersion === 'tracebolt.journal-generation-view.v3';
     const access = !unit && known && generation.fresh ? generation.policyEnabled ? 'reported_scope' : 'reported_disabled' : reported === 'unknown' ? historical : reported;
     const stale = Boolean(generation && !generation.fresh);
     const label = stale ? (locale === 'de' ? 'Freigabemeldung veraltet · Zugriff unbekannt' : 'Policy report stale · permission unknown') : ({

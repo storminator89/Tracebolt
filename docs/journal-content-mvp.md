@@ -6,6 +6,10 @@ checks are distinct from actual helper installation, effective journal access
 and service/reboot acceptance. The separate host permission grant has not been
 implied by these source tests. See [helper setup](linux-journal-helper.md).
 
+The separately versioned [retained browsing candidate](retained-journal-browsing.md)
+adds an explicitly approved v4 local scope. The v1-v3 snapshot behavior described
+below remains unchanged for existing grants.
+
 ## Useful first scope
 
 An administrator will request one exact supported service unit, an explicit UTC

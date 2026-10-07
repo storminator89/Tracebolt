@@ -23,6 +23,7 @@ type aiJournalFixture struct {
 	clock                   *investigationsSource
 	generation              journalgeneration.Tuple
 	enabled, fresh          bool
+	retained                bool
 	record                  *journalrequest.Record
 	rows                    []journalview.Row
 	coverage                journalview.Coverage
@@ -40,7 +41,12 @@ func (f *aiJournalFixture) JournalGenerationStatus(_ context.Context, _ string, 
 	}
 	enabled := f.enabled
 	units := []string{"fixture.service"}
-	return &enrollmentstore.JournalGenerationView{SchemaVersion: "tracebolt.journal-generation-view.v2", PolicyGeneration: f.generation, Sequence: 1, ObservedAt: f.Now(), ReceivedAt: f.Now(), Fresh: f.fresh, ExpiresAt: f.Now().Add(5 * time.Minute), PolicyEnabled: &enabled, ServiceAuthorization: journalgeneration.ExactUnits, AllowedUnits: &units}, f.sourceError
+	view := &enrollmentstore.JournalGenerationView{SchemaVersion: "tracebolt.journal-generation-view.v2", PolicyGeneration: f.generation, Sequence: 1, ObservedAt: f.Now(), ReceivedAt: f.Now(), Fresh: f.fresh, ExpiresAt: f.Now().Add(5 * time.Minute), PolicyEnabled: &enabled, ServiceAuthorization: journalgeneration.ExactUnits, AllowedUnits: &units}
+	if f.retained {
+		view.SchemaVersion = "tracebolt.journal-generation-view.v3"
+		view.BrowsingContract = journalview.BrowseContract
+	}
+	return view, f.sourceError
 }
 func (f *aiJournalFixture) JournalStatus(_ context.Context, _ string, _ time.Time) (journalrequest.Status, string, error) {
 	if f.change != nil {

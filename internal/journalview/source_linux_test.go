@@ -166,3 +166,28 @@ func TestBoundedWritersAndOSFailures(t *testing.T) {
 		}
 	}
 }
+
+func TestRetainedJournalArgsKeepJSONFieldBoundAndExactContinuation(t *testing.T) {
+	q, _ := browseFixture()
+	q.Search = "literal [text] + .*"
+	for _, cursor := range []string{"", "s=fixture;i=8"} {
+		q.Cursor = cursor
+		got, e := journalArgs(q)
+		if e != nil {
+			t.Fatal(e)
+		}
+		want := []string{"--reverse", "--lines=4098"}
+		if cursor != "" {
+			want = append(want, "--cursor="+cursor)
+		}
+		want = append(want, "--system", "--no-pager", "--utc", "--output=json", "--output-fields=__CURSOR,__REALTIME_TIMESTAMP,_SYSTEMD_UNIT,_PID,_UID,UNIT,PRIORITY,MESSAGE", "--since=@0.000000", "--until=@1791115200.000000", "--priority=0..7", "--", "_SYSTEMD_UNIT=demo.service", "+", "_PID=1", "_UID=0", "UNIT=demo.service")
+		if !reflect.DeepEqual(got, want) {
+			t.Fatal("retained exact argv changed")
+		}
+		for _, arg := range got {
+			if arg == "--all" || strings.HasPrefix(arg, "--grep=") || arg == q.Search {
+				t.Fatal("unbounded JSON or source regex search admitted")
+			}
+		}
+	}
+}

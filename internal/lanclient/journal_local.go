@@ -110,7 +110,7 @@ func configureJournalContent(path, mode string, acknowledged, plaintext bool, id
 	if e != nil || generation != current.generation {
 		return JournalConsentResult{}, ErrConfiguration
 	}
-	broad := current.policy.SchemaVersion == journalpolicy.VersionV3
+	broad := (current.policy.SchemaVersion == journalpolicy.VersionV3 || current.policy.SchemaVersion == journalpolicy.VersionV4)
 	if broad {
 		if current.policy.ServiceAuthorization != journalpolicy.AllSystemServices || current.generation.Revision != 1 || current.activationPhase != "pending" || !current.policy.Enabled || current.deployment.SchemaVersion != journalhelper.DeploymentVersionV2 || !current.deployment.PolicyGenerationRequired {
 			return JournalConsentResult{}, ErrConfiguration

@@ -367,7 +367,7 @@ func (h *operatorHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		serveSocketOwnerCapabilities(w, r, h.enrollmentBootstrap, &h.bootstrapAdmission)
 		return
 	}
-	if r.URL.Path == journalCapabilitiesPath {
+	if r.URL.Path == journalCapabilitiesPath || r.URL.Path == journalBrowseCapabilitiesPath {
 		if h.enrollment == nil {
 			fail(w, 404, "enrollment_unavailable", "Enrollment is not configured.")
 			return

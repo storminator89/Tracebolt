@@ -49,7 +49,22 @@ func ValidUnit(unit string) bool {
 	return journalview.ValidateQuery(journalview.Query{Unit: unit, Start: now.Add(-time.Minute), End: now, MaxPriority: 4}, now) == nil
 }
 func PermittedGeneration(v *enrollmentstore.JournalGenerationView, unit string, now time.Time) bool {
-	if v == nil || v.SchemaVersion != "tracebolt.journal-generation-view.v2" || !v.Fresh || !now.Before(v.ExpiresAt) || v.PolicyEnabled == nil || !*v.PolicyEnabled || v.AllowedUnits == nil || journalgeneration.Validate(v.PolicyGeneration) != nil || journalgeneration.ValidateServiceAuthorization(v.ServiceAuthorization, *v.AllowedUnits) != nil || !ValidUnit(unit) {
+	if v == nil || !v.Fresh || !now.Before(v.ExpiresAt) || v.PolicyEnabled == nil || !*v.PolicyEnabled || v.AllowedUnits == nil || journalgeneration.Validate(v.PolicyGeneration) != nil || journalgeneration.ValidateServiceAuthorization(v.ServiceAuthorization, *v.AllowedUnits) != nil || !ValidUnit(unit) {
+		return false
+	}
+	// V4 local policies also authorize the original bounded TBJ2 capture. A
+	// retained-policy report is eligible for a *new*, exact-generation AI review,
+	// never for adapting a retained page or rebinding an older approval.
+	switch v.SchemaVersion {
+	case "tracebolt.journal-generation-view.v2":
+		if v.BrowsingContract != "" {
+			return false
+		}
+	case "tracebolt.journal-generation-view.v3":
+		if v.BrowsingContract != journalview.BrowseContract {
+			return false
+		}
+	default:
 		return false
 	}
 	if v.ServiceAuthorization == journalgeneration.AllSystemServices {
@@ -64,6 +79,30 @@ func PermittedGeneration(v *enrollmentstore.JournalGenerationView, unit string, 
 		}
 	}
 	return false
+}
+
+// BoundedQuery is deliberately independent of the wider local journal grant.
+// No retained mode, source search, source continuation or arbitrary range may
+// reach AI, even when an approved local policy permits those operator reads.
+func BoundedQuery(q journalview.Query) bool {
+	span := q.End.Sub(q.Start)
+	return q.BrowseMode == "" && q.Search == "" && q.Cursor == "" && q.MaxPriority == 4 && (span == 5*time.Minute || span == 15*time.Minute) && journalview.ValidateQuery(q, q.End) == nil
+}
+
+func MatchesWindow(c Capture, openedAt time.Time, minutes int) bool {
+	q := c.Description.Query
+	return BoundedQuery(q) && (minutes == 5 || minutes == 15) && q.End.Equal(openedAt.UTC().Truncate(time.Microsecond)) && q.End.Sub(q.Start) == time.Duration(minutes)*time.Minute
+}
+
+func validCapture(t Target, c Capture, now time.Time) bool {
+	d := c.Description
+	return d.DeviceID == t.DeviceID && d.Query.Unit == t.Unit && d.PolicyGeneration == t.Generation && d.SchemaVersion == journalrequest.SchemaVersionV2 && BoundedQuery(d.Query) && !now.Before(d.CreatedAt) && now.Before(d.ExpiresAt) && journalrequest.Validate(journalrequest.Record{Description: d, State: journalrequest.Pending}) == nil
+}
+
+// BoundedPage rejects retained traversal metadata even if its search scope has
+// been relabeled. Only display offsets within one bounded snapshot are allowed.
+func BoundedPage(p journalcache.Page) bool {
+	return p.SchemaVersion == "tracebolt.journal-page.v1" && BoundedQuery(p.Query) && p.NextCursor == "" && !p.Exhausted && p.Search == "" && p.SearchScope == "captured_snapshot_only" && p.Scope == journalview.Scope && p.RedactionWarning == journalview.RedactionWarning && (p.Coverage == journalview.Complete || p.Coverage == journalview.Partial) && len(p.Rows) <= MaxRows && p.TotalCapturedRows >= p.Offset+len(p.Rows) && p.TotalCapturedRows <= journalview.MaxRows && p.Offset >= 0 && p.MatchedRows == p.TotalCapturedRows
 }
 func CheckTarget(ctx context.Context, s Source, t Target, now time.Time) error {
 	if journalgeneration.Validate(t.Generation) != nil || !ValidUnit(t.Unit) {
@@ -83,7 +122,7 @@ func CheckTarget(ctx context.Context, s Source, t Target, now time.Time) error {
 // preparation. Policy and exact accepted content must both remain current.
 func CheckCapture(ctx context.Context, s Source, t Target, c Capture, digest string, now time.Time) error {
 	d := c.Description
-	if d.DeviceID != t.DeviceID || d.Query.Unit != t.Unit || d.PolicyGeneration != t.Generation || !journalrequest.ValidDigest(digest) || !now.Before(d.ExpiresAt) {
+	if !validCapture(t, c, now) || !journalrequest.ValidDigest(digest) {
 		return ErrChanged
 	}
 	if err := CheckTarget(ctx, s, t, now); err != nil {
@@ -128,14 +167,14 @@ func Begin(ctx context.Context, s Source, t Target, openedAt time.Time, minutes 
 	if err != nil {
 		return Capture{}, ErrUnavailable
 	}
-	if d.DeviceID != t.DeviceID || d.Query != q || d.PolicyGeneration != t.Generation || d.SchemaVersion != journalrequest.SchemaVersionV2 || d.Identity.Sequence != floor+1 || d.Budgets != journalrequest.FixedBudgets() || !s.Now().UTC().Before(d.ExpiresAt) {
+	if !validCapture(t, Capture{Description: d}, s.Now().UTC()) || d.Query != q || d.Identity.Sequence != floor+1 {
 		return Capture{}, ErrChanged
 	}
 	return Capture{Description: d}, nil
 }
 func Read(ctx context.Context, s Source, t Target, c Capture, now time.Time) (journalcache.Page, error) {
 	d := c.Description
-	if d.DeviceID != t.DeviceID || d.Query.Unit != t.Unit || d.PolicyGeneration != t.Generation || !now.Before(d.ExpiresAt) {
+	if !validCapture(t, c, now) {
 		return journalcache.Page{}, ErrChanged
 	}
 	if err := CheckTarget(ctx, s, t, now); err != nil {
@@ -155,13 +194,13 @@ func Read(ctx context.Context, s Source, t Target, c Capture, now time.Time) (jo
 	if err != nil {
 		return journalcache.Page{}, ErrUnavailable
 	}
-	if page.Identity != d.Identity || page.Query != d.Query || page.ExpiresAt != d.ExpiresAt || page.SnapshotDigest != status.Receipt.ResultDigest || page.Offset != 0 || len(page.Rows) > MaxRows || page.Coverage == journalview.Failed || !s.Now().UTC().Before(page.ExpiresAt) {
+	if !BoundedPage(page) || page.DeviceID != t.DeviceID || page.Identity != d.Identity || page.Query != d.Query || page.ExpiresAt != d.ExpiresAt || page.SnapshotDigest != status.Receipt.ResultDigest || page.Offset != 0 || !s.Now().UTC().Before(page.ExpiresAt) {
 		return journalcache.Page{}, ErrUnavailable
 	}
 	if page.TotalCapturedRows > MaxRows {
 		offset := page.TotalCapturedRows - MaxRows
 		page, err = s.JournalPage(ctx, t.DeviceID, journalcache.PageRequest{Identity: d.Identity, SnapshotDigest: status.Receipt.ResultDigest, Search: "", Offset: offset, Limit: MaxRows}, s.Now().UTC())
-		if err != nil || page.Offset != offset || page.Identity != d.Identity || page.Query != d.Query || page.ExpiresAt != d.ExpiresAt || page.SnapshotDigest != status.Receipt.ResultDigest || len(page.Rows) > MaxRows || page.Coverage == journalview.Failed || !s.Now().UTC().Before(page.ExpiresAt) {
+		if err != nil || !BoundedPage(page) || page.DeviceID != t.DeviceID || page.Offset != offset || page.Identity != d.Identity || page.Query != d.Query || page.ExpiresAt != d.ExpiresAt || page.SnapshotDigest != status.Receipt.ResultDigest || !s.Now().UTC().Before(page.ExpiresAt) {
 			return journalcache.Page{}, ErrUnavailable
 		}
 	}

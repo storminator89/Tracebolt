@@ -13,8 +13,11 @@ default-off scope (`service-journal-ai-v1`) for complete Linux enrollment.
    provider URL and model, enrolled device and service, and either 5 or 15 minutes
    before each new service incident. Up to eight device/service pairs are allowed.
 3. Read the fresh local journal-policy report. It must explicitly allow the exact
-   service. This page cannot install a helper, grant local journal access or
-   change the local service allowlist.
+   service. Generation-view v2 and retained-policy v3 with the exact browsing
+   contract are supported. A changed local scope/generation pauses the old AI
+   approval: remove and add that service from the current policy, then review
+   and acknowledge the new bounded approval. This page cannot install a helper,
+   grant local journal access or change the local service allowlist.
 4. Separately acknowledge future monitoring/captures and provider export. The
    HTTP-test profile requires an additional acknowledgement of unencrypted
    operator transport. None of these boxes is preselected.
@@ -23,7 +26,8 @@ Approval adds these exact services to manager-side health monitoring and records
 its original time, manager/transport, saved provider revision and credential
 identity, device/service, policy generation and data scope. It survives an
 ordinary manager restart only while these bindings still match. Provider or
-policy changes require renewed review. Saving approval does not collect logs,
+policy changes require renewed review. A retained local grant does not promote
+an old AI approval or select all services for AI. Saving approval does not collect logs,
 test connectivity or invoke a model. Incidents that predate approval are excluded.
 Disabling prevents further AI export immediately; any unfinished exact capture
 cancellation is explicitly reported and retried until confirmed or expired.
@@ -35,6 +39,15 @@ approved service and preceding window, priority warning or higher. An existing
 manual capture is never replaced or adopted. Request metadata is claimed before
 creation; uncertain creation outcomes are not retried. Original source identity,
 policy generation, enrollment authority and expiry are revalidated before use.
+
+Under a retained v4 local policy, AI still creates a request-v2/TBJ2 bounded
+capture, with no retained mode, search or source cursor. The helper returns the
+original content-v1 snapshot and page-v1 display projection. Every AI boundary
+rejects retained pages/continuations; the model cannot request or follow one.
+The request must retain its fixed budgets, query digest, original 15-minute
+expiry and exact policy tuple. Before export the capture must match the saved
+5/15-minute choice and the incident's original opening time. A new broad local
+grant changes none of those AI limits, and is never inferred to approve export.
 
 The local capture retains at most 500 rows, 512 KiB total and 4 KiB/message,
 under the existing helper budget. The manager reads at most two bounded snapshot pages to select the latest ten
@@ -82,6 +95,14 @@ content on original expiry, page/background/session loss and changed time
 reference. Revocation and unavailable source identity fail closed.
 
 ## Validation boundary
+
+Automated tests cover old-to-retained generation changes, renewed exact approval,
+restart-preserved original receipts and consume-once captures, policy/provider
+changes before and during analysis, retained/manual-page rejection, the original
+capture expiry and 5/15-minute bounds. Synthetic helper/store fixtures exercise
+the bounded TBJ2/request-v2 route under v4 without native reads. UI tests and the
+existing hosted journal-AI case cover unchanged unchecked acknowledgements,
+source/provider/window changes and explicit new-generation reapproval.
 
 Automated tests use invented journal rows and an in-process model adapter;
 hosted screenshots use explicitly synthetic intercepted DTOs. They do not prove

@@ -56,7 +56,7 @@ test('document identity, time origin and pagehide catch document changes and Bac
 });
 test('hosted probe extends the existing real LAN case and keeps runner counts, reads and deadlines intact',()=>{
  const runner=read('./lan-browser.mjs'),module=read('./workspace-navigation-browser.mjs'),ci=read('../../.github/workflows/validate.yml');
- assert.equal((runner.match(/await check\(/g)||[]).length,25);
+ assert.equal((runner.match(/await check\(/g)||[]).length,26);
  const name="Authenticated LAN contract shows unknown awaiting-agent data with no demo fleet or healthy empty-state claim";
  const start=runner.indexOf("await check('"+name+"'");assert.ok(start>=0);const end=runner.indexOf('await check(',start+12),scenario=runner.slice(start,end);
  assert.equal((scenario.match(/await workspaceNavigationBrowserProbe\(\{page,expect,base\}\)/g)||[]).length,1);

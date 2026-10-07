@@ -1,5 +1,5 @@
 {
-  "goSourceSha256": "48f83efcf5455f62bd2a877febc5a727ea22a47f8735b39ba63d437ef1cbb1a7",
+  "goSourceSha256": "046a7d07793186586036587f916c2113fe59c877c568fb2a5629fa8f32c8d033",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -622,8 +622,12 @@
       "TestJournalAIInvalidScopeDoesNotPoisonLaterApproval",
       "TestJournalAIManualWorkPolicyFailureAndRevocationDoNotLeak",
       "TestJournalAIMissingApprovalAndChangedPolicyNeverCapture",
+      "TestJournalAIOldBoundedApprovalCannotCaptureUnderRetainedScope",
       "TestJournalAIProviderReplacementInvalidatesApprovalAndResults",
+      "TestJournalAIRetainedScopeChangeRequiresFreshApprovalIncludingAfterRestart",
       "TestJournalAISavedProviderViewChecksProtectedBinding",
+      "TestJournalAIV4PolicyChangesAndProviderReplacementBlockExports",
+      "TestJournalAIV4UnapprovedWindowIsRejectedBeforeProvider",
       "TestJournalCapabilitiesPublicStaticBoundedAndGuarded",
       "TestJournalCapabilitiesUnavailableOnDeveloperSurface",
       "TestJournalExpectedGenerationShape",
@@ -719,6 +723,8 @@
       "TestResourceHistoryOperatorBoundary",
       "TestResourceHistoryOutputRechecksAfterEncoding",
       "TestResourceHistorySessionRecheckAndNamedRead",
+      "TestRetainedCreateHasExplicitProtocolWithoutPerReadAcknowledgement",
+      "TestRetainedManagerCapabilitiesAreDistinctMetadata",
       "TestSecurityCoverageLegitimateEmptyInventoryIsNotZeroCVEs",
       "TestSecurityCoveragePartialStaleUnknownAndRetainedRemainDistinct",
       "TestSecurityCoverageSeparatesInventoryFromUnknownAssessments",
@@ -1270,6 +1276,7 @@
       "TestResourceHistoryEncodedViewLifetime",
       "TestResourceHistoryMinuteBoundAndMaintenanceDoNotChangeReplay",
       "TestResourceHistoryOptionalSchemaPreservesExistingIdentityAndNoBackfill",
+      "TestRetainedBrowseRequiresNewReportedGrantAndKeepsConsumeFloor",
       "TestServiceActionCanceledPersistenceReleasesNoApproval",
       "TestServiceActionObservedExpiryCannotRevive",
       "TestServiceActionPreviewExpiryCannotReviveAfterFailedApproval",
@@ -1319,6 +1326,7 @@
       "TestTwentyFiveNearMaxConcurrentTransactionWait",
       "TestTwentyFiveOperationalRetainedBudget",
       "TestTwentyFivePopulatedRecordsRetainFrames",
+      "TestV4GenerationAdmitsOnlyExactBoundedAIRequestAndKeepsConsumeFloor",
       "TestWindowsEnrollmentNeverAuthorizesNativePackageDevice",
       "TestWindowsInventoryCannotBeWrittenIntoBasicStore",
       "TestWindowsInventoryDurableViewRetryHistoryAndScope",
@@ -1500,6 +1508,7 @@
     ],
     "localrmm/internal/journalhelper": [
       "TestAllDenialsPrecedeCapture",
+      "TestBrowseHelperPolicyRateAndVerify",
       "TestCancellationWaitsForSynchronousCleanupAndKeepsCaptureSlot",
       "TestCaptureAndVerifyUseEncodedSnapshotOnly",
       "TestDeadlineClosesBlockedReadAndNoCapture",
@@ -1519,12 +1528,14 @@
       "TestServeWaitsForCleanupAndClosesListener",
       "TestTBJ2ExactBinaryRoundTripAndLegacyFrameUnchanged",
       "TestTBJ2MalformedTupleLengthVersionAndOperationsReject",
+      "TestTBJ3CanonicalRoundtripAndDowngrade",
       "TestV2AuthorityRequiresMigratedDeploymentAndCommittedExactTuple",
       "TestV2HelperBindsCaptureAndMetadataVerification",
       "TestV2HelperDeniesPredecessorLegacyAndConflictingRequestsBeforeCapture",
       "TestV2HelperFinalReleaseDeniesGenerationChange",
       "TestV3HelperAllowsFutureExactServiceThroughExistingTBJ2Protocol",
       "TestV3HelperDeniesLegacyRequestsAndScopeChangesBeforeRelease",
+      "TestV4HelperKeepsBoundedAICaptureOnTBJ2",
       "TestWriteAllRejectsBadWriter"
     ],
     "localrmm/internal/journalpolicy": [
@@ -1537,11 +1548,13 @@
       "TestPolicyDecodingDetachesInput",
       "TestPolicyRequiresSeparateIdentityExactAllowlistAndConsent",
       "TestPolicyStrictJSONRejectsAmbiguity",
+      "TestRetainedGrantIsFreshExplicitAndCannotPromoteOldPolicy",
       "TestStrictPolicyRoundTripAndExactScope",
       "TestV3ScopeRejectsAmbiguousOrDowngradedAuthority",
       "TestV3ServiceAuthorizationIsExplicitAndLegacyBytesStayExact"
     ],
     "localrmm/internal/journalrequest": [
+      "TestBrowseRequestVersionDigestAndLifetime",
       "TestExpiredRecordRequiresDurableTerminalTime",
       "TestNestedGenerationRejectsMalformedAndDuplicateJSON",
       "TestQueryDigestExactAndBoundedRecord",
@@ -1592,6 +1605,19 @@
       "TestQueryValidation",
       "TestRedactionBestEffort",
       "TestRelevantIdentityFieldsAreScalarSingletons",
+      "TestRetainedBrowsePagesBeyondLegacyLimits",
+      "TestRetainedBrowseSparseLiteralSearchProgress",
+      "TestRetainedCleanupFailuresClearExhaustionWithoutInventingContinuation",
+      "TestRetainedCursorAndSearchBounds",
+      "TestRetainedCursorLossFailsClosed",
+      "TestRetainedEarlyCollectionFailuresKeepTheirVersionAndReason",
+      "TestRetainedFailedCursorIsRejectedBySnapshotAndPageContracts",
+      "TestRetainedJournalArgsKeepJSONFieldBoundAndExactContinuation",
+      "TestRetainedMaskExpansionIsAnExplicitGapAndOlderRowsRemainReachable",
+      "TestRetainedNullAndBinaryMessagesAreExplicitTraversableGaps",
+      "TestRetainedOversizedEntryIsAnExplicitGapWithBoundedProgress",
+      "TestRetainedPageCapacityRetriesTheUnretainedRow",
+      "TestRetainedZeroRowProgressSurvivesCleanupFailures",
       "TestRootRefusalBeforeOpenOrRunner",
       "TestTrustedPID1ManagerBranchAndSharedFilters"
     ],
@@ -2279,7 +2305,10 @@
       "TestPackageSignaturePurposePathAndFraming",
       "TestServiceSignatureCannotBecomePackageAuthority"
     ],
-    "localrmm/internal/proactivejournal": [],
+    "localrmm/internal/proactivejournal": [
+      "TestBoundedBridgeRejectsRetainedCapturesAndLiveManualPages",
+      "TestRetainedLocalGrantNeedsExactBoundedAIApproval"
+    ],
     "localrmm/internal/rules": [
       "TestNativeInputsDoNotBecomeDemoEvidence",
       "TestRulesAndCounterexamples"

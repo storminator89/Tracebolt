@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {healthDashboardFixture,healthDashboardPhases,healthDisclosureFrameMs,openHealthDisclosure} from './health-dashboard-browser.mjs';
+import {healthDashboardFixture,healthDashboardPhases,healthDisclosureFrameMs,openHealthDisclosure,healthDashboardLayout} from './health-dashboard-browser.mjs';
 const id='agent_'+'d'.repeat(32);
 test('Health dashboard browser fixtures cover honest current, issue, no-check, stale, awaiting and unavailable states',()=>{
  for(const phase of healthDashboardPhases){const {device,health}=healthDashboardFixture(phase,id);assert.equal(device.id,health.deviceId);assert.equal(device.source,'lan');assert.equal(device.synthetic,false);assert.equal(device.ip,null);assert.equal(health.deviceId,id);}
@@ -24,4 +24,28 @@ test('paused-clock Health disclosures drain a bounded frame after click and befo
   assert.ok(focus>start&&(next<0||focus<next),'focus assertion must follow its drained frame');
  }
 
+});
+
+// Geometry values are invented booleans here. These checks validate diagnostic
+// attribution and assertion preservation, not browser layout or the root cause.
+test('Health layout failures retain finite viewport/card/issue/summary stages and never become success',async()=>{
+ const groups=['viewport','cards','issues','summaries'];
+ for(const failed of groups){
+  const stages=[],expectedError=new Error('fixture geometry failure');
+  const expect=value=>({toBe:expected=>{assert.equal(expected,true);if(!value)throw expectedError;}});
+  const page={evaluate:async()=>failed!=='viewport'};
+  const health={locator:selector=>({all:async()=>[{isVisible:async()=>true,evaluate:async()=>!(failed==='cards'&&selector==='.health-reading-card'||failed==='issues'&&selector==='.health-issue'||failed==='summaries'&&selector==='.health-disclosure > summary')} ]})};
+  await assert.rejects(healthDashboardLayout(page,health,expect,stage=>stages.push(stage),'health-mobile-de-settings-layout'),error=>error===expectedError);
+  assert.equal(stages.at(-1),`health-mobile-de-settings-layout-${failed}`);
+ }
+});
+test('German settings and the following clear phase no longer inherit the previous successful screenshot stage',()=>{
+ const source=readFileSync(new URL('./health-dashboard-browser.mjs',import.meta.url),'utf8');
+ const stages=['health-mobile-de-settings-open','health-mobile-de-settings-visible','health-mobile-de-settings-scroll','synthetic-http-test-health-controls-mobile-de','health-mobile-de-clear-reload','health-mobile-de-clear-summary','health-mobile-de-clear-reading'];
+ let previous=-1;for(const stage of stages){const index=source.indexOf(`mark('${stage}')`);assert.ok(index>previous,stage);previous=index;}
+ assert.match(source,/try\{await layout\(page,health,expect,mark,'health-mobile-de-settings-layout'\);\}catch\(error\)/);
+ assert.match(source,/page\.locator\('input\[type="password"\]'\)\)\.toHaveCount\(0\)/);
+ assert.match(source,/await shot\(page,'synthetic-http-test-health-controls-layout-failure-mobile-de',fixtureDisclosure\);\s*\}finally\{throw error;\}/);
+ assert.match(source,/el\.scrollWidth<=el\.clientWidth\+1/);
+ assert.equal(healthDisclosureFrameMs,32);
 });

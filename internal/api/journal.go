@@ -212,7 +212,7 @@ func (h *operatorHandler) writeJournalView(w http.ResponseWriter, r *http.Reques
 	// between them may cancel old work; never publish a hybrid active view.
 	if v.Request != nil {
 		d := v.Request.Description
-		if d.SchemaVersion == journalrequest.SchemaVersionV2 && (generation == nil || d.PolicyGeneration.Revision > generation.PolicyGeneration.Revision || d.PolicyGeneration.Revision == generation.PolicyGeneration.Revision && d.PolicyGeneration != generation.PolicyGeneration) || generation != nil && (v.Request.State == journalrequest.Pending || v.Request.State == journalrequest.Claimed) && (d.SchemaVersion != journalrequest.SchemaVersionV2 || d.PolicyGeneration != generation.PolicyGeneration) {
+		if (d.SchemaVersion == journalrequest.SchemaVersionV2 || d.SchemaVersion == journalrequest.SchemaVersionV3) && (generation == nil || d.PolicyGeneration.Revision > generation.PolicyGeneration.Revision || d.PolicyGeneration.Revision == generation.PolicyGeneration.Revision && d.PolicyGeneration != generation.PolicyGeneration) || generation != nil && (v.Request.State == journalrequest.Pending || v.Request.State == journalrequest.Claimed) && ((d.SchemaVersion != journalrequest.SchemaVersionV2 && d.SchemaVersion != journalrequest.SchemaVersionV3) || d.PolicyGeneration != generation.PolicyGeneration) {
 			journalOperatorError(w, journalrequest.ErrConflict)
 			return
 		}
@@ -350,15 +350,24 @@ func readJournalCreate(w http.ResponseWriter, r *http.Request, now time.Time, in
 	}
 	floor, err := strconv.ParseUint(in.ExpectedFloor, 10, 64)
 	var q journalview.Query
-	if err != nil || strconv.FormatUint(floor, 10) != in.ExpectedFloor || !journalObject(in.Query, []string{"unit", "start", "end", "maxPriority"}, &q) || journalview.ValidateQuery(q, now) != nil {
-		fail(w, 400, "invalid_journal_request", "Use one exact service, a past UTC time range up to one hour, and priority 0–7.")
+	queryKeys := []string{"unit", "start", "end", "maxPriority"}
+	var queryFields map[string]json.RawMessage
+	if json.Unmarshal(in.Query, &queryFields) == nil {
+		for _, key := range []string{"browseMode", "search", "cursor"} {
+			if _, ok := queryFields[key]; ok {
+				queryKeys = append(queryKeys, key)
+			}
+		}
+	}
+	if err != nil || strconv.FormatUint(floor, 10) != in.ExpectedFloor || !journalObject(in.Query, queryKeys, &q) || journalview.ValidateQuery(q, now) != nil {
+		fail(w, 400, "invalid_journal_request", "Use one exact service, valid past UTC dates, priority 0–7, and the limits of the selected query contract.")
 		return 0, journalview.Query{}, journalgeneration.Tuple{}, false
 	}
-	if !in.AcknowledgeLogContent {
+	if q.BrowseMode == "" && !in.AcknowledgeLogContent {
 		fail(w, 400, "journal_acknowledgement_required", "Acknowledge that journal messages may contain credentials, personal data or other secrets despite best-effort masking.")
 		return 0, journalview.Query{}, journalgeneration.Tuple{}, false
 	}
-	if insecure && !in.AcknowledgePlaintext {
+	if q.BrowseMode == "" && insecure && !in.AcknowledgePlaintext {
 		fail(w, 400, "journal_plaintext_acknowledgement_required", "Acknowledge that this HTTP test sends log content unencrypted without server authentication.")
 		return 0, journalview.Query{}, journalgeneration.Tuple{}, false
 	}
@@ -370,6 +379,10 @@ func readJournalCreate(w http.ResponseWriter, r *http.Request, now time.Time, in
 			fail(w, 400, "invalid_journal_request", "The expected policy generation is invalid.")
 			return 0, journalview.Query{}, journalgeneration.Tuple{}, false
 		}
+	}
+	if q.BrowseMode == journalview.BrowseMode && journalgeneration.Validate(generation) != nil {
+		fail(w, 409, "journal_browse_unsupported", "Retained browsing requires a fresh explicit local browsing grant and compatible endpoint.")
+		return 0, journalview.Query{}, journalgeneration.Tuple{}, false
 	}
 	return floor, q, generation, true
 }

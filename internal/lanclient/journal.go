@@ -106,7 +106,7 @@ func (s *journalSender) Run(ctx context.Context) string {
 		}
 		return "denied"
 	}
-	disabled := local.policy.SchemaVersion == journalpolicy.VersionV3 && !local.policy.Enabled
+	disabled := (local.policy.SchemaVersion == journalpolicy.VersionV3 || local.policy.SchemaVersion == journalpolicy.VersionV4) && !local.policy.Enabled
 	if disabled {
 		s.discard()
 	}

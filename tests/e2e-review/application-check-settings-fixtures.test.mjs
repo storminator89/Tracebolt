@@ -42,7 +42,7 @@ test('unknown routes and check/probe methods never reach a real target',()=>{
 });
 test('hosted case adds exact intercepted setup without weakening the shared harness',()=>{
  const runner=read('./lan-browser.mjs'),source=read('./application-check-settings-browser.mjs');
- assert.equal((runner.match(/await check\(/g)||[]).length,25);assert.equal((runner.match(/await check\(applicationCheckSettingsCaseName/g)||[]).length,1);
+ assert.equal((runner.match(/await check\(/g)||[]).length,26);assert.equal((runner.match(/await check\(applicationCheckSettingsCaseName/g)||[]).length,1);
  assert.match(runner,/applicationCheckSettingsBrowserCase\(\{pageAt,login,expect,base,shot\}\),'10m'/);
  assert.match(applicationCheckSettingsCaseName,/Synthetic application check setup/);assert.match(applicationCheckSettingsFixtureDisclosure,/no real configuration persistence, target probe, DNS request, TCP connection or permission grant/);
  assert.doesNotMatch(source,/chromium\.launch|newContext\(|setDefaultTimeout|waitForTimeout|ignoreHTTPSErrors|execFile|spawn\(/);

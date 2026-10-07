@@ -186,7 +186,7 @@ func readJournalLocalPolicyMode(m Material, uid, gid uint32, pending, inspect bo
 	// V3 explicitly permits reporting its scope metadata, including disabled
 	// state. The sender must stop before any query operation when disabled;
 	// policy authorization independently continues to reject every such query.
-	if !p.Enabled && !inspect && p.SchemaVersion != journalpolicy.VersionV3 {
+	if !p.Enabled && !inspect && p.SchemaVersion != journalpolicy.VersionV3 && p.SchemaVersion != journalpolicy.VersionV4 {
 		return journalLocal{}, errJournalDisabled
 	}
 	lastDir, e := journalRootDirectory([]string{"etc", "tracebolt"})

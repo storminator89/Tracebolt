@@ -19,6 +19,7 @@ const (
 	ReportVersion       = "tracebolt.journal-generation-report.v1"
 	ReportSchemaVersion = ReportVersion
 	ReportVersionV2     = "tracebolt.journal-generation-report.v2"
+	ReportVersionV3     = "tracebolt.journal-generation-report.v3"
 	MaxReportBytes      = 12 << 10
 	MaxAllowedUnits     = 32
 	MaxTupleBytes       = 256
@@ -92,6 +93,7 @@ type Report struct {
 	PolicyEnabled        bool
 	ServiceAuthorization ServiceAuthorization
 	AllowedUnits         []string
+	BrowsingContract     string
 }
 type reportV1 struct {
 	SchemaVersion string    `json:"schemaVersion"`
@@ -104,6 +106,11 @@ type reportV2 struct {
 	PolicyEnabled        bool                 `json:"policyEnabled"`
 	ServiceAuthorization ServiceAuthorization `json:"serviceAuthorization"`
 	AllowedUnits         []string             `json:"allowedUnits"`
+}
+
+type reportV3 struct {
+	reportV2
+	BrowsingContract string `json:"browsingContract"`
 }
 
 func ValidateServiceAuthorization(scope ServiceAuthorization, units []string) error {
@@ -133,10 +140,18 @@ func ValidateReport(r Report) error {
 	}
 	switch r.SchemaVersion {
 	case ReportVersion:
-		if r.PolicyEnabled || r.ServiceAuthorization != "" || r.AllowedUnits != nil {
+		if r.PolicyEnabled || r.ServiceAuthorization != "" || r.AllowedUnits != nil || r.BrowsingContract != "" {
 			return ErrInvalid
 		}
 	case ReportVersionV2:
+		if r.BrowsingContract != "" {
+			return ErrInvalid
+		}
+		return ValidateServiceAuthorization(r.ServiceAuthorization, r.AllowedUnits)
+	case ReportVersionV3:
+		if r.BrowsingContract != journalview.BrowseContract {
+			return ErrInvalid
+		}
 		return ValidateServiceAuthorization(r.ServiceAuthorization, r.AllowedUnits)
 	default:
 		return ErrInvalid
@@ -148,7 +163,11 @@ func (r Report) MarshalJSON() ([]byte, error) {
 	if r.SchemaVersion == ReportVersion {
 		return json.Marshal(base)
 	}
-	return json.Marshal(reportV2{base, r.PolicyEnabled, r.ServiceAuthorization, r.AllowedUnits})
+	v2 := reportV2{base, r.PolicyEnabled, r.ServiceAuthorization, r.AllowedUnits}
+	if r.SchemaVersion == ReportVersionV3 {
+		return json.Marshal(reportV3{v2, r.BrowsingContract})
+	}
+	return json.Marshal(v2)
 }
 func EncodeReport(r Report) ([]byte, error) {
 	if ValidateReport(r) != nil {
@@ -181,6 +200,12 @@ func DecodeReport(raw []byte) (Report, error) {
 			return Report{}, ErrInvalid
 		}
 		r = Report{SchemaVersion: v.SchemaVersion, Tuple: v.Tuple, Sequence: v.Sequence, ObservedAt: v.ObservedAt, PolicyEnabled: v.PolicyEnabled, ServiceAuthorization: v.ServiceAuthorization, AllowedUnits: v.AllowedUnits}
+	case ReportVersionV3:
+		var v reportV3
+		if strict(raw, &v, MaxReportBytes) != nil {
+			return Report{}, ErrInvalid
+		}
+		r = Report{SchemaVersion: v.SchemaVersion, Tuple: v.Tuple, Sequence: v.Sequence, ObservedAt: v.ObservedAt, PolicyEnabled: v.PolicyEnabled, ServiceAuthorization: v.ServiceAuthorization, AllowedUnits: v.AllowedUnits, BrowsingContract: v.BrowsingContract}
 	default:
 		return Report{}, ErrInvalid
 	}
@@ -198,7 +223,7 @@ func (r *Report) UnmarshalJSON(raw []byte) error {
 	return nil
 }
 func SameAuthorization(a, b Report) bool {
-	return a.SchemaVersion == b.SchemaVersion && a.PolicyEnabled == b.PolicyEnabled && a.ServiceAuthorization == b.ServiceAuthorization && slices.Equal(a.AllowedUnits, b.AllowedUnits)
+	return a.SchemaVersion == b.SchemaVersion && a.PolicyEnabled == b.PolicyEnabled && a.BrowsingContract == b.BrowsingContract && a.ServiceAuthorization == b.ServiceAuthorization && slices.Equal(a.AllowedUnits, b.AllowedUnits)
 }
 func EqualReport(a, b Report) bool {
 	return a.Tuple == b.Tuple && a.Sequence == b.Sequence && a.ObservedAt == b.ObservedAt && SameAuthorization(a, b)

@@ -30,6 +30,8 @@ type serverState struct {
 	deps        Dependencies
 	connections chan struct{}
 	capture     atomic.Bool
+	browseMu    sync.Mutex
+	lastBrowse  time.Time
 }
 
 func New(d Dependencies) (*Server, error) {
@@ -142,6 +144,18 @@ func (s *Server) handleReserved(ctx context.Context, c net.Conn) {
 		}
 		result.Status = StatusVerified
 	case QueryOperation:
+		if r.Query.BrowseMode == journalview.BrowseMode {
+			s.runtime.browseMu.Lock()
+			busy := !s.runtime.lastBrowse.IsZero() && now.Before(s.runtime.lastBrowse.Add(2*time.Second))
+			if !busy {
+				s.runtime.lastBrowse = now
+			}
+			s.runtime.browseMu.Unlock()
+			if busy {
+				s.failure(c, StatusBusy)
+				return
+			}
+		}
 		if !s.runtime.capture.CompareAndSwap(false, true) {
 			s.failure(c, StatusBusy)
 			return

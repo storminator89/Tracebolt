@@ -43,11 +43,15 @@ func (s *journalSender) reportGeneration(ctx context.Context, local journalLocal
 		return errJournalDenied
 	}
 	// Older policy consent never authorized disclosure of its service allowlist.
-	if local.policy.SchemaVersion == journalpolicy.VersionV3 {
+	if local.policy.SchemaVersion == journalpolicy.VersionV3 || local.policy.SchemaVersion == journalpolicy.VersionV4 {
 		report.SchemaVersion = journalgeneration.ReportVersionV2
 		report.PolicyEnabled = local.policy.Enabled
 		report.ServiceAuthorization = journalgeneration.ServiceAuthorization(local.policy.ServiceAuthorization)
 		report.AllowedUnits = slices.Clone(local.policy.AllowedUnits)
+	}
+	if local.policy.SchemaVersion == journalpolicy.VersionV4 {
+		report.SchemaVersion = journalgeneration.ReportVersionV3
+		report.BrowsingContract = local.policy.BrowsingContract
 	}
 	raw, e := journalwire.EncodeGenerationReport(report)
 	if e != nil {

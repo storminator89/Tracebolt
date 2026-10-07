@@ -385,9 +385,22 @@ func (h *operatorHandler) writeJournalAISettings(w http.ResponseWriter, r *http.
 		return
 	}
 	devices := []string{}
+	deadlines := map[string]time.Time{}
 	for _, v := range inputs {
 		if allowed[v.DeviceID] && !v.AuthorityUntil.IsZero() && now.Before(v.AuthorityUntil) {
 			devices = append(devices, v.DeviceID)
+			deadlines[v.DeviceID] = v.AuthorityUntil
+		}
+	}
+	// A saved provider alone is not a ready log scope. In particular, a new
+	// retained local generation must visibly pause the older exact approval.
+	ready := h.app.journalAIReceiptCurrentLocked(receipt)
+	if ready {
+		for _, target := range receipt.Targets {
+			if !j.source.Now().Before(deadlines[target.DeviceID]) || proactivejournal.CheckTarget(r.Context(), j.source, target, now) != nil || !j.source.Now().Before(deadlines[target.DeviceID]) {
+				ready = false
+				break
+			}
 		}
 	}
 	if !operatorStillActive(w, r) {
@@ -399,7 +412,7 @@ func (h *operatorHandler) writeJournalAISettings(w http.ResponseWriter, r *http.
 	if lookback == 0 {
 		lookback = 5
 	}
-	write(w, 200, map[string]any{"cancellationPending": pending || pendingErr != nil || len(j.unrecordedCaptures) != 0, "schemaVersion": "tracebolt.journal-ai-settings.v1", "revision": receipt.Revision, "enabled": receipt.Enabled, "ready": h.app.journalAIReceiptCurrentLocked(receipt), "configRevision": a.config.Revision, "providerSaved": providerSaved, "baseURL": a.config.BaseURL, "model": a.config.Model, "targets": receipt.Targets, "lookbackMinutes": lookback, "approvedAt": receipt.ApprovedAt, "devices": devices, "plaintext": j.transport == "http-test", "maxTargets": proactivejournal.MaxTargets, "maxAnalysesPerHour": proactivejournal.MaxAnalysesPerHour, "maxRows": proactivejournal.MaxRows, "maxMessageBytes": analysis.MaxJournalMessageBytes, "dataScope": proactivejournal.DataScope, "retention": "original-capture-expiry-memory-only", "blocked": j.blocked})
+	write(w, 200, map[string]any{"cancellationPending": pending || pendingErr != nil || len(j.unrecordedCaptures) != 0, "schemaVersion": "tracebolt.journal-ai-settings.v1", "revision": receipt.Revision, "enabled": receipt.Enabled, "ready": ready, "configRevision": a.config.Revision, "providerSaved": providerSaved, "baseURL": a.config.BaseURL, "model": a.config.Model, "targets": receipt.Targets, "lookbackMinutes": lookback, "approvedAt": receipt.ApprovedAt, "devices": devices, "plaintext": j.transport == "http-test", "maxTargets": proactivejournal.MaxTargets, "maxAnalysesPerHour": proactivejournal.MaxAnalysesPerHour, "maxRows": proactivejournal.MaxRows, "maxMessageBytes": analysis.MaxJournalMessageBytes, "dataScope": proactivejournal.DataScope, "retention": "original-capture-expiry-memory-only", "blocked": j.blocked})
 }
 func findJournalTarget(r store.JournalAIReceipt, device, unit string) (proactivejournal.Target, bool) {
 	for _, t := range r.Targets {
@@ -493,7 +506,7 @@ func (s *Server) runJournalAIStep(parent context.Context, m *healthMonitor) erro
 				check = c
 			}
 		}
-		if incident.ResolvedAt != nil || check.State != "open" || state.MaintenanceUntil != nil && now.Before(*state.MaintenanceUntil) {
+		if !proactivejournal.MatchesWindow(*attempt.Capture, incident.OpenedAt, receipt.LookbackMinutes) || incident.ResolvedAt != nil || check.State != "open" || state.MaintenanceUntil != nil && now.Before(*state.MaintenanceUntil) {
 			_ = s.cancelJournalAttemptLocked(step, attempt)
 			continue
 		}

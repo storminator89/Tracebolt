@@ -12,20 +12,21 @@ import (
 	"localrmm/internal/model"
 	"localrmm/internal/proactivejournal"
 	"strings"
+	"time"
 	"unicode/utf8"
 )
 
 const MaxJournalMessageBytes = 1024
 
 // AnalyzeJournal may only receive an independently approved and revalidated
-// retained page. Its result includes sensitive source/model text: keep it solely
+// bounded snapshot page. Its result includes sensitive source/model text: keep it solely
 // in memory until the original capture expiry, never in the health-result store.
 func (s *Service) AnalyzeJournal(ctx context.Context, x health.Incident, check health.Check, page journalcache.Page) (Result, error) {
 	c, p, err := healthPacket(x, check)
 	if err != nil {
 		return Result{}, err
 	}
-	if x.Kind != "service" || page.Query.Unit != x.Target || page.Query.MaxPriority != 4 || page.Coverage != journalview.Complete && page.Coverage != journalview.Partial || len(page.Rows) > proactivejournal.MaxRows || page.Scope != journalview.Scope || page.Search != "" || page.SearchScope != "captured_snapshot_only" || page.Offset < 0 || page.TotalCapturedRows < page.Offset+len(page.Rows) || page.RedactionWarning != journalview.RedactionWarning {
+	if !proactivejournal.BoundedPage(page) || x.Kind != "service" || page.Query.Unit != x.Target || !page.Query.End.Equal(x.OpenedAt.UTC().Truncate(time.Microsecond)) {
 		return Result{}, ErrInvalidPacket
 	}
 	p.DataScope = proactivejournal.DataScope

@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -95,6 +96,9 @@ func digest(s string) ([32]byte, bool) {
 // All fields have exact lengths except the canonical service unit name. There
 // are no generic commands, JSON extension maps, file paths or URL arguments.
 func EncodeRequest(r Request) ([]byte, error) {
+	if r.Query.BrowseMode == journalview.BrowseMode {
+		return encodeBrowseRequest(r)
+	}
 	binding, ok := digest(r.SenderBinding)
 	if !ok || journalview.ValidateQuery(r.Query, r.Query.End) != nil {
 		return nil, ErrRejected
@@ -160,8 +164,29 @@ func EncodeRequest(r Request) ([]byte, error) {
 }
 func readRequest(rd io.Reader) (Request, error) {
 	var h [8]byte
-	if _, e := io.ReadFull(rd, h[:]); e != nil || string(h[:4]) != string(wireMagic[:]) && string(h[:4]) != string(wireMagicV2[:]) {
+	if _, e := io.ReadFull(rd, h[:]); e != nil || string(h[:4]) != string(wireMagic[:]) && string(h[:4]) != string(wireMagicV2[:]) && string(h[:4]) != "TBJ3" {
 		return Request{}, ErrRejected
+	}
+	if string(h[:4]) == "TBJ3" {
+		n := binary.BigEndian.Uint32(h[4:])
+		if n == 0 || n > MaxRequestBytes-8 {
+			return Request{}, ErrRejected
+		}
+		raw := make([]byte, n)
+		if _, e := io.ReadFull(rd, raw); e != nil {
+			return Request{}, ErrRejected
+		}
+		var r Request
+		d := json.NewDecoder(bytes.NewReader(raw))
+		d.DisallowUnknownFields()
+		if d.Decode(&r) != nil {
+			return Request{}, ErrRejected
+		}
+		canonical, e := encodeBrowseRequest(r)
+		if e != nil || !bytes.Equal(raw, canonical[8:]) {
+			return Request{}, ErrRejected
+		}
+		return r, nil
 	}
 	extra := 0
 	if string(h[:4]) == string(wireMagicV2[:]) {
@@ -263,4 +288,39 @@ func taggedDigest(s string) ([32]byte, bool) {
 		return [32]byte{}, false
 	}
 	return digest(strings.TrimPrefix(s, "sha256:"))
+}
+
+// TBJ3 has one canonical bounded typed record, never arbitrary commands. An
+// older helper rejects this magic rather than interpreting expanded ranges.
+func encodeBrowseRequest(r Request) ([]byte, error) {
+	if r.Query.BrowseMode != journalview.BrowseMode || journalview.ValidateQuery(r.Query, r.Query.End) != nil || journalgeneration.Validate(r.PolicyGeneration) != nil {
+		return nil, ErrRejected
+	}
+	if _, ok := digest(r.SenderBinding); !ok {
+		return nil, ErrRejected
+	}
+	switch r.Operation {
+	case QueryOperation:
+		if r.PolicyDigest != "" || r.Revision != "" {
+			return nil, ErrRejected
+		}
+	case VerifyOperation:
+		if r.PolicyDigest != r.PolicyGeneration.PolicyDigest {
+			return nil, ErrRejected
+		}
+		if _, ok := taggedDigest(r.Revision); !ok {
+			return nil, ErrRejected
+		}
+	default:
+		return nil, ErrRejected
+	}
+	raw, e := json.Marshal(r)
+	if e != nil || len(raw) > MaxRequestBytes-8 {
+		return nil, ErrRejected
+	}
+	out := make([]byte, 8+len(raw))
+	copy(out, "TBJ3")
+	binary.BigEndian.PutUint32(out[4:8], uint32(len(raw)))
+	copy(out[8:], raw)
+	return out, nil
 }

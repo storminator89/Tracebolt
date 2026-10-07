@@ -36,6 +36,8 @@ type Page struct {
 	TotalCapturedRows int       `json:"totalCapturedRows"`
 	Offset            int       `json:"offset"`
 	NextOffset        *int      `json:"nextOffset"`
+	NextCursor        string    `json:"nextCursor,omitempty"`
+	Exhausted         bool      `json:"exhausted,omitempty"`
 }
 
 func (Page) String() string               { return "journalview.Page{content redacted}" }
@@ -68,7 +70,7 @@ func SelectPage(s Snapshot, expectedDigest string, offset, limit int) (Page, err
 	if expectedDigest != digest || offset < 0 || offset > len(s.Rows) || offset == len(s.Rows) && offset != 0 {
 		return Page{}, ErrPageConflict
 	}
-	p := Page{SchemaVersion: s.SchemaVersion, Scope: s.Scope, SnapshotDigest: digest, Query: s.Query, ObservedAt: s.ObservedAt, Coverage: s.Coverage, Reason: s.Reason, Rows: make([]Row, 0, limit), ObservedCount: s.ObservedCount, CountExact: s.CountExact, RedactionApplied: s.RedactionApplied, RedactionWarning: s.RedactionWarning, TotalCapturedRows: len(s.Rows), Offset: offset}
+	p := Page{SchemaVersion: s.SchemaVersion, Scope: s.Scope, SnapshotDigest: digest, Query: s.Query, ObservedAt: s.ObservedAt, Coverage: s.Coverage, Reason: s.Reason, Rows: make([]Row, 0, limit), ObservedCount: s.ObservedCount, CountExact: s.CountExact, RedactionApplied: s.RedactionApplied, RedactionWarning: s.RedactionWarning, TotalCapturedRows: len(s.Rows), Offset: offset, NextCursor: s.NextCursor, Exhausted: s.Exhausted}
 	size := pageMetadataReserve
 	for i := offset; i < len(s.Rows) && len(p.Rows) < limit; i++ {
 		row := s.Rows[i]
@@ -92,7 +94,7 @@ func SelectPage(s Snapshot, expectedDigest string, offset, limit int) (Page, err
 // EncodePage bounds the deliberate page wire representation. The digest format
 // is checked; only SelectPage establishes its relation to a full snapshot.
 func EncodePage(p Page) ([]byte, error) {
-	if p.SchemaVersion != SchemaVersion || p.Scope != Scope || ValidateQuery(p.Query, p.ObservedAt) != nil || p.RedactionWarning != RedactionWarning || !validDigest(p.SnapshotDigest) || !validReason(p.Reason) || p.Rows == nil || len(p.Rows) > MaxPageRows || p.TotalCapturedRows < 0 || p.TotalCapturedRows > MaxRows || p.ObservedCount > MaxScannedRows || p.ObservedCount < uint64(p.TotalCapturedRows) || p.Offset < 0 || p.Offset > p.TotalCapturedRows || p.Offset == p.TotalCapturedRows && p.Offset != 0 || len(p.Rows) > p.TotalCapturedRows-p.Offset {
+	if !validSnapshotMode(Snapshot{SchemaVersion: p.SchemaVersion, Query: p.Query, Coverage: p.Coverage, NextCursor: p.NextCursor, Exhausted: p.Exhausted}) || p.Scope != Scope || ValidateQuery(p.Query, p.ObservedAt) != nil || p.RedactionWarning != RedactionWarning || !validDigest(p.SnapshotDigest) || !validReason(p.Reason) || p.Rows == nil || len(p.Rows) > MaxPageRows || p.TotalCapturedRows < 0 || p.TotalCapturedRows > MaxRows || p.ObservedCount > MaxScannedRows || p.ObservedCount < uint64(p.TotalCapturedRows) || p.Offset < 0 || p.Offset > p.TotalCapturedRows || p.Offset == p.TotalCapturedRows && p.Offset != 0 || len(p.Rows) > p.TotalCapturedRows-p.Offset {
 		return nil, ErrInvalidSnapshot
 	}
 	end := p.Offset + len(p.Rows)

@@ -154,6 +154,26 @@ func (s *Store) CreateJournalRequestWithGeneration(ctx context.Context, device s
 		if err = s.checkJournalGenerationCreate(ctx, t, snap, system, expected, now); err != nil {
 			return err
 		}
+		if q.BrowseMode == journalview.BrowseMode {
+			report := system.JournalGeneration
+			if report == nil || report.Report.SchemaVersion != journalgeneration.ReportVersionV3 || report.Report.BrowsingContract != journalview.BrowseContract || !report.Report.PolicyEnabled {
+				return journalrequest.ErrNotReady
+			}
+			if report.Report.ServiceAuthorization != journalgeneration.AllSystemServices {
+				found := false
+				for _, unit := range report.Report.AllowedUnits {
+					if unit == q.Unit {
+						found = true
+					}
+				}
+				if !found {
+					return journalrequest.ErrNotReady
+				}
+			}
+			if previous := system.JournalRequest; previous != nil && now.Before(previous.Description.CreatedAt.Add(2*time.Second)) {
+				return ErrBusy
+			}
+		}
 		floor := uint64(0)
 		if previous := system.JournalRequest; previous != nil {
 			// A terminal expiry is irreversible, but a new request still requires a
@@ -261,7 +281,7 @@ func (s *Store) ClaimJournalRequest(ctx context.Context, id, hash string, claim 
 		if err = journalrequest.CheckTime(query, now); err != nil {
 			return err
 		}
-		if !journalrequest.ValidDigest(claim.PolicyDigest) || query.Description.SchemaVersion == journalrequest.SchemaVersionV2 && claim.PolicyDigest != query.Description.PolicyGeneration.PolicyDigest {
+		if !journalrequest.ValidDigest(claim.PolicyDigest) || (query.Description.SchemaVersion == journalrequest.SchemaVersionV2 || query.Description.SchemaVersion == journalrequest.SchemaVersionV3) && claim.PolicyDigest != query.Description.PolicyGeneration.PolicyDigest {
 			return journalrequest.ErrInvalid
 		}
 		if query.State != journalrequest.Pending {

@@ -47,23 +47,23 @@ const copy = {
     },
 };
 
-type JournalServicePickerProps = { deviceId: string; sessionKey: string | null; journalView?: JournalView | null; selectedUnit?: string; onSelect: (unit: string) => void; onClose: () => void };
+type JournalServicePickerProps = { deviceId: string; sessionKey: string | null; journalView?: JournalView | null; selectedUnit?: string; browseOnSelect?: boolean; onSelect: (unit: string) => void; onClose: () => void };
 
 /** Read-only inventory picker: selecting a name never requests journal content. */
-export function JournalServicePicker({ deviceId, sessionKey, journalView = null, selectedUnit = '', onSelect, onClose }: JournalServicePickerProps) {
+export function JournalServicePicker({ deviceId, sessionKey, journalView = null, selectedUnit = '', browseOnSelect = false, onSelect, onClose }: JournalServicePickerProps) {
     const operator = useOperator(), [locale] = useLocale(), c = copy[locale], id = useId();
     return <section className="journal-service-picker" aria-labelledby={id} onKeyDown={event => {
         if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); onClose(); }
     }}>
         <header><h4 id={id}>{c.title}</h4></header>
         {operator?.mode === 'lan' && operator.authenticated
-            ? <ObservedServices key={JSON.stringify([deviceId, sessionKey, operator.expiresAt])} deviceId={deviceId} journalView={journalView} selectedUnit={selectedUnit} onSelect={onSelect}/>
+            ? <ObservedServices key={JSON.stringify([deviceId, sessionKey, operator.expiresAt])} deviceId={deviceId} journalView={journalView} selectedUnit={selectedUnit} browseOnSelect={browseOnSelect} onSelect={onSelect}/>
             : <p role="status">{c.access}</p>}
-        <footer className="journal-picker-footer"><span>{c.selectionHint}</span><button type="button" className="button" aria-label={c.close} onClick={onClose}>{c.cancel}</button></footer>
+        <footer className="journal-picker-footer"><span>{browseOnSelect ? locale === 'de' ? 'Auswahl liest Logs unter der bestehenden lokalen Freigabe.' : 'Selection reads logs under the existing local grant.' : c.selectionHint}</span><button type="button" className="button" aria-label={c.close} onClick={onClose}>{c.cancel}</button></footer>
     </section>;
 }
 
-function ObservedServices({ deviceId, journalView = null, selectedUnit = '', onSelect }: Pick<JournalServicePickerProps, 'deviceId' | 'journalView' | 'selectedUnit' | 'onSelect'>) {
+function ObservedServices({ deviceId, journalView = null, selectedUnit = '', browseOnSelect = false, onSelect }: Pick<JournalServicePickerProps, 'deviceId' | 'journalView' | 'selectedUnit' | 'browseOnSelect' | 'onSelect'>) {
     const [locale] = useLocale(), c = copy[locale], id = useId(), resource = useSystemInventory(deviceId, 'services');
     const searchInput = useRef<HTMLInputElement>(null), list = useRef<HTMLUListElement>(null), searchTimer = useRef<number | undefined>(undefined), composing = useRef(false);
     const cancelSearch = () => { window.clearTimeout(searchTimer.current); searchTimer.current = undefined; };
@@ -126,7 +126,7 @@ function ObservedServices({ deviceId, journalView = null, selectedUnit = '', onS
                     {page.returnedCount > 0 ? <ul ref={list} className="journal-picker-rows" aria-label={c.title}>
                         {page.services.map((row, index) => {
                             const access = journalReportedAccess(journalView, row.name), supported = validJournalUnit(row.name), label = journalServiceLabel(row.name, locale), reasonId = `${id}-unsupported-${index}`, selected = selectedUnit === row.name;
-                            return <li key={row.name}><button type="button" className="journal-picker-row" data-journal-unit={row.name} disabled={!supported || resource.loading} aria-label={`${c.select} ${row.name}`} aria-current={selected ? 'true' : undefined} aria-describedby={supported ? undefined : reasonId} onKeyDown={event => move(event)} onClick={() => { if (validJournalUnit(row.name)) { cancelSearch(); onSelect(row.name); } }}><span className="journal-picker-row-copy"><strong className="journal-picker-unit">{row.name}</strong>{label && <span className="journal-picker-label">{label}</span>}{row.enablement === 'alias' && <span className="journal-picker-alias" title={c.aliasHint}>{c.alias}</span>}<span className={`journal-picker-access journal-picker-access-${access}`}>{access === 'unknown' ? c.observedOnly : c[access]}</span></span>{selected ? <Check size={18} aria-label={c.selected}/> : <ArrowRight size={16} aria-hidden="true"/>}</button>{!supported && <p id={reasonId} className="journal-picker-warning">{c.unsupported}</p>}</li>;
+                            return <li key={row.name}><button type="button" className="journal-picker-row" data-journal-unit={row.name} disabled={!supported || resource.loading || browseOnSelect && access !== 'reported_allowed'} aria-label={`${c.select} ${row.name}`} aria-current={selected ? 'true' : undefined} aria-describedby={supported ? undefined : reasonId} onKeyDown={event => move(event)} onClick={() => { if (validJournalUnit(row.name)) { cancelSearch(); onSelect(row.name); } }}><span className="journal-picker-row-copy"><strong className="journal-picker-unit">{row.name}</strong>{label && <span className="journal-picker-label">{label}</span>}{row.enablement === 'alias' && <span className="journal-picker-alias" title={c.aliasHint}>{c.alias}</span>}<span className={`journal-picker-access journal-picker-access-${access}`}>{access === 'unknown' ? c.observedOnly : c[access]}</span></span>{selected ? <Check size={18} aria-label={c.selected}/> : <ArrowRight size={16} aria-hidden="true"/>}</button>{!supported && <p id={reasonId} className="journal-picker-warning">{c.unsupported}</p>}</li>;
                         })}
                     </ul> : <p role="status">{!page.exhausted ? c.emptyWindow : page.totalRows === 0 ? c.zero : resource.matches === 0 ? c.noMatches : c.noMore}</p>}
                     {!page.exhausted && <button type="button" className="button journal-picker-next" disabled={resource.loading} onClick={resource.next}>{resource.search.trim() ? c.continue : c.next}<ArrowRight size={14}/></button>}

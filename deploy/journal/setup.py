@@ -52,6 +52,8 @@ BROAD_CREATED_FILES = CREATED_FILES | frozenset((ACTIVATION, ACTIVATION_STAGE))
 CREATE_DIRS = frozenset((CONFIG_DIR,))
 SCOPE = "on-demand-allowlisted-system-service-log-content"
 SCOPE_V3 = "on-demand-system-service-log-content"
+SCOPE_V4 = "on-demand-retained-system-service-log-content"
+BROWSING_CONTRACT = "tracebolt.journal-browse.v1"
 ALL_SERVICES = "all-system-services"
 PROFILE = "managed-operations-v3"
 ENV = {"PATH": "/usr/sbin:/usr/bin:/sbin:/bin", "LANG": "C", "LC_ALL": "C",
@@ -220,13 +222,13 @@ def owned_unit(s, name, active=None):
             s["ActiveState"] in ((active,) if active else ("active", "inactive", "failed")))
 
 
-def preview(raw, expected, mode="preview", *, policy_generation=None):
+def preview(raw, expected, mode="preview", *, policy_generation=None, retained_browsing=False):
     fields = ("schemaVersion", "mode", "scope", "senderBinding", "managerOrigin", "transportProfile",
               "collectionProfile", "deviceId", "certificateHash", "agentUid", "agentGid",
               "initialized", "existingStatePreserved")
     p = strict_json(raw, fields + (("policyGeneration",) if policy_generation else ()))
     require(p["schemaVersion"] == "tracebolt.journal-consent-result.v1" and p["mode"] == mode and
-            p["scope"] == (SCOPE_V3 if policy_generation else SCOPE) and p["collectionProfile"] == PROFILE and
+            p["scope"] == (SCOPE_V4 if policy_generation and retained_browsing else SCOPE_V3 if policy_generation else SCOPE) and p["collectionProfile"] == PROFILE and
             p["transportProfile"] == expected["profile"] and p["managerOrigin"] == expected["origin"] and
             p["agentUid"] == expected["uid"] and p["agentGid"] == expected["gid"] and
             type(p["agentUid"]) is int and type(p["agentGid"]) is int and
@@ -238,7 +240,7 @@ def preview(raw, expected, mode="preview", *, policy_generation=None):
     return p
 
 
-def declarations(p, helper_uid, helper_gid, journal_gid, units, *, all_system_services=False, generation=None):
+def declarations(p, helper_uid, helper_gid, journal_gid, units, *, all_system_services=False, generation=None, retained_browsing=False):
     require(type(all_system_services) is bool and
             (not units and valid_digest(generation) if all_system_services else generation is None),
             "explicit-service-profile")
@@ -254,9 +256,14 @@ def declarations(p, helper_uid, helper_gid, journal_gid, units, *, all_system_se
                       scope=SCOPE_V3, serviceAuthorization=ALL_SERVICES)
     else:
         policy["scope"] = SCOPE
+    require(type(retained_browsing) is bool and (not retained_browsing or all_system_services), "explicit-retained-service-profile")
+    if retained_browsing:
+        policy.update(schemaVersion="tracebolt.journal-content-policy.v4", scope=SCOPE_V4)
+        # Insert immediately after scope, matching the canonical Go policy order.
+        policy = {k: v for key, value in policy.items() for k, v in ([(key, value), ("browsingContract", BROWSING_CONTRACT)] if key == "scope" else [(key, value)])}
     policy.update(collectionProfile=PROFILE, senderBinding=p["senderBinding"], managerOrigin=p["managerOrigin"],
                   transportProfile=p["transportProfile"], agentUid=p["agentUid"], helperUid=helper_uid,
-                  allowedUnits=[] if all_system_services else selected_units(units), maxWindowSeconds=3600, maxLookbackSeconds=86400,
+                  allowedUnits=[] if all_system_services else selected_units(units), maxWindowSeconds=0 if retained_browsing else 3600, maxLookbackSeconds=0 if retained_browsing else 86400,
                   maxPriority=7, enabled=True, contentAcknowledged=True,
                   plaintextAcknowledged=p["transportProfile"] == "http-test")
     return canonical(d), canonical(policy)
@@ -490,7 +497,8 @@ def inspect_agent(e, templates):
                 active=s["ActiveState"] == "active", users=users, groups=groups)
 
 
-def preflight(e, units, templates, *, all_system_services=False):
+def preflight(e, units, templates, *, all_system_services=False, retained_browsing=False):
+    require(type(retained_browsing) is bool and (not retained_browsing or all_system_services), "explicit-retained-service-profile")
     require(type(all_system_services) is bool and (not units if all_system_services else True), "explicit-service-profile")
     units = [] if all_system_services else selected_units(units)
     existing = inspect_agent(e, templates)
@@ -534,10 +542,15 @@ def preflight(e, units, templates, *, all_system_services=False):
                     failureAfterCreationKeepsAgentStopped=True,
                     createFiles=sorted(BROAD_CREATED_FILES),
                     warning="All current and future supported exact system services are authorized. " + plan["warning"])
+    if retained_browsing:
+        capabilities = strict_json(e.command([BINARY, "--journal-capabilities"], uid=existing["uid"], gid=existing["gid"], limit=4096))
+        require(capabilities.get("schemaVersion") == "tracebolt.journal-runtime-capabilities.v1" and "tracebolt.journal-content-policy.v4" in capabilities.get("policyVersions", []) and "tracebolt.journal-request.v3" in capabilities.get("requestVersions", []) and "TBJ3" in capabilities.get("helperProtocols", []), "retained-browsing-agent-upgrade-required")
+        plan.update(schemaVersion="tracebolt.journal-helper-plan.v3", scope=SCOPE_V4, browsingContract=BROWSING_CONTRACT, maxWindowSeconds=0, maxLookbackSeconds=0, retainedRange="all-currently-accessible-retained-entries", pageRows=500, pageBytes=524288, sourceBytes=8388608, sourceRows=4096, timeoutMilliseconds=4000, minimumPageIntervalSeconds=2, contentLifetimeSeconds=900, sourceCursorMetadata=True, externalAIExport=False)
+        plan["warning"] += " This persistent local grant covers all accessible retained history, date/severity/literal filtering and bounded cursor pages without per-read approval. Source locators may identify journal boots. Retention can remove old entries. External AI export requires separate approval."
     return existing, plan
 
 
-def consent_command(e, mode, facts, *, policy_generation=None):
+def consent_command(e, mode, facts, *, policy_generation=None, retained_browsing=False):
     args = [BINARY, "--config", CONFIG, "--service-identity", f"{facts['uid']}:{facts['gid']}",
             "--journal-content-consent", mode]
     if mode == "initialize":
@@ -546,17 +559,18 @@ def consent_command(e, mode, facts, *, policy_generation=None):
             args.append("--ack-journal-http-plaintext")
     stage = "journal-initialize-command-failed" if mode == "initialize" else "journal-preview-command-failed"
     return preview(e.command(args, uid=facts["uid"], gid=facts["gid"], limit=8192,
-                             failure_stage=stage), facts, mode, policy_generation=policy_generation)
+                             failure_stage=stage), facts, mode, policy_generation=policy_generation, retained_browsing=retained_browsing)
 
 
 def same_agent(a, b):
     return all(a[k] == b[k] for k in ("manifest", "ownerHash", "uid", "gid", "profile", "origin"))
 
 
-def apply(e, units, templates, expected_plan, content_ack, plaintext_ack, *, all_system_services=False):
+def apply(e, units, templates, expected_plan, content_ack, plaintext_ack, *, all_system_services=False, retained_browsing=False, retained_browsing_ack=False):
+    require(type(retained_browsing_ack) is bool and retained_browsing_ack == retained_browsing, "retained-browsing-acknowledgement-required")
     require(content_ack, "content-acknowledgement-required")
     with e.lock():
-        facts, plan = preflight(e, units, templates, all_system_services=all_system_services)
+        facts, plan = preflight(e, units, templates, all_system_services=all_system_services, retained_browsing=retained_browsing)
         require(valid_digest(expected_plan) and digest(canonical(plan)) == expected_plan, "reviewed-plan-changed")
         require(plaintext_ack == (facts["profile"] == "http-test"), "transport-specific-acknowledgement")
         stopped = False
@@ -592,7 +606,7 @@ def apply(e, units, templates, expected_plan, content_ack, plaintext_ack, *, all
                     groups["systemd-journal"] == facts["groups"]["systemd-journal"], "unchanged-existing-accounts")
             nonce = e.nonce() if all_system_services else None
             deployment, policy = declarations(p, hu, hg, plan["journalGid"], units,
-                                              all_system_services=all_system_services, generation=nonce)
+                                              all_system_services=all_system_services, generation=nonce, retained_browsing=retained_browsing)
             generation = None
             artifacts = []
             if all_system_services:
@@ -617,7 +631,7 @@ def apply(e, units, templates, expected_plan, content_ack, plaintext_ack, *, all
                 artifacts.extend(((UNIT_DIR + "/" + SERVICE, service, 0, 0o644),
                                   (UNIT_DIR + "/" + SOCKET, socket, 0, 0o644)))
                 pins = [checked_created_file(e, *artifact) for artifact in artifacts]
-            initialized = consent_command(e, "initialize", facts, policy_generation=generation)
+            initialized = consent_command(e, "initialize", facts, policy_generation=generation, retained_browsing=retained_browsing)
             require(all(initialized[k] == p[k] for k in ("senderBinding", "deviceId", "certificateHash")), "consent-identity-changed")
             if all_system_services:
                 fresh = inspect_agent(e, templates)
@@ -680,6 +694,8 @@ def main(argv=None):
     selection.add_argument("--allow-unit", action="append")
     selection.add_argument("--all-system-services", action="store_true",
                            help="explicitly authorize all current and future supported exact system services")
+    parser.add_argument("--retained-browsing", action="store_true", help="new explicit v4 all-service retained journal browsing grant")
+    parser.add_argument("--ack-journal-retained-browsing", action="store_true")
     parser.add_argument("--apply", action="store_true")
     parser.add_argument("--expected-plan-sha256")
     parser.add_argument("--ack-journal-content", action="store_true")
@@ -698,12 +714,12 @@ def main(argv=None):
         if args.apply:
             result = apply(e, units, templates, args.expected_plan_sha256,
                            args.ack_journal_content, args.ack_journal_http_plaintext,
-                           all_system_services=args.all_system_services)
+                           all_system_services=args.all_system_services, retained_browsing=args.retained_browsing, retained_browsing_ack=args.ack_journal_retained_browsing)
             print(json.dumps(result, indent=2))
             return 0 if result["configured"] and "failureStage" not in result else 1
         require(not args.expected_plan_sha256 and not args.ack_journal_content and
-                not args.ack_journal_http_plaintext, "plan-does-not-accept-apply-flags")
-        _, plan = preflight(e, units, templates, all_system_services=args.all_system_services)
+                not args.ack_journal_http_plaintext and not args.ack_journal_retained_browsing, "plan-does-not-accept-apply-flags")
+        _, plan = preflight(e, units, templates, all_system_services=args.all_system_services, retained_browsing=args.retained_browsing)
         print(json.dumps(dict(plan=plan, planSHA256=digest(canonical(plan))), indent=2))
         return 0
     except (Rejected, OSError, ValueError, TypeError, KeyError, UnicodeError, subprocess.SubprocessError) as exc:

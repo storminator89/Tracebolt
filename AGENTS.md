@@ -50,6 +50,11 @@ file as navigation and project constraints, never as permission to act on a host
   separate HTTP plaintext-content acknowledgement, durable consume-once floors,
   original expiry and operator-only content boundaries. Source/fixture checks do
   not authorize account, group, unit or socket changes or an actual journal read.
+- Retained service-log browsing is a new create-only v4 local scope. Read
+  `docs/retained-journal-browsing.md` before changing its policy, cursor protocol
+  or installer integration. Never promote v1-v3 grants; the combined fresh admin
+  approval must explicitly cover retained history. Keep consume-once and source
+  cursor-loss truth, bounded pages, and external-AI separation.
 - Complete visible process/mount generations are a separate default-off local
   extension under an existing activated v3 identity. Read
   `docs/complete-overview-extension.md` before opt-in. Keep the stopped-service

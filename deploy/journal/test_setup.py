@@ -145,6 +145,9 @@ class Fixture:
     def command(self, args, uid=None, gid=None, limit=16384, timeout=45,
                 failure_stage="fixed-command-failed"):
         args = tuple(args)
+        if args == (s.BINARY, "--journal-capabilities"):
+            s.require(uid == 200 and gid == 201, "nonroot-capabilities")
+            return s.canonical(dict(schemaVersion="tracebolt.journal-runtime-capabilities.v1", policyVersions=["tracebolt.journal-content-policy.v4"], requestVersions=["tracebolt.journal-request.v3"], helperProtocols=["TBJ3"]))
         self.effect("command", args)
         if args[0] == "/usr/sbin/useradd":
             self.files["/etc/passwd"] += b"tracebolt-journal-reader:x:300:301::/nonexistent:/usr/sbin/nologin\n"
@@ -159,14 +162,14 @@ class Fixture:
                 s.require(not self.init, "create-only-consent-marker")
                 self.init = True
                 policy = json.loads(self.files[s.CLIENT_POLICY])
-                if policy["schemaVersion"] == "tracebolt.journal-content-policy.v3":
+                if policy["schemaVersion"] in ("tracebolt.journal-content-policy.v3", "tracebolt.journal-content-policy.v4"):
                     gate = json.loads(self.files[s.ACTIVATION])
                     g = dict(revision=policy["revision"], generation=policy["generation"],
                              policyDigest="sha256:" + s.digest(self.files[s.CLIENT_POLICY]))
                     s.require(gate["phase"] == "pending" and gate["policyGeneration"] == g and
                               self.absent(s.ACTIVATION_STAGE) and self.private_generation is None, "fixture-initial-generation")
                     self.private_generation = g
-                    p.update(scope=s.SCOPE_V3, policyGeneration=g)
+                    p.update(scope=policy["scope"], policyGeneration=g)
             return s.canonical(p) + b"\n"
         elif args == ("/usr/bin/systemctl", "stop", s.AGENT_UNIT):
             self.units[s.AGENT_UNIT]["ActiveState"] = "inactive"

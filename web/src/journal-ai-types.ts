@@ -1,4 +1,4 @@
-import { journalAge, journalTime, validJournalGeneration, validJournalGenerationView, validJournalUnit } from './journal-types';
+import { JOURNAL_BROWSE_CONTRACT, journalAge, journalTime, validJournalGeneration, validJournalGenerationView, validJournalUnit } from './journal-types';
 import type { JournalGenerationView, JournalPolicyGeneration } from './journal-types';
 import { validJournalAnalysisResult } from './investigation-analysis-types';
 import type { StoredAnalysisResult } from './investigation-analysis-types';
@@ -33,8 +33,12 @@ export function validJournalAISource(v: unknown, device: string): v is JournalAI
     return exact(v, ['deviceId', 'serverNow', 'generation']) && v.deviceId === device && journalAIDevice(device) && journalTime(v.serverNow) && (v.generation === null || validJournalGenerationView(v.generation, v.serverNow));
 }
 export function journalAIAllows(source: JournalAISource, unit: string, elapsed = 0): boolean {
+    // Local retained access is only eligibility for a separate bounded AI approval.
+    // Validate the whole report before admitting either supported policy version.
+    if (!validJournalAISource(source, source.deviceId)) return false;
     const g = source.generation;
-    return elapsed >= 0 && elapsed < 60000 && !!g && g.schemaVersion === 'tracebolt.journal-generation-view.v2' && g.fresh && g.policyEnabled === true && journalAge(g.expiresAt, source.serverNow) > elapsed && validJournalUnit(unit) && (g.serviceAuthorization === 'all-system-services' || g.allowedUnits?.includes(unit) === true);
+    const supported = g?.schemaVersion === 'tracebolt.journal-generation-view.v2' || g?.schemaVersion === 'tracebolt.journal-generation-view.v3' && g.browsingContract === JOURNAL_BROWSE_CONTRACT;
+    return elapsed >= 0 && elapsed < 60000 && !!g && supported && g.fresh && g.policyEnabled === true && journalAge(g.expiresAt, source.serverNow) > elapsed && validJournalUnit(unit) && (g.serviceAuthorization === 'all-system-services' || g.allowedUnits?.includes(unit) === true);
 }
 export function validJournalAISummary(v: unknown): v is JournalAISummary {
     return exact(v, ['state', 'expiresAt']) && journalAIStates.includes(v.state as JournalAIState) && (v.expiresAt === null || journalTime(v.expiresAt));

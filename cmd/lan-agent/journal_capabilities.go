@@ -40,13 +40,13 @@ func runJournalCapabilities(exclusive bool, stdout, stderr io.Writer) int {
 	}
 	capabilities := journalRuntimeCapabilities{
 		SchemaVersion:            "tracebolt.journal-runtime-capabilities.v1",
-		PolicyVersions:           []string{journalpolicy.Version, journalpolicy.VersionV2, journalpolicy.VersionV3},
-		GenerationReportVersions: []string{"tracebolt.journal-generation-report.v1", "tracebolt.journal-generation-report.v2"},
-		RequestVersions:          []string{"tracebolt.journal-request.v1", "tracebolt.journal-request.v2"},
-		HelperProtocols:          []string{"TBJ1", "TBJ2"},
+		PolicyVersions:           []string{journalpolicy.Version, journalpolicy.VersionV2, journalpolicy.VersionV3, journalpolicy.VersionV4},
+		GenerationReportVersions: []string{"tracebolt.journal-generation-report.v1", "tracebolt.journal-generation-report.v2", "tracebolt.journal-generation-report.v3"},
+		RequestVersions:          []string{"tracebolt.journal-request.v1", "tracebolt.journal-request.v2", "tracebolt.journal-request.v3"},
+		HelperProtocols:          []string{"TBJ1", "TBJ2", "TBJ3"},
 		ActivationVersions:       []string{journalactivation.Version},
 		ServiceAuthorization:     []journalpolicy.ServiceAuthorization{journalpolicy.ExactUnits, journalpolicy.AllSystemServices},
-		Scopes:                   []string{journalpolicy.Scope, journalpolicy.ScopeV3},
+		Scopes:                   []string{journalpolicy.Scope, journalpolicy.ScopeV3, journalpolicy.ScopeV4},
 	}
 	if json.NewEncoder(stdout).Encode(capabilities) != nil {
 		fmt.Fprintln(stderr, "Tracebolt journal capabilities could not be written.")

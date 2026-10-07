@@ -40,8 +40,21 @@ func journalArgs(q Query) ([]string, error) {
 	if ValidateQuery(q, q.End) != nil {
 		return nil, ErrInvalidInput
 	}
-	return []string{"--system", "--no-pager", "--utc", "--all", "--output=json", "--output-fields=__REALTIME_TIMESTAMP,_SYSTEMD_UNIT,_PID,_UID,UNIT,PRIORITY,MESSAGE",
-		"--since=@" + journalTime(q.Start), "--until=@" + journalTime(q.End), "--priority=0.." + strconv.Itoa(q.MaxPriority), "--", "_SYSTEMD_UNIT=" + q.Unit, "+", "_PID=1", "_UID=0", "UNIT=" + q.Unit}, nil
+	args := []string{"--system", "--no-pager", "--utc", "--all", "--output=json", "--output-fields=__REALTIME_TIMESTAMP,_SYSTEMD_UNIT,_PID,_UID,UNIT,PRIORITY,MESSAGE",
+		"--since=@" + journalTime(q.Start), "--until=@" + journalTime(q.End), "--priority=0.." + strconv.Itoa(q.MaxPriority), "--", "_SYSTEMD_UNIT=" + q.Unit, "+", "_PID=1", "_UID=0", "UNIT=" + q.Unit}
+	if q.BrowseMode == BrowseMode {
+		args[5] = "--output-fields=__CURSOR,__REALTIME_TIMESTAMP,_SYSTEMD_UNIT,_PID,_UID,UNIT,PRIORITY,MESSAGE"
+		// Retained mode keeps journalctl JSON's default field-size bound. An
+		// oversized field becomes null, which the parser reports as an explicit
+		// projection gap with a validated cursor. Legacy argv remains unchanged.
+		args = append(args[:3], args[4:]...) // remove only --all
+		options := []string{"--reverse", "--lines=" + strconv.Itoa(MaxScannedRows+2)}
+		if q.Cursor != "" {
+			options = append(options, "--cursor="+q.Cursor)
+		}
+		args = append(options, args...)
+	}
+	return args, nil
 }
 func journalTime(t time.Time) string {
 	return strconv.FormatInt(t.Unix(), 10) + "." + t.Format(".000000")[1:]

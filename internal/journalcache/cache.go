@@ -132,6 +132,23 @@ func (c *Cache) CreateWithGeneration(ctx context.Context, device string, floor u
 	defer unlock()
 	now = c.freshNow(now)
 	c.prune(now)
+
+	if q.BrowseMode == journalview.BrowseMode && q.Cursor != "" {
+		current, _, err := c.status(ctx, device, now)
+		if err != nil {
+			return journalrequest.Description{}, err
+		}
+		entry := c.entries[device]
+		var snap journalview.Snapshot
+		if current.State != journalrequest.Accepted || current.ContentStatus != "available" || entry == nil || json.Unmarshal(entry.raw, &snap) != nil {
+			return journalrequest.Description{}, ErrUnavailable
+		}
+		prior := snap.Query
+		prior.Cursor = q.Cursor
+		if prior != q || snap.NextCursor != q.Cursor || snap.Exhausted || current.Description.PolicyGeneration != expected || current.Description.Identity.Sequence != floor {
+			return journalrequest.Description{}, journalrequest.ErrConflict
+		}
+	}
 	d, e := c.store.CreateJournalRequestWithGeneration(ctx, device, floor, q, expected, now)
 	if e == nil {
 		c.remove(device)
@@ -322,6 +339,8 @@ type Page struct {
 	SearchScope       string                  `json:"searchScope"`
 	Offset            int                     `json:"offset"`
 	NextOffset        *int                    `json:"nextOffset"`
+	NextCursor        string                  `json:"nextCursor,omitempty"`
+	Exhausted         bool                    `json:"exhausted,omitempty"`
 }
 
 func (c *Cache) Page(ctx context.Context, device string, q PageRequest, now time.Time) (Page, error) {
@@ -365,7 +384,13 @@ func (c *Cache) Page(ctx context.Context, device string, q PageRequest, now time
 		return Page{}, journalrequest.ErrConflict
 	}
 	p := Page{SchemaVersion: "tracebolt.journal-page.v1", DeviceID: device, ServerNow: now, ExpiresAt: s.Description.ExpiresAt, Identity: q.Identity, SnapshotDigest: digest, Scope: snap.Scope, Query: snap.Query, ObservedAt: snap.ObservedAt, Coverage: snap.Coverage, Reason: snap.Reason, Rows: make([]journalview.Row, 0, q.Limit), ObservedCount: snap.ObservedCount, CountExact: snap.CountExact, RedactionApplied: snap.RedactionApplied, RedactionWarning: snap.RedactionWarning, TotalCapturedRows: len(snap.Rows), MatchedRows: len(matched), Search: q.Search, SearchScope: "captured_snapshot_only", Offset: q.Offset}
-	size := 4096
+	if snap.Query.BrowseMode == journalview.BrowseMode {
+		p.SchemaVersion = "tracebolt.journal-page.v2"
+		p.NextCursor = snap.NextCursor
+		p.Exhausted = snap.Exhausted
+		p.SearchScope = "retained_source_page"
+	}
+	size := 6144
 	for i := q.Offset; i < len(matched) && len(p.Rows) < q.Limit; i++ {
 		raw, _ := json.Marshal(matched[i])
 		if size+len(raw)+1 > journalview.MaxPageBytes {

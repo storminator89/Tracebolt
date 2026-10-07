@@ -4,8 +4,11 @@ import (
 	"encoding/json"
 	"localrmm/internal/journalgeneration"
 	"localrmm/internal/journalrequest"
+	"localrmm/internal/journalview"
 	"net/http"
 )
+
+const journalBrowseCapabilitiesPath = "/v4/journal/capabilities"
 
 const journalCapabilitiesPath = "/v3/journal/capabilities"
 
@@ -17,6 +20,18 @@ func serveJournalCapabilities(w http.ResponseWriter, r *http.Request, b Enrollme
 		return
 	}
 	if !admitPublicMetadata(w, r, admission) {
+		return
+	}
+	if r.URL.Path == journalBrowseCapabilitiesPath {
+		w.Header().Set("Cache-Control", "no-store")
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		write(w, 200, struct {
+			SchemaVersion    string `json:"schemaVersion"`
+			AgentOrigin      string `json:"agentOrigin"`
+			BrowsingContract string `json:"browsingContract"`
+			GenerationReport string `json:"generationReport"`
+			Request          string `json:"request"`
+		}{"tracebolt.journal-browse-manager-capabilities.v1", b.AgentOrigin, journalview.BrowseContract, journalgeneration.ReportVersionV3, journalrequest.SchemaVersionV3})
 		return
 	}
 	value := struct {

@@ -2,7 +2,7 @@
 import fs from 'node:fs';
 import {proactiveAIIdentityFixture} from './proactive-ai-browser.mjs';
 export const journalAICaseName='Synthetic service-log AI requires independent capture/export scope and expires cited findings without real collection';
-export const journalAIFixtureDisclosure='UI-only production rendering with real loopback HTTP-test login and CSRF reads; intercepted invented Go-generated service-log scope, policy, incident and cited-result DTOs. No journal collection, real provider request, key entry, persistent grant or host action. Native authorization, cancellation and rate bounds have separate Go tests.';
+export const journalAIFixtureDisclosure='UI-only production rendering with real loopback HTTP-test login and CSRF reads; intercepted invented Go-generated service-log scope, incident and cited-result DTOs, plus an explicit synthetic v2-to-v3 local-policy transition requiring fresh bounded AI consent. No journal collection, real provider request, key entry, persistent grant or host action. Native authorization, cancellation and rate bounds have separate Go tests.';
 const stored=JSON.parse(fs.readFileSync(new URL('../../web/src/journal-ai-go-fixture.json',import.meta.url),'utf8'));
 const stages=new Set(['setup','review','save','mobile','finding','expiry','guards']);let stage='setup';
 export const journalAIFailureStage=()=>stage;
@@ -12,16 +12,23 @@ const requireFixture=value=>{if(!value)throw Error('Unsupported synthetic journa
 const exact=(v,keys)=>v&&typeof v==='object'&&!Array.isArray(v)&&Object.keys(v).sort().join(',')===[...keys].sort().join(',');
 export function journalAIWireFixture(){return clone(stored);}
 export function createJournalAIFixture(){
- let settings={...clone(stored.offSettings),plaintext:true},writes=0;
+ let settings={...clone(stored.offSettings),plaintext:true},source=clone(stored.source),writes=0;
  const device=stored.source.deviceId,unit=stored.settings.targets[0].unit;
- return {get writes(){return writes;},get settings(){return clone(settings);},device,unit,handle(method,path,body){
+ return {get writes(){return writes;},get settings(){return clone(settings);},get source(){return clone(source);},device,unit,
+ useRetainedPolicy(){
+  requireFixture(source.generation.schemaVersion==='tracebolt.journal-generation-view.v2');
+  source={...source,generation:{...source.generation,schemaVersion:'tracebolt.journal-generation-view.v3',browsingContract:'tracebolt.journal-browse.v1',serviceAuthorization:'all-system-services',allowedUnits:[],policyGeneration:{revision:'2',generation:'c'.repeat(64),policyDigest:`sha256:${'d'.repeat(64)}`}}};
+  // A local generation change cannot move the already approved AI target.
+  settings={...settings,ready:false};
+ },handle(method,path,body){
   if(method==='GET'&&path==='/api/ai/journal'){requireFixture(body===null);return clone(settings);}
-  if(method==='GET'&&path===`/api/ai/journal/source/${device}`){requireFixture(body===null);return clone(stored.source);}
+  if(method==='GET'&&path===`/api/ai/journal/source/${device}`){requireFixture(body===null);return clone(source);}
   if(method==='POST'&&path==='/api/ai/journal'){
    requireFixture(exact(body,['dataScope','expectedRevision','configRevision','enabled','baseURL','model','targets','lookbackMinutes','acknowledgeCapture','acknowledgeExport','acknowledgePlaintext']));
-   requireFixture(body.enabled===true&&body.dataScope==='service-journal-ai-v1'&&body.expectedRevision===settings.revision&&body.configRevision===settings.configRevision&&body.baseURL===settings.baseURL&&body.model===settings.model&&body.lookbackMinutes===5&&body.acknowledgeCapture===true&&body.acknowledgeExport===true&&body.acknowledgePlaintext===true);
-   requireFixture(JSON.stringify(body.targets)===JSON.stringify([{deviceId:device,unit,generation:stored.source.generation.policyGeneration}]));
-   settings={...clone(stored.settings),plaintext:true,revision:'fixture-journal-approved'};writes++;return {saved:true,revision:settings.revision,enabled:true,cancellationPending:false};
+   const minutes=source.generation.schemaVersion==='tracebolt.journal-generation-view.v3'?15:5;
+   requireFixture(body.enabled===true&&body.dataScope==='service-journal-ai-v1'&&body.expectedRevision===settings.revision&&body.configRevision===settings.configRevision&&body.baseURL===settings.baseURL&&body.model===settings.model&&body.lookbackMinutes===minutes&&body.acknowledgeCapture===true&&body.acknowledgeExport===true&&body.acknowledgePlaintext===true);
+   requireFixture(JSON.stringify(body.targets)===JSON.stringify([{deviceId:device,unit,generation:source.generation.policyGeneration}]));
+   settings={...clone(stored.settings),plaintext:true,revision:`fixture-journal-approved-${writes+1}`,targets:clone(body.targets),lookbackMinutes:minutes};writes++;return {saved:true,revision:settings.revision,enabled:true,cancellationPending:false};
   }
   if(method==='GET'&&path.startsWith('/api/investigations?')){requireFixture(body===null&&new URLSearchParams(path.split('?')[1]).get('scope')==='open'&&new URLSearchParams(path.split('?')[1]).get('offset')==='0');return clone(stored.investigations);}
   if(method==='GET'&&path===`/api/ai/journal/${device}/${stored.result.result.packet.case.id}`){requireFixture(body===null);const result=clone(stored.result);result.serverNow=new Date(Date.parse(result.expiresAt)-2000).toISOString();return result;}
@@ -69,7 +76,17 @@ export async function journalAIBrowserCase({pageAt,login,expect,base,shot}){
  await page.getByLabel('Sprache',{exact:true}).selectOption('en');await page.setViewportSize({width:1440,height:1000});
  mark('save');await approve.click();await expect(panel).toContainText('Approval saved. No capture or provider test was sent.');expect(fixture.writes).toBe(1);for(let i=0;i<3;i++)await expect(boxes.nth(i)).not.toBeChecked();
  mark('mobile');await page.setViewportSize({width:390,height:844});await page.getByLabel('Language',{exact:true}).selectOption('de');await expect(panel).toContainText('Zugangsdaten, personenbezogene Daten und Geheimnisse');expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth&&document.body.scrollWidth<=innerWidth)).toBe(true);await shot(page,'synthetic-service-log-ai-saved-mobile-de',journalAIFixtureDisclosure);await page.getByLabel('Sprache',{exact:true}).selectOption('en');
+ await page.setViewportSize({width:1440,height:1000});
+ mark('review');for(let i=0;i<3;i++)await boxes.nth(i).check();await expect(approve).toBeEnabled();const originalGeneration=fixture.settings.targets[0].generation;fixture.useRetainedPolicy();
+ await panel.getByRole('button',{name:'Read local policy',exact:true}).click();await expect(panel).toContainText('Policy changed. Remove and add this service again, then review and approve this generation.');
+ for(let i=0;i<3;i++){await expect(boxes.nth(i)).not.toBeChecked();await expect(boxes.nth(i)).toBeDisabled();}await expect(approve).toBeDisabled();expect(fixture.writes).toBe(1);expect(fixture.settings.targets[0].generation).toEqual(originalGeneration);
+ await expect(panel).toContainText('Local retained-log browsing permission does not approve AI export.');await expect(panel).toContainText('only the selected 5- or 15-minute incident window');await expect(panel).toContainText('never searches or exports arbitrary retained history');
+ await panel.getByRole('button',{name:'Remove',exact:true}).click();await panel.getByRole('textbox',{name:'Service',exact:true}).fill(fixture.unit);await panel.getByRole('button',{name:'Add service',exact:true}).click();
+ for(let i=0;i<3;i++)await boxes.nth(i).check();await panel.getByRole('combobox',{name:'Minutes before incident',exact:true}).selectOption('15');for(let i=0;i<3;i++)await expect(boxes.nth(i)).not.toBeChecked();await expect(approve).toBeDisabled();
+ for(let i=0;i<3;i++)await boxes.nth(i).check();await expect(approve).toBeEnabled();await panel.scrollIntoViewIfNeeded();await shot(page,'synthetic-service-log-ai-v3-review-desktop-en',journalAIFixtureDisclosure);
+ mark('save');await approve.click();await expect(panel).toContainText('Approval saved. No capture or provider test was sent.');expect(fixture.writes).toBe(2);expect(fixture.settings.targets[0].generation).toEqual(fixture.source.generation.policyGeneration);expect(fixture.settings.lookbackMinutes).toBe(15);for(let i=0;i<3;i++)await expect(boxes.nth(i)).not.toBeChecked();
+ mark('mobile');await page.setViewportSize({width:390,height:844});await page.getByLabel('Language',{exact:true}).selectOption('de');await expect(panel).toContainText('Zugangsdaten, personenbezogene Daten und Geheimnisse');expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth&&document.body.scrollWidth<=innerWidth)).toBe(true);await shot(page,'synthetic-service-log-ai-v3-saved-mobile-de',journalAIFixtureDisclosure);await page.getByLabel('Sprache',{exact:true}).selectOption('en');
  mark('finding');await page.evaluate(()=>{location.hash='/cases';});const item=page.locator('.investigation-item').filter({hasText:fixture.unit}).first();await item.locator('summary').filter({hasText:'Service-log AI:'}).click();await expect(item).toContainText('Unconfirmed hypotheses. Human review required.');await item.getByText('Sources, counterevidence & gaps',{exact:true}).click();await expect(item).toContainText('journal-window');await expect(item).toContainText('journal-row-');await shot(page,'synthetic-service-log-ai-finding-mobile-en',journalAIFixtureDisclosure);
  mark('expiry');await page.clock.runFor(2250);await expect(item).toContainText('Finding expired.');await expect(item.getByText('Sources, counterevidence & gaps',{exact:true})).toHaveCount(0);
- mark('guards');expect(fixture.writes).toBe(1);expect(unexpected).toEqual([]);expect(external).toEqual([]);const storage=await page.evaluate(()=>JSON.stringify({local:{...localStorage},session:{...sessionStorage}}));expect(storage.includes('journal-row-')||storage.includes('synthetic-log-secret')).toBe(false);
+ mark('guards');expect(fixture.writes).toBe(2);expect(unexpected).toEqual([]);expect(external).toEqual([]);const storage=await page.evaluate(()=>JSON.stringify({local:{...localStorage},session:{...sessionStorage}}));expect(storage.includes('journal-row-')||storage.includes('synthetic-log-secret')).toBe(false);
 }

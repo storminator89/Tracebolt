@@ -23,13 +23,18 @@ export function healthDashboardFixture(phase,deviceId){
  if(!validHealthView(health,deviceId))throw new Error('Invalid synthetic Health dashboard contract');
  return {device,health};
 }
-async function layout(page,health,expect){
+export async function healthDashboardLayout(page,health,expect,mark=()=>{},prefix='health-layout'){
+ mark(`${prefix}-viewport`);
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1&&document.body.scrollWidth<=innerWidth+1)).toBe(true);
- for(const item of await health.locator('.health-reading-card,.health-issue,.health-disclosure > summary').all()){
-  if(!await item.isVisible())continue;
-  expect(await item.evaluate(el=>el.scrollWidth<=el.clientWidth+1)).toBe(true);
+ for(const [kind,selector] of [['cards','.health-reading-card'],['issues','.health-issue'],['summaries','.health-disclosure > summary']]){
+  mark(`${prefix}-${kind}`);
+  for(const item of await health.locator(selector).all()){
+   if(!await item.isVisible())continue;
+   expect(await item.evaluate(el=>el.scrollWidth<=el.clientWidth+1)).toBe(true);
+  }
  }
 }
+const layout=healthDashboardLayout;
 // The parent case deliberately pauses its clock. Drain only two animation
 // frames so production disclosure focus can settle, without changing deadlines.
 export const healthDisclosureFrameMs=32;
@@ -47,8 +52,23 @@ export async function healthDashboardBrowserCase({page,expect,shot,setPhase,mark
  await openHealthDisclosure(health.getByRole('button',{name:'Choose services',exact:true}),page);await expect(health.locator('.health-controls')).toBeVisible();await expect(health.locator('.health-disclosure').first().locator('summary')).toBeFocused();await health.locator('.health-disclosure').first().locator('summary').press('Enter');await expect(health.locator('.health-disclosure').first()).not.toHaveAttribute('open');
  await page.setViewportSize({width:390,height:844});await capture('synthetic-http-test-health-issue-mobile-en');
  await page.getByLabel('Language',{exact:true}).selectOption('de');await expect(health).toContainText('Aufmerksamkeit nötig');await capture('synthetic-http-test-health-mobile-de');
- await openHealthDisclosure(health.getByRole('button',{name:'Dienste auswählen',exact:true}),page);await expect(health.locator('.health-controls')).toBeVisible();await health.locator('.health-controls').scrollIntoViewIfNeeded();await layout(page,health,expect);await shot(page,'synthetic-http-test-health-controls-mobile-de',fixtureDisclosure);
- await change('clear');await expect(health).toContainText('Überwachte Prüfungen unauffällig');await expect(health.locator('.health-cards')).toContainText('46,8%');await capture('synthetic-http-test-health-clear-mobile-de');
+ mark('health-mobile-de-settings-open');
+ await openHealthDisclosure(health.getByRole('button',{name:'Dienste auswählen',exact:true}),page);
+ mark('health-mobile-de-settings-visible');await expect(health.locator('.health-controls')).toBeVisible();
+ mark('health-mobile-de-settings-scroll');await health.locator('.health-controls').scrollIntoViewIfNeeded();
+ try{await layout(page,health,expect,mark,'health-mobile-de-settings-layout');}catch(error){
+  // Keep the failed geometry assertion and its exact finite stage. Capture only
+  // this known invented, authenticated state, without credentials or full-page
+  // expansion. The filename explicitly denotes failure, not visual acceptance.
+  try{
+   await expect(page.locator('input[type="password"]')).toHaveCount(0);
+   await shot(page,'synthetic-http-test-health-controls-layout-failure-mobile-de',fixtureDisclosure);
+  }finally{throw error;}
+ }
+ mark('synthetic-http-test-health-controls-mobile-de');await shot(page,'synthetic-http-test-health-controls-mobile-de',fixtureDisclosure);
+ mark('health-mobile-de-clear-reload');await change('clear');
+ mark('health-mobile-de-clear-summary');await expect(health).toContainText('Überwachte Prüfungen unauffällig');
+ mark('health-mobile-de-clear-reading');await expect(health.locator('.health-cards')).toContainText('46,8%');await capture('synthetic-http-test-health-clear-mobile-de');
  await page.setViewportSize({width:1440,height:1000});await capture('synthetic-http-test-health-clear-desktop-de');await page.setViewportSize({width:390,height:844});await page.getByLabel('Sprache',{exact:true}).selectOption('en');
  await change('stale');await expect(health.locator('[data-health-state]')).toHaveAttribute('data-health-state','unknown');await expect(health).toContainText('Stale reading');await expect(health.locator('.health-cards')).not.toContainText('73.4%');await capture('synthetic-http-test-health-stale-mobile-en');
  await change('awaiting');await expect(health.locator('[data-health-state]')).toHaveAttribute('data-health-state','unknown');await expect(health).toContainText('Waiting for the first health evaluation');await capture('synthetic-http-test-health-unknown-mobile-en');

@@ -34,13 +34,13 @@ MAX_SOURCE_BYTES = 131072
 MAX_MANIFEST_BYTES = 8192
 AGENT_CAPABILITIES = {
     "schemaVersion": "tracebolt.journal-runtime-capabilities.v1",
-    "policyVersions": ["tracebolt.journal-content-policy.v1", "tracebolt.journal-content-policy.v2", "tracebolt.journal-content-policy.v3"],
-    "generationReportVersions": ["tracebolt.journal-generation-report.v1", "tracebolt.journal-generation-report.v2"],
-    "requestVersions": ["tracebolt.journal-request.v1", "tracebolt.journal-request.v2"],
-    "helperProtocols": ["TBJ1", "TBJ2"],
+    "policyVersions": ["tracebolt.journal-content-policy.v1", "tracebolt.journal-content-policy.v2", "tracebolt.journal-content-policy.v3", "tracebolt.journal-content-policy.v4"],
+    "generationReportVersions": ["tracebolt.journal-generation-report.v1", "tracebolt.journal-generation-report.v2", "tracebolt.journal-generation-report.v3"],
+    "requestVersions": ["tracebolt.journal-request.v1", "tracebolt.journal-request.v2", "tracebolt.journal-request.v3"],
+    "helperProtocols": ["TBJ1", "TBJ2", "TBJ3"],
     "activationVersions": ["tracebolt.journal-activation.v1"],
     "serviceAuthorization": ["exact-units", "all-system-services"],
-    "scopes": ["on-demand-allowlisted-system-service-log-content", "on-demand-system-service-log-content"],
+    "scopes": ["on-demand-allowlisted-system-service-log-content", "on-demand-system-service-log-content", "on-demand-retained-system-service-log-content"],
 }
 
 

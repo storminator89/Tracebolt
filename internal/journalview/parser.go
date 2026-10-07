@@ -22,6 +22,9 @@ func parse(ctx context.Context, q Query, now time.Time, input io.Reader, sourceR
 	if ctx == nil || input == nil || ValidateQuery(q, now) != nil {
 		return Snapshot{}, ErrInvalidInput
 	}
+	if q.BrowseMode == BrowseMode {
+		return parseBrowse(ctx, q, now, input, sourceReason)
+	}
 	s := empty(q, now)
 	if ctx.Err() != nil {
 		return mark(s, ReasonTimeout), nil
@@ -237,7 +240,7 @@ func validNumericIdentity(s string, pid bool) bool {
 // final body allocation. Callers must use this rather than marshal arbitrary
 // externally constructed snapshots. No cursor or raw metadata is represented.
 func Encode(s Snapshot) ([]byte, error) {
-	if s.SchemaVersion != SchemaVersion || s.Scope != Scope || ValidateQuery(s.Query, s.ObservedAt) != nil || s.RedactionWarning != RedactionWarning || s.Rows == nil || len(s.Rows) > MaxRows || s.ObservedCount > MaxScannedRows || s.ObservedCount < uint64(len(s.Rows)) || !validReason(s.Reason) {
+	if !validSnapshotMode(s) || s.Scope != Scope || ValidateQuery(s.Query, s.ObservedAt) != nil || s.RedactionWarning != RedactionWarning || s.Rows == nil || len(s.Rows) > MaxRows || s.ObservedCount > MaxScannedRows || s.ObservedCount < uint64(len(s.Rows)) || !validReason(s.Reason) {
 		return nil, ErrInvalidSnapshot
 	}
 	switch s.Coverage {

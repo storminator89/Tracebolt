@@ -59,7 +59,9 @@ export function journalSourceAccess(view: JournalView | null, unit: string): Jou
 export type JournalReportedAccess = 'unknown' | 'reported_disabled' | 'reported_allowed' | 'outside_reported_scope';
 export function journalReportedAccess(view: JournalView | null, unit: string): JournalReportedAccess {
     const generation = view?.generation;
-    if (!view?.configured || !generation?.fresh || generation.schemaVersion !== 'tracebolt.journal-generation-view.v2' || !validJournalUnit(unit)) return 'unknown';
+    if (!view?.configured || !generation?.fresh || !['tracebolt.journal-generation-view.v2','tracebolt.journal-generation-view.v3'].includes(generation.schemaVersion) || !validJournalUnit(unit)) return 'unknown';
     if (!generation.policyEnabled) return 'reported_disabled';
     return generation.serviceAuthorization === 'all-system-services' || generation.allowedUnits?.includes(unit) ? 'reported_allowed' : 'outside_reported_scope';
 }
+
+export function journalBrowsingAllowed(view: JournalView | null, unit: string): boolean { return view?.generation?.schemaVersion === 'tracebolt.journal-generation-view.v3' && view.generation.browsingContract === 'tracebolt.journal-browse.v1' && journalReportedAccess(view, unit) === 'reported_allowed'; }

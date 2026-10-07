@@ -2,13 +2,16 @@
 export const JOURNAL_VIEW_BYTES = 16384;
 export const JOURNAL_PAGE_BYTES = 65536;
 export const JOURNAL_SEARCH_BYTES = 128;
+export const JOURNAL_SOURCE_SEARCH_BYTES = 200;
+export const JOURNAL_CURSOR_BYTES = 1024;
+export const JOURNAL_BROWSE_CONTRACT = 'tracebolt.journal-browse.v1';
 export const JOURNAL_WARNING = 'Best-effort masking only. Messages may still contain credentials, personal data or other secrets; this output is not safe or anonymous.';
-export interface JournalQuery { unit: string; start: string; end: string; maxPriority: number }
+export interface JournalQuery { unit: string; start: string; end: string; maxPriority: number; browseMode?: 'retained-v1'; search?: string; cursor?: string }
 export interface JournalIdentity { id: string; sequence: string; queryDigest: string }
 export interface JournalPolicyGeneration { revision: string; generation: string; policyDigest: string }
-export interface JournalGenerationView { schemaVersion: 'tracebolt.journal-generation-view.v1' | 'tracebolt.journal-generation-view.v2'; policyEnabled?: boolean; serviceAuthorization?: 'exact-units' | 'all-system-services'; allowedUnits?: string[]; policyGeneration: JournalPolicyGeneration; sequence: string; observedAt: string; receivedAt: string; expiresAt: string; fresh: boolean }
+export interface JournalGenerationView { schemaVersion: 'tracebolt.journal-generation-view.v1' | 'tracebolt.journal-generation-view.v2' | 'tracebolt.journal-generation-view.v3'; browsingContract?: typeof JOURNAL_BROWSE_CONTRACT; policyEnabled?: boolean; serviceAuthorization?: 'exact-units' | 'all-system-services'; allowedUnits?: string[]; policyGeneration: JournalPolicyGeneration; sequence: string; observedAt: string; receivedAt: string; expiresAt: string; fresh: boolean }
 export interface JournalDescription {
-    schemaVersion: 'tracebolt.journal-request.v1' | 'tracebolt.journal-request.v2'; policyGeneration?: JournalPolicyGeneration; identity: JournalIdentity; deviceId: string; certificateHash: string;
+    schemaVersion: 'tracebolt.journal-request.v1' | 'tracebolt.journal-request.v2' | 'tracebolt.journal-request.v3'; policyGeneration?: JournalPolicyGeneration; identity: JournalIdentity; deviceId: string; certificateHash: string;
     query: JournalQuery; budgets: { maxRows: number; maxSnapshotBytes: number; maxMessageBytes: number; maxRawBytes: number; maxLineBytes: number; maxScannedRows: number; timeoutMs: number };
     createdAt: string; expiresAt: string;
 }
@@ -20,13 +23,13 @@ export interface JournalView {
 }
 export interface JournalRow { timestamp: string; unit: string; priority: number; message: string }
 export interface JournalPage {
-    schemaVersion: 'tracebolt.journal-page.v1'; deviceId: string; serverNow: string; expiresAt: string; identity: JournalIdentity;
+    schemaVersion: 'tracebolt.journal-page.v1' | 'tracebolt.journal-page.v2'; nextCursor?: string; exhausted?: boolean; deviceId: string; serverNow: string; expiresAt: string; identity: JournalIdentity;
     snapshotDigest: string; scope: 'agent-visible-system-journal-service-and-manager'; query: JournalQuery; observedAt: string;
     coverage: 'complete' | 'partial' | 'failed'; reason: typeof journalReasons[number]; rows: JournalRow[]; observedCount: number; countExact: boolean;
     redactionApplied: boolean; redactionWarning: typeof JOURNAL_WARNING; totalCapturedRows: number; matchedRows: number;
-    search: string; searchScope: 'captured_snapshot_only'; offset: number; nextOffset: number | null;
+    search: string; searchScope: 'captured_snapshot_only' | 'retained_source_page'; offset: number; nextOffset: number | null;
 }
-export const journalReasons = ['none', 'permission_denied', 'source_missing', 'invalid_source', 'read_failed', 'timeout', 'item_limit', 'byte_limit', 'visibility_restricted', 'not_supported', 'collector_busy'] as const;
+export const journalReasons = ['none', 'permission_denied', 'source_missing', 'invalid_source', 'read_failed', 'timeout', 'item_limit', 'byte_limit', 'visibility_restricted', 'not_supported', 'collector_busy', 'cursor_unavailable'] as const;
 const record = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
 const exact = (v: unknown, keys: string[]): v is Record<string, unknown> => record(v) && Object.keys(v).length === keys.length && keys.every(k => Object.hasOwn(v, k));
 const integer = (v: unknown, max = Number.MAX_SAFE_INTEGER): v is number => typeof v === 'number' && Number.isSafeInteger(v) && v >= 0 && v <= max;
@@ -48,10 +51,15 @@ export function validJournalUnit(v: unknown): v is string {
     const stem = v.slice(0, -8); return !stem.includes('..') && !stem.endsWith('@') && (stem.match(/@/g)?.length ?? 0) <= 1;
 }
 export function validJournalQuery(v: unknown, now: string): v is JournalQuery {
-    if (!exact(v, ['unit', 'start', 'end', 'maxPriority']) || !validJournalUnit(v.unit) || !journalTime(v.start) || !journalTime(v.end) || !integer(v.maxPriority, 7)) return false;
+    const browse = record(v) && v.browseMode === 'retained-v1';
+    if (!exact(v, ['unit', 'start', 'end', 'maxPriority', ...(browse ? ['browseMode', ...(Object.hasOwn(v, 'search') ? ['search'] : []), ...(Object.hasOwn(v, 'cursor') ? ['cursor'] : [])] : [])]) || !validJournalUnit(v.unit) || !journalTime(v.start) || !journalTime(v.end) || !integer(v.maxPriority, 7)) return false;
     const micro = (s: string) => !s.includes('.') || s.slice(20, -1).padEnd(9, '0').endsWith('000');
-    return micro(v.start) && micro(v.end) && journalAge(v.end, v.start) > 0 && journalAge(v.end, v.start) <= 3600000 && journalAge(now, v.end) >= 0 && journalAge(now, v.start) <= 86400000;
+    if (!micro(v.start) || !micro(v.end) || journalAge(v.end, v.start) <= 0 || journalAge(now, v.end) < 0) return false;
+    if (browse) return (v.search === undefined || validJournalSourceSearch(v.search)) && (v.cursor === undefined || validJournalCursor(v.cursor));
+    return journalAge(v.end, v.start) <= 3600000 && journalAge(now, v.start) <= 86400000;
 }
+export const validJournalSourceSearch = (v: unknown): v is string => typeof v === 'string' && journalBytes(v) <= JOURNAL_SOURCE_SEARCH_BYTES && !/[\u0000-\u001f\u007f]/.test(v);
+export const validJournalCursor = (v: unknown): v is string => typeof v === 'string' && journalBytes(v) <= JOURNAL_CURSOR_BYTES && /^[A-Za-z0-9=;_-]*$/.test(v) && (v === '' || v.includes('='));
 const digest = (v: unknown): v is string => typeof v === 'string' && /^sha256:[a-f0-9]{64}$/.test(v);
 const sequence = (v: unknown): v is string => typeof v === 'string' && /^(0|[1-9][0-9]{0,19})$/.test(v) && BigInt(v) <= 18446744073709551615n;
 export function validJournalGeneration(v: unknown): v is JournalPolicyGeneration {
@@ -59,11 +67,12 @@ export function validJournalGeneration(v: unknown): v is JournalPolicyGeneration
 }
 export const sameJournalGeneration = (a: JournalPolicyGeneration, b: JournalPolicyGeneration) => a.revision === b.revision && a.generation === b.generation && a.policyDigest === b.policyDigest;
 export function sameJournalAuthorization(a: JournalGenerationView, b: JournalGenerationView): boolean {
-    return a.schemaVersion === b.schemaVersion && a.policyEnabled === b.policyEnabled && a.serviceAuthorization === b.serviceAuthorization && JSON.stringify(a.allowedUnits) === JSON.stringify(b.allowedUnits);
+    return a.schemaVersion === b.schemaVersion && a.browsingContract === b.browsingContract && a.policyEnabled === b.policyEnabled && a.serviceAuthorization === b.serviceAuthorization && JSON.stringify(a.allowedUnits) === JSON.stringify(b.allowedUnits);
 }
 export function validJournalGenerationView(v: unknown, now: string): v is JournalGenerationView {
-    const v2 = record(v) && v.schemaVersion === 'tracebolt.journal-generation-view.v2';
-    if (!exact(v, ['schemaVersion', 'policyGeneration', 'sequence', 'observedAt', 'receivedAt', 'expiresAt', 'fresh', ...(v2 ? ['policyEnabled', 'serviceAuthorization', 'allowedUnits'] : [])]) || !v2 && v.schemaVersion !== 'tracebolt.journal-generation-view.v1' || !validJournalGeneration(v.policyGeneration) || !sequence(v.sequence) || v.sequence === '0' || !journalTime(v.observedAt) || !journalTime(v.receivedAt) || !journalTime(v.expiresAt) || journalAge(v.receivedAt, v.observedAt) < 0 || journalAge(v.receivedAt, v.observedAt) >= 300000 || journalAge(now, v.receivedAt) < 0 || journalAge(v.expiresAt, v.observedAt) !== 300000 || typeof v.fresh !== 'boolean' || v.fresh && journalAge(v.expiresAt, now) <= 0) return false;
+    const v3 = record(v) && v.schemaVersion === 'tracebolt.journal-generation-view.v3';
+    const v2 = v3 || record(v) && v.schemaVersion === 'tracebolt.journal-generation-view.v2';
+    if (!exact(v, ['schemaVersion', 'policyGeneration', 'sequence', 'observedAt', 'receivedAt', 'expiresAt', 'fresh', ...(v2 ? ['policyEnabled', 'serviceAuthorization', 'allowedUnits'] : []), ...(v3 ? ['browsingContract'] : [])]) || v3 && v.browsingContract !== JOURNAL_BROWSE_CONTRACT || !v2 && v.schemaVersion !== 'tracebolt.journal-generation-view.v1' || !validJournalGeneration(v.policyGeneration) || !sequence(v.sequence) || v.sequence === '0' || !journalTime(v.observedAt) || !journalTime(v.receivedAt) || !journalTime(v.expiresAt) || journalAge(v.receivedAt, v.observedAt) < 0 || journalAge(v.receivedAt, v.observedAt) >= 300000 || journalAge(now, v.receivedAt) < 0 || journalAge(v.expiresAt, v.observedAt) !== 300000 || typeof v.fresh !== 'boolean' || v.fresh && journalAge(v.expiresAt, now) <= 0) return false;
     if (!v2) return true;
     if (typeof v.policyEnabled !== 'boolean' || !Array.isArray(v.allowedUnits) || v.allowedUnits.length > 32) return false;
     if (v.serviceAuthorization === 'all-system-services') return v.allowedUnits.length === 0;
@@ -71,10 +80,12 @@ export function validJournalGenerationView(v: unknown, now: string): v is Journa
 }
 function identity(v: unknown): v is JournalIdentity { return exact(v, ['id', 'sequence', 'queryDigest']) && typeof v.id === 'string' && /^journal_[A-Za-z0-9_-]{1,120}$/.test(v.id) && sequence(v.sequence) && v.sequence !== '0' && digest(v.queryDigest); }
 export const sameJournalIdentity = (a: JournalIdentity, b: JournalIdentity) => a.id === b.id && a.sequence === b.sequence && a.queryDigest === b.queryDigest;
-const sameQuery = (a: JournalQuery, b: JournalQuery) => a.unit === b.unit && a.start === b.start && a.end === b.end && a.maxPriority === b.maxPriority;
+export const sameJournalQuery = (a: JournalQuery, b: JournalQuery) => a.unit === b.unit && a.start === b.start && a.end === b.end && a.maxPriority === b.maxPriority && a.browseMode === b.browseMode && (a.search ?? '') === (b.search ?? '') && (a.cursor ?? '') === (b.cursor ?? '');
 function description(v: unknown, deviceId: string, now: string): v is JournalDescription {
-    const v2 = record(v) && v.schemaVersion === 'tracebolt.journal-request.v2';
+    const v3 = record(v) && v.schemaVersion === 'tracebolt.journal-request.v3';
+    const v2 = v3 || record(v) && v.schemaVersion === 'tracebolt.journal-request.v2';
     if (!exact(v, ['schemaVersion', 'identity', 'deviceId', 'certificateHash', 'query', 'budgets', 'createdAt', 'expiresAt', ...(v2 ? ['policyGeneration'] : [])]) || (!v2 && v.schemaVersion !== 'tracebolt.journal-request.v1') || v2 && !validJournalGeneration(v.policyGeneration) || !identity(v.identity) || v.deviceId !== deviceId || typeof v.certificateHash !== 'string' || !/^[a-f0-9]{64}$/.test(v.certificateHash) || !journalTime(v.createdAt) || !journalTime(v.expiresAt) || journalAge(now, v.createdAt) < 0 || journalAge(v.expiresAt, v.createdAt) !== 900000 || !validJournalQuery(v.query, v.createdAt)) return false;
+    if (v3 !== (v.query.browseMode === 'retained-v1')) return false;
     const limits = { maxRows: 500, maxSnapshotBytes: 524288, maxMessageBytes: 4096, maxRawBytes: 8388608, maxLineBytes: 65536, maxScannedRows: 4096, timeoutMs: 4000 };
     return exact(v.budgets, Object.keys(limits)) && Object.entries(limits).every(([key, n]) => (v.budgets as Record<string, unknown>)[key] === n);
 }
@@ -100,7 +111,10 @@ export function validJournalView(v: unknown, deviceId: string): v is JournalView
 }
 export function validJournalPage(v: unknown, view: JournalView, search: string, offset: number): v is JournalPage {
     const r = view.request;
-    if (!r?.receipt || r.state !== 'accepted' || view.contentStatus !== 'available' || !exact(v, ['schemaVersion', 'deviceId', 'serverNow', 'expiresAt', 'identity', 'snapshotDigest', 'scope', 'query', 'observedAt', 'coverage', 'reason', 'rows', 'observedCount', 'countExact', 'redactionApplied', 'redactionWarning', 'totalCapturedRows', 'matchedRows', 'search', 'searchScope', 'offset', 'nextOffset']) || v.schemaVersion !== 'tracebolt.journal-page.v1' || v.deviceId !== view.deviceId || !journalTime(v.serverNow) || journalAge(v.serverNow, view.serverNow) < 0 || v.expiresAt !== r.description.expiresAt || journalAge(v.expiresAt, v.serverNow) <= 0 || !identity(v.identity) || !sameJournalIdentity(v.identity, r.description.identity) || v.snapshotDigest !== r.receipt.resultDigest || v.scope !== 'agent-visible-system-journal-service-and-manager' || !validJournalQuery(v.query, r.description.createdAt) || !sameQuery(v.query, r.description.query) || !journalTime(v.observedAt) || journalAge(v.serverNow, v.observedAt) < 0 || !member(v.coverage, ['complete', 'partial', 'failed']) || !member(v.reason, journalReasons) || !integer(v.observedCount, 4096) || typeof v.countExact !== 'boolean' || typeof v.redactionApplied !== 'boolean' || v.redactionWarning !== JOURNAL_WARNING || !integer(v.totalCapturedRows, 500) || !integer(v.matchedRows, v.totalCapturedRows) || v.observedCount < v.totalCapturedRows || v.search !== search || journalBytes(search) > JOURNAL_SEARCH_BYTES || v.searchScope !== 'captured_snapshot_only' || v.offset !== offset || !integer(v.offset, v.matchedRows) || !Array.isArray(v.rows) || v.rows.length > 100 || v.rows.length > v.matchedRows - offset) return false;
+    const browse = r?.description.query.browseMode === 'retained-v1';
+    const pageKeys = record(v) ? [...(Object.hasOwn(v, 'nextCursor') ? ['nextCursor'] : []), ...(Object.hasOwn(v, 'exhausted') ? ['exhausted'] : [])] : [];
+    if (!r?.receipt || r.state !== 'accepted' || view.contentStatus !== 'available' || !exact(v, ['schemaVersion', 'deviceId', 'serverNow', 'expiresAt', 'identity', 'snapshotDigest', 'scope', 'query', 'observedAt', 'coverage', 'reason', 'rows', 'observedCount', 'countExact', 'redactionApplied', 'redactionWarning', 'totalCapturedRows', 'matchedRows', 'search', 'searchScope', 'offset', 'nextOffset', ...(browse ? pageKeys : [])]) || v.schemaVersion !== (browse ? 'tracebolt.journal-page.v2' : 'tracebolt.journal-page.v1') || v.deviceId !== view.deviceId || !journalTime(v.serverNow) || journalAge(v.serverNow, view.serverNow) < 0 || v.expiresAt !== r.description.expiresAt || journalAge(v.expiresAt, v.serverNow) <= 0 || !identity(v.identity) || !sameJournalIdentity(v.identity, r.description.identity) || v.snapshotDigest !== r.receipt.resultDigest || v.scope !== 'agent-visible-system-journal-service-and-manager' || !validJournalQuery(v.query, r.description.createdAt) || !sameJournalQuery(v.query, r.description.query) || !journalTime(v.observedAt) || journalAge(v.serverNow, v.observedAt) < 0 || !member(v.coverage, ['complete', 'partial', 'failed']) || !member(v.reason, journalReasons) || !integer(v.observedCount, 4096) || typeof v.countExact !== 'boolean' || typeof v.redactionApplied !== 'boolean' || v.redactionWarning !== JOURNAL_WARNING || !integer(v.totalCapturedRows, 500) || !integer(v.matchedRows, v.totalCapturedRows) || v.observedCount < v.totalCapturedRows || v.search !== search || journalBytes(search) > JOURNAL_SEARCH_BYTES || v.searchScope !== (browse ? 'retained_source_page' : 'captured_snapshot_only') || v.offset !== offset || !integer(v.offset, v.matchedRows) || !Array.isArray(v.rows) || v.rows.length > 100 || v.rows.length > v.matchedRows - offset) return false;
+    if (browse && (search !== '' || v.exhausted !== undefined && typeof v.exhausted !== 'boolean' || v.nextCursor !== undefined && (!validJournalCursor(v.nextCursor) || !v.nextCursor) || v.exhausted === true && (v.nextCursor !== undefined || v.coverage !== 'complete') || v.coverage === 'complete' && v.exhausted !== true || v.coverage === 'failed' && (v.exhausted === true || v.nextCursor !== undefined))) return false;
     if (!search && v.matchedRows !== v.totalCapturedRows || offset === v.matchedRows && offset !== 0) return false;
     const end = offset + v.rows.length;
     if (end < v.matchedRows ? v.rows.length === 0 || v.nextOffset !== end : v.nextOffset !== null) return false;
