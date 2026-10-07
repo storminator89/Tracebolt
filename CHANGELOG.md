@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-10-07 — rc.3 publication and public readback
+
+- Publish v0.1.0-rc.3 from 405f57f after the manually approved native rc.2-to-source upgrade passed: changed artifacts, retained identity/scopes/private state, local approval and all six journal/socket/restart/revoke checks. This does not establish OS reboot or the user's Debian-host update.
+- Capture the exact published bootstrap and pin the read-only hosted verifier to the rc.3 source, manifest, signature bundle and all twelve public asset hashes/sizes. Direct byte checks and release-archive reconstruction match the native-tested source; hosted keyless provenance/readback must pass before command activation. Historical published bootstraps remain unchanged.
+- Keep dashboard activation separate from this metadata checkpoint. Require a rendered initial fleet identity before the synthetic age test submits its ordinary report, preserving original controls, assertions and deadlines. The prior boolean-only fixture error did not expose its cause; the competing read/write admission contract was reproduced separately.
+
 ## 2026-10-07 — Preserve stopped-unit upgrade restoration
 
 - Keep successful reset of every loaded owned service mandatory, while accepting a failed reset only after a bounded non-loading query proves that systemd has unloaded the unit and renewed ownership, stopped-state and cgroup-drain checks succeed. Unloading already discards start-limit counters. Scope, capabilities, private state, rollback and original receipts remain unchanged.

@@ -116,29 +116,31 @@ class PublicReadback(unittest.TestCase):
         with patch.object(v, "TEMPLATE_SHA256", "0" * 64), self.assertRaisesRegex(v.Failed, "^FAIL_TEMPLATE$"):
             v.load_bootstrap()
 
-    def test_selected_release_is_exact_rc2_and_pilot2_bytes_are_preserved(self):
-        self.assertEqual(v.VERSION, "v0.1.0-rc.2")
-        self.assertEqual(v.SOURCE, "a6368b0202b1efecdb6214dc34c4302d239854f7")
+    def test_selected_release_is_exact_rc3_and_pilot2_bytes_are_preserved(self):
+        self.assertEqual(v.VERSION, "v0.1.0-rc.3")
+        self.assertEqual(v.SOURCE, "405f57f184e75736477cbd3af7a2536ddfe0e6f6")
         self.assertEqual(v.PIN["version"], v.VERSION)
         self.assertEqual(v.PIN["sourceCommit"], v.SOURCE)
         self.assertIsNone(self.b.RELEASE_PIN)
+        rc2 = (v.HERE / "published" / "v0.1.0-rc.2.py").read_bytes()
+        self.assertEqual((len(rc2), self.b.digest(rc2)), (46739, "10b372ed31d0b2e04d901286ed477a9e7b4fc4d1efe7faea78a5ae8a284db4ea"))
         rc1 = (v.HERE / "published" / "v0.1.0-rc.1.py").read_bytes()
         self.assertEqual((len(rc1), self.b.digest(rc1)), (37461, "85bd2c01beb3012d5d042d88448d892a270cf527786a73e7a0a67867cac47f61"))
         historical = (v.HERE / "published" / "v0.1.0-pilot.2.py").read_bytes()
         self.assertEqual((len(historical), self.b.digest(historical)),
                          (32677, "ba0cf2b8bb25868782bbf9f7a2ae228a982895dd45f865314c6620af30731457"))
 
-    def test_existing_readback_workflow_is_read_only_and_selects_exact_rc2(self):
+    def test_existing_readback_workflow_is_read_only_and_selects_exact_rc3(self):
         workflow = (ROOT / ".github/workflows/verify-published-release.yml").read_text()
         self.assertEqual(workflow.count("permissions:"), 1)
         self.assertIn("permissions:\n  contents: read\n", workflow)
         self.assertNotIn(": write", workflow)
         self.assertNotIn("workflow_dispatch:", workflow)
         self.assertIn("on:\n  push:\n    branches: [main]\n", workflow)
-        self.assertIn("      - 'deploy/release/published/v0.1.0-rc.2.py'\n", workflow)
-        self.assertIn("TRACEBOLT_VERIFY_PUBLISHED_RC2: '1'", workflow)
-        self.assertIn("--verify-published-rc2", workflow)
-        self.assertIn("name: verified-public-linux-rc2", workflow)
+        self.assertIn("      - 'deploy/release/published/v0.1.0-rc.3.py'\n", workflow)
+        self.assertIn("TRACEBOLT_VERIFY_PUBLISHED_RC3: '1'", workflow)
+        self.assertIn("--verify-published-rc3", workflow)
+        self.assertIn("name: verified-public-linux-rc3", workflow)
         self.assertNotIn("pilot2", workflow.lower())
 
     def test_selected_release_uses_its_captured_template_with_pin_disabled(self):
@@ -164,7 +166,7 @@ class PublicReadback(unittest.TestCase):
                 v.load_bootstrap()
 
     def test_default_arguments_wrong_context_and_root_never_load_or_download(self):
-        for arguments in ([], ["--output", str(self.output)], ["--output", str(self.output), "--verify-published-rc2"],
+        for arguments in ([], ["--output", str(self.output)], ["--output", str(self.output), "--verify-published-rc3"],
                           ["--output", str(self.output), "--verify-published-pilot2"], ["--secret=do-not-print"]):
             stream = io.StringIO()
             with patch("sys.argv", ["verify-published-release.py", *arguments]), \
@@ -173,7 +175,7 @@ class PublicReadback(unittest.TestCase):
                 loader.assert_not_called()
             self.assertIn(stream.getvalue(), ("FAIL_ARGUMENTS\n", "FAIL_CONTEXT\n"))
         env = {"GITHUB_ACTIONS": "true", "GITHUB_REPOSITORY": v.REPOSITORY, "GITHUB_REF": "refs/heads/main",
-               "GITHUB_EVENT_NAME": "push", "GITHUB_JOB": "verify-published-release", "TRACEBOLT_VERIFY_PUBLISHED_RC2": "1",
+               "GITHUB_EVENT_NAME": "push", "GITHUB_JOB": "verify-published-release", "TRACEBOLT_VERIFY_PUBLISHED_RC3": "1",
                "GITHUB_WORKFLOW_REF": v.REPOSITORY + "/.github/workflows/verify-published-release.yml@refs/heads/main",
                "RUNNER_OS": "Linux", "RUNNER_ARCH": "X64", "RUNNER_TEMP": str(self.parent)}
         with patch.dict(os.environ, env, clear=True), patch.object(v.os, "getuid", return_value=0), self.assertRaisesRegex(v.Failed, "^FAIL_CONTEXT$"):
@@ -189,7 +191,7 @@ class PublicReadback(unittest.TestCase):
 
     def test_only_exact_nonroot_hosted_context_and_output_are_allowed(self):
         env = {"GITHUB_ACTIONS": "true", "GITHUB_REPOSITORY": v.REPOSITORY, "GITHUB_REF": "refs/heads/main",
-               "GITHUB_EVENT_NAME": "push", "GITHUB_JOB": "verify-published-release", "TRACEBOLT_VERIFY_PUBLISHED_RC2": "1",
+               "GITHUB_EVENT_NAME": "push", "GITHUB_JOB": "verify-published-release", "TRACEBOLT_VERIFY_PUBLISHED_RC3": "1",
                "GITHUB_WORKFLOW_REF": v.REPOSITORY + "/.github/workflows/verify-published-release.yml@refs/heads/main",
                "RUNNER_OS": "Linux", "RUNNER_ARCH": "X64", "RUNNER_TEMP": str(self.parent)}
         original_stat = Path.stat
@@ -212,7 +214,7 @@ class PublicReadback(unittest.TestCase):
                     v.check_context(self.output, True)
             with self.assertRaisesRegex(v.Failed, "^FAIL_CONTEXT$"):
                 v.check_context(self.output, False)
-            with patch.dict(os.environ, {"TRACEBOLT_VERIFY_PUBLISHED_RC2": "", "TRACEBOLT_VERIFY_PUBLISHED_PILOT2": "1"}), \
+            with patch.dict(os.environ, {"TRACEBOLT_VERIFY_PUBLISHED_RC3": "", "TRACEBOLT_VERIFY_PUBLISHED_PILOT2": "1"}), \
                  self.assertRaisesRegex(v.Failed, "^FAIL_CONTEXT$"):
                 v.check_context(self.output, True)
             with self.assertRaisesRegex(v.Failed, "^FAIL_OUTPUT$"):

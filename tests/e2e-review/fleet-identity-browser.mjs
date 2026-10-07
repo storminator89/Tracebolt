@@ -72,8 +72,16 @@ try{
   mark('mobile all-platform filter preserves alpha');await page.getByLabel('Nach Betriebssystem filtern').selectOption('all');await expect(fleetRow(page)).toBeVisible();await clean(page);
  });
  await check('Original age survives ordinary reports and fleet refresh; revoked and expired values disappear',async()=>{
-  const page=await pageAt();await fleetReady(page);const original=(await get(fleetPath)).items.find(item=>item.deviceId===devices.alpha);await control('advance',{seconds:121});await control('sample',{device:'alpha',mode:'ordinary'});await fleetRefresh(page);await expect(fleetRow(page)).toContainText('Reported by device · Stale');const retained=(await get(fleetPath)).items.find(item=>item.deviceId===devices.alpha);expect(retained.latest.collectedAt).toBe(original.latest.collectedAt);expect(retained.sequence).toBe(original.sequence);
-  await control('revoke',{device:'alpha'});await fleetRefresh(page);await expect(fleetRow(page)).toContainText('Reported by device · Revoked');await expect(fleetRow(page)).not.toContainText(hostname('alpha'));await expect(fleetRow(page)).not.toContainText('192.0.2.19');await control('advance',{seconds:86400});await fleetRefresh(page);await expect(fleetRow(page,'beta')).toContainText('Reported by device · Expired');await expect(fleetRow(page,'beta')).not.toContainText('192.0.2.19');
+  const page=await pageAt();
+  // The first metadata effect can start after the initial enabled button renders.
+  // Finish that read before advancing its clock or issuing a nonblocking fixture write.
+  mark('initial fleet snapshot before age controls');await expect(fleetRow(page).locator('strong')).toHaveText(hostname('alpha'));await expect(fleetRow(page)).toContainText('192.0.2.19');await fleetReady(page);
+  mark('capture original identity receipt');const original=(await get(fleetPath)).items.find(item=>item.deviceId===devices.alpha);
+  mark('advance original identity age');await control('advance',{seconds:121});
+  mark('save ordinary system fixture report');await control('sample',{device:'alpha',mode:'ordinary'});
+  mark('verify original stale identity receipt');await fleetRefresh(page);await expect(fleetRow(page)).toContainText('Reported by device · Stale');const retained=(await get(fleetPath)).items.find(item=>item.deviceId===devices.alpha);expect(retained.latest.collectedAt).toBe(original.latest.collectedAt);expect(retained.sequence).toBe(original.sequence);
+  mark('revoke fixture identity');await control('revoke',{device:'alpha'});await fleetRefresh(page);await expect(fleetRow(page)).toContainText('Reported by device · Revoked');await expect(fleetRow(page)).not.toContainText(hostname('alpha'));await expect(fleetRow(page)).not.toContainText('192.0.2.19');
+  mark('advance original retention expiry');await control('advance',{seconds:86400});await fleetRefresh(page);await expect(fleetRow(page,'beta')).toContainText('Reported by device · Expired');await expect(fleetRow(page,'beta')).not.toContainText('192.0.2.19');
  });
  await check('Failed refresh and suspended visibility clear values; recovery performs a new batch',async()=>{
   const page=await pageAt();await fleetReady(page);await page.route('**'+fleetPath,route=>route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({error:{code:'inventory_unavailable',message:'Synthetic read failure'}})}));await page.getByRole('button',{name:'Refresh hostnames and IP addresses'}).click();await expect(page.locator('.fleet-identity-notice [role=alert]')).toBeVisible();await expect(page.locator('.device-table')).not.toContainText(hostname('alpha'));await page.unroute('**'+fleetPath);await fleetRefresh(page);await expect(fleetRow(page)).toContainText(hostname('alpha'));
