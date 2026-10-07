@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
+	"localrmm/internal/bundle"
+	"localrmm/internal/linuxpackages"
 	"localrmm/internal/model"
 	"localrmm/internal/operational"
 	"reflect"
@@ -190,7 +192,13 @@ func exactPackageFrameJSON(raw []byte) error {
 	}
 	d := json.NewDecoder(bytes.NewReader(raw))
 	d.UseNumber()
-	if exactShape(d, reflect.TypeOf(frame{}), 0) != nil {
+	if exactShape(d, reflect.TypeOf(struct {
+		SchemaVersion string                  `json:"schemaVersion"`
+		Sequence      uint64                  `json:"sequence"`
+		Observation   bundle.Bundle           `json:"observation"`
+		Operational   *operational.Snapshot   `json:"operational"`
+		Packages      *linuxpackages.Snapshot `json:"packages"`
+	}{}), 0) != nil {
 		return ErrState
 	}
 	if _, err := d.Token(); err != io.EOF {

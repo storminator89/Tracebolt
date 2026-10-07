@@ -10,11 +10,25 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import run_acceptance as gate
 
 PACKAGES = (
+    "./internal/windowsacceptance/profile",
     "./internal/windowsacceptance/fixture", "./internal/windowsacceptance/native",
     "./internal/windowsacceptance/gate", "./cmd/windows-native-acceptance",
     "./internal/windowsservice", "./cmd/windows-service",
 )
 REQUIRED = {
+    ("localrmm/cmd/windows-native-acceptance", "TestControllerFinalObservationFollowsPeerClosure"),
+    ("localrmm/cmd/windows-native-acceptance", "TestControllerLateInventoryQualityKeepsFiniteFailure"),
+    ("localrmm/internal/windowsacceptance/profile", "TestFiniteSelection"),
+    ("localrmm/internal/windowsacceptance/profile", "TestFiniteObservationQualities"),
+    ("localrmm/internal/windowsacceptance/fixture", "TestSelectedProofAndRouteConfusion"),
+    ("localrmm/internal/windowsacceptance/fixture", "TestInventoryTLSRejectsSignedFallback"),
+    ("localrmm/internal/windowsacceptance/fixture", "TestSelectedBootstrapLifecycleAndInventory"),
+    ("localrmm/internal/windowsacceptance/fixture", "TestInventoryHTTPProofsAndOriginalReceipt"),
+    ("localrmm/internal/windowsacceptance/fixture", "TestInventoryGenerationAndCaptureFences"),
+    ("localrmm/internal/windowsacceptance/fixture", "TestInventoryQualityEvidenceRemainsHonest"),
+    ("localrmm/internal/windowsacceptance/fixture", "TestInventoryHTTPCurrentAuthorityRechecked"),
+    ("localrmm/internal/windowsacceptance/gate", "TestProfileScopeRequiresExactSeparateApprovals"),
+    ("localrmm/cmd/windows-native-acceptance", "TestControllerInventoryTLSAndExplicitHTTPUseExactGrant"),
     ("localrmm/internal/windowsacceptance/gate", "TestManualSourceAuthorityDefaultsDeny"),
     ("localrmm/internal/windowsacceptance/gate", "TestGrantIsBoundedAndRevocable"),
     ("localrmm/cmd/windows-native-acceptance", "TestManualAcceptanceCLIRejectsBeforeExecution"),

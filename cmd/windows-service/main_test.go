@@ -77,3 +77,65 @@ func TestWindowsLifecycleShortWriteFails(t *testing.T) {
 		t.Fatal("short write accepted")
 	}
 }
+
+func TestWindowsInventoryConsentDispatchAndConflicts(t *testing.T) {
+	for _, mode := range []string{"install", "enroll"} {
+		args := []string{"--" + mode, "--apply", "--windows-inventory"}
+		if mode == "install" {
+			args = append(args, "--bootstrap-file=C:\\Fixture\\bootstrap.json")
+		}
+		var out, stderr bytes.Buffer
+		calls := 0
+		op := func(_ context.Context, r request, _ io.Writer, _ io.Writer) (any, error) {
+			calls++
+			if r.collectionProfile != "windows-inventory-v1" {
+				t.Fatal("scope not forwarded")
+			}
+			if !strings.Contains(out.String(), "IP addresses") || !strings.Contains(out.String(), "event content") {
+				t.Fatal("scope not disclosed before dispatch")
+			}
+			return nil, nil
+		}
+		if runWith(context.Background(), args, &out, &stderr, op) != 0 || calls != 1 {
+			t.Fatal("consented Windows mode rejected")
+		}
+		args = append(args, "--basic-readonly")
+		if runWith(context.Background(), args, io.Discard, io.Discard, op) != 2 || calls != 1 {
+			t.Fatal("conflicting scope reached operation")
+		}
+	}
+	for _, mode := range []string{"plan", "inspect", "run-service", "start", "stop", "uninstall"} {
+		args := []string{"--" + mode, "--windows-inventory"}
+		if mode == "start" || mode == "stop" || mode == "uninstall" {
+			args = append(args, "--apply")
+		}
+		op := func(context.Context, request, io.Writer, io.Writer) (any, error) {
+			t.Fatal("runtime scope override reached backend")
+			return nil, nil
+		}
+		if runWith(context.Background(), args, io.Discard, io.Discard, op) != 2 {
+			t.Fatal("runtime scope override accepted")
+		}
+	}
+}
+
+func TestWindowsInventoryHTTPFlagDisclosesBeforeDispatch(t *testing.T) {
+	var out, stderr bytes.Buffer
+	called := false
+	op := func(_ context.Context, r request, _ io.Writer, _ io.Writer) (any, error) {
+		called = true
+		if !r.insecureHTTP || r.collectionProfile != "windows-inventory-v1" || !strings.Contains(out.String(), "plaintext") || !strings.Contains(out.String(), "manager responses can be forged") {
+			t.Fatal("HTTP disclosure or acknowledgement missing")
+		}
+		return nil, nil
+	}
+	if runWith(context.Background(), []string{"--enroll", "--apply", "--windows-inventory", "--insecure-http-test"}, &out, &stderr, op) != 0 || !called {
+		t.Fatal("explicit test mode rejected")
+	}
+	for _, args := range [][]string{{"--enroll", "--apply", "--basic-readonly", "--insecure-http-test"}, {"--run-service", "--insecure-http-test"}, {"--start", "--apply", "--insecure-http-test"}} {
+		called = false
+		if runWith(context.Background(), args, io.Discard, io.Discard, op) != 2 || called {
+			t.Fatal("HTTP flag widened existing scope")
+		}
+	}
+}

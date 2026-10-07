@@ -1,5 +1,5 @@
 {
-  "goSourceSha256": "8a26e1c1381bbaf8caf5d8aef63cc87f74b88cc98fc25d2a5e9f57323ad3c717",
+  "goSourceSha256": "59d22b388916af07b6a47be1ff1edaced6eafc2018ddce55b7c1b2700defdba9",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -165,7 +165,9 @@
       "TestReadAdminSetupDiagnosticIsClosed",
       "TestReadAdminSocketProcessMatches",
       "TestReadAdminUpgradeClosedFailureProjection",
-      "TestSystemdDiagnosticStageAllowlist"
+      "TestSystemdDiagnosticStageAllowlist",
+      "TestWindowsInventoryCannotReplacePrimaryEnrollmentBinding",
+      "TestWindowsManagerExplicitSidecarProfileAndOperatorConsent"
     ],
     "localrmm/cmd/manager": [
       "TestHTTPWriteBudgetOutlastsAnalysis",
@@ -190,9 +192,14 @@
       "TestControllerAncestorFailureNeverProvisionsOrStartsPeer",
       "TestControllerCancelledWaitStillUsesBoundedOwnedCleanup",
       "TestControllerCloseFailureCannotPass",
+      "TestControllerDeniedInventoryRemainsFailedWithFiniteQuality",
       "TestControllerFailureStopsUninstallsAndCleansOnlyOwnedReceipt",
+      "TestControllerFinalObservationFollowsPeerClosure",
+      "TestControllerInventoryTLSAndExplicitHTTPUseExactGrant",
+      "TestControllerLateInventoryQualityKeepsFiniteFailure",
       "TestControllerMissingNativeEvidenceNeverPassesValidation",
       "TestControllerPartialProvisionFailureStillRequestsBoundedCleanup",
+      "TestControllerRefusesMismatchedArtifactProfileBeforeDriver",
       "TestControllerRevokedGrantIsInert",
       "TestControllerSyntheticCompleteSequence",
       "TestManualAcceptanceCLIRejectsBeforeExecution"
@@ -218,12 +225,17 @@
       "TestPendingSuccessfulAttemptWithoutReadyDoesNotSpin",
       "TestPendingTerminalAndInvalidStatesNeverRetry",
       "TestPendingTimeoutContinuesWithinOriginalThirtyMinuteAuthority",
+      "TestPendingWindowsHTTPRetainsExactTransportAndRechecksHandoff",
       "TestSetupFailuresNeverSkipReceiptOrStart",
       "TestSetupFiniteFailurePhases",
       "TestSetupRechecksRuntimeReadBeforeClaimAfterPreparation",
       "TestSetupRejectsCancellationAndExistingServiceBeforeIntent",
       "TestSetupRuntimeReadPreflightStopsBeforeJournalOrClaim",
       "TestSetupWritesIntentBeforeSCMAndPreparedReceiptBeforeEnrollment",
+      "TestWindowsBootstrapMustMatchExplicitLocalProfile",
+      "TestWindowsInventoryConsentDispatchAndConflicts",
+      "TestWindowsInventoryHTTPFlagDisclosesBeforeDispatch",
+      "TestWindowsInventoryHTTPRequiresBothExplicitAcknowledgements",
       "TestWindowsLifecycleApprovedModesDispatchExactlyOnce",
       "TestWindowsLifecycleFlagsFailBeforeAnyOperation",
       "TestWindowsLifecycleHelpAndErrorsAreInertAndSanitized",
@@ -987,11 +999,17 @@
       "TestTLSMalformedRejectionCannotEnableSecretCorrection",
       "TestTLSUnknownRejectionCannotEnableSecretCorrection",
       "TestUncertainClaimsAndActivationReconcile",
+      "TestWindowsInventoryFixedEnrollmentRoutes",
+      "TestWindowsInventoryFreshConsentRequiredBeforeStateOrDisplay",
+      "TestWindowsInventoryHTTPHandoffKeepsExplicitTransportBinding",
+      "TestWindowsInventoryHandoffUsesDistinctConfigAndDisclosesScope",
       "TestWireRejectsOversizeEncodedAndAmbiguousResponses",
       "TestWrongValidSecretDoesNotRebindSavedClaim"
     ],
     "localrmm/internal/enrollmentconfig": [
-      "TestOptionalCollectionProfileAndExactModeBinding"
+      "TestOptionalCollectionProfileAndExactModeBinding",
+      "TestWindowsDatabaseFragmentsCannotBeAdoptedAsFreshOrManualState",
+      "TestWindowsSidecarNeedsExplicitOptInAndPreservesPrimaryBinding"
     ],
     "localrmm/internal/enrollmentcrypto": [
       "TestActivationBindsCompleteImmutableIntent",
@@ -1002,7 +1020,8 @@
       "TestImplementedCollectionProofDomainsRemainDistinct",
       "TestOrdinaryGeneratedProofsBindSelectedCollectionProfile",
       "TestStatusProofPurposeAndContext",
-      "TestStatusStrictContract"
+      "TestStatusStrictContract",
+      "TestWindowsInventoryConsentIsSeparateFromLinuxManagedProfiles"
     ],
     "localrmm/internal/enrollmentissuer": [
       "TestCancellationAndZeroHandlesFailClosed",
@@ -1272,7 +1291,10 @@
       "TestTransactionFrameReusePreservesReceiptAndDetachedViews",
       "TestTwentyFiveNearMaxConcurrentTransactionWait",
       "TestTwentyFiveOperationalRetainedBudget",
-      "TestTwentyFivePopulatedRecordsRetainFrames"
+      "TestTwentyFivePopulatedRecordsRetainFrames",
+      "TestWindowsInventoryCannotBeWrittenIntoBasicStore",
+      "TestWindowsInventoryDurableViewRetryHistoryAndScope",
+      "TestWindowsInventoryViewRechecksClockFreshnessAndExpiry"
     ],
     "localrmm/internal/enrollmenttransport": [
       "TestCachedUpdatesTLSHTTPActivationReplayAndRevocation",
@@ -1728,7 +1750,16 @@
       "TestStalePendingIsNotRetimestamped",
       "TestSystemNativeMissingStateAndFuturePendingFailBeforeSource",
       "TestSystemNativeTLSHTTPExactRetryBeforeRecapture",
-      "TestValidateGuidedHandoffIsLocalAndPreservesState"
+      "TestValidateGuidedHandoffIsLocalAndPreservesState",
+      "TestWindowsInventoryExactRetryAndHTTPPathSignature",
+      "TestWindowsInventoryFrameComesFromOneConsentedReport",
+      "TestWindowsInventoryNoCollectionOutsideExactConsent",
+      "TestWindowsInventoryPendingStrictShapeAndBounds",
+      "TestWindowsInventoryRuntimeAndLedgerIsolation",
+      "TestWindowsInventoryWrongPendingAndExpiredCounter",
+      "TestWindowsManagerPipelineOperatorHTTPBoundary",
+      "TestWindowsManagerPipelineRejectsOtherProfilesAndMixedScope",
+      "TestWindowsManagerPipelineRetryRestartAndLatestView"
     ],
     "localrmm/internal/lanclientstate": [
       "TestAcknowledgmentDiscardAndMonotonicSequence",
@@ -2127,7 +2158,8 @@
       "TestRequestBoundaryRejectsAmbiguityAndTLSFallback",
       "TestRevocationAndUnapprovedCertificates",
       "TestSignedRequestUsesApprovedOpaqueIdentity",
-      "TestTranscriptTamperingCannotAuthenticate"
+      "TestTranscriptTamperingCannotAuthenticate",
+      "TestWindowsTelemetryPathIsFiniteAndSigned"
     ],
     "localrmm/internal/socketowner": [
       "TestAuthorityAndPeerDenialsNeverCapture",
@@ -2353,7 +2385,15 @@
     ],
     "localrmm/internal/windowsacceptance/fixture": [
       "TestConcurrentSyntheticObservationAndClose",
+      "TestInventoryGenerationAndCaptureFences",
+      "TestInventoryHTTPCurrentAuthorityRechecked",
+      "TestInventoryHTTPProofsAndOriginalReceipt",
+      "TestInventoryQualityEvidenceRemainsHonest",
+      "TestInventoryTLSRejectsSignedFallback",
       "TestRedactionSecretCopiesAndClosedFixture",
+      "TestSelectedBootstrapLifecycleAndInventory",
+      "TestSelectedFixtureRejectsInvalidSelectionAndOrigins",
+      "TestSelectedProofAndRouteConfusion",
       "TestSyntheticChallengeUseExpiryAndCapacity",
       "TestSyntheticFrameAndRequestCaps",
       "TestSyntheticNewSequenceRequiresStrictlyLaterTimesLikeProductionStore",
@@ -2365,15 +2405,21 @@
     "localrmm/internal/windowsacceptance/gate": [
       "TestBlockedReportCannotContainMutationClaim",
       "TestGrantIsBoundedAndRevocable",
+      "TestInventoryReportRequiresUsableNativeScope",
       "TestManualSourceAuthorityDefaultsDeny",
+      "TestProfileScopeRequiresExactSeparateApprovals",
       "TestReportRejectsFalseFullAcceptanceAndMissingChecks"
     ],
     "localrmm/internal/windowsacceptance/native": [
       "TestAncestorDiagnosticMatchesUnchangedAdmissionDecision",
       "TestCanceledContextDoesNotConsultGrantOrNativeState",
       "TestCanonicalFixedPathPolicy",
+      "TestCleanupFreezeFailureClosesOnlyAcquiredHandlesInReverse",
+      "TestCleanupFreezeRejectsMissingParentWithoutPathFallback",
+      "TestCleanupFreezeReusesDeleteParentsWithoutReopeningAncestors",
       "TestConstructorAndFormattingAreInertAndRedacted",
       "TestConstructorRejectsInvalidArtifactBinding",
+      "TestDriverRejectsUnboundAndDifferentProfileBeforePlatform",
       "TestEveryDriverMutatorRequiresLiveGuardBeforePlatformDispatch",
       "TestEvidenceHasOnlyFiniteStagesReasonsAndBooleans",
       "TestNativeReadFailureClassificationDoesNotPublishNativeError",
@@ -2395,9 +2441,15 @@
       "TestProbeHandlerEarlyRejectionsDoNotReachNativeChecks",
       "TestProbeOwnStatus",
       "TestProbeReadTargetsRequiresBothAndHonorsCancellation",
+      "TestProgramDataExceptionIsScopedAndCannotGrantChildReplacement",
+      "TestProgramDataWriteMaskRetainsEveryDestructiveBit",
       "TestRetainedOutageObservationNeedsSameExactBytesAndSequence",
       "TestSenderCounterAndIdentityCannotMoveBackwards",
       "TestTransitionObservationNeedsExistingWantedState"
+    ],
+    "localrmm/internal/windowsacceptance/profile": [
+      "TestFiniteObservationQualities",
+      "TestFiniteSelection"
     ],
     "localrmm/internal/windowsagentconfig": [
       "TestWindowsStoreSchemasRemainSeparateAndFixed"
@@ -2457,6 +2509,22 @@
       "TestNativeWindowsReadOnlyInventory",
       "TestNilContextRejected",
       "TestSectionBoundsAndMalformedRows"
+    ],
+    "localrmm/internal/windowsmanaged": [
+      "TestAdapterRejectsMalformedSourceWithoutCollection",
+      "TestDecodeRejectsMalformedOrAmbiguousJSON",
+      "TestEncodedByteLimitIncludesEscapesAndTrimsDeterministically",
+      "TestNativePartialDeniedUnavailableAndTruncatedRemainHonest",
+      "TestRecordCapsPreserveOriginalCountAndTime",
+      "TestSameReportPreservesTimesMetricsAndBundleContract",
+      "TestValidateRejectsInconsistentSchemaAndRows"
+    ],
+    "localrmm/internal/windowspath": [
+      "TestCanonicalAndComponentContract",
+      "TestCreateOnlyBindingFailureOrder",
+      "TestRelativeNativeFailureHasNoAdoptionOrRetry",
+      "TestRelativeNativeInvalidInputNeverReachesSyscall",
+      "TestRelativeNativeRequestsAreBoundAndCreateOnly"
     ],
     "localrmm/internal/windowsservice": [
       "TestAncestorTrustAdmissionNeverClaimsEffectiveTokenReadAccess",

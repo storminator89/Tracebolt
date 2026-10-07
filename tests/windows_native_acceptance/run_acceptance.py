@@ -18,7 +18,7 @@ import tempfile
 import threading
 
 REPOSITORY = "storminator89/Tracebolt"
-SCHEMA = "tracebolt.windows-native-acceptance.v1"
+SCHEMA = "tracebolt.windows-native-acceptance.v2"
 MAX_REPORT_BYTES = 32 * 1024
 CONTROLLER_TIMEOUT_SECONDS = 13 * 60  # 10-minute controller + 2-minute cleanup.
 REPORT_NAME = "tracebolt-windows-native-acceptance.json"
@@ -26,12 +26,12 @@ APPROVALS = {
     "TRACEBOLT_APPROVE_SERVICES": "--approve-services",
     "TRACEBOLT_APPROVE_IDENTITY": "--approve-identity",
     "TRACEBOLT_APPROVE_APP_ACLS": "--approve-app-acls",
-    "TRACEBOLT_APPROVE_LOOPBACK_TLS": "--approve-loopback-tls",
+    "TRACEBOLT_APPROVE_LOOPBACK": "--approve-loopback",
     "TRACEBOLT_APPROVE_CLEANUP": "--approve-cleanup",
 }
 CHECK_NAMES = (
     "prerequisites", "app_only_provisioning", "service_prepare", "pending_claim",
-    "limited_token", "pending_stop_identity", "delayed_approval_report",
+    "limited_token", "pending_stop_identity", "delayed_approval_report", "profile_report",
     "unrelated_service_denied", "outage_pending_retained",
     "outage_restart_same_bytes", "recovery_same_identity",
     "uninstall_retains_state", "owned_cleanup",
@@ -46,7 +46,7 @@ REASONS = {
     "operation-failed", "deadline-or-cancellation", "state-rejected",
 }
 COVERAGE_FALSE = {
-    "productionManagerExercised", "hiddenConsoleExercised", "osShutdownExercised",
+    "productionIngressExercised", "sharedDashboardExercised", "productionManagerExercised", "hiddenConsoleExercised", "osShutdownExercised",
     "osRebootExercised", "broadAncestorAclChanged", "existingResourcesAdopted",
     "secretsExported", "rawTelemetryExported",
 }
@@ -60,7 +60,7 @@ NATIVE_FALSE = {"installed", "running", "pending_present", "cleanup_retained"}
 NATIVE_BOOLEANS = NATIVE_TRUE | NATIVE_FALSE
 REPORT_FIELDS = {
     "schema", "source", "status", "stage", "reason", "approvalValidated",
-    "nativeActionsAttempted", "native", "checks",
+    "nativeActionsAttempted", "native", "checks", "selection", "inventory", "loopbackPeerExercised", "nativeInventorySenderExercised",
 } | COVERAGE_FALSE
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -78,8 +78,20 @@ def valid_source(value: object) -> bool:
     return type(value) is str and re.fullmatch(r"[0-9a-f]{40}", value) is not None
 
 
+QUALITIES = ("cpu", "memory", "disk", "hostname", "processes", "services", "software", "interfaces")
+VALID_SELECTIONS = {("basic-readonly-v1", "tls"), ("windows-inventory-v1", "tls"), ("windows-inventory-v1", "http-test")}
+
+def selection(env: dict[str, str]) -> dict:
+    collection, transport = env.get("TRACEBOLT_COLLECTION_PROFILE"), env.get("TRACEBOLT_TRANSPORT_PROFILE")
+    require(type(collection) is str and type(transport) is str and (collection, transport) in VALID_SELECTIONS)
+    require(env.get("TRACEBOLT_APPROVE_INVENTORY_METADATA") == ("true" if collection == "windows-inventory-v1" else "false"))
+    require(env.get("TRACEBOLT_APPROVE_HTTP_PLAINTEXT") == ("true" if transport == "http-test" else "false"))
+    return {"collectionProfile": collection, "transport": transport}
+
+
 def authorize(env: dict[str, str]) -> str:
     """Pure, first boundary: invalid/unapproved inputs cannot spawn a process."""
+    selection(env)
     source = env.get("TRACEBOLT_EXPECTED_SOURCE_SHA")
     require(valid_source(source) and source == env.get("GITHUB_SHA"))
     for name in APPROVALS:
@@ -122,14 +134,28 @@ def member(value: object, allowed: set | tuple) -> bool:
     return type(value) is str and value in allowed
 
 
-def validate_report(raw: bytes, source: str) -> dict:
+def validate_report(raw: bytes, source: str, expected: dict | None = None) -> dict:
     """Mirror Go gate.Report/native.Evidence exactly; reject unknown data."""
     require(valid_source(source))
     report = strict_json(raw, MAX_REPORT_BYTES)
     require(type(report) is dict and set(report) == REPORT_FIELDS)
     require(report["schema"] == SCHEMA and report["source"] == source)
+    selected = report["selection"]
+    require(type(selected) is dict and set(selected) == {"collectionProfile", "transport"})
+    require(type(selected["collectionProfile"]) is str and type(selected["transport"]) is str and (selected["collectionProfile"], selected["transport"]) in VALID_SELECTIONS)
+    require(expected is None or selected == expected)
+    inventory = report["inventory"]
+    require(type(inventory) is dict and set(inventory) == {"frames", *QUALITIES})
+    require(type(inventory["frames"]) is int and 0 <= inventory["frames"] <= 64)
+    allowed = {"not_run"} if inventory["frames"] == 0 else {"healthy", "partial", "denied", "unavailable"}
+    require(all(member(inventory[key], allowed) for key in QUALITIES))
+    is_inventory = selected["collectionProfile"] == "windows-inventory-v1"
+    require(is_inventory or inventory["frames"] == 0)
+    require(type(report["loopbackPeerExercised"]) is bool and type(report["nativeInventorySenderExercised"]) is bool)
+    require(report["nativeInventorySenderExercised"] == (is_inventory and inventory["frames"] > 0 and report["loopbackPeerExercised"]))
     require(report["approvalValidated"] is True)
     require(type(report["nativeActionsAttempted"]) is bool)
+    require(not report["loopbackPeerExercised"] or report["nativeActionsAttempted"])
     require(all(report[key] is False for key in COVERAGE_FALSE))
     require(member(report["status"], {"passed_native_subset", "failed", "blocked"}))
     require(member(report["stage"], CHECK_NAMES) and member(report["reason"], REASONS))
@@ -143,6 +169,8 @@ def validate_report(raw: bytes, source: str) -> dict:
         require(type(check) is dict and set(check) == {"name", "status"})
         require(check["name"] == expected and member(check["status"], {"pass", "fail", "blocked", "not_run"}))
     if report["status"] == "passed_native_subset":
+        require(report["loopbackPeerExercised"] is True)
+        require(not is_inventory or (report["nativeInventorySenderExercised"] is True and all(inventory[key] in {"healthy", "partial"} for key in QUALITIES)))
         require(report["nativeActionsAttempted"] is True)
         require(report["stage"] == "owned_cleanup" and report["reason"] == "none")
         require(native["stage"] == "cleanup" and native["reason"] == "none")
@@ -150,6 +178,7 @@ def validate_report(raw: bytes, source: str) -> dict:
         require(all(native[key] is True for key in NATIVE_TRUE))
         require(all(native[key] is False for key in NATIVE_FALSE))
     if report["status"] == "blocked":
+        require(not report["loopbackPeerExercised"] and inventory["frames"] == 0)
         require(report["stage"] == "prerequisites" and report["nativeActionsAttempted"] is False)
         require(all(native[key] is False for key in {"provisioned", "installed", "prepared", "claim_committed"}))
     return report
@@ -238,16 +267,20 @@ def binary_digest(path: Path) -> str:
         return hashlib.file_digest(stream, "sha256").hexdigest()
 
 
-def controller_arguments(controller: Path, service: Path, source: str) -> list[str]:
-    require(valid_source(source))
+def controller_arguments(controller: Path, service: Path, source: str, selected: dict) -> list[str]:
+    require(valid_source(source) and type(selected) is dict and (selected.get("collectionProfile"), selected.get("transport")) in VALID_SELECTIONS)
     return [str(controller), "--expected-source=" + source,
             *[flag + "=true" for flag in APPROVALS.values()],
+            "--collection-profile=" + selected["collectionProfile"], "--transport-profile=" + selected["transport"],
+            "--approve-inventory-metadata=" + str(selected["collectionProfile"] == "windows-inventory-v1").lower(),
+            "--approve-http-plaintext=" + str(selected["transport"] == "http-test").lower(),
             "--service-artifact=" + str(service), "--service-sha256=" + binary_digest(service),
             "--controller-artifact=" + str(controller), "--controller-sha256=" + binary_digest(controller)]
 
 
 def run_native(env: dict[str, str], root: Path = ROOT) -> dict:
     source = authorize(env)  # Must precede filesystem staging and every process.
+    selected = selection(env)
     child = child_environment(env)
     verify_checkout(child, source, root)
     verify_go(child, root)
@@ -264,9 +297,9 @@ def run_native(env: dict[str, str], root: Path = ROOT) -> dict:
                     "-X main.compiledSource=" + source, "-o", str(controller),
                     "./cmd/windows-native-acceptance"], child, root, 300)
         verify_checkout(child, source, root)
-        code, raw = command(controller_arguments(controller, service, source), child,
+        code, raw = command(controller_arguments(controller, service, source, selected), child,
                             root, CONTROLLER_TIMEOUT_SECONDS)
-        report = validate_report(raw, source)
+        report = validate_report(raw, source, selected)
         require(report["status"] != "passed_native_subset" or code == 0)
     # Staged executables have gone away. Only this finite reserialization is
     # retained, never private keys, controller output, telemetry or native paths.

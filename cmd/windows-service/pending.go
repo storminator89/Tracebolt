@@ -69,6 +69,11 @@ func cooperativePendingOutcome(err error) (ok bool) {
 // attempt. A 15-minute transport timeout is not the original approval deadline.
 // This coordinator never creates keys or extends that retained authority.
 func runPendingWindows(ctx context.Context, configPath string, ready func(), h pendingHooks) error {
+	return runPendingWindowsProfile(ctx, configPath, false, ready, h)
+}
+
+// HTTP-test is admitted only from a validated retained Windows inventory bootstrap.
+func runPendingWindowsProfile(ctx context.Context, configPath string, insecure bool, ready func(), h pendingHooks) error {
 	if ctx == nil || configPath == "" || ready == nil || h.identity == nil || h.inspect == nil || h.resume == nil || h.stopDeadline == nil || h.markReady == nil || h.sender == nil || h.wait == nil {
 		return marked(windowsservice.PhasePendingApproval, windowsservice.ReasonInvalidConfiguration, nil)
 	}
@@ -103,7 +108,7 @@ func runPendingWindows(ctx context.Context, configPath string, ready func(), h p
 			}
 			return marked(windowsservice.PhaseRetainedState, windowsservice.ReasonStateRejected, err)
 		}
-		if state.ConfigPath != configPath || state.HTTPTest {
+		if state.ConfigPath != configPath || state.HTTPTest != insecure {
 			return marked(windowsservice.PhaseRetainedState, windowsservice.ReasonInvalidConfiguration, nil)
 		}
 		if ctx.Err() != nil {
@@ -121,7 +126,7 @@ func runPendingWindows(ctx context.Context, configPath string, ready func(), h p
 				}
 				return marked(windowsservice.PhaseHandoff, windowsservice.ReasonHandoffInvalid, err)
 			}
-			if !handoff.Ready || handoff.ConfigPath != configPath || handoff.HTTPTest {
+			if !handoff.Ready || handoff.ConfigPath != configPath || handoff.HTTPTest != insecure {
 				return marked(windowsservice.PhaseHandoff, windowsservice.ReasonHandoffInvalid, nil)
 			}
 			if ctx.Err() != nil {

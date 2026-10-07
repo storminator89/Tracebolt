@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-10-07 — Windows inventory and shared-dashboard source candidate
+
+- Add a distinct, explicitly approved Windows inventory profile and manager domain. The ordinary service sender supplies bounded process, service, software, hostname/interface and resource observations to durable shared-dashboard views and history. Preserve the primary Linux binding, stable identity, original age, replay handling and explicit denied/truncated states. Event content, update/CVE checks, AI diagnostics and remote actions remain outside this Windows profile.
+- Use sharing-relevant directory pins and handle-relative, create-only Windows path traversal. Preserve protected app/state ownership and destructive-right checks without changing OS-root or ProgramData ACLs. Reuse held direct-parent handles for receipt-bound cleanup. Read-only prerequisite observations remain distinct from actual service-token, native race and cleanup acceptance.
+- Bind the manual native gate to the selected collection and transport profile. Preserve five explicit authority approvals; require separate inventory-metadata and HTTP-plaintext approval when applicable. Reject basic-over-HTTP and profile/grant mismatches before native changes. Keep real LocalService sender/loopback validation separate from Linux durable-manager fixture and synthetic UI evidence. Publication does not dispatch the gate or establish installed Windows acceptance.
+- Synchronize all 23 required LAN fixture counts and retain a Windows-only unavailable/basic-device regression. The existing Linux one-command update stays pinned to its accepted revision and unchanged rc.3 release.
+
 ## 2026-10-07 — Finish visual coverage and clarify Windows prerequisites
 
 - Require all 19 conditional and 10 v3 browser cases after the added bilingual capture scenarios. The preceding source passed all 133 executed cases; only the older fixed totals rejected the complete reports. Retain exact source, unique-case, zero-error and export-safety checks, and restore execution of the dependent endpoint capture gate.

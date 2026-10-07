@@ -11,6 +11,7 @@ import (
 	"localrmm/internal/windowsacceptance/fixture"
 	"localrmm/internal/windowsacceptance/gate"
 	"localrmm/internal/windowsacceptance/native"
+	"localrmm/internal/windowsacceptance/profile"
 	"math/big"
 	"strings"
 	"testing"
@@ -23,6 +24,7 @@ type fakePeer struct {
 	b                    enrollmentclient.Bootstrap
 	e                    fixture.Evidence
 	approved, closeError bool
+	closeHook            func()
 }
 
 func (f *fakePeer) Bootstrap() enrollmentclient.Bootstrap  { return f.b }
@@ -37,6 +39,9 @@ func (f *fakePeer) Approve(fp, code string) error {
 func (f *fakePeer) Evidence() fixture.Evidence { return f.e }
 func (f *fakePeer) ToggleUnavailable(v bool)   { f.e.Unavailable = v }
 func (f *fakePeer) Close() error {
+	if f.closeHook != nil {
+		f.closeHook()
+	}
 	f.e.Closed = true
 	if f.closeError {
 		return errors.New("fixture close")
@@ -91,7 +96,7 @@ func (d *fakeDriver) Claim(_ context.Context, _ native.Guard, _ func(context.Con
 	}
 	b := d.peer.b
 	if d.omit != "display" {
-		if err := display(enrollmentclient.TrustDisplay{Profile: "tls", CollectionProfile: "basic-readonly-v1", ManagerInstanceID: b.ManagerInstanceID, EnrollmentOrigin: b.EnrollmentOrigin, AgentOrigin: b.AgentOrigin, InvitationID: b.InvitationID, ServerCAFingerprints: []string{certificateHash(b.ServerCAPEM)}, IssuerRootFingerprint: certificateHash(b.IssuerRootPEM), IssuerFingerprint: certificateHash(b.IssuerPEM), KeyFingerprint: strings.Repeat("b", 64), ComparisonCode: "fixture-comparison"}); err != nil {
+		if err := display(enrollmentclient.TrustDisplay{HTTPTest: b.Profile == "http-test", Profile: b.Profile, CollectionProfile: b.CollectionProfile, ManagerInstanceID: b.ManagerInstanceID, EnrollmentOrigin: b.EnrollmentOrigin, AgentOrigin: b.AgentOrigin, InvitationID: b.InvitationID, ServerCAFingerprints: fixtureServerPins(b.ServerCAPEM), IssuerRootFingerprint: certificateHash(b.IssuerRootPEM), IssuerFingerprint: certificateHash(b.IssuerPEM), KeyFingerprint: strings.Repeat("b", 64), ComparisonCode: "fixture-comparison"}); err != nil {
 			return err
 		}
 	}
@@ -169,7 +174,7 @@ func (d *fakeDriver) Cleanup(context.Context, native.Guard) error {
 func controllerFixture(t *testing.T) (*gate.Grant, *fakeDriver, *fakePeer, controllerHooks) {
 	t.Helper()
 	sha := strings.Repeat("a", 40)
-	g, err := gate.Authorize(gate.Approval{ExpectedSource: sha, Services: true, Identity: true, AppACLs: true, LoopbackTLS: true, Cleanup: true}, gate.Environment{Event: "workflow_dispatch", Actions: "true", RunnerOS: "Windows", RunnerEnvironment: "github-hosted", Repository: gate.Repository, Source: sha, RunID: "42"}, sha)
+	g, err := gate.Authorize(gate.Approval{ExpectedSource: sha, Services: true, Identity: true, AppACLs: true, Loopback: true, Cleanup: true, Selection: profile.BasicTLS()}, gate.Environment{Event: "workflow_dispatch", Actions: "true", RunnerOS: "Windows", RunnerEnvironment: "github-hosted", Repository: gate.Repository, Source: sha, RunID: "42"}, sha)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -181,10 +186,13 @@ func controllerFixture(t *testing.T) (*gate.Grant, *fakeDriver, *fakePeer, contr
 		t.Fatal(err)
 	}
 	cert := string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}))
-	f := &fakePeer{b: enrollmentclient.Bootstrap{ManagerInstanceID: "fixture-manager", InvitationID: "fixture-invitation", EnrollmentOrigin: "https://127.0.0.1:32100", AgentOrigin: "https://127.0.0.1:32101", ServerCAPEM: cert, IssuerRootPEM: cert, IssuerPEM: cert}}
+	f := &fakePeer{e: fixture.Evidence{Inventory: profile.ZeroObservation(), Transport: "tls"}, b: enrollmentclient.Bootstrap{Profile: "tls", CollectionProfile: "basic-readonly-v1", ManagerInstanceID: "fixture-manager", InvitationID: "fixture-invitation", EnrollmentOrigin: "https://127.0.0.1:32100", AgentOrigin: "https://127.0.0.1:32101", ServerCAPEM: cert, IssuerRootPEM: cert, IssuerPEM: cert}}
 	d := &fakeDriver{e: native.Evidence{Stage: native.StageIdle, Reason: native.ReasonNone}, peer: f}
 	now := time.Unix(0, 0)
-	h := controllerHooks{newDriver: func(native.Options) (driver, error) { return d, nil }, startPeer: func(context.Context) (peer, error) { d.calls = append(d.calls, "fixture-start"); return f, nil }, now: func() time.Time { return now }, pause: func(c context.Context, duration time.Duration) error {
+	h := controllerHooks{newDriver: func(native.Options) (driver, error) { return d, nil }, startPeer: func(context.Context, profile.Selection) (peer, error) {
+		d.calls = append(d.calls, "fixture-start")
+		return f, nil
+	}, now: func() time.Time { return now }, pause: func(c context.Context, duration time.Duration) error {
 		if c.Err() != nil {
 			return c.Err()
 		}
@@ -196,7 +204,11 @@ func controllerFixture(t *testing.T) (*gate.Grant, *fakeDriver, *fakePeer, contr
 				f.e.Frames++
 				f.e.LastSequence++
 				f.e.Platform = "windows"
-				f.e.CollectionProfile = "basic-readonly-v1"
+				f.e.CollectionProfile = f.b.CollectionProfile
+				f.e.Transport = f.b.Profile
+				if f.b.CollectionProfile == "windows-inventory-v1" {
+					f.e.Inventory = usableInventory(f.e.Frames)
+				}
 			}
 		}
 		return nil
@@ -285,4 +297,170 @@ func (d *fakeDriver) CleanupStop(context.Context, native.Guard) error {
 	d.e.Running = false
 	d.e.Stopped = true
 	return nil
+}
+
+func fixtureServerPins(raw string) []string {
+	if raw == "" {
+		return nil
+	}
+	return []string{certificateHash(raw)}
+}
+func usableInventory(frames uint64) profile.Observation {
+	return profile.Observation{Frames: frames, CPU: "healthy", Memory: "healthy", Disk: "healthy", Hostname: "healthy", Processes: "partial", Services: "healthy", Software: "healthy", Interfaces: "healthy"}
+}
+
+func TestControllerInventoryTLSAndExplicitHTTPUseExactGrant(t *testing.T) {
+	for _, transport := range []string{"tls", "http-test"} {
+		t.Run(transport, func(t *testing.T) {
+			old, d, f, h := controllerFixture(t)
+			old.Close()
+			selected := profile.Selection{CollectionProfile: "windows-inventory-v1", Transport: transport}
+			sha := strings.Repeat("a", 40)
+			g, err := gate.Authorize(gate.Approval{ExpectedSource: sha, Services: true, Identity: true, AppACLs: true, Loopback: true, Cleanup: true, Selection: selected, InventoryMetadata: true, HTTPPlaintext: selected.HTTPTest()}, gate.Environment{Event: "workflow_dispatch", Actions: "true", RunnerOS: "Windows", RunnerEnvironment: "github-hosted", Repository: gate.Repository, Source: sha, RunID: "42"}, sha)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer g.Close()
+			f.b.Profile = transport
+			f.b.CollectionProfile = selected.CollectionProfile
+			f.e.Transport = transport
+			if selected.HTTPTest() {
+				f.b.ServerCAPEM = ""
+				f.b.EnrollmentOrigin = "http://127.0.0.1:32100"
+				f.b.AgentOrigin = "http://127.0.0.1:32101"
+			}
+			original := h.newDriver
+			h.newDriver = func(o native.Options) (driver, error) {
+				if o.Selection != selected {
+					t.Fatal("driver did not receive exact grant")
+				}
+				return original(o)
+			}
+			r := executeWith(context.Background(), g, native.Options{}, h)
+			if r.Status != "passed_native_subset" || gate.Validate(r) != nil || !r.NativeInventorySenderExercised || !r.Inventory.Usable() || !d.e.LimitedToken || r.ProductionManagerExercised || r.ProductionIngressExercised || r.SharedDashboardExercised {
+				t.Fatal("inventory fixture overclaimed or failed")
+			}
+		})
+	}
+}
+func TestControllerRefusesMismatchedArtifactProfileBeforeDriver(t *testing.T) {
+	g, d, _, h := controllerFixture(t)
+	r := executeWith(context.Background(), g, native.Options{Selection: profile.InventoryTLS()}, h)
+	if r.Reason != native.ReasonGuard || len(d.calls) != 0 {
+		t.Fatal("unapproved profile reached native driver")
+	}
+}
+
+func TestControllerDeniedInventoryRemainsFailedWithFiniteQuality(t *testing.T) {
+	old, d, f, h := controllerFixture(t)
+	old.Close()
+	selected := profile.InventoryTLS()
+	sha := strings.Repeat("a", 40)
+	g, err := gate.Authorize(gate.Approval{ExpectedSource: sha, Services: true, Identity: true, AppACLs: true, Loopback: true, Cleanup: true, Selection: selected, InventoryMetadata: true}, gate.Environment{Event: "workflow_dispatch", Actions: "true", RunnerOS: "Windows", RunnerEnvironment: "github-hosted", Repository: gate.Repository, Source: sha, RunID: "42"}, sha)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer g.Close()
+	f.b.CollectionProfile = selected.CollectionProfile
+	original := h.pause
+	h.pause = func(c context.Context, d time.Duration) error {
+		err := original(c, d)
+		if f.e.Inventory.Frames > 0 {
+			f.e.Inventory.Services = "denied"
+		}
+		return err
+	}
+	r := executeWith(context.Background(), g, native.Options{}, h)
+	if r.Status != "failed" || r.Stage != "profile_report" || r.Inventory.Services != "denied" || !r.NativeInventorySenderExercised || !d.e.Cleaned || gate.Validate(r) != nil {
+		t.Fatal("denied inventory counted as usable or lost cleanup")
+	}
+}
+
+func TestControllerLateInventoryQualityKeepsFiniteFailure(t *testing.T) {
+	for _, test := range []struct {
+		quality        string
+		cleanupFailure bool
+	}{{"denied", false}, {"unavailable", false}, {"denied", true}} {
+		name := test.quality
+		if test.cleanupFailure {
+			name += "/cleanup-failure"
+		}
+		t.Run(name, func(t *testing.T) {
+			old, d, f, h := controllerFixture(t)
+			old.Close()
+			selected := profile.InventoryTLS()
+			sha := strings.Repeat("a", 40)
+			g, err := gate.Authorize(gate.Approval{ExpectedSource: sha, Services: true, Identity: true, AppACLs: true, Loopback: true, Cleanup: true, Selection: selected, InventoryMetadata: true}, gate.Environment{Event: "workflow_dispatch", Actions: "true", RunnerOS: "Windows", RunnerEnvironment: "github-hosted", Repository: gate.Repository, Source: sha, RunID: "42"}, sha)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer g.Close()
+			f.b.CollectionProfile = selected.CollectionProfile
+			if test.cleanupFailure {
+				d.fail = "cleanup"
+			}
+			original := h.pause
+			h.pause = func(c context.Context, duration time.Duration) error {
+				err := original(c, duration)
+				if f.e.Inventory.Frames >= 2 {
+					f.e.Inventory.Services = test.quality
+				}
+				return err
+			}
+			r := executeWith(context.Background(), g, native.Options{}, h)
+			if r.Status != "failed" || r.Inventory.Services != test.quality || !r.NativeInventorySenderExercised || r.Inventory.Frames < 2 {
+				t.Fatal("late quality lost finite diagnostic")
+			}
+			if _, err := gate.Encode(r); err != nil {
+				t.Fatal("late failed report could not be retained")
+			}
+			if test.cleanupFailure {
+				if r.Stage != "owned_cleanup" || r.Reason != native.ReasonOperation || !r.Native.CleanupRetained {
+					t.Fatal("cleanup failure overwritten")
+				}
+			} else {
+				if r.Stage != "profile_report" || !d.e.Cleaned {
+					t.Fatal("late quality remained a pass or lost cleanup")
+				}
+				for _, check := range r.Checks {
+					if check.Name == "profile_report" && check.Status != "fail" {
+						t.Fatal("initial quality pass not withdrawn")
+					}
+					if check.Name == "owned_cleanup" && check.Status != "pass" {
+						t.Fatal("successful cleanup lost")
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestControllerFinalObservationFollowsPeerClosure(t *testing.T) {
+	for _, closeFails := range []bool{false, true} {
+		t.Run(map[bool]string{false: "closed", true: "close-failed"}[closeFails], func(t *testing.T) {
+			old, _, f, h := controllerFixture(t)
+			old.Close()
+			selected := profile.InventoryTLS()
+			sha := strings.Repeat("a", 40)
+			g, err := gate.Authorize(gate.Approval{ExpectedSource: sha, Services: true, Identity: true, AppACLs: true, Loopback: true, Cleanup: true, Selection: selected, InventoryMetadata: true}, gate.Environment{Event: "workflow_dispatch", Actions: "true", RunnerOS: "Windows", RunnerEnvironment: "github-hosted", Repository: gate.Repository, Source: sha, RunID: "42"}, sha)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer g.Close()
+			f.b.CollectionProfile = selected.CollectionProfile
+			f.closeError = closeFails
+			f.closeHook = func() { f.e.Inventory.Services = "denied" }
+			r := executeWith(context.Background(), g, native.Options{}, h)
+			expectedStage := "profile_report"
+			if closeFails {
+				expectedStage = "owned_cleanup"
+			}
+			if r.Status != "failed" || r.Stage != expectedStage || r.Inventory.Services != "denied" || !f.e.Closed {
+				t.Fatal("terminal observation preceded peer closure or hid close failure")
+			}
+			if _, err := gate.Encode(r); err != nil {
+				t.Fatal("closed peer failure not retainable")
+			}
+		})
+	}
 }

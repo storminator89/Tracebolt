@@ -5,7 +5,7 @@ const shellQuote = (value: string): string => `'${value.replaceAll("'", "'\\''")
 /** Validated public arguments shared by the two source-owned command surfaces.
  * No invitation secret or executable trust input is accepted here. */
 export function publicEnrollmentArguments(value: unknown, snapshot: EnrollmentSnapshot, checksum: unknown): string | null {
-    if (!validSnapshot(snapshot) || snapshot.state !== 'created' || !validBootstrapSHA256(checksum) || typeof checksum !== 'string') return null;
+    if (!validSnapshot(snapshot) || snapshot.state !== 'created' || snapshot.platform !== 'linux' || snapshot.binding.collectionProfile === 'windows-inventory-v1' || !validBootstrapSHA256(checksum) || typeof checksum !== 'string') return null;
     const bootstrap = publicBootstrap(value, snapshot, '');
     if (!bootstrap) return null;
     let command = ` --manager-origin ${shellQuote(bootstrap.enrollmentOrigin)} --invitation-id ${shellQuote(bootstrap.invitationId)} --bootstrap-sha256 ${shellQuote(checksum)}`;

@@ -1,9 +1,9 @@
 // Package fixture is a disposable, process-local protocol peer for the explicitly
 // authorized Windows native acceptance controller. It is NOT a Linux manager,
 // durable enrollment store, dashboard, production issuer, or persistence test.
-// Importing this package performs no work. Only an explicit Start call creates
-// disposable authority and two loopback listeners. The caller must obtain the
-// acceptance gate's approval before calling Start or creating endpoint identity.
+// Importing this package performs no work. Only explicit Start or StartSelected
+// calls create disposable authority and two loopback listeners. The caller must
+// obtain the exact acceptance gate approval before either or endpoint identity.
 package fixture
 
 import (
@@ -22,6 +22,8 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"net/url"
+	"strconv"
 	"sync"
 	"time"
 
@@ -30,6 +32,8 @@ import (
 	"localrmm/internal/enrollmentissuer"
 	"localrmm/internal/enrollmentstate"
 	"localrmm/internal/lanstore"
+	"localrmm/internal/signedhttp"
+	"localrmm/internal/windowsacceptance/profile"
 )
 
 const (
@@ -54,6 +58,9 @@ type state struct {
 	ctx                          context.Context
 	cancel                       context.CancelFunc
 	now                          func() time.Time
+	selection                    profile.Selection
+	signed                       *signedhttp.Verifier
+	inventory                    profile.Observation
 	bootstrap                    enrollmentclient.Bootstrap
 	engine                       *enrollmentstate.Engine
 	issuer                       *enrollmentissuer.Issuer
@@ -75,6 +82,8 @@ type state struct {
 	lastReceipt                  lanstore.Receipt
 	lastDigest                   [32]byte
 	lastGenerated                time.Time
+	lastWindowsGeneration        string
+	lastWindowsCollected         time.Time
 }
 
 type challenge struct {
@@ -89,6 +98,8 @@ type Evidence struct {
 	State               enrollmentstate.State `json:"state"`
 	Platform            string                `json:"platform"`
 	CollectionProfile   string                `json:"collectionProfile"`
+	Transport           string                `json:"transport"`
+	Inventory           profile.Observation   `json:"inventory"`
 	Frames              uint64                `json:"frames"`
 	LastSequence        uint64                `json:"lastSequence"`
 	DuplicateReceipts   uint64                `json:"duplicateReceipts"`
@@ -112,7 +123,14 @@ func (f Fixture) LogValue() slog.Value         { return slog.StringValue(f.Strin
 // TLS is always 1.3, both listeners are IPv4 loopback, and their routes are fixed.
 // The fixture closes on cancellation or after MaxLifetime, whichever comes first.
 func Start(ctx context.Context) (*Fixture, error) {
-	if ctx == nil || ctx.Err() != nil {
+	return StartSelected(ctx, profile.BasicTLS())
+}
+
+// StartSelected is an explicit manual-only operation under the caller's exact
+// profile and transport approval. HTTP is admitted only for Windows inventory;
+// it has no TLS fallback and provides no confidentiality or server authentication.
+func StartSelected(ctx context.Context, selection profile.Selection) (*Fixture, error) {
+	if ctx == nil || ctx.Err() != nil || selection.Validate() != nil {
 		return nil, ErrFixture
 	}
 	enrollment, err := net.Listen("tcp4", "127.0.0.1:0")
@@ -124,7 +142,11 @@ func Start(ctx context.Context) (*Fixture, error) {
 		_ = enrollment.Close()
 		return nil, ErrFixture
 	}
-	f, err := newFixture(ctx, "https://"+enrollment.Addr().String(), "https://"+agent.Addr().String(), time.Now)
+	scheme := "https://"
+	if selection.HTTPTest() {
+		scheme = "http://"
+	}
+	f, err := newFixtureSelected(ctx, scheme+enrollment.Addr().String(), scheme+agent.Addr().String(), time.Now, selection)
 	if err != nil {
 		_ = enrollment.Close()
 		_ = agent.Close()
@@ -146,7 +168,11 @@ func Start(ctx context.Context) (*Fixture, error) {
 			BaseContext: func(net.Listener) context.Context { return f.state.ctx },
 		}
 		f.state.servers = append(f.state.servers, srv)
-		listeners = append(listeners, tls.NewListener(&limitedListener{Listener: l, slots: make(chan struct{}, 8)}, cfg))
+		var listener net.Listener = &limitedListener{Listener: l, slots: make(chan struct{}, 8)}
+		if !selection.HTTPTest() {
+			listener = tls.NewListener(listener, cfg)
+		}
+		listeners = append(listeners, listener)
 	}
 	// Publish the complete immutable server list before any goroutine can close
 	// the fixture. A failed first Serve cannot race the second server's setup.
@@ -167,14 +193,18 @@ func Start(ctx context.Context) (*Fixture, error) {
 // tests create explicitly disposable in-memory keys but never listen or invoke
 // collectors, protected endpoint state, native ACLs, or services.
 func newFixture(ctx context.Context, enrollmentOrigin, agentOrigin string, now func() time.Time) (*Fixture, error) {
-	if ctx == nil || ctx.Err() != nil || now == nil {
+	return newFixtureSelected(ctx, enrollmentOrigin, agentOrigin, now, profile.BasicTLS())
+}
+
+func newFixtureSelected(ctx context.Context, enrollmentOrigin, agentOrigin string, now func() time.Time, selection profile.Selection) (*Fixture, error) {
+	if ctx == nil || ctx.Err() != nil || now == nil || selection.Validate() != nil || !validOrigin(enrollmentOrigin, selection) || !validOrigin(agentOrigin, selection) || enrollmentOrigin == agentOrigin {
 		return nil, ErrFixture
 	}
 	issuer, server, err := newDisposableAuthority(now())
 	if err != nil {
 		return nil, ErrFixture
 	}
-	s := &state{now: now, issuer: issuer, server: server, challenges: make(map[string]challenge), slots: make(chan struct{}, 2), closeDone: make(chan struct{})}
+	s := &state{now: now, selection: selection, inventory: profile.ZeroObservation(), issuer: issuer, server: server, challenges: make(map[string]challenge), slots: make(chan struct{}, 2), closeDone: make(chan struct{})}
 	s.ctx, s.cancel = context.WithTimeout(ctx, MaxLifetime)
 	f := &Fixture{state: s}
 	ok := false
@@ -189,14 +219,24 @@ func newFixture(ctx context.Context, enrollmentOrigin, agentOrigin string, now f
 	if e1 != nil || e2 != nil || e3 != nil {
 		return nil, ErrFixture
 	}
-	s.bootstrap = enrollmentclient.Bootstrap{SchemaVersion: enrollmentclient.BootstrapVersion, ManagerInstanceID: manager, Profile: "tls", EnrollmentOrigin: enrollmentOrigin, AgentOrigin: agentOrigin, CollectionProfile: enrollmentcrypto.CollectionProfile, InvitationID: invitation, ServerCAPEM: publicPEM(issuer.RootDER()), IssuerRootPEM: publicPEM(issuer.RootDER()), IssuerPEM: publicPEM(issuer.IssuerDER())}
+	serverCA := publicPEM(issuer.RootDER())
+	if selection.HTTPTest() {
+		serverCA = ""
+	}
+	s.bootstrap = enrollmentclient.Bootstrap{SchemaVersion: enrollmentclient.BootstrapVersion, ManagerInstanceID: manager, Profile: selection.Transport, EnrollmentOrigin: enrollmentOrigin, AgentOrigin: agentOrigin, CollectionProfile: selection.CollectionProfile, InvitationID: invitation, ServerCAPEM: serverCA, IssuerRootPEM: publicPEM(issuer.RootDER()), IssuerPEM: publicPEM(issuer.IssuerDER())}
 	s.issuerCert, err = x509.ParseCertificate(issuer.IssuerDER())
 	if err != nil {
 		return nil, ErrFixture
 	}
 	s.clientRoots = x509.NewCertPool()
 	s.clientRoots.AddCert(s.issuerCert)
-	binding := enrollmentstate.Binding{InstanceID: manager, Origin: enrollmentOrigin, Profile: "tls", CollectionProfile: enrollmentcrypto.CollectionProfile, IssuerFingerprint: issuer.Fingerprint()}
+	if selection.HTTPTest() {
+		s.signed, err = signedhttp.New(signedhttp.Config{Origin: agentOrigin, Path: signedhttp.WindowsPath, Registry: fixtureAuthorizer{s}})
+		if err != nil {
+			return nil, ErrFixture
+		}
+	}
+	binding := enrollmentstate.Binding{InstanceID: manager, Origin: enrollmentOrigin, Profile: selection.Transport, CollectionProfile: selection.CollectionProfile, IssuerFingerprint: issuer.Fingerprint()}
 	cfg := enrollmentstate.DefaultConfig(binding)
 	cfg.RecordLimit = 1
 	cfg.InvitationLimit = 1
@@ -222,6 +262,19 @@ func newFixture(ctx context.Context, enrollmentOrigin, agentOrigin string, now f
 	}
 	ok = true
 	return f, nil
+}
+
+func validOrigin(origin string, selection profile.Selection) bool {
+	u, err := url.Parse(origin)
+	scheme := "https"
+	if selection.HTTPTest() {
+		scheme = "http"
+	}
+	if err != nil || u.Scheme != scheme || u.Hostname() != "127.0.0.1" || u.User != nil || u.Path != "" || u.RawPath != "" || u.RawQuery != "" || u.ForceQuery || u.Fragment != "" || u.RawFragment != "" || u.Opaque != "" || origin != scheme+"://"+u.Host {
+		return false
+	}
+	port, err := strconv.Atoi(u.Port())
+	return err == nil && port > 0 && port <= 65535 && strconv.Itoa(port) == u.Port() && u.Host == net.JoinHostPort("127.0.0.1", u.Port())
 }
 
 func (f *Fixture) Bootstrap() enrollmentclient.Bootstrap {
@@ -266,13 +319,13 @@ func (s *state) snapshot() (enrollmentstate.Snapshot, error) {
 
 func (f *Fixture) Evidence() Evidence {
 	if f == nil || f.state == nil {
-		return Evidence{Closed: true}
+		return Evidence{Closed: true, Inventory: profile.ZeroObservation()}
 	}
 	s := f.state
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	v, _ := s.snapshot()
-	return Evidence{State: v.State, Platform: v.Platform, CollectionProfile: v.Binding.CollectionProfile, Frames: s.frames, LastSequence: s.lastReceipt.Sequence, DuplicateReceipts: s.duplicates, Requests: s.requests, UnavailableRequests: s.unavailableRequests, Unavailable: s.unavailable, Closed: s.closed}
+	return Evidence{State: v.State, Platform: v.Platform, CollectionProfile: v.Binding.CollectionProfile, Transport: s.selection.Transport, Inventory: s.inventory, Frames: s.frames, LastSequence: s.lastReceipt.Sequence, DuplicateReceipts: s.duplicates, Requests: s.requests, UnavailableRequests: s.unavailableRequests, Unavailable: s.unavailable, Closed: s.closed}
 }
 
 // ToggleUnavailable models a scoped transport outage; it never changes the

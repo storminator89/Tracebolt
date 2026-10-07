@@ -35,6 +35,10 @@ func (s *session) handoff() (lanclient.Config, []artifact, []byte, error) {
 		c.SchemaVersion = lanclient.CompleteConfigVersion
 		c.CollectionProfile = enrollmentcrypto.CollectionProfileComplete
 	}
+	if s.l.Bootstrap.CollectionProfile == enrollmentcrypto.CollectionProfileWindowsInventory {
+		c.SchemaVersion = lanclient.WindowsInventoryConfigVersion
+		c.CollectionProfile = enrollmentcrypto.CollectionProfileWindowsInventory
+	}
 	if c.Profile == "tls" {
 		c.ServerCAFile = filepath.Join(s.opts.StateDirectory, "server-ca.pem")
 	}

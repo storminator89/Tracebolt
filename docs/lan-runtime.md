@@ -9,6 +9,7 @@ Build with `go build -buildvcs=false -o bin/lan-manager ./cmd/lan-manager`. The 
 Configuration fields:
 
 - `schemaVersion`: `tracebolt.lan-config.v1`.
+- `windowsInventoryEnabled`: optional boolean, default false. Guided enrollment only; enables a separate consent-bound Windows inventory domain and shared dashboard. Keep the primary enrollment profile unchanged. See [Windows inventory dashboard](windows-inventory-dashboard.md).
 - `profile`: `tls` or the explicit `http-test` profile.
 - `operatorListen` and `agentListen`: distinct literal IP and port pairs, for example separate configured ports8443/8444. They may bind a selected local address or an explicitly chosen container interface.
 - `operatorOrigin` and `agentOrigin`: distinct exact public origins, HTTPS for TLS or HTTP for test, with no path, query, credentials, trailing slash or explicit default port. Host/Origin checks remain exact. Docker host-port mappings can differ from internal listener ports; this is transport-level forwarding with unchanged TLS/Host, not a trusted reverse-proxy header contract.

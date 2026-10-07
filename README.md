@@ -46,14 +46,14 @@ Open **http://127.0.0.1:8787**. This loopback demo contains synthetic devices; d
 | Manager | Linux, including native amd64/arm64 Docker validation |
 | Full Linux read-admin | amd64; Ubuntu 24.04 or Debian 13, systemd, cgroup v2, kernel 6.5+ |
 | Linux arm64 / Raspberry Pi | Native read-only tests and source preparation; public installation remains closed pending privileged acceptance |
-| Windows | Native read-only inventory tested on amd64; protected basic TLS service remains a source candidate awaiting native acceptance |
+| Windows | Native read-only inventory tested on amd64; inventory, shared-dashboard and LocalService candidates await installed-service acceptance |
 | macOS | Limited standalone read-only collector |
 
 The main agent is unprivileged. Journal and socket-owner helpers need explicit local approval; the socket helper has broad process-memory authority. Review the [exact scope](docs/read-admin-onboarding.md#exactly-what-the-one-approval-covers). HTTPS is the default; [isolated HTTP testing](docs/http-complete-first-start.md) exposes credentials and content to the network. There is no arbitrary remote shell or automatic package updater.
 
 ## Documentation and development
 
-[Installation](docs/installation.md) · [Logs](docs/journal-content-mvp.md) · [Checks](docs/application-checks.md) · [Alarms](docs/alarm-delivery.md) · [Proactive AI](docs/proactive-ai-diagnostics.md) · [Security boundaries](docs/lan-security-review.md) · [Contributing workflow](AGENTS.md)
+[Installation](docs/installation.md) · [Logs](docs/journal-content-mvp.md) · [Checks](docs/application-checks.md) · [Alarms](docs/alarm-delivery.md) · [Proactive AI](docs/proactive-ai-diagnostics.md) · [Windows inventory](docs/windows-inventory-dashboard.md) · [Security boundaries](docs/lan-security-review.md) · [Contributing workflow](AGENTS.md)
 
 Run `make test`, `make build` and the [web checks](web/README.md); see [exact-revision CI](https://github.com/storminator89/Tracebolt/actions) for browser, container and native coverage. [Roadmap](docs/roadmap.md) and [changelog](CHANGELOG.md) hold the development detail.
 

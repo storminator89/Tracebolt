@@ -8,11 +8,15 @@ injected observations. Cross-building those tests does not execute them.
 
 `New` validates artifact names/digests without opening files. Every exported
 mutating operation takes a live `Guard` supplied by the exact-source manual
-controller. No package initialization performs native work, and no environment
+controller and requires its finite profile/transport selection to match the
+artifact options. An empty selection is allowed only for inert construction and
+read-only preflight; it cannot authorize a mutating call. No package initialization performs native work, and no environment
 variable, receipt or command argument is treated as approval. The controller
 must independently bind its own build and the ordinary service binary to the
 approved source. Approval must cover the fixed resources, temporary endpoint
-identity, app-owned ACLs, bounded controls and owned cleanup. Only `Evidence`
+identity, app-owned ACLs, bounded controls and owned cleanup. Windows inventory
+metadata requires its separate approval; HTTP-test additionally requires the
+explicit plaintext acknowledgement. Basic remains TLS-only. Only `Evidence`
 (finite stages/reasons and booleans) is intended for reports.
 
 ## Read-only prerequisite
@@ -22,11 +26,17 @@ local NTFS with persistent ACLs, holds the existing OS ancestor handles against
 replacement, rejects reparse points and requires trusted owner/writer policy.
 Ancestor descriptor admission does not claim effective read access and does not
 require a named LocalService ACE. Windows applies group membership, inheritance
-and ordered applicable denies during the actual service's unchanged native opens.
+and ordered applicable denies during the actual service's native opens.
 The ordinary read-only result always keeps effective service-token access false.
 The later approved native run must observe real SCM startup, its limited token,
 protected-state use and reporting. See
 [the access-proof contract](../../../docs/windows-runtime-read-preflight.md).
+
+Only the resolved ProgramData leaf admits specific add-file/EA/attribute rights
+under the [bound-path contract](../../../docs/windows-path-binding.md). Proper
+sharing-relevant directory pins and component-relative no-reparse create-only
+operations preserve the protected nonempty-child binding; this is never an ACL
+repair or native acceptance claim.
 
 The final executable's sufficient read policy and all creation descriptors remain
 unchanged; private state remains service-SID protected. A blocked prerequisite
@@ -39,8 +49,9 @@ contains no existing-object ACL repair API and no fabricated token.
 Both existing `ProgramFiles\Tracebolt` and `ProgramData\Tracebolt` cause refusal,
 even if empty. Existing main or probe services cause refusal. `Provision` copies
 only the controller-bound artifact bytes to the two fixed executable names,
-using `CREATE_NEW`, explicit descriptors at creation and recorded file IDs and
-hashes. Parent creation uses `CreateDirectoryW` with a protected descriptor; it
+using component-relative `NtCreateFile(FILE_CREATE)`, explicit descriptors at
+creation and recorded file IDs and hashes. Parent creation returns and retains
+the protected directory handle directly; it
 never calls `SetSecurityInfo`, `SetNamedSecurityInfo`, `icacls`, a shell or an
 installer script. The public executable/app parent grants LocalService read and
 execute; the new app data parent grants only its required ancestor read rights.
@@ -134,3 +145,15 @@ grant operation. Finite supported/blocked/unverified observations describe the
 current sufficient host policy, never actual effective SCM-token access. A
 blocked ancestor policy does not prove a native permission denial or justify
 changing OS-managed ACLs. Real service acceptance remains separately approved.
+
+## Profile-bound native reporting
+
+The controller supplies an exact basic/TLS or Windows inventory/TLS/HTTP-test
+selection. Prepare rejects any bootstrap mismatch. Fresh Claim supplies the
+matching library scope acknowledgements; HTTP requires an unauthenticated-server
+result, while TLS requires authenticated-server evidence. Inspect/resume retain
+the same transport binding. The ordinary SCM service remains unchanged and uses
+its retained identity to run the selected collector/sender. No acceptance-only
+clock or collector is substituted into that process. The separate peer reports
+only finite quality labels; the Linux durable ingress and shared UI are not
+exercised by this driver.

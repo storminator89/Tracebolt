@@ -73,7 +73,7 @@ func TestOrdinaryGeneratedProofsBindSelectedCollectionProfile(t *testing.T) {
 
 func TestImplementedCollectionProofDomainsRemainDistinct(t *testing.T) {
 	now := time.Now().UTC().Truncate(time.Second)
-	profiles := []string{CollectionProfile, CollectionProfileOperational, CollectionProfilePackages, CollectionProfileComplete}
+	profiles := []string{CollectionProfile, CollectionProfileOperational, CollectionProfilePackages, CollectionProfileComplete, CollectionProfileWindowsInventory}
 	for _, selected := range profiles {
 		c := contextFixture("tls", now)
 		c.CollectionProfile = selected
@@ -86,5 +86,11 @@ func TestImplementedCollectionProofDomainsRemainDistinct(t *testing.T) {
 				t.Fatal("selected collection proof domain not exact")
 			}
 		}
+	}
+}
+
+func TestWindowsInventoryConsentIsSeparateFromLinuxManagedProfiles(t *testing.T) {
+	if !ValidCollectionProfile(CollectionProfileWindowsInventory) || ManagedCollectionProfile(CollectionProfileWindowsInventory) {
+		t.Fatal("Windows consent must remain valid and outside Linux managed profiles")
 	}
 }

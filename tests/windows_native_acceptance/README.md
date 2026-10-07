@@ -5,9 +5,13 @@ run it. It has not dispatched a workflow, installed/controlled a service, change
 an ACL, created an endpoint key, or performed cleanup during implementation.
 
 The workflow `.github/workflows/windows-native-acceptance.yml` has only a manual
-`workflow_dispatch` trigger. The reviewed `expected_source_sha` and all five
-separate `services`, `identity`, `app_acls`, `loopback_tls`, and `cleanup`
-approvals are required. Every approval defaults to false. A failed prerequisite
+`workflow_dispatch` trigger. The reviewed `expected_source_sha` and five shared
+`services`, `identity`, `app_acls`, `loopback_transport`, and `cleanup` approvals
+are required. The exact collection/transport selection also requires
+`inventory_metadata` for Windows inventory and `http_plaintext` for its HTTP-test
+transport. All seven approvals default to false; unused extra scope is rejected.
+Valid pairs are basic+TLS, Windows inventory+TLS (default selection), and Windows
+inventory+explicit HTTP-test. No automatic matrix or fallback exists. A failed prerequisite
 is a failing **blocked** result; it is never permission to repair existing OS
 ancestor ACLs or silently choose another host. A hosted Windows image can fail
 the driver's strict prerequisite checks and requires separate review, not an
@@ -35,9 +39,9 @@ exception here.
   serialized finite report, capped at 32 KiB, retained for three days. Unknown,
   missing or duplicate fields, non-boolean truthy values, unexpected JSON,
   additional output, and invalid enums fail closed. Invalid output is not saved.
-- Native pass means exactly `passed_native_subset`, all thirteen checks passing,
+- Native pass means exactly `passed_native_subset`, all fourteen checks passing,
   successful controller exit and every required terminal proof. Failed and
-  blocked finite reports may be retained but fail the job. Production-manager,
+  blocked finite reports may be retained but fail the job. Production-manager/production-ingress/shared-dashboard,
   hidden-console, OS shutdown/reboot and broad ancestor ACL coverage stay false.
 
 ## Source-only tests
@@ -61,3 +65,14 @@ substitute for the native report and do not prove an OS shutdown or reboot.
 Calling `run_acceptance.py` without its fixed mode rejects immediately. Do not
 reproduce the workflow environment to bypass review; approval comes from the
 human-reviewed manual workflow for its exact dispatched source.
+
+## Selected native inventory evidence
+
+The manual controller uses the ordinary installed LocalService collector/sender,
+then validates the exact profile frame with production decoders. The loopback
+HTTP mode additionally uses production signed-request verification. Report v2
+retains only the selected pair, bounded frame count and finite metric/section
+quality labels. Denied or unavailable sections prevent usable-inventory success.
+The Linux protected SQLite manager and shared browser are not run by this native
+peer; production ingress/store fixtures and invented shared UI evidence remain
+separate gates. See [manual scope and proof](../../docs/windows-native-service-acceptance.md).

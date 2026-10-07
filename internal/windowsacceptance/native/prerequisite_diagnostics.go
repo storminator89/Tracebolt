@@ -72,3 +72,15 @@ func (d PrerequisiteDiagnostic) valid() bool {
 	}
 	return true
 }
+
+// Untrusted writes remain rejected everywhere except the resolved ProgramData
+// shared ancestor's specific add-file/EA/attribute bits. These do not authorize
+// deletion or overwriting a protected child. Relative no-reparse creation and
+// retained protected child bindings are required independently of this policy.
+func ancestorWriteMask(programData bool) uint32 {
+	destructive := uint32(0x10000000 | 0x40000000 | 0x80000 | 0x40000 | 0x10000 | 0x40)
+	if !programData {
+		destructive |= 0x2 | 0x10 | 0x100
+	}
+	return destructive
+}

@@ -147,9 +147,14 @@ func (s *Service) CreateInvitation(ctx context.Context, requestID, platform stri
 		return InvitationCreation{}, ErrConfiguration
 	}
 	// Linux retains its existing profile matrix. Windows admission is limited
-	// to the existing basic scope over authenticated TLS; an invitation cannot
-	// opt a Windows endpoint into the Linux managed collection profiles.
-	if platform != "linux" && (platform != "windows" || s.binding.Profile != "tls" || s.binding.CollectionProfile != enrollmentcrypto.CollectionProfile) {
+	// to explicit Windows scope: basic remains TLS-only, while the separate
+	// inventory profile also has an acknowledged signed HTTP-test path. No
+	// Windows invitation can reinterpret a Linux managed profile.
+	if s.binding.CollectionProfile == enrollmentcrypto.CollectionProfileWindowsInventory {
+		if platform != "windows" || s.binding.Profile != "tls" && s.binding.Profile != "http-test" {
+			return InvitationCreation{}, ErrPlatform
+		}
+	} else if platform != "linux" && (platform != "windows" || s.binding.Profile != "tls" || s.binding.CollectionProfile != enrollmentcrypto.CollectionProfile) {
 		return InvitationCreation{}, ErrPlatform
 	}
 	id, e := newID("invite_")

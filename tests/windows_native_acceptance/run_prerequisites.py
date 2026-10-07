@@ -215,8 +215,16 @@ def run_measurement(env: dict[str, str], root: Path = ROOT) -> dict:
     return report
 
 
-FIXTURE_PACKAGES = ("localrmm/internal/windowsacceptance/native", "localrmm/cmd/windows-prerequisites")
+FIXTURE_PACKAGES = ("localrmm/internal/windowsacceptance/native", "localrmm/cmd/windows-prerequisites", "localrmm/internal/windowspath")
 REQUIRED_FIXTURES = {
+    (FIXTURE_PACKAGES[0], "TestCleanupFreezeReusesDeleteParentsWithoutReopeningAncestors"),
+    (FIXTURE_PACKAGES[0], "TestCleanupFreezeFailureClosesOnlyAcquiredHandlesInReverse"),
+    (FIXTURE_PACKAGES[0], "TestCleanupFreezeRejectsMissingParentWithoutPathFallback"),
+    (FIXTURE_PACKAGES[2], "TestRelativeNativeInvalidInputNeverReachesSyscall"),
+    (FIXTURE_PACKAGES[0], "TestProgramDataExceptionIsScopedAndCannotGrantChildReplacement"),
+    (FIXTURE_PACKAGES[2], "TestRelativeNativeRequestsAreBoundAndCreateOnly"),
+    (FIXTURE_PACKAGES[2], "TestRelativeNativeFailureHasNoAdoptionOrRetry"),
+    (FIXTURE_PACKAGES[2], "TestCreateOnlyBindingFailureOrder"),
     (FIXTURE_PACKAGES[0], "TestAncestorDiagnosticMatchesUnchangedAdmissionDecision"),
     (FIXTURE_PACKAGES[0], "TestNativeReadFailureClassificationDoesNotPublishNativeError"),
     (FIXTURE_PACKAGES[0], "TestPrerequisiteDiagnosticsRejectNativeDetailsAndMisleadingFacts"),
@@ -247,7 +255,7 @@ def run_fixtures(env: dict[str, str], root: Path = ROOT) -> None:
     verify_checkout(child, source, root)
     verify_go(child, root)
     raw = command(["go", "test", "-json", "-mod=readonly", "-buildvcs=false", "-count=1", "-timeout=60s",
-                   "./internal/windowsacceptance/native", "./cmd/windows-prerequisites"],
+                   "./internal/windowsacceptance/native", "./cmd/windows-prerequisites", "./internal/windowspath"],
                   child, root, 600, 4 * 1024 * 1024)
     validate_fixture_events(raw)
 

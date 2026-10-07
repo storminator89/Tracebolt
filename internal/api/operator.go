@@ -44,9 +44,11 @@ type LANOperatorConfig struct {
 	Registry                 *lantrust.Registry
 	Devices                  func() ([]model.Device, error)
 	// InsecureHTTPTest is a separate, explicitly opted-in plaintext profile.
-	InsecureHTTPTest    bool
-	Enrollment          *enrollmentservice.Service
-	EnrollmentBootstrap EnrollmentBootstrap
+	InsecureHTTPTest           bool
+	Enrollment                 *enrollmentservice.Service
+	EnrollmentBootstrap        EnrollmentBootstrap
+	WindowsEnrollment          *enrollmentservice.Service
+	WindowsEnrollmentBootstrap EnrollmentBootstrap
 	// CVECache contains only explicitly synchronized public advisory records.
 	CVECache *linuxcvefeed.Cache
 	// CVEProgress is private derived state, separate from public advisory data.
@@ -64,6 +66,7 @@ type operatorHandler struct {
 	insecureHTTPTest         bool
 	cookieName               string
 	enrollment               *enrollmentservice.Service
+	windowsEnrollment        *operatorHandler
 	enrollmentBootstrap      EnrollmentBootstrap
 	bootstrapAdmission       bootstrapAdmission
 }
@@ -113,8 +116,17 @@ func NewLANOperatorHandler(app *Server, c LANOperatorConfig) (http.Handler, erro
 	if strings.HasSuffix(u.Host, ":") || u.Hostname() == "" {
 		return nil, errors.New("invalid operator authority")
 	}
-	if c.Enrollment != nil && !validEnrollmentBootstrap(c.Enrollment, c.EnrollmentBootstrap, c.Origin, c.InsecureHTTPTest) {
+	if c.Enrollment != nil && (c.Enrollment.Binding().CollectionProfile == enrollmentcrypto.CollectionProfileWindowsInventory || !validEnrollmentBootstrap(c.Enrollment, c.EnrollmentBootstrap, c.Origin, c.InsecureHTTPTest)) {
 		return nil, errors.New("enrollment public bootstrap does not match configured authority")
+	}
+	if c.WindowsEnrollment != nil {
+		if c.Enrollment == nil || c.WindowsEnrollment == c.Enrollment || c.WindowsEnrollment.Binding().CollectionProfile != enrollmentcrypto.CollectionProfileWindowsInventory || c.Enrollment.Binding().CollectionProfile == enrollmentcrypto.CollectionProfileWindowsInventory || !validEnrollmentBootstrap(c.WindowsEnrollment, c.WindowsEnrollmentBootstrap, c.Origin, c.InsecureHTTPTest) {
+			return nil, errors.New("Windows enrollment authority is not separately configured")
+		}
+		a, b := c.Enrollment.Binding(), c.WindowsEnrollment.Binding()
+		if a.InstanceID != b.InstanceID || a.Origin != b.Origin || a.Profile != b.Profile || a.IssuerFingerprint != b.IssuerFingerprint {
+			return nil, errors.New("Windows enrollment boundary does not match manager authority")
+		}
 	}
 	profile := "tls"
 	if c.InsecureHTTPTest {
@@ -191,7 +203,11 @@ func NewLANOperatorHandler(app *Server, c LANOperatorConfig) (http.Handler, erro
 	if c.ServiceActions != nil {
 		actions = c.ServiceActions
 	}
-	return &operatorHandler{alarmSettings: c.AlarmSettings, applicationChecks: c.ApplicationChecks, applicationCheckSettings: c.ApplicationCheckSettings, actions: actions, app: app, origin: c.Origin, authority: u.Host, auth: c.Auth, registry: c.Registry, insecureHTTPTest: c.InsecureHTTPTest, cookieName: cookieName, enrollment: c.Enrollment, enrollmentBootstrap: c.EnrollmentBootstrap}, nil
+	h := &operatorHandler{alarmSettings: c.AlarmSettings, applicationChecks: c.ApplicationChecks, applicationCheckSettings: c.ApplicationCheckSettings, actions: actions, app: app, origin: c.Origin, authority: u.Host, auth: c.Auth, registry: c.Registry, insecureHTTPTest: c.InsecureHTTPTest, cookieName: cookieName, enrollment: c.Enrollment, enrollmentBootstrap: c.EnrollmentBootstrap}
+	if c.WindowsEnrollment != nil {
+		h.windowsEnrollment = &operatorHandler{app: app, origin: c.Origin, authority: u.Host, auth: c.Auth, registry: c.Registry, insecureHTTPTest: c.InsecureHTTPTest, cookieName: cookieName, enrollment: c.WindowsEnrollment, enrollmentBootstrap: c.WindowsEnrollmentBootstrap}
+	}
+	return h, nil
 }
 func (s *Server) developmentAuthView() authView {
 	token := s.csrf
@@ -355,6 +371,10 @@ func (h *operatorHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		servePublicBootstrap(w, r, h.enrollmentBootstrap, &h.bootstrapAdmission)
 		return
 	}
+	if strings.HasPrefix(r.URL.Path, "/v2/windows/enrollment/") {
+		h.windowsEnrollmentClient(w, r)
+		return
+	}
 	if strings.HasPrefix(r.URL.Path, "/v2/enrollment/") {
 		h.enrollmentClient(w, r)
 		return
@@ -455,6 +475,14 @@ func (h *operatorHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if r.URL.Path == "/api/auth/login" || r.URL.Path == "/api/auth/logout" || r.URL.Path == "/api/auth/session" {
 		fail(w, 405, "method_not_allowed", "Method is unsupported.")
+		return
+	}
+	if r.URL.Path == "/api/windows/enrollment" || strings.HasPrefix(r.URL.Path, "/api/windows/enrollment/") {
+		h.windowsEnrollmentOperator(w, r)
+		return
+	}
+	if strings.HasPrefix(r.URL.Path, "/api/devices/") && strings.HasSuffix(r.URL.Path, "/windows-inventory") {
+		h.windowsInventoryView(w, r)
 		return
 	}
 	if r.URL.Path == "/api/enrollment" || strings.HasPrefix(r.URL.Path, "/api/enrollment/") {

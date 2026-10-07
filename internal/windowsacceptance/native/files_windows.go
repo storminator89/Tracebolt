@@ -14,6 +14,7 @@ import (
 	"unsafe"
 
 	"golang.org/x/sys/windows"
+	"localrmm/internal/windowspath"
 	"localrmm/internal/windowsservice"
 )
 
@@ -23,14 +24,13 @@ const directoryRead = uint32(0x001200a0)
 const executableRead = uint32(0x001200a9)
 const stateDirectoryRead = uint32(0x001200a1)
 
-type objectID struct{ Volume, High, Low uint32 }
-type ownedObject struct {
-	path      string
-	id        objectID
-	hash      string
-	directory bool
+type directoryBinding struct {
+	handle windows.Handle
+	id     objectID
 }
 type nativeState struct {
+	directories      map[string]directoryBinding
+	objectPins       map[string]windows.Handle
 	layout           windowsservice.Layout
 	anchors          []windows.Handle
 	objects          []ownedObject
@@ -53,26 +53,8 @@ func closeHandles(h []windows.Handle) {
 		_ = windows.CloseHandle(h[i])
 	}
 }
-func canonicalPath(p string) bool {
-	if len(p) < 3 || len(p) > 240 || p[0] < 'A' || p[0] > 'Z' || p[1:3] != `:\` || strings.ContainsAny(p, "/\x00\r\n\"") {
-		return false
-	}
-	for _, r := range p {
-		if r < 32 || r > 126 {
-			return false
-		}
-	}
-	if len(p) == 3 {
-		return true
-	}
-	for _, s := range strings.Split(p[3:], `\`) {
-		if s == "" || s == "." || s == ".." || strings.Contains(s, ":") || strings.HasSuffix(s, ".") || strings.HasSuffix(s, " ") || strings.Contains(s, "~") {
-			return false
-		}
-	}
-	return true
-}
-func trusted(s string) bool { return s == "S-1-5-18" || s == "S-1-5-32-544" || s == trustedInstaller }
+func canonicalPath(p string) bool { return windowspath.Canonical(p) }
+func trusted(s string) bool       { return s == "S-1-5-18" || s == "S-1-5-32-544" || s == trustedInstaller }
 
 // Existing ancestor admission establishes trusted path integrity only. It does
 // not guess future service token groups or substitute a named-SID scan for
@@ -82,6 +64,12 @@ func ancestorDescriptor(sd *windows.SECURITY_DESCRIPTOR) bool {
 	return failure == ""
 }
 func ancestorDescriptorDiagnostic(sd *windows.SECURITY_DESCRIPTOR) (string, []string) {
+	return ancestorDescriptorForRole(sd, false)
+}
+
+// The exception is limited to the resolved ProgramData leaf. No volume root,
+// intermediate path, ProgramFiles directory, or app-owned child gets it.
+func ancestorDescriptorForRole(sd *windows.SECURITY_DESCRIPTOR, programData bool) (string, []string) {
 	if sd == nil || !sd.IsValid() {
 		return "descriptor-invalid", nil
 	}
@@ -99,7 +87,7 @@ func ancestorDescriptorDiagnostic(sd *windows.SECURITY_DESCRIPTOR) (string, []st
 	if acl == nil {
 		return "dacl-missing", nil
 	}
-	writes := uint32(windows.GENERIC_ALL | windows.GENERIC_WRITE | windows.WRITE_DAC | windows.WRITE_OWNER | windows.DELETE | 0x40 | windows.FILE_WRITE_DATA | windows.FILE_WRITE_EA | windows.FILE_WRITE_ATTRIBUTES)
+	writes := ancestorWriteMask(programData)
 	for i := uint32(0); i < uint32(acl.AceCount); i++ {
 		var ace *windows.ACCESS_ALLOWED_ACE
 		if windows.GetAce(acl, i, &ace) != nil || ace == nil {
@@ -124,7 +112,7 @@ func ancestorDescriptorDiagnostic(sd *windows.SECURITY_DESCRIPTOR) (string, []st
 			continue
 		}
 		if uint32(ace.Mask)&writes != 0 && !trusted(sid.String()) {
-			return "untrusted-write-grant", replacementRights(uint32(ace.Mask))
+			return "untrusted-write-grant", replacementRights(uint32(ace.Mask) & writes)
 		}
 	}
 	return "", nil
@@ -161,10 +149,13 @@ func openChecked(p string, directory bool, access, share uint32) (windows.Handle
 	return h, id, err
 }
 func openFailure(err error) string {
-	if errors.Is(err, windows.ERROR_ACCESS_DENIED) {
+	if errors.Is(err, windows.STATUS_REPARSE_POINT_ENCOUNTERED) {
+		return "reparse-point"
+	}
+	if errors.Is(err, windows.ERROR_ACCESS_DENIED) || errors.Is(err, windows.STATUS_ACCESS_DENIED) {
 		return "open-access-denied"
 	}
-	if errors.Is(err, windows.ERROR_SHARING_VIOLATION) {
+	if errors.Is(err, windows.ERROR_SHARING_VIOLATION) || errors.Is(err, windows.STATUS_SHARING_VIOLATION) {
 		return "open-sharing-violation"
 	}
 	return "open-failed"
@@ -191,15 +182,42 @@ func openCheckedDiagnostic(p string, directory bool, access, share uint32) (wind
 	if !canonicalPath(p) {
 		return 0, objectID{}, "path-syntax", ErrAcceptance
 	}
-	h, err := windows.CreateFile(windows.StringToUTF16Ptr(p), access, share, nil, windows.OPEN_EXISTING, windows.FILE_FLAG_OPEN_REPARSE_POINT|windows.FILE_FLAG_BACKUP_SEMANTICS, 0)
-	if err != nil {
-		return 0, objectID{}, openFailure(err), err
+	chain := pathChain(p)
+	var held []windows.Handle
+	defer func() { closeHandles(held) }()
+	for i, path := range chain {
+		last := i == len(chain)-1
+		isDir, wantAccess, wantShare := true, uint32(windowspath.DirectoryAccess), uint32(windowspath.DirectoryShare)
+		if last {
+			isDir, wantAccess, wantShare = directory, access, share
+		}
+		var h windows.Handle
+		var err error
+		if i == 0 {
+			h, err = windowspath.OpenRoot(path)
+		} else {
+			h, err = windowspath.OpenChild(held[len(held)-1], filepath.Base(path), isDir, wantAccess, wantShare)
+		}
+		if err != nil {
+			return 0, objectID{}, openFailure(err), err
+		}
+		_, id, failure, err := checkHandleDiagnostic(h, path, isDir)
+		if err != nil {
+			windows.CloseHandle(h)
+			return 0, objectID{}, failure, err
+		}
+		if last {
+			return h, id, "", nil
+		}
+		held = append(held, h)
 	}
+	return 0, objectID{}, "path-syntax", ErrAcceptance
+}
+func checkHandleDiagnostic(h windows.Handle, p string, directory bool) (windows.Handle, objectID, string, error) {
 	id, failure, err := infoDiagnostic(h, directory)
 	var final [512]uint16
 	n, pathErr := windows.GetFinalPathNameByHandle(h, &final[0], uint32(len(final)), 0)
 	if err != nil || pathErr != nil || n == 0 || n >= uint32(len(final)) || windows.UTF16ToString(final[:n]) != `\\?\`+p {
-		windows.CloseHandle(h)
 		if failure == "" {
 			if pathErr != nil || n == 0 || n >= uint32(len(final)) {
 				failure = "final-path-query-failed"
@@ -214,7 +232,6 @@ func openCheckedDiagnostic(p string, directory bool, access, share uint32) (wind
 		var iosb windows.IO_STATUS_BLOCK
 		err = windows.NtQueryInformationFile(h, &iosb, (*byte)(unsafe.Pointer(&flags)), 4, windows.FileCaseSensitiveInformation)
 		if failure = caseQueryFailure(err, flags); failure != "" {
-			windows.CloseHandle(h)
 			return 0, objectID{}, failure, ErrAcceptance
 		}
 	}
@@ -244,6 +261,9 @@ func physicalVolumePath(root string) bool {
 }
 func pathChain(p string) []string {
 	out := []string{p[:3]}
+	if len(p) == 3 {
+		return out
+	}
 	current := strings.TrimSuffix(p[:3], `\`)
 	for _, part := range strings.Split(p[3:], `\`) {
 		current += `\` + part
@@ -274,7 +294,7 @@ func (d *Driver) preflight(ctx context.Context) error {
 	if !elevated {
 		return d.fail(ReasonPrerequisite)
 	}
-	s := &nativeState{layout: l}
+	s := &nativeState{layout: l, directories: make(map[string]directoryBinding), objectPins: make(map[string]windows.Handle)}
 	success := false
 	defer func() {
 		if !success {
@@ -295,18 +315,40 @@ func (d *Driver) preflight(ctx context.Context) error {
 		chain := pathChain(base)
 		for index, p := range chain {
 			location := ancestorLocation(index, len(chain), baseIndex == 0)
-			h, _, failure, err := openCheckedDiagnostic(p, true, windows.READ_CONTROL|windows.FILE_READ_ATTRIBUTES, windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE)
+			var h windows.Handle
+			var openErr error
+			if index == 0 {
+				h, openErr = windowspath.OpenRoot(p)
+			} else {
+				parent, known := s.directories[chain[index-1]]
+				if !known {
+					return d.fail(ReasonPrerequisite)
+				}
+				h, openErr = windowspath.OpenChild(parent.handle, filepath.Base(p), true, windowspath.DirectoryAccess, windowspath.DirectoryShare)
+			}
+			failure := ""
+			var id objectID
+			err := openErr
+			if err != nil {
+				failure = openFailure(err)
+			} else {
+				_, id, failure, err = checkHandleDiagnostic(h, p, true)
+				if err != nil {
+					windows.CloseHandle(h)
+				}
+			}
 			if err != nil {
 				d.prerequisiteDiagnostic = &PrerequisiteDiagnostic{Location: location, Failure: failure, Rights: []string{}}
 				return d.fail(ReasonPrerequisite)
 			}
 			s.anchors = append(s.anchors, h)
+			s.directories[p] = directoryBinding{h, id}
 			sd, err := windows.GetSecurityInfo(h, windows.SE_FILE_OBJECT, windows.OWNER_SECURITY_INFORMATION|windows.DACL_SECURITY_INFORMATION)
 			rights := []string{}
 			if err != nil {
 				failure = "descriptor-query-failed"
 			} else {
-				failure, rights = ancestorDescriptorDiagnostic(sd)
+				failure, rights = ancestorDescriptorForRole(sd, location == "program-data")
 				if rights == nil {
 					rights = []string{}
 				}
@@ -351,24 +393,65 @@ func newDescriptor(mask uint32) (*windows.SECURITY_DESCRIPTOR, error) {
 	}
 	return windows.SecurityDescriptorFromString("O:BAG:BAD:P(A;;FA;;;SY)(A;;FA;;;BA)(A;;0x001200a9;;;LS)")
 }
-func attributes(sd *windows.SECURITY_DESCRIPTOR) *windows.SecurityAttributes {
-	return &windows.SecurityAttributes{Length: uint32(unsafe.Sizeof(windows.SecurityAttributes{})), SecurityDescriptor: sd}
+
+// checkDirectory revalidates an already held object, never an absolute name.
+func (s *nativeState) checkDirectory(path string) error {
+	binding, ok := s.directories[path]
+	if !ok || binding.handle == 0 {
+		return ErrAcceptance
+	}
+	_, id, _, err := checkHandleDiagnostic(binding.handle, path, true)
+	if err != nil || id != binding.id {
+		return ErrAcceptance
+	}
+	sd, err := windows.GetSecurityInfo(binding.handle, windows.SE_FILE_OBJECT, windows.OWNER_SECURITY_INFORMATION|windows.DACL_SECURITY_INFORMATION)
+	if err != nil {
+		return ErrAcceptance
+	}
+	failure, _ := ancestorDescriptorForRole(sd, path == s.layout.ProgramData)
+	if failure != "" {
+		return ErrAcceptance
+	}
+	return nil
 }
 func (s *nativeState) createParent(path string, mask uint32) error {
+	parentPath := filepath.Dir(path)
+	parent, ok := s.directories[parentPath]
+	if !ok || !canonicalPath(path) {
+		return ErrAcceptance
+	}
 	sd, err := newDescriptor(mask)
 	if err != nil {
 		return ErrAcceptance
 	}
-	if err = windows.CreateDirectory(windows.StringToUTF16Ptr(path), attributes(sd)); err != nil {
-		return ErrAcceptance
+	var h windows.Handle
+	return windowspath.CreatedBinding(func() error { return s.checkDirectory(parentPath) }, func() error {
+		var err error
+		h, err = windowspath.CreateChild(parent.handle, filepath.Base(path), true, sd)
+		return err
+	}, func() {
+		// Retain the creation handle even if a subsequent validation fails. Never
+		// adopt an existing child or recover by reopening an absolute path.
+		s.objectPins[path] = h
+	}, func() error {
+		_, id, _, err := checkHandleDiagnostic(h, path, true)
+		if err != nil || !objectACLMatches(h, mask) {
+			return ErrAcceptance
+		}
+		s.directories[path] = directoryBinding{h, id}
+		s.objects = append(s.objects, ownedObject{path: path, id: id, directory: true})
+		// A protected, pinned child now makes the shared ancestor nonempty. The
+		// ancestor rejects untrusted delete-child and the child rejects untrusted
+		// delete/write/ACL changes, so that binding survives other users' creation.
+		return s.checkDirectory(parentPath)
+	})
+}
+func (s *nativeState) releaseObjectPins() {
+	for path, h := range s.objectPins {
+		_ = windows.CloseHandle(h)
+		delete(s.objectPins, path)
+		delete(s.directories, path)
 	}
-	h, id, err := openChecked(path, true, windows.READ_CONTROL|windows.FILE_READ_ATTRIBUTES, windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE)
-	if err != nil {
-		return ErrAcceptance
-	}
-	windows.CloseHandle(h)
-	s.objects = append(s.objects, ownedObject{path: path, id: id, directory: true})
-	return nil
 }
 func readArtifact(path, digest string) ([]byte, error) {
 	if !canonicalPath(path) {
@@ -400,7 +483,12 @@ func (s *nativeState) createArtifact(path string, b []byte, digest string) error
 	if err != nil {
 		return ErrAcceptance
 	}
-	h, err := windows.CreateFile(windows.StringToUTF16Ptr(path), windows.GENERIC_READ|windows.GENERIC_WRITE|windows.READ_CONTROL, 0, attributes(sd), windows.CREATE_NEW, windows.FILE_FLAG_OPEN_REPARSE_POINT|windows.FILE_FLAG_WRITE_THROUGH, 0)
+	parentPath := filepath.Dir(path)
+	parent, ok := s.directories[parentPath]
+	if !ok || !canonicalPath(path) || s.checkDirectory(parentPath) != nil {
+		return ErrAcceptance
+	}
+	h, err := windowspath.CreateChild(parent.handle, filepath.Base(path), false, sd)
 	if err != nil {
 		return ErrAcceptance
 	}
@@ -410,8 +498,8 @@ func (s *nativeState) createArtifact(path string, b []byte, digest string) error
 		return ErrAcceptance
 	}
 	defer f.Close()
-	id, err := info(h, false)
-	if err != nil {
+	_, id, _, err := checkHandleDiagnostic(h, path, false)
+	if err != nil || s.checkDirectory(parentPath) != nil || !objectACLMatches(h, executableRead) {
 		return ErrAcceptance
 	}
 	s.objects = append(s.objects, ownedObject{path: path, id: id, hash: digest})
@@ -428,7 +516,22 @@ func (s *nativeState) createArtifact(path string, b []byte, digest string) error
 	if _, err = io.Copy(hash, f); err != nil || hex.EncodeToString(hash.Sum(nil)) != digest {
 		return ErrAcceptance
 	}
-	return nil
+	// Close the exclusive writer only after verification. Reopen through the
+	// still-pinned protected parent with read-only/no-write/no-delete sharing.
+	// Untrusted principals cannot alter that child during this transition.
+	if f.Close() != nil {
+		return ErrAcceptance
+	}
+	pin, err := windowspath.OpenChild(parent.handle, filepath.Base(path), false, windows.GENERIC_READ|windows.READ_CONTROL, windows.FILE_SHARE_READ)
+	if err != nil {
+		return ErrAcceptance
+	}
+	s.objectPins[path] = pin
+	_, after, _, err := checkHandleDiagnostic(pin, path, false)
+	if err != nil || after != id || !objectACLMatches(pin, executableRead) {
+		return ErrAcceptance
+	}
+	return s.checkDirectory(parentPath)
 }
 func (d *Driver) provision(ctx context.Context, g Guard) error {
 	if d.evidence.Provisioned || d.state == nil {
@@ -492,5 +595,6 @@ func (d *Driver) releasePrerequisiteHandles() {
 	if s, ok := d.native(); ok {
 		closeHandles(s.anchors)
 		s.anchors = nil
+		s.directories = nil
 	}
 }

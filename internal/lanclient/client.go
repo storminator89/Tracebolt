@@ -16,16 +16,19 @@ import (
 	"localrmm/internal/operational"
 	"localrmm/internal/packagecollector"
 	"localrmm/internal/signedhttp"
+	"localrmm/internal/windowsmanaged"
 	"net/http"
+	"runtime"
 	"time"
 )
 
 type frame struct {
-	SchemaVersion string                  `json:"schemaVersion"`
-	Sequence      uint64                  `json:"sequence"`
-	Observation   bundle.Bundle           `json:"observation"`
-	Operational   *operational.Snapshot   `json:"operational,omitempty"`
-	Packages      *linuxpackages.Snapshot `json:"packages,omitempty"`
+	SchemaVersion    string                   `json:"schemaVersion"`
+	Sequence         uint64                   `json:"sequence"`
+	Observation      bundle.Bundle            `json:"observation"`
+	Operational      *operational.Snapshot    `json:"operational,omitempty"`
+	Packages         *linuxpackages.Snapshot  `json:"packages,omitempty"`
+	WindowsInventory *windowsmanaged.Snapshot `json:"windowsInventory,omitempty"`
 }
 type receipt struct {
 	SchemaVersion string    `json:"schemaVersion"`
@@ -76,7 +79,7 @@ func Run(ctx context.Context, m Material) (Report, error) {
 	if ctx.Err() != nil {
 		return report, ctx.Err()
 	}
-	if !m.valid() {
+	if !m.valid() || !m.config.platformAllowed(runtime.GOOS) {
 		return report, ErrConfiguration
 	}
 	report.Profile = m.config.Profile
@@ -181,6 +184,11 @@ func runUsingStateWithCollectors(ctx context.Context, m Material, state *lanclie
 // All dependencies are private per-attempt values. Tests can exercise staging
 // and transport without reading any production observation source.
 func runUsingStateWithSources(ctx context.Context, m Material, state *lanclientstate.State, collectOperations func(context.Context, time.Time) operational.Snapshot, collectPackages func(context.Context, string, time.Time) (linuxpackages.Snapshot, error), collectBasic func() model.Device) (Report, error) {
+	return runUsingStateWithDependencies(ctx, m, state, collectOperations, collectPackages, collectBasic, windowsmanaged.Collect, nil)
+}
+
+// Dependencies are per-attempt and private: fixture transports never open listeners.
+func runUsingStateWithDependencies(ctx context.Context, m Material, state *lanclientstate.State, collectOperations func(context.Context, time.Time) operational.Snapshot, collectPackages func(context.Context, string, time.Time) (linuxpackages.Snapshot, error), collectBasic func() model.Device, collectWindows windowsCollector, send func(*http.Request) (*http.Response, error)) (Report, error) {
 	report := Report{SchemaVersion: "tracebolt.agent-run.v1", Status: "failed", Profile: m.config.Profile}
 	if ctx.Err() != nil {
 		return report, ctx.Err()
@@ -220,10 +228,10 @@ func runUsingStateWithSources(ctx context.Context, m Material, state *lanclients
 		if e != nil {
 			return report, ErrState
 		}
-		if m.config.managed() && sequence > operational.MaxSafeInteger {
+		if (m.config.managed() || m.config.windowsInventory()) && sequence > operational.MaxSafeInteger {
 			return report, ErrState
 		}
-		f, body, e = collectFrameWithSources(ctx, m.config, sequence, collectOperations, collectPackages, collectBasic)
+		f, body, e = collectFrameWithDependencies(ctx, m.config, sequence, collectOperations, collectPackages, collectBasic, collectWindows)
 		if e != nil {
 			return report, e
 		}
@@ -250,9 +258,9 @@ func runUsingStateWithSources(ctx context.Context, m Material, state *lanclients
 	report.Status = "pending_retained"
 	var req *http.Request
 	if m.config.Profile == "http-test" {
-		req, e = signedhttp.NewSignedRequest(ctx, m.config.ManagerOrigin, m.certificate, pending.Sequence, f.Observation.GeneratedAt, pending.Body())
+		req, e = signedhttp.NewSignedRequestForPath(ctx, m.config.ManagerOrigin, telemetryPath(m.config), m.certificate, pending.Sequence, f.Observation.GeneratedAt, pending.Body())
 	} else {
-		req, e = http.NewRequestWithContext(ctx, "POST", m.config.ManagerOrigin+signedhttp.Path, bytes.NewReader(pending.Body()))
+		req, e = http.NewRequestWithContext(ctx, "POST", m.config.ManagerOrigin+telemetryPath(m.config), bytes.NewReader(pending.Body()))
 		if e == nil {
 			req.Header.Set("Content-Type", "application/json")
 		}
@@ -260,12 +268,15 @@ func runUsingStateWithSources(ctx context.Context, m Material, state *lanclients
 	if e != nil {
 		return report, ErrConfiguration
 	}
-	client := newHTTPClient(m.tlsConfig, m.config.Profile == "http-test")
-	defer client.CloseIdleConnections()
+	if send == nil {
+		client := newHTTPClient(m.tlsConfig, m.config.Profile == "http-test")
+		defer client.CloseIdleConnections()
+		send = client.Do
+	}
 	if ctx.Err() != nil {
 		return report, ctx.Err()
 	}
-	response, e := client.Do(req)
+	response, e := send(req)
 	if e != nil {
 		return report, ErrTransport
 	}
@@ -314,6 +325,13 @@ func collectFrameWithCollectors(ctx context.Context, c Config, sequence uint64, 
 }
 
 func collectFrameWithSources(ctx context.Context, c Config, sequence uint64, collectOperations func(context.Context, time.Time) operational.Snapshot, collectPackages func(context.Context, string, time.Time) (linuxpackages.Snapshot, error), collectBasic func() model.Device) (frame, []byte, error) {
+	return collectFrameWithDependencies(ctx, c, sequence, collectOperations, collectPackages, collectBasic, windowsmanaged.Collect)
+}
+
+func collectFrameWithDependencies(ctx context.Context, c Config, sequence uint64, collectOperations func(context.Context, time.Time) operational.Snapshot, collectPackages func(context.Context, string, time.Time) (linuxpackages.Snapshot, error), collectBasic func() model.Device, collectWindows windowsCollector) (frame, []byte, error) {
+	if c.SchemaVersion == WindowsInventoryConfigVersion || c.CollectionProfile == enrollmentcrypto.CollectionProfileWindowsInventory {
+		return collectWindowsFrame(ctx, c, sequence, collectWindows)
+	}
 	f := frame{SchemaVersion: FrameVersion, Sequence: sequence}
 	if c.SchemaVersion == PackageConfigVersion && c.CollectionProfile != enrollmentcrypto.CollectionProfilePackages {
 		return f, nil, ErrConfiguration
@@ -381,7 +399,7 @@ func decodeFrameForConfig(raw []byte, sequence uint64, c Config) (frame, error) 
 		return f, ErrState
 	}
 	want := 3
-	if c.SchemaVersion == OperationalConfigVersion || c.complete() {
+	if c.SchemaVersion == OperationalConfigVersion || c.complete() || c.windowsInventory() {
 		want = 4
 	} else if c.SchemaVersion == PackageConfigVersion {
 		want = 5
@@ -399,7 +417,13 @@ func decodeFrameForConfig(raw []byte, sequence uint64, c Config) (frame, error) 
 	if d.Decode(&f) != nil || d.Decode(new(any)) != io.EOF {
 		return f, ErrState
 	}
-	if c.SchemaVersion == OperationalConfigVersion || c.complete() {
+	if c.SchemaVersion == WindowsInventoryConfigVersion || c.CollectionProfile == enrollmentcrypto.CollectionProfileWindowsInventory {
+		if validateWindowsFrame(f, fields, c) != nil {
+			return f, ErrState
+		}
+	} else if f.WindowsInventory != nil {
+		return f, ErrState
+	} else if c.SchemaVersion == OperationalConfigVersion || c.complete() {
 		if f.Packages != nil || f.SchemaVersion != FrameOperationalVersion || f.Sequence == 0 || f.Sequence > operational.MaxSafeInteger || (c.CollectionProfile != operational.CollectionProfile && !c.complete()) || f.Operational == nil || len(fields["operational"]) > operational.MaxSnapshotBytes || exactOperationalJSON(fields["operational"]) != nil || operational.Validate(*f.Operational) != nil || f.Observation.Platform != "linux" || f.Operational.CollectedAt.After(f.Observation.GeneratedAt) {
 			return f, ErrState
 		}
@@ -440,7 +464,7 @@ func decodeFrameForConfig(raw []byte, sequence uint64, c Config) (frame, error) 
 		return f, ErrState
 	}
 	encoded, e := json.Marshal(f.Observation)
-	if e != nil || len(encoded) > bundle.MaxBytes || c.SchemaVersion == PackageConfigVersion && len(encoded) > MaxPackageObservationBytes {
+	if e != nil || len(encoded) > bundle.MaxBytes || (c.SchemaVersion == PackageConfigVersion && len(encoded) > MaxPackageObservationBytes || c.windowsInventory() && len(encoded) > MaxWindowsObservationBytes) {
 		return f, ErrState
 	}
 	return f, nil
@@ -453,6 +477,9 @@ func stale(f frame, now time.Time) bool {
 	}
 	if f.Packages != nil {
 		times = append(times, f.Packages.CollectedAt)
+	}
+	if f.WindowsInventory != nil {
+		times = append(times, f.WindowsInventory.CollectedAt)
 	}
 	for _, e := range d.Evidence {
 		times = append(times, e.CollectedAt)

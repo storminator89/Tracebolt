@@ -10,11 +10,12 @@ import (
 
 const ModeFile = "identity-mode-v2.json"
 const DatabaseFile = "enrollment-v2.db"
+const WindowsDatabaseFile = "enrollment-windows.db"
 
 // RejectEnrollmentMode prevents an existing v2 ledger from silently returning
 // to manual-v1 operation, including an interrupted mode-marker initialization.
 func RejectEnrollmentMode(dir string) error {
-	for _, name := range []string{ModeFile, DatabaseFile, DatabaseFile + "-wal", DatabaseFile + "-shm", DatabaseFile + "-journal"} {
+	for _, name := range []string{ModeFile, DatabaseFile, DatabaseFile + "-wal", DatabaseFile + "-shm", DatabaseFile + "-journal", WindowsDatabaseFile, WindowsDatabaseFile + "-wal", WindowsDatabaseFile + "-shm", WindowsDatabaseFile + "-journal"} {
 		if _, e := os.Lstat(filepath.Join(dir, name)); e == nil || !os.IsNotExist(e) {
 			return ErrConfiguration
 		}
@@ -42,6 +43,11 @@ func (m Material) PrepareMode(dir string, legacyEntries int) error {
 		return nil
 	} else if !os.IsNotExist(e) {
 		return ErrConfiguration
+	}
+	for _, suffix := range []string{"", "-wal", "-shm", "-journal"} {
+		if _, e := os.Lstat(filepath.Join(dir, WindowsDatabaseFile+suffix)); e == nil || !os.IsNotExist(e) {
+			return ErrConfiguration
+		}
 	}
 	for _, suffix := range []string{"", "-wal", "-shm", "-journal"} {
 		if _, e := os.Lstat(filepath.Join(dir, DatabaseFile+suffix)); e == nil || !os.IsNotExist(e) {

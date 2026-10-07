@@ -27,7 +27,7 @@ func InitializeGuidedState(c Config) error {
 		return e
 	}
 	var state *lanclientstate.State
-	if c.complete() {
+	if c.complete() || c.windowsInventory() {
 		state, e = lanclientstate.InitializeNew(c.StateDirectory, m.binding)
 	} else {
 		state, e = lanclientstate.Open(c.StateDirectory, m.binding)

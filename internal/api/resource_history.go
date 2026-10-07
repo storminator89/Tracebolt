@@ -2,7 +2,9 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"localrmm/internal/enrollmentcrypto"
+	"localrmm/internal/enrollmentstate"
 	"localrmm/internal/enrollmentstore"
 	"net/http"
 	"strings"
@@ -44,7 +46,12 @@ func (h *operatorHandler) resourceHistory(w http.ResponseWriter, r *http.Request
 		fail(w, 404, "not_found", "Resource history is unavailable.")
 		return
 	}
-	view, e := h.enrollment.ResourceHistory(r.Context(), parts[3], h.enrollment.Now())
+	source := h.enrollment
+	view, e := source.ResourceHistory(r.Context(), parts[3], source.Now())
+	if errors.Is(e, enrollmentstate.ErrNotFound) && h.windowsEnrollment != nil {
+		source = h.windowsEnrollment.enrollment
+		view, e = source.ResourceHistory(r.Context(), parts[3], source.Now())
+	}
 	if e != nil {
 		systemInventoryError(w, e)
 		return
@@ -52,7 +59,7 @@ func (h *operatorHandler) resourceHistory(w http.ResponseWriter, r *http.Request
 	if !operatorStillActive(w, r) {
 		return
 	}
-	view, e = view.RecheckAt(h.enrollment.Now())
+	view, e = view.RecheckAt(source.Now())
 	if e != nil {
 		systemInventoryError(w, e)
 		return

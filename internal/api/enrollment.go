@@ -49,6 +49,9 @@ func (h *operatorHandler) enrollmentOperator(w http.ResponseWriter, r *http.Requ
 				return
 			}
 			platforms = []string{"linux"}
+			if h.enrollment.Binding().CollectionProfile == enrollmentcrypto.CollectionProfileWindowsInventory {
+				platforms = []string{"windows"}
+			}
 		}
 		response := map[string]any{"enabled": h.enrollment != nil, "schemaVersion": "tracebolt.enrollment-operator.v2", "platforms": platforms, "recordLimit": enrollmentservice.MaxRecords, "items": items, "serverNow": serverNow}
 		if h.enrollment != nil && enrollmentcrypto.ManagedCollectionProfile(h.enrollment.Binding().CollectionProfile) {
@@ -60,6 +63,10 @@ func (h *operatorHandler) enrollmentOperator(w http.ResponseWriter, r *http.Requ
 			if h.enrollment.Binding().CollectionProfile == enrollmentcrypto.CollectionProfileComplete {
 				response["collectionPrivacy"] = "complete_system_inventory_metadata_may_be_sensitive"
 			}
+		}
+		if h.enrollment != nil && h.enrollment.Binding().CollectionProfile == enrollmentcrypto.CollectionProfileWindowsInventory {
+			response["collectionProfile"] = enrollmentcrypto.CollectionProfileWindowsInventory
+			response["collectionPrivacy"] = "windows_inventory_metadata_may_be_sensitive"
 		}
 		write(w, 200, response)
 		return
@@ -78,6 +85,10 @@ func (h *operatorHandler) enrollmentOperator(w http.ResponseWriter, r *http.Requ
 	if r.URL.Path == "/api/enrollment/invitations" {
 		input, ok := readInvitationInput(w, r, h.enrollment.Binding().CollectionProfile)
 		if !ok {
+			return
+		}
+		if h.enrollment.Binding().CollectionProfile == enrollmentcrypto.CollectionProfileWindowsInventory && (input.Platform != "windows" || input.InsecureHTTPAcknowledged != h.insecureHTTPTest) {
+			fail(w, 400, "windows_consent_required", "Exact Windows scope and transport acknowledgement are required.")
 			return
 		}
 		release, ok := beginOperatorMutation(w, r)
@@ -342,9 +353,10 @@ func enrollmentOperatorError(w http.ResponseWriter, e error) {
 // The collection choice comes from the immutable instance binding; request
 // fields can only acknowledge it, never select or widen an endpoint profile.
 type invitationInput struct {
-	RequestID              string `json:"requestId"`
-	Platform               string `json:"platform"`
-	CollectionAcknowledged bool   `json:"collectionAcknowledged"`
+	RequestID                string `json:"requestId"`
+	Platform                 string `json:"platform"`
+	CollectionAcknowledged   bool   `json:"collectionAcknowledged"`
+	InsecureHTTPAcknowledged bool   `json:"insecureHTTPAcknowledged"`
 }
 
 func readInvitationInput(w http.ResponseWriter, r *http.Request, profile string) (invitationInput, bool) {
@@ -352,6 +364,8 @@ func readInvitationInput(w http.ResponseWriter, r *http.Request, profile string)
 	fields := []string{"requestId", "platform"}
 	switch profile {
 	case enrollmentcrypto.CollectionProfile:
+	case enrollmentcrypto.CollectionProfileWindowsInventory:
+		fields = append(fields, "collectionAcknowledged", "insecureHTTPAcknowledged")
 	case enrollmentcrypto.CollectionProfileOperational, enrollmentcrypto.CollectionProfilePackages, enrollmentcrypto.CollectionProfileComplete:
 		fields = append(fields, "collectionAcknowledged")
 	default:
@@ -361,7 +375,7 @@ func readInvitationInput(w http.ResponseWriter, r *http.Request, profile string)
 	if !readObject(w, r, 1024, fields, &input) {
 		return input, false
 	}
-	if enrollmentcrypto.ManagedCollectionProfile(profile) && !input.CollectionAcknowledged {
+	if (enrollmentcrypto.ManagedCollectionProfile(profile) || profile == enrollmentcrypto.CollectionProfileWindowsInventory) && !input.CollectionAcknowledged {
 		fail(w, 400, "collection_consent_required", "Explicit collection profile acknowledgement is required.")
 		return input, false
 	}

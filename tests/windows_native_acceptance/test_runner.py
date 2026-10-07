@@ -22,6 +22,8 @@ PRIVATE = "private-output-sentinel::error::not-exportable"
 
 def approved():
     return {
+        "TRACEBOLT_COLLECTION_PROFILE":"basic-readonly-v1", "TRACEBOLT_TRANSPORT_PROFILE":"tls",
+        "TRACEBOLT_APPROVE_INVENTORY_METADATA":"false", "TRACEBOLT_APPROVE_HTTP_PLAINTEXT":"false",
         "TRACEBOLT_EXPECTED_SOURCE_SHA": SOURCE, "GITHUB_SHA": SOURCE,
         "GITHUB_EVENT_NAME": "workflow_dispatch", "GITHUB_ACTIONS": "true",
         "GITHUB_REPOSITORY": gate.REPOSITORY, "RUNNER_ENVIRONMENT": "github-hosted",
@@ -35,6 +37,9 @@ def pass_report():
         "schema": gate.SCHEMA, "source": SOURCE, "status": "passed_native_subset",
         "stage": "owned_cleanup", "reason": "none", "approvalValidated": True,
         "nativeActionsAttempted": True,
+        "selection":{"collectionProfile":"basic-readonly-v1","transport":"tls"},
+        "inventory":{"frames":0,**{key:"not_run" for key in gate.QUALITIES}},
+        "loopbackPeerExercised":True,"nativeInventorySenderExercised":False,
         "native": {"stage": "cleanup", "reason": "none",
                    **{key: True for key in gate.NATIVE_TRUE},
                    **{key: False for key in gate.NATIVE_FALSE}},
@@ -200,7 +205,7 @@ class ReportTests(unittest.TestCase):
             report["native"][key] = value
             self.reject(report)
 
-    def test_all_thirteen_checks_in_exact_order_are_required(self):
+    def test_all_fourteen_checks_in_exact_order_are_required(self):
         for index in range(len(gate.CHECK_NAMES)):
             for status in ("fail", "blocked", "not_run", PRIVATE, True):
                 report = pass_report()
@@ -214,7 +219,7 @@ class ReportTests(unittest.TestCase):
     def test_failed_and_blocked_are_not_native_passes(self):
         for status in ("failed", "blocked"):
             report = pass_report()
-            report.update(status=status, stage="prerequisites", reason="ancestor-prerequisite", nativeActionsAttempted=False)
+            report.update(status=status, stage="prerequisites", reason="ancestor-prerequisite", nativeActionsAttempted=False, loopbackPeerExercised=False)
             report["native"] = {"stage": "preflight", "reason": "ancestor-prerequisite", **{key: False for key in gate.NATIVE_BOOLEANS}}
             report["checks"] = [{"name": name, "status": "blocked" if i == 0 else "not_run"} for i, name in enumerate(gate.CHECK_NAMES)]
             self.assertEqual(gate.validate_report(encode(report), SOURCE)["status"], status)
@@ -270,9 +275,11 @@ class ExecutionTests(unittest.TestCase):
             controller = Path(directory) / "controller with spaces.exe"
             service.write_bytes(b"inert service fixture")
             controller.write_bytes(b"inert controller fixture")
-            args = gate.controller_arguments(controller, service, SOURCE)
+            args = gate.controller_arguments(controller, service, SOURCE, gate.selection(approved()))
             self.assertEqual(args, [str(controller), "--expected-source=" + SOURCE,
                                    *[flag + "=true" for flag in gate.APPROVALS.values()],
+                                   "--collection-profile=basic-readonly-v1", "--transport-profile=tls",
+                                   "--approve-inventory-metadata=false", "--approve-http-plaintext=false",
                                    "--service-artifact=" + str(service),
                                    "--service-sha256=" + hashlib.sha256(service.read_bytes()).hexdigest(),
                                    "--controller-artifact=" + str(controller),
@@ -366,7 +373,7 @@ class ExecutionTests(unittest.TestCase):
                 output_file.touch()
                 env = dict(approved(), RUNNER_TEMP=directory, GITHUB_OUTPUT=str(output_file))
                 report = pass_report()
-                report.update(status=status, stage="prerequisites", reason="ancestor-prerequisite", nativeActionsAttempted=False)
+                report.update(status=status, stage="prerequisites", reason="ancestor-prerequisite", nativeActionsAttempted=False, loopbackPeerExercised=False)
                 report["native"] = {"stage": "preflight", "reason": "ancestor-prerequisite", **{key: False for key in gate.NATIVE_BOOLEANS}}
                 report["checks"] = [{"name": name, "status": "blocked" if i == 0 else "not_run"} for i, name in enumerate(gate.CHECK_NAMES)]
                 def fake_success(args, *_args, **_kwargs):
@@ -387,13 +394,13 @@ class WorkflowTests(unittest.TestCase):
         trigger = workflow.split("\non:\n", 1)[1].split("\npermissions:", 1)[0]
         self.assertEqual(re.findall(r"^  ([a-z_]+):", trigger, re.M), ["workflow_dispatch"])
         self.assertEqual(re.findall(r"^      ([a-z_]+):", trigger, re.M),
-                         ["expected_source_sha", "services", "identity", "app_acls", "loopback_tls", "cleanup"])
+                         ["expected_source_sha", "collection_profile", "transport_profile", "inventory_metadata", "http_plaintext", "services", "identity", "app_acls", "loopback_transport", "cleanup"])
         self.assertNotRegex(trigger, r"default:\s*true")
-        for approval in ("services", "identity", "app_acls", "loopback_tls", "cleanup"):
+        for approval in ("inventory_metadata", "http_plaintext", "services", "identity", "app_acls", "loopback_transport", "cleanup"):
             block = re.split(r"\n      [a-z_]+:", trigger.split("      " + approval + ":\n", 1)[1], maxsplit=1)[0]
             for line in ("        default: false", "        required: true", "        type: boolean"):
                 self.assertIn(line, block)
-        source = trigger.split("      expected_source_sha:\n", 1)[1].split("\n      services:", 1)[0]
+        source = trigger.split("      expected_source_sha:\n", 1)[1].split("\n      collection_profile:", 1)[0]
         self.assertIn("required: true", source)
         self.assertNotIn("default:", source)
         self.assertIn("runs-on: windows-2025", workflow)
@@ -444,6 +451,64 @@ class SourceFixtureTests(unittest.TestCase):
         with self.assertRaises(gate.Rejected):
             fixtures.validate_events(b"\n".join(encode(event) for event in skipped))
 
+
+
+class ProfileScopeTests(unittest.TestCase):
+    def test_only_finite_pairs_and_exact_additional_acknowledgements(self):
+        for collection, transport in gate.VALID_SELECTIONS:
+            env = dict(approved(), TRACEBOLT_COLLECTION_PROFILE=collection, TRACEBOLT_TRANSPORT_PROFILE=transport,
+                       TRACEBOLT_APPROVE_INVENTORY_METADATA=str(collection == "windows-inventory-v1").lower(),
+                       TRACEBOLT_APPROVE_HTTP_PLAINTEXT=str(transport == "http-test").lower())
+            self.assertEqual(gate.selection(env), {"collectionProfile": collection, "transport": transport})
+            for name in ("TRACEBOLT_APPROVE_INVENTORY_METADATA", "TRACEBOLT_APPROVE_HTTP_PLAINTEXT"):
+                for value in (None, "TRUE", True, "false" if env[name] == "true" else "true"):
+                    with self.subTest(selection=(collection, transport), field=name, value=value):
+                        with self.assertRaises(gate.Rejected):
+                            gate.selection(dict(env, **{name: value}))
+        for collection, transport in (("basic-readonly-v1", "http-test"), ("managed-operations-v3", "tls"), ("windows-inventory-v1", "https"), (None, "tls")):
+            with self.assertRaises(gate.Rejected):
+                gate.selection(dict(approved(), TRACEBOLT_COLLECTION_PROFILE=collection, TRACEBOLT_TRANSPORT_PROFILE=transport))
+
+    def test_late_failed_inventory_report_is_retained_after_successful_cleanup(self):
+        for quality in ("denied", "unavailable"):
+            report = pass_report()
+            report["selection"] = {"collectionProfile": "windows-inventory-v1", "transport": "tls"}
+            report["inventory"] = {"frames": 2, **{key: "healthy" for key in gate.QUALITIES}}
+            report["inventory"]["services"] = quality
+            report["nativeInventorySenderExercised"] = True
+            report.update(status="failed", stage="profile_report", reason="operation-failed")
+            for check in report["checks"]:
+                if check["name"] == "profile_report": check["status"] = "fail"
+            self.assertEqual(gate.validate_report(gate.sanitized_bytes(report, SOURCE), SOURCE), report)
+            self.assertTrue(report["native"]["cleaned"])
+
+    def test_inventory_report_requires_usable_scope_and_exact_dispatch_pair(self):
+        report = pass_report()
+        report["selection"] = {"collectionProfile": "windows-inventory-v1", "transport": "http-test"}
+        report["inventory"] = {"frames": 2, **{key: "healthy" for key in gate.QUALITIES}}
+        report["inventory"]["processes"] = "partial"
+        report["nativeInventorySenderExercised"] = True
+        self.assertEqual(gate.validate_report(encode(report), SOURCE, report["selection"]), report)
+        with self.assertRaises(gate.Rejected):
+            gate.validate_report(encode(report), SOURCE, {"collectionProfile": "windows-inventory-v1", "transport": "tls"})
+        for key in gate.QUALITIES:
+            for quality in ("denied", "unavailable"):
+                bad = copy.deepcopy(report); bad["inventory"][key] = quality
+                with self.assertRaises(gate.Rejected): gate.validate_report(encode(bad), SOURCE)
+                bad["status"] = "failed"; bad["stage"] = "profile_report"
+                self.assertEqual(gate.validate_report(encode(bad), SOURCE), bad)
+        for quality in ("not_run", PRIVATE, None, 1):
+            bad = copy.deepcopy(report); bad["inventory"]["cpu"] = quality
+            with self.assertRaises(gate.Rejected): gate.validate_report(encode(bad), SOURCE)
+        for frames in (0, 65, True, -1, "2"):
+            bad = copy.deepcopy(report); bad["inventory"]["frames"] = frames
+            with self.assertRaises(gate.Rejected): gate.validate_report(encode(bad), SOURCE)
+        for section, key in (("selection", "collectionProfile"), ("inventory", "cpu")):
+            for change in ("missing", "extra"):
+                bad = copy.deepcopy(report)
+                if change == "missing": del bad[section][key]
+                else: bad[section]["rawData"] = PRIVATE
+                with self.assertRaises(gate.Rejected): gate.validate_report(encode(bad), SOURCE)
 
 if __name__ == "__main__":
     unittest.main()

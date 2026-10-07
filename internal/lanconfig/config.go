@@ -25,6 +25,7 @@ const HTTPTest = "http-test"
 var ErrConfiguration = errors.New("LAN configuration or file protection is invalid")
 
 type Config struct {
+	WindowsInventoryEnabled  bool   `json:"windowsInventoryEnabled,omitempty"`
 	ServiceActionsConfigFile string `json:"serviceActionsConfigFile,omitempty"`
 	SchemaVersion            string `json:"schemaVersion"`
 	Profile                  string `json:"profile"`
@@ -184,7 +185,7 @@ func Load(path string) (Material, error) {
 		return fail()
 	}
 	var c Config
-	if StrictObject(raw, &c, "schemaVersion", "profile", "operatorListen", "agentListen", "operatorOrigin", "agentOrigin", "tlsCertificateFile", "tlsPrivateKeyFile", "agentClientCAFile", "operatorAuthFile", "stateDirectory", "webDirectory", "insecureHTTPAcknowledged", "serviceActionsConfigFile") != nil || c.Validate() != nil {
+	if StrictObject(raw, &c, "schemaVersion", "profile", "operatorListen", "agentListen", "operatorOrigin", "agentOrigin", "tlsCertificateFile", "tlsPrivateKeyFile", "agentClientCAFile", "operatorAuthFile", "stateDirectory", "webDirectory", "insecureHTTPAcknowledged", "serviceActionsConfigFile", "windowsInventoryEnabled") != nil || c.Validate() != nil {
 		return fail()
 	}
 	auth, e := ReadProtected(c.OperatorAuthFile, true, 32768)

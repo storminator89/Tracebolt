@@ -48,7 +48,7 @@ test('unknown routes and noncontract methods are rejected, not passed to a real 
 
 test('one hosted LAN case reuses the existing runner without launching another browser or weakening security',()=>{
  const runner=read('./lan-browser.mjs'),module=read('./alarm-settings-browser.mjs');
- assert.equal((runner.match(/await check\(/g)||[]).length,22);assert.equal((runner.match(/await check\(alarmSettingsCaseName/g)||[]).length,1);
+ assert.equal((runner.match(/await check\(/g)||[]).length,23);assert.equal((runner.match(/await check\(alarmSettingsCaseName/g)||[]).length,1);
  assert.match(runner,/alarmSettingsBrowserCase\(\{pageAt,login,expect,base,shot\}\),'10m'/);
  assert.match(alarmSettingsCaseName,/Synthetic alarm setup/);assert.match(alarmSettingsFixtureDisclosure,/Rendered production UI/);assert.match(alarmSettingsFixtureDisclosure,/invented/);assert.match(alarmSettingsFixtureDisclosure,/fake sender states/);assert.match(alarmSettingsFixtureDisclosure,/actual backend behavior is tested separately/);
  assert.doesNotMatch(module,/chromium\.launch|newContext\(|setDefaultTimeout|waitForTimeout|ignoreHTTPSErrors|execFile|spawn\(/);

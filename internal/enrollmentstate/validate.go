@@ -161,6 +161,9 @@ func ValidateSnapshot(s Snapshot) error {
 	if s.Version != SnapshotVersion || !validBinding(s.Binding) || !validID(s.InvitationID, "invite") || !validID(s.CreateRequestID, "request") || !validPlatform(s.Platform) || s.Revision < 1 || s.Revision > MaxRevision || !validTime(s.CreatedAt) || !validTime(s.DeadlineAt) || !validTime(s.UpdatedAt) || s.UpdatedAt < s.CreatedAt {
 		return ErrInvalid
 	}
+	if s.Binding.CollectionProfile == enrollmentcrypto.CollectionProfileWindowsInventory && (s.Platform != "windows" || s.Binding.Profile != "tls" && s.Binding.Profile != "http-test") {
+		return ErrInvalid
+	}
 	n := stage(s.State)
 	if terminal(s.State) {
 		n = stage(s.Termination.From)

@@ -13,6 +13,7 @@ import (
 	"sync"
 
 	"localrmm/internal/enrollmentclient"
+	"localrmm/internal/windowsacceptance/profile"
 	"localrmm/internal/windowsservice"
 )
 
@@ -85,6 +86,7 @@ var ErrAcceptance = errors.New("native acceptance operation refused or incomplet
 // arguments are fixed; there is no destination/service/account option.
 // Format methods intentionally redact even the public source paths.
 type Options struct {
+	Selection          profile.Selection
 	ServiceArtifact    string
 	ServiceSHA256      string
 	ControllerArtifact string
@@ -114,7 +116,7 @@ func (*Driver) Format(f fmt.State, _ rune) { _, _ = f.Write([]byte("<native acce
 
 // New validates values only. It performs no filesystem, SCM, token or key action.
 func New(o Options) (*Driver, error) {
-	if o.ServiceArtifact == "" || o.ControllerArtifact == "" || !validDigest(o.ServiceSHA256) || !validDigest(o.ControllerSHA256) {
+	if (o.Selection != (profile.Selection{}) && o.Selection.Validate() != nil) || o.ServiceArtifact == "" || o.ControllerArtifact == "" || !validDigest(o.ServiceSHA256) || !validDigest(o.ControllerSHA256) {
 		return nil, ErrAcceptance
 	}
 	return &Driver{options: o, evidence: Evidence{Stage: StageIdle, Reason: ReasonNone}}, nil
@@ -138,6 +140,11 @@ func (d *Driver) enter(ctx context.Context, g Guard, stage Stage) bool {
 		return false
 	}
 	if g == nil || !g.Check() {
+		d.evidence.Reason = ReasonGuard
+		return false
+	}
+	scope, ok := g.(interface{ Selection() profile.Selection })
+	if !ok || d.options.Selection.Validate() != nil || scope.Selection() != d.options.Selection {
 		d.evidence.Reason = ReasonGuard
 		return false
 	}

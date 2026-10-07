@@ -20,6 +20,7 @@ import (
 	"net/netip"
 	"net/url"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -30,6 +31,10 @@ const GuidedConfigVersion = "tracebolt.lan-agent.v2"
 const OperationalConfigVersion = "tracebolt.lan-agent.v3"
 const PackageConfigVersion = "tracebolt.lan-agent.v4"
 const CompleteConfigVersion = "tracebolt.lan-agent.v5"
+const WindowsInventoryConfigVersion = "tracebolt.lan-agent.windows.v1"
+const FrameWindowsInventoryVersion = "tracebolt.agent-telemetry.windows.v1"
+const WindowsTelemetryPath = signedhttp.WindowsPath
+const MaxWindowsObservationBytes = 16 << 10
 const FrameVersion = "tracebolt.agent-telemetry.v1"
 const FrameOperationalVersion = "tracebolt.agent-telemetry.v2"
 const FramePackagesVersion = "tracebolt.agent-telemetry.v3"
@@ -125,6 +130,10 @@ func (c *Config) Validate() error {
 		if c.CollectionProfile != enrollmentcrypto.CollectionProfileComplete {
 			return ErrConfiguration
 		}
+	} else if c.SchemaVersion == WindowsInventoryConfigVersion {
+		if c.CollectionProfile != enrollmentcrypto.CollectionProfileWindowsInventory || !windowsTransportAllowed(*c) {
+			return ErrConfiguration
+		}
 	} else if c.CollectionProfile != "" {
 		return ErrConfiguration
 	}
@@ -181,6 +190,9 @@ func Load(path string) (Material, error) {
 	return m, err
 }
 func loadConfig(c Config) (Material, error) {
+	if !c.platformAllowed(runtime.GOOS) {
+		return Material{}, ErrConfiguration
+	}
 	fail := func() (Material, error) { return Material{}, ErrConfiguration }
 	if c.Validate() != nil {
 		return fail()
@@ -225,7 +237,7 @@ func loadConfig(c Config) (Material, error) {
 			return fail()
 		}
 		// The signing helper validates key/leaf agreement without network access; the exclusive current client role was checked above.
-		if _, e := signedhttp.NewSignedRequest(context.Background(), c.ManagerOrigin, pair, 1, time.Now().UTC(), []byte(`{}`)); e != nil {
+		if _, e := signedhttp.NewSignedRequestForPath(context.Background(), c.ManagerOrigin, telemetryPath(c), pair, 1, time.Now().UTC(), []byte(`{}`)); e != nil {
 			return fail()
 		}
 	}
@@ -275,11 +287,14 @@ func senderBinding(c Config, leaf *x509.Certificate) [32]byte {
 	if c.SchemaVersion == CompleteConfigVersion {
 		domain = "tracebolt.sender-binding.v5\n" + c.CollectionProfile + "\n"
 	}
+	if c.windowsInventory() {
+		domain = "tracebolt.sender-binding.windows.v1\n" + c.CollectionProfile + "\n"
+	}
 	return sha256.Sum256([]byte(domain + c.Profile + "\n" + c.ManagerOrigin + "\n" + lantrust.Fingerprint(leaf) + "\n" + c.AgentID))
 }
 
 func (c Config) guided() bool {
-	return c.SchemaVersion == GuidedConfigVersion || c.managed()
+	return c.SchemaVersion == GuidedConfigVersion || c.managed() || c.windowsInventory()
 }
 
 func (c Config) managed() bool {
@@ -294,4 +309,12 @@ func systemStateDirectory(c Config) string    { return filepath.Join(c.StateDire
 func systemStateBinding(m Material) string {
 	sum := sha256.Sum256([]byte("tracebolt.system-observation-state.v1\x00" + m.binding))
 	return hex.EncodeToString(sum[:])
+}
+
+// Platform admission derives from the running process, never remote metadata.
+func (c Config) platformAllowed(runningOS string) bool {
+	return !c.windowsInventory() || runningOS == "windows"
+}
+func (c Config) windowsInventory() bool {
+	return c.SchemaVersion == WindowsInventoryConfigVersion && c.CollectionProfile == enrollmentcrypto.CollectionProfileWindowsInventory
 }

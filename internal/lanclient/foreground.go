@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"localrmm/internal/agentloop"
+	"runtime"
 	"time"
 )
 
@@ -24,7 +25,7 @@ func RunForeground(ctx context.Context, m Material, interval time.Duration, obse
 	return runForeground(ctx, m, interval, observe, nil, nil)
 }
 func runForeground(ctx context.Context, m Material, interval time.Duration, observe func(agentloop.Event) error, clock agentloop.Clock, random func(int64) int64) (agentloop.Summary, error) {
-	if ctx == nil || !m.valid() || (interval != 0 && (interval < agentloop.MinInterval || interval > agentloop.MaxInterval)) {
+	if ctx == nil || !m.valid() || !m.config.platformAllowed(runtime.GOOS) || (interval != 0 && (interval < agentloop.MinInterval || interval > agentloop.MaxInterval)) {
 		return agentloop.Summary{Reason: agentloop.InvalidConfig}, agentloop.ErrConfiguration
 	}
 	if ctx.Err() != nil {

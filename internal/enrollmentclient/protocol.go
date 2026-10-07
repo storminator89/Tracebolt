@@ -16,9 +16,12 @@ import (
 	"time"
 )
 
+const WindowsEnrollmentPathPrefix = "/v2/windows/enrollment/"
+
 type wireClient struct {
-	client *http.Client
-	origin string
+	client            *http.Client
+	origin            string
+	collectionProfile string
 }
 type httpFailure struct {
 	status                 int
@@ -45,7 +48,17 @@ func (w *wireClient) post(ctx context.Context, path string, raw []byte) ([]byte,
 	if len(raw) == 0 || len(raw) > enrollmentcrypto.MaxClaimBytes {
 		return nil, ErrResponse
 	}
-	req, e := http.NewRequestWithContext(ctx, "POST", w.origin+"/v2/enrollment/"+path, bytes.NewReader(raw))
+	// The caller selects only fixed protocol verbs; bootstrap data cannot supply a path.
+	switch path {
+	case "challenge", "claim", "status", "credential", "activate":
+	default:
+		return nil, ErrResponse
+	}
+	prefix := "/v2/enrollment/"
+	if w.collectionProfile == enrollmentcrypto.CollectionProfileWindowsInventory {
+		prefix = WindowsEnrollmentPathPrefix
+	}
+	req, e := http.NewRequestWithContext(ctx, "POST", w.origin+prefix+path, bytes.NewReader(raw))
 	if e != nil {
 		return nil, ErrTransport
 	}

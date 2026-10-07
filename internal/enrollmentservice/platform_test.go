@@ -11,7 +11,7 @@ import (
 
 func TestInvitationPlatformProfileAdmission(t *testing.T) {
 	for _, transport := range []string{"tls", "http-test"} {
-		for _, collection := range []string{enrollmentcrypto.CollectionProfile, enrollmentcrypto.CollectionProfileOperational, enrollmentcrypto.CollectionProfilePackages, enrollmentcrypto.CollectionProfileComplete} {
+		for _, collection := range []string{enrollmentcrypto.CollectionProfile, enrollmentcrypto.CollectionProfileOperational, enrollmentcrypto.CollectionProfilePackages, enrollmentcrypto.CollectionProfileComplete, enrollmentcrypto.CollectionProfileWindowsInventory} {
 			t.Run(transport+"/"+collection, func(t *testing.T) {
 				f := newFixture(t, transport)
 				if collection != f.config.Binding.CollectionProfile {
@@ -23,7 +23,7 @@ func TestInvitationPlatformProfileAdmission(t *testing.T) {
 				accepted := 0
 				for n, platform := range []string{"darwin", "", "Windows", "windows", "linux"} {
 					created, err := f.service.CreateInvitation(ctx, id("request", n+1), platform)
-					allowed := platform == "linux" || platform == "windows" && transport == "tls" && collection == enrollmentcrypto.CollectionProfile
+					allowed := platform == "linux" && collection != enrollmentcrypto.CollectionProfileWindowsInventory || platform == "windows" && (collection == enrollmentcrypto.CollectionProfileWindowsInventory || transport == "tls" && collection == enrollmentcrypto.CollectionProfile)
 					if allowed {
 						if err != nil {
 							t.Fatalf("%s invitation rejected: %v", platform, err)

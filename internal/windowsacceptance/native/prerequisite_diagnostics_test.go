@@ -52,3 +52,16 @@ func TestPrerequisiteDiagnosticsRejectNativeDetailsAndMisleadingFacts(t *testing
 		}
 	}
 }
+
+func TestProgramDataWriteMaskRetainsEveryDestructiveBit(t *testing.T) {
+	const benign = uint32(0x112)
+	strict, shared := ancestorWriteMask(false), ancestorWriteMask(true)
+	if strict^shared != benign || shared&benign != 0 {
+		t.Fatal("exception is not exact")
+	}
+	for _, bit := range []uint32{0x10000000, 0x40000000, 0x80000, 0x40000, 0x10000, 0x40} {
+		if strict&bit == 0 || shared&bit == 0 {
+			t.Fatal("destructive grant no longer rejected")
+		}
+	}
+}

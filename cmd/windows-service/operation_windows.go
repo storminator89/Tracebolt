@@ -48,7 +48,7 @@ func nativeOperation(ctx context.Context, r request, out, stderr io.Writer) (res
 	case "run-service":
 		return nil, windowsservice.Run(ctx, runService)
 	case "install":
-		return install(ctx, r.bootstrap, out, stderr)
+		return install(ctx, r.bootstrap, r.collectionProfile, r.insecureHTTP, out, stderr)
 	}
 	receipt, err := loadReceipt()
 	if err != nil {
@@ -60,7 +60,7 @@ func nativeOperation(ctx context.Context, r request, out, stderr io.Writer) (res
 		if err != nil || snapshot.State != windowsservice.Stopped {
 			return nil, marked(windowsservice.PhaseRuntimeInstallation, windowsservice.ReasonInvalidConfiguration, err)
 		}
-		if err = enroll(ctx, receipt.Service.Layout, out, stderr); err != nil {
+		if err = enroll(ctx, receipt.Service.Layout, r.collectionProfile, r.insecureHTTP, out, stderr); err != nil {
 			return nil, err
 		}
 		return struct {
@@ -104,13 +104,13 @@ func loadReceipt() (installReceipt, error) {
 	}
 	return r, nil
 }
-func install(ctx context.Context, bootstrapPath string, out, stderr io.Writer) (any, error) {
+func install(ctx context.Context, bootstrapPath, selectedProfile string, insecure bool, out, stderr io.Writer) (any, error) {
 	return setup(ctx, bootstrapPath, setupSteps{
 		plan:          windowsservice.Plan,
 		readBootstrap: func(path string) ([]byte, error) { return windowsstate.ReadProtectedInstaller(path, false, 64<<10) },
 		validateBootstrap: func(raw []byte) error {
 			b, err := enrollmentclient.ParseBootstrap(raw)
-			if err != nil || b.Profile != "tls" || b.CollectionProfile != enrollmentcrypto.CollectionProfile {
+			if err != nil || validateWindowsBootstrapConsent(b, selectedProfile, insecure) != nil {
 				return errLifecycle
 			}
 			return nil
@@ -130,8 +130,10 @@ func install(ctx context.Context, bootstrapPath string, out, stderr io.Writer) (
 			}
 			return nil
 		},
-		enroll: func(ctx context.Context, layout windowsservice.Layout) error { return enroll(ctx, layout, out, stderr) },
-		start:  windowsservice.ApplyStart,
+		enroll: func(ctx context.Context, layout windowsservice.Layout) error {
+			return enroll(ctx, layout, selectedProfile, insecure, out, stderr)
+		},
+		start: windowsservice.ApplyStart,
 	})
 }
 func prepareRuntime(layout windowsservice.Layout, receipt windowsservice.Receipt, raw []byte) error {
@@ -168,19 +170,32 @@ func bootstrap(layout windowsservice.Layout) (enrollmentclient.Bootstrap, error)
 	}
 	defer clear(raw)
 	b, err := enrollmentclient.ParseBootstrap(raw)
-	if err != nil || b.Profile != "tls" || b.CollectionProfile != enrollmentcrypto.CollectionProfile {
+	if err != nil || validateWindowsBootstrapConsent(b, b.CollectionProfile, b.Profile == "http-test") != nil {
 		return enrollmentclient.Bootstrap{}, marked(windowsservice.PhaseBootstrap, windowsservice.ReasonStateUnavailable, errLifecycle)
 	}
 	return b, nil
 }
-func enroll(ctx context.Context, layout windowsservice.Layout, out, stderr io.Writer) error {
+func enroll(ctx context.Context, layout windowsservice.Layout, selectedProfile string, insecure bool, out, stderr io.Writer) error {
 	b, err := bootstrap(layout)
 	if err != nil {
 		return err
 	}
-	result, err := enrollmentclient.Run(ctx, b, enrollmentclient.Options{StateDirectory: layout.EnrollmentRoot, ClaimOnly: true, Display: func(d enrollmentclient.TrustDisplay) error {
+	if validateWindowsBootstrapConsent(b, selectedProfile, insecure) != nil {
+		return marked(windowsservice.PhaseBootstrap, windowsservice.ReasonInvalidConfiguration, errLifecycle)
+	}
+	result, err := enrollmentclient.Run(ctx, b, enrollmentclient.Options{StateDirectory: layout.EnrollmentRoot, ClaimOnly: true, InsecureHTTPAcknowledged: insecure, WindowsInventoryAcknowledged: selectedProfile == enrollmentcrypto.CollectionProfileWindowsInventory, Display: func(d enrollmentclient.TrustDisplay) error {
 		if _, err := fmt.Fprintf(out, "Manager: %s\nEnrollment: %s\nAgent ingress: %s\nScope: %s\n", d.ManagerInstanceID, d.EnrollmentOrigin, d.AgentOrigin, d.CollectionProfile); err != nil {
 			return err
+		}
+		if d.HTTPTest {
+			if _, err := fmt.Fprintln(out, enrollmentclient.WindowsInventoryHTTPPrivacy); err != nil {
+				return err
+			}
+		}
+		if d.CollectionPrivacy != "" {
+			if _, err := fmt.Fprintln(out, d.CollectionPrivacy); err != nil {
+				return err
+			}
 		}
 		for _, fp := range d.ServerCAFingerprints {
 			if _, err := fmt.Fprintln(out, "Server CA SHA-256: "+fp); err != nil {
@@ -207,7 +222,7 @@ func enroll(ctx context.Context, layout windowsservice.Layout, out, stderr io.Wr
 		}
 		return marked(windowsservice.PhaseEnrollment, reason, err)
 	}
-	if !result.Pending || !result.ServerAuthenticated {
+	if !result.Pending || result.ServerAuthenticated != (b.Profile == "tls") {
 		return marked(windowsservice.PhaseEnrollment, windowsservice.ReasonInvalidConfiguration, nil)
 	}
 	return nil
@@ -224,18 +239,20 @@ func runService(ctx context.Context, ready func()) error {
 	if err != nil {
 		return marked(windowsservice.PhaseBootstrap, windowsservice.ReasonInvalidConfiguration, err)
 	}
-	return runPendingWindows(ctx, filepath.Join(layout.EnrollmentRoot, "agent.json"), ready, pendingHooks{
+	return runPendingWindowsProfile(ctx, filepath.Join(layout.EnrollmentRoot, "agent.json"), b.Profile == "http-test", ready, pendingHooks{
 		identity: windowsservice.ValidateRuntimeIdentity,
 		inspect: func() (enrollmentclient.ServiceState, error) {
-			return enrollmentclient.InspectService(b, layout.EnrollmentRoot, false)
+			return enrollmentclient.InspectService(b, layout.EnrollmentRoot, b.Profile == "http-test")
 		},
 		resume: func(ctx context.Context) error {
-			_, err := enrollmentclient.ResumeService(ctx, b, layout.EnrollmentRoot, false, nil)
+			_, err := enrollmentclient.ResumeService(ctx, b, layout.EnrollmentRoot, b.Profile == "http-test", nil)
 			return err
 		},
-		stopDeadline: func() error { return enrollmentclient.StopServiceAtDeadline(b, layout.EnrollmentRoot, false) },
+		stopDeadline: func() error {
+			return enrollmentclient.StopServiceAtDeadline(b, layout.EnrollmentRoot, b.Profile == "http-test")
+		},
 		markReady: func() (enrollmentclient.ServiceState, error) {
-			return enrollmentclient.MarkServiceReady(b, layout.EnrollmentRoot, false)
+			return enrollmentclient.MarkServiceReady(b, layout.EnrollmentRoot, b.Profile == "http-test")
 		},
 		sender: func(ctx context.Context, path string) error {
 			material, err := lanclient.Load(path)

@@ -242,7 +242,7 @@ class ReadOnlyFixtureTests(unittest.TestCase):
         checkout.assert_called_once()
         args = command.call_args.args[0]
         self.assertEqual(args[:2], ["go", "test"])
-        self.assertEqual(args[-2:], ["./internal/windowsacceptance/native", "./cmd/windows-prerequisites"])
+        self.assertEqual(args[-3:], ["./internal/windowsacceptance/native", "./cmd/windows-prerequisites", "./internal/windowspath"])
         self.assertIn("-json", args)
         self.assertNotIn("--run-read-only", args)
         self.assertNotIn("--run-native", args)
@@ -364,7 +364,7 @@ class ReadOnlyWorkflowTests(unittest.TestCase):
         trigger = workflow.split("\non:\n", 1)[1].split("\npermissions:", 1)[0]
         self.assertEqual(re.findall(r"^  ([a-z_]+):", trigger, re.M), ["workflow_dispatch"])
         self.assertNotRegex(trigger, r"default:\s*true")
-        self.assertEqual(trigger.count("default: false"), 5)
+        self.assertEqual(trigger.count("default: false"), 7)
         self.assertIn("run_acceptance.py --check-authorization", workflow)
         self.assertIn("run_acceptance.py --run-native", workflow)
         runner = (probe.ROOT / "tests/windows_native_acceptance/run_prerequisites.py").read_text()

@@ -52,6 +52,7 @@ type Ingress struct {
 	issuer                     *x509.Certificate
 	roots                      *x509.CertPool
 	origin, authority, profile string
+	telemetryPath              string
 	slots                      chan struct{}
 	admission                  *certificateAdmission
 	now                        func() time.Time
@@ -85,7 +86,11 @@ func New(store *enrollmentstore.Store, issuerDER []byte, agentOrigin string, cac
 	}
 	roots := x509.NewCertPool()
 	roots.AddCert(issuer)
-	h := &Ingress{store: store, journal: cache, issuer: issuer, roots: roots, origin: agentOrigin, authority: authority, profile: cfg.Binding.Profile, slots: make(chan struct{}, MaxInFlight), admission: &certificateAdmission{active: make(map[[32]byte]bool)}, now: time.Now}
+	path := signedhttp.Path
+	if cfg.Binding.CollectionProfile == enrollmentcrypto.CollectionProfileWindowsInventory {
+		path = "/v1/windows/agent/telemetry"
+	}
+	h := &Ingress{telemetryPath: path, store: store, journal: cache, issuer: issuer, roots: roots, origin: agentOrigin, authority: authority, profile: cfg.Binding.Profile, slots: make(chan struct{}, MaxInFlight), admission: &certificateAdmission{active: make(map[[32]byte]bool)}, now: time.Now}
 	if h.journal == nil {
 		h.journal = journalcache.New(store, func() time.Time { return h.now() })
 	}
@@ -122,6 +127,10 @@ func (h *Ingress) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		failure(w, http.StatusServiceUnavailable, "storage_unavailable")
 		return
 	}
+	if h.telemetryPath == "/v1/windows/agent/telemetry" && (r == nil || r.URL == nil || r.URL.Path != h.telemetryPath) {
+		failure(w, http.StatusNotFound, "not_found")
+		return
+	}
 	// Acquire before any certificate authorization/full-ledger transaction or
 	// body read. A slow sender cannot create an unbounded durable-store queue.
 	select {
@@ -156,7 +165,7 @@ func (h *Ingress) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.inventory(w, r)
 		return
 	}
-	if !validRequest(r, h.authority, h.profile) {
+	if !validRequestPath(r, h.authority, h.profile, h.telemetryPath) {
 		failure(w, http.StatusBadRequest, "invalid_request")
 		return
 	}
@@ -232,7 +241,7 @@ func (h *Ingress) serveSigned(w http.ResponseWriter, r *http.Request) {
 	// Each request gets its own context-bound adapter. It never caches an
 	// authorization decision: both verifier lookups hit the durable store.
 	authorizer := &publicAuthorizer{store: h.store, ctx: r.Context(), now: h.now}
-	verifier, err := signedhttp.New(signedhttp.Config{Origin: h.origin, Registry: authorizer})
+	verifier, err := signedhttp.New(signedhttp.Config{Origin: h.origin, Registry: authorizer, Path: h.telemetryPath})
 	if err != nil {
 		failure(w, http.StatusServiceUnavailable, "storage_unavailable")
 		return
@@ -368,11 +377,17 @@ func canonicalOrigin(origin, profile string) (string, error) {
 }
 
 func validRequest(r *http.Request, authority, profile string) bool {
+	return validRequestPath(r, authority, profile, signedhttp.Path)
+}
+func validRequestPath(r *http.Request, authority, profile, path string) bool {
+	if path != signedhttp.Path && path != "/v1/windows/agent/telemetry" {
+		return false
+	}
 	scheme := "https"
 	if profile == "http-test" {
 		scheme = "http"
 	}
-	if r == nil || r.URL == nil || r.Method != http.MethodPost || r.Host != authority || r.URL.Path != signedhttp.Path || r.URL.RawPath != "" || r.URL.RawQuery != "" || r.URL.ForceQuery || r.URL.Fragment != "" || r.URL.RawFragment != "" || r.URL.Opaque != "" || r.URL.User != nil || (r.URL.Scheme != "" && r.URL.Scheme != scheme) || (r.URL.Host != "" && r.URL.Host != authority) || (r.RequestURI != "" && r.RequestURI != signedhttp.Path) || r.Body == nil || r.ContentLength <= 0 || len(r.TransferEncoding) != 0 || len(r.Trailer) != 0 || (profile == "http-test" && r.TLS != nil) {
+	if r == nil || r.URL == nil || r.Method != http.MethodPost || r.Host != authority || r.URL.Path != path || r.URL.RawPath != "" || r.URL.RawQuery != "" || r.URL.ForceQuery || r.URL.Fragment != "" || r.URL.RawFragment != "" || r.URL.Opaque != "" || r.URL.User != nil || (r.URL.Scheme != "" && r.URL.Scheme != scheme) || (r.URL.Host != "" && r.URL.Host != authority) || (r.RequestURI != "" && r.RequestURI != path) || r.Body == nil || r.ContentLength <= 0 || len(r.TransferEncoding) != 0 || len(r.Trailer) != 0 || (profile == "http-test" && r.TLS != nil) {
 		return false
 	}
 	size, contentTypes, lengths := 128, 0, 0

@@ -24,6 +24,8 @@ import (
 	"localrmm/internal/lanstore"
 	"localrmm/internal/model"
 	"localrmm/internal/operational"
+	"localrmm/internal/signedhttp"
+	"localrmm/internal/windowsacceptance/profile"
 )
 
 // These tests deliberately do not call Start. Their keys, certificates, proofs,
@@ -41,8 +43,18 @@ type syntheticClient struct {
 
 func synthetic(t *testing.T) *syntheticClient {
 	t.Helper()
+	return syntheticSelected(t, profile.BasicTLS())
+}
+
+func syntheticSelected(t *testing.T, selection profile.Selection) *syntheticClient {
+	t.Helper()
 	now := time.Date(2026, 10, 7, 10, 0, 0, 0, time.UTC)
-	f, e := newFixture(context.Background(), "https://127.0.0.1:18443", "https://127.0.0.1:18444", func() time.Time { return now })
+	scheme := "https://"
+	if selection.HTTPTest() {
+		now = time.Now().UTC().Add(-time.Second)
+		scheme = "http://"
+	}
+	f, e := newFixtureSelected(context.Background(), scheme+"127.0.0.1:18443", scheme+"127.0.0.1:18444", func() time.Time { return now }, selection)
 	if e != nil {
 		t.Fatal("create disposable in-memory fixture:", e)
 	}
@@ -83,7 +95,7 @@ func encoded(t *testing.T, v any) []byte {
 func (c *syntheticClient) request(path string, raw []byte, peer bool) *http.Request {
 	c.t.Helper()
 	origin := c.f.Bootstrap().EnrollmentOrigin
-	if path == telemetryPath {
+	if path == c.f.state.selection.TelemetryPath() {
 		origin = c.f.Bootstrap().AgentOrigin
 	}
 	r, e := http.NewRequest(http.MethodPost, origin+path, bytes.NewReader(raw))
@@ -92,8 +104,20 @@ func (c *syntheticClient) request(path string, raw []byte, peer bool) *http.Requ
 	}
 	r.RemoteAddr = "127.0.0.1:20000"
 	r.Header.Set("Content-Type", "application/json")
-	r.TLS = &tls.ConnectionState{Version: tls.VersionTLS13, HandshakeComplete: true}
-	if peer {
+	if !c.f.state.selection.HTTPTest() {
+		r.TLS = &tls.ConnectionState{Version: tls.VersionTLS13, HandshakeComplete: true}
+	}
+	if peer && c.f.state.selection.HTTPTest() {
+		frame, err := lanstore.ValidateFrame(raw, *c.now)
+		if err != nil {
+			c.t.Fatal("synthetic signed body must be schema valid")
+		}
+		r, e = signedhttp.NewSignedRequestForPath(context.Background(), origin, path, tls.Certificate{Certificate: [][]byte{c.cert.DER()}, PrivateKey: c.key}, frame.Sequence, frame.Observation.GeneratedAt, raw)
+		if e != nil {
+			c.t.Fatal("synthetic HTTP request signing failed", e)
+		}
+		r.RemoteAddr = "127.0.0.1:20000"
+	} else if peer {
 		leaf, e := x509.ParseCertificate(c.cert.DER())
 		if e != nil {
 			c.t.Fatal("synthetic certificate missing")
@@ -112,14 +136,14 @@ func (c *syntheticClient) post(path string, raw []byte, peer bool) *httptest.Res
 	c.t.Helper()
 	r := c.request(path, raw, peer)
 	w := httptest.NewRecorder()
-	c.f.serve(w, r, path == telemetryPath)
+	c.f.serve(w, r, path == c.f.state.selection.TelemetryPath())
 	return w
 }
 
 func (c *syntheticClient) challenge(purpose string) enrollmentcrypto.ChallengeContext {
 	c.t.Helper()
 	raw := encoded(c.t, map[string]string{"invitationId": c.f.Bootstrap().InvitationID, "claimId": c.claimID, "purpose": purpose})
-	w := c.post(prefix+"challenge", raw, false)
+	w := c.post(c.f.state.selection.EnrollmentPrefix()+"challenge", raw, false)
 	if w.Code != 200 {
 		c.t.Fatal("synthetic challenge rejected, status", w.Code)
 	}
@@ -164,7 +188,7 @@ func (c *syntheticClient) claim() {
 	c.t.Helper()
 	raw := c.claimBytes(c.challenge("claim"))
 	defer clear(raw)
-	w := c.post(prefix+"claim", raw, false)
+	w := c.post(c.f.state.selection.EnrollmentPrefix()+"claim", raw, false)
 	if w.Code != 200 {
 		c.t.Fatal("synthetic claim rejected, status", w.Code)
 	}
@@ -200,7 +224,7 @@ func (c *syntheticClient) approve() {
 	if e = c.f.Approve(digest(c.public), code); e != nil {
 		c.t.Fatal("synthetic exact approval failed:", e)
 	}
-	w := c.post(prefix+"credential", c.statusBytes("credential"), false)
+	w := c.post(c.f.state.selection.EnrollmentPrefix()+"credential", c.statusBytes("credential"), false)
 	if w.Code != 200 {
 		c.t.Fatal("synthetic credential delivery rejected")
 	}
@@ -240,7 +264,7 @@ func (c *syntheticClient) activationBytes() []byte {
 
 func (c *syntheticClient) activate() {
 	c.t.Helper()
-	w := c.post(prefix+"activate", c.activationBytes(), false)
+	w := c.post(c.f.state.selection.EnrollmentPrefix()+"activate", c.activationBytes(), false)
 	if w.Code != 200 || c.f.Snapshot().State != enrollmentstate.Activated {
 		c.t.Fatal("synthetic activation rejected")
 	}
@@ -283,7 +307,7 @@ func TestSyntheticRealProofLifecycleAndReceipt(t *testing.T) {
 			t.Fatal("mismatched approval changed lifecycle")
 		}
 	}
-	if w := c.post(prefix+"credential", c.statusBytes("credential"), false); w.Code != 409 {
+	if w := c.post(c.f.state.selection.EnrollmentPrefix()+"credential", c.statusBytes("credential"), false); w.Code != 409 {
 		t.Fatal("unapproved credential delivery accepted")
 	}
 	c.approve()
@@ -343,10 +367,10 @@ func TestSyntheticChallengeUseExpiryAndCapacity(t *testing.T) {
 	cc := c.challenge("claim")
 	raw := c.claimBytes(cc)
 	defer clear(raw)
-	if w := c.post(prefix+"claim", raw, false); w.Code != 200 {
+	if w := c.post(c.f.state.selection.EnrollmentPrefix()+"claim", raw, false); w.Code != 200 {
 		t.Fatal("first proof failed")
 	}
-	if w := c.post(prefix+"claim", raw, false); w.Code != 401 {
+	if w := c.post(c.f.state.selection.EnrollmentPrefix()+"claim", raw, false); w.Code != 401 {
 		t.Fatal("replayed challenge accepted")
 	}
 	cc = c.challenge("claim")
@@ -497,7 +521,7 @@ func TestSyntheticWrongProofAndPurposeConsumeChallenge(t *testing.T) {
 	if w := c.post(prefix+"claim", corrupt, false); w.Code != 401 {
 		t.Fatal("invalid possession accepted")
 	}
-	if w := c.post(prefix+"claim", raw, false); w.Code != 401 {
+	if w := c.post(c.f.state.selection.EnrollmentPrefix()+"claim", raw, false); w.Code != 401 {
 		t.Fatal("failed proof did not consume challenge")
 	}
 	c.claim()

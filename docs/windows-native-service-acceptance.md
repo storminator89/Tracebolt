@@ -3,8 +3,10 @@
 This is **test infrastructure source**, not an installed-service acceptance result.
 The workflow has no automatic trigger. No repository publication, successful
 cross-build, source fixture, or read-only collector job authorizes its native
-operations. The published Windows basic service contract remains in
-[windows-basic-service-candidate.md](windows-basic-service-candidate.md).
+operations. The basic service contract remains in
+[windows-basic-service-candidate.md](windows-basic-service-candidate.md); the separate
+[Windows inventory profile](windows-inventory-dashboard.md) is the default manual
+gate selection. Selecting it is not approval to run it.
 
 ## Separate ordinary-CI read-only measurement
 
@@ -36,7 +38,13 @@ statement of Windows service readiness should precede inspection of this result.
 After reviewing an exact source commit, the operator must separately approve a
 single run of `Manual disposable Windows native acceptance subset` on a fresh disposable
 GitHub-hosted `windows-2025` x64 runner. The dispatch requires its full 40-character
-commit SHA and **all five** scopes, each false by default:
+commit SHA, an exact `collection_profile` and `transport_profile`, and every
+applicable scope below. All seven approval booleans default to false. The only
+valid pairs are `basic-readonly-v1` + `tls`, `windows-inventory-v1` + `tls`
+(the default selection), and `windows-inventory-v1` + `http-test`. No automatic
+matrix, transport fallback or existing-identity reuse is supported.
+
+The five shared approvals are:
 
 1. `services`: create the fixed `TraceboltWindowsAgent` LocalService SCM
    service and the separate `TraceboltWindowsAcceptanceProbe` LocalService
@@ -46,11 +54,22 @@ commit SHA and **all five** scopes, each false by default:
    comparison value against a disposable fixture authority.
 3. `app_acls`: create only new Tracebolt app directories/files with their
    explicit ACLs. Existing resources are never adopted or repaired.
-4. `loopback_tls`: create temporary memory-only fixture authority and two
-   local TLS listeners; send real basic Windows telemetry to that local fixture.
+4. `loopback_transport`: create temporary memory-only fixture authority and two
+   local listeners using the explicitly selected transport; send real selected-profile
+   telemetry only to that disposable peer. TLS uses normal TLS1.3 and client
+   certificates. HTTP-test uses the production signed-request verifier and provides
+   no confidentiality or server authentication.
 5. `cleanup`: delete only the newly owned test services and app files
    after receipt, object ID, content hash and manifest checks. Unexpected or
    incomplete resources are retained with a failed cleanup result.
+
+`inventory_metadata` must be true for Windows inventory and false for basic.
+It approves the bounded process/service/software names, hostname/interface
+addresses and CPU/RAM/system-volume observations inside the disposable peer.
+`http_plaintext` must additionally be true only for HTTP-test. It explicitly
+acknowledges plaintext invitation/enrollment/inventory data, forgeable peer
+responses and the fact that signatures do not encrypt traffic. A TLS selection
+rejects this extra acknowledgement rather than treating it as downgrade consent.
 
 The action-time request must name the exact commit, workflow and disposable
 runner, the above objects/identity/permissions/telemetry, and bounded cleanup.
@@ -58,7 +77,10 @@ It must disclose the prerequisite below and that a failed run can retain test
 resources until runner destruction. An earlier request to implement Windows
 support is not approval to dispatch this gate. Never reuse an approval for a new
 source commit. There are no user computer targets or external manager credentials
-in this workflow. There is no dispatch command in this guide.
+in this workflow. The user's existing HTTP-test manager is not contacted or
+silently treated as TLS. Proving this HTTP loopback selection would establish
+only its selected transport path, not acceptance against that manager. There is
+no dispatch command in this guide.
 
 ## Source and artifact binding
 
@@ -73,7 +95,8 @@ hashes are checked again before copying. The main service is the unchanged
 or service timeout is injected into it.
 
 The approval is in-memory, expires after twenty minutes and is rechecked on
-mutating driver calls. Main work is bounded to ten minutes; failure cleanup has
+mutating driver calls, including an exact selection match against the driver.
+The selection is also bound to the bootstrap, trust display, claim and final report. Main work is bounded to ten minutes; failure cleanup has
 its own two-minute cancellation window using the same still-valid scope. The
 wrapper's process deadline includes that cleanup interval. Cancellation does not
 grant permission to adopt incomplete state or erase an ownership fence.
@@ -84,8 +107,9 @@ Existing ancestors must pass trusted owner/non-replaceable writer, supported
 ACL-shape and canonical local-path checks. An explicit LocalService-named read
 ACE on each volume/Program Files/ProgramData ancestor is not required: enabled
 groups, inherited grants and applicable ordered denies are evaluated by Windows
-when the actual SCM process opens them. The unchanged native runtime access
-masks remain authoritative, including protected-state directory listing.
+when the actual SCM process opens them. Actual runtime opens remain
+authoritative. Executable traversal now also requests directory listing to make
+its no-delete-sharing pins effective; protected-state listing remains unchanged.
 
 The final executable retains its sufficient LocalService read/execute DACL
 policy, and private state retains its exact service-SID protection. New app-owned
@@ -110,47 +134,59 @@ cannot promote policy-only support into a runtime pass.
 
 ## What a successful native subset would prove
 
-The controller emits exactly thirteen finite outcome checks:
+The controller emits exactly fourteen finite outcome checks:
 
 1. Read-only prerequisites passed.
 2. App-only create-new provisioning matched source-bound artifacts.
 3. Ordinary service install and protected state preparation completed.
-4. A single pending claim was committed with explicit TLS/basic public trust.
+4. One pending claim was committed under the selected profile/transport and
+   explicitly checked public trust. HTTP does not claim server authentication.
 5. The actual main service process token was LocalService with its enabled,
    owner-capable service SID, no enabled Administrators group and only
    `SeChangeNotifyPrivilege`. The SCM PID is rechecked after querying it.
-6. Each acceptance Stop requires zero ordinary and service-specific SCM exit
-   codes; stopped failures cannot count as orderly shutdown. A real pending service ran for at least five seconds, then stopped while
-   preserving the original claim identity and approval deadline.
-7. On restart, explicit matching fixture approval activated the same identity;
-   the ordinary service delivered a validated Windows basic frame over real TLS.
-8. A separate real LocalService process with a different service SID, and no
-   main service SID or impersonation, was denied read opens of the initialized
-   main private key and sender state by Win32 `ERROR_ACCESS_DENIED`. Missing
-   objects, sharing violations and policy sentinel errors cannot pass.
-9. A fixture outage yielded a real unavailable request without receipt progress,
-   and Stop retained the durable sender's pending generation.
-10. Restart during the same outage retained exactly the same pending bytes and
-    sequence, with no new claim or reset.
-11. Recovery accepted progress from the same identity and durable counter floor;
-    Stop left no pending generation.
-12. Ordinary uninstall removed the SCM service while preserving verified state
-    objects unchanged. Uninstall itself does not erase identity.
-13. Only newly owned, unchanged app resources and the probe registration were
-    cleaned. Cleanup freezes a bounded allowlisted tree and deletes exact opened
-    handles bottom-up. Unknown children, altered IDs/hashes or partial receipts
-    cause retained-state failure rather than wider deletion.
+6. A real pending service ran for at least five seconds, then stopped with zero
+   ordinary and service-specific exit codes while preserving its original claim
+   and approval deadline. Failed stopped services cannot count as orderly Stop.
+7. On restart, explicit matching fixture approval activated that same identity
+   and the ordinary sender delivered a profile-valid frame over the selected
+   real loopback transport.
+8. `profile_report` proves that the peer accepted the exact selected contract.
+   For inventory, the real service collector/sender must supply healthy or partial
+   CPU/RAM/disk and all five scoped inventory sections. Denied or unavailable
+   sections remain in the finite report and fail this usable-inventory check;
+   they are never promoted to empty or complete coverage. Partial/truncated
+   observations remain explicitly partial. Basic cannot satisfy inventory proof.
+9. A separate real LocalService process with another service SID was denied
+   read opens of the initialized main private key and sender state with Win32
+   `ERROR_ACCESS_DENIED`; absence, sharing violations and sentinels cannot pass.
+10. A peer outage produced a real unavailable request without receipt progress;
+    Stop retained the sender's durable pending generation.
+11. Restart during that outage retained exactly the same pending bytes and
+    sequence without a new claim or reset.
+12. Recovery accepted same-identity progress; Stop left no pending generation.
+13. Ordinary uninstall removed the SCM registration while retaining the verified
+    private state unchanged.
+14. Receipt/ID/hash-bound cleanup deleted only the newly owned resources through
+    retained handles; unknown children or changed bindings cause retained failure.
 
-A success is named `passed_native_subset`. The finite report's current-state
-fields require the services stopped/uninstalled, no pending generation and no
-retained cleanup resources. It cannot be promoted to full deployment acceptance.
+A success is named `passed_native_subset`. The v2 report records the exact
+`selection`, bounded inventory frame count and eight finite quality labels,
+`loopbackPeerExercised`, and `nativeInventorySenderExercised`. Its terminal
+current-state fields require the services stopped/uninstalled, no pending
+sender generation and no retained cleanup resources. No row, hostname, address,
+process name or metric value is exported. A partial quality does not establish
+whole-machine completeness. A pass cannot be promoted to full deployment acceptance.
 
 ## Fixture boundaries and outstanding gates
 
 The native peer in `internal/windowsacceptance/fixture` uses real enrollment
-proofs, state transitions, issuance and v1 frame/receipt validation. It holds its
+proofs, state transitions, issuance and the production `lanstore`/`windowsmanaged`
+frame decoders. HTTP uses the production `signedhttp` verifier with the exact
+Windows path, issued certificate and current activated identity. Strict sequence,
+generation and capture-time progression follows exact-duplicate handling. It holds its
 issuer and invitation only in process memory and listens only on IPv4 loopback,
-TLS 1.3. The ordinary Windows service uses its actual protected identity, real
+under the exact selected TLS1.3 or explicitly acknowledged HTTP-test transport.
+The ordinary Windows service uses its actual protected identity, real
 collector and sender. Raw telemetry is validated but never printed or uploaded.
 
 This peer is **not the production Linux manager**. The latter's durable enrollment
@@ -172,7 +208,8 @@ approval; the report never labels this as a real fifteen/thirty-minute wait.
 
 No actual OS Shutdown or reboot is requested. Real shutdown/reboot persistence,
 power loss, interrupted writes, desktop Windows and ARM64 runtime remain pending.
-The report always keeps `productionManagerExercised`, `hiddenConsoleExercised`,
+The report always keeps `productionManagerExercised`, `productionIngressExercised`,
+`sharedDashboardExercised`, `hiddenConsoleExercised`,
 `osShutdownExercised` and `osRebootExercised` false. Source cross-builds are not
 native proof. Persistent Event Log diagnostics remain separate from finite SCM
 and console codes.
@@ -180,7 +217,8 @@ and console codes.
 ## Safe evidence and failure handling
 
 Only a strictly validated bounded JSON report with exact source, finite stages,
-finite reasons, booleans and the thirteen outcome names is retained. The wrapper
+finite reasons, selected profile/transport, bounded counts/quality labels, booleans
+and the fourteen outcome names is retained. The wrapper
 rejects unknown fields, duplicates, malformed types, missing checks and false
 success claims. It captures but never publishes raw controller output. Binaries,
 private stores, invitation/key material, fingerprints, object paths, raw native
@@ -207,3 +245,12 @@ The implementation never enables debug/ownership privileges, logs on as another
 identity, repairs an ACL, installs a trust root, changes a firewall, or exposes
 arbitrary shell commands. Those omissions are enforced source boundaries; their
 runtime correctness still needs the separately approved native run.
+
+### Scoped ProgramData path binding
+
+The [path-binding correction](windows-path-binding.md) permits only specific
+ProgramData add-file/EA/attribute rights alongside real directory pins and
+component-relative no-reparse create-only provisioning. Destructive grants,
+untrusted owners, final binary checks and private-state protections remain
+unchanged. Source/injected fixtures and a read-only policy pass leave the native
+race, real token, service, cleanup, manager, console and reboot gates outstanding.

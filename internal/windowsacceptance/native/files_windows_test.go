@@ -3,6 +3,7 @@
 package native
 
 import (
+	"fmt"
 	"golang.org/x/sys/windows"
 	"localrmm/internal/windowsservice"
 	"testing"
@@ -77,6 +78,42 @@ func TestCanonicalFixedPathPolicy(t *testing.T) {
 	for _, p := range []string{`c:\ProgramData`, `\\server\share`, `C:\ProgramData\..\foreign`, `C:\ProgramData\Tracebolt:stream`, `C:\PROGRA~1`, `C:\ProgramData\Tracebolt.`, `C:\ProgramData\☃`} {
 		if canonicalPath(p) {
 			t.Fatal("unsafe fixture path admitted")
+		}
+	}
+}
+
+func TestProgramDataExceptionIsScopedAndCannotGrantChildReplacement(t *testing.T) {
+	const base = "O:BAG:BAD:P(A;;FA;;;SY)(A;;FA;;;BA)"
+	// Every case constructs only an in-memory descriptor; no host ACL is touched.
+	for _, mask := range []uint32{0x2, 0x10, 0x100, 0x112} {
+		sd, err := windows.SecurityDescriptorFromString(base + fmt.Sprintf("(A;;0x%x;;;BU)", mask))
+		if err != nil {
+			t.Fatal("descriptor fixture invalid")
+		}
+		strict, _ := ancestorDescriptorForRole(sd, false)
+		pd, _ := ancestorDescriptorForRole(sd, true)
+		if strict != "untrusted-write-grant" || pd != "" {
+			t.Fatal("ProgramData exception escaped its role")
+		}
+	}
+	for _, mask := range []uint32{windows.GENERIC_ALL, windows.GENERIC_WRITE, windows.WRITE_OWNER, windows.WRITE_DAC, windows.DELETE, 0x40} {
+		sd, err := windows.SecurityDescriptorFromString(base + fmt.Sprintf("(A;;0x%x;;;BU)", mask|0x112))
+		if err != nil {
+			t.Fatal("descriptor fixture invalid")
+		}
+		failure, rights := ancestorDescriptorForRole(sd, true)
+		if failure != "untrusted-write-grant" || len(rights) != 1 {
+			t.Fatal("destructive right admitted or diagnostic widened")
+		}
+	}
+	for _, sddl := range []string{"O:BUG:BAD:P(A;;0x112;;;BU)", "O:BAG:BAD:NO_ACCESS_CONTROL", base + "(OA;;0x112;11111111-1111-1111-1111-111111111111;;BU)"} {
+		sd, err := windows.SecurityDescriptorFromString(sddl)
+		if err != nil {
+			t.Fatal("descriptor fixture invalid")
+		}
+		failure, _ := ancestorDescriptorForRole(sd, true)
+		if failure == "" {
+			t.Fatal("invalid ProgramData ownership/descriptor accepted")
 		}
 	}
 }

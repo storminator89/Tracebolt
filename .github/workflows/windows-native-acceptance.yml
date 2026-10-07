@@ -9,6 +9,32 @@ on:
         description: 'Exact reviewed 40-lowercase-hex source SHA; must equal the dispatched SHA and checkout'
         required: true
         type: string
+      collection_profile:
+        description: 'Exact fresh identity scope; existing basic or Linux identities cannot be reused'
+        required: true
+        type: choice
+        default: windows-inventory-v1
+        options:
+          - windows-inventory-v1
+          - basic-readonly-v1
+      transport_profile:
+        description: 'TLS by default; HTTP-test requires Windows inventory and separate plaintext approval'
+        required: true
+        type: choice
+        default: tls
+        options:
+          - tls
+          - http-test
+      inventory_metadata:
+        description: 'Approve bounded native process/service/software names, hostname/interface addresses and CPU/RAM/system-disk metrics inside the disposable peer only; required only for Windows inventory'
+        required: true
+        default: false
+        type: boolean
+      http_plaintext:
+        description: 'Approve plaintext invitation, enrollment and inventory metadata on loopback for the selected disposable HTTP test; signatures do not encrypt or authenticate the peer; required only for HTTP-test'
+        required: true
+        default: false
+        type: boolean
       services:
         description: 'Approve fresh TraceboltWindowsAgent and separate TraceboltWindowsAcceptanceProbe SCM creation/start/stop/delete on this disposable hosted VM only'
         required: true
@@ -24,8 +50,8 @@ on:
         required: true
         default: false
         type: boolean
-      loopback_tls:
-        description: 'Approve bounded loopback-only TLS fixture with ephemeral in-memory authority, repeated ordinary basic reports and outage/recovery; no production manager or firewall change'
+      loopback_transport:
+        description: 'Approve bounded loopback-only peer using the explicitly selected transport, ephemeral authority, ordinary profile reports and outage/recovery; no production manager or firewall change'
         required: true
         default: false
         type: boolean
@@ -45,11 +71,15 @@ jobs:
     runs-on: windows-2025
     timeout-minutes: 40
     env:
+      TRACEBOLT_COLLECTION_PROFILE: ${{ inputs.collection_profile }}
+      TRACEBOLT_TRANSPORT_PROFILE: ${{ inputs.transport_profile }}
+      TRACEBOLT_APPROVE_INVENTORY_METADATA: ${{ inputs.inventory_metadata }}
+      TRACEBOLT_APPROVE_HTTP_PLAINTEXT: ${{ inputs.http_plaintext }}
       TRACEBOLT_EXPECTED_SOURCE_SHA: ${{ inputs.expected_source_sha }}
       TRACEBOLT_APPROVE_SERVICES: ${{ inputs.services }}
       TRACEBOLT_APPROVE_IDENTITY: ${{ inputs.identity }}
       TRACEBOLT_APPROVE_APP_ACLS: ${{ inputs.app_acls }}
-      TRACEBOLT_APPROVE_LOOPBACK_TLS: ${{ inputs.loopback_tls }}
+      TRACEBOLT_APPROVE_LOOPBACK: ${{ inputs.loopback_transport }}
       TRACEBOLT_APPROVE_CLEANUP: ${{ inputs.cleanup }}
       PYTHONDONTWRITEBYTECODE: '1'
       GOTOOLCHAIN: local
@@ -61,7 +91,7 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: '3.12'
-      - name: Require all five approvals and exact clean source before further work
+      - name: Require exact selected scope, all applicable approvals and exact clean source before further work
         id: approval_gate
         shell: pwsh
         run: python -I -B tests/windows_native_acceptance/run_acceptance.py --check-authorization

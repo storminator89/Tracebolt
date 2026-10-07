@@ -17,21 +17,25 @@ The descriptor-only ancestor policy now checks integrity only:
 
 - Trusted owner: SYSTEM, Administrators or TrustedInstaller.
 - No untrusted replacement-capable writer, ownership/DACL change, delete or
-  delete-child grant. The existing writer masks are unchanged.
+  delete-child grant. Only the manual harness's resolved ProgramData leaf has the
+  [scoped benign-right exception](windows-path-binding.md); executable ancestors
+  keep their strict writer masks.
 - No NULL DACL or unsupported effective ACE shape; inherit-only entries do not
   affect the current object.
 - Existing fixed-drive, canonical-path, reparse, hard-link and held-handle checks
-  remain. Directory handles deny delete sharing while used.
+  remain. Directory handles now include sharing-relevant listing access and deny
+  delete sharing while used.
 
 Read-deny ACEs do not make a path writable. They remain in the original DACL and
 Windows applies them during actual access, using their real trustees and order.
 A trusted administrator-only ancestor can therefore pass this static integrity
 policy without claiming that the future service can read it.
 
-The native `CreateFile` and `NtCreateFile` access masks are unchanged. Executable
-self-validation still requests descriptor/attribute read on ancestor handles;
-protected-state traversal still requests `READ_CONTROL`, attributes, listing,
-traverse and synchronization. Failure of any actual open fails closed. Nothing
+Executable self-validation now opens components relative to held parents with
+`OBJ_DONT_REPARSE` and requests `READ_CONTROL`, attributes, listing, traverse and
+synchronization on directories. This supplies an actual no-delete-sharing pin;
+metadata-only handles were insufficient. Protected-state traversal already uses
+these directory rights and remains unchanged. Failure of any actual open fails closed. Nothing
 retries as administrator, impersonates another token, enables a privilege or
 changes a parent ACL. This change does not rely on guessed group membership or
 on an assumed traverse-bypass privilege. Microsoft documents the [file mappings,

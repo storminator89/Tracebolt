@@ -13,7 +13,6 @@ import (
 
 	"golang.org/x/sys/windows"
 	"localrmm/internal/enrollmentclient"
-	"localrmm/internal/enrollmentcrypto"
 	"localrmm/internal/windowsagentconfig"
 	"localrmm/internal/windowsservice"
 	"localrmm/internal/windowsstate"
@@ -45,7 +44,7 @@ func (d *Driver) prepare(ctx context.Context, g Guard, raw []byte) error {
 		return d.fail(ReasonState)
 	}
 	b, err := enrollmentclient.ParseBootstrap(raw)
-	if err != nil || b.Profile != "tls" || b.CollectionProfile != enrollmentcrypto.CollectionProfile {
+	if err != nil || b.Profile != d.options.Selection.Transport || b.CollectionProfile != d.options.Selection.CollectionProfile {
 		return d.fail(ReasonState)
 	}
 	p, err := windowsservice.Plan(ctx)
@@ -146,7 +145,7 @@ func (d *Driver) claim(ctx context.Context, g Guard, secret func(context.Context
 	if !ok || !d.evidence.Prepared || d.evidence.ClaimCommitted || secret == nil || display == nil || !d.verifyReceipt() || !d.requireStopped(ctx) {
 		return d.fail(ReasonState)
 	}
-	result, err := enrollmentclient.Run(ctx, d.bootstrap, enrollmentclient.Options{StateDirectory: s.layout.EnrollmentRoot, ClaimOnly: true,
+	result, err := enrollmentclient.Run(ctx, d.bootstrap, enrollmentclient.Options{StateDirectory: s.layout.EnrollmentRoot, ClaimOnly: true, WindowsInventoryAcknowledged: d.options.Selection.Inventory(), InsecureHTTPAcknowledged: d.options.Selection.HTTPTest(),
 		Display: func(t enrollmentclient.TrustDisplay) error {
 			if !approved(ctx, g) {
 				return ErrAcceptance
@@ -160,10 +159,10 @@ func (d *Driver) claim(ctx context.Context, g Guard, secret func(context.Context
 			return secret(c)
 		},
 	})
-	if err != nil || !result.Pending || !result.ServerAuthenticated {
+	if err != nil || !result.Pending || result.ServerAuthenticated == d.options.Selection.HTTPTest() {
 		return d.fail(ReasonOperation)
 	}
-	if _, err = enrollmentclient.InspectService(d.bootstrap, s.layout.EnrollmentRoot, false); err != nil {
+	if _, err = enrollmentclient.InspectService(d.bootstrap, s.layout.EnrollmentRoot, d.options.Selection.HTTPTest()); err != nil {
 		return d.fail(ReasonState)
 	}
 	binding, err := d.claimIdentity()
@@ -309,7 +308,7 @@ func (d *Driver) stateContinuity(ctx context.Context) error {
 	if err != nil || bound != s.claimBinding {
 		return d.fail(ReasonOwnership)
 	}
-	state, err := enrollmentclient.InspectService(d.bootstrap, s.layout.EnrollmentRoot, false)
+	state, err := enrollmentclient.InspectService(d.bootstrap, s.layout.EnrollmentRoot, d.options.Selection.HTTPTest())
 	if err != nil {
 		return d.fail(ReasonState)
 	}

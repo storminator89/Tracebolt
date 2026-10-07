@@ -72,6 +72,15 @@ func (s *Store) SaveObservation(ctx context.Context, invitationID, certificateHa
 			return lanstore.ErrReplay
 		}
 
+		if frame.WindowsInventory != nil && previous != (Replay{}) {
+			old, e := t.validateFrame(c.Frame, previous.ReceivedAt)
+			if e != nil || old.WindowsInventory == nil {
+				return ErrStorage
+			}
+			if !frame.WindowsInventory.CollectedAt.After(old.WindowsInventory.CollectedAt) || frame.WindowsInventory.GenerationID == old.WindowsInventory.GenerationID {
+				return lanstore.ErrReplay
+			}
+		}
 		if frame.Operational != nil {
 			if previous != (Replay{}) {
 				old, e := t.validateFrame(c.Frame, previous.ReceivedAt)

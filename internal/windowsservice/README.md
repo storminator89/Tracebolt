@@ -113,3 +113,9 @@ fixtures into an installation/credential test.
 - [DeleteService deferred deletion](https://learn.microsoft.com/en-us/windows/win32/api/winsvc/nf-winsvc-deleteservice)
 
 - [SCM process ID validity](https://learn.microsoft.com/en-us/windows/win32/api/winsvc/nf-winsvc-queryservicestatusex)
+
+Executable verification now pins each directory with sharing-relevant listing
+access and opens each component relative to its parent with `OBJ_DONT_REPARSE`.
+It rejects reparse/case-sensitive/mismatched paths and retains the final-file
+read policy. See [path binding](../../docs/windows-path-binding.md); this does
+not grant permissions or substitute source checks for SCM token acceptance.

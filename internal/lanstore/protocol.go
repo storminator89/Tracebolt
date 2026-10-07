@@ -10,6 +10,7 @@ import (
 	"localrmm/internal/linuxpackages"
 	"localrmm/internal/model"
 	"localrmm/internal/operational"
+	"localrmm/internal/windowsmanaged"
 	"reflect"
 	"strings"
 	"time"
@@ -19,6 +20,7 @@ import (
 const FrameVersion = "tracebolt.agent-telemetry.v1"
 const FrameOperationalVersion = "tracebolt.agent-telemetry.v2"
 const FramePackagesVersion = "tracebolt.agent-telemetry.v3"
+const FrameWindowsInventoryVersion = "tracebolt.agent-telemetry.windows.v1"
 const MaxPackageObservationBytes = 16 << 10
 const MaxPackageOperationalBytes = operational.MaxPackageFrameSnapshotBytes
 const MaxFrameBytes = 72 * 1024
@@ -29,11 +31,12 @@ var ErrFrame = errors.New("agent telemetry frame is invalid")
 var ErrStale = errors.New("agent observation is stale or future-dated")
 
 type Frame struct {
-	SchemaVersion string                  `json:"schemaVersion"`
-	Sequence      uint64                  `json:"sequence"`
-	Observation   bundle.Bundle           `json:"observation"`
-	Operational   *operational.Snapshot   `json:"operational,omitempty"`
-	Packages      *linuxpackages.Snapshot `json:"packages,omitempty"`
+	SchemaVersion    string                   `json:"schemaVersion"`
+	Sequence         uint64                   `json:"sequence"`
+	Observation      bundle.Bundle            `json:"observation"`
+	Operational      *operational.Snapshot    `json:"operational,omitempty"`
+	Packages         *linuxpackages.Snapshot  `json:"packages,omitempty"`
+	WindowsInventory *windowsmanaged.Snapshot `json:"windowsInventory,omitempty"`
 }
 
 // ValidateFrame separates protocol version from application/agent build version.
@@ -73,6 +76,23 @@ func ValidateFrame(raw []byte, now time.Time) (Frame, error) {
 			Operational   *operational.Snapshot `json:"operational"`
 		}{})
 	}
+	if object["schemaVersion"] == FramePackagesVersion {
+		shapeType = reflect.TypeOf(struct {
+			SchemaVersion string                  `json:"schemaVersion"`
+			Sequence      uint64                  `json:"sequence"`
+			Observation   bundle.Bundle           `json:"observation"`
+			Operational   *operational.Snapshot   `json:"operational"`
+			Packages      *linuxpackages.Snapshot `json:"packages"`
+		}{})
+	}
+	if object["schemaVersion"] == FrameWindowsInventoryVersion {
+		shapeType = reflect.TypeOf(struct {
+			SchemaVersion    string                   `json:"schemaVersion"`
+			Sequence         uint64                   `json:"sequence"`
+			Observation      bundle.Bundle            `json:"observation"`
+			WindowsInventory *windowsmanaged.Snapshot `json:"windowsInventory"`
+		}{})
+	}
 	if !shape(value, shapeType) {
 		return frame, ErrFrame
 	}
@@ -97,7 +117,7 @@ func ValidateFrame(raw []byte, now time.Time) (Frame, error) {
 		return frame, ErrFrame
 	}
 	b := frame.Observation
-	if (frame.SchemaVersion != FrameVersion && frame.SchemaVersion != FrameOperationalVersion && frame.SchemaVersion != FramePackagesVersion) || frame.Sequence == 0 || frame.Sequence > 1<<63-1 || b.SchemaVersion != bundle.SchemaVersion || b.Product != "Tracebolt" || b.Version == "" || len(b.Version) > 64 || b.Platform != b.Observation.Platform || b.Scope != "single-read-only-local-observation" {
+	if (frame.SchemaVersion != FrameVersion && frame.SchemaVersion != FrameOperationalVersion && frame.SchemaVersion != FramePackagesVersion && frame.SchemaVersion != FrameWindowsInventoryVersion) || frame.Sequence == 0 || frame.Sequence > 1<<63-1 || b.SchemaVersion != bundle.SchemaVersion || b.Product != "Tracebolt" || b.Version == "" || len(b.Version) > 64 || b.Platform != b.Observation.Platform || b.Scope != "single-read-only-local-observation" {
 		return frame, ErrFrame
 	}
 	if len(b.Architecture) == 0 || len(b.Architecture) > 32 || len(b.Privacy) > 16 {
@@ -113,10 +133,31 @@ func ValidateFrame(raw []byte, now time.Time) (Frame, error) {
 		return frame, ErrFrame
 	}
 	if frame.SchemaVersion == FrameVersion {
-		if frame.Operational != nil || frame.Packages != nil {
+		if frame.Operational != nil || frame.Packages != nil || frame.WindowsInventory != nil {
 			return frame, ErrFrame
 		}
+	} else if frame.SchemaVersion == FrameWindowsInventoryVersion {
+		if frame.Sequence > operational.MaxSafeInteger || frame.Operational != nil || frame.Packages != nil || frame.WindowsInventory == nil || b.Platform != "windows" || windowsmanaged.Validate(*frame.WindowsInventory) != nil || len(encoded) > MaxPackageObservationBytes {
+			return frame, ErrFrame
+		}
+		var members map[string]json.RawMessage
+		if json.Unmarshal(raw, &members) != nil || len(members["observation"]) > MaxPackageObservationBytes {
+			return frame, ErrFrame
+		}
+		if _, err := windowsmanaged.Decode(members["windowsInventory"]); err != nil {
+			return frame, ErrFrame
+		}
+		at := frame.WindowsInventory.CollectedAt
+		if at.After(b.GeneratedAt) || at.After(b.Observation.LastSeen) {
+			return frame, ErrFrame
+		}
+		if now.Sub(at) > SampleMaxAge || at.Sub(now) > AllowedClockSkew {
+			return frame, ErrStale
+		}
 	} else {
+		if frame.WindowsInventory != nil {
+			return frame, ErrFrame
+		}
 		if frame.SchemaVersion == FrameOperationalVersion && frame.Packages != nil {
 			return frame, ErrFrame
 		}
@@ -289,7 +330,7 @@ func shape(value any, t reflect.Type) bool {
 	case reflect.Bool:
 		_, ok := value.(bool)
 		return ok
-	case reflect.Float32, reflect.Float64, reflect.Int, reflect.Int64, reflect.Uint64:
+	case reflect.Float32, reflect.Float64, reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64, reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
 		_, ok := value.(json.Number)
 		return ok
 	default:
@@ -300,7 +341,12 @@ func shape(value any, t reflect.Type) bool {
 // FrameMatchesCollectionProfile accepts only the profile from trusted durable
 // identity state, never a profile claimed by the incoming payload itself.
 func FrameMatchesCollectionProfile(frame Frame, profile string) bool {
+	if frame.WindowsInventory != nil && profile != windowsmanaged.CollectionProfile {
+		return false
+	}
 	switch profile {
+	case windowsmanaged.CollectionProfile:
+		return frame.SchemaVersion == FrameWindowsInventoryVersion && frame.WindowsInventory != nil && frame.WindowsInventory.CollectionProfile == profile && frame.Operational == nil && frame.Packages == nil && frame.Observation.Platform == "windows"
 	case "basic-readonly-v1":
 		return frame.SchemaVersion == FrameVersion && frame.Operational == nil && frame.Packages == nil
 	case operational.CollectionProfile:

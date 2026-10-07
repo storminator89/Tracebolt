@@ -16,6 +16,7 @@ import (
 
 	"golang.org/x/sys/windows"
 	"localrmm/internal/windowsagentconfig"
+	"localrmm/internal/windowspath"
 	"localrmm/internal/windowsservice"
 	"localrmm/internal/windowsstate"
 )
@@ -253,19 +254,12 @@ func (d *Driver) cleanupSnapshot() ([]ownedObject, error) {
 	}
 	return out, nil
 }
-func freezeObjects(objects []ownedObject) ([]heldObject, error) {
-	// Parents first pin all containing paths before opening their children.
-	slices.SortFunc(objects, func(a, b ownedObject) int { return strings.Compare(a.path, b.path) })
-	var held []heldObject
-	success := false
-	defer func() {
-		if !success {
-			for _, h := range held {
-				windows.CloseHandle(h.handle)
-			}
-		}
-	}()
-	for _, o := range objects {
+func (s *nativeState) freezeObjects(objects []ownedObject) ([]heldObject, error) {
+	anchors := make(map[string]uintptr, len(s.directories))
+	for path, binding := range s.directories {
+		anchors[path] = uintptr(binding.handle)
+	}
+	pins, err := freezeTree(objects, anchors, func(parent uintptr, o ownedObject) (uintptr, error) {
 		access := uint32(windows.DELETE | windows.READ_CONTROL | windows.FILE_READ_ATTRIBUTES)
 		if !o.directory {
 			access |= windows.GENERIC_READ
@@ -274,13 +268,16 @@ func freezeObjects(objects []ownedObject) ([]heldObject, error) {
 		if o.directory {
 			share |= windows.FILE_SHARE_WRITE
 		}
-		h, id, err := openChecked(o.path, o.directory, access, share)
+		// The direct parent is the frozen DELETE handle or a retained OS anchor.
+		// Never re-open that parent through openChecked's full-chain traversal.
+		h, err := windowspath.OpenChild(windows.Handle(parent), filepath.Base(o.path), o.directory, access, share)
 		if err != nil {
-			return nil, ErrAcceptance
+			return 0, ErrAcceptance
 		}
-		held = append(held, heldObject{o, h})
-		if id != o.id {
-			return nil, ErrAcceptance
+		_, id, _, err := checkHandleDiagnostic(h, o.path, o.directory)
+		if err != nil || id != o.id {
+			windows.CloseHandle(h)
+			return 0, ErrAcceptance
 		}
 		if !o.directory {
 			max := int64(2 << 20)
@@ -289,11 +286,19 @@ func freezeObjects(objects []ownedObject) ([]heldObject, error) {
 			}
 			sum, err := hashHandle(h, max)
 			if err != nil || sum != o.hash {
-				return nil, ErrAcceptance
+				windows.CloseHandle(h)
+				return 0, ErrAcceptance
 			}
 		}
+		return uintptr(h), nil
+	}, func(h uintptr) { _ = windows.CloseHandle(windows.Handle(h)) })
+	if err != nil {
+		return nil, err
 	}
-	success = true
+	held := make([]heldObject, 0, len(pins))
+	for _, pin := range pins {
+		held = append(held, heldObject{pin.object, windows.Handle(pin.handle)})
+	}
 	return held, nil
 }
 func (d *Driver) cleanup(ctx context.Context, g Guard) error {
@@ -301,7 +306,7 @@ func (d *Driver) cleanup(ctx context.Context, g Guard) error {
 	if !ok || !d.evidence.Uninstalled || !d.verifyReceipt() {
 		return d.fail(ReasonOwnership)
 	}
-	defer func() { closeHandles(s.anchors); s.anchors = nil }()
+	defer func() { s.releaseObjectPins(); closeHandles(s.anchors); s.anchors = nil; s.directories = nil }()
 	main, err := windowsservice.Inspect(ctx)
 	if err != nil || main.Exists {
 		return d.fail(ReasonOwnership)
@@ -317,7 +322,12 @@ func (d *Driver) cleanup(ctx context.Context, g Guard) error {
 	if err != nil {
 		return d.fail(ReasonOwnership)
 	}
-	held, err := freezeObjects(objects)
+	// Receipt/hash/ACL snapshots have succeeded. Release only this driver's
+	// normal-lifetime no-delete pins before obtaining cleanup DELETE handles.
+	// App ACLs and the retained OS ancestors still prohibit untrusted replacement;
+	// freezeObjects opens from the retained direct parent and rechecks every ID.
+	s.releaseObjectPins()
+	held, err := s.freezeObjects(objects)
 	if err != nil {
 		return d.fail(ReasonOwnership)
 	}

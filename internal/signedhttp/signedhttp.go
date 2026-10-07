@@ -31,6 +31,7 @@ import (
 
 const (
 	Path                      = "/v1/agent/telemetry"
+	WindowsPath               = "/v1/windows/agent/telemetry"
 	MaxBodyBytes              = 72 * 1024
 	MaxCertificateHeaderBytes = 4096
 	MaxHeaderBytes            = 8192
@@ -59,13 +60,16 @@ type PublicCertificateAuthorizer interface {
 }
 
 type Config struct {
+	// Path is selected by trusted server configuration; empty preserves Path.
+	// Only the fixed Linux/basic and Windows inventory telemetry routes are valid.
+	Path     string
 	Origin   string
 	Registry PublicCertificateAuthorizer
 }
 type Verifier struct {
-	origin, authority string
-	registry          PublicCertificateAuthorizer
-	now               func() time.Time
+	origin, authority, path string
+	registry                PublicCertificateAuthorizer
+	now                     func() time.Time
 }
 
 // Verified is a detached request snapshot, not a committed telemetry receipt.
@@ -82,11 +86,17 @@ type Verified struct {
 }
 
 func New(config Config) (*Verifier, error) {
+	if config.Path == "" {
+		config.Path = Path
+	}
+	if !validPath(config.Path) {
+		return nil, ErrConfiguration
+	}
 	authority, err := canonicalOrigin(config.Origin)
 	if err != nil || config.Registry == nil || (reflect.ValueOf(config.Registry).Kind() == reflect.Pointer && reflect.ValueOf(config.Registry).IsNil()) {
 		return nil, ErrConfiguration
 	}
-	return &Verifier{origin: config.Origin, authority: authority, registry: config.Registry, now: func() time.Time { return time.Now().UTC() }}, nil
+	return &Verifier{origin: config.Origin, authority: authority, path: config.Path, registry: config.Registry, now: func() time.Time { return time.Now().UTC() }}, nil
 }
 
 func canonicalOrigin(origin string) (string, error) {
@@ -183,10 +193,15 @@ func decodeBase64(text string, limit int) ([]byte, bool) {
 	raw, err := base64.RawStdEncoding.Strict().DecodeString(text)
 	return raw, err == nil && base64.RawStdEncoding.EncodeToString(raw) == text
 }
+func validPath(path string) bool { return path == Path || path == WindowsPath }
+
 func transcript(origin, fingerprint, sequence, signedAt string, body []byte) []byte {
+	return transcriptForPath(origin, Path, fingerprint, sequence, signedAt, body)
+}
+func transcriptForPath(origin, path, fingerprint, sequence, signedAt string, body []byte) []byte {
 	digest := sha256.Sum256(body)
 	var message bytes.Buffer
-	for _, field := range []string{domain, origin, http.MethodPost, Path, "application/json", fingerprint, sequence, signedAt, hex.EncodeToString(digest[:])} {
+	for _, field := range []string{domain, origin, http.MethodPost, path, "application/json", fingerprint, sequence, signedAt, hex.EncodeToString(digest[:])} {
 		var size [4]byte
 		binary.BigEndian.PutUint32(size[:], uint32(len(field)))
 		message.Write(size[:])
@@ -199,7 +214,7 @@ func transcript(origin, fingerprint, sequence, signedAt string, body []byte) []b
 // quietly become an authentication fallback on the mutual-TLS HTTPS surface.
 func (v *Verifier) Verify(req *http.Request) (Verified, error) {
 	bad := func(err error) (Verified, error) { return Verified{}, err }
-	if v == nil || v.registry == nil || v.now == nil || req == nil || req.URL == nil || req.TLS != nil || req.Method != http.MethodPost || req.Host != v.authority || req.URL.Path != Path || req.URL.RawPath != "" || req.URL.RawQuery != "" || req.URL.ForceQuery || req.URL.Fragment != "" || req.URL.RawFragment != "" || req.URL.Opaque != "" || req.URL.User != nil || (req.URL.Scheme != "" && req.URL.Scheme != "http") || (req.URL.Host != "" && req.URL.Host != v.authority) || (req.RequestURI != "" && req.RequestURI != Path) || len(req.TransferEncoding) != 0 || len(req.Trailer) != 0 || req.Body == nil || req.ContentLength <= 0 || !requestHeaders(req.Header) {
+	if v == nil || v.registry == nil || v.now == nil || !validPath(v.path) || req == nil || req.URL == nil || req.TLS != nil || req.Method != http.MethodPost || req.Host != v.authority || req.URL.Path != v.path || req.URL.RawPath != "" || req.URL.RawQuery != "" || req.URL.ForceQuery || req.URL.Fragment != "" || req.URL.RawFragment != "" || req.URL.Opaque != "" || req.URL.User != nil || (req.URL.Scheme != "" && req.URL.Scheme != "http") || (req.URL.Host != "" && req.URL.Host != v.authority) || (req.RequestURI != "" && req.RequestURI != v.path) || len(req.TransferEncoding) != 0 || len(req.Trailer) != 0 || req.Body == nil || req.ContentLength <= 0 || !requestHeaders(req.Header) {
 		return bad(ErrRequest)
 	}
 	if req.ContentLength > MaxBodyBytes {
@@ -253,7 +268,7 @@ func (v *Verifier) Verify(req *http.Request) (Verified, error) {
 	if int64(len(body)) != req.ContentLength {
 		return bad(ErrRequest)
 	}
-	if !ed25519.Verify(publicKey, transcript(v.origin, lantrust.Fingerprint(cert), sequenceText, timeText, body), signature) {
+	if !ed25519.Verify(publicKey, transcriptForPath(v.origin, v.path, lantrust.Fingerprint(cert), sequenceText, timeText, body), signature) {
 		return bad(ErrUnauthorized)
 	}
 	// A slow body may cross expiry/revocation/time boundaries; recheck before
@@ -276,6 +291,15 @@ func (v *Verifier) Verify(req *http.Request) (Verified, error) {
 // request is plaintext; a caller must explicitly choose the insecure HTTP test
 // profile, disable proxies/redirects and accept that the server is unauthenticated.
 func NewSignedRequest(ctx context.Context, origin string, certificate tls.Certificate, sequence uint64, signedAt time.Time, body []byte) (*http.Request, error) {
+	return NewSignedRequestForPath(ctx, origin, Path, certificate, sequence, signedAt, body)
+}
+
+// NewSignedRequestForPath binds a finite, explicitly selected telemetry route.
+// It never accepts an arbitrary URL path or rewrites an existing signature.
+func NewSignedRequestForPath(ctx context.Context, origin, path string, certificate tls.Certificate, sequence uint64, signedAt time.Time, body []byte) (*http.Request, error) {
+	if !validPath(path) {
+		return nil, ErrConfiguration
+	}
 	if _, err := canonicalOrigin(origin); err != nil {
 		return nil, err
 	}
@@ -301,8 +325,8 @@ func NewSignedRequest(ctx context.Context, origin string, certificate tls.Certif
 	}
 	sequenceText := strconv.FormatUint(sequence, 10)
 	bodyCopy := bytes.Clone(body)
-	signature := ed25519.Sign(key, transcript(origin, lantrust.Fingerprint(cert), sequenceText, timeText, bodyCopy))
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, origin+Path, bytes.NewReader(bodyCopy))
+	signature := ed25519.Sign(key, transcriptForPath(origin, path, lantrust.Fingerprint(cert), sequenceText, timeText, bodyCopy))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, origin+path, bytes.NewReader(bodyCopy))
 	if err != nil {
 		return nil, ErrRequest
 	}

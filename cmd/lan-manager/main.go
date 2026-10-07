@@ -71,7 +71,10 @@ func prepareWithApplicationChecks(m lanconfig.Material, enrollment *enrollmentco
 	if e := c.Validate(); e != nil {
 		return nil, e
 	}
-	if enrollment != nil && !enrollment.ValidFor(c) {
+	if enrollment != nil && (!enrollment.ValidFor(c) || enrollment.StoreConfig().Binding.CollectionProfile == enrollmentcrypto.CollectionProfileWindowsInventory) {
+		return nil, enrollmentconfig.ErrConfiguration
+	}
+	if c.WindowsInventoryEnabled && enrollment == nil {
 		return nil, enrollmentconfig.ErrConfiguration
 	}
 	if enrollment == nil && enrollmentconfig.RejectEnrollmentMode(c.StateDirectory) != nil {
@@ -97,12 +100,18 @@ func prepareWithApplicationChecks(m lanconfig.Material, enrollment *enrollmentco
 	var enrolledStore *enrollmentstore.Store
 	var enrolledService *enrollmentservice.Service
 	var enrolledIngress *enrollmenttransport.Ingress
+	var windowsStore *enrollmentstore.Store
+	var windowsService *enrollmentservice.Service
+	var windowsIngress *enrollmenttransport.Ingress
 	fail := func(err error) (*prepared, error) {
 		if actions != nil {
 			actions.Close()
 		}
 		if enrolledStore != nil {
 			enrolledStore.Close()
+		}
+		if windowsStore != nil {
+			windowsStore.Close()
 		}
 		trustStore.Close()
 		return nil, err
@@ -133,6 +142,24 @@ func prepareWithApplicationChecks(m lanconfig.Material, enrollment *enrollmentco
 		enrolledIngress, e = enrollmenttransport.New(enrolledStore, enrollment.Issuer().IssuerDER(), c.AgentOrigin, enrolledService.JournalCache())
 		if e != nil {
 			return fail(e)
+		}
+	}
+	if c.WindowsInventoryEnabled {
+		cfg, err := enrollment.WindowsStoreConfig()
+		if err != nil {
+			return fail(err)
+		}
+		windowsStore, err = enrollmentstore.Open(filepath.Join(c.StateDirectory, enrollmentconfig.WindowsDatabaseFile), cfg, enrollment.Issuer().IssuerDER())
+		if err != nil {
+			return fail(err)
+		}
+		windowsService, err = enrollmentservice.New(windowsStore, enrollment.Issuer(), nil)
+		if err != nil {
+			return fail(err)
+		}
+		windowsIngress, err = enrollmenttransport.New(windowsStore, enrollment.Issuer().IssuerDER(), c.AgentOrigin, windowsService.JournalCache())
+		if err != nil {
+			return fail(err)
 		}
 	}
 	if c.ServiceActionsConfigFile != "" {
@@ -207,6 +234,9 @@ func prepareWithApplicationChecks(m lanconfig.Material, enrollment *enrollmentco
 			if enrolledStore != nil {
 				enrolledStore.Close()
 			}
+			if windowsStore != nil {
+				windowsStore.Close()
+			}
 		})
 	}
 	app, e := api.New(appStore, 8787, c.WebDirectory, model.Device{})
@@ -252,6 +282,14 @@ func prepareWithApplicationChecks(m lanconfig.Material, enrollment *enrollmentco
 		operatorConfig.EnrollmentBootstrap = api.EnrollmentBootstrap{SchemaVersion: "tracebolt.enrollment-bootstrap.v2", ManagerInstanceID: binding.InstanceID, Profile: binding.Profile, EnrollmentOrigin: c.OperatorOrigin, AgentOrigin: c.AgentOrigin, CollectionProfile: binding.CollectionProfile, ServerCAPEM: enrollment.ServerCAPEM(), IssuerRootPEM: enrollment.RootPEM(), IssuerPEM: enrollment.IssuerPEM()}
 		operatorConfig.Devices = func() ([]model.Device, error) { return enrolledService.Devices(context.Background(), time.Now().UTC()) }
 	}
+	if windowsService != nil {
+		b := windowsService.Binding()
+		operatorConfig.WindowsEnrollment = windowsService
+		operatorConfig.WindowsEnrollmentBootstrap = api.EnrollmentBootstrap{SchemaVersion: "tracebolt.enrollment-bootstrap.v2", ManagerInstanceID: b.InstanceID, Profile: b.Profile, EnrollmentOrigin: c.OperatorOrigin, AgentOrigin: c.AgentOrigin, CollectionProfile: b.CollectionProfile, ServerCAPEM: enrollment.ServerCAPEM(), IssuerRootPEM: enrollment.RootPEM(), IssuerPEM: enrollment.IssuerPEM()}
+		operatorConfig.Devices = func() ([]model.Device, error) {
+			return mergedWindowsDevices(context.Background(), enrolledService, windowsService, time.Now().UTC())
+		}
+	}
 	operator, e := api.NewLANOperatorHandler(app, operatorConfig)
 	if e != nil {
 		closeAll()
@@ -268,6 +306,9 @@ func prepareWithApplicationChecks(m lanconfig.Material, enrollment *enrollmentco
 	if e != nil {
 		closeAll()
 		return nil, e
+	}
+	if windowsIngress != nil {
+		agent = withWindowsIngress(agent, windowsIngress)
 	}
 	return &prepared{operator: operator, agent: agent, operatorTLS: operatorTLS, agentTLS: agentTLS, close: closeAll, maintenance: enrolledService, health: app, alarms: alarmWorker, applicationChecks: applicationChecks}, nil
 }

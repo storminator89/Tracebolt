@@ -31,14 +31,14 @@ function ResourceChart({ view, metric, label }: { view: ResourceHistory; metric:
         <div id={description} className={`resource-chart-inspection ${sample ? 'visible' : ''}`} aria-live="polite">{sample ? <><strong>{new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }).format(sample.value!)}%</strong><time dateTime={sample.collectedAt}>{fullDate(sample.collectedAt)}</time></> : <span>{c.keyboard}</span>}</div>
     </figure>;
 }
-export function ResourceHistoryCharts({ deviceId, sessionKey, ready }: { deviceId: string; sessionKey: string | null; ready: boolean }) {
+export function ResourceHistoryCharts({ deviceId, sessionKey, ready, platform }: { deviceId: string; sessionKey: string | null; ready: boolean; platform?: 'windows' }) {
     const operator = useOperator(), [locale] = useLocale(), c = copy[locale];
     const enabled = ready && operator?.mode === 'lan' && operator.authenticated;
     const { view, loading, error, retry } = useResourceHistory(deviceId, sessionKey, Boolean(enabled));
     if (operator?.mode !== 'lan' || !operator.authenticated) return null;
     return <section className="resource-history" aria-label={c.title} aria-busy={loading}>
         <header><h3>{c.title}</h3></header>
-        {error ? <div className="resource-history-message" role="status"><span>{c[error]}</span>{error !== 'session' && <button type="button" className="text-button" onClick={retry}>{c.retry}</button>}</div> : !view ? <p className="resource-history-message" role="status">{c.loading}</p> : ['revoked', 'expired', 'not_configured'].includes(view.status) ? <p className="resource-history-message" role="status">{c[view.status as 'revoked' | 'expired' | 'not_configured']}</p> : <><div className="resource-history-grid">{(['cpu', 'memory', 'disk'] as const).map(metric => <ResourceChart key={metric} view={view} metric={metric} label={metric === 'cpu' ? 'CPU' : c[metric]}/>)}</div>{view.status === 'awaiting' && <p className="resource-history-message">{c.empty}</p>}</>}
-        <details className="resource-history-note"><summary>{c.detail}</summary><p>{c.note}</p><p>{c.diskNote}</p></details>
+        {error ? <div className="resource-history-message" role="status"><span>{c[error]}</span>{error !== 'session' && <button type="button" className="text-button" onClick={retry}>{c.retry}</button>}</div> : !view ? <p className="resource-history-message" role="status">{c.loading}</p> : ['revoked', 'expired', 'not_configured'].includes(view.status) ? <p className="resource-history-message" role="status">{c[view.status as 'revoked' | 'expired' | 'not_configured']}</p> : <><div className="resource-history-grid">{(['cpu', 'memory', 'disk'] as const).map(metric => <ResourceChart key={metric} view={view} metric={metric} label={metric === 'cpu' ? 'CPU' : metric === 'disk' && platform === 'windows' ? locale === 'de' ? 'Systemvolume' : 'System volume' : c[metric]}/>)}</div>{view.status === 'awaiting' && <p className="resource-history-message">{c.empty}</p>}</>}
+        <details className="resource-history-note"><summary>{c.detail}</summary><p>{c.note}</p><p>{platform === 'windows' ? locale === 'de' ? 'Belegung des Windows-Systemvolumes, keine Datenträgeraktivität.' : 'Windows system-volume usage, not disk activity.' : c.diskNote}</p></details>
     </section>;
 }

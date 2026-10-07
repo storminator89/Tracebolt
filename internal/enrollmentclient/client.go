@@ -26,7 +26,10 @@ type Options struct {
 	ClaimOnly, ResumeOnly    bool
 	StateDirectory           string
 	InsecureHTTPAcknowledged bool
-	Display                  func(TrustDisplay) error
+	// WindowsInventoryAcknowledged is required for fresh Windows inventory setup.
+	// ResumeOnly validates an existing service-bound identity without changing scope.
+	WindowsInventoryAcknowledged bool
+	Display                      func(TrustDisplay) error
 	// Secret returns fresh invitation bytes in memory, only after Display succeeds.
 	// The client clears the returned slice; the callback must not log or save it.
 	Secret       func(context.Context) ([]byte, error)
@@ -94,7 +97,7 @@ type sessionData struct {
 // resets keys/state or installs anything. Uncertain network outcomes reconcile
 // with a fresh bound-key status proof; only uncommitted claims ask for the secret.
 func Run(ctx context.Context, b Bootstrap, o Options) (Result, error) {
-	if o.ClaimOnly && o.ResumeOnly || o.ResumeOnly && o.Secret != nil {
+	if o.ClaimOnly && o.ResumeOnly || o.ResumeOnly && o.Secret != nil || !o.ResumeOnly && (b.CollectionProfile == enrollmentcrypto.CollectionProfileWindowsInventory) != o.WindowsInventoryAcknowledged {
 		return Result{}, ErrBootstrap
 	}
 	if ctx == nil || validatePlatformBootstrap(b, runtime.GOOS) != nil || o.Display == nil || !filepath.IsAbs(o.StateDirectory) || filepath.Clean(o.StateDirectory) != o.StateDirectory {
@@ -151,7 +154,7 @@ func Run(ctx context.Context, b Bootstrap, o Options) (Result, error) {
 		return Result{}, ErrBootstrap
 	}
 	defer c.CloseIdleConnections()
-	s.wire = &wireClient{client: c, origin: b.EnrollmentOrigin}
+	s.wire = &wireClient{client: c, origin: b.EnrollmentOrigin, collectionProfile: b.CollectionProfile}
 	ctx, cancel := context.WithTimeout(ctx, o.Timeout)
 	defer cancel()
 	if s.service != nil && !s.l.Activated {

@@ -14,6 +14,7 @@ import (
 	"localrmm/internal/windowsacceptance/fixture"
 	"localrmm/internal/windowsacceptance/gate"
 	"localrmm/internal/windowsacceptance/native"
+	"localrmm/internal/windowsacceptance/profile"
 )
 
 type driver interface {
@@ -42,13 +43,15 @@ type peer interface {
 }
 type controllerHooks struct {
 	newDriver func(native.Options) (driver, error)
-	startPeer func(context.Context) (peer, error)
+	startPeer func(context.Context, profile.Selection) (peer, error)
 	pause     func(context.Context, time.Duration) error
 	now       func() time.Time
 }
 
 func executeNative(ctx context.Context, g *gate.Grant, o native.Options) gate.Report {
-	return executeWith(ctx, g, o, controllerHooks{newDriver: func(o native.Options) (driver, error) { return native.New(o) }, startPeer: func(c context.Context) (peer, error) { return fixture.Start(c) }, pause: pause, now: time.Now})
+	return executeWith(ctx, g, o, controllerHooks{newDriver: func(o native.Options) (driver, error) { return native.New(o) }, startPeer: func(c context.Context, selected profile.Selection) (peer, error) {
+		return fixture.StartSelected(c, selected)
+	}, pause: pause, now: time.Now})
 }
 func pause(ctx context.Context, d time.Duration) error {
 	timer := time.NewTimer(d)
@@ -84,11 +87,16 @@ func certificateHash(raw string) string {
 	return hex.EncodeToString(s[:])
 }
 func executeWith(ctx context.Context, g *gate.Grant, o native.Options, h controllerHooks) (r gate.Report) {
-	r = gate.NewReport(g.Source())
+	r = gate.NewSelectedReport(g.Source(), g.Selection())
 	if ctx == nil || !g.Check() || h.newDriver == nil || h.startPeer == nil || h.pause == nil || h.now == nil {
 		r.Reason = native.ReasonGuard
 		return r
 	}
+	if o.Selection != (profile.Selection{}) && o.Selection != g.Selection() {
+		r.Reason = native.ReasonGuard
+		return r
+	}
+	o.Selection = g.Selection()
 	d, err := h.newDriver(o)
 	if err != nil {
 		r.Reason = native.ReasonArtifact
@@ -106,11 +114,25 @@ func executeWith(ctx context.Context, g *gate.Grant, o native.Options, h control
 		}
 		if f != nil {
 			defer func() {
-				if f.Close() != nil || !f.Evidence().Closed {
+				closeErr := f.Close()
+				// Close freezes peer authority/receipts before terminal evidence.
+				// A handler accepted during native cleanup must not disappear.
+				e := f.Evidence()
+				r.Inventory = e.Inventory
+				r.LoopbackPeerExercised = e.Frames > 0
+				r.NativeInventorySenderExercised = g.Selection().Inventory() && e.Inventory.Frames > 0 && e.Frames > 0
+				if closeErr != nil || !e.Closed {
 					r.Status = "failed"
 					r.Stage = "owned_cleanup"
 					r.Reason = native.ReasonOperation
 					r.Mark("owned_cleanup", "fail")
+				}
+				// Preserve earlier lifecycle, native cleanup or peer-close failure.
+				if r.Status == "passed_native_subset" && g.Selection().Inventory() && !r.Inventory.Usable() {
+					r.Status = "failed"
+					r.Stage = "profile_report"
+					r.Reason = native.ReasonOperation
+					r.Mark("profile_report", "fail")
 				}
 			}()
 		}
@@ -162,7 +184,7 @@ func executeWith(ctx context.Context, g *gate.Grant, o native.Options, h control
 	if !step("app_only_provisioning", func() error { return d.Provision(ctx, g) }) {
 		return r
 	}
-	f, err = h.startPeer(ctx)
+	f, err = h.startPeer(ctx, g.Selection())
 	if err != nil {
 		r.Stage = "service_prepare"
 		r.Reason = native.ReasonOperation
@@ -180,7 +202,9 @@ func executeWith(ctx context.Context, g *gate.Grant, o native.Options, h control
 	}
 	var fingerprint, comparison string
 	display := func(t enrollmentclient.TrustDisplay) error {
-		if certificateHash(b.ServerCAPEM) == "" || certificateHash(b.IssuerRootPEM) == "" || certificateHash(b.IssuerPEM) == "" || t.HTTPTest || t.Profile != "tls" || t.CollectionProfile != "basic-readonly-v1" || t.ManagerInstanceID != b.ManagerInstanceID || t.EnrollmentOrigin != b.EnrollmentOrigin || t.AgentOrigin != b.AgentOrigin || t.InvitationID != b.InvitationID || len(t.ServerCAFingerprints) != 1 || t.ServerCAFingerprints[0] != certificateHash(b.ServerCAPEM) || t.IssuerRootFingerprint != certificateHash(b.IssuerRootPEM) || t.IssuerFingerprint != certificateHash(b.IssuerPEM) || len(t.KeyFingerprint) != 64 || t.ComparisonCode == "" {
+		tlsMatch := !g.Selection().HTTPTest() && certificateHash(b.ServerCAPEM) != "" && len(t.ServerCAFingerprints) == 1 && t.ServerCAFingerprints[0] == certificateHash(b.ServerCAPEM)
+		httpMatch := g.Selection().HTTPTest() && b.ServerCAPEM == "" && len(t.ServerCAFingerprints) == 0
+		if (!tlsMatch && !httpMatch) || t.HTTPTest != g.Selection().HTTPTest() || t.Profile != g.Selection().Transport || t.CollectionProfile != g.Selection().CollectionProfile || b.Profile != g.Selection().Transport || b.CollectionProfile != g.Selection().CollectionProfile || certificateHash(b.IssuerRootPEM) == "" || certificateHash(b.IssuerPEM) == "" || t.ManagerInstanceID != b.ManagerInstanceID || t.EnrollmentOrigin != b.EnrollmentOrigin || t.AgentOrigin != b.AgentOrigin || t.InvitationID != b.InvitationID || t.IssuerRootFingerprint != certificateHash(b.IssuerRootPEM) || t.IssuerFingerprint != certificateHash(b.IssuerPEM) || len(t.KeyFingerprint) != 64 || t.ComparisonCode == "" {
 			return errors.New("fixture public trust mismatch")
 		}
 		fingerprint, comparison = t.KeyFingerprint, t.ComparisonCode
@@ -222,6 +246,18 @@ func executeWith(ctx context.Context, g *gate.Grant, o native.Options, h control
 			return native.ErrAcceptance
 		}
 		if d.Stop(ctx, g) != nil || d.StateContinuity(ctx) != nil || !d.Evidence().Ready || !d.Evidence().SenderFloorRetained {
+			return native.ErrAcceptance
+		}
+		return nil
+	}) {
+		return r
+	}
+	if !step("profile_report", func() error {
+		e := f.Evidence()
+		r.Inventory = e.Inventory
+		r.LoopbackPeerExercised = e.Frames > 0
+		r.NativeInventorySenderExercised = g.Selection().Inventory() && e.Inventory.Frames > 0
+		if e.CollectionProfile != g.Selection().CollectionProfile || e.Transport != g.Selection().Transport || !r.LoopbackPeerExercised || (g.Selection().Inventory() && !e.Inventory.Usable()) {
 			return native.ErrAcceptance
 		}
 		return nil

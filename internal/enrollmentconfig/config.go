@@ -117,7 +117,7 @@ func Load(path string, lan lanconfig.Material, now time.Time) (Material, error) 
 	if c.CollectionProfile == "" {
 		c.CollectionProfile = enrollmentcrypto.CollectionProfile
 	}
-	if !enrollmentcrypto.ValidCollectionProfile(c.CollectionProfile) {
+	if !enrollmentcrypto.ValidCollectionProfile(c.CollectionProfile) || c.CollectionProfile == enrollmentcrypto.CollectionProfileWindowsInventory {
 		return fail()
 	}
 	for _, p := range []string{c.IssuerCertificateFile, c.IssuerPrivateKeyFile, c.IssuerRootFile} {
@@ -212,4 +212,16 @@ func (m Material) marker() []byte {
 	root := sha256.Sum256(v.issuer.RootDER())
 	raw, _ := json.Marshal(struct{ SchemaVersion, Profile, InstanceID, OperatorOrigin, AgentOrigin, CollectionProfile, IssuerFingerprint, IssuerRootFingerprint, ServerTrustHash string }{"tracebolt.identity-mode.v2", v.config.Profile, v.config.InstanceID, v.lan.OperatorOrigin, v.lan.AgentOrigin, v.config.CollectionProfile, v.issuer.Fingerprint(), hex.EncodeToString(root[:]), hex.EncodeToString(server[:])})
 	return raw
+}
+
+// WindowsStoreConfig derives a separate immutable collection domain only after
+// an explicit manager configuration enables this Windows profile. Existing Linux
+// stores and certificates keep their original binding; no identity is upgraded.
+func (m Material) WindowsStoreConfig() (enrollmentstate.Config, error) {
+	if m.value == nil || !m.value.lan.WindowsInventoryEnabled || m.value.config.CollectionProfile == enrollmentcrypto.CollectionProfileWindowsInventory {
+		return enrollmentstate.Config{}, ErrConfiguration
+	}
+	cfg := m.StoreConfig()
+	cfg.Binding.CollectionProfile = enrollmentcrypto.CollectionProfileWindowsInventory
+	return cfg, nil
 }

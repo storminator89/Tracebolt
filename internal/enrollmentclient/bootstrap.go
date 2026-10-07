@@ -35,6 +35,12 @@ var (
 const BootstrapVersion = "tracebolt.enrollment-bootstrap.v2"
 const maxJSON = 64 << 10
 
+// WindowsInventoryHTTPPrivacy is required in addition to inventory scope consent.
+const WindowsInventoryHTTPPrivacy = "WARNING: HTTP-test sends invitation secrets, hostname, IP addresses, process/service/software inventory and basic metrics in plaintext. Anyone on the network path can read this data. Signatures prove client key possession but do not encrypt traffic or authenticate the manager; manager responses can be forged or changed. Use only a disposable test network. Production must use HTTPS. This acknowledgement does not authorize event content, actions or updates."
+
+// WindowsInventoryPrivacy must be shown before invitation entry.
+const WindowsInventoryPrivacy = "Windows inventory includes the local hostname, interface names and IP addresses; caller-visible process IDs, parent IDs, names and thread counts; service names, display names, states and PIDs; machine uninstall software names, versions, publishers and registry views; and OS, uptime, CPU, physical RAM and system-volume metrics. These fields can reveal private names, installed software and network topology. Rows are bounded and may be partial, denied or unavailable; counts cover only the reported local API scope. No command lines, executable paths, owners, process memory, MAC addresses, DNS, routes, sockets, event content, remote actions or updates are included. A fresh explicitly acknowledged Windows identity is required; existing basic or Linux ledgers cannot be adopted or reset. Production TLS is the default; disposable HTTP test transport requires an additional explicit plaintext acknowledgement. Inventory stays in the operator view and is excluded from AI export."
+
 type Bootstrap struct {
 	SchemaVersion     string `json:"schemaVersion"`
 	ManagerInstanceID string `json:"managerInstanceId"`
@@ -161,6 +167,9 @@ func validateBootstrap(b Bootstrap, now time.Time) (TrustDisplay, error) {
 		d.CollectionPrivacy = strings.Replace(d.CollectionPrivacy, "No command lines, environment, account IDs, IP/MAC address values, raw log messages or package descriptions are collected.", "No command lines, environment, account IDs, MAC addresses, raw log messages, network payloads or package descriptions are collected.", 1)
 		d.CollectionPrivacy += " This profile includes system-service runtime and startup/enablement states, locally observed TCP listeners and connections, UDP-bound/connected sockets, numeric local/remote IP addresses and ports, and process IDs/names where attribution is permitted. These fields can reveal private network topology and user activity. Missing ownership and unsupported scopes remain explicitly unknown. Local binding does not prove external reachability; no scan, DNS lookup, namespace entry or additional privilege is used."
 		d.CollectionPrivacy += " This fresh profile additionally transfers the complete supported dpkg installed/incomplete package dataset in bounded chunks, including exact OS release identifiers, binary/source package names and versions, source-mapping basis and installation state. Unsupported software managers remain unknown. Resource limits fail the new generation explicitly rather than publishing a truncated list as complete. The previous completed generation retains its original collection time while a new transfer is pending or fails; rows are hidden after 24 hours but current stored bytes can remain until replaced, including after revocation. Names can contain personal or secret-like metadata. No repository URLs, maintainer data, descriptions, APT queries or update installation are included. All package metadata is excluded from AI export. Existing sender state cannot be adopted or reset into this profile."
+	}
+	if b.CollectionProfile == enrollmentcrypto.CollectionProfileWindowsInventory {
+		d.CollectionPrivacy = WindowsInventoryPrivacy
 	}
 	if b.Profile == "tls" {
 		cs, e := publicCertificates(b.ServerCAPEM)

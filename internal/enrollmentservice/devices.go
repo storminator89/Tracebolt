@@ -2,6 +2,7 @@ package enrollmentservice
 
 import (
 	"context"
+	"localrmm/internal/enrollmentcrypto"
 	"localrmm/internal/enrollmentstate"
 	"localrmm/internal/model"
 	"time"
@@ -34,6 +35,10 @@ func (s *Service) Devices(ctx context.Context, now time.Time) ([]model.Device, e
 		}
 		metric := model.Metric{Unit: "%", Quality: "unknown", Source: "Awaiting activated enrolled agent observation"}
 		d := model.Device{ID: id, Name: id, Platform: "unknown", OS: "Awaiting agent", Site: "Local network", Group: "Managed devices", Source: "lan", Status: "unknown", AgentVersion: "unknown", CPU: metric, Memory: metric, Disk: metric, Uptime: "Unknown", Tags: []string{"lan", "read-only", "guided-enrollment"}, Capabilities: []model.Capability{}, Evidence: []model.Evidence{}, Trend: []float64{}, CaseIDs: []string{}}
+		if snapshot.Binding.CollectionProfile == enrollmentcrypto.CollectionProfileWindowsInventory && snapshot.Platform == "windows" {
+			d.Platform = "windows"
+			d.OS = "Awaiting Windows agent"
+		}
 		if observation, ok := observations[id]; ok {
 			d = observation
 			d.Capabilities = profileCapabilities(d.Capabilities, s.binding.CollectionProfile)

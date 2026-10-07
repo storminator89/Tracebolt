@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 
+	"localrmm/internal/enrollmentclient"
+	"localrmm/internal/enrollmentcrypto"
 	"localrmm/internal/windowsservice"
 )
 
@@ -31,7 +33,7 @@ type setupSteps struct {
 	start             func(context.Context, windowsservice.Receipt) (windowsservice.ApplyResult, error)
 }
 
-// setup runs only after the command's explicit apply and basic-scope gate. Its
+// setup runs only after the command's explicit apply and selected-scope gate. Its
 // dependencies keep transaction ordering testable without a Windows mutation.
 func setup(ctx context.Context, bootstrapPath string, s setupSteps) (any, error) {
 	if ctx == nil || s.plan == nil || s.readBootstrap == nil || s.validateBootstrap == nil || s.createJournal == nil || s.apply == nil || s.prepare == nil || s.verifyOwned == nil || s.enroll == nil || s.start == nil {
@@ -101,4 +103,17 @@ func setup(ctx context.Context, bootstrapPath string, s setupSteps) (any, error)
 		return nil, marked(windowsservice.PhaseLifecycle, windowsservice.ReasonOperationFailed, err)
 	}
 	return result, nil
+}
+
+// Selected local consent must match the retained public bootstrap exactly.
+func validateWindowsBootstrapProfile(b enrollmentclient.Bootstrap, selected string) error {
+	return validateWindowsBootstrapConsent(b, selected, false)
+}
+
+func validateWindowsBootstrapConsent(b enrollmentclient.Bootstrap, selected string, insecure bool) error {
+	transportOK := b.Profile == "tls" && !insecure || b.Profile == "http-test" && insecure && selected == enrollmentcrypto.CollectionProfileWindowsInventory
+	if !transportOK || b.CollectionProfile != selected || (selected != enrollmentcrypto.CollectionProfile && selected != enrollmentcrypto.CollectionProfileWindowsInventory) {
+		return errLifecycle
+	}
+	return nil
 }

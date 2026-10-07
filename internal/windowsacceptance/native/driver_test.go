@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"localrmm/internal/windowsacceptance/profile"
 	"reflect"
 	"strings"
 	"testing"
@@ -99,5 +100,22 @@ func TestEvidenceHasOnlyFiniteStagesReasonsAndBooleans(t *testing.T) {
 		if f.Type.Kind() != reflect.Bool && f.Type != reflect.TypeOf(StageIdle) && f.Type != reflect.TypeOf(ReasonNone) {
 			t.Fatal("report expanded beyond finite evidence")
 		}
+	}
+}
+
+type selectedGuard struct{ selected profile.Selection }
+
+func (g selectedGuard) Check() bool                  { return true }
+func (g selectedGuard) Selection() profile.Selection { return g.selected }
+func TestDriverRejectsUnboundAndDifferentProfileBeforePlatform(t *testing.T) {
+	for _, selected := range []profile.Selection{{}, profile.BasicTLS()} {
+		d := &Driver{options: Options{Selection: selected}}
+		if d.enter(context.Background(), selectedGuard{profile.InventoryTLS()}, StageProvision) || d.Evidence().Reason != ReasonGuard {
+			t.Fatal("profile boundary reached platform")
+		}
+	}
+	d := &Driver{options: Options{Selection: profile.InventoryTLS()}}
+	if !d.enter(context.Background(), selectedGuard{profile.InventoryTLS()}, StageProvision) {
+		t.Fatal("same synthetic scope refused")
 	}
 }

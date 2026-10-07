@@ -177,3 +177,29 @@ func TestPendingSuccessfulAttemptWithoutReadyDoesNotSpin(t *testing.T) {
 		t.Fatal("unready successful attempt spun or constructed sender")
 	}
 }
+
+func TestPendingWindowsHTTPRetainsExactTransportAndRechecksHandoff(t *testing.T) {
+	for _, stage := range []string{"matching", "inspect-mismatch", "handoff-mismatch"} {
+		f := &pendingFixture{active: true}
+		h := f.hooks()
+		inspect, mark := h.inspect, h.markReady
+		h.inspect = func() (enrollmentclient.ServiceState, error) {
+			s, e := inspect()
+			s.HTTPTest = stage != "inspect-mismatch"
+			return s, e
+		}
+		h.markReady = func() (enrollmentclient.ServiceState, error) {
+			s, e := mark()
+			s.HTTPTest = stage != "handoff-mismatch"
+			return s, e
+		}
+		err := runPendingWindowsProfile(context.Background(), pendingConfig, true, f.signal, h)
+		if stage == "matching" {
+			if err != nil || f.sends != 1 {
+				t.Fatal("explicit HTTP handoff rejected", err)
+			}
+		} else if err == nil || f.sends != 0 {
+			t.Fatal("transport change reached sender")
+		}
+	}
+}

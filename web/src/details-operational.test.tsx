@@ -1,7 +1,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DeviceDetail } from './details';
-import { AUTH_REQUIRED_EVENT, request } from './api';
+import { APIError, AUTH_REQUIRED_EVENT, request } from './api';
 import { AuthBoundary } from './auth';
 import { setLocale } from './i18n';
 import type { Device, Metric } from './types';
@@ -24,8 +24,28 @@ describe('actual device page operational integration',()=>{
   expect(tab).toHaveAttribute('aria-selected','true');expect(screen.getByRole('tabpanel',{name:'Inventory'})).toHaveAttribute('aria-labelledby',tab.id);expect(request).toHaveBeenCalledWith(`/devices/${id}/operational`,expect.objectContaining({signal:expect.any(AbortSignal)}));
   expect(screen.getByText('Available updates')).toBeVisible();expect(screen.getByText('Vulnerabilities / CVEs')).toBeVisible();expect(screen.queryByText('Secure')).not.toBeInTheDocument();
  });
- it.each([{synthetic:true},{source:'sandbox' as const},{source:'local' as const},{platform:'windows' as const},{platform:'macos' as const}])('does not invent operational support for %j',async overrides=>{
+ it.each([{synthetic:true},{source:'sandbox' as const},{source:'local' as const},{platform:'macos' as const}])('does not invent operational support for %j',async overrides=>{
   selected=device(overrides);render(detail());await screen.findByRole('tab',{name:'Overview'});expect(screen.queryByRole('tab',{name:'Inventory'})).not.toBeInTheDocument();expect(request).not.toHaveBeenCalledWith(expect.stringContaining('/operational'),expect.anything());
+ });
+ it.each(['not_configured','unavailable','missing'] as const)('keeps basic Windows inventory %s without inventing Linux collection',async status=>{
+  selected=device({platform:'windows',os:'Basic Windows fixture'});
+  vi.mocked(request).mockImplementation(async path=>{
+   if(path==='/auth/session')return session;
+   if(path===`/devices/${id}`)return selected;
+   if(path.endsWith('/windows-inventory')){
+    if(status==='missing')throw new APIError('private missing view',404);
+    return {schemaVersion:'tracebolt.windows-inventory-view.v1',deviceId:id,collectionProfile:'windows-inventory-v1',serverNow:session.serverNow,maxAgeSeconds:120,status,sequence:null,receivedAt:null,snapshot:null};
+   }
+   throw new APIError('private unavailable source',404);
+  });
+  render(detail());const tab=await screen.findByRole('tab',{name:'Inventory',exact:true});fireEvent.click(tab);
+  const panel=screen.getByRole('region',{name:'Windows inventory',exact:true});
+  await within(panel).findByText(status==='not_configured'?'Windows inventory is not configured for this identity.':'Windows inventory is unavailable.');
+  expect(within(panel).queryByRole('table')).not.toBeInTheDocument();expect(within(panel).queryByText('Recent observation')).not.toBeInTheDocument();
+  expect(screen.queryByText('Legacy inventory source')).not.toBeInTheDocument();expect(screen.queryByText('Operational inventory')).not.toBeInTheDocument();
+  const paths=vi.mocked(request).mock.calls.map(([path])=>path);
+  expect(paths).toContain(`/devices/${id}/windows-inventory`);expect(paths.some(path=>path.endsWith('/operational')||path.includes('/inventory/')||path.endsWith('/packages')||path.includes('/journal'))).toBe(false);
+  expect(document.body).not.toHaveTextContent('private missing view');expect(document.body).not.toHaveTextContent('private unavailable source');
  });
  it('permits an unsampled LAN identity to show its explicit awaiting state',async()=>{
   selected=device({platform:'unknown'});vi.mocked(request).mockImplementation(async path=>path==='/auth/session'?session:path.endsWith('/operational')?view(id,'awaiting'):selected);await inventory();await screen.findByText('The operational profile is selected. Waiting for its first accepted observation.');expect(screen.queryByText(/739\d+ days/)).not.toBeInTheDocument();expect(document.querySelector('.detail-badges .status-unknown')).toHaveTextContent('Not assessed');

@@ -11,6 +11,7 @@ import (
 	"unsafe"
 
 	"golang.org/x/sys/windows"
+	"localrmm/internal/windowspath"
 )
 
 const trustedInstallerSID = "S-1-5-80-956008885-3418522649-1831038044-1853292631-2271478464"
@@ -19,6 +20,9 @@ func trustedWriter(sid string) bool {
 	return sid == "S-1-5-18" || sid == "S-1-5-32-544" || sid == trustedInstallerSID
 }
 
+// Open each component relative to its held parent with OBJ_DONT_REPARSE.
+// Directory handles include FILE_LIST_DIRECTORY, which makes no-delete sharing
+// an actual rename/delete pin (metadata-only opens do not).
 // Hold every checked path open without delete sharing until the digest is
 // complete, and deny write sharing on the executable. Reject reparse points and
 // untrusted owner/replacement-capable ACEs. Existing ancestor admission is a
@@ -54,15 +58,21 @@ func verifyExecutable(l Layout) (string, error) {
 	var file windows.Handle
 	for i, path := range paths {
 		directory := i < len(paths)-1
-		access := uint32(windows.READ_CONTROL | windows.FILE_READ_ATTRIBUTES)
+		access := uint32(windowspath.DirectoryAccess)
 		if !directory {
-			access |= windows.GENERIC_READ
+			access = windows.READ_CONTROL | windows.FILE_READ_ATTRIBUTES | windows.GENERIC_READ
 		}
 		share := uint32(windows.FILE_SHARE_READ)
 		if directory {
 			share |= windows.FILE_SHARE_WRITE
 		}
-		h, err := windows.CreateFile(windows.StringToUTF16Ptr(path), access, share, nil, windows.OPEN_EXISTING, windows.FILE_FLAG_OPEN_REPARSE_POINT|windows.FILE_FLAG_BACKUP_SEMANTICS, 0)
+		var h windows.Handle
+		var err error
+		if i == 0 {
+			h, err = windowspath.OpenRoot(path)
+		} else {
+			h, err = windowspath.OpenChild(held[len(held)-1], parts[i-1], directory, access, share)
+		}
 		if err != nil {
 			return "", ErrUnsafePath
 		}
@@ -76,6 +86,18 @@ func verifyExecutable(l Layout) (string, error) {
 		}
 		if !directory && info.NumberOfLinks != 1 {
 			return "", ErrUnsafePath
+		}
+		var final [512]uint16
+		n, finalErr := windows.GetFinalPathNameByHandle(h, &final[0], uint32(len(final)), 0)
+		if finalErr != nil || n == 0 || n >= uint32(len(final)) || windows.UTF16ToString(final[:n]) != `\\?\`+path {
+			return "", ErrUnsafePath
+		}
+		if directory {
+			var flags uint32
+			var iosb windows.IO_STATUS_BLOCK
+			if windows.NtQueryInformationFile(h, &iosb, (*byte)(unsafe.Pointer(&flags)), 4, windows.FileCaseSensitiveInformation) != nil || flags != 0 {
+				return "", ErrUnsafePath
+			}
 		}
 		if err = validatePathACL(h, directory); err != nil {
 			return "", err
@@ -126,7 +148,7 @@ func validatePathDescriptor(sd *windows.SECURITY_DESCRIPTOR, directory bool) err
 		writes |= windows.FILE_WRITE_DATA | windows.FILE_APPEND_DATA | windows.FILE_WRITE_EA | windows.FILE_WRITE_ATTRIBUTES
 	}
 	// Do not use descriptor-only ancestor scans as an effective-access test.
-	// Windows decides each unchanged CreateFile request using the current token,
+	// Windows decides each native open request using the current token,
 	// its enabled groups and ACE ordering. The installer has no future SCM token.
 	// The final app-owned executable retains its conservative sufficient read
 	// policy; its administrator-only/read-denied variants must still fail plan.

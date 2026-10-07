@@ -20,6 +20,8 @@ import (
 	"localrmm/internal/enrollmentcrypto"
 	"localrmm/internal/enrollmentstate"
 	"localrmm/internal/lanstore"
+	"localrmm/internal/signedhttp"
+	"localrmm/internal/windowsacceptance/profile"
 )
 
 const prefix = "/v2/enrollment/"
@@ -48,7 +50,7 @@ func (f *Fixture) serve(w http.ResponseWriter, r *http.Request, agent bool) {
 	if agent {
 		limit = lanstore.MaxFrameBytes
 	}
-	if !validRequest(r, origin, agent) {
+	if !validRequestSelected(r, origin, agent, s.selection) {
 		fail(w, 400)
 		return
 	}
@@ -72,7 +74,19 @@ func (f *Fixture) serve(w http.ResponseWriter, r *http.Request, agent bool) {
 		fail(w, 503)
 		return
 	}
-	raw, err := io.ReadAll(io.LimitReader(r.Body, int64(limit)+1))
+	var raw []byte
+	var verified *signedhttp.Verified
+	var err error
+	if agent && s.selection.HTTPTest() {
+		v, e := s.signed.Verify(r)
+		if e != nil {
+			fail(w, 403)
+			return
+		}
+		verified, raw = &v, v.Body
+	} else {
+		raw, err = io.ReadAll(io.LimitReader(r.Body, int64(limit)+1))
+	}
 	defer clear(raw)
 	if err != nil || len(raw) > limit || int64(len(raw)) != r.ContentLength {
 		fail(w, 400)
@@ -85,10 +99,10 @@ func (f *Fixture) serve(w http.ResponseWriter, r *http.Request, agent bool) {
 		return
 	}
 	if agent {
-		s.telemetry(w, r, raw)
+		s.telemetry(w, r, raw, verified)
 		return
 	}
-	if r.URL.Path == prefix+"challenge" {
+	if r.URL.Path == s.selection.EnrollmentPrefix()+"challenge" {
 		s.challenge(w, raw)
 		return
 	}
@@ -96,11 +110,22 @@ func (f *Fixture) serve(w http.ResponseWriter, r *http.Request, agent bool) {
 }
 
 func validRequest(r *http.Request, origin string, agent bool) bool {
+	return validRequestSelected(r, origin, agent, profile.BasicTLS())
+}
+
+func validRequestSelected(r *http.Request, origin string, agent bool, selection profile.Selection) bool {
 	u, e := url.Parse(origin)
-	if e != nil || r == nil || r.URL == nil || r.Method != http.MethodPost || r.Host != u.Host || r.Body == nil || r.ContentLength <= 0 || len(r.TransferEncoding) != 0 || len(r.Trailer) != 0 || r.TLS == nil || !r.TLS.HandshakeComplete || r.TLS.Version != tls.VersionTLS13 {
+	if e != nil || selection.Validate() != nil || !validOrigin(origin, selection) || r == nil || r.URL == nil || r.Method != http.MethodPost || r.Host != u.Host || r.Body == nil || r.ContentLength <= 0 || len(r.TransferEncoding) != 0 || len(r.Trailer) != 0 {
 		return false
 	}
-	if r.URL.RawPath != "" || r.URL.RawQuery != "" || r.URL.ForceQuery || r.URL.Fragment != "" || r.URL.RawFragment != "" || r.URL.Opaque != "" || r.URL.User != nil || r.URL.Scheme != "" && r.URL.Scheme != "https" || r.URL.Host != "" && r.URL.Host != u.Host || r.RequestURI != "" && r.RequestURI != r.URL.Path {
+	if selection.HTTPTest() {
+		if r.TLS != nil {
+			return false
+		}
+	} else if r.TLS == nil || !r.TLS.HandshakeComplete || r.TLS.Version != tls.VersionTLS13 {
+		return false
+	}
+	if r.URL.RawPath != "" || r.URL.RawQuery != "" || r.URL.ForceQuery || r.URL.Fragment != "" || r.URL.RawFragment != "" || r.URL.Opaque != "" || r.URL.User != nil || r.URL.Scheme != "" && r.URL.Scheme != u.Scheme || r.URL.Host != "" && r.URL.Host != u.Host || r.RequestURI != "" && r.RequestURI != r.URL.Path {
 		return false
 	}
 	host, _, e := net.SplitHostPort(r.RemoteAddr)
@@ -108,12 +133,13 @@ func validRequest(r *http.Request, origin string, agent bool) bool {
 		return false
 	}
 	if agent {
-		if r.URL.Path != telemetryPath {
+		if r.URL.Path != selection.TelemetryPath() {
 			return false
 		}
 	} else {
+		p := selection.EnrollmentPrefix()
 		switch r.URL.Path {
-		case prefix + "challenge", prefix + "claim", prefix + "status", prefix + "credential", prefix + "activate":
+		case p + "challenge", p + "claim", p + "status", p + "credential", p + "activate":
 		default:
 			return false
 		}
@@ -121,8 +147,18 @@ func validRequest(r *http.Request, origin string, agent bool) bool {
 	size, types, lengths := 128, 0, 0
 	for key, values := range r.Header {
 		lower := strings.ToLower(key)
-		if lower == "cookie" || lower == "authorization" || lower == "proxy-authorization" || lower == "origin" || lower == "forwarded" || strings.HasPrefix(lower, "x-forwarded-") || strings.HasPrefix(lower, "sec-fetch-") || strings.HasPrefix(lower, "x-tracebolt-") || lower == "content-encoding" || lower == "trailer" || lower == "transfer-encoding" || lower == "expect" || lower == "upgrade" || lower == "host" {
+		if lower == "cookie" || lower == "authorization" || lower == "proxy-authorization" || lower == "origin" || lower == "forwarded" || strings.HasPrefix(lower, "x-forwarded-") || strings.HasPrefix(lower, "sec-fetch-") || lower == "content-encoding" || lower == "trailer" || lower == "transfer-encoding" || lower == "expect" || lower == "upgrade" || lower == "host" {
 			return false
+		}
+		if strings.HasPrefix(lower, "x-tracebolt-") {
+			if !agent || !selection.HTTPTest() {
+				return false
+			}
+			switch lower {
+			case strings.ToLower(signedhttp.CertificateHeader), strings.ToLower(signedhttp.SequenceHeader), strings.ToLower(signedhttp.SignedAtHeader), strings.ToLower(signedhttp.SignatureHeader):
+			default:
+				return false
+			}
 		}
 		if lower == "content-type" {
 			types += len(values)
@@ -227,7 +263,7 @@ func (s *state) challenge(w http.ResponseWriter, raw []byte) {
 		fail(w, 503)
 		return
 	}
-	c := enrollmentcrypto.ChallengeContext{ManagerInstanceID: s.bootstrap.ManagerInstanceID, Profile: "tls", Origin: s.bootstrap.EnrollmentOrigin, CollectionProfile: enrollmentcrypto.CollectionProfile, InvitationID: s.bootstrap.InvitationID, ClaimID: in["claimId"], Challenge: base64.RawURLEncoding.EncodeToString(nonce[:]), ExpiresAt: now.Add(60 * time.Second).Unix()}
+	c := enrollmentcrypto.ChallengeContext{ManagerInstanceID: s.bootstrap.ManagerInstanceID, Profile: s.selection.Transport, Origin: s.bootstrap.EnrollmentOrigin, CollectionProfile: s.selection.CollectionProfile, InvitationID: s.bootstrap.InvitationID, ClaimID: in["claimId"], Challenge: base64.RawURLEncoding.EncodeToString(nonce[:]), ExpiresAt: now.Add(60 * time.Second).Unix()}
 	s.challenges[c.Challenge] = challenge{context: c, purpose: purpose}
 	write(w, struct {
 		SchemaVersion string                            `json:"schemaVersion"`
@@ -238,7 +274,7 @@ func (s *state) challenge(w http.ResponseWriter, raw []byte) {
 }
 
 func (s *state) proof(w http.ResponseWriter, r *http.Request, raw []byte) {
-	purpose := strings.TrimPrefix(r.URL.Path, prefix)
+	purpose := strings.TrimPrefix(r.URL.Path, s.selection.EnrollmentPrefix())
 	if purpose == "activate" {
 		purpose = "activation"
 	}
@@ -324,15 +360,31 @@ func deadline(v enrollmentstate.Snapshot) int64 {
 	return v.DeadlineAt
 }
 
-func (s *state) telemetry(w http.ResponseWriter, r *http.Request, raw []byte) {
+func (s *state) telemetry(w http.ResponseWriter, r *http.Request, raw []byte, signed *signedhttp.Verified) {
 	now := s.now().UTC()
 	v, e := s.snapshot()
-	if e != nil || v.State != enrollmentstate.Activated || now.Unix() < v.Intent.NotBefore || now.Unix() >= v.Intent.NotAfter || !s.verifyPeer(r, v, now) {
+	if e != nil || !s.activeIdentity(v, now) {
+		fail(w, 403)
+		return
+	}
+	if s.selection.HTTPTest() {
+		// Final authority check shares the replay/receipt lock; verification alone
+		// cannot keep an expired, closed, or otherwise changed identity active.
+		current, err := s.authorizeCertificate(s.issued.DER(), now)
+		if err != nil || signed == nil || signed.Agent != current || !bytes.Equal(signed.Body, raw) || r.TLS != nil {
+			fail(w, 403)
+			return
+		}
+	} else if signed != nil || !s.verifyPeer(r, v, now) {
 		fail(w, 403)
 		return
 	}
 	frame, e := lanstore.ValidateFrame(raw, now)
-	if e != nil || frame.Observation.Platform != "windows" || !lanstore.FrameMatchesCollectionProfile(frame, enrollmentcrypto.CollectionProfile) {
+	if e != nil || frame.Observation.Platform != "windows" || !lanstore.FrameMatchesCollectionProfile(frame, s.selection.CollectionProfile) {
+		fail(w, 400)
+		return
+	}
+	if signed != nil && (signed.Sequence != frame.Sequence || !signed.SignedAt.Equal(frame.Observation.GeneratedAt)) {
 		fail(w, 400)
 		return
 	}
@@ -348,6 +400,10 @@ func (s *state) telemetry(w http.ResponseWriter, r *http.Request, raw []byte) {
 		fail(w, 409)
 		return
 	}
+	if frame.WindowsInventory != nil && s.frames > 0 && (frame.WindowsInventory.GenerationID == s.lastWindowsGeneration || !frame.WindowsInventory.CollectedAt.After(s.lastWindowsCollected)) {
+		fail(w, 409)
+		return
+	}
 	if s.frames >= MaxFrames {
 		fail(w, 503)
 		return
@@ -356,8 +412,22 @@ func (s *state) telemetry(w http.ResponseWriter, r *http.Request, raw []byte) {
 	s.lastDigest = hash
 	s.lastGenerated = frame.Observation.GeneratedAt
 	s.frames++
+	if inventory := frame.WindowsInventory; inventory != nil {
+		s.lastWindowsGeneration, s.lastWindowsCollected = inventory.GenerationID, inventory.CollectedAt
+		d := frame.Observation.Observation
+		s.inventory = profile.Observation{Frames: s.frames, CPU: metricQuality(d.CPU.Quality), Memory: metricQuality(d.Memory.Quality), Disk: metricQuality(d.Disk.Quality), Hostname: inventory.Hostname.Quality, Processes: inventory.Processes.Quality, Services: inventory.Services.Quality, Software: inventory.Software.Quality, Interfaces: inventory.Network.Quality}
+	}
 	write(w, s.lastReceipt)
 	// No raw body, bundle, metric, label, or observation is retained in state.
+}
+
+func metricQuality(q string) string {
+	switch q {
+	case "healthy", "partial", "denied":
+		return q
+	default:
+		return "unavailable"
+	}
 }
 
 func (s *state) verifyPeer(r *http.Request, v enrollmentstate.Snapshot, now time.Time) bool {

@@ -27,7 +27,7 @@ func TestAutomaticEventCannotRunApprovedLookingFlags(t *testing.T) {
 	old := compiledSource
 	compiledSource = strings.Repeat("a", 40)
 	defer func() { compiledSource = old }()
-	args := []string{"--expected-source=" + compiledSource, "--approve-services", "--approve-identity", "--approve-app-acls", "--approve-loopback-tls", "--approve-cleanup", "--service-artifact=fixture.exe", "--service-sha256=" + strings.Repeat("b", 64), "--controller-artifact=fixture-controller.exe", "--controller-sha256=" + strings.Repeat("c", 64)}
+	args := []string{"--expected-source=" + compiledSource, "--approve-services", "--approve-identity", "--approve-app-acls", "--approve-loopback", "--approve-cleanup", "--collection-profile=basic-readonly-v1", "--transport-profile=tls", "--service-artifact=fixture.exe", "--service-sha256=" + strings.Repeat("b", 64), "--controller-artifact=fixture-controller.exe", "--controller-sha256=" + strings.Repeat("c", 64)}
 	env := gate.Environment{Event: "push", Actions: "true", RunnerOS: "Windows", RunnerEnvironment: "github-hosted", Repository: gate.Repository, Source: compiledSource, RunID: "42"}
 	var out, stderr bytes.Buffer
 	called := false

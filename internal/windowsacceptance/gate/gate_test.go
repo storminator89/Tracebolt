@@ -6,11 +6,12 @@ import (
 	"time"
 
 	"localrmm/internal/windowsacceptance/native"
+	"localrmm/internal/windowsacceptance/profile"
 )
 
 func approvalFixture() (Approval, Environment, string) {
 	sha := strings.Repeat("a", 40)
-	return Approval{sha, true, true, true, true, true}, Environment{"workflow_dispatch", "true", "Windows", "github-hosted", Repository, sha, "123"}, sha
+	return Approval{ExpectedSource: sha, Services: true, Identity: true, AppACLs: true, Loopback: true, Cleanup: true, Selection: profile.BasicTLS()}, Environment{"workflow_dispatch", "true", "Windows", "github-hosted", Repository, sha, "123"}, sha
 }
 func TestManualSourceAuthorityDefaultsDeny(t *testing.T) {
 	a, e, sha := approvalFixture()
@@ -18,7 +19,7 @@ func TestManualSourceAuthorityDefaultsDeny(t *testing.T) {
 		t.Fatal("default approvals accepted")
 	}
 	for _, mutate := range []func(*Approval, *Environment){
-		func(a *Approval, e *Environment) { a.Services = false }, func(a *Approval, e *Environment) { a.Identity = false }, func(a *Approval, e *Environment) { a.AppACLs = false }, func(a *Approval, e *Environment) { a.LoopbackTLS = false }, func(a *Approval, e *Environment) { a.Cleanup = false },
+		func(a *Approval, e *Environment) { a.Services = false }, func(a *Approval, e *Environment) { a.Identity = false }, func(a *Approval, e *Environment) { a.AppACLs = false }, func(a *Approval, e *Environment) { a.Loopback = false }, func(a *Approval, e *Environment) { a.Cleanup = false },
 		func(a *Approval, e *Environment) { a.ExpectedSource = strings.Repeat("b", 40) }, func(a *Approval, e *Environment) { e.Source = strings.Repeat("b", 40) }, func(a *Approval, e *Environment) { e.Event = "push" }, func(a *Approval, e *Environment) { e.Event = "pull_request" }, func(a *Approval, e *Environment) { e.RunnerEnvironment = "self-hosted" }, func(a *Approval, e *Environment) { e.RunnerOS = "Linux" }, func(a *Approval, e *Environment) { e.Repository = "foreign/repo" }, func(a *Approval, e *Environment) { e.Actions = "false" }, func(a *Approval, e *Environment) { e.RunID = "0" },
 	} {
 		aa, ee := a, e
@@ -54,6 +55,7 @@ func TestReportRejectsFalseFullAcceptanceAndMissingChecks(t *testing.T) {
 	r.Status = "passed_native_subset"
 	r.Stage = "owned_cleanup"
 	r.NativeActionsAttempted = true
+	r.LoopbackPeerExercised = true
 	for i := range r.Checks {
 		r.Checks[i].Status = "pass"
 	}
@@ -81,5 +83,50 @@ func TestBlockedReportCannotContainMutationClaim(t *testing.T) {
 	r.NativeActionsAttempted = true
 	if Validate(r) == nil {
 		t.Fatal("mutation report relabeled as preflight block")
+	}
+}
+
+func TestProfileScopeRequiresExactSeparateApprovals(t *testing.T) {
+	for _, selected := range []profile.Selection{profile.BasicTLS(), profile.InventoryTLS(), {CollectionProfile: "windows-inventory-v1", Transport: "http-test"}} {
+		a, e, sha := approvalFixture()
+		a.Selection = selected
+		a.InventoryMetadata = selected.Inventory()
+		a.HTTPPlaintext = selected.HTTPTest()
+		g, err := Authorize(a, e, sha)
+		if err != nil || g.Selection() != selected {
+			t.Fatal("approved profile rejected")
+		}
+		g.Close()
+		for _, change := range []func(*Approval){func(a *Approval) { a.InventoryMetadata = !a.InventoryMetadata }, func(a *Approval) { a.HTTPPlaintext = !a.HTTPPlaintext }, func(a *Approval) { a.Selection.Transport = "unexpected" }} {
+			next := a
+			change(&next)
+			if _, err := Authorize(next, e, sha); err == nil {
+				t.Fatal("profile grant widened or omitted")
+			}
+		}
+	}
+	a, e, sha := approvalFixture()
+	a.Selection.Transport = "http-test"
+	a.HTTPPlaintext = true
+	if _, err := Authorize(a, e, sha); err == nil {
+		t.Fatal("basic HTTP accepted")
+	}
+}
+func TestInventoryReportRequiresUsableNativeScope(t *testing.T) {
+	_, _, sha := approvalFixture()
+	r := NewSelectedReport(sha, profile.InventoryTLS())
+	if Validate(r) != nil {
+		t.Fatal("initial inventory report invalid")
+	}
+	r.NativeActionsAttempted = true
+	r.Inventory = profile.Observation{Frames: 1, CPU: "healthy", Memory: "healthy", Disk: "healthy", Hostname: "healthy", Processes: "partial", Services: "denied", Software: "healthy", Interfaces: "healthy"}
+	r.LoopbackPeerExercised = true
+	r.NativeInventorySenderExercised = true
+	if Validate(r) != nil || r.Inventory.Usable() {
+		t.Fatal("denied observation obscured")
+	}
+	r.ProductionIngressExercised = true
+	if Validate(r) == nil {
+		t.Fatal("peer relabeled production ingress")
 	}
 }

@@ -19,9 +19,13 @@ const CollectionProfilePackages = "managed-operations-v2"
 // generation transfer. Existing selected-row profiles retain their old scope.
 const CollectionProfileComplete = "managed-operations-v3"
 
+// CollectionProfileWindowsInventory is an independently consented Windows-only
+// inventory scope. It is never a Linux managed-operations profile.
+const CollectionProfileWindowsInventory = "windows-inventory-v1"
+
 // ValidCollectionProfile admits only explicitly implemented, consent-bound profiles.
 func ValidCollectionProfile(profile string) bool {
-	return profile == CollectionProfile || ManagedCollectionProfile(profile)
+	return profile == CollectionProfile || profile == CollectionProfileWindowsInventory || ManagedCollectionProfile(profile)
 }
 
 // ManagedCollectionProfile identifies explicit managed metadata scopes. It does

@@ -14,9 +14,11 @@ func validatePlatformBootstrap(b Bootstrap, runningOS string) error {
 	}
 	switch runningOS {
 	case "linux":
-		return nil
+		if b.CollectionProfile != enrollmentcrypto.CollectionProfileWindowsInventory {
+			return nil
+		}
 	case "windows":
-		if b.Profile == "tls" && b.CollectionProfile == enrollmentcrypto.CollectionProfile {
+		if b.CollectionProfile == enrollmentcrypto.CollectionProfileWindowsInventory || b.Profile == "tls" && b.CollectionProfile == enrollmentcrypto.CollectionProfile {
 			return nil
 		}
 	}

@@ -24,50 +24,42 @@ are not shipped claims.
 - [ ] Real Windows endpoint → production Linux manager → shared browser dashboard
   acceptance. An in-memory native protocol peer does not satisfy this item.
 
-The basic service currently calls `collector.Snapshot`: it does not send the
-richer `windowsinventory.Report` used by `cmd/windows-agent`. In particular,
-interval CPU/process/service/software/network rows in stdout must not be described
-as already connected to the service or dashboard.
+The existing basic profile stays limited. A separate explicit
+`windows-inventory-v1` source candidate now connects the richer report to the
+ordinary sender and shared manager/UI; see
+[Windows inventory dashboard](windows-inventory-dashboard.md).
 
-## Next coherent implementation: inventory through the shared UI
+## Inventory vertical slice: source implemented, native acceptance pending
 
-Implement this source slice after the ancestor-policy correction is reviewed,
-with native claims dependent on the approved service gate:
-
-- [ ] Define a Windows-specific, explicit consent/profile and bounded wire schema
-  for CPU/RAM/disk plus process, service and software inventory. Hostname/interface
-  disclosure must be explicit. Do not relabel Windows as Linux
-  `managed-operations-v3`, silently expand a basic identity, or imply consent from
-  a manager upgrade. Profile names are implementation choices until committed.
-- [ ] Bind the selected Windows scope through bootstrap, cryptographic proofs,
-  issuer/claim platform admission and endpoint protected state. Preserve expiry,
-  original identity/fences, revocation, wrong-profile rejection and TLS default.
-- [ ] Wire the existing Windows collector into the ordinary service sender with
-  bounded payloads, exact retry bytes, durable monotonic counters and distinct
-  completeness/quality/truncation for every inventory generation.
-- [ ] Add production Linux manager validation and persistence for that Windows
-  wire contract. Reject forged platform/profile, duplicate/conflicting sequences,
-  stale capture times, oversized rows and unconsented fields.
-- [ ] Project Windows capabilities into the existing device details navigation:
-  overview/metric charts, process rows, service rows, software rows and network
-  identity where granted. Preserve stale/denied/partial/unavailable explanations,
-  timestamps and limits; never fill missing observations with healthy defaults.
-- [ ] Connect overview/history, alerts and health diagnostics to the actual stored
-  Windows evidence. Existing Linux behavior and its release pin stay intact.
-- [ ] Exercise real manager HTTP/operator APIs and shared UI using synthetic
-  Windows fixtures; verify profile mismatch, denied/partial/stale data, restart
-  retry, persisted receipts and EN/DE mobile/desktop layouts.
-- [ ] Run the separately approved real Windows-to-Linux-manager/browser path on
-  exact source. Verify the same device identity, fresh rows/charts and supported
-  scope in the UI before calling this vertical slice complete.
+- [x] Windows-specific consent, strict bounded wire contract and explicit
+  hostname/interface disclosure; no Linux profile or basic-ledger reuse.
+- [x] Exact bootstrap/identity/platform scope and durable sender binding, TLS
+  default and explicitly acknowledged HTTP-test compatibility.
+- [x] One native collector adapter for CPU/RAM/system-disk and bounded process,
+  service, software, hostname/interface sections with honest quality/counts.
+- [x] Production manager validation, separate Windows enrollment store, fixed
+  signed ingress and atomic frame/replay/history persistence.
+- [x] Existing shared device Overview/resource charts and Inventory subviews,
+  authenticated same-origin reads, EN/DE labels and bounded stale visibility.
+- [x] Deterministic actual sender → signed ingress → durable manager → private
+  operator view/history fixture with restart, exact retry and rejection checks.
+- [x] DOM contract, consent, request interruption and cumulative freshness tests;
+  additive invented Windows case prepared in the existing hosted LAN runner.
+- [ ] Observe the hosted browser case on exact composed source; local Chromium
+  execution is blocked, so source/DOM tests are not screenshot acceptance.
+- [ ] Native protected installation and actual Windows endpoint → Linux manager
+  → shared dashboard. The separate native path-pinning prerequisite is still
+  under correction; no root/ProgramData ACL widening is an acceptable shortcut.
+- [ ] Windows event-derived alerts/health diagnostics and explicit AI evidence
+  scope, followed by the remaining native capability parity below.
 
 ## Remaining parity work, each with UI acceptance
 
 | Capability | Existing Windows foundation | Required next delivery and evidence |
 | --- | --- | --- |
-| CPU/RAM/disks/history | RAM/system disk basic; interval CPU in stdout; CPU limited to one processor group | Wire real interval values into shared charts; report multi-group limitation honestly; add all-volume inventory with Windows semantics and native tests |
-| Processes/services/software | Bounded read-only native/registry rows in stdout | Consent-bound generations, manager storage/query and existing dashboard tables; no `Win32_Product` repair side effects |
-| Hostname/interfaces/connections | Hostname/interface addresses locally available | Explicit network scope through identity/sender/manager/UI; bounded Windows connection/owner metadata requires its own implemented API and permission evidence |
+| CPU/RAM/disks/history | CPU/RAM/system-volume source connected through sender/store/shared charts; CPU limited to one processor group | Prove native end-to-end values; report multi-group limitation honestly; add all-volume inventory with Windows semantics and native tests |
+| Processes/services/software | Consent-bound bounded native/registry generations connected to shared dashboard source | Native installed-service and shared-browser acceptance; no `Win32_Product` repair side effects |
+| Hostname/interfaces/connections | Explicit hostname/interface scope connected through identity/sender/manager/UI source | Native end-to-end acceptance; bounded Windows connection/owner metadata requires its own implemented API and permission evidence |
 | Logs and alarms | Opt-in Application/System metadata only; no messages/XML/EventData/security identities | Persist bounded event metadata and surface event-derived alerts in shared UI; content retrieval is a separately consented, bounded Windows channel policy with redaction and access tests |
 | Updates and CVEs | No Windows Update equivalent shipped | Native Windows update discovery/provenance and software matching, manager validation plus shared update/risk UI; separate approval for any remediation/installation |
 | AI diagnostics | Manager feature exists; no Windows inventory end-to-end acceptance | Explicit Windows evidence/provider scope and shared diagnostics UI; preserve current export blocks, no raw event content/dumps or autonomous shell/actions |

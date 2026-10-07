@@ -40,6 +40,11 @@ func TestAncestorDiagnosticMatchesUnchangedAdmissionDecision(t *testing.T) {
 	}
 }
 func TestNativeReadFailureClassificationDoesNotPublishNativeError(t *testing.T) {
+	for status, want := range map[error]string{windows.STATUS_ACCESS_DENIED: "open-access-denied", windows.STATUS_SHARING_VIOLATION: "open-sharing-violation", windows.STATUS_REPARSE_POINT_ENCOUNTERED: "reparse-point"} {
+		if openFailure(fmt.Errorf("private: %w", status)) != want {
+			t.Fatal("native status escaped finite diagnostic")
+		}
+	}
 	if openFailure(fmt.Errorf("private: %w", windows.ERROR_ACCESS_DENIED)) != "open-access-denied" || openFailure(windows.ERROR_SHARING_VIOLATION) != "open-sharing-violation" || openFailure(errors.New("private-path")) != "open-failed" {
 		t.Fatal("open failure classification invalid")
 	}

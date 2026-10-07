@@ -8,7 +8,7 @@ test('synthetic resource history remains bounded, valid and explicit about gaps'
  for(const phase of ['awaiting','revoked','expired','not_configured']){const view=resourceBrowserFixture(v.serverNow,phase);assert.equal(validResourceHistory(view,view.deviceId),true);assert.equal(view.points.length,0);}
 });
 test('hosted LAN runner includes resource history without changing other case coverage',()=>{
- const runner=fs.readFileSync(new URL('./lan-browser.mjs',import.meta.url),'utf8');assert.equal((runner.match(/await check\(/g)||[]).length,22);assert.equal((runner.match(/await check\(resourceHistoryCaseName/g)||[]).length,1);
+ const runner=fs.readFileSync(new URL('./lan-browser.mjs',import.meta.url),'utf8');assert.equal((runner.match(/await check\(/g)||[]).length,23);assert.equal((runner.match(/await check\(resourceHistoryCaseName/g)||[]).length,1);
 });
 
 

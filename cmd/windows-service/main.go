@@ -1,5 +1,5 @@
-// Command windows-service is a guarded source candidate for the Windows basic
-// TLS lifecycle. Applying installation or enrollment requires local approval;
+// Command windows-service is a guarded source candidate for explicitly selected Windows
+// profiles. Applying installation or enrollment requires local approval;
 // tests must use injected operations, never the native implementation.
 package main
 
@@ -12,10 +12,15 @@ import (
 	"os"
 	"os/signal"
 
+	"localrmm/internal/enrollmentclient"
+	"localrmm/internal/enrollmentcrypto"
 	"localrmm/internal/windowsservice"
 )
 
-type request struct{ mode, bootstrap string }
+type request struct {
+	mode, bootstrap, collectionProfile string
+	insecureHTTP                       bool
+}
 type operation func(context.Context, request, io.Writer, io.Writer) (any, error)
 
 func run(ctx context.Context, args []string, out, stderr io.Writer) int {
@@ -31,6 +36,8 @@ func runWith(ctx context.Context, args []string, out, stderr io.Writer, perform 
 	}
 	apply := flags.Bool("apply", false, "")
 	consent := flags.Bool("basic-readonly", false, "")
+	windowsConsent := flags.Bool("windows-inventory", false, "")
+	insecure := flags.Bool("insecure-http-test", false, "")
 	bootstrap := flags.String("bootstrap-file", "", "")
 	help := flags.Bool("help", false, "")
 	if err := flags.Parse(args); err != nil {
@@ -57,15 +64,30 @@ func runWith(ctx context.Context, args []string, out, stderr io.Writer, perform 
 	}
 	mutate := mode == "install" || mode == "enroll" || mode == "start" || mode == "stop" || mode == "uninstall"
 	needsConsent := mode == "install" || mode == "enroll"
-	if flags.NArg() != 0 || mode == "" || *apply != mutate || *consent != needsConsent || (mode == "install") != (*bootstrap != "") {
-		fmt.Fprintln(stderr, "Operation flags rejected. Review --help; explicit apply and basic scope acknowledgement are required where stated.")
+	if flags.NArg() != 0 || mode == "" || *apply != mutate || (*consent || *windowsConsent) != needsConsent || *consent && *windowsConsent || *insecure && !*windowsConsent || (mode == "install") != (*bootstrap != "") {
+		fmt.Fprintln(stderr, "Operation flags rejected. Review --help; explicit apply and exactly one scope acknowledgement are required where stated.")
 		return 2
 	}
 	if ctx == nil || perform == nil {
 		reportDiagnostic(stderr, marked(windowsservice.PhaseLifecycle, windowsservice.ReasonInvalidConfiguration, nil))
 		return 1
 	}
-	result, err := perform(ctx, request{mode: mode, bootstrap: *bootstrap}, out, stderr)
+	profile := ""
+	if *consent {
+		profile = enrollmentcrypto.CollectionProfile
+	}
+	if *windowsConsent {
+		profile = enrollmentcrypto.CollectionProfileWindowsInventory
+		if _, err := fmt.Fprintln(out, enrollmentclient.WindowsInventoryPrivacy); err != nil {
+			return 1
+		}
+	}
+	if *insecure {
+		if _, err := fmt.Fprintln(out, enrollmentclient.WindowsInventoryHTTPPrivacy); err != nil {
+			return 1
+		}
+	}
+	result, err := perform(ctx, request{mode: mode, bootstrap: *bootstrap, collectionProfile: profile, insecureHTTP: *insecure}, out, stderr)
 	if err != nil {
 		reportDiagnostic(stderr, marked(windowsservice.PhaseLifecycle, windowsservice.ReasonOperationFailed, err))
 		fmt.Fprintln(stderr, "Preserve the service and protected state for inspection; no reset or automatic cleanup was performed.")
@@ -87,14 +109,18 @@ func runWith(ctx context.Context, args []string, out, stderr io.Writer, perform 
 	return 0
 }
 func usage(out io.Writer) {
-	fmt.Fprintln(out, "Tracebolt Windows basic TLS service source candidate. No Windows installation/reboot acceptance is established.")
+	fmt.Fprintln(out, "Tracebolt Windows service source candidate (HTTPS by default). No Windows installation/reboot acceptance is established.")
 	fmt.Fprintln(out, "Read only: --plan | --inspect")
 	fmt.Fprintln(out, "Approved initial setup: --install --apply --basic-readonly --bootstrap-file ABSOLUTE_PROTECTED_PUBLIC_BOOTSTRAP")
 	fmt.Fprintln(out, "Resume stopped enrollment: --enroll --apply --basic-readonly")
+	fmt.Fprintln(out, "Fresh Windows inventory setup: replace --basic-readonly with --windows-inventory and use a matching windows-inventory-v1 bootstrap; both flags together are rejected.")
+	fmt.Fprintln(out, "Disposable Windows inventory HTTP test only: additionally supply --insecure-http-test with a matching http-test bootstrap. Basic Windows remains TLS-only.")
+	fmt.Fprintln(out, enrollmentclient.WindowsInventoryHTTPPrivacy)
+	fmt.Fprintln(out, "Windows inventory scope: "+enrollmentclient.WindowsInventoryPrivacy)
 	fmt.Fprintln(out, "Approved lifecycle: --start --apply | --stop --apply | --uninstall --apply")
 	fmt.Fprintln(out, "SCM-only runtime: --run-service (rejects an ordinary console)")
 	fmt.Fprintln(out, "Installation creates one LocalService SCM service, a scoped service SID and protected durable state, then asks for a hidden invitation and starts pending enrollment. Review these persistent changes and obtain action-time approval before applying. Public fingerprint/comparison approval in the manager remains mandatory.")
-	fmt.Fprintln(out, "Basic scope: bounded OS, uptime, physical RAM and system-volume observation. No expanded hostname/IP/process/software/event content collection, Windows Update/CVE, remote commands or service-control requests from a manager. Production TLS and basic-readonly-v1 only; Linux v3 profiles are rejected.")
+	fmt.Fprintln(out, "Basic scope: bounded OS, uptime, physical RAM and system-volume observation. No expanded hostname/IP/process/software/event content collection, Windows Update/CVE, remote commands or service-control requests from a manager. Production TLS is required; Linux managed profiles are rejected.")
 	fmt.Fprintln(out, "Prerequisites: separately authorized provisioning of the fixed protected executable/parent directories, explicit LocalService read/execute access, and an administrator-only protected public bootstrap file. This candidate does not download/copy binaries, repair ACLs, enable privileges, adopt services or erase identities. Uninstall retains all private state.")
 }
 func main() {
