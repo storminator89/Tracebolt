@@ -1,3 +1,4 @@
+import { PackageUpdateSelectionCell, PackageUpdateSelectionHeader } from './package-updates';
 import { useId } from 'react';
 import { Info, LoaderCircle, RefreshCw, TriangleAlert } from 'lucide-react';
 import { useLocale } from './i18n';
@@ -62,7 +63,7 @@ export function CachedUpdatesPanel({ resource }: { resource: CachedUpdatesResour
             {snapshot.truncated && <p className="package-note">{labels.truncated}</p>}
             <p className={snapshot.metadata.freshness === 'stale' ? 'package-error' : 'package-note'}>{snapshot.metadata.freshness === 'stale' ? labels.metadataStale : labels.metadataUnknown}</p>
             <dl className="package-facts">{field(labels.observed, snapshot.collectedAt)}{snapshot.metadata.oldestIndexModifiedAt && field(labels.sourceTime, snapshot.metadata.oldestIndexModifiedAt)}{snapshot.metadata.ageSeconds !== null && field(labels.age, new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }).format(snapshot.metadata.ageSeconds / 3600))}</dl>
-            {snapshot.items.length > 0 && <div className="package-table-scroll" role="region" aria-label={labels.title} tabIndex={0}><table><caption className="sr-only">{labels.title}</caption><thead><tr>{[labels.package, labels.architecture, labels.installedVersion, labels.candidateVersion, labels.state].map(label => <th key={label} scope="col">{label}</th>)}</tr></thead><tbody>{snapshot.items.map(row => <tr key={`${row.name}:${row.architecture}`}><th scope="row">{row.name}</th><td>{row.architecture}</td><td>{row.installedVersion}</td><td>{row.candidateVersion}</td><td>{row.state === 'held' ? labels.heldState : labels.candidate_only}</td></tr>)}</tbody></table></div>}
+            {snapshot.items.length > 0 && <div className="package-table-scroll" role="region" aria-label={labels.title} tabIndex={0}><table><caption className="sr-only">{labels.title}</caption><thead><tr><PackageUpdateSelectionHeader/>{[labels.package, labels.architecture, labels.installedVersion, labels.candidateVersion, labels.state].map(label => <th key={label} scope="col">{label}</th>)}</tr></thead><tbody>{snapshot.items.map(row => <tr key={`${row.name}:${row.architecture}`}><PackageUpdateSelectionCell name={row.name} architecture={row.architecture} held={row.state === 'held'}/><th scope="row">{row.name}</th><td>{row.architecture}</td><td>{row.installedVersion}</td><td>{row.candidateVersion}</td><td>{row.state === 'held' ? labels.heldState : labels.candidate_only}</td></tr>)}</tbody></table></div>}
         </>}
         <details><summary><Info size={14}/>{labels.details}</summary><p>{labels.scope}</p><p>{labels.permission}</p><p>{labels.retention}</p></details>
     </section>;

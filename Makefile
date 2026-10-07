@@ -8,6 +8,10 @@ build:
 	go build -buildvcs=false -trimpath -o bin/enroll-agent ./cmd/enroll-agent
 	go build -buildvcs=false -trimpath -o bin/agent-service ./cmd/agent-service
 	go build -buildvcs=false -trimpath -o bin/action-setup ./cmd/action-setup
+	go build -buildvcs=false -trimpath -o bin/package-manager-init ./cmd/package-manager-init
+	go build -buildvcs=false -trimpath -o bin/package-helper ./cmd/package-helper
+	go build -buildvcs=false -trimpath -o bin/package-runner ./cmd/package-runner
+	go build -buildvcs=false -trimpath -o bin/package-guard ./cmd/package-guard
 test:
 	go test -race ./...
 web:

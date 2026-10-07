@@ -26,6 +26,7 @@ var ErrConfiguration = errors.New("LAN configuration or file protection is inval
 
 type Config struct {
 	WindowsInventoryEnabled  bool   `json:"windowsInventoryEnabled,omitempty"`
+	PackageActionsConfigFile string `json:"packageActionsConfigFile,omitempty"`
 	ServiceActionsConfigFile string `json:"serviceActionsConfigFile,omitempty"`
 	SchemaVersion            string `json:"schemaVersion"`
 	Profile                  string `json:"profile"`
@@ -137,6 +138,9 @@ func validListen(raw string) bool {
 	return e == nil && ne == nil && net.ParseIP(h) != nil && n > 0 && n <= 65535 && strconv.Itoa(n) == p
 }
 func (c *Config) Validate() error {
+	if c.PackageActionsConfigFile != "" && (!filepath.IsAbs(c.PackageActionsConfigFile) || filepath.Clean(c.PackageActionsConfigFile) != c.PackageActionsConfigFile) {
+		return ErrConfiguration
+	}
 	if c.ServiceActionsConfigFile != "" && (!filepath.IsAbs(c.ServiceActionsConfigFile) || filepath.Clean(c.ServiceActionsConfigFile) != c.ServiceActionsConfigFile) {
 		return ErrConfiguration
 	}
@@ -185,7 +189,7 @@ func Load(path string) (Material, error) {
 		return fail()
 	}
 	var c Config
-	if StrictObject(raw, &c, "schemaVersion", "profile", "operatorListen", "agentListen", "operatorOrigin", "agentOrigin", "tlsCertificateFile", "tlsPrivateKeyFile", "agentClientCAFile", "operatorAuthFile", "stateDirectory", "webDirectory", "insecureHTTPAcknowledged", "serviceActionsConfigFile", "windowsInventoryEnabled") != nil || c.Validate() != nil {
+	if StrictObject(raw, &c, "schemaVersion", "profile", "operatorListen", "agentListen", "operatorOrigin", "agentOrigin", "tlsCertificateFile", "tlsPrivateKeyFile", "agentClientCAFile", "operatorAuthFile", "stateDirectory", "webDirectory", "insecureHTTPAcknowledged", "serviceActionsConfigFile", "windowsInventoryEnabled", "packageActionsConfigFile") != nil || c.Validate() != nil {
 		return fail()
 	}
 	auth, e := ReadProtected(c.OperatorAuthFile, true, 32768)

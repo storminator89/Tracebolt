@@ -1,0 +1,26 @@
+# Source candidate only. Provisioning and native acceptance require separate approval.
+[Unit]
+Description=Tracebolt approved package job %i
+After=local-fs.target
+# Deliberately no PartOf, BindsTo or Requires on the agent or broker.
+
+[Service]
+Type=exec
+User=root
+Group=root
+ExecStart=/usr/libexec/tracebolt-package-runner %i
+WorkingDirectory=/
+Slice=system.slice
+UMask=0077
+Restart=no
+TimeoutStartSec=infinity
+TimeoutStopSec=infinity
+RuntimeMaxSec=infinity
+SendSIGKILL=no
+KillMode=process
+OOMPolicy=continue
+StandardInput=null
+StandardOutput=null
+StandardError=journal
+# Do not apply the agent's filesystem sandbox: approved dpkg/maintainer scripts
+# need normal root host semantics. This unit is not a package-script sandbox.

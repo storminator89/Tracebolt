@@ -79,6 +79,11 @@ func runForeground(ctx context.Context, m Material, interval time.Duration, obse
 	// Keep them outside the read-only telemetry scheduler callback. The sender
 	// ownership lock is held first and until both loops have finished.
 	if m.config.complete() {
+		packages := openPackageSender(m)
+		packageContext, stopPackages := context.WithCancel(ctx)
+		packagesDone := make(chan struct{})
+		go func() { defer close(packagesDone); runPackageLoop(packageContext, packages) }()
+		defer func() { stopPackages(); <-packagesDone; packages.Close() }()
 		actions := openActionSender(m)
 		actionContext, stopActions := context.WithCancel(ctx)
 		actionsDone := make(chan struct{})

@@ -1,0 +1,850 @@
+{
+  "applying": {
+    "schemaVersion": "tracebolt.package-update-workflow.v2",
+    "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "serverNow": "2023-11-14T22:13:24Z",
+    "executionMode": "simulation",
+    "available": false,
+    "reason": "operation_in_progress",
+    "preview": {
+      "requestId": "update_11111111111111111111111111111111",
+      "digest": "sha256:eb43109b3dda4dc91671502ff249659ea9a1362ff9194c700cbbf73cc8d4537c",
+      "actorId": "operator_11111111111111111111111111111111",
+      "expiresAt": "2023-11-14T22:14:20Z",
+      "transportProfile": "production-tls",
+      "conffilePolicy": "preserve-modified-dpkg-conffiles",
+      "totalBytes": 23,
+      "items": [
+        {
+          "name": "sample-bin",
+          "architecture": "amd64",
+          "fromVersion": "1.0-1",
+          "toVersion": "1.0-2",
+          "sourcePackage": "sample-bin",
+          "sourceVersion": "1.0-2",
+          "sourceLabel": "Synthetic fixture repository",
+          "suite": "trixie",
+          "component": "main",
+          "archiveSHA256": "sha256:ac1b6d5ac22a7e0e2dc248ac728d5c99b355730e0d89429f9c7d47000bc79217"
+        }
+      ]
+    },
+    "job": {
+      "requestId": "update_11111111111111111111111111111111",
+      "state": "applying",
+      "createdAt": "2023-11-14T22:13:20Z",
+      "updatedAt": "2023-11-14T22:13:24Z",
+      "approvedAt": "2023-11-14T22:13:22Z",
+      "result": {
+        "phase": "applying",
+        "observedAt": "2023-11-14T22:13:24Z",
+        "packages": [
+          {
+            "name": "sample-bin",
+            "architecture": "amd64",
+            "expectedVersion": "1.0-2",
+            "observedVersion": null,
+            "outcome": "unknown"
+          }
+        ],
+        "reboot": {
+          "state": "unknown",
+          "source": "simulation",
+          "observedAt": "2023-11-14T22:13:24Z"
+        },
+        "reason": "simulated_running"
+      }
+    }
+  },
+  "approved": {
+    "schemaVersion": "tracebolt.package-update-workflow.v2",
+    "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "serverNow": "2023-11-14T22:13:22Z",
+    "executionMode": "simulation",
+    "available": false,
+    "reason": "operation_in_progress",
+    "preview": {
+      "requestId": "update_11111111111111111111111111111111",
+      "digest": "sha256:eb43109b3dda4dc91671502ff249659ea9a1362ff9194c700cbbf73cc8d4537c",
+      "actorId": "operator_11111111111111111111111111111111",
+      "expiresAt": "2023-11-14T22:14:20Z",
+      "transportProfile": "production-tls",
+      "conffilePolicy": "preserve-modified-dpkg-conffiles",
+      "totalBytes": 23,
+      "items": [
+        {
+          "name": "sample-bin",
+          "architecture": "amd64",
+          "fromVersion": "1.0-1",
+          "toVersion": "1.0-2",
+          "sourcePackage": "sample-bin",
+          "sourceVersion": "1.0-2",
+          "sourceLabel": "Synthetic fixture repository",
+          "suite": "trixie",
+          "component": "main",
+          "archiveSHA256": "sha256:ac1b6d5ac22a7e0e2dc248ac728d5c99b355730e0d89429f9c7d47000bc79217"
+        }
+      ]
+    },
+    "job": {
+      "requestId": "update_11111111111111111111111111111111",
+      "state": "approved",
+      "createdAt": "2023-11-14T22:13:20Z",
+      "updatedAt": "2023-11-14T22:13:22Z",
+      "approvedAt": "2023-11-14T22:13:22Z",
+      "result": null
+    }
+  },
+  "delivery_unknown": {
+    "schemaVersion": "tracebolt.package-update-workflow.v2",
+    "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "serverNow": "2023-11-14T22:13:23Z",
+    "executionMode": "simulation",
+    "available": false,
+    "reason": "needs_intervention",
+    "preview": {
+      "requestId": "update_11111111111111111111111111111111",
+      "digest": "sha256:eb43109b3dda4dc91671502ff249659ea9a1362ff9194c700cbbf73cc8d4537c",
+      "actorId": "operator_11111111111111111111111111111111",
+      "expiresAt": "2023-11-14T22:14:20Z",
+      "transportProfile": "production-tls",
+      "conffilePolicy": "preserve-modified-dpkg-conffiles",
+      "totalBytes": 23,
+      "items": [
+        {
+          "name": "sample-bin",
+          "architecture": "amd64",
+          "fromVersion": "1.0-1",
+          "toVersion": "1.0-2",
+          "sourcePackage": "sample-bin",
+          "sourceVersion": "1.0-2",
+          "sourceLabel": "Synthetic fixture repository",
+          "suite": "trixie",
+          "component": "main",
+          "archiveSHA256": "sha256:ac1b6d5ac22a7e0e2dc248ac728d5c99b355730e0d89429f9c7d47000bc79217"
+        }
+      ]
+    },
+    "job": {
+      "requestId": "update_11111111111111111111111111111111",
+      "state": "delivery_unknown",
+      "createdAt": "2023-11-14T22:13:20Z",
+      "updatedAt": "2023-11-14T22:13:23Z",
+      "approvedAt": "2023-11-14T22:13:22Z",
+      "result": null
+    }
+  },
+  "expired": {
+    "schemaVersion": "tracebolt.package-update-workflow.v2",
+    "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "serverNow": "2023-11-14T22:14:20Z",
+    "executionMode": "simulation",
+    "available": true,
+    "reason": "simulation_only",
+    "preview": {
+      "requestId": "update_11111111111111111111111111111111",
+      "digest": "sha256:eb43109b3dda4dc91671502ff249659ea9a1362ff9194c700cbbf73cc8d4537c",
+      "actorId": "operator_11111111111111111111111111111111",
+      "expiresAt": "2023-11-14T22:14:20Z",
+      "transportProfile": "production-tls",
+      "conffilePolicy": "preserve-modified-dpkg-conffiles",
+      "totalBytes": 23,
+      "items": [
+        {
+          "name": "sample-bin",
+          "architecture": "amd64",
+          "fromVersion": "1.0-1",
+          "toVersion": "1.0-2",
+          "sourcePackage": "sample-bin",
+          "sourceVersion": "1.0-2",
+          "sourceLabel": "Synthetic fixture repository",
+          "suite": "trixie",
+          "component": "main",
+          "archiveSHA256": "sha256:ac1b6d5ac22a7e0e2dc248ac728d5c99b355730e0d89429f9c7d47000bc79217"
+        }
+      ]
+    },
+    "job": {
+      "requestId": "update_11111111111111111111111111111111",
+      "state": "expired",
+      "createdAt": "2023-11-14T22:13:20Z",
+      "updatedAt": "2023-11-14T22:14:20Z",
+      "approvedAt": "2023-11-14T22:13:22Z",
+      "result": null
+    }
+  },
+  "idle": {
+    "schemaVersion": "tracebolt.package-update-workflow.v2",
+    "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "serverNow": "2023-11-14T22:13:20Z",
+    "executionMode": "simulation",
+    "available": true,
+    "reason": "simulation_only",
+    "preview": null,
+    "job": null
+  },
+  "native_applying": {
+    "schemaVersion": "tracebolt.package-update-workflow.v2",
+    "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "serverNow": "2023-11-14T22:13:25Z",
+    "executionMode": "native",
+    "available": false,
+    "reason": "operation_in_progress",
+    "preview": {
+      "requestId": "update_11111111111111111111111111111111",
+      "digest": "sha256:eb43109b3dda4dc91671502ff249659ea9a1362ff9194c700cbbf73cc8d4537c",
+      "actorId": "operator_11111111111111111111111111111111",
+      "expiresAt": "2023-11-14T22:14:20Z",
+      "transportProfile": "production-tls",
+      "conffilePolicy": "preserve-modified-dpkg-conffiles",
+      "totalBytes": 23,
+      "items": [
+        {
+          "name": "sample-bin",
+          "architecture": "amd64",
+          "fromVersion": "1.0-1",
+          "toVersion": "1.0-2",
+          "sourcePackage": "sample-bin",
+          "sourceVersion": "1.0-2",
+          "sourceLabel": "Synthetic fixture repository",
+          "suite": "trixie",
+          "component": "main",
+          "archiveSHA256": "sha256:ac1b6d5ac22a7e0e2dc248ac728d5c99b355730e0d89429f9c7d47000bc79217"
+        }
+      ]
+    },
+    "job": {
+      "requestId": "update_11111111111111111111111111111111",
+      "state": "applying",
+      "createdAt": "2023-11-14T22:13:20Z",
+      "updatedAt": "2023-11-14T22:13:25Z",
+      "approvedAt": "2023-11-14T22:13:23Z",
+      "result": {
+        "phase": "applying",
+        "observedAt": "2023-11-14T22:13:25Z",
+        "packages": [
+          {
+            "name": "sample-bin",
+            "architecture": "amd64",
+            "expectedVersion": "1.0-2",
+            "observedVersion": null,
+            "outcome": "unknown"
+          }
+        ],
+        "reboot": {
+          "state": "unknown",
+          "source": "native",
+          "observedAt": "2023-11-14T22:13:25Z"
+        },
+        "reason": "native_running"
+      }
+    }
+  },
+  "native_approved": {
+    "schemaVersion": "tracebolt.package-update-workflow.v2",
+    "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "serverNow": "2023-11-14T22:13:23Z",
+    "executionMode": "native",
+    "available": false,
+    "reason": "operation_in_progress",
+    "preview": {
+      "requestId": "update_11111111111111111111111111111111",
+      "digest": "sha256:eb43109b3dda4dc91671502ff249659ea9a1362ff9194c700cbbf73cc8d4537c",
+      "actorId": "operator_11111111111111111111111111111111",
+      "expiresAt": "2023-11-14T22:14:20Z",
+      "transportProfile": "production-tls",
+      "conffilePolicy": "preserve-modified-dpkg-conffiles",
+      "totalBytes": 23,
+      "items": [
+        {
+          "name": "sample-bin",
+          "architecture": "amd64",
+          "fromVersion": "1.0-1",
+          "toVersion": "1.0-2",
+          "sourcePackage": "sample-bin",
+          "sourceVersion": "1.0-2",
+          "sourceLabel": "Synthetic fixture repository",
+          "suite": "trixie",
+          "component": "main",
+          "archiveSHA256": "sha256:ac1b6d5ac22a7e0e2dc248ac728d5c99b355730e0d89429f9c7d47000bc79217"
+        }
+      ]
+    },
+    "job": {
+      "requestId": "update_11111111111111111111111111111111",
+      "state": "approved",
+      "createdAt": "2023-11-14T22:13:20Z",
+      "updatedAt": "2023-11-14T22:13:23Z",
+      "approvedAt": "2023-11-14T22:13:23Z",
+      "result": null
+    }
+  },
+  "native_delivery_unknown": {
+    "schemaVersion": "tracebolt.package-update-workflow.v2",
+    "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "serverNow": "2023-11-14T22:13:24Z",
+    "executionMode": "native",
+    "available": false,
+    "reason": "needs_intervention",
+    "preview": {
+      "requestId": "update_11111111111111111111111111111111",
+      "digest": "sha256:eb43109b3dda4dc91671502ff249659ea9a1362ff9194c700cbbf73cc8d4537c",
+      "actorId": "operator_11111111111111111111111111111111",
+      "expiresAt": "2023-11-14T22:14:20Z",
+      "transportProfile": "production-tls",
+      "conffilePolicy": "preserve-modified-dpkg-conffiles",
+      "totalBytes": 23,
+      "items": [
+        {
+          "name": "sample-bin",
+          "architecture": "amd64",
+          "fromVersion": "1.0-1",
+          "toVersion": "1.0-2",
+          "sourcePackage": "sample-bin",
+          "sourceVersion": "1.0-2",
+          "sourceLabel": "Synthetic fixture repository",
+          "suite": "trixie",
+          "component": "main",
+          "archiveSHA256": "sha256:ac1b6d5ac22a7e0e2dc248ac728d5c99b355730e0d89429f9c7d47000bc79217"
+        }
+      ]
+    },
+    "job": {
+      "requestId": "update_11111111111111111111111111111111",
+      "state": "delivery_unknown",
+      "createdAt": "2023-11-14T22:13:20Z",
+      "updatedAt": "2023-11-14T22:13:24Z",
+      "approvedAt": "2023-11-14T22:13:23Z",
+      "result": null
+    }
+  },
+  "native_idle": {
+    "schemaVersion": "tracebolt.package-update-workflow.v2",
+    "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "serverNow": "2023-11-14T22:13:20Z",
+    "executionMode": "native",
+    "available": true,
+    "reason": "ready",
+    "preview": null,
+    "job": null
+  },
+  "native_preparation_uncertain": {
+    "schemaVersion": "tracebolt.package-update-workflow.v2",
+    "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "serverNow": "2023-11-14T22:13:22Z",
+    "executionMode": "native",
+    "available": false,
+    "reason": "needs_intervention",
+    "preview": null,
+    "job": {
+      "requestId": "update_11111111111111111111111111111111",
+      "state": "needs_intervention",
+      "createdAt": "2023-11-14T22:13:20Z",
+      "updatedAt": "2023-11-14T22:13:22Z",
+      "approvedAt": null,
+      "result": null
+    }
+  },
+  "native_preparing": {
+    "schemaVersion": "tracebolt.package-update-workflow.v2",
+    "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "serverNow": "2023-11-14T22:13:20Z",
+    "executionMode": "native",
+    "available": false,
+    "reason": "operation_in_progress",
+    "preview": null,
+    "job": {
+      "requestId": "update_11111111111111111111111111111111",
+      "state": "preparing",
+      "createdAt": "2023-11-14T22:13:20Z",
+      "updatedAt": "2023-11-14T22:13:20Z",
+      "approvedAt": null,
+      "result": null
+    }
+  },
+  "native_preview_ready": {
+    "schemaVersion": "tracebolt.package-update-workflow.v2",
+    "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "serverNow": "2023-11-14T22:13:22Z",
+    "executionMode": "native",
+    "available": false,
+    "reason": "ready",
+    "preview": {
+      "requestId": "update_11111111111111111111111111111111",
+      "digest": "sha256:eb43109b3dda4dc91671502ff249659ea9a1362ff9194c700cbbf73cc8d4537c",
+      "actorId": "operator_11111111111111111111111111111111",
+      "expiresAt": "2023-11-14T22:14:20Z",
+      "transportProfile": "production-tls",
+      "conffilePolicy": "preserve-modified-dpkg-conffiles",
+      "totalBytes": 23,
+      "items": [
+        {
+          "name": "sample-bin",
+          "architecture": "amd64",
+          "fromVersion": "1.0-1",
+          "toVersion": "1.0-2",
+          "sourcePackage": "sample-bin",
+          "sourceVersion": "1.0-2",
+          "sourceLabel": "Synthetic fixture repository",
+          "suite": "trixie",
+          "component": "main",
+          "archiveSHA256": "sha256:ac1b6d5ac22a7e0e2dc248ac728d5c99b355730e0d89429f9c7d47000bc79217"
+        }
+      ]
+    },
+    "job": {
+      "requestId": "update_11111111111111111111111111111111",
+      "state": "preview_ready",
+      "createdAt": "2023-11-14T22:13:20Z",
+      "updatedAt": "2023-11-14T22:13:22Z",
+      "approvedAt": null,
+      "result": null
+    }
+  },
+  "native_succeeded": {
+    "schemaVersion": "tracebolt.package-update-workflow.v2",
+    "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "serverNow": "2023-11-14T22:13:27Z",
+    "executionMode": "native",
+    "available": true,
+    "reason": "ready",
+    "preview": {
+      "requestId": "update_11111111111111111111111111111111",
+      "digest": "sha256:eb43109b3dda4dc91671502ff249659ea9a1362ff9194c700cbbf73cc8d4537c",
+      "actorId": "operator_11111111111111111111111111111111",
+      "expiresAt": "2023-11-14T22:14:20Z",
+      "transportProfile": "production-tls",
+      "conffilePolicy": "preserve-modified-dpkg-conffiles",
+      "totalBytes": 23,
+      "items": [
+        {
+          "name": "sample-bin",
+          "architecture": "amd64",
+          "fromVersion": "1.0-1",
+          "toVersion": "1.0-2",
+          "sourcePackage": "sample-bin",
+          "sourceVersion": "1.0-2",
+          "sourceLabel": "Synthetic fixture repository",
+          "suite": "trixie",
+          "component": "main",
+          "archiveSHA256": "sha256:ac1b6d5ac22a7e0e2dc248ac728d5c99b355730e0d89429f9c7d47000bc79217"
+        }
+      ]
+    },
+    "job": {
+      "requestId": "update_11111111111111111111111111111111",
+      "state": "succeeded",
+      "createdAt": "2023-11-14T22:13:20Z",
+      "updatedAt": "2023-11-14T22:13:27Z",
+      "approvedAt": "2023-11-14T22:13:23Z",
+      "result": {
+        "phase": "succeeded",
+        "observedAt": "2023-11-14T22:13:27Z",
+        "packages": [
+          {
+            "name": "sample-bin",
+            "architecture": "amd64",
+            "expectedVersion": "1.0-2",
+            "observedVersion": "1.0-2",
+            "outcome": "verified"
+          }
+        ],
+        "reboot": {
+          "state": "required",
+          "source": "native",
+          "observedAt": "2023-11-14T22:13:27Z"
+        },
+        "reason": "native_verified"
+      }
+    }
+  },
+  "native_unavailable_preview": {
+    "schemaVersion": "tracebolt.package-update-workflow.v2",
+    "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "serverNow": "2023-11-14T22:13:22Z",
+    "executionMode": "native",
+    "available": false,
+    "reason": "native_adapter_unavailable",
+    "preview": {
+      "requestId": "update_11111111111111111111111111111111",
+      "digest": "sha256:eb43109b3dda4dc91671502ff249659ea9a1362ff9194c700cbbf73cc8d4537c",
+      "actorId": "operator_11111111111111111111111111111111",
+      "expiresAt": "2023-11-14T22:14:20Z",
+      "transportProfile": "production-tls",
+      "conffilePolicy": "preserve-modified-dpkg-conffiles",
+      "totalBytes": 23,
+      "items": [
+        {
+          "name": "sample-bin",
+          "architecture": "amd64",
+          "fromVersion": "1.0-1",
+          "toVersion": "1.0-2",
+          "sourcePackage": "sample-bin",
+          "sourceVersion": "1.0-2",
+          "sourceLabel": "Synthetic fixture repository",
+          "suite": "trixie",
+          "component": "main",
+          "archiveSHA256": "sha256:ac1b6d5ac22a7e0e2dc248ac728d5c99b355730e0d89429f9c7d47000bc79217"
+        }
+      ]
+    },
+    "job": {
+      "requestId": "update_11111111111111111111111111111111",
+      "state": "preview_ready",
+      "createdAt": "2023-11-14T22:13:20Z",
+      "updatedAt": "2023-11-14T22:13:22Z",
+      "approvedAt": null,
+      "result": null
+    }
+  },
+  "native_verifying": {
+    "schemaVersion": "tracebolt.package-update-workflow.v2",
+    "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "serverNow": "2023-11-14T22:13:26Z",
+    "executionMode": "native",
+    "available": false,
+    "reason": "operation_in_progress",
+    "preview": {
+      "requestId": "update_11111111111111111111111111111111",
+      "digest": "sha256:eb43109b3dda4dc91671502ff249659ea9a1362ff9194c700cbbf73cc8d4537c",
+      "actorId": "operator_11111111111111111111111111111111",
+      "expiresAt": "2023-11-14T22:14:20Z",
+      "transportProfile": "production-tls",
+      "conffilePolicy": "preserve-modified-dpkg-conffiles",
+      "totalBytes": 23,
+      "items": [
+        {
+          "name": "sample-bin",
+          "architecture": "amd64",
+          "fromVersion": "1.0-1",
+          "toVersion": "1.0-2",
+          "sourcePackage": "sample-bin",
+          "sourceVersion": "1.0-2",
+          "sourceLabel": "Synthetic fixture repository",
+          "suite": "trixie",
+          "component": "main",
+          "archiveSHA256": "sha256:ac1b6d5ac22a7e0e2dc248ac728d5c99b355730e0d89429f9c7d47000bc79217"
+        }
+      ]
+    },
+    "job": {
+      "requestId": "update_11111111111111111111111111111111",
+      "state": "verifying",
+      "createdAt": "2023-11-14T22:13:20Z",
+      "updatedAt": "2023-11-14T22:13:26Z",
+      "approvedAt": "2023-11-14T22:13:23Z",
+      "result": {
+        "phase": "verifying",
+        "observedAt": "2023-11-14T22:13:26Z",
+        "packages": [
+          {
+            "name": "sample-bin",
+            "architecture": "amd64",
+            "expectedVersion": "1.0-2",
+            "observedVersion": null,
+            "outcome": "unknown"
+          }
+        ],
+        "reboot": {
+          "state": "unknown",
+          "source": "native",
+          "observedAt": "2023-11-14T22:13:26Z"
+        },
+        "reason": "native_running"
+      }
+    }
+  },
+  "needs_intervention": {
+    "schemaVersion": "tracebolt.package-update-workflow.v2",
+    "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "serverNow": "2023-11-14T22:13:24Z",
+    "executionMode": "simulation",
+    "available": false,
+    "reason": "needs_intervention",
+    "preview": {
+      "requestId": "update_11111111111111111111111111111111",
+      "digest": "sha256:eb43109b3dda4dc91671502ff249659ea9a1362ff9194c700cbbf73cc8d4537c",
+      "actorId": "operator_11111111111111111111111111111111",
+      "expiresAt": "2023-11-14T22:14:20Z",
+      "transportProfile": "production-tls",
+      "conffilePolicy": "preserve-modified-dpkg-conffiles",
+      "totalBytes": 23,
+      "items": [
+        {
+          "name": "sample-bin",
+          "architecture": "amd64",
+          "fromVersion": "1.0-1",
+          "toVersion": "1.0-2",
+          "sourcePackage": "sample-bin",
+          "sourceVersion": "1.0-2",
+          "sourceLabel": "Synthetic fixture repository",
+          "suite": "trixie",
+          "component": "main",
+          "archiveSHA256": "sha256:ac1b6d5ac22a7e0e2dc248ac728d5c99b355730e0d89429f9c7d47000bc79217"
+        }
+      ]
+    },
+    "job": {
+      "requestId": "update_11111111111111111111111111111111",
+      "state": "needs_intervention",
+      "createdAt": "2023-11-14T22:13:20Z",
+      "updatedAt": "2023-11-14T22:13:24Z",
+      "approvedAt": "2023-11-14T22:13:22Z",
+      "result": {
+        "phase": "needs_intervention",
+        "observedAt": "2023-11-14T22:13:24Z",
+        "packages": [
+          {
+            "name": "sample-bin",
+            "architecture": "amd64",
+            "expectedVersion": "1.0-2",
+            "observedVersion": null,
+            "outcome": "unknown"
+          }
+        ],
+        "reboot": {
+          "state": "unknown",
+          "source": "simulation",
+          "observedAt": "2023-11-14T22:13:24Z"
+        },
+        "reason": "runner_state_unknown"
+      }
+    }
+  },
+  "preparation_failed": {
+    "schemaVersion": "tracebolt.package-update-workflow.v2",
+    "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "serverNow": "2023-11-14T22:13:21Z",
+    "executionMode": "simulation",
+    "available": true,
+    "reason": "simulation_only",
+    "preview": null,
+    "job": {
+      "requestId": "update_11111111111111111111111111111111",
+      "state": "preparation_failed",
+      "createdAt": "2023-11-14T22:13:20Z",
+      "updatedAt": "2023-11-14T22:13:21Z",
+      "approvedAt": null,
+      "result": null
+    }
+  },
+  "preparing": {
+    "schemaVersion": "tracebolt.package-update-workflow.v2",
+    "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "serverNow": "2023-11-14T22:13:20Z",
+    "executionMode": "simulation",
+    "available": false,
+    "reason": "operation_in_progress",
+    "preview": null,
+    "job": {
+      "requestId": "update_11111111111111111111111111111111",
+      "state": "preparing",
+      "createdAt": "2023-11-14T22:13:20Z",
+      "updatedAt": "2023-11-14T22:13:20Z",
+      "approvedAt": null,
+      "result": null
+    }
+  },
+  "preview_ready": {
+    "schemaVersion": "tracebolt.package-update-workflow.v2",
+    "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "serverNow": "2023-11-14T22:13:21Z",
+    "executionMode": "simulation",
+    "available": false,
+    "reason": "simulation_only",
+    "preview": {
+      "requestId": "update_11111111111111111111111111111111",
+      "digest": "sha256:eb43109b3dda4dc91671502ff249659ea9a1362ff9194c700cbbf73cc8d4537c",
+      "actorId": "operator_11111111111111111111111111111111",
+      "expiresAt": "2023-11-14T22:14:20Z",
+      "transportProfile": "production-tls",
+      "conffilePolicy": "preserve-modified-dpkg-conffiles",
+      "totalBytes": 23,
+      "items": [
+        {
+          "name": "sample-bin",
+          "architecture": "amd64",
+          "fromVersion": "1.0-1",
+          "toVersion": "1.0-2",
+          "sourcePackage": "sample-bin",
+          "sourceVersion": "1.0-2",
+          "sourceLabel": "Synthetic fixture repository",
+          "suite": "trixie",
+          "component": "main",
+          "archiveSHA256": "sha256:ac1b6d5ac22a7e0e2dc248ac728d5c99b355730e0d89429f9c7d47000bc79217"
+        }
+      ]
+    },
+    "job": {
+      "requestId": "update_11111111111111111111111111111111",
+      "state": "preview_ready",
+      "createdAt": "2023-11-14T22:13:20Z",
+      "updatedAt": "2023-11-14T22:13:21Z",
+      "approvedAt": null,
+      "result": null
+    }
+  },
+  "revoked": {
+    "schemaVersion": "tracebolt.package-update-workflow.v2",
+    "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "serverNow": "2023-11-14T22:13:22Z",
+    "executionMode": "simulation",
+    "available": false,
+    "reason": "simulation_only",
+    "preview": {
+      "requestId": "update_11111111111111111111111111111111",
+      "digest": "sha256:eb43109b3dda4dc91671502ff249659ea9a1362ff9194c700cbbf73cc8d4537c",
+      "actorId": "operator_11111111111111111111111111111111",
+      "expiresAt": "2023-11-14T22:14:20Z",
+      "transportProfile": "production-tls",
+      "conffilePolicy": "preserve-modified-dpkg-conffiles",
+      "totalBytes": 23,
+      "items": [
+        {
+          "name": "sample-bin",
+          "architecture": "amd64",
+          "fromVersion": "1.0-1",
+          "toVersion": "1.0-2",
+          "sourcePackage": "sample-bin",
+          "sourceVersion": "1.0-2",
+          "sourceLabel": "Synthetic fixture repository",
+          "suite": "trixie",
+          "component": "main",
+          "archiveSHA256": "sha256:ac1b6d5ac22a7e0e2dc248ac728d5c99b355730e0d89429f9c7d47000bc79217"
+        }
+      ]
+    },
+    "job": {
+      "requestId": "update_11111111111111111111111111111111",
+      "state": "revoked",
+      "createdAt": "2023-11-14T22:13:20Z",
+      "updatedAt": "2023-11-14T22:13:22Z",
+      "approvedAt": null,
+      "result": null
+    }
+  },
+  "succeeded": {
+    "schemaVersion": "tracebolt.package-update-workflow.v2",
+    "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "serverNow": "2023-11-14T22:13:26Z",
+    "executionMode": "simulation",
+    "available": true,
+    "reason": "simulation_only",
+    "preview": {
+      "requestId": "update_11111111111111111111111111111111",
+      "digest": "sha256:eb43109b3dda4dc91671502ff249659ea9a1362ff9194c700cbbf73cc8d4537c",
+      "actorId": "operator_11111111111111111111111111111111",
+      "expiresAt": "2023-11-14T22:14:20Z",
+      "transportProfile": "production-tls",
+      "conffilePolicy": "preserve-modified-dpkg-conffiles",
+      "totalBytes": 23,
+      "items": [
+        {
+          "name": "sample-bin",
+          "architecture": "amd64",
+          "fromVersion": "1.0-1",
+          "toVersion": "1.0-2",
+          "sourcePackage": "sample-bin",
+          "sourceVersion": "1.0-2",
+          "sourceLabel": "Synthetic fixture repository",
+          "suite": "trixie",
+          "component": "main",
+          "archiveSHA256": "sha256:ac1b6d5ac22a7e0e2dc248ac728d5c99b355730e0d89429f9c7d47000bc79217"
+        }
+      ]
+    },
+    "job": {
+      "requestId": "update_11111111111111111111111111111111",
+      "state": "succeeded",
+      "createdAt": "2023-11-14T22:13:20Z",
+      "updatedAt": "2023-11-14T22:13:26Z",
+      "approvedAt": "2023-11-14T22:13:22Z",
+      "result": {
+        "phase": "succeeded",
+        "observedAt": "2023-11-14T22:13:26Z",
+        "packages": [
+          {
+            "name": "sample-bin",
+            "architecture": "amd64",
+            "expectedVersion": "1.0-2",
+            "observedVersion": "1.0-2",
+            "outcome": "verified"
+          }
+        ],
+        "reboot": {
+          "state": "required",
+          "source": "simulation",
+          "observedAt": "2023-11-14T22:13:26Z"
+        },
+        "reason": "simulated_verified"
+      }
+    }
+  },
+  "unavailable": {
+    "schemaVersion": "tracebolt.package-update-workflow.v2",
+    "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "serverNow": "2023-11-14T22:13:20Z",
+    "executionMode": "unavailable",
+    "available": false,
+    "reason": "native_adapter_unavailable",
+    "preview": null,
+    "job": null
+  },
+  "verifying": {
+    "schemaVersion": "tracebolt.package-update-workflow.v2",
+    "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "serverNow": "2023-11-14T22:13:25Z",
+    "executionMode": "simulation",
+    "available": false,
+    "reason": "operation_in_progress",
+    "preview": {
+      "requestId": "update_11111111111111111111111111111111",
+      "digest": "sha256:eb43109b3dda4dc91671502ff249659ea9a1362ff9194c700cbbf73cc8d4537c",
+      "actorId": "operator_11111111111111111111111111111111",
+      "expiresAt": "2023-11-14T22:14:20Z",
+      "transportProfile": "production-tls",
+      "conffilePolicy": "preserve-modified-dpkg-conffiles",
+      "totalBytes": 23,
+      "items": [
+        {
+          "name": "sample-bin",
+          "architecture": "amd64",
+          "fromVersion": "1.0-1",
+          "toVersion": "1.0-2",
+          "sourcePackage": "sample-bin",
+          "sourceVersion": "1.0-2",
+          "sourceLabel": "Synthetic fixture repository",
+          "suite": "trixie",
+          "component": "main",
+          "archiveSHA256": "sha256:ac1b6d5ac22a7e0e2dc248ac728d5c99b355730e0d89429f9c7d47000bc79217"
+        }
+      ]
+    },
+    "job": {
+      "requestId": "update_11111111111111111111111111111111",
+      "state": "verifying",
+      "createdAt": "2023-11-14T22:13:20Z",
+      "updatedAt": "2023-11-14T22:13:25Z",
+      "approvedAt": "2023-11-14T22:13:22Z",
+      "result": {
+        "phase": "verifying",
+        "observedAt": "2023-11-14T22:13:25Z",
+        "packages": [
+          {
+            "name": "sample-bin",
+            "architecture": "amd64",
+            "expectedVersion": "1.0-2",
+            "observedVersion": null,
+            "outcome": "unknown"
+          }
+        ],
+        "reboot": {
+          "state": "unknown",
+          "source": "simulation",
+          "observedAt": "2023-11-14T22:13:25Z"
+        },
+        "reason": "simulated_running"
+      }
+    }
+  }
+}

@@ -5,6 +5,7 @@ import { OperationalInventoryPanel } from './operational';
 import { CompletePackagesPanel } from './complete-packages';
 import { DeviceCachedUpdates } from './cached-updates';
 import { CompleteUpdatesPanel } from './complete-updates';
+import { PackageUpdatesWorkspace } from './package-updates';
 import { SystemInventoryPanel } from './system-inventory';
 import { CompleteOverviewPanel } from './complete-overview';
 import './complete-packages.css';
@@ -38,6 +39,6 @@ function DeviceUpdatesWorkspace({ deviceId, sessionKey }: { deviceId: string; se
                 <option value="preview">{locale === 'de' ? 'Begrenzte Vorschau' : 'Limited preview'}</option>
             </select>
         </div>
-        {source === 'complete' ? <CompleteUpdatesPanel deviceId={deviceId} sessionKey={sessionKey ?? undefined}/> : <DeviceCachedUpdates deviceId={deviceId} sessionKey={sessionKey}/>}
+        <PackageUpdatesWorkspace deviceId={deviceId} sessionKey={sessionKey} source={source}>{source === 'complete' ? <CompleteUpdatesPanel deviceId={deviceId} sessionKey={sessionKey ?? undefined}/> : <DeviceCachedUpdates deviceId={deviceId} sessionKey={sessionKey}/>}</PackageUpdatesWorkspace>
     </>;
 }

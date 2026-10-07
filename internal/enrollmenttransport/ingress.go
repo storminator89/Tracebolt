@@ -34,6 +34,7 @@ import (
 	"localrmm/internal/lanstore"
 	"localrmm/internal/lantrust"
 	"localrmm/internal/overviewwire"
+	"localrmm/internal/packagecontroller"
 	"localrmm/internal/signedhttp"
 	"localrmm/internal/systemwire"
 )
@@ -46,6 +47,7 @@ var ErrConfiguration = errors.New("enrollment ingress configuration is invalid")
 // Ingress is fixed to one store, profile, exact agent origin and dedicated issuer.
 // Construct one per listener; sharing its address preserves the admission bound.
 type Ingress struct {
+	packages                   *packagecontroller.Manager
 	actions                    *actionmanager.Manager
 	store                      *enrollmentstore.Store
 	journal                    *journalcache.Cache
@@ -139,6 +141,10 @@ func (h *Ingress) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	default:
 		w.Header().Set("Retry-After", "15")
 		failure(w, http.StatusTooManyRequests, "ingress_busy")
+		return
+	}
+	if r != nil && r.URL != nil && strings.HasPrefix(r.URL.Path, "/v3/package-actions/") {
+		h.packageActions(w, r)
 		return
 	}
 	if r != nil && r.URL != nil && strings.HasPrefix(r.URL.Path, "/v3/service-actions/") {

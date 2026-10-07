@@ -1,0 +1,14 @@
+.journal-ai-form { display: grid; gap: .75rem; margin-block: .8rem; }
+.journal-ai-form p { margin: 0; }
+.journal-ai-form fieldset { display: flex; flex-wrap: wrap; align-items: end; gap: .75rem; border: 0; padding: 0; min-width: 0; }
+.journal-ai-form fieldset label { display: grid; gap: .3rem; max-width: 100%; }
+.journal-ai-form input:not([type="checkbox"]), .journal-ai-form select { max-width: 100%; min-width: 0; }
+.journal-ai-targets { display: grid; gap: .8rem; list-style: none; padding: 0; margin: 0; }
+.journal-ai-targets li { display: flex; align-items: center; flex-wrap: wrap; gap: .75rem; overflow-wrap: anywhere; }
+.journal-ai-form dd { margin-inline-start: 0; overflow-wrap: anywhere; }
+.journal-ai-result { overflow-wrap: anywhere; }
+.journal-ai-result pre { white-space: pre-wrap; font: inherit; }
+.journal-ai { margin-bottom: 20px; padding: 16px 20px; font-size: 13px; line-height: 1.5; }
+.journal-ai h2 { font-size: 14px; margin: 0; }
+.journal-ai .proactive-ai-destination { display: block; }
+@media(max-width:600px) { .journal-ai { padding: 14px 16px; } }

@@ -11,7 +11,7 @@ test('invented Windows views preserve finite scope, truncation and denied distin
 });
 test('hosted Windows UI case is additive and keeps finite diagnostics and real fixture login',()=>{
  const runner=fs.readFileSync(new URL('./lan-browser.mjs',import.meta.url),'utf8'),source=fs.readFileSync(new URL('./windows-inventory-browser.mjs',import.meta.url),'utf8');
- assert.equal((runner.match(/await check\(/g)||[]).length,23);assert.equal((runner.match(/await check\(windowsInventoryCaseName/g)||[]).length,1);
+ assert.equal((runner.match(/await check\(/g)||[]).length,25);assert.equal((runner.match(/await check\(windowsInventoryCaseName/g)||[]).length,1);
  assert.match(runner,/stage:windowsInventoryFailureStage\(\)/);assert.match(source,/await login\(page\)/);assert.match(source,/writes\.push\('write'\)/);assert.match(source,/external\.push\('external'\)/);
  assert.doesNotMatch(source,/chromium\.launch|createServer|writeFile|error\.message/);
 });

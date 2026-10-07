@@ -147,13 +147,16 @@ func ntOpenWith(parent windows.Handle, name string, access, share, disposition u
 		return 0, ErrPath
 	}
 	oa := windows.OBJECT_ATTRIBUTES{Length: uint32(unsafe.Sizeof(windows.OBJECT_ATTRIBUTES{})), RootDirectory: parent, ObjectName: unicode, Attributes: windows.OBJ_CASE_INSENSITIVE | windows.OBJ_DONT_REPARSE, SecurityDescriptor: sd}
-	flags := uint32(windows.FILE_SYNCHRONOUS_IO_NONALERT | windows.FILE_OPEN_REPARSE_POINT | windows.FILE_OPEN_NO_RECALL)
+	// Keep both reparse protections. NO_RECALL is not part of MS-FSA's
+	// directory option set; request it only for non-directory content opens.
+	// This does not assert that directory acquisition cannot invoke providers.
+	flags := uint32(windows.FILE_SYNCHRONOUS_IO_NONALERT | windows.FILE_OPEN_REPARSE_POINT)
 	attributes := uint32(windows.FILE_ATTRIBUTE_NORMAL)
 	if directory {
 		flags |= windows.FILE_DIRECTORY_FILE
 		attributes = windows.FILE_ATTRIBUTE_DIRECTORY
 	} else {
-		flags |= windows.FILE_NON_DIRECTORY_FILE | windows.FILE_WRITE_THROUGH
+		flags |= windows.FILE_NON_DIRECTORY_FILE | windows.FILE_WRITE_THROUGH | windows.FILE_OPEN_NO_RECALL
 	}
 	var h windows.Handle
 	var iosb windows.IO_STATUS_BLOCK

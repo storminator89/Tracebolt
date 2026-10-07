@@ -22,19 +22,20 @@ const runbook = (v: unknown) => ['none', 'service', 'storage', 'network'].includ
 function provenance(v: unknown): v is Provenance {
     return object(v) && fields(v, ['method', 'provider', 'model', 'promptVersion', 'runbookVersion', 'ruleId', 'packetSHA256', 'destination', 'endpointOrigin']) && Object.values(v).every(value => text(value, 512));
 }
-function validResult(v: unknown, incident: HealthIncident, now: string): v is StoredAnalysisResult {
+function validResult(v: unknown, incident: HealthIncident, now: string, scope: 'health-summary-v1' | 'service-journal-ai-v1' = 'health-summary-v1'): v is StoredAnalysisResult {
     if (!object(v) || !fields(v, ['schemaVersion', 'id', 'fingerprint', 'generatedAt', 'packet', 'baseline', 'ai', 'rootCauseConfirmed', 'limitations'], ['configRevision', 'superseded']) || v.schemaVersion !== 'tracebolt.analysis.v1' || !id(v.id) || !text(v.fingerprint, 128) || !timeBefore(v.generatedAt, now) || v.rootCauseConfirmed !== false || !strings(v.limitations, 16)) return false;
     if (Object.hasOwn(v, 'configRevision') && !id(v.configRevision) || Object.hasOwn(v, 'superseded') && v.superseded !== false) return false;
     const packet = v.packet;
-    if (!object(packet) || !fields(packet, ['schemaVersion', 'dataScope', 'case', 'evidence', 'missingEvidenceIDs', 'observationWindow', 'gaps']) || packet.schemaVersion !== 'tracebolt.evidence-packet.v1' || packet.dataScope !== 'health-summary-v1') return false;
+    if (!object(packet) || !fields(packet, ['schemaVersion', 'dataScope', 'case', 'evidence', 'missingEvidenceIDs', 'observationWindow', 'gaps']) || packet.schemaVersion !== 'tracebolt.evidence-packet.v1' || packet.dataScope !== scope) return false;
     const item = packet.case;
     if (!object(item) || !fields(item, ['id', 'title', 'summary', 'category', 'ruleId', 'runbookId', 'createdAt', 'updatedAt', 'synthetic']) || item.id !== incident.id || !text(item.title, 256) || !text(item.summary) || item.category !== incident.kind || item.ruleId !== `health:${incident.kind}` || !runbook(item.runbookId) || !timeBefore(item.createdAt, now) || !timeBefore(item.updatedAt, now) || item.synthetic !== false) return false;
-    if (!Array.isArray(packet.evidence) || packet.evidence.length !== 2 || !ids(packet.missingEvidenceIDs) || packet.missingEvidenceIDs.length !== 0) return false;
+    if (!Array.isArray(packet.evidence) || (scope === 'health-summary-v1' ? packet.evidence.length !== 2 : packet.evidence.length < 3 || packet.evidence.length > 13) || !ids(packet.missingEvidenceIDs) || packet.missingEvidenceIDs.length !== 0) return false;
     const evidenceIDs = new Set<string>();
     for (const evidence of packet.evidence) {
-        if (!object(evidence) || !fields(evidence, ['id', 'title', 'source', 'quality', 'collectedAt', 'detail', 'value', 'synthetic']) || !id(evidence.id) || !['health-event', 'health-snapshot'].includes(evidence.id) || evidenceIDs.has(evidence.id) || !text(evidence.title) || !text(evidence.source) || !text(evidence.detail) || !text(evidence.value) || !['healthy', 'stale', 'unknown', 'denied'].includes(String(evidence.quality)) || !timeBefore(evidence.collectedAt, now) || evidence.synthetic !== false) return false;
+        if (!object(evidence) || !fields(evidence, ['id', 'title', 'source', 'quality', 'collectedAt', 'detail', 'value', 'synthetic']) || !id(evidence.id) || !(scope === 'health-summary-v1' ? ['health-event', 'health-snapshot'].includes(evidence.id) : ['health-event', 'health-snapshot', 'journal-window'].includes(evidence.id) || /^journal-row-[0-9]{3}$/.test(evidence.id)) || evidenceIDs.has(evidence.id) || !text(evidence.title) || !text(evidence.source) || !text(evidence.detail) || !text(evidence.value) || !['healthy', 'stale', 'unknown', 'denied'].includes(String(evidence.quality)) || !timeBefore(evidence.collectedAt, now) || evidence.synthetic !== false) return false;
         evidenceIDs.add(evidence.id);
     }
+    if (!evidenceIDs.has('health-event') || !evidenceIDs.has('health-snapshot') || scope === 'service-journal-ai-v1' && !evidenceIDs.has('journal-window')) return false;
     const references = (value: unknown): value is string[] => ids(value) && value.every(key => evidenceIDs.has(key));
     const window = packet.observationWindow;
     if (!object(window) || !fields(window, ['from', 'to']) || !(window.from === null && window.to === null || timeBefore(window.from, now) && timeBefore(window.to, now) && Date.parse(window.from) <= Date.parse(window.to))) return false;
@@ -57,4 +58,9 @@ export function validInvestigationAnalysis(v: unknown, incident: HealthIncident,
     if (v.result !== null && !validResult(v.result, incident, now)) return false;
     if (v.result !== null && (!object(v.result) || !object(v.result.ai) || v.result.ai.status !== v.status)) return false;
     try { return new TextEncoder().encode(JSON.stringify(v)).byteLength <= INVESTIGATION_ANALYSIS_BYTES; } catch { return false; }
+}
+
+/** Separate opt-in source validator; the health-summary contract stays unchanged. */
+export function validJournalAnalysisResult(v: unknown, incident: HealthIncident, now: string): v is StoredAnalysisResult {
+    return validResult(v, incident, now, 'service-journal-ai-v1');
 }

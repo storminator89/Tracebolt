@@ -1,0 +1,16 @@
+.package-update-unavailable { margin: 0 0 16px; padding: 12px; border: 1px solid var(--line); border-radius: 7px; }
+.package-update-unavailable h4 { margin: 0 0 6px; }
+.package-update-unavailable p { margin: 4px 0 0; color: var(--secondary); font-size: 12px; line-height: 1.5; }
+.package-update-workflow { margin: 0 0 20px; padding: 16px; border: 1px solid var(--line); border-radius: 8px; }
+.package-update-workflow h3, .package-update-workflow h4 { margin: 0 0 8px; }
+.package-update-workflow .package-heading { gap: 12px; flex-wrap: wrap; }
+.package-update-simulation { border: 2px solid #b36b00; background: color-mix(in srgb, #f5a623 12%, transparent); border-radius: 5px; padding: 10px; font-weight: 700; }
+.package-update-selection, .package-update-review, .package-update-uncertain { border-top: 1px solid var(--line); margin-top: 14px; padding-top: 14px; }
+.package-update-workflow .package-facts dd { overflow-wrap: anywhere; }
+.package-update-selection li { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 5px 0; }
+.package-update-workflow ul, .package-update-workflow ol { padding-left: 22px; }
+.package-update-review ol > li { margin: 12px 0; }
+.package-update-ack { display: flex; align-items: flex-start; gap: 9px; margin: 14px 0; line-height: 1.5; }
+.package-update-ack input { flex-shrink: 0; margin-top: 4px; }
+.package-update-workflow section[aria-label] { margin-top: 16px; }
+.package-update-uncertain .button { margin: 4px 8px 4px 0; }

@@ -119,7 +119,7 @@ func (s *Store) ClaimHealthAnalysis(ctx context.Context, deviceID, incidentID, r
 	}
 	var recent int
 	var last, ruleLast sql.NullInt64
-	if err = tx.QueryRowContext(ctx, `SELECT count(*),max(created) FROM health_analyses WHERE created>?`, now.Add(-time.Hour).UnixMilli()).Scan(&recent, &last); err != nil {
+	if err = tx.QueryRowContext(ctx, `SELECT count(*),max(at) FROM (SELECT created AS at FROM health_analyses UNION ALL SELECT model_started AS at FROM journal_ai_attempts WHERE model_started>0) WHERE at>?`, now.Add(-time.Hour).UnixMilli()).Scan(&recent, &last); err != nil {
 		return nil, err
 	}
 	if recent >= HealthAnalysisHourlyLimit || last.Valid && now.UnixMilli() < last.Int64+HealthAnalysisInterval.Milliseconds() {

@@ -93,10 +93,12 @@ The same native failures and policy refusals are preserved, including their
 internal error identity. There is no retry, alternate alias, new read, access
 mask change, flag removal, ACL repair or mutating fallback.
 
-The exact root request retains `0x001200a1` desired access (including
+The diagnostic-only amendment retained `0x001200a1` desired access (including
 SYNCHRONIZE), read/write sharing without delete, existing-only `FILE_OPEN`,
-`OBJ_CASE_INSENSITIVE | OBJ_DONT_REPARSE`, and directory, synchronous,
-open-reparse-point and no-recall options. The short directory-compatible-option
+`OBJ_CASE_INSENSITIVE | OBJ_DONT_REPARSE`, and all original create options.
+After c0fc06a measured an invalid native request, the separate
+[directory compatibility correction](windows-directory-request-options.md)
+omits only directory NO_RECALL while retaining both reparse protections. The short directory-compatible-option
 list in Microsoft documentation does not establish which status occurred here;
 this amendment does not infer an invalid parameter or weaken either protection.
 

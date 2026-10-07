@@ -61,7 +61,7 @@ export const sameJournalGeneration = (a: JournalPolicyGeneration, b: JournalPoli
 export function sameJournalAuthorization(a: JournalGenerationView, b: JournalGenerationView): boolean {
     return a.schemaVersion === b.schemaVersion && a.policyEnabled === b.policyEnabled && a.serviceAuthorization === b.serviceAuthorization && JSON.stringify(a.allowedUnits) === JSON.stringify(b.allowedUnits);
 }
-function generationView(v: unknown, now: string): v is JournalGenerationView {
+export function validJournalGenerationView(v: unknown, now: string): v is JournalGenerationView {
     const v2 = record(v) && v.schemaVersion === 'tracebolt.journal-generation-view.v2';
     if (!exact(v, ['schemaVersion', 'policyGeneration', 'sequence', 'observedAt', 'receivedAt', 'expiresAt', 'fresh', ...(v2 ? ['policyEnabled', 'serviceAuthorization', 'allowedUnits'] : [])]) || !v2 && v.schemaVersion !== 'tracebolt.journal-generation-view.v1' || !validJournalGeneration(v.policyGeneration) || !sequence(v.sequence) || v.sequence === '0' || !journalTime(v.observedAt) || !journalTime(v.receivedAt) || !journalTime(v.expiresAt) || journalAge(v.receivedAt, v.observedAt) < 0 || journalAge(v.receivedAt, v.observedAt) >= 300000 || journalAge(now, v.receivedAt) < 0 || journalAge(v.expiresAt, v.observedAt) !== 300000 || typeof v.fresh !== 'boolean' || v.fresh && journalAge(v.expiresAt, now) <= 0) return false;
     if (!v2) return true;
@@ -81,7 +81,7 @@ function description(v: unknown, deviceId: string, now: string): v is JournalDes
 export function validJournalView(v: unknown, deviceId: string): v is JournalView {
     const v2 = record(v) && v.schemaVersion === 'tracebolt.journal-view.v2';
     if (!exact(v, ['schemaVersion', 'deviceId', 'serverNow', 'configured', 'expectedFloor', 'request', 'localStatus', 'contentStatus', ...(v2 ? ['generation'] : [])]) || (!v2 && v.schemaVersion !== 'tracebolt.journal-view.v1') || !validJournalDevice(deviceId) || v.deviceId !== deviceId || !journalTime(v.serverNow) || typeof v.configured !== 'boolean' || !sequence(v.expectedFloor) || !member(v.localStatus, ['unknown', 'checking', 'disabled', 'denied', 'helper_unavailable', 'result_lost']) || !member(v.contentStatus, ['available', 'unavailable'])) return false;
-    if (v2 && (!v.configured || !generationView(v.generation, v.serverNow))) return false;
+    if (v2 && (!v.configured || !validJournalGenerationView(v.generation, v.serverNow))) return false;
     if (v.request === null) return v.contentStatus === 'unavailable' && v.expectedFloor === '0';
     if (!v.configured) return false;
     const r = v.request;

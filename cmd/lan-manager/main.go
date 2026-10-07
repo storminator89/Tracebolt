@@ -27,6 +27,7 @@ import (
 	"localrmm/internal/linuxcveprogress"
 	"localrmm/internal/model"
 	"localrmm/internal/operatorauth"
+	"localrmm/internal/packagecontroller"
 	"localrmm/internal/store"
 	"log"
 	"net"
@@ -97,6 +98,7 @@ func prepareWithApplicationChecks(m lanconfig.Material, enrollment *enrollmentco
 		return nil, e
 	}
 	var actions *actionmanager.Manager
+	var packageActions *packagecontroller.Manager
 	var enrolledStore *enrollmentstore.Store
 	var enrolledService *enrollmentservice.Service
 	var enrolledIngress *enrollmenttransport.Ingress
@@ -104,6 +106,9 @@ func prepareWithApplicationChecks(m lanconfig.Material, enrollment *enrollmentco
 	var windowsService *enrollmentservice.Service
 	var windowsIngress *enrollmenttransport.Ingress
 	fail := func(err error) (*prepared, error) {
+		if packageActions != nil {
+			packageActions.Close()
+		}
 		if actions != nil {
 			actions.Close()
 		}
@@ -184,6 +189,28 @@ func prepareWithApplicationChecks(m lanconfig.Material, enrollment *enrollmentco
 			return fail(e)
 		}
 	}
+	if c.PackageActionsConfigFile != "" {
+		if enrolledStore == nil || enrolledIngress == nil || !auth.Named() {
+			return fail(packagecontroller.ErrConfiguration)
+		}
+		forbidden := []ed25519.PublicKey{}
+		for _, der := range append([][]byte{enrollment.Issuer().IssuerDER(), enrollment.Issuer().RootDER()}, m.Server.Certificate...) {
+			cert, err := x509.ParseCertificate(der)
+			if err != nil {
+				return fail(packagecontroller.ErrConfiguration)
+			}
+			if pub, ok := cert.PublicKey.(ed25519.PublicKey); ok {
+				forbidden = append(forbidden, pub)
+			}
+		}
+		packageActions, e = packagecontroller.Load(context.Background(), c.PackageActionsConfigFile, enrolledStore.AuthorizePackageDevice, auth.ActorHasCapability, forbidden...)
+		if e != nil {
+			return fail(e)
+		}
+		if e = enrolledIngress.ConfigurePackageActions(packageActions); e != nil {
+			return fail(e)
+		}
+	}
 	var operatorTLS, agentTLS *tls.Config
 	if c.Profile == lanconfig.TLS {
 		if enrolledIngress != nil {
@@ -220,6 +247,9 @@ func prepareWithApplicationChecks(m lanconfig.Material, enrollment *enrollmentco
 	var cveProgress *linuxcveprogress.Cache
 	closeAll := func() {
 		once.Do(func() {
+			if packageActions != nil {
+				packageActions.Close()
+			}
 			if actions != nil {
 				actions.Close()
 			}
@@ -259,7 +289,7 @@ func prepareWithApplicationChecks(m lanconfig.Material, enrollment *enrollmentco
 			return nil, e
 		}
 	}
-	operatorConfig := api.LANOperatorConfig{AISettings: aiSettings, AlarmSettings: alarmWorker, ApplicationCheckSettings: applicationChecks, ServiceActions: actions, Origin: c.OperatorOrigin, Auth: auth, Registry: registry, InsecureHTTPTest: c.Profile == lanconfig.HTTPTest, Devices: func() ([]model.Device, error) {
+	operatorConfig := api.LANOperatorConfig{PackageActions: packageActions, AISettings: aiSettings, AlarmSettings: alarmWorker, ApplicationCheckSettings: applicationChecks, ServiceActions: actions, Origin: c.OperatorOrigin, Auth: auth, Registry: registry, InsecureHTTPTest: c.Profile == lanconfig.HTTPTest, Devices: func() ([]model.Device, error) {
 		return trustStore.Devices(context.Background(), registry.List(), time.Now().UTC())
 	}}
 	if enrolledService != nil {

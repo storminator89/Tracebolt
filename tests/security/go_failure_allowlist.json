@@ -1,5 +1,5 @@
 {
-  "goSourceSha256": "6f7c31e2e5773f872f020cebe4be20934d5db5394e5b443b18bf13f2238d9805",
+  "goSourceSha256": "48f83efcf5455f62bd2a877febc5a727ea22a47f8735b39ba63d437ef1cbb1a7",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -173,6 +173,10 @@
       "TestHTTPWriteBudgetOutlastsAnalysis",
       "TestRealManagerReturnsDelayedFakeProviderResult"
     ],
+    "localrmm/cmd/package-guard": [],
+    "localrmm/cmd/package-helper": [],
+    "localrmm/cmd/package-manager-init": [],
+    "localrmm/cmd/package-runner": [],
     "localrmm/cmd/socket-owner-reader": [
       "TestArgumentBoundaryIsInert",
       "TestCancellationDoesNotFinishBeforeRuntimeCleanup",
@@ -286,6 +290,7 @@
       "TestConfigurationFingerprintStableOrderAndExplicitEmptyValues",
       "TestDefaultOffPolicyCannotVerifySubmission",
       "TestFixedBackendChecksPinsAndExactTryRestart",
+      "TestHelperStartedBeforePackageScopeRefusesLaterAdmission",
       "TestIPCConnectionLimitAndCanceledPartialFrames",
       "TestIPCDisconnectedCallerCannotDiscardCompletedState",
       "TestIPCPeerDeniedBeforeReading",
@@ -293,6 +298,7 @@
       "TestIPCShutdownWaitsForInvokedOperationAndPersists",
       "TestIPCSubmissionAndStatusFrames",
       "TestNoRawBackendErrorsInWireResponse",
+      "TestPackageFenceBlocksServiceBeforeBackend",
       "TestPolicyExplicitGrantAndReviewRequirements",
       "TestProfileSwitchRetainsFloorAndRejectsOldPolicyPermit",
       "TestResponseAllowsAllActualLifecycleStatuses",
@@ -312,7 +318,8 @@
       "TestSetupInitializationRequiresRootAndCanonicalPolicyBeforeFence",
       "TestSetupInitializationRetainedCompletionBlocksLostLedgerAndStarted",
       "TestSetupTargetCheckOnlyFixedReadOnlyBackend",
-      "TestSetupTargetFileIsProtectedAndStable"
+      "TestSetupTargetFileIsProtectedAndStable",
+      "TestUncertainServiceRetainsCrossActionFence"
     ],
     "localrmm/internal/actionjob": [
       "TestApprovalIsBoundAndSignsOnce",
@@ -498,6 +505,7 @@
       "TestWebhookTLSVerificationAndSnapshotIntegrity"
     ],
     "localrmm/internal/analysis": [
+      "TestAnalyzeJournalBoundsAndUTF8Clipping",
       "TestCitationIdentityDoesNotClaimEntailment",
       "TestEndpointDefaultBoundaryAndAllowlist",
       "TestEndpointRejectsURLTricksAndUnsafeDestinations",
@@ -604,6 +612,18 @@
       "TestInvestigationsUnavailableWithoutHealthMonitor",
       "TestInvestigationsUnknownFreshnessAndBoundedPaging",
       "TestInvitationCreationAdvertisesExactPublicDownloadChecksum",
+      "TestJournalAICanceledPreparedCaptureNeverExports",
+      "TestJournalAICancellationRetriesAcrossRevisionAndRestart",
+      "TestJournalAICapturePersistenceAndCancellationFailureRemainHonest",
+      "TestJournalAIDelayedPagePreservesObservationAndOriginalExpiry",
+      "TestJournalAIExplicitScopeCapturesOnceMasksCitesAndExpires",
+      "TestJournalAIFinalAuthorityAndResultBinding",
+      "TestJournalAIGoDTOFixture",
+      "TestJournalAIInvalidScopeDoesNotPoisonLaterApproval",
+      "TestJournalAIManualWorkPolicyFailureAndRevocationDoNotLeak",
+      "TestJournalAIMissingApprovalAndChangedPolicyNeverCapture",
+      "TestJournalAIProviderReplacementInvalidatesApprovalAndResults",
+      "TestJournalAISavedProviderViewChecksProtectedBinding",
       "TestJournalCapabilitiesPublicStaticBoundedAndGuarded",
       "TestJournalCapabilitiesUnavailableOnDeveloperSurface",
       "TestJournalExpectedGenerationShape",
@@ -661,6 +681,13 @@
       "TestOperationalReadDefaultsAreExplicitAndBounded",
       "TestPackageReadDefaultsAndProfileConsent",
       "TestPackageSourceRemainsUnassessedAndExcludedFromAI",
+      "TestPackageUpdateBodyReadDoesNotHoldSessionGate",
+      "TestPackageUpdateGoViewContract",
+      "TestPackageUpdateRequestRejectsEvidenceAndNestedAliases",
+      "TestPackageUpdateRoutesAreExact",
+      "TestPackageUpdateSQLiteSimulationThroughAuthenticatedAPI",
+      "TestPackageUpdatesCapabilitiesAreIndependentAndSharedCannotMutate",
+      "TestPackageUpdatesStayInertBehindRealOperatorBoundary",
       "TestPersistentAIActualStoreReopenConsumesInterruptedAndChecksAuthority",
       "TestPersistentAIDurableDisableAndDiskMismatch",
       "TestPersistentAIExplicitKeyStorageAndHTTPBoundary",
@@ -1292,6 +1319,7 @@
       "TestTwentyFiveNearMaxConcurrentTransactionWait",
       "TestTwentyFiveOperationalRetainedBudget",
       "TestTwentyFivePopulatedRecordsRetainFrames",
+      "TestWindowsEnrollmentNeverAuthorizesNativePackageDevice",
       "TestWindowsInventoryCannotBeWrittenIntoBasicStore",
       "TestWindowsInventoryDurableViewRetryHistoryAndScope",
       "TestWindowsInventoryViewRechecksClockFreshnessAndExpiry"
@@ -1317,6 +1345,7 @@
       "TestJournalRealTransportPurposeAndTerminalExpiry",
       "TestJournalRealTransportResultSearchRetryAndRevocation",
       "TestJournalRealTransportRevocationDuringClaimBody",
+      "TestNativePackageEnrolledTransportExactClaimsAndResults",
       "TestRealHTTPGuardsAndSignatureMetadata",
       "TestRealIngressActivatedIdentityReplayReusedConnectionRevocation",
       "TestRequestContractGuards",
@@ -1331,6 +1360,7 @@
       "TestTLSConfigAcceptsOnlyDedicatedIssuerAndNormalServerVerification",
       "TestTLSExactStaleRetryAndRestartPreserveOriginalReceipt",
       "TestUnavailableStoreReturns503OnEveryProfile",
+      "TestWindowsIngressRejectsNativePackageRoutesBeforeDispatch",
       "TestZeroConfigurationAndPlaintextTLSSeparation"
     ],
     "localrmm/internal/fixtures": [],
@@ -1697,6 +1727,7 @@
       "TestOverviewSiblingFatalFailureCannotBeMaskedByDeliveryFailure",
       "TestOverviewSourceErrorCancellationAndAllocationAreDurable",
       "TestOverviewTrustedFailureStillStopsJournalCompletion",
+      "TestPackageClientLocalScopeCannotBorrowServiceOrCollectionGrant",
       "TestPackageCollectorFailuresNeverStage",
       "TestPackageConfigAndEveryOlderLedgerDomain",
       "TestPackageExpiredPendingDiscardsWithoutReusingSequence",
@@ -1704,7 +1735,10 @@
       "TestPackageObservationShapeRejectsOperatorCertificateMetadata",
       "TestPackagePendingRawReservationsAndCanonicalBasicCap",
       "TestPackagePendingStrictShapeAndWrongSchemaRetained",
+      "TestPackageSenderChecksRevocationAfterClaimAndSnapshotBinding",
       "TestPackageSenderExactRetryAndSignature",
+      "TestPackageSenderLostDeliveryIsStatusOnly",
+      "TestPackageSenderUnavailableCapabilityStillReadsClaimedStatus",
       "TestPendingWrongCollectionSchemaIsRetainedWithoutFallback",
       "TestPublicBootstrapRedirectIsNeverFollowed",
       "TestPublicBootstrapRejectsNoncanonicalHeaderMapKeys",
@@ -1756,6 +1790,7 @@
       "TestWindowsInventoryNoCollectionOutsideExactConsent",
       "TestWindowsInventoryPendingStrictShapeAndBounds",
       "TestWindowsInventoryRuntimeAndLedgerIsolation",
+      "TestWindowsInventorySenderCannotPollPackageActions",
       "TestWindowsInventoryWrongPendingAndExpiredCounter",
       "TestWindowsManagerPipelineOperatorHTTPBoundary",
       "TestWindowsManagerPipelineRejectsOtherProfilesAndMixedScope",
@@ -1965,6 +2000,22 @@
       "TestTruncatedCountFeasibility"
     ],
     "localrmm/internal/model": [],
+    "localrmm/internal/mutationfence": [
+      "TestCrossActionFencePersistsUnknownAndNeverReplays",
+      "TestIndependentHandlesSerializeOneAdmission",
+      "TestSameIDChangedBytesAndClockRollbackFail",
+      "TestUncertainIntentAndMissingStateNeverReset",
+      "TestUnsafeFilesAndInterruptedWritePoisonAdmission"
+    ],
+    "localrmm/internal/nativeapt": [
+      "TestCaptureDerivesOnlyObservedConfigAndMatchesActualArchives",
+      "TestDPKGConfigurationHasNoForcePathOrHookEscape",
+      "TestFixedInvocationAndNoModeFlag",
+      "TestHostConfigDigestCanonicalAndSensitiveToBytes",
+      "TestPreparedCanonicalAndEvidenceValidation",
+      "TestSelectionAndInvocationRejectInjection",
+      "TestSourceSnapshotBindsEveryByteAndField"
+    ],
     "localrmm/internal/offlinecatalog": [
       "TestCASAndFailurePreserveLastGood",
       "TestCancellationBeforeParseAndCommit",
@@ -2124,6 +2175,45 @@
       "TestUnknownProviderErrorIsFixed",
       "TestValidCallerBeforeAnyProviderWork"
     ],
+    "localrmm/internal/packagecontroller": [
+      "TestExplicitInitializationIsCreateOnlyAndNeverGeneratesKey",
+      "TestNativeControllerCannotBindWindowsEnrollmentScope",
+      "TestNativeCurrentAuthorityAndLostPreparation",
+      "TestNativeSQLiteExactDispatchResultsAndReopen",
+      "TestNativeStaleCapabilitiesAndWrongExactApproval",
+      "TestOfflinePreparationRetainsExpiredPreviewWithoutApproval"
+    ],
+    "localrmm/internal/packagehelper": [
+      "TestAgentReplacementDoesNotHideAlreadyAdmittedCompletion",
+      "TestBrokerPersistsBeforeSingleLaunchAndRetry",
+      "TestBusyRejectionLeavesNoJobAndCanAdmitWhenFree",
+      "TestCaptureAlwaysAbortsCompleteReceiptAndRepeatedHookRefuses",
+      "TestCaptureExit100WithoutReceiptIsFailure",
+      "TestCurrentProcessMustHoldExactSharedFenceInode",
+      "TestDeadRunnerBecomesInterventionWithoutRestartOrFenceRelease",
+      "TestExecuteGuardSingleUseAndApplyingMarker",
+      "TestExecutionHasNoTimeoutVerifiesAndCompletes",
+      "TestFenceCompletionFailureCannotPublishSuccess",
+      "TestFirstPilotExcludesPackageManagerAndHostFoundations",
+      "TestGuardRejectsChangedArchiveStatusPolicyAndExpiry",
+      "TestInterruptedRecordIntentCannotBeAdopted",
+      "TestLostStartResponseNeverRestarts",
+      "TestMissingGuardCannotSucceedAndKeepsFence",
+      "TestPendingDPKGAndUnsupportedConfigsRefuse",
+      "TestPendingSystemdJobCannotBeCalledInterrupted",
+      "TestPreclaimFailureReconcilesBothModesWithoutReleasingFence",
+      "TestProtectedAuthorityAndNoFollow",
+      "TestProtectedFilesRejectHardlinksAndWriteOnce",
+      "TestProtocolStrictBoundsAndUnsupportedOperations",
+      "TestRealisticDPKGConffilesMultilineHeader",
+      "TestRunnerUnitPinnedExactAndEffectiveDefinitionCannotDrift",
+      "TestStillActivePrepareRefusesExecuteBeforeConsumption"
+    ],
+    "localrmm/internal/packagepermit": [
+      "TestCanonicalSignedPackagePermitAndIsolation",
+      "TestPackagePinsAndAllowedIdentitiesAreExact",
+      "TestPackagePreparationAndExecutionBounds"
+    ],
     "localrmm/internal/packageplan": [
       "TestBinaryRebuildAndDefaultMapping",
       "TestCancellationAndNilContext",
@@ -2142,6 +2232,54 @@
       "TestRepeatedPureCallsDoNotPretendToConsume",
       "TestStrictPlanWire"
     ],
+    "localrmm/internal/packageupdate": [
+      "TestExpiryRevocationAndMonotonicTime",
+      "TestImmutableSnapshotAndEvidenceBinding",
+      "TestInertLifecycleExactRetriesAndCanonicalReload",
+      "TestManagerCannotBeEnabledAndNeverInventsStatus",
+      "TestManagerReopenNeverRelaunchesLostSimulationRunner",
+      "TestNativeClaimsAreBoundToSignedAuthority",
+      "TestNativeLostPreparationRemainsFencedAndUnclaimedExpires",
+      "TestPersistedPreparingRetryNeverRefreshesEvidence",
+      "TestPrepareBoundsAndCanonicalOrdering",
+      "TestPreviewRejectsMismatchedSelectionOrProvenance",
+      "TestReloadRejectsAuthorityAfterOriginalRevocation",
+      "TestResultsCannotInventSuccessOrRebootAbsence",
+      "TestSQLiteManagerSelectionApprovalResultsAndCleanReopen",
+      "TestSelectionAndActorCannotChangeOnRetry",
+      "TestSharedWorkflowWireFixtures",
+      "TestSimulationMismatchBlocksFurtherPackageMutation",
+      "TestStrictRecordWireAndStateValidation",
+      "TestSuccessorPreservesExactHistory",
+      "TestUncertainClaimNeverCallsRunnerStart"
+    ],
+    "localrmm/internal/packageupdatestore": [
+      "TestCanceledBeforeWriteRemainsUsable",
+      "TestCanonicalByteAndSizeBounds",
+      "TestClaimUnknownAndInterventionCannotResetOnReopen",
+      "TestConcurrentCASHasOneWinnerAndConflictsAreClean",
+      "TestCorruptOrMissingStateNeverReinitialized",
+      "TestCrashHelper",
+      "TestCreateCanonicalCASAndCleanReopen",
+      "TestCreateRejectsOrphanSidecarAndMissingDirectory",
+      "TestDirectoryReplacementIsNotAdopted",
+      "TestExactBindingAcrossOpenAndCAS",
+      "TestExclusiveHandleAndPathReplacementFence",
+      "TestMutationOutsideStorePoisonsAndKeepsFence",
+      "TestPrepareIntentImmutableAndCapacityRetained",
+      "TestProcessCrashLeavesDurableFence",
+      "TestProtectedPathRejectsPermissionsLinksAndSidecars",
+      "TestRejectHistoryMutationAndRollbackWithoutPoison",
+      "TestResultsAndRebootEvidenceSurviveCleanRestart",
+      "TestUncertainCommitFencesCopiesAndReopen",
+      "TestUnsignedRevisionFloorSurvivesSQLite"
+    ],
+    "localrmm/internal/packagewire": [
+      "TestActionTLSShapeNeverAcceptsProofFallback",
+      "TestPackageSignaturePurposePathAndFraming",
+      "TestServiceSignatureCannotBecomePackageAuthority"
+    ],
+    "localrmm/internal/proactivejournal": [],
     "localrmm/internal/rules": [
       "TestNativeInputsDoNotBecomeDemoEvidence",
       "TestRulesAndCounterexamples"
@@ -2236,6 +2374,11 @@
       "TestHealthAnalysisRetentionProtectsOpenClaims",
       "TestHealthDurableHistoryAndAtomicMutation",
       "TestHealthStateCorruptionIsNotEmptySuccess",
+      "TestJournalAIFenceCreationFailureDoesNotClaimDurableStop",
+      "TestJournalAIMutationFenceSurvivesFailedDisableAndRestart",
+      "TestJournalAIStoreRejectsRawScopeInDurableHealthResults",
+      "TestJournalAIStoreRestartQueuesKnownCapturesAndNeverReplays",
+      "TestJournalAIStoreSharesHealthRateBudget",
       "TestNoteLimit",
       "TestPruneHealthAnalysesWorksWithoutProviderApproval"
     ],
@@ -2595,6 +2738,8 @@
       "TestNoNonWindowsNativeFallback",
       "TestOptionsPolicyFixtures",
       "TestPathPolicyFixtures",
+      "TestStateNativeDirectoryOptionsPreserveBinding",
+      "TestStateNativeReparseFailureHasNoFallback",
       "TestWindowsDescriptorConversionInMemory",
       "TestWindowsOutputBufferAlignment",
       "TestWindowsRenameABI"

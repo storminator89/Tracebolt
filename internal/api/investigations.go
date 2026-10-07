@@ -21,10 +21,15 @@ type investigationCounts struct {
 	Closed    int `json:"closed"`
 	All       int `json:"all"`
 }
+type journalAISummary struct {
+	State     string     `json:"state"`
+	ExpiresAt *time.Time `json:"expiresAt"`
+}
 type investigationItem struct {
-	DeviceID string                `json:"deviceId"`
-	Incident health.Incident       `json:"incident"`
-	Analysis *store.HealthAnalysis `json:"analysis,omitempty"`
+	JournalAI *journalAISummary     `json:"journalAI,omitempty"`
+	DeviceID  string                `json:"deviceId"`
+	Incident  health.Incident       `json:"incident"`
+	Analysis  *store.HealthAnalysis `json:"analysis,omitempty"`
 }
 type investigationsView struct {
 	SchemaVersion string              `json:"schemaVersion"`
@@ -149,9 +154,27 @@ func (h *operatorHandler) investigations(w http.ResponseWriter, r *http.Request)
 	}
 	// Attach only the current page's durable local findings. Reading never starts
 	// inference. The same final enrollment recheck protects both data classes.
+	journalByIncident := map[string]journalAISummary{}
+	if h.app.journalAI != nil {
+		attempts, err := m.store.JournalAIAttempts(r.Context())
+		if err != nil {
+			fail(w, 503, "health_unavailable", "Log analysis receipts are unavailable.")
+			return
+		}
+		for _, attempt := range attempts {
+			state := attempt.State
+			if state == "completed" && attempt.ExpiresAt != nil && !now.Before(*attempt.ExpiresAt) {
+				state = "expired"
+			}
+			journalByIncident[journalAIKey(attempt.DeviceID, attempt.IncidentID)] = journalAISummary{State: state, ExpiresAt: attempt.ExpiresAt}
+		}
+	}
 	analysisByDevice := map[string]map[string]store.HealthAnalysis{}
 	for i := range view.Items {
 		item := &view.Items[i]
+		if summary, ok := journalByIncident[journalAIKey(item.DeviceID, item.Incident.ID)]; ok {
+			item.JournalAI = &summary
+		}
 		if _, ok := analysisByDevice[item.DeviceID]; !ok {
 			findings, err := m.store.HealthAnalyses(r.Context(), item.DeviceID)
 			if err != nil {

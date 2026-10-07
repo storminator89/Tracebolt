@@ -165,11 +165,86 @@ describe('journal fixture primary-consumer observation',()=>{
   const first=await globalThis.fetch(systemRoot+'/query',{method:'POST'});await globalThis.fetch(systemRoot+'/query',{method:'POST'});const reader=first.body!.getReader();await reader.read();await reader.read();reader.releaseLock();expect(observer().state(token)).toBe('duplicate');expect(observer().take(token)).toBeNull();
  });
 
- it.each([['journal',65536],['services',262144]] as const)('retains the exact %s byte cap',async(scope,maximum)=>{
+ it.each([['journal',65536],['services',262144],['overview',262144]] as const)('retains the exact %s byte cap',async(scope,maximum)=>{
   vi.stubGlobal('fetch',vi.fn(async()=>new Response('"'+'x'.repeat(maximum-2)+'"')));uninstall=installJournalPrimaryBody({url:url()});
-  const route=scope==='journal'?root+'/query':systemRoot+'/query',token=observer().arm(scope),response=await globalThis.fetch(route,{method:'POST'}),reader=response.body!.getReader();
+  const route=scope==='journal'?root+'/query':scope==='services'?systemRoot+'/query':overviewRoot+'/query',token=observer().arm(scope),response=await globalThis.fetch(route,{method:'POST',body:scope==='overview'?'{}':undefined}),reader=response.body!.getReader();
   while(!(await reader.read()).done){}reader.releaseLock();expect(observer().take(token)?.body).toHaveLength(maximum-2);
   vi.stubGlobal('fetch',vi.fn(async()=>new Response('"'+'x'.repeat(maximum-1)+'"')));uninstall();uninstall=installJournalPrimaryBody({url:url()});
-  const oversized=observer().arm(scope),tooLarge=await globalThis.fetch(route,{method:'POST'}),largeReader=tooLarge.body!.getReader();while(!(await largeReader.read()).done){}largeReader.releaseLock();expect(observer().state(oversized)).toBe('oversized');expect(observer().take(oversized)).toBeNull();
+  const oversized=observer().arm(scope),tooLarge=await globalThis.fetch(route,{method:'POST',body:scope==='overview'?'{}':undefined}),largeReader=tooLarge.body!.getReader();while(!(await largeReader.read()).done){}largeReader.releaseLock();expect(observer().state(oversized)).toBe('oversized');expect(observer().take(oversized)).toBeNull();
+ });
+});
+
+import { CompleteOverviewPanel } from '../../web/src/complete-overview';
+import { overviewPage, overviewView, processRows } from '../../web/src/complete-overview-fixtures';
+import { OVERVIEW_PAGE_BYTES } from '../../web/src/complete-overview-types';
+const overviewRoot=`/api/devices/${journalDevice}/inventory/overview`;
+
+describe('complete overview fixture primary-consumer observation',()=>{
+ it.each(['valid','terminal inspector abort','malformed','invalid identity','disconnect','abort','oversized','declared oversized'])('binds the exact literal-search primary request and preserves UI handling for %s',async outcome=>{
+  expect(OVERVIEW_PAGE_BYTES).toBe(262144);
+  const view={...overviewView(205,0),deviceId:journalDevice},processes=processRows(205),search='nEeDlE[.*]';
+  for(const index of [0,100,200])processes[index].process!.name=`Needle[.*] fixture ${index}`;
+  let held:ReadableStreamDefaultController<Uint8Array>,signal:AbortSignal,response:Response,value:ReturnType<typeof overviewPage>,readerSpy:ReturnType<typeof vi.fn>,cancelled=false;
+  const fetch=vi.fn(async(path:string,init?:RequestInit)=>{
+   if(path==='/api/auth/session')return json({...journalSession,transport:'http',insecureTestMode:true,transportWarning:'unencrypted_lan_test'});
+   if(path==='/api/session')return json({csrfToken:'synthetic-csrf'});
+   if(path===overviewRoot)return json(view);
+   if(path!==overviewRoot+'/query')throw new Error('Unexpected synthetic route');
+   value=overviewPage(view,processes,[],String(init?.body));
+   if(JSON.parse(String(init?.body)).search==='')return json(value);
+   if(outcome==='invalid identity')value.deviceId=`agent_${'b'.repeat(32)}`;
+   signal=init!.signal!;
+   const stream=new ReadableStream<Uint8Array>({start(controller){held=controller;},cancel(){cancelled=true;}});
+   signal.addEventListener('abort',()=>{if(!cancelled)try{held.error(new DOMException('Synthetic abort','AbortError'));}catch{}},{once:true});
+   response=new Response(stream,outcome==='declared oversized'?{headers:{'Content-Length':String(OVERVIEW_PAGE_BYTES+1)}}:undefined);
+   readerSpy=vi.spyOn(stream,'getReader');vi.spyOn(response,'clone').mockImplementation(()=>{throw new Error('Secondary body consumer is forbidden');});return response;
+  });vi.stubGlobal('fetch',fetch);uninstall=installJournalPrimaryBody({url:url()});
+  await act(async()=>{render(<AuthBoundary><CompleteOverviewPanel deviceId={journalDevice} section="processes"/></AuthBoundary>);});await screen.findByRole('table');
+  fireEvent.change(screen.getByRole('searchbox',{name:'Search this section'}),{target:{value:search}});expect(screen.queryByRole('table')).not.toBeInTheDocument();
+  const token=observer().arm('overview');fireEvent.click(screen.getByRole('button',{name:'Search'}));await waitFor(()=>expect(held).toBeDefined());expect(observer().take(token)).toBeNull();
+  if(outcome==='declared oversized'){
+   await screen.findByRole('alert');expect(cancelled).toBe(true);expect(readerSpy).not.toHaveBeenCalled();expect(observer().state(token)).toBe('cancelled');
+  }else{
+   const bytes=new TextEncoder().encode(JSON.stringify(value!)),split=Math.floor(bytes.length/2);
+   await act(async()=>{held.enqueue(bytes.slice(0,split));});expect(observer().state(token)).toBe('reading');expect(observer().take(token)).toBeNull();expect(screen.queryByRole('table')).not.toBeInTheDocument();
+   await act(async()=>{
+    if(outcome==='abort')window.dispatchEvent(new Event('pagehide'));
+    else if(outcome==='disconnect')held.error(new TypeError('Synthetic disconnect'));
+    else if(outcome==='oversized')held.enqueue(new Uint8Array(OVERVIEW_PAGE_BYTES+1));
+    else{held.enqueue(bytes.slice(split,outcome==='malformed'?bytes.length-1:undefined));held.close();}
+   });
+   expect(readerSpy).toHaveBeenCalledTimes(1);expect(response!.clone).not.toHaveBeenCalled();
+   if(outcome==='valid'||outcome==='terminal inspector abort'){
+    await screen.findByText('Needle[.*] fixture 200');expect(document.querySelectorAll('.complete-overview tbody tr')).toHaveLength(3);expect(screen.queryByRole('alert')).not.toBeInTheDocument();expect(signal!.aborted).toBe(false);expect(cancelled).toBe(false);
+    if(outcome==='terminal inspector abort'){
+     // Controlled ordering regression, not a claim to reproduce Chromium:
+     // the app has already read and validated all bytes when a separate terminal
+     // inspector reports abort. Do not require that second body reader to succeed.
+     const terminalFailure=new Error('Synthetic terminal inspector: net::ERR_ABORTED');
+     const inspector={json:vi.fn(async()=>{throw terminalFailure;})};await expect(inspector.json()).rejects.toBe(terminalFailure);
+     expect(observer().state(token)).toBe('complete');expect(screen.getByRole('table')).toBeVisible();
+    }
+    const captured=observer().take(token),raw=fetch.mock.calls.filter(([path])=>path===overviewRoot+'/query').at(-1)![1]!.body;
+    expect(captured).toEqual({status:200,body:value!,requestBody:raw});expect(JSON.parse(captured.requestBody)).toEqual({section:'processes',generationId:view.processes.complete!.binding.generationId,cursor:'',search,limit:100});
+    expect(captured.body.binding).toEqual(view.processes.complete!.binding);expect(captured.body.collectedAt).toBe(view.processes.complete!.manifest.collectedAt);expect(captured.body.retainedUntil).toBe(view.processes.complete!.retainedUntil);expect(captured.body.items).toHaveLength(3);expect(Object.isFrozen(captured.body.items[0])).toBe(true);expect(observer().take(token)).toBeNull();
+   }else if(outcome==='invalid identity'){
+    await screen.findByRole('alert');expect(screen.queryByRole('table')).not.toBeInTheDocument();expect(observer().take(token)?.body.deviceId).toBe(value!.deviceId);
+   }else{
+    if(outcome==='abort')expect(signal!.aborted).toBe(true);else await screen.findByRole('alert');
+    expect(screen.queryByRole('table')).not.toBeInTheDocument();expect(observer().take(token)).toBeNull();expect(observer().state(token)).not.toBe('complete');
+   }
+  }
+  expect(fetch.mock.calls.filter(([path])=>path===overviewRoot+'/query')).toHaveLength(2);expect(fetch.mock.calls.some(([path])=>path.includes('/journal')||path.includes('/service-actions'))).toBe(false);
+ });
+
+ it('observes only the armed exact overview POST and rejects duplicates or unsupported request bodies',async()=>{
+  vi.stubGlobal('fetch',vi.fn(async()=>json({fixture:true})));uninstall=installJournalPrimaryBody({url:url()});let token=observer().arm('overview');
+  for(const [path,method]of [[overviewRoot,'GET'],[overviewRoot+'/query','GET'],[overviewRoot+'/query?unexpected=1','POST'],[root+'/query','POST'],[systemRoot+'/query','POST'],[overviewRoot.replace(journalDevice,`agent_${'b'.repeat(32)}`)+'/query','POST'],['/api/auth/session','GET'],['/api/session','GET']]){
+   const response=await globalThis.fetch(path,{method,body:method==='POST'?'{}':undefined});expect(response.bodyUsed).toBe(false);expect(observer().state(token)).toBe('armed');
+  }
+  const first=await globalThis.fetch(overviewRoot+'/query',{method:'POST',body:'{"cursor":""}'});expect(first.bodyUsed).toBe(false);await globalThis.fetch(overviewRoot+'/query',{method:'POST',body:'{"cursor":"different"}'});const reader=first.body!.getReader();while(!(await reader.read()).done){}reader.releaseLock();expect(observer().state(token)).toBe('duplicate');expect(observer().take(token)).toBeNull();
+  for(const body of [undefined,new Uint8Array([1]),'x'.repeat(2049)]){
+   token=observer().arm('overview');const response=await globalThis.fetch(overviewRoot+'/query',{method:'POST',body});expect(response.bodyUsed).toBe(false);expect(observer().state(token)).toBe('invalid-request');expect(observer().take(token)).toBeNull();
+  }
  });
 });

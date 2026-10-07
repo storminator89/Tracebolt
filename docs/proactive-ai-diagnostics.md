@@ -2,7 +2,9 @@
 
 This is a **default-off, manager-side** workflow for existing activated Linux
 health incidents. It adds background AI suggestions from narrowly scoped stored
-health evidence. It does not yet search or export logs. No production provider,
+health evidence. Its `health-summary-v1` approval excludes logs. The separate
+[service-log AI scope](proactive-service-log-ai.md) requires new explicit approval.
+No production provider,
 customer telemetry, API key, endpoint permission or host action was used to
 validate this change; tests use invented fixtures only.
 
@@ -56,15 +58,15 @@ The existing `BuildPacket` rejection of managed operational profiles is unchange
 as basic telemetry. All model inputs remain untrusted data. Model output has no
 permission to fetch context, invoke tools, issue shell commands or remediate.
 
-### Raw logs require a separate future increment
+### Service logs require separate approval
 
-The disabled raw-log option explains that existing local journal consent does
-not authorize sending contents to an AI provider. A future implementation needs
-an independently reviewed, exact provider/model/device/unit/time-window grant,
-retention and redaction policy, bounded query/result contract and cancellation
-revalidation. It must preserve the endpoint's original local journal grant and
-cannot silently enable collection, widen service allowlists, convert dump access
-into log access or reuse this `health-summary-v1` approval.
+Existing local journal consent and this health-summary approval never authorize
+provider export. The separate [service-log AI workflow](proactive-service-log-ai.md)
+binds the exact saved provider/model/device/service/window and local policy
+generation to independent capture/export acknowledgements. It preserves local
+allowlists and original capture expiry, uses bounded fixed queries, and keeps
+log-backed source/model text in memory only. It cannot reuse this
+`health-summary-v1` approval or convert dump access into journal access.
 
 ## Bounds and durable behavior
 

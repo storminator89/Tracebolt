@@ -1,0 +1,15 @@
+# Replace the reviewed agent primary group locally. This is not an installer.
+[Unit]
+Description=Tracebolt protected package request socket
+
+[Socket]
+ListenStream=/run/tracebolt-package-helper/package.sock
+SocketUser=root
+SocketGroup=@REVIEWED_AGENT_GROUP@
+SocketMode=0660
+DirectoryMode=0755
+Accept=no
+RemoveOnStop=yes
+
+[Install]
+WantedBy=sockets.target

@@ -69,10 +69,13 @@ func Open(path string) (*Store, error) {
 		return fail(err)
 	}
 	defer tx.Rollback()
-	for _, q := range []string{`CREATE TABLE IF NOT EXISTS devices(id TEXT PRIMARY KEY, body TEXT NOT NULL CHECK(json_valid(body)))`, `CREATE TABLE IF NOT EXISTS cases(id TEXT PRIMARY KEY, body TEXT NOT NULL CHECK(json_valid(body)))`, healthSchema, alarmSchema, proactiveAISchema, `PRAGMA user_version=1`} {
+	for _, q := range []string{`CREATE TABLE IF NOT EXISTS devices(id TEXT PRIMARY KEY, body TEXT NOT NULL CHECK(json_valid(body)))`, `CREATE TABLE IF NOT EXISTS cases(id TEXT PRIMARY KEY, body TEXT NOT NULL CHECK(json_valid(body)))`, healthSchema, alarmSchema, proactiveAISchema, journalAISchema, `PRAGMA user_version=1`} {
 		if _, err = tx.Exec(q); err != nil {
 			return fail(err)
 		}
+	}
+	if err = initJournalAI(tx); err != nil {
+		return fail(err)
 	}
 	// A committed attempt is never replayed after restart. No provider settings
 	// or runtime approval are restored from this local claim ledger.

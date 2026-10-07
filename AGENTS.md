@@ -83,6 +83,11 @@ file as navigation and project constraints, never as permission to act on a host
   Plan is read-only; manager/endpoint apply needs separate local approval. Never
   remove intent/fences or reinitialize missing used state. The old pinned release
   is incompatible; source fixtures do not authorize native setup or a target action.
+- Selected native APT updates are a default-off source candidate, not released. Read
+  `docs/selected-package-updates-native.md` and its native gate before setup. Source
+  compilation and fake subprocess tests never authorize package installs, root
+  helper grants or state reset. Keep exact signed plans, consume-once claims and
+  the shared service/package mutation fence.
 - Proactive AI diagnostics are a default-off manager-side scope. Read
   `docs/proactive-ai-diagnostics.md` before changing its admission or data flow. For
   optional restart-safe storage also read `docs/ai-settings-persistence.md`; never
@@ -102,3 +107,14 @@ Build/test entry points and safe operational boundaries are in the runbook;
 component detail is in `docs/lan-runtime.md`, `docs/lan-agent.md`, `docs/docker.md`
 and `tests/lanclient/README.md`. For service requests also read
 `docs/linux-agent-service.md`; its candidate status does not authorize host changes.
+
+## Separately approved service-log AI
+
+`service-journal-ai-v1` is an explicit, default-off exception implemented only by
+`internal/proactivejournal`, `analysis.AnalyzeJournal` and the journal-AI API.
+Never infer its approval from local journal access or `health-summary-v1`.
+Preserve exact provider/credential, manager, device/service, policy-generation,
+window, acknowledgement and original-expiry bindings. Log-backed source/model
+text stays memory-only; durable receipt/attempt metadata must contain no log or
+model prose. The existing managed-profile `BuildPacket` exclusion remains intact.
+See `docs/proactive-service-log-ai.md` for bounds and the native fixture boundary.

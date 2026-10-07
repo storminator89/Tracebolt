@@ -61,11 +61,24 @@ export async function windowsInventoryBrowserCase({pageAt,login,expect,base,shot
    await page.getByRole('tab',{name:label,exact:true}).click();await expect(page.locator('.windows-inventory-table')).toBeVisible();
    expect(await page.locator('.windows-inventory').evaluate(el=>el.scrollWidth<=el.clientWidth+1)).toBe(true);
   }
-  await expect(page.getByText('192.0.2.40',{exact:true})).toBeVisible();await shot(page,`synthetic-windows-inventory-${width}-${locale}`,windowsInventoryFixtureDisclosure);
+  await expect(page.getByText('192.0.2.40',{exact:true})).toBeVisible();
+  if(width===390)await page.locator('.windows-inventory-table tbody tr').first().scrollIntoViewIfNeeded();
+  await shot(page,`synthetic-windows-inventory-${width}-${locale}`,windowsInventoryFixtureDisclosure);
   mark('partial');phase='stale';await page.getByRole('button',{name:locale==='de'?'Windows-Inventar aktualisieren':'Refresh Windows inventory',exact:true}).click();await page.getByRole('tab',{name:locale==='de'?'Prozesse':'Processes',exact:true}).click();await expect(page.locator('.windows-inventory-count')).toContainText(locale==='de'?'mindestens 200':'at least 200');
-  mark('denied');await page.getByRole('tab',{name:locale==='de'?'Dienste':'Services',exact:true}).click();await expect(page.locator('.windows-inventory-table')).toHaveCount(0);await expect(page.locator('.windows-inventory')).toContainText(locale==='de'?'Berechtigung verweigert':'Permission denied');await shot(page,`synthetic-windows-denied-${width}-${locale}`,windowsInventoryFixtureDisclosure);
+  mark('denied');await page.getByRole('tab',{name:locale==='de'?'Dienste':'Services',exact:true}).click();await expect(page.locator('.windows-inventory-table')).toHaveCount(0);await expect(page.locator('.windows-inventory')).toContainText(locale==='de'?'Berechtigung verweigert':'Permission denied');
+  if(width===390)await page.locator('.windows-inventory-empty').scrollIntoViewIfNeeded();
+  await shot(page,`synthetic-windows-denied-${width}-${locale}`,windowsInventoryFixtureDisclosure);
   mark('enrollment');await page.goto(`${base}/#/devices`);await page.getByRole('combobox',{name:locale==='de'?'Betriebssystem':'Operating system',exact:true}).selectOption('windows');await page.getByRole('button',{name:locale==='de'?'Gerät hinzufügen':'Add device',exact:true}).click();
   const dialog=page.getByRole('dialog'),create=dialog.getByRole('button',{name:locale==='de'?'Einladung erstellen':'Create invitation',exact:true});await expect(dialog.getByRole('checkbox')).toHaveCount(2);await expect(create).toBeDisabled();await shot(page,`synthetic-windows-consent-${width}-${locale}`,windowsInventoryFixtureDisclosure);
+  if(width===390){
+   // Retain the scope-first capture and also show the separate HTTP approval
+   // and final controls before either acknowledgement is changed.
+   await create.scrollIntoViewIfNeeded();
+   await create.evaluate(el=>el.scrollIntoView({block:'center',inline:'nearest',behavior:'instant'}));
+   await expect(dialog.locator('.enrollment-windows-http')).toBeInViewport({ratio:1});await expect(create).toBeInViewport({ratio:1});
+   await expect(dialog.getByRole('checkbox').nth(0)).not.toBeChecked();await expect(dialog.getByRole('checkbox').nth(1)).not.toBeChecked();await expect(create).toBeDisabled();
+   await shot(page,`synthetic-windows-consent-controls-${width}-${locale}`,windowsInventoryFixtureDisclosure);
+  }
   await dialog.getByRole('checkbox').nth(0).check();await expect(create).toBeDisabled();await dialog.getByRole('checkbox').nth(1).check();await expect(create).toBeEnabled();
   await expect(dialog.locator('.enrollment-public-command')).toHaveCount(0);await page.keyboard.press('Escape');await expect(dialog).toHaveCount(0);
  }

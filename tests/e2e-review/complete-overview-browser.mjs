@@ -8,6 +8,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import {fileURLToPath,pathToFileURL} from 'node:url';
+import {installJournalPrimaryBody} from './journal-primary-body.mjs';
 
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../..');
 const require=createRequire(path.join(root,'web/package.json'));
@@ -93,6 +94,7 @@ async function start(){
 async function pageAt({mobile=false}={}){
  context=await browser.newContext({viewport:mobile?{width:390,height:844}:{width:1440,height:1000},locale:'en-GB'});
  const page=await context.newPage();observeReads(page);page.on('pageerror',()=>runtimeErrorCount++);
+ await page.addInitScript(installJournalPrimaryBody,{url:base+`/api/devices/${devices.alpha}/journal/query`});
  mark('open signed-out overview fixture');await page.goto(base+'/#/devices');
  mark('sign in to overview fixture');await page.getByLabel('Operator password',{exact:true}).fill(password);
  await page.getByRole('button',{name:'Sign in',exact:true}).click();
@@ -130,8 +132,13 @@ async function held(page,url,run,{releaseBusy=false}={}){
 }
 async function pageAction(page,action,expected={}){
  queryField=null;queryStep='perform action';
- const reply=page.waitForResponse(r=>r.url()===base+endpoint('alpha','query')&&r.request().method()==='POST');
- await action();queryStep='await response headers';const response=await reply;queryStep='require HTTP200';expect(response.status()).toBe(200);queryStep='read response JSON';const value=await response.json();
+ const capture=await page.evaluate(()=>window.__traceboltJournalBody.arm('overview'));
+ const nextRequest=page.waitForRequest(request=>request.url()===base+endpoint('alpha','query')&&request.method()==='POST');
+ await action();queryStep='await exact query request';const request=await nextRequest;queryStep='await response headers';const response=await request.response();queryStep='require HTTP200';expect(response).not.toBeNull();expect(response.status()).toBe(200);
+ // Inspect only bytes consumed by the application's original bounded reader.
+ // A Chromium terminal event can lose the CDP body after the UI has accepted it.
+ queryStep='await primary response consumption';await expect.poll(()=>page.evaluate(id=>window.__traceboltJournalBody.state(id),capture)).not.toMatch(/^(armed|waiting|reading)$/);
+ queryStep='require complete primary response';expect(await page.evaluate(id=>window.__traceboltJournalBody.state(id),capture)).toBe('complete');const consumed=await page.evaluate(id=>window.__traceboltJournalBody.take(id),capture);expect(consumed).not.toBeNull();expect(consumed.status).toBe(200);expect(consumed.requestBody).toBe(request.postData());const value=consumed.body;
  queryStep='assert response fields';for(const [key,want]of Object.entries(expected)){queryField=['section','totalRows','exhausted','binding','collectedAt','retainedUntil','cursorExpiresAt'].includes(key)?key:'other';expect(value[key]).toEqual(want);}
  queryField=null;queryStep='wait for rendered row count';await expect(rows(page)).toHaveCount(value.items.length);queryStep='wait for settled view';await settled(page);queryStep='page action complete';return value;
 }
@@ -220,6 +227,6 @@ try{
 finally{
  if(context)await context.close();await stop();if(browser)await browser.close();
  const safe={secretsExported:false,realTelemetryExported:false,hostInventoryRead:false,collectorExecuted:false,permissionChanges:false,installerExecuted:false,userVmAccessed:false};
- const report={sourceSha,createdAt:new Date().toISOString(),scope:apiSmoke?'Real-handler complete overview API smoke; no browser executed':'Built React and real authenticated loopback HTTP-test overview with typed synthetic generation admission',fixture:'Disposable generated activated v3 identities and invented process/mount/dpkg rows. Begin/append/finalize admission does not prove native ingress, collection, local consent or host inventory.',faultInjection:'Held real responses, injected visibility state and forward-only service clock. First-page live replacement and paused paging/draft windows use real browser timers; auth clock and existing expiry budgets remain real.',existingGate:'Inherited104 required cases, three enrollment skips and five review cycles retained; two runners adapt only inventory navigation.',runtimeErrorCount,...safe,results,summary:{passed:results.filter(r=>r.status==='PASS').length,failed:results.filter(r=>r.status==='FAIL').length,setupFailure:fatal}};
+ const report={sourceSha,createdAt:new Date().toISOString(),scope:apiSmoke?'Real-handler complete overview API smoke; no browser executed':'Built React and real authenticated loopback HTTP-test overview with typed synthetic generation admission',fixture:'Disposable generated activated v3 identities and invented process/mount/dpkg rows. Begin/append/finalize admission does not prove native ingress, collection, local consent or host inventory.',faultInjection:'Held real responses, observation of the exact bounded primary query reader without response clones or CDP body retrieval, injected visibility state and forward-only service clock. First-page live replacement and paused paging/draft windows use real browser timers; auth clock and existing expiry budgets remain real.',existingGate:'Inherited104 required cases, three enrollment skips and five review cycles retained; two runners adapt only inventory navigation.',runtimeErrorCount,...safe,results,summary:{passed:results.filter(r=>r.status==='PASS').length,failed:results.filter(r=>r.status==='FAIL').length,setupFailure:fatal}};
  await fs.writeFile(path.join(out,apiSmoke?'complete-overview-api-smoke.json':'complete-overview-browser-results.json'),JSON.stringify(report,null,2));if(!apiSmoke)await fs.writeFile(path.join(out,'complete-overview-browser-manifest.json'),JSON.stringify({sourceSha,...safe,screenshots},null,2));await fs.rm(temporary,{recursive:true,force:true});process.exitCode=fatal||runtimeErrorCount||results.some(r=>r.status==='FAIL')?1:0;
 }

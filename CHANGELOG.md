@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-10-07 — Approved service-log diagnostics and selected-update source workflow
+
+- Connect confirmed Linux service incidents to bounded journal capture and cited AI findings through a separate, default-off provider/device/service/window approval. Keep original capture expiry, content-free durable receipts, existing local journal permission and memory-only log-backed results. Health-summary approval alone never exports logs.
+- Add selected APT preparation, exact package/version review, durable signed dispatch and endpoint-reported outcomes behind separately provisioned Linux scope. Preserve named planning/execution capabilities, explicit installation consent, a shared service/package mutation fence and unknown-outcome handling. No package action is enabled by a manager update; native Debian acceptance, operational recovery and release/provisioning remain pending.
+- Compose both paths with the separate Windows inventory domain and retain current concise UI, original evidence ages and strict browser gates. Source/fixture validation is distinct from actual provider export, installed Windows service proof or APT execution.
+
 ## 2026-10-07 — Windows inventory and shared-dashboard source candidate
 
 - Add a distinct, explicitly approved Windows inventory profile and manager domain. The ordinary service sender supplies bounded process, service, software, hostname/interface and resource observations to durable shared-dashboard views and history. Preserve the primary Linux binding, stable identity, original age, replay handling and explicit denied/truncated states. Event content, update/CVE checks, AI diagnostics and remote actions remain outside this Windows profile.

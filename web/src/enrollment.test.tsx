@@ -25,6 +25,22 @@ describe('explicit enrollment availability and public exports',()=>{
  it('does not enable creation before explicit supported capability',async()=>{current=listing([],false);render(section());await screen.findByText('Enrollment is not configured on this manager.');expect(screen.getByRole('button',{name:'Add device'})).toBeDisabled();expect(mutate).not.toHaveBeenCalled();expect(validEnrollmentList({...listing(),items:[record(),record()]})).toBe(false);});
  it('shows an unavailable state on API failure, with no invented records',async()=>{vi.mocked(request).mockRejectedValue(new Error(secret));render(section());await screen.findByRole('alert');expect(screen.getByRole('button',{name:'Add device'})).toBeDisabled();expect(document.body.textContent).not.toContain(secret);expect(document.querySelector('.enrollment-row')).toBeNull();});
  it('describes the selected Linux platform without fake installer links when download is explicitly disabled',async()=>{vi.spyOn(downloadCommands,'verifiedLinuxDownloadAvailable').mockReturnValue(false);const dialog=await add();expect(within(dialog).getByText('Linux selected. Close this dialog to switch operating systems.')).toBeVisible();expect(dialog.querySelector('.enrollment-platforms')).toBeNull();expect(within(dialog).getByText('Public bootstrap file. No installer is included in this build.')).toBeVisible();expect(dialog.querySelector('a')).toBeNull();expect(mutate).not.toHaveBeenCalled();});
+ it('keeps the hosted basic Linux HTTP dialog scoped and Escape-only without mutation',async()=>{
+  vi.stubGlobal('location',new URL('http://localhost/#/devices'));
+  const session={mode:'lan',transport:'http',insecureTestMode:true,transportWarning:'unencrypted_lan_test',authenticationRequired:true,authenticated:true,csrfToken:'synthetic-session',serverNow:current.serverNow,expiresAt:new Date(Date.parse(current.serverNow)+1800000).toISOString(),expiresInSeconds:1800};
+  vi.mocked(request).mockImplementation(async path=>path==='/auth/session'?session:structuredClone(current));
+  render(<AuthBoundary>{section()}</AuthBoundary>);await waitFor(()=>expect(screen.getByRole('button',{name:'Add device'})).toBeEnabled());
+  expect(current.platforms).toEqual(['linux']);expect(current.collectionProfile??'basic-readonly-v1').toBe('basic-readonly-v1');
+  expect(screen.getByRole('combobox',{name:'Operating system'})).toHaveValue('linux');
+  const addButton=screen.getByRole('button',{name:'Add device'});addButton.focus();fireEvent.click(addButton);
+  const dialog=screen.getByRole('dialog',{name:'Add device'});
+  expect(within(dialog).getByText('Linux selected. Close this dialog to switch operating systems.')).toBeVisible();
+  expect(within(dialog).getByRole('note')).toHaveTextContent('Unencrypted LAN test');expect(dialog).not.toHaveTextContent('Windows and macOS not yet available');
+  expect(mutate).not.toHaveBeenCalled();expect(current.items).toHaveLength(0);
+  fireEvent.keyDown(document,{key:'Escape'});await waitFor(()=>expect(screen.queryByRole('dialog')).toBeNull());
+  expect(addButton).toHaveFocus();expect(mutate).not.toHaveBeenCalled();expect(current.items).toHaveLength(0);
+  expect(vi.mocked(request).mock.calls.every(([path])=>path==='/auth/session'||path==='/enrollment')).toBe(true);
+ });
  it('exports a fixed public schema and rejects secret-bearing or private-key bootstrap data',()=>{const response=creation();const exported=publicBootstrap(response.bootstrap,response.snapshot,secret)!;expect(JSON.stringify(exported)).not.toContain(secret);expect(Object.keys(exported)).toHaveLength(10);expect(publicBootstrap({...response.bootstrap,invitationSecret:secret},response.snapshot,secret)).toBeNull();expect(publicBootstrap({...response.bootstrap,issuerPem:'-----BEGIN PRIVATE KEY-----'},response.snapshot,secret)).toBeNull();expect(publicBootstrap({...response.bootstrap,enrollmentOrigin:'https://attacker.example'},response.snapshot,secret)).toBeNull();expect(publicBootstrap({...response.bootstrap,invitationId:'invite_'+'9'.repeat(32)},response.snapshot,secret)).toBeNull();});
  it('counts retained terminal records toward the real capacity',async()=>{current=listing(Array.from({length:25},(_,i)=>({...record('revoked',9),invitationID:'invite_'+i.toString(16).padStart(32,'0')})));render(section());await screen.findByText(/Limit reached: 25 retained records/);expect(screen.getByRole('button',{name:'Add device'})).toBeDisabled();expect(mutate).not.toHaveBeenCalled();});
 });

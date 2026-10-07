@@ -37,7 +37,7 @@ func TestRootRequestUsesResolvedDeviceWithoutFallback(t *testing.T) {
 	calls := 0
 	h, err := openRootWith(`C:\`, rootFixture(t, func(h *windows.Handle, access uint32, oa *windows.OBJECT_ATTRIBUTES, iosb *windows.IO_STATUS_BLOCK, allocation *int64, attributes, share, disposition, options uint32, ea uintptr, eaLength uint32) error {
 		calls++
-		if oa.RootDirectory != 0 || oa.ObjectName.String() != `\Device\HarddiskVolume12\` || oa.Attributes != windows.OBJ_CASE_INSENSITIVE|windows.OBJ_DONT_REPARSE || oa.SecurityDescriptor != nil || oa.SecurityQoS != nil || access != 0x1200a1 || share != 3 || disposition != windows.FILE_OPEN || attributes != windows.FILE_ATTRIBUTE_DIRECTORY || options != windows.FILE_SYNCHRONOUS_IO_NONALERT|windows.FILE_OPEN_REPARSE_POINT|windows.FILE_OPEN_NO_RECALL|windows.FILE_DIRECTORY_FILE || allocation != nil || ea != 0 || eaLength != 0 {
+		if oa.RootDirectory != 0 || oa.ObjectName.String() != `\Device\HarddiskVolume12\` || oa.Attributes != windows.OBJ_CASE_INSENSITIVE|windows.OBJ_DONT_REPARSE || oa.SecurityDescriptor != nil || oa.SecurityQoS != nil || access != 0x1200a1 || share != 3 || disposition != windows.FILE_OPEN || attributes != windows.FILE_ATTRIBUTE_DIRECTORY || options != windows.FILE_SYNCHRONOUS_IO_NONALERT|windows.FILE_OPEN_REPARSE_POINT|windows.FILE_DIRECTORY_FILE || allocation != nil || ea != 0 || eaLength != 0 {
 			t.Fatal("native root request changed")
 		}
 		*h = 17

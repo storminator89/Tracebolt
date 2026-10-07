@@ -21,3 +21,7 @@ func redact(s string) (string, bool) {
 	}
 	return s, s != original
 }
+
+// MaskForExport repeats the same narrow credential-pattern pass at a separately
+// approved export boundary. It is not anonymization or general secret detection.
+func MaskForExport(message string) (string, bool) { return redact(message) }

@@ -153,3 +153,22 @@ func (s Session) BeginCapability(ctx context.Context, capability Capability) (fu
 func (m *Manager) LoginNamed(ctx context.Context, peer, username, password string) (Session, error) {
 	return m.login(ctx, peer, username, password, true)
 }
+
+// ActorHasCapability is the current immutable named-account grant used before
+// dispatching a previously explicit approval. Account changes require restart;
+// approval never manufactures a grant after that restart.
+func (m *Manager) ActorHasCapability(actor string, cap Capability) bool {
+	if m == nil || actor == "" || cap == Read {
+		return false
+	}
+	bit := capabilityBit(cap)
+	if bit == 0 {
+		return false
+	}
+	for _, p := range m.operators {
+		if p.id == actor {
+			return p.grants&bit != 0
+		}
+	}
+	return false
+}

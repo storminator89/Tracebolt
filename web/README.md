@@ -27,6 +27,52 @@ npm audit
 
 All fonts/icons are installed dependencies served locally; no CDN or remote font request. The explicit language preference (English unless German is chosen), dark/light theme and one saved inventory view persist in local browser storage. UI labels, errors, status and dates are localized; collected evidence, notes and model output retain their original text. CSV export neutralizes formula-leading cells. Notes validate the backend's 2000 UTF-8 byte limit. Dynamic strings are rendered as React text, not HTML.
 
+### Selected package-update workflow: simulation only
+
+The Updates workspace now connects detected cached-candidate rows to a bounded
+selection, independent preparation, immutable review, explicit confirmation and
+saved status/results. Select at most 32 exact package name + architecture pairs;
+selection and acknowledgment reset when the device, inventory source or operator
+session/access scope changes. No arbitrary package or command entry is offered.
+
+The independent `tracebolt.package-update-workflow.v1` contract is read from
+`GET /api/devices/{deviceId}/package-updates`. Preparation sends only a new stable
+request ID and canonical sorted identities to `/prepare`. The server's separate
+adapter supplies exact versions, source package/version, source label, suite,
+component, archive SHA-256, total download bytes, expiry, actor and transport.
+Cached row versions are never submitted or converted into verified plan evidence.
+The English/German review retains the server's immutable preview throughout its
+saved job history.
+
+Named `plan_updates` and `execute_updates` capabilities are independent and are
+revalidated before their respective writes. Confirmation sends only the original
+request ID and preview digest, and is enabled only for a nonexpired, actor-bound
+`preview_ready` job after acknowledgment that package scripts may restart
+services, no reboot happens automatically and rollback is not guaranteed.
+Successful status requires every approved identity and exact version to have
+matching verification evidence; a saved approval alone never displays success.
+
+Lost write responses do not create another operation or automatically replay a
+POST. Recovery reads the exact durable
+`GET /api/devices/{deviceId}/package-updates/jobs/{requestId}` record. Only its
+explicit `package_update_not_found` response can open a missing-prepare recovery
+path: fresh named plan access and current simulation admission are rechecked,
+and the original intent is retained. Generic 404 or unreadable status cannot
+open that retry gate. An explicit retry preserves the same request and identity set or approval digest. A bounded,
+nonsecret recovery intent in session storage contains only device/actor/session
+scope, request ID, selected identities or approval digest. It contains no token,
+full preview or source provenance, and is cleared on access invalidation or a
+different device/actor/session scope. The manager's saved job remains authoritative.
+
+Only the explicit simulation adapter can provide an available workflow in this
+source candidate. Its UI is conspicuously labeled **SIMULATION ONLY** and all
+package/result evidence is synthetic. Production remains
+`executionMode: unavailable`, `available: false`, `native_adapter_unavailable`,
+with null preview/job and disabled preparation/confirmation. This work does not
+ship a protected native adapter, run a host update, or establish native/release
+acceptance. Existing complete and limited cached-inventory readers keep their
+separate local-consent and provenance boundaries.
+
 ## Screenshots
 
 `node scripts/capture-screenshots.mjs` captures actual rendered UI against the running manager with Playwright. Install the official browser with `npx playwright install --with-deps chromium` on a supported development or CI runner. Optional environment variables:

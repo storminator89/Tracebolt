@@ -5,6 +5,8 @@ package actionhelper
 import (
 	"context"
 	"localrmm/internal/actionstate"
+	"localrmm/internal/mutationfence"
+	"os"
 	"time"
 )
 
@@ -34,9 +36,37 @@ func Run(ctx context.Context) error {
 		return ErrRejected
 	}
 	defer listener.Close()
-	s, e := New(Dependencies{Load: loadAuthority, Identity: rootIdentity, Peer: peerIdentity, Backend: newSystemdBackend(), State: state, Now: func() time.Time { return time.Now().UTC() }})
+	var fence *mutationfence.Fence
+	required := false
+	if _, statErr := os.Lstat(mutationfence.DefaultDirectory); !os.IsNotExist(statErr) {
+		required = true
+		if statErr != nil {
+			return ErrRejected
+		}
+		p := authority.Policy
+		fence, e = mutationfence.Open(ctx, mutationfence.DefaultDirectory, mutationfence.Binding{ManagerID: p.ManagerID, EndpointID: p.EndpointID, IncarnationDigest: p.IncarnationDigest})
+		if e != nil {
+			return ErrRejected
+		}
+		defer fence.Close()
+	}
+	s, e := New(Dependencies{Fence: fence, FenceRequired: required, Load: loadAuthority, Identity: func() error { return fenceRuntimeIdentity(mutationfence.DefaultDirectory, fence != nil, rootIdentity) }, Peer: peerIdentity, Backend: newSystemdBackend(), State: state, Now: func() time.Time { return time.Now().UTC() }})
 	if e != nil {
 		return e
 	}
 	return s.Serve(ctx, listener)
+}
+
+// An unfenced helper started before package setup cannot remain an admission
+// authority after the shared directory appears. It must restart and open state.
+func fenceRuntimeIdentity(directory string, hasFence bool, identity func() error) error {
+	if identity == nil || identity() != nil {
+		return ErrRejected
+	}
+	if !hasFence {
+		if _, e := os.Lstat(directory); !os.IsNotExist(e) {
+			return ErrRejected
+		}
+	}
+	return nil
 }

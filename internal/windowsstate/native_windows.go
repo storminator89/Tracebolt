@@ -137,7 +137,14 @@ func (b *nativeStore) initializeHandles() error {
 	return nil
 }
 
+type createCall func(*windows.Handle, uint32, *windows.OBJECT_ATTRIBUTES, *windows.IO_STATUS_BLOCK, *int64, uint32, uint32, uint32, uint32, uintptr, uint32) error
+
 func ntOpen(parent windows.Handle, name string, access, share, disposition uint32, directory bool, sd *windows.SECURITY_DESCRIPTOR) (windows.Handle, error) {
+	return ntOpenWith(parent, name, access, share, disposition, directory, sd, windows.NtCreateFile)
+}
+
+// Inert request tests intercept the call; production always uses NtCreateFile.
+func ntOpenWith(parent windows.Handle, name string, access, share, disposition uint32, directory bool, sd *windows.SECURITY_DESCRIPTOR, call createCall) (windows.Handle, error) {
 	unicode, e := windows.NewNTUnicodeString(name)
 	if e != nil {
 		return 0, ErrPolicy
@@ -146,17 +153,20 @@ func ntOpen(parent windows.Handle, name string, access, share, disposition uint3
 	if disposition == windows.FILE_CREATE {
 		oa.SecurityDescriptor = sd
 	}
-	flags := uint32(windows.FILE_SYNCHRONOUS_IO_NONALERT | windows.FILE_OPEN_REPARSE_POINT | windows.FILE_OPEN_NO_RECALL)
+	// Keep both reparse protections. NO_RECALL is not part of MS-FSA's
+	// directory option set; request it only for non-directory content opens.
+	// This does not assert that directory acquisition cannot invoke providers.
+	flags := uint32(windows.FILE_SYNCHRONOUS_IO_NONALERT | windows.FILE_OPEN_REPARSE_POINT)
 	attributes := uint32(windows.FILE_ATTRIBUTE_NORMAL)
 	if directory {
 		flags |= windows.FILE_DIRECTORY_FILE
 		attributes = windows.FILE_ATTRIBUTE_DIRECTORY
 	} else {
-		flags |= windows.FILE_NON_DIRECTORY_FILE | windows.FILE_WRITE_THROUGH
+		flags |= windows.FILE_NON_DIRECTORY_FILE | windows.FILE_WRITE_THROUGH | windows.FILE_OPEN_NO_RECALL
 	}
 	var h windows.Handle
 	var iosb windows.IO_STATUS_BLOCK
-	e = windows.NtCreateFile(&h, access, &oa, &iosb, nil, attributes, share, disposition, flags, 0, 0)
+	e = call(&h, access, &oa, &iosb, nil, attributes, share, disposition, flags, 0, 0)
 	runtime.KeepAlive(unicode)
 	runtime.KeepAlive(sd)
 	if e != nil {

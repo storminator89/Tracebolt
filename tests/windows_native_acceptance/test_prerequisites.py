@@ -245,7 +245,7 @@ class ReadOnlyFixtureTests(unittest.TestCase):
         checkout.assert_called_once()
         args = command.call_args.args[0]
         self.assertEqual(args[:2], ["go", "test"])
-        self.assertEqual(args[-3:], ["./internal/windowsacceptance/native", "./cmd/windows-prerequisites", "./internal/windowspath"])
+        self.assertEqual(args[-4:], ["./internal/windowsacceptance/native", "./cmd/windows-prerequisites", "./internal/windowspath", "./internal/windowsstate"])
         self.assertIn("-json", args)
         self.assertNotIn("--run-read-only", args)
         self.assertNotIn("--run-native", args)

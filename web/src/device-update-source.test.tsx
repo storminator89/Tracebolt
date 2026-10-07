@@ -1,13 +1,16 @@
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AUTH_REQUIRED_EVENT, mutateRaw, request } from './api';
 import { DeviceInventoryWorkspace } from './device-inventory';
-import { completeDevice, completePage, completeRows, completeView } from './complete-packages-fixtures';
+import { completePage, completeRows, completeView } from './complete-packages-fixtures';
 import { emptyCachedUpdatesView } from './cached-updates-fixtures';
 import { updatePage, updateRows, updateView } from './complete-updates-fixtures';
 import { setLocale } from './i18n';
+import { unavailablePackageUpdates } from './package-update-fixtures';
 
 vi.mock('./api', async original => ({ ...await original<typeof import('./api')>(), request: vi.fn(), mutateRaw: vi.fn() }));
+const completeDevice = `agent_${'a'.repeat(32)}`;
+const packages = () => ({ ...completeView(12), deviceId: completeDevice });
 let session = 'session-a';
 vi.mock('./auth', () => ({ useOperator: () => ({ mode: 'lan', authenticated: true, expiresAt: session }) }));
 const complete = () => ({ ...updateView(12), deviceId: completeDevice });
@@ -19,9 +22,9 @@ async function updates() {
     await screen.findByRole('rowheader', { name: 'fixture-update-000000' });
 }
 beforeEach(() => {
-    session = 'session-a'; setLocale('en', false);
-    vi.mocked(request).mockReset().mockImplementation(async path => path.endsWith('/cached-updates') ? preview() : path.endsWith('/complete-updates') ? complete() : completeView(12));
-    vi.mocked(mutateRaw).mockReset().mockImplementation(async (path, body) => path.endsWith('/complete-updates/query') ? updatePage(complete(), updateRows(12), body) : completePage(completeView(12), completeRows(12), body));
+    session = 'session-a'; sessionStorage.clear(); setLocale('en', false);
+    vi.mocked(request).mockReset().mockImplementation(async path => path.endsWith('/package-updates') ? { ...unavailablePackageUpdates(), deviceId: completeDevice } : path.endsWith('/cached-updates') ? preview() : path.endsWith('/complete-updates') ? complete() : packages());
+    vi.mocked(mutateRaw).mockReset().mockImplementation(async (path, body) => path.endsWith('/complete-updates/query') ? updatePage(complete(), updateRows(12), body) : completePage(packages(), completeRows(12), body));
 });
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
@@ -29,6 +32,7 @@ describe('package and update source isolation', () => {
     it('defaults to Packages without opening any legacy, process or update source', async () => {
         render(<DeviceInventoryWorkspace deviceId={completeDevice}/>); await screen.findByRole('rowheader', { name: 'fixture-000000' });
         expect(screen.getByRole('tab', { name: 'Packages' })).toHaveAttribute('aria-selected', 'true');
+        expect(screen.queryByRole('region', { name: 'Selected package updates · unavailable' })).not.toBeInTheDocument();
         expect(vi.mocked(request).mock.calls.map(([path]) => path)).toEqual([`/devices/${completeDevice}/inventory/packages`]);
         expect(screen.getByText('Legacy inventory source', { selector: 'summary' }).closest('details')).not.toHaveAttribute('open');
     });
@@ -36,6 +40,21 @@ describe('package and update source isolation', () => {
         mount(); await screen.findByRole('rowheader', { name: 'fixture-000000' });
         expect(request).toHaveBeenCalledTimes(1); expect(vi.mocked(request).mock.calls[0][0]).toBe(`/devices/${completeDevice}/inventory/packages`);
         expect(mutateRaw).toHaveBeenCalledTimes(1); expect(screen.queryByLabelText('Update view')).not.toBeInTheDocument();
+    });
+    it('keeps production installation unavailable while reading independent saved status in each inventory source', async () => {
+        await updates();
+        const notice = screen.getByRole('region', { name: 'Selected package updates · unavailable' });
+        expect(notice).toBeVisible(); expect(within(notice).queryByRole('button')).not.toBeInTheDocument();
+        expect(screen.getAllByRole('checkbox').every(input => (input as HTMLInputElement).disabled)).toBe(true);
+        fireEvent.change(screen.getByLabelText('Update view'), { target: { value: 'preview' } });
+        await screen.findByText('No accepted cached-update report');
+        expect(screen.getByRole('region', { name: 'Selected package updates · unavailable' })).toBeVisible();
+        expect(vi.mocked(request).mock.calls.map(([path]) => path)).toEqual([
+            `/devices/${completeDevice}/inventory/packages`, `/devices/${completeDevice}/inventory/complete-updates`, `/devices/${completeDevice}/package-updates`, `/devices/${completeDevice}/inventory/cached-updates`, `/devices/${completeDevice}/package-updates`,
+        ]);
+        expect(vi.mocked(mutateRaw).mock.calls.map(([path]) => path)).toEqual([
+            `/devices/${completeDevice}/inventory/packages/query`, `/devices/${completeDevice}/inventory/complete-updates/query`,
+        ]);
     });
     it('keeps full and limited update readers mutually exclusive and restarts after switching back', async () => {
         await updates(); const selector = screen.getByLabelText('Update view'); selector.focus();
@@ -78,7 +97,7 @@ describe('package and update source isolation', () => {
     });
     it('keeps lost-session reads locked without enabling either local collection scope', async () => {
         await updates(); act(() => window.dispatchEvent(new Event(AUTH_REQUIRED_EVENT)));
-        expect(screen.getByRole('alert')).toHaveTextContent('Your session has ended.');
+        expect(screen.getAllByRole('alert').some(alert => alert.textContent?.includes('Your session has ended.'))).toBe(true);
         const calls = vi.mocked(request).mock.calls.length; act(() => window.dispatchEvent(new Event('focus'))); expect(request).toHaveBeenCalledTimes(calls);
     });
     it('provides the limited-preview choice in German', async () => {

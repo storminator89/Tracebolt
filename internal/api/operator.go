@@ -21,6 +21,7 @@ import (
 	"localrmm/internal/model"
 	"localrmm/internal/offlinecatalog"
 	"localrmm/internal/operatorauth"
+	"localrmm/internal/packagecontroller"
 	"math"
 	"net"
 	"net/http"
@@ -31,8 +32,9 @@ import (
 )
 
 type LANOperatorConfig struct {
-	AISettings    *aiconfig.Settings
-	AlarmSettings *alarmdelivery.Settings
+	PackageActions *packagecontroller.Manager
+	AISettings     *aiconfig.Settings
+	AlarmSettings  *alarmdelivery.Settings
 	// ApplicationChecks is an inert, read-only view of the explicit startup worker.
 	ApplicationChecks *applicationcheck.Monitor
 	// ApplicationCheckSettings supplies the separately authorized managed controller.
@@ -55,6 +57,7 @@ type LANOperatorConfig struct {
 	CVEProgress *linuxcveprogress.Cache
 }
 type operatorHandler struct {
+	packageUpdatesManager    packageUpdateManager
 	alarmSettings            *alarmdelivery.Settings
 	applicationChecks        *applicationcheck.Monitor
 	applicationCheckSettings *applicationcheck.Settings
@@ -132,6 +135,9 @@ func NewLANOperatorHandler(app *Server, c LANOperatorConfig) (http.Handler, erro
 	if c.InsecureHTTPTest {
 		profile = "http-test"
 	}
+	if c.PackageActions != nil && (c.Enrollment == nil || !c.Auth.Named() || !c.PackageActions.MatchesBinding(c.Enrollment.Binding()) || c.PackageActions.TransportProfile() != actionmanager.Profile(profile)) {
+		return nil, errors.New("package action authority does not match enrolled named operator boundary")
+	}
 	if c.ServiceActions != nil && (c.Enrollment == nil || !c.Auth.Named() || !c.ServiceActions.MatchesBinding(c.Enrollment.Binding()) || c.ServiceActions.TransportProfile() != actionmanager.Profile(profile)) {
 		return nil, errors.New("service action authority does not match the named operator enrollment boundary")
 	}
@@ -161,6 +167,7 @@ func NewLANOperatorHandler(app *Server, c LANOperatorConfig) (http.Handler, erro
 	app.lanOperational = nil
 	app.lanPackages = nil
 	app.health = nil
+	app.journalAI = nil
 	app.linuxCVE = nil
 	app.aiCollectionProfile = "basic-readonly-v1"
 	app.catalogStore = nil
@@ -178,6 +185,7 @@ func NewLANOperatorHandler(app *Server, c LANOperatorConfig) (http.Handler, erro
 		app.aiCollectionProfile = c.Enrollment.Binding().CollectionProfile
 		if app.aiCollectionProfile == enrollmentcrypto.CollectionProfileComplete {
 			app.health = &healthMonitor{store: app.store, source: c.Enrollment}
+			app.journalAI = &journalAIState{source: c.Enrollment, managerID: managerID, transport: profile, results: map[string]*journalAIResult{}}
 			app.linuxCVE = newLinuxCVEState(c.Enrollment, c.Enrollment.Now)
 			app.linuxCVE.cache = c.CVECache
 			app.linuxCVE.progress = c.CVEProgress
@@ -203,7 +211,11 @@ func NewLANOperatorHandler(app *Server, c LANOperatorConfig) (http.Handler, erro
 	if c.ServiceActions != nil {
 		actions = c.ServiceActions
 	}
-	h := &operatorHandler{alarmSettings: c.AlarmSettings, applicationChecks: c.ApplicationChecks, applicationCheckSettings: c.ApplicationCheckSettings, actions: actions, app: app, origin: c.Origin, authority: u.Host, auth: c.Auth, registry: c.Registry, insecureHTTPTest: c.InsecureHTTPTest, cookieName: cookieName, enrollment: c.Enrollment, enrollmentBootstrap: c.EnrollmentBootstrap}
+	var packages packageUpdateManager
+	if c.PackageActions != nil {
+		packages = c.PackageActions
+	}
+	h := &operatorHandler{packageUpdatesManager: packages, alarmSettings: c.AlarmSettings, applicationChecks: c.ApplicationChecks, applicationCheckSettings: c.ApplicationCheckSettings, actions: actions, app: app, origin: c.Origin, authority: u.Host, auth: c.Auth, registry: c.Registry, insecureHTTPTest: c.InsecureHTTPTest, cookieName: cookieName, enrollment: c.Enrollment, enrollmentBootstrap: c.EnrollmentBootstrap}
 	if c.WindowsEnrollment != nil {
 		h.windowsEnrollment = &operatorHandler{app: app, origin: c.Origin, authority: u.Host, auth: c.Auth, registry: c.Registry, insecureHTTPTest: c.InsecureHTTPTest, cookieName: cookieName, enrollment: c.WindowsEnrollment, enrollmentBootstrap: c.WindowsEnrollmentBootstrap}
 	}
@@ -436,6 +448,10 @@ func (h *operatorHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		write(w, 200, h.view(nil))
 		return
 	}
+	if _, _, ok := packageUpdateRoute(r); ok {
+		h.packageUpdates(w, r)
+		return
+	}
 	if _, _, ok := serviceActionRoute(r); ok {
 		h.serviceActions(w, r)
 		return
@@ -450,6 +466,10 @@ func (h *operatorHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if session.Named() && !namedReadRoute(r) {
 		fail(w, 403, "operator_capability_required", "This named account does not have permission for this administrative operation.")
+		return
+	}
+	if r.URL.Path == "/api/ai/journal" || strings.HasPrefix(r.URL.Path, "/api/ai/journal/") {
+		h.journalAIAPI(w, r)
 		return
 	}
 	if r.URL.Path == "/api/ai/proactive" {

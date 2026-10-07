@@ -56,7 +56,7 @@ Run after the normal and managed targets:
 node tests/e2e-review/lan-browser.mjs
 ```
 
-This adds fourteen scenarios against the real `NewLANOperatorHandler` with explicit `InsecureHTTPTest:true`, bound only to 127.0.0.1 (port 19886, overridable with `LAN_REVIEW_PORT`). The test fixture uses a known synthetic password, an in-memory ephemeral CA and the safe awaiting-agent contract from `docs/lan-api-examples.json`. It starts fresh disposable state for each scenario and tests real login, cookie/CSRF boundaries, logout and actual short expiry. Malformed bootstrap, protected 401 and interrupted logout are explicitly injected fault paths. Nothing calls a real model or enrolls a device.
+The LAN runner contains 25 scenarios against the real `NewLANOperatorHandler` with explicit `InsecureHTTPTest:true`, bound only to 127.0.0.1 (port 19886, overridable with `LAN_REVIEW_PORT`). The test fixture uses a known synthetic password, an in-memory ephemeral CA and the safe awaiting-agent contract from `docs/lan-api-examples.json`. It starts fresh disposable state for each scenario and tests real login, cookie/CSRF boundaries, logout and actual short expiry. Malformed bootstrap, protected 401 and interrupted logout are explicitly injected fault paths. Nothing calls a real model or enrolls a device.
 
 Upload only `lan-browser-results.json`, `lan-browser-manifest.json` and `synthetic-http-test-*.png` from `artifacts/review`. These contain bounded outcomes and labelled synthetic UI fixtures, no raw cookies, passwords, private keys or real telemetry. Login screenshots are captured before password entry. The target does not run the production LAN CLI or validate real trusted TLS browser deployment. It never uses `ignoreHTTPSErrors`, certificate-error launch flags, a certificate-warning bypass, a public listener or a tunnel.
 
@@ -117,8 +117,7 @@ captures are produced only by the upcoming hosted browser run, not source tests.
 ## Read-only alarm status in Settings
 
 `alarm-status-browser.mjs` adds exactly one required case through the existing
-`lan-browser.mjs` runner, bringing the pre-continuation runner to thirteen LAN
-cases. All previous case names,
+`lan-browser.mjs` runner. It is one of the current 25 LAN cases. Previous case names,
 assertions, fixture session lifetimes, timeouts and browser launch options are
 unchanged. The existing hosted browser step and artifact upload already include
 this runner and its new `synthetic-http-test-alarm-status-*.png` captures; no
@@ -154,8 +153,8 @@ configuration, or establishes production/native delivery acceptance.
 
 ## Bounded CVE continuation
 
-`cve-continuation-browser.mjs` adds one required synthetic case for fourteen LAN
-cases total. The thirteen existing cases, fixture TTLs, assertion deadlines,
+`cve-continuation-browser.mjs` supplies one of the current 25 required LAN
+cases. Existing case bodies, fixture TTLs, assertion deadlines,
 launch options and hosted workflow are unchanged. The case reads the exact
 Go-generated `web/src/linux-cve-go-fixture-continuation.json` projection, validates
 every DTO with the production validator and adapts the surrounding synthetic
@@ -190,10 +189,9 @@ native deployment acceptance is included.
 ## Bounded complete CVE detail pages
 
 `cve-detail-pages-browser.mjs` adds one disjoint required case after the original
-continuation case, for fifteen LAN cases total. All fourteen earlier case bodies
-and guards remain byte-identical, as do the fixture TTLs, assertion deadlines,
-launch options and hosted workflow. The original continuation fixture test's
-runner-count assertion is updated from fourteen to fifteen.
+continuation case, within the current 25-case LAN runner. Earlier case bodies
+and guards remain unchanged, as do their fixture TTLs, assertion deadlines,
+launch options and hosted workflow. Pure fixture checks bind the current total.
 
 The new case uses `linux-cve-go-fixture-details.json` and both production detail
 DTO validators. It starts with a real fixture login and a completed 145-warning /
@@ -235,3 +233,34 @@ syntax and pure fixture/guard checks never start a browser/server, create socket
 or produce screenshots. Hosted acceptance and pixel review remain publisher
 owned. No real inventory, vendor fetch, feed import, command, host action or
 native deployment acceptance is included.
+
+## Selected package update workspace
+
+`package-updates-browser.mjs` adds one case to the existing LAN runner, for
+25 cases total. Earlier cases, fixture session lifetimes, assertion deadlines,
+launch options and cleanup remain unchanged. The explicit Node fixture list in
+`.github/workflows/validate.yml` includes its pure guard/DTO contract test.
+
+The case starts with the default unavailable/not-configured result. Its later
+selection, exact package/version/source review and unknown outcome use disclosed
+simulation projections from `web/src/package-update-go-fixtures.json`, checked by
+the production TypeScript validator. The candidate inventory row is derived from
+those invented package identities and versions. A single timestamp offset,
+request binding and HTTP-test transport adaptation are presentation-only; the
+adapted projection is not a newly signed or Go-validated native plan. Cached
+inventory is never shown as native preparation evidence. Any fixture-only authentication display proxy is
+explicitly synthetic; it does not establish a real named-account permission or
+native package authority.
+
+Real fixture login and protected CSRF reads retain their existing boundary. All
+package requests used for the presentation are intercepted and validated in
+memory. Unexpected writes and external requests are blocked. No preparation,
+installation, repository refresh, helper, service, key or local grant is invoked.
+Original package consent and approval-expiry rules are not relaxed.
+
+The case uses the existing source-bound screenshot manifest for English/German
+and desktop/mobile viewport captures. Each capture discloses invented evidence
+and simulation. Syntax, pure fixture and targeted UI tests do not produce these
+screenshots: the hosted browser run and pixel review are still required before
+visual acceptance. No local Chromium launch or alternative browser route is part
+of this amendment.

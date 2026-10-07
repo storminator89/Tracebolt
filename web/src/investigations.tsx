@@ -1,3 +1,4 @@
+import { JournalAIInvestigation } from './journal-ai-result';
 import { ArrowRight, RefreshCw } from 'lucide-react';
 import { EmptyState } from './components';
 import { t, useLocale } from './i18n';
@@ -57,6 +58,7 @@ export function InvestigationList({ view, devices, concise = false, onAll }: { v
                 {incident.kind === 'service' && !validJournalUnit(incident.target) && <p className="investigations-note">{de ? 'Für diesen Unit-Namen ist keine Journal-Verknüpfung verfügbar. Dienststatus in Health prüfen.' : 'A journal link is unavailable for this unit name. Inspect its service status in Health.'}</p>}
                 <p className="investigations-note">{de ? 'Keine früheren Rohwerte oder Logs gespeichert. Der Log-Link startet keine Erfassung.' : 'Earlier raw values and logs are not stored. The logs link does not start a capture.'}</p>
             </details>}
+            {!concise && item.journalAI && <JournalAIInvestigation device={item.deviceId} incident={incident} state={item.journalAI.state}/>}
             {item.analysis && <InvestigationAnalysisView analysis={item.analysis} concise={concise}/>}
             {concise && <button type="button" className="text-button" onClick={onAll}>{de ? 'Untersuchen' : 'Investigate'}<ArrowRight size={13}/></button>}
         </article>;

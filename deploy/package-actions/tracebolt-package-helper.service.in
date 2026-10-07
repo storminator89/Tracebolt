@@ -1,0 +1,17 @@
+# Source candidate only; never start before explicit state/trust provisioning.
+[Unit]
+Description=Tracebolt signed package request broker
+Requires=tracebolt-package-helper.socket
+After=local-fs.target tracebolt-package-helper.socket
+
+[Service]
+Type=exec
+User=root
+Group=root
+ExecStart=/usr/libexec/tracebolt-package-helper
+WorkingDirectory=/
+UMask=0077
+Restart=no
+StandardInput=null
+StandardOutput=null
+StandardError=journal

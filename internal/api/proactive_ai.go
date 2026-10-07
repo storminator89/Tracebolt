@@ -271,6 +271,7 @@ func (s *Server) runProactiveMonitor(ctx context.Context, m *healthMonitor) {
 			}
 		}
 		_ = s.runProactiveAI(ctx, m)
+		_ = s.runJournalAIStep(ctx, m)
 		select {
 		case <-ctx.Done():
 			return

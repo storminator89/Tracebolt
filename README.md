@@ -17,7 +17,7 @@ Understand your Linux machines, investigate changes and keep the original eviden
 - **Resource history:** 24-hour CPU, RAM and root-filesystem charts, with original sample times and gaps.
 - **Service logs:** choose an exact service and time window, then search the captured journal snapshot.
 - **Package evidence:** cached APT candidates and Debian/Ubuntu CVE warnings, with source and coverage limits.
-- **Optional integrations:** application checks, webhook alarms and proactive AI suggestions from explicitly approved Health incidents.
+- **Optional integrations:** application checks, webhook alarms and proactive AI suggestions from approved Health incidents or separately approved service-log evidence.
 
 Unavailable, partial and stale observations stay visible. Package findings do not establish exploitability or trigger package installation. AI suggestions remain unconfirmed, and provider/data approval is separate.
 
@@ -51,9 +51,11 @@ Open **http://127.0.0.1:8787**. This loopback demo contains synthetic devices; d
 
 The main agent is unprivileged. Journal and socket-owner helpers need explicit local approval; the socket helper has broad process-memory authority. Review the [exact scope](docs/read-admin-onboarding.md#exactly-what-the-one-approval-covers). HTTPS is the default; [isolated HTTP testing](docs/http-complete-first-start.md) exposes credentials and content to the network. There is no arbitrary remote shell or automatic package updater.
 
+Selected APT installation is a [source candidate](docs/selected-package-updates-native.md) awaiting disposable-host acceptance and separate local setup. The current installer does not enable it.
+
 ## Documentation and development
 
-[Installation](docs/installation.md) · [Logs](docs/journal-content-mvp.md) · [Checks](docs/application-checks.md) · [Alarms](docs/alarm-delivery.md) · [Proactive AI](docs/proactive-ai-diagnostics.md) · [Windows inventory](docs/windows-inventory-dashboard.md) · [Security boundaries](docs/lan-security-review.md) · [Contributing workflow](AGENTS.md)
+[Installation](docs/installation.md) · [Logs](docs/journal-content-mvp.md) · [Checks](docs/application-checks.md) · [Alarms](docs/alarm-delivery.md) · [Proactive AI](docs/proactive-ai-diagnostics.md) · [Service-log AI](docs/proactive-service-log-ai.md) · [Windows inventory](docs/windows-inventory-dashboard.md) · [Security boundaries](docs/lan-security-review.md) · [Contributing workflow](AGENTS.md)
 
 Run `make test`, `make build` and the [web checks](web/README.md); see [exact-revision CI](https://github.com/storminator89/Tracebolt/actions) for browser, container and native coverage. [Roadmap](docs/roadmap.md) and [changelog](CHANGELOG.md) hold the development detail.
 

@@ -36,14 +36,14 @@ func TestRelativeNativeRequestsAreBoundAndCreateOnly(t *testing.T) {
 				if oa.RootDirectory != 17 || oa.ObjectName.String() != "child" || oa.Attributes != windows.OBJ_CASE_INSENSITIVE|windows.OBJ_DONT_REPARSE || oa.SecurityDescriptor != descriptor || oa.Length != uint32(unsafe.Sizeof(*oa)) || share&windows.FILE_SHARE_DELETE != 0 || gotDisposition != disposition || allocation != nil || ea != 0 || eaLength != 0 {
 					t.Fatal("relative request contract changed")
 				}
-				required := uint32(windows.FILE_SYNCHRONOUS_IO_NONALERT | windows.FILE_OPEN_REPARSE_POINT | windows.FILE_OPEN_NO_RECALL)
+				required := uint32(windows.FILE_SYNCHRONOUS_IO_NONALERT | windows.FILE_OPEN_REPARSE_POINT)
 				if dir {
 					required |= windows.FILE_DIRECTORY_FILE
 					if attributes != windows.FILE_ATTRIBUTE_DIRECTORY {
 						t.Fatal("wrong directory attributes")
 					}
 				} else {
-					required |= windows.FILE_NON_DIRECTORY_FILE | windows.FILE_WRITE_THROUGH
+					required |= windows.FILE_NON_DIRECTORY_FILE | windows.FILE_WRITE_THROUGH | windows.FILE_OPEN_NO_RECALL
 				}
 				if options != required {
 					t.Fatal("relative request options changed")

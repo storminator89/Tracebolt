@@ -15,9 +15,16 @@ export function conciseShellFixture(data) {
   },
  };
 }
+export function conciseShellTargets(data) {
+ const fixture = conciseShellFixture(data);
+ const device = fixture.devices.find(item => item.id === 'demo-win-01' && item.platform === 'windows');
+ const statusDevice = fixture.devices.find(item => item.id === 'demo-linux-01' && item.platform === 'linux');
+ const selectedCase = fixture.cases.find(item => item.deviceId === device?.id);
+ if (!device || !statusDevice || !selectedCase) throw new Error('Required synthetic platform gallery fixtures are unavailable.');
+ return { fixture, device, statusDevice, selectedCase };
+}
 export async function conciseShellGallery({ test, pageAt, loaded, shot, expect, data }) {
- const fixture = conciseShellFixture(data), { devices, cases } = fixture;
- const device = devices.find(item => item.id === 'demo-win-01'), selectedCase = cases.find(item => item.deviceId === device.id);
+ const { fixture, device, statusDevice, selectedCase } = conciseShellTargets(data);
  for (const locale of ['en', 'de']) for (const [size, viewport] of [['desktop', { width: 1440, height: 1000 }], ['mobile', { width: 390, height: 844 }]]) {
   await test(`Concise shell every-page synthetic gallery ${size} ${locale}`, async () => {
    const page = await pageAt('/overview', viewport, { reviewLocale: locale });
@@ -39,28 +46,34 @@ export async function conciseShellGallery({ test, pageAt, loaded, shot, expect, 
    await expect(page.locator('.device-page h1')).toHaveText(device.name);
    for (const [key, name] of [['overview', locale === 'de' ? 'Übersicht' : 'Overview'], ['details', 'Details'], ['evidence', locale === 'de' ? 'Belege' : 'Evidence']]) {
     await page.getByRole('tab', { name, exact: true }).click();
-    if (key === 'overview' && locale === 'de') {
-     // Real layout assertion: the two unknown status values must remain intact
-     // at 390px, while desktop typography and the three-card structure stay put.
-     await page.evaluate(async () => { await document.fonts.ready; });
-     await expect(page.locator('.device-essential-card')).toHaveCount(3);
-     const unknown = page.locator('.device-essential-value').filter({ hasText: /^Unbekannt$/ });
-     await expect(unknown).toHaveCount(2);
-     const geometry = await unknown.evaluateAll(values => values.map(value => {
-      const range = document.createRange(); range.selectNodeContents(value);
-      const lines = [...range.getClientRects()], card = value.closest('.device-essential-card');
-      const bounds = card.getBoundingClientRect(), style = getComputedStyle(card);
-      return { text: value.textContent, lines: lines.length,
-       contained: lines.every(line => line.left >= bounds.left + parseFloat(style.paddingLeft) - 1 && line.right <= bounds.right - parseFloat(style.paddingRight) + 1),
-       fontSize: parseFloat(getComputedStyle(value).fontSize) };
-     }));
-     for (const value of geometry) {
-      expect(value.text).toBe('Unbekannt'); expect(value.lines).toBe(1); expect(value.contained).toBe(true);
-      if (size === 'desktop') expect(value.fontSize).toBe(22);
-      else { expect(value.fontSize).toBeGreaterThanOrEqual(13); expect(value.fontSize).toBeLessThanOrEqual(16); }
-     }
-    }
     await capture(`device-${key}`);
+   }
+   if (locale === 'de') {
+    // Windows has its own overview. Exercise the original three-card contract
+    // on a separately whitelisted Linux demo, without dropping Windows views.
+    await page.goto(new URL(`#/devices/${statusDevice.id}`, page.url()).href);
+    await expect(page.locator('.device-page h1')).toHaveText(statusDevice.name);
+    await page.getByRole('tab', { name: 'Übersicht', exact: true }).click();
+    // Real layout assertion: the two unknown status values must remain intact
+    // at 390px, while desktop typography and the three-card structure stay put.
+    await page.evaluate(async () => { await document.fonts.ready; });
+    await expect(page.locator('.device-essential-card')).toHaveCount(3);
+    const unknown = page.locator('.device-essential-value').filter({ hasText: /^Unbekannt$/ });
+    await expect(unknown).toHaveCount(2);
+    const geometry = await unknown.evaluateAll(values => values.map(value => {
+     const range = document.createRange(); range.selectNodeContents(value);
+     const lines = [...range.getClientRects()], card = value.closest('.device-essential-card');
+     const bounds = card.getBoundingClientRect(), style = getComputedStyle(card);
+     return { text: value.textContent, lines: lines.length,
+      contained: lines.every(line => line.left >= bounds.left + parseFloat(style.paddingLeft) - 1 && line.right <= bounds.right - parseFloat(style.paddingRight) + 1),
+      fontSize: parseFloat(getComputedStyle(value).fontSize) };
+    }));
+    for (const value of geometry) {
+     expect(value.text).toBe('Unbekannt'); expect(value.lines).toBe(1); expect(value.contained).toBe(true);
+     if (size === 'desktop') expect(value.fontSize).toBe(22);
+     else { expect(value.fontSize).toBeGreaterThanOrEqual(13); expect(value.fontSize).toBeLessThanOrEqual(16); }
+    }
+    await capture('linux-device-overview');
    }
    await page.goto(new URL(`#/cases/${selectedCase.id}`, page.url()).href);
    await expect(page.locator('.case-detail-header h1')).toHaveText(selectedCase.title);

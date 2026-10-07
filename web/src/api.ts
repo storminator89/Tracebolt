@@ -1,5 +1,5 @@
 import { t, apiErrorText } from './i18n';
-const retainedErrorCodes = ['storage_busy', 'cve_progress_unavailable', 'cve_progress_uncertain', 'cve_feed_changed', 'cve_assessment_interrupted', 'inventory_generation_expired', 'cve_clock_changed', 'cve_assessment_changed', 'cve_assessment_incomplete', 'cve_detail_unavailable', 'cve_response_unavailable', 'inventory_unavailable'] as const;
+const retainedErrorCodes = ['package_update_not_found', 'storage_busy', 'cve_progress_unavailable', 'cve_progress_uncertain', 'cve_feed_changed', 'cve_assessment_interrupted', 'inventory_generation_expired', 'cve_clock_changed', 'cve_assessment_changed', 'cve_assessment_incomplete', 'cve_detail_unavailable', 'cve_response_unavailable', 'inventory_unavailable'] as const;
 export class APIError extends Error {
     constructor(message: string, public status?: number, public code?: typeof retainedErrorCodes[number]) { super(message); this.name = 'APIError'; }
 }
@@ -46,7 +46,7 @@ async function boundedJSON(response: Response, maximum: number): Promise<unknown
     return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes)) as unknown;
 }
 export async function request<T>(path: string, options?: RequestInit, maxResponseBytes?: number): Promise<T> {
-    const responseCap = /^\/devices\/agent_[0-9a-f]{32}\/resource-history(?:\?afterSequence=[1-9][0-9]{0,18})?$/.test(path) ? 1536 * 1024 : /^\/investigations\?scope=(?:open|recovered|closed|all)&offset=(?:0|[1-9][0-9]*)$/.test(path) ? 2 * 1024 * 1024 : 262144;
+    const responseCap = /^\/devices\/agent_[0-9a-f]{32}\/package-updates(?:\/(?:prepare|approve|jobs\/update_[0-9a-f]{32}))?$/.test(path) ? 512 * 1024 : /^\/devices\/agent_[0-9a-f]{32}\/resource-history(?:\?afterSequence=[1-9][0-9]{0,18})?$/.test(path) ? 1536 * 1024 : /^\/investigations\?scope=(?:open|recovered|closed|all)&offset=(?:0|[1-9][0-9]*)$/.test(path) ? 2 * 1024 * 1024 : 262144;
     if (maxResponseBytes !== undefined && (!Number.isSafeInteger(maxResponseBytes) || maxResponseBytes < 1 || maxResponseBytes > responseCap))
         throw new APIError(t("Der Manager hat keine gültigen JSON-Daten zurückgegeben."));
     const controller = new AbortController();
@@ -126,7 +126,7 @@ export async function mutateRaw<T>(path: string, rawJson: string, headers: Recor
     if (typeof rawJson !== 'string' || new TextEncoder().encode(rawJson).byteLength > 2097152 || Object.keys(headers).some(key => key !== 'X-Tracebolt-Catalog-Revision'))
         throw new APIError(t("Die Anfrage konnte nicht geladen werden (HTTP {0}).", { "0": 400 }), 400);
     const epoch = protectedEpoch;
-    const { csrfToken } = await request<{ csrfToken: string }>('/session', { signal }, maxResponseBytes);
+    const { csrfToken } = await request<{ csrfToken: string }>('/session', { signal }, Math.min(maxResponseBytes, 32768));
     if (epoch !== protectedEpoch || signal?.aborted)
         throw new DOMException(t("Anfrage abgebrochen."), 'AbortError');
     if (typeof csrfToken !== 'string' || csrfToken.length < 1 || csrfToken.length > 256)

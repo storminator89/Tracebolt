@@ -30,7 +30,10 @@ within the resulting bounded snapshot. It is an on-demand log reader, not a
 continuous feed or a general command runner. HTTP-test requires an additional
 acknowledgement: log content is readable on the network and the manager can be
 impersonated. Existing inventory/telemetry consent is insufficient for either
-log-content consent or that separate plaintext-content risk.
+log-content consent or that separate plaintext-content risk. This local grant
+also does not authorize AI export. [Service-log AI](proactive-service-log-ai.md)
+requires its own exact provider/service/window approval in the manager; it uses
+the existing helper without widening this local allowlist.
 
 The helper has a fixed Unix socket, no network, no caller-selected paths, and
 no access to the packaged agent enrollment/private-key directories. The main

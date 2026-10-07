@@ -1,9 +1,11 @@
+import { validJournalAISummary } from './journal-ai-types';
+import type { JournalAISummary } from './journal-ai-types';
 import { validHealthView } from './health-types';
 import { validInvestigationAnalysis } from './investigation-analysis-types';
 import type { InvestigationAnalysis } from './investigation-analysis-types';
 import type { HealthIncident, HealthView } from './health-types';
 export type InvestigationScope = 'open' | 'recovered' | 'closed' | 'all';
-export interface InvestigationItem { deviceId: string; incident: HealthIncident; analysis?: InvestigationAnalysis }
+export interface InvestigationItem { deviceId: string; incident: HealthIncident; analysis?: InvestigationAnalysis; journalAI?: JournalAISummary }
 export interface InvestigationsView {
     schemaVersion: 'tracebolt.investigations.v1'; serverNow: string; scope: InvestigationScope; offset: number; total: number;
     counts: Record<InvestigationScope, number>; devices: HealthView[]; items: InvestigationItem[];
@@ -27,11 +29,12 @@ export function validInvestigationsView(v: unknown, scope: InvestigationScope, o
     }
     if (Number(v.counts.open) > [...devices.values()].reduce((sum, device) => sum + device.checks.length, 0)) return false;
     for (const item of v.items) {
-        if (!record(item) || !fields(item, Object.hasOwn(item, 'analysis') ? ['deviceId', 'incident', 'analysis'] : ['deviceId', 'incident']) || typeof item.deviceId !== 'string' || !record(item.incident)) return false;
+        if (!record(item) || !fields(item, ['deviceId', 'incident', ...(Object.hasOwn(item, 'analysis') ? ['analysis'] : []), ...(Object.hasOwn(item, 'journalAI') ? ['journalAI'] : [])]) || typeof item.deviceId !== 'string' || !record(item.incident)) return false;
         const device = devices.get(item.deviceId);
         if (!device || !validHealthView({ ...device, incidents: [item.incident] }, item.deviceId) || typeof item.incident.id !== 'string' || !/^health_[a-f0-9]{16}$/.test(item.incident.id)) return false;
         const incident = item.incident as unknown as HealthIncident;
         if (Object.hasOwn(item, 'analysis') && !validInvestigationAnalysis(item.analysis, incident, v.serverNow)) return false;
+        if (Object.hasOwn(item, 'journalAI') && !validJournalAISummary(item.journalAI)) return false;
         const key = `${item.deviceId}:${incident.id}`;
         if (seen.has(key) || incident.resolvedAt !== null && !incident.closedReason || scope !== 'all' && incidentScope(incident) !== scope) return false;
         if (!incident.resolvedAt && !device.checks.some(check => check.key === incident.key)) return false;

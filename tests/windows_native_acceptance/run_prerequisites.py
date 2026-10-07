@@ -217,8 +217,10 @@ def run_measurement(env: dict[str, str], root: Path = ROOT) -> dict:
     return report
 
 
-FIXTURE_PACKAGES = ("localrmm/internal/windowsacceptance/native", "localrmm/cmd/windows-prerequisites", "localrmm/internal/windowspath")
+FIXTURE_PACKAGES = ("localrmm/internal/windowsacceptance/native", "localrmm/cmd/windows-prerequisites", "localrmm/internal/windowspath", "localrmm/internal/windowsstate")
 REQUIRED_FIXTURES = {
+    (FIXTURE_PACKAGES[3], "TestStateNativeDirectoryOptionsPreserveBinding"),
+    (FIXTURE_PACKAGES[3], "TestStateNativeReparseFailureHasNoFallback"),
     (FIXTURE_PACKAGES[2], "TestRootRequestUsesResolvedDeviceWithoutFallback"),
     (FIXTURE_PACKAGES[2], "TestRootAcquisitionStagesFailBeforeNativeOpen"),
     (FIXTURE_PACKAGES[2], "TestRootNativeStatusesAreFiniteAndNeverRetried"),
@@ -260,7 +262,7 @@ def run_fixtures(env: dict[str, str], root: Path = ROOT) -> None:
     verify_checkout(child, source, root)
     verify_go(child, root)
     raw = command(["go", "test", "-json", "-mod=readonly", "-buildvcs=false", "-count=1", "-timeout=60s",
-                   "./internal/windowsacceptance/native", "./cmd/windows-prerequisites", "./internal/windowspath"],
+                   "./internal/windowsacceptance/native", "./cmd/windows-prerequisites", "./internal/windowspath", "./internal/windowsstate"],
                   child, root, 600, 4 * 1024 * 1024)
     validate_fixture_events(raw)
 

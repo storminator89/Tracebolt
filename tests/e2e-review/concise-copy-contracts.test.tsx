@@ -20,6 +20,8 @@ import { systemPage, systemView, serviceRows } from '../../web/src/system-invent
 import { actionSession, actionView, actionDevice } from '../../web/src/service-action-fixtures';
 import { openServiceActionDisplay } from './service-action-display-navigation.mjs';
 import { conciseCopy } from './concise-copy-contracts.mjs';
+import { conciseShellTargets } from './concise-shell-gallery.mjs';
+import type { Device } from '../../web/src/types';
 import type { JournalResource } from '../../web/src/journal-resource';
 vi.mock('../../web/src/api', async original => ({ ...await original<typeof import('../../web/src/api')>(), request: vi.fn(), mutateRaw: vi.fn() }));
 vi.mock('../../web/src/auth', async original => ({ ...await original<typeof import('../../web/src/auth')>(), useOperator: vi.fn() }));
@@ -107,4 +109,37 @@ it('the display setup helper reaches the actual Services action control through 
  await waitFor(()=>expect(screen.getByRole('button',{name:'Preview try-restart: fixture.service'})).toBeEnabled());
  expect(screen.getByRole('tab',{name:'Services'})).toHaveAttribute('aria-selected','true');
  expect(vi.mocked(mutateRaw).mock.calls.every(([path])=>path.endsWith('/inventory/system/query'))).toBe(true);
+});
+
+
+const platformGalleryData = () => {
+ const at='2026-10-07T18:00:00Z',metric={value:null,unit:'%',quality:'unknown' as const,source:'Invented platform gallery',collectedAt:at};
+ const windows:Device={id:'demo-win-01',name:'Synthetic Windows gallery',platform:'windows',os:'Windows fixture',site:'Fixture',group:'Fixture',ip:null,status:'unknown',source:'synthetic',synthetic:true,lastSeen:at,agentVersion:'fixture',cpu:metric,memory:metric,disk:metric,uptime:'',tags:[],capabilities:[],evidence:[],trend:[],caseIds:[]};
+ const linux:Device={...windows,id:'demo-linux-01',name:'Synthetic Linux gallery',platform:'linux',os:'Linux fixture'};
+ return {generatedAt:at,devices:[windows,linux],cases:[{id:'case-demo-windows',deviceId:windows.id,synthetic:true,status:'open',severity:'critical'}],activity:[]};
+};
+it.each(['en','de'] as const)('routes the retained Windows gallery and three-card geometry to their actual platform views in %s',async locale=>{
+ setLocale(locale,false);const data=platformGalleryData(),targets=conciseShellTargets(data);
+ expect(targets.device.id).toBe('demo-win-01');expect(targets.statusDevice.id).toBe('demo-linux-01');expect(targets.selectedCase.deviceId).toBe(targets.device.id);
+ vi.mocked(request).mockImplementation(async path=>{
+  const device=data.devices.find(item=>path===`/devices/${item.id}`);if(device)return device;
+  throw new Error('Unrelated public fixture source unavailable');
+ });
+ const windows=render(<DeviceDetail id={targets.device.id} onClose={vi.fn()} onCase={vi.fn()}/>);await flush();
+ expect(screen.getByRole('heading',{name:targets.device.name,level:1})).toBeVisible();
+ expect(document.querySelector('.windows-device-overview')).not.toBeNull();expect(document.querySelectorAll('.device-essential-card')).toHaveLength(0);
+ windows.unmount();render(<DeviceDetail id={targets.statusDevice.id} onClose={vi.fn()} onCase={vi.fn()}/>);await flush();
+ expect(screen.getByRole('heading',{name:targets.statusDevice.name,level:1})).toBeVisible();expect(document.querySelector('.windows-device-overview')).toBeNull();
+ expect(document.querySelectorAll('.device-essential-card')).toHaveLength(3);
+ expect([...document.querySelectorAll('.device-essential-value')].filter(value=>value.textContent===(locale==='de'?'Unbekannt':'Unknown'))).toHaveLength(2);
+ expect(vi.mocked(request).mock.calls.some(([path])=>path.endsWith('/inventory/windows')||path.endsWith('/inventory/endpoint-identity'))).toBe(false);expect(mutateRaw).not.toHaveBeenCalled();
+});
+it('rejects missing, mislabelled or non-synthetic platform targets before a gallery capture',()=>{
+ for(const change of [
+  (data:ReturnType<typeof platformGalleryData>)=>{data.devices=data.devices.filter(item=>item.platform!=='linux');},
+  (data:ReturnType<typeof platformGalleryData>)=>{data.devices[1].synthetic=false;},
+  (data:ReturnType<typeof platformGalleryData>)=>{data.devices[1].platform='windows';},
+  (data:ReturnType<typeof platformGalleryData>)=>{data.devices[0].synthetic=false;},
+  (data:ReturnType<typeof platformGalleryData>)=>{data.cases=[];},
+ ]){const data=platformGalleryData();change(data);expect(()=>conciseShellTargets(data)).toThrow('Required synthetic platform gallery fixtures are unavailable.');}
 });

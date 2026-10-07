@@ -6,6 +6,11 @@ executor, network client or filesystem adapter. It does not enable package
 planning/execution in the manager, agent, helper, API or UI. The existing
 `actionpermit.Plan` and durable service-only workflow remain unchanged.
 
+A separate [inert package workflow candidate](selected-package-update-workflow-inert.md)
+adds typed selection/preview records, protected SQLite persistence and a fully
+labeled simulation workflow. Its production operator boundary remains unavailable;
+it supplies no native adapter, signed execution authority or live host execution.
+
 This slice implements a bounded immutable data contract and a pure comparison of
 supplied observations. It is not an executable plan, authenticated provenance,
 operator approval, execution admission, or native acceptance. A successful

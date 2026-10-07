@@ -54,6 +54,14 @@ No TLS warning bypass is used. Actual browser execution belongs to hosted CI.
    Open Packages selects the full view; the secondary bounded preview retains
    explicit sample limitations and cannot supply the complete total.
 
+Page-action assertions bind the exact armed query POST and original request body.
+They observe only bytes consumed by the application's primary bounded reader,
+without cloning, prefetching or retrieving the body again through Chromium's
+network inspector. A completed JSON observation is not UI acceptance: all
+existing binding, row, literal-search, paging and rendered-state assertions still
+have to pass. The observer is test-only, loopback/device scoped, consume-once and
+capped at the existing 256 KiB overview-page limit; raw bodies are not exported.
+
 The service clock is fixture-controlled and forward-only through private stdin.
 Operator time remains real with the supported one-hour fixture session. Clock
 advancement demonstrates original expiry rules, not actual elapsed wall time,

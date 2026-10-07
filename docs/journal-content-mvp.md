@@ -34,8 +34,13 @@ projected rows for that exact query, not proof of unrestricted host visibility.
 
 Narrow masking removes recognized credential patterns on a best-effort basis.
 Messages can still contain passwords, tokens, personal data and other secrets.
-Every result carries that warning. Log content must remain inert operator-only
-text, outside AI packets, diagnostics, exports and automatic notifications.
+Every result carries that warning. By default log content remains inert
+operator-only text, outside AI packets, diagnostics, exports and automatic
+notifications. A local journal grant does not authorize provider export. The
+separately reviewed [service-log AI scope](proactive-service-log-ai.md) is the only
+explicit opt-in exception: fixed service/window queries, exact provider-bound
+approval, bounded row selection and original-expiry memory-only findings.
+Automatic notifications still exclude log and log-backed model text.
 Source tests are deliberately invented and do not demonstrate effective journal
 permissions or real source completeness.
 

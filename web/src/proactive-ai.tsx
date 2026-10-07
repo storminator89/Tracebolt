@@ -1,3 +1,4 @@
+import { JournalAISettingsPanel } from './journal-ai';
 import { useEffect, useId, useRef, useState } from 'react';
 import { Bot, ChevronDown, RefreshCw } from 'lucide-react';
 import { APIError, AUTH_REQUIRED_EVENT, getProtectedRequestEpoch, mutateRaw, request } from './api';
@@ -24,7 +25,7 @@ const copy = {
         persistentConsent: 'I approve future health-summary analyses, including after manager restart, for these selected devices with the exact provider URL and model shown above.',
         persistent: 'Stored in a protected file on this manager with the original approval time and exact provider, device and data scope. No backfill of older incidents. Saving does not test provider connectivity.',
         reset: 'Approval resets to off after manager restart or provider changes.', connectivity: 'Saving does not test provider connectivity.',
-        logsHelp: 'Raw-log sharing is unavailable. It requires separate local collection approval and specific provider approval.',
+        logsHelp: 'This health-summary scope excludes logs. Service-log AI below needs separate local and provider approval.',
         save: 'Approve and enable', update: 'Approve updated scope', disable: 'Disable proactive AI', close: 'Close', cancel: 'Cancel waiting', saved: 'Settings saved. No connectivity test was sent.',
         error: 'Settings could not be read. Refresh to try again.', invalid: 'Unsupported settings received. Refresh before making changes.', timeout: 'The manager did not respond in time. Refresh to try again.',
         conflict: 'The provider or settings changed. Refresh and review the current destination, model and devices; approval must be given again.',
@@ -45,7 +46,7 @@ const copy = {
         persistentConsent: 'Ich erlaube künftige Health-Zusammenfassungsanalysen, auch nach einem Manager-Neustart, für diese ausgewählten Geräte mit genau der oben angezeigten Anbieter-URL und dem Modell.',
         persistent: 'Mit dem ursprünglichen Zeitpunkt und genau diesem Anbieter-, Geräte- und Datenumfang in einer geschützten Datei auf diesem Manager gespeichert. Keine nachträgliche Analyse älterer Vorfälle. Speichern testet keine Anbieterverbindung.',
         reset: 'Nach Manager-Neustart oder Anbieteränderung wird die Freigabe deaktiviert.', connectivity: 'Speichern testet keine Anbieterverbindung.',
-        logsHelp: 'Keine Rohlog-Freigabe. Dafür sind separate lokale Erfassungs- und ausdrückliche Anbieterfreigaben nötig.',
+        logsHelp: 'Dieser Health-Umfang enthält keine Logs. Dienstlog-KI unten benötigt separate lokale und Anbieterfreigaben.',
         save: 'Freigeben und aktivieren', update: 'Geänderten Umfang freigeben', disable: 'Proaktive KI deaktivieren', close: 'Schließen', cancel: 'Warten abbrechen', saved: 'Einstellungen gespeichert. Es wurde kein Verbindungstest gesendet.',
         error: 'Einstellungen konnten nicht gelesen werden. Zum Wiederholen aktualisieren.', invalid: 'Nicht unterstützte Einstellungen erhalten. Vor Änderungen aktualisieren.', timeout: 'Der Manager hat nicht rechtzeitig geantwortet. Zum Wiederholen aktualisieren.',
         conflict: 'Anbieter oder Einstellungen wurden geändert. Aktualisieren und Ziel, Modell und Geräte erneut prüfen und freigeben.',
@@ -159,5 +160,5 @@ export function ProactiveAISettingsPanel({ fleetIdentity }: ProactiveAIProps = {
     const operator = useOperator();
     if (!operator || operator.mode !== 'lan' || !operator.authenticated) return null;
     const canManage = (operator.loginMode ?? 'shared') === 'shared';
-    return <ProactiveAIContent key={`${operator.actorId ?? ''}:${operator.expiresAt ?? ''}:${canManage}`} canManage={canManage} fleetIdentity={fleetIdentity}/>;
+    return <><ProactiveAIContent key={`${operator.actorId ?? ''}:${operator.expiresAt ?? ''}:${canManage}`} canManage={canManage} fleetIdentity={fleetIdentity}/><JournalAISettingsPanel fleetIdentity={fleetIdentity}/></>;
 }

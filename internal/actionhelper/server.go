@@ -10,6 +10,7 @@ import (
 
 	"localrmm/internal/actionpermit"
 	"localrmm/internal/actionstate"
+	"localrmm/internal/mutationfence"
 )
 
 const (
@@ -24,12 +25,15 @@ const (
 // operations are synchronous, with cancellation/cleanup completed before return.
 // No goroutine is abandoned to pretend an operation stopped.
 type Dependencies struct {
-	Load     func() (Authority, error)
-	Identity func() error
-	Peer     func(net.Conn) (Peer, error)
-	Backend  Backend
-	State    *actionstate.State
-	Now      func() time.Time
+	// Fence is mandatory at runtime whenever the separate package scope exists.
+	Fence         *mutationfence.Fence
+	FenceRequired bool
+	Load          func() (Authority, error)
+	Identity      func() error
+	Peer          func(net.Conn) (Peer, error)
+	Backend       Backend
+	State         *actionstate.State
+	Now           func() time.Time
 }
 type Server struct{ inner *server }
 type server struct {
@@ -40,7 +44,7 @@ type server struct {
 }
 
 func New(d Dependencies) (*Server, error) {
-	if d.Load == nil || d.Identity == nil || d.Peer == nil || d.Backend == nil || d.State == nil || d.Now == nil || d.Identity() != nil {
+	if d.Load == nil || d.Identity == nil || d.Peer == nil || d.Backend == nil || d.State == nil || d.Now == nil || d.FenceRequired && d.Fence == nil || d.Identity() != nil {
 		return nil, ErrRejected
 	}
 	a, e := d.Load()
@@ -138,6 +142,21 @@ func (s *Server) Handle(ctx context.Context, peer Peer, r Request) (actionstate.
 		return actionstate.Status{}, ErrBusy
 	}
 	defer x.busy.Store(false)
+	fenceOwner := mutationfence.Owner{Action: mutationfence.Service, JobID: p.JobID, Sequence: p.Sequence, EnvelopeDigest: actionpermit.Digest(r.Envelope)}
+	if x.deps.Fence != nil {
+		_, fresh, err := x.deps.Fence.Acquire(ctx, fenceOwner, x.deps.Now().Unix())
+		if err != nil || !fresh {
+			return actionstate.Status{}, ErrBusy
+		}
+	}
+	finishFence := func(outcome string) error {
+		if x.deps.Fence == nil {
+			return nil
+		}
+		c, stop := context.WithTimeout(context.Background(), PersistenceTimeout)
+		defer stop()
+		return x.deps.Fence.Complete(c, fenceOwner, outcome, x.deps.Now().Unix())
+	}
 	// Only Begin's fresh in-memory attempt can proceed. A duplicate, legacy
 	// admission, migration or status lookup can never reconstruct that capability.
 	st, attempt, e := x.deps.State.Begin(ctx, r.Envelope, x.deps.Now())
@@ -147,7 +166,11 @@ func (s *Server) Handle(ctx context.Context, peer Peer, r Request) (actionstate.
 	notStarted := func(reason actionstate.NotStartedReason) (actionstate.Status, error) {
 		finishCtx, stop := context.WithTimeout(context.Background(), PersistenceTimeout)
 		defer stop()
-		return attempt.NotStarted(finishCtx, reason, x.deps.Now())
+		result, err := attempt.NotStarted(finishCtx, reason, x.deps.Now())
+		if err == nil {
+			err = finishFence("not_started")
+		}
+		return result, err
 	}
 	reasonFor := func(err error) actionstate.NotStartedReason {
 		if errors.Is(err, actionpermit.ErrExpired) {
@@ -240,7 +263,11 @@ func (s *Server) Handle(ctx context.Context, peer Peer, r Request) (actionstate.
 	}
 	finishCtx, stop := context.WithTimeout(context.Background(), PersistenceTimeout)
 	defer stop()
-	return attempt.Complete(finishCtx, outcome, observed, x.deps.Now())
+	result, finishErr := attempt.Complete(finishCtx, outcome, observed, x.deps.Now())
+	if finishErr == nil && outcome == actionstate.OutcomeCompleted {
+		finishErr = finishFence("completed")
+	}
+	return result, finishErr
 }
 func (s *Server) ServeConn(ctx context.Context, c net.Conn) {
 	if c == nil {
