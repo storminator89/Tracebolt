@@ -110,8 +110,10 @@ export async function applicationChecksBrowserCase({pageAt,login,expect,base,sho
  await expect(row('fixture-unverified').locator('td').nth(1).locator('.application-cell-value')).toHaveText('Unknown');
  await expect(row('fixture-unverified').locator('.application-expiry')).toHaveCount(0);
  for(const item of fixture.items){await expect(row(item.id).locator('td:last-child time')).toHaveAttribute('datetime',item.observedAt);await expect(row(item.id).locator('td:last-child time')).toHaveText('1m ago');}
- await expect(panel.getByRole('button')).toHaveCount(1);await expect(panel.locator('a,input,select,textarea,form')).toHaveCount(0);
+ await expect(panel.getByRole('button')).toHaveCount(1);await expect(panel.locator('input,select,textarea,form')).toHaveCount(0);
+ await expect(panel.locator('.application-checks-timing')).toContainText('60s after each round');await expect(panel.locator('.application-checks-timing')).toContainText('85s');
  const disclosure=panel.locator('details');await disclosure.locator('summary').click();await expect(disclosure).toHaveAttribute('open','');
+ await expect(disclosure.getByRole('link',{name:'Startup-file guide (GitHub)',exact:true})).toHaveAttribute('rel','noopener noreferrer');
  await expect(disclosure).toContainText('2xx describes only the HTTP status. Certificate details come from that observation. Reload only reads retained results.');
  await applicationRowLayout({page,panel,expect,fixture,mobile:false});
  await panel.scrollIntoViewIfNeeded();await shot(page,'synthetic-http-test-application-checks-desktop-en',applicationFixtureDisclosure);
@@ -154,7 +156,7 @@ export async function applicationChecksBrowserCase({pageAt,login,expect,base,sho
     await expect(values.nth(1)).toContainText('Expiring soon');await expect(current.locator('.application-expiry')).toHaveAttribute('datetime',item.tls.expiresAt);
    }
   }
-  await expect(panel.getByRole('button')).toHaveCount(1);await expect(panel.locator('a,input,select,textarea,form')).toHaveCount(0);
+  await expect(panel.getByRole('button')).toHaveCount(1);await expect(panel.locator('input,select,textarea,form')).toHaveCount(0);
   const details=panel.locator('details');await details.locator('summary').click();await expect(details).toHaveAttribute('open','');
   await expect(details).toContainText('2xx describes only the HTTP status. Certificate details come from that observation. Reload only reads retained results.');
   if(mixed){
@@ -191,5 +193,28 @@ export async function applicationChecksBrowserCase({pageAt,login,expect,base,sho
   phase='access-lost';await reload.click();await expect(page.getByRole('heading',{name:'Sign in',exact:true})).toBeVisible();await expect(panel).toHaveCount(0);await expect(page.locator('.app-shell')).toHaveCount(0);
   const stoppedAgain=reads;await page.clock.runFor(30000);expect(reads).toBe(stoppedAgain);
  }
+ // Disabled status has setup guidance, never a target form or trigger.
+ activeFixture={...fixture,enabled:false,intervalSeconds:0,maxAgeSeconds:0,items:[]};phase='retained';await login(page);
+ await expect(panel).toContainText('Disabled · no application checks running.');
+ await expect(panel).toContainText('Configure up to 8 HTTP/HTTPS, DNS or TCP targets on the manager.');
+ await expect(panel.locator('table,dl,input,select,textarea,form')).toHaveCount(0);
+ const setup=panel.locator('details');await expect(setup).not.toHaveAttribute('open','');
+ await setup.locator('summary').click();await expect(setup).toHaveAttribute('open','');
+ await expect(setup).toContainText('Private LAN and plaintext HTTP need separate acknowledgements.');
+ const guide=setup.getByRole('link',{name:'Startup-file guide (GitHub)',exact:true});
+ await expect(guide).toHaveAttribute('href','https://github.com/storminator89/Tracebolt/blob/bb76d6a6b7000b244b8075d5644562ad0da94c91/docs/application-checks.md');
+ await expect(guide).toHaveAttribute('referrerpolicy','no-referrer');await expect(panel.getByRole('button')).toHaveCount(1);
+ await setup.locator('summary').click();await expect(setup).not.toHaveAttribute('open','');
+ await panel.scrollIntoViewIfNeeded();await shot(page,'synthetic-application-checks-disabled-desktop-en',applicationFixtureDisclosure);
+ await page.setViewportSize({width:390,height:844});await setup.locator('summary').click();
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth&&document.body.scrollWidth<=innerWidth)).toBe(true);
+ await panel.scrollIntoViewIfNeeded();await shot(page,'synthetic-application-checks-disabled-mobile-en',applicationFixtureDisclosure);
+ await page.getByRole('combobox',{name:'Language',exact:true}).selectOption('de');
+ const germanPanel=page.getByRole('region',{name:'Anwendungsprüfungen',exact:true});
+ await expect(germanPanel).toContainText('Deaktiviert · keine Anwendungsprüfungen aktiv.');
+ await expect(germanPanel.locator('details')).toHaveAttribute('open','');
+ await expect(germanPanel).toContainText('Privates LAN und unverschlüsseltes HTTP benötigen eigene Bestätigungen.');
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth&&document.body.scrollWidth<=innerWidth)).toBe(true);
+ await germanPanel.scrollIntoViewIfNeeded();await shot(page,'synthetic-application-checks-disabled-mobile-de',applicationFixtureDisclosure);
  expect(mutations).toEqual([]);expect(applicationRequests.length).toBe(reads);expect(applicationRequests.every(value=>value===`GET ${statusPath}`)).toBe(true);
 }

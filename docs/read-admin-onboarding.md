@@ -1,13 +1,13 @@
 # One-command Linux read-admin onboarding
 
-Status: **rc.2 is published, independently verified and selected by the dashboard
-for the complete Linux profile**. One explicit terminal approval configures its
-supported read scopes and separate helpers. The [native Ubuntu TLS run](https://github.com/storminator89/Tracebolt/actions/runs/37508637893)
-passed registration, owners/provenance, journal content, restart, revocation and
-cleanup on production-equivalent c1cd23a source. The [public rc.2 readback](https://github.com/storminator89/Tracebolt/actions/runs/37513100878)
-verified all 12 assets and exact source/workflow provenance without executing an
-installer. A user's download-based Debian/HTTP installation and actual OS reboot
-remain separate observations; source and release checks are not that host result.
+Status: **rc.3 is published, independently verified and selected by the dashboard
+for the complete Linux profile**. One explicit terminal approval configures the
+supported read scopes and separate helpers. [Native Ubuntu TLS acceptance](https://github.com/storminator89/Tracebolt/actions/runs/37572468648)
+passed the verified rc.2-to-405f source-built upgrade, all four upgrade checks, all
+six functional checks and cleanup. [Public rc.3 readback](https://github.com/storminator89/Tracebolt/actions/runs/37574492167) verified all
+12 released assets and exact source/workflow provenance without executing an
+installer. The user's download-based Debian/HTTP upgrade and actual OS reboot
+remain separate observations.
 
 ## Normal path
 
@@ -167,8 +167,8 @@ Fresh mode refuses any existing installed or retained installer domain and any
 existing journal configuration/evidence. It never treats an older/basic/v2 grant
 as approval for this profile. Upgrading a binary alone cannot activate it.
 Completed v2 installations use the explicit [same-scope update](read-admin-upgrade.md)
-when it is present in the selected verified release. Existing installations retain their recovery workflows; this
-candidate intentionally does not turn an unresolved pending journal transaction
+available in the verified rc.3 release. Existing installations retain their recovery workflows; this
+flow intentionally does not turn an unresolved pending journal transaction
 into a fresh helper installation.
 
 An explicitly selected `--resume-read-admin` together with the same `--read-admin`

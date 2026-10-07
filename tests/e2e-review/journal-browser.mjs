@@ -229,6 +229,7 @@ try{
    mark('observed service query returns exact invented rows');expect(services.services.map(row=>row.name)).toEqual(['invented-backup.service','invented.service','invented:unsupported.service']);
    mark('observed service query matches services section');expect(services.section).toBe('services');
    mark('observed service picker is visible');await expect(picker).toBeVisible();
+   mark('search-first picker focuses search and supports exact-row keyboard navigation');const pickerSearch=picker.getByLabel('Search observed services',{exact:true});await expect(pickerSearch).toBeFocused();await expect(picker.locator('.journal-picker-shortcuts')).not.toHaveAttribute('open');await pickerSearch.press('ArrowDown');await expect(picker.getByRole('button',{name:'Use invented-backup.service',exact:true})).toBeFocused();await page.keyboard.press('End');await expect(picker.getByRole('button',{name:'Use invented.service',exact:true})).toBeFocused();expect(tally.create).toBe(0);expect(tally.cancel).toBe(0);await pickerSearch.focus();await shot(page,'synthetic-journal-picker-search-desktop-en');
    mark('open observed service permission disclosure');await picker.getByText('Selection & permission',{exact:true}).click();
    mark('observed service picker does not imply local permission');await expect(picker).toContainText('Observed inventory does not confirm local journal allowlist membership or grant access.');
    mark('observed service picker discloses selection does not capture');await expect(picker).toContainText('Selecting a service only fills the exact-unit field; it does not capture logs.');
@@ -312,6 +313,8 @@ try{
    await expect(sources.getByRole('button')).toHaveCount(0);expect(tally.create).toBe(0);expect(tally.cancel).toBe(0);
    await page.getByRole('button',{name:'Choose observed service',exact:true}).click();
    const picker=page.getByRole('region',{name:'Observed services',exact:true});await expect(picker.getByRole('button',{name:'Use invented.service',exact:true})).toBeVisible();
+   mark('typing searches only retained service inventory');const serviceSearch=picker.getByLabel('Search observed services',{exact:true}),typed=page.waitForResponse(response=>response.url()===`${base}/api/devices/${devices.alpha}/inventory/system/query`&&response.request().method()==='POST');await serviceSearch.fill('invented-backup');expect((await typed).status()).toBe(200);await expect(picker.getByRole('button',{name:'Use invented-backup.service',exact:true})).toBeVisible();await expect(picker.locator('button[data-journal-unit]')).toHaveCount(1);expect(tally.create).toBe(0);expect(tally.cancel).toBe(0);expect(tally.query).toBe(0);await serviceSearch.fill('');await expect(picker.getByRole('button',{name:'Use invented.service',exact:true})).toBeVisible();
+   await picker.getByText('Quick filters',{exact:true}).click();
    await picker.getByRole('button',{name:'SSH logins',exact:true}).click();
    await expect(picker.getByLabel('Search observed services',{exact:true})).toHaveValue('ssh');
    await expect(picker.getByText('No matches in the complete service inventory.',{exact:true})).toBeVisible();
@@ -319,6 +322,7 @@ try{
    await picker.getByRole('button',{name:'All services',exact:true}).click();
    await expect(picker.getByRole('button',{name:'Use invented.service',exact:true})).toBeVisible();
    await expect(picker.getByText('Permission unknown',{exact:true})).toHaveCount(3);
+   await picker.getByText('Quick filters',{exact:true}).click();await expect(picker.locator('.journal-picker-shortcuts')).not.toHaveAttribute('open');
    await picker.scrollIntoViewIfNeeded();await shot(page,'synthetic-journal-source-picker-desktop-en');
    await picker.getByRole('button',{name:'Use invented.service',exact:true}).click();
    await expect(page.locator('.journal-source-selection')).toContainText('Permission not verified.');
@@ -328,6 +332,7 @@ try{
    await page.getByRole('region',{name:'Log-Quellen',exact:true}).scrollIntoViewIfNeeded();
    await expect(page.getByText('Kernel & Hardware',{exact:true})).toBeVisible();await shot(page,'synthetic-journal-source-options-mobile-de');
    mark('compact German mobile query and unchecked request-time consent');await page.getByText('Freigabe & Quellen',{exact:true}).click();await expect(page.locator('.journal-context-details')).not.toHaveAttribute('open');await page.locator('.journal-query-bar').scrollIntoViewIfNeeded();await shot(page,'synthetic-journal-workspace-mobile-de');await page.getByRole('button',{name:'Logs abrufen',exact:true}).click();const mobileReview=page.getByRole('dialog',{name:'Log-Anfrage prüfen',exact:true});await expect(mobileReview).toBeVisible();for(const box of await mobileReview.getByRole('checkbox').all())await expect(box).not.toBeChecked();await expect(mobileReview.getByRole('button',{name:'Logs erfassen',exact:true})).toBeDisabled();await shot(page,'synthetic-journal-review-mobile-de');await mobileReview.getByRole('button',{name:'Zurück',exact:true}).click();expect(tally.create).toBe(0);expect(tally.cancel).toBe(0);expect(tally.query).toBe(0);
+   mark('capture the search-first German mobile picker');await page.getByRole('button',{name:'Beobachteten Dienst wählen',exact:true}).click();const mobilePicker=page.getByRole('region',{name:'Beobachtete Dienste',exact:true});await expect(mobilePicker.getByLabel('Beobachtete Dienste durchsuchen',{exact:true})).toBeFocused();await expect(mobilePicker.getByRole('button',{name:'Übernehmen invented.service',exact:true})).toBeVisible();await expect(mobilePicker.locator('.journal-picker-shortcuts')).not.toHaveAttribute('open');await shot(page,'synthetic-journal-picker-search-mobile-de');await mobilePicker.getByRole('button',{name:'Dienstauswahl schließen',exact:true}).click();expect(tally.create).toBe(0);expect(tally.cancel).toBe(0);expect(tally.query).toBe(0);
    await clean(page);
   });
 

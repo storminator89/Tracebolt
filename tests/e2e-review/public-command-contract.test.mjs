@@ -21,7 +21,7 @@ const snapshot={version:'tracebolt.enrollment-state.v2',binding:{instanceID:'man
 const certificate='-----BEGIN CERTIFICATE-----\nQUJDRA==\n-----END CERTIFICATE-----';
 const bootstrap={schemaVersion:'tracebolt.enrollment-bootstrap.v2',managerInstanceId:snapshot.binding.instanceID,profile:'http-test',enrollmentOrigin:managerOrigin,agentOrigin:'http://127.0.0.1:19893',collectionProfile:'managed-operations-v2',invitationId,serverCaPem:'',issuerRootPem:certificate,issuerPem:certificate};
 const originalWindow=globalThis.window;globalThis.window={location:{origin:managerOrigin}};
-const completePin={...pin,version:'v0.1.0-rc.2'};
+const completePin={...pin,version:'v0.1.0-rc.3'};
 const completeSnapshot={...snapshot,binding:{...snapshot.binding,collectionProfile:'managed-operations-v3'}};
 const completeBootstrap={...bootstrap,collectionProfile:'managed-operations-v3'};
 const completeContext={...context,collectionProfile:'managed-operations-v3',agentOrigin:bootstrap.agentOrigin};
@@ -31,7 +31,7 @@ const selectedComplete=production.selectEnrollmentCommand(completeBootstrap,comp
 // written, and no generated installation text is executed or fetched.
 const selectorFixtures=[];
 const selectorSource=fs.readFileSync(path.join(root,'web/src/verified-download-command.ts'),'utf8');
-for(const selectedPin of [null,{...pin,version:'v0.1.0-rc.1'},completePin,{...pin,version:'v0.1.0-rc.3'}]){
+for(const selectedPin of [null,{...pin,version:'v0.1.0-rc.1'},{...pin,version:'v0.1.0-rc.2'},completePin,{...pin,version:'v0.1.0-rc.4'}]){
  const contents=selectorSource.replace(/^(export const OFFICIAL_LINUX_BOOTSTRAP_PIN: BootstrapPublicationPin \| null = ).*;$/m,(_line,prefix)=>prefix+JSON.stringify(selectedPin)+';');
  assert.notEqual(contents,selectorSource);
  const compiledFixture=await build({stdin:{contents,loader:'ts',resolveDir:path.join(root,'web/src')},bundle:true,platform:'node',format:'esm',write:false,logLevel:'silent'});
@@ -97,12 +97,12 @@ test('complete commands require an explicitly capable pin and never a base-only 
  assert.equal(assertPublicCommand(complete,{pin:completePin,...completeContext}),'verified-download');
  const script=innerScript(complete);
  assert.ok(script.includes(` --read-admin --read-admin-agent-origin ${quote(bootstrap.agentOrigin)}`));assert.ok(!script.includes('--pending-service'));
- for(const unavailablePin of [null,pin,{...pin,version:'v0.1.0-rc.1'},{...pin,version:'v0.1.0-rc.3'}]){
+ for(const unavailablePin of [null,pin,{...pin,version:'v0.1.0-rc.1'},{...pin,version:'v0.1.0-rc.2'},{...pin,version:'v0.1.0-rc.4'}]){
   assert.equal(assertPublicCommand(null,{pin:unavailablePin,...completeContext}),'unavailable');
   for(const command of [manual,verified,complete])assert.throws(()=>assertPublicCommand(command,{pin:unavailablePin,...completeContext}),/PUBLIC_COMMAND_CONTRACT_MISMATCH/);
  }
  assert.throws(()=>assertPublicCommand(null,{pin:completePin,...completeContext}),/PUBLIC_COMMAND_CONTRACT_MISMATCH/);
- assert.equal(assertPublicCommand(selectedComplete?.command??null,{pin:readSourceOwnedPin(root),...completeContext}),readSourceOwnedPin(root)?.version==='v0.1.0-rc.2'?'verified-download':'unavailable');
+ assert.equal(assertPublicCommand(selectedComplete?.command??null,{pin:readSourceOwnedPin(root),...completeContext}),readSourceOwnedPin(root)?.version==='v0.1.0-rc.3'?'verified-download':'unavailable');
 });
 test('complete contract rejects missing or changed validated ingress and any weaker install mode',()=>{
  for(const agentOrigin of [undefined,'http://127.0.0.1:0','http://127.0.0.1:99999','http://127.0.0.1:19892','http://127.0.0.1:19893/','https://127.0.0.1:19893',"http://127.0.0.1:19893';echo untrusted"]){
@@ -116,7 +116,7 @@ test('complete contract rejects missing or changed validated ingress and any wea
 
 test('a literal-only capable pin activation selects complete read-admin while disabled pins never fall back',()=>{
  for(const fixture of selectorFixtures){
-  const capable=fixture.pin?.version==='v0.1.0-rc.2';
+  const capable=fixture.pin?.version==='v0.1.0-rc.3';
   assert.equal(fixture.available,capable);
   assert.equal(assertPublicCommand(fixture.complete?.command??null,{pin:fixture.pin,...completeContext}),capable?'verified-download':'unavailable');
   assert.equal(fixture.complete?.kind??null,capable?'verified-download':null);

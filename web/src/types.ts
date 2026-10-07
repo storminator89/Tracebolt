@@ -3,7 +3,7 @@ export type Quality = 'healthy' | 'stale' | 'unknown' | 'denied';
 export type DeviceStatus = 'healthy' | 'attention' | 'critical' | 'stale' | 'unknown';
 export interface Metric { value: number | null; unit: string; quality: Quality; source: string; collectedAt: string }
 export interface Evidence { id: string; title: string; source: string; quality: Quality; collectedAt: string; detail: string; value: string; synthetic: boolean }
-export interface Capability { id: string; name: string; status: 'supported' | 'limited' | 'unsupported' | 'denied'; detail: string }
+export interface Capability { id: string; name: string; status: 'supported' | 'limited' | 'unsupported' | 'denied' | 'scope'; detail: string }
 export interface AgentCertificate { source: 'manual-approval' | 'guided-enrollment'; expiresAt: string | null; checkedAt: string }
 export interface Device { agentCertificate?: AgentCertificate; id: string; name: string; platform: Platform; os: string; site: string; group: string; ip: string | null; status: DeviceStatus; source: 'synthetic' | 'sandbox' | 'local' | 'lan'; synthetic: boolean; lastSeen: string; agentVersion: string; cpu: Metric; memory: Metric; disk: Metric; uptime: string; tags: string[]; capabilities: Capability[]; evidence: Evidence[]; trend: number[]; caseIds: string[] }
 export interface Activity { id: string; type: 'observation' | 'case' | 'note' | 'status'; title: string; detail: string; time: string; deviceId?: string; caseId?: string }

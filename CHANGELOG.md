@@ -1,5 +1,23 @@
 # Changelog
 
+## 2026-10-07 — Coherent manager update and verified rc.3 commands
+
+- Select the independently verified rc.3 bootstrap for the complete-profile dashboard command. The release remains bound to 405f source; its separate native Ubuntu TLS gate passed the rc.2 replacement, original identity/scopes/private-state checks, all six functions and cleanup. Update the current installation guides; the user's Debian/HTTP update and OS reboot remain separate acceptance.
+- Refresh visible first-page inventory by validated complete generation without resetting selected source, submitted search, table DOM or scroll. Later pages and unsubmitted drafts pause visibly. Original timestamps, cursor expiry, backoff and access-loss clearing remain intact.
+- Replace profile-only orange capability rows with neutral scope declarations and bounded actual collection/status evidence. Keep denied, failed, partial, stale and unknown outcomes explicit. Preserve original age and session deadlines across manual refresh; successful socket enumeration cannot imply confirmed owner provenance.
+- Simplify the log service picker with a focused search, debounced retained-inventory reads, exact-unit keyboard selection and quieter disclosures. Preserve request-time content/plaintext consent and all capture/retention rules. Correct the hosted unit test's asynchronous review-readiness assertion without weakening its requested window or unchecked-consent checks.
+- Add 24-hour CPU/RAM/root-filesystem minute history for newly accepted guided-agent observations. Keep gaps and original metric timestamps, exact replay/identity guards and bounded storage. Use 60-second visible reads and session-local deltas to reduce repeated full-history transfer; do not redraw unchanged expired slices. A controlled fixture measured 480,351-byte full history versus 979 bytes for two changed points and 320 bytes unchanged. No user-host resource measurement or new agent collection is claimed.
+- Extend the existing hosted runner with application-settings, resource-history and capability cases (20 total) and first-page inventory continuity checks. All screenshots use disclosed synthetic fixtures; exact-revision hosted rendering remains the acceptance gate. Preserve the prior three quarantined cases, all individual assertions/deadlines, and native approval gates.
+
+
+## 2026-10-07 — Persisted application-check setup candidate
+
+- Add a compact administrator form for the existing HTTP/HTTPS (including verified leaf expiry), DNS and single-port TCP checks. Save typed targets as a disabled draft; review exact destinations/IPs and separately confirm manager-origin recurring checks before enabling. Editing consent, interrupted writes and stale revisions fail closed.
+- Add explicit `manage_application_checks` permission for named operators, confidential settings reads, CSRF-protected bounded mutations and the existing shared-pilot administrator mapping. No account, grant, credential or real target is created by the source change.
+- Persist manager/origin/profile-bound settings with protected atomic writes and a bounded secret-free audit envelope. Preserve explicit startup-file read-only precedence, sequential transport safeguards, cancellation/join and per-generation result separation. Browser toggles cannot bypass the existing completion-based cadence.
+- Retain the read-only Overview status, with truthful disabled wording, cadence/freshness details and short reason help. Link administrators to the working Settings form; the pinned external guide is explicitly for startup-file configuration.
+- Add mocked UI/API, injected worker/storage and exact intercepted hosted-browser cases. Local browser execution remains blocked before page creation by socket permissions; hosted geometry/native target acceptance and publication remain separate gates. This candidate does not alter the agent upgrade/release path, enable alarms or configure a user host.
+
 ## 2026-10-07 — rc.3 publication and public readback
 
 - Publish v0.1.0-rc.3 from 405f57f after the manually approved native rc.2-to-source upgrade passed: changed artifacts, retained identity/scopes/private state, local approval and all six journal/socket/restart/revoke checks. This does not establish OS reboot or the user's Debian-host update.

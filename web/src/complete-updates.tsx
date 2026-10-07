@@ -1,3 +1,4 @@
+import { InventoryLiveStatus } from './inventory-live-status';
 import { useId } from 'react';
 import { LoaderCircle, RefreshCw, Search, TriangleAlert } from 'lucide-react';
 import { useOperator } from './auth';
@@ -61,6 +62,7 @@ function CompleteUpdates({ deviceId }: { deviceId: string }) {
     return <section className="package-observations complete-packages complete-updates" aria-labelledby={id} aria-busy={resource.loading}>
         <header className="package-heading"><h3 id={id}>{labels.title}</h3><button type="button" className="button small" disabled={resource.loading || resource.error === 'session'} onClick={resource.refresh}><RefreshCw size={14}/>{labels.refresh}</button></header>
         <p className="package-note">{labels.summary}</p>
+        <InventoryLiveStatus state={resource.liveState}/>
         {resource.loading && <p role="status"><LoaderCircle size={16} className="spin"/>{labels.loading}</p>}
         {resource.error && <p className="package-error" role="alert"><TriangleAlert size={16}/>{labels[resource.error]}</p>}
         {['busy', 'timeout', 'loadError'].includes(resource.error ?? '') && <button type="button" className="button small" disabled={resource.loading} onClick={resource.retry}>{labels.retry}</button>}

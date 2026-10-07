@@ -163,7 +163,7 @@ describe('complete APT generation details', () => {
             expect(screen.getByRole('table')).toBeVisible();
             expect(screen.getByText(view.complete.manifest.collectedAt)).toBeVisible();
         } else expect(screen.queryByRole('table')).not.toBeInTheDocument();
-        expect(request).toHaveBeenCalledTimes(1);
+        expect(request).toHaveBeenCalledTimes(deadline === 'staging lease' ? 2 : 1);
         expect(mutateRaw).toHaveBeenCalledTimes(view.complete ? 1 : 0);
         expect(JSON.stringify(view)).toBe(original);
     });

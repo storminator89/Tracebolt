@@ -130,15 +130,55 @@ function CheckRow({ row, view, elapsedMs }: { row: ApplicationCheckRow; view: Ap
         <td role="cell" headers={`${rowHeaderId} application-checks-observed`}><span className="application-mobile-label" aria-hidden="true">{t('Beobachtet')}</span><span className="application-cell-value">{row.observedAt ? <time dateTime={row.observedAt} title={new Date(row.observedAt).toLocaleString(dateLocale())}>{ageLabel(applicationObservationAge(view, row, elapsedMs))}</time> : <span>—</span>}</span></td>
     </tr>;
 }
-function ApplicationChecksContent() {
+// Fixed, reviewed source documentation only. Never derive a link from a target or status.
+const configurationGuide = 'https://github.com/storminator89/Tracebolt/blob/bb76d6a6b7000b244b8075d5644562ad0da94c91/docs/application-checks.md';
+function ConfigurationGuide() {
+    return <a href={configurationGuide} target="_blank" rel="noopener noreferrer" referrerPolicy="no-referrer">{t('Anleitung zur Startdatei (GitHub)')}</a>;
+}
+const reasonHelp: Partial<Record<ApplicationCheckRow['reason'], TranslationKey>> = {
+    destination_blocked: 'Ziel gesperrt: Alle aufgelösten IP-Adressen müssen zur exakten Freigabeliste und zur LAN-Freigabe passen.',
+    stale: 'Veraltete oder zeitlich unplausible Ergebnisse bleiben unbekannt. Neu laden startet keine Prüfung.',
+    invalid_configuration: 'Konfiguration ungültig: Einstellungen oder die Startdatei des Managers prüfen.',
+    not_checked: 'Noch keine Beobachtung vorhanden. Auf den nächsten Prüfdurchlauf des Managers warten.',
+    cancelled: 'Die Beobachtung wurde abgebrochen. Es liegt kein bestätigtes Ergebnis vor.',
+    dns_failed: 'DNS fehlgeschlagen: Namensauflösung aus Sicht des Managers prüfen.',
+    timeout: 'Zeitlimit erreicht: DNS, Verbindung oder Antwort überschritten das gemeinsame Limit von 5 Sekunden.',
+    tcp_failed: 'TCP fehlgeschlagen: Erreichbarkeit des freigegebenen Ziels und einzelnen Ports vom Manager prüfen.',
+    request_failed: 'Netzwerkfehler: Verbindung und HTTP-Antwort aus Sicht des Managers prüfen.',
+    tls_verification_failed: 'TLS-Verifizierung fehlgeschlagen: Hostname, Zertifikatsgültigkeit und vorhandenen Vertrauensspeicher des Managers prüfen.',
+    tls_handshake_failed: 'TLS-Verbindung fehlgeschlagen: TLS-Konfiguration und Erreichbarkeit vom Manager prüfen.',
+    redirect_blocked: 'Weiterleitungen werden nicht verfolgt. Eine freigegebene, direkte Ressource konfigurieren.',
+    http_status: 'HTTP-Fehler: Die Ressource antwortete außerhalb von 2xx. Dies ist keine vollständige Anwendungsdiagnose.',
+};
+function ApplicationChecksContent({ canManage }: { canManage: boolean }) {
     const { snapshot, elapsed, refreshing, locked, notice, refresh } = useApplicationChecks();
     const view = snapshot?.view;
+    const help = view?.enabled ? [...new Set(view.items.map(row => reasonHelp[projectApplicationCheck(view, row, elapsed).reason]).filter((key): key is TranslationKey => key !== undefined))] : [];
     return <section className="panel application-checks" aria-labelledby="application-checks-heading">
-        <div className="application-checks-heading"><div><h2 id="application-checks-heading">{t('Anwendungsprüfungen')}</h2><p>{t(view?.schemaVersion === 'tracebolt.application-checks.v2' ? 'HTTP/TLS-, DNS- und TCP-Beobachtungen vom Managementserver.' : 'HTTP/TLS-Beobachtungen vom Managementserver.')}</p></div><button className="text-button" onClick={refresh} disabled={refreshing || locked} aria-label={t('Anwendungsstatus neu laden')} title={t('Gespeicherte Ergebnisse neu laden')}><RefreshCw size={14} className={refreshing ? 'spin' : ''}/>{t('Neu laden')}</button></div>
+        <div className="application-checks-heading"><div><h2 id="application-checks-heading">{t('Anwendungsprüfungen')}</h2><p>{t(view?.enabled && view.schemaVersion === 'tracebolt.application-checks.v1' ? 'HTTP/TLS-Beobachtungen vom Managementserver.' : 'HTTP/TLS-, DNS- und TCP-Beobachtungen vom Managementserver.')}</p></div><button className="text-button" onClick={refresh} disabled={refreshing || locked} aria-label={t('Anwendungsstatus neu laden')} title={t('Gespeicherte Ergebnisse neu laden')}><RefreshCw size={14} className={refreshing ? 'spin' : ''}/>{t('Neu laden')}</button></div>
         {notice && <p className="application-checks-notice" role={notice === interrupted ? 'status' : 'alert'}>{t(notice)}</p>}
         {!view && !notice && <p className="application-checks-notice" role="status">{t('Anwendungsstatus wird geladen …')}</p>}
-        {view?.enabled === false && <p className="application-checks-notice">{t('Deaktiviert · keine Anwendungsprüfungen konfiguriert.')}</p>}
-        {view?.enabled && <><div className="application-checks-table"><table role="table"><thead role="rowgroup"><tr role="row"><th id="application-checks-application" scope="col" role="columnheader">{t('Anwendung')}</th><th id="application-checks-result" scope="col" role="columnheader">{t(view.schemaVersion === 'tracebolt.application-checks.v2' ? 'Prüfergebnis' : 'HTTP-Ergebnis')}</th><th id="application-checks-certificate" scope="col" role="columnheader">{t('Blattzertifikat')}</th><th id="application-checks-observed" scope="col" role="columnheader">{t('Beobachtet')}</th></tr></thead><tbody role="rowgroup">{view.items.map(row => <CheckRow key={row.id} row={row} view={view} elapsedMs={elapsed}/>)}</tbody></table></div><details className="application-checks-details"><summary>{t('Beobachtungsumfang')}</summary><p>{t('2xx beschreibt nur den HTTP-Status. Zertifikatsdaten stammen aus dieser Beobachtung. Neu laden liest nur gespeicherte Ergebnisse.')}</p>{view.schemaVersion === 'tracebolt.application-checks.v2' && <><p>{t('DNS: System-Namensauflösung, ggf. über Hosts-Datei, Cache oder Suchdomänen. Alle zurückgegebenen Adressen müssen freigegeben sein; kein autoritativer oder vollständiger DNS-Datensatz.')}</p><p>{t('TCP: eine Verbindung zu einer numerischen Adresse und schließen, ohne Daten oder TLS. Dies bestätigt keine Anwendungsfunktion.')}</p></>}</details></>}
+        {view?.enabled === false && <>
+            <div className="application-checks-notice application-checks-inactive"><p>{t('Deaktiviert · keine Anwendungsprüfungen aktiv.')}</p><p>{t('Bis zu 8 HTTP/HTTPS-, DNS- oder TCP-Ziele auf dem Manager konfigurieren.')}</p></div>
+            <details className="application-checks-details"><summary>{t('Einrichtung und Freigaben')}</summary>
+                <p>{canManage ? <a href="#/settings">{t('Einstellungen → Anwendungsprüfungen einrichten')}</a> : t('Ein Administrator kann die Ziele in den Einstellungen einrichten.')}</p>
+                <p>{t('Entwurf speichern, die genauen Ziele prüfen und anschließend separat aktivieren. Speichern allein startet keine Prüfungen.')}</p>
+                <p>{t('Jedes Ziel und seine exakten IP-Adressen freigeben. Privates LAN und unverschlüsseltes HTTP benötigen eigene Bestätigungen.')}</p>
+                <p>{t('Nur nebenwirkungsfreie Ziele ohne Zugangsdaten. Ergebnisse bleiben im Arbeitsspeicher und erzeugen keine Alarme.')}</p>
+                <p><ConfigurationGuide/></p>
+            </details>
+        </>}
+        {view?.enabled && <>
+            <dl className="application-checks-timing"><div><dt>{t('Prüfintervall')}</dt><dd>{t('{0} s nach jedem Durchlauf', { 0: view.intervalSeconds })}</dd></div><div><dt>{t('Aktualitätsgrenze')}</dt><dd>{t('{0} s', { 0: view.maxAgeSeconds })}</dd></div></dl>
+            <div className="application-checks-table"><table role="table"><thead role="rowgroup"><tr role="row"><th id="application-checks-application" scope="col" role="columnheader">{t('Anwendung')}</th><th id="application-checks-result" scope="col" role="columnheader">{t(view.schemaVersion === 'tracebolt.application-checks.v2' ? 'Prüfergebnis' : 'HTTP-Ergebnis')}</th><th id="application-checks-certificate" scope="col" role="columnheader">{t('Blattzertifikat')}</th><th id="application-checks-observed" scope="col" role="columnheader">{t('Beobachtet')}</th></tr></thead><tbody role="rowgroup">{view.items.map(row => <CheckRow key={row.id} row={row} view={view} elapsedMs={elapsed}/>)}</tbody></table></div>
+            <details className="application-checks-details"><summary>{t('Beobachtungsumfang')}</summary>
+                <p>{t('2xx beschreibt nur den HTTP-Status. Zertifikatsdaten stammen aus dieser Beobachtung. Neu laden liest nur gespeicherte Ergebnisse.')}</p>
+                <p>{t('Das Intervall beginnt nach dem vollständigen Durchlauf. Ergebnisse über der Aktualitätsgrenze werden unbekannt; ihr ursprünglicher Zeitpunkt bleibt erhalten.')}</p>
+                {view.schemaVersion === 'tracebolt.application-checks.v2' && <><p>{t('DNS: System-Namensauflösung, ggf. über Hosts-Datei, Cache oder Suchdomänen. Alle zurückgegebenen Adressen müssen freigegeben sein; kein autoritativer oder vollständiger DNS-Datensatz.')}</p><p>{t('TCP: eine Verbindung zu einer numerischen Adresse und schließen, ohne Daten oder TLS. Dies bestätigt keine Anwendungsfunktion.')}</p></>}
+                {help.length > 0 && <ul className="application-checks-help">{help.map(key => <li key={key}>{t(key)}</li>)}</ul>}
+                <p>{t('Ergebnisse bleiben im Arbeitsspeicher und erzeugen keine Alarme.')} <ConfigurationGuide/></p>
+            </details>
+        </>}
     </section>;
 }
 /** Development and signed-out pages must never issue this LAN-only read. */
@@ -147,5 +187,6 @@ export function ApplicationChecksPanel() {
     const operator = useOperator();
     if (operator?.mode !== 'lan' || !operator.authenticated) return null;
     const scope = JSON.stringify([operator.expiresAt, operator.loginMode, operator.actorId, operator.capabilities]);
-    return <ApplicationChecksContent key={scope}/>;
+    const canManage = (operator.loginMode ?? 'shared') === 'shared' || operator.capabilities?.includes('manage_application_checks') === true;
+    return <ApplicationChecksContent key={scope} canManage={canManage}/>;
 }

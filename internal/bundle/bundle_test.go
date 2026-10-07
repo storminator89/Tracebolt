@@ -42,6 +42,7 @@ func TestRejectUnexpectedData(t *testing.T) {
 		{"arbitrary tag", func(d *model.Device) { d.Tags = []string{"private-value"} }},
 		{"role mismatch", func(d *model.Device) { d.Platform = "windows" }},
 		{"evidence field bound", func(d *model.Device) { d.Evidence[0].Detail = strings.Repeat("x", 4097) }},
+		{"manager-only capability scope", func(d *model.Device) { d.Capabilities = []model.Capability{{ID: "systemd", Status: "scope"}} }},
 		{"invalid capability state", func(d *model.Device) { d.Capabilities = []model.Capability{{Status: "invented"}} }},
 		{"valid quality missing metric", func(d *model.Device) { d.CPU.Quality = "healthy" }},
 		{"health claim", func(d *model.Device) { d.Status = "healthy" }},

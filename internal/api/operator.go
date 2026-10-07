@@ -33,11 +33,14 @@ type LANOperatorConfig struct {
 	AlarmSettings *alarmdelivery.Settings
 	// ApplicationChecks is an inert, read-only view of the explicit startup worker.
 	ApplicationChecks *applicationcheck.Monitor
-	ServiceActions    *actionmanager.Manager
-	Origin            string
-	Auth              *operatorauth.Manager
-	Registry          *lantrust.Registry
-	Devices           func() ([]model.Device, error)
+	// ApplicationCheckSettings supplies the separately authorized managed controller.
+	// It cannot be combined with ApplicationChecks. Both constructors are inert.
+	ApplicationCheckSettings *applicationcheck.Settings
+	ServiceActions           *actionmanager.Manager
+	Origin                   string
+	Auth                     *operatorauth.Manager
+	Registry                 *lantrust.Registry
+	Devices                  func() ([]model.Device, error)
 	// InsecureHTTPTest is a separate, explicitly opted-in plaintext profile.
 	InsecureHTTPTest    bool
 	Enrollment          *enrollmentservice.Service
@@ -48,18 +51,19 @@ type LANOperatorConfig struct {
 	CVEProgress *linuxcveprogress.Cache
 }
 type operatorHandler struct {
-	alarmSettings       *alarmdelivery.Settings
-	applicationChecks   *applicationcheck.Monitor
-	actions             serviceActionManager
-	app                 *Server
-	origin, authority   string
-	auth                *operatorauth.Manager
-	registry            *lantrust.Registry
-	insecureHTTPTest    bool
-	cookieName          string
-	enrollment          *enrollmentservice.Service
-	enrollmentBootstrap EnrollmentBootstrap
-	bootstrapAdmission  bootstrapAdmission
+	alarmSettings            *alarmdelivery.Settings
+	applicationChecks        *applicationcheck.Monitor
+	applicationCheckSettings *applicationcheck.Settings
+	actions                  serviceActionManager
+	app                      *Server
+	origin, authority        string
+	auth                     *operatorauth.Manager
+	registry                 *lantrust.Registry
+	insecureHTTPTest         bool
+	cookieName               string
+	enrollment               *enrollmentservice.Service
+	enrollmentBootstrap      EnrollmentBootstrap
+	bootstrapAdmission       bootstrapAdmission
 }
 type operatorRequestKey struct{}
 type operatorRequest struct {
@@ -124,7 +128,7 @@ func NewLANOperatorHandler(app *Server, c LANOperatorConfig) (http.Handler, erro
 	if c.AlarmSettings != nil && (c.Enrollment == nil || c.Enrollment.Binding().CollectionProfile != enrollmentcrypto.CollectionProfileComplete || !c.AlarmSettings.Matches(managerID, profile)) {
 		return nil, alarmdelivery.ErrConfiguration
 	}
-	if !c.ApplicationChecks.Matches(managerID, c.Origin, profile) {
+	if c.ApplicationChecks != nil && c.ApplicationCheckSettings != nil || !c.ApplicationChecks.Matches(managerID, c.Origin, profile) || !c.ApplicationCheckSettings.Matches(managerID, c.Origin, profile) {
 		return nil, applicationcheck.ErrConfiguration
 	}
 	app.mu.Lock()
@@ -179,7 +183,7 @@ func NewLANOperatorHandler(app *Server, c LANOperatorConfig) (http.Handler, erro
 	if c.ServiceActions != nil {
 		actions = c.ServiceActions
 	}
-	return &operatorHandler{alarmSettings: c.AlarmSettings, applicationChecks: c.ApplicationChecks, actions: actions, app: app, origin: c.Origin, authority: u.Host, auth: c.Auth, registry: c.Registry, insecureHTTPTest: c.InsecureHTTPTest, cookieName: cookieName, enrollment: c.Enrollment, enrollmentBootstrap: c.EnrollmentBootstrap}, nil
+	return &operatorHandler{alarmSettings: c.AlarmSettings, applicationChecks: c.ApplicationChecks, applicationCheckSettings: c.ApplicationCheckSettings, actions: actions, app: app, origin: c.Origin, authority: u.Host, auth: c.Auth, registry: c.Registry, insecureHTTPTest: c.InsecureHTTPTest, cookieName: cookieName, enrollment: c.Enrollment, enrollmentBootstrap: c.EnrollmentBootstrap}, nil
 }
 func (s *Server) developmentAuthView() authView {
 	token := s.csrf
@@ -309,7 +313,7 @@ func (h *operatorHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		fail(w, 400, "invalid_framing", "Chunked request bodies are not accepted.")
 		return
 	}
-	if strings.Contains(r.URL.Path, "//") || strings.Contains(r.URL.Path, "\\") || strings.Contains(r.URL.EscapedPath(), "%") || (r.URL.Path != "/api/investigations" && r.URL.RawQuery != "") || r.URL.ForceQuery {
+	if strings.Contains(r.URL.Path, "//") || strings.Contains(r.URL.Path, "\\") || strings.Contains(r.URL.EscapedPath(), "%") || (r.URL.Path != "/api/investigations" && !resourceHistoryQueryAllowed(r.URL) && r.URL.RawQuery != "") || r.URL.ForceQuery {
 		fail(w, 400, "invalid_path", "Path is not canonical.")
 		return
 	}
@@ -412,6 +416,10 @@ func (h *operatorHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.alarmSettingsAPI(w, r)
 		return
 	}
+	if r.URL.Path == "/api/application-checks/settings" {
+		h.applicationCheckSettingsAPI(w, r)
+		return
+	}
 	if session.Named() && !namedReadRoute(r) {
 		fail(w, 403, "operator_capability_required", "This named account does not have permission for this administrative operation.")
 		return
@@ -483,6 +491,10 @@ func (h *operatorHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if strings.HasPrefix(r.URL.Path, "/api/devices/") && strings.Contains(r.URL.Path, "/health") {
 		h.healthAPI(w, r)
+		return
+	}
+	if strings.HasPrefix(r.URL.Path, "/api/devices/") && strings.Contains(r.URL.Path, "/resource-history") {
+		h.resourceHistory(w, r)
 		return
 	}
 	h.app.api(w, r)

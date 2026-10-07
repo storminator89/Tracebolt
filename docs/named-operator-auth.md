@@ -57,7 +57,8 @@ Git, terminal output, screenshots, logs and support artifacts.
 
 ## Capability and existing-route mapping
 
-- `read`: existing authenticated GET/HEAD views and the exact read-only JSON POST
+- `read`: existing authenticated GET/HEAD views except privileged application-check
+  settings, and the exact read-only JSON POST
   queries for `/api/devices/{agentId}/journal/query` and
   `/api/devices/{agentId}/inventory/{section}/query`, where `section` is `system`,
   `overview`, `packages` or `complete-updates`. These queries still require
@@ -68,6 +69,15 @@ Git, terminal output, screenshots, logs and support artifacts.
 - `manage_alarms`: explicit browser alarm configuration and synthetic-test permission.
   It does not enable delivery by itself; destination/payload approval and the protected
   complete-profile manager settings are required. See [alarm delivery](alarm-delivery.md).
+- `manage_application_checks`: explicit access to application-check destinations and
+  browser configuration. Existing read, alarm, update and service grants do not imply
+  it. Save persists a disabled draft; a separate enable requires current-revision
+  manager-origin and destination acknowledgement, plus plaintext acknowledgement
+  on the isolated HTTP-test profile. Status stays destination-free and readable
+  with `read`. A supplied startup configuration is immutable in the browser.
+  The existing shared pilot administrator can configure checks without a named
+  grant, following its explicit administrator route mapping. No account or grant
+  is created or changed by this feature.
 
 No grant implies another. A named account is not an existing shared-login
 administrator. Named accounts cannot create/cancel journal collection, change
@@ -108,13 +118,14 @@ no live reload, per-account revoke endpoint or claim that editing a file affects
 an already-running process. Logout affects the current session, not other
 sessions signed in as that operator.
 
-The API includes an unwired, fail-closed capability-admission seam for future
-typed action endpoints. It requires a current named LAN session, the exact
-capability and Origin/CSRF protection, and returns the server-derived actor.
-It rejects development and shared-login authority. Future approval and dispatch
-must use it immediately before short admission work, rechecking current session
-permission at dispatch. No current route calls that seam; there is no action API,
-permit signing, dispatch, execution or immutable-plan approval in this slice.
+Typed administrative endpoints use fail-closed capability admission. Application
+check settings require the exact grant for reads as well as writes because their
+review DTO contains destinations. Mutations additionally require current
+Origin/CSRF, strict typed bodies and a current revision; they derive the audit
+actor from server-side session identity. The session gate is acquired only after
+bounded request-body parsing and is released before response I/O. Logout/revocation
+cannot admit a delayed request body. Check generation replacement cancels and
+joins prior work before confirmation; it does not probe targets in the request.
 
 ## Transport and acceptance limits
 

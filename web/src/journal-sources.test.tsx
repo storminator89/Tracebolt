@@ -69,6 +69,7 @@ describe('Linux log source guidance is discovery, never authority', () => {
     });
     it.each(journalServiceSearches)('the $term shortcut is only a visible literal inventory search', async shortcut => {
         render(picker()); await screen.findByText('ssh.service');
+        fireEvent.click(screen.getByText('Quick filters', { selector: 'summary' }));
         fireEvent.click(screen.getByRole('button', { name: shortcut.label.en }));
         expect(screen.getByLabelText('Search observed services')).toHaveValue(shortcut.term);
         const last = vi.mocked(mutateRaw).mock.calls.at(-1)!;
@@ -85,6 +86,7 @@ describe('Linux log source guidance is discovery, never authority', () => {
         openAdvanced(); fireEvent.change(screen.getByLabelText('Exact service unit'), { target: { value: 'manual.service' } });
         expect(screen.getByRole('button', { name: 'Fetch logs' })).toBeEnabled(); expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
         fireEvent.click(screen.getByRole('button', { name: 'Choose observed service' })); await screen.findByText('ssh.service');
+        fireEvent.click(screen.getByText('Quick filters', { selector: 'summary' }));
         fireEvent.click(screen.getByRole('button', { name: 'SSH logins' })); await screen.findByText('sshd.service');
         expect(screen.getByLabelText('Exact service unit')).toHaveValue('manual.service');
         expect(resource.create).not.toHaveBeenCalled(); expect(resource.cancelRequest).not.toHaveBeenCalled();
@@ -93,6 +95,7 @@ describe('Linux log source guidance is discovery, never authority', () => {
     it('offers German discovery and explicit unknown access', async () => {
         setLocale('de', false); render(picker()); await screen.findByText('ssh.service');
         expect(screen.getAllByText('SSH-Fernzugriff')).toHaveLength(2);
+        fireEvent.click(screen.getByText('Schnellfilter', { selector: 'summary' }));
         fireEvent.click(screen.getByRole('button', { name: 'SSH-Anmeldungen' })); await screen.findByText('sshd.service');
         expect(screen.getByLabelText('Beobachtete Dienste durchsuchen')).toHaveValue('ssh');
         expect(screen.getAllByText('Freigabe unbekannt')).toHaveLength(2);

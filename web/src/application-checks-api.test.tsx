@@ -55,9 +55,9 @@ describe('application status protected API boundary', () => {
     });
     it('integrates only into LAN Overview, preserving the other routes', async () => {
         const fetch = server(); fetch.mockImplementation(async url => url === '/api/auth/session' ? json(session) : url === '/api/overview' ? json(overview) : json(disabledApplicationView()));
-        render(<App/>); await screen.findByRole('heading', { name: 'Overview', level: 1 }); await screen.findByText('Disabled · no application checks configured.'); expect(reads(fetch)).toHaveLength(1);
+        render(<App/>); await screen.findByRole('heading', { name: 'Overview', level: 1 }); await screen.findByText('Disabled · no application checks running.'); expect(reads(fetch)).toHaveLength(1);
         act(() => { window.location.hash = '/cases'; window.dispatchEvent(new Event('hashchange')); }); await screen.findByRole('heading', { name: 'Investigations', level: 1 }); expect(screen.queryByRole('region', { name: 'Application checks' })).not.toBeInTheDocument();
-        act(() => { window.location.hash = '/overview'; window.dispatchEvent(new Event('hashchange')); }); await screen.findByText('Disabled · no application checks configured.'); expect(reads(fetch)).toHaveLength(2);
+        act(() => { window.location.hash = '/overview'; window.dispatchEvent(new Event('hashchange')); }); await screen.findByText('Disabled · no application checks running.'); expect(reads(fetch)).toHaveLength(2);
     });
     it('does not issue the LAN-only status request from actual development Overview', async () => {
         const fetch = server(); fetch.mockImplementation(async url => url === '/api/auth/session' ? json({ ...session, mode: 'development', authenticationRequired: false, authenticated: false, csrfToken: null, expiresAt: null, expiresInSeconds: null }) : json(overview));

@@ -114,3 +114,20 @@ func TestNamedProtectedConfigLoadAndSnapshotIsolation(t *testing.T) {
 		t.Fatal("symlink named config accepted")
 	}
 }
+
+func TestNamedApplicationCheckCapabilityStrictLoading(t *testing.T) {
+	valid := strings.Replace(namedAuthJSON(), `"read","restart_service"`, `"read","manage_application_checks"`, 1)
+	_, ops, err := loadOperatorAuth([]byte(valid), HTTPTest)
+	if err != nil || len(ops) != 1 || len(ops[0].Capabilities) != 2 || ops[0].Capabilities[1] != operatorauth.ManageApplicationChecks {
+		t.Fatal("explicit application check grant rejected")
+	}
+	for _, invalid := range []string{
+		strings.Replace(valid, `"read","manage_application_checks"`, `"manage_application_checks"`, 1),
+		strings.Replace(valid, `"manage_application_checks"`, `"manage_application_checks","manage_application_checks"`, 1),
+		strings.Replace(valid, `"manage_application_checks"`, `"Manage_application_checks"`, 1),
+	} {
+		if _, _, err := loadOperatorAuth([]byte(invalid), HTTPTest); err == nil {
+			t.Fatal("ambiguous or implicit application grant accepted")
+		}
+	}
+}

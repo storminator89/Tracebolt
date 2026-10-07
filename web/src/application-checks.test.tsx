@@ -29,7 +29,7 @@ describe('compact retained application observations', () => {
         await start(); const content = panel(); expect(content).toHaveTextContent('204 · 2xx'); expect(content).toHaveTextContent('Expiring soon');
         expect(content).toHaveTextContent('HTTP/TLS observations from the management server.'); expect(content).toHaveTextContent('0s ago');
         expect(content.querySelector('td:last-child time')).toHaveAttribute('datetime', applicationNow); expect(content.querySelectorAll('tbody tr')).toHaveLength(1);
-        expect(within(content).getAllByRole('button')).toHaveLength(1); expect(content.querySelector('a,input,select')).toBeNull();
+        expect(within(content).getAllByRole('button')).toHaveLength(1); expect(content.querySelector('input,select')).toBeNull();
         expect(vi.mocked(request).mock.calls[0]).toEqual(['/application-checks/status', { signal: expect.any(AbortSignal), cache: 'no-store' }, APPLICATION_CHECKS_BYTES]);
     });
     it('does not conflate an HTTP failure with a leaf expiry more than 30 days away', async () => {
@@ -45,7 +45,7 @@ describe('compact retained application observations', () => {
         await start(); expect(panel()).toHaveTextContent('HTTP · plaintext'); expect(panel()).toHaveTextContent('No TLS'); expect(panel().querySelector('.application-expiry')).toBeNull();
     });
     it('has a concise disabled state without configuration or check controls', async () => {
-        vi.mocked(request).mockResolvedValue(disabledApplicationView()); await start(); expect(panel()).toHaveTextContent('Disabled · no application checks configured.');
+        vi.mocked(request).mockResolvedValue(disabledApplicationView()); await start(); expect(panel()).toHaveTextContent('Disabled · no application checks running.');
         expect(screen.queryByRole('table')).not.toBeInTheDocument(); expect(within(panel()).getAllByRole('button')).toHaveLength(1);
         await advance(59999); expect(request).toHaveBeenCalledTimes(1); await advance(1); expect(request).toHaveBeenCalledTimes(2);
     });

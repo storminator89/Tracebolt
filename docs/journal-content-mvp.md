@@ -48,6 +48,20 @@ targets: the UI does not infer a target, rewrite a selection or expand a grant.
 A complete empty capture suggests checking the exact unit, time and severity;
 it is not proof that an alias target has no journal entries.
 
+The picker starts with focused search. Typing performs one bounded inventory
+search after a 250 ms pause; Enter searches immediately and cancels that pending
+search. Closing, backgrounding or navigating away cancels pending typing work.
+Arrow keys move between the search field and supported exact-unit row buttons;
+Home/End move within those rows. Focusing a row never selects it or reads logs.
+The current selected unit is identified without inferring any canonical alias
+target. Quick filters and inventory explanations are collapsed by default.
+
+The request review keeps separate unchecked content and HTTP acknowledgements
+visible. The concise content notice still names credentials, personal data and
+secrets despite masking; full masking limitations and capture budgets remain
+available under Limits & privacy. Actionable access and partial-coverage states
+remain visible. Empty-capture troubleshooting is an optional disclosure.
+
 **Last 15 min** explicitly checks the current manager time and prepares that
 window in the draft. It does not capture content, renew the operator session or
 approve either content acknowledgement. Service and severity remain selected;

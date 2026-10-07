@@ -3,7 +3,7 @@
 Use a **fresh Debian 13 or Ubuntu 24.04 amd64 test VM**, systemd as PID 1,
 cgroup v2 and kernel 6.5+. Docker Engine, Docker Compose v2, Git and Python 3
 must already be available. Run the following in a real local root terminal.
-Use the exact manager activation revision supplied with the rc.2 handoff; the
+Use the exact manager activation revision supplied with the rc.3 handoff; the
 manager includes the verified complete-profile installation command.
 
 **Disposable HTTP test only:** passwords, invitations, sessions, inventory and
@@ -45,7 +45,7 @@ docker build -t tracebolt-manager:http-complete-test .
 ```
 
 This builds the manager/UI and its create-only configuration helper. The endpoint
-programs are downloaded from the verified rc.2 release by the later command;
+programs are downloaded from the verified rc.3 release by the later command;
 no endpoint Go build or manual source-archive transfer is needed.
 
 ## 2. Configure and start the manager
@@ -88,7 +88,7 @@ with dropped capabilities. No endpoint is installed by these manager commands.
 
 1. In **Add device**, review the complete-profile notice and create a Linux
    invitation after the manager build is finished.
-2. Copy its **verified rc.2 installation command** and run it deliberately in the
+2. Copy its **verified rc.3 installation command** and run it deliberately in the
    endpoint's local root terminal. The command contains only validated public
    enrollment data. It verifies the pinned bootstrap, release provenance and all
    selected files before entering the existing installer.

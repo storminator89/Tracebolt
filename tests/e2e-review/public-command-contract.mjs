@@ -75,7 +75,7 @@ export function assertPublicCommand(command,{pin,...context}){
  if(complete){
   const {agentOrigin}=context;
   if(!loopbackHTTPOrigin(agentOrigin))reject();
-  if(pin?.version!=='v0.1.0-rc.2'){if(command!==null)reject();return 'unavailable';}
+  if(pin?.version!=='v0.1.0-rc.3'){if(command!==null)reject();return 'unavailable';}
   installMode=` --read-admin --read-admin-agent-origin ${quote(agentOrigin)}`;
  }
  const kind=pin===null?'prepared-local':'verified-download';

@@ -1,3 +1,4 @@
+import userEvent from '@testing-library/user-event';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { abortProtectedRequests, AUTH_REQUIRED_EVENT } from './api';
@@ -257,8 +258,14 @@ describe('explicit last-15-minute preparation', () => {
         expect(fetch.mock.calls.filter(([url]) => url === `${root}/query`)).toHaveLength(queries);
         expect(fetch.mock.calls.some(([url]) => url.endsWith('/create') || url.endsWith('/cancel') || url.includes('renew'))).toBe(false);
         expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
-        fireEvent.click(screen.getByRole('button', { name: 'Fetch logs' }));
-        expect(screen.getByRole('dialog')).toHaveTextContent('sshd.service');
+        // Draft preparation completes asynchronously. Exercise the enabled
+        // submit control as a user would, then await its committed review.
+        const fetchButton = screen.getByRole('button', { name: 'Fetch logs' });
+        await waitFor(() => expect(fetchButton).toBeEnabled());
+        await userEvent.setup().click(fetchButton);
+        const dialog = await screen.findByRole('dialog', { name: 'Review log request' });
+        expect(dialog).toHaveTextContent('sshd.service');
+        expect(Array.from(dialog.querySelectorAll('time'), time => time.dateTime)).toEqual(['2026-10-04T11:49:00Z', '2026-10-04T12:04:00Z']);
         expect(screen.getByRole('checkbox')).not.toBeChecked();
         expect(screen.getByRole('button', { name: 'Capture logs' })).toBeDisabled();
     });

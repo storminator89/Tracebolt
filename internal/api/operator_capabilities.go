@@ -38,12 +38,11 @@ func namedReadRoute(r *http.Request) bool {
 	return false
 }
 
-// beginOperatorCapability is the fail-closed seam for future typed maintenance
-// endpoints. It requires LAN operator context, current Origin/CSRF, a named
-// server-derived actor and a specific explicit capability; development/shared
-// sessions can never authorize a new controlled action. No route calls it yet.
-// Future dispatch must call it again immediately before committing dispatch,
-// and derive the approval actor from the returned value, never the request.
+// beginOperatorCapability is the fail-closed admission seam for typed
+// administrative endpoints. It requires LAN context, current Origin/CSRF, a
+// named server-derived actor and the specific explicit grant. Routes that allow
+// shared legacy administration must handle that mapping separately. Dispatch
+// derives its audit actor from the returned value, never from request fields.
 func (s *Server) beginOperatorCapability(w http.ResponseWriter, r *http.Request, capability operatorauth.Capability) (string, func(), bool) {
 	operator, ok := operatorContext(r)
 	if !ok || !operator.session.Named() || capability == operatorauth.Read {

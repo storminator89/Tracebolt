@@ -1,3 +1,4 @@
+import userEvent from '@testing-library/user-event';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { APIError, AUTH_REQUIRED_EVENT, mutateRaw, request } from './api';
@@ -58,6 +59,8 @@ describe('observed-service picker uses only bounded protected inventory reads', 
         }
         expect(seen).toEqual(services.map(row => row.name));
         expect(ui.queryByText('fixture-000000.service')).not.toBeInTheDocument();
+        expect(ui.getByText('50 shown')).toBeVisible();
+        fireEvent.click(ui.getByText('Inventory details', { selector: 'summary' }));
         expect(ui.getByText('50 shown · 350 / 350 scanned · 350 matches so far')).toBeVisible();
         const before = vi.mocked(mutateRaw).mock.calls.length;
         fireEvent.click(ui.getByRole('button', { name: 'Use fixture-000349.service' }));
@@ -96,7 +99,7 @@ describe('observed-service picker uses only bounded protected inventory reads', 
         for (const name of names) {
             const button = screen.getByRole('button', { name: `Use ${name}` });
             if (name === 'instance@one.service') { expect(button).toBeEnabled(); fireEvent.click(button); }
-            else { expect(button).toBeDisabled(); expect(button).toHaveAccessibleDescription('This observed name is not supported by the exact service-unit syntax for log capture.'); fireEvent.click(button); }
+            else { expect(button).toBeDisabled(); expect(button).toHaveAccessibleDescription('Unsupported service-unit name.'); fireEvent.click(button); }
         }
         expect(select).toHaveBeenCalledExactlyOnceWith('instance@one.service');
     });
@@ -108,7 +111,7 @@ describe('observed-service picker uses only bounded protected inventory reads', 
             const rendered = render(<form onSubmit={submit} onKeyDown={parentKeys}>{picker()}<button type="submit">Capture logs</button></form>);
             await screen.findByText(services[0].name);
             expect(rendered.container.querySelectorAll('form')).toHaveLength(1);
-            expect(screen.getByRole('button', { name: 'Close service picker' })).toHaveFocus();
+            await waitFor(() => expect(screen.getByLabelText('Search observed services')).toHaveFocus());
             const region = screen.getByRole('region', { name: 'Observed services' });
             for (const button of within(region).getAllByRole('button')) expect(button).toHaveAttribute('type', 'button');
             fireEvent.change(screen.getByLabelText('Search observed services'), { target: { value: 'fixture-000010' } });
@@ -256,4 +259,68 @@ it('marks only metadata-reported aliases and never guesses or rewrites their tar
     fireEvent.click(screen.getByRole('button', { name: 'Refresh service list' }));
     await waitFor(() => expect(screen.getAllByText('Reported alias · target unavailable')).toHaveLength(1));
     expect(within(screen.getByText('sshd.service').closest('li')!).queryByText('Reported alias · target unavailable')).not.toBeInTheDocument();
+});
+
+describe('search-first service selection', () => {
+    it('focuses search, collapses technical details and quick filters, and keeps the exact current selection visible', async () => {
+        render(<JournalServicePicker deviceId={systemDevice} sessionKey="polish" selectedUnit={services[0].name} onSelect={select} onClose={close}/>);
+        await screen.findByText(services[0].name);
+        await waitFor(() => expect(screen.getByLabelText('Search observed services')).toHaveFocus());
+        expect(screen.getByText('Quick filters', { selector: 'summary' }).closest('details')).not.toHaveAttribute('open');
+        expect(screen.getByText('Inventory details', { selector: 'summary' }).closest('details')).not.toHaveAttribute('open');
+        expect(screen.getByRole('button', { name: `Use ${services[0].name}` })).toHaveAttribute('aria-current', 'true');
+        expect(screen.getByText('Selection only. Logs still need your approval.')).toBeVisible();
+        expect(select).not.toHaveBeenCalled();
+    });
+    it('uses Arrow keys, Home and End for exact rows, skipping unsupported units without selecting on focus', async () => {
+        services = ['alpha.service', 'unsupported:name.service', 'zeta.service'].map(name => ({ ...serviceRows(1)[0], name })); view = systemView(services.length);
+        const user = userEvent.setup(); await open();
+        const search = screen.getByLabelText('Search observed services'), first = screen.getByRole('button', { name: 'Use alpha.service' }), last = screen.getByRole('button', { name: 'Use zeta.service' });
+        await waitFor(() => expect(search).toHaveFocus());
+        await user.keyboard('{ArrowDown}'); expect(first).toHaveFocus();
+        await user.keyboard('{ArrowDown}'); expect(last).toHaveFocus();
+        await user.keyboard('{Home}'); expect(first).toHaveFocus();
+        await user.keyboard('{End}'); expect(last).toHaveFocus();
+        await user.keyboard('{ArrowUp}{ArrowUp}'); expect(search).toHaveFocus();
+        await user.keyboard('{ArrowUp}'); expect(last).toHaveFocus(); expect(select).not.toHaveBeenCalled();
+        await user.keyboard('{Enter}'); expect(select).toHaveBeenCalledExactlyOnceWith('zeta.service');
+        expect(mutateRaw).toHaveBeenCalledTimes(1);
+    });
+    it('debounces typing into one latest bounded inventory search', async () => {
+        await open(); vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+        const search = screen.getByLabelText('Search observed services');
+        fireEvent.change(search, { target: { value: 'fixture-0' } });
+        fireEvent.change(search, { target: { value: 'fixture-000010' } });
+        await act(async () => { await vi.advanceTimersByTimeAsync(249); }); expect(mutateRaw).toHaveBeenCalledTimes(1);
+        await act(async () => { await vi.advanceTimersByTimeAsync(1); }); expect(mutateRaw).toHaveBeenCalledTimes(2);
+        expect(JSON.parse(vi.mocked(mutateRaw).mock.calls[1][1])).toMatchObject({ section: 'services', search: 'fixture-000010', cursor: '', filter: 'all', limit: 100 });
+        expect(select).not.toHaveBeenCalled();
+    });
+    it('Enter submits the bounded search once and cancels the typing debounce', async () => {
+        await open(); vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+        const search = screen.getByLabelText('Search observed services');
+        fireEvent.change(search, { target: { value: 'fixture-000010' } });
+        fireEvent.keyDown(search, { key: 'Enter' });
+        await act(async () => { await vi.advanceTimersByTimeAsync(300); });
+        expect(mutateRaw).toHaveBeenCalledTimes(2); expect(select).not.toHaveBeenCalled();
+    });
+    it.each(['unmount', 'blur', 'pagehide', 'hashchange'] as const)('cancels a scheduled inventory search on %s', async transition => {
+        const mounted = await open(); vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+        fireEvent.change(screen.getByLabelText('Search observed services'), { target: { value: 'fixture-000010' } });
+        if (transition === 'unmount') mounted.unmount(); else act(() => window.dispatchEvent(new Event(transition)));
+        await act(async () => { await vi.advanceTimersByTimeAsync(300); });
+        expect(mutateRaw).toHaveBeenCalledTimes(1); expect(select).not.toHaveBeenCalled();
+    });
+    it('does not search invalid UTF-8 input or incomplete IME composition', async () => {
+        await open(); vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+        const search = screen.getByLabelText('Search observed services');
+        fireEvent.change(search, { target: { value: '😀'.repeat(33) } });
+        await act(async () => { await vi.advanceTimersByTimeAsync(300); }); expect(mutateRaw).toHaveBeenCalledTimes(1);
+        fireEvent.compositionStart(search); fireEvent.change(search, { target: { value: 'fixture-000010' } });
+        fireEvent.keyDown(search, { key: 'Enter', isComposing: true });
+        await act(async () => { await vi.advanceTimersByTimeAsync(300); }); expect(mutateRaw).toHaveBeenCalledTimes(1);
+        fireEvent.compositionEnd(search);
+        await act(async () => { await vi.advanceTimersByTimeAsync(250); }); expect(mutateRaw).toHaveBeenCalledTimes(2);
+        expect(select).not.toHaveBeenCalled();
+    });
 });

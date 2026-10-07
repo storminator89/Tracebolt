@@ -39,7 +39,7 @@ func TestProfileCapabilitiesCompleteScopeIsNotObservedSuccess(t *testing.T) {
 			t.Fatal("invented success or retained contradictory basic-only detail")
 		}
 	}
-	if seen["journal"].Status != "denied" || seen["remote_actions"].Status != "unsupported" || seen["systemd"].Status != "limited" || seen["package_inventory"].Status != "limited" || seen["socket_inventory"].Status != "limited" {
+	if seen["journal"].Status != "denied" || seen["remote_actions"].Status != "unsupported" || seen["systemd"].Status != "scope" || seen["package_inventory"].Status != "scope" || seen["socket_inventory"].Status != "scope" {
 		t.Fatal("scope projection promoted denied/unknown observations or remote control")
 	}
 	if !strings.Contains(seen["journal"].Detail, "excludes message bodies") || !strings.Contains(seen["socket_inventory"].Detail, "does not establish external reachability") {
@@ -90,7 +90,7 @@ func TestOptionalJournalContentNeedsSeparatePermissionAndDoesNotPromoteDeniedMet
 		}
 		if c.ID == "journal_content" {
 			found = true
-			if c.Status != "limited" || !strings.Contains(c.Detail, "separate local helper/content permission") || !strings.Contains(c.Detail, "may contain secrets") || !strings.Contains(c.Detail, "does not establish") {
+			if c.Status != "scope" || !strings.Contains(c.Detail, "separate local helper/content permission") || !strings.Contains(c.Detail, "may contain secrets") || !strings.Contains(c.Detail, "does not establish") {
 				t.Fatal("optional access advertised as established")
 			}
 		}
@@ -134,5 +134,28 @@ func TestCompleteOverviewCapabilitiesRequireOptInWithoutInventedSuccess(t *testi
 	}
 	if found != 2 || in[0].Detail != "inert fixture denial" {
 		t.Fatal("missing optional scope or source mutation")
+	}
+}
+
+func TestCompleteCapabilitiesSeparateScopeFromObservedFailure(t *testing.T) {
+	for _, in := range [][]model.Capability{nil, {{ID: "socket_owner_metadata", Status: "denied", Detail: "fixed denial"}}} {
+		out := profileCapabilities(in, enrollmentcrypto.CollectionProfileComplete)
+		seen := false
+		for _, row := range out {
+			if row.ID != "socket_owner_metadata" {
+				continue
+			}
+			seen = true
+			want := "scope"
+			if len(in) != 0 {
+				want = "denied"
+			}
+			if row.Status != want || !strings.Contains(row.Detail, "not complete attribution") {
+				t.Fatal("helper scope was confused with observed success or denied access")
+			}
+		}
+		if !seen {
+			t.Fatal("missing independent owner coverage disclosure")
+		}
 	}
 }

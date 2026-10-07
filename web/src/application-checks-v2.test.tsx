@@ -45,7 +45,7 @@ describe('compact mixed-kind retained observations', () => {
         expect(content).toHaveTextContent('system hostname resolution'); expect(content).toHaveTextContent('hosts file, cache or search domains');
         expect(content).toHaveTextContent('All returned addresses must be approved'); expect(content).toHaveTextContent('not an authoritative or complete DNS record set');
         expect(content).toHaveTextContent('one connection to a numeric address and close, without data or TLS'); expect(content).toHaveTextContent('does not establish application health');
-        expect(content.querySelector('a,input,select')).toBeNull(); expect(within(content).getAllByRole('button')).toHaveLength(1);
+        expect(content.querySelector('input,select')).toBeNull(); expect(within(content).getAllByRole('button')).toHaveLength(1);
         expect(vi.mocked(request).mock.calls[0]).toEqual(['/application-checks/status', { signal: expect.any(AbortSignal), cache: 'no-store' }, APPLICATION_CHECKS_BYTES]);
     });
 

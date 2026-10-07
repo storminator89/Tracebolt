@@ -39,9 +39,11 @@ type target struct {
 	PlaintextHTTPAcknowledged bool     `json:"plaintextHTTPAcknowledged"`
 }
 
-// Config is an immutable startup snapshot. Configuration never comes from the API.
+// Config is an immutable validated snapshot. The settings controller alone may
+// create a managed snapshot from a separately saved, explicitly enabled draft.
 type Config struct {
 	schema                     string
+	external                   bool
 	enabled                    bool
 	managerID, origin, profile string
 	interval                   time.Duration
@@ -114,7 +116,7 @@ func Load(path, managerID, origin, profile string) (Config, error) {
 		if len(f) != 2 {
 			return Config{}, ErrConfiguration
 		}
-		return Config{schema: schema}, nil
+		return Config{schema: schema, external: true}, nil
 	}
 	var id, o, p string
 	var interval int
@@ -123,7 +125,7 @@ func Load(path, managerID, origin, profile string) (Config, error) {
 	if !decode(f, "managerInstanceId", &id) || !decode(f, "operatorOrigin", &o) || !decode(f, "profile", &p) || !decode(f, "intervalSeconds", &interval) || !decode(f, "checksFromManagerAcknowledged", &acknowledged) || !decode(f, "targets", &targets) || !acknowledged || interval < 60 || interval > 3600 || len(targets) == 0 || len(targets) > MaxTargets || id != managerID || o != origin || p != profile || (p != lanconfig.TLS && p != lanconfig.HTTPTest) || o == "" {
 		return Config{}, ErrConfiguration
 	}
-	c := Config{schema: schema, enabled: true, managerID: id, origin: o, profile: p, interval: time.Duration(interval) * time.Second}
+	c := Config{schema: schema, external: true, enabled: true, managerID: id, origin: o, profile: p, interval: time.Duration(interval) * time.Second}
 	seen := map[string]bool{}
 	for _, rawTarget := range targets {
 		t, e := parseTarget(rawTarget, schema, p)

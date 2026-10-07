@@ -8,13 +8,14 @@ Tracebolt combines a Go manager, a React/TypeScript dashboard and native Linux a
 
 ## What it does
 
-- **Inventory:** supported dpkg packages, system services, visible processes and mounted filesystems, with paged complete generations and explicit collection limits.
+- **Inventory:** supported dpkg packages, system services, visible processes and mounted filesystems, with paged complete generations, visible first-page refresh and explicit collection limits.
 - **Network:** observed sockets/connections, hostname and interface addresses; optional helper-backed TCP/UDP process ownership with source and permission limits.
 - **Packages and CVEs:** cached APT candidates and Debian/Ubuntu distribution-version warnings. These are evidence for investigation, not confirmed exploitability or guaranteed installable updates. Tracebolt does not refresh APT metadata or install packages.
 - **Logs:** on-demand, service-scoped journal snapshots with time/severity selection, paging and literal search, through a separately granted helper.
+- **Resource charts:** CPU, RAM and root-filesystem utilization over the last 24 hours, with exact minute samples, visible gaps and bounded incremental reads. History starts after the manager update.
 - **Health & history:** contact, root-filesystem usage and selected-service checks, with incidents, acknowledgements and bounded maintenance windows.
 - **Dashboard:** English/German, light/dark themes, searchable inventory, device details, evidence views and investigations.
-- **Optional integrations:** configured application checks, webhook alarms, AI-assisted investigation and allowlisted service try-restart. Each has separate configuration/permission requirements and acceptance limits; the read-admin profile does not enable service actions.
+- **Optional integrations:** administrator-configured application checks and webhook alarms, AI-assisted investigation and allowlisted service try-restart. Each has separate configuration/permission requirements and acceptance limits; the read-admin profile does not enable service actions.
 
 Actual visibility depends on the approved collection profile, helper grants, platform and agent namespace. Missing or stale data never means a healthy device or an empty inventory.
 
@@ -29,7 +30,9 @@ Actual visibility depends on the approved collection profile, helper grants, pla
 
 The fresh read-admin workflow has passed [disposable Ubuntu TLS native acceptance](https://github.com/storminator89/Tracebolt/actions/runs/37508637893), including socket ownership, journal content, service restart, revocation and cleanup. This does not establish Debian HTTP or actual OS-reboot acceptance.
 
-**Current release:** [v0.1.0-rc.2](https://github.com/storminator89/Tracebolt/releases/tag/v0.1.0-rc.2) is published and [all 12 public assets and provenance are verified](https://github.com/storminator89/Tracebolt/actions/runs/37513100878). The dashboard selects its combined read-admin command for the complete Linux profile. See the [verified-download guide](docs/dashboard-verified-download.md) for the exact source pins and acceptance limits.
+**Current release:** [v0.1.0-rc.3](https://github.com/storminator89/Tracebolt/releases/tag/v0.1.0-rc.3) is published and [all 12 public assets and provenance are verified](https://github.com/storminator89/Tracebolt/actions/runs/37574492167). The dashboard selects its combined read-admin command for the complete Linux profile. See the [verified-download guide](docs/dashboard-verified-download.md) for the exact source pins and acceptance limits.
+
+Completed read-admin installations can use the [same-identity rc.3 update](docs/read-admin-upgrade.md). Its [Ubuntu TLS upgrade acceptance](https://github.com/storminator89/Tracebolt/actions/runs/37572468648) passed with original identity/scopes/private state preserved. A user-host Debian/HTTP update remains a separate check.
 
 ## Get started
 

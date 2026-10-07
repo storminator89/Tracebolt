@@ -75,12 +75,43 @@
         "testAcknowledged": true
       },
       "response": "Sanitized settings view with queued fixed synthetic test. Worker later uses guarded outbox/HTTPS transport. Provider acceptance does not prove human receipt; uncertain attempts are not replayed."
+    },
+    "GET /api/application-checks/status": {
+      "requirements": "Any authenticated LAN read session. No queries; retained redacted snapshot only. Never exposes URLs, hostnames, ports or allowlists and never probes targets.",
+      "response": "tracebolt.application-checks.v1|v2 retained status: enabled, management-server vantage and bounded typed observations."
+    },
+    "GET /api/application-checks/settings": {
+      "requirements": "Legacy shared administrator or explicit named manage_application_checks grant, checked under the current session gate. No body/query. This privileged destination-review DTO is never available to named read-only or unrelated-capability users. No network work.",
+      "response": "tracebolt.application-check-settings.v1: mode (managed|external|unavailable), revision, configured, enabled, blocked, intervalSeconds, targets (exact existing v2 typed targets). Omitted startup file selects persisted managed settings, initially empty and disabled; supplied startup files, including disabled files, remain read-only external mode."
+    },
+    "POST /api/application-checks/settings": {
+      "requirements": "Same explicit application-check administrator authority; exact Origin/Host, CSRF, current session and revision; application/json <=32768 bytes. Reject duplicate/null/unknown/case-alias fields and inappropriate operation fields. No test/probe route. Target validation and persistence are inert; the separate joined supervisor owns outbound checks.",
+      "bodyByOperation": {
+        "save": {
+          "expectedRevision": "current 32 lowercase hex revision",
+          "operation": "save",
+          "intervalSeconds": "integer 60..3600",
+          "targets": "1..8 strict v2 HTTP/HTTPS, DNS or TCP target objects with existing consent/allowlist policy; acknowledgement fields forbidden"
+        },
+        "enable": {
+          "expectedRevision": "current saved revision",
+          "operation": "enable",
+          "checksFromManagerAcknowledged": true,
+          "destinationsAcknowledged": true,
+          "plaintextAcknowledged": "required true for isolated HTTP-test transport; optional false for TLS; intervalSeconds and targets forbidden"
+        },
+        "disable": {
+          "expectedRevision": "current revision",
+          "operation": "disable; all other fields forbidden"
+        }
+      },
+      "response": "Current SettingsView. Save always disables, enable is separate, disable retains the draft. Every accepted change rotates revision; stale/busy changes return409. Unsafe unavailable/external/blocked state returns503. Invalid input returns400. No error echoes targets or raw errors."
     }
   },
   "modeBehavior": {
     "development": "Existing loopback-only guard remains unchanged. GET auth/session explicitly says authenticationRequired=false, authenticated=false, csrfToken=current process token, expiry=null. No fake authentication. Login/logout routes are disabled.",
     "lan": "Dedicated authenticated operator handler. Unauthenticated auth/session is200, protected APIs401. Static assets may load without data. Actual TLS required in the default profile, never inferred from forwarded headers. HTTP test accepts plaintext only, has its own cookie/state/auth profile and permanent warning. Developer ingress is unavailable in either profile.",
-    "named": "Static protected v2 named-only configuration. All operators explicitly require read. Existing GET/HEAD views and exact journal/query or inventory/{system,overview,packages,complete-updates}/query POSTs are readable; these POSTs retain Origin/CSRF checks. Logout is allowed. Other legacy administrative writes are denied; none of the new grants implies those rights. No account-management, action or execution route exists. Config changes take effect only after manager restart; all in-memory sessions then disappear. Explicit manage_alarms additionally admits the exact alarm settings/test routes; unrelated administrative routes remain denied."
+    "named": "Static protected v2 named-only configuration. All operators explicitly require read. Existing GET/HEAD views and exact journal/query or inventory/{system,overview,packages,complete-updates}/query POSTs are readable; these POSTs retain Origin/CSRF checks. Logout is allowed. Other legacy administrative writes are denied; none of the new grants implies those rights. No account-management, action or execution route exists. Config changes take effect only after manager restart; all in-memory sessions then disappear. Explicit manage_alarms additionally admits the exact alarm settings/test routes; unrelated administrative routes remain denied. Application-check settings GET and POST both require the separate manage_application_checks grant; application-check status remains readable without destinations."
   },
   "errors": {
     "400": "invalid typed or duplicate-key body",
@@ -130,6 +161,7 @@
     "plan_updates": "Future typed package planning; currently inert.",
     "execute_updates": "Future approved typed package execution; currently inert.",
     "restart_service": "Future approved typed service restart; currently inert.",
-    "manage_alarms": "Explicit alarm configuration and synthetic-test permission, with separately acknowledged destination/payload and complete-profile managed setup."
+    "manage_alarms": "Explicit alarm configuration and synthetic-test permission, with separately acknowledged destination/payload and complete-profile managed setup.",
+    "manage_application_checks": "Explicit application-check destination review and save/enable/disable permission. No existing grant implies it. No account/grant provisioning; no direct test/probe action."
   }
 }

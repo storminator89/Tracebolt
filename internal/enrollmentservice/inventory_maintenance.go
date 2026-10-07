@@ -12,7 +12,8 @@ const InventoryMaintenanceInterval = time.Second
 
 // RunInventoryMaintenance is one fixed manager-owned loop, not an agent action
 // or generic scheduler. A tick considers one known identity/domain and deletes
-// at most256 rows/16 chunks. Every step restores current authority; no identity
+// at most256 inventory rows/16 chunks and 256 expired resource-history rows.
+// Every step restores current authority; no identity
 // decision is cached across ticks. Busy/failing steps preserve data and retry on
 // later rounds. A bounded warning callback never receives source content.
 func (s *Service) RunInventoryMaintenance(ctx context.Context, warn func()) error {

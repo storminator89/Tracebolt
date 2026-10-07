@@ -40,11 +40,11 @@ func TestApplicationChecksManagerDefaultOff(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer p.close()
-	if p.applicationChecks != nil {
-		t.Fatal("omitted configuration constructed an outbound worker")
+	if p.applicationChecks == nil || p.applicationChecks.View().Mode != "managed" || p.applicationChecks.View().Enabled || p.applicationChecks.View().Configured {
+		t.Fatal("omitted configuration did not construct an inert managed supervisor")
 	}
 	view := p.applicationChecks.Status()
-	if view.Enabled || view.SchemaVersion != applicationcheck.SchemaVersion || len(view.Items) != 0 {
+	if view.Enabled || len(view.Items) != 0 {
 		t.Fatal("omitted configuration enabled application checks")
 	}
 }
@@ -65,8 +65,8 @@ func TestApplicationChecksManagerExplicitDisabled(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer p.close()
-	if p.applicationChecks != nil {
-		t.Fatal("disabled configuration constructed an outbound worker")
+	if p.applicationChecks == nil || p.applicationChecks.View().Mode != "external" || p.applicationChecks.Status().Enabled {
+		t.Fatal("disabled external configuration became browser-managed or enabled")
 	}
 }
 

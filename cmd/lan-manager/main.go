@@ -45,7 +45,7 @@ type prepared struct {
 	maintenance           *enrollmentservice.Service
 	health                *api.Server
 	alarms                *alarmdelivery.Settings
-	applicationChecks     *applicationcheck.Monitor
+	applicationChecks     *applicationcheck.Settings
 }
 
 func prepare(m lanconfig.Material) (*prepared, error) { return prepareWithEnrollment(m, nil) }
@@ -213,14 +213,14 @@ func prepareWithApplicationChecks(m lanconfig.Material, enrollment *enrollmentco
 		closeAll()
 		return nil, e
 	}
-	// Keep the configured status schema even when disabled; only the enabled
-	// monitor is assigned to the worker lifecycle below. Construction is inert.
-	applicationStatus := applicationcheck.New(checks)
-	var applicationChecks *applicationcheck.Monitor
-	if checks.Enabled() {
-		applicationChecks = applicationStatus
+	// The supervisor exists even for a disabled draft so an explicit browser
+	// enable can take effect without restart. Construction never probes targets.
+	applicationChecks, e := applicationcheck.NewSettings(c.StateDirectory, managerID, c.OperatorOrigin, c.Profile, checks)
+	if e != nil {
+		closeAll()
+		return nil, e
 	}
-	operatorConfig := api.LANOperatorConfig{AlarmSettings: alarmWorker, ApplicationChecks: applicationStatus, ServiceActions: actions, Origin: c.OperatorOrigin, Auth: auth, Registry: registry, InsecureHTTPTest: c.Profile == lanconfig.HTTPTest, Devices: func() ([]model.Device, error) {
+	operatorConfig := api.LANOperatorConfig{AlarmSettings: alarmWorker, ApplicationCheckSettings: applicationChecks, ServiceActions: actions, Origin: c.OperatorOrigin, Auth: auth, Registry: registry, InsecureHTTPTest: c.Profile == lanconfig.HTTPTest, Devices: func() ([]model.Device, error) {
 		return trustStore.Devices(context.Background(), registry.List(), time.Now().UTC())
 	}}
 	if enrolledService != nil {
@@ -366,7 +366,7 @@ func main() {
 	path := flag.String("lan-config", "", "Explicit protected LAN profile JSON (required); HTTPS is the default")
 	enrollmentPath := flag.String("enrollment-config", "", "Optional protected guided-enrollment v2 profile; requires a dedicated preprovided issuer and empty legacy registry")
 	alarmPath := flag.String("alarm-config", "", "Optional protected HTTPS alarm config; overrides browser-managed settings as read-only. Without this flag, saved browser settings apply (initially off).")
-	applicationChecksPath := flag.String("application-checks-config", "", "Optional protected opt-in manager-origin application check configuration; disabled when omitted")
+	applicationChecksPath := flag.String("application-checks-config", "", "Optional protected manager-origin application check configuration; overrides browser-managed settings as read-only. Without this flag, saved browser settings apply (initially off).")
 	flag.Parse()
 	if *path == "" || flag.NArg() != 0 {
 		log.Fatal("Tracebolt LAN manager requires --lan-config PATH")

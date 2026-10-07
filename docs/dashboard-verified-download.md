@@ -1,10 +1,10 @@
 # Verified dashboard Linux download
 
-The invitation dialog selects `v0.1.0-rc.2` through the source-owned bootstrap
-publication commit `08c7f0ef3bb8c3f8941a071d885bdf550c7f72c5` and SHA-256
-`10b372ed31d0b2e04d901286ed477a9e7b4fc4d1efe7faea78a5ae8a284db4ea`.
+The invitation dialog selects `v0.1.0-rc.3` through the source-owned bootstrap
+publication commit `bba617e459bb072d4506fe6cacecaa97388ea93c` and SHA-256
+`5071d6ecb5933c70c9ee9be8a2ff0b4c0b48fbd6084ea83065b8c5cf634cc231`.
 The binary/source build is separately bound to
-`a6368b0202b1efecdb6214dc34c4302d239854f7`.
+`405f57f184e75736477cbd3af7a2536ddfe0e6f6`.
 
 For the complete `managed-operations-v3` profile, the command selects
 `--read-admin --read-admin-agent-origin` with the strictly validated public
@@ -74,19 +74,21 @@ authenticate that page. Existing disposable HTTP and collection notices remain.
 
 ## Recorded release and activation evidence
 
-- [rc.2 build/publication](https://github.com/storminator89/Tracebolt/actions/runs/37511484957)
-  produced [12 public assets](https://github.com/storminator89/Tracebolt/releases/tag/v0.1.0-rc.2)
+- [rc.3 build/publication](https://github.com/storminator89/Tracebolt/actions/runs/37573387512)
+  produced [12 public assets](https://github.com/storminator89/Tracebolt/releases/tag/v0.1.0-rc.3)
   from the exact source above, including four programs for each architecture.
-- [Strict public readback](https://github.com/storminator89/Tracebolt/actions/runs/37513100878)
+- [Strict public readback](https://github.com/storminator89/Tracebolt/actions/runs/37574492167)
   verified all 12 assets, exact source/workflow keyless provenance and the
   reconstructed bootstrap. No Tracebolt program or installer was executed.
-- The [commit-pinned bootstrap](https://raw.githubusercontent.com/storminator89/Tracebolt/08c7f0ef3bb8c3f8941a071d885bdf550c7f72c5/deploy/release/published/v0.1.0-rc.2.py)
-  was separately read back and matched its 46,739 bytes and SHA-256.
-- [Native Ubuntu TLS acceptance](https://github.com/storminator89/Tracebolt/actions/runs/37508637893)
-  passed all scenarios, all six functional checks and cleanup on production-equivalent
-  c1cd23a source. This is not a Debian/HTTP download-installation or OS-reboot result.
+- The [commit-pinned bootstrap](https://raw.githubusercontent.com/storminator89/Tracebolt/bba617e459bb072d4506fe6cacecaa97388ea93c/deploy/release/published/v0.1.0-rc.3.py)
+  was separately read back and matched its 49,246 bytes and SHA-256.
+- [Native Ubuntu TLS upgrade acceptance](https://github.com/storminator89/Tracebolt/actions/runs/37572468648) passed all scenarios, the four
+  old-to-new upgrade checks, all six functional checks and cleanup on exact
+  `405f57f184e75736477cbd3af7a2536ddfe0e6f6` source. The prior side used verified rc.2 binaries; the replacement
+  was built from this source. Released rc.3 binaries have a separate provenance
+  check above. The user's Debian/HTTP upgrade and OS reboot remain unverified.
 - GitHub reports `immutable: false`; fixed source, manifest, bundle and asset
-  hashes remain the boundary. Historical rc.1 and pilot.2 bytes are unchanged.
+  hashes remain the boundary. Historical rc.2, rc.1 and pilot.2 bytes are unchanged.
 
 Focused command, UI and actual inert shell-tail checks cover both profile modes.
 The activation revision's hosted browser acceptance remains separately recorded.

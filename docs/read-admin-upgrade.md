@@ -1,10 +1,13 @@
 # Same-identity read-admin update
 
-This source adds an explicit update for an already completed
-`tracebolt.linux-read-admin.v2` installation. It is not available from the old
-rc.2 bootstrap. Use a verified release containing this implementation after its
-native upgrade acceptance and publication have passed. Source/fixture tests alone
-are not permission to run it on a host.
+The verified `v0.1.0-rc.3` release supports an explicit update for an already
+completed `tracebolt.linux-read-admin.v2` installation. The old rc.2 bootstrap
+cannot perform this operation. [Native Ubuntu TLS acceptance](https://github.com/storminator89/Tracebolt/actions/runs/37572468648) passed
+with verified rc.2 on the prior side and a replacement built from exact
+`405f57f184e75736477cbd3af7a2536ddfe0e6f6` source. All four upgrade checks, six functional checks and cleanup
+passed. The [rc.3 public artifact verification](https://github.com/storminator89/Tracebolt/actions/runs/37574492167) separately passed all
+12 release assets and provenance. The user's Debian/HTTP update and OS reboot
+remain unverified; an update still requires its displayed local approval.
 
 The selected verified bootstrap accepts:
 

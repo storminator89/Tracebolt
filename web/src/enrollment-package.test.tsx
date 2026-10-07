@@ -309,7 +309,7 @@ describe('public prepared-checkout command', () => {
 describe('source-owned verified download command (inert fixtures only)', () => {
  // Synthetic values exercise string generation only. No fixture is a release pin.
  const fixturePin = Object.freeze({ version: 'v0.0.0-inert-fixture', publicationCommit: 'c'.repeat(40), bootstrapSHA256: 'd'.repeat(64) });
- const capableFixturePin = Object.freeze({ ...fixturePin, version: 'v0.1.0-rc.2' });
+ const capableFixturePin = Object.freeze({ ...fixturePin, version: 'v0.1.0-rc.3' });
  const checksum = 'b'.repeat(64);
  const decodedScript = (command: string) => {
   const prefix = '/usr/bin/env -i PATH=/usr/sbin:/usr/bin:/sbin:/bin LANG=C.UTF-8 LC_ALL=C.UTF-8 /bin/sh -c ';
@@ -317,14 +317,11 @@ describe('source-owned verified download command (inert fixtures only)', () => {
   const quoted = command.slice(prefix.length); expect(quoted[0]).toBe("'"); expect(quoted.at(-1)).toBe("'");
   return quoted.slice(1, -1).replaceAll("'\\''", "'");
  };
- it('keeps the known rc.1 publication intact until reviewed rc.2 pin activation', () => {
-  const pin = downloadCommands.OFFICIAL_LINUX_BOOTSTRAP_PIN;
-  expect(['v0.1.0-rc.1', 'v0.1.0-rc.2']).toContain(pin?.version);
-  if (pin?.version !== 'v0.1.0-rc.1') return;
-  expect(pin).toEqual({
-   version: 'v0.1.0-rc.1',
-   publicationCommit: '458fc072a73946032446c0d9e63220ea29cca355',
-   bootstrapSHA256: '85bd2c01beb3012d5d042d88448d892a270cf527786a73e7a0a67867cac47f61',
+ it('pins the publicly verified rc.3 bootstrap publication exactly', () => {
+  expect(downloadCommands.OFFICIAL_LINUX_BOOTSTRAP_PIN).toEqual({
+   version: 'v0.1.0-rc.3',
+   publicationCommit: 'bba617e459bb072d4506fe6cacecaa97388ea93c',
+   bootstrapSHA256: '5071d6ecb5933c70c9ee9be8a2ff0b4c0b48fbd6084ea83065b8c5cf634cc231',
   });
  });
  it('requires a null or strictly valid source pin and ignores ambient or response pins', () => {
@@ -469,14 +466,14 @@ describe('source-owned verified download command (inert fixtures only)', () => {
  });
  it('rejects complete fallback for old, missing, unknown and ambient pins', () => {
   const response = creation(v3);
-  for (const pin of [null, undefined, fixturePin, { ...fixturePin, version: 'v0.1.0-rc.1' }, { ...fixturePin, version: 'v0.1.0-rc.3' }, { ...fixturePin, version: 'v0.1.0' }]) {
+  for (const pin of [null, undefined, fixturePin, { ...fixturePin, version: 'v0.1.0-rc.1' }, { ...fixturePin, version: 'v0.1.0-rc.2' }, { ...fixturePin, version: 'v0.1.0-rc.4' }, { ...fixturePin, version: 'v0.1.0' }]) {
    expect(downloadCommands.verifiedDownloadCommand(pin, response.bootstrap, response.snapshot, checksum)).toBeNull();
   }
   vi.stubGlobal('TRACEBOLT_RELEASE_PIN', capableFixturePin); vi.stubEnv('VITE_TRACEBOLT_RELEASE_PIN', JSON.stringify(capableFixturePin));
   localStorage.setItem('releasePin', JSON.stringify(capableFixturePin));
   try {
    const sourcePin = downloadCommands.OFFICIAL_LINUX_BOOTSTRAP_PIN;
-   const capable = sourcePin?.version === 'v0.1.0-rc.2';
+   const capable = sourcePin?.version === 'v0.1.0-rc.3';
    expect(downloadCommands.verifiedLinuxDownloadAvailable(v3)).toBe(capable);
    expect(downloadCommands.selectEnrollmentCommand(response.bootstrap, { ...response.snapshot, releasePin: capableFixturePin } as EnrollmentSnapshot, checksum)).toEqual(capable ? { kind: 'verified-download', command: downloadCommands.verifiedDownloadCommand(sourcePin, response.bootstrap, response.snapshot, checksum) } : null);
    expect(downloadCommands.selectEnrollmentCommand({ ...response.bootstrap, releasePin: capableFixturePin }, response.snapshot, checksum)).toBeNull();

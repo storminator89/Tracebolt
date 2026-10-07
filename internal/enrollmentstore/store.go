@@ -574,6 +574,15 @@ func validateSchema(ctx context.Context, conn *sql.Conn, profile string) error {
 		"enrollment_state":       {Type: "table", Name: "enrollment_state", SQL: stateSchema},
 		"enrollment_credentials": {Type: "table", Name: "enrollment_credentials", SQL: credentialSchema},
 	}
+	historyEnabled, historyErr := resourceHistoryPresent(ctx, conn)
+	if historyErr != nil {
+		return historyErr
+	}
+	if historyEnabled {
+		for _, obj := range resourceHistoryObjects() {
+			expected[obj.Name] = obj
+		}
+	}
 	if enrollmentcrypto.ManagedCollectionProfile(profile) {
 		expected["enrollment_operational"] = inventoryledger.SchemaObject{Type: "table", Name: "enrollment_operational", SQL: operationalSchema}
 	}

@@ -271,3 +271,47 @@ func TestNamedAccountsDoNotSharePasswordsIdentityOrCapabilities(t *testing.T) {
 		t.Fatal("one session logout revoked another account")
 	}
 }
+
+func TestApplicationCheckCapabilityIsExplicitAndSessionBound(t *testing.T) {
+	c := namedConfig()
+	c.Operators[0].Capabilities = []Capability{Read, PlanUpdates, ExecuteUpdates, RestartService, ManageAlarms}
+	m, err := New(c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := namedLogin(t, m)
+	if _, err := s.BeginCapability(context.Background(), ManageApplicationChecks); !errors.Is(err, ErrForbidden) {
+		t.Fatal("existing grants imply application administration")
+	}
+	c.Operators[0].Capabilities = append(c.Operators[0].Capabilities, ManageApplicationChecks)
+	m, err = New(c)
+	if err != nil {
+		t.Fatal("explicit application grant rejected", err)
+	}
+	s = namedLogin(t, m)
+	caps := s.Capabilities()
+	if len(caps) != 6 || caps[5] != ManageApplicationChecks {
+		t.Fatal("display omitted explicit application grant")
+	}
+	raw, _ := json.Marshal(caps)
+	if !strings.Contains(string(raw), `"manage_application_checks"`) {
+		t.Fatal("wire grant lost")
+	}
+	release, err := s.BeginCapability(context.Background(), ManageApplicationChecks)
+	if err != nil {
+		t.Fatal("explicit grant denied")
+	}
+	release()
+	m.Logout(s.Token)
+	if _, err := s.BeginCapability(context.Background(), ManageApplicationChecks); !errors.Is(err, ErrUnauthenticated) {
+		t.Fatal("revoked application grant reused")
+	}
+	c.Operators[0].Capabilities = append(c.Operators[0].Capabilities, ManageApplicationChecks)
+	if _, err := New(c); !errors.Is(err, ErrConfiguration) {
+		t.Fatal("duplicate application grant accepted")
+	}
+	c.Operators[0].Capabilities = []Capability{ManageApplicationChecks}
+	if _, err := New(c); !errors.Is(err, ErrConfiguration) {
+		t.Fatal("application grant implied read")
+	}
+}

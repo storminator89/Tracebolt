@@ -6,9 +6,13 @@ application works correctly. HTTP 2xx means only that the selected resource
 returned that status. Failures can reflect the manager's DNS, network, firewall
 or trust store rather than an application failure.
 
-The feature is disabled when `--application-checks-config` is omitted. Loading
-configuration, constructing the monitor and polling status perform no DNS lookup
-or check. This source change supplies no real targets and changes no host,
+Without `--application-checks-config`, browser-managed settings apply and start
+disabled. Administrators can save an inert draft, then explicitly review and enable
+it in **Settings → Application check setup**. See the
+[persisted setup contract](application-checks-configuration-design.md). An explicit
+startup file overrides browser settings as read-only, including when disabled.
+Loading configuration, constructing the monitor and polling status perform no DNS
+lookup or check. This source change supplies no real targets and changes no host,
 network, certificate, permission or service configuration.
 
 An optional [v2 DNS/TCP extension](application-network-checks.md) adds bounded
@@ -57,10 +61,11 @@ intentionally check HTTP, and an HTTP-test manager still verifies HTTPS target
 certificates normally. HTTP rows visibly identify `targetScheme: "http"` and
 `tls.state: "not_applicable"`.
 
-Configuration is an immutable startup snapshot. Changing, removing or disabling
-the file takes effect on the next separately authorized manager restart; there
-is no API to enable, edit, trigger or pause checks. Restart discards old results.
-Stop the manager to stop checks immediately. Configuration binds origin/profile
+Explicit file configuration is an immutable startup snapshot. Changing, removing
+or disabling that file takes effect on the next separately authorized manager
+restart. Browser-managed settings instead support save-disabled, reviewed enable
+and stop-and-join disable without a restart. Neither path has a one-shot trigger.
+Restart discards old results. Stop the manager to stop checks immediately. Configuration binds origin/profile
 and, where present, the existing enrolled manager ID; no identity is created.
 
 ## Destination and transport policy
@@ -110,7 +115,14 @@ HTTP/HTTPS transport, HTTP result, separate leaf-certificate expiry and original
 observation age. Reload fetches retained status; it never triggers a check.
 Polling pauses when hidden, aborts on unmount/access changes and cannot overlap.
 Read errors and locally stale evidence cannot remain successful. Disabled mode
-is shown concisely; no browser control enables targets or changes configuration.
+shows the supported HTTP/HTTPS, DNS and TCP kinds and a collapsed setup guide
+pointing to Settings.
+It says checks are not running; it does not infer whether a disabled file exists.
+Enabled mode shows the configured completion-based interval, freshness limit
+and reason-specific help inside the scope disclosure. The fixed source-guide
+link opens separately without a referrer and contains no target information.
+Overview remains read-only; the separate administrator-only Settings form owns
+configuration changes and explicit enablement.
 
 The response has schema `tracebolt.application-checks.v1`, `vantage:
 "management_server"`, server time, enabled/cadence/freshness fields, and at most
@@ -141,11 +153,15 @@ unknown; current HTTP status and verified TLS expiry are cleared, preserving the
 original timestamp. HTTP TLS stays not-applicable. Cancelled work never replaces
 a prior observation with a synthetic failure.
 
+The [persisted setup contract](application-checks-configuration-design.md)
+describes the source candidate’s administrator flow, capability, protected state,
+revision/generation lifecycle and audit boundaries.
+
 ## Scope and remaining gates
 
 Results exist only in memory. There is no history, alert delivery, incident
 creation, endpoint association, DB/backup check, content matching,
-credential support or target-configuration UI. Existing device pages, health incidents and
+credential support or automatic target discovery. Existing device pages, health incidents and
 external alarm behavior are unchanged.
 
 Tests use invented configuration, injected transports and local/in-memory TLS

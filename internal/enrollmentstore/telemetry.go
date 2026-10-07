@@ -87,6 +87,11 @@ func (s *Store) SaveObservation(ctx context.Context, invitationID, certificateHa
 		c.Replay = Replay{Sequence: frame.Sequence, PayloadHash: digest, GeneratedAt: frame.Observation.GeneratedAt.UTC(), CollectedAt: frame.Observation.Observation.LastSeen.UTC(), ReceivedAt: receivedAt}
 		c.Frame = raw
 		t.credentials[invitationID] = c
+		// Every activated identity already has a credential row. Retain the
+		// observation and advance its replay receipt in this same transaction.
+		if err := retainResourcePoint(ctx, t, invitationID, frame.Sequence, frame.Observation.Observation, receivedAt); err != nil {
+			return err
+		}
 		out = lanstore.Receipt{SchemaVersion: "tracebolt.agent-receipt.v1", AgentID: snapshot.Approval.DeviceID, Sequence: frame.Sequence, CollectedAt: c.Replay.CollectedAt, ReceivedAt: receivedAt}
 		return nil
 	})

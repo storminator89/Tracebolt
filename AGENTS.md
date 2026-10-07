@@ -33,7 +33,7 @@ file as navigation and project constraints, never as permission to act on a host
 - Expanded operational/package collection requires a fresh explicitly acknowledged
   profile and identity. Never relabel or reuse a basic/v2 ledger to grant it. For the
   fresh v3 HTTP background-service MVP read `docs/http-complete-first-start.md`.
-  The current rc.2 complete-profile public command selects `--read-admin` and the
+  The current rc.3 complete-profile public command selects `--read-admin` and the
   validated ingress. One combined local scope approval configures inventory and
   the separate helpers; invitation input remains hidden and dashboard identity
   approval is still required. Basic/non-complete profiles retain pending-service.
@@ -67,7 +67,7 @@ file as navigation and project constraints, never as permission to act on a host
   supported read scopes/helper only; production HTTPS remains default and HTTP
   requires its full content-risk warning. Keep the main agent nonroot, retain
   started/completed phase evidence, and never adopt existing or pending journal
-  state. Use only the verified rc.2 pin and matching manager source described there;
+  state. Use only the verified rc.3 pin and matching manager source described there;
   older release commands are not compatible with the combined profile. Do not
   call fixture results native acceptance or execute any host grant without approval.
 - For a completed read-admin v2 update, read `docs/read-admin-upgrade.md`. Use only

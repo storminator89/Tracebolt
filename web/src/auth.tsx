@@ -7,7 +7,7 @@ import { abortProtectedRequests, APIError, AUTH_REQUIRED_EVENT, mutate, request 
 import { Logo } from './components';
 import { fullDate, noteBytes, readSaved, saveLocal } from './utils';
 export type OperatorLoginMode = 'shared' | 'named';
-export type OperatorCapability = 'read' | 'plan_updates' | 'execute_updates' | 'restart_service' | 'manage_alarms';
+export type OperatorCapability = 'read' | 'plan_updates' | 'execute_updates' | 'restart_service' | 'manage_alarms' | 'manage_application_checks';
 export interface OperatorSession {
     mode: 'development' | 'lan';
     transport: 'http' | 'https';
@@ -46,7 +46,7 @@ function validOperatorMetadata(s: Partial<OperatorSession>): boolean {
         return true;
     if (s.loginMode !== 'shared' && s.loginMode !== 'named')
         return false;
-    if (!Array.isArray(s.capabilities) || s.capabilities.length > 5 || new Set(s.capabilities).size !== s.capabilities.length || s.capabilities.some(capability => !['read', 'plan_updates', 'execute_updates', 'restart_service', 'manage_alarms'].includes(capability)))
+    if (!Array.isArray(s.capabilities) || s.capabilities.length > 6 || new Set(s.capabilities).size !== s.capabilities.length || s.capabilities.some(capability => !['read', 'plan_updates', 'execute_updates', 'restart_service', 'manage_alarms', 'manage_application_checks'].includes(capability)))
         return false;
     if (s.mode === 'development')
         return s.loginMode === 'shared' && s.actorId === null && s.capabilities.length === 0;

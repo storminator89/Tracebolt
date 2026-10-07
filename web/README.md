@@ -84,7 +84,7 @@ add no polling, update-page query or collection. On restoration they wait for a 
 identity read again. Full Health/Updates subviews retain their existing behavior.
 Software inventory, full certificate/identity information and measurement sources
 are in **Details**. Certificate expiry warnings remain on Overview. Metadata refresh
-preserves the current subview, drafts, disclosures and scroll position.
+preserves the current subview, drafts, disclosures and scroll position. The selected inventory panel separately checks its first page every 15 seconds, atomically replacing only validated complete generations. Paging and unsubmitted search/filter edits pause those checks; captures keep their original times. See [inventory refresh boundaries](../tests/e2e-review/INVENTORY_LIVE_REFRESH.md).
 
 For journal-compatible service units, **Open logs** in Services or Health opens the
 existing Logs tab with only the exact-unit draft filled in. It does not create or
@@ -156,3 +156,31 @@ retry, sender control, destination editor or event replay. Failed refreshes reta
 the previous snapshot with its original browser loading time and unknown current
 status. Losing access, navigating away or suspending the page clears it and aborts
 late reads. These source/component checks do not establish real webhook delivery.
+
+### Capability source states
+
+The capability view separates the manager-selected collection profile (`scope`)
+from current source observations. Profile declarations are neutral; they never
+prove a completed installation, successful read or healthy device. Endpoint
+observation bundles still reject the manager-only `scope` value.
+
+For complete-profile devices, visible authenticated capability views read the
+existing bounded system, complete-overview, package and journal status endpoints
+at a 15-second cadence. They do not fetch inventory rows or journal bodies,
+start captures, or change grants. The original capture time remains authoritative;
+retention and repeated reads cannot refresh old data. Hidden views, lost sessions,
+invalid data and interrupted requests cannot retain a successful live status.
+
+Denied access, collection/transfer failures, missing configuration, stale data,
+unknown data and unsupported sources are distinct. New failures remain visible
+even when an older complete generation exists. Expected process exits and
+not-applicable filesystem capacity fields do not become source failures. Socket
+collection and privileged owner-source provenance are separate; per-connection
+attribution gaps remain in Connections. An enabled journal policy means
+Configured, never proof of successful content access. The legacy automatic
+journal-metadata preview is separate from the read-admin on-demand log helper.
+
+Read-admin onboarding still uses one combined local approval for its supported
+read scopes. This UI does not ask for additional grants or normalize missing
+permission for an approved supported read. Technical source explanations stay
+available in keyboard-accessible, initially collapsed disclosures.

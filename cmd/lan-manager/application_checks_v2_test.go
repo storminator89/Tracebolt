@@ -30,8 +30,8 @@ func TestApplicationChecksV2ManagerDisabledSchemaWithoutWorker(t *testing.T) {
 		t.Fatal(e)
 	}
 	defer p.close()
-	if p.applicationChecks != nil {
-		t.Fatal("disabled v2 created running worker")
+	if p.applicationChecks == nil || p.applicationChecks.View().Mode != "external" || p.applicationChecks.Status().Enabled {
+		t.Fatal("disabled v2 settings did not preserve immutable external mode")
 	}
 	view := readApplicationChecksPrepared(t, p, m.Config.OperatorOrigin)
 	if view["schemaVersion"] != applicationcheck.SchemaVersionV2 || view["enabled"] != false || len(view["items"].([]any)) != 0 {

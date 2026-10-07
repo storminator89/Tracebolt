@@ -1,3 +1,4 @@
+import { InventoryLiveStatus } from './inventory-live-status';
 import { useId } from 'react';
 import { Info, LoaderCircle, RefreshCw, Search, TriangleAlert } from 'lucide-react';
 import { useOperator } from './auth';
@@ -52,7 +53,7 @@ export function SystemInventoryPanel({ deviceId, section, sessionKey, onOpenLogs
     return <SystemInventory key={`${deviceId}:${section}:${sessionKey ?? operator.expiresAt ?? ''}`} deviceId={deviceId} section={section} onOpenLogs={onOpenLogs}/>;
 }
 function SystemInventory({ deviceId, section, onOpenLogs }: { deviceId: string; section: SystemSection; onOpenLogs?: (unit: string) => void }) {
-    const [locale] = useLocale(), labels = copy[locale], id = useId(), resource = useSystemInventory(deviceId, section), operator = useOperator();
+    const [locale] = useLocale(), labels = copy[locale], id = useId(), resource = useSystemInventory(deviceId, section, true), operator = useOperator();
     const actionAccess = section === 'services' && operator?.mode === 'lan' && operator.authenticated && operator.loginMode === 'named' && operator.actorId && operator.expiresAt && operator.capabilities?.includes('restart_service') ? { actorId: operator.actorId, sessionKey: operator.expiresAt, insecureTestMode: operator.insecureTestMode } : null;
     const actions = useServiceActions(deviceId, actionAccess);
     const { view, page } = resource, complete = view?.lastComplete[section], latest = view?.latest?.[section], visible = view && systemSectionVisible(view, section, resource.elapsed);
@@ -64,6 +65,7 @@ function SystemInventory({ deviceId, section, onOpenLogs }: { deviceId: string; 
         <header className="package-heading"><h3 id={id}>{labels[section]}</h3><button className="button small" disabled={resource.loading || resource.error === 'session'} onClick={resource.refresh}><RefreshCw size={14}/>{labels.refresh}</button></header>
         {section === 'services' && <ServiceActionPanel workflow={actions} authorized={!!actionAccess}/>}
         <p className="package-note">{labels.intro}</p>{section === 'sockets' && <p className="package-note">{labels.network}</p>}
+        <InventoryLiveStatus state={resource.liveState}/>
         {resource.loading && <p role="status"><LoaderCircle className="spin" size={16}/>{labels.loading}</p>}
         {resource.error && <p className="package-error" role="alert"><TriangleAlert size={16}/>{labels[resource.error]}</p>}
         {['busy', 'timeout', 'loadError'].includes(resource.error ?? '') && <button className="button small" disabled={resource.loading} onClick={resource.retry}>{labels.retry}</button>}

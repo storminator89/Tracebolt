@@ -1,6 +1,6 @@
 # Linux release distribution candidate
 
-Status: official `v0.1.0-rc.2` is published and independently verified. The
+Status: official `v0.1.0-rc.3` is published and independently verified. The
 [dashboard pin](dashboard-verified-download.md) selects its immutable bootstrap
 source. Actual download-based host installation, upgrade and OS reboot acceptance
 remain separate pilot operations; arm64 is cross-built only.
@@ -60,10 +60,10 @@ only after inspecting a compatible retained preparation and retaining the exact
 release, public bootstrap and identity.
 
 **Release boundary:** these bootstrap and native-installer improvements are included
-in the independently verified `v0.1.0-rc.2` from source
-`a6368b0202b1efecdb6214dc34c4302d239854f7`, now selected by the dashboard pin.
-The published rc.1 and pilot.2 bootstrap and binaries are unchanged. GitHub reports
-`immutable: false` for rc.2; the exact source, manifest, bundle and asset hashes
+in the independently verified `v0.1.0-rc.3` from source
+`405f57f184e75736477cbd3af7a2536ddfe0e6f6`, now selected by the dashboard pin.
+The published rc.2, rc.1 and pilot.2 bootstrap and binaries are unchanged. GitHub reports
+`immutable: false` for rc.3; the exact source, manifest, bundle and asset hashes
 remain fixed, without claiming platform-level release locking. This selection
 does not establish download-based installation, upgrade or reboot acceptance.
 
@@ -140,7 +140,7 @@ The attestation binds this manifest to the specific build workflow. It does not
 prove that two independent builds are byte-identical, and it does not substitute
 for reviewing the source, dependencies, workflow or actual runtime behavior.
 
-The rc.2 manifest contains all nine program/source assets plus three public
+The rc.3 manifest contains all nine program/source assets plus three public
 bootstrap/provenance files. The combined read-admin path selects the separate
 helper explicitly; an ordinary install or upgrade does not grant that scope.
 Historical rc.1 and pilot.2 artifacts remain unchanged.
@@ -214,25 +214,26 @@ Before activation, the authorized publisher must:
    privileged acceptance operations on an unapproved host.
 
 The reusable template remains at `RELEASE_PIN = None`. The separately published
-`deploy/release/published/v0.1.0-rc.2.py` contains the verified fixed release pin;
+`deploy/release/published/v0.1.0-rc.3.py` contains the verified fixed release pin;
 the dashboard names bootstrap publication commit
-`08c7f0ef3bb8c3f8941a071d885bdf550c7f72c5` and the exact bootstrap digest.
+`bba617e459bb072d4506fe6cacecaa97388ea93c` and the exact bootstrap digest.
 The earlier pilot.2 source is retained unchanged. There is no private-key setup
 step for this chosen keyless path.
 
 ## Verification evidence and limits
 
-The [rc.2 build/publication](https://github.com/storminator89/Tracebolt/actions/runs/37511484957)
+The [rc.3 build/publication](https://github.com/storminator89/Tracebolt/actions/runs/37573387512)
 succeeded from the exact source above. The
-[independent public-byte check](https://github.com/storminator89/Tracebolt/actions/runs/37513100878)
+[independent public-byte check](https://github.com/storminator89/Tracebolt/actions/runs/37574492167)
 verified all twelve assets, exact source/workflow keyless provenance and the bootstrap's
 source reconstruction without executing a Tracebolt program or installer. The
 commit-pinned bootstrap source was independently read back before the UI pin update;
 its exact size/hash and selection are recorded in the
-[dashboard download guide](dashboard-verified-download.md). The [production-equivalent native Ubuntu TLS run](https://github.com/storminator89/Tracebolt/actions/runs/37508637893)
-passed fresh setup, owners, journal, restart, revoke and cleanup. A user-host
-download installation, other transports/platforms and actual OS reboot remain
-separate authorized acceptance observations.
+[dashboard download guide](dashboard-verified-download.md). The [native Ubuntu TLS upgrade run](https://github.com/storminator89/Tracebolt/actions/runs/37572468648) passed the verified rc.2-to-405f
+source-built replacement, unchanged identity/scopes/private state, local approval,
+all six functional checks and cleanup. Released rc.3 bytes are separately verified
+above. The user's Debian/HTTP upgrade and actual OS reboot remain separate
+authorized acceptance observations.
 
 Default fixtures cover disabled production pins, read-only preflight, platform
 rejection, root/terminal boundaries, strict manifest/asset validation, tampering,

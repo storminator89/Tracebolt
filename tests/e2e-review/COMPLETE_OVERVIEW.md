@@ -30,7 +30,11 @@ No TLS warning bypass is used. Actual browser execution belongs to hosted CI.
 1. Primary Processes uses complete generations: 205 rows across 100/100/5 pages,
    observed zero values, explicit denied/exited/unavailable field outcomes,
    cumulative CPU time, literal case-insensitive search and unchanged binding,
-   capture time, retention and cursor deadline.
+   capture time, retention and cursor deadline. It also admits a newer typed process
+   generation, holds its automatic first page to prove atomic replacement, and
+   preserves the rendered table, search and scroll. Later-page and draft-search
+   windows each wait 16 real seconds and require no inventory reads; no journal
+   or service action requests may occur.
 2. Mounts uses 125 rows across 100/25 pages. Per-page capacity groups distinguish
    measured zero, denied local, memory, remote-skipped and virtual N/A values.
    German mobile keeps document bounds and keyboard-scrollable table overflow.
@@ -38,7 +42,8 @@ No TLS warning bypass is used. Actual browser execution belongs to hosted CI.
    generation is current, and vice versa. Each retains its original age and
    expiry; mixed captures remain explicit.
 4. Successful zero enumeration differs from missing data. An expired cursor
-   clears old rows until an explicit refresh. Original mount retention expires
+   is tested from a later pinned page so first-page polling cannot pre-empt the
+   intended HTTP 409. It clears old rows until an explicit refresh. Original mount retention expires
    while a later process generation remains available.
 5. Injected hidden visibility clears rows until fresh real metadata arrives.
    Device navigation cancels or discards a held old page. Actual Sign out clears

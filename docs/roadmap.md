@@ -6,12 +6,15 @@ mean it has passed its release or host checks.
 
 ## Immediate delivery and approved follow-ups
 
-The current priority is delivering the three reported Debian fixes (process
-names, cached APT configuration and device-header refresh) through a verified
-update of the existing full read-admin installation. The update must preserve
-identity, history, consent and private counters while coordinating both helpers.
-Publishing source or rebuilding the manager alone does not update the endpoint.
-Other feature work must not delay that maintenance path and its acceptance.
+The three reported Debian fixes (process names, cached APT configuration and
+live device-header metadata) are included in the verified rc.3 agent release.
+The [native Ubuntu TLS update](https://github.com/storminator89/Tracebolt/actions/runs/37572468648)
+passed the rc.2-to-405f source-built replacement with original identity, scopes,
+private state and all six functional checks preserved. The
+[released assets and provenance](https://github.com/storminator89/Tracebolt/actions/runs/37574492167)
+were independently verified. Applying rc.3 on the user's Debian/HTTP endpoint and
+checking its new observations remain the next local acceptance steps. A manager
+update alone cannot replace the endpoint agent.
 
 The following requests have the individual source status below. Source work does
 not activate a feature or change consent on an installed host:
@@ -25,32 +28,58 @@ not activate a feature or change consent on an installed host:
   reported hostname and interface-scoped IP addresses, including multiple-address,
   stale and missing states. Stable IDs still bind navigation and remain visible
   as technical details. One bounded operator read reuses existing approved identity
-  observations; it creates no collection grant. Hosted desktop/mobile acceptance
-  of this new table remains pending. See [the display contract](fleet-endpoint-identity.md).
+  observations; it creates no collection grant. Hosted desktop/mobile acceptance passed on the
+  [bb76 manager baseline](https://github.com/storminator89/Tracebolt/actions/runs/37548278549). See [the display contract](fleet-endpoint-identity.md).
 - **Usable alarm setup in Settings — implemented in source, off by default.**
   Administrators can review and save one generic public HTTPS webhook, explicitly
   approve the disclosed payload, enable or disable delivery, and deliberately
   enqueue a synthetic test. Named users need the existing configured administrator
   to grant the new manage_alarms capability; source publication grants nobody that
   capability. The complete URL is write-only and protected at rest. No provider was
-  configured or contacted during source validation; new hosted UI acceptance remains
-  pending. Provider acceptance does not confirm human receipt. See [alarm delivery](alarm-delivery.md).
+  configured or contacted during source validation. Synthetic hosted UI acceptance
+  passed on the bb76 baseline; actual provider delivery remains untested. Provider acceptance does not confirm human receipt. See [alarm delivery](alarm-delivery.md).
 - **Rule-based investigations for real LAN devices — implemented in source.**
   Investigations and Overview now project the existing durable Health incidents:
   contact loss, root-filesystem capacity and explicitly selected services. Open,
   recovered and monitoring-stopped history remain distinct, with original incident
   timestamps and separately aged current checks. Device Health, details and exact
   service-log links support read-only triage. This is not a new diagnosis engine,
-  raw-evidence archive, AI root-cause analysis or separate case workflow. Native
-  deployment and hosted browser acceptance remain pending. See
+  raw-evidence archive, AI root-cause analysis or separate case workflow. Hosted browser acceptance passed on the bb76 baseline; actual device
+  observations and deployment remain separate. See
   [Health investigations](linux-health-checks.md#fleet-investigations).
 - **Service-log selection and capture time — implemented in source.** Exact
   observed unit names and reported-alias hints reduce guesswork; an alias target
   is never inferred. Last 15 min explicitly prepares a new draft window while
   retained rows keep their original capture window and age. Empty capture and
   empty search remain distinct. Exact service/time review, unchecked content
-  approval and local scope boundaries are preserved. New hosted layout/interaction
-  acceptance and native Debian service evidence remain separate pending gates.
+  approval and local scope boundaries are preserved. The latest search-first picker
+  and quieter disclosures require the new revision's hosted layout checks; native
+  Debian service evidence remains a separate local check.
+
+
+- **Live inventory and capability evidence — implemented in this manager revision.**
+  Visible first pages check for whole new generations while preserving submitted
+  search, selected source and scroll. Later pages and unsubmitted drafts pause
+  refresh. Capability rows distinguish selected scope from actual collection,
+  denied/failed/stale sources and confirmed helper configuration.
+- **Application check setup — implemented, off by default.** Administrators can
+  save and explicitly enable exact HTTP/HTTPS, DNS and TCP targets in Settings.
+  Probes originate at the manager. Saved destination consent and the named
+  `manage_application_checks` capability are required; publication alone sends no
+  probe. Hosted UI checks and any real-target acceptance remain separate.
+- **24-hour CPU, RAM and root-disk charts — implemented in this manager revision.**
+  History starts with newly accepted guided-agent samples after the manager update;
+  no historical values are invented. Missing samples and denied values remain
+  gaps. Hosted chart rendering and actual endpoint trends need their own checks.
+- **Selected APT package execution — not shipped.** A held inert planning/lifecycle
+  foundation cannot install or update packages. Durable dispatch, local executor,
+  mutation fencing and native acceptance still need implementation.
+
+The latest manager additions above use existing rc.3 telemetry and do not require
+another agent release. Their exact-revision CI and hosted rendering results must
+be checked before calling the composed manager build accepted. Automatic renewal
+remains an unshipped candidate with an incomplete final review; expiry and UI
+revocation must not be described as an implemented renewal service.
 
 ## Current MVP priorities
 

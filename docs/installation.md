@@ -19,30 +19,29 @@ Downloads, release verification and artifact checks are internal to that command
 no endpoint Go build, file transfer or manual checksum step is needed. Review the
 supported platform and existing prerequisites first; dependencies are not installed.
 
-**Current release:** the dashboard pins `v0.1.0-rc.2`, built from
-`a6368b0202b1efecdb6214dc34c4302d239854f7`. Its
-[build/publication](https://github.com/storminator89/Tracebolt/actions/runs/37511484957)
-and [all-asset public-byte/provenance check](https://github.com/storminator89/Tracebolt/actions/runs/37513100878)
-passed. The complete `managed-operations-v3` profile selects
-`--read-admin` and the validated agent ingress, with one combined terminal
-approval for inventory, network identity, current/future exact-service journals
-and isolated socket-owner metadata. The main agent remains nonroot; the separate
-socket helper's broad process-memory authority is explicitly disclosed.
+**Current release:** the dashboard pins `v0.1.0-rc.3`, built from
+`405f57f184e75736477cbd3af7a2536ddfe0e6f6`. Its [build/publication](https://github.com/storminator89/Tracebolt/actions/runs/37573387512) and
+[all-asset public-byte/provenance check](https://github.com/storminator89/Tracebolt/actions/runs/37574492167) passed. The complete
+`managed-operations-v3` profile selects `--read-admin` and the validated agent
+ingress, with one combined terminal approval for inventory, network identity,
+current/future exact-service journals and isolated socket-owner metadata. The main
+agent remains nonroot; the separate socket helper's broad process-memory authority
+is explicitly disclosed.
 
 The [one-command read-admin guide](read-admin-onboarding.md) describes that scope
-and the required hidden invitation entry and dashboard fingerprint approval.
-Keep the local terminal open until all phases finish. No endpoint Go build or
-per-view setup command is needed. Basic/non-complete profiles retain their
-ordinary pending-service behavior; a missing or incompatible release pin cannot
-silently downgrade a complete installation to it.
+and the required hidden invitation entry and dashboard fingerprint approval. Keep
+the local terminal open until all phases finish. Basic/non-complete profiles retain
+ordinary pending-service behavior. A missing or incompatible pin cannot downgrade
+a complete installation. Manager deployment is separate; see the
+[fresh Docker-manager guide](http-complete-first-start.md).
 
-The [native Ubuntu TLS acceptance](https://github.com/storminator89/Tracebolt/actions/runs/37508637893)
-passed on c1cd23a, whose production/native bytes match the release source. This
-covers all six functional checks and final cleanup. Download-based installation
-on the user's fresh Debian/HTTP VM and actual OS reboot remain separate local
-acceptance steps. Follow the **[fresh Docker-manager and background-agent guide](http-complete-first-start.md)**;
-manager deployment remains separate from installing the endpoint. The combined
-path is for a fresh supported host and does not adopt existing installation state.
+For a completed read-admin v2 installation, rc.3 supports the
+[same-identity, same-scope update](read-admin-upgrade.md) with a local terminal
+approval and no new enrollment. The [native Ubuntu TLS gate](https://github.com/storminator89/Tracebolt/actions/runs/37572468648) passed
+the verified rc.2-to-405f source-built replacement, all four upgrade checks, all six
+functional checks and cleanup. Released rc.3 artifacts are independently verified
+above; the user's download-based Debian/HTTP upgrade and actual OS reboot remain
+separate local acceptance steps.
 
 For an existing activated v3 agent, the [one-time inventory collection guide](guided-inventory-setup.md)
 can group the existing full process/mount and full cached APT grants into one

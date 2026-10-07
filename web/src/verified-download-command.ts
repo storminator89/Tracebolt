@@ -7,7 +7,7 @@ type BootstrapPublicationPin = Readonly<{ version: string; publicationCommit: st
 // Activation is a reviewed source change after official publication and readback.
 // This is the bootstrap publication commit, NOT the binary/source build commit.
 // Never populate it from API data, manager configuration, environment or storage.
-export const OFFICIAL_LINUX_BOOTSTRAP_PIN: BootstrapPublicationPin | null = { version: 'v0.1.0-rc.2', publicationCommit: '08c7f0ef3bb8c3f8941a071d885bdf550c7f72c5', bootstrapSHA256: '10b372ed31d0b2e04d901286ed477a9e7b4fc4d1efe7faea78a5ae8a284db4ea' };
+export const OFFICIAL_LINUX_BOOTSTRAP_PIN: BootstrapPublicationPin | null = { version: 'v0.1.0-rc.3', publicationCommit: 'bba617e459bb072d4506fe6cacecaa97388ea93c', bootstrapSHA256: '5071d6ecb5933c70c9ee9be8a2ff0b4c0b48fbd6084ea83065b8c5cf634cc231' };
 
 const shellQuote = (value: string): string => `'${value.replaceAll("'", "'\\''")}'`;
 function validPin(value: unknown): value is BootstrapPublicationPin {
@@ -21,7 +21,7 @@ function validPin(value: unknown): value is BootstrapPublicationPin {
 
 // Only this explicitly reviewed release supports the combined read-admin v2 flow.
 // Future releases require a source review, rather than an inferred version range.
-const READ_ADMIN_RELEASE_VERSION = 'v0.1.0-rc.2';
+const READ_ADMIN_RELEASE_VERSION = 'v0.1.0-rc.3';
 export function verifiedLinuxDownloadAvailable(profile: EnrollmentCollectionProfile = 'basic-readonly-v1'): boolean {
     return validPin(OFFICIAL_LINUX_BOOTSTRAP_PIN) &&
         (profile !== 'managed-operations-v3' || OFFICIAL_LINUX_BOOTSTRAP_PIN.version === READ_ADMIN_RELEASE_VERSION);

@@ -93,9 +93,25 @@ describe('fresh capture drafts and retained snapshot context', () => {
         const age = document.querySelector('.journal-snapshot-age')!;
         expect(age).toHaveTextContent('Age at last status check: 4 min');
         expect(age.querySelector('time')).toHaveAttribute('datetime', journalNow);
+        expect(screen.getByText(/Alias targets are not reported here/)).not.toBeVisible();
+        fireEvent.click(screen.getByText('Why is this empty?', { selector: 'summary' }));
         expect(screen.getByText(/Alias targets are not reported here/)).toBeVisible();
         rendered.rerender(<JournalContent resource={{ ...r, page: { ...r.page!, coverage: 'partial', reason: 'item_limit' } }} insecureTestMode={false}/>);
         expect(screen.queryByText(/Alias targets are not reported here/)).not.toBeInTheDocument();
         expect(r.create).not.toHaveBeenCalled(); expect(r.search).not.toHaveBeenCalled();
     });
+});
+
+it('keeps essential unchecked consent visible while collapsing limits and the full masking explanation', () => {
+    const r = resource(); render(<JournalContent resource={r} insecureTestMode initialUnit="ssh.service"/>);
+    fireEvent.click(screen.getByRole('button', { name: 'Fetch logs' }));
+    const dialog = screen.getByRole('dialog', { name: 'Review log request' }), ui = within(dialog);
+    expect(ui.getByText('Limits & privacy', { selector: 'summary' }).closest('details')).not.toHaveAttribute('open');
+    expect(ui.getByText(/Masking is best effort and does not make log messages safe or anonymous/)).not.toBeVisible();
+    expect(ui.getByRole('checkbox', { name: /credentials, personal data or other secrets, even after masking/ })).not.toBeChecked();
+    expect(ui.getByRole('checkbox', { name: /HTTP test sends log content over an unencrypted connection/ })).not.toBeChecked();
+    expect(ui.getByRole('button', { name: 'Capture logs' })).toBeDisabled();
+    fireEvent.click(ui.getByText('Limits & privacy', { selector: 'summary' }));
+    expect(ui.getByText(/Masking is best effort and does not make log messages safe or anonymous/)).toBeVisible();
+    expect(r.create).not.toHaveBeenCalled(); expect(r.refreshWindow).not.toHaveBeenCalled();
 });

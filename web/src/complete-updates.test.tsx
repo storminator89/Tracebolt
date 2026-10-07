@@ -90,7 +90,7 @@ describe('complete known cached update rows', () => {
     it('requires explicit restart after generation conflict', async () => { await open(); vi.mocked(mutateRaw).mockRejectedValueOnce(new APIError('expired', 409)); fireEvent.click(screen.getByRole('button', { name: 'Next 100 candidates' })); await screen.findByText(/generation or paging session expired or changed/); expect(screen.queryByRole('table')).not.toBeInTheDocument(); expect(request).toHaveBeenCalledTimes(1); fireEvent.click(screen.getByRole('button', { name: 'Refresh complete update inventory' })); await screen.findByRole('table'); expect(JSON.parse(vi.mocked(mutateRaw).mock.calls.at(-1)![1]).cursor).toBe(''); });
     it('locks after session failure and never restores on focus', async () => { await open(); vi.mocked(mutateRaw).mockRejectedValueOnce(new APIError('session', 401)); fireEvent.click(screen.getByRole('button', { name: 'Next 100 candidates' })); await screen.findByText('Your session has ended. Sign in again.'); act(() => window.dispatchEvent(new Event('focus'))); expect(screen.queryByRole('table')).not.toBeInTheDocument(); expect(screen.getByRole('button', { name: 'Refresh complete update inventory' })).toBeDisabled(); });
     it('rejects repeated page order rather than silently missing tail rows', async () => { await open(); vi.mocked(mutateRaw).mockResolvedValueOnce(updatePage(view, rows)); fireEvent.click(screen.getByRole('button', { name: 'Next 100 candidates' })); await screen.findByText(/Inconsistent or unsupported update data/); expect(screen.queryByRole('table')).not.toBeInTheDocument(); });
-    it.each(['staging lease', 'capture retention'] as const)('expires a pending transfer at its %s without refreshing facts or querying', async deadline => {
+    it.each(['staging lease', 'capture retention'] as const)('expires a pending transfer at its %s without renewing facts or querying', async deadline => {
         vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
         const mono = vi.spyOn(performance, 'now').mockReturnValue(1000), wall = vi.spyOn(Date, 'now').mockReturnValue(100000);
         view.complete!.binding.sequence = '1';
@@ -108,7 +108,7 @@ describe('complete known cached update rows', () => {
         expect(screen.getByText('Transfer expired')).toBeVisible(); expect(screen.queryByText('Transfer pending')).not.toBeInTheDocument();
         expect(screen.getByText('128 / 1,213')).toBeVisible(); expect(screen.getByText('1 / 10')).not.toBeVisible(); fireEvent.click(screen.getByText('Transfer details', { selector: 'summary' })); expect(screen.getByText('1 / 10')).toBeVisible();
         if (view.complete) { expect(screen.getByRole('table')).toBeVisible(); expect(screen.getByText(view.complete.manifest.collectedAt)).toBeVisible(); }
-        expect(request).toHaveBeenCalledTimes(reads); expect(mutateRaw).toHaveBeenCalledTimes(pages); expect(JSON.stringify(view)).toBe(original);
+        expect(request).toHaveBeenCalledTimes(reads + (deadline === 'staging lease' ? 1 : 0)); expect(mutateRaw).toHaveBeenCalledTimes(pages); expect(JSON.stringify(view)).toBe(original);
     });
     it('renders German state and hold labels', async () => { setLocale('de', false); await open(); expect(screen.getByText('Bekannte neuere Kandidaten')).toBeVisible(); expect(screen.getAllByText('Von dpkg zurückgehalten').length).toBeGreaterThan(0); });
 });

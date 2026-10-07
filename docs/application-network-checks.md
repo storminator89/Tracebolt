@@ -11,8 +11,11 @@ configuration is provided or changed by this source candidate.
 
 ## Versioned explicit configuration
 
-Use the same protected `--application-checks-config PATH` file and existing
-manager binding/acknowledgement rules documented in [application checks](application-checks.md).
+Use **Settings → Application check setup** for a disabled draft and separate
+reviewed enablement, or the same protected `--application-checks-config PATH`
+startup file and existing manager binding/acknowledgement rules documented in
+[application checks](application-checks.md). The supplied file overrides browser
+settings as read-only, even when disabled.
 For DNS/TCP, select `schemaVersion: "tracebolt.application-checks-config.v2"`.
 The root fields otherwise stay identical. Version 1 never accepts new kinds.
 A minimal disabled v2 file is:
@@ -36,11 +39,12 @@ credentials, TLS switches or extra fields are accepted. IPv6 host literals use
 canonical unbracketed address syntax; they may not contain an interface zone.
 A configured literal TCP address must be in the exact numeric allowlist.
 
-The existing eight-target total is shared by all kinds. Targets are startup
-snapshots, remain off without explicit configuration, and have no browser
-configuration or trigger controls. Altering the file requires the same separately
-authorized manager restart. Disabled v2 preserves its v2 status schema without
-starting an outbound worker.
+The existing eight-target total is shared by all kinds. Managed drafts remain off
+until an administrator explicitly enables the reviewed saved revision. The
+protected file path remains an immutable startup snapshot; altering it requires
+the same separately authorized manager restart. Neither path provides a one-shot
+trigger. Disabled v2 preserves its v2 status schema without starting an outbound
+worker. See the [persisted setup contract](application-checks-configuration-design.md).
 
 ## What the observations establish
 

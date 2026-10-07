@@ -25,7 +25,8 @@ type InventoryMaintenanceResult struct {
 // schema is installed. The caller's rolling slot only chooses fairness, never
 // authority. At most one eligible generation batch (256 rows,16 chunks) is
 // reclaimed in this transaction. Cached-update rows also expire after their
-// original 24-hour retention. Replay floors and original receipt ages survive.
+// original 24-hour retention. Up to 256 expired resource-history rows are
+// also reclaimed. Replay floors and original receipt ages survive.
 func (s *Store) MaintainInventoryStep(ctx context.Context, slot uint64, now time.Time) (InventoryMaintenanceResult, error) {
 	zero := InventoryMaintenanceResult{}
 	release, e := s.inventoryAdmission(ctx)
@@ -38,6 +39,9 @@ func (s *Store) MaintainInventoryStep(ctx context.Context, slot uint64, now time
 	e = s.transact(ctx, func(t *transaction) error {
 		if !validStoreTime(now) {
 			return enrollmentstate.ErrInvalid
+		}
+		if e := pruneResourceHistory(ctx, t, now); e != nil {
+			return e
 		}
 		devices := []string{}
 		for _, snap := range t.engine.Snapshots() {
