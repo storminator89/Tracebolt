@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-10-07 — Keep mobile device navigation visible
+
+- Reveal the selected device tab on mount, selection and resize using horizontal-only movement. Actual German mobile screenshots showed Capabilities selected while its tab remained outside the visible strip. Add named 44px previous/more controls only when the full row cannot fit; browsing those controls does not select a panel or start a data read. Preserve arrow/Home/End focus, panel permissions and manual strip position across unchanged metadata refreshes.
+- Check widened layouts against the whole row so controls disappear when no longer needed. Extend the existing English/German mobile capability scenario with active-tab geometry and control assertions; revised hosted screenshots remain required. Read-only application explanations already begin collapsed, so the visual review leaves them unchanged.
+
+
 ## 2026-10-07 — Complete container inputs and order v3 fixture setup
 
 - Add only the proactive browser fixture and its TypeScript declaration to the Docker context allowlist and web build inputs. The new UI contract test imports that shared synthetic fixture; the old restricted build layout reproduced TS2307, while the corrected exact COPY layout passes the unchanged production build and fixture validator. Runtime stages, dependency pins and TypeScript/test coverage are unchanged.

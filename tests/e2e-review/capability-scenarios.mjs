@@ -78,6 +78,7 @@ export async function capabilityBrowserCase({ pageAt, login, shot, expect, base 
   await expect(row('remote_actions')).toHaveAttribute('data-state', 'unsupported');
   await expect(page.locator('.capability-observations details[open]')).toHaveCount(0);
   await expect(page.getByText(device.capabilities[0].detail, { exact: true })).not.toBeVisible();
+  await expect(page.locator('.device-tab-scroll')).toHaveCount(0);
   await noOverflow(); await page.locator('.capability-observations').scrollIntoViewIfNeeded(); await shot(page, `synthetic-capability-collected-desktop-${locale}`, capabilityFixtureDisclosure);
   for (const state of ['denied', 'failed', 'stale']) {
    stage = locale + '-' + state; phase = state; const before = statusReads; await check.click();
@@ -90,6 +91,24 @@ export async function capabilityBrowserCase({ pageAt, login, shot, expect, base 
   }
   await page.setViewportSize({ width: 390, height: 844 });
   await noOverflow();
+  stage = locale + '-mobile-navigation';
+  const activeTab = page.getByRole('tab', { name: locale === 'de' ? 'Fähigkeiten' : 'Capabilities', exact: true });
+  const activeTabVisible = () => activeTab.evaluate(element => {
+   const item = element.getBoundingClientRect(), strip = element.parentElement.getBoundingClientRect();
+   return item.left >= strip.left - 1 && item.right <= strip.right + 1;
+  });
+  await expect.poll(activeTabVisible).toBe(true);
+  const previousSections = page.getByRole('button', { name: locale === 'de' ? 'Vorherige Gerätebereiche anzeigen' : 'Show previous device sections', exact: true });
+  const moreSections = page.getByRole('button', { name: locale === 'de' ? 'Weitere Gerätebereiche anzeigen' : 'Show more device sections', exact: true });
+  await expect(previousSections).toBeEnabled(); await expect(moreSections).toBeDisabled();
+  expect(await previousSections.evaluate(element => { const rect = element.getBoundingClientRect(); return rect.width >= 44 && rect.height >= 44; })).toBe(true);
+  await previousSections.click(); await expect(moreSections).toBeEnabled();
+  await expect(activeTab).toHaveAttribute('aria-selected', 'true');
+  await expect(row('systemd')).toHaveAttribute('data-state', 'stale');
+  await activeTab.evaluate(element => element.focus({ preventScroll: true }));
+  await page.keyboard.press('End'); await expect(activeTab).toBeFocused();
+  await expect.poll(activeTabVisible).toBe(true); await expect(moreSections).toBeDisabled();
+  stage = locale + '-mobile-disclosure';
   const details = row('systemd').locator('details');
   await details.locator('summary').focus(); await page.keyboard.press('Enter');
   await expect(details).toHaveAttribute('open', '');

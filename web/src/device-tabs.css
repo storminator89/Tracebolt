@@ -1,0 +1,5 @@
+.device-tab-navigation{display:flex;align-items:flex-end;gap:6px;min-width:0;margin-top:14px;border-bottom:1px solid var(--line)}
+.device-page .device-tab-navigation>.drawer-tabs{flex:1;min-width:0;margin-top:0;border-bottom:0;overscroll-behavior-x:contain}
+.device-tab-scroll{display:flex;align-items:center;justify-content:center;flex:0 0 44px;min-height:44px;margin-bottom:2px;border:1px solid var(--line);border-radius:7px;background:var(--panel);color:var(--accent)}
+.device-tab-scroll:disabled{color:var(--secondary);opacity:.45;cursor:default}
+.device-tab-scroll:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
