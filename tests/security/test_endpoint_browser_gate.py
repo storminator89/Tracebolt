@@ -4,6 +4,7 @@ import copy
 import io
 import json
 import os
+import re
 from pathlib import Path
 import tempfile
 import unittest
@@ -18,7 +19,7 @@ def valid_report():
     value = {key: False for key in gate.FLAGS}
     value.update({key: "Synthetic fixture" for key in gate.TEXT})
     value.update(sourceSha=SHA, runtimeErrorCount=0,
-                 summary={"passed": 6, "failed": 0, "setupFailure": False},
+                 summary={"passed": 7, "failed": 0, "setupFailure": False},
                  results=[{"name": name, "status": "PASS", "durationMs": 1} for name in sorted(gate.CASES)])
     return value
 
@@ -26,6 +27,18 @@ def valid_report():
 class BrowserEvidenceTests(unittest.TestCase):
     def test_exact_complete_report(self):
         self.assertIsNone(gate.validate(valid_report(), SHA))
+
+    def test_closed_case_names_match_the_current_browser_runner(self):
+        source = (Path(__file__).parents[1] / "e2e-review" / "endpoint-identity-browser.mjs").read_text()
+        names = re.findall(r"await check\('([^']+)'", source)
+        self.assertEqual(len(names), 7)
+        self.assertEqual(len(set(names)), 7)
+        self.assertEqual(set(names), gate.CASES)
+        gallery = "Identity and certificate details stay legible in both languages and viewport sizes"
+        value = valid_report()
+        value["results"] = [item for item in value["results"] if item["name"] != gallery]
+        value["summary"]["passed"] = 6
+        with self.assertRaises(ValueError): gate.validate(value, SHA)
 
     def test_each_field_required_and_unknown_fields_rejected(self):
         for key in gate.KEYS:
@@ -44,7 +57,7 @@ class BrowserEvidenceTests(unittest.TestCase):
             for wrong in (True, 0, None, "false"):
                 value = valid_report(); value[key] = wrong
                 with self.subTest(key=key, wrong=wrong), self.assertRaises(ValueError): gate.validate(value, SHA)
-        for key, wrong in (("passed", 5), ("passed", 7), ("passed", 6.0), ("failed", 1),
+        for key, wrong in (("passed", 5), ("passed", 6), ("passed", 8), ("passed", 6.0), ("passed", 7.0), ("failed", 1),
                            ("failed", False), ("setupFailure", True), ("setupFailure", 0)):
             value = valid_report(); value["summary"][key] = wrong
             with self.subTest(key=key, wrong=wrong), self.assertRaises(ValueError): gate.validate(value, SHA)
@@ -53,7 +66,7 @@ class BrowserEvidenceTests(unittest.TestCase):
             with self.assertRaises(ValueError): gate.validate(value, SHA)
 
     def test_exact_case_set_status_and_duration(self):
-        for index in range(6):
+        for index in range(7):
             value = valid_report(); del value["results"][index]
             with self.assertRaises(ValueError): gate.validate(value, SHA)
             for field, wrong in (("name", "unknown"), ("name", []), ("status", "SKIPPED"),

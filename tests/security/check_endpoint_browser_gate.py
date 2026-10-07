@@ -1,4 +1,4 @@
-"""Check the six fixed synthetic browser cases without printing report contents."""
+"""Check the seven fixed synthetic browser cases without printing report contents."""
 import json
 import os
 import re
@@ -9,6 +9,7 @@ from report_complete_mvp import unique_object, reject_constant
 
 MAX_BYTES = 131072
 CASES = {
+    "Identity and certificate details stay legible in both languages and viewport sizes",
     "Reported hostname stays inert and distinct from stable identity with independent interface families",
     "Partial and denied observations preserve per-family facts and distinguish successful emptiness in German mobile UI",
     "Ordinary reports and manual refresh preserve original hostname generation and historical age",
@@ -35,10 +36,10 @@ def validate(value, source_sha):
     summary = value["summary"]
     if not isinstance(summary, dict) or set(summary) != {"passed", "failed", "setupFailure"}:
         raise ValueError("invalid summary")
-    if type(summary["passed"]) is not int or summary["passed"] != 6 or type(summary["failed"]) is not int or summary["failed"] != 0 or summary["setupFailure"] is not False:
+    if type(summary["passed"]) is not int or summary["passed"] != 7 or type(summary["failed"]) is not int or summary["failed"] != 0 or summary["setupFailure"] is not False:
         raise ValueError("incomplete summary")
     results = value["results"]
-    if not isinstance(results, list) or len(results) != 6:
+    if not isinstance(results, list) or len(results) != 7:
         raise ValueError("wrong case count")
     names = set()
     for result in results:
@@ -77,7 +78,7 @@ def main(argv):
     except Exception:
         print("FAIL: missing, partial, mismatched or unsafe endpoint-browser evidence.")
         return 1
-    print("PASS: six exact endpoint browser cases on the selected commit; invented data and no collector, consent, installer or user-VM execution.")
+    print("PASS: seven exact endpoint browser cases on the selected commit; invented data and no collector, consent, installer or user-VM execution.")
     return 0
 
 

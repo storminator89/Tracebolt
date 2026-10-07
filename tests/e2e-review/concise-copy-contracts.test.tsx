@@ -13,6 +13,9 @@ import { FleetIdentityName } from '../../web/src/fleet-identity';
 import { fleetIdentityProjection } from '../../web/src/fleet-identity-types';
 import { endpointView, endpointDevice } from '../../web/src/endpoint-identity-fixtures';
 import { DeviceDetail } from '../../web/src/details';
+import { EndpointIdentityPanel } from '../../web/src/endpoint-identity';
+import { Status } from '../../web/src/components';
+import { emptyEndpointView } from '../../web/src/endpoint-identity-fixtures';
 import { systemPage, systemView, serviceRows } from '../../web/src/system-inventory-fixtures';
 import { actionSession, actionView, actionDevice } from '../../web/src/service-action-fixtures';
 import { openServiceActionDisplay } from './service-action-display-navigation.mjs';
@@ -29,6 +32,16 @@ beforeEach(() => {
 afterEach(() => { cleanup(); abortProtectedRequests(); vi.restoreAllMocks(); });
 const flush = () => act(async () => {});
 describe('concise browser copy matches rendered production meaning', () => {
+ it('keeps default-off local identity consent and unassessed health explicit while no observation exists', () => {
+  const refresh=vi.fn();
+  render(<><EndpointIdentityPanel resource={{view:emptyEndpointView('not_collected'),snapshot:null,loading:false,recovering:false,error:null,elapsed:0,refresh}}/><Status status="unknown" source="lan" synthetic={false}/></>);
+  expect(screen.getByText(conciseCopy.endpointPermission)).toBeVisible();
+  expect(screen.getByText('No accepted hostname or interface observation')).toBeVisible();
+  expect(screen.getByText('No hostname or address values are shown in this state.')).toBeVisible();
+  expect(document.querySelector('.endpoint-hostname-value,.endpoint-interface,.endpoint-identity input')).toBeNull();
+  expect(screen.getByText('Not assessed')).toHaveAttribute('title','Overall health has not been assessed. The last observation time is shown separately.');
+  expect(request).not.toHaveBeenCalled();expect(mutateRaw).not.toHaveBeenCalled();expect(refresh).not.toHaveBeenCalled();
+ });
  it('retains DNS source/approval limits in the mixed application view', async () => {
   vi.mocked(request).mockResolvedValue(applicationViewV2([applicationDNSRow()]));render(<ApplicationChecksPanel/>);await flush();
   fireEvent.click(screen.getByText('Observation scope',{selector:'summary'}));
