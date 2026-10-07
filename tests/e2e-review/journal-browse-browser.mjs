@@ -9,6 +9,12 @@ const clone=v=>structuredClone(v),requireFixture=v=>{if(!v)throw Error('Unsuppor
 const exact=(v,keys)=>v&&typeof v==='object'&&!Array.isArray(v)&&Object.keys(v).sort().join(',')===[...keys].sort().join(',');
 const stages=new Set(['setup','login','direct-read','sparse-search','continuation','mobile','expiry','guards']);let stage='setup';
 export const journalBrowseFailureStage=()=>stage;
+let diagnostic=null;
+export const journalBrowseFailureDetails=()=>diagnostic;
+export function journalBrowseDiagnostic({counts={},rejected='none',state='unknown'}={}){
+ const finite=v=>Number.isSafeInteger(v)&&v>=0&&v<=100?v:null;
+ return {reads:finite(counts.reads),creates:finite(counts.creates),pages:finite(counts.pages),cancels:finite(counts.cancels),rejected:['none','authentication','csrf','payload','device','unrelated-write'].includes(rejected)?rejected:'unknown',state:['missing-panel','failure','paused','blocked','loading','expired','rendered','unknown'].includes(state)?state:'unknown'};
+}
 const mark=s=>{stage=stages.has(s)?s:'unknown';};
 export function createJournalBrowseFixture({anchor='2026-10-07T12:00:00.000Z'}={}){
  let now=Date.parse(anchor),request=null,source=null,sequence=0;requireFixture(Number.isFinite(now));
@@ -34,18 +40,30 @@ export function createJournalBrowseFixture({anchor='2026-10-07T12:00:00.000Z'}={
  }};
 }
 export async function journalBrowseBrowserCase({pageAt,login,expect,base,shot}){
- mark('setup');const page=await pageAt(`/devices/${originalDevice.id}/logs/fixture.service`),start=Date.now();await page.clock.install({time:new Date(start)});await page.clock.pauseAt(new Date(start+1000));
- const fixture=createJournalBrowseFixture({anchor:new Date(start-5000).toISOString()}),unexpected=[],external=[];let csrf='',sessionSequence=0,consumedSession=0,authenticated=false;
- await page.route('**/*',async route=>{const request=route.request(),url=new URL(request.url()),method=request.method();const fail=()=>{unexpected.push('rejected-fixture-request');return route.abort('blockedbyclient');};
+ diagnostic=null;mark('setup');const page=await pageAt(`/devices/${originalDevice.id}/logs/fixture.service`),start=Date.now();await page.clock.install({time:new Date(start)});await page.clock.pauseAt(new Date(start+1000));
+ const fixture=createJournalBrowseFixture({anchor:new Date(start-5000).toISOString()}),unexpected=[],external=[];let csrf='',sessionSequence=0,consumedSession=0,authenticated=false,rejected='none',gate='payload';
+ await page.route('**/*',async route=>{const request=route.request(),url=new URL(request.url()),method=request.method();const fail=(reason='payload')=>{rejected=reason;unexpected.push('rejected-fixture-request');return route.abort('blockedbyclient');};
   if(url.origin!==base){external.push('external');return route.abort('blockedbyclient');}
   if(method==='GET'&&url.pathname==='/api/auth/session'&&url.search===''){requireFixture(request.postData()===null);const response=await route.fetch();if(response.status()===200)authenticated=(await response.json()).authenticated===true;return route.fulfill({response});}
   if(method==='GET'&&url.pathname==='/api/session'&&url.search===''){requireFixture(request.postData()===null);const response=await route.fetch();if(response.status()===200){const value=await response.json();csrf=value.csrfToken;sessionSequence++;}return route.fulfill({response});}
-  if(url.pathname===`/api/devices/${fixture.device}`&&method==='GET'&&url.search===''){if(!authenticated||request.postData()!==null)return fail();return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(fixture.deviceView())});}
-  if(url.pathname.startsWith(fixture.prefix))try{requireFixture(authenticated&&url.search==='');if(method==='GET')requireFixture(request.postData()===null);else{const headers=await request.allHeaders();requireFixture(method==='POST'&&headers['content-type']==='application/json'&&csrf!==''&&headers['x-csrf-token']===csrf&&sessionSequence>consumedSession);consumedSession=sessionSequence;}return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(fixture.handle(method,url.pathname,method==='GET'?null:request.postDataJSON()))});}catch{return fail();}
-  if(method!=='GET'&&!(method==='POST'&&url.pathname==='/api/auth/login'))return fail();return route.continue();
+  if(url.pathname===`/api/devices/${fixture.device}`&&method==='GET'&&url.search===''){if(!authenticated||request.postData()!==null)return fail('device');return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(fixture.deviceView())});}
+  if(url.pathname.startsWith(fixture.prefix))try{gate='authentication';requireFixture(authenticated&&url.search==='');gate='payload';if(method==='GET')requireFixture(request.postData()===null);else{const headers=await request.allHeaders();gate='csrf';requireFixture(method==='POST'&&headers['content-type']==='application/json'&&csrf!==''&&headers['x-csrf-token']===csrf&&sessionSequence>consumedSession);consumedSession=sessionSequence;}gate='payload';const body=fixture.handle(method,url.pathname,method==='GET'?null:request.postDataJSON());return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(body)});}catch{return fail(gate);}
+  if(method!=='GET'&&!(method==='POST'&&url.pathname==='/api/auth/login'))return fail('unrelated-write');return route.continue();
  });
  mark('login');await login(page);const panel=page.locator('.journal-panel');
- mark('direct-read');await expect(panel).toContainText('Synthetic newest retained message');expect(fixture.counts.creates).toBe(1);expect(fixture.latestQuery.start).toBe('1970-01-01T00:00:00Z');await expect(page.getByRole('dialog')).toHaveCount(0);await expect(panel).not.toContainText('I understand');
+ mark('direct-read');try{await expect(panel).toContainText('Synthetic newest retained message');}catch(error){
+  // Return only finite invented-state classifications, never DOM text, URLs,
+  // request bodies, tokens or raw Playwright exceptions.
+  let state='missing-panel';
+  try{if(await panel.count())state=await panel.evaluate(el=>{
+   const text=el.textContent??'';
+   return text.includes('The read could not be confirmed.')?'failure':text.includes('Reading is paused.')?'paused':text.includes('Retained browsing is unavailable')?'blocked':text.includes('Reading the selected service')?'loading':text.includes('This page is expired')?'expired':text.includes('Synthetic newest retained message')?'rendered':'unknown';
+  });}catch{state='unknown';}
+  diagnostic=journalBrowseDiagnostic({counts:fixture.counts,rejected,state});
+  try{if(authenticated&&await page.locator('input[type="password"]').count()===0&&await panel.count()===1){await panel.scrollIntoViewIfNeeded();await shot(page,'synthetic-retained-journal-direct-read-failure',journalBrowseDisclosure);}}catch{/* Diagnostic capture cannot replace the original failure. */}
+  throw error;
+ }
+ expect(fixture.counts.creates).toBe(1);expect(fixture.latestQuery.start).toBe('1970-01-01T00:00:00Z');await expect(page.getByRole('dialog')).toHaveCount(0);await expect(panel).not.toContainText('I understand');
  const label=async()=>page.evaluate(()=>{let el=document.getElementById('synthetic-journal-browse-label');if(!el){el=document.createElement('aside');el.id='synthetic-journal-browse-label';el.style.cssText='position:fixed;bottom:0;left:0;right:0;z-index:99999;background:#102a43;color:white;padding:6px 12px;font:12px sans-serif;text-align:center;pointer-events:none';document.body.append(el)}el.textContent='SYNTHETIC UI FIXTURE · No journal read, local grant or AI export';});
  await label();await panel.scrollIntoViewIfNeeded();await shot(page,'synthetic-retained-journal-desktop-en',journalBrowseDisclosure);
  mark('sparse-search');await page.clock.runFor(2200);await panel.getByLabel('Search retained messages').fill('rare');await panel.getByRole('button',{name:'Search logs',exact:true}).click();await expect(panel).toContainText('No matching messages in this source page. Older entries may still contain matches.');expect(fixture.counts.creates).toBe(2);const original=fixture.latestQuery;

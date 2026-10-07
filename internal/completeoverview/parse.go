@@ -146,7 +146,7 @@ func parseMountBytes(ctx context.Context, raw []byte) ([]MountRecord, error) {
 		}
 		major, c := canonicalUint32(dev[0])
 		minor, d := canonicalUint32(dev[1])
-		root, ok1 := decodeMountPath(f[3])
+		root, ok1 := decodeMountRoot(f[3], f[sep+1])
 		point, ok2 := decodeMountPath(f[4])
 		if !c || !d || !ok1 || !ok2 || !filesystemPattern.MatchString(f[sep+1]) {
 			return nil, ErrInvalidSource
@@ -162,6 +162,32 @@ func parseMountBytes(ctx context.Context, raw []byte) ([]MountRecord, error) {
 	}
 	return rows, nil
 }
+
+// nsfs renders a namespace handle rather than an absolute filesystem path in
+// mountinfo's root field (Linux fs/nsfs.c, nsfs_show_path). The handle is used
+// only for whole-set coherence; it is never opened or included in wire rows.
+// Mount points always retain decodeMountPath's absolute canonical path checks.
+func decodeMountRoot(s, filesystem string) (string, bool) {
+	if filesystem != "nsfs" || strings.HasPrefix(s, "/") {
+		return decodeMountPath(s)
+	}
+	kind, suffix, ok := strings.Cut(s, ":[")
+	if !ok || !strings.HasSuffix(suffix, "]") {
+		return "", false
+	}
+	switch kind {
+	case "cgroup", "ipc", "mnt", "net", "pid", "time", "user", "uts":
+	default:
+		return "", false
+	}
+	inode := strings.TrimSuffix(suffix, "]")
+	n, err := strconv.ParseUint(inode, 10, 64)
+	if err != nil || n == 0 || strconv.FormatUint(n, 10) != inode {
+		return "", false
+	}
+	return s, true
+}
+
 func decodeMountPath(s string) (string, bool) {
 	var b strings.Builder
 	for i := 0; i < len(s); i++ {

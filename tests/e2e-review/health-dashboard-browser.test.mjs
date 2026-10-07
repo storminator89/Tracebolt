@@ -49,3 +49,16 @@ test('German settings and the following clear phase no longer inherit the previo
  assert.match(source,/el\.scrollWidth<=el\.clientWidth\+1/);
  assert.equal(healthDisclosureFrameMs,32);
 });
+
+// Source geometry guard supplements, but does not replace, the hosted browser
+// assertion of every summary's scrollWidth after opening mobile settings.
+test('Health chevrons reserve room for every intermediate rotation angle',()=>{
+ const css=readFileSync(new URL('../../web/src/health.css',import.meta.url),'utf8');
+ const rule=css.match(/\.health-disclosure > summary > svg \{([^}]+)\}/)?.[1];
+ assert.ok(rule);
+ const clearance=Number(rule.match(/margin-inline:\s*(\d+)px/)?.[1]);
+ assert.ok(clearance>=(16*Math.SQRT2-16)/2,'16px rotating square needs clearance on each side');
+ assert.match(rule,/transition: transform \.15s/);
+ const view=readFileSync(new URL('../../web/src/health.tsx',import.meta.url),'utf8');
+ assert.equal((view.match(/<ChevronDown size=\{16\} aria-hidden="true"\/>/g)||[]).length,3);
+});

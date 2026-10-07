@@ -5,7 +5,7 @@
     "deploy/actions/common.py": "sha256:e41d7d6316505282e4e850a46cc4de95412c16b6223eeafd899ca53ac2e8e2c3",
     "deploy/actions/manager.py": "sha256:8fd5fd1e8ce9667e62a17b90bdcc5510239118ee9222acff741572f7671f42d8",
     "deploy/actions/endpoint.py": "sha256:164888cc3daa552c2fbdaa40eb83415dfc991b53b692ed1c27ed071dd1c224ba",
-    "deploy/journal/setup.py": "sha256:cd2c096814f2a59ee0b2380eeb60505c99baeb8e82bc31568b320ebf411442b3",
+    "deploy/journal/setup.py": "sha256:d9d7cedd0a1cd7b6ab1d6786a66f4f986b603a566cbe5e01f2703069f5d80098",
     "deploy/systemd/tracebolt-agent.service.in": "sha256:0bc6374c36f6252e42751f4692464429165b512bcb196486b81ff4785671ea0c",
     "deploy/systemd/tracebolt-action-helper.service.in": "sha256:d84ecb0d8e28c8866593bb9a4ca37c14653fb05ad69f2c8edd0a6b72e002a5f7",
     "deploy/systemd/tracebolt-action-helper.socket.in": "sha256:84c46bddbc907ec838a47cb06955ab12fa9edd8d1d258ed0793a4eb09d359537"

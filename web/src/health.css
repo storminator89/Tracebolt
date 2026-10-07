@@ -62,7 +62,9 @@
 .health-disclosure > summary > span { display: flex; align-items: baseline; gap: 13px; min-width: 0; }
 .health-disclosure > summary strong { font-size: 12px; font-weight: 550; }
 .health-disclosure > summary small { font-size: 11px; color: var(--secondary); }
-.health-disclosure > summary > svg { color: var(--secondary); flex: 0 0 auto; transition: transform .15s; }
+/* A rotating 16px chevron reaches 22.63px mid-transition. Keep its paint
+   inside the summary even when a paused browser clock stops mid-animation. */
+.health-disclosure > summary > svg { margin-inline: 4px; color: var(--secondary); flex: 0 0 auto; transition: transform .15s; }
 .health-disclosure[open] > summary > svg { transform: rotate(180deg); }
 .health-disclosure > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 3px; }
 .health-disclosure > :not(summary) { margin-bottom: 16px; }
