@@ -1,7 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import {createApplicationCheckSettingsFixture,applicationCheckSettingsFixtureTargets,applicationCheckSettingsEditedTargets,applicationCheckSettingsFixtureDisclosure,applicationCheckSettingsCaseName} from './application-check-settings-browser.mjs';
+import {createRequire} from 'node:module';
+import nodePath from 'node:path';
+import {createApplicationCheckSettingsFixture,applicationCheckSettingsFixtureTargets,applicationCheckSettingsEditedTargets,applicationCheckSettingsFixtureDisclosure,applicationCheckSettingsCaseName,createApplicationCheckSettingsDiagnostics} from './application-check-settings-browser.mjs';
 import {validApplicationCheckSettings} from '../../web/src/application-check-settings-types.ts';
 const path='/api/application-checks/settings';
 const save=f=>({expectedRevision:f.settings().revision,operation:'save',intervalSeconds:75,targets:structuredClone(applicationCheckSettingsFixtureTargets)});
@@ -47,4 +49,50 @@ test('hosted case adds exact intercepted setup without weakening the shared harn
  assert.match(source,/url.origin!==base/);assert.match(source,/url.pathname!=='\/api\/application-checks\/settings'\|\|url.search/);assert.match(source,/route.abort\('blockedbyclient'\)/);
  assert.match(source,/method==='POST'&&url.pathname!=='\/api\/auth\/login'/);assert.match(source,/expect\(unexpected\)\.toEqual\(\[\]\)/);assert.match(source,/expect\(external\)\.toEqual\(\[\]\)/);
  assert.match(source,/name:'Cancel'/);assert.match(source,/toHaveCount\(3\)/);assert.match(source,/width:390,height:844/);assert.match(source,/application-setup-disabled-mobile-de/);assert.match(source,/localStorage/);assert.match(source,/name:'Edit targets'/);assert.match(source,/namedCapabilities=\['read'\]/);assert.match(source,/namedCapabilities=\['read','manage_application_checks'\]/);assert.match(source,/fixture.counts.reads\)\.toBe\(beforeReadOnly\)/);
+});
+
+
+test('closed application-settings stages are retained by the runner without raw diagnostics',()=>{
+ const diagnostics=createApplicationCheckSettingsDiagnostics();assert.equal(diagnostics.current(),'initial');
+ for(const stage of ['bootstrap','http-url','tcp-kind','tcp-allowlist','save-edit','confirm-enable','readonly-role','admin-role','final-guards']){diagnostics.mark(stage);assert.equal(diagnostics.current(),stage);}
+ for(const invalid of ['https://secret.invalid/?token=never-log','raw DOM or exception text',null,{},42]){diagnostics.mark(invalid);assert.equal(diagnostics.current(),'unknown');}
+ const runner=read('./lan-browser.mjs'),source=read('./application-check-settings-browser.mjs');
+ assert.match(runner,/name===applicationCheckSettingsCaseName\?\{stage:applicationCheckSettingsFailureStage\(\)\}/);
+ assert.match(source,/applicationSettingsDiagnostics.mark\('tcp-kind'\)/);assert.match(source,/applicationSettingsDiagnostics.mark\('tcp-allowlist'\)/);
+ assert.match(source,/const field=name=>panel.getByRole\('textbox',\{name,exact:true\}\)/);
+ assert.match(source,/getByRole\('combobox',\{name:'Type',exact:true\}\)/);
+ assert.doesNotMatch(source,/getByLabel\('(?:Type|Allowed IP addresses)'/);
+});
+
+test('actual TargetForm preserves exact role names where Playwright label text includes control contents',()=>{
+ // Execute the installed, lockfile-pinned selector implementation in a DOM model.
+ // This is a selector regression, not Chromium/layout/actionability acceptance.
+ const require=createRequire(new URL('../../web/package.json',import.meta.url));
+ const {JSDOM,VirtualConsole}=require('jsdom'),React=require('react');
+ const {renderToStaticMarkup}=require('react-dom/server'),{transformSync}=require('esbuild');
+ const source=read('../../web/src/application-check-settings.tsx');
+ const form=source.slice(source.indexOf('function TargetForm('),source.indexOf('function ApplicationCheckSettingsContent('));
+ assert.match(form,/function TargetForm\(/);
+ const compiled=transformSync(`import {useId} from 'react';\n${form}\nexport default TargetForm;`,{loader:'tsx',format:'cjs',jsx:'automatic'}).code;
+ const module={exports:{}};new Function('require','module','exports',compiled)(require,module,module.exports);
+ const TargetForm=module.exports.default;
+ const labels={target:'Target',id:'Target ID',kind:'Type',url:'URL',dnsHost:'Hostname',tcpHost:'Hostname or IP address',port:'Port',ips:'Allowed IP addresses',ipsHelp:'Exact invented IPs',privateAck:'Approve private LAN',httpAck:'Approve plaintext HTTP',remove:'Remove target'};
+ const draft={kind:'http',id:'fixture',url:'https://fixture-check.invalid/health',host:'',port:'',ips:'',privateAck:false,httpAck:false};
+ const target=(index,ips)=>React.createElement(TargetForm,{draft:{...draft,ips},index,count:2,labels,change:()=>{},remove:()=>{}});
+ const html=renderToStaticMarkup(React.createElement('form',null,target(0,'10.20.30.40'),target(1,'')));
+ const dom=new JSDOM(html,{runScripts:'outside-only',pretendToBeVisual:true,virtualConsole:new VirtualConsole()});
+ try{
+  const {source:injectedSource}=require(nodePath.join(nodePath.dirname(require.resolve('playwright-core/package.json')),'lib/generated/injectedScriptSource.js'));
+  const win=dom.window;win.module={exports:{}};win.eval(injectedSource);
+  const InjectedScript=win.eval('InjectedScript');
+  const injected=new InjectedScript(win,{isUnderTest:true,sdkLanguage:'javascript',testIdAttributeName:'data-testid',stableRafCount:1,browserName:'chromium',customEngines:[]});
+  const query=selector=>injected.querySelectorAll(injected.parseSelector(selector),win.document);
+  assert.equal(query('internal:label="Type"s').length,0);
+  assert.equal(query('internal:role=combobox[name="Type"s]').length,2);
+  assert.equal(query('internal:role=combobox[name="Type"s] >> nth=1')[0],win.document.querySelectorAll('select')[1]);
+  assert.equal(query('internal:label="Allowed IP addresses"s').length,1);
+  assert.equal(query('internal:label="Allowed IP addresses"s >> nth=1').length,0);
+  assert.equal(query('internal:role=textbox[name="Allowed IP addresses"s]').length,2);
+  assert.equal(query('internal:role=textbox[name="Allowed IP addresses"s] >> nth=1')[0],win.document.querySelectorAll('textarea')[1]);
+ }finally{dom.window.close();}
 });

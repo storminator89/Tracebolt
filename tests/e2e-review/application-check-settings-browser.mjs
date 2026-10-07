@@ -35,7 +35,17 @@ export function createApplicationCheckSettingsFixture() {
  return {counts,settings,handle};
 }
 
+// Only fixed stage names reach reports: no DOM, destination, body or error text.
+const applicationSettingsStages=new Set(['initial','bootstrap','login','settings-load','open-editor','initial-interval','http-id','http-url','http-allowlist','http-approval','add-tcp-target','tcp-id','tcp-kind','tcp-host','tcp-port','tcp-allowlist','tcp-approval','draft-capture','save-draft','edit-targets','edit-port','edit-approvals','save-edit','enable-review','cancel-review','enable-approvals','enable-mobile','confirm-enable','disable','german-mobile','storage-guard','readonly-role','admin-role','final-guards']);
+export function createApplicationCheckSettingsDiagnostics(){
+ let stage='initial';
+ return {mark(value){stage=applicationSettingsStages.has(value)?value:'unknown';},current(){return stage;}};
+}
+const applicationSettingsDiagnostics=createApplicationCheckSettingsDiagnostics();
+export const applicationCheckSettingsFailureStage=()=>applicationSettingsDiagnostics.current();
+
 export async function applicationCheckSettingsBrowserCase({pageAt,login,expect,base,shot}) {
+ applicationSettingsDiagnostics.mark('bootstrap');
  const page=await pageAt('/settings'),clockStart=Date.now();
  await page.clock.install({time:new Date(clockStart)});await page.clock.pauseAt(new Date(clockStart+10000));
  const fixture=createApplicationCheckSettingsFixture(),requests=[],unexpected=[],external=[];let namedCapabilities=null;
@@ -60,59 +70,93 @@ export async function applicationCheckSettingsBrowserCase({pageAt,login,expect,b
   if(method==='POST'&&url.pathname!=='/api/auth/login'){unexpected.push(`Unexpected POST ${url.pathname}`);return route.abort('blockedbyclient');}
   return route.continue();
  });
+ applicationSettingsDiagnostics.mark('login');
  await expect(page.getByRole('heading',{name:'Sign in',exact:true})).toBeVisible();expect(fixture.counts.reads).toBe(0);await login(page);
  const panel=page.locator('.application-check-settings');
  const toggle=()=>panel.getByRole('button',{name:'Application check setup',exact:true});
+ // Exact role/name avoids getByLabel's option/textarea descendant-text matching.
+ const field=name=>panel.getByRole('textbox',{name,exact:true});
+ applicationSettingsDiagnostics.mark('settings-load');
  await expect(panel).toBeVisible();await expect.poll(()=>fixture.counts.reads).toBe(1);
+ applicationSettingsDiagnostics.mark('open-editor');
  await toggle().click();await panel.getByRole('button',{name:'Add targets',exact:true}).click();
- await panel.getByLabel('Interval (seconds)',{exact:true}).fill('75');
- await panel.getByLabel('Target ID',{exact:true}).fill('fixture-web');
- await panel.getByLabel('URL',{exact:true}).fill(applicationCheckSettingsFixtureTargets[0].url);
- await panel.getByLabel('Allowed IP addresses',{exact:true}).fill('10.20.30.40');
+ applicationSettingsDiagnostics.mark('initial-interval');
+ await field('Interval (seconds)').fill('75');
+ applicationSettingsDiagnostics.mark('http-id');
+ await field('Target ID').fill('fixture-web');
+ applicationSettingsDiagnostics.mark('http-url');
+ await field('URL').fill(applicationCheckSettingsFixtureTargets[0].url);
+ applicationSettingsDiagnostics.mark('http-allowlist');
+ await field('Allowed IP addresses').fill('10.20.30.40');
  // The form's per-target consent remains a distinct unchecked control.
+ applicationSettingsDiagnostics.mark('http-approval');
  await panel.locator('input[type=checkbox]').check();
+ applicationSettingsDiagnostics.mark('add-tcp-target');
  await panel.getByRole('button',{name:'Add target',exact:true}).click();
- await panel.getByLabel('Target ID',{exact:true}).nth(1).fill('fixture-port');
- await panel.getByLabel('Type',{exact:true}).nth(1).selectOption('tcp');
- await panel.getByLabel('Hostname or IP address',{exact:true}).fill('fixture-check.invalid');
- await panel.getByLabel('Port',{exact:true}).fill('443');
- await panel.getByLabel('Allowed IP addresses',{exact:true}).nth(1).fill('10.20.30.40');
+ applicationSettingsDiagnostics.mark('tcp-id');
+ await field('Target ID').nth(1).fill('fixture-port');
+ applicationSettingsDiagnostics.mark('tcp-kind');
+ await panel.getByRole('combobox',{name:'Type',exact:true}).nth(1).selectOption('tcp');
+ applicationSettingsDiagnostics.mark('tcp-host');
+ await field('Hostname or IP address').fill('fixture-check.invalid');
+ applicationSettingsDiagnostics.mark('tcp-port');
+ await field('Port').fill('443');
+ applicationSettingsDiagnostics.mark('tcp-allowlist');
+ await field('Allowed IP addresses').nth(1).fill('10.20.30.40');
+ applicationSettingsDiagnostics.mark('tcp-approval');
  await panel.locator('input[type=checkbox]').last().check();
+ applicationSettingsDiagnostics.mark('draft-capture');
  await panel.scrollIntoViewIfNeeded();await shot(page,'synthetic-http-test-application-setup-draft-desktop-en',applicationCheckSettingsFixtureDisclosure);
  expect(fixture.counts.saves).toBe(0);expect(fixture.counts.enables).toBe(0);
+ applicationSettingsDiagnostics.mark('save-draft');
  await panel.getByRole('button',{name:'Save draft',exact:true}).click();await expect.poll(()=>fixture.counts.saves).toBe(1);expect(fixture.settings().enabled).toBe(false);
+ applicationSettingsDiagnostics.mark('edit-targets');
  await panel.getByRole('button',{name:'Edit targets',exact:true}).click();
- await expect(panel.getByLabel('URL',{exact:true})).toHaveValue(applicationCheckSettingsFixtureTargets[0].url);
- await panel.getByLabel('Port',{exact:true}).fill('8443');
+ await expect(field('URL')).toHaveValue(applicationCheckSettingsFixtureTargets[0].url);
+ applicationSettingsDiagnostics.mark('edit-port');
+ await field('Port').fill('8443');
+ applicationSettingsDiagnostics.mark('edit-approvals');
  for(const checkbox of await panel.getByRole('checkbox').all()){await expect(checkbox).not.toBeChecked();await checkbox.check();}
+ applicationSettingsDiagnostics.mark('save-edit');
  await panel.getByRole('button',{name:'Save draft',exact:true}).click();await expect.poll(()=>fixture.counts.saves).toBe(2);
  expect(fixture.settings().enabled).toBe(false);expect(fixture.settings().targets[1].port).toBe(8443);
+ applicationSettingsDiagnostics.mark('enable-review');
  await panel.getByRole('button',{name:'Enable checks',exact:true}).click();
  const confirm=panel.getByRole('button',{name:'Confirm enable',exact:true});await expect(confirm).toBeDisabled();
  await expect(panel).toContainText(applicationCheckSettingsFixtureTargets[0].url);await expect(panel).toContainText('10.20.30.40');await expect(panel).toContainText('8443');
  for(const checkbox of await panel.getByRole('checkbox').all())await expect(checkbox).not.toBeChecked();
+ applicationSettingsDiagnostics.mark('cancel-review');
  await panel.getByRole('button',{name:'Cancel',exact:true}).click();expect(fixture.counts.enables).toBe(0);
+ applicationSettingsDiagnostics.mark('enable-approvals');
  await panel.getByRole('button',{name:'Enable checks',exact:true}).click();await expect(confirm).toBeDisabled();
  const acknowledgements=panel.getByRole('checkbox');await expect(acknowledgements).toHaveCount(3);
  for(const checkbox of await acknowledgements.all())await checkbox.check();
+ applicationSettingsDiagnostics.mark('enable-mobile');
  await page.setViewportSize({width:390,height:844});await panel.scrollIntoViewIfNeeded();
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth&&document.body.scrollWidth<=innerWidth)).toBe(true);
  await shot(page,'synthetic-http-test-application-setup-enable-mobile-en',applicationCheckSettingsFixtureDisclosure);
+ applicationSettingsDiagnostics.mark('confirm-enable');
  await confirm.click();await expect.poll(()=>fixture.counts.enables).toBe(1);
+ applicationSettingsDiagnostics.mark('disable');
  await panel.getByRole('button',{name:'Disable checks',exact:true}).click();await panel.getByRole('button',{name:'Confirm disable',exact:true}).click();await expect.poll(()=>fixture.counts.disables).toBe(1);
  expect(fixture.settings().enabled).toBe(false);expect(fixture.settings().configured).toBe(true);
+ applicationSettingsDiagnostics.mark('german-mobile');
  await page.getByLabel('Language',{exact:true}).selectOption('de');await expect(page.locator('html')).toHaveAttribute('lang','de');
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth&&document.body.scrollWidth<=innerWidth)).toBe(true);
  await panel.scrollIntoViewIfNeeded();await shot(page,'synthetic-http-test-application-setup-disabled-mobile-de',applicationCheckSettingsFixtureDisclosure);
+ applicationSettingsDiagnostics.mark('storage-guard');
  expect(await page.evaluate(()=>JSON.stringify({local:{...localStorage},session:{...sessionStorage}}).includes('fixture-check.invalid'))).toBe(false);
  // Named-role UI behavior only; actual server permission denial is covered by Go.
+ applicationSettingsDiagnostics.mark('readonly-role');
  const beforeReadOnly=fixture.counts.reads;namedCapabilities=['read'];await page.reload();
  const rolePanel=page.locator('.check-settings');await expect(rolePanel).toContainText('Die Einrichtung von Anwendungsprüfungen erfordert Administratorrechte.');
  await expect(rolePanel.locator('input,button,textarea,.check-settings-snapshot')).toHaveCount(0);
  await expect(page.locator('body')).not.toContainText('fixture-check.invalid');expect(fixture.counts.reads).toBe(beforeReadOnly);
+ applicationSettingsDiagnostics.mark('admin-role');
  namedCapabilities=['read','manage_application_checks'];await page.reload();await expect.poll(()=>fixture.counts.reads).toBe(beforeReadOnly+1);
  await panel.getByRole('button',{name:'Anwendungsprüfungen einrichten',exact:true}).click();
  await expect(panel.getByRole('button',{name:'Ziele bearbeiten',exact:true})).toBeVisible();
  await expect(panel).toContainText('fixture-check.invalid');
+ applicationSettingsDiagnostics.mark('final-guards');
  expect(unexpected).toEqual([]);expect(external).toEqual([]);expect(requests.filter(value=>value.startsWith('POST'))).toHaveLength(4);
 }

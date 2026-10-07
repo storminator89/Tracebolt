@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-10-07 — Align the hosted manager acceptance contracts
+
+- Update the older v3 enrollment browser case to recognize the already verified rc.3 read-admin pin. Preserve its original consent, public checksum, hidden-secret and no-execution assertions.
+- Select application setup controls by their exact accessible textbox/combobox names. The installed Playwright selector engine reproduces the old exact-label failure for nested select text and populated textarea labels. Retain target indexing, consent, request restrictions and every deadline; report only fixed allowlisted failure stages.
+- Bind chart keyboard expectations to the exact fulfilled synthetic response rather than regenerating timestamps after the settling clock advances. A deterministic 500ms regression covers the mismatch, with narrower closed initial-stage labels. The prior coarse hosted failure does not establish which initial subassertion failed; rendered acceptance still needs the next run.
+- This checkpoint changes tests and this record only. Production UI/API/collector/installer and resource-history delta behavior are byte-identical to b9d9; it does not require another agent release or native permission grant.
+
+
 ## 2026-10-07 — Coherent manager update and verified rc.3 commands
 
 - Select the independently verified rc.3 bootstrap for the complete-profile dashboard command. The release remains bound to 405f source; its separate native Ubuntu TLS gate passed the rc.2 replacement, original identity/scopes/private-state checks, all six functions and cleanup. Update the current installation guides; the user's Debian/HTTP update and OS reboot remain separate acceptance.
