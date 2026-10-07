@@ -40,12 +40,14 @@ PTY = inert_module('readAdminPTY')
 
 
 def approved_env(**updates):
-    return dict(TRACEBOLT_APPROVED_SYSTEMD_TEST='1',
+    value = dict(TRACEBOLT_APPROVED_SYSTEMD_TEST='1',
                 TRACEBOLT_APPROVED_READ_ADMIN_V2_SYSTEMD_TEST='1', GITHUB_ACTIONS='true',
-                RUNNER_ENVIRONMENT='github-hosted', RUNNER_OS='Linux',
+                RUNNER_ENVIRONMENT='github-hosted', RUNNER_OS='Linux', RUNNER_ARCH='X64', TRACEBOLT_READ_ADMIN_ARCHITECTURE='amd64', TRACEBOLT_READ_ADMIN_UPGRADE_CASE='false',
                 TRACEBOLT_READ_ADMIN_TRANSPORT='tls', TRACEBOLT_READ_ADMIN_SCENARIO='complete',
                 GITHUB_SHA='a' * 40, TRACEBOLT_READ_ADMIN_PROFILE='tracebolt.linux-read-admin.v2',
-                TRACEBOLT_APPROVED_READ_ADMIN_PTRACE='true', TRACEBOLT_READ_ADMIN_REVIEWED_SOURCE='a' * 40, **updates)
+                TRACEBOLT_APPROVED_READ_ADMIN_PTRACE='true', TRACEBOLT_READ_ADMIN_REVIEWED_SOURCE='a' * 40)
+    value.update(updates)
+    return value
 
 
 def complete(**updates):
@@ -62,6 +64,37 @@ def encoded(value, **kwargs):
 
 
 class InertScriptTests(unittest.TestCase):
+    def test_source_platform_accepts_only_finite_unpinned_contracts_without_mutation(self):
+        for targets in (("linux-amd64",),("linux-amd64","linux-arm64")):
+            host=types.SimpleNamespace(RELEASE_PIN=None,RUNTIME_TARGETS=targets,inspect_platform=mock.Mock(return_value="arm64"))
+            self.assertEqual(LAUNCHER.inspect_source_platform(host),"arm64")
+            host.inspect_platform.assert_called_once_with()
+            self.assertEqual(host.RUNTIME_TARGETS,targets)
+            self.assertIsNone(host.RELEASE_PIN)
+        for targets in ((),("linux-arm64",),("linux-amd64","linux-arm64","linux-armhf"),["linux-amd64"],"linux-amd64"):
+            host=types.SimpleNamespace(RELEASE_PIN=None,RUNTIME_TARGETS=targets,inspect_platform=mock.Mock())
+            with self.assertRaises(ValueError):LAUNCHER.inspect_source_platform(host)
+            host.inspect_platform.assert_not_called()
+        host=types.SimpleNamespace(RELEASE_PIN={"version":"unapproved"},RUNTIME_TARGETS=("linux-amd64",),inspect_platform=mock.Mock())
+        with self.assertRaises(ValueError):LAUNCHER.inspect_source_platform(host)
+        host.inspect_platform.assert_not_called()
+
+    def test_arm64_gate_requires_exact_architecture_runner_and_all_approvals(self):
+        for module in (LAUNCHER, PTY):
+            valid=approved_env(RUNNER_ARCH="ARM64",TRACEBOLT_READ_ADMIN_ARCHITECTURE="arm64",TRACEBOLT_APPROVED_READ_ADMIN_UPGRADE="true")
+            for scenario in ("complete","cancel-enrollment","retained-journal"):
+                current=dict(valid,TRACEBOLT_READ_ADMIN_SCENARIO=scenario)
+                self.assertEqual(module.require_gate(current,"linux",0,0),("tls",scenario,"a"*40))
+            for key,value in (("RUNNER_ARCH","X64"),("TRACEBOLT_READ_ADMIN_ARCHITECTURE","armhf"),("TRACEBOLT_APPROVED_READ_ADMIN_UPGRADE","false"),("TRACEBOLT_APPROVED_READ_ADMIN_PTRACE","false")):
+                with self.subTest(key=key),self.assertRaises(ValueError):module.require_gate(dict(valid,**{key:value}),"linux",0,0)
+        source=embedded('readAdminLauncher')
+        self.assertIn("arch = inspect_source_platform(host)",source)
+        self.assertIn("arch = b.inspect_host()",source)
+        self.assertIn("host.RUNTIME_TARGETS not in (('linux-amd64',), ('linux-amd64','linux-arm64'))",source)
+        self.assertNotRegex(source,r"\.RUNTIME_TARGETS\s*=(?!=)")
+        self.assertNotIn("b.inspect_host =",source)
+        self.assertIn("hashlib.sha256(host_bootstrap).hexdigest() == cfg['sourceHostPreflightSHA256']",source)
+
     def test_upgrade_restore_step_projection_is_closed_and_phase_bound(self):
         failed = dict(schemaVersion="tracebolt.read-admin-upgrade-result.v1", completed=False, canceled=False,
                       identityRetained=True, scopesChanged=False, participantsStopped=True, rollbackConfirmed=False,
@@ -116,7 +149,7 @@ class InertScriptTests(unittest.TestCase):
         cfg = dict(args=["/inert/python","-I"],secret="",approval="UPGRADE READ ADMIN",cancelApproval=False)
         with mock.patch.dict(PTY.os.environ, {}, clear=True), self.assertRaises(ValueError):
             PTY.parse_config(encoded(cfg),"tls")
-        with mock.patch.dict(PTY.os.environ,approved_env(TRACEBOLT_APPROVED_READ_ADMIN_UPGRADE="true"),clear=True):
+        with mock.patch.dict(PTY.os.environ,approved_env(TRACEBOLT_APPROVED_READ_ADMIN_UPGRADE="true",TRACEBOLT_READ_ADMIN_UPGRADE_CASE="true"),clear=True):
             self.assertEqual(PTY.parse_config(encoded(cfg),"tls")[1],"UPGRADE READ ADMIN")
 
     def test_cancel_preflight_diagnostics_remain_closed(self):

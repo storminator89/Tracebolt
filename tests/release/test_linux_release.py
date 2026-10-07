@@ -452,6 +452,33 @@ class Preflight(unittest.TestCase):
         run.assert_not_called()
         download.assert_not_called()
 
+    def test_source_platform_inspection_is_read_only_and_does_not_grant_release_admission(self):
+        original_targets = b.RUNTIME_TARGETS
+        with self.supported_host(), patch.object(b.platform, "machine", return_value="aarch64"), patch.object(b.sys, "maxsize", 2**63-1), patch.object(b.subprocess, "run") as run, patch.object(b, "download") as download, patch.object(b.tempfile, "mkdtemp") as staging:
+            self.assertEqual(b.inspect_platform(), "arm64")
+        self.assertEqual(b.RUNTIME_TARGETS, original_targets)
+        self.assertEqual(original_targets, ("linux-amd64",))
+        run.assert_not_called()
+        download.assert_not_called()
+        staging.assert_not_called()
+        with patch.object(b, "inspect_platform", return_value="arm64") as inspect, patch.object(b, "prepare_release") as prepare:
+            with self.assertRaisesRegex(b.Rejected, "not enabled by the pinned release"):
+                b.inspect_host()
+        inspect.assert_called_once_with()
+        prepare.assert_not_called()
+
+    def test_source_platform_api_keeps_userspace_distribution_and_prerequisite_checks(self):
+        with self.supported_host(), patch.object(b.platform, "machine", return_value="aarch64"), patch.object(b.sys, "maxsize", 2**31-1):
+            with self.assertRaisesRegex(b.Rejected, "64-bit Linux userspace"):
+                b.inspect_platform()
+        with self.supported_host(), patch.object(b.Path, "read_text", return_value="ID=raspbian\nVERSION_ID=13"):
+            with self.assertRaisesRegex(b.Rejected, "Supported hosts"):
+                b.inspect_platform()
+        with self.supported_host(), patch.object(b.Path, "is_file", return_value=False), patch.object(b.subprocess, "run") as run:
+            with self.assertRaises(b.Rejected):
+                b.inspect_platform()
+        run.assert_not_called()
+
     def test_arm64_runtime_admission_stays_disabled_until_native_gate(self):
         self.assertEqual(b.RUNTIME_TARGETS, ("linux-amd64",))
         with self.supported_host(), patch.object(b.platform, "machine", return_value="aarch64"), patch.object(b, "download") as download:

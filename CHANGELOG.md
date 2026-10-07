@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-10-07 — Windows read-only foundation and explicit ARM source acceptance
+
+- Add a separate, opt-in Windows stdout collector for bounded native resource, hostname/interface, process, service and machine-software observations. Application/System event headers require a second explicit flag. No event messages, Security log, elevation, enrollment, service installation, sender or persistent state is introduced. A dedicated hosted Windows gate validates actual reads without exporting telemetry.
+- Extend the existing manual read-admin workflow with native ARM64 fresh and source-built same-identity upgrade cases, plus cancellation and retained-journal cases. Bind the prior to exact 7b20 source and the candidate to the reviewed dispatched commit; independently verify native ELF, clean VCS metadata and artifact hashes. Require all three explicit approvals for every ARM case. Keep public release admission closed and historical rc.3 bytes/pins unchanged.
+- Separate read-only host compatibility inspection from mandatory public release admission for the explicitly approved source harness. This does not add a public installer bypass flag or establish a published ARM release, physical Raspberry Pi, interrupted-upgrade recovery or reboot acceptance.
+- Record that the 7b20 native ARM collector/fixture and manager-container TLS/HTTP jobs passed. Its separate service-action browser case reached HTTP 200 and the exact preview request, then failed while reading the response body; the historical subcause was not captured. Add fixed transport, size-bound and JSON-decoding stage labels while preserving all 83 assertions, response bounds, deadlines and action consent. No production correction is claimed for that failure.
+
 ## 2026-10-07 — Prepare Linux ARM64 parity and native CI
 
 - Select architecture-bound read-admin, upgrade and socket-helper artifacts for 64-bit amd64 or ARM64 hosts. Reject 32-bit userland and cross-architecture upgrade inputs; retain the existing kernel, ownership, approval and private-state checks.

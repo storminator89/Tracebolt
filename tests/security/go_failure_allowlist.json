@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "sourceCommit": "fccc4b00cd8a144afd58e4b995747afab7a10022",
-  "goSourceSha256": "56a124774bd745ffa3d066cdf869d73d11c209a416c649bc86bf89d2c1afbb3d",
+  "goSourceSha256": "f4b688872facc50e906d612e6950258334ae53ed33ec76077eaee7d8a2a77ddb",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -147,6 +147,7 @@
       "TestPackageUbuntu2404PositiveNative",
       "TestPreparedNamedOperatorProfilesAndRestartRevocation",
       "TestProfileStateIsolation",
+      "TestReadAdminARM64SourceFixtureContract",
       "TestReadAdminFixtureOwner",
       "TestReadAdminInitialProbeDiagnosticIsClosed",
       "TestReadAdminJournalReady",
@@ -176,6 +177,14 @@
       "TestCancellationDoesNotFinishBeforeRuntimeCleanup",
       "TestCoordinatedCancellationExitsCleanly",
       "TestEntryUsesOnlyInjectedRuntime"
+    ],
+    "localrmm/cmd/windows-agent": [
+      "TestEventDeniedRemainsExplicit",
+      "TestExplicitReadOnlyScopeRequired",
+      "TestHelpNeverCollects",
+      "TestInventoryAndEventConsentAreSeparate",
+      "TestNativeFailuresAreSanitizedAndAtomic",
+      "TestShortWriteFails"
     ],
     "localrmm/internal/actionclient": [
       "TestClientCallerDeadlineAndCancellationBoundStalledResponse",
@@ -2241,6 +2250,45 @@
       "TestValidatorCancellationAndSharedHandleAreTerminal",
       "TestValidatorRejectsIncompleteRowsAndWrongFinalDigest",
       "TestValidatorRejectsReorderReplayAndWrongLinkage"
+    ],
+    "localrmm/internal/windowsevents": [
+      "TestBoundedCollectionAndLookahead",
+      "TestCancellationAndCloseFailures",
+      "TestCancellationDuringEmptyLookaheadIsNotComplete",
+      "TestCollectionSuppliesFiniteContext",
+      "TestEmptySuccessfulChannelIsStillObserved",
+      "TestMaximumLimitAndChannelIsolation",
+      "TestNativeAPISurfaceStaysReadOnly",
+      "TestNativeErrorTaxonomy",
+      "TestNativeRejectsBeforeReading",
+      "TestNativeWindowsEventMetadata",
+      "TestNonWindowsIsExplicitlyUnsupported",
+      "TestParseSelectedValues",
+      "TestProviderBounds",
+      "TestRejectInvalidInputsBeforeOpening",
+      "TestRejectMalformedMetadata",
+      "TestRenderFailureAndWrongChannel",
+      "TestReportCannotContainEventContent",
+      "TestScalarUnusedStorageIsIgnored",
+      "TestSourceFailuresRemainVisibleAndSanitized"
+    ],
+    "localrmm/internal/windowsinventory": [
+      "TestCPUIntervalValidation",
+      "TestCancelledCollectionNeverStartsOrContinues",
+      "TestCompositionScopeAndSource",
+      "TestDeniedAndPartialErrorsDoNotLeak",
+      "TestEncodeRejectsOversizeDocument",
+      "TestInterfaceAddressValidation",
+      "TestNativeBufferStringBounds",
+      "TestNativeNetworkFixtureAndBounds",
+      "TestNativeNetworkIPv6AndInvalidPrefix",
+      "TestNativeNetworkReadFlags",
+      "TestNativeNetworkRejectsMalformedPointersAndLengths",
+      "TestNativeNetworkTraversalCaps",
+      "TestNativeServiceStateMapping",
+      "TestNativeWindowsReadOnlyInventory",
+      "TestNilContextRejected",
+      "TestSectionBoundsAndMalformedRows"
     ],
     "localrmm/tests/container": [
       "TestDeploymentExampleSchemas",

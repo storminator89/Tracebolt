@@ -24,7 +24,24 @@ def require_gate(env, system, uid, euid):
         any(c not in '0123456789abcdef' for c in source) or
         env.get('TRACEBOLT_READ_ADMIN_REVIEWED_SOURCE') != source):
         raise ValueError('acceptance-gate-rejected')
+    architecture = env.get('TRACEBOLT_READ_ADMIN_ARCHITECTURE')
+    if architecture not in ('amd64','arm64') or env.get('RUNNER_ARCH') != {'amd64':'X64','arm64':'ARM64'}[architecture]:
+        raise ValueError('acceptance-gate-rejected')
+    if architecture == 'arm64' and (env.get('TRACEBOLT_APPROVED_READ_ADMIN_UPGRADE') != 'true' or source == '7b20a93e481feb1f7433ee0ef6c912a35f68ce6d'):
+        raise ValueError('acceptance-gate-rejected')
+    upgrade_case = env.get('TRACEBOLT_READ_ADMIN_UPGRADE_CASE')
+    if upgrade_case not in ('true','false') or upgrade_case == 'true' and (env.get('TRACEBOLT_APPROVED_READ_ADMIN_UPGRADE') != 'true' or scenario != 'complete'):
+        raise ValueError('acceptance-gate-rejected')
     return transport, scenario, source
+
+
+def inspect_source_platform(host):
+    # This finite source-only contract can survive a separately reviewed future
+    # release activation without changing or overriding public admission.
+    if (host.RELEASE_PIN is not None or type(host.RUNTIME_TARGETS) is not tuple or
+        host.RUNTIME_TARGETS not in (('linux-amd64',), ('linux-amd64','linux-arm64'))):
+        raise ValueError('acceptance-launcher-host')
+    return host.inspect_platform()
 
 
 def failure_result(stage):
@@ -181,6 +198,7 @@ def main(argv=None):
         print(json.dumps(failure_result('acceptance-gate-rejected')), flush=True)
         return 1
     import hashlib,json,re,signal,stat,tarfile,types
+    architecture = os.environ['TRACEBOLT_READ_ADMIN_ARCHITECTURE']
     from pathlib import Path
 
     def require(ok):
@@ -254,17 +272,17 @@ def main(argv=None):
         finally:
             os.close(parent)
         cfg = json.loads(raw.decode('utf-8'), object_pairs_hook=unique, parse_constant=no_constant)
-        require(type(cfg) is dict and set(cfg) == {'directory','manifest','arguments','scenario','operation'} and cfg['scenario'] == scenario)
+        require(type(cfg) is dict and set(cfg) == {'directory','manifest','arguments','scenario','operation'} | ({'sourceHostPreflightSHA256'} if architecture == 'arm64' else set()) and cfg['scenario'] == scenario)
         manifest, arguments = cfg['manifest'], cfg['arguments']
         operation = cfg['operation']
         require(operation in ('install','inspect-socket','revoke-socket','cleanup','upgrade'))
         version = 'v0.0.0-read-admin-acceptance'
         require(type(manifest) is dict and set(manifest) == {'version','sourceCommit','assets'} and
             manifest['version'] == version and (manifest['sourceCommit'] == source_commit or
-            os.environ.get('TRACEBOLT_APPROVED_READ_ADMIN_UPGRADE') == 'true' and scenario == 'complete' and operation != 'upgrade' and
-            manifest['sourceCommit'] == 'a6368b0202b1efecdb6214dc34c4302d239854f7'))
+            os.environ.get('TRACEBOLT_APPROVED_READ_ADMIN_UPGRADE') == 'true' and os.environ.get('TRACEBOLT_READ_ADMIN_UPGRADE_CASE') == 'true' and scenario == 'complete' and operation != 'upgrade' and
+            manifest['sourceCommit'] == ('7b20a93e481feb1f7433ee0ef6c912a35f68ce6d' if architecture == 'arm64' else 'a6368b0202b1efecdb6214dc34c4302d239854f7')))
         roles = ('agent-service','enroll-agent','lan-agent','socket-owner-reader')
-        names = [f'tracebolt-{version}-linux-amd64-{role}' for role in roles]
+        names = [f'tracebolt-{version}-linux-{architecture}-{role}' for role in roles]
         source_name = f'tracebolt-{version}-source.tar'
         assets = manifest['assets']
         require(type(assets) is dict and set(assets) == set(names + [source_name]))
@@ -273,7 +291,7 @@ def main(argv=None):
             require(type(item) is dict and set(item) == {'size','sha256'} and type(item['size']) is int and
                 0 < item['size'] <= limit and type(item['sha256']) is str and
                 re.fullmatch(r'[0-9a-f]{64}', item['sha256']) and item['sha256'] != '0' * 64)
-        if manifest['sourceCommit'] != source_commit:
+        if manifest['sourceCommit'] != source_commit and architecture == 'amd64':
             expected_prior = {'agent-service':'2b4e8f3174ab831bab3522d7119c0973819e214d2800d9328e7be72282e207e0',
                 'enroll-agent':'44a2235072459cc73fc918c9596e51fe441407b721f3d7cfc2b796fc1bbe645c',
                 'lan-agent':'6e1ac6ca7b50ae11141b1d345dc69cd59e0ff97583aa3cefd52152b209509bb5',
@@ -285,7 +303,13 @@ def main(argv=None):
             sum(len(v) for v in arguments) <= 100000)
         checkpoint = 'acceptance-launcher-artifacts'
         stage = directory_fd(cfg['directory'], private=True)
+        host_bootstrap = None
         try:
+            if architecture == 'arm64':
+                require(type(cfg['sourceHostPreflightSHA256']) is str and re.fullmatch(r'[0-9a-f]{64}', cfg['sourceHostPreflightSHA256']))
+                fd, host_bootstrap, _ = protected_file(stage, 'candidate-host-preflight.py', 0o600, 131072)
+                os.close(fd)
+                require(hashlib.sha256(host_bootstrap).hexdigest() == cfg['sourceHostPreflightSHA256'])
             for name in names:
                 fd, _, _ = protected_file(stage, name, 0o500, 128 * 1024 * 1024, assets[name])
                 os.close(fd)
@@ -321,7 +345,7 @@ def main(argv=None):
         checkpoint = 'acceptance-launcher-arguments'
         args = b.parse_args(arguments)
         if operation == 'upgrade':
-            require(os.environ.get('TRACEBOLT_APPROVED_READ_ADMIN_UPGRADE') == 'true' and scenario == 'complete' and manifest['sourceCommit'] == source_commit and
+            require(os.environ.get('TRACEBOLT_APPROVED_READ_ADMIN_UPGRADE') == 'true' and os.environ.get('TRACEBOLT_READ_ADMIN_UPGRADE_CASE') == 'true' and scenario == 'complete' and manifest['sourceCommit'] == source_commit and
                 args.apply and args.action == 'upgrade' and args.upgrade_read_admin and not args.read_admin and args.insecure_http_test == (transport == 'http-test'))
         else:
             require(args.apply and args.read_admin and args.action == 'install' and not args.resume and
@@ -331,8 +355,17 @@ def main(argv=None):
             checkpoint = 'acceptance-launcher-terminal'
             b.inspect_terminal()
         checkpoint = 'acceptance-launcher-host'
-        arch = b.inspect_host()
-        require(arch == 'amd64')
+        if architecture == 'arm64':
+            # Explicit source-component acceptance under all three approvals.
+            # This checker comes from the bound candidate archive, not the prior
+            # release bootstrap. No production admission guard is overridden.
+            host = types.ModuleType('tracebolt_candidate_host_preflight')
+            host.__file__ = '/selected-candidate/deploy/release/linux-bootstrap.py'
+            exec(compile(host_bootstrap, host.__file__, 'exec'), host.__dict__)
+            arch = inspect_source_platform(host)
+        else:
+            arch = b.inspect_host()
+        require(arch == architecture)
         checkpoint = 'acceptance-launcher-components'
         workflow, inventory, setup, amendment, journal_guide, socket_setup, templates = b.read_admin_sources(directory, manifest)
         rejection_types = (workflow.Rejected, inventory.Rejected, setup.Rejected, amendment.Rejected, journal_guide.Rejected, socket_setup.Rejected)
@@ -345,7 +378,7 @@ def main(argv=None):
             return 0
         checkpoint = 'acceptance-launcher-workflow'
         plan = workflow.make_plan(args, manifest, arch)
-        helper = directory / f'tracebolt-{version}-linux-amd64-socket-owner-reader'
+        helper = directory / f'tracebolt-{version}-linux-{architecture}-socket-owner-reader'
         artifact = dict(manifest['assets'][helper.name], path=str(helper))
         adapter = workflow.real_adapter(setup, inventory, amendment, journal_guide, socket_setup, templates, plan, artifact)
         if scenario == 'retained-journal':
@@ -1038,6 +1071,14 @@ def require_gate(env, system, uid, euid):
         any(c not in '0123456789abcdef' for c in source) or
         env.get('TRACEBOLT_READ_ADMIN_REVIEWED_SOURCE') != source):
         raise ValueError('acceptance-gate-rejected')
+    architecture = env.get('TRACEBOLT_READ_ADMIN_ARCHITECTURE')
+    if architecture not in ('amd64','arm64') or env.get('RUNNER_ARCH') != {'amd64':'X64','arm64':'ARM64'}[architecture]:
+        raise ValueError('acceptance-gate-rejected')
+    if architecture == 'arm64' and (env.get('TRACEBOLT_APPROVED_READ_ADMIN_UPGRADE') != 'true' or source == '7b20a93e481feb1f7433ee0ef6c912a35f68ce6d'):
+        raise ValueError('acceptance-gate-rejected')
+    upgrade_case = env.get('TRACEBOLT_READ_ADMIN_UPGRADE_CASE')
+    if upgrade_case not in ('true','false') or upgrade_case == 'true' and (env.get('TRACEBOLT_APPROVED_READ_ADMIN_UPGRADE') != 'true' or scenario != 'complete'):
+        raise ValueError('acceptance-gate-rejected')
     return transport, scenario, source
 
 
@@ -1201,7 +1242,7 @@ def parse_config(raw, transport):
         raise ValueError()
     cfg = json.loads(raw.decode('utf-8'), object_pairs_hook=unique_object, parse_constant=no_constant)
     upgrade = type(cfg) is dict and type(cfg.get('approval')) is str and cfg['approval'].startswith('UPGRADE READ ADMIN')
-    if upgrade and (os.environ.get('TRACEBOLT_APPROVED_READ_ADMIN_UPGRADE') != 'true' or os.environ.get('TRACEBOLT_READ_ADMIN_SCENARIO') != 'complete'):
+    if upgrade and (os.environ.get('TRACEBOLT_APPROVED_READ_ADMIN_UPGRADE') != 'true' or os.environ.get('TRACEBOLT_READ_ADMIN_UPGRADE_CASE') != 'true' or os.environ.get('TRACEBOLT_READ_ADMIN_SCENARIO') != 'complete'):
         raise ValueError()
     approval = ('UPGRADE READ ADMIN' if upgrade else 'INSTALL READ ADMIN') + (' OVER HTTP' if transport == 'http-test' else '')
     if (type(cfg) is not dict or set(cfg) != {'args','secret','approval','cancelApproval'} or

@@ -339,13 +339,18 @@ def read_os_release(text):
     return values["ID"]
 
 
-def inspect_host():
+def inspect_platform():
+    """Read-only native compatibility checks, without published-release admission.
+
+    The separately approved source-acceptance harness may inspect a platform
+    before that platform has earned admission to a published release. This
+    function does not authorize installation or alter RUNTIME_TARGETS.
+    """
     require(sys.platform == "linux", "Only Linux is supported.")
     read_os_release(Path("/etc/os-release").read_text(encoding="utf-8"))
     architecture = {"x86_64": "amd64", "aarch64": "arm64"}.get(platform.machine())
     require(architecture is not None, "Unsupported Linux architecture; amd64 or ARM64 is required.")
     require(sys.maxsize > 2**32, "A 64-bit Linux userspace and Python are required; 32-bit Raspberry Pi OS is not supported.")
-    require("linux-" + architecture in RUNTIME_TARGETS, "This architecture is not enabled by the pinned release.")
     require(Path("/proc/1/comm").read_text().strip() == "systemd" and Path("/run/systemd/system").is_dir() and
             Path("/sys/fs/cgroup/cgroup.controllers").is_file(), "A running systemd host with cgroup v2 is required.")
     require(sys.version_info >= (3, 11), "Python 3.11 or newer is required. Use the supported distribution's python3 package; no dependency was installed.")
@@ -369,6 +374,12 @@ def inspect_host():
         release_context()
     except (OSError, ssl.SSLError):
         raise Rejected("The system HTTPS CA bundle could not be loaded. Ask the administrator to inspect ca-certificates; no trust setting was changed.") from None
+    return architecture
+
+
+def inspect_host():
+    architecture = inspect_platform()
+    require("linux-" + architecture in RUNTIME_TARGETS, "This architecture is not enabled by the pinned release.")
     return architecture
 
 

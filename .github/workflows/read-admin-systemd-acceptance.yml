@@ -17,6 +17,14 @@ on:
         description: 'Exact independently reviewed 40-hex source commit; must equal the dispatched GITHUB_SHA'
         required: true
         type: string
+      architecture:
+        description: 'Native runner architecture. ARM64 tests source-built 7b20 to reviewed-candidate components, not a published release or Raspberry Pi hardware'
+        required: true
+        default: amd64
+        type: choice
+        options:
+          - amd64
+          - arm64
       approved_fresh_v2_read_admin_systemd:
         description: 'Approve tightening only the root-owned hosted /opt directory inode from 0777 to 0755 (no recursion), then fresh V2 identity/account/service, inventory/network grants, journal/socket-owner helpers, cancellation, bounded root-owned loopback TCP/UDP fixtures, fixture log service/content query, owned-main-service restart including clearing its systemd failure/start-limit bookkeeping (Result/NRestarts) after stopped identity validation, explicit revoke, owned-helper stop/drain and owned-main-service cleanup on each disposable VM; no reboot'
         required: true
@@ -28,7 +36,7 @@ on:
         default: false
         type: boolean
       approved_read_admin_upgrade:
-        description: 'Also approve the complete scenario installing the verified rc.2 artifact contract, then updating that same identity to the reviewed source build: owned participant stop/drain, temporary startup disable/restore, same-scope executable binding update, private-state equality proof and disclosed start-limit reset; no renewal or scope expansion'
+        description: 'Approve complete-scenario same-identity upgrade: amd64 uses verified rc.2; ARM64 uses fixed 7b20 source components installed by this candidate harness, then distinct reviewed-source build artifacts. Includes owned stop/drain, startup disable/restore, same-scope bindings, private-state equality and start-limit reset; no published ARM release proof, renewal, scope expansion or reboot'
         required: true
         default: false
         type: boolean
@@ -71,6 +79,9 @@ jobs:
           source = os.environ.get('GITHUB_SHA', '')
           checks = (
               (inputs.get('read_profile') == 'tracebolt.linux-read-admin.v2', 'READ_PROFILE_MISMATCH'),
+              (inputs.get('architecture') in ('amd64','arm64'), 'ARCHITECTURE_MISMATCH'),
+              (inputs.get('architecture') != 'arm64' or (inputs.get('approved_read_admin_upgrade') is True or inputs.get('approved_read_admin_upgrade') == 'true'), 'ARM64_UPGRADE_APPROVAL_MISSING'),
+              (inputs.get('architecture') != 'arm64' or source != '7b20a93e481feb1f7433ee0ef6c912a35f68ce6d', 'ARM64_DISTINCT_CANDIDATE_REQUIRED'),
               (inputs.get('approved_read_admin_upgrade') in (None, True, False, 'true', 'false'), 'READ_ADMIN_UPGRADE_APPROVAL_INVALID'),
               (len(source) == 40 and all(c in '0123456789abcdef' for c in source)
                and inputs.get('reviewed_source_commit') == source, 'REVIEWED_SOURCE_MISMATCH'),
@@ -88,15 +99,17 @@ jobs:
           PYTHON_INPUTS
   disposable-systemd:
     needs: validate-inputs
-    if: ${{ needs.validate-inputs.result == 'success' && github.event_name == 'workflow_dispatch' && inputs.approved_fresh_v2_read_admin_systemd && inputs.approved_cap_sys_ptrace_process_memory && inputs.read_profile == 'tracebolt.linux-read-admin.v2' && inputs.reviewed_source_commit == github.sha }}
-    name: Fresh read-admin V2 ${{ inputs.transport }} / ${{ matrix.scenario }}
-    runs-on: ubuntu-24.04
+    if: ${{ needs.validate-inputs.result == 'success' && github.event_name == 'workflow_dispatch' && inputs.approved_fresh_v2_read_admin_systemd && inputs.approved_cap_sys_ptrace_process_memory && inputs.read_profile == 'tracebolt.linux-read-admin.v2' && inputs.reviewed_source_commit == github.sha && (inputs.architecture != 'arm64' || inputs.approved_read_admin_upgrade) }}
+    name: Fresh read-admin V2 ${{ inputs.architecture }} / ${{ inputs.transport }} / ${{ matrix.scenario }} / ${{ matrix.acceptance_case }}
+    runs-on: ${{ inputs.architecture == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
     timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
-        scenario: [complete, cancel-enrollment, retained-journal]
+        include: ${{ fromJSON(inputs.architecture == 'arm64' && '[{"scenario":"complete","acceptance_case":"fresh","upgrade_case":"false"},{"scenario":"complete","acceptance_case":"upgrade","upgrade_case":"true"},{"scenario":"cancel-enrollment","acceptance_case":"cancel","upgrade_case":"false"},{"scenario":"retained-journal","acceptance_case":"retained","upgrade_case":"false"}]' || '[{"scenario":"complete","acceptance_case":"standard","upgrade_case":"selected"},{"scenario":"cancel-enrollment","acceptance_case":"cancel","upgrade_case":"false"},{"scenario":"retained-journal","acceptance_case":"retained","upgrade_case":"false"}]') }}
     env:
+      TRACEBOLT_READ_ADMIN_ARCHITECTURE: ${{ inputs.architecture }}
+      TRACEBOLT_READ_ADMIN_UPGRADE_CASE: ${{ (matrix.upgrade_case == 'true' || (matrix.upgrade_case == 'selected' && inputs.approved_read_admin_upgrade)) && 'true' || 'false' }}
       TRACEBOLT_APPROVED_SYSTEMD_TEST: '1'
       TRACEBOLT_APPROVED_READ_ADMIN_V2_SYSTEMD_TEST: ${{ inputs.approved_fresh_v2_read_admin_systemd && '1' || '0' }}
       TRACEBOLT_READ_ADMIN_PROFILE: ${{ inputs.read_profile }}
@@ -118,6 +131,11 @@ jobs:
           test "$GITHUB_ACTIONS" = true
           test "$RUNNER_ENVIRONMENT" = github-hosted
           test "$RUNNER_OS" = Linux
+          case "$TRACEBOLT_READ_ADMIN_ARCHITECTURE:$RUNNER_ARCH:$(uname -m)" in
+            amd64:X64:x86_64) ;;
+            arm64:ARM64:aarch64) test "$TRACEBOLT_APPROVED_READ_ADMIN_UPGRADE" = true ;;
+            *) exit 1 ;;
+          esac
           test "$TRACEBOLT_APPROVED_SYSTEMD_TEST" = 1
           test "$TRACEBOLT_APPROVED_READ_ADMIN_V2_SYSTEMD_TEST" = 1
           test "$TRACEBOLT_READ_ADMIN_PROFILE" = tracebolt.linux-read-admin.v2
@@ -145,7 +163,19 @@ jobs:
           go build -buildvcs=false -o "$STAGE/socket-owner-reader" ./cmd/socket-owner-reader
           go test -c -o "$STAGE/systemd.test" ./cmd/lan-manager
           git archive --format=tar --output="$STAGE/source.tar" "$GITHUB_SHA"
-          if test "$TRACEBOLT_APPROVED_READ_ADMIN_UPGRADE" = true && test "$TRACEBOLT_READ_ADMIN_SCENARIO" = complete; then
+          if test "$TRACEBOLT_READ_ADMIN_ARCHITECTURE" = arm64; then
+            # Fixed reviewed source, never a moving branch or fake historical release.
+            git fetch --no-tags --depth=1 origin 7b20a93e481feb1f7433ee0ef6c912a35f68ce6d
+            git worktree add --detach "$STAGE/prior-source" 7b20a93e481feb1f7433ee0ef6c912a35f68ce6d
+            python3 -I -B deploy/release/prepare-arm64-source-upgrade-fixture.py \
+              --prior-checkout "$STAGE/prior-source" --candidate-checkout "$GITHUB_WORKSPACE" \
+              --directory "$STAGE/arm64-fixture"
+            for role in agent-service enroll-agent lan-agent socket-owner-reader; do
+              cp -- "$STAGE/arm64-fixture/candidate/$role" "$STAGE/$role"
+              chmod 0700 "$STAGE/$role"
+            done
+            cp -- "$STAGE/arm64-fixture/candidate/source.tar" "$STAGE/source.tar"
+          elif test "$TRACEBOLT_APPROVED_READ_ADMIN_UPGRADE" = true && test "$TRACEBOLT_READ_ADMIN_SCENARIO" = complete; then
             python3 -I deploy/release/prepare-read-admin-upgrade-fixture.py --directory "$STAGE/prior-rc2"
           fi
       - name: Execute the approved test once with a minimal root environment
@@ -162,6 +192,9 @@ jobs:
             GITHUB_SHA="$GITHUB_SHA" \
             RUNNER_ENVIRONMENT="$RUNNER_ENVIRONMENT" \
             RUNNER_OS="$RUNNER_OS" \
+            RUNNER_ARCH="$RUNNER_ARCH" \
+            TRACEBOLT_READ_ADMIN_ARCHITECTURE="$TRACEBOLT_READ_ADMIN_ARCHITECTURE" \
+            TRACEBOLT_READ_ADMIN_UPGRADE_CASE="$TRACEBOLT_READ_ADMIN_UPGRADE_CASE" \
             TRACEBOLT_APPROVED_SYSTEMD_TEST="$TRACEBOLT_APPROVED_SYSTEMD_TEST" \
             TRACEBOLT_APPROVED_READ_ADMIN_V2_SYSTEMD_TEST="$TRACEBOLT_APPROVED_READ_ADMIN_V2_SYSTEMD_TEST" \
             TRACEBOLT_READ_ADMIN_PROFILE="$TRACEBOLT_READ_ADMIN_PROFILE" \
@@ -171,6 +204,7 @@ jobs:
             TRACEBOLT_READ_ADMIN_SCENARIO="$TRACEBOLT_READ_ADMIN_SCENARIO" \
             TRACEBOLT_APPROVED_READ_ADMIN_UPGRADE="$TRACEBOLT_APPROVED_READ_ADMIN_UPGRADE" \
             TRACEBOLT_READ_ADMIN_PRIOR_DIRECTORY="$STAGE/prior-rc2" \
+            TRACEBOLT_READ_ADMIN_ARM64_FIXTURE_DIRECTORY="$STAGE/arm64-fixture" \
             TRACEBOLT_SYSTEMD_BINARY_DIRECTORY="$STAGE" \
             TRACEBOLT_SYSTEMD_SOURCE_ARCHIVE="$STAGE/source.tar" \
             TRACEBOLT_SYSTEMD_RESULT_FILE="$STAGE/read-admin-systemd-result.json" \
@@ -193,7 +227,7 @@ jobs:
           if ! sudo env -i PATH=/usr/sbin:/usr/bin:/sbin:/bin LANG=C LC_ALL=C \
             /usr/bin/python3 - "$RUNNER_TEMP/tracebolt-read-admin-systemd-acceptance/read-admin-systemd-result.json" \
             "$TRACEBOLT_READ_ADMIN_TRANSPORT" "$TRACEBOLT_READ_ADMIN_SCENARIO" \
-            "$TRACEBOLT_READ_ADMIN_PROFILE" "$GITHUB_SHA" "$TRACEBOLT_APPROVED_READ_ADMIN_UPGRADE" \
+            "$TRACEBOLT_READ_ADMIN_PROFILE" "$GITHUB_SHA" "$TRACEBOLT_READ_ADMIN_UPGRADE_CASE" "$TRACEBOLT_READ_ADMIN_ARCHITECTURE" "$TRACEBOLT_APPROVED_READ_ADMIN_UPGRADE" \
             > "$TARGET" <<'PYTHON'; then
           import json, os, re, stat, sys
           def check(condition):
@@ -208,6 +242,28 @@ jobs:
               return value
           def native_diagnostics(path):
               allowed = {
+                  'ARM64 ELF or commit build provenance rejected',
+                  'ARM64 source fixture gate required',
+                  'ARM64 source proof read',
+                  'ARM64 source proof rejected',
+                  'ARM64 verified source evidence missing',
+                  'architecture approval boundary changed',
+                  'candidate host preflight member rejected',
+                  'candidate host preflight read',
+                  'candidate host preflight staging',
+                  'candidate source archive invalid',
+                  'candidate source host preflight unbound',
+                  'candidate source unavailable',
+                  'exact ARM64 fixture directory required',
+                  'exact generated source proof rejected',
+                  'inexact source proof accepted',
+                  'invalid native architecture or ARM64 upgrade approval; no host work started',
+                  'invalid separately selected upgrade case; no host work started',
+                  'private ARM64 source proof unavailable',
+                  'same binary falsely presented as upgrade',
+                  'source-bound ARM64 artifact mismatch',
+                  'source-bound ARM64 artifact unavailable',
+                  'staged ARM64 source artifact changed',
                   'verified prior release fixture unavailable',
                   'prior release artifact contract mismatch',
                   'explicit native upgrade gate missing',
@@ -472,8 +528,14 @@ jobs:
               except Exception:
                   return 'private-diagnostic-unavailable', [], []
           try:
-              check(len(sys.argv) in (6, 7))
-              upgrade_requested = len(sys.argv) == 7 and sys.argv[6] == 'true' and sys.argv[3] == 'complete'
+              check(len(sys.argv) in (6, 7, 8, 9))
+              architecture = sys.argv[7] if len(sys.argv) >= 8 else 'amd64'
+              upgrade_approval = sys.argv[8] if len(sys.argv) == 9 else (sys.argv[6] if len(sys.argv) >= 7 else 'false')
+              check(upgrade_approval in {'true','false'})
+              check(architecture in {'amd64','arm64'})
+              check(architecture != 'arm64' or (len(sys.argv) >= 8 and upgrade_approval == 'true' and sys.argv[5] != '7b20a93e481feb1f7433ee0ef6c912a35f68ce6d'))
+              upgrade_requested = len(sys.argv) >= 7 and sys.argv[6] == 'true' and sys.argv[3] == 'complete'
+              check(not upgrade_requested or upgrade_approval == 'true')
               check(len(sys.argv) == 6 or sys.argv[6] in {'true', 'false'})
               check(sys.argv[2] in {'tls', 'http-test'})
               check(sys.argv[3] in {'complete', 'cancel-enrollment', 'retained-journal'})
@@ -487,7 +549,7 @@ jobs:
               check(0 < len(raw) <= 4096 and len(raw) == info.st_size)
               value = json.loads(raw, object_pairs_hook=unique_object)
               check(type(value) is dict)
-              check(set(value) == {'schemaVersion', 'status', 'stage', 'profile', 'collectionProfile', 'scenario', 'osRebootTested', 'telemetryExported', 'readProfile', 'sourceCommit', 'ptraceRiskAcknowledged', 'socketNativeChecks', 'initialProbe', 'setupFailure'} | ({'upgradeNativeChecks'} if upgrade_requested else set()))
+              check(set(value) == {'schemaVersion', 'status', 'stage', 'profile', 'collectionProfile', 'scenario', 'osRebootTested', 'telemetryExported', 'readProfile', 'sourceCommit', 'ptraceRiskAcknowledged', 'socketNativeChecks', 'initialProbe', 'setupFailure'} | ({'upgradeNativeChecks'} if upgrade_requested else set()) | ({'architecture','sourceBuildProof'} if architecture == 'arm64' else set()))
               check(value['schemaVersion'] == 'tracebolt.read-admin-systemd-acceptance.v2')
               check(value['profile'] == sys.argv[2])
               check(value['collectionProfile'] == 'managed-operations-v3')
@@ -498,14 +560,37 @@ jobs:
               check(value['osRebootTested'] is False and value['telemetryExported'] is False)
               check(value['status'] in {'pass', 'fail'})
               check(value['stage'] in {'preflight', 'manager_start', 'operator_login', 'install_enroll', 'approval', 'initial_reports', 'read_admin_cancel', 'read_admin_fixture_opt', 'read_admin_inventory', 'read_admin_journal', 'read_admin_repeat', 'read_admin_retained', 'read_admin_readiness', 'read_admin_socket', 'read_admin_socket_owners', 'read_admin_revoke', 'read_admin_post_revoke', 'read_admin_journal_content', 'read_admin_restart', 'read_admin_upgrade', 'complete', 'installer_preflight_inspect', 'installer_preflight_systemd', 'installer_preflight_terminal', 'installer_preflight_systemctl_tool', 'installer_preflight_useradd_tool', 'installer_preflight_nologin_tool', 'installer_preflight_opt_directory', 'installer_preflight_etc_directory', 'installer_preflight_state_directory', 'installer_preflight_unit_directory', 'installer_preflight_unit_status', 'installer_preflight_account', 'installer_preflight_installation_state', 'installer_preflight_ownership_state', 'installer_preflight_fresh_paths', 'installer_preflight_bootstrap', 'installer_preflight_complete_profile', 'installer_preflight_artifacts', 'installer_preflight_plan', 'installer_preflight_begin', 'installer_preflight_reinspect', 'installer_preflight_replan', 'installer_preflight_unit_command', 'installer_preflight_unit_members', 'installer_preflight_unit_pid', 'installer_preflight_unit_absence', 'installer_preflight_manifest_absence', 'installer_preflight_begin_request', 'installer_preflight_begin_control', 'installer_preflight_begin_lock', 'installer_preflight_begin_journal', 'installer_preflight_begin_entropy', 'installer_preflight_begin_ownership', 'installer_preflight_begin_unit', 'installer_preflight_begin_artifacts', 'installer_preflight_begin_bootstrap', 'installer_preflight_begin_save', 'installer_preflight', 'installer_prepare', 'installer_stage', 'installer_enroll', 'installer_validate', 'installer_publish', 'installer_start', 'installer_commit'})
+              if architecture == 'arm64':
+                  check(value['architecture'] == 'arm64')
+                  proof = value['sourceBuildProof']
+                  check(proof is not None or value['status'] == 'fail')
+                  if proof is not None:
+                      check(type(proof) is dict and set(proof) == {'schemaVersion','architecture','baselineKind','priorSourceCommit','candidateSourceCommit','prior','candidate'})
+                      check(proof['schemaVersion'] == 'tracebolt.arm64-source-upgrade-fixture.v1' and proof['architecture'] == 'arm64' and proof['baselineKind'] == 'source-built')
+                      check(proof['priorSourceCommit'] == '7b20a93e481feb1f7433ee0ef6c912a35f68ce6d' and proof['candidateSourceCommit'] == sys.argv[5] and proof['priorSourceCommit'] != proof['candidateSourceCommit'])
+                      for key in ('prior','candidate'):
+                          generation = proof[key]
+                          check(type(generation) is dict and set(generation) == {'sourceCommit','files'} and generation['sourceCommit'] == proof[key + 'SourceCommit'])
+                          files = generation['files']
+                          check(type(files) is dict and set(files) == {'agent-service','enroll-agent','lan-agent','socket-owner-reader','source'})
+                          for role, artifact in files.items():
+                              check(type(artifact) is dict and set(artifact) == {'size','sha256'})
+                              check(type(artifact['size']) is int and 0 < artifact['size'] <= (256 << 20 if role == 'source' else 128 << 20))
+                              check(type(artifact['sha256']) is str and re.fullmatch(r'[0-9a-f]{64}', artifact['sha256']) is not None and artifact['sha256'] != '0'*64)
+                      check(proof['prior']['files']['lan-agent']['sha256'] != proof['candidate']['files']['lan-agent']['sha256'])
+                      check(proof['prior']['files']['source']['sha256'] != proof['candidate']['files']['source']['sha256'])
               if upgrade_requested:
                   upgrade = value['upgradeNativeChecks']
                   check(upgrade is not None or value['status'] == 'fail')
                   if upgrade is not None:
                       upgrade_keys = {'priorVersion', 'priorSourceCommit', 'priorAgentSHA256', 'candidateAgentSHA256', 'artifactReplaced', 'identityAndScopesRetained', 'privateStateVerified', 'localApprovalObserved'}
                       check(type(upgrade) is dict and set(upgrade) == upgrade_keys)
-                      check(upgrade['priorVersion'] == 'v0.1.0-rc.2' and upgrade['priorSourceCommit'] == 'a6368b0202b1efecdb6214dc34c4302d239854f7')
-                      check(upgrade['priorAgentSHA256'] == '6e1ac6ca7b50ae11141b1d345dc69cd59e0ff97583aa3cefd52152b209509bb5')
+                      if architecture == 'arm64':
+                          check(proof is not None and upgrade['priorVersion'] == 'source-built-7b20a93' and upgrade['priorSourceCommit'] == proof['priorSourceCommit'])
+                          check(upgrade['priorAgentSHA256'] == proof['prior']['files']['lan-agent']['sha256'] and upgrade['candidateAgentSHA256'] == proof['candidate']['files']['lan-agent']['sha256'])
+                      else:
+                          check(upgrade['priorVersion'] == 'v0.1.0-rc.2' and upgrade['priorSourceCommit'] == 'a6368b0202b1efecdb6214dc34c4302d239854f7')
+                          check(upgrade['priorAgentSHA256'] == '6e1ac6ca7b50ae11141b1d345dc69cd59e0ff97583aa3cefd52152b209509bb5')
                       check(type(upgrade['candidateAgentSHA256']) is str and re.fullmatch(r'[0-9a-f]{64}', upgrade['candidateAgentSHA256']) is not None and (value['status'] != 'pass' or upgrade['candidateAgentSHA256'] != upgrade['priorAgentSHA256']))
                       for key in ('artifactReplaced', 'identityAndScopesRetained', 'privateStateVerified', 'localApprovalObserved'):
                           check(type(upgrade[key]) is bool and (value['status'] != 'pass' or upgrade[key]))
@@ -1191,7 +1276,7 @@ jobs:
         if: ${{ always() && !cancelled() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
         with:
-          name: read-admin-v2-systemd-acceptance-${{ inputs.transport }}-${{ matrix.scenario }}-${{ github.sha }}
+          name: read-admin-v2-systemd-acceptance-${{ inputs.architecture }}-${{ inputs.transport }}-${{ matrix.scenario }}-${{ matrix.acceptance_case }}-${{ github.sha }}
           path: ${{ runner.temp }}/read-admin-systemd-result.json
           if-no-files-found: ignore
           retention-days: 3

@@ -108,7 +108,7 @@ class ReadAdminWrapperTests(unittest.TestCase):
         cls.input_validator = compile(cls.input_script, "<fixed-input-validator>", "exec")
 
     def dispatch_inputs(self, changes=None, *, source=SOURCE, raw=None):
-        values = {"read_profile": READ_PROFILE, "reviewed_source_commit": SOURCE,
+        values = {"read_profile": READ_PROFILE, "reviewed_source_commit": SOURCE, "architecture": "amd64",
                   "approved_fresh_v2_read_admin_systemd": "true",
                   "approved_cap_sys_ptrace_process_memory": "true"}
         values.update(changes or {})
@@ -189,7 +189,7 @@ class ReadAdminWrapperTests(unittest.TestCase):
                 self.assertEqual(self.dispatch_inputs(raw=raw), ("", "::error::INVALID_DISPATCH_INPUTS"))
 
     def validate(self, raw, transport="tls", scenario="complete", *, read_profile=READ_PROFILE,
-                 source=SOURCE, mode=stat.S_IFREG | 0o600, upgrade_requested=None,
+                 source=SOURCE, mode=stat.S_IFREG | 0o600, upgrade_requested=None, architecture=None, upgrade_approval=None,
                  size=None, open_error=None, private_log=None, log_mode=stat.S_IFREG | 0o600, log_size=None,
                  log_open_error=None, log_read_error=None):
         stream = FakeFile(raw)
@@ -217,7 +217,7 @@ class ReadAdminWrapperTests(unittest.TestCase):
         )
         output, error = io.StringIO(), None
         with contextlib.redirect_stdout(output), mock.patch.dict(sys.modules, {"os": fake_os}), \
-                mock.patch.object(sys, "argv", ["validator", "private-fixture-path", transport, scenario, read_profile, source] + ([] if upgrade_requested is None else [upgrade_requested])):
+                mock.patch.object(sys, "argv", ["validator", "private-fixture-path", transport, scenario, read_profile, source] + ([] if upgrade_requested is None else [upgrade_requested]) + ([] if architecture is None else [architecture]) + ([] if upgrade_approval is None else [upgrade_approval])):
             try:
                 exec(self.readers[0], {"__name__": "__main__"})
             except SystemExit as exc:
@@ -570,6 +570,50 @@ class ReadAdminWrapperTests(unittest.TestCase):
             value=result(status="fail",stage="read_admin_upgrade",upgradeNativeChecks=None,setupFailure=failure)
             self.assertEqual(self.validate(json.dumps(value).encode(),upgrade_requested="true")[1],INVALID)
 
+    def test_arm64_dispatch_requires_all_three_approvals_and_distinct_candidate(self):
+        valid = dict(architecture="arm64", approved_read_admin_upgrade="true")
+        self.assertEqual(self.dispatch_inputs(valid), ("PASS: dispatch input approvals validated.\n", None))
+        for value in (None, False, "false", ""):
+            out, status = self.dispatch_inputs(dict(valid, approved_read_admin_upgrade=value))
+            self.assertIn("::error::ARM64_UPGRADE_APPROVAL_MISSING\n", out)
+            self.assertEqual(status, 1)
+        for value in ("armhf", "aarch64", "ARM64", "arm64 ", None):
+            out, status = self.dispatch_inputs(dict(valid, architecture=value))
+            self.assertIn("::error::ARCHITECTURE_MISMATCH\n", out)
+            self.assertEqual(status, 1)
+        prior = "7b20a93e481feb1f7433ee0ef6c912a35f68ce6d"
+        self.assertIn("ARM64_DISTINCT_CANDIDATE_REQUIRED", self.dispatch_inputs(dict(valid, reviewed_source_commit=prior), source=prior)[0])
+
+    def test_arm64_source_proof_is_exact_and_cannot_claim_published_upgrade(self):
+        prior = "7b20a93e481feb1f7433ee0ef6c912a35f68ce6d"
+        roles = ("agent-service", "enroll-agent", "lan-agent", "socket-owner-reader", "source")
+        generation = lambda source, char: dict(sourceCommit=source, files={role: dict(size=100, sha256=char*64) for role in roles})
+        proof = dict(schemaVersion="tracebolt.arm64-source-upgrade-fixture.v1", architecture="arm64", baselineKind="source-built", priorSourceCommit=prior, candidateSourceCommit=SOURCE, prior=generation(prior, "b"), candidate=generation(SOURCE, "c"))
+        upgrade = dict(priorVersion="source-built-7b20a93", priorSourceCommit=prior, priorAgentSHA256="b"*64, candidateAgentSHA256="c"*64,
+                       artifactReplaced=True, identityAndScopesRetained=True, privateStateVerified=True, localApprovalObserved=True)
+        value = result(architecture="arm64", sourceBuildProof=proof, upgradeNativeChecks=upgrade)
+        check = lambda value: self.validate(json.dumps(value).encode(), upgrade_requested="true", architecture="arm64")
+        self.assertLess(len(json.dumps(value).encode()),4096)
+        output,error,_,_=check(value)
+        self.assertIsNone(error)
+        self.assertEqual(json.loads(output)["sourceBuildProof"]["baselineKind"],"source-built")
+        self.assertEqual(self.validate(json.dumps(value).encode(),upgrade_requested="true",architecture="amd64")[1],INVALID)
+        self.assertEqual(self.validate(json.dumps(value).encode(),upgrade_requested="false",architecture="arm64")[1],INVALID)
+        for changes in (dict(sourceBuildProof=None),dict(architecture="amd64"),dict(extra=True),
+                        dict(upgradeNativeChecks=dict(upgrade, priorVersion="v0.1.0-rc.2")),
+                        dict(upgradeNativeChecks=dict(upgrade, priorAgentSHA256="d"*64)),
+                        dict(upgradeNativeChecks=dict(upgrade, artifactReplaced=False))):
+            self.assertEqual(check(dict(value,**changes))[1],INVALID)
+        for changes in (dict(baselineKind="published-release"),dict(architecture="amd64"),dict(priorSourceCommit=SOURCE),dict(candidateSourceCommit=prior),dict(extra=True),dict(candidate=generation(SOURCE,"b"))):
+            self.assertEqual(check(dict(value,sourceBuildProof=dict(proof,**changes)))[1],INVALID)
+        fresh=json.dumps(result(architecture="arm64",sourceBuildProof=proof)).encode()
+        self.assertIsNone(self.validate(fresh,upgrade_requested="false",architecture="arm64",upgrade_approval="true")[1])
+        self.assertEqual(self.validate(fresh,upgrade_requested="false",architecture="arm64",upgrade_approval="false")[1],INVALID)
+        for scenario in ("cancel-enrollment","retained-journal"):
+            raw=json.dumps(result(scenario=scenario,architecture="arm64",sourceBuildProof=proof)).encode()
+            self.assertIsNone(self.validate(raw,scenario=scenario,upgrade_requested="true",architecture="arm64")[1])
+        self.assertIsNone(check(result(status="fail",stage="preflight",architecture="arm64",sourceBuildProof=None,upgradeNativeChecks=None))[1])
+
     def test_upgrade_proof_requires_selection_prior_contract_and_all_checks(self):
         evidence = dict(priorVersion="v0.1.0-rc.2", priorSourceCommit="a6368b0202b1efecdb6214dc34c4302d239854f7",
                         priorAgentSHA256="6e1ac6ca7b50ae11141b1d345dc69cd59e0ff97583aa3cefd52152b209509bb5", candidateAgentSHA256="c" * 64,
@@ -593,7 +637,7 @@ class ReadAdminWrapperTests(unittest.TestCase):
         triggers = source.split("on:\n", 1)[1].split("\npermissions:", 1)[0]
         self.assertEqual(re.findall(r"^  (\w+):", triggers, re.M), ["workflow_dispatch"])
         self.assertEqual(re.findall(r"^      ([a-z0-9_]+):", triggers, re.M),
-                         ["read_profile", "reviewed_source_commit", "approved_fresh_v2_read_admin_systemd",
+                         ["read_profile", "reviewed_source_commit", "architecture", "approved_fresh_v2_read_admin_systemd",
                           "approved_cap_sys_ptrace_process_memory", "approved_read_admin_upgrade", "transport"])
         for approval in ("approved_fresh_v2_read_admin_systemd", "approved_cap_sys_ptrace_process_memory", "approved_read_admin_upgrade"):
             self.assertRegex(triggers, rf"      {approval}:\n        description: [^\n]+\n"
@@ -610,7 +654,7 @@ class ReadAdminWrapperTests(unittest.TestCase):
         self.assertIn("        default: tls\n        type: choice\n        options:\n          - tls\n          - http-test\n", triggers)
         self.assertIn("plaintext passwords, sessions, telemetry and journal content", triggers)
         self.assertIn("server/UI impersonation", triggers)
-        self.assertIn("    if: ${{ needs.validate-inputs.result == 'success' && github.event_name == 'workflow_dispatch' && inputs.approved_fresh_v2_read_admin_systemd && inputs.approved_cap_sys_ptrace_process_memory && inputs.read_profile == 'tracebolt.linux-read-admin.v2' && inputs.reviewed_source_commit == github.sha }}\n", source)
+        self.assertIn("    if: ${{ needs.validate-inputs.result == 'success' && github.event_name == 'workflow_dispatch' && inputs.approved_fresh_v2_read_admin_systemd && inputs.approved_cap_sys_ptrace_process_memory && inputs.read_profile == 'tracebolt.linux-read-admin.v2' && inputs.reviewed_source_commit == github.sha && (inputs.architecture != 'arm64' || inputs.approved_read_admin_upgrade) }}\n", source)
         self.assertNotIn("approved_disposable_read_admin_systemd", source)
         self.assertNotIn("TRACEBOLT_APPROVED_READ_ADMIN_SYSTEMD_TEST", source)
         self.assertIn("permissions:\n  contents: read\n", source)
@@ -620,7 +664,9 @@ class ReadAdminWrapperTests(unittest.TestCase):
         source = self.source
         self.assertEqual(re.findall(r"^  ([a-z-]+):", source.split("jobs:\n", 1)[1], re.M), ["validate-inputs", "disposable-systemd"])
         self.assertIn("    runs-on: ubuntu-24.04\n", source)
-        self.assertIn("      fail-fast: false\n      matrix:\n        scenario: [complete, cancel-enrollment, retained-journal]\n", source)
+        self.assertIn("      fail-fast: false\n      matrix:\n        include: ${{ fromJSON(",source)
+        self.assertIn('{"scenario":"complete","acceptance_case":"fresh","upgrade_case":"false"}',source)
+        self.assertIn('{"scenario":"complete","acceptance_case":"upgrade","upgrade_case":"true"}',source)
         self.assertIn('test "$RUNNER_ENVIRONMENT" = github-hosted', source)
         self.assertIn('test "$RUNNER_OS" = Linux', source)
         self.assertIn('test "$(git rev-parse HEAD)" = "$GITHUB_SHA"', source)
@@ -693,7 +739,7 @@ class ReadAdminWrapperTests(unittest.TestCase):
         artifact = source.split("      - name: Upload", 1)[1]
         self.assertEqual(source.count("uses: actions/upload-artifact@"), 1)
         self.assertIn("        if: ${{ always() && !cancelled() }}\n", artifact)
-        self.assertIn("          name: read-admin-v2-systemd-acceptance-${{ inputs.transport }}-${{ matrix.scenario }}-${{ github.sha }}\n", artifact)
+        self.assertIn("          name: read-admin-v2-systemd-acceptance-${{ inputs.architecture }}-${{ inputs.transport }}-${{ matrix.scenario }}-${{ matrix.acceptance_case }}-${{ github.sha }}\n", artifact)
         self.assertIn("          path: ${{ runner.temp }}/read-admin-systemd-result.json\n", artifact)
         self.assertNotIn("*", artifact)
         self.assertNotIn("private", artifact)

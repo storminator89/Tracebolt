@@ -144,6 +144,10 @@ func runApprovedSystemdInstallationMode(t *testing.T, profile, collectionProfile
 			result["schemaVersion"] = "tracebolt.read-admin-systemd-acceptance.v2"
 			result["readProfile"] = "tracebolt.linux-read-admin.v2"
 			result["sourceCommit"] = readAdmin.source
+			if readAdmin.architecture == "arm64" {
+				result["architecture"] = "arm64"
+				result["sourceBuildProof"] = readAdmin.sourceBuild
+			}
 			result["ptraceRiskAcknowledged"] = true
 			result["socketNativeChecks"] = readAdmin.checks
 			result["initialProbe"] = readAdmin.probeDiagnostic()
@@ -170,6 +174,9 @@ func runApprovedSystemdInstallationMode(t *testing.T, profile, collectionProfile
 			return append(arguments, "--insecure-http-test")
 		}
 		return arguments
+	}
+	if readAdmin != nil && readAdmin.architecture == "arm64" {
+		readAdminLoadSourceFixture(t, readAdmin, binaries, sourceArchive)
 	}
 	if readAdmin != nil {
 		stage = "read_admin_fixture_opt"
@@ -329,8 +336,15 @@ func runApprovedSystemdInstallationMode(t *testing.T, profile, collectionProfile
 		readAdminCommand = prepareReadAdminNativeCommand(t, python, binaries, sourceArchive, profile, created.Bootstrap, created.BootstrapSHA256, readAdmin)
 		if readAdmin.upgrade {
 			replacement := readAdminCommand
-			prior, priorArchive := readAdminPriorArtifacts(t)
-			readAdminCommand = prepareReadAdminNativeCommandSource(t, python, prior, priorArchive, profile, created.Bootstrap, created.BootstrapSHA256, readAdmin, readAdminPriorSource)
+			var prior map[string]string
+			var priorArchive string
+			if readAdmin.architecture == "arm64" {
+				prior = readAdmin.priorArtifacts
+				priorArchive = prior["source"]
+			} else {
+				prior, priorArchive = readAdminPriorArtifacts(t)
+			}
+			readAdminCommand = prepareReadAdminNativeCommandSource(t, python, prior, priorArchive, profile, created.Bootstrap, created.BootstrapSHA256, readAdmin, readAdmin.priorSource())
 			readAdminCommand.replacement = replacement
 		}
 		stage = "read_admin_cancel"

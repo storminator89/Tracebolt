@@ -67,11 +67,15 @@ func readAdminRunApprovedUpgrade(t *testing.T, c *readAdminNativeCommand, stage 
 	*stage = "read_admin_upgrade"
 	next := c.replacement
 	oldHash := systemdHash(t, agentinstall.AgentPath)
-	replacement := filepath.Join(filepath.Dir(next.configs[false]), "tracebolt-"+readAdminFixtureVersion+"-linux-amd64-lan-agent")
+	replacement := filepath.Join(filepath.Dir(next.configs[false]), "tracebolt-"+readAdminFixtureVersion+"-linux-"+c.options.architecture+"-lan-agent")
 	newHash := systemdHash(t, replacement)
-	checks := &readAdminUpgradeNativeChecks{PriorVersion: readAdminPriorVersion, PriorSourceCommit: readAdminPriorSource, PriorAgentSHA256: readAdminPriorHashes["lan-agent"], CandidateAgentSHA256: newHash}
+	priorVersion := readAdminPriorVersion
+	if c.options.architecture == "arm64" {
+		priorVersion = readAdminARM64PriorVersion
+	}
+	checks := &readAdminUpgradeNativeChecks{PriorVersion: priorVersion, PriorSourceCommit: c.options.priorSource(), PriorAgentSHA256: c.options.priorHashes()["lan-agent"], CandidateAgentSHA256: newHash}
 	c.options.upgradeChecks = checks
-	if oldHash != readAdminPriorHashes["lan-agent"] || oldHash == newHash {
+	if oldHash != c.options.priorHashes()["lan-agent"] || oldHash == newHash {
 		t.Fatal("native upgrade requires exact prior and different candidate bytes")
 	}
 	before := readAdminIdentitySnapshot(t)

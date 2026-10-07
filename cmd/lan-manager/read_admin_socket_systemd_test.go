@@ -294,7 +294,7 @@ func readAdminSocketOwnersAndRevoke(t *testing.T, c *readAdminNativeCommand, get
 	}
 	var restartedSequence uint64
 	run("read_admin_restart", func(t *testing.T) {
-		installer := filepath.Join(filepath.Dir(c.configs[false]), "tracebolt-"+readAdminFixtureVersion+"-linux-amd64-agent-service")
+		installer := filepath.Join(filepath.Dir(c.configs[false]), "tracebolt-"+readAdminFixtureVersion+"-linux-"+c.options.architecture+"-agent-service")
 		args := []string{"--action", "restart"}
 		if c.options.profile == lanconfig.HTTPTest {
 			args = append(args, "--insecure-http-test")

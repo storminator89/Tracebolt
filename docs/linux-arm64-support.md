@@ -49,6 +49,10 @@ TLS/HTTP-test lifecycle assertions without registry publication. Neither job has
 been run for this candidate. The local-agent job does not enroll an endpoint, grant helper capabilities,
 install services, create persistent keys, or establish Pi hardware acceptance.
 
+The existing manual hosted workflow now has a [source-bound ARM64 acceptance
+harness](linux-arm64-native-acceptance.md), with separate fresh-candidate and
+same-identity source-upgrade cases. It has not been run by this source change.
+
 ## Smallest native acceptance plan
 
 1. Run the native ARM64 read-only CI job for the exact reviewed candidate. Require

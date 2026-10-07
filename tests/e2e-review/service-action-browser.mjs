@@ -68,8 +68,16 @@ async function read(route){
  return body(response);
 }
 async function body(response){
- const bytes=await response.body();expect(bytes.length).toBeLessThanOrEqual(32768);
- return JSON.parse(bytes.toString('utf8'));
+ // Preserve the fixed caller stage and distinguish transport, bounds and JSON
+ // failures without exporting response content or the caught browser error.
+ const callerStage=stage;
+ mark(callerStage+' / retrieve response bytes');
+ const bytes=await response.body();
+ mark(callerStage+' / check response byte bound');
+ expect(bytes.length).toBeLessThanOrEqual(32768);
+ mark(callerStage+' / decode response JSON');
+ const value=JSON.parse(bytes.toString('utf8'));
+ mark(callerStage);return value;
 }
 function counters(value,calls,claims,jobs){
  expect(value.calls).toBe(calls);expect(value.claims).toBe(claims);expect(value.jobs).toBe(jobs);

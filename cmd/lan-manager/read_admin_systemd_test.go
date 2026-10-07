@@ -24,6 +24,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
 	"testing"
@@ -761,6 +762,11 @@ type readAdminNativeChecks struct {
 }
 type readAdminNativeOptions struct {
 	profile, scenario, source string
+	architecture              string
+	upgradeApproved           bool
+	sourceBuild               *readAdminSourceBuildProof
+	priorArtifacts            map[string]string
+	hostPreflight             []byte
 	checks                    readAdminNativeChecks
 	initialProbe              readAdminProbeDiagnostic
 	setupFailure              string
@@ -827,7 +833,7 @@ func readAdminNativeSelection(base, approval, profile, scenario, source, actions
 	if scenario != "complete" && scenario != "cancel-enrollment" && scenario != "retained-journal" {
 		return nil, errors.New("read_admin_explicit_scenario_required")
 	}
-	return &readAdminNativeOptions{profile: profile, scenario: scenario, source: source}, nil
+	return &readAdminNativeOptions{profile: profile, scenario: scenario, source: source, architecture: "amd64"}, nil
 }
 
 func TestApprovedReadAdminDisposableSystemdInstallation(t *testing.T) {
@@ -842,7 +848,16 @@ func TestApprovedReadAdminDisposableSystemdInstallation(t *testing.T) {
 	if selection != "" && selection != "false" && selection != "true" {
 		t.Fatal("invalid explicit read-admin upgrade gate")
 	}
-	options.upgrade = selection == "true" && options.scenario == "complete"
+	options.architecture = os.Getenv("TRACEBOLT_READ_ADMIN_ARCHITECTURE")
+	if readAdminArchitectureSelection(options.architecture, runtime.GOARCH, os.Getenv("RUNNER_ARCH"), selection, options.source) != nil {
+		t.Fatal("invalid native architecture or ARM64 upgrade approval; no host work started")
+	}
+	options.upgradeApproved = selection == "true"
+	upgradeCase := os.Getenv("TRACEBOLT_READ_ADMIN_UPGRADE_CASE")
+	if upgradeCase != "false" && upgradeCase != "true" || upgradeCase == "true" && (!options.upgradeApproved || options.scenario != "complete") {
+		t.Fatal("invalid separately selected upgrade case; no host work started")
+	}
+	options.upgrade = upgradeCase == "true"
 	runApprovedSystemdInstallationMode(t, options.profile, enrollmentcrypto.CollectionProfileComplete, options)
 }
 
@@ -962,7 +977,7 @@ func (c *readAdminNativeCommand) approval() string {
 }
 func (c *readAdminNativeCommand) environment() []string {
 	return append(systemdCleanEnvironment(), "GITHUB_ACTIONS=true", "RUNNER_ENVIRONMENT=github-hosted", "RUNNER_OS=Linux", "GITHUB_SHA="+c.options.source,
-		"TRACEBOLT_APPROVED_SYSTEMD_TEST=1", "TRACEBOLT_APPROVED_READ_ADMIN_V2_SYSTEMD_TEST=1", "TRACEBOLT_READ_ADMIN_PROFILE=tracebolt.linux-read-admin.v2", "TRACEBOLT_APPROVED_READ_ADMIN_PTRACE=true", "TRACEBOLT_READ_ADMIN_REVIEWED_SOURCE="+c.options.source, "TRACEBOLT_READ_ADMIN_TRANSPORT="+c.options.profile, "TRACEBOLT_READ_ADMIN_SCENARIO="+c.options.scenario, "TRACEBOLT_APPROVED_READ_ADMIN_UPGRADE="+strconv.FormatBool(c.options.upgrade))
+		"TRACEBOLT_APPROVED_SYSTEMD_TEST=1", "TRACEBOLT_APPROVED_READ_ADMIN_V2_SYSTEMD_TEST=1", "TRACEBOLT_READ_ADMIN_PROFILE=tracebolt.linux-read-admin.v2", "TRACEBOLT_APPROVED_READ_ADMIN_PTRACE=true", "TRACEBOLT_READ_ADMIN_REVIEWED_SOURCE="+c.options.source, "TRACEBOLT_READ_ADMIN_TRANSPORT="+c.options.profile, "TRACEBOLT_READ_ADMIN_SCENARIO="+c.options.scenario, "TRACEBOLT_APPROVED_READ_ADMIN_UPGRADE="+strconv.FormatBool(c.options.upgradeApproved), "TRACEBOLT_READ_ADMIN_UPGRADE_CASE="+strconv.FormatBool(c.options.upgrade), "TRACEBOLT_READ_ADMIN_ARCHITECTURE="+c.options.architecture, "RUNNER_ARCH="+map[string]string{"amd64": "X64", "arm64": "ARM64"}[c.options.architecture])
 }
 
 func prepareReadAdminNativeCommand(t *testing.T, python string, binaries map[string]string, archive, profile string, bootstrap api.EnrollmentBootstrap, bootstrapHash string, options *readAdminNativeOptions) *readAdminNativeCommand {
@@ -1004,21 +1019,43 @@ func prepareReadAdminNativeCommandSource(t *testing.T, python string, binaries m
 		assets[name] = map[string]any{"size": n, "sha256": expected}
 	}
 	for _, role := range []string{"agent-service", "enroll-agent", "lan-agent", "socket-owner-reader"} {
-		copyArtifact(binaries[role], "tracebolt-"+readAdminFixtureVersion+"-linux-amd64-"+role, 0500)
+		copyArtifact(binaries[role], "tracebolt-"+readAdminFixtureVersion+"-linux-"+options.architecture+"-"+role, 0500)
 	}
 	copyArtifact(archive, "tracebolt-"+readAdminFixtureVersion+"-source.tar", 0600)
 	if artifactSource != options.source {
-		if !options.upgrade || artifactSource != readAdminPriorSource {
+		if !options.upgrade || artifactSource != options.priorSource() {
 			t.Fatal("unapproved prior release source")
 		}
-		for role, expected := range readAdminPriorHashes {
-			name := "tracebolt-" + readAdminFixtureVersion + "-linux-amd64-" + role
+		for role, expected := range options.priorHashes() {
+			name := "tracebolt-" + readAdminFixtureVersion + "-linux-" + options.architecture + "-" + role
 			if role == "source" {
 				name = "tracebolt-" + readAdminFixtureVersion + "-source.tar"
 			}
 			if assets[name].(map[string]any)["sha256"] != expected {
 				t.Fatal("staged prior release artifact changed")
 			}
+		}
+	}
+	if options.architecture == "arm64" {
+		if options.sourceBuild == nil || len(options.hostPreflight) == 0 {
+			t.Fatal("ARM64 verified source evidence missing")
+		}
+		generation := options.sourceBuild.Candidate
+		if artifactSource != options.source {
+			generation = options.sourceBuild.Prior
+		}
+		for role, want := range generation.Files {
+			name := "tracebolt-" + readAdminFixtureVersion + "-linux-arm64-" + role
+			if role == "source" {
+				name = "tracebolt-" + readAdminFixtureVersion + "-source.tar"
+			}
+			actual := assets[name].(map[string]any)
+			if actual["sha256"] != want.SHA256 || actual["size"] != want.Size {
+				t.Fatal("staged ARM64 source artifact changed")
+			}
+		}
+		if os.WriteFile(filepath.Join(stage, "candidate-host-preflight.py"), options.hostPreflight, 0600) != nil {
+			t.Fatal("candidate host preflight staging")
 		}
 	}
 	manifest := map[string]any{"version": readAdminFixtureVersion, "sourceCommit": artifactSource, "assets": assets}
@@ -1038,7 +1075,11 @@ func prepareReadAdminNativeCommandSource(t *testing.T, python string, binaries m
 		if resume {
 			selected = append(selected, "--resume-read-admin")
 		}
-		raw, err := json.Marshal(map[string]any{"directory": stage, "manifest": manifest, "arguments": selected, "scenario": options.scenario, "operation": "install"})
+		config := map[string]any{"directory": stage, "manifest": manifest, "arguments": selected, "scenario": options.scenario, "operation": "install"}
+		if options.architecture == "arm64" {
+			config["sourceHostPreflightSHA256"] = fmt.Sprintf("%x", sha256.Sum256(options.hostPreflight))
+		}
+		raw, err := json.Marshal(config)
 		if err != nil {
 			t.Fatal("read-admin public fixture encoding")
 		}
@@ -1060,7 +1101,11 @@ func prepareReadAdminNativeCommandSource(t *testing.T, python string, binaries m
 				selectedArguments = append(selectedArguments, "--insecure-http-test")
 			}
 		}
-		raw, err := json.Marshal(map[string]any{"directory": stage, "manifest": manifest, "arguments": selectedArguments, "scenario": options.scenario, "operation": operation})
+		config := map[string]any{"directory": stage, "manifest": manifest, "arguments": selectedArguments, "scenario": options.scenario, "operation": operation}
+		if options.architecture == "arm64" {
+			config["sourceHostPreflightSHA256"] = fmt.Sprintf("%x", sha256.Sum256(options.hostPreflight))
+		}
+		raw, err := json.Marshal(config)
 		if err != nil {
 			t.Fatal("maintenance fixture encoding")
 		}
