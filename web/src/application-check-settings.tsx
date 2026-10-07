@@ -5,6 +5,7 @@ import { hasLogoutIntent, LOGOUT_INTENT_KEY, useOperator } from './auth';
 import { useLocale } from './i18n';
 import { APPLICATION_CHECK_MAX_TARGETS, APPLICATION_CHECK_SETTINGS_BYTES, sameApplicationTargets, validApplicationCheckSettings, validApplicationTarget } from './application-check-settings-types';
 import type { ApplicationCheckSettings, ApplicationCheckSettingsChange, ApplicationTarget } from './application-check-settings-types';
+import { applicationCheckEntryCopy } from './application-check-entry';
 import './application-check-settings.css';
 
 const copy = {
@@ -139,28 +140,54 @@ function TargetForm({ draft, index, count, labels, change, remove }: { draft: Dr
         <button type="button" className="button" disabled={count <= 1} aria-label={`${labels.remove} ${index + 1}`} onClick={remove}>{labels.remove}</button>
     </fieldset>;
 }
-function ApplicationCheckSettingsContent({ insecureTestMode }: { insecureTestMode: boolean }) {
+function ApplicationCheckSettingsContent({ insecureTestMode, initialAdd }: { insecureTestMode: boolean; initialAdd: boolean }) {
     const [locale] = useLocale(), labels = copy[locale], heading = useId(), body = useId();
-    const toggle = useRef<HTMLButtonElement>(null);
-    const [expanded, setExpanded] = useState(false), [editor, setEditor] = useState<Editor>(null), [drafts, setDrafts] = useState<Draft[]>([]), [interval, setInterval] = useState('60');
+    const toggle = useRef<HTMLButtonElement>(null), section = useRef<HTMLElement>(null), entryPending = useRef(initialAdd), focusDraft = useRef(false);
+    const [expanded, setExpanded] = useState(initialAdd), [editor, setEditor] = useState<Editor>(null), [drafts, setDrafts] = useState<Draft[]>([]), [interval, setInterval] = useState('60');
     const [managerAck, setManagerAck] = useState(false), [destinationsAck, setDestinationsAck] = useState(false), [transportAck, setTransportAck] = useState(false), [attempted, setAttempted] = useState(false);
     const resetApprovals = () => { setManagerAck(false); setDestinationsAck(false); setTransportAck(false); };
     const clearForm = () => { setEditor(null); setDrafts([]); setInterval('60'); resetApprovals(); setAttempted(false); };
-    const { view, busy, locked, failure, notice, refresh, write, dismiss } = useApplicationSettings(clearForm, () => setExpanded(false));
+    const { view, busy, locked, failure, notice, refresh, write, dismiss } = useApplicationSettings(clearForm, () => { entryPending.current = false; focusDraft.current = false; setExpanded(false); });
     const editable = !!view && view.mode === 'managed' && !view.blocked && !busy && !locked;
     const targets = drafts.map(asTarget), validInterval = /^[0-9]{2,4}$/.test(interval) && Number(interval) >= 60 && Number(interval) <= 3600;
     const validTargets = targets.length > 0 && targets.length <= APPLICATION_CHECK_MAX_TARGETS && targets.every(validApplicationTarget) && new Set(targets.map(target => target.id)).size === targets.length;
     const permitted = editable && (editor === 'save' ? validInterval && validTargets : editor === 'enable' ? managerAck && destinationsAck && (!insecureTestMode || transportAck) : editor === 'disable');
     const choose = (next: Editor) => { if (!editable || !view) return; clearForm(); setEditor(next); if (next === 'save') { setInterval(String(view.intervalSeconds)); setDrafts(view.targets.length ? view.targets.map(draftTarget) : [emptyTarget()]); } };
+    // The fixed entry route opens a local draft once, after a valid settings
+    // read. It never saves, enables, fills destinations or grants consent.
+    useEffect(() => {
+        if (!initialAdd) return;
+        toggle.current?.focus({ preventScroll: true });
+        section.current?.scrollIntoView?.({ block: 'start', behavior: 'instant' });
+    }, [initialAdd]);
+    useEffect(() => {
+        if (!entryPending.current || !view || busy || locked) return;
+        entryPending.current = false;
+        if (!editable) return;
+        clearForm(); setEditor('save'); setInterval(String(view.intervalSeconds));
+        const existing = view.targets.map(draftTarget);
+        setDrafts(existing.length < APPLICATION_CHECK_MAX_TARGETS ? [...existing, emptyTarget()] : existing);
+        focusDraft.current = true;
+    }, [view, busy, locked, editable]);
+    useEffect(() => {
+        if (!focusDraft.current || !expanded || editor !== 'save') return;
+        focusDraft.current = false;
+        const inputs = section.current?.querySelectorAll<HTMLInputElement>('.check-settings-target input');
+        // Target IDs precede target values; focus the last target's first field.
+        const target = section.current?.querySelector<HTMLElement>('.check-settings-target:last-of-type');
+        const first = target?.querySelector<HTMLInputElement>('input') ?? inputs?.[0];
+        first?.focus({ preventScroll: true }); first?.scrollIntoView?.({ block: 'center', behavior: 'instant' });
+    }, [expanded, editor, drafts.length]);
     const submit = () => {
         setAttempted(true); if (!permitted || !view || !editor) return;
         write(editor === 'save' ? { expectedRevision: view.revision, operation: 'save', intervalSeconds: Number(interval), targets } : editor === 'enable' ? { expectedRevision: view.revision, operation: 'enable', checksFromManagerAcknowledged: true, destinationsAcknowledged: true, ...(insecureTestMode ? { plaintextAcknowledged: true as const } : {}) } : { expectedRevision: view.revision, operation: 'disable' });
     };
-    const close = () => { dismiss(); setExpanded(false); toggle.current?.focus(); };
-    return <section className="panel check-settings application-check-settings" aria-labelledby={heading} onKeyDown={event => { if (event.key === 'Escape' && expanded) { event.preventDefault(); close(); } }}>
+    const close = () => { entryPending.current = false; focusDraft.current = false; dismiss(); setExpanded(false); toggle.current?.focus(); };
+    return <section ref={section} className="panel check-settings application-check-settings" aria-labelledby={heading} onKeyDown={event => { if (event.key === 'Escape' && expanded) { event.preventDefault(); close(); } }}>
         <div className="check-settings-heading"><h2 id={heading}><button ref={toggle} className="check-settings-toggle" aria-expanded={expanded} aria-controls={body} onClick={() => expanded ? close() : setExpanded(true)}><Activity size={17}/>{labels.title}<ChevronDown size={15}/></button></h2><span className="check-settings-state">{view ? view.configured ? `${view.targets.length} · ${view.enabled ? labels.on : labels.off}` : labels.unconfigured : busy === 'read' ? labels.loading : labels.unknown}</span><button className="icon-button" aria-label={labels.refresh} disabled={!!busy || locked} onClick={refresh}><RefreshCw size={15}/></button></div>
         {failure && <p className="check-settings-notice" role="alert">{labels[failure]}</p>}{notice && <p className="check-settings-notice" role="status">{labels[notice]}</p>}{busy === 'write' && <p className="check-settings-notice" role="status">{labels.working}</p>}
         {expanded && <div id={body} className="check-settings-body">
+            <p>{applicationCheckEntryCopy[locale].examples}</p>
             {editor === null && <p>{labels.intro}</p>}{insecureTestMode && <p className="check-settings-warning">{labels.transportNote}</p>}
             {view?.mode === 'external' && <p>{labels.external}</p>}{view?.mode === 'unavailable' && <p>{labels.unavailable}</p>}{view?.blocked && <p role="alert">{labels.blocked}</p>}
             {view?.configured && editor !== 'save' && <>{editor === 'enable' && <h3>{labels.review}</h3>}<SavedTargets view={view} labels={labels}/></>}
@@ -180,10 +207,10 @@ function ApplicationCheckSettingsContent({ insecureTestMode }: { insecureTestMod
         </div>}
     </section>;
 }
-export function ApplicationCheckSettingsPanel() {
+export function ApplicationCheckSettingsPanel({ initialAdd = false }: { initialAdd?: boolean } = {}) {
     const operator = useOperator(), [locale] = useLocale();
     if (!operator || operator.mode !== 'lan' || !operator.authenticated) return null;
     const canManage = (operator.loginMode ?? 'shared') === 'shared' || operator.capabilities?.includes('manage_application_checks') === true;
     if (!canManage) return <section className="panel check-settings check-settings-readonly" aria-label={copy[locale].title}><p>{copy[locale].readonly}</p></section>;
-    return <ApplicationCheckSettingsContent key={`${operator.actorId ?? ''}:${operator.expiresAt ?? ''}:${operator.insecureTestMode}`} insecureTestMode={operator.insecureTestMode}/>;
+    return <ApplicationCheckSettingsContent key={`${operator.actorId ?? ''}:${operator.expiresAt ?? ''}:${operator.insecureTestMode}:${initialAdd}`} insecureTestMode={operator.insecureTestMode} initialAdd={initialAdd}/>;
 }

@@ -52,6 +52,7 @@ async function start() {
     return { ...result, onClose };
 }
 beforeEach(() => {
+    abortProtectedRequests();
     vi.useFakeTimers(); vi.setSystemTime(journalNow); localStorage.clear(); sessionStorage.clear(); setLocale('en', false);
     vi.mocked(useOperator).mockReturnValue(operator);
     vi.mocked(request).mockReset().mockImplementation(async path => answer(path));
@@ -98,7 +99,7 @@ describe('explicit service to Logs navigation', () => {
     });
     it('keeps an unknown health check honest while offering the same explicit log shortcut', async () => {
         await start(); fireEvent.click(screen.getByRole('tab', { name: 'Health & history' })); await flush();
-        const checks = screen.getByRole('list', { name: 'Current checks' }); expect(checks).toHaveTextContent('Unknown'); expect(checks).toHaveTextContent('Time unknown');
+        const cards = screen.getByRole('list', { name: 'Current checks' }); expect(cards).toHaveTextContent('Current state unknown'); const checks = screen.getByRole('region', { name: 'Current issues' }); expect(checks).toHaveTextContent('Unknown');
         expect(within(checks).getAllByRole('button', { name: /^Open logs:/ })).toHaveLength(1);
         fireEvent.click(within(checks).getByRole('button', { name: `Open logs: ${services[0].name}` })); await flush();
         expect(screen.getByLabelText('Exact service unit')).toHaveValue(services[0].name); expect(screen.queryByRole('checkbox')).not.toBeInTheDocument(); fireEvent.click(screen.getByRole('button', { name: 'Fetch logs' })); expect(screen.getByRole('checkbox')).not.toBeChecked(); expect(screen.getByRole('button', { name: 'Capture logs' })).toBeDisabled(); assertNoCapture();

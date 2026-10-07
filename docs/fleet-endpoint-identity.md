@@ -27,8 +27,10 @@ separate from `model.Device`, general CSV exports, AI packets, connection target
 and routing. Device details still open by stable agent ID. Name sorting and local
 search use only currently displayable hostname/address observations. All reported
 addresses remain searchable, including ones behind the compact extra-address
-count. Two addresses are shown with their interface; remaining addresses are
-available in the existing device identity details. Display order prefers up,
+count. One address is shown in the compact row; the disclosure exposes the remaining
+addresses, their interface/scope, collection time, stable ID and group. Link-local
+and loopback scope, inactive interfaces, stale/expired values and partial or failed
+collection remain visible where needed without opening the disclosure. Display order prefers up,
 nonloopback interfaces but does not identify a primary IP. Link-local association
 retains interface name and index. Address-family and hostname collection failures
 remain independent; permission denied, failed collection, successful emptiness,
@@ -43,6 +45,22 @@ requires a fresh read. The browser ages observations while open, clears expired 
 clears on read failure or access loss, aborts obsolete requests, and suspends on
 hidden/blurred navigation. Resuming requires a fresh read. A single exact
 `storage_busy` retry stays inside the original ten-second request budget.
+
+## Selecting and copying values
+
+The LAN cell is selectable text, not a row-navigation button. Its explicit arrow
+still opens the stable device ID. Copy buttons operate only on the selected
+reported hostname or numeric interface address. They never infer a connection
+target, append a zone, resolve a name or copy a transport peer address.
+
+A user click tries the secure Clipboard API when available. On HTTP or failure,
+it selects the actual displayed value and attempts the document copy command.
+Only a resolved clipboard write or a true document-copy result reports success.
+Otherwise it leaves the text selected and says to copy manually; unsupported
+selection receives an honest manual-selection message. No permission grants or
+queries happen automatically. Late denial cannot select/copy a removed value.
+A requested copy is now in the user's OS clipboard; hiding expired/revoked DOM
+values does not recall or automatically overwrite that clipboard.
 
 ## Verification
 

@@ -6,7 +6,7 @@ export function installJournalPrimaryBody({ url }) {
  if(target.protocol!=='http:'||!['127.0.0.1','localhost'].includes(target.hostname)||!/^\/api\/devices\/agent_[a-f0-9]{32}\/journal\/query$/.test(target.pathname)||target.search||target.hash)throw new Error('Invalid synthetic journal observation scope');
  // One armed response, scoped to this fixture device. Inventory pages use the
  // production SYSTEM_PAGE_BYTES bound; journal pages retain their original cap.
- const scopes={journal:{url:target.href,maximum:65536},services:{url:target.href.replace(/\/journal\/query$/,'/inventory/system/query'),maximum:262144},overview:{url:target.href.replace(/\/journal\/query$/,'/inventory/overview/query'),maximum:262144}};
+ const scopes={journal:{url:target.href,maximum:65536},services:{url:target.href.replace(/\/journal\/query$/,'/inventory/system/query'),maximum:262144},overview:{url:target.href.replace(/\/journal\/query$/,'/inventory/overview/query'),maximum:262144,requestBound:true},actionPreview:{url:target.href.replace(/\/journal\/query$/,'/service-actions/preview'),maximum:32768,requestBound:true,measureBytes:true},actionApprove:{url:target.href.replace(/\/journal\/query$/,'/service-actions/approve'),maximum:32768,requestBound:true,measureBytes:true}};
  const originalFetch=globalThis.fetch;
  let serial=0,current=null;
  const discard=(entry,phase)=>{entry.phase=phase;entry.chunks=[];entry.body=null;entry.requestBody=null;};
@@ -20,7 +20,7 @@ export function installJournalPrimaryBody({ url }) {
   if(entry){entry.requests++;if(entry.requests!==1)discard(entry,'duplicate');else{
    entry.phase='waiting';
    // Observe the original bounded query string; never read/clone Request bodies.
-   if(entry.scope===scopes.overview){if(typeof init?.body!=='string'||new TextEncoder().encode(init.body).byteLength>2048)discard(entry,'invalid-request');else entry.requestBody=init.body;}
+   if(entry.scope.requestBound){if(typeof init?.body!=='string'||new TextEncoder().encode(init.body).byteLength>2048)discard(entry,'invalid-request');else entry.requestBody=init.body;}
   }}
   let response;
   try{response=await Reflect.apply(originalFetch,this,[input,init]);}
@@ -60,7 +60,7 @@ export function installJournalPrimaryBody({ url }) {
  const observer=Object.freeze({
   arm(scope='journal'){if(!Object.hasOwn(scopes,scope))throw new Error('Invalid synthetic observation scope');if(current)discard(current,'superseded');current={id:++serial,scope:scopes[scope],phase:'armed',requests:0,status:0,bytes:0,chunks:[],body:null,requestBody:null};return serial;},
   state(id){return current?.id===id?current.phase:'missing';},
-  take(id){if(current?.id!==id||current.phase!=='complete'||current.requests!==1)return null;const entry=current,body=entry.body,requestBody=entry.requestBody;entry.body=null;entry.requestBody=null;current=null;return Object.freeze({status:entry.status,body,...(entry.scope===scopes.overview?{requestBody}:{})});},
+  take(id){if(current?.id!==id||current.phase!=='complete'||current.requests!==1)return null;const entry=current,body=entry.body,requestBody=entry.requestBody;entry.body=null;entry.requestBody=null;current=null;return Object.freeze({status:entry.status,body,...(entry.scope.requestBound?{requestBody}:{}),...(entry.scope.measureBytes?{bytes:entry.bytes}:{})});},
   clear(){if(current)discard(current,'cleared');current=null;},
  });
  Object.defineProperty(globalThis,'__traceboltJournalBody',{configurable:true,value:observer});

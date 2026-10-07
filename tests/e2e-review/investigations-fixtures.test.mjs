@@ -1,4 +1,6 @@
+import './health-dashboard-browser.test.mjs';
 import './device-inventory-browser-contracts.test.mjs';
+import './workspace-navigation-browser.test.mjs';
 // Keep the display-only service-action privacy guards in the existing CI fixture entry point.
 import './service-action-display-fixtures.test.mjs';
 /** Pure DTO/source checks only; no browser, API, host or provider is started. */

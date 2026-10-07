@@ -55,3 +55,9 @@
     .application-checks-notice{padding:13px 17px}
     .application-checks-timing{padding:10px 17px;font-size:12px}
 }
+
+.application-checks-heading{align-items:flex-start;flex-wrap:wrap}
+.application-checks-heading>div:first-child{flex:1;min-width:220px}
+.application-checks-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.application-check-examples{overflow-wrap:anywhere}
+@media(max-width:760px){.application-checks-heading>div:first-child{flex-basis:100%;min-width:0}.application-checks-actions{width:100%}.application-checks-actions .button{min-height:44px;flex:1;justify-content:center}}

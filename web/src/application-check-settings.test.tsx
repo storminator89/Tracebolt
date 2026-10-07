@@ -81,6 +81,49 @@ describe('administrator-only settings', () => {
     it('localizes the editor without another request or losing its draft', async () => { await edit(); fill('Target ID', 'new-id'); act(() => setLocale('de', false)); expect(screen.getByRole('region', { name: 'Anwendungsprüfungen einrichten' })).toBeInTheDocument(); expect(input('Ziel-ID')).toHaveValue('new-id'); expect(button('Entwurf speichern')).toBeEnabled(); expect(request).toHaveBeenCalledTimes(1); });
 });
 
+describe('direct add-check entry', () => {
+    it('opens one empty local draft after a valid read, with examples and no write or implicit consent', async () => {
+        vi.mocked(request).mockResolvedValue(empty()); render(<ApplicationCheckSettingsPanel initialAdd/>); await flush();
+        expect(button('Application check setup')).toHaveAttribute('aria-expanded', 'true');
+        expect(screen.getAllByRole('group')).toHaveLength(1); expect(input('Target ID')).toHaveValue(''); expect(input('URL')).toHaveValue(''); expect(input('Allowed IP addresses')).toHaveValue('');
+        expect(input('Target ID')).toHaveFocus(); expect(screen.getByRole('checkbox')).not.toBeChecked();
+        expect(panel()).toHaveTextContent('Website: https://example.org/health · DNS: example.org · Port: example.org:443');
+        expect(request).toHaveBeenCalledTimes(1); expect(mutateRaw).not.toHaveBeenCalled();
+        fireEvent.click(button('Save draft')); expect(mutateRaw).not.toHaveBeenCalled(); expect(screen.getByRole('alert')).toHaveTextContent('invalid');
+    });
+    it('adds a blank target beside exact saved destinations without stopping running checks or reusing approvals', async () => {
+        const value = { ...on(), targets: [{ ...http(), kind: 'http' as const, url: 'http://fixture.example.test/health', allowedAddresses: ['10.2.3.4'], allowPrivateLAN: true, plaintextHTTPAcknowledged: true }] };
+        vi.mocked(request).mockResolvedValue(value); render(<ApplicationCheckSettingsPanel initialAdd/>); await flush();
+        expect(screen.getAllByRole('group')).toHaveLength(2); expect(screen.getAllByLabelText('URL', { exact: true })[0]).toHaveValue(value.targets[0].url); expect(screen.getAllByLabelText('URL', { exact: true })[1]).toHaveValue('');
+        expect(screen.getAllByLabelText('Target ID', { exact: true })[1]).toHaveFocus(); expect(screen.getAllByRole('checkbox').every(box => !(box as HTMLInputElement).checked)).toBe(true);
+        expect(panel()).toHaveTextContent('1 · On'); expect(mutateRaw).not.toHaveBeenCalled();
+        fireEvent.click(button('Cancel')); expect(screen.queryByRole('form')).toBeNull(); expect(button('Disable checks')).toBeVisible(); expect(mutateRaw).not.toHaveBeenCalled();
+    });
+    it('respects the existing eight-target limit', async () => {
+        vi.mocked(request).mockResolvedValue({ ...configured(), targets: Array.from({ length: 8 }, (_, i) => ({ ...http(), id: `web${i}` })) }); render(<ApplicationCheckSettingsPanel initialAdd/>); await flush();
+        expect(screen.getAllByRole('group')).toHaveLength(8); expect(button('Add target')).toBeDisabled(); expect(mutateRaw).not.toHaveBeenCalled();
+    });
+    it.each([{ ...configured(), mode: 'external', revision: '' }, { ...empty(), mode: 'unavailable', revision: '' }, { ...configured(), blocked: true }])('does not bypass immutable manager state %#', async value => {
+        vi.mocked(request).mockResolvedValue(value); render(<ApplicationCheckSettingsPanel initialAdd/>); await flush(); expect(panel().querySelector('input,form')).toBeNull(); expect(mutateRaw).not.toHaveBeenCalled();
+    });
+    it('cannot expose admin settings through the entry route to a read-only operator', async () => {
+        vi.mocked(useOperator).mockReturnValue({ ...operator, loginMode: 'named', actorId: `operator_${revision}`, capabilities: ['read'] }); render(<ApplicationCheckSettingsPanel initialAdd/>); await flush();
+        expect(panel()).toHaveTextContent('administrator permission'); expect(panel().querySelector('button,input,form')).toBeNull(); expect(request).not.toHaveBeenCalled(); expect(mutateRaw).not.toHaveBeenCalled();
+    });
+    it.each(['cancel', 'Escape', 'hashchange', 'popstate'])('cancels pending entry on %s and cannot reopen from a late response', async action => {
+        const held = deferred<ApplicationCheckSettings>(); vi.mocked(request).mockReturnValueOnce(held.promise); render(<ApplicationCheckSettingsPanel initialAdd/>);
+        const signal = vi.mocked(request).mock.calls[0][1]!.signal!;
+        if (action === 'cancel') fireEvent.click(button('Cancel')); else if (action === 'Escape') fireEvent.keyDown(panel(), { key: 'Escape' }); else act(() => window.dispatchEvent(new Event(action)));
+        expect(signal.aborted).toBe(true); await act(async () => held.resolve(empty())); expect(panel().querySelector('input,form')).toBeNull();
+        vi.mocked(request).mockResolvedValue(empty()); fireEvent.click(refresh()); await flush(); open(); expect(button('Add targets')).toBeVisible(); expect(panel().querySelector('form')).toBeNull(); expect(mutateRaw).not.toHaveBeenCalled();
+    });
+    it('re-entry resets unsaved destinations and approvals while ordinary Settings stays collapsed', async () => {
+        vi.mocked(request).mockResolvedValue(empty()); const mounted = render(<ApplicationCheckSettingsPanel initialAdd/>); await flush(); fill('URL', 'https://unsaved.example.test/health'); fireEvent.click(screen.getByRole('checkbox'));
+        mounted.rerender(<ApplicationCheckSettingsPanel/>); await flush(); expect(button('Application check setup')).toHaveAttribute('aria-expanded', 'false'); expect(panel().querySelector('input')).toBeNull();
+        mounted.rerender(<ApplicationCheckSettingsPanel initialAdd/>); await flush(); expect(input('URL')).toHaveValue(''); expect(screen.getByRole('checkbox')).not.toBeChecked(); expect(request).toHaveBeenCalledTimes(3); expect(mutateRaw).not.toHaveBeenCalled();
+    });
+});
+
 describe('inert saved drafts and exact consent', () => {
     it('saves exact targets once, leaves checks off and never sends a probe', async () => {
         await edit(on()); fill('Interval (seconds)', '75'); const held = deferred<ApplicationCheckSettings>(); vi.mocked(mutateRaw).mockReturnValue(held.promise); const save = button('Save draft'); fireEvent.click(save); fireEvent.click(save);

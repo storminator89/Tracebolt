@@ -54,7 +54,7 @@ describe('concise browser copy matches rendered production meaning', () => {
   setLocale('de',false);vi.mocked(request).mockResolvedValue(disabledApplicationViewV2());render(<ApplicationChecksPanel/>);await flush();
   fireEvent.click(screen.getByText('Einrichtung und Freigaben',{selector:'summary'}));
   expect(screen.getByRole('region',{name:'Anwendungsprüfungen'})).toHaveTextContent(conciseCopy.applicationApprovalDE);
-  expect(screen.getByRole('link',{name:'Anwendungsprüfungen einrichten'})).toHaveAttribute('href','#/settings');expect(document.querySelector('form,input,select')).toBeNull();
+  expect(screen.getByRole('link',{name:'Prüfung hinzufügen'})).toHaveAttribute('href','#/settings/application-checks');expect(document.querySelector('form,input,select')).toBeNull();
  });
  it('distinguishes browser Loaded time from event/server time without enabling sending', async () => {
   vi.mocked(request).mockResolvedValue({schemaVersion:'tracebolt.alarm-status.v1',enabled:false,queued:0,inFlight:0,providerAccepted:0,failed:0,uncertain:0,suppressed:0,dropped:0});
@@ -73,11 +73,12 @@ describe('concise browser copy matches rendered production meaning', () => {
   expect(screen.getByRole('status')).toHaveTextContent(conciseCopy.journalPaused);expect(screen.getByRole('button',{name:'Fetch logs'})).toBeDisabled();
   expect(screen.getByLabelText('Exact service unit')).toBeDisabled();expect(document.querySelector('.journal-results,.journal-search')).toBeNull();expect(resource.create).not.toHaveBeenCalled();
  });
- it('keeps the omitted-address count and stable identity while shortening the fleet label', () => {
+ it('keeps one copyable address and reveals remaining addresses and stable identity on demand', async () => {
   const view=endpointView();const display=fleetIdentityProjection({schemaVersion:'tracebolt.fleet-endpoint-identity.v1',serverNow:view.serverNow,items:[view]},0).get(endpointDevice)!;
   render(<FleetIdentityName identity={{...display,addresses:display.addresses.slice(0,4)}} deviceId={endpointDevice}/>);
-  expect(screen.getByText(conciseCopy.fleetMore)).toBeVisible();expect(screen.getByText(`ID: ${endpointDevice}`)).toBeVisible();expect(screen.getByText('fixture-linux')).toBeVisible();
-  expect(document.querySelector('.fleet-identity-addresses')).toHaveAttribute('title',expect.stringContaining('eth0'));
+  expect(screen.getByText(conciseCopy.fleetMore)).toBeVisible();expect(screen.getByText(`ID: ${endpointDevice}`)).not.toBeVisible();expect(screen.getByText('fixture-linux')).toBeVisible();
+  expect(screen.getByRole('button',{name:'Copy hostname: fixture-linux'})).toBeVisible();expect(screen.getByRole('button',{name:'Copy IP address: 192.0.2.19 (eth0)'})).toBeVisible();
+  fireEvent.click(screen.getByText(conciseCopy.fleetMore));await screen.findByText('2001:db8::19');expect(screen.getByText(`ID: ${endpointDevice}`)).toBeVisible();
  });
 });
 

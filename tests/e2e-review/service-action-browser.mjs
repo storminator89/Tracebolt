@@ -1,7 +1,8 @@
 /** Built React + real named auth, manager API/store, agent ingress and framed
  * helper IPC. The synthetic protocol driver and fake Backend never run systemctl.
  * Injected fixture authority/peer are not native root/helper isolation evidence.
- * No API interception, response substitution, saved traces or raw diagnostics.
+ * No API routing, response substitution, saved traces or raw diagnostics.
+ * Test-only observation forwards the original primary response/reader unchanged.
  */
 import {createRequire} from 'node:module';
 import {execFileSync,spawn} from 'node:child_process';
@@ -11,6 +12,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {createBrowserTransportDiagnostics,reportTransportFailure} from './browser-transport-diagnostics.mjs';
+import {installJournalPrimaryBody} from './journal-primary-body.mjs';
 
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../..');
 const out=path.join(root,'artifacts/review/service-action-browser-results.json');
@@ -85,6 +87,16 @@ async function body(response){
  const value=JSON.parse(bytes.toString('utf8'));
  mark(callerStage);return value;
 }
+async function primaryBody(capture,request){
+ // Browser POSTs are observed only through the application's original bounded
+ // consumer. Context-request reads/replays keep their independent body() checks.
+ const callerStage=stage;mark(callerStage+' / await primary response consumption');
+ await expect.poll(()=>page.evaluate(id=>window.__traceboltJournalBody.state(id),capture)).not.toMatch(/^(armed|waiting|reading)$/);
+ mark(callerStage+' / require complete primary response');expect(await page.evaluate(id=>window.__traceboltJournalBody.state(id),capture)).toBe('complete');
+ const consumed=await page.evaluate(id=>window.__traceboltJournalBody.take(id),capture);expect(consumed).not.toBeNull();expect(consumed.status).toBe(200);expect(consumed.requestBody).toBe(request.postData());
+ mark(callerStage+' / check response byte bound');expect(Number.isSafeInteger(consumed.bytes)).toBe(true);expect(consumed.bytes).toBeGreaterThanOrEqual(0);expect(consumed.bytes).toBeLessThanOrEqual(32768);
+ mark(callerStage);return consumed.body;
+}
 function counters(value,calls,claims,jobs){
  expect(value.calls).toBe(calls);expect(value.claims).toBe(claims);expect(value.jobs).toBe(jobs);
 }
@@ -105,13 +117,15 @@ async function preview(){
  mark('await preview selector enabled');
  await expect(selector()).toBeEnabled();
  mark('request exact preview');
- const [received]=await Promise.all([
-  page.waitForResponse(value=>value.url()===base+endpoint()+'/preview'&&value.request().method()==='POST'),
+ const capture=await page.evaluate(()=>window.__traceboltJournalBody.arm('actionPreview'));
+ const [request]=await Promise.all([
+  page.waitForRequest(value=>value.url()===base+endpoint()+'/preview'&&value.method()==='POST'),
   selector().click(),
  ]);
+ const received=await request.response();expect(received).not.toBeNull();
  mark('assert preview HTTP status');expect(received.status()).toBe(200);
  mark('assert exact preview request');expect(received.request().postDataJSON()).toEqual({unit:'fixture.service'});
- mark('read preview response');const value=await body(received);
+ mark('read preview response');const value=await primaryBody(capture,request);
  mark('assert preview present');expect(value.preview).not.toBeNull();
  const p=value.preview;
  mark('assert preview identity');
@@ -170,6 +184,7 @@ try{
  context=await browser.newContext({viewport:{width:1440,height:1000},locale:'en-GB',acceptDownloads:false,serviceWorkers:'block'});
  context.setDefaultTimeout(15000);context.setDefaultNavigationTimeout(15000);
  page=await context.newPage();transportDiagnostics=createBrowserTransportDiagnostics(page,browser);page.on('pageerror',()=>runtimeErrorCount++);
+ await page.addInitScript(installJournalPrimaryBody,{url:base+`/api/devices/${device.deviceId}/journal/query`});
  page.on('request',request=>{if(request.url()===base+endpoint()+'/approve'&&request.method()==='POST')approveRequests++;});
 
  await check(0,async()=>{
@@ -193,13 +208,15 @@ try{
   mark('assert fresh preview zero approval requests');expect(approveRequests).toBe(0);
   mark('check interruption consent');await review().getByRole('checkbox',{name:'I accept the interruption risk for this exact action.',exact:true}).check();
   mark('submit exact approval');
-  const [received]=await Promise.all([
-   page.waitForResponse(value=>value.url()===base+endpoint()+'/approve'&&value.request().method()==='POST'),
+  const capture=await page.evaluate(()=>window.__traceboltJournalBody.arm('actionApprove'));
+  const [request]=await Promise.all([
+   page.waitForRequest(value=>value.url()===base+endpoint()+'/approve'&&value.method()==='POST'),
    review().getByRole('button',{name:'Approve try-restart',exact:true}).click(),
   ]);
+  const received=await request.response();expect(received).not.toBeNull();
   mark('assert approval HTTP status');expect(received.status()).toBe(200);
   mark('assert exact approval request');expect(received.request().postDataJSON()).toEqual(approval);
-  mark('read approval response');const approved=await body(received);savedJob=approved.job;
+  mark('read approval response');const approved=await primaryBody(capture,request);savedJob=approved.job;
   mark('assert approved job identity');expect(savedJob.id).toBe(approval.previewId);
   mark('assert approved job actor');expect(savedJob.actorId).toBe(actor);
   mark('assert approved job unit');expect(savedJob.unit).toBe('fixture.service');

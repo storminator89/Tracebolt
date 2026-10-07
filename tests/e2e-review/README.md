@@ -58,6 +58,18 @@ node tests/e2e-review/lan-browser.mjs
 
 The LAN runner contains 25 scenarios against the real `NewLANOperatorHandler` with explicit `InsecureHTTPTest:true`, bound only to 127.0.0.1 (port 19886, overridable with `LAN_REVIEW_PORT`). The test fixture uses a known synthetic password, an in-memory ephemeral CA and the safe awaiting-agent contract from `docs/lan-api-examples.json`. It starts fresh disposable state for each scenario and tests real login, cookie/CSRF boundaries, logout and actual short expiry. Malformed bootstrap, protected 401 and interrupted logout are explicitly injected fault paths. Nothing calls a real model or enrolls a device.
 
+The existing authenticated awaiting-agent case also exercises Overview, Devices
+and Investigations through the actual sidebar, rapid repeated route changes and
+browser Back/Forward. `workspace-navigation-browser.mjs` checks document and
+shell/sidebar/topbar/main DOM identity, including transient removals and a return
+to global initial loading, while preserving the device filter. It permits no
+document request, repeated overview read or session bootstrap during these
+transitions. Only request/body-presence counters and DOM lifecycle booleans are
+inspected; this probe captures no response data, headers, storage or screenshots.
+It uses the existing browser, fixture, 25 case names and session/assertion deadlines.
+Its pure metadata/observer contracts run through the existing investigations
+fixture test entry point; those checks do not establish a hosted browser pass.
+
 Upload only `lan-browser-results.json`, `lan-browser-manifest.json` and `synthetic-http-test-*.png` from `artifacts/review`. These contain bounded outcomes and labelled synthetic UI fixtures, no raw cookies, passwords, private keys or real telemetry. Login screenshots are captured before password entry. The target does not run the production LAN CLI or validate real trusted TLS browser deployment. It never uses `ignoreHTTPSErrors`, certificate-error launch flags, a certificate-warning bypass, a public listener or a tunnel.
 
 The application-status case in `application-checks-browser.mjs` runs through this

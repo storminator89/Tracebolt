@@ -1,14 +1,17 @@
 #!/usr/bin/env python3
 """Inert updater fixtures. No real Docker, systemd, installer or network calls."""
 import copy
+from contextlib import ExitStack
 import importlib.util
 import json
 import os
 from pathlib import Path
 import shlex
+import stat
 import tempfile
+from types import SimpleNamespace
 import unittest
-from unittest.mock import patch
+from unittest.mock import MagicMock, mock_open, patch
 
 SPEC = importlib.util.spec_from_file_location("test_vm_update", Path(__file__).with_name("test-vm.py"))
 u = importlib.util.module_from_spec(SPEC)
@@ -236,6 +239,22 @@ class UpdateTests(unittest.TestCase):
         self.assertEqual(f.image, NEW_IMAGE)
         self.assertIn("No automatic rollback", f.messages[-1])
 
+    def test_later_phase_failures_retain_partial_update_warning(self):
+        for failure, phase in (("fetch", "fetch"), ("build", "build"),
+                               ("up", "manager-replacement"), ("bootstrap", "agent-upgrade")):
+            with self.subTest(phase=phase):
+                f = Fixture(); f.fail = failure
+                self.fails(f)
+                self.assertEqual(f.messages[-1], "STOP at " + phase + ". No automatic rollback or repair was attempted. Manager source/image/state may already be newer; the agent may be unchanged or contained/stopped by its coordinator. Preserve its reported failure, receipts, backups and private state. Do not erase evidence, reinstall or blindly rerun. Inspect the named phase locally.")
+                self.assertNotIn("No manager or agent update occurred", f.messages[-1])
+
+    def test_preflight_failure_does_not_claim_possible_update(self):
+        f = Fixture(); f.fail = "prerequisites"
+        self.fails(f, "unsupported-host")
+        self.assertEqual(f.commands, [])
+        self.assertFalse(f.bootstrap_called)
+        self.assertEqual(f.messages, ["STOP at preflight. No manager or agent update occurred. The download wrapper may have created its temporary file and this updater may have created its advisory lock. No automatic repair was attempted. Inspect the reported preflight failure locally."])
+
     def test_exit_zero_cancellation_rc2_is_not_success(self):
         f = Fixture(); f.cancel = True
         self.fails(f, "agent-upgrade-canceled-or-completion-unconfirmed")
@@ -278,6 +297,111 @@ class UpdateTests(unittest.TestCase):
         path = Path(__file__).resolve().parents[1] / "release/published/v0.1.0-rc.3.py"
         self.assertEqual(u.digest(path.read_bytes()), u.BOOTSTRAP_SHA256)
         self.assertIn("/bba617e459bb072d4506fe6cacecaa97388ea93c/", u.BOOTSTRAP_URL)
+
+
+class ParentPathsTests(unittest.TestCase):
+    paths = (u.CHECKOUT + "/.git/config", u.CONFIG + "/http-test.json", u.INTENT,
+             "/opt/tracebolt-agent/installation.json")
+
+    def setUp(self):
+        self.entries = {str(part): SimpleNamespace(st_mode=stat.S_IFDIR | 0o755, st_uid=0)
+                        for path in self.paths for part in Path(path).parents}
+        self.entries["/root"].st_mode = stat.S_IFDIR | 0o700
+        self.checked = []
+        for target in ("subprocess.run", "subprocess.Popen", "http.client.HTTPConnection"):
+            item = patch(target, side_effect=AssertionError("real effects forbidden"))
+            item.start()
+            self.addCleanup(item.stop)
+
+    def lstat(self, part):
+        self.checked.append(str(part))
+        entry = self.entries[str(part)]
+        if isinstance(entry, Exception):
+            raise entry
+        return entry
+
+    def rejection(self, *paths):
+        with patch.object(u.Path, "lstat", autospec=True, side_effect=self.lstat), self.assertRaises(u.Rejected) as ctx:
+            u.parent_paths(*paths)
+        return str(ctx.exception)
+
+    def test_checkout_and_git_775_report_together(self):
+        for part in (u.CHECKOUT, u.CHECKOUT + "/.git"):
+            self.entries[part].st_mode = stat.S_IFDIR | 0o775
+        self.assertEqual(self.rejection(self.paths[0]),
+                         "unprotected-parent-directory: " + u.CHECKOUT + " (group-or-other-writable); " +
+                         u.CHECKOUT + "/.git (group-or-other-writable)")
+        self.assertEqual(self.checked, ["/", "/root", u.CHECKOUT, u.CHECKOUT + "/.git"])
+
+    def test_protected_parent_families_allow_both_trusted_owners(self):
+        for index, entry in enumerate(self.entries.values()):
+            entry.st_uid = (0, 65532)[index % 2]
+        with patch.object(u.Path, "lstat", autospec=True, side_effect=self.lstat):
+            u.parent_paths(*self.paths)
+        self.assertEqual(set(self.checked), set(self.entries))
+        self.assertEqual(len(self.checked), len(self.entries))
+
+    def test_symlink_and_non_directory_reject_without_visiting_descendants(self):
+        for kind, reason in ((stat.S_IFLNK, "symlink"), (stat.S_IFREG, "not-directory")):
+            with self.subTest(reason=reason):
+                self.checked.clear()
+                self.entries[u.CHECKOUT].st_mode = kind | 0o755
+                self.assertEqual(self.rejection(self.paths[0]),
+                                 "unprotected-parent-directory: " + u.CHECKOUT + " (" + reason + ")")
+                self.assertNotIn(u.CHECKOUT + "/.git", self.checked)
+
+    def test_other_writable_and_untrusted_owner_still_reject(self):
+        self.entries[u.CHECKOUT].st_mode = stat.S_IFDIR | 0o757
+        self.entries[u.CHECKOUT + "/.git"].st_uid = 1000
+        self.assertEqual(self.rejection(self.paths[0]),
+                         "unprotected-parent-directory: " + u.CHECKOUT + " (group-or-other-writable); " +
+                         u.CHECKOUT + "/.git (untrusted-owner)")
+
+    def test_missing_parent_and_unsafe_other_families_are_reported_separately(self):
+        self.entries[u.CHECKOUT] = FileNotFoundError("private exception detail must not be printed")
+        self.entries[u.CONFIG].st_mode = stat.S_IFDIR | 0o775
+        self.entries[u.CONTROL].st_uid = 1000
+        self.entries["/opt/tracebolt-agent"] = PermissionError("private exception detail must not be printed")
+        self.assertEqual(self.rejection(*self.paths),
+                         "unprotected-parent-directory: " + u.CHECKOUT + " (missing-parent-directory); " +
+                         u.CONFIG + " (group-or-other-writable); " + u.CONTROL + " (untrusted-owner); " +
+                         "/opt/tracebolt-agent (parent-metadata-unavailable)")
+        self.assertNotIn(u.CHECKOUT + "/.git", self.checked)
+
+    def test_real_preflight_reports_all_families_before_any_update_calls(self):
+        for part in (u.CHECKOUT, u.CHECKOUT + "/.git", u.CONFIG, u.CONTROL, "/opt/tracebolt-agent"):
+            self.entries[part].st_mode = stat.S_IFDIR | 0o775
+        f = Fixture()
+        before = copy.deepcopy(f.files)
+        f.prerequisites = lambda: u.Host.prerequisites(f)
+        terminal = MagicMock()
+        terminal.isatty.return_value = True
+        tty = mock_open()
+        tty.return_value.isatty.return_value = True
+        with ExitStack() as stack:
+            for target, value in (("os.getuid", 0), ("os.geteuid", 0), ("os.getpgrp", 10),
+                                  ("os.tcgetpgrp", 10), ("os.path.isfile", True), ("os.access", True),
+                                  ("os.statvfs", SimpleNamespace(f_flag=0)), ("platform.system", "Linux"),
+                                  ("platform.machine", "x86_64"),
+                                  ("platform.freedesktop_os_release", {"ID": "debian", "VERSION_ID": "13"})):
+                stack.enter_context(patch(target, return_value=value))
+            stack.enter_context(patch.object(u.sys, "stdin", terminal))
+            stack.enter_context(patch.object(u.sys, "version_info", (3, 11)))
+            stack.enter_context(patch("builtins.open", tty))
+            stack.enter_context(patch.object(u.Path, "read_text", return_value="systemd\n"))
+            stack.enter_context(patch.object(u.Path, "is_file", return_value=True))
+            stack.enter_context(patch.object(u.Path, "lstat", autospec=True, side_effect=self.lstat))
+            with self.assertRaises(u.Rejected) as ctx:
+                u.perform(f, COMMIT, TREE)
+        self.assertEqual(str(ctx.exception), "unprotected-parent-directory: " + "; ".join(
+            part + " (group-or-other-writable)" for part in
+            (u.CHECKOUT, u.CHECKOUT + "/.git", u.CONFIG, u.CONTROL, "/opt/tracebolt-agent")))
+        self.assertEqual(f.commands, [])
+        self.assertFalse(f.bootstrap_called)
+        self.assertFalse(f.upgraded)
+        self.assertEqual((f.head, f.image, f.waits, f.files), (OLD, OLD_IMAGE, 0, before))
+        self.assertIn("No manager or agent update occurred", f.messages[-1])
+        self.assertNotIn("may already be newer", f.messages[-1])
 
 
 class BootstrapTests(unittest.TestCase):

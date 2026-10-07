@@ -33,6 +33,40 @@ describe('complete dpkg inventory browsing', () => {
         expect(mutateRaw).toHaveBeenCalledTimes(4);
         for (const [path, raw, , , maximum] of vi.mocked(mutateRaw).mock.calls) { expect(path).toBe(`/devices/${completeDevice}/inventory/packages/query`); expect(JSON.parse(raw)).toMatchObject({ generationId: view.complete!.binding.generationId, limit: 100, search: '' }); expect(maximum).toBe(262144); }
     });
+    it.each(['en', 'de'] as const)('keeps six scan columns and exact mapping evidence in collapsed per-package details in %s', async locale => {
+        setLocale(locale, false); view = completeView(2); rows = completeRows(2);
+        Object.assign(rows[1], { sourcePackage: 'fixture-source', sourceVersion: '1.0', sourceMapping: 'source-field' });
+        render(<CompletePackagesPanel deviceId={completeDevice} inline/>);
+        const table = await screen.findByRole('table'), rowElements = within(table).getAllByRole('row').slice(1);
+        const headers = locale === 'de' ? ['Binärpaket', 'Binärversion', 'Architektur', 'Quellpaket', 'Quellversion', 'Installationszustand'] : ['Binary package', 'Binary version', 'Architecture', 'Source package', 'Source version', 'Install state'];
+        expect(within(table).getAllByRole('columnheader').map(header => header.textContent)).toEqual(headers);
+        const labels = locale === 'de' ? ['Source-Feld fehlt: Binärvorgabe', 'Ausdrückliches Source-Feld'] : ['Absent Source field: binary default', 'Explicit Source field'];
+        for (const [index, rowElement] of rowElements.entries()) {
+            const summary = rowElement.querySelector('summary')!, details = summary.closest('details')!;
+            expect(summary).toHaveTextContent(rows[index].sourcePackage);
+            expect(summary).toHaveTextContent(`${locale === 'de' ? 'Paketdetails' : 'Package details'}: ${rows[index].name} (${rows[index].architecture})`);
+            expect(details).not.toHaveAttribute('open'); expect(within(rowElement).getByText(labels[index])).not.toBeVisible();
+            summary.focus(); expect(summary).toHaveFocus();
+            fireEvent.click(summary); expect(details).toHaveAttribute('open'); expect(within(rowElement).getByText(labels[index])).toBeVisible();
+            fireEvent.click(summary); expect(details).not.toHaveAttribute('open'); expect(within(rowElement).getByText(labels[index])).not.toBeVisible();
+        }
+        expect(within(rowElements[1]).getByText('1.0')).toBeVisible(); expect(within(rowElements[1]).getByText('1.0+b1')).toBeVisible();
+        expect(request).toHaveBeenCalledTimes(1); expect(mutateRaw).toHaveBeenCalledTimes(1);
+    });
+    it('still searches mapping evidence while it is collapsed and clears expanded details when search changes', async () => {
+        view = completeView(2); rows = completeRows(2);
+        Object.assign(rows[1], { sourcePackage: 'fixture-source', sourceVersion: '1.0', sourceMapping: 'source-field' });
+        await open(); const firstSummary = screen.getByRole('table').querySelector('summary')!; fireEvent.click(firstSummary);
+        expect(firstSummary.closest('details')).toHaveAttribute('open');
+        for (const [search, name, evidence] of [['source-field', rows[1].name, 'Explicit Source field'], ['binary-default', rows[0].name, 'Absent Source field: binary default']]) {
+            fireEvent.change(screen.getByLabelText('Search packages'), { target: { value: search } });
+            expect(screen.queryByRole('table')).not.toBeInTheDocument(); fireEvent.click(screen.getByRole('button', { name: 'Search' }));
+            await screen.findByText(name, { selector: 'th' }); expect(within(screen.getByRole('table')).getAllByRole('rowheader')).toHaveLength(1);
+            expect(screen.getByText(evidence)).not.toBeVisible(); expect(screen.getByRole('table').querySelector('details')).not.toHaveAttribute('open');
+            expect(JSON.parse(vi.mocked(mutateRaw).mock.calls.at(-1)![1])).toMatchObject({ search, cursor: '', limit: 100 });
+        }
+        expect(screen.getByText('2026-10-04T00:00:00Z')).toBeVisible(); expect(request).toHaveBeenCalledTimes(1);
+    });
     it('continues an empty 2048-row search window and finds a match beyond row 2299', async () => {
         view = completeView(2300); rows = completeRows(2300); await open();
         fireEvent.change(screen.getByLabelText('Search packages'), { target: { value: 'fixture-002299' } });

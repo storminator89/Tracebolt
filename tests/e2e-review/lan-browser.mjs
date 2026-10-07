@@ -22,6 +22,7 @@ import {alarmStatusBrowserCase,alarmStatusFailureDetails} from './alarm-status-b
 import {alarmSettingsBrowserCase,alarmSettingsCaseName,alarmSettingsFailureDetails} from './alarm-settings-browser.mjs';
 import {cveContinuationBrowserCase,cveContinuationCaseName} from './cve-continuation-browser.mjs';
 import {cveDetailPagesBrowserCase,cveDetailPagesCaseName,cveDetailPagesFailureStage} from './cve-detail-pages-browser.mjs';
+import {workspaceNavigationBrowserProbe} from './workspace-navigation-browser.mjs';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../..');
 const require=createRequire(path.join(root,'web/package.json'));
 const {chromium,expect}=require('@playwright/test');
@@ -64,6 +65,7 @@ try {
  });
  await check('Authenticated LAN contract shows unknown awaiting-agent data with no demo fleet or healthy empty-state claim',async()=>{
   const page=await pageAt('/devices');await login(page);await expect(page.locator('.device-table tbody tr')).toHaveCount(1);await expect(page.locator('.inventory-tabs')).toContainText('LAN agents');await expect(page.locator('.inventory-tabs')).not.toContainText('Demo devices');await expect(page.locator('.demo-banner')).toContainText('LAN');await expect(page.locator('.demo-banner')).not.toContainText('DEMO');await expect(page.locator('.device-table').getByRole('columnheader',{name:'Overall health',exact:true})).toBeVisible();await expect(page.locator('.device-table .status')).toHaveText('Not assessed');await expect(page.locator('.device-table .status')).toHaveAttribute('title','Overall health has not been assessed. The last observation time is shown separately.');
+  await workspaceNavigationBrowserProbe({page,expect,base});
   await page.getByRole('button',{name:'Open details: Fixture workstation'}).click();await expect(page.getByRole('region',{name:'Device Fixture workstation',exact:true})).toContainText('Time unknown');await page.getByRole('tab',{name:'Details',exact:true}).click();await expect(page.getByRole('region',{name:'Device Fixture workstation',exact:true})).toContainText('Accepted agent reports only.');await expect(page.locator('.device-metric-card .unavailable')).toHaveCount(3);await expect(page.getByRole('region',{name:'Device Fixture workstation',exact:true})).not.toContainText('01.01.1');await page.getByRole('button',{name:'Back to devices',exact:true}).click();await page.goto(`${base}/#/overview`);
   // This manual awaiting-agent fixture deliberately has no Health monitor.
   // Its real handler returns unavailable, never a successful empty assessment.

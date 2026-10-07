@@ -123,12 +123,12 @@ it('keeps shell and loaded fleet data on ordinary menu navigation without reauth
  expect(vi.mocked(request).mock.calls.filter(([path]) => path === '/auth/session')).toHaveLength(1);
 });
 
-it('removes duplicate overview/list explanations while retaining explicit source and unassessed-state labels', async () => {
+it('removes duplicate overview/list explanations while retaining source details and unassessed-state labels', async () => {
  await navigate('overview'); render(<App/>); await screen.findByRole('heading', { name: 'Overview', level: 1 });
  expect(document.querySelector('.page-heading .eyebrow')).toBeNull(); expect(document.querySelector('.page-heading p')).toBeNull();
  expect(screen.queryByText('Rule-based findings. Sources included.')).not.toBeInTheDocument(); expect(screen.queryByText('Sources clearly labelled')).not.toBeInTheDocument();
  expect(await screen.findByText('No open health incidents. Device health may still be unknown.')).toBeVisible();
- expect(screen.getAllByText('LAN agent').length).toBeGreaterThan(0); expect(screen.getByRole('columnheader', { name: 'Overall health' })).toBeVisible();
+ const sourceDetails = document.querySelector('.device-table .fleet-identity-details')!; const sourceLabel = within(sourceDetails as HTMLElement).getByText('Reported by device · LAN agent'); expect(sourceLabel).not.toBeVisible(); fireEvent.click(within(sourceDetails as HTMLElement).getByText('More details')); expect(sourceLabel).toBeVisible(); expect(screen.getByRole('columnheader', { name: 'Overall health' })).toBeVisible();
  const sidebar = screen.getByRole('complementary', { name: 'Main navigation' }); fireEvent.click(within(sidebar).getByRole('button', { name: /Devices/ })); await screen.findByLabelText('Search devices');
  expect(document.querySelector('.page-heading .eyebrow')).toBeNull(); expect(document.querySelector('.page-heading p')).toBeNull();
  expect(screen.queryByText('Sources and data quality stay visible.')).not.toBeInTheDocument(); expect(document.querySelector('.inventory-panel .table-footer')).toHaveTextContent('2 of 2 devices');

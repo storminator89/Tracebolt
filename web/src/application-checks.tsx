@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
-import { RefreshCw } from 'lucide-react';
+import { Plus, RefreshCw } from 'lucide-react';
 import { APIError, AUTH_REQUIRED_EVENT, getProtectedRequestEpoch, hasPendingAPIRequests, request } from './api';
 import { hasLogoutIntent, LOGOUT_INTENT_KEY, useOperator } from './auth';
 import { dateLocale, t, useLocale } from './i18n';
 import type { TranslationKey } from './translations';
 import { APPLICATION_CHECKS_BYTES, applicationObservationAge, isHTTPApplicationCheck, projectApplicationCheck, validApplicationChecksView } from './application-checks-types';
 import type { ApplicationCheckRow, ApplicationChecksStatus } from './application-checks-types';
+import { applicationCheckEntryCopy, applicationCheckSetupRoute } from './application-check-entry';
 import './application-checks.css';
 
 const POLL_MS = 15000, TIMEOUT_MS = 10000;
@@ -151,15 +152,16 @@ const reasonHelp: Partial<Record<ApplicationCheckRow['reason'], TranslationKey>>
     http_status: 'HTTP-Fehler: Die Ressource antwortete außerhalb von 2xx. Dies ist keine vollständige Anwendungsdiagnose.',
 };
 function ApplicationChecksContent({ canManage }: { canManage: boolean }) {
+    const [locale] = useLocale(), entry = applicationCheckEntryCopy[locale];
     const { snapshot, elapsed, refreshing, locked, notice, refresh } = useApplicationChecks();
     const view = snapshot?.view;
     const help = view?.enabled ? [...new Set(view.items.map(row => reasonHelp[projectApplicationCheck(view, row, elapsed).reason]).filter((key): key is TranslationKey => key !== undefined))] : [];
     return <section className="panel application-checks" aria-labelledby="application-checks-heading">
-        <div className="application-checks-heading"><div><h2 id="application-checks-heading">{t('Anwendungsprüfungen')}</h2><p>{t(view?.enabled && view.schemaVersion === 'tracebolt.application-checks.v1' ? 'HTTP/TLS-Prüfung vom Manager.' : 'Prüfung vom Manager: HTTP/TLS, DNS, TCP.')}</p></div><button className="text-button" onClick={refresh} disabled={refreshing || locked} aria-label={t('Anwendungsstatus neu laden')} title={t('Gespeicherte Ergebnisse neu laden')}><RefreshCw size={14} className={refreshing ? 'spin' : ''}/>{t('Neu laden')}</button></div>
+        <div className="application-checks-heading"><div><h2 id="application-checks-heading">{t('Anwendungsprüfungen')}</h2><p>{t(view?.enabled && view.schemaVersion === 'tracebolt.application-checks.v1' ? 'HTTP/TLS-Prüfung vom Manager.' : 'Prüfung vom Manager: HTTP/TLS, DNS, TCP.')}</p><p className="application-check-examples">{entry.examples}</p></div><div className="application-checks-actions">{canManage && !locked && <a className="button primary" href={applicationCheckSetupRoute}><Plus size={14}/>{entry.add}</a>}<button className="text-button" onClick={refresh} disabled={refreshing || locked} aria-label={t('Anwendungsstatus neu laden')} title={t('Gespeicherte Ergebnisse neu laden')}><RefreshCw size={14} className={refreshing ? 'spin' : ''}/>{t('Neu laden')}</button></div></div>
         {notice && <p className="application-checks-notice" role={notice === interrupted ? 'status' : 'alert'}>{t(notice)}</p>}
         {!view && !notice && <p className="application-checks-notice" role="status">{t('Anwendungsstatus wird geladen …')}</p>}
         {view?.enabled === false && <>
-            <div className="application-checks-notice application-checks-inactive"><p>{t('Deaktiviert · keine Anwendungsprüfungen aktiv.')}</p><p>{canManage ? <a href="#/settings">{t('Anwendungsprüfungen einrichten')}</a> : t('Ein Administrator richtet die Ziele ein.')}</p></div>
+            <div className="application-checks-notice application-checks-inactive"><p>{t('Deaktiviert · keine Anwendungsprüfungen aktiv.')}</p>{!canManage && <p>{t('Ein Administrator richtet die Ziele ein.')}</p>}</div>
             <details className="application-checks-details"><summary>{t('Einrichtung und Freigaben')}</summary>
                 <p>{t('Bis zu 8 HTTP/HTTPS-, DNS- oder TCP-Ziele auf dem Manager konfigurieren.')}</p>
                 <p>{t('Entwurf speichern, Ziele und IP-Adressen prüfen, separat aktivieren. Speichern startet keine Prüfung.')}</p>

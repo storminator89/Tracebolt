@@ -118,6 +118,20 @@ async function consentShot(page,name){
  await expect(dialog.getByRole('note')).toBeVisible();await expect(dialog.getByRole('checkbox')).toBeVisible();await expect(dialog.getByRole('checkbox')).not.toBeChecked();
  const file=`${name}.png`;await page.screenshot({path:path.join(out,file),fullPage:false,animations:'disabled'});screenshots.push({file,sourceSha,sha256:createHash('sha256').update(await fs.readFile(path.join(out,file))).digest('hex'),viewport:page.viewportSize(),locale:await page.locator('html').getAttribute('lang'),fullPage:false,publicSafe:true,fixtureDisclosure:'Pre-creation consent on an invented loopback HTTP-test v3 fixture. No invitation, key, comparison value, native collector or real telemetry.',test:currentTest});
 }
+async function packageMappingDisclosure(page,selector,binary,source,locale='en'){
+ mark('six package columns and keyboard-accessible mapping details');
+ const region=page.locator(selector+' .package-table-scroll'),table=region.locator('table'),first=table.locator('tbody tr').first(),details=first.locator('.package-row-details'),summary=details.locator('summary');
+ const headers=locale==='de'?['Binärpaket','Binärversion','Architektur','Quellpaket','Quellversion','Installationszustand']:['Binary package','Binary version','Architecture','Source package','Source version','Install state'];
+ await expect(table.getByRole('columnheader')).toHaveText(headers);
+ await expect(summary).toHaveAccessibleName(`${source} · ${locale==='de'?'Paketdetails':'Package details'}: ${binary} (amd64)`);
+ await expect(details).not.toHaveAttribute('open');await expect(details.locator('dl')).toBeHidden();
+ await region.focus();await page.keyboard.press('Tab');await expect(summary).toBeFocused();
+ await page.keyboard.press('Enter');await expect(details).toHaveAttribute('open','');
+ await expect(details.locator('dt')).toHaveText(locale==='de'?'Zuordnungsgrundlage':'Mapping basis');await expect(details.locator('dd')).toHaveText(locale==='de'?'Ausdrückliches Source-Feld':'Explicit Source field');await expect(details.locator('dd')).toBeVisible();
+ await page.keyboard.press('Space');await expect(details).not.toHaveAttribute('open');await expect(details.locator('dl')).toBeHidden();await expect(summary).toBeFocused();
+ await page.keyboard.press('Tab');await expect(table.locator('tbody tr').nth(1).locator('summary')).toBeFocused();
+ await region.evaluate(el=>{el.scrollLeft=0;});
+}
 async function compactPanelShots(page,selector,stem,{mobileSelector=selector}={}){
  for(const locale of ['en','de'])for(const mobile of [false,true]){
   await page.setViewportSize(mobile?{width:390,height:844}:{width:1440,height:1000});
@@ -181,6 +195,12 @@ try{
   await check('Compact Packages and Updates remain explicit about source, stale cache and unknown comparisons',async()=>{
    const page=await pageAt();await device(page);await expect(rows(page,'.complete-packages')).toHaveCount(100);
    await compactPanelShots(page,'.complete-packages .package-heading','synthetic-complete-packages-summary',{mobileSelector:'.complete-packages tbody tr:first-child'});
+   for(const locale of ['en','de']){await page.getByLabel(/^(Language|Sprache)$/).selectOption(locale);await packageMappingDisclosure(page,'.complete-packages','qa-package-000000','qa-source-000000',locale);}
+   await compactPanelShots(page,'.complete-packages .package-table-scroll','synthetic-complete-packages-table',{mobileSelector:'.complete-packages tbody tr:first-child'});
+   const packageDetails=page.locator('.complete-packages .package-row-details').first();await packageDetails.locator('summary').focus();await page.keyboard.press('Enter');await expect(packageDetails).toHaveAttribute('open','');
+   await compactPanelShots(page,'.complete-packages tbody tr:first-child .package-row-details','synthetic-complete-package-mapping',{mobileSelector:'.complete-packages tbody tr:first-child .package-row-details'});
+   await packageDetails.locator('summary').focus();await page.keyboard.press('Space');await expect(packageDetails).not.toHaveAttribute('open');
+
    mark('select current Security coverage tab after package captures');await page.getByRole('tab',{name:'Security coverage',exact:true}).click();mark('current CVE reader settles');await settled(page,'.linux-cve');
    mark('compact Security navigation remains discoverable');await expect(page.locator('.device-security-sources button')).toHaveCount(2);await compactPanelShots(page,'.device-security-sources','synthetic-security-summary',{mobileSelector:'.linux-cve-summary'});
    mark('return to complete Packages before update fixture');await page.getByRole('tab',{name:'Inventory',exact:true}).click();await settled(page,'.complete-packages');

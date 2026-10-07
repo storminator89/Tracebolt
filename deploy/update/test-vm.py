@@ -82,11 +82,37 @@ def stamp(entry):
     return tuple(getattr(entry, key) for key in ("st_dev", "st_ino", "st_mode", "st_uid", "st_gid", "st_nlink", "st_size", "st_mtime_ns", "st_ctime_ns"))
 
 
-def parent_paths(path):
-    for part in reversed(Path(path).parents):
-        entry = part.lstat()
-        require(stat.S_ISDIR(entry.st_mode) and entry.st_uid in (0, 65532) and not entry.st_mode & 0o022,
-                "unprotected-parent-directory")
+def parent_paths(*paths):
+    checked, blocked, rejected = set(), set(), []
+    for path in paths:
+        for part in reversed(Path(path).parents):
+            if part in checked or any(parent in blocked for parent in part.parents):
+                continue
+            checked.add(part)
+            try:
+                entry = part.lstat()
+            except FileNotFoundError:
+                reasons = ["missing-parent-directory"]
+                blocked.add(part)
+            except OSError:
+                reasons = ["parent-metadata-unavailable"]
+                blocked.add(part)
+            else:
+                if not stat.S_ISDIR(entry.st_mode):
+                    reasons = ["symlink" if stat.S_ISLNK(entry.st_mode) else "not-directory"]
+                    blocked.add(part)
+                else:
+                    reasons = []
+                    if entry.st_uid not in (0, 65532):
+                        reasons.append("untrusted-owner")
+                    if entry.st_mode & 0o022:
+                        reasons.append("group-or-other-writable")
+            if reasons:
+                rejected.append(str(part) + " (" + ", ".join(reasons) + ")")
+    # Only fixed parent paths and reason categories are reported, never file
+    # contents or symlink targets. Do not inspect below a missing/non-directory
+    # parent or follow a symlink while collecting the other parent families.
+    require(not rejected, "unprotected-parent-directory: " + "; ".join(rejected))
 
 
 class Host:
@@ -138,7 +164,8 @@ class Host:
         require(Path("/proc/1/comm").read_text().strip() == "systemd" and Path("/sys/fs/cgroup/cgroup.controllers").is_file(),
                 "systemd-and-cgroup-v2-required")
         require(not os.statvfs("/tmp").f_flag & os.ST_NOEXEC, "tmp-noexec-not-supported")
-        parent_paths(CHECKOUT + "/.git/config")
+        parent_paths(CHECKOUT + "/.git/config", CONFIG + "/http-test.json", INTENT,
+                     "/opt/tracebolt-agent/installation.json")
         self.command(DOCKER + ["info", "--format", "{{.OSType}} {{.Architecture}}"])
         require(self.command(DOCKER + ["compose", "version", "--short"]).startswith(b"2."), "compose-v2-required")
 
@@ -380,7 +407,10 @@ def perform(host, commit, tree):
         host.say("Update completed: manager " + commit + "; image " + image + "; verified agent rc.3; existing identity and scopes retained by its coordinator. Open " + ORIGIN + ":8787 and check fresh accepted reports for the same device, journals and socket owners. Debian/HTTP functional and OS reboot acceptance remain local checks.")
         return 0
     except (Rejected, OSError, ValueError, KeyError, TypeError, IndexError, subprocess.SubprocessError, KeyboardInterrupt):
-        host.say("STOP at " + phase + ". No automatic rollback or repair was attempted. Manager source/image/state may already be newer; the agent may be unchanged or contained/stopped by its coordinator. Preserve its reported failure, receipts, backups and private state. Do not erase evidence, reinstall or blindly rerun. Inspect the named phase locally.")
+        if phase == "preflight":
+            host.say("STOP at preflight. No manager or agent update occurred. The download wrapper may have created its temporary file and this updater may have created its advisory lock. No automatic repair was attempted. Inspect the reported preflight failure locally.")
+        else:
+            host.say("STOP at " + phase + ". No automatic rollback or repair was attempted. Manager source/image/state may already be newer; the agent may be unchanged or contained/stopped by its coordinator. Preserve its reported failure, receipts, backups and private state. Do not erase evidence, reinstall or blindly rerun. Inspect the named phase locally.")
         raise
 
 

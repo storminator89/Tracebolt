@@ -29,7 +29,7 @@ const route=(value:string)=>act(()=>{window.history.replaceState({},'', `/${valu
 it('routes a real LAN investigation to its device Health, Details and exact-service logs without capturing logs',async()=>{
  const fetch=server();render(<App/>);await screen.findByText('fixture.service: service inactive');fireEvent.click(screen.getByText('Evidence & next check'));
  const health=screen.getByRole('link',{name:'Check Health'}).getAttribute('href')!;const details=screen.getByRole('link',{name:'Device details'}).getAttribute('href')!;const logs=screen.getByRole('link',{name:'Service logs'}).getAttribute('href')!;
- route(health);await screen.findByRole('heading',{name:'Health & history'});expect(screen.getByRole('tab',{name:'Health & history'})).toHaveAttribute('aria-selected','true');
+ route(health);await screen.findByRole('heading',{name:'Health'});expect(screen.getByRole('tab',{name:'Health & history'})).toHaveAttribute('aria-selected','true');
  route(details);await screen.findByText('Stable cryptographic device ID');expect(screen.getByRole('tab',{name:'Details'})).toHaveAttribute('aria-selected','true');
  route(logs);await screen.findByText('Awaiting a request');expect(screen.getByRole('tab',{name:'Logs'})).toHaveAttribute('aria-selected','true');
  fireEvent.click(document.querySelector('.journal-advanced summary')!);expect(screen.getByLabelText('Exact service unit')).toHaveValue('fixture.service');
@@ -49,9 +49,9 @@ it('resets a previous recovered filter when opening the Overview open-investigat
  expect(fetch.mock.calls.filter(([url])=>url.startsWith('/api/investigations')).at(-1)?.[0]).toBe('/api/investigations?scope=open&offset=0');
 });
 
-it('revalidates equivalent hash navigation instead of suspending forever',async()=>{
+it('keeps equivalent hash navigation available without reloading the same query',async()=>{
  window.history.replaceState({},'', '/');const fetch=server();render(<App/>);await screen.findByText('fixture.service: service inactive');const before=fetch.mock.calls.filter(([url])=>url.startsWith('/api/investigations')).length;
- route('/overview');await screen.findByText('fixture.service: service inactive');await waitFor(()=>expect(fetch.mock.calls.filter(([url])=>url.startsWith('/api/investigations')).length).toBe(before+1));
+ route('/overview');await screen.findByText('fixture.service: service inactive');await waitFor(()=>expect(fetch.mock.calls.filter(([url])=>url.startsWith('/api/investigations')).length).toBe(before));
 });
 
 it('survives a rapid real hash roundtrip whose final route equals the starting route',async()=>{

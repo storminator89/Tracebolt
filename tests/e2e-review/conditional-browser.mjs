@@ -42,6 +42,20 @@ async function selectCatalog(page,value){const disclosure=page.locator('.securit
 async function expectCatalogSelectionCleared(page){const disclosure=page.locator('.security-import');await expect(disclosure).toBeVisible();if(await disclosure.getAttribute('open')===null)await disclosure.locator('summary').click();const replace=page.getByRole('button',{name:'Replace current catalog',exact:true});await expect(replace).toBeVisible();await expect(replace).toBeDisabled();await expect(page.getByLabel('Choose JSON file',{exact:true})).toHaveValue('');}
 async function unknownCoverage(page){await legacy(page,'legacy-coverage');await expect(page.locator('.security-metric .security-unknown')).toHaveCount(2);await expect(page.locator('.security-metric .security-unknown').nth(0)).toHaveText('Unknown');await expect(page.locator('.security-metric .security-unknown').nth(1)).toHaveText('Unknown');}
 async function shot(page,name){mark('safe synthetic viewport capture');await expect(page.locator('.enrollment-secret')).toHaveCount(0);await expect(page.getByLabel('Operator password',{exact:true})).toHaveCount(0);const text=await page.evaluate(()=>document.body.innerText+'\n'+[...document.querySelectorAll('input')].map(x=>x.value).join('\n'));expect(text.includes(password)).toBe(false);await page.screenshot({path:path.join(out,`${name}.png`),fullPage:false,animations:'disabled'});const bytes=await fs.readFile(path.join(out,`${name}.png`));screenshots.push({file:`${name}.png`,sha256:createHash('sha256').update(bytes).digest('hex'),sourceSha,applicationBaselineArchiveSha256,publicSafe:true,fullPage:false,viewport:page.viewportSize(),locale:await page.locator('html').getAttribute('lang'),fixtureDisclosure:'Entirely invented QA devices and metadata on loopback HTTP-test. A catalog declaring synthetic:false is an invented parser fixture, not real vendor data or verified provenance. No telemetry, invitation material or installed-service evidence.',test:currentTest});}
+async function packageMappingDisclosure(page,selector,binary,source,locale='en'){
+ mark('six package columns and keyboard-accessible mapping details');
+ const region=page.locator(selector+' .package-table-scroll'),table=region.locator('table'),first=table.locator('tbody tr').first(),details=first.locator('.package-row-details'),summary=details.locator('summary');
+ const headers=locale==='de'?['Binärpaket','Binärversion','Architektur','Quellpaket','Quellversion','Installationszustand']:['Binary package','Binary version','Architecture','Source package','Source version','Install state'];
+ await expect(table.getByRole('columnheader')).toHaveText(headers);
+ await expect(summary).toHaveAccessibleName(`${source} · ${locale==='de'?'Paketdetails':'Package details'}: ${binary} (amd64)`);
+ await expect(details).not.toHaveAttribute('open');await expect(details.locator('dl')).toBeHidden();
+ await region.focus();await page.keyboard.press('Tab');await expect(summary).toBeFocused();
+ await page.keyboard.press('Enter');await expect(details).toHaveAttribute('open','');
+ await expect(details.locator('dt')).toHaveText(locale==='de'?'Zuordnungsgrundlage':'Mapping basis');await expect(details.locator('dd')).toHaveText(locale==='de'?'Ausdrückliches Source-Feld':'Explicit Source field');await expect(details.locator('dd')).toBeVisible();
+ await page.keyboard.press('Space');await expect(details).not.toHaveAttribute('open');await expect(details.locator('dl')).toBeHidden();await expect(summary).toBeFocused();
+ await page.keyboard.press('Tab');await expect(table.locator('tbody tr').nth(1).locator('summary')).toBeFocused();
+ await region.evaluate(el=>{el.scrollLeft=0;});
+}
 async function capturePanelMatrix(page,selector,stem,{device=true,mobileSelector=selector}={}){
  for(const locale of ['en','de'])for(const mobile of [false,true]){
   await page.setViewportSize(mobile?{width:390,height:844}:{width:1440,height:1000});await page.getByLabel(/^(Language|Sprache)$/).selectOption(locale);
@@ -119,7 +133,12 @@ try{
    await capturePanelMatrix(page,'.device-security-workspace > .security-panel > .security-heading','synthetic-legacy-security-summary',{mobileSelector:'.device-security-workspace > .security-panel .security-grid'});
    await packages(page);await expect(page.locator('.package-observations tbody tr')).toHaveCount(2);
    await capturePanelMatrix(page,'.package-observations > .package-heading','synthetic-legacy-package-summary',{mobileSelector:'.package-observations tbody tr:first-child'});
+   for(const locale of ['en','de']){await page.getByLabel(/^(Language|Sprache)$/).selectOption(locale);await packageMappingDisclosure(page,'.package-observations','qa-fixture-binary','qa-fixture-source',locale);}
    await capturePanelMatrix(page,'.package-observations .package-table-scroll','synthetic-legacy-package-table');
+   const packageDetails=page.locator('.package-observations .package-row-details').first();await packageDetails.locator('summary').focus();await page.keyboard.press('Enter');await expect(packageDetails).toHaveAttribute('open','');
+   await capturePanelMatrix(page,'.package-observations tbody tr:first-child .package-row-details','synthetic-legacy-package-mapping');
+   await packageDetails.locator('summary').focus();await page.keyboard.press('Space');await expect(packageDetails).not.toHaveAttribute('open');
+
    await importCatalog();await page.goto(base+'/#/settings');await expect(page.locator('.security-catalog')).toHaveAttribute('aria-busy','false');await expect(page.locator('.security-catalog')).toContainText('Unverified origin');
    await capturePanelMatrix(page,'.security-catalog > .security-heading','synthetic-legacy-catalog-summary',{device:false});
   });

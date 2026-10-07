@@ -46,7 +46,7 @@ describe('read-only health investigations',()=>{
  });
  it('distinguishes an empty retained history from missing or revoked data',async()=>{
   const value=fixture();value.items=[];value.devices=[];value.counts={open:0,recovered:0,closed:0,all:0};value.total=0;
-  const fetch=vi.fn().mockResolvedValueOnce(response(value)).mockResolvedValueOnce(response({},503));vi.stubGlobal('fetch',fetch);render(<Harness/>);await screen.findByText('No cases in this view');expect(screen.getByText(/This does not confirm device health/)).toBeVisible();refresh();await screen.findByRole('alert');expect(screen.queryByText('No cases in this view')).not.toBeInTheDocument();expect(screen.getByRole('button',{name:'Open —'})).toBeVisible();
+  const fetch=vi.fn().mockResolvedValueOnce(response(value)).mockResolvedValueOnce(response({},503));vi.stubGlobal('fetch',fetch);render(<Harness/>);await screen.findByText('No devices with Health data yet');expect(screen.getByText(/This does not confirm device health/)).toBeVisible();refresh();await screen.findByRole('alert');expect(screen.queryByText('No devices with Health data yet')).not.toBeInTheDocument();expect(screen.getByRole('button',{name:'Open —'})).toBeVisible();
  });
  it('ages current evidence without resolving a stored incident or inventing historical values',async()=>{
   vi.useFakeTimers();const value=fixture();value.devices[0].checks[1].observedAt='2026-10-06T11:58:01Z';vi.stubGlobal('fetch',vi.fn().mockResolvedValue(response(value)));render(<Harness/>);await act(async()=>{await vi.advanceTimersByTimeAsync(0);});fireEvent.click(screen.getByText('Evidence & next check'));expect(screen.getByText('95.0 %')).toBeVisible();await act(async()=>{await vi.advanceTimersByTimeAsync(2100);});expect(screen.queryByText('95.0 %')).not.toBeInTheDocument();expect(screen.getByText('Unknown: current evidence is missing or stale')).toBeVisible();expect(screen.getByRole('button',{name:'Open 1'})).toBeVisible();
@@ -84,4 +84,20 @@ it('shows the next destination before evidence and omits repeated page headings'
  expect(screen.queryByRole('heading',{name:'Open'})).not.toBeInTheDocument();
  expect(screen.queryByText('Review stored health warnings and find the next check.')).not.toBeInTheDocument();
  expect(fetch).toHaveBeenCalledTimes(1);expect(fetch.mock.calls[0][1].method).toBeUndefined();
+});
+
+it.each(['en','de'] as const)('distinguishes missing current data from no open selected-check problems in %s',async locale=>{
+ setLocale(locale,false);const value=fixture();value.items=[];value.total=0;value.counts={open:0,recovered:0,closed:0,all:0};value.devices[0].status='unknown';value.devices[0].evaluatedAt=null;value.devices[0].checks=value.devices[0].checks.map(check=>({...check,state:'unknown',value:null,observedAt:null}));
+ expect(validInvestigationsView(value,'open',0)).toBe(true);const fetch=vi.fn().mockResolvedValue(response(value));vi.stubGlobal('fetch',fetch);render(<Harness/>);
+ expect(await screen.findByText(locale==='de'?'Keine offenen Vorfälle · Daten fehlen':'No open incidents · data missing')).toBeVisible();
+ expect(screen.queryByText(locale==='de'?'Keine offenen Health-Probleme':'No open Health problems')).not.toBeInTheDocument();
+ value.devices[0].status='clear';value.devices[0].evaluatedAt=now;value.devices[0].checks=value.devices[0].checks.map(check=>({...check,state:'ok',observedAt:now,value:check.kind==='filesystem'?40:null}));expect(validInvestigationsView(value,'open',0)).toBe(true);
+ fetch.mockResolvedValue(response(value));fireEvent.click(screen.getByRole('button',{name:locale==='de'?'Untersuchungen aktualisieren':'Refresh investigations'}));
+ expect(await screen.findByText(locale==='de'?'Keine offenen Health-Probleme':'No open Health problems')).toBeVisible();
+ expect(screen.getByText(locale==='de'?'Health-Probleme: Agentkontakt, Root-Dateisystem und ausgewählte Dienste. Vorhandene KI-Befunde stehen beim Vorfall.':'Health problems: agent contact, root filesystem and selected services. Available AI findings appear with the incident.')).toBeVisible();
+ expect(fetch.mock.calls.every(call=>call[1]?.method===undefined&&call[1]?.body===undefined)).toBe(true);
+});
+it('does not present pending or warning checks as clear solely because history is empty',async()=>{
+ const value=fixture();value.items=[];value.total=0;value.counts={open:0,recovered:0,closed:0,all:0};vi.stubGlobal('fetch',vi.fn().mockResolvedValue(response(value)));render(<Harness/>);
+ expect(await screen.findByText('No confirmed incident yet')).toBeVisible();expect(screen.queryByText('No open Health problems')).not.toBeInTheDocument();
 });

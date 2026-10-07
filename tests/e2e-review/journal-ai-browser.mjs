@@ -45,9 +45,30 @@ export async function journalAIBrowserCase({pageAt,login,expect,base,shot}){
  });
  await login(page);const panel=page.locator('.journal-ai');await expect(panel.getByRole('button',{name:'Service-log AI',exact:true})).toHaveAttribute('aria-expanded','false');expect(fixture.writes).toBe(0);
  mark('review');await panel.getByRole('button',{name:'Service-log AI',exact:true}).click();await expect(panel).toContainText(fixture.settings.baseURL);await expect(panel).toContainText(fixture.settings.model);await panel.getByRole('button',{name:'Read local policy',exact:true}).click();await expect(panel.getByRole('button',{name:'Read local policy',exact:true})).toBeEnabled();await panel.getByRole('textbox',{name:'Service',exact:true}).fill(fixture.unit);await panel.getByRole('button',{name:'Add service',exact:true}).click();
+ // Capture the actual pre-save German mobile review separately from saved state.
+ const center=async element=>{await element.scrollIntoViewIfNeeded();await element.evaluate(el=>el.scrollIntoView({block:'center',inline:'nearest',behavior:'instant'}));};
+ const mobileConsentFrame=async name=>{
+  const labels=panel.locator('.proactive-ai-check');await expect(labels).toHaveCount(3);await center(labels.nth(1));
+  for(let i=0;i<3;i++)await expect(labels.nth(i)).toBeInViewport({ratio:1});
+  await expect(panel.getByRole('button',{name:'Dienstlog-KI freigeben und aktivieren',exact:true})).toBeInViewport({ratio:1});
+  expect(fixture.writes).toBe(0);expect(fixture.settings.enabled).toBe(false);await shot(page,name,journalAIFixtureDisclosure);
+ };
+ await page.setViewportSize({width:390,height:844});await page.getByLabel('Language',{exact:true}).selectOption('de');
+ const destination=panel.locator('.proactive-ai-destination'),scope=panel.locator('.proactive-ai-destination + p'),retention=panel.locator('.proactive-ai-destination + p + p');
+ await center(scope);await expect(destination).toBeInViewport({ratio:1});await expect(scope).toBeInViewport({ratio:1});await expect(retention).toBeInViewport({ratio:1});
+ await expect(destination).toContainText(fixture.settings.baseURL);await expect(destination).toContainText(fixture.settings.model);
+ await shot(page,'synthetic-service-log-ai-scope-mobile-de',journalAIFixtureDisclosure);
+ const mobileBoxes=panel.getByRole('checkbox');await expect(mobileBoxes).toHaveCount(3);for(let i=0;i<3;i++)await expect(mobileBoxes.nth(i)).not.toBeChecked();
+ await expect(panel.getByRole('button',{name:'Dienstlog-KI freigeben und aktivieren',exact:true})).toBeDisabled();
+ await mobileConsentFrame('synthetic-service-log-ai-consent-unchecked-mobile-de');
+ await page.getByLabel('Sprache',{exact:true}).selectOption('en');await page.setViewportSize({width:1440,height:1000});
  const approve=panel.getByRole('button',{name:'Approve and enable service-log AI',exact:true}),boxes=panel.getByRole('checkbox');await expect(boxes).toHaveCount(3);for(let i=0;i<3;i++)await expect(boxes.nth(i)).not.toBeChecked();await expect(approve).toBeDisabled();await boxes.nth(0).check();await boxes.nth(1).check();await expect(approve).toBeDisabled();await boxes.nth(2).check();await expect(approve).toBeEnabled();await expect(panel).toContainText('credentials, personal data and secrets');await expect(panel).toContainText('at most 15 minutes');await panel.scrollIntoViewIfNeeded();await shot(page,'synthetic-service-log-ai-review-desktop-en',journalAIFixtureDisclosure);
+ await page.setViewportSize({width:390,height:844});await page.getByLabel('Language',{exact:true}).selectOption('de');
+ for(let i=0;i<3;i++)await expect(boxes.nth(i)).toBeChecked();await expect(panel.getByRole('button',{name:'Dienstlog-KI freigeben und aktivieren',exact:true})).toBeEnabled();
+ await mobileConsentFrame('synthetic-service-log-ai-consent-checked-mobile-de');
+ await page.getByLabel('Sprache',{exact:true}).selectOption('en');await page.setViewportSize({width:1440,height:1000});
  mark('save');await approve.click();await expect(panel).toContainText('Approval saved. No capture or provider test was sent.');expect(fixture.writes).toBe(1);for(let i=0;i<3;i++)await expect(boxes.nth(i)).not.toBeChecked();
- mark('mobile');await page.setViewportSize({width:390,height:844});await page.getByLabel('Language',{exact:true}).selectOption('de');await expect(panel).toContainText('Zugangsdaten, personenbezogene Daten und Geheimnisse');expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth&&document.body.scrollWidth<=innerWidth)).toBe(true);await shot(page,'synthetic-service-log-ai-review-mobile-de',journalAIFixtureDisclosure);await page.getByLabel('Sprache',{exact:true}).selectOption('en');
+ mark('mobile');await page.setViewportSize({width:390,height:844});await page.getByLabel('Language',{exact:true}).selectOption('de');await expect(panel).toContainText('Zugangsdaten, personenbezogene Daten und Geheimnisse');expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth&&document.body.scrollWidth<=innerWidth)).toBe(true);await shot(page,'synthetic-service-log-ai-saved-mobile-de',journalAIFixtureDisclosure);await page.getByLabel('Sprache',{exact:true}).selectOption('en');
  mark('finding');await page.evaluate(()=>{location.hash='/cases';});const item=page.locator('.investigation-item').filter({hasText:fixture.unit}).first();await item.locator('summary').filter({hasText:'Service-log AI:'}).click();await expect(item).toContainText('Unconfirmed hypotheses. Human review required.');await item.getByText('Sources, counterevidence & gaps',{exact:true}).click();await expect(item).toContainText('journal-window');await expect(item).toContainText('journal-row-');await shot(page,'synthetic-service-log-ai-finding-mobile-en',journalAIFixtureDisclosure);
  mark('expiry');await page.clock.runFor(2250);await expect(item).toContainText('Finding expired.');await expect(item.getByText('Sources, counterevidence & gaps',{exact:true})).toHaveCount(0);
  mark('guards');expect(fixture.writes).toBe(1);expect(unexpected).toEqual([]);expect(external).toEqual([]);const storage=await page.evaluate(()=>JSON.stringify({local:{...localStorage},session:{...sessionStorage}}));expect(storage.includes('journal-row-')||storage.includes('synthetic-log-secret')).toBe(false);

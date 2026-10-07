@@ -44,6 +44,14 @@ Playwright Chromium. It starts the separate loopback-only `actionfixture` test
 binary with a new private temporary state directory. Every identity, key,
 observation and service name is invented and discarded after the test.
 
+Browser preview and approval assertions observe only the bytes consumed by the
+application's original bounded reader, bound to the exact armed device/POST and
+original request body. The test-only observer neither clones nor fetches another
+response and retains the 32 KiB action-response cap. This is not rendered-UI
+acceptance by itself: all preview, consent, saved-job and helper-counter checks
+still have to pass. Context-request status/replay reads keep their existing byte
+and JSON checks. No response bodies, credentials or screenshots are exported.
+
 The browser uses actual named-operator authentication and actual preview,
 approval and status APIs. There is no service-action API interception or response
 substitution. A synthetic test-only protocol driver uses the real purpose-signed

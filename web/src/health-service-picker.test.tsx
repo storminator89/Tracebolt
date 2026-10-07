@@ -2,7 +2,7 @@ import { Profiler, useState } from 'react';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { APIError, AUTH_REQUIRED_EVENT, mutate, mutateRaw, request } from './api';
+import { abortProtectedRequests, APIError, AUTH_REQUIRED_EVENT, mutate, mutateRaw, request } from './api';
 import { HealthServicePicker } from './health-service-picker';
 import { HealthPanel } from './health';
 import { setLocale } from './i18n';
@@ -26,6 +26,7 @@ function Harness({ deviceId = systemDevice, sessionKey = 'first', initial = [], 
 const open = async (initial: string[] = []) => { const rendered = render(<Harness initial={initial}/>); await screen.findByRole('checkbox', { name: rows[0].name }); return rendered; };
 const unavailable = (status: 'awaiting' | 'unknown' | 'not_configured' | 'expired' | 'revoked' = 'awaiting') => { view = { ...systemView(), status, latest: null, lastComplete: { services: null, sockets: null } }; };
 beforeEach(() => {
+    abortProtectedRequests();
     setLocale('en', false); view = systemView(); rows = serviceRows(); auth.mode = 'lan'; auth.authenticated = true;
     change.mockReset(); submit.mockReset(); vi.mocked(mutate).mockReset();
     vi.mocked(request).mockReset().mockImplementation(async () => view);
@@ -212,6 +213,8 @@ describe('health picker inventory lifecycle', () => {
     });
 });
 
+async function openPanelSettings() { const button = await screen.findByRole('button', { name: 'Choose services' }); fireEvent.click(button); }
+
 describe('real health form integration', () => {
     function health(): HealthView { return { ...structuredClone(healthFixture) as HealthView, deviceId: systemDevice }; }
     it('persists only on explicit Save, sends sorted names, and explicitly saves deselection', async () => {
@@ -222,14 +225,14 @@ describe('real health form integration', () => {
             const services = (body as { services: string[] }).services;
             saved = { ...saved, monitoredServices: services, checks: [...saved.checks.filter(check => check.kind !== 'service'), ...services.map(unit => ({ key: `service:${unit}`, kind: 'service' as const, target: unit, state: 'unknown' as const, observedAt: null, value: null }))] }; return saved;
         });
-        render(<HealthPanel deviceId={systemDevice} sessionKey="first"/>); await screen.findByRole('checkbox', { name: rows[0].name });
+        render(<HealthPanel deviceId={systemDevice} sessionKey="first"/>); await openPanelSettings(); await screen.findByRole('checkbox', { name: rows[0].name });
         expect(screen.getByRole('button', { name: 'Save selection' })).toBeDisabled(); fireEvent.click(screen.getByRole('checkbox', { name: rows[0].name }));
         expect(screen.getByRole('list', { name: 'Current checks' })).not.toHaveTextContent(rows[0].name);
-        fireEvent.change(screen.getByRole('searchbox'), { target: { value: '000001' } }); fireEvent.keyDown(screen.getByRole('searchbox'), { key: 'Enter' }); await screen.findByRole('checkbox', { name: rows[1].name });
+        fireEvent.change(screen.getByRole('searchbox'), { target: { value: '000001' } }); fireEvent.keyDown(screen.getByRole('searchbox'), { key: 'Enter' }); await openPanelSettings(); await screen.findByRole('checkbox', { name: rows[1].name });
         expect(mutate).not.toHaveBeenCalled(); fireEvent.click(screen.getByRole('button', { name: 'Save selection' }));
         await waitFor(() => expect(screen.getByRole('button', { name: 'Save selection' })).toBeDisabled());
         expect(mutate).toHaveBeenCalledExactlyOnceWith(`/devices/${systemDevice}/health/services`, { services: [rows[0].name, 'sshd.service'] }, expect.any(AbortSignal));
-        expect(screen.getByRole('list', { name: 'Current checks' })).toHaveTextContent('Unknown');
+        expect(screen.getByRole('list', { name: 'Current checks' })).toHaveTextContent('Current state unknown');
         fireEvent.click(screen.getByRole('button', { name: `Remove service: ${rows[0].name}` })); fireEvent.click(screen.getByRole('button', { name: 'Remove service: sshd.service' }));
         expect(mutate).toHaveBeenCalledTimes(1); fireEvent.click(screen.getByRole('button', { name: 'Save selection' }));
         await waitFor(() => expect(mutate).toHaveBeenCalledTimes(2)); expect(vi.mocked(mutate).mock.calls[1][1]).toEqual({ services: [] });
@@ -257,7 +260,7 @@ describe('real health form integration', () => {
                 (remove as HTMLButtonElement).click();
             }
         }}><HealthPanel deviceId={systemDevice} sessionKey="first"/></Profiler>);
-        await screen.findByRole('checkbox', { name: rows[0].name });
+        await openPanelSettings(); await screen.findByRole('checkbox', { name: rows[0].name });
         fireEvent.click(screen.getByRole('checkbox', { name: rows[0].name }));
         fireEvent.click(screen.getByRole('button', { name: 'Save selection' }));
         expect(mutate).toHaveBeenCalledExactlyOnceWith(`/devices/${systemDevice}/health/services`, { services: [rows[0].name, 'sshd.service'] }, expect.any(AbortSignal));
@@ -281,7 +284,7 @@ describe('real health form integration', () => {
         if (failure === 'rejected') vi.mocked(mutate).mockRejectedValueOnce(new Error('fixture failure'));
         else vi.mocked(mutate).mockResolvedValueOnce({});
         render(<HealthPanel deviceId={systemDevice} sessionKey="first"/>);
-        await screen.findByRole('checkbox', { name: rows[0].name });
+        await openPanelSettings(); await screen.findByRole('checkbox', { name: rows[0].name });
         fireEvent.click(screen.getByRole('checkbox', { name: rows[0].name }));
         await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Save selection' })); });
         expect(screen.getByRole('alert')).toHaveTextContent('Change not confirmed');
@@ -298,7 +301,7 @@ describe('real health form integration', () => {
         vi.mocked(request).mockImplementation(async path => path.endsWith('/health') ? current : view);
         vi.mocked(mutate).mockImplementationOnce(() => new Promise<HealthView>(resolve => { finish = resolve; }));
         const rendered = render(<HealthPanel deviceId={systemDevice} sessionKey="first"/>);
-        await screen.findByRole('checkbox', { name: rows[0].name });
+        await openPanelSettings(); await screen.findByRole('checkbox', { name: rows[0].name });
         fireEvent.click(screen.getByRole('checkbox', { name: rows[0].name }));
         fireEvent.click(screen.getByRole('button', { name: 'Save selection' }));
         expect(mutate).toHaveBeenCalledTimes(1);
@@ -306,7 +309,7 @@ describe('real health form integration', () => {
         const oldResponse: HealthView = { ...current, monitoredServices: [rows[0].name, 'sshd.service'], checks: [...current.checks, { key: `service:${rows[0].name}`, kind: 'service', target: rows[0].name, state: 'unknown', observedAt: null, value: null }] };
         if (transition === 'device') { current = { ...health(), deviceId: 'agent_replacement' }; view = { ...view, deviceId: current.deviceId }; }
         rendered.rerender(<HealthPanel deviceId={current.deviceId} sessionKey={transition === 'session' ? 'second' : 'first'}/>);
-        await screen.findByRole('checkbox', { name: rows[1].name });
+        await openPanelSettings(); await screen.findByRole('checkbox', { name: rows[1].name });
         expect(signal.aborted).toBe(true);
         fireEvent.click(screen.getByRole('checkbox', { name: rows[1].name }));
         await act(async () => { finish(oldResponse); });
@@ -321,7 +324,7 @@ describe('real health form integration', () => {
         vi.useFakeTimers(); const wall = Date.now(); vi.spyOn(performance, 'now').mockImplementation(() => Date.now() - wall);
         const current = health(); let finish!: (value: HealthView) => void;
         vi.mocked(request).mockImplementation(async path => path.endsWith('/health') ? current : view);
-        render(<HealthPanel deviceId={systemDevice}/>); await act(async () => {});
+        render(<HealthPanel deviceId={systemDevice}/>); await act(async () => {}); fireEvent.click(screen.getByRole('button', { name: 'Choose services' })); await act(async () => {});
         fireEvent.click(screen.getByRole('checkbox', { name: rows[0].name }));
         const search = screen.getByRole('searchbox'); fireEvent.change(search, { target: { value: 'partly typed' } }); search.focus();
         vi.mocked(request).mockImplementation(async path => path.endsWith('/health') ? new Promise(resolve => { finish = resolve; }) : view);
@@ -337,17 +340,17 @@ describe('real health form integration', () => {
     it('clears an unsaved selection on device/session switch', async () => {
         view = systemView(2); rows = serviceRows(2);
         let current = health(); vi.mocked(request).mockImplementation(async path => path.endsWith('/health') ? current : view);
-        const rendered = render(<HealthPanel deviceId={systemDevice} sessionKey="first"/>); await screen.findByRole('checkbox', { name: rows[0].name }); fireEvent.click(screen.getByRole('checkbox', { name: rows[0].name }));
-        rendered.rerender(<HealthPanel deviceId={systemDevice} sessionKey="second"/>); await screen.findByRole('checkbox', { name: rows[0].name });
+        const rendered = render(<HealthPanel deviceId={systemDevice} sessionKey="first"/>); await openPanelSettings(); await screen.findByRole('checkbox', { name: rows[0].name }); fireEvent.click(screen.getByRole('checkbox', { name: rows[0].name }));
+        rendered.rerender(<HealthPanel deviceId={systemDevice} sessionKey="second"/>); await openPanelSettings(); await screen.findByRole('checkbox', { name: rows[0].name });
         expect(screen.getByRole('checkbox', { name: rows[0].name })).not.toBeChecked(); expect(screen.getByRole('button', { name: 'Save selection' })).toBeDisabled();
         fireEvent.click(screen.getByRole('checkbox', { name: rows[0].name })); current = { ...health(), deviceId: 'agent_replacement' }; view = { ...view, deviceId: current.deviceId };
-        rendered.rerender(<HealthPanel deviceId={current.deviceId} sessionKey="second"/>); await screen.findByRole('checkbox', { name: rows[0].name }); expect(screen.getByRole('checkbox', { name: rows[0].name })).not.toBeChecked();
+        rendered.rerender(<HealthPanel deviceId={current.deviceId} sessionKey="second"/>); await openPanelSettings(); await screen.findByRole('checkbox', { name: rows[0].name }); expect(screen.getByRole('checkbox', { name: rows[0].name })).not.toBeChecked();
         rendered.unmount(); expect(mutate).not.toHaveBeenCalled();
     });
     it('aborts a pending service inventory page on unmount', async () => {
         vi.mocked(request).mockImplementation(async path => path.endsWith('/health') ? health() : view);
         const rendered = render(<HealthPanel deviceId={systemDevice} sessionKey="first"/>);
-        await screen.findByRole('checkbox', { name: rows[0].name });
+        await openPanelSettings(); await screen.findByRole('checkbox', { name: rows[0].name });
         let signal!: AbortSignal; vi.mocked(mutateRaw).mockImplementationOnce(async (_path, _raw, _headers, supplied) => { signal = supplied!; return new Promise(() => {}); });
         fireEvent.click(screen.getByRole('button', { name: 'Next service page' })); await waitFor(() => expect(signal).toBeDefined()); rendered.unmount(); expect(signal.aborted).toBe(true); expect(mutate).not.toHaveBeenCalled();
     });

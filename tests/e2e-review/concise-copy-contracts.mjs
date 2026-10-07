@@ -9,5 +9,5 @@ export const conciseCopy = {
  journalReference: 'Reference time may be old. Refresh status, then choose a window; this does not capture logs.',
  journalReferenceLabel: 'Last checked manager time (UTC)',
  journalPaused: 'Content paused. Return here or refresh status to recheck access; no new capture starts.',
- fleetMore: '+2 more',
+ fleetMore: '+3 more IPs',
 };

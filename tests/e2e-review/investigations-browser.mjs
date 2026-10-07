@@ -1,3 +1,4 @@
+import {healthDashboardBrowserCase,healthDashboardFixture} from './health-dashboard-browser.mjs';
 /** Invented intercepted DTOs only. This is rendered UI acceptance, not the
  * Health API/evaluator/store or a live endpoint; those have separate Go tests. */
 import {validHealthView} from '../../web/src/health-types.ts';
@@ -46,7 +47,7 @@ async function layout(page,expect){
 /** Reuses the repository runner's single browser, fixture login and captures. */
 export async function investigationsBrowserCase({pageAt,login,expect,base,shot}){
  mark('setup');const page=await pageAt('/cases'),clockStart=Date.now();await page.clock.install({time:new Date(clockStart)});await page.clock.pauseAt(new Date(clockStart+1000));
- let phase='issue',reads=0;const unexpected=[],external=[],mutations=[];
+ let phase='issue',healthPhase=null,reads=0;const unexpected=[],external=[],mutations=[];
  const prefix='/api/devices/'+investigationsFixtureDevice;
  await page.route('**/*',async route=>{
   const request=route.request(),url=new URL(request.url()),method=request.method();
@@ -58,8 +59,8 @@ export async function investigationsBrowserCase({pageAt,login,expect,base,shot})
    reads++;return fulfill(investigationsFixture(phase));
   }
   if(url.pathname==='/api/overview'){const view=investigationsFixture(phase);return fulfill({generatedAt:view.serverNow,devices:[investigationsDeviceFixture()],cases:[],activity:[],stats:{totalDevices:1,healthyDevices:0,attentionDevices:0,openCases:0,criticalCases:0}});}
-  if(url.pathname===prefix)return fulfill(investigationsDeviceFixture());
-  if(url.pathname===prefix+'/health'){const view=investigationsFixture(phase);return fulfill({...view.devices[0],incidents:view.items.map(item=>item.incident)});}
+  if(url.pathname===prefix)return fulfill(healthPhase?healthDashboardFixture(healthPhase,investigationsFixtureDevice).device:investigationsDeviceFixture());
+  if(url.pathname===prefix+'/health'){if(healthPhase==='unavailable')return route.fulfill({status:409,contentType:'application/json',body:JSON.stringify({error:{code:'health_unavailable',message:'fixture unavailable reason'}})});if(healthPhase)return fulfill(healthDashboardFixture(healthPhase,investigationsFixtureDevice).health);const view=investigationsFixture(phase);return fulfill({...view.devices[0],incidents:view.items.map(item=>item.incident)});}
   if(url.pathname.startsWith(prefix+'/inventory/'))return route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({error:{code:'inventory_unavailable',message:'Invented inventory unavailable'}})});
   if(url.pathname.startsWith('/api/')&&!['/api/auth/session','/api/auth/login'].includes(url.pathname)){unexpected.push('unexpected-api-read');return route.abort('blockedbyclient');}
   return route.continue();
@@ -73,23 +74,13 @@ export async function investigationsBrowserCase({pageAt,login,expect,base,shot})
  await panel().locator('summary').click();await expect(panel()).toContainText('Cause undetermined.');await expect(panel()).toContainText('95.0 %');const opened=await panel().locator('time').first().getAttribute('datetime');
  await capture('synthetic-http-test-investigations-issue-desktop-en');
  mark('expired-current-evidence');phase='stale';await reload();await expect(panel()).toContainText('Unknown: current evidence is missing or stale');await expect(panel()).not.toContainText('95.0 %');await expect(page.getByRole('button',{name:'Open 1',exact:true})).toBeVisible();await expect(panel().locator('time').first()).toHaveAttribute('datetime',opened);await capture('synthetic-http-test-investigations-stale-desktop-en');
- mark('no-current-assessment');phase='unknown';await reload();await expect(panel()).toContainText('No cases in this view');await expect(panel()).toContainText('This does not confirm device health');await expect(page.locator('main')).toContainText('1 with incomplete current checks');await expect(panel().locator('.investigation-item')).toHaveCount(0);
+ mark('no-current-assessment');phase='unknown';await reload();await expect(panel()).toContainText('No open incidents · data missing');await expect(panel()).toContainText('This does not confirm device health');await expect(page.locator('main')).toContainText('1 with incomplete current checks');await expect(panel().locator('.investigation-item')).toHaveCount(0);
  await page.setViewportSize({width:390,height:844});await capture('synthetic-http-test-investigations-unknown-mobile-en');
  mark('mobile-issue');phase='renewed';await reload();await expect(panel()).toContainText('Root filesystem nearly full');await expect(panel().locator('details')).not.toHaveAttribute('open','');await capture('synthetic-http-test-investigations-issue-mobile-en');
  await page.getByLabel('Language',{exact:true}).selectOption('de');await expect(page.getByRole('button',{name:'Offen 1',exact:true})).toBeVisible();await capture('synthetic-http-test-investigations-issue-mobile-de');await page.getByLabel('Sprache',{exact:true}).selectOption('en');
  mark('stable-device-navigation');await panel().locator('summary').click();const link=panel().getByRole('link',{name:'Check Health',exact:true});await expect(link).toHaveAttribute('href',`#/devices/${investigationsFixtureDevice}/health`);await link.click();await expect(page).toHaveURL(`${base}/#/devices/${investigationsFixtureDevice}/health`);await expect(page.getByRole('tab',{name:'Health & history',exact:true})).toHaveAttribute('aria-selected','true');await expect(page.getByRole('heading',{name:'Investigation fixture <Linux>',exact:true})).toBeVisible();
- // Existing invented Health DTO and unchanged read-only route guards also cover
- // the device Health surface, including unknown state and unavailable inventory.
- const health=page.locator('.health-panel');
- await expect(health).toContainText('Selected checks need attention.');
- await page.setViewportSize({width:1440,height:1000});await health.scrollIntoViewIfNeeded();
- await shot(page,'synthetic-http-test-health-desktop-en',investigationsFixtureDisclosure);
- await page.setViewportSize({width:390,height:844});await page.getByLabel('Language',{exact:true}).selectOption('de');await health.scrollIntoViewIfNeeded();
- await shot(page,'synthetic-http-test-health-mobile-de',investigationsFixtureDisclosure);
- await health.locator('.health-controls').scrollIntoViewIfNeeded();
- await shot(page,'synthetic-http-test-health-controls-mobile-de',investigationsFixtureDisclosure);
- await page.getByLabel('Sprache',{exact:true}).selectOption('en');phase='unknown';await page.reload();await expect(health).toContainText('Selected checks cannot be fully assessed.');await health.scrollIntoViewIfNeeded();
- await shot(page,'synthetic-http-test-health-unknown-mobile-en',investigationsFixtureDisclosure);phase='renewed';
+ // Extend this existing case; retain its login, case count and write guards.
+ await healthDashboardBrowserCase({page,expect,shot,setPhase:value=>{healthPhase=value;},mark,fixtureDisclosure:investigationsFixtureDisclosure});
  mark('browser-back');await page.goBack();await expect(page.getByRole('heading',{name:'Investigations',exact:true})).toBeVisible();await expect(panel()).toContainText('Root filesystem nearly full');
  mark('final-read-only-guards');expect(mutations).toEqual([]);expect(unexpected).toEqual([]);expect(external).toEqual([]);expect(await page.evaluate(value=>JSON.stringify({...localStorage,...sessionStorage}).includes(value),investigationsFixtureDevice)).toBe(false);
 }

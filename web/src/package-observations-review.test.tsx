@@ -118,6 +118,8 @@ describe('independent private UI and selected identity regressions', () => {
         packageResponse.snapshot!.release = { quality: 'denied', reason: 'permission_denied', fields: { id: null, versionId: null, versionCodename: null } };
         await loadedPanel(); const storage = vi.spyOn(Storage.prototype, 'setItem'); act(() => setLocale(locale, false));
         expect(screen.getByRole('table')).toBeVisible(); expect(screen.getAllByText('7:2.0~pre1-3+b8')).toHaveLength(2);
+        expect(screen.getByText(locale === 'de' ? 'Source-Feld fehlt: Binärvorgabe' : 'Absent Source field: binary default')).not.toBeVisible();
+        fireEvent.click(screen.getByRole('table').querySelector('summary')!);
         expect(screen.getByText(locale === 'de' ? 'Source-Feld fehlt: Binärvorgabe' : 'Absent Source field: binary default')).toBeVisible();
         expect(screen.getByText(locale === 'de' ? 'Die Leseberechtigung für die Quelle wurde verweigert.' : 'Permission to read the source was denied.')).toBeVisible();
         expect(screen.queryByText(/Exact Debian|Exakte Debian/)).not.toBeInTheDocument(); expect(screen.queryByRole('link')).not.toBeInTheDocument(); expect(storage).not.toHaveBeenCalled();

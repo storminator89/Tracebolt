@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import App from './App';
 import { abortProtectedRequests, request } from './api';
@@ -21,7 +21,7 @@ beforeEach(() => {
     vi.mocked(request).mockReset();
 });
 afterEach(() => { cleanup(); abortProtectedRequests(); history.replaceState(null, '', '/'); vi.restoreAllMocks(); });
-it('reuses the App fleet hook on Settings and restores metadata after equivalent-hash navigation', async () => {
+it('reuses the App fleet hook on Settings and preserves metadata without another read after equivalent-hash navigation', async () => {
     vi.mocked(request).mockImplementation(async path => {
         if (path === '/overview') return { devices: [], cases: [], stats: {}, activity: [], generatedAt: endpointView().serverNow };
         if (path === '/capabilities') return { limitations: [] };
@@ -32,10 +32,14 @@ it('reuses the App fleet hook on Settings and restores metadata after equivalent
     render(<App/>); await screen.findByText('Off'); fireEvent.click(screen.getByRole('button', { name: 'Proactive AI diagnostics' })); await screen.findByText('fixture-linux');
     const identityCalls = () => vi.mocked(request).mock.calls.filter(([path]) => path === '/fleet/endpoint-identities').length;
     expect(identityCalls()).toBe(1);
-    for (const [index, hash] of ['#settings', '#/settings', '#/settings/'].entries()) {
-        act(() => { history.replaceState(null, '', hash); window.dispatchEvent(new HashChangeEvent('hashchange')); });
-        await waitFor(() => expect(identityCalls()).toBe(index + 2));
+    for (const hash of ['#settings', '#/settings', '#/settings/']) {
+        const shell = document.querySelector('.app-shell');
+        await act(async () => { history.replaceState(null, '', hash); window.dispatchEvent(new HashChangeEvent('hashchange')); });
+        expect(document.querySelector('.app-shell')).toBe(shell); expect(identityCalls()).toBe(1);
+        // Privileged settings still clear their own draft/consent on navigation.
+        // Refreshing them reuses the workspace metadata without a duplicate read.
+        expect(screen.queryByText('fixture-linux')).not.toBeInTheDocument();
         fireEvent.click(screen.getByRole('button', { name: 'Refresh proactive AI settings' }));
-        await screen.findByText('fixture-linux'); expect(screen.getByRole('checkbox', { name: new RegExp(endpointDevice) })).not.toBeChecked();
+        await screen.findByText('fixture-linux'); expect(identityCalls()).toBe(1); expect(screen.getByRole('checkbox', { name: new RegExp(endpointDevice) })).not.toBeChecked();
     }
 });

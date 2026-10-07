@@ -117,9 +117,27 @@ describe('package observations presentation and private lifecycle', () => {
     it('fetches only when expanded, uses the bounded endpoint and shows exact observed/full-source facts', async () => {
         vi.mocked(request).mockResolvedValue(partial()); const storage = vi.spyOn(Storage.prototype, 'setItem'); render(<PackageObservationsPanel deviceId="agent_fixture"/>); expect(request).not.toHaveBeenCalled();
         open(); await screen.findByRole('table'); expect(request).toHaveBeenCalledExactlyOnceWith('/devices/agent_fixture/packages', { signal: expect.any(AbortSignal) }, PACKAGE_RESPONSE_MAX_BYTES);
-        expect(screen.getByText('2:1.0~rc1-2+b1')).toBeVisible(); expect(screen.getByText('2:1.0~rc1-2')).toBeVisible(); expect(screen.getByText('Explicit Source field')).toBeVisible();
+        expect(screen.getByText('2:1.0~rc1-2+b1')).toBeVisible(); expect(screen.getByText('2:1.0~rc1-2')).toBeVisible(); expect(screen.getByText('Explicit Source field')).not.toBeVisible(); fireEvent.click(screen.getByRole('table').querySelector('summary')!); expect(screen.getByText('Explicit Source field')).toBeVisible();
         for (const text of ['500', '490', '499', 'Partial exported inventory', 'Rows truncated by export bounds', 'trixie']) expect(screen.getByText(text)).toBeVisible();
         expect(screen.queryByRole('link')).not.toBeInTheDocument(); expect(document.body.textContent).not.toMatch(/0 CVEs|zero vulnerabilities|Available updates: 0/i); expect(storage).not.toHaveBeenCalled();
+    });
+    it('keeps binary-default and explicit Source evidence separate in keyboard-focusable row disclosures', async () => {
+        const value = view(), inventory = value.snapshot!.inventory;
+        inventory.items.push({ ...row('fixture-default'), sourcePackage: 'fixture-default', sourceVersion: '2:1.0~rc1-2+b1', sourceMapping: 'binary-default' });
+        inventory.observedCount = inventory.installedCount = 2; await show(value);
+        const table = screen.getByRole('table'); expect(within(table).getAllByRole('columnheader')).toHaveLength(6);
+        expect(within(table).queryByRole('columnheader', { name: 'Mapping basis' })).not.toBeInTheDocument();
+        const summaries = [...table.querySelectorAll('summary')];
+        for (const [index, evidence] of ['Explicit Source field', 'Absent Source field: binary default'].entries()) {
+            expect(screen.getByText(evidence)).not.toBeVisible(); summaries[index].focus(); expect(summaries[index]).toHaveFocus();
+            expect(summaries[index]).toHaveTextContent(`Package details: ${inventory.items[index].name} (amd64)`);
+            fireEvent.click(summaries[index]); expect(screen.getByText(evidence)).toBeVisible();
+            fireEvent.click(summaries[index]); expect(screen.getByText(evidence)).not.toBeVisible();
+        }
+        expect(request).toHaveBeenCalledTimes(1);
+        fireEvent.click(summaries[0]); fireEvent.click(screen.getByRole('button', { name: 'Release and source-package observations' }));
+        expect(screen.queryByRole('table')).not.toBeInTheDocument(); open(); await screen.findByRole('table');
+        expect(screen.getByText('Explicit Source field')).not.toBeVisible();
     });
     it('distinguishes successfully empty from unknown with fresh receipt, and clears older rows on refresh', async () => {
         await show(); const unknownValue = unknown(); vi.mocked(request).mockResolvedValue(unknownValue); fireEvent.click(screen.getByRole('button', { name: 'Refresh package observations' }));
@@ -178,7 +196,7 @@ describe('package observations presentation and private lifecycle', () => {
         await act(async () => delayed.resolve(view())); expect(screen.getByRole('alert')).toHaveTextContent('The time anchor is no longer reliable.'); expect(screen.queryByRole('table')).not.toBeInTheDocument();
     });
     it('supports German labels and preserves exact identifier text', async () => {
-        setLocale('de', false); vi.mocked(request).mockResolvedValue(partial()); render(<PackageObservationsPanel deviceId="agent_fixture"/>); fireEvent.click(screen.getByRole('button', { name: 'Release- und Quellpaket-Beobachtungen' })); const table = await screen.findByRole('table'); expect(within(table).getByText('Ausdrückliches Source-Feld')).toBeVisible(); expect(screen.getByText('Teilweise exportiertes Inventar')).toBeVisible(); expect(screen.getByText('trixie')).toBeVisible();
+        setLocale('de', false); vi.mocked(request).mockResolvedValue(partial()); render(<PackageObservationsPanel deviceId="agent_fixture"/>); fireEvent.click(screen.getByRole('button', { name: 'Release- und Quellpaket-Beobachtungen' })); const table = await screen.findByRole('table'); expect(within(table).getAllByRole('columnheader')).toHaveLength(6); expect(within(table).queryByRole('columnheader', { name: 'Zuordnungsgrundlage' })).not.toBeInTheDocument(); expect(within(table).getByText('Ausdrückliches Source-Feld')).not.toBeVisible(); fireEvent.click(table.querySelector('summary')!); expect(within(table).getByText('Ausdrückliches Source-Feld')).toBeVisible(); expect(screen.getByText('Teilweise exportiertes Inventar')).toBeVisible(); expect(screen.getByText('trixie')).toBeVisible();
     });
     it.each([null, { ...operator, authenticated: false }, { ...operator, mode: 'development' as const }])('does not fetch without authenticated LAN access', async currentOperator => {
         vi.mocked(useOperator).mockReturnValue(currentOperator); render(<PackageObservationsPanel deviceId="agent_fixture"/>); expect(screen.getByText('Authenticated LAN operator access is required.')).toBeVisible(); expect(request).not.toHaveBeenCalled();

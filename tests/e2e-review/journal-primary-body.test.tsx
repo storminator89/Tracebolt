@@ -248,3 +248,72 @@ describe('complete overview fixture primary-consumer observation',()=>{
   }
  });
 });
+
+import { approveServiceAction, previewServiceAction, InvalidServiceActionResponse } from '../../web/src/service-action-api';
+import { actionAccess, actionDevice, actionActor, actionJobView, actionPreview, actionSession, actionView } from '../../web/src/service-action-fixtures';
+import { SERVICE_ACTION_VIEW_BYTES } from '../../web/src/service-action-types';
+const actionRoot=`/api/devices/${actionDevice}/service-actions`;
+const primaryActionAccess={...actionAccess,insecureTestMode:true},primaryActionSession={...actionSession,transport:'http',insecureTestMode:true,transportWarning:'unencrypted_lan_test'};
+const primaryActionPreview=()=>({...actionPreview(),transportProfile:'disposable-http-test' as const});
+
+describe.each(['preview','approve'] as const)('service-action %s primary observation',operation=>{
+ it.each(['valid','terminal inspector abort','malformed','invalid identity','disconnect','abort','oversized','declared oversized'])('preserves the real named/CSRF/DTO reader and exact one-shot request for %s',async outcome=>{
+  expect(SERVICE_ACTION_VIEW_BYTES).toBe(32768);
+  const scope=operation==='preview'?'actionPreview':'actionApprove',value=operation==='preview'?{...actionView(),preview:primaryActionPreview()}:actionJobView();
+  if(outcome==='invalid identity')value.deviceId=`agent_${'e'.repeat(32)}`;
+  let held:ReadableStreamDefaultController<Uint8Array>,response:Response,readerSpy:ReturnType<typeof vi.fn>,cancelled=false;
+  const controller=new AbortController(),fetch=vi.fn(async(path:string,init?:RequestInit)=>{
+   if(path==='/api/auth/session')return json(primaryActionSession);
+   if(path==='/api/session')return json({csrfToken:'synthetic-csrf'});
+   if(path!==actionRoot+'/'+operation)throw new Error('Unexpected synthetic route');
+   const stream=new ReadableStream<Uint8Array>({start(target){held=target;},cancel(){cancelled=true;}});
+   init!.signal!.addEventListener('abort',()=>{if(!cancelled)try{held.error(new DOMException('Synthetic abort','AbortError'));}catch{}},{once:true});
+   response=new Response(stream,outcome==='declared oversized'?{headers:{'Content-Length':String(SERVICE_ACTION_VIEW_BYTES+1)}}:undefined);readerSpy=vi.spyOn(stream,'getReader');vi.spyOn(response,'clone').mockImplementation(()=>{throw new Error('Secondary body consumer is forbidden');});return response;
+  });vi.stubGlobal('fetch',fetch);uninstall=installJournalPrimaryBody({url:new URL(`/api/devices/${actionDevice}/journal/query`,location.href).href});
+  const token=observer().arm(scope),pending=(operation==='preview'?previewServiceAction(actionDevice,'fixture.service',primaryActionAccess,controller.signal):approveServiceAction(actionDevice,primaryActionPreview(),primaryActionAccess,controller.signal)).then(result=>({result,error:null}),error=>({result:null,error}));
+  await waitFor(()=>expect(held).toBeDefined());expect(observer().take(token)).toBeNull();
+  const raw=fetch.mock.calls.at(-1)![1]!.body as string;
+  expect(fetch.mock.calls.map(([path])=>path)).toEqual(['/api/auth/session','/api/session',actionRoot+'/'+operation]);
+  expect(fetch.mock.calls.at(-1)![1]).toMatchObject({method:'POST',credentials:'same-origin',headers:{'X-CSRF-Token':'synthetic-csrf'}});
+  expect(JSON.parse(raw)).toEqual(operation==='preview'?{unit:'fixture.service'}:{previewId:actionPreview().id,previewDigest:actionPreview().digest});
+  const bytes=new TextEncoder().encode(JSON.stringify(value));
+  if(outcome!=='declared oversized'){
+   const split=Math.floor(bytes.length/2);held.enqueue(bytes.slice(0,split));await waitFor(()=>expect(observer().state(token)).toBe('reading'));expect(observer().take(token)).toBeNull();
+   if(outcome==='abort')controller.abort();
+   else if(outcome==='disconnect')held.error(new TypeError('Synthetic disconnect'));
+   else if(outcome==='oversized')held.enqueue(new Uint8Array(SERVICE_ACTION_VIEW_BYTES+1));
+   else{held.enqueue(bytes.slice(split,outcome==='malformed'?bytes.length-1:undefined));held.close();}
+  }
+  const result=await pending;
+  if(outcome==='valid'||outcome==='terminal inspector abort'){
+   expect(result.error).toBeNull();expect(result.result).toEqual(value);expect(readerSpy!).toHaveBeenCalledTimes(1);expect(response!.clone).not.toHaveBeenCalled();expect(cancelled).toBe(false);
+   if(outcome==='terminal inspector abort'){
+    // Controlled ordering only: the real primary API validator already accepted
+    // these bytes. This does not infer acceptance in the historical browser run.
+    const terminal=new Error('Synthetic terminal inspector body-data-missing / aborted'),inspector={body:vi.fn(async()=>{throw terminal;})};await expect(inspector.body()).rejects.toBe(terminal);expect(observer().state(token)).toBe('complete');
+   }
+   expect(observer().take(token)).toEqual({status:200,body:value,requestBody:raw,bytes:bytes.length});expect(observer().take(token)).toBeNull();
+  }else{
+   expect(result.result).toBeNull();expect(result.error).not.toBeNull();
+   if(outcome==='invalid identity'){expect(result.error).toBeInstanceOf(InvalidServiceActionResponse);expect(observer().take(token)?.body).toEqual(value);}
+   else{expect(observer().take(token)).toBeNull();expect(observer().state(token)).not.toBe('complete');}
+   if(outcome==='declared oversized'){expect(cancelled).toBe(true);expect(readerSpy!).not.toHaveBeenCalled();}
+  }
+  expect(fetch.mock.calls.filter(([path])=>path===actionRoot+'/'+operation)).toHaveLength(1);expect(fetch).toHaveBeenCalledTimes(3);
+ });
+
+ it.each(['actor','capability','expiry'] as const)('never sends an armed action when %s authorization changes',async changed=>{
+  const session={...primaryActionSession,...(changed==='actor'?{actorId:`operator_${'f'.repeat(32)}`}:changed==='capability'?{capabilities:['read']}:{expiresAt:'2026-10-05T14:00:00Z'})};
+  const fetch=vi.fn(async()=>json(session));vi.stubGlobal('fetch',fetch);uninstall=installJournalPrimaryBody({url:new URL(`/api/devices/${actionDevice}/journal/query`,location.href).href});const token=observer().arm(operation==='preview'?'actionPreview':'actionApprove');
+  await expect(operation==='preview'?previewServiceAction(actionDevice,'fixture.service',primaryActionAccess,new AbortController().signal):approveServiceAction(actionDevice,primaryActionPreview(),primaryActionAccess,new AbortController().signal)).rejects.toMatchObject({status:401});expect(fetch).toHaveBeenCalledTimes(1);expect(observer().state(token)).toBe('armed');expect(observer().take(token)).toBeNull();expect(actionActor).toBe(actionAccess.actorId);
+ });
+});
+
+it.each(['actionPreview','actionApprove'] as const)('bounds and isolates the exact %s observer without consuming credentials or another action',async scope=>{
+ const target=`/api/devices/${journalDevice}/service-actions/${scope==='actionPreview'?'preview':'approve'}`,other=target.endsWith('/preview')?target.replace(/preview$/,'approve'):target.replace(/approve$/,'preview');
+ vi.stubGlobal('fetch',vi.fn(async()=>new Response('"'+'x'.repeat(32766)+'"')));uninstall=installJournalPrimaryBody({url:url()});let token=observer().arm(scope);
+ for(const [path,method]of [[target,'GET'],[other,'POST'],[target+'?extra=1','POST'],[target.replace(journalDevice,`agent_${'e'.repeat(32)}`),'POST'],['/api/auth/session','GET'],['/api/session','GET'],[root+'/query','POST']]){const response=await globalThis.fetch(path,{method,body:method==='POST'?'{}':undefined});expect(response.bodyUsed).toBe(false);expect(observer().state(token)).toBe('armed');}
+ const response=await globalThis.fetch(target,{method:'POST',body:'{}'});expect(response.bodyUsed).toBe(false);const reader=response.body!.getReader();while(!(await reader.read()).done){}reader.releaseLock();const captured=observer().take(token);expect(captured.bytes).toBe(32768);expect(captured.body).toHaveLength(32766);expect(captured.requestBody).toBe('{}');
+ token=observer().arm(scope);const first=await globalThis.fetch(target,{method:'POST',body:'{}'});await globalThis.fetch(target,{method:'POST',body:'{"other":true}'});const read=first.body!.getReader();while(!(await read.read()).done){}read.releaseLock();expect(observer().state(token)).toBe('duplicate');expect(observer().take(token)).toBeNull();
+ token=observer().arm(scope);const tooLong=await globalThis.fetch(target,{method:'POST',body:'x'.repeat(2049)});expect(tooLong.bodyUsed).toBe(false);expect(observer().state(token)).toBe('invalid-request');expect(observer().take(token)).toBeNull();
+});

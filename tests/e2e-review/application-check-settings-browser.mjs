@@ -1,4 +1,5 @@
 import {isDeepStrictEqual} from 'node:util';
+import {validApplicationChecksView} from '../../web/src/application-checks-types.ts';
 import {validApplicationCheckSettings} from '../../web/src/application-check-settings-types.ts';
 
 export const applicationCheckSettingsCaseName='Synthetic application check setup saves inert drafts and requires exact manager-origin enable consent';
@@ -17,6 +18,11 @@ export function createApplicationCheckSettingsFixture() {
  const counts={reads:0,saves:0,enables:0,disables:0};let generation=10;const revision=()=> (++generation).toString(16).padStart(32,'0');
  const settings=()=>{requireFixture(validApplicationCheckSettings(current));return structuredClone(current);};
  const handle=(method,pathname,data)=>{
+  if(pathname==='/api/application-checks/status'){
+   requireFixture(method==='GET'&&data===null);
+   const status={schemaVersion:'tracebolt.application-checks.v2',enabled:false,vantage:'management_server',serverNow:'2026-10-06T12:00:00Z',intervalSeconds:0,maxAgeSeconds:0,items:[]};
+   requireFixture(validApplicationChecksView(status));return status;
+  }
   requireFixture(pathname==='/api/application-checks/settings');
   if(method==='GET'){requireFixture(data===null);counts.reads++;return settings();}
   requireFixture(method==='POST'&&data?.expectedRevision===current.revision);
@@ -36,7 +42,7 @@ export function createApplicationCheckSettingsFixture() {
 }
 
 // Only fixed stage names reach reports: no DOM, destination, body or error text.
-const applicationSettingsStages=new Set(['initial','bootstrap','login','settings-load','open-editor','initial-interval','http-id','http-url','http-allowlist','http-approval','add-tcp-target','tcp-id','tcp-kind','tcp-host','tcp-port','tcp-allowlist','tcp-approval','draft-capture','save-draft','edit-targets','edit-port','edit-approvals','save-edit','enable-review','cancel-review','enable-approvals','enable-mobile','confirm-enable','disable','german-mobile','storage-guard','readonly-role','admin-role','final-guards']);
+const applicationSettingsStages=new Set(['initial','bootstrap','login','entry-overview','settings-load','open-editor','initial-interval','http-id','http-url','http-allowlist','http-approval','add-tcp-target','tcp-id','tcp-kind','tcp-host','tcp-port','tcp-allowlist','tcp-approval','draft-capture','save-draft','edit-targets','edit-port','edit-approvals','save-edit','enable-review','cancel-review','enable-approvals','enable-mobile','confirm-enable','disable','german-mobile','entry-mobile','storage-guard','readonly-role','admin-role','final-guards']);
 export function createApplicationCheckSettingsDiagnostics(){
  let stage='initial';
  return {mark(value){stage=applicationSettingsStages.has(value)?value:'unknown';},current(){return stage;}};
@@ -46,7 +52,7 @@ export const applicationCheckSettingsFailureStage=()=>applicationSettingsDiagnos
 
 export async function applicationCheckSettingsBrowserCase({pageAt,login,expect,base,shot}) {
  applicationSettingsDiagnostics.mark('bootstrap');
- const page=await pageAt('/settings'),clockStart=Date.now();
+ const page=await pageAt('/overview'),clockStart=Date.now();
  await page.clock.install({time:new Date(clockStart)});await page.clock.pauseAt(new Date(clockStart+10000));
  const fixture=createApplicationCheckSettingsFixture(),requests=[],unexpected=[],external=[];let namedCapabilities=null;
  await page.route('**/*',async route=>{
@@ -58,7 +64,7 @@ export async function applicationCheckSettingsBrowserCase({pageAt,login,expect,b
    return route.fulfill({response,json:{...session,loginMode:'named',actorId:'operator_'+ '1'.repeat(32),capabilities:namedCapabilities}});
   }
   if(url.pathname.startsWith('/api/application-checks')){
-   if(url.pathname!=='/api/application-checks/settings'||url.search){unexpected.push('Unexpected application-check route');return route.abort('blockedbyclient');}
+   if((url.pathname!=='/api/application-checks/settings'&&!(method==='GET'&&url.pathname==='/api/application-checks/status'))||url.search){unexpected.push('Unexpected application-check route');return route.abort('blockedbyclient');}
    requests.push(`${method} ${url.pathname}`);
    try{
     const data=method==='GET'?null:request.postDataJSON();
@@ -72,6 +78,14 @@ export async function applicationCheckSettingsBrowserCase({pageAt,login,expect,b
  });
  applicationSettingsDiagnostics.mark('login');
  await expect(page.getByRole('heading',{name:'Sign in',exact:true})).toBeVisible();expect(fixture.counts.reads).toBe(0);await login(page);
+ applicationSettingsDiagnostics.mark('entry-overview');
+ const overviewPanel=page.locator('.application-checks'),entry=page.getByRole('link',{name:'Add check',exact:true});
+ await expect(entry).toHaveAttribute('href','#/settings/application-checks');
+ await expect(overviewPanel).toContainText('Website: https://example.org/health · DNS: example.org · Port: example.org:443');
+ expect(fixture.counts).toEqual({reads:0,saves:0,enables:0,disables:0});
+ await entry.scrollIntoViewIfNeeded();await entry.evaluate(node=>node.scrollIntoView({block:'center',behavior:'instant'}));
+ await expect(entry).toBeInViewport({ratio:1});await shot(page,'synthetic-http-test-application-entry-desktop-en',applicationCheckSettingsFixtureDisclosure);
+ await entry.click();await expect(page).toHaveURL(`${base}/#/settings/application-checks`);
  const panel=page.locator('.application-check-settings');
  const toggle=()=>panel.getByRole('button',{name:'Application check setup',exact:true});
  // Exact role/name avoids getByLabel's option/textarea descendant-text matching.
@@ -79,7 +93,10 @@ export async function applicationCheckSettingsBrowserCase({pageAt,login,expect,b
  applicationSettingsDiagnostics.mark('settings-load');
  await expect(panel).toBeVisible();await expect.poll(()=>fixture.counts.reads).toBe(1);
  applicationSettingsDiagnostics.mark('open-editor');
- await toggle().click();await panel.scrollIntoViewIfNeeded();await shot(page,'synthetic-http-test-application-setup-empty-desktop-en',applicationCheckSettingsFixtureDisclosure);await panel.getByRole('button',{name:'Add targets',exact:true}).click();
+ await expect(toggle()).toHaveAttribute('aria-expanded','true');
+ await expect(field('Target ID')).toHaveValue('');await expect(field('URL')).toHaveValue('');await expect(field('Allowed IP addresses')).toHaveValue('');
+ await expect(panel.getByRole('checkbox')).not.toBeChecked();expect(fixture.counts).toEqual({reads:1,saves:0,enables:0,disables:0});
+ await panel.scrollIntoViewIfNeeded();await shot(page,'synthetic-http-test-application-setup-empty-desktop-en',applicationCheckSettingsFixtureDisclosure);
  applicationSettingsDiagnostics.mark('initial-interval');
  await field('Interval (seconds)').fill('75');
  applicationSettingsDiagnostics.mark('http-id');
@@ -145,6 +162,27 @@ export async function applicationCheckSettingsBrowserCase({pageAt,login,expect,b
  await page.getByLabel('Language',{exact:true}).selectOption('de');await expect(page.locator('html')).toHaveAttribute('lang','de');
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth&&document.body.scrollWidth<=innerWidth)).toBe(true);
  await panel.scrollIntoViewIfNeeded();await shot(page,'synthetic-http-test-application-setup-disabled-mobile-de',applicationCheckSettingsFixtureDisclosure);
+ applicationSettingsDiagnostics.mark('entry-mobile');
+ await page.evaluate(()=>{location.hash='#/overview';});
+ const mobileEntry=page.getByRole('link',{name:'Prüfung hinzufügen',exact:true});
+ await expect(mobileEntry).toHaveAttribute('href','#/settings/application-checks');
+ await mobileEntry.scrollIntoViewIfNeeded();await mobileEntry.evaluate(node=>node.scrollIntoView({block:'center',behavior:'instant'}));
+ await expect(mobileEntry).toBeInViewport({ratio:1});await expect(overviewPanel.locator('.application-check-examples')).toBeInViewport({ratio:1});
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth&&document.body.scrollWidth<=innerWidth)).toBe(true);
+ await shot(page,'synthetic-http-test-application-entry-mobile-de',applicationCheckSettingsFixtureDisclosure);
+ await mobileEntry.click();await expect(page).toHaveURL(`${base}/#/settings/application-checks`);
+ await expect(panel.getByRole('button',{name:'Anwendungsprüfungen einrichten',exact:true})).toHaveAttribute('aria-expanded','true');
+ await expect(field('Ziel-ID')).toHaveCount(3);await expect(field('Ziel-ID').last()).toHaveValue('');await expect(field('URL').last()).toHaveValue('');
+ for(const checkbox of await panel.getByRole('checkbox').all())await expect(checkbox).not.toBeChecked();
+ expect(fixture.counts.saves).toBe(2);expect(fixture.counts.enables).toBe(1);expect(fixture.counts.disables).toBe(1);
+ const blank=panel.getByRole('group',{name:'Ziel 3',exact:true});
+ await blank.scrollIntoViewIfNeeded();await blank.evaluate(node=>node.scrollIntoView({block:'center',behavior:'instant'}));await expect(blank).toBeInViewport({ratio:1});
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth&&document.body.scrollWidth<=innerWidth)).toBe(true);
+ await shot(page,'synthetic-http-test-application-entry-draft-mobile-de',applicationCheckSettingsFixtureDisclosure);
+ await panel.getByRole('button',{name:'Schließen',exact:true}).click();await expect(panel.locator('form')).toHaveCount(0);
+ const beforeOrdinarySettings=fixture.counts.reads;await page.evaluate(()=>{location.hash='#/settings';});
+ await expect.poll(()=>fixture.counts.reads).toBe(beforeOrdinarySettings+1);
+ await expect(panel.getByRole('button',{name:'Anwendungsprüfungen einrichten',exact:true})).toHaveAttribute('aria-expanded','false');
  applicationSettingsDiagnostics.mark('storage-guard');
  expect(await page.evaluate(()=>JSON.stringify({local:{...localStorage},session:{...sessionStorage}}).includes('fixture-check.invalid'))).toBe(false);
  // Named-role UI behavior only; actual server permission denial is covered by Go.

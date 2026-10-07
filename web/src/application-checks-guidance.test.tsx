@@ -1,6 +1,6 @@
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { abortProtectedRequests, hasPendingAPIRequests, request } from './api';
+import { abortProtectedRequests, APIError, hasPendingAPIRequests, request } from './api';
 import { useOperator } from './auth';
 import { ApplicationChecksPanel } from './application-checks';
 import { applicationNow, applicationRow, applicationView, disabledApplicationView } from './application-checks-fixtures';
@@ -31,7 +31,7 @@ describe('read-only application-check setup guidance', () => {
         const details = panel().querySelector('details')!;
         expect(details).not.toHaveAttribute('open');
         expect(details.querySelector('summary')).toHaveTextContent('Setup and approvals');
-        expect(within(panel()).getByRole('link', { name: 'Set up checks' })).toBeVisible();
+        expect(within(panel()).getByRole('link', { name: 'Add check' })).toBeVisible();
         expect(details).toHaveTextContent('Saving starts no checks');
         expect(details).not.toHaveTextContent('explicitly restart the manager');
         expect(details).toHaveTextContent('exact targets and IPs');
@@ -47,7 +47,7 @@ describe('read-only application-check setup guidance', () => {
     it.each([disabledApplicationView, applicationView])('links only fixed source guidance without sending the operator referrer (%#)', async fixture => {
         vi.mocked(request).mockResolvedValue(fixture()); await start();
         const links = panel().querySelectorAll('a[target="_blank"]'); expect(links).toHaveLength(1);
-        if (!fixture().enabled) expect(within(panel()).getByRole('link', { name: 'Set up checks' })).toHaveAttribute('href', '#/settings');
+        if (!fixture().enabled) expect(within(panel()).getByRole('link', { name: 'Add check' })).toHaveAttribute('href', '#/settings/application-checks');
         expect(links[0]).toHaveTextContent('Startup-file guide (GitHub)'); expect(links[0]).toHaveAttribute('href', guide);
         expect(links[0]).toHaveAttribute('target', '_blank'); expect(links[0]).toHaveAttribute('rel', 'noopener noreferrer'); expect(links[0]).toHaveAttribute('referrerpolicy', 'no-referrer');
         expect(request).toHaveBeenCalledTimes(1);
@@ -57,8 +57,14 @@ describe('read-only application-check setup guidance', () => {
         vi.mocked(useOperator).mockReturnValue({ ...operator, loginMode: 'named', actorId: `operator_${'a'.repeat(32)}`, capabilities: ['read'] });
         vi.mocked(request).mockResolvedValue(disabledApplicationView()); await start();
         expect(panel()).toHaveTextContent('An administrator can set up targets.');
-        expect(within(panel()).queryByRole('link', { name: 'Set up checks' })).toBeNull();
+        expect(within(panel()).queryByRole('link', { name: 'Add check' })).toBeNull();
         expect(vi.mocked(request).mock.calls.every(([path]) => path === '/application-checks/status')).toBe(true);
+    });
+
+    it.each([401, 403])('removes the direct entry after an authorization failure %i', async status => {
+        vi.mocked(request).mockRejectedValue(new APIError('fixture', status)); await start();
+        expect(within(panel()).queryByRole('link', { name: 'Add check' })).toBeNull();
+        expect(screen.getByRole('button', { name: 'Reload application status' })).toBeDisabled();
     });
 
     it('localizes setup guidance without another request or storing approvals', async () => {
@@ -115,7 +121,8 @@ describe('retained cadence, freshness and reason explanations', () => {
         const mounted = await start(); expect(panel().querySelector('dl')).not.toBeNull(); expect(panel().querySelector('.application-checks-help')).not.toBeNull();
         vi.mocked(request).mockRejectedValueOnce(new Error('fixture'));
         fireEvent.click(screen.getByRole('button', { name: 'Reload application status' })); await flush();
-        expect(panel().querySelector('dl,.application-checks-help,a')).toBeNull();
+        expect(panel().querySelector('dl,.application-checks-help,.application-checks-details')).toBeNull();
+        expect(within(panel()).getByRole('link', { name: 'Add check' })).toHaveAttribute('href', '#/settings/application-checks');
         vi.mocked(useOperator).mockReturnValue({ ...operator, authenticated: false }); mounted.rerender(<ApplicationChecksPanel/>);
         expect(screen.queryByRole('region')).toBeNull();
     });

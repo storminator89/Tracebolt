@@ -38,7 +38,7 @@ test('enable requires saved targets and each distinct manager/destination/plaint
  }
 });
 test('unknown routes and check/probe methods never reach a real target',()=>{
- for(const [method,url,body] of [['POST','/api/application-checks/run',{}],['POST','/api/application-checks/test',{}],['PUT',path,{}],['GET',`${path}?target=x`,null],['GET',path,{}]])assert.throws(()=>createApplicationCheckSettingsFixture().handle(method,url,body));
+ for(const [method,url,body] of [['POST','/api/application-checks/status',{}],['GET','/api/application-checks/status?target=x',null],['GET','/api/application-checks/status',{}],['POST','/api/application-checks/run',{}],['POST','/api/application-checks/test',{}],['PUT',path,{}],['GET',`${path}?target=x`,null],['GET',path,{}]])assert.throws(()=>createApplicationCheckSettingsFixture().handle(method,url,body));
 });
 test('hosted case adds exact intercepted setup without weakening the shared harness',()=>{
  const runner=read('./lan-browser.mjs'),source=read('./application-check-settings-browser.mjs');
@@ -46,7 +46,7 @@ test('hosted case adds exact intercepted setup without weakening the shared harn
  assert.match(runner,/applicationCheckSettingsBrowserCase\(\{pageAt,login,expect,base,shot\}\),'10m'/);
  assert.match(applicationCheckSettingsCaseName,/Synthetic application check setup/);assert.match(applicationCheckSettingsFixtureDisclosure,/no real configuration persistence, target probe, DNS request, TCP connection or permission grant/);
  assert.doesNotMatch(source,/chromium\.launch|newContext\(|setDefaultTimeout|waitForTimeout|ignoreHTTPSErrors|execFile|spawn\(/);
- assert.match(source,/url.origin!==base/);assert.match(source,/url.pathname!=='\/api\/application-checks\/settings'\|\|url.search/);assert.match(source,/route.abort\('blockedbyclient'\)/);
+ assert.match(source,/url.origin!==base/);assert.match(source,/url.pathname!=='\/api\/application-checks\/settings'&&!.+method==='GET'&&url.pathname==='\/api\/application-checks\/status'/);assert.match(source,/\|\|url.search/);assert.match(source,/route.abort\('blockedbyclient'\)/);
  assert.match(source,/method==='POST'&&url.pathname!=='\/api\/auth\/login'/);assert.match(source,/expect\(unexpected\)\.toEqual\(\[\]\)/);assert.match(source,/expect\(external\)\.toEqual\(\[\]\)/);
  assert.match(source,/name:'Cancel'/);assert.match(source,/toHaveCount\(3\)/);assert.match(source,/width:390,height:844/);assert.match(source,/application-setup-disabled-mobile-de/);assert.match(source,/localStorage/);assert.match(source,/name:'Edit targets'/);assert.match(source,/namedCapabilities=\['read'\]/);assert.match(source,/namedCapabilities=\['read','manage_application_checks'\]/);assert.match(source,/fixture.counts.reads\)\.toBe\(beforeReadOnly\)/);
 });
@@ -95,4 +95,14 @@ test('actual TargetForm preserves exact role names where Playwright label text i
   assert.equal(query('internal:role=textbox[name="Allowed IP addresses"s]').length,2);
   assert.equal(query('internal:role=textbox[name="Allowed IP addresses"s] >> nth=1')[0],win.document.querySelectorAll('textarea')[1]);
  }finally{dom.window.close();}
+});
+
+test('direct-entry status fixture is GET-only and cannot configure, probe or grant any target',()=>{
+ const f=createApplicationCheckSettingsFixture(),status=f.handle('GET','/api/application-checks/status',null);
+ assert.equal(status.enabled,false);assert.deepEqual(status.items,[]);assert.deepEqual(f.counts,{reads:0,saves:0,enables:0,disables:0});
+ const source=read('./application-check-settings-browser.mjs');
+ assert.match(source,/pageAt\('\/overview'\)/);assert.match(source,/entry.click\(\)/);assert.match(source,/toHaveURL\(`\$\{base\}\/\#\/settings\/application-checks`\)/);
+ assert.match(source,/expect\(fixture.counts\).toEqual\(\{reads:1,saves:0,enables:0,disables:0\}\)/);
+ assert.match(source,/application-entry-mobile-de/);assert.match(source,/application-entry-draft-mobile-de/);assert.match(source,/name:'Schließen',exact:true/);
+ assert.match(source,/requests.filter\(value=>value.startsWith\('POST'\)\)\).toHaveLength\(4\)/);
 });
