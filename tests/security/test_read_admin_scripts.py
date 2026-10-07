@@ -62,6 +62,26 @@ def encoded(value, **kwargs):
 
 
 class InertScriptTests(unittest.TestCase):
+    def test_upgrade_restore_step_projection_is_closed_and_phase_bound(self):
+        failed = dict(schemaVersion="tracebolt.read-admin-upgrade-result.v1", completed=False, canceled=False,
+                      identityRetained=True, scopesChanged=False, participantsStopped=True, rollbackConfirmed=False,
+                      restartBookkeepingReset=True, nativeAcceptance="not-established", failureStage="restore-runtime",
+                      failureReason="private-child-output", recovery="private-child-output")
+        expected = {"reset-restart-state", "enablement", "helpers", "socket-proof", "journal-proof",
+                    "agent-validation", "agent-start", "final-enablement"}
+        self.assertEqual(PTY.UPGRADE_RESTORE_STEPS, expected)
+        for step in expected:
+            event = PTY.exit_event(encoded(dict(failed, restoreStep=step)), 1, "", 1, upgrade=True)
+            self.assertEqual(event["readAdminFailure"], "read-admin-upgrade-restore-runtime-" + step)
+            self.assertIn(event["readAdminFailure"], PTY.FAILURES)
+            self.assertNotIn("private-child-output", json.dumps(event))
+        for step in ("private-child-output", "unknown", None, [], {}):
+            event = PTY.exit_event(encoded(dict(failed, restoreStep=step)), 1, "", 1, upgrade=True)
+            self.assertEqual(event["readAdminFailure"], "read-admin-phase-incomplete")
+            self.assertNotIn("private-child-output", json.dumps(event))
+        event = PTY.exit_event(encoded(dict(failed, failureStage="commit", restoreStep="helpers")), 1, "", 1, upgrade=True)
+        self.assertEqual(event["readAdminFailure"], "read-admin-phase-incomplete")
+
     def test_upgrade_failure_projects_only_closed_phase_without_child_values(self):
         private="private-host-or-command-output"
         failed=dict(schemaVersion="tracebolt.read-admin-upgrade-result.v1",completed=False,canceled=False,identityRetained=True,

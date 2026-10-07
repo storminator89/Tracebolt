@@ -608,6 +608,14 @@ read-admin-upgrade-native-upgrade
 read-admin-upgrade-helper-rebind
 read-admin-upgrade-same-scope-validation
 read-admin-upgrade-restore-runtime
+read-admin-upgrade-restore-runtime-reset-restart-state
+read-admin-upgrade-restore-runtime-enablement
+read-admin-upgrade-restore-runtime-helpers
+read-admin-upgrade-restore-runtime-socket-proof
+read-admin-upgrade-restore-runtime-journal-proof
+read-admin-upgrade-restore-runtime-agent-validation
+read-admin-upgrade-restore-runtime-agent-start
+read-admin-upgrade-restore-runtime-final-enablement
 read-admin-upgrade-commit
 read-admin-upgrade-lock-release
 read-admin-receipt-mismatch

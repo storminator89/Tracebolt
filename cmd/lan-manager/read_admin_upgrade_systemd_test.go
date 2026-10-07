@@ -125,7 +125,11 @@ func TestReadAdminPriorReleaseContractIsImmutable(t *testing.T) {
 }
 
 func TestReadAdminUpgradeClosedFailureProjection(t *testing.T) {
-	for _, phase := range []string{"preflight", "prepare", "drain", "retained-state", "native-upgrade", "helper-rebind", "same-scope-validation", "restore-runtime", "commit", "lock-release"} {
+	phases := []string{"preflight", "prepare", "drain", "retained-state", "native-upgrade", "helper-rebind", "same-scope-validation", "restore-runtime", "commit", "lock-release"}
+	for _, step := range []string{"reset-restart-state", "enablement", "helpers", "socket-proof", "journal-proof", "agent-validation", "agent-start", "final-enablement"} {
+		phases = append(phases, "restore-runtime-"+step)
+	}
+	for _, phase := range phases {
 		options := &readAdminNativeOptions{}
 		expected := "read-admin-upgrade-" + phase
 		options.observeSetup(ptyEvent{Phase: "exit", ExitCode: 1, ReadAdminFailure: expected, ReadAdminComplete: false})

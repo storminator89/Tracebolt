@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-10-07 — Preserve stopped-unit upgrade restoration
+
+- Keep successful reset of every loaded owned service mandatory, while accepting a failed reset only after a bounded non-loading query proves that systemd has unloaded the unit and renewed ownership, stopped-state and cgroup-drain checks succeed. Unloading already discards start-limit counters. Scope, capabilities, private state, rollback and original receipts remain unchanged.
+- Preserve eight fixed restoration substeps in sanitized native failure evidence without exporting child errors, paths or private output. The original bb76 native upgrade failed at restore-runtime; its limited artifact does not prove which substep caused that historical failure. The corrected path still requires an actual old-release-to-new-artifact native pass before rc.3 publication.
+
 ## 2026-10-06 — Readable mobile investigation evidence
 
 - Isolate the new investigation paragraphs from an older demo note grid, so mobile warning labels and original timestamps retain normal text flow. Add hosted checks for full paragraph width and non-overlapping label/time text.

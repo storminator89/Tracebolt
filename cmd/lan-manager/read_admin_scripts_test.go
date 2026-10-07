@@ -902,6 +902,14 @@ read-admin-upgrade-native-upgrade
 read-admin-upgrade-helper-rebind
 read-admin-upgrade-same-scope-validation
 read-admin-upgrade-restore-runtime
+read-admin-upgrade-restore-runtime-reset-restart-state
+read-admin-upgrade-restore-runtime-enablement
+read-admin-upgrade-restore-runtime-helpers
+read-admin-upgrade-restore-runtime-socket-proof
+read-admin-upgrade-restore-runtime-journal-proof
+read-admin-upgrade-restore-runtime-agent-validation
+read-admin-upgrade-restore-runtime-agent-start
+read-admin-upgrade-restore-runtime-final-enablement
 read-admin-upgrade-commit
 read-admin-upgrade-lock-release
 read-admin-receipt-mismatch
@@ -1117,6 +1125,7 @@ def parse_result(raw):
 
 
 UPGRADE_FAILURE_PHASES = frozenset(('preflight','prepare','drain','retained-state','native-upgrade','helper-rebind','same-scope-validation','restore-runtime','commit','lock-release'))
+UPGRADE_RESTORE_STEPS = frozenset(('reset-restart-state', 'enablement', 'helpers', 'socket-proof', 'journal-proof', 'agent-validation', 'agent-start', 'final-enablement'))
 
 
 def parse_upgrade_result(raw):
@@ -1131,15 +1140,20 @@ def parse_upgrade_result(raw):
         value = roots[0]
         if value.get('completed') is False:
             required = {'schemaVersion','completed','canceled','identityRetained','scopesChanged','participantsStopped','rollbackConfirmed','restartBookkeepingReset','nativeAcceptance','failureStage','failureReason'}
-            optional = {'recovery','agentActivityRestored','agentActive'}
+            optional = {'recovery','agentActivityRestored','agentActive','restoreStep'}
             phase = value.get('failureStage')
             booleans = ('completed','canceled','identityRetained','scopesChanged','participantsStopped','rollbackConfirmed','restartBookkeepingReset')
             if (not required <= set(value) or not set(value) <= required | optional or
                 any(type(value.get(key)) is not bool for key in booleans) or value['canceled'] is not False or
                 value.get('nativeAcceptance') != 'not-established' or type(phase) is not str or phase not in UPGRADE_FAILURE_PHASES):
                 raise ValueError()
-            # Project only this source-owned enum. Reason/recovery text and all
+            # Project only source-owned enums. Reason/recovery text and all
             # other child data are deliberately omitted from the native result.
+            if 'restoreStep' in value:
+                step = value['restoreStep']
+                if phase != 'restore-runtime' or type(step) is not str or step not in UPGRADE_RESTORE_STEPS:
+                    raise ValueError()
+                phase += '-' + step
             result['readAdminFailure'] = 'read-admin-upgrade-' + phase
             return result
         if (set(value) != {'schemaVersion','completed','canceled','identityRetained','scopesChanged','participantsStopped','rollbackConfirmed','restartBookkeepingReset','nativeAcceptance','agentActivityRestored','agentActive'} or

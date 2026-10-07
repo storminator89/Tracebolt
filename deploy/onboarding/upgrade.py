@@ -29,6 +29,8 @@ HELPER = "/opt/tracebolt-agent/socket-owner-reader"
 DEPLOYMENT = "/etc/tracebolt/socket-owner-deployment.json"
 PUBLIC = {AGENT: (0o555, 0), ENROLL: (0o555, 0), MANIFEST: (0o644, 0), OWNER: (0o600, 0), HELPER: (0o755, 0), CURRENT: (0o600, 0)}
 VERSION = "tracebolt.read-admin-upgrade-transaction.v1"
+RESTORE_STEPS = frozenset(("reset-restart-state", "enablement", "helpers", "socket-proof", "journal-proof",
+                           "agent-validation", "agent-start", "final-enablement"))
 
 
 class Rejected(Exception):
@@ -94,6 +96,9 @@ def run(adapter, confirm, emit):
                 result["agentActivityRestored"] = True
                 result["agentActive"] = original["active"]
             except BaseException:
+                restore_step = getattr(adapter, "restore_step", None)
+                if phase == "restore-runtime" and type(restore_step) is str and restore_step in RESTORE_STEPS:
+                    result["restoreStep"] = restore_step
                 # Any uncertain child/replace/start is contained before rollback.
                 # Restoration never starts participants after a failed update.
                 try:
@@ -520,19 +525,49 @@ def real_adapter(w, s, inventory, amendment, socket, templates, release, directo
             self.write(CONTROL + "/read-admin-upgrade-" + digest(current) + ".complete.json", current)
             self.write(CURRENT, current, previous=self.old[CURRENT])
 
+        def reset_restart_state(self, facts, unit):
+            require(unit in (s.AGENT_UNIT, s.SERVICE, socket.SERVICE), "fixed-upgrade-reset-unit")
+            self.prove_unit_ownership(facts, unit)
+            try:
+                self.systemctl("reset-failed", unit)
+            except s.Rejected as exc:
+                if str(exc) != "fixed-command-failed":
+                    raise
+                # ResetFailedUnit does not load units. An inactive unit may have
+                # been garbage-collected after the ownership proof, discarding
+                # its counters. Unlike show, this exact-name enumeration never
+                # loads it. A listed unit still requires a successful reset,
+                # even when inactive with Result=success and NRestarts=0.
+                listed = s.Effects.command(je, ["/usr/bin/systemctl", "list-units", "--all", "--full",
+                                               "--plain", "--no-legend", unit], limit=4096, timeout=5)
+                require(listed == b"", "upgrade-reset-loaded-unit-unconfirmed")
+                self.prove_unit_ownership(facts, unit)
+                state = se.status(unit) if unit == socket.SERVICE else je.status(unit)
+                require(s.owned_unit(state, unit) and state["ActiveState"] == "inactive" and
+                        state["MainPID"] == "0", "upgrade-reset-stopped-unit-unconfirmed")
+                self.drain(unit)
+
         def restore(self, original, current):
-            for unit in (s.AGENT_UNIT, s.SERVICE, socket.SERVICE): self.systemctl("reset-failed", unit)
+            self.restore_step = "reset-restart-state"
+            for unit in (s.AGENT_UNIT, s.SERVICE, socket.SERVICE): self.reset_restart_state(current, unit)
+            self.restore_step = "enablement"
             for unit in (s.AGENT_UNIT, s.SOCKET, socket.SOCKET):
                 if original["enablement"][unit] == "enabled": self.systemctl("enable", unit)
+            self.restore_step = "helpers"
             for unit in (s.SOCKET, socket.SOCKET, s.SERVICE, socket.SERVICE):
                 if original["activity"][unit]: self.systemctl("start", unit)
+            self.restore_step = "socket-proof"
             socket.runtime_configuration(se, current, current["receipt"])
+            self.restore_step = "journal-proof"
             j = amendment.inspect(s, je, templates)
             require(j["policy"] == original["journalPolicy"] and j["identity"] == original["journalIdentity"] and j["activity"][s.SOCKET], "journal-runtime-handoff-unconfirmed")
+            self.restore_step = "agent-validation"
             se.validate(current)
+            self.restore_step = "agent-start"
             if original["active"]:
                 self.systemctl("start", s.AGENT_UNIT)
                 socket.loaded(se, s.AGENT_UNIT, current["uid"], current["gid"], socket.agent_argv(s, templates, current), active="active")
+            self.restore_step = "final-enablement"
             for unit in participants:
                 state = se.status(unit) if unit in (socket.SERVICE, socket.SOCKET) else je.status(unit)
                 require(state["UnitFileState"] == original["enablement"][unit], "startup-enablement-changed")

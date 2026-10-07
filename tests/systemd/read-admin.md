@@ -213,6 +213,10 @@ The source fields and bounded projected diagnostic fields are:
   Main outcome, interrupted enrollment, resumed setup and helper maintenance
   retain the latest reason before their assertions. Passing complete setup must
   report `none`; expected cancel/retained refusals keep their existing assertions.
+  Upgrade restoration failures additionally retain one of eight fixed substeps:
+  restart-state reset, enablement, helpers, socket proof, journal proof, agent
+  validation, agent start or final enablement. Child reason/recovery text remains
+  excluded; older phase-only upgrade failures are still accepted.
 - `nativeAssertion`: on failure, the first exact allowlisted static native-test
   assertion found in at most 1 MiB of private test output, or a fixed unavailable/
   unknown label. Its file path, line number and all unmatched text are discarded.

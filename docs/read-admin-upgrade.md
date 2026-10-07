@@ -57,6 +57,11 @@ systemd failed/start-limit bookkeeping, restores previous startup enablement,
 restores the helper/socket lifecycles and only then restores prior agent activity.
 Historical journal entries and sender counters are preserved. Clearing systemd's
 Result/NRestarts/start-limit counters is disclosed and cannot be rolled back.
+A failed reset is accepted only when an exact, non-loading systemd enumeration
+proves the unit has been unloaded (which discards its counters), followed by
+renewed ownership, stopped-state and cgroup-drain proofs. An inactive unit still
+loaded in systemd must reset successfully, even with a successful result and no
+automatic restarts. Unknown command or readback failures remain fail-closed.
 A new helper runtime invalidates old runtime references; the existing sender may
 discard privileged socket-tagged pending observations while preserving its
 monotonic floor. It never re-labels those observations under the new runtime.

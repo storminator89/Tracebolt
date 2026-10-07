@@ -557,13 +557,16 @@ class ReadAdminWrapperTests(unittest.TestCase):
         self.assertIn("check(len(normalized.encode('utf-8')) + 1 <= 16384)", self.source)
 
     def test_upgrade_failed_phase_survives_sanitized_reader_without_private_text(self):
-        for phase in ("preflight","prepare","drain","retained-state","native-upgrade","helper-rebind","same-scope-validation","restore-runtime","commit","lock-release"):
+        phases = ("preflight","prepare","drain","retained-state","native-upgrade","helper-rebind","same-scope-validation","restore-runtime","commit","lock-release")
+        restore_steps = ("reset-restart-state", "enablement", "helpers", "socket-proof", "journal-proof",
+                         "agent-validation", "agent-start", "final-enablement")
+        for phase in phases + tuple("restore-runtime-" + step for step in restore_steps):
             value=result(status="fail",stage="read_admin_upgrade",upgradeNativeChecks=None,setupFailure="read-admin-upgrade-"+phase)
             output,error,_,_=self.validate(json.dumps(value).encode(),upgrade_requested="true")
             self.assertIsNone(error)
             self.assertEqual(json.loads(output)["setupFailure"],"read-admin-upgrade-"+phase)
             self.assertEqual(self.complete(output.encode())[1],INCOMPLETE)
-        for failure in ("private-host-value","read-admin-upgrade-unknown"):
+        for failure in ("private-host-value", "read-admin-upgrade-unknown", "read-admin-upgrade-restore-runtime-private-host-value"):
             value=result(status="fail",stage="read_admin_upgrade",upgradeNativeChecks=None,setupFailure=failure)
             self.assertEqual(self.validate(json.dumps(value).encode(),upgrade_requested="true")[1],INVALID)
 
