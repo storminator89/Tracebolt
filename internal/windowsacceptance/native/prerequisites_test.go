@@ -19,13 +19,16 @@ func TestPrerequisiteObservationClassifiesPolicyNotActualTokenAccess(t *testing.
 	}
 	for _, c := range cases {
 		p := prerequisiteObservation(c.check, c.reason, c.err)
+		if p.Status == "blocked" && p.Check == "ancestor-policy" {
+			p.Diagnostic = &PrerequisiteDiagnostic{Location: "volume-root", Failure: "owner-untrusted", Rights: []string{}}
+		}
 		if !p.Valid() || p.Status != c.status || p.Reason != c.want {
 			t.Fatal("invalid finite prerequisite classification")
 		}
 	}
 }
 func TestPrerequisiteObservationRejectsFalseNativeOrSuccessReasons(t *testing.T) {
-	for _, p := range []PrerequisiteObservation{{"supported", "ancestor-policy", "none"}, {"supported", "complete", "prerequisite-blocked"}, {"blocked", "complete", "prerequisite-blocked"}, {"blocked", "elevation", "existing-resource"}, {"unverified", "complete", "unsupported-platform"}, {"native_pass", "complete", "none"}, {"unverified", "platform", "private-error"}} {
+	for _, p := range []PrerequisiteObservation{{Status: "supported", Check: "ancestor-policy", Reason: "none"}, {Status: "supported", Check: "complete", Reason: "prerequisite-blocked"}, {Status: "blocked", Check: "complete", Reason: "prerequisite-blocked"}, {Status: "blocked", Check: "elevation", Reason: "existing-resource"}, {Status: "unverified", Check: "complete", Reason: "unsupported-platform"}, {Status: "native_pass", Check: "complete", Reason: "none"}, {Status: "unverified", Check: "platform", Reason: "private-error"}} {
 		if p.Valid() {
 			t.Fatal("overstated prerequisite observation")
 		}

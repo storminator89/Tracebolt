@@ -42,7 +42,7 @@ function ServiceChoices({ deviceId, selected, disabled, onChange }: Props) {
         <button className="button small" type="button" disabled={locked || resource.loading} onClick={resource.refresh}>{t('Dienstliste aktualisieren')}</button>
         {resource.loading && <p role="status" className="health-note">{t('Beobachtete Dienste werden gelesen …')}</p>}
         {resource.error && <p role="alert" className="health-failure">{resource.error === 'restart' ? t('Dienstgeneration oder Seitensitzung geändert oder abgelaufen. Dienste aktualisieren.') : resource.error === 'clock' ? t('Zeitbezug des Dienstinventars geändert. Dienste aktualisieren.') : t('Dienstinventar konnte nicht verlässlich gelesen werden. Dienste aktualisieren.')}</p>}
-        {unavailable && <p className="health-note" role="status">{t('Dienstinventar fehlt, nicht die Dienste. Manuelle Auswahl bleibt bis zur Beobachtung unbekannt.')}</p>}
+        {unavailable && <p className="health-note" role="status">{t('Dienstinventar nicht verfügbar; Dienstanzahl unbekannt. Manuelle Auswahl bleibt bis zur Beobachtung unbekannt.')}</p>}
         {complete && visible && <>
             <p className="health-note">{systemAgeStatus(view!.serverNow, complete.meta.observedAt, resource.elapsed) === 'fresh' ? t('Dienste im Beobachtungszeitfenster') : t('Veraltete / historische Dienstbeobachtungen')}<br/>{t('Ursprünglich beobachtet:')} <time dateTime={complete.meta.observedAt}>{complete.meta.observedAt}</time><br/>{t('Gespeicherte Dienste insgesamt: {0}', { 0: number(complete.meta.observedCount!) })}</p>
             {view!.latest?.services.coverage === 'failed' && <p className="health-note">{t('Die neuere Erfassung ist fehlgeschlagen. Der ursprüngliche Beobachtungszeitpunkt bleibt unverändert.')}</p>}

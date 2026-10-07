@@ -28,7 +28,7 @@ func TestReadOnlyPolicyResultsCannotClaimNativeAcceptance(t *testing.T) {
 	old := compiledSource
 	compiledSource = strings.Repeat("a", 40)
 	defer func() { compiledSource = old }()
-	for _, p := range []native.PrerequisiteObservation{{Status: "supported", Check: "complete", Reason: "none"}, {Status: "blocked", Check: "ancestor-policy", Reason: "prerequisite-blocked"}, {Status: "unverified", Check: "platform", Reason: "unsupported-platform"}} {
+	for _, p := range []native.PrerequisiteObservation{{Status: "supported", Check: "complete", Reason: "none"}, {Status: "blocked", Check: "ancestor-policy", Reason: "prerequisite-blocked", Diagnostic: &native.PrerequisiteDiagnostic{Location: "program-data", Failure: "untrusted-write-grant", Rights: []string{"add-file"}}}, {Status: "unverified", Check: "platform", Reason: "unsupported-platform"}} {
 		var out, stderr bytes.Buffer
 		calls := 0
 		code := run(context.Background(), []string{"--read-only-prerequisites", "--expected-source=" + compiledSource}, &out, &stderr, func(c context.Context) native.PrerequisiteObservation {

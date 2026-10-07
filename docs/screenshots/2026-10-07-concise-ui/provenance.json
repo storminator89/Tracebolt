@@ -1,0 +1,39 @@
+{
+  "sourceCommit": "fe6c5a6a08fb616e7d5f79dc5faccc20e89db68b",
+  "workflowRun": 37635263778,
+  "browserJob": 112840864293,
+  "artifact": 11489901995,
+  "artifactSHA256": "8670b7fd4768ecd6e8782f26f160939cc97407915e1f5ff333666fb31409b16f",
+  "images": [
+    {
+      "file": "resource-history-dark.png",
+      "originalFile": "synthetic-resource-history-desktop-dark-en.png",
+      "sha256": "5eaa06a3b6687787d57f3898b5356a2aa20544965b8d77105152ce1ca545e74f",
+      "sourceSha": "fe6c5a6a08fb616e7d5f79dc5faccc20e89db68b",
+      "test": "Synthetic 24-hour resource charts preserve real sample times, missing intervals and protected access",
+      "testStatus": "PASS",
+      "publicSafe": true,
+      "syntheticData": true,
+      "imageModified": false,
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      }
+    },
+    {
+      "file": "log-workspace.png",
+      "originalFile": "synthetic-journal-workspace-desktop-en.png",
+      "sha256": "a98a4f90ef1c3b01fc1d865ece2953c132c9bbee3b330ac68bad353428cd6ac5",
+      "sourceSha": "fe6c5a6a08fb616e7d5f79dc5faccc20e89db68b",
+      "test": "Explicit content and HTTP acknowledgements gate one lazy journal request and honest pending state",
+      "testStatus": "PASS",
+      "publicSafe": true,
+      "syntheticData": true,
+      "imageModified": false,
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      }
+    }
+  ]
+}

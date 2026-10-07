@@ -368,7 +368,7 @@ export const english = {
 "Bis zu 8 Dienste; danach speichern. Keine zusätzliche Erfassung oder Logs.":"Up to 8 services; save when ready. No additional collection or logs.",
 "Dienstliste aktualisieren":"Refresh service list",
 "Keine Auswahl. Speichern beendet bestehende Dienstprüfungen.":"No selection. Saving stops existing service checks.",
-"Dienstinventar fehlt, nicht die Dienste. Manuelle Auswahl bleibt bis zur Beobachtung unbekannt.":"Inventory unavailable, not an empty service list. Manual selections stay unknown until observed.",
+"Dienstinventar nicht verfügbar; Dienstanzahl unbekannt. Manuelle Auswahl bleibt bis zur Beobachtung unbekannt.":"Service inventory unavailable; service count unknown. Manual selections stay unknown until observed.",
 "Namen und Zustände: bis zu 100 Treffer aus 2.048 Zeilen je Anfrage.":"Names and states: up to 100 matches from 2,048 rows per request.",
 "Dienst manuell hinzufügen":"Add service manually",
 "Exakter .service-Name, keine Platzhalter. Danach Auswahl speichern.":"Exact .service name, no wildcards. Save the selection afterward.",

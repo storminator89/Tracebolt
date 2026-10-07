@@ -78,80 +78,147 @@ func trusted(s string) bool { return s == "S-1-5-18" || s == "S-1-5-32-544" || s
 // not guess future service token groups or substitute a named-SID scan for
 // Windows effective access checks. Real runtime opens retain their full masks.
 func ancestorDescriptor(sd *windows.SECURITY_DESCRIPTOR) bool {
+	failure, _ := ancestorDescriptorDiagnostic(sd)
+	return failure == ""
+}
+func ancestorDescriptorDiagnostic(sd *windows.SECURITY_DESCRIPTOR) (string, []string) {
 	if sd == nil || !sd.IsValid() {
-		return false
+		return "descriptor-invalid", nil
 	}
 	owner, _, err := sd.Owner()
-	if err != nil || owner == nil || !owner.IsValid() || !trusted(owner.String()) {
-		return false
+	if err != nil || owner == nil || !owner.IsValid() {
+		return "owner-unavailable", nil
+	}
+	if !trusted(owner.String()) {
+		return "owner-untrusted", nil
 	}
 	acl, _, err := sd.DACL()
-	if err != nil || acl == nil {
-		return false
+	if err != nil {
+		return "dacl-unavailable", nil
+	}
+	if acl == nil {
+		return "dacl-missing", nil
 	}
 	writes := uint32(windows.GENERIC_ALL | windows.GENERIC_WRITE | windows.WRITE_DAC | windows.WRITE_OWNER | windows.DELETE | 0x40 | windows.FILE_WRITE_DATA | windows.FILE_WRITE_EA | windows.FILE_WRITE_ATTRIBUTES)
 	for i := uint32(0); i < uint32(acl.AceCount); i++ {
 		var ace *windows.ACCESS_ALLOWED_ACE
 		if windows.GetAce(acl, i, &ace) != nil || ace == nil {
-			return false
+			return "ace-malformed", nil
 		}
 		if ace.Header.AceFlags&windows.INHERIT_ONLY_ACE != 0 {
 			continue
 		}
 		if ace.Header.AceType != windows.ACCESS_ALLOWED_ACE_TYPE && ace.Header.AceType != windows.ACCESS_DENIED_ACE_TYPE {
-			return false
+			return "ace-type-unsupported", nil
 		}
 		const offset = unsafe.Offsetof(windows.ACCESS_ALLOWED_ACE{}.SidStart)
 		if uintptr(ace.Header.AceSize) < offset+8 {
-			return false
+			return "ace-malformed", nil
 		}
 		sid := (*windows.SID)(unsafe.Pointer(&ace.SidStart))
 		header := unsafe.Slice((*byte)(unsafe.Pointer(sid)), 8)
 		if offset+8+4*uintptr(header[1]) > uintptr(ace.Header.AceSize) || !sid.IsValid() {
-			return false
+			return "ace-malformed", nil
 		}
 		if ace.Header.AceType == windows.ACCESS_DENIED_ACE_TYPE {
 			continue
 		}
 		if uint32(ace.Mask)&writes != 0 && !trusted(sid.String()) {
-			return false
+			return "untrusted-write-grant", replacementRights(uint32(ace.Mask))
 		}
 	}
-	return true
+	return "", nil
 }
 func info(h windows.Handle, directory bool) (objectID, error) {
+	id, _, err := infoDiagnostic(h, directory)
+	return id, err
+}
+func infoDiagnostic(h windows.Handle, directory bool) (objectID, string, error) {
 	var f windows.ByHandleFileInformation
-	if windows.GetFileInformationByHandle(h, &f) != nil || f.FileAttributes&windows.FILE_ATTRIBUTE_REPARSE_POINT != 0 || (f.FileAttributes&windows.FILE_ATTRIBUTE_DIRECTORY != 0) != directory || (!directory && f.NumberOfLinks != 1) {
-		return objectID{}, ErrAcceptance
+	if windows.GetFileInformationByHandle(h, &f) != nil {
+		return objectID{}, "metadata-query-failed", ErrAcceptance
 	}
-	return objectID{f.VolumeSerialNumber, f.FileIndexHigh, f.FileIndexLow}, nil
+	failure := fileInformationFailure(f, directory)
+	if failure != "" {
+		return objectID{}, failure, ErrAcceptance
+	}
+	return objectID{f.VolumeSerialNumber, f.FileIndexHigh, f.FileIndexLow}, "", nil
+}
+func fileInformationFailure(f windows.ByHandleFileInformation, directory bool) string {
+	if f.FileAttributes&windows.FILE_ATTRIBUTE_REPARSE_POINT != 0 {
+		return "reparse-point"
+	}
+	if (f.FileAttributes&windows.FILE_ATTRIBUTE_DIRECTORY != 0) != directory {
+		return "object-kind"
+	}
+	if !directory && f.NumberOfLinks != 1 {
+		return "multiple-links"
+	}
+	return ""
 }
 func openChecked(p string, directory bool, access, share uint32) (windows.Handle, objectID, error) {
+	h, id, _, err := openCheckedDiagnostic(p, directory, access, share)
+	return h, id, err
+}
+func openFailure(err error) string {
+	if errors.Is(err, windows.ERROR_ACCESS_DENIED) {
+		return "open-access-denied"
+	}
+	if errors.Is(err, windows.ERROR_SHARING_VIOLATION) {
+		return "open-sharing-violation"
+	}
+	return "open-failed"
+}
+func caseQueryFailure(err error, flags uint32) string {
+	if err != nil {
+		if errors.Is(err, windows.STATUS_ACCESS_DENIED) {
+			return "case-query-denied"
+		}
+		if errors.Is(err, windows.STATUS_INVALID_INFO_CLASS) || errors.Is(err, windows.STATUS_NOT_SUPPORTED) {
+			return "case-query-unsupported"
+		}
+		if errors.Is(err, windows.STATUS_INVALID_PARAMETER) {
+			return "case-query-invalid"
+		}
+		return "case-query-failed"
+	}
+	if flags != 0 {
+		return "case-sensitive-directory"
+	}
+	return ""
+}
+func openCheckedDiagnostic(p string, directory bool, access, share uint32) (windows.Handle, objectID, string, error) {
 	if !canonicalPath(p) {
-		return 0, objectID{}, ErrAcceptance
+		return 0, objectID{}, "path-syntax", ErrAcceptance
 	}
 	h, err := windows.CreateFile(windows.StringToUTF16Ptr(p), access, share, nil, windows.OPEN_EXISTING, windows.FILE_FLAG_OPEN_REPARSE_POINT|windows.FILE_FLAG_BACKUP_SEMANTICS, 0)
 	if err != nil {
-		return 0, objectID{}, err
+		return 0, objectID{}, openFailure(err), err
 	}
-	id, err := info(h, directory)
+	id, failure, err := infoDiagnostic(h, directory)
 	var final [512]uint16
 	n, pathErr := windows.GetFinalPathNameByHandle(h, &final[0], uint32(len(final)), 0)
 	if err != nil || pathErr != nil || n == 0 || n >= uint32(len(final)) || windows.UTF16ToString(final[:n]) != `\\?\`+p {
 		windows.CloseHandle(h)
-		return 0, objectID{}, ErrAcceptance
+		if failure == "" {
+			if pathErr != nil || n == 0 || n >= uint32(len(final)) {
+				failure = "final-path-query-failed"
+			} else {
+				failure = "final-path-mismatch"
+			}
+		}
+		return 0, objectID{}, failure, ErrAcceptance
 	}
 	if directory {
-		// Match the protected store's supported directory semantics before any
-		// creation: unsupported or case-sensitive ancestors fail read-only.
 		var flags uint32
 		var iosb windows.IO_STATUS_BLOCK
-		if windows.NtQueryInformationFile(h, &iosb, (*byte)(unsafe.Pointer(&flags)), 4, windows.FileCaseSensitiveInformation) != nil || flags != 0 {
+		err = windows.NtQueryInformationFile(h, &iosb, (*byte)(unsafe.Pointer(&flags)), 4, windows.FileCaseSensitiveInformation)
+		if failure = caseQueryFailure(err, flags); failure != "" {
 			windows.CloseHandle(h)
-			return 0, objectID{}, ErrAcceptance
+			return 0, objectID{}, failure, ErrAcceptance
 		}
 	}
-	return h, id, nil
+	return h, id, "", nil
 }
 func physicalVolumePath(root string) bool {
 	var target [1024]uint16
@@ -214,7 +281,7 @@ func (d *Driver) preflight(ctx context.Context) error {
 			closeHandles(s.anchors)
 		}
 	}()
-	for _, base := range []string{l.ProgramFiles, l.ProgramData} {
+	for baseIndex, base := range []string{l.ProgramFiles, l.ProgramData} {
 		d.prerequisiteCheck = "filesystem"
 		if windows.GetDriveType(windows.StringToUTF16Ptr(base[:3])) != windows.DRIVE_FIXED || !physicalVolumePath(base[:3]) {
 			return d.fail(ReasonPrerequisite)
@@ -225,14 +292,27 @@ func (d *Driver) preflight(ctx context.Context) error {
 			return d.fail(ReasonPrerequisite)
 		}
 		d.prerequisiteCheck = "ancestor-policy"
-		for _, p := range pathChain(base) {
-			h, _, err := openChecked(p, true, windows.READ_CONTROL|windows.FILE_READ_ATTRIBUTES, windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE)
+		chain := pathChain(base)
+		for index, p := range chain {
+			location := ancestorLocation(index, len(chain), baseIndex == 0)
+			h, _, failure, err := openCheckedDiagnostic(p, true, windows.READ_CONTROL|windows.FILE_READ_ATTRIBUTES, windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE)
 			if err != nil {
+				d.prerequisiteDiagnostic = &PrerequisiteDiagnostic{Location: location, Failure: failure, Rights: []string{}}
 				return d.fail(ReasonPrerequisite)
 			}
 			s.anchors = append(s.anchors, h)
 			sd, err := windows.GetSecurityInfo(h, windows.SE_FILE_OBJECT, windows.OWNER_SECURITY_INFORMATION|windows.DACL_SECURITY_INFORMATION)
-			if err != nil || !ancestorDescriptor(sd) {
+			rights := []string{}
+			if err != nil {
+				failure = "descriptor-query-failed"
+			} else {
+				failure, rights = ancestorDescriptorDiagnostic(sd)
+				if rights == nil {
+					rights = []string{}
+				}
+			}
+			if failure != "" {
+				d.prerequisiteDiagnostic = &PrerequisiteDiagnostic{Location: location, Failure: failure, Rights: rights}
 				return d.fail(ReasonPrerequisite)
 			}
 		}

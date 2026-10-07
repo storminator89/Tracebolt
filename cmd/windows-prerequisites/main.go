@@ -16,7 +16,7 @@ import (
 
 var compiledSource = "unbound"
 
-const schema = "tracebolt.windows-prerequisites.v1"
+const schema = "tracebolt.windows-prerequisites.v2"
 
 type report struct {
 	Schema string `json:"schema"`

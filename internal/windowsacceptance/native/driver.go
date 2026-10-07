@@ -98,13 +98,14 @@ func (Options) MarshalJSON() ([]byte, error) { return []byte(`{"artifacts_redact
 
 type platformState interface{ platformState() }
 type Driver struct {
-	mu                sync.Mutex
-	options           Options
-	evidence          Evidence
-	state             platformState
-	receipt           windowsservice.Receipt
-	bootstrap         enrollmentclient.Bootstrap
-	prerequisiteCheck string
+	mu                     sync.Mutex
+	options                Options
+	evidence               Evidence
+	state                  platformState
+	receipt                windowsservice.Receipt
+	bootstrap              enrollmentclient.Bootstrap
+	prerequisiteCheck      string
+	prerequisiteDiagnostic *PrerequisiteDiagnostic
 }
 
 func (*Driver) String() string             { return "<native acceptance driver>" }

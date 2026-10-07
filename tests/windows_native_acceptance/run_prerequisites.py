@@ -18,7 +18,7 @@ import threading
 
 ROOT = Path(__file__).resolve().parents[2]
 REPOSITORY = "storminator89/Tracebolt"
-SCHEMA = "tracebolt.windows-prerequisites.v1"
+SCHEMA = "tracebolt.windows-prerequisites.v2"
 REPORT_NAME = "tracebolt-windows-prerequisites.json"
 MAX_REPORT_BYTES = 32 * 1024
 TIMEOUT_SECONDS = 90
@@ -26,7 +26,19 @@ STATUSES = {"supported", "blocked", "unverified"}
 CHECKS = {"idle", "platform", "layout", "elevation", "filesystem", "ancestor-policy", "resource-absence", "complete"}
 REASONS = {"none", "unsupported-platform", "prerequisite-blocked", "existing-resource", "inspection-failed", "cancelled"}
 FALSE_FLAGS = {"nativeServiceAcceptance", "effectiveServiceTokenAccessVerified", "hostMutated"}
-REPORT_FIELDS = {"schema", "source", "status", "check", "reason", "readOnly"} | FALSE_FLAGS
+REPORT_FIELDS = {"schema", "source", "status", "check", "reason", "readOnly", "diagnostic"} | FALSE_FLAGS
+
+DIAGNOSTIC_LOCATIONS = {"volume-root", "program-files", "program-data", "intermediate"}
+DIAGNOSTIC_FAILURES = {
+    "path-syntax", "open-access-denied", "open-sharing-violation", "open-failed",
+    "metadata-query-failed", "reparse-point", "object-kind", "multiple-links",
+    "final-path-query-failed", "final-path-mismatch", "case-query-denied",
+    "case-query-unsupported", "case-query-invalid", "case-query-failed", "case-sensitive-directory",
+    "descriptor-query-failed", "descriptor-invalid", "owner-unavailable", "owner-untrusted",
+    "dacl-unavailable", "dacl-missing", "ace-malformed", "ace-type-unsupported", "untrusted-write-grant",
+}
+DIAGNOSTIC_RIGHTS = ("generic-all", "generic-write", "change-owner", "change-dacl",
+                     "delete-child", "delete", "add-file", "write-ea", "write-attributes")
 
 
 class Rejected(Exception):
@@ -93,6 +105,21 @@ def validate_report(raw: bytes, source: str) -> dict:
     else:
         require(report["check"] != "complete")
         require(report["reason"] in {"unsupported-platform", "inspection-failed", "cancelled"})
+    diagnostic = report["diagnostic"]
+    ancestor_block = report["status"] == "blocked" and report["check"] == "ancestor-policy"
+    if not ancestor_block:
+        require(diagnostic is None)
+    else:
+        require(type(diagnostic) is dict and set(diagnostic) == {"location", "failure", "rights"})
+        require(type(diagnostic["location"]) is str and diagnostic["location"] in DIAGNOSTIC_LOCATIONS)
+        require(type(diagnostic["failure"]) is str and diagnostic["failure"] in DIAGNOSTIC_FAILURES)
+        rights = diagnostic["rights"]
+        require(type(rights) is list and all(type(right) is str for right in rights))
+        if diagnostic["failure"] == "untrusted-write-grant":
+            require(0 < len(rights) <= len(DIAGNOSTIC_RIGHTS))
+            require(rights == [right for right in DIAGNOSTIC_RIGHTS if right in rights])
+        else:
+            require(rights == [])
     return report
 
 
@@ -153,12 +180,16 @@ def verify_checkout(env: dict[str, str], source: str, root: Path) -> None:
     require(command(git + ["status", "--porcelain=v1", "--untracked-files=all", "--ignored=matching"], env, root, 30) == b"")
 
 
+def verify_go(child: dict[str, str], root: Path) -> None:
+    host = strict_json(command(["go", "env", "-json", "GOHOSTOS", "GOHOSTARCH", "GOOS", "GOARCH"], child, root, 30), 1024)
+    require(host == {"GOHOSTOS": "windows", "GOHOSTARCH": "amd64", "GOOS": "windows", "GOARCH": "amd64"})
+
+
 def run_measurement(env: dict[str, str], root: Path = ROOT) -> dict:
     source = check_environment(env)
     child = child_environment(env)
     verify_checkout(child, source, root)
-    host = strict_json(command(["go", "env", "-json", "GOHOSTOS", "GOHOSTARCH", "GOOS", "GOARCH"], child, root, 30), 1024)
-    require(host == {"GOHOSTOS": "windows", "GOHOSTARCH": "amd64", "GOOS": "windows", "GOARCH": "amd64"})
+    verify_go(child, root)
     command(["go", "mod", "verify"], child, root, 180)
     destination = Path(env.get("RUNNER_TEMP", ""))
     require(destination.is_absolute() and destination.is_dir())
@@ -184,11 +215,52 @@ def run_measurement(env: dict[str, str], root: Path = ROOT) -> dict:
     return report
 
 
+FIXTURE_PACKAGES = ("localrmm/internal/windowsacceptance/native", "localrmm/cmd/windows-prerequisites")
+REQUIRED_FIXTURES = {
+    (FIXTURE_PACKAGES[0], "TestAncestorDiagnosticMatchesUnchangedAdmissionDecision"),
+    (FIXTURE_PACKAGES[0], "TestNativeReadFailureClassificationDoesNotPublishNativeError"),
+    (FIXTURE_PACKAGES[0], "TestPrerequisiteDiagnosticsRejectNativeDetailsAndMisleadingFacts"),
+    (FIXTURE_PACKAGES[0], "TestOSAncestorsRequireTrustedPathsWithoutTokenClaims"),
+    (FIXTURE_PACKAGES[1], "TestReadOnlyPrerequisitesRejectSourceAndEveryMutatingMode"),
+}
+
+
+def validate_fixture_events(raw: bytes) -> None:
+    require(type(raw) is bytes and 0 < len(raw) <= 4 * 1024 * 1024)
+    passed, skipped, packages = set(), set(), set()
+    for line in raw.splitlines():
+        event = strict_json(line, 1024 * 1024)
+        require(type(event) is dict and event.get("Action") != "fail")
+        pair = (event.get("Package"), event.get("Test"))
+        if pair in REQUIRED_FIXTURES and event.get("Action") == "pass":
+            passed.add(pair)
+        if pair in REQUIRED_FIXTURES and event.get("Action") == "skip":
+            skipped.add(pair)
+        if "Test" not in event and event.get("Action") == "pass":
+            packages.add(event.get("Package"))
+    require(passed == REQUIRED_FIXTURES and not skipped and packages == set(FIXTURE_PACKAGES))
+
+
+def run_fixtures(env: dict[str, str], root: Path = ROOT) -> None:
+    source = check_environment(env)
+    child = child_environment(env)
+    verify_checkout(child, source, root)
+    verify_go(child, root)
+    raw = command(["go", "test", "-json", "-mod=readonly", "-buildvcs=false", "-count=1", "-timeout=60s",
+                   "./internal/windowsacceptance/native", "./cmd/windows-prerequisites"],
+                  child, root, 600, 4 * 1024 * 1024)
+    validate_fixture_events(raw)
+
+
 def main(argv: list[str] | None = None, env: dict[str, str] | None = None) -> int:
     args = sys.argv[1:] if argv is None else argv
     environment = dict(os.environ if env is None else env)
     try:
-        require(args in (["--check-source"], ["--run-read-only"]))
+        require(args in (["--check-source"], ["--run-read-only"], ["--check-fixtures"]))
+        if args == ["--check-fixtures"]:
+            run_fixtures(environment)
+            print("PASS: in-memory Windows diagnostic fixtures only; native service acceptance unverified.")
+            return 0
         if args == ["--check-source"]:
             source = check_environment(environment)
             verify_checkout(child_environment(environment), source, ROOT)
@@ -197,6 +269,10 @@ def main(argv: list[str] | None = None, env: dict[str, str] | None = None) -> in
         report = run_measurement(environment)
         print("Windows read-only prerequisites: " + report["status"] + "; check=" + report["check"]
               + "; reason=" + report["reason"] + "; native service acceptance unverified.")
+        if report["diagnostic"] is not None:
+            diagnostic = report["diagnostic"]
+            print("Ancestor diagnostic: location=" + diagnostic["location"] + "; failure="
+                  + diagnostic["failure"] + "; rejected-rights=" + ",".join(diagnostic["rights"]) + ".")
         # Blocked/unverified are complete measurements, never native passes.
         return 0
     except Exception:

@@ -15,8 +15,9 @@ and fixed resource absence. Its sole CLI mode cannot dispatch the manual native
 controller or any service/ACL/identity mutation. It does not collect telemetry.
 The clean checkout, GitHub SHA and compiled source are bound independently.
 
-Its finite `tracebolt.windows-prerequisites.v1` result is `supported`, `blocked`
-or `unverified`, with one finite check/reason. `supported` means only that the
+Its finite `tracebolt.windows-prerequisites.v2` result is `supported`, `blocked`
+or `unverified`, with one finite check/reason and a closed first-failure
+[ancestor diagnostic](windows-prerequisite-diagnostics.md) when that check blocks. `supported` means only that the
 current sufficient host policy is satisfied; actual SCM-token/effective access
 and native service acceptance remain explicitly false. `blocked` at
 `ancestor-policy` means the current descriptor policy rejected the prerequisite,

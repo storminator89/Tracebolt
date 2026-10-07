@@ -39,6 +39,27 @@ export async function conciseShellGallery({ test, pageAt, loaded, shot, expect, 
    await expect(page.locator('.device-page h1')).toHaveText(device.name);
    for (const [key, name] of [['overview', locale === 'de' ? 'Übersicht' : 'Overview'], ['details', 'Details'], ['evidence', locale === 'de' ? 'Belege' : 'Evidence']]) {
     await page.getByRole('tab', { name, exact: true }).click();
+    if (key === 'overview' && locale === 'de') {
+     // Real layout assertion: the two unknown status values must remain intact
+     // at 390px, while desktop typography and the three-card structure stay put.
+     await page.evaluate(async () => { await document.fonts.ready; });
+     await expect(page.locator('.device-essential-card')).toHaveCount(3);
+     const unknown = page.locator('.device-essential-value').filter({ hasText: /^Unbekannt$/ });
+     await expect(unknown).toHaveCount(2);
+     const geometry = await unknown.evaluateAll(values => values.map(value => {
+      const range = document.createRange(); range.selectNodeContents(value);
+      const lines = [...range.getClientRects()], card = value.closest('.device-essential-card');
+      const bounds = card.getBoundingClientRect(), style = getComputedStyle(card);
+      return { text: value.textContent, lines: lines.length,
+       contained: lines.every(line => line.left >= bounds.left + parseFloat(style.paddingLeft) - 1 && line.right <= bounds.right - parseFloat(style.paddingRight) + 1),
+       fontSize: parseFloat(getComputedStyle(value).fontSize) };
+     }));
+     for (const value of geometry) {
+      expect(value.text).toBe('Unbekannt'); expect(value.lines).toBe(1); expect(value.contained).toBe(true);
+      if (size === 'desktop') expect(value.fontSize).toBe(22);
+      else { expect(value.fontSize).toBeGreaterThanOrEqual(13); expect(value.fontSize).toBeLessThanOrEqual(16); }
+     }
+    }
     await capture(`device-${key}`);
    }
    await page.goto(new URL(`#/cases/${selectedCase.id}`, page.url()).href);

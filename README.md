@@ -1,54 +1,35 @@
 # Tracebolt
 
-Self-hosted Linux inventory and diagnostics, with evidence you can inspect.
+**Inventory, logs and diagnostics in one self-hosted dashboard.**
 
-Tracebolt combines a Go manager, a React/TypeScript dashboard and native Linux agents. It brings device inventory, service logs, package/CVE information and selected health checks into one interface, with collection time, coverage and unavailable data kept visible.
+Understand your Linux machines, investigate changes and keep the original evidence in view. Tracebolt combines a Go manager, native agents and an English/German dashboard with light and dark themes.
 
-**Status: development pilot.** Use it on deliberately selected test systems. Production hardening, fleet-scale operation and full OS-reboot acceptance are still open.
+[Get started](docs/installation.md) · [Linux read-admin setup](docs/read-admin-onboarding.md) · [Roadmap](docs/roadmap.md)
 
-## What it does
+![Tracebolt device overview with CPU, memory and disk history](docs/screenshots/2026-10-07-concise-ui/resource-history-dark.png)
 
-- **Inventory:** supported dpkg packages, system services, visible processes and mounted filesystems, with paged complete generations, visible first-page refresh and explicit collection limits.
-- **Network:** observed sockets/connections, hostname and interface addresses; optional helper-backed TCP/UDP process ownership with source and permission limits.
-- **Packages and CVEs:** cached APT candidates and Debian/Ubuntu distribution-version warnings. These are evidence for investigation, not confirmed exploitability or guaranteed installable updates. Tracebolt does not refresh APT metadata or install packages.
-- **Logs:** on-demand, service-scoped journal snapshots with time/severity selection, paging and literal search, through a separately granted helper.
-- **Resource charts:** CPU, RAM and root-filesystem utilization over the last 24 hours, with exact minute samples, visible gaps and bounded incremental reads. History starts after the manager update.
-- **Health & history:** contact, root-filesystem usage and selected-service checks, with incidents, acknowledgements and bounded maintenance windows.
-- **Dashboard:** English/German, light/dark themes, searchable inventory, device details, evidence views and investigations.
-- **Optional integrations:** administrator-configured application checks and webhook alarms, AI-assisted investigation and allowlisted service try-restart. Each has separate configuration/permission requirements and acceptance limits; the read-admin profile does not enable service actions.
+*Actual UI capture with invented test data. [Screenshots and provenance](docs/screenshots/2026-10-07-concise-ui/README.md).*
 
-Actual visibility depends on the approved collection profile, helper grants, platform and agent namespace. Missing or stale data never means a healthy device or an empty inventory.
+## What you can see
 
-## Platforms and current release
+- **Devices and activity:** reported hostnames, scoped IP addresses, contact history and selected Health checks.
+- **Complete inventory:** processes, mounts, packages, services and connections, with search, paging and visible first-page refresh.
+- **Resource history:** 24-hour CPU, RAM and root-filesystem charts, with original sample times and gaps.
+- **Service logs:** choose an exact service and time window, then search the captured journal snapshot.
+- **Package evidence:** cached APT candidates and Debian/Ubuntu CVE warnings, with source and coverage limits.
+- **Optional integrations:** application checks, webhook alarms and proactive AI suggestions from explicitly approved Health incidents.
 
-| Component | Current scope |
-| --- | --- |
-| Manager | Native Linux or Docker; authenticated LAN dashboard and agent ingress |
-| Full Linux read-admin agent | Fresh Ubuntu 24.04 or Debian 13, **amd64**, systemd as PID 1, cgroup v2 and kernel 6.5+ |
-| Linux arm64 | Published cross-built artifacts; runtime installation remains disabled |
-| Windows/macOS | Limited standalone read-only collectors; no supported LAN agent or installed-service parity |
+Unavailable, partial and stale observations stay visible. Package findings do not establish exploitability or trigger package installation. AI suggestions remain unconfirmed, and provider/data approval is separate.
 
-The fresh read-admin workflow has passed [disposable Ubuntu TLS native acceptance](https://github.com/storminator89/Tracebolt/actions/runs/37508637893), including socket ownership, journal content, service restart, revocation and cleanup. This does not establish Debian HTTP or actual OS-reboot acceptance.
-
-**Current release:** [v0.1.0-rc.3](https://github.com/storminator89/Tracebolt/releases/tag/v0.1.0-rc.3) is published and [all 12 public assets and provenance are verified](https://github.com/storminator89/Tracebolt/actions/runs/37574492167). The dashboard selects its combined read-admin command for the complete Linux profile. See the [verified-download guide](docs/dashboard-verified-download.md) for the exact source pins and acceptance limits.
-
-Completed read-admin installations can use the [same-identity rc.3 update](docs/read-admin-upgrade.md). Its [Ubuntu TLS upgrade acceptance](https://github.com/storminator89/Tracebolt/actions/runs/37572468648) passed with original identity/scopes/private state preserved. A user-host Debian/HTTP update remains a separate check.
+![Tracebolt log workspace with service selection and time-window controls](docs/screenshots/2026-10-07-concise-ui/log-workspace.png)
 
 ## Get started
 
-### Fresh Linux installation
+For real devices, follow the [installation runbook](docs/installation.md), then the [combined Linux read-admin setup](docs/read-admin-onboarding.md). The dashboard supplies a verified command; run it in the endpoint's local terminal, review its scope and approve the matching device. Existing completed installations use the [same-identity upgrade](docs/read-admin-upgrade.md).
 
-1. Start with the **[installation runbook](docs/installation.md)**. Prepare a fresh Linux manager using the [Docker/native setup](docs/docker.md) and protected configuration. HTTPS is the default.
-2. Follow the **[one-command read-admin guide](docs/read-admin-onboarding.md)** for the combined fresh-agent workflow and its current activation status. The administrator reviews the collection/helper scope, runs the verified command in a local root terminal, enters the invitation at the hidden prompt, and compares/approves the device in the dashboard.
-3. Keep the terminal open until completion. Confirm fresh reports and each section's actual coverage in the dashboard; a running service alone does not establish complete collection.
+The current Linux release is [v0.1.0-rc.3](https://github.com/storminator89/Tracebolt/releases/tag/v0.1.0-rc.3). Its public assets and Ubuntu TLS install/upgrade paths are verified. Use deliberately selected test systems; user-host functionality and OS reboot remain separate checks.
 
-The endpoint needs Python 3.11+, curl, the system CA bundle and the native tools listed in the [release prerequisites](docs/linux-release-distribution.md). The installer checks prerequisites but does not install dependencies. Start with a fresh supported host; the combined setup does not migrate an existing installation.
-
-For a deliberately isolated disposable test, use the [HTTP manager guide](docs/http-complete-first-start.md). **HTTP exposes passwords, invitations, sessions, telemetry and requested log content, and permits server impersonation.** Use disposable credentials and explicitly accept that risk.
-
-### Local development demo
-
-Requirements: Go **1.27.1**, Node.js **24** with npm, and `make`. No separate database server is needed.
+For a quick local demo, install Go **1.27.1**, Node.js **24**, npm and `make`, then run:
 
 ```sh
 make web
@@ -56,37 +37,24 @@ make build
 ./bin/manager
 ```
 
-Open **http://127.0.0.1:8787**. This loopback-only developer manager uses synthetic demo devices and local SQLite state in `.local/state.db`. Do not expose, tunnel or reverse-proxy it onto a network. Real devices use the separate `lan-manager` runtime.
+Open **http://127.0.0.1:8787**. This loopback demo contains synthetic devices; do not expose it to a network. Real devices use the separate authenticated `lan-manager` runtime.
 
-## Security essentials
+## Platform support
 
-- The main agent runs as an unprivileged service. Journal content and socket ownership use separate explicitly approved helpers. The socket helper has broad `CAP_SYS_PTRACE` process-memory authority; metadata-only collection is a code policy, not an OS confidentiality boundary. Review the [read-admin disclosure](docs/read-admin-onboarding.md#exactly-what-the-one-approval-covers).
-- Review collection destinations and scope before enrollment. Keep invitation secrets in the hidden local prompt and protect credentials, private keys, databases and exported logs. Logs may contain secrets or personal information.
-- There is no arbitrary remote shell, network scan or automatic package/agent updater. Controlled service actions require their own named-operator approval and local allowlist/helper setup.
-- Production use still requires a deployment/security review and operational audit, backup and retention controls. See the [LAN security review](docs/lan-security-review.md) and [installation boundaries](docs/installation.md).
+| Component | Current scope |
+| --- | --- |
+| Manager | Linux, including native amd64/arm64 Docker validation |
+| Full Linux read-admin | amd64; Ubuntu 24.04 or Debian 13, systemd, cgroup v2, kernel 6.5+ |
+| Linux arm64 / Raspberry Pi | Native read-only tests and source preparation; public installation remains closed pending privileged acceptance |
+| Windows | Native read-only inventory tested on amd64; protected basic TLS service remains a source candidate awaiting native acceptance |
+| macOS | Limited standalone read-only collector |
 
-## Documentation
+The main agent is unprivileged. Journal and socket-owner helpers need explicit local approval; the socket helper has broad process-memory authority. Review the [exact scope](docs/read-admin-onboarding.md#exactly-what-the-one-approval-covers). HTTPS is the default; [isolated HTTP testing](docs/http-complete-first-start.md) exposes credentials and content to the network. There is no arbitrary remote shell or automatic package updater.
 
-- **Installation:** [runbook](docs/installation.md), [read-admin setup](docs/read-admin-onboarding.md), [verified downloads](docs/dashboard-verified-download.md), [release verification](docs/linux-release-distribution.md), [agent service](docs/linux-agent-service.md)
-- **Inventory:** [processes and mounts](docs/complete-overview-extension.md), [hostname/interfaces](docs/endpoint-identity-extension.md), [socket-owner provenance](docs/socket-owner-source-provenance.md), [cached updates](docs/complete-cached-updates-extension.md), [CVE warnings](docs/linux-cve-warnings.md)
-- **Operations:** [journal logs](docs/journal-content-mvp.md), [health & history](docs/linux-health-checks.md), [controlled service actions](docs/service-action-workflow.md), [service-action setup](docs/guided-service-action-setup.md)
-- **Optional integrations:** [HTTP/HTTPS checks](docs/application-checks.md), [DNS/TCP checks](docs/application-network-checks.md), [webhook alarms](docs/alarm-delivery.md), [AI investigation](docs/ai-diagnostics.md)
-- **Reference:** [LAN runtime](docs/lan-runtime.md), [native collection](docs/native-collection.md), [support bundles](docs/support-bundle.md), [API contract](docs/api-contract.json), [repository guide](AGENTS.md)
-- **Development:** [web app](web/README.md), [browser acceptance](tests/e2e-review/README.md), [synthetic screenshot gallery](docs/screenshots/2026-10-04-linux-inventory/README.md), [roadmap](docs/roadmap.md), [changelog](CHANGELOG.md)
+## Documentation and development
 
-## Validate changes
+[Installation](docs/installation.md) · [Logs](docs/journal-content-mvp.md) · [Checks](docs/application-checks.md) · [Alarms](docs/alarm-delivery.md) · [Proactive AI](docs/proactive-ai-diagnostics.md) · [Security boundaries](docs/lan-security-review.md) · [Contributing workflow](AGENTS.md)
 
-```sh
-go vet ./...
-make test
-make build
-make crosscheck
-bash tests/security/run.sh
-(cd web && npm ci && npm run typecheck && npm test && npm run build)
-```
+Run `make test`, `make build` and the [web checks](web/README.md); see [exact-revision CI](https://github.com/storminator89/Tracebolt/actions) for browser, container and native coverage. [Roadmap](docs/roadmap.md) and [changelog](CHANGELOG.md) hold the development detail.
 
-Race-detector tests need a C toolchain; boundary regressions use Python 3 and curl. `make crosscheck` only cross-builds Windows amd64 and macOS arm64 collectors. Read the [exact revision's CI results](https://github.com/storminator89/Tracebolt/actions) and the linked acceptance guides: source, browser, container and native-service checks establish different things, and none substitutes for an actual OS reboot.
-
-## License
-
-No project license has been selected. Public source availability is not an open-source license grant. Dependencies retain their own licenses; see the [curve dependency notice](docs/dependencies/edwards25519.md) for distribution requirements.
+**Development pilot.** Production hardening and fleet-scale validation remain open. No project license has been selected; public source availability does not grant an open-source license. Dependencies retain their [own notices](docs/dependencies/edwards25519.md).

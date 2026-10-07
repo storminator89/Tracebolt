@@ -6,9 +6,10 @@ import "context"
 // does not claim access under the future SCM service token. A blocked descriptor
 // means this sufficient policy rejected it, not that LocalService was denied.
 type PrerequisiteObservation struct {
-	Status string `json:"status"`
-	Check  string `json:"check"`
-	Reason string `json:"reason"`
+	Status     string                  `json:"status"`
+	Check      string                  `json:"check"`
+	Reason     string                  `json:"reason"`
+	Diagnostic *PrerequisiteDiagnostic `json:"diagnostic"`
 }
 
 // InspectPrerequisites reads the host layout/filesystem, existing security
@@ -19,7 +20,9 @@ func InspectPrerequisites(ctx context.Context) PrerequisiteObservation {
 	d := &Driver{evidence: Evidence{Stage: StageIdle, Reason: ReasonNone}, prerequisiteCheck: "platform"}
 	defer d.releasePrerequisiteHandles()
 	err := d.Preflight(ctx)
-	return prerequisiteObservation(d.prerequisiteCheck, d.Evidence().Reason, err)
+	p := prerequisiteObservation(d.prerequisiteCheck, d.Evidence().Reason, err)
+	p.Diagnostic = d.prerequisiteDiagnostic
+	return p
 }
 func prerequisiteObservation(check string, reason Reason, err error) PrerequisiteObservation {
 	p := PrerequisiteObservation{Status: "unverified", Check: check, Reason: "inspection-failed"}
@@ -65,6 +68,13 @@ func validPrerequisiteCheck(s string) bool {
 // Valid validates only finite classifications, not any native acceptance claim.
 func (p PrerequisiteObservation) Valid() bool {
 	if !validPrerequisiteCheck(p.Check) {
+		return false
+	}
+	if p.Diagnostic != nil {
+		if p.Status != "blocked" || p.Check != "ancestor-policy" || p.Reason != "prerequisite-blocked" || !p.Diagnostic.valid() {
+			return false
+		}
+	} else if p.Status == "blocked" && p.Check == "ancestor-policy" {
 		return false
 	}
 	switch p.Status {

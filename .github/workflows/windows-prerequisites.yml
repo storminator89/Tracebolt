@@ -38,6 +38,9 @@ jobs:
       - name: Pure read-only runner and report fixtures (not native proof)
         shell: pwsh
         run: python -I -B -m unittest discover -s tests/windows_native_acceptance -p "test_prerequisites.py"
+      - name: In-memory Windows diagnostic fixtures (no native host changes)
+        shell: pwsh
+        run: python -I -B tests/windows_native_acceptance/run_prerequisites.py --check-fixtures
       - name: Build separate source-bound read-only prerequisite executable
         id: measurement
         shell: pwsh

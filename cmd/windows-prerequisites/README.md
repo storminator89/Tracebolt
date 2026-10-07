@@ -16,3 +16,9 @@ The JSON is source-bound and finite. Completed `supported`, `blocked` and
 encoding fail. Actual service-token access, native service acceptance and host
 mutation fields stay false even when the static policy is supported. The ordinary
 workflow validates/re-serializes only this JSON; no raw native errors are exported.
+
+Version 2 adds a closed first-failure ancestor diagnostic: coarse location,
+finite failed predicate and canonical rejected-right categories only. No raw
+paths, SIDs, descriptors, masks or native errors leave the observer. This is
+evidence-only; no admission rule or requested access changes. See
+[diagnostic interpretation](../../docs/windows-prerequisite-diagnostics.md).

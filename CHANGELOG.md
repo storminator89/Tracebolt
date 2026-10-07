@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-10-07 — Finish visual coverage and clarify Windows prerequisites
+
+- Require all 19 conditional and 10 v3 browser cases after the added bilingual capture scenarios. The preceding source passed all 133 executed cases; only the older fixed totals rejected the complete reports. Retain exact source, unique-case, zero-error and export-safety checks, and restore execution of the dependent endpoint capture gate.
+- Keep unavailable service inventory explicitly separate from an unknown service count. Fit complete German status values inside the three narrow mobile summary cards while preserving desktop typography and status semantics. Frame existing mobile inventory captures around actual rows/details and require the German values to remain on one contained line in Chromium.
+- Replace the long README with a concise feature/start/support overview and two original, visually reviewed synthetic screenshots. Preserve their exact source/case/hash provenance and the platform and native-acceptance limits.
+- Add closed first-failure diagnostics to the ordinary read-only Windows prerequisite report. Export only a coarse ancestor location, operation and fixed rights categories; preserve every admission rule, access mask and native call. The actual remaining ancestor blocker still needs this new measurement, and effective service-token access remains unverified. No service, credential, ACL or host grant follows from the diagnostic.
+
 ## 2026-10-07 — Complete concise-copy contracts and prepare the pilot update
 
 - Align the nine hosted browser failures with the shortened production copy and exact accessible labels. Make the separate invented service-action gallery install its intercepted session before reloading, then follow Device → Inventory → Services. Preserve every approval/execution abort, request boundary, original timestamp and deadline; add production-render and route regressions for the repaired contracts. Production UI is unchanged.

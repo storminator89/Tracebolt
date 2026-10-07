@@ -70,6 +70,16 @@ describe('compact device essentials', () => {
         expect(card('Last report').queryByText('Live reachability is not checked.')).not.toBeInTheDocument(); expect(screen.getByRole('button', { name: /Certificate: Expired/ })).toBeVisible();
         expect(screen.queryByText('Invented original source')).not.toBeInTheDocument();
     });
+    it('keeps all three German cards and complete unknown values without replacing them with zero', async () => {
+        setLocale('de', false); updates.status = 'awaiting'; updates.complete = null;
+        health.status = 'unknown'; health.checks = health.checks.map(check => ({ ...check, state: 'unknown', observedAt: null, value: null }));
+        render(panel()); await flush();
+        const cards = document.querySelectorAll('.device-essential-card'); expect(cards).toHaveLength(3);
+        expect(document.querySelectorAll('.device-essential-value')).toHaveLength(3);
+        expect(card('Updates').getByText('Unbekannt')).toBeVisible(); expect(card('Warnungen').getByText('Unbekannt')).toBeVisible();
+        expect(card('Updates').queryByText('0')).not.toBeInTheDocument(); expect(card('Warnungen').queryByText('0 offen')).not.toBeInTheDocument();
+        expect(mutate).not.toHaveBeenCalled(); expect(mutateRaw).not.toHaveBeenCalled();
+    });
     it('shows zero only for a complete available candidate generation and fully known selected checks', async () => {
         updates = updateView(0); health.status = 'clear'; health.checks = health.checks.map(check => ({ ...check, state: 'ok', observedAt: now, value: 0 }));
         render(panel()); await flush(); expect(card('Updates').getByText('0')).toBeVisible(); expect(card('Updates').getByText('cached candidates')).toBeVisible(); expect(card('Updates').getByText('Cache is stale')).toBeVisible();

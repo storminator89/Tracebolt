@@ -545,9 +545,9 @@ jobs:
                   raise ValueError('runtime errors')
               if value.get('secretsExported') is not False or value.get('realTelemetryExported') is not False:
                   raise ValueError('invalid export scope')
-              if type(summary.get('passed')) is not int or summary['passed'] != 18 or type(summary.get('failed')) is not int or summary['failed'] != 0 or summary.get('setupFailure') is not False:
+              if type(summary.get('passed')) is not int or summary['passed'] != 19 or type(summary.get('failed')) is not int or summary['failed'] != 0 or summary.get('setupFailure') is not False:
                   raise ValueError('incomplete summary')
-              if not isinstance(results, list) or len(results) != 18:
+              if not isinstance(results, list) or len(results) != 19:
                   raise ValueError('wrong case count')
               names = set()
               for result in results:
@@ -556,7 +556,7 @@ jobs:
                   names.add(result['name'])
           except Exception:
               raise SystemExit('FAIL: missing, partial, mismatched or unsafe conditional-browser evidence.')
-          print('PASS:18 unique conditional-browser cases on the exact commit, with zero runtime errors and no secret/real telemetry export.')
+          print('PASS:19 unique conditional-browser cases on the exact commit, with zero runtime errors and no secret/real telemetry export.')
           PYTHON
       - name: V3 main-flow browser acceptance with invented inventory
         if: ${{ !cancelled() }}
@@ -586,9 +586,9 @@ jobs:
               for key in ('secretsExported', 'realTelemetryExported', 'installerExecuted', 'nativeCollectorExecuted', 'userVmAccessed'):
                   if value.get(key) is not False:
                       raise ValueError('invalid execution or export scope')
-              if type(summary.get('passed')) is not int or summary['passed'] != 8 or type(summary.get('failed')) is not int or summary['failed'] != 0 or summary.get('setupFailure') is not False:
+              if type(summary.get('passed')) is not int or summary['passed'] != 10 or type(summary.get('failed')) is not int or summary['failed'] != 0 or summary.get('setupFailure') is not False:
                   raise ValueError('incomplete summary')
-              if not isinstance(results, list) or len(results) != 8:
+              if not isinstance(results, list) or len(results) != 10:
                   raise ValueError('wrong case count')
               names = set()
               for result in results:
@@ -597,7 +597,7 @@ jobs:
                   names.add(result['name'])
           except Exception:
               raise SystemExit('FAIL: missing, partial, mismatched or unsafe v3-browser evidence.')
-          print('PASS:8 unique v3 browser cases on the exact commit; invented data, zero runtime errors and no native/installer/VM execution.')
+          print('PASS:10 unique v3 browser cases on the exact commit; invented data, zero runtime errors and no native/installer/VM execution.')
           PYTHON
       - name: Endpoint hostname and interface browser acceptance
         env:

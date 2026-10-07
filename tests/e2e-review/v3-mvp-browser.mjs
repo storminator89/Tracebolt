@@ -118,11 +118,12 @@ async function consentShot(page,name){
  await expect(dialog.getByRole('note')).toBeVisible();await expect(dialog.getByRole('checkbox')).toBeVisible();await expect(dialog.getByRole('checkbox')).not.toBeChecked();
  const file=`${name}.png`;await page.screenshot({path:path.join(out,file),fullPage:false,animations:'disabled'});screenshots.push({file,sourceSha,sha256:createHash('sha256').update(await fs.readFile(path.join(out,file))).digest('hex'),viewport:page.viewportSize(),locale:await page.locator('html').getAttribute('lang'),fullPage:false,publicSafe:true,fixtureDisclosure:'Pre-creation consent on an invented loopback HTTP-test v3 fixture. No invitation, key, comparison value, native collector or real telemetry.',test:currentTest});
 }
-async function compactPanelShots(page,selector,stem){
+async function compactPanelShots(page,selector,stem,{mobileSelector=selector}={}){
  for(const locale of ['en','de'])for(const mobile of [false,true]){
   await page.setViewportSize(mobile?{width:390,height:844}:{width:1440,height:1000});
   await page.getByLabel(/^(Language|Sprache)$/).selectOption(locale);
-  await page.locator(selector).scrollIntoViewIfNeeded();
+  // Keep desktop context; center existing mobile data rather than its heading.
+  await page.locator(mobile?mobileSelector:selector).scrollIntoViewIfNeeded();
   await shot(page,`${stem}-${mobile?'mobile':'desktop'}-${locale}`);
  }
  await page.getByLabel('Sprache',{exact:true}).selectOption('en');await page.setViewportSize({width:1440,height:1000});
@@ -179,9 +180,9 @@ try{
   });
   await check('Compact Packages and Updates remain explicit about source, stale cache and unknown comparisons',async()=>{
    const page=await pageAt();await device(page);await expect(rows(page,'.complete-packages')).toHaveCount(100);
-   await compactPanelShots(page,'.complete-packages .package-heading','synthetic-complete-packages-summary');
+   await compactPanelShots(page,'.complete-packages .package-heading','synthetic-complete-packages-summary',{mobileSelector:'.complete-packages tbody tr:first-child'});
    mark('select current Security coverage tab after package captures');await page.getByRole('tab',{name:'Security coverage',exact:true}).click();mark('current CVE reader settles');await settled(page,'.linux-cve');
-   mark('compact Security navigation remains discoverable');await expect(page.locator('.device-security-sources button')).toHaveCount(2);await compactPanelShots(page,'.device-security-sources','synthetic-security-summary');
+   mark('compact Security navigation remains discoverable');await expect(page.locator('.device-security-sources button')).toHaveCount(2);await compactPanelShots(page,'.device-security-sources','synthetic-security-summary',{mobileSelector:'.linux-cve-summary'});
    mark('return to complete Packages before update fixture');await page.getByRole('tab',{name:'Inventory',exact:true}).click();await settled(page,'.complete-packages');
    mark('prepare typed complete-update presentation fixture');const moduleFile=path.join(temporary,'complete-update-presentation.mjs');
    require('esbuild').buildSync({entryPoints:[path.join(root,'web/src/complete-updates-fixtures.ts')],bundle:true,platform:'node',format:'esm',outfile:moduleFile,logLevel:'silent'});
@@ -198,7 +199,7 @@ try{
    });
    mark('select Updates and settle typed complete candidates');await page.getByRole('tablist',{name:'Inventory source',exact:true}).getByRole('tab',{name:'Updates',exact:true}).click();await settled(page,'.complete-updates');
    mark('complete candidates retain stale and unknown-comparison warnings');await expect(rows(page,'.complete-updates')).toHaveCount(4);await expect(page.locator('.complete-updates')).toContainText('lower bound');await expect(page.locator('.complete-updates')).toContainText('metadata is stale');await expect(page.locator('.complete-updates')).toContainText('does not refresh APT or install updates');
-   await compactPanelShots(page,'.complete-updates .package-heading','synthetic-complete-updates-summary');
+   await compactPanelShots(page,'.complete-updates .package-heading','synthetic-complete-updates-summary',{mobileSelector:'.complete-updates tbody tr:first-child'});
    for(const screenshot of screenshots.filter(item=>item.test===currentTest&&item.file.includes('complete-updates'))){screenshot.fixtureDisclosure='Presentation-only intercepted typed CompleteUpdateView/Page fixtures over an authenticated loopback session. Four invented candidates, stale cache and unknown comparisons; no APT execution, native collection or backend update acceptance.';}
   });
   await check('Connections scope and bounded cached Updates preview have bilingual viewport coverage',async()=>{
@@ -212,7 +213,7 @@ try{
    await page.route('**'+prefix,async route=>{if(route.request().method()==='GET')await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(view)});else await route.continue();});
    await page.getByRole('tablist',{name:'Inventory source',exact:true}).getByRole('tab',{name:'Updates',exact:true}).click();await page.getByLabel('Update view',{exact:true}).selectOption('preview');await settled(page,'.cached-updates');
    await expect(rows(page,'.cached-updates')).toHaveCount(2);await expect(page.locator('.cached-updates')).toContainText('Source freshness unknown');await expect(page.locator('.cached-updates')).toContainText('Held by dpkg');
-   await compactPanelShots(page,'.cached-updates > .package-heading','synthetic-cached-updates-preview-summary');
+   await compactPanelShots(page,'.cached-updates > .package-heading','synthetic-cached-updates-preview-summary',{mobileSelector:'.cached-updates tbody tr:first-child'});
    await compactPanelShots(page,'.cached-updates .package-table-scroll','synthetic-cached-updates-preview-table');
    for(const entry of screenshots.filter(item=>item.test===currentTest&&item.file.includes('cached-updates')))entry.fixtureDisclosure='Presentation-only intercepted CachedUpdatesView from the existing within-web synthetic fixture. Two invented candidates, held state and unknown source freshness; no APT/native query, collection consent or backend acceptance.';
   });

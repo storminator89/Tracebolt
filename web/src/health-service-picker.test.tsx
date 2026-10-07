@@ -91,13 +91,24 @@ describe('health service selection', () => {
     it.each(['awaiting', 'unknown', 'not_configured', 'expired', 'revoked'] as const)('offers an unknown manual fallback only when %s inventory is unavailable', async status => {
         rows = serviceRows(2);
         unavailable(status); render(<Harness/>); const manual = await screen.findByRole('textbox', { name: 'Add service manually' });
-        expect(screen.getByText(/not an empty service list/)).toBeVisible(); expect(screen.queryByText('The complete service inventory contained zero services.')).not.toBeInTheDocument(); expect(mutateRaw).not.toHaveBeenCalled();
+        expect(screen.getByText(/Service inventory unavailable; service count unknown/)).toBeVisible(); expect(screen.queryByText('The complete service inventory contained zero services.')).not.toBeInTheDocument(); expect(mutateRaw).not.toHaveBeenCalled();
         fireEvent.change(manual, { target: { value: '*.service' } }); expect(screen.getByRole('button', { name: 'Add service' })).toBeDisabled(); expect(manual).toHaveAttribute('aria-invalid', 'true');
         fireEvent.change(manual, { target: { value: 'manual.service' } }); fireEvent.keyDown(manual, { key: 'Enter' });
         expect(change).toHaveBeenCalledExactlyOnceWith(['manual.service']); expect(submit).not.toHaveBeenCalled(); expect(mutate).not.toHaveBeenCalled();
         fireEvent.change(manual, { target: { value: 'manual.service' } }); expect(screen.getByRole('button', { name: 'Add service' })).toBeDisabled();
         view = systemView(rows.length); fireEvent.click(screen.getByRole('button', { name: 'Refresh service list' })); await screen.findByRole('checkbox', { name: rows[0].name });
         expect(screen.queryByRole('textbox')).not.toBeInTheDocument(); expect(screen.getByRole('list', { name: 'Selected services' })).toHaveTextContent('manual.service');
+    });
+
+    it.each([
+        ['en', 'Service inventory unavailable; service count unknown. Manual selections stay unknown until observed.'],
+        ['de', 'Dienstinventar nicht verfügbar; Dienstanzahl unbekannt. Manuelle Auswahl bleibt bis zur Beobachtung unbekannt.'],
+    ] as const)('keeps an unavailable service count explicitly unknown in %s', async (locale, note) => {
+        setLocale(locale, false); unavailable(); render(<Harness/>);
+        expect(await screen.findByText(note)).toBeVisible();
+        expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+        expect(screen.queryByText(/complete service inventory contained zero services|vollständige Dienstinventar enthielt keine Dienste/)).not.toBeInTheDocument();
+        expect(change).not.toHaveBeenCalled(); expect(submit).not.toHaveBeenCalled(); expect(mutate).not.toHaveBeenCalled(); expect(mutateRaw).not.toHaveBeenCalled();
     });
 
     it('keeps manual addition bounded and clearing selection explicit', async () => {

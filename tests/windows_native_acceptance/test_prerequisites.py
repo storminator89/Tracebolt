@@ -35,7 +35,7 @@ def report(status="supported"):
     return {"schema": probe.SCHEMA, "source": SOURCE, "status": status,
             "check": check, "reason": reason, "readOnly": True,
             "nativeServiceAcceptance": False, "effectiveServiceTokenAccessVerified": False,
-            "hostMutated": False}
+            "hostMutated": False, "diagnostic": {"location":"program-data","failure":"untrusted-write-grant","rights":["add-file"]} if status=="blocked" else None}
 
 
 def encode(value):
@@ -143,7 +143,7 @@ class ReadOnlyReportTests(unittest.TestCase):
         for reason in ("none", "inspection-failed", "unsupported-platform", "cancelled"):
             self.reject(dict(report("blocked"), reason=reason))
         self.reject(dict(report("blocked"), reason="existing-resource"))
-        probe.validate_report(encode(dict(report("blocked"), check="resource-absence", reason="existing-resource")), SOURCE)
+        probe.validate_report(encode(dict(report("blocked"), check="resource-absence", reason="existing-resource", diagnostic=None)), SOURCE)
         for reason in ("none", "existing-resource", "prerequisite-blocked"):
             self.reject(dict(report("unverified"), reason=reason))
         self.reject(dict(report("unverified"), check="complete"))
@@ -158,6 +158,45 @@ class ReadOnlyReportTests(unittest.TestCase):
                         raw.replace(b'"hostMutated":false', b'"hostMutated":1e999')):
             with self.subTest(raw=invalid[:40]), self.assertRaises(probe.Rejected):
                 probe.validate_report(invalid, SOURCE)
+
+    def test_nested_diagnostics_reject_unknown_host_details_and_noncanonical_rights(self):
+        value = report("blocked")
+        for key in ("location", "failure", "rights"):
+            diagnostic = dict(value["diagnostic"])
+            del diagnostic[key]
+            self.reject(dict(value, diagnostic=diagnostic))
+        for wrong in (None, [], True, 0, PRIVATE, {}, dict(value["diagnostic"], rawSID=PRIVATE)):
+            self.reject(dict(value, diagnostic=wrong))
+        for key in ("location", "failure"):
+            for wrong in (None, [], {}, True, PRIVATE, "C:\\private", "S-1-5-21-private"):
+                self.reject(dict(value, diagnostic=dict(value["diagnostic"], **{key: wrong})))
+        for wrong in (None, [], [PRIVATE], [1], ["add-file", "add-file"], ["add-file", "generic-all"], ["add-file", PRIVATE]):
+            self.reject(dict(value, diagnostic=dict(value["diagnostic"], rights=wrong)))
+        self.reject(dict(report(), diagnostic=value["diagnostic"]))
+        self.reject(dict(report("unverified"), diagnostic=value["diagnostic"]))
+        self.reject(dict(value, diagnostic=dict(value["diagnostic"], failure="owner-untrusted")))
+        for location in probe.DIAGNOSTIC_LOCATIONS:
+            for failure in probe.DIAGNOSTIC_FAILURES:
+                rights = ["add-file"] if failure == "untrusted-write-grant" else []
+                diagnostic = {"location": location, "failure": failure, "rights": rights}
+                probe.validate_report(encode(dict(value, diagnostic=diagnostic)), SOURCE)
+        full = dict(value, diagnostic=dict(value["diagnostic"], rights=list(probe.DIAGNOSTIC_RIGHTS)))
+        probe.validate_report(encode(full), SOURCE)
+        raw = encode(value)
+        duplicate = raw.replace(b'"location":', b'"location":"volume-root","location":', 1)
+        with self.assertRaises(probe.Rejected):
+            probe.validate_report(duplicate, SOURCE)
+
+    def test_diagnostic_schema_enum_sets_match_go(self):
+        native = (probe.ROOT / "internal/windowsacceptance/native/prerequisite_diagnostics.go").read_text()
+        definition = native.split("type PrerequisiteDiagnostic struct {", 1)[1].split("\n}", 1)[0]
+        self.assertEqual(set(re.findall(r'json:"([^\"]+)"', definition)), {"location", "failure", "rights"})
+        failure = native.split("func validDiagnosticFailure", 1)[1].split("return true", 1)[0]
+        self.assertEqual(set(re.findall(r'"([^\"]+)"', failure)), probe.DIAGNOSTIC_FAILURES)
+        location = native.split("switch d.Location", 1)[1].split("default:", 1)[0]
+        self.assertEqual(set(re.findall(r'"([^\"]+)"', location)), probe.DIAGNOSTIC_LOCATIONS)
+        rights = native.split("var diagnosticRightNames", 1)[1].split("\n", 1)[0]
+        self.assertEqual(tuple(re.findall(r'"([^\"]+)"', rights)), probe.DIAGNOSTIC_RIGHTS)
 
     def test_size_limit_is_32kib_including_whitespace(self):
         raw = encode(report())
@@ -181,6 +220,32 @@ class ReadOnlyReportTests(unittest.TestCase):
         self.assertIn("native.InspectPrerequisites", cli)
         for forbidden in ("--approve-", "--internal-denial-probe", "executeNative", "ApplyInstall"):
             self.assertNotIn(forbidden, cli)
+
+
+class ReadOnlyFixtureTests(unittest.TestCase):
+    def events(self):
+        events = [{"Package": package, "Test": test, "Action": "pass"} for package, test in probe.REQUIRED_FIXTURES]
+        return events + [{"Package": package, "Action": "pass"} for package in probe.FIXTURE_PACKAGES]
+
+    def test_windows_fixture_evidence_requires_actual_pass_without_skip(self):
+        events = self.events()
+        raw = b"\n".join(encode(event) for event in events)
+        probe.validate_fixture_events(raw)
+        for bad in (events[1:], events + [dict(events[0], Action="skip")], events + [{"Action":"fail"}]):
+            with self.assertRaises(probe.Rejected):
+                probe.validate_fixture_events(b"\n".join(encode(event) for event in bad))
+
+    def test_fixture_mode_is_exact_source_and_runs_only_memory_packages(self):
+        events = b"\n".join(encode(event) for event in self.events())
+        with mock.patch.object(probe, "check_environment", return_value=SOURCE), mock.patch.object(probe, "verify_checkout") as checkout, mock.patch.object(probe, "verify_go"), mock.patch.object(probe, "command", return_value=events) as command:
+            probe.run_fixtures(environment())
+        checkout.assert_called_once()
+        args = command.call_args.args[0]
+        self.assertEqual(args[:2], ["go", "test"])
+        self.assertEqual(args[-2:], ["./internal/windowsacceptance/native", "./cmd/windows-prerequisites"])
+        self.assertIn("-json", args)
+        self.assertNotIn("--run-read-only", args)
+        self.assertNotIn("--run-native", args)
 
 
 class ReadOnlyExecutionTests(unittest.TestCase):

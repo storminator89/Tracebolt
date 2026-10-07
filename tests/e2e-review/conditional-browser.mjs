@@ -42,10 +42,11 @@ async function selectCatalog(page,value){const disclosure=page.locator('.securit
 async function expectCatalogSelectionCleared(page){const disclosure=page.locator('.security-import');await expect(disclosure).toBeVisible();if(await disclosure.getAttribute('open')===null)await disclosure.locator('summary').click();const replace=page.getByRole('button',{name:'Replace current catalog',exact:true});await expect(replace).toBeVisible();await expect(replace).toBeDisabled();await expect(page.getByLabel('Choose JSON file',{exact:true})).toHaveValue('');}
 async function unknownCoverage(page){await legacy(page,'legacy-coverage');await expect(page.locator('.security-metric .security-unknown')).toHaveCount(2);await expect(page.locator('.security-metric .security-unknown').nth(0)).toHaveText('Unknown');await expect(page.locator('.security-metric .security-unknown').nth(1)).toHaveText('Unknown');}
 async function shot(page,name){mark('safe synthetic viewport capture');await expect(page.locator('.enrollment-secret')).toHaveCount(0);await expect(page.getByLabel('Operator password',{exact:true})).toHaveCount(0);const text=await page.evaluate(()=>document.body.innerText+'\n'+[...document.querySelectorAll('input')].map(x=>x.value).join('\n'));expect(text.includes(password)).toBe(false);await page.screenshot({path:path.join(out,`${name}.png`),fullPage:false,animations:'disabled'});const bytes=await fs.readFile(path.join(out,`${name}.png`));screenshots.push({file:`${name}.png`,sha256:createHash('sha256').update(bytes).digest('hex'),sourceSha,applicationBaselineArchiveSha256,publicSafe:true,fullPage:false,viewport:page.viewportSize(),locale:await page.locator('html').getAttribute('lang'),fixtureDisclosure:'Entirely invented QA devices and metadata on loopback HTTP-test. A catalog declaring synthetic:false is an invented parser fixture, not real vendor data or verified provenance. No telemetry, invitation material or installed-service evidence.',test:currentTest});}
-async function capturePanelMatrix(page,selector,stem,{device=true}={}){
+async function capturePanelMatrix(page,selector,stem,{device=true,mobileSelector=selector}={}){
  for(const locale of ['en','de'])for(const mobile of [false,true]){
   await page.setViewportSize(mobile?{width:390,height:844}:{width:1440,height:1000});await page.getByLabel(/^(Language|Sprache)$/).selectOption(locale);
-  await page.locator(selector).scrollIntoViewIfNeeded();
+  // A visible heading alone can leave the actual data below a mobile frame.
+  await page.locator(mobile?mobileSelector:selector).scrollIntoViewIfNeeded();
   if(device)await assertViewport(page);else expect(await page.evaluate(()=>scrollX===0&&scrollY===0&&document.documentElement.scrollWidth<=innerWidth+1&&document.body.scrollWidth<=innerWidth+1)).toBe(true);
   await shot(page,`${stem}-${mobile?'mobile':'desktop'}-${locale}`);
  }
@@ -97,7 +98,7 @@ try{
    const page=await pageAt();await openDevice(page);await expect(page.locator('.operational-panel')).toHaveAttribute('aria-busy','false');
    for(const [key,label]of [['volumes','Volumes'],['network','Network'],['services','Services'],['processes','Processes'],['software','Software sample'],['events','Events']]){
     await page.getByRole('button',{name:new RegExp('^'+label+' ·')}).click();
-    await capturePanelMatrix(page,'.operational-section-heading',`synthetic-legacy-${key}`);
+    await capturePanelMatrix(page,'.operational-section-heading',`synthetic-legacy-${key}`,{mobileSelector:['volumes','processes'].includes(key)?'.operational-section-detail tbody tr:first-child, .operational-section-detail .operational-empty':'.operational-section-heading'});
    }
    // Reuse the invented volume and event rows from web/src/operational.test.tsx.
    // The real fixture has no successful rows for these two sources. These extra
@@ -110,14 +111,14 @@ try{
    await page.getByRole('button',{name:'Refresh observations',exact:true}).click();await expect(page.locator('.operational-panel')).toHaveAttribute('aria-busy','false');
    for(const [key,label]of [['volumes','Volumes'],['events','Events']]){
     await page.getByRole('button',{name:new RegExp('^'+label+' ·')}).click();await expect(page.locator('.operational-table tbody tr')).toHaveCount(1);
-    await capturePanelMatrix(page,'.operational-section-heading',`synthetic-legacy-${key}-rows`);
+    await capturePanelMatrix(page,'.operational-section-heading',`synthetic-legacy-${key}-rows`,{mobileSelector:key==='volumes'?'.operational-section-detail tbody tr:first-child':'.operational-section-heading'});
    }
    for(const entry of screenshots.filter(item=>item.test===currentTest&&/-rows-/.test(item.file)))entry.fixtureDisclosure='Presentation-only intercepted operational response with invented volume/event metadata copied from the existing within-web fixture. No host mount read, journal body, log text or native acceptance.';
    await page.unroute('**'+prefix);
    await page.getByRole('tab',{name:'Security coverage',exact:true}).click();await legacy(page,'legacy-coverage');await expect(page.locator('.device-security-workspace > .security-panel')).toHaveAttribute('aria-busy','false');
-   await capturePanelMatrix(page,'.device-security-workspace > .security-panel > .security-heading','synthetic-legacy-security-summary');
+   await capturePanelMatrix(page,'.device-security-workspace > .security-panel > .security-heading','synthetic-legacy-security-summary',{mobileSelector:'.device-security-workspace > .security-panel .security-grid'});
    await packages(page);await expect(page.locator('.package-observations tbody tr')).toHaveCount(2);
-   await capturePanelMatrix(page,'.package-observations > .package-heading','synthetic-legacy-package-summary');
+   await capturePanelMatrix(page,'.package-observations > .package-heading','synthetic-legacy-package-summary',{mobileSelector:'.package-observations tbody tr:first-child'});
    await capturePanelMatrix(page,'.package-observations .package-table-scroll','synthetic-legacy-package-table');
    await importCatalog();await page.goto(base+'/#/settings');await expect(page.locator('.security-catalog')).toHaveAttribute('aria-busy','false');await expect(page.locator('.security-catalog')).toContainText('Unverified origin');
    await capturePanelMatrix(page,'.security-catalog > .security-heading','synthetic-legacy-catalog-summary',{device:false});
