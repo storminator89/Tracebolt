@@ -11,6 +11,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runAIReview } from './ai-scenarios.mjs';
 import { runShellReview } from './shell-scenarios.mjs';
+import { createBrowserTransportDiagnostics, reportTransportFailure } from './browser-transport-diagnostics.mjs';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const require = createRequire(path.join(root, 'web/package.json'));
 const { chromium, expect } = require('@playwright/test');
@@ -47,26 +48,38 @@ const caseItem = data.cases.find(c=>c.deviceId===device.id);
 const nextCase = data.cases.find(c=>c.id!==caseItem.id);
 const noteText = '<img src=x onerror="window.__reviewXss=1"> Review: literal evidence, never markup.';
 const allPages = new Set();
+const transportDiagnostics = new Map();
+function trackTransport(page) { const diagnostics=createBrowserTransportDiagnostics(page,browser); transportDiagnostics.set(page,diagnostics); return page; }
 const runtimeErrors = [];
 async function pageAt(hash='/overview', viewport={width:1440,height:1000}, extra={}) {
  const {reviewLocale='de',...contextOptions}=extra;
  const context = await browser.newContext({ viewport, locale:'de-DE', ...contextOptions });
  if(reviewLocale) await context.addInitScript(value=>localStorage.setItem('tracebolt.locale',value),reviewLocale);
- const page = await context.newPage(); allPages.add(context);
+ const page = trackTransport(await context.newPage()); allPages.add(context);
  page.on('pageerror', error=>runtimeErrors.push({test:currentTest, message:error.message}));
  await page.goto(`${base}/#${hash}`); return page;
 }
 let currentTest='';
-async function test(name, run) { currentTest=name; const begun=Date.now(); try { await run(); results.push({name, status:'PASS', durationMs:Date.now()-begun}); console.log(`PASS ${name}`); } catch(error) { results.push({name,status:'FAIL',error:sanitize(name.startsWith('AI ') ? error.message.split('\n')[0] : error.message),durationMs:Date.now()-begun}); console.log(`FAIL ${name}: ${error.message.split('\n')[0]}`); } finally { for(const context of allPages) await context.close(); allPages.clear(); } }
+async function test(name, run) { currentTest=name; const begun=Date.now(); try { await run(); results.push({name, status:'PASS', durationMs:Date.now()-begun}); console.log(`PASS ${name}`); } catch(error) { results.push({name,status:'FAIL',error:sanitize(name.startsWith('AI ') ? error.message.split('\n')[0] : error.message),durationMs:Date.now()-begun}); console.log(`FAIL ${name}: ${error.message.split('\n')[0]}`); } finally { for(const context of allPages) await context.close(); allPages.clear(); for(const diagnostics of transportDiagnostics.values()) diagnostics.dispose(); transportDiagnostics.clear(); } }
 async function loaded(page) { await expect(page.locator('.page-footer')).toBeVisible(); }
 async function shot(page,name,section=null) {
  const fullPage=false,dialog=await page.getByRole('dialog').count()>0;
+ let layout=null;
  if(!dialog) {
-  await page.locator('.main-content').evaluate(el=>el.scrollTo({top:0,left:0,behavior:'instant'})).catch(()=>{});
+  layout=await page.locator('.main-content').evaluate(el=>{
+   el.scrollTo({top:0,left:0,behavior:'instant'});
+   const rect=el.getBoundingClientRect();
+   return {viewportWidth:innerWidth,viewportHeight:innerHeight,documentClientWidth:document.documentElement.clientWidth,documentClientHeight:document.documentElement.clientHeight,mainWidth:rect.width,mainHeight:rect.height};
+  }).catch(()=>null);
   const target=section || (name.includes('ai-fixture-case')?'.ai-analysis-panel':null);
   if(target) await page.locator(target).evaluate(el=>el.scrollIntoView({block:'start',behavior:'instant'}));
  }
- await page.screenshot({path:path.join(out,`${name}.png`),fullPage,animations:'disabled'});
+ const captureStarted=performance.now();
+ try { await page.screenshot({path:path.join(out,`${name}.png`),fullPage,animations:'disabled'}); }
+ catch(error) {
+  reportTransportFailure(transportDiagnostics.get(page),'screenshot',error,{elapsedMs:performance.now()-captureStarted,layout});
+  throw error;
+ }
  screenshots.push({fullPage,file:`${name}.png`,sourceSha,publicSafe:name.startsWith('synthetic-'),fixtureDisclosure:name.includes('ai-fixture')?'Testanbieter / keine reale Modellanalyse':null,viewport:page.viewportSize(),section:section || (name.includes('ai-fixture-case')?'AI analysis':dialog?'dialog':'top'),contentScrollTop:await page.locator('.main-content').evaluate(el=>el.scrollTop).catch(()=>null),theme:await page.locator('html').getAttribute('data-theme'),locale:await page.locator('html').getAttribute('lang'),test:currentTest});
 }
 async function noOverflow(page) { const size=await page.evaluate(()=>({view:innerWidth,body:document.body.scrollWidth,html:document.documentElement.scrollWidth})); expect(size.body).toBeLessThanOrEqual(size.view+1); expect(size.html).toBeLessThanOrEqual(size.view+1); }
@@ -185,12 +198,12 @@ try {
   await expect(page.locator('.case-detail-header h1')).toHaveText(nextCase.title); await expect(page).toHaveURL(new RegExp(nextCase.id));
  });
  await test('First-load API failure shows explicit error without fake data; retry recovers', async()=>{
-  const context=await browser.newContext({viewport:{width:1440,height:1000}}); allPages.add(context); await context.addInitScript(()=>localStorage.setItem('tracebolt.locale','de')); const page=await context.newPage(); page.on('pageerror',error=>runtimeErrors.push({test:currentTest,message:error.message})); await page.route('**/api/overview',route=>route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({error:{message:'Controlled manager unavailable'}})}));
+  const context=await browser.newContext({viewport:{width:1440,height:1000}}); allPages.add(context); await context.addInitScript(()=>localStorage.setItem('tracebolt.locale','de')); const page=trackTransport(await context.newPage()); page.on('pageerror',error=>runtimeErrors.push({test:currentTest,message:error.message})); await page.route('**/api/overview',route=>route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({error:{message:'Controlled manager unavailable'}})}));
   await page.goto(`${base}/#/overview`); await expect(page.getByRole('alert')).toContainText('Keine Verbindung'); await expect(page.getByRole('alert')).toContainText('keine Ersatz-Demodaten'); await expect(page.locator('.device-table')).toHaveCount(0); await shot(page,'desktop-api-error');
   await page.unroute('**/api/overview'); await page.getByRole('button',{name:'Erneut versuchen'}).click(); await loaded(page);
  });
  await test('Loading state is visible and refreshing error keeps stale data labeled', async()=>{
-  const context=await browser.newContext({viewport:{width:1440,height:1000}}); allPages.add(context); await context.addInitScript(()=>localStorage.setItem('tracebolt.locale','de')); const page=await context.newPage(); page.on('pageerror',error=>runtimeErrors.push({test:currentTest,message:error.message}));
+  const context=await browser.newContext({viewport:{width:1440,height:1000}}); allPages.add(context); await context.addInitScript(()=>localStorage.setItem('tracebolt.locale','de')); const page=trackTransport(await context.newPage()); page.on('pageerror',error=>runtimeErrors.push({test:currentTest,message:error.message}));
   let release; const gate=new Promise(r=>release=r); await page.route('**/api/overview',async route=>{await gate; await route.continue();}); await page.goto(`${base}/#/overview`); await expect(page.locator('.initial-loading')).toBeVisible(); await expect(page.locator('.initial-loading').getByRole('status')).toContainText('geladen'); await shot(page,'desktop-loading'); release(); await loaded(page); await page.unroute('**/api/overview');
   await page.route('**/api/overview',route=>route.abort('failed')); await page.getByRole('button',{name:'Aktualisieren',exact:true}).click(); await expect(page.getByRole('alert')).toContainText('letzten erfolgreichen Abruf'); await expect(page.locator('.device-table')).toBeVisible(); await expect(page.locator('.page-footer')).toContainText('Letzter erfolgreicher Abruf');
  });

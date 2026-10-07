@@ -10,6 +10,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
+import {createBrowserTransportDiagnostics,reportTransportFailure} from './browser-transport-diagnostics.mjs';
 
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../..');
 const out=path.join(root,'artifacts/review/service-action-browser-results.json');
@@ -36,7 +37,7 @@ const scope={
 };
 const fixture='Disposable loopback HTTP test with invented inventory and a synthetic protocol-driving agent; real framed net.Pipe helper ServeConn uses injected fixture authority/peer and a fake Backend. This does not establish native root/helper/systemd isolation, production actionSender acceptance or mTLS browser acceptance.';
 const results=[];
-let temporary,browser,context,page,server,pipe,waiting,device,actor,approval,savedJob;
+let temporary,browser,context,page,server,pipe,waiting,device,actor,approval,savedJob,transportDiagnostics;
 let runtimeErrorCount=0,setupFailure=false,stage='setup',base='',approveRequests=0;
 const mark=value=>{stage=value;};
 const endpoint=()=>`/api/devices/${device.deviceId}/service-actions`;
@@ -72,7 +73,12 @@ async function body(response){
  // failures without exporting response content or the caught browser error.
  const callerStage=stage;
  mark(callerStage+' / retrieve response bytes');
- const bytes=await response.body();
+ const began=performance.now();let bytes;
+ try{bytes=await response.body();}
+ catch(error){
+  reportTransportFailure(transportDiagnostics,'response-body',error,{response,elapsedMs:performance.now()-began});
+  throw error;
+ }
  mark(callerStage+' / check response byte bound');
  expect(bytes.length).toBeLessThanOrEqual(32768);
  mark(callerStage+' / decode response JSON');
@@ -163,7 +169,7 @@ try{
  browser=await chromium.launch(launch);
  context=await browser.newContext({viewport:{width:1440,height:1000},locale:'en-GB',acceptDownloads:false,serviceWorkers:'block'});
  context.setDefaultTimeout(15000);context.setDefaultNavigationTimeout(15000);
- page=await context.newPage();page.on('pageerror',()=>runtimeErrorCount++);
+ page=await context.newPage();transportDiagnostics=createBrowserTransportDiagnostics(page,browser);page.on('pageerror',()=>runtimeErrorCount++);
  page.on('request',request=>{if(request.url()===base+endpoint()+'/approve'&&request.method()==='POST')approveRequests++;});
 
  await check(0,async()=>{
@@ -234,6 +240,7 @@ try{
  try{if(context)await context.close();}catch{setupFailure=true;}
  try{await stop();}catch{setupFailure=true;}
  try{if(browser)await browser.close();}catch{setupFailure=true;}
+ transportDiagnostics?.dispose();
  try{if(temporary)await fs.rm(temporary,{recursive:true,force:true});}catch{setupFailure=true;}
  const report={schemaVersion:'tracebolt.service-action-browser.v1',sourceSha,createdAt:new Date().toISOString(),transportProfile:'disposable-http-test',fixture,scope,runtimeErrorCount,results,summary:{passed:results.filter(result=>result.status==='PASS').length,failed:results.filter(result=>result.status==='FAIL').length,setupFailure}};
  await fs.mkdir(path.dirname(out),{recursive:true});await fs.writeFile(out,JSON.stringify(report,null,2),{mode:0o600});

@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-10-07 — Clear proactive device choices and bounded browser diagnostics
+
+- Label proactive AI device choices with already-collected reported hostnames and compact interface-scoped addresses through the existing operator-only fleet read. Keep stable IDs as the selection authority, show unavailable or stale identity honestly, and never add these display labels to AI export. Preserve current navigation scope when Settings uses an equivalent hash route.
+- Keep the exact provider, model, data scope, restart behavior, cost/forwarding caveat and explicit consent visible. Put secondary limits and privacy detail behind a collapsed disclosure so the approval remains practical on narrow screens.
+- The preceding 491d hosted run passed all 21 LAN cases, including proactive saved-mode approval and result readback. Two separate existing harness operations failed during screenshot capture and response-byte retrieval. Add passive closed transport/lifecycle diagnostics before cleanup, preserving all assertions, single executions, screenshots and deadlines. The historical causes remain unproven; no production or retry correction is claimed.
+
+
 ## 2026-10-07 — Scoped proactive diagnostics and Windows service source
 
 - Add default-off background suggestions for newly opened, authorized Linux Health incidents. Require an explicit exact provider/model/device approval for the typed health-summary-v1 data scope. Keep raw logs, arbitrary context fetching, remediation and external AI-result notifications outside this increment. Persist bounded findings with original evidence times, consume-once claims and rate limits; revalidate authority and configuration before export and publication.

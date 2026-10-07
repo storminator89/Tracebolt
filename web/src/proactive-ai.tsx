@@ -5,21 +5,26 @@ import { hasLogoutIntent, LOGOUT_INTENT_KEY, useOperator } from './auth';
 import { useLocale } from './i18n';
 import { PROACTIVE_SETTINGS_BYTES, validProactiveAISettings } from './proactive-ai-types';
 import type { ProactiveAIChange, ProactiveAISettings } from './proactive-ai-types';
+import type { FleetIdentityResource } from './fleet-identity-resource';
+import { ProactiveDeviceIdentity, proactiveDeviceName } from './proactive-device-identity';
 import './proactive-ai.css';
 
 const copy = {
     en: {
         title: 'Proactive AI diagnostics', refresh: 'Refresh proactive AI settings', loading: 'Reading proactive AI settings…', working: 'Saving settings…', unknown: 'Status unknown', on: 'On', off: 'Off',
-        intro: 'Allow future health incidents on selected enrolled devices to trigger a bounded background analysis. Opening investigations only reads stored results.',
+        intro: 'Automatically analyze future health incidents on selected enrolled devices.',
         readonly: 'Named accounts can read these settings. Changes require the shared LAN administrator.', provider: 'Approved provider', model: 'Model', missingProvider: 'Configure an AI provider above, then refresh this panel.',
         scope: 'Data scope', scopeText: 'Stored health rule state, selected service name, numeric values and original event times only. No raw logs, device names, IP addresses or free-form notes.',
         unavailableDevice: 'Unavailable; remove before approving a new scope', devices: 'Selected enrolled devices', noDevices: 'No enrolled devices available.', consent: 'I approve future health-summary analyses for these selected devices with the exact provider URL and model shown above.',
-        limits: 'At most 6 analyses/hour, one in flight, at least 60 seconds apart and a 30-minute incident cooldown. Evidence context is capped at 24 KiB; model output at 1,024 tokens. Provider prices still apply.',
-        forwarding: 'A local endpoint can forward data elsewhere. Masking is best effort, not a guarantee that all sensitive content is removed.',
+        limits: 'At most 6 analyses/hour, one in flight, at least 60 seconds apart and a 30-minute incident cooldown. Evidence context is capped at 24 KiB; model output at 1,024 tokens.',
+        forwarding: 'Provider charges may apply. Even local endpoints can forward data; masking is not guaranteed.',
+        details: 'Limits & privacy details', privacy: 'Masking is best effort, not a guarantee that all sensitive content is removed. Opening investigations only reads stored results.',
+        restartSummary: 'Approval survives manager restart for this exact scope. Provider changes disable it.',
+        identityLoading: 'Loading reported hostnames and IP addresses…', identityUnavailable: 'Reported hostnames and IP addresses are unavailable.', identityRefresh: 'Refresh hostnames and IP addresses',
         persistentConsent: 'I approve future health-summary analyses, including after manager restart, for these selected devices with the exact provider URL and model shown above.',
         persistent: 'Approval is saved in a protected file on this manager with its original approval time. It remains valid after restart for this exact provider, device and data scope. Provider changes disable it; no older incidents are backfilled. Saving does not test provider connectivity.',
-        reset: 'Approval resets to off after manager restart or provider changes. Saving does not test provider connectivity.',
-        logs: 'Include raw logs (unavailable)', logsHelp: 'Raw logs require separate local collection approval and specific provider approval. Raw-log sharing is unavailable here.',
+        reset: 'Approval resets to off after manager restart or provider changes.', connectivity: 'Saving does not test provider connectivity.',
+        logs: 'Raw-log sharing is unavailable.', logsHelp: 'Raw logs require separate local collection approval and specific provider approval. Raw-log sharing is unavailable here.',
         save: 'Approve and enable', update: 'Approve updated scope', disable: 'Disable proactive AI', close: 'Close', cancel: 'Cancel waiting', saved: 'Settings saved. No connectivity test was sent.',
         error: 'Settings could not be read. Refresh to try again.', invalid: 'Unsupported settings received. Refresh before making changes.', timeout: 'The manager did not respond in time. Refresh to try again.',
         conflict: 'The provider or settings changed. Refresh and review the current destination, model and devices; approval must be given again.',
@@ -28,16 +33,19 @@ const copy = {
     },
     de: {
         title: 'Proaktive KI-Diagnostik', refresh: 'Proaktive KI-Einstellungen aktualisieren', loading: 'Proaktive KI-Einstellungen werden gelesen…', working: 'Einstellungen werden gespeichert…', unknown: 'Status unbekannt', on: 'Ein', off: 'Aus',
-        intro: 'Künftige Health-Vorfälle ausgewählter freigegebener Geräte dürfen eine begrenzte Hintergrundanalyse auslösen. Untersuchungen zeigen nur gespeicherte Ergebnisse.',
+        intro: 'Künftige Health-Vorfälle ausgewählter freigegebener Geräte automatisch analysieren.',
         readonly: 'Benannte Konten können diese Einstellungen lesen. Änderungen erfordern den gemeinsamen LAN-Administrator.', provider: 'Freigegebener Anbieter', model: 'Modell', missingProvider: 'Oben einen KI-Anbieter einrichten, dann dieses Feld aktualisieren.',
         scope: 'Datenumfang', scopeText: 'Nur gespeicherter Health-Regelzustand, ausgewählter Dienstname, Zahlenwerte und ursprüngliche Ereigniszeiten. Keine Rohlogs, Gerätenamen, IP-Adressen oder Freitextnotizen.',
         unavailableDevice: 'Nicht verfügbar; vor einer neuen Freigabe entfernen', devices: 'Ausgewählte freigegebene Geräte', noDevices: 'Keine freigegebenen Geräte verfügbar.', consent: 'Ich erlaube künftige Health-Zusammenfassungsanalysen für diese ausgewählten Geräte mit genau der oben angezeigten Anbieter-URL und dem Modell.',
-        limits: 'Höchstens 6 Analysen/Stunde, eine gleichzeitig, mindestens 60 Sekunden Abstand und 30 Minuten Vorfall-Abkühlzeit. Belegkontext: höchstens 24 KiB; Modellausgabe: 1.024 Tokens. Anbieterpreise gelten weiterhin.',
-        forwarding: 'Ein lokaler Endpoint kann Daten weiterleiten. Maskierung erfolgt nach bestem Bemühen und garantiert keine vollständige Entfernung sensibler Inhalte.',
+        limits: 'Höchstens 6 Analysen/Stunde, eine gleichzeitig, mindestens 60 Sekunden Abstand und 30 Minuten Vorfall-Abkühlzeit. Belegkontext: höchstens 24 KiB; Modellausgabe: 1.024 Tokens.',
+        forwarding: 'Anbieterkosten können anfallen. Auch lokale Endpoints können Daten weiterleiten; Maskierung ist nicht garantiert.',
+        details: 'Grenzen & Datenschutzdetails', privacy: 'Maskierung erfolgt nach bestem Bemühen und garantiert keine vollständige Entfernung sensibler Inhalte. Untersuchungen zeigen nur gespeicherte Ergebnisse.',
+        restartSummary: 'Die Freigabe gilt nach einem Manager-Neustart für genau diesen Umfang weiter. Anbieteränderungen deaktivieren sie.',
+        identityLoading: 'Gemeldete Hostnamen und IP-Adressen werden geladen…', identityUnavailable: 'Gemeldete Hostnamen und IP-Adressen sind nicht verfügbar.', identityRefresh: 'Hostname und IP-Adressen aktualisieren',
         persistentConsent: 'Ich erlaube künftige Health-Zusammenfassungsanalysen, auch nach einem Manager-Neustart, für diese ausgewählten Geräte mit genau der oben angezeigten Anbieter-URL und dem Modell.',
         persistent: 'Die Freigabe wird mit ihrem ursprünglichen Zeitpunkt in einer geschützten Datei auf diesem Manager gespeichert. Sie gilt nach einem Neustart für genau diesen Anbieter-, Geräte- und Datenumfang weiter. Anbieteränderungen deaktivieren sie; ältere Vorfälle werden nicht nachträglich analysiert. Speichern testet keine Anbieterverbindung.',
-        reset: 'Nach Manager-Neustart oder Anbieteränderung wird die Freigabe deaktiviert. Speichern testet keine Anbieterverbindung.',
-        logs: 'Rohlogs einschließen (nicht verfügbar)', logsHelp: 'Rohlogs benötigen eine separate lokale Erfassungsfreigabe und eine ausdrückliche Anbieterfreigabe. Rohlogs können hier nicht freigegeben werden.',
+        reset: 'Nach Manager-Neustart oder Anbieteränderung wird die Freigabe deaktiviert.', connectivity: 'Speichern testet keine Anbieterverbindung.',
+        logs: 'Rohlogs können hier nicht freigegeben werden.', logsHelp: 'Rohlogs benötigen eine separate lokale Erfassungsfreigabe und eine ausdrückliche Anbieterfreigabe. Rohlogs können hier nicht freigegeben werden.',
         save: 'Freigeben und aktivieren', update: 'Geänderten Umfang freigeben', disable: 'Proaktive KI deaktivieren', close: 'Schließen', cancel: 'Warten abbrechen', saved: 'Einstellungen gespeichert. Es wurde kein Verbindungstest gesendet.',
         error: 'Einstellungen konnten nicht gelesen werden. Zum Wiederholen aktualisieren.', invalid: 'Nicht unterstützte Einstellungen erhalten. Vor Änderungen aktualisieren.', timeout: 'Der Manager hat nicht rechtzeitig geantwortet. Zum Wiederholen aktualisieren.',
         conflict: 'Anbieter oder Einstellungen wurden geändert. Aktualisieren und Ziel, Modell und Geräte erneut prüfen und freigeben.',
@@ -109,7 +117,9 @@ function useProactiveAI(canManage: boolean, clearForm: () => void) {
     return { view: viewEpoch.current === getProtectedRequestEpoch() && !hasLogoutIntent() ? view : null, busy, failure, saved, locked, refresh: () => commands.current.read(), write: (value: ProactiveAIChange) => commands.current.write(value), cancel: () => commands.current.cancel() };
 }
 
-function ProactiveAIContent({ canManage }: { canManage: boolean }) {
+type ProactiveAIProps = { fleetIdentity?: Pick<FleetIdentityResource, 'identities' | 'loading' | 'error' | 'refresh'> };
+
+function ProactiveAIContent({ canManage, fleetIdentity }: ProactiveAIProps & { canManage: boolean }) {
     const [locale] = useLocale(), labels = copy[locale], heading = useId(), body = useId();
     const [expanded, setExpanded] = useState(false), [selected, setSelected] = useState<string[]>([]), [acknowledged, setAcknowledged] = useState(false);
     const toggle = useRef<HTMLButtonElement>(null);
@@ -118,6 +128,9 @@ function ProactiveAIContent({ canManage }: { canManage: boolean }) {
     useEffect(() => { setSelected(view?.deviceIds ?? []); setAcknowledged(false); }, [view]);
     const editable = !!view && canManage && !busy && !locked;
     const unavailable = selected.filter(id => !view?.availableDevices.some(device => device.id === id));
+    const deviceIds = [...(view?.availableDevices.map(device => device.id) ?? []), ...unavailable];
+    // These observations are display-only; mutations continue to use the exact enrolled IDs.
+    const identityFor = (id: string) => !fleetIdentity?.loading && !fleetIdentity?.error ? fleetIdentity?.identities.get(id) : undefined;
     const canApprove = editable && !!view?.providerConfigured && selected.length > 0 && unavailable.length === 0;
     const close = () => { state.cancel(); setSelected(view?.deviceIds ?? []); setExpanded(false); toggle.current?.focus(); };
     const change = (enabled: boolean) => {
@@ -132,18 +145,19 @@ function ProactiveAIContent({ canManage }: { canManage: boolean }) {
         {expanded && <div id={body} className="proactive-ai-body"><p>{labels.intro}</p>{!canManage && <p>{labels.readonly}</p>}
             {view && <><dl className="proactive-ai-destination"><div><dt>{labels.provider}</dt><dd>{view.providerConfigured ? view.baseURL : labels.missingProvider}</dd></div><div><dt>{labels.model}</dt><dd>{view.model || '—'}</dd></div></dl>
                 <p><strong>{labels.scope}: </strong>{labels.scopeText}</p>
-                <fieldset disabled={!editable || !view.providerConfigured} className="proactive-ai-devices"><legend>{labels.devices}</legend>{view.availableDevices.length ? view.availableDevices.map(device => <label className="proactive-ai-check" key={device.id}><input type="checkbox" checked={selected.includes(device.id)} onChange={event => { setSelected(ids => event.target.checked ? [...ids, device.id] : ids.filter(id => id !== device.id)); setAcknowledged(false); }}/><span>{device.id}</span></label>) : <p>{labels.noDevices}</p>}{unavailable.map(id => <label className="proactive-ai-check" key={id}><input type="checkbox" checked onChange={() => { setSelected(ids => ids.filter(value => value !== id)); setAcknowledged(false); }}/><span>{id}<small>{labels.unavailableDevice}</small></span></label>)}</fieldset>
-                <p>{labels.forwarding}</p><p>{labels.limits}</p><p>{view.resetsOnRestart ? labels.reset : labels.persistent}</p>
-                <label className="proactive-ai-check"><input type="checkbox" disabled checked={false} readOnly/><span>{labels.logs}<small>{labels.logsHelp}</small></span></label>
+                <fieldset disabled={!editable || !view.providerConfigured} className="proactive-ai-devices"><legend>{labels.devices}</legend>{view.availableDevices.length ? view.availableDevices.map(device => <label className="proactive-ai-check proactive-ai-device" key={device.id}><input type="checkbox" value={device.id} aria-label={`${proactiveDeviceName(identityFor(device.id), locale)} · ${device.id}`} checked={selected.includes(device.id)} onChange={event => { setSelected(ids => event.target.checked ? [...ids, device.id] : ids.filter(id => id !== device.id)); setAcknowledged(false); }}/><ProactiveDeviceIdentity identity={identityFor(device.id)} deviceId={device.id} deviceIds={deviceIds}/></label>) : <p>{labels.noDevices}</p>}{unavailable.map(id => <label className="proactive-ai-check proactive-ai-device" key={id}><input type="checkbox" value={id} aria-label={`${labels.unavailableDevice} · ${id}`} checked onChange={() => { setSelected(ids => ids.filter(value => value !== id)); setAcknowledged(false); }}/><span><ProactiveDeviceIdentity deviceId={id} deviceIds={deviceIds}/><small>{labels.unavailableDevice}</small></span></label>)}</fieldset>
+                {fleetIdentity && <div className="proactive-ai-identity-status">{(fleetIdentity.loading || fleetIdentity.error) && <span role="status">{fleetIdentity.loading ? labels.identityLoading : labels.identityUnavailable}</span>}<button className="text-button" disabled={fleetIdentity.loading || fleetIdentity.error === 'session'} onClick={fleetIdentity.refresh}>{labels.identityRefresh}</button></div>}
+                <p className="proactive-ai-caveat">{labels.forwarding}</p><p className="proactive-ai-restart">{view.resetsOnRestart ? labels.reset : labels.restartSummary}</p>
                 {canManage && <><label className="proactive-ai-check proactive-ai-consent"><input type="checkbox" disabled={!canApprove} checked={acknowledged} onChange={event => setAcknowledged(event.target.checked)}/><span>{view.resetsOnRestart ? labels.consent : labels.persistentConsent}</span></label><div className="proactive-ai-actions"><button className="button primary" disabled={!canApprove || !acknowledged} onClick={() => change(true)}>{view.enabled ? labels.update : labels.save}</button>{view.enabled && <button className="button" disabled={!editable} onClick={() => change(false)}>{labels.disable}</button>}</div></>}
+                <details className="proactive-ai-details"><summary>{labels.details}</summary><p>{labels.limits}</p><p>{labels.privacy}</p><p>{labels.logs} {labels.logsHelp}</p><p>{view.resetsOnRestart ? labels.connectivity : labels.persistent}</p></details>
             </>}
             <div className="proactive-ai-actions">{busy && <button className="button" onClick={state.cancel}>{labels.cancel}</button>}<button className="button" onClick={close}>{labels.close}</button></div>
         </div>}
     </section>;
 }
-export function ProactiveAISettingsPanel() {
+export function ProactiveAISettingsPanel({ fleetIdentity }: ProactiveAIProps = {}) {
     const operator = useOperator();
     if (!operator || operator.mode !== 'lan' || !operator.authenticated) return null;
     const canManage = (operator.loginMode ?? 'shared') === 'shared';
-    return <ProactiveAIContent key={`${operator.actorId ?? ''}:${operator.expiresAt ?? ''}:${canManage}`} canManage={canManage}/>;
+    return <ProactiveAIContent key={`${operator.actorId ?? ''}:${operator.expiresAt ?? ''}:${canManage}`} canManage={canManage} fleetIdentity={fleetIdentity}/>;
 }

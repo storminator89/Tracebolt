@@ -11,7 +11,7 @@ const settings = { schemaVersion: 'tracebolt.proactive-ai-settings.v1', revision
 const json = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status });
 beforeEach(() => { setLocale('en', false); localStorage.clear(); sessionStorage.clear(); vi.mocked(useOperator).mockReturnValue({ mode: 'lan', authenticated: true, loginMode: 'shared', expiresAt: null, insecureTestMode: false, logout: vi.fn(), theme: 'light', setTheme: vi.fn() }); });
 afterEach(() => { cleanup(); abortProtectedRequests(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
-async function review() { await screen.findByText('Off'); fireEvent.click(screen.getByRole('button', { name: 'Proactive AI diagnostics' })); fireEvent.click(screen.getByRole('checkbox', { name: id })); fireEvent.click(screen.getByRole('checkbox', { name: /I approve future health-summary/ })); }
+async function review() { await screen.findByText('Off'); fireEvent.click(screen.getByRole('button', { name: 'Proactive AI diagnostics' })); fireEvent.click(screen.getByRole('checkbox', { name: new RegExp(id) })); fireEvent.click(screen.getByRole('checkbox', { name: /I approve future health-summary/ })); }
 it('sends only the explicitly approved scope using same-origin CSRF and no provider request', async () => {
     const fetch = vi.fn().mockImplementation((path: string, options: RequestInit) => Promise.resolve(path === '/api/session' ? json({ csrfToken: 'fixture-csrf' }) : options?.method === 'POST' ? json({ ...settings, revision: 'revision-b', enabled: true, deviceIds: [id] }) : json(settings)));
     vi.stubGlobal('fetch', fetch); render(<ProactiveAISettingsPanel/>); await review(); expect(fetch).toHaveBeenCalledTimes(1);
