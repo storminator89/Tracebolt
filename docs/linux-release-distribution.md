@@ -21,6 +21,11 @@ bootstrap rejects runtime installation until its own acceptance gate is recorded
 Other distributions, architectures, Windows, macOS and non-systemd environments
 fail clearly. No fallback changes the supported platform or collection profile.
 
+The unactivated source candidate now implements the same amd64/ARM64 installer,
+read-admin, upgrade and helper paths. Its release manifest still admits only amd64. The [ARM64 support matrix and native gates](linux-arm64-support.md)
+must be completed before adding ARM64 runtime admission; none of the historical release
+bytes or current dashboard pins are changed by this source work.
+
 The target must already provide Python 3, curl, the distribution's system CA
 bundle, sha256sum and ordinary system tools. There is no automatic dependency
 installation, privilege escalation, global trust installation, firewall change,
@@ -134,7 +139,9 @@ its declared Go version. The new source contract cross-builds `agent-service`, `
 `lan-agent` and `socket-owner-reader` with CGO disabled, baseline amd64/arm64 settings, trimmed paths and
 recorded VCS metadata. It makes an explicit `git archive` from that full source
 SHA. The strict new manifest contains the chosen version/source, nine file hashes
-and sizes, and only `linux-amd64` as the runtime target.
+and sizes, and only `linux-amd64` as the runtime target. ARM64 installer/helper
+paths are implemented and fixture-tested, but runtime admission stays closed
+until the separate native gates pass. A source build cannot promote that claim.
 
 The attestation binds this manifest to the specific build workflow. It does not
 prove that two independent builds are byte-identical, and it does not substitute

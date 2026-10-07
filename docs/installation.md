@@ -63,6 +63,10 @@ compatible source/fixture tests leave native privileged acceptance outstanding.
 | Windows/macOS endpoint | Native `cmd/agent` bounded stdout-only collector; limited platform reads | Supported LAN sender, native ACL/state lifecycle, installed service or fleet deployment |
 | Docker architectures | Linux amd64 TLS and explicit HTTP-test lifecycle gates; Linux arm64 cross-build support | arm64 runtime acceptance from cross-building alone |
 
+The separate [ARM64/Pi OS 64-bit source candidate](linux-arm64-support.md)
+implements architecture parity and defines its outstanding native acceptance gates.
+It does not change the current rc.3 download pin or claim an installed Pi.
+
 Use the selected revision's actual CI results, not this table, to establish what
 passed. Windows/macOS collector runtime results do **not** validate a LAN sender.
 The product direction is native agents on Windows, Linux and macOS with a Docker

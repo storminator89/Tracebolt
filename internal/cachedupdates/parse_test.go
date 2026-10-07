@@ -30,6 +30,18 @@ func TestPolicyOnlyRetainsSelectedNativeFields(t *testing.T) {
 			t.Fatal("accepted invalid policy")
 		}
 	}
+	for _, arch := range []string{"arm64", "armhf", "all"} {
+		// APT may omit the architecture in a native header. Each collector batch
+		// has one architecture, so both forms retain the exact package key.
+		for _, header := range []string{"fixture-package", "fixture-package:" + arch} {
+			p := []installedPackage{{"fixture-package", arch, "1.0-1", false}}
+			raw := header + ":\n  Installed: 1.0-1\n  Candidate: 2.0-1\n  Version table:\n"
+			got, err := parsePolicy(context.Background(), []byte(raw), p)
+			if err != nil || len(got) != 1 || got["fixture-package:"+arch] != "2.0-1" {
+				t.Fatal("ARM64 or multiarch APT header lost identity")
+			}
+		}
+	}
 }
 func TestMissingPolicyIsUnknownNotZeroSuccess(t *testing.T) {
 	got, e := parsePolicy(context.Background(), nil, []installedPackage{{"curl", "amd64", "1.0", false}})

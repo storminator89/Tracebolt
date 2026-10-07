@@ -15,6 +15,7 @@ import selectors
 import signal
 import stat
 import subprocess
+import sys
 import time
 
 HELPER = "tracebolt-socket-owner-reader"
@@ -536,13 +537,22 @@ def fail_closed(s, e, templates, expected_facts, parent_intent_sha256, *, contai
             revoke_safety_shutdown(e, Rejected("revoke-incomplete"), disable_admission=True, helper_identity=(r["helperUid"], r["helperGid"]))
 
 
+def native_architecture():
+    """Kernel and Python/userspace must agree on a supported 64-bit target."""
+    u = os.uname()
+    arch = {"x86_64": "amd64", "aarch64": "arm64"}.get(u.machine)
+    require(u.sysname == "Linux" and arch is not None and sys.maxsize > 2**32, "supported-linux-64bit-architecture")
+    return arch
+
+
 def real_effects(s):
     """Production-only fixed adapter. Constructing it performs no host access."""
     class Effects(s.Effects):
         def platform(self):
             u = os.uname()
             m = re.match(r"([0-9]+)\.([0-9]+)", u.release)
-            require(u.sysname == "Linux" and u.machine == "x86_64" and m and tuple(map(int, m.groups())) >= (6, 5), "supported-linux-amd64-kernel")
+            native_architecture()
+            require(m and tuple(map(int, m.groups())) >= (6, 5), "supported-linux-kernel-65")
             require(self._pseudo("/proc/1/comm", 64) == b"systemd\n", "systemd-pid1-required")
             mounts = self._pseudo("/proc/self/mountinfo", 1 << 20).decode("ascii").splitlines()
             matching = [line.split(" - ", 1) for line in mounts if len(line.split()) >= 7 and line.split()[4] == "/sys/fs/cgroup"]
@@ -687,7 +697,7 @@ def real_effects(s):
             require(exact_file(self, path, mode, gid, limit=128 << 20 if path == BINARY else 16384) == raw, "created-artifact-readback")
 
         def install_helper(self, artifact):
-            require(type(artifact) is dict and set(artifact) == {"path", "size", "sha256"} and type(artifact["path"]) is str and re.fullmatch(r"/tmp/tracebolt-release-[a-z0-9_]{8}/tracebolt-v[0-9]+\.[0-9]+\.[0-9]+(?:-[A-Za-z0-9.-]+)?-linux-amd64-socket-owner-reader", artifact["path"]) and type(artifact["size"]) is int and 0 < artifact["size"] <= 128 << 20 and valid_hash(artifact["sha256"]), "verified-helper-artifact")
+            require(type(artifact) is dict and set(artifact) == {"path", "size", "sha256"} and type(artifact["path"]) is str and re.fullmatch(r"/tmp/tracebolt-release-[a-z0-9_]{8}/tracebolt-v[0-9]+\.[0-9]+\.[0-9]+(?:-[A-Za-z0-9.-]+)?-linux-" + re.escape(native_architecture()) + "-socket-owner-reader", artifact["path"]) and type(artifact["size"]) is int and 0 < artifact["size"] <= 128 << 20 and valid_hash(artifact["sha256"]), "verified-helper-artifact")
             # The bootstrap's one fixed root-private staging directory is the
             # sole sticky-parent exception. Never accept a caller-selected root.
             root = os.open("/", os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC)

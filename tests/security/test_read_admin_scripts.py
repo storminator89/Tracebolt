@@ -121,7 +121,7 @@ class InertScriptTests(unittest.TestCase):
 
     def test_cancel_preflight_diagnostics_remain_closed(self):
         for stage in ('systemd-status-members', 'fixed-command-failed', 'unit-dropin',
-                      'supported-linux-amd64-kernel', 'acceptance-launcher-host',
+                      'supported-linux-amd64-kernel', 'supported-linux-64bit-architecture', 'supported-linux-kernel-65', 'acceptance-launcher-host',
                       'acceptance-launcher-components'):
             event = PTY.exit_event(encoded(LAUNCHER.failure_result(stage)), 1, '', 0)
             self.assertEqual(event['readAdminFailure'], stage)

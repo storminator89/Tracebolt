@@ -989,6 +989,8 @@ stopped-agent
 stopped-agent-preview
 stopped-installation-changed
 supported-linux-amd64-kernel
+supported-linux-64bit-architecture
+supported-linux-kernel-65
 systemd-pid1-required
 systemd-reload-command-failed
 systemd-status-members

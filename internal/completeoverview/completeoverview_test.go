@@ -249,9 +249,13 @@ func TestCancellationKeepsAdmissionUntilSynchronousProviderReturns(t *testing.T)
 	}
 }
 func TestParsersPreserveAllowedMetricsAndRejectUnsafeValues(t *testing.T) {
-	p, e := ParseProcessStat([]byte(statFixture(42, "name with ) paren")), 42, 4096, 100)
-	if e != nil || *p.RSSBytes != 32768 || *p.CPUTimeSeconds != 2 || *p.Threads != 3 {
-		t.Fatal("stat metrics")
+	// ARM64 kernels can use larger pages, including 16 KiB on Raspberry Pi 5.
+	// RSS uses the observed page size; USER_HZ remains 100 for both 64-bit targets.
+	for _, pageBytes := range []uint64{4096, 16384, 65536} {
+		p, e := ParseProcessStat([]byte(statFixture(42, "name with ) paren")), 42, pageBytes, 100)
+		if e != nil || *p.RSSBytes != 8*pageBytes || *p.CPUTimeSeconds != 2 || *p.Threads != 3 {
+			t.Fatal("stat metrics for supported Linux page size")
+		}
 	}
 	for _, raw := range []string{statFixture(41, "other pid"), statFixture(42, "bad\nname"), strings.Replace(statFixture(42, "bad rss"), "0 8 ", "0 -8 ", 1)} {
 		if _, e := ParseProcessStat([]byte(raw), 42, 4096, 100); e == nil {

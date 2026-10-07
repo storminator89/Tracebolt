@@ -43,6 +43,9 @@ jobs:
           - runner: ubuntu-24.04
             platform: linux
             arch: amd64
+          - runner: ubuntu-24.04-arm
+            platform: linux
+            arch: arm64
           - runner: windows-2025
             platform: windows
             arch: amd64
@@ -66,6 +69,13 @@ jobs:
         env:
           PYTHONDONTWRITEBYTECODE: '1'
         run: python tests/security/run_native_smoke.py --expect-platform ${{ matrix.platform }} --expect-arch ${{ matrix.arch }}
+      - name: Execute ARM64 Linux installer and helper fixture tests natively
+        if: matrix.platform == 'linux' && matrix.arch == 'arm64'
+        env:
+          GOTOOLCHAIN: local
+        run: |
+          go test -race -buildvcs=false ./internal/agentinstall ./internal/socketowner ./internal/systeminventory ./internal/operational ./internal/completeoverview ./internal/linuxpackages ./internal/cachedupdates ./internal/assessment ./cmd/agent-service
+          CGO_ENABLED=0 go build -buildvcs=false ./cmd/lan-manager ./cmd/action-setup ./cmd/lan-agent ./cmd/enroll-agent ./cmd/agent-service ./cmd/socket-owner-reader
 
   package-dense-race:
     name: Dense package race (${{ matrix.topology }}/${{ matrix.profile }})
@@ -700,9 +710,19 @@ jobs:
           retention-days: 3
 
   container:
-    name: Linux manager container lifecycle (TLS and HTTP test)
-    runs-on: ubuntu-24.04
+    name: Linux manager container lifecycle (${{ matrix.arch }}, TLS and HTTP test)
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            arch: amd64
+            machine: x86_64
+          - runner: ubuntu-24.04-arm
+            arch: arm64
+            machine: aarch64
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -711,8 +731,15 @@ jobs:
         with:
           go-version-file: go.mod
           cache: false
-      - name: Build local Linux image without registry publication
-        run: docker build --tag tracebolt-manager:ci .
+      - name: Build and verify the native Linux image without registry publication
+        env:
+          EXPECTED_ARCH: ${{ matrix.arch }}
+          EXPECTED_MACHINE: ${{ matrix.machine }}
+        run: |
+          test "$(uname -m)" = "$EXPECTED_MACHINE"
+          test "$(go env GOHOSTARCH)" = "$EXPECTED_ARCH"
+          docker build --platform "linux/$EXPECTED_ARCH" --tag tracebolt-manager:ci .
+          test "$(docker image inspect --format '{{.Os}}/{{.Architecture}}' tracebolt-manager:ci)" = "linux/$EXPECTED_ARCH"
       - name: Exercise both disposable container profiles
         run: |
           if ! TRACEBOLT_CONTAINER_IMAGE=tracebolt-manager:ci go test -count=1 -v ./tests/container > "$RUNNER_TEMP/container-tests.log" 2>&1; then

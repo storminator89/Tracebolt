@@ -58,6 +58,20 @@ class Tests(unittest.TestCase):
         command=upgrade.real_adapter.call_args.args[-1]
         self.assertEqual(command[1:4],["--action","upgrade","--apply"])
 
+    def test_arm64_upgrade_passes_same_architecture_to_adapter_and_installer(self):
+        self.package_upgrade()
+        for role in b.ROLES:
+            self.manifest["assets"][f"tracebolt-{f.VERSION}-linux-arm64-{role}"] = dict(sha256="d"*64, size=1)
+        args = b.parse_args(["--action", "upgrade", "--upgrade-read-admin", "--apply"])
+        workflow, inventory, setup, amendment, socket, upgrade = (mock.Mock() for _ in range(6))
+        upgrade.run.return_value = dict(completed=True, canceled=False)
+        with mock.patch.object(b, "read_admin_sources", return_value=(workflow, inventory, setup, amendment, None, socket, {}, upgrade)), contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(b.run_upgrade_read_admin(args, self.root, self.manifest, "arm64"), 0)
+        self.assertEqual(upgrade.real_adapter.call_args.kwargs, {"arch": "arm64"})
+        command = upgrade.real_adapter.call_args.args[-1]
+        self.assertTrue(command[0].endswith("-linux-arm64-agent-service"))
+        self.assertFalse(any("linux-amd64" in token for token in command))
+
     def test_main_upgrade_stages_all_roles_and_uses_coordinator(self):
         pin=dict(version=f.VERSION,sourceCommit="a"*40,manifestSHA256="b"*64,bundleSHA256="c"*64)
         with contextlib.ExitStack() as stack:

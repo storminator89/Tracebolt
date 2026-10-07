@@ -5,6 +5,7 @@ import importlib.util
 import json
 from pathlib import Path
 import stat
+from types import SimpleNamespace
 import unittest
 from unittest import mock
 
@@ -187,6 +188,31 @@ class Fixture(f.Fixture):
 
 
 class SetupTests(unittest.TestCase):
+    def test_platform_accepts_both_64bit_architectures_with_unchanged_kernel_and_namespace_gates(self):
+        for machine, arch in (("x86_64", "amd64"), ("aarch64", "arm64")):
+            real = x.real_effects(s)
+            def pseudo(path, limit):
+                return {"/proc/1/comm": b"systemd\n", "/proc/self/mountinfo": b"1 2 0:1 / /sys/fs/cgroup rw - cgroup2 cgroup rw\n", "/sys/fs/cgroup/cgroup.controllers": b"cpu memory pids\n"}[path]
+            with self.subTest(machine=machine), mock.patch.object(x.os, "uname", return_value=SimpleNamespace(sysname="Linux", machine=machine, release="6.18.0")), mock.patch.object(x.sys, "maxsize", 2**63-1), mock.patch.object(real, "_pseudo", side_effect=pseudo):
+                self.assertEqual(x.native_architecture(), arch)
+                real.platform()
+        for machine, bits, release, expected in (("armv7l", 63, "6.18", "architecture"), ("aarch64", 31, "6.18", "architecture"), ("aarch64", 63, "6.1.0", "kernel")):
+            real = x.real_effects(s)
+            with self.subTest(machine=machine, bits=bits, release=release), mock.patch.object(x.os, "uname", return_value=SimpleNamespace(sysname="Linux", machine=machine, release=release)), mock.patch.object(x.sys, "maxsize", 2**bits-1), mock.patch.object(real, "_pseudo", side_effect=AssertionError("must reject before host reads")):
+                with self.assertRaisesRegex(x.Rejected, expected):
+                    real.platform()
+
+    def test_helper_artifact_filename_must_match_native_architecture_before_open(self):
+        for arch, other in (("amd64", "arm64"), ("arm64", "amd64")):
+            real = x.real_effects(s)
+            with self.subTest(arch=arch), mock.patch.object(x, "native_architecture", return_value=arch), mock.patch.object(x.os, "open", side_effect=AssertionError("reached verified native staging")):
+                artifact = dict(path=f"/tmp/tracebolt-release-abcd1234/tracebolt-v1.2.3-linux-{other}-socket-owner-reader", size=1, sha256="a"*64)
+                with self.assertRaisesRegex(x.Rejected, "verified-helper-artifact"):
+                    real.install_helper(artifact)
+                artifact["path"] = artifact["path"].replace(other, arch)
+                with self.assertRaisesRegex(AssertionError, "reached verified native staging"):
+                    real.install_helper(artifact)
+
     def test_guided_validation_uses_supported_offline_args_and_dropped_identity(self):
         real = x.real_effects(s)
         facts = dict(uid=200, gid=201, profile="tls")

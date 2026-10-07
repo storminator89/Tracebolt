@@ -49,7 +49,7 @@ def digest(raw):
 
 
 def make_plan(args, manifest, arch):
-    require(args.action == "install" and not args.resume and arch == "amd64", "fresh-read-admin-only")
+    require(args.action == "install" and not args.resume and arch in ("amd64", "arm64"), "fresh-read-admin-only")
     require(type(manifest["sourceCommit"]) is str and re.fullmatch(r"[0-9a-f]{40}", manifest["sourceCommit"]), "source-revision")
     version = manifest["version"]
     hashes = {role: manifest["assets"][f"tracebolt-{version}-linux-{arch}-{role}"]["sha256"]

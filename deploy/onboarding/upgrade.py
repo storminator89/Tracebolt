@@ -179,13 +179,14 @@ print(h.hexdigest())
 '''
 
 
-def real_adapter(w, s, inventory, amendment, socket, templates, release, directory, command):
+def real_adapter(w, s, inventory, amendment, socket, templates, release, directory, command, *, arch):
+    require(arch in ("amd64", "arm64"), "supported-upgrade-architecture")
     ie = inventory.real_effects(s)
     je = amendment.real_effects(s, {})
     se = socket.real_effects(s)
     roles = ("agent-service", "lan-agent", "enroll-agent", "socket-owner-reader")
-    assets = {role: dict(release["assets"][f"tracebolt-{release['version']}-linux-amd64-{role}"],
-                        path=str(directory / f"tracebolt-{release['version']}-linux-amd64-{role}")) for role in roles}
+    assets = {role: dict(release["assets"][f"tracebolt-{release['version']}-linux-{arch}-{role}"],
+                        path=str(directory / f"tracebolt-{release['version']}-linux-{arch}-{role}")) for role in roles}
     source = release["assets"][f"tracebolt-{release['version']}-source.tar"]["sha256"]
     release_hash = digest((directory / "manifest.json").read_bytes())
     participants = (s.AGENT_UNIT, s.SOCKET, s.SERVICE, socket.SOCKET, socket.SERVICE)
@@ -204,6 +205,7 @@ def real_adapter(w, s, inventory, amendment, socket, templates, release, directo
             require(updating or ie.absent(TRANSACTION), "unresolved-read-admin-upgrade")
             require(all(ie.absent(p) for p in (socket.REVOKE_STARTED, socket.REVOKE_COMPLETE, socket.DISABLE_STAGE)), "revoked-or-uncertain-socket-scope")
             se.platform()
+            require(socket.native_architecture() == arch, "upgrade-architecture-mismatch")
             facts = inventory.inspect(s, ie, templates, inventory.selected_scopes(True))
             require((facts["profile"] == "http-test") == ("--insecure-http-test" in command), "upgrade-transport-acknowledgement")
             raw = ie.read(w.RECEIPT, 16384, 0o600)
@@ -293,7 +295,7 @@ def real_adapter(w, s, inventory, amendment, socket, templates, release, directo
         def artifact(self, role):
             spec = assets[role]
             name = spec["path"]
-            require(re.fullmatch(r"/tmp/tracebolt-release-[a-z0-9_]{8}/tracebolt-v[0-9]+\.[0-9]+\.[0-9]+(?:-[A-Za-z0-9.-]+)?-linux-amd64-" + re.escape(role), name), "verified-upgrade-artifact-path")
+            require(re.fullmatch(r"/tmp/tracebolt-release-[a-z0-9_]{8}/tracebolt-v[0-9]+\.[0-9]+\.[0-9]+(?:-[A-Za-z0-9.-]+)?-linux-" + re.escape(arch) + "-" + re.escape(role), name), "verified-upgrade-artifact-path")
             # The verified bootstrap staging directory is the only sticky-parent exception.
             parent = Path(name).parent
             pst = os.lstat(parent); tst = os.lstat("/tmp")

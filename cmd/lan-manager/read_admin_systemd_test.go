@@ -695,6 +695,8 @@ stopped-agent
 stopped-agent-preview
 stopped-installation-changed
 supported-linux-amd64-kernel
+supported-linux-64bit-architecture
+supported-linux-kernel-65
 systemd-pid1-required
 systemd-reload-command-failed
 systemd-status-members
@@ -775,7 +777,7 @@ type readAdminProbeDiagnostic struct {
 
 func readAdminProbeReason(value string) string {
 	switch value {
-	case "not_attempted", "none", "driver-execution-failed", "driver-output-invalid", "unexpected-cancellation-result", "acceptance-gate-rejected", "acceptance-launcher-rejected", "acceptance-driver-rejected", "acceptance-deadline-exceeded", "acceptance-capture-exceeded", "read-admin-result-unavailable", "read-admin-result-invalid", "read-admin-phase-incomplete", "existing-installation-use-upgrade-or-recovery", "existing-journal-state-retained", "supported-linux-amd64-kernel", "systemd-pid1-required", "cgroup-v2-required", "platform-file", "platform-read-limit", "local-account-database", "local-nss-only", "existing-socket-owner-account", "alternate-unit-fragment", "unit-dropin", "existing-socket-owner-state", "fixed-command-failed", "systemd-unit-inspection-command-failed", "systemd-status-members", "preexisting-loaded-unit", "protected-directory", "protected-file", "changed-protected-file", "command-timeout", "command-output-limit", "acceptance-launcher-input", "acceptance-launcher-config", "acceptance-launcher-artifacts", "acceptance-launcher-source-loader", "acceptance-launcher-arguments", "acceptance-launcher-terminal", "acceptance-launcher-host", "acceptance-launcher-components", "acceptance-launcher-workflow":
+	case "not_attempted", "none", "driver-execution-failed", "driver-output-invalid", "unexpected-cancellation-result", "acceptance-gate-rejected", "acceptance-launcher-rejected", "acceptance-driver-rejected", "acceptance-deadline-exceeded", "acceptance-capture-exceeded", "read-admin-result-unavailable", "read-admin-result-invalid", "read-admin-phase-incomplete", "existing-installation-use-upgrade-or-recovery", "existing-journal-state-retained", "supported-linux-amd64-kernel", "supported-linux-64bit-architecture", "supported-linux-kernel-65", "systemd-pid1-required", "cgroup-v2-required", "platform-file", "platform-read-limit", "local-account-database", "local-nss-only", "existing-socket-owner-account", "alternate-unit-fragment", "unit-dropin", "existing-socket-owner-state", "fixed-command-failed", "systemd-unit-inspection-command-failed", "systemd-status-members", "preexisting-loaded-unit", "protected-directory", "protected-file", "changed-protected-file", "command-timeout", "command-output-limit", "acceptance-launcher-input", "acceptance-launcher-config", "acceptance-launcher-artifacts", "acceptance-launcher-source-loader", "acceptance-launcher-arguments", "acceptance-launcher-terminal", "acceptance-launcher-host", "acceptance-launcher-components", "acceptance-launcher-workflow":
 		return value
 	default:
 		return "read-admin-phase-incomplete"

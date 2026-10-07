@@ -17,15 +17,15 @@ def load(name, path):
 w = load("onboarding", Path(__file__).with_name("read_admin.py"))
 VERSION = "v0.1.0-inert.1"
 
-def plan(http=False):
+def plan(http=False, arch="amd64"):
     args = SimpleNamespace(action="install", resume=False, bootstrap_sha256="d" * 64,
         manager_origin="http://192.168.1.2:8787" if http else "https://manager.example:8443",
         invitation_id="invite_" + "e" * 32, insecure_http_test=http,
         read_admin_agent_origin="http://192.168.1.2:8788" if http else "https://manager.example:8444")
-    assets = {f"tracebolt-{VERSION}-linux-amd64-{role}": {"sha256": (str(i) * 64)}
+    assets = {f"tracebolt-{VERSION}-linux-{arch}-{role}": {"sha256": (str(i) * 64)}
               for i, role in enumerate(("agent-service", "enroll-agent", "lan-agent", "socket-owner-reader"), 1)}
     assets[f"tracebolt-{VERSION}-source.tar"] = {"sha256": "c" * 64}
-    return w.make_plan(args, dict(version=VERSION, sourceCommit="a" * 40, assets=assets), "amd64")
+    return w.make_plan(args, dict(version=VERSION, sourceCommit="a" * 40, assets=assets), arch)
 
 class Fixture:
     def __init__(self, http=False):
@@ -116,6 +116,16 @@ class Fixture:
         return w.run(self.plan, self, self.install, self.confirm, self.output.append, resume=resume)
 
 class Tests(unittest.TestCase):
+    def test_arm64_plan_has_identical_scopes_and_architecture_bound_hashes(self):
+        arm = plan(arch="arm64")
+        amd = plan()
+        self.assertEqual(arm["architecture"], "arm64")
+        self.assertEqual(arm["scopes"], amd["scopes"])
+        self.assertEqual(arm["artifacts"], amd["artifacts"])
+        for unsupported in ("arm", "armhf", "armv7l", "aarch64", "i386"):
+            with self.subTest(arch=unsupported), self.assertRaises(w.Rejected):
+                plan(arch=unsupported)
+
     def test_one_combined_approval_precedes_install_and_all_scopes(self):
         f = Fixture()
         result = f.run()

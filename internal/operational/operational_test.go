@@ -102,6 +102,12 @@ func TestProcessStatMetadataAndHighRSSPriority(t *testing.T) {
 	if !ok || p.PID != 17 || *p.RSSBytes != 81920 || *p.CPUTimeSeconds != 2 || *p.Threads != 2 || p.State != "sleeping" {
 		t.Fatal("proc fields")
 	}
+	for _, pageBytes := range []uint64{16384, 65536} {
+		p, ok := parseProcessStat(statFixture(17, "worker (io)", 20), 17, pageBytes)
+		if !ok || *p.RSSBytes != 20*pageBytes || *p.CPUTimeSeconds != 2 {
+			t.Fatal("ARM64 page size changed RSS or USER_HZ semantics")
+		}
+	}
 	if _, ok = parseProcessStat(statFixture(17, "/path/private", 20), 17, 4096); ok {
 		t.Fatal("path in process name")
 	}

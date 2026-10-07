@@ -83,6 +83,34 @@ def upgrade_binding(host, revision="new", prior=""):
 
 
 class BindingTests(unittest.TestCase):
+    def test_real_upgrade_adapter_selects_matching_arm64_assets_and_rejects_cross_architecture(self):
+        inventory, amendment = mock.Mock(), mock.Mock()
+        inventory.Rejected = amendment.Rejected = x.Rejected
+        effects = mock.Mock()
+        roles = ("agent-service", "lan-agent", "enroll-agent", "socket-owner-reader")
+        with tempfile.TemporaryDirectory(prefix="inert-arm64-upgrade-") as tmp:
+            directory = Path(tmp)
+            (directory / "manifest.json").write_bytes(b'{"inert":true}')
+            # Only ARM64 entries are present: selecting amd64 must fail.
+            release = dict(version="v2.0.0", assets={f"tracebolt-v2.0.0-linux-arm64-{role}": dict(size=1, sha256="a"*64) for role in roles})
+            release["assets"]["tracebolt-v2.0.0-source.tar"] = dict(sha256="b"*64)
+            with mock.patch.object(x, "real_effects", return_value=effects):
+                adapter = u.real_adapter(w, s, inventory, amendment, x, {}, release, directory, [], arch="arm64")
+            with mock.patch.object(x, "native_architecture", return_value="amd64"):
+                with self.assertRaisesRegex(u.Rejected, "upgrade-architecture-mismatch"):
+                    adapter.inspect()
+            inventory.inspect.assert_not_called()
+            # Recreate at the exact public staging shape with manifest reads inert.
+            with mock.patch.object(x, "real_effects", return_value=effects), mock.patch.object(Path, "read_bytes", return_value=b'{"inert":true}'):
+                adapter = u.real_adapter(w, s, inventory, amendment, x, {}, release, Path("/tmp/tracebolt-release-abcd1234"), [], arch="arm64")
+            for role in roles:
+                with self.subTest(role=role), mock.patch.object(u.os, "lstat", side_effect=AssertionError("verified native artifact path accepted")):
+                    with self.assertRaisesRegex(AssertionError, "verified native artifact path accepted"):
+                        adapter.artifact(role)
+            for bad in ("arm", "armhf", "aarch64", "i386"):
+                with self.subTest(arch=bad), self.assertRaisesRegex(u.Rejected, "supported-upgrade-architecture"):
+                    u.real_adapter(w, s, inventory, amendment, x, {}, release, directory, [], arch=bad)
+
     def test_new_artifacts_retain_original_grant_and_allow_supported_revoke(self):
         for profile in ("tls", "http-test"):
             with self.subTest(profile=profile):
@@ -295,7 +323,7 @@ class LifecycleTests(unittest.TestCase):
             release=dict(version="v2.0.0",assets={f"tracebolt-v2.0.0-linux-amd64-{role}":dict(size=1,sha256="a"*64) for role in ("agent-service","lan-agent","enroll-agent","socket-owner-reader")})
             release["assets"]["tracebolt-v2.0.0-source.tar"]=dict(sha256="b"*64)
             with mock.patch.object(x,"real_effects",return_value=se):
-                adapter=u.real_adapter(w,s,inventory,amendment,x,{},release,directory,[])
+                adapter=u.real_adapter(w,s,inventory,amendment,x,{},release,directory,[], arch="amd64")
             effects=[]
             def proof(facts,unit):
                 if unit==x.SERVICE:raise u.Rejected("foreign-unit")

@@ -42,6 +42,9 @@ func TestReleaseTargetIsExact(t *testing.T) {
 	}{
 		{"ID=debian\nVERSION_ID=13\nVERSION_CODENAME=trixie\n", Debian13},
 		{"ID=ubuntu\nVERSION_ID=24.04\nVERSION_CODENAME=noble\n", Ubuntu2404},
+		// A derivative label or ID_LIKE is not Debian vendor coverage.
+		{"ID=raspbian\nVERSION_ID=13\nVERSION_CODENAME=trixie\nID_LIKE=debian\n", Unsupported},
+		{"ID=raspberrypi\nVERSION_ID=13\nVERSION_CODENAME=trixie\nID_LIKE=debian\n", Unsupported},
 		{"ID=linuxmint\nVERSION_ID=24.04\nVERSION_CODENAME=noble\nID_LIKE=ubuntu\n", Unsupported},
 		{"ID=debian\nVERSION_ID=12\nVERSION_CODENAME=bookworm\n", Unsupported},
 		{"ID=debian\nVERSION_ID=13\nVERSION_CODENAME=bookworm\n", Inconsistent},

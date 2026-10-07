@@ -107,6 +107,31 @@ func TestSupportedDebianAndUbuntuCandidatesAndHolds(t *testing.T) {
 			}
 		})
 	}
+	t.Run("arm64-with-foreign-and-all-packages", func(t *testing.T) {
+		// pi-gen's 64-bit image enables foreign armhf packages too. Keeping them
+		// in the package inventory does not add a 32-bit agent runtime target.
+		f := fixture("debian")
+		f.packages = []installedPackage{
+			{"shared-package", "arm64", "1.0-1", false},
+			{"shared-package", "armhf", "1.0-1", true},
+			{"common-data", "all", "1.0-1", false},
+		}
+		f.candidates = map[string]string{
+			"shared-package:arm64": "2.0-1",
+			"shared-package:armhf": "2.0-1",
+			"common-data:all":      "1.0-1",
+		}
+		s := collectFixture(t, f)
+		if s.Coverage != "complete" || *s.InstalledCount != 3 || *s.CheckedCount != 3 || *s.CandidateCount != 2 || *s.HeldCount != 1 || len(s.Items) != 2 {
+			t.Fatal("ARM64 multiarch inventory counts")
+		}
+		if s.Items[0].Architecture != "arm64" || s.Items[0].State != "candidate_only" || s.Items[1].Architecture != "armhf" || s.Items[1].State != "held" {
+			t.Fatal("multiarch candidates or holds conflated")
+		}
+		if strings.Join(f.calls, ",") != "inventory,metadata,holds,policy,policy,policy,recheck,close" {
+			t.Fatal("APT policy was not batched by architecture")
+		}
+	})
 }
 func TestStaleSourceAgeIsNotRefreshedByRead(t *testing.T) {
 	f := fixture("debian")

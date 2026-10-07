@@ -90,7 +90,7 @@ class Composition:
         release["assets"]["tracebolt-v2.0.0-source.tar"] = dict(sha256="b" * 64)
         with mock.patch.object(i, "real_effects", return_value=h), mock.patch.object(a, "real_effects", return_value=je), \
              mock.patch.object(x, "real_effects", return_value=se):
-            self.adapter = u.real_adapter(w, s, i, a, x, h.templates, release, directory, [])
+            self.adapter = u.real_adapter(w, s, i, a, x, h.templates, release, directory, [], arch="amd64")
         # The sole cgroup effect stays inert; ownership, restore ordering, real
         # status parsers, command guards and downstream inspectors are unmodified.
         self.adapter.drain = lambda unit: self.drains.append(unit)

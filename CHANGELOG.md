@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-10-07 — Prepare Linux ARM64 parity and native CI
+
+- Select architecture-bound read-admin, upgrade and socket-helper artifacts for 64-bit amd64 or ARM64 hosts. Reject 32-bit userland and cross-architecture upgrade inputs; retain the existing kernel, ownership, approval and private-state checks.
+- Keep release runtime admission restricted to amd64. Historical published bootstraps, the verified rc.3 assets and the dashboard pin are unchanged. Raspberry Pi installation, privileged helper operation, upgrade and reboot still need their own approved native acceptance before an ARM64 release can be activated.
+- Add a native Linux ARM64 collector smoke and installer/helper/parser fixture lane, including larger page sizes and foreign-package architecture fixtures. Run the existing disposable manager container lifecycle on both native amd64 and ARM64 runners with explicit host/image architecture checks and the original TLS/HTTP assertions.
+- Preserve the accepted amd64 evening-update baseline: exact 3444 passed all 16 CI jobs and 124 browser cases, with three historical enrollment quarantines/skips retained. This separate source checkpoint does not require another user release build or change the accepted rc.3 upgrade instructions.
+
 ## 2026-10-07 — Align the hosted manager acceptance contracts
 
 - Update the older v3 enrollment browser case to recognize the already verified rc.3 read-admin pin. Preserve its original consent, public checksum, hidden-secret and no-execution assertions.

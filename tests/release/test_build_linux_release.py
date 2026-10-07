@@ -51,6 +51,7 @@ class BuildContract(unittest.TestCase):
             manifest = json.loads((output / "manifest.json").read_bytes())
             self.assertEqual(set(manifest["assets"]), build.bootstrap.asset_names("v0.1.0-inert.1"))
             self.assertEqual(len(manifest["assets"]), 9)
+            self.assertEqual(manifest["runtimeTargets"], ["linux-amd64"])
             for name, entry in manifest["assets"].items():
                 raw = (output / name).read_bytes()
                 self.assertEqual(entry, dict(size=len(raw), sha256=build.bootstrap.digest(raw)))

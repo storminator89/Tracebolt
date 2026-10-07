@@ -65,7 +65,7 @@ def main():
         stream.write((json.dumps(manifest, sort_keys=True, separators=(",", ":")) + "\n").encode())
     bootstrap.require(not run(["git", "status", "--porcelain", "--untracked-files=all"], root, capture_output=True).stdout,
                       "Source changed during the build; discard the candidate.")
-    print("Unsigned candidates prepared for offline review. Linux arm64 is cross-built only. No release or signing key was created.")
+    print("Unsigned candidates prepared for offline review. Both amd64 and arm64 were built, not executed. No release or signing key was created.")
     print("Source revision: " + revision)
 
 

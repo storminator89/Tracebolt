@@ -101,6 +101,24 @@ class Fixture(unittest.TestCase):
             self.assertEqual(stat.S_IMODE((self.stage / f"tracebolt-{VERSION}-linux-amd64-{role}").stat().st_mode), 0o500)
         self.assertEqual(stat.S_IMODE((self.stage / f"tracebolt-{VERSION}-source.tar").stat().st_mode), 0o600)
 
+    def test_arm64_read_admin_downloads_only_matching_verified_assets(self):
+        seen = []
+        def verifier(directory, arch, fetch):
+            seen.append(arch)
+            return self.verifier(directory, arch, fetch)
+        self.manifest["runtimeTargets"] = ["linux-amd64", "linux-arm64"]
+        self.raw = manifest_bytes(self.manifest)
+        self.pin["manifestSHA256"] = b.digest(self.raw)
+        with patch.object(b, "RUNTIME_TARGETS", ("linux-amd64", "linux-arm64")):
+            result = b.prepare_release(self.stage, self.pin, "arm64", self.fetch, verifier, self.verify, read_admin=True)
+        self.assertEqual(result, self.manifest)
+        self.assertEqual(seen, ["arm64"])
+        self.assertFalse(any("amd64" in path.name for path in self.stage.iterdir()))
+        for role in b.ROLES:
+            path = self.stage / f"tracebolt-{VERSION}-linux-arm64-{role}"
+            self.assertEqual(path.read_bytes(), self.artifacts[path.name])
+            self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o500)
+
     def test_ordinary_prepare_never_stages_optional_helper(self):
         self.prepare()
         self.assertFalse((self.stage / f"tracebolt-{VERSION}-linux-amd64-socket-owner-reader").exists())
@@ -392,9 +410,9 @@ class Preflight(unittest.TestCase):
             with self.assertRaises(b.Rejected):
                 b.read_os_release(text)
 
-    def test_arm64_and_no_systemd_fail_closed(self):
-        with patch.object(b.sys, "platform", "linux"), patch.object(b.platform, "machine", return_value="aarch64"), patch.object(b.Path, "read_text", return_value='ID=debian\nVERSION_ID="13"'):
-            with self.assertRaisesRegex(b.Rejected, "build-only"):
+    def test_unsupported_architecture_and_no_systemd_fail_closed(self):
+        with patch.object(b.sys, "platform", "linux"), patch.object(b.platform, "machine", return_value="armv7l"), patch.object(b.Path, "read_text", return_value='ID=debian\nVERSION_ID="13"'):
+            with self.assertRaisesRegex(b.Rejected, "architecture"):
                 b.inspect_host()
         with patch.object(b.sys, "platform", "linux"), patch.object(b.platform, "machine", return_value="x86_64"), patch.object(b.Path, "read_text", side_effect=['ID=debian\nVERSION_ID="13"', 'not-systemd']):
             with self.assertRaisesRegex(b.Rejected, "systemd"):
@@ -432,6 +450,23 @@ class Preflight(unittest.TestCase):
         with self.supported_host(), patch.object(b.subprocess, "run") as run, patch.object(b, "download") as download:
             self.assertEqual(b.inspect_host(), "amd64")
         run.assert_not_called()
+        download.assert_not_called()
+
+    def test_arm64_runtime_admission_stays_disabled_until_native_gate(self):
+        self.assertEqual(b.RUNTIME_TARGETS, ("linux-amd64",))
+        with self.supported_host(), patch.object(b.platform, "machine", return_value="aarch64"), patch.object(b, "download") as download:
+            with self.assertRaisesRegex(b.Rejected, "not enabled by the pinned release"):
+                b.inspect_host()
+        download.assert_not_called()
+
+    def test_arm64_native_userspace_and_systemd_preflight(self):
+        with self.supported_host(), patch.object(b, "RUNTIME_TARGETS", ("linux-amd64", "linux-arm64")), patch.object(b.platform, "machine", return_value="aarch64"), patch.object(b.sys, "maxsize", 2**63-1), patch.object(b.subprocess, "run") as run:
+            self.assertEqual(b.inspect_host(), "arm64")
+        run.assert_not_called()
+        # A 64-bit kernel may host 32-bit Pi OS. uname alone must not admit it.
+        with self.supported_host(), patch.object(b.platform, "machine", return_value="aarch64"), patch.object(b.sys, "maxsize", 2**31-1), patch.object(b, "download") as download:
+            with self.assertRaisesRegex(b.Rejected, "64-bit Linux userspace"):
+                b.inspect_host()
         download.assert_not_called()
 
     def test_missing_dependencies_are_collected_with_one_manual_command(self):

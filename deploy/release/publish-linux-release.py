@@ -118,7 +118,7 @@ def validate_ref(value, name, commit):
 
 def release_description(commit):
     return ("Verified Linux download candidate from source " + commit +
-            ". Linux amd64: Debian 13 / Ubuntu 24.04 systemd candidate. arm64 is cross-built only. "
+            ". Linux amd64: Debian 13 / Ubuntu 24.04 systemd candidate. ARM64 runtime admission remains gated on native acceptance. "
             "Workflow provenance is in manifest.sigstore.json; verify the pinned bootstrap before installation. "
             "Actual host installation/reboot acceptance is separate.")
 

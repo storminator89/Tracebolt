@@ -49,7 +49,7 @@ SCHEMA = "tracebolt.linux-release.v1"
 INSTALL_ROLES = ("agent-service", "enroll-agent", "lan-agent")
 ROLES = INSTALL_ROLES + ("socket-owner-reader",)
 ARCHES = ("amd64", "arm64")
-RUNTIME_TARGETS = ("linux-amd64",)  # arm64 remains build-only.
+RUNTIME_TARGETS = ("linux-amd64",)  # ARM64 admission remains gated on native acceptance.
 MAX_MANIFEST = 32 * 1024
 MAX_BUNDLE = 1024 * 1024
 MAX_BINARY = 128 * 1024 * 1024
@@ -343,8 +343,9 @@ def inspect_host():
     require(sys.platform == "linux", "Only Linux is supported.")
     read_os_release(Path("/etc/os-release").read_text(encoding="utf-8"))
     architecture = {"x86_64": "amd64", "aarch64": "arm64"}.get(platform.machine())
-    require(architecture is not None, "Unsupported Linux architecture.")
-    require("linux-" + architecture in RUNTIME_TARGETS, "Linux arm64 is build-only; runtime installation is not enabled yet.")
+    require(architecture is not None, "Unsupported Linux architecture; amd64 or ARM64 is required.")
+    require(sys.maxsize > 2**32, "A 64-bit Linux userspace and Python are required; 32-bit Raspberry Pi OS is not supported.")
+    require("linux-" + architecture in RUNTIME_TARGETS, "This architecture is not enabled by the pinned release.")
     require(Path("/proc/1/comm").read_text().strip() == "systemd" and Path("/run/systemd/system").is_dir() and
             Path("/sys/fs/cgroup/cgroup.controllers").is_file(), "A running systemd host with cgroup v2 is required.")
     require(sys.version_info >= (3, 11), "Python 3.11 or newer is required. Use the supported distribution's python3 package; no dependency was installed.")
@@ -586,10 +587,10 @@ def run_read_admin(args, directory, manifest, arch, installer=None):
 
 
 def run_upgrade_read_admin(args, directory, manifest, arch):
-    require(arch == "amd64", "Read-admin upgrade requires the supported amd64 profile.")
+    require(arch in ARCHES, "Read-admin upgrade requires a supported 64-bit Linux profile.")
     workflow, inventory, setup, amendment, _guide, socket_setup, templates, upgrade = read_admin_sources(directory, manifest, upgrade=True)
     adapter = upgrade.real_adapter(workflow, setup, inventory, amendment, socket_setup, templates, manifest, directory,
-                                   installer_command(args, directory, manifest, arch))
+                                   installer_command(args, directory, manifest, arch), arch=arch)
     def interrupted(_signum, _frame):
         raise upgrade.Rejected("interrupted")
     previous = {signum: signal.signal(signum, interrupted) for signum in (signal.SIGINT, signal.SIGTERM)}
