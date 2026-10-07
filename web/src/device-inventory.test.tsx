@@ -25,6 +25,16 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
 describe('inventory source tabs in the authenticated device drawer', () => {
+    it('opens Security through its descriptive accessible name while displaying its short label', async () => {
+        render(detail());
+        const security = await screen.findByRole('tab', { name: 'Security coverage' });
+        expect(security).toHaveTextContent('Security');
+        expect(screen.queryByRole('tab', { name: 'Security' })).not.toBeInTheDocument();
+        fireEvent.click(security);
+        expect(security).toHaveAttribute('aria-selected', 'true');
+        expect(screen.getByRole('tabpanel', { name: 'Security coverage' })).toBeVisible();
+    });
+
     it('opens Packages directly from explicit device Details without eagerly reading any rows', async () => {
         render(detail()); fireEvent.click(await screen.findByRole('tab', { name: 'Details' })); const summary = await screen.findByRole('region', { name: 'Software · complete dpkg inventory' });
         await within(summary).findByText('Complete generation available'); expect(mutateRaw).not.toHaveBeenCalled();

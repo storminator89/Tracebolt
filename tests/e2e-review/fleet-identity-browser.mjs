@@ -1,3 +1,4 @@
+import {conciseCopy} from './concise-copy-contracts.mjs';
 /** Real operator/store/React endpoint-identity acceptance with wholly invented data.
  * No VM, installer execution, native collection, real credentials or TLS bypass.
  */
@@ -55,7 +56,7 @@ try{
  execFileSync(process.env.GO_BIN||'go',['build','-buildvcs=false','-o',path.join(temporary,'endpointfixture'),'./tests/e2e-review/endpointfixture'],{cwd:root,stdio:'ignore'});
  browser=await chromium.launch({headless:true,args:['--no-sandbox'],executablePath:process.env.CHROMIUM_PATH||'/usr/bin/chromium',env:{...process.env,HOME:temporary,XDG_CONFIG_HOME:temporary,XDG_CACHE_HOME:temporary}});
  await check('One bounded fleet read displays escaped hostname and scoped multiple IPs, searches locally and preserves stable routing',async()=>{
-  const page=await pageAt();await fleetReady(page);const row=fleetRow(page);await expect(row.locator('strong')).toHaveText(hostname('alpha'));await expect(row).toContainText('192.0.2.19');await expect(row).toContainText('qa-eth0');await expect(row).toContainText('+2 more in device details');await expect(row.locator('img,a')).toHaveCount(0);
+  const page=await pageAt();await fleetReady(page);const row=fleetRow(page);await expect(row.locator('strong')).toHaveText(hostname('alpha'));await expect(row).toContainText('192.0.2.19');await expect(row).toContainText('qa-eth0');await expect(row).toContainText(conciseCopy.fleetMore);await expect(row.locator('img,a')).toHaveCount(0);
   const collection=await get(fleetPath);expect(collection.items.length).toBeLessThanOrEqual(25);expect(collection.items.find(item=>item.deviceId===devices.alpha).latest.reportedHostname.value).toBe(hostname('alpha'));
   let reads=0;page.on('request',r=>{if(r.url().endsWith(fleetPath))reads++;});await page.getByRole('textbox',{name:'Search devices'}).fill('198.51.100.24');await expect(fleetRow(page)).toBeVisible();await page.getByRole('textbox',{name:'Search devices'}).fill('qa-host-<lab>&alpha');await expect(page.locator('.device-table tbody tr')).toHaveCount(1);expect(reads).toBe(0);await page.getByRole('textbox',{name:'Search devices'}).fill('');
   await page.getByLabel('Sort devices').selectOption('name');const overview=await get('/api/overview');const reported=new Map(collection.items.map(item=>[item.deviceId,item.latest?.reportedHostname.value]));const expected=overview.devices.slice().sort((a,b)=>(reported.get(a.id)||a.name).localeCompare(reported.get(b.id)||b.name,'en')).map(item=>'ID: '+item.id);expect(await page.locator('.device-table .fleet-identity-id').allTextContents()).toEqual(expected);

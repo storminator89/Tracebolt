@@ -41,15 +41,14 @@ hard-linked executables. Trusted executable owners/writers are SYSTEM,
 Administrators and TrustedInstaller. It grants or repairs nothing. Unexpected
 ACL forms fail closed; native acceptance must validate target-specific defaults.
 
-The same held-descriptor check also requires LocalService-specific effective
-allow ACEs for executable read/execute and for descriptor/attribute read and
-traverse on every ancestor, including the volume root. SYSTEM/Administrators-only
-permissions now fail before installation or an owned enrollment preflight.
-Required-access denies fail conservatively regardless of trustee or ACE order.
-`ErrRuntimeReadAccess` identifies a missing/denied runtime grant. This is a
-sufficient-DACL source policy, not a simulated token or proof that the future SCM
-token can load the image. See the [runtime-read policy and native acceptance
-limits](../../docs/windows-runtime-read-preflight.md).
+Existing ancestor descriptors establish trusted-path integrity only; they do
+not require a named LocalService read ACE or aggregate unrelated read-deny ACEs
+as effective access. Actual unchanged runtime opens under the SCM token decide
+read access. The final executable still requires the conservative explicit
+LocalService read/execute grant and rejects missing/denied rights before install.
+Private-state ACLs remain service-SID protected. Neither an administrator's
+successful open nor a read-only policy pass proves service access. See the
+[runtime access proof and native acceptance limits](../../docs/windows-runtime-read-preflight.md).
 
 The parent coordinator owns explicit authorization, independently selected byte
 verification, artifact placement and protected durable installation records. It

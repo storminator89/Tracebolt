@@ -105,7 +105,8 @@ describe('system inventory bounded service/socket browsing', () => {
         await open('sockets'); await screen.findByText('14 / 14');
         expect(screen.getByText('Whole retained section').nextElementSibling).toHaveTextContent('14');
         expect(screen.getAllByText('Owner unknown')).toHaveLength(14); expect(screen.getAllByText('Partial · Permission denied')).toHaveLength(14);
-        expect(screen.getByText(/under Attribution applies to the owner field/)).toBeVisible();
+        expect(screen.getByText('Connection rows and process attribution have separate coverage. “Permission denied” under Attribution applies to the owner field. Collection failures appear in the section status.')).toBeVisible();
+        expect(screen.queryByText(/Socket rows and PID\/process owners have separate coverage/)).not.toBeInTheDocument();
         expect(screen.queryByText('No retained complete section is available. Missing or failed data is not a successful zero-row observation.')).not.toBeInTheDocument();
         expect(vi.mocked(mutateRaw).mock.calls.every(([path]) => path.endsWith('/inventory/system/query'))).toBe(true);
     });

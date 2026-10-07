@@ -1,3 +1,4 @@
+import {conciseCopy} from './concise-copy-contracts.mjs';
 import {createAlarmBrowserDiagnostics} from './alarm-browser-diagnostics.mjs';
 const diagnostics=createAlarmBrowserDiagnostics();
 export const alarmStatusFailureDetails=()=>diagnostics.details();
@@ -86,7 +87,7 @@ export async function alarmStatusBrowserCase({pageAt,login,expect,base,shot}) {
   await expect(details).not.toHaveAttribute('open','');await expect(summary).toHaveAccessibleName('Details');
   await summary.focus();await page.keyboard.press('Enter');await expect(details).toHaveAttribute('open','');
   await expect(details).toContainText('Delivery is disabled in manager configuration.');
-  await expect(details).toContainText('Loaded time uses this browser’s clock, not an event or server observation time.');
+  await expect(details).toContainText(conciseCopy.alarmBrowserTime);
   await page.keyboard.press('Space');await expect(details).not.toHaveAttribute('open','');
   diagnostics.track(panel,-1);diagnostics.step('capture');await panel.scrollIntoViewIfNeeded();await shot(page,'synthetic-http-test-alarm-status-off-desktop-en',alarmFixtureDisclosure);
 

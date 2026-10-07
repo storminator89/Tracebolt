@@ -1,4 +1,8 @@
+import {conciseCopy} from './concise-copy-contracts.mjs';
 /** Invented retained DTOs only; no application target, probe or configuration. */
+let stage='setup';
+export const applicationChecksFailureStage=()=>stage;
+const mark=value=>{stage=value;};
 export const applicationFixtureDisclosure = 'Real fixture login with explicitly intercepted invented application-status DTOs; retained HTTP result and previously verified leaf expiry are shown separately; no actual management-server target probes, new TLS handshake or native acceptance';
 
 export function applicationStatusFixture() {
@@ -75,6 +79,7 @@ async function applicationRowLayout({page,panel,expect,fixture,mobile}) {
 
 /** Uses the existing LAN runner's real login, context, screenshot and cleanup. */
 export async function applicationChecksBrowserCase({pageAt,login,expect,base,shot}) {
+ mark('setup');
  const page=await pageAt('/overview');await page.clock.install({time:new Date()});
  const fixture=applicationStatusFixture(), statusPath='/api/application-checks/status';
  let reads=0,phase='retained',activeFixture=fixture;const mutations=[],applicationRequests=[];
@@ -97,7 +102,7 @@ export async function applicationChecksBrowserCase({pageAt,login,expect,base,sho
  const panel=page.getByRole('region',{name:'Application checks',exact:true}), rows=panel.locator('tbody tr');
  const row=id=>rows.filter({has:page.getByText(id,{exact:true})});
  const reload=panel.getByRole('button',{name:'Reload application status',exact:true});
- await expect(rows).toHaveCount(4);await expect(panel).toContainText('HTTP/TLS checks from the manager.');
+ mark('retained-http-rows');await expect(rows).toHaveCount(4);await expect(panel).toContainText('HTTP/TLS checks from the manager.');
  for(const name of ['Application','HTTP result','Leaf certificate','Observed'])await expect(panel.getByRole('columnheader',{name,exact:true})).toBeVisible();
  await expect(row('fixture-expiring').locator('td').nth(0).locator('.application-cell-value')).toHaveText('204 · 2xx');
  await expect(row('fixture-expiring').locator('td').nth(1)).toContainText('Expiring soon');
@@ -112,7 +117,7 @@ export async function applicationChecksBrowserCase({pageAt,login,expect,base,sho
  for(const item of fixture.items){await expect(row(item.id).locator('td:last-child time')).toHaveAttribute('datetime',item.observedAt);await expect(row(item.id).locator('td:last-child time')).toHaveText('1m ago');}
  await expect(panel.getByRole('button')).toHaveCount(1);await expect(panel.locator('input,select,textarea,form')).toHaveCount(0);
  await expect(panel.locator('.application-checks-timing')).toContainText('60s after each round');await expect(panel.locator('.application-checks-timing')).toContainText('85s');
- const disclosure=panel.locator('details');await disclosure.locator('summary').click();await expect(disclosure).toHaveAttribute('open','');
+ mark('retained-http-scope');const disclosure=panel.locator('details');await disclosure.locator('summary').click();await expect(disclosure).toHaveAttribute('open','');
  await expect(disclosure.getByRole('link',{name:'Startup-file guide (GitHub)',exact:true})).toHaveAttribute('rel','noopener noreferrer');
  await expect(disclosure).toContainText('2xx is an HTTP status, not proof of health. Certificate data is from the same check. Reload starts no check.');
  await applicationRowLayout({page,panel,expect,fixture,mobile:false});
@@ -125,7 +130,7 @@ export async function applicationChecksBrowserCase({pageAt,login,expect,base,sho
  await page.setViewportSize({width:1440,height:1000});
  // Original sample age is 65s; the four-row contract permits 85s. Re-reading
  // this same retained DTO cannot reset its clock watermark or sample time.
- const beforePoll=reads;await page.clock.runFor(21000);expect(reads).toBeGreaterThan(beforePoll);
+ mark('original-staleness');const beforePoll=reads;await page.clock.runFor(21000);expect(reads).toBeGreaterThan(beforePoll);
  await expect(panel.locator('.application-unknown')).toHaveCount(4);await expect(panel.locator('.application-expiry')).toHaveCount(0);
  await expect(panel.locator('.application-ok,.application-tls-valid,.application-tls-expiring,.application-tls-expired')).toHaveCount(0);
  for(const item of fixture.items){await expect(row(item.id).locator('td').nth(0).locator('.application-cell-value')).toHaveText('Unknown · stale');await expect(row(item.id).locator('td').nth(1).locator('.application-cell-value')).toHaveText('Unknown');await expect(row(item.id).locator('td:last-child time')).toHaveAttribute('datetime',item.observedAt);}
@@ -137,7 +142,7 @@ export async function applicationChecksBrowserCase({pageAt,login,expect,base,sho
  // Keep both new protocols inside this existing hosted case and login lifecycle.
  // Each fresh login receives only invented, production-validated retained DTOs.
  for(const [nextFixture,suffix] of [[applicationHTTPStatusFixture(),'v1-http-https'],[applicationMixedStatusFixture(),'v2-dns-tcp-https']]){
-  activeFixture=nextFixture;phase='retained';await login(page);
+  mark('retained-'+suffix);activeFixture=nextFixture;phase='retained';await login(page);
   await expect(rows).toHaveCount(nextFixture.items.length);
   const mixed=nextFixture.schemaVersion.endsWith('.v2');
   await expect(panel).toContainText(mixed?'Checks from the manager: HTTP/TLS, DNS, TCP.':'HTTP/TLS checks from the manager.');
@@ -157,10 +162,10 @@ export async function applicationChecksBrowserCase({pageAt,login,expect,base,sho
    }
   }
   await expect(panel.getByRole('button')).toHaveCount(1);await expect(panel.locator('input,select,textarea,form')).toHaveCount(0);
-  const details=panel.locator('details');await details.locator('summary').click();await expect(details).toHaveAttribute('open','');
+  mark('scope-'+suffix);const details=panel.locator('details');await details.locator('summary').click();await expect(details).toHaveAttribute('open','');
   await expect(details).toContainText('2xx is an HTTP status, not proof of health. Certificate data is from the same check. Reload starts no check.');
   if(mixed){
-   await expect(details).toContainText('DNS: system resolution, which may use a hosts, cache or search domains. Every returned address needs approval; this is not a complete, authoritative DNS record.');
+   await expect(details).toContainText(conciseCopy.applicationDNS);
    await expect(details).toContainText('TCP connects to the IP, then closes. No data, TLS or proof of application health.');
   }
   const captureDisclosure=`${applicationFixtureDisclosure}; invented ${mixed?'v2 DNS/TCP/HTTPS':'v1 HTTP/HTTPS'} rows, original sample age, ${mixed?'DNS/TCP have no certificate evidence':'plaintext HTTP has no TLS'}`;
@@ -194,7 +199,7 @@ export async function applicationChecksBrowserCase({pageAt,login,expect,base,sho
   const stoppedAgain=reads;await page.clock.runFor(30000);expect(reads).toBe(stoppedAgain);
  }
  // Disabled status has setup guidance, never a target form or trigger.
- activeFixture={...fixture,enabled:false,intervalSeconds:0,maxAgeSeconds:0,items:[]};phase='retained';await login(page);
+ mark('disabled-en');activeFixture={...fixture,enabled:false,intervalSeconds:0,maxAgeSeconds:0,items:[]};phase='retained';await login(page);
  await expect(panel).toContainText('Disabled · no application checks running.');
  await expect(panel).toContainText('Configure up to 8 HTTP/HTTPS, DNS or TCP targets on the manager.');
  await expect(panel.locator('table,dl,input,select,textarea,form')).toHaveCount(0);
@@ -210,10 +215,10 @@ export async function applicationChecksBrowserCase({pageAt,login,expect,base,sho
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth&&document.body.scrollWidth<=innerWidth)).toBe(true);
  await panel.scrollIntoViewIfNeeded();await shot(page,'synthetic-application-checks-disabled-mobile-en',applicationFixtureDisclosure);
  await page.getByRole('combobox',{name:'Language',exact:true}).selectOption('de');
- const germanPanel=page.getByRole('region',{name:'Anwendungsprüfungen',exact:true});
+ mark('disabled-de');const germanPanel=page.getByRole('region',{name:'Anwendungsprüfungen',exact:true});
  await expect(germanPanel).toContainText('Deaktiviert · keine Anwendungsprüfungen aktiv.');
  await expect(germanPanel.locator('details')).toHaveAttribute('open','');
- await expect(germanPanel).toContainText('LAN und unverschlüsseltes HTTP benötigen eigene Bestätigungen.');
+ await expect(germanPanel).toContainText(conciseCopy.applicationApprovalDE);
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth&&document.body.scrollWidth<=innerWidth)).toBe(true);
  await germanPanel.scrollIntoViewIfNeeded();await shot(page,'synthetic-application-checks-disabled-mobile-de',applicationFixtureDisclosure);
  expect(mutations).toEqual([]);expect(applicationRequests.length).toBe(reads);expect(applicationRequests.every(value=>value===`GET ${statusPath}`)).toBe(true);

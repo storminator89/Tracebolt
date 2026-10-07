@@ -20,19 +20,19 @@ identity, app-owned ACLs, bounded controls and owned cleanup. Only `Evidence`
 `Preflight` uses KnownFolder paths, requires an elevated administrator and fixed
 local NTFS with persistent ACLs, holds the existing OS ancestor handles against
 replacement, rejects reparse points and requires trusted owner/writer policy.
-All effective ordinary denies of required read rights cause refusal. Explicit
-LocalService allow entries are required:
+Ancestor descriptor admission does not claim effective read access and does not
+require a named LocalService ACE. Windows applies group membership, inheritance
+and ordered applicable denies during the actual service's unchanged native opens.
+The ordinary read-only result always keeps effective service-token access false.
+The later approved native run must observe real SCM startup, its limited token,
+protected-state use and reporting. See
+[the access-proof contract](../../../docs/windows-runtime-read-preflight.md).
 
-- Executable ancestors: `0x001200a0`
-- State ancestors: `0x001200a1`, also including directory listing because
-  `windowsstate` uses that right while pinning every existing ancestor
-
-The stricter state requirement includes the volume root. A stock hosted Windows
-image may not meet it. Such a result is an honest missing prerequisite, **not**
-permission to change drive-root, Program Files, ProgramData, Users, existing
-Tracebolt directories, groups, tokens or global security policy. This package
-contains no existing-object ACL repair API. A suitable separately reviewed VM
-image is required before a native pass is possible.
+The final executable's sufficient read policy and all creation descriptors remain
+unchanged; private state remains service-SID protected. A blocked prerequisite
+never authorizes changes to drive-root, Program Files, ProgramData, Users,
+existing Tracebolt directories, groups, tokens or global policy. This package
+contains no existing-object ACL repair API and no fabricated token.
 
 ## Fixed create-only resources
 

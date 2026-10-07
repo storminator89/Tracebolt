@@ -218,7 +218,11 @@ func overviewServiceFixture(t *testing.T, origin string) *enrollmentservice.Serv
 }
 func overviewServiceFixtureWithClock(t *testing.T, origin string, clock func() time.Time) *enrollmentservice.Service {
 	t.Helper()
-	now := time.Now().UTC()
+	return overviewServiceFixtureAt(t, origin, time.Now().UTC(), clock)
+}
+
+func overviewServiceFixtureAt(t *testing.T, origin string, now time.Time, clock func() time.Time) *enrollmentservice.Service {
+	t.Helper()
 	rp, rk, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
 		t.Fatal(err)

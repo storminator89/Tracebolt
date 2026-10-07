@@ -122,10 +122,17 @@ func TestResourceHistoryDeltaOutputChecksOmittedPointExpiry(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	h := operatorHandler{app: setup(t), enrollment: overviewServiceFixtureWithClock(t, "https://overview.invalid", func() time.Time { return start.Add(time.Nanosecond) })}
+	now := start
+	h := operatorHandler{app: setup(t), enrollment: overviewServiceFixtureAt(t, "https://overview.invalid", start, func() time.Time { return now })}
 	r := httptest.NewRequest("GET", "/api/devices/"+namedDeviceID+"/resource-history?afterSequence=5", nil)
 	r = r.WithContext(context.WithValue(r.Context(), operatorRequestKey{}, operatorRequest{active: func() bool { return true }}))
 	w := httptest.NewRecorder()
+	h.writeResourceHistoryResponse(w, r, payload, view.ValidateAt)
+	if w.Code != 200 || !strings.Contains(w.Body.String(), "baseSequence") {
+		t.Fatal("valid omitted point rejected at exact retention boundary", w.Code)
+	}
+	now = start.Add(time.Nanosecond)
+	w = httptest.NewRecorder()
 	h.writeResourceHistoryResponse(w, r, payload, view.ValidateAt)
 	if w.Code != 409 || strings.Contains(w.Body.String(), "baseSequence") {
 		t.Fatal("omitted expired point escaped source recheck", w.Code)

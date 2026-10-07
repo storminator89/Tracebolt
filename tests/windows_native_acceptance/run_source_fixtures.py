@@ -27,7 +27,7 @@ REQUIRED = {
     ("localrmm/cmd/windows-service", "TestConcurrentStopDoesNotHidePendingAuthorityFailures"),
     ("localrmm/cmd/windows-service", "TestPendingExpiryDuringBackoffStopsWithoutSecondResume"),
     ("localrmm/internal/windowsservice", "TestRuntimeShutdownDuringInitialization"),
-    ("localrmm/internal/windowsacceptance/native", "TestOSAncestorsRequireExplicitAccountReadWithoutRepair"),
+    ("localrmm/internal/windowsacceptance/native", "TestOSAncestorsRequireTrustedPathsWithoutTokenClaims"),
     ("localrmm/internal/windowsacceptance/native", "TestNativeTokenPolicy"),
     ("localrmm/internal/windowsacceptance/native", "TestProbeAcceptsOnlyActualAccessDenied"),
     ("localrmm/internal/windowsacceptance/native", "TestOrderlyAcceptanceStopRejectsNativeFailureExitCodes"),

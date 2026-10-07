@@ -77,30 +77,35 @@ its own two-minute cancellation window using the same still-valid scope. The
 wrapper's process deadline includes that cleanup interval. Cancellation does not
 grant permission to adopt incomplete state or erase an ownership fence.
 
-## Read-only provisioning prerequisite: a real blocker
+## Read-only provisioning prerequisites and native proof
 
-The current service deliberately uses a conservative sufficient-DACL policy,
-not a general effective-access calculation. Its existing executable ancestors
-require an explicit LocalService read/execute grant (`0x001200a0`), trusted owner
-and no untrusted writer. The protected state's ancestors additionally need
-`FILE_LIST_DIRECTORY` (`0x001200a1`). This includes the volume root, Program Files
-and ProgramData. All effective ordinary deny entries intersecting required
-rights are refused, even if they would not apply to this particular token.
+Existing ancestors must pass trusted owner/non-replaceable writer, supported
+ACL-shape and canonical local-path checks. An explicit LocalService-named read
+ACE on each volume/Program Files/ProgramData ancestor is not required: enabled
+groups, inherited grants and applicable ordered denies are evaluated by Windows
+when the actual SCM process opens them. The unchanged native runtime access
+masks remain authoritative, including protected-state directory listing.
 
-**A stock GitHub-hosted runner may fail this prerequisite.** The gate checks it
-before creating any fixture listener, identity, service or app directory. It
-returns `blocked` with `ancestor-prerequisite`; this is not a native pass. It
-never adds an ACE to a drive root, Program Files, ProgramData, Users or any other
-existing directory, and never invokes an ACL-repair shell command. Do not change
-OS-managed root ACLs merely to make this test pass. If the hosted image is
-unsuitable, a separately reviewed provisioning/access-policy solution and a new
-exact-source approval are required. Self-hosted dispatch is deliberately refused
-by this candidate; no suitable image is assumed to exist.
+The final executable retains its sufficient LocalService read/execute DACL
+policy, and private state retains its exact service-SID protection. New app-owned
+creation ACLs remain unchanged. See the [trust/access
+contract](windows-runtime-read-preflight.md) for the distinction.
 
-Other prerequisites are elevated administration, supported physical local NTFS
-paths, persistent ACLs, no reparse points or case-sensitive directory semantics,
-and absence of both fixed services and both Tracebolt app parents. Preflight
-pins existing ancestor handles. It neither adopts nor empties existing resources.
+The ordinary read-only prerequisite job on exact source
+`5bd1340f431b79e64d83d0049c1da8dcd370c27b` observed `blocked`, `ancestor-policy`,
+`prerequisite-blocked` under the previous explicit-ACE rule. It proved neither
+LocalService denial nor an unsupported Windows OS. A later static policy pass
+also cannot prove runtime access. The separately approved native gate must
+observe real image startup, limited token, runtime state opens and reporting.
+
+No branch adds an ACE to a drive root, Program Files, ProgramData, Users or any
+other existing directory. Do not change OS-managed ACLs merely to pass a test.
+Other prerequisites are elevated administration, supported physical local NTFS,
+persistent ACLs, no reparse points or case-sensitive directory semantics, and
+absence of both fixed services and both app parents. Preflight pins existing
+ancestor handles and never adopts or empties existing resources. If runtime
+opens fail under the real SCM token, native acceptance fails; the controller
+cannot promote policy-only support into a runtime pass.
 
 ## What a successful native subset would prove
 

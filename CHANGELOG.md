@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-10-07 — Complete concise-copy contracts and prepare the pilot update
+
+- Align the nine hosted browser failures with the shortened production copy and exact accessible labels. Make the separate invented service-action gallery install its intercepted session before reloading, then follow Device → Inventory → Services. Preserve every approval/execution abort, request boundary, original timestamp and deadline; add production-render and route regressions for the repaired contracts. Production UI is unchanged.
+- Give the resource-history expiry test a certificate created against its explicit test clock. The earlier helper used wall time, so its fixed clock eventually preceded the synthetic issuer's validity. Verify a delta at the exact retention boundary, then reject it one nanosecond later using the full source view. Existing helper callers and production history code are unchanged.
+- Add a pinned, one-command updater for the documented existing Debian test VM. Verify its clean checkout, fixed Compose/config/volume, accepted manager commit/tree and unchanged rc.3 coordinator; retain device identity and scope. Check installed hashes and a new immutable completion binding instead of trusting cancellation's zero exit status. Keep terminal signal containment, local scope confirmation and explicit partial-failure reporting. No host update was performed by the fixture checks.
+- Separate ancestor path integrity from effective LocalService read access. Keep trusted ownership, replacement/write restrictions, pinned handles and final executable/private-state checks; actual service-token opens remain a manual native acceptance requirement. Never change OS-root or ancestor ACLs to satisfy the check. Ordinary read-only measurement still reports that effective service access is unverified.
+
 ## 2026-10-07 — Shorter pages and clearer task hierarchy
 
 - Remove repeated headings and framing across login, fleet, device tabs, inventory, security, investigations and settings. Keep the information needed to act: exact destination and data scope, explicit consent, source time, uncertainty, unavailable states and retained-data limits. Replace duplicate package navigation with direct controls and give mobile log messages the available width.

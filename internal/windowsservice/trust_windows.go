@@ -21,8 +21,10 @@ func trustedWriter(sid string) bool {
 
 // Hold every checked path open without delete sharing until the digest is
 // complete, and deny write sharing on the executable. Reject reparse points and
-// untrusted owner/replacement-capable ACEs and require the runtime's explicit
-// LocalService read/execute grants without modifying ACLs. Creation of unrelated
+// untrusted owner/replacement-capable ACEs. Existing ancestor admission is a
+// path-integrity policy only: actual opens under the SCM token determine its
+// read access, including enabled groups and ACE order. The final executable
+// retains its explicit LocalService read/execute protection. Creation of unrelated
 // children on volume roots does not allow replacing the existing locked chain;
 // DELETE_CHILD/DELETE/WRITE_DAC/WRITE_OWNER are denied.
 func verifyExecutable(l Layout) (string, error) {
@@ -123,11 +125,12 @@ func validatePathDescriptor(sd *windows.SECURITY_DESCRIPTOR, directory bool) err
 	} else {
 		writes |= windows.FILE_WRITE_DATA | windows.FILE_APPEND_DATA | windows.FILE_WRITE_EA | windows.FILE_WRITE_ATTRIBUTES
 	}
-	// This is a conservative sufficient-DACL policy, not AccessCheck with a
-	// fabricated token. The actual SCM token does not yet exist at install plan
-	// time. Count only grants naming LocalService; reject any effective deny of
-	// a required bit, even for an unrelated SID or after an allow. This avoids
-	// guessing future token group membership or relying on ACE ordering.
+	// Do not use descriptor-only ancestor scans as an effective-access test.
+	// Windows decides each unchanged CreateFile request using the current token,
+	// its enabled groups and ACE ordering. The installer has no future SCM token.
+	// The final app-owned executable retains its conservative sufficient read
+	// policy; its administrator-only/read-denied variants must still fail plan.
+	// https://learn.microsoft.com/en-us/windows/win32/secauthz/how-dacls-control-access-to-an-object
 	required := runtimePathAccess(directory)
 	var granted, denied uint32
 	for i := uint32(0); i < uint32(acl.AceCount); i++ {
@@ -168,7 +171,7 @@ func validatePathDescriptor(sd *windows.SECURITY_DESCRIPTOR, directory bool) err
 			granted |= mapFileGenericRights(mask)
 		}
 	}
-	if denied&required != 0 || granted&required != required {
+	if !directory && (denied&required != 0 || granted&required != required) {
 		return ErrRuntimeReadAccess
 	}
 	return nil
@@ -176,9 +179,8 @@ func validatePathDescriptor(sd *windows.SECURITY_DESCRIPTOR, directory bool) err
 
 func runtimePathAccess(directory bool) uint32 {
 	if directory {
-		// Runtime self-validation reads the descriptor/attributes of every
-		// ancestor, including the volume root. Require traverse explicitly,
-		// rather than assuming SeChangeNotifyPrivilege is present and enabled.
+		// These are runtime path capabilities, not a named-ACE admission rule.
+		// Native opens remain authoritative; no token or privilege is fabricated.
 		return windows.READ_CONTROL | windows.FILE_READ_ATTRIBUTES | windows.FILE_TRAVERSE | windows.SYNCHRONIZE
 	}
 	// Includes READ_CONTROL, data/EA/attribute reads, synchronization, and

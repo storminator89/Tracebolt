@@ -73,29 +73,11 @@ func canonicalPath(p string) bool {
 	return true
 }
 func trusted(s string) bool { return s == "S-1-5-18" || s == "S-1-5-32-544" || s == trustedInstaller }
-func mapGeneric(mask uint32) uint32 {
-	m := mask &^ (windows.GENERIC_READ | windows.GENERIC_WRITE | windows.GENERIC_EXECUTE | windows.GENERIC_ALL)
-	if mask&windows.GENERIC_READ != 0 {
-		m |= windows.FILE_GENERIC_READ
-	}
-	if mask&windows.GENERIC_WRITE != 0 {
-		m |= windows.FILE_GENERIC_WRITE
-	}
-	if mask&windows.GENERIC_EXECUTE != 0 {
-		m |= windows.FILE_GENERIC_EXECUTE
-	}
-	if mask&windows.GENERIC_ALL != 0 {
-		m |= 0x1f01ff
-	}
-	return m
-}
 
-// Same conservative sufficient-DACL contract as windowsservice's runtime
-// executable preflight. This function only reads an allocated descriptor.
+// Existing ancestor admission establishes trusted path integrity only. It does
+// not guess future service token groups or substitute a named-SID scan for
+// Windows effective access checks. Real runtime opens retain their full masks.
 func ancestorDescriptor(sd *windows.SECURITY_DESCRIPTOR) bool {
-	return ancestorDescriptorFor(sd, directoryRead)
-}
-func ancestorDescriptorFor(sd *windows.SECURITY_DESCRIPTOR, required uint32) bool {
 	if sd == nil || !sd.IsValid() {
 		return false
 	}
@@ -107,7 +89,6 @@ func ancestorDescriptorFor(sd *windows.SECURITY_DESCRIPTOR, required uint32) boo
 	if err != nil || acl == nil {
 		return false
 	}
-	var allow, deny uint32
 	writes := uint32(windows.GENERIC_ALL | windows.GENERIC_WRITE | windows.WRITE_DAC | windows.WRITE_OWNER | windows.DELETE | 0x40 | windows.FILE_WRITE_DATA | windows.FILE_WRITE_EA | windows.FILE_WRITE_ATTRIBUTES)
 	for i := uint32(0); i < uint32(acl.AceCount); i++ {
 		var ace *windows.ACCESS_ALLOWED_ACE
@@ -130,17 +111,13 @@ func ancestorDescriptorFor(sd *windows.SECURITY_DESCRIPTOR, required uint32) boo
 			return false
 		}
 		if ace.Header.AceType == windows.ACCESS_DENIED_ACE_TYPE {
-			deny |= mapGeneric(uint32(ace.Mask))
 			continue
 		}
 		if uint32(ace.Mask)&writes != 0 && !trusted(sid.String()) {
 			return false
 		}
-		if sid.String() == windowsservice.LocalServiceSID {
-			allow |= mapGeneric(uint32(ace.Mask))
-		}
 	}
-	return deny&required == 0 && allow&required == required
+	return true
 }
 func info(h windows.Handle, directory bool) (objectID, error) {
 	var f windows.ByHandleFileInformation
@@ -247,10 +224,6 @@ func (d *Driver) preflight(ctx context.Context) error {
 		if windows.GetVolumeInformation(windows.StringToUTF16Ptr(base[:3]), nil, 0, nil, nil, &flags, &fs[0], uint32(len(fs))) != nil || windows.UTF16ToString(fs[:]) != "NTFS" || flags&windows.FILE_PERSISTENT_ACLS == 0 {
 			return d.fail(ReasonPrerequisite)
 		}
-		required := directoryRead
-		if base == l.ProgramData {
-			required = stateDirectoryRead
-		}
 		d.prerequisiteCheck = "ancestor-policy"
 		for _, p := range pathChain(base) {
 			h, _, err := openChecked(p, true, windows.READ_CONTROL|windows.FILE_READ_ATTRIBUTES, windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE)
@@ -259,7 +232,7 @@ func (d *Driver) preflight(ctx context.Context) error {
 			}
 			s.anchors = append(s.anchors, h)
 			sd, err := windows.GetSecurityInfo(h, windows.SE_FILE_OBJECT, windows.OWNER_SECURITY_INFORMATION|windows.DACL_SECURITY_INFORMATION)
-			if err != nil || !ancestorDescriptorFor(sd, required) {
+			if err != nil || !ancestorDescriptor(sd) {
 				return d.fail(ReasonPrerequisite)
 			}
 		}

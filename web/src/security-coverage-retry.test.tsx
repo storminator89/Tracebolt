@@ -29,6 +29,9 @@ describe('one bounded security-coverage storage read recovery', () => {
         vi.mocked(request).mockRejectedValueOnce(busy()).mockResolvedValueOnce(coverage()); await start();
         expect(screen.getByRole('status')).toHaveTextContent('Storage is busy. One automatic read retry in 2 seconds.');
         expect(screen.queryByRole('article')).not.toBeInTheDocument(); expect(screen.getByRole('button', { name: 'Refresh security coverage' })).toBeDisabled();
+        const footer = document.querySelector('.security-footer')!;
+        expect(footer).toHaveTextContent('Missing or partial evidence is not zero vulnerabilities.');
+        expect(footer).not.toHaveTextContent('must not be read as zero vulnerabilities');
         const first = vi.mocked(request).mock.calls[0]; expect(first).toEqual(['/devices/agent_fixture/security', { signal: expect.any(AbortSignal) }, SECURITY_RESPONSE_MAX_BYTES]);
         await advance(1999); expect(request).toHaveBeenCalledTimes(1); await advance(1);
         expect(request).toHaveBeenCalledTimes(2); expect(vi.mocked(request).mock.calls[1]).toEqual(first); expect(screen.getByText('Partial inventory')).toBeVisible();

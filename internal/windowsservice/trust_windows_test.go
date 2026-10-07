@@ -21,7 +21,7 @@ func TestNativeRuntimeReadACLMemoryFixtures(t *testing.T) {
 		want       error
 	}{
 		{"administrator only file", admin, false, ErrRuntimeReadAccess},
-		{"administrator only ancestor", admin, true, ErrRuntimeReadAccess},
+		{"administrator only ancestor is trust-only unverified access", admin, true, nil},
 		{"empty DACL", `O:SYG:SYD:P`, false, ErrRuntimeReadAccess},
 		{"BuiltIn Users does not prove runtime membership", admin + `(A;;FRFX;;;BU)`, false, ErrRuntimeReadAccess},
 		{"Everyone does not replace named LocalService grant", admin + `(A;;FRFX;;;WD)`, false, ErrRuntimeReadAccess},
@@ -33,8 +33,8 @@ func TestNativeRuntimeReadACLMemoryFixtures(t *testing.T) {
 		{"execute without read", admin + `(A;;FX;;;LS)`, false, ErrRuntimeReadAccess},
 		{"ancestor requires descriptor attributes traverse and sync", admin + `(A;;0x1200a0;;;LS)`, true, nil},
 		{"ancestor need not list contents", admin + `(A;;FX;;;LS)`, true, nil},
-		{"ancestor traverse without descriptor read", admin + `(A;;0x1000a0;;;LS)`, true, ErrRuntimeReadAccess},
-		{"ancestor descriptor read without traverse", admin + `(A;;0x120080;;;LS)`, true, ErrRuntimeReadAccess},
+		{"ancestor traverse without descriptor read remains runtime decision", admin + `(A;;0x1000a0;;;LS)`, true, nil},
+		{"ancestor descriptor read without traverse remains runtime decision", admin + `(A;;0x120080;;;LS)`, true, nil},
 		{"LocalService deny before allow", `O:SYG:SYD:P(D;;FR;;;LS)(A;;FA;;;SY)(A;;FA;;;BA)` + read, false, ErrRuntimeReadAccess},
 		{"LocalService deny after allow fails conservative policy", admin + read + `(D;;FR;;;LS)`, false, ErrRuntimeReadAccess},
 		{"Everyone deny with LocalService allow", admin + `(D;;FX;;;WD)` + read, false, ErrRuntimeReadAccess},
@@ -45,7 +45,7 @@ func TestNativeRuntimeReadACLMemoryFixtures(t *testing.T) {
 		{"deny only data write does not deny read", admin + `(D;;0x2;;;LS)` + read, false, nil},
 		{"inherited effective LocalService grant", admin + `(A;ID;FRFX;;;LS)`, false, nil},
 		{"inheritable effective LocalService grant", admin + `(A;OICI;FRFX;;;LS)`, true, nil},
-		{"inherit-only LocalService grant is not current access", admin + `(A;OICIIO;FRFX;;;LS)`, true, ErrRuntimeReadAccess},
+		{"inherit-only LocalService grant does not assert access", admin + `(A;OICIIO;FRFX;;;LS)`, true, nil},
 		{"inherit-only deny is not current access", admin + read + `(D;OICIIO;FRFX;;;WD)`, true, nil},
 		{"inherited effective deny", admin + read + `(D;ID;FR;;;LS)`, false, ErrRuntimeReadAccess},
 		{"inherited untrusted write remains rejected", admin + read + `(A;ID;FW;;;WD)`, false, ErrUnsafePath},
@@ -57,7 +57,7 @@ func TestNativeRuntimeReadACLMemoryFixtures(t *testing.T) {
 		{"object allow cannot prove ordinary file access", admin + `(OA;;FRFX;11111111-1111-1111-1111-111111111111;;LS)`, false, ErrUnsafePath},
 		{"object deny cannot be ignored", admin + read + `(OD;;FR;11111111-1111-1111-1111-111111111111;;LS)`, false, ErrUnsafePath},
 		{"inherited effective object ACE still rejected", admin + read + `(OA;ID;FR;11111111-1111-1111-1111-111111111111;;LS)`, false, ErrUnsafePath},
-		{"inherit-only object grant does not satisfy policy", admin + `(OA;OICIIO;FRFX;11111111-1111-1111-1111-111111111111;;LS)`, true, ErrRuntimeReadAccess},
+		{"inherit-only object grant is not current ancestor access", admin + `(OA;OICIIO;FRFX;11111111-1111-1111-1111-111111111111;;LS)`, true, nil},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -73,7 +73,8 @@ func TestNativeRuntimeReadACLMemoryFixtures(t *testing.T) {
 }
 
 func TestNativeRuntimeReadRejectsEachMissingAndDeniedBit(t *testing.T) {
-	for _, directory := range []bool{false, true} {
+	// Only the final executable has a sufficient named-account read policy.
+	for _, directory := range []bool{false} {
 		required := runtimePathAccess(directory)
 		for bit := uint32(1); bit != 0; bit <<= 1 {
 			if required&bit == 0 {
@@ -113,5 +114,27 @@ func TestNativeFileGenericRightsMapping(t *testing.T) {
 	}
 	if got := runtimePathAccess(true); got != 0x1200a0 {
 		t.Fatalf("unexpected ancestor requirement %x", got)
+	}
+}
+
+func TestAncestorTrustAdmissionNeverClaimsEffectiveTokenReadAccess(t *testing.T) {
+	const trusted = `O:SYG:SYD:P(A;;FA;;;SY)(A;;FA;;;BA)`
+	for _, readACL := range []string{``, `(A;;FRFX;;;BU)`, `(A;ID;FRFX;;;AU)`, `(A;;GRGX;;;WD)`, `(D;;FRFX;;;LS)`, `(D;;GR;;;WD)`, `(D;;GR;;;S-1-5-21-1-2-3-1001)`, `(A;;FRFX;;;LS)(D;;FRFX;;;LS)`} {
+		sd, err := windows.SecurityDescriptorFromString(trusted + readACL)
+		if err != nil || validatePathDescriptor(sd, true) != nil {
+			t.Fatal("descriptor-only read policy rejected a trusted ancestor")
+		}
+	}
+	for _, badACL := range []string{`(A;;WD;;;BU)`, `(A;;WO;;;BU)`, `(A;;SD;;;BU)`, `(A;;0x40;;;BU)`, `(A;;GW;;;BU)`, `(A;;0x100;;;LS)`} {
+		sd, err := windows.SecurityDescriptorFromString(trusted + badACL)
+		if err != nil || !errors.Is(validatePathDescriptor(sd, true), ErrUnsafePath) {
+			t.Fatal("replacement-capable ancestor grant accepted")
+		}
+	}
+	for _, sddl := range []string{`O:BUG:SYD:P(A;;FRFX;;;BU)`, `O:SYG:SYD:NO_ACCESS_CONTROL`} {
+		sd, err := windows.SecurityDescriptorFromString(sddl)
+		if err != nil || !errors.Is(validatePathDescriptor(sd, true), ErrUnsafePath) {
+			t.Fatal("untrusted owner or null ancestor DACL accepted")
+		}
 	}
 }

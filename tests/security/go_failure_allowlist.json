@@ -1,5 +1,5 @@
 {
-  "goSourceSha256": "0e40a4442e535e9faffd22ffedca0c837ee1d39fa3f6323d01f051a2375529f5",
+  "goSourceSha256": "8a5952fe8b3b764bd3785e0891a7d40e66b6f8262afbac405865d24245903588",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -2378,7 +2378,7 @@
       "TestNativeTokenGroupAndSIDBounds",
       "TestNativeTokenPolicy",
       "TestNativeTokenPrivilegeBounds",
-      "TestOSAncestorsRequireExplicitAccountReadWithoutRepair",
+      "TestOSAncestorsRequireTrustedPathsWithoutTokenClaims",
       "TestOnlyNewAppDataParentIncludesRequiredDirectoryListing",
       "TestOrderlyAcceptanceStopRejectsNativeFailureExitCodes",
       "TestPendingDigestAndCanonicalShapeFailClosed",
@@ -2455,6 +2455,7 @@
       "TestSectionBoundsAndMalformedRows"
     ],
     "localrmm/internal/windowsservice": [
+      "TestAncestorTrustAdmissionNeverClaimsEffectiveTokenReadAccess",
       "TestArtifactChangedAfterPlanFailsClosed",
       "TestCancelledRequestNeverMutates",
       "TestConfigOrReceiptMismatchPreventsAllMutations",

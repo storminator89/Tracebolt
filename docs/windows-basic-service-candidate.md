@@ -130,8 +130,10 @@ is interrupted, the existing stopped installation can use the separate enroll
 operation; it never replaces the bootstrap, identity or original deadline.
 Manager approval remains a separate deliberate fingerprint/comparison step.
 
-The binary and its parent directories must already be provisioned with trusted
-owners, non-replaceable permissions and the explicit LocalService rights in the
+The binary and its parent directories must already have trusted owners and
+non-replaceable permissions. The final executable retains explicit LocalService
+read/execute protection; ancestor access is decided by unchanged native opens
+under the actual service token, as described in the
 [runtime-read preflight](windows-runtime-read-preflight.md). The public bootstrap input must be in a
 protected administrator-only location. This candidate neither downloads/copies
 binaries nor repairs ACLs, adds groups or substitutes weaker input handling when
