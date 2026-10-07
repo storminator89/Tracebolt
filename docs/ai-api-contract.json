@@ -23,7 +23,9 @@
         "Loopback transport does not prove inference stays local.",
         "Only bounded case-linked evidence is analyzed. Notes, device identifiers and unrelated telemetry are excluded.",
         "Evidence can still contain sensitive text; review the case and destination before starting."
-      ]
+      ],
+      "persistenceAvailable": false,
+      "persistentKeyAllowed": false
     },
     "POST /api/ai/config": {
       "body": {
@@ -52,6 +54,20 @@
       "rawBodyMaxBytes": 1024,
       "response": "internal/analysis.Result plus configRevision:string and superseded:boolean",
       "effects": "Explicit single provider request for existing server-loaded case/evidence only. No commands, fetching extra context, retries or fallback. No result persistence. With no provider returns rule baseline + ai.status not_configured."
+    },
+    "POST /api/ai/config/persistent": {
+      "body": {
+        "expectedRevision": "from GET config",
+        "baseURL": "exact user-selected OpenAI-compatible base URL ending /v1 normally",
+        "model": "1..128 printable ASCII bytes",
+        "apiKey": "fresh key, <=4096 printable ASCII bytes; empty allowed only for literal loopback",
+        "approvedOrigin": "exact scheme://authority of baseURL, no path",
+        "allowRemoteEvidence": "boolean; must be true for public HTTPS",
+        "useLegacyMaxTokens": "boolean; explicit compatibility choice, no automatic retries",
+        "acknowledgeKeyStorage": "boolean; must be true for a nonempty key; keyed persistence requires HTTPS operator profile"
+      },
+      "availability": "Authenticated shared administrator on complete Linux LAN manager with protected AI settings controller only",
+      "effects": "Explicitly persist exact provider and fresh key if separately acknowledged; invalidate prior proactive scope. No provider/DNS call."
     }
   },
   "errors": {
@@ -87,5 +103,6 @@
     "Ignore old navigation responses and mismatched/superseded config results. Keep deterministic baseline separate from model suggestions.",
     "Do not label settings saved as a successful provider connection or model test.",
     "Configuration and results are memory-only and reset on restart/reload respectively."
-  ]
+  ],
+  "persistenceExtension": "Complete Linux LAN managers optionally support explicit protected provider+scope persistence; see ai-settings-persistence.md. No automatic migration; key storage additionally acknowledged and HTTPS-only. Local development remains memory-only."
 }

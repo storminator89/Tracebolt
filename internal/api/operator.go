@@ -9,6 +9,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"localrmm/internal/actionmanager"
+	"localrmm/internal/aiconfig"
 	"localrmm/internal/alarmdelivery"
 	"localrmm/internal/applicationcheck"
 	"localrmm/internal/enrollmentcrypto"
@@ -30,6 +31,7 @@ import (
 )
 
 type LANOperatorConfig struct {
+	AISettings    *aiconfig.Settings
 	AlarmSettings *alarmdelivery.Settings
 	// ApplicationChecks is an inert, read-only view of the explicit startup worker.
 	ApplicationChecks *applicationcheck.Monitor
@@ -124,6 +126,12 @@ func NewLANOperatorHandler(app *Server, c LANOperatorConfig) (http.Handler, erro
 	managerID := ""
 	if c.Enrollment != nil {
 		managerID = c.Enrollment.Binding().InstanceID
+	}
+	if c.AISettings != nil && (c.Enrollment == nil || c.Enrollment.Binding().CollectionProfile != enrollmentcrypto.CollectionProfileComplete || !c.AISettings.Matches(managerID, profile)) {
+		return nil, aiconfig.ErrConfiguration
+	}
+	if err := app.configurePersistentAI(c.AISettings, !c.InsecureHTTPTest); err != nil {
+		return nil, err
 	}
 	if c.AlarmSettings != nil && (c.Enrollment == nil || c.Enrollment.Binding().CollectionProfile != enrollmentcrypto.CollectionProfileComplete || !c.AlarmSettings.Matches(managerID, profile)) {
 		return nil, alarmdelivery.ErrConfiguration
@@ -422,6 +430,10 @@ func (h *operatorHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if session.Named() && !namedReadRoute(r) {
 		fail(w, 403, "operator_capability_required", "This named account does not have permission for this administrative operation.")
+		return
+	}
+	if r.URL.Path == "/api/ai/proactive" {
+		h.proactiveAI(w, r)
 		return
 	}
 	if r.URL.Path == "/api/application-checks/status" {

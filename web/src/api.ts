@@ -46,7 +46,7 @@ async function boundedJSON(response: Response, maximum: number): Promise<unknown
     return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes)) as unknown;
 }
 export async function request<T>(path: string, options?: RequestInit, maxResponseBytes?: number): Promise<T> {
-    const responseCap = /^\/devices\/agent_[0-9a-f]{32}\/resource-history(?:\?afterSequence=[1-9][0-9]{0,18})?$/.test(path) ? 1536 * 1024 : 262144;
+    const responseCap = /^\/devices\/agent_[0-9a-f]{32}\/resource-history(?:\?afterSequence=[1-9][0-9]{0,18})?$/.test(path) ? 1536 * 1024 : /^\/investigations\?scope=(?:open|recovered|closed|all)&offset=(?:0|[1-9][0-9]*)$/.test(path) ? 2 * 1024 * 1024 : 262144;
     if (maxResponseBytes !== undefined && (!Number.isSafeInteger(maxResponseBytes) || maxResponseBytes < 1 || maxResponseBytes > responseCap))
         throw new APIError(t("Der Manager hat keine gültigen JSON-Daten zurückgegeben."));
     const controller = new AbortController();

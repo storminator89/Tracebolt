@@ -2,9 +2,18 @@
 
 ## Current scope
 
+The separately approved [proactive health workflow](proactive-ai-diagnostics.md)
+now reuses this adapter for typed stored health summaries. It is default-off,
+independent of manual case export, and does not search or transmit raw logs.
+
 `internal/analysis` provides a replaceable model-provider interface, a pure evidence-packet composer, a deterministic case baseline and an optional OpenAI-compatible Chat Completions adapter. It does not install or download a model, discover services, collect logs, schedule recurring work, execute checks or remediate a device. Tests use in-process fake providers and loopback HTTP servers only. No real model quality, endpoint credentials or customer incidents have been evaluated.
 
 The package is independently usable; manager settings and UI routes are a separate integration. A missing provider is explicitly `not_configured`. An error never produces a fabricated AI result, and existing rule output remains separately labeled. A successful response means its structure and citation identities passed validation, **not that its explanation is correct**.
+
+The complete Linux LAN manager additionally supports explicit
+[protected restart-safe provider/scope settings](ai-settings-persistence.md).
+Session-only remains the default. Key storage requires a separate choice;
+no old configuration is silently migrated or contacted.
 
 ## Data flow and composition
 
@@ -91,7 +100,7 @@ Prompt separation and schema validation reduce attack surface but cannot guarant
 
 The intended user flow is native case investigation with an explicit analyze action, not an unrestricted chatbot:
 
-1. Configure the base URL/model and, if needed, a newly entered key through a CSRF-protected manager settings flow. Saving configuration must not make a test/inference request automatically. Keep key storage separate from ordinary case SQLite data and browser/local storage; the initial in-memory configuration should reset on manager restart.
+1. Configure the base URL/model and, if needed, a newly entered key through a CSRF-protected manager settings flow. Saving configuration must not make a test/inference request automatically. Keep key storage separate from ordinary case SQLite data and browser/local storage; the initial in-memory configuration resets on manager restart. The complete LAN manager can instead retain an explicitly saved protected configuration under the linked persistence contract.
 2. For a remote provider, show the exact destination and data-field categories, and obtain explicit consent. Treat an origin change as a fresh approval/key-binding decision.
 3. Analyze only a stored case under a specific configuration revision. Apply the manager's loopback/Host/Origin/CSRF/body boundary and a manager-wide concurrency guard. Cancel active old-config requests when settings change; mark an old response superseded before display.
 4. Display deterministic findings and AI suggestions separately. Link citations to the matching packet evidence, surface missing/stale/synthetic context, and keep the uncertainty label visible even after successful validation.

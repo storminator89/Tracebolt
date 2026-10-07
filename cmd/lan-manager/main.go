@@ -10,6 +10,7 @@ import (
 	"errors"
 	"flag"
 	"localrmm/internal/actionmanager"
+	"localrmm/internal/aiconfig"
 	"localrmm/internal/alarmdelivery"
 	"localrmm/internal/analysis"
 	"localrmm/internal/api"
@@ -220,7 +221,15 @@ func prepareWithApplicationChecks(m lanconfig.Material, enrollment *enrollmentco
 		closeAll()
 		return nil, e
 	}
-	operatorConfig := api.LANOperatorConfig{AlarmSettings: alarmWorker, ApplicationCheckSettings: applicationChecks, ServiceActions: actions, Origin: c.OperatorOrigin, Auth: auth, Registry: registry, InsecureHTTPTest: c.Profile == lanconfig.HTTPTest, Devices: func() ([]model.Device, error) {
+	var aiSettings *aiconfig.Settings
+	if enrollment != nil && enrollment.StoreConfig().Binding.CollectionProfile == enrollmentcrypto.CollectionProfileComplete {
+		aiSettings, e = aiconfig.New(c.StateDirectory, managerID, c.Profile)
+		if e != nil {
+			closeAll()
+			return nil, e
+		}
+	}
+	operatorConfig := api.LANOperatorConfig{AISettings: aiSettings, AlarmSettings: alarmWorker, ApplicationCheckSettings: applicationChecks, ServiceActions: actions, Origin: c.OperatorOrigin, Auth: auth, Registry: registry, InsecureHTTPTest: c.Profile == lanconfig.HTTPTest, Devices: func() ([]model.Device, error) {
 		return trustStore.Devices(context.Background(), registry.List(), time.Now().UTC())
 	}}
 	if enrolledService != nil {

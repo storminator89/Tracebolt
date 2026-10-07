@@ -8,6 +8,7 @@ import type { InvestigationItem, InvestigationScope, InvestigationsView } from '
 import type { InvestigationsResource } from './investigations-resource';
 import type { Device } from './types';
 import './investigations.css';
+import { InvestigationAnalysisView } from './investigation-analysis';
 const labels = (de: boolean) => ({ open: de ? 'Offen' : 'Open', recovered: de ? 'Erholt' : 'Recovered', closed: de ? 'Überwachung beendet' : 'Monitoring stopped', all: de ? 'Alle Fälle' : 'All cases' });
 function title(item: InvestigationItem, de: boolean) { return item.incident.kind === 'offline' ? de ? 'Agent-Kontakt fehlt' : 'Agent contact missing' : item.incident.kind === 'filesystem' ? de ? 'Root-Dateisystem fast voll' : 'Root filesystem nearly full' : `${item.incident.target}: ${de ? 'Dienst inaktiv' : 'service inactive'}`; }
 function Time({ value }: { value: string | null }) { return value ? <time dateTime={value} title={value}>{fullDate(value)}</time> : <span>{t('Zeitpunkt unbekannt')}</span>; }
@@ -55,6 +56,7 @@ export function InvestigationList({ view, devices, concise = false, onAll }: { v
                 {incident.kind === 'service' && !validJournalUnit(incident.target) && <p className="investigations-note">{de ? 'Für diesen Unit-Namen ist keine Journal-Verknüpfung verfügbar. Dienststatus in Health prüfen.' : 'A journal link is unavailable for this unit name. Inspect its service status in Health.'}</p>}
                 <p className="investigations-note">{de ? 'Gespeicherter Regelverlauf und letzte Prüfung. Frühere Rohwerte oder Logzeilen werden hier nicht als Beleg gespeichert. Logs werden durch das Öffnen dieses Links nicht angefordert.' : 'Stored rule history and latest check. Earlier raw values or log lines are not saved here as evidence. Opening the logs link does not request a capture.'}</p>
             </details>}
+            {item.analysis && <InvestigationAnalysisView analysis={item.analysis} concise={concise}/>}
             {concise && <button type="button" className="text-button" onClick={onAll}>{de ? 'Untersuchen' : 'Investigate'}<ArrowRight size={13}/></button>}
         </article>;
     })}</div>;

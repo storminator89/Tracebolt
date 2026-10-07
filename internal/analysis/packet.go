@@ -42,6 +42,7 @@ type CaseContext struct {
 // original ID, source, time, quality and synthetic label without truncation.
 type Packet struct {
 	SchemaVersion      string            `json:"schemaVersion"`
+	DataScope          string            `json:"dataScope,omitempty"`
 	Case               CaseContext       `json:"case"`
 	Evidence           []model.Evidence  `json:"evidence"`
 	MissingEvidenceIDs []string          `json:"missingEvidenceIDs"`

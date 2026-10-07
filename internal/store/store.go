@@ -2,6 +2,7 @@
 package store
 
 import (
+	"context"
 	"crypto/rand"
 	"database/sql"
 	"encoding/hex"
@@ -68,10 +69,18 @@ func Open(path string) (*Store, error) {
 		return fail(err)
 	}
 	defer tx.Rollback()
-	for _, q := range []string{`CREATE TABLE IF NOT EXISTS devices(id TEXT PRIMARY KEY, body TEXT NOT NULL CHECK(json_valid(body)))`, `CREATE TABLE IF NOT EXISTS cases(id TEXT PRIMARY KEY, body TEXT NOT NULL CHECK(json_valid(body)))`, healthSchema, alarmSchema, `PRAGMA user_version=1`} {
+	for _, q := range []string{`CREATE TABLE IF NOT EXISTS devices(id TEXT PRIMARY KEY, body TEXT NOT NULL CHECK(json_valid(body)))`, `CREATE TABLE IF NOT EXISTS cases(id TEXT PRIMARY KEY, body TEXT NOT NULL CHECK(json_valid(body)))`, healthSchema, alarmSchema, proactiveAISchema, `PRAGMA user_version=1`} {
 		if _, err = tx.Exec(q); err != nil {
 			return fail(err)
 		}
+	}
+	// A committed attempt is never replayed after restart. No provider settings
+	// or runtime approval are restored from this local claim ledger.
+	if _, err = tx.Exec(`UPDATE health_analyses SET status='interrupted',finished=max(created,?) WHERE status='running'`, time.Now().UTC().UnixMilli()); err != nil {
+		return fail(err)
+	}
+	if err = pruneHealthAnalyses(context.Background(), tx, time.Now().UTC()); err != nil {
+		return fail(err)
 	}
 	if err = tx.Commit(); err != nil {
 		return fail(err)

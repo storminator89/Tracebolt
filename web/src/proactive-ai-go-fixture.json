@@ -1,0 +1,201 @@
+{
+  "counts": {
+    "all": 1,
+    "closed": 0,
+    "open": 1,
+    "recovered": 0
+  },
+  "devices": [
+    {
+      "checks": [
+        {
+          "key": "offline:contact",
+          "kind": "offline",
+          "observedAt": "2026-10-07T08:31:59Z",
+          "state": "ok",
+          "target": "agent",
+          "value": null
+        },
+        {
+          "key": "filesystem:root",
+          "kind": "filesystem",
+          "observedAt": "2026-10-07T08:31:59Z",
+          "state": "open",
+          "target": "/",
+          "value": 95
+        }
+      ],
+      "deviceId": "agent_00000000000000000000000000000001",
+      "evaluatedAt": "2026-10-07T08:31:59Z",
+      "incidents": [],
+      "maintenanceUntil": null,
+      "monitoredServices": [],
+      "schemaVersion": "tracebolt.health-view.v1",
+      "serverNow": "2026-10-07T08:31:59Z",
+      "status": "attention"
+    }
+  ],
+  "items": [
+    {
+      "analysis": {
+        "createdAt": "2026-10-07T08:31:59Z",
+        "finishedAt": "2026-10-07T08:31:59Z",
+        "recoveredAt": null,
+        "result": {
+          "ai": {
+            "findings": {
+              "counterevidence": [],
+              "hypotheses": [
+                {
+                  "evidenceIDs": [
+                    "health-snapshot"
+                  ],
+                  "statement": "Die Belegung könnte steigen; Ursache offen."
+                }
+              ],
+              "missingData": [
+                "Logs wurden nicht gesucht."
+              ],
+              "nextCheck": "storage",
+              "observedEvidenceIDs": [
+                "health-event",
+                "health-snapshot"
+              ]
+            },
+            "nextSteps": [
+              "Betroffenes lokales Volume und verfügbare Kapazität bestätigen.",
+              "Letzte Messwerte vergleichen und prüfen, ob die Belegung weiter steigt.",
+              "Freigegebene Aufbewahrungsregeln der Anwendung mit der verantwortlichen Person prüfen.",
+              "Eine klar begrenzte Bereinigung vorschlagen. Dateien nicht automatisch löschen oder verschieben."
+            ],
+            "provenance": {
+              "destination": "test-only",
+              "endpointOrigin": "http://127.0.0.1:11434",
+              "method": "ai",
+              "model": "fixture-model",
+              "packetSHA256": "f107bbd9ccd26582c1d8453d87b78d38b495e525af28506e0b96f989968ba6cc",
+              "promptVersion": "tracebolt.diagnostics-prompt.v1",
+              "provider": "fixture",
+              "ruleId": "health:filesystem",
+              "runbookVersion": "tracebolt.read-only-runbooks.v1"
+            },
+            "reason": "Schema and evidence IDs passed validation. The suggestions still require human review.",
+            "status": "completed"
+          },
+          "baseline": {
+            "evidenceIDs": [
+              "health-event",
+              "health-snapshot"
+            ],
+            "nextCheck": "storage",
+            "nextSteps": [
+              "Betroffenes lokales Volume und verfügbare Kapazität bestätigen.",
+              "Letzte Messwerte vergleichen und prüfen, ob die Belegung weiter steigt.",
+              "Freigegebene Aufbewahrungsregeln der Anwendung mit der verantwortlichen Person prüfen.",
+              "Eine klar begrenzte Bereinigung vorschlagen. Dateien nicht automatisch löschen oder verschieben."
+            ],
+            "provenance": {
+              "destination": "none",
+              "endpointOrigin": "",
+              "method": "rules",
+              "model": "none",
+              "packetSHA256": "f107bbd9ccd26582c1d8453d87b78d38b495e525af28506e0b96f989968ba6cc",
+              "promptVersion": "not-applicable",
+              "provider": "none",
+              "ruleId": "health:filesystem",
+              "runbookVersion": "tracebolt.read-only-runbooks.v1"
+            },
+            "summary": "Fortlaufende Messwerte bestätigten mindestens 90 Prozent Root-Dateisystembelegung über 120 Sekunden. Die Ursache ist unbekannt."
+          },
+          "fingerprint": "2e6bc1825016b6dd3243842b91dee8e581f05607e032d2e79c3a0000dee3b322",
+          "generatedAt": "2026-10-07T08:29:59.562869856Z",
+          "id": "analysis-4afb805ef9f931e1ca031f88c1baad07",
+          "limitations": [
+            "Model findings are unverified suggestions. Valid citation IDs do not prove that evidence supports a claim.",
+            "Untrusted evidence is separated from instructions, but prompt-injection resistance is not guaranteed. Model output has no execution authority.",
+            "The packet contains case-linked observations only. No logs, changes, dependencies or extra context are collected or searched by this analysis.",
+            "The observation window spans available timestamps and does not establish continuous or complete monitoring.",
+            "Rules and AI do not confirm a root cause. Read-only runbooks are suggestions for an operator; no checks or remediation run automatically.",
+            "This explicitly scoped health summary contains an incident event and the check snapshot at analysis admission, not historical raw samples or journal content.",
+            "Only typed rule fields are exported. Secret-pattern masking is best effort and is not a guarantee of anonymization; selected service names can reveal application details."
+          ],
+          "packet": {
+            "case": {
+              "category": "filesystem",
+              "createdAt": "2026-10-07T08:31:59Z",
+              "id": "health_0000000000000001",
+              "ruleId": "health:filesystem",
+              "runbookId": "storage",
+              "summary": "Fortlaufende Messwerte bestätigten mindestens 90 Prozent Root-Dateisystembelegung über 120 Sekunden. Die Ursache ist unbekannt.",
+              "synthetic": false,
+              "title": "Root-Dateisystem fast voll",
+              "updatedAt": "2026-10-07T08:31:59Z"
+            },
+            "dataScope": "health-summary-v1",
+            "evidence": [
+              {
+                "collectedAt": "2026-10-07T08:31:59Z",
+                "detail": "Fortlaufende Messwerte bestätigten mindestens 90 Prozent Root-Dateisystembelegung über 120 Sekunden. Die Ursache ist unbekannt.",
+                "id": "health-event",
+                "quality": "healthy",
+                "source": "manager.health.incident",
+                "synthetic": false,
+                "title": "Bestätigter Regelvorfall",
+                "value": "filesystem"
+              },
+              {
+                "collectedAt": "2026-10-07T08:31:59Z",
+                "detail": "Current manager check snapshot; not a historical raw sample. Target: /",
+                "id": "health-snapshot",
+                "quality": "healthy",
+                "source": "manager.health.check",
+                "synthetic": false,
+                "title": "Prüfung bei Analysebeginn",
+                "value": "95.00 %"
+              }
+            ],
+            "gaps": [
+              {
+                "code": "no-logs",
+                "detail": "Journal content is outside this approved scope. No logs were requested or searched.",
+                "evidenceIDs": []
+              },
+              {
+                "code": "no-historical-samples",
+                "detail": "The incident stores confirmed rule transitions, not every underlying raw sample.",
+                "evidenceIDs": [
+                  "health-event"
+                ]
+              }
+            ],
+            "missingEvidenceIDs": [],
+            "observationWindow": {
+              "from": "2026-10-07T08:31:59Z",
+              "to": "2026-10-07T08:31:59Z"
+            },
+            "schemaVersion": "tracebolt.evidence-packet.v1"
+          },
+          "rootCauseConfirmed": false,
+          "schemaVersion": "tracebolt.analysis.v1"
+        },
+        "status": "completed"
+      },
+      "deviceId": "agent_00000000000000000000000000000001",
+      "incident": {
+        "acknowledgedAt": null,
+        "id": "health_0000000000000001",
+        "key": "filesystem:root",
+        "kind": "filesystem",
+        "lastObservedAt": "2026-10-07T08:31:59Z",
+        "openedAt": "2026-10-07T08:31:59Z",
+        "resolvedAt": null,
+        "target": "/"
+      }
+    }
+  ],
+  "offset": 0,
+  "schemaVersion": "tracebolt.investigations.v1",
+  "scope": "open",
+  "serverNow": "2026-10-07T08:31:59Z",
+  "total": 1
+}

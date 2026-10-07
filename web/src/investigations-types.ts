@@ -1,12 +1,14 @@
 import { validHealthView } from './health-types';
+import { validInvestigationAnalysis } from './investigation-analysis-types';
+import type { InvestigationAnalysis } from './investigation-analysis-types';
 import type { HealthIncident, HealthView } from './health-types';
 export type InvestigationScope = 'open' | 'recovered' | 'closed' | 'all';
-export interface InvestigationItem { deviceId: string; incident: HealthIncident }
+export interface InvestigationItem { deviceId: string; incident: HealthIncident; analysis?: InvestigationAnalysis }
 export interface InvestigationsView {
     schemaVersion: 'tracebolt.investigations.v1'; serverNow: string; scope: InvestigationScope; offset: number; total: number;
     counts: Record<InvestigationScope, number>; devices: HealthView[]; items: InvestigationItem[];
 }
-export const INVESTIGATIONS_BYTES = 262144;
+export const INVESTIGATIONS_BYTES = 2 * 1024 * 1024;
 export const INVESTIGATIONS_PAGE_SIZE = 50;
 export function incidentScope(incident: HealthIncident): Exclude<InvestigationScope, 'all'> { return !incident.resolvedAt ? 'open' : incident.closedReason === 'recovered' ? 'recovered' : 'closed'; }
 const record = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === 'object' && !Array.isArray(v);
@@ -25,10 +27,12 @@ export function validInvestigationsView(v: unknown, scope: InvestigationScope, o
     }
     if (Number(v.counts.open) > [...devices.values()].reduce((sum, device) => sum + device.checks.length, 0)) return false;
     for (const item of v.items) {
-        if (!record(item) || !fields(item, ['deviceId', 'incident']) || typeof item.deviceId !== 'string' || !record(item.incident)) return false;
+        if (!record(item) || !fields(item, Object.hasOwn(item, 'analysis') ? ['deviceId', 'incident', 'analysis'] : ['deviceId', 'incident']) || typeof item.deviceId !== 'string' || !record(item.incident)) return false;
         const device = devices.get(item.deviceId);
         if (!device || !validHealthView({ ...device, incidents: [item.incident] }, item.deviceId) || typeof item.incident.id !== 'string' || !/^health_[a-f0-9]{16}$/.test(item.incident.id)) return false;
-        const incident = item.incident as unknown as HealthIncident, key = `${item.deviceId}:${incident.id}`;
+        const incident = item.incident as unknown as HealthIncident;
+        if (Object.hasOwn(item, 'analysis') && !validInvestigationAnalysis(item.analysis, incident, v.serverNow)) return false;
+        const key = `${item.deviceId}:${incident.id}`;
         if (seen.has(key) || incident.resolvedAt !== null && !incident.closedReason || scope !== 'all' && incidentScope(incident) !== scope) return false;
         if (!incident.resolvedAt && !device.checks.some(check => check.key === incident.key)) return false;
         const openKey = `${item.deviceId}:${incident.key}`;

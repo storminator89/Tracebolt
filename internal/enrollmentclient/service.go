@@ -8,6 +8,7 @@ import (
 	"localrmm/internal/lanclient"
 	"os"
 	"path/filepath"
+	"runtime"
 	"time"
 )
 
@@ -160,6 +161,9 @@ type ServiceState struct {
 }
 
 func withServiceSession(b Bootstrap, state string, insecure bool, fn func(*session) (ServiceState, error)) (ServiceState, error) {
+	if validatePlatformBootstrap(b, runtime.GOOS) != nil {
+		return ServiceState{}, ErrBootstrap
+	}
 	if (b.Profile == "http-test") != insecure {
 		return ServiceState{}, ErrBootstrap
 	}

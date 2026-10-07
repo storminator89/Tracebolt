@@ -146,7 +146,10 @@ func (s *Service) CreateInvitation(ctx context.Context, requestID, platform stri
 	if s == nil || s.serviceState == nil || !enrollmentcrypto.ValidID(requestID, "request_") {
 		return InvitationCreation{}, ErrConfiguration
 	}
-	if platform != "linux" {
+	// Linux retains its existing profile matrix. Windows admission is limited
+	// to the existing basic scope over authenticated TLS; an invitation cannot
+	// opt a Windows endpoint into the Linux managed collection profiles.
+	if platform != "linux" && (platform != "windows" || s.binding.Profile != "tls" || s.binding.CollectionProfile != enrollmentcrypto.CollectionProfile) {
 		return InvitationCreation{}, ErrPlatform
 	}
 	id, e := newID("invite_")

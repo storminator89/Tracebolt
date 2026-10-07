@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { ArrowRight, Bot, Check, ChevronRight, CircleHelp, Cloud, FileCheck2, Fingerprint, Info, KeyRound, Link2, LoaderCircle, LockKeyhole, RefreshCw, Send, Server, ShieldCheck, SlidersHorizontal, Square, Trash2, TriangleAlert } from 'lucide-react';
 import { APIError, mutate, request } from './api';
 import type { AIConfig, AnalysisResult, Claim, EndpointInfo } from './ai-types';
-import { endpointInfo, safeAIError } from './ai-types';
+import { endpointInfo, safeAIError, validAIConfig } from './ai-types';
 import type { Case, Evidence } from './types';
 import { Dialog, Loading, SectionHead, Source } from './components';
 import { fullDate, qualityLabels } from './utils';
@@ -24,7 +24,7 @@ function useAIConfig() {
         }
         try {
             const next = await request<AIConfig>('/ai/config', { signal: current.signal });
-            if (typeof next?.revision !== 'string' || typeof next.baseURL !== 'string' || typeof next.model !== 'string' || typeof next.configured !== 'boolean')
+            if (!validAIConfig(next))
                 throw new APIError(t("Die KI-Konfiguration ist unvollst\u00E4ndig."));
             if (!alive.current || current.signal.aborted)
                 return null;
@@ -32,8 +32,10 @@ function useAIConfig() {
             return next;
         }
         catch (err) {
-            if (alive.current && !current.signal.aborted)
+            if (alive.current && !current.signal.aborted) {
+                setConfig(null);
                 setError(safeAIError(err));
+            }
             return null;
         }
         finally {
@@ -42,7 +44,7 @@ function useAIConfig() {
         }
     }, []);
     useEffect(() => { void refresh(); }, [refresh]);
-    return { config, setConfig, loading, error, refresh };
+    return { config, setConfig, loading, error, refresh, invalidate: (message: string) => { setConfig(null); setError(message); } };
 }
 function Destination({ info, endpoint, compact = false }: {
     info: EndpointInfo;
@@ -50,15 +52,16 @@ function Destination({ info, endpoint, compact = false }: {
     compact?: boolean;
 }) { return <div className={`ai-destination ${compact ? 'compact' : ''}`}><span className="ai-destination-icon">{info.local ? <Server size={17}/> : <Cloud size={17}/>}</span><div><strong>{info.valid ? info.local ? t("Loopback-Anbieter") : t("Externer HTTPS-Anbieter") : t("Ziel festlegen")}</strong><code>{info.valid ? endpoint : t("Noch keine g\u00FCltige Basis-URL")}</code></div>{info.valid && <span className="ai-destination-tag">{info.local ? t("LOKALER ENDPOINT") : t("EXTERN")}</span>}</div>; }
 export function AIProviderSettings() {
-    const { config, setConfig, loading, error, refresh } = useAIConfig();
+    const { config, setConfig, loading, error, refresh, invalidate } = useAIConfig();
     const [formRevision, setFormRevision] = useState('');
     const [baseURL, setBaseURL] = useState('');
     const [model, setModel] = useState('');
     const [apiKey, setAPIKey] = useState('');
     const [allowRemote, setAllowRemote] = useState(false);
     const [legacy, setLegacy] = useState(false);
+    const [remember, setRemember] = useState(false);
+    const [acknowledgeKeyStorage, setAcknowledgeKeyStorage] = useState(false);
     const [saving, setSaving] = useState(false);
-    const [saveError, setSaveError] = useState('');
     const [success, setSuccess] = useState('');
     const [confirmClear, setConfirmClear] = useState(false);
     const operation = useRef<AbortController | null>(null);
@@ -72,72 +75,82 @@ export function AIProviderSettings() {
             setAllowRemote(config.allowRemoteEvidence);
             setLegacy(config.useLegacyMaxTokens);
             setAPIKey('');
+            setRemember(false);
+            setAcknowledgeKeyStorage(false);
             setFormRevision(config.revision);
         }
     }, [config]);
     const modelValid = model.length > 0 && model.length <= 128 && /^[\x21-\x7e]+$/.test(model);
     const keyValid = apiKey.length <= 4096 && /^[\x21-\x7e]*$/.test(apiKey) && (info.local || apiKey.length > 0);
-    const canSave = Boolean(config && info.valid && modelValid && keyValid && (info.local || allowRemote) && !saving);
+    const persistenceReady = !remember || config?.persistenceAvailable === true && (!apiKey || config.persistentKeyAllowed === true && acknowledgeKeyStorage);
+    const canSave = Boolean(config && !error && !loading && formRevision === config.revision && info.valid && modelValid && keyValid && (info.local || allowRemote) && persistenceReady && !saving);
     const save = async (event: React.SubmitEvent<HTMLFormElement>) => {
         event.preventDefault();
-        if (!config || !canSave)
+        if (!config || !canSave || operation.current)
             return;
         setSaving(true);
-        setSaveError('');
         setSuccess('');
         const secret = apiKey;
         setAPIKey('');
+        setAcknowledgeKeyStorage(false);
         const current = new AbortController();
         operation.current = current;
         try {
-            const next = await mutate<AIConfig>('/ai/config', { expectedRevision: config.revision, baseURL, model, apiKey: secret, approvedOrigin: info.origin, allowRemoteEvidence: !info.local && allowRemote, useLegacyMaxTokens: legacy }, current.signal);
+            const change = { expectedRevision: config.revision, baseURL, model, apiKey: secret, approvedOrigin: info.origin, allowRemoteEvidence: !info.local && allowRemote, useLegacyMaxTokens: legacy };
+            const next = await mutate<AIConfig>(remember ? '/ai/config/persistent' : '/ai/config', remember ? { ...change, acknowledgeKeyStorage: !!secret && acknowledgeKeyStorage } : change, current.signal);
+            if (!validAIConfig(next) || !next.configured || next.revision === config.revision || next.baseURL !== baseURL || next.model !== model || next.keyConfigured !== !!secret || next.storage !== (remember ? 'protected-file' : 'memory-only')) throw new APIError(t("Die KI-Konfiguration ist unvollständig."));
             if (alive.current && !current.signal.aborted) {
                 setConfig(next);
+                window.dispatchEvent(new Event('tracebolt-ai-config-changed'));
                 setSuccess(t("Konfiguration gespeichert. Der Anbieter wurde noch nicht kontaktiert."));
             }
         }
-        catch (err) {
+        catch {
             if (alive.current && !current.signal.aborted) {
-                setSaveError(safeAIError(err, secret));
-                if (err instanceof APIError && err.status === 409)
-                    void refresh();
+                setAPIKey(''); setRemember(false); setAcknowledgeKeyStorage(false);
+                invalidate(t('Die Änderung konnte nicht bestätigt werden und kann bereits wirksam sein. Vor einer neuen Anfrage erneut lesen. Keine automatische Wiederholung.'));
+                window.dispatchEvent(new Event('tracebolt-ai-config-changed'));
             }
         }
         finally {
+            if (operation.current === current) operation.current = null;
             if (alive.current && !current.signal.aborted)
                 setSaving(false);
         }
     };
     const clear = async () => {
-        if (!config || saving)
+        if (!config || saving || operation.current)
             return;
         setConfirmClear(false);
         setSaving(true);
-        setSaveError('');
         setSuccess('');
         setAPIKey('');
+        setAcknowledgeKeyStorage(false);
         const current = new AbortController();
         operation.current = current;
         try {
             const next = await mutate<AIConfig>('/ai/config/clear', { expectedRevision: config.revision }, current.signal);
+            if (!validAIConfig(next) || next.configured || next.keyConfigured || next.revision === config.revision || next.storage !== 'memory-only') throw new APIError(t('Die KI-Konfiguration ist unvollständig.'));
             if (alive.current && !current.signal.aborted) {
                 setConfig(next);
-                setSuccess(t("Anbieter und Schl\u00FCssel aus dem Arbeitsspeicher entfernt."));
+                window.dispatchEvent(new Event('tracebolt-ai-config-changed'));
+                setSuccess(config.storage === 'protected-file' ? t("Anbieter, Schlüssel und gespeicherte proaktive Freigabe entfernt.") : t("Anbieter und Schl\u00FCssel aus dem Arbeitsspeicher entfernt."));
             }
         }
-        catch (err) {
+        catch {
             if (alive.current && !current.signal.aborted) {
-                setSaveError(safeAIError(err));
-                if (err instanceof APIError && err.status === 409)
-                    void refresh();
+                setAPIKey(''); setRemember(false); setAcknowledgeKeyStorage(false);
+                invalidate(t('Die Änderung konnte nicht bestätigt werden und kann bereits wirksam sein. Vor einer neuen Anfrage erneut lesen. Keine automatische Wiederholung.'));
+                window.dispatchEvent(new Event('tracebolt-ai-config-changed'));
             }
         }
         finally {
+            if (operation.current === current) operation.current = null;
             if (alive.current && !current.signal.aborted)
                 setSaving(false);
         }
     };
-    return <section className="panel ai-settings-panel"><SectionHead title={t("KI-Anbieter")} action={<span className={`ai-config-status ${config?.configured ? 'configured' : ''}`}><span className="status-dot"/>{error ? t("Status unbekannt") : loading && !config ? t("L\u00E4dt \u2026") : config?.configured ? t("Konfiguriert \u00B7 ungetestet") : t("Nicht eingerichtet")}</span>}/>{error ? <div className="ai-inline-error" role="alert"><TriangleAlert size={17}/><p>{ui(error)}</p><button className="button small" onClick={() => void refresh()}>{t("Erneut versuchen")}</button></div> : loading || (config && formRevision !== config.revision) ? <Loading label={t("KI-Konfiguration wird geladen \u2026")}/> : config && <div className="ai-settings-layout"><form onSubmit={event => void save(event)} className="ai-provider-form"><div className="ai-form-brand"><span><Bot size={19}/></span><div><h3>{t("OpenAI-kompatibel")}</h3><p>{t("Eigener Endpoint oder HTTPS-Anbieter")}</p></div></div><label className="form-field"><span>{t("Basis-URL")}</span><div className="input-with-icon"><Link2 size={15}/><input disabled={saving} aria-label={t("KI Basis-URL")} value={baseURL} onChange={event => { setBaseURL(event.target.value); setAllowRemote(false); setAPIKey(''); setSuccess(''); }} placeholder="http://127.0.0.1:11434/v1" type="url" maxLength={512} autoComplete="off" spellCheck={false}/></div>{baseURL && !info.valid && <small className="field-warning">{info.error}</small>}</label><label className="form-field"><span>{t("Modell")}</span><input disabled={saving} aria-label={t("KI Modell")} value={model} onChange={event => { setModel(event.target.value); setSuccess(''); }} placeholder={t("Modellkennung des Anbieters")} maxLength={128} autoComplete="off" spellCheck={false}/>{model && !modelValid && <small className="field-warning">{t("Modellkennung ohne Leer- oder Steuerzeichen eingeben.")}</small>}</label><label className="form-field"><span>{t("API-Schl\u00FCssel")}{config.keyConfigured && <span className="key-saved"><LockKeyhole size={11}/>{t("Schl\u00FCssel gesetzt")}</span>}</span><div className="input-with-icon"><KeyRound size={15}/><input disabled={saving} aria-label={t("KI API-Schl\u00FCssel")} type="password" value={apiKey} onChange={event => { setAPIKey(event.target.value); setSuccess(''); }} maxLength={4096} autoComplete="off" spellCheck={false} placeholder={info.local ? t("Optional f\u00FCr Loopback") : t("Neuen Schl\u00FCssel eingeben")}/></div><small>{config.keyConfigured ? t("Gesetzter Schl\u00FCssel bleibt verborgen. Zum Speichern neu eingeben.") : t("Nur im Arbeitsspeicher des Managers. Keine Speicherung im Browser oder auf Datentr\u00E4ger.")}</small>{apiKey && !keyValid && <small className="field-warning">{t("Schl\u00FCssel ohne Leer- oder Steuerzeichen eingeben.")}</small>}</label>{info.valid && !info.local && <label className="check-field remote-opt-in"><input disabled={saving} type="checkbox" checked={allowRemote} onChange={event => setAllowRemote(event.target.checked)}/><span>{t("Fallbelege für manuelle Analysen an {0} freigeben.", { "0": info.origin })}</span></label>}<details className="ai-advanced"><summary><SlidersHorizontal size={14}/>{t("Kompatibilit\u00E4t")}<ChevronRight size={14}/></summary><label className="check-field"><input disabled={saving} type="checkbox" checked={legacy} onChange={event => setLegacy(event.target.checked)}/><span><code>max_tokens</code>{" " + t("statt") + " "}<code>max_completion_tokens</code><small>{t("Nur verwenden, wenn der Anbieter das \u00E4ltere Feld ben\u00F6tigt. Keine automatische Wiederholung.")}</small></span></label></details>{saveError && <div className="ai-form-message error" role="alert"><TriangleAlert size={15}/><span>{ui(saveError)} {!info.local ? t("Schl\u00FCssel bei Bedarf erneut eingeben.") : ''}</span></div>}{success && <div className="ai-form-message success" role="status"><Check size={15}/><span>{ui(success)}</span></div>}<div className="ai-form-actions"><button className="button primary" type="submit" disabled={!canSave}>{saving ? <LoaderCircle className="spin" size={14}/> : <Check size={14}/>}{t("Konfiguration speichern")}</button>{config.configured && <button className="icon-button danger-action" type="button" aria-label={t("KI-Anbieter entfernen")} title={t("Anbieter und Schl\u00FCssel entfernen")} onClick={() => setConfirmClear(true)} disabled={saving}><Trash2 size={16}/></button>}</div></form><aside className="ai-settings-context"><Destination info={info} endpoint={baseURL}/><div className="ai-memory-notice"><LockKeyhole size={16}/><div><strong>{t("Nur f\u00FCr diese Manager-Sitzung")}</strong><p>{t("Nach einem Neustart m\u00FCssen Anbieter und Schl\u00FCssel neu gesetzt werden.")}</p></div></div><details className="ai-disclosure"><summary><Info size={14}/>{t("Daten & Grenzen")}<ChevronRight size={14}/></summary><ul><li>{t("Gesendet werden Falltitel, Zusammenfassung und ausgew\u00E4hlte Belege mit Rohtext, Quelle, Zeitpunkt und Datenqualit\u00E4t.")}</li><li>{t("Belege werden nicht automatisch von Geheimnissen oder personenbezogenen Inhalten bereinigt.")}</li><li>{t("Notizen, Ger\u00E4tekennungen und unbeteiligte Telemetrie sind ausgeschlossen.")}</li><li>{t("Ein Loopback-Endpoint kann Anfragen extern weiterleiten.")}</li><li>{t("Speichern stellt keine Verbindung her. Analysen starten erst nach deiner Best\u00E4tigung am Fall.")}</li></ul></details><div className="ai-scope-icons"><span><ShieldCheck size={14}/>{t("Keine Ausf\u00FChrung")}</span><span><FileCheck2 size={14}/>{t("Nur Fallbelege")}</span></div></aside></div>}{confirmClear && <Dialog title={t("KI-Anbieter entfernen")} onClose={() => setConfirmClear(false)} className="ai-confirm-dialog"><div className="confirm-symbol"><Trash2 size={22}/></div><h2>{t("KI-Anbieter entfernen?")}</h2><p>{t("Konfiguration und Schl\u00FCssel werden aus dem Arbeitsspeicher entfernt. Eine laufende Anfrage wird abgebrochen.")}</p><div className="confirm-actions"><button className="button" onClick={() => setConfirmClear(false)}>{t("Abbrechen")}</button><button className="button primary" onClick={() => void clear()}>{t("Anbieter entfernen")}</button></div></Dialog>}</section>;
+    return <section className="panel ai-settings-panel"><SectionHead title={t("KI-Anbieter")} action={<span className={`ai-config-status ${config?.configured ? 'configured' : ''}`}><span className="status-dot"/>{error ? t("Status unbekannt") : loading && !config ? t("L\u00E4dt \u2026") : config?.configured ? t("Konfiguriert \u00B7 ungetestet") : t("Nicht eingerichtet")}</span>}/>{error ? <div className="ai-inline-error" role="alert"><TriangleAlert size={17}/><p>{ui(error)}</p><button className="button small" onClick={() => void refresh()}>{t("Erneut versuchen")}</button></div> : loading || (config && formRevision !== config.revision) ? <Loading label={t("KI-Konfiguration wird geladen \u2026")}/> : config && <div className="ai-settings-layout"><form onSubmit={event => void save(event)} className="ai-provider-form"><div className="ai-form-brand"><span><Bot size={19}/></span><div><h3>{t("OpenAI-kompatibel")}</h3><p>{t("Eigener Endpoint oder HTTPS-Anbieter")}</p></div></div><label className="form-field"><span>{t("Basis-URL")}</span><div className="input-with-icon"><Link2 size={15}/><input disabled={saving} aria-label={t("KI Basis-URL")} value={baseURL} onChange={event => { setBaseURL(event.target.value); setAllowRemote(false); setAPIKey(''); setAcknowledgeKeyStorage(false); setSuccess(''); }} placeholder="http://127.0.0.1:11434/v1" type="url" maxLength={512} autoComplete="off" spellCheck={false}/></div>{baseURL && !info.valid && <small className="field-warning">{info.error}</small>}</label><label className="form-field"><span>{t("Modell")}</span><input disabled={saving} aria-label={t("KI Modell")} value={model} onChange={event => { setModel(event.target.value); setAPIKey(''); setAcknowledgeKeyStorage(false); setSuccess(''); }} placeholder={t("Modellkennung des Anbieters")} maxLength={128} autoComplete="off" spellCheck={false}/>{model && !modelValid && <small className="field-warning">{t("Modellkennung ohne Leer- oder Steuerzeichen eingeben.")}</small>}</label><label className="form-field"><span>{t("API-Schl\u00FCssel")}{config.keyConfigured && <span className="key-saved"><LockKeyhole size={11}/>{t("Schl\u00FCssel gesetzt")}</span>}</span><div className="input-with-icon"><KeyRound size={15}/><input disabled={saving} aria-label={t("KI API-Schl\u00FCssel")} type="password" value={apiKey} onChange={event => { setAPIKey(event.target.value); setAcknowledgeKeyStorage(false); setSuccess(''); }} maxLength={4096} autoComplete="off" spellCheck={false} placeholder={info.local ? t("Optional f\u00FCr Loopback") : t("Neuen Schl\u00FCssel eingeben")}/></div><small>{config.keyConfigured ? t('Ein gespeicherter Schlüssel wird nie automatisch übernommen. Zum Speichern erneut eingeben.') : remember ? t('Keine Speicherung im Browser. Dauerhafte Schlüsselspeicherung erfordert die separate Bestätigung unten.') : t("Nur im Arbeitsspeicher des Managers. Keine Speicherung im Browser oder auf Datentr\u00E4ger.")}</small>{apiKey && !keyValid && <small className="field-warning">{t("Schl\u00FCssel ohne Leer- oder Steuerzeichen eingeben.")}</small>}</label>{info.valid && !info.local && <label className="check-field remote-opt-in"><input disabled={saving} type="checkbox" checked={allowRemote} onChange={event => setAllowRemote(event.target.checked)}/><span>{t("Fallbelege für manuelle Analysen an {0} freigeben.", { "0": info.origin })}</span></label>}{config.persistenceAvailable === true && <div className="ai-persistence-options"><label className="check-field"><input disabled={saving} type="checkbox" checked={remember} onChange={event => { setRemember(event.target.checked); setAcknowledgeKeyStorage(false); setSuccess(''); }}/><span>{t('Anbieterkonfiguration nach einem Neustart auf diesem Manager behalten')}</span></label><p>{remember ? t('Geschützte Datei auf dem Manager. Dateischutz ist keine Verschlüsselung; Managerkonto, Administratoren und Sicherungen können darauf zugreifen. Keine Speicherung im Browser.') : t('Ohne diese Auswahl wird nur im Arbeitsspeicher gespeichert. Eine zuvor gespeicherte Konfiguration und ihre proaktive Freigabe werden entfernt.')}</p>{remember && apiKey.length > 0 && <><label className="check-field"><input disabled={saving || config.persistentKeyAllowed !== true} type="checkbox" checked={acknowledgeKeyStorage} onChange={event => setAcknowledgeKeyStorage(event.target.checked)}/><span>{t('Diesen Schlüssel auf diesem Manager speichern')}</span></label>{config.persistentKeyAllowed !== true && <p className="field-warning">{t('Schlüssel dürfen nur über den HTTPS-Operator-Zugang dauerhaft gespeichert werden. Im HTTP-Testmodus ist nur ein schlüsselloser Loopback-Anbieter möglich.')}</p>}</>}<p>{t('Bei jedem Speichern wird die proaktive Freigabe deaktiviert und muss separat neu erteilt werden.')}</p></div>}<details className="ai-advanced"><summary><SlidersHorizontal size={14}/>{t("Kompatibilit\u00E4t")}<ChevronRight size={14}/></summary><label className="check-field"><input disabled={saving} type="checkbox" checked={legacy} onChange={event => setLegacy(event.target.checked)}/><span><code>max_tokens</code>{" " + t("statt") + " "}<code>max_completion_tokens</code><small>{t("Nur verwenden, wenn der Anbieter das \u00E4ltere Feld ben\u00F6tigt. Keine automatische Wiederholung.")}</small></span></label></details>{success && <div className="ai-form-message success" role="status"><Check size={15}/><span>{ui(success)}</span></div>}<div className="ai-form-actions"><button className="button primary" type="submit" disabled={!canSave}>{saving ? <LoaderCircle className="spin" size={14}/> : <Check size={14}/>}{t("Konfiguration speichern")}</button>{config.configured && <button className="icon-button danger-action" type="button" aria-label={t("KI-Anbieter entfernen")} title={t("Anbieter und Schl\u00FCssel entfernen")} onClick={() => setConfirmClear(true)} disabled={saving}><Trash2 size={16}/></button>}</div></form><aside className="ai-settings-context"><Destination info={info} endpoint={baseURL}/><div className="ai-memory-notice"><LockKeyhole size={16}/><div><strong>{config.storage === 'protected-file' ? t("Auf diesem Manager gespeichert") : t("Nur f\u00FCr diese Manager-Sitzung")}</strong><p>{config.storage === 'protected-file' ? t("Anbieter und gegebenenfalls Schlüssel bleiben in einer geschützten Datei nach einem Neustart verfügbar. Proaktive Analysen benötigen eine separate Freigabe.") : t("Nach einem Neustart m\u00FCssen Anbieter und Schl\u00FCssel neu gesetzt werden.")}</p></div></div><details className="ai-disclosure"><summary><Info size={14}/>{t("Daten & Grenzen")}<ChevronRight size={14}/></summary><ul><li>{t("Gesendet werden Falltitel, Zusammenfassung und ausgew\u00E4hlte Belege mit Rohtext, Quelle, Zeitpunkt und Datenqualit\u00E4t.")}</li><li>{t("Belege werden nicht automatisch von Geheimnissen oder personenbezogenen Inhalten bereinigt.")}</li><li>{t("Notizen, Ger\u00E4tekennungen und unbeteiligte Telemetrie sind ausgeschlossen.")}</li><li>{t("Ein Loopback-Endpoint kann Anfragen extern weiterleiten.")}</li><li>{t("Speichern stellt keine Verbindung her. Manuelle Fallanalysen starten nach deiner Bestätigung am Fall. Proaktive Health-Analysen werden separat freigegeben.")}</li></ul></details><div className="ai-scope-icons"><span><ShieldCheck size={14}/>{t("Keine Ausf\u00FChrung")}</span><span><FileCheck2 size={14}/>{t("Nur Fallbelege")}</span></div></aside></div>}{confirmClear && <Dialog title={t("KI-Anbieter entfernen")} onClose={() => setConfirmClear(false)} className="ai-confirm-dialog"><div className="confirm-symbol"><Trash2 size={22}/></div><h2>{t("KI-Anbieter entfernen?")}</h2><p>{config?.storage === 'protected-file' ? t("Konfiguration, Schlüssel und proaktive Freigabe werden dauerhaft entfernt. Eine laufende Anfrage wird abgebrochen.") : t("Konfiguration und Schl\u00FCssel werden aus dem Arbeitsspeicher entfernt. Eine laufende Anfrage wird abgebrochen.")}</p><div className="confirm-actions"><button className="button" onClick={() => setConfirmClear(false)}>{t("Abbrechen")}</button><button className="button primary" onClick={() => void clear()}>{t("Anbieter entfernen")}</button></div></Dialog>}</section>;
 }
 export function AIAnalysisPanel({ item, onSettings }: {
     item: Case;

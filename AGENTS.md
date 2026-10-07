@@ -83,6 +83,14 @@ file as navigation and project constraints, never as permission to act on a host
   Plan is read-only; manager/endpoint apply needs separate local approval. Never
   remove intent/fences or reinitialize missing used state. The old pinned release
   is incompatible; source fixtures do not authorize native setup or a target action.
+- Proactive AI diagnostics are a default-off manager-side scope. Read
+  `docs/proactive-ai-diagnostics.md` before changing its admission or data flow. For
+  optional restart-safe storage also read `docs/ai-settings-persistence.md`; never
+  silently persist a provider/key/scope or bypass an unresolved storage fence.
+  Preserve exact provider/device approval, claim-before-call deduplication and
+  existing managed-evidence export blocks. Health-summary approval never permits
+  raw logs, dump data, autonomous tools, shell commands or remediation. Fixtures
+  do not authorize a real provider call, API-key entry or runtime scope grant.
 - Follow Go/Node versions and dependency locks in this revision. Validate commands
   against actual flags/config. Distinguish runtime tests from cross-builds, skipped
   container tests, and proposed functionality. Never invent install/enroll flags.

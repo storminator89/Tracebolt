@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"localrmm/internal/aiconfig"
 	"localrmm/internal/analysis"
 	"localrmm/internal/store"
 	"net/http"
@@ -22,30 +23,35 @@ import (
 const defaultAIBaseURL = "http://127.0.0.1:11434/v1"
 
 type publicAIConfig struct {
-	Revision            string   `json:"revision"`
-	Configured          bool     `json:"configured"`
-	Provider            string   `json:"provider"`
-	BaseURL             string   `json:"baseURL"`
-	EndpointOrigin      string   `json:"endpointOrigin"`
-	Model               string   `json:"model"`
-	KeyConfigured       bool     `json:"keyConfigured"`
-	UseLegacyMaxTokens  bool     `json:"useLegacyMaxTokens"`
-	AllowRemoteEvidence bool     `json:"allowRemoteEvidence"`
-	Storage             string   `json:"storage"`
-	ResetsOnRestart     bool     `json:"resetsOnRestart"`
-	Busy                bool     `json:"busy"`
-	Limitations         []string `json:"limitations"`
+	PersistenceAvailable bool     `json:"persistenceAvailable"`
+	PersistentKeyAllowed bool     `json:"persistentKeyAllowed"`
+	Revision             string   `json:"revision"`
+	Configured           bool     `json:"configured"`
+	Provider             string   `json:"provider"`
+	BaseURL              string   `json:"baseURL"`
+	EndpointOrigin       string   `json:"endpointOrigin"`
+	Model                string   `json:"model"`
+	KeyConfigured        bool     `json:"keyConfigured"`
+	UseLegacyMaxTokens   bool     `json:"useLegacyMaxTokens"`
+	AllowRemoteEvidence  bool     `json:"allowRemoteEvidence"`
+	Storage              string   `json:"storage"`
+	ResetsOnRestart      bool     `json:"resetsOnRestart"`
+	Busy                 bool     `json:"busy"`
+	Limitations          []string `json:"limitations"`
 }
 
 type aiState struct {
-	mu           sync.Mutex
-	config       publicAIConfig
-	service      *analysis.Service
-	busy         bool
-	activeCancel context.CancelFunc
-	activeID     uint64
-	activeOwner  string
-	timeout      time.Duration // Internal bounded test seam, never user-controlled over HTTP.
+	mu                   sync.Mutex
+	proactive            proactiveAIApproval
+	persistence          *aiconfig.Settings
+	persistentKeyAllowed bool
+	config               publicAIConfig
+	service              *analysis.Service
+	busy                 bool
+	activeCancel         context.CancelFunc
+	activeID             uint64
+	activeOwner          string
+	timeout              time.Duration // Internal bounded test seam, never user-controlled over HTTP.
 }
 
 func configRevision() (string, error) {
@@ -62,7 +68,7 @@ func defaultAIConfig(revision string) publicAIConfig {
 		"Loopback transport does not prove local inference: that server may forward requests elsewhere. Model provenance is a configured label, not weight verification.",
 		"An explicit analysis sends the case title/summary and selected evidence title/source/detail/value/timestamps/quality. Operator notes, device names, IPs and unrelated telemetry are excluded.",
 		"Evidence text is not secret-redacted. Review the case and the exact destination before starting an analysis.",
-		"No command execution, extra data collection, automatic retry, provider fallback or remediation is enabled.",
+		"Manual case analysis has no command execution, extra collection, retry, fallback or remediation. Background health analysis requires a separate device/provider scope.",
 	}}
 }
 func newAIState() (*aiState, error) {
@@ -70,24 +76,42 @@ func newAIState() (*aiState, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &aiState{config: defaultAIConfig(revision), service: analysis.NewService(nil), timeout: analysis.DefaultTimeout}, nil
+	a := &aiState{config: defaultAIConfig(revision), service: analysis.NewService(nil), timeout: analysis.DefaultTimeout}
+	a.resetProactiveLocked(revision)
+	return a, nil
 }
-func (a *aiState) publicLocked() publicAIConfig { v := a.config; v.Busy = a.busy; return v }
+func (a *aiState) publicLocked() publicAIConfig {
+	v := a.config
+	v.Busy = a.busy
+	v.PersistenceAvailable = a.persistence != nil
+	v.PersistentKeyAllowed = a.persistence != nil && a.persistentKeyAllowed
+	if v.Storage == "protected-file" {
+		v.Limitations = append([]string{}, v.Limitations...)
+		v.Limitations[0] = "Configuration and explicitly approved credentials are stored in a protected manager file, without an encryption-at-rest guarantee. Loading or saving does not contact the provider."
+	}
+	return v
+}
 func (s *Server) aiConfig(w http.ResponseWriter) {
 	s.ai.mu.Lock()
+	if !s.ai.persistenceCurrentLocked() {
+		s.ai.mu.Unlock()
+		fail(w, 503, "ai_settings_unavailable", "Saved AI settings are blocked. Review protected storage before use.")
+		return
+	}
 	view := s.ai.publicLocked()
 	s.ai.mu.Unlock()
 	write(w, 200, view)
 }
 
 type aiConfigRequest struct {
-	ExpectedRevision    string `json:"expectedRevision"`
-	BaseURL             string `json:"baseURL"`
-	Model               string `json:"model"`
-	APIKey              string `json:"apiKey"`
-	ApprovedOrigin      string `json:"approvedOrigin"`
-	AllowRemoteEvidence bool   `json:"allowRemoteEvidence"`
-	UseLegacyMaxTokens  bool   `json:"useLegacyMaxTokens"`
+	AcknowledgeKeyStorage bool   `json:"acknowledgeKeyStorage,omitempty"`
+	ExpectedRevision      string `json:"expectedRevision"`
+	BaseURL               string `json:"baseURL"`
+	Model                 string `json:"model"`
+	APIKey                string `json:"apiKey"`
+	ApprovedOrigin        string `json:"approvedOrigin"`
+	AllowRemoteEvidence   bool   `json:"allowRemoteEvidence"`
+	UseLegacyMaxTokens    bool   `json:"useLegacyMaxTokens"`
 }
 
 func (aiConfigRequest) String() string   { return "api.aiConfigRequest{secrets:redacted}" }
@@ -178,7 +202,7 @@ func (s *Server) aiMutation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	switch r.URL.Path {
-	case "/api/ai/config":
+	case "/api/ai/config", "/api/ai/config/persistent":
 		s.saveAIConfig(w, r)
 		return
 	case "/api/ai/config/clear":
@@ -194,7 +218,12 @@ func (s *Server) aiMutation(w http.ResponseWriter, r *http.Request) {
 }
 func (s *Server) saveAIConfig(w http.ResponseWriter, r *http.Request) {
 	var input aiConfigRequest
-	if !readObject(w, r, 8192, []string{"expectedRevision", "baseURL", "model", "apiKey", "approvedOrigin", "allowRemoteEvidence", "useLegacyMaxTokens"}, &input) {
+	persistent := r.URL.Path == "/api/ai/config/persistent"
+	fields := []string{"expectedRevision", "baseURL", "model", "apiKey", "approvedOrigin", "allowRemoteEvidence", "useLegacyMaxTokens"}
+	if persistent {
+		fields = append(fields, "acknowledgeKeyStorage")
+	}
+	if !readObject(w, r, 8192, fields, &input) {
 		return
 	}
 	defer func() { input.APIKey = "" }() // Removes this reference; this is not secure memory erasure.
@@ -248,10 +277,31 @@ func (s *Server) saveAIConfig(w http.ResponseWriter, r *http.Request) {
 	if !operatorStillActive(w, r) {
 		return
 	}
+	if persistent && (s.ai.persistence == nil || input.APIKey != "" && (!input.AcknowledgeKeyStorage || !s.ai.persistentKeyAllowed)) {
+		fail(w, 400, "ai_storage_approval_required", "Persistent provider storage requires explicit key-storage approval and HTTPS for a keyed provider.")
+		return
+	}
+	if s.ai.persistence != nil {
+		var err error
+		if persistent {
+			err = s.ai.persistence.SaveProvider(aiconfig.Provider{Revision: revision, BaseURL: input.BaseURL, Model: input.Model, APIKey: input.APIKey, ApprovedOrigin: input.ApprovedOrigin, AllowRemoteEvidence: input.AllowRemoteEvidence, UseLegacyMaxTokens: input.UseLegacyMaxTokens}, input.AcknowledgeKeyStorage, aiSettingsActor(r), time.Now().UTC())
+		} else {
+			err = s.ai.persistence.Forget(revision, revision, aiSettingsActor(r), time.Now().UTC())
+		}
+		if err != nil {
+			s.ai.blockPersistenceLocked()
+			fail(w, 503, "ai_settings_unavailable", "Saved AI settings could not be confirmed. Export is blocked; review protected storage before restarting.")
+			return
+		}
+	}
 	if s.ai.activeCancel != nil {
 		s.ai.activeCancel()
 	}
 	view := defaultAIConfig(revision)
+	if persistent {
+		view.Storage = "protected-file"
+		view.ResetsOnRestart = false
+	}
 	view.Configured = true
 	view.BaseURL = input.BaseURL
 	view.EndpointOrigin = provider.Identity().EndpointOrigin
@@ -259,6 +309,7 @@ func (s *Server) saveAIConfig(w http.ResponseWriter, r *http.Request) {
 	view.KeyConfigured = input.APIKey != ""
 	view.UseLegacyMaxTokens = input.UseLegacyMaxTokens
 	view.AllowRemoteEvidence = input.AllowRemoteEvidence
+	s.ai.resetProactiveLocked(revision)
 	s.ai.config = view
 	s.ai.service = analysis.NewService(provider)
 	viewResult := s.ai.publicLocked()
@@ -294,6 +345,14 @@ func (s *Server) clearAIConfig(w http.ResponseWriter, r *http.Request) {
 	if s.ai.activeCancel != nil {
 		s.ai.activeCancel()
 	}
+	if s.ai.persistence != nil {
+		if err := s.ai.persistence.Forget(revision, revision, aiSettingsActor(r), time.Now().UTC()); err != nil {
+			s.ai.blockPersistenceLocked()
+			fail(w, 503, "ai_settings_unavailable", "Saved AI settings could not be cleared. Export is blocked; review protected storage before restarting.")
+			return
+		}
+	}
+	s.ai.resetProactiveLocked(revision)
 	s.ai.config = defaultAIConfig(revision)
 	s.ai.service = analysis.NewService(nil)
 	viewResult := s.ai.publicLocked()
@@ -341,6 +400,11 @@ func (s *Server) analyzeCase(w http.ResponseWriter, r *http.Request, id string) 
 	}
 	defer release()
 	s.ai.mu.Lock()
+	if !s.ai.persistenceCurrentLocked() {
+		s.ai.mu.Unlock()
+		fail(w, 503, "ai_settings_unavailable", "Saved AI settings are blocked. Review protected storage before use.")
+		return
+	}
 	if input.ConfigRevision != s.ai.config.Revision {
 		s.ai.mu.Unlock()
 		fail(w, 409, "config_revision_mismatch", "Provider settings changed. Review the current destination before starting.")
@@ -396,5 +460,5 @@ func (s *Server) analyzeCase(w http.ResponseWriter, r *http.Request, id string) 
 func (s *Server) aiConfigured() bool {
 	s.ai.mu.Lock()
 	defer s.ai.mu.Unlock()
-	return s.ai.config.Configured
+	return s.ai.persistenceCurrentLocked() && s.ai.config.Configured
 }

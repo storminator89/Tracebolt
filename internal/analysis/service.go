@@ -33,6 +33,11 @@ func (s *Service) Analyze(ctx context.Context, c model.Case, evidence []model.Ev
 	if err != nil {
 		return Result{}, err
 	}
+	return s.analyzePacket(ctx, c, p)
+}
+
+// analyzePacket is private so HTTP callers cannot supply arbitrary export packets.
+func (s *Service) analyzePacket(ctx context.Context, c model.Case, p Packet) (Result, error) {
 	encoded, err := p.encode()
 	if err != nil {
 		return Result{}, err

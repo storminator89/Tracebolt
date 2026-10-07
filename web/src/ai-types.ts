@@ -10,10 +10,24 @@ export interface AIConfig {
     keyConfigured: boolean;
     useLegacyMaxTokens: boolean;
     allowRemoteEvidence: boolean;
-    storage: 'memory-only';
+    storage: 'memory-only' | 'protected-file';
+    /** Absent on older managers: never infer permission to persist. */
+    persistenceAvailable?: boolean;
+    persistentKeyAllowed?: boolean;
     resetsOnRestart: boolean;
     busy: boolean;
     limitations: string[];
+}
+/** Reject ambiguous storage/capability readbacks before offering a write. */
+export function validAIConfig(value: unknown): value is AIConfig {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    const config = value as Record<string, unknown>;
+    if (typeof config.revision !== 'string' || !config.revision || typeof config.baseURL !== 'string' || typeof config.model !== 'string' || typeof config.configured !== 'boolean') return false;
+    if (['keyConfigured', 'useLegacyMaxTokens', 'allowRemoteEvidence', 'busy'].some(key => typeof config[key] !== 'boolean')) return false;
+    if (config.persistenceAvailable !== undefined && typeof config.persistenceAvailable !== 'boolean' || config.persistentKeyAllowed !== undefined && typeof config.persistentKeyAllowed !== 'boolean') return false;
+    if (config.persistentKeyAllowed === true && config.persistenceAvailable !== true) return false;
+    if (config.storage === 'memory-only') return config.resetsOnRestart === true;
+    return config.storage === 'protected-file' && config.resetsOnRestart === false && config.configured === true && config.persistenceAvailable === true;
 }
 export interface Provenance {
     method: string;

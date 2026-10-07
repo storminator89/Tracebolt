@@ -113,8 +113,12 @@ func status(t *testing.T, f *fixture, invite, claim, purpose string, n int, key 
 }
 func claim(t *testing.T, f *fixture) (enrollmentstate.Snapshot, ed25519.PrivateKey) {
 	t.Helper()
+	return claimForPlatform(t, f, "linux")
+}
+func claimForPlatform(t *testing.T, f *fixture, platform string) (enrollmentstate.Snapshot, ed25519.PrivateKey) {
+	t.Helper()
 	ctx := context.Background()
-	created, e := f.service.CreateInvitation(ctx, id("request", 1), "linux")
+	created, e := f.service.CreateInvitation(ctx, id("request", 1), platform)
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -147,11 +151,11 @@ func claim(t *testing.T, f *fixture) (enrollmentstate.Snapshot, ed25519.PrivateK
 	return pending, key
 }
 func TestDurableServiceApprovalIssuanceDeliveryActivation(t *testing.T) {
-	for _, profile := range []string{"tls", "http-test"} {
-		t.Run(profile, func(t *testing.T) {
-			f := newFixture(t, profile)
+	for _, tc := range []struct{ platform, profile string }{{"linux", "tls"}, {"linux", "http-test"}, {"windows", "tls"}} {
+		t.Run(tc.platform+"/"+tc.profile, func(t *testing.T) {
+			f := newFixture(t, tc.profile)
 			ctx := context.Background()
-			pending, key := claim(t, f)
+			pending, key := claimForPlatform(t, f, tc.platform)
 			c, b := status(t, f, pending.InvitationID, pending.Claim.ClaimID, "credential", 3, key)
 			if _, e := f.service.Credential(ctx, c.Context.Challenge, b); e == nil {
 				t.Fatal("credential before approval")
@@ -191,6 +195,9 @@ func TestDurableServiceApprovalIssuanceDeliveryActivation(t *testing.T) {
 			if e != nil || active.State != enrollmentstate.Activated {
 				t.Fatal("activation failed", e)
 			}
+			if tc.platform == "windows" {
+				assertWindowsBasicTelemetry(t, f, active, cert)
+			}
 			revoked, e := f.service.Terminate(ctx, pending.InvitationID, id("request", 8), active.Revision, enrollmentstate.Revoked)
 			if e != nil {
 				t.Fatal(e)
@@ -227,7 +234,7 @@ func TestChallengeLimitsExpiryAndConfiguration(t *testing.T) {
 	if _, e := f.service.takeChallenge(c.Context.Challenge, "status"); !errors.Is(e, ErrChallenge) {
 		t.Fatal("expired challenge")
 	}
-	if _, e := f.service.CreateInvitation(context.Background(), id("request", 1), "windows"); !errors.Is(e, ErrPlatform) {
+	if _, e := f.service.CreateInvitation(context.Background(), id("request", 1), "darwin"); !errors.Is(e, ErrPlatform) {
 		t.Fatal("unimplemented platform accepted")
 	}
 	cfg := f.config

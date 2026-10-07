@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"localrmm/internal/enrollmentcrypto"
 	"localrmm/internal/health"
+	"localrmm/internal/store"
 	"net/http"
 	"net/url"
 	"sort"
@@ -12,7 +13,7 @@ import (
 )
 
 const investigationPageSize = 50
-const investigationResponseBytes = 256 * 1024
+const investigationResponseBytes = 2 * 1024 * 1024
 
 type investigationCounts struct {
 	Open      int `json:"open"`
@@ -21,8 +22,9 @@ type investigationCounts struct {
 	All       int `json:"all"`
 }
 type investigationItem struct {
-	DeviceID string          `json:"deviceId"`
-	Incident health.Incident `json:"incident"`
+	DeviceID string                `json:"deviceId"`
+	Incident health.Incident       `json:"incident"`
+	Analysis *store.HealthAnalysis `json:"analysis,omitempty"`
 }
 type investigationsView struct {
 	SchemaVersion string              `json:"schemaVersion"`
@@ -122,7 +124,7 @@ func (h *operatorHandler) investigations(w http.ResponseWriter, r *http.Request)
 			}
 			view.Counts.All++
 			if scope == "all" || scope == bucket {
-				items = append(items, investigationItem{id, incident})
+				items = append(items, investigationItem{DeviceID: id, Incident: incident})
 			}
 		}
 	}
@@ -144,6 +146,23 @@ func (h *operatorHandler) investigations(w http.ResponseWriter, r *http.Request)
 			end = len(items)
 		}
 		view.Items = items[offset:end]
+	}
+	// Attach only the current page's durable local findings. Reading never starts
+	// inference. The same final enrollment recheck protects both data classes.
+	analysisByDevice := map[string]map[string]store.HealthAnalysis{}
+	for i := range view.Items {
+		item := &view.Items[i]
+		if _, ok := analysisByDevice[item.DeviceID]; !ok {
+			findings, err := m.store.HealthAnalyses(r.Context(), item.DeviceID)
+			if err != nil {
+				fail(w, 503, "health_unavailable", "Analysis history is unavailable.")
+				return
+			}
+			analysisByDevice[item.DeviceID] = findings
+		}
+		if finding, ok := analysisByDevice[item.DeviceID][item.Incident.ID]; ok {
+			item.Analysis = &finding
+		}
 	}
 	raw, err := json.Marshal(view)
 	if err != nil || len(raw) >= investigationResponseBytes-1 {

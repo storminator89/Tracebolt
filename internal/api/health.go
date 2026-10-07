@@ -59,6 +59,10 @@ func (s *Server) RunHealthMonitor(ctx context.Context, warn func()) error {
 	if m == nil {
 		return nil
 	}
+	proactiveCtx, stopProactive := context.WithCancel(ctx)
+	proactiveDone := make(chan struct{})
+	go func() { defer close(proactiveDone); s.runProactiveMonitor(proactiveCtx, m) }()
+	defer func() { stopProactive(); <-proactiveDone }()
 	ticker := time.NewTicker(health.Interval)
 	defer ticker.Stop()
 	var lastWarning time.Time

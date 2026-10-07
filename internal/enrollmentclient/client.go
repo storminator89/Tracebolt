@@ -97,7 +97,7 @@ func Run(ctx context.Context, b Bootstrap, o Options) (Result, error) {
 	if o.ClaimOnly && o.ResumeOnly || o.ResumeOnly && o.Secret != nil {
 		return Result{}, ErrBootstrap
 	}
-	if ctx == nil || runtime.GOOS != "linux" || o.Display == nil || !filepath.IsAbs(o.StateDirectory) || filepath.Clean(o.StateDirectory) != o.StateDirectory {
+	if ctx == nil || validatePlatformBootstrap(b, runtime.GOOS) != nil || o.Display == nil || !filepath.IsAbs(o.StateDirectory) || filepath.Clean(o.StateDirectory) != o.StateDirectory {
 		return Result{}, ErrBootstrap
 	}
 	if (b.Profile == "http-test") != o.InsecureHTTPAcknowledged {

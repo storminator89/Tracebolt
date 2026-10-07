@@ -79,6 +79,14 @@ currently authorized Linux devices. New events can change page order; this is
 live paging rather than a pinned export. No usable evaluator or a source failure
 is an unavailable result, never an empty successful assessment.
 
+## Optional saved AI suggestions
+
+The [proactive AI workflow](proactive-ai-diagnostics.md) can add durable, cited
+suggestions after a separate exact provider/device/data approval. Its worker is
+independent of these health checks and remains off by default. Opening this page
+still performs reads only. Raw journal content is not part of that scope, and
+confirmed recovery does not validate a model hypothesis.
+
 ## API and authority
 
 Only the authenticated operator surface exposes:

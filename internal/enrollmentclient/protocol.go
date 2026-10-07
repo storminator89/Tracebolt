@@ -11,6 +11,7 @@ import (
 	"localrmm/internal/enrollmentcrypto"
 	"localrmm/internal/enrollmentstate"
 	"net/http"
+	"runtime"
 	"strconv"
 	"time"
 )
@@ -242,7 +243,7 @@ func (s *session) claim(ctx context.Context) error {
 }
 func (s *session) acceptSnapshot(v enrollmentstate.Snapshot) error {
 	b := s.l.Bootstrap
-	if enrollmentstate.ValidateSnapshot(v) != nil || v.Binding.InstanceID != b.ManagerInstanceID || v.Binding.Profile != b.Profile || v.Binding.Origin != b.EnrollmentOrigin || v.Binding.CollectionProfile != b.CollectionProfile || v.Binding.IssuerFingerprint != fingerprint(s.issuerDER) || v.InvitationID != b.InvitationID || v.Platform != "linux" || v.Revision < s.l.LastRevision {
+	if enrollmentstate.ValidateSnapshot(v) != nil || v.Binding.InstanceID != b.ManagerInstanceID || v.Binding.Profile != b.Profile || v.Binding.Origin != b.EnrollmentOrigin || v.Binding.CollectionProfile != b.CollectionProfile || v.Binding.IssuerFingerprint != fingerprint(s.issuerDER) || v.InvitationID != b.InvitationID || validatePlatformSnapshot(v, b, runtime.GOOS) != nil || v.Revision < s.l.LastRevision {
 		return ErrResponse
 	}
 	if v.Claim.ClaimID != s.l.ClaimID || v.Claim.RequestID != s.l.ClaimRequestID || v.Claim.KeyFingerprint != fingerprint(s.publicDER) || v.Claim.CSRHash != fingerprint(s.csr) || s.l.ClaimHash == "" || v.Claim.ClaimHash != s.l.ClaimHash || v.Claim.ComparisonCode != s.trust.ComparisonCode {

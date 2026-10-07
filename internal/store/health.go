@@ -103,6 +103,9 @@ func (s *Store) updateHealth(ctx context.Context, id string, fn func(*health.Sta
 	if _, e = tx.ExecContext(ctx, "INSERT INTO health_devices(id,body) VALUES(?,?) ON CONFLICT(id) DO UPDATE SET body=excluded.body", id, body); e != nil {
 		return state, e
 	}
+	if e = recoverHealthAnalyses(ctx, tx, id, state, transitions); e != nil {
+		return state, e
+	}
 	if e = enqueueHealthAlarms(ctx, tx, id, before, state, transitions); e != nil {
 		return state, e
 	}
