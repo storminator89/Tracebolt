@@ -310,13 +310,13 @@ describe('health tab integration', () => {
         render(<DeviceDetail id={id} initialTab="health" onClose={() => {}} onCase={() => {}}/>);
         const cards = await screen.findByRole('list', { name: 'Current checks' }); expect(cards).toHaveTextContent('23.4%'); expect(cards).toHaveTextContent('48.1%');
     });
-    it.each(['unknown', 'windows', 'macos', 'synthetic', 'local', 'signed-out'] as const)('does not expose health for %s', async kind => {
+    it.each(['unknown', 'windows', 'macos', 'synthetic', 'local', 'signed-out'] as const)('does not expose Linux health for %s', async kind => {
         const value = device();
         if (kind === 'synthetic') value.synthetic = true;
         else if (kind === 'local') value.source = 'local';
         else if (kind === 'signed-out') vi.mocked(useOperator).mockReturnValue({ ...operator, authenticated: false });
         else value.platform = kind;
         vi.mocked(request).mockResolvedValue(value); render(<DeviceDetail id={id} onClose={() => {}} onCase={() => {}}/>); await screen.findByRole('heading', { name: value.name });
-        expect(screen.queryByRole('tab', { name: 'Health & history' })).not.toBeInTheDocument(); expect(vi.mocked(request).mock.calls.some(([path]) => path.endsWith('/health'))).toBe(false);
+        if (kind === 'windows') expect(screen.getByRole('tab', { name: 'Health & history' })).toBeInTheDocument(); else expect(screen.queryByRole('tab', { name: 'Health & history' })).not.toBeInTheDocument(); expect(vi.mocked(request).mock.calls.some(([path]) => path.endsWith('/health'))).toBe(false);
     });
 });

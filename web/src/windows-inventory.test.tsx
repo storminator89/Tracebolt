@@ -26,7 +26,7 @@ describe('Windows inventory within the shared device UI', () => {
         fireEvent.click(screen.getByRole('tab', { name: 'Software' })); expect(screen.getByText('Synthetic Application')).toBeVisible(); expect(screen.getByText('64-bit')).toBeVisible();
         fireEvent.click(screen.getByRole('tab', { name: 'Hostname' })); expect(screen.getByText('fixture-windows')).toBeVisible();
         fireEvent.click(screen.getByRole('tab', { name: 'Interfaces' })); expect(screen.getByText('192.0.2.40')).toBeVisible(); expect(screen.getByText('2001:db8::40')).toBeVisible(); expect(screen.queryByRole('link')).toBeNull();
-        expect(request).toHaveBeenCalledWith(`/devices/${windowsDeviceId}/windows-inventory`, { signal: expect.any(AbortSignal) }, 51200); expect(mutate).not.toHaveBeenCalled();
+        expect(request).toHaveBeenCalledWith(`/devices/${windowsDeviceId}/windows-inventory`, { signal: expect.any(AbortSignal) }, 69632); expect(mutate).not.toHaveBeenCalled();
     });
     it('shows truncated exact and lower-bound counts, and keeps denied separate from healthy empty', async () => {
         const v = windowsView(); v.snapshot!.processes = { ...v.snapshot!.processes, quality: 'partial', observedCount: 180, truncated: true, complete: false }; v.snapshot!.services = { ...windowsSection([]), quality: 'denied', complete: false, countExact: false }; v.snapshot!.software = windowsSection([]); vi.mocked(request).mockResolvedValue(v);
@@ -61,7 +61,8 @@ describe('Windows inventory within the shared device UI', () => {
     it('mounts Windows inventory and existing resource charts without Linux endpoints or tabs', async () => {
         const history = historyFixture(); history.deviceId = windowsDeviceId;
         vi.mocked(request).mockImplementation(async path => path === `/devices/${windowsDeviceId}` ? windowsDevice() : path.endsWith('/windows-inventory') ? windowsView() : path.endsWith('/resource-history') ? history : Promise.reject(new Error(`Unexpected fixture path: ${path}`)));
-        render(<DeviceDetail id={windowsDeviceId} onClose={vi.fn()} onCase={vi.fn()}/>); await screen.findByRole('heading', { name: 'fixture-windows' }); await screen.findByRole('img', { name: /^System volume/ }); expect(screen.getAllByRole('img')).toHaveLength(3); expect(screen.queryByText('cached candidates')).toBeNull(); expect(screen.queryByRole('tab', { name: /CVE|Logs|Security coverage|Health/ })).toBeNull();
+        render(<DeviceDetail id={windowsDeviceId} onClose={vi.fn()} onCase={vi.fn()}/>); await screen.findByRole('heading', { name: 'fixture-windows' }); await screen.findByRole('img', { name: /^System volume/ }); expect(screen.getAllByRole('img')).toHaveLength(3); expect(screen.queryByText('cached candidates')).toBeNull(); expect(screen.queryByRole('tab', { name: /CVE|Logs|Security coverage/ })).toBeNull();
+        fireEvent.click(screen.getByRole('tab', { name: /Health/ })); await screen.findByText('No current event scope reported. Health unknown.');
         fireEvent.click(screen.getByRole('tab', { name: 'Inventory' })); await screen.findByText('fixture.exe'); fireEvent.click(screen.getByRole('tab', { name: 'Interfaces' })); expect(screen.getByText('192.0.2.40')).toBeVisible();
         expect(vi.mocked(request).mock.calls.map(([path]) => path).every(path => path === `/devices/${windowsDeviceId}` || path.endsWith('/windows-inventory') || path.endsWith('/resource-history'))).toBe(true);
     });

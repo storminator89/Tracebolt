@@ -50,14 +50,16 @@ ordinary sender and shared manager/UI; see
 - [ ] Native protected installation and actual Windows endpoint → Linux manager
   → shared dashboard. The separate native path-pinning prerequisite is still
   under correction; no root/ProgramData ACL widening is an acceptable shortcut.
-- [ ] Windows event-derived alerts/health diagnostics and explicit AI evidence
+- [x] Separately consented bounded Application/System headers through sender/store and shared Health source; [source boundary](windows-event-health.md). Native/browser acceptance remains pending.
+- [x] Separately consented bounded caller-visible volume inventory, truthful quota/physical capacity, v3 sender/store and shared Storage source; [source boundary](windows-volume-inventory.md). Native/browser acceptance remains pending.
+- [ ] Complete Windows event-derived alerts/health diagnostics and explicit AI evidence
   scope, followed by the remaining native capability parity below.
 
 ## Remaining parity work, each with UI acceptance
 
 | Capability | Existing Windows foundation | Required next delivery and evidence |
 | --- | --- | --- |
-| CPU/RAM/disks/history | CPU/RAM/system-volume source connected through sender/store/shared charts; CPU limited to one processor group | Prove native end-to-end values; report multi-group limitation honestly; add all-volume inventory with Windows semantics and native tests |
+| CPU/RAM/disks/history | CPU/RAM/system-volume source connected through sender/store/shared charts; CPU limited to one processor group | Prove native end-to-end values; report multi-group limitation honestly; separately consented [caller-visible volume source](windows-volume-inventory.md) now connects through v3 sender/store/Storage UI; prove native quota/denied/no-drive-letter cases |
 | Processes/services/software | Consent-bound bounded native/registry generations connected to shared dashboard source | Native installed-service and shared-browser acceptance; no `Win32_Product` repair side effects |
 | Hostname/interfaces/connections | Explicit hostname/interface scope connected through identity/sender/manager/UI source | Native end-to-end acceptance; bounded Windows connection/owner metadata requires its own implemented API and permission evidence |
 | Logs and alarms | Opt-in Application/System metadata only; no messages/XML/EventData/security identities | Persist bounded event metadata and surface event-derived alerts in shared UI; content retrieval is a separately consented, bounded Windows channel policy with redaction and access tests |

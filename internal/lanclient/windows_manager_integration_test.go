@@ -42,8 +42,10 @@ import (
 	"localrmm/internal/operatorauth"
 	"localrmm/internal/signedhttp"
 	appstore "localrmm/internal/store"
+	"localrmm/internal/windowseventhealth"
 	"localrmm/internal/windowsinventory"
 	"localrmm/internal/windowsmanaged"
+	"localrmm/internal/windowsvolumes"
 )
 
 // These are Linux-hosted integration fixtures, not Windows native acceptance.
@@ -531,6 +533,10 @@ func TestWindowsManagerPipelineRejectsOtherProfilesAndMixedScope(t *testing.T) {
 }
 
 func TestWindowsManagerPipelineOperatorHTTPBoundary(t *testing.T) {
+	t.Run("event-v2", func(t *testing.T) { testWindowsManagerPipelineOperatorHTTPBoundary(t, false) })
+	t.Run("events-and-volumes-v3", func(t *testing.T) { testWindowsManagerPipelineOperatorHTTPBoundary(t, true) })
+}
+func testWindowsManagerPipelineOperatorHTTPBoundary(t *testing.T, withVolumes bool) {
 	f := newWindowsManagerFixture(t, enrollmentcrypto.CollectionProfileWindowsInventory, "windows")
 	ctx := context.Background()
 	state, err := lanclientstate.InitializeNew(f.material.config.StateDirectory, f.material.binding)
@@ -538,14 +544,14 @@ func TestWindowsManagerPipelineOperatorHTTPBoundary(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer state.Close()
-	run, err := runUsingStateWithDependencies(ctx, f.material, state, nil, nil, nil, windowsSource, func(r *http.Request) (*http.Response, error) {
+	run, err := runUsingStateWithCapabilityDependencies(ctx, f.material, state, nil, nil, nil, windowsSource, func(r *http.Request) (*http.Response, error) {
 		return f.serve(t, r, http.StatusOK), nil
-	})
+	}, func() (windowseventhealth.Consent, bool) { return eventConsentFixture(f.material), true }, eventSourceFixture, func() (windowsvolumes.Consent, bool) { return volumeConsentFixture(f.material), withVolumes }, volumeSourceFixture)
 	if err != nil || run.Sequence != 1 || run.Duplicate {
 		t.Fatal("fixture sender did not commit its first Windows frame", err)
 	}
 	want := f.view(t, time.Now().UTC())
-	if want.Snapshot == nil || want.ReceivedAt == nil || want.Sequence == nil {
+	if (want.Volumes != nil) != withVolumes || want.Events == nil || want.Snapshot == nil || want.ReceivedAt == nil || want.Sequence == nil {
 		t.Fatal("accepted fixture frame is missing")
 	}
 	// The operator handler has one existing primary/Linux authority and a
@@ -632,12 +638,12 @@ func TestWindowsManagerPipelineOperatorHTTPBoundary(t *testing.T) {
 		return w
 	}
 	path := "/api/devices/" + f.identity.Approval.DeviceID + "/windows-inventory"
-	if w := call(http.MethodGet, path, nil, false, "", ""); w.Code != http.StatusUnauthorized || bytes.Contains(w.Body.Bytes(), []byte("fixture-host")) {
+	if w := call(http.MethodGet, path, nil, false, "", ""); w.Code != http.StatusUnauthorized || (bytes.Contains(w.Body.Bytes(), []byte("fixture-host")) || bytes.Contains(w.Body.Bytes(), []byte("Invented Provider"))) {
 		t.Fatal("unauthenticated operator read exposed accepted Windows rows", w.Code)
 	}
 	w := call(http.MethodGet, path, nil, true, "", "")
 	var got enrollmentstore.WindowsInventoryView
-	if w.Code != http.StatusOK || json.Unmarshal(w.Body.Bytes(), &got) != nil || got.SchemaVersion != want.SchemaVersion || got.DeviceID != want.DeviceID || got.CollectionProfile != want.CollectionProfile || got.Status != "fresh" || got.Sequence == nil || *got.Sequence != *want.Sequence || got.ReceivedAt == nil || !got.ReceivedAt.Equal(*want.ReceivedAt) || !reflect.DeepEqual(got.Snapshot, want.Snapshot) {
+	if w.Code != http.StatusOK || json.Unmarshal(w.Body.Bytes(), &got) != nil || got.SchemaVersion != want.SchemaVersion || got.DeviceID != want.DeviceID || got.CollectionProfile != want.CollectionProfile || got.Status != "fresh" || got.Sequence == nil || *got.Sequence != *want.Sequence || got.ReceivedAt == nil || !got.ReceivedAt.Equal(*want.ReceivedAt) || !reflect.DeepEqual(got.Snapshot, want.Snapshot) || !reflect.DeepEqual(got.Events, want.Events) || !reflect.DeepEqual(got.Volumes, want.Volumes) {
 		t.Fatal("authenticated HTTP view lost accepted Windows rows, identity or provenance", w.Code)
 	}
 	if w := call(http.MethodGet, "/api/devices/"+windowsManagerID("agent", 99)+"/windows-inventory", nil, true, "", ""); w.Code != http.StatusNotFound {

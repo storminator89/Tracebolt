@@ -7,17 +7,20 @@ import path from 'node:path';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../..');
 const require=createRequire(path.join(root,'web/package.json'));
 const {build}=require('esbuild');
-const fixtureModule=await build({stdin:{contents:"export * from './windows-inventory-fixture'; export * from './resource-history-fixture'; export {validWindowsInventoryView} from './windows-inventory-types';",resolveDir:path.join(root,'web/src'),loader:'ts'},bundle:true,platform:'node',format:'esm',write:false,logLevel:'silent'});
-const {windowsDevice,windowsDeviceId,windowsNow,windowsSection,windowsView,historyFixture,validWindowsInventoryView}=await import('data:text/javascript;base64,'+Buffer.from(fixtureModule.outputFiles[0].text).toString('base64'));
+const fixtureModule=await build({stdin:{contents:"export * from './windows-inventory-fixture'; export * from './windows-volumes-fixture'; export * from './resource-history-fixture'; export {validWindowsInventoryView} from './windows-inventory-types';",resolveDir:path.join(root,'web/src'),loader:'ts'},bundle:true,platform:'node',format:'esm',write:false,logLevel:'silent'});
+const {windowsVolumes,windowsDevice,windowsDeviceId,windowsNow,windowsSection,windowsView,historyFixture,validWindowsInventoryView}=await import('data:text/javascript;base64,'+Buffer.from(fixtureModule.outputFiles[0].text).toString('base64'));
 export const windowsInventoryCaseName='Synthetic Windows inventory shares device charts and explicit enrollment consent without Linux reads';
 export const windowsInventoryFixtureDisclosure='Real loopback HTTP-test fixture login with intercepted invented Windows inventory and resource history in the production UI. UI-only evidence; no native endpoint acceptance, collection, invitation, service installation or external request.';
 let stage='setup';
-const stages=new Set(['setup','login','overview','inventory','partial','denied','enrollment','access-loss']);
+const stages=new Set(['setup','login','overview','inventory','storage','events','legacy','partial','denied','enrollment','access-loss']);
 export const windowsInventoryFailureStage=()=>stages.has(stage)?stage:'setup';
 const mark=value=>{stage=value;};
 export function windowsBrowserFixture(now,phase='fresh'){
- const view=windowsView(),time=Date.parse(now);view.serverNow=now;view.receivedAt=new Date(time-1000).toISOString();view.snapshot.collectedAt=new Date(time-(phase==='fresh'?2000:300000)).toISOString();
- if(phase!=='fresh'){
+ const view=windowsView(),time=Date.parse(now);view.serverNow=now;view.receivedAt=new Date(time-1000).toISOString();view.snapshot.collectedAt=new Date(time-(phase==='stale'?300000:2000)).toISOString();
+ view.events={schemaVersion:'tracebolt.windows-event-metadata.v1',scope:'windows-application-system-event-headers-v1',grantId:'e'.repeat(32),generationId:view.snapshot.generationId,collectedAt:view.snapshot.collectedAt,channels:[{channel:'Application',quality:'observed',reason:'',complete:true,truncated:false,observedCount:1,rows:[{recordId:'18446744073709551615',eventId:42,level:2,provider:'Invented Event Provider',timestamp:new Date(time-60000).toISOString()}]},{channel:'System',quality:'denied',reason:'windows_events_access_denied',complete:false,truncated:false,observedCount:0,rows:[]}]};
+ if(phase==='legacy')delete view.events;
+ else {view.volumes=windowsVolumes();view.volumes.collectedAt=new Date(time-(phase==='stale'?300000:1500)).toISOString();}
+ if(phase==='stale'){
   view.status='stale';view.snapshot.processes={...view.snapshot.processes,quality:'partial',countExact:false,complete:false,truncated:true,observedCount:200};
   view.snapshot.services={...windowsSection([]),quality:'denied',complete:false,countExact:false};
  }
@@ -64,6 +67,21 @@ export async function windowsInventoryBrowserCase({pageAt,login,expect,base,shot
   await expect(page.getByText('192.0.2.40',{exact:true})).toBeVisible();
   if(width===390)await page.locator('.windows-inventory-table tbody tr').first().scrollIntoViewIfNeeded();
   await shot(page,`synthetic-windows-inventory-${width}-${locale}`,windowsInventoryFixtureDisclosure);
+  mark('storage');await page.getByRole('tab',{name:locale==='de'?'Speicher':'Storage',exact:true}).click();
+  await expect(page.getByLabel('9007199254740993 '+(locale==='de'?'Bytes':'bytes'),{exact:true})).toBeVisible();
+  await expect(page.getByText(locale==='de'?'Zugriff verweigert':'Access denied',{exact:true})).toBeVisible();
+  expect(await page.locator('.windows-inventory').evaluate(el=>el.scrollWidth<=el.clientWidth+1)).toBe(true);
+  await shot(page,`synthetic-windows-storage-${width}-${locale}`,windowsInventoryFixtureDisclosure);
+  mark('events');await page.getByRole('tab',{name:locale==='de'?'Health & Verlauf':'Health & history',exact:true}).click();
+  await expect(page.getByText(locale==='de'?'Zugriff verweigert':'Access denied',{exact:true})).toBeVisible();
+  await page.getByText(locale==='de'?'Ereignisse ansehen':'View events',{exact:true}).click();await expect(page.getByText('Invented Event Provider',{exact:true})).toBeVisible();
+  expect(await page.locator('.windows-inventory').evaluate(el=>el.scrollWidth<=el.clientWidth+1)).toBe(true);
+  await shot(page,`synthetic-windows-events-${width}-${locale}`,windowsInventoryFixtureDisclosure);
+  await page.getByRole('tab',{name:locale==='de'?'Inventar':'Inventory',exact:true}).click();
+  mark('legacy');phase='legacy';await page.getByRole('button',{name:locale==='de'?'Windows-Inventar aktualisieren':'Refresh Windows inventory',exact:true}).click();
+  await page.getByRole('tab',{name:locale==='de'?'Speicher':'Storage',exact:true}).click();
+  await expect(page.getByText(locale==='de'?/Eine separate lokale Zustimmung ist erforderlich/:/Separate local consent is required/)).toBeVisible();
+  await expect(page.locator('.windows-inventory-table')).toHaveCount(0);
   mark('partial');phase='stale';await page.getByRole('button',{name:locale==='de'?'Windows-Inventar aktualisieren':'Refresh Windows inventory',exact:true}).click();await page.getByRole('tab',{name:locale==='de'?'Prozesse':'Processes',exact:true}).click();await expect(page.locator('.windows-inventory-count')).toContainText(locale==='de'?'mindestens 200':'at least 200');
   mark('denied');await page.getByRole('tab',{name:locale==='de'?'Dienste':'Services',exact:true}).click();await expect(page.locator('.windows-inventory-table')).toHaveCount(0);await expect(page.locator('.windows-inventory')).toContainText(locale==='de'?'Berechtigung verweigert':'Permission denied');
   if(width===390)await page.locator('.windows-inventory-empty').scrollIntoViewIfNeeded();

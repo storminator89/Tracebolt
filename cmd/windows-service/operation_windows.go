@@ -55,6 +55,20 @@ func nativeOperation(ctx context.Context, r request, out, stderr io.Writer) (res
 		return nil, err
 	}
 	switch r.mode {
+	case "events-preview", "events-enable", "events-disable":
+		snapshot, err := windowsservice.InspectOwned(ctx, receipt.Service)
+		if err != nil || snapshot.State != windowsservice.Stopped {
+			return nil, errLifecycle
+		}
+		mode := map[string]string{"events-preview": "preview", "events-enable": "enable", "events-disable": "disable"}[r.mode]
+		return lanclient.ConfigureWindowsEventMetadata(filepath.Join(receipt.Service.Layout.EnrollmentRoot, "agent.json"), mode, mode == "enable", r.insecureHTTP)
+	case "volumes-preview", "volumes-enable", "volumes-disable":
+		snapshot, err := windowsservice.InspectOwned(ctx, receipt.Service)
+		if err != nil || snapshot.State != windowsservice.Stopped {
+			return nil, errLifecycle
+		}
+		mode := map[string]string{"volumes-preview": "preview", "volumes-enable": "enable", "volumes-disable": "disable"}[r.mode]
+		return lanclient.ConfigureWindowsVolumes(filepath.Join(receipt.Service.Layout.EnrollmentRoot, "agent.json"), mode, mode == "enable", r.insecureHTTP)
 	case "enroll":
 		snapshot, err := windowsservice.InspectOwned(ctx, receipt.Service)
 		if err != nil || snapshot.State != windowsservice.Stopped {

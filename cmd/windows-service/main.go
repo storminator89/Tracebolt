@@ -14,7 +14,9 @@ import (
 
 	"localrmm/internal/enrollmentclient"
 	"localrmm/internal/enrollmentcrypto"
+	"localrmm/internal/windowseventhealth"
 	"localrmm/internal/windowsservice"
+	"localrmm/internal/windowsvolumes"
 )
 
 type request struct {
@@ -29,13 +31,15 @@ func run(ctx context.Context, args []string, out, stderr io.Writer) int {
 func runWith(ctx context.Context, args []string, out, stderr io.Writer, perform operation) int {
 	flags := flag.NewFlagSet("windows-service", flag.ContinueOnError)
 	flags.SetOutput(io.Discard)
-	names := []string{"plan", "inspect", "install", "enroll", "start", "stop", "uninstall", "run-service"}
+	names := []string{"plan", "inspect", "install", "enroll", "start", "stop", "uninstall", "run-service", "events-preview", "events-enable", "events-disable", "volumes-preview", "volumes-enable", "volumes-disable"}
 	modes := map[string]*bool{}
 	for _, n := range names {
 		modes[n] = flags.Bool(n, false, "")
 	}
 	apply := flags.Bool("apply", false, "")
 	consent := flags.Bool("basic-readonly", false, "")
+	volumeConsent := flags.Bool("visible-volumes", false, "")
+	eventConsent := flags.Bool("application-system-event-headers", false, "")
 	windowsConsent := flags.Bool("windows-inventory", false, "")
 	insecure := flags.Bool("insecure-http-test", false, "")
 	bootstrap := flags.String("bootstrap-file", "", "")
@@ -62,9 +66,9 @@ func runWith(ctx context.Context, args []string, out, stderr io.Writer, perform 
 			mode = n
 		}
 	}
-	mutate := mode == "install" || mode == "enroll" || mode == "start" || mode == "stop" || mode == "uninstall"
+	mutate := mode == "install" || mode == "enroll" || mode == "start" || mode == "stop" || mode == "uninstall" || mode == "events-enable" || mode == "events-disable" || mode == "volumes-enable" || mode == "volumes-disable"
 	needsConsent := mode == "install" || mode == "enroll"
-	if flags.NArg() != 0 || mode == "" || *apply != mutate || (*consent || *windowsConsent) != needsConsent || *consent && *windowsConsent || *insecure && !*windowsConsent || (mode == "install") != (*bootstrap != "") {
+	if *volumeConsent != (mode == "volumes-enable") || *eventConsent != (mode == "events-enable") || flags.NArg() != 0 || mode == "" || *apply != mutate || (*consent || *windowsConsent) != needsConsent || *consent && *windowsConsent || *insecure && !*windowsConsent && mode != "events-preview" && mode != "events-enable" && mode != "events-disable" && mode != "volumes-preview" && mode != "volumes-enable" && mode != "volumes-disable" || (mode == "install") != (*bootstrap != "") {
 		fmt.Fprintln(stderr, "Operation flags rejected. Review --help; explicit apply and exactly one scope acknowledgement are required where stated.")
 		return 2
 	}
@@ -79,6 +83,26 @@ func runWith(ctx context.Context, args []string, out, stderr io.Writer, perform 
 	if *windowsConsent {
 		profile = enrollmentcrypto.CollectionProfileWindowsInventory
 		if _, err := fmt.Fprintln(out, enrollmentclient.WindowsInventoryPrivacy); err != nil {
+			return 1
+		}
+	}
+	if *volumeConsent {
+		if _, err := fmt.Fprintln(out, windowsvolumes.Privacy); err != nil {
+			return 1
+		}
+	}
+	if *insecure && *volumeConsent {
+		if _, err := fmt.Fprintln(out, windowsvolumes.HTTPPrivacy); err != nil {
+			return 1
+		}
+	}
+	if *eventConsent {
+		if _, err := fmt.Fprintln(out, windowseventhealth.Privacy); err != nil {
+			return 1
+		}
+	}
+	if *insecure && *eventConsent {
+		if _, err := fmt.Fprintln(out, windowseventhealth.HTTPPrivacy); err != nil {
 			return 1
 		}
 	}
@@ -118,6 +142,11 @@ func usage(out io.Writer) {
 	fmt.Fprintln(out, enrollmentclient.WindowsInventoryHTTPPrivacy)
 	fmt.Fprintln(out, "Windows inventory scope: "+enrollmentclient.WindowsInventoryPrivacy)
 	fmt.Fprintln(out, "Approved lifecycle: --start --apply | --stop --apply | --uninstall --apply")
+	fmt.Fprintln(out, "Stopped installed inventory service: --events-preview | --events-enable --apply --application-system-event-headers | --events-disable --apply. HTTP-test additionally requires --insecure-http-test. No automatic service restart.")
+	fmt.Fprintln(out, windowseventhealth.Privacy)
+	fmt.Fprintln(out, "Stopped installed inventory service: --volumes-preview | --volumes-enable --apply --visible-volumes | --volumes-disable --apply. HTTP-test additionally requires --insecure-http-test. No automatic service restart.")
+	fmt.Fprintln(out, windowsvolumes.Privacy)
+	fmt.Fprintln(out, windowsvolumes.HTTPPrivacy)
 	fmt.Fprintln(out, "SCM-only runtime: --run-service (rejects an ordinary console)")
 	fmt.Fprintln(out, "Installation creates one LocalService SCM service, a scoped service SID and protected durable state, then asks for a hidden invitation and starts pending enrollment. Review these persistent changes and obtain action-time approval before applying. Public fingerprint/comparison approval in the manager remains mandatory.")
 	fmt.Fprintln(out, "Basic scope: bounded OS, uptime, physical RAM and system-volume observation. No expanded hostname/IP/process/software/event content collection, Windows Update/CVE, remote commands or service-control requests from a manager. Production TLS is required; Linux managed profiles are rejected.")

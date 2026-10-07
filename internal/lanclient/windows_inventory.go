@@ -77,7 +77,10 @@ func collectWindowsFrame(ctx context.Context, c Config, sequence uint64, collect
 }
 
 func validateWindowsFrame(f frame, fields map[string]json.RawMessage, c Config) error {
-	if !c.windowsInventory() || !windowsTransportAllowed(c) || f.SchemaVersion != FrameWindowsInventoryVersion || f.Sequence == 0 || f.Sequence > operational.MaxSafeInteger || f.WindowsInventory == nil || f.Operational != nil || f.Packages != nil || f.Observation.Platform != "windows" || len(fields["windowsInventory"]) > windowsmanaged.MaxSnapshotBytes || len(fields["observation"]) > MaxWindowsObservationBytes {
+	if !c.windowsInventory() || !windowsTransportAllowed(c) || (f.SchemaVersion != FrameWindowsInventoryVersion && f.SchemaVersion != FrameWindowsEventsVersion && f.SchemaVersion != FrameWindowsCapabilitiesVersion) || f.Sequence == 0 || f.Sequence > operational.MaxSafeInteger || f.WindowsInventory == nil || f.Operational != nil || f.Packages != nil || f.Observation.Platform != "windows" || len(fields["windowsInventory"]) > windowsmanaged.MaxSnapshotBytes || len(fields["observation"]) > MaxWindowsObservationBytes {
+		return ErrState
+	}
+	if validateWindowsEventsFrame(f, fields) != nil || validateWindowsVolumesFrame(f, fields) != nil {
 		return ErrState
 	}
 	inventory, err := windowsmanaged.Decode(fields["windowsInventory"])

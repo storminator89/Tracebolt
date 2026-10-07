@@ -70,8 +70,9 @@ lifecycle policy; uninstall retains identity state.
 One native read-only report supplies both chart metrics and the inventory:
 
 - CPU interval usage for one processor group, physical RAM and system-volume
-  usage, each with its own timestamp and quality. This is not all-volume or
-  multi-group CPU coverage.
+  usage, each with its own timestamp and quality. This base profile is not all-volume or
+  multi-group CPU coverage. Separately consented visible-volume source is described
+  in [Windows volume inventory](windows-volume-inventory.md).
 - Caller-visible process IDs, parent IDs, executable names and thread counts;
   no command lines, owners or executable paths.
 - SCM-enumerated service names, display names, state and process IDs; no service
@@ -122,7 +123,7 @@ replace prior successful rows. Clock regression, frozen-response refreshes,
 request timeout, lost session and navigation discard private rows.
 
 Linux APT/journal/CVE/action panels and Linux collection routes are not used by
-this Windows view. Windows event content, event-derived alarms, Windows Update,
+this Windows view. Separately consented bounded event headers now have a source path to the shared Health tab; see [Windows event health](windows-event-health.md). Windows event content, complete event-derived alarms, Windows Update,
 CVE matching, remote actions and Windows AI evidence scope remain separate
 [parity work](windows-dashboard-parity.md).
 

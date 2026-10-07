@@ -10,7 +10,9 @@ import (
 	"localrmm/internal/linuxpackages"
 	"localrmm/internal/model"
 	"localrmm/internal/operational"
+	"localrmm/internal/windowseventhealth"
 	"localrmm/internal/windowsmanaged"
+	"localrmm/internal/windowsvolumes"
 	"reflect"
 	"strings"
 	"time"
@@ -20,6 +22,8 @@ import (
 const FrameVersion = "tracebolt.agent-telemetry.v1"
 const FrameOperationalVersion = "tracebolt.agent-telemetry.v2"
 const FramePackagesVersion = "tracebolt.agent-telemetry.v3"
+const FrameWindowsCapabilitiesVersion = "tracebolt.agent-telemetry.windows.v3"
+const FrameWindowsEventsVersion = "tracebolt.agent-telemetry.windows.v2"
 const FrameWindowsInventoryVersion = "tracebolt.agent-telemetry.windows.v1"
 const MaxPackageObservationBytes = 16 << 10
 const MaxPackageOperationalBytes = operational.MaxPackageFrameSnapshotBytes
@@ -31,12 +35,14 @@ var ErrFrame = errors.New("agent telemetry frame is invalid")
 var ErrStale = errors.New("agent observation is stale or future-dated")
 
 type Frame struct {
-	SchemaVersion    string                   `json:"schemaVersion"`
-	Sequence         uint64                   `json:"sequence"`
-	Observation      bundle.Bundle            `json:"observation"`
-	Operational      *operational.Snapshot    `json:"operational,omitempty"`
-	Packages         *linuxpackages.Snapshot  `json:"packages,omitempty"`
-	WindowsInventory *windowsmanaged.Snapshot `json:"windowsInventory,omitempty"`
+	SchemaVersion    string                       `json:"schemaVersion"`
+	Sequence         uint64                       `json:"sequence"`
+	Observation      bundle.Bundle                `json:"observation"`
+	Operational      *operational.Snapshot        `json:"operational,omitempty"`
+	Packages         *linuxpackages.Snapshot      `json:"packages,omitempty"`
+	WindowsInventory *windowsmanaged.Snapshot     `json:"windowsInventory,omitempty"`
+	WindowsEvents    *windowseventhealth.Snapshot `json:"windowsEvents,omitempty"`
+	WindowsVolumes   *windowsvolumes.Snapshot     `json:"windowsVolumes,omitempty"`
 }
 
 // ValidateFrame separates protocol version from application/agent build version.
@@ -93,6 +99,36 @@ func ValidateFrame(raw []byte, now time.Time) (Frame, error) {
 			WindowsInventory *windowsmanaged.Snapshot `json:"windowsInventory"`
 		}{})
 	}
+	if object["schemaVersion"] == FrameWindowsEventsVersion {
+		shapeType = reflect.TypeOf(struct {
+			SchemaVersion    string                       `json:"schemaVersion"`
+			Sequence         uint64                       `json:"sequence"`
+			Observation      bundle.Bundle                `json:"observation"`
+			WindowsInventory *windowsmanaged.Snapshot     `json:"windowsInventory"`
+			WindowsEvents    *windowseventhealth.Snapshot `json:"windowsEvents"`
+		}{})
+	}
+	if object["schemaVersion"] == FrameWindowsCapabilitiesVersion {
+		shapeType = reflect.TypeOf(struct {
+			SchemaVersion    string                       `json:"schemaVersion"`
+			Sequence         uint64                       `json:"sequence"`
+			Observation      bundle.Bundle                `json:"observation"`
+			WindowsInventory *windowsmanaged.Snapshot     `json:"windowsInventory"`
+			WindowsEvents    *windowseventhealth.Snapshot `json:"windowsEvents,omitempty"`
+			WindowsVolumes   *windowsvolumes.Snapshot     `json:"windowsVolumes"`
+		}{})
+	}
+	if object["schemaVersion"] == FrameWindowsCapabilitiesVersion {
+		if _, exists := object["windowsEvents"]; !exists {
+			shapeType = reflect.TypeOf(struct {
+				SchemaVersion    string                   `json:"schemaVersion"`
+				Sequence         uint64                   `json:"sequence"`
+				Observation      bundle.Bundle            `json:"observation"`
+				WindowsInventory *windowsmanaged.Snapshot `json:"windowsInventory"`
+				WindowsVolumes   *windowsvolumes.Snapshot `json:"windowsVolumes"`
+			}{})
+		}
+	}
 	if !shape(value, shapeType) {
 		return frame, ErrFrame
 	}
@@ -117,7 +153,7 @@ func ValidateFrame(raw []byte, now time.Time) (Frame, error) {
 		return frame, ErrFrame
 	}
 	b := frame.Observation
-	if (frame.SchemaVersion != FrameVersion && frame.SchemaVersion != FrameOperationalVersion && frame.SchemaVersion != FramePackagesVersion && frame.SchemaVersion != FrameWindowsInventoryVersion) || frame.Sequence == 0 || frame.Sequence > 1<<63-1 || b.SchemaVersion != bundle.SchemaVersion || b.Product != "Tracebolt" || b.Version == "" || len(b.Version) > 64 || b.Platform != b.Observation.Platform || b.Scope != "single-read-only-local-observation" {
+	if (frame.SchemaVersion != FrameVersion && frame.SchemaVersion != FrameOperationalVersion && frame.SchemaVersion != FramePackagesVersion && frame.SchemaVersion != FrameWindowsInventoryVersion && frame.SchemaVersion != FrameWindowsEventsVersion && frame.SchemaVersion != FrameWindowsCapabilitiesVersion) || frame.Sequence == 0 || frame.Sequence > 1<<63-1 || b.SchemaVersion != bundle.SchemaVersion || b.Product != "Tracebolt" || b.Version == "" || len(b.Version) > 64 || b.Platform != b.Observation.Platform || b.Scope != "single-read-only-local-observation" {
 		return frame, ErrFrame
 	}
 	if len(b.Architecture) == 0 || len(b.Architecture) > 32 || len(b.Privacy) > 16 {
@@ -133,10 +169,10 @@ func ValidateFrame(raw []byte, now time.Time) (Frame, error) {
 		return frame, ErrFrame
 	}
 	if frame.SchemaVersion == FrameVersion {
-		if frame.Operational != nil || frame.Packages != nil || frame.WindowsInventory != nil {
+		if frame.Operational != nil || frame.Packages != nil || frame.WindowsInventory != nil || frame.WindowsEvents != nil || frame.WindowsVolumes != nil {
 			return frame, ErrFrame
 		}
-	} else if frame.SchemaVersion == FrameWindowsInventoryVersion {
+	} else if frame.SchemaVersion == FrameWindowsInventoryVersion || frame.SchemaVersion == FrameWindowsEventsVersion || frame.SchemaVersion == FrameWindowsCapabilitiesVersion {
 		if frame.Sequence > operational.MaxSafeInteger || frame.Operational != nil || frame.Packages != nil || frame.WindowsInventory == nil || b.Platform != "windows" || windowsmanaged.Validate(*frame.WindowsInventory) != nil || len(encoded) > MaxPackageObservationBytes {
 			return frame, ErrFrame
 		}
@@ -147,6 +183,28 @@ func ValidateFrame(raw []byte, now time.Time) (Frame, error) {
 		if _, err := windowsmanaged.Decode(members["windowsInventory"]); err != nil {
 			return frame, ErrFrame
 		}
+		if frame.SchemaVersion == FrameWindowsEventsVersion || frame.SchemaVersion == FrameWindowsCapabilitiesVersion && frame.WindowsEvents != nil {
+			events, e := windowseventhealth.Decode(members["windowsEvents"])
+			if e != nil || events.GenerationID != frame.WindowsInventory.GenerationID || events.CollectedAt.After(b.GeneratedAt) {
+				return frame, ErrFrame
+			}
+			if now.Sub(events.CollectedAt) > SampleMaxAge || events.CollectedAt.Sub(now) > AllowedClockSkew {
+				return frame, ErrStale
+			}
+		} else if frame.WindowsEvents != nil || len(members["windowsEvents"]) != 0 {
+			return frame, ErrFrame
+		}
+		if frame.SchemaVersion == FrameWindowsCapabilitiesVersion {
+			volumes, e := windowsvolumes.Decode(members["windowsVolumes"])
+			if e != nil || volumes.GenerationID != frame.WindowsInventory.GenerationID || volumes.CollectedAt.After(b.GeneratedAt) {
+				return frame, ErrFrame
+			}
+			if now.Sub(volumes.CollectedAt) > SampleMaxAge || volumes.CollectedAt.Sub(now) > AllowedClockSkew {
+				return frame, ErrStale
+			}
+		} else if frame.WindowsVolumes != nil {
+			return frame, ErrFrame
+		}
 		at := frame.WindowsInventory.CollectedAt
 		if at.After(b.GeneratedAt) || at.After(b.Observation.LastSeen) {
 			return frame, ErrFrame
@@ -155,7 +213,7 @@ func ValidateFrame(raw []byte, now time.Time) (Frame, error) {
 			return frame, ErrStale
 		}
 	} else {
-		if frame.WindowsInventory != nil {
+		if frame.WindowsInventory != nil || frame.WindowsEvents != nil || frame.WindowsVolumes != nil {
 			return frame, ErrFrame
 		}
 		if frame.SchemaVersion == FrameOperationalVersion && frame.Packages != nil {
@@ -341,12 +399,12 @@ func shape(value any, t reflect.Type) bool {
 // FrameMatchesCollectionProfile accepts only the profile from trusted durable
 // identity state, never a profile claimed by the incoming payload itself.
 func FrameMatchesCollectionProfile(frame Frame, profile string) bool {
-	if frame.WindowsInventory != nil && profile != windowsmanaged.CollectionProfile {
+	if (frame.WindowsInventory != nil || frame.WindowsEvents != nil || frame.WindowsVolumes != nil) && profile != windowsmanaged.CollectionProfile {
 		return false
 	}
 	switch profile {
 	case windowsmanaged.CollectionProfile:
-		return frame.SchemaVersion == FrameWindowsInventoryVersion && frame.WindowsInventory != nil && frame.WindowsInventory.CollectionProfile == profile && frame.Operational == nil && frame.Packages == nil && frame.Observation.Platform == "windows"
+		return (frame.SchemaVersion == FrameWindowsInventoryVersion && frame.WindowsEvents == nil && frame.WindowsVolumes == nil || frame.SchemaVersion == FrameWindowsEventsVersion && frame.WindowsEvents != nil && frame.WindowsVolumes == nil || frame.SchemaVersion == FrameWindowsCapabilitiesVersion && frame.WindowsVolumes != nil) && frame.WindowsInventory != nil && frame.WindowsInventory.CollectionProfile == profile && frame.Operational == nil && frame.Packages == nil && frame.Observation.Platform == "windows"
 	case "basic-readonly-v1":
 		return frame.SchemaVersion == FrameVersion && frame.Operational == nil && frame.Packages == nil
 	case operational.CollectionProfile:

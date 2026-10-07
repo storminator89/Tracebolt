@@ -1,8 +1,12 @@
+import { validWindowsVolumes, WINDOWS_VOLUMES_BYTES } from './windows-volumes-types';
+import type { WindowsVolumes } from './windows-volumes-types';
+import { validWindowsEvents, WINDOWS_EVENTS_BYTES } from './windows-events-types';
+import type { WindowsEvents } from './windows-events-types';
 import { inventoryAge } from './complete-packages-types';
 
 /** Windows observations are display-only, never commands, connection targets or AI inputs. */
 export const WINDOWS_INVENTORY_SNAPSHOT_BYTES = 48 * 1024;
-export const WINDOWS_INVENTORY_VIEW_BYTES = WINDOWS_INVENTORY_SNAPSHOT_BYTES + 2048;
+export const WINDOWS_INVENTORY_VIEW_BYTES = WINDOWS_INVENTORY_SNAPSHOT_BYTES + WINDOWS_EVENTS_BYTES + WINDOWS_VOLUMES_BYTES + 2048;
 export type WindowsInventoryQuality = 'healthy' | 'partial' | 'denied' | 'unavailable';
 export type WindowsInventoryStatus = 'not_configured' | 'awaiting' | 'fresh' | 'stale' | 'unavailable' | 'revoked';
 export interface WindowsInventorySection<T> { source: string; scope: string; quality: WindowsInventoryQuality; observedCount: number; countExact: boolean; complete: boolean; truncated: boolean; rows: T[] }
@@ -17,6 +21,8 @@ export interface WindowsInventorySnapshot {
 }
 export interface WindowsInventoryView {
     schemaVersion: 'tracebolt.windows-inventory-view.v1'; deviceId: string; collectionProfile: 'windows-inventory-v1'; serverNow: string; maxAgeSeconds: 120;
+    events?: WindowsEvents;
+    volumes?: WindowsVolumes;
     status: WindowsInventoryStatus; sequence: number | null; receivedAt: string | null; snapshot: WindowsInventorySnapshot | null;
 }
 const exact = (value: unknown, keys: readonly string[]): value is Record<string, unknown> => value !== null && typeof value === 'object' && !Array.isArray(value) && Object.keys(value).length === keys.length && keys.every(key => Object.hasOwn(value, key));
@@ -79,10 +85,12 @@ export function validWindowsInventorySnapshot(value: unknown): value is WindowsI
     return new TextEncoder().encode(encoded).byteLength <= WINDOWS_INVENTORY_SNAPSHOT_BYTES;
 }
 export function validWindowsInventoryView(value: unknown, deviceId: string): value is WindowsInventoryView {
-    if (!exact(value, ['schemaVersion', 'deviceId', 'collectionProfile', 'serverNow', 'maxAgeSeconds', 'status', 'sequence', 'receivedAt', 'snapshot']) || value.schemaVersion !== 'tracebolt.windows-inventory-view.v1' || value.collectionProfile !== 'windows-inventory-v1' || !validWindowsDeviceId(deviceId) || value.deviceId !== deviceId || !timestamp(value.serverNow) || value.maxAgeSeconds !== 120 || typeof value.status !== 'string' || !['not_configured', 'awaiting', 'fresh', 'stale', 'unavailable', 'revoked'].includes(value.status)) return false;
+    if (!exact(value, ['schemaVersion', 'deviceId', 'collectionProfile', 'serverNow', 'maxAgeSeconds', 'status', 'sequence', 'receivedAt', 'snapshot', ...(value !== null && typeof value === 'object' && Object.hasOwn(value, 'events') ? ['events'] : []), ...(value !== null && typeof value === 'object' && Object.hasOwn(value, 'volumes') ? ['volumes'] : [])]) || value.schemaVersion !== 'tracebolt.windows-inventory-view.v1' || value.collectionProfile !== 'windows-inventory-v1' || !validWindowsDeviceId(deviceId) || value.deviceId !== deviceId || !timestamp(value.serverNow) || value.maxAgeSeconds !== 120 || typeof value.status !== 'string' || !['not_configured', 'awaiting', 'fresh', 'stale', 'unavailable', 'revoked'].includes(value.status)) return false;
     const receipt = integer(value.sequence, Number.MAX_SAFE_INTEGER) && value.sequence > 0 && timestamp(value.receivedAt) && inventoryAge(value.serverNow, value.receivedAt) >= 0;
     if (!(value.sequence === null && value.receivedAt === null) && !receipt) return false;
-    if (value.status !== 'fresh' && value.status !== 'stale') return value.snapshot === null && (!['not_configured', 'awaiting'].includes(value.status) || value.sequence === null);
+    if (Object.hasOwn(value, 'events') && (!validWindowsInventorySnapshot(value.snapshot) || !validWindowsEvents(value.events, value.snapshot.generationId, value.serverNow))) return false;
+    if (Object.hasOwn(value, 'volumes') && (!validWindowsInventorySnapshot(value.snapshot) || !validWindowsVolumes(value.volumes, value.snapshot.generationId, value.serverNow))) return false;
+    if (value.status !== 'fresh' && value.status !== 'stale') return !Object.hasOwn(value, 'events') && !Object.hasOwn(value, 'volumes') && value.snapshot === null && (!['not_configured', 'awaiting'].includes(value.status) || value.sequence === null);
     if (!receipt || !validWindowsInventorySnapshot(value.snapshot)) return false;
     const age = inventoryAge(value.serverNow, value.snapshot.collectedAt);
     const receiptSkew = inventoryAge(value.snapshot.collectedAt, value.receivedAt as string);

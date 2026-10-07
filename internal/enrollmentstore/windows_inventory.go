@@ -5,22 +5,26 @@ import (
 	"localrmm/internal/enrollmentcrypto"
 	"localrmm/internal/enrollmentstate"
 	"localrmm/internal/lanstore"
+	"localrmm/internal/windowseventhealth"
 	"localrmm/internal/windowsmanaged"
+	"localrmm/internal/windowsvolumes"
 	"time"
 )
 
 // WindowsInventoryView exposes only the latest profile-bound bounded frame.
 // It has no fallback to Linux operations, an old healthy generation or host reads.
 type WindowsInventoryView struct {
-	SchemaVersion       string                   `json:"schemaVersion"`
-	DeviceID            string                   `json:"deviceId"`
-	CollectionProfile   string                   `json:"collectionProfile"`
-	ServerNow           time.Time                `json:"serverNow"`
-	MaxAgeSeconds       int64                    `json:"maxAgeSeconds"`
-	Status              string                   `json:"status"`
-	Sequence            *uint64                  `json:"sequence"`
-	ReceivedAt          *time.Time               `json:"receivedAt"`
-	Snapshot            *windowsmanaged.Snapshot `json:"snapshot"`
+	SchemaVersion       string                       `json:"schemaVersion"`
+	DeviceID            string                       `json:"deviceId"`
+	CollectionProfile   string                       `json:"collectionProfile"`
+	ServerNow           time.Time                    `json:"serverNow"`
+	MaxAgeSeconds       int64                        `json:"maxAgeSeconds"`
+	Status              string                       `json:"status"`
+	Sequence            *uint64                      `json:"sequence"`
+	ReceivedAt          *time.Time                   `json:"receivedAt"`
+	Snapshot            *windowsmanaged.Snapshot     `json:"snapshot"`
+	Events              *windowseventhealth.Snapshot `json:"events,omitempty"`
+	Volumes             *windowsvolumes.Snapshot     `json:"volumes,omitempty"`
 	certificateNotAfter int64
 }
 
@@ -71,6 +75,8 @@ func (s *Store) WindowsInventoryView(ctx context.Context, id string, now time.Ti
 				return enrollmentstate.ErrInvalid
 			}
 			out.Snapshot = &copy
+			out.Events = frame.WindowsEvents
+			out.Volumes = frame.WindowsVolumes
 			out.Sequence = &seq
 			out.ReceivedAt = &received
 			out.Status = "fresh"
@@ -80,11 +86,15 @@ func (s *Store) WindowsInventoryView(ctx context.Context, id string, now time.Ti
 			if now.Sub(copy.CollectedAt) >= 24*time.Hour {
 				out.Status = "unavailable"
 				out.Snapshot = nil
+				out.Events = nil
+				out.Volumes = nil
 			}
 		}
 		if identity.State == enrollmentstate.Revoked || identity.State == enrollmentstate.Canceled || identity.State == enrollmentstate.Rejected || identity.State == enrollmentstate.Expired || identity.Intent.NotAfter > 0 && now.Unix() >= identity.Intent.NotAfter {
 			out.Status = "revoked"
 			out.Snapshot = nil
+			out.Events = nil
+			out.Volumes = nil
 		}
 		return nil
 	})
@@ -104,6 +114,8 @@ func (v WindowsInventoryView) RecheckAt(now time.Time) (WindowsInventoryView, er
 	if v.Status == "revoked" || v.certificateNotAfter > 0 && now.Unix() >= v.certificateNotAfter {
 		v.Status = "revoked"
 		v.Snapshot = nil
+		v.Events = nil
+		v.Volumes = nil
 		return v, nil
 	}
 	if v.Snapshot != nil {
@@ -120,7 +132,15 @@ func (v WindowsInventoryView) RecheckAt(now time.Time) (WindowsInventoryView, er
 		if now.Sub(v.Snapshot.CollectedAt) >= 24*time.Hour {
 			v.Status = "unavailable"
 			v.Snapshot = nil
+			v.Events = nil
+			v.Volumes = nil
 		}
+	}
+	if v.Events != nil && now.Sub(v.Events.CollectedAt) >= 24*time.Hour {
+		v.Events = nil
+	}
+	if v.Volumes != nil && now.Sub(v.Volumes.CollectedAt) >= 24*time.Hour {
+		v.Volumes = nil
 	}
 	return v, nil
 }

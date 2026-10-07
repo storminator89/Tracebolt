@@ -1,5 +1,5 @@
 {
-  "goSourceSha256": "6f4da1a01f05780bf206f4a35a44b2cdadbc70ef682994eab99496b984fb1777",
+  "goSourceSha256": "88203f40c16cf0d028c42bf6418d2b8f203593d085e8c51a65772f37e8bf6cc8",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -219,6 +219,7 @@
       "TestConcurrentStopDoesNotHidePendingAuthorityFailures",
       "TestConcurrentStopPreservesInvalidHandoffAndMarkerFailure",
       "TestCooperativePendingOutcomeRejectsMixedAndDiagnosedFailures",
+      "TestEventConsentFlagsExplicitAndBounded",
       "TestPendingCancellationDuringBackoffIsGraceful",
       "TestPendingExpiryDuringBackoffStopsWithoutSecondResume",
       "TestPendingExpiryMarkerSentinelIsExpected",
@@ -236,6 +237,7 @@
       "TestSetupRejectsCancellationAndExistingServiceBeforeIntent",
       "TestSetupRuntimeReadPreflightStopsBeforeJournalOrClaim",
       "TestSetupWritesIntentBeforeSCMAndPreparedReceiptBeforeEnrollment",
+      "TestVolumeConsentFlagsExplicitAndBounded",
       "TestWindowsBootstrapMustMatchExplicitLocalProfile",
       "TestWindowsInventoryConsentDispatchAndConflicts",
       "TestWindowsInventoryHTTPFlagDisclosesBeforeDispatch",
@@ -1364,7 +1366,8 @@
       "TestWindowsEnrollmentNeverAuthorizesNativePackageDevice",
       "TestWindowsInventoryCannotBeWrittenIntoBasicStore",
       "TestWindowsInventoryDurableViewRetryHistoryAndScope",
-      "TestWindowsInventoryViewRechecksClockFreshnessAndExpiry"
+      "TestWindowsInventoryViewRechecksClockFreshnessAndExpiry",
+      "TestWindowsVolumeViewIndependentExpiryAndRevocation"
     ],
     "localrmm/internal/enrollmenttransport": [
       "TestCachedUpdatesTLSHTTPActivationReplayAndRevocation",
@@ -1689,6 +1692,8 @@
       "TestCachedUpdatesNativeExactRetryAndDisablePreserveSystemFloor",
       "TestCachedUpdatesParentCancellationRemainsFatal",
       "TestCachedUpdatesTimeoutPreservesOrdinarySystemAndEndpointReport",
+      "TestCombinedWindowsCapabilitiesPreserveSelectionAndPartialResult",
+      "TestCombinedWindowsCapabilityConsentExactContract",
       "TestCompleteConfigInitializesBothBoundLedgersAndRejectsLoss",
       "TestCompleteMetricsUseOperationsWithoutTruncatedPackageCapture",
       "TestCompleteSyntheticAuthorityRetryStagesAndRestart",
@@ -1847,6 +1852,11 @@
       "TestSystemNativeMissingStateAndFuturePendingFailBeforeSource",
       "TestSystemNativeTLSHTTPExactRetryBeforeRecapture",
       "TestValidateGuidedHandoffIsLocalAndPreservesState",
+      "TestWindowsEventConsentCreateOnlyAndReenable",
+      "TestWindowsEventConsentRejectsIncompleteForeignAndFailedStorage",
+      "TestWindowsEventsActualSenderIngressStoreRetryAndDisable",
+      "TestWindowsEventsIngressRejectsScopeContentAndProfileConfusion",
+      "TestWindowsEventsPendingRevocationAndConsentRace",
       "TestWindowsInventoryExactRetryAndHTTPPathSignature",
       "TestWindowsInventoryFrameComesFromOneConsentedReport",
       "TestWindowsInventoryNoCollectionOutsideExactConsent",
@@ -1856,7 +1866,15 @@
       "TestWindowsInventoryWrongPendingAndExpiredCounter",
       "TestWindowsManagerPipelineOperatorHTTPBoundary",
       "TestWindowsManagerPipelineRejectsOtherProfilesAndMixedScope",
-      "TestWindowsManagerPipelineRetryRestartAndLatestView"
+      "TestWindowsManagerPipelineRetryRestartAndLatestView",
+      "TestWindowsVolumeConsentCreateOnlyAndReenable",
+      "TestWindowsVolumeConsentNeverCreatesOnPreviewDisableOrAccessFailure",
+      "TestWindowsVolumeConsentRejectsIncompleteForeignAndFailedStorage",
+      "TestWindowsVolumeConsentSeparateProtectedManifest",
+      "TestWindowsVolumesActualSenderIngressStoreRetryAndIndependentDisable",
+      "TestWindowsVolumesEnvelopeBudgetPreservesCountsAndCapture",
+      "TestWindowsVolumesIngressStrictVersionAndScope",
+      "TestWindowsVolumesPendingRevocationReplacementAndConsentRace"
     ],
     "localrmm/internal/lanclientstate": [
       "TestAcknowledgmentDiscardAndMonotonicSequence",
@@ -2680,6 +2698,13 @@
       "TestReadRejectsBeforeOpening",
       "TestUnsupportedPlatformDoesNotPrompt"
     ],
+    "localrmm/internal/windowseventhealth": [
+      "TestConsentExactBoundAndNoImplicitCollection",
+      "TestDeniedPartialAndEmptyRemainHonest",
+      "TestHeadersRoundTripAndBounds",
+      "TestInvalidOrCanceledCollectionNeverReachesSource",
+      "TestStrictHeaderContractRejectsContentAndQualityLies"
+    ],
     "localrmm/internal/windowsevents": [
       "TestBoundedCollectionAndLookahead",
       "TestCancellationAndCloseFailures",
@@ -2808,6 +2833,20 @@
       "TestWindowsDescriptorConversionInMemory",
       "TestWindowsOutputBufferAlignment",
       "TestWindowsRenameABI"
+    ],
+    "localrmm/internal/windowsvolumes": [
+      "TestBoundsAndCounts",
+      "TestConsentAndCanonical",
+      "TestDeadlineAndRowUnavailable",
+      "TestFailuresAndScope",
+      "TestFitBudgetRetainsTruth",
+      "TestFullUint64AndBoundedContradictions",
+      "TestNativeInjectedEnumeration",
+      "TestNativeRejectMalformedRoots",
+      "TestNoReadWithoutConsentOrAfterCancel",
+      "TestObservedQuotaAndEmpty",
+      "TestRejectMalformedSnapshot",
+      "TestUnknownTypeNeverHasCapacity"
     ],
     "localrmm/tests/container": [
       "TestDeploymentExampleSchemas",

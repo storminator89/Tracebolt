@@ -101,6 +101,10 @@ file as navigation and project constraints, never as permission to act on a host
   existing managed-evidence export blocks. Health-summary approval never permits
   raw logs, dump data, autonomous tools, shell commands or remediation. Fixtures
   do not authorize a real provider call, API-key entry or runtime scope grant.
+- Windows caller-visible volume metadata is a separate default-off local grant.
+  Read `docs/windows-volume-inventory.md` before changing its consent, capacity
+  semantics or v3 wire shape. Keep v1/event-v2 identities and bytes compatible;
+  fresh combined approval is a reusable contract, not an automatic installer grant.
 - Follow Go/Node versions and dependency locks in this revision. Validate commands
   against actual flags/config. Distinguish runtime tests from cross-builds, skipped
   container tests, and proposed functionality. Never invent install/enroll flags.

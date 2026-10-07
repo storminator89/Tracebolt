@@ -65,6 +65,12 @@ export function useWindowsInventory(deviceId: string, enabled: boolean, sessionK
     }, [clear, enabled, key, read]);
     const view = enabled && data?.key === key ? data.view : null, age = anchor.current ? elapsed(anchor.current) : Infinity;
     const status = view ? windowsInventoryStatus(view, age) : null;
-    return { view, snapshot: view && (status === 'fresh' || status === 'stale') ? view.snapshot : null, status, loading: enabled && loading, error: enabled ? error : null, refresh: () => void read() };
+    const eventAge = view?.events ? inventoryAge(view.serverNow, view.events.collectedAt) + age : Infinity;
+    const events = view && (status === 'fresh' || status === 'stale') && eventAge < 86400000 ? view.events ?? null : null;
+    const eventsStale = events !== null && (status !== 'fresh' || eventAge < 0 || eventAge > 120000);
+    const volumeAge = view?.volumes ? inventoryAge(view.serverNow, view.volumes.collectedAt) + age : Infinity;
+    const volumes = view && (status === 'fresh' || status === 'stale') && volumeAge < 86400000 ? view.volumes ?? null : null;
+    const volumesStale = volumes !== null && (volumeAge < 0 || volumeAge > 120000 || !view?.receivedAt || inventoryAge(view.serverNow, view.receivedAt) + age > 120000);
+    return { volumes, volumesStale, events, eventsStale, view, snapshot: view && (status === 'fresh' || status === 'stale') ? view.snapshot : null, status, loading: enabled && loading, error: enabled ? error : null, refresh: () => void read() };
 }
 export type WindowsInventoryResource = ReturnType<typeof useWindowsInventory>;

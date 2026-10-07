@@ -16,19 +16,23 @@ import (
 	"localrmm/internal/operational"
 	"localrmm/internal/packagecollector"
 	"localrmm/internal/signedhttp"
+	"localrmm/internal/windowseventhealth"
 	"localrmm/internal/windowsmanaged"
+	"localrmm/internal/windowsvolumes"
 	"net/http"
 	"runtime"
 	"time"
 )
 
 type frame struct {
-	SchemaVersion    string                   `json:"schemaVersion"`
-	Sequence         uint64                   `json:"sequence"`
-	Observation      bundle.Bundle            `json:"observation"`
-	Operational      *operational.Snapshot    `json:"operational,omitempty"`
-	Packages         *linuxpackages.Snapshot  `json:"packages,omitempty"`
-	WindowsInventory *windowsmanaged.Snapshot `json:"windowsInventory,omitempty"`
+	SchemaVersion    string                       `json:"schemaVersion"`
+	Sequence         uint64                       `json:"sequence"`
+	Observation      bundle.Bundle                `json:"observation"`
+	Operational      *operational.Snapshot        `json:"operational,omitempty"`
+	Packages         *linuxpackages.Snapshot      `json:"packages,omitempty"`
+	WindowsInventory *windowsmanaged.Snapshot     `json:"windowsInventory,omitempty"`
+	WindowsEvents    *windowseventhealth.Snapshot `json:"windowsEvents,omitempty"`
+	WindowsVolumes   *windowsvolumes.Snapshot     `json:"windowsVolumes,omitempty"`
 }
 type receipt struct {
 	SchemaVersion string    `json:"schemaVersion"`
@@ -54,6 +58,7 @@ type Report struct {
 	Sequence                    uint64 `json:"sequence,omitempty"`
 	Duplicate                   bool   `json:"duplicate"`
 	RetriedPending              bool   `json:"retriedPending"`
+	DiscardedUnconsented        bool   `json:"discardedUnconsented,omitempty"`
 	DiscardedStale              bool   `json:"discardedStale"`
 	AvailablePercentageFields   int    `json:"availablePercentageFields"`
 	UnavailablePercentageFields int    `json:"unavailablePercentageFields"`
@@ -189,12 +194,30 @@ func runUsingStateWithSources(ctx context.Context, m Material, state *lanclients
 
 // Dependencies are per-attempt and private: fixture transports never open listeners.
 func runUsingStateWithDependencies(ctx context.Context, m Material, state *lanclientstate.State, collectOperations func(context.Context, time.Time) operational.Snapshot, collectPackages func(context.Context, string, time.Time) (linuxpackages.Snapshot, error), collectBasic func() model.Device, collectWindows windowsCollector, send func(*http.Request) (*http.Response, error)) (Report, error) {
+	return runUsingStateWithCapabilityDependencies(ctx, m, state, collectOperations, collectPackages, collectBasic, collectWindows, send, func() (windowseventhealth.Consent, bool) { return readWindowsEventConsent(m) }, windowseventhealth.Collect, func() (windowsvolumes.Consent, bool) { return readWindowsVolumeConsent(m) }, windowsvolumes.Collect)
+}
+
+func runUsingStateWithEventDependencies(ctx context.Context, m Material, state *lanclientstate.State, collectOperations func(context.Context, time.Time) operational.Snapshot, collectPackages func(context.Context, string, time.Time) (linuxpackages.Snapshot, error), collectBasic func() model.Device, collectWindows windowsCollector, send func(*http.Request) (*http.Response, error), readConsent func() (windowseventhealth.Consent, bool), collectEvents eventCollector) (Report, error) {
+	return runUsingStateWithCapabilityDependencies(ctx, m, state, collectOperations, collectPackages, collectBasic, collectWindows, send, readConsent, collectEvents, nil, nil)
+}
+
+func runUsingStateWithCapabilityDependencies(ctx context.Context, m Material, state *lanclientstate.State, collectOperations func(context.Context, time.Time) operational.Snapshot, collectPackages func(context.Context, string, time.Time) (linuxpackages.Snapshot, error), collectBasic func() model.Device, collectWindows windowsCollector, send func(*http.Request) (*http.Response, error), readConsent func() (windowseventhealth.Consent, bool), collectEvents eventCollector, readVolumes func() (windowsvolumes.Consent, bool), collectVolumes volumeCollector) (Report, error) {
 	report := Report{SchemaVersion: "tracebolt.agent-run.v1", Status: "failed", Profile: m.config.Profile}
 	if ctx.Err() != nil {
 		return report, ctx.Err()
 	}
 	if !m.valid() {
 		return report, ErrConfiguration
+	}
+	consent, enabled := windowseventhealth.Consent{}, false
+	if m.config.windowsInventory() && readConsent != nil {
+		consent, enabled = readConsent()
+		enabled = enabled && validEventConsent(consent, m.binding)
+	}
+	volumeConsent, volumesEnabled := windowsvolumes.Consent{}, false
+	if m.config.windowsInventory() && readVolumes != nil {
+		volumeConsent, volumesEnabled = readVolumes()
+		volumesEnabled = volumesEnabled && validVolumeConsent(volumeConsent, m.binding)
 	}
 	pending, e := state.Pending()
 	if e != nil {
@@ -210,12 +233,14 @@ func runUsingStateWithDependencies(ctx context.Context, m Material, state *lancl
 		if ctx.Err() != nil {
 			return report, ctx.Err()
 		}
-		if stale(f, time.Now().UTC()) {
+		unconsented := f.WindowsEvents != nil && (!enabled || f.WindowsEvents.GrantID != consent.GrantID) || f.WindowsVolumes != nil && (!volumesEnabled || f.WindowsVolumes.GrantID != volumeConsent.GrantID)
+		if stale(f, time.Now().UTC()) || unconsented {
 			if state.Discard(pending.Digest) != nil {
 				return report, ErrState
 			}
 			pending = nil
-			report.DiscardedStale = true
+			report.DiscardedStale = !unconsented
+			report.DiscardedUnconsented = unconsented
 		} else {
 			report.RetriedPending = true
 		}
@@ -235,8 +260,23 @@ func runUsingStateWithDependencies(ctx context.Context, m Material, state *lancl
 		if e != nil {
 			return report, e
 		}
+		if enabled {
+			f, body, e = appendWindowsEvents(ctx, m, f, consent, collectEvents)
+			if e != nil {
+				return report, e
+			}
+		}
+		if volumesEnabled {
+			f, body, e = appendWindowsVolumes(ctx, m, f, volumeConsent, collectVolumes)
+			if e != nil {
+				return report, e
+			}
+		}
 		if ctx.Err() != nil {
 			return report, ctx.Err()
+		}
+		if f.WindowsEvents != nil && !sameEventConsent(readConsent, consent, m.binding) || f.WindowsVolumes != nil && !sameVolumeConsent(readVolumes, volumeConsent, m.binding) {
+			return report, ErrState
 		}
 		p, e := state.Stage(sequence, body)
 		if e != nil {
@@ -246,6 +286,9 @@ func runUsingStateWithDependencies(ctx context.Context, m Material, state *lancl
 	}
 	if ctx.Err() != nil {
 		return report, ctx.Err()
+	}
+	if f.WindowsEvents != nil && !sameEventConsent(readConsent, consent, m.binding) || f.WindowsVolumes != nil && !sameVolumeConsent(readVolumes, volumeConsent, m.binding) {
+		return report, ErrState
 	}
 	report.Sequence = pending.Sequence
 	for _, v := range []bool{f.Observation.Observation.CPU.Value != nil && f.Observation.Observation.CPU.Quality == "healthy", f.Observation.Observation.Memory.Value != nil && f.Observation.Observation.Memory.Quality == "healthy", f.Observation.Observation.Disk.Value != nil && f.Observation.Observation.Disk.Quality == "healthy"} {
@@ -404,6 +447,12 @@ func decodeFrameForConfig(raw []byte, sequence uint64, c Config) (frame, error) 
 	} else if c.SchemaVersion == PackageConfigVersion {
 		want = 5
 	}
+	if c.windowsInventory() && len(fields["windowsEvents"]) > 0 {
+		want++
+	}
+	if c.windowsInventory() && len(fields["windowsVolumes"]) > 0 {
+		want++
+	}
 	if len(fields) != want {
 		return f, ErrState
 	}
@@ -421,7 +470,7 @@ func decodeFrameForConfig(raw []byte, sequence uint64, c Config) (frame, error) 
 		if validateWindowsFrame(f, fields, c) != nil {
 			return f, ErrState
 		}
-	} else if f.WindowsInventory != nil {
+	} else if f.WindowsInventory != nil || f.WindowsEvents != nil || f.WindowsVolumes != nil {
 		return f, ErrState
 	} else if c.SchemaVersion == OperationalConfigVersion || c.complete() {
 		if f.Packages != nil || f.SchemaVersion != FrameOperationalVersion || f.Sequence == 0 || f.Sequence > operational.MaxSafeInteger || (c.CollectionProfile != operational.CollectionProfile && !c.complete()) || f.Operational == nil || len(fields["operational"]) > operational.MaxSnapshotBytes || exactOperationalJSON(fields["operational"]) != nil || operational.Validate(*f.Operational) != nil || f.Observation.Platform != "linux" || f.Operational.CollectedAt.After(f.Observation.GeneratedAt) {
@@ -480,6 +529,12 @@ func stale(f frame, now time.Time) bool {
 	}
 	if f.WindowsInventory != nil {
 		times = append(times, f.WindowsInventory.CollectedAt)
+	}
+	if f.WindowsEvents != nil {
+		times = append(times, f.WindowsEvents.CollectedAt)
+	}
+	if f.WindowsVolumes != nil {
+		times = append(times, f.WindowsVolumes.CollectedAt)
 	}
 	for _, e := range d.Evidence {
 		times = append(times, e.CollectedAt)

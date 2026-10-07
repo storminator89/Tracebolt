@@ -8,8 +8,10 @@ import sys
 import tempfile
 
 PACKAGES = ("./internal/windowsstate", "./internal/windowsservice", "./internal/windowsconsole",
-            "./internal/windowsagentconfig", "./cmd/windows-service")
+            "./internal/windowsagentconfig", "./cmd/windows-service", "./internal/windowsvolumes")
 REQUIRED = {
+    ("localrmm/internal/windowsvolumes", "TestNativeInjectedEnumeration"),
+    ("localrmm/internal/windowsvolumes", "TestNativeRejectMalformedRoots"),
     ("localrmm/internal/windowsstate", "TestWindowsRenameABI"),
     ("localrmm/internal/windowsstate", "TestWindowsDescriptorConversionInMemory"),
     ("localrmm/internal/windowsservice", "TestNativeSCMStructureABI"),
