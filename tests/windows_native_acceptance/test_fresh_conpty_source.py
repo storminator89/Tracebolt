@@ -33,7 +33,7 @@ class FreshConPTYSourceBoundary(unittest.TestCase):
         self.assertIn('windows.CREATE_SUSPENDED',raw)
         self.assertLess(raw.index('windows.AssignProcessToJobObject'),raw.index('windows.ResumeThread'))
         self.assertNotIn('exec.Command(',raw)
-        self.assertIn('sort.Slice(entries',raw)
+        self.assertIn('sort.Slice(entries',(ROOT/'cmd/windows-service/fresh_environment_test.go').read_text())
     def test_production_hidden_input_remains_console_only(self):
         raw=(ROOT/'internal/windowsconsole/native_windows.go').read_text()
         self.assertIn('"CONIN$"',raw)
@@ -75,7 +75,8 @@ class FreshConPTYSourceBoundary(unittest.TestCase):
         harness=(ROOT/'cmd/windows-service/fresh_native_windows_test.go').read_text()
         child=(ROOT/'cmd/windows-service/fresh_pty_windows_test.go').read_text()
         authorization=harness.split('func freshAuthorization()',1)[1].split('func freshConsent()',1)[0]
-        forwarded=set(re.findall(r'"([A-Z][A-Z_]+)"',child.split('entries :=',1)[0]))
+        builder=(ROOT/'cmd/windows-service/fresh_environment_test.go').read_text()
+        forwarded=set(re.findall(r'"([A-Z][A-Z_]+)"',builder.split('entries :=',1)[0]))
         required=set(re.findall(r'get\("([A-Z][A-Z_]+)"\)',authorization))
         required.update('TRACEBOLT_FRESH_APPROVE_'+x for x in re.findall(r'yes\("([A-Z_]+)"\)',authorization))
         self.assertTrue(required<=forwarded,required-forwarded)
@@ -83,8 +84,21 @@ class FreshConPTYSourceBoundary(unittest.TestCase):
             self.assertIn(arg,harness);self.assertIn(arg,child)
         self.assertIn('len(os.Args) != 4',harness)
         self.assertIn('syscall.EscapeArg(exe)',child)
-        self.assertIn('TRACEBOLT_FRESH_BOOTSTRAP=',child)
+        self.assertIn('TRACEBOLT_FRESH_BOOTSTRAP=',builder)
         self.assertIn('windows.CreateProcess(app, command, nil, nil, false,',child)
+
+    def test_systemdrive_is_derived_once_from_os_api_without_inherited_override(self):
+        child=(ROOT/'cmd/windows-service/fresh_pty_windows_test.go').read_text()
+        builder=(ROOT/'cmd/windows-service/fresh_environment_test.go').read_text().split('func Test',1)[0]
+        self.assertIn('freshChildEnvironmentEntries(bootstrap, windows.GetSystemWindowsDirectory, os.Getenv)',child)
+        self.assertIn('windowsservice.SystemDriveFromWindowsDirectory(directory)',builder)
+        self.assertEqual(builder.count('"SystemDrive=" + drive'),1)
+        self.assertIn('return nil, freshgate.ErrGuard',builder)
+        keys=builder.split('keys := []string{',1)[1].split('}',1)[0]
+        for forbidden in ('"SystemDrive"','"ProgramData"','"ProgramFiles"','"PATH"','"GITHUB_TOKEN"'):
+            self.assertNotIn(forbidden,keys)
+        for forbidden in ('os.Environ(','.Error()', 'fmt.', 'log.'):
+            self.assertNotIn(forbidden,builder)
 
     def test_failure_decode_is_snapshot_only_and_before_teardown(self):
         harness=(ROOT/'cmd/windows-service/fresh_native_windows_test.go').read_text()

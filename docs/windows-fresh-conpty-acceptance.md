@@ -368,8 +368,8 @@ explanation on that ordinary Windows host. A passing probe only means a complete
 observation: it does not require or claim reproduction on every Windows image.
 If the baseline already succeeds, or the addition fails to restore both roots,
 the hypothesis remains unconfirmed. Windows cross-builds and portable parser
-fixtures do not constitute a native observation. The privileged child's
-allowlist, root checks, trust/ownership checks, artifacts and pins are unchanged.
+fixtures do not constitute a native observation. At the probe-only revision, the privileged child's allowlist, root checks,
+trust/ownership checks, artifacts and pins were unchanged.
 This probe neither installs nor controls services, creates keys/enrollment,
 changes ACLs/settings, accesses network endpoints, nor runs the manual gate.
 
@@ -379,3 +379,27 @@ read-only retrieval flags, and the shared Windows directory API:
 - https://learn.microsoft.com/en-us/windows/win32/api/shlobj_core/nf-shlobj_core-shgetknownfolderpath
 - https://learn.microsoft.com/en-us/windows/win32/api/shlobj_core/ne-shlobj_core-known_folder_flag
 - https://learn.microsoft.com/en-us/windows/win32/api/sysinfoapi/nf-sysinfoapi-getsystemwindowsdirectoryw
+
+### Observed result and narrow child-environment correction
+
+Ordinary source run `37760619051` at commit
+`5d48b2a56c0ada2008ec797b8a207d4cd6602afb` observed:
+- Baseline ProgramFiles: `valid`, equal to parent.
+- Baseline ProgramData: `unsafe_root`, not equal to parent.
+- Adding only the API-derived SystemDrive: both roots `valid`, equal to parent.
+
+This establishes the missing-variable behavior on that hosted Windows image.
+The native test-child environment now adds only that proven `SystemDrive` value.
+Both probe and builder reuse the identical pure strict directory validator;
+`GetSystemWindowsDirectory` supplies the native value. An API error or invalid
+result returns only the fixed admission error before child creation. Inherited
+SystemDrive is never consulted, and ProgramData/ProgramFiles are not overridden.
+All original forwarded entries and authorization bindings remain intact.
+
+The pure builder is extracted into a test-only helper so ordinary portable tests
+can assert the exact environment delta, reject malformed roots/NULs and verify
+error non-disclosure. The production installer, KnownFolder resolution, strict
+layout parser, executable ownership/trust, artifact pins, console input and
+manual-gate approval requirements are unchanged. This source fix does not prove
+that the complete privileged scenario succeeds, and does not authorize another
+native run.

@@ -164,7 +164,7 @@ class FreshOwnerAuthority(unittest.TestCase):
             self.assertIn(term,raw)
     def test_native_parent_and_child_keep_owner_facts(self):
         parent=(r.ROOT/'cmd/windows-service/fresh_native_windows_test.go').read_text()
-        child=(r.ROOT/'cmd/windows-service/fresh_pty_windows_test.go').read_text()
+        child=(r.ROOT/'cmd/windows-service/fresh_environment_test.go').read_text()
         for key in ('GITHUB_REPOSITORY_OWNER','GITHUB_REPOSITORY_OWNER_ID','GITHUB_ACTOR','GITHUB_ACTOR_ID','GITHUB_TRIGGERING_ACTOR'):
             self.assertIn('get("'+key+'")',parent)
             self.assertIn('"'+key+'"',child)

@@ -7,8 +7,6 @@ import (
 	"errors"
 	"os"
 	"runtime"
-	"sort"
-	"strings"
 	"sync"
 	"syscall"
 	"testing"
@@ -40,16 +38,10 @@ type freshPTY struct {
 }
 
 func freshChildEnvironment(bootstrap string) ([]uint16, error) {
-	keys := []string{"SystemRoot", "WINDIR", "COMPUTERNAME", "GITHUB_SHA", "GITHUB_RUN_ID", "GITHUB_RUN_ATTEMPT", "GITHUB_REPOSITORY", "GITHUB_REPOSITORY_OWNER", "GITHUB_REPOSITORY_OWNER_ID", "GITHUB_ACTOR", "GITHUB_ACTOR_ID", "GITHUB_TRIGGERING_ACTOR", "GITHUB_EVENT_NAME", "GITHUB_ACTIONS", "RUNNER_ENVIRONMENT", "RUNNER_OS", "TRACEBOLT_FRESH_PROFILE", "TRACEBOLT_FRESH_SOURCE", "TRACEBOLT_FRESH_TEST_SHA256", "TRACEBOLT_FRESH_SERVICE_SHA256", "TRACEBOLT_FRESH_SERVICE_ARTIFACT", "TRACEBOLT_FRESH_MACHINE", "TRACEBOLT_FRESH_RUN_ID", "TRACEBOLT_FRESH_ATTEMPT", "TRACEBOLT_FRESH_EXPIRES_UNIX", "TRACEBOLT_FRESH_APPROVE_SERVICES", "TRACEBOLT_FRESH_APPROVE_IDENTITY", "TRACEBOLT_FRESH_APPROVE_APP_ACLS", "TRACEBOLT_FRESH_APPROVE_FIVE_READ_SCOPES", "TRACEBOLT_FRESH_APPROVE_SYNTHETIC_CONSOLE", "TRACEBOLT_FRESH_APPROVE_LOOPBACK_TLS", "TRACEBOLT_FRESH_APPROVE_RETAIN_FOR_VM_DISPOSAL", "TRACEBOLT_FRESH_APPROVE_STOP_OWNED_SERVICE"}
-	entries := []string{"TRACEBOLT_FRESH_ROLE=child", "TRACEBOLT_FRESH_BOOTSTRAP=" + bootstrap, "GOTRACEBACK=none"}
-	for _, k := range keys {
-		v := os.Getenv(k)
-		if strings.ContainsRune(v, 0) {
-			return nil, freshgate.ErrGuard
-		}
-		entries = append(entries, k+"="+v)
+	entries, e := freshChildEnvironmentEntries(bootstrap, windows.GetSystemWindowsDirectory, os.Getenv)
+	if e != nil {
+		return nil, freshgate.ErrGuard
 	}
-	sort.Slice(entries, func(i, j int) bool { return strings.ToUpper(entries[i]) < strings.ToUpper(entries[j]) })
 	var block []uint16
 	for _, v := range entries {
 		x, e := syscall.UTF16FromString(v)

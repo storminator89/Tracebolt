@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "sourceCommit": "fccc4b00cd8a144afd58e4b995747afab7a10022",
-  "goSourceSha256": "926e3cf3b30662cd82c61b8f5beefba00823d88a06fd70cb468d75ae6cb964b4",
+  "goSourceSha256": "32f4841bbc294a9f555bd2f54c42c71c3df4d84cd7e0994d4fec7be7d3f71996",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -225,6 +225,9 @@
       "TestConcurrentStopPreservesInvalidHandoffAndMarkerFailure",
       "TestCooperativePendingOutcomeRejectsMixedAndDiagnosedFailures",
       "TestEventConsentFlagsExplicitAndBounded",
+      "TestFreshChildEnvironmentAddsOnlyTrustedSystemDrive",
+      "TestFreshChildEnvironmentRejectsInvalidDirectoryWithoutDisclosure",
+      "TestFreshChildEnvironmentRejectsNULAndRetainsEmptyValues",
       "TestFreshNaturalDiagnosticKnownFailureSnapshot",
       "TestFreshNaturalExitDiagnostics",
       "TestFreshReadConPTYNative",

@@ -7,7 +7,6 @@ import (
 	"errors"
 	"io"
 	"os/exec"
-	"strings"
 	"testing"
 	"time"
 )
@@ -36,14 +35,6 @@ func knownFolderCategory(path string, err error) string {
 		return "unsafe_root"
 	}
 	return "unsafe_component"
-}
-
-// Derive only a drive from the OS API, never from caller SystemDrive/ProgramData.
-func knownFolderProbeDrive(systemWindows string) (string, error) {
-	if _, err := layoutFromRoots(systemWindows, systemWindows); err != nil || strings.ContainsAny(systemWindows, "%*") {
-		return "", errors.New("invalid system directory")
-	}
-	return systemWindows[:2], nil
 }
 
 type knownFolderProbeOutput struct {
@@ -102,12 +93,12 @@ func parseKnownFolderObservation(raw []byte) (knownFolderObservation, error) {
 
 func TestKnownFolderProbeDriveValidation(t *testing.T) {
 	for _, value := range []string{"", `C:`, `C:\`, `C:Windows`, `\\server\Windows`, `%SystemRoot%`, `C:\..\Windows`, `C:\Windows.`, `C:\Windows `, `C:\Windows%bad%`, `C:\Windows*`, "C:\\Windows\x00"} {
-		if _, err := knownFolderProbeDrive(value); err == nil {
+		if _, err := SystemDriveFromWindowsDirectory(value); err == nil {
 			t.Fatal("unsafe system directory accepted")
 		}
 	}
 	for _, value := range []string{`C:\Windows`, `D:\WinNT`} {
-		if drive, err := knownFolderProbeDrive(value); err != nil || drive != value[:2] {
+		if drive, err := SystemDriveFromWindowsDirectory(value); err != nil || drive != value[:2] {
 			t.Fatal("valid system directory rejected")
 		}
 	}

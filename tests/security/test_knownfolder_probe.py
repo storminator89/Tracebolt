@@ -104,7 +104,7 @@ class KnownFolderProjection(unittest.TestCase):
             self.assertNotIn(forbidden,raw)
         self.assertIn('[]string{"SystemRoot", "WINDIR", "COMPUTERNAME"}',raw)
         self.assertIn('windows.GetSystemWindowsDirectory()',raw)
-        harness = (ROOT/'cmd/windows-service/fresh_pty_windows_test.go').read_text()
+        harness = (ROOT/'cmd/windows-service/fresh_environment_test.go').read_text()
         keys = harness.split('keys := []string{',1)[1].split('}',1)[0]
         self.assertTrue(keys.startswith('"SystemRoot", "WINDIR", "COMPUTERNAME", "GITHUB_SHA"'))
         for name in ('"SystemDrive"','"ProgramData"','"ProgramFiles"'):

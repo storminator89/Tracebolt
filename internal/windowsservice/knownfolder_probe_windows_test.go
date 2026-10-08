@@ -50,7 +50,7 @@ func TestKnownFolderRestrictedEnvironment(t *testing.T) {
 	if err != nil {
 		t.Fatal("system directory unavailable")
 	}
-	drive, err := knownFolderProbeDrive(root)
+	drive, err := SystemDriveFromWindowsDirectory(root)
 	if err != nil {
 		t.Fatal("system directory invalid")
 	}
@@ -60,7 +60,7 @@ func TestKnownFolderRestrictedEnvironment(t *testing.T) {
 	}
 	pfHash, pdHash := sha256.Sum256([]byte(pf)), sha256.Sum256([]byte(pd))
 	expected := append(pfHash[:], pdHash[:]...)
-	// Exactly the current fresh child's OS allowlist. Public gate metadata has
+	// Exactly the pre-fix fresh child's OS allowlist. Public gate metadata has
 	// no KnownFolder role and is deliberately absent from this non-gate probe.
 	baseline := []string{}
 	for _, key := range []string{"SystemRoot", "WINDIR", "COMPUTERNAME"} {
