@@ -14,8 +14,9 @@ workflows remain unchanged.
 The independent observer classifies sequence *families*, not grammar acceptance.
 It is neither a copy of the freshgate parser nor a terminal emulator. Its finite
 booleans cannot prove that the real output guard accepts the output or that a
-coordinator succeeds. Unknown sequences are reported only as a boolean; parameters
-and raw output are never returned, logged, or written to an artifact. A family
+coordinator succeeds. Unknown sequences are reported only as a boolean; these family summaries never return parameters
+or raw output. The separate pre-input fixture below permits only its narrowly
+validated exact public-control descriptor. A family
 observation can guide a later documented public unit-test case for the real guard.
 
 The four mode flags recognize only exact CSI `?9001h`, `?9001l`, `?1004h`, and
@@ -199,9 +200,23 @@ vocabulary, and the first unsupported CSI classification. Exact classifications
 cover DEC cursor blinking (`?12h/l`), DECSCUSR default and six cursor styles
 (`CSI Ps SP q`, Ps 0 through 6), and erase-line default/right/all (`CSI K`,
 `CSI 0K`, `CSI 2K`). Cursor position, cursor movement, SGR and `other` are coarse
-labels only, never authorization for parser support. All parameters, raw console
-bytes and title strings remain withheld. A failed guard test stays failed; the
-bounded Python failure projector preserves only this exact finite record.
+labels only, never authorization for parser support. The record additionally
+reports the exact unsupported CSI from this wholly fixed-public fixture: its
+final byte is a closed lowercase hexadecimal value `40` through `7e`, and its
+quoted parameter/intermediate string is at most 64 bytes drawn only from ASCII
+digits, semicolon, colon, question mark, and space. Unsupported descriptor bytes
+are withheld as final `none` with empty parameters. No escaping is accepted by
+the projector. This narrow descriptor is not added to privileged native reports.
+
+The actual guard is fed byte by byte. Only its first `csi_unsupported` failure
+captures the observer's current CSI buffer, before that same final byte resets
+the observer. Earlier accepted controls, OSC lookalikes, and later rejections
+cannot replace it. This association is tested across every byte split, along
+with malformed/oversized CSI, OSC rejection, raw echo rejection, and every
+allowed/disallowed descriptor byte. Raw console bytes outside this validated
+control descriptor, output text, titles, paths and errors remain withheld. A
+failed guard test stays failed; the bounded Python failure projector preserves
+only the closed record and this validated public-control descriptor.
 
 References for the observational vocabulary:
 - [Microsoft VT cursor and erase sequences](https://learn.microsoft.com/en-us/windows/console/console-virtual-terminal-sequences)

@@ -138,7 +138,7 @@ func TestNativePublicRendering(t *testing.T) {
 		t.Fatal("rendering_bound_or_incomplete")
 	}
 	p := preinput.preinput
-	t.Logf("preinput_live_output=%t preinput_public_trust=%t preinput_prompt_ready=%t preinput_no_rejection=%t preinput_mode_restored=%t preinput_rejection=%s preinput_first_csi=%s", p.live, p.trust, p.ready, p.rejection == freshgate.OutputNotRejected, p.restored, p.rejection, p.firstCSI)
+	t.Logf("preinput_live_output=%t preinput_public_trust=%t preinput_prompt_ready=%t preinput_no_rejection=%t preinput_mode_restored=%t preinput_rejection=%s preinput_first_csi=%s preinput_csi_final=%s preinput_csi_params=%q", p.live, p.trust, p.ready, p.rejection == freshgate.OutputNotRejected, p.restored, p.rejection, p.firstCSI, p.csiFinal, p.csiParams)
 	if p.rejection != freshgate.OutputNotRejected {
 		t.Fatal("preinput_guard_rejected")
 	}
@@ -281,7 +281,7 @@ func observeNative(explicit bool, deadline time.Time, preinputOption ...bool) (r
 	peek := windows.NewLazySystemDLL("kernel32.dll").NewProc("PeekNamedPipe")
 	var observer Observer
 	var guard *freshgate.OutputGuard
-	pre := preinputResult{rejection: freshgate.OutputNotRejected, firstCSI: "none"}
+	pre := preinputResult{rejection: freshgate.OutputNotRejected, firstCSI: "none", csiFinal: "none"}
 	if preinput {
 		// Fixed public sentinel only: never issued, entered, or transmitted.
 		sentinel := []byte(strings.Repeat("A", 43))
@@ -337,17 +337,7 @@ func observeNative(explicit bool, deadline time.Time, preinputOption ...bool) (r
 					return empty, "output_empty_read"
 				}
 				sawOutput = true
-				for _, c := range buffer[:read] {
-					if guard != nil && pre.rejection == freshgate.OutputNotRejected {
-						if guard.Feed([]byte{c}) != nil {
-							pre.rejection = guard.RejectionReason()
-							if pre.rejection == freshgate.OutputCSIUnsupported && observer.state == 2 {
-								pre.firstCSI = publicCSISignature(observer.sequence[:observer.n], c)
-							}
-						}
-					}
-					observer.Feed([]byte{c})
-				}
+				feedPublicPreinput(guard, &observer, &pre, buffer[:read])
 				// Freeze the last pipe-read snapshot observed while the child
 				// was still running. Shutdown-only rendering cannot satisfy it.
 				status, waitErr := windows.WaitForSingleObject(pi.Process, 0)

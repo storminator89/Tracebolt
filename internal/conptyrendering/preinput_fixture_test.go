@@ -2,6 +2,7 @@ package conptyrendering
 
 import (
 	"bytes"
+	"encoding/hex"
 	"localrmm/internal/windowsacceptance/freshgate"
 )
 
@@ -14,10 +15,11 @@ type preinputResult struct {
 	live, trust, ready, restored bool
 	rejection                    freshgate.OutputRejection
 	firstCSI                     string
+	csiFinal, csiParams          string
 }
 
-// Classification only, never permission. All parameters remain private to the
-// bounded public observer; only these finite semantic labels leave the fixture.
+// Classification only, never permission. This classifier returns only fixed
+// semantic labels; the separately validated descriptor below is public-fixture-only.
 func publicCSISignature(p []byte, final byte) string {
 	if bytes.Equal(p, []byte("?12")) {
 		if final == 'h' {
@@ -64,4 +66,39 @@ func publicCSISignature(p []byte, final byte) string {
 		return "sgr"
 	}
 	return "other"
+}
+
+// feedPublicPreinput feeds the actual guard one byte at a time. Only the exact
+// byte that causes its first CSI rejection can capture a descriptor. The
+// observer still points at that CSI before it consumes/resets on the final byte.
+// No transcript is retained; OSC text is never a candidate CSI buffer.
+func feedPublicPreinput(g *freshgate.OutputGuard, o *Observer, p *preinputResult, chunk []byte) {
+	for _, c := range chunk {
+		if g != nil && p.rejection == freshgate.OutputNotRejected {
+			if g.Feed([]byte{c}) != nil {
+				p.rejection = g.RejectionReason()
+				if p.rejection == freshgate.OutputCSIUnsupported && o.state == 2 {
+					p.firstCSI = publicCSISignature(o.sequence[:o.n], c)
+					p.csiFinal, p.csiParams = publicCSIDescriptor(o.sequence[:o.n], c)
+				}
+			}
+		}
+		o.Feed([]byte{c})
+	}
+}
+
+// Exact numeric control descriptor for this fixed-public test ONLY. Final-byte
+// values are the closed ECMA-48 CSI final range 40..7e (hex); parameters and
+// intermediates are capped at 64 bytes and a deliberately narrower alphabet.
+// No OSC, output text, paths, errors or privileged native stream is accepted.
+func publicCSIDescriptor(p []byte, final byte) (string, string) {
+	if final < 0x40 || final > 0x7e || len(p) > 64 {
+		return "none", ""
+	}
+	for _, c := range p {
+		if !(c >= '0' && c <= '9' || c == ';' || c == ':' || c == '?' || c == ' ') {
+			return "none", ""
+		}
+	}
+	return hex.EncodeToString([]byte{final}), string(p)
 }

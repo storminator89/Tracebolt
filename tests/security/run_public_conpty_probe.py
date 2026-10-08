@@ -30,6 +30,7 @@ FIRST_CSI_KINDS = ("none", "cursor_blink_enable", "cursor_blink_disable", "curso
                    "cursor_style_steady_underline", "cursor_style_blink_bar", "cursor_style_steady_bar",
                    "erase_line_default", "erase_line_right", "erase_line_all", "cursor_position",
                    "cursor_movement", "sgr", "other")
+CSI_FINALS = ("none",) + tuple(format(value, "02x") for value in range(0x40, 0x7f))
 RESIDUAL_KINDS = ("none", "text_control", "non_ascii", "escape", "csi", "osc")
 SUMMARY_TEXT = (" ".join(name + r"=(true|false)" for name in FIELDS) +
                 r" first_residual_kind=(" + "|".join(RESIDUAL_KINDS) + r") " +
@@ -40,12 +41,15 @@ DESTINATION = re.compile(" ".join(name + r"=(true|false)" for name in DESTINATIO
                          r" conout_first_residual_kind=(" + "|".join(RESIDUAL_KINDS) + r")\n")
 PREINPUT = re.compile(" ".join(name + r"=(true|false)" for name in PREINPUT_FIELDS) +
                       r" preinput_rejection=(" + "|".join(OUTPUT_REJECTIONS) + r")" +
-                      r" preinput_first_csi=(" + "|".join(FIRST_CSI_KINDS) + r")\n")
+                      r" preinput_first_csi=(" + "|".join(FIRST_CSI_KINDS) + r")" +
+                      r" preinput_csi_final=(" + "|".join(CSI_FINALS) + r")" +
+                      r' preinput_csi_params="([0-9;:? ]{0,64})"\n')
 ARGS = ("go", "test", "-mod=readonly", "-json", "-count=1", "-timeout=45s",
         "-buildvcs=false", "-run=^TestNativePublicRendering$", "./internal/conptyrendering")
 
 
-# Only labels already emitted by the fixed-public Go test can cross this boundary.
+# Only fixed labels and the bounded, safe-character CSI descriptor from this
+# wholly public Go fixture can cross this boundary. No native report is parsed.
 PREINPUT_FAILURES = frozenset({"preinput_guard_rejected", "preinput_prompt_missing"})
 NATIVE_FAILURES = PREINPUT_FAILURES | frozenset({
     "input_pipe", "output_pipe", "conpty_create", "conpty_close_deadline",
@@ -160,7 +164,8 @@ class PreinputRecord:
         match = PREINPUT.fullmatch(output[start:])
         require(match is not None, "projection_preinput_fields")
         self.value = dict(zip(PREINPUT_FIELDS, (x == "true" for x in match.groups()[:len(PREINPUT_FIELDS)])))
-        self.value["preinput_rejection"], self.value["preinput_first_csi"] = match.groups()[-2:]
+        self.value.update(zip(("preinput_rejection", "preinput_first_csi", "preinput_csi_final",
+                               "preinput_csi_params"), match.groups()[len(PREINPUT_FIELDS):]))
         return True
 
     def finish(self, failure_reason=None):
@@ -173,6 +178,12 @@ class PreinputRecord:
                 "projection_preinput_invariants")
         require(value["preinput_first_csi"] == "none" or value["preinput_rejection"] == "csi_unsupported",
                 "projection_preinput_invariants")
+        if value["preinput_csi_final"] == "none":
+            require(value["preinput_csi_params"] == "", "projection_preinput_invariants")
+        else:
+            require(failure_reason == "preinput_guard_rejected" and
+                    value["preinput_rejection"] == "csi_unsupported" and value["preinput_first_csi"] != "none",
+                    "projection_preinput_invariants")
         if failure_reason == "preinput_guard_rejected":
             require(not value["preinput_no_rejection"], "projection_preinput_invariants")
         elif failure_reason == "preinput_prompt_missing":
@@ -181,7 +192,8 @@ class PreinputRecord:
         else:
             require(failure_reason is None, "projection_preinput_invariants")
             require(all(value[name] for name in PREINPUT_FIELDS) and value["preinput_rejection"] == "none" and
-                    value["preinput_first_csi"] == "none", "projection_preinput_success")
+                    value["preinput_first_csi"] == "none" and value["preinput_csi_final"] == "none" and
+                    value["preinput_csi_params"] == "", "projection_preinput_success")
         return value
 
 
@@ -211,7 +223,9 @@ def failed_preinput_record(raw, reason):
 def format_preinput(value):
     return (" ".join(name + "=" + str(value[name]).lower() for name in PREINPUT_FIELDS) +
             " preinput_rejection=" + value["preinput_rejection"] +
-            " preinput_first_csi=" + value["preinput_first_csi"])
+            " preinput_first_csi=" + value["preinput_first_csi"] +
+            " preinput_csi_final=" + value["preinput_csi_final"] +
+            ' preinput_csi_params="' + value["preinput_csi_params"] + '"')
 
 
 def project(raw):

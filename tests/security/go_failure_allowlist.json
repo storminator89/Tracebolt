@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "sourceCommit": "fccc4b00cd8a144afd58e4b995747afab7a10022",
-  "goSourceSha256": "956dbe36fc784d56b29c777424e9eda99b185d2f2b9b54fb0e803cde2b205127",
+  "goSourceSha256": "11bf1ddc8cdccdda2e2ccef0ecfcd843613597a3ba0d0671e3a3b53b959c6ead",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -1039,6 +1039,9 @@
       "TestFinishKeepsIncompleteSticky",
       "TestNativePublicRendering",
       "TestObserverRedactsFormatting",
+      "TestPublicCSIActualFirstRejectionEverySplit",
+      "TestPublicCSIDescriptorExcludesOSCAndOtherFailures",
+      "TestPublicCSIDescriptorStrictAlphabetAndBounds",
       "TestPublicHandleFactsClosedEncoding",
       "TestPublicModesIgnoreTitlePayloadAndMalformedLookalikes",
       "TestPublicPreinputCSISignatures",

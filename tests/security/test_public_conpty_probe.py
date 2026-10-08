@@ -23,7 +23,8 @@ def records(unknown=False):
         {"Action": "output", "Package": probe.PACKAGE, "Test": probe.TEST,
          "Output": "    native_windows_test.go:50: " + " ".join(name+"="+("true" if name=="conout_console" else "false") for name in probe.DESTINATION_FIELDS) + " conout_first_residual_kind=none\n"},
         {"Action": "output", "Package": probe.PACKAGE, "Test": probe.TEST,
-         "Output": "    native_windows_test.go:60: " + " ".join(name + "=true" for name in probe.PREINPUT_FIELDS) + " preinput_rejection=none preinput_first_csi=none\n"},
+         "Output": "    native_windows_test.go:60: " + " ".join(name + "=true" for name in probe.PREINPUT_FIELDS) +
+         ' preinput_rejection=none preinput_first_csi=none preinput_csi_final=none preinput_csi_params=""\n'},
         {"Action": "pass", "Package": probe.PACKAGE, "Test": probe.TEST},
         {"Action": "pass", "Package": probe.PACKAGE},
     ]
@@ -53,7 +54,14 @@ def preinput_failure_records(reason="preinput_guard_rejected", **values):
 def set_preinput(rows, **values):
     for name, value in values.items():
         value = str(value).lower() if type(value) is bool else value
-        rows[4]["Output"] = re.sub(r"\b" + re.escape(name) + r"=[^\s]+", lambda _: name + "=" + value, rows[4]["Output"])
+        if name == "preinput_csi_params":
+            value = '"' + value + '"'
+        rows[4]["Output"], count = re.subn(preinput_field_pattern(name), lambda _: name + "=" + value, rows[4]["Output"])
+        assert count == 1
+
+
+def preinput_field_pattern(name):
+    return r"\b" + re.escape(name) + r'=(?:"[^"]*"|[^\s]+)'
 
 
 def encode(rows):
@@ -65,10 +73,12 @@ class PublicProbeTests(unittest.TestCase):
         source = (probe.ROOT / "internal/windowsacceptance/freshgate/output_rejection.go").read_text()
         self.assertEqual(set(re.findall(r'OutputRejection = "([a-z_]+)"', source)), set(probe.OUTPUT_REJECTIONS))
         source = (probe.ROOT / "internal/conptyrendering/preinput_fixture_test.go").read_text()
-        self.assertEqual(set(re.findall(r'return "([a-z_]+)"', source)) | {"none"}, set(probe.FIRST_CSI_KINDS))
+        signature = re.search(r"func publicCSISignature\([^\n]+\n.*?\n\}", source, re.DOTALL)
+        self.assertIsNotNone(signature)
+        self.assertEqual(set(re.findall(r'return "([a-z_]+)"', signature.group())) | {"none"}, set(probe.FIRST_CSI_KINDS))
         source = (probe.ROOT / "internal/conptyrendering/native_windows_test.go").read_text()
         shape = " ".join(name + "=%t" for name in probe.PREINPUT_FIELDS)
-        self.assertIn(shape + " preinput_rejection=%s preinput_first_csi=%s", source)
+        self.assertIn(shape + " preinput_rejection=%s preinput_first_csi=%s preinput_csi_final=%s preinput_csi_params=%q", source)
 
     def test_preinput_requires_one_exact_finite_record(self):
         rows = records()
@@ -82,10 +92,10 @@ class PublicProbeTests(unittest.TestCase):
                      body.replace("preinput_rejection=none", "preinput_rejection=none extra=PRIVATE_SENTINEL"),
                      body.replace("preinput_live_output=true preinput_public_trust=true",
                                   "preinput_public_trust=true preinput_live_output=true")]
-        for name in probe.PREINPUT_FIELDS + ("preinput_rejection", "preinput_first_csi"):
-            malformed.append(re.sub(r"\b" + name + r"=[^\s]+ ?", "", body))
+        for name in probe.PREINPUT_FIELDS + ("preinput_rejection", "preinput_first_csi", "preinput_csi_final", "preinput_csi_params"):
+            malformed.append(re.sub(preinput_field_pattern(name) + " ?", "", body))
             for value in ("PRIVATE_SENTINEL", "1", "TRUE", "", "none\x1b[31m"):
-                malformed.append(re.sub(r"\b" + name + r"=[^\s]+", lambda _: name + "=" + value, body))
+                malformed.append(re.sub(preinput_field_pattern(name), lambda _: name + "=" + value, body))
         for other in (records()[2]["Output"], records()[3]["Output"]):
             malformed += [other.rstrip("\n") + " " + body, body.rstrip("\n") + " " + other]
         for text in malformed:
@@ -105,6 +115,8 @@ class PublicProbeTests(unittest.TestCase):
         self.assertTrue(all(summary[name] for name in probe.PREINPUT_FIELDS))
         self.assertEqual(summary["preinput_rejection"], "none")
         self.assertEqual(summary["preinput_first_csi"], "none")
+        self.assertEqual(summary["preinput_csi_final"], "none")
+        self.assertEqual(summary["preinput_csi_params"], "")
         for name in probe.PREINPUT_FIELDS:
             rows = records()
             set_preinput(rows, **{name: False})
@@ -121,9 +133,122 @@ class PublicProbeTests(unittest.TestCase):
             with self.subTest(kind=kind), self.assertRaises(probe.ProbeFailure):
                 probe.project(encode(rows))
 
+    def test_preinput_csi_descriptor_accepts_exact_closed_values(self):
+        self.assertEqual(probe.CSI_FINALS, ("none",) + tuple(format(value, "02x") for value in range(0x40, 0x7f)))
+        for final in probe.CSI_FINALS[1:]:
+            for params in ("", " ", "?12", "0123456789;:? ", " ?0:1;23 ", ("0123456789;:? " * 5)[:64]):
+                rows = preinput_failure_records(preinput_first_csi="other", preinput_csi_final=final,
+                                               preinput_csi_params=params)
+                with self.subTest(final=final, params=params):
+                    value = probe.failed_preinput_record(encode(rows), "preinput_guard_rejected")
+                    self.assertIsNotNone(value)
+                    self.assertEqual(value["preinput_csi_final"], final)
+                    self.assertEqual(value["preinput_csi_params"], params)
+                    self.assertTrue(probe.format_preinput(value).endswith(
+                        ' preinput_csi_final=' + final + ' preinput_csi_params="' + params + '"'))
+        # Test builders must replace the whole quoted field, including spaces.
+        rows = preinput_failure_records(preinput_csi_final="71", preinput_csi_params="1 ")
+        set_preinput(rows, preinput_csi_params=" 2 ")
+        value = probe.failed_preinput_record(encode(rows), "preinput_guard_rejected")
+        self.assertEqual(value["preinput_csi_params"], " 2 ")
+
+    def test_preinput_csi_descriptor_rejects_every_forbidden_ascii_character(self):
+        allowed = set("0123456789;:? ")
+        forbidden = [chr(value) for value in range(128) if chr(value) not in allowed]
+        forbidden += ["é", "０", "١", "\u00a0", "\u2028", "\U0001f512"]
+        for char in forbidden:
+            with self.subTest(char=repr(char)):
+                rows = preinput_failure_records(preinput_first_csi="other", preinput_csi_final="7e",
+                                               preinput_csi_params="1" + char + "2")
+                self.assertIsNone(probe.failed_preinput_record(encode(rows), "preinput_guard_rejected"))
+
+    def test_preinput_csi_descriptor_bounds_and_quoting_fail_closed(self):
+        for size in (0, 1, 63, 64, 65):
+            rows = preinput_failure_records(preinput_csi_final="71", preinput_csi_params=" " * size)
+            with self.subTest(size=size):
+                value = probe.failed_preinput_record(encode(rows), "preinput_guard_rejected")
+                if size <= 64:
+                    self.assertEqual(value["preinput_csi_params"], " " * size)
+                else:
+                    self.assertIsNone(value)
+        invalid_finals = [format(value, "02x") for value in range(256) if not 0x40 <= value <= 0x7e]
+        invalid_finals += [final.upper() for final in probe.CSI_FINALS[1:] if final.upper() != final]
+        invalid_finals += ["NONE", "None", "", "4", "040", "0x40", "40 ", " 40", "7e;", "PRIVATE_SENTINEL"]
+        for final in invalid_finals:
+            with self.subTest(final=final):
+                rows = preinput_failure_records(preinput_csi_final=final)
+                self.assertIsNone(probe.failed_preinput_record(encode(rows), "preinput_guard_rejected"))
+        for encoded in ('', '12', "'12'", '"12', '12"', '"12" ', ' "12"', '"12" extra=0',
+                        '"12"""', r'"\x31"', r'"\u0031"', r'"\061"', r'"1\ 2"', '"1\t2"'):
+            rows = preinput_failure_records(preinput_csi_final="71")
+            rows[4]["Output"] = rows[4]["Output"].replace('preinput_csi_params=""', "preinput_csi_params=" + encoded)
+            with self.subTest(encoded=encoded):
+                self.assertIsNone(probe.failed_preinput_record(encode(rows), "preinput_guard_rejected"))
+
+    def test_preinput_csi_descriptor_requires_its_own_actual_guard_rejection(self):
+        for params in ("1", " ", "?12"):
+            rows = preinput_failure_records(preinput_csi_final="none", preinput_csi_params=params)
+            self.assertIsNone(probe.failed_preinput_record(encode(rows), "preinput_guard_rejected"))
+        for rejection in probe.OUTPUT_REJECTIONS:
+            if rejection == "csi_unsupported":
+                continue
+            rows = preinput_failure_records(preinput_rejection=rejection,
+                                           preinput_no_rejection=(rejection == "none"),
+                                           preinput_first_csi="none", preinput_csi_final="68", preinput_csi_params="?12")
+            with self.subTest(rejection=rejection):
+                self.assertIsNone(probe.failed_preinput_record(encode(rows), "preinput_guard_rejected"))
+        rows = preinput_failure_records(preinput_first_csi="none", preinput_csi_final="68", preinput_csi_params="?12")
+        self.assertIsNone(probe.failed_preinput_record(encode(rows), "preinput_guard_rejected"))
+        for reason in probe.NATIVE_FAILURES - {"preinput_guard_rejected"}:
+            rows = preinput_failure_records(reason, preinput_no_rejection=False, preinput_rejection="csi_unsupported",
+                                           preinput_first_csi="other", preinput_csi_final="7e", preinput_csi_params="?12")
+            self.assertIsNone(probe.failed_preinput_record(encode(rows), reason))
+        for values in (dict(preinput_csi_final="68", preinput_csi_params="?12"),
+                       dict(preinput_csi_final="none", preinput_csi_params=" ")):
+            rows = records()
+            set_preinput(rows, **values)
+            with self.assertRaises(probe.ProbeFailure):
+                probe.project(encode(rows))
+
+    def test_preinput_csi_descriptor_cannot_be_borrowed_from_another_record(self):
+        original = preinput_failure_records(preinput_first_csi="other", preinput_csi_final="7e", preinput_csi_params=" ?0:1 ")
+        text = original[4]["Output"]
+        for key, value in (("Package", "Other"), ("Test", "Other"), ("Test", None),
+                           ("Action", "skip"), ("OutputType", "frame")):
+            rows = [dict(row) for row in original]
+            rows[4][key] = value
+            self.assertIsNone(probe.failed_preinput_record(encode(rows), "preinput_guard_rejected"))
+        body, descriptor = text.split(" preinput_csi_final=", 1)
+        for detached in (" preinput_csi_final=" + descriptor, "PRIVATE_SENTINEL preinput_csi_final=" + descriptor):
+            rows = [dict(row) for row in original]
+            rows[4:5] = [dict(rows[4], Output=body + "\n"), dict(rows[4], Output=detached)]
+            self.assertIsNone(probe.failed_preinput_record(encode(rows), "preinput_guard_rejected"))
+        for index in (2, 3, 4, 5):
+            rows = [dict(row) for row in original]
+            rows.insert(index, dict(rows[4], Output=text.replace('" ?0:1 "', '"?12"')))
+            self.assertIsNone(probe.failed_preinput_record(encode(rows), "preinput_guard_rejected"))
+
+    def test_preinput_csi_private_path_title_and_escaped_payloads_are_not_exported(self):
+        private_values = ("PRIVATE_SENTINEL", "C:\\PRIVATE_SENTINEL\\file", "/home/PRIVATE_SENTINEL",
+                          "\x1b]0;PRIVATE_SENTINEL\x07", '" PRIVATE_SENTINEL "', r"\x31", r"\u0031")
+        for private in private_values:
+            rows = preinput_failure_records(preinput_csi_final="7e", preinput_first_csi="other", preinput_csi_params=private)
+            process = mock.Mock(stdout=io.BytesIO(encode(rows)))
+            process.wait.return_value = 1
+            output = io.StringIO()
+            with mock.patch.object(probe.sys, "platform", "win32"), mock.patch.object(probe.subprocess, "Popen", return_value=process), contextlib.redirect_stdout(output):
+                self.assertEqual(probe.main(), 1)
+            self.assertEqual(len(output.getvalue().splitlines()), 1)
+            self.assertIn("reason=preinput_guard_rejected;", output.getvalue())
+            self.assertNotIn("preinput_csi_final=", output.getvalue())
+            self.assertNotIn("PRIVATE_SENTINEL", output.getvalue())
+            self.assertNotIn(private, output.getvalue())
+
     def test_preinput_fragments_and_private_prefixes_are_safely_projected(self):
         for failure_reason in (None, "preinput_guard_rejected", "preinput_prompt_missing"):
             original = records() if failure_reason is None else preinput_failure_records(failure_reason)
+            if failure_reason == "preinput_guard_rejected":
+                set_preinput(original, preinput_first_csi="other", preinput_csi_final="7e", preinput_csi_params=" ?0:1;23 ")
             project = probe.project if failure_reason is None else lambda raw: probe.failed_preinput_record(raw, failure_reason)
             expected = project(encode(original))
             self.assertIsNotNone(expected)
@@ -141,19 +266,22 @@ class PublicProbeTests(unittest.TestCase):
     def test_preinput_fragments_never_cross_context_boundaries(self):
         for failure_reason in (None, "preinput_guard_rejected"):
             original = records() if failure_reason is None else preinput_failure_records(failure_reason)
+            if failure_reason:
+                set_preinput(original, preinput_csi_final="68", preinput_csi_params="?12")
             text = original[4]["Output"]
             boundaries = [dict(Action="output", Package=probe.PACKAGE, Output="PRIVATE_SENTINEL\n"),
                           dict(Action="output", Package=probe.PACKAGE, Test=probe.TEST, OutputType="frame", Output="PRIVATE_SENTINEL\n"),
                           dict(Action="output", Package=probe.PACKAGE, Test="Other", Output="PRIVATE_SENTINEL\n"),
                           dict(Action="fail" if failure_reason else "pass", Package=probe.PACKAGE, Test=probe.TEST)]
             for boundary in boundaries:
-                rows = original[:4] + [dict(original[4], Output=text[:50]), boundary,
-                                      dict(original[4], Output=text[50:])] + original[5:]
-                if failure_reason:
-                    self.assertIsNone(probe.failed_preinput_record(encode(rows), failure_reason))
-                else:
-                    with self.assertRaises(probe.ProbeFailure):
-                        probe.project(encode(rows))
+                for split in (50, text.index('preinput_csi_params="') + len('preinput_csi_params="')):
+                    rows = original[:4] + [dict(original[4], Output=text[:split]), boundary,
+                                          dict(original[4], Output=text[split:])] + original[5:]
+                    if failure_reason:
+                        self.assertIsNone(probe.failed_preinput_record(encode(rows), failure_reason))
+                    else:
+                        with self.assertRaises(probe.ProbeFailure):
+                            probe.project(encode(rows))
             for replacement in (text[:-1], "x" * (probe.MAX_LINE + 1) + "\n" + text):
                 rows = original[:4] + [dict(original[4], Output=replacement)] + original[5:]
                 if failure_reason:
@@ -226,6 +354,8 @@ class PublicProbeTests(unittest.TestCase):
     def test_capture_projects_preinput_failures_without_raw_output(self):
         for reason in probe.PREINPUT_FAILURES:
             rows = preinput_failure_records(reason)
+            if reason == "preinput_guard_rejected":
+                set_preinput(rows, preinput_first_csi="other", preinput_csi_final="7e", preinput_csi_params=" ?0:1;23 ")
             rows[4]["Output"] = "C:\\PRIVATE_SENTINEL\\fixture.go:1: " + rows[4]["Output"]
             rows.insert(2, dict(rows[2], Output="PRIVATE_SENTINEL\x1b[31m\n"))
             expected = probe.failed_preinput_record(encode(rows), reason)
@@ -477,7 +607,7 @@ class PublicProbeTests(unittest.TestCase):
             probe.project(encode(rows))
 
     def test_requires_exact_test_package_and_summary(self):
-        self.assertEqual(set(probe.project(encode(records()))), set(probe.FIELDS) | set(probe.TEXT_FIELDS) | set(probe.DESTINATION_FIELDS) | set(probe.PREINPUT_FIELDS) | {"first_residual_kind", "conout_first_residual_kind", "preinput_rejection", "preinput_first_csi"})
+        self.assertEqual(set(probe.project(encode(records()))), set(probe.FIELDS) | set(probe.TEXT_FIELDS) | set(probe.DESTINATION_FIELDS) | set(probe.PREINPUT_FIELDS) | {"first_residual_kind", "conout_first_residual_kind", "preinput_rejection", "preinput_first_csi", "preinput_csi_final", "preinput_csi_params"})
         self.assertTrue(probe.project(encode(records(True)))["unknown"])
         for index in (2, 3, 4, 5, 6):
             rows = records()
