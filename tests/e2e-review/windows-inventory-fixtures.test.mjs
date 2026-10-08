@@ -194,3 +194,6 @@ import './windows-service-software-fixtures.test.mjs';
 
 // Keep positive Health fixture assertions in the existing hosted source-check entry.
 import './windows-health-fixtures.test.mjs';
+
+// OS evidence stays an invented overlay in this same hosted fixture gate.
+import './windows-os-provenance-fixtures.test.mjs';

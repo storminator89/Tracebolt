@@ -1,3 +1,4 @@
+import {withWindowsOSProvenance,exerciseWindowsOSProvenance} from './windows-os-provenance-browser.mjs';
 import {exerciseWindowsContactHistory,windowsContactBrowserFixture,windowsContactHistoryStageNames} from './windows-contact-history-browser.mjs';
 import {exerciseWindowsHealth,windowsHealthStageNames} from './windows-health-browser.mjs';
 import {addWindowsServiceSoftwareControlsFixture,exerciseWindowsServiceSoftwareControls} from './windows-service-software-browser.mjs';
@@ -17,7 +18,7 @@ const {windowsNetwork,windowsVolumes,windowsHealthDevice,windowsDeviceId,windows
 export const windowsInventoryCaseName='Synthetic Windows inventory shares device charts and explicit enrollment consent without Linux reads';
 export const windowsInventoryFixtureDisclosure='Real loopback HTTP-test fixture login with intercepted invented Windows inventory and resource history in the production UI. UI-only evidence; no native endpoint acceptance, collection, invitation, service installation or external request.';
 let stage='setup';
-const stages=new Set(['setup','login','overview','overview-history','inventory','storage','network','network-stale','network-expired','network-partial','network-empty','network-denied','network-unavailable','network-truncated','process-metrics','process-controls','service-software-controls','process-metrics-stale','process-metrics-expired','events',...windowsHealthStageNames,...windowsContactHistoryStageNames,'logs',...windowsLogsStageNames,'legacy','partial','denied','enrollment','access-loss']);
+const stages=new Set(['setup','login','overview','overview-history','os-provenance','inventory','storage','network','network-stale','network-expired','network-partial','network-empty','network-denied','network-unavailable','network-truncated','process-metrics','process-controls','service-software-controls','process-metrics-stale','process-metrics-expired','events',...windowsHealthStageNames,...windowsContactHistoryStageNames,'logs',...windowsLogsStageNames,'legacy','partial','denied','enrollment','access-loss']);
 export const windowsInventoryFailureStage=()=>stages.has(stage)?stage:'setup';
 const mark=value=>{stage=value;};
 export function windowsBrowserFixture(now,phase='fresh',networkPhaseAt=now,logsPhaseAt=now){
@@ -84,8 +85,10 @@ export async function remountWindowsDevice(page,expect,base){
  await expect(page.locator('.device-table')).toBeVisible();
  await page.goto(`${base}/#/devices/${windowsDeviceId}`);
 }
-export function windowsHealthBrowserDevice(now,phase='fresh'){
- return shifted(windowsHealthDevice(phase==='health-unverified'?'missing-identity':'activated'),now);
+export function windowsHealthBrowserDevice(now,phase='fresh',osObservedAt){
+ const device=shifted(windowsHealthDevice(phase==='health-unverified'?'missing-identity':'activated'),now);
+ // The older hosted DTO keeps its original generic OS / no-evidence fallback.
+ return phase==='legacy'?device:withWindowsOSProvenance(device,osObservedAt);
 }
 // runFor dispatches intermediate polls before reaching the host's final phase
 // time. Sample the paused browser clock for each recognized synthetic response,
@@ -96,7 +99,7 @@ export async function windowsFixtureResponseTime(page){
  return new Date(at).toISOString();
 }
 export async function windowsInventoryBrowserCase({pageAt,login,expect,base,shot}){
- const page=await pageAt('/devices/'+windowsDeviceId),prefix='/api/devices/'+windowsDeviceId,unexpected=[],writes=[],external=[];let phase='fresh',networkPhaseAt=null,logsPhaseAt=null,contactPhaseAt=null;
+ const page=await pageAt('/devices/'+windowsDeviceId),prefix='/api/devices/'+windowsDeviceId,unexpected=[],writes=[],external=[];let phase='fresh',networkPhaseAt=null,logsPhaseAt=null,contactPhaseAt=null,osObservedAt=null;
  const syntheticPaths=new Set([prefix,prefix+'/windows-inventory',prefix+'/windows-contact',prefix+'/resource-history','/api/overview','/api/windows/enrollment']);
  // A bounded virtual clock makes the five-second private-row expiry deterministic.
  let clockNow=Date.now();await page.clock.install({time:new Date(clockNow)});await page.clock.pauseAt(new Date(clockNow+1000));clockNow+=1000;
@@ -111,7 +114,7 @@ export async function windowsInventoryBrowserCase({pageAt,login,expect,base,shot
   }
   if(url.pathname===prefix+'/windows-inventory'&&(url.search||request.postData()!==null))throw new Error('Unexpected Windows query');
   if(url.pathname===prefix+'/windows-contact'&&(url.search||request.postData()!==null)){unexpected.push('unexpected-contact-query');return route.abort('blockedbyclient');}
-  const reply=data=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(data)}),at=await windowsFixtureResponseTime(page),device=windowsHealthBrowserDevice(at,phase);
+  const reply=data=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(data)}),at=await windowsFixtureResponseTime(page),device=windowsHealthBrowserDevice(at,phase,osObservedAt??undefined);
   if(url.pathname===prefix+'/windows-inventory'){
    if(phase==='session')return route.fulfill({status:401,contentType:'application/json',body:JSON.stringify({error:{code:'authentication_required'}})});
    return reply(windowsBrowserFixture(at,phase,networkPhaseAt??at,logsPhaseAt??at));
@@ -120,9 +123,11 @@ export async function windowsInventoryBrowserCase({pageAt,login,expect,base,shot
    if(phase==='contact-denied')return route.fulfill({status:403,contentType:'application/json',body:JSON.stringify({error:{code:'fixture_access_denied'}})});
    contactPhaseAt??=at;return reply(windowsContactBrowserFixture(at,contactPhaseAt,phase));
   }
-  if(url.pathname===prefix)return reply(device);
+  // Invented retained OS observation: later receipt/server times may advance,
+  // but metadata reads or Evidence visits cannot refresh this admitted capture.
+  if(url.pathname===prefix){osObservedAt??=device.evidence.find(({id})=>id==='local-windows-os')?.collectedAt??null;return reply(device);}
   if(url.pathname===prefix+'/resource-history')return reply({...shifted(historyFixture(),at),deviceId:windowsDeviceId});
-  if(url.pathname==='/api/overview')return reply({generatedAt:at,devices:[device],cases:[],activity:[],stats:{totalDevices:1,healthyDevices:0,attentionDevices:0,unknownDevices:1,openCases:0,criticalCases:0}});
+  if(url.pathname==='/api/overview'){osObservedAt??=device.evidence.find(({id})=>id==='local-windows-os')?.collectedAt??null;return reply({generatedAt:at,devices:[device],cases:[],activity:[],stats:{totalDevices:1,healthyDevices:0,attentionDevices:0,unknownDevices:1,openCases:0,criticalCases:0}});}
   if(url.pathname==='/api/windows/enrollment')return reply({schemaVersion:'tracebolt.enrollment-operator.v2',serverNow:at,enabled:true,platforms:['windows'],recordLimit:25,collectionProfile:'windows-inventory-v1',collectionPrivacy:'windows_inventory_metadata_may_be_sensitive',items:[]});
  });
  mark('login');await login(page);
@@ -134,6 +139,7 @@ export async function windowsInventoryBrowserCase({pageAt,login,expect,base,shot
   mark('overview-history');await settleWindowsHistory(page,expect,async ms=>{clockNow+=ms;await page.clock.runFor(ms);});
   await expect(page.getByRole('img',{name:/^(System volume|Systemvolume)/})).toBeVisible();
   await shot(page,`synthetic-windows-overview-${width}-${locale}`,windowsInventoryFixtureDisclosure);
+  mark('os-provenance');await exerciseWindowsOSProvenance({page,expect,locale,width,shot,disclosure:windowsInventoryFixtureDisclosure,observedAt:osObservedAt});
   mark('inventory');await page.getByRole('tab',{name:locale==='de'?'Inventar':'Inventory',exact:true}).click();
   for(const label of [locale==='de'?'Prozesse':'Processes',locale==='de'?'Dienste':'Services','Software','Hostname',locale==='de'?'Schnittstellen':'Interfaces']){
    await page.getByRole('tab',{name:label,exact:true}).click();await expect(page.locator('.windows-inventory-table')).toBeVisible();
