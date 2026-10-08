@@ -56,7 +56,10 @@ func appendWindowsVolumes(ctx context.Context, m Material, f frame, c windowsvol
 	return f, b, nil
 }
 func validateWindowsVolumesFrame(f frame, fields map[string]json.RawMessage) error {
-	if f.SchemaVersion != FrameWindowsCapabilitiesVersion {
+	if (f.SchemaVersion == FrameWindowsProcessMetricsVersion || f.SchemaVersion == FrameWindowsNetworkVersion) && f.WindowsVolumes == nil && len(fields["windowsVolumes"]) == 0 {
+		return nil
+	}
+	if f.SchemaVersion != FrameWindowsCapabilitiesVersion && f.SchemaVersion != FrameWindowsProcessMetricsVersion && f.SchemaVersion != FrameWindowsNetworkVersion {
 		if f.WindowsVolumes != nil || len(fields["windowsVolumes"]) != 0 {
 			return ErrState
 		}

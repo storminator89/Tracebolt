@@ -16,6 +16,7 @@ import (
 	"localrmm/internal/lanconfig"
 	"localrmm/internal/lantrust"
 	"localrmm/internal/signedhttp"
+	"localrmm/internal/windowsprocessmetrics"
 	"net"
 	"net/netip"
 	"net/url"
@@ -32,6 +33,8 @@ const OperationalConfigVersion = "tracebolt.lan-agent.v3"
 const PackageConfigVersion = "tracebolt.lan-agent.v4"
 const CompleteConfigVersion = "tracebolt.lan-agent.v5"
 const WindowsInventoryConfigVersion = "tracebolt.lan-agent.windows.v1"
+const FrameWindowsProcessMetricsVersion = "tracebolt.agent-telemetry.windows.v4"
+const FrameWindowsNetworkVersion = "tracebolt.agent-telemetry.windows.v5"
 const FrameWindowsCapabilitiesVersion = "tracebolt.agent-telemetry.windows.v3"
 const FrameWindowsEventsVersion = "tracebolt.agent-telemetry.windows.v2"
 const FrameWindowsInventoryVersion = "tracebolt.agent-telemetry.windows.v1"
@@ -64,12 +67,13 @@ type Config struct {
 
 // Material is opaque loaded credential/trust state. A zero value is unusable.
 type Material struct {
-	config      Config
-	configPath  string // protected origin for current activated-material rereads; never serialized
-	certificate tls.Certificate
-	tlsConfig   *tls.Config
-	binding     string
-	loaded      bool
+	config         Config
+	configPath     string // protected origin for current activated-material rereads; never serialized
+	certificate    tls.Certificate
+	tlsConfig      *tls.Config
+	binding        string
+	loaded         bool
+	processSampler *windowsprocessmetrics.Sampler
 }
 
 func (m Material) Profile() string            { return m.config.Profile }
@@ -216,7 +220,7 @@ func loadConfig(c Config) (Material, error) {
 	if e != nil {
 		return fail()
 	}
-	m := Material{config: c, certificate: pair}
+	m := Material{config: c, certificate: pair, processSampler: windowsprocessmetrics.NewSampler()}
 	origin, _ := url.Parse(c.ManagerOrigin)
 	if c.Profile == "tls" {
 		ca, e := lanconfig.ReadProtected(c.ServerCAFile, false, 65536)

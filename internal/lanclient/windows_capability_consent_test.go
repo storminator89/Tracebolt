@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"localrmm/internal/enrollmentcrypto"
 	"localrmm/internal/windowseventhealth"
+	"localrmm/internal/windowsnetwork"
+	"localrmm/internal/windowsprocessmetrics"
 	"localrmm/internal/windowsvolumes"
 	"reflect"
 	"testing"
@@ -64,5 +66,137 @@ func TestCombinedWindowsCapabilitiesPreserveSelectionAndPartialResult(t *testing
 	})
 	if err == nil || r.FailedScope != windowsvolumes.Scope || !reflect.DeepEqual(r.AppliedScopes, []string{windowseventhealth.Scope}) {
 		t.Fatal("partial commit hidden", r, err)
+	}
+}
+
+func TestCombinedWindowsCapabilityV2ExactScopeCombinations(t *testing.T) {
+	metadata := enrollmentcrypto.CollectionProfileWindowsInventory
+	optional := []string{windowseventhealth.Scope, windowsvolumes.Scope, windowsprocessmetrics.Scope}
+	for mask := 0; mask < 8; mask++ {
+		scopes := []string{metadata}
+		for i, scope := range optional {
+			if mask&(1<<i) != 0 {
+				scopes = append(scopes, scope)
+			}
+		}
+		r := capabilityFixture(scopes...)
+		r.SchemaVersion = WindowsCapabilityConsentVersionV2
+		raw, _ := json.Marshal(r)
+		if _, err := DecodeWindowsCapabilityConsent(raw); err != nil {
+			t.Fatal(mask, err)
+		}
+		var called []string
+		result, err := applyWindowsCapabilities(r, func(scope string) error { called = append(called, scope); return nil })
+		if err != nil || !result.MetadataScopeVerified || len(called) != len(scopes)-1 {
+			t.Fatal(mask, result, err)
+		}
+		for i, scope := range called {
+			if scope != scopes[i+1] {
+				t.Fatal("scope order changed")
+			}
+		}
+		if mask&4 != 0 {
+			r.SchemaVersion = WindowsCapabilityConsentVersion
+			if r.Validate() == nil {
+				t.Fatal("v1 granted new scope")
+			}
+		}
+	}
+	for _, scopes := range [][]string{{windowsprocessmetrics.Scope}, {metadata, windowsprocessmetrics.Scope, windowsprocessmetrics.Scope}, {metadata, "unknown"}} {
+		r := capabilityFixture(scopes...)
+		r.SchemaVersion = WindowsCapabilityConsentVersionV2
+		if _, err := applyWindowsCapabilities(r, func(string) error { t.Fatal("invalid selection applied"); return nil }); err == nil {
+			t.Fatal("invalid v2 accepted")
+		}
+	}
+	r := capabilityFixture(metadata, windowsvolumes.Scope, windowsprocessmetrics.Scope, windowseventhealth.Scope)
+	r.SchemaVersion = WindowsCapabilityConsentVersionV2
+	result, err := applyWindowsCapabilities(r, func(scope string) error {
+		if scope == windowsprocessmetrics.Scope {
+			return ErrState
+		}
+		return nil
+	})
+	if err == nil || result.FailedScope != windowsprocessmetrics.Scope || !reflect.DeepEqual(result.AppliedScopes, []string{windowsvolumes.Scope}) {
+		t.Fatal("partial result lost", result, err)
+	}
+}
+
+func TestCombinedWindowsCapabilityV3ExactScopeCombinations(t *testing.T) {
+	metadata := enrollmentcrypto.CollectionProfileWindowsInventory
+	optional := []string{windowseventhealth.Scope, windowsvolumes.Scope, windowsprocessmetrics.Scope, windowsnetwork.Scope}
+	for mask := 0; mask < 16; mask++ {
+		for _, http := range []bool{false, true} {
+			scopes := []string{metadata}
+			for i, scope := range optional {
+				if mask&(1<<i) != 0 {
+					scopes = append(scopes, scope)
+				}
+			}
+			r := capabilityFixture(scopes...)
+			r.SchemaVersion = WindowsCapabilityConsentVersionV3
+			r.InsecureHTTPAcknowledged = http
+			raw, _ := json.Marshal(r)
+			decoded, err := DecodeWindowsCapabilityConsent(raw)
+			if err != nil || !reflect.DeepEqual(decoded, r) {
+				t.Fatal(mask, http, "v3 request changed", err)
+			}
+			called := []string{}
+			result, err := applyWindowsCapabilities(decoded, func(scope string) error { called = append(called, scope); return nil })
+			if err != nil || !result.MetadataScopeVerified || !reflect.DeepEqual(called, scopes[1:]) || !reflect.DeepEqual(result.AppliedScopes, called) || result.FailedScope != "" {
+				t.Fatal(mask, http, "unselected scope applied or selected scope omitted", result, called, err)
+			}
+			if mask&8 != 0 {
+				for _, older := range []string{WindowsCapabilityConsentVersion, WindowsCapabilityConsentVersionV2} {
+					r.SchemaVersion = older
+					if _, err := applyWindowsCapabilities(r, func(string) error { t.Fatal("older approval granted network"); return nil }); err == nil {
+						t.Fatal("older scope set expanded", older)
+					}
+				}
+			}
+		}
+	}
+}
+
+func TestCombinedWindowsCapabilityV3StrictAndPartialFailures(t *testing.T) {
+	metadata := enrollmentcrypto.CollectionProfileWindowsInventory
+	good := capabilityFixture(metadata, windowsvolumes.Scope, windowsnetwork.Scope, windowsprocessmetrics.Scope, windowseventhealth.Scope)
+	good.SchemaVersion = WindowsCapabilityConsentVersionV3
+	for _, scopes := range [][]string{nil, {windowsnetwork.Scope}, {metadata, windowsnetwork.Scope, windowsnetwork.Scope}, {metadata, "unknown"}} {
+		bad := good
+		bad.Scopes = scopes
+		if _, err := applyWindowsCapabilities(bad, func(string) error { t.Fatal("invalid v3 touched grant"); return nil }); err == nil {
+			t.Fatal("invalid v3 accepted")
+		}
+	}
+	for _, mutate := range []func(*WindowsCapabilityConsent){
+		func(r *WindowsCapabilityConsent) { r.SchemaVersion = "tracebolt.windows-capability-consent.v4" },
+		func(r *WindowsCapabilityConsent) { r.Acknowledged = false },
+		func(r *WindowsCapabilityConsent) { r.CollectionProfile = enrollmentcrypto.CollectionProfile },
+	} {
+		bad := good
+		mutate(&bad)
+		if _, err := applyWindowsCapabilities(bad, func(string) error { t.Fatal("invalid v3 touched grant"); return nil }); err == nil {
+			t.Fatal("invalid v3 accepted")
+		}
+	}
+	raw, _ := json.Marshal(good)
+	for _, bad := range [][]byte{append(append([]byte{}, raw...), ' '), append(raw[:len(raw)-1:len(raw)-1], []byte(`,"acknowledged":true}`)...), append(raw[:len(raw)-1:len(raw)-1], []byte(`,"network":true}`)...)} {
+		if _, err := DecodeWindowsCapabilityConsent(bad); err == nil {
+			t.Fatal("noncanonical v3 accepted")
+		}
+	}
+	for failed := 1; failed < len(good.Scopes); failed++ {
+		called := []string{}
+		result, err := applyWindowsCapabilities(good, func(scope string) error {
+			called = append(called, scope)
+			if scope == good.Scopes[failed] {
+				return ErrState
+			}
+			return nil
+		})
+		if err != ErrState || !result.MetadataScopeVerified || result.FailedScope != good.Scopes[failed] || !reflect.DeepEqual(result.AppliedScopes, good.Scopes[1:failed]) || !reflect.DeepEqual(called, good.Scopes[1:failed+1]) {
+			t.Fatal("partial result lost or later scope touched", result, called, err)
+		}
 	}
 }

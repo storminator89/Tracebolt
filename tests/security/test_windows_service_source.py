@@ -22,6 +22,23 @@ class GateTests(unittest.TestCase):
         self.assertIn('env.pop("TRACEBOLT_WINDOWS_READONLY_NATIVE", None)',source)
         self.assertNotIn("run_windows_readonly.py",source)
         self.assertNotIn("run_acceptance.py",source)
+    def test_process_metric_mock_is_mandatory(self):
+        self.assertIn("./internal/windowsprocessmetrics",gate.PACKAGES)
+        required=("localrmm/internal/windowsprocessmetrics","TestNativeMinimalRightsCloseAndCancel")
+        self.assertIn(required,gate.REQUIRED)
+        rows=[dict(Package=p,Test=t,Action="pass") for p,t in gate.REQUIRED if (p,t)!=required]
+        with self.assertRaises(ValueError):gate.check_events(b"\n".join(json.dumps(x).encode() for x in rows))
+    def test_network_mocks_are_mandatory_without_native_reads(self):
+        self.assertIn("./internal/windowsnetwork", gate.PACKAGES)
+        for name in ("TestNativeNetworkInjectedFourTables", "TestNativeNetworkReturnCodesAndBounds", "TestNativeNetworkDWORDLayouts", "TestFourTablesAndNetworkByteOrder", "TestMalformedAndTrailingNativeTables", "TestBufferGrowthBoundAndCancellation", "TestBoundedCountsStableRowsAndBudget", "TestShrinkingTableIgnoresSurplusAllocation", "TestTCPListenerHasNoRemotePeer"):
+            required = ("localrmm/internal/windowsnetwork", name)
+            self.assertIn(required, gate.REQUIRED)
+            rows = [dict(Package=p, Test=t, Action="pass") for p, t in gate.REQUIRED if (p, t) != required]
+            with self.assertRaises(ValueError):
+                gate.check_events(b"\n".join(json.dumps(x).encode() for x in rows))
+        source = Path(gate.__file__).read_text()
+        self.assertIn('env.pop("TRACEBOLT_WINDOWS_READONLY_NATIVE", None)', source)
+        self.assertNotIn('TRACEBOLT_WINDOWS_READONLY_NATIVE"] =', source)
     def test_malformed_stream(self):
         for raw in (b"[]",b"not json",b"",b" "*(32*1024*1024+1)):
             with self.assertRaises(ValueError):gate.check_events(raw)

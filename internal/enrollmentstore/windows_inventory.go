@@ -7,6 +7,8 @@ import (
 	"localrmm/internal/lanstore"
 	"localrmm/internal/windowseventhealth"
 	"localrmm/internal/windowsmanaged"
+	"localrmm/internal/windowsnetwork"
+	"localrmm/internal/windowsprocessmetrics"
 	"localrmm/internal/windowsvolumes"
 	"time"
 )
@@ -14,17 +16,19 @@ import (
 // WindowsInventoryView exposes only the latest profile-bound bounded frame.
 // It has no fallback to Linux operations, an old healthy generation or host reads.
 type WindowsInventoryView struct {
-	SchemaVersion       string                       `json:"schemaVersion"`
-	DeviceID            string                       `json:"deviceId"`
-	CollectionProfile   string                       `json:"collectionProfile"`
-	ServerNow           time.Time                    `json:"serverNow"`
-	MaxAgeSeconds       int64                        `json:"maxAgeSeconds"`
-	Status              string                       `json:"status"`
-	Sequence            *uint64                      `json:"sequence"`
-	ReceivedAt          *time.Time                   `json:"receivedAt"`
-	Snapshot            *windowsmanaged.Snapshot     `json:"snapshot"`
-	Events              *windowseventhealth.Snapshot `json:"events,omitempty"`
-	Volumes             *windowsvolumes.Snapshot     `json:"volumes,omitempty"`
+	SchemaVersion       string                          `json:"schemaVersion"`
+	DeviceID            string                          `json:"deviceId"`
+	CollectionProfile   string                          `json:"collectionProfile"`
+	ServerNow           time.Time                       `json:"serverNow"`
+	MaxAgeSeconds       int64                           `json:"maxAgeSeconds"`
+	Status              string                          `json:"status"`
+	Sequence            *uint64                         `json:"sequence"`
+	ReceivedAt          *time.Time                      `json:"receivedAt"`
+	Snapshot            *windowsmanaged.Snapshot        `json:"snapshot"`
+	Events              *windowseventhealth.Snapshot    `json:"events,omitempty"`
+	Volumes             *windowsvolumes.Snapshot        `json:"volumes,omitempty"`
+	ProcessMetrics      *windowsprocessmetrics.Snapshot `json:"processMetrics,omitempty"`
+	Network             *windowsnetwork.Snapshot        `json:"network,omitempty"`
 	certificateNotAfter int64
 }
 
@@ -77,6 +81,8 @@ func (s *Store) WindowsInventoryView(ctx context.Context, id string, now time.Ti
 			out.Snapshot = &copy
 			out.Events = frame.WindowsEvents
 			out.Volumes = frame.WindowsVolumes
+			out.ProcessMetrics = frame.WindowsProcessMetrics
+			out.Network = frame.WindowsNetwork
 			out.Sequence = &seq
 			out.ReceivedAt = &received
 			out.Status = "fresh"
@@ -88,6 +94,8 @@ func (s *Store) WindowsInventoryView(ctx context.Context, id string, now time.Ti
 				out.Snapshot = nil
 				out.Events = nil
 				out.Volumes = nil
+				out.ProcessMetrics = nil
+				out.Network = nil
 			}
 		}
 		if identity.State == enrollmentstate.Revoked || identity.State == enrollmentstate.Canceled || identity.State == enrollmentstate.Rejected || identity.State == enrollmentstate.Expired || identity.Intent.NotAfter > 0 && now.Unix() >= identity.Intent.NotAfter {
@@ -95,6 +103,8 @@ func (s *Store) WindowsInventoryView(ctx context.Context, id string, now time.Ti
 			out.Snapshot = nil
 			out.Events = nil
 			out.Volumes = nil
+			out.ProcessMetrics = nil
+			out.Network = nil
 		}
 		return nil
 	})
@@ -116,6 +126,8 @@ func (v WindowsInventoryView) RecheckAt(now time.Time) (WindowsInventoryView, er
 		v.Snapshot = nil
 		v.Events = nil
 		v.Volumes = nil
+		v.ProcessMetrics = nil
+		v.Network = nil
 		return v, nil
 	}
 	if v.Snapshot != nil {
@@ -134,6 +146,8 @@ func (v WindowsInventoryView) RecheckAt(now time.Time) (WindowsInventoryView, er
 			v.Snapshot = nil
 			v.Events = nil
 			v.Volumes = nil
+			v.ProcessMetrics = nil
+			v.Network = nil
 		}
 	}
 	if v.Events != nil && now.Sub(v.Events.CollectedAt) >= 24*time.Hour {
@@ -141,6 +155,12 @@ func (v WindowsInventoryView) RecheckAt(now time.Time) (WindowsInventoryView, er
 	}
 	if v.Volumes != nil && now.Sub(v.Volumes.CollectedAt) >= 24*time.Hour {
 		v.Volumes = nil
+	}
+	if v.ProcessMetrics != nil && now.Sub(v.ProcessMetrics.CollectedAt) >= 24*time.Hour {
+		v.ProcessMetrics = nil
+	}
+	if v.Network != nil && now.Sub(v.Network.CollectedAt) >= 24*time.Hour {
+		v.Network = nil
 	}
 	return v, nil
 }

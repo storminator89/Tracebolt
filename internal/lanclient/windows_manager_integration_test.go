@@ -45,6 +45,8 @@ import (
 	"localrmm/internal/windowseventhealth"
 	"localrmm/internal/windowsinventory"
 	"localrmm/internal/windowsmanaged"
+	"localrmm/internal/windowsnetwork"
+	"localrmm/internal/windowsprocessmetrics"
 	"localrmm/internal/windowsvolumes"
 )
 
@@ -536,7 +538,8 @@ func TestWindowsManagerPipelineOperatorHTTPBoundary(t *testing.T) {
 	t.Run("event-v2", func(t *testing.T) { testWindowsManagerPipelineOperatorHTTPBoundary(t, false) })
 	t.Run("events-and-volumes-v3", func(t *testing.T) { testWindowsManagerPipelineOperatorHTTPBoundary(t, true) })
 }
-func testWindowsManagerPipelineOperatorHTTPBoundary(t *testing.T, withVolumes bool) {
+func testWindowsManagerPipelineOperatorHTTPBoundary(t *testing.T, withVolumes bool, network ...bool) {
+	withNetwork := len(network) == 1 && network[0]
 	f := newWindowsManagerFixture(t, enrollmentcrypto.CollectionProfileWindowsInventory, "windows")
 	ctx := context.Background()
 	state, err := lanclientstate.InitializeNew(f.material.config.StateDirectory, f.material.binding)
@@ -544,14 +547,14 @@ func testWindowsManagerPipelineOperatorHTTPBoundary(t *testing.T, withVolumes bo
 		t.Fatal(err)
 	}
 	defer state.Close()
-	run, err := runUsingStateWithCapabilityDependencies(ctx, f.material, state, nil, nil, nil, windowsSource, func(r *http.Request) (*http.Response, error) {
+	run, err := runUsingStateWithNetworkDependencies(ctx, f.material, state, nil, nil, nil, windowsSource, func(r *http.Request) (*http.Response, error) {
 		return f.serve(t, r, http.StatusOK), nil
-	}, func() (windowseventhealth.Consent, bool) { return eventConsentFixture(f.material), true }, eventSourceFixture, func() (windowsvolumes.Consent, bool) { return volumeConsentFixture(f.material), withVolumes }, volumeSourceFixture)
+	}, func() (windowseventhealth.Consent, bool) { return eventConsentFixture(f.material), true }, eventSourceFixture, func() (windowsvolumes.Consent, bool) { return volumeConsentFixture(f.material), withVolumes }, volumeSourceFixture, func() (windowsprocessmetrics.Consent, bool) { return processConsentFixture(f.material), withNetwork }, processSourceFixture, func() (windowsnetwork.Consent, bool) { return networkConsentFixture(f.material), withNetwork }, networkSourceFixture)
 	if err != nil || run.Sequence != 1 || run.Duplicate {
 		t.Fatal("fixture sender did not commit its first Windows frame", err)
 	}
 	want := f.view(t, time.Now().UTC())
-	if (want.Volumes != nil) != withVolumes || want.Events == nil || want.Snapshot == nil || want.ReceivedAt == nil || want.Sequence == nil {
+	if (want.Network != nil) != withNetwork || (want.ProcessMetrics != nil) != withNetwork || (want.Volumes != nil) != withVolumes || want.Events == nil || want.Snapshot == nil || want.ReceivedAt == nil || want.Sequence == nil {
 		t.Fatal("accepted fixture frame is missing")
 	}
 	// The operator handler has one existing primary/Linux authority and a
@@ -643,7 +646,7 @@ func testWindowsManagerPipelineOperatorHTTPBoundary(t *testing.T, withVolumes bo
 	}
 	w := call(http.MethodGet, path, nil, true, "", "")
 	var got enrollmentstore.WindowsInventoryView
-	if w.Code != http.StatusOK || json.Unmarshal(w.Body.Bytes(), &got) != nil || got.SchemaVersion != want.SchemaVersion || got.DeviceID != want.DeviceID || got.CollectionProfile != want.CollectionProfile || got.Status != "fresh" || got.Sequence == nil || *got.Sequence != *want.Sequence || got.ReceivedAt == nil || !got.ReceivedAt.Equal(*want.ReceivedAt) || !reflect.DeepEqual(got.Snapshot, want.Snapshot) || !reflect.DeepEqual(got.Events, want.Events) || !reflect.DeepEqual(got.Volumes, want.Volumes) {
+	if w.Code != http.StatusOK || json.Unmarshal(w.Body.Bytes(), &got) != nil || got.SchemaVersion != want.SchemaVersion || got.DeviceID != want.DeviceID || got.CollectionProfile != want.CollectionProfile || got.Status != "fresh" || got.Sequence == nil || *got.Sequence != *want.Sequence || got.ReceivedAt == nil || !got.ReceivedAt.Equal(*want.ReceivedAt) || !reflect.DeepEqual(got.Snapshot, want.Snapshot) || !reflect.DeepEqual(got.Events, want.Events) || !reflect.DeepEqual(got.Volumes, want.Volumes) || !reflect.DeepEqual(got.Network, want.Network) || !reflect.DeepEqual(got.ProcessMetrics, want.ProcessMetrics) {
 		t.Fatal("authenticated HTTP view lost accepted Windows rows, identity or provenance", w.Code)
 	}
 	if w := call(http.MethodGet, "/api/devices/"+windowsManagerID("agent", 99)+"/windows-inventory", nil, true, "", ""); w.Code != http.StatusNotFound {
@@ -679,4 +682,9 @@ func testWindowsManagerPipelineOperatorHTTPBoundary(t *testing.T, withVolumes bo
 	if w := call(http.MethodGet, path, nil, true, "", ""); w.Code != http.StatusUnauthorized {
 		t.Fatal("revoked operator session retained Windows inventory access", w.Code)
 	}
+}
+
+func TestWindowsNetworkOperatorHTTPBoundary(t *testing.T) {
+	t.Run("all-scopes", func(t *testing.T) { testWindowsManagerPipelineOperatorHTTPBoundary(t, true, true) })
+	t.Run("no-volumes", func(t *testing.T) { testWindowsManagerPipelineOperatorHTTPBoundary(t, false, true) })
 }

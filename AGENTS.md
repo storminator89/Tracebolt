@@ -105,6 +105,16 @@ file as navigation and project constraints, never as permission to act on a host
   Read `docs/windows-volume-inventory.md` before changing its consent, capacity
   semantics or v3 wire shape. Keep v1/event-v2 identities and bytes compatible;
   fresh combined approval is a reusable contract, not an automatic installer grant.
+- Windows per-process CPU and working-set memory is a separate default-off
+  capability. Read `docs/windows-process-metrics.md` before changing consent,
+  CPU accounting or wire v4. Preserve old grants, PID-creation attribution, exact
+  retry, frame budget and provider exclusions; fixtures never grant host reads.
+- Windows TCP/UDP endpoint metadata is a separate default-off local capability.
+  Read `docs/windows-network-endpoints.md` before changing consent or wire v5.
+  Keep earlier grants/frames unchanged, numeric addresses and API-snapshot PID
+  attribution only, explicit HTTP disclosure, exact retry and private operator
+  expiry. No DNS, process joins, traffic payloads or AI export; source fixtures
+  never authorize a host network read or a service/security change.
 - Follow Go/Node versions and dependency locks in this revision. Validate commands
   against actual flags/config. Distinguish runtime tests from cross-builds, skipped
   container tests, and proposed functionality. Never invent install/enroll flags.

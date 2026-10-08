@@ -8,8 +8,18 @@ import sys
 import tempfile
 
 PACKAGES = ("./internal/windowsstate", "./internal/windowsservice", "./internal/windowsconsole",
-            "./internal/windowsagentconfig", "./cmd/windows-service", "./internal/windowsvolumes")
+            "./internal/windowsagentconfig", "./cmd/windows-service", "./internal/windowsvolumes", "./internal/windowsprocessmetrics", "./internal/windowsnetwork")
 REQUIRED = {
+    ("localrmm/internal/windowsnetwork", "TestNativeNetworkInjectedFourTables"),
+    ("localrmm/internal/windowsnetwork", "TestNativeNetworkReturnCodesAndBounds"),
+    ("localrmm/internal/windowsnetwork", "TestNativeNetworkDWORDLayouts"),
+    ("localrmm/internal/windowsnetwork", "TestFourTablesAndNetworkByteOrder"),
+    ("localrmm/internal/windowsnetwork", "TestMalformedAndTrailingNativeTables"),
+    ("localrmm/internal/windowsnetwork", "TestBufferGrowthBoundAndCancellation"),
+    ("localrmm/internal/windowsnetwork", "TestBoundedCountsStableRowsAndBudget"),
+    ("localrmm/internal/windowsnetwork", "TestShrinkingTableIgnoresSurplusAllocation"),
+    ("localrmm/internal/windowsnetwork", "TestTCPListenerHasNoRemotePeer"),
+    ("localrmm/internal/windowsprocessmetrics", "TestNativeMinimalRightsCloseAndCancel"),
     ("localrmm/internal/windowsvolumes", "TestNativeInjectedEnumeration"),
     ("localrmm/internal/windowsvolumes", "TestNativeRejectMalformedRoots"),
     ("localrmm/internal/windowsstate", "TestWindowsRenameABI"),

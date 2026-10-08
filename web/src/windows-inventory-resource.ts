@@ -71,6 +71,13 @@ export function useWindowsInventory(deviceId: string, enabled: boolean, sessionK
     const volumeAge = view?.volumes ? inventoryAge(view.serverNow, view.volumes.collectedAt) + age : Infinity;
     const volumes = view && (status === 'fresh' || status === 'stale') && volumeAge < 86400000 ? view.volumes ?? null : null;
     const volumesStale = volumes !== null && (volumeAge < 0 || volumeAge > 120000 || !view?.receivedAt || inventoryAge(view.serverNow, view.receivedAt) + age > 120000);
-    return { volumes, volumesStale, events, eventsStale, view, snapshot: view && (status === 'fresh' || status === 'stale') ? view.snapshot : null, status, loading: enabled && loading, error: enabled ? error : null, refresh: () => void read() };
+    const metricsAge = view?.processMetrics ? inventoryAge(view.serverNow, view.processMetrics.collectedAt) + age : Infinity;
+    const processMetrics = view && (status === 'fresh' || status === 'stale') && metricsAge < 86400000 ? view.processMetrics ?? null : null;
+    const processMetricsStale = processMetrics !== null && (metricsAge < 0 || metricsAge > 120000 || !view?.receivedAt || inventoryAge(view.serverNow, view.receivedAt) + age > 120000);
+    const networkAge = view?.network ? inventoryAge(view.serverNow, view.network.collectedAt) + age : Infinity;
+    const network = view && (status === 'fresh' || status === 'stale') && networkAge < 86400000 ? view.network ?? null : null;
+    const networkStale = network !== null && (networkAge < 0 || networkAge > 120000 || !view?.receivedAt || inventoryAge(view.serverNow, view.receivedAt) + age > 120000);
+    const networkExpired = Boolean(view?.network) && Number.isFinite(networkAge) && networkAge >= 86400000;
+    return { network, networkStale, networkExpired, processMetrics, processMetricsStale, volumes, volumesStale, events, eventsStale, view, snapshot: view && (status === 'fresh' || status === 'stale') ? view.snapshot : null, status, loading: enabled && loading, error: enabled ? error : null, refresh: () => void read() };
 }
 export type WindowsInventoryResource = ReturnType<typeof useWindowsInventory>;

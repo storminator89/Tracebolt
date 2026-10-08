@@ -66,9 +66,14 @@ func (s *Store) loadOperational(ctx context.Context, t *transaction) error {
 	if rows.Err() != nil {
 		return ErrStorage
 	}
-	return s.validateOperational(t)
+	// These bytes were just decoded and checked for canonical equality above.
+	// No caller can mutate the records before this load-time validation.
+	return s.validateOperational(t, t.originalOperational)
 }
-func (s *Store) validateOperational(t *transaction) error {
+
+// encoded must describe the current records: freshly canonicalized by load, or
+// freshly marshaled by save. It is never reused across the transaction action.
+func (s *Store) validateOperational(t *transaction, encoded map[string][]byte) error {
 	if !enrollmentcrypto.ManagedCollectionProfile(s.config.Binding.CollectionProfile) {
 		if len(t.operational) != 0 {
 			return ErrStorage
@@ -92,7 +97,10 @@ func (s *Store) validateOperational(t *transaction) error {
 			return ErrStorage
 		}
 		snap, _ := json.Marshal(frame.Operational)
-		cached, _ := json.Marshal(record)
+		cached, exists := encoded[id]
+		if !exists || len(cached) == 0 || len(cached) > OperationalDeviceQuota {
+			return ErrStorage
+		}
 		packageBytes := 0
 		if frame.Packages != nil {
 			packages, e := json.Marshal(frame.Packages)
@@ -117,18 +125,24 @@ func (s *Store) validateOperational(t *transaction) error {
 	return nil
 }
 func (s *Store) saveOperational(ctx context.Context, t *transaction) error {
-	if s.validateOperational(t) != nil {
-		return ErrStorage
-	}
+	// The action may have changed any retained section since load. Encode all
+	// current records again, then use those exact bytes for quota and persistence.
+	encoded := make(map[string][]byte, len(t.operational))
 	for id, record := range t.operational {
 		raw, e := json.Marshal(record)
 		if e != nil || len(raw) > OperationalDeviceQuota {
 			return ErrStorage
 		}
+		encoded[id] = raw
+	}
+	if s.validateOperational(t, encoded) != nil {
+		return ErrStorage
+	}
+	for id, raw := range encoded {
 		if bytes.Equal(raw, t.originalOperational[id]) {
 			continue
 		}
-		if _, e = t.conn.ExecContext(ctx, "INSERT INTO enrollment_operational(invitation_id,body) VALUES(?,?) ON CONFLICT(invitation_id) DO UPDATE SET body=excluded.body", id, raw); e != nil {
+		if _, e := t.conn.ExecContext(ctx, "INSERT INTO enrollment_operational(invitation_id,body) VALUES(?,?) ON CONFLICT(invitation_id) DO UPDATE SET body=excluded.body", id, raw); e != nil {
 			return ErrStorage
 		}
 	}

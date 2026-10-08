@@ -46,3 +46,5 @@
 }
 
 .windows-overview-partial{display:block;color:var(--warning);font-size:11px;margin-top:3px}
+
+.windows-process-metrics-note{font-size:12px;line-height:1.65;color:var(--secondary);margin:12px 0}

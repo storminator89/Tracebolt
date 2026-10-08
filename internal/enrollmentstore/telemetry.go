@@ -77,6 +77,18 @@ func (s *Store) SaveObservation(ctx context.Context, invitationID, certificateHa
 			if e != nil || old.WindowsInventory == nil {
 				return ErrStorage
 			}
+			// Advance the base capture past the previous network snapshot even when
+			// this frame omits that optional scope. Future network captures cannot fall
+			// below their own base, so omission cannot erase the durable capture floor.
+			if old.WindowsNetwork != nil && !frame.WindowsInventory.CollectedAt.After(old.WindowsNetwork.CollectedAt) {
+				return lanstore.ErrReplay
+			}
+			if frame.WindowsNetwork != nil && old.WindowsNetwork != nil && !frame.WindowsNetwork.CollectedAt.After(old.WindowsNetwork.CollectedAt) {
+				return lanstore.ErrReplay
+			}
+			if frame.WindowsProcessMetrics != nil && old.WindowsProcessMetrics != nil && !frame.WindowsProcessMetrics.CollectedAt.After(old.WindowsProcessMetrics.CollectedAt) {
+				return lanstore.ErrReplay
+			}
 			if frame.WindowsVolumes != nil && old.WindowsVolumes != nil && !frame.WindowsVolumes.CollectedAt.After(old.WindowsVolumes.CollectedAt) {
 				return lanstore.ErrReplay
 			}

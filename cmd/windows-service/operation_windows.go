@@ -55,6 +55,10 @@ func nativeOperation(ctx context.Context, r request, out, stderr io.Writer) (res
 		return nil, err
 	}
 	switch r.mode {
+	case "network-preview", "network-enable", "network-disable":
+		return networkOperation(ctx, r, receipt.Service, windowsservice.InspectOwned, lanclient.ConfigureWindowsNetwork)
+	case "process-metrics-preview", "process-metrics-enable", "process-metrics-disable":
+		return processMetricsOperation(ctx, r, receipt.Service, windowsservice.InspectOwned, lanclient.ConfigureWindowsProcessMetrics)
 	case "events-preview", "events-enable", "events-disable":
 		snapshot, err := windowsservice.InspectOwned(ctx, receipt.Service)
 		if err != nil || snapshot.State != windowsservice.Stopped {

@@ -8,7 +8,7 @@ import { useWindowsInventory } from './windows-inventory-resource';
 import { WindowsInventoryWorkspace } from './windows-inventory';
 import { windowsDevice, windowsDeviceId, windowsNow, windowsSection, windowsView } from './windows-inventory-fixture';
 import { historyFixture } from './resource-history-fixture';
-import type { WindowsInventoryView } from './windows-inventory-types';
+import { WINDOWS_INVENTORY_VIEW_BYTES, type WindowsInventoryView } from './windows-inventory-types';
 
 vi.mock('./api', async original => ({ ...await original<typeof import('./api')>(), request: vi.fn(), mutate: vi.fn() }));
 vi.mock('./auth', async original => ({ ...await original<typeof import('./auth')>(), useOperator: vi.fn() }));
@@ -26,7 +26,7 @@ describe('Windows inventory within the shared device UI', () => {
         fireEvent.click(screen.getByRole('tab', { name: 'Software' })); expect(screen.getByText('Synthetic Application')).toBeVisible(); expect(screen.getByText('64-bit')).toBeVisible();
         fireEvent.click(screen.getByRole('tab', { name: 'Hostname' })); expect(screen.getByText('fixture-windows')).toBeVisible();
         fireEvent.click(screen.getByRole('tab', { name: 'Interfaces' })); expect(screen.getByText('192.0.2.40')).toBeVisible(); expect(screen.getByText('2001:db8::40')).toBeVisible(); expect(screen.queryByRole('link')).toBeNull();
-        expect(request).toHaveBeenCalledWith(`/devices/${windowsDeviceId}/windows-inventory`, { signal: expect.any(AbortSignal) }, 69632); expect(mutate).not.toHaveBeenCalled();
+        expect(request).toHaveBeenCalledWith(`/devices/${windowsDeviceId}/windows-inventory`, { signal: expect.any(AbortSignal) }, WINDOWS_INVENTORY_VIEW_BYTES); expect(mutate).not.toHaveBeenCalled();
     });
     it('shows truncated exact and lower-bound counts, and keeps denied separate from healthy empty', async () => {
         const v = windowsView(); v.snapshot!.processes = { ...v.snapshot!.processes, quality: 'partial', observedCount: 180, truncated: true, complete: false }; v.snapshot!.services = { ...windowsSection([]), quality: 'denied', complete: false, countExact: false }; v.snapshot!.software = windowsSection([]); vi.mocked(request).mockResolvedValue(v);

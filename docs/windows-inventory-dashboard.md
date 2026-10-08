@@ -74,7 +74,8 @@ One native read-only report supplies both chart metrics and the inventory:
   multi-group CPU coverage. Separately consented visible-volume source is described
   in [Windows volume inventory](windows-volume-inventory.md).
 - Caller-visible process IDs, parent IDs, executable names and thread counts;
-  no command lines, owners or executable paths.
+  no command lines, owners or executable paths. Separately consented process
+  CPU/working-set memory is described in [process metrics](windows-process-metrics.md).
 - SCM-enumerated service names, display names, state and process IDs; no service
   start/stop or configuration authority.
 - Machine uninstall-registry names, versions and publishers from 32/64-bit

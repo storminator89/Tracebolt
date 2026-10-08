@@ -5,6 +5,8 @@ import (
 	"context"
 	"errors"
 	"io"
+	"localrmm/internal/windowsnetwork"
+	"localrmm/internal/windowsprocessmetrics"
 	"localrmm/internal/windowsvolumes"
 	"strings"
 	"testing"
@@ -188,6 +190,60 @@ func TestVolumeConsentFlagsExplicitAndBounded(t *testing.T) {
 		}
 		if runWith(context.Background(), args, &out, io.Discard, op) != 0 || !called {
 			t.Fatal("valid fixture volume dispatch rejected", args)
+		}
+	}
+}
+
+func TestProcessMetricsConsentFlagsExplicitAndBounded(t *testing.T) {
+	for _, args := range [][]string{{"--process-metrics-enable", "--apply"}, {"--process-metrics-enable", "--process-cpu-memory"}, {"--process-metrics-preview", "--apply"}, {"--process-metrics-disable", "--apply", "--process-cpu-memory"}, {"--process-metrics-enable", "--apply", "--process-cpu-memory", "--application-system-event-headers"}, {"--install", "--apply", "--windows-inventory", "--process-cpu-memory", "--bootstrap-file=C:\\fixture"}} {
+		called := false
+		op := func(context.Context, request, io.Writer, io.Writer) (any, error) { called = true; return nil, nil }
+		if runWith(context.Background(), args, io.Discard, io.Discard, op) != 2 || called {
+			t.Fatal("invalid volume grant reached backend")
+		}
+	}
+	for _, args := range [][]string{{"--process-metrics-preview"}, {"--process-metrics-preview", "--insecure-http-test"}, {"--process-metrics-enable", "--apply", "--process-cpu-memory"}, {"--process-metrics-enable", "--apply", "--process-cpu-memory", "--insecure-http-test"}, {"--process-metrics-disable", "--apply"}, {"--process-metrics-disable", "--apply", "--insecure-http-test"}} {
+		var out bytes.Buffer
+		called := false
+		op := func(_ context.Context, r request, _ io.Writer, _ io.Writer) (any, error) {
+			called = true
+			if r.mode == "process-metrics-enable" && !strings.Contains(out.String(), windowsprocessmetrics.Privacy) {
+				t.Fatal("scope not disclosed")
+			}
+			if r.insecureHTTP && !strings.Contains(out.String(), "plaintext") {
+				t.Fatal("HTTP warning missing")
+			}
+			return nil, nil
+		}
+		if runWith(context.Background(), args, &out, io.Discard, op) != 0 || !called {
+			t.Fatal("valid fixture volume dispatch rejected", args)
+		}
+	}
+}
+
+func TestNetworkConsentFlagsExplicitAndBounded(t *testing.T) {
+	for _, args := range [][]string{{"--network-enable", "--apply"}, {"--network-enable", "--network-endpoints"}, {"--network-preview", "--apply"}, {"--network-disable", "--apply", "--network-endpoints"}, {"--network-enable", "--apply", "--network-endpoints", "--application-system-event-headers"}, {"--install", "--apply", "--windows-inventory", "--network-endpoints", "--bootstrap-file=C:\\fixture"}} {
+		called := false
+		op := func(context.Context, request, io.Writer, io.Writer) (any, error) { called = true; return nil, nil }
+		if runWith(context.Background(), args, io.Discard, io.Discard, op) != 2 || called {
+			t.Fatal("invalid network grant reached backend")
+		}
+	}
+	for _, args := range [][]string{{"--network-preview"}, {"--network-preview", "--insecure-http-test"}, {"--network-enable", "--apply", "--network-endpoints"}, {"--network-enable", "--apply", "--network-endpoints", "--insecure-http-test"}, {"--network-disable", "--apply"}, {"--network-disable", "--apply", "--insecure-http-test"}} {
+		var out bytes.Buffer
+		called := false
+		op := func(_ context.Context, r request, _ io.Writer, _ io.Writer) (any, error) {
+			called = true
+			if r.mode == "network-enable" && !strings.Contains(out.String(), windowsnetwork.Privacy) {
+				t.Fatal("scope not disclosed")
+			}
+			if r.mode == "network-enable" && r.insecureHTTP && !strings.Contains(out.String(), windowsnetwork.HTTPPrivacy) {
+				t.Fatal("HTTP warning missing")
+			}
+			return nil, nil
+		}
+		if runWith(context.Background(), args, &out, io.Discard, op) != 0 || !called {
+			t.Fatal("valid fixture network dispatch rejected", args)
 		}
 	}
 }

@@ -50,10 +50,10 @@ func validateWindowsEventsFrame(f frame, fields map[string]json.RawMessage) erro
 		}
 		return nil
 	}
-	if f.SchemaVersion == FrameWindowsCapabilitiesVersion && f.WindowsEvents == nil && len(fields["windowsEvents"]) == 0 {
+	if (f.SchemaVersion == FrameWindowsCapabilitiesVersion || f.SchemaVersion == FrameWindowsProcessMetricsVersion || f.SchemaVersion == FrameWindowsNetworkVersion) && f.WindowsEvents == nil && len(fields["windowsEvents"]) == 0 {
 		return nil
 	}
-	if (f.SchemaVersion != FrameWindowsEventsVersion && f.SchemaVersion != FrameWindowsCapabilitiesVersion) || f.WindowsEvents == nil || f.WindowsInventory == nil {
+	if (f.SchemaVersion != FrameWindowsEventsVersion && f.SchemaVersion != FrameWindowsCapabilitiesVersion && f.SchemaVersion != FrameWindowsProcessMetricsVersion && f.SchemaVersion != FrameWindowsNetworkVersion) || f.WindowsEvents == nil || f.WindowsInventory == nil {
 		return ErrState
 	}
 	s, e := windowseventhealth.Decode(fields["windowsEvents"])
