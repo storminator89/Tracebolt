@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "sourceCommit": "fccc4b00cd8a144afd58e4b995747afab7a10022",
-  "goSourceSha256": "4ee9c99541d5200b42f5d8b33b714b36ea88a761e6221dba7f705951b6f0f377",
+  "goSourceSha256": "3c8de42f9129ee6e245929742965fbc6fe5cff8581abe82fc607b5e0a95971f1",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -228,6 +228,13 @@
       "TestFreshChildEnvironmentAddsOnlyTrustedSystemDrive",
       "TestFreshChildEnvironmentRejectsInvalidDirectoryWithoutDisclosure",
       "TestFreshChildEnvironmentRejectsNULAndRetainsEmptyValues",
+      "TestFreshCompletionCancellationAndExpiryAtEveryBoundary",
+      "TestFreshCompletionFinalAcceptanceAfterStopAndReadbackOnly",
+      "TestFreshCompletionInvalidInputsNeverRead",
+      "TestFreshCompletionLiveCancellationAndExpiryAtEveryBoundary",
+      "TestFreshCompletionLiveFailuresCannotReachStores",
+      "TestFreshCompletionSeparatesLiveTokenAndStoppedStores",
+      "TestFreshCompletionStoppedFailuresFailClosed",
       "TestFreshConsoleOutputOwnershipAndFaults",
       "TestFreshConsoleOutputRejectsMissingCallbacks",
       "TestFreshNaturalDiagnosticKnownFailureSnapshot",
@@ -1809,6 +1816,7 @@
       "TestGenerationReportFailureCannotReachClaim",
       "TestGenerationResponseLimitDoesNotWidenOtherReplies",
       "TestGenerationSummaryOnlyForNewlyAcknowledgedPolicyV3",
+      "TestGuidedHandoffRejectsLiveSenderUntilStopped",
       "TestGuidedSenderNeverInitializesMissingLedger",
       "TestGuidedSenderRejectsMissingFilesAndBinding",
       "TestHTTPMaterialRejectsExpiredAndWrongRoleBeforeState",

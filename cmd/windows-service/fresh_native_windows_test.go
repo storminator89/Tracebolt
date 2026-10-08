@@ -183,31 +183,33 @@ func freshReadReceipt(layout windowsservice.Layout) (installReceipt, error) {
 	}
 	return r, nil
 }
-func freshVerifyCompleted(ctx context.Context, g *freshgate.Grant) (installReceipt, error) {
-	if (ctx.Err() != nil || !g.Check()) || ctx.Err() != nil {
+func freshVerifyRunning(ctx context.Context, g *freshgate.Grant) (installReceipt, error) {
+	if !freshCompletionAllowed(ctx, g.Check) {
 		return installReceipt{}, setupFailed("completion_context", freshgate.ErrGuard)
 	}
 	layout, e := windowsservice.ResolveLayout()
 	if e != nil {
 		return installReceipt{}, setupFailed("completion_layout", freshgate.ErrGuard)
 	}
-	r, e := freshReadReceipt(layout)
-	if e != nil || !completeReadSetup(r) {
-		return r, setupFailed("completion_receipt", freshgate.ErrGuard)
-	}
-	p := filepath.Join(layout.EnrollmentRoot, "agent.json")
-	binding, e := lanclient.WindowsCapabilityIdentity(p, r.ReadSetup.Consent)
-	if e != nil || binding != r.ReadSetup.SenderBinding {
-		return r, setupFailed("completion_identity", freshgate.ErrGuard)
-	}
-	digests, e := lanclient.WindowsCapabilityGrantDigests(p, r.ReadSetup.Consent)
-	if e != nil || !reflect.DeepEqual(digests, r.ReadSetup.GrantDigests) {
-		return r, setupFailed("completion_grants", freshgate.ErrGuard)
-	}
-	if native.VerifyFreshServiceToken(ctx, r.Service) != nil {
-		return r, setupFailed("completion_token", freshgate.ErrGuard)
-	}
-	return r, nil
+	return freshLiveCompletion(ctx, g.Check, freshCompletionSteps{
+		receipt: func() (installReceipt, error) { return freshReadReceipt(layout) },
+		service: native.VerifyFreshServiceToken,
+	})
+}
+
+func freshVerifyStopped(ctx context.Context, g *freshgate.Grant, expected installReceipt) error {
+	return freshStoppedCompletion(ctx, g.Check, expected, freshCompletionSteps{
+		receipt: func() (installReceipt, error) { return freshReadReceipt(expected.Service.Layout) },
+		service: func(ctx context.Context, receipt windowsservice.Receipt) error {
+			snapshot, err := windowsservice.InspectOwned(ctx, receipt)
+			if err != nil || snapshot.State != windowsservice.Stopped || snapshot.Configuration.StartType != 2 {
+				return freshgate.ErrGuard
+			}
+			return nil
+		},
+		identity: lanclient.WindowsCapabilityIdentity,
+		grants:   lanclient.WindowsCapabilityGrantDigests,
+	})
 }
 func freshChild(ctx context.Context, g *freshgate.Grant) error {
 	// No injected secret/enrollment/setup/grant/start callback. The production
@@ -220,7 +222,7 @@ func freshChild(ctx context.Context, g *freshgate.Grant) error {
 			return setupFailed("coordinator", e)
 		}
 		var completionErr error
-		if e := freshAwait(ctx, func() bool { _, completionErr = freshVerifyCompleted(ctx, g); return completionErr == nil }); e != nil {
+		if e := freshAwait(ctx, func() bool { _, completionErr = freshVerifyRunning(ctx, g); return completionErr == nil }); e != nil {
 			if completionErr != nil {
 				return completionErr
 			}
@@ -334,6 +336,10 @@ func freshController(ctx context.Context, g *freshgate.Grant, exe, service strin
 	if e != nil {
 		return r
 	}
+	// Readiness alone is not acceptance. The live receipt must still match
+	// independent full identity/grant readback after the existing owned stop.
+	var liveReceipt installReceipt
+	completionReady := false
 	defer func() {
 		if !r.OwnedChildReaped {
 			r.Status = "failed"
@@ -341,13 +347,12 @@ func freshController(ctx context.Context, g *freshgate.Grant, exe, service strin
 		}
 		cleanupCtx, cancel := context.WithDeadline(context.Background(), g.Deadline())
 		defer cancel()
-		q, err := freshStopOwnedService(cleanupCtx, g, layout, func(phase string) { r.CoordinatorPhase = freshDiagnosticPhase(phase) })
-		r.OwnedServiceStopped = q.Stopped
-		r.ServiceDisabled = q.Disabled
-		r.AutomaticStartConfigurationRetained = q.Automatic
-		if err != nil || !q.Stopped {
-			r.Status = "failed"
-		}
+		freshFinalizeCompletion(&r, completionReady,
+			func() (freshQuiescence, error) {
+				return freshStopOwnedService(cleanupCtx, g, layout, func(phase string) { r.CoordinatorPhase = freshDiagnosticPhase(phase) })
+			},
+			func() error { return freshVerifyStopped(cleanupCtx, g, liveReceipt) },
+		)
 	}()
 	defer func() {
 		// Snapshot only the existing waiter result before any forced teardown.
@@ -401,21 +406,18 @@ func freshController(ctx context.Context, g *freshgate.Grant, exe, service strin
 	}
 	r.NoEchoVerified = true
 	r.ControllerStage = "verify_completed"
-	verified, e := freshVerifyCompleted(ctx, g)
+	verified, e := freshVerifyRunning(ctx, g)
 	if e != nil {
 		return r
 	}
 	r.CoordinatorPhase = freshDiagnosticPhase(verified.ReadSetup.Phase)
-	r.ReceiptAndGrantsVerified = true
+	liveReceipt = verified
 	r.LimitedServiceTokenVerified = true
-	r.HiddenConsoleExercised = true
 	r.ControllerStage = "observe_inventory"
 	if freshAwait(ctx, func() bool { v := f.Evidence(); return v.Inventory.Usable() && v.Extensions.Usable() }) != nil {
 		return r
 	}
-	r.ControllerStage = "completed"
-	r.FreshOrchestrationAcceptance = true
-	r.Status = "passed_fresh_native_subset"
+	completionReady = true
 	return r
 }
 
@@ -423,8 +425,6 @@ func freshController(ctx context.Context, g *freshgate.Grant, exe, service strin
 // exited. Unknown/partial ownership never receives Stop/Delete/config changes.
 // Disabled staging needs no mutation; an exact automatic successor gets Stop
 // only. The service and all protected state are retained for VM disposal.
-type freshQuiescence struct{ Stopped, Disabled, Automatic bool }
-
 func freshStopOwnedService(ctx context.Context, g *freshgate.Grant, layout windowsservice.Layout, observePhase func(string)) (freshQuiescence, error) {
 	if ctx.Err() != nil || !g.Check() {
 		return freshQuiescence{}, freshgate.ErrGuard

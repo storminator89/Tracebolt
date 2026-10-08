@@ -65,7 +65,7 @@ class FreshConPTYSourceBoundary(unittest.TestCase):
         import re
         runner=(ROOT/'tests/windows_native_acceptance/fresh_child_diagnostics.py').read_text()
         known=set(re.findall(r"\('([a-z_]+)', '[a-z_]+'\)",runner))
-        for name in ('setup.go','read_setup.go','read_setup_windows.go','operation_windows.go','fresh_native_windows_test.go'):
+        for name in ('setup.go','read_setup.go','read_setup_windows.go','operation_windows.go','fresh_native_windows_test.go','fresh_completion_test.go'):
             raw=(ROOT/'cmd/windows-service'/name).read_text()
             observed=set(re.findall(r'(?:stage\s*:?=\s*|setupFailed(?:Category)?\()"([a-z_]+)"',raw))
             self.assertTrue(observed<=known,(name,observed-known))
@@ -141,3 +141,32 @@ class FreshConPTYSourceBoundary(unittest.TestCase):
         self.assertLess(portable.index('console(output)'),portable.index('run(output)'))
         main=harness.split('func freshChildMain()',1)[1].split('func TestFreshReadConPTYNative',1)[0]
         self.assertLess(main.index('freshAuthorization()'),main.index('freshChild(ctx, g)'))
+
+    def test_completion_defers_exclusive_reads_until_exact_owned_stop(self):
+        harness=(ROOT/'cmd/windows-service/fresh_native_windows_test.go').read_text()
+        helper=(ROOT/'cmd/windows-service/fresh_completion_test.go').read_text()
+        live=harness.split('func freshVerifyRunning(',1)[1].split('func freshVerifyStopped(',1)[0]
+        self.assertIn('service: native.VerifyFreshServiceToken',live)
+        self.assertNotIn('WindowsCapabilityIdentity',live)
+        self.assertNotIn('WindowsCapabilityGrantDigests',live)
+        stopped=harness.split('func freshVerifyStopped(',1)[1].split('func freshChild(',1)[0]
+        self.assertIn('windowsservice.InspectOwned(ctx, receipt)',stopped)
+        self.assertIn('snapshot.State != windowsservice.Stopped',stopped)
+        self.assertIn('snapshot.Configuration.StartType != 2',stopped)
+        self.assertIn('lanclient.WindowsCapabilityIdentity',stopped)
+        self.assertIn('lanclient.WindowsCapabilityGrantDigests',stopped)
+        self.assertIn('reflect.DeepEqual(r, expected)',helper)
+        self.assertNotIn('freshVerifyCompleted(',harness)
+        child=harness.split('func freshChild(ctx ',1)[1].split('func freshAwait(',1)[0]
+        self.assertIn('freshVerifyRunning(ctx, g)',child)
+        self.assertNotIn('freshVerifyStopped(',child)
+        controller=harness.split('func freshController(',1)[1].split('func freshStopOwnedService(',1)[0]
+        self.assertIn('freshFinalizeCompletion(&r, completionReady,',controller)
+        self.assertIn('freshVerifyStopped(cleanupCtx, g, liveReceipt)',controller)
+        self.assertIn('liveReceipt = verified',controller)
+        self.assertLess(controller.index('v.Inventory.Usable() && v.Extensions.Usable()'),controller.index('completionReady = true'))
+        self.assertNotIn('r.Status = "passed_fresh_native_subset"',controller)
+        final=helper.split('func freshFinalizeCompletion(',1)[1]
+        self.assertLess(final.index('q, err := stop()'),final.index('if verify() != nil'))
+        self.assertLess(final.index('if verify() != nil'),final.index('r.ReceiptAndGrantsVerified = true'))
+        self.assertLess(final.index('r.ReceiptAndGrantsVerified = true'),final.index('r.Status = "passed_fresh_native_subset"'))

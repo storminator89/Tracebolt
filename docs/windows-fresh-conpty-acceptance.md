@@ -212,7 +212,9 @@ installation, workflow dispatch, service operation or platform disposal.
   native tests can establish compatibility. No source fixture is that proof.
 - Success needs real completed protected v2 receipt, unchanged sender/four grant-ID
   digests, actual limited running service token, and positive v5 volume, CPU delta,
-  working-set and peer TCP observations. Event-header successful-empty semantics
+  working-set and peer TCP observations. Live verification observes the completed
+  receipt and limited running token; after the existing exact-owned stop, full
+  identity/grant verification must match that same receipt before acceptance. Event-header successful-empty semantics
   remain explicit. No raw telemetry is exported.
 - Child exit, drained EOF, console closure and exact-owned stopped/disabled service
   must all be proved. Cancellation terminates/reaps only the owned child job;
@@ -444,3 +446,67 @@ layout parser, executable ownership/trust, artifact pins, console input and
 manual-gate approval requirements are unchanged. This source fix does not prove
 that the complete privileged scenario succeeds, and does not authorize another
 native run.
+
+
+## Configured-session cancellation and exclusive sender ownership
+
+[Run 37790998779](https://github.com/storminator89/Tracebolt/actions/runs/37790998779)
+at exact source `adec499284841ae4c65ae66a45b26c555ed677fd` failed with
+`controllerStage=session`, `sessionOutcome=cancelled`, `outputRejection=none`,
+`syntheticInput=true`, `disabledStageVerified=true`, and
+`coordinatorPhase=configured`. Its retained finite report recorded 13 inventory
+and extension frames. Natural child exit and child failure stage/category were
+unknown. Receipt/grant, limited-token, no-echo and hidden-console acceptance
+remained unverified. Owned child reaping, console/fixture closure and owned-service
+stop were verified; automatic startup configuration was retained and
+`serviceDisabled=false`. These observations are not an accepted installation or
+verified VM disposal. The retained finite report SHA-256 is
+`7c268708a8cc549af84bfa32a82d3ad40aeec2964f4be8016814979cabbaf92c`.
+
+A source-level defect is independently reproducible: the old post-start
+`freshVerifyCompleted` calls `WindowsCapabilityIdentity`, which calls
+`ValidateGuidedHandoff` and `lanclientstate.ValidateExisting`. That path opens the
+sender ledger under its exclusive lock. The running service's `RunForeground`
+holds the same lock throughout its lifetime, including reporting intervals and
+backoff. Windows opens the lock file with no sharing and an exclusive,
+fail-immediately lock. `WindowsCapabilityGrantDigests` repeats the same handoff
+validation, so removing only the first identity call would leave the conflict.
+
+Once the service has acquired sender ownership, the old completion check cannot
+succeed until that ownership is released. The child retries until the same
+operational deadline observed by the controller, explaining how controller
+cancellation and an unknown natural child exit can coexist with continuing
+telemetry. A short startup race also existed before sender acquisition; SCM
+running alone does not establish that the lock is already held. The finite report
+does not expose the child's last verifier error, so the source-proven defect is
+consistent with this run rather than a directly recorded root-cause diagnosis.
+
+The candidate changes only the separately tagged native test and portable test
+support. It preserves the production coordinator, service, exclusive stores,
+permissions, output guard, synthetic-input path and every acceptance requirement.
+Verification is split into two ordered phases:
+
+1. Child and controller require a completed protected receipt and the actual
+   limited running-service token, without opening the sender ledger. The child
+   marker is an intermediate protocol milestone. The controller still requires
+   natural child success, full guarded output/EOF/console completion and usable
+   live inventory plus all extension observations.
+2. After child reaping, the existing exact-owned service stop runs with the
+   original cleanup reserve and deadline. Independent stopped-state inspection
+   precedes all exclusive-store reads. The full receipt must equal the previously
+   observed live receipt; the original identity and exact grant-digest APIs must
+   succeed unchanged. A second owned/stopped inspection closes the readback.
+   Only then are receipt/grant and orchestration acceptance fields set.
+
+Any failed stop, incomplete console/session/inventory evidence, changed receipt,
+identity or grant, rejected read, restarted service, cancellation or expired
+original grant prevents acceptance. Stop evidence remains separate and truthful
+when later verification fails. Automatic startup configuration is retained, never
+disabled or restarted; no cleanup, ledger recovery or ownership bypass is added.
+
+Portable regressions use only synthetic temporary state and inert callbacks.
+They demonstrate the actual handoff dependency rejecting a held sender lock and
+passing after release without changing the ledger or sending a request, plus the
+two-phase ordering and failure boundaries. They do not establish native Windows
+lock execution, a successful token query, native acceptance or permission for
+another dispatch. Windows cross-builds likewise are compilation evidence only.
