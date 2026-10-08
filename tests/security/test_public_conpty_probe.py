@@ -2,6 +2,7 @@ import contextlib
 import importlib.util
 import io
 import json
+import re
 from pathlib import Path
 import subprocess
 import unittest
@@ -24,11 +25,68 @@ def records(unknown=False):
     ]
 
 
+def failure_records(reason="child_exit"):
+    rows = records()
+    rows[2]["Output"] = "    native_windows_test.go:41: " + reason + "\n"
+    rows[3]["Action"] = rows[4]["Action"] = "fail"
+    return rows
+
+
 def encode(rows):
     return b"".join(json.dumps(row).encode() + b"\n" for row in rows)
 
 
 class PublicProbeTests(unittest.TestCase):
+    def test_native_failure_labels_are_exact_and_source_bound(self):
+        source = (Path(probe.ROOT) / "internal/conptyrendering/native_windows_test.go").read_text()
+        labels = set(re.findall(r'(?:return empty, |reason = |t.Fatal\()"([a-z_]+)"', source))
+        self.assertEqual(labels, probe.NATIVE_FAILURES)
+        for reason in probe.NATIVE_FAILURES:
+            self.assertEqual(probe.native_failure_reason(encode(failure_records(reason))), reason)
+        for reason in ("PRIVATE_SENTINEL", "child_exit PRIVATE_SENTINEL", "child_exit\nPRIVATE_SENTINEL", "../child_exit"):
+            self.assertEqual(probe.native_failure_reason(encode(failure_records(reason))), "go_test_failed")
+        self.assertEqual(probe.ProbeFailure("PRIVATE_SENTINEL").reason, "go_test_failed")
+
+    def test_failed_json_never_promotes_pass_or_ambiguous_labels(self):
+        cases = [encode(records()), b"PRIVATE_SENTINEL", b"{}", b"[]\n", b"x"*(probe.MAX_OUTPUT+1)]
+        for index in (2, 3, 4):
+            rows = failure_records(); del rows[index]; cases.append(encode(rows))
+            rows = failure_records(); rows.append(rows[index]); cases.append(encode(rows))
+        for key, value in (("Package", "PRIVATE_SENTINEL"), ("Test", "Other"), ("Action", "skip")):
+            rows = failure_records(); rows[2][key] = value; cases.append(encode(rows))
+        cases += [encode(failure_records()).replace(b'"Package":', b'"Package":"duplicate", "Package":', 1),
+                  encode(failure_records()).replace(b'"Action": "start"', b'"extra":NaN, "Action":"start"', 1)]
+        for raw in cases:
+            self.assertEqual(probe.native_failure_reason(raw), "go_test_failed")
+
+    def test_capture_failure_keeps_only_closed_reason(self):
+        for raw, reason in ((encode(failure_records()), "child_exit"), (encode(records()), "go_test_failed"),
+                            (b"PRIVATE_SENTINEL", "go_test_failed"),
+                            (b"x"*(probe.MAX_OUTPUT+1), "capture_incomplete")):
+            process = mock.Mock(stdout=io.BytesIO(raw)); process.wait.return_value = 1
+            with mock.patch.object(probe.subprocess, "Popen", return_value=process):
+                with self.assertRaises(probe.ProbeFailure) as caught:
+                    probe.capture({})
+            self.assertEqual(caught.exception.reason, reason)
+        for reason in probe.NATIVE_FAILURES | probe.LAUNCHER_FAILURES:
+            output = io.StringIO()
+            with mock.patch.object(probe.sys, "platform", "win32"), mock.patch.object(probe, "capture", side_effect=probe.ProbeFailure(reason)), contextlib.redirect_stdout(output):
+                self.assertEqual(probe.main(), 1)
+            self.assertIn("reason="+reason+";", output.getvalue())
+            self.assertNotIn("PRIVATE_SENTINEL", output.getvalue())
+
+    def test_projection_failure_names_exact_boundary(self):
+        cases = [(b"", "projection_frame"), (b"PRIVATE_SENTINEL\n", "projection_json")]
+        for key,value,reason in (("Package","other","projection_package"),("Test","Other","projection_test"),("Action","skip","projection_action")):
+            rows=records();rows[2][key]=value;cases.append((encode(rows),reason))
+        for index,reason in ((2,"projection_missing_summary"),(3,"projection_missing_pass")):
+            rows=records();del rows[index];cases.append((encode(rows),reason))
+        for raw,reason in cases:
+            with self.assertRaises(probe.ProbeFailure) as caught:
+                probe.project(raw)
+            self.assertEqual(caught.exception.reason,reason)
+
+
     def test_live_text_flags_are_finite_and_consistent(self):
         for field in probe.TEXT_FIELDS:
             rows = records()

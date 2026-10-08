@@ -107,3 +107,11 @@ A last-live omitted-space snapshot does not prove that no space can arrive
 later. In particular, final shutdown rendering is excluded. Interpret this as
 a measured live observation for this fixed two-second child, not the byte history
 or root cause of another process.
+
+On failure, the launcher now reports one closed `reason` label. A complete
+nonzero Go test stream may supply exactly one already-fixed native-test failure
+label, only with the exact package/test and both failed outcomes. Missing,
+ambiguous or malformed failure evidence becomes `go_test_failed`. Capture and
+success-projection checks have fixed labels naming their failing boundary.
+Failure still exits nonzero; bounds, success requirements and raw-output
+suppression are unchanged. No label proves cleanup or native acceptance.
