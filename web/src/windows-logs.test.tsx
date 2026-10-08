@@ -8,7 +8,7 @@ import { windowsEventsView, windowsEventsFixture } from './windows-events-fixtur
 import { validWindowsInventoryView } from './windows-inventory-types';
 import { windowsDeviceId } from './windows-inventory-fixture';
 
-function resource(): WindowsInventoryResource { const view = windowsEventsView(); return { elapsedMS: 0, view, snapshot: view.snapshot, events: view.events, eventsStale: false, volumes: null, volumesStale: false, processMetrics: null, processMetricsStale: false, network: null, networkStale: false, networkExpired: false, status: 'fresh', loading: false, error: null, refresh: vi.fn() }; }
+function resource(): WindowsInventoryResource { const view = windowsEventsView(); return { serviceStartup: null, serviceStartupStale: false, elapsedMS: 0, view, snapshot: view.snapshot, events: view.events, eventsStale: false, volumes: null, volumesStale: false, processMetrics: null, processMetricsStale: false, network: null, networkStale: false, networkExpired: false, status: 'fresh', loading: false, error: null, refresh: vi.fn() }; }
 const tableRows = () => within(screen.getByRole('table')).getAllByRole('row').slice(1);
 const change = (label: string, value: string) => fireEvent.change(screen.getByLabelText(label), { target: { value } });
 beforeEach(() => setLocale('en', false));

@@ -172,7 +172,7 @@ func TestCombinedWindowsCapabilityV3StrictAndPartialFailures(t *testing.T) {
 		}
 	}
 	for _, mutate := range []func(*WindowsCapabilityConsent){
-		func(r *WindowsCapabilityConsent) { r.SchemaVersion = "tracebolt.windows-capability-consent.v4" },
+		func(r *WindowsCapabilityConsent) { r.SchemaVersion = "tracebolt.windows-capability-consent.v999" },
 		func(r *WindowsCapabilityConsent) { r.Acknowledged = false },
 		func(r *WindowsCapabilityConsent) { r.CollectionProfile = enrollmentcrypto.CollectionProfile },
 	} {

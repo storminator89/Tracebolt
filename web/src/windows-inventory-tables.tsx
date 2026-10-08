@@ -1,3 +1,5 @@
+import { serviceStartupCell, serviceStartupCopy } from './windows-service-startup';
+import type { WindowsServiceStartup } from './windows-service-startup-types';
 import { useId, useState } from 'react';
 import type { WindowsInventoryResource } from './windows-inventory-resource';
 import type { WindowsInventorySnapshot } from './windows-inventory-types';
@@ -6,7 +8,7 @@ import './windows-inventory-tables.css';
 const PAGE_SIZE = 25;
 export type WindowsInventoryTableKind = 'services' | 'software';
 const sorts = {
-    services: ['name-asc', 'name-desc', 'pid-asc', 'pid-desc', 'state-asc', 'state-desc'],
+    services: ['name-asc', 'name-desc', 'pid-asc', 'pid-desc', 'state-asc', 'state-desc', 'startup-asc', 'startup-desc'],
     software: ['name-asc', 'name-desc', 'version-asc', 'version-desc', 'publisher-asc', 'publisher-desc'],
 } as const;
 export type WindowsInventoryTableSort = typeof sorts[WindowsInventoryTableKind][number];
@@ -14,9 +16,9 @@ const copy = {
     en: {
         services: 'Services', software: 'Software', name: 'Name', displayName: 'Display name', state: 'State', version: 'Version', publisher: 'Publisher', registry: 'Registry view', unknown: 'Not reported',
         servicesSearch: 'Filter captured services', softwareSearch: 'Filter captured software', servicesSort: 'Sort captured services', softwareSort: 'Sort captured software',
-        'name-asc': 'Name: A to Z', 'name-desc': 'Name: Z to A', 'pid-asc': 'PID: lowest first', 'pid-desc': 'PID: highest first', 'state-asc': 'State: A to Z', 'state-desc': 'State: Z to A',
+        'name-asc': 'Name: A to Z', 'name-desc': 'Name: Z to A', 'pid-asc': 'PID: lowest first', 'pid-desc': 'PID: highest first', 'state-asc': 'State: A to Z', 'state-desc': 'State: Z to A', 'startup-asc': 'Startup mode: A to Z', 'startup-desc': 'Startup mode: Z to A',
         'version-asc': 'Version text: A to Z', 'version-desc': 'Version text: Z to A', 'publisher-asc': 'Publisher: A to Z', 'publisher-desc': 'Publisher: Z to A',
-        servicesBounded: 'Search, sorting and pages apply only to this bounded snapshot, with at most 128 captured service rows. Other services may be omitted. Startup mode and service configuration are not collected.',
+        servicesBounded: 'Search, sorting and pages apply only to this bounded snapshot, with at most 128 captured service rows. Other services may be omitted. Startup mode requires separate local consent and describes captured configuration.',
         softwareBounded: 'Search, sorting and pages apply only to this bounded snapshot, with at most 128 captured machine uninstall registrations. Other software may be omitted. Versions are sorted as text, not by update order.',
         noMatches: 'No captured rows match this filter.', previous: 'Previous page', next: 'Next page', servicesPages: 'Captured service pages', softwarePages: 'Captured software pages',
         count: (start: number, end: number, matches: number, captured: number) => `Rows ${start}–${end} of ${matches} matching · ${captured} captured`,
@@ -26,9 +28,9 @@ const copy = {
     de: {
         services: 'Dienste', software: 'Software', name: 'Name', displayName: 'Anzeigename', state: 'Zustand', version: 'Version', publisher: 'Herausgeber', registry: 'Registrierungsansicht', unknown: 'Nicht gemeldet',
         servicesSearch: 'Erfasste Dienste filtern', softwareSearch: 'Erfasste Software filtern', servicesSort: 'Erfasste Dienste sortieren', softwareSort: 'Erfasste Software sortieren',
-        'name-asc': 'Name: A bis Z', 'name-desc': 'Name: Z bis A', 'pid-asc': 'PID: niedrigste zuerst', 'pid-desc': 'PID: höchste zuerst', 'state-asc': 'Zustand: A bis Z', 'state-desc': 'Zustand: Z bis A',
+        'name-asc': 'Name: A bis Z', 'name-desc': 'Name: Z bis A', 'pid-asc': 'PID: niedrigste zuerst', 'pid-desc': 'PID: höchste zuerst', 'state-asc': 'Zustand: A bis Z', 'state-desc': 'Zustand: Z bis A', 'startup-asc': 'Starttyp: A bis Z', 'startup-desc': 'Starttyp: Z bis A',
         'version-asc': 'Versionstext: A bis Z', 'version-desc': 'Versionstext: Z bis A', 'publisher-asc': 'Herausgeber: A bis Z', 'publisher-desc': 'Herausgeber: Z bis A',
-        servicesBounded: 'Suche, Sortierung und Seiten gelten nur für diesen begrenzten Snapshot mit höchstens 128 erfassten Dienstzeilen. Weitere Dienste können fehlen. Starttyp und Dienstkonfiguration werden nicht erfasst.',
+        servicesBounded: 'Suche, Sortierung und Seiten gelten nur für diesen begrenzten Snapshot mit höchstens 128 erfassten Dienstzeilen. Weitere Dienste können fehlen. Der Starttyp benötigt eine separate lokale Zustimmung und beschreibt die erfasste Konfiguration.',
         softwareBounded: 'Suche, Sortierung und Seiten gelten nur für diesen begrenzten Snapshot mit höchstens 128 erfassten maschinenweiten Deinstallationsregistrierungen. Weitere Software kann fehlen. Versionen werden als Text sortiert, nicht nach Updatereihenfolge.',
         noMatches: 'Keine erfassten Zeilen entsprechen diesem Filter.', previous: 'Vorherige Seite', next: 'Nächste Seite', servicesPages: 'Seiten der erfassten Dienste', softwarePages: 'Seiten der erfassten Software',
         count: (start: number, end: number, matches: number, captured: number) => `Zeilen ${start}–${end} von ${matches} Treffern · ${captured} erfasst`,
@@ -42,15 +44,20 @@ const literalCompare = (a: string, b: string) => a < b ? -1 : a > b ? 1 : 0;
 
 /** Sort source numbers numerically and source text literally. No version parsing,
  * cross-generation cache, backend search, row deduplication or source mutation. */
-export function capturedInventoryTableRows(snapshot: WindowsInventorySnapshot, kind: WindowsInventoryTableKind, query: string, sort: WindowsInventoryTableSort, locale: Locale) {
+export function capturedInventoryTableRows(snapshot: WindowsInventorySnapshot, kind: WindowsInventoryTableKind, query: string, sort: WindowsInventoryTableSort, locale: Locale, startup: WindowsServiceStartup | null = null) {
     const c = copy[locale], unknown = (value: string) => value || c.unknown;
     const filter = query.trim().toLocaleLowerCase(locale), descending = sort.endsWith('-desc');
-    const rows: Row[] = kind === 'services' ? snapshot.services.rows.map((row, index) => ({
-        cells: [row.name, unknown(row.displayName), c[row.state], String(row.pid)],
-        order: sort.startsWith('pid-') ? row.pid : sort.startsWith('state-') ? c[row.state] : row.name,
-        tie: JSON.stringify([row.name, row.displayName, row.state, row.pid]), index,
-        search: [row.name, row.displayName, row.state, c[row.state], String(row.pid)],
-    })) : snapshot.software.rows.map((row, index) => ({
+    const startupRows = new Map(startup?.rows.map(row => [row.serviceIndex, row]));
+    const rows: Row[] = kind === 'services' ? snapshot.services.rows.map((row, index) => {
+        const captured = startupRows.get(index), startupText = serviceStartupCell(captured, startup, locale);
+        const startupMode = captured?.startupQuality === 'observed' && captured.startupMode ? serviceStartupCopy[locale][captured.startupMode] : '';
+        return {
+            cells: [row.name, unknown(row.displayName), c[row.state], String(row.pid), startupText],
+            order: sort.startsWith('pid-') ? row.pid : sort.startsWith('state-') ? c[row.state] : sort.startsWith('startup-') ? startupMode : row.name,
+            tie: JSON.stringify([row.name, row.displayName, row.state, row.pid]), index,
+            search: [row.name, row.displayName, row.state, c[row.state], String(row.pid), startupText, captured?.startupMode ?? '', captured?.startupQuality ?? '', captured?.delayedAutoQuality ?? ''],
+        };
+    }) : snapshot.software.rows.map((row, index) => ({
         cells: [row.name, unknown(row.version), unknown(row.publisher), `${row.registryView}-bit`],
         order: sort.startsWith('version-') ? row.version : sort.startsWith('publisher-') ? row.publisher : row.name,
         tie: JSON.stringify([row.name, row.version, row.publisher, row.registryView]), index,
@@ -80,12 +87,12 @@ export function useWindowsInventoryTableControls(resource: WindowsInventoryResou
 }
 
 /** All data comes from the already validated, admitted current inventory view. */
-export function WindowsInventoryTable({ snapshot, kind, locale, controls, onChange }: { snapshot: WindowsInventorySnapshot; kind: WindowsInventoryTableKind; locale: Locale; controls: TableControls; onChange: (controls: TableControls) => void }) {
+export function WindowsInventoryTable({ snapshot, kind, locale, controls, onChange, serviceStartup = null }: { snapshot: WindowsInventorySnapshot; serviceStartup?: WindowsServiceStartup | null; kind: WindowsInventoryTableKind; locale: Locale; controls: TableControls; onChange: (controls: TableControls) => void }) {
     const id = useId(), c = copy[locale], { query, sort, page } = controls;
-    const rows = capturedInventoryTableRows(snapshot, kind, query, sort, locale);
+    const rows = capturedInventoryTableRows(snapshot, kind, query, sort, locale, serviceStartup);
     const pageCount = Math.max(1, Math.ceil(rows.length / PAGE_SIZE)), currentPage = Math.min(page, pageCount - 1), start = currentPage * PAGE_SIZE, visible = rows.slice(start, start + PAGE_SIZE);
-    const headers = kind === 'services' ? [c.name, c.displayName, c.state, 'PID'] : [c.name, c.version, c.publisher, c.registry];
-    const sortedColumn = sort.startsWith('name-') ? 0 : sort.startsWith('pid-') ? 3 : sort.startsWith('version-') ? 1 : 2;
+    const headers = kind === 'services' ? [c.name, c.displayName, c.state, 'PID', serviceStartupCopy[locale].column] : [c.name, c.version, c.publisher, c.registry];
+    const sortedColumn = sort.startsWith('startup-') ? 4 : sort.startsWith('name-') ? 0 : sort.startsWith('pid-') ? 3 : sort.startsWith('version-') ? 1 : 2;
     return <>
         <p className="windows-inventory-exclusions" id={`${id}-bounds`}>{c[`${kind}Bounded`]}</p>
         <div className="windows-inventory-table-controls">

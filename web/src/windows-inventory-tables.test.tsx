@@ -17,7 +17,7 @@ function tableView(count = 61): WindowsInventoryView {
     return view;
 }
 function resource(view = tableView()): WindowsInventoryResource {
-    return { elapsedMS: 0, view, snapshot: view.snapshot, status: view.status, loading: false, error: null, refresh: vi.fn(), processMetrics: null, processMetricsStale: false, network: null, networkStale: false, networkExpired: false, volumes: null, volumesStale: false, events: null, eventsStale: false };
+    return { serviceStartup: null, serviceStartupStale: false, elapsedMS: 0, view, snapshot: view.snapshot, status: view.status, loading: false, error: null, refresh: vi.fn(), processMetrics: null, processMetricsStale: false, network: null, networkStale: false, networkExpired: false, volumes: null, volumesStale: false, events: null, eventsStale: false };
 }
 function Harness({ id = windowsDeviceId, session = 'fixture' }: { id?: string; session?: string }) { return <WindowsInventoryWorkspace key={`${id}:${session}`} resource={useWindowsInventory(id, true, session)}/>; }
 const select = (kind: WindowsInventoryTableKind, locale = 'en') => fireEvent.click(screen.getByRole('tab', { name: kind === 'services' ? locale === 'de' ? 'Dienste' : 'Services' : 'Software' }));

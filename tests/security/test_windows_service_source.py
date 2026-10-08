@@ -28,6 +28,47 @@ class GateTests(unittest.TestCase):
         self.assertIn(required,gate.REQUIRED)
         rows=[dict(Package=p,Test=t,Action="pass") for p,t in gate.REQUIRED if (p,t)!=required]
         with self.assertRaises(ValueError):gate.check_events(b"\n".join(json.dumps(x).encode() for x in rows))
+    def test_startup_mock_and_explicit_cli_boundaries_are_mandatory(self):
+        self.assertIn("./internal/windowsmanaged", gate.PACKAGES)
+        cases = [
+            ("localrmm/internal/windowsmanaged", "TestServiceStartupNativeRightsAndHandleLifetime"),
+            ("localrmm/internal/windowsmanaged", "TestServiceStartupNativeBufferClearedAndNoPointersFollowed"),
+            ("localrmm/internal/windowsmanaged", "TestServiceStartupNativeModesAndUnknownDoNotQueryDelayed"),
+            ("localrmm/internal/windowsmanaged", "TestServiceStartupNativeFailuresBoundsAndBOOL"),
+            ("localrmm/internal/windowsmanaged", "TestServiceStartupNativeCancellationClosesOwnedHandles"),
+            ("localrmm/internal/windowsmanaged", "TestServiceStartupNativeInvalidInputsNeverOpen"),
+            ("localrmm/internal/windowsmanaged", "TestServiceStartupGoGeneratedDigestFixture"),
+            ("localrmm/cmd/windows-service", "TestServiceStartupRequiresOwnedStoppedService"),
+            ("localrmm/cmd/windows-service", "TestServiceStartupDisclosureMustCompleteBeforeDispatch"),
+            ("localrmm/cmd/windows-service", "TestServiceStartupFlagsDoNotAuthorizeAnotherScope"),
+        ]
+        for required in cases:
+            self.assertIn(required, gate.REQUIRED)
+            rows = [dict(Package=p, Test=t, Action="pass") for p, t in gate.REQUIRED if (p, t) != required]
+            with self.assertRaises(ValueError):
+                gate.check_events(b"\n".join(json.dumps(x).encode() for x in rows))
+        source = Path(gate.__file__).read_text()
+        self.assertIn('env.pop("TRACEBOLT_WINDOWS_READONLY_NATIVE", None)', source)
+        self.assertIn('env.pop("TRACEBOLT_UPDATE_SERVICE_STARTUP_FIXTURE", None)', source)
+        self.assertNotIn('TRACEBOLT_WINDOWS_READONLY_NATIVE"] =', source)
+    def test_startup_vectors_survive_restricted_docker_web_inputs(self):
+        root = Path(__file__).resolve().parents[2]
+        docker = (root / "Dockerfile").read_text()
+        ignore = (root / ".dockerignore").read_text().splitlines()
+        web_stage = docker.split("FROM --platform=$BUILDPLATFORM golang:")[0]
+        runtime_stage = docker.split("FROM scratch AS runtime")[1]
+        # This fixture stays inside the already allowed/copied web tree. No new
+        # tests directory, secret source, runtime COPY or ignore exception is needed.
+        self.assertIn("!web/**", ignore)
+        self.assertNotIn("web/src/windows-service-startup-go-fixture.json", ignore)
+        self.assertLess(web_stage.index("COPY web/ ./"), web_stage.index("RUN npm run build"))
+        path = root / "web/src/windows-service-startup-go-fixture.json"
+        self.assertGreater(len(json.loads(path.read_text())), 0)
+        source = (root / "web/src/windows-service-startup-types.test.ts").read_text()
+        self.assertIn("'./windows-service-startup-go-fixture.json'", source)
+        self.assertIn("COPY --from=web /src/web/dist /tracebolt/web", runtime_stage)
+        self.assertNotIn("/src/web/src", runtime_stage)
+        self.assertNotIn("windows-service-startup-vectors", runtime_stage)
     def test_network_mocks_are_mandatory_without_native_reads(self):
         self.assertIn("./internal/windowsnetwork", gate.PACKAGES)
         for name in ("TestNativeNetworkInjectedFourTables", "TestNativeNetworkReturnCodesAndBounds", "TestNativeNetworkDWORDLayouts", "TestFourTablesAndNetworkByteOrder", "TestMalformedAndTrailingNativeTables", "TestBufferGrowthBoundAndCancellation", "TestBoundedCountsStableRowsAndBudget", "TestShrinkingTableIgnoresSurplusAllocation", "TestTCPListenerHasNoRemotePeer"):

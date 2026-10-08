@@ -8,8 +8,18 @@ import sys
 import tempfile
 
 PACKAGES = ("./internal/windowsstate", "./internal/windowsservice", "./internal/windowsconsole",
-            "./internal/windowsagentconfig", "./cmd/windows-service", "./internal/windowsvolumes", "./internal/windowsprocessmetrics", "./internal/windowsnetwork")
+            "./internal/windowsagentconfig", "./cmd/windows-service", "./internal/windowsvolumes", "./internal/windowsprocessmetrics", "./internal/windowsnetwork", "./internal/windowsmanaged")
 REQUIRED = {
+    ("localrmm/internal/windowsmanaged", "TestServiceStartupNativeRightsAndHandleLifetime"),
+    ("localrmm/internal/windowsmanaged", "TestServiceStartupNativeBufferClearedAndNoPointersFollowed"),
+    ("localrmm/internal/windowsmanaged", "TestServiceStartupNativeModesAndUnknownDoNotQueryDelayed"),
+    ("localrmm/internal/windowsmanaged", "TestServiceStartupNativeFailuresBoundsAndBOOL"),
+    ("localrmm/internal/windowsmanaged", "TestServiceStartupNativeCancellationClosesOwnedHandles"),
+    ("localrmm/internal/windowsmanaged", "TestServiceStartupNativeInvalidInputsNeverOpen"),
+    ("localrmm/internal/windowsmanaged", "TestServiceStartupGoGeneratedDigestFixture"),
+    ("localrmm/cmd/windows-service", "TestServiceStartupRequiresOwnedStoppedService"),
+    ("localrmm/cmd/windows-service", "TestServiceStartupDisclosureMustCompleteBeforeDispatch"),
+    ("localrmm/cmd/windows-service", "TestServiceStartupFlagsDoNotAuthorizeAnotherScope"),
     ("localrmm/cmd/windows-service", "TestFreshReadSetupReconcileOnlyFinalizesCompletedEffect"),
     ("localrmm/cmd/windows-service", "TestFreshReadSetupReconcileDisabledChangedOrUnknownNeverWrites"),
     ("localrmm/cmd/windows-service", "TestFreshReadSetupReconcileStrictCanonicalAndCancellation"),
@@ -94,6 +104,7 @@ def main():
         # This gate never enables the separate read-only host collector smoke.
         env.pop("TRACEBOLT_WINDOWS_READONLY_NATIVE", None)
         env.pop("TRACEBOLT_KNOWNFOLDER_PROBE", None)
+        env.pop("TRACEBOLT_UPDATE_SERVICE_STARTUP_FIXTURE", None)
         if command(["go", "env", "GOHOSTARCH"], env, 30).strip() != b"amd64":
             raise ValueError("native amd64 fixture host required")
         stage = "pure fixtures"

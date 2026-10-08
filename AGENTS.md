@@ -120,6 +120,12 @@ file as navigation and project constraints, never as permission to act on a host
   attribution only, explicit HTTP disclosure, exact retry and private operator
   expiry. No DNS, process joins, traffic payloads or AI export; source fixtures
   never authorize a host network read or a service/security change.
+- Windows configured service startup metadata is a separate default-off local
+  capability. Read `docs/windows-service-startup.md` before changing consent,
+  aggregate native-buffer handling or wire v6. Preserve the original service-row
+  digest/index binding, per-field unavailable states and old grants. The fresh
+  five-scope coordinator remains unchanged; source fixtures never authorize a
+  native configuration read, new persistent grant or service/security change.
 - Follow Go/Node versions and dependency locks in this revision. Validate commands
   against actual flags/config. Distinguish runtime tests from cross-builds, skipped
   container tests, and proposed functionality. Never invent install/enroll flags.

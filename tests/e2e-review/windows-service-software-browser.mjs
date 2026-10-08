@@ -1,8 +1,15 @@
+import {createHash} from 'node:crypto';
 /** Invented bounded display rows and hosted assertions only. No host reads. */
 export function addWindowsServiceSoftwareControlsFixture(view){
  const services=Array.from({length:61},(_,index)=>{const n=index+1;return {name:`synthetic-service-${String(n).padStart(3,'0')}`,displayName:n===60?'Literal [.*] Service':`Synthetic service label ${String(n).padStart(3,'0')}`,state:n===61?'start_pending':n%2?'running':'stopped',pid:n===1?2:n===2?10:n===10?1:n};});
  const software=Array.from({length:61},(_,index)=>{const n=index+1;return {name:`synthetic-software-${String(n).padStart(3,'0')}`,version:n===1?'2':n===2?'10':n===60?'literal[.*]':`v${String(n).padStart(3,'0')}`,publisher:n===1?'ZZZ Fixture Publisher':n===2?'AAA Fixture Publisher':`Fixture Publisher ${String(n).padStart(3,'0')}`,registryView:n%2?'64':'32'};});
  for(const [key,rows] of [['services',services],['software',software]])view.snapshot[key]={...view.snapshot[key],quality:'partial',countExact:false,complete:false,truncated:true,observedCount:200,rows};
+ // Bind only invented startup rows to the exact final base array. Real TS/Go
+ // digest implementations independently check this projection in pure fixtures.
+ const canonical=JSON.stringify(services.map(({name,displayName,state,pid})=>({name,displayName,state,pid}))).replace(/[<>&\u2028\u2029]/g,c=>`\\u${c.charCodeAt(0).toString(16).padStart(4,'0')}`);
+ const observed=(serviceIndex,startupMode,delayedAutoStart=null,delayedAutoQuality='not-applicable')=>({serviceIndex,startupMode,startupQuality:'observed',delayedAutoStart,delayedAutoQuality});
+ const missing=(serviceIndex,startupQuality)=>({serviceIndex,startupMode:null,startupQuality,delayedAutoStart:null,delayedAutoQuality:startupQuality});
+ view.serviceStartup={schemaVersion:'tracebolt.windows-service-startup.v1',scope:'windows-service-startup-v1',grantId:'f'.repeat(32),generationId:view.snapshot.generationId,servicesSHA256:createHash('sha256').update(canonical,'utf8').digest('hex'),collectedAt:view.snapshot.collectedAt,requestedCount:services.length,truncated:true,rows:[observed(0,'automatic',true,'observed'),observed(1,'automatic',false,'observed'),observed(2,'manual'),observed(3,'disabled'),missing(4,'denied'),missing(5,'unavailable'),missing(6,'unknown'),observed(7,'automatic',null,'denied'),observed(8,'automatic',null,'unavailable'),observed(9,'automatic',null,'unknown'),observed(25,'manual')]};
  return view;
 }
 
@@ -21,7 +28,7 @@ async function checkControls({page,expect,locale,width,kind}){
  await expect(panel).toContainText(de?'Zeilen durch Erfassungs- oder Übertragungsgrenzen ausgelassen':'Rows omitted by collection or transfer limits');
  await expect(table.locator('thead th[aria-sort]')).toHaveCount(1);await expect(table.locator('thead th').first()).toHaveAttribute('aria-sort','ascending');
  await expect(filter).toBeVisible();await expect(sort).toBeVisible();await expect(table.locator('thead input, thead select, thead button')).toHaveCount(0);
- const labels=service?(de?['Name','Anzeigename','Zustand','PID']:['Name','Display name','State','PID']):(de?['Name','Version','Herausgeber','Registrierungsansicht']:['Name','Version','Publisher','Registry view']);
+ const labels=service?(de?['Name','Anzeigename','Zustand','PID','Starttyp']:['Name','Display name','State','PID','Startup mode']):(de?['Name','Version','Herausgeber','Registrierungsansicht']:['Name','Version','Publisher','Registry view']);
  for(const label of labels){
   if(width===1440)await expect(table.getByRole('columnheader',{name:label,exact:true})).toBeVisible();
   else {
@@ -30,11 +37,39 @@ async function checkControls({page,expect,locale,width,kind}){
    expect(before.content).toBe(JSON.stringify(label));expect(before.display).not.toBe('none');expect(before.visibility).toBe('visible');
   }
  }
+ if(service)await checkStartupModes({page,expect,de,panel,table,rows,filter,sort});
  await expect(previous).toBeDisabled();await next.click();await expect(rows.first()).toContainText(prefix+'026');
+ if(service)await expect(rows.first().locator('td').nth(4)).toHaveText(de?'Manuell':'Manual');
  await next.focus();await page.keyboard.press('Enter');await expect(rows).toHaveCount(11);await expect(rows.first()).toContainText(prefix+'051');await expect(next).toBeDisabled();
  await expect(panel).toContainText(de?'Zeilen 51–61 von 61 Treffern · 61 erfasst':'Rows 51–61 of 61 matching · 61 captured');
  await previous.click();await expect(rows).toHaveCount(25);await expect(rows.first()).toContainText(prefix+'026');
+ if(service)await expect(rows.first().locator('td').nth(4)).toHaveText(de?'Manuell':'Manual');
  return {workspace,panel,table,rows,filter,sort,next,previous};
+}
+
+// Positive startup checks stay inside the same service/software phase and reuse
+// its existing screenshots. No extra clock movement, waits, routes or session.
+async function checkStartupModes({page,expect,de,panel,table,rows,filter,sort}){
+ const cell=suffix=>rows.filter({has:page.getByText('synthetic-service-'+suffix,{exact:true})}).locator('td').nth(4);
+ const expected=de?['Automatisch (verzögert)','Automatisch (nicht verzögert)','Manuell','Deaktiviert','Zugriff verweigert','Nicht verfügbar','Unbekannt','Automatisch · Verzögerungsstatus: Zugriff verweigert (teilweise)','Automatisch · Verzögerungsstatus: Nicht verfügbar (teilweise)','Automatisch · Verzögerungsstatus: Unbekannt (teilweise)']:['Automatic (delayed)','Automatic (not delayed)','Manual','Disabled','Access denied','Unavailable','Unknown','Automatic · delayed status: Access denied (partial)','Automatic · delayed status: Unavailable (partial)','Automatic · delayed status: Unknown (partial)'];
+ for(let i=0;i<expected.length;i++)await expect(cell(String(i+1).padStart(3,'0'))).toHaveText(expected[i]);
+ await expect(cell('011')).toHaveText(de?'Nicht erfasst (gekürzt)':'Not captured (trimmed)');
+ await expect(panel).toContainText(de?'11 Starttypzeilen erfasst · 61 Basisdienstzeilen angefordert':'11 startup rows captured · 61 base service rows requested');
+ await expect(panel).toContainText(de?'Starttypzeilen durch Erfassungs- oder Übertragungsgrenzen ausgelassen.':'Startup rows omitted by capture or transfer limits.');
+ for(const [query,suffixes] of [[de?'Automatisch':'Automatic',['001','002','008','009','010']],[expected[0],['001']],[expected[1],['002']],[de?'Manuell':'Manual',['003','026']],[de?'Deaktiviert':'Disabled',['004']],[de?'Zugriff verweigert':'Access denied',['005','008']],[de?'Nicht verfügbar':'Unavailable',['006','009']],[de?'Unbekannt':'Unknown',['007','010']],[de?'teilweise':'partial',['008','009','010']]]){
+  await filter.fill(query);await expect(rows).toHaveCount(suffixes.length);
+  for(let i=0;i<suffixes.length;i++)await expect(rows.nth(i).locator('td').first()).toHaveText('synthetic-service-'+suffixes[i]);
+ }
+ await filter.fill('');
+ for(const direction of ['asc','desc']){
+  await sort.selectOption('startup-'+direction);await expect(table.locator('thead th').nth(4)).toHaveAttribute('aria-sort',direction==='asc'?'ascending':'descending');
+  await expect(table.locator('thead th[aria-sort]')).toHaveCount(1);
+  await expect(rows.first().locator('td').first()).toHaveText('synthetic-service-'+(direction==='asc'?'001':'003'));
+  await expect(cell('001')).toHaveText(expected[0]);await expect(cell('002')).toHaveText(expected[1]);await expect(cell('026')).toHaveText(de?'Manuell':'Manual');
+  await expect(cell('011')).toHaveText(de?'Nicht erfasst (gekürzt)':'Not captured (trimmed)');
+ }
+ await sort.selectOption('name-desc');await expect(rows.first().locator('td').nth(4)).toHaveText(de?'Nicht erfasst (gekürzt)':'Not captured (trimmed)');
+ await sort.selectOption('name-asc');await expect(rows.first().locator('td').first()).toHaveText('synthetic-service-001');
 }
 
 /** Called only by the existing hosted loopback runner, never a browser launcher. */

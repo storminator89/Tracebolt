@@ -67,6 +67,11 @@ type windowsManagerFixture struct {
 func windowsManagerID(prefix string, n int) string { return fmt.Sprintf("%s_%032x", prefix, n) }
 
 func newWindowsManagerFixture(t *testing.T, collection, platform string) *windowsManagerFixture {
+	return newWindowsManagerFixtureForTransport(t, collection, platform, "http-test")
+}
+
+// The transport-specific fixture uses in-memory certificates and injected requests, never a listener.
+func newWindowsManagerFixtureForTransport(t *testing.T, collection, platform, transport string) *windowsManagerFixture {
 	t.Helper()
 	ctx, now := context.Background(), time.Now().UTC().Truncate(time.Second)
 	newKey := func() (ed25519.PublicKey, ed25519.PrivateKey) {
@@ -99,7 +104,11 @@ func newWindowsManagerFixture(t *testing.T, collection, platform string) *window
 	if err != nil {
 		t.Fatal(err)
 	}
-	config := enrollmentstate.DefaultConfig(enrollmentstate.Binding{InstanceID: windowsManagerID("manager", 1), Origin: "http://fixture.invalid", Profile: "http-test", CollectionProfile: collection, IssuerFingerprint: issuer.Fingerprint()})
+	origin := "http://fixture.invalid"
+	if transport == "tls" {
+		origin = "https://fixture.invalid"
+	}
+	config := enrollmentstate.DefaultConfig(enrollmentstate.Binding{InstanceID: windowsManagerID("manager", 1), Origin: origin, Profile: transport, CollectionProfile: collection, IssuerFingerprint: issuer.Fingerprint()})
 	config.RecordLimit, config.InvitationLimit, config.PendingLimit = 25, 25, 25
 	f := &windowsManagerFixture{path: filepath.Join(t.TempDir(), "manager", "enrollment.sqlite"), config: config, issuer: issuer}
 	f.open(t)
@@ -168,7 +177,7 @@ func newWindowsManagerFixture(t *testing.T, collection, platform string) *window
 	if err != nil || f.identity.State != enrollmentstate.Activated {
 		t.Fatal("fixture activation failed", err)
 	}
-	f.material = windowsMaterialFixture(t, "http-test")
+	f.material = windowsMaterialFixture(t, transport)
 	f.material.certificate = tls.Certificate{Certificate: [][]byte{cert.DER(), issuer.IssuerDER()}, PrivateKey: agentKey}
 	f.material.config.AgentID, f.material.config.ManagerOrigin = intent.DeviceID, config.Binding.Origin
 	leaf, err := x509.ParseCertificate(cert.DER())
@@ -558,7 +567,8 @@ func TestWindowsManagerPipelineOperatorHTTPBoundary(t *testing.T) {
 	t.Run("events-and-volumes-v3", func(t *testing.T) { testWindowsManagerPipelineOperatorHTTPBoundary(t, true) })
 }
 func testWindowsManagerPipelineOperatorHTTPBoundary(t *testing.T, withVolumes bool, network ...bool) {
-	withNetwork := len(network) == 1 && network[0]
+	withNetwork := len(network) >= 1 && network[0]
+	withStartup := len(network) >= 2 && network[1]
 	f := newWindowsManagerFixture(t, enrollmentcrypto.CollectionProfileWindowsInventory, "windows")
 	ctx := context.Background()
 	state, err := lanclientstate.InitializeNew(f.material.config.StateDirectory, f.material.binding)
@@ -570,18 +580,24 @@ func testWindowsManagerPipelineOperatorHTTPBoundary(t *testing.T, withVolumes bo
 	// without changing the base fixture's unknown CPU or native collection scope.
 	positiveSource := func(_ context.Context, generation string) (windowsmanaged.Snapshot, model.Device, error) {
 		report := syntheticWindowsReport(time.Now().UTC())
+		if withStartup {
+			report.Services.Quality, report.Services.Complete = "healthy", true
+			report.Services.Rows = []windowsinventory.Service{{Name: "InventedA", DisplayName: "Invented service", State: "running", PID: 7}}
+		}
 		disk := 24.25
 		report.Disk.Value, report.Disk.Quality = &disk, "healthy"
 		return windowsmanaged.FromReport(report, generation)
 	}
-	run, err := runUsingStateWithNetworkDependencies(ctx, f.material, state, nil, nil, nil, positiveSource, func(r *http.Request) (*http.Response, error) {
+	run, err := runUsingStateWithServiceStartupDependencies(ctx, f.material, state, nil, nil, nil, positiveSource, func(r *http.Request) (*http.Response, error) {
 		return f.serve(t, r, http.StatusOK), nil
-	}, func() (windowseventhealth.Consent, bool) { return eventConsentFixture(f.material), true }, eventSourceFixture, func() (windowsvolumes.Consent, bool) { return volumeConsentFixture(f.material), withVolumes }, volumeSourceFixture, func() (windowsprocessmetrics.Consent, bool) { return processConsentFixture(f.material), withNetwork }, processSourceFixture, func() (windowsnetwork.Consent, bool) { return networkConsentFixture(f.material), withNetwork }, networkSourceFixture)
+	}, func() (windowseventhealth.Consent, bool) { return eventConsentFixture(f.material), true }, eventSourceFixture, func() (windowsvolumes.Consent, bool) { return volumeConsentFixture(f.material), withVolumes }, volumeSourceFixture, func() (windowsprocessmetrics.Consent, bool) { return processConsentFixture(f.material), withNetwork }, processSourceFixture, func() (windowsnetwork.Consent, bool) { return networkConsentFixture(f.material), withNetwork }, networkSourceFixture, func() (windowsmanaged.ServiceStartupConsent, bool) {
+		return serviceStartupConsentFixture(f.material), withStartup
+	}, serviceStartupSourceFixture)
 	if err != nil || run.Sequence != 1 || run.Duplicate {
 		t.Fatal("fixture sender did not commit its first Windows frame", err)
 	}
 	want := f.view(t, time.Now().UTC())
-	if (want.Network != nil) != withNetwork || (want.ProcessMetrics != nil) != withNetwork || (want.Volumes != nil) != withVolumes || want.Events == nil || want.Snapshot == nil || want.ReceivedAt == nil || want.Sequence == nil {
+	if (want.ServiceStartup != nil) != withStartup || (want.Network != nil) != withNetwork || (want.ProcessMetrics != nil) != withNetwork || (want.Volumes != nil) != withVolumes || want.Events == nil || want.Snapshot == nil || want.ReceivedAt == nil || want.Sequence == nil {
 		t.Fatal("accepted fixture frame is missing")
 	}
 	// The operator handler has one existing primary/Linux authority and a
@@ -673,7 +689,7 @@ func testWindowsManagerPipelineOperatorHTTPBoundary(t *testing.T, withVolumes bo
 	}
 	w := call(http.MethodGet, path, nil, true, "", "")
 	var got enrollmentstore.WindowsInventoryView
-	if w.Code != http.StatusOK || json.Unmarshal(w.Body.Bytes(), &got) != nil || got.SchemaVersion != want.SchemaVersion || got.DeviceID != want.DeviceID || got.CollectionProfile != want.CollectionProfile || got.Status != "fresh" || got.Sequence == nil || *got.Sequence != *want.Sequence || got.ReceivedAt == nil || !got.ReceivedAt.Equal(*want.ReceivedAt) || !reflect.DeepEqual(got.Snapshot, want.Snapshot) || !reflect.DeepEqual(got.Events, want.Events) || !reflect.DeepEqual(got.Volumes, want.Volumes) || !reflect.DeepEqual(got.Network, want.Network) || !reflect.DeepEqual(got.ProcessMetrics, want.ProcessMetrics) {
+	if w.Code != http.StatusOK || json.Unmarshal(w.Body.Bytes(), &got) != nil || got.SchemaVersion != want.SchemaVersion || got.DeviceID != want.DeviceID || got.CollectionProfile != want.CollectionProfile || got.Status != "fresh" || got.Sequence == nil || *got.Sequence != *want.Sequence || got.ReceivedAt == nil || !got.ReceivedAt.Equal(*want.ReceivedAt) || !reflect.DeepEqual(got.Snapshot, want.Snapshot) || !reflect.DeepEqual(got.Events, want.Events) || !reflect.DeepEqual(got.Volumes, want.Volumes) || !reflect.DeepEqual(got.Network, want.Network) || !reflect.DeepEqual(got.ProcessMetrics, want.ProcessMetrics) || !reflect.DeepEqual(got.ServiceStartup, want.ServiceStartup) {
 		t.Fatal("authenticated HTTP view lost accepted Windows rows, identity or provenance", w.Code)
 	}
 	// Read the real device DTO for that same admitted Windows inventory identity.
@@ -724,4 +740,9 @@ func testWindowsManagerPipelineOperatorHTTPBoundary(t *testing.T, withVolumes bo
 func TestWindowsNetworkOperatorHTTPBoundary(t *testing.T) {
 	t.Run("all-scopes", func(t *testing.T) { testWindowsManagerPipelineOperatorHTTPBoundary(t, true, true) })
 	t.Run("no-volumes", func(t *testing.T) { testWindowsManagerPipelineOperatorHTTPBoundary(t, false, true) })
+}
+
+func TestWindowsServiceStartupOperatorHTTPBoundary(t *testing.T) {
+	t.Run("all-scopes", func(t *testing.T) { testWindowsManagerPipelineOperatorHTTPBoundary(t, true, true, true) })
+	t.Run("without-network-volumes", func(t *testing.T) { testWindowsManagerPipelineOperatorHTTPBoundary(t, false, false, true) })
 }

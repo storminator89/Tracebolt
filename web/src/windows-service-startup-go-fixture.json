@@ -1,0 +1,111 @@
+[
+  {
+    "name": "empty",
+    "services": [],
+    "canonicalJSON": "[]",
+    "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "validBase": true
+  },
+  {
+    "name": "ascii",
+    "services": [
+      {
+        "name": "FixtureService",
+        "displayName": "Fixture Service",
+        "state": "running",
+        "pid": 44
+      }
+    ],
+    "canonicalJSON": "[{\"name\":\"FixtureService\",\"displayName\":\"Fixture Service\",\"state\":\"running\",\"pid\":44}]",
+    "sha256": "542d7899332d3902b9923522276ae34b22b2f09157fd1cf08101244945be90d0",
+    "validBase": true
+  },
+  {
+    "name": "unicode-html",
+    "services": [
+      {
+        "name": "Dienst-ä-\u0026\u003cβ\u003e",
+        "displayName": "日本語 🚀 \"quoted\" \\ path",
+        "state": "stopped",
+        "pid": 0
+      },
+      {
+        "name": "Дубликат",
+        "displayName": "A\u0026B \u003e C",
+        "state": "paused",
+        "pid": 4294967295
+      }
+    ],
+    "canonicalJSON": "[{\"name\":\"Dienst-ä-\\u0026\\u003cβ\\u003e\",\"displayName\":\"日本語 🚀 \\\"quoted\\\" \\\\ path\",\"state\":\"stopped\",\"pid\":0},{\"name\":\"Дубликат\",\"displayName\":\"A\\u0026B \\u003e C\",\"state\":\"paused\",\"pid\":4294967295}]",
+    "sha256": "1ac6ea97dbdee48af20c966403fb82ca7eca236eeceb3635fe6709ece72c86c5",
+    "validBase": true
+  },
+  {
+    "name": "duplicates",
+    "services": [
+      {
+        "name": "same",
+        "displayName": "duplicate",
+        "state": "running",
+        "pid": 4
+      },
+      {
+        "name": "same",
+        "displayName": "duplicate",
+        "state": "running",
+        "pid": 4
+      }
+    ],
+    "canonicalJSON": "[{\"name\":\"same\",\"displayName\":\"duplicate\",\"state\":\"running\",\"pid\":4},{\"name\":\"same\",\"displayName\":\"duplicate\",\"state\":\"running\",\"pid\":4}]",
+    "sha256": "2cdbdacad6c5423001bb9a35dd7387c515bc94875f4d266ec46774296114fe70",
+    "validBase": true
+  },
+  {
+    "name": "canonical-escapes-only",
+    "services": [
+      {
+        "name": "line\u2028separator",
+        "displayName": "paragraph\u2029separator",
+        "state": "running",
+        "pid": 1
+      }
+    ],
+    "canonicalJSON": "[{\"name\":\"line\\u2028separator\",\"displayName\":\"paragraph\\u2029separator\",\"state\":\"running\",\"pid\":1}]",
+    "sha256": "21be76633133970dc8ffa0ec4e4f816b98d8f2c45fe2b0cba99459e4b6100bab",
+    "validBase": false
+  },
+  {
+    "name": "unicode-trimmed",
+    "services": [
+      {
+        "name": "Dienst-ä-\u0026\u003cβ\u003e",
+        "displayName": "日本語 🚀 \"quoted\" \\ path",
+        "state": "stopped",
+        "pid": 0
+      }
+    ],
+    "canonicalJSON": "[{\"name\":\"Dienst-ä-\\u0026\\u003cβ\\u003e\",\"displayName\":\"日本語 🚀 \\\"quoted\\\" \\\\ path\",\"state\":\"stopped\",\"pid\":0}]",
+    "sha256": "e3b844a0775a1bb2f3cf30db65df6c81b493d10b614ba0808cdd49a95c3eaf90",
+    "validBase": true
+  },
+  {
+    "name": "unicode-reordered",
+    "services": [
+      {
+        "name": "Дубликат",
+        "displayName": "A\u0026B \u003e C",
+        "state": "paused",
+        "pid": 4294967295
+      },
+      {
+        "name": "Dienst-ä-\u0026\u003cβ\u003e",
+        "displayName": "日本語 🚀 \"quoted\" \\ path",
+        "state": "stopped",
+        "pid": 0
+      }
+    ],
+    "canonicalJSON": "[{\"name\":\"Дубликат\",\"displayName\":\"A\\u0026B \\u003e C\",\"state\":\"paused\",\"pid\":4294967295},{\"name\":\"Dienst-ä-\\u0026\\u003cβ\\u003e\",\"displayName\":\"日本語 🚀 \\\"quoted\\\" \\\\ path\",\"state\":\"stopped\",\"pid\":0}]",
+    "sha256": "aa3a1d9bf347df77f3a9d5c72819a1dcf25da42262d5df1338a176c27ed35bc4",
+    "validBase": true
+  }
+]

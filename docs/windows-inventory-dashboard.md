@@ -77,6 +77,15 @@ lifecycle policy; uninstall retains identity state.
 
 One native read-only report supplies both chart metrics and the inventory:
 
+The existing numeric Windows NT major/minor/build observation also retains its
+fixed RtlGetVersion source, original capture time and healthy/unknown/denied
+collection quality through the signed observation and the shared Evidence tab.
+The report adapter carries that metadata internally; standalone readonly.v1 JSON
+is unchanged, and legacy reports without it do not acquire invented provenance.
+No additional native call, registry revision/UBR read, KB inventory or CVE
+assessment is introduced. Source provenance does not establish native service
+acceptance, host attestation or device health.
+
 - CPU interval usage for one processor group, physical RAM and system-volume
   usage, each with its own timestamp and quality. This base profile is not all-volume or
   multi-group CPU coverage. Separately consented visible-volume source is described
@@ -85,7 +94,10 @@ One native read-only report supplies both chart metrics and the inventory:
   no command lines, owners or executable paths. Separately consented process
   CPU/working-set memory is described in [process metrics](windows-process-metrics.md).
 - SCM-enumerated service names, display names, state and process IDs; no service
-  start/stop or configuration authority.
+  start/stop or configuration-mutation authority. Separately consented
+  [startup metadata](windows-service-startup.md) adds configured mode and
+  delayed-auto status through wire v6 and this same Services table. The original
+  five-scope setup stays unchanged; native acceptance for this scope is pending.
 - Machine uninstall-registry names, versions and publishers from 32/64-bit
   views; no `Win32_Product`, MSI repair, per-user registry sweep or claim that
   all installed applications are visible.

@@ -20,7 +20,10 @@ potentially fewer under its 48 KiB shared encoding limit. Captured, matching,
 visible and observed counts remain distinct. A lower-bound count stays a lower
 bound, and truncated, denied, unavailable and healthy-empty sections keep their
 original meaning. The original capture/receipt times are never changed by pages,
-search or sorting. No UI action collects more rows or adds service startup data.
+search or sorting. No UI action collects more rows or authorizes new data.
+The separately consented [service-startup source slice](windows-service-startup.md)
+adds configured mode to this same table, with exact original-row binding and
+independent per-field quality. Existing five-scope grants do not enable it.
 
 Controls remain during a same-generation refresh, but all private rows and
 controls are hidden while its request is pending. A changed device, original

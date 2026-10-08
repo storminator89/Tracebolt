@@ -16,19 +16,20 @@ import (
 // WindowsInventoryView exposes only the latest profile-bound bounded frame.
 // It has no fallback to Linux operations, an old healthy generation or host reads.
 type WindowsInventoryView struct {
-	SchemaVersion       string                          `json:"schemaVersion"`
-	DeviceID            string                          `json:"deviceId"`
-	CollectionProfile   string                          `json:"collectionProfile"`
-	ServerNow           time.Time                       `json:"serverNow"`
-	MaxAgeSeconds       int64                           `json:"maxAgeSeconds"`
-	Status              string                          `json:"status"`
-	Sequence            *uint64                         `json:"sequence"`
-	ReceivedAt          *time.Time                      `json:"receivedAt"`
-	Snapshot            *windowsmanaged.Snapshot        `json:"snapshot"`
-	Events              *windowseventhealth.Snapshot    `json:"events,omitempty"`
-	Volumes             *windowsvolumes.Snapshot        `json:"volumes,omitempty"`
-	ProcessMetrics      *windowsprocessmetrics.Snapshot `json:"processMetrics,omitempty"`
-	Network             *windowsnetwork.Snapshot        `json:"network,omitempty"`
+	SchemaVersion       string                                 `json:"schemaVersion"`
+	DeviceID            string                                 `json:"deviceId"`
+	CollectionProfile   string                                 `json:"collectionProfile"`
+	ServerNow           time.Time                              `json:"serverNow"`
+	MaxAgeSeconds       int64                                  `json:"maxAgeSeconds"`
+	Status              string                                 `json:"status"`
+	Sequence            *uint64                                `json:"sequence"`
+	ReceivedAt          *time.Time                             `json:"receivedAt"`
+	Snapshot            *windowsmanaged.Snapshot               `json:"snapshot"`
+	Events              *windowseventhealth.Snapshot           `json:"events,omitempty"`
+	Volumes             *windowsvolumes.Snapshot               `json:"volumes,omitempty"`
+	ProcessMetrics      *windowsprocessmetrics.Snapshot        `json:"processMetrics,omitempty"`
+	Network             *windowsnetwork.Snapshot               `json:"network,omitempty"`
+	ServiceStartup      *windowsmanaged.ServiceStartupSnapshot `json:"serviceStartup,omitempty"`
 	certificateNotAfter int64
 }
 
@@ -83,6 +84,7 @@ func (s *Store) WindowsInventoryView(ctx context.Context, id string, now time.Ti
 			out.Volumes = frame.WindowsVolumes
 			out.ProcessMetrics = frame.WindowsProcessMetrics
 			out.Network = frame.WindowsNetwork
+			out.ServiceStartup = frame.WindowsServiceStartup
 			out.Sequence = &seq
 			out.ReceivedAt = &received
 			out.Status = "fresh"
@@ -96,6 +98,7 @@ func (s *Store) WindowsInventoryView(ctx context.Context, id string, now time.Ti
 				out.Volumes = nil
 				out.ProcessMetrics = nil
 				out.Network = nil
+				out.ServiceStartup = nil
 			}
 		}
 		if identity.State == enrollmentstate.Revoked || identity.State == enrollmentstate.Canceled || identity.State == enrollmentstate.Rejected || identity.State == enrollmentstate.Expired || identity.Intent.NotAfter > 0 && now.Unix() >= identity.Intent.NotAfter {
@@ -105,6 +108,7 @@ func (s *Store) WindowsInventoryView(ctx context.Context, id string, now time.Ti
 			out.Volumes = nil
 			out.ProcessMetrics = nil
 			out.Network = nil
+			out.ServiceStartup = nil
 		}
 		return nil
 	})
@@ -128,6 +132,7 @@ func (v WindowsInventoryView) RecheckAt(now time.Time) (WindowsInventoryView, er
 		v.Volumes = nil
 		v.ProcessMetrics = nil
 		v.Network = nil
+		v.ServiceStartup = nil
 		return v, nil
 	}
 	if v.Snapshot != nil {
@@ -148,6 +153,7 @@ func (v WindowsInventoryView) RecheckAt(now time.Time) (WindowsInventoryView, er
 			v.Volumes = nil
 			v.ProcessMetrics = nil
 			v.Network = nil
+			v.ServiceStartup = nil
 		}
 	}
 	if v.Events != nil && now.Sub(v.Events.CollectedAt) >= 24*time.Hour {
@@ -161,6 +167,9 @@ func (v WindowsInventoryView) RecheckAt(now time.Time) (WindowsInventoryView, er
 	}
 	if v.Network != nil && now.Sub(v.Network.CollectedAt) >= 24*time.Hour {
 		v.Network = nil
+	}
+	if v.ServiceStartup != nil && now.Sub(v.ServiceStartup.CollectedAt) >= 24*time.Hour {
+		v.ServiceStartup = nil
 	}
 	return v, nil
 }

@@ -12,6 +12,7 @@ import (
 
 const (
 	windowsOSSource     = "ntdll.RtlGetVersion; numeric NT version and build"
+	windowsOSDetail     = "NT major/minor/build only, without inferring a marketing release or edition. Application compatibility can affect RtlGetVersion."
 	windowsUptimeSource = "kernel32.GetTickCount64; elapsed system-start time"
 	windowsMemorySource = "kernel32.GlobalMemoryStatusEx; ullTotalPhys and ullAvailPhys"
 	windowsDiskSource   = "kernel32.GetDiskFreeSpaceExW(system-directory drive root); caller-visible quota-aware capacity"
@@ -62,18 +63,17 @@ func snapshotWindows(p windowsProvider, at time.Time) model.Device {
 		}
 	}
 
-	const osDetail = "NT major/minor/build only, without inferring a marketing release or edition. Application compatibility can affect RtlGetVersion."
 	const uptimeDetail = "Elapsed time since system start, including sleep; this is not agent runtime or a lifecycle check."
 	const memoryDetail = "Physical memory not immediately available, calculated as (ullTotalPhys - ullAvailPhys) / ullTotalPhys. Not process, commit, or page-file usage."
 	const diskDetail = "Drive root derived only from GetSystemDirectoryW and accepted only when GetDriveTypeW reports fixed media. Uses matching caller-total and caller-available bytes, including quotas; not whole-disk or all-volume utilization. No path is emitted."
 	d.Capabilities = append([]model.Capability{
-		nativeCapability("os", "Windows version", osQuality, osDetail),
+		nativeCapability("os", "Windows version", osQuality, windowsOSDetail),
 		nativeCapability("uptime", "System-start elapsed time", uptimeQuality, uptimeDetail),
 		nativeCapability("memory", "Physical memory sample", d.Memory.Quality, memoryDetail),
 		nativeCapability("disk", "System-volume caller capacity", d.Disk.Quality, diskDetail),
 	}, nativeLimitations()...)
 	d.Evidence = []model.Evidence{
-		nativeEvidence("local-windows-os", "Windows NT version", windowsOSSource, osQuality, d.OS, osDetail, at),
+		nativeEvidence("local-windows-os", "Windows NT version", windowsOSSource, osQuality, d.OS, windowsOSDetail, at),
 		nativeEvidence("local-windows-uptime", "System-start elapsed time", windowsUptimeSource, uptimeQuality, d.Uptime, uptimeDetail, at),
 		nativeMetricEvidence("local-windows-cpu", "CPU utilization unavailable", "No CPU interval sample was taken.", d.CPU),
 		nativeMetricEvidence("local-windows-memory", "Physical memory utilization", memoryDetail, d.Memory),
@@ -81,6 +81,34 @@ func snapshotWindows(p windowsProvider, at time.Time) model.Device {
 		nativeScopeEvidence("Windows", at),
 	}
 	return d
+}
+
+// ValidWindowsOSEvidence checks already-collected metadata only. It performs no
+// host reads and never interprets OS text alone as proof of a successful read.
+// Keep this exact allowlist alongside the producer so report adapters cannot
+// promote arbitrary evidence, identifiers, revisions or source claims.
+func ValidWindowsOSEvidence(e model.Evidence, os string, collectedAt time.Time) bool {
+	if e.CollectionProfile != "" || e.Synthetic || e.Value != os || e.CollectedAt.IsZero() || e.CollectedAt.Location() != time.UTC || e.CollectedAt.Year() < 1970 || e.CollectedAt.Year() > 9999 || e.CollectedAt.After(collectedAt) {
+		return false
+	}
+	want := nativeEvidence("local-windows-os", "Windows NT version", windowsOSSource, e.Quality, os, windowsOSDetail, e.CollectedAt)
+	if e != want {
+		return false
+	}
+	switch e.Quality {
+	case "healthy":
+		// The producer formats exactly three uint32 fields; a revision, suffix,
+		// leading zero, sign or arbitrary provider string is outside this scope.
+		if len(os) > 64 {
+			return false
+		}
+		var major, minor, build uint32
+		n, err := fmt.Sscanf(os, "Windows NT %d.%d (build %d)", &major, &minor, &build)
+		return err == nil && n == 3 && major > 0 && build > 0 && os == fmt.Sprintf("Windows NT %d.%d (build %d)", major, minor, build)
+	case "unknown", "denied":
+		return os == "Windows (version unavailable)"
+	}
+	return false
 }
 
 // Reject UNC, device, relative, malformed and environment-derived paths. The

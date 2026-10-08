@@ -65,6 +65,7 @@ ordinary sender and shared manager/UI; see
 - [x] Separately consented bounded Application/System headers through sender/store and shared Health source; [source boundary](windows-event-health.md). Broader native-to-production-manager/browser acceptance remains pending.
 - [x] Separately consented bounded caller-visible volume inventory, truthful quota/physical capacity, v3 sender/store and shared Storage source; [source boundary](windows-volume-inventory.md). Broader native-to-production-manager/browser acceptance remains pending.
 - [x] Separately consented process CPU/working-set memory through v4 sender/store and the existing Processes table; [source boundary](windows-process-metrics.md). Broader native-to-production-manager/browser acceptance remains pending.
+- [x] Separately consented bounded [service startup metadata](windows-service-startup.md) source through v6 sender/store and the existing Services table. Automatic/manual/disabled and delayed-auto quality are explicit; the original five-scope coordinator is unchanged. Native collection and exact-source hosted browser acceptance remain pending.
 - [ ] Complete Windows event-derived alerts/health diagnostics and explicit AI evidence
   scope, followed by the remaining native capability parity below.
 

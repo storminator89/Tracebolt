@@ -8,6 +8,7 @@ import (
 	"errors"
 	"localrmm/internal/enrollmentcrypto"
 	"localrmm/internal/windowseventhealth"
+	"localrmm/internal/windowsmanaged"
 	"localrmm/internal/windowsnetwork"
 	"localrmm/internal/windowsprocessmetrics"
 	"localrmm/internal/windowsstate"
@@ -27,10 +28,15 @@ const WindowsCapabilityConsentVersionV2 = "tracebolt.windows-capability-consent.
 // Earlier versions retain their exact scope sets and never authorize network reads.
 const WindowsCapabilityConsentVersionV3 = "tracebolt.windows-capability-consent.v3"
 
+// WindowsCapabilityConsentVersionV4 adds explicitly selected service startup metadata.
+// V1-V3 and the fresh five-scope coordinator remain unchanged.
+const WindowsCapabilityConsentVersionV4 = "tracebolt.windows-capability-consent.v4"
+
 // WindowsCapabilityConsent selects the exact scope disclosed to the human.
 // Metadata is mandatory for this inventory profile; event headers and volumes
 // remain optional in v1. V2 additionally permits process CPU/memory; V3 also
-// permits network endpoints. Acknowledged covers every selected scope's privacy notice;
+// permits network endpoints. V4 also permits service startup metadata.
+// Acknowledged covers every selected scope's privacy notice;
 // HTTP additionally requires the selected scopes' plaintext-risk disclosure.
 // This is not an enrollment approval or a grant by itself.
 type WindowsCapabilityConsent struct {
@@ -44,6 +50,7 @@ type WindowsCapabilityConsent struct {
 func (r WindowsCapabilityConsent) Validate() error {
 	v2 := r.SchemaVersion == WindowsCapabilityConsentVersionV2
 	v3 := r.SchemaVersion == WindowsCapabilityConsentVersionV3
+	v4 := r.SchemaVersion == WindowsCapabilityConsentVersionV4
 	maxScopes := 3
 	if v2 {
 		maxScopes = 4
@@ -51,12 +58,15 @@ func (r WindowsCapabilityConsent) Validate() error {
 	if v3 {
 		maxScopes = 5
 	}
-	if r.SchemaVersion != WindowsCapabilityConsentVersion && !v2 && !v3 || r.CollectionProfile != enrollmentcrypto.CollectionProfileWindowsInventory || !r.Acknowledged || len(r.Scopes) == 0 || len(r.Scopes) > maxScopes {
+	if v4 {
+		maxScopes = 6
+	}
+	if r.SchemaVersion != WindowsCapabilityConsentVersion && !v2 && !v3 && !v4 || r.CollectionProfile != enrollmentcrypto.CollectionProfileWindowsInventory || !r.Acknowledged || len(r.Scopes) == 0 || len(r.Scopes) > maxScopes {
 		return ErrConfiguration
 	}
 	seen := map[string]bool{}
 	for _, scope := range r.Scopes {
-		if seen[scope] || scope != enrollmentcrypto.CollectionProfileWindowsInventory && scope != windowseventhealth.Scope && scope != windowsvolumes.Scope && !((v2 || v3) && scope == windowsprocessmetrics.Scope) && !(v3 && scope == windowsnetwork.Scope) {
+		if seen[scope] || scope != enrollmentcrypto.CollectionProfileWindowsInventory && scope != windowseventhealth.Scope && scope != windowsvolumes.Scope && !((v2 || v3 || v4) && scope == windowsprocessmetrics.Scope) && !((v3 || v4) && scope == windowsnetwork.Scope) && !(v4 && scope == windowsmanaged.ServiceStartupScope) {
 			return ErrConfiguration
 		}
 		seen[scope] = true
@@ -110,6 +120,9 @@ func ConfigureWindowsCapabilities(path string, r WindowsCapabilityConsent) (Wind
 		switch scope {
 		case windowseventhealth.Scope:
 			_, err := ConfigureWindowsEventMetadata(path, "enable", true, r.InsecureHTTPAcknowledged)
+			return err
+		case windowsmanaged.ServiceStartupScope:
+			_, err := ConfigureWindowsServiceStartup(path, "enable", true, r.InsecureHTTPAcknowledged)
 			return err
 		case windowsnetwork.Scope:
 			_, err := ConfigureWindowsNetwork(path, "enable", true, r.InsecureHTTPAcknowledged)
@@ -234,6 +247,9 @@ func WindowsCapabilityGrantDigests(path string, r WindowsCapabilityConsent) ([]W
 			return c, ok
 		case windowsprocessmetrics.Scope:
 			c, ok := readWindowsProcessMetricsConsent(m)
+			return c, ok
+		case windowsmanaged.ServiceStartupScope:
+			c, ok := readWindowsServiceStartupConsent(m)
 			return c, ok
 		case windowsnetwork.Scope:
 			c, ok := readWindowsNetworkConsent(m)

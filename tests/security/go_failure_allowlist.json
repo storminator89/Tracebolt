@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "sourceCommit": "fccc4b00cd8a144afd58e4b995747afab7a10022",
-  "goSourceSha256": "c03ee2454cdeda5c74da55ce83e95635d01ddfc2c6dc30d9a7d3378201ccae4e",
+  "goSourceSha256": "568d8cf29266826cb1e171ee731e17564c57a0c005facf56d75526e4403a1bfe",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -278,6 +278,12 @@
       "TestReadSetupJournalPreservesOriginalPublicErrorAndCategory",
       "TestReadSetupStartupPermissionFailureCategories",
       "TestRetainedBootstrapValidationCapturesCategoryBeforePublicCollapse",
+      "TestServiceStartupConsentErrorsAndInvalidModes",
+      "TestServiceStartupConsentFlagsExplicitAndBounded",
+      "TestServiceStartupConsentNeverConfiguresWithMissingDependencies",
+      "TestServiceStartupDisclosureMustCompleteBeforeDispatch",
+      "TestServiceStartupFlagsDoNotAuthorizeAnotherScope",
+      "TestServiceStartupRequiresOwnedStoppedService",
       "TestSetupCauseCategoriesAreIdentityBasedAndFinite",
       "TestSetupDiagnosticEveryInjectedStage",
       "TestSetupDiagnosticUnknownPanicCycleAndWideChainsFailClosed",
@@ -1017,6 +1023,7 @@
       "TestWindowsMissingAndFailedReads",
       "TestWindowsNativeComposition",
       "TestWindowsNativePermissionQuality",
+      "TestWindowsOSEvidenceMatchesExistingProducer",
       "TestWindowsRootSelectionAndReadBoundary"
     ],
     "localrmm/internal/completeoverview": [
@@ -1460,6 +1467,7 @@
       "TestWindowsInventoryViewRechecksClockFreshnessAndExpiry",
       "TestWindowsNetworkIndependentExpiryAndRevocation",
       "TestWindowsProcessMetricsIndependentExpiryAndRevocation",
+      "TestWindowsServiceStartupIndependentExpiryAndRevocation",
       "TestWindowsVolumeViewIndependentExpiryAndRevocation"
     ],
     "localrmm/internal/enrollmenttransport": [
@@ -1986,6 +1994,8 @@
       "TestWindowsNetworkOperatorHTTPBoundary",
       "TestWindowsNetworkPendingRevocationReplacementAndConsentRace",
       "TestWindowsNetworkPreviewPreservesExistingRecord",
+      "TestWindowsOSProvenanceManagerRetryRestartQualityAndAge",
+      "TestWindowsOSProvenanceUsesExistingStrictWireAndRetainsLegacy",
       "TestWindowsProcessMetricsActualSenderIngressStoreRetryAndIndependentDisable",
       "TestWindowsProcessMetricsConsentCreateOnlyAndReenable",
       "TestWindowsProcessMetricsConsentFreshCreateRacesAndFailuresDoNotAdopt",
@@ -1998,6 +2008,25 @@
       "TestWindowsProcessMetricsIngressStrictVersionAndScope",
       "TestWindowsProcessMetricsMaximalCombinedEnvelopePreservesCountsAndCapture",
       "TestWindowsProcessMetricsPendingRevocationReplacementAndConsentRace",
+      "TestWindowsServiceStartupAll32CombinationsBothTransportAdmissions",
+      "TestWindowsServiceStartupCapabilityV4ExplicitSelectionsAndOlderScopeIsolation",
+      "TestWindowsServiceStartupCaptureFloorAndPreSendRevocation",
+      "TestWindowsServiceStartupCaptureFloorSurvivesAbsentScope",
+      "TestWindowsServiceStartupConsentCreateOnlyAndReenable",
+      "TestWindowsServiceStartupConsentFreshCreateRacesAndFailuresDoNotAdopt",
+      "TestWindowsServiceStartupConsentMissingExistingRecordFailsClosedEveryMode",
+      "TestWindowsServiceStartupConsentNeverCreatesOnPreviewDisableOrAccessFailure",
+      "TestWindowsServiceStartupConsentRejectsIncompleteForeignAndFailedStorage",
+      "TestWindowsServiceStartupConsentSeparateProtectedManifest",
+      "TestWindowsServiceStartupConsentStorageIsolation",
+      "TestWindowsServiceStartupIngressStrictBindingsAndOldVersions",
+      "TestWindowsServiceStartupInvalidRequestDoesNotReadHost",
+      "TestWindowsServiceStartupMaximalCombinedEnvelopePreservesBaseAndCapture",
+      "TestWindowsServiceStartupOperatorHTTPBoundary",
+      "TestWindowsServiceStartupPendingRevocationReplacementAndRaces",
+      "TestWindowsServiceStartupPreviewPreservesExistingRecord",
+      "TestWindowsServiceStartupRechecksGrantImmediatelyBeforeNativeSeam",
+      "TestWindowsServiceStartupSenderRetryRestartDenialAndIndependentDisable",
       "TestWindowsVolumeConsentCreateOnlyAndReenable",
       "TestWindowsVolumeConsentNeverCreatesOnPreviewDisableOrAccessFailure",
       "TestWindowsVolumeConsentRejectsIncompleteForeignAndFailedStorage",
@@ -2964,7 +2993,9 @@
       "TestNativeServiceStateMapping",
       "TestNativeWindowsReadOnlyInventory",
       "TestNilContextRejected",
-      "TestSectionBoundsAndMalformedRows"
+      "TestSectionBoundsAndMalformedRows",
+      "TestWindowsOSProvenanceRejectsMalformedAndDuplicateSource",
+      "TestWindowsOSProvenanceUsesOneExistingReadAndNoStandaloneFields"
     ],
     "localrmm/internal/windowsmanaged": [
       "TestAdapterRejectsMalformedSourceWithoutCollection",
@@ -2973,7 +3004,23 @@
       "TestNativePartialDeniedUnavailableAndTruncatedRemainHonest",
       "TestRecordCapsPreserveOriginalCountAndTime",
       "TestSameReportPreservesTimesMetricsAndBundleContract",
-      "TestValidateRejectsInconsistentSchemaAndRows"
+      "TestServiceStartupBudgetKeepsBindingAndAge",
+      "TestServiceStartupCollectionBoundsAndCancellation",
+      "TestServiceStartupConsentCanonicalAndIndependent",
+      "TestServiceStartupExactDecodeAndCoherence",
+      "TestServiceStartupFailuresAreFiniteAndEmptyDoesNotRead",
+      "TestServiceStartupGoGeneratedDigestFixture",
+      "TestServiceStartupNativeBufferClearedAndNoPointersFollowed",
+      "TestServiceStartupNativeCancellationClosesOwnedHandles",
+      "TestServiceStartupNativeFailuresBoundsAndBOOL",
+      "TestServiceStartupNativeInvalidInputsNeverOpen",
+      "TestServiceStartupNativeModesAndUnknownDoNotQueryDelayed",
+      "TestServiceStartupNativeRightsAndHandleLifetime",
+      "TestServiceStartupNonWindowsNeverReads",
+      "TestServiceStartupRowsDigestExactBase",
+      "TestValidateRejectsInconsistentSchemaAndRows",
+      "TestWindowsManagedOSProvenancePreservesExistingEvidenceAndLegacyReport",
+      "TestWindowsManagedOSProvenanceRejectsUntrustedMetadata"
     ],
     "localrmm/internal/windowsnetwork": [
       "TestAddressAndScopeCanonical",

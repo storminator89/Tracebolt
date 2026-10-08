@@ -15,6 +15,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	"localrmm/internal/collector"
 	"localrmm/internal/model"
 )
 
@@ -32,6 +33,7 @@ const (
 
 var ErrUnsupported = errors.New("Windows inventory is unavailable on this operating system")
 var ErrInvalidInput = errors.New("Windows inventory requires a context")
+var ErrInvalidOSEvidence = errors.New("Windows OS observation metadata is invalid")
 
 type Section[T any] struct {
 	Source    string `json:"source"`
@@ -69,6 +71,10 @@ type Hostname struct {
 	Value string `json:"value"`
 }
 type Report struct {
+	// OSEvidence carries only the existing fixed OS observation to the managed
+	// adapter. It is not a new standalone report field or collection scope.
+	// Nil preserves reports from older adapters and JSON round trips.
+	OSEvidence         *model.Evidence           `json:"-"`
 	Schema             string                    `json:"schema"`
 	Platform           string                    `json:"platform"`
 	CollectedAt        time.Time                 `json:"collectedAt"`
@@ -156,6 +162,16 @@ func collect(ctx context.Context, p provider, wait func(context.Context) error) 
 	}
 	d := p.system()
 	r := Report{Schema: Schema, Platform: "windows", CollectedAt: d.LastSeen, NativeVerification: "installed-service-and-enrollment-unverified", OS: d.OS, Uptime: d.Uptime, Memory: d.Memory, Disk: d.Disk}
+	for _, evidence := range d.Evidence {
+		if evidence.ID != "local-windows-os" {
+			continue
+		}
+		if r.OSEvidence != nil || !collector.ValidWindowsOSEvidence(evidence, r.OS, r.CollectedAt) {
+			return Report{}, ErrInvalidOSEvidence
+		}
+		copy := evidence
+		r.OSEvidence = &copy
+	}
 	r.CPU = model.Metric{Unit: "%", Quality: "unknown", Source: cpuSource, CollectedAt: time.Now().UTC()}
 	before, beforeErr := p.cpu()
 	if err := wait(ctx); err != nil {

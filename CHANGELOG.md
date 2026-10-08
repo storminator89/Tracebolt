@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-10-08 — Bounded Windows service startup source candidate
+
+- Add one default-off startup metadata scope, explicit stopped-service opt-in, strict v6 sender/store support and one EN/DE column in the existing Services table. Preserve old consent compatibility, persisted retry bytes and the exact five-scope fresh coordinator. The separate OS-provenance fix restores already-approved evidence in newly generated observations.
+- Bind startup readings to the final service-row digest and original ordinal, preserve exact retries and per-field denial/unavailability, and keep aggregate native configuration buffers transient with numeric-only extraction. No path/account strings, service mutation, remote action or AI export is added.
+- Add injected API, consent, sender/store, Go-to-TypeScript digest and UI regression coverage. Native reads, persistent grants, installed-service validation, hosted browser acceptance and source publication are separate gates; none is performed by these source checks.
+
 ## 2026-10-08 — Isolated Windows accepted-contact history source candidate
 
 - Add receipt-only Windows contact evaluation, bounded durable overdue-report and recovery history, and a separate authenticated read-only Health panel. Preserve original accepted timestamps/sequences, one-open-incident semantics, restart/gap/error uncertainty, and immutable enrollment/certificate history binding.

@@ -7,6 +7,7 @@ import (
 	"math"
 	"sort"
 
+	"localrmm/internal/collector"
 	"localrmm/internal/model"
 	"localrmm/internal/windowsinventory"
 )
@@ -39,6 +40,9 @@ func FromReport(r windowsinventory.Report, generationID string) (Snapshot, model
 		return Snapshot{}, model.Device{}, ErrInvalidInput
 	}
 	if r.Schema != windowsinventory.Schema || r.Platform != "windows" || !validTime(r.CollectedAt) || !validText(r.OS, true, 512) || !validText(r.Uptime, true, 128) {
+		return Snapshot{}, model.Device{}, ErrInvalidReport
+	}
+	if r.OSEvidence != nil && !collector.ValidWindowsOSEvidence(*r.OSEvidence, r.OS, r.CollectedAt) {
 		return Snapshot{}, model.Device{}, ErrInvalidReport
 	}
 	for _, metric := range []model.Metric{r.CPU, r.Memory, r.Disk} {
@@ -232,6 +236,11 @@ func deviceFromReport(r windowsinventory.Report) model.Device {
 		CPU: copyMetric(r.CPU), Memory: copyMetric(r.Memory), Disk: copyMetric(r.Disk),
 		Tags: []string{"read-only", "local-only", "native-unverified"}, Capabilities: []model.Capability{},
 		Evidence: []model.Evidence{}, Trend: []float64{}, CaseIDs: []string{}}
+	if r.OSEvidence != nil {
+		// FromReport validated this fixed source; preserve the original capture
+		// and failure quality, with no timestamp refresh or caller-owned alias.
+		d.Evidence = append(d.Evidence, *r.OSEvidence)
+	}
 	for _, row := range []struct {
 		id, title, detail string
 		metric            model.Metric

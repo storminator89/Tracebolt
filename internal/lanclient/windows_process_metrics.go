@@ -96,10 +96,10 @@ func appendWindowsProcessMetrics(ctx context.Context, m Material, f frame, c win
 	return f, b, nil
 }
 func validateWindowsProcessMetricsFrame(f frame, fields map[string]json.RawMessage) error {
-	if f.SchemaVersion == FrameWindowsNetworkVersion && f.WindowsProcessMetrics == nil && len(fields["windowsProcessMetrics"]) == 0 {
+	if (f.SchemaVersion == FrameWindowsNetworkVersion || f.SchemaVersion == FrameWindowsServiceStartupVersion) && f.WindowsProcessMetrics == nil && len(fields["windowsProcessMetrics"]) == 0 {
 		return nil
 	}
-	if f.SchemaVersion != FrameWindowsProcessMetricsVersion && f.SchemaVersion != FrameWindowsNetworkVersion {
+	if f.SchemaVersion != FrameWindowsProcessMetricsVersion && f.SchemaVersion != FrameWindowsNetworkVersion && f.SchemaVersion != FrameWindowsServiceStartupVersion {
 		if f.WindowsProcessMetrics != nil || len(fields["windowsProcessMetrics"]) != 0 {
 			return ErrState
 		}
