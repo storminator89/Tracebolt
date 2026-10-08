@@ -167,3 +167,27 @@ func TestPublicCSIDescriptorExcludesOSCAndOtherFailures(t *testing.T) {
 		}
 	}
 }
+
+func TestPublicObservedMousePairActualGuardEverySplit(t *testing.T) {
+	// Exact public mode observed in ordinary Windows CI; the reset counterpart
+	// is documented by the same Microsoft renderer. No input or mouse events.
+	stream := publicDisclosureLines + "\x1b[?1003;1006h" + publicTrustLines + publicComparisonReminder + publicPrompt + "\x1b[?1003;1006l"
+	for split := 0; split <= len(stream); split++ {
+		sentinel := []byte(strings.Repeat("A", 43))
+		g, err := freshgate.NewOutputGuard(sentinel)
+		clear(sentinel)
+		if err != nil {
+			t.Fatal("inert guard setup")
+		}
+		var o Observer
+		p := preinputResult{rejection: freshgate.OutputNotRejected, firstCSI: "none", csiFinal: "none"}
+		feedPublicPreinput(g, &o, &p, []byte(stream[:split]))
+		feedPublicPreinput(g, &o, &p, []byte(stream[split:]))
+		fp, comparison, trust := g.PublicTrust()
+		if p.rejection != freshgate.OutputNotRejected || !trust || fp != publicFingerprint || comparison != publicComparison || !g.PromptReady() || p.csiFinal != "none" || p.csiParams != "" {
+			g.Close()
+			t.Fatal("observed mouse pair changed actual public guard readiness")
+		}
+		g.Close()
+	}
+}

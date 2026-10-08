@@ -389,6 +389,14 @@ func (s *outputState) validCSI(final byte) bool {
 		// do not generalize this to other private modes or parameter lists.
 		return true
 	}
+	if (final == 'h' || final == 'l') && bytes.Equal(p, []byte("?1003;1006")) {
+		// Exact ConPTY any-event mouse reporting + SGR mouse encoding pair.
+		// These requests do not render text; this headless pipe client has no
+		// mouse event source and sends no mouse reports or acknowledgement.
+		// Admit only this observed ordering and its documented reset partner,
+		// never arbitrary private-mode lists. See the compatibility rationale.
+		return true
+	}
 	if !s.hadText && !s.pendingCR && s.lineLen == 0 {
 		if final == 'J' && bytes.Equal(p, []byte("2")) {
 			return true // Clear the initial, known-empty screen only.

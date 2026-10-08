@@ -263,9 +263,10 @@ The ordinary fixed-public-output [probe run 37749340509](https://github.com/stor
 on `f118d6a18591932065ff6cf3f4182351569ec2f6` observed all four exact mode
 controls below, with no residual unknown. This proves a compatibility gap in
 public ConPTY output, not the bytes rejected in the earlier native enrollment
-run. The guard now accepts only CSI `?9001h`, `?9001l`, `?1004h`, and `?1004l`
-in addition to its existing language. Parameter lists, leading-zero aliases,
-other private modes, input event sequences and malformed lookalikes still fail.
+run. That compatibility change admitted only CSI `?9001h`, `?9001l`, `?1004h`, and `?1004l`
+in addition to its existing language. The later exact combined mouse pair below
+is a separate evidence-backed addition; arbitrary parameter lists, leading-zero
+aliases, other private modes and input event sequences still fail.
 
 These are input requests, not text, cursor movement or line editing:
 
@@ -289,6 +290,46 @@ input writer, approval, permission, workflow or cleanup code changes. Portable
 fixtures cover each sequence at every text position and sequence split before
 and after input, concealed synthetic echoes, incomplete controls and malformed
 lookalikes. This source fix is not native acceptance and authorizes no new run.
+
+### Exact combined mouse-reporting compatibility
+
+The ordinary full-public pre-input probe on source
+`41d550b04ba1c68098452d180d900b85ec46cdea`,
+[run 37785848155, job 113340255939](https://github.com/storminator89/Tracebolt/actions/runs/37785848155/job/113340255939),
+failed at the actual guard's first unsupported CSI: final byte `68` (hex `h`),
+parameters `?1003;1006`. Live output and verified console-mode restoration were
+observed; trust and prompt readiness were not. The bounded descriptor came only
+from the fixed-public fixture, not a privileged native transcript.
+
+Microsoft's immutable [VtIo::Writer::WriteSGR1006 implementation](https://github.com/microsoft/terminal/blob/6676c6f938f7e98ad680f0cecedd3bafb6529734/src/host/VtIo.cpp#L715-L721)
+emits this exact `CSI ?1003;1006 h` pair when enabling mouse reporting and the
+same parameters with final `l` when disabling it. Its [SetConsoleMode caller](https://github.com/microsoft/terminal/blob/6676c6f938f7e98ad680f0cecedd3bafb6529734/src/host/getset.cpp#L367-L387)
+checks effective mouse-input changes including Quick Edit. The fixture continues
+to use the existing actual hidden-mode preparation and restoration unchanged.
+
+The official [xterm control-sequence reference](https://invisible-island.net/xterm/ctlseqs/ctlseqs.html)
+defines private mode 1003 as reporting all mouse motion events, and 1006 as SGR
+encoding for mouse reports. DECSET (`h`) enables and DECRST (`l`) disables the
+specified modes. These mode-setting operations do not specify an acknowledgement
+or alter displayed characters; mouse events generate the reports. Our scoped
+compatibility inference is that this headless pipe client, with no mouse-event
+source, can consume this exact pair without sending input or changing its text
+model. This is not a guarantee about arbitrary interactive mouse applications.
+
+The guard admits only the exact parameter bytes `?1003;1006` and final `h` or
+`l`. Individual modes, reversed order, aliases, added parameters, whitespace,
+other finals and actual mouse-event reports remain unsupported. No cursor
+rewrite, generic private-mode list parser, mouse report generator, input-mode
+change or acknowledgement is added. Raw/visible echo matching, OSC/title policy,
+CSI/output/line bounds, trust ordering, prompt and approval/input barriers remain
+unchanged. The existing mode regression suite covers both controls at every
+text position and split before/after input, partial sequences, malformed and
+interrupted lookalikes, echo interleaving, titles and bounds. The full-public
+fixture also exercises both controls through its actual-guard feeding helper.
+
+Portable tests and cross-builds do not establish the ordinary Windows live
+pre-input result. That ordinary fixture must pass before considering another
+separately approved installer run. This source change itself authorizes none.
 
 ## Third-run early child exit and bounded failure diagnostics
 
