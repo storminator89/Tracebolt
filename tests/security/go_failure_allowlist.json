@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "sourceCommit": "fccc4b00cd8a144afd58e4b995747afab7a10022",
-  "goSourceSha256": "983f58e565aa26f86db96beb3b2c8a5afdbe3dfb125f134aacc0beb73c5c0e84",
+  "goSourceSha256": "467e3c8d9f5ae0b8a524f8fddb069faf8b888120c12649d5d4837c1345898618",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -225,6 +225,7 @@
       "TestConcurrentStopPreservesInvalidHandoffAndMarkerFailure",
       "TestCooperativePendingOutcomeRejectsMixedAndDiagnosedFailures",
       "TestEventConsentFlagsExplicitAndBounded",
+      "TestFreshNaturalExitDiagnostics",
       "TestFreshReadConPTYNative",
       "TestFreshReadSetupCanceledContextNeverMutates",
       "TestFreshReadSetupConsentDisclosesEveryScopeAndHTTPRisk",
@@ -2702,6 +2703,9 @@
       "TestSyntheticWrongProofAndPurposeConsumeChallenge"
     ],
     "localrmm/internal/windowsacceptance/freshgate": [
+      "TestFreshDiagnosticsDefaultsAndFiniteFailureEvidence",
+      "TestFreshDiagnosticsDoNotPromoteSuccess",
+      "TestFreshDiagnosticsRejectArbitraryStringsAndTypes",
       "TestFreshEvidenceNeverPromotesFixtureOrHuman",
       "TestFreshGateExactBindings",
       "TestFreshGateExpiryNotRenewed",
@@ -2727,6 +2731,12 @@
       "TestOwnedStopRefusesUnknownCancelledAndAmbiguous",
       "TestPostInputTitleCannotCarryPartialEcho",
       "TestSessionCancellationAndFaultBoundaries",
+      "TestSessionDiagnosticCancellationAndInputBarrier",
+      "TestSessionDiagnosticCompletionPrecedence",
+      "TestSessionDiagnosticEOFDoesNotRequireChannelClosure",
+      "TestSessionDiagnosticInvalidSteps",
+      "TestSessionDiagnosticOutputAndCallbackFailures",
+      "TestSessionOutcomeVocabulary",
       "TestSessionProductionPromptAndFiniteChildProtocol",
       "TestSessionRejectsUnprovenDrainAndCancelledCallbacks"
     ],
