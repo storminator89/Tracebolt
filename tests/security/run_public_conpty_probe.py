@@ -13,9 +13,12 @@ PACKAGE = "localrmm/internal/conptyrendering"
 TEST = "TestNativePublicRendering"
 MAX_OUTPUT = 1024 * 1024
 FIELDS = ("cursor_position", "clear", "cursor_visibility", "presentation", "title",
-          "unknown", "overflow", "incomplete")
+          "unknown", "overflow", "incomplete", "win32_input_enable", "win32_input_disable",
+          "focus_reporting_enable", "focus_reporting_disable", "residual_unknown")
+RESIDUAL_KINDS = ("none", "text_control", "non_ascii", "escape", "csi", "osc")
 SUMMARY = re.compile(r"    native_windows_test\.go:[1-9][0-9]*: " +
-                     " ".join(name + r"=(true|false)" for name in FIELDS) + r"\n")
+                     " ".join(name + r"=(true|false)" for name in FIELDS) +
+                     r" first_residual_kind=(" + "|".join(RESIDUAL_KINDS) + r")\n")
 ARGS = ("go", "test", "-mod=readonly", "-json", "-count=1", "-timeout=45s",
         "-buildvcs=false", "-run=^TestNativePublicRendering$", "./internal/conptyrendering")
 
@@ -57,9 +60,12 @@ def project(raw):
             match = SUMMARY.fullmatch(output)
             if match:
                 require(summary is None)
-                summary = dict(zip(FIELDS, (x == "true" for x in match.groups())))
+                summary = dict(zip(FIELDS, (x == "true" for x in match.groups()[:-1])))
+                summary["first_residual_kind"] = match.groups()[-1]
     require(passed and package_passed and summary is not None)
     require(not summary["overflow"] and not summary["incomplete"])
+    require(summary["residual_unknown"] == (summary["first_residual_kind"] != "none"))
+    require(summary["unknown"] == any(summary[name] for name in FIELDS[8:]))
     return summary
 
 
@@ -112,6 +118,7 @@ def main():
         summary = project(capture(env))
         print("OBSERVED: fixed public ConPTY sequence families " +
               " ".join(name + "=" + str(summary[name]).lower() for name in FIELDS) +
+              " first_residual_kind=" + summary["first_residual_kind"] +
               "; no coordinator or guard compatibility claim.")
         return 0
     except (OSError, ValueError, TypeError, KeyError, subprocess.SubprocessError):

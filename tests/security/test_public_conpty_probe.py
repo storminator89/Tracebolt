@@ -13,12 +13,12 @@ spec.loader.exec_module(probe)
 
 
 def records(unknown=False):
-    summary = " ".join(name + "=" + ("true" if name == "unknown" and unknown else "false") for name in probe.FIELDS)
+    summary = " ".join(name + "=" + ("true" if name in {"unknown", "win32_input_enable"} and unknown else "false") for name in probe.FIELDS)
     return [
         {"Action": "start", "Package": probe.PACKAGE},
         {"Action": "run", "Package": probe.PACKAGE, "Test": probe.TEST},
         {"Action": "output", "Package": probe.PACKAGE, "Test": probe.TEST,
-         "Output": "    native_windows_test.go:38: " + summary + "\n"},
+         "Output": "    native_windows_test.go:38: " + summary + " first_residual_kind=none\n"},
         {"Action": "pass", "Package": probe.PACKAGE, "Test": probe.TEST},
         {"Action": "pass", "Package": probe.PACKAGE},
     ]
@@ -29,8 +29,41 @@ def encode(rows):
 
 
 class PublicProbeTests(unittest.TestCase):
+    def test_refinement_enum_and_aggregate_consistency(self):
+        for kind in probe.RESIDUAL_KINDS:
+            rows = records()
+            output = rows[2]["Output"]
+            if kind != "none":
+                output = output.replace("unknown=false", "unknown=true")
+            rows[2]["Output"] = output.replace("first_residual_kind=none", "first_residual_kind=" + kind)
+            self.assertEqual(probe.project(encode(rows))["first_residual_kind"], kind)
+        for replacement in ("private_text", "0", "CSI", "none extra", "none\nPRIVATE_SENTINEL"):
+            rows = records()
+            rows[2]["Output"] = rows[2]["Output"].replace("first_residual_kind=none", "first_residual_kind=" + replacement)
+            with self.assertRaises(ValueError):
+                probe.project(encode(rows))
+        for old, new in (("first_residual_kind=none", "first_residual_kind=csi"),
+                         ("residual_unknown=false", "residual_unknown=true"),
+                         ("unknown=false overflow", "unknown=true overflow"),
+                         ("win32_input_enable=false", "win32_input_enable=true")):
+            rows = records()
+            rows[2]["Output"] = rows[2]["Output"].replace(old, new)
+            with self.assertRaises(ValueError):
+                probe.project(encode(rows))
+
+    def test_refinement_requires_every_fixed_field_and_no_extra_payload(self):
+        for field in probe.FIELDS[8:]:
+            rows = records()
+            rows[2]["Output"] = rows[2]["Output"].replace(" " + field + "=false", "")
+            with self.assertRaises(ValueError):
+                probe.project(encode(rows))
+        rows = records()
+        rows[2]["Output"] = rows[2]["Output"].replace("\n", " title_payload=PRIVATE_SENTINEL\n")
+        with self.assertRaises(ValueError):
+            probe.project(encode(rows))
+
     def test_requires_exact_test_package_and_summary(self):
-        self.assertEqual(set(probe.project(encode(records()))), set(probe.FIELDS))
+        self.assertEqual(set(probe.project(encode(records()))), set(probe.FIELDS) | {"first_residual_kind"})
         self.assertTrue(probe.project(encode(records(True)))["unknown"])
         for index in (2, 3, 4):
             rows = records()

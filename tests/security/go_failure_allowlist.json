@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "sourceCommit": "fccc4b00cd8a144afd58e4b995747afab7a10022",
-  "goSourceSha256": "e2c177533ce5994c90fc92a81dbea0f15930ee0c5110ed4a665d45c2654ef922",
+  "goSourceSha256": "dd3e05fa9a5ab08d30054fea908410f70caef76877d578b4f2709cf9a243d2d8",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -1012,10 +1012,14 @@
       "TestUnsafeMountAncestorsAndIdentityAreRejected"
     ],
     "localrmm/internal/conptyrendering": [
+      "TestExactPublicModesEverySplit",
       "TestFamiliesEverySplit",
       "TestFinishKeepsIncompleteSticky",
       "TestNativePublicRendering",
       "TestObserverRedactsFormatting",
+      "TestPublicModesIgnoreTitlePayloadAndMalformedLookalikes",
+      "TestRefinedObserverPreservesBoundsAndOldFamilyFlags",
+      "TestResidualCategoriesEverySplitAndStickyFirst",
       "TestUnknownAndBounds"
     ],
     "localrmm/internal/debianversion": [

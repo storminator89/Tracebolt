@@ -8,7 +8,7 @@ import (
 
 func TestFamiliesEverySplit(t *testing.T) {
 	p := "\x1b[2J\x1b[1;1H\x1b[?25l\x1b[0mPUBLIC\r\n\x1b]0;public\x07\x1b[?25h"
-	want := Summary{CursorPosition: true, Clear: true, CursorVisibility: true, Presentation: true, Title: true}
+	want := Summary{CursorPosition: true, Clear: true, CursorVisibility: true, Presentation: true, Title: true, FirstResidualKind: ResidualNone}
 	for i := 0; i <= len(p); i++ {
 		var o Observer
 		o.Feed([]byte(p[:i]))

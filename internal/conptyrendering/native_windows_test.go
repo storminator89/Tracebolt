@@ -35,7 +35,7 @@ func TestNativePublicRendering(t *testing.T) {
 		t.Fatal(reason)
 	}
 	// Only finite classifications reach test output. No bytes or parameters do.
-	t.Logf("cursor_position=%t clear=%t cursor_visibility=%t presentation=%t title=%t unknown=%t overflow=%t incomplete=%t", result.CursorPosition, result.Clear, result.CursorVisibility, result.Presentation, result.Title, result.Unknown, result.Overflow, result.Incomplete)
+	t.Logf("cursor_position=%t clear=%t cursor_visibility=%t presentation=%t title=%t unknown=%t overflow=%t incomplete=%t win32_input_enable=%t win32_input_disable=%t focus_reporting_enable=%t focus_reporting_disable=%t residual_unknown=%t first_residual_kind=%s", result.CursorPosition, result.Clear, result.CursorVisibility, result.Presentation, result.Title, result.Unknown, result.Overflow, result.Incomplete, result.Win32InputEnable, result.Win32InputDisable, result.FocusReportingEnable, result.FocusReportingDisable, result.ResidualUnknown, result.FirstResidualKind)
 	if result.Overflow || result.Incomplete {
 		t.Fatal("rendering_bound_or_incomplete")
 	}

@@ -16,6 +16,28 @@ coordinator succeeds. Unknown sequences are reported only as a boolean; paramete
 and raw output are never returned, logged, or written to an artifact. A family
 observation can guide a later documented public unit-test case for the real guard.
 
+The four mode flags recognize only exact CSI `?9001h`, `?9001l`, `?1004h`, and
+`?1004l` sequences outside OSC payloads. They respectively observe Win32 input
+mode and focus reporting being enabled/disabled; the probe sends no reply or
+input. `unknown` retains its original meaning: something outside the original
+five recognized families occurred, including these newly named modes.
+`residual_unknown` means an unknown remains after those four exact matches.
+`first_residual_kind` is only `none`, `text_control`, `non_ascii`, `escape`,
+`csi`, or `osc`, never an output byte or sequence parameter. It stays at the first
+category even if later unknowns differ. Title content is never returned or used
+to recognize mode patterns. Malformed OSC bodies are discarded through their
+terminator, so nested lookalikes cannot become observations of external modes.
+
+If modes are observed with no residual, those additional public-probe controls
+are classified. If a residual remains, its category guides another narrowly
+scoped observation. Neither outcome proves freshgate accepts the stream: the
+older family flags deliberately do not validate cursor/clear/SGR parameters or
+placement. It cannot retroactively diagnose a different native enrollment run.
+
+Pattern references:
+- [Microsoft Win32 input mode specification](https://github.com/microsoft/terminal/blob/main/doc/specs/%234999%20-%20Improved%20keyboard%20handling%20in%20Conpty.md)
+- [Microsoft parser mode injection definitions](https://github.com/microsoft/terminal/blob/main/src/terminal/parser/stateMachine.hpp)
+
 Memory is bounded: 1 KiB read buffer, 256-byte sequence buffer, 64 KiB observation
 budget. Output continues draining after the observation limit so cleanup does not
 block on a full pipe. Overflow and incomplete output fail the test. Unknown is a
