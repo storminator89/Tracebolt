@@ -119,9 +119,18 @@ suppression are unchanged. No label proves cleanup or native acceptance.
 The launcher reconstructs newline-complete lines only across consecutive output
 events belonging to this exact test. A pending line is limited to 1024 characters
 and cannot cross a package-output, framing/action or terminal-outcome boundary.
-The original exact summary grammar and all success conditions still apply.
-Missing summaries report only closed shape categories (CRLF, prefix, fields,
+The exact 18-field body grammar and all success conditions still apply.
+Missing summaries report only closed shape categories (CRLF, fields,
 attribution, or absent); those categories never include unmatched output text.
 This is compatibility hardening: the pinned Go 1.27.1 converter normally keeps
 this approximately 413-byte summary in one event, below its 1024-byte buffer.
 No claim is made that fragmentation caused the observed Windows mismatch.
+
+The fixed first field `cursor_position=` now delimits the finite record within
+a complete exact-test output line. Any preceding test-logger presentation text
+is discarded without being returned or printed, including caller paths. Only
+one marker may occur in that line, and its remaining suffix must match the
+entire exact 18-field body with a terminating newline and no extra suffix.
+Exactly one record and both passing outcomes remain mandatory. This addresses
+the observed valid-body/different-prefix reporting mismatch; it does not alter
+ConPTY observation, console acceptance or any production security boundary.

@@ -150,7 +150,14 @@ def project(raw):
                 label_seen |= "cursor_position=" in output
                 crlf |= output.endswith("\r\n") and SUMMARY.fullmatch(output[:-2] + "\n") is not None
                 prefix |= SUMMARY_BODY.search(output) is not None
-                match = SUMMARY.fullmatch(output)
+                # The caller prefix is test-log presentation, not observation
+                # data. Discard it without exporting paths or other prefix text.
+                # The fixed first field delimits one complete finite record.
+                marker = "cursor_position="
+                start = output.find(marker)
+                if start >= 0:
+                    require(output.count(marker) == 1, "projection_duplicate_summary")
+                match = SUMMARY_BODY.fullmatch(output[start:]) if start >= 0 else None
                 if match:
                     require(summary is None, "projection_duplicate_summary")
                     summary = dict(zip(FIELDS, (x == "true" for x in match.groups()[:len(FIELDS)])))

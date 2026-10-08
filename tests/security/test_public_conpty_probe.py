@@ -37,10 +37,42 @@ def encode(rows):
 
 
 class PublicProbeTests(unittest.TestCase):
+    def test_presentation_prefix_is_discarded_without_export(self):
+        expected = probe.project(encode(records()))
+        body = records()[2]["Output"].split("cursor_position=", 1)[1]
+        body = "cursor_position=" + body
+        for prefix in ("", "    native_windows_test.go:44: ", "\tfixture.go:9: ",
+                       "    C:\\PRIVATE_SENTINEL\\native_windows_test.go:44: ",
+                       "PRIVATE_SENTINEL presentation prefix: "):
+            rows=records();rows[2]["Output"]=prefix+body
+            self.assertEqual(probe.project(encode(rows)),expected)
+            output=io.StringIO()
+            with mock.patch.object(probe.sys,"platform","win32"),mock.patch.object(probe,"capture",return_value=encode(rows)),contextlib.redirect_stdout(output):
+                self.assertEqual(probe.main(),0)
+            self.assertNotIn("PRIVATE_SENTINEL",output.getvalue())
+            self.assertNotIn("native_windows_test.go",output.getvalue())
+            text=rows[2]["Output"]
+            for split in range(len(text)+1):
+                parts=rows[:2]+[dict(rows[2],Output=text[:split]),dict(rows[2],Output=text[split:])]+rows[3:]
+                self.assertEqual(probe.project(encode(parts)),expected)
+
+    def test_prefix_cannot_hide_duplicate_or_malformed_finite_body(self):
+        body=records()[2]["Output"].split("cursor_position=",1)[1]
+        body="cursor_position="+body
+        for text in ("cursor_position=PRIVATE_SENTINEL "+body,
+                     "PRIVATE_SENTINEL "+body.rstrip("\n")+" cursor_position=false\n",
+                     "PRIVATE_SENTINEL "+body.replace("title=false","title=PRIVATE_SENTINEL"),
+                     "PRIVATE_SENTINEL "+body.rstrip("\n")+" extra=PRIVATE_SENTINEL\n"):
+            rows=records();rows[2]["Output"]=text
+            with self.assertRaises(probe.ProbeFailure):probe.project(encode(rows))
+            output=io.StringIO()
+            with mock.patch.object(probe.sys,"platform","win32"),mock.patch.object(probe,"capture",return_value=encode(rows)),contextlib.redirect_stdout(output):
+                self.assertEqual(probe.main(),1)
+            self.assertNotIn("PRIVATE_SENTINEL",output.getvalue())
+
     def test_missing_summary_shape_is_finite_and_still_rejected(self):
         cases=[]
         rows=records();rows[2]["Output"]=rows[2]["Output"].replace("\n","\r\n");cases.append((rows,"projection_summary_crlf"))
-        rows=records();rows[2]["Output"]="PRIVATE_SENTINEL "+rows[2]["Output"];cases.append((rows,"projection_summary_prefix"))
         rows=records();rows[2]["Output"]=rows[2]["Output"].replace("public_trust=false","public_trust=PRIVATE_SENTINEL");cases.append((rows,"projection_summary_fields"))
         rows=records();del rows[2]["Test"];cases.append((rows,"projection_summary_attribution"))
         for rows,reason in cases:
