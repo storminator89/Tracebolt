@@ -38,3 +38,6 @@ test('Logs expiry remount waits for unmount and fleet visibility before returnin
 
 // Finite source-only diagnostics; never launches a browser.
 import './windows-logs-diagnostics.test.mjs';
+
+// Use the same exact-label engine as the hosted Playwright gate.
+import './windows-logs-labels.test.mjs';

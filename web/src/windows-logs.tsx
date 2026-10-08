@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { AUTH_REQUIRED_EVENT } from './api';
 import { useLocale } from './i18n';
 import { fullDate } from './utils';
@@ -22,7 +22,7 @@ function newestFirst(a: Header, b: Header): number {
 /** Browse the already accepted header sample only. No source query, retained
  * history, content collection, grant, export or private row cache is added. */
 export function WindowsLogsPanel({ resource }: { resource: WindowsInventoryResource }) {
-    const [locale] = useLocale(), de = locale === 'de';
+    const [locale] = useLocale(), de = locale === 'de', filterId = useId();
     const [savedFilters, setFilters] = useState(initialFilters);
     const [page, setPage] = useState({ generation: '', index: 0 });
     const clear = () => { setFilters(initialFilters); setPage({ generation: '', index: 0 }); };
@@ -62,8 +62,8 @@ export function WindowsLogsPanel({ resource }: { resource: WindowsInventoryResou
             {channel.quality === 'partial' && <span>{de ? 'Quellabfrage unvollständig.' : 'Source read incomplete.'}</span>}
         </li>)}</ul></>}
         <fieldset className="windows-logs-filters" disabled={resource.error === 'session' || resource.status === 'revoked' || !events && !resource.loading} aria-describedby="windows-logs-filter-scope"><legend>{de ? 'Stichprobe filtern' : 'Filter sample'}</legend>
-            <label>{de ? 'Kanal' : 'Channel'}<select value={filters.channel} onChange={event => update('channel', event.target.value)}><option value="">{de ? 'Alle Kanäle' : 'All channels'}</option><option>Application</option><option>System</option></select></label>
-            <label>{de ? 'Stufe' : 'Level'}<select value={filters.level} onChange={event => update('level', event.target.value)}><option value="">{de ? 'Alle Stufen' : 'All levels'}</option>{levels.slice(1).map((label, i) => <option key={i} value={i + 1}>{label}</option>)}<option value="unknown">{levels[0]}</option></select></label>
+            <div className="windows-logs-filter"><label htmlFor={`${filterId}-channel`}>{de ? 'Kanal' : 'Channel'}</label><select id={`${filterId}-channel`} value={filters.channel} onChange={event => update('channel', event.target.value)}><option value="">{de ? 'Alle Kanäle' : 'All channels'}</option><option>Application</option><option>System</option></select></div>
+            <div className="windows-logs-filter"><label htmlFor={`${filterId}-level`}>{de ? 'Stufe' : 'Level'}</label><select id={`${filterId}-level`} value={filters.level} onChange={event => update('level', event.target.value)}><option value="">{de ? 'Alle Stufen' : 'All levels'}</option>{levels.slice(1).map((label, i) => <option key={i} value={i + 1}>{label}</option>)}<option value="unknown">{levels[0]}</option></select></div>
             <label>Provider<input type="search" autoComplete="off" spellCheck={false} maxLength={256} value={filters.provider} onChange={event => update('provider', event.target.value)}/></label>
             <label>{de ? 'Ereignis-ID' : 'Event ID'}<input type="text" autoComplete="off" inputMode="numeric" maxLength={5} aria-invalid={!validId} aria-describedby={!validId ? 'windows-logs-id-error' : undefined} value={filters.eventId} onChange={event => update('eventId', event.target.value)}/></label>
             <button type="button" className="button small" disabled={!Object.values(filters).some(Boolean)} onClick={clear}>{de ? 'Filter zurücksetzen' : 'Reset filters'}</button>
