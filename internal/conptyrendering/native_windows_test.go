@@ -14,29 +14,68 @@ import (
 )
 
 const publicChild = "--conpty-public-lines-only"
+const publicConsoleChild = "--conpty-public-conout-only"
 
 // The only child entry exits before the test runner. It accepts no input and
 // writes these fixed public trust lines and non-newline prompt. It does not run commands or spawn children.
 func TestMain(m *testing.M) {
-	if len(os.Args) == 2 && os.Args[1] == publicChild {
-		const lines = publicTrustLines
-		n, e := os.Stdout.Write([]byte(lines))
-		if e != nil || n != len(lines) {
-			os.Exit(2)
-		}
-		n, e = os.Stderr.Write([]byte(publicPrompt))
-		if e != nil || n != len(publicPrompt) {
-			os.Exit(2)
-		}
-		// Keep the non-newline prompt visible while alive; never read input.
-		time.Sleep(2 * time.Second)
-		os.Exit(0)
+	if len(os.Args) == 2 && (os.Args[1] == publicChild || os.Args[1] == publicConsoleChild) {
+		os.Exit(runPublicChild(os.Args[1] == publicConsoleChild))
 	}
 	os.Exit(m.Run())
 }
+func publicHandleType(handle windows.Handle) (character, pipe, console bool) {
+	kind, err := windows.GetFileType(handle)
+	var mode uint32
+	return err == nil && kind == windows.FILE_TYPE_CHAR, err == nil && kind == windows.FILE_TYPE_PIPE, windows.GetConsoleMode(handle, &mode) == nil
+}
+func runPublicChild(explicit bool) (code int) {
+	var facts publicHandleFacts
+	facts.stdoutChar, facts.stdoutPipe, facts.stdoutConsole = publicHandleType(windows.Handle(os.Stdout.Fd()))
+	facts.stderrChar, facts.stderrPipe, facts.stderrConsole = publicHandleType(windows.Handle(os.Stderr.Fd()))
+	out, promptOut := os.Stdout, os.Stderr
+	if explicit {
+		name, err := windows.UTF16PtrFromString("CONOUT$")
+		if err != nil {
+			return 2
+		}
+		handle, err := windows.CreateFile(name, windows.GENERIC_READ|windows.GENERIC_WRITE, windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE, nil, windows.OPEN_EXISTING, 0, 0)
+		if err != nil {
+			return 2
+		}
+		character, pipe, console := publicHandleType(handle)
+		if !character || pipe || !console {
+			windows.CloseHandle(handle)
+			return 2
+		}
+		file := os.NewFile(uintptr(handle), "<public console output>")
+		if file == nil {
+			windows.CloseHandle(handle)
+			return 2
+		}
+		defer func() {
+			if file.Close() != nil {
+				code = 2
+			}
+		}()
+		out, promptOut = file, file
+	}
+	n, err := out.Write([]byte(publicTrustLines))
+	if err != nil || n != len(publicTrustLines) {
+		return 2
+	}
+	n, err = promptOut.Write([]byte(publicPrompt))
+	if err != nil || n != len(publicPrompt) {
+		return 2
+	}
+	// No input is read or sent. Keep the same prompt live in each owned child.
+	time.Sleep(2 * time.Second)
+	return facts.code()
+}
 
 func TestNativePublicRendering(t *testing.T) {
-	result, reason := observeNative()
+	deadline := time.Now().Add(20 * time.Second)
+	result, reason := observeNative(false, deadline)
 	if reason != "none" {
 		t.Fatal(reason)
 	}
@@ -45,12 +84,24 @@ func TestNativePublicRendering(t *testing.T) {
 	if result.Overflow || result.Incomplete {
 		t.Fatal("rendering_bound_or_incomplete")
 	}
+	explicit, reason := observeNative(true, deadline)
+	if reason != "none" {
+		t.Fatal(reason)
+	}
+	if explicit.Overflow || explicit.Incomplete {
+		t.Fatal("rendering_bound_or_incomplete")
+	}
+	f := result.handles
+	t.Logf("stdout_char=%t stdout_pipe=%t stdout_console=%t stderr_char=%t stderr_pipe=%t stderr_console=%t conout_console=true conout_live_output=%t conout_public_trust=%t conout_exact_prompt=%t conout_prompt_without_final_space=%t conout_overflow=%t conout_incomplete=%t conout_residual_unknown=%t conout_first_residual_kind=%s", f.stdoutChar, f.stdoutPipe, f.stdoutConsole, f.stderrChar, f.stderrPipe, f.stderrConsole, explicit.LiveOutput, explicit.PublicTrust, explicit.ExactPrompt, explicit.PromptWithoutFinalSpace, explicit.Overflow, explicit.Incomplete, explicit.ResidualUnknown, explicit.FirstResidualKind)
 	// Unknown is a useful observation, not acceptance or permission to relax any
 	// production guard. The probe deliberately does not apply that guard.
 }
 
-func observeNative() (result Summary, reason string) {
+func observeNative(explicit bool, deadline time.Time) (result Summary, reason string) {
 	var empty Summary
+	if !time.Now().Before(deadline) {
+		return empty, "deadline"
+	}
 	var inputR, inputW, outputR, outputW windows.Handle
 	if windows.CreatePipe(&inputR, &inputW, nil, 0) != nil {
 		return empty, "input_pipe"
@@ -114,7 +165,11 @@ func observeNative() (result Summary, reason string) {
 	if e != nil {
 		return empty, "executable"
 	}
-	command, e := windows.UTF16PtrFromString(syscall.EscapeArg(exe) + " " + publicChild)
+	childArg := publicChild
+	if explicit {
+		childArg = publicConsoleChild
+	}
+	command, e := windows.UTF16PtrFromString(syscall.EscapeArg(exe) + " " + childArg)
 	if e != nil {
 		return empty, "command"
 	}
@@ -168,7 +223,7 @@ func observeNative() (result Summary, reason string) {
 	defer func() { observer.reset(); clear(observer.public.line[:]) }()
 	var buffer [1024]byte
 	defer clear(buffer[:])
-	deadline := time.Now().Add(20 * time.Second)
+	var handles publicHandleFacts
 	sawOutput := false
 	eof := false
 	for time.Now().Before(deadline) {
@@ -180,7 +235,12 @@ func observeNative() (result Summary, reason string) {
 			if status == windows.WAIT_OBJECT_0 {
 				reaped = true
 				var code uint32
-				if windows.GetExitCodeProcess(pi.Process, &code) != nil || code != 0 {
+				if windows.GetExitCodeProcess(pi.Process, &code) != nil {
+					return empty, "child_exit"
+				}
+				var valid bool
+				handles, valid = decodePublicHandleFacts(code)
+				if !valid {
 					return empty, "child_exit"
 				}
 				startClose()
@@ -225,6 +285,7 @@ func observeNative() (result Summary, reason string) {
 					return empty, "output_missing"
 				}
 				result = observer.Finish()
+				result.handles = handles
 				result.LiveOutput, result.PublicTrust = liveOutput, publicTrust
 				result.ExactPrompt, result.PromptWithoutFinalSpace = exactPrompt, omittedSpace
 				return result, "none"

@@ -20,6 +20,8 @@ def records(unknown=False):
         {"Action": "run", "Package": probe.PACKAGE, "Test": probe.TEST},
         {"Action": "output", "Package": probe.PACKAGE, "Test": probe.TEST,
          "Output": "    native_windows_test.go:38: " + summary + " first_residual_kind=none " + " ".join(name + "=false" for name in probe.TEXT_FIELDS) + "\n"},
+        {"Action": "output", "Package": probe.PACKAGE, "Test": probe.TEST,
+         "Output": "    native_windows_test.go:50: " + " ".join(name+"="+("true" if name=="conout_console" else "false") for name in probe.DESTINATION_FIELDS) + " conout_first_residual_kind=none\n"},
         {"Action": "pass", "Package": probe.PACKAGE, "Test": probe.TEST},
         {"Action": "pass", "Package": probe.PACKAGE},
     ]
@@ -27,6 +29,7 @@ def records(unknown=False):
 
 def failure_records(reason="child_exit"):
     rows = records()
+    del rows[3]
     rows[2]["Output"] = "    native_windows_test.go:41: " + reason + "\n"
     rows[3]["Action"] = rows[4]["Action"] = "fail"
     return rows
@@ -37,6 +40,41 @@ def encode(rows):
 
 
 class PublicProbeTests(unittest.TestCase):
+    def test_destination_record_required_unique_and_finite(self):
+        rows=records();del rows[3]
+        with self.assertRaises(probe.ProbeFailure) as caught:probe.project(encode(rows))
+        self.assertEqual(caught.exception.reason,"projection_destination_missing")
+        rows=records();rows.append(rows[3])
+        with self.assertRaises(probe.ProbeFailure):probe.project(encode(rows))
+        for field in probe.DESTINATION_FIELDS:
+            rows=records();rows[3]["Output"]=rows[3]["Output"].replace(field+"=",field+"=PRIVATE_SENTINEL")
+            with self.assertRaises(probe.ProbeFailure):probe.project(encode(rows))
+        for replacements in (("stdout_pipe=false","stdout_pipe=true","stdout_char=false","stdout_char=true"),
+                             ("stdout_console=false","stdout_console=true"),
+                             ("stderr_console=false","stderr_console=true"),
+                             ("conout_console=true","conout_console=false"),
+                             ("conout_overflow=false","conout_overflow=true"),
+                             ("conout_public_trust=false","conout_public_trust=true"),
+                             ("conout_residual_unknown=false","conout_residual_unknown=true")):
+            rows=records()
+            for old,new in zip(replacements[::2],replacements[1::2]):rows[3]["Output"]=rows[3]["Output"].replace(old,new)
+            with self.assertRaises(probe.ProbeFailure):probe.project(encode(rows))
+        rows=records()
+        for field in ("stdout_pipe","stderr_pipe","conout_live_output","conout_public_trust","conout_exact_prompt"):
+            rows[3]["Output"]=rows[3]["Output"].replace(field+"=false",field+"=true")
+        self.assertTrue(probe.project(encode(rows))["conout_public_trust"])
+
+    def test_destination_fragmentation_and_prefix_suppression(self):
+        rows=records();rows[3]["Output"]="PRIVATE_SENTINEL "+rows[3]["Output"]
+        text=rows[3]["Output"];expected=probe.project(encode(rows))
+        for split in range(len(text)+1):
+            parts=rows[:3]+[dict(rows[3],Output=text[:split]),dict(rows[3],Output=text[split:])]+rows[4:]
+            self.assertEqual(probe.project(encode(parts)),expected)
+        output=io.StringIO()
+        with mock.patch.object(probe.sys,"platform","win32"),mock.patch.object(probe,"capture",return_value=encode(rows)),contextlib.redirect_stdout(output):
+            self.assertEqual(probe.main(),0)
+        self.assertNotIn("PRIVATE_SENTINEL",output.getvalue())
+
     def test_presentation_prefix_is_discarded_without_export(self):
         expected = probe.project(encode(records()))
         body = records()[2]["Output"].split("cursor_position=", 1)[1]
@@ -163,7 +201,7 @@ class PublicProbeTests(unittest.TestCase):
         cases = [(b"", "projection_frame"), (b"PRIVATE_SENTINEL\n", "projection_json")]
         for key,value,reason in (("Package","other","projection_package"),("Test","Other","projection_test"),("Action","skip","projection_action")):
             rows=records();rows[2][key]=value;cases.append((encode(rows),reason))
-        for index,reason in ((2,"projection_missing_summary"),(3,"projection_missing_pass")):
+        for index,reason in ((2,"projection_missing_summary"),(4,"projection_missing_pass")):
             rows=records();del rows[index];cases.append((encode(rows),reason))
         for raw,reason in cases:
             with self.assertRaises(probe.ProbeFailure) as caught:
@@ -228,26 +266,26 @@ class PublicProbeTests(unittest.TestCase):
             probe.project(encode(rows))
 
     def test_requires_exact_test_package_and_summary(self):
-        self.assertEqual(set(probe.project(encode(records()))), set(probe.FIELDS) | set(probe.TEXT_FIELDS) | {"first_residual_kind"})
+        self.assertEqual(set(probe.project(encode(records()))), set(probe.FIELDS) | set(probe.TEXT_FIELDS) | set(probe.DESTINATION_FIELDS) | {"first_residual_kind", "conout_first_residual_kind"})
         self.assertTrue(probe.project(encode(records(True)))["unknown"])
-        for index in (2, 3, 4):
+        for index in (2, 3, 4, 5):
             rows = records()
             del rows[index]
             with self.assertRaises(ValueError):
                 probe.project(encode(rows))
         for action in ("fail", "skip", "bench", "pause"):
             rows = records()
-            rows[3]["Action"] = action
+            rows[4]["Action"] = action
             with self.assertRaises(ValueError):
                 probe.project(encode(rows))
         for field, value in (("Package", "localrmm/cmd/windows-service"), ("Test", "Other")):
             rows = records()
-            rows[3][field] = value
+            rows[4][field] = value
             with self.assertRaises(ValueError):
                 probe.project(encode(rows))
 
     def test_duplicate_malformed_and_nonfinite_reports_fail(self):
-        for index in (2, 3, 4):
+        for index in (2, 3, 4, 5):
             rows = records()
             rows.append(rows[index])
             with self.assertRaises(ValueError):

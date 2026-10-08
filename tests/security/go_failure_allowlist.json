@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "sourceCommit": "fccc4b00cd8a144afd58e4b995747afab7a10022",
-  "goSourceSha256": "795264123bf09400d68c5aecefa6cdc474d6ca345c2bd4d3d20ddcf36608f8e0",
+  "goSourceSha256": "3206911f61caf0bf08aac21becd4b47bf3b30236210eb78e2e712ec6ef0d4d99",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -1035,6 +1035,7 @@
       "TestFinishKeepsIncompleteSticky",
       "TestNativePublicRendering",
       "TestObserverRedactsFormatting",
+      "TestPublicHandleFactsClosedEncoding",
       "TestPublicModesIgnoreTitlePayloadAndMalformedLookalikes",
       "TestPublicPromptSourceContract",
       "TestPublicPromptTextEverySplit",

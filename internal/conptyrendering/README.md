@@ -1,8 +1,9 @@
 # Public ConPTY rendering probe (source candidate)
 
-This ordinary test starts only its own inert test-binary child, which writes two
-fixed public trust ASCII lines and the exact production-shaped non-newline prompt,
-then stays alive for two seconds without reading any input and exits. There is no elevation request, input,
+This ordinary test sequentially starts two owned inert test-binary children.
+Each writes the same two fixed public trust ASCII lines and the exact
+production-shaped non-newline prompt, then stays alive for two seconds without
+reading any input and exits. There is no elevation request, input,
 invitation, service/coordinator import, enrollment, fixture authority, network,
 ACL change, native-acceptance admission, or manual-gate environment. It requires
 no special host approval. Do not interpret this statement as authorization to run
@@ -48,7 +49,7 @@ no handles. The helper accepts no arbitrary arguments or commands.
 
 The main loop alone reads/peeks the output handle, limiting each read to the
 available bytes. A separate goroutine closes ConPTY while output continues to be
-drained through EOF. The run deadline is 20 seconds; cleanup terminates only the
+drained through EOF. The two cases share one absolute 20-second observation deadline; cleanup terminates only the
 owned process if necessary, waits up to 5 seconds for that process, closes its
 output pipe to release older ConPTY close waits, and waits up to 5 seconds for
 ConPTY closure. Cleanup failures produce only fixed reason labels. No cleanup
@@ -134,3 +135,31 @@ entire exact 18-field body with a terminating newline and no extra suffix.
 Exactly one record and both passing outcomes remain mandatory. This addresses
 the observed valid-body/different-prefix reporting mismatch; it does not alter
 ConPTY observation, console acceptance or any production security boundary.
+
+## Standard-output versus explicit-console comparison
+
+The first case retains the existing `os.Stdout`/`os.Stderr` writes. It reads only
+`GetFileType` and `GetConsoleMode` for those cached handles. Six booleans describe
+character-device, pipe and console-mode predicates; neither numeric handles nor
+error values leave the child. A closed exit-code encoding carries those facts
+to the owning parent. Invalid encodings or inconsistent predicates fail closed.
+
+The second case opens literal `CONOUT$` with noninheritable read/write access and
+read/write sharing, validates `FILE_TYPE_CHAR` and successful `GetConsoleMode`,
+and writes only the same fixed public fixture text through that owned handle.
+It closes that handle before exiting. It does not change standard handles,
+console modes or permissions, and never opens input. Both cases keep the same
+viewport, bounds, output drain and owned-process cleanup behavior. The baseline
+18-field record is unchanged; a second mandatory finite record reports baseline
+handle predicates and explicit-console live trust/prompt and boundedness facts.
+No raw pipe output or prefix text is exposed.
+
+Microsoft documents that standard handles can be redirected, and that `CONOUT$`
+opens the attached console's active output buffer independently of that
+redirection: [Console Handles](https://learn.microsoft.com/en-us/windows/console/console-handles)
+and [GetStdHandle](https://learn.microsoft.com/en-us/windows/console/getstdhandle).
+Pinned Go initializes `syscall.Stdout/Stderr` with `GetStdHandle`, then wraps them
+once in `os.Stdout/Stderr`; replacing a process-table handle later would not by
+itself rebind these files. The comparison measures this fixture only. Missing
+baseline text alone does not establish where it went; explicit-console text
+would support a routing distinction, not native enrollment acceptance.

@@ -17,12 +17,17 @@ FIELDS = ("cursor_position", "clear", "cursor_visibility", "presentation", "titl
           "unknown", "overflow", "incomplete", "win32_input_enable", "win32_input_disable",
           "focus_reporting_enable", "focus_reporting_disable", "residual_unknown")
 TEXT_FIELDS = ("live_output", "public_trust", "exact_prompt", "prompt_without_final_space")
+DESTINATION_FIELDS = ("stdout_char", "stdout_pipe", "stdout_console", "stderr_char", "stderr_pipe", "stderr_console",
+                      "conout_console", "conout_live_output", "conout_public_trust", "conout_exact_prompt",
+                      "conout_prompt_without_final_space", "conout_overflow", "conout_incomplete", "conout_residual_unknown")
 RESIDUAL_KINDS = ("none", "text_control", "non_ascii", "escape", "csi", "osc")
 SUMMARY_TEXT = (" ".join(name + r"=(true|false)" for name in FIELDS) +
                 r" first_residual_kind=(" + "|".join(RESIDUAL_KINDS) + r") " +
                 " ".join(name + r"=(true|false)" for name in TEXT_FIELDS) + r"\n")
 SUMMARY = re.compile(r"    native_windows_test\.go:[1-9][0-9]*: " + SUMMARY_TEXT)
 SUMMARY_BODY = re.compile(SUMMARY_TEXT)
+DESTINATION = re.compile(" ".join(name + r"=(true|false)" for name in DESTINATION_FIELDS) +
+                         r" conout_first_residual_kind=(" + "|".join(RESIDUAL_KINDS) + r")\n")
 ARGS = ("go", "test", "-mod=readonly", "-json", "-count=1", "-timeout=45s",
         "-buildvcs=false", "-run=^TestNativePublicRendering$", "./internal/conptyrendering")
 
@@ -43,7 +48,8 @@ LAUNCHER_FAILURES = frozenset({
     "projection_bounds", "projection_residual", "projection_unknown", "projection_prompt",
     "projection_live", "launch_or_io_failed", "projection_line_bound", "projection_line_incomplete",
     "projection_summary_crlf", "projection_summary_prefix", "projection_summary_fields",
-    "projection_summary_attribution",
+    "projection_summary_attribution", "projection_destination_fields", "projection_destination_duplicate",
+    "projection_destination_missing", "projection_destination_invariants",
 })
 FAILURE_LINE = re.compile(r"    native_windows_test\.go:[1-9][0-9]*: (" +
                           "|".join(sorted(NATIVE_FAILURES)) + r")\n")
@@ -125,7 +131,7 @@ def unique_object(pairs):
 def project(raw):
     require(type(raw) is bytes and 0 < len(raw) <= MAX_OUTPUT and raw.endswith(b"\n"), "projection_frame")
     passed = package_passed = False
-    summary = None
+    summary = destination = None
     label_seen = wrong_owner = crlf = prefix = False
     lines = OutputLines()
     for line in raw.splitlines():
@@ -147,6 +153,16 @@ def project(raw):
                 package_passed = True
         if action == "output" and name == TEST and event.get("OutputType") != "frame":
             for output in lines.feed(event.get("Output")):
+                marker = "stdout_char="
+                start = output.find(marker)
+                if start >= 0:
+                    require("cursor_position=" not in output, "projection_line_incomplete")
+                    require(output.count(marker) == 1 and destination is None, "projection_destination_duplicate")
+                    match = DESTINATION.fullmatch(output[start:])
+                    require(match is not None, "projection_destination_fields")
+                    destination = dict(zip(DESTINATION_FIELDS, (x == "true" for x in match.groups()[:-1])))
+                    destination["conout_first_residual_kind"] = match.groups()[-1]
+                    continue
                 label_seen |= "cursor_position=" in output
                 crlf |= output.endswith("\r\n") and SUMMARY.fullmatch(output[:-2] + "\n") is not None
                 prefix |= SUMMARY_BODY.search(output) is not None
@@ -184,6 +200,16 @@ def project(raw):
     require(summary["unknown"] == any(summary[name] for name in FIELDS[8:]), "projection_unknown")
     require(not (summary["exact_prompt"] and summary["prompt_without_final_space"]), "projection_prompt")
     require(summary["live_output"] or not any(summary[name] for name in TEXT_FIELDS[1:]), "projection_live")
+    require(destination is not None, "projection_destination_missing")
+    for stream in ("stdout", "stderr"):
+        require(not (destination[stream+"_char"] and destination[stream+"_pipe"]) and
+                (not destination[stream+"_console"] or destination[stream+"_char"]), "projection_destination_invariants")
+    require(destination["conout_console"] and not destination["conout_overflow"] and not destination["conout_incomplete"], "projection_destination_invariants")
+    require(destination["conout_residual_unknown"] == (destination["conout_first_residual_kind"] != "none"), "projection_destination_invariants")
+    require(not (destination["conout_exact_prompt"] and destination["conout_prompt_without_final_space"]), "projection_destination_invariants")
+    require(destination["conout_live_output"] or not any(destination[name] for name in
+            ("conout_public_trust", "conout_exact_prompt", "conout_prompt_without_final_space")), "projection_destination_invariants")
+    summary.update(destination)
     return summary
 
 
@@ -245,6 +271,8 @@ def main():
               " ".join(name + "=" + str(summary[name]).lower() for name in FIELDS) +
               " first_residual_kind=" + summary["first_residual_kind"] +
               " " + " ".join(name + "=" + str(summary[name]).lower() for name in TEXT_FIELDS) +
+              " " + " ".join(name + "=" + str(summary[name]).lower() for name in DESTINATION_FIELDS) +
+              " conout_first_residual_kind=" + summary["conout_first_residual_kind"] +
               "; no coordinator or guard compatibility claim.")
         return 0
     except ProbeFailure as failure:

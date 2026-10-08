@@ -24,6 +24,7 @@ const (
 
 // Summary contains only finite observations, never terminal bytes or parameters.
 type Summary struct {
+	handles                                                                          publicHandleFacts
 	CursorPosition, Clear, CursorVisibility, Presentation, Title                     bool
 	Unknown, Overflow, Incomplete                                                    bool
 	Win32InputEnable, Win32InputDisable, FocusReportingEnable, FocusReportingDisable bool

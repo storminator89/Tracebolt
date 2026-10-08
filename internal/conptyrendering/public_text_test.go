@@ -95,3 +95,19 @@ func TestPublicTextPendingControlsAndBounds(t *testing.T) {
 		t.Fatal("bounded line did not recover on newline")
 	}
 }
+
+func TestPublicHandleFactsClosedEncoding(t *testing.T) {
+	for code := uint32(0); code < 512; code++ {
+		facts, ok := decodePublicHandleFacts(code)
+		valid := code >= 256 && code <= 319 && !(code&1 != 0 && code&2 != 0) && !(code&8 != 0 && code&16 != 0) && !(code&4 != 0 && code&1 == 0) && !(code&32 != 0 && code&8 == 0)
+		if ok != valid {
+			t.Fatal("handle facts admitted an invalid code")
+		}
+		if ok && uint32(facts.code()) != code {
+			t.Fatal("handle fact encoding differs")
+		}
+	}
+	if _, ok := decodePublicHandleFacts(^uint32(0)); ok {
+		t.Fatal("unbounded exit value accepted")
+	}
+}

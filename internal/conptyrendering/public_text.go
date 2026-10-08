@@ -54,3 +54,30 @@ func (o *Observer) liveTextSummary() (trust, exact, omitted bool) {
 	complete := o.state == 0 && !p.pendingCR
 	return p.fingerprint && p.comparison, complete && !p.overflow && bytes.Equal(p.line[:p.n], []byte(publicPrompt)), complete && !p.overflow && bytes.Equal(p.line[:p.n], []byte(publicPrompt[:len(publicPrompt)-1]))
 }
+
+// publicHandleFacts contains only type/mode predicates for the fixed child's
+// cached stdout/stderr handles. No handle value, path or error is encoded.
+type publicHandleFacts struct {
+	stdoutChar, stdoutPipe, stdoutConsole bool
+	stderrChar, stderrPipe, stderrConsole bool
+}
+
+func (f publicHandleFacts) code() int {
+	code := 256
+	for i, bit := range []bool{f.stdoutChar, f.stdoutPipe, f.stdoutConsole, f.stderrChar, f.stderrPipe, f.stderrConsole} {
+		if bit {
+			code |= 1 << i
+		}
+	}
+	return code
+}
+func decodePublicHandleFacts(code uint32) (publicHandleFacts, bool) {
+	if code < 256 || code > 319 {
+		return publicHandleFacts{}, false
+	}
+	f := publicHandleFacts{code&1 != 0, code&2 != 0, code&4 != 0, code&8 != 0, code&16 != 0, code&32 != 0}
+	if f.stdoutChar && f.stdoutPipe || f.stderrChar && f.stderrPipe || f.stdoutConsole && !f.stdoutChar || f.stderrConsole && !f.stderrChar {
+		return publicHandleFacts{}, false
+	}
+	return f, true
+}
