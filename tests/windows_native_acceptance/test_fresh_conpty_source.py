@@ -117,3 +117,27 @@ class FreshConPTYSourceBoundary(unittest.TestCase):
         child=(ROOT/'cmd/windows-service/fresh_native_windows_test.go').read_text()
         self.assertIn('setupFailedCategory("fresh_disclosure", "failed", err)',setup)
         self.assertIn('setupFailedCategory("success_write", "failed", e)',child)
+
+
+    def test_child_output_is_owned_explicit_and_tagged(self):
+        native=(ROOT/'cmd/windows-service/fresh_output_windows_test.go').read_text()
+        harness=(ROOT/'cmd/windows-service/fresh_native_windows_test.go').read_text()
+        portable=(ROOT/'cmd/windows-service/fresh_output_test.go').read_text()
+        self.assertTrue(native.startswith('//go:build windows && tracebolt_fresh_native\n'))
+        self.assertIn('windows.UTF16PtrFromString("CONOUT$")',native)
+        self.assertIn('windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE, nil, windows.OPEN_EXISTING',native)
+        self.assertIn('kind != windows.FILE_TYPE_CHAR',native)
+        self.assertIn('windows.GetConsoleMode',native)
+        child=harness.split('func freshChild(ctx ',1)[1].split('func freshAwait(',1)[0]
+        self.assertLess(child.index('!g.Check()'),child.index('withFreshConsoleOutput('))
+        self.assertIn('freshConsent(), output, output)',child)
+        self.assertIn('fmt.Fprint(output, "\\r\\n"+freshSuccessMarker+"\\r\\n")',child)
+        for forbidden in ('os.Stdout','os.Stderr','SetStdHandle','SetConsoleMode','STD_INPUT_HANDLE','CONIN$'):
+            self.assertNotIn(forbidden,native)
+        for forbidden in ('os.Stdout','os.Stderr'):
+            self.assertNotIn(forbidden,child)
+        self.assertEqual(portable.count('output.Close()'),1)
+        self.assertLess(portable.index('character(output)'),portable.index('run(output)'))
+        self.assertLess(portable.index('console(output)'),portable.index('run(output)'))
+        main=harness.split('func freshChildMain()',1)[1].split('func TestFreshReadConPTYNative',1)[0]
+        self.assertLess(main.index('freshAuthorization()'),main.index('freshChild(ctx, g)'))

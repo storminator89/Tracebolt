@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "sourceCommit": "fccc4b00cd8a144afd58e4b995747afab7a10022",
-  "goSourceSha256": "3206911f61caf0bf08aac21becd4b47bf3b30236210eb78e2e712ec6ef0d4d99",
+  "goSourceSha256": "e49762568a157ed9687d73258df382c1c2ee8d3c7a780c35d94ec41a478a710b",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -228,6 +228,8 @@
       "TestFreshChildEnvironmentAddsOnlyTrustedSystemDrive",
       "TestFreshChildEnvironmentRejectsInvalidDirectoryWithoutDisclosure",
       "TestFreshChildEnvironmentRejectsNULAndRetainsEmptyValues",
+      "TestFreshConsoleOutputOwnershipAndFaults",
+      "TestFreshConsoleOutputRejectsMissingCallbacks",
       "TestFreshNaturalDiagnosticKnownFailureSnapshot",
       "TestFreshNaturalExitDiagnostics",
       "TestFreshReadConPTYNative",

@@ -9,6 +9,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -214,24 +215,30 @@ func freshChild(ctx context.Context, g *freshgate.Grant) error {
 	if ctx.Err() != nil || !g.Check() {
 		return setupFailed("child_context", freshgate.ErrGuard)
 	}
-	if _, e := installReadObservation(ctx, os.Getenv("TRACEBOLT_FRESH_BOOTSTRAP"), freshConsent(), os.Stdout, os.Stderr); e != nil {
-		return setupFailed("coordinator", e)
-	}
-	var completionErr error
-	if e := freshAwait(ctx, func() bool { _, completionErr = freshVerifyCompleted(ctx, g); return completionErr == nil }); e != nil {
-		if completionErr != nil {
-			return completionErr
+	err := withFreshConsoleOutput(openFreshConsoleOutput, freshConsoleOutputCharacter, freshConsoleOutputMode, func(output io.Writer) error {
+		if _, e := installReadObservation(ctx, os.Getenv("TRACEBOLT_FRESH_BOOTSTRAP"), freshConsent(), output, output); e != nil {
+			return setupFailed("coordinator", e)
 		}
-		return setupFailed("completion_wait", e)
+		var completionErr error
+		if e := freshAwait(ctx, func() bool { _, completionErr = freshVerifyCompleted(ctx, g); return completionErr == nil }); e != nil {
+			if completionErr != nil {
+				return completionErr
+			}
+			return setupFailed("completion_wait", e)
+		}
+		if ctx.Err() != nil || !g.Check() {
+			return setupFailed("success_context", freshgate.ErrGuard)
+		}
+		_, e := fmt.Fprint(output, "\r\n"+freshSuccessMarker+"\r\n")
+		if e != nil {
+			return setupFailedCategory("success_write", "failed", e)
+		}
+		return nil
+	})
+	if errors.Is(err, errFreshConsoleOutput) {
+		return setupFailed("child_context", freshgate.ErrGuard)
 	}
-	if ctx.Err() != nil || !g.Check() {
-		return setupFailed("success_context", freshgate.ErrGuard)
-	}
-	_, e := fmt.Fprint(os.Stdout, "\r\n"+freshSuccessMarker+"\r\n")
-	if e != nil {
-		return setupFailedCategory("success_write", "failed", e)
-	}
-	return nil
+	return err
 }
 func freshAwait(ctx context.Context, condition func() bool) error {
 	for {
