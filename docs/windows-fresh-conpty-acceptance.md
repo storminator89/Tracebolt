@@ -1,12 +1,35 @@
 # Separate fresh Windows ConPTY native test candidate
 
-This is source-only opt-in test infrastructure, not a public installer, workflow
-result, release gate override, deployment command or permission to run. No native
+This is opt-in test infrastructure, not a public installer, release gate override,
+deployment command or permission to run. Exact native results are recorded below. No native
 execution is established by portable tests or either-architecture cross-builds.
 Existing base and expanded manual modes, consent meanings and reports are unchanged.
-A distinct manual-only workflow candidate is included. The recorded native attempt
-below failed; no accepted native subset has been established. There is no automatic
-or reusable native trigger.
+A distinct manual-only workflow is included. Historical failed attempts remain
+recorded below; the exact-source fresh native subset now has the successful
+evidence listed next. There is no automatic or reusable native trigger.
+
+## Verified fresh native subset
+
+[Run 37800284228](https://github.com/storminator89/Tracebolt/actions/runs/37800284228)
+on exact source `69fc69a9d20efb8f998898445246ff317d94ac57` completed successfully.
+Artifact `11560367520` contains the validated 1,965-byte finite JSON report; its
+ZIP SHA-256 is `e1f84ddde808bbc1172f003ffa0d95da6848042ef6c73db436e0a8151bb993c4`.
+The report records `passed_fresh_native_subset`, fresh orchestration acceptance,
+controller `completed`, coordinator `configured`, session `passed`, natural child
+exit `zero`, and no failure or output rejection.
+
+Verified scope includes the actual hidden console with synthetic input/no echo,
+protected receipt/grants, limited service token, staged disabled state, and two
+inventory/extension frames. Scoped partial process/service/software observations
+are allowed; this is not a complete-host-visibility claim. The owned child was
+reaped, console and TLS fixture closed, and exact-owned service stopped.
+
+Automatic startup remains configured (`serviceDisabled=false`). Service/app
+files, identity and grants are retained; `applicationCleanup=false`, and required
+VM disposal is unverified. Production manager/ingress/shared dashboard, human
+entry/approval, reboot, upgrade/rollback and native interruption acceptance are
+not established. This successful subset neither grants new permission nor
+creates a released installer or full Linux feature parity.
 
 ## Recorded native failure and diagnostics boundary
 
@@ -19,9 +42,9 @@ observations do not establish the runtime cause or the resulting service state.
 The verified historical report artifact SHA-256 is
 `4f324ea407058bf9db74202f81a4b2cda9cc42e2da941aef17203121a0f5b7a2`.
 
-The diagnostics-only candidate described below has not been run natively. Its
-portable checks do not fix or identify the runtime failure, establish a successful
-native subset, or authorize a new workflow dispatch or native operation.
+These historical diagnostics and portable checks do not by themselves establish
+native success or authorize a new workflow dispatch. The later successful subset
+is bound only to the exact run and source recorded above.
 
 ## Distinct approval before any effect
 
@@ -142,7 +165,8 @@ final two minutes for exact-owned stop/verification. It is never extended on ret
 
 An unauthorized tagged test skips before effects; a skip or process exit zero is
 never native acceptance. Only the finite `passed_fresh_native_subset` report with
-all required evidence can establish this subset, and none has yet been produced.
+all required evidence can establish this subset. The report recorded above meets
+that contract on its exact source; other sources/runs need their own evidence.
 
 ## Native execution design and finite evidence
 

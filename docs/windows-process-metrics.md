@@ -79,6 +79,21 @@ Identity revocation and existing session/navigation/blur/clock protections hide
 private data. Process measurements never enter basic observations or AI/provider
 exports.
 
+The Processes workspace can filter the captured process name or PID and sort by
+name, numeric PID, CPU or working-set RAM in either direction. Missing CPU/RAM
+measurements stay last; byte sorting preserves exact uint64 values. The default
+remains ascending PID. Each page contains at most 25 of the existing maximum
+128 captured process rows. Captured, matching, displayed and observed counts
+remain distinct; sorting cannot find high-usage processes omitted from the
+bounded collection. These controls neither collect more rows nor grant a scope.
+Filter/sort changes return to the first page. A same-snapshot refresh keeps only
+the view controls while the resource hides private rows during its reread.
+Device or original-snapshot changes,
+private-data clearing and leaving the Processes tab discard its view controls.
+Metric expiry removes values independently while younger process rows remain.
+English/German native controls stay outside the mobile-hidden table header;
+fixture DOM/keyboard coverage is not rendered-browser or native acceptance.
+
 ## Remaining acceptance
 
 Portable synthetic tests, mocked Windows API tests, TypeScript/DOM tests and

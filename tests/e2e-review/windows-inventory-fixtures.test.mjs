@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import {settleWindowsHistory,windowsBrowserFixture,windowsInventoryFixtureDisclosure,windowsInventoryFailureStage} from './windows-inventory-browser.mjs';
+import {remountWindowsDevice,settleWindowsHistory,windowsBrowserFixture,windowsInventoryFixtureDisclosure,windowsInventoryFailureStage} from './windows-inventory-browser.mjs';
 test('invented Windows views preserve finite scope, truncation and denied distinction',()=>{
  const now='2026-10-07T12:00:10Z',fresh=windowsBrowserFixture(now),stale=windowsBrowserFixture(now,'stale');
  assert.equal(fresh.events.scope,'windows-application-system-event-headers-v1');assert.equal(fresh.events.channels[0].rows[0].recordId,'18446744073709551615');assert.equal(fresh.events.channels[1].quality,'denied');assert.equal(stale.events.collectedAt,stale.snapshot.collectedAt);
@@ -102,3 +102,89 @@ test('paused overview still rejects incomplete chart evidence',async()=>{
  const expect={poll(probe){return {async toBe(wanted){for(let n=0;n<3;n++)if(await probe()===wanted)return;throw new Error('incomplete chart evidence');}};}};
  await assert.rejects(settleWindowsHistory(page,expect,async ms=>{assert.equal(ms,500);advances++;}),/incomplete chart evidence/);assert.equal(advances,3);
 });
+
+
+test('expiry remount waits for the actual device unmount and fleet before returning',async()=>{
+ const calls=[];let pending=false,unmounted=false;
+ const page={async goto(url){calls.push(url);if(url.endsWith('/#/devices'))pending=true;else assert.equal(unmounted,true,'return must not overtake the away commit');},locator(selector){return selector;}};
+ const expect=selector=>({async toHaveCount(count){assert.equal(selector,'.device-page');assert.equal(count,0);assert.equal(pending,true);calls.push('unmount');unmounted=true;},async toBeVisible(){assert.equal(selector,'.device-table');assert.equal(unmounted,true);calls.push('fleet');}});
+ await remountWindowsDevice(page,expect,'https://fixture.invalid');
+ assert.deepEqual(calls,['https://fixture.invalid/#/devices','unmount','fleet',`https://fixture.invalid/#/devices/agent_${'7'.repeat(32)}`]);
+ const source=fs.readFileSync(new URL('./windows-inventory-browser.mjs',import.meta.url),'utf8');
+ assert.equal((source.match(/await remountWindowsDevice\(page,expect,base\)/g)||[]).length,2);
+ assert.doesNotMatch(source,/setDefaultTimeout|waitForTimeout|\.skip\(|test\.skip/);
+});
+
+test('expiry remount refuses to return if the device never unmounts',async()=>{
+ const visits=[];
+ const page={async goto(url){visits.push(url);},locator(selector){return selector;}};
+ const expect=()=>({async toHaveCount(){throw new Error('device still mounted');}});
+ await assert.rejects(remountWindowsDevice(page,expect,'https://fixture.invalid'),/device still mounted/);
+ assert.deepEqual(visits,['https://fixture.invalid/#/devices']);
+});
+
+
+test('repeated intended network generations age while trusted server time advances',()=>{
+ const origin='2026-10-08T12:00:00.000Z';
+ for(const phase of ['network-stale','network-expiring']){
+  const first=windowsBrowserFixture(origin,phase,origin);
+  const later=windowsBrowserFixture('2026-10-08T12:00:04.000Z',phase,origin);
+  assert.equal(later.serverNow,'2026-10-08T12:00:04.000Z');
+  assert.equal(later.snapshot.generationId,first.snapshot.generationId);
+  assert.equal(later.network.collectedAt,first.network.collectedAt);
+  assert.equal(later.snapshot.collectedAt,first.snapshot.collectedAt);
+  assert.equal(Date.parse(later.serverNow)-Date.parse(later.network.collectedAt),Date.parse(first.serverNow)-Date.parse(first.network.collectedAt)+4000);
+ }
+ const expired=windowsBrowserFixture('2026-10-08T12:00:05.000Z','network-expiring',origin);
+ assert.equal(expired.serverNow,'2026-10-08T12:00:05.000Z');assert.equal(expired.status,'unavailable');assert.equal(expired.snapshot,null);
+ for(const key of ['events','volumes','processMetrics','network'])assert.equal(Object.hasOwn(expired,key),false);
+ const source=fs.readFileSync(new URL('./windows-inventory-browser.mjs',import.meta.url),'utf8');
+ assert.match(source,/windowsBrowserFixture\(at,phase,networkPhaseAt\?\?at,logsPhaseAt\?\?at\)/);
+ assert.match(source,/phase='network-expiring';networkPhaseAt=now\(\)/);
+});
+
+test('actual route parser demonstrates queued hash coalescence and the remount barrier',async()=>{
+ const {createRequire}=await import('node:module'),{default:vm}=await import('node:vm');
+ const require=createRequire(new URL('../../web/package.json',import.meta.url));
+ const app=fs.readFileSync(new URL('../../web/src/App.tsx',import.meta.url),'utf8');
+ const source=app.slice(app.indexOf('function useRoute()'),app.indexOf('\nconst navigate ='));
+ const {code}=await require('esbuild').transform(source,{loader:'ts'});
+ function harness(){
+  const id=`agent_${'7'.repeat(32)}`,states=[],listeners=[],queued=[];
+  const window={location:{hash:`#/devices/${id}`},addEventListener(type,fn){if(type==='hashchange')listeners.push(fn);},removeEventListener(){}};
+  const context=vm.createContext({window,document:{getElementById:()=>null},decodeRouteId:value=>value,useState:init=>[init(),value=>states.push(value)],useRef:value=>({current:value}),useLayoutEffect:fn=>fn(),useEffect:fn=>fn(),Map});
+  vm.runInContext(code+'\nuseRoute();',context);
+  const flush=()=>{while(queued.length)queued.shift()();};
+  const page={async goto(url){window.location.hash=new URL(url).hash;queued.push(()=>listeners.forEach(fn=>fn()));},locator:selector=>selector};
+  return {page,flush,states,id};
+ }
+ const old=harness();
+ await old.page.goto('https://fixture.invalid/#/devices');await old.page.goto(`https://fixture.invalid/#/devices/${old.id}`);old.flush();
+ assert.equal(old.states.length,2);assert.ok(old.states.every(route=>route.id===old.id),'both queued events can read only the final route');
+ const fixed=harness();
+ const expect=selector=>({async toHaveCount(count){assert.equal(selector,'.device-page');assert.equal(count,0);fixed.flush();assert.equal(fixed.states.at(-1).id,undefined);},async toBeVisible(){assert.equal(selector,'.device-table');assert.equal(fixed.states.at(-1).id,undefined);}});
+ await remountWindowsDevice(fixed.page,expect,'https://fixture.invalid');fixed.flush();
+ assert.equal(fixed.states.length,2);assert.equal(fixed.states[0].id,undefined);assert.equal(fixed.states[1].id,fixed.id);
+});
+
+test('bounded process-control fixture preserves disclosed counts and exact source values',()=>{
+ const view=windowsBrowserFixture('2026-10-07T12:00:10Z','process-controls'),section=view.snapshot.processes,metrics=view.processMetrics;
+ assert.equal(section.rows.length,61);assert.equal(section.observedCount,200);assert.equal(section.countExact,false);assert.equal(section.complete,false);assert.equal(section.truncated,true);assert.equal(section.quality,'partial');
+ assert.equal(metrics.rows.length,61);assert.equal(metrics.observedCount,61);assert.equal(metrics.truncated,false);assert.equal(metrics.generationId,view.snapshot.generationId);
+ assert.deepEqual(metrics.rows.slice(0,3).map(row=>row.cpuPercent),[2,10,125.25]);
+ assert.equal(metrics.rows[0].memoryBytes,'9007199254740993');assert.equal(metrics.rows[1].memoryBytes,'9007199254740992');assert.equal(metrics.rows[59].memoryBytes,'18446744073709551615');
+ assert.equal(metrics.rows[60].cpuPercent,null);assert.equal(metrics.rows[60].cpuQuality,'denied');assert.equal(metrics.rows[60].memoryBytes,null);assert.equal(metrics.rows[60].memoryQuality,'denied');
+ assert.deepEqual(metrics.rows.map(row=>row.pid),section.rows.map(row=>row.pid));
+});
+test('hosted process-control checks are additive and preserve read-only desktop/mobile safety',()=>{
+ const source=fs.readFileSync(new URL('./windows-process-browser.mjs',import.meta.url),'utf8'),runner=fs.readFileSync(new URL('./windows-inventory-browser.mjs',import.meta.url),'utf8');
+ for(const sort of ['cpu-desc','cpu-asc','ram-desc','ram-asc','pid-asc'])assert.ok(source.includes(`selectOption('${sort}')`));
+ assert.match(source,/toHaveCount\(25\)/);assert.match(source,/toHaveCount\(11\)/);assert.match(source,/toHaveCount\(1\)/);assert.match(source,/Rows 51–61 of 61 matching · 61 captured/);assert.match(source,/61 captured · 61 observed within bounded scope/);
+ assert.match(source,/page\.keyboard\.press\('Enter'\)/);assert.match(source,/scrollWidth<=el\.clientWidth\+1/);assert.ok(source.includes('synthetic-windows-process-controls-${width}-${locale}'));
+ assert.match(runner,/exerciseWindowsProcessControls\(\{page,expect,locale,width,shot,disclosure:windowsInventoryFixtureDisclosure\}\)/);
+ assert.match(runner,/for\(const locale of \['en','de'\]\)for\(const width of \[1440,390\]\)/);
+ assert.doesNotMatch(source,/chromium\.launch|newContext\(|execFile|spawn\(|writeFile|ignoreHTTPSErrors|fetch\(/);
+});
+
+// Additive Logs contracts remain in the hosted fixture gate.
+import './windows-logs-fixtures.test.mjs';

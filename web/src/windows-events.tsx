@@ -2,7 +2,7 @@ import { useLocale } from './i18n';
 import { fullDate } from './utils';
 import type { WindowsInventoryResource } from './windows-inventory-resource';
 
-export function WindowsEventsPanel({ resource }: { resource: WindowsInventoryResource }) {
+export function WindowsEventsPanel({ resource, onOpenLogs }: { resource: WindowsInventoryResource; onOpenLogs?: () => void }) {
     const [locale] = useLocale(), de = locale === 'de';
     const events = resource.events;
     const state = resource.error ? (de ? 'Ereignisse nicht verfügbar. Health unbekannt.' : 'Events unavailable. Health unknown.') : resource.loading ? (de ? 'Ereignisse werden geladen …' : 'Loading events …') : resource.status === 'revoked' ? (de ? 'Gerätefreigabe beendet.' : 'Device access ended.') : !events ? (de ? 'Keine aktuelle Ereignisfreigabe gemeldet. Health unbekannt.' : 'No current event scope reported. Health unknown.') : resource.eventsStale ? (de ? 'Veraltete Ereignisstichprobe. Health unbekannt.' : 'Stale event sample. Health unknown.') : (de ? 'Beobachtete Ereignisse' : 'Observed events');
@@ -19,6 +19,7 @@ export function WindowsEventsPanel({ resource }: { resource: WindowsInventoryRes
                 {channel.rows.length > 0 && <details><summary>{de ? 'Ereignisse ansehen' : 'View events'}</summary><div className="windows-inventory-table-wrap"><table className="windows-inventory-table"><thead><tr>{[de ? 'Zeit' : 'Time', de ? 'Stufe' : 'Level', 'Provider', 'ID'].map(h=><th key={h} scope="col">{h}</th>)}</tr></thead><tbody>{channel.rows.map(event=><tr key={event.recordId}><td data-label={de ? 'Zeit' : 'Time'}><time dateTime={event.timestamp}>{fullDate(event.timestamp)}</time></td><td data-label={de ? 'Stufe' : 'Level'}>{level(event.level)}</td><td data-label="Provider">{event.provider}</td><td data-label="ID">{event.eventId}</td></tr>)}</tbody></table></div></details>}
             </section>;
         })}</>}
+        {onOpenLogs && <button type="button" className="text-button" onClick={onOpenLogs}>{de ? 'Ereignisköpfe in Logs öffnen' : 'Open event headers in Logs'}</button>}
         <details className="windows-inventory-scope"><summary>{de ? 'Umfang' : 'Scope'}</summary><p>{de ? 'Nur Application-/System-Ereignisköpfe. Keine Nachrichten oder Security-Logs, kein KI-Export. Die Stichprobe ist keine vollständige Health-Bewertung. Ereignisse können älter als die Erfassung sein. Eine separate lokale Freigabe ist erforderlich.' : 'Application/System event headers only. No messages, Security logs or AI export. A sample is not a complete health assessment. Events may be older than the capture time. Separate local approval is required.'}</p></details>
     </section>;
 }

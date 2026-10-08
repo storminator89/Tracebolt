@@ -1,7 +1,9 @@
 /** Invented Windows inventory in the existing real loopback login and compiled UI.
  * Durable enrollment/sender/storage authority has separate Go fixtures. This case
  * never collects an endpoint, creates an invitation or installs a service. */
+import {windowsLogsBrowserCase,windowsLogsFixture} from './windows-logs-browser.mjs';
 import {createRequire} from 'node:module';
+import {addWindowsProcessControlsFixture,exerciseWindowsProcessControls} from './windows-process-browser.mjs';
 import {fileURLToPath} from 'node:url';
 import path from 'node:path';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../..');
@@ -12,10 +14,10 @@ const {windowsNetwork,windowsVolumes,windowsDevice,windowsDeviceId,windowsNow,wi
 export const windowsInventoryCaseName='Synthetic Windows inventory shares device charts and explicit enrollment consent without Linux reads';
 export const windowsInventoryFixtureDisclosure='Real loopback HTTP-test fixture login with intercepted invented Windows inventory and resource history in the production UI. UI-only evidence; no native endpoint acceptance, collection, invitation, service installation or external request.';
 let stage='setup';
-const stages=new Set(['setup','login','overview','overview-history','inventory','storage','network','network-stale','network-expired','network-partial','network-empty','network-denied','network-unavailable','network-truncated','process-metrics','process-metrics-stale','process-metrics-expired','events','legacy','partial','denied','enrollment','access-loss']);
+const stages=new Set(['setup','login','overview','overview-history','inventory','storage','network','network-stale','network-expired','network-partial','network-empty','network-denied','network-unavailable','network-truncated','process-metrics','process-controls','process-metrics-stale','process-metrics-expired','events','logs','legacy','partial','denied','enrollment','access-loss']);
 export const windowsInventoryFailureStage=()=>stages.has(stage)?stage:'setup';
 const mark=value=>{stage=value;};
-export function windowsBrowserFixture(now,phase='fresh'){
+export function windowsBrowserFixture(now,phase='fresh',networkPhaseAt=now,logsPhaseAt=now){
  const view=windowsView(),time=Date.parse(now);view.serverNow=now;view.receivedAt=new Date(time-1000).toISOString();view.snapshot.collectedAt=new Date(time-(phase==='stale'?300000:2000)).toISOString();
  view.events={schemaVersion:'tracebolt.windows-event-metadata.v1',scope:'windows-application-system-event-headers-v1',grantId:'e'.repeat(32),generationId:view.snapshot.generationId,collectedAt:view.snapshot.collectedAt,channels:[{channel:'Application',quality:'observed',reason:'',complete:true,truncated:false,observedCount:1,rows:[{recordId:'18446744073709551615',eventId:42,level:2,provider:'Invented Event Provider',timestamp:new Date(time-60000).toISOString()}]},{channel:'System',quality:'denied',reason:'windows_events_access_denied',complete:false,truncated:false,observedCount:0,rows:[]}]};
  if(phase==='legacy')delete view.events;
@@ -34,16 +36,27 @@ export function windowsBrowserFixture(now,phase='fresh'){
   ]};
  }
  if(phase!=='legacy'){
-  view.network=windowsNetwork();view.network.collectedAt=new Date(time-(phase==='network-expiring'?86400000-5000:phase==='network-stale'||phase==='stale'?300000:1500)).toISOString();
+  view.network=windowsNetwork();
+  // A repeated reply advances server time, not this intended observation.
+  const networkTime=['network-stale','network-expiring'].includes(phase)?Date.parse(networkPhaseAt):time;
+  view.network.collectedAt=new Date(networkTime-(phase==='network-expiring'?86400000-5000:phase==='network-stale'||phase==='stale'?300000:1500)).toISOString();
   if(['network-stale','network-expiring'].includes(phase)){view.snapshot.collectedAt=view.network.collectedAt;view.status='stale';}
   if(phase==='network-empty')Object.assign(view.network,{rows:[],observedCount:0});
   if(['network-denied','network-unavailable','network-partial'].includes(phase))Object.assign(view.network,{quality:phase.slice('network-'.length),countExact:false,rows:[],observedCount:0});
   if(phase==='network-truncated')Object.assign(view.network,{truncated:true,observedCount:100});
  }
+ if(phase==='process-controls')addWindowsProcessControlsFixture(view);
  if(phase==='stale'){
   view.status='stale';view.snapshot.processes={...view.snapshot.processes,quality:'partial',countExact:false,complete:false,truncated:true,observedCount:200};
   view.snapshot.services={...windowsSection([]),quality:'denied',complete:false,countExact:false};
  }
+ // The real wire contract omits all private sections after the base expiry.
+ // A late repeat must not mint another five seconds for the same generation.
+ if(phase==='network-expiring'&&time-Date.parse(view.snapshot.collectedAt)>=86400000){
+  view.status='unavailable';view.snapshot=null;
+  for(const key of ['events','volumes','processMetrics','network'])delete view[key];
+ }
+ windowsLogsFixture(view,now,phase,logsPhaseAt);
  if(!validWindowsInventoryView(view,windowsDeviceId))throw new Error('Invalid invented Windows fixture');return view;
 }
 function shifted(value,now){
@@ -58,8 +71,17 @@ function shifted(value,now){
 export async function settleWindowsHistory(page,expect,advance){
  await expect.poll(async()=>{await advance(500);return page.locator('.resource-history').getByRole('img').count();}).toBe(3);
 }
+// Hash-only navigation can finish before React commits the intermediate route.
+// Prove the previous device is gone before returning so expiry checks really
+// start a new inventory lifetime and its existing 15-second refresh interval.
+export async function remountWindowsDevice(page,expect,base){
+ await page.goto(`${base}/#/devices`);
+ await expect(page.locator('.device-page')).toHaveCount(0);
+ await expect(page.locator('.device-table')).toBeVisible();
+ await page.goto(`${base}/#/devices/${windowsDeviceId}`);
+}
 export async function windowsInventoryBrowserCase({pageAt,login,expect,base,shot}){
- const page=await pageAt('/devices/'+windowsDeviceId),prefix='/api/devices/'+windowsDeviceId,unexpected=[],writes=[],external=[];let phase='fresh';
+ const page=await pageAt('/devices/'+windowsDeviceId),prefix='/api/devices/'+windowsDeviceId,unexpected=[],writes=[],external=[];let phase='fresh',networkPhaseAt=null,logsPhaseAt=null;
  // A bounded virtual clock makes the five-second private-row expiry deterministic.
  let clockNow=Date.now();await page.clock.install({time:new Date(clockNow)});await page.clock.pauseAt(new Date(clockNow+1000));clockNow+=1000;
  const now=()=>new Date(clockNow).toISOString();
@@ -71,7 +93,7 @@ export async function windowsInventoryBrowserCase({pageAt,login,expect,base,shot
   if(url.pathname===prefix+'/windows-inventory'){
    if(url.search||request.postData()!==null)throw new Error('Unexpected Windows query');
    if(phase==='session')return route.fulfill({status:401,contentType:'application/json',body:JSON.stringify({error:{code:'authentication_required'}})});
-   return reply(windowsBrowserFixture(at,phase));
+   return reply(windowsBrowserFixture(at,phase,networkPhaseAt??at,logsPhaseAt??at));
   }
   if(url.pathname===prefix)return reply(device);
   if(url.pathname===prefix+'/resource-history')return reply({...shifted(historyFixture(),at),deviceId:windowsDeviceId});
@@ -119,11 +141,13 @@ export async function windowsInventoryBrowserCase({pageAt,login,expect,base,shot
   await row('fixture.exe').scrollIntoViewIfNeeded();
   await shot(page,`synthetic-windows-process-metrics-${width}-${locale}`,windowsInventoryFixtureDisclosure);
   if(width===390){await row('synthetic-first.exe').scrollIntoViewIfNeeded();await shot(page,`synthetic-windows-process-metrics-null-${width}-${locale}`,windowsInventoryFixtureDisclosure);await row('synthetic-denied.exe').scrollIntoViewIfNeeded();await shot(page,`synthetic-windows-process-metrics-denied-${width}-${locale}`,windowsInventoryFixtureDisclosure);}
+  mark('process-controls');phase='process-controls';await page.getByRole('button',{name:locale==='de'?'Windows-Inventar aktualisieren':'Refresh Windows inventory',exact:true}).click();
+  await exerciseWindowsProcessControls({page,expect,locale,width,shot,disclosure:windowsInventoryFixtureDisclosure});
   mark('process-metrics-stale');phase='metrics-stale';await page.getByRole('button',{name:locale==='de'?'Windows-Inventar aktualisieren':'Refresh Windows inventory',exact:true}).click();
   await expect(page.locator('.windows-process-metrics-note')).toContainText(locale==='de'?'Veraltete Prozessmesswerte.':'Stale process metrics.');await expect(row('fixture.exe')).toContainText(locale==='de'?'125,25 %':'125.25 %');
   await page.locator('.windows-process-metrics-note').scrollIntoViewIfNeeded();await shot(page,`synthetic-windows-process-metrics-stale-${width}-${locale}`,windowsInventoryFixtureDisclosure);
   // Remount to reset the 15-second refresh timer, then cross only the metrics TTL.
-  mark('process-metrics-expired');phase='metrics-expiring';await page.goto(`${base}/#/devices`);await page.goto(`${base}/#/devices/${windowsDeviceId}`);await page.getByRole('tab',{name:locale==='de'?'Inventar':'Inventory',exact:true}).click();await page.getByRole('tab',{name:locale==='de'?'Prozesse':'Processes',exact:true}).click();
+  mark('process-metrics-expired');phase='metrics-expiring';await remountWindowsDevice(page,expect,base);await page.getByRole('tab',{name:locale==='de'?'Inventar':'Inventory',exact:true}).click();await page.getByRole('tab',{name:locale==='de'?'Prozesse':'Processes',exact:true}).click();
   await expect(row('fixture.exe')).toContainText(locale==='de'?'125,25 %':'125.25 %');
   clockNow+=6000;await page.clock.runFor(6000);
   await expect(table.getByText(locale==='de'?'125,25 %':'125.25 %',{exact:true})).toHaveCount(0);await expect(row('fixture.exe')).toContainText(locale==='de'?'Nicht verfügbar':'Unavailable');
@@ -155,7 +179,7 @@ export async function windowsInventoryBrowserCase({pageAt,login,expect,base,shot
   await networkRow('0.0.0.0:135').scrollIntoViewIfNeeded();await shot(page,`synthetic-windows-network-${width}-${locale}`,windowsInventoryFixtureDisclosure);
   if(width===390){await networkRow('[fe80::40%4]:5353').scrollIntoViewIfNeeded();await shot(page,`synthetic-windows-network-udp-${width}-${locale}`,windowsInventoryFixtureDisclosure);}
   for(const state of ['empty','denied','unavailable','partial','truncated','stale']){
-   mark('network-'+state);phase='network-'+state;await page.getByRole('button',{name:locale==='de'?'Windows-Inventar aktualisieren':'Refresh Windows inventory',exact:true}).click();
+   mark('network-'+state);phase='network-'+state;networkPhaseAt=now();await page.getByRole('button',{name:locale==='de'?'Windows-Inventar aktualisieren':'Refresh Windows inventory',exact:true}).click();
    const panel=page.locator('.windows-inventory [role="tabpanel"]');
    if(state==='empty'){await expect(panel).toContainText(locale==='de'?'Keine Endpunkte aus den':'No endpoints returned');await expect(panel).toContainText(locale==='de'?'0 angezeigt · 0 beobachtet':'0 shown · 0 observed');}
    else if(['denied','unavailable','partial'].includes(state)){
@@ -166,7 +190,7 @@ export async function windowsInventoryBrowserCase({pageAt,login,expect,base,shot
    else {await expect(panel).toContainText(locale==='de'?'Veraltete Netzwerkbeobachtung':'Stale network observation');await expect(networkTable.getByText('[2001:db8::80]:443',{exact:true})).toBeVisible();}
    await panel.scrollIntoViewIfNeeded();await shot(page,`synthetic-windows-network-${state}-${width}-${locale}`,windowsInventoryFixtureDisclosure);
   }
-  mark('network-expired');phase='network-expiring';await page.goto(`${base}/#/devices`);await page.goto(`${base}/#/devices/${windowsDeviceId}`);await page.getByRole('tab',{name:locale==='de'?'Inventar':'Inventory',exact:true}).click();await page.getByRole('tab',{name:locale==='de'?'Netzwerk':'Network',exact:true}).click();
+  mark('network-expired');phase='network-expiring';networkPhaseAt=now();await remountWindowsDevice(page,expect,base);await page.getByRole('tab',{name:locale==='de'?'Inventar':'Inventory',exact:true}).click();await page.getByRole('tab',{name:locale==='de'?'Netzwerk':'Network',exact:true}).click();
   await expect(networkTable.getByText('[2001:db8::80]:443',{exact:true})).toBeVisible();clockNow+=6000;await page.clock.runFor(6000);
   await expect(networkTable).toHaveCount(0);await expect(page.locator('.windows-inventory-empty')).toContainText(locale==='de'?'Netzwerksnapshot ist abgelaufen':'network snapshot expired');
   await shot(page,`synthetic-windows-network-expired-${width}-${locale}`,windowsInventoryFixtureDisclosure);
@@ -183,6 +207,7 @@ export async function windowsInventoryBrowserCase({pageAt,login,expect,base,shot
   await page.getByText(locale==='de'?'Ereignisse ansehen':'View events',{exact:true}).click();await expect(page.getByText('Invented Event Provider',{exact:true})).toBeVisible();
   expect(await page.locator('.windows-inventory').evaluate(el=>el.scrollWidth<=el.clientWidth+1)).toBe(true);
   await shot(page,`synthetic-windows-events-${width}-${locale}`,windowsInventoryFixtureDisclosure);
+  mark('logs');await windowsLogsBrowserCase({page,expect,base,deviceId:windowsDeviceId,locale,width,shot,disclosure:windowsInventoryFixtureDisclosure,setPhase:value=>{phase=value;logsPhaseAt=value==='logs-expiring'?now():null;},advance:async ms=>{clockNow+=ms;await page.clock.runFor(ms);}});
   await page.getByRole('tab',{name:locale==='de'?'Inventar':'Inventory',exact:true}).click();
   mark('legacy');phase='legacy';await page.getByRole('button',{name:locale==='de'?'Windows-Inventar aktualisieren':'Refresh Windows inventory',exact:true}).click();
   await page.getByRole('tab',{name:locale==='de'?'Speicher':'Storage',exact:true}).click();

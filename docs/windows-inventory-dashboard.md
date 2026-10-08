@@ -5,15 +5,23 @@ Linux manager and existing device dashboard. It requires a fresh, explicitly
 acknowledged `windows-inventory-v1` identity. It does not upgrade a basic Windows
 identity or reuse a Linux `managed-operations-v3` identity.
 
-Source and synthetic integration tests are available. Installed Windows service,
-real Windows-to-manager/browser, hidden invitation console, shutdown/reboot and
-released Windows installer acceptance remain pending. The separate
-[manual native gate](windows-native-service-acceptance.md) is still required;
-its selected profile and transport must match this fresh Windows inventory
-identity. The source gate now supports this richer profile but has not run. The historical ProgramData policy block now has a reviewed path-pinning
-correction. Its ordinary read-only result on the final composed source must be
-observed before a native installation attempt. Do not change OS-root or
-ProgramData ACLs to make a prerequisite check pass.
+Source and synthetic integration tests are available. The separately approved
+[fresh native ConPTY subset](windows-fresh-conpty-acceptance.md) passed in
+[run 37800284228](https://github.com/storminator89/Tracebolt/actions/runs/37800284228)
+on exact source `69fc69a9d20efb8f998898445246ff317d94ac57`. Its finite report verifies
+fresh orchestration with hidden synthetic console input, completed protected
+receipt/grants, a limited service token, two inventory/extension frames and an
+exact-owned stop. It uses a loopback fixture peer; scoped partial inventory is
+allowed and does not establish complete host visibility.
+
+Real Windows-to-production-manager/ingress/browser acceptance, human invitation
+entry/approval, native interruption, shutdown/reboot, identity-preserving upgrade,
+rollback and a released Windows installer remain pending. Automatic startup and
+service/app identity, grants and files were retained; application cleanup and VM
+disposal were not verified. The [manual native gate](windows-native-service-acceptance.md)
+remains a separate approved operation; a successful subset does not authorize
+another run or a host deployment. No OS-root or ProgramData ACL widening follows
+from these results.
 
 ## Same manager, explicit Windows scope
 
@@ -81,8 +89,11 @@ One native read-only report supplies both chart metrics and the inventory:
 - Machine uninstall-registry names, versions and publishers from 32/64-bit
   views; no `Win32_Product`, MSI repair, per-user registry sweep or claim that
   all installed applications are visible.
-- Hostname and interface index/name/address/prefix observations. No remote
-  connection list, packet capture, connection owners or network targets.
+- Hostname and interface index/name/address/prefix observations in the base
+  profile. Separately consented [TCP/UDP endpoint metadata](windows-network-endpoints.md)
+  is implemented through v5 sender/store and the shared Network UI: bounded
+  numeric addresses/ports, TCP states and API-snapshot owning PIDs. It adds no
+  packet capture, DNS lookup, stable process-owner join or network-control action.
 
 Native enumeration is bounded to 2,048 processes/services/software rows and 512
 addresses. Transport allows at most 128 rows per process/service/software
@@ -115,7 +126,9 @@ telemetry listener is not an operator inventory API.
 
 The existing Windows device Overview shows the shared resource charts. Its
 Inventory tab contains Processes, Services, Software, Hostname and Interfaces,
-with EN/DE labels, visible-row filtering and keyboard tabs. Original capture and
+with EN/DE labels and keyboard tabs. The Processes view adds local name/PID
+filtering, numeric PID/CPU/RAM sorting and bounded pages within the captured
+rows; it does not retrieve omitted host processes. Original capture and
 manager receipt timestamps remain visible. Observations become stale after two
 minutes and inventory rows disappear from the operator view after 24 hours;
 this display bound does not delete the retained telemetry frame. Expired or
@@ -124,7 +137,12 @@ replace prior successful rows. Clock regression, frozen-response refreshes,
 request timeout, lost session and navigation discard private rows.
 
 Linux APT/journal/CVE/action panels and Linux collection routes are not used by
-this Windows view. Separately consented bounded event headers now have a source path to the shared Health tab; see [Windows event health](windows-event-health.md). Windows event content, complete event-derived alarms, Windows Update,
+this Windows view. Separately consented bounded event headers have a source path
+to shared Health and the [Logs sample browser](windows-logs-sample-browser.md),
+with local filtering/pagination and sample refresh only. See also
+[Windows event health](windows-event-health.md). These new UI controls need their
+own exact-source hosted-browser evidence. Windows event content, complete
+event-derived alarms, Windows Update,
 CVE matching, remote actions and Windows AI evidence scope remain separate
 [parity work](windows-dashboard-parity.md).
 
@@ -142,6 +160,9 @@ clock freshness and session/navigation interruption. The existing hosted LAN
 browser runner includes one additive Windows case using real fixture login and
 intercepted invented data at EN/DE desktop/mobile sizes. That case is UI-only;
 its screenshots cannot establish native service or real manager collection.
-Local Chromium execution was blocked by this environment; hosted browser
-results must be observed on the final composed source before claiming that
-stage passed.
+The hosted browser job passed on exact source
+`69fc69a9d20efb8f998898445246ff317d94ac57` in
+[ordinary CI 37796325355](https://github.com/storminator89/Tracebolt/actions/runs/37796325355).
+That run establishes its invented-data browser cases, not a real Windows endpoint
+to production manager/browser path. Later fixture or UI changes require their own
+exact-source checks.

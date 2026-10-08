@@ -1,0 +1,6 @@
+.windows-process-controls{display:flex;align-items:flex-end;flex-wrap:wrap;gap:12px 20px;margin:16px 0}
+.windows-process-controls .windows-inventory-search,.windows-process-sort{display:flex;flex-direction:column;align-items:flex-start;gap:8px;margin:0;font-size:12px;min-width:0;max-width:100%}
+.windows-process-sort select{max-width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--text);font:inherit}
+.windows-process-controls input:focus-visible,.windows-process-controls select:focus-visible,.windows-process-pagination button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.windows-process-pagination{display:flex;align-items:center;flex-wrap:wrap;gap:10px;margin:16px 0;font-size:12px}
+@media(max-width:600px){.windows-process-controls{align-items:stretch}.windows-process-controls>label{width:100%}.windows-process-controls input,.windows-process-controls select{width:100%;box-sizing:border-box}}
