@@ -317,6 +317,6 @@ describe('health tab integration', () => {
         else if (kind === 'signed-out') vi.mocked(useOperator).mockReturnValue({ ...operator, authenticated: false });
         else value.platform = kind;
         vi.mocked(request).mockResolvedValue(value); render(<DeviceDetail id={id} onClose={() => {}} onCase={() => {}}/>); await screen.findByRole('heading', { name: value.name });
-        if (kind === 'windows') expect(screen.getByRole('tab', { name: 'Health & history' })).toBeInTheDocument(); else expect(screen.queryByRole('tab', { name: 'Health & history' })).not.toBeInTheDocument(); expect(vi.mocked(request).mock.calls.some(([path]) => path.endsWith('/health'))).toBe(false);
+        if (kind === 'windows') expect(screen.getByRole('tab', { name: 'Health' })).toBeInTheDocument(); expect(screen.queryByRole('tab', { name: 'Health & history' })).not.toBeInTheDocument(); expect(vi.mocked(request).mock.calls.some(([path]) => path.endsWith('/health'))).toBe(false);
     });
 });

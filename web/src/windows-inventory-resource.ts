@@ -78,6 +78,6 @@ export function useWindowsInventory(deviceId: string, enabled: boolean, sessionK
     const network = view && (status === 'fresh' || status === 'stale') && networkAge < 86400000 ? view.network ?? null : null;
     const networkStale = network !== null && (networkAge < 0 || networkAge > 120000 || !view?.receivedAt || inventoryAge(view.serverNow, view.receivedAt) + age > 120000);
     const networkExpired = Boolean(view?.network) && Number.isFinite(networkAge) && networkAge >= 86400000;
-    return { network, networkStale, networkExpired, processMetrics, processMetricsStale, volumes, volumesStale, events, eventsStale, view, snapshot: view && (status === 'fresh' || status === 'stale') ? view.snapshot : null, status, loading: enabled && loading, error: enabled ? error : null, refresh: () => void read() };
+    return { elapsedMS: age, network, networkStale, networkExpired, processMetrics, processMetricsStale, volumes, volumesStale, events, eventsStale, view, snapshot: view && (status === 'fresh' || status === 'stale') ? view.snapshot : null, status, loading: enabled && loading, error: enabled ? error : null, refresh: () => void read() };
 }
 export type WindowsInventoryResource = ReturnType<typeof useWindowsInventory>;

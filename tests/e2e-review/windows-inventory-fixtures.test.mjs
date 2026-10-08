@@ -188,3 +188,6 @@ test('hosted process-control checks are additive and preserve read-only desktop/
 
 // Additive Logs contracts remain in the hosted fixture gate.
 import './windows-logs-fixtures.test.mjs';
+
+// Bounded service/software display contracts share the existing hosted fixture gate.
+import './windows-service-software-fixtures.test.mjs';

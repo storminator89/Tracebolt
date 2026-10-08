@@ -1,0 +1,6 @@
+.windows-inventory-table-controls{display:flex;align-items:flex-end;flex-wrap:wrap;gap:12px 20px;margin:16px 0}
+.windows-inventory-table-controls .windows-inventory-search,.windows-inventory-table-sort{display:flex;flex-direction:column;align-items:flex-start;gap:8px;margin:0;font-size:12px;min-width:0;max-width:100%}
+.windows-inventory-table-sort select{max-width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--text);font:inherit}
+.windows-inventory-table-controls input:focus-visible,.windows-inventory-table-controls select:focus-visible,.windows-inventory-table-pagination button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.windows-inventory-table-pagination{display:flex;align-items:center;flex-wrap:wrap;gap:10px;margin:16px 0;font-size:12px}
+@media(max-width:600px){.windows-inventory-table-controls{align-items:stretch}.windows-inventory-table-controls>label,.windows-inventory-table-controls>.windows-inventory-table-sort{width:100%}.windows-inventory-table-controls input,.windows-inventory-table-controls select{width:100%;box-sizing:border-box}}

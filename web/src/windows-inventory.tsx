@@ -1,3 +1,4 @@
+import { WindowsInventoryTable, useWindowsInventoryTableControls } from './windows-inventory-tables';
 import { WindowsNetworkPanel } from './windows-network';
 import { WindowsProcessMetricsNote } from './windows-process-metrics';
 import { WindowsProcessTable, useWindowsProcessControls } from './windows-processes';
@@ -38,19 +39,19 @@ function InventoryState({ resource }: { resource: WindowsInventoryResource }) {
         {resource.status === 'stale' && <p className="windows-inventory-caution">{c.staleNote}</p>}
     </div>;
 }
-function dataRows(snapshot: WindowsInventorySnapshot, key: Exclude<SectionKey, 'processes'>, locale: 'en' | 'de'): { headers: string[]; rows: string[][] } {
-    const c = copy[locale], unknown = (value: string) => value || c.unknown;
+function dataRows(snapshot: WindowsInventorySnapshot, key: 'hostname' | 'network', locale: 'en' | 'de'): { headers: string[]; rows: string[][] } {
+    const c = copy[locale];
     switch (key) {
-        case 'services': return { headers: [c.name, c.displayName, c.state, 'PID'], rows: snapshot.services.rows.map(row => [row.name, unknown(row.displayName), c[row.state], String(row.pid)]) };
-        case 'software': return { headers: [c.name, c.version, c.publisher, c.registry], rows: snapshot.software.rows.map(row => [row.name, unknown(row.version), unknown(row.publisher), `${row.registryView}-bit`]) };
         case 'hostname': return { headers: [c.hostname], rows: snapshot.hostname.rows.map(row => [row.value]) };
         case 'network': return { headers: [c.name, c.index, c.address, c.prefix], rows: snapshot.network.rows.map(row => [row.name, String(row.index), row.address, String(row.prefixLength)]) };
     }
 }
-export function WindowsInventoryWorkspace({ resource }: { resource: WindowsInventoryResource }) {
-    const [locale] = useLocale(), c = copy[locale], id = useId(), [selected, setSelected] = useState<TabKey>('processes'), [query, setQuery] = useState('');
+export function WindowsInventoryWorkspace({ resource, initialTab }: { resource: WindowsInventoryResource; initialTab?: 'storage' }) {
+    const [locale] = useLocale(), c = copy[locale], id = useId(), [selected, setSelected] = useState<TabKey>(initialTab ?? 'processes'), [query, setQuery] = useState('');
     const [processControls, setProcessControls] = useWindowsProcessControls(resource, selected === 'processes');
-    const snapshot = resource.snapshot, section = selected !== 'storage' && selected !== 'endpoints' ? snapshot?.[selected] : null, data = snapshot && selected !== 'storage' && selected !== 'endpoints' && selected !== 'processes' ? dataRows(snapshot, selected, locale) : null;
+    const tableKind = selected === 'services' || selected === 'software' ? selected : null;
+    const [tableControls, setTableControls] = useWindowsInventoryTableControls(resource, tableKind);
+    const snapshot = resource.snapshot, section = selected !== 'storage' && selected !== 'endpoints' ? snapshot?.[selected] : null, data = snapshot && (selected === 'hostname' || selected === 'network') ? dataRows(snapshot, selected, locale) : null;
     const rows = data?.rows.filter(row => row.some(value => value.toLocaleLowerCase(locale).includes(query.toLocaleLowerCase(locale)))) ?? [];
     const select = (key: TabKey) => { setSelected(key); setQuery(''); };
     return <section className="windows-inventory" aria-label={c.title}>
@@ -61,9 +62,9 @@ export function WindowsInventoryWorkspace({ resource }: { resource: WindowsInven
             {selected === 'storage' && <WindowsStoragePanel resource={resource}/>}
             {section && <>
                 <div className="windows-inventory-section-header"><h3>{c[selected]}</h3><span className={`windows-inventory-quality quality-${section.quality}`}>{c[section.quality]}</span></div>
-                {(section.quality === 'healthy' || section.quality === 'partial') && <p className="windows-inventory-count">{sectionCount(section, locale, selected === 'processes')}</p>}{section.truncated && <p className="windows-inventory-caution">{c.truncated}</p>}
+                {(section.quality === 'healthy' || section.quality === 'partial') && <p className="windows-inventory-count">{sectionCount(section, locale, selected === 'processes' || tableKind !== null)}</p>}{section.truncated && <p className="windows-inventory-caution">{c.truncated}</p>}
                 {selected === 'processes' && <WindowsProcessMetricsNote resource={resource} locale={locale}/>}
-                {section.rows.length > 0 ? selected === 'processes' && snapshot ? <WindowsProcessTable key={`${resource.view?.deviceId}:${snapshot.generationId}:${snapshot.collectedAt}`} snapshot={snapshot} metrics={resource.processMetrics} locale={locale} controls={processControls} onChange={setProcessControls}/> : data && <><label className="windows-inventory-search" htmlFor={`${id}-search`}>{c.search}<input id={`${id}-search`} type="search" value={query} maxLength={256} onChange={event => setQuery(event.target.value)}/></label>{rows.length ? <div className="windows-inventory-table-wrap"><table className="windows-inventory-table"><caption className="sr-only">{c[selected]}</caption><thead><tr>{data.headers.map(header => <th key={header} scope="col">{header}</th>)}</tr></thead><tbody>{rows.map((row, index) => <tr key={index}>{row.map((value, col) => <td key={col} data-label={data.headers[col]}>{value}</td>)}</tr>)}</tbody></table></div> : <p>{c.noMatches}</p>}</> : <p className="windows-inventory-empty">{section.quality === 'healthy' ? c.empty : c.missing}</p>}
+                {section.rows.length > 0 ? selected === 'processes' && snapshot ? <WindowsProcessTable key={`${resource.view?.deviceId}:${snapshot.generationId}:${snapshot.collectedAt}`} snapshot={snapshot} metrics={resource.processMetrics} locale={locale} controls={processControls} onChange={setProcessControls}/> : tableKind && snapshot ? <WindowsInventoryTable snapshot={snapshot} kind={tableKind} locale={locale} controls={tableControls} onChange={setTableControls}/> : data && <><label className="windows-inventory-search" htmlFor={`${id}-search`}>{c.search}<input id={`${id}-search`} type="search" value={query} maxLength={256} onChange={event => setQuery(event.target.value)}/></label>{rows.length ? <div className="windows-inventory-table-wrap"><table className="windows-inventory-table"><caption className="sr-only">{c[selected]}</caption><thead><tr>{data.headers.map(header => <th key={header} scope="col">{header}</th>)}</tr></thead><tbody>{rows.map((row, index) => <tr key={index}>{row.map((value, col) => <td key={col} data-label={data.headers[col]}>{value}</td>)}</tr>)}</tbody></table></div> : <p>{c.noMatches}</p>}</> : <p className="windows-inventory-empty">{section.quality === 'healthy' ? c.empty : c.missing}</p>}
                 <details className="windows-inventory-scope"><summary>{c.bounds}</summary><dl><div><dt>{c.sourceLabel}</dt><dd>{section.source}</dd></div><div><dt>{c.scopeLabel}</dt><dd>{section.scope}</dd></div></dl><p>{c.counts}</p></details>
             </>}
         </div>

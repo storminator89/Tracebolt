@@ -48,3 +48,10 @@ write/external-request guards. It adds no LAN case registration or send action.
 The hosted browser artifacts must be inspected on the exact composed source
 before visual acceptance or user rollout is claimed. Local component/fixture
 checks alone are not screenshot, native-agent or deployment acceptance.
+
+## Windows observations
+
+Windows uses a separate [read-only observation summary](windows-health-observations.md)
+for accepted contact and caller-visible system-volume usage, alongside existing
+event headers. It has no durable incidents, Linux alarm thresholds or AI-health
+authority. The Linux evaluator and its inputs remain unchanged.

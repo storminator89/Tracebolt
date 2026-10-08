@@ -1,0 +1,10 @@
+.windows-health-summary{min-width:0;margin-bottom:24px;padding-bottom:8px;border-bottom:1px solid var(--line)}
+.windows-health-summary>h2{font-size:15px}
+.windows-health-scope,.windows-health-note{font-size:12px;color:var(--secondary);margin:10px 0}
+.windows-health-cards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin-top:16px}
+.windows-health-cards>section{display:flex;flex-direction:column;align-items:flex-start;gap:10px;border:1px solid var(--line);border-radius:8px;padding:16px;min-width:0;background:var(--panel)}
+.windows-health-cards h3{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--secondary)}
+.windows-health-cards strong{font-size:20px;font-weight:600;overflow-wrap:anywhere}
+.windows-health-cards p,.windows-health-cards>section>span{font-size:12px;color:var(--secondary);overflow-wrap:anywhere}
+.windows-health-cards button{margin-top:auto}
+@media(max-width:600px){.windows-health-cards{grid-template-columns:1fr}}

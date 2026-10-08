@@ -1,3 +1,4 @@
+import {addWindowsServiceSoftwareControlsFixture,exerciseWindowsServiceSoftwareControls} from './windows-service-software-browser.mjs';
 /** Invented Windows inventory in the existing real loopback login and compiled UI.
  * Durable enrollment/sender/storage authority has separate Go fixtures. This case
  * never collects an endpoint, creates an invitation or installs a service. */
@@ -14,7 +15,7 @@ const {windowsNetwork,windowsVolumes,windowsDevice,windowsDeviceId,windowsNow,wi
 export const windowsInventoryCaseName='Synthetic Windows inventory shares device charts and explicit enrollment consent without Linux reads';
 export const windowsInventoryFixtureDisclosure='Real loopback HTTP-test fixture login with intercepted invented Windows inventory and resource history in the production UI. UI-only evidence; no native endpoint acceptance, collection, invitation, service installation or external request.';
 let stage='setup';
-const stages=new Set(['setup','login','overview','overview-history','inventory','storage','network','network-stale','network-expired','network-partial','network-empty','network-denied','network-unavailable','network-truncated','process-metrics','process-controls','process-metrics-stale','process-metrics-expired','events','logs',...windowsLogsStageNames,'legacy','partial','denied','enrollment','access-loss']);
+const stages=new Set(['setup','login','overview','overview-history','inventory','storage','network','network-stale','network-expired','network-partial','network-empty','network-denied','network-unavailable','network-truncated','process-metrics','process-controls','service-software-controls','process-metrics-stale','process-metrics-expired','events','logs',...windowsLogsStageNames,'legacy','partial','denied','enrollment','access-loss']);
 export const windowsInventoryFailureStage=()=>stages.has(stage)?stage:'setup';
 const mark=value=>{stage=value;};
 export function windowsBrowserFixture(now,phase='fresh',networkPhaseAt=now,logsPhaseAt=now){
@@ -46,6 +47,7 @@ export function windowsBrowserFixture(now,phase='fresh',networkPhaseAt=now,logsP
   if(phase==='network-truncated')Object.assign(view.network,{truncated:true,observedCount:100});
  }
  if(phase==='process-controls')addWindowsProcessControlsFixture(view);
+ if(phase==='service-software-controls')addWindowsServiceSoftwareControlsFixture(view);
  if(phase==='stale'){
   view.status='stale';view.snapshot.processes={...view.snapshot.processes,quality:'partial',countExact:false,complete:false,truncated:true,observedCount:200};
   view.snapshot.services={...windowsSection([]),quality:'denied',complete:false,countExact:false};
@@ -143,6 +145,8 @@ export async function windowsInventoryBrowserCase({pageAt,login,expect,base,shot
   if(width===390){await row('synthetic-first.exe').scrollIntoViewIfNeeded();await shot(page,`synthetic-windows-process-metrics-null-${width}-${locale}`,windowsInventoryFixtureDisclosure);await row('synthetic-denied.exe').scrollIntoViewIfNeeded();await shot(page,`synthetic-windows-process-metrics-denied-${width}-${locale}`,windowsInventoryFixtureDisclosure);}
   mark('process-controls');phase='process-controls';await page.getByRole('button',{name:locale==='de'?'Windows-Inventar aktualisieren':'Refresh Windows inventory',exact:true}).click();
   await exerciseWindowsProcessControls({page,expect,locale,width,shot,disclosure:windowsInventoryFixtureDisclosure});
+  mark('service-software-controls');phase='service-software-controls';await page.getByRole('button',{name:locale==='de'?'Windows-Inventar aktualisieren':'Refresh Windows inventory',exact:true}).click();
+  await exerciseWindowsServiceSoftwareControls({page,expect,locale,width,shot,disclosure:windowsInventoryFixtureDisclosure});
   mark('process-metrics-stale');phase='metrics-stale';await page.getByRole('button',{name:locale==='de'?'Windows-Inventar aktualisieren':'Refresh Windows inventory',exact:true}).click();
   await expect(page.locator('.windows-process-metrics-note')).toContainText(locale==='de'?'Veraltete Prozessmesswerte.':'Stale process metrics.');await expect(row('fixture.exe')).toContainText(locale==='de'?'125,25 %':'125.25 %');
   await page.locator('.windows-process-metrics-note').scrollIntoViewIfNeeded();await shot(page,`synthetic-windows-process-metrics-stale-${width}-${locale}`,windowsInventoryFixtureDisclosure);
@@ -202,7 +206,7 @@ export async function windowsInventoryBrowserCase({pageAt,login,expect,base,shot
   await expect(page.getByText(locale==='de'?'Zugriff verweigert':'Access denied',{exact:true})).toBeVisible();
   expect(await page.locator('.windows-inventory').evaluate(el=>el.scrollWidth<=el.clientWidth+1)).toBe(true);
   await shot(page,`synthetic-windows-storage-${width}-${locale}`,windowsInventoryFixtureDisclosure);
-  mark('events');await page.getByRole('tab',{name:locale==='de'?'Health & Verlauf':'Health & history',exact:true}).click();
+  mark('events');await page.getByRole('tab',{name:'Health',exact:true}).click();
   await expect(page.getByText(locale==='de'?'Zugriff verweigert':'Access denied',{exact:true})).toBeVisible();
   await page.getByText(locale==='de'?'Ereignisse ansehen':'View events',{exact:true}).click();await expect(page.getByText('Invented Event Provider',{exact:true})).toBeVisible();
   expect(await page.locator('.windows-inventory').evaluate(el=>el.scrollWidth<=el.clientWidth+1)).toBe(true);

@@ -20,7 +20,7 @@ function metrics(view: WindowsInventoryView): WindowsProcessMetrics {
     return { schemaVersion: 'tracebolt.windows-process-metrics.v1', scope: 'windows-process-metrics-v1', grantId: 'e'.repeat(32), generationId: view.snapshot!.generationId, collectedAt: '2026-10-07T12:00:02Z', observedCount: view.snapshot!.processes.rows.length, truncated: false, rows: view.snapshot!.processes.rows.map(row => ({ pid: row.pid, cpuPercent: row.pid, cpuQuality: 'observed', memoryBytes: String(row.pid), memoryQuality: 'observed' })) };
 }
 function resource(view = processView()): WindowsInventoryResource {
-    return { view, snapshot: view.snapshot, status: view.status, loading: false, error: null, refresh: vi.fn(), processMetrics: view.processMetrics ?? null, processMetricsStale: false, network: null, networkStale: false, networkExpired: false, volumes: null, volumesStale: false, events: null, eventsStale: false };
+    return { elapsedMS: 0, view, snapshot: view.snapshot, status: view.status, loading: false, error: null, refresh: vi.fn(), processMetrics: view.processMetrics ?? null, processMetricsStale: false, network: null, networkStale: false, networkExpired: false, volumes: null, volumesStale: false, events: null, eventsStale: false };
 }
 function Harness() { return <WindowsInventoryWorkspace resource={useWindowsInventory(windowsDeviceId, true, 'fixture')}/>; }
 const displayedNames = () => within(screen.getByRole('table', { name: 'Processes' })).getAllByRole('row').slice(1).map(row => within(row).getAllByRole('cell')[0].textContent);

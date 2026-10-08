@@ -1,0 +1,13 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { abortProtectedRequests, getProtectedRequestEpoch } from './api';
+import { acceptWindowsHealthClock, windowsHealthElapsed } from './windows-health-clock';
+import { windowsNow } from './windows-inventory-fixture';
+beforeEach(() => { abortProtectedRequests(); vi.useFakeTimers(); vi.setSystemTime(windowsNow); });
+afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); });
+describe('isolated Windows Health timing watermark', () => {
+    it('retains cumulative elapsed time through equal and slowly advancing replies', () => { const e = getProtectedRequestEpoch(); expect(acceptWindowsHealthClock('one', e, windowsNow, 250)).toBe(true); vi.advanceTimersByTime(1000); expect(acceptWindowsHealthClock('one', e, windowsNow, 0)).toBe(true); vi.advanceTimersByTime(1000); expect(acceptWindowsHealthClock('one', e, '2026-10-07T12:00:10.001Z', 0)).toBe(true); expect(windowsHealthElapsed('one', e, '2026-10-07T12:00:10.001Z', 0)).toBe(2249); });
+    it('rejects even sub-millisecond manager rollback', () => { const e = getProtectedRequestEpoch(); expect(acceptWindowsHealthClock('one', e, '2026-10-07T12:00:10.000000002Z', 0)).toBe(true); expect(acceptWindowsHealthClock('one', e, '2026-10-07T12:00:10.000000001Z', 0)).toBe(false); });
+    it('never evicts a live device/session watermark on capacity exhaustion', () => { const e = getProtectedRequestEpoch(); for (let i = 0; i < 128; i++) expect(acceptWindowsHealthClock(String(i), e, windowsNow, 0)).toBe(true); vi.advanceTimersByTime(1000); expect(acceptWindowsHealthClock('overflow', e, windowsNow, 0)).toBe(false); expect(acceptWindowsHealthClock('0', e, windowsNow, 0)).toBe(true); expect(windowsHealthElapsed('0', e, windowsNow, 0)).toBe(1000); });
+    it('isolates protected epochs and discards timing after session invalidation', () => { const e = getProtectedRequestEpoch(); expect(acceptWindowsHealthClock('one', e, windowsNow, 0)).toBe(true); abortProtectedRequests(); expect(acceptWindowsHealthClock('one', e, windowsNow, 0)).toBe(false); expect(windowsHealthElapsed('one', e, windowsNow, 0)).toBe(Infinity); expect(acceptWindowsHealthClock('one', getProtectedRequestEpoch(), windowsNow, 0)).toBe(true); });
+    it('withholds on divergent local clocks or invalid request age', () => { const e = getProtectedRequestEpoch(); expect(acceptWindowsHealthClock('one', e, windowsNow, Infinity)).toBe(false); expect(acceptWindowsHealthClock('one', e, windowsNow, 0)).toBe(true); vi.setSystemTime('2026-10-07T11:00:00Z'); expect(windowsHealthElapsed('one', e, windowsNow, 0)).toBe(Infinity); });
+});
