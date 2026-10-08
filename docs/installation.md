@@ -645,3 +645,11 @@ Prüfe Zielrechner, Commit und vorhandene Konfiguration. Schlage den passenden
 Installationsweg vor und frage vor Zugangsdaten-, Vertrauens-, Firewall- oder
 Dienständerungen. Erfinde keine Installer-/Enrollment-Befehle. Berichte klar,
 was wirklich getestet wurde und welche manuellen Schritte noch fehlen.“
+
+## Unreleased Windows one-choice observation source
+
+The [fresh Windows observation coordinator](windows-read-observation-setup.md)
+combines the five supported read scopes under one explicit upfront local choice.
+It stages a fresh SCM service disabled until activation and protected grants are
+verified. This is source-only: there is no new installation command or released
+Windows installer, and existing Windows identities/commands are unchanged.

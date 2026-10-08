@@ -1,7 +1,7 @@
 // Package fixture is a disposable, process-local protocol peer for the explicitly
 // authorized Windows native acceptance controller. It is NOT a Linux manager,
 // durable enrollment store, dashboard, production issuer, or persistence test.
-// Importing this package performs no work. Only explicit Start or StartSelected
+// Importing this package performs no work. Only explicit Start, StartSelected or StartExpanded
 // calls create disposable authority and two loopback listeners. The caller must
 // obtain the exact acceptance gate approval before either or endpoint identity.
 package fixture
@@ -61,6 +61,12 @@ type state struct {
 	selection                    profile.Selection
 	signed                       *signedhttp.Verifier
 	inventory                    profile.Observation
+	expanded                     bool
+	extensions                   profile.ExtensionObservation
+	lastEventsCollected          time.Time
+	lastVolumesCollected         time.Time
+	lastProcessCollected         time.Time
+	lastNetworkCollected         time.Time
 	bootstrap                    enrollmentclient.Bootstrap
 	engine                       *enrollmentstate.Engine
 	issuer                       *enrollmentissuer.Issuer
@@ -95,18 +101,19 @@ type challenge struct {
 // protocol peer's validation, not native OS origin, Linux persistence, or UI
 // acceptance. The native controller must independently establish its execution.
 type Evidence struct {
-	State               enrollmentstate.State `json:"state"`
-	Platform            string                `json:"platform"`
-	CollectionProfile   string                `json:"collectionProfile"`
-	Transport           string                `json:"transport"`
-	Inventory           profile.Observation   `json:"inventory"`
-	Frames              uint64                `json:"frames"`
-	LastSequence        uint64                `json:"lastSequence"`
-	DuplicateReceipts   uint64                `json:"duplicateReceipts"`
-	Requests            uint64                `json:"requests"`
-	UnavailableRequests uint64                `json:"unavailableRequests"`
-	Unavailable         bool                  `json:"unavailable"`
-	Closed              bool                  `json:"closed"`
+	State               enrollmentstate.State        `json:"state"`
+	Platform            string                       `json:"platform"`
+	CollectionProfile   string                       `json:"collectionProfile"`
+	Transport           string                       `json:"transport"`
+	Inventory           profile.Observation          `json:"inventory"`
+	Extensions          profile.ExtensionObservation `json:"extensions"`
+	Frames              uint64                       `json:"frames"`
+	LastSequence        uint64                       `json:"lastSequence"`
+	DuplicateReceipts   uint64                       `json:"duplicateReceipts"`
+	Requests            uint64                       `json:"requests"`
+	UnavailableRequests uint64                       `json:"unavailableRequests"`
+	Unavailable         bool                         `json:"unavailable"`
+	Closed              bool                         `json:"closed"`
 }
 
 func (Fixture) String() string               { return "windowsacceptance.fixture{material:redacted,nonDurable:true}" }
@@ -130,6 +137,18 @@ func Start(ctx context.Context) (*Fixture, error) {
 // profile and transport approval. HTTP is admitted only for Windows inventory;
 // it has no TLS fallback and provides no confidentiality or server authentication.
 func StartSelected(ctx context.Context, selection profile.Selection) (*Fixture, error) {
+	return startSelected(ctx, selection, false)
+}
+
+// StartExpanded is a separately authorized manual-only peer for all four Windows
+// inventory extensions. It does not change any old selection or enrollment wire.
+func StartExpanded(ctx context.Context, selection profile.Selection) (*Fixture, error) {
+	if !selection.Inventory() {
+		return nil, ErrFixture
+	}
+	return startSelected(ctx, selection, true)
+}
+func startSelected(ctx context.Context, selection profile.Selection, expanded bool) (*Fixture, error) {
 	if ctx == nil || ctx.Err() != nil || selection.Validate() != nil {
 		return nil, ErrFixture
 	}
@@ -152,6 +171,7 @@ func StartSelected(ctx context.Context, selection profile.Selection) (*Fixture, 
 		_ = agent.Close()
 		return nil, ErrFixture
 	}
+	f.state.expanded = expanded
 	listeners := make([]net.Listener, 0, 2)
 	for i, l := range []net.Listener{enrollment, agent} {
 		agentListener := i == 1
@@ -204,7 +224,7 @@ func newFixtureSelected(ctx context.Context, enrollmentOrigin, agentOrigin strin
 	if err != nil {
 		return nil, ErrFixture
 	}
-	s := &state{now: now, selection: selection, inventory: profile.ZeroObservation(), issuer: issuer, server: server, challenges: make(map[string]challenge), slots: make(chan struct{}, 2), closeDone: make(chan struct{})}
+	s := &state{now: now, selection: selection, inventory: profile.ZeroObservation(), extensions: profile.ZeroExtensionObservation(), issuer: issuer, server: server, challenges: make(map[string]challenge), slots: make(chan struct{}, 2), closeDone: make(chan struct{})}
 	s.ctx, s.cancel = context.WithTimeout(ctx, MaxLifetime)
 	f := &Fixture{state: s}
 	ok := false
@@ -319,13 +339,13 @@ func (s *state) snapshot() (enrollmentstate.Snapshot, error) {
 
 func (f *Fixture) Evidence() Evidence {
 	if f == nil || f.state == nil {
-		return Evidence{Closed: true, Inventory: profile.ZeroObservation()}
+		return Evidence{Closed: true, Inventory: profile.ZeroObservation(), Extensions: profile.ZeroExtensionObservation()}
 	}
 	s := f.state
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	v, _ := s.snapshot()
-	return Evidence{State: v.State, Platform: v.Platform, CollectionProfile: v.Binding.CollectionProfile, Transport: s.selection.Transport, Inventory: s.inventory, Frames: s.frames, LastSequence: s.lastReceipt.Sequence, DuplicateReceipts: s.duplicates, Requests: s.requests, UnavailableRequests: s.unavailableRequests, Unavailable: s.unavailable, Closed: s.closed}
+	return Evidence{State: v.State, Platform: v.Platform, CollectionProfile: v.Binding.CollectionProfile, Transport: s.selection.Transport, Inventory: s.inventory, Extensions: s.extensions, Frames: s.frames, LastSequence: s.lastReceipt.Sequence, DuplicateReceipts: s.duplicates, Requests: s.requests, UnavailableRequests: s.unavailableRequests, Unavailable: s.unavailable, Closed: s.closed}
 }
 
 // ToggleUnavailable models a scoped transport outage; it never changes the

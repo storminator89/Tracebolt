@@ -379,6 +379,16 @@ func (s *state) telemetry(w http.ResponseWriter, r *http.Request, raw []byte, si
 		fail(w, 403)
 		return
 	}
+	hash := sha256.Sum256(raw)
+	// Exact latest bytes were already validated. Check retry before sample-age
+	// and capture fences so an outage never refreshes or invalidates its receipt.
+	if s.frames > 0 && hash == s.lastDigest && (signed == nil || signed.Sequence == s.lastReceipt.Sequence && signed.SignedAt.Equal(s.lastGenerated)) {
+		receipt := s.lastReceipt
+		receipt.Duplicate = true
+		s.duplicates++
+		write(w, receipt)
+		return
+	}
 	frame, e := lanstore.ValidateFrame(raw, now)
 	if e != nil || frame.Observation.Platform != "windows" || !lanstore.FrameMatchesCollectionProfile(frame, s.selection.CollectionProfile) {
 		fail(w, 400)
@@ -388,12 +398,12 @@ func (s *state) telemetry(w http.ResponseWriter, r *http.Request, raw []byte, si
 		fail(w, 400)
 		return
 	}
-	hash := sha256.Sum256(raw)
-	if frame.Sequence == s.lastReceipt.Sequence && hash == s.lastDigest && s.frames > 0 {
-		receipt := s.lastReceipt
-		receipt.Duplicate = true
-		s.duplicates++
-		write(w, receipt)
+	if !s.extensionShape(frame) {
+		fail(w, 400)
+		return
+	}
+	if !s.extensionAdvance(frame) {
+		fail(w, 409)
 		return
 	}
 	if frame.Sequence <= s.lastReceipt.Sequence || !s.lastReceipt.CollectedAt.IsZero() && !frame.Observation.Observation.LastSeen.After(s.lastReceipt.CollectedAt) || !s.lastGenerated.IsZero() && !frame.Observation.GeneratedAt.After(s.lastGenerated) {
@@ -417,6 +427,7 @@ func (s *state) telemetry(w http.ResponseWriter, r *http.Request, raw []byte, si
 		d := frame.Observation.Observation
 		s.inventory = profile.Observation{Frames: s.frames, CPU: metricQuality(d.CPU.Quality), Memory: metricQuality(d.Memory.Quality), Disk: metricQuality(d.Disk.Quality), Hostname: inventory.Hostname.Quality, Processes: inventory.Processes.Quality, Services: inventory.Services.Quality, Software: inventory.Software.Quality, Interfaces: inventory.Network.Quality}
 	}
+	s.observeExtensions(frame)
 	write(w, s.lastReceipt)
 	// No raw body, bundle, metric, label, or observation is retained in state.
 }

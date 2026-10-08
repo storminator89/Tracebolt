@@ -27,3 +27,7 @@ func runProbeRuntime(context.Context) error              { return ErrAcceptance 
 func (d *Driver) cleanupStop(context.Context, Guard) error { return d.fail(ReasonUnsupported) }
 
 func (d *Driver) releasePrerequisiteHandles() {}
+
+func (d *Driver) configureCapabilities(context.Context, Guard) error {
+	return d.fail(ReasonUnsupported)
+}

@@ -34,7 +34,9 @@ process CPU/RAM and network endpoints. The acknowledgement covers every selected
 scope and, for HTTP-test, its plaintext disclosure. V1 and v2 keep their original
 scope sets and reject network endpoints. V3 neither grants unselected scopes nor
 promotes earlier approvals. Activation and owned/stopped-service verification
-remain required. No installer automatically invokes this contract. Extension
+remain required. The source-only [fresh observation coordinator](windows-read-observation-setup.md)
+now invokes this contract once for its exact five-scope selection. No released
+installer or public command invokes it; existing installations remain unchanged. Extension
 writes are sequential: partial results identify completed scopes and the possibly
 indeterminate failed scope. Recovery must preserve state rather than roll back,
 re-enroll or enable scopes the user did not select.

@@ -45,6 +45,10 @@ func run(ctx context.Context, args []string, out, stderr io.Writer, env gate.Env
 	transport := flags.String("transport-profile", "", "")
 	inventory := flags.Bool("approve-inventory-metadata", false, "")
 	plaintext := flags.Bool("approve-http-plaintext", false, "")
+	events := flags.Bool("approve-event-headers", false, "")
+	volumes := flags.Bool("approve-visible-volumes", false, "")
+	metrics := flags.Bool("approve-process-metrics", false, "")
+	endpoints := flags.Bool("approve-network-endpoints", false, "")
 	cleanup := flags.Bool("approve-cleanup", false, "")
 	service := flags.String("service-artifact", "", "")
 	serviceSHA := flags.String("service-sha256", "", "")
@@ -54,13 +58,13 @@ func run(ctx context.Context, args []string, out, stderr io.Writer, env gate.Env
 		fmt.Fprintln(stderr, "Native Windows acceptance arguments rejected; no action authorized.")
 		return 2
 	}
-	grant, err := gate.Authorize(gate.Approval{ExpectedSource: *source, Services: *services, Identity: *identity, AppACLs: *acls, Loopback: *network, Cleanup: *cleanup, Selection: profile.Selection{CollectionProfile: *collection, Transport: *transport}, InventoryMetadata: *inventory, HTTPPlaintext: *plaintext}, env, compiledSource)
+	grant, err := gate.Authorize(gate.Approval{ExpectedSource: *source, Services: *services, Identity: *identity, AppACLs: *acls, Loopback: *network, Cleanup: *cleanup, Selection: profile.Selection{CollectionProfile: *collection, Transport: *transport}, InventoryMetadata: *inventory, HTTPPlaintext: *plaintext, EventHeaders: *events, VisibleVolumes: *volumes, ProcessMetrics: *metrics, NetworkEndpoints: *endpoints}, env, compiledSource)
 	if err != nil {
 		fmt.Fprintln(stderr, "Native Windows acceptance requires manual exact-source approval for every scope.")
 		return 2
 	}
 	defer grant.Close()
-	options := native.Options{Selection: grant.Selection(), ServiceArtifact: *service, ServiceSHA256: *serviceSHA, ControllerArtifact: *controller, ControllerSHA256: *controllerSHA}
+	options := native.Options{Expanded: grant.ExtensionsApproved(), Selection: grant.Selection(), ServiceArtifact: *service, ServiceSHA256: *serviceSHA, ControllerArtifact: *controller, ControllerSHA256: *controllerSHA}
 	if _, err = native.New(options); err != nil {
 		fmt.Fprintln(stderr, "Native acceptance artifact binding rejected.")
 		return 2

@@ -55,6 +55,8 @@ func (windowsBackend) Open(a access) (service, error) {
 		rights |= windows.SERVICE_STOP
 	case deleteAccess:
 		rights |= windows.DELETE
+	case configureAccess:
+		rights |= windows.SERVICE_CHANGE_CONFIG
 	default:
 		return nil, ErrMismatch
 	}
@@ -74,6 +76,9 @@ func (windowsBackend) Open(a access) (service, error) {
 	return &nativeService{h}, nil
 }
 func (windowsBackend) Create(c Configuration) (service, error) {
+	if c.StartType != windows.SERVICE_AUTO_START && c.StartType != windows.SERVICE_DISABLED {
+		return nil, ErrMismatch
+	}
 	scm, err := openSCM(windows.SC_MANAGER_CONNECT | windows.SC_MANAGER_CREATE_SERVICE)
 	if err != nil {
 		return nil, err
@@ -104,10 +109,15 @@ func (windowsBackend) Create(c Configuration) (service, error) {
 	if err != nil {
 		return s, err
 	}
-	if err = windows.ChangeServiceConfig(h, windows.SERVICE_NO_CHANGE, windows.SERVICE_AUTO_START, windows.SERVICE_NO_CHANGE, nil, nil, nil, nil, nil, nil, nil); err != nil {
-		return s, err
+	if c.StartType == windows.SERVICE_AUTO_START {
+		if err = windows.ChangeServiceConfig(h, windows.SERVICE_NO_CHANGE, windows.SERVICE_AUTO_START, windows.SERVICE_NO_CHANGE, nil, nil, nil, nil, nil, nil, nil); err != nil {
+			return s, err
+		}
 	}
 	return s, nil
+}
+func (s *nativeService) SetAutomatic() error {
+	return windows.ChangeServiceConfig(s.handle, windows.SERVICE_NO_CHANGE, windows.SERVICE_AUTO_START, windows.SERVICE_NO_CHANGE, nil, nil, nil, nil, nil, nil, nil)
 }
 func (s *nativeService) Start() error { return windows.StartService(s.handle, 0, nil) }
 func (s *nativeService) Stop() error {

@@ -19,6 +19,7 @@ import threading
 
 REPOSITORY = "storminator89/Tracebolt"
 SCHEMA = "tracebolt.windows-native-acceptance.v2"
+EXPANDED_SCHEMA = "tracebolt.windows-native-acceptance.v3"
 MAX_REPORT_BYTES = 32 * 1024
 CONTROLLER_TIMEOUT_SECONDS = 13 * 60  # 10-minute controller + 2-minute cleanup.
 REPORT_NAME = "tracebolt-windows-native-acceptance.json"
@@ -29,6 +30,24 @@ APPROVALS = {
     "TRACEBOLT_APPROVE_LOOPBACK": "--approve-loopback",
     "TRACEBOLT_APPROVE_CLEANUP": "--approve-cleanup",
 }
+EXTENSION_APPROVALS = {
+    "TRACEBOLT_APPROVE_EVENT_HEADERS": "--approve-event-headers",
+    "TRACEBOLT_APPROVE_VISIBLE_VOLUMES": "--approve-visible-volumes",
+    "TRACEBOLT_APPROVE_PROCESS_METRICS": "--approve-process-metrics",
+    "TRACEBOLT_APPROVE_NETWORK_ENDPOINTS": "--approve-network-endpoints",
+}
+
+
+def extension_approval(env: dict[str, str]) -> bool:
+    # Missing new flags retain the old base-only meaning, never expanded consent.
+    values = [env.get(name, "false") for name in EXTENSION_APPROVALS]
+    require(all(type(v) is str and v in {"true", "false"} for v in values))
+    require(all(v == "false" for v in values) or all(v == "true" for v in values))
+    expanded = values[0] == "true"
+    require(not expanded or env.get("TRACEBOLT_COLLECTION_PROFILE") == "windows-inventory-v1")
+    return expanded
+
+
 CHECK_NAMES = (
     "prerequisites", "app_only_provisioning", "service_prepare", "pending_claim",
     "limited_token", "pending_stop_identity", "delayed_approval_report", "profile_report",
@@ -38,7 +57,7 @@ CHECK_NAMES = (
 )
 STAGES = {
     "idle", "preflight", "provision", "install", "prepare", "claim", "start",
-    "token", "status", "state-continuity", "probe", "stop", "uninstall", "cleanup",
+    "token", "status", "state-continuity", "capabilities", "probe", "stop", "uninstall", "cleanup",
 }
 REASONS = {
     "none", "approval-required", "unsupported-platform", "ancestor-prerequisite",
@@ -92,6 +111,7 @@ def selection(env: dict[str, str]) -> dict:
 def authorize(env: dict[str, str]) -> str:
     """Pure, first boundary: invalid/unapproved inputs cannot spawn a process."""
     selection(env)
+    extension_approval(env)
     source = env.get("TRACEBOLT_EXPECTED_SOURCE_SHA")
     require(valid_source(source) and source == env.get("GITHUB_SHA"))
     for name in APPROVALS:
@@ -134,12 +154,52 @@ def member(value: object, allowed: set | tuple) -> bool:
     return type(value) is str and value in allowed
 
 
-def validate_report(raw: bytes, source: str, expected: dict | None = None) -> dict:
+def validate_extensions(value: object, inventory_frames: int, status: str) -> None:
+    qualities = {"eventApplication", "eventSystem", "volumes", "volumeCapacity", "processCPU", "processMemory", "network"}
+    rows = {"eventRows": 32, "volumeRows": 64, "processRows": 128, "networkRows": 64, "peerLoopbackRows": 64, "processCPUFirstSampleRows": 128}
+    counts = {"volumeCapacityCounts": "volumeRows", "processCPUCounts": "processRows", "processMemoryCounts": "processRows"}
+    require(type(value) is dict and set(value) == qualities | set(rows) | set(counts) | {"frames", "v5Frames", "freshOrchestrationAcceptance"})
+    require(value["freshOrchestrationAcceptance"] is False)
+    for key, bound in {**rows, "frames": 64, "v5Frames": 64}.items():
+        require(type(value[key]) is int and 0 <= value[key] <= bound)
+    require(value["frames"] == value["v5Frames"] and value["frames"] <= inventory_frames)
+    for key, row_key in counts.items():
+        c = value[key]
+        require(type(c) is dict and set(c) == {"observed", "denied", "unavailable", "firstSample", "reset"})
+        require(all(type(n) is int and 0 <= n <= rows[row_key] for n in c.values()))
+        require(sum(c.values()) == value[row_key])
+        require(key == "processCPUCounts" or c["firstSample"] == c["reset"] == 0)
+        present = [label for name, label in (("observed", "observed"), ("denied", "denied"), ("unavailable", "unavailable"), ("firstSample", "first-sample"), ("reset", "reset")) if c[name] > 0]
+        expected = "empty" if not present else present[0] if len(present) == 1 else "partial"
+        if value["frames"] > 0:
+            require(value[key[:-6]] == expected)
+    require(value["peerLoopbackRows"] <= value["networkRows"])
+    require(value["processCPUFirstSampleRows"] == value["processCPUCounts"]["firstSample"])
+    if value["frames"] == 0:
+        require(all(value[key] == "not_run" for key in qualities) and all(value[key] == 0 for key in rows))
+    else:
+        for key in ("eventApplication", "eventSystem", "volumes"):
+            require(member(value[key], {"observed", "bounded", "partial", "denied", "unavailable"}))
+        require(member(value["network"], {"observed", "partial", "denied", "unavailable"}))
+        require(value["volumes"] not in {"denied", "unavailable"} or value["volumeRows"] == 0)
+        require(value["network"] not in {"denied", "unavailable"} or value["networkRows"] == 0)
+        require(not all(value[key] in {"denied", "unavailable"} for key in ("eventApplication", "eventSystem")) or value["eventRows"] == 0)
+    if status == "passed_native_subset":
+        require(value["frames"] > 0 and all(value[key] in {"observed", "bounded", "partial"} for key in ("eventApplication", "eventSystem", "volumes")))
+        require(all(value[key]["observed"] > 0 for key in counts) and value["network"] in {"observed", "partial"} and value["peerLoopbackRows"] > 0)
+    if status == "blocked":
+        require(value["frames"] == 0)
+
+
+def validate_report(raw: bytes, source: str, expected: dict | None = None, expanded: bool | None = None) -> dict:
     """Mirror Go gate.Report/native.Evidence exactly; reject unknown data."""
     require(valid_source(source))
     report = strict_json(raw, MAX_REPORT_BYTES)
-    require(type(report) is dict and set(report) == REPORT_FIELDS)
-    require(report["schema"] == SCHEMA and report["source"] == source)
+    require(type(report) is dict)
+    is_expanded = report.get("schema") == EXPANDED_SCHEMA
+    require(set(report) == REPORT_FIELDS | ({"extensions"} if is_expanded else set()))
+    require(member(report["schema"], {SCHEMA, EXPANDED_SCHEMA}) and report["source"] == source)
+    require(expanded is None or is_expanded == expanded)
     selected = report["selection"]
     require(type(selected) is dict and set(selected) == {"collectionProfile", "transport"})
     require(type(selected["collectionProfile"]) is str and type(selected["transport"]) is str and (selected["collectionProfile"], selected["transport"]) in VALID_SELECTIONS)
@@ -151,6 +211,10 @@ def validate_report(raw: bytes, source: str, expected: dict | None = None) -> di
     require(all(member(inventory[key], allowed) for key in QUALITIES))
     is_inventory = selected["collectionProfile"] == "windows-inventory-v1"
     require(is_inventory or inventory["frames"] == 0)
+    if is_expanded:
+        require(is_inventory)
+        validate_extensions(report["extensions"], inventory["frames"], report["status"])
+        require(report["extensions"]["frames"] == 0 or report["loopbackPeerExercised"] is True)
     require(type(report["loopbackPeerExercised"]) is bool and type(report["nativeInventorySenderExercised"]) is bool)
     require(report["nativeInventorySenderExercised"] == (is_inventory and inventory["frames"] > 0 and report["loopbackPeerExercised"]))
     require(report["approvalValidated"] is True)
@@ -267,10 +331,12 @@ def binary_digest(path: Path) -> str:
         return hashlib.file_digest(stream, "sha256").hexdigest()
 
 
-def controller_arguments(controller: Path, service: Path, source: str, selected: dict) -> list[str]:
+def controller_arguments(controller: Path, service: Path, source: str, selected: dict, expanded: bool = False) -> list[str]:
     require(valid_source(source) and type(selected) is dict and (selected.get("collectionProfile"), selected.get("transport")) in VALID_SELECTIONS)
+    require(type(expanded) is bool and (not expanded or selected["collectionProfile"] == "windows-inventory-v1"))
     return [str(controller), "--expected-source=" + source,
             *[flag + "=true" for flag in APPROVALS.values()],
+            *([flag + "=true" for flag in EXTENSION_APPROVALS.values()] if expanded else []),
             "--collection-profile=" + selected["collectionProfile"], "--transport-profile=" + selected["transport"],
             "--approve-inventory-metadata=" + str(selected["collectionProfile"] == "windows-inventory-v1").lower(),
             "--approve-http-plaintext=" + str(selected["transport"] == "http-test").lower(),
@@ -281,6 +347,7 @@ def controller_arguments(controller: Path, service: Path, source: str, selected:
 def run_native(env: dict[str, str], root: Path = ROOT) -> dict:
     source = authorize(env)  # Must precede filesystem staging and every process.
     selected = selection(env)
+    expanded = extension_approval(env)
     child = child_environment(env)
     verify_checkout(child, source, root)
     verify_go(child, root)
@@ -297,9 +364,9 @@ def run_native(env: dict[str, str], root: Path = ROOT) -> dict:
                     "-X main.compiledSource=" + source, "-o", str(controller),
                     "./cmd/windows-native-acceptance"], child, root, 300)
         verify_checkout(child, source, root)
-        code, raw = command(controller_arguments(controller, service, source, selected), child,
+        code, raw = command(controller_arguments(controller, service, source, selected, expanded), child,
                             root, CONTROLLER_TIMEOUT_SECONDS)
-        report = validate_report(raw, source, selected)
+        report = validate_report(raw, source, selected, expanded)
         require(report["status"] != "passed_native_subset" or code == 0)
     # Staged executables have gone away. Only this finite reserialization is
     # retained, never private keys, controller output, telemetry or native paths.

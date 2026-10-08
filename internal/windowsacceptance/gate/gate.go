@@ -16,19 +16,22 @@ import (
 
 const Repository = "storminator89/Tracebolt"
 const Schema = "tracebolt.windows-native-acceptance.v2"
+const ExpandedSchema = "tracebolt.windows-native-acceptance.v3"
 const MaxReportBytes = 32 << 10
 const MaxLifetime = 20 * time.Minute
 
 var ErrGate = errors.New("manual exact-source Windows acceptance approval is missing or invalid")
 
 type Approval struct {
-	ExpectedSource                                 string
-	Services, Identity, AppACLs, Loopback, Cleanup bool
-	Selection                                      profile.Selection
-	InventoryMetadata, HTTPPlaintext               bool
+	ExpectedSource                                                 string
+	Services, Identity, AppACLs, Loopback, Cleanup                 bool
+	Selection                                                      profile.Selection
+	InventoryMetadata, HTTPPlaintext                               bool
+	EventHeaders, VisibleVolumes, ProcessMetrics, NetworkEndpoints bool
 }
 type Environment struct{ Event, Actions, RunnerOS, RunnerEnvironment, Repository, Source, RunID string }
 type Grant struct {
+	expanded  bool
 	source    string
 	selection profile.Selection
 	expires   time.Time
@@ -44,7 +47,7 @@ func Authorize(a Approval, e Environment, compiled string) (*Grant, error) {
 	return authorize(a, e, compiled, time.Now)
 }
 func authorize(a Approval, e Environment, compiled string, now func() time.Time) (*Grant, error) {
-	if a.Selection.Validate() != nil || a.InventoryMetadata != a.Selection.Inventory() || a.HTTPPlaintext != a.Selection.HTTPTest() || now == nil || !ValidSource(compiled) || a.ExpectedSource != compiled || e.Source != compiled || !a.Services || !a.Identity || !a.AppACLs || !a.Loopback || !a.Cleanup || e.Event != "workflow_dispatch" || e.Actions != "true" || e.RunnerOS != "Windows" || e.RunnerEnvironment != "github-hosted" || e.Repository != Repository || len(e.RunID) == 0 || len(e.RunID) > 24 {
+	if !validExtensionApproval(a) || a.Selection.Validate() != nil || a.InventoryMetadata != a.Selection.Inventory() || a.HTTPPlaintext != a.Selection.HTTPTest() || now == nil || !ValidSource(compiled) || a.ExpectedSource != compiled || e.Source != compiled || !a.Services || !a.Identity || !a.AppACLs || !a.Loopback || !a.Cleanup || e.Event != "workflow_dispatch" || e.Actions != "true" || e.RunnerOS != "Windows" || e.RunnerEnvironment != "github-hosted" || e.Repository != Repository || len(e.RunID) == 0 || len(e.RunID) > 24 {
 		return nil, ErrGate
 	}
 	for _, c := range e.RunID {
@@ -55,10 +58,20 @@ func authorize(a Approval, e Environment, compiled string, now func() time.Time)
 	if strings.Trim(e.RunID, "0") == "" {
 		return nil, ErrGate
 	}
-	g := &Grant{source: compiled, selection: a.Selection, expires: now().Add(MaxLifetime), now: now}
+	g := &Grant{expanded: a.EventHeaders, source: compiled, selection: a.Selection, expires: now().Add(MaxLifetime), now: now}
 	g.active.Store(true)
 	return g, nil
 }
+func validExtensionApproval(a Approval) bool {
+	count := 0
+	for _, v := range []bool{a.EventHeaders, a.VisibleVolumes, a.ProcessMetrics, a.NetworkEndpoints} {
+		if v {
+			count++
+		}
+	}
+	return count == 0 || count == 4 && a.Selection.Inventory()
+}
+func (g *Grant) ExtensionsApproved() bool { return g != nil && g.expanded }
 func (g *Grant) Check() bool {
 	return g != nil && g.now != nil && g.active.Load() && g.now().Before(g.expires)
 }
@@ -87,29 +100,30 @@ type Check struct {
 	Status string `json:"status"`
 }
 type Report struct {
-	Selection                      profile.Selection   `json:"selection"`
-	Inventory                      profile.Observation `json:"inventory"`
-	LoopbackPeerExercised          bool                `json:"loopbackPeerExercised"`
-	NativeInventorySenderExercised bool                `json:"nativeInventorySenderExercised"`
-	ProductionIngressExercised     bool                `json:"productionIngressExercised"`
-	SharedDashboardExercised       bool                `json:"sharedDashboardExercised"`
-	Schema                         string              `json:"schema"`
-	Source                         string              `json:"source"`
-	Status                         string              `json:"status"`
-	Stage                          string              `json:"stage"`
-	Reason                         native.Reason       `json:"reason"`
-	ApprovalValidated              bool                `json:"approvalValidated"`
-	NativeActionsAttempted         bool                `json:"nativeActionsAttempted"`
-	Native                         native.Evidence     `json:"native"`
-	Checks                         []Check             `json:"checks"`
-	ProductionManagerExercised     bool                `json:"productionManagerExercised"`
-	HiddenConsoleExercised         bool                `json:"hiddenConsoleExercised"`
-	OSShutdownExercised            bool                `json:"osShutdownExercised"`
-	OSRebootExercised              bool                `json:"osRebootExercised"`
-	BroadAncestorACLChanged        bool                `json:"broadAncestorAclChanged"`
-	ExistingResourcesAdopted       bool                `json:"existingResourcesAdopted"`
-	SecretsExported                bool                `json:"secretsExported"`
-	RawTelemetryExported           bool                `json:"rawTelemetryExported"`
+	Extensions                     *profile.ExtensionObservation `json:"extensions,omitempty"`
+	Selection                      profile.Selection             `json:"selection"`
+	Inventory                      profile.Observation           `json:"inventory"`
+	LoopbackPeerExercised          bool                          `json:"loopbackPeerExercised"`
+	NativeInventorySenderExercised bool                          `json:"nativeInventorySenderExercised"`
+	ProductionIngressExercised     bool                          `json:"productionIngressExercised"`
+	SharedDashboardExercised       bool                          `json:"sharedDashboardExercised"`
+	Schema                         string                        `json:"schema"`
+	Source                         string                        `json:"source"`
+	Status                         string                        `json:"status"`
+	Stage                          string                        `json:"stage"`
+	Reason                         native.Reason                 `json:"reason"`
+	ApprovalValidated              bool                          `json:"approvalValidated"`
+	NativeActionsAttempted         bool                          `json:"nativeActionsAttempted"`
+	Native                         native.Evidence               `json:"native"`
+	Checks                         []Check                       `json:"checks"`
+	ProductionManagerExercised     bool                          `json:"productionManagerExercised"`
+	HiddenConsoleExercised         bool                          `json:"hiddenConsoleExercised"`
+	OSShutdownExercised            bool                          `json:"osShutdownExercised"`
+	OSRebootExercised              bool                          `json:"osRebootExercised"`
+	BroadAncestorACLChanged        bool                          `json:"broadAncestorAclChanged"`
+	ExistingResourcesAdopted       bool                          `json:"existingResourcesAdopted"`
+	SecretsExported                bool                          `json:"secretsExported"`
+	RawTelemetryExported           bool                          `json:"rawTelemetryExported"`
 }
 
 func NewReport(source string) Report { return NewSelectedReport(source, profile.BasicTLS()) }
@@ -130,7 +144,7 @@ func (r *Report) Mark(name, status string) {
 }
 func finiteStage(v native.Stage) bool {
 	switch v {
-	case native.StageIdle, native.StagePreflight, native.StageProvision, native.StageInstall, native.StagePrepare, native.StageClaim, native.StageStart, native.StageToken, native.StageStatus, native.StageContinuity, native.StageProbe, native.StageStop, native.StageUninstall, native.StageCleanup:
+	case native.StageCapabilities, native.StageIdle, native.StagePreflight, native.StageProvision, native.StageInstall, native.StagePrepare, native.StageClaim, native.StageStart, native.StageToken, native.StageStatus, native.StageContinuity, native.StageProbe, native.StageStop, native.StageUninstall, native.StageCleanup:
 		return true
 	}
 	return false
@@ -143,7 +157,14 @@ func finiteReason(v native.Reason) bool {
 	return false
 }
 func Validate(r Report) error {
-	if (r.LoopbackPeerExercised && !r.NativeActionsAttempted) || r.Selection.Validate() != nil || r.Inventory.Validate() != nil || (!r.Selection.Inventory() && r.Inventory.Frames != 0) || r.NativeInventorySenderExercised != (r.Selection.Inventory() && r.Inventory.Frames > 0 && r.LoopbackPeerExercised) || r.ProductionIngressExercised || r.SharedDashboardExercised || r.Schema != Schema || !ValidSource(r.Source) || !r.ApprovalValidated || r.ProductionManagerExercised || r.HiddenConsoleExercised || r.OSShutdownExercised || r.OSRebootExercised || r.BroadAncestorACLChanged || r.ExistingResourcesAdopted || r.SecretsExported || r.RawTelemetryExported || !finiteStage(r.Native.Stage) || !finiteReason(r.Native.Reason) || !finiteReason(r.Reason) || len(r.Checks) != len(CheckNames) {
+	if r.Schema == ExpandedSchema {
+		if !r.Selection.Inventory() || r.Extensions == nil || r.Extensions.Validate() != nil || r.Extensions.Frames > r.Inventory.Frames || (r.Extensions.Frames > 0 && !r.LoopbackPeerExercised) || (r.Status == "passed_native_subset" && !r.Extensions.Usable()) || (r.Status == "blocked" && r.Extensions.Frames != 0) {
+			return ErrGate
+		}
+	} else if r.Schema != Schema || r.Extensions != nil {
+		return ErrGate
+	}
+	if (r.LoopbackPeerExercised && !r.NativeActionsAttempted) || r.Selection.Validate() != nil || r.Inventory.Validate() != nil || (!r.Selection.Inventory() && r.Inventory.Frames != 0) || r.NativeInventorySenderExercised != (r.Selection.Inventory() && r.Inventory.Frames > 0 && r.LoopbackPeerExercised) || r.ProductionIngressExercised || r.SharedDashboardExercised || !ValidSource(r.Source) || !r.ApprovalValidated || r.ProductionManagerExercised || r.HiddenConsoleExercised || r.OSShutdownExercised || r.OSRebootExercised || r.BroadAncestorACLChanged || r.ExistingResourcesAdopted || r.SecretsExported || r.RawTelemetryExported || !finiteStage(r.Native.Stage) || !finiteReason(r.Native.Reason) || !finiteReason(r.Reason) || len(r.Checks) != len(CheckNames) {
 		return ErrGate
 	}
 	if r.Status != "passed_native_subset" && r.Status != "failed" && r.Status != "blocked" {

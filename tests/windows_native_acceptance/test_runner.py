@@ -258,9 +258,9 @@ class ReportTests(unittest.TestCase):
         go_native = (gate.ROOT / "internal/windowsacceptance/native/driver.go").read_text()
         report_struct = go_gate.split("type Report struct {", 1)[1].split("\n}", 1)[0]
         native_struct = go_native.split("type Evidence struct {", 1)[1].split("\n}", 1)[0]
-        self.assertEqual(set(re.findall(r'json:"([^"]+)"', report_struct)), gate.REPORT_FIELDS)
+        self.assertEqual(set(re.findall(r'json:"([^"]+)"', report_struct)), gate.REPORT_FIELDS | {"extensions,omitempty"})
         self.assertEqual(set(re.findall(r'json:"([^"]+)"', native_struct)), gate.NATIVE_BOOLEANS | {"stage", "reason"})
-        self.assertEqual(set(re.findall(r'Stage\w+\s+Stage\s*=\s*"([^"]+)"', go_native)), gate.STAGES)
+        self.assertEqual(set(re.findall(r'Stage\w+\s+Stage\s*=\s*"([^"]+)"', go_native + (gate.ROOT / "internal/windowsacceptance/native/capabilities.go").read_text())), gate.STAGES)
         self.assertEqual(set(re.findall(r'Reason\w+\s+Reason\s*=\s*"([^"]+)"', go_native)), gate.REASONS)
         names = go_gate.split("var CheckNames = []string{", 1)[1].split("}", 1)[0]
         self.assertEqual(tuple(re.findall(r'"([^"]+)"', names)), gate.CHECK_NAMES)
@@ -394,9 +394,9 @@ class WorkflowTests(unittest.TestCase):
         trigger = workflow.split("\non:\n", 1)[1].split("\npermissions:", 1)[0]
         self.assertEqual(re.findall(r"^  ([a-z_]+):", trigger, re.M), ["workflow_dispatch"])
         self.assertEqual(re.findall(r"^      ([a-z_]+):", trigger, re.M),
-                         ["expected_source_sha", "collection_profile", "transport_profile", "inventory_metadata", "http_plaintext", "services", "identity", "app_acls", "loopback_transport", "cleanup"])
+                         ["expected_source_sha", "collection_profile", "transport_profile", "inventory_metadata", "event_headers", "visible_volumes", "process_metrics", "network_endpoints", "http_plaintext", "services", "identity", "app_acls", "loopback_transport", "cleanup"])
         self.assertNotRegex(trigger, r"default:\s*true")
-        for approval in ("inventory_metadata", "http_plaintext", "services", "identity", "app_acls", "loopback_transport", "cleanup"):
+        for approval in ("inventory_metadata", "event_headers", "visible_volumes", "process_metrics", "network_endpoints", "http_plaintext", "services", "identity", "app_acls", "loopback_transport", "cleanup"):
             block = re.split(r"\n      [a-z_]+:", trigger.split("      " + approval + ":\n", 1)[1], maxsplit=1)[0]
             for line in ("        default: false", "        required: true", "        type: boolean"):
                 self.assertIn(line, block)

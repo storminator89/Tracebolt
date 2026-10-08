@@ -214,6 +214,11 @@ func (d *Driver) cleanupSnapshot() ([]ownedObject, error) {
 		return nil, ErrAcceptance
 	}
 	pdNames := []string{filepath.Base(s.layout.StateRoot), filepath.Base(s.layout.StateRoot) + "-installer"}
+	for _, c := range capabilityStores() {
+		if _, known := s.recordedRoot(s.layout.StateRoot + c.suffix); known {
+			pdNames = append(pdNames, filepath.Base(s.layout.StateRoot)+c.suffix)
+		}
+	}
 	if s.probeCreated {
 		pdNames = append(pdNames, "windows-acceptance")
 	}
@@ -237,6 +242,15 @@ func (d *Driver) cleanupSnapshot() ([]ownedObject, error) {
 			path    string
 			options windowsstate.Options
 		}{s.acceptancePath(), acceptanceStoreOptions(false)})
+	}
+	for _, c := range capabilityStores() {
+		path := s.layout.StateRoot + c.suffix
+		if _, known := s.recordedRoot(path); known {
+			stores = append(stores, struct {
+				path    string
+				options windowsstate.Options
+			}{path, c.options(d.receipt.ServiceSID)})
+		}
 	}
 	for _, store := range stores {
 		records, err := snapshotStore(store.path, store.options)

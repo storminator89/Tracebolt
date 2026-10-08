@@ -86,6 +86,7 @@ var ErrAcceptance = errors.New("native acceptance operation refused or incomplet
 // arguments are fixed; there is no destination/service/account option.
 // Format methods intentionally redact even the public source paths.
 type Options struct {
+	Expanded           bool
 	Selection          profile.Selection
 	ServiceArtifact    string
 	ServiceSHA256      string
@@ -141,6 +142,14 @@ func (d *Driver) enter(ctx context.Context, g Guard, stage Stage) bool {
 	}
 	if g == nil || !g.Check() {
 		d.evidence.Reason = ReasonGuard
+		return false
+	}
+	expanded := false
+	if scope, ok := g.(interface{ ExtensionsApproved() bool }); ok {
+		expanded = scope.ExtensionsApproved()
+	}
+	if d.options.Expanded != expanded {
+		d.fail(ReasonGuard)
 		return false
 	}
 	scope, ok := g.(interface{ Selection() profile.Selection })

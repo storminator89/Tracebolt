@@ -6,7 +6,9 @@ import (
 	"localrmm/internal/windowseventhealth"
 	"localrmm/internal/windowsnetwork"
 	"localrmm/internal/windowsprocessmetrics"
+	"localrmm/internal/windowsstate"
 	"localrmm/internal/windowsvolumes"
+	"os"
 	"reflect"
 	"testing"
 )
@@ -198,5 +200,66 @@ func TestCombinedWindowsCapabilityV3StrictAndPartialFailures(t *testing.T) {
 		if err != ErrState || !result.MetadataScopeVerified || result.FailedScope != good.Scopes[failed] || !reflect.DeepEqual(result.AppliedScopes, good.Scopes[1:failed]) || !reflect.DeepEqual(called, good.Scopes[1:failed+1]) {
 			t.Fatal("partial result lost or later scope touched", result, called, err)
 		}
+	}
+}
+
+type capabilityPresenceFixture struct{ closed bool }
+
+func (s *capabilityPresenceFixture) Close() error { s.closed = true; return nil }
+func TestFreshWindowsCapabilityScopePreflightOnlyAcceptsMissingRoots(t *testing.T) {
+	root := `C:\ProgramData\Tracebolt\windows-agent`
+	sid := "S-1-5-80-1-2-3-4-5"
+	want := []string{root + "-event-metadata", root + "-visible-volumes", root + "-process-metrics", root + "-network"}
+	var got []string
+	absent := func(path string, o windowsstate.Options) (capabilityInspectionStore, error) {
+		got = append(got, path)
+		if o.Create || o.RuntimeSID != sid || !reflect.DeepEqual(o.Names, []string{"consent.json"}) {
+			t.Fatal("preflight creation/schema mismatch")
+		}
+		return nil, os.ErrNotExist
+	}
+	if err := windowsCapabilityScopesAbsent(root, sid, absent); err != nil || !reflect.DeepEqual(got, want) {
+		t.Fatal("fresh scope paths mismatch", err, got)
+	}
+	for _, existing := range []bool{false, true} {
+		calls := 0
+		store := &capabilityPresenceFixture{}
+		err := windowsCapabilityScopesAbsent(root, sid, func(string, windowsstate.Options) (capabilityInspectionStore, error) {
+			calls++
+			if existing {
+				return store, nil
+			}
+			return nil, os.ErrPermission
+		})
+		if err == nil || calls != 1 || store.closed != existing {
+			t.Fatal("unknown/existing state adopted")
+		}
+	}
+}
+
+func TestWindowsCapabilityGrantDigestDetectsReplacementWithoutCollection(t *testing.T) {
+	r := capabilityFixture(enrollmentcrypto.CollectionProfileWindowsInventory, windowsvolumes.Scope)
+	grant := windowsvolumes.Consent{SchemaVersion: windowsvolumes.ConsentVersion, Scope: windowsvolumes.Scope, SenderBinding: "fixture-binding", GrantID: "first", Enabled: true}
+	read := func(scope string) (any, bool) {
+		if scope != windowsvolumes.Scope {
+			t.Fatal("unexpected scope")
+		}
+		return grant, true
+	}
+	first, err := windowsCapabilityGrantDigests(r, read)
+	if err != nil || len(first) != 1 || first[0].Scope != windowsvolumes.Scope || len(first[0].SHA256) != 64 {
+		t.Fatal("missing digest", err)
+	}
+	again, err := windowsCapabilityGrantDigests(r, read)
+	if err != nil || !reflect.DeepEqual(first, again) {
+		t.Fatal("unstable canonical digest")
+	}
+	grant.GrantID = "replacement"
+	changed, err := windowsCapabilityGrantDigests(r, read)
+	if err != nil || reflect.DeepEqual(first, changed) {
+		t.Fatal("grant replacement undetected")
+	}
+	if got, err := windowsCapabilityGrantDigests(r, func(string) (any, bool) { return grant, false }); err == nil || got != nil {
+		t.Fatal("denied grant digested as success")
 	}
 }

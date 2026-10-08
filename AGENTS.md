@@ -101,6 +101,11 @@ file as navigation and project constraints, never as permission to act on a host
   existing managed-evidence export blocks. Health-summary approval never permits
   raw logs, dump data, autonomous tools, shell commands or remediation. Fixtures
   do not authorize a real provider call, API-key entry or runtime scope grant.
+- For the source-only fresh five-scope Windows observation coordinator, read
+  `docs/windows-read-observation-setup.md`. Keep SCM disabled until activated
+  identity and all exact grants are durably verified; retain indeterminate
+  transitions for read-only reconciliation. No public/released command exists,
+  and existing service/grant receipts must not be promoted.
 - Windows caller-visible volume metadata is a separate default-off local grant.
   Read `docs/windows-volume-inventory.md` before changing its consent, capacity
   semantics or v3 wire shape. Keep v1/event-v2 identities and bytes compatible;

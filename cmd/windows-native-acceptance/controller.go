@@ -42,15 +42,18 @@ type peer interface {
 	Close() error
 }
 type controllerHooks struct {
-	newDriver func(native.Options) (driver, error)
-	startPeer func(context.Context, profile.Selection) (peer, error)
-	pause     func(context.Context, time.Duration) error
-	now       func() time.Time
+	newDriver     func(native.Options) (driver, error)
+	startPeer     func(context.Context, profile.Selection) (peer, error)
+	startExpanded func(context.Context, profile.Selection) (peer, error)
+	pause         func(context.Context, time.Duration) error
+	now           func() time.Time
 }
 
 func executeNative(ctx context.Context, g *gate.Grant, o native.Options) gate.Report {
 	return executeWith(ctx, g, o, controllerHooks{newDriver: func(o native.Options) (driver, error) { return native.New(o) }, startPeer: func(c context.Context, selected profile.Selection) (peer, error) {
 		return fixture.StartSelected(c, selected)
+	}, startExpanded: func(c context.Context, selected profile.Selection) (peer, error) {
+		return fixture.StartExpanded(c, selected)
 	}, pause: pause, now: time.Now})
 }
 func pause(ctx context.Context, d time.Duration) error {
@@ -88,11 +91,20 @@ func certificateHash(raw string) string {
 }
 func executeWith(ctx context.Context, g *gate.Grant, o native.Options, h controllerHooks) (r gate.Report) {
 	r = gate.NewSelectedReport(g.Source(), g.Selection())
+	if g.ExtensionsApproved() {
+		z := profile.ZeroExtensionObservation()
+		r.Extensions = &z
+		r.Schema = gate.ExpandedSchema
+	}
 	if ctx == nil || !g.Check() || h.newDriver == nil || h.startPeer == nil || h.pause == nil || h.now == nil {
 		r.Reason = native.ReasonGuard
 		return r
 	}
 	if o.Selection != (profile.Selection{}) && o.Selection != g.Selection() {
+		r.Reason = native.ReasonGuard
+		return r
+	}
+	if o.Expanded != g.ExtensionsApproved() {
 		r.Reason = native.ReasonGuard
 		return r
 	}
@@ -119,6 +131,10 @@ func executeWith(ctx context.Context, g *gate.Grant, o native.Options, h control
 				// A handler accepted during native cleanup must not disappear.
 				e := f.Evidence()
 				r.Inventory = e.Inventory
+				if r.Extensions != nil {
+					x := e.Extensions
+					r.Extensions = &x
+				}
 				r.LoopbackPeerExercised = e.Frames > 0
 				r.NativeInventorySenderExercised = g.Selection().Inventory() && e.Inventory.Frames > 0 && e.Frames > 0
 				if closeErr != nil || !e.Closed {
@@ -128,7 +144,7 @@ func executeWith(ctx context.Context, g *gate.Grant, o native.Options, h control
 					r.Mark("owned_cleanup", "fail")
 				}
 				// Preserve earlier lifecycle, native cleanup or peer-close failure.
-				if r.Status == "passed_native_subset" && g.Selection().Inventory() && !r.Inventory.Usable() {
+				if r.Status == "passed_native_subset" && g.Selection().Inventory() && (!r.Inventory.Usable() || r.Extensions != nil && !r.Extensions.Usable()) {
 					r.Status = "failed"
 					r.Stage = "profile_report"
 					r.Reason = native.ReasonOperation
@@ -184,7 +200,15 @@ func executeWith(ctx context.Context, g *gate.Grant, o native.Options, h control
 	if !step("app_only_provisioning", func() error { return d.Provision(ctx, g) }) {
 		return r
 	}
-	f, err = h.startPeer(ctx, g.Selection())
+	if g.ExtensionsApproved() {
+		if h.startExpanded == nil {
+			r.Reason = native.ReasonGuard
+			return r
+		}
+		f, err = h.startExpanded(ctx, g.Selection())
+	} else {
+		f, err = h.startPeer(ctx, g.Selection())
+	}
 	if err != nil {
 		r.Stage = "service_prepare"
 		r.Reason = native.ReasonOperation
@@ -253,6 +277,22 @@ func executeWith(ctx context.Context, g *gate.Grant, o native.Options, h control
 		return r
 	}
 	if !step("profile_report", func() error {
+		if g.ExtensionsApproved() {
+			extended, ok := d.(interface {
+				ConfigureCapabilities(context.Context, native.Guard) error
+			})
+			if !ok || extended.ConfigureCapabilities(ctx, g) != nil || d.Start(ctx, g) != nil {
+				return native.ErrAcceptance
+			}
+			// Keep the ordinary service running for real CPU deltas, not only a
+			// first-sample/null CPU frame. No injected collector or clock.
+			if await(ctx, 90*time.Second, h, func() bool { return f.Evidence().Extensions.Usable() }) != nil {
+				return native.ErrAcceptance
+			}
+			if d.Stop(ctx, g) != nil || d.StateContinuity(ctx) != nil || !d.Evidence().Ready || !d.Evidence().SenderFloorRetained {
+				return native.ErrAcceptance
+			}
+		}
 		e := f.Evidence()
 		r.Inventory = e.Inventory
 		r.LoopbackPeerExercised = e.Frames > 0
@@ -306,7 +346,7 @@ func executeWith(ctx context.Context, g *gate.Grant, o native.Options, h control
 		}
 		if await(ctx, 90*time.Second, h, func() bool {
 			e := f.Evidence()
-			return e.Frames > baseline.Frames && e.LastSequence > baseline.LastSequence
+			return e.Frames > baseline.Frames && e.LastSequence > baseline.LastSequence && (!g.ExtensionsApproved() || e.Extensions.Usable())
 		}) != nil {
 			return native.ErrAcceptance
 		}

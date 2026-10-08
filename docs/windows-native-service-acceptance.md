@@ -39,7 +39,8 @@ After reviewing an exact source commit, the operator must separately approve a
 single run of `Manual disposable Windows native acceptance subset` on a fresh disposable
 GitHub-hosted `windows-2025` x64 runner. The dispatch requires its full 40-character
 commit SHA, an exact `collection_profile` and `transport_profile`, and every
-applicable scope below. All seven approval booleans default to false. The only
+applicable scope below. The original seven approval booleans keep their exact meaning. Four new
+extension booleans also default to false; none is inferred from earlier approval. The only
 valid pairs are `basic-readonly-v1` + `tls`, `windows-inventory-v1` + `tls`
 (the default selection), and `windows-inventory-v1` + `http-test`. No automatic
 matrix, transport fallback or existing-identity reuse is supported.
@@ -81,6 +82,75 @@ in this workflow. The user's existing HTTP-test manager is not contacted or
 silently treated as TLS. Proving this HTTP loopback selection would establish
 only its selected transport path, not acceptance against that manager. There is
 no dispatch command in this guide.
+
+## One optional expanded session (source candidate, never auto-dispatched)
+
+Keep `collection_profile=windows-inventory-v1`. In addition to the original
+applicable approvals, acknowledge **all four** new scopes together:
+
+- `event_headers`: bounded System and Application provider names, event IDs,
+  levels, timestamps and counts. No messages, event payload, Security log,
+  selected log content or provider/AI export.
+- `visible_volumes`: caller-visible local volume GUIDs, drive types and
+  quota-aware total/available plus physical-free capacity. No file reads,
+  labels, mount paths or remote shares.
+- `process_metrics`: bounded PID/creation attribution, CPU-time deltas and
+  working-set bytes. No process memory contents, owners or executable paths.
+- `network_endpoints`: bounded numeric TCP/UDP addresses, ports, state and
+  API-snapshot PIDs. No DNS, process joins or traffic payload.
+
+Each new acknowledgement includes its separate temporary protected sibling
+consent store and exact owned cleanup; these grants are not part of the earlier
+base metadata approval. All four false preserves the base-only v2 acceptance
+option. Any mixed combination, or expanded basic identity, fails before native
+execution. The optional expanded evidence uses report schema v3. Selecting HTTP
+also discloses that all these identifying observations travel in plaintext on
+loopback; the original HTTP acknowledgement remains independently required.
+
+This is one bounded runner session with one fresh identity and the ordinary
+unmodified service. After initial delayed activation/base reporting, the
+controller stops the receipt-owned service, verifies its original identity and
+sender floor, and configures each specifically acknowledged extension using the
+existing consent-v3 base-plus-one-scope helper. It checks live approval before
+each separate write and records each successful sibling root's object ID.
+It then starts the ordinary service and requires an all-four v5 frame, including
+at least one observed volume capacity, real per-process CPU delta and RAM row.
+First-sample-only CPU does not pass. Mixed denied/unavailable rows remain visible
+as finite counts and partial quality; the controller never widens host rights.
+Zero event rows can be an honest successful bounded read. Expanded acceptance
+additionally requires at least one retained TCP loopback row matching this peer’s
+actual listening port. Empty/trimmed/unavailable network snapshots cannot pass;
+no collector scope or permissions are widened to find that row. The public
+report exports only its bounded match count, never the address, port or PID.
+The outage/restart/retry/recovery lifecycle then exercises the expanded sender;
+recovery must again reach a usable observation before orderly Stop.
+
+The v3 report requires `freshOrchestrationAcceptance=false` and adds only finite
+quality labels and bounded retained-row counts,
+including per-row observed/denied/unavailable/first-sample/reset histograms.
+It exports no row, identifier, metric value, secret, raw request, event content
+or provider response. It proves only the all-four v5 selection, not separate
+native v2/v3/v4 runs, whole-machine completeness or every hardware/failure case.
+The existing fourteen checks, source binding, deadlines, denial probe and
+production/ingress/dashboard/reboot false fields remain mandatory.
+
+Successful siblings join the fixed allowlist for object-ID/hash-bound snapshots,
+uninstall retention comparison and frozen-handle cleanup. The original runtime
+and sender manifests, ACLs, hash/file bounds and 64-object ceiling are unchanged.
+A failed scope may have written state. Its indeterminate sibling is never adopted
+or rolled back; it fences uninstall/cleanup and remains a failed retained result.
+Runner destruction is not relabelled as successful cleanup. No automatic retry
+reuses such state.
+
+This option does **not** exercise a fresh one-choice production installer flow:
+it configures already activated, stopped acceptance-owned service state through
+existing local helpers. Fresh setup orchestration, real Linux manager durable
+storage, production ingress and shared dashboard remain separate native gates.
+The real stores intentionally reject non-Linux operation; this option must not
+replace them with an in-memory peer and call that production acceptance.
+
+See the [approval packet](windows-expanded-acceptance-approval.md) for the exact
+future human review requirements. Preparing this source does not request a run.
 
 ## Source and artifact binding
 

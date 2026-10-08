@@ -30,6 +30,26 @@ on:
         required: true
         default: false
         type: boolean
+      event_headers:
+        description: 'Approve bounded System/Application event headers only (provider, ID, level, timestamps/counts); no messages, payloads, Security log or exports; all four extension approvals required together, plus base inventory; temporary protected sibling grants and owned cleanup included; selected HTTP means plaintext'
+        required: true
+        default: false
+        type: boolean
+      visible_volumes:
+        description: 'Approve caller-visible local volume GUIDs, drive types and quota-aware capacities; no files, labels or remote shares; all four extension approvals required together, plus base inventory; temporary protected sibling grants and owned cleanup included; selected HTTP means plaintext'
+        required: true
+        default: false
+        type: boolean
+      process_metrics:
+        description: 'Approve bounded per-process PID/creation attribution, CPU deltas and working-set bytes; no memory contents, owners or executable paths; all four extension approvals required together, plus base inventory; temporary protected sibling grants and owned cleanup included; selected HTTP means plaintext'
+        required: true
+        default: false
+        type: boolean
+      network_endpoints:
+        description: 'Approve bounded numeric TCP/UDP addresses, ports, state and API-snapshot PID; no DNS, traffic, process joins or provider export; all four extension approvals required together, plus base inventory; temporary protected sibling grants and owned cleanup included; selected HTTP means plaintext'
+        required: true
+        default: false
+        type: boolean
       http_plaintext:
         description: 'Approve plaintext invitation, enrollment and inventory metadata on loopback for the selected disposable HTTP test; signatures do not encrypt or authenticate the peer; required only for HTTP-test'
         required: true
@@ -74,6 +94,10 @@ jobs:
       TRACEBOLT_COLLECTION_PROFILE: ${{ inputs.collection_profile }}
       TRACEBOLT_TRANSPORT_PROFILE: ${{ inputs.transport_profile }}
       TRACEBOLT_APPROVE_INVENTORY_METADATA: ${{ inputs.inventory_metadata }}
+      TRACEBOLT_APPROVE_EVENT_HEADERS: ${{ inputs.event_headers }}
+      TRACEBOLT_APPROVE_VISIBLE_VOLUMES: ${{ inputs.visible_volumes }}
+      TRACEBOLT_APPROVE_PROCESS_METRICS: ${{ inputs.process_metrics }}
+      TRACEBOLT_APPROVE_NETWORK_ENDPOINTS: ${{ inputs.network_endpoints }}
       TRACEBOLT_APPROVE_HTTP_PLAINTEXT: ${{ inputs.http_plaintext }}
       TRACEBOLT_EXPECTED_SOURCE_SHA: ${{ inputs.expected_source_sha }}
       TRACEBOLT_APPROVE_SERVICES: ${{ inputs.services }}

@@ -144,6 +144,7 @@ const (
 	startAccess
 	stopAccess
 	deleteAccess
+	configureAccess
 )
 
 type service interface {
@@ -264,6 +265,9 @@ func validServiceSID(s string) bool {
 	return true
 }
 func install(ctx context.Context, b backend, p InstallPlan) (Receipt, error) {
+	return installMode(ctx, b, p, false)
+}
+func installMode(ctx context.Context, b backend, p InstallPlan, staged bool) (Receipt, error) {
 	if err := ctx.Err(); err != nil {
 		return Receipt{}, err
 	}
@@ -271,7 +275,11 @@ func install(ctx context.Context, b backend, p InstallPlan) (Receipt, error) {
 	if err != nil {
 		return Receipt{}, err
 	}
-	if l != p.Layout || !validHex(p.InstallationID, 16) || !validHex(p.ExecutableSHA256, 32) || !reflect.DeepEqual(p.Configuration, configuration(l, p.InstallationID, p.ExecutableSHA256)) {
+	expected := configuration(l, p.InstallationID, p.ExecutableSHA256)
+	if staged {
+		expected.StartType = 4
+	}
+	if l != p.Layout || !validHex(p.InstallationID, 16) || !validHex(p.ExecutableSHA256, 32) || !reflect.DeepEqual(p.Configuration, expected) {
 		return Receipt{}, ErrMismatch
 	}
 	if p.Existing.Exists {
@@ -295,6 +303,9 @@ func install(ctx context.Context, b backend, p InstallPlan) (Receipt, error) {
 		return Receipt{}, err
 	}
 	r := Receipt{Version: 1, InstallationID: p.InstallationID, Layout: l, ConfigurationSHA256: digestConfig(p.Configuration), ExecutableSHA256: hash}
+	if staged {
+		r.Version = 2
+	}
 	s, err := b.Create(p.Configuration)
 	if s != nil {
 		defer s.Close()
@@ -324,6 +335,9 @@ func install(ctx context.Context, b backend, p InstallPlan) (Receipt, error) {
 	return r, nil
 }
 func openOwned(ctx context.Context, b backend, r Receipt, a access, verifyBinary bool) (service, Snapshot, error) {
+	return openOwnedMode(ctx, b, r, a, verifyBinary, false)
+}
+func openOwnedMode(ctx context.Context, b backend, r Receipt, a access, verifyBinary, staged bool) (service, Snapshot, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, Snapshot{}, err
 	}
@@ -332,7 +346,12 @@ func openOwned(ctx context.Context, b backend, r Receipt, a access, verifyBinary
 		return nil, Snapshot{}, err
 	}
 	c := configuration(l, r.InstallationID, r.ExecutableSHA256)
-	if r.Version != 1 || !r.Complete || r.Layout != l || !validHex(r.InstallationID, 16) || !validHex(r.ExecutableSHA256, 32) || !validServiceSID(r.ServiceSID) || r.ConfigurationSHA256 != digestConfig(c) {
+	version := 1
+	if staged {
+		version = 2
+		c.StartType = 4
+	}
+	if r.Version != version || !r.Complete || r.Layout != l || !validHex(r.InstallationID, 16) || !validHex(r.ExecutableSHA256, 32) || !validServiceSID(r.ServiceSID) || r.ConfigurationSHA256 != digestConfig(c) {
 		return nil, Snapshot{}, ErrMismatch
 	}
 	s, err := b.Open(a)

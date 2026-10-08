@@ -39,6 +39,20 @@ class GateTests(unittest.TestCase):
         source = Path(gate.__file__).read_text()
         self.assertIn('env.pop("TRACEBOLT_WINDOWS_READONLY_NATIVE", None)', source)
         self.assertNotIn('TRACEBOLT_WINDOWS_READONLY_NATIVE"] =', source)
+    def test_fresh_setup_remains_inert_source_and_required(self):
+        names = {
+            "TestFreshReadSetupStaysDisabledAndOrdinaryLifecycleRejectsReceipt",
+            "TestFreshReadSetupIndeterminateTransitionOnlyReadOnlyReconciliation",
+            "TestFreshReadSetupOneConsentBeforeFirstStart",
+            "TestFreshReadSetupPartialGrantOutcomeRetained",
+            "TestFreshReadSetupHasNoPublicCommand",
+        }
+        self.assertTrue(names.issubset({name for _, name in gate.REQUIRED}))
+        root = Path(__file__).resolve().parents[2]
+        cli = (root / "cmd/windows-service/main.go").read_text()
+        dispatch = (root / "cmd/windows-service/operation_windows.go").read_text()
+        self.assertNotIn("installReadObservation(", dispatch)
+        self.assertNotIn('flags.Bool("read-setup"', cli)
     def test_malformed_stream(self):
         for raw in (b"[]",b"not json",b"",b" "*(32*1024*1024+1)):
             with self.assertRaises(ValueError):gate.check_events(raw)

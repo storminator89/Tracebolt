@@ -343,8 +343,7 @@ func (d *Driver) uninstall(ctx context.Context, g Guard) error {
 	if !d.verifyReceipt() || !d.requireStopped(ctx) || !approved(ctx, g) {
 		return d.fail(ReasonOwnership)
 	}
-	s, _ := d.native()
-	before, err := snapshotStore(s.layout.StateRoot, windowsagentconfig.RuntimeRoot(d.receipt.ServiceSID, false))
+	before, err := d.snapshotRetainedState()
 	if err != nil {
 		return d.fail(ReasonOwnership)
 	}
@@ -358,7 +357,7 @@ func (d *Driver) uninstall(ctx context.Context, g Guard) error {
 		if err == nil && !snap.Exists {
 			d.evidence.Uninstalled = true
 			d.evidence.Installed = false
-			after, err := snapshotStore(s.layout.StateRoot, windowsagentconfig.RuntimeRoot(d.receipt.ServiceSID, false))
+			after, err := d.snapshotRetainedState()
 			if err != nil || !reflect.DeepEqual(before, after) {
 				return d.fail(ReasonOwnership)
 			}

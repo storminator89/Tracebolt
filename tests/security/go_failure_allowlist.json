@@ -1,5 +1,7 @@
 {
-  "goSourceSha256": "1af535b2804a817eb34e481de1240a9e8040eef1d467f98e60b39e9297888770",
+  "schemaVersion": 1,
+  "sourceCommit": "fccc4b00cd8a144afd58e4b995747afab7a10022",
+  "goSourceSha256": "983f58e565aa26f86db96beb3b2c8a5afdbe3dfb125f134aacc0beb73c5c0e84",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -206,6 +208,9 @@
       "TestControllerRefusesMismatchedArtifactProfileBeforeDriver",
       "TestControllerRevokedGrantIsInert",
       "TestControllerSyntheticCompleteSequence",
+      "TestExpandedCLIRequiresFourFreshFlags",
+      "TestExpandedControllerCannotFallbackToBasePeer",
+      "TestExpandedControllerRequiresStoppedGrantAndUsefulV5",
       "TestManualAcceptanceCLIRejectsBeforeExecution"
     ],
     "localrmm/cmd/windows-prerequisites": [
@@ -220,6 +225,20 @@
       "TestConcurrentStopPreservesInvalidHandoffAndMarkerFailure",
       "TestCooperativePendingOutcomeRejectsMixedAndDiagnosedFailures",
       "TestEventConsentFlagsExplicitAndBounded",
+      "TestFreshReadConPTYNative",
+      "TestFreshReadSetupCanceledContextNeverMutates",
+      "TestFreshReadSetupConsentDisclosesEveryScopeAndHTTPRisk",
+      "TestFreshReadSetupEveryFailureRetainsStateWithoutStart",
+      "TestFreshReadSetupHasNoPublicCommand",
+      "TestFreshReadSetupIdentityReplacementAndReceiptMismatchNeverTransition",
+      "TestFreshReadSetupOneConsentBeforeFirstStart",
+      "TestFreshReadSetupPartialGrantOutcomeRetained",
+      "TestFreshReadSetupReceiptStrictAndLegacyUnchanged",
+      "TestFreshReadSetupReconcileDisabledChangedOrUnknownNeverWrites",
+      "TestFreshReadSetupReconcileOnlyFinalizesCompletedEffect",
+      "TestFreshReadSetupReconcileStrictCanonicalAndCancellation",
+      "TestFreshReadSetupRejectsAutomaticPlanBeforeJournal",
+      "TestFreshReadSetupRejectsOldConsentAndMissingScopesWithoutOperations",
       "TestNetworkConsentErrorsAndInvalidModes",
       "TestNetworkConsentFlagsExplicitAndBounded",
       "TestNetworkConsentNeverConfiguresWithMissingDependencies",
@@ -1735,6 +1754,7 @@
       "TestForegroundInvalidConfigDoesNotOpenState",
       "TestForegroundKeepsExclusiveLockAcrossWaits",
       "TestFrameShapeAndCollectionIsolation",
+      "TestFreshWindowsCapabilityScopePreflightOnlyAcceptsMissingRoots",
       "TestFullAdminSenderRequiresExplicitV2GrantAndFreshInspection",
       "TestGenerationBoundSenderRejectsOldRequestsWithoutCapture",
       "TestGenerationChangedAfterCaptureDiscardsOldBody",
@@ -1868,6 +1888,7 @@
       "TestSystemNativeMissingStateAndFuturePendingFailBeforeSource",
       "TestSystemNativeTLSHTTPExactRetryBeforeRecapture",
       "TestValidateGuidedHandoffIsLocalAndPreservesState",
+      "TestWindowsCapabilityGrantDigestDetectsReplacementWithoutCollection",
       "TestWindowsEventConsentCreateOnlyAndReenable",
       "TestWindowsEventConsentRejectsIncompleteForeignAndFailedStorage",
       "TestWindowsEventsActualSenderIngressStoreRetryAndDisable",
@@ -2656,6 +2677,13 @@
     ],
     "localrmm/internal/windowsacceptance/fixture": [
       "TestConcurrentSyntheticObservationAndClose",
+      "TestExpandedExactDuplicateBeforeCaptureAge",
+      "TestExpandedIndependentCaptureFences",
+      "TestExpandedMalformedRealDecodersFailClosed",
+      "TestExpandedPartialCombinationsRejected",
+      "TestExpandedPeerLoopbackProof",
+      "TestExpandedQualityCountsAndFirstSample",
+      "TestExpandedShapeEvidenceAndFallback",
       "TestInventoryGenerationAndCaptureFences",
       "TestInventoryHTTPCurrentAuthorityRechecked",
       "TestInventoryHTTPProofsAndOriginalReceipt",
@@ -2673,8 +2701,39 @@
       "TestSyntheticRequestsRemainFixedAndBounded",
       "TestSyntheticWrongProofAndPurposeConsumeChallenge"
     ],
+    "localrmm/internal/windowsacceptance/freshgate": [
+      "TestFreshEvidenceNeverPromotesFixtureOrHuman",
+      "TestFreshGateExactBindings",
+      "TestFreshGateExpiryNotRenewed",
+      "TestFreshGateNoImplicitConsent",
+      "TestFreshGateRejectsRerunEvenWithMatchingBindings",
+      "TestFreshGateRequiresVerifiedOwnerActors",
+      "TestFreshSuccessfulStopDoesNotClaimDisabledOrDisposal",
+      "TestOutputGuardEchoAcrossVTAndLines",
+      "TestOutputGuardEchoEveryChunkSplit",
+      "TestOutputGuardEchoInTitlePayload",
+      "TestOutputGuardEchoPrefixOverlap",
+      "TestOutputGuardExactPublicFlowEveryChunkSplit",
+      "TestOutputGuardIncompleteVTAndMarkerFailAtEOF",
+      "TestOutputGuardPromptAndMarkerNotSubstrings",
+      "TestOutputGuardRejectsMisorderedOrDuplicatePhases",
+      "TestOutputGuardSecretOwnershipAndRedactedFormatting",
+      "TestOutputGuardTotalBoundAndStickyFailure",
+      "TestOutputGuardTrustRequiresExactWholeOrderedLines",
+      "TestOutputGuardUnsupportedControlsFailClosed",
+      "TestOutputGuardVTAndOneByteChunks",
+      "TestOutputGuardZeroAndInvalidSecret",
+      "TestOwnedStopPendingStatesAndNoReplay",
+      "TestOwnedStopRefusesUnknownCancelledAndAmbiguous",
+      "TestPostInputTitleCannotCarryPartialEcho",
+      "TestSessionCancellationAndFaultBoundaries",
+      "TestSessionProductionPromptAndFiniteChildProtocol",
+      "TestSessionRejectsUnprovenDrainAndCancelledCallbacks"
+    ],
     "localrmm/internal/windowsacceptance/gate": [
       "TestBlockedReportCannotContainMutationClaim",
+      "TestExpandedReportCannotReuseBaseEvidence",
+      "TestExpandedRequiresEveryFreshScopeAndInventory",
       "TestGrantIsBoundedAndRevocable",
       "TestInventoryReportRequiresUsableNativeScope",
       "TestManualSourceAuthorityDefaultsDeny",
@@ -2685,6 +2744,8 @@
       "TestAncestorDiagnosticMatchesUnchangedAdmissionDecision",
       "TestCanceledContextDoesNotConsultGrantOrNativeState",
       "TestCanonicalFixedPathPolicy",
+      "TestCapabilityConfigurationRequiresExactExpandedAuthority",
+      "TestCapabilitySiblingSchemasAndExactConsent",
       "TestCleanupFreezeFailureClosesOnlyAcquiredHandlesInReverse",
       "TestCleanupFreezeRejectsMissingParentWithoutPathFallback",
       "TestCleanupFreezeReusesDeleteParentsWithoutReopeningAncestors",
@@ -2692,6 +2753,7 @@
       "TestConstructorRejectsInvalidArtifactBinding",
       "TestDriverRejectsUnboundAndDifferentProfileBeforePlatform",
       "TestEveryDriverMutatorRequiresLiveGuardBeforePlatformDispatch",
+      "TestEveryMutatorBindsExpandedAuthority",
       "TestEvidenceHasOnlyFiniteStagesReasonsAndBooleans",
       "TestNativeReadFailureClassificationDoesNotPublishNativeError",
       "TestNativeTokenGroupAndSIDBounds",
@@ -2720,6 +2782,8 @@
       "TestTransitionObservationNeedsExistingWantedState"
     ],
     "localrmm/internal/windowsacceptance/profile": [
+      "TestExtensionObservationFiniteTruth",
+      "TestExtensionObservationNeverClaimsFreshOrchestration",
       "TestFiniteObservationQualities",
       "TestFiniteSelection"
     ],
@@ -2850,6 +2914,11 @@
       "TestDiagnosticJSONAndWriterIgnoreCause",
       "TestDiagnosticUnknownLabelsAndTamperedStatusFailClosed",
       "TestDiagnosticWrappedJoinedAndUnknownErrors",
+      "TestFreshReadSetupCloseFailureRemainsIndeterminate",
+      "TestFreshReadSetupIndeterminateTransitionOnlyReadOnlyReconciliation",
+      "TestFreshReadSetupPlanAdmissionDoesNotBroadenOrdinaryInstall",
+      "TestFreshReadSetupRejectsUnknownAndRunningBindingsBeforeTransition",
+      "TestFreshReadSetupStaysDisabledAndOrdinaryLifecycleRejectsReceipt",
       "TestInspectOwnedIsReadOnlyAndChecksExecutable",
       "TestInspectOwnedRejectsForeignAndIncompleteRecords",
       "TestInstallRejectsExistingEvenIfConfigurationMatches",
@@ -3110,7 +3179,5 @@
       "TestSupportBundleRejectsUnavailableHealthyMetric",
       "TestSystemInventoryOperatorActualTLSHTTPAllPagesAndDelayedExpiry"
     ]
-  },
-  "schemaVersion": 1,
-  "sourceCommit": "fccc4b00cd8a144afd58e4b995747afab7a10022"
+  }
 }

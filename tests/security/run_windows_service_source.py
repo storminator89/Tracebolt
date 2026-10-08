@@ -10,6 +10,18 @@ import tempfile
 PACKAGES = ("./internal/windowsstate", "./internal/windowsservice", "./internal/windowsconsole",
             "./internal/windowsagentconfig", "./cmd/windows-service", "./internal/windowsvolumes", "./internal/windowsprocessmetrics", "./internal/windowsnetwork")
 REQUIRED = {
+    ("localrmm/cmd/windows-service", "TestFreshReadSetupReconcileOnlyFinalizesCompletedEffect"),
+    ("localrmm/cmd/windows-service", "TestFreshReadSetupReconcileDisabledChangedOrUnknownNeverWrites"),
+    ("localrmm/cmd/windows-service", "TestFreshReadSetupReconcileStrictCanonicalAndCancellation"),
+    ("localrmm/internal/windowsservice", "TestFreshReadSetupStaysDisabledAndOrdinaryLifecycleRejectsReceipt"),
+    ("localrmm/internal/windowsservice", "TestFreshReadSetupRejectsUnknownAndRunningBindingsBeforeTransition"),
+    ("localrmm/internal/windowsservice", "TestFreshReadSetupIndeterminateTransitionOnlyReadOnlyReconciliation"),
+    ("localrmm/internal/windowsservice", "TestFreshReadSetupPlanAdmissionDoesNotBroadenOrdinaryInstall"),
+    ("localrmm/cmd/windows-service", "TestFreshReadSetupOneConsentBeforeFirstStart"),
+    ("localrmm/cmd/windows-service", "TestFreshReadSetupEveryFailureRetainsStateWithoutStart"),
+    ("localrmm/cmd/windows-service", "TestFreshReadSetupPartialGrantOutcomeRetained"),
+    ("localrmm/cmd/windows-service", "TestFreshReadSetupReceiptStrictAndLegacyUnchanged"),
+    ("localrmm/cmd/windows-service", "TestFreshReadSetupHasNoPublicCommand"),
     ("localrmm/internal/windowsnetwork", "TestNativeNetworkInjectedFourTables"),
     ("localrmm/internal/windowsnetwork", "TestNativeNetworkReturnCodesAndBounds"),
     ("localrmm/internal/windowsnetwork", "TestNativeNetworkDWORDLayouts"),

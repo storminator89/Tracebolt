@@ -3,9 +3,7 @@
 package main
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -108,22 +106,13 @@ func loadReceipt() (installReceipt, error) {
 		return installReceipt{}, marked(windowsservice.PhaseReceipt, windowsservice.ReasonStateRejected, errLifecycle)
 	}
 	defer clear(raw)
-	var r installReceipt
-	decoder := json.NewDecoder(bytes.NewReader(raw))
-	decoder.DisallowUnknownFields()
-	if decoder.Decode(&r) != nil || r.Version != 1 || !r.Prepared || !r.Service.Complete || r.Service.Layout != layout {
-		return installReceipt{}, marked(windowsservice.PhaseReceipt, windowsservice.ReasonStateRejected, errLifecycle)
-	}
-	// Canonical bytes reject duplicate/trailing fields and preserve the exact
-	// locally persisted ownership record. SCM revalidation occurs before apply.
-	canonical, err := json.Marshal(r)
-	if err != nil || !bytes.Equal(canonical, raw) {
-		return installReceipt{}, marked(windowsservice.PhaseReceipt, windowsservice.ReasonStateRejected, errLifecycle)
-	}
-	return r, nil
+	return decodeInstallReceipt(raw, layout)
 }
 func install(ctx context.Context, bootstrapPath, selectedProfile string, insecure bool, out, stderr io.Writer) (any, error) {
-	return setup(ctx, bootstrapPath, setupSteps{
+	return setup(ctx, bootstrapPath, nativeSetupSteps(selectedProfile, insecure, out, stderr))
+}
+func nativeSetupSteps(selectedProfile string, insecure bool, out, stderr io.Writer) setupSteps {
+	return setupSteps{
 		plan:          windowsservice.Plan,
 		readBootstrap: func(path string) ([]byte, error) { return windowsstate.ReadProtectedInstaller(path, false, 64<<10) },
 		validateBootstrap: func(raw []byte) error {
@@ -152,7 +141,7 @@ func install(ctx context.Context, bootstrapPath, selectedProfile string, insecur
 			return enroll(ctx, layout, selectedProfile, insecure, out, stderr)
 		},
 		start: windowsservice.ApplyStart,
-	})
+	}
 }
 func prepareRuntime(layout windowsservice.Layout, receipt windowsservice.Receipt, raw []byte) error {
 	store, err := windowsstate.Open(layout.StateRoot, windowsagentconfig.RuntimeRoot(receipt.ServiceSID, true))

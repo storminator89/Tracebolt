@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -13,9 +14,10 @@ import (
 var errLifecycle = errors.New("Windows lifecycle authority unavailable")
 
 type installReceipt struct {
-	Version  int                    `json:"version"`
-	Service  windowsservice.Receipt `json:"service"`
-	Prepared bool                   `json:"prepared"`
+	Version   int                    `json:"version"`
+	Service   windowsservice.Receipt `json:"service"`
+	Prepared  bool                   `json:"prepared"`
+	ReadSetup *readSetupProgress     `json:"readSetup,omitempty"`
 }
 type setupJournal interface {
 	Write(string, []byte) error
@@ -116,4 +118,19 @@ func validateWindowsBootstrapConsent(b enrollmentclient.Bootstrap, selected stri
 		return errLifecycle
 	}
 	return nil
+}
+
+// Strict canonical receipt decoding keeps every legacy v1 byte shape unchanged.
+// Fresh v2 is usable by ordinary lifecycle only after the exact startup transition
+// has completed; unfinished or indeterminate records remain inspection-only.
+func decodeInstallReceipt(raw []byte, layout windowsservice.Layout) (installReceipt, error) {
+	var r installReceipt
+	if len(raw) == 0 || len(raw) > 64<<10 || json.Unmarshal(raw, &r) != nil || !(r.Version == 1 && r.ReadSetup == nil || completeReadSetup(r)) || !r.Prepared || !r.Service.Complete || r.Service.Version != 1 || r.Service.Layout != layout {
+		return installReceipt{}, marked(windowsservice.PhaseReceipt, windowsservice.ReasonStateRejected, errLifecycle)
+	}
+	canonical, err := json.Marshal(r)
+	if err != nil || !bytes.Equal(canonical, raw) {
+		return installReceipt{}, marked(windowsservice.PhaseReceipt, windowsservice.ReasonStateRejected, errLifecycle)
+	}
+	return r, nil
 }

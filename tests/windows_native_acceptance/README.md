@@ -76,3 +76,10 @@ quality labels. Denied or unavailable sections prevent usable-inventory success.
 The Linux protected SQLite manager and shared browser are not run by this native
 peer; production ingress/store fixtures and invented shared UI evidence remain
 separate gates. See [manual scope and proof](../../docs/windows-native-service-acceptance.md).
+
+The optional all-four expanded source candidate adds independent event-header,
+volume, process-metric and network-endpoint acknowledgements. All false keeps the
+original base v2 evidence; all true plus inventory selects v3 finite evidence.
+See `docs/windows-expanded-acceptance-approval.md`. Source checks and Windows
+cross-builds do not authorize or establish native execution. Production Linux
+manager/store/dashboard and fresh installer acceptance remain unproven.

@@ -367,7 +367,7 @@ class ReadOnlyWorkflowTests(unittest.TestCase):
         trigger = workflow.split("\non:\n", 1)[1].split("\npermissions:", 1)[0]
         self.assertEqual(re.findall(r"^  ([a-z_]+):", trigger, re.M), ["workflow_dispatch"])
         self.assertNotRegex(trigger, r"default:\s*true")
-        self.assertEqual(trigger.count("default: false"), 7)
+        self.assertEqual(trigger.count("default: false"), 11)
         self.assertIn("run_acceptance.py --check-authorization", workflow)
         self.assertIn("run_acceptance.py --run-native", workflow)
         runner = (probe.ROOT / "tests/windows_native_acceptance/run_prerequisites.py").read_text()

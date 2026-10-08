@@ -1,0 +1,110 @@
+name: Manual disposable Windows fresh ConPTY acceptance
+
+# New explicit contract. No push/pull_request/schedule/reusable entry exists.
+on:
+  workflow_dispatch:
+    inputs:
+      expected_source_sha:
+        description: 'Exact reviewed 40-hex SHA; must equal this dispatched source. Build hashes and assigned hosted machine/run/deadline bind this same approved run.'
+        required: true
+        type: string
+      fresh_profile:
+        description: 'Separate TLS-only fresh production coordinator and synthetic real-console test; old approvals do not apply'
+        required: true
+        type: choice
+        options: [fresh-read-conpty-v1]
+      services:
+        description: 'Approve fresh fixed TraceboltWindowsAgent SCM disabled staging, exact automatic transition and Start on this run disposable hosted Windows VM only'
+        required: true
+        default: false
+        type: boolean
+      identity:
+        description: 'Approve fresh persistent endpoint key/identity and grants against the ephemeral loopback fixture; synthetic public comparison approval, no human entry or production manager'
+        required: true
+        default: false
+        type: boolean
+      app_acls:
+        description: 'Approve fresh app-only Program Files/ProgramData dirs, executables, protected installer/runtime/extension stores and public bootstrap test store; no ancestor repair/adoption'
+        required: true
+        default: false
+        type: boolean
+      five_read_scopes:
+        description: 'Approve bounded inventory/names/hostname/interfaces, Application/System event headers, visible volume capacities, per-process CPU/working-set, numeric TCP/UDP metadata/PIDs; no content/traffic/AI export'
+        required: true
+        default: false
+        type: boolean
+      synthetic_console:
+        description: 'Approve isolated ConPTY child and memory-only synthetic one-time invite through actual hidden CONIN$ after prompt; bounded no-echo inspection; no real user invite or transcript export'
+        required: true
+        default: false
+        type: boolean
+      loopback_tls:
+        description: 'Approve disposable TLS loopback peer/authority and bounded native reports only; no real Linux manager/dashboard, HTTP, firewall or system-trust changes'
+        required: true
+        default: false
+        type: boolean
+      stop_owned_service:
+        description: 'Approve exact protected-receipt-owned Stop after child reaping; pending states observed, no retry of ambiguous effects. Success is stopped, NOT disabled; automatic startup remains'
+        required: true
+        default: false
+        type: boolean
+      retain_for_vm_disposal:
+        description: 'Approve retaining service+identity+grants+files for platform VM destruction. NO reuse/reboot/uninstall/app-cleanup acceptance. Disposal is required but unverified; failed/unknown state remains'
+        required: true
+        default: false
+        type: boolean
+permissions:
+  contents: read
+jobs:
+  fresh-conpty:
+    name: Separately approved fresh Windows production-coordinator subset
+    if: ${{ github.event_name == 'workflow_dispatch' && github.repository == 'storminator89/Tracebolt' && github.repository_owner == 'storminator89' && github.repository_owner_id == '30489872' && github.actor == 'storminator89' && github.actor_id == '30489872' && github.triggering_actor == 'storminator89' && github.run_attempt == 1 }}
+    runs-on: windows-2025
+    timeout-minutes: 35
+    env:
+      TRACEBOLT_FRESH_SOURCE: ${{ inputs.expected_source_sha }}
+      TRACEBOLT_FRESH_PROFILE: ${{ inputs.fresh_profile }}
+      TRACEBOLT_FRESH_APPROVE_SERVICES: ${{ inputs.services }}
+      TRACEBOLT_FRESH_APPROVE_IDENTITY: ${{ inputs.identity }}
+      TRACEBOLT_FRESH_APPROVE_APP_ACLS: ${{ inputs.app_acls }}
+      TRACEBOLT_FRESH_APPROVE_FIVE_READ_SCOPES: ${{ inputs.five_read_scopes }}
+      TRACEBOLT_FRESH_APPROVE_SYNTHETIC_CONSOLE: ${{ inputs.synthetic_console }}
+      TRACEBOLT_FRESH_APPROVE_LOOPBACK_TLS: ${{ inputs.loopback_tls }}
+      TRACEBOLT_FRESH_APPROVE_STOP_OWNED_SERVICE: ${{ inputs.stop_owned_service }}
+      TRACEBOLT_FRESH_APPROVE_RETAIN_FOR_VM_DISPOSAL: ${{ inputs.retain_for_vm_disposal }}
+      PYTHONDONTWRITEBYTECODE: '1'
+      GOTOOLCHAIN: local
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      - name: Validate distinct approvals and exact clean source before further work
+        shell: pwsh
+        run: python -I -B tests/windows_native_acceptance/run_fresh_conpty.py --check-authorization
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Inert gate and lifecycle fixtures only
+        shell: pwsh
+        run: |
+          python -I -B -m unittest discover -s tests/windows_native_acceptance -p "test_*.py"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          go test ./internal/windowsacceptance/freshgate -count=1
+          exit $LASTEXITCODE
+      - name: Bind approved run facts and execute only the fresh native subset
+        id: fresh
+        shell: pwsh
+        run: python -I -B tests/windows_native_acceptance/run_fresh_conpty.py --run-native
+      - name: Retain finite evidence only; VM disposal remains unverified
+        if: ${{ always() && !cancelled() && steps.fresh.outputs.report_validated == 'true' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: windows-fresh-conpty-${{ github.sha }}
+          path: ${{ runner.temp }}/tracebolt-windows-fresh-conpty-acceptance.json
+          if-no-files-found: error
+          retention-days: 3

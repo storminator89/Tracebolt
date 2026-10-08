@@ -130,3 +130,48 @@ func TestInventoryReportRequiresUsableNativeScope(t *testing.T) {
 		t.Fatal("peer relabeled production ingress")
 	}
 }
+
+func TestExpandedRequiresEveryFreshScopeAndInventory(t *testing.T) {
+	for mask := 0; mask < 16; mask++ {
+		for _, selected := range []profile.Selection{profile.BasicTLS(), profile.InventoryTLS(), {CollectionProfile: "windows-inventory-v1", Transport: "http-test"}} {
+			a, e, sha := approvalFixture()
+			a.Selection = selected
+			a.InventoryMetadata = selected.Inventory()
+			a.HTTPPlaintext = selected.HTTPTest()
+			a.EventHeaders = mask&1 != 0
+			a.VisibleVolumes = mask&2 != 0
+			a.ProcessMetrics = mask&4 != 0
+			a.NetworkEndpoints = mask&8 != 0
+			g, err := Authorize(a, e, sha)
+			allowed := mask == 0 || mask == 15 && selected.Inventory()
+			if (err == nil) != allowed {
+				t.Fatalf("wrong extension admission mask=%d", mask)
+			}
+			if allowed && g.ExtensionsApproved() != (mask == 15) {
+				t.Fatal("scope changed")
+			}
+		}
+	}
+}
+func TestExpandedReportCannotReuseBaseEvidence(t *testing.T) {
+	_, _, sha := approvalFixture()
+	r := NewSelectedReport(sha, profile.InventoryTLS())
+	r.Schema = ExpandedSchema
+	if Validate(r) == nil {
+		t.Fatal("missing expanded evidence accepted")
+	}
+	z := profile.ZeroExtensionObservation()
+	r.Extensions = &z
+	if Validate(r) != nil {
+		t.Fatal("finite not-run expanded failure rejected")
+	}
+	r.Schema = Schema
+	if Validate(r) == nil {
+		t.Fatal("expanded evidence smuggled into v2")
+	}
+	r.Schema = ExpandedSchema
+	r.Selection = profile.BasicTLS()
+	if Validate(r) == nil {
+		t.Fatal("basic identity expanded")
+	}
+}

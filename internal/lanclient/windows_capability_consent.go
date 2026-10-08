@@ -2,16 +2,21 @@ package lanclient
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"localrmm/internal/enrollmentcrypto"
 	"localrmm/internal/windowseventhealth"
 	"localrmm/internal/windowsnetwork"
 	"localrmm/internal/windowsprocessmetrics"
+	"localrmm/internal/windowsstate"
 	"localrmm/internal/windowsvolumes"
+	"os"
 )
 
 // WindowsCapabilityConsentVersion is an upfront local approval contract for a
-// future fresh installer. No current installer invokes it or grants extensions.
+// fresh source-only installer coordinator. No released installer invokes it.
 const WindowsCapabilityConsentVersion = "tracebolt.windows-capability-consent.v1"
 
 // WindowsCapabilityConsentVersionV2 adds an explicitly selected process CPU/memory scope.
@@ -136,6 +141,126 @@ func applyWindowsCapabilities(r WindowsCapabilityConsent, enable func(string) er
 			return result, err
 		}
 		result.AppliedScopes = append(result.AppliedScopes, scope)
+	}
+	return result, nil
+}
+
+// WindowsCapabilityIdentity validates the activated handoff and the exact
+// transport/scope contract without collection. The opaque sender binding lets a
+// fresh setup fence reject replacement identities without exposing credentials.
+func WindowsCapabilityIdentity(path string, r WindowsCapabilityConsent) (string, error) {
+	if r.Validate() != nil {
+		return "", ErrConfiguration
+	}
+	if ValidateGuidedHandoff(path) != nil {
+		return "", ErrState
+	}
+	m, err := Load(path)
+	if err != nil || !m.config.windowsInventory() || r.InsecureHTTPAcknowledged != (m.config.Profile == "http-test") {
+		return "", ErrConfiguration
+	}
+	return m.binding, nil
+}
+
+// WindowsCapabilityScopesAbsent is a read-only fresh-install precondition. Only
+// actual absent roots are fresh; denied, malformed or existing stores are not.
+func WindowsCapabilityScopesAbsent(root, sid string) error {
+	return windowsCapabilityScopesAbsent(root, sid, func(path string, options windowsstate.Options) (capabilityInspectionStore, error) {
+		store, err := windowsstate.Open(path, options)
+		if err != nil {
+			return nil, err
+		}
+		return store, nil
+	})
+}
+
+type capabilityInspectionStore interface{ Close() error }
+
+func windowsCapabilityScopesAbsent(root, sid string, open func(string, windowsstate.Options) (capabilityInspectionStore, error)) error {
+	if open == nil {
+		return ErrConfiguration
+	}
+	for _, item := range []struct {
+		suffix  string
+		options windowsstate.Options
+	}{
+		{"-event-metadata", windowsEventOptions(sid, false)},
+		{"-visible-volumes", windowsVolumeOptions(sid, false)},
+		{"-process-metrics", windowsProcessMetricsOptions(sid, false)},
+		{"-network", windowsNetworkOptions(sid, false)},
+	} {
+		store, err := open(root+item.suffix, item.options)
+		if store != nil {
+			_ = store.Close()
+			return ErrState
+		}
+		if !errors.Is(err, os.ErrNotExist) {
+			return ErrState
+		}
+	}
+	return nil
+}
+
+// VerifyWindowsCapabilities reads the exact identity-bound local grants, never
+// native observations. It neither repairs, enables nor initializes any scope.
+func VerifyWindowsCapabilities(path string, r WindowsCapabilityConsent) error {
+	_, err := WindowsCapabilityGrantDigests(path, r)
+	return err
+}
+
+type WindowsCapabilityGrantDigest struct {
+	Scope  string `json:"scope"`
+	SHA256 string `json:"sha256"`
+}
+
+// WindowsCapabilityGrantDigests reads canonical enabled identity-bound grants.
+// Digests include each grant ID, so disable/re-enable or replacement cannot be
+// mistaken for the exact grants verified before a startup transition.
+func WindowsCapabilityGrantDigests(path string, r WindowsCapabilityConsent) ([]WindowsCapabilityGrantDigest, error) {
+	if _, err := WindowsCapabilityIdentity(path, r); err != nil {
+		return nil, err
+	}
+	m, err := Load(path)
+	if err != nil {
+		return nil, err
+	}
+	return windowsCapabilityGrantDigests(r, func(scope string) (any, bool) {
+		switch scope {
+		case windowseventhealth.Scope:
+			c, ok := readWindowsEventConsent(m)
+			return c, ok
+		case windowsvolumes.Scope:
+			c, ok := readWindowsVolumeConsent(m)
+			return c, ok
+		case windowsprocessmetrics.Scope:
+			c, ok := readWindowsProcessMetricsConsent(m)
+			return c, ok
+		case windowsnetwork.Scope:
+			c, ok := readWindowsNetworkConsent(m)
+			return c, ok
+		}
+		return nil, false
+	})
+}
+func windowsCapabilityGrantDigests(r WindowsCapabilityConsent, read func(string) (any, bool)) ([]WindowsCapabilityGrantDigest, error) {
+	if r.Validate() != nil || read == nil {
+		return nil, ErrConfiguration
+	}
+	result := []WindowsCapabilityGrantDigest{}
+	for _, scope := range r.Scopes {
+		if scope == enrollmentcrypto.CollectionProfileWindowsInventory {
+			continue
+		}
+		c, ok := read(scope)
+		if !ok || c == nil {
+			return nil, ErrState
+		}
+		raw, err := json.Marshal(c)
+		if err != nil {
+			return nil, ErrState
+		}
+		digest := sha256.Sum256(raw)
+		result = append(result, WindowsCapabilityGrantDigest{scope, hex.EncodeToString(digest[:])})
 	}
 	return result, nil
 }

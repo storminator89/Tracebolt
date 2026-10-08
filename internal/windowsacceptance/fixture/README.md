@@ -132,3 +132,45 @@ injected timestamp because the production signed transport checks the real clock
 Those tests, the race detector and Windows cross-compilation are source evidence
 only. The actual selected loopback exchange, native persistent identity/service/ACL
 lifecycle, and future controller cleanup still require their approved native run.
+
+## Separately approved all-four expanded peer
+
+`StartExpanded(ctx, selection)` accepts only the existing inventory TLS or
+explicit inventory HTTP-test selection. It uses the same identity/profile/wire
+contracts but is a distinct manual-only entry point. Old `StartSelected` peers
+reject all event-v2/volume-v3/process-v4/network-v5 extensions. Expanded peers
+permit base inventory activation frames until the first expanded frame, then
+require events, volumes, process CPU/RAM and network together in every new v5
+frame. Partial combinations and later base fallback fail closed. Independent
+original-capture fences apply to all four scopes, including advancing inventory
+past the previous network capture. An exact latest retry returns its original
+receipt before freshness/capture checks and never increments extension proof.
+
+`Evidence.Extensions` is a finite `profile.ExtensionObservation`: all qualities
+are `not_run` before an accepted all-four frame; `frames` and `v5Frames` count
+accepted distinct all-four frames separately from base activation frames.
+Retained-row counts are bounded (events 32, volumes 64, processes 128, network
+64), not whole-machine or complete-table coverage claims. Volume-capacity and
+process CPU/RAM quality histograms explicitly preserve observed, denied,
+unavailable, first-sample and reset counts; non-CPU histograms forbid CPU-only
+statuses. Mixed rows are `partial`, not silently successful. Usability requires
+at least one observed capacity, CPU delta and RAM row plus usable event-channel,
+volume-enumeration and network status. First-sample-only CPU or all-denied reads
+cannot pass; mixed protected-process denials need no privilege expansion.
+No rows, values, identifiers, timestamps or free text enter this evidence.
+
+A successful all-four native v5 observation does **not** prove independent native
+wire-v2/v3/v4 runs. Their decoders and rejection/compatibility paths have synthetic
+source coverage only. Fixture tests use invented in-memory samples and authority;
+no test opens listeners, executes native reads, touches endpoint credentials or
+dispatches a workflow. Native service and Linux-manager/browser acceptance remain
+separate gates.
+
+Positive network acceptance additionally requires `peerLoopbackRows > 0`: a
+retained TCP IPv4 row whose numeric local or remote endpoint is exactly
+`127.0.0.1` and this disposable peer's telemetry port. The count is bounded by
+retained network rows; no address, port, process identifier or name is exported.
+Empty tables, UDP, other ports and unrelated loopback addresses do not prove the
+peer endpoint. If ordinary bounded native collection omits the peer row, the
+gate fails honestly; it does not widen collection, elevate permissions or join
+process metadata to make the check pass.
