@@ -1,3 +1,4 @@
+import {exerciseWindowsContactHistory,windowsContactBrowserFixture,windowsContactHistoryStageNames} from './windows-contact-history-browser.mjs';
 import {exerciseWindowsHealth,windowsHealthStageNames} from './windows-health-browser.mjs';
 import {addWindowsServiceSoftwareControlsFixture,exerciseWindowsServiceSoftwareControls} from './windows-service-software-browser.mjs';
 /** Invented Windows inventory in the existing real loopback login and compiled UI.
@@ -16,7 +17,7 @@ const {windowsNetwork,windowsVolumes,windowsHealthDevice,windowsDeviceId,windows
 export const windowsInventoryCaseName='Synthetic Windows inventory shares device charts and explicit enrollment consent without Linux reads';
 export const windowsInventoryFixtureDisclosure='Real loopback HTTP-test fixture login with intercepted invented Windows inventory and resource history in the production UI. UI-only evidence; no native endpoint acceptance, collection, invitation, service installation or external request.';
 let stage='setup';
-const stages=new Set(['setup','login','overview','overview-history','inventory','storage','network','network-stale','network-expired','network-partial','network-empty','network-denied','network-unavailable','network-truncated','process-metrics','process-controls','service-software-controls','process-metrics-stale','process-metrics-expired','events',...windowsHealthStageNames,'logs',...windowsLogsStageNames,'legacy','partial','denied','enrollment','access-loss']);
+const stages=new Set(['setup','login','overview','overview-history','inventory','storage','network','network-stale','network-expired','network-partial','network-empty','network-denied','network-unavailable','network-truncated','process-metrics','process-controls','service-software-controls','process-metrics-stale','process-metrics-expired','events',...windowsHealthStageNames,...windowsContactHistoryStageNames,'logs',...windowsLogsStageNames,'legacy','partial','denied','enrollment','access-loss']);
 export const windowsInventoryFailureStage=()=>stages.has(stage)?stage:'setup';
 const mark=value=>{stage=value;};
 export function windowsBrowserFixture(now,phase='fresh',networkPhaseAt=now,logsPhaseAt=now){
@@ -87,7 +88,7 @@ export function windowsHealthBrowserDevice(now,phase='fresh'){
  return shifted(windowsHealthDevice(phase==='health-unverified'?'missing-identity':'activated'),now);
 }
 export async function windowsInventoryBrowserCase({pageAt,login,expect,base,shot}){
- const page=await pageAt('/devices/'+windowsDeviceId),prefix='/api/devices/'+windowsDeviceId,unexpected=[],writes=[],external=[];let phase='fresh',networkPhaseAt=null,logsPhaseAt=null;
+ const page=await pageAt('/devices/'+windowsDeviceId),prefix='/api/devices/'+windowsDeviceId,unexpected=[],writes=[],external=[];let phase='fresh',networkPhaseAt=null,logsPhaseAt=null,contactPhaseAt=null;
  // A bounded virtual clock makes the five-second private-row expiry deterministic.
  let clockNow=Date.now();await page.clock.install({time:new Date(clockNow)});await page.clock.pauseAt(new Date(clockNow+1000));clockNow+=1000;
  const now=()=>new Date(clockNow).toISOString();
@@ -100,6 +101,11 @@ export async function windowsInventoryBrowserCase({pageAt,login,expect,base,shot
    if(url.search||request.postData()!==null)throw new Error('Unexpected Windows query');
    if(phase==='session')return route.fulfill({status:401,contentType:'application/json',body:JSON.stringify({error:{code:'authentication_required'}})});
    return reply(windowsBrowserFixture(at,phase,networkPhaseAt??at,logsPhaseAt??at));
+  }
+  if(url.pathname===prefix+'/windows-contact'){
+   if(url.search||request.postData()!==null){unexpected.push('unexpected-contact-query');return route.abort('blockedbyclient');}
+   if(phase==='contact-denied')return route.fulfill({status:403,contentType:'application/json',body:JSON.stringify({error:{code:'fixture_access_denied'}})});
+   contactPhaseAt??=at;return reply(windowsContactBrowserFixture(at,contactPhaseAt,phase));
   }
   if(url.pathname===prefix)return reply(device);
   if(url.pathname===prefix+'/resource-history')return reply({...shifted(historyFixture(),at),deviceId:windowsDeviceId});
@@ -211,7 +217,8 @@ export async function windowsInventoryBrowserCase({pageAt,login,expect,base,shot
   expect(await page.locator('.windows-inventory').evaluate(el=>el.scrollWidth<=el.clientWidth+1)).toBe(true);
   await shot(page,`synthetic-windows-storage-${width}-${locale}`,windowsInventoryFixtureDisclosure);
   mark('events');await page.getByRole('tab',{name:'Health',exact:true}).click();
-  await exerciseWindowsHealth({page,expect,locale,width,shot,disclosure:windowsInventoryFixtureDisclosure,setPhase:value=>{phase=value;},mark,now});
+  await exerciseWindowsHealth({page,expect,locale,width,shot,disclosure:windowsInventoryFixtureDisclosure,setPhase:value=>{phase=value;contactPhaseAt=now();},mark,now});
+  await exerciseWindowsContactHistory({page,expect,locale,width,shot,setPhase:value=>{phase=value;if(value==='contact-overdue')contactPhaseAt=now();},mark,advance:async ms=>{clockNow+=ms;await page.clock.runFor(ms);}});
   mark('events');
   await expect(page.getByText(locale==='de'?'Zugriff verweigert':'Access denied',{exact:true})).toBeVisible();
   await page.getByText(locale==='de'?'Ereignisse ansehen':'View events',{exact:true}).click();await expect(page.getByText('Invented Event Provider',{exact:true})).toBeVisible();

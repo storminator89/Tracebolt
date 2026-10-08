@@ -1,9 +1,10 @@
 # Windows Health observations
 
-This source-only UI slice shows accepted contact and system-volume observations
-in the Windows Health tab, before the existing event-header sample. It does not
-add host collection, grants, API routes, persistent health state or provider
-exports. Existing Windows inventory and device-metadata reads supply the view.
+This source-only observation display uses existing Windows inventory and
+device-metadata reads in the Windows Health tab. The device now places the
+separate [accepted-contact history](windows-contact-history.md) beside this
+neutral system-volume reading and the existing event-header sample. The
+observation adapter itself adds no collection, grants or provider exports.
 
 ## Exact evidence and semantics
 
@@ -42,17 +43,18 @@ used for source, receipt and certificate boundaries.
 The summary is compact, English/German and responsive. Sources and assessment
 limits start collapsed. **Inspect storage** opens the existing Storage tab; it
 neither reads a new host source nor enables its optional scope. The Windows tab
-is labelled **Health**, avoiding a promise of incident history.
+remains labelled **Health**. Its separate contact-history panel describes overdue
+accepted reports, without assessing overall endpoint health.
 
-## Durable Windows checks remain a separate contract
+## Durable Windows checks use a separate contract
 
 The Linux `HealthInputs` source remains Linux-only. It is also an authority
 boundary for investigations and AI workflows and must not be generalized just
-to populate this view. A future Windows evaluator needs its own reviewed
-observation/authority contract, contact semantics, caller-capacity thresholds,
-duration/hysteresis policy, durable incident lifecycle, service selection model
-and independent export approval boundary. This UI supplies none of those grants
-or guarantees and must not be described as full Linux Health parity.
+to populate this view. The [Windows contact evaluator](windows-contact-history.md)
+now has its own receipt-only authority contract, duration policy, durable history
+and operator-only read boundary. It does not add disk thresholds, service
+selection, AI export or notifications. Caller-capacity disk rules and other
+checks still need their own policies; this is not full Linux Health parity.
 
 ## Verification boundary
 

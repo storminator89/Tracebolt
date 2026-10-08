@@ -33,6 +33,7 @@ type Server struct {
 	journalAI           *journalAIState
 	linuxCVE            *linuxCVEState
 	health              *healthMonitor
+	windowsContact      *windowsContactMonitor
 	store               *store.Store
 	port                int
 	web                 string

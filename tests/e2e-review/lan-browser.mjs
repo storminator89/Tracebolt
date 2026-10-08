@@ -111,7 +111,7 @@ try {
  await check('Synthetic read-only alarm status preserves snapshot meaning and clears interrupted access without replay',()=>alarmStatusBrowserCase({pageAt,login,expect,base,shot}));
  await check(alarmSettingsCaseName,()=>alarmSettingsBrowserCase({pageAt,login,expect,base,shot}),'10m');
  await check(applicationCheckSettingsCaseName,()=>applicationCheckSettingsBrowserCase({pageAt,login,expect,base,shot}),'10m');
- await check(windowsInventoryCaseName,()=>windowsInventoryBrowserCase({pageAt,login,expect,base,shot}),'10m');
+ await check(windowsInventoryCaseName,()=>windowsInventoryBrowserCase({pageAt,login,expect,base,shot}),'20m');
  await check(resourceHistoryCaseName,()=>resourceHistoryBrowserCase({pageAt,login,expect,base,shot}),'10m');
  await check(capabilityCaseName,()=>capabilityBrowserCase({pageAt,login,expect,base,shot}),'10m');
  await check(journalBrowseCaseName,()=>journalBrowseBrowserCase({pageAt,login,expect,base,shot}),'30m');

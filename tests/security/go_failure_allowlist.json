@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "sourceCommit": "fccc4b00cd8a144afd58e4b995747afab7a10022",
-  "goSourceSha256": "127418c827d46d23263ac06ca3944c120d720ea4c8b8d4c76d18e53e4c9cc3a9",
+  "goSourceSha256": "c03ee2454cdeda5c74da55ce83e95635d01ddfc2c6dc30d9a7d3378201ccae4e",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -826,7 +826,12 @@
       "TestSocketOwnerCapabilitiesUnavailableOnDeveloperSurface",
       "TestSystemInventoryMetadataFairReadPreservesOperatorGuards",
       "TestSystemInventoryMetadataFinalOutputRechecksIdentityAndSession",
-      "TestSystemPageFinalOutputRechecksAfterEncodingAndSession"
+      "TestSystemPageFinalOutputRechecksAfterEncodingAndSession",
+      "TestWindowsContactAuthenticatedReadOnlyAndAuthority",
+      "TestWindowsContactFinalAuthoritySessionAndTimeRecheck",
+      "TestWindowsContactMonitorFailureRestartAndCancellation",
+      "TestWindowsContactMonitorRejectsDuplicateIDsBeforeWrites",
+      "TestWindowsContactReplacementIdentityCannotReadRetainedHistory"
     ],
     "localrmm/internal/applicationcheck": [
       "TestApplicationConfigOmittedDisabledAndBinding",
@@ -1446,6 +1451,9 @@
       "TestTwentyFiveOperationalRetainedBudget",
       "TestTwentyFivePopulatedRecordsRetainFrames",
       "TestV4GenerationAdmitsOnlyExactBoundedAIRequestAndKeepsConsumeFloor",
+      "TestWindowsContactAuthorityExpiryCancellationAndAdmission",
+      "TestWindowsContactSourceReadsDoNotWriteEnrollmentState",
+      "TestWindowsContactUsesOriginalAcceptedReceiptOnly",
       "TestWindowsEnrollmentNeverAuthorizesNativePackageDevice",
       "TestWindowsInventoryCannotBeWrittenIntoBasicStore",
       "TestWindowsInventoryDurableViewRetryHistoryAndScope",
@@ -1945,6 +1953,7 @@
       "TestValidateGuidedHandoffIsLocalAndPreservesState",
       "TestWindowsBootstrapRouteBoundariesRemainClosed",
       "TestWindowsCapabilityGrantDigestDetectsReplacementWithoutCollection",
+      "TestWindowsContactAcceptedReceiptMonitorAndOperatorPipeline",
       "TestWindowsEventConsentCreateOnlyAndReenable",
       "TestWindowsEventConsentRejectsIncompleteForeignAndFailedStorage",
       "TestWindowsEventsActualSenderIngressStoreRetryAndDisable",
@@ -2585,7 +2594,15 @@
       "TestJournalAIStoreRestartQueuesKnownCapturesAndNeverReplays",
       "TestJournalAIStoreSharesHealthRateBudget",
       "TestNoteLimit",
-      "TestPruneHealthAnalysesWorksWithoutProviderApproval"
+      "TestPruneHealthAnalysesWorksWithoutProviderApproval",
+      "TestWindowsContactCancelledAndFailedTransactionsDoNotChangeHistory",
+      "TestWindowsContactCannotTransferBoundHistory",
+      "TestWindowsContactConcurrentEvaluationOneOpenIncident",
+      "TestWindowsContactCorruptionNeverErasesLedger",
+      "TestWindowsContactDeviceLimitAndBoundedList",
+      "TestWindowsContactDurableRestartAndReadOnlyGET",
+      "TestWindowsContactFreshSchemaIsEmptyAndCanonicalIdentityRequired",
+      "TestWindowsContactNeverTouchesHealthAnalysisOrAlarms"
     ],
     "localrmm/internal/systeminventory": [
       "TestAdmissionRetainedUntilSynchronousReturn",
@@ -2890,6 +2907,18 @@
       "TestReadFixtureSanitizesEveryFailure",
       "TestReadRejectsBeforeOpening",
       "TestUnsupportedPlatformDoesNotPrompt"
+    ],
+    "localrmm/internal/windowscontact": [
+      "TestAgeAndConfirmationExactBoundaries",
+      "TestDuplicateReceiptAndRecoveryEvidence",
+      "TestGapRollbackRestartAndUnauthorizedReset",
+      "TestIdentityMissingFutureAndRegressedReceipt",
+      "TestIncidentLimitOverflowDoesNotPartiallyMutate",
+      "TestPruningKeepsOpenBoundedHistoryAndIndependentIDs",
+      "TestRecoveryCannotBridgeUnobservedStaleReceiptInterval",
+      "TestStrictCanonicalSerializationAndCorruption",
+      "TestViewReadOnlyRestartExpiryAndCurrentReceipt",
+      "TestWindowsContactViewWireFixture"
     ],
     "localrmm/internal/windowseventhealth": [
       "TestConsentExactBoundAndNoImplicitCollection",

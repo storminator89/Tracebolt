@@ -24,7 +24,7 @@ test('hosted Health asserts positive and missing-authority states at each locale
  assert.deepEqual(windowsHealthStageNames,['health-current','health-unverified','health-restored']);
  assert.match(runner,/for\(const locale of \['en','de'\]\)for\(const width of \[1440,390\]\)/);assert.match(runner,/\.\.\.windowsHealthStageNames/);assert.match(runner,/await exerciseWindowsHealth\(/);
  for(const text of ['Recent report','Aktuelle Meldung','Current reading','Aktuelle Messung','61.0 %','61,0 %','Unknown','Unbekannt','Observed events','Beobachtete Ereignisse'])assert.ok(source.includes(text));
- assert.match(source,/contact\.locator\('time'\)\)\.toHaveCount\(1\)/);assert.match(source,/disk\.locator\('time'\)\)\.toHaveCount\(1\)/);assert.match(source,/health\.locator\('time'\)\)\.toHaveCount\(0\)/);
+ assert.match(source,/contact\.locator\('time'\)\)\.toHaveCount\(2\)/);assert.match(source,/disk\.locator\('time'\)\)\.toHaveCount\(1\)/);assert.match(source,/health\.locator\('time'\)\)\.toHaveCount\(0\)/);
  assert.ok(source.includes('synthetic-windows-health-current-${width}-${locale}'));assert.ok(source.includes('synthetic-windows-health-unverified-${width}-${locale}'));
  assert.match(source,/await positive\(\)/);assert.match(source,/await expect\(disk\.getByText\(value,\{exact:true\}\)\)\.toHaveCount\(0\)/);
  assert.doesNotMatch(source,/chromium\.launch|newContext\(|fetch\(|spawn\(|execFile|writeFile|ignoreHTTPSErrors|waitForTimeout|setDefaultTimeout|\.skip\(/);

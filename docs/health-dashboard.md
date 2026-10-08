@@ -51,7 +51,9 @@ checks alone are not screenshot, native-agent or deployment acceptance.
 
 ## Windows observations
 
-Windows uses a separate [read-only observation summary](windows-health-observations.md)
-for accepted contact and caller-visible system-volume usage, alongside existing
-event headers. It has no durable incidents, Linux alarm thresholds or AI-health
-authority. The Linux evaluator and its inputs remain unchanged.
+Windows uses separate [accepted-contact history](windows-contact-history.md),
+[neutral system-volume observations](windows-health-observations.md), and the
+existing event-header sample. Only overdue accepted reports have deterministic
+durable incidents. They do not determine live reachability, inherit Linux disk
+thresholds, or enter Linux investigations, AI or alarm delivery. The Linux
+evaluator and its authority inputs remain unchanged.

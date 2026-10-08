@@ -157,6 +157,13 @@ func NewLANOperatorHandler(app *Server, c LANOperatorConfig) (http.Handler, erro
 	if c.ApplicationChecks != nil && c.ApplicationCheckSettings != nil || !c.ApplicationChecks.Matches(managerID, c.Origin, profile) || !c.ApplicationCheckSettings.Matches(managerID, c.Origin, profile) {
 		return nil, applicationcheck.ErrConfiguration
 	}
+	var windowsContact *windowsContactMonitor
+	if c.WindowsEnrollment != nil {
+		windowsContact, err = newWindowsContactMonitor(app.store, c.WindowsEnrollment)
+		if err != nil {
+			return nil, err
+		}
+	}
 	app.mu.Lock()
 	app.lanOnly = true
 	app.guidedEnrollment = c.Enrollment != nil
@@ -167,6 +174,7 @@ func NewLANOperatorHandler(app *Server, c LANOperatorConfig) (http.Handler, erro
 	app.lanOperational = nil
 	app.lanPackages = nil
 	app.health = nil
+	app.windowsContact = windowsContact
 	app.journalAI = nil
 	app.linuxCVE = nil
 	app.aiCollectionProfile = "basic-readonly-v1"
@@ -503,6 +511,10 @@ func (h *operatorHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if strings.HasPrefix(r.URL.Path, "/api/devices/") && strings.HasSuffix(r.URL.Path, "/windows-inventory") {
 		h.windowsInventoryView(w, r)
+		return
+	}
+	if strings.HasPrefix(r.URL.Path, "/api/devices/") && strings.Contains(r.URL.Path, "/windows-contact") {
+		h.windowsContactAPI(w, r)
 		return
 	}
 	if r.URL.Path == "/api/enrollment" || strings.HasPrefix(r.URL.Path, "/api/enrollment/") {

@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-10-08 — Isolated Windows accepted-contact history source candidate
+
+- Add receipt-only Windows contact evaluation, bounded durable overdue-report and recovery history, and a separate authenticated read-only Health panel. Preserve original accepted timestamps/sequences, one-open-incident semantics, restart/gap/error uncertainty, and immutable enrollment/certificate history binding.
+- Keep Linux Health, investigations, AI and alarm delivery separate. No live reachability claim, host collection, disk threshold, service action, notification or identity renewal is added.
+- Cover the backend vertical slice with invented accepted reports, durable-store and authority tests, cross-language wire fixtures, and a bounded hosted-browser case. Local source/fixture checks do not establish hosted visual, native Windows service or deployment acceptance.
+
 ## 2026-10-07 — Approved service-log diagnostics and selected-update source workflow
 
 - Connect confirmed Linux service incidents to bounded journal capture and cited AI findings through a separate, default-off provider/device/service/window approval. Keep original capture expiry, content-free durable receipts, existing local journal permission and memory-only log-backed results. Health-summary approval alone never exports logs.

@@ -1,0 +1,19 @@
+.windows-contact{min-width:0;margin-bottom:24px;padding-bottom:20px;border-bottom:1px solid var(--line)}
+.windows-contact>header{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.windows-contact h2,.windows-contact h3{font-size:15px}
+.windows-contact h2,.windows-contact header button{display:flex;align-items:center;gap:7px}
+.windows-contact p,.windows-contact dt,.windows-contact-assessment>span{font-size:12px;color:var(--secondary);overflow-wrap:anywhere}
+.windows-contact-scope{margin:10px 0 16px}
+.windows-contact-assessment{display:flex;flex-direction:column;gap:7px;padding:14px 16px;background:var(--panel);border:1px solid var(--line);border-radius:8px}
+.windows-contact-assessment>strong{font-size:18px;font-weight:600;overflow-wrap:anywhere}
+.windows-contact-times{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 20px;margin:14px 0 18px}
+.windows-contact-times>div{min-width:0}
+.windows-contact dd{font-size:12px;margin:4px 0 0;overflow-wrap:anywhere}
+.windows-contact-incidents{list-style:none;padding:0;margin:12px 0}
+.windows-contact-incidents>li{padding:14px 0;border-bottom:1px solid var(--line)}
+.windows-contact-incident-heading{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;font-size:12px}
+.windows-contact-incident-heading>span{color:var(--secondary);min-width:0;overflow-wrap:anywhere}
+.windows-contact-incident-heading code{font-size:11px}
+.windows-contact-incidents .windows-contact-times{margin-bottom:0}
+.windows-health-summary.windows-health-volume-only .windows-health-cards{grid-template-columns:1fr}
+@media(max-width:600px){.windows-contact-times{grid-template-columns:1fr}.windows-contact>header{align-items:flex-start}.windows-contact-incident-heading{flex-direction:column}}

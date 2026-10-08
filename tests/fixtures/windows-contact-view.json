@@ -1,0 +1,82 @@
+{
+  "overdue": {
+    "schemaVersion": "tracebolt.windows-contact-view.v1",
+    "certificateExpiresAt": "2027-10-08T12:00:00Z",
+    "deviceId": "agent_11111111111111111111111111111111",
+    "serverNow": "2026-10-08T12:03:01Z",
+    "status": "overdue",
+    "lastAcceptedAt": "2026-10-08T12:00:00Z",
+    "sequence": 1,
+    "evaluatedAt": "2026-10-08T12:03:01Z",
+    "incidents": [
+      {
+        "id": "wcontact_0000000000000001",
+        "kind": "overdue-report",
+        "openedAt": "2026-10-08T12:03:01Z",
+        "lastConfirmedAt": "2026-10-08T12:03:01Z",
+        "lastAcceptedAt": "2026-10-08T12:00:00Z",
+        "sequence": 1,
+        "recoveryAcceptedAt": null,
+        "recoverySequence": 0,
+        "resolvedAt": null
+      }
+    ]
+  },
+  "pending": {
+    "schemaVersion": "tracebolt.windows-contact-view.v1",
+    "certificateExpiresAt": "2027-10-08T12:00:00Z",
+    "deviceId": "agent_11111111111111111111111111111111",
+    "serverNow": "2026-10-08T12:02:01Z",
+    "status": "pending",
+    "lastAcceptedAt": "2026-10-08T12:00:00Z",
+    "sequence": 1,
+    "evaluatedAt": "2026-10-08T12:02:01Z",
+    "incidents": []
+  },
+  "recent": {
+    "schemaVersion": "tracebolt.windows-contact-view.v1",
+    "certificateExpiresAt": "2027-10-08T12:00:00Z",
+    "deviceId": "agent_11111111111111111111111111111111",
+    "serverNow": "2026-10-08T12:00:00Z",
+    "status": "recent",
+    "lastAcceptedAt": "2026-10-08T12:00:00Z",
+    "sequence": 1,
+    "evaluatedAt": "2026-10-08T12:00:00Z",
+    "incidents": []
+  },
+  "recovered": {
+    "schemaVersion": "tracebolt.windows-contact-view.v1",
+    "certificateExpiresAt": "2027-10-08T12:00:00Z",
+    "deviceId": "agent_11111111111111111111111111111111",
+    "serverNow": "2026-10-08T12:04:31Z",
+    "status": "recent",
+    "lastAcceptedAt": "2026-10-08T12:03:31Z",
+    "sequence": 2,
+    "evaluatedAt": "2026-10-08T12:04:31Z",
+    "incidents": [
+      {
+        "id": "wcontact_0000000000000001",
+        "kind": "overdue-report",
+        "openedAt": "2026-10-08T12:03:01Z",
+        "lastConfirmedAt": "2026-10-08T12:03:01Z",
+        "lastAcceptedAt": "2026-10-08T12:00:00Z",
+        "sequence": 1,
+        "recoveryAcceptedAt": "2026-10-08T12:03:31Z",
+        "recoverySequence": 2,
+        "resolvedAt": "2026-10-08T12:04:31Z",
+        "closedReason": "reports-resumed"
+      }
+    ]
+  },
+  "unknown": {
+    "schemaVersion": "tracebolt.windows-contact-view.v1",
+    "certificateExpiresAt": "2027-10-08T12:00:00Z",
+    "deviceId": "agent_11111111111111111111111111111111",
+    "serverNow": "2026-10-08T12:00:00Z",
+    "status": "unknown",
+    "lastAcceptedAt": null,
+    "sequence": 0,
+    "evaluatedAt": null,
+    "incidents": []
+  }
+}

@@ -386,6 +386,15 @@ func runWithApplicationChecks(ctx context.Context, m lanconfig.Material, enrollm
 		defer func() { stopChecks(); <-checksDone }()
 	}
 	if p.health != nil {
+		contactCtx, stopContact := context.WithCancel(ctx)
+		contactDone := make(chan struct{})
+		go func() {
+			defer close(contactDone)
+			_ = p.health.RunWindowsContactMonitor(contactCtx, func() {
+				log.Print("Windows contact evaluation is unavailable; existing incident history is preserved.")
+			})
+		}()
+		defer func() { stopContact(); <-contactDone }()
 		healthCtx, stopHealth := context.WithCancel(ctx)
 		healthDone := make(chan struct{})
 		go func() {
