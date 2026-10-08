@@ -381,6 +381,14 @@ func (s *outputState) validCSI(final byte) bool {
 	if (final == 'h' || final == 'l') && bytes.Equal(p, []byte("?25")) {
 		return true // Cursor visibility does not change the text model.
 	}
+	if (final == 'h' || final == 'l') &&
+		(bytes.Equal(p, []byte("?9001")) || bytes.Equal(p, []byte("?1004"))) {
+		// Exact ConPTY Win32-input/focus-reporting requests do not render text.
+		// This pipe client retains plain-text input compatibility and has no
+		// focus events to report. See the documented compatibility rationale;
+		// do not generalize this to other private modes or parameter lists.
+		return true
+	}
 	if !s.hadText && !s.pendingCR && s.lineLen == 0 {
 		if final == 'J' && bytes.Equal(p, []byte("2")) {
 			return true // Clear the initial, known-empty screen only.

@@ -256,3 +256,36 @@ sequence can therefore be unsupported here. Public synthetic fixtures reproduce
 that compatibility boundary, not the actual rejected native bytes. They provide
 no basis for guessing an allowlist expansion or declaring the native failure fixed.
 No additional native run is authorized by this diagnostic change.
+
+### Exact ConPTY mode compatibility
+
+The ordinary fixed-public-output [probe run 37749340509](https://github.com/storminator89/Tracebolt/actions/runs/37749340509)
+on `f118d6a18591932065ff6cf3f4182351569ec2f6` observed all four exact mode
+controls below, with no residual unknown. This proves a compatibility gap in
+public ConPTY output, not the bytes rejected in the earlier native enrollment
+run. The guard now accepts only CSI `?9001h`, `?9001l`, `?1004h`, and `?1004l`
+in addition to its existing language. Parameter lists, leading-zero aliases,
+other private modes, input event sequences and malformed lookalikes still fail.
+
+These are input requests, not text, cursor movement or line editing:
+
+- Microsoft's [Win32-input specification](https://github.com/microsoft/terminal/blob/main/doc/specs/%234999%20-%20Improved%20keyboard%20handling%20in%20Conpty.md)
+  defines mode 9001 enable/disable and encoded key events. Its compatibility
+  section explicitly expects clients without that capability to ignore the
+  request. Microsoft's [plain-text input handling](https://github.com/microsoft/terminal/blob/main/src/terminal/adapter/InteractDispatch.cpp)
+  synthesizes key events for such clients. This headless pipe client keeps its
+  existing bounded plain ASCII synthetic invitation and carriage return; it
+  does not implement or advertise Win32 key-event encoding.
+- Microsoft's [mode definitions](https://github.com/microsoft/terminal/blob/main/src/terminal/adapter/DispatchTypes.hpp)
+  identify 1004 as focus reporting, and its [input implementation](https://github.com/microsoft/terminal/blob/main/src/terminal/input/terminalInput.cpp)
+  emits focus-in/out input only when handling a focus event with that mode
+  enabled. This isolated pipe client has no UI focus events and emits no focus
+  replies. The requests do not change the guard's visible text model.
+
+The guard consumes these exact controls without resetting either echo matcher,
+changing prompt readiness during partial sequences, or relaxing title, cursor,
+line/total bounds, trust ordering or success/input barriers. No input encoding,
+input writer, approval, permission, workflow or cleanup code changes. Portable
+fixtures cover each sequence at every text position and sequence split before
+and after input, concealed synthetic echoes, incomplete controls and malformed
+lookalikes. This source fix is not native acceptance and authorizes no new run.

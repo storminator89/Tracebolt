@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "sourceCommit": "fccc4b00cd8a144afd58e4b995747afab7a10022",
-  "goSourceSha256": "dd3e05fa9a5ab08d30054fea908410f70caef76877d578b4f2709cf9a243d2d8",
+  "goSourceSha256": "34d2d26addfff0c2515654ed0f62199c94e7af0db8ed2e41f3354cbb883a0c03",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -2724,6 +2724,10 @@
       "TestFreshGateRejectsRerunEvenWithMatchingBindings",
       "TestFreshGateRequiresVerifiedOwnerActors",
       "TestFreshSuccessfulStopDoesNotClaimDisabledOrDisposal",
+      "TestOutputGuardConPTYModeLookalikesRejected",
+      "TestOutputGuardConPTYModesEverySplitAndPosition",
+      "TestOutputGuardConPTYModesKeepBarriersAndBounds",
+      "TestOutputGuardConPTYModesPreserveEcho",
       "TestOutputGuardEchoAcrossVTAndLines",
       "TestOutputGuardEchoEveryChunkSplit",
       "TestOutputGuardEchoInTitlePayload",
