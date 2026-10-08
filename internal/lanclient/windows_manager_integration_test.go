@@ -442,6 +442,25 @@ func assertWindowsManagerProjection(t *testing.T, f *windowsManagerFixture, snap
 	if err != nil || len(devices) != 1 || devices[0].ID != d.ID || devices[0].Platform != "windows" || devices[0].Memory.Value == nil || *devices[0].Memory.Value != 41.5 {
 		t.Fatal("dashboard projection lost accepted Windows device", err)
 	}
+	assertWindowsHealthProjection(t, devices[0], f.identity, now)
+}
+
+// The Health UI may require this manager-owned authority, never an agent claim.
+func assertWindowsHealthProjection(t *testing.T, device model.Device, identity enrollmentstate.Snapshot, now time.Time) {
+	t.Helper()
+	count := 0
+	for _, capability := range device.Capabilities {
+		if capability.ID == "agent_identity" {
+			count++
+			if capability.Status != "supported" {
+				t.Fatal("activated Windows inventory identity lacks supported manager authority")
+			}
+		}
+	}
+	certificate := device.AgentCertificate
+	if count != 1 || certificate == nil || certificate.Source != "guided-enrollment" || certificate.ExpiresAt == nil || !certificate.ExpiresAt.Equal(time.Unix(identity.Intent.NotAfter, 0).UTC()) || !certificate.CheckedAt.Equal(now) {
+		t.Fatal("Windows health metadata lost exact identity/certificate authority")
+	}
 }
 
 func TestWindowsManagerPipelineRejectsOtherProfilesAndMixedScope(t *testing.T) {
@@ -547,7 +566,15 @@ func testWindowsManagerPipelineOperatorHTTPBoundary(t *testing.T, withVolumes bo
 		t.Fatal(err)
 	}
 	defer state.Close()
-	run, err := runUsingStateWithNetworkDependencies(ctx, f.material, state, nil, nil, nil, windowsSource, func(r *http.Request) (*http.Response, error) {
+	// Supply a declared positive disk observation through the real signed sender,
+	// without changing the base fixture's unknown CPU or native collection scope.
+	positiveSource := func(_ context.Context, generation string) (windowsmanaged.Snapshot, model.Device, error) {
+		report := syntheticWindowsReport(time.Now().UTC())
+		disk := 24.25
+		report.Disk.Value, report.Disk.Quality = &disk, "healthy"
+		return windowsmanaged.FromReport(report, generation)
+	}
+	run, err := runUsingStateWithNetworkDependencies(ctx, f.material, state, nil, nil, nil, positiveSource, func(r *http.Request) (*http.Response, error) {
 		return f.serve(t, r, http.StatusOK), nil
 	}, func() (windowseventhealth.Consent, bool) { return eventConsentFixture(f.material), true }, eventSourceFixture, func() (windowsvolumes.Consent, bool) { return volumeConsentFixture(f.material), withVolumes }, volumeSourceFixture, func() (windowsprocessmetrics.Consent, bool) { return processConsentFixture(f.material), withNetwork }, processSourceFixture, func() (windowsnetwork.Consent, bool) { return networkConsentFixture(f.material), withNetwork }, networkSourceFixture)
 	if err != nil || run.Sequence != 1 || run.Duplicate {
@@ -648,6 +675,16 @@ func testWindowsManagerPipelineOperatorHTTPBoundary(t *testing.T, withVolumes bo
 	var got enrollmentstore.WindowsInventoryView
 	if w.Code != http.StatusOK || json.Unmarshal(w.Body.Bytes(), &got) != nil || got.SchemaVersion != want.SchemaVersion || got.DeviceID != want.DeviceID || got.CollectionProfile != want.CollectionProfile || got.Status != "fresh" || got.Sequence == nil || *got.Sequence != *want.Sequence || got.ReceivedAt == nil || !got.ReceivedAt.Equal(*want.ReceivedAt) || !reflect.DeepEqual(got.Snapshot, want.Snapshot) || !reflect.DeepEqual(got.Events, want.Events) || !reflect.DeepEqual(got.Volumes, want.Volumes) || !reflect.DeepEqual(got.Network, want.Network) || !reflect.DeepEqual(got.ProcessMetrics, want.ProcessMetrics) {
 		t.Fatal("authenticated HTTP view lost accepted Windows rows, identity or provenance", w.Code)
+	}
+	// Read the real device DTO for that same admitted Windows inventory identity.
+	metadataResponse := call(http.MethodGet, "/api/devices/"+f.identity.Approval.DeviceID, nil, true, "", "")
+	var metadata model.Device
+	if metadataResponse.Code != http.StatusOK || json.Unmarshal(metadataResponse.Body.Bytes(), &metadata) != nil || metadata.ID != got.DeviceID || metadata.Platform != "windows" || metadata.Source != "lan" || metadata.Synthetic || metadata.Disk.Value == nil || *metadata.Disk.Value != 24.25 || metadata.Disk.Quality != "healthy" || metadata.Disk.Unit != "%" || !metadata.Disk.CollectedAt.Equal(got.Snapshot.CollectedAt) || !metadata.LastSeen.Equal(got.Snapshot.CollectedAt) || metadata.AgentCertificate == nil {
+		t.Fatal("Windows device HTTP DTO lost accepted disk/identity provenance", metadataResponse.Code)
+	}
+	assertWindowsHealthProjection(t, metadata, f.identity, metadata.AgentCertificate.CheckedAt)
+	if metadata.AgentCertificate.CheckedAt.Before(got.ServerNow) || metadata.AgentCertificate.CheckedAt.Sub(*got.ReceivedAt) > 2*time.Minute || !metadata.AgentCertificate.CheckedAt.Before(*metadata.AgentCertificate.ExpiresAt) {
+		t.Fatal("positive Windows Health DTO is not fresh and authorized")
 	}
 	if w := call(http.MethodGet, "/api/devices/"+windowsManagerID("agent", 99)+"/windows-inventory", nil, true, "", ""); w.Code != http.StatusNotFound {
 		t.Fatal("unknown Windows identity was not rejected", w.Code)

@@ -191,3 +191,6 @@ import './windows-logs-fixtures.test.mjs';
 
 // Bounded service/software display contracts share the existing hosted fixture gate.
 import './windows-service-software-fixtures.test.mjs';
+
+// Keep positive Health fixture assertions in the existing hosted source-check entry.
+import './windows-health-fixtures.test.mjs';

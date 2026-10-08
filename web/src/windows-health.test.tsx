@@ -8,12 +8,12 @@ import type { Device } from './types';
 import { WindowsHealthSummary, windowsHealthSummary } from './windows-health';
 import { useWindowsInventory } from './windows-inventory-resource';
 import type { WindowsInventoryResource } from './windows-inventory-resource';
-import { windowsDevice as fixtureWindowsDevice, windowsDeviceId, windowsNow, windowsView } from './windows-inventory-fixture';
+import { windowsDeviceId, windowsNow, windowsView } from './windows-inventory-fixture';
 import type { WindowsInventoryView } from './windows-inventory-types';
 
 vi.mock('./api', async original => ({ ...await original<typeof import('./api')>(), request: vi.fn(), mutate: vi.fn() }));
 vi.mock('./auth', async original => ({ ...await original<typeof import('./auth')>(), useOperator: vi.fn() }));
-function windowsDevice(): Device { return { ...fixtureWindowsDevice(), capabilities: [{ id: 'agent_identity', name: 'Enrolled agent identity', status: 'supported', detail: 'Synthetic activated identity fixture' }] }; }
+import { windowsHealthDevice as windowsDevice } from './windows-health-fixture';
 const operator = { mode: 'lan' as const, authenticated: true, expiresAt: '2026-10-07T13:00:00Z', insecureTestMode: false, logout: vi.fn(), theme: 'light' as const, setTheme: vi.fn() };
 function resource(view = windowsView()): WindowsInventoryResource { return { elapsedMS: 0, view, snapshot: view.snapshot, status: view.status, loading: false, error: null, refresh: vi.fn(), events: null, eventsStale: false, volumes: null, volumesStale: false, processMetrics: null, processMetricsStale: false, network: null, networkStale: false, networkExpired: false }; }
 const summary = (device = windowsDevice(), r = resource(), elapsed = 0, ready = true) => windowsHealthSummary(device, r, elapsed, ready);
@@ -24,6 +24,7 @@ beforeEach(() => { abortProtectedRequests(); setLocale('en', false); vi.mocked(r
 afterEach(() => { cleanup(); abortProtectedRequests(); vi.useRealTimers(); vi.restoreAllMocks(); });
 
 describe('Windows health read adapter', () => {
+    it('keeps the explicit missing-authority browser fixture unknown despite fresh evidence', () => { expect(summary(windowsDevice('missing-identity'))).toMatchObject({ reason: 'authority', contact: 'unknown', disk: { state: 'unknown', value: null } }); });
     it('reports receipt contact and neutral system-volume usage without thresholds', () => { const v = summary(); expect(v.contact).toBe('recent'); expect(v.receivedAt).toBe('2026-10-07T12:00:01Z'); expect(v.disk).toMatchObject({ state: 'current', value: 61, at: '2026-10-07T12:00:00Z' }); const d = windowsDevice(); d.disk.value = 99; expect(summary(d).disk).toMatchObject({ state: 'current', value: 99 }); });
     it('uses receipt age even when the inventory capture is stale or partial', () => { const v = windowsView(); v.status = 'stale'; v.snapshot!.collectedAt = '2026-10-07T11:55:00Z'; v.snapshot!.services = { ...v.snapshot!.services, quality: 'partial', complete: false, countExact: false }; const s = summary(windowsDevice(), resource(v)); expect(s.contact).toBe('recent'); expect(s.disk.state).toBe('current'); });
     it('never treats rereading an old accepted receipt as recent contact', () => { const v = windowsView(); v.receivedAt = '2026-10-07T11:57:00Z'; v.snapshot!.collectedAt = '2026-10-07T11:56:59Z'; v.status = 'stale'; expect(summary(windowsDevice(), resource(v)).contact).toBe('stale'); });
