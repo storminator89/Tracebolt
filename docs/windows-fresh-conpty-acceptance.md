@@ -337,3 +337,45 @@ metadata does not grant permission, retry an operation, weaken an admission rule
 Portable fault-injection checks and Windows cross-compilation are source evidence
 only. This candidate does not establish the third run's cause, authorize another
 native dispatch, or establish a successful native subset.
+
+## Read-only KnownFolder environment comparison
+
+The fourth diagnostic run (`37758168998`) reached the strict root-syntax refusal
+`service_layout_root` / `unsafe_path` after both KnownFolder APIs succeeded.
+That locates the refusal, but does not identify the malformed root or prove why
+it was malformed. No raw path is required to test the narrowed hypothesis.
+
+Ordinary Windows service source CI now has a separate, opt-in, bounded probe.
+It starts two fresh copies of the test executable, each limited to reading
+`FOLDERID_ProgramFiles` and `FOLDERID_ProgramData` with `KF_FLAG_DONT_VERIFY`.
+The baseline has only the existing child's three OS environment entries
+(`SystemRoot`, `WINDIR`, `COMPUTERNAME`), a public probe role, and
+`GOTRACEBACK=none`. It carries no native-gate metadata, authorization, bootstrap,
+secret or caller environment. The comparison adds exactly `SystemDrive`, derived
+from a strictly validated `GetSystemWindowsDirectory` result, rather than trusting
+an inherited drive or substituting a KnownFolder root.
+
+The valid parent roots remain private to memory; only their SHA-256 comparisons
+travel to the owned children over an anonymous pipe. Children return canonical
+finite categories (`valid`, `api_error`, `unsafe_root`, `unsafe_component`) and
+parent-equality booleans. Child output is capped at 1 KiB, child lifetime at 10
+seconds, and the wrapper retains at most 1 MiB of private test output before
+printing only the finite summary. Raw output and errors are never replayed.
+
+Interpretation: a valid parent, a baseline root refusal, and both comparison
+roots strictly valid and identical to the parent would support the single-variable
+explanation on that ordinary Windows host. A passing probe only means a complete
+observation: it does not require or claim reproduction on every Windows image.
+If the baseline already succeeds, or the addition fails to restore both roots,
+the hypothesis remains unconfirmed. Windows cross-builds and portable parser
+fixtures do not constitute a native observation. The privileged child's
+allowlist, root checks, trust/ownership checks, artifacts and pins are unchanged.
+This probe neither installs nor controls services, creates keys/enrollment,
+changes ACLs/settings, accesses network endpoints, nor runs the manual gate.
+
+Microsoft documents the KnownFolder default paths using `SystemDrive`, the
+read-only retrieval flags, and the shared Windows directory API:
+- https://learn.microsoft.com/en-us/windows/win32/shell/knownfolderid
+- https://learn.microsoft.com/en-us/windows/win32/api/shlobj_core/nf-shlobj_core-shgetknownfolderpath
+- https://learn.microsoft.com/en-us/windows/win32/api/shlobj_core/ne-shlobj_core-known_folder_flag
+- https://learn.microsoft.com/en-us/windows/win32/api/sysinfoapi/nf-sysinfoapi-getsystemwindowsdirectoryw

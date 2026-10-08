@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "sourceCommit": "fccc4b00cd8a144afd58e4b995747afab7a10022",
-  "goSourceSha256": "01ea2d126ba1a86e2e3a62338ada19cc669f0fa6a71d182da1586cb40762f457",
+  "goSourceSha256": "926e3cf3b30662cd82c61b8f5beefba00823d88a06fd70cb468d75ae6cb964b4",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -2974,6 +2974,11 @@
       "TestInspectOwnedIsReadOnlyAndChecksExecutable",
       "TestInspectOwnedRejectsForeignAndIncompleteRecords",
       "TestInstallRejectsExistingEvenIfConfigurationMatches",
+      "TestKnownFolderObservationOutputBound",
+      "TestKnownFolderObservationStrictFiniteOutput",
+      "TestKnownFolderProbeChild",
+      "TestKnownFolderProbeDriveValidation",
+      "TestKnownFolderRestrictedEnvironment",
       "TestLayoutRejectsNonlocalAndAmbiguousRoots",
       "TestLookupFailureRetainsCreatedService",
       "TestMarkedDiagnosticNeverFormatsCause",

@@ -39,3 +39,9 @@ jobs:
           GOTOOLCHAIN: local
           PYTHONDONTWRITEBYTECODE: '1'
         run: python -I -B tests/security/run_public_conpty_probe.py
+      - name: Observe read-only KnownFolder child environment (no service or identity)
+        timeout-minutes: 3
+        env:
+          GOTOOLCHAIN: local
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: python -I -B tests/security/run_knownfolder_probe.py

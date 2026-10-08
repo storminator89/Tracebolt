@@ -93,6 +93,7 @@ def main():
         env["GOTOOLCHAIN"] = "local"
         # This gate never enables the separate read-only host collector smoke.
         env.pop("TRACEBOLT_WINDOWS_READONLY_NATIVE", None)
+        env.pop("TRACEBOLT_KNOWNFOLDER_PROBE", None)
         if command(["go", "env", "GOHOSTARCH"], env, 30).strip() != b"amd64":
             raise ValueError("native amd64 fixture host required")
         stage = "pure fixtures"
