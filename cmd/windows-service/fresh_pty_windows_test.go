@@ -210,24 +210,25 @@ func (p *freshPTY) Run(ctx context.Context, guard *freshgate.OutputGuard, input,
 	}})
 }
 
-// naturalExit reads only state published by the existing waiter. The channel
-// close synchronizes processErr/processExit. No wait, poll, or native call is
-// added, and cleanup-induced or not-yet-observed exits remain unknown.
-func (p *freshPTY) naturalExit() string {
+// naturalDiagnostic reads one readiness snapshot published by the existing
+// waiter. The channel close synchronizes all three finite facts together. No
+// wait, poll or native call is added; teardown/unobserved exits remain unknown.
+func (p *freshPTY) naturalDiagnostic() (exit, stage, category string) {
 	if p == nil || p.closed {
-		return "unknown"
+		return "unknown", "unknown", "unknown"
 	}
 	select {
 	case <-p.processDone:
 		if p.processErr != nil {
-			return "unknown"
+			return "unknown", "unknown", "unknown"
 		}
+		stage, category = freshgate.DecodeChildFailureExit(p.processExit)
 		if p.processExit == 0 {
-			return "zero"
+			return "zero", stage, category
 		}
-		return "nonzero"
+		return "nonzero", stage, category
 	default:
-		return "unknown"
+		return "unknown", "unknown", "unknown"
 	}
 }
 
@@ -333,13 +334,41 @@ func TestFreshNaturalExitDiagnostics(t *testing.T) {
 			if tc.done {
 				close(p.processDone)
 			}
-			if got := p.naturalExit(); got != tc.want {
+			if got, stage, category := p.naturalDiagnostic(); got != tc.want {
 				t.Fatalf("finite exit = %q, want %q", got, tc.want)
+			} else if got == "zero" && (stage != "none" || category != "none") || got != "zero" && (stage != "unknown" || category != "unknown") {
+				t.Fatal("incoherent natural diagnosis")
 			}
 		})
 	}
 	var missing *freshPTY
-	if missing.naturalExit() != "unknown" {
+	if exit, stage, category := missing.naturalDiagnostic(); exit != "unknown" || stage != "unknown" || category != "unknown" {
 		t.Fatal("missing child not unknown")
+	}
+}
+
+func TestFreshNaturalDiagnosticKnownFailureSnapshot(t *testing.T) {
+	for _, pair := range freshgate.ChildFailurePairs() {
+		for _, done := range []bool{false, true} {
+			for _, closed := range []bool{false, true} {
+				for _, waitError := range []bool{false, true} {
+					p := &freshPTY{processDone: make(chan struct{}), closed: closed, processExit: uint32(freshgate.ChildFailureExitCode(pair[0], pair[1]))}
+					if done {
+						close(p.processDone)
+					}
+					if waitError {
+						p.processErr = freshgate.ErrGuard
+					}
+					exit, stage, category := p.naturalDiagnostic()
+					if done && !closed && !waitError {
+						if exit != "nonzero" || stage != pair[0] || category != pair[1] {
+							t.Fatal("natural diagnostic lost")
+						}
+					} else if exit != "unknown" || stage != "unknown" || category != "unknown" {
+						t.Fatal("unobserved or forced failure inferred")
+					}
+				}
+			}
+		}
 	}
 }

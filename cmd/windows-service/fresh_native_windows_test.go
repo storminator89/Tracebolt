@@ -57,35 +57,38 @@ func freshAuthorization() (*freshgate.Grant, string, string, error) {
 	yes := func(n string) bool { return get("TRACEBOLT_FRESH_APPROVE_"+n) == "true" }
 	deadline, e := strconv.ParseInt(get("TRACEBOLT_FRESH_EXPIRES_UNIX"), 10, 64)
 	if e != nil {
-		return nil, "", "", freshgate.ErrGuard
+		return nil, "", "", setupFailed("authorization_expiry", freshgate.ErrGuard)
 	}
 	a := freshgate.Approval{Profile: get("TRACEBOLT_FRESH_PROFILE"), Source: get("TRACEBOLT_FRESH_SOURCE"), TestSHA256: get("TRACEBOLT_FRESH_TEST_SHA256"), ServiceSHA256: get("TRACEBOLT_FRESH_SERVICE_SHA256"), Machine: get("TRACEBOLT_FRESH_MACHINE"), RunID: get("TRACEBOLT_FRESH_RUN_ID"), Attempt: get("TRACEBOLT_FRESH_ATTEMPT"), ExpiresUnix: deadline, Services: yes("SERVICES"), Identity: yes("IDENTITY"), AppACLs: yes("APP_ACLS"), FiveReadScopes: yes("FIVE_READ_SCOPES"), SyntheticConsole: yes("SYNTHETIC_CONSOLE"), LoopbackTLS: yes("LOOPBACK_TLS"), RetainForVMDisposal: yes("RETAIN_FOR_VM_DISPOSAL"), StopOwnedService: yes("STOP_OWNED_SERVICE")}
 	// Preliminary pure grant verification occurs before reading artifact files.
 	r := freshgate.Runtime{Source: get("GITHUB_SHA"), CompiledSource: freshCompiledSource, TestSHA256: a.TestSHA256, ServiceSHA256: a.ServiceSHA256, Machine: get("COMPUTERNAME"), RunID: get("GITHUB_RUN_ID"), Attempt: get("GITHUB_RUN_ATTEMPT"), Repository: get("GITHUB_REPOSITORY"), Event: get("GITHUB_EVENT_NAME"), Actions: get("GITHUB_ACTIONS"), RunnerEnvironment: get("RUNNER_ENVIRONMENT"), RunnerOS: get("RUNNER_OS"), RepositoryOwner: get("GITHUB_REPOSITORY_OWNER"), RepositoryOwnerID: get("GITHUB_REPOSITORY_OWNER_ID"), Actor: get("GITHUB_ACTOR"), ActorID: get("GITHUB_ACTOR_ID"), TriggeringActor: get("GITHUB_TRIGGERING_ACTOR")}
 	preliminary, e := freshgate.Authorize(a, r, time.Now)
 	if e != nil {
-		return nil, "", "", freshgate.ErrGuard
+		return nil, "", "", setupFailed("authorization_preliminary", freshgate.ErrGuard)
 	}
 	preliminary.Close()
 	host, e := os.Hostname()
 	if e != nil || host != a.Machine {
-		return nil, "", "", freshgate.ErrGuard
+		return nil, "", "", setupFailed("authorization_hostname", freshgate.ErrGuard)
 	}
 	exe, e := os.Executable()
 	if e != nil {
-		return nil, "", "", freshgate.ErrGuard
+		return nil, "", "", setupFailed("authorization_executable", freshgate.ErrGuard)
 	}
 	service := get("TRACEBOLT_FRESH_SERVICE_ARTIFACT")
 	r.Machine = host
 	r.TestSHA256, e = freshArtifactHash(exe)
 	if e != nil {
-		return nil, "", "", freshgate.ErrGuard
+		return nil, "", "", setupFailed("authorization_test_hash", freshgate.ErrGuard)
 	}
 	r.ServiceSHA256, e = freshArtifactHash(service)
 	if e != nil {
-		return nil, "", "", freshgate.ErrGuard
+		return nil, "", "", setupFailed("authorization_service_hash", freshgate.ErrGuard)
 	}
 	g, e := freshgate.Authorize(a, r, time.Now)
+	if e != nil {
+		e = setupFailed("authorization_final", e)
+	}
 	return g, exe, service, e
 }
 func freshConsent() lanclient.WindowsCapabilityConsent {
@@ -101,24 +104,24 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 func freshChildMain() (code int) {
-	code = 1
+	code = freshgate.ChildFailureExitCode("unknown", "unknown")
 	defer func() {
 		if recover() != nil {
-			code = 1
+			code = freshgate.ChildFailureExitCode("child_panic", "recovered")
 		}
 	}()
 	if len(os.Args) != 4 || os.Args[1] != "-test.run=^TestFreshReadConPTYNative$" || os.Args[2] != "-test.count=1" || os.Args[3] != "-test.timeout=14m" {
-		return 1
+		return freshgate.ChildFailureExitCode("child_arguments", "rejected")
 	}
 	g, _, _, e := freshAuthorization()
 	if e != nil {
-		return 1
+		return freshChildFailureCode(e)
 	}
 	defer g.Close()
 	ctx, cancel := context.WithDeadline(context.Background(), g.Deadline().Add(-2*time.Minute))
 	defer cancel()
-	if freshChild(ctx, g) != nil {
-		return 1
+	if e := freshChild(ctx, g); e != nil {
+		return freshChildFailureCode(e)
 	}
 	return 0
 }
@@ -181,27 +184,27 @@ func freshReadReceipt(layout windowsservice.Layout) (installReceipt, error) {
 }
 func freshVerifyCompleted(ctx context.Context, g *freshgate.Grant) (installReceipt, error) {
 	if (ctx.Err() != nil || !g.Check()) || ctx.Err() != nil {
-		return installReceipt{}, freshgate.ErrGuard
+		return installReceipt{}, setupFailed("completion_context", freshgate.ErrGuard)
 	}
 	layout, e := windowsservice.ResolveLayout()
 	if e != nil {
-		return installReceipt{}, freshgate.ErrGuard
+		return installReceipt{}, setupFailed("completion_layout", freshgate.ErrGuard)
 	}
 	r, e := freshReadReceipt(layout)
 	if e != nil || !completeReadSetup(r) {
-		return r, freshgate.ErrGuard
+		return r, setupFailed("completion_receipt", freshgate.ErrGuard)
 	}
 	p := filepath.Join(layout.EnrollmentRoot, "agent.json")
 	binding, e := lanclient.WindowsCapabilityIdentity(p, r.ReadSetup.Consent)
 	if e != nil || binding != r.ReadSetup.SenderBinding {
-		return r, freshgate.ErrGuard
+		return r, setupFailed("completion_identity", freshgate.ErrGuard)
 	}
 	digests, e := lanclient.WindowsCapabilityGrantDigests(p, r.ReadSetup.Consent)
 	if e != nil || !reflect.DeepEqual(digests, r.ReadSetup.GrantDigests) {
-		return r, freshgate.ErrGuard
+		return r, setupFailed("completion_grants", freshgate.ErrGuard)
 	}
 	if native.VerifyFreshServiceToken(ctx, r.Service) != nil {
-		return r, freshgate.ErrGuard
+		return r, setupFailed("completion_token", freshgate.ErrGuard)
 	}
 	return r, nil
 }
@@ -209,19 +212,26 @@ func freshChild(ctx context.Context, g *freshgate.Grant) error {
 	// No injected secret/enrollment/setup/grant/start callback. The production
 	// function opens CONIN$ and performs all its real SCM and protected-store work.
 	if ctx.Err() != nil || !g.Check() {
-		return freshgate.ErrGuard
+		return setupFailed("child_context", freshgate.ErrGuard)
 	}
 	if _, e := installReadObservation(ctx, os.Getenv("TRACEBOLT_FRESH_BOOTSTRAP"), freshConsent(), os.Stdout, os.Stderr); e != nil {
-		return freshgate.ErrGuard
+		return setupFailed("coordinator", e)
 	}
-	if e := freshAwait(ctx, func() bool { _, e := freshVerifyCompleted(ctx, g); return e == nil }); e != nil {
-		return freshgate.ErrGuard
+	var completionErr error
+	if e := freshAwait(ctx, func() bool { _, completionErr = freshVerifyCompleted(ctx, g); return completionErr == nil }); e != nil {
+		if completionErr != nil {
+			return completionErr
+		}
+		return setupFailed("completion_wait", e)
 	}
 	if ctx.Err() != nil || !g.Check() {
-		return freshgate.ErrGuard
+		return setupFailed("success_context", freshgate.ErrGuard)
 	}
 	_, e := fmt.Fprint(os.Stdout, "\r\n"+freshSuccessMarker+"\r\n")
-	return e
+	if e != nil {
+		return setupFailedCategory("success_write", "failed", e)
+	}
+	return nil
 }
 func freshAwait(ctx context.Context, condition func() bool) error {
 	for {
@@ -334,7 +344,7 @@ func freshController(ctx context.Context, g *freshgate.Grant, exe, service strin
 	}()
 	defer func() {
 		// Snapshot only the existing waiter result before any forced teardown.
-		r.NaturalChildExit = child.naturalExit()
+		r.NaturalChildExit, r.ChildFailureStage, r.ChildFailureCategory = child.naturalDiagnostic()
 		reaped, closed := child.Close()
 		r.OwnedChildReaped = reaped
 		r.ConsoleClosed = closed

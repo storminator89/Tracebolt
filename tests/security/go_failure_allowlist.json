@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "sourceCommit": "fccc4b00cd8a144afd58e4b995747afab7a10022",
-  "goSourceSha256": "34d2d26addfff0c2515654ed0f62199c94e7af0db8ed2e41f3354cbb883a0c03",
+  "goSourceSha256": "01ea2d126ba1a86e2e3a62338ada19cc669f0fa6a71d182da1586cb40762f457",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -225,6 +225,7 @@
       "TestConcurrentStopPreservesInvalidHandoffAndMarkerFailure",
       "TestCooperativePendingOutcomeRejectsMixedAndDiagnosedFailures",
       "TestEventConsentFlagsExplicitAndBounded",
+      "TestFreshNaturalDiagnosticKnownFailureSnapshot",
       "TestFreshNaturalExitDiagnostics",
       "TestFreshReadConPTYNative",
       "TestFreshReadSetupCanceledContextNeverMutates",
@@ -260,11 +261,23 @@
       "TestProcessMetricsConsentErrorsAndInvalidModes",
       "TestProcessMetricsConsentFlagsExplicitAndBounded",
       "TestProcessMetricsRequiresOwnedStoppedService",
+      "TestReadSetupDiagnosticEveryInjectedStage",
+      "TestReadSetupFirstInstallFailureSurvivesRejectedReceipt",
+      "TestReadSetupJournalPreservesOriginalPublicErrorAndCategory",
+      "TestReadSetupStartupPermissionFailureCategories",
+      "TestRetainedBootstrapValidationCapturesCategoryBeforePublicCollapse",
+      "TestSetupCauseCategoriesAreIdentityBasedAndFinite",
+      "TestSetupDiagnosticEveryInjectedStage",
+      "TestSetupDiagnosticUnknownPanicCycleAndWideChainsFailClosed",
       "TestSetupFailuresNeverSkipReceiptOrStart",
       "TestSetupFiniteFailurePhases",
+      "TestSetupFirstFailureMetadataDoesNotAdoptSecondaryNativeCause",
+      "TestSetupFirstInstallFailureStillAttemptsReceiptWrite",
+      "TestSetupMetadataPreservesErrorIdentityRenderingAndInnerStage",
       "TestSetupRechecksRuntimeReadBeforeClaimAfterPreparation",
       "TestSetupRejectsCancellationAndExistingServiceBeforeIntent",
       "TestSetupRuntimeReadPreflightStopsBeforeJournalOrClaim",
+      "TestSetupWindowsPermissionCauseHasFiniteStartupCode",
       "TestSetupWritesIntentBeforeSCMAndPreparedReceiptBeforeEnrollment",
       "TestVolumeConsentFlagsExplicitAndBounded",
       "TestWindowsBootstrapMustMatchExplicitLocalProfile",
@@ -274,7 +287,8 @@
       "TestWindowsLifecycleApprovedModesDispatchExactlyOnce",
       "TestWindowsLifecycleFlagsFailBeforeAnyOperation",
       "TestWindowsLifecycleHelpAndErrorsAreInertAndSanitized",
-      "TestWindowsLifecycleShortWriteFails"
+      "TestWindowsLifecycleShortWriteFails",
+      "TestWriteFailureStagesUseFixedFiniteCategory"
     ],
     "localrmm/internal/actionclient": [
       "TestClientCallerDeadlineAndCancellationBoundStalledResponse",
@@ -2714,6 +2728,8 @@
       "TestSyntheticWrongProofAndPurposeConsumeChallenge"
     ],
     "localrmm/internal/windowsacceptance/freshgate": [
+      "TestChildFailureCodesExhaustiveAndFinite",
+      "TestChildFailureReportDefaultsAndStrictValues",
       "TestFreshDiagnosticsDefaultsAndFiniteFailureEvidence",
       "TestFreshDiagnosticsDoNotPromoteSuccess",
       "TestFreshDiagnosticsRejectArbitraryStringsAndTypes",
@@ -2822,12 +2838,18 @@
     ],
     "localrmm/internal/windowsconsole": [
       "TestConsoleSerializationWaitIsCancellable",
+      "TestContextDiagnosticAtEveryBoundary",
       "TestDecoderAlphabet",
       "TestDecoderCanonicalInvitationAndClearing",
       "TestDecoderEditingRepeatsAndIgnoredRecords",
       "TestDecoderRejectsInvalidInput",
+      "TestDiagnosticChangesPreserveConsoleSequence",
+      "TestDiagnosticClosedCategories",
+      "TestDiagnosticHostileUnknownAndBoundedChains",
       "TestInputRecordABI",
       "TestNativeModeConstants",
+      "TestOpenFailureCategoriesAreSanitized",
+      "TestOpenSequenceUsesOnlyExistingOperations",
       "TestPublicInputValidationDoesNotOpenConsole",
       "TestReadFixtureCancellationWithoutCharacters",
       "TestReadFixtureDeadlineAndCancellationAtCompletion",
@@ -2978,6 +3000,14 @@
       "TestRuntimeUnexpectedSuccessIsFailure",
       "TestRuntimeWorkerFailureNeverReportsRunning",
       "TestSIDValidation",
+      "TestSetupCreatePrefixAndSafeNestedRendering",
+      "TestSetupDiagnosticNeverFormatsHostileErrors",
+      "TestSetupDiagnosticPreservesEveryLegacyReason",
+      "TestSetupDiagnosticSourceLabelsAreRegistered",
+      "TestSetupDiagnosticVocabularyIsFiniteAndPreservesCauses",
+      "TestSetupInstallFailureSites",
+      "TestSetupOwnedFailureSites",
+      "TestSetupPlanFailureSites",
       "TestStopAndUninstallRetainStateDespiteMissingBinary"
     ],
     "localrmm/internal/windowsstate": [

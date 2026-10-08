@@ -8,8 +8,9 @@ import (
 	"time"
 )
 
-// ErrInput is the only error returned by ReadInvitation. Native errors, prompt
-// errors and partial invitation material are never included in diagnostics.
+// ErrInput matches every error returned by ReadInvitation through errors.Is.
+// CategoryOf and Diagnostic expose only a finite failed-operation category.
+// Native errors, prompt errors and partial input are never retained.
 var ErrInput = errors.New("hidden console invitation input unavailable or invalid")
 
 const (
@@ -37,14 +38,17 @@ var consoleGate = make(chan struct{}, 1)
 // restoration discards the result. Abrupt process/console termination cannot be
 // repaired by a defer. Non-Windows systems fail without invoking prompt.
 func ReadInvitation(ctx context.Context, prompt func() error) ([]byte, error) {
-	if ctx == nil || prompt == nil || ctx.Err() != nil {
-		return nil, ErrInput
+	if ctx == nil || prompt == nil {
+		return nil, failure(CategoryInvalid)
+	}
+	if ctx.Err() != nil {
+		return nil, failure(CategoryContext)
 	}
 	select {
 	case consoleGate <- struct{}{}:
 		defer func() { <-consoleGate }()
 	case <-ctx.Done():
-		return nil, ErrInput
+		return nil, failure(CategoryContext)
 	}
 	return readWithConsole(ctx, prompt, openConsole)
 }
@@ -67,80 +71,104 @@ func restoreMode(c console, original uint32) error {
 	// Extended flags must be present while restoring the Quick Edit bit. Then
 	// restore the exact original mask, including an originally unset flag.
 	if c.setMode(original|extendedFlags) != nil {
-		return ErrInput
+		return failure(CategoryRestoreSet)
 	}
 	if original&extendedFlags == 0 && c.setMode(original) != nil {
-		return ErrInput
+		return failure(CategoryRestoreSet)
 	}
 	actual, err := c.mode()
 	if err != nil || actual != original {
-		return ErrInput
+		return failure(CategoryRestoreVerify)
 	}
 	return nil
 }
 
 func readWithConsole(ctx context.Context, prompt func() error, open func() (console, error)) (secret []byte, err error) {
-	if ctx == nil || prompt == nil || ctx.Err() != nil {
-		return nil, ErrInput
+	if ctx == nil || prompt == nil {
+		return nil, failure(CategoryInvalid)
+	}
+	if ctx.Err() != nil {
+		return nil, failure(CategoryContext)
 	}
 	c, err := open()
 	if err != nil || c == nil {
-		return nil, ErrInput
+		// The native opener supplies only these closed categories. Do not
+		// preserve an arbitrary error or an unrelated fabricated category.
+		category := CategoryOf(err)
+		switch category {
+		case CategoryUnsupported, CategoryResolve, CategoryOpen, CategoryType, CategoryClose:
+			return nil, failure(category)
+		default:
+			return nil, failure(CategoryOpen)
+		}
 	}
 	var original uint32
 	var modeAttempted bool
 	var decoder invitationDecoder
 	defer func() {
 		decoder.clear()
-		failed := false
+		var cleanupErr error
 		if modeAttempted {
 			// Discard unread paste suffixes before restoring echo. This also
 			// clears pending input on cancellation or invalid input.
 			if c.discard() != nil {
-				failed = true
+				cleanupErr = failure(CategoryCleanupDiscard)
 			}
-			if restoreMode(c, original) != nil {
-				failed = true
+			if restoreErr := restoreMode(c, original); restoreErr != nil && cleanupErr == nil {
+				cleanupErr = restoreErr
 			}
 		}
-		if c.close() != nil {
-			failed = true
+		if c.close() != nil && cleanupErr == nil {
+			cleanupErr = failure(CategoryClose)
 		}
-		if failed || err != nil || ctx.Err() != nil {
+		// Cleanup failure takes precedence, in native cleanup order. Otherwise
+		// preserve the first failure, or cancellation observed at completion.
+		if cleanupErr != nil {
+			err = cleanupErr
+		} else if err == nil && ctx.Err() != nil {
+			err = failure(CategoryContext)
+		}
+		if err != nil {
 			clear(secret)
-			secret, err = nil, ErrInput
+			secret = nil
 		}
 	}()
 	original, err = c.mode()
 	if err != nil {
-		return nil, ErrInput
+		return nil, failure(CategoryModeRead)
 	}
 	modeAttempted = true // Even a failed mode change must attempt restoration.
 	if c.setMode(hiddenMode(original)) != nil {
-		return nil, ErrInput
+		return nil, failure(CategoryModeSet)
 	}
 	actual, err := c.mode()
 	if err != nil || actual != hiddenMode(original) {
-		return nil, ErrInput
+		return nil, failure(CategoryModeVerify)
 	}
 	// Do not accept type-ahead that predates the hidden prompt.
-	if c.discard() != nil || ctx.Err() != nil || prompt() != nil {
-		return nil, ErrInput
+	if c.discard() != nil {
+		return nil, failure(CategoryDiscard)
+	}
+	if ctx.Err() != nil {
+		return nil, failure(CategoryContext)
+	}
+	if prompt() != nil {
+		return nil, failure(CategoryPrompt)
 	}
 	for {
 		if ctx.Err() != nil {
-			return nil, ErrInput
+			return nil, failure(CategoryContext)
 		}
 		record, available, readErr := c.readRecord()
 		if readErr != nil {
 			record.clear()
-			return nil, ErrInput
+			return nil, failure(CategoryRead)
 		}
 		if available {
 			done, decodeErr := decoder.consume(record)
 			record.clear()
 			if decodeErr != nil {
-				return nil, ErrInput
+				return nil, failure(CategoryDecode)
 			}
 			if done {
 				return decoder.take(), nil
@@ -152,7 +180,7 @@ func readWithConsole(ctx context.Context, prompt func() error, open func() (cons
 		select {
 		case <-ctx.Done():
 			timer.Stop()
-			return nil, ErrInput
+			return nil, failure(CategoryContext)
 		case <-timer.C:
 		}
 	}

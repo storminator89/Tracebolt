@@ -20,29 +20,26 @@ func openConsole() (console, error) {
 	// NOWAIT avoids the readiness-probe/read race of ReadConsoleInputW, which
 	// can otherwise block indefinitely when another reader consumes the event.
 	// https://learn.microsoft.com/en-us/windows/console/readconsoleinputex
-	if readConsoleInputExW.Find() != nil {
-		return nil, ErrInput
-	}
-	name, err := windows.UTF16PtrFromString("CONIN$")
-	if err != nil {
-		return nil, ErrInput
-	}
-	// NULL security attributes make the handle noninheritable. No caller path,
-	// standard handle, remote device, process or command is accepted.
-	// https://learn.microsoft.com/en-us/windows/console/console-handles
-	handle, err := windows.CreateFile(name, windows.GENERIC_READ|windows.GENERIC_WRITE,
-		windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE, nil, windows.OPEN_EXISTING, 0, 0)
-	if err != nil {
-		return nil, ErrInput
-	}
-	kind, err := windows.GetFileType(handle)
-	if err != nil || kind != windows.FILE_TYPE_CHAR {
-		_ = windows.CloseHandle(handle)
-		return nil, ErrInput
-	}
-	// A successful GetConsoleMode in readWithConsole is additionally required;
-	// FILE_TYPE_CHAR alone would not establish a real console input handle.
-	return &nativeConsole{handle: handle}, nil
+	return openVerifiedConsole(readConsoleInputExW.Find, func() (console, error) {
+		name, err := windows.UTF16PtrFromString("CONIN$")
+		if err != nil {
+			return nil, ErrInput
+		}
+		// NULL security attributes make the handle noninheritable. No caller
+		// path, standard handle, remote device, process or command is accepted.
+		// https://learn.microsoft.com/en-us/windows/console/console-handles
+		handle, err := windows.CreateFile(name, windows.GENERIC_READ|windows.GENERIC_WRITE,
+			windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE, nil, windows.OPEN_EXISTING, 0, 0)
+		if err != nil {
+			return nil, ErrInput
+		}
+		return &nativeConsole{handle: handle}, nil
+	}, func(c console) (bool, error) {
+		kind, err := windows.GetFileType(c.(*nativeConsole).handle)
+		// A successful GetConsoleMode in readWithConsole is additionally
+		// required; FILE_TYPE_CHAR alone does not establish console input.
+		return kind == windows.FILE_TYPE_CHAR, err
+	})
 }
 
 func (c *nativeConsole) mode() (uint32, error) {

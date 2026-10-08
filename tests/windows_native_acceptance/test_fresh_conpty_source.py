@@ -42,9 +42,9 @@ class FreshConPTYSourceBoundary(unittest.TestCase):
 
     def test_diagnostics_observe_before_cleanup_without_native_calls(self):
         harness=(ROOT/'cmd/windows-service/fresh_native_windows_test.go').read_text()
-        self.assertLess(harness.index('r.NaturalChildExit = child.naturalExit()'),harness.index('reaped, closed := child.Close()'))
+        self.assertLess(harness.index('r.NaturalChildExit, r.ChildFailureStage, r.ChildFailureCategory = child.naturalDiagnostic()'),harness.index('reaped, closed := child.Close()'))
         raw=(ROOT/'cmd/windows-service/fresh_pty_windows_test.go').read_text()
-        observation=raw.split('func (p *freshPTY) naturalExit() string {',1)[1].split('func (p *freshPTY) Close()',1)[0]
+        observation=raw.split('func (p *freshPTY) naturalDiagnostic() (exit, stage, category string) {',1)[1].split('func (p *freshPTY) Close()',1)[0]
         self.assertIn('case <-p.processDone:',observation)
         self.assertIn('p.closed',observation)
         for forbidden in ('windows.', 'time.', 'processErr.Error', 'strconv.', 'fmt.'):
@@ -60,3 +60,46 @@ class FreshConPTYSourceBoundary(unittest.TestCase):
         runner=(ROOT/'tests/windows_native_acceptance/run_fresh_conpty.py').read_text()
         field=runner.split('"outputRejection":{',1)[1].split('}',1)[0]
         self.assertEqual(values,set(re.findall(r'"([a-z_]+)"',field)))
+
+    def test_child_diagnostic_vocab_covers_all_location_labels(self):
+        import re
+        runner=(ROOT/'tests/windows_native_acceptance/fresh_child_diagnostics.py').read_text()
+        known=set(re.findall(r"\('([a-z_]+)', '[a-z_]+'\)",runner))
+        for name in ('setup.go','read_setup.go','read_setup_windows.go','operation_windows.go','fresh_native_windows_test.go'):
+            raw=(ROOT/'cmd/windows-service'/name).read_text()
+            observed=set(re.findall(r'(?:stage\s*:?=\s*|setupFailed(?:Category)?\()"([a-z_]+)"',raw))
+            self.assertTrue(observed<=known,(name,observed-known))
+
+    def test_authorization_environment_and_child_argv_are_unchanged(self):
+        import re
+        harness=(ROOT/'cmd/windows-service/fresh_native_windows_test.go').read_text()
+        child=(ROOT/'cmd/windows-service/fresh_pty_windows_test.go').read_text()
+        authorization=harness.split('func freshAuthorization()',1)[1].split('func freshConsent()',1)[0]
+        forwarded=set(re.findall(r'"([A-Z][A-Z_]+)"',child.split('entries :=',1)[0]))
+        required=set(re.findall(r'get\("([A-Z][A-Z_]+)"\)',authorization))
+        required.update('TRACEBOLT_FRESH_APPROVE_'+x for x in re.findall(r'yes\("([A-Z_]+)"\)',authorization))
+        self.assertTrue(required<=forwarded,required-forwarded)
+        for arg in ('-test.run=^TestFreshReadConPTYNative$','-test.count=1','-test.timeout=14m'):
+            self.assertIn(arg,harness);self.assertIn(arg,child)
+        self.assertIn('len(os.Args) != 4',harness)
+        self.assertIn('syscall.EscapeArg(exe)',child)
+        self.assertIn('TRACEBOLT_FRESH_BOOTSTRAP=',child)
+        self.assertIn('windows.CreateProcess(app, command, nil, nil, false,',child)
+
+    def test_failure_decode_is_snapshot_only_and_before_teardown(self):
+        harness=(ROOT/'cmd/windows-service/fresh_native_windows_test.go').read_text()
+        self.assertLess(harness.index('child.naturalDiagnostic()'),harness.index('reaped, closed := child.Close()'))
+        child=(ROOT/'cmd/windows-service/fresh_pty_windows_test.go').read_text()
+        block=child.split('func (p *freshPTY) naturalDiagnostic()',1)[1].split('func (p *freshPTY) Close()',1)[0]
+        self.assertIn('case <-p.processDone:',block)
+        self.assertIn('p.closed',block)
+        self.assertIn('p.processErr != nil',block)
+        for forbidden in ('windows.','time.','.Error(', 'fmt.', 'os.'):
+            self.assertNotIn(forbidden,block)
+        self.assertIn('freshgate.DecodeChildFailureExit(p.processExit)',block)
+
+    def test_write_failures_use_fixed_reviewed_category(self):
+        setup=(ROOT/'cmd/windows-service/read_setup_windows.go').read_text()
+        child=(ROOT/'cmd/windows-service/fresh_native_windows_test.go').read_text()
+        self.assertIn('setupFailedCategory("fresh_disclosure", "failed", err)',setup)
+        self.assertIn('setupFailedCategory("success_write", "failed", e)',child)

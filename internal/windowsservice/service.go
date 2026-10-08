@@ -50,11 +50,11 @@ type Layout struct {
 func layoutFromRoots(programFiles, programData string) (Layout, error) {
 	for _, p := range []string{programFiles, programData} {
 		if len(p) < 4 || p[1] != ':' || p[2] != '\\' || !((p[0] >= 'A' && p[0] <= 'Z') || (p[0] >= 'a' && p[0] <= 'z')) || strings.ContainsAny(p, "/\x00\r\n\"") || strings.HasSuffix(p, `\`) {
-			return Layout{}, ErrUnsafePath
+			return Layout{}, setupStageError("service_layout_root", "unsafe_path", ErrUnsafePath)
 		}
 		for _, component := range strings.Split(p[3:], `\`) {
 			if component == "" || component == "." || component == ".." || strings.HasSuffix(component, ".") || strings.HasSuffix(component, " ") || strings.Contains(component, ":") {
-				return Layout{}, ErrUnsafePath
+				return Layout{}, setupStageError("service_layout_component", "unsafe_path", ErrUnsafePath)
 			}
 		}
 	}
@@ -196,37 +196,38 @@ func ApplyUninstall(ctx context.Context, r Receipt) (ApplyResult, error) {
 
 func inspect(ctx context.Context, b backend) (Snapshot, error) {
 	if err := ctx.Err(); err != nil {
-		return Snapshot{}, err
+		return Snapshot{}, setupStageError("service_inspect_context", "interrupted", err)
 	}
 	s, err := b.Open(readAccess)
 	if errors.Is(err, ErrNotInstalled) {
 		return Snapshot{}, nil
 	}
 	if err != nil {
-		return Snapshot{}, err
+		return Snapshot{}, setupStageError("service_inspect_open", "failed", err)
 	}
 	defer s.Close()
-	return s.Inspect()
+	snapshot, err := s.Inspect()
+	return snapshot, setupStageError("service_inspect_snapshot", "failed", err)
 }
 func plan(ctx context.Context, b backend) (InstallPlan, error) {
 	if err := ctx.Err(); err != nil {
-		return InstallPlan{}, err
+		return InstallPlan{}, setupStageError("service_plan_context", "interrupted", err)
 	}
 	l, err := b.Layout()
 	if err != nil {
-		return InstallPlan{}, err
+		return InstallPlan{}, setupStageError("service_plan_layout", "failed", err)
 	}
 	digest, err := b.VerifyExecutable(l)
 	if err != nil {
-		return InstallPlan{}, err
+		return InstallPlan{}, setupStageError("service_plan_executable", "failed", err)
 	}
 	existing, err := inspect(ctx, b)
 	if err != nil {
-		return InstallPlan{}, err
+		return InstallPlan{}, setupStageError("service_plan_inspect", "failed", err)
 	}
 	var nonce [16]byte
 	if _, err = rand.Read(nonce[:]); err != nil {
-		return InstallPlan{}, err
+		return InstallPlan{}, setupStageError("service_plan_nonce", "failed", err)
 	}
 	id := hex.EncodeToString(nonce[:])
 	return InstallPlan{l, configuration(l, id, digest), digest, existing, id}, nil
@@ -269,38 +270,38 @@ func install(ctx context.Context, b backend, p InstallPlan) (Receipt, error) {
 }
 func installMode(ctx context.Context, b backend, p InstallPlan, staged bool) (Receipt, error) {
 	if err := ctx.Err(); err != nil {
-		return Receipt{}, err
+		return Receipt{}, setupStageError("service_install_context", "interrupted", err)
 	}
 	l, err := b.Layout()
 	if err != nil {
-		return Receipt{}, err
+		return Receipt{}, setupStageError("service_install_layout", "failed", err)
 	}
 	expected := configuration(l, p.InstallationID, p.ExecutableSHA256)
 	if staged {
 		expected.StartType = 4
 	}
 	if l != p.Layout || !validHex(p.InstallationID, 16) || !validHex(p.ExecutableSHA256, 32) || !reflect.DeepEqual(p.Configuration, expected) {
-		return Receipt{}, ErrMismatch
+		return Receipt{}, setupStageError("service_install_plan", "mismatch", ErrMismatch)
 	}
 	if p.Existing.Exists {
-		return Receipt{}, ErrExisting
+		return Receipt{}, setupStageError("service_install_plan_existing", "existing", ErrExisting)
 	}
 	current, err := inspect(ctx, b)
 	if err != nil {
-		return Receipt{}, err
+		return Receipt{}, setupStageError("service_install_inspect", "failed", err)
 	}
 	if current.Exists {
-		return Receipt{}, ErrExisting
+		return Receipt{}, setupStageError("service_install_current_existing", "existing", ErrExisting)
 	}
 	hash, err := b.VerifyExecutable(l)
 	if err != nil {
-		return Receipt{}, err
+		return Receipt{}, setupStageError("service_install_executable", "failed", err)
 	}
 	if hash != p.ExecutableSHA256 {
-		return Receipt{}, ErrMismatch
+		return Receipt{}, setupStageError("service_install_hash", "changed", ErrMismatch)
 	}
 	if err = ctx.Err(); err != nil {
-		return Receipt{}, err
+		return Receipt{}, setupStageError("service_install_precreate_context", "interrupted", err)
 	}
 	r := Receipt{Version: 1, InstallationID: p.InstallationID, Layout: l, ConfigurationSHA256: digestConfig(p.Configuration), ExecutableSHA256: hash}
 	if staged {
@@ -311,25 +312,25 @@ func installMode(ctx context.Context, b backend, p InstallPlan, staged bool) (Re
 		defer s.Close()
 	}
 	if err != nil {
-		return r, fmt.Errorf("service creation/configuration incomplete; retain installation intent and inspect: %w", err)
+		return r, setupStageError("service_install_create", "failed", fmt.Errorf("service creation/configuration incomplete; retain installation intent and inspect: %w", err))
 	}
 	if s == nil {
-		return r, errors.New("service creation returned no handle; retain installation intent")
+		return r, setupStageError("service_install_handle", "missing", errors.New("service creation returned no handle; retain installation intent"))
 	}
 	sid, err := b.LookupSID()
 	if err != nil {
-		return r, err
+		return r, setupStageError("service_install_sid", "failed", err)
 	}
 	if !validServiceSID(sid) {
-		return r, ErrMismatch
+		return r, setupStageError("service_install_sid", "invalid", ErrMismatch)
 	}
 	r.ServiceSID = sid
 	snapshot, err := s.Inspect()
 	if err != nil {
-		return r, err
+		return r, setupStageError("service_install_snapshot", "failed", err)
 	}
 	if !snapshot.Exists || snapshot.State != Stopped || snapshot.ServiceSID != sid || !reflect.DeepEqual(snapshot.Configuration, p.Configuration) {
-		return r, ErrMismatch
+		return r, setupStageError("service_install_snapshot", "mismatch", ErrMismatch)
 	}
 	r.Complete = true
 	return r, nil
@@ -339,11 +340,11 @@ func openOwned(ctx context.Context, b backend, r Receipt, a access, verifyBinary
 }
 func openOwnedMode(ctx context.Context, b backend, r Receipt, a access, verifyBinary, staged bool) (service, Snapshot, error) {
 	if err := ctx.Err(); err != nil {
-		return nil, Snapshot{}, err
+		return nil, Snapshot{}, setupStageError("service_owned_context", "interrupted", err)
 	}
 	l, err := b.Layout()
 	if err != nil {
-		return nil, Snapshot{}, err
+		return nil, Snapshot{}, setupStageError("service_owned_layout", "failed", err)
 	}
 	c := configuration(l, r.InstallationID, r.ExecutableSHA256)
 	version := 1
@@ -352,11 +353,11 @@ func openOwnedMode(ctx context.Context, b backend, r Receipt, a access, verifyBi
 		c.StartType = 4
 	}
 	if r.Version != version || !r.Complete || r.Layout != l || !validHex(r.InstallationID, 16) || !validHex(r.ExecutableSHA256, 32) || !validServiceSID(r.ServiceSID) || r.ConfigurationSHA256 != digestConfig(c) {
-		return nil, Snapshot{}, ErrMismatch
+		return nil, Snapshot{}, setupStageError("service_owned_receipt", "mismatch", ErrMismatch)
 	}
 	s, err := b.Open(a)
 	if err != nil {
-		return nil, Snapshot{}, err
+		return nil, Snapshot{}, setupStageError("service_owned_open", "failed", err)
 	}
 	accepted := false
 	defer func() {
@@ -366,22 +367,22 @@ func openOwnedMode(ctx context.Context, b backend, r Receipt, a access, verifyBi
 	}()
 	snapshot, err := s.Inspect()
 	if err != nil {
-		return nil, Snapshot{}, err
+		return nil, Snapshot{}, setupStageError("service_owned_inspect", "failed", err)
 	}
 	if !snapshot.Exists || snapshot.ServiceSID != r.ServiceSID || !reflect.DeepEqual(snapshot.Configuration, c) {
-		return nil, Snapshot{}, ErrMismatch
+		return nil, Snapshot{}, setupStageError("service_owned_binding", "mismatch", ErrMismatch)
 	}
 	if verifyBinary {
 		hash, err := b.VerifyExecutable(l)
 		if err != nil {
-			return nil, Snapshot{}, err
+			return nil, Snapshot{}, setupStageError("service_owned_executable", "failed", err)
 		}
 		if hash != r.ExecutableSHA256 {
-			return nil, Snapshot{}, ErrMismatch
+			return nil, Snapshot{}, setupStageError("service_owned_hash", "changed", ErrMismatch)
 		}
 	}
 	if err = ctx.Err(); err != nil {
-		return nil, Snapshot{}, err
+		return nil, Snapshot{}, setupStageError("service_owned_final_context", "interrupted", err)
 	}
 	accepted = true
 	return s, snapshot, nil

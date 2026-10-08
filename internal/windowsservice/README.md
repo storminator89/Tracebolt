@@ -119,3 +119,16 @@ access and opens each component relative to its parent with `OBJ_DONT_REPARSE`.
 It rejects reparse/case-sensitive/mismatched paths and retains the final-file
 read policy. See [path binding](../../docs/windows-path-binding.md); this does
 not grant permissions or substitute source checks for SCM token acceptance.
+
+### Setup-child failure metadata
+
+`SetupDiagnostic(error)` extracts a finite failure site and category for the
+setup-child report without formatting error text or exposing native error codes,
+paths, configuration, or identity data. `SetupDiagnosticPairs` returns a copy of
+the stable append-only allowed-pair table; `SetupDiagnosticValid` checks an exact
+pair. More-specific native metadata survives plan/install/owned-check wrappers.
+Unknown and malformed chains fail closed, with a bounded traversal budget.
+Existing `Error()` text, `errors.Is`/`errors.As`, and the separate `Reason`/SCM
+status contract remain unchanged. Error formatting is not the report boundary;
+report consumers must use only the finite metadata API. Portable fixtures and
+Windows cross-compilation do not establish native service acceptance.

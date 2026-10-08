@@ -27,6 +27,7 @@ func passingFreshReport() Report {
 	r.ControllerStage = "completed"
 	r.SessionOutcome = "passed"
 	r.NaturalChildExit = "zero"
+	r.ChildFailureStage, r.ChildFailureCategory = "none", "none"
 	r.CoordinatorPhase = "configured"
 	r.ApprovalValidated = true
 	r.NativeActionsAttempted = true
@@ -72,7 +73,14 @@ var diagnosticCases = []struct {
 	{"outputRejection", []string{"none", "output_limit", "echo", "escape_unsupported", "csi_limit", "csi_unsupported", "csi_malformed", "osc_limit", "osc_malformed", "osc_unsupported", "post_input_title", "carriage_return", "text_unsupported", "line_limit", "protocol", "incomplete", "state"}, func(r *Report, value string) { r.OutputRejection = OutputRejection(value) }},
 	{"controllerStage", []string{"not_started", "provisioning", "fixture", "bootstrap", "launch", "session", "verify_completed", "observe_inventory", "completed"}, func(r *Report, value string) { r.ControllerStage = value }},
 	{"sessionOutcome", []string{"not_run", "invalid_steps", "cancelled", "output_rejected", "output_read_failed", "output_eof_missing", "input_failed", "approval_failed", "child_unsuccessful", "protocol_incomplete", "passed"}, func(r *Report, value string) { r.SessionOutcome = SessionOutcome(value) }},
-	{"naturalChildExit", []string{"unknown", "zero", "nonzero"}, func(r *Report, value string) { r.NaturalChildExit = value }},
+	{"naturalChildExit", []string{"unknown", "zero", "nonzero"}, func(r *Report, value string) {
+		r.NaturalChildExit = value
+		if value == "zero" {
+			r.ChildFailureStage, r.ChildFailureCategory = "none", "none"
+		} else {
+			r.ChildFailureStage, r.ChildFailureCategory = "unknown", "unknown"
+		}
+	}},
 	{"coordinatorPhase", []string{"unknown", "install-started", "claim-started", "activation-started", "grants-started", "grants-incomplete", "grants-verified", "startup-transition-started", "configured"}, func(r *Report, value string) { r.CoordinatorPhase = value }},
 }
 

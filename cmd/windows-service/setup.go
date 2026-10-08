@@ -37,70 +37,94 @@ type setupSteps struct {
 
 // setup runs only after the command's explicit apply and selected-scope gate. Its
 // dependencies keep transaction ordering testable without a Windows mutation.
-func setup(ctx context.Context, bootstrapPath string, s setupSteps) (any, error) {
+func setup(ctx context.Context, bootstrapPath string, s setupSteps) (result any, err error) {
+	stage := "setup_validate"
+	defer func() {
+		if err != nil {
+			err = setupFailed(stage, err)
+		}
+	}()
 	if ctx == nil || s.plan == nil || s.readBootstrap == nil || s.validateBootstrap == nil || s.createJournal == nil || s.apply == nil || s.prepare == nil || s.verifyOwned == nil || s.enroll == nil || s.start == nil {
 		return nil, marked(windowsservice.PhaseSetup, windowsservice.ReasonInvalidConfiguration, nil)
 	}
+	stage = "setup_context"
 	if ctx.Err() != nil {
 		return nil, marked(windowsservice.PhaseSetup, windowsservice.ReasonInterrupted, ctx.Err())
 	}
+	stage = "service_plan"
 	plan, err := s.plan(ctx)
 	if err != nil || plan.Existing.Exists {
 		return nil, marked(windowsservice.PhaseRuntimeInstallation, windowsservice.ReasonInvalidConfiguration, err)
 	}
+	stage = "bootstrap_read"
 	raw, err := s.readBootstrap(bootstrapPath)
 	if err != nil {
 		return nil, marked(windowsservice.PhaseBootstrap, windowsservice.ReasonStateUnavailable, err)
 	}
 	defer clear(raw)
+	stage = "bootstrap_validate"
 	if err = s.validateBootstrap(raw); err != nil {
 		return nil, marked(windowsservice.PhaseBootstrap, windowsservice.ReasonInvalidConfiguration, err)
 	}
+	stage = "journal_create"
 	admin, err := s.createJournal(plan.Layout)
 	if err != nil || admin == nil {
 		return nil, marked(windowsservice.PhaseReceipt, windowsservice.ReasonStateRejected, err)
 	}
 	defer admin.Close()
+	stage = "intent_encode"
 	intent, err := json.Marshal(plan)
 	if err != nil {
 		return nil, marked(windowsservice.PhaseReceipt, windowsservice.ReasonResultEncoding, err)
 	}
+	stage = "intent_write"
 	if err = admin.Write("intent.json", intent); err != nil {
 		return nil, marked(windowsservice.PhaseReceipt, windowsservice.ReasonStateRejected, err)
 	}
+	stage = "service_install"
 	receipt, installErr := s.apply(ctx, plan)
 	retained := installReceipt{Version: 1, Service: receipt}
+	stage = "receipt_encode"
 	saved, err := json.Marshal(retained)
 	if err != nil {
-		return nil, marked(windowsservice.PhaseReceipt, windowsservice.ReasonResultEncoding, err)
+		return nil, setupFirstInstallFailure(installErr, marked(windowsservice.PhaseReceipt, windowsservice.ReasonResultEncoding, err))
 	}
+	stage = "receipt_write"
 	if err = admin.Write("receipt.json", saved); err != nil {
-		return nil, marked(windowsservice.PhaseReceipt, windowsservice.ReasonStateRejected, err)
+		return nil, setupFirstInstallFailure(installErr, marked(windowsservice.PhaseReceipt, windowsservice.ReasonStateRejected, err))
 	}
+	stage = "service_install"
 	if installErr != nil || !receipt.Complete {
 		return nil, marked(windowsservice.PhaseSetup, windowsservice.ReasonOperationFailed, installErr)
 	}
+	stage = "runtime_prepare"
 	if err = s.prepare(plan.Layout, receipt, raw); err != nil {
 		return nil, marked(windowsservice.PhaseRetainedState, windowsservice.ReasonStateRejected, err)
 	}
 	retained.Prepared = true
+	stage = "prepared_receipt_encode"
 	saved, err = json.Marshal(retained)
 	if err != nil {
 		return nil, marked(windowsservice.PhaseReceipt, windowsservice.ReasonResultEncoding, err)
 	}
+	stage = "prepared_receipt_write"
 	if err = admin.Write("receipt.json", saved); err != nil {
 		return nil, marked(windowsservice.PhaseReceipt, windowsservice.ReasonStateRejected, err)
 	}
+	stage = "journal_close"
 	if err = admin.Close(); err != nil {
 		return nil, marked(windowsservice.PhaseReceipt, windowsservice.ReasonStateRejected, err)
 	}
+	stage = "owned_verify"
 	if err = s.verifyOwned(ctx, receipt); err != nil {
 		return nil, marked(windowsservice.PhaseRuntimeInstallation, windowsservice.ReasonInvalidConfiguration, err)
 	}
+	stage = "enrollment"
 	if err = s.enroll(ctx, plan.Layout); err != nil {
 		return nil, marked(windowsservice.PhaseEnrollment, windowsservice.ReasonEnrollmentFailed, err)
 	}
-	result, err := s.start(ctx, receipt)
+	stage = "service_start"
+	result, err = s.start(ctx, receipt)
 	if err != nil {
 		return nil, marked(windowsservice.PhaseLifecycle, windowsservice.ReasonOperationFailed, err)
 	}

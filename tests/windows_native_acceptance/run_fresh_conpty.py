@@ -14,6 +14,10 @@ ROOT=Path(__file__).resolve().parents[2]
 _spec=importlib.util.spec_from_file_location("_fresh_shared_runner",Path(__file__).with_name("run_acceptance.py"))
 shared=importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(shared)
+_child_spec=importlib.util.spec_from_file_location("_fresh_child_diagnostics",Path(__file__).with_name("fresh_child_diagnostics.py"))
+child_diagnostics=importlib.util.module_from_spec(_child_spec)
+_child_spec.loader.exec_module(child_diagnostics)
+CHILD_FAILURE_PAIRS=child_diagnostics.CHILD_FAILURE_PAIRS|child_diagnostics.SERVICE_FAILURE_PAIRS
 require=shared.require
 PROFILE="fresh-read-conpty-v1"
 OWNER="storminator89"
@@ -24,14 +28,16 @@ FALSE_FIELDS={"humanEntry","humanManagerApproval","productionManagerExercised","
 PASS_FIELDS={"approvalValidated","nativeActionsAttempted","hiddenConsoleExercised","syntheticInput","noEchoVerified","disabledStageVerified","freshOrchestrationAcceptance","receiptAndGrantsVerified","limitedServiceTokenVerified","ownedChildReaped","consoleClosed","fixtureClosed","appStateRetainedForVMDisposal","ownedServiceStopped","automaticStartConfigurationRetained","serviceAndAppStateRetained","platformDisposalRequired"}
 BOOL_FIELDS=FALSE_FIELDS|PASS_FIELDS|{"serviceDisabled"}
 DIAGNOSTIC_VALUES={
+    "childFailureStage":{p[0] for p in CHILD_FAILURE_PAIRS}|{"unknown","none"},
+    "childFailureCategory":{p[1] for p in CHILD_FAILURE_PAIRS}|{"unknown","none"},
     "outputRejection":{"none","output_limit","echo","escape_unsupported","csi_limit","csi_unsupported","csi_malformed","osc_limit","osc_malformed","osc_unsupported","post_input_title","carriage_return","text_unsupported","line_limit","protocol","incomplete","state"},
     "controllerStage":{"not_started","provisioning","fixture","bootstrap","launch","session","verify_completed","observe_inventory","completed"},
     "sessionOutcome":{"not_run","invalid_steps","cancelled","output_rejected","output_read_failed","output_eof_missing","input_failed","approval_failed","child_unsuccessful","protocol_incomplete","passed"},
     "naturalChildExit":{"unknown","zero","nonzero"},
     "coordinatorPhase":{"unknown","install-started","claim-started","activation-started","grants-started","grants-incomplete","grants-verified","startup-transition-started","configured"},
 }
-DEFAULT_DIAGNOSTICS={"outputRejection":"none","controllerStage":"not_started","sessionOutcome":"not_run","naturalChildExit":"unknown","coordinatorPhase":"unknown"}
-PASS_DIAGNOSTICS={"outputRejection":"none","controllerStage":"completed","sessionOutcome":"passed","naturalChildExit":"zero","coordinatorPhase":"configured"}
+DEFAULT_DIAGNOSTICS={"childFailureStage":"unknown","childFailureCategory":"unknown","outputRejection":"none","controllerStage":"not_started","sessionOutcome":"not_run","naturalChildExit":"unknown","coordinatorPhase":"unknown"}
+PASS_DIAGNOSTICS={"childFailureStage":"none","childFailureCategory":"none","outputRejection":"none","controllerStage":"completed","sessionOutcome":"passed","naturalChildExit":"zero","coordinatorPhase":"configured"}
 
 def authorize(env):
     source=env.get("TRACEBOLT_FRESH_SOURCE","")
@@ -60,6 +66,10 @@ def validate_report(raw,source):
     require(shared.member(r["status"],{"passed_fresh_native_subset","failed","blocked"}))
     require(all(type(r[k]) is bool for k in BOOL_FIELDS) and all(r[k] is False for k in FALSE_FIELDS))
     require(all(shared.member(r[k],allowed) for k,allowed in DIAGNOSTIC_VALUES.items()))
+    pair=(r["childFailureStage"],r["childFailureCategory"])
+    if r["naturalChildExit"]=="zero":require(pair==("none","none"))
+    elif r["naturalChildExit"]=="unknown":require(pair==("unknown","unknown"))
+    else:require(pair==("unknown","unknown") or pair in CHILD_FAILURE_PAIRS)
     require(r["nativeActionsAttempted"] or all(r[k]==value for k,value in DEFAULT_DIAGNOSTICS.items()))
     require(not (r["serviceDisabled"] and r["automaticStartConfigurationRetained"]))
     require(not (r["serviceDisabled"] or r["automaticStartConfigurationRetained"]) or r["ownedServiceStopped"])

@@ -21,6 +21,8 @@ type Report struct {
 	ControllerStage                     string                       `json:"controllerStage"`
 	OutputRejection                     OutputRejection              `json:"outputRejection"`
 	SessionOutcome                      SessionOutcome               `json:"sessionOutcome"`
+	ChildFailureStage                   string                       `json:"childFailureStage"`
+	ChildFailureCategory                string                       `json:"childFailureCategory"`
 	NaturalChildExit                    string                       `json:"naturalChildExit"`
 	CoordinatorPhase                    string                       `json:"coordinatorPhase"`
 	ApprovalValidated                   bool                         `json:"approvalValidated"`
@@ -48,13 +50,13 @@ type Report struct {
 }
 
 func NewReport(source string) Report {
-	return Report{Schema: ReportSchema, Source: source, Status: "blocked", ControllerStage: "not_started", SessionOutcome: "not_run", OutputRejection: OutputNotRejected, NaturalChildExit: "unknown", CoordinatorPhase: "unknown", Inventory: profile.ZeroObservation(), Extensions: profile.ZeroExtensionObservation()}
+	return Report{Schema: ReportSchema, Source: source, Status: "blocked", ControllerStage: "not_started", SessionOutcome: "not_run", OutputRejection: OutputNotRejected, NaturalChildExit: "unknown", ChildFailureStage: "unknown", ChildFailureCategory: "unknown", CoordinatorPhase: "unknown", Inventory: profile.ZeroObservation(), Extensions: profile.ZeroExtensionObservation()}
 }
 
 // Diagnostics are finite observations only. They carry no errors, console text,
 // raw child exit code, or authority to read or change production runtime state.
 func (r Report) validDiagnostics() bool {
-	if !r.OutputRejection.valid() {
+	if !r.OutputRejection.valid() || !validChildFailure(r.ChildFailureStage, r.ChildFailureCategory, r.NaturalChildExit) {
 		return false
 	}
 	switch r.ControllerStage {
@@ -78,7 +80,7 @@ func (r Report) validDiagnostics() bool {
 	default:
 		return false
 	}
-	if !r.NativeActionsAttempted && (r.OutputRejection != OutputNotRejected || r.ControllerStage != "not_started" || r.SessionOutcome != "not_run" || r.NaturalChildExit != "unknown" || r.CoordinatorPhase != "unknown") {
+	if !r.NativeActionsAttempted && (r.OutputRejection != OutputNotRejected || r.ControllerStage != "not_started" || r.SessionOutcome != "not_run" || r.NaturalChildExit != "unknown" || r.ChildFailureStage != "unknown" || r.ChildFailureCategory != "unknown" || r.CoordinatorPhase != "unknown") {
 		return false
 	}
 	return r.Status != "passed_fresh_native_subset" || r.OutputRejection == OutputNotRejected && r.ControllerStage == "completed" && r.SessionOutcome == "passed" && r.NaturalChildExit == "zero" && r.CoordinatorPhase == "configured"

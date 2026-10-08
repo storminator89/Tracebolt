@@ -143,54 +143,94 @@ func nativeSetupSteps(selectedProfile string, insecure bool, out, stderr io.Writ
 		start: windowsservice.ApplyStart,
 	}
 }
-func prepareRuntime(layout windowsservice.Layout, receipt windowsservice.Receipt, raw []byte) error {
+func prepareRuntime(layout windowsservice.Layout, receipt windowsservice.Receipt, raw []byte) (err error) {
+	stage := "runtime_root_open"
+	defer func() {
+		if err != nil {
+			err = setupFailed(stage, err)
+		}
+	}()
 	store, err := windowsstate.Open(layout.StateRoot, windowsagentconfig.RuntimeRoot(receipt.ServiceSID, true))
 	if err != nil {
-		return errLifecycle
+		return setupFailedCategory(stage, setupCauseCategory(err), errLifecycle)
 	}
 	defer store.Close()
-	if store.Write("bootstrap.json", raw) != nil {
-		return errLifecycle
+	stage = "runtime_bootstrap_write"
+	if e := store.Write("bootstrap.json", raw); e != nil {
+		return setupFailedCategory(stage, setupCauseCategory(e), errLifecycle)
 	}
+	stage = "runtime_enrollment_create"
 	child, err := store.CreateDirectoryStore("enrollment", windowsagentconfig.Enrollment(receipt.ServiceSID, true))
 	if err != nil {
-		return errLifecycle
+		return setupFailedCategory(stage, setupCauseCategory(err), errLifecycle)
 	}
-	if child.Close() != nil || store.Close() != nil {
-		return errLifecycle
+	stage = "runtime_enrollment_close"
+	if e := child.Close(); e != nil {
+		return setupFailedCategory(stage, setupCauseCategory(e), errLifecycle)
+	}
+	stage = "runtime_root_close"
+	if e := store.Close(); e != nil {
+		return setupFailedCategory(stage, setupCauseCategory(e), errLifecycle)
 	}
 	return nil
 }
-func bootstrap(layout windowsservice.Layout) (enrollmentclient.Bootstrap, error) {
+func bootstrap(layout windowsservice.Layout) (result enrollmentclient.Bootstrap, err error) {
+	stage := "bootstrap_sid"
+	defer func() {
+		if err != nil {
+			err = setupFailed(stage, err)
+		}
+	}()
 	sid, err := windowsservice.LookupServiceSID()
 	if err != nil {
-		return enrollmentclient.Bootstrap{}, marked(windowsservice.PhaseBootstrap, windowsservice.ReasonStateUnavailable, errLifecycle)
+		return enrollmentclient.Bootstrap{}, setupFailedCategory(stage, setupCauseCategory(err), marked(windowsservice.PhaseBootstrap, windowsservice.ReasonStateUnavailable, errLifecycle))
 	}
+	stage = "bootstrap_root_open"
 	store, err := windowsstate.Open(layout.StateRoot, windowsagentconfig.RuntimeRoot(sid, false))
 	if err != nil {
-		return enrollmentclient.Bootstrap{}, marked(windowsservice.PhaseBootstrap, windowsservice.ReasonStateUnavailable, errLifecycle)
+		return enrollmentclient.Bootstrap{}, setupFailedCategory(stage, setupCauseCategory(err), marked(windowsservice.PhaseBootstrap, windowsservice.ReasonStateUnavailable, errLifecycle))
 	}
 	defer store.Close()
+	stage = "bootstrap_retained_read"
 	raw, err := store.Read("bootstrap.json")
 	if err != nil {
-		return enrollmentclient.Bootstrap{}, marked(windowsservice.PhaseBootstrap, windowsservice.ReasonStateUnavailable, errLifecycle)
+		return enrollmentclient.Bootstrap{}, setupFailedCategory(stage, setupCauseCategory(err), marked(windowsservice.PhaseBootstrap, windowsservice.ReasonStateUnavailable, errLifecycle))
 	}
 	defer clear(raw)
+	stage = "bootstrap_retained_validate"
 	b, err := enrollmentclient.ParseBootstrap(raw)
 	if err != nil || validateWindowsBootstrapConsent(b, b.CollectionProfile, b.Profile == "http-test") != nil {
-		return enrollmentclient.Bootstrap{}, marked(windowsservice.PhaseBootstrap, windowsservice.ReasonStateUnavailable, errLifecycle)
+		return enrollmentclient.Bootstrap{}, setupFailedCategory(stage, setupCauseCategory(err), marked(windowsservice.PhaseBootstrap, windowsservice.ReasonStateUnavailable, errLifecycle))
 	}
 	return b, nil
 }
-func enroll(ctx context.Context, layout windowsservice.Layout, selectedProfile string, insecure bool, out, stderr io.Writer) error {
+func enroll(ctx context.Context, layout windowsservice.Layout, selectedProfile string, insecure bool, out, stderr io.Writer) (err error) {
+	stage := "enrollment_bootstrap_read"
+	category := ""
+	defer func() {
+		if err != nil {
+			if category == "" {
+				category = setupCauseCategory(err)
+			}
+			err = setupFailedCategory(stage, category, err)
+		}
+	}()
 	b, err := bootstrap(layout)
 	if err != nil {
 		return err
 	}
+	stage = "enrollment_bootstrap_validate"
 	if validateWindowsBootstrapConsent(b, selectedProfile, insecure) != nil {
 		return marked(windowsservice.PhaseBootstrap, windowsservice.ReasonInvalidConfiguration, errLifecycle)
 	}
-	result, err := enrollmentclient.Run(ctx, b, enrollmentclient.Options{StateDirectory: layout.EnrollmentRoot, ClaimOnly: true, InsecureHTTPAcknowledged: insecure, WindowsInventoryAcknowledged: selectedProfile == enrollmentcrypto.CollectionProfileWindowsInventory, Display: func(d enrollmentclient.TrustDisplay) error {
+	stage = "enrollment_before_display"
+	result, err := enrollmentclient.Run(ctx, b, enrollmentclient.Options{StateDirectory: layout.EnrollmentRoot, ClaimOnly: true, InsecureHTTPAcknowledged: insecure, WindowsInventoryAcknowledged: selectedProfile == enrollmentcrypto.CollectionProfileWindowsInventory, Display: func(d enrollmentclient.TrustDisplay) (displayErr error) {
+		stage = "enrollment_display"
+		defer func() {
+			if displayErr == nil {
+				stage = "enrollment_before_console"
+			}
+		}()
 		if _, err := fmt.Fprintf(out, "Manager: %s\nEnrollment: %s\nAgent ingress: %s\nScope: %s\n", d.ManagerInstanceID, d.EnrollmentOrigin, d.AgentOrigin, d.CollectionProfile); err != nil {
 			return err
 		}
@@ -212,10 +252,17 @@ func enroll(ctx context.Context, layout windowsservice.Layout, selectedProfile s
 		_, err := fmt.Fprintf(out, "Issuer root SHA-256: %s\nIssuer SHA-256: %s\nDevice SPKI SHA-256: %s\nComparison: %s\nCompare the complete public fingerprint and comparison value in the manager before approving.\n", d.IssuerRootFingerprint, d.IssuerFingerprint, d.KeyFingerprint, d.ComparisonCode)
 		return err
 	}, Secret: func(ctx context.Context) ([]byte, error) {
-		return windowsconsole.ReadInvitation(ctx, func() error {
+		stage = "enrollment_console"
+		secret, consoleErr := windowsconsole.ReadInvitation(ctx, func() error {
 			_, err := fmt.Fprint(stderr, "Verify public trust and enter the invitation in this console (hidden): ")
 			return err
 		})
+		if consoleErr != nil {
+			category = windowsconsole.Diagnostic(consoleErr)
+		} else {
+			stage = "enrollment_claim"
+		}
+		return secret, consoleErr
 	}})
 	if err != nil {
 		reason := windowsservice.ReasonEnrollmentFailed
@@ -229,6 +276,7 @@ func enroll(ctx context.Context, layout windowsservice.Layout, selectedProfile s
 		}
 		return marked(windowsservice.PhaseEnrollment, reason, err)
 	}
+	stage = "enrollment_result"
 	if !result.Pending || result.ServerAuthenticated != (b.Profile == "tls") {
 		return marked(windowsservice.PhaseEnrollment, windowsservice.ReasonInvalidConfiguration, nil)
 	}

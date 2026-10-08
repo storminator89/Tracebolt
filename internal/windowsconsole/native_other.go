@@ -2,4 +2,4 @@
 
 package windowsconsole
 
-func openConsole() (console, error) { return nil, ErrInput }
+func openConsole() (console, error) { return nil, failure(CategoryUnsupported) }

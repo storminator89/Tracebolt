@@ -69,15 +69,20 @@ func (s readSetupJournal) Write(name string, raw []byte) error { return s.write(
 // explicit read-only reconciliation. There is no retry, rollback or adoption.
 func setupReadObservation(ctx context.Context, bootstrap string, consent lanclient.WindowsCapabilityConsent, hooks readSetupSteps) (any, error) {
 	if ctx == nil || validateReadSetupConsent(consent) != nil || hooks.updateReceipt == nil || hooks.ensureFreshScopes == nil || hooks.activateIdentity == nil || hooks.identity == nil || hooks.configure == nil || hooks.verifyGrants == nil || hooks.grantDigests == nil || hooks.activateStartup == nil || hooks.setup.plan == nil || hooks.setup.createJournal == nil || hooks.setup.prepare == nil || hooks.setup.enroll == nil || hooks.setup.verifyOwned == nil || hooks.setup.start == nil {
-		return nil, errLifecycle
+		return nil, setupFailed("fresh_validate", errLifecycle)
 	}
 	consent.Scopes = append([]string(nil), consent.Scopes...)
 	s := hooks.setup
 	progress := &readSetupProgress{Consent: consent, Phase: "install-started"}
 	var retained installReceipt
 	var previous []byte
-	s.plan = func(ctx context.Context) (windowsservice.InstallPlan, error) {
-		p, err := hooks.setup.plan(ctx)
+	s.plan = func(ctx context.Context) (p windowsservice.InstallPlan, err error) {
+		defer func() {
+			if err != nil {
+				err = setupFailed("fresh_plan", err)
+			}
+		}()
+		p, err = hooks.setup.plan(ctx)
 		if err != nil {
 			return p, err
 		}
@@ -86,10 +91,15 @@ func setupReadObservation(ctx context.Context, bootstrap string, consent lanclie
 		}
 		return p, nil
 	}
-	s.createJournal = func(layout windowsservice.Layout) (setupJournal, error) {
+	s.createJournal = func(layout windowsservice.Layout) (result setupJournal, err error) {
+		defer func() {
+			if err != nil {
+				err = setupFailed("journal_create", err)
+			}
+		}()
 		journal, err := hooks.setup.createJournal(layout)
 		if err != nil || journal == nil {
-			return nil, errLifecycle
+			return nil, setupFailedCategory("journal_create", setupCauseCategory(err), errLifecycle)
 		}
 		return readSetupJournal{journal, func(name string, raw []byte) error {
 			switch name {
@@ -136,46 +146,69 @@ func setupReadObservation(ctx context.Context, bootstrap string, consent lanclie
 		previous = raw
 		return nil
 	}
-	s.prepare = func(layout windowsservice.Layout, receipt windowsservice.Receipt, raw []byte) error {
+	s.prepare = func(layout windowsservice.Layout, receipt windowsservice.Receipt, raw []byte) (err error) {
+		stage := "runtime_receipt"
+		defer func() {
+			if err != nil {
+				err = setupFailed(stage, err)
+			}
+		}()
 		if receipt.Version != 2 || !receipt.Complete {
 			return errLifecycle
 		}
+		stage = "scopes_absent"
 		if err := hooks.ensureFreshScopes(receipt); err != nil {
 			return err
 		}
+		stage = "runtime_prepare"
 		return hooks.setup.prepare(layout, receipt, raw)
 	}
-	s.enroll = func(ctx context.Context, layout windowsservice.Layout) error {
+	s.enroll = func(ctx context.Context, layout windowsservice.Layout) (err error) {
+		stage := "enrollment_layout"
+		defer func() {
+			if err != nil {
+				err = setupFailed(stage, err)
+			}
+		}()
 		if layout != retained.Service.Layout {
 			return errLifecycle
 		}
+		stage = "claim_record"
 		if err := save("claim-started"); err != nil {
 			return err
 		}
+		stage = "enrollment"
 		if err := hooks.setup.enroll(ctx, layout); err != nil {
 			return err
 		}
+		stage = "owned_after_claim"
 		if err := hooks.setup.verifyOwned(ctx, retained.Service); err != nil {
 			return err
 		}
+		stage = "activation_record"
 		if err := save("activation-started"); err != nil {
 			return err
 		}
+		stage = "identity_activate"
 		if err := hooks.activateIdentity(ctx, retained.Service); err != nil {
 			return err
 		}
+		stage = "owned_after_activation"
 		if err := hooks.setup.verifyOwned(ctx, retained.Service); err != nil {
 			return err
 		}
 		path := filepath.Join(layout.EnrollmentRoot, "agent.json")
+		stage = "identity_read"
 		binding, err := hooks.identity(path, consent)
 		if err != nil || !validReadSetupBinding(binding) {
 			return errLifecycle
 		}
 		progress.SenderBinding = binding
+		stage = "grants_record"
 		if err = save("grants-started"); err != nil {
 			return err
 		}
+		stage = "grants_configure"
 		result, grantErr := hooks.configure(path, consent)
 		progress.Grants = result
 		if grantErr != nil {
@@ -184,32 +217,46 @@ func setupReadObservation(ctx context.Context, bootstrap string, consent lanclie
 			_ = save("grants-incomplete")
 			return grantErr
 		}
+		stage = "grants_result"
 		if !result.MetadataScopeVerified || result.FailedScope != "" || !reflect.DeepEqual(result.AppliedScopes, readSetupScopes()[1:]) {
 			return errLifecycle
 		}
+		stage = "grants_verify"
 		if err = hooks.verifyGrants(path, consent); err != nil {
 			return err
 		}
+		stage = "grants_digests"
 		progress.GrantDigests, err = hooks.grantDigests(path, consent)
 		if err != nil || !validReadSetupDigests(progress.GrantDigests) {
 			return errLifecycle
 		}
+		stage = "identity_recheck"
 		current, err := hooks.identity(path, consent)
 		if err != nil || current != binding {
 			return errLifecycle
 		}
+		stage = "owned_after_grants"
 		if err = hooks.setup.verifyOwned(ctx, retained.Service); err != nil {
 			return err
 		}
+		stage = "grants_verified_record"
 		return save("grants-verified")
 	}
-	s.start = func(ctx context.Context, receipt windowsservice.Receipt) (windowsservice.ApplyResult, error) {
+	s.start = func(ctx context.Context, receipt windowsservice.Receipt) (result windowsservice.ApplyResult, err error) {
+		stage := "startup_receipt"
+		defer func() {
+			if err != nil {
+				err = setupFailed(stage, err)
+			}
+		}()
 		if receipt != retained.Service || progress.Phase != "grants-verified" {
 			return windowsservice.ApplyResult{}, errLifecycle
 		}
+		stage = "startup_record"
 		if err := save("startup-transition-started"); err != nil {
 			return windowsservice.ApplyResult{}, err
 		}
+		stage = "startup_activate"
 		activated, err := hooks.activateStartup(ctx, receipt)
 		if err != nil {
 			return windowsservice.ApplyResult{}, err
@@ -217,16 +264,20 @@ func setupReadObservation(ctx context.Context, bootstrap string, consent lanclie
 		expected := receipt
 		expected.Version = 1
 		expected.ConfigurationSHA256 = activated.ConfigurationSHA256
+		stage = "startup_verify"
 		if activated != expected || !validReadSetupBinding(activated.ConfigurationSHA256) {
 			return windowsservice.ApplyResult{}, errLifecycle
 		}
 		retained.Service = activated
+		stage = "configured_record"
 		if err = save("configured"); err != nil {
 			return windowsservice.ApplyResult{}, err
 		}
+		stage = "configured_verify"
 		if !completeReadSetup(retained) {
 			return windowsservice.ApplyResult{}, errLifecycle
 		}
+		stage = "service_start"
 		return hooks.setup.start(ctx, activated)
 	}
 	return setup(ctx, bootstrap, s)

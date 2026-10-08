@@ -21,10 +21,10 @@ import (
 // acknowledgement, and satisfy real release/native gates before invoking it.
 func installReadObservation(ctx context.Context, bootstrapPath string, consent lanclient.WindowsCapabilityConsent, out, stderr io.Writer) (any, error) {
 	if validateReadSetupConsent(consent) != nil {
-		return nil, errLifecycle
+		return nil, setupFailed("fresh_consent", errLifecycle)
 	}
 	if err := writeReadSetupDisclosure(out, consent); err != nil {
-		return nil, err
+		return nil, setupFailedCategory("fresh_disclosure", "failed", err)
 	}
 	s := nativeSetupSteps(enrollmentcrypto.CollectionProfileWindowsInventory, consent.InsecureHTTPAcknowledged, out, stderr)
 	s.plan = windowsservice.PlanFreshReadSetup

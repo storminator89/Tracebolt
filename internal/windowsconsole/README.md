@@ -3,8 +3,18 @@
 `ReadInvitation(context.Context, func() error)` accepts one canonical
 43-character unpadded base64url invitation through the local Windows console.
 The returned bytes are still encoded, not decoded key material. The caller must
-clear them after use. Every failure returns only `ErrInput`, without native or
-callback diagnostics or partial input. Other platforms return the same error.
+clear them after use. Every failure matches `ErrInput` through `errors.Is`, with
+the same fixed error text. `CategoryOf` and `Diagnostic` expose only a closed
+failed-operation category, without native or callback diagnostics, console mode
+values, records or partial input. Unknown errors map to `unknown`; error text is
+never inspected. Other platforms fail with the `unsupported` category.
+
+Categories distinguish fixed-API resolution, `CONIN$` open/type, initial mode
+read/set/verification, pre-prompt discard, prompt, record read, input decoding,
+context cancellation and cleanup. The first cleanup failure takes precedence
+(discard, restore set/verification, close); otherwise the original failure is
+retained. Cleanup cancellation after valid input fails closed as `context`.
+Categorization never adds native reads, probes, retries or console operations.
 
 ## Boundary
 
@@ -46,7 +56,10 @@ The tests use in-memory console fixtures only, including cleanup failures,
 callback errors/panics, original modes without extended flags, cancellation
 without keyboard input, and cancellation at successful input completion. The
 portable record-layout test checks the 20-byte, four-byte-aligned Windows ABI.
-The Windows-specific test compares constants only and invokes no native API.
+Open-sequence fixtures cover API resolution, open, type rejection and handle
+cleanup, including exact ordering. Closed-category tests check every category,
+unknown values and wrappers whose error text must never be evaluated. The
+Windows-specific test compares constants only and invokes no native API.
 
 Cross-compilation establishes compilation, not live console acceptance. No test
 here enters credentials, changes a real console, provisions a key, installs a

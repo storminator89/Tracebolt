@@ -4,6 +4,7 @@ package windowsconsole
 
 import (
 	"context"
+	"errors"
 	"testing"
 )
 
@@ -12,7 +13,7 @@ func TestUnsupportedPlatformDoesNotPrompt(t *testing.T) {
 		t.Fatal("unsupported platform invoked prompt")
 		return nil
 	})
-	if secret != nil || err != ErrInput {
+	if secret != nil || !errors.Is(err, ErrInput) || CategoryOf(err) != CategoryUnsupported {
 		t.Fatal("unsupported platform did not fail closed")
 	}
 }

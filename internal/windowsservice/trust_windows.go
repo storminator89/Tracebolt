@@ -34,13 +34,13 @@ func trustedWriter(sid string) bool {
 func verifyExecutable(l Layout) (string, error) {
 	resolved, err := ResolveLayout()
 	if err != nil {
-		return "", err
+		return "", setupStageError("service_trust_layout", "failed", err)
 	}
 	if l != resolved {
-		return "", ErrUnsafePath
+		return "", setupStageError("service_trust_layout", "mismatch", ErrUnsafePath)
 	}
 	if windows.GetDriveType(windows.StringToUTF16Ptr(l.Executable[:3])) != windows.DRIVE_FIXED {
-		return "", ErrUnsafePath
+		return "", setupStageError("service_trust_drive", "unsafe_path", ErrUnsafePath)
 	}
 	parts := strings.Split(l.Executable[3:], `\`)
 	paths := []string{l.Executable[:3]}
@@ -74,29 +74,41 @@ func verifyExecutable(l Layout) (string, error) {
 			h, err = windowspath.OpenChild(held[len(held)-1], parts[i-1], directory, access, share)
 		}
 		if err != nil {
-			return "", ErrUnsafePath
+			return "", setupTrustPathError(i == 0, directory, "open_failed", ErrUnsafePath)
 		}
 		held = append(held, h)
 		var info windows.ByHandleFileInformation
 		if windows.GetFileInformationByHandle(h, &info) != nil {
-			return "", ErrUnsafePath
+			return "", setupTrustPathError(i == 0, directory, "info_failed", ErrUnsafePath)
 		}
-		if info.FileAttributes&windows.FILE_ATTRIBUTE_REPARSE_POINT != 0 || (info.FileAttributes&windows.FILE_ATTRIBUTE_DIRECTORY != 0) != directory {
-			return "", ErrUnsafePath
+		if info.FileAttributes&windows.FILE_ATTRIBUTE_REPARSE_POINT != 0 {
+			return "", setupTrustPathError(i == 0, directory, "reparse", ErrUnsafePath)
+		}
+		if (info.FileAttributes&windows.FILE_ATTRIBUTE_DIRECTORY != 0) != directory {
+			return "", setupTrustPathError(i == 0, directory, "type_invalid", ErrUnsafePath)
 		}
 		if !directory && info.NumberOfLinks != 1 {
-			return "", ErrUnsafePath
+			return "", setupStageError("service_trust_file_links", "unsafe_path", ErrUnsafePath)
 		}
 		var final [512]uint16
 		n, finalErr := windows.GetFinalPathNameByHandle(h, &final[0], uint32(len(final)), 0)
-		if finalErr != nil || n == 0 || n >= uint32(len(final)) || windows.UTF16ToString(final[:n]) != `\\?\`+path {
-			return "", ErrUnsafePath
+		if finalErr != nil {
+			return "", setupTrustPathError(i == 0, directory, "final_failed", ErrUnsafePath)
+		}
+		if n == 0 || n >= uint32(len(final)) {
+			return "", setupTrustPathError(i == 0, directory, "final_size", ErrUnsafePath)
+		}
+		if windows.UTF16ToString(final[:n]) != `\\?\`+path {
+			return "", setupTrustPathError(i == 0, directory, "final_mismatch", ErrUnsafePath)
 		}
 		if directory {
 			var flags uint32
 			var iosb windows.IO_STATUS_BLOCK
-			if windows.NtQueryInformationFile(h, &iosb, (*byte)(unsafe.Pointer(&flags)), 4, windows.FileCaseSensitiveInformation) != nil || flags != 0 {
-				return "", ErrUnsafePath
+			if windows.NtQueryInformationFile(h, &iosb, (*byte)(unsafe.Pointer(&flags)), 4, windows.FileCaseSensitiveInformation) != nil {
+				return "", setupTrustPathError(i == 0, directory, "case_failed", ErrUnsafePath)
+			}
+			if flags != 0 {
+				return "", setupTrustPathError(i == 0, directory, "case_enabled", ErrUnsafePath)
 			}
 		}
 		if err = validatePathACL(h, directory); err != nil {
@@ -107,39 +119,48 @@ func verifyExecutable(l Layout) (string, error) {
 	// Duplicate ownership into os.File while retaining the checked handle/chain.
 	var duplicate windows.Handle
 	if windows.DuplicateHandle(windows.CurrentProcess(), file, windows.CurrentProcess(), &duplicate, 0, false, windows.DUPLICATE_SAME_ACCESS) != nil {
-		return "", ErrUnsafePath
+		return "", setupStageError("service_trust_duplicate", "unsafe_path", ErrUnsafePath)
 	}
 	f := os.NewFile(uintptr(duplicate), l.Executable)
 	if f == nil {
 		windows.CloseHandle(duplicate)
-		return "", ErrUnsafePath
+		return "", setupStageError("service_trust_file_handle", "unsafe_path", ErrUnsafePath)
 	}
 	defer f.Close()
 	hash := sha256.New()
 	if _, err = io.Copy(hash, f); err != nil {
-		return "", err
+		return "", setupStageError("service_trust_hash_read", "failed", err)
 	}
 	return hex.EncodeToString(hash.Sum(nil)), nil
 }
 func validatePathACL(h windows.Handle, directory bool) error {
 	sd, err := windows.GetSecurityInfo(h, windows.SE_FILE_OBJECT, windows.OWNER_SECURITY_INFORMATION|windows.DACL_SECURITY_INFORMATION)
 	if err != nil {
-		return ErrUnsafePath
+		return setupStageError("service_acl_security", "failed", ErrUnsafePath)
 	}
 	return validatePathDescriptor(sd, directory)
 }
 
 func validatePathDescriptor(sd *windows.SECURITY_DESCRIPTOR, directory bool) error {
 	if sd == nil || !sd.IsValid() {
-		return ErrUnsafePath
+		return setupStageError("service_acl_descriptor", "invalid", ErrUnsafePath)
 	}
 	owner, _, err := sd.Owner()
-	if err != nil || owner == nil || !owner.IsValid() || !trustedWriter(owner.String()) {
-		return ErrUnsafePath
+	if err != nil {
+		return setupStageError("service_acl_owner", "failed", ErrUnsafePath)
+	}
+	if owner == nil || !owner.IsValid() {
+		return setupStageError("service_acl_owner", "invalid", ErrUnsafePath)
+	}
+	if !trustedWriter(owner.String()) {
+		return setupStageError("service_acl_owner", "unsafe_path", ErrUnsafePath)
 	}
 	acl, _, err := sd.DACL()
-	if err != nil || acl == nil {
-		return ErrUnsafePath
+	if err != nil {
+		return setupStageError("service_acl_dacl", "failed", ErrUnsafePath)
+	}
+	if acl == nil {
+		return setupStageError("service_acl_dacl", "missing", ErrUnsafePath)
 	}
 	writes := uint32(windows.GENERIC_ALL | windows.GENERIC_WRITE | windows.WRITE_DAC | windows.WRITE_OWNER | windows.DELETE)
 	if directory {
@@ -157,8 +178,11 @@ func validatePathDescriptor(sd *windows.SECURITY_DESCRIPTOR, directory bool) err
 	var granted, denied uint32
 	for i := uint32(0); i < uint32(acl.AceCount); i++ {
 		var ace *windows.ACCESS_ALLOWED_ACE
-		if windows.GetAce(acl, i, &ace) != nil || ace == nil {
-			return ErrUnsafePath
+		if windows.GetAce(acl, i, &ace) != nil {
+			return setupStageError("service_acl_ace", "failed", ErrUnsafePath)
+		}
+		if ace == nil {
+			return setupStageError("service_acl_ace", "missing", ErrUnsafePath)
 		}
 		if ace.Header.AceFlags&windows.INHERIT_ONLY_ACE != 0 {
 			continue
@@ -166,19 +190,22 @@ func validatePathDescriptor(sd *windows.SECURITY_DESCRIPTOR, directory bool) err
 		switch ace.Header.AceType {
 		case windows.ACCESS_DENIED_ACE_TYPE, windows.ACCESS_ALLOWED_ACE_TYPE:
 		default:
-			return ErrUnsafePath
+			return setupStageError("service_acl_ace_type", "invalid", ErrUnsafePath)
 		}
 		// Both supported ACE layouts have Mask then SidStart. Bound the complete
 		// SID before passing it to native SID helpers; no object/callback ACE is
 		// interpreted as an ordinary allow or deny.
 		const sidOffset = unsafe.Offsetof(windows.ACCESS_ALLOWED_ACE{}.SidStart)
 		if uintptr(ace.Header.AceSize) < sidOffset+8 {
-			return ErrUnsafePath
+			return setupStageError("service_acl_ace_size", "invalid", ErrUnsafePath)
 		}
 		sid := (*windows.SID)(unsafe.Pointer(&ace.SidStart))
 		sidHeader := unsafe.Slice((*byte)(unsafe.Pointer(sid)), 8)
-		if sidOffset+8+4*uintptr(sidHeader[1]) > uintptr(ace.Header.AceSize) || !sid.IsValid() {
-			return ErrUnsafePath
+		if sidOffset+8+4*uintptr(sidHeader[1]) > uintptr(ace.Header.AceSize) {
+			return setupStageError("service_acl_sid_size", "invalid", ErrUnsafePath)
+		}
+		if !sid.IsValid() {
+			return setupStageError("service_acl_sid", "invalid", ErrUnsafePath)
 		}
 		mask := uint32(ace.Mask)
 		if ace.Header.AceType == windows.ACCESS_DENIED_ACE_TYPE {
@@ -187,14 +214,17 @@ func validatePathDescriptor(sd *windows.SECURITY_DESCRIPTOR, directory bool) err
 		}
 		trustee := sid.String()
 		if mask&writes != 0 && !trustedWriter(trustee) {
-			return ErrUnsafePath
+			return setupStageError("service_acl_writer", "unsafe_path", ErrUnsafePath)
 		}
 		if trustee == LocalServiceSID {
 			granted |= mapFileGenericRights(mask)
 		}
 	}
-	if !directory && (denied&required != 0 || granted&required != required) {
-		return ErrRuntimeReadAccess
+	if !directory && denied&required != 0 {
+		return setupStageError("service_acl_runtime_read", "denied", ErrRuntimeReadAccess)
+	}
+	if !directory && granted&required != required {
+		return setupStageError("service_acl_runtime_read", "missing", ErrRuntimeReadAccess)
 	}
 	return nil
 }
@@ -227,4 +257,15 @@ func mapFileGenericRights(mask uint32) uint32 {
 		mapped |= windows.STANDARD_RIGHTS_REQUIRED | windows.SYNCHRONIZE | 0x1ff // FILE_ALL_ACCESS from winnt.h
 	}
 	return mapped
+}
+
+// This distinguishes fixed path roles without exporting a path or component index.
+func setupTrustPathError(root, directory bool, category string, err error) error {
+	if root {
+		return setupStageError("service_trust_root", category, err)
+	}
+	if directory {
+		return setupStageError("service_trust_directory", category, err)
+	}
+	return setupStageError("service_trust_file", category, err)
 }

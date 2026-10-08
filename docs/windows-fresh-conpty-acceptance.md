@@ -289,3 +289,51 @@ input writer, approval, permission, workflow or cleanup code changes. Portable
 fixtures cover each sequence at every text position and sequence split before
 and after input, concealed synthetic echoes, incomplete controls and malformed
 lookalikes. This source fix is not native acceptance and authorizes no new run.
+
+## Third-run early child exit and bounded failure diagnostics
+
+[Run 37753015193](https://github.com/storminator89/Tracebolt/actions/runs/37753015193)
+used exact source `24dd3cea9b28095c1b3f4731133238fdb003a5c2`. Its retained finite
+artifact SHA-256 is
+`d1acfbc5906287df6a5380e042126b61a59a8ce4e0cca76d37a73e56160b3df7`.
+Approval and inert checks passed. The native report recorded controller stage
+`session`, session outcome `protocol_incomplete`, output rejection `none`, natural
+child exit `nonzero`, and coordinator phase `unknown`. No synthetic input,
+receipt/grant verification, or inventory frames were observed. The owned child,
+console and fixture were closed. Service stop/disabled state and platform VM
+disposal remain unverified; retained state is not an accepted installation.
+
+These facts do not locate the failed operation. The session returns
+`protocol_incomplete` before testing process success when input or approval is
+absent. On that path `outputRejection=none` means no incremental rejection was
+recorded; it does not establish successful final protocol validation.
+`coordinatorPhase=unknown` means no qualifying receipt observation was available,
+not that a receipt or service was absent. The old child maps every caught failure
+and recovered panic to the same nonzero status.
+
+A source audit found all child admission environment keys and eight approvals
+forwarded, exact matching child arguments, absolute artifact/bootstrap paths,
+and KnownFolder-derived production layout. Parent provisioning creates the app
+parents and executables, not the child installer/runtime/enrollment stores. No
+source-proven missing environment value, working-directory dependency, or
+preprovision collision was identified. The native step lasted 58 seconds including
+build and admission, so ordinary exhaustion of the child's remaining-grant window
+is not supported. None of these checks identifies the run's actual cause.
+
+The subsequent diagnostics source candidate preserves the existing console-only
+input and create-only coordinator operations. It annotates existing failure paths
+with closed finite metadata and transports only approved failure-stage/category
+pairs through fixed test-child exit statuses. The report retains only
+`childFailureStage` and `childFailureCategory`. One atomic observation of the
+existing waiter supplies those fields together with `naturalChildExit` before
+forced teardown; termination imposed by cleanup cannot become a child diagnostic.
+Unknown/unmapped statuses stay unknown. No console transcript,
+raw error, raw process status, path, key, invitation, or additional native/protected
+read is added to retained evidence. If a failed installation is followed by the
+mandatory failed-receipt write, the first installation diagnosis is retained only
+as metadata; the original write and public error remain unchanged. Diagnostic
+metadata does not grant permission, retry an operation, weaken an admission rule, or establish cleanup or acceptance.
+
+Portable fault-injection checks and Windows cross-compilation are source evidence
+only. This candidate does not establish the third run's cause, authorize another
+native dispatch, or establish a successful native subset.

@@ -89,8 +89,10 @@ class FreshRunner(unittest.TestCase):
                             with self.assertRaises(r.shared.Rejected):r.validate_report(json.dumps(x).encode(),SHA)
     def test_finite_failure_diagnostics_do_not_promote_success(self):
         for key,values in r.DIAGNOSTIC_VALUES.items():
+            if key in {"childFailureStage","childFailureCategory"}:continue
             for value in values:
                 x=passing();x['status']='failed';x[key]=value
+                if key=="naturalChildExit" and value!="zero":x.update(childFailureStage="unknown",childFailureCategory="unknown")
                 with self.subTest(key=key,value=value):
                     self.assertEqual(r.validate_report(json.dumps(x).encode(),SHA),x)
                     x['status']='passed_fresh_native_subset'
@@ -166,3 +168,49 @@ class FreshOwnerAuthority(unittest.TestCase):
         for key in ('GITHUB_REPOSITORY_OWNER','GITHUB_REPOSITORY_OWNER_ID','GITHUB_ACTOR','GITHUB_ACTOR_ID','GITHUB_TRIGGERING_ACTOR'):
             self.assertIn('get("'+key+'")',parent)
             self.assertIn('"'+key+'"',child)
+
+class ChildFailureDiagnostics(unittest.TestCase):
+    def test_pair_vocabulary_exactly_matches_go(self):
+        import re
+        local=(r.ROOT/'internal/windowsacceptance/freshgate/child_failure.go').read_text().split('const childFailureCodeBase',1)[0]
+        pairs=set(re.findall(r'\{"([a-z_]+)", "([a-z_]+)"\}',local))
+        self.assertEqual(pairs,r.child_diagnostics.CHILD_FAILURE_PAIRS)
+
+    def test_every_pair_requires_naturally_observed_nonzero_and_cannot_pass(self):
+        for stage,category in r.CHILD_FAILURE_PAIRS:
+            x=blocked();x.update(status='failed',approvalValidated=True,nativeActionsAttempted=True,naturalChildExit='nonzero',childFailureStage=stage,childFailureCategory=category)
+            self.assertEqual(r.validate_report(json.dumps(x).encode(),SHA),x)
+            for value in ('unknown','zero'):
+                x['naturalChildExit']=value
+                with self.subTest(stage=stage,category=category,exit=value),self.assertRaises(r.shared.Rejected):r.validate_report(json.dumps(x).encode(),SHA)
+            x=passing();x.update(childFailureStage=stage,childFailureCategory=category)
+            with self.assertRaises(r.shared.Rejected):r.validate_report(json.dumps(x).encode(),SHA)
+
+    def test_finite_values_in_invented_pairs_rejected(self):
+        for stage in r.DIAGNOSTIC_VALUES['childFailureStage']:
+            for category in r.DIAGNOSTIC_VALUES['childFailureCategory']:
+                pair=(stage,category)
+                if pair in r.CHILD_FAILURE_PAIRS or pair==('unknown','unknown'):continue
+                x=blocked();x.update(status='failed',approvalValidated=True,nativeActionsAttempted=True,naturalChildExit='nonzero',childFailureStage=stage,childFailureCategory=category)
+                with self.assertRaises(r.shared.Rejected):r.validate_report(json.dumps(x).encode(),SHA)
+
+    def test_new_fields_cannot_leak_raw_details(self):
+        for name in ('childExitCode','childError','childStdout','childStderr','nativeError'):
+            x=passing();x[name]='PRIVATE_MARKER'
+            with self.assertRaises(r.shared.Rejected):r.validate_report(json.dumps(x).encode(),SHA)
+        raw=json.dumps(passing()).encode()
+        for key in ('childFailureStage','childFailureCategory'):
+            duplicate=raw[:-1]+b',"'+key.encode()+b'":"PRIVATE_MARKER"}'
+            with self.assertRaises(r.shared.Rejected):r.validate_report(duplicate,SHA)
+
+    def test_service_pair_vocabulary_exactly_matches_go(self):
+        import re
+        source=(r.ROOT/'internal/windowsservice/setup_diagnostics.go').read_text().split('type setupDiagnosticError',1)[0]
+        pairs=set(re.findall(r'\{"([a-z_]+)", "([a-z_]+)"\}',source))-{('unknown','unknown')}
+        self.assertEqual(pairs,r.child_diagnostics.SERVICE_FAILURE_PAIRS)
+
+    def test_console_categories_exactly_match_console_api(self):
+        import re
+        source=(r.ROOT/'internal/windowsconsole/diagnostic.go').read_text().split('func Diagnostic(',1)[1]
+        values=set(re.findall(r'return "([a-z_]+)"',source))
+        self.assertEqual(values,{c for s,c in r.CHILD_FAILURE_PAIRS if s=='enrollment_console'})
