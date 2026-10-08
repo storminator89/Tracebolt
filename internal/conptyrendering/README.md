@@ -1,10 +1,10 @@
 # Public ConPTY rendering probe (source candidate)
 
-This ordinary test sequentially starts two owned inert test-binary children.
+This ordinary test sequentially starts three owned inert test-binary children.
 Each writes the same two fixed public trust ASCII lines and the exact
 production-shaped non-newline prompt, then stays alive for two seconds without
 reading any input and exits. There is no elevation request, input,
-invitation, service/coordinator import, enrollment, fixture authority, network,
+issued invitation, service/coordinator invocation, enrollment, fixture authority, network,
 ACL change, native-acceptance admission, or manual-gate environment. It requires
 no special host approval. Do not interpret this statement as authorization to run
 any other test. The existing ordinary Windows service-source workflow runs this probe as a
@@ -49,7 +49,7 @@ no handles. The helper accepts no arbitrary arguments or commands.
 
 The main loop alone reads/peeks the output handle, limiting each read to the
 available bytes. A separate goroutine closes ConPTY while output continues to be
-drained through EOF. The two cases share one absolute 20-second observation deadline; cleanup terminates only the
+drained through EOF. The three cases share one absolute 20-second observation deadline; cleanup terminates only the
 owned process if necessary, waits up to 5 seconds for that process, closes its
 output pipe to release older ConPTY close waits, and waits up to 5 seconds for
 ConPTY closure. Cleanup failures produce only fixed reason labels. No cleanup
@@ -163,3 +163,62 @@ once in `os.Stdout/Stderr`; replacing a process-table handle later would not by
 itself rebind these files. The comparison measures this fixture only. Missing
 baseline text alone does not establish where it went; explicit-console text
 would support a routing distinction, not native enrollment acceptance.
+
+
+## Actual pre-input guard fixture
+
+The third child opens its own `CONOUT$` and prints fixed public production-shaped
+TLS display headers, the exact Windows inventory disclosure, fixture fingerprint
+and comparison values, and the public comparison reminder. The long disclosure
+exercises ordinary wrapping in the fixed 120-column viewport. Source-contract
+checks bind the disclosure and prompt to the production strings. No real host
+identifier, URL, fingerprint, title, or invitation is copied into these fixtures.
+
+It then invokes the production `windowsconsole.ReadInvitation` solely to exercise
+its real hidden-input console mode preparation. The prompt callback writes the
+public prompt, waits two seconds, and unconditionally returns a fixed error.
+Production code therefore returns before `readRecord`; the parent never writes
+any byte to ConPTY input. Expected `CategoryPrompt` is required: cleanup errors
+supersede that category, so the valid child exit establishes discard, exact mode
+restoration/verification, and owned input/output handle closure. The console
+belongs only to this inert child. Abrupt termination cannot establish restoration.
+
+Live pipe output is fed into the actual `freshgate.OutputGuard`, with a fixed
+public 43-byte all-`A` sentinel used only to initialize echo matching. That value
+is never issued, read as input, transmitted, or used for enrollment. The fixture
+never calls `MarkInputSent`, session orchestration, issuer, installer, or authority
+APIs. It requires live `PublicTrust` and `PromptReady`, and no rejection through
+drain, before reporting success. The final guard must still be prompt-ready at
+EOF; a saved live snapshot cannot hide a trailing partial control. Observer
+overflow/incomplete state also fails. A shutdown-only prompt cannot pass. `Finish`
+is intentionally not called because it requires a post-input success protocol.
+
+The additional finite record reports five booleans (live output, public trust,
+prompt ready, no rejection, and restored mode), the existing finite rejection
+vocabulary, and the first unsupported CSI classification. Exact classifications
+cover DEC cursor blinking (`?12h/l`), DECSCUSR default and six cursor styles
+(`CSI Ps SP q`, Ps 0 through 6), and erase-line default/right/all (`CSI K`,
+`CSI 0K`, `CSI 2K`). Cursor position, cursor movement, SGR and `other` are coarse
+labels only, never authorization for parser support. All parameters, raw console
+bytes and title strings remain withheld. A failed guard test stays failed; the
+bounded Python failure projector preserves only this exact finite record.
+
+References for the observational vocabulary:
+- [Microsoft VT cursor and erase sequences](https://learn.microsoft.com/en-us/windows/console/console-virtual-terminal-sequences)
+- [Microsoft hidden console modes](https://learn.microsoft.com/en-us/windows/console/setconsolemode)
+
+Dependency audit: `freshgate` transitively imports `windowsservice` and
+`windowspath`, but does not invoke their service/installer APIs. Windows source
+selection includes eight non-standard-library packages: these three, `profile`,
+`windowsconsole`, and `x/sys/windows`, `svc`, `svc/mgr`. No explicit `init`
+functions exist in that selected set. Repository initializers are error
+sentinels, literal diagnostic tables, a process-local channel, and a lazy system
+DLL/procedure descriptor. `x/sys/windows` initializes three standard handles via
+read-only `GetStdHandle` calls, plus lazy DLL/procedure descriptors and literal
+state. Importing this fixture does not install/start services, open SCM, change
+identity/grants/ACLs, issue invitations, or use the network. This is not a claim
+that imports contain no native calls.
+
+The earlier two observer cases remain family observations only. A pass in the
+third case proves this fixed-public pre-input rendering path, not real enrollment,
+input delivery, service activation, native acceptance, or a privileged rerun.

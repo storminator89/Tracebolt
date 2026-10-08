@@ -3,7 +3,13 @@
 package conptyrendering
 
 import (
+	"context"
+	"errors"
 	"os"
+	"strings"
+
+	"localrmm/internal/windowsacceptance/freshgate"
+	"localrmm/internal/windowsconsole"
 	"runtime"
 	"syscall"
 	"testing"
@@ -15,12 +21,13 @@ import (
 
 const publicChild = "--conpty-public-lines-only"
 const publicConsoleChild = "--conpty-public-conout-only"
+const publicPreinputChild = "--conpty-public-preinput-only"
 
 // The only child entry exits before the test runner. It accepts no input and
 // writes these fixed public trust lines and non-newline prompt. It does not run commands or spawn children.
 func TestMain(m *testing.M) {
-	if len(os.Args) == 2 && (os.Args[1] == publicChild || os.Args[1] == publicConsoleChild) {
-		os.Exit(runPublicChild(os.Args[1] == publicConsoleChild))
+	if len(os.Args) == 2 && (os.Args[1] == publicChild || os.Args[1] == publicConsoleChild || os.Args[1] == publicPreinputChild) {
+		os.Exit(runPublicChild(os.Args[1] != publicChild, os.Args[1] == publicPreinputChild))
 	}
 	os.Exit(m.Run())
 }
@@ -29,7 +36,7 @@ func publicHandleType(handle windows.Handle) (character, pipe, console bool) {
 	var mode uint32
 	return err == nil && kind == windows.FILE_TYPE_CHAR, err == nil && kind == windows.FILE_TYPE_PIPE, windows.GetConsoleMode(handle, &mode) == nil
 }
-func runPublicChild(explicit bool) (code int) {
+func runPublicChild(explicit, preinput bool) (code int) {
 	var facts publicHandleFacts
 	facts.stdoutChar, facts.stdoutPipe, facts.stdoutConsole = publicHandleType(windows.Handle(os.Stdout.Fd()))
 	facts.stderrChar, facts.stderrPipe, facts.stderrConsole = publicHandleType(windows.Handle(os.Stderr.Fd()))
@@ -60,9 +67,39 @@ func runPublicChild(explicit bool) (code int) {
 		}()
 		out, promptOut = file, file
 	}
+	if preinput {
+		n, err := out.Write([]byte(publicDisclosureLines))
+		if err != nil || n != len(publicDisclosureLines) {
+			return 2
+		}
+	}
 	n, err := out.Write([]byte(publicTrustLines))
 	if err != nil || n != len(publicTrustLines) {
 		return 2
+	}
+	if preinput {
+		if n, err := out.Write([]byte(publicComparisonReminder)); err != nil || n != len(publicComparisonReminder) {
+			return 2
+		}
+		// Exercise the actual hidden-mode preparation and restoration. The
+		// callback always fails before ReadInvitation can read any record.
+		// Its expected CategoryPrompt is preserved only if cleanup succeeded.
+		called, displayed := false, false
+		secret, err := windowsconsole.ReadInvitation(context.Background(), func() error {
+			called = true
+			n, err := promptOut.Write([]byte(publicPrompt))
+			if err != nil || n != len(publicPrompt) {
+				return errors.New("public prompt write")
+			}
+			displayed = true
+			time.Sleep(2 * time.Second)
+			return errors.New("public pre-input boundary")
+		})
+		defer clear(secret)
+		if !called || !displayed || len(secret) != 0 || windowsconsole.CategoryOf(err) != windowsconsole.CategoryPrompt {
+			return 2
+		}
+		return facts.code()
 	}
 	n, err = promptOut.Write([]byte(publicPrompt))
 	if err != nil || n != len(publicPrompt) {
@@ -93,12 +130,33 @@ func TestNativePublicRendering(t *testing.T) {
 	}
 	f := result.handles
 	t.Logf("stdout_char=%t stdout_pipe=%t stdout_console=%t stderr_char=%t stderr_pipe=%t stderr_console=%t conout_console=true conout_live_output=%t conout_public_trust=%t conout_exact_prompt=%t conout_prompt_without_final_space=%t conout_overflow=%t conout_incomplete=%t conout_residual_unknown=%t conout_first_residual_kind=%s", f.stdoutChar, f.stdoutPipe, f.stdoutConsole, f.stderrChar, f.stderrPipe, f.stderrConsole, explicit.LiveOutput, explicit.PublicTrust, explicit.ExactPrompt, explicit.PromptWithoutFinalSpace, explicit.Overflow, explicit.Incomplete, explicit.ResidualUnknown, explicit.FirstResidualKind)
+	preinput, reason := observeNative(true, deadline, true)
+	if reason != "none" {
+		t.Fatal(reason)
+	}
+	if preinput.Overflow || preinput.Incomplete {
+		t.Fatal("rendering_bound_or_incomplete")
+	}
+	p := preinput.preinput
+	t.Logf("preinput_live_output=%t preinput_public_trust=%t preinput_prompt_ready=%t preinput_no_rejection=%t preinput_mode_restored=%t preinput_rejection=%s preinput_first_csi=%s", p.live, p.trust, p.ready, p.rejection == freshgate.OutputNotRejected, p.restored, p.rejection, p.firstCSI)
+	if p.rejection != freshgate.OutputNotRejected {
+		t.Fatal("preinput_guard_rejected")
+	}
+	if !p.live || !p.trust || !p.ready || !p.restored {
+		t.Fatal("preinput_prompt_missing")
+	}
 	// Unknown is a useful observation, not acceptance or permission to relax any
-	// production guard. The probe deliberately does not apply that guard.
+	// production guard in the first two cases. The third case above does apply it.
 }
 
-func observeNative(explicit bool, deadline time.Time) (result Summary, reason string) {
-	var empty Summary
+type nativeObservation struct {
+	Summary
+	preinput preinputResult
+}
+
+func observeNative(explicit bool, deadline time.Time, preinputOption ...bool) (result nativeObservation, reason string) {
+	preinput := len(preinputOption) == 1 && preinputOption[0]
+	var empty nativeObservation
 	if !time.Now().Before(deadline) {
 		return empty, "deadline"
 	}
@@ -169,6 +227,9 @@ func observeNative(explicit bool, deadline time.Time) (result Summary, reason st
 	if explicit {
 		childArg = publicConsoleChild
 	}
+	if preinput {
+		childArg = publicPreinputChild
+	}
 	command, e := windows.UTF16PtrFromString(syscall.EscapeArg(exe) + " " + childArg)
 	if e != nil {
 		return empty, "command"
@@ -219,6 +280,18 @@ func observeNative(explicit bool, deadline time.Time) (result Summary, reason st
 	}()
 	peek := windows.NewLazySystemDLL("kernel32.dll").NewProc("PeekNamedPipe")
 	var observer Observer
+	var guard *freshgate.OutputGuard
+	pre := preinputResult{rejection: freshgate.OutputNotRejected, firstCSI: "none"}
+	if preinput {
+		// Fixed public sentinel only: never issued, entered, or transmitted.
+		sentinel := []byte(strings.Repeat("A", 43))
+		guard, e = freshgate.NewOutputGuard(sentinel)
+		clear(sentinel)
+		if e != nil {
+			return empty, "preinput_guard_setup"
+		}
+		defer guard.Close()
+	}
 	var liveOutput, publicTrust, exactPrompt, omittedSpace bool
 	defer func() { observer.reset(); clear(observer.public.line[:]) }()
 	var buffer [1024]byte
@@ -264,7 +337,17 @@ func observeNative(explicit bool, deadline time.Time) (result Summary, reason st
 					return empty, "output_empty_read"
 				}
 				sawOutput = true
-				observer.Feed(buffer[:read])
+				for _, c := range buffer[:read] {
+					if guard != nil && pre.rejection == freshgate.OutputNotRejected {
+						if guard.Feed([]byte{c}) != nil {
+							pre.rejection = guard.RejectionReason()
+							if pre.rejection == freshgate.OutputCSIUnsupported && observer.state == 2 {
+								pre.firstCSI = publicCSISignature(observer.sequence[:observer.n], c)
+							}
+						}
+					}
+					observer.Feed([]byte{c})
+				}
 				// Freeze the last pipe-read snapshot observed while the child
 				// was still running. Shutdown-only rendering cannot satisfy it.
 				status, waitErr := windows.WaitForSingleObject(pi.Process, 0)
@@ -272,6 +355,11 @@ func observeNative(explicit bool, deadline time.Time) (result Summary, reason st
 					return empty, "child_wait"
 				}
 				if status == uint32(windows.WAIT_TIMEOUT) {
+					if guard != nil {
+						pre.live = true
+						_, _, pre.trust = guard.PublicTrust()
+						pre.ready = guard.PromptReady()
+					}
 					liveOutput = true
 					publicTrust, exactPrompt, omittedSpace = observer.liveTextSummary()
 				}
@@ -284,7 +372,13 @@ func observeNative(explicit bool, deadline time.Time) (result Summary, reason st
 				if !sawOutput {
 					return empty, "output_missing"
 				}
-				result = observer.Finish()
+				if guard != nil {
+					// A live snapshot cannot mask a partial control or trailing rewrite at EOF.
+					pre.ready = pre.ready && guard.PromptReady()
+				}
+				pre.restored = preinput // Valid child exit follows verified restoration and close.
+				result.Summary = observer.Finish()
+				result.preinput = pre
 				result.handles = handles
 				result.LiveOutput, result.PublicTrust = liveOutput, publicTrust
 				result.ExactPrompt, result.PromptWithoutFinalSpace = exactPrompt, omittedSpace
