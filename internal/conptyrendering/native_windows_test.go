@@ -16,14 +16,20 @@ import (
 const publicChild = "--conpty-public-lines-only"
 
 // The only child entry exits before the test runner. It accepts no input and
-// writes these fixed public lines. It does not run commands or spawn children.
+// writes these fixed public trust lines and non-newline prompt. It does not run commands or spawn children.
 func TestMain(m *testing.M) {
 	if len(os.Args) == 2 && os.Args[1] == publicChild {
-		const lines = "TRACEBOLT PUBLIC RENDER ONE\r\nTRACEBOLT PUBLIC RENDER TWO\r\n"
+		const lines = publicTrustLines
 		n, e := os.Stdout.Write([]byte(lines))
 		if e != nil || n != len(lines) {
 			os.Exit(2)
 		}
+		n, e = os.Stderr.Write([]byte(publicPrompt))
+		if e != nil || n != len(publicPrompt) {
+			os.Exit(2)
+		}
+		// Keep the non-newline prompt visible while alive; never read input.
+		time.Sleep(2 * time.Second)
 		os.Exit(0)
 	}
 	os.Exit(m.Run())
@@ -35,7 +41,7 @@ func TestNativePublicRendering(t *testing.T) {
 		t.Fatal(reason)
 	}
 	// Only finite classifications reach test output. No bytes or parameters do.
-	t.Logf("cursor_position=%t clear=%t cursor_visibility=%t presentation=%t title=%t unknown=%t overflow=%t incomplete=%t win32_input_enable=%t win32_input_disable=%t focus_reporting_enable=%t focus_reporting_disable=%t residual_unknown=%t first_residual_kind=%s", result.CursorPosition, result.Clear, result.CursorVisibility, result.Presentation, result.Title, result.Unknown, result.Overflow, result.Incomplete, result.Win32InputEnable, result.Win32InputDisable, result.FocusReportingEnable, result.FocusReportingDisable, result.ResidualUnknown, result.FirstResidualKind)
+	t.Logf("cursor_position=%t clear=%t cursor_visibility=%t presentation=%t title=%t unknown=%t overflow=%t incomplete=%t win32_input_enable=%t win32_input_disable=%t focus_reporting_enable=%t focus_reporting_disable=%t residual_unknown=%t first_residual_kind=%s live_output=%t public_trust=%t exact_prompt=%t prompt_without_final_space=%t", result.CursorPosition, result.Clear, result.CursorVisibility, result.Presentation, result.Title, result.Unknown, result.Overflow, result.Incomplete, result.Win32InputEnable, result.Win32InputDisable, result.FocusReportingEnable, result.FocusReportingDisable, result.ResidualUnknown, result.FirstResidualKind, result.LiveOutput, result.PublicTrust, result.ExactPrompt, result.PromptWithoutFinalSpace)
 	if result.Overflow || result.Incomplete {
 		t.Fatal("rendering_bound_or_incomplete")
 	}
@@ -158,7 +164,8 @@ func observeNative() (result Summary, reason string) {
 	}()
 	peek := windows.NewLazySystemDLL("kernel32.dll").NewProc("PeekNamedPipe")
 	var observer Observer
-	defer observer.reset()
+	var liveOutput, publicTrust, exactPrompt, omittedSpace bool
+	defer func() { observer.reset(); clear(observer.public.line[:]) }()
 	var buffer [1024]byte
 	defer clear(buffer[:])
 	deadline := time.Now().Add(20 * time.Second)
@@ -198,6 +205,16 @@ func observeNative() (result Summary, reason string) {
 				}
 				sawOutput = true
 				observer.Feed(buffer[:read])
+				// Freeze the last pipe-read snapshot observed while the child
+				// was still running. Shutdown-only rendering cannot satisfy it.
+				status, waitErr := windows.WaitForSingleObject(pi.Process, 0)
+				if waitErr != nil {
+					return empty, "child_wait"
+				}
+				if status == uint32(windows.WAIT_TIMEOUT) {
+					liveOutput = true
+					publicTrust, exactPrompt, omittedSpace = observer.liveTextSummary()
+				}
 				clear(buffer[:])
 			}
 		}
@@ -207,7 +224,10 @@ func observeNative() (result Summary, reason string) {
 				if !sawOutput {
 					return empty, "output_missing"
 				}
-				return observer.Finish(), "none"
+				result = observer.Finish()
+				result.LiveOutput, result.PublicTrust = liveOutput, publicTrust
+				result.ExactPrompt, result.PromptWithoutFinalSpace = exactPrompt, omittedSpace
+				return result, "none"
 			default:
 			}
 		}

@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "sourceCommit": "fccc4b00cd8a144afd58e4b995747afab7a10022",
-  "goSourceSha256": "32f4841bbc294a9f555bd2f54c42c71c3df4d84cd7e0994d4fec7be7d3f71996",
+  "goSourceSha256": "795264123bf09400d68c5aecefa6cdc474d6ca345c2bd4d3d20ddcf36608f8e0",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -1029,12 +1029,17 @@
       "TestUnsafeMountAncestorsAndIdentityAreRejected"
     ],
     "localrmm/internal/conptyrendering": [
+      "TestActualGuardRequiresFinalPublicSpace",
       "TestExactPublicModesEverySplit",
       "TestFamiliesEverySplit",
       "TestFinishKeepsIncompleteSticky",
       "TestNativePublicRendering",
       "TestObserverRedactsFormatting",
       "TestPublicModesIgnoreTitlePayloadAndMalformedLookalikes",
+      "TestPublicPromptSourceContract",
+      "TestPublicPromptTextEverySplit",
+      "TestPublicTextExcludesTitlesAndWrappedTrust",
+      "TestPublicTextPendingControlsAndBounds",
       "TestRefinedObserverPreservesBoundsAndOldFamilyFlags",
       "TestResidualCategoriesEverySplitAndStickyFirst",
       "TestUnknownAndBounds"
@@ -1125,6 +1130,7 @@
       "TestTLSMalformedRejectionCannotEnableSecretCorrection",
       "TestTLSUnknownRejectionCannotEnableSecretCorrection",
       "TestUncertainClaimsAndActivationReconcile",
+      "TestWindowsBootstrapPreSecretChallengeRoute",
       "TestWindowsInventoryFixedEnrollmentRoutes",
       "TestWindowsInventoryFreshConsentRequiredBeforeStateOrDisplay",
       "TestWindowsInventoryHTTPHandoffKeepsExplicitTransportBinding",
@@ -1739,6 +1745,7 @@
       "TestActionSetupReadinessRejectsGrantOrCurrentIdentityChanges",
       "TestAmendmentAcceptPreservesOriginalIdentityAndConsumption",
       "TestAmendmentInvalidModesAndRootNeverReadState",
+      "TestBootstrapRouteFamiliesRemainIsolated",
       "TestBootstrapTransportPinsOriginPathAndRejectsRedirect",
       "TestBootstrapTransportUsesExplicitServerTrustWithoutClientIdentity",
       "TestBuiltAgentCLIExactRetry",
@@ -1917,6 +1924,7 @@
       "TestSystemNativeMissingStateAndFuturePendingFailBeforeSource",
       "TestSystemNativeTLSHTTPExactRetryBeforeRecapture",
       "TestValidateGuidedHandoffIsLocalAndPreservesState",
+      "TestWindowsBootstrapRouteBoundariesRemainClosed",
       "TestWindowsCapabilityGrantDigestDetectsReplacementWithoutCollection",
       "TestWindowsEventConsentCreateOnlyAndReenable",
       "TestWindowsEventConsentRejectsIncompleteForeignAndFailedStorage",

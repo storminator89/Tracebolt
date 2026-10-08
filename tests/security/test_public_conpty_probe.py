@@ -18,7 +18,7 @@ def records(unknown=False):
         {"Action": "start", "Package": probe.PACKAGE},
         {"Action": "run", "Package": probe.PACKAGE, "Test": probe.TEST},
         {"Action": "output", "Package": probe.PACKAGE, "Test": probe.TEST,
-         "Output": "    native_windows_test.go:38: " + summary + " first_residual_kind=none\n"},
+         "Output": "    native_windows_test.go:38: " + summary + " first_residual_kind=none " + " ".join(name + "=false" for name in probe.TEXT_FIELDS) + "\n"},
         {"Action": "pass", "Package": probe.PACKAGE, "Test": probe.TEST},
         {"Action": "pass", "Package": probe.PACKAGE},
     ]
@@ -29,6 +29,29 @@ def encode(rows):
 
 
 class PublicProbeTests(unittest.TestCase):
+    def test_live_text_flags_are_finite_and_consistent(self):
+        for field in probe.TEXT_FIELDS:
+            rows = records()
+            rows[2]["Output"] = rows[2]["Output"].replace(" " + field + "=false", "")
+            with self.assertRaises(ValueError):
+                probe.project(encode(rows))
+            rows = records()
+            rows[2]["Output"] = rows[2]["Output"].replace(field + "=false", field + "=PRIVATE_SENTINEL")
+            with self.assertRaises(ValueError):
+                probe.project(encode(rows))
+        for selected in ({"public_trust"}, {"exact_prompt"}, {"prompt_without_final_space"},
+                         {"live_output", "exact_prompt", "prompt_without_final_space"}):
+            rows = records()
+            for field in selected:
+                rows[2]["Output"] = rows[2]["Output"].replace(field + "=false", field + "=true")
+            with self.assertRaises(ValueError):
+                probe.project(encode(rows))
+        for chosen in ("exact_prompt", "prompt_without_final_space"):
+            rows = records()
+            for field in ("live_output", "public_trust", chosen):
+                rows[2]["Output"] = rows[2]["Output"].replace(field + "=false", field + "=true")
+            self.assertTrue(probe.project(encode(rows))[chosen])
+
     def test_refinement_enum_and_aggregate_consistency(self):
         for kind in probe.RESIDUAL_KINDS:
             rows = records()
@@ -63,7 +86,7 @@ class PublicProbeTests(unittest.TestCase):
             probe.project(encode(rows))
 
     def test_requires_exact_test_package_and_summary(self):
-        self.assertEqual(set(probe.project(encode(records()))), set(probe.FIELDS) | {"first_residual_kind"})
+        self.assertEqual(set(probe.project(encode(records()))), set(probe.FIELDS) | set(probe.TEXT_FIELDS) | {"first_residual_kind"})
         self.assertTrue(probe.project(encode(records(True)))["unknown"])
         for index in (2, 3, 4):
             rows = records()

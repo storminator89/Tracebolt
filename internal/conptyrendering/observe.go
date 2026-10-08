@@ -29,9 +29,11 @@ type Summary struct {
 	Win32InputEnable, Win32InputDisable, FocusReportingEnable, FocusReportingDisable bool
 	ResidualUnknown                                                                  bool
 	FirstResidualKind                                                                ResidualKind
+	LiveOutput, PublicTrust, ExactPrompt, PromptWithoutFinalSpace                    bool
 }
 
-// Observer retains at most 256 sequence bytes; no output accessor exists.
+// Observer retains at most 256 sequence bytes and a 4096-byte current public
+// text line; no output accessor exists.
 // Calls must be serialized. It classifies families, not sequence semantics.
 type Observer struct {
 	result   Summary
@@ -39,6 +41,7 @@ type Observer struct {
 	state    byte
 	sequence [256]byte
 	n        int
+	public   publicTextObservation
 }
 
 func (o *Observer) Feed(p []byte) {
@@ -50,6 +53,7 @@ func (o *Observer) Feed(p []byte) {
 		o.total++
 		switch o.state {
 		case 0:
+			o.public.consume(c)
 			if c == 27 {
 				o.state = 1
 			} else if c >= 0x80 {

@@ -1,7 +1,8 @@
 # Public ConPTY rendering probe (source candidate)
 
 This ordinary test starts only its own inert test-binary child, which writes two
-fixed public ASCII lines and exits. There is no elevation request, input,
+fixed public trust ASCII lines and the exact production-shaped non-newline prompt,
+then stays alive for two seconds without reading any input and exits. There is no elevation request, input,
 invitation, service/coordinator import, enrollment, fixture authority, network,
 ACL change, native-acceptance admission, or manual-gate environment. It requires
 no special host approval. Do not interpret this statement as authorization to run
@@ -38,7 +39,7 @@ Pattern references:
 - [Microsoft Win32 input mode specification](https://github.com/microsoft/terminal/blob/main/doc/specs/%234999%20-%20Improved%20keyboard%20handling%20in%20Conpty.md)
 - [Microsoft parser mode injection definitions](https://github.com/microsoft/terminal/blob/main/src/terminal/parser/stateMachine.hpp)
 
-Memory is bounded: 1 KiB read buffer, 256-byte sequence buffer, 64 KiB observation
+Memory is bounded: 1 KiB read buffer, 256-byte sequence buffer, 4096-byte public line, 64 KiB observation
 budget. Output continues draining after the observation limit so cleanup does not
 block on a full pipe. Overflow and incomplete output fail the test. Unknown is a
 reported observation rather than acceptance or a reason to relax another parser.
@@ -78,3 +79,31 @@ Official lifecycle references:
 Microsoft documents continued output draining during close, including older
 Windows where ClosePseudoConsole blocks; newer Windows returning immediately
 still requires waiting for pipe EOF. Peek/read share no concurrent handle user.
+
+## Live fixed-public prompt observation
+
+The four additional booleans describe the last output-read snapshot taken while
+the owned child was still running: `live_output`, `public_trust`, `exact_prompt`,
+and `prompt_without_final_space`. The latter two compare the current visible-text
+line to the fixed public prompt with exactly one final ASCII space, or with only
+that one space omitted. They cannot both be true. Shutdown-only output cannot
+set these flags. No input is sent and no console input routine is called.
+
+This is a bounded text observation, not a terminal emulator: CSI and OSC are
+classified separately by the existing observer. Cursor editing is not applied
+to the text line, so interpret text flags alongside those classifications.
+Partial control sequences and pending CR cannot count as an exact prompt.
+Trust means only the exact fixed public fingerprint and comparison lines were
+seen in order, not real identity or manager trust. No transcript is retained or exported; one 4096-byte current public-text line
+is held in memory and cleared on newline and cleanup.
+
+Portable inert tests compare the actual freshgate guard's readiness for these
+two fixed public spellings using a known all-zero base64 fixture value. That
+value is never entered or transmitted. The production prompt, output guard,
+input barrier, echo detection, approvals and manual native gate are unchanged.
+An ordinary Windows observation is required before choosing a compatibility fix.
+
+A last-live omitted-space snapshot does not prove that no space can arrive
+later. In particular, final shutdown rendering is excluded. Interpret this as
+a measured live observation for this fixed two-second child, not the byte history
+or root cause of another process.

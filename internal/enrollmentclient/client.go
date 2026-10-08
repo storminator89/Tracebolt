@@ -14,6 +14,7 @@ import (
 	"localrmm/internal/enrollmentstate"
 	"localrmm/internal/keyvalidation"
 	"localrmm/internal/lanclient"
+	"net/http"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -149,7 +150,7 @@ func Run(ctx context.Context, b Bootstrap, o Options) (Result, error) {
 	if o.Display(s.trust) != nil {
 		return Result{}, ErrInput
 	}
-	c, err := lanclient.NewBootstrapHTTPClient(b.EnrollmentOrigin, b.Profile, []byte(b.ServerCAPEM))
+	c, err := newEnrollmentHTTPClient(b)
 	if err != nil {
 		return Result{}, ErrBootstrap
 	}
@@ -428,4 +429,13 @@ func grow(d time.Duration) time.Duration {
 		return 30 * time.Second
 	}
 	return d
+}
+
+// Keep the transport allowlist bound to the same validated collection profile
+// that chooses the wire route family. Legacy clients retain legacy paths only.
+func newEnrollmentHTTPClient(b Bootstrap) (*http.Client, error) {
+	if b.CollectionProfile == enrollmentcrypto.CollectionProfileWindowsInventory {
+		return lanclient.NewWindowsBootstrapHTTPClient(b.EnrollmentOrigin, b.Profile, []byte(b.ServerCAPEM))
+	}
+	return lanclient.NewBootstrapHTTPClient(b.EnrollmentOrigin, b.Profile, []byte(b.ServerCAPEM))
 }

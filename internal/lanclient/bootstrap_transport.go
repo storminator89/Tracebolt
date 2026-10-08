@@ -11,6 +11,17 @@ import (
 // explicit local bootstrap input. This constructor performs no DNS/network I/O.
 // The wrapper restricts requests to the exact enrollment origin and fixed paths.
 func NewBootstrapHTTPClient(origin, profile string, serverCAPEM []byte) (*http.Client, error) {
+	return newBootstrapHTTPClient(origin, profile, serverCAPEM, "/v2/enrollment/")
+}
+
+// NewWindowsBootstrapHTTPClient pins only the five Windows inventory enrollment
+// routes. It does not enable enrollment, create an identity, or grant consent.
+// All destination, TLS, redirect, header and body restrictions are unchanged.
+func NewWindowsBootstrapHTTPClient(origin, profile string, serverCAPEM []byte) (*http.Client, error) {
+	return newBootstrapHTTPClient(origin, profile, serverCAPEM, "/v2/windows/enrollment/")
+}
+
+func newBootstrapHTTPClient(origin, profile string, serverCAPEM []byte, pathPrefix string) (*http.Client, error) {
 	scheme := "https"
 	if profile == "http-test" {
 		scheme = "http"
@@ -37,13 +48,13 @@ func NewBootstrapHTTPClient(origin, profile string, serverCAPEM []byte) (*http.C
 		}
 		client = newHTTPClient(nil, true)
 	}
-	client.Transport = &bootstrapTransport{origin: origin, authority: u.Host, next: client.Transport}
+	client.Transport = &bootstrapTransport{origin: origin, authority: u.Host, pathPrefix: pathPrefix, next: client.Transport}
 	return client, nil
 }
 
 type bootstrapTransport struct {
-	origin, authority string
-	next              http.RoundTripper
+	origin, authority, pathPrefix string
+	next                          http.RoundTripper
 }
 
 func (t *bootstrapTransport) RoundTrip(r *http.Request) (*http.Response, error) {
@@ -51,7 +62,7 @@ func (t *bootstrapTransport) RoundTrip(r *http.Request) (*http.Response, error) 
 		return nil, errDestination
 	}
 	switch r.URL.Path {
-	case "/v2/enrollment/challenge", "/v2/enrollment/claim", "/v2/enrollment/status", "/v2/enrollment/credential", "/v2/enrollment/activate":
+	case t.pathPrefix + "challenge", t.pathPrefix + "claim", t.pathPrefix + "status", t.pathPrefix + "credential", t.pathPrefix + "activate":
 	default:
 		return nil, errDestination
 	}

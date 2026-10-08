@@ -15,10 +15,11 @@ MAX_OUTPUT = 1024 * 1024
 FIELDS = ("cursor_position", "clear", "cursor_visibility", "presentation", "title",
           "unknown", "overflow", "incomplete", "win32_input_enable", "win32_input_disable",
           "focus_reporting_enable", "focus_reporting_disable", "residual_unknown")
+TEXT_FIELDS = ("live_output", "public_trust", "exact_prompt", "prompt_without_final_space")
 RESIDUAL_KINDS = ("none", "text_control", "non_ascii", "escape", "csi", "osc")
 SUMMARY = re.compile(r"    native_windows_test\.go:[1-9][0-9]*: " +
                      " ".join(name + r"=(true|false)" for name in FIELDS) +
-                     r" first_residual_kind=(" + "|".join(RESIDUAL_KINDS) + r")\n")
+                     r" first_residual_kind=(" + "|".join(RESIDUAL_KINDS) + r") " + " ".join(name + r"=(true|false)" for name in TEXT_FIELDS) + r"\n")
 ARGS = ("go", "test", "-mod=readonly", "-json", "-count=1", "-timeout=45s",
         "-buildvcs=false", "-run=^TestNativePublicRendering$", "./internal/conptyrendering")
 
@@ -60,12 +61,15 @@ def project(raw):
             match = SUMMARY.fullmatch(output)
             if match:
                 require(summary is None)
-                summary = dict(zip(FIELDS, (x == "true" for x in match.groups()[:-1])))
-                summary["first_residual_kind"] = match.groups()[-1]
+                summary = dict(zip(FIELDS, (x == "true" for x in match.groups()[:len(FIELDS)])))
+                summary["first_residual_kind"] = match.groups()[len(FIELDS)]
+                summary.update(zip(TEXT_FIELDS, (x == "true" for x in match.groups()[len(FIELDS)+1:])))
     require(passed and package_passed and summary is not None)
     require(not summary["overflow"] and not summary["incomplete"])
     require(summary["residual_unknown"] == (summary["first_residual_kind"] != "none"))
     require(summary["unknown"] == any(summary[name] for name in FIELDS[8:]))
+    require(not (summary["exact_prompt"] and summary["prompt_without_final_space"]))
+    require(summary["live_output"] or not any(summary[name] for name in TEXT_FIELDS[1:]))
     return summary
 
 
@@ -119,6 +123,7 @@ def main():
         print("OBSERVED: fixed public ConPTY sequence families " +
               " ".join(name + "=" + str(summary[name]).lower() for name in FIELDS) +
               " first_residual_kind=" + summary["first_residual_kind"] +
+              " " + " ".join(name + "=" + str(summary[name]).lower() for name in TEXT_FIELDS) +
               "; no coordinator or guard compatibility claim.")
         return 0
     except (OSError, ValueError, TypeError, KeyError, subprocess.SubprocessError):
