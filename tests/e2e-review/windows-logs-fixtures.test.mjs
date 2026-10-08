@@ -33,5 +33,8 @@ test('Logs expiry remount waits for unmount and fleet visibility before returnin
  await remountWindowsLogsDevice(page,expect,'https://fixture.invalid','fixture-id');assert.deepEqual(steps,['https://fixture.invalid/#/devices','.device-page','.device-table','https://fixture.invalid/#/devices/fixture-id']);
  const visits=[],blocked={async goto(url){visits.push(url);},locator:selector=>selector};
  await assert.rejects(remountWindowsLogsDevice(blocked,()=>({async toHaveCount(){throw new Error('device still mounted');}}),'https://fixture.invalid','fixture-id'),/device still mounted/);assert.deepEqual(visits,['https://fixture.invalid/#/devices']);
- const source=fs.readFileSync(new URL('./windows-logs-browser.mjs',import.meta.url),'utf8');assert.match(source,/await remountWindowsLogsDevice\(page,expect,base,deviceId\)/);assert.match(source,/page\.waitForResponse/);assert.match(source,/await poll;await expect\(refresh\)\.toBeEnabled\(\)/);assert.match(source,/not\.toHaveAttribute\('datetime',beforeCapture\)/);
+ const source=fs.readFileSync(new URL('./windows-logs-browser.mjs',import.meta.url),'utf8');assert.match(source,/await remountWindowsLogsDevice\(page,expect,base,deviceId,mark\)/);assert.match(source,/page\.waitForResponse/);assert.match(source,/await poll;\s*mark\('logs-poll-ready'\);await expect\(refresh\)\.toBeEnabled\(\)/);assert.match(source,/not\.toHaveAttribute\('datetime',beforeCapture\)/);
 });
+
+// Finite source-only diagnostics; never launches a browser.
+import './windows-logs-diagnostics.test.mjs';
