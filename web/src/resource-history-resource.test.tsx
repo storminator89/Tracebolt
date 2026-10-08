@@ -16,6 +16,16 @@ describe('bounded resource-history reader', () => {
         const v = historyFixture(); v.serverNow = '2026-10-07T12:01:01Z'; v.windowStart = '2026-10-06T12:01:01Z'; vi.mocked(request).mockResolvedValue(v); await advance(500); expect(request).toHaveBeenCalledTimes(2); expect(h.result.current.error).toBe('');
         act(() => window.dispatchEvent(new Event('blur'))); expect(h.result.current.view).toBeNull(); await advance(120000); expect(request).toHaveBeenCalledTimes(2);
     });
+    it('keeps initial history deferred while the browser clock is paused, then loads after its 500 ms yield', async () => {
+        vi.mocked(hasPendingAPIRequests).mockReturnValue(true);
+        const h = renderHook(() => useResourceHistory(historyDevice, 'session', true)); await flush();
+        expect(request).not.toHaveBeenCalled(); expect(h.result.current.view).toBeNull(); expect(h.result.current.loading).toBe(true);
+        // Finishing foreground inventory does not itself advance a paused clock.
+        vi.mocked(hasPendingAPIRequests).mockReturnValue(false); await flush();
+        expect(request).not.toHaveBeenCalled(); expect(h.result.current.view).toBeNull();
+        await advance(499); expect(request).not.toHaveBeenCalled(); expect(h.result.current.view).toBeNull();
+        await advance(1); expect(request).toHaveBeenCalledTimes(1); expect(h.result.current.view?.points).toHaveLength(4); expect(h.result.current.error).toBe('');
+    });
     it('trims expired points once without redrawing unchanged history or renewing its age anchor', async () => {
         const full = historyFixture(Array.from({ length: 1441 }, (_, i) => (i - 1440) * 60));
         for (const point of full.points) { point.cpu.value = 35; point.memory.value = 48; }

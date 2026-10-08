@@ -12,7 +12,7 @@ const {windowsNetwork,windowsVolumes,windowsDevice,windowsDeviceId,windowsNow,wi
 export const windowsInventoryCaseName='Synthetic Windows inventory shares device charts and explicit enrollment consent without Linux reads';
 export const windowsInventoryFixtureDisclosure='Real loopback HTTP-test fixture login with intercepted invented Windows inventory and resource history in the production UI. UI-only evidence; no native endpoint acceptance, collection, invitation, service installation or external request.';
 let stage='setup';
-const stages=new Set(['setup','login','overview','inventory','storage','network','network-stale','network-expired','network-partial','network-empty','network-denied','network-unavailable','network-truncated','process-metrics','process-metrics-stale','process-metrics-expired','events','legacy','partial','denied','enrollment','access-loss']);
+const stages=new Set(['setup','login','overview','overview-history','inventory','storage','network','network-stale','network-expired','network-partial','network-empty','network-denied','network-unavailable','network-truncated','process-metrics','process-metrics-stale','process-metrics-expired','events','legacy','partial','denied','enrollment','access-loss']);
 export const windowsInventoryFailureStage=()=>stages.has(stage)?stage:'setup';
 const mark=value=>{stage=value;};
 export function windowsBrowserFixture(now,phase='fresh'){
@@ -52,6 +52,12 @@ function shifted(value,now){
  if(typeof value==='string'&&/^2026-\d\d-\d\dT/.test(value))return new Date(Date.parse(value)+Date.parse(now)-Date.parse(windowsNow)).toISOString();
  return value;
 }
+// This fixture pauses browser time. The shared history reader yields for 500 ms
+// while a foreground inventory request is pending; advance that same clock,
+// preserving the fixture timestamp binding, until all three real charts exist.
+export async function settleWindowsHistory(page,expect,advance){
+ await expect.poll(async()=>{await advance(500);return page.locator('.resource-history').getByRole('img').count();}).toBe(3);
+}
 export async function windowsInventoryBrowserCase({pageAt,login,expect,base,shot}){
  const page=await pageAt('/devices/'+windowsDeviceId),prefix='/api/devices/'+windowsDeviceId,unexpected=[],writes=[],external=[];let phase='fresh';
  // A bounded virtual clock makes the five-second private-row expiry deterministic.
@@ -79,7 +85,9 @@ export async function windowsInventoryBrowserCase({pageAt,login,expect,base,shot
   await page.setViewportSize({width,height:width===390?844:1000});
   const language=page.locator('select[aria-label="Language"],select[aria-label="Sprache"]');await language.selectOption(locale);
   phase='fresh';await page.goto(`${base}/#/devices/${windowsDeviceId}`);await expect(page.locator('html')).toHaveAttribute('lang',locale);
-  mark('overview');await expect(page.getByRole('heading',{name:'fixture-windows',exact:true})).toBeVisible();await expect(page.getByRole('img',{name:/^(System volume|Systemvolume)/})).toBeVisible();
+  mark('overview');await expect(page.getByRole('heading',{name:'fixture-windows',exact:true})).toBeVisible();
+  mark('overview-history');await settleWindowsHistory(page,expect,async ms=>{clockNow+=ms;await page.clock.runFor(ms);});
+  await expect(page.getByRole('img',{name:/^(System volume|Systemvolume)/})).toBeVisible();
   await shot(page,`synthetic-windows-overview-${width}-${locale}`,windowsInventoryFixtureDisclosure);
   mark('inventory');await page.getByRole('tab',{name:locale==='de'?'Inventar':'Inventory',exact:true}).click();
   for(const label of [locale==='de'?'Prozesse':'Processes',locale==='de'?'Dienste':'Services','Software','Hostname',locale==='de'?'Schnittstellen':'Interfaces']){

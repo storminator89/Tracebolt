@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import {windowsBrowserFixture,windowsInventoryFixtureDisclosure,windowsInventoryFailureStage} from './windows-inventory-browser.mjs';
+import {settleWindowsHistory,windowsBrowserFixture,windowsInventoryFixtureDisclosure,windowsInventoryFailureStage} from './windows-inventory-browser.mjs';
 test('invented Windows views preserve finite scope, truncation and denied distinction',()=>{
  const now='2026-10-07T12:00:10Z',fresh=windowsBrowserFixture(now),stale=windowsBrowserFixture(now,'stale');
  assert.equal(fresh.events.scope,'windows-application-system-event-headers-v1');assert.equal(fresh.events.channels[0].rows[0].recordId,'18446744073709551615');assert.equal(fresh.events.channels[1].quality,'denied');assert.equal(stale.events.collectedAt,stale.snapshot.collectedAt);
@@ -80,4 +80,25 @@ test('additive network overlay keeps hosted browser safeguards and desktop/mobil
  assert.match(source,/clockNow\+=6000;await page\.clock\.runFor\(6000\)/);assert.match(source,/API owning PID/);assert.match(source,/Besitzende PID laut API/);assert.match(source,/networkTable\.getByRole\('link'\)/);
  assert.ok(source.includes("await expect(networkTable.getByText('fixture.exe',{exact:true})).toHaveCount(0)"));
  assert.doesNotMatch(source,/chromium\.launch|newContext\(|execFile|spawn\(|writeFile|ignoreHTTPSErrors/);
+});
+
+
+test('paused Windows overview advances the same fixture clock before requiring all three charts',async()=>{
+ let now=0,reads=0;const calls=[];
+ const page={locator(selector){assert.equal(selector,'.resource-history');return {getByRole(role){assert.equal(role,'img');return {async count(){calls.push('count');reads++;return now<1000?0:3;}};}};}};
+ const expect={poll(probe){return {async toBe(wanted){assert.equal(wanted,3);for(let n=0;n<4;n++)if(await probe()===wanted)return;assert.fail('all three real charts required');}};}};
+ await settleWindowsHistory(page,expect,async ms=>{assert.equal(ms,500);calls.push('advance');now+=ms;});
+ assert.equal(now,1000);assert.equal(reads,2);assert.deepEqual(calls,['advance','count','advance','count']);
+ const source=fs.readFileSync(new URL('./windows-inventory-browser.mjs',import.meta.url),'utf8');
+ assert.match(source,/settleWindowsHistory\(page,expect,async ms=>\{clockNow\+=ms;await page\.clock\.runFor\(ms\);\}\)/);
+ assert.match(source,/getByRole\('img',\{name:\/\^\(System volume\|Systemvolume\)\/\}\)\)\.toBeVisible\(\)/);
+ assert.doesNotMatch(source,/setDefaultTimeout|waitForTimeout|\.skip\(|test\.skip/);
+});
+
+
+test('paused overview still rejects incomplete chart evidence',async()=>{
+ let advances=0;
+ const page={locator(){return {getByRole(){return {async count(){return 2;}};}};}};
+ const expect={poll(probe){return {async toBe(wanted){for(let n=0;n<3;n++)if(await probe()===wanted)return;throw new Error('incomplete chart evidence');}};}};
+ await assert.rejects(settleWindowsHistory(page,expect,async ms=>{assert.equal(ms,500);advances++;}),/incomplete chart evidence/);assert.equal(advances,3);
 });
