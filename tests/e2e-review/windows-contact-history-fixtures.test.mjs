@@ -2,6 +2,20 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {windowsContactBrowserFixture,windowsContactHistoryDisclosure} from './windows-contact-history-browser.mjs';
+test('Docker web typecheck admits exactly the synthetic Go-to-TypeScript contact fixture',()=>{
+ const read=name=>fs.readFileSync(new URL(name,import.meta.url),'utf8');
+ const docker=read('../../Dockerfile'),ignore=read('../../.dockerignore').split(/\r?\n/).map(line=>line.trim()).filter(line=>line&&!line.startsWith('#'));
+ const webStage=docker.split('FROM --platform=$BUILDPLATFORM golang:')[0];
+ assert.ok(webStage.includes('COPY tests/fixtures/windows-contact-view.json /src/tests/fixtures/windows-contact-view.json\n'));
+ assert.ok(webStage.indexOf('COPY tests/fixtures/windows-contact-view.json ')<webStage.indexOf('RUN npm run build'));
+ assert.deepEqual(ignore.filter(line=>line.startsWith('!tests/fixtures')),['!tests/fixtures/','!tests/fixtures/windows-contact-view.json']);
+ const parent=ignore.indexOf('!tests/fixtures/');assert.equal(ignore[parent+1],'tests/fixtures/**');assert.equal(ignore[parent+2],'!tests/fixtures/windows-contact-view.json');
+ assert.ok(ignore.includes('**')&&ignore.includes('tests/**'));
+ assert.doesNotMatch(webStage,/^COPY tests\/\s/m);
+ assert.match(read('../../web/src/windows-contact-types.test.ts'),/import wireFixture from '\.\.\/\.\.\/tests\/fixtures\/windows-contact-view\.json'/);
+ assert.match(read('../../web/src/windows-contact-types.test.ts'),/Object\.entries\(wireFixture\)/);
+ assert.ok(JSON.parse(read('../../web/tsconfig.json')).include.includes('src'));
+});
 test('invented contact GET advances manager time without renewing acceptance or evaluation',()=>{
  const origin='2026-10-07T12:00:10Z',first=windowsContactBrowserFixture(origin),later=windowsContactBrowserFixture('2026-10-07T12:02:11Z',origin);
  assert.equal(first.status,'overdue');assert.equal(later.status,'unknown');assert.equal(first.lastAcceptedAt,later.lastAcceptedAt);assert.equal(first.sequence,later.sequence);assert.equal(first.evaluatedAt,later.evaluatedAt);assert.deepEqual(first.incidents,later.incidents);assert.equal(later.incidents[0].resolvedAt,null);assert.match(windowsContactHistoryDisclosure,/Source-only test; no native Windows read/);

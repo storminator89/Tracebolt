@@ -87,8 +87,17 @@ export async function remountWindowsDevice(page,expect,base){
 export function windowsHealthBrowserDevice(now,phase='fresh'){
  return shifted(windowsHealthDevice(phase==='health-unverified'?'missing-identity':'activated'),now);
 }
+// runFor dispatches intermediate polls before reaching the host's final phase
+// time. Sample the paused browser clock for each recognized synthetic response,
+// so those polls cannot bind a future timestamp and poison a retained watermark.
+export async function windowsFixtureResponseTime(page){
+ const at=await page.evaluate(()=>Date.now());
+ if(!Number.isSafeInteger(at)||at<=0)throw new Error('Synthetic fixture clock unavailable');
+ return new Date(at).toISOString();
+}
 export async function windowsInventoryBrowserCase({pageAt,login,expect,base,shot}){
  const page=await pageAt('/devices/'+windowsDeviceId),prefix='/api/devices/'+windowsDeviceId,unexpected=[],writes=[],external=[];let phase='fresh',networkPhaseAt=null,logsPhaseAt=null,contactPhaseAt=null;
+ const syntheticPaths=new Set([prefix,prefix+'/windows-inventory',prefix+'/windows-contact',prefix+'/resource-history','/api/overview','/api/windows/enrollment']);
  // A bounded virtual clock makes the five-second private-row expiry deterministic.
  let clockNow=Date.now();await page.clock.install({time:new Date(clockNow)});await page.clock.pauseAt(new Date(clockNow+1000));clockNow+=1000;
  const now=()=>new Date(clockNow).toISOString();
@@ -96,14 +105,18 @@ export async function windowsInventoryBrowserCase({pageAt,login,expect,base,shot
   const request=route.request(),url=new URL(request.url());
   if(url.origin!==base){external.push('external');return route.abort('blockedbyclient');}
   if(request.method()!=='GET'&&!(request.method()==='POST'&&url.pathname==='/api/auth/login')){writes.push('write');return route.abort('blockedbyclient');}
-  const reply=data=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(data)}),at=now(),device=windowsHealthBrowserDevice(at,phase);
+  if(!syntheticPaths.has(url.pathname)){
+   if(url.pathname.startsWith(prefix+'/')){unexpected.push('unexpected-device-read');return route.fulfill({status:404,contentType:'application/json',body:JSON.stringify({error:{code:'fixture_unexpected_route'}})});}
+   return route.continue();
+  }
+  if(url.pathname===prefix+'/windows-inventory'&&(url.search||request.postData()!==null))throw new Error('Unexpected Windows query');
+  if(url.pathname===prefix+'/windows-contact'&&(url.search||request.postData()!==null)){unexpected.push('unexpected-contact-query');return route.abort('blockedbyclient');}
+  const reply=data=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(data)}),at=await windowsFixtureResponseTime(page),device=windowsHealthBrowserDevice(at,phase);
   if(url.pathname===prefix+'/windows-inventory'){
-   if(url.search||request.postData()!==null)throw new Error('Unexpected Windows query');
    if(phase==='session')return route.fulfill({status:401,contentType:'application/json',body:JSON.stringify({error:{code:'authentication_required'}})});
    return reply(windowsBrowserFixture(at,phase,networkPhaseAt??at,logsPhaseAt??at));
   }
   if(url.pathname===prefix+'/windows-contact'){
-   if(url.search||request.postData()!==null){unexpected.push('unexpected-contact-query');return route.abort('blockedbyclient');}
    if(phase==='contact-denied')return route.fulfill({status:403,contentType:'application/json',body:JSON.stringify({error:{code:'fixture_access_denied'}})});
    contactPhaseAt??=at;return reply(windowsContactBrowserFixture(at,contactPhaseAt,phase));
   }
@@ -111,8 +124,6 @@ export async function windowsInventoryBrowserCase({pageAt,login,expect,base,shot
   if(url.pathname===prefix+'/resource-history')return reply({...shifted(historyFixture(),at),deviceId:windowsDeviceId});
   if(url.pathname==='/api/overview')return reply({generatedAt:at,devices:[device],cases:[],activity:[],stats:{totalDevices:1,healthyDevices:0,attentionDevices:0,unknownDevices:1,openCases:0,criticalCases:0}});
   if(url.pathname==='/api/windows/enrollment')return reply({schemaVersion:'tracebolt.enrollment-operator.v2',serverNow:at,enabled:true,platforms:['windows'],recordLimit:25,collectionProfile:'windows-inventory-v1',collectionPrivacy:'windows_inventory_metadata_may_be_sensitive',items:[]});
-  if(url.pathname.startsWith(prefix+'/')){unexpected.push('unexpected-device-read');return route.fulfill({status:404,contentType:'application/json',body:JSON.stringify({error:{code:'fixture_unexpected_route'}})});}
-  return route.continue();
  });
  mark('login');await login(page);
  for(const locale of ['en','de'])for(const width of [1440,390]){
