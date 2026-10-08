@@ -1,11 +1,18 @@
 #!/usr/bin/env python3
 """Pure/injected Windows source gate; never run an installer, service or real console."""
+import importlib.util
 import json
 import os
 from pathlib import Path
 import subprocess
 import sys
 import tempfile
+
+_reporter_spec = importlib.util.spec_from_file_location(
+    "windows_source_go_failure", Path(__file__).with_name("report_go_failure.py"))
+_reporter = importlib.util.module_from_spec(_reporter_spec)
+_reporter_spec.loader.exec_module(_reporter)
+project = _reporter.project
 
 PACKAGES = ("./internal/windowsstate", "./internal/windowsservice", "./internal/windowsconsole",
             "./internal/windowsagentconfig", "./cmd/windows-service", "./internal/windowsvolumes", "./internal/windowsprocessmetrics", "./internal/windowsnetwork", "./internal/windowsmanaged")
@@ -92,6 +99,36 @@ def command(args, env, timeout):
     return result.stdout
 
 
+def fixture_failure(raw):
+    """Project only the gate's fixed vocabulary; never open logs or load an allowlist."""
+    diagnostic = {"category": "diagnostic_unavailable", "records": [], "truncated": False}
+    try:
+        if not isinstance(raw, bytes) or len(raw) > 32 * 1024 * 1024:
+            raise ValueError("test output bound")
+        allowed = {}
+        for package, root in REQUIRED:
+            allowed.setdefault(package, set()).add(root)
+        diagnostic = project(raw, allowed)
+    except (ValueError, TypeError, OverflowError, RecursionError):
+        pass
+    print("WINDOWS_SOURCE_DIAGNOSTIC " + json.dumps(diagnostic, sort_keys=True, separators=(",", ":"), allow_nan=False))
+
+
+def pure_fixtures(env):
+    raw = None
+    try:
+        result = subprocess.run(
+            ["go", "test", "-json", "-count=1", "-timeout=120s", "-buildvcs=false", *PACKAGES],
+            env=env, capture_output=True, timeout=300, check=False)
+        raw = result.stdout
+        if result.returncode:
+            raise ValueError("source command failed")
+        check_events(raw)
+    except (OSError, subprocess.TimeoutExpired, ValueError, TypeError, KeyError, OverflowError, RecursionError):
+        fixture_failure(raw)
+        raise ValueError("source fixtures failed") from None
+
+
 def main():
     stage = "platform"
     try:
@@ -108,8 +145,7 @@ def main():
         if command(["go", "env", "GOHOSTARCH"], env, 30).strip() != b"amd64":
             raise ValueError("native amd64 fixture host required")
         stage = "pure fixtures"
-        raw = command(["go", "test", "-json", "-count=1", "-timeout=120s", "-buildvcs=false", *PACKAGES], env, 300)
-        check_events(raw)
+        pure_fixtures(env)
         stage = "vet"
         command(["go", "vet", *PACKAGES], env, 180)
         # Build products stay in a disposable folder. No built executable runs.

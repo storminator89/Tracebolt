@@ -1,10 +1,56 @@
 import importlib.util
 import json
+import os
 from pathlib import Path
+import shutil
+import subprocess
+import tempfile
 import unittest
 spec=importlib.util.spec_from_file_location("source_gate",Path(__file__).with_name("run_windows_service_source.py"))
 gate=importlib.util.module_from_spec(spec);spec.loader.exec_module(gate)
 class GateTests(unittest.TestCase):
+    def test_startup_digest_fixture_stays_canonical_under_autocrlf_checkout(self):
+        root = Path(__file__).resolve().parents[2]
+        name = "web/src/windows-service-startup-go-fixture.json"
+        expected = (root / name).read_bytes()
+        self.assertNotIn(b"\r", expected)
+        git = shutil.which("git")
+        self.assertIsNotNone(git, "Git is required to verify the checkout contract")
+        env = os.environ.copy()
+        for key in ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_CONFIG_PARAMETERS", "GIT_CONFIG_COUNT"):
+            env.pop(key, None)
+        env.update(GIT_CONFIG_NOSYSTEM="1", GIT_CONFIG_GLOBAL=os.devnull, GIT_ATTR_NOSYSTEM="1")
+        with tempfile.TemporaryDirectory(prefix="startup-checkout-") as folder:
+            checkout = Path(folder)
+            fixture = checkout / name
+            fixture.parent.mkdir(parents=True)
+            fixture.write_bytes(expected)
+            def run(*args):
+                return subprocess.run([git, *args], cwd=checkout, env=env,
+                                      check=True, capture_output=True, timeout=20)
+            run("init", "--quiet")
+            run("config", "core.autocrlf", "true")
+            run("add", "--", name)
+            fixture.unlink()
+            run("checkout-index", "--", name)
+            # Negative control: Git's Windows-style conversion really changes
+            # raw bytes while leaving the JSON data and embedded digests equal.
+            converted = fixture.read_bytes()
+            self.assertEqual(converted, expected.replace(b"\n", b"\r\n"))
+            self.assertNotEqual(converted, expected)
+            self.assertEqual(json.loads(converted), json.loads(expected))
+            (checkout / ".gitattributes").write_bytes((root / ".gitattributes").read_bytes())
+            run("add", "--", ".gitattributes")
+            fixture.unlink()
+            run("checkout-index", "--", name)
+            self.assertEqual(fixture.read_bytes(), expected)
+            # Pin only this fixture. Unrelated text keeps the checkout's policy.
+            other = checkout / "ordinary.txt"
+            other.write_bytes(b"ordinary\ntext\n")
+            run("add", "--", "ordinary.txt")
+            other.unlink()
+            run("checkout-index", "--", "ordinary.txt")
+            self.assertEqual(other.read_bytes(), b"ordinary\r\ntext\r\n")
     def test_exact_required_cases(self):
         records=[dict(Package=p,Test=t,Action="pass") for p,t in gate.REQUIRED]
         raw=lambda rows:b"\n".join(json.dumps(x).encode() for x in rows)

@@ -11,6 +11,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"testing/synctest"
 	"time"
 )
 
@@ -326,18 +327,26 @@ func TestServiceStartupCollectionBoundsAndCancellation(t *testing.T) {
 	if err != nil || factoryCalls != 0 || len(s.Rows) != 2 || s.Rows[0].StartupQuality != "unavailable" {
 		t.Fatal("expired budget queried native or lost row", s, err)
 	}
-	closed, attempts := 0, 0
-	factory = func(context.Context) (ServiceStartupReader, func(), error) {
-		return func(ctx context.Context, _ string) (ServiceStartupRow, error) {
-			attempts++
-			<-ctx.Done()
-			return startupTestRow("manual", nil), nil
-		}, func() { closed++ }, nil
-	}
-	s, err = collectServiceStartupUsing(context.Background(), services, startupTestGeneration, startupTestGrant, startupTestAt, factory, time.Millisecond, clock)
-	if err != nil || closed != 1 || attempts != 1 || s.Rows[0].StartupQuality != "unavailable" || s.Rows[1].StartupQuality != "unavailable" {
-		t.Fatal("cooperative exhaustion", s, err, closed, attempts)
-	}
+	// Keep the one-millisecond cooperative deadline, but advance it only once
+	// the injected reader blocks. Host scheduling must not expire it first.
+	synctest.Test(t, func(t *testing.T) {
+		closed, attempts := 0, 0
+		factory := func(context.Context) (ServiceStartupReader, func(), error) {
+			return func(ctx context.Context, _ string) (ServiceStartupRow, error) {
+				attempts++
+				<-ctx.Done()
+				return startupTestRow("manual", nil), nil
+			}, func() { closed++ }, nil
+		}
+		started := time.Now()
+		s, err := collectServiceStartupUsing(context.Background(), services, startupTestGeneration, startupTestGrant, startupTestAt, factory, time.Millisecond, clock)
+		if err != nil || closed != 1 || attempts != 1 || s.Rows[0].StartupQuality != "unavailable" || s.Rows[1].StartupQuality != "unavailable" {
+			t.Fatal("cooperative exhaustion", s, err, closed, attempts)
+		}
+		if time.Since(started) != time.Millisecond {
+			t.Fatal("cooperative deadline changed")
+		}
+	})
 }
 
 func TestServiceStartupFailuresAreFiniteAndEmptyDoesNotRead(t *testing.T) {

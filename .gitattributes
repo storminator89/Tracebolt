@@ -1,0 +1,2 @@
+# The Go-generated digest fixture is compared byte-for-byte with canonical LF JSON.
+web/src/windows-service-startup-go-fixture.json text eol=lf
