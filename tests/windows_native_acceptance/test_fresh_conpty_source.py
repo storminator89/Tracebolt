@@ -39,3 +39,15 @@ class FreshConPTYSourceBoundary(unittest.TestCase):
         self.assertIn('"CONIN$"',raw)
         self.assertIn('ReadConsoleInputExW',raw)
         self.assertNotIn('TRACEBOLT_FRESH',raw)
+
+    def test_diagnostics_observe_before_cleanup_without_native_calls(self):
+        harness=(ROOT/'cmd/windows-service/fresh_native_windows_test.go').read_text()
+        self.assertLess(harness.index('r.NaturalChildExit = child.naturalExit()'),harness.index('reaped, closed := child.Close()'))
+        raw=(ROOT/'cmd/windows-service/fresh_pty_windows_test.go').read_text()
+        observation=raw.split('func (p *freshPTY) naturalExit() string {',1)[1].split('func (p *freshPTY) Close()',1)[0]
+        self.assertIn('case <-p.processDone:',observation)
+        self.assertIn('p.closed',observation)
+        for forbidden in ('windows.', 'time.', 'processErr.Error', 'strconv.', 'fmt.'):
+            self.assertNotIn(forbidden,observation)
+        self.assertEqual(harness.count('freshReadReceipt(layout)'),3)
+        self.assertIn('r.SessionOutcome, e = child.Run(',harness)

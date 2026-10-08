@@ -246,6 +246,7 @@ func freshController(ctx context.Context, g *freshgate.Grant, exe, service strin
 		return r
 	}
 	r.NativeActionsAttempted = true
+	r.ControllerStage = "provisioning"
 	r.Status = "failed"
 	d, e := native.New(native.Options{Expanded: true, Selection: g.Selection(), ServiceArtifact: service, ServiceSHA256: os.Getenv("TRACEBOLT_FRESH_SERVICE_SHA256"), ControllerArtifact: exe, ControllerSHA256: os.Getenv("TRACEBOLT_FRESH_TEST_SHA256")})
 	if e != nil {
@@ -264,6 +265,7 @@ func freshController(ctx context.Context, g *freshgate.Grant, exe, service strin
 	if ctx.Err() != nil || !g.Check() {
 		return r
 	}
+	r.ControllerStage = "fixture"
 	f, e := fixture.StartExpanded(ctx, g.Selection())
 	if e != nil {
 		return r
@@ -288,6 +290,7 @@ func freshController(ctx context.Context, g *freshgate.Grant, exe, service strin
 		return r
 	}
 	defer guard.Close()
+	r.ControllerStage = "bootstrap"
 	layout, e := windowsservice.ResolveLayout()
 	if e != nil || (ctx.Err() != nil || !g.Check()) {
 		return r
@@ -309,6 +312,7 @@ func freshController(ctx context.Context, g *freshgate.Grant, exe, service strin
 	if e != nil || closeErr != nil {
 		return r
 	}
+	r.ControllerStage = "launch"
 	child, e := startFreshPTY(ctx, g, exe, filepath.Join(layout.StateRoot+"-acceptance-input", "bootstrap.json"))
 	if e != nil {
 		return r
@@ -320,7 +324,7 @@ func freshController(ctx context.Context, g *freshgate.Grant, exe, service strin
 		}
 		cleanupCtx, cancel := context.WithDeadline(context.Background(), g.Deadline())
 		defer cancel()
-		q, err := freshStopOwnedService(cleanupCtx, g, layout)
+		q, err := freshStopOwnedService(cleanupCtx, g, layout, func(phase string) { r.CoordinatorPhase = freshDiagnosticPhase(phase) })
 		r.OwnedServiceStopped = q.Stopped
 		r.ServiceDisabled = q.Disabled
 		r.AutomaticStartConfigurationRetained = q.Automatic
@@ -329,6 +333,8 @@ func freshController(ctx context.Context, g *freshgate.Grant, exe, service strin
 		}
 	}()
 	defer func() {
+		// Snapshot only the existing waiter result before any forced teardown.
+		r.NaturalChildExit = child.naturalExit()
 		reaped, closed := child.Close()
 		r.OwnedChildReaped = reaped
 		r.ConsoleClosed = closed
@@ -337,11 +343,15 @@ func freshController(ctx context.Context, g *freshgate.Grant, exe, service strin
 		}
 	}()
 	// Only one goroutine reads/feeds output; the main loop consumes finite state.
-	if child.Run(ctx, guard, func() error {
+	r.ControllerStage = "session"
+	r.SessionOutcome, e = child.Run(ctx, guard, func() error {
 		if ctx.Err() != nil || !g.Check() {
 			return freshgate.ErrGuard
 		}
 		receipt, e := freshReadReceipt(layout)
+		if e == nil {
+			r.CoordinatorPhase = freshDiagnosticPhase(receipt.ReadSetup.Phase)
+		}
 		if e != nil || receipt.Service.Version != 2 || !receipt.Prepared || receipt.ReadSetup.Phase != "claim-started" {
 			return freshgate.ErrGuard
 		}
@@ -367,19 +377,25 @@ func freshController(ctx context.Context, g *freshgate.Grant, exe, service strin
 			return errFreshPending
 		}
 		return f.Approve(fp, comparison)
-	}) != nil {
+	})
+	if e != nil {
 		return r
 	}
 	r.NoEchoVerified = true
-	if _, e = freshVerifyCompleted(ctx, g); e != nil {
+	r.ControllerStage = "verify_completed"
+	verified, e := freshVerifyCompleted(ctx, g)
+	if e != nil {
 		return r
 	}
+	r.CoordinatorPhase = freshDiagnosticPhase(verified.ReadSetup.Phase)
 	r.ReceiptAndGrantsVerified = true
 	r.LimitedServiceTokenVerified = true
 	r.HiddenConsoleExercised = true
+	r.ControllerStage = "observe_inventory"
 	if freshAwait(ctx, func() bool { v := f.Evidence(); return v.Inventory.Usable() && v.Extensions.Usable() }) != nil {
 		return r
 	}
+	r.ControllerStage = "completed"
 	r.FreshOrchestrationAcceptance = true
 	r.Status = "passed_fresh_native_subset"
 	return r
@@ -391,11 +407,14 @@ func freshController(ctx context.Context, g *freshgate.Grant, exe, service strin
 // only. The service and all protected state are retained for VM disposal.
 type freshQuiescence struct{ Stopped, Disabled, Automatic bool }
 
-func freshStopOwnedService(ctx context.Context, g *freshgate.Grant, layout windowsservice.Layout) (freshQuiescence, error) {
+func freshStopOwnedService(ctx context.Context, g *freshgate.Grant, layout windowsservice.Layout, observePhase func(string)) (freshQuiescence, error) {
 	if ctx.Err() != nil || !g.Check() {
 		return freshQuiescence{}, freshgate.ErrGuard
 	}
 	r, e := freshReadReceipt(layout)
+	if e == nil {
+		observePhase(r.ReadSetup.Phase)
+	}
 	if e != nil || !r.Service.Complete {
 		return freshQuiescence{}, freshgate.ErrGuard
 	}
@@ -435,4 +454,15 @@ func freshStopOwnedService(ctx context.Context, g *freshgate.Grant, layout windo
 		return freshQuiescence{}, err
 	}
 	return freshQuiescence{Stopped: true, Automatic: true}, nil
+}
+
+// Only copy a known lifecycle phase from an already-required protected receipt
+// read. Diagnostic collection never opens an additional native resource.
+func freshDiagnosticPhase(phase string) string {
+	switch phase {
+	case "install-started", "claim-started", "activation-started", "grants-started", "grants-incomplete", "grants-verified", "startup-transition-started", "configured":
+		return phase
+	default:
+		return "unknown"
+	}
 }

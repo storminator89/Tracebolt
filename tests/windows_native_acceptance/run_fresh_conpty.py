@@ -23,6 +23,14 @@ APPROVALS=("SERVICES","IDENTITY","APP_ACLS","FIVE_READ_SCOPES","SYNTHETIC_CONSOL
 FALSE_FIELDS={"humanEntry","humanManagerApproval","productionManagerExercised","productionIngressExercised","sharedDashboardExercised","osRebootExercised","nativeInterruptionAcceptance","applicationCleanupVerified","vmDisposalVerified"}
 PASS_FIELDS={"approvalValidated","nativeActionsAttempted","hiddenConsoleExercised","syntheticInput","noEchoVerified","disabledStageVerified","freshOrchestrationAcceptance","receiptAndGrantsVerified","limitedServiceTokenVerified","ownedChildReaped","consoleClosed","fixtureClosed","appStateRetainedForVMDisposal","ownedServiceStopped","automaticStartConfigurationRetained","serviceAndAppStateRetained","platformDisposalRequired"}
 BOOL_FIELDS=FALSE_FIELDS|PASS_FIELDS|{"serviceDisabled"}
+DIAGNOSTIC_VALUES={
+    "controllerStage":{"not_started","provisioning","fixture","bootstrap","launch","session","verify_completed","observe_inventory","completed"},
+    "sessionOutcome":{"not_run","invalid_steps","cancelled","output_rejected","output_read_failed","output_eof_missing","input_failed","approval_failed","child_unsuccessful","protocol_incomplete","passed"},
+    "naturalChildExit":{"unknown","zero","nonzero"},
+    "coordinatorPhase":{"unknown","install-started","claim-started","activation-started","grants-started","grants-incomplete","grants-verified","startup-transition-started","configured"},
+}
+DEFAULT_DIAGNOSTICS={"controllerStage":"not_started","sessionOutcome":"not_run","naturalChildExit":"unknown","coordinatorPhase":"unknown"}
+PASS_DIAGNOSTICS={"controllerStage":"completed","sessionOutcome":"passed","naturalChildExit":"zero","coordinatorPhase":"configured"}
 
 def authorize(env):
     source=env.get("TRACEBOLT_FRESH_SOURCE","")
@@ -46,10 +54,12 @@ def bind_run(env,source,test,service,host,deadline):
 
 def validate_report(raw,source):
     r=shared.strict_json(raw,16<<10)
-    require(type(r) is dict and set(r)==BOOL_FIELDS|{"schema","source","status","inventory","extensions"})
+    require(type(r) is dict and set(r)==BOOL_FIELDS|set(DIAGNOSTIC_VALUES)|{"schema","source","status","inventory","extensions"})
     require(r["schema"]=="tracebolt.windows-fresh-conpty-acceptance.v1" and r["source"]==source)
     require(shared.member(r["status"],{"passed_fresh_native_subset","failed","blocked"}))
     require(all(type(r[k]) is bool for k in BOOL_FIELDS) and all(r[k] is False for k in FALSE_FIELDS))
+    require(all(shared.member(r[k],allowed) for k,allowed in DIAGNOSTIC_VALUES.items()))
+    require(r["nativeActionsAttempted"] or all(r[k]==value for k,value in DEFAULT_DIAGNOSTICS.items()))
     require(not (r["serviceDisabled"] and r["automaticStartConfigurationRetained"]))
     require(not (r["serviceDisabled"] or r["automaticStartConfigurationRetained"]) or r["ownedServiceStopped"])
     require(not r["nativeActionsAttempted"] or r["approvalValidated"])
@@ -66,7 +76,9 @@ def validate_report(raw,source):
         require(all(r[k] for k in ("hiddenConsoleExercised","disabledStageVerified","limitedServiceTokenVerified")))
         require(inv["frames"]>0 and all(inv[k] in {"healthy","partial"} for k in shared.QUALITIES))
         shared.validate_extensions(r["extensions"],inv["frames"],"passed_native_subset")
-    if is_pass: require(all(r[k] is True for k in PASS_FIELDS) and r["serviceDisabled"] is False)
+    if is_pass:
+        require(all(r[k] is True for k in PASS_FIELDS) and r["serviceDisabled"] is False)
+        require(all(r[k]==value for k,value in PASS_DIAGNOSTICS.items()))
     if r["status"]=="blocked": require(not r["nativeActionsAttempted"] and inv["frames"]==0)
     return r
 

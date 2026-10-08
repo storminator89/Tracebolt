@@ -4,8 +4,24 @@ This is source-only opt-in test infrastructure, not a public installer, workflow
 result, release gate override, deployment command or permission to run. No native
 execution is established by portable tests or either-architecture cross-builds.
 Existing base and expanded manual modes, consent meanings and reports are unchanged.
-A distinct manual-only workflow candidate is included; it has never been dispatched.
-There is no automatic or reusable native trigger.
+A distinct manual-only workflow candidate is included. The recorded native attempt
+below failed; no accepted native subset has been established. There is no automatic
+or reusable native trigger.
+
+## Recorded native failure and diagnostics boundary
+
+[Run 37725910252](https://github.com/storminator89/Tracebolt/actions/runs/37725910252)
+at source `e4bc02d449b16b5a23fd9d8f32b34912a53a9fec` passed the approval and inert
+checks, then failed native acceptance. Its finite report recorded native actions
+attempted, but no synthetic input, receipt/grant verification, inventory frames,
+owned-service stopped verification or disabled-state verification. These absent
+observations do not establish the runtime cause or the resulting service state.
+The verified historical report artifact SHA-256 is
+`4f324ea407058bf9db74202f81a4b2cda9cc42e2da941aef17203121a0f5b7a2`.
+
+The diagnostics-only candidate described below has not been run natively. Its
+portable checks do not fix or identify the runtime failure, establish a successful
+native subset, or authorize a new workflow dispatch or native operation.
 
 ## Distinct approval before any effect
 
@@ -129,6 +145,42 @@ never native acceptance. Only the finite `passed_fresh_native_subset` report wit
 all required evidence can establish this subset, and none has yet been produced.
 
 ## Native execution design and finite evidence
+
+The report requires four finite, string-valued diagnostic fields, including in
+blocked and failed reports:
+
+- `controllerStage`: `not_started`, `provisioning`, `fixture`, `bootstrap`,
+  `launch`, `session`, `verify_completed`, `observe_inventory`, or `completed`.
+  This identifies the last main-controller stage reached, not a successful
+  completion of that stage. Cleanup does not replace it with a new stage.
+- `sessionOutcome`: `not_run`, `invalid_steps`, `cancelled`, `output_rejected`,
+  `output_read_failed`, `output_eof_missing`, `input_failed`, `approval_failed`,
+  `child_unsuccessful`, `protocol_incomplete`, or `passed`.
+- `naturalChildExit`: `unknown`, `zero`, or `nonzero`. Only a child exit observed
+  before controller cleanup may set the latter two values. A forced cleanup
+  termination or later reaping cannot establish a natural exit. No raw exit code
+  is retained.
+- `coordinatorPhase`: `unknown`, or an existing production receipt phase:
+  `install-started`, `claim-started`, `activation-started`, `grants-started`,
+  `grants-incomplete`, `grants-verified`, `startup-transition-started`, or
+  `configured`. The phase is copied only from already-required protected receipt
+  inspections; these diagnostics add no runtime read or operation.
+
+The defaults are respectively `not_started`, `not_run`, `unknown`, and `unknown`.
+Without native actions attempted, all four must remain at these defaults. A passing
+report additionally requires `completed`, `passed`, `zero`, and `configured`, while
+retaining every existing acceptance requirement. Finite nonpassing evidence is
+allowed, including successful milestones followed by a later failure. These fields
+never promote a failed report to a pass or replace ownership, approval, cleanup or
+inventory evidence. Go and Python reject values outside these allowlists and
+non-string diagnostic values; the launcher also rejects missing or extra report
+fields before reserialization.
+
+This is a diagnostics-only source change. It adds no production hook, invitation
+input route, receipt recovery, retry, fallback, authorization, transcript, raw error
+text, or telemetry export. Portable checks establish the finite reporting contract
+only. They do not demonstrate a runtime fix, native execution, accepted Windows
+installation, workflow dispatch, service operation or platform disposal.
 
 - Parent revalidates the gate before effects, creates only fresh protected app
   resources, generates an ephemeral local peer and public bootstrap, and launches

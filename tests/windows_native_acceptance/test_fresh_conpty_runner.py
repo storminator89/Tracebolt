@@ -19,8 +19,21 @@ def approved():
 def passing():
     p={k:False for k in r.BOOL_FIELDS};p.update({k:True for k in r.PASS_FIELDS})
     p.update(schema='tracebolt.windows-fresh-conpty-acceptance.v1',source=SHA,status='passed_fresh_native_subset',inventory={'frames':1,**{k:'healthy' for k in r.shared.QUALITIES}})
+    p.update(r.PASS_DIAGNOSTICS)
     q={'observed':1,'denied':0,'unavailable':0,'firstSample':0,'reset':0}
     p['extensions']={'frames':1,'v5Frames':1,'freshOrchestrationAcceptance':False,'eventApplication':'observed','eventSystem':'bounded','volumes':'observed','volumeCapacity':'observed','processCPU':'observed','processMemory':'observed','network':'observed','eventRows':0,'volumeRows':1,'processRows':1,'networkRows':1,'peerLoopbackRows':1,'processCPUFirstSampleRows':0,'volumeCapacityCounts':dict(q),'processCPUCounts':dict(q),'processMemoryCounts':dict(q)}
+    return p
+
+def blocked():
+    p=passing()
+    p.update({k:False for k in r.BOOL_FIELDS})
+    p.update(r.DEFAULT_DIAGNOSTICS)
+    p.update(status='blocked',inventory={'frames':0,**{k:'not_run' for k in r.shared.QUALITIES}})
+    for key,value in p['extensions'].items():
+        if type(value) is dict:p['extensions'][key]={name:0 for name in value}
+        elif type(value) is bool:p['extensions'][key]=False
+        elif type(value) is int:p['extensions'][key]=0
+        else:p['extensions'][key]='not_run'
     return p
 
 class FreshRunner(unittest.TestCase):
@@ -54,7 +67,41 @@ class FreshRunner(unittest.TestCase):
     def test_go_python_report_field_sets_match(self):
         import re
         fields=set(re.findall(r'json:"([^"]+)"',(r.ROOT/'internal/windowsacceptance/freshgate/report.go').read_text()))
-        self.assertEqual(fields,r.BOOL_FIELDS|{'schema','source','status','inventory','extensions'})
+        self.assertEqual(fields,r.BOOL_FIELDS|set(r.DIAGNOSTIC_VALUES)|{'schema','source','status','inventory','extensions'})
+    def test_required_diagnostics_reject_missing_extra_and_invalid_values(self):
+        for key in r.DIAGNOSTIC_VALUES:
+            x=passing();del x[key]
+            with self.subTest(key=key,case='missing'),self.assertRaises(r.shared.Rejected):r.validate_report(json.dumps(x).encode(),SHA)
+            for value in ('','raw private diagnostic','PASSED','0','1','passed\n',None,True,False,0,1.5,[],{}):
+                x=passing();x['status']='failed';x[key]=value
+                with self.subTest(key=key,value=value),self.assertRaises(r.shared.Rejected):r.validate_report(json.dumps(x).encode(),SHA)
+        x=passing();x['diagnosticError']='raw private diagnostic'
+        with self.assertRaises(r.shared.Rejected):r.validate_report(json.dumps(x).encode(),SHA)
+    def test_diagnostics_require_defaults_without_native_actions(self):
+        p=blocked();self.assertEqual(r.validate_report(json.dumps(p).encode(),SHA),p)
+        for status in ('blocked','failed'):
+            for key,values in r.DIAGNOSTIC_VALUES.items():
+                for value in values:
+                    x=blocked();x['status']=status;x[key]=value
+                    with self.subTest(status=status,key=key,value=value):
+                        if value==r.DEFAULT_DIAGNOSTICS[key]:self.assertEqual(r.validate_report(json.dumps(x).encode(),SHA),x)
+                        else:
+                            with self.assertRaises(r.shared.Rejected):r.validate_report(json.dumps(x).encode(),SHA)
+    def test_finite_failure_diagnostics_do_not_promote_success(self):
+        for key,values in r.DIAGNOSTIC_VALUES.items():
+            for value in values:
+                x=passing();x['status']='failed';x[key]=value
+                with self.subTest(key=key,value=value):
+                    self.assertEqual(r.validate_report(json.dumps(x).encode(),SHA),x)
+                    x['status']='passed_fresh_native_subset'
+                    if value==r.PASS_DIAGNOSTICS[key]:self.assertEqual(r.validate_report(json.dumps(x).encode(),SHA),x)
+                    else:
+                        with self.assertRaises(r.shared.Rejected):r.validate_report(json.dumps(x).encode(),SHA)
+    def test_coordinator_phases_are_existing_production_states(self):
+        import re
+        source=(r.ROOT/'cmd/windows-service/read_setup.go').read_text()
+        phases=set(re.findall(r'(?:Phase:\s*|save\()"([a-z-]+)"',source))
+        self.assertEqual(r.DIAGNOSTIC_VALUES['coordinatorPhase'],phases|{'unknown'})
     def test_one_approved_run_binds_facts_without_creating_consent(self):
         with tempfile.TemporaryDirectory() as temp:
             env=approved();env['RUNNER_TEMP']=temp;env['GITHUB_OUTPUT']=str(Path(temp)/'output')

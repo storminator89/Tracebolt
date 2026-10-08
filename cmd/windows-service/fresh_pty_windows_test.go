@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync"
 	"syscall"
+	"testing"
 	"time"
 	"unsafe"
 
@@ -199,8 +200,8 @@ func (p *freshPTY) Input(secret []byte) error {
 func (p *freshPTY) beginConsoleClose() {
 	p.closeConsole.Do(func() { go func() { windows.ClosePseudoConsole(p.console); close(p.consoleDone) }() })
 }
-func (p *freshPTY) Run(ctx context.Context, guard *freshgate.OutputGuard, input, approve func() error) error {
-	return freshgate.ObserveSession(ctx, guard, freshgate.SessionSteps{Output: p.chunks, Exited: p.processDone, ConsoleClosed: p.consoleDone, ProcessSucceeded: func() bool { return p.processErr == nil && p.processExit == 0 }, CloseConsole: p.beginConsoleClose, Input: input, Approve: func() (bool, error) {
+func (p *freshPTY) Run(ctx context.Context, guard *freshgate.OutputGuard, input, approve func() error) (freshgate.SessionOutcome, error) {
+	return freshgate.ObserveSessionDiagnostic(ctx, guard, freshgate.SessionSteps{Output: p.chunks, Exited: p.processDone, ConsoleClosed: p.consoleDone, ProcessSucceeded: func() bool { return p.processErr == nil && p.processExit == 0 }, CloseConsole: p.beginConsoleClose, Input: input, Approve: func() (bool, error) {
 		e := approve()
 		if errors.Is(e, errFreshPending) {
 			return false, nil
@@ -208,6 +209,28 @@ func (p *freshPTY) Run(ctx context.Context, guard *freshgate.OutputGuard, input,
 		return e == nil, e
 	}})
 }
+
+// naturalExit reads only state published by the existing waiter. The channel
+// close synchronizes processErr/processExit. No wait, poll, or native call is
+// added, and cleanup-induced or not-yet-observed exits remain unknown.
+func (p *freshPTY) naturalExit() string {
+	if p == nil || p.closed {
+		return "unknown"
+	}
+	select {
+	case <-p.processDone:
+		if p.processErr != nil {
+			return "unknown"
+		}
+		if p.processExit == 0 {
+			return "zero"
+		}
+		return "nonzero"
+	default:
+		return "unknown"
+	}
+}
+
 func (p *freshPTY) Close() (reaped, closed bool) {
 	if p == nil {
 		return true, true
@@ -286,4 +309,37 @@ func (p *freshPTY) Close() (reaped, closed bool) {
 		p.process = 0
 	}
 	return reaped, closed
+}
+
+// These cases only inspect inert waiter state. They make no Windows API calls.
+func TestFreshNaturalExitDiagnostics(t *testing.T) {
+	for _, tc := range []struct {
+		name         string
+		done, closed bool
+		code         uint32
+		err          error
+		want         string
+	}{
+		{"unobserved", false, false, 0, nil, "unknown"},
+		{"natural zero", true, false, 0, nil, "zero"},
+		{"natural nonzero", true, false, 1, nil, "nonzero"},
+		{"arbitrary exit", true, false, 0xffffffff, nil, "nonzero"},
+		{"wait failed", true, false, 0, freshgate.ErrGuard, "unknown"},
+		{"cleanup zero", true, true, 0, nil, "unknown"},
+		{"cleanup nonzero", true, true, 1, nil, "unknown"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			p := &freshPTY{processDone: make(chan struct{}), closed: tc.closed, processExit: tc.code, processErr: tc.err}
+			if tc.done {
+				close(p.processDone)
+			}
+			if got := p.naturalExit(); got != tc.want {
+				t.Fatalf("finite exit = %q, want %q", got, tc.want)
+			}
+		})
+	}
+	var missing *freshPTY
+	if missing.naturalExit() != "unknown" {
+		t.Fatal("missing child not unknown")
+	}
 }
