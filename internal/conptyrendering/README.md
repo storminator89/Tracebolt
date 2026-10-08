@@ -115,3 +115,13 @@ ambiguous or malformed failure evidence becomes `go_test_failed`. Capture and
 success-projection checks have fixed labels naming their failing boundary.
 Failure still exits nonzero; bounds, success requirements and raw-output
 suppression are unchanged. No label proves cleanup or native acceptance.
+
+The launcher reconstructs newline-complete lines only across consecutive output
+events belonging to this exact test. A pending line is limited to 1024 characters
+and cannot cross a package-output, framing/action or terminal-outcome boundary.
+The original exact summary grammar and all success conditions still apply.
+Missing summaries report only closed shape categories (CRLF, prefix, fields,
+attribution, or absent); those categories never include unmatched output text.
+This is compatibility hardening: the pinned Go 1.27.1 converter normally keeps
+this approximately 413-byte summary in one event, below its 1024-byte buffer.
+No claim is made that fragmentation caused the observed Windows mismatch.

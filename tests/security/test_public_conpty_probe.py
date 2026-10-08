@@ -37,6 +37,58 @@ def encode(rows):
 
 
 class PublicProbeTests(unittest.TestCase):
+    def test_missing_summary_shape_is_finite_and_still_rejected(self):
+        cases=[]
+        rows=records();rows[2]["Output"]=rows[2]["Output"].replace("\n","\r\n");cases.append((rows,"projection_summary_crlf"))
+        rows=records();rows[2]["Output"]="PRIVATE_SENTINEL "+rows[2]["Output"];cases.append((rows,"projection_summary_prefix"))
+        rows=records();rows[2]["Output"]=rows[2]["Output"].replace("public_trust=false","public_trust=PRIVATE_SENTINEL");cases.append((rows,"projection_summary_fields"))
+        rows=records();del rows[2]["Test"];cases.append((rows,"projection_summary_attribution"))
+        for rows,reason in cases:
+            with self.assertRaises(probe.ProbeFailure) as caught: probe.project(encode(rows))
+            self.assertEqual(caught.exception.reason,reason)
+            output=io.StringIO()
+            with mock.patch.object(probe.sys,"platform","win32"),mock.patch.object(probe,"capture",return_value=encode(rows)),contextlib.redirect_stdout(output):
+                self.assertEqual(probe.main(),1)
+            self.assertIn("reason="+reason+";",output.getvalue())
+            self.assertNotIn("PRIVATE_SENTINEL",output.getvalue())
+
+    def test_summary_fragments_reassemble_at_every_split(self):
+        original = records()
+        text = original[2]["Output"]
+        for split in range(len(text)+1):
+            rows = original[:2] + [dict(original[2], Output=text[:split]),
+                                  dict(original[2], Output=text[split:])] + original[3:]
+            self.assertEqual(probe.project(encode(rows)), probe.project(encode(original)))
+        rows = original[:2] + [dict(original[2], Output=c) for c in text] + original[3:]
+        self.assertEqual(probe.project(encode(rows)), probe.project(encode(original)))
+        rows=records(); rows[2]["Output"]="PRIVATE_SENTINEL\n"+text+"unrelated fixed text\n"
+        self.assertEqual(probe.project(encode(rows)), probe.project(encode(original)))
+
+    def test_summary_fragments_do_not_cross_context_or_terminal_boundary(self):
+        text=records()[2]["Output"]
+        for boundary in ({"Action":"output","Package":probe.PACKAGE,"Output":"package text\n"},
+                         {"Action":"output","Package":probe.PACKAGE,"Test":probe.TEST,"OutputType":"frame","Output":"frame text\n"},
+                         {"Action":"pass","Package":probe.PACKAGE,"Test":probe.TEST},
+                         {"Action":"output","Package":probe.PACKAGE,"Test":"Other","Output":"other text\n"}):
+            rows=records(); rows[2:3]=[dict(rows[2],Output=text[:60]),boundary,dict(rows[2],Output=text[60:])]
+            with self.assertRaises(probe.ProbeFailure): probe.project(encode(rows))
+        rows=records();rows[2]["Output"]=text[:-1]
+        with self.assertRaises(probe.ProbeFailure) as caught: probe.project(encode(rows))
+        self.assertEqual(caught.exception.reason,"projection_line_incomplete")
+
+    def test_summary_line_bound_duplicate_and_private_output(self):
+        rows=records(); rows[2]["Output"]="x"*(probe.MAX_LINE+1)+"\n"
+        with self.assertRaises(probe.ProbeFailure) as caught: probe.project(encode(rows))
+        self.assertEqual(caught.exception.reason,"projection_line_bound")
+        rows=records();rows[2]["Output"]*=2
+        with self.assertRaises(probe.ProbeFailure) as caught: probe.project(encode(rows))
+        self.assertEqual(caught.exception.reason,"projection_duplicate_summary")
+        rows=records();rows[2]["Output"]="PRIVATE_SENTINEL"
+        output=io.StringIO()
+        with mock.patch.object(probe.sys,"platform","win32"),mock.patch.object(probe,"capture",return_value=encode(rows)),contextlib.redirect_stdout(output):
+            self.assertEqual(probe.main(),1)
+        self.assertNotIn("PRIVATE_SENTINEL",output.getvalue())
+
     def test_native_failure_labels_are_exact_and_source_bound(self):
         source = (Path(probe.ROOT) / "internal/conptyrendering/native_windows_test.go").read_text()
         labels = set(re.findall(r'(?:return empty, |reason = |t.Fatal\()"([a-z_]+)"', source))

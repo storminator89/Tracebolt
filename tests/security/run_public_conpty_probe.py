@@ -12,14 +12,17 @@ ROOT = Path(__file__).resolve().parents[2]
 PACKAGE = "localrmm/internal/conptyrendering"
 TEST = "TestNativePublicRendering"
 MAX_OUTPUT = 1024 * 1024
+MAX_LINE = 1024
 FIELDS = ("cursor_position", "clear", "cursor_visibility", "presentation", "title",
           "unknown", "overflow", "incomplete", "win32_input_enable", "win32_input_disable",
           "focus_reporting_enable", "focus_reporting_disable", "residual_unknown")
 TEXT_FIELDS = ("live_output", "public_trust", "exact_prompt", "prompt_without_final_space")
 RESIDUAL_KINDS = ("none", "text_control", "non_ascii", "escape", "csi", "osc")
-SUMMARY = re.compile(r"    native_windows_test\.go:[1-9][0-9]*: " +
-                     " ".join(name + r"=(true|false)" for name in FIELDS) +
-                     r" first_residual_kind=(" + "|".join(RESIDUAL_KINDS) + r") " + " ".join(name + r"=(true|false)" for name in TEXT_FIELDS) + r"\n")
+SUMMARY_TEXT = (" ".join(name + r"=(true|false)" for name in FIELDS) +
+                r" first_residual_kind=(" + "|".join(RESIDUAL_KINDS) + r") " +
+                " ".join(name + r"=(true|false)" for name in TEXT_FIELDS) + r"\n")
+SUMMARY = re.compile(r"    native_windows_test\.go:[1-9][0-9]*: " + SUMMARY_TEXT)
+SUMMARY_BODY = re.compile(SUMMARY_TEXT)
 ARGS = ("go", "test", "-mod=readonly", "-json", "-count=1", "-timeout=45s",
         "-buildvcs=false", "-run=^TestNativePublicRendering$", "./internal/conptyrendering")
 
@@ -38,7 +41,9 @@ LAUNCHER_FAILURES = frozenset({
     "projection_test", "projection_duplicate_pass", "projection_output",
     "projection_duplicate_summary", "projection_missing_pass", "projection_missing_summary",
     "projection_bounds", "projection_residual", "projection_unknown", "projection_prompt",
-    "projection_live", "launch_or_io_failed",
+    "projection_live", "launch_or_io_failed", "projection_line_bound", "projection_line_incomplete",
+    "projection_summary_crlf", "projection_summary_prefix", "projection_summary_fields",
+    "projection_summary_attribution",
 })
 FAILURE_LINE = re.compile(r"    native_windows_test\.go:[1-9][0-9]*: (" +
                           "|".join(sorted(NATIVE_FAILURES)) + r")\n")
@@ -48,6 +53,25 @@ class ProbeFailure(ValueError):
     def __init__(self, reason):
         self.reason = reason if reason in NATIVE_FAILURES | LAUNCHER_FAILURES else "go_test_failed"
         super().__init__("public rendering probe incomplete")
+
+
+class OutputLines:
+    """Reassemble only contiguous exact-test Output fragments, never export them."""
+    def __init__(self):
+        self.pending = ""
+
+    def feed(self, output):
+        require(type(output) is str, "projection_output")
+        parts = output.split("\n")
+        for index, part in enumerate(parts):
+            require(len(self.pending) + len(part) <= MAX_LINE, "projection_line_bound")
+            self.pending += part
+            if index < len(parts) - 1:
+                line, self.pending = self.pending + "\n", ""
+                yield line
+
+    def finish(self):
+        require(not self.pending, "projection_line_incomplete")
 
 
 def native_failure_reason(raw):
@@ -102,6 +126,8 @@ def project(raw):
     require(type(raw) is bytes and 0 < len(raw) <= MAX_OUTPUT and raw.endswith(b"\n"), "projection_frame")
     passed = package_passed = False
     summary = None
+    label_seen = wrong_owner = crlf = prefix = False
+    lines = OutputLines()
     for line in raw.splitlines():
         try:
             event = json.loads(line, object_pairs_hook=unique_object, parse_constant=reject_constant)
@@ -119,17 +145,33 @@ def project(raw):
             elif name is None:
                 require(not package_passed, "projection_duplicate_pass")
                 package_passed = True
-        if action == "output" and name == TEST:
-            output = event.get("Output")
-            require(type(output) is str, "projection_output")
-            match = SUMMARY.fullmatch(output)
-            if match:
-                require(summary is None, "projection_duplicate_summary")
-                summary = dict(zip(FIELDS, (x == "true" for x in match.groups()[:len(FIELDS)])))
-                summary["first_residual_kind"] = match.groups()[len(FIELDS)]
-                summary.update(zip(TEXT_FIELDS, (x == "true" for x in match.groups()[len(FIELDS)+1:])))
+        if action == "output" and name == TEST and event.get("OutputType") != "frame":
+            for output in lines.feed(event.get("Output")):
+                label_seen |= "cursor_position=" in output
+                crlf |= output.endswith("\r\n") and SUMMARY.fullmatch(output[:-2] + "\n") is not None
+                prefix |= SUMMARY_BODY.search(output) is not None
+                match = SUMMARY.fullmatch(output)
+                if match:
+                    require(summary is None, "projection_duplicate_summary")
+                    summary = dict(zip(FIELDS, (x == "true" for x in match.groups()[:len(FIELDS)])))
+                    summary["first_residual_kind"] = match.groups()[len(FIELDS)]
+                    summary.update(zip(TEXT_FIELDS, (x == "true" for x in match.groups()[len(FIELDS)+1:])))
+        else:
+            lines.finish()
+            if action == "output" and isinstance(event.get("Output"), str):
+                wrong_owner |= "cursor_position=" in event["Output"]
+    lines.finish()
     require(passed and package_passed, "projection_missing_pass")
-    require(summary is not None, "projection_missing_summary")
+    if summary is None:
+        if crlf:
+            raise ProbeFailure("projection_summary_crlf")
+        if prefix:
+            raise ProbeFailure("projection_summary_prefix")
+        if label_seen:
+            raise ProbeFailure("projection_summary_fields")
+        if wrong_owner:
+            raise ProbeFailure("projection_summary_attribution")
+        raise ProbeFailure("projection_missing_summary")
     require(not summary["overflow"] and not summary["incomplete"], "projection_bounds")
     require(summary["residual_unknown"] == (summary["first_residual_kind"] != "none"), "projection_residual")
     require(summary["unknown"] == any(summary[name] for name in FIELDS[8:]), "projection_unknown")
