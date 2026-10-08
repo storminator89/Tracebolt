@@ -378,6 +378,7 @@ func freshController(ctx context.Context, g *freshgate.Grant, exe, service strin
 		}
 		return f.Approve(fp, comparison)
 	})
+	r.OutputRejection = guard.RejectionReason()
 	if e != nil {
 		return r
 	}

@@ -24,13 +24,14 @@ FALSE_FIELDS={"humanEntry","humanManagerApproval","productionManagerExercised","
 PASS_FIELDS={"approvalValidated","nativeActionsAttempted","hiddenConsoleExercised","syntheticInput","noEchoVerified","disabledStageVerified","freshOrchestrationAcceptance","receiptAndGrantsVerified","limitedServiceTokenVerified","ownedChildReaped","consoleClosed","fixtureClosed","appStateRetainedForVMDisposal","ownedServiceStopped","automaticStartConfigurationRetained","serviceAndAppStateRetained","platformDisposalRequired"}
 BOOL_FIELDS=FALSE_FIELDS|PASS_FIELDS|{"serviceDisabled"}
 DIAGNOSTIC_VALUES={
+    "outputRejection":{"none","output_limit","echo","escape_unsupported","csi_limit","csi_unsupported","csi_malformed","osc_limit","osc_malformed","osc_unsupported","post_input_title","carriage_return","text_unsupported","line_limit","protocol","incomplete","state"},
     "controllerStage":{"not_started","provisioning","fixture","bootstrap","launch","session","verify_completed","observe_inventory","completed"},
     "sessionOutcome":{"not_run","invalid_steps","cancelled","output_rejected","output_read_failed","output_eof_missing","input_failed","approval_failed","child_unsuccessful","protocol_incomplete","passed"},
     "naturalChildExit":{"unknown","zero","nonzero"},
     "coordinatorPhase":{"unknown","install-started","claim-started","activation-started","grants-started","grants-incomplete","grants-verified","startup-transition-started","configured"},
 }
-DEFAULT_DIAGNOSTICS={"controllerStage":"not_started","sessionOutcome":"not_run","naturalChildExit":"unknown","coordinatorPhase":"unknown"}
-PASS_DIAGNOSTICS={"controllerStage":"completed","sessionOutcome":"passed","naturalChildExit":"zero","coordinatorPhase":"configured"}
+DEFAULT_DIAGNOSTICS={"outputRejection":"none","controllerStage":"not_started","sessionOutcome":"not_run","naturalChildExit":"unknown","coordinatorPhase":"unknown"}
+PASS_DIAGNOSTICS={"outputRejection":"none","controllerStage":"completed","sessionOutcome":"passed","naturalChildExit":"zero","coordinatorPhase":"configured"}
 
 def authorize(env):
     source=env.get("TRACEBOLT_FRESH_SOURCE","")

@@ -79,6 +79,7 @@ type outputState struct {
 	finished      bool
 	closed        bool
 	err           error
+	rejection     OutputRejection
 }
 
 // Format prevents accidental fmt logging (including %#v and numeric verbs)
@@ -128,12 +129,12 @@ func (g *OutputGuard) Feed(chunk []byte) error {
 		return err
 	}
 	if len(chunk) > maxOutput-s.total {
-		return s.fail(ErrOutputGuard)
+		return s.fail(s.reject(OutputTotalLimit, ErrOutputGuard))
 	}
 	s.total += len(chunk)
 	for _, c := range chunk {
 		if s.matches(&s.rawMatch, c) {
-			return s.fail(ErrOutputEcho)
+			return s.fail(s.reject(OutputEcho, ErrOutputEcho))
 		}
 		if err := s.consume(c); err != nil {
 			return s.fail(err)
@@ -183,7 +184,7 @@ func (g *OutputGuard) MarkInputSent() error {
 		return err
 	}
 	if !g.PromptReady() {
-		return s.fail(ErrOutputState)
+		return s.fail(s.reject(OutputStateInvalid, ErrOutputState))
 	}
 	s.inputSent = true
 	return nil
@@ -200,7 +201,7 @@ func (g *OutputGuard) Finish() error {
 	}
 	if s.vt != vtText || s.pendingCR || s.lineLen != 0 || !s.sawFP ||
 		!s.sawComparison || !s.promptEnded || !s.inputSent || !s.success {
-		return s.fail(ErrOutputGuard)
+		return s.fail(s.reject(OutputIncomplete, ErrOutputGuard))
 	}
 	s.finished = true
 	s.clearSensitive()
@@ -271,22 +272,22 @@ func (s *outputState) consume(c byte) error {
 		case ']':
 			s.vt = vtOSC
 		default:
-			return ErrOutputGuard
+			return s.reject(OutputEscapeUnsupported, ErrOutputGuard)
 		}
 		return nil
 	case vtCSI:
 		if s.sequenceLen == maxCSI {
-			return ErrOutputGuard
+			return s.reject(OutputCSILimit, ErrOutputGuard)
 		}
 		if c >= 0x40 && c <= 0x7e {
 			if !s.validCSI(c) {
-				return ErrOutputGuard
+				return s.reject(OutputCSIUnsupported, ErrOutputGuard)
 			}
 			s.endSequence()
 			return nil
 		}
 		if c < 0x20 || c > 0x3f {
-			return ErrOutputGuard
+			return s.reject(OutputCSIMalformed, ErrOutputGuard)
 		}
 		s.sequence[s.sequenceLen] = c
 		s.sequenceLen++
@@ -299,15 +300,18 @@ func (s *outputState) consume(c byte) error {
 			s.vt = vtOSCEscape
 			return nil
 		}
-		if c < 0x20 || c > 0x7e || s.sequenceLen == maxOSC {
-			return ErrOutputGuard
+		if c < 0x20 || c > 0x7e {
+			return s.reject(OutputOSCMalformed, ErrOutputGuard)
+		}
+		if s.sequenceLen == maxOSC {
+			return s.reject(OutputOSCLimit, ErrOutputGuard)
 		}
 		s.sequence[s.sequenceLen] = c
 		s.sequenceLen++
 		return nil
 	case vtOSCEscape:
 		if c != '\\' {
-			return ErrOutputGuard
+			return s.reject(OutputOSCMalformed, ErrOutputGuard)
 		}
 		return s.endOSC()
 	}
@@ -317,7 +321,7 @@ func (s *outputState) consume(c byte) error {
 	}
 	if s.pendingCR {
 		if c != '\n' {
-			return ErrOutputGuard
+			return s.reject(OutputCarriageReturn, ErrOutputGuard)
 		}
 		s.pendingCR = false
 	}
@@ -328,18 +332,24 @@ func (s *outputState) consume(c byte) error {
 	case '\n':
 		return s.endLine()
 	}
-	if c < 0x20 || c > 0x7e || s.lineLen == maxLine || s.success {
-		return ErrOutputGuard
+	if c < 0x20 || c > 0x7e {
+		return s.reject(OutputTextUnsupported, ErrOutputGuard)
+	}
+	if s.lineLen == maxLine {
+		return s.reject(OutputLineLimit, ErrOutputGuard)
+	}
+	if s.success {
+		return s.reject(OutputProtocol, ErrOutputGuard)
 	}
 	if s.matches(&s.textMatch, c) {
-		return ErrOutputEcho
+		return s.reject(OutputEcho, ErrOutputEcho)
 	}
 	s.hadText = true
 	s.line[s.lineLen] = c
 	s.lineLen++
 	if bytes.Equal(s.line[:s.lineLen], []byte(PublicPrompt)) {
 		if s.promptSeen || !s.sawFP || !s.sawComparison || s.inputSent {
-			return ErrOutputGuard
+			return s.reject(OutputProtocol, ErrOutputGuard)
 		}
 		s.promptSeen = true
 	}
@@ -357,10 +367,10 @@ func (s *outputState) endOSC() error {
 	// clipboard access, shell integration and all other commands are rejected.
 	p := s.sequence[:s.sequenceLen]
 	if s.inputSent && len(p) > 2 {
-		return ErrOutputGuard
+		return s.reject(OutputPostInputTitle, ErrOutputGuard)
 	}
 	if len(p) < 2 || (p[0] != '0' && p[0] != '2') || p[1] != ';' {
-		return ErrOutputGuard
+		return s.reject(OutputOSCUnsupported, ErrOutputGuard)
 	}
 	s.endSequence()
 	return nil
@@ -419,14 +429,14 @@ func (s *outputState) endLine() error {
 	}()
 	if bytes.Equal(line, []byte(PublicPrompt)) {
 		if !s.promptSeen || !s.inputSent || s.promptEnded {
-			return ErrOutputGuard
+			return s.reject(OutputProtocol, ErrOutputGuard)
 		}
 		s.promptEnded = true
 		return nil
 	}
 	if bytes.Equal(line, []byte(SuccessMarker)) {
 		if !s.sawFP || !s.sawComparison || !s.promptEnded || !s.inputSent || s.success {
-			return ErrOutputGuard
+			return s.reject(OutputProtocol, ErrOutputGuard)
 		}
 		s.success = true
 		return nil
@@ -435,11 +445,11 @@ func (s *outputState) endLine() error {
 		if len(line) == 0 && s.promptEnded {
 			return nil
 		}
-		return ErrOutputGuard
+		return s.reject(OutputProtocol, ErrOutputGuard)
 	}
 	if bytes.HasPrefix(line, []byte("Device SPKI SHA-256:")) {
 		if s.sawFP || s.sawComparison || !publicHexLine(line, fingerprintLabel, 64) {
-			return ErrOutputGuard
+			return s.reject(OutputProtocol, ErrOutputGuard)
 		}
 		copy(s.fingerprint[:], line[len(fingerprintLabel):])
 		s.sawFP = true
@@ -447,7 +457,7 @@ func (s *outputState) endLine() error {
 	}
 	if bytes.HasPrefix(line, []byte("Comparison:")) {
 		if !s.sawFP || s.sawComparison || !publicHexLine(line, comparisonLabel, 32) {
-			return ErrOutputGuard
+			return s.reject(OutputProtocol, ErrOutputGuard)
 		}
 		copy(s.comparison[:], line[len(comparisonLabel):])
 		s.sawComparison = true

@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "sourceCommit": "fccc4b00cd8a144afd58e4b995747afab7a10022",
-  "goSourceSha256": "467e3c8d9f5ae0b8a524f8fddb069faf8b888120c12649d5d4837c1345898618",
+  "goSourceSha256": "e2c177533ce5994c90fc92a81dbea0f15930ee0c5110ed4a665d45c2654ef922",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -1010,6 +1010,13 @@
       "TestSectionByteRejectionDropsAllRows",
       "TestStrictContractRoundTripAndForbiddenFields",
       "TestUnsafeMountAncestorsAndIdentityAreRejected"
+    ],
+    "localrmm/internal/conptyrendering": [
+      "TestFamiliesEverySplit",
+      "TestFinishKeepsIncompleteSticky",
+      "TestNativePublicRendering",
+      "TestObserverRedactsFormatting",
+      "TestUnknownAndBounds"
     ],
     "localrmm/internal/debianversion": [
       "TestBoundedOrderProperties",
@@ -2727,6 +2734,11 @@
       "TestOutputGuardUnsupportedControlsFailClosed",
       "TestOutputGuardVTAndOneByteChunks",
       "TestOutputGuardZeroAndInvalidSecret",
+      "TestOutputRejectionBoundsAndTerminalStates",
+      "TestOutputRejectionEchoNeverIncludesBytes",
+      "TestOutputRejectionFiniteCategoriesEverySplit",
+      "TestOutputRejectionNoneDoesNotClaimAcceptance",
+      "TestOutputRejectionSessionStopsBeforeInputAndApproval",
       "TestOwnedStopPendingStatesAndNoReplay",
       "TestOwnedStopRefusesUnknownCancelledAndAmbiguous",
       "TestPostInputTitleCannotCarryPartialEcho",

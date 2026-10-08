@@ -19,6 +19,7 @@ type Report struct {
 	Source                              string                       `json:"source"`
 	Status                              string                       `json:"status"`
 	ControllerStage                     string                       `json:"controllerStage"`
+	OutputRejection                     OutputRejection              `json:"outputRejection"`
 	SessionOutcome                      SessionOutcome               `json:"sessionOutcome"`
 	NaturalChildExit                    string                       `json:"naturalChildExit"`
 	CoordinatorPhase                    string                       `json:"coordinatorPhase"`
@@ -47,12 +48,15 @@ type Report struct {
 }
 
 func NewReport(source string) Report {
-	return Report{Schema: ReportSchema, Source: source, Status: "blocked", ControllerStage: "not_started", SessionOutcome: "not_run", NaturalChildExit: "unknown", CoordinatorPhase: "unknown", Inventory: profile.ZeroObservation(), Extensions: profile.ZeroExtensionObservation()}
+	return Report{Schema: ReportSchema, Source: source, Status: "blocked", ControllerStage: "not_started", SessionOutcome: "not_run", OutputRejection: OutputNotRejected, NaturalChildExit: "unknown", CoordinatorPhase: "unknown", Inventory: profile.ZeroObservation(), Extensions: profile.ZeroExtensionObservation()}
 }
 
 // Diagnostics are finite observations only. They carry no errors, console text,
 // raw child exit code, or authority to read or change production runtime state.
 func (r Report) validDiagnostics() bool {
+	if !r.OutputRejection.valid() {
+		return false
+	}
 	switch r.ControllerStage {
 	case "not_started", "provisioning", "fixture", "bootstrap", "launch", "session", "verify_completed", "observe_inventory", "completed":
 	default:
@@ -74,10 +78,10 @@ func (r Report) validDiagnostics() bool {
 	default:
 		return false
 	}
-	if !r.NativeActionsAttempted && (r.ControllerStage != "not_started" || r.SessionOutcome != "not_run" || r.NaturalChildExit != "unknown" || r.CoordinatorPhase != "unknown") {
+	if !r.NativeActionsAttempted && (r.OutputRejection != OutputNotRejected || r.ControllerStage != "not_started" || r.SessionOutcome != "not_run" || r.NaturalChildExit != "unknown" || r.CoordinatorPhase != "unknown") {
 		return false
 	}
-	return r.Status != "passed_fresh_native_subset" || r.ControllerStage == "completed" && r.SessionOutcome == "passed" && r.NaturalChildExit == "zero" && r.CoordinatorPhase == "configured"
+	return r.Status != "passed_fresh_native_subset" || r.OutputRejection == OutputNotRejected && r.ControllerStage == "completed" && r.SessionOutcome == "passed" && r.NaturalChildExit == "zero" && r.CoordinatorPhase == "configured"
 }
 
 func (r Report) Validate() error {

@@ -33,3 +33,9 @@ jobs:
           GOTOOLCHAIN: local
           PYTHONDONTWRITEBYTECODE: '1'
         run: python tests/security/run_windows_service_source.py
+      - name: Observe isolated fixed-public-output ConPTY rendering (no service or identity)
+        timeout-minutes: 3
+        env:
+          GOTOOLCHAIN: local
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: python -I -B tests/security/run_public_conpty_probe.py

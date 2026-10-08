@@ -51,3 +51,12 @@ class FreshConPTYSourceBoundary(unittest.TestCase):
             self.assertNotIn(forbidden,observation)
         self.assertEqual(harness.count('freshReadReceipt(layout)'),3)
         self.assertIn('r.SessionOutcome, e = child.Run(',harness)
+        self.assertIn('r.OutputRejection = guard.RejectionReason()',harness)
+
+    def test_output_rejection_allowlist_matches_go(self):
+        raw=(ROOT/'internal/windowsacceptance/freshgate/output_rejection.go').read_text()
+        import re
+        values=set(re.findall(r'OutputRejection\s*=\s*"([a-z_]+)"',raw))
+        runner=(ROOT/'tests/windows_native_acceptance/run_fresh_conpty.py').read_text()
+        field=runner.split('"outputRejection":{',1)[1].split('}',1)[0]
+        self.assertEqual(values,set(re.findall(r'"([a-z_]+)"',field)))

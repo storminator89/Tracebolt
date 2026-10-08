@@ -69,6 +69,7 @@ var diagnosticCases = []struct {
 	values []string
 	set    func(*Report, string)
 }{
+	{"outputRejection", []string{"none", "output_limit", "echo", "escape_unsupported", "csi_limit", "csi_unsupported", "csi_malformed", "osc_limit", "osc_malformed", "osc_unsupported", "post_input_title", "carriage_return", "text_unsupported", "line_limit", "protocol", "incomplete", "state"}, func(r *Report, value string) { r.OutputRejection = OutputRejection(value) }},
 	{"controllerStage", []string{"not_started", "provisioning", "fixture", "bootstrap", "launch", "session", "verify_completed", "observe_inventory", "completed"}, func(r *Report, value string) { r.ControllerStage = value }},
 	{"sessionOutcome", []string{"not_run", "invalid_steps", "cancelled", "output_rejected", "output_read_failed", "output_eof_missing", "input_failed", "approval_failed", "child_unsuccessful", "protocol_incomplete", "passed"}, func(r *Report, value string) { r.SessionOutcome = SessionOutcome(value) }},
 	{"naturalChildExit", []string{"unknown", "zero", "nonzero"}, func(r *Report, value string) { r.NaturalChildExit = value }},
@@ -85,7 +86,7 @@ func TestFreshDiagnosticsDefaultsAndFiniteFailureEvidence(t *testing.T) {
 	if json.Unmarshal(raw, &fields) != nil {
 		t.Fatal("report encoding rejected")
 	}
-	defaults := map[string]string{"controllerStage": "not_started", "sessionOutcome": "not_run", "naturalChildExit": "unknown", "coordinatorPhase": "unknown"}
+	defaults := map[string]string{"outputRejection": "none", "controllerStage": "not_started", "sessionOutcome": "not_run", "naturalChildExit": "unknown", "coordinatorPhase": "unknown"}
 	for _, field := range diagnosticCases {
 		t.Run(field.name, func(t *testing.T) {
 			if fields[field.name] != defaults[field.name] {
@@ -148,7 +149,7 @@ func TestFreshDiagnosticsRejectArbitraryStringsAndTypes(t *testing.T) {
 }
 
 func TestFreshDiagnosticsDoNotPromoteSuccess(t *testing.T) {
-	expected := map[string]string{"controllerStage": "completed", "sessionOutcome": "passed", "naturalChildExit": "zero", "coordinatorPhase": "configured"}
+	expected := map[string]string{"outputRejection": "none", "controllerStage": "completed", "sessionOutcome": "passed", "naturalChildExit": "zero", "coordinatorPhase": "configured"}
 	for _, field := range diagnosticCases {
 		t.Run(field.name, func(t *testing.T) {
 			for _, value := range field.values {
