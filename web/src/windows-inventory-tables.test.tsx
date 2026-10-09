@@ -1,3 +1,4 @@
+import { isInaccessible } from '@testing-library/dom';
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -21,7 +22,13 @@ function resource(view = tableView()): WindowsInventoryResource {
 }
 function Harness({ id = windowsDeviceId, session = 'fixture' }: { id?: string; session?: string }) { return <WindowsInventoryWorkspace key={`${id}:${session}`} resource={useWindowsInventory(id, true, session)}/>; }
 const select = (kind: WindowsInventoryTableKind, locale = 'en') => fireEvent.click(screen.getByRole('tab', { name: kind === 'services' ? locale === 'de' ? 'Dienste' : 'Services' : 'Software' }));
-const names = () => within(screen.getByRole('table')).getAllByRole('row').slice(1).map(row => within(row).getAllByRole('cell')[0].textContent);
+const names = () => within(screen.getByRole('table')).getAllByRole('row').slice(1).map(row => {
+    // Only the name cell is consumed here. Check its accessibility explicitly
+    // instead of computing visibility for every unrelated cell in every row.
+    const name = within(row).getAllByRole('cell', { hidden: true })[0];
+    expect(isInaccessible(name)).toBe(false);
+    return name.textContent;
+});
 const flush = () => act(async () => {});
 beforeEach(() => { setLocale('en', false); vi.mocked(request).mockReset(); });
 afterEach(() => { cleanup(); abortProtectedRequests(); vi.useRealTimers(); vi.restoreAllMocks(); });
@@ -74,12 +81,13 @@ for (const kind of ['services', 'software'] as const) describe(`captured ${kind}
         Object.assign(view.snapshot![kind], { quality: 'partial', complete: false, observedCount: 700, countExact: false, truncated: true });
         expect(validWindowsInventoryView(view, windowsDeviceId)).toBe(true);
         render(<WindowsInventoryWorkspace resource={resource(view)}/>); select(kind);
-        expect(names()).toHaveLength(25); expect(screen.getByText('128 captured · at least 700 observed')).toBeVisible();
+        const firstPage = names(); expect(firstPage).toHaveLength(25); expect(screen.getByText('128 captured · at least 700 observed')).toBeVisible();
         expect(screen.getByText(/at most 128 captured/)).toBeVisible(); expect(screen.getByText('Rows omitted by collection or transfer limits')).toBeVisible();
         expect(screen.getByRole('button', { name: 'Previous page' })).toBeDisabled();
-        const seen = [...names()];
+        const seen = [...firstPage];
         for (let page = 1; page < 6; page++) { fireEvent.click(screen.getByRole('button', { name: 'Next page' })); seen.push(...names()); }
-        expect(seen).toHaveLength(128); expect(new Set(seen).size).toBe(128); expect(names()).toHaveLength(3);
+        expect(seen).toHaveLength(128); expect(new Set(seen).size).toBe(128);
+        expect(seen).toEqual(view.snapshot![kind].rows.map(row => row.name)); expect(names()).toHaveLength(3);
         expect(screen.getByText('Rows 126–128 of 128 matching · 128 captured')).toBeVisible(); expect(screen.getByText('Page 6 of 6')).toBeVisible();
         expect(screen.getByRole('button', { name: 'Next page' })).toBeDisabled(); expect(request).not.toHaveBeenCalled();
     });
