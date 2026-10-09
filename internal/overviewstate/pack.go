@@ -159,11 +159,14 @@ func decodePack(ctx context.Context, raw []byte, r diskRecord) (*generationPack,
 			}
 			validator, e = overviewgeneration.NewValidator(ctx, *m.Manifest)
 			if e != nil {
-				return nil, ErrCorrupt
+				return nil, packValidationError(e)
 			}
 		} else if op == "append" {
-			if m.Chunk == nil || validator.Add(*m.Chunk) != nil {
+			if m.Chunk == nil {
 				return nil, ErrCorrupt
+			}
+			if e = validator.Add(*m.Chunk); e != nil {
+				return nil, packValidationError(e)
 			}
 		}
 		p.frames = append(p.frames, body)
@@ -180,7 +183,7 @@ func decodePack(ctx context.Context, raw []byte, r diskRecord) (*generationPack,
 		return nil, ErrCorrupt
 	}
 	if _, e := validator.Finish(); e != nil {
-		return nil, ErrCorrupt
+		return nil, packValidationError(e)
 	}
 	if r.Last != nil && r.Last.Sequence == r.Floor && r.Next > 0 && r.Last.Operation != "abort" {
 		index := r.Next - 1
@@ -193,4 +196,13 @@ func decodePack(ctx context.Context, raw []byte, r diskRecord) (*generationPack,
 		}
 	}
 	return p, nil
+}
+
+func packValidationError(err error) error {
+	// Only the validator's exact cancellation result is retryable. Rechecking
+	// the context, or matching a joined error, could conceal actual corruption.
+	if err == overviewgeneration.ErrCanceled {
+		return ErrCanceled
+	}
+	return ErrCorrupt
 }

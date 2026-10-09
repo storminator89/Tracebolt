@@ -120,3 +120,22 @@ API-smoke report, native fixture state, HTML, videos or browser traces.
 The inherited 84 required cases, three explicit enrollment quarantines and five
 review-recovery cycles remain byte-for-byte unchanged. The existing coverage429
 manual-refresh gap remains backlog; this target does not expand that repair.
+
+## Finite creation and mobile diagnostics
+
+Fresh-consent stages distinguish every capability/consent assertion, response
+registration/submission, HTTP status, submitted acknowledgement, response-byte
+retrieval and JSON decoding. The existing response-body transport classifier is
+reused. A generic earlier failure does not establish that body retrieval failed.
+
+Mobile socket stages distinguish ARIA/existence, scrolling into view, focus,
+ArrowRight response and each existing viewport assertion. Failure-only snapshots
+contain fixed booleans, bounded counts and geometry, and at most 32 fixed
+enrollment/system request categories/statuses. They contain no DOM text, input
+value, identifier, URL, response body, request body or raw exception. Snapshots
+are taken before ordinary teardown, within the existing diagnostic time budget.
+
+No assertion, threshold, timeout, mutation or quarantine policy changes. A failure
+remains a failure, including diagnostic capture failures. These diagnostics do
+not prove a product bug, browser flakiness or timing neutrality. The inert Node
+suite exercises each phase with injected failures; it does not launch Chromium.
