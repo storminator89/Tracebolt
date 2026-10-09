@@ -106,3 +106,19 @@ The harness does not provision real access or validate a complete enrollment
 rollout. Actual CLI TLS/HTTP integration, cryptographic/durable-state review,
 installer/service reboot behavior and real native endpoint operation are separate
 verification levels.
+
+## Creation failure localization
+
+The shared creation helper uses only fixed stage labels. The route/session-loss
+scenario labels its two calls `first` (before dismissal) and `second` (after
+returning to devices). Stages distinguish opening, submission, waiting, HTTP 201,
+JSON parsing, the v2 response schema, secret type and masked-field assertion.
+No response body, unexpected schema value, exception text or input value is
+exported. The original secret-type and password-mask assertions remain strict;
+HTTP status/schema checks additionally fail closed. No mutation is retried and
+no timeout, scenario, quarantine or application behavior changes.
+
+The inert `enrollment-create-diagnostics.test.mjs` suite exercises this helper
+with in-memory page/response doubles only. It does not launch a browser or run
+the enrollment fixture. These checks are diagnostic coverage, not browser
+acceptance or evidence that the original failure is fixed.

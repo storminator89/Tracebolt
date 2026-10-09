@@ -9,6 +9,7 @@
     "investigations-fixtures.test.mjs",
     "alarm-browser-diagnostics.test.mjs",
     "browser-transport-diagnostics.test.mjs",
+    "enrollment-create-diagnostics.test.mjs",
     "alarm-settings-fixtures.test.mjs",
     "cve-continuation-fixtures.test.mjs",
     "cve-detail-pages-fixtures.test.mjs",
