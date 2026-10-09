@@ -468,7 +468,7 @@ jobs:
       - name: Type check
         run: npm run typecheck
       - name: Unit and interaction tests
-        run: npm test
+        run: npm test -- --maxWorkers=1
       - name: Independent UI regression tests
         working-directory: .
         run: ./web/node_modules/.bin/vitest run --config tests/e2e-review/vitest.config.mts
