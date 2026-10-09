@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { APIError, AUTH_REQUIRED_EVENT, getProtectedRequestEpoch, mutateRaw, request } from './api';
 import { hasLogoutIntent, LOGOUT_INTENT_KEY } from './auth';
+import { JOURNAL_AI_SETTINGS_BYTES } from './journal-ai-types';
 /** A bounded review lifetime, independent of provider/source freshness. Never retries a write. */
 export function useJournalAIReview(clear: () => void) {
     const reset = useRef(clear); reset.current = clear;
@@ -24,7 +25,7 @@ export function useJournalAIReview(clear: () => void) {
             pending = { controller, write, timer: window.setTimeout(() => invalidate(write ? 'uncertain' : 'timeout'), 10000) };
             setBusy(true); setError('');
             try {
-                const value = await work(<V,>(path: string, max = 16384) => request<V>(path, { signal: controller.signal, cache: 'no-store' }, max), <V,>(path: string, body: unknown, max = 16384) => mutateRaw<V>(path, JSON.stringify(body), {}, controller.signal, max));
+                const value = await work(<V,>(path: string, max = JOURNAL_AI_SETTINGS_BYTES) => request<V>(path, { signal: controller.signal, cache: 'no-store' }, max), <V,>(path: string, body: unknown, max = JOURNAL_AI_SETTINGS_BYTES) => mutateRaw<V>(path, JSON.stringify(body), {}, controller.signal, max));
                 if (!active()) return;
                 const elapsed = performance.now() - started.mono;
                 if (elapsed < 0 || elapsed >= 10000 || Math.abs(Date.now() - started.wall - elapsed) > 1500) { invalidate(write ? 'uncertain' : 'refresh'); return; }

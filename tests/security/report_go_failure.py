@@ -1,4 +1,4 @@
-"""Finite Go failure projection. Never emit runtime Output, stderr or subtests."""
+"""Finite Go failure/timing projection. Never emit Output, stderr or subtests."""
 import argparse
 import hashlib
 import io
@@ -17,6 +17,8 @@ MAX_EVENTS = 250000
 MAX_RECORDS = 64
 MAX_ACTIVE = 512
 MAX_SECONDS = 86400
+MAX_TIMING_PACKAGES = 20
+MAX_TIMING_TESTS = 32
 SOURCE_COMMIT = "fccc4b00cd8a144afd58e4b995747afab7a10022"
 ALLOWLIST = Path(__file__).with_name("go_failure_allowlist.json")
 ROOT = Path(__file__).resolve().parents[2]
@@ -256,16 +258,71 @@ class SafeParser(argparse.ArgumentParser):
         raise ValueError("invalid")
 
 
+def project_timings(raw, allowed):
+    """Bounded elapsed metadata from successful runs; never runtime text."""
+    if not raw or len(raw) > MAX_FILE or not raw.endswith(b"\n"):
+        raise ValueError("invalid")
+    packages, tests = {}, {}
+    skipped_packages = set()
+    for count, line in enumerate(io.BytesIO(raw), 1):
+        if count > MAX_EVENTS or len(line) > MAX_LINE:
+            raise ValueError("invalid")
+        event = decode(line)
+        validate_event(event)
+        action = event["Action"]
+        if action in {"fail", "build-fail"}:
+            raise ValueError("unsuccessful run")
+        package = event.get("Package", "")
+        if package not in allowed:
+            continue
+        test = event.get("Test", "")
+        if action == "skip" and not test:
+            if (package, "") in packages or package in skipped_packages:
+                raise ValueError("duplicate completion")
+            skipped_packages.add(package)
+        if action != "pass":
+            continue
+        if test and test not in allowed[package]:
+            continue  # Includes every subtest, even beneath a known root.
+        if "Elapsed" not in event:
+            raise ValueError("missing elapsed")
+        key = (package, test)
+        target = tests if test else packages
+        if key in target or package in skipped_packages:
+            raise ValueError("duplicate completion")
+        target[key] = event["Elapsed"]
+    if not packages or any((package, "") not in packages for package, _ in tests):
+        raise ValueError("incomplete package completion")
+
+    def slowest(values, limit):
+        # Source names break elapsed ties deterministically. Root and package
+        # durations overlap; they must never be summed together as CPU time.
+        return [{"package": package, **({"test": test} if test else {}),
+                 "elapsedSeconds": round(elapsed, 3)}
+                for (package, test), elapsed in
+                sorted(values.items(), key=lambda item: (-item[1], item[0]))[:limit]]
+
+    return {"category": "success_timings", "packages": slowest(packages, MAX_TIMING_PACKAGES),
+            "tests": slowest(tests, MAX_TIMING_TESTS),
+            "completedPackages": len(packages), "completedRoots": len(tests),
+            "skippedPackages": len(skipped_packages),
+            "truncated": len(packages) > MAX_TIMING_PACKAGES or len(tests) > MAX_TIMING_TESTS}
+
+
 def main(argv=None):
     exit_code = elapsed = None
+    success = False
     try:
         parser = SafeParser(description=__doc__, add_help=False, allow_abbrev=False)
         parser.add_argument("--events", required=True)
         parser.add_argument("--stderr", required=True)
         parser.add_argument("--exit-code", required=True)
         parser.add_argument("--elapsed-seconds", required=True)
+        parser.add_argument("--success", action="store_true")
         args = parser.parse_args(argv)
-        if not re.fullmatch(r"[0-9]{1,3}", args.exit_code) or not 1 <= int(args.exit_code) <= 255:
+        success = args.success
+        if (not re.fullmatch(r"[0-9]{1,3}", args.exit_code)
+                or not (int(args.exit_code) == 0 if success else 1 <= int(args.exit_code) <= 255)):
             raise ValueError("invalid")
         exit_code = int(args.exit_code)
         if not re.fullmatch(r"[0-9]{1,5}", args.elapsed_seconds) or int(args.elapsed_seconds) > MAX_SECONDS:
@@ -274,13 +331,14 @@ def main(argv=None):
         allowed = load_allowlist()
         raw = read_private(args.events, MAX_FILE)
         read_private(args.stderr, MAX_STDERR)  # Verified privately, never interpreted or emitted.
-        result = project(raw, allowed)
+        result = project_timings(raw, allowed) if success else project(raw, allowed)
         code = 0
     except (OSError, ValueError, TypeError, OverflowError, RecursionError):
         result = {"category": "diagnostic_unavailable", "records": [], "truncated": False}
         code = 1
     result.update(exitCode=exit_code, elapsedSeconds=elapsed)
-    print("GO_TEST_DIAGNOSTIC " + json.dumps(result, sort_keys=True, separators=(",", ":"), allow_nan=False))
+    prefix = "GO_TEST_TIMINGS " if success else "GO_TEST_DIAGNOSTIC "
+    print(prefix + json.dumps(result, sort_keys=True, separators=(",", ":"), allow_nan=False))
     return code
 
 

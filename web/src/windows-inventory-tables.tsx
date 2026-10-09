@@ -1,6 +1,6 @@
 import { serviceStartupCell, serviceStartupCopy } from './windows-service-startup';
 import type { WindowsServiceStartup } from './windows-service-startup-types';
-import { useId, useState } from 'react';
+import { useId, useMemo, useState } from 'react';
 import type { WindowsInventoryResource } from './windows-inventory-resource';
 import type { WindowsInventorySnapshot } from './windows-inventory-types';
 import './windows-inventory-tables.css';
@@ -45,6 +45,7 @@ const literalCompare = (a: string, b: string) => a < b ? -1 : a > b ? 1 : 0;
 /** Sort source numbers numerically and source text literally. No version parsing,
  * cross-generation cache, backend search, row deduplication or source mutation. */
 export function capturedInventoryTableRows(snapshot: WindowsInventorySnapshot, kind: WindowsInventoryTableKind, query: string, sort: WindowsInventoryTableSort, locale: Locale, startup: WindowsServiceStartup | null = null) {
+    const compareText = new Intl.Collator(locale, { numeric: false }).compare;
     const c = copy[locale], unknown = (value: string) => value || c.unknown;
     const filter = query.trim().toLocaleLowerCase(locale), descending = sort.endsWith('-desc');
     const startupRows = new Map(startup?.rows.map(row => [row.serviceIndex, row]));
@@ -67,7 +68,7 @@ export function capturedInventoryTableRows(snapshot: WindowsInventorySnapshot, k
         // Empty source fields stay last in either direction; the placeholder is
         // display text and must not be treated as a reported value.
         if (a.order === '' || b.order === '') return a.order === b.order ? literalCompare(a.tie, b.tie) || a.index - b.index : a.order === '' ? 1 : -1;
-        const order = typeof a.order === 'number' && typeof b.order === 'number' ? a.order - b.order : String(a.order).localeCompare(String(b.order), locale, { numeric: false });
+        const order = typeof a.order === 'number' && typeof b.order === 'number' ? a.order - b.order : compareText(String(a.order), String(b.order));
         return order * (descending ? -1 : 1) || literalCompare(a.tie, b.tie) || a.index - b.index;
     });
 }
@@ -89,7 +90,9 @@ export function useWindowsInventoryTableControls(resource: WindowsInventoryResou
 /** All data comes from the already validated, admitted current inventory view. */
 export function WindowsInventoryTable({ snapshot, kind, locale, controls, onChange, serviceStartup = null }: { snapshot: WindowsInventorySnapshot; serviceStartup?: WindowsServiceStartup | null; kind: WindowsInventoryTableKind; locale: Locale; controls: TableControls; onChange: (controls: TableControls) => void }) {
     const id = useId(), c = copy[locale], { query, sort, page } = controls;
-    const rows = capturedInventoryTableRows(snapshot, kind, query, sort, locale, serviceStartup);
+    // This component exists only while its owner admits the current snapshot.
+    // Cache pure row work within that lifetime, never authority or freshness.
+    const rows = useMemo(() => capturedInventoryTableRows(snapshot, kind, query, sort, locale, serviceStartup), [snapshot, kind, query, sort, locale, serviceStartup]);
     const pageCount = Math.max(1, Math.ceil(rows.length / PAGE_SIZE)), currentPage = Math.min(page, pageCount - 1), start = currentPage * PAGE_SIZE, visible = rows.slice(start, start + PAGE_SIZE);
     const headers = kind === 'services' ? [c.name, c.displayName, c.state, 'PID', serviceStartupCopy[locale].column] : [c.name, c.version, c.publisher, c.registry];
     const sortedColumn = sort.startsWith('startup-') ? 4 : sort.startsWith('name-') ? 0 : sort.startsWith('pid-') ? 3 : sort.startsWith('version-') ? 1 : 2;

@@ -282,3 +282,25 @@ loopback login/CSRF with invented content. It covers direct scoped service reads
 source-wide literal search with empty nonexhausted pages, exact cursor continuation,
 content replacement, expiry, no export and desktop/mobile layout. It never reads a
 host journal or grants access. Native systemd acceptance remains separate.
+
+## Windows Health evidence layers
+
+The Health source-presence case was removed: it passed when the helper returned
+without doing anything and failed on a harmless local helper rename. The existing
+executable clock, route, validator and selector tests retain their separate
+behavioral coverage, alongside the completion checks below.
+Literal API spellings were brittle hints, not execution or permission proof.
+The actual route/request guards and finite diagnostics remain unchanged.
+
+Before the live LAN runner marks the Windows case as passed, it now requires
+all eight existing Health screenshot records: positive and missing-authority
+states in English/German at desktop/mobile sizes. Each record must match the
+current source, case, locale, viewport and viewport-only safety metadata. The
+runner records these outputs only after the actual screenshot call succeeds;
+an early return that skips the Health helper therefore cannot produce a passing
+Windows case. No new screenshot, browser action or deadline is added.
+
+Pure omission, duplicate and metadata negative controls check that completion
+contract without a browser. Completion metadata alone does not prove pixel
+content, native collection or host acceptance. The helper's strict DOM assertions,
+the hosted run and independent pixel review remain the visual evidence.

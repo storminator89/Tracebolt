@@ -264,9 +264,6 @@ func (h *operatorHandler) view(session *operatorauth.Session) authView {
 	}
 	return view
 }
-func operatorCookie(r *http.Request) (string, bool) {
-	return namedOperatorCookie(r, operatorauth.CookieName)
-}
 func namedOperatorCookie(r *http.Request, name string) (string, bool) {
 	value := ""
 	count := 0
@@ -288,9 +285,6 @@ func (h *operatorHandler) session(r *http.Request) (operatorauth.Session, error)
 func (h *operatorHandler) setCookie(w http.ResponseWriter, s operatorauth.Session) {
 	maxAge := int(math.Ceil(s.ExpiresAt.Sub(h.auth.Now()).Seconds()))
 	http.SetCookie(w, &http.Cookie{Name: h.cookieName, Value: s.Token, Path: "/", Secure: !h.insecureHTTPTest, HttpOnly: true, SameSite: http.SameSiteStrictMode, MaxAge: maxAge, Expires: s.ExpiresAt.UTC()})
-}
-func clearOperatorCookie(w http.ResponseWriter) {
-	clearNamedOperatorCookie(w, operatorauth.CookieName, true)
 }
 func clearNamedOperatorCookie(w http.ResponseWriter, name string, secure bool) {
 	http.SetCookie(w, &http.Cookie{Name: name, Value: "", Path: "/", Secure: secure, HttpOnly: true, SameSite: http.SameSiteStrictMode, MaxAge: -1, Expires: time.Unix(1, 0).UTC()})

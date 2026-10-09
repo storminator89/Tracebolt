@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import {createRequire} from 'node:module';
 import {fileURLToPath} from 'node:url';
 import {windowsBrowserFixture,windowsHealthBrowserDevice,windowsFixtureResponseTime} from './windows-inventory-browser.mjs';
-import {windowsHealthStageNames} from './windows-health-browser.mjs';
+import {requireWindowsHealthEvidence} from './windows-health-evidence.mjs';
 const now='2026-10-08T18:00:00.000Z';
 test('positive hosted Health fixture mirrors manager activation authority and original metric ages',()=>{
  const d=windowsHealthBrowserDevice(now),view=windowsBrowserFixture(now);
@@ -21,16 +21,39 @@ test('missing-authority fixture changes no accepted readings or inventory to fab
  assert.deepEqual(windowsBrowserFixture(now,'health-unverified'),windowsBrowserFixture(now));
  assert.equal(windowsHealthBrowserDevice(now).capabilities.length,1,'a missing case cannot taint the next positive fixture');
 });
-test('hosted Health asserts positive and missing-authority states at each locale and viewport',()=>{
- const source=fs.readFileSync(new URL('./windows-health-browser.mjs',import.meta.url),'utf8'),runner=fs.readFileSync(new URL('./windows-inventory-browser.mjs',import.meta.url),'utf8');
- assert.deepEqual(windowsHealthStageNames,['health-current','health-unverified','health-restored']);
- assert.match(runner,/for\(const locale of \['en','de'\]\)for\(const width of \[1440,390\]\)/);assert.match(runner,/\.\.\.windowsHealthStageNames/);assert.match(runner,/await exerciseWindowsHealth\(/);
- for(const text of ['Recent report','Aktuelle Meldung','Current reading','Aktuelle Messung','61.0 %','61,0 %','Unknown','Unbekannt','Observed events','Beobachtete Ereignisse'])assert.ok(source.includes(text));
- assert.match(source,/contact\.locator\('time'\)\)\.toHaveCount\(2\)/);assert.match(source,/disk\.locator\('time'\)\)\.toHaveCount\(1\)/);assert.match(source,/health\.locator\('time'\)\)\.toHaveCount\(0\)/);
- assert.ok(source.includes('synthetic-windows-health-current-${width}-${locale}'));assert.ok(source.includes('synthetic-windows-health-unverified-${width}-${locale}'));
- assert.match(source,/await positive\(\)/);assert.match(source,/await expect\(disk\.getByText\(value,\{exact:true\}\)\)\.toHaveCount\(0\)/);
- assert.doesNotMatch(source,/chromium\.launch|newContext\(|fetch\(|spawn\(|execFile|writeFile|ignoreHTTPSErrors|waitForTimeout|setDefaultTimeout|\.skip\(/);
- assert.match(runner,/expect\(unexpected\)\.toEqual\(\[\]\)/);assert.match(runner,/expect\(writes\)\.toEqual\(\[\]\)/);assert.match(runner,/expect\(external\)\.toEqual\(\[\]\)/);
+test('hosted completion rejects skipped positive or authority-loss outputs without fake browser assertions',()=>{
+ const sourceSha='a'.repeat(40),testName='Invented Windows case';
+ const fixture=()=>['en','de'].flatMap(locale=>[1440,390].flatMap(width=>['current','unverified'].map(phase=>({file:`synthetic-windows-health-${phase}-${width}-${locale}.png`,sourceSha,test:testName,locale,viewport:{width,height:width===390?844:1000},publicSafe:true,fullPage:false}))));
+ assert.deepEqual(requireWindowsHealthEvidence(fixture(),sourceSha,testName),{positive:4,authorityLoss:4});
+ // An early-return/skipped helper produces no Health screenshots. Do not let
+ // an otherwise successful surrounding inventory case count as Health proof.
+ assert.throws(()=>requireWindowsHealthEvidence([],sourceSha,testName),/completion evidence/);
+ for(let index=0;index<8;index++){
+  const missing=fixture();missing.splice(index,1);assert.throws(()=>requireWindowsHealthEvidence(missing,sourceSha,testName),/completion evidence/);
+  const duplicate=fixture();duplicate[index]={...duplicate[(index+1)%8]};assert.throws(()=>requireWindowsHealthEvidence(duplicate,sourceSha,testName),/completion evidence/);
+ }
+ for(const mutate of [item=>{item.sourceSha='b'.repeat(40);},item=>{item.test='Another case';},item=>{item.locale='de';},item=>{item.viewport.width=390;},item=>{item.viewport.height=844;},item=>{item.publicSafe=false;},item=>{item.fullPage=true;}]){
+  const invalid=fixture();mutate(invalid[0]);assert.throws(()=>requireWindowsHealthEvidence(invalid,sourceSha,testName),/completion evidence/);
+ }
+ const unrelated=fixture();unrelated.push({file:'synthetic-unrelated.png'});assert.deepEqual(requireWindowsHealthEvidence(unrelated,sourceSha,testName),{positive:4,authorityLoss:4});
+});
+
+test('the real runner success boundary rejects a no-op Windows callback before reporting PASS',async()=>{
+ const require=createRequire(new URL('../../web/package.json',import.meta.url)),ts=require('typescript'),vm=require('node:vm');
+ const source=fs.readFileSync(new URL('./lan-browser.mjs',import.meta.url),'utf8');
+ const parsed=ts.createSourceFile('lan-browser.mjs',source,ts.ScriptTarget.Latest,true,ts.ScriptKind.JS);
+ const check=parsed.statements.find(node=>ts.isFunctionDeclaration(node)&&node.name?.text==='check');assert.ok(check);
+ // Execute only the actual success/failure wrapper. Its process/browser setup
+ // and teardown are inert here; no Playwright assertion is mocked or replaced.
+ const globals={Date,console:{log(){}},start:async()=>{},stop:async()=>{},context:null,currentTest:'',results:[],screenshots:[],sourceSha:'a'.repeat(40),requireWindowsHealthEvidence,windowsInventoryFailureStage:()=> 'fixture-before-completion'};
+ for(const name of new Set([...check.getText(parsed).matchAll(/\b\w+CaseName\b/g)].map(match=>match[0])))globals[name]=name;
+ const run=vm.runInNewContext('('+check.getText(parsed)+')',globals);
+ await run(globals.windowsInventoryCaseName,async()=>{});
+ assert.equal(globals.results.length,1);assert.equal(globals.results[0].status,'FAIL');assert.equal(globals.results[0].stage,'health-completion');
+ globals.results.length=0;
+ for(const locale of ['en','de'])for(const width of [1440,390])for(const phase of ['current','unverified'])globals.screenshots.push({file:`synthetic-windows-health-${phase}-${width}-${locale}.png`,sourceSha:globals.sourceSha,test:globals.windowsInventoryCaseName,locale,viewport:{width,height:width===390?844:1000},publicSafe:true,fullPage:false});
+ await run(globals.windowsInventoryCaseName,async()=>{});
+ assert.equal(globals.results[0].status,'PASS');
 });
 
 test('interleaved contact aging preserves the real Health watermark without poisoning the next viewport',async()=>{

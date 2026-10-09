@@ -96,7 +96,6 @@ func (s *inventorySender) deliver(ctx context.Context, w inventorystate.Work) ([
 	return raw, false, nil
 }
 
-func inventoryConflictResponse(raw []byte) bool { return inventoryDomainConflictResponse(raw, false) }
 func inventoryDomainConflictResponse(raw []byte, updates bool) bool {
 	// StrictObject deliberately disallows nested values; decode precisely one
 	// outer member here, then apply it to the fixed scalar error object.

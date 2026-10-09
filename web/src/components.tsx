@@ -4,7 +4,7 @@ import type { FleetIdentityMap } from './fleet-identity-types';
 import { t, useLocale } from './i18n';
 import { useEffect, useRef } from 'react';
 import type { ReactNode } from 'react';
-import { ArrowRight, ArrowUpRight, Check, ChevronRight, CircleHelp, Clock3, Database, HardDrive, LoaderCircle, Monitor, Server, ShieldCheck, Terminal, TriangleAlert, X } from 'lucide-react';
+import { ArrowUpRight, Check, ChevronRight, CircleHelp, Clock3, Database, HardDrive, LoaderCircle, Monitor, Server, ShieldCheck, Terminal, TriangleAlert, X } from 'lucide-react';
 import type { Activity, Case, Device, DeviceStatus, Evidence, Metric, Platform } from './types';
 import { caseStatusLabels, fullDate, platformLabels, qualityLabels, relativeTime, statusLabels } from './utils';
 export function Logo() { return <span className="logo-mark" aria-hidden="true"><i /><i /><i /><i /></span>; }
@@ -106,7 +106,6 @@ export function Dialog({ children, title, onClose, className = '' }: {
                 onClose();
         }}><div className="dialog" ref={ref} role="dialog" aria-modal="true" aria-label={title} tabIndex={-1}><button className="icon-button dialog-close" aria-label={t("Schlie\u00DFen")} onClick={onClose}><X size={20}/></button>{children}</div></div>;
 }
-export function NextArrow() { return <ArrowRight size={15}/>; }
 export function CaseStatus({ status }: {
     status: Case['status'];
 }) { return <span className={`case-status case-status-${status}`}><span className="status-dot"/>{caseStatusLabels[status]}</span>; }

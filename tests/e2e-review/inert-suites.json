@@ -1,0 +1,34 @@
+{
+  "schemaVersion": "tracebolt.inert-node-suites.v1",
+  "scope": "Only reviewed, inert *.test.mjs suites directly inside tests/e2e-review. Browser runners, Python/native gates and all other paths are outside this manifest and are never discovered for execution.",
+  "entries": [
+    "public-command-contract.test.mjs",
+    "windows-inventory-fixtures.test.mjs",
+    "resource-history-fixtures.test.mjs",
+    "application-check-settings-fixtures.test.mjs",
+    "investigations-fixtures.test.mjs",
+    "alarm-browser-diagnostics.test.mjs",
+    "browser-transport-diagnostics.test.mjs",
+    "alarm-settings-fixtures.test.mjs",
+    "cve-continuation-fixtures.test.mjs",
+    "cve-detail-pages-fixtures.test.mjs",
+    "proactive-ai-fixtures.test.mjs",
+    "journal-ai-fixtures.test.mjs",
+    "package-updates-fixtures.test.mjs",
+    "journal-browse-fixtures.test.mjs",
+    "windows-contact-history-fixtures.test.mjs"
+  ],
+  "imported": [
+    "device-inventory-browser-contracts.test.mjs",
+    "health-dashboard-browser.test.mjs",
+    "service-action-display-fixtures.test.mjs",
+    "windows-health-fixtures.test.mjs",
+    "windows-logs-diagnostics.test.mjs",
+    "windows-logs-fixtures.test.mjs",
+    "windows-logs-labels.test.mjs",
+    "windows-os-provenance-fixtures.test.mjs",
+    "windows-service-software-fixtures.test.mjs",
+    "workspace-navigation-browser.test.mjs"
+  ],
+  "excluded": []
+}

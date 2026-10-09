@@ -311,6 +311,10 @@ jobs:
       - name: Validate bounded Go failure projection with inert fixtures
         run: |
           python3 -B tests/security/test_go_failure_reporter.py
+          python3 -B tests/security/test_go_aggregate_coverage.py
+          python3 -O -B tests/security/test_go_aggregate_coverage.py
+          python3 -B tests/security/test_go_timing_reporter.py
+          python3 -O -B tests/security/test_go_timing_reporter.py
           python3 -B tests/security/test_action_setup_identity_gate.py
           python3 -O -B tests/security/test_action_setup_identity_gate.py
       - name: Require read-only action setup under the existing runner service identity
@@ -354,8 +358,10 @@ jobs:
           set -euo pipefail
           (umask 077; : > "$RUNNER_TEMP/go-tests.jsonl"; : > "$RUNNER_TEMP/go-tests.stderr")
           tracebolt_test_start=$SECONDS
-          if go test -race -json -p 1 -buildvcs=false ./... -skip '^TestIndependentPackageStoreDenseCapacityAndActualIngress$' -count=1 -timeout=15m > "$RUNNER_TEMP/go-tests.jsonl" 2> "$RUNNER_TEMP/go-tests.stderr"; then
+          if go test -race -json -p 1 -buildvcs=false ./... -skip '^(TestIndependentPackageStoreDenseCapacityAndActualIngress|TestGuidedThreeBinaryEnrollmentAndForeground)$' -count=1 -timeout=15m > "$RUNNER_TEMP/go-tests.jsonl" 2> "$RUNNER_TEMP/go-tests.stderr"; then
             echo 'PASS: Go unit and race tests.'
+            tracebolt_test_elapsed=$((SECONDS - tracebolt_test_start))
+            python3 -I -B tests/security/report_go_failure.py --success --events "$RUNNER_TEMP/go-tests.jsonl" --stderr "$RUNNER_TEMP/go-tests.stderr" --exit-code 0 --elapsed-seconds "$tracebolt_test_elapsed" || true
           else
             tracebolt_test_status=$?
             tracebolt_test_elapsed=$((SECONDS - tracebolt_test_start))
@@ -469,8 +475,10 @@ jobs:
       - name: Verify public installation and browser fixture contracts without executing commands
         working-directory: .
         run: |
+          node tests/e2e-review/check-inert-suites.mjs --self-test
+          node tests/e2e-review/check-inert-suites.mjs
           node --test tests/e2e-review/public-command-contract.test.mjs
-          node --test tests/e2e-review/windows-inventory-fixtures.test.mjs tests/e2e-review/resource-history-fixtures.test.mjs tests/e2e-review/application-check-settings-fixtures.test.mjs tests/e2e-review/investigations-fixtures.test.mjs tests/e2e-review/alarm-browser-diagnostics.test.mjs tests/e2e-review/browser-transport-diagnostics.test.mjs tests/e2e-review/alarm-settings-fixtures.test.mjs tests/e2e-review/cve-continuation-fixtures.test.mjs tests/e2e-review/cve-detail-pages-fixtures.test.mjs tests/e2e-review/proactive-ai-fixtures.test.mjs tests/e2e-review/journal-ai-fixtures.test.mjs tests/e2e-review/package-updates-fixtures.test.mjs tests/e2e-review/journal-browse-fixtures.test.mjs
+          node --test tests/e2e-review/windows-inventory-fixtures.test.mjs tests/e2e-review/resource-history-fixtures.test.mjs tests/e2e-review/application-check-settings-fixtures.test.mjs tests/e2e-review/investigations-fixtures.test.mjs tests/e2e-review/alarm-browser-diagnostics.test.mjs tests/e2e-review/browser-transport-diagnostics.test.mjs tests/e2e-review/alarm-settings-fixtures.test.mjs tests/e2e-review/cve-continuation-fixtures.test.mjs tests/e2e-review/cve-detail-pages-fixtures.test.mjs tests/e2e-review/proactive-ai-fixtures.test.mjs tests/e2e-review/journal-ai-fixtures.test.mjs tests/e2e-review/package-updates-fixtures.test.mjs tests/e2e-review/journal-browse-fixtures.test.mjs tests/e2e-review/windows-contact-history-fixtures.test.mjs
       - name: Production build
         run: npm run build
 

@@ -336,6 +336,3 @@ func ValidOperation(operation string) bool {
 	}
 	return false
 }
-func validInventoryPath(path string) bool {
-	return strings.HasPrefix(path, PathPrefix) && ValidOperation(strings.TrimPrefix(path, PathPrefix))
-}

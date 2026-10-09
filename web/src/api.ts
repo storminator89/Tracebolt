@@ -45,10 +45,22 @@ async function boundedJSON(response: Response, maximum: number): Promise<unknown
     for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
     return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes)) as unknown;
 }
+/** These legacy projections have no server byte contract (api/api.go and
+ * store/store.go). Full case histories can exceed 256 KiB through ordinary
+ * notes/status writes. Keep only these exact successful responses compatible
+ * until summary projections and paged histories replace them. An explicit
+ * caller cap still applies; errors never use this exception. */
+function legacyUnboundedProjection(path: string, method: string): boolean {
+    if (method === 'GET')
+        return path === '/overview' || path === '/devices' || path === '/cases' || /^\/(?:devices|cases)\/[a-z0-9_-]{1,96}$/.test(path);
+    return method === 'POST' && /^\/cases\/[a-z0-9_-]{1,96}\/(?:notes|status)$/.test(path);
+}
 export async function request<T>(path: string, options?: RequestInit, maxResponseBytes?: number): Promise<T> {
     const responseCap = /^\/devices\/agent_[0-9a-f]{32}\/package-updates(?:\/(?:prepare|approve|jobs\/update_[0-9a-f]{32}))?$/.test(path) ? 512 * 1024 : /^\/devices\/agent_[0-9a-f]{32}\/resource-history(?:\?afterSequence=[1-9][0-9]{0,18})?$/.test(path) ? 1536 * 1024 : /^\/investigations\?scope=(?:open|recovered|closed|all)&offset=(?:0|[1-9][0-9]*)$/.test(path) ? 2 * 1024 * 1024 : 262144;
     if (maxResponseBytes !== undefined && (!Number.isSafeInteger(maxResponseBytes) || maxResponseBytes < 1 || maxResponseBytes > responseCap))
         throw new APIError(t("Der Manager hat keine gültigen JSON-Daten zurückgegeben."));
+    const maximum = maxResponseBytes ?? responseCap;
+    const legacySuccess = maxResponseBytes === undefined && legacyUnboundedProjection(path, options?.method?.toUpperCase() ?? 'GET');
     const controller = new AbortController();
     const protectedRoute = !path.startsWith('/auth/') || path === '/auth/logout';
     const epoch = protectedEpoch;
@@ -85,7 +97,7 @@ export async function request<T>(path: string, options?: RequestInit, maxRespons
             let message = t("Die Anfrage konnte nicht geladen werden (HTTP {0}).", { "0": response.status });
             let code: APIError['code'];
             try {
-                const data = maxResponseBytes === undefined ? await response.json() : await boundedJSON(response, maxResponseBytes) as { error?: { code?: string; message?: string } };
+                const data = await boundedJSON(response, maximum) as { error?: { code?: string; message?: string } };
                 if (typeof data.error?.code === 'string' && (retainedErrorCodes as readonly string[]).includes(data.error.code)) code = data.error.code as APIError['code'];
                 message = apiErrorText(data.error?.code, typeof data.error?.message === "string" ? data.error.message : message);
             }
@@ -95,7 +107,7 @@ export async function request<T>(path: string, options?: RequestInit, maxRespons
         }
         let data: T;
         try {
-            data = (maxResponseBytes === undefined ? await response.json() : await boundedJSON(response, maxResponseBytes)) as T;
+            data = (legacySuccess ? await response.json() : await boundedJSON(response, maximum)) as T;
         }
         catch {
             active();
