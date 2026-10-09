@@ -2,14 +2,14 @@
  * never pass response bodies, errors, URLs, secret values or DOM contents to mark.
  */
 const invocations=new Set(['single','first','second']);
-const phases=new Set(['open dialog','submit','await response','response status','parse response','response schema','secret type','masked field']);
+const phases=new Set(['open dialog','submit','await response','response status','retrieve response bytes','decode response JSON','response schema','secret type','masked field']);
 export function invitationCreationStage(invocation,phase){
  const call=invocations.has(invocation)?invocation:'single';
  const step=phases.has(phase)?phase:'unknown';
  return `create invitation ${call}: ${step}`;
 }
 
-export async function createBrowserInvitation(page,{base,mark,expect,secrets,invocation='single'}){
+export async function createBrowserInvitation(page,{base,mark,expect,secrets,invocation='single',transportDiagnostics,recordTransportFailure=()=>{}}){
  const step=phase=>mark(invitationCreationStage(invocation,phase));
  step('open dialog');
  await page.getByRole('button',{name:'Add device',exact:true}).click();
@@ -21,8 +21,17 @@ export async function createBrowserInvitation(page,{base,mark,expect,secrets,inv
  const response=await responsePending;
  step('response status');
  expect(response.status()).toBe(201);
- step('parse response');
- const created=await response.json();
+ step('retrieve response bytes');
+ const began=performance.now();let bytes;
+ try{bytes=await response.body();}
+ catch(error){
+  // Capture the original request's finite transport state before normal cleanup.
+  // A failed diagnostic must never replace this failure or make it a success.
+  try{recordTransportFailure(transportDiagnostics.capture('response-body',error,{response,elapsedMs:performance.now()-began}));}catch{}
+  throw error;
+ }
+ step('decode response JSON');
+ const created=JSON.parse(bytes.toString('utf8'));
  step('response schema');
  expect(created?.schemaVersion==='tracebolt.enrollment-invitation.v2').toBe(true);
  step('secret type');

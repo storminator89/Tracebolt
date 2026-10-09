@@ -112,7 +112,7 @@ verification levels.
 The shared creation helper uses only fixed stage labels. The route/session-loss
 scenario labels its two calls `first` (before dismissal) and `second` (after
 returning to devices). Stages distinguish opening, submission, waiting, HTTP 201,
-JSON parsing, the v2 response schema, secret type and masked-field assertion.
+response-byte retrieval, JSON decoding, the v2 response schema, secret type and masked-field assertion.
 No response body, unexpected schema value, exception text or input value is
 exported. The original secret-type and password-mask assertions remain strict;
 HTTP status/schema checks additionally fail closed. No mutation is retried and
@@ -122,3 +122,12 @@ The inert `enrollment-create-diagnostics.test.mjs` suite exercises this helper
 with in-memory page/response doubles only. It does not launch a browser or run
 the enrollment fixture. These checks are diagnostic coverage, not browser
 acceptance or evidence that the original failure is fixed.
+
+A retrieval failure additionally retains the existing transport diagnostic's
+closed error category, original request completion/failure category, page/context
+close or crash state, browser connection state, bounded viewport/elapsed numbers
+and numeric browser version. The snapshot is taken before cleanup. No response
+bytes, headers, URLs, DOM text, secret or raw exception are retained. A JSON
+decoding failure has its own fixed stage; it is not treated as a transport error.
+Both failures still fail the case. Diagnostic failures cannot replace the original
+failure; listeners are removed at case teardown and the snapshot resets per case.
