@@ -1,7 +1,5 @@
 {
-  "schemaVersion": 1,
-  "sourceCommit": "fccc4b00cd8a144afd58e4b995747afab7a10022",
-  "goSourceSha256": "03f1b6a71cd439fcd1a5589a3c5eb97637bf4012ba72dc4246283197f50b3bf7",
+  "goSourceSha256": "df6180439c399c5a3bf30f97358bf1b7397dc3a882ada2327b9ffb2e50debca9",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -259,6 +257,7 @@
       "TestNetworkDisclosureMustCompleteBeforeDispatch",
       "TestNetworkFlagsDoNotAuthorizeAnotherScope",
       "TestNetworkRequiresOwnedStoppedService",
+      "TestPackagedSetupGUINative",
       "TestPendingCancellationDuringBackoffIsGraceful",
       "TestPendingExpiryDuringBackoffStopsWithoutSecondResume",
       "TestPendingExpiryMarkerSentinelIsExpected",
@@ -285,6 +284,7 @@
       "TestServiceStartupFlagsDoNotAuthorizeAnotherScope",
       "TestServiceStartupRequiresOwnedStoppedService",
       "TestSetupCauseCategoriesAreIdentityBasedAndFinite",
+      "TestSetupConsoleOnlyControlCAndBreakCancelCooperatively",
       "TestSetupDiagnosticEveryInjectedStage",
       "TestSetupDiagnosticUnknownPanicCycleAndWideChainsFailClosed",
       "TestSetupFailuresNeverSkipReceiptOrStart",
@@ -296,6 +296,12 @@
       "TestSetupRejectsCancellationAndExistingServiceBeforeIntent",
       "TestSetupRuntimeReadPreflightStopsBeforeJournalOrClaim",
       "TestSetupWindowsPermissionCauseHasFiniteStartupCode",
+      "TestSetupWizardCanceledBeforeApplyIsInert",
+      "TestSetupWizardDeletionPendingIsObservedNotRetried",
+      "TestSetupWizardInstallOrderingAndEveryBoundary",
+      "TestSetupWizardPublicBootstrapPreviewAndExplicitTransportConsent",
+      "TestSetupWizardRejectsSecretAndHTTPBootstrap",
+      "TestSetupWizardRemovalWaitsForExactOwnedStopAndAbsence",
       "TestSetupWritesIntentBeforeSCMAndPreparedReceiptBeforeEnrollment",
       "TestVolumeConsentFlagsExplicitAndBounded",
       "TestWindowsBootstrapMustMatchExplicitLocalProfile",
@@ -308,6 +314,7 @@
       "TestWindowsLifecycleShortWriteFails",
       "TestWriteFailureStagesUseFixedFiniteCategory"
     ],
+    "localrmm/deploy/windows-setup": [],
     "localrmm/internal/actionclient": [
       "TestClientCallerDeadlineAndCancellationBoundStalledResponse",
       "TestClientCapabilitiesPreserveDefaultOffAndOriginalTime",
@@ -837,7 +844,9 @@
       "TestWindowsContactFinalAuthoritySessionAndTimeRecheck",
       "TestWindowsContactMonitorFailureRestartAndCancellation",
       "TestWindowsContactMonitorRejectsDuplicateIDsBeforeWrites",
-      "TestWindowsContactReplacementIdentityCannotReadRetainedHistory"
+      "TestWindowsContactReplacementIdentityCannotReadRetainedHistory",
+      "TestWindowsSetupCapabilitiesAbsentOnDeveloper",
+      "TestWindowsSetupCapabilitiesExactPublicGuardedTLSContract"
     ],
     "localrmm/internal/applicationcheck": [
       "TestApplicationConfigOmittedDisabledAndBinding",
@@ -2027,6 +2036,9 @@
       "TestWindowsServiceStartupPreviewPreservesExistingRecord",
       "TestWindowsServiceStartupRechecksGrantImmediatelyBeforeNativeSeam",
       "TestWindowsServiceStartupSenderRetryRestartDenialAndIndependentDisable",
+      "TestWindowsSetupCompatibilityResponseBoundedAndExact",
+      "TestWindowsSetupExplicitHTTPProfileKeepsOriginalTransport",
+      "TestWindowsSetupTransportDoesNotBroadenProofTransport",
       "TestWindowsVolumeConsentCreateOnlyAndReenable",
       "TestWindowsVolumeConsentNeverCreatesOnPreviewDisableOrAccessFailure",
       "TestWindowsVolumeConsentRejectsIncompleteForeignAndFailedStorage",
@@ -2795,6 +2807,8 @@
       "TestSelectedBootstrapLifecycleAndInventory",
       "TestSelectedFixtureRejectsInvalidSelectionAndOrigins",
       "TestSelectedProofAndRouteConfusion",
+      "TestSetupCapabilitiesFixtureSharesAdmissionAndOutage",
+      "TestSetupCapabilitiesRequestBoundary",
       "TestSyntheticChallengeUseExpiryAndCapacity",
       "TestSyntheticFrameAndRequestCaps",
       "TestSyntheticNewSequenceRequiresStrictlyLaterTimesLikeProductionStore",
@@ -2909,6 +2923,10 @@
       "TestExtensionObservationNeverClaimsFreshOrchestration",
       "TestFiniteObservationQualities",
       "TestFiniteSelection"
+    ],
+    "localrmm/internal/windowsacceptance/setupgate": [
+      "TestExactAuthorizationFailClosed",
+      "TestFiniteReportCoverageAndIndeterminateTruth"
     ],
     "localrmm/internal/windowsagentconfig": [
       "TestWindowsStoreSchemasRemainSeparateAndFixed"
@@ -3041,6 +3059,25 @@
       "TestTCPListenerHasNoRemotePeer",
       "TestUnsupportedPlatformDoesNotObserveHost"
     ],
+    "localrmm/internal/windowspackage": [
+      "TestAncestorDescriptorMemoryFixtures",
+      "TestAncestorExceptionKeepsDestructiveRights",
+      "TestCloseFailureFiniteAndIdempotent",
+      "TestCreatedDescriptorsExactInMemory",
+      "TestManifestRejectsFields",
+      "TestManifestRejectsPayloads",
+      "TestManifestValidPEArchitectures",
+      "TestNativeRolePathsAndMasks",
+      "TestOnlyDirectChildMissingIsFreshness",
+      "TestPEMetadataBoundsBeforeDecoder",
+      "TestParseManifestStrict",
+      "TestPreflightReadOnlyAndCloses",
+      "TestProvisionCancellationAtEveryBoundary",
+      "TestProvisionEveryFailureRetainsAndNeverContinues",
+      "TestProvisionOrderingAndPinLifetime",
+      "TestProvisionRejectsInputsWithoutNativeCalls",
+      "TestUnsupportedHasNoNativeFallback"
+    ],
     "localrmm/internal/windowspath": [
       "TestCanonicalAndComponentContract",
       "TestCreateOnlyBindingFailureOrder",
@@ -3122,6 +3159,36 @@
       "TestSetupOwnedFailureSites",
       "TestSetupPlanFailureSites",
       "TestStopAndUninstallRetainStateDespiteMissingBinary"
+    ],
+    "localrmm/internal/windowssetup": [
+      "TestCompatibilityExactAndNoExtensions"
+    ],
+    "localrmm/internal/windowssetupui": [
+      "TestAutomationControlIDsStayStable",
+      "TestCancelBeforeApplyIsInert",
+      "TestCancelRetainsOperationUntilHookReturned",
+      "TestClampWindowPreservesOrBoundsPlacementAcrossMonitorOrigins",
+      "TestConfigRequiresCompleteDisclosureAndHooks",
+      "TestDisplayLayoutFailuresInvalidatePreviouslyReadyActions",
+      "TestExplicitHTTPNeedsSeparateRiskApprovalAndMatchingTransport",
+      "TestHTTPDisclosureShownOnlyForHTTP",
+      "TestInitialAndBackConsentAreOff",
+      "TestInitialWindowFitsSmallWorkAreasIncluding125PercentRegression",
+      "TestLateCancelDoesNotOverrideAuthoritativeCompletion",
+      "TestLayoutControlsStayReachableAcrossClientSizesAndDPI",
+      "TestLayoutRejectsInvalidParameters",
+      "TestNativeLayoutMessagePointerDecoding",
+      "TestNoInstallWithoutEveryExplicitAcknowledgement",
+      "TestPublicBootstrapFileBoundsAndKinds",
+      "TestReviewIncludesFullDisclosureAndTruthfulLimitations",
+      "TestSelectedInputAndTrustAreFrozen",
+      "TestSuccessAndFailureNeverRetry",
+      "TestTrustMustBePublicHTTPSAndFullDigests",
+      "TestUnavailableDisplayRetainsBusyOperationUntilCancellationCompletes",
+      "TestUninstallHasSeparateConfirmation",
+      "TestUnsupportedRunNeverCallsHooks",
+      "TestWin32Supported64BitLayouts",
+      "TestWindowMinimumBoundsAndRounding"
     ],
     "localrmm/internal/windowsstate": [
       "TestACLPolicyFixtures",
@@ -3352,5 +3419,7 @@
       "TestSupportBundleRejectsUnavailableHealthyMetric",
       "TestSystemInventoryOperatorActualTLSHTTPAllPagesAndDelayedExpiry"
     ]
-  }
+  },
+  "schemaVersion": 1,
+  "sourceCommit": "fccc4b00cd8a144afd58e4b995747afab7a10022"
 }

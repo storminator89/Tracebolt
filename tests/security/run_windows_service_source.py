@@ -14,9 +14,34 @@ _reporter = importlib.util.module_from_spec(_reporter_spec)
 _reporter_spec.loader.exec_module(_reporter)
 project = _reporter.project
 
-PACKAGES = ("./internal/windowsstate", "./internal/windowsservice", "./internal/windowsconsole",
+PACKAGES = ("./internal/windowspackage", "./internal/windowssetup", "./internal/windowssetupui", "./internal/windowsstate", "./internal/windowsservice", "./internal/windowsconsole",
             "./internal/windowsagentconfig", "./cmd/windows-service", "./internal/windowsvolumes", "./internal/windowsprocessmetrics", "./internal/windowsnetwork", "./internal/windowsmanaged")
 REQUIRED = {
+    ("localrmm/cmd/windows-service", "TestSetupWizardPublicBootstrapPreviewAndExplicitTransportConsent"),
+    ("localrmm/cmd/windows-service", "TestSetupWizardDeletionPendingIsObservedNotRetried"),
+    ("localrmm/cmd/windows-service", "TestSetupConsoleOnlyControlCAndBreakCancelCooperatively"),
+    ("localrmm/internal/windowspackage", "TestAncestorDescriptorMemoryFixtures"),
+    ("localrmm/internal/windowspackage", "TestCreatedDescriptorsExactInMemory"),
+    ("localrmm/internal/windowspackage", "TestOnlyDirectChildMissingIsFreshness"),
+    ("localrmm/internal/windowspackage", "TestProvisionEveryFailureRetainsAndNeverContinues"),
+    ("localrmm/internal/windowspackage", "TestProvisionCancellationAtEveryBoundary"),
+    ("localrmm/internal/windowssetup", "TestCompatibilityExactAndNoExtensions"),
+    ("localrmm/internal/windowssetupui", "TestWin32Supported64BitLayouts"),
+    ("localrmm/internal/windowssetupui", "TestLayoutControlsStayReachableAcrossClientSizesAndDPI"),
+    ("localrmm/internal/windowssetupui", "TestInitialWindowFitsSmallWorkAreasIncluding125PercentRegression"),
+    ("localrmm/internal/windowssetupui", "TestWindowMinimumBoundsAndRounding"),
+    ("localrmm/internal/windowssetupui", "TestClampWindowPreservesOrBoundsPlacementAcrossMonitorOrigins"),
+    ("localrmm/internal/windowssetupui", "TestLayoutRejectsInvalidParameters"),
+    ("localrmm/internal/windowssetupui", "TestDisplayLayoutFailuresInvalidatePreviouslyReadyActions"),
+    ("localrmm/internal/windowssetupui", "TestUnavailableDisplayRetainsBusyOperationUntilCancellationCompletes"),
+    ("localrmm/internal/windowssetupui", "TestAutomationControlIDsStayStable"),
+    ("localrmm/internal/windowssetupui", "TestNativeLayoutMessagePointerDecoding"),
+    ("localrmm/internal/windowssetupui", "TestNoInstallWithoutEveryExplicitAcknowledgement"),
+    ("localrmm/internal/windowssetupui", "TestCancelRetainsOperationUntilHookReturned"),
+    ("localrmm/internal/windowssetupui", "TestExplicitHTTPNeedsSeparateRiskApprovalAndMatchingTransport"),
+    ("localrmm/cmd/windows-service", "TestSetupWizardInstallOrderingAndEveryBoundary"),
+    ("localrmm/cmd/windows-service", "TestSetupWizardCanceledBeforeApplyIsInert"),
+    ("localrmm/cmd/windows-service", "TestSetupWizardRemovalWaitsForExactOwnedStopAndAbsence"),
     ("localrmm/internal/windowsmanaged", "TestServiceStartupNativeRightsAndHandleLifetime"),
     ("localrmm/internal/windowsmanaged", "TestServiceStartupNativeBufferClearedAndNoPointersFollowed"),
     ("localrmm/internal/windowsmanaged", "TestServiceStartupNativeModesAndUnknownDoNotQueryDelayed"),
@@ -154,6 +179,7 @@ def main():
                 stage = arch + " source build"
                 cross = dict(env, GOOS="windows", GOARCH=arch, CGO_ENABLED="0")
                 command(["go", "build", "-buildvcs=false", "-trimpath", "-o", str(Path(folder) / ("service-" + arch + ".exe")), "./cmd/windows-service"], cross, 300)
+                command(["go", "build", "-buildvcs=false", "-trimpath", "-tags=tracebolt_setup", "-ldflags=-H windowsgui", "-o", str(Path(folder) / ("setup-source-" + arch + ".exe")), "./cmd/windows-service"], cross, 300)
         print("PASS: Windows source fixtures and amd64/arm64 builds; no service installation/control, DACL grants, enrollment keys, live console or endpoint observation executed.")
         return 0
     except (OSError, subprocess.TimeoutExpired, ValueError, TypeError, KeyError):

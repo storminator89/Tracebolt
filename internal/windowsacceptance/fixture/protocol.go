@@ -50,7 +50,8 @@ func (f *Fixture) serve(w http.ResponseWriter, r *http.Request, agent bool) {
 	if agent {
 		limit = lanstore.MaxFrameBytes
 	}
-	if !validRequestSelected(r, origin, agent, s.selection) {
+	setupCapabilities := !agent && s.expanded && setupCapabilitiesRequest(r, origin, s.selection)
+	if !setupCapabilities && !validRequestSelected(r, origin, agent, s.selection) {
 		fail(w, 400)
 		return
 	}
@@ -72,6 +73,12 @@ func (f *Fixture) serve(w http.ResponseWriter, r *http.Request, agent bool) {
 	s.mu.Unlock()
 	if blocked {
 		fail(w, 503)
+		return
+	}
+	if setupCapabilities {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		s.writeSetupCapabilities(w)
 		return
 	}
 	var raw []byte

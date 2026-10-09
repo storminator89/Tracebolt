@@ -99,7 +99,9 @@ describe('Windows enrollment contract and creation consent', () => {
   expect(button).toBeDisabled(); fireEvent.click(button); expect(mutate).not.toHaveBeenCalled();
   acknowledge(dialog); fireEvent.click(button); await within(dialog).findByLabelText('One-time invitation secret');
   expect(mutate).toHaveBeenCalledExactlyOnceWith('/windows/enrollment/invitations', { requestId: expect.stringMatching(/^request_[a-f0-9]{32}$/), platform: 'windows', collectionAcknowledged: true, insecureHTTPAcknowledged: false }, expect.any(AbortSignal));
-  expect(within(dialog).getByText('Prepare the reviewed Windows source build')).toBeVisible();
+  expect(within(dialog).getByText('Use the reviewed Windows Setup preview')).toBeVisible();
+  expect(within(dialog).getByText(/select that public JSON export in its wizard/)).toHaveTextContent('compatibility before making changes');
+  expect(within(dialog).getByText(/select that public JSON export in its wizard/)).toHaveTextContent('HTTP-test needs a separate plaintext-risk acknowledgement');
   expect(within(dialog).getByText(/No released Windows installer or download command is available/)).toBeVisible();
   expect(within(dialog).queryByRole('button', { name: 'Copy public installation command' })).not.toBeInTheDocument();
   expect(dialog.textContent).not.toMatch(/rc\.3|Run as root|sha256sum|curl|agent-service/);
@@ -124,7 +126,7 @@ describe('Windows enrollment contract and creation consent', () => {
   vi.mocked(mutate).mockResolvedValue(response); const dialog = await add(); acknowledge(dialog);
   fireEvent.click(within(dialog).getByRole('button', { name: 'Create invitation' })); await within(dialog).findByRole('alert');
   expect(within(dialog).queryByLabelText('One-time invitation secret')).not.toBeInTheDocument();
-  expect(within(dialog).queryByText('Prepare the reviewed Windows source build')).not.toBeInTheDocument();
+  expect(within(dialog).queryByText('Use the reviewed Windows Setup preview')).not.toBeInTheDocument();
   expect(within(dialog).queryByRole('button', { name: 'Download bootstrap file' })).not.toBeInTheDocument();
   expect(document.body.textContent).not.toContain(secret);
  });

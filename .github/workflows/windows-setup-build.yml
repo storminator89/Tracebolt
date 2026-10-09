@@ -1,0 +1,55 @@
+name: Build unsigned Windows Setup candidates
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Compile and upload review artifacts only. No OIDC, signing, release-write,
+# native service install, trust approval, or user-machine access is requested.
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-setup-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Deterministic x64 and ARM64 Setup artifacts (never executed)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      GOTOOLCHAIN: local
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Check packaging and resource negative fixtures
+        run: python3 -I -B -m unittest discover -s tests/windows_setup -v
+      - name: Check portable source fixtures without Windows host operations
+        run: >-
+          go test -race -buildvcs=false
+          ./internal/windowsservice ./internal/windowsstate ./internal/windowsconsole
+          ./internal/windowspath ./internal/windowspackage ./internal/windowssetup
+          ./internal/windowssetupui ./cmd/windows-service
+      - name: Cross-build both architectures twice and inspect actual PE resources
+        env:
+          SOURCE_COMMIT: ${{ github.sha }}
+        run: >-
+          python3 -I -B deploy/windows-setup/build-setup.py
+          --version v0.0.0-setup-candidate
+          --source-commit "$SOURCE_COMMIT"
+          --output "$RUNNER_TEMP/tracebolt-windows-setup"
+      - name: Preserve unsigned source candidates for review
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: unsigned-windows-setup-candidates
+          path: ${{ runner.temp }}/tracebolt-windows-setup/
+          if-no-files-found: error
+          retention-days: 7

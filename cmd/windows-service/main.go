@@ -9,8 +9,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"os"
-	"os/signal"
 
 	"localrmm/internal/enrollmentclient"
 	"localrmm/internal/enrollmentcrypto"
@@ -201,11 +199,6 @@ func usage(out io.Writer) {
 	fmt.Fprintln(out, "Installation creates one LocalService SCM service, a scoped service SID and protected durable state, then asks for a hidden invitation and starts pending enrollment. Review these persistent changes and obtain action-time approval before applying. Public fingerprint/comparison approval in the manager remains mandatory.")
 	fmt.Fprintln(out, "Basic scope: bounded OS, uptime, physical RAM and system-volume observation. No expanded hostname/IP/process/software/event content collection, Windows Update/CVE, remote commands or service-control requests from a manager. Production TLS is required; Linux managed profiles are rejected.")
 	fmt.Fprintln(out, "Prerequisites: separately authorized provisioning of the fixed protected executable/parent directories, explicit LocalService read/execute access, and an administrator-only protected public bootstrap file. This candidate does not download/copy binaries, repair ACLs, enable privileges, adopt services or erase identities. Uninstall retains all private state.")
-}
-func main() {
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
-	defer stop()
-	os.Exit(run(ctx, os.Args[1:], os.Stdout, os.Stderr))
 }
 
 // processMetricsOperation keeps local ownership/stopped verification ahead of

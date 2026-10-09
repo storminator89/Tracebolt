@@ -646,10 +646,21 @@ Installationsweg vor und frage vor Zugangsdaten-, Vertrauens-, Firewall- oder
 Dienständerungen. Erfinde keine Installer-/Enrollment-Befehle. Berichte klar,
 was wirklich getestet wurde und welche manuellen Schritte noch fehlen.“
 
+## Unreleased Windows Setup.exe preview
+
+The [fresh-host Windows Setup preview](windows-setup-preview.md) adds a native
+wizard with embedded versioned/hash-bound service payload, public manager-export
+selection, explicit five-scope/identity/service consent, hidden invitation entry
+and separate manager approval. It supports HTTPS by default and separately
+acknowledged disposable HTTP-test. The matching manager compatibility route is
+required before installation writes. This is an unsigned source-built preview,
+not a new public Windows release or acceptance on the user's host. Partial-state
+recovery, actual-EXE native approval and release provenance remain explicit gates.
+
 ## Unreleased Windows one-choice observation source
 
 The [fresh Windows observation coordinator](windows-read-observation-setup.md)
 combines the five supported read scopes under one explicit upfront local choice.
 It stages a fresh SCM service disabled until activation and protected grants are
-verified. This is source-only: there is no new installation command or released
-Windows installer, and existing Windows identities/commands are unchanged.
+verified. This is source-only: the new separate Setup build is an unreleased preview, and existing Windows
+identities/lifecycle commands are unchanged.
