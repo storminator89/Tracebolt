@@ -3,6 +3,7 @@
  */
 import {checkFreshV3Consent,checkMobileSocketViewport,checkV3Viewport,createV3FailureDiagnostics} from './v3-failure-diagnostics.mjs';
 import {createRequire} from 'node:module';
+import {hasInventoryReadiness,inventoryProjectionReady} from './inventory-readiness.mjs';
 import {assertPublicCommand,readSourceOwnedPin} from './public-command-contract.mjs';
 import {spawn,execFileSync} from 'node:child_process';
 import {createInterface} from 'node:readline';
@@ -80,7 +81,7 @@ async function device(page,label='alpha',openInventory=true){
  if(!openInventory)return;
  mark('select fixture Inventory tab');await page.getByRole('tab',{name:'Inventory',exact:true}).click();
  mark('fixture Inventory selects Packages');await expect(page.getByRole('tablist',{name:'Inventory source',exact:true}).getByRole('tab',{name:'Packages',exact:true})).toHaveAttribute('aria-selected','true');
- mark('fixture complete packages settle');await expect(page.locator('.complete-packages')).toHaveAttribute('aria-busy','false');
+ mark('fixture complete packages settle');await settled(page,'.complete-packages');
 }
 async function overviewLayout(page,mobile=false,returnToInventory=true){
  mark('compact icon-led essentials precede technical detail');
@@ -112,7 +113,7 @@ async function overviewLayout(page,mobile=false,returnToInventory=true){
  if(returnToInventory){await page.getByRole('tab',{name:'Inventory',exact:true}).click();await expect(page.getByRole('tablist',{name:'Inventory source',exact:true}).getByRole('tab',{name:'Packages',exact:true})).toHaveAttribute('aria-selected','true');await settled(page,'.complete-packages');}
 }
 async function source(page,name){await page.getByRole('tablist',{name:'Inventory source',exact:true}).getByRole('tab',{name,exact:true}).click();await settled(page,name==='Packages'?'.complete-packages':'.system-inventory');}
-async function settled(page,selector){await expect(page.locator(selector)).toHaveAttribute('aria-busy','false');await expect(page.locator(selector+' [role=alert]')).toHaveCount(0);}
+async function settled(page,selector){if(hasInventoryReadiness(selector)){await expect.poll(()=>page.locator(selector).evaluateAll(inventoryProjectionReady,selector)).toBe(true);return;}await expect(page.locator(selector)).toHaveAttribute('aria-busy','false');await expect(page.locator(selector+' [role=alert]')).toHaveCount(0);}
 const rows=(page,selector)=>page.locator(selector+' tbody tr');
 async function viewport(page){return checkV3Viewport(page,{expect});}
 async function shot(page,name){mark('safe invented inventory viewport');await expect(page.locator('.enrollment-secret')).toHaveCount(0);await expect(page.getByLabel('Operator password',{exact:true})).toHaveCount(0);expect(await page.evaluate(p=>document.body.innerText.includes(p)||[...document.querySelectorAll('input')].some(x=>x.value.includes(p)),password)).toBe(false);await viewport(page);const file=`${name}.png`;await page.screenshot({path:path.join(out,file),fullPage:false,animations:'disabled'});screenshots.push({file,sourceSha,sha256:createHash('sha256').update(await fs.readFile(path.join(out,file))).digest('hex'),viewport:page.viewportSize(),fullPage:false,publicSafe:true,fixtureDisclosure:'Invented v3 inventory on an explicit loopback HTTP-test operator fixture. No native collector, VM, installation, service lifecycle, real endpoint or invitation material is shown.',test:currentTest});}
