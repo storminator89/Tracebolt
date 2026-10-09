@@ -40,7 +40,7 @@ OWNER_ID = 30489872
 PREFIX = "/repos/" + REPOSITORY
 # Only this independently reviewed Setup source tree is eligible. A different
 # tree needs a new review and explicit publisher change, never an input override.
-ACCEPTED_SOURCE_TREE = "93001dc899c69f4590c3477dcd2e8b29899274ce"
+ACCEPTED_SOURCE_TREE = "e8d5594267b77328c445f72bf345af41c8863d19"
 NATIVE_WORKFLOW = ".github/workflows/windows-setup-acceptance.yml"
 PUBLISH_WORKFLOW = ".github/workflows/windows-prerelease.yml"
 AGGREGATE_JOB = "Validate four reports and preserve exact tested public bytes (no rebuild)"

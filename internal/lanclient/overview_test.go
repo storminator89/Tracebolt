@@ -251,18 +251,66 @@ func TestOverviewNativeTLSAndHTTPSharedCaptureExactRestart(t *testing.T) {
 		})
 	}
 }
+
+// Stage the real large generations before testing the shared transfer-operation
+// budget. Capture/staging time is not a guarantee of 64 deliveries within a
+// burst: the independent cooperative deadline may legitimately end it earlier.
+// Fresh shared capture is covered by TestOverviewNativeTLSAndHTTPSharedCaptureExactRestart.
+func stageOverviewFairnessFixture(t *testing.T, s *overviewSender, at time.Time) {
+	t.Helper()
+	var source completeoverview.Snapshot
+	for i, section := range []*overviewSectionSender{s.processes, s.volumes} {
+		func() {
+			ctx, cancel := context.WithTimeout(context.Background(), overviewBurstTimeout)
+			defer cancel()
+			a, err := section.state.Allocate(ctx, at)
+			if err != nil {
+				t.Fatal("fairness fixture allocation", err)
+			}
+			if i == 0 {
+				source, err = s.collect(ctx, a.GenerationID, at)
+				if err != nil {
+					t.Fatal("fairness fixture capture", err)
+				}
+			}
+			manifest, chunks, err := overviewgeneration.Build(ctx, source, section.section, a.GenerationID, nil)
+			if err != nil {
+				t.Fatal("fairness fixture generation", err)
+			}
+			rawManifest, err := json.Marshal(manifest)
+			if err != nil {
+				t.Fatal("fairness fixture manifest", err)
+			}
+			rawChunks := make([][]byte, len(chunks))
+			for j := range chunks {
+				rawChunks[j], err = json.Marshal(chunks[j])
+				if err != nil {
+					t.Fatal("fairness fixture chunk", err)
+				}
+			}
+			if err = section.state.Stage(ctx, a, rawManifest, rawChunks); err != nil {
+				t.Fatal("fairness fixture staging", err)
+			}
+		}()
+	}
+}
+
 func TestOverviewSharedBurstBudgetAndFairness(t *testing.T) {
 	s, h, calls := overviewFixture(t, "tls", 9000, 9000)
+	stageOverviewFairnessFixture(t, s, h.clock.now())
+	if calls.Load() != 1 || len(h.requests) != 0 {
+		t.Fatal("fixture must stage one capture without transport")
+	}
 	first, e := burstOverview(s)
-	if !errors.Is(e, ErrOverviewPending) || first.Processes.Operations+first.Volumes.Operations != 64 || first.Volumes.Operations != 0 || calls.Load() != 1 {
+	if !errors.Is(e, ErrOverviewPending) || first.Processes.Operations+first.Volumes.Operations != 64 || first.Volumes.Operations != 0 || first.Processes.Captured || first.Volumes.Captured || calls.Load() != 1 {
 		t.Fatal("shared budget", e, first)
 	}
 	second, e := burstOverview(s)
-	if !errors.Is(e, ErrOverviewPending) || second.Processes.Operations+second.Volumes.Operations != 64 || second.Volumes.Operations != 64 || calls.Load() != 1 {
+	if !errors.Is(e, ErrOverviewPending) || second.Processes.Operations+second.Volumes.Operations != 64 || second.Volumes.Operations != 64 || second.Processes.Captured || second.Volumes.Captured || calls.Load() != 1 {
 		t.Fatal("section fairness", e, second)
 	}
 	third, e := burstOverview(s)
-	if e != nil || third.Processes.Status != "acknowledged" || third.Volumes.Status != "acknowledged" || h.rows["processes"] != 9000 || h.rows["volumes"] != 9000 || calls.Load() != 1 {
+	if e != nil || third.Processes.Operations != 9 || third.Volumes.Operations != 9 || third.Processes.Captured || third.Volumes.Captured || third.Processes.Status != "acknowledged" || third.Volumes.Status != "acknowledged" || h.rows["processes"] != 9000 || h.rows["volumes"] != 9000 || calls.Load() != 1 {
 		t.Fatal("full rows beyond cap", e, third)
 	}
 }

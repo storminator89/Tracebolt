@@ -1,5 +1,5 @@
 {
-  "goSourceSha256": "6965ca159c0a04e88586e310b61906325d1f1ff118291ebbfd32b3d1d9a92daf",
+  "goSourceSha256": "ce574990a8c262ee971b82ddf13f4b5df6b70c60ed8bbb51fbaeef560be4fa38",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -2366,11 +2366,14 @@
       "TestAllocationFaultPhasesPreserveUncertainty",
       "TestCancellationAndPublicLimits",
       "TestCollectionTimestampCannotBeRefreshed",
+      "TestDecodePackCancellationDoesNotOverrideCorruption",
+      "TestDecodePackPreservesValidatorCancellation",
       "TestDurableAttemptCooldownAndAtomicStatusAbort",
       "TestFailureZeroRowsAndInvalidStage",
       "TestFixedSectionDomainsRejectCrossWorkAndSpools",
       "TestFullContract1024ChunksAnd64KiBRawChunk",
       "TestLifetimeLockAndReplacementFailClosed",
+      "TestPackValidationErrorRequiresExactCancellation",
       "TestPrivateModesSymlinkHardlinkAndFIFORefused",
       "TestReadyMissingOrChangedPackFailsClosed",
       "TestRedactionAllFormattingVerbsAndJSON",
@@ -2381,6 +2384,7 @@
       "TestStageCancellationAfterDurableMarkerFailsClosed",
       "TestStageCancellationAfterPackWriteCompletesJournal",
       "TestStageFaultPhasesNeverRecollectOrExposePrefix",
+      "TestStageValidatorCancellationPreservesAllocation",
       "TestStatusCountsExpiryAndCompletedReceiptAreBound",
       "TestStrictEnrollmentAndSenderRefusalsPreserveFiles",
       "TestStrictOwnLedgerSchema",

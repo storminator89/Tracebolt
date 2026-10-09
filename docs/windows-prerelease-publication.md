@@ -18,7 +18,7 @@ signing, repository administration or immutability-setting changes are involved.
 The manual `windows-prerelease.yml` workflow has five inputs:
 
 - `expected_source_sha`: the exact native-tested Setup commit. Its Git tree must
-  be the frozen reviewed `93001dc899c69f4590c3477dcd2e8b29899274ce`.
+  be the frozen reviewed `e8d5594267b77328c445f72bf345af41c8863d19`.
 - `acceptance_run_id`: one explicitly selected successful first-attempt owner-
   dispatched `windows-setup-acceptance.yml` run on `refs/heads/main` at that source.
   All four distinct packaged GUI case jobs and the accepted-package aggregation

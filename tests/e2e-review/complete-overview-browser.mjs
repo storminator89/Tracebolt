@@ -9,6 +9,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {fileURLToPath,pathToFileURL} from 'node:url';
 import {installJournalPrimaryBody} from './journal-primary-body.mjs';
+import {hasInventoryReadiness,inventoryProjectionReady} from './inventory-readiness.mjs';
 
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../..');
 const require=createRequire(path.join(root,'web/package.json'));
@@ -103,7 +104,7 @@ async function pageAt({mobile=false}={}){
 
 async function get(route){const response=await context.request.get(base+route);expect(response.status()).toBe(200);return response.json();}
 async function post(route,data){const auth=await get('/api/auth/session');return context.request.post(base+route,{headers:{Origin:base,'X-CSRF-Token':auth.csrfToken},data});}
-async function settled(page,selector='.complete-overview'){await expect(page.locator(selector)).toHaveAttribute('aria-busy','false');await expect(page.locator(selector).getByRole('alert')).toHaveCount(0);}
+async function settled(page,selector='.complete-overview'){if(hasInventoryReadiness(selector)){await expect.poll(()=>page.locator(selector).evaluateAll(inventoryProjectionReady,selector)).toBe(true);return;}await expect(page.locator(selector)).toHaveAttribute('aria-busy','false');await expect(page.locator(selector).getByRole('alert')).toHaveCount(0);}
 async function device(page,label='alpha'){
  mark('open invented overview device');await page.goto(`${base}/#/devices/${devices[label]}`);
  await expect(page.getByRole('region',{name:`Device QA synthetic overview ${label}`,exact:true})).toBeVisible();
