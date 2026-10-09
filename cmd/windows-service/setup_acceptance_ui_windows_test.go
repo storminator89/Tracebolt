@@ -256,6 +256,9 @@ func (g *setupGUI) exit(ctx context.Context, expected uint32) error {
 	if setupClick(g.window, 2) != nil {
 		return setupgate.ErrGuard
 	}
+	return g.waitExit(ctx, expected)
+}
+func (g *setupGUI) waitExit(ctx context.Context, expected uint32) error {
 	if setupAwait(ctx, 10*time.Second, func() bool {
 		s, e := windows.WaitForSingleObject(g.process, 0)
 		return e == nil && s == windows.WAIT_OBJECT_0
@@ -299,56 +302,40 @@ func (g *setupGUI) choose(ctx context.Context, path string) error {
 	return setupAwait(ctx, 10*time.Second, func() bool { return setupWindow(g.pid, "#32770") == 0 && setupEnabled(setupControl(g.window, 1)) })
 }
 func (g *setupGUI) consent(ctx context.Context, http bool) error {
-	if setupClick(g.window, 1) != nil {
-		return setupgate.ErrGuard
-	}
-	if setupAwait(ctx, 5*time.Second, func() bool { return setupControl(g.window, 104) != 0 }) != nil {
-		return setupgate.ErrGuard
-	}
-	ids := []int{104, 105, 106, 107}
-	if http {
-		ids = append(ids, 108)
-	} else if setupControl(g.window, 108) != 0 {
-		return setupgate.ErrGuard
-	}
-	for pass := 0; pass < 2; pass++ {
-		if setupEnabled(setupControl(g.window, 1)) {
-			return setupgate.ErrGuard
-		}
-		for _, id := range ids {
+	return g.consentObserved(ctx, http, func(string) {})
+}
+func (g *setupGUI) consentObserved(ctx context.Context, http bool, stage func(string)) error {
+	reviewWait := 5 * time.Second
+	return setupgate.CheckConsent(stage, http, setupgate.ConsentSteps{
+		Next: func() error { return setupClick(g.window, 1) },
+		WaitReview: func() error {
+			timeout := reviewWait
+			reviewWait = 3 * time.Second
+			return setupAwait(ctx, timeout, func() bool { return setupControl(g.window, 104) != 0 })
+		},
+		NextEnabled: func() bool { return setupEnabled(setupControl(g.window, 1)) },
+		Present:     func(id int) bool { return setupControl(g.window, id) != 0 },
+		Unchecked: func(id int) error {
 			v, e := setupSend(setupControl(g.window, id), 0x00f0, 0, 0)
 			if e != nil || v != 0 {
 				return setupgate.ErrGuard
 			}
-		}
-		for _, id := range ids {
+			return nil
+		},
+		ClickChecked: func(id int) error {
 			if setupClick(g.window, id) != nil {
 				return setupgate.ErrGuard
 			}
-			if setupAwait(ctx, 2*time.Second, func() bool { v, e := setupSend(setupControl(g.window, id), 0x00f0, 0, 0); return e == nil && v == 1 }) != nil {
-				return setupgate.ErrGuard
-			}
-		}
-		if setupAwait(ctx, 3*time.Second, func() bool { return setupEnabled(setupControl(g.window, 1)) }) != nil {
-			return setupgate.ErrGuard
-		}
-		if pass == 0 {
-			if setupClick(g.window, 101) != nil {
-				return setupgate.ErrGuard
-			}
-			if setupAwait(ctx, 3*time.Second, func() bool { return setupControl(g.window, 203) != 0 && setupEnabled(setupControl(g.window, 1)) }) != nil {
-				return setupgate.ErrGuard
-			}
-			if setupClick(g.window, 1) != nil {
-				return setupgate.ErrGuard
-			}
-			if setupAwait(ctx, 3*time.Second, func() bool { return setupControl(g.window, 104) != 0 }) != nil {
-				return setupgate.ErrGuard
-			}
-		}
-	}
-	return nil
-
+			return setupAwait(ctx, 2*time.Second, func() bool { v, e := setupSend(setupControl(g.window, id), 0x00f0, 0, 0); return e == nil && v == 1 })
+		},
+		WaitEnabled: func() error {
+			return setupAwait(ctx, 3*time.Second, func() bool { return setupEnabled(setupControl(g.window, 1)) })
+		},
+		Back: func() error { return setupClick(g.window, 101) },
+		WaitInput: func() error {
+			return setupAwait(ctx, 3*time.Second, func() bool { return setupControl(g.window, 203) != 0 && setupEnabled(setupControl(g.window, 1)) })
+		},
+	})
 }
 func (g *setupGUI) finished(ctx context.Context) error {
 	return setupAwait(ctx, 45*time.Second, func() bool {

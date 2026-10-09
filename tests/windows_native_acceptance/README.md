@@ -172,3 +172,12 @@ The accepted-package aggregation runtime also requires the exact
 checked for matching `main` across run, attempt and artifact records, but is not
 represented as independently proving the heads-versus-tags namespace. That part
 of the contract relies on the exact-source aggregate runtime guard.
+
+The existing v2 report now also gives finite lifecycle failure stages for the
+pre-install cancellation sequence, both acknowledgement/reset passes (including
+HTTP), and service-removal observation. These labels distinguish the first failed
+controller assertion without exporting window text, native errors, paths or
+telemetry. Removal still requires the same deliberately held SCM handle, pending
+text, stopped status, 500 ms non-completion guard and subsequent confirmed
+absence. A diagnostic label does not prove that removal was requested or that VM
+disposal happened. No deadline or success requirement is relaxed.

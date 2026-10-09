@@ -1,5 +1,7 @@
 {
-  "goSourceSha256": "ce574990a8c262ee971b82ddf13f4b5df6b70c60ed8bbb51fbaeef560be4fa38",
+  "schemaVersion": 1,
+  "sourceCommit": "fccc4b00cd8a144afd58e4b995747afab7a10022",
+  "goSourceSha256": "533792c14431ee24f2554e431cbfd822bf7778799c8c2a94e443dec993f8b242",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -2944,6 +2946,8 @@
       "TestFiniteSelection"
     ],
     "localrmm/internal/windowsacceptance/setupgate": [
+      "TestConsentMissingCallbacksFailClosed",
+      "TestConsentSequenceEveryFailureStops",
       "TestControllerEnvironmentFailsClosedAndRedacts",
       "TestControllerEnvironmentUsesOnlyValidatedDerivedDrive",
       "TestExactAuthorizationFailClosed",
@@ -2952,7 +2956,16 @@
       "TestFrameProgressReadyRequiresUnchangedPositivePredicate",
       "TestFrameProgressRejectsContradictoryAndPrivateEvidence",
       "TestFreshFailureStagesStayFiniteAndInert",
-      "TestFreshPrerequisitePipelineStopsBeforeLaterChecks"
+      "TestFreshPrerequisitePipelineStopsBeforeLaterChecks",
+      "TestPreflightSequenceEveryFailureStops",
+      "TestUninstallDiagnosticParagraphsMatchExistingProductionText",
+      "TestUninstallHeldCloseDistinguishesFailureFromCompletion",
+      "TestUninstallHeldQueryFailuresAreFiniteAndCannotPass",
+      "TestUninstallMissingObserverDoesNotSucceed",
+      "TestUninstallPendingCloseClassifiesOutcomeWithoutAcceptingIt",
+      "TestUninstallPendingPredicateAndReadOrderUnchanged",
+      "TestUninstallPendingSequenceDoesNotLatchEarlierSuccess",
+      "TestUninstallProgressOnlyRecognizesExactBoundedParagraphs"
     ],
     "localrmm/internal/windowsagentconfig": [
       "TestWindowsStoreSchemasRemainSeparateAndFixed"
@@ -3445,7 +3458,5 @@
       "TestSupportBundleRejectsUnavailableHealthyMetric",
       "TestSystemInventoryOperatorActualTLSHTTPAllPagesAndDelayedExpiry"
     ]
-  },
-  "schemaVersion": 1,
-  "sourceCommit": "fccc4b00cd8a144afd58e4b995747afab7a10022"
+  }
 }

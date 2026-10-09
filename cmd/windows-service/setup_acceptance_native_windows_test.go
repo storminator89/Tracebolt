@@ -287,13 +287,23 @@ func setupGUIController(ctx context.Context, b setupgate.Binding) (r setupgate.R
 	}
 	exe := os.Getenv("TRACEBOLT_SETUP_SETUP_ARTIFACT")
 	if setupgate.NormalCase(b.Case) {
-		r.Stage = "preflight-cancel"
-		g, e := setupLaunch(ctx, exe)
-		if e != nil {
-			return r
-		}
-		defer g.dispose()
-		if g.choose(ctx, public) != nil || g.consent(ctx, http) != nil || g.exit(ctx, 0) != nil || !setupFresh(ctx, l) {
+		var preflight *setupGUI
+		defer func() {
+			if preflight != nil {
+				preflight.dispose()
+			}
+		}()
+		stage := func(value string) { r.Stage = value }
+		if setupgate.CheckPreflight(stage, setupgate.PreflightSteps{
+			Launch:       func() error { var err error; preflight, err = setupLaunch(ctx, exe); return err },
+			Choose:       func() error { return preflight.choose(ctx, public) },
+			Consent:      func() error { return preflight.consentObserved(ctx, http, stage) },
+			Cancel:       func() error { return setupClick(preflight.window, 2) },
+			Exit:         func() error { return preflight.waitExit(ctx, 0) },
+			Service:      func() error { return setupFreshService(ctx) },
+			ProgramFiles: func() error { return setupFreshDirectory(l.ProgramFiles) },
+			ProgramData:  func() error { return setupFreshDirectory(l.ProgramData) },
+		}) != nil {
 			return r
 		}
 		r.Checks["preflightCancelUnchanged"] = true
@@ -537,26 +547,31 @@ func setupGUIController(ctx context.Context, b setupgate.Binding) (r setupgate.R
 		r.Checks["incompleteUninstallBlocked"] = true
 		r.Checks["filesAndStateRetained"] = true
 	} else {
-		r.Stage = "uninstall-cancel"
+		r.Stage = "uninstall-receipt"
 		receipt, e := setupReceipt(l)
 		if e != nil || !completeReadSetup(receipt) {
 			return r
 		}
+		r.Stage = "uninstall-owned"
 		before, e := windowsservice.InspectOwned(ctx, receipt.Service)
 		if e != nil {
 			return r
 		}
+		r.Stage = "uninstall-launch"
 		u, e := setupLaunch(ctx, exe)
 		if e != nil {
 			return r
 		}
 		defer u.dispose()
+		r.Stage = "uninstall-cancel-confirmation"
 		if u.uninstall(ctx, false) != nil {
 			return r
 		}
+		r.Stage = "uninstall-cancel-return"
 		if setupAwait(ctx, 5*time.Second, func() bool { return setupWindow(u.pid, "#32770") == 0 && setupEnabled(setupControl(u.window, 103)) }) != nil {
 			return r
 		}
+		r.Stage = "uninstall-cancel-invariant"
 		after, e := windowsservice.InspectOwned(ctx, receipt.Service)
 		again, receiptErr := setupReceipt(l)
 		if e != nil || receiptErr != nil || !reflect.DeepEqual(receipt, again) || !reflect.DeepEqual(before, after) {
@@ -565,10 +580,12 @@ func setupGUIController(ctx context.Context, b setupgate.Binding) (r setupgate.R
 		r.Checks["uninstallCancelUnchanged"] = true
 		// This read-only handle deliberately makes DeleteService's pending state
 		// observable. The GUI must wait; releasing it permits SCM absence to occur.
+		r.Stage = "uninstall-hold-scm"
 		scm, e := windows.OpenSCManager(nil, nil, windows.SC_MANAGER_CONNECT)
 		if e != nil {
 			return r
 		}
+		r.Stage = "uninstall-hold-service"
 		hold, e := windows.OpenService(scm, setupUTF(windowsservice.Name), windows.SERVICE_QUERY_STATUS)
 		windows.CloseServiceHandle(scm)
 		if e != nil {
@@ -579,31 +596,71 @@ func setupGUIController(ctx context.Context, b setupgate.Binding) (r setupgate.R
 				windows.CloseServiceHandle(hold)
 			}
 		}()
-		r.Stage = "uninstall"
+		r.Stage = "uninstall-confirmation"
 		if u.uninstall(ctx, true) != nil {
 			return r
 		}
 		r.Startup = "inspection_required"
+		r.Stage = "uninstall-pending-text"
 		if setupAwait(ctx, 25*time.Second, func() bool {
-			var status windows.SERVICE_STATUS
-			return strings.Contains(u.operationText(), "Service deletion is pending. Waiting for SCM to confirm absence.") && windows.QueryServiceStatus(hold, &status) == nil && status.CurrentState == windows.SERVICE_STOPPED && strings.ReplaceAll(setupText(setupControl(u.window, 2)), "&", "") != "Close"
+			text := u.operationText()
+			observation := setupgate.ObserveUninstallPending(strings.Contains(text, "Service deletion is pending. Waiting for SCM to confirm absence."), func() (setupgate.UninstallHeldStatus, bool) {
+				var status windows.SERVICE_STATUS
+				err := windows.QueryServiceStatus(hold, &status)
+				outcome := setupgate.UninstallStatusFailed
+				switch err {
+				case nil:
+					outcome = setupgate.UninstallStatusObserved
+				case windows.ERROR_SERVICE_MARKED_FOR_DELETE:
+					outcome = setupgate.UninstallStatusDeletePending
+				case windows.ERROR_INVALID_HANDLE:
+					outcome = setupgate.UninstallStatusInvalidHandle
+				case windows.ERROR_ACCESS_DENIED:
+					outcome = setupgate.UninstallStatusAccessDenied
+				}
+				return outcome, status.CurrentState == windows.SERVICE_STOPPED
+			}, func() bool {
+				return strings.ReplaceAll(setupText(setupControl(u.window, 2)), "&", "") == "Close"
+			})
+			r.Stage = observation.Stage(text)
+			return observation.Ready()
 		}) != nil {
 			return r
 		}
 		// Keep the observed exact stopped SCM handle alive a little longer:
 		// successful removal cannot be announced while deletion is held pending.
+		r.Stage = "uninstall-held-close"
 		time.Sleep(500 * time.Millisecond)
 		if strings.ReplaceAll(setupText(setupControl(u.window, 2)), "&", "") == "Close" {
+			r.Stage = setupgate.UninstallHeldCloseStage(u.operationText())
 			return r
 		}
 
 		r.Checks["deletePendingObserved"] = true
+		r.Stage = "uninstall-release"
 		windows.CloseServiceHandle(hold)
 		hold = 0
-		if u.finished(ctx) != nil || !strings.Contains(u.operationText(), "Service removal confirmed") || u.exit(ctx, 0) != nil {
+		r.Stage = "uninstall-finish"
+		if u.finished(ctx) != nil {
 			return r
 		}
-		if setupAwait(ctx, 5*time.Second, func() bool { s, e := windowsservice.Inspect(ctx); return e == nil && !s.Exists }) != nil {
+		r.Stage = "uninstall-finish-message"
+		if !strings.Contains(u.operationText(), "Service removal confirmed") {
+			return r
+		}
+		r.Stage = "uninstall-exit"
+		if u.exit(ctx, 0) != nil {
+			return r
+		}
+		r.Stage = "uninstall-absence-inspect"
+		if setupAwait(ctx, 5*time.Second, func() bool {
+			s, e := windowsservice.Inspect(ctx)
+			r.Stage = "uninstall-absence-inspect"
+			if e == nil && s.Exists {
+				r.Stage = "uninstall-absence-present"
+			}
+			return e == nil && !s.Exists
+		}) != nil {
 			return r
 		}
 		r.Startup = "absent"
