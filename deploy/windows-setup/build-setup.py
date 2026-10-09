@@ -186,7 +186,7 @@ def build(root: Path, output: Path, version: str, source: str, arches: list[str]
         require(after == inputs, "Source changed during the build; candidate rejected.")
         git_source(root, source, snapshot)
         (deliver / "source-inputs.json").write_bytes(inputs_raw)
-        for path in sorted(deliver.iterdir()):
+        for path in sorted(deliver.iterdir(), key=lambda p: p.name):
             raw = path.read_bytes()
             assets[path.name] = {"size": len(raw), "sha256": sha256(raw)}
         metadata = {"schemaVersion": "tracebolt.windows-setup-build.v1", "repository": "storminator89/Tracebolt",
@@ -196,7 +196,7 @@ def build(root: Path, output: Path, version: str, source: str, arches: list[str]
                     "distributionStatus": "source-candidate-not-released", "nativeExecution": False,
                     "repeatBuildIdentical": rebuild, "assets": assets, "peChecks": checks}
         (deliver / "build-manifest.json").write_bytes(canonical_json(metadata))
-        sums = "".join(f"{sha256(p.read_bytes())}  {p.name}\n" for p in sorted(deliver.iterdir()))
+        sums = "".join(f"{sha256(p.read_bytes())}  {p.name}\n" for p in sorted(deliver.iterdir(), key=lambda p: p.name))
         (deliver / "SHA256SUMS").write_text(sums, encoding="ascii", newline="\n")
         # Publish locally only after every verification succeeds, leaving no
         # apparently complete output directory behind on failure.
