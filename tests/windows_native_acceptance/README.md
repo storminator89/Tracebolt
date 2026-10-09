@@ -102,3 +102,12 @@ The older `fresh` label remains readable for prior reports. Portable injected
 fixtures and Windows cross-compilation do not establish that this environment
 correction fixes a particular hosted native run; a separately approved exact-source
 native gate remains required.
+
+Before freezing a candidate that changes any Go source (including test files),
+regenerate `tests/security/go_failure_allowlist.json` with the canonical
+`derive_allowlist(ROOT)` function in `tests/security/report_go_failure.py`.
+Run the complete existing **Validate bounded Go failure projection with inert
+fixtures** step in `.github/workflows/validate.yml`, starting with
+`python3 -B tests/security/test_go_failure_reporter.py`. The narrower Windows
+source and package tests above do not verify this exact-source inventory. Keep
+its fail-closed source binding intact; do not hand-edit test names or hashes.

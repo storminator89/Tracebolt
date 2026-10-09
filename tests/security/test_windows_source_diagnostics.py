@@ -43,8 +43,21 @@ class SourceDiagnosticTests(unittest.TestCase):
         result = subprocess.CompletedProcess([SECRET], returncode, raw, SECRET.encode())
         replies = [subprocess.CompletedProcess([], 0, b"amd64\n", SECRET.encode()),
                    error if error is not None else result]
+        # Declare the complete expected post-fixture plan. Responses are tied
+        # to commands, so a missing GUI build cannot be hidden by extra padding.
+        folder = Path("/inert/" + SECRET)
+        post_fixture = [(["go", "vet", *gate.PACKAGES], 180, None)]
+        for arch in ("amd64", "arm64"):
+            post_fixture.extend([
+                (["go", "build", "-buildvcs=false", "-trimpath", "-o",
+                  str(folder / ("service-" + arch + ".exe")), "./cmd/windows-service"], 300, arch),
+                (["go", "build", "-buildvcs=false", "-trimpath", "-tags=tracebolt_setup",
+                  "-ldflags=-H windowsgui", "-o", str(folder / ("setup-source-" + arch + ".exe")),
+                  "./cmd/windows-service"], 300, arch),
+            ])
         if success:
-            replies += [subprocess.CompletedProcess([], 0, b"", SECRET.encode())] * 3
+            replies += [subprocess.CompletedProcess(args, 0, b"", SECRET.encode())
+                        for args, _, _ in post_fixture]
         with mock.patch.object(gate.sys, "platform", "win32"), \
                 mock.patch.object(gate.subprocess, "run", side_effect=replies) as run, \
                 mock.patch.object(gate.tempfile, "TemporaryDirectory") as temporary, \
@@ -57,8 +70,11 @@ class SourceDiagnosticTests(unittest.TestCase):
             code = gate.main()
         self.assertEqual(errors.getvalue(), "")
         self.assertNotIn(SECRET, output.getvalue())
-        self.assertEqual(run.call_count, 5 if success else 2)
+        self.assertEqual(run.call_count, 2 + len(post_fixture) if success else 2)
         call = run.call_args_list[1]
+        self.assertEqual(run.call_args_list[0], mock.call(
+            ["go", "env", "GOHOSTARCH"], env=call.kwargs["env"],
+            capture_output=True, timeout=30, check=False))
         self.assertEqual(call.args, (["go", "test", "-json", "-count=1", "-timeout=120s",
                                       "-buildvcs=false", *gate.PACKAGES],))
         self.assertEqual({key: value for key, value in call.kwargs.items() if key != "env"},
@@ -68,6 +84,14 @@ class SourceDiagnosticTests(unittest.TestCase):
                      "TRACEBOLT_KNOWNFOLDER_PROBE", "TRACEBOLT_UPDATE_SERVICE_STARTUP_FIXTURE"):
             self.assertNotIn(name, call.kwargs["env"])
         if success:
+            for call, (args, timeout, arch) in zip(run.call_args_list[2:], post_fixture):
+                self.assertEqual(call.args, (args,))
+                self.assertEqual({key: value for key, value in call.kwargs.items() if key != "env"},
+                                 dict(capture_output=True, timeout=timeout, check=False))
+                expected_env = dict(run.call_args_list[1].kwargs["env"])
+                if arch is not None:
+                    expected_env.update(GOOS="windows", GOARCH=arch, CGO_ENABLED="0")
+                self.assertEqual(call.kwargs["env"], expected_env)
             self.assertEqual(code, 0)
             self.assertNotIn(PREFIX, output.getvalue())
             self.assertTrue(output.getvalue().startswith("PASS: Windows source fixtures"))
