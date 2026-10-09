@@ -99,7 +99,7 @@ jobs:
       - name: Inert authorization and report fixtures
         shell: pwsh
         run: |
-          python -I -B -m unittest discover -s tests/windows_native_acceptance -p "test_setup_gui.py"
+          python -I -B -m unittest discover -s tests/windows_native_acceptance -p "test_setup*.py"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           go test ./internal/windowsacceptance/setupgate ./internal/windowsacceptance/fixture -count=1
           exit $LASTEXITCODE
@@ -136,6 +136,9 @@ jobs:
     if: ${{ github.event_name == 'workflow_dispatch' && needs.packaged-gui.result == 'success' && github.run_attempt == 1 }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read
     env:
       TRACEBOLT_SETUP_SOURCE: ${{ inputs.expected_source_sha }}
       TRACEBOLT_SETUP_PROFILE: packaged-setup-gui-v1
@@ -170,6 +173,8 @@ jobs:
           path: ${{ runner.temp }}/tracebolt-setup-package-input
       - name: Verify same source/run, all four cases, artifact equality and public package bytes
         id: aggregate
+        env:
+          TRACEBOLT_SETUP_API_TOKEN: ${{ github.token }}
         run: python -I -B tests/windows_native_acceptance/run_setup_gui.py --aggregate
       - name: Preserve exact tested unsigned source-candidate native-subset package
         if: ${{ success() && steps.aggregate.outputs.accepted_package_validated == 'true' }}

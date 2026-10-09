@@ -21,8 +21,21 @@ def allowed():
     env.update({"TRACEBOLT_SETUP_APPROVE_" + a: "true" for a in runner.APPROVALS})
     return env
 
+def frame_progress():
+    value = runner.zero_frame_progress()
+    value.update(reason="complete", acceptedFrames=2)
+    value["inventory"] = {"frames": 2, **dict.fromkeys(runner.shared.QUALITIES, "healthy")}
+    ext = value["extensions"]
+    for key in ("eventApplication", "eventSystem", "volumes", "volumeCapacity", "processCPU", "processMemory", "network"):
+        ext[key] = "observed"
+    ext.update(frames=2, v5Frames=2, eventRows=1, volumeRows=1, processRows=1, networkRows=1, peerLoopbackRows=1)
+    for key in ("volumeCapacityCounts", "processCPUCounts", "processMemoryCounts"):
+        ext[key]["observed"] = 1
+    value["telemetry"].update(admitted=2, accepted=2)
+    return value
+
 def report(which="install-uninstall"):
-    return {"setupSHA256":"c"*64,"serviceSHA256":"d"*64,"driverSHA256":"b"*64,"sourceInputsSHA256":"e"*64,"runID":"123","machine":"fresh-vm","schema": "tracebolt.windows-setup-acceptance.v1", "source": "a" * 40, "case": which, "status": "passed_packaged_gui_subset", "stage": "completed", "reason": "none", "approvalValidated": True, "nativeActionsAttempted": True, "checks": {k: True for k in runner.CHECKS[which]}, "coverage": {k: False for k in runner.FALSE_COVERAGE}, "startup": "absent" if which in runner.NORMAL else "disabled", "frames": 2 if which in runner.NORMAL else 0, "platformDisposalRequired": True}
+    return {"setupSHA256":"c"*64,"serviceSHA256":"d"*64,"driverSHA256":"b"*64,"sourceInputsSHA256":"e"*64,"runID":"123","machine":"fresh-vm","schema": "tracebolt.windows-setup-acceptance.v2", "source": "a" * 40, "case": which, "status": "passed_packaged_gui_subset", "stage": "completed", "reason": "none", "approvalValidated": True, "nativeActionsAttempted": True, "checks": {k: True for k in runner.CHECKS[which]}, "coverage": {k: False for k in runner.FALSE_COVERAGE}, "startup": "absent" if which in runner.NORMAL else "disabled", "frames": 2 if which in runner.NORMAL else 0, "platformDisposalRequired": True, "frameProgress": frame_progress() if which in runner.NORMAL else runner.zero_frame_progress()}
 
 class SetupPreNativeDiagnostics(unittest.TestCase):
     def test_each_pre_native_failure_is_finite_private_and_stops_before_launch(self):
@@ -124,11 +137,55 @@ class SetupGate(unittest.TestCase):
             runner.validate_report(raw.replace(b'"stage": "completed"', b'"stage":"completed","stage":"completed"'), "a" * 40, "install-uninstall")
     def test_desktop_block_cannot_claim_native_or_disabled(self):
         r = report()
-        r.update(status="blocked", stage="desktop", reason="desktop_unavailable", nativeActionsAttempted=False, startup="inspection_required", frames=0, platformDisposalRequired=False)
+        r.update(status="blocked", stage="desktop", reason="desktop_unavailable", nativeActionsAttempted=False, startup="inspection_required", frames=0, platformDisposalRequired=False, frameProgress=runner.zero_frame_progress())
         r["checks"] = dict.fromkeys(r["checks"], False)
         self.validate(r)
         r["nativeActionsAttempted"] = True
         with self.assertRaises(runner.shared.Rejected): self.validate(r)
+    def test_failed_frame_wait_preserves_finite_counts_and_legitimate_denial(self):
+        r = report()
+        r.update(status="failed", stage="frames", reason="operation_failed")
+        r["checks"] = dict.fromkeys(r["checks"], False)
+        progress = r["frameProgress"]
+        progress["extensions"]["processCPUCounts"].update(observed=0, denied=1)
+        progress["extensions"]["processCPU"] = "denied"
+        progress["reason"] = "extensions_unusable"
+        self.assertEqual(self.validate(r)["frames"], 2)
+        self.assertEqual(r["frameProgress"]["telemetry"]["accepted"], 2)
+        self.assertFalse(runner.validate_frame_progress(progress))
+        r["status"] = "passed_packaged_gui_subset"
+        with self.assertRaises(runner.shared.Rejected): self.validate(r)
+
+    def test_zero_frame_sample_is_distinct_from_no_observation(self):
+        progress = runner.zero_frame_progress()
+        self.assertFalse(runner.validate_frame_progress(progress))
+        progress["reason"] = "no_accepted_frames"
+        progress["telemetry"].update(admitted=2, authorizationRejected=2)
+        self.assertFalse(runner.validate_frame_progress(progress))
+        progress["reason"] = "not_started"
+        with self.assertRaises(runner.shared.Rejected): runner.validate_frame_progress(progress)
+
+    def test_frame_diagnostics_are_bounded_consistent_and_do_not_relax_two_frames(self):
+        progress = frame_progress()
+        progress.update(acceptedFrames=1, reason="insufficient_v5_frames")
+        progress["inventory"]["frames"] = 1
+        progress["extensions"].update(frames=1, v5Frames=1)
+        progress["telemetry"].update(admitted=1, accepted=1)
+        self.assertFalse(runner.validate_frame_progress(progress))
+        for change in (lambda p: p.update(reason="complete"),
+                       lambda p: p.update(rawTelemetry="private"),
+                       lambda p: p["telemetry"].update(admitted=True),
+                       lambda p: p["telemetry"].update(admitted=4097),
+                       lambda p: p["telemetry"].update(inFlight=3, admitted=4),
+                       lambda p: p["telemetry"].update(frameRejected=1),
+                       lambda p: p["inventory"].update(hostname="private-host")):
+            bad = copy.deepcopy(progress)
+            change(bad)
+            with self.assertRaises(runner.shared.Rejected): runner.validate_frame_progress(bad)
+        r = report()
+        r["frames"] = 0
+        with self.assertRaises(runner.shared.Rejected): self.validate(r)
+
     def test_finite_go_python_contract_parity(self):
         source = (ROOT / "internal/windowsacceptance/setupgate/gate.go").read_text()
         for name in runner.APPROVALS:
@@ -141,7 +198,7 @@ class SetupGate(unittest.TestCase):
         for stage in ("fresh-environment", "fresh-layout", "fresh-service", "fresh-program-files", "fresh-program-data"):
             r = report()
             r.update(status="blocked", stage=stage, reason="operation_failed", nativeActionsAttempted=False,
-                     startup="inspection_required", frames=0, platformDisposalRequired=False)
+                     startup="inspection_required", frames=0, platformDisposalRequired=False, frameProgress=runner.zero_frame_progress())
             r["checks"] = dict.fromkeys(r["checks"], False)
             self.validate(r)
             for key, value in (("stage", "private path or error"), ("nativeActionsAttempted", True),
@@ -181,7 +238,7 @@ class SetupGate(unittest.TestCase):
         ui = (ROOT / "cmd/windows-service/setup_acceptance_ui_windows_test.go").read_text()
         for forbidden in ("installReadObservation(", "setupWizardInstall(", "ApplyStop(", "ApplyUninstall(", "ConfigureWindowsCapabilities(", "Provision(", "ResumeService("):
             self.assertNotIn(forbidden, driver + ui)
-        for required in ("setupLaunch(ctx, exe)", "f.Approve(fp, comparison)", "setupDisabled(ctx, l)", "Service deletion is pending. Waiting for SCM to confirm absence.", "windows.QueryServiceStatus(hold, &status)", "before.DeadlineAt", "receipt.ReadSetup.GrantDigests", "v.Extensions.V5Frames >= 2"):
+        for required in ("setupLaunch(ctx, exe)", "f.Approve(fp, comparison)", "setupDisabled(ctx, l)", "Service deletion is pending. Waiting for SCM to confirm absence.", "windows.QueryServiceStatus(hold, &status)", "before.DeadlineAt", "receipt.ReadSetup.GrantDigests", "setupgate.ObserveFrames(f.Evidence())"):
             self.assertIn(required, driver)
         self.assertIn("windows.CREATE_SUSPENDED", ui)
         self.assertLess(ui.index("windows.AssignProcessToJobObject"), ui.index("windows.ResumeThread"))
@@ -193,6 +250,21 @@ class SetupGate(unittest.TestCase):
         self.assertIn('strings.ReplaceAll(setupText(setupControl(g.window, 2)), "&", "") == "Close"', ui)
         for name in ("setup_acceptance_native_windows_test.go", "setup_acceptance_ui_windows_test.go"):
             self.assertTrue((ROOT / "cmd/windows-service" / name).read_text().startswith("//go:build windows && tracebolt_setup_native\n"))
+    def test_active_pending_observation_keeps_installer_store_quiescent(self):
+        driver = (ROOT / "cmd/windows-service/setup_acceptance_native_windows_test.go").read_text()
+        controller = driver.split("func setupGUIController(", 1)[1]
+        self.assertLess(controller.index("captureSetupPendingObservation("), controller.index("setupConsole(g.pid, secret, secret, true)"))
+        active = controller.split('r.Stage = "pending-claim"', 1)[1].split('if f.Approve(fp, comparison)', 1)[0]
+        self.assertNotIn("setupReceipt(", active)
+        self.assertNotIn("setupDisabled(", active)
+        self.assertEqual(active.count("pending.inspectDisabled(ctx)"), 2)
+        self.assertLess(controller.index("g.exit(ctx, expectedExit)"), controller.index("pending.verifyRetained(ctx"))
+        helper = (ROOT / "cmd/windows-service/setup_pending_observation_test.go").read_text()
+        inspect = helper.split("func (o setupPendingObservation) inspectDisabled", 1)[1].split("func (o setupPendingObservation) verifyRetained", 1)[0]
+        self.assertNotIn("windowsstate.Open", inspect)
+        self.assertNotIn("read()", inspect)
+        self.assertIn("windowsservice.InspectFreshReadSetup", controller)
+
     def test_sensitive_native_child_environment_is_not_forwarded(self):
         env = allowed()
         env.update(COMPUTERNAME="fresh-machine", GITHUB_TOKEN="secret", TRACEBOLT_SETUP_OTHER="inert", SystemDrive="Z:", SYSTEMDRIVE="Y:", ProgramData="private", ProgramFiles="private")
@@ -228,20 +300,80 @@ def public_fixture():
         reports[case] = runner.canonical(r)
     return files, reports
 
+def execution_fixture(reports, files):
+    p = runner.provenance
+    value = {"schema": p.SCHEMA, "repository": p.REPOSITORY, "repositoryID": "1403204207", "source": "a" * 40,
+             "runID": "123", "runAttempt": 1, "workflowPath": p.WORKFLOW_PATH, "workflowID": "9",
+             "proofBasis": p.PROOF_BASIS, "artifactJobBinding": p.ARTIFACT_BINDING,
+             "freshVMDocumentation": p.FRESH_VM_SOURCE, "documentationReviewedOn": p.SOURCE_REVIEWED_ON,
+             "vmIdentityAttested": False, "cases": {}}
+    for i, case in enumerate(p.CASES, 1):
+        value["cases"][case] = {"artifactID": str(100+i), "artifactName": "windows-setup-gui-"+case+"-"+"a"*40,
+            "artifactZipSHA256": "b"*64, "jobID": str(i), "runnerID": str(300+i), "runnerGroupID": "0",
+            "reportSHA256": runner.digest(reports[case])}
+    value["publicPackage"] = {"artifactID": "200", "artifactName": "windows-setup-public-input-"+"a"*40,
+        "artifactZipSHA256": "c"*64, "jobID": value["cases"]["install-uninstall"]["jobID"],
+        "filesSHA256": {name: runner.digest(raw) for name, raw in files.items()}}
+    return value
+
 class SetupPublicDelivery(unittest.TestCase):
     def test_four_reports_require_all_passed_same_run_and_exact_bytes(self):
-        _, reports = public_fixture()
-        runner.aggregate_reports(reports, "a" * 40, "123")
+        files, reports = public_fixture()
+        proof = execution_fixture(reports, files)
+        runner.aggregate_reports(reports, "a" * 40, "123", proof, files)
         for key in ("source", "runID", "setupSHA256", "serviceSHA256", "driverSHA256", "sourceInputsSHA256", "machine", "status"):
             bad = dict(reports)
             r = json.loads(bad["pending-transport"])
             r[key] = {"source": "f" * 40, "runID": "456", "machine": "FRESH-VM-0", "status": "failed"}.get(key, "f" * 64)
             bad["pending-transport"] = runner.canonical(r)
             with self.subTest(key=key), self.assertRaises(runner.shared.Rejected):
-                runner.aggregate_reports(bad, "a" * 40, "123")
+                runner.aggregate_reports(bad, "a" * 40, "123", proof, files)
         missing = dict(reports)
         missing.pop("cancel-hidden-input")
-        with self.assertRaises(runner.shared.Rejected): runner.aggregate_reports(missing, "a" * 40, "123")
+        with self.assertRaises(runner.shared.Rejected): runner.aggregate_reports(missing, "a" * 40, "123", proof, files)
+    def test_cloned_hostnames_require_distinct_authenticated_job_provenance(self):
+        files, reports = public_fixture()
+        for case, raw in reports.items():
+            r = json.loads(raw)
+            r["machine"] = "same-cloned-hostname"
+            reports[case] = runner.canonical(r)
+        proof = execution_fixture(reports, files)
+        runner.aggregate_reports(reports, "a" * 40, "123", proof, files)
+        with self.assertRaises(runner.shared.Rejected):
+            runner.aggregate_reports(reports, "a" * 40, "123")
+        bad = copy.deepcopy(proof)
+        bad["cases"]["pending-transport"]["jobID"] = bad["cases"]["install-uninstall"]["jobID"]
+        with self.assertRaises(runner.shared.Rejected):
+            runner.aggregate_reports(reports, "a" * 40, "123", bad, files)
+
+    def test_aggregate_requires_canonical_original_report_bytes(self):
+        files, reports = public_fixture()
+        noncanonical = dict(reports)
+        noncanonical["install-uninstall"] = json.dumps(json.loads(reports["install-uninstall"]), indent=2).encode()
+        proof = execution_fixture(noncanonical, files)
+        with self.assertRaises(runner.shared.Rejected):
+            runner.aggregate_reports(noncanonical, "a"*40, "123", proof, files)
+
+    def test_api_provenance_failure_cannot_preserve_package_or_emit_success(self):
+        files, reports = public_fixture()
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.object(runner.resources, "verify_pe", side_effect=fake_pe), mock.patch.object(runner.shared, "verify_checkout"), mock.patch.object(runner.provenance, "verify_current_run", side_effect=runner.provenance.Rejected()):
+            temp = Path(tmp)
+            env = allowed()
+            env.update(RUNNER_OS="Linux", RUNNER_TEMP=str(temp), GITHUB_OUTPUT=str(temp / "outputs"))
+            downloads = temp / "tracebolt-setup-reports"
+            downloads.mkdir()
+            for case, raw in reports.items():
+                folder = downloads / ("windows-setup-gui-" + case + "-" + "a"*40)
+                folder.mkdir()
+                (folder / runner.REPORT_NAME).write_bytes(raw)
+            package = temp / "tracebolt-setup-package-input"
+            package.mkdir()
+            for name, raw in files.items(): (package / name).write_bytes(raw)
+            with self.assertRaises(runner.provenance.Rejected): runner.run_aggregate(env)
+            self.assertFalse((temp / runner.ACCEPTED_DIRECTORY).exists())
+            self.assertFalse((temp / runner.AGGREGATE_REPORT).exists())
+            self.assertFalse((temp / "outputs").exists())
+
     def test_public_manifest_and_report_binding_and_no_snapshot_relabel(self):
         files, reports = public_fixture()
         tls = json.loads(reports["install-uninstall"])
@@ -275,10 +407,10 @@ class SetupPublicDelivery(unittest.TestCase):
             with self.assertRaises(runner.shared.Rejected): runner.read_public_package(destination)
     def test_aggregate_copies_actual_bytes_without_build_or_native_execution(self):
         files, reports = public_fixture()
-        with tempfile.TemporaryDirectory() as tmp, mock.patch.object(runner.resources, "verify_pe", side_effect=fake_pe), mock.patch.object(runner.shared, "verify_checkout"), mock.patch.object(runner.shared, "command", side_effect=AssertionError("execution forbidden")):
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.object(runner.resources, "verify_pe", side_effect=fake_pe), mock.patch.object(runner.shared, "verify_checkout") as checkout, mock.patch.object(runner.shared, "command", side_effect=AssertionError("execution forbidden")), mock.patch.object(runner.provenance, "verify_current_run", return_value=execution_fixture(reports, files)) as verify:
             temp = Path(tmp)
             env = allowed()
-            env.update(RUNNER_OS="Linux", RUNNER_TEMP=str(temp), GITHUB_OUTPUT=str(temp / "outputs"))
+            env.update(RUNNER_OS="Linux", RUNNER_TEMP=str(temp), GITHUB_OUTPUT=str(temp / "outputs"), TRACEBOLT_SETUP_API_TOKEN="PRIVATE_API_TOKEN")
             downloads = temp / "tracebolt-setup-reports"
             downloads.mkdir()
             for case, raw in reports.items():
@@ -289,6 +421,10 @@ class SetupPublicDelivery(unittest.TestCase):
             package.mkdir()
             for name, raw in files.items(): (package / name).write_bytes(raw)
             evidence = runner.run_aggregate(env)
+            verify.assert_called_once_with(env, "a" * 40, reports, files)
+            self.assertNotIn("TRACEBOLT_SETUP_API_TOKEN", checkout.call_args.args[0])
+            self.assertEqual(evidence["schema"], "tracebolt.windows-setup-native-subset.v2")
+            self.assertEqual(evidence["executionProvenance"], execution_fixture(reports, files))
             self.assertEqual(runner.read_public_package(temp / runner.ACCEPTED_DIRECTORY), files)
             self.assertFalse(evidence["crossOSRebuildEquivalence"])
             self.assertTrue(all(v is False for v in evidence["coverage"].values()))

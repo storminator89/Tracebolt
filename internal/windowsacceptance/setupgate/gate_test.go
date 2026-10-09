@@ -4,6 +4,9 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"localrmm/internal/windowsacceptance/fixture"
+	"localrmm/internal/windowsacceptance/profile"
 )
 
 func authorized() (map[string]string, Binding, time.Time) {
@@ -58,6 +61,7 @@ func TestFiniteReportCoverageAndIndeterminateTruth(t *testing.T) {
 		if NormalCase(which) {
 			r.Startup = "absent"
 			r.Frames = 2
+			r.FrameProgress = setupGateFrameProgressFixture()
 		}
 		for k := range r.Checks {
 			r.Checks[k] = true
@@ -74,5 +78,15 @@ func TestFiniteReportCoverageAndIndeterminateTruth(t *testing.T) {
 		if r.Validate() == nil {
 			t.Fatal("invented coverage")
 		}
+	}
+}
+
+// Finite invented quality/counts only. No fixture server or collector is started.
+func setupGateFrameProgressFixture() FrameProgress {
+	observed := profile.QualityCounts{Observed: 1}
+	return FrameProgress{Reason: "complete", AcceptedFrames: 2,
+		Inventory:  profile.Observation{Frames: 2, CPU: "healthy", Memory: "healthy", Disk: "healthy", Hostname: "healthy", Processes: "healthy", Services: "healthy", Software: "healthy", Interfaces: "healthy"},
+		Extensions: profile.ExtensionObservation{Frames: 2, V5Frames: 2, EventApplication: "observed", EventSystem: "observed", Volumes: "observed", VolumeCapacity: "observed", ProcessCPU: "observed", ProcessMemory: "observed", Network: "observed", EventRows: 1, VolumeRows: 1, ProcessRows: 1, NetworkRows: 1, PeerLoopbackRows: 1, VolumeCapacityCounts: observed, ProcessCPUCounts: observed, ProcessMemoryCounts: observed},
+		Telemetry:  fixture.TelemetryObservation{Admitted: 2, Accepted: 2},
 	}
 }

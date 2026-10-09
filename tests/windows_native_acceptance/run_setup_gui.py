@@ -22,6 +22,9 @@ ROOT = Path(__file__).resolve().parents[2]
 _spec = importlib.util.spec_from_file_location("_setup_shared", Path(__file__).with_name("run_acceptance.py"))
 shared = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(shared)
+_provenance_spec = importlib.util.spec_from_file_location("_setup_job_provenance", Path(__file__).with_name("setup_job_provenance.py"))
+provenance = importlib.util.module_from_spec(_provenance_spec)
+_provenance_spec.loader.exec_module(provenance)
 require = shared.require
 PROFILE = "packaged-setup-gui-v1"
 VERSION = "v0.0.0-setup-candidate"
@@ -45,7 +48,7 @@ CHECKS = {
 }
 CHECKS["http-install-uninstall"] = CHECKS["install-uninstall"] | {"httpAcknowledgementOff", "httpExplicitlyAcknowledged"}
 FALSE_COVERAGE = {"humanUAC", "humanInvitation", "realLinuxManager", "sharedDashboard", "arm64Runtime", "osReboot", "upgrade", "vmDisposalVerified", "secretsExported", "rawTelemetryExported"}
-STAGES = {"authorization", "desktop", "fresh", "fresh-environment", "fresh-layout", "fresh-service", "fresh-program-files", "fresh-program-data", "fixture", "preflight-cancel", "bootstrap", "consent", "install", "hidden-input", "pending", "transport", "completion", "frames", "reopen", "uninstall-cancel", "uninstall", "verify-retention", "completed"}
+STAGES = {"authorization", "desktop", "fresh", "fresh-environment", "fresh-layout", "fresh-service", "fresh-program-files", "fresh-program-data", "fixture", "preflight-cancel", "bootstrap", "consent", "install", "hidden-input", "pending", "pending-capture", "pending-claim", "pending-service", "pending-console", "pending-invariant", "pending-retention", "transport", "transport-service", "completion", "frames", "frames-evidence", "reopen", "uninstall-cancel", "uninstall", "verify-retention", "completed"}
 
 # Wrapper-only diagnostics: these are not native controller reports or evidence.
 # Never include exception messages, commands, paths, output, or environment values.
@@ -86,12 +89,54 @@ def authorize_aggregate(env):
     require(env.get("RUNNER_OS") == "Linux")
     return source
 
+FRAME_REASONS = {"not_started", "no_accepted_frames", "inventory_unusable", "extensions_unusable", "insufficient_v5_frames", "complete"}
+TELEMETRY_COUNTS = {"admitted", "inFlight", "accepted", "duplicate", "authorizationRejected", "bodyRejected", "frameRejected", "scopeRejected", "freshnessRejected", "unavailable"}
+
+def zero_frame_progress():
+    extensions = {key: "not_run" for key in ("eventApplication", "eventSystem", "volumes", "volumeCapacity", "processCPU", "processMemory", "network")}
+    extensions.update({key: 0 for key in ("frames", "v5Frames", "eventRows", "volumeRows", "processRows", "networkRows", "peerLoopbackRows", "processCPUFirstSampleRows")})
+    extensions["freshOrchestrationAcceptance"] = False
+    for key in ("volumeCapacityCounts", "processCPUCounts", "processMemoryCounts"):
+        extensions[key] = dict.fromkeys(("observed", "denied", "unavailable", "firstSample", "reset"), 0)
+    return {"reason": "not_started", "acceptedFrames": 0,
+            "inventory": {"frames": 0, **dict.fromkeys(shared.QUALITIES, "not_run")},
+            "extensions": extensions, "telemetry": dict.fromkeys(TELEMETRY_COUNTS, 0)}
+
+def validate_frame_progress(value):
+    require(type(value) is dict and set(value) == {"reason", "acceptedFrames", "inventory", "extensions", "telemetry"})
+    require(shared.member(value["reason"], FRAME_REASONS))
+    require(type(value["acceptedFrames"]) is int and 0 <= value["acceptedFrames"] <= 64)
+    inventory = value["inventory"]
+    require(type(inventory) is dict and set(inventory) == {"frames", *shared.QUALITIES})
+    require(type(inventory["frames"]) is int and inventory["frames"] == value["acceptedFrames"])
+    qualities = {"not_run"} if inventory["frames"] == 0 else {"healthy", "partial", "denied", "unavailable"}
+    require(all(shared.member(inventory[key], qualities) for key in shared.QUALITIES))
+    extensions = value["extensions"]
+    shared.validate_extensions(extensions, inventory["frames"], "failed")
+    counts = value["telemetry"]
+    require(type(counts) is dict and set(counts) == TELEMETRY_COUNTS)
+    require(all(type(v) is int and 0 <= v <= 4096 for v in counts.values()))
+    require(counts["inFlight"] <= 2 and counts["accepted"] == value["acceptedFrames"])
+    require(counts["duplicate"] == 0 or counts["accepted"] > 0)
+    require(sum(v for k, v in counts.items() if k != "admitted") == counts["admitted"])
+    if value["reason"] == "not_started":
+        require(value == zero_frame_progress())
+        return False
+    inventory_usable = inventory["frames"] > 0 and all(inventory[key] in {"healthy", "partial"} for key in shared.QUALITIES)
+    extensions_usable = extensions["frames"] > 0 and all(extensions[key] in {"observed", "bounded", "partial"} for key in ("eventApplication", "eventSystem", "volumes")) and all(extensions[key]["observed"] > 0 for key in ("volumeCapacityCounts", "processCPUCounts", "processMemoryCounts")) and extensions["peerLoopbackRows"] > 0 and extensions["network"] in {"observed", "partial"}
+    expected = ("no_accepted_frames" if value["acceptedFrames"] == 0 else
+                "inventory_unusable" if not inventory_usable else
+                "extensions_unusable" if not extensions_usable else
+                "insufficient_v5_frames" if extensions["v5Frames"] < 2 else "complete")
+    require(value["reason"] == expected)
+    return expected == "complete"
+
 def validate_report(raw, source, which):
     r = shared.strict_json(raw, 16 << 10)
-    require(type(r) is dict and set(r) == {"setupSHA256", "serviceSHA256", "driverSHA256", "sourceInputsSHA256", "runID", "machine", "schema", "source", "case", "status", "stage", "reason", "approvalValidated", "nativeActionsAttempted", "checks", "coverage", "startup", "frames", "platformDisposalRequired"})
+    require(type(r) is dict and set(r) == {"setupSHA256", "serviceSHA256", "driverSHA256", "sourceInputsSHA256", "runID", "machine", "schema", "source", "case", "status", "stage", "reason", "approvalValidated", "nativeActionsAttempted", "checks", "coverage", "startup", "frames", "frameProgress", "platformDisposalRequired"})
     require(all(type(r[k]) is str and re.fullmatch(r"[0-9a-f]{64}", r[k]) for k in ("setupSHA256", "serviceSHA256", "driverSHA256", "sourceInputsSHA256")))
     require(type(r["runID"]) is str and re.fullmatch(r"[1-9][0-9]{0,23}", r["runID"]) and type(r["machine"]) is str and re.fullmatch(r"[A-Za-z0-9_-]{1,80}", r["machine"]))
-    require(r["schema"] == "tracebolt.windows-setup-acceptance.v1" and r["source"] == source and r["case"] == which and which in CHECKS)
+    require(r["schema"] == "tracebolt.windows-setup-acceptance.v2" and r["source"] == source and r["case"] == which and which in CHECKS)
     require(shared.member(r["status"], {"blocked", "failed", "passed_packaged_gui_subset"}) and shared.member(r["stage"], STAGES))
     require(shared.member(r["reason"], {"none", "authorization", "desktop_unavailable", "operation_failed", "deadline", "inspection_required"}))
     require(shared.member(r["startup"], {"inspection_required", "disabled", "automatic", "absent"}))
@@ -99,13 +144,17 @@ def validate_report(raw, source, which):
     require(type(r["coverage"]) is dict and set(r["coverage"]) == FALSE_COVERAGE and all(v is False for v in r["coverage"].values()))
     require(all(type(r[k]) is bool for k in ("approvalValidated", "nativeActionsAttempted", "platformDisposalRequired")))
     require(type(r["frames"]) is int and 0 <= r["frames"] <= 64)
+    ready = validate_frame_progress(r["frameProgress"])
+    require(r["frames"] == r["frameProgress"]["extensions"]["v5Frames"])
+    require(r["nativeActionsAttempted"] or r["frameProgress"]["reason"] == "not_started")
+    require(which in NORMAL or r["frameProgress"]["reason"] == "not_started")
     require(not r["nativeActionsAttempted"] or r["approvalValidated"])
     require(not r["platformDisposalRequired"] or r["nativeActionsAttempted"])
     if r["status"] == "blocked":
         require(not r["nativeActionsAttempted"] and r["frames"] == 0 and r["startup"] == "inspection_required" and not any(r["checks"].values()))
     if r["status"] == "passed_packaged_gui_subset":
         require(all(r["checks"].values()) and r["nativeActionsAttempted"] and r["platformDisposalRequired"] and r["stage"] == "completed" and r["reason"] == "none")
-        require((r["startup"] == "absent" and r["frames"] >= 2) if which in NORMAL else (r["startup"] == "disabled" and r["frames"] == 0))
+        require((r["startup"] == "absent" and r["frames"] >= 2 and ready) if which in NORMAL else (r["startup"] == "disabled" and r["frames"] == 0))
     return r
 
 def parse_controller(raw, source, which):
@@ -199,18 +248,30 @@ def preserve_public_package(files, destination, source, report):
     require(copied == files)
     validate_public_package(copied, source, report)
 
-def aggregate_reports(reports, source, run_id):
+def _validated_reports(reports, source, run_id):
     require(type(reports) is dict and set(reports) == set(CHECKS))
     accepted = {case: validate_report(raw, source, case) for case, raw in reports.items()}
+    require(all(raw == canonical(accepted[case]) for case, raw in reports.items()))
     require(all(r["status"] == "passed_packaged_gui_subset" and r["runID"] == run_id for r in accepted.values()))
-    require(len({r["machine"].lower() for r in accepted.values()}) == len(CHECKS))
     for key in ("setupSHA256", "serviceSHA256", "driverSHA256", "sourceInputsSHA256"):
         require(len({r[key] for r in accepted.values()}) == 1)
     return accepted
 
+def aggregate_reports(reports, source, run_id, execution_provenance=None, public_files=None):
+    accepted = _validated_reports(reports, source, run_id)
+    # Hostnames may be cloned across separate hosted jobs. Distinct execution
+    # evidence is mandatory; report names or random nonces are not a fallback.
+    try:
+        provenance.validate_provenance(execution_provenance, source, run_id, reports, public_files)
+    except Exception:
+        raise shared.Rejected() from None
+    return accepted
+
 def run_aggregate(env, root=ROOT):
     source = authorize_aggregate(env)
-    shared.verify_checkout(shared.child_environment(env), source, root)
+    # The ephemeral API credential is confined to in-process provenance reads.
+    child_env = {k: v for k, v in env.items() if k not in {provenance.TOKEN_ENV, "GITHUB_TOKEN", "GH_TOKEN"}}
+    shared.verify_checkout(shared.child_environment(child_env), source, root)
     temp = Path(env.get("RUNNER_TEMP", ""))
     require(temp.is_absolute() and temp.is_dir())
     downloads = temp / "tracebolt-setup-reports"
@@ -220,11 +281,13 @@ def run_aggregate(env, root=ROOT):
     for case, name in names.items():
         exact_directory(downloads / name, {REPORT_NAME})
         raw_reports[case] = regular_file(downloads / name / REPORT_NAME, 16 << 10)
-    reports = aggregate_reports(raw_reports, source, env["GITHUB_RUN_ID"])
+    reports = _validated_reports(raw_reports, source, env["GITHUB_RUN_ID"])
     package = read_public_package(temp / "tracebolt-setup-package-input")
     hashes = validate_public_package(package, source, reports["install-uninstall"])
+    execution = provenance.verify_current_run(env, source, raw_reports, package)
+    aggregate_reports(raw_reports, source, env["GITHUB_RUN_ID"], execution, package)
     preserve_public_package(package, temp / ACCEPTED_DIRECTORY, source, reports["install-uninstall"])
-    evidence = {"schema": "tracebolt.windows-setup-native-subset.v1", "source": source, "runID": env["GITHUB_RUN_ID"], "status": "four_case_packaged_gui_subset", "distributionStatus": "unsigned-source-candidate-native-subset", "crossOSRebuildEquivalence": False, "coverage": dict.fromkeys(sorted(FALSE_COVERAGE), False), "reports": reports, "publicFilesSHA256": hashes}
+    evidence = {"schema": "tracebolt.windows-setup-native-subset.v2", "source": source, "runID": env["GITHUB_RUN_ID"], "status": "four_case_packaged_gui_subset", "distributionStatus": "unsigned-source-candidate-native-subset", "crossOSRebuildEquivalence": False, "coverage": dict.fromkeys(sorted(FALSE_COVERAGE), False), "reports": reports, "publicFilesSHA256": hashes, "executionProvenance": execution}
     with (temp / AGGREGATE_REPORT).open("xb") as stream:
         stream.write(canonical(evidence))
     require(env.get("GITHUB_OUTPUT", "") != "")

@@ -107,27 +107,42 @@ rollout. Actual CLI TLS/HTTP integration, cryptographic/durable-state review,
 installer/service reboot behavior and real native endpoint operation are separate
 verification levels.
 
-## Creation failure localization
+## Creation response observation
 
-The shared creation helper uses only fixed stage labels. The route/session-loss
-scenario labels its two calls `first` (before dismissal) and `second` (after
-returning to devices). Stages distinguish opening, submission, waiting, HTTP 201,
-response-byte retrieval, JSON decoding, the v2 response schema, secret type and masked-field assertion.
-No response body, unexpected schema value, exception text or input value is
-exported. The original secret-type and password-mask assertions remain strict;
-HTTP status/schema checks additionally fail closed. No mutation is retried and
-no timeout, scenario, quarantine or application behavior changes.
+The shared creation helper uses fixed first/second invocation labels for the
+route/session-loss case and single elsewhere. It observes the application's
+original bounded fetch reader for the exact loopback invitation POST. It never
+clones a Response, creates another reader, fetches DevTools response bytes or
+retries a mutation. The original Response, read values, bytes and errors remain
+unchanged. A single exact request body is bound to the observed browser POST.
 
-The inert `enrollment-create-diagnostics.test.mjs` suite exercises this helper
-with in-memory page/response doubles only. It does not launch a browser or run
-the enrollment fixture. These checks are diagnostic coverage, not browser
-acceptance or evidence that the original failure is fixed.
+Success requires HTTP 201, one completed primary reader within the production
+262144-byte bound, complete UTF-8/JSON, the v2 response schema and a string
+invitation secret. Independently, the application must render a password input
+whose value equals that response's secret; the equality assertion uses a boolean
+so it cannot print the secret. EOF/valid JSON by itself is not acceptance: the
+application's DTO, bootstrap, clock and access checks may still reject it.
 
-A retrieval failure additionally retains the existing transport diagnostic's
-closed error category, original request completion/failure category, page/context
-close or crash state, browser connection state, bounded viewport/elapsed numbers
-and numeric browser version. The snapshot is taken before cleanup. No response
-bytes, headers, URLs, DOM text, secret or raw exception are retained. A JSON
-decoding failure has its own fixed stage; it is not treated as a transport error.
-Both failures still fail the case. Diagnostic failures cannot replace the original
-failure; listeners are removed at case teardown and the snapshot resets per case.
+The test-only observer is armed once per creation. It discards private bytes on
+abort (including after EOF), duplicate requests, reader/cancellation/decoding
+failure, navigation, hidden visibility, pagehide and authentication-required.
+Taking a successful response is destructive, and helper finally always clears
+remaining state. It never writes storage, screenshots or artifacts. Existing
+route/session/lifecycle assertions and the three quarantine entries are unchanged.
+
+Failure reports retain only fixed stages, bounded primary-reader state/counts,
+and the existing finite transport snapshot before cleanup. No response body,
+request body, unexpected schema value, error message or input value is reported.
+Diagnostic errors cannot turn a failure into success. Genuine primary abort,
+truncation, invalid JSON, invalid DTO/bootstrap and missing/mismatched UI still
+fail; there is no fallback to a cached response or status-only pass.
+
+This corrects the test's dependence on a secondary DevTools body retrieval. The
+recorded body-data-missing/aborted transport failure did not establish why the
+request was aborted or whether its primary consumer succeeded. Do not claim a
+product root cause or historical primary success from this harness change.
+
+The inert helper suite and enrollment-primary-body.test.tsx exercise finite
+stages and real production decoder/UI behavior with synthetic streams. They do
+not launch Chromium or establish hosted browser/native acceptance. The latter
+suite is explicitly included in the existing independent UI regression target.

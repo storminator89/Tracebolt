@@ -65,9 +65,16 @@ func (f *Fixture) serve(w http.ResponseWriter, r *http.Request, agent bool) {
 	blocked := s.closed || s.ctx.Err() != nil || s.requests >= MaxRequests
 	if !blocked {
 		s.requests++
+		if agent {
+			s.telemetryProgress.Admitted++
+			s.telemetryProgress.InFlight++
+		}
 		if s.unavailable {
 			s.unavailableRequests++
 			blocked = true
+			if agent {
+				s.finishTelemetryLocked(telemetryUnavailable)
+			}
 		}
 	}
 	s.mu.Unlock()
@@ -87,6 +94,7 @@ func (f *Fixture) serve(w http.ResponseWriter, r *http.Request, agent bool) {
 	if agent && s.selection.HTTPTest() {
 		v, e := s.signed.Verify(r)
 		if e != nil {
+			s.finishTelemetry(telemetryAuthorizationRejected)
 			fail(w, 403)
 			return
 		}
@@ -96,17 +104,23 @@ func (f *Fixture) serve(w http.ResponseWriter, r *http.Request, agent bool) {
 	}
 	defer clear(raw)
 	if err != nil || len(raw) > limit || int64(len(raw)) != r.ContentLength {
+		if agent {
+			s.finishTelemetry(telemetryBodyRejected)
+		}
 		fail(w, 400)
 		return
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.closed || s.unavailable || s.ctx.Err() != nil || r.Context().Err() != nil {
+		if agent {
+			s.finishTelemetryLocked(telemetryUnavailable)
+		}
 		fail(w, 503)
 		return
 	}
 	if agent {
-		s.telemetry(w, r, raw, verified)
+		s.finishTelemetryLocked(s.telemetry(w, r, raw, verified))
 		return
 	}
 	if r.URL.Path == s.selection.EnrollmentPrefix()+"challenge" {
@@ -367,12 +381,12 @@ func deadline(v enrollmentstate.Snapshot) int64 {
 	return v.DeadlineAt
 }
 
-func (s *state) telemetry(w http.ResponseWriter, r *http.Request, raw []byte, signed *signedhttp.Verified) {
+func (s *state) telemetry(w http.ResponseWriter, r *http.Request, raw []byte, signed *signedhttp.Verified) telemetryOutcome {
 	now := s.now().UTC()
 	v, e := s.snapshot()
 	if e != nil || !s.activeIdentity(v, now) {
 		fail(w, 403)
-		return
+		return telemetryAuthorizationRejected
 	}
 	if s.selection.HTTPTest() {
 		// Final authority check shares the replay/receipt lock; verification alone
@@ -380,11 +394,11 @@ func (s *state) telemetry(w http.ResponseWriter, r *http.Request, raw []byte, si
 		current, err := s.authorizeCertificate(s.issued.DER(), now)
 		if err != nil || signed == nil || signed.Agent != current || !bytes.Equal(signed.Body, raw) || r.TLS != nil {
 			fail(w, 403)
-			return
+			return telemetryAuthorizationRejected
 		}
 	} else if signed != nil || !s.verifyPeer(r, v, now) {
 		fail(w, 403)
-		return
+		return telemetryAuthorizationRejected
 	}
 	hash := sha256.Sum256(raw)
 	// Exact latest bytes were already validated. Check retry before sample-age
@@ -394,36 +408,36 @@ func (s *state) telemetry(w http.ResponseWriter, r *http.Request, raw []byte, si
 		receipt.Duplicate = true
 		s.duplicates++
 		write(w, receipt)
-		return
+		return telemetryDuplicate
 	}
 	frame, e := lanstore.ValidateFrame(raw, now)
 	if e != nil || frame.Observation.Platform != "windows" || !lanstore.FrameMatchesCollectionProfile(frame, s.selection.CollectionProfile) {
 		fail(w, 400)
-		return
+		return telemetryFrameRejected
 	}
 	if signed != nil && (signed.Sequence != frame.Sequence || !signed.SignedAt.Equal(frame.Observation.GeneratedAt)) {
 		fail(w, 400)
-		return
+		return telemetryFrameRejected
 	}
 	if !s.extensionShape(frame) {
 		fail(w, 400)
-		return
+		return telemetryScopeRejected
 	}
 	if !s.extensionAdvance(frame) {
 		fail(w, 409)
-		return
+		return telemetryFreshnessRejected
 	}
 	if frame.Sequence <= s.lastReceipt.Sequence || !s.lastReceipt.CollectedAt.IsZero() && !frame.Observation.Observation.LastSeen.After(s.lastReceipt.CollectedAt) || !s.lastGenerated.IsZero() && !frame.Observation.GeneratedAt.After(s.lastGenerated) {
 		fail(w, 409)
-		return
+		return telemetryFreshnessRejected
 	}
 	if frame.WindowsInventory != nil && s.frames > 0 && (frame.WindowsInventory.GenerationID == s.lastWindowsGeneration || !frame.WindowsInventory.CollectedAt.After(s.lastWindowsCollected)) {
 		fail(w, 409)
-		return
+		return telemetryFreshnessRejected
 	}
 	if s.frames >= MaxFrames {
 		fail(w, 503)
-		return
+		return telemetryUnavailable
 	}
 	s.lastReceipt = lanstore.Receipt{SchemaVersion: "tracebolt.agent-receipt.v1", AgentID: v.Approval.DeviceID, Sequence: frame.Sequence, CollectedAt: frame.Observation.Observation.LastSeen, ReceivedAt: now}
 	s.lastDigest = hash
@@ -437,6 +451,7 @@ func (s *state) telemetry(w http.ResponseWriter, r *http.Request, raw []byte, si
 	s.observeExtensions(frame)
 	write(w, s.lastReceipt)
 	// No raw body, bundle, metric, label, or observation is retained in state.
+	return telemetryAccepted
 }
 
 func metricQuality(q string) string {
