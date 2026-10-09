@@ -8,6 +8,10 @@ See [build and provenance](windows-setup-release.md) for final artifact generati
 The existing public Linux rc.3 download pin is unchanged and is not a Windows
 installer or compatible-manager guarantee.
 
+For the dated native results and current release blockers, read
+[Windows status and limitations](windows-status.md). Some x64 setup/telemetry
+phases have passed; final service removal and complete acceptance remain open.
+
 ## What a human does
 
 1. Obtain the separately reviewed Setup.exe and its exact source/hash manifest

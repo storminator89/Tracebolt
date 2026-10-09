@@ -1,0 +1,149 @@
+{
+  "sourceCommit": "9e6203b6c17cbc7e4e6f9e35ac86ff4fb664dd20",
+  "sourceURL": "https://github.com/storminator89/Tracebolt/commit/9e6203b6c17cbc7e4e6f9e35ac86ff4fb664dd20",
+  "workflowRun": 37986888183,
+  "workflowURL": "https://github.com/storminator89/Tracebolt/actions/runs/37986888183",
+  "browserJob": 114012926640,
+  "browserJobURL": "https://github.com/storminator89/Tracebolt/actions/runs/37986888183/job/114012926640",
+  "artifactID": 11644415145,
+  "artifactName": "ui-review-9e6203b6c17cbc7e4e6f9e35ac86ff4fb664dd20",
+  "artifactArchiveSHA256": "16e7c592a8106c03d144cb4e953731209c11f250efb8073676ca3b4f5ea39b86",
+  "capturedOn": "2026-10-09",
+  "reviewedOn": "2026-10-09",
+  "browser": "Playwright Chromium headless shell on the standard Ubuntu 24.04 GitHub-hosted runner",
+  "transformation": "None. Original PNG bytes were copied from the digest-verified CI artifact; filenames only were shortened.",
+  "data": "Invented test data rendered by the real compiled Tracebolt UI. No captured customer telemetry or user-host data.",
+  "acceptanceBoundary": "These captures establish rendering of the named passing synthetic browser cases on the exact source commit. They do not establish native Windows installation, LocalService operation, host grants, production TLS deployment, upgrade or OS reboot acceptance.",
+  "images": [
+    {
+      "file": "resource-history-dark.png",
+      "originalFile": "synthetic-resource-history-desktop-dark-en.png",
+      "sha256": "6dc11e9e87a4a0133bbd908b9244b027ef4958d4c701a0b9a2ab2c2b7d35749d",
+      "bytes": 108183,
+      "caption": "Dark-mode resource history with invented CPU, memory and root-filesystem samples. The original sample times, visible gaps and unknown assessment states are preserved.",
+      "sourceManifest": "lan-browser-manifest.json",
+      "sourceManifestSHA256": "6c7359bb31e9916a2acad606f8b15e32eb55c34437d590b925be194e7e8c68a3",
+      "sourceResults": "lan-browser-results.json",
+      "sourceResultsSHA256": "4ef35f6872956746b2360934766089d85928997c2e2cf1d88c345829c7e28130",
+      "testStatus": "PASS",
+      "suiteSummary": {
+        "passed": 26,
+        "failed": 0,
+        "setupFailure": false
+      },
+      "suiteRuntimeErrorCount": 0,
+      "pixelReview": "Reviewed at original 1440x1000 pixels: fixture device name, readable metrics/charts, intact HTTP-test warning, no observed private host identifiers, credentials, tokens or external URLs.",
+      "capture": {
+        "file": "synthetic-resource-history-desktop-dark-en.png",
+        "sourceSha": "9e6203b6c17cbc7e4e6f9e35ac86ff4fb664dd20",
+        "publicSafe": true,
+        "fullPage": false,
+        "viewport": {
+          "width": 1440,
+          "height": 1000
+        },
+        "locale": "en",
+        "fixtureDisclosure": "Real loopback HTTP-test fixture login and production compiled UI with intercepted invented CPU, memory and root-filesystem history. UI-only evidence; no native telemetry, user VM, collection, external requests, or deployment.",
+        "test": "Synthetic 24-hour resource charts preserve real sample times, missing intervals and protected access"
+      }
+    },
+    {
+      "file": "log-workspace.png",
+      "originalFile": "synthetic-journal-workspace-desktop-en.png",
+      "sha256": "e3a5bef22c0b3f039e5ffbc8dd2f3b9c1c436de264e21f11188d928c45d48515",
+      "bytes": 93335,
+      "caption": "Service-scoped log-request workspace before a service or request is selected. Permission remains unverified and no journal content has been fetched.",
+      "sourceManifest": "journal-browser-manifest.json",
+      "sourceManifestSHA256": "e7930b84c40a78d72d438dbb42376eda616b91c2432f58f8db61190a531b7c37",
+      "sourceResults": "journal-browser-results.json",
+      "sourceResultsSHA256": "eccd875a5ccb2fc1e9e9a761c7992108081d73325632a30b7117798ec020e751",
+      "testStatus": "PASS",
+      "suiteSummary": {
+        "passed": 7,
+        "failed": 0,
+        "setupFailure": false
+      },
+      "suiteRuntimeErrorCount": 0,
+      "pixelReview": "Reviewed at original 1440x1000 pixels: synthetic fixture name, no log content, intact HTTP-test warning, readable scope and period controls, no observed private host identifiers, credentials, tokens or external URLs.",
+      "capture": {
+        "file": "synthetic-journal-workspace-desktop-en.png",
+        "sourceSha": "9e6203b6c17cbc7e4e6f9e35ac86ff4fb664dd20",
+        "sha256": "e3a5bef22c0b3f039e5ffbc8dd2f3b9c1c436de264e21f11188d928c45d48515",
+        "viewport": {
+          "width": 1440,
+          "height": 1000
+        },
+        "locale": "en",
+        "fullPage": false,
+        "publicSafe": true,
+        "fixtureDisclosure": "Entirely invented journal messages admitted through typed cache/store calls and the real operator HTTP-test handler. No host log read, helper, local grant or native journal transport.",
+        "test": "Explicit content and HTTP acknowledgements gate one lazy journal request and honest pending state"
+      }
+    },
+    {
+      "file": "windows-inventory.png",
+      "originalFile": "synthetic-windows-inventory-1440-en.png",
+      "sha256": "7f3bf94b826ee8c066c45313831aaca7518804f024f45e9f53d2d3baed49045d",
+      "bytes": 107756,
+      "caption": "Windows interface inventory in the compiled dashboard, using invented API replies and documentation-range IP addresses. UI evidence only; not Windows installation or native acceptance.",
+      "sourceManifest": "lan-browser-manifest.json",
+      "sourceManifestSHA256": "6c7359bb31e9916a2acad606f8b15e32eb55c34437d590b925be194e7e8c68a3",
+      "sourceResults": "lan-browser-results.json",
+      "sourceResultsSHA256": "4ef35f6872956746b2360934766089d85928997c2e2cf1d88c345829c7e28130",
+      "testStatus": "PASS",
+      "suiteSummary": {
+        "passed": 26,
+        "failed": 0,
+        "setupFailure": false
+      },
+      "suiteRuntimeErrorCount": 0,
+      "pixelReview": "Reviewed at original 1440x1000 pixels: fixture-windows and Fixture Ethernet labels, documentation-range IPv4/IPv6, intact HTTP-test warning and collection limits; no observed private host identifiers, credentials, tokens or external URLs.",
+      "capture": {
+        "file": "synthetic-windows-inventory-1440-en.png",
+        "sourceSha": "9e6203b6c17cbc7e4e6f9e35ac86ff4fb664dd20",
+        "publicSafe": true,
+        "fullPage": false,
+        "viewport": {
+          "width": 1440,
+          "height": 1000
+        },
+        "locale": "en",
+        "fixtureDisclosure": "Real loopback HTTP-test fixture login with intercepted invented Windows inventory and resource history in the production UI. UI-only evidence; no native endpoint acceptance, collection, invitation, service installation or external request.",
+        "test": "Synthetic Windows inventory shares device charts and explicit enrollment consent without Linux reads"
+      }
+    },
+    {
+      "file": "fleet-mobile-de.png",
+      "originalFile": "synthetic-fleet-identity-mobile-de.png",
+      "sha256": "61b9290758271ec5f57915394488b3b12d20d98ebea6fe6b3dc3a93cbbab5c24",
+      "bytes": 49037,
+      "caption": "German mobile fleet view with invented hostname, documentation-range IP addresses and explicit unavailable, denied and partial observations.",
+      "sourceManifest": "fleet-identity-browser-manifest.json",
+      "sourceManifestSHA256": "100122ffa9a079076008749bf2b0ed38f4029bd7fda9ada1a8686dd30d3efd1b",
+      "sourceResults": "fleet-identity-browser-results.json",
+      "sourceResultsSHA256": "be4ed83b898c79e553b9dee7c86fc4eb1cf39e97a52053215865771141edc403",
+      "testStatus": "PASS",
+      "suiteSummary": {
+        "passed": 5,
+        "failed": 0,
+        "setupFailure": false
+      },
+      "suiteRuntimeErrorCount": 0,
+      "pixelReview": "Reviewed at original 390x844 pixels: invented escaped hostname and documentation-range address, intact German HTTP-test warning, readable rows and unknown assessment; no observed private host identifiers, credentials, tokens or external URLs.",
+      "capture": {
+        "file": "synthetic-fleet-identity-mobile-de.png",
+        "sourceSha": "9e6203b6c17cbc7e4e6f9e35ac86ff4fb664dd20",
+        "sha256": "61b9290758271ec5f57915394488b3b12d20d98ebea6fe6b3dc3a93cbbab5c24",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "locale": "de",
+        "fullPage": false,
+        "publicSafe": true,
+        "fixtureDisclosure": "Entirely invented hostname and documentation-range addresses, directly admitted through typed v2 frames to the real store on loopback HTTP-test. No host collector, local consent file, installer, real telemetry or user endpoint.",
+        "test": "German mobile table preserves hostname, IPs, scope, filters and unavailable identity distinctions"
+      }
+    }
+  ]
+}
