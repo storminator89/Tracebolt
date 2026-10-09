@@ -3,6 +3,7 @@
  * TLS warning bypass, secret screenshots, traces, request logs or storage dumps.
  */
 import {createRequire} from 'node:module';
+import {installEnrollmentPrimaryBody} from './enrollment-primary-body.mjs';
 import {createBrowserTransportDiagnostics} from './browser-transport-diagnostics.mjs';
 import {createBrowserInvitation} from './enrollment-create-diagnostics.mjs';
 import {readSourceOwnedPin} from './public-command-contract.mjs';
@@ -23,7 +24,7 @@ const sourceSha=process.env.TRACEBOLT_SOURCE_SHA||null;
 const base=`http://127.0.0.1:${Number(process.env.ENROLLMENT_REVIEW_PORT||19889)}`;
 const password='TRACEBOLT_ENROLLMENT_BROWSER_FIXTURE_NOT_A_REAL_PASSWORD';
 const results=[],screenshots=[],secrets=[];
-let transportDiagnostics,creationTransportFailure=null;
+let transportDiagnostics,creationTransportFailure=null,creationPrimaryFailure=null;
 let browser,server,context,pipe,waiting,currentTest='',stage='setup',runtimeErrorCount=0,fatal=false;
 const apiSmoke=process.argv.includes('--api-smoke');
 // Temporary, explicit quarantine. Keep the scenarios and their strict checks;
@@ -53,6 +54,7 @@ async function control(action,extra={}){
 }
 async function pageAt({mobile=false,skew=false}={}){
  context=await browser.newContext({viewport:mobile?{width:390,height:844}:{width:1440,height:1000},locale:'en-GB',acceptDownloads:true});
+ await context.addInitScript(installEnrollmentPrimaryBody,{url:base+'/api/enrollment/invitations'});
  if(skew)await context.addInitScript(()=>{const OriginalDate=Date;class SkewDate extends OriginalDate{constructor(...args){super(...(args.length?args:[OriginalDate.now()+365*24*3600000]));}static now(){return OriginalDate.now()+365*24*3600000;}}window.Date=SkewDate;});
  const page=await context.newPage();page.on('pageerror',()=>runtimeErrorCount++);transportDiagnostics=createBrowserTransportDiagnostics(page,browser);
  await page.goto(`${base}/#/devices`);await page.getByLabel('Operator password',{exact:true}).fill(password);await page.getByRole('button',{name:'Sign in',exact:true}).click();await expect(page.locator('.app-shell')).toBeVisible();await expect(page.locator('.enrollment-panel')).toBeVisible();
@@ -60,12 +62,12 @@ async function pageAt({mobile=false,skew=false}={}){
 }
 async function list(){const response=await context.request.get(`${base}/api/enrollment`);expect(response.status()).toBe(200);return response.json();}
 async function post(route,data){const session=await(await context.request.get(`${base}/api/auth/session`)).json();return context.request.post(`${base}/api/enrollment/${route}`,{headers:{Origin:base,'X-CSRF-Token':session.csrfToken},data});}
-async function create(page,invocation='single'){return createBrowserInvitation(page,{base,mark,expect,secrets,invocation,transportDiagnostics,recordTransportFailure:detail=>{creationTransportFailure=detail;}});}
+async function create(page,invocation='single'){return createBrowserInvitation(page,{base,mark,expect,secrets,invocation,transportDiagnostics,recordTransportFailure:detail=>{creationTransportFailure=detail;},recordPrimaryFailure:detail=>{creationPrimaryFailure=detail;}});}
 async function nativeClaim(created){mark('native claim');await control('start',{secret:created.invitationSecret,bootstrap:created.bootstrap});await expect.poll(async()=>{const items=(await list()).items;return items.find(v=>v.invitationID===created.snapshot.invitationID)?.state;},{timeout:12000}).toBe('claimed_pending');return control('status');}
 async function review(page,id){mark('review invitation');const dialog=page.getByRole('dialog');if(await dialog.count())await page.keyboard.press('Escape');await page.getByRole('button',{name:'Refresh enrollment status'}).click();await expect(page.getByRole('button',{name:`Review invitation ${id}`,exact:true})).toBeVisible();await page.getByRole('button',{name:`Review invitation ${id}`,exact:true}).click();await expect(page.getByRole('dialog',{name:'Review invitation',exact:true})).toBeVisible();}
 async function checkClean(page){const value=await page.evaluate(()=>JSON.stringify({local:{...localStorage},session:{...sessionStorage}}));expect(secrets.some(s=>value.includes(s))||value.includes(password)).toBe(false);expect(secrets.some(s=>page.url().includes(s))).toBe(false);}
 async function shot(page,name){mark('safe viewport capture');const visible=await page.evaluate(()=>document.body.innerText+'\n'+[...document.querySelectorAll('input')].map(i=>i.value).join('\n'));expect(secrets.some(s=>visible.includes(s))||visible.includes(password)).toBe(false);await expect(page.locator('.enrollment-secret')).toHaveCount(0);await expect(page.locator('.enrollment-comparison')).toHaveCount(0);await expect(page.locator('.enrollment-fingerprint')).toHaveCount(0);await page.screenshot({path:path.join(out,`${name}.png`),fullPage:false,animations:'disabled'});const bytes=await fs.readFile(path.join(out,`${name}.png`));screenshots.push({file:`${name}.png`,sourceSha,sha256:createHash('sha256').update(bytes).digest('hex'),publicSafe:true,fullPage:false,viewport:page.viewportSize(),locale:await page.locator('html').getAttribute('lang'),fixtureDisclosure:'Disposable loopback enrollment with explicit unencrypted HTTP-test profile; no real endpoint, secret, comparison value or telemetry',test:currentTest});}
-async function check(name,run,options){if(!includeQuarantined&&quarantinedNames.has(name)){results.push({name,status:'SKIPPED',reason:quarantineReason,durationMs:0});console.log(`SKIP ${name}: ${quarantineReason}`);return;}currentTest=name;stage='fixture setup';creationTransportFailure=null;const begin=Date.now();try{await start(options);await run();results.push({name,status:'PASS',durationMs:Date.now()-begin});console.log(`PASS ${name}`);}catch{results.push({name,status:'FAIL',stage,durationMs:Date.now()-begin,error:'Assertion failed; secret-bearing diagnostics intentionally withheld.',...(creationTransportFailure?{transportFailure:creationTransportFailure}:{})});console.log(`FAIL ${name} (${stage})`);}finally{transportDiagnostics?.dispose();transportDiagnostics=null;if(context)await context.close();context=null;await stop();secrets.length=0;}}
+async function check(name,run,options){if(!includeQuarantined&&quarantinedNames.has(name)){results.push({name,status:'SKIPPED',reason:quarantineReason,durationMs:0});console.log(`SKIP ${name}: ${quarantineReason}`);return;}currentTest=name;stage='fixture setup';creationTransportFailure=null;creationPrimaryFailure=null;const begin=Date.now();try{await start(options);await run();results.push({name,status:'PASS',durationMs:Date.now()-begin});console.log(`PASS ${name}`);}catch{results.push({name,status:'FAIL',stage,durationMs:Date.now()-begin,error:'Assertion failed; secret-bearing diagnostics intentionally withheld.',...(creationTransportFailure?{transportFailure:creationTransportFailure}:{}),...(creationPrimaryFailure?{primaryFailure:creationPrimaryFailure}:{})});console.log(`FAIL ${name} (${stage})`);}finally{transportDiagnostics?.dispose();transportDiagnostics=null;if(context)await context.close();context=null;await stop();secrets.length=0;}}
 async function terminate(page,label){
  const expected={ 'Cancel invitation':['canceled','Canceled'], 'Reject':['rejected','Rejected'], 'Revoke identity':['revoked','Revoked'] }[label];
  if(!expected)throw new Error('UNSUPPORTED_TEST_ACTION');
