@@ -66,9 +66,9 @@ const windowsConsent = {
   http: 'HTTP test: the invitation and approved hostname, network, process, service and software metadata travel without encryption and may be intercepted or altered. Use only in a deliberately isolated test environment.',
   acknowledgeHTTP: 'I explicitly accept unencrypted HTTP-test enrollment and Windows inventory transmission.',
   availability: 'Windows inventory source candidate. Local installation and persistent identity creation require separate approval.',
-  installTitle: 'Prepare the reviewed Windows source build',
-  install: 'Use the Windows enrollment client and service coordinator built from this reviewed source with the windows-inventory-v1 profile. Transfer the public bootstrap file, review the documented local permissions and inventory consent, then separately approve installation and persistent identity creation on the Windows device. Enter the invitation only in the native hidden prompt and compare the full fingerprint and comparison value here.',
-  release: 'No released Windows installer or download command is available. Source and fixture validation do not prove installation, service restart or reboot acceptance on your Windows device.',
+  installTitle: 'Use the reviewed Windows Setup preview',
+  install: 'For a separately provided, reviewed Setup.exe preview, choose Download bootstrap file below and select that public JSON export in its wizard. No hand-written configuration or endpoint build is needed. The wizard verifies manager compatibility before making changes, asks for the five local read scopes and persistent service/identity approval, then opens a hidden invitation prompt. Compare the full device fingerprint and comparison value here before approving. HTTPS is default; HTTP-test needs a separate plaintext-risk acknowledgement. Existing installations and partial state cannot be overwritten or reset.',
+  release: 'No released Windows installer or download command is available. The unsigned fresh-host Setup preview is distributed separately only after review; this page does not link an unverified artifact. Source and fixture validation do not prove installation, service restart or reboot acceptance on your Windows device.',
  },
  de: {
   title: 'Begrenztes Windows-Inventar',
@@ -79,9 +79,9 @@ const windowsConsent = {
   http: 'HTTP-Test: Die Einladung und freigegebene Hostnamen-, Netzwerk-, Prozess-, Dienst- und Softwaremetadaten werden unverschlüsselt übertragen und können abgefangen oder verändert werden. Nur in einer bewusst isolierten Testumgebung verwenden.',
   acknowledgeHTTP: 'Ich akzeptiere ausdrücklich das unverschlüsselte HTTP-Test-Enrollment und die Übertragung des Windows-Inventars.',
   availability: 'Windows-Inventar als Quellcode-Kandidat. Lokale Installation und dauerhafte Identitätserstellung erfordern eine separate Zustimmung.',
-  installTitle: 'Geprüften Windows-Quellbuild vorbereiten',
-  install: 'Verwende den Windows-Enrollment-Client und Dienstkoordinator aus diesem geprüften Quellcode mit dem Profil windows-inventory-v1. Übertrage die öffentliche Bootstrap-Datei, prüfe die dokumentierten lokalen Berechtigungen und Inventarzustimmung und genehmige danach Installation und dauerhafte Identitätserstellung separat am Windows-Gerät. Gib die Einladung nur im nativen verdeckten Prompt ein und vergleiche hier den vollständigen Fingerabdruck und Vergleichswert.',
-  release: 'Ein veröffentlichter Windows-Installer oder Download-Befehl ist nicht verfügbar. Quellcode- und Fixture-Prüfungen belegen weder Installation noch Dienst- oder Systemneustart auf deinem Windows-Gerät.',
+  installTitle: 'Geprüfte Windows-Setup-Vorschau verwenden',
+  install: 'Für eine separat bereitgestellte, geprüfte Setup.exe-Vorschau wähle unten Bootstrap-Datei herunterladen und öffne diesen öffentlichen JSON-Export im Assistenten. Eigene Konfiguration oder ein Build am Windows-Gerät sind nicht nötig. Setup prüft zuerst die Manager-Kompatibilität, fragt nach fünf lokalen Lesebereichen sowie Dienst- und Identitätserstellung und öffnet danach eine verdeckte Einladungseingabe. Vergleiche hier vor der Freigabe den vollständigen Geräte-Fingerabdruck und Vergleichswert. HTTPS ist Standard; HTTP-Test braucht eine zusätzliche Klartext-Zustimmung. Vorhandene Installationen oder unvollständiger Zustand werden nicht überschrieben oder zurückgesetzt.',
+  release: 'Ein veröffentlichter Windows-Installer oder Download-Befehl ist nicht verfügbar. Die unsignierte Setup-Vorschau für frische Geräte wird nach Prüfung separat bereitgestellt; diese Seite verlinkt kein ungeprüftes Artefakt. Quellcode- und Fixture-Prüfungen belegen weder Installation noch Dienst- oder Systemneustart auf deinem Windows-Gerät.',
  },
 } as const;
 

@@ -15,11 +15,18 @@ import (
 	"localrmm/internal/windowsstate"
 )
 
-// installReadObservation is intentionally not dispatched by nativeOperation or
-// exposed as a command. A future verified installer must show every scope's full
+// installReadObservation is not dispatched by the ordinary lifecycle CLI. The
+// separate Setup build must show every scope's full
 // privacy disclosure (including every HTTP warning), obtain one explicit local
 // acknowledgement, and satisfy real release/native gates before invoking it.
 func installReadObservation(ctx context.Context, bootstrapPath string, consent lanclient.WindowsCapabilityConsent, out, stderr io.Writer) (any, error) {
+	return installReadObservationWithProgress(ctx, bootstrapPath, consent, out, stderr, nil)
+}
+
+func installReadObservationWithProgress(ctx context.Context, bootstrapPath string, consent lanclient.WindowsCapabilityConsent, out, stderr io.Writer, progress func(string)) (any, error) {
+	if progress == nil {
+		progress = func(string) {}
+	}
 	if validateReadSetupConsent(consent) != nil {
 		return nil, setupFailed("fresh_consent", errLifecycle)
 	}
@@ -29,6 +36,11 @@ func installReadObservation(ctx context.Context, bootstrapPath string, consent l
 	s := nativeSetupSteps(enrollmentcrypto.CollectionProfileWindowsInventory, consent.InsecureHTTPAcknowledged, out, stderr)
 	s.plan = windowsservice.PlanFreshReadSetup
 	s.apply = windowsservice.ApplyFreshReadSetup
+	enrollStep := s.enroll
+	s.enroll = func(ctx context.Context, layout windowsservice.Layout) error {
+		progress("Service staged disabled. Verify public trust and enter the invitation in the dedicated hidden console.")
+		return enrollStep(ctx, layout)
+	}
 	s.verifyOwned = func(ctx context.Context, receipt windowsservice.Receipt) error {
 		snapshot, err := windowsservice.InspectFreshReadSetup(ctx, receipt)
 		if err != nil {
@@ -60,6 +72,7 @@ func installReadObservation(ctx context.Context, bootstrapPath string, consent l
 			return lanclient.WindowsCapabilityScopesAbsent(receipt.Layout.StateRoot, receipt.ServiceSID)
 		},
 		activateIdentity: func(ctx context.Context, receipt windowsservice.Receipt) error {
+			progress("Waiting for manager approval of the displayed fingerprint and comparison code. Service remains disabled.")
 			b, err := bootstrap(receipt.Layout)
 			if err != nil {
 				return err
@@ -78,8 +91,11 @@ func installReadObservation(ctx context.Context, bootstrapPath string, consent l
 			}
 			return nil
 		},
-		identity:        lanclient.WindowsCapabilityIdentity,
-		configure:       lanclient.ConfigureWindowsCapabilities,
+		identity: lanclient.WindowsCapabilityIdentity,
+		configure: func(path string, consent lanclient.WindowsCapabilityConsent) (lanclient.WindowsCapabilityConsentResult, error) {
+			progress("Manager approved this identity. Applying and verifying the five explicitly approved local read scopes.")
+			return lanclient.ConfigureWindowsCapabilities(path, consent)
+		},
 		verifyGrants:    lanclient.VerifyWindowsCapabilities,
 		grantDigests:    lanclient.WindowsCapabilityGrantDigests,
 		activateStartup: windowsservice.ActivateFreshReadSetup,

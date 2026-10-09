@@ -51,6 +51,23 @@ class GateTests(unittest.TestCase):
             other.unlink()
             run("checkout-index", "--", "ordinary.txt")
             self.assertEqual(other.read_bytes(), b"ordinary\r\ntext\r\n")
+    def test_setup_geometry_is_mandatory_without_native_execution(self):
+        for name in (
+            "TestLayoutControlsStayReachableAcrossClientSizesAndDPI",
+            "TestInitialWindowFitsSmallWorkAreasIncluding125PercentRegression",
+            "TestWindowMinimumBoundsAndRounding",
+            "TestClampWindowPreservesOrBoundsPlacementAcrossMonitorOrigins",
+            "TestLayoutRejectsInvalidParameters",
+            "TestDisplayLayoutFailuresInvalidatePreviouslyReadyActions",
+            "TestUnavailableDisplayRetainsBusyOperationUntilCancellationCompletes",
+            "TestAutomationControlIDsStayStable",
+            "TestNativeLayoutMessagePointerDecoding",
+        ):
+            required = ("localrmm/internal/windowssetupui", name)
+            self.assertIn(required, gate.REQUIRED)
+            rows = [dict(Package=p, Test=t, Action="pass") for p, t in gate.REQUIRED if (p, t) != required]
+            with self.assertRaises(ValueError):
+                gate.check_events(b"\n".join(json.dumps(x).encode() for x in rows))
     def test_exact_required_cases(self):
         records=[dict(Package=p,Test=t,Action="pass") for p,t in gate.REQUIRED]
         raw=lambda rows:b"\n".join(json.dumps(x).encode() for x in rows)
@@ -140,6 +157,18 @@ class GateTests(unittest.TestCase):
         dispatch = (root / "cmd/windows-service/operation_windows.go").read_text()
         self.assertNotIn("installReadObservation(", dispatch)
         self.assertNotIn('flags.Bool("read-setup"', cli)
+    def test_setup_source_gate_is_inert_and_required(self):
+        for package in ("./internal/windowspackage", "./internal/windowssetup", "./internal/windowssetupui"):
+            self.assertIn(package, gate.PACKAGES)
+        for required in (("localrmm/internal/windowssetupui", "TestExplicitHTTPNeedsSeparateRiskApprovalAndMatchingTransport"), ("localrmm/internal/windowspackage", "TestProvisionEveryFailureRetainsAndNeverContinues"), ("localrmm/cmd/windows-service", "TestSetupWizardRemovalWaitsForExactOwnedStopAndAbsence")):
+            self.assertIn(required, gate.REQUIRED)
+            rows = [dict(Package=p, Test=t, Action="pass") for p, t in gate.REQUIRED if (p, t) != required]
+            with self.assertRaises(ValueError):
+                gate.check_events(b"\n".join(json.dumps(x).encode() for x in rows))
+        source = Path(gate.__file__).read_text()
+        self.assertIn('"-tags=tracebolt_setup"', source)
+        self.assertNotIn('tracebolt_setup_native', source)
+        self.assertNotIn('run_windows_setup_acceptance', source)
     def test_malformed_stream(self):
         for raw in (b"[]",b"not json",b"",b" "*(32*1024*1024+1)):
             with self.assertRaises(ValueError):gate.check_events(raw)

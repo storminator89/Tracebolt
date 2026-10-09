@@ -361,6 +361,10 @@ func (h *operatorHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	if r.URL.Path == "/v1/windows/setup-capabilities" {
+		h.windowsSetupCapabilities(w, r)
+		return
+	}
 	if r.URL.Path == socketOwnerCapabilitiesPath {
 		if h.enrollment == nil {
 			fail(w, 404, "enrollment_unavailable", "Enrollment is not configured.")

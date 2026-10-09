@@ -1,0 +1,195 @@
+name: Manual disposable packaged Windows Setup GUI acceptance
+
+# A separate exact-source consent contract; never push, pull_request, schedule,
+# workflow_call, workflow_run or the old coordinator-only acceptance approval.
+on:
+  workflow_dispatch:
+    inputs:
+      expected_source_sha:
+        description: 'Exact independently reviewed 40-hex source SHA; must equal this dispatch. Four assigned fresh hosted Windows 2025 x64 VMs only, first attempt.'
+        required: true
+        type: string
+      app_acls:
+        description: 'Approve real Setup.exe creating app-only Program Files/ProgramData roots, payload and protected stores; no ancestor repair, adoption or user computer'
+        required: true
+        default: false
+        type: boolean
+      services:
+        description: 'Approve fixed LocalService SCM identity/SID/limited privileges, Disabled staging, exact automatic transition/Start on approved fresh VMs only'
+        required: true
+        default: false
+        type: boolean
+      identity:
+        description: 'Approve persistent endpoint keys/identity and five exact grants, fixture public fingerprint/comparison approval; no production manager identity'
+        required: true
+        default: false
+        type: boolean
+      five_read_scopes:
+        description: 'Approve bounded inventory/names/hostname/interfaces, Application/System event headers, volume capacities, process CPU/working-set, numeric TCP/UDP metadata/PIDs; no content/traffic/AI export'
+        required: true
+        default: false
+        type: boolean
+      synthetic_console:
+        description: 'Approve actual GUI controls and memory-only synthetic invitation events at true hidden CONIN$, bounded no-echo inspection, owned GUI worker termination; no human invite/UAC claim'
+        required: true
+        default: false
+        type: boolean
+      loopback_tls:
+        description: 'Approve disposable loopback TLS fixture authority and reports for TLS cases only; no real Linux manager/dashboard, firewall, global trust or network policy changes'
+        required: true
+        default: false
+        type: boolean
+      http_plaintext:
+        description: 'Separately approve one HTTP-test loopback GUI case: invitation, identity and five-scope telemetry are plaintext and manager responses forgeable; synthetic disposable data only, no TLS downgrade'
+        required: true
+        default: false
+        type: boolean
+      stop_remove_owned_service:
+        description: 'Approve GUI-confirmed stop/delete of exact completed receipt-owned service, observable delete-pending and final absence; reject incomplete uninstalls; no files/keys/state deletion'
+        required: true
+        default: false
+        type: boolean
+      retain_for_vm_disposal:
+        description: 'Approve retaining installed executable, bootstrap, identity/grants/state and any incomplete service for platform VM disposal. Disposal required but unverified; no reuse/reboot/upgrade'
+        required: true
+        default: false
+        type: boolean
+permissions:
+  contents: read
+jobs:
+  packaged-gui:
+    name: Actual packaged GUI - ${{ matrix.case }}
+    if: ${{ github.event_name == 'workflow_dispatch' && github.repository == 'storminator89/Tracebolt' && github.repository_owner == 'storminator89' && github.repository_owner_id == '30489872' && github.actor == 'storminator89' && github.actor_id == '30489872' && github.triggering_actor == 'storminator89' && github.run_attempt == 1 }}
+    strategy:
+      fail-fast: false
+      matrix:
+        case: [install-uninstall, http-install-uninstall, cancel-hidden-input, pending-transport]
+    runs-on: windows-2025
+    timeout-minutes: 40
+    env:
+      TRACEBOLT_SETUP_SOURCE: ${{ inputs.expected_source_sha }}
+      TRACEBOLT_SETUP_PROFILE: packaged-setup-gui-v1
+      TRACEBOLT_SETUP_CASE: ${{ matrix.case }}
+      TRACEBOLT_SETUP_APPROVE_APP_ACLS: ${{ inputs.app_acls }}
+      TRACEBOLT_SETUP_APPROVE_SERVICES: ${{ inputs.services }}
+      TRACEBOLT_SETUP_APPROVE_IDENTITY: ${{ inputs.identity }}
+      TRACEBOLT_SETUP_APPROVE_FIVE_READ_SCOPES: ${{ inputs.five_read_scopes }}
+      TRACEBOLT_SETUP_APPROVE_SYNTHETIC_CONSOLE: ${{ inputs.synthetic_console }}
+      TRACEBOLT_SETUP_APPROVE_LOOPBACK_TLS: ${{ inputs.loopback_tls }}
+      TRACEBOLT_SETUP_APPROVE_HTTP_PLAINTEXT: ${{ inputs.http_plaintext }}
+      TRACEBOLT_SETUP_APPROVE_STOP_REMOVE_OWNED_SERVICE: ${{ inputs.stop_remove_owned_service }}
+      TRACEBOLT_SETUP_APPROVE_RETAIN_FOR_VM_DISPOSAL: ${{ inputs.retain_for_vm_disposal }}
+      PYTHONDONTWRITEBYTECODE: '1'
+      GOTOOLCHAIN: local
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      - name: Require all distinct approvals and exact clean source before further work
+        shell: pwsh
+        run: python -I -B tests/windows_native_acceptance/run_setup_gui.py --check-authorization
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Inert authorization and report fixtures
+        shell: pwsh
+        run: |
+          python -I -B -m unittest discover -s tests/windows_native_acceptance -p "test_setup_gui.py"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          go test ./internal/windowsacceptance/setupgate ./internal/windowsacceptance/fixture -count=1
+          exit $LASTEXITCODE
+      - name: Build exact package and drive actual GUI; fail blocked if no interactive desktop
+        id: gui
+        shell: pwsh
+        run: python -I -B tests/windows_native_acceptance/run_setup_gui.py --run-native
+      - name: Export finite evidence only; platform disposal remains unverified
+        if: ${{ always() && !cancelled() && steps.gui.outputs.report_validated == 'true' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: windows-setup-gui-${{ matrix.case }}-${{ github.sha }}
+          path: ${{ runner.temp }}/tracebolt-windows-setup-acceptance.json
+          if-no-files-found: error
+          retention-days: 3
+
+      - name: Retain only the exact successful TLS-case public package, pending all-case validation
+        if: ${{ success() && matrix.case == 'install-uninstall' && steps.gui.outputs.public_package_validated == 'true' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: windows-setup-public-input-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/tracebolt-setup-tested-public/Tracebolt-v0.0.0-setup-candidate-windows-amd64-Setup.exe
+            ${{ runner.temp }}/tracebolt-setup-tested-public/tracebolt-v0.0.0-setup-candidate-windows-amd64-service.exe
+            ${{ runner.temp }}/tracebolt-setup-tested-public/setup-package-amd64.json
+            ${{ runner.temp }}/tracebolt-setup-tested-public/build-manifest.json
+            ${{ runner.temp }}/tracebolt-setup-tested-public/source-inputs.json
+            ${{ runner.temp }}/tracebolt-setup-tested-public/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 3
+  accepted-public-package:
+    name: Validate four reports and preserve exact tested public bytes (no rebuild)
+    needs: packaged-gui
+    if: ${{ github.event_name == 'workflow_dispatch' && needs.packaged-gui.result == 'success' && github.run_attempt == 1 }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      TRACEBOLT_SETUP_SOURCE: ${{ inputs.expected_source_sha }}
+      TRACEBOLT_SETUP_PROFILE: packaged-setup-gui-v1
+      TRACEBOLT_SETUP_APPROVE_APP_ACLS: ${{ inputs.app_acls }}
+      TRACEBOLT_SETUP_APPROVE_SERVICES: ${{ inputs.services }}
+      TRACEBOLT_SETUP_APPROVE_IDENTITY: ${{ inputs.identity }}
+      TRACEBOLT_SETUP_APPROVE_FIVE_READ_SCOPES: ${{ inputs.five_read_scopes }}
+      TRACEBOLT_SETUP_APPROVE_SYNTHETIC_CONSOLE: ${{ inputs.synthetic_console }}
+      TRACEBOLT_SETUP_APPROVE_LOOPBACK_TLS: ${{ inputs.loopback_tls }}
+      TRACEBOLT_SETUP_APPROVE_HTTP_PLAINTEXT: ${{ inputs.http_plaintext }}
+      TRACEBOLT_SETUP_APPROVE_STOP_REMOVE_OWNED_SERVICE: ${{ inputs.stop_remove_owned_service }}
+      TRACEBOLT_SETUP_APPROVE_RETAIN_FOR_VM_DISPOSAL: ${{ inputs.retain_for_vm_disposal }}
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      - name: Download current-run reports into separate case directories
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with:
+          pattern: windows-setup-gui-*-${{ github.sha }}
+          path: ${{ runner.temp }}/tracebolt-setup-reports
+          merge-multiple: false
+      - name: Download the current-run exact successful TLS public package
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with:
+          name: windows-setup-public-input-${{ github.sha }}
+          path: ${{ runner.temp }}/tracebolt-setup-package-input
+      - name: Verify same source/run, all four cases, artifact equality and public package bytes
+        id: aggregate
+        run: python -I -B tests/windows_native_acceptance/run_setup_gui.py --aggregate
+      - name: Preserve exact tested unsigned source-candidate native-subset package
+        if: ${{ success() && steps.aggregate.outputs.accepted_package_validated == 'true' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: windows-setup-native-subset-public-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/tracebolt-setup-accepted-public/Tracebolt-v0.0.0-setup-candidate-windows-amd64-Setup.exe
+            ${{ runner.temp }}/tracebolt-setup-accepted-public/tracebolt-v0.0.0-setup-candidate-windows-amd64-service.exe
+            ${{ runner.temp }}/tracebolt-setup-accepted-public/setup-package-amd64.json
+            ${{ runner.temp }}/tracebolt-setup-accepted-public/build-manifest.json
+            ${{ runner.temp }}/tracebolt-setup-accepted-public/source-inputs.json
+            ${{ runner.temp }}/tracebolt-setup-accepted-public/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 7
+      - name: Preserve finite cross-case linkage evidence separately
+        if: ${{ success() && steps.aggregate.outputs.accepted_package_validated == 'true' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: windows-setup-native-subset-evidence-${{ github.sha }}
+          path: ${{ runner.temp }}/tracebolt-setup-native-subset.json
+          if-no-files-found: error
+          retention-days: 7

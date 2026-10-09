@@ -20,7 +20,8 @@ import (
 )
 
 // No CLI dispatch exists for this fresh-only coordinator. Release/provenance,
-// native acceptance and the human combined-consent entry point remain gates.
+// native acceptance and exact released-artifact provenance remain gates. The
+// separate Setup preview supplies the explicit human combined-consent entry.
 type readSetupProgress struct {
 	Consent       lanclient.WindowsCapabilityConsent       `json:"consent"`
 	Phase         string                                   `json:"phase"`
@@ -289,7 +290,7 @@ func validReadSetupBinding(binding string) bool {
 }
 
 // All five notices form one local choice; none implies manager approval or a
-// grant to an external AI provider. The production entry point remains absent.
+// grant to an external AI provider. The separate Setup preview reuses this text.
 func writeReadSetupDisclosure(out io.Writer, c lanclient.WindowsCapabilityConsent) error {
 	if out == nil || validateReadSetupConsent(c) != nil {
 		return errLifecycle

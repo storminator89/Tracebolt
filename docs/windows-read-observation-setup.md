@@ -2,10 +2,12 @@
 
 This is an isolated production-source candidate, not an available installation
 command, release download, native acceptance result or permission to install.
-The existing Windows commands and existing identities are unchanged. There is no
-new CLI flag, dashboard command, installer download, provenance assertion or
-release-gate override. A future released installer must satisfy the real gates
-below before invoking this source entry point.
+The existing Windows commands and existing identities are unchanged. The separate
+[Setup.exe preview](windows-setup-preview.md) now invokes this source entry point
+through an explicit local wizard; it is unsigned and unreleased. There is no new
+lifecycle CLI flag, automatic dashboard download pin, provenance assertion or
+release-gate override. The exact distributed executable must satisfy the real
+gates below before broader release.
 
 ## One explicit upfront read choice
 
