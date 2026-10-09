@@ -145,18 +145,22 @@ func setupDisabled(ctx context.Context, l windowsservice.Layout) (installReceipt
 	}
 	return r, nil
 }
-func setupFresh(ctx context.Context, l windowsservice.Layout) bool {
+func setupFreshService(ctx context.Context) error {
 	s, e := windowsservice.Inspect(ctx)
 	if e != nil || s.Exists {
-		return false
+		return setupgate.ErrGuard
 	}
-	for _, p := range []string{filepath.Join(l.ProgramFiles, "Tracebolt"), filepath.Join(l.ProgramData, "Tracebolt")} {
-		_, e := os.Lstat(p)
-		if !errors.Is(e, os.ErrNotExist) {
-			return false
-		}
+	return nil
+}
+func setupFreshDirectory(root string) error {
+	_, e := os.Lstat(filepath.Join(root, "Tracebolt"))
+	if !errors.Is(e, os.ErrNotExist) {
+		return setupgate.ErrGuard
 	}
-	return true
+	return nil
+}
+func setupFresh(ctx context.Context, l windowsservice.Layout) bool {
+	return setupFreshService(ctx) == nil && setupFreshDirectory(l.ProgramFiles) == nil && setupFreshDirectory(l.ProgramData) == nil
 }
 func setupFileTree(l windowsservice.Layout) (map[string][32]byte, error) {
 	out := map[string][32]byte{}
@@ -227,10 +231,21 @@ func setupGUIController(ctx context.Context, b setupgate.Binding) (r setupgate.R
 	if !setupInteractiveDesktop() {
 		return r
 	} // No service/session bypass for hosted GUI absence.
-	r.Stage = "fresh"
+	r.Stage = "fresh-environment"
 	r.Reason = "operation_failed"
-	l, e := windowsservice.ResolveLayout()
-	if e != nil || !setupFresh(ctx, l) {
+	var l windowsservice.Layout
+	// bind_run intentionally discards ambient SystemDrive. Restore only the
+	// validated OS-derived drive before this process first resolves KnownFolders.
+	e := setupgate.CheckFreshPrerequisites(func(stage string) { r.Stage = stage }, setupgate.FreshPrerequisites{
+		Environment: func() error {
+			return setupgate.PrepareControllerEnvironment(windows.GetSystemWindowsDirectory, os.Setenv)
+		},
+		Layout:       func() error { var err error; l, err = windowsservice.ResolveLayout(); return err },
+		Service:      func() error { return setupFreshService(ctx) },
+		ProgramFiles: func() error { return setupFreshDirectory(l.ProgramFiles) },
+		ProgramData:  func() error { return setupFreshDirectory(l.ProgramData) },
+	})
+	if e != nil {
 		return r
 	}
 	r.NativeActionsAttempted = true

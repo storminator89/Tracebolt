@@ -45,7 +45,7 @@ CHECKS = {
 }
 CHECKS["http-install-uninstall"] = CHECKS["install-uninstall"] | {"httpAcknowledgementOff", "httpExplicitlyAcknowledged"}
 FALSE_COVERAGE = {"humanUAC", "humanInvitation", "realLinuxManager", "sharedDashboard", "arm64Runtime", "osReboot", "upgrade", "vmDisposalVerified", "secretsExported", "rawTelemetryExported"}
-STAGES = {"authorization", "desktop", "fresh", "fixture", "preflight-cancel", "bootstrap", "consent", "install", "hidden-input", "pending", "transport", "completion", "frames", "reopen", "uninstall-cancel", "uninstall", "verify-retention", "completed"}
+STAGES = {"authorization", "desktop", "fresh", "fresh-environment", "fresh-layout", "fresh-service", "fresh-program-files", "fresh-program-data", "fixture", "preflight-cancel", "bootstrap", "consent", "install", "hidden-input", "pending", "transport", "completion", "frames", "reopen", "uninstall-cancel", "uninstall", "verify-retention", "completed"}
 
 # Wrapper-only diagnostics: these are not native controller reports or evidence.
 # Never include exception messages, commands, paths, output, or environment values.

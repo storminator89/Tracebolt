@@ -1,5 +1,5 @@
 {
-  "goSourceSha256": "df6180439c399c5a3bf30f97358bf1b7397dc3a882ada2327b9ffb2e50debca9",
+  "goSourceSha256": "82264aba27d41190c67f7e6503e41a0d3facf92e51b74154b1fac1a1800e39cd",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -2925,8 +2925,12 @@
       "TestFiniteSelection"
     ],
     "localrmm/internal/windowsacceptance/setupgate": [
+      "TestControllerEnvironmentFailsClosedAndRedacts",
+      "TestControllerEnvironmentUsesOnlyValidatedDerivedDrive",
       "TestExactAuthorizationFailClosed",
-      "TestFiniteReportCoverageAndIndeterminateTruth"
+      "TestFiniteReportCoverageAndIndeterminateTruth",
+      "TestFreshFailureStagesStayFiniteAndInert",
+      "TestFreshPrerequisitePipelineStopsBeforeLaterChecks"
     ],
     "localrmm/internal/windowsagentconfig": [
       "TestWindowsStoreSchemasRemainSeparateAndFixed"

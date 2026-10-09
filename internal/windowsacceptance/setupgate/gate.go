@@ -27,7 +27,7 @@ func NormalCase(which string) bool {
 	return which == "install-uninstall" || which == "http-install-uninstall"
 }
 
-var Stages = []string{"authorization", "desktop", "fresh", "fixture", "preflight-cancel", "bootstrap", "consent", "install", "hidden-input", "pending", "transport", "completion", "frames", "reopen", "uninstall-cancel", "uninstall", "verify-retention", "completed"}
+var Stages = []string{"authorization", "desktop", "fresh", "fresh-environment", "fresh-layout", "fresh-service", "fresh-program-files", "fresh-program-data", "fixture", "preflight-cancel", "bootstrap", "consent", "install", "hidden-input", "pending", "transport", "completion", "frames", "reopen", "uninstall-cancel", "uninstall", "verify-retention", "completed"}
 var FalseCoverage = []string{"humanUAC", "humanInvitation", "realLinuxManager", "sharedDashboard", "arm64Runtime", "osReboot", "upgrade", "vmDisposalVerified", "secretsExported", "rawTelemetryExported"}
 var hex40 = regexp.MustCompile(`^[0-9a-f]{40}$`)
 var hex64 = regexp.MustCompile(`^[0-9a-f]{64}$`)
