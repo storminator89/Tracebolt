@@ -111,3 +111,64 @@ fixtures** step in `.github/workflows/validate.yml`, starting with
 `python3 -B tests/security/test_go_failure_reporter.py`. The narrower Windows
 source and package tests above do not verify this exact-source inventory. Keep
 its fail-closed source binding intact; do not hand-edit test names or hashes.
+
+## Pending observation and finite progress (report v2)
+
+The packaged controller captures a protected, canonical staged receipt while the
+worker is waiting for hidden input. While that worker is active, pending checks
+inspect the exact captured service identity, SCM configuration and executable,
+including stopped/disabled state. They do not reopen the installer store: doing
+so competes with its fail-immediately exclusive lock and can make either the
+observer or the worker's phase write fail. Partial cases still require a fresh
+protected receipt read after the worker exits, unchanged Service/Consent, and
+renewed live ownership verification. Phase may legitimately advance from
+claim-started to activation-started. Production locking is unchanged.
+
+Finite pending substages identify capture, claim wait, owned-service inspection,
+console inspection, fixture-state checks and post-worker retention. The original
+15-second claim wait, two-second withholding check and four-minute frame wait
+are unchanged. Native report v2 adds `frameProgress`: the latest accepted-frame
+counts, inventory/extension quality labels and bounded receiver checkpoint
+counts. `not_started` is distinct from an observed `no_accepted_frames`; a failed
+frame wait retains its latest validated V5 count instead of a success-only zero.
+Accepted-but-denied collection is distinct from receiver rejection. Counters cover
+only admitted exact-shape HTTP requests, not TCP/TLS handshakes or malformed
+pre-admission traffic. They contain no telemetry rows, names, addresses, metrics,
+secret material, errors or paths. Positive acceptance still requires the original
+usable inventory/extensions predicate and at least two distinct V5 frames.
+
+## Hosted execution provenance (aggregate v2)
+
+Hostnames can be cloned and are not cross-job VM identifiers. The controller keeps
+its within-job hostname binding and every fresh-host guard. Aggregation now also
+requires authenticated GitHub attempt-1 run/workflow/job records, four distinct
+successful native job IDs and four distinct positive runner registration IDs,
+exact case/source/repository/actor bindings and the
+reviewed Windows-2025 job wiring. Artifact archives are refetched with bounded
+HTTPS reads and checked against authenticated ZIP sizes/digests and the exact
+report/public-package bytes being consumed. API failure or ambiguous/missing
+provenance blocks accepted-package output; there is no nonce/hostname fallback.
+Only the Linux aggregation step receives the ephemeral read-only API token, and
+it is removed before checkout/build subprocess environments.
+
+The proof basis is GitHub-hosted job isolation. GitHub documents a fresh hosted
+instance for each standard job; Windows runners are VMs. This is not independent
+VM/hardware attestation or proof of platform disposal. Artifacts REST does not
+name the uploader job, so case-to-job attribution additionally trusts this exact
+reviewed workflow's one-case/one-upload wiring. Runner registration metadata is
+required corroboration, not a VM identifier. Official documentation reviewed 2026-10-09:
+<https://docs.github.com/en/actions/concepts/runners/github-hosted-runners> and
+<https://docs.github.com/en/rest/actions/workflow-jobs>.
+
+Aggregate v2 records this finite `executionProvenance` and accepts only exact
+canonical report bytes, preserving an unambiguous report digest binding. Any release publisher
+must independently call `setup_job_provenance.verify_run` with the stored proof
+and `require_aggregate_success=True`; its pure schema validator alone does not
+authenticate evidence. Report-v1 or aggregate-v1 artifacts must not be relabeled
+as v2. The already-failed primary run remains failed; these source corrections
+do not authorize another native run or establish a production collector fix.
+The accepted-package aggregation runtime also requires the exact
+`refs/heads/main` ref and reviewed workflow/source SHA. REST `head_branch` is
+checked for matching `main` across run, attempt and artifact records, but is not
+represented as independently proving the heads-versus-tags namespace. That part
+of the contract relies on the exact-source aggregate runtime guard.

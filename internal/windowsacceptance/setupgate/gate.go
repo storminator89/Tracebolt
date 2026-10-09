@@ -9,7 +9,7 @@ import (
 )
 
 const Profile = "packaged-setup-gui-v1"
-const Schema = "tracebolt.windows-setup-acceptance.v1"
+const Schema = "tracebolt.windows-setup-acceptance.v2"
 
 var ErrGuard = errors.New("packaged Setup acceptance boundary rejected")
 var Approvals = []string{"APP_ACLS", "SERVICES", "IDENTITY", "FIVE_READ_SCOPES", "SYNTHETIC_CONSOLE", "LOOPBACK_TLS", "HTTP_PLAINTEXT", "STOP_REMOVE_OWNED_SERVICE", "RETAIN_FOR_VM_DISPOSAL"}
@@ -27,7 +27,7 @@ func NormalCase(which string) bool {
 	return which == "install-uninstall" || which == "http-install-uninstall"
 }
 
-var Stages = []string{"authorization", "desktop", "fresh", "fresh-environment", "fresh-layout", "fresh-service", "fresh-program-files", "fresh-program-data", "fixture", "preflight-cancel", "bootstrap", "consent", "install", "hidden-input", "pending", "transport", "completion", "frames", "reopen", "uninstall-cancel", "uninstall", "verify-retention", "completed"}
+var Stages = []string{"authorization", "desktop", "fresh", "fresh-environment", "fresh-layout", "fresh-service", "fresh-program-files", "fresh-program-data", "fixture", "preflight-cancel", "bootstrap", "consent", "install", "hidden-input", "pending", "pending-capture", "pending-claim", "pending-service", "pending-console", "pending-invariant", "pending-retention", "transport", "transport-service", "completion", "frames", "frames-evidence", "reopen", "uninstall-cancel", "uninstall", "verify-retention", "completed"}
 var FalseCoverage = []string{"humanUAC", "humanInvitation", "realLinuxManager", "sharedDashboard", "arm64Runtime", "osReboot", "upgrade", "vmDisposalVerified", "secretsExported", "rawTelemetryExported"}
 var hex40 = regexp.MustCompile(`^[0-9a-f]{40}$`)
 var hex64 = regexp.MustCompile(`^[0-9a-f]{64}$`)
@@ -94,13 +94,14 @@ type Report struct {
 	Checks                   map[string]bool `json:"checks"`
 	Coverage                 map[string]bool `json:"coverage"`
 	Startup                  string          `json:"startup"`
+	FrameProgress            FrameProgress   `json:"frameProgress"`
 	Frames                   uint64          `json:"frames"`
 	PlatformDisposalRequired bool            `json:"platformDisposalRequired"`
 }
 
 func NewReport(b Binding) Report {
 	source, which := b.Source, b.Case
-	r := Report{SetupHash: b.SetupHash, ServiceHash: b.ServiceHash, DriverHash: b.DriverHash, SourceInputsHash: b.SourceInputsHash, RunID: b.RunID, Machine: b.Machine, Schema: Schema, Source: source, Case: which, Status: "blocked", Stage: "authorization", Reason: "authorization", Startup: "inspection_required", Checks: map[string]bool{}, Coverage: map[string]bool{}}
+	r := Report{SetupHash: b.SetupHash, ServiceHash: b.ServiceHash, DriverHash: b.DriverHash, SourceInputsHash: b.SourceInputsHash, RunID: b.RunID, Machine: b.Machine, Schema: Schema, Source: source, Case: which, Status: "blocked", Stage: "authorization", Reason: "authorization", Startup: "inspection_required", FrameProgress: ZeroFrameProgress(), Checks: map[string]bool{}, Coverage: map[string]bool{}}
 	for _, s := range Checks[which] {
 		r.Checks[s] = false
 	}
@@ -111,6 +112,9 @@ func NewReport(b Binding) Report {
 }
 func (r Report) Validate() error {
 	if !hex64.MatchString(r.SetupHash) || !hex64.MatchString(r.ServiceHash) || !hex64.MatchString(r.DriverHash) || !hex64.MatchString(r.SourceInputsHash) || !decimal.MatchString(r.RunID) || !safeID.MatchString(r.Machine) || r.Schema != Schema || !hex40.MatchString(r.Source) || !Contains(Cases, r.Case) || !Contains(Stages, r.Stage) || !Contains([]string{"blocked", "failed", "passed_packaged_gui_subset"}, r.Status) || !Contains([]string{"none", "authorization", "desktop_unavailable", "operation_failed", "deadline", "inspection_required"}, r.Reason) || !Contains([]string{"inspection_required", "disabled", "automatic", "absent"}, r.Startup) || r.Frames > 64 || len(r.Checks) != len(Checks[r.Case]) || len(r.Coverage) != len(FalseCoverage) {
+		return ErrGuard
+	}
+	if r.FrameProgress.Validate() != nil || r.Frames != r.FrameProgress.Extensions.V5Frames || !r.NativeActionsAttempted && r.FrameProgress.Reason != "not_started" || !NormalCase(r.Case) && r.FrameProgress.Reason != "not_started" {
 		return ErrGuard
 	}
 	for _, s := range Checks[r.Case] {
@@ -128,7 +132,7 @@ func (r Report) Validate() error {
 	if r.NativeActionsAttempted && !r.ApprovalValidated || r.PlatformDisposalRequired && !r.NativeActionsAttempted || r.Status == "blocked" && (r.NativeActionsAttempted || r.Frames != 0 || r.Startup != "inspection_required") {
 		return ErrGuard
 	}
-	if r.Status == "passed_packaged_gui_subset" && (!r.NativeActionsAttempted || !r.PlatformDisposalRequired || r.Stage != "completed" || r.Reason != "none" || NormalCase(r.Case) && (r.Startup != "absent" || r.Frames < 2) || !NormalCase(r.Case) && (r.Startup != "disabled" || r.Frames != 0)) {
+	if r.Status == "passed_packaged_gui_subset" && (!r.NativeActionsAttempted || !r.PlatformDisposalRequired || r.Stage != "completed" || r.Reason != "none" || NormalCase(r.Case) && (r.Startup != "absent" || r.Frames < 2 || !r.FrameProgress.Ready()) || !NormalCase(r.Case) && (r.Startup != "disabled" || r.Frames != 0)) {
 		return ErrGuard
 	}
 	return nil

@@ -334,7 +334,13 @@ func setupGUIController(ctx context.Context, b setupgate.Binding) (r setupgate.R
 		return r
 	}
 	r.Checks["hiddenConsoleExercised"] = true
-	if _, e = setupDisabled(ctx, l); e != nil {
+	r.Stage = "pending-capture"
+	// Capture the protected receipt while the worker is blocked at hidden input.
+	// Active pending observations must not reopen its exclusive installer store.
+	pending, e := captureSetupPendingObservation(ctx, func() (installReceipt, error) {
+		return setupReceipt(l)
+	}, windowsservice.InspectFreshReadSetup)
+	if e != nil {
 		return r
 	}
 	r.Checks["pendingStoppedDisabled"] = true
@@ -360,19 +366,22 @@ func setupGUIController(ctx context.Context, b setupgate.Binding) (r setupgate.R
 		if _, _, e = setupConsole(g.pid, secret, secret, true); e != nil {
 			return r
 		}
-		r.Stage = "pending"
+		r.Stage = "pending-claim"
 		if setupAwait(ctx, 15*time.Second, func() bool { return f.Evidence().State == enrollmentstate.ClaimedPending }) != nil {
 			return r
 		}
 		before := f.Snapshot()
 		until := time.Now().Add(2 * time.Second)
 		for time.Now().Before(until) {
-			if _, e = setupDisabled(ctx, l); e != nil {
+			r.Stage = "pending-service"
+			if e = pending.inspectDisabled(ctx); e != nil {
 				return r
 			}
+			r.Stage = "pending-console"
 			if _, _, e = setupConsole(g.pid, secret, nil, false); e != nil {
 				return r
 			}
+			r.Stage = "pending-invariant"
 			if f.Evidence().Frames != 0 || f.Evidence().State != enrollmentstate.ClaimedPending {
 				return r
 			}
@@ -392,7 +401,8 @@ func setupGUIController(ctx context.Context, b setupgate.Binding) (r setupgate.R
 				return r
 			}
 			r.Checks["sameIdentityAndDeadline"] = true
-			if _, e = setupDisabled(ctx, l); e != nil {
+			r.Stage = "transport-service"
+			if e = pending.inspectDisabled(ctx); e != nil {
 				return r
 			}
 			if strings.Contains(strings.ToLower(g.operationText()), "connected") || strings.Contains(g.operationText(), "Service start requested.") {
@@ -428,14 +438,25 @@ func setupGUIController(ctx context.Context, b setupgate.Binding) (r setupgate.R
 			r.Checks["limitedServiceToken"] = true
 			r.Startup = "automatic"
 			r.Stage = "frames"
+			progressInvalid := false
 			if setupAwait(ctx, 4*time.Minute, func() bool {
-				v := f.Evidence()
-				return v.Inventory.Usable() && v.Extensions.Usable() && v.Extensions.V5Frames >= 2
-			}) != nil {
+				progress, err := setupgate.ObserveFrames(f.Evidence())
+				if err != nil {
+					progressInvalid = true
+					return true // Stop immediately; this is not positive acceptance.
+				}
+				// Keep the latest finite sample even when the full positive
+				// predicate never succeeds; zero no longer means "not sampled".
+				r.FrameProgress = progress
+				r.Frames = progress.Extensions.V5Frames
+				return progress.Ready()
+			}) != nil || progressInvalid {
+				if progressInvalid {
+					r.Stage = "frames-evidence"
+				}
 				return r
 			}
-			v := f.Evidence()
-			r.Frames = v.Extensions.V5Frames
+			v := r.FrameProgress
 			r.Checks["twoFiveScopeFrames"] = true
 			r.Checks["volumeCapacity"] = v.Extensions.VolumeCapacityCounts.Observed > 0
 			r.Checks["processCPUDelta"] = v.Extensions.ProcessCPUCounts.Observed > 0
@@ -462,7 +483,8 @@ func setupGUIController(ctx context.Context, b setupgate.Binding) (r setupgate.R
 	}
 	r.Checks["workerTerminated"] = true
 	if !setupgate.NormalCase(b.Case) {
-		if _, e = setupDisabled(ctx, l); e != nil {
+		r.Stage = "pending-retention"
+		if e = pending.verifyRetained(ctx, func() (installReceipt, error) { return setupReceipt(l) }); e != nil {
 			return r
 		}
 		r.Checks["partialStateRetained"] = true

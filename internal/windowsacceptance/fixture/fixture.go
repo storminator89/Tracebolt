@@ -61,6 +61,7 @@ type state struct {
 	selection                    profile.Selection
 	signed                       *signedhttp.Verifier
 	inventory                    profile.Observation
+	telemetryProgress            TelemetryObservation
 	expanded                     bool
 	extensions                   profile.ExtensionObservation
 	lastEventsCollected          time.Time
@@ -107,6 +108,7 @@ type Evidence struct {
 	Transport           string                       `json:"transport"`
 	Inventory           profile.Observation          `json:"inventory"`
 	Extensions          profile.ExtensionObservation `json:"extensions"`
+	Telemetry           TelemetryObservation         `json:"telemetry"`
 	Frames              uint64                       `json:"frames"`
 	LastSequence        uint64                       `json:"lastSequence"`
 	DuplicateReceipts   uint64                       `json:"duplicateReceipts"`
@@ -345,7 +347,7 @@ func (f *Fixture) Evidence() Evidence {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	v, _ := s.snapshot()
-	return Evidence{State: v.State, Platform: v.Platform, CollectionProfile: v.Binding.CollectionProfile, Transport: s.selection.Transport, Inventory: s.inventory, Extensions: s.extensions, Frames: s.frames, LastSequence: s.lastReceipt.Sequence, DuplicateReceipts: s.duplicates, Requests: s.requests, UnavailableRequests: s.unavailableRequests, Unavailable: s.unavailable, Closed: s.closed}
+	return Evidence{State: v.State, Platform: v.Platform, CollectionProfile: v.Binding.CollectionProfile, Transport: s.selection.Transport, Inventory: s.inventory, Extensions: s.extensions, Telemetry: s.telemetryProgress, Frames: s.frames, LastSequence: s.lastReceipt.Sequence, DuplicateReceipts: s.duplicates, Requests: s.requests, UnavailableRequests: s.unavailableRequests, Unavailable: s.unavailable, Closed: s.closed}
 }
 
 // ToggleUnavailable models a scoped transport outage; it never changes the
