@@ -1,5 +1,8 @@
 """Portable/injected checks only. Never build, launch a GUI or invoke Windows APIs."""
+from contextlib import ExitStack, redirect_stdout
 import copy
+import io
+import subprocess
 import importlib.util
 import json
 from pathlib import Path
@@ -20,6 +23,60 @@ def allowed():
 
 def report(which="install-uninstall"):
     return {"setupSHA256":"c"*64,"serviceSHA256":"d"*64,"driverSHA256":"b"*64,"sourceInputsSHA256":"e"*64,"runID":"123","machine":"fresh-vm","schema": "tracebolt.windows-setup-acceptance.v1", "source": "a" * 40, "case": which, "status": "passed_packaged_gui_subset", "stage": "completed", "reason": "none", "approvalValidated": True, "nativeActionsAttempted": True, "checks": {k: True for k in runner.CHECKS[which]}, "coverage": {k: False for k in runner.FALSE_COVERAGE}, "startup": "absent" if which in runner.NORMAL else "disabled", "frames": 2 if which in runner.NORMAL else 0, "platformDisposalRequired": True}
+
+class SetupPreNativeDiagnostics(unittest.TestCase):
+    def test_each_pre_native_failure_is_finite_private_and_stops_before_launch(self):
+        stages = ["authorization", "checkout", "toolchain", "dependencies", "staging",
+                  "package-build", "package-validation", "driver-build", "source-recheck", "run-binding"]
+        self.assertEqual(set(stages), runner.PRE_NATIVE_STAGES)
+        secret = "DO_NOT_EXPORT_PATH_COMMAND_ENV_BODY"
+        errors = [runner.shared.Rejected(secret), OSError(secret),
+                  subprocess.CalledProcessError(9, [secret], output=secret, stderr=secret)]
+        for failed in stages:
+            for error in errors:
+                with self.subTest(stage=failed, error=type(error).__name__), tempfile.TemporaryDirectory() as tmp, ExitStack() as stack:
+                    events = []
+                    def step(stage, value=None):
+                        events.append(stage)
+                        if stage == failed:
+                            raise error
+                        return value
+                    checkout_stages = iter(["checkout", "source-recheck"])
+                    process_stages = iter(["dependencies", "package-build", "driver-build"])
+                    stack.enter_context(mock.patch.object(runner, "authorize", side_effect=lambda env: step("authorization", "a" * 40)))
+                    stack.enter_context(mock.patch.object(runner.shared, "child_environment", return_value={}))
+                    stack.enter_context(mock.patch.object(runner.shared, "verify_checkout", side_effect=lambda *a: step(next(checkout_stages))))
+                    stack.enter_context(mock.patch.object(runner.shared, "verify_go", side_effect=lambda *a: step("toolchain")))
+                    stack.enter_context(mock.patch.object(runner.shared, "successful", side_effect=lambda *a: step(next(process_stages))))
+                    stack.enter_context(mock.patch.object(runner.tempfile, "mkdtemp", side_effect=lambda **kw: step("staging", str(Path(tmp) / "stage"))))
+                    stack.enter_context(mock.patch.object(runner, "read_public_package", return_value={}))
+                    stack.enter_context(mock.patch.object(runner, "validate_public_package", side_effect=lambda *a: step("package-validation")))
+                    stack.enter_context(mock.patch.object(runner, "bind_run", side_effect=lambda *a: step("run-binding", {})))
+                    native = stack.enter_context(mock.patch.object(runner.shared, "command", side_effect=AssertionError("native forbidden")))
+                    out = stack.enter_context(redirect_stdout(io.StringIO()))
+                    env = allowed()
+                    env.update(RUNNER_TEMP=tmp, GITHUB_OUTPUT=str(Path(tmp) / "outputs"), GITHUB_TOKEN=secret)
+                    self.assertEqual(runner.main(["--run-native"], env), 1)
+                    self.assertEqual(events, stages[:stages.index(failed) + 1])
+                    native.assert_not_called()
+                    self.assertEqual(out.getvalue(), "FAIL: packaged Setup gate; stage=" + failed + "; reason=pre_native_failed; private output withheld; inspect assigned VM/disposal status.\n")
+                    self.assertNotIn(secret, out.getvalue())
+                    self.assertEqual(list(Path(tmp).iterdir()), [])  # No success/report/package artifacts.
+
+    def test_invalid_labels_and_unclassified_errors_cannot_export_details(self):
+        secret = "DO_NOT_EXPORT"
+        for value in (secret, "", None, [], {"stage": secret}):
+            with self.subTest(value=value), self.assertRaises(runner.shared.Rejected):
+                runner.PreNativeFailure(value)
+        error = runner.PreNativeFailure("authorization")
+        error.stage = secret  # Even a corrupted internal label is not exported.
+        with mock.patch.object(runner, "run_native", side_effect=error), redirect_stdout(io.StringIO()) as out:
+            self.assertEqual(runner.main(["--run-native"], allowed()), 1)
+        self.assertIn("stage=unknown; reason=pre_native_failed", out.getvalue())
+        self.assertNotIn(secret, out.getvalue())
+        with mock.patch.object(runner, "run_native", side_effect=RuntimeError(secret)), redirect_stdout(io.StringIO()) as out:
+            self.assertEqual(runner.main(["--run-native"], allowed()), 1)
+        self.assertEqual(out.getvalue(), "FAIL: packaged Setup gate or evidence rejected; private output withheld; inspect assigned VM/disposal status.\n")
 
 class SetupGate(unittest.TestCase):
     def validate(self, r):

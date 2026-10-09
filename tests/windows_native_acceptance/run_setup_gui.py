@@ -5,6 +5,7 @@ Build errors, GUI text, console buffers, identities and observations are never
 exported. Only strict finite reports and an exact allowlisted public package
 can reach artifact uploads. Delivered package bytes are never rebuilt.
 """
+from contextlib import contextmanager
 import hashlib
 import importlib.util
 import json
@@ -45,6 +46,25 @@ CHECKS = {
 CHECKS["http-install-uninstall"] = CHECKS["install-uninstall"] | {"httpAcknowledgementOff", "httpExplicitlyAcknowledged"}
 FALSE_COVERAGE = {"humanUAC", "humanInvitation", "realLinuxManager", "sharedDashboard", "arm64Runtime", "osReboot", "upgrade", "vmDisposalVerified", "secretsExported", "rawTelemetryExported"}
 STAGES = {"authorization", "desktop", "fresh", "fixture", "preflight-cancel", "bootstrap", "consent", "install", "hidden-input", "pending", "transport", "completion", "frames", "reopen", "uninstall-cancel", "uninstall", "verify-retention", "completed"}
+
+# Wrapper-only diagnostics: these are not native controller reports or evidence.
+# Never include exception messages, commands, paths, output, or environment values.
+PRE_NATIVE_STAGES = frozenset({"authorization", "checkout", "toolchain", "dependencies",
+    "staging", "package-build", "package-validation", "driver-build", "source-recheck", "run-binding"})
+
+class PreNativeFailure(shared.Rejected):
+    def __init__(self, stage):
+        require(type(stage) is str and stage in PRE_NATIVE_STAGES)
+        self.stage = stage
+        super().__init__("pre_native_failed")
+
+@contextmanager
+def pre_native_step(stage):
+    require(type(stage) is str and stage in PRE_NATIVE_STAGES)
+    try:
+        yield
+    except Exception:
+        raise PreNativeFailure(stage) from None
 
 def authorize_common(env):
     source = env.get("TRACEBOLT_SETUP_SOURCE", "")
@@ -213,25 +233,35 @@ def run_aggregate(env, root=ROOT):
     return evidence
 
 def run_native(env, root=ROOT):
-    source = authorize(env)  # Before staging/build/processes/native actions.
-    child = shared.child_environment(env)
-    shared.verify_checkout(child, source, root)
-    shared.verify_go(child, root)
-    shared.successful(["go", "mod", "verify"], child, root, 180)
-    temp = Path(env.get("RUNNER_TEMP", ""))
-    require(temp.is_absolute() and temp.is_dir() and not (temp / REPORT_NAME).exists())
-    # Retain the exact built artifacts and all app/private state for VM disposal.
-    stage = Path(tempfile.mkdtemp(prefix="tracebolt-setup-gui-", dir=temp))
-    package = stage / "package"
-    shared.successful([sys.executable, "-I", "-B", "deploy/windows-setup/build-setup.py", "--version", VERSION, "--source-commit", source, "--output", str(package), "--arch", "amd64"], child, root, 600)
-    original_public = read_public_package(package)
-    validate_public_package(original_public, source)
-    setup = package / SETUP_NAME
-    service = package / SERVICE_NAME
-    driver = stage / "setup-gui.test.exe"
-    shared.successful(["go", "test", "-c", "-mod=readonly", "-buildvcs=false", "-trimpath", "-tags", "tracebolt_setup_native", "-ldflags", "-X localrmm/cmd/windows-service.setupCompiledSource=" + source, "-o", str(driver), "./cmd/windows-service"], child, root, 300)
-    shared.verify_checkout(child, source, root)
-    native_env = bind_run(env, source, driver, setup, service, socket.gethostname(), int(time.time()) + 14 * 60)
+    with pre_native_step("authorization"):
+        source = authorize(env)  # Before staging/build/processes/native actions.
+    with pre_native_step("checkout"):
+        child = shared.child_environment(env)
+        shared.verify_checkout(child, source, root)
+    with pre_native_step("toolchain"):
+        shared.verify_go(child, root)
+    with pre_native_step("dependencies"):
+        shared.successful(["go", "mod", "verify"], child, root, 180)
+    with pre_native_step("staging"):
+        temp = Path(env.get("RUNNER_TEMP", ""))
+        require(temp.is_absolute() and temp.is_dir() and not (temp / REPORT_NAME).exists())
+        # Retain the exact built artifacts and all app/private state for VM disposal.
+        stage = Path(tempfile.mkdtemp(prefix="tracebolt-setup-gui-", dir=temp))
+        package = stage / "package"
+    with pre_native_step("package-build"):
+        shared.successful([sys.executable, "-I", "-B", "deploy/windows-setup/build-setup.py", "--version", VERSION, "--source-commit", source, "--output", str(package), "--arch", "amd64"], child, root, 600)
+    with pre_native_step("package-validation"):
+        original_public = read_public_package(package)
+        validate_public_package(original_public, source)
+    with pre_native_step("driver-build"):
+        setup = package / SETUP_NAME
+        service = package / SERVICE_NAME
+        driver = stage / "setup-gui.test.exe"
+        shared.successful(["go", "test", "-c", "-mod=readonly", "-buildvcs=false", "-trimpath", "-tags", "tracebolt_setup_native", "-ldflags", "-X localrmm/cmd/windows-service.setupCompiledSource=" + source, "-o", str(driver), "./cmd/windows-service"], child, root, 300)
+    with pre_native_step("source-recheck"):
+        shared.verify_checkout(child, source, root)
+    with pre_native_step("run-binding"):
+        native_env = bind_run(env, source, driver, setup, service, socket.gethostname(), int(time.time()) + 14 * 60)
     code, raw = shared.command([str(driver), "-test.run=^TestPackagedSetupGUINative$", "-test.count=1", "-test.timeout=15m"], native_env, root, 15 * 60, 32 << 10)
     report = parse_controller(raw, source, env["TRACEBOLT_SETUP_CASE"])
     for key, name in (("setupSHA256", "SETUP"), ("serviceSHA256", "SERVICE"), ("driverSHA256", "DRIVER"), ("sourceInputsSHA256", "SOURCE_INPUTS")):
@@ -273,6 +303,11 @@ def main(argv=None, env=None):
         r = run_native(values)
         print("Packaged Setup GUI subset: " + r["status"] + "; stage=" + r["stage"] + "; reason=" + r["reason"] + "; retained app/state requires platform VM disposal, unverified.")
         return 0 if r["status"] == "passed_packaged_gui_subset" else 1
+    except PreNativeFailure as error:
+        # Recheck the finite label at the output boundary; never stringify errors.
+        stage = error.stage if type(error.stage) is str and error.stage in PRE_NATIVE_STAGES else "unknown"
+        print("FAIL: packaged Setup gate; stage=" + stage + "; reason=pre_native_failed; private output withheld; inspect assigned VM/disposal status.")
+        return 1
     except Exception:
         print("FAIL: packaged Setup gate or evidence rejected; private output withheld; inspect assigned VM/disposal status.")
         return 1

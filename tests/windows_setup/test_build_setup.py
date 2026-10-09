@@ -2,7 +2,7 @@
 import importlib.util
 import json
 import os
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 import struct
 import subprocess
 import tempfile
@@ -163,6 +163,33 @@ class BuilderTests(unittest.TestCase):
             self.assertEqual(manifest["sha256"], builder.sha256(service.read_bytes()))
         self.assertFalse(list(self.root.rglob("*.syso")))
         self.assertFalse(list(self.base.glob("tracebolt-windows-build-*")))
+
+    def test_windows_filename_order_passes_actual_public_package_validator(self):
+        spec = importlib.util.spec_from_file_location("setup_gate_for_builder", ROOT / "tests/windows_native_acceptance/run_setup_gui.py")
+        gate = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(gate)
+        # Real filesystem reads/writes with Windows comparison semantics, even
+        # on Linux. No Go process, Windows API, or executable is ever run.
+        class WindowsOrderedPath(type(Path())):
+            def __lt__(self, other):
+                return PureWindowsPath(str(self)) < PureWindowsPath(str(other))
+        original_iterdir = Path.iterdir
+        def windows_iterdir(path):
+            return (WindowsOrderedPath(p) for p in original_iterdir(path))
+        with patch.object(builder, "run", self.fake_run), patch.object(builder, "git_source", return_value="clean-git-commit"), patch.object(Path, "iterdir", windows_iterdir):
+            builder.build(self.root, self.base / "output", gate.VERSION, SOURCE,
+                          ["amd64"], "fixture-go")
+        files = gate.read_public_package(self.base / "output")
+        gate.validate_public_package(files, SOURCE)  # Includes the real PE verifier.
+        names = files.keys() - {"SHA256SUMS"}
+        paths = [PureWindowsPath(name) for name in names]
+        legacy_order = [p.name for p in sorted(paths)]
+        self.assertNotEqual(legacy_order, sorted(names))
+        bad = dict(files)
+        bad["SHA256SUMS"] = "".join(gate.digest(files[name]) + "  " + name + "\n" for name in legacy_order).encode("ascii")
+        with self.assertRaises(gate.shared.Rejected):
+            gate.validate_public_package(bad, SOURCE)
+        self.assertEqual([p.name for p in sorted(paths, key=lambda p: p.name)], sorted(names))
 
     def test_package_manifest_binds_exact_payload(self):
         raw = b"opaque service bytes"
