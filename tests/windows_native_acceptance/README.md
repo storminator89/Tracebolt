@@ -83,3 +83,22 @@ original base v2 evidence; all true plus inventory selects v3 finite evidence.
 See `docs/windows-expanded-acceptance-approval.md`. Source checks and Windows
 cross-builds do not authorize or establish native execution. Production Linux
 manager/store/dashboard and fresh installer acceptance remain unproven.
+
+## Packaged GUI controller fresh prerequisites
+
+The packaged GUI controller receives a restricted environment. Before its first
+KnownFolder lookup, it derives only `SystemDrive` from the Windows API's system
+Windows directory using the existing strict path validator, then sets that single
+process-local variable. Ambient `SystemDrive`, `ProgramFiles` and `ProgramData`
+overrides are not forwarded. KnownFolder resolution and the existing deny-existing
+service/directory checks remain authoritative; no host repair or path fallback is
+performed.
+
+Finite `fresh-environment`, `fresh-layout`, `fresh-service`,
+`fresh-program-files` and `fresh-program-data` stages distinguish prerequisite
+failures without exporting paths, native errors or environment values. A failure
+still stops before the fixture, GUI, service changes or persistent identity work.
+The older `fresh` label remains readable for prior reports. Portable injected
+fixtures and Windows cross-compilation do not establish that this environment
+correction fixes a particular hosted native run; a separately approved exact-source
+native gate remains required.

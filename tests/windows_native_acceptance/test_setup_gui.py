@@ -137,6 +137,32 @@ class SetupGate(unittest.TestCase):
             self.assertIn('"' + name + '"', source)
         for checks in runner.CHECKS.values():
             for name in checks: self.assertIn('"' + name + '"', source)
+    def test_fresh_failure_labels_are_finite_and_inert(self):
+        for stage in ("fresh-environment", "fresh-layout", "fresh-service", "fresh-program-files", "fresh-program-data"):
+            r = report()
+            r.update(status="blocked", stage=stage, reason="operation_failed", nativeActionsAttempted=False,
+                     startup="inspection_required", frames=0, platformDisposalRequired=False)
+            r["checks"] = dict.fromkeys(r["checks"], False)
+            self.validate(r)
+            for key, value in (("stage", "private path or error"), ("nativeActionsAttempted", True),
+                               ("frames", 1), ("platformDisposalRequired", True)):
+                bad = copy.deepcopy(r)
+                bad[key] = value
+                with self.subTest(stage=stage, key=key), self.assertRaises(runner.shared.Rejected):
+                    self.validate(bad)
+
+    def test_controller_restores_trusted_drive_before_layout_and_mutation(self):
+        driver = (ROOT / "cmd/windows-service/setup_acceptance_native_windows_test.go").read_text()
+        controller = driver.split("func setupGUIController(", 1)[1]
+        restore = "setupgate.PrepareControllerEnvironment(windows.GetSystemWindowsDirectory, os.Setenv)"
+        self.assertLess(controller.index("setupInteractiveDesktop()"), controller.index(restore))
+        self.assertLess(controller.index(restore), controller.index("windowsservice.ResolveLayout()"))
+        self.assertLess(controller.index("setupgate.CheckFreshPrerequisites("), controller.index("r.NativeActionsAttempted = true"))
+        self.assertIn("if !errors.Is(e, os.ErrNotExist)", driver)
+        for stage in ("fresh-environment", "fresh-layout", "fresh-service", "fresh-program-files", "fresh-program-data"):
+            stages = (ROOT / "internal/windowsacceptance/setupgate/environment.go").read_text()
+            self.assertIn('"' + stage + '"', stages)
+
     def test_workflow_manual_only_false_defaults_and_fresh_matrix(self):
         path = ROOT / ".github/workflows/windows-setup-acceptance.yml"
         text = path.read_text()
@@ -169,11 +195,13 @@ class SetupGate(unittest.TestCase):
             self.assertTrue((ROOT / "cmd/windows-service" / name).read_text().startswith("//go:build windows && tracebolt_setup_native\n"))
     def test_sensitive_native_child_environment_is_not_forwarded(self):
         env = allowed()
-        env.update(COMPUTERNAME="fresh-machine", GITHUB_TOKEN="secret", TRACEBOLT_SETUP_OTHER="inert")
+        env.update(COMPUTERNAME="fresh-machine", GITHUB_TOKEN="secret", TRACEBOLT_SETUP_OTHER="inert", SystemDrive="Z:", SYSTEMDRIVE="Y:", ProgramData="private", ProgramFiles="private")
         with mock.patch.object(runner.shared, "binary_digest", side_effect=["b" * 64, "c" * 64, "d" * 64, "e" * 64]):
             result = runner.bind_run(env, "a" * 40, Path("driver.exe"), Path("Setup.exe"), Path("service.exe"), "fresh-machine", 1900000000)
         self.assertNotIn("GITHUB_TOKEN", result)
         self.assertNotIn("TRACEBOLT_SETUP_OTHER", result)
+        for key in ("SystemDrive", "SYSTEMDRIVE", "ProgramData", "ProgramFiles"):
+            self.assertNotIn(key, result)
         self.assertEqual(result["TRACEBOLT_SETUP_SETUP_SHA256"], "c" * 64)
 
 def fake_pe(_raw, _version, _source, _arch, *, setup):
