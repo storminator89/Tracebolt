@@ -20,6 +20,9 @@ export function installEnrollmentPrimaryBody({url}){
   if(entry){
    entry.requests=Math.min(2,entry.requests+1);
    if(entry.requests!==1)discard(entry,'duplicate');
+   // Lifecycle invalidation before the first fetch is terminal for this arm.
+   // Still forward the original request; only a new explicit arm can observe it.
+   else if(entry.phase!=='armed')discard(entry,entry.phase);
    else if(typeof init?.body!=='string'||new TextEncoder().encode(init.body).byteLength>2048)discard(entry,'invalid-request');
    else{
     entry.requestBody=init.body;entry.phase='waiting';entry.signal=init?.signal;

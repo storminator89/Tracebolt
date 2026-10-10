@@ -3,6 +3,7 @@
  */
 import {checkFreshV3Consent,checkMobileSocketViewport,checkV3Viewport,createV3FailureDiagnostics} from './v3-failure-diagnostics.mjs';
 import {createRequire} from 'node:module';
+import {installEnrollmentPrimaryBody} from './enrollment-primary-body.mjs';
 import {hasInventoryReadiness,inventoryProjectionReady} from './inventory-readiness.mjs';
 import {assertPublicCommand,readSourceOwnedPin} from './public-command-contract.mjs';
 import {spawn,execFileSync} from 'node:child_process';
@@ -53,8 +54,9 @@ function observeFailure(page,kind){
 async function stop(){if(server?.pid&&server.exitCode===null){const end=new Promise(r=>server.once('exit',r));const wait=async()=>{let timer;try{await Promise.race([end,new Promise(r=>timer=setTimeout(r,1500))]);}finally{clearTimeout(timer);}};server.stdin.end();await wait();if(server.exitCode===null){server.kill('SIGTERM');await wait();}if(server.exitCode===null){server.kill('SIGKILL');await wait();}if(server.exitCode===null)fatal=true;}pipe?.close();server=null;waiting=null;}
 async function control(action,extra={}){if(waiting)throw new Error('CONTROL_CONCURRENCY');let entry;const pending=new Promise((resolve,reject)=>{entry={resolve,reject};waiting=entry;});const timeout=setTimeout(()=>{if(waiting===entry){waiting=null;entry.reject(new Error('CONTROL_TIMEOUT'));}},15000);try{server.stdin.write(JSON.stringify({action,...extra})+'\n');const answer=await pending;expect(answer.ok).toBe(true);return answer;}finally{clearTimeout(timeout);if(waiting===entry)waiting=null;}}
 async function start(){mark('create disposable v3 fixture state');const dir=await fs.mkdtemp(path.join(temporary,'state-'));mark('start disposable v3 fixture');server=spawn(path.join(temporary,'v3fixture'),['--listen',new URL(base).host,'--state',dir,'--web',path.join(root,'web/dist')],{cwd:root,stdio:['pipe','pipe','ignore']});pipe=createInterface({input:server.stdout});pipe.on('line',line=>{const cb=waiting;waiting=null;if(cb){try{cb.resolve(JSON.parse(line));}catch{cb.reject(new Error('CONTROL_RESPONSE'));}}});server.on('error',()=>{waiting?.reject(new Error('FIXTURE_START_FAILED'));waiting=null;});server.stdin.on('error',()=>{waiting?.reject(new Error('FIXTURE_PIPE_FAILED'));waiting=null;});server.on('exit',()=>{waiting?.reject(new Error('FIXTURE_EXITED'));waiting=null;});mark('read seeded v3 fixture identities');devices=(await control('info')).devices;}
-async function pageAt(route='/devices',{mobile=false}={}){
+async function pageAt(route='/devices',{mobile=false,observeEnrollment=false}={}){
  mark('create fixture browser context');context=await browser.newContext({viewport:mobile?{width:390,height:844}:{width:1440,height:1000},locale:'en-GB'});
+ if(observeEnrollment)await context.addInitScript(installEnrollmentPrimaryBody,{url:base+'/api/enrollment/invitations'});
  mark('create fixture page');const page=await context.newPage();page.on('pageerror',()=>runtimeErrorCount++);failureDiagnostics=createV3FailureDiagnostics(page,browser);
  mark('open fixture login');await page.goto(`${base}/#${route}`);
  mark('fill fixture operator password');await page.getByLabel('Operator password',{exact:true}).fill(password);
@@ -160,7 +162,7 @@ try{
   const launch={headless:true,args:['--no-sandbox'],env:{...process.env,HOME:temporary,XDG_CONFIG_HOME:temporary,XDG_CACHE_HOME:temporary}};if(process.env.CHROMIUM_PATH)launch.executablePath=process.env.CHROMIUM_PATH;mark('hosted Chromium launch');browser=await chromium.launch(launch);
   await check('Fresh v3 consent gates the complete read-admin command without exporting or executing invitation material',async()=>{
    const sourcePin=readSourceOwnedPin(root),completeAvailable=sourcePin?.version==='v0.1.0-rc.3';
-   const page=await pageAt();mark('compact v3 consent before any creation');
+   const page=await pageAt('/devices',{observeEnrollment:true});mark('compact v3 consent before any creation');
    await page.getByRole('button',{name:'Add device',exact:true}).click();
    const consentDialog=page.getByRole('dialog',{name:'Add device',exact:true});await expect(consentDialog.getByRole('note')).toContainText('Unencrypted LAN test');await expect(page.locator('.enrollment-consent details')).not.toHaveAttribute('open','');
    await expect(page.getByRole('button',{name:'Create invitation',exact:true})).toBeDisabled();if(!completeAvailable)await expect(consentDialog.getByText('The complete read-admin command is unavailable until a verified compatible release is activated.',{exact:true})).toBeVisible();await consentShot(page,'synthetic-v3-consent-desktop-en');
