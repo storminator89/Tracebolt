@@ -9,6 +9,10 @@ once or repeatedly in the foreground. The Linux/systemd installer
 adds explicit service operations and the fresh combined read-admin path below.
 A repository link alone does not authorize a deployment or
 provide credentials. Read the checklist before executing the quickstart.
+For task-oriented navigation and common problems, see [Help and guides](README.md)
+and [Troubleshooting](troubleshooting.md). Windows has a separate
+[unsigned, unreleased Setup preview](windows-status.md); it is not covered by
+the published Linux endpoint installation command.
 
 For a fresh supported Linux endpoint, the normal published-release path is the
 **[verified dashboard download](dashboard-verified-download.md)**: copy one public
@@ -60,7 +64,8 @@ compatible source/fixture tests leave native privileged acceptance outstanding.
 | --- | --- | --- |
 | Central manager | Separate `cmd/lan-manager`, Admin UI, authenticated operator API, approved agent ingress; Docker or native Linux execution | Production assurance, automatic provisioning, HA/shared SQLite writers |
 | Linux endpoint | Native `cmd/lan-agent --config …`, one-shot or bounded foreground reporting; optional `cmd/enroll-agent` with explicit guided-v2 configuration; `cmd/agent-service` with explicit fixed-path operations and fresh combined read-admin setup | Verified OS reboot persistence, automatic renewal or remote updater; native Ubuntu TLS acceptance is recorded above; other host/profile combinations remain separate |
-| Windows/macOS endpoint | Native `cmd/agent` bounded stdout-only collector; limited platform reads | Supported LAN sender, native ACL/state lifecycle, installed service or fleet deployment |
+| Windows endpoint | Native bounded read-only collector, shared-dashboard path and unsigned fresh-host Setup source preview; some x64 native phases recorded in [Windows status](windows-status.md) | Published Setup download, complete installed-service acceptance, interactive UAC/reboot/upgrade/full-removal proof or ARM64 runtime acceptance |
+| macOS endpoint | Native `cmd/agent` bounded stdout-only collector; limited platform reads | Supported LAN sender, installed service or fleet deployment |
 | Docker architectures | Linux amd64 TLS and explicit HTTP-test lifecycle gates; Linux arm64 cross-build support | arm64 runtime acceptance from cross-building alone |
 
 The separate [ARM64/Pi OS 64-bit source candidate](linux-arm64-support.md)
@@ -68,7 +73,8 @@ implements architecture parity and defines its outstanding native acceptance gat
 It does not change the current rc.3 download pin or claim an installed Pi.
 
 Use the selected revision's actual CI results, not this table, to establish what
-passed. Windows/macOS collector runtime results do **not** validate a LAN sender.
+passed. Standalone collector results do **not** validate an installed LAN sender;
+partial Windows Setup results do not establish a complete lifecycle pass.
 The product direction is native agents on Windows, Linux and macOS with a Docker
 or native manager; all three endpoint installation paths are not shipped yet.
 The original enrollment proposal remains design history. Use the implemented
@@ -94,9 +100,11 @@ plan. Record these answers without secrets:
 - TLS (default) or explicitly approved isolated HTTP test, operator who will sign
   in, credential/certificate custodian, and endpoint/public fingerprint to approve.
 - Endpoint OS/architecture, ordinary-user collection constraints, and whether a
-  foreground Linux sender meets the request. If a Windows/macOS LAN client or an
-  installed service is required, read the candidate [service contract](linux-agent-service.md)
-  and exact manual-gate evidence. True reboot persistence remains unverified.
+  foreground Linux sender meets the request. For a Linux installed service, read
+  the [service contract](linux-agent-service.md) and exact manual-gate evidence.
+  For Windows, read [preview status](windows-status.md) and the
+  [Setup guide](windows-setup-preview.md). There is no supported macOS LAN
+  installation path. True reboot persistence remains unverified.
 
 Before changing the target, get approval for the concrete plan, destinations and
 paths. Persistent credential creation/import, device trust approval/revocation,
