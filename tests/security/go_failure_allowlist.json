@@ -1,5 +1,5 @@
 {
-  "goSourceSha256": "c8e8e6a392655f034bfbfe1a4af7cfa61e0612fb29654b396f75843fd1a529fd",
+  "goSourceSha256": "ee7b2345523d7b1d48bc2c638e24618bbad8518c7acf168faa7dbd6bbd161123",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -309,6 +309,19 @@
       "TestSetupRejectsCancellationAndExistingServiceBeforeIntent",
       "TestSetupRemovalPendingRejectsMixedAndUntrustedCauses",
       "TestSetupRemovalUsesReceiptBoundObservationOnlyAfterDelete",
+      "TestSetupRetentionAcceptsActualSenderWriterWithPendingAcknowledgedAndGappedSequences",
+      "TestSetupRetentionBaselineRejectsChangedIdentityReadyAndFixedPaths",
+      "TestSetupRetentionBaselineRejectsOwnedMaterialAndExactReceiptFailures",
+      "TestSetupRetentionCanonicalSenderRejectsMalformedForeignRollbackAndPendingTampering",
+      "TestSetupRetentionEveryGrantRequiresCanonicalEnabledOriginalIdentityAndGrantID",
+      "TestSetupRetentionGuardErrorsClearBytesAndClosePopulatedOpenFailureExactlyOnce",
+      "TestSetupRetentionIdentityPreservesActiveArtifactBounds",
+      "TestSetupRetentionImmutableBytesAndRequiredEntriesCannotDisappearOrChange",
+      "TestSetupRetentionNativeOrderingDoesNotReopenRunningSenderOrResolveDeletedService",
+      "TestSetupRetentionProtectedStoresFailClosedAtEveryBoundary",
+      "TestSetupRetentionRequiresStoppedCaptureAndOriginalCopiedReceipt",
+      "TestSetupRetentionStoppedSenderCannotMutateEvenWithValidNewSequence",
+      "TestSetupRetentionTLSAndHTTPPreserveOriginalBindingWithoutLiveSIDAfterStop",
       "TestSetupRuntimeReadPreflightStopsBeforeJournalOrClaim",
       "TestSetupWindowsPermissionCauseHasFiniteStartupCode",
       "TestSetupWizardCanceledBeforeApplyIsInert",
@@ -2958,6 +2971,12 @@
       "TestFiniteSelection"
     ],
     "localrmm/internal/windowsacceptance/setupgate": [
+      "TestChooserBranchStagesAreFailureOnlyAcrossCases",
+      "TestChooserClickFailureStagesExactFiniteVocabulary",
+      "TestClickInvalidInputsAndMissingCallbacksAreInert",
+      "TestClickRestoreFailureNeverMasksEarlierGuard",
+      "TestClickSequenceEveryBranchStopsAndCleansUp",
+      "TestClickVisibilityErrorIsNotExposed",
       "TestConsentMissingCallbacksFailClosed",
       "TestConsentSequenceEveryFailureStops",
       "TestControllerEnvironmentFailsClosedAndRedacts",
@@ -2972,6 +2991,7 @@
       "TestPreflightSequenceEveryFailureStops",
       "TestRemovalFailureParserExactEnvelopeAndPairs",
       "TestRemovalFailureReportCannotGrantAcceptance",
+      "TestRetentionStagesAreNormalCaseFailureOnly",
       "TestUninstallDiagnosticParagraphsMatchExistingProductionText",
       "TestUninstallHeldCloseDistinguishesFailureFromCompletion",
       "TestUninstallHeldQueryFailuresAreFiniteAndCannotPass",

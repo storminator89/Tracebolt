@@ -22,6 +22,8 @@ var Checks = map[string][]string{
 
 func init() {
 	Stages = append(Stages, RemovalFailureStages...)
+	Stages = append(Stages, ChooserClickFailureStages...)
+	Stages = append(Stages, RetentionFailureStages...)
 	Checks["http-install-uninstall"] = append(append([]string{}, Checks["install-uninstall"]...), "httpAcknowledgementOff", "httpExplicitlyAcknowledged")
 }
 func NormalCase(which string) bool {
@@ -113,6 +115,12 @@ func NewReport(b Binding) Report {
 }
 func (r Report) Validate() error {
 	if !hex64.MatchString(r.SetupHash) || !hex64.MatchString(r.ServiceHash) || !hex64.MatchString(r.DriverHash) || !hex64.MatchString(r.SourceInputsHash) || !decimal.MatchString(r.RunID) || !safeID.MatchString(r.Machine) || r.Schema != Schema || !hex40.MatchString(r.Source) || !Contains(Cases, r.Case) || !Contains(Stages, r.Stage) || !Contains([]string{"blocked", "failed", "passed_packaged_gui_subset"}, r.Status) || (!Contains([]string{"none", "authorization", "desktop_unavailable", "operation_failed", "deadline", "inspection_required"}, r.Reason) && !RemovalFailureReason(r.Reason)) || !Contains([]string{"inspection_required", "disabled", "automatic", "absent"}, r.Startup) || r.Frames > 64 || len(r.Checks) != len(Checks[r.Case]) || len(r.Coverage) != len(FalseCoverage) {
+		return ErrGuard
+	}
+	if Contains(RetentionFailureStages, r.Stage) && (r.Status != "failed" || !NormalCase(r.Case)) {
+		return ErrGuard
+	}
+	if Contains(ChooserClickFailureStages, r.Stage) && r.Status != "failed" {
 		return ErrGuard
 	}
 	if Contains(RemovalFailureStages, r.Stage) || !Contains([]string{"none", "authorization", "desktop_unavailable", "operation_failed", "deadline", "inspection_required"}, r.Reason) {

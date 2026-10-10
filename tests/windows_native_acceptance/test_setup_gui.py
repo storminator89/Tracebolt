@@ -187,13 +187,57 @@ class SetupGate(unittest.TestCase):
         with self.assertRaises(runner.shared.Rejected): self.validate(r)
 
     def test_finite_go_python_contract_parity(self):
-        source = (ROOT / "internal/windowsacceptance/setupgate/gate.go").read_text() + (ROOT / "internal/windowsacceptance/setupgate/removal_failure.go").read_text()
+        source = (ROOT / "internal/windowsacceptance/setupgate/gate.go").read_text() + (ROOT / "internal/windowsacceptance/setupgate/removal_failure.go").read_text() + (ROOT / "internal/windowsacceptance/setupgate/click_sequence.go").read_text() + (ROOT / "internal/windowsacceptance/setupgate/retention_stages.go").read_text()
         for name in runner.APPROVALS:
             self.assertIn('"' + name + '"', source)
         for name in runner.FALSE_COVERAGE | runner.STAGES | set(runner.CHECKS):
             self.assertIn('"' + name + '"', source)
         for checks in runner.CHECKS.values():
             for name in checks: self.assertIn('"' + name + '"', source)
+    def test_retention_labels_are_normal_case_failure_only(self):
+        self.assertEqual(len(runner.RETENTION_FAILURE_STAGES), 30)
+        for which in runner.CHECKS:
+            for stage in runner.RETENTION_FAILURE_STAGES:
+                value = report(which)
+                value.update(status="failed", stage=stage, reason="operation_failed")
+                if which in runner.NORMAL:
+                    self.validate(value)
+                else:
+                    with self.assertRaises(runner.shared.Rejected): self.validate(value)
+                blocked = copy.deepcopy(value)
+                blocked.update(status="blocked", checks=dict.fromkeys(blocked["checks"], False),
+                               nativeActionsAttempted=False, platformDisposalRequired=False,
+                               startup="inspection_required", frames=0, frameProgress=runner.zero_frame_progress())
+                with self.assertRaises(runner.shared.Rejected): self.validate(blocked)
+                for status in ("blocked", "passed_packaged_gui_subset"):
+                    bad = copy.deepcopy(value)
+                    bad["status"] = status
+                    with self.assertRaises(runner.shared.Rejected): self.validate(bad)
+
+    def test_chooser_branch_labels_are_failure_only_for_all_cases(self):
+        self.assertEqual(len(runner.CHOOSER_CLICK_FAILURE_STAGES), 32)
+        for which in runner.CHECKS:
+            for stage in runner.CHOOSER_CLICK_FAILURE_STAGES:
+                value = report(which)
+                value.update(status="failed", stage=stage, reason="operation_failed")
+                with self.subTest(case=which, stage=stage):
+                    self.validate(value)
+                    for status in ("blocked", "passed_packaged_gui_subset"):
+                        bad = copy.deepcopy(value)
+                        bad["status"] = status
+                        with self.assertRaises(runner.shared.Rejected):
+                            self.validate(bad)
+                    blocked = copy.deepcopy(value)
+                    blocked.update(status="blocked", checks=dict.fromkeys(blocked["checks"], False),
+                                   nativeActionsAttempted=False, platformDisposalRequired=False,
+                                   startup="inspection_required", frames=0, frameProgress=runner.zero_frame_progress())
+                    with self.assertRaises(runner.shared.Rejected): self.validate(blocked)
+                    for suffix in ("-private", "\n", " "):
+                        bad = copy.deepcopy(value)
+                        bad["stage"] += suffix
+                        with self.assertRaises(runner.shared.Rejected):
+                            self.validate(bad)
+
     def test_removal_reason_expansion_is_failure_only(self):
         for stage in runner.REMOVAL_FAILURE_STAGES:
             r=report()
@@ -273,11 +317,15 @@ class SetupGate(unittest.TestCase):
                 self.assertNotIn("tracebolt_setup_native", other.read_text())
     def test_actual_packaged_gui_not_coordinator_substitute(self):
         driver = (ROOT / "cmd/windows-service/setup_acceptance_native_windows_test.go").read_text()
+        retained = (ROOT / "cmd/windows-service/setup_retained_state_test.go").read_text()
         ui = (ROOT / "cmd/windows-service/setup_acceptance_ui_windows_test.go").read_text()
         for forbidden in ("installReadObservation(", "setupWizardInstall(", "ApplyStop(", "ApplyUninstall(", "ConfigureWindowsCapabilities(", "Provision(", "ResumeService("):
-            self.assertNotIn(forbidden, driver + ui)
-        for required in ("setupLaunch(ctx, exe)", "f.Approve(fp, comparison)", "setupDisabled(ctx, l)", "Service deletion is pending. Waiting for SCM to confirm absence.", "windows.QueryServiceStatus(hold, &status)", "before.DeadlineAt", "receipt.ReadSetup.GrantDigests", "setupgate.ObserveFrames(f.Evidence())"):
+            self.assertNotIn(forbidden, driver + ui + retained)
+        for required in ("setupLaunch(ctx, exe)", "f.Approve(fp, comparison)", "setupDisabled(ctx, l)", "Service deletion is pending. Waiting for SCM to confirm absence.", "windows.QueryServiceStatus(hold, &status)", "before.DeadlineAt", "setupgate.ObserveFrames(f.Evidence())"):
             self.assertIn(required, driver)
+        self.assertIn("r.ReadSetup.GrantDigests[i]", retained)
+        self.assertIn("setupRetentionDigest(raw[\"consent.json\"]) == digest.SHA256", retained)
+        self.assertIn("retained.verifyAbsent(", driver)
         self.assertIn("windows.CREATE_SUSPENDED", ui)
         self.assertLess(ui.index("windows.AssignProcessToJobObject"), ui.index("windows.ResumeThread"))
         self.assertIn('"WriteConsoleInputW"', ui)
@@ -485,7 +533,10 @@ class SetupPublicDelivery(unittest.TestCase):
         geometry = (ROOT / "cmd/windows-service/setup_acceptance_ui_windows_test.go").read_text()
         self.assertIn('"GetMonitorInfoW"', geometry)
         self.assertIn('"SetThreadDpiAwarenessContext"', geometry)
-        self.assertIn("runtime.LockOSThread()", geometry)
+        self.assertIn("LockThread: runtime.LockOSThread, UnlockThread: runtime.UnlockOSThread", geometry)
+        click = (ROOT / "internal/windowsacceptance/setupgate/click_sequence.go").read_text()
+        self.assertIn("s.LockThread()", click)
+        self.assertIn("defer s.UnlockThread()", click)
         self.assertIn('setupCall("SetThreadDpiAwarenessContext", previous)', geometry)
 
 

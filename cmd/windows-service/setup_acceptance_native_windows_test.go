@@ -578,6 +578,23 @@ func setupGUIController(ctx context.Context, b setupgate.Binding) (r setupgate.R
 			return r
 		}
 		r.Checks["uninstallCancelUnchanged"] = true
+		openRetained := func(path string, options windowsstate.Options) (setupRetentionStore, error) {
+			store, err := windowsstate.Open(path, options)
+			if err != nil {
+				return nil, err
+			}
+			return store, nil
+		}
+		retentionStage := func(stage string) { r.Stage = stage }
+		retained, e := captureSetupRetainedState(ctx, receipt, l, openRetained, windowsservice.InspectOwned, func(path string) error {
+			// Load validates material with the live SID, without trying to take
+			// the foreground sender's lifetime-exclusive state lock.
+			_, err := lanclient.Load(path)
+			return err
+		}, retentionStage)
+		if e != nil {
+			return r
+		}
 		// This read-only handle deliberately makes DeleteService's pending state
 		// observable. The GUI must wait; releasing it permits SCM absence to occur.
 		r.Stage = "uninstall-hold-scm"
@@ -642,6 +659,12 @@ func setupGUIController(ctx context.Context, b setupgate.Binding) (r setupgate.R
 		}
 
 		r.Checks["deletePendingObserved"] = true
+		// The exact held handle was successfully queried as Stopped, and GUI
+		// deletion is pending. Only now may observation acquire sender/grant
+		// locks. Use the fixture's actual accepted sequence, never frame count.
+		if retained.captureStopped(ctx, f.Evidence().LastSequence, openRetained, retentionStage) != nil {
+			return r
+		}
 		r.Stage = "uninstall-release"
 		windows.CloseServiceHandle(hold)
 		hold = 0
@@ -671,24 +694,19 @@ func setupGUIController(ctx context.Context, b setupgate.Binding) (r setupgate.R
 		r.Startup = "absent"
 		r.Checks["serviceAbsent"] = true
 		r.Stage = "verify-retention"
-		again, e = setupReceipt(l)
-		if e != nil || !reflect.DeepEqual(receipt, again) {
-			return r
-		}
-		path := filepath.Join(l.EnrollmentRoot, "agent.json")
-		identity, e := lanclient.WindowsCapabilityIdentity(path, receipt.ReadSetup.Consent)
-		if e != nil || identity != receipt.ReadSetup.SenderBinding {
-			return r
-		}
-		digests, e := lanclient.WindowsCapabilityGrantDigests(path, receipt.ReadSetup.Consent)
-		if e != nil || !reflect.DeepEqual(digests, receipt.ReadSetup.GrantDigests) {
+		// An absent service no longer has an account name to resolve. Retained
+		// state is verified with the original protected receipt SID instead,
+		// preserving all Store manifest, ACL, pinned-path and rollback checks.
+		if retained.verifyAbsent(ctx, f.Evidence().LastSequence, openRetained, retentionStage) != nil {
 			return r
 		}
 		r.Checks["receiptAndGrantsVerified"] = true
+		r.Stage = "verify-retention-binary"
 		hash, e := setupArtifactHash(l.Executable)
 		if e != nil || hash != b.ServiceHash {
 			return r
 		}
+		r.Stage = "verify-retention-tree"
 		if _, e = setupFileTree(l); e != nil {
 			return r
 		}

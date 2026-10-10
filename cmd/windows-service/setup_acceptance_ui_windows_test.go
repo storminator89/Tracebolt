@@ -68,59 +68,62 @@ type setupRect struct{ Left, Top, Right, Bottom int32 }
 func setupContains(outer, inner setupRect) bool {
 	return inner.Right > inner.Left && inner.Bottom > inner.Top && outer.Left <= inner.Left && outer.Top <= inner.Top && outer.Right >= inner.Right && outer.Bottom >= inner.Bottom
 }
-func setupVisibleControl(hwnd uintptr) (visible bool) {
-	runtime.LockOSThread()
-	defer runtime.UnlockOSThread()
-	// Match the real wizard's per-monitor-V2 coordinate space for all calls.
-	previous := setupCall("SetThreadDpiAwarenessContext", ^uintptr(3))
-	if previous == 0 {
-		return false
-	}
-	defer func() {
-		if setupCall("SetThreadDpiAwarenessContext", previous) == 0 {
-			visible = false
-		}
-	}()
-
-	if hwnd == 0 || setupCall("IsWindowVisible", hwnd) == 0 {
-		return false
-	}
-	root := setupCall("GetAncestor", hwnd, 2)
-	if root == 0 || setupCall("IsIconic", root) != 0 {
-		return false
-	}
+func setupVisibleControl(hwnd uintptr) bool {
+	return setupVisibleControlObserved(hwnd, "chooser-click", func(string) {}) == nil
+}
+func setupVisibleControlObserved(hwnd uintptr, prefix string, stage func(string)) error {
+	var previous, root, monitor uintptr
 	var control, client setupRect
-	if setupCall("GetWindowRect", hwnd, uintptr(unsafe.Pointer(&control))) == 0 || setupCall("GetClientRect", root, uintptr(unsafe.Pointer(&client))) == 0 {
-		return false
-	}
-	// Explicit BOOL-returning corner conversions avoid confusing a valid zero
-	// displacement with a failed MapWindowPoints call.
-	if setupCall("ClientToScreen", root, uintptr(unsafe.Pointer(&client.Left))) == 0 || setupCall("ClientToScreen", root, uintptr(unsafe.Pointer(&client.Right))) == 0 {
-		return false
-	}
-
-	monitor := setupCall("MonitorFromWindow", root, 2)
 	info := struct {
 		Size          uint32
 		Monitor, Work setupRect
 		Flags         uint32
 	}{}
-	info.Size = uint32(unsafe.Sizeof(info))
-	if monitor == 0 || setupCall("GetMonitorInfoW", monitor, uintptr(unsafe.Pointer(&info))) == 0 {
-		return false
-	}
-	return setupContains(client, control) && setupContains(info.Work, control)
+	return setupgate.CheckClickVisibility(stage, prefix, setupgate.ClickVisibilitySteps{
+		LockThread: runtime.LockOSThread, UnlockThread: runtime.UnlockOSThread,
+		SetDPI: func() bool {
+			// Match the real wizard's per-monitor-V2 coordinate space for all calls.
+			previous = setupCall("SetThreadDpiAwarenessContext", ^uintptr(3))
+			return previous != 0
+		},
+		RestoreDPI: func() bool { return setupCall("SetThreadDpiAwarenessContext", previous) != 0 },
+		Visible:    func() bool { return hwnd != 0 && setupCall("IsWindowVisible", hwnd) != 0 },
+		Root: func() bool {
+			root = setupCall("GetAncestor", hwnd, 2)
+			return root != 0
+		},
+		NotIconic:   func() bool { return setupCall("IsIconic", root) == 0 },
+		ControlRect: func() bool { return setupCall("GetWindowRect", hwnd, uintptr(unsafe.Pointer(&control))) != 0 },
+		ClientRect:  func() bool { return setupCall("GetClientRect", root, uintptr(unsafe.Pointer(&client))) != 0 },
+		// Explicit BOOL-returning corner conversions avoid confusing a valid zero
+		// displacement with a failed MapWindowPoints call.
+		ClientTopLeft:     func() bool { return setupCall("ClientToScreen", root, uintptr(unsafe.Pointer(&client.Left))) != 0 },
+		ClientBottomRight: func() bool { return setupCall("ClientToScreen", root, uintptr(unsafe.Pointer(&client.Right))) != 0 },
+		Monitor: func() bool {
+			monitor = setupCall("MonitorFromWindow", root, 2)
+			info.Size = uint32(unsafe.Sizeof(info))
+			return monitor != 0
+		},
+		MonitorInfo:     func() bool { return setupCall("GetMonitorInfoW", monitor, uintptr(unsafe.Pointer(&info))) != 0 },
+		ClientContained: func() bool { return setupContains(client, control) },
+		WorkContained:   func() bool { return setupContains(info.Work, control) },
+	})
 }
 
 func setupClick(hwnd uintptr, id int) error {
-	h := setupControl(hwnd, id)
-	if !setupEnabled(h) || !setupVisibleControl(h) {
-		return setupgate.ErrGuard
-	}
-	if setupCall("PostMessageW", h, 0x00f5, 0, 0) == 0 {
-		return setupgate.ErrGuard
-	}
-	return nil
+	return setupClickObserved(hwnd, id, "chooser-click", func(string) {})
+}
+func setupClickObserved(hwnd uintptr, id int, prefix string, stage func(string)) error {
+	var h uintptr
+	return setupgate.CheckClick(stage, prefix, setupgate.ClickSteps{
+		Control: func() bool {
+			h = setupControl(hwnd, id)
+			return h != 0
+		},
+		Enabled:    func() bool { return setupEnabled(h) },
+		Visibility: func() error { return setupVisibleControlObserved(h, prefix, stage) },
+		Post:       func() bool { return setupCall("PostMessageW", h, 0x00f5, 0, 0) != 0 },
+	})
 }
 func setupAwait(ctx context.Context, timeout time.Duration, predicate func() bool) error {
 	c, cancel := context.WithTimeout(ctx, timeout)
@@ -288,7 +291,7 @@ func (g *setupGUI) choose(ctx context.Context, path string) error {
 }
 func (g *setupGUI) chooseObserved(ctx context.Context, path string, stage func(string)) error {
 	stage("chooser-click")
-	if setupClick(g.window, 102) != nil {
+	if setupClickObserved(g.window, 102, "chooser-click", stage) != nil {
 		return setupgate.ErrGuard
 	}
 	var dialog uintptr
@@ -314,7 +317,7 @@ func (g *setupGUI) chooseObserved(ctx context.Context, path string, stage func(s
 		return e
 	}
 	stage("chooser-open")
-	if setupClick(dialog, 1) != nil {
+	if setupClickObserved(dialog, 1, "chooser-open", stage) != nil {
 		return setupgate.ErrGuard
 	}
 	stage("chooser-validated")
