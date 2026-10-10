@@ -1,0 +1,96 @@
+name: Manual exact-accepted Windows x64 prerelease
+
+# Verification/promotion only. This workflow never builds or runs Windows code.
+on:
+  workflow_dispatch:
+    inputs:
+      expected_source_sha:
+        description: 'Exact 40-hex accepted main-branch Setup source commit (the frozen reviewed Setup tree, not this later publisher commit)'
+        required: true
+        type: string
+      acceptance_run_id:
+        description: 'Exact successful first-attempt four-case Windows Setup acceptance run from main; never latest'
+        required: true
+        type: string
+      version:
+        description: 'Fresh tag: vMAJOR.MINOR.PATCH-windows-preview.N; original tested filenames/version stay unchanged'
+        required: true
+        type: string
+      expected_publisher_sha:
+        description: 'Exact independently reviewed 40-hex publisher commit; must equal dispatch and current branch lease'
+        required: true
+        type: string
+      publish:
+        description: 'Explicitly create one fresh tag/draft, upload the ten verified public files, and publish an unsigned prerelease (not latest)'
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: windows-prerelease-${{ inputs.version }}
+  cancel-in-progress: false
+
+env:
+  TRACEBOLT_RELEASE_SOURCE: ${{ inputs.expected_source_sha }}
+  TRACEBOLT_ACCEPTANCE_RUN_ID: ${{ inputs.acceptance_run_id }}
+  TRACEBOLT_RELEASE_VERSION: ${{ inputs.version }}
+  TRACEBOLT_PUBLISHER_SHA: ${{ inputs.expected_publisher_sha }}
+  TRACEBOLT_RELEASE_PUBLISH: ${{ inputs.publish }}
+  PYTHONDONTWRITEBYTECODE: '1'
+
+jobs:
+  verify:
+    name: Read-only exact-run artifact and native-proof verification
+    if: ${{ github.event_name == 'workflow_dispatch' && github.repository == 'storminator89/Tracebolt' && github.repository_id == '1403204207' && github.repository_owner == 'storminator89' && github.repository_owner_id == '30489872' && github.actor == 'storminator89' && github.actor_id == '30489872' && github.triggering_actor == 'storminator89' && github.run_attempt == 1 && github.sha == inputs.expected_publisher_sha && github.workflow_sha == github.sha }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      plan: ${{ steps.verify.outputs.plan }}
+      plan_sha256: ${{ steps.verify.outputs.plan_sha256 }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      - name: Inert publisher regression fixtures
+        run: python3 -I -B -m unittest discover -s tests/windows_release -v
+      - name: Verify exact accepted artifacts and freeze immutable IDs, digests, and output hashes
+        id: verify
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 -I -B deploy/release/publish-windows-prerelease.py --verify
+
+  publish:
+    name: Explicit fresh unsigned prerelease publication
+    needs: verify
+    if: ${{ inputs.publish == true && needs.verify.result == 'success' && github.run_attempt == 1 && github.sha == inputs.expected_publisher_sha && github.workflow_sha == github.sha }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    permissions:
+      contents: write
+      actions: read
+    env:
+      TRACEBOLT_VERIFIED_PLAN: ${{ needs.verify.outputs.plan }}
+      TRACEBOLT_VERIFIED_PLAN_SHA256: ${{ needs.verify.outputs.plan_sha256 }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      - name: Reverify frozen IDs and exact bytes; create fresh draft, verify uploads, publish once, verify public bytes
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 -I -B deploy/release/publish-windows-prerelease.py --publish
