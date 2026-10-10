@@ -17,7 +17,9 @@ func nativeProcessMetricCollector(s *windowsprocessmetrics.Sampler) processMetri
 	if s == nil {
 		s = windowsprocessmetrics.NewSampler()
 	}
-	return s.Sample
+	return func(ctx context.Context, pids []uint32, generation, grant string, inventoryAt time.Time) (windowsprocessmetrics.Snapshot, error) {
+		return s.SampleWithSelfPID(ctx, pids, generation, grant, inventoryAt, processMetricSelfPID(ctx))
+	}
 }
 func validProcessMetricConsent(c windowsprocessmetrics.Consent, binding string) bool {
 	_, err := windowsprocessmetrics.EncodeConsent(c, binding)
@@ -42,6 +44,13 @@ func appendWindowsProcessMetrics(ctx context.Context, m Material, f frame, c win
 	if err != nil || windowsprocessmetrics.Validate(s) != nil || s.GenerationID != f.WindowsInventory.GenerationID || s.GrantID != c.GrantID {
 		return frame{}, nil, ErrObservation
 	}
+	// An injected or future collector must not silently lose an admitted self row.
+	selfPID := processMetricSelfPID(ctx)
+	for _, pid := range pids {
+		if selfPID != 0 && pid == selfPID && len(minimumProcessMetricSnapshot(s, selfPID).Rows) != 1 {
+			return frame{}, nil, ErrObservation
+		}
+	}
 	f.SchemaVersion = FrameWindowsProcessMetricsVersion
 	f.WindowsProcessMetrics = &s
 	f.Observation.GeneratedAt = time.Now().UTC()
@@ -56,11 +65,9 @@ func appendWindowsProcessMetrics(ctx context.Context, m Material, f frame, c win
 			return frame{}, nil, ErrObservation
 		}
 		// A preceding volume extension may already use the entire frame budget.
-		// Reserve the process header and disclosure by trimming complete volume rows,
+		// Reserve the process header, admitted self row and disclosure by trimming complete volume rows,
 		// then trim process rows to the remaining budget. Original counts/captures stay.
-		minimal := s
-		minimal.Rows = []windowsprocessmetrics.Process{}
-		minimal.Truncated = minimal.ObservedCount > 0
+		minimal := minimumProcessMetricSnapshot(s, selfPID)
 		minimum, _ := json.Marshal(minimal)
 		remaining := len(section) - (len(b) - MaxFrameBytes)
 		if remaining < len(minimum) && f.WindowsVolumes != nil {
@@ -79,7 +86,7 @@ func appendWindowsProcessMetrics(ctx context.Context, m Material, f frame, c win
 			}
 			remaining = len(section) - (len(b) - MaxFrameBytes)
 		}
-		s, err = windowsprocessmetrics.FitBudget(s, remaining)
+		s, err = windowsprocessmetrics.FitBudgetWithSelfPID(s, remaining, selfPID)
 		if err != nil {
 			return frame{}, nil, ErrObservation
 		}

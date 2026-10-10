@@ -1,5 +1,5 @@
 {
-  "goSourceSha256": "f1a575e2afdf74ca045fa9ce593e6541d9dedd3ada9e0a84c2988638d9253746",
+  "goSourceSha256": "c8e8e6a392655f034bfbfe1a4af7cfa61e0612fb29654b396f75843fd1a529fd",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -1946,6 +1946,10 @@
       "TestPublicBootstrapTransportPinsOneBodylessPublicRoute",
       "TestPublicBootstrapTransportUsesSharedDNSVetting",
       "TestRedirectAndCancellationDoNotSendElsewhere",
+      "TestSelfRetentionAllFrameRefits",
+      "TestSelfRetentionFreshConsentAndExactPendingRetry",
+      "TestSelfRetentionProcessReservesSelfAlongsideFullVolumeFrame",
+      "TestSelfRetentionStartupSkipsProtectedOnlyMetrics",
       "TestServiceActionsAbsentDisabledInvalidGrantDoesNoIO",
       "TestServiceActionsClaimLostNeverSubmitsOnRecovery",
       "TestServiceActionsDiagnosticFormattingRedactsMaterial",
@@ -3069,6 +3073,8 @@
       "TestDecodeRejectsMalformedOrAmbiguousJSON",
       "TestEncodedByteLimitIncludesEscapesAndTrimsDeterministically",
       "TestNativePartialDeniedUnavailableAndTruncatedRemainHonest",
+      "TestProcessMetricSelfRetentionInventoryCapsAndBytes",
+      "TestProcessMetricSelfRetentionMissingAndInventoryOnlyUnchanged",
       "TestRecordCapsPreserveOriginalCountAndTime",
       "TestSameReportPreservesTimesMetricsAndBundleContract",
       "TestServiceStartupBudgetKeepsBindingAndAge",
@@ -3146,7 +3152,11 @@
       "TestIndependentMemoryFailureAndSampleTime",
       "TestIntervalReuseResetDenied",
       "TestNativeMinimalRightsCloseAndCancel",
-      "TestResetDropsBaselineWithoutReads"
+      "TestResetDropsBaselineWithoutReads",
+      "TestSelfRetentionDoesNotBypassInputAndAttributionGuards",
+      "TestSelfRetentionMissingDeniedAndLegacyEquality",
+      "TestSelfRetentionReadPriorityWithinUnchangedBudget",
+      "TestSelfRetentionSamplerAndEverySmallerBudget"
     ],
     "localrmm/internal/windowsservice": [
       "TestAncestorTrustAdmissionNeverClaimsEffectiveTokenReadAccess",
@@ -3199,8 +3209,11 @@
       "TestPartialCreateNeverDeletesOrAdopts",
       "TestPlanAndInspectAreReadOnly",
       "TestPlanTamperingCannotChooseTarget",
+      "TestRemovalDisabledTransitionPreservesActiveReceipt",
+      "TestRemovalFailedDeleteKeepsActiveConfiguration",
       "TestRemovalObservationWaitEligibilityCannotBeForgedByCauses",
       "TestRemovalOpenAbsenceRejectsAmbiguousAndMalformedChains",
+      "TestRemovalRejectsEveryNonDisabledStartType",
       "TestRuntimeArgumentRejectionHasSanitizedSCMCode",
       "TestRuntimeInstallationBinding",
       "TestRuntimeParentCancellation",

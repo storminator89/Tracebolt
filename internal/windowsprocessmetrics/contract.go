@@ -154,12 +154,19 @@ func Decode(raw []byte) (Snapshot, error) {
 
 // FitBudget drops highest-PID complete rows and preserves original capture/count.
 func FitBudget(s Snapshot, maxBytes int) (Snapshot, error) {
+	return FitBudgetWithSelfPID(s, maxBytes, 0)
+}
+
+// FitBudgetWithSelfPID protects an existing local self row during a fresh,
+// consented capture. Missing self is never inserted. It fails closed when the
+// existing self row and envelope cannot fit, and never changes the input slice.
+func FitBudgetWithSelfPID(s Snapshot, maxBytes int, selfPID uint32) (Snapshot, error) {
 	if Validate(s) != nil || maxBytes <= 0 {
 		return Snapshot{}, ErrInvalid
 	}
-	return fit(s, maxBytes)
+	return fitWithSelfPID(s, maxBytes, selfPID)
 }
-func fit(s Snapshot, maxBytes int) (Snapshot, error) {
+func fitWithSelfPID(s Snapshot, maxBytes int, selfPID uint32) (Snapshot, error) {
 	if maxBytes > MaxBytes {
 		maxBytes = MaxBytes
 	}
@@ -175,9 +182,14 @@ func fit(s Snapshot, maxBytes int) (Snapshot, error) {
 			}
 			return s, nil
 		}
-		if len(s.Rows) == 0 {
+		i := len(s.Rows) - 1
+		for i >= 0 && selfPID != 0 && s.Rows[i].PID == selfPID {
+			i--
+		}
+		if i < 0 {
 			return Snapshot{}, ErrInvalid
 		}
+		copy(s.Rows[i:], s.Rows[i+1:])
 		s.Rows = s.Rows[:len(s.Rows)-1]
 		s.Truncated = true
 	}

@@ -77,6 +77,11 @@ caller must observe absence separately before claiming deletion completed.
 validates the original completed receipt and resolved layout before opening SCM
 with query-only access. A still-present object must match every expected SCM
 configuration field, including its unique installation marker, and be stopped.
+The receipt digest remains bound to the original automatic-start configuration.
+Only the observed post-delete start type must be disabled: the
+[MS-SCMR RDeleteService contract](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-scmr/6744cdb8-f162-4be0-bb31-98996b6495be)
+requires SCM to set `Start` to `SERVICE_DISABLED` before marking the service
+deleted. No other configuration difference is accepted.
 Its trusted executable and receipt-bound hash are rechecked while it is present.
 The observation has no service SID: name-to-SID resolution can fail after a
 successful delete request while another open handle delays actual deletion.

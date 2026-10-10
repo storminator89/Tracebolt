@@ -29,9 +29,15 @@ native calls and closes each handle before proceeding. An in-flight Windows call
 cannot be preempted; no detached goroutine leaks handles. OpenProcess uses only
 PROCESS_QUERY_LIMITED_INFORMATION. CPU and memory API failures have independent
 quality states after successful identity lookup. Wire rows are PID-sorted, at
-most 128 and 12 KiB; highest-PID rows are removed deterministically to fit. The
+most 128 and 12 KiB. Ordinary APIs remove highest-PID rows deterministically.
+The fresh, consented sender path explicitly prefers its already-enumerated self
+PID: it reads self first within the same five-second budget and removes highest
+non-self rows during inventory, metrics and network/startup sibling refits.
+Output remains PID-sorted; no missing self row is invented. If an admitted self
+row and the minimum envelope cannot fit, the opted-in fit fails closed. The
 original requested PID count and capture time survive trimming. Denied and
-unavailable values are null, not invented zero values.
+unavailable values are null, not invented zero values. This local preference is
+not a wire field or grant, and durable pending retries retain their original bytes.
 
 `NewSamplerWithReader` accepts deterministic mock readings/clock/core count for
 source and signed-pipeline fixtures. Linux tests and Windows test cross-builds do

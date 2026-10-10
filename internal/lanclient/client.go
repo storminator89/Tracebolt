@@ -22,6 +22,7 @@ import (
 	"localrmm/internal/windowsprocessmetrics"
 	"localrmm/internal/windowsvolumes"
 	"net/http"
+	"os"
 	"runtime"
 	"time"
 )
@@ -194,7 +195,7 @@ func runUsingStateWithCollectors(ctx context.Context, m Material, state *lanclie
 // All dependencies are private per-attempt values. Tests can exercise staging
 // and transport without reading any production observation source.
 func runUsingStateWithSources(ctx context.Context, m Material, state *lanclientstate.State, collectOperations func(context.Context, time.Time) operational.Snapshot, collectPackages func(context.Context, string, time.Time) (linuxpackages.Snapshot, error), collectBasic func() model.Device) (Report, error) {
-	return runUsingStateWithDependencies(ctx, m, state, collectOperations, collectPackages, collectBasic, windowsmanaged.Collect, nil)
+	return runUsingStateWithDependencies(ctx, m, state, collectOperations, collectPackages, collectBasic, collectWindowsForProcessMetrics, nil)
 }
 
 // Dependencies are per-attempt and private: fixture transports never open listeners.
@@ -291,30 +292,37 @@ func runUsingStateWithServiceStartupDependencies(ctx context.Context, m Material
 		if (m.config.managed() || m.config.windowsInventory()) && sequence > operational.MaxSafeInteger {
 			return report, ErrState
 		}
-		f, body, e = collectFrameWithDependencies(ctx, m.config, sequence, collectOperations, collectPackages, collectBasic, collectWindows)
+		// Self retention is local to a fresh, explicitly consented capture.
+		// Pending retries never select a PID, collect, or refit their durable bytes.
+		selfPID := uint32(0)
+		if processEnabled {
+			selfPID = uint32(os.Getpid())
+		}
+		captureCtx := withProcessMetricSelfPID(ctx, selfPID)
+		f, body, e = collectFrameWithDependencies(captureCtx, m.config, sequence, collectOperations, collectPackages, collectBasic, collectWindows)
 		if e != nil {
 			return report, e
 		}
 		if enabled {
-			f, body, e = appendWindowsEvents(ctx, m, f, consent, collectEvents)
+			f, body, e = appendWindowsEvents(captureCtx, m, f, consent, collectEvents)
 			if e != nil {
 				return report, e
 			}
 		}
 		if volumesEnabled {
-			f, body, e = appendWindowsVolumes(ctx, m, f, volumeConsent, collectVolumes)
+			f, body, e = appendWindowsVolumes(captureCtx, m, f, volumeConsent, collectVolumes)
 			if e != nil {
 				return report, e
 			}
 		}
 		if processEnabled {
-			f, body, e = appendWindowsProcessMetrics(ctx, m, f, processConsent, collectProcessMetrics)
+			f, body, e = appendWindowsProcessMetrics(captureCtx, m, f, processConsent, collectProcessMetrics)
 			if e != nil {
 				return report, e
 			}
 		}
 		if networkEnabled {
-			f, body, e = appendWindowsNetwork(ctx, m, f, networkConsent, collectNetwork)
+			f, body, e = appendWindowsNetwork(captureCtx, m, f, networkConsent, collectNetwork)
 			if e != nil {
 				return report, e
 			}
@@ -325,7 +333,7 @@ func runUsingStateWithServiceStartupDependencies(ctx context.Context, m Material
 			if !sameServiceStartupConsent(readServiceStartup, startupConsent, m.binding) {
 				return report, ErrState
 			}
-			f, body, e = appendWindowsServiceStartup(ctx, m, f, startupConsent, collectServiceStartup)
+			f, body, e = appendWindowsServiceStartup(captureCtx, m, f, startupConsent, collectServiceStartup)
 			if e != nil {
 				return report, e
 			}
