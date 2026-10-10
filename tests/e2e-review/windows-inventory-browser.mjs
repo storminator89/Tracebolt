@@ -100,6 +100,23 @@ export async function windowsFixtureResponseTime(page){
  if(!Number.isSafeInteger(at)||at<=0)throw new Error('Synthetic fixture clock unavailable');
  return new Date(at).toISOString();
 }
+// Read the real fixture session once, in the awaited test flow. A passive CDP
+// response-body observer can lose its body handle when a UI request is canceled
+// or navigation intervenes. The API context shares this page's cookie jar, while
+// this read neither renews the immutable session expiry nor changes the UI flow.
+export async function windowsFixtureSessionExpiry(page,base){
+ try{
+  const target=new URL('/api/auth/session',base);
+  if(target.origin!==base||target.protocol!=='http:'||target.hostname!=='127.0.0.1')throw new Error();
+  const response=await page.request.get(target.href,{maxRedirects:0,timeout:5000});
+  try{
+   if(response.status()!==200)throw new Error();
+   const value=await response.json(),expires=Date.parse(value?.expiresAt),now=Date.parse(value?.serverNow);
+   if(value?.authenticated!==true||typeof value.expiresAt!=='string'||typeof value.serverNow!=='string'||!Number.isFinite(expires)||!Number.isFinite(now)||expires<=now)throw new Error();
+   return value.expiresAt;
+  }finally{await response.dispose();}
+ }catch{throw new Error('Windows fixture session expiry unavailable');}
+}
 export async function windowsInventoryBrowserCase({pageAt,login,expect,base,shot}){
  const page=await pageAt('/devices/'+windowsDeviceId),prefix='/api/devices/'+windowsDeviceId,unexpected=[],writes=[],external=[];let phase='fresh',networkPhaseAt=null,logsPhaseAt=null,contactPhaseAt=null,osObservedAt=null,updatesCapturedAt=null;
  const syntheticPaths=new Set([prefix,prefix+'/windows-inventory',prefix+'/windows-contact',prefix+'/resource-history','/api/overview','/api/windows/enrollment']);
@@ -143,8 +160,7 @@ export async function windowsInventoryBrowserCase({pageAt,login,expect,base,shot
   if(url.pathname==='/api/overview'){osObservedAt??=device.evidence.find(({id})=>id==='local-windows-os')?.collectedAt??null;return reply({generatedAt:at,devices:[device],cases:[],activity:[],stats:{totalDevices:1,healthyDevices:0,attentionDevices:0,unknownDevices:1,openCases:0,criticalCases:0}});}
   if(url.pathname==='/api/windows/enrollment')return reply({schemaVersion:'tracebolt.enrollment-operator.v2',serverNow:at,enabled:true,platforms:['windows'],recordLimit:25,collectionProfile:'windows-inventory-v1',collectionPrivacy:'windows_inventory_metadata_may_be_sensitive',items:[]});
  });
- mark('login');await login(page);
- page.on('response',async response=>{if(new URL(response.url()).pathname==='/api/auth/session'&&response.ok()){const value=await response.json();if(typeof value.expiresAt==='string')eventSessionExpires=value.expiresAt;}});
+ mark('login');await login(page);eventSessionExpires=await windowsFixtureSessionExpiry(page,base);
  for(const locale of ['en','de'])for(const width of [1440,390]){
   await page.setViewportSize({width,height:width===390?844:1000});
   const language=page.locator('select[aria-label="Language"],select[aria-label="Sprache"]');await language.selectOption(locale);
