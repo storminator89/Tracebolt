@@ -181,13 +181,27 @@ func setupInteractiveDesktop() bool {
 }
 
 type setupGUI struct {
-	process, job windows.Handle
-	pid          uint32
-	window       uintptr
-	closed       bool
+	process, job                                          windows.Handle
+	pid                                                   uint32
+	window                                                uintptr
+	closed                                                bool
+	initialChooser                                        uintptr
+	initialChooserRootThread, initialChooserControlThread uint32
+	initialChooserAttempt                                 setupgate.InitialChooserAttempt
+	initialChooserDeadline                                time.Time
 }
 
 func setupLaunch(ctx context.Context, path string) (*setupGUI, error) {
+	return setupLaunchObserved(ctx, path, false, func(string) {})
+}
+
+// Only the two initial public-bootstrap launch sites opt in. Installed/reopened
+// and uninstall windows keep the ordinary discovery-only launch behavior.
+func setupLaunchInitialChooser(ctx context.Context, path string, stage func(string)) (*setupGUI, error) {
+	return setupLaunchObserved(ctx, path, true, stage)
+}
+
+func setupLaunchObserved(ctx context.Context, path string, initialChooser bool, stage func(string)) (*setupGUI, error) {
 	if ctx.Err() != nil || !filepath.IsAbs(path) {
 		return nil, setupgate.ErrGuard
 	}
@@ -248,12 +262,117 @@ func setupLaunch(ctx context.Context, path string) (*setupGUI, error) {
 		g.dispose()
 		return nil, setupgate.ErrGuard
 	}
-	if setupAwait(ctx, 15*time.Second, func() bool { g.window = setupWindow(g.pid, "TraceboltFreshSetupWizard"); return g.window != 0 }) != nil {
+	if initialChooser {
+		// Start at the original discovery wait boundary, immediately after resume.
+		// Discovery and enabled readiness consume this same 15-second budget; the
+		// first click must still be within it. No later callback resets the clock.
+		g.initialChooserDeadline = time.Now().Add(15 * time.Second)
+		err := setupgate.AwaitInitialChooser(ctx, g.initialChooserDeadline, stage, setupgate.InitialChooserSteps{
+			InitialChooserBinding: g.initialChooserBinding(),
+			Discover: func() (bool, error) {
+				var err error
+				g.window, err = setupInitialChooserWindow(g.pid)
+				return g.window != 0, err
+			},
+			Pin: func() bool {
+				g.initialChooser = setupControl(g.window, 102)
+				if g.initialChooser == 0 {
+					return false
+				}
+				rootPID, rootThread, rootErr := setupInitialChooserOwner(g.window)
+				childPID, childThread, childErr := setupInitialChooserOwner(g.initialChooser)
+				g.initialChooserRootThread, g.initialChooserControlThread = rootThread, childThread
+				return rootErr == nil && childErr == nil && rootPID == g.pid && childPID == g.pid && rootThread == childThread
+			},
+			Enabled: func() (bool, error) { return setupEnabled(g.initialChooser), nil },
+			Wait: func(ctx context.Context, delay time.Duration) error {
+				timer := time.NewTimer(delay)
+				defer timer.Stop()
+				select {
+				case <-ctx.Done():
+					return setupgate.ErrGuard
+				case <-timer.C:
+					return nil
+				}
+			},
+		})
+		if err != nil {
+			g.dispose()
+			return nil, setupgate.ErrGuard
+		}
+	} else if setupAwait(ctx, 15*time.Second, func() bool { g.window = setupWindow(g.pid, "TraceboltFreshSetupWizard"); return g.window != 0 }) != nil {
 		g.dispose()
 		return nil, setupgate.ErrGuard
 	}
 	return g, nil
 }
+
+// Strict discovery is initial-launch-only. A failed native query or ambiguous
+// root fails immediately instead of being treated as a not-yet-created window.
+func setupInitialChooserWindow(pid uint32) (uintptr, error) {
+	var found uintptr
+	failed := false
+	callback := syscall.NewCallback(func(h, _ uintptr) uintptr {
+		var owner uint32
+		// An unclassified/foreign window can disappear during enumeration. Only
+		// the owned process and its eventual pins are this controller's target.
+		if setupCall("GetWindowThreadProcessId", h, uintptr(unsafe.Pointer(&owner))) == 0 {
+			return 1
+		}
+		if owner != pid {
+			return 1
+		}
+		var class [128]uint16
+		if setupCall("GetClassNameW", h, uintptr(unsafe.Pointer(&class[0])), uintptr(len(class))) == 0 {
+			failed = true
+			return 0
+		}
+		if windows.UTF16ToString(class[:]) == "TraceboltFreshSetupWizard" && setupCall("IsWindowVisible", h) != 0 {
+			if found != 0 {
+				failed = true
+				return 0
+			}
+			found = h
+		}
+		return 1
+	})
+	if setupCall("EnumWindows", callback, 0) == 0 || failed {
+		return 0, setupgate.ErrGuard
+	}
+	return found, nil
+}
+
+func setupInitialChooserOwner(h uintptr) (uint32, uint32, error) {
+	var owner uint32
+	thread := setupCall("GetWindowThreadProcessId", h, uintptr(unsafe.Pointer(&owner)))
+	if thread == 0 || owner == 0 {
+		return 0, 0, setupgate.ErrGuard
+	}
+	return owner, uint32(thread), nil
+}
+
+func (g *setupGUI) initialChooserBinding() setupgate.InitialChooserBinding {
+	return setupgate.InitialChooserBinding{
+		Now: time.Now,
+		Alive: func() bool {
+			if g.closed || g.process == 0 || g.pid == 0 {
+				return false
+			}
+			status, err := windows.WaitForSingleObject(g.process, 0)
+			return err == nil && status == uint32(windows.WAIT_TIMEOUT)
+		},
+		Owned: func() bool {
+			return setupgate.OwnsInitialChooser(setupgate.InitialChooserWindows{Root: g.window, Control: g.initialChooser, PID: g.pid, RootThread: g.initialChooserRootThread, ControlThread: g.initialChooserControlThread}, setupgate.InitialChooserWindowSteps{
+				Valid:   func(h uintptr) bool { return setupCall("IsWindow", h) != 0 },
+				Owner:   setupInitialChooserOwner,
+				Root:    func(h uintptr) uintptr { return setupCall("GetAncestor", h, 2) },
+				Parent:  func(h uintptr) uintptr { return setupCall("GetParent", h) },
+				Control: func(h uintptr) uintptr { return setupControl(h, 102) },
+			})
+		},
+	}
+}
+
 func (g *setupGUI) dispose() {
 	if g == nil || g.closed {
 		return
@@ -291,7 +410,22 @@ func (g *setupGUI) choose(ctx context.Context, path string) error {
 }
 func (g *setupGUI) chooseObserved(ctx context.Context, path string, stage func(string)) error {
 	stage("chooser-click")
-	if setupClickObserved(g.window, 102, "chooser-click", stage) != nil {
+	if !g.initialChooserDeadline.IsZero() {
+		h := g.initialChooser
+		if g.initialChooserAttempt.Click(ctx, g.initialChooserDeadline, stage, g.initialChooserBinding(), setupgate.ClickSteps{
+			Control:    func() bool { return h != 0 && setupControl(g.window, 102) == h },
+			Enabled:    func() bool { return setupEnabled(h) },
+			Visibility: func() error { return setupVisibleControlObserved(h, "chooser-click", stage) },
+			Post:       func() bool { return setupCall("PostMessageW", h, 0x00f5, 0, 0) != 0 },
+		}) != nil {
+			return setupgate.ErrGuard
+		}
+		// Only a successful first click consumes this launch-specific route into
+		// ordinary later chooser behavior. A failed attempt stays spent/rejected.
+		g.initialChooserDeadline = time.Time{}
+		g.initialChooser = 0
+		g.initialChooserRootThread, g.initialChooserControlThread = 0, 0
+	} else if setupClickObserved(g.window, 102, "chooser-click", stage) != nil {
 		return setupgate.ErrGuard
 	}
 	var dialog uintptr
