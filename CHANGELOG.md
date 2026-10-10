@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-10-10 — Windows parity read foundations (not yet wired)
+
+- Add a source-linked Linux/Windows parity matrix that separates implemented code, released bytes and exact native acceptance. Preserve the published preview and existing five-scope Setup.
+- Add a separate bounded native Application/System message reader for exact selected event identities, fixed privacy/error contracts and explicit unavailable/truncated results. Add independent local-consent and digest-only request lifecycle contracts with immutable 15-minute expiry; message text is not added to durable Windows telemetry.
+- Add an explicitly consented cached/offline WUA software-update inspection source with strict row/string budgets and unknown cache freshness. It cannot scan online, download, install, accept update terms, reboot or upgrade WUA.
+- These are portable-fixture/cross-build foundations, with no production caller, new CLI grant, manager route or dashboard feature yet. End-to-end integration and independently approved native acceptance remain separate increments.
+
 ## 2026-10-08 — Bounded Windows service startup source candidate
 
 - Add one default-off startup metadata scope, explicit stopped-service opt-in, strict v6 sender/store support and one EN/DE column in the existing Services table. Preserve old consent compatibility, persisted retry bytes and the exact five-scope fresh coordinator. The separate OS-provenance fix restores already-approved evidence in newly generated observations.

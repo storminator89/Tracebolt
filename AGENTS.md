@@ -126,6 +126,15 @@ file as navigation and project constraints, never as permission to act on a host
   digest/index binding, per-field unavailable states and old grants. The fresh
   five-scope coordinator remains unchanged; source fixtures never authorize a
   native configuration read, new persistent grant or service/security change.
+- Selected Windows event messages and cached Windows Update inspection are separate
+  unwired source foundations. Read `docs/windows-event-content-request.md`,
+  `docs/windows-event-content.md` and `docs/windows-update-inspection.md` before
+  wiring them. Existing five-scope Setup or event-header grants authorize neither.
+  Keep message content out of durable telemetry and AI/provider export; preserve
+  exact selections, original expiry and future durable consume-once boundaries.
+  Cached WUA inspection must remain offline and must not download, install,
+  accept update terms, reboot, upgrade WUA or change service/network settings.
+  Fixtures/cross-builds do not authorize native reads or create a local grant.
 - Follow Go/Node versions and dependency locks in this revision. Validate commands
   against actual flags/config. Distinguish runtime tests from cross-builds, skipped
   container tests, and proposed functionality. Never invent install/enroll flags.

@@ -69,6 +69,16 @@ jobs:
         env:
           PYTHONDONTWRITEBYTECODE: '1'
         run: python tests/security/run_native_smoke.py --expect-platform ${{ matrix.platform }} --expect-arch ${{ matrix.arch }}
+      - name: Windows parity inert source and ABI fixtures (no host collection)
+        if: matrix.platform == 'windows'
+        env:
+          GOTOOLCHAIN: local
+        run: go test -buildvcs=false -count=1 ./internal/windowseventcontent ./internal/windowseventrequest ./internal/windowsupdates
+      - name: Vet Windows parity sources (no host collection)
+        if: matrix.platform == 'windows'
+        env:
+          GOTOOLCHAIN: local
+        run: go vet -buildvcs=false ./internal/windowseventcontent ./internal/windowseventrequest ./internal/windowsupdates
       - name: Execute ARM64 Linux installer and helper fixture tests natively
         if: matrix.platform == 'linux' && matrix.arch == 'arm64'
         env:

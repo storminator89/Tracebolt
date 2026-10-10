@@ -1,5 +1,5 @@
 {
-  "goSourceSha256": "3c8dd17f470f46ffceb980563bdc7f0e90d7f77fbfd1ddce37cbba691e66dbc5",
+  "goSourceSha256": "788ff81cf01409fb09247bff815e48e8abef0cd5053126932244e27b013669ec",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -3040,12 +3040,49 @@
       "TestViewReadOnlyRestartExpiryAndCurrentReceipt",
       "TestWindowsContactViewWireFixture"
     ],
+    "localrmm/internal/windowseventcontent": [
+      "TestBoundedTwoPhaseNativeFormatting",
+      "TestByteBoundsAndNoReadsAfterAggregateBudget",
+      "TestCancellationBetweenNativeSteps",
+      "TestDiagnosticFormattingAlwaysRedacted",
+      "TestFixedNativeSelectorsAndLocalArguments",
+      "TestFormatCancellationNoSecondNativeCall",
+      "TestFormattingFailureDiscardsPopulatedText",
+      "TestInvalidSelectionsNeverOpen",
+      "TestLegacyMetadataSourceStillCannotFormatMessages",
+      "TestMalformedFormattedBuffers",
+      "TestMixedAvailabilityAndSanitizedFailures",
+      "TestNativeAPISurfaceStaysReadOnly",
+      "TestNativeAllocationProbeBounds",
+      "TestNativeErrorTaxonomy",
+      "TestNativeInvalidOrCanceledSelectionNeverReads",
+      "TestNonWindowsUnavailableWithoutReading",
+      "TestParseSelectedValues",
+      "TestProviderBounds",
+      "TestRecordMissingInvalidTextAndCloseFailure",
+      "TestRejectMalformedMetadata",
+      "TestScalarUnusedStorageIsIgnored",
+      "TestSelectedContentAndEmptySuccessfulMessage",
+      "TestSelectionQueryCannotAcceptArbitrarySyntax",
+      "TestSixFieldIdentityCheckedBeforeFormatting",
+      "TestValidateReportRejectsMalformedWireStates"
+    ],
     "localrmm/internal/windowseventhealth": [
       "TestConsentExactBoundAndNoImplicitCollection",
       "TestDeniedPartialAndEmptyRemainHonest",
       "TestHeadersRoundTripAndBounds",
       "TestInvalidOrCanceledCollectionNeverReachesSource",
       "TestStrictHeaderContractRejectsContentAndQualityLies"
+    ],
+    "localrmm/internal/windowseventrequest": [
+      "TestCancellationExpiryAndClockRollbackCannotReopen",
+      "TestClaimOnceAndFreshConsentRecheck",
+      "TestConsentIsSeparateExplicitAndDestinationBound",
+      "TestForeignDeviceAndCertificateCannotUseLocalConsent",
+      "TestImmutableRequestDigestAndFixedBudgets",
+      "TestResultAcceptanceContainsOnlyDigestAndOriginalExpiry",
+      "TestSelectedHeadersAreExactAndBounded",
+      "TestStrictMetadataDecodingAndStateInvariants"
     ],
     "localrmm/internal/windowsevents": [
       "TestBoundedCollectionAndLookahead",
@@ -3313,6 +3350,26 @@
       "TestWindowsDescriptorConversionInMemory",
       "TestWindowsOutputBufferAlignment",
       "TestWindowsRenameABI"
+    ],
+    "localrmm/internal/windowsupdates": [
+      "TestBadRowsStayPartialAndErrorReasonsSanitized",
+      "TestCanceledRowsReturnNoSnapshot",
+      "TestCancellationAfterEveryControlStopsBeforeNextCall",
+      "TestCanonicalSnapshotAndConsent",
+      "TestFitPreservesIdentityAgeCountsAndOwnsNestedSlices",
+      "TestMandatoryOfflineControlsFailClosed",
+      "TestNativeAPISurfaceStaysOfflineMetadataOnly",
+      "TestNativeHRESULTUsesSignedLowWord",
+      "TestNativeTraversalRowAndFrameBounds",
+      "TestNativeUTF16RejectsMalformedAndBounds",
+      "TestNativeUnsupportedIsExplicit",
+      "TestNativeVariantAndDispatchABI",
+      "TestNoSourceBeforeValidEnabledConsent",
+      "TestOfflineControlsBeforeFixedSearch",
+      "TestRejectContradictorySnapshot",
+      "TestResultTruthAndNoCleanConclusionFromEmptyCache",
+      "TestSanitizedMetadata",
+      "TestSourceNilAndFailureOwnership"
     ],
     "localrmm/internal/windowsvolumes": [
       "TestBoundsAndCounts",
