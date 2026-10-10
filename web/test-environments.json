@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "nodeFiles": [
+    "src/advisory-review-types.test.ts",
+    "src/application-checks-types.test.ts",
+    "src/application-checks-v2-types.test.ts",
+    "src/cached-updates-types.test.ts",
+    "src/capability-observations.test.ts",
+    "src/complete-overview-types.test.ts",
+    "src/complete-packages-types.test.ts",
+    "src/complete-updates-types.test.ts",
+    "src/endpoint-identity-types.test.ts",
+    "src/journal-browse-types.test.ts",
+    "src/journal-types.test.ts",
+    "src/linux-cve-types.test.ts",
+    "src/package-update-types.test.ts",
+    "src/proactive-ai-identity-fixture.test.ts",
+    "src/resource-history-delta.test.ts",
+    "src/service-action-types.test.ts",
+    "src/service-action-v2.test.ts",
+    "src/system-inventory-types.test.ts",
+    "src/utils.test.ts",
+    "src/windows-contact-clock.test.ts",
+    "src/windows-contact-types.test.ts",
+    "src/windows-event-content-types.test.ts",
+    "src/windows-health-clock.test.ts",
+    "src/windows-inventory-types.test.ts",
+    "src/windows-service-startup-types.test.ts",
+    "src/windows-updates-types.test.ts"
+  ]
+}
