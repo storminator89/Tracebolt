@@ -41,6 +41,8 @@ copying a demo command does not deploy a manager or connect real endpoints.
 - **Packages and findings:** [complete cached APT candidates](complete-cached-updates-extension.md)
   and [Debian/Ubuntu CVE coverage](linux-cve-warnings.md).
   Cached candidates are not an installation guarantee. Separate
+  [Selected Windows event messages](windows-event-content-runtime.md) connect exact
+  header selection to an expiring private Logs view under separate local consent.
   [Windows cached Update inspection](windows-update-runtime.md) is a default-off
   source candidate with native acceptance still pending.
 - **Checks and notifications:** [application checks](application-checks.md),

@@ -74,10 +74,21 @@ download, installation, CVE mapping or reboot is provided. This code is not in
 the published preview and still needs exact-source native/installed-service
 acceptance.
 
-[Selected event-message reading](windows-event-content.md) and its
-[consent/request contract](windows-event-content-request.md) are foundations only.
-No production event-content path or dashboard message button exists yet. Service
-actions, broader Health/AI and same-identity lifecycle improvements remain in the
+[Selected event messages](windows-event-content-runtime.md) now have a separate
+source path from stopped-service local consent through exact header selection,
+consume-once isolated reading, authenticated transport and the shared Logs view.
+The manager keeps message text only in an expiring, originating-admin-session
+cache. A request selects at most 16 existing Application/System headers; output
+is bounded to 16 KiB per message and 64 KiB total, with an immutable 15-minute
+expiry. Missing records, denied reads, partial output and lost results remain
+explicit. This is not retained-history browsing, content search or an AI export.
+
+This path is also absent from the published preview. Synthetic transport/browser
+fixtures and builds do not establish native Event Log reading under the installed
+service or real Windows-to-Linux interoperability. See the
+[manager boundary](windows-event-content-manager.md) and
+[wire contract](windows-event-content-wire.md). Service actions, broader Health/AI,
+complete inventory generations and lifecycle improvements remain in the
 [parity roadmap](windows-linux-parity.md). Existing grants are never widened by a
 source or manager update.
 

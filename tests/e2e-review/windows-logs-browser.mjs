@@ -63,9 +63,9 @@ export const windowsLogsStageNames=Object.freeze([
  'logs-expiry-screenshot'
 ]);
 export function windowsLogsFixture(view,now,phase,phaseAt=now){
- if(!['logs','logs-expiring'].includes(phase))return view;
+ if(!['logs','logs-expiring','event-content'].includes(phase))return view;
  view.events=windowsEventsFixture();view.events.generationId=view.snapshot.generationId;
- const captureClock=phase==='logs-expiring'?phaseAt:now;
+ const captureClock=phase==='logs'?now:phaseAt;
  view.events.collectedAt=new Date(Date.parse(captureClock)-(phase==='logs-expiring'?86400000-5000:2000)).toISOString();
  // The existing event wire contract omits expired headers; a repeat cannot
  // mint a new capture time or renew the original private-row lifetime.

@@ -38,6 +38,8 @@ import (
 	"localrmm/internal/packagecontroller"
 	"localrmm/internal/signedhttp"
 	"localrmm/internal/systemwire"
+	"localrmm/internal/windowseventcache"
+	"localrmm/internal/windowseventwire"
 )
 
 const MaxInFlight = 2
@@ -48,6 +50,7 @@ var ErrConfiguration = errors.New("enrollment ingress configuration is invalid")
 // Ingress is fixed to one store, profile, exact agent origin and dedicated issuer.
 // Construct one per listener; sharing its address preserves the admission bound.
 type Ingress struct {
+	windowsEvents              *windowseventcache.Cache
 	packages                   *packagecontroller.Manager
 	actions                    *actionmanager.Manager
 	store                      *enrollmentstore.Store
@@ -130,7 +133,7 @@ func (h *Ingress) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		failure(w, http.StatusServiceUnavailable, "storage_unavailable")
 		return
 	}
-	if h.telemetryPath == "/v1/windows/agent/telemetry" && (r == nil || r.URL == nil || r.URL.Path != h.telemetryPath) {
+	if h.telemetryPath == "/v1/windows/agent/telemetry" && (r == nil || r.URL == nil || r.URL.Path != h.telemetryPath && !windowsEventPath(r.URL.Path)) {
 		failure(w, http.StatusNotFound, "not_found")
 		return
 	}
@@ -142,6 +145,10 @@ func (h *Ingress) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	default:
 		w.Header().Set("Retry-After", "15")
 		failure(w, http.StatusTooManyRequests, "ingress_busy")
+		return
+	}
+	if r != nil && r.URL != nil && strings.HasPrefix(r.URL.Path, windowseventwire.PathPrefix) {
+		h.windowsEventRequest(w, r)
 		return
 	}
 	if r != nil && r.URL != nil && strings.HasPrefix(r.URL.Path, "/v3/package-actions/") {

@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-10-10 — Wire selected Windows event messages
+
+- Add a separate stopped-service content grant and an exact selected Application/System message path through the existing sender, manager and Logs view. Preserve five-scope Setup and header-only grants; require independent HTTP plaintext acknowledgement.
+- Commit parent claim-attempt and child consume-once metadata before an isolated native read. Keep bounded exact retries in memory, fixed original expiry, immutable header selection, explicit missing/denied/partial/lost results and no message text in durable telemetry, diagnostics or AI export.
+- Bind manager retrieval to the originating administrative session; clear content on expiry, access loss, cancellation and shutdown. Preserve full-width record IDs and render untrusted message text without HTML interpretation.
+- Add synthetic mTLS/signed-HTTP, private-state, subprocess, session/API, EN/DE UI and browser fixtures. Native Event Log, installed-service, real Windows-to-Linux interoperability and release acceptance remain separate gates.
+
 ## 2026-10-10 — Opt-in cached Windows Updates end-to-end source candidate
 
 - Add a separate stopped-service local grant, bounded current-executable WUA worker, signed v7 sender path, durable manager admission and a shared EN/DE Updates tab. Refresh reads accepted cached observations only; unknown cache freshness and partial/denied results stay explicit, and an empty cache never means fully patched.

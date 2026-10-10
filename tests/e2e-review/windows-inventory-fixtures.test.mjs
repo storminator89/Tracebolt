@@ -200,3 +200,6 @@ import './windows-os-provenance-fixtures.test.mjs';
 
 // Cached update source/hosted-helper contracts use this same existing CI gate.
 import './windows-updates-fixtures.test.mjs';
+
+// Selected event-content source contracts extend the same explicit CI entry.
+import './windows-event-content-fixtures.test.mjs';

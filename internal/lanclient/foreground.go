@@ -40,6 +40,8 @@ func runForeground(ctx context.Context, m Material, interval time.Duration, obse
 		return agentloop.Summary{Reason: agentloop.InvalidState}, agentloop.ErrState
 	}
 	defer state.Close()
+	events := openWindowsEventContentSender(m)
+	defer events.Close()
 	var inventory *inventorySender
 	var system *systemSender
 	if m.config.complete() {
@@ -92,6 +94,7 @@ func runForeground(ctx context.Context, m Material, interval time.Duration, obse
 	}
 	return agentloop.Run(ctx, agentloop.Config{Interval: interval}, agentloop.Dependencies{Clock: clock, Random: random, Observe: observe, Attempt: func(parent context.Context) agentloop.Result {
 		journal.prune()
+		events.prune()
 		report, err := runPreparedAttemptWithSystem(parent, m, state, system, inventory, runUsingState)
 		if err == nil {
 			err = runCompleteUpdatesAttempt(parent, updates, &report)
@@ -107,6 +110,9 @@ func runForeground(ctx context.Context, m Material, interval time.Duration, obse
 		}
 		if err != nil {
 			report.JournalStatus = journal.prune()
+		}
+		if parent.Err() == nil {
+			report.WindowsEventContentStatus = runWindowsEventContentAttempt(parent, events)
 		}
 		outcome := agentloop.Retryable
 		switch {

@@ -1,0 +1,120 @@
+{
+  "record": {
+    "description": {
+      "schemaVersion": "tracebolt.windows-event-content-request.v1",
+      "identity": {
+        "id": "winevent_11111111111111111111111111111111",
+        "sequence": "9007199254740993",
+        "queryDigest": "sha256:ea7d755585e61e72806ec08dba8196009409b1baaf6ca7821f1bfdfc2e9d24e2"
+      },
+      "deviceId": "agent_eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "certificateHash": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "grantId": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "headerGenerationId": "sample_dddddddddddddddddddddddddddddddd",
+      "headerCollectedAt": "2026-10-10T11:59:00Z",
+      "headerSnapshotDigest": "sha256:4fff671a63c8dd765c404ad9aac697e58e6bfec11c26e460bb4b4d9e695983cb",
+      "query": {
+        "events": [
+          {
+            "recordId": "18446744073709551615",
+            "eventId": 42,
+            "level": 2,
+            "provider": "Synthetic fixture publisher",
+            "timestamp": "2026-10-10T11:59:00.1234567Z",
+            "channel": "Application"
+          },
+          {
+            "recordId": "9007199254740993",
+            "eventId": 43,
+            "level": 3,
+            "provider": "Synthetic fixture publisher",
+            "timestamp": "2026-10-10T11:58:00.7654321Z",
+            "channel": "Application"
+          }
+        ]
+      },
+      "budgets": {
+        "maxSelectedEvents": 16,
+        "maxMessageBytes": 16384,
+        "maxTotalMessageBytes": 65536,
+        "timeoutMs": 5000
+      },
+      "createdAt": "2026-10-10T12:00:00Z",
+      "expiresAt": "2026-10-10T12:15:00Z"
+    },
+    "state": "accepted",
+    "policyDigest": "sha256:c8f13c04b7f0be605d2be792d24b4c2ae4ea5380fe0b65da2851a871badf22d6",
+    "claimedAt": "2026-10-10T12:00:01Z",
+    "receipt": {
+      "identity": {
+        "id": "winevent_11111111111111111111111111111111",
+        "sequence": "9007199254740993",
+        "queryDigest": "sha256:ea7d755585e61e72806ec08dba8196009409b1baaf6ca7821f1bfdfc2e9d24e2"
+      },
+      "policyDigest": "sha256:c8f13c04b7f0be605d2be792d24b4c2ae4ea5380fe0b65da2851a871badf22d6",
+      "resultDigest": "sha256:0d05348a3740fd56602e6bc31b1b2d9b9ea0fe2d7f84b2a205ebbce664f594fe",
+      "acceptedAt": "2026-10-10T12:00:03Z",
+      "expiresAt": "2026-10-10T12:15:00Z"
+    },
+    "canceledAt": null,
+    "expiredAt": null
+  },
+  "page": {
+    "identity": {
+      "id": "winevent_11111111111111111111111111111111",
+      "sequence": "9007199254740993",
+      "queryDigest": "sha256:ea7d755585e61e72806ec08dba8196009409b1baaf6ca7821f1bfdfc2e9d24e2"
+    },
+    "receipt": {
+      "identity": {
+        "id": "winevent_11111111111111111111111111111111",
+        "sequence": "9007199254740993",
+        "queryDigest": "sha256:ea7d755585e61e72806ec08dba8196009409b1baaf6ca7821f1bfdfc2e9d24e2"
+      },
+      "policyDigest": "sha256:c8f13c04b7f0be605d2be792d24b4c2ae4ea5380fe0b65da2851a871badf22d6",
+      "resultDigest": "sha256:0d05348a3740fd56602e6bc31b1b2d9b9ea0fe2d7f84b2a205ebbce664f594fe",
+      "acceptedAt": "2026-10-10T12:00:03Z",
+      "expiresAt": "2026-10-10T12:15:00Z"
+    },
+    "report": {
+      "source": "windows-event-log-message-content",
+      "warning": "Event messages may contain credentials, personal data and other secrets. Authorized operator-only content; do not send to AI providers or export.",
+      "quality": "partial",
+      "collectedAt": "2026-10-10T12:00:02Z",
+      "complete": false,
+      "truncated": false,
+      "events": [
+        {
+          "event": {
+            "recordId": "18446744073709551615",
+            "eventId": 42,
+            "level": 2,
+            "provider": "Synthetic fixture publisher",
+            "timestamp": "2026-10-10T11:59:00.1234567Z",
+            "channel": "Application"
+          },
+          "message": "Synthetic \u003cb\u003eplain text\u003c/b\u003e \u0026 message fixture",
+          "quality": "observed",
+          "complete": true,
+          "truncated": false
+        },
+        {
+          "event": {
+            "recordId": "9007199254740993",
+            "eventId": 43,
+            "level": 3,
+            "provider": "Synthetic fixture publisher",
+            "timestamp": "2026-10-10T11:58:00.7654321Z",
+            "channel": "Application"
+          },
+          "message": "",
+          "quality": "unavailable",
+          "complete": false,
+          "truncated": false,
+          "reason": "windows_event_content_record_not_found"
+        }
+      ]
+    },
+    "expiresAt": "2026-10-10T12:15:00Z"
+  }
+}

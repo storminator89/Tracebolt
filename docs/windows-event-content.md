@@ -1,10 +1,12 @@
 # Selected Windows event message content: source candidate
 
 `internal/windowseventcontent` adds a separate, explicit local source for actual
-Windows event **message text**. It is a source-only foundation, not a released
-installer, persistent grant, manager API, endpoint transport or dashboard. The
-existing `internal/windowsevents` header-only package and its callers remain
-unchanged. A manager upgrade or successful metadata read grants no content scope.
+Windows event **message text**. This page describes the bounded native adapter;
+the newer [runtime](windows-event-content-runtime.md),
+[manager](windows-event-content-manager.md) and [wire](windows-event-content-wire.md)
+source paths connect it to independent local consent and the shared Logs view.
+They are not included in the published preview or natively accepted. The existing
+`internal/windowsevents` header-only package remains a separate scope. A manager upgrade or successful metadata read grants no content scope.
 
 ## Caller contract
 

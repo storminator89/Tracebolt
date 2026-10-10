@@ -511,6 +511,10 @@ func (h *operatorHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.windowsInventoryView(w, r)
 		return
 	}
+	if strings.HasPrefix(r.URL.Path, "/api/devices/") && strings.Contains(r.URL.Path, "/windows-event-content") {
+		h.windowsEventContent(w, r)
+		return
+	}
 	if strings.HasPrefix(r.URL.Path, "/api/devices/") && strings.Contains(r.URL.Path, "/windows-contact") {
 		h.windowsContactAPI(w, r)
 		return
