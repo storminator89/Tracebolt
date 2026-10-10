@@ -6,7 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"strings"
 	"testing"
 )
 
@@ -36,17 +35,8 @@ func TestApplicationChecksV2NamedReadAndPrivateFieldBoundary(t *testing.T) {
 	if r.StatusCode != 200 || v["schemaVersion"] != applicationcheck.SchemaVersionV2 {
 		t.Fatal("named v2 read failed")
 	}
-	for _, item := range v["items"].([]any) {
-		row := item.(map[string]any)
-		if len(row) != 5 || row["httpStatus"] != nil || row["tls"] != nil || row["observedAt"] != nil || row["state"] != "unknown" {
-			t.Fatal("wrong kind fields or read triggered work")
-		}
-	}
-	payload, _ := json.Marshal(v)
-	for _, secret := range []string{"private-fixture.internal", "10.2.3.4", "5432", "allowedAddresses", "allowPrivateLAN", "operatorOrigin"} {
-		if strings.Contains(string(payload), secret) {
-			t.Fatal("configuration leaked in status")
-		}
+	if !applicationChecksV2InitialStatusIsPublic(v) {
+		t.Fatal("wrong public status shape or values, private configuration leaked, or read triggered work")
 	}
 	csrf := session["csrfToken"].(string)
 	if r, _ := o.call(t, "POST", applicationCheckStatusPath, map[string]any{"kind": "tcp", "host": "other.internal", "port": 22}, csrf, nil); r.StatusCode != 403 {
