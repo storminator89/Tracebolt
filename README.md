@@ -36,7 +36,9 @@ and [selected event messages](docs/windows-event-content-runtime.md); both still
 need installed-service/native acceptance. A separate default-off
 [system-volume capacity policy](docs/windows-capacity-health.md) uses only the
 existing quota-aware metric. Independent default-off [CPU and physical-RAM policies](docs/windows-resource-health.md)
-use their existing basic samples; overall Windows health remains unassessed and
+use their existing basic samples. Separate default-off [service checks](docs/windows-service-health.md)
+let administrators select reported services that should be running; missing rows
+remain unknown. Overall Windows health remains unassessed and
 native acceptance remains pending. AI provider/data approval is separate, and suggestions
 remain unconfirmed.
 

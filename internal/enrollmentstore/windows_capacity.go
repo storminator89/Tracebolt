@@ -7,10 +7,11 @@ import (
 	"localrmm/internal/windowscapacity"
 	"localrmm/internal/windowscontact"
 	"localrmm/internal/windowsmanaged"
+	"localrmm/internal/windowsservicehealth"
 	"time"
 )
 
-// WindowsCapacityInputs reads the existing accepted basic percentage metrics and
+// WindowsCapacityInputs reads the existing accepted basic metrics, service metadata and
 // receipt in one authority transaction. It never reads a host or widens a grant.
 // The Linux HealthInputs contract also authorizes AI and remains unchanged.
 func (s *Store) WindowsCapacityInputs(ctx context.Context, now time.Time) ([]windowscapacity.Input, error) {
@@ -70,6 +71,7 @@ func (s *Store) WindowsCapacityInputs(ctx context.Context, now time.Time) ([]win
 				in.Disk = frame.Observation.Observation.Disk
 				in.CPU = frame.Observation.Observation.CPU
 				in.Memory = frame.Observation.Observation.Memory
+				in.Services = windowsservicehealth.Sample{CollectedAt: frame.WindowsInventory.CollectedAt, Services: frame.WindowsInventory.Services}
 			}
 			out = append(out, in)
 		}

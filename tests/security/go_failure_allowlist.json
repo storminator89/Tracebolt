@@ -1,5 +1,5 @@
 {
-  "goSourceSha256": "5efdf75fd197ccbe84424a87963c81a102aa5d91262cad01461e90c4605646d1",
+  "goSourceSha256": "be44a0c70c819fabe329c476126f137c236be00570027e12f83ace843c200305",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -930,6 +930,15 @@
       "TestWindowsResourceMonitorSharesOneSourceTransactionAtCapacity",
       "TestWindowsResourceRechecksCurrentAuthorityBeforeWriteAndRelease",
       "TestWindowsResourceRouteBodyAndReadRoleBoundaries",
+      "TestWindowsServiceAndPercentagesShareSingleSourcePass",
+      "TestWindowsServiceAuthenticatedDefaultOffAndPolicy",
+      "TestWindowsServiceAuthorityRechecksAndFailureEpoch",
+      "TestWindowsServiceFinalClockCannotReleaseExpiredHistory",
+      "TestWindowsServiceFinalMutationRecheckAndUnknownSelection",
+      "TestWindowsServicePolicyAcceptsEightMaximumEscapedNames",
+      "TestWindowsServicePolicyResponseLossDoesNotRepeatMutation",
+      "TestWindowsServicePolicyStrictValidationAndNamedRead",
+      "TestWindowsServiceResponseBoundIncludesFramingNewline",
       "TestWindowsSetupCapabilitiesAbsentOnDeveloper",
       "TestWindowsSetupCapabilitiesExactPublicGuardedTLSContract",
       "TestWindowsUpdatesOperatorSessionAndResponseTimeExpiry",
@@ -1576,6 +1585,7 @@
       "TestWindowsInventoryViewRechecksClockFreshnessAndExpiry",
       "TestWindowsNetworkIndependentExpiryAndRevocation",
       "TestWindowsProcessMetricsIndependentExpiryAndRevocation",
+      "TestWindowsServiceSourceRetainsOriginalSnapshotAndReceipt",
       "TestWindowsServiceStartupIndependentExpiryAndRevocation",
       "TestWindowsUpdatesCannotBeAdmittedUnderBasicIdentity",
       "TestWindowsUpdatesDurablePrivateReplayAndCaptureFloor",
@@ -2146,6 +2156,7 @@
       "TestWindowsProcessMetricsMaximalCombinedEnvelopePreservesCountsAndCapture",
       "TestWindowsProcessMetricsPendingRevocationReplacementAndConsentRace",
       "TestWindowsResourceAcceptedReceiptMonitorAndOperatorPipeline",
+      "TestWindowsServiceAcceptedReceiptMonitorAndOperatorPipeline",
       "TestWindowsServiceStartupAll32CombinationsBothTransportAdmissions",
       "TestWindowsServiceStartupCapabilityV4ExplicitSelectionsAndOlderScopeIsolation",
       "TestWindowsServiceStartupCaptureFloorAndPreSendRevocation",
@@ -2806,7 +2817,12 @@
       "TestWindowsResourceBoundedDeviceAndMetricAdmission",
       "TestWindowsResourceFailedWritesAndTagCorruptionRemainIntact",
       "TestWindowsResourceIndependentPoliciesPersistWithoutDiskMigration",
-      "TestWindowsResourceOptimisticRacesAndIndependentFloors"
+      "TestWindowsResourceOptimisticRacesAndIndependentFloors",
+      "TestWindowsServiceConcurrentPolicyRevisionAndIsolation",
+      "TestWindowsServiceFailedWritesAndCorruptionPreserveState",
+      "TestWindowsServiceNeverTouchesHealthAnalysisOrAlarms",
+      "TestWindowsServicePersistenceReadOnlyAndDefaultOff",
+      "TestWindowsServiceStorageBoundAndInvalidIdentity"
     ],
     "localrmm/internal/systeminventory": [
       "TestAdmissionRetainedUntilSynchronousReturn",
@@ -3496,6 +3512,18 @@
       "TestSetupOwnedFailureSites",
       "TestSetupPlanFailureSites",
       "TestStopAndUninstallRetainStateDespiteMissingBinary"
+    ],
+    "localrmm/internal/windowsservicehealth": [
+      "TestAdvancingSourceConfirmationRecoveryAndUnknown",
+      "TestAllReportedStatesAndNoPercentageSemantics",
+      "TestDefaultOffExactSelectionAndPolicyAuthority",
+      "TestEpochGapRegressionAndOriginalCaptureFloors",
+      "TestPolicyCloseIsNotRecoveryAndHistoryIsReadOnly",
+      "TestPositiveRowsPartialAndAmbiguousNames",
+      "TestServiceBoundedWorstCaseEscapedNames",
+      "TestServiceHistoryPrunesOnlyClosedAndRemainsBounded",
+      "TestViewCurrentSourceAuthorityAndCanonicalCorruption",
+      "TestWindowsServiceSharedViewFixture"
     ],
     "localrmm/internal/windowssetup": [
       "TestCompatibilityExactAndNoExtensions"

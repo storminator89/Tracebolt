@@ -26,8 +26,8 @@ func evaluateWindowsHealthMonitors(ctx context.Context, contact *windowsContactM
 }
 
 // RunWindowsHealthMonitors is the production Windows scheduler. It preserves
-// separate contact/percentage authority, durable ledgers and restart epochs, with
-// independent disk/CPU/RAM ledgers, no concurrent self-contention or host activity. Shutdown joins this worker
+// separate contact/percentage/service authority, durable ledgers and restart epochs, with
+// independent disk/CPU/RAM/selected-service ledgers, no concurrent self-contention or host activity. Shutdown joins this worker
 // before the enrollment and operator stores close.
 func (s *Server) RunWindowsHealthMonitors(ctx context.Context, warnContact, warnCapacity func()) error {
 	s.mu.RLock()

@@ -109,6 +109,16 @@ capacity evidence engine and coordinated source read, with separate opt-ins,
 revisions, history and durable floors. They do not add host collection or complete
 Windows Health parity, and remain separate from preview/native/browser acceptance.
 
+## Newer manager-only selected-service checks
+
+The source adds independent default-off [service checks](windows-service-health.md)
+with an EN/DE chooser for currently reported names and display names. Only unique
+exact positive rows support state; missing/ambiguous rows always remain unknown.
+Explicit should-be-running selections use 120-second stopped/paused confirmation
+and 60-second running recovery. This manager policy changes no native collection,
+SCM lifecycle, transport, local grant, AI or alarm scope. Native and hosted-browser
+acceptance remain separate gates.
+
 ## Before trying the preview
 
 Use an explicitly approved disposable Windows target, the reviewed exact Setup

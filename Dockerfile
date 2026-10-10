@@ -13,6 +13,7 @@ COPY internal/api/testdata/complete-overview-synthetic.json /src/internal/api/te
 COPY tests/fixtures/windows-contact-view.json /src/tests/fixtures/windows-contact-view.json
 COPY tests/fixtures/windows-capacity-view.json /src/tests/fixtures/windows-capacity-view.json
 COPY tests/fixtures/windows-resource-view.json /src/tests/fixtures/windows-resource-view.json
+COPY tests/fixtures/windows-service-health-view.json /src/tests/fixtures/windows-service-health-view.json
 # Shared proactive identity contract and its TypeScript declaration; no test runner.
 COPY tests/e2e-review/proactive-ai-browser.mjs tests/e2e-review/proactive-ai-browser.d.mts /src/tests/e2e-review/
 RUN npm run build

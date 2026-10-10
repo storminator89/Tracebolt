@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-10-10 — Independent opt-in Windows service checks
+
+- Add explicit should-be-running selections from current readable Windows service names, with a separate disabled-by-default manager policy and discrete stopped/paused confirmation, running recovery and retained unknown history.
+- Keep exact-name ambiguity fail-closed, missing rows unknown, original capture/receipt evidence and durable identity/sequence floors. Share the existing coordinated accepted-source read without adding native collection, grants or service actions.
+- Wire bounded durable storage, shared-admin same-origin/CSRF/revision-checked API, EN/DE Health chooser, cross-language fixtures and accepted-frame-to-authenticated-API tests. Native, hosted-browser and release acceptance remain separate gates; AI and alarms are unchanged.
+
 ## 2026-10-10 — Independent opt-in Windows CPU and physical-RAM policies
 
 - Reuse the percentage evidence engine for existing observed-processor-group CPU and physical RAM not immediately available, with independently disabled policies, tagged storage, revisions, history and durable floors. Keep disk v1 state/API/fixture bytes unchanged.
