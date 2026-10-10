@@ -194,6 +194,23 @@ class SetupGate(unittest.TestCase):
             self.assertIn('"' + name + '"', source)
         for checks in runner.CHECKS.values():
             for name in checks: self.assertIn('"' + name + '"', source)
+    def test_gui_lifecycle_failure_stages_never_claim_success(self):
+        source = (ROOT / "internal/windowsacceptance/setupgate/gui_sequence.go").read_text()
+        stages = set(re.findall(r'"((?:consent|preflight)-[a-z-]+)"', source))
+        stages |= {stage for stage in runner.STAGES if stage.startswith("uninstall-")}
+        self.assertGreater(len(stages), 30)
+        for stage in stages:
+            self.assertIn(stage, runner.STAGES)
+            value = report()
+            value.update(status="failed", stage=stage, reason="operation_failed", startup="inspection_required")
+            self.validate(value)
+            for change in ({"stage": "private-error-or-path"}, {"reason": "private-native-error"},
+                           {"status": "passed_packaged_gui_subset"}):
+                bad = copy.deepcopy(value)
+                bad.update(change)
+                with self.subTest(stage=stage, change=change), self.assertRaises(runner.shared.Rejected):
+                    self.validate(bad)
+
     def test_fresh_failure_labels_are_finite_and_inert(self):
         for stage in ("fresh-environment", "fresh-layout", "fresh-service", "fresh-program-files", "fresh-program-data"):
             r = report()
