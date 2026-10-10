@@ -90,6 +90,14 @@ source candidates wired into Updates and Logs. Their source/fixture evidence is
 separate from native acceptance. Neither is added to the published preview by
 updating the manager.
 
+| Cached Windows Updates, unreleased source preview | Mobile device overview, German |
+| --- | --- |
+| [<img src="docs/screenshots/2026-10-10-windows-parity/windows-cached-updates.png" width="660" alt="Tracebolt cached Windows Updates with invented update rows and explicit unknown cache freshness">](docs/screenshots/2026-10-10-windows-parity/windows-cached-updates.png) | [<img src="docs/screenshots/2026-10-10-windows-parity/windows-mobile-de.png" width="220" alt="German mobile Windows device overview with invented inventory data">](docs/screenshots/2026-10-10-windows-parity/windows-mobile-de.png) |
+
+*Actual 10 October source-preview captures with invented Windows data. These
+images show no selected event messages or native Windows acceptance.
+[Inventory screenshot and exact-source provenance](docs/screenshots/2026-10-10-windows-parity/README.md).*
+
 ## Platform support
 
 | Component | Current boundary |
@@ -118,6 +126,10 @@ Run `make test`, `make build` and the [web checks](web/README.md#checks). Consul
 container and native coverage; a cross-build or screenshot is not host acceptance.
 
 **Development pilot.** Production hardening and fleet-scale validation remain
-open. No project license has been selected; public source availability does not
-grant an open-source license. Dependencies retain their
-[own notices](docs/dependencies/edwards25519.md).
+open.
+
+## License
+
+Tracebolt is licensed under the [Apache License 2.0](LICENSE)
+(SPDX: `Apache-2.0`). Third-party dependencies retain their own licenses and
+notices, including the [Edwards25519 dependency notice](docs/dependencies/edwards25519.md).

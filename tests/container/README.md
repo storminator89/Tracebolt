@@ -25,6 +25,7 @@ Assertions:
 - Explicit HTTP-test profile: Ed25519-signed requests, rejected unsigned input,
   mandatory unencrypted warning, and independent profile-marked auth/state
 - Static UI reachable and protected API denied before operator authentication
+- Project Apache 2.0 license and pinned dependency notice match the source bytes
 - Operator login and authenticated HTTPS health
 - Mandatory client certificate (TLS) or signature (HTTP test), rejection before approval, accepted API sample
   after exact public leaf-fingerprint approval

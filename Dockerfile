@@ -33,7 +33,8 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -buildvcs=false
 FROM scratch AS runtime
 COPY --from=build /out/manager /tracebolt/manager
 COPY --from=build /out/action-setup /tracebolt/action-setup
-# Preserve the pinned dependency notice with the distributed static binary.
+# Preserve the project license and pinned dependency notice in the distribution.
+COPY --chmod=0444 LICENSE /tracebolt/licenses/LICENSE
 COPY --chmod=0444 docs/dependencies/edwards25519-LICENSE.txt /tracebolt/licenses/edwards25519-LICENSE.txt
 # Public system roots support optional outbound HTTPS integrations; agent trust
 # still uses only its explicitly configured private CA pool.
