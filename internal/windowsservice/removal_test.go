@@ -45,6 +45,7 @@ func (s *removalTestService) inspectRemoval() (Snapshot, error) {
 func (s *removalTestService) Delete() error {
 	err := s.fakeService.Delete()
 	if err == nil {
+		s.snapshot.Configuration.StartType = 4
 		s.sidUnavailable = true
 	}
 	return err
@@ -112,13 +113,21 @@ func (b *removalTestBackend) VerifyExecutable(l Layout) (string, error) {
 	return b.fakeBackend.VerifyExecutable(l)
 }
 
-func removalFixture(t *testing.T) (*removalTestBackend, Receipt) {
+func activeRemovalFixture(t *testing.T) (*removalTestBackend, Receipt) {
 	t.Helper()
 	b, r := installedFixture(t)
 	b.opened = nil
 	b.verified = 0
 	b.s.closes = 0
 	return &removalTestBackend{fakeBackend: b, service: &removalTestService{fakeService: b.s}}, r
+}
+
+// Other observer fixtures start at the documented post-delete SCM state.
+// Their receipts remain the original active-installation receipts.
+func removalFixture(t *testing.T) (*removalTestBackend, Receipt) {
+	b, r := activeRemovalFixture(t)
+	b.s.snapshot.Configuration.StartType = 4
+	return b, r
 }
 
 func requireRemovalReadOnly(t *testing.T, b *removalTestBackend) {
@@ -134,7 +143,7 @@ func requireRemovalReadOnly(t *testing.T, b *removalTestBackend) {
 }
 
 func TestInspectRemovalSurvivesSIDLossOnlyAfterStrictDelete(t *testing.T) {
-	b, r := removalFixture(t)
+	b, r := activeRemovalFixture(t)
 	deleted, err := apply(context.Background(), b, r, deleteAccess)
 	if err != nil || !deleted.Requested || !deleted.DeletePending || b.s.deletes != 1 || b.service.ordinaryReads != 1 || b.service.handles != 0 {
 		t.Fatalf("strict delete failed: %+v, %v", deleted, err)
@@ -221,7 +230,7 @@ func TestInspectRemovalRequiresEveryConfigurationField(t *testing.T) {
 		"binary":              func(c *Configuration) { c.BinaryPath += ` "--other"` },
 		"account":             func(c *Configuration) { c.Account = "LocalSystem" },
 		"service type":        func(c *Configuration) { c.ServiceType = 32 },
-		"start type":          func(c *Configuration) { c.StartType = 4 },
+		"start type":          func(c *Configuration) { c.StartType = 2 },
 		"error control":       func(c *Configuration) { c.ErrorControl = 0 },
 		"SID type":            func(c *Configuration) { c.SIDType = 0 },
 		"required privileges": func(c *Configuration) { c.RequiredPrivileges = []string{"SeDebugPrivilege"} },
@@ -489,5 +498,51 @@ func TestNativeRemovalSnapshotKeepsOrdinarySIDLookup(t *testing.T) {
 		} else if calls["LookupServiceSID"] != 0 || calls["LookupSID"] != 0 || calls["Inspect"] != 0 || calls["Config"] != 1 || calls["QueryServiceStatusEx"] != 1 || calls["queryConfig2"] != 3 {
 			t.Fatalf("native removal reader lost complete SID-free configuration/status queries: %v", calls)
 		}
+	}
+}
+
+func TestRemovalDisabledTransitionPreservesActiveReceipt(t *testing.T) {
+	b, r := activeRemovalFixture(t)
+	original := r
+	active := configuration(r.Layout, r.InstallationID, r.ExecutableSHA256)
+	if active.StartType != 2 || r.ConfigurationSHA256 != digestConfig(active) || b.s.snapshot.Configuration.StartType != 2 {
+		t.Fatal("fixture is not an authenticated automatic installation")
+	}
+	result, err := apply(context.Background(), b, r, deleteAccess)
+	if err != nil || !result.Requested || !result.DeletePending || b.s.deletes != 1 || b.s.snapshot.Configuration.StartType != 4 {
+		t.Fatal("successful deletion did not model documented disabled transition")
+	}
+	snapshot, err := inspectRemoval(context.Background(), b, r)
+	if err != nil || !snapshot.Exists || snapshot.Configuration.StartType != 4 || r != original || r.ConfigurationSHA256 != digestConfig(active) {
+		t.Fatal("post-delete observation changed original receipt or rejected disabled object")
+	}
+	disabled := active
+	disabled.StartType = 4
+	forged := r
+	forged.ConfigurationSHA256 = digestConfig(disabled)
+	before := len(b.opened)
+	if _, err = inspectRemoval(context.Background(), b, forged); !errors.Is(err, ErrMismatch) || len(b.opened) != before {
+		t.Fatal("disabled configuration accepted as original receipt")
+	}
+}
+
+func TestRemovalRejectsEveryNonDisabledStartType(t *testing.T) {
+	for _, start := range []uint32{0, 1, 2, 3, 5, 0xffffffff} {
+		b, r := removalFixture(t)
+		b.s.snapshot.Configuration.StartType = start
+		if _, err := inspectRemoval(context.Background(), b, r); !errors.Is(err, ErrMismatch) {
+			t.Fatal("non-disabled post-delete configuration accepted")
+		}
+		requireRemovalReadOnly(t, b)
+	}
+}
+
+func TestRemovalFailedDeleteKeepsActiveConfiguration(t *testing.T) {
+	b, r := activeRemovalFixture(t)
+	failure := errors.New("delete refused")
+	b.s.errorDelete = failure
+	result, err := apply(context.Background(), b, r, deleteAccess)
+	if !errors.Is(err, failure) || result.Requested || result.DeletePending || b.s.deletes != 1 || b.s.snapshot.Configuration.StartType != 2 || b.service.sidUnavailable {
+		t.Fatal("failed deletion changed fixture configuration or claimed success")
 	}
 }

@@ -16,6 +16,18 @@ import (
 // windows-inventory-v1 local consent. It performs one native report collection;
 // the shared-chart metrics and transport rows come from that same report.
 func Collect(ctx context.Context, generationID string) (Snapshot, model.Device, error) {
+	return collect(ctx, generationID, 0)
+}
+
+// CollectForProcessMetrics retains the already-enumerated local self PID for a
+// separately consented process-metrics capture. It does not enumerate again or
+// fabricate a missing row. Zero selects the ordinary inventory-only behavior.
+// The caller must validate both inventory and process-metrics consent first.
+func CollectForProcessMetrics(ctx context.Context, generationID string, selfPID uint32) (Snapshot, model.Device, error) {
+	return collect(ctx, generationID, selfPID)
+}
+
+func collect(ctx context.Context, generationID string, selfPID uint32) (Snapshot, model.Device, error) {
 	if ctx == nil || !validGeneration(generationID) {
 		return Snapshot{}, model.Device{}, ErrInvalidInput
 	}
@@ -29,13 +41,24 @@ func Collect(ctx context.Context, generationID string) (Snapshot, model.Device, 
 	if err := ctx.Err(); err != nil {
 		return Snapshot{}, model.Device{}, err
 	}
-	return FromReport(r, generationID)
+	return fromReport(r, generationID, selfPID)
 }
 
 // FromReport is a pure adapter for a native report or injected fixture. It does
 // not consult the clock, collect sources, mutate the report, or replace capture
 // times. Input rows are copied before deterministic sorting and transport trims.
 func FromReport(r windowsinventory.Report, generationID string) (Snapshot, model.Device, error) {
+	return fromReport(r, generationID, 0)
+}
+
+// FromReportForProcessMetrics is the pure adapter for an explicitly consented
+// process-metrics capture. Only an existing self row is protected from row and
+// byte trims. The original report, counts, capture and PID ordering are retained.
+func FromReportForProcessMetrics(r windowsinventory.Report, generationID string, selfPID uint32) (Snapshot, model.Device, error) {
+	return fromReport(r, generationID, selfPID)
+}
+
+func fromReport(r windowsinventory.Report, generationID string, selfPID uint32) (Snapshot, model.Device, error) {
 	if !validGeneration(generationID) {
 		return Snapshot{}, model.Device{}, ErrInvalidInput
 	}
@@ -119,11 +142,13 @@ func FromReport(r windowsinventory.Report, generationID string) (Snapshot, model
 		}
 		return a.PrefixLength < b.PrefixLength
 	})
-	trimRows(&s.Processes, MaxProcessRows)
+	if err := trimProcesses(&s.Processes, MaxProcessRows, selfPID); err != nil {
+		return Snapshot{}, model.Device{}, err
+	}
 	trimRows(&s.Services, MaxServiceRows)
 	trimRows(&s.Software, MaxSoftwareRows)
 	trimRows(&s.Network, MaxNetworkRows)
-	if err := fitBytes(&s); err != nil {
+	if err := fitBytesWithSelfPID(&s, selfPID); err != nil {
 		return Snapshot{}, model.Device{}, err
 	}
 	if err := Validate(s); err != nil {
@@ -165,11 +190,34 @@ func trimRows[T any](s *Section[T], limit int) {
 	s.Complete, s.Truncated, s.Quality = false, true, QualityPartial
 }
 
-// fitBytes removes the tail from the currently largest encoded row section.
+// processDropIndex excludes only the local self PID selected by the consented
+// caller. Rows have already been sorted; all other omissions remain highest-PID.
+func processDropIndex(rows []Process, selfPID uint32) int {
+	for i := len(rows) - 1; i >= 0; i-- {
+		if selfPID == 0 || rows[i].PID != selfPID {
+			return i
+		}
+	}
+	return -1
+}
+
+func trimProcesses(s *Section[Process], limit int, selfPID uint32) error {
+	for len(s.Rows) > limit {
+		i := processDropIndex(s.Rows, selfPID)
+		if i < 0 {
+			return ErrSnapshotLimit
+		}
+		copy(s.Rows[i:], s.Rows[i+1:])
+		trimRows(s, len(s.Rows)-1)
+	}
+	return nil
+}
+
+// fitBytesWithSelfPID removes the tail from the largest removable row section.
 // Ties use the fixed section order. It cannot erase the hostname, counts,
 // timestamps, provenance, or a native failure. Every step strictly removes a
 // row; the record caps bound both encoding work and the number of iterations.
-func fitBytes(s *Snapshot) error {
+func fitBytesWithSelfPID(s *Snapshot, selfPID uint32) error {
 	for {
 		b, err := json.Marshal(s)
 		if err != nil {
@@ -182,7 +230,7 @@ func fitBytes(s *Snapshot) error {
 		counts := []int{len(s.Processes.Rows), len(s.Services.Rows), len(s.Software.Rows), len(s.Network.Rows)}
 		largest, size := -1, 0
 		for i, row := range rows {
-			if counts[i] == 0 {
+			if counts[i] == 0 || i == 0 && processDropIndex(s.Processes.Rows, selfPID) < 0 {
 				continue
 			}
 			encoded, err := json.Marshal(row)
@@ -195,7 +243,9 @@ func fitBytes(s *Snapshot) error {
 		}
 		switch largest {
 		case 0:
-			trimRows(&s.Processes, len(s.Processes.Rows)-1)
+			if err := trimProcesses(&s.Processes, len(s.Processes.Rows)-1, selfPID); err != nil {
+				return err
+			}
 		case 1:
 			trimRows(&s.Services, len(s.Services.Rows)-1)
 		case 2:

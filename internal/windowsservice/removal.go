@@ -77,6 +77,10 @@ func inspectRemoval(ctx context.Context, b backend, r Receipt) (result Snapshot,
 	if r.Version != 1 || !r.Complete || r.Layout != l || !validHex(r.InstallationID, 16) || !validHex(r.ExecutableSHA256, 32) || !validServiceSID(r.ServiceSID) || r.ConfigurationSHA256 != digestConfig(expected) {
 		return Snapshot{}, setupStageError("service_removal_receipt", "mismatch", ErrMismatch)
 	}
+	// MS-SCMR RDeleteService sets Start to SERVICE_DISABLED before marking
+	// Deleted. The receipt above still authenticates the original active
+	// configuration; only post-delete observation expects this one transition.
+	expected.StartType = 4
 	if err = ctx.Err(); err != nil {
 		return Snapshot{}, setupStageError("service_removal_context", "interrupted", err)
 	}

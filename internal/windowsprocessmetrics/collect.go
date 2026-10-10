@@ -72,6 +72,18 @@ func quality(e error) string {
 // A first sample is null CPU; later values divide CPU time by elapsed wall time,
 // never by processor count. No goroutine abandons an in-flight native call.
 func (s *Sampler) Sample(ctx context.Context, pids []uint32, generation, grant string, inventoryAt time.Time) (Snapshot, error) {
+	return s.sample(ctx, pids, generation, grant, inventoryAt, 0)
+}
+
+// SampleWithSelfPID samples an already-inventoried local self PID first, within
+// the same cooperative budget, and protects that row from byte trimming. It
+// never adds a PID, read or right; absent self keeps the ordinary sampling order.
+// Like Sample, it requires the caller to have validated active process consent.
+func (s *Sampler) SampleWithSelfPID(ctx context.Context, pids []uint32, generation, grant string, inventoryAt time.Time, selfPID uint32) (Snapshot, error) {
+	return s.sample(ctx, pids, generation, grant, inventoryAt, selfPID)
+}
+
+func (s *Sampler) sample(ctx context.Context, pids []uint32, generation, grant string, inventoryAt time.Time, selfPID uint32) (Snapshot, error) {
 	if s == nil || ctx == nil || len(pids) > MaxRows || !validGeneration(generation) || !hex(grant, 32) || inventoryAt.IsZero() || inventoryAt.Location() != time.UTC || inventoryAt.Year() < 1970 || inventoryAt.Year() > 9999 {
 		return Snapshot{}, ErrInvalid
 	}
@@ -80,6 +92,15 @@ func (s *Sampler) Sample(ctx context.Context, pids []uint32, generation, grant s
 	for i := 1; i < len(ids); i++ {
 		if ids[i] == ids[i-1] {
 			return Snapshot{}, ErrInvalid
+		}
+	}
+	if selfPID != 0 {
+		for i, pid := range ids {
+			if pid == selfPID {
+				copy(ids[1:i+1], ids[:i])
+				ids[0] = selfPID
+				break
+			}
 		}
 	}
 	s.mu.Lock()
@@ -149,7 +170,9 @@ func (s *Sampler) Sample(ctx context.Context, pids []uint32, generation, grant s
 	if e := ctx.Err(); e != nil {
 		return Snapshot{}, e
 	}
-	result, e := fit(out, MaxBytes)
+	// Read priority is local only; the wire remains strictly PID-sorted.
+	sort.Slice(out.Rows, func(i, j int) bool { return out.Rows[i].PID < out.Rows[j].PID })
+	result, e := fitWithSelfPID(out, MaxBytes, selfPID)
 	if e != nil {
 		return Snapshot{}, e
 	}

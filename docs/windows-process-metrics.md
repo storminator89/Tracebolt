@@ -57,10 +57,17 @@ interval. Pending retry never re-collects or updates capture/receipt times.
 A strict v4 Windows frame carries process metrics and optional independently
 consented event/volume extensions. Without process scope, v1, event-only v2 and
 volume-bearing v3 preserve their shapes. Each metrics snapshot carries at most
-128 PID-sorted rows and 12 KiB. Highest-PID complete rows are trimmed deterministically;
-original requested count and capture survive. For a full frame, complete volume
-rows may additionally be trimmed enough to retain the metrics envelope, followed
-by metrics-row trimming. The whole frame remains 72 KiB. Unknown/duplicate fields,
+128 PID-sorted rows and 12 KiB. During a fresh, explicitly consented process-metrics
+capture, an already-enumerated sender-process row is retained through the inventory
+row/byte caps, the metrics cap and later network/startup frame refits. The sampler
+reads that admitted process first within the unchanged five-second budget, then
+the remaining PIDs deterministically; serialized rows remain PID-sorted. Trimming
+removes the highest non-self PID. Ordinary inventory-only paths retain their
+existing highest-PID trimming. Missing self is never fabricated, and an admitted
+self row plus the minimum envelope that cannot fit fails closed. Original counts,
+capture times, denied/unavailable values and partial labels remain truthful.
+For a full frame, complete volume rows may additionally be trimmed enough to retain
+the metrics envelope and admitted self row, followed by non-self metrics-row trimming. The whole frame remains 72 KiB. Unknown/duplicate fields,
 wrong scopes/generation, unlisted PIDs, null extensions, contradictory values and
 invalid timestamps fail closed. Updated managers are required before enabling;
 never reset a sender ledger to bypass an older manager's rejection.

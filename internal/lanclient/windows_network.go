@@ -61,9 +61,9 @@ func appendWindowsNetwork(ctx context.Context, m Material, f frame, c windowsnet
 					return frame{}, nil, ErrObservation
 				}
 				f.WindowsVolumes = &v
-			} else if f.WindowsProcessMetrics != nil && len(f.WindowsProcessMetrics.Rows) > 0 {
+			} else if f.WindowsProcessMetrics != nil && canTrimProcessMetricRows(*f.WindowsProcessMetrics, processMetricSelfPID(ctx)) {
 				raw, _ := json.Marshal(f.WindowsProcessMetrics)
-				v, e := windowsprocessmetrics.FitBudget(*f.WindowsProcessMetrics, len(raw)-1)
+				v, e := windowsprocessmetrics.FitBudgetWithSelfPID(*f.WindowsProcessMetrics, len(raw)-1, processMetricSelfPID(ctx))
 				if e != nil {
 					return frame{}, nil, ErrObservation
 				}
