@@ -24,7 +24,7 @@ func TestRemovalFailureEveryStepPreservesCauseAndMutationCounts(t *testing.T) {
 				return windowsservice.Receipt{}, nil
 			}, inspectOwned: func(context.Context, windowsservice.Receipt) (windowsservice.Snapshot, error) {
 				ownedCalls++
-				if ownedCalls == 1 && failure == "owned" || ownedCalls > 1 && !deleted && failure == "stop-observe" || deleted && failure == "absence-owned" {
+				if ownedCalls == 1 && failure == "owned" || ownedCalls > 1 && !deleted && failure == "stop-observe" {
 					return windowsservice.Snapshot{}, sentinel
 				}
 				state := windowsservice.Running
@@ -55,11 +55,15 @@ func TestRemovalFailureEveryStepPreservesCauseAndMutationCounts(t *testing.T) {
 					return windowsservice.ApplyResult{}, nil
 				}
 				return windowsservice.ApplyResult{Requested: true, DeletePending: true, StateRetained: true}, nil
-			}, inspect: func(context.Context) (windowsservice.Snapshot, error) {
+			}, inspectRemoval: func(context.Context, windowsservice.Receipt) (windowsservice.Snapshot, error) {
 				if failure == "absence-inspect" {
 					return windowsservice.Snapshot{}, sentinel
 				}
-				return windowsservice.Snapshot{Exists: true}, nil
+				state := windowsservice.Stopped
+				if failure == "absence-owned" {
+					state = windowsservice.Running
+				}
+				return windowsservice.Snapshot{Exists: true, State: state}, nil
 			}, pending: func(error) bool { return false }, wait: func(context.Context) error { return sentinel }}
 			err := setupWizardUninstall(context.Background(), steps, func(string) {})
 			r, ok := err.(*removalFailure)
@@ -97,7 +101,9 @@ func TestRemovalFailureCancellationAndPrivateFormatting(t *testing.T) {
 	hit := func() error { t.Fatal("callback after cancellation"); return nil }
 	s := setupWizardRemovalSteps{receipt: func() (windowsservice.Receipt, error) { return windowsservice.Receipt{}, hit() }, inspectOwned: func(context.Context, windowsservice.Receipt) (windowsservice.Snapshot, error) {
 		return windowsservice.Snapshot{}, hit()
-	}, inspect: func(context.Context) (windowsservice.Snapshot, error) { return windowsservice.Snapshot{}, hit() }, stop: func(context.Context, windowsservice.Receipt) (windowsservice.ApplyResult, error) {
+	}, inspectRemoval: func(context.Context, windowsservice.Receipt) (windowsservice.Snapshot, error) {
+		return windowsservice.Snapshot{}, hit()
+	}, stop: func(context.Context, windowsservice.Receipt) (windowsservice.ApplyResult, error) {
 		return windowsservice.ApplyResult{}, hit()
 	}, remove: func(context.Context, windowsservice.Receipt) (windowsservice.ApplyResult, error) {
 		return windowsservice.ApplyResult{}, hit()
@@ -148,12 +154,12 @@ func TestRemovalSequencePendingStatesAndFailureWaitKeepSingleMutation(t *testing
 				deleteCalls++
 				return windowsservice.ApplyResult{Requested: true, DeletePending: true, StateRetained: true}, nil
 			},
-			inspect: func(context.Context) (windowsservice.Snapshot, error) {
+			inspectRemoval: func(context.Context, windowsservice.Receipt) (windowsservice.Snapshot, error) {
 				inspectCalls++
 				if inspectCalls < 3 {
 					return windowsservice.Snapshot{}, pendingError
 				}
-				return windowsservice.Snapshot{Exists: inspectCalls == 3}, nil
+				return windowsservice.Snapshot{Exists: inspectCalls == 3, State: windowsservice.Stopped}, nil
 			},
 			pending: func(err error) bool { return err == pendingError },
 			wait: func(context.Context) error {

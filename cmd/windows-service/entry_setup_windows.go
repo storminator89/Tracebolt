@@ -97,8 +97,8 @@ func main() {
 	}
 	hooks.Uninstall = func(ctx context.Context, progress func(string)) error {
 		err := setupWizardUninstall(ctx, setupWizardRemovalSteps{
-			receipt: func() (windowsservice.Receipt, error) { r, e := loadReceipt(); return r.Service, e }, inspectOwned: windowsservice.InspectOwned, inspect: windowsservice.Inspect, stop: windowsservice.ApplyStop, remove: windowsservice.ApplyUninstall,
-			pending: func(err error) bool { return errors.Is(err, windows.ERROR_SERVICE_MARKED_FOR_DELETE) },
+			receipt: func() (windowsservice.Receipt, error) { r, e := loadReceipt(); return r.Service, e }, inspectOwned: windowsservice.InspectOwned, inspectRemoval: windowsservice.InspectRemoval, stop: windowsservice.ApplyStop, remove: windowsservice.ApplyUninstall,
+			pending: func(err error) bool { return windowsservice.CanWaitRemovalObservation(err) && setupRemovalPending(err) },
 			wait: func(ctx context.Context) error {
 				t := time.NewTimer(250 * time.Millisecond)
 				defer t.Stop()

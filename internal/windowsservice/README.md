@@ -55,7 +55,7 @@ verification, artifact placement and protected durable installation records. It
 must persist a create intent before `ApplyInstall(ctx, plan)`. The plan's random
 installation ID and executable SHA-256 are stored as public metadata in the
 SCM description and returned in the receipt.
-Every subsequent operation requires the protected completed receipt and exact
+Every subsequent mutation requires the protected completed receipt and exact
 current configuration, SID, installation marker and resolved layout. Starting
 also rechecks the trusted executable hash.
 
@@ -72,6 +72,24 @@ is pending is rejected. `ApplyUninstall` requires a stopped, matching service an
 marks only the SCM object for deletion; other open handles can delay deletion.
 It does not stop the service implicitly or delete binaries/private state. The
 caller must observe absence separately before claiming deletion completed.
+
+`InspectRemoval(ctx, receipt)` is the read-only post-delete observation API. It
+validates the original completed receipt and resolved layout before opening SCM
+with query-only access. A still-present object must match every expected SCM
+configuration field, including its unique installation marker, and be stopped.
+Its trusted executable and receipt-bound hash are rechecked while it is present.
+The observation has no service SID: name-to-SID resolution can fail after a
+successful delete request while another open handle delays actual deletion.
+Only a missing service when opening it establishes absence; marked-for-deletion,
+access, query, mismatch, cancellation and handle-close failures cannot establish
+completion. Each observation handle is closed before return. This API does not
+authorize deletion or replace the strict SID/configuration/stopped checks before
+`ApplyUninstall`, ordinary ownership inspection, installation, startup or runtime
+identity validation. Private state and executable files remain untouched.
+`CanWaitRemovalObservation(error)` supplies the operational Open/query boundary;
+the caller must additionally establish a sole native marked-for-deletion cause.
+Close, cancellation and executable-verification failures cannot become retryable
+just because an error chain also contains a marked-for-deletion code.
 
 `Run(ctx, worker)` uses `golang.org/x/sys/windows/svc.Run` and validates the runtime
 token before calling the worker. It also checks the actual executable path,

@@ -133,6 +133,17 @@ var setupDiagnosticPairs = [...][2]string{
 	{"service_apply_stop_control", "failed"},
 	{"service_apply_delete", "failed"},
 	{"service_apply_stop_inspect", "failed"},
+	{"service_removal_context", "interrupted"},
+	{"service_removal_layout", "failed"},
+	{"service_removal_receipt", "mismatch"},
+	{"service_removal_open", "failed"},
+	{"service_removal_reader", "missing"},
+	{"service_removal_snapshot", "failed"},
+	{"service_removal_binding", "mismatch"},
+	{"service_removal_state", "not_stopped"},
+	{"service_removal_close", "failed"},
+	{"service_removal_executable", "failed"},
+	{"service_removal_hash", "changed"},
 }
 
 // SetupDiagnosticPairs returns a copy of the finite setup vocabulary in stable
