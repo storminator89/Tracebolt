@@ -191,11 +191,7 @@ func completeMVPProfile(t *testing.T, gate context.Context, profile string, bina
 			t.Fatal("complete operator request")
 		}
 		defer response.Body.Close()
-		limit := int64(192 << 10)
-		if overview && strings.HasSuffix(path, "/inventory/overview/query") {
-			limit = (256 << 10) + 1
-		}
-		bodyBytes, e := io.ReadAll(io.LimitReader(response.Body, limit))
+		bodyBytes, e := io.ReadAll(io.LimitReader(response.Body, 192<<10))
 		if e != nil {
 			t.Fatal("complete operator response")
 		}
@@ -432,7 +428,10 @@ func completeMVPProfile(t *testing.T, gate context.Context, profile string, bina
 	}
 	var firstOverview completeMVPOverviewObservation
 	if overview {
-		firstOverview = completeMVPOverviewRead(t, get, call, session.CSRFToken, c.AgentID)
+		query := func(input completeMVPOverviewQueryInput) (completeMVPOverviewPage, completeMVPOverviewQueryResult) {
+			return completeMVPOverviewQueryRead(run, operator, m.Config.OperatorOrigin, c.AgentID, session.CSRFToken, input, completeMVPOperatorWait)
+		}
+		firstOverview = completeMVPOverviewRead(t, get, query, c.AgentID)
 	}
 	firstCounters := completeMVPCounters(t, c.StateDirectory)
 	if firstCounters != progress.counters() || firstCounters[0] != first.metricSequence || firstCounters[1] != first.systemSequence || firstCounters[2] == 0 {
@@ -645,4 +644,9 @@ func completeMVPCounters(t *testing.T, state string) [3]uint64 {
 // the opt-in native gate or starts a source, binary, listener, or state domain.
 func TestCompleteMVPOverviewMarkerCaller(t *testing.T) {
 	t.Run("inert", func(t *testing.T) { completeMVPOverviewMarkerProbe(t) })
+}
+
+// Pure caller-prefix probe for finite diagnostics, with no native gate activity.
+func TestCompleteMVPOverviewQueryDiagnosticMarkerCaller(t *testing.T) {
+	t.Log(completeMVPOverviewQueryDiagnostic("volumes", completeMVPOverviewQueryResult{status: http.StatusTooManyRequests, failure: "status", busy: true, retried: true}))
 }

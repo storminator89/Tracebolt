@@ -1,5 +1,5 @@
 {
-  "goSourceSha256": "fb23369992bc5aad085a425a901939602876cb1bef412baddf506636dc63c911",
+  "goSourceSha256": "c9e26f67c03bc20237337e6b16aae7313db0fb449f84debf906cf932d588cf31",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -114,6 +114,14 @@
       "TestCompleteMVPOverviewGateSelection",
       "TestCompleteMVPOverviewMarkerCaller",
       "TestCompleteMVPOverviewPageEvidence",
+      "TestCompleteMVPOverviewQueryBodyBoundsAndFailures",
+      "TestCompleteMVPOverviewQueryCancellationAndParentDeadline",
+      "TestCompleteMVPOverviewQueryDiagnosticMarkerCaller",
+      "TestCompleteMVPOverviewQueryExactBusyThenPage",
+      "TestCompleteMVPOverviewQueryRejectsAmbiguousBackoff",
+      "TestCompleteMVPOverviewQueryRejectsNonRetryableResponses",
+      "TestCompleteMVPOverviewQueryStopsAfterOneRetry",
+      "TestCompleteMVPOverviewQueryTransportAndDiagnosticPrivacy",
       "TestCompleteMVPOverviewRetainedAge",
       "TestCompleteMVPPendingApprovalNativeRestart",
       "TestCompleteMVPPositiveEvidence",
@@ -1370,6 +1378,7 @@
       "TestCompleteOverviewMaintenanceReclaimsAfterRevocationAndExpiry",
       "TestCompleteOverviewMaintenanceRequiresTrustedBindingAfterRevocation",
       "TestCompleteOverviewMissingRetryCannotCreateBeforeExpiry",
+      "TestCompleteOverviewPageSharedAdmissionBackpressure",
       "TestCompleteOverviewPostCommitBoundaryAndClockRollback",
       "TestCompleteOverviewPostCommitGETRejectsStaleLabels",
       "TestCompleteOverviewProcessCommWireStoreRoundTrip",

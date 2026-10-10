@@ -25,6 +25,20 @@ npm audit --omit=dev
 npm audit
 ```
 
+The main test command first checks that Vitest discovers every default test file
+exactly once. An explicit list of 26 DOM-free contract, clock and utility files in
+`test-environments.json` runs under Node; all other tests, including new files,
+remain in jsdom. Both projects inherit the same setup and React configuration.
+No assertions, test cases, per-test timeouts or worker limits are removed or relaxed.
+
+Run `npm run test:environments` for the fast discovery guard and its synthetic
+self-tests. Use `npm test -- --maxWorkers=1` for the same bounded main aggregate
+as CI. `npm run test:watch` keeps both environment projects available in watch mode.
+Before moving another file to Node, verify its complete assertion identities and
+results in both environments, then run the full aggregate, type check, independent
+UI regressions and production build. Browser behavior stays covered by jsdom and
+the separate real-browser acceptance gate.
+
 All fonts/icons are installed dependencies served locally; no CDN or remote font request. The explicit language preference (English unless German is chosen), dark/light theme and one saved inventory view persist in local browser storage. UI labels, errors, status and dates are localized; collected evidence, notes and model output retain their original text. CSV export neutralizes formula-leading cells. Notes validate the backend's 2000 UTF-8 byte limit. Dynamic strings are rendered as React text, not HTML.
 
 ### Selected package-update workflow: simulation only
