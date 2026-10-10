@@ -94,9 +94,21 @@ updating the manager.
 | --- | --- |
 | [<img src="docs/screenshots/2026-10-10-windows-parity/windows-cached-updates.png" width="660" alt="Tracebolt cached Windows Updates with invented update rows and explicit unknown cache freshness">](docs/screenshots/2026-10-10-windows-parity/windows-cached-updates.png) | [<img src="docs/screenshots/2026-10-10-windows-parity/windows-mobile-de.png" width="220" alt="German mobile Windows device overview with invented inventory data">](docs/screenshots/2026-10-10-windows-parity/windows-mobile-de.png) |
 
-*Actual 10 October source-preview captures with invented Windows data. These
-images show no selected event messages or native Windows acceptance.
-[Inventory screenshot and exact-source provenance](docs/screenshots/2026-10-10-windows-parity/README.md).*
+*Actual 10 October source-preview captures with invented Windows data.
+[Inventory screenshot and exact-source provenance](docs/screenshots/2026-10-10-windows-parity/README.md). Native Windows acceptance remains separate.*
+
+![Tracebolt selected Windows event messages with invented text, original expiry and partial availability](docs/screenshots/2026-10-10-windows-parity/windows-selected-messages.png)
+
+*Selected Windows event messages, unreleased source preview with invented data.
+Original expiry and per-record availability stay visible.
+[Exact source and fixture boundaries](docs/screenshots/2026-10-10-windows-parity/README.md#selected-windows-event-messages).*
+
+![Tracebolt Windows CPU health policy with an invented open incident, explicit threshold and original observation times](docs/screenshots/2026-10-10-windows-parity/windows-health-policy.png)
+
+*Windows CPU health policy, an unreleased source candidate in
+[PR #31](https://github.com/storminator89/Tracebolt/pull/31), shown with invented data.
+This separate implementation is not part of the published Windows preview.
+[Exact source and fixture boundaries](docs/screenshots/2026-10-10-windows-parity/README.md#windows-health-policy).*
 
 ## Platform support
 

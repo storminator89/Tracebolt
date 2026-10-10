@@ -1,0 +1,38 @@
+{
+  "sourceCommit": "9a1913066ab9811a6a69b4b039d7b416bce249a6",
+  "sourceTree": "12d3dfae06d256ff8f213f54ca7b5992d2a75dbe",
+  "reviewedHead": "103e1d7100e9517d4072c8dcf441dce75e8f1983",
+  "workflowRun": 38091744846,
+  "workflowAttempt": 1,
+  "workflowConclusion": "success",
+  "artifactId": 11685055808,
+  "artifactName": "ui-review-9a1913066ab9811a6a69b4b039d7b416bce249a6",
+  "artifactSHA256": "ae94e05d5ae7cb2be9af4ad0cc7a62703d3ae666e714ceb2f259f16dd6e9896c",
+  "sourceManifest": "lan-browser-manifest.json",
+  "sourceManifestSHA256": "d5f49be5f94c2b6e58acb92699152f9ceb540e84617d7b64f1850ef62f1eae3b",
+  "sourceResults": "lan-browser-results.json",
+  "sourceResultsSHA256": "494ba5db0e98cac6982956116fa9182c272ff1e38c2484d3d0b660f87a7e820d",
+  "sourceResultsSummary": {
+    "passed": 26,
+    "failed": 0,
+    "setupFailure": false
+  },
+  "screenshots": [
+    {
+      "file": "windows-selected-messages.png",
+      "sourceSha": "9a1913066ab9811a6a69b4b039d7b416bce249a6",
+      "publicSafe": true,
+      "fullPage": false,
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "locale": "en",
+      "fixtureDisclosure": "Invented selected Windows messages through the production UI and real session/CSRF reads. UI-only fixture evidence; no native event read, local grant, host changes, AI call or external request.",
+      "test": "Synthetic Windows inventory shares device charts and explicit enrollment consent without Linux reads",
+      "originalFile": "synthetic-windows-selected-messages-1440-en.png",
+      "sha256": "09b95db006020c04f9a6ee5d880874751a1de63b06a28fbbf8b7b63bead66bc3",
+      "bytes": 121068
+    }
+  ]
+}
