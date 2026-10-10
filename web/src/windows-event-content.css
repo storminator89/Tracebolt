@@ -1,0 +1,13 @@
+.windows-event-content{border-top:1px solid var(--line);margin-top:28px;padding-top:24px;font-size:13px;line-height:1.6;min-width:0;overflow-wrap:anywhere}
+.windows-event-content h2{font-size:17px;margin:0}.windows-event-content h3{font-size:15px}.windows-event-content h4{font-size:13px;margin:0}
+.windows-event-content-warning{border-left:3px solid var(--accent);padding:10px 14px;background:var(--bg);border-radius:4px}
+.windows-event-content-actions{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:14px 0}
+.windows-event-content-review{min-width:0;margin:18px 0;border:1px solid var(--line);border-radius:8px;padding:18px}
+.windows-event-content-review legend{font-weight:600;padding:0 6px}.windows-event-content-review ol{padding-left:24px}.windows-event-content-review li{padding:8px 0}.windows-event-content-review li>*{display:block}
+.windows-event-content-review label{display:flex;align-items:flex-start;gap:10px;margin:14px 0}.windows-event-content input[type=checkbox],.windows-logs input[type=checkbox]{width:18px;height:18px;flex-shrink:0;accent-color:var(--accent)}
+.windows-event-content-window{font-size:12px;color:var(--secondary)}.windows-event-content-window p{margin:5px 0}
+.windows-event-content-result>label{display:flex;flex-direction:column;gap:6px;max-width:560px}.windows-event-content input[type=search]{min-height:40px;padding:9px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--text);font:inherit;min-width:0}
+.windows-event-content-result article{padding:16px 0;border-top:1px solid var(--line);margin-top:16px;min-width:0}.windows-event-content-result article>p{font-size:12px;color:var(--secondary)}
+.windows-event-message{white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word;unicode-bidi:plaintext;tab-size:4;font:12px/1.6 ui-monospace,monospace;background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:14px;max-height:360px;overflow:auto;max-width:100%}
+.windows-event-content :is(input,button):focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+@media(max-width:640px){.windows-event-content-actions button{min-height:44px;flex:1 1 180px}.windows-event-content-review{padding:12px}.windows-event-content .windows-inventory-section-header{align-items:flex-start;gap:12px;flex-wrap:wrap}.windows-event-content .windows-inventory-section-header button{min-height:44px}.windows-event-message{padding:10px}}

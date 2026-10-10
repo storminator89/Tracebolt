@@ -45,6 +45,7 @@ type prepared struct {
 	operatorTLS, agentTLS *tls.Config
 	close                 func()
 	maintenance           *enrollmentservice.Service
+	windowsMaintenance    *enrollmentservice.Service
 	health                *api.Server
 	alarms                *alarmdelivery.Settings
 	applicationChecks     *applicationcheck.Settings
@@ -115,6 +116,9 @@ func prepareWithApplicationChecks(m lanconfig.Material, enrollment *enrollmentco
 		if enrolledStore != nil {
 			enrolledStore.Close()
 		}
+		if windowsService != nil {
+			windowsService.CloseWindowsEventContent()
+		}
 		if windowsStore != nil {
 			windowsStore.Close()
 		}
@@ -162,8 +166,14 @@ func prepareWithApplicationChecks(m lanconfig.Material, enrollment *enrollmentco
 		if err != nil {
 			return fail(err)
 		}
+		if err = windowsService.InitializeWindowsEventContent(context.Background()); err != nil {
+			return fail(err)
+		}
 		windowsIngress, err = enrollmenttransport.New(windowsStore, enrollment.Issuer().IssuerDER(), c.AgentOrigin, windowsService.JournalCache())
 		if err != nil {
+			return fail(err)
+		}
+		if err = windowsIngress.ConfigureWindowsEventContent(windowsService.WindowsEventCache()); err != nil {
 			return fail(err)
 		}
 	}
@@ -264,6 +274,9 @@ func prepareWithApplicationChecks(m lanconfig.Material, enrollment *enrollmentco
 			if enrolledStore != nil {
 				enrolledStore.Close()
 			}
+			if windowsService != nil {
+				windowsService.CloseWindowsEventContent()
+			}
 			if windowsStore != nil {
 				windowsStore.Close()
 			}
@@ -340,7 +353,7 @@ func prepareWithApplicationChecks(m lanconfig.Material, enrollment *enrollmentco
 	if windowsIngress != nil {
 		agent = withWindowsIngress(agent, windowsIngress)
 	}
-	return &prepared{operator: operator, agent: agent, operatorTLS: operatorTLS, agentTLS: agentTLS, close: closeAll, maintenance: enrolledService, health: app, alarms: alarmWorker, applicationChecks: applicationChecks}, nil
+	return &prepared{operator: operator, agent: agent, operatorTLS: operatorTLS, agentTLS: agentTLS, close: closeAll, maintenance: enrolledService, windowsMaintenance: windowsService, health: app, alarms: alarmWorker, applicationChecks: applicationChecks}, nil
 }
 
 func server(handler http.Handler) *http.Server {
@@ -422,6 +435,17 @@ func runWithApplicationChecks(ctx context.Context, m lanconfig.Material, enrollm
 			defer close(maintenanceDone)
 			_ = p.maintenance.RunInventoryMaintenance(maintenanceCtx, func() {
 				log.Print("Complete inventory maintenance is unavailable; retained observations are preserved.")
+			})
+		}()
+		defer func() { stopMaintenance(); <-maintenanceDone }()
+	}
+	if p.windowsMaintenance != nil {
+		maintenanceCtx, stopMaintenance := context.WithCancel(ctx)
+		maintenanceDone := make(chan struct{})
+		go func() {
+			defer close(maintenanceDone)
+			_ = runWindowsEventMaintenance(maintenanceCtx, p.windowsMaintenance, func() {
+				log.Print("Windows event-content maintenance is unavailable; content access remains restricted.")
 			})
 		}()
 		defer func() { stopMaintenance(); <-maintenanceDone }()

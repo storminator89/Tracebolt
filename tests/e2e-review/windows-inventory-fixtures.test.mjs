@@ -1,7 +1,45 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import {remountWindowsDevice,settleWindowsHistory,windowsBrowserFixture,windowsInventoryFixtureDisclosure,windowsInventoryFailureStage} from './windows-inventory-browser.mjs';
+import {remountWindowsDevice,settleWindowsHistory,windowsBrowserFixture,windowsInventoryFixtureDisclosure,windowsInventoryFailureStage,windowsFixtureSessionExpiry} from './windows-inventory-browser.mjs';
+function fixtureSessionRead({status=200,value={authenticated:true,serverNow:'2026-10-10T12:00:00Z',expiresAt:'2026-10-10T12:20:00Z',csrfToken:'PRIVATE_INERT_SESSION_VALUE'},fetchFailure=false,bodyFailure=false,disposeFailure=false}={}){
+ const calls=[],response={status:()=>status,async json(){calls.push('json');if(bodyFailure)throw new Error('PRIVATE_INERT_BODY_FAILURE');return value;},async dispose(){calls.push('dispose');if(disposeFailure)throw new Error('PRIVATE_INERT_DISPOSE_FAILURE');}};
+ return {calls,page:{request:{async get(url,options){calls.push({url,options});if(fetchFailure)throw new Error('PRIVATE_INERT_REQUEST_FAILURE');return response;}}}};
+}
+test('Windows fixture session expiry uses one awaited cookie-sharing read and retains only the original expiry',async()=>{
+ const f=fixtureSessionRead(),expiry=await windowsFixtureSessionExpiry(f.page,'http://127.0.0.1:19886');
+ assert.equal(expiry,'2026-10-10T12:20:00Z');
+ assert.deepEqual(f.calls,[{url:'http://127.0.0.1:19886/api/auth/session',options:{maxRedirects:0,timeout:5000}},'json','dispose']);
+ assert.equal(JSON.stringify(expiry).includes('PRIVATE_INERT'),false);
+ const source=fs.readFileSync(new URL('./windows-inventory-browser.mjs',import.meta.url),'utf8');
+ assert.match(source,/await login\(page\);eventSessionExpires=await windowsFixtureSessionExpiry\(page,base\)/);
+ assert.doesNotMatch(source,/page\.on\('response'/);
+ assert.equal((source.match(/eventSessionExpires=/g)||[]).length,2,'one initial null and one awaited assignment only');
+});
+test('Windows fixture session read rejects redirected or unauthenticated status without reading a body',async()=>{
+ for(const status of [201,204,301,302,307,401,403,500]){
+  const f=fixtureSessionRead({status});await assert.rejects(windowsFixtureSessionExpiry(f.page,'http://127.0.0.1:19886'),{message:'Windows fixture session expiry unavailable'});
+  assert.equal(f.calls.length,2);assert.equal(f.calls[1],'dispose');
+ }
+});
+test('Windows fixture session read requires authenticated finite future expiry without fallback',async()=>{
+ const valid={authenticated:true,serverNow:'2026-10-10T12:00:00Z',expiresAt:'2026-10-10T12:20:00Z'};
+ for(const value of [null,{}, {...valid,authenticated:false},{...valid,authenticated:'true'},{...valid,expiresAt:null},{...valid,expiresAt:'invalid'},{...valid,serverNow:'invalid'},{...valid,serverNow:null},{...valid,expiresAt:valid.serverNow},{...valid,expiresAt:'2026-10-10T11:59:59Z'}]){
+  const f=fixtureSessionRead({value});await assert.rejects(windowsFixtureSessionExpiry(f.page,'http://127.0.0.1:19886'),{message:'Windows fixture session expiry unavailable'});
+  assert.deepEqual(f.calls.slice(1),['json','dispose']);
+ }
+});
+test('Windows fixture session read rejects every non-exact loopback origin before making a request',async()=>{
+ for(const base of ['https://127.0.0.1:19886','http://example.invalid','http://localhost:19886','http://127.0.0.1:19886/other','http://user:password@127.0.0.1:19886','not a URL']){
+  const f=fixtureSessionRead();await assert.rejects(windowsFixtureSessionExpiry(f.page,base),{message:'Windows fixture session expiry unavailable'});assert.deepEqual(f.calls,[]);
+ }
+});
+test('Windows fixture session transport and body failures stay awaited, finite and never retry',async()=>{
+ for(const options of [{fetchFailure:true},{bodyFailure:true},{disposeFailure:true}]){
+  const f=fixtureSessionRead(options);await assert.rejects(windowsFixtureSessionExpiry(f.page,'http://127.0.0.1:19886'),{message:'Windows fixture session expiry unavailable'});
+  assert.equal(f.calls.filter(x=>typeof x==='object').length,1);assert.equal(f.calls.filter(x=>x==='dispose').length,options.fetchFailure?0:1);
+ }
+});
 test('invented Windows views preserve finite scope, truncation and denied distinction',()=>{
  const now='2026-10-07T12:00:10Z',fresh=windowsBrowserFixture(now),stale=windowsBrowserFixture(now,'stale');
  assert.equal(fresh.events.scope,'windows-application-system-event-headers-v1');assert.equal(fresh.events.channels[0].rows[0].recordId,'18446744073709551615');assert.equal(fresh.events.channels[1].quality,'denied');assert.equal(stale.events.collectedAt,stale.snapshot.collectedAt);
@@ -200,3 +238,6 @@ import './windows-os-provenance-fixtures.test.mjs';
 
 // Cached update source/hosted-helper contracts use this same existing CI gate.
 import './windows-updates-fixtures.test.mjs';
+
+// Selected event-content source contracts extend the same explicit CI entry.
+import './windows-event-content-fixtures.test.mjs';

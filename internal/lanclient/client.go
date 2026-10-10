@@ -52,6 +52,7 @@ type receipt struct {
 	Duplicate     bool      `json:"duplicate"`
 }
 type Report struct {
+	WindowsEventContentStatus   string `json:"windowsEventContentStatus,omitempty"`
 	CachedUpdatesStatus         string `json:"cachedUpdatesStatus,omitempty"`
 	CachedUpdatesSequence       uint64 `json:"cachedUpdatesSequence,omitempty"`
 	CachedUpdatesOperations     uint8  `json:"cachedUpdatesOperations,omitempty"`
@@ -119,7 +120,13 @@ func Run(ctx context.Context, m Material) (Report, error) {
 	if inventory == nil {
 		// Preserve the preexisting one-shot caller-context contract. Legacy
 		// foreground attempts retain their original20s budget separately.
-		return runUsingState(ctx, m, state)
+		events := openWindowsEventContentSender(m)
+		defer events.Close()
+		report, err := runUsingState(ctx, m, state)
+		if ctx.Err() == nil {
+			report.WindowsEventContentStatus = runWindowsEventContentAttempt(ctx, events)
+		}
+		return report, err
 	}
 	updates, e := openCompleteUpdatesSender(m)
 	if e != nil {

@@ -25,6 +25,7 @@
     "device-inventory-browser-contracts.test.mjs",
     "health-dashboard-browser.test.mjs",
     "service-action-display-fixtures.test.mjs",
+    "windows-event-content-fixtures.test.mjs",
     "windows-health-fixtures.test.mjs",
     "windows-logs-diagnostics.test.mjs",
     "windows-logs-fixtures.test.mjs",

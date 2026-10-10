@@ -1,15 +1,17 @@
-# Selected Windows event content request foundation
+# Selected Windows event content request contract
 
-This is an **unwired source foundation**, paired with the bounded
-[event-message reader](windows-event-content.md). It does not add a manager
-route, local grant command, installed-service read, dashboard button or native
-acceptance. Existing headers and the five-scope Windows Setup remain unchanged.
+This is the pure request contract paired with the bounded
+[event-message reader](windows-event-content.md). The newer
+[runtime](windows-event-content-runtime.md), [manager](windows-event-content-manager.md)
+and [wire](windows-event-content-wire.md) implement its integration responsibilities.
+Those are source candidates, not published-preview features or native acceptance.
+Existing headers and the five-scope Windows Setup remain unchanged.
 
-`internal/windowseventrequest` defines the next boundary without putting message
+`internal/windowseventrequest` defines the independent boundary without putting message
 content in the durable Windows telemetry frame. Its pure state machine models
 pending, claimed, accepted, canceled and expired work. It does not open a source,
 write consent, commit a consumed marker or prove that an operator has approved a
-request. Those are mandatory integration responsibilities below.
+request. Those responsibilities belong to the runtime and manager, not this pure package.
 
 ## Independent consent and exact selection
 

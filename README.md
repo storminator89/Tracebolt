@@ -31,8 +31,9 @@ dashboard with light and dark themes.
 Each feature depends on its platform and approved scope. Unavailable, partial and
 stale observations stay visible. Windows event headers contain no message bodies.
 The published preview has no Windows Update/CVE assessment. The current source
-adds separately consented [cached Windows Update inspection](docs/windows-update-runtime.md);
-its installed-service/native acceptance remains pending. AI provider/data approval is
+adds separately consented [cached Windows Update inspection](docs/windows-update-runtime.md)
+and [selected event messages](docs/windows-event-content-runtime.md); both still
+need installed-service/native acceptance. AI provider/data approval is
 separate, and suggestions remain unconfirmed.
 
 ![Tracebolt Linux log workspace with service selection and time-window controls](docs/screenshots/2026-10-09-main-ui/log-workspace.png)
@@ -84,9 +85,10 @@ The accepted hosted Windows Server 2025 subset does not prove Windows 10/11,
 reboot, upgrade or ARM64 support. Do not use the Linux installation command on Windows.
 
 Newer source work is tracked in the [Linux/Windows parity matrix](docs/windows-linux-parity.md).
-Cached Update inspection is a separate default-off source candidate; event-message
-foundations are not yet a working dashboard feature. Neither is added to the
-published preview by updating the manager.
+Cached Update inspection and exact selected event messages are separate default-off
+source candidates wired into Updates and Logs. Their source/fixture evidence is
+separate from native acceptance. Neither is added to the published preview by
+updating the manager.
 
 ## Platform support
 

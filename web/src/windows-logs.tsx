@@ -1,10 +1,13 @@
-import { useEffect, useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { AUTH_REQUIRED_EVENT } from './api';
 import { useLocale } from './i18n';
 import { fullDate } from './utils';
 import type { WindowsInventoryResource } from './windows-inventory-resource';
 import type { WindowsEvent, WindowsEventChannel } from './windows-events-types';
 import './windows-logs.css';
+import { useWindowsEventContent } from './windows-event-content-resource';
+import { WindowsEventContentPanel } from './windows-event-content';
+import { validSelectedEvent } from './windows-event-content-types';
 
 const PAGE_SIZE = 10;
 type Header = WindowsEvent & { channel: WindowsEventChannel['channel'] };
@@ -21,10 +24,13 @@ function newestFirst(a: Header, b: Header): number {
 
 /** Browse the already accepted header sample only. No source query, retained
  * history, content collection, grant, export or private row cache is added. */
-export function WindowsLogsPanel({ resource }: { resource: WindowsInventoryResource }) {
+export function WindowsLogsPanel({ resource, contentAccess }: { resource: WindowsInventoryResource; contentAccess?: { deviceId: string; admin: boolean; insecure: boolean; sessionKey: string | null } }) {
     const [locale] = useLocale(), de = locale === 'de', filterId = useId();
     const [savedFilters, setFilters] = useState(initialFilters);
     const [page, setPage] = useState({ generation: '', index: 0 });
+    const content = useWindowsEventContent(contentAccess?.deviceId ?? '', Boolean(contentAccess?.admin), contentAccess?.insecure ?? false, contentAccess?.sessionKey ?? null);
+    const [selected, setSelected] = useState<Header[]>([]);
+    const priorHeader = useRef('');
     const clear = () => { setFilters(initialFilters); setPage({ generation: '', index: 0 }); };
     useEffect(() => {
         const hide = () => { if (document.visibilityState === 'hidden') clear(); };
@@ -36,6 +42,12 @@ export function WindowsLogsPanel({ resource }: { resource: WindowsInventoryResou
     // same render as terminal sample loss, and discard it after that render.
     const filters = events || resource.loading ? savedFilters : initialFilters;
     useEffect(() => { if (!events && !resource.loading) clear(); }, [events, resource.loading]);
+    const headerKey = events ? `${events.grantId}:${events.generationId}:${events.collectedAt}` : resource.loading ? priorHeader.current : '';
+    const activeContent = Boolean(content.busy === 'create' || content.uncertain || content.view?.request && ['pending', 'claimed', 'accepted'].includes(content.view.request.state));
+    useEffect(() => { if (headerKey !== priorHeader.current) { if (priorHeader.current && (!activeContent || !events && !resource.loading)) content.discard(); priorHeader.current = headerKey; setSelected([]); } }, [headerKey]);
+    useEffect(() => { setSelected([]); }, [content.reset]);
+    const canSelect = Boolean(contentAccess?.admin && events && content.view?.configured && content.view.localStatus === 'enabled' && content.view.capability?.enabled && content.view.headers?.generationId === events.generationId && content.view.headers.collectedAt === events.collectedAt && !content.busy && !content.uncertain && !['pending', 'claimed', 'accepted'].includes(content.view.request?.state ?? ''));
+    const toggle = (row: Header) => { if (!canSelect || !validSelectedEvent(row)) return; setSelected(old => old.some(e => e.channel === row.channel && e.recordId === row.recordId) ? old.filter(e => e.channel !== row.channel || e.recordId !== row.recordId) : old.length < 16 ? [...old, { ...row }] : old); };
     const expired = !resource.loading && !resource.error && !events && Boolean(resource.view?.events);
     const state = resource.error === 'session' ? (de ? 'Sitzung beendet. Zum Lesen erneut anmelden.' : 'Session ended. Sign in again to read headers.') : resource.error ? (de ? 'Ereignisköpfe nicht verfügbar. Erneut aktualisieren.' : 'Event headers unavailable. Refresh to try again.') : resource.loading ? (de ? 'Ereignisstichprobe wird geprüft …' : 'Checking the event sample…') : resource.status === 'revoked' ? (de ? 'Gerätefreigabe beendet.' : 'Device access ended.') : expired ? (de ? 'Ereignisstichprobe abgelaufen. Auf eine neue Endpunktmeldung warten.' : 'Event sample expired. Wait for a new endpoint report.') : !events ? (de ? 'Keine aktuelle Ereigniskopf-Stichprobe gemeldet.' : 'No current event-header sample reported.') : resource.eventsStale ? (de ? 'Veraltete Stichprobe. Der aktuelle Zustand ist unbekannt.' : 'Stale sample. Current conditions are unknown.') : (de ? 'Neueste gemeldete Stichprobe' : 'Latest reported sample');
     const levels = [de ? 'Unbekannt / reserviert' : 'Unknown / reserved', de ? 'Kritisch' : 'Critical', de ? 'Fehler' : 'Error', de ? 'Warnung' : 'Warning', 'Information', de ? 'Ausführlich' : 'Verbose'];
@@ -71,8 +83,8 @@ export function WindowsLogsPanel({ resource }: { resource: WindowsInventoryResou
         <p id="windows-logs-filter-scope" className="windows-inventory-count">{de ? 'Provider: wörtlicher Teiltext · Ereignis-ID: exakter Wert · neueste Ereigniszeit zuerst' : 'Provider: literal text match · event ID: exact value · newest event time first'}</p>
         {!validId && <p id="windows-logs-id-error" role="alert">{de ? 'Ereignis-ID von 0 bis 65535 eingeben.' : 'Enter an event ID from 0 to 65535.'}</p>}
         {events && (rows.length === 0 ? <p className="windows-inventory-empty">{events.channels.every(channel => channel.rows.length === 0) ? (de ? 'Keine Ereignisköpfe in dieser Stichprobe. Das belegt keinen fehlerfreien Zustand.' : 'No event headers in this sample. This does not establish a healthy system.') : (de ? 'Keine Köpfe dieser Stichprobe passen zu den Filtern.' : 'No headers in this sample match these filters.')}</p> : <>
-            <div className="windows-inventory-table-wrap"><table className="windows-inventory-table"><caption className="sr-only">{de ? 'Gefilterte Ereigniskopf-Stichprobe' : 'Filtered event-header sample'}</caption><thead><tr>{columns.map(label => <th scope="col" key={label}>{label}</th>)}</tr></thead><tbody>{rows.slice(index * PAGE_SIZE, (index + 1) * PAGE_SIZE).map(row => <tr key={`${row.channel}:${row.recordId}`}>
-                <td data-label={columns[0]}><time dateTime={row.timestamp}>{fullDate(row.timestamp)}</time></td><td data-label={columns[1]}>{row.channel}</td><td data-label={columns[2]}>{levels[row.level] ?? levels[0]} ({row.level})</td><td data-label={columns[3]}>{row.provider}</td><td data-label={columns[4]}>{row.eventId}</td><td data-label={columns[5]}>{row.recordId}</td>
+            <div className="windows-inventory-table-wrap"><table className="windows-inventory-table"><caption className="sr-only">{de ? 'Gefilterte Ereigniskopf-Stichprobe' : 'Filtered event-header sample'}</caption><thead><tr>{contentAccess && <th scope="col">{de ? 'Auswahl' : 'Select'}</th>}{columns.map(label => <th scope="col" key={label}>{label}</th>)}</tr></thead><tbody>{rows.slice(index * PAGE_SIZE, (index + 1) * PAGE_SIZE).map(row => <tr key={`${row.channel}:${row.recordId}`}>
+                {contentAccess && <td data-label={de ? 'Auswahl' : 'Select'}><input type="checkbox" aria-label={`${de ? 'Auswählen' : 'Select'} ${row.channel} ${row.recordId}`} checked={selected.some(e => e.channel === row.channel && e.recordId === row.recordId)} disabled={!canSelect || !validSelectedEvent(row) || selected.length >= 16 && !selected.some(e => e.channel === row.channel && e.recordId === row.recordId)} onChange={() => toggle(row)}/></td>}<td data-label={columns[0]}><time dateTime={row.timestamp}>{fullDate(row.timestamp)}</time></td><td data-label={columns[1]}>{row.channel}</td><td data-label={columns[2]}>{levels[row.level] ?? levels[0]} ({row.level})</td><td data-label={columns[3]}>{row.provider}</td><td data-label={columns[4]}>{row.eventId}</td><td data-label={columns[5]}>{row.recordId}</td>
             </tr>)}</tbody></table></div>
         </>)}
         <nav className="windows-logs-pages" hidden={!resource.loading && (!events || rows.length === 0)} aria-label={de ? 'Stichprobenseiten' : 'Sample pages'}>
@@ -81,5 +93,6 @@ export function WindowsLogsPanel({ resource }: { resource: WindowsInventoryResou
             <button type="button" className="button small" disabled={!resource.loading && !canNext} aria-disabled={!canNext} onClick={() => { if (canNext && events) setPage({ generation: events.generationId, index: index + 1 }); }}>{de ? 'Weiter' : 'Next'}</button>
         </nav>
         <details className="windows-inventory-scope"><summary>{de ? 'Umfang und Grenzen' : 'Scope and limits'}</summary><p>{de ? 'Application-/System-Köpfe aus der vorhandenen lokalen Freigabe. Keine Nachrichten, XML, Security-Logs oder KI-Übertragung. Aktualisieren prüft nur die neueste akzeptierte Meldung. Die Stichprobe ersetzt keine vollständige Ereignishistorie oder Health-Bewertung. Ereignisse können älter als die Erfassung sein.' : 'Application/System headers from the existing local grant. No messages, XML, Security logs or AI export. Refresh checks only the latest accepted report. The sample is not a complete event history or health assessment. Events may be older than the capture time.'}</p></details>
+        {contentAccess && <WindowsEventContentPanel key={activeContent ? `request:${content.reset}` : `${headerKey}:${content.reset}`} resource={events || resource.loading ? content : { ...content, view: null, report: null }} selected={events || resource.loading ? selected : []} headers={events} admin={contentAccess.admin} insecure={contentAccess.insecure} clearSelection={() => setSelected([])}/>}
     </section>;
 }

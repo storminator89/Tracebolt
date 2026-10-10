@@ -43,9 +43,13 @@ The unsigned x64 [v0.1.0-windows-preview.1](https://github.com/storminator89/Tra
 was published on 10 October 2026 from the exact accepted bytes above. This does
 not alter the baseline comparison below.
 
-- The [event-message reader](windows-event-content.md) and
-  [independent request contract](windows-event-content-request.md) are now source
-  foundations; on-demand durable consumption, transport and ephemeral UI remain.
+- [Selected event messages](windows-event-content-runtime.md) now have a separate
+  default-off source path through protected local consent, exact header selection,
+  durable consume-before-read isolation, authenticated request/result transport,
+  session-bound ephemeral manager cache and the shared Logs view. It is not in the
+  published preview. Native Event Log/installed-service and real Windows-to-Linux
+  acceptance remain open; retained-history navigation and content search remain
+  future work.
 - [Cached Windows Update inspection](windows-update-runtime.md) now has a
   default-off source path through protected local consent, an isolated reader,
   signed v7 telemetry, durable private manager admission and the shared Updates
@@ -144,10 +148,11 @@ Keep this smaller than a full Event Viewer or whole-history collection:
    navigation, refresh/cancel and late responses. Header search is not full-log
    search; retained event browsing needs its own continuation/loss contract.
 
-An isolated native collector and contract are a useful **source foundation**,
-but do not complete this user-visible increment until the consent, sender,
-manager and UI paths are implemented and tested together. Publishing it or
-performing host content reads needs the separately applicable approval/gate.
+The current source implements this selected-message increment across consent,
+sender, manager and UI. The baseline matrix above remains historical; this does
+not complete retained-log parity or establish native installed-service acceptance.
+Source tests use invented records and isolated fixture processes. Publishing new
+release bytes or performing host content reads needs its applicable approval/gate.
 
 ## Subsequent increments and completion gates
 

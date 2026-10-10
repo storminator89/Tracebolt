@@ -127,13 +127,15 @@ file as navigation and project constraints, never as permission to act on a host
   digest/index binding, per-field unavailable states and old grants. The fresh
   five-scope coordinator remains unchanged; source fixtures never authorize a
   native configuration read, new persistent grant or service/security change.
-- Selected Windows event messages remain an unwired source foundation. Cached
-  Windows Update inspection has a separate default-off runtime/manager/UI source
-  path. Read `docs/windows-event-content-request.md`, `docs/windows-event-content.md`,
-  `docs/windows-update-inspection.md` and `docs/windows-update-runtime.md` before
-  changing them. Existing five-scope Setup or event-header grants authorize neither.
+- Selected Windows event messages and cached Windows Update inspection have
+  separate default-off runtime/manager/UI source paths. Read
+  `docs/windows-event-content-runtime.md`, `docs/windows-event-content-manager.md`,
+  `docs/windows-event-content-wire.md`, `docs/windows-event-content-request.md`,
+  `docs/windows-event-content.md`, `docs/windows-update-inspection.md` and
+  `docs/windows-update-runtime.md` before changing them. Existing five-scope Setup or event-header grants authorize neither.
   Keep message content out of durable telemetry and AI/provider export; preserve
-  exact selections, original expiry and future durable consume-once boundaries.
+  exact selections, original expiry, session-bound ephemeral content and durable
+  consume-once boundaries. Never reset missing used state or recapture lost results.
   Cached WUA inspection must remain offline and must not download, install,
   accept update terms, reboot, upgrade WUA or change service/network settings.
   Fixtures/cross-builds do not authorize native reads or create a local grant.

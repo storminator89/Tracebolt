@@ -53,6 +53,8 @@ func nativeOperation(ctx context.Context, r request, out, stderr io.Writer) (res
 		return nil, err
 	}
 	switch r.mode {
+	case "event-content-preview", "event-content-enable", "event-content-disable":
+		return eventContentOperation(ctx, r, receipt.Service, windowsservice.InspectOwned, lanclient.ConfigureWindowsEventContent)
 	case "updates-preview", "updates-enable", "updates-disable":
 		return updatesOperation(ctx, r, receipt.Service, windowsservice.InspectOwned, lanclient.ConfigureWindowsUpdates)
 	case "service-startup-preview", "service-startup-enable", "service-startup-disable":

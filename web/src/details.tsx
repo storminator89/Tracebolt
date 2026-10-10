@@ -102,7 +102,7 @@ export function DeviceDetail({ id, onClose, onCase, initialTab, initialUnit }: {
     {tab === 'health' && healthAvailable && <HealthPanel key={device.id} deviceId={device.id} device={device} sessionKey={operator?.expiresAt} onOpenLogs={openServiceLogs}/> }
     {tab === 'inventory' && windowsAvailable && <WindowsInventoryWorkspace key={`${device.id}:${operator?.expiresAt ?? ''}`} resource={windowsInventory} initialTab={windowsInventoryTab}/> }
     {tab === 'inventory' && inventoryAvailable && <DeviceInventoryWorkspace key={device.id} deviceId={device.id} initialSource={inventorySource} onOpenLogs={securityAvailable ? openServiceLogs : undefined}/> }
-    {tab === 'logs' && windowsAvailable && <WindowsLogsPanel key={`${device.id}:${operator?.expiresAt ?? ''}`} resource={windowsInventory}/> }
+    {tab === 'logs' && windowsAvailable && <WindowsLogsPanel key={`${device.id}:${operator?.expiresAt ?? ''}`} resource={windowsInventory} contentAccess={{ deviceId: device.id, admin: operator?.loginMode === 'shared' && operator.hasExplicitMetadata === true, insecure: operator?.insecureTestMode ?? false, sessionKey: operator?.expiresAt ?? null }}/> }
     {tab === 'logs' && securityAvailable && <JournalPanel key={device.id} deviceId={device.id} insecureTestMode={operator.insecureTestMode} sessionKey={operator.expiresAt} initialUnit={journalUnit}/> }
     {tab === 'cves' && securityAvailable && <LinuxCVEPanel deviceId={device.id} sessionKey={operator.expiresAt ?? undefined}/> }
     {tab === 'security' && securityAvailable && <DeviceSecurityWorkspace deviceId={device.id} sessionKey={operator.expiresAt ?? undefined} onOpenPackages={openPackages} onOpenUpdates={openUpdates}/>}
