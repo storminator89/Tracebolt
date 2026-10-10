@@ -181,3 +181,15 @@ telemetry. Removal still requires the same deliberately held SCM handle, pending
 text, stopped status, 500 ms non-completion guard and subsequent confirmed
 absence. A diagnostic label does not prove that removal was requested or that VM
 disposal happened. No deadline or success requirement is relaxed.
+
+The native controller's three uintptr syscall wrappers carry the Go compiler's
+pointer-escape directive. A compile-only regression checks the actual declarations
+and individually removes each directive to prove the buffer-lifetime guarantee;
+this does not execute Windows code or identify an earlier run's cause.
+
+Uninstall failures use a complete, fixed public diagnostic rendering containing
+only an allowlisted removal step, service failure site and coarse native cause.
+The v2 report's existing stage/reason keys retain those values only for failed
+normal install/uninstall cases. Extra text, invalid pairs, duplicate messages and
+success-shaped reports cannot use them. Original error identity, single Stop and
+Delete requests, pending waits and final absence verification remain unchanged.

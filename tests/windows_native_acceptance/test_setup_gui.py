@@ -187,17 +187,38 @@ class SetupGate(unittest.TestCase):
         with self.assertRaises(runner.shared.Rejected): self.validate(r)
 
     def test_finite_go_python_contract_parity(self):
-        source = (ROOT / "internal/windowsacceptance/setupgate/gate.go").read_text()
+        source = (ROOT / "internal/windowsacceptance/setupgate/gate.go").read_text() + (ROOT / "internal/windowsacceptance/setupgate/removal_failure.go").read_text()
         for name in runner.APPROVALS:
             self.assertIn('"' + name + '"', source)
         for name in runner.FALSE_COVERAGE | runner.STAGES | set(runner.CHECKS):
             self.assertIn('"' + name + '"', source)
         for checks in runner.CHECKS.values():
             for name in checks: self.assertIn('"' + name + '"', source)
+    def test_removal_reason_expansion_is_failure_only(self):
+        for stage in runner.REMOVAL_FAILURE_STAGES:
+            r=report()
+            r.update(status="failed",stage=stage,reason="failed",startup="inspection_required")
+            self.validate(r)
+            for status in ("blocked","passed_packaged_gui_subset"):
+                bad=copy.deepcopy(r);bad["status"]=status
+                with self.assertRaises(runner.shared.Rejected):self.validate(bad)
+        for reason in runner.REMOVAL_FAILURE_REASONS:
+            accepted=report();accepted["reason"]=reason
+            with self.assertRaises(runner.shared.Rejected):self.validate(accepted)
+            r=report();r.update(status="failed",stage="uninstall-failure-stop",reason=reason,startup="inspection_required")
+            self.validate(r)
+            for stage in ("completed","uninstall"):
+                if reason=="deadline":continue
+                bad=copy.deepcopy(r);bad["stage"]=stage
+                with self.assertRaises(runner.shared.Rejected):self.validate(bad)
+        for reason in ("private", "service:service_owned_context:failed:failed", "service:service_apply_stop_control:failed:private"):
+            bad=report();bad.update(status="failed",stage="uninstall-failure-stop",reason=reason)
+            with self.assertRaises(runner.shared.Rejected):self.validate(bad)
+
     def test_gui_lifecycle_failure_stages_never_claim_success(self):
         source = (ROOT / "internal/windowsacceptance/setupgate/gui_sequence.go").read_text()
         stages = set(re.findall(r'"((?:consent|preflight)-[a-z-]+)"', source))
-        stages |= {stage for stage in runner.STAGES if stage.startswith("uninstall-")}
+        stages |= {stage for stage in runner.STAGES if stage.startswith("uninstall-") and stage not in runner.REMOVAL_FAILURE_STAGES}
         self.assertGreater(len(stages), 30)
         for stage in stages:
             self.assertIn(stage, runner.STAGES)

@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "sourceCommit": "fccc4b00cd8a144afd58e4b995747afab7a10022",
-  "goSourceSha256": "533792c14431ee24f2554e431cbfd822bf7778799c8c2a94e443dec993f8b242",
+  "goSourceSha256": "3db417c8d1e73d1b6f8563219fd4952a635eeb0082d352f9258e4475db397c1e",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -278,6 +278,10 @@
       "TestReadSetupFirstInstallFailureSurvivesRejectedReceipt",
       "TestReadSetupJournalPreservesOriginalPublicErrorAndCategory",
       "TestReadSetupStartupPermissionFailureCategories",
+      "TestRemovalFailureCancellationAndPrivateFormatting",
+      "TestRemovalFailureCauseFiniteAndHostileSafe",
+      "TestRemovalFailureEveryStepPreservesCauseAndMutationCounts",
+      "TestRemovalSequencePendingStatesAndFailureWaitKeepSingleMutation",
       "TestRetainedBootstrapValidationCapturesCategoryBeforePublicCollapse",
       "TestServiceStartupConsentErrorsAndInvalidModes",
       "TestServiceStartupConsentFlagsExplicitAndBounded",
@@ -294,6 +298,7 @@
       "TestSetupFirstFailureMetadataDoesNotAdoptSecondaryNativeCause",
       "TestSetupFirstInstallFailureStillAttemptsReceiptWrite",
       "TestSetupMetadataPreservesErrorIdentityRenderingAndInnerStage",
+      "TestSetupNativePointerWrapperLifetime",
       "TestSetupPendingCaptureRejectsReadAndCloseFailuresBeforeInput",
       "TestSetupPendingCaptureRejectsUnpreparedOrUnapprovedReceipts",
       "TestSetupPendingObserverDependenciesAndCancellationFailClosed",
@@ -2958,6 +2963,8 @@
       "TestFreshFailureStagesStayFiniteAndInert",
       "TestFreshPrerequisitePipelineStopsBeforeLaterChecks",
       "TestPreflightSequenceEveryFailureStops",
+      "TestRemovalFailureParserExactEnvelopeAndPairs",
+      "TestRemovalFailureReportCannotGrantAcceptance",
       "TestUninstallDiagnosticParagraphsMatchExistingProductionText",
       "TestUninstallHeldCloseDistinguishesFailureFromCompletion",
       "TestUninstallHeldQueryFailuresAreFiniteAndCannotPass",
@@ -3140,6 +3147,9 @@
     ],
     "localrmm/internal/windowsservice": [
       "TestAncestorTrustAdmissionNeverClaimsEffectiveTokenReadAccess",
+      "TestApplyRemovalDiagnosticsLeaveStartErrorsUnchanged",
+      "TestApplyRemovalDiagnosticsPreserveSuccess",
+      "TestApplyRemovalFailureDiagnosticsPreserveOperation",
       "TestArtifactChangedAfterPlanFailsClosed",
       "TestCancelledRequestNeverMutates",
       "TestConfigOrReceiptMismatchPreventsAllMutations",

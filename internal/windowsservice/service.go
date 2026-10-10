@@ -412,12 +412,12 @@ func apply(ctx context.Context, b backend, r Receipt, a access) (ApplyResult, er
 		if snapshot.State != Running {
 			return result, errors.New("service transition already pending")
 		}
-		err = s.Stop()
+		err = setupStageError("service_apply_stop_control", "failed", s.Stop())
 	case deleteAccess:
 		if snapshot.State != Stopped {
 			return result, ErrNotStopped
 		}
-		err = s.Delete()
+		err = setupStageError("service_apply_delete", "failed", s.Delete())
 		if err == nil {
 			result.DeletePending = true
 		}
@@ -430,6 +430,9 @@ func apply(ctx context.Context, b backend, r Receipt, a access) (ApplyResult, er
 	result.Requested = true
 	if a != deleteAccess {
 		result.Snapshot, err = s.Inspect()
+		if a == stopAccess {
+			err = setupStageError("service_apply_stop_inspect", "failed", err)
+		}
 	}
 	return result, err
 }
