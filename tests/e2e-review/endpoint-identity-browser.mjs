@@ -19,7 +19,7 @@ const sourceSha=process.env.TRACEBOLT_SOURCE_SHA||null;
 const base=`http://127.0.0.1:${Number(process.env.ENDPOINT_REVIEW_PORT||19895)}`;
 const password='TRACEBOLT_ENDPOINT_BROWSER_FIXTURE_NOT_A_REAL_PASSWORD';
 const apiSmoke=process.argv.includes('--api-smoke');
-const results=[],screenshots=[];let browser,server,context,pipe,waiting,devices,currentTest='',stage='setup',runtimeErrorCount=0,fatal=false;
+const results=[],screenshots=[];let browser,server,context,pipe,waiting,devices,currentTest='',stage='setup',runtimeErrorCount=0,fatal=false,cleanupFailed=false;
 const mark=value=>{stage=value;};
 // Fixed projection only: no request URLs, identifiers, headers, response text or rows.
 let readOutcomes=[],readTasks=[];
@@ -38,9 +38,33 @@ function observeReads(page){
 }
 async function readEvidence(){const outcomes=readOutcomes.slice(),tasks=readTasks.slice();await Promise.allSettled(tasks);return JSON.stringify(outcomes);}
 
-async function stop(){if(server?.pid&&server.exitCode===null){const end=new Promise(r=>server.once('exit',r));const wait=async()=>{let timer;try{await Promise.race([end,new Promise(r=>timer=setTimeout(r,1500))]);}finally{clearTimeout(timer);}};server.stdin.end();await wait();if(server.exitCode===null){server.kill('SIGTERM');await wait();}if(server.exitCode===null){server.kill('SIGKILL');await wait();}if(server.exitCode===null)fatal=true;}pipe?.close();server=null;waiting=null;}
+async function stop(){
+ const child=server;
+ // Node keeps exitCode null after signal termination; either field proves exit.
+ const exited=()=>child.exitCode!==null||child.signalCode!==null;
+ if(child&&!exited()){
+  if(child.pid&&!cleanupFailed){
+   const wait=async()=>{
+    if(exited())return;
+    let timer,onExit;
+    try{await new Promise(resolve=>{
+     onExit=resolve;child.once('exit',onExit);timer=setTimeout(resolve,1500);
+     // Also cover an exit between the first check and listener attachment.
+     if(exited())resolve();
+    });}finally{clearTimeout(timer);child.removeListener('exit',onExit);}
+   };
+   child.stdin.end();await wait();
+   if(!exited()){child.kill('SIGTERM');await wait();}
+   if(!exited()){child.kill('SIGKILL');await wait();}
+  }
+  if(!exited())fatal=cleanupFailed=true;
+ }
+ pipe?.close();waiting=null;
+ // Retain an unresolved child, without retrying or allowing start() to replace it.
+ if(!child||exited()){server=null;cleanupFailed=false;}
+}
 async function control(action,extra={}){if(waiting)throw new Error('CONTROL_CONCURRENCY');let entry;const pending=new Promise((resolve,reject)=>{entry={resolve,reject};waiting=entry;});const timeout=setTimeout(()=>{if(waiting===entry){waiting=null;entry.reject(new Error('CONTROL_TIMEOUT'));}},15000);try{server.stdin.write(JSON.stringify({action,...extra})+'\n');const answer=await pending;expect(answer.ok).toBe(true);return answer;}finally{clearTimeout(timeout);if(waiting===entry)waiting=null;}}
-async function start(){const dir=await fs.mkdtemp(path.join(temporary,'state-'));server=spawn(path.join(temporary,'endpointfixture'),['--listen',new URL(base).host,'--state',dir,'--web',path.join(root,'web/dist')],{cwd:root,stdio:['pipe','pipe','ignore']});pipe=createInterface({input:server.stdout});pipe.on('line',line=>{const cb=waiting;waiting=null;if(cb){try{cb.resolve(JSON.parse(line));}catch{cb.reject(new Error('CONTROL_RESPONSE'));}}});server.on('error',()=>{waiting?.reject(new Error('FIXTURE_START_FAILED'));waiting=null;});server.stdin.on('error',()=>{waiting?.reject(new Error('FIXTURE_PIPE_FAILED'));waiting=null;});server.on('exit',()=>{waiting?.reject(new Error('FIXTURE_EXITED'));waiting=null;});devices=(await control('info')).devices;}
+async function start(){if(server)throw new Error('FIXTURE_CLEANUP_UNRESOLVED');const dir=await fs.mkdtemp(path.join(temporary,'state-'));server=spawn(path.join(temporary,'endpointfixture'),['--listen',new URL(base).host,'--state',dir,'--web',path.join(root,'web/dist')],{cwd:root,stdio:['pipe','pipe','ignore']});pipe=createInterface({input:server.stdout});pipe.on('line',line=>{const cb=waiting;waiting=null;if(cb){try{cb.resolve(JSON.parse(line));}catch{cb.reject(new Error('CONTROL_RESPONSE'));}}});server.on('error',()=>{waiting?.reject(new Error('FIXTURE_START_FAILED'));waiting=null;});server.stdin.on('error',()=>{waiting?.reject(new Error('FIXTURE_PIPE_FAILED'));waiting=null;});server.on('exit',()=>{waiting?.reject(new Error('FIXTURE_EXITED'));waiting=null;});devices=(await control('info')).devices;}
 async function pageAt(route='/devices',{mobile=false}={}){context=await browser.newContext({viewport:mobile?{width:390,height:844}:{width:1440,height:1000},locale:'en-GB'});const page=await context.newPage();observeReads(page);page.on('pageerror',()=>runtimeErrorCount++);await page.goto(`${base}/#${route}`);await page.getByLabel('Operator password',{exact:true}).fill(password);await page.getByRole('button',{name:'Sign in',exact:true}).click();await expect(page.locator('.app-shell')).toBeVisible();return page;}
 async function get(route){const response=await context.request.get(base+route);expect(response.status()).toBe(200);return response.json();}
 async function query(route,data){const auth=await get('/api/auth/session');return context.request.post(base+route,{headers:{Origin:base,'X-CSRF-Token':auth.csrfToken},data});}
