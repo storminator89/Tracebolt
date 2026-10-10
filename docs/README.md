@@ -32,7 +32,9 @@ copying a demo command does not deploy a manager or connect real endpoints.
   [numeric network endpoints](windows-network-endpoints.md).
 - **Performance and Health:** [24-hour resource history](resource-history.md),
   [Linux Health](health-dashboard.md),
-  [Windows system-volume observations](windows-health-observations.md) and
+  [Windows system-volume observations](windows-health-observations.md),
+  [opt-in Windows capacity checks](windows-capacity-health.md),
+  [CPU and physical-RAM policies](windows-resource-health.md) and
   [Windows event-header Health](windows-event-health.md).
 - **Logs:** [Linux exact-service captures](journal-content-mvp.md),
   [retained journal browsing](retained-journal-browsing.md) and

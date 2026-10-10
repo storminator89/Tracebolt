@@ -33,7 +33,9 @@
     "windows-os-provenance-fixtures.test.mjs",
     "windows-service-software-fixtures.test.mjs",
     "windows-updates-fixtures.test.mjs",
-    "workspace-navigation-browser.test.mjs"
+    "workspace-navigation-browser.test.mjs",
+    "windows-capacity-fixtures.test.mjs",
+    "windows-resource-fixtures.test.mjs"
   ],
   "excluded": []
 }

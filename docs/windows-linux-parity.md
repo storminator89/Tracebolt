@@ -55,6 +55,20 @@ not alter the baseline comparison below.
   signed v7 telemetry, durable private manager admission and the shared Updates
   tab. It is not in the published preview. Native WUA/installed-service acceptance
   and real Windows-to-Linux-manager/browser proof remain separate gates.
+- [System-volume capacity checks](windows-capacity-health.md) add a separate,
+  default-off manager policy and durable incident history over the existing
+  caller-visible, quota-aware Windows disk percentage. This is a source-only
+  increment with EN/DE Health controls, not full Windows Health parity. It adds
+  no native collection, local grant, service action, AI export or notification.
+  Native quota/installed-service behavior, real Windows-to-Linux interoperability
+  and hosted-browser acceptance remain separate gates.
+- [CPU and physical-RAM policies](windows-resource-health.md) reuse the same
+  percentage evidence engine through independent default-off metric-bound state,
+  routes and EN/DE controls. CPU remains observed-processor-group utilization;
+  RAM remains physical memory not immediately available. Confirmation/recovery
+  needs distinct advancing source observations. Disk opt-in never enables these
+  policies. No host scope, AI or notification is added, and native/browser
+  acceptance and selected-service rules remain separate open work.
 - Online discovery, Update/CVE mapping, update installation, remote service
   actions and lifecycle/AI gaps below remain open. No new grant is enabled by
   existing Setup receipts or a manager update.

@@ -139,6 +139,16 @@ file as navigation and project constraints, never as permission to act on a host
   Cached WUA inspection must remain offline and must not download, install,
   accept update terms, reboot, upgrade WUA or change service/network settings.
   Fixtures/cross-builds do not authorize native reads or create a local grant.
+- Windows system-volume capacity health is a separate default-off manager policy.
+  Read `docs/windows-capacity-health.md` before changing its thresholds or lifecycle.
+  Preserve caller-quota semantics, advancing-source confirmation, durable floors,
+  unknown evidence and explicit non-recovery policy closure. Never route it into
+  Linux Health/AI/alarm admission or infer native scope/service-action permission.
+- Windows CPU and physical-RAM policies are independent default-off manager scopes.
+  Read `docs/windows-resource-health.md` before changing their shared percentage
+  engine, tagged storage, API or UI. Preserve disk v1 bytes, exact observed-group
+  CPU and physical-memory semantics, independent opt-ins/floors, one coordinated
+  source read, and unknown evidence. No host collection, AI or alarm grant follows.
 - Follow Go/Node versions and dependency locks in this revision. Validate commands
   against actual flags/config. Distinguish runtime tests from cross-builds, skipped
   container tests, and proposed functionality. Never invent install/enroll flags.

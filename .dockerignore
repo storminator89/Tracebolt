@@ -19,6 +19,8 @@ tests/e2e-review/**
 !tests/fixtures/
 tests/fixtures/**
 !tests/fixtures/windows-contact-view.json
+!tests/fixtures/windows-capacity-view.json
+!tests/fixtures/windows-resource-view.json
 # Only this required dependency notice may enter from docs.
 !docs/
 docs/**

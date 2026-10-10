@@ -53,7 +53,9 @@ checks alone are not screenshot, native-agent or deployment acceptance.
 
 Windows uses separate [accepted-contact history](windows-contact-history.md),
 [neutral system-volume observations](windows-health-observations.md), and the
-existing event-header sample. Only overdue accepted reports have deterministic
-durable incidents. They do not determine live reachability, inherit Linux disk
-thresholds, or enter Linux investigations, AI or alarm delivery. The Linux
-evaluator and its authority inputs remain unchanged.
+existing event-header sample, plus a separately enabled [quota-aware system-volume
+capacity policy](windows-capacity-health.md) and independent default-off
+[CPU/physical-RAM policies](windows-resource-health.md). Contact and opted-in percentage checks
+have deterministic durable incidents. They do not determine overall health or
+live reachability, inherit Linux disk thresholds, or enter Linux investigations,
+AI or alarm delivery. The Linux evaluator and authority inputs remain unchanged.

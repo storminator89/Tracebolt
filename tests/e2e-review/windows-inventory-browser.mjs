@@ -1,3 +1,5 @@
+import {exerciseWindowsResources,windowsResourceBrowserFixture,windowsResourceFixtureMetric,windowsResourceStageNames} from './windows-resource-browser.mjs';
+import {exerciseWindowsCapacity,windowsCapacityBrowserFixture,windowsCapacityStageNames} from './windows-capacity-browser.mjs';
 import {createWindowsEventContentFixture,exerciseWindowsEventContent,windowsEventContentStages} from './windows-event-content-browser.mjs';
 import {windowsUpdatesBrowserFixture,exerciseWindowsUpdates} from './windows-updates-browser.mjs';
 import {withWindowsOSProvenance,exerciseWindowsOSProvenance} from './windows-os-provenance-browser.mjs';
@@ -20,7 +22,7 @@ const {windowsNetwork,windowsVolumes,windowsHealthDevice,windowsDeviceId,windows
 export const windowsInventoryCaseName='Synthetic Windows inventory shares device charts and explicit enrollment consent without Linux reads';
 export const windowsInventoryFixtureDisclosure='Real loopback HTTP-test fixture login with intercepted invented Windows inventory and resource history in the production UI. UI-only evidence; no native endpoint acceptance, collection, invitation, service installation or external request.';
 let stage='setup';
-const stages=new Set(['setup',...windowsEventContentStages,'login','overview','overview-history','os-provenance','inventory','storage','network','network-stale','network-expired','network-partial','network-empty','network-denied','network-unavailable','network-truncated','process-metrics','process-controls','service-software-controls','process-metrics-stale','process-metrics-expired','events',...windowsHealthStageNames,...windowsContactHistoryStageNames,'logs',...windowsLogsStageNames,'legacy','updates','partial','denied','enrollment','access-loss']);
+const stages=new Set(['setup',...windowsEventContentStages,'login','overview','overview-history','os-provenance','inventory','storage','network','network-stale','network-expired','network-partial','network-empty','network-denied','network-unavailable','network-truncated','process-metrics','process-controls','service-software-controls','process-metrics-stale','process-metrics-expired','events',...windowsHealthStageNames,...windowsContactHistoryStageNames,...windowsCapacityStageNames,...windowsResourceStageNames,'logs',...windowsLogsStageNames,'legacy','updates','partial','denied','enrollment','access-loss']);
 export const windowsInventoryFailureStage=()=>stages.has(stage)?stage:'setup';
 const mark=value=>{stage=value;};
 export function windowsBrowserFixture(now,phase='fresh',networkPhaseAt=now,logsPhaseAt=now){
@@ -117,9 +119,30 @@ export async function windowsFixtureSessionExpiry(page,base){
   }finally{await response.dispose();}
  }catch{throw new Error('Windows fixture session expiry unavailable');}
 }
+/** Independent invented percentage ledgers for one mounted detail walkthrough.
+ * A sibling phase never resets an accepted policy revision or rewrites closure time. */
+export function createWindowsPercentageFixtureState(){
+ const phases={disk:'capacity-disabled',cpu:'cpu-disabled',memory:'memory-disabled'},origins={disk:null,cpu:null,memory:null},closedAt={disk:null,cpu:null,memory:null};
+ const select=phase=>windowsCapacityStageNames.includes(phase)?'disk':windowsResourceStageNames.includes(phase)?phase.split('-')[0]:null;
+ return {
+  setPhase(phase,at){
+   const metric=select(phase);if(!metric)return false;
+   if(!Number.isFinite(Date.parse(at)))throw new Error('Invalid invented percentage phase time');
+   const stages=metric==='disk'?windowsCapacityStageNames:windowsResourceStageNames.filter(value=>value.startsWith(metric+'-'));
+   if(stages.indexOf(phase)<stages.indexOf(phases[metric]))throw new Error('Invented percentage revision rollback');
+   if(phase===phases[metric]&&origins[metric]!==null)return true;
+   phases[metric]=phase;
+   if(phase==='capacity-disabled'||phase===`${metric}-disabled`)origins[metric]=at;
+   if(phase==='capacity-closed'||phase===`${metric}-policy-changed`)closedAt[metric]??=at;
+   return true;
+  },
+  capacity(at){const view=windowsCapacityBrowserFixture(at,origins.disk??at,phases.disk);if(closedAt.disk&&phases.disk==='capacity-closed')view.incidents[0].resolvedAt=closedAt.disk;return view;},
+  resource(metric,at){if(!['cpu','memory'].includes(metric))throw new Error('Invalid invented resource metric');const view=windowsResourceBrowserFixture(metric,at,origins[metric]??at,phases[metric]);if(closedAt[metric]&&phases[metric]===`${metric}-policy-changed`)view.incidents[0].resolvedAt=closedAt[metric];return view;},
+ };
+}
 export async function windowsInventoryBrowserCase({pageAt,login,expect,base,shot}){
- const page=await pageAt('/devices/'+windowsDeviceId),prefix='/api/devices/'+windowsDeviceId,unexpected=[],writes=[],external=[];let phase='fresh',networkPhaseAt=null,logsPhaseAt=null,contactPhaseAt=null,osObservedAt=null,updatesCapturedAt=null;
- const syntheticPaths=new Set([prefix,prefix+'/windows-inventory',prefix+'/windows-contact',prefix+'/resource-history','/api/overview','/api/windows/enrollment']);
+ const page=await pageAt('/devices/'+windowsDeviceId),prefix='/api/devices/'+windowsDeviceId,unexpected=[],writes=[],external=[];let phase='fresh',networkPhaseAt=null,logsPhaseAt=null,contactPhaseAt=null,percentagePolicyFixtures=createWindowsPercentageFixtureState(),osObservedAt=null,updatesCapturedAt=null;
+ const syntheticPaths=new Set([prefix,prefix+'/windows-inventory',prefix+'/windows-contact',prefix+'/windows-capacity',prefix+'/windows-resource/cpu',prefix+'/windows-resource/memory',prefix+'/resource-history','/api/overview','/api/windows/enrollment']);
  // A bounded virtual clock makes the five-second private-row expiry deterministic.
  const eventContent=createWindowsEventContentFixture();let eventSessionExpires=null;
  let clockNow=Date.now();await page.clock.install({time:new Date(clockNow)});await page.clock.pauseAt(new Date(clockNow+1000));clockNow+=1000;
@@ -143,6 +166,9 @@ export async function windowsInventoryBrowserCase({pageAt,login,expect,base,shot
   }
   if(url.pathname===prefix+'/windows-inventory'&&(url.search||request.postData()!==null))throw new Error('Unexpected Windows query');
   if(url.pathname===prefix+'/windows-contact'&&(url.search||request.postData()!==null)){unexpected.push('unexpected-contact-query');return route.abort('blockedbyclient');}
+  if(url.pathname===prefix+'/windows-capacity'&&(url.search||request.postData()!==null)){unexpected.push('unexpected-capacity-query');return route.abort('blockedbyclient');}
+  const resourceMetric=windowsResourceFixtureMetric(url.pathname,prefix);
+  if(resourceMetric&&(url.search||request.postData()!==null)){unexpected.push('unexpected-resource-query');return route.abort('blockedbyclient');}
   const reply=data=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(data)}),at=await windowsFixtureResponseTime(page),device=windowsHealthBrowserDevice(at,phase,osObservedAt??undefined);
   if(url.pathname===prefix+'/windows-inventory'){
    if(phase==='session')return route.fulfill({status:401,contentType:'application/json',body:JSON.stringify({error:{code:'authentication_required'}})});
@@ -153,6 +179,8 @@ export async function windowsInventoryBrowserCase({pageAt,login,expect,base,shot
    if(phase==='contact-denied')return route.fulfill({status:403,contentType:'application/json',body:JSON.stringify({error:{code:'fixture_access_denied'}})});
    contactPhaseAt??=at;return reply(windowsContactBrowserFixture(at,contactPhaseAt,phase));
   }
+  if(url.pathname===prefix+'/windows-capacity')return reply(percentagePolicyFixtures.capacity(at));
+  if(resourceMetric)return reply(percentagePolicyFixtures.resource(resourceMetric,at));
   // Invented retained OS observation: later receipt/server times may advance,
   // but metadata reads or Evidence visits cannot refresh this admitted capture.
   if(url.pathname===prefix){osObservedAt??=device.evidence.find(({id})=>id==='local-windows-os')?.collectedAt??null;return reply(device);}
@@ -164,7 +192,7 @@ export async function windowsInventoryBrowserCase({pageAt,login,expect,base,shot
  for(const locale of ['en','de'])for(const width of [1440,390]){
   await page.setViewportSize({width,height:width===390?844:1000});
   const language=page.locator('select[aria-label="Language"],select[aria-label="Sprache"]');await language.selectOption(locale);
-  phase='fresh';await page.goto(`${base}/#/devices/${windowsDeviceId}`);await expect(page.locator('html')).toHaveAttribute('lang',locale);
+  phase='fresh';percentagePolicyFixtures=createWindowsPercentageFixtureState();await page.goto(`${base}/#/devices/${windowsDeviceId}`);await expect(page.locator('html')).toHaveAttribute('lang',locale);
   mark('overview');await expect(page.getByRole('heading',{name:'fixture-windows',exact:true})).toBeVisible();
   mark('overview-history');await settleWindowsHistory(page,expect,async ms=>{clockNow+=ms;await page.clock.runFor(ms);});
   await expect(page.getByRole('img',{name:/^(System volume|Systemvolume)/})).toBeVisible();
@@ -266,6 +294,8 @@ export async function windowsInventoryBrowserCase({pageAt,login,expect,base,shot
   mark('events');await page.getByRole('tab',{name:'Health',exact:true}).click();
   await exerciseWindowsHealth({page,expect,locale,width,shot,disclosure:windowsInventoryFixtureDisclosure,setPhase:value=>{phase=value;contactPhaseAt=now();},mark,now});
   await exerciseWindowsContactHistory({page,expect,locale,width,shot,setPhase:value=>{phase=value;if(value==='contact-overdue')contactPhaseAt=now();},mark,advance:async ms=>{clockNow+=ms;await page.clock.runFor(ms);}});
+  await exerciseWindowsCapacity({page,expect,locale,width,shot,setPhase:value=>{phase=value;percentagePolicyFixtures.setPhase(value,now());},mark});
+  await exerciseWindowsResources({page,expect,locale,width,shot,setPhase:value=>{phase=value;percentagePolicyFixtures.setPhase(value,now());},mark});
   mark('events');
   await expect(page.getByText(locale==='de'?'Zugriff verweigert':'Access denied',{exact:true})).toBeVisible();
   await page.getByText(locale==='de'?'Ereignisse ansehen':'View events',{exact:true}).click();await expect(page.getByText('Invented Event Provider',{exact:true})).toBeVisible();

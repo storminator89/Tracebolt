@@ -241,3 +241,6 @@ import './windows-updates-fixtures.test.mjs';
 
 // Selected event-content source contracts extend the same explicit CI entry.
 import './windows-event-content-fixtures.test.mjs';
+
+// Additive, reviewed read-only system-volume capacity display fixtures.
+import './windows-capacity-fixtures.test.mjs';

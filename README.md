@@ -33,8 +33,12 @@ stale observations stay visible. Windows event headers contain no message bodies
 The published preview has no Windows Update/CVE assessment. The current source
 adds separately consented [cached Windows Update inspection](docs/windows-update-runtime.md)
 and [selected event messages](docs/windows-event-content-runtime.md); both still
-need installed-service/native acceptance. AI provider/data approval is
-separate, and suggestions remain unconfirmed.
+need installed-service/native acceptance. A separate default-off
+[system-volume capacity policy](docs/windows-capacity-health.md) uses only the
+existing quota-aware metric. Independent default-off [CPU and physical-RAM policies](docs/windows-resource-health.md)
+use their existing basic samples; overall Windows health remains unassessed and
+native acceptance remains pending. AI provider/data approval is separate, and suggestions
+remain unconfirmed.
 
 ![Tracebolt Linux log workspace with service selection and time-window controls](docs/screenshots/2026-10-09-main-ui/log-workspace.png)
 

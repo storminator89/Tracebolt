@@ -92,6 +92,23 @@ complete inventory generations and lifecycle improvements remain in the
 [parity roadmap](windows-linux-parity.md). Existing grants are never widened by a
 source or manager update.
 
+## Newer manager-only capacity policy
+
+The source includes [opt-in Windows system-volume capacity checks](windows-capacity-health.md)
+using already accepted caller-visible quota-aware disk metadata. Policy starts
+disabled; explicit manager configuration does not grant a native read or widen
+AI/notification access. This source change is separate from published preview
+bytes and pending native/hosted-browser acceptance.
+
+## Newer manager-only CPU and physical-RAM policies
+
+The source also prepares independent default-off [CPU and physical-RAM checks](windows-resource-health.md)
+using existing accepted basic metrics. CPU describes the observed processor group;
+RAM describes physical memory not immediately available. These policies share the
+capacity evidence engine and coordinated source read, with separate opt-ins,
+revisions, history and durable floors. They do not add host collection or complete
+Windows Health parity, and remain separate from preview/native/browser acceptance.
+
 ## Before trying the preview
 
 Use an explicitly approved disposable Windows target, the reviewed exact Setup
