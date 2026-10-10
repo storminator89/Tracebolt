@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "sourceRun": "38058537360/114231878636",
+  "milliseconds": {
+    "localrmm/internal/enrollmentstore": 592837,
+    "localrmm/tests/security": 352138,
+    "localrmm/internal/lanclient": 167849,
+    "localrmm/internal/api": 102022,
+    "localrmm/internal/inventoryledger": 85513,
+    "localrmm/internal/windowsmanaged": 84372,
+    "localrmm/internal/enrollmenttransport": 63304,
+    "localrmm/cmd/lan-manager": 61577,
+    "localrmm/internal/enrollmentclient": 46508,
+    "localrmm/internal/agentinstall": 35621,
+    "localrmm/internal/inventorystate": 25113,
+    "localrmm/cmd/enroll-agent": 23302,
+    "localrmm/tests/e2e-review/journalfixture": 21071,
+    "localrmm/internal/fullinventory": 20841,
+    "localrmm/internal/enrollmentservice": 13806,
+    "localrmm/cmd/manager": 12079,
+    "localrmm/internal/overviewstate": 11220,
+    "localrmm/internal/overviewgeneration": 10318,
+    "localrmm/internal/store": 10294,
+    "localrmm/internal/linuxcve": 8276
+  }
+}

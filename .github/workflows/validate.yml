@@ -280,8 +280,8 @@ jobs:
           fi
           python3 tests/security/check_endpoint_identity_gate.py --require-complete-overview "$RUNNER_TEMP/complete-v3-native.jsonl"
 
-  backend:
-    name: Go tests and build-only platform checks
+  backend-checks:
+    name: Go build and runtime checks
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
@@ -313,6 +313,8 @@ jobs:
           python3 -B tests/security/test_go_failure_reporter.py
           python3 -B tests/security/test_go_aggregate_coverage.py
           python3 -O -B tests/security/test_go_aggregate_coverage.py
+          python3 -B tests/security/test_go_race_shards.py
+          python3 -O -B tests/security/test_go_race_shards.py
           python3 -B tests/security/test_go_timing_reporter.py
           python3 -O -B tests/security/test_go_timing_reporter.py
           python3 -B tests/security/test_action_setup_identity_gate.py
@@ -352,24 +354,6 @@ jobs:
             exit 1
           fi
           python3 -B tests/security/check_action_setup_identity_gate.py "$RUNNER_TEMP/action-setup-identity.jsonl"
-      - name: Unit and race tests
-        shell: bash
-        run: |
-          set -euo pipefail
-          (umask 077; : > "$RUNNER_TEMP/go-tests.jsonl"; : > "$RUNNER_TEMP/go-tests.stderr")
-          tracebolt_test_start=$SECONDS
-          if go test -race -json -p 1 -buildvcs=false ./... -skip '^(TestIndependentPackageStoreDenseCapacityAndActualIngress|TestGuidedThreeBinaryEnrollmentAndForeground)$' -count=1 -timeout=15m > "$RUNNER_TEMP/go-tests.jsonl" 2> "$RUNNER_TEMP/go-tests.stderr"; then
-            echo 'PASS: Go unit and race tests.'
-            tracebolt_test_elapsed=$((SECONDS - tracebolt_test_start))
-            python3 -I -B tests/security/report_go_failure.py --success --events "$RUNNER_TEMP/go-tests.jsonl" --stderr "$RUNNER_TEMP/go-tests.stderr" --exit-code 0 --elapsed-seconds "$tracebolt_test_elapsed" || true
-          else
-            tracebolt_test_status=$?
-            tracebolt_test_elapsed=$((SECONDS - tracebolt_test_start))
-            echo 'FAIL: Go race tests; raw runtime output withheld.'
-            python3 -I -B tests/security/report_go_failure.py --events "$RUNNER_TEMP/go-tests.jsonl" --stderr "$RUNNER_TEMP/go-tests.stderr" --exit-code "$tracebolt_test_status" --elapsed-seconds "$tracebolt_test_elapsed" || true
-            exit 1
-          fi
-
       - name: Build local binaries
         run: make build
       - name: Execute actual Linux LAN manager and sender binaries
@@ -421,6 +405,78 @@ jobs:
             exit 1
           fi
           echo 'PASS: 13 HTTP, six fake-provider AI and seven managed API groups; SQLite checks.'
+
+  go-race:
+    name: Go race shard (${{ matrix.shard }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Prepare verified race dependencies
+        run: |
+          go mod download
+          go mod verify
+      - name: Run an exact source-bound package partition
+        env:
+          GOTOOLCHAIN: local
+          GOPROXY: 'off'
+          GOSUMDB: 'off'
+          TRACEBOLT_GO_SHARD: ${{ matrix.shard }}
+        run: python3 -I -B tests/security/go_race_shards.py --shard "$TRACEBOLT_GO_SHARD" --report "$RUNNER_TEMP/go-race-report/completion.json"
+      - name: Upload normalized completion evidence only
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: go-race-${{ github.run_attempt }}-${{ matrix.shard }}
+          path: ${{ runner.temp }}/go-race-report/completion.json
+          if-no-files-found: error
+          retention-days: 1
+
+  backend:
+    name: Go tests and build-only platform checks
+    if: ${{ always() }}
+    needs: [backend-checks, go-race, package-dense-race]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Require successful runtime and race prerequisites
+        env:
+          TRACEBOLT_GO_NEEDS: ${{ toJSON(needs) }}
+        run: |
+          python3 -I -B tests/security/go_race_shards.py --check-needs
+      - name: Download this attempt's normalized race evidence
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with:
+          pattern: go-race-${{ github.run_attempt }}-*
+          path: ${{ runner.temp }}/go-race-results
+          merge-multiple: false
+      - name: Prepare independent package discovery
+        run: |
+          go mod download
+          go mod verify
+      - name: Require exact complete race coverage and successful runtime checks
+        env:
+          GOTOOLCHAIN: local
+          GOPROXY: 'off'
+          GOSUMDB: 'off'
+          TRACEBOLT_GO_NEEDS: ${{ toJSON(needs) }}
+        run: python3 -I -B tests/security/go_race_shards.py --verify "$RUNNER_TEMP/go-race-results"
 
   transport-smoke:
     name: Real two-process Linux transport and expiry
