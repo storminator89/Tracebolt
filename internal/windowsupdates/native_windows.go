@@ -87,6 +87,10 @@ func openNative(ctx context.Context) (Source, error) {
 		}
 	}
 	runtime.LockOSThread()
+	if e := verifyNativeActivationTrust(); e != nil {
+		runtime.UnlockOSThread()
+		return nil, e
+	}
 	hr, _, _ := coInitializeEx.Call(0, 2) // COINIT_APARTMENTTHREADED; no callbacks.
 	if e := hrError(hr); e != nil {
 		runtime.UnlockOSThread()

@@ -37,6 +37,24 @@ rc.3 read-admin path and a specific Ubuntu TLS same-identity upgrade gate. Selec
 APT installation and guided service-action setup are separately scoped source
 candidates. They must not be presented as generally released Linux capabilities.
 
+## Subsequent source increments
+
+The unsigned x64 [v0.1.0-windows-preview.1](https://github.com/storminator89/Tracebolt/releases/tag/v0.1.0-windows-preview.1)
+was published on 10 October 2026 from the exact accepted bytes above. This does
+not alter the baseline comparison below.
+
+- The [event-message reader](windows-event-content.md) and
+  [independent request contract](windows-event-content-request.md) are now source
+  foundations; on-demand durable consumption, transport and ephemeral UI remain.
+- [Cached Windows Update inspection](windows-update-runtime.md) now has a
+  default-off source path through protected local consent, an isolated reader,
+  signed v7 telemetry, durable private manager admission and the shared Updates
+  tab. It is not in the published preview. Native WUA/installed-service acceptance
+  and real Windows-to-Linux-manager/browser proof remain separate gates.
+- Online discovery, Update/CVE mapping, update installation, remote service
+  actions and lifecycle/AI gaps below remain open. No new grant is enabled by
+  existing Setup receipts or a manager update.
+
 ## Source-based parity matrix
 
 “Implemented” below means baseline source, with the evidence limits above.

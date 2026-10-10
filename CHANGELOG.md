@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-10-10 — Opt-in cached Windows Updates end-to-end source candidate
+
+- Add a separate stopped-service local grant, bounded current-executable WUA worker, signed v7 sender path, durable manager admission and a shared EN/DE Updates tab. Refresh reads accepted cached observations only; unknown cache freshness and partial/denied results stay explicit, and an empty cache never means fully patched.
+- Preserve the five-scope Setup receipt, old v1-v6 frames and pending bytes, restricted service identity, original inspection/receipt times, frame budgets, capture floors and private expiry. The worker verifies the exact live SCM creator/service SID and protected executable/config before and after capture; parent deadline, reaping and a child watchdog bound owned-worker lifetime, not WUA-internal work. A read-only High/System-integrity and no-impersonation gate precedes COM activation without changing token or registry settings.
+- Add consent, worker-lifetime, signed transport/retry, private API and dashboard/source-browser fixtures. Native WUA and installed-service acceptance, real Windows/Linux-manager interoperability and release remain separate gates. No new scope is enabled or existing preview binary upgraded by this source change.
+- Refresh README, Windows status and installation/help navigation for the published unsigned x64 preview, keeping released bytes and newer source capabilities separate. Event-message content is still a foundation rather than a working UI feature.
+
 ## 2026-10-10 — Windows parity read foundations (not yet wired)
 
 - Add a source-linked Linux/Windows parity matrix that separates implemented code, released bytes and exact native acceptance. Preserve the published preview and existing five-scope Setup.

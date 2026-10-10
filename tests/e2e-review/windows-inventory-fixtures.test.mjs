@@ -197,3 +197,6 @@ import './windows-health-fixtures.test.mjs';
 
 // OS evidence stays an invented overlay in this same hosted fixture gate.
 import './windows-os-provenance-fixtures.test.mjs';
+
+// Cached update source/hosted-helper contracts use this same existing CI gate.
+import './windows-updates-fixtures.test.mjs';

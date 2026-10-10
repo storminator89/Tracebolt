@@ -1,0 +1,167 @@
+[
+  {
+    "name": "Go HTML escaping and Unicode metadata",
+    "snapshot": {
+      "schemaVersion": "tracebolt.windows-update-inspection.v1",
+      "scope": "windows-cached-update-inspection-v1",
+      "grantId": "99999999999999999999999999999999",
+      "generationId": "sample_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "collectedAt": "2026-10-07T12:00:00Z",
+      "source": "wua-cache",
+      "cacheFreshness": "unknown",
+      "quality": "observed",
+      "reason": "",
+      "countExact": true,
+      "observedCount": 1,
+      "truncated": false,
+      "rows": [
+        {
+          "updateId": "00000001-0000-0000-0000-000000000001",
+          "revision": 2147483647,
+          "title": "Synthetic \u003cupdate\u003e \u0026 Unicode 🛠",
+          "kbArticleIds": [
+            "KB1",
+            "KB1234567890"
+          ],
+          "severity": "critical",
+          "downloaded": true,
+          "metadataTruncated": true
+        }
+      ]
+    }
+  },
+  {
+    "name": "Exact bounded collection count",
+    "snapshot": {
+      "schemaVersion": "tracebolt.windows-update-inspection.v1",
+      "scope": "windows-cached-update-inspection-v1",
+      "grantId": "99999999999999999999999999999999",
+      "generationId": "sample_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "collectedAt": "2026-10-07T12:00:00Z",
+      "source": "wua-cache",
+      "cacheFreshness": "unknown",
+      "quality": "observed",
+      "reason": "",
+      "countExact": true,
+      "observedCount": 2147483647,
+      "truncated": true,
+      "rows": [
+        {
+          "updateId": "00000001-0000-0000-0000-000000000001",
+          "revision": 2147483647,
+          "title": "Synthetic \u003cupdate\u003e \u0026 Unicode 🛠",
+          "kbArticleIds": [
+            "KB1",
+            "KB1234567890"
+          ],
+          "severity": "critical",
+          "downloaded": true,
+          "metadataTruncated": true
+        }
+      ]
+    }
+  },
+  {
+    "name": "Partial lower-bound count",
+    "snapshot": {
+      "schemaVersion": "tracebolt.windows-update-inspection.v1",
+      "scope": "windows-cached-update-inspection-v1",
+      "grantId": "99999999999999999999999999999999",
+      "generationId": "sample_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "collectedAt": "2026-10-07T12:00:00Z",
+      "source": "wua-cache",
+      "cacheFreshness": "unknown",
+      "quality": "partial",
+      "reason": "windows_updates_partial_result",
+      "countExact": false,
+      "observedCount": 2147483647,
+      "truncated": true,
+      "rows": [
+        {
+          "updateId": "00000001-0000-0000-0000-000000000001",
+          "revision": 2147483647,
+          "title": "Synthetic \u003cupdate\u003e \u0026 Unicode 🛠",
+          "kbArticleIds": [
+            "KB1",
+            "KB1234567890"
+          ],
+          "severity": "critical",
+          "downloaded": true,
+          "metadataTruncated": true
+        }
+      ]
+    }
+  },
+  {
+    "name": "Empty cached result, not patch coverage",
+    "snapshot": {
+      "schemaVersion": "tracebolt.windows-update-inspection.v1",
+      "scope": "windows-cached-update-inspection-v1",
+      "grantId": "99999999999999999999999999999999",
+      "generationId": "sample_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "collectedAt": "2026-10-07T12:00:00Z",
+      "source": "wua-cache",
+      "cacheFreshness": "unknown",
+      "quality": "observed",
+      "reason": "",
+      "countExact": true,
+      "observedCount": 0,
+      "truncated": false,
+      "rows": []
+    }
+  },
+  {
+    "name": "Partial empty lower bound",
+    "snapshot": {
+      "schemaVersion": "tracebolt.windows-update-inspection.v1",
+      "scope": "windows-cached-update-inspection-v1",
+      "grantId": "99999999999999999999999999999999",
+      "generationId": "sample_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "collectedAt": "2026-10-07T12:00:00Z",
+      "source": "wua-cache",
+      "cacheFreshness": "unknown",
+      "quality": "partial",
+      "reason": "windows_updates_partial_result",
+      "countExact": false,
+      "observedCount": 0,
+      "truncated": false,
+      "rows": []
+    }
+  },
+  {
+    "name": "Access denied",
+    "snapshot": {
+      "schemaVersion": "tracebolt.windows-update-inspection.v1",
+      "scope": "windows-cached-update-inspection-v1",
+      "grantId": "99999999999999999999999999999999",
+      "generationId": "sample_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "collectedAt": "2026-10-07T12:00:00Z",
+      "source": "wua-cache",
+      "cacheFreshness": "unknown",
+      "quality": "denied",
+      "reason": "windows_updates_access_denied",
+      "countExact": false,
+      "observedCount": 0,
+      "truncated": false,
+      "rows": []
+    }
+  },
+  {
+    "name": "Offline-only safety check unavailable",
+    "snapshot": {
+      "schemaVersion": "tracebolt.windows-update-inspection.v1",
+      "scope": "windows-cached-update-inspection-v1",
+      "grantId": "99999999999999999999999999999999",
+      "generationId": "sample_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "collectedAt": "2026-10-07T12:00:00Z",
+      "source": "wua-cache",
+      "cacheFreshness": "unknown",
+      "quality": "unavailable",
+      "reason": "windows_updates_offline_not_verified",
+      "countExact": false,
+      "observedCount": 0,
+      "truncated": false,
+      "rows": []
+    }
+  }
+]

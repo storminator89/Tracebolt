@@ -104,7 +104,10 @@ func appendWindowsServiceStartup(ctx context.Context, m Material, f frame, c win
 	return f, b, nil
 }
 func validateWindowsServiceStartupFrame(f frame, fields map[string]json.RawMessage) error {
-	if f.SchemaVersion != FrameWindowsServiceStartupVersion {
+	if f.SchemaVersion == FrameWindowsUpdatesVersion && f.WindowsServiceStartup == nil && len(fields["windowsServiceStartup"]) == 0 {
+		return nil
+	}
+	if f.SchemaVersion != FrameWindowsServiceStartupVersion && f.SchemaVersion != FrameWindowsUpdatesVersion {
 		if f.WindowsServiceStartup != nil || len(fields["windowsServiceStartup"]) != 0 {
 			return ErrState
 		}

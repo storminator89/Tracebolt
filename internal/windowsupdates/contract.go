@@ -1,5 +1,6 @@
 // Package windowsupdates inspects bounded Windows Update Agent cache metadata.
-// It has no runtime, manager, update-installation or network-scan integration.
+// Local consent and isolated runtime wiring live outside this collector package.
+// It provides no update-installation or network-scan operation.
 package windowsupdates
 
 import (
