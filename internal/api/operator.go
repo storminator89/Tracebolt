@@ -521,6 +521,10 @@ func (h *operatorHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.windowsEventContent(w, r)
 		return
 	}
+	if strings.HasPrefix(r.URL.Path, "/api/devices/") && strings.Contains(r.URL.Path, "/windows-services") {
+		h.windowsServiceAPI(w, r)
+		return
+	}
 	if strings.HasPrefix(r.URL.Path, "/api/devices/") && (strings.Contains(r.URL.Path, "/windows-capacity") || strings.Contains(r.URL.Path, "/windows-resource")) {
 		h.windowsCapacityAPI(w, r)
 		return

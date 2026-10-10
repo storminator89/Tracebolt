@@ -17,6 +17,7 @@ import (
 	"localrmm/internal/enrollmentcrypto"
 	"localrmm/internal/model"
 	"localrmm/internal/windowscontact"
+	"localrmm/internal/windowsservicehealth"
 )
 
 const (
@@ -41,6 +42,8 @@ type Input struct {
 	// Already-consented basic samples, selected only by the resource policy adapter.
 	CPU    model.Metric
 	Memory model.Metric
+	// Service metadata shares this accepted-source transaction, not the percentage engine.
+	Services windowsservicehealth.Sample
 }
 type Policy struct {
 	Enabled          bool   `json:"enabled"`

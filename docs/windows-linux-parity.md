@@ -68,7 +68,14 @@ not alter the baseline comparison below.
   RAM remains physical memory not immediately available. Confirmation/recovery
   needs distinct advancing source observations. Disk opt-in never enables these
   policies. No host scope, AI or notification is added, and native/browser
-  acceptance and selected-service rules remain separate open work.
+  acceptance remain separate open work.
+- [Selected-service checks](windows-service-health.md) add an independent default-off
+  should-be-running policy over unique exact reported names, with a readable EN/DE
+  chooser, discrete stopped/paused confirmation and running recovery, durable
+  history and the same coordinated source read. Missing or duplicate rows always
+  stay unknown. No full-host visibility, service-instance continuity, crash cause,
+  native grant, service action, AI or notification is inferred. Native lifecycle,
+  real interoperability and hosted-browser acceptance remain separate gates.
 - Online discovery, Update/CVE mapping, update installation, remote service
   actions and lifecycle/AI gaps below remain open. No new grant is enabled by
   existing Setup receipts or a manager update.

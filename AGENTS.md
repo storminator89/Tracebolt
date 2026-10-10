@@ -149,6 +149,12 @@ file as navigation and project constraints, never as permission to act on a host
   engine, tagged storage, API or UI. Preserve disk v1 bytes, exact observed-group
   CPU and physical-memory semantics, independent opt-ins/floors, one coordinated
   source read, and unknown evidence. No host collection, AI or alarm grant follows.
+- Selected Windows service checks are a separate default-off manager policy.
+  Read `docs/windows-service-health.md` before changing exact-name selection,
+  discrete state evaluation, source admission, API or UI. Keep native
+  `internal/windowsservice` lifecycle code separate from the manager-only
+  `internal/windowsservicehealth` package. Missing/duplicate rows never prove down;
+  preserve positive partial-row scope, original capture, authority and durable floors.
 - Follow Go/Node versions and dependency locks in this revision. Validate commands
   against actual flags/config. Distinguish runtime tests from cross-builds, skipped
   container tests, and proposed functionality. Never invent install/enroll flags.

@@ -11,6 +11,7 @@ import (
 	"localrmm/internal/windowscapacity"
 	"localrmm/internal/windowscontact"
 	"localrmm/internal/windowsresource"
+	"localrmm/internal/windowsservicehealth"
 	"net/http"
 	"strings"
 	"sync"
@@ -89,6 +90,10 @@ func (m *windowsCapacityMonitor) evaluate(ctx context.Context) (err error) {
 	if err != nil {
 		return err
 	}
+	services, err := m.store.WindowsServiceStates(ctx)
+	if err != nil {
+		return err
+	}
 	enabled := false
 	for _, state := range states {
 		if state.Policy.Enabled {
@@ -98,6 +103,12 @@ func (m *windowsCapacityMonitor) evaluate(ctx context.Context) (err error) {
 	}
 	for _, state := range resources {
 		if state.Assessment.Policy.Enabled {
+			enabled = true
+			break
+		}
+	}
+	for _, state := range services {
+		if state.Policy.Enabled {
 			enabled = true
 			break
 		}
@@ -151,6 +162,21 @@ func (m *windowsCapacityMonitor) evaluate(ctx context.Context) (err error) {
 			return err
 		}
 	}
+	for id, state := range services {
+		if err = ctx.Err(); err != nil {
+			return err
+		}
+		if !state.Policy.Enabled {
+			continue
+		}
+		in, exists := authority[id]
+		if !exists {
+			in = windowscapacity.Input{Input: windowscontact.Input{DeviceID: id, InvitationID: state.InvitationID, CertificateHash: state.CertificateHash}}
+		}
+		if _, err = m.store.EvaluateWindowsService(ctx, windowsservicehealth.Input{Input: in.Input, Sample: in.Services}, now, m.epoch); err != nil {
+			return err
+		}
+	}
 	if !contactReadTime(now, m.source.Now().UTC()) {
 		return windowscapacity.ErrInvalid
 	}
@@ -159,7 +185,7 @@ func (m *windowsCapacityMonitor) evaluate(ctx context.Context) (err error) {
 }
 
 // RunWindowsCapacityMonitor runs independently of Linux checks, AI workers and
-// browser visibility. It evaluates only existing disk, CPU and physical-RAM metrics.
+// browser visibility. It evaluates only existing disk, CPU, physical-RAM and selected-service metadata.
 func (s *Server) RunWindowsCapacityMonitor(ctx context.Context, warn func()) error {
 	s.mu.RLock()
 	m := s.windowsCapacity
