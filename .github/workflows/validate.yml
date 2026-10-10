@@ -73,12 +73,12 @@ jobs:
         if: matrix.platform == 'windows'
         env:
           GOTOOLCHAIN: local
-        run: go test -buildvcs=false -count=1 ./internal/windowseventcontent ./internal/windowseventrequest ./internal/windowsupdates
+        run: go test -buildvcs=false -count=1 ./internal/windowseventcontent ./internal/windowseventrequest ./internal/windowsupdates ./internal/windowsupdateworker
       - name: Vet Windows parity sources (no host collection)
         if: matrix.platform == 'windows'
         env:
           GOTOOLCHAIN: local
-        run: go vet -buildvcs=false ./internal/windowseventcontent ./internal/windowseventrequest ./internal/windowsupdates
+        run: go vet -buildvcs=false ./internal/windowseventcontent ./internal/windowseventrequest ./internal/windowsupdates ./internal/windowsupdateworker
       - name: Execute ARM64 Linux installer and helper fixture tests natively
         if: matrix.platform == 'linux' && matrix.arch == 'arm64'
         env:

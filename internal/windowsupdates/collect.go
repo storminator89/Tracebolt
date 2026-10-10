@@ -40,8 +40,8 @@ type Result interface {
 }
 type OpenSource func(context.Context) (Source, error)
 
-// Collect is source-only and is not called by Setup, the agent or the manager.
-// It requires separate explicit local consent. No caller-selectable query,
+// Collect is invoked only by the separately consented isolated runtime worker,
+// never directly by the ordinary sender or manager. No caller-selectable query,
 // remote address, service registration, installation or online fallback exists.
 func Collect(ctx context.Context, req Request) (Snapshot, error) {
 	return collect(ctx, req, openNative)

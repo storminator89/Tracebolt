@@ -1,5 +1,5 @@
 {
-  "goSourceSha256": "788ff81cf01409fb09247bff815e48e8abef0cd5053126932244e27b013669ec",
+  "goSourceSha256": "7d6ae2684ed5b5358b0a9d3309327fe39ee7e1bfca4c69318d37d0b11680b988",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -331,6 +331,15 @@
       "TestSetupWizardRejectsSecretAndHTTPBootstrap",
       "TestSetupWizardRemovalWaitsForExactOwnedStopAndAbsence",
       "TestSetupWritesIntentBeforeSCMAndPreparedReceiptBeforeEnrollment",
+      "TestUpdatesConsentErrorsAndInvalidModes",
+      "TestUpdatesConsentFlagsExplicitAndBounded",
+      "TestUpdatesConsentNeverConfiguresWithMissingDependencies",
+      "TestUpdatesDisclosureMustCompleteBeforeDispatch",
+      "TestUpdatesFlagsDoNotAuthorizeAnotherScope",
+      "TestUpdatesRequiresOwnedStoppedService",
+      "TestUpdatesWorkerEntryRechecksActualParentBeforeReturning",
+      "TestUpdatesWorkerNativeWatchdogCannotTargetAnotherProcess",
+      "TestUpdatesWorkerWatchdogUsesOnlyInjectedTermination",
       "TestVolumeConsentFlagsExplicitAndBounded",
       "TestWindowsBootstrapMustMatchExplicitLocalProfile",
       "TestWindowsInventoryConsentDispatchAndConflicts",
@@ -340,6 +349,8 @@
       "TestWindowsLifecycleFlagsFailBeforeAnyOperation",
       "TestWindowsLifecycleHelpAndErrorsAreInertAndSanitized",
       "TestWindowsLifecycleShortWriteFails",
+      "TestWindowsUpdatesCanceledInspectionCannotWriteConsent",
+      "TestWindowsUpdatesHelpDescribesIndependentScope",
       "TestWriteFailureStagesUseFixedFiniteCategory"
     ],
     "localrmm/deploy/windows-setup": [],
@@ -877,7 +888,9 @@
       "TestWindowsContactMonitorRejectsDuplicateIDsBeforeWrites",
       "TestWindowsContactReplacementIdentityCannotReadRetainedHistory",
       "TestWindowsSetupCapabilitiesAbsentOnDeveloper",
-      "TestWindowsSetupCapabilitiesExactPublicGuardedTLSContract"
+      "TestWindowsSetupCapabilitiesExactPublicGuardedTLSContract",
+      "TestWindowsUpdatesOperatorSessionAndResponseTimeExpiry",
+      "TestWindowsUpdatesResourceRequiresExistingOperatorRoute"
     ],
     "localrmm/internal/applicationcheck": [
       "TestApplicationConfigOmittedDisabledAndBinding",
@@ -1508,6 +1521,9 @@
       "TestWindowsNetworkIndependentExpiryAndRevocation",
       "TestWindowsProcessMetricsIndependentExpiryAndRevocation",
       "TestWindowsServiceStartupIndependentExpiryAndRevocation",
+      "TestWindowsUpdatesCannotBeAdmittedUnderBasicIdentity",
+      "TestWindowsUpdatesDurablePrivateReplayAndCaptureFloor",
+      "TestWindowsUpdatesPrivateIndependentExpiryAndReceipt",
       "TestWindowsVolumeViewIndependentExpiryAndRevocation"
     ],
     "localrmm/internal/enrollmenttransport": [
@@ -2074,6 +2090,23 @@
       "TestWindowsSetupCompatibilityResponseBoundedAndExact",
       "TestWindowsSetupExplicitHTTPProfileKeepsOriginalTransport",
       "TestWindowsSetupTransportDoesNotBroadenProofTransport",
+      "TestWindowsUpdatesAbsentKeepsOldPendingBytes",
+      "TestWindowsUpdatesAll64SelectionsBothTransportAdmissions",
+      "TestWindowsUpdatesConsentCreateOnlyAndReenable",
+      "TestWindowsUpdatesConsentFreshCreateRacesAndFailuresDoNotAdopt",
+      "TestWindowsUpdatesConsentMissingExistingRecordFailsClosedEveryMode",
+      "TestWindowsUpdatesConsentNeverCreatesOnPreviewDisableOrAccessFailure",
+      "TestWindowsUpdatesConsentRejectsIncompleteForeignAndFailedStorage",
+      "TestWindowsUpdatesConsentSeparateProtectedManifest",
+      "TestWindowsUpdatesConsentStorageIsolation",
+      "TestWindowsUpdatesDoesNotRelaxObservationEnvelope",
+      "TestWindowsUpdatesExactRetryRestartCaptureAndDisable",
+      "TestWindowsUpdatesInvalidRequestDoesNotReadHost",
+      "TestWindowsUpdatesMaximalFramePreservesSiblingBindings",
+      "TestWindowsUpdatesPendingReplacementAndThreeRevocationChecks",
+      "TestWindowsUpdatesPreviewPreservesExistingRecord",
+      "TestWindowsUpdatesRejectsCollectorBindingAndCaptureRewrite",
+      "TestWindowsUpdatesWorkerActivatedReceiptBinding",
       "TestWindowsVolumeConsentCreateOnlyAndReenable",
       "TestWindowsVolumeConsentNeverCreatesOnPreviewDisableOrAccessFailure",
       "TestWindowsVolumeConsentRejectsIncompleteForeignAndFailedStorage",
@@ -2135,7 +2168,11 @@
       "TestPackageFrameRawReservationsAndWholeFrame",
       "TestPackageFrameStrictWireNegatives",
       "TestPrivateDirectorySidecarsAndColumnBinding",
-      "TestStorageRejectsSymlinksAndInsecureExistingFiles"
+      "TestStorageRejectsSymlinksAndInsecureExistingFiles",
+      "TestWindowsUpdatesCacheQualityNeverBecomesPatchAssessment",
+      "TestWindowsUpdatesSnapshotAndAggregateBudgets",
+      "TestWindowsUpdatesV7AllSiblingShapesAndOldBytes",
+      "TestWindowsUpdatesV7RejectsMalformedBindingsAndClosedShapes"
     ],
     "localrmm/internal/lantrust": [
       "TestApprovalRejectsInvalidCertsAndLabels",
@@ -3263,6 +3300,9 @@
       "TestNativeSCMStructureABI",
       "TestNativeTrustedACLMemoryFixtures",
       "TestNonWindowsPublicAPIsRejectWithoutMutation",
+      "TestObservationWorkerExactRestrictedIdentityAndRunningParent",
+      "TestObservationWorkerIdentityFailurePrecedesStateReads",
+      "TestObservationWorkerRejectsOrphanAndPIDReuse",
       "TestPartialCreateNeverDeletesOrAdopts",
       "TestPlanAndInspectAreReadOnly",
       "TestPlanTamperingCannotChooseTarget",
@@ -3352,6 +3392,11 @@
       "TestWindowsRenameABI"
     ],
     "localrmm/internal/windowsupdates": [
+      "TestActivationIntegrityAcceptsOnlyHighAndSystem",
+      "TestActivationIntegrityRejectsMalformedNativeRecords",
+      "TestActivationTokenFailuresCloseHandlesAndStop",
+      "TestActivationTrustNativeSurfaceIsReadOnlyAndFailClosed",
+      "TestActivationTrustPrecedesCOMOnLockedThread",
       "TestBadRowsStayPartialAndErrorReasonsSanitized",
       "TestCanceledRowsReturnNoSnapshot",
       "TestCancellationAfterEveryControlStopsBeforeNextCall",
@@ -3370,6 +3415,24 @@
       "TestResultTruthAndNoCleanConclusionFromEmptyCache",
       "TestSanitizedMetadata",
       "TestSourceNilAndFailureOwnership"
+    ],
+    "localrmm/internal/windowsupdateworker": [
+      "TestBoundedOutputCancelsAndDoesNotRetainOverflow",
+      "TestFixedCurrentExecutable",
+      "TestInvalidRequestNeverStartsProcess",
+      "TestProcessConstructionFailureIsFiniteUnavailable",
+      "TestReapedAssertionRejectsLiveAndUnwaitedChild",
+      "TestRequestCanonicalAndBounded",
+      "TestServeBoundsInputAndOutputWrites",
+      "TestServeDeniesAbsentOrChangedAuthority",
+      "TestServeMalformedInputHasNoAuthorityOrNativeRead",
+      "TestServeRevalidatesBeforeAndAfterNative",
+      "TestServeRevalidatesFailedNativeAndRejectsForeignSnapshot",
+      "TestSubprocessBudgetKillsAndReaps",
+      "TestSubprocessCallerCancellationKillsAndReaps",
+      "TestSubprocessInheritedPipeDoesNotStallWait",
+      "TestSubprocessResponsesAndEnvironment",
+      "TestWorkerFixture"
     ],
     "localrmm/internal/windowsvolumes": [
       "TestBoundsAndCounts",
@@ -3572,7 +3635,8 @@
       "TestSupportBundleRejectsRoleMetadataReuse",
       "TestSupportBundleRejectsUnavailableHealthyMetric",
       "TestSystemInventoryOperatorActualTLSHTTPAllPagesAndDelayedExpiry"
-    ]
+    ],
+    "localrmm/web/scripts": []
   },
   "schemaVersion": 1,
   "sourceCommit": "fccc4b00cd8a144afd58e4b995747afab7a10022"

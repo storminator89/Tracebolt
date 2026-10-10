@@ -1,17 +1,19 @@
 # Windows Update cache inspection candidate
 
-**Source-only candidate, 10 October 2026. No native Windows acceptance or runtime
-integration is established.** This package is a first read-only Windows Update
-slice, not Linux feature parity, a CVE evaluator or update installation support.
+**Default-off source candidate, 10 October 2026. Native Windows acceptance is
+pending.** This collector now has a separate [runtime/manager/UI source path](windows-update-runtime.md).
+It is not in the published Windows preview, does not establish Linux feature
+parity, and is not a CVE evaluator or update-installation mechanism.
 
 [Windows status](windows-status.md) · [Read-observation consent](windows-read-observation-setup.md)
 
 ## Implemented source boundary
 
 `internal/windowsupdates` defines a separate consent and a bounded inspection
-contract. No current CLI, Setup flow, installed service, sender, manager API,
-dashboard, provider or telemetry path imports or invokes it. Existing Windows
-five-scope approvals and service-startup consent do not grant this scope.
+contract. The sender invokes it only inside an independently verified, bounded
+owned worker after the new local grant. The ordinary service does not make a
+synchronous WUA call. Existing Windows five-scope approvals and service-startup
+consent do not grant this scope; Setup, provider/AI and action paths remain excluded.
 
 The Windows source creates a local in-process Windows Update Agent (WUA) session
 through COM on one locked OS thread. Before a single fixed search it sets and
@@ -66,6 +68,38 @@ WUA reports content already cached; the adapter does not request a download.
   Raw HRESULT messages, exception descriptions and arbitrary source errors never
   enter snapshots. Caller cancellation returns an error and no snapshot.
 
+## COM activation trust boundary
+
+A fixed update-session CLSID avoids ProgID resolution but does not itself pin a
+provider DLL. Microsoft documents per-user COM class configuration precedence,
+LocalService's own HKCU hive, and in-process activation of the DLL selected by
+class registration. Those facts alone do not establish that this worker is
+vulnerable: Microsoft's [COM per-user configuration restriction](https://learn.microsoft.com/en-us/previous-versions/bb756926(v=msdn.10))
+states that, starting with Vista/Server 2008, processes above Medium integrity
+ignore per-user COM configuration and use per-machine configuration.
+
+The native source makes that precondition explicit. After locking its OS thread
+and before COM initialization or activation, it requires no thread impersonation
+token and queries its current process token with `TOKEN_QUERY` only. A bounded
+two-call `TokenIntegrityLevel` query, capped at 4 KiB, must contain a valid mandatory-label SID
+whose pointer and complete bytes remain inside the returned buffer. Only High
+(`S-1-16-12288`) and System (`S-1-16-16384`) are accepted. Medium, Medium Plus,
+unknown or malformed labels, token/query errors and impersonation all fail
+closed before WUA activation. The adapter never raises integrity, adjusts a
+token, impersonates, overrides registry mappings or changes registry/security
+settings. The ordinary worker identity, grant and parent-verification gates
+remain separate requirements.
+
+Activation continues through documented `CoCreateInstance` with the fixed CLSID
+and `CLSCTX_INPROC_SERVER` only. It does not call `DllGetClassObject` directly;
+Microsoft's [caller guidance](https://learn.microsoft.com/en-us/windows/win32/api/combaseapi/nf-combaseapi-dllgetclassobject)
+explicitly discourages that bypass. The existing system-DLL loader is retained
+for `ole32.dll` and `oleaut32.dll`. This trusts the operating system, protected
+machine registration and installed executable; it is not a claim to validate
+every later DLL/dependency load or isolate all services sharing LocalService.
+Machine-registration/system compromise and arbitrary code already inside the
+worker are outside this narrow guard.
+
 ## Bounds and synchronous-call limitation
 
 The source examines at most 128 updates from WUA's native result order, sorts the
@@ -86,10 +120,12 @@ before bounded traversal begins. Therefore the source does not establish a hard
 wall-time bound, a cap on WUA's own memory, or service-stop responsiveness. It
 spawns no abandoned background worker to pretend cancellation completed.
 
-Before installed-service integration, choose and test a bounded isolation/lifetime
-strategy that does not let a slow native call stall reporting or service shutdown.
-Do not enable this source in the current main agent loop without resolving that
-gate and measuring native behavior on separately approved disposable Windows VMs.
+The [runtime adapter](windows-update-runtime.md) isolates this source in the
+current installed executable's fixed worker mode. Its parent enforces a process
+deadline and reaps the child; a child-only watchdog also covers parent loss.
+That limits the owned client process, not WUA service-internal work or memory.
+The exact LocalService/COM behavior, termination and ordinary-reporting continuity
+still require separately approved native Windows measurement before release.
 
 ## Consent and contracts
 
@@ -111,33 +147,30 @@ gate and measuring native behavior on separately approved disposable Windows VMs
   bindings, source freshness, count or quality semantics, and owns its copied
   row/KB slices.
 
-No consent sidecar, persistent generation ledger or wire version is introduced by
-this slice. The consent and HTTP warning strings are contracts for a future
-explicit local approval flow, not a new supported command or a runtime grant.
+The collector itself does not write consent or sender state. The separate
+[runtime adapter](windows-update-runtime.md) adds protected create-only consent
+and explicit source CLI commands; [v7 manager admission](windows-update-manager.md)
+retains exact pending bytes and original capture/replay boundaries. Documentation
+or source compilation is not a runtime grant.
 
-## Planned separate end-to-end slice
+## Separate end-to-end source path
 
-1. Add create-only, identity-bound local preview/enable/disable handling in
-   `internal/lanclient` with protected persistence and explicit disclosure of
-   update titles/identifiers, unknown cache freshness and HTTP-test exposure.
-   Retain disabled receipts and independent durable generation/retry floors.
-2. Resolve the synchronous source lifetime gate; then add opt-in collection in
-   the Windows sender. Never activate from a manager request, schema upgrade,
-   Setup receipt or an older profile. The fresh five-scope coordinator stays as-is.
-3. Add a new backwards-compatible Windows wire version in
-   `internal/windowsmanaged`, leaving v1-v6 accepted bytes unchanged. Bind the
-   optional update snapshot to the base generation, grant and original capture;
-   enforce the complete frame budget and durable exact retry bytes.
-4. Extend admission, consumption/replay and private manager persistence in
-   `internal/enrollmentservice`, `internal/enrollmentstore` and `internal/store`.
-   A manager schema change must not grant endpoint collection.
-5. Add an operator-only bounded API and dashboard view in `internal/api` and
-   `web`. Preserve stale/partial/unavailable truth, private expiry and the unknown
-   cache-freshness label. No "up to date" inference from zero rows. Keep update
-   evidence excluded from provider packets and public health summaries.
-6. Test consent-negative, cross-generation, replay, exact-retry, disabled/stale
-   retention, old-frame compatibility, malformed metadata, UI escaping, budgets
-   and provider exclusion before separately approved native acceptance.
+- [Local consent and isolated sender](windows-update-runtime.md): stopped-service
+  preview/enable/disable, independent grant, pre/post/send rechecks, bounded owned
+  worker and exact pending-byte retries. No promotion of old identities or grants.
+- [Protocol, durable manager and operator view](windows-update-manager.md): new
+  v7 with required update snapshot, optional old siblings, unchanged 72 KiB frame
+  budget, exact base generation/capture binding, original receipt, capture floor,
+  revocation and 24-hour private expiry. Old v1-v6 frames remain accepted.
+- [Shared Updates dashboard](windows-update-dashboard.md): bounded cached rows,
+  original inspection time, unknown cache freshness, truthful empty/partial/denied
+  states, local search/sort/page and explicit session/navigation/expiry clearing.
+  Refresh reads the accepted manager snapshot and never triggers a native scan.
+
+Portable tests and synthetic browser fixtures cover those contracts. They do not
+prove native WUA visibility under the installed token, actual offline behavior or
+Windows-to-Linux production interoperability. The published preview's five-scope
+native subset does not cover this new capability.
 
 Update/CVE mapping and selected update installation remain separate future work
 requiring their own trustworthy applicability/feed data and mutation consent,
@@ -150,8 +183,15 @@ identity/capture binding, cancellation, partial/empty/failed searches, large
 counts, bounded native-row traversal, output fitting, sanitized metadata and
 error reasons, UTF-16 rejection, canonical serialization and unsupported hosts.
 Windows-only tests inspect COM ABI layouts, pointer-union access and HRESULT
-mapping without opening WUA. A portable source-boundary test guards the reviewed
-DLL/API/property surface. Cross-builds are compilation evidence only.
+mapping without opening WUA. Portable synthetic integrity-label fixtures cover
+both pointer widths, allowed/rejected levels, malformed/truncated records and
+out-of-buffer pointers. Injected token-API fixtures cover open/query failures,
+impersonation, null handles, size/fill growth or truncation, bounded allocation,
+no retry and handle closure, including a close failure overriding success.
+Source-order fixtures pin the no-impersonation/query-only API surface, pre-COM
+trust gate and OS-thread cleanup. These fixtures never query a real token or
+initialize COM. A portable source-boundary test guards the
+reviewed DLL/API/property surface. Cross-builds are compilation evidence only.
 
 Run the focused portable checks with the repository's Go version:
 
@@ -171,6 +211,16 @@ caller rights, repeated cancellation/cleanup, resource measurements and traffic
 observation proving no online scan by this client. Do not use fixtures or an
 unsigned cross-build as permission for a real host read or a new persistent grant.
 
+Activation acceptance must also record the exact child process's LocalService
+identity, owning service SID, existing High/System integrity label and absence
+of thread impersonation before COM activation. Microsoft says system services
+ordinarily receive System integrity; that is not a measurement of this child.
+Verify the actual loaded provider/dependency provenance and the protected
+per-machine registration, along with successful denied/allowed gate behavior and
+balanced COM/thread cleanup. Do not modify host registration, permissions,
+identity, privileges or integrity to make this gate pass. A failed trust gate
+must remain a denied observation with ordinary reporting still available.
+
 ## Microsoft references
 
 - [WUA Online property](https://learn.microsoft.com/en-us/windows/win32/api/wuapi/nf-wuapi-iupdatesearcher-get_online)
@@ -181,3 +231,18 @@ unsigned cross-build as permission for a real host read or a new persistent gran
 - [Update session CLSID assignment](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-uamg/e839e7e0-1795-451b-94ef-abacd6cbecac)
 - [IDispatch invocation and property-put convention](https://learn.microsoft.com/en-us/windows/win32/api/oaidl/nf-oaidl-idispatch-invoke)
 - [VARIANT layout](https://learn.microsoft.com/en-us/windows/win32/api/oaidl/ns-oaidl-variant)
+- [COM class configuration precedence](https://learn.microsoft.com/en-us/windows/win32/com/classes-and-servers)
+- [LocalService account and its HKCU hive](https://learn.microsoft.com/en-us/windows/win32/services/localservice-account)
+- [Merged HKEY_CLASSES_ROOT view](https://learn.microsoft.com/en-us/windows/win32/sysinfo/merged-view-of-hkey-classes-root)
+- [COM process-integrity restriction on per-user configuration](https://learn.microsoft.com/en-us/previous-versions/bb756926(v=msdn.10))
+- [Mandatory Integrity Control](https://learn.microsoft.com/en-us/windows/win32/secauthz/mandatory-integrity-control)
+- [Integrity RID constants](https://learn.microsoft.com/en-us/windows/win32/secauthz/well-known-sids)
+- [TOKEN_MANDATORY_LABEL](https://learn.microsoft.com/en-us/windows/win32/api/winnt/ns-winnt-token_mandatory_label)
+- [GetTokenInformation query contract](https://learn.microsoft.com/en-us/windows/win32/api/securitybaseapi/nf-securitybaseapi-gettokeninformation)
+- [OpenThreadToken](https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-openthreadtoken)
+- [CoCreateInstance and class-factory lifetime](https://learn.microsoft.com/en-us/windows/win32/api/combaseapi/nf-combaseapi-cocreateinstance)
+- [CLSCTX in-process selection](https://learn.microsoft.com/en-us/windows/win32/api/wtypesbase/ne-wtypesbase-clsctx)
+- [DllGetClassObject caller restrictions](https://learn.microsoft.com/en-us/windows/win32/api/combaseapi/nf-combaseapi-dllgetclassobject)
+- [LoadLibraryEx directory/dependency search](https://learn.microsoft.com/en-us/windows/win32/api/libloaderapi/nf-libloaderapi-loadlibraryexw)
+- [DLL search order and redirection](https://learn.microsoft.com/en-us/windows/win32/dlls/dynamic-link-library-search-order)
+- [COM thread initialization and balanced cleanup](https://learn.microsoft.com/en-us/windows/win32/api/combaseapi/nf-combaseapi-coinitializeex)

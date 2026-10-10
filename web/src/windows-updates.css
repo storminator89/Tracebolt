@@ -1,0 +1,5 @@
+.windows-updates{min-width:0}
+.windows-updates-shortened,.windows-updates-revision{display:block;margin-top:5px;font-size:11px;line-height:1.5;color:var(--secondary)}
+.windows-updates-table th:first-child{width:28%}
+.windows-updates-table th:last-child{width:23%}
+@media(max-width:600px){.windows-updates-table td>span{min-width:0;overflow-wrap:anywhere}}

@@ -15,7 +15,7 @@ import { validWindowsInventoryView, type WindowsInventoryView } from './windows-
 vi.mock('./api', async original => ({ ...await original<typeof import('./api')>(), request: vi.fn() }));
 const flush = () => act(async () => {});
 function resource(view: WindowsInventoryView = windowsServiceStartupView()): WindowsInventoryResource {
-    return { elapsedMS: 0, view, snapshot: view.snapshot, status: view.status, loading: false, error: null, refresh: vi.fn(), serviceStartup: view.serviceStartup ?? null, serviceStartupStale: view.status === 'stale', processMetrics: null, processMetricsStale: false, network: null, networkStale: false, networkExpired: false, volumes: null, volumesStale: false, events: null, eventsStale: false };
+    return { updates: null, updatesStale: false, updatesExpired: false, updatesAhead: false, elapsedMS: 0, view, snapshot: view.snapshot, status: view.status, loading: false, error: null, refresh: vi.fn(), serviceStartup: view.serviceStartup ?? null, serviceStartupStale: view.status === 'stale', processMetrics: null, processMetricsStale: false, network: null, networkStale: false, networkExpired: false, volumes: null, volumesStale: false, events: null, eventsStale: false };
 }
 function Harness({ id = windowsDeviceId, session = 'fixture', enabled = true }: { id?: string; session?: string; enabled?: boolean }) { return <WindowsInventoryWorkspace key={`${id}:${session}`} resource={useWindowsInventory(id, enabled, session)}/>; }
 const selectServices = (locale = 'en') => fireEvent.click(screen.getByRole('tab', { name: locale === 'de' ? 'Dienste' : 'Services' }));

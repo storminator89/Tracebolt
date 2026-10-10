@@ -9,6 +9,7 @@ import (
 	"localrmm/internal/windowsmanaged"
 	"localrmm/internal/windowsnetwork"
 	"localrmm/internal/windowsprocessmetrics"
+	"localrmm/internal/windowsupdates"
 	"localrmm/internal/windowsvolumes"
 	"time"
 )
@@ -30,6 +31,7 @@ type WindowsInventoryView struct {
 	ProcessMetrics      *windowsprocessmetrics.Snapshot        `json:"processMetrics,omitempty"`
 	Network             *windowsnetwork.Snapshot               `json:"network,omitempty"`
 	ServiceStartup      *windowsmanaged.ServiceStartupSnapshot `json:"serviceStartup,omitempty"`
+	Updates             *windowsupdates.Snapshot               `json:"updates,omitempty"`
 	certificateNotAfter int64
 }
 
@@ -85,6 +87,7 @@ func (s *Store) WindowsInventoryView(ctx context.Context, id string, now time.Ti
 			out.ProcessMetrics = frame.WindowsProcessMetrics
 			out.Network = frame.WindowsNetwork
 			out.ServiceStartup = frame.WindowsServiceStartup
+			out.Updates = frame.WindowsUpdates
 			out.Sequence = &seq
 			out.ReceivedAt = &received
 			out.Status = "fresh"
@@ -99,6 +102,7 @@ func (s *Store) WindowsInventoryView(ctx context.Context, id string, now time.Ti
 				out.ProcessMetrics = nil
 				out.Network = nil
 				out.ServiceStartup = nil
+				out.Updates = nil
 			}
 		}
 		if identity.State == enrollmentstate.Revoked || identity.State == enrollmentstate.Canceled || identity.State == enrollmentstate.Rejected || identity.State == enrollmentstate.Expired || identity.Intent.NotAfter > 0 && now.Unix() >= identity.Intent.NotAfter {
@@ -109,6 +113,7 @@ func (s *Store) WindowsInventoryView(ctx context.Context, id string, now time.Ti
 			out.ProcessMetrics = nil
 			out.Network = nil
 			out.ServiceStartup = nil
+			out.Updates = nil
 		}
 		return nil
 	})
@@ -133,6 +138,7 @@ func (v WindowsInventoryView) RecheckAt(now time.Time) (WindowsInventoryView, er
 		v.ProcessMetrics = nil
 		v.Network = nil
 		v.ServiceStartup = nil
+		v.Updates = nil
 		return v, nil
 	}
 	if v.Snapshot != nil {
@@ -154,6 +160,7 @@ func (v WindowsInventoryView) RecheckAt(now time.Time) (WindowsInventoryView, er
 			v.ProcessMetrics = nil
 			v.Network = nil
 			v.ServiceStartup = nil
+			v.Updates = nil
 		}
 	}
 	if v.Events != nil && now.Sub(v.Events.CollectedAt) >= 24*time.Hour {
@@ -170,6 +177,9 @@ func (v WindowsInventoryView) RecheckAt(now time.Time) (WindowsInventoryView, er
 	}
 	if v.ServiceStartup != nil && now.Sub(v.ServiceStartup.CollectedAt) >= 24*time.Hour {
 		v.ServiceStartup = nil
+	}
+	if v.Updates != nil && (v.Snapshot == nil || now.Sub(v.Updates.CollectedAt) >= 24*time.Hour) {
+		v.Updates = nil
 	}
 	return v, nil
 }

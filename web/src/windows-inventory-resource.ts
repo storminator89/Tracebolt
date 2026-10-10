@@ -14,7 +14,7 @@ function elapsed(anchor: Anchor): number {
  * session, navigation and visibility changes discard all private row data. */
 export function useWindowsInventory(deviceId: string, enabled: boolean, sessionKey: string | null = null) {
     const key = `${deviceId}:${sessionKey ?? ''}:${enabled}`;
-    const [data, setData] = useState<{ key: string; view: WindowsInventoryView } | null>(null), [loading, setLoading] = useState(false), [error, setError] = useState<WindowsInventoryFailure | null>(null), [, tick] = useState(0);
+    const [data, setData] = useState<{ key: string; view: WindowsInventoryView; accepted: Anchor } | null>(null), [loading, setLoading] = useState(false), [error, setError] = useState<WindowsInventoryFailure | null>(null), [, tick] = useState(0);
     const alive = useRef(false), locked = useRef(false), suspended = useRef(false), epoch = useRef(0), anchor = useRef<Anchor | null>(null), latestServer = useRef<{ value: string; floor: string; accepted: Anchor } | null>(null);
     const pending = useRef<{ controller: AbortController; timeout: number; started: Anchor } | null>(null);
     const cancel = useCallback(() => { epoch.current++; pending.current?.controller.abort(); window.clearTimeout(pending.current?.timeout); pending.current = null; if (alive.current) setLoading(false); }, []);
@@ -40,7 +40,7 @@ export function useWindowsInventory(deviceId: string, enabled: boolean, sessionK
             // A replay or slowly advancing manager clock must not renew retained rows.
             const previous = latestServer.current;
             if (previous !== null && (inventoryAge(server, previous.value) < 0 || inventoryAge(server, previous.floor) + 1500 < elapsed(previous.accepted))) { clear('clock'); return; }
-            latestServer.current = previous ? { ...previous, value: server } : { value: server, floor: server, accepted: capture() }; anchor.current = started; setData({ key, view: response });
+            latestServer.current = previous ? { ...previous, value: server } : { value: server, floor: server, accepted: capture() }; anchor.current = started; setData({ key, view: response, accepted: capture() });
         } catch (caught) {
             if (!active()) return;
             if (caught instanceof APIError && caught.status === 401) { locked.current = true; clear('session'); }
@@ -81,6 +81,15 @@ export function useWindowsInventory(deviceId: string, enabled: boolean, sessionK
     const startupAge = view?.serviceStartup ? inventoryAge(view.serverNow, view.serviceStartup.collectedAt) + age : Infinity;
     const serviceStartup = view && (status === 'fresh' || status === 'stale') && startupAge < 86400000 ? view.serviceStartup ?? null : null;
     const serviceStartupStale = serviceStartup !== null && (status !== 'fresh' || startupAge < 0 || startupAge > 120000);
-    return { serviceStartup, serviceStartupStale, elapsedMS: age, network, networkStale, networkExpired, processMetrics, processMetricsStale, volumes, volumesStale, events, eventsStale, view, snapshot: view && (status === 'fresh' || status === 'stale') ? view.snapshot : null, status, loading: enabled && loading, error: enabled ? error : null, refresh: () => void read() };
+    const updatesAge = view?.updates ? inventoryAge(view.serverNow, view.updates.collectedAt) + age : Infinity;
+    // Request-start age remains the conservative expiry anchor. Future-row
+    // visibility instead waits from acceptance, so response latency cannot
+    // make a still-future capture appear to have happened already.
+    const updatesAcceptedAge = data ? elapsed(data.accepted) : Infinity;
+    const updatesAhead = Boolean(view?.updates && (!Number.isFinite(updatesAcceptedAge) || inventoryAge(view.updates.collectedAt, view.serverNow) > updatesAcceptedAge));
+    const updates = view && (status === 'fresh' || status === 'stale') && !updatesAhead && updatesAge >= 0 && updatesAge < 86400000 ? view.updates ?? null : null;
+    const updatesStale = updates !== null && (status !== 'fresh' || updatesAge > 120000);
+    const updatesExpired = Boolean(view?.updates) && Number.isFinite(updatesAge) && updatesAge >= 86400000;
+    return { updates, updatesStale, updatesExpired, updatesAhead, serviceStartup, serviceStartupStale, elapsedMS: age, network, networkStale, networkExpired, processMetrics, processMetricsStale, volumes, volumesStale, events, eventsStale, view, snapshot: view && (status === 'fresh' || status === 'stale') ? view.snapshot : null, status, loading: enabled && loading, error: enabled ? error : null, refresh: () => void read() };
 }
 export type WindowsInventoryResource = ReturnType<typeof useWindowsInventory>;

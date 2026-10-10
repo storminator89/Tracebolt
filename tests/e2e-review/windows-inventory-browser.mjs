@@ -1,3 +1,4 @@
+import {windowsUpdatesBrowserFixture,exerciseWindowsUpdates} from './windows-updates-browser.mjs';
 import {withWindowsOSProvenance,exerciseWindowsOSProvenance} from './windows-os-provenance-browser.mjs';
 import {exerciseWindowsContactHistory,windowsContactBrowserFixture,windowsContactHistoryStageNames} from './windows-contact-history-browser.mjs';
 import {exerciseWindowsHealth,windowsHealthStageNames} from './windows-health-browser.mjs';
@@ -18,7 +19,7 @@ const {windowsNetwork,windowsVolumes,windowsHealthDevice,windowsDeviceId,windows
 export const windowsInventoryCaseName='Synthetic Windows inventory shares device charts and explicit enrollment consent without Linux reads';
 export const windowsInventoryFixtureDisclosure='Real loopback HTTP-test fixture login with intercepted invented Windows inventory and resource history in the production UI. UI-only evidence; no native endpoint acceptance, collection, invitation, service installation or external request.';
 let stage='setup';
-const stages=new Set(['setup','login','overview','overview-history','os-provenance','inventory','storage','network','network-stale','network-expired','network-partial','network-empty','network-denied','network-unavailable','network-truncated','process-metrics','process-controls','service-software-controls','process-metrics-stale','process-metrics-expired','events',...windowsHealthStageNames,...windowsContactHistoryStageNames,'logs',...windowsLogsStageNames,'legacy','partial','denied','enrollment','access-loss']);
+const stages=new Set(['setup','login','overview','overview-history','os-provenance','inventory','storage','network','network-stale','network-expired','network-partial','network-empty','network-denied','network-unavailable','network-truncated','process-metrics','process-controls','service-software-controls','process-metrics-stale','process-metrics-expired','events',...windowsHealthStageNames,...windowsContactHistoryStageNames,'logs',...windowsLogsStageNames,'legacy','updates','partial','denied','enrollment','access-loss']);
 export const windowsInventoryFailureStage=()=>stages.has(stage)?stage:'setup';
 const mark=value=>{stage=value;};
 export function windowsBrowserFixture(now,phase='fresh',networkPhaseAt=now,logsPhaseAt=now){
@@ -99,7 +100,7 @@ export async function windowsFixtureResponseTime(page){
  return new Date(at).toISOString();
 }
 export async function windowsInventoryBrowserCase({pageAt,login,expect,base,shot}){
- const page=await pageAt('/devices/'+windowsDeviceId),prefix='/api/devices/'+windowsDeviceId,unexpected=[],writes=[],external=[];let phase='fresh',networkPhaseAt=null,logsPhaseAt=null,contactPhaseAt=null,osObservedAt=null;
+ const page=await pageAt('/devices/'+windowsDeviceId),prefix='/api/devices/'+windowsDeviceId,unexpected=[],writes=[],external=[];let phase='fresh',networkPhaseAt=null,logsPhaseAt=null,contactPhaseAt=null,osObservedAt=null,updatesCapturedAt=null;
  const syntheticPaths=new Set([prefix,prefix+'/windows-inventory',prefix+'/windows-contact',prefix+'/resource-history','/api/overview','/api/windows/enrollment']);
  // A bounded virtual clock makes the five-second private-row expiry deterministic.
  let clockNow=Date.now();await page.clock.install({time:new Date(clockNow)});await page.clock.pauseAt(new Date(clockNow+1000));clockNow+=1000;
@@ -117,6 +118,7 @@ export async function windowsInventoryBrowserCase({pageAt,login,expect,base,shot
   const reply=data=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(data)}),at=await windowsFixtureResponseTime(page),device=windowsHealthBrowserDevice(at,phase,osObservedAt??undefined);
   if(url.pathname===prefix+'/windows-inventory'){
    if(phase==='session')return route.fulfill({status:401,contentType:'application/json',body:JSON.stringify({error:{code:'authentication_required'}})});
+   if(phase==='updates')return reply(windowsUpdatesBrowserFixture({serverNow:at,capturedAt:updatesCapturedAt}));
    return reply(windowsBrowserFixture(at,phase,networkPhaseAt??at,logsPhaseAt??at));
   }
   if(url.pathname===prefix+'/windows-contact'){
@@ -243,6 +245,8 @@ export async function windowsInventoryBrowserCase({pageAt,login,expect,base,shot
   await shot(page,`synthetic-windows-events-${width}-${locale}`,windowsInventoryFixtureDisclosure);
   mark('logs');await windowsLogsBrowserCase({page,expect,base,mark,deviceId:windowsDeviceId,locale,width,shot,disclosure:windowsInventoryFixtureDisclosure,setPhase:value=>{phase=value;logsPhaseAt=value==='logs-expiring'?now():null;},advance:async ms=>{clockNow+=ms;await page.clock.runFor(ms);}});
   await page.getByRole('tab',{name:locale==='de'?'Inventar':'Inventory',exact:true}).click();
+  mark('updates');phase='updates';updatesCapturedAt=new Date(clockNow-2000).toISOString();await page.getByRole('button',{name:locale==='de'?'Windows-Inventar aktualisieren':'Refresh Windows inventory',exact:true}).click();
+  await exerciseWindowsUpdates({page,expect,locale,width,shot});
   mark('legacy');phase='legacy';await page.getByRole('button',{name:locale==='de'?'Windows-Inventar aktualisieren':'Refresh Windows inventory',exact:true}).click();
   await page.getByRole('tab',{name:locale==='de'?'Speicher':'Storage',exact:true}).click();
   await expect(page.getByText(locale==='de'?/Eine separate lokale Zustimmung ist erforderlich/:/Separate local consent is required/)).toBeVisible();

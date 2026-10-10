@@ -29,8 +29,10 @@ dashboard with light and dark themes.
   suggestions from explicitly approved Health incidents or service-log evidence.
 
 Each feature depends on its platform and approved scope. Unavailable, partial and
-stale observations stay visible. Windows event headers contain no message bodies;
-Windows Update/CVE assessment is not implemented. AI provider/data approval is
+stale observations stay visible. Windows event headers contain no message bodies.
+The published preview has no Windows Update/CVE assessment. The current source
+adds separately consented [cached Windows Update inspection](docs/windows-update-runtime.md);
+its installed-service/native acceptance remains pending. AI provider/data approval is
 separate, and suggestions remain unconfirmed.
 
 ![Tracebolt Linux log workspace with service selection and time-window controls](docs/screenshots/2026-10-09-main-ui/log-workspace.png)
@@ -74,12 +76,17 @@ LAN operation. [Demo troubleshooting](docs/troubleshooting.md#local-demo).
 
 ### Windows preview
 
-**There is no published Windows Setup download yet.** The unsigned source-built
-wizard implements fresh installation and five explicitly approved read scopes.
-Some native x64 phases have passed, but complete installed-service acceptance is
-still blocked. Start with [Windows status and limitations](docs/windows-status.md)
-before the [Setup preview guide](docs/windows-setup-preview.md). Do not use the
-Linux installation command on Windows.
+The unsigned x64 [v0.1.0-windows-preview.1 prerelease](https://github.com/storminator89/Tracebolt/releases/tag/v0.1.0-windows-preview.1)
+is available, with fresh installation and five explicitly approved read scopes.
+Read the [prerelease installation guide](docs/windows-prerelease-install.md) and
+[Windows status and limitations](docs/windows-status.md) before installing.
+The accepted hosted Windows Server 2025 subset does not prove Windows 10/11,
+reboot, upgrade or ARM64 support. Do not use the Linux installation command on Windows.
+
+Newer source work is tracked in the [Linux/Windows parity matrix](docs/windows-linux-parity.md).
+Cached Update inspection is a separate default-off source candidate; event-message
+foundations are not yet a working dashboard feature. Neither is added to the
+published preview by updating the manager.
 
 ## Platform support
 
@@ -88,7 +95,7 @@ Linux installation command on Windows.
 | Manager | Linux, native or Docker; exact-revision CI records architecture and runtime coverage |
 | Published Linux read-admin | amd64; Ubuntu 24.04 or Debian 13, systemd, cgroup v2, kernel 6.5+; actual host acceptance still required |
 | Linux arm64 / Raspberry Pi | Source/read-only testing; public installation remains closed pending privileged native acceptance |
-| Windows | Implemented bounded read-only inventory and unsigned Setup preview; no published installer, full lifecycle acceptance, reboot/upgrade proof or ARM64 runtime acceptance |
+| Windows | Published unsigned x64 read-only prerelease; bounded hosted Windows Server 2025 subset accepted, with Windows 10/11, full lifecycle, reboot/upgrade and ARM64 runtime gates still open |
 | macOS | Limited standalone read-only collector; no supported LAN installation path |
 
 The main agent is unprivileged. Linux journal and socket-owner helpers need
