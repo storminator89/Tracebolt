@@ -27,7 +27,10 @@ export function createWindowsEventContentFixture(){
    } else if(action==='query'){
     assert.equal(enabled,true);assert.equal(record?.state,'accepted');assert.deepEqual(Object.keys(body),['identity']);assert.deepEqual(body.identity,record.description.identity);const result=eventContentResult(record);
     if(result.report.events.length>1){Object.assign(result.report,{quality:'partial',complete:false});Object.assign(result.report.events[1],{message:'',quality:'unavailable',complete:false,reason:'windows_event_content_publisher_unavailable'});}
-    assert.equal(validEventContentResult(result,record),true);queries++;return result;
+    // The request/receipt keeps its original 15-minute lifetime. Disclosure is
+    // separately bounded by this real authenticated session, as in the manager.
+    result.expiresAt=new Date(Math.min(Date.parse(result.expiresAt),Date.parse(sessionExpiresAt))).toISOString();
+    assert.equal(validEventContentResult(result,record,sessionExpiresAt),true);queries++;return result;
    } else {assert.equal(action,'');assert.equal(body,null);if(ready&&record?.state==='pending'){record=eventContentAccepted(record);view.request=record;view.contentStatus='available';}}
    assert.equal(validEventContentView(view,view.deviceId,sessionExpiresAt),true);return view;
   }
