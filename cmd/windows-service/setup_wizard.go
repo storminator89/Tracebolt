@@ -162,13 +162,13 @@ func setupWizardInstall(ctx context.Context, raw []byte, s setupWizardInstallSte
 }
 
 type setupWizardRemovalSteps struct {
-	receipt      func() (windowsservice.Receipt, error)
-	inspectOwned func(context.Context, windowsservice.Receipt) (windowsservice.Snapshot, error)
-	inspect      func(context.Context) (windowsservice.Snapshot, error)
-	stop         func(context.Context, windowsservice.Receipt) (windowsservice.ApplyResult, error)
-	remove       func(context.Context, windowsservice.Receipt) (windowsservice.ApplyResult, error)
-	pending      func(error) bool
-	wait         func(context.Context) error
+	receipt        func() (windowsservice.Receipt, error)
+	inspectOwned   func(context.Context, windowsservice.Receipt) (windowsservice.Snapshot, error)
+	inspectRemoval func(context.Context, windowsservice.Receipt) (windowsservice.Snapshot, error)
+	stop           func(context.Context, windowsservice.Receipt) (windowsservice.ApplyResult, error)
+	remove         func(context.Context, windowsservice.Receipt) (windowsservice.ApplyResult, error)
+	pending        func(error) bool
+	wait           func(context.Context) error
 }
 
 func setupWizardUninstall(ctx context.Context, s setupWizardRemovalSteps, progress func(string)) (err error) {
@@ -182,7 +182,7 @@ func setupWizardUninstall(ctx context.Context, s setupWizardRemovalSteps, progre
 			err = &removalFailure{step: step, original: err, detail: detail}
 		}
 	}()
-	if ctx == nil || s.receipt == nil || s.inspectOwned == nil || s.inspect == nil || s.stop == nil || s.remove == nil || s.pending == nil || s.wait == nil || progress == nil {
+	if ctx == nil || s.receipt == nil || s.inspectOwned == nil || s.inspectRemoval == nil || s.stop == nil || s.remove == nil || s.pending == nil || s.wait == nil || progress == nil {
 		return errLifecycle
 	}
 	ctx, cancel := context.WithTimeout(ctx, 45*time.Second)
@@ -247,7 +247,7 @@ func setupWizardUninstall(ctx context.Context, s setupWizardRemovalSteps, progre
 	progress("Service deletion is pending. Waiting for SCM to confirm absence.")
 	for {
 		step = "absence-inspect"
-		snap, err = s.inspect(ctx)
+		snap, err = s.inspectRemoval(ctx, r)
 		if err != nil {
 			detail = err
 			if s.pending(err) {
@@ -263,15 +263,10 @@ func setupWizardUninstall(ctx context.Context, s setupWizardRemovalSteps, progre
 			break
 		}
 		step = "absence-owned"
-		if _, err = s.inspectOwned(ctx, r); err != nil {
-			detail = err
-			if s.pending(err) {
-				step = "absence-wait"
-				detail = s.wait(ctx)
-				if detail == nil {
-					continue
-				}
-			}
+		// The removal-only observation already binds the SCM configuration to
+		// this receipt without requiring a deleted account-name SID mapping.
+		// A still-present object must remain stopped; it never proves absence.
+		if snap.State != windowsservice.Stopped {
 			return errSetupRemovalPending
 		}
 		step = "absence-wait"

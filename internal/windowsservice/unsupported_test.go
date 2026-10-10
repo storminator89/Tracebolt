@@ -16,6 +16,9 @@ func TestNonWindowsPublicAPIsRejectWithoutMutation(t *testing.T) {
 	if _, err := Inspect(ctx); !errors.Is(err, ErrUnsupported) {
 		t.Fatal(err)
 	}
+	if _, err := InspectRemoval(ctx, Receipt{}); !errors.Is(err, ErrUnsupported) {
+		t.Fatal(err)
+	}
 	if _, err := ApplyInstall(ctx, InstallPlan{}); !errors.Is(err, ErrUnsupported) {
 		t.Fatal(err)
 	}

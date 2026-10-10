@@ -95,7 +95,7 @@ func TestSetupWizardRemovalWaitsForExactOwnedStopAndAbsence(t *testing.T) {
 			}
 			deleted = true
 			return windowsservice.ApplyResult{Requested: true, DeletePending: true, StateRetained: true}, call("remove")
-		}, inspect: func(context.Context) (windowsservice.Snapshot, error) {
+		}, inspectRemoval: func(context.Context, windowsservice.Receipt) (windowsservice.Snapshot, error) {
 			return windowsservice.Snapshot{Exists: !deleted}, call("deleted-inspect")
 		}}
 		err := setupWizardUninstall(context.Background(), s, func(string) {})
@@ -141,7 +141,7 @@ func TestSetupWizardDeletionPendingIsObservedNotRetried(t *testing.T) {
 				deletes++
 				return windowsservice.ApplyResult{Requested: true, DeletePending: true, StateRetained: true}, nil
 			},
-			inspect: func(context.Context) (windowsservice.Snapshot, error) {
+			inspectRemoval: func(context.Context, windowsservice.Receipt) (windowsservice.Snapshot, error) {
 				inspections++
 				if !emittedPending {
 					t.Fatal("pending result not reported before observation")

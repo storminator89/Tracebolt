@@ -84,3 +84,28 @@ func setupRemovalFailureText(err error) string {
 	}
 	return "Service removal did not complete. Removal diagnostic: " + step + "; " + reason + ". Files, identity and grants remain; inspect retained state before any further action."
 }
+
+// setupRemovalPending accepts only one unambiguous native pending cause. A
+// joined close/cancellation/configuration error must fail closed even if another
+// branch contains ERROR_SERVICE_MARKED_FOR_DELETE. No arbitrary Is/As is called.
+func setupRemovalPending(err error) (pending bool) {
+	defer func() {
+		if recover() != nil {
+			pending = false
+		}
+	}()
+	for depth := 0; err != nil && depth < 32; depth++ {
+		if _, multi := err.(interface{ Unwrap() []error }); multi {
+			return false
+		}
+		if native, ok := err.(syscall.Errno); ok {
+			return native == 1072
+		}
+		single, ok := err.(interface{ Unwrap() error })
+		if !ok {
+			return false
+		}
+		err = single.Unwrap()
+	}
+	return false
+}

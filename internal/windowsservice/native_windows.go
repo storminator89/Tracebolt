@@ -126,6 +126,21 @@ func (s *nativeService) Stop() error {
 }
 func (s *nativeService) Delete() error { return windows.DeleteService(s.handle) }
 func (s *nativeService) Inspect() (Snapshot, error) {
+	result, err := s.inspectRemoval()
+	if err != nil {
+		return Snapshot{}, err
+	}
+	sid, err := LookupServiceSID()
+	if err != nil {
+		return Snapshot{}, setupStageError("service_snapshot_sid", "failed", err)
+	}
+	result.ServiceSID = sid
+	return result, nil
+}
+
+// This complete SCM snapshot deliberately excludes name-to-SID resolution.
+// Inspect still requires that identity lookup; post-delete observation cannot.
+func (s *nativeService) inspectRemoval() (Snapshot, error) {
 	c, err := (&mgr.Service{Name: Name, Handle: s.handle}).Config()
 	if err != nil {
 		return Snapshot{}, setupStageError("service_snapshot_configuration", "failed", err)
@@ -160,12 +175,8 @@ func (s *nativeService) Inspect() (Snapshot, error) {
 	if err = windows.QueryServiceStatusEx(s.handle, windows.SC_STATUS_PROCESS_INFO, (*byte)(unsafe.Pointer(&st)), uint32(unsafe.Sizeof(st)), &needed); err != nil {
 		return Snapshot{}, setupStageError("service_snapshot_status", "failed", err)
 	}
-	sid, err := LookupServiceSID()
-	if err != nil {
-		return Snapshot{}, setupStageError("service_snapshot_sid", "failed", err)
-	}
 	deps := append([]string{}, c.Dependencies...)
-	result := Snapshot{Exists: true, State: State(st.CurrentState), ServiceSID: sid, ProcessID: st.ProcessId, Win32ExitCode: st.Win32ExitCode, ServiceSpecificExitCode: st.ServiceSpecificExitCode, Configuration: Configuration{Name: Name, DisplayName: c.DisplayName, BinaryPath: c.BinaryPathName, Account: c.ServiceStartName, ServiceType: c.ServiceType, StartType: c.StartType, ErrorControl: c.ErrorControl, SIDType: c.SidType, RequiredPrivileges: privileges, Dependencies: deps, LoadOrderGroup: c.LoadOrderGroup, DelayedAutoStart: c.DelayedAutoStart, FailureActions: hasFailure, Triggers: hasTriggers, Description: c.Description}}
+	result := Snapshot{Exists: true, State: State(st.CurrentState), ProcessID: st.ProcessId, Win32ExitCode: st.Win32ExitCode, ServiceSpecificExitCode: st.ServiceSpecificExitCode, Configuration: Configuration{Name: Name, DisplayName: c.DisplayName, BinaryPath: c.BinaryPathName, Account: c.ServiceStartName, ServiceType: c.ServiceType, StartType: c.StartType, ErrorControl: c.ErrorControl, SIDType: c.SidType, RequiredPrivileges: privileges, Dependencies: deps, LoadOrderGroup: c.LoadOrderGroup, DelayedAutoStart: c.DelayedAutoStart, FailureActions: hasFailure, Triggers: hasTriggers, Description: c.Description}}
 	runtime.KeepAlive(failure)
 	runtime.KeepAlive(triggers)
 	runtime.KeepAlive(required)

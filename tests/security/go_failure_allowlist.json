@@ -1,5 +1,5 @@
 {
-  "goSourceSha256": "237aa079d5021bc734c09112574044fe361ab2fc3cc92d68450081fd86d320fb",
+  "goSourceSha256": "f1a575e2afdf74ca045fa9ce593e6541d9dedd3ada9e0a84c2988638d9253746",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -307,6 +307,8 @@
       "TestSetupPendingRepeatedStoreReadsReproduceBothExclusiveCollisionOrders",
       "TestSetupRechecksRuntimeReadBeforeClaimAfterPreparation",
       "TestSetupRejectsCancellationAndExistingServiceBeforeIntent",
+      "TestSetupRemovalPendingRejectsMixedAndUntrustedCauses",
+      "TestSetupRemovalUsesReceiptBoundObservationOnlyAfterDelete",
       "TestSetupRuntimeReadPreflightStopsBeforeJournalOrClaim",
       "TestSetupWindowsPermissionCauseHasFiniteStartupCode",
       "TestSetupWizardCanceledBeforeApplyIsInert",
@@ -3168,6 +3170,15 @@
       "TestFreshReadSetupStaysDisabledAndOrdinaryLifecycleRejectsReceipt",
       "TestInspectOwnedIsReadOnlyAndChecksExecutable",
       "TestInspectOwnedRejectsForeignAndIncompleteRecords",
+      "TestInspectRemovalCancellationClosesHandlesAndNeverCompletes",
+      "TestInspectRemovalDeadlineDoesNotOpen",
+      "TestInspectRemovalOnlyOpenAbsenceCompletes",
+      "TestInspectRemovalPreservesPendingWithCloseOrCancellationFailure",
+      "TestInspectRemovalPreservesQueryAndCloseErrors",
+      "TestInspectRemovalRejectsCorruptReceiptBeforeOpen",
+      "TestInspectRemovalRequiresEveryConfigurationField",
+      "TestInspectRemovalRequiresStoppedState",
+      "TestInspectRemovalSurvivesSIDLossOnlyAfterStrictDelete",
       "TestInstallRejectsExistingEvenIfConfigurationMatches",
       "TestKnownFolderObservationOutputBound",
       "TestKnownFolderObservationStrictFiniteOutput",
@@ -3178,6 +3189,7 @@
       "TestLookupFailureRetainsCreatedService",
       "TestMarkedDiagnosticNeverFormatsCause",
       "TestNativeFileGenericRightsMapping",
+      "TestNativeRemovalSnapshotKeepsOrdinarySIDLookup",
       "TestNativeRequiredPrivilegeBufferFixtures",
       "TestNativeRuntimeReadACLMemoryFixtures",
       "TestNativeRuntimeReadRejectsEachMissingAndDeniedBit",
@@ -3187,6 +3199,8 @@
       "TestPartialCreateNeverDeletesOrAdopts",
       "TestPlanAndInspectAreReadOnly",
       "TestPlanTamperingCannotChooseTarget",
+      "TestRemovalObservationWaitEligibilityCannotBeForgedByCauses",
+      "TestRemovalOpenAbsenceRejectsAmbiguousAndMalformedChains",
       "TestRuntimeArgumentRejectionHasSanitizedSCMCode",
       "TestRuntimeInstallationBinding",
       "TestRuntimeParentCancellation",
