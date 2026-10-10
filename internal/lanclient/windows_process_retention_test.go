@@ -79,8 +79,13 @@ func retentionMetricSource(t *testing.T, ctx context.Context, f frame) windowspr
 
 func retentionFullFrame(t *testing.T, m Material, ctx context.Context) frame {
 	t.Helper()
+	return retentionFullFrameAt(t, m, ctx, time.Now().UTC())
+}
+
+func retentionFullFrameAt(t *testing.T, m Material, ctx context.Context, at time.Time) frame {
+	t.Helper()
 	f, _, err := collectWindowsFrame(ctx, m.config, 1, func(ctx context.Context, g string) (windowsmanaged.Snapshot, model.Device, error) {
-		return windowsmanaged.FromReportForProcessMetrics(retentionReport(time.Now().UTC(), retentionFixtureSelf, true), g, processMetricSelfPID(ctx))
+		return windowsmanaged.FromReportForProcessMetrics(retentionReport(at, retentionFixtureSelf, true), g, processMetricSelfPID(ctx))
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -296,18 +301,65 @@ func TestSelfRetentionFreshConsentAndExactPendingRetry(t *testing.T) {
 }
 
 func TestSelfRetentionProcessReservesSelfAlongsideFullVolumeFrame(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		nanos int
+	}{
+		{"wall-clock", -1},
+		{"whole-second", 0},
+		{"eight-fractional-digits", 123456780},
+		{"nine-fractional-digits", 123456789},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			at := time.Now().UTC()
+			if tc.nanos >= 0 {
+				at = at.Truncate(time.Second).Add(-time.Second + time.Duration(tc.nanos))
+			}
+			testRetentionProcessWithFullVolumeFrame(t, at)
+		})
+	}
+}
+
+func testRetentionProcessWithFullVolumeFrame(t *testing.T, at time.Time) {
+	t.Helper()
 	m := windowsMaterialFixture(t, "http-test")
 	ctx := withProcessMetricSelfPID(context.Background(), retentionFixtureSelf)
-	f := retentionFullFrame(t, m, ctx)
+	f := retentionFullFrameAt(t, m, ctx, at)
 	original := retentionMetricSource(t, ctx, f)
 	v, err := volumeSourceFixture(ctx, f.WindowsInventory.GenerationID, volumeConsentFixture(m), m.binding)
 	if err != nil {
 		t.Fatal(err)
 	}
 	v.Rows = nil
+	v.CollectedAt = at
 	v.ObservedCount, v.Complete, v.Truncated, v.Quality = 64, false, true, "bounded"
-	for i := 0; i < 40; i++ {
+	// Forty rows only overflow when RFC3339Nano retains enough fractional
+	// digits. The inventory capture appears eight times in this frame.
+	// Forty-one rows overflow even with whole-second timestamps, without
+	// exceeding the volume snapshot's independent byte cap.
+	for i := 0; i < 41; i++ {
 		v.Rows = append(v.Rows, windowsvolumes.Volume{VolumeID: fmt.Sprintf(`\\?\Volume{11111111-2222-3333-4444-%012x}\`, i), DriveType: "fixed", Quality: "observed", Capacity: &windowsvolumes.Capacity{TotalBytes: "18446744073709551615", FreeBytes: "18446744073709551615", AvailableBytes: "18446744073709551615"}})
+	}
+	volumeRaw, err := json.Marshal(v)
+	if err != nil || len(volumeRaw) > windowsvolumes.MaxBytes {
+		t.Fatal("fixture exceeded volume snapshot budget", len(volumeRaw), err)
+	}
+	if _, err := windowsvolumes.Decode(volumeRaw); err != nil {
+		t.Fatal("invalid source volume fixture", err)
+	}
+	// Model the untrimmed envelope with the shortest possible volume capture
+	// and GeneratedAt. The whole-second case also minimizes inventory captures.
+	// appendWindowsVolumes uses the current time, whose encoding is no shorter.
+	minimumVolume := v
+	minimumVolume.CollectedAt = at.Truncate(time.Second)
+	untrimmed := f
+	untrimmed.SchemaVersion = FrameWindowsCapabilitiesVersion
+	untrimmed.WindowsVolumes = &minimumVolume
+	untrimmed.Observation.GeneratedAt = at.Truncate(time.Second)
+	untrimmed.Observation.Privacy = append(append([]string(nil), f.Observation.Privacy...), windowsvolumes.Privacy)
+	untrimmedRaw, err := json.Marshal(untrimmed)
+	if err != nil || len(untrimmedRaw) <= MaxFrameBytes {
+		t.Fatal("fixture did not require whole-frame volume trimming", len(untrimmedRaw), err)
 	}
 	f, _, err = appendWindowsVolumes(ctx, m, f, volumeConsentFixture(m), func(context.Context, string, windowsvolumes.Consent, string) (windowsvolumes.Snapshot, error) {
 		return v, nil
