@@ -1,7 +1,7 @@
 /** Diagnostic-only fixture helpers. No raw errors, bodies, URLs, DOM text,
  * identifiers or input values are reported. Assertions and write count remain. */
 import {createBrowserTransportDiagnostics} from './browser-transport-diagnostics.mjs';
-const freshSteps=new Set(['read capability','capability status','capability response bytes','capability JSON decode','collection profile','collection privacy','open dialog','consent unchecked','creation disabled','acknowledge consent','register creation response','submit creation','await creation response','creation status','request consent','creation response bytes','creation JSON decode']);
+const freshSteps=new Set(['read capability','capability status','capability response bytes','capability JSON decode','collection profile','collection privacy','open dialog','consent unchecked','creation disabled','acknowledge consent','arm primary reader','register creation response','submit creation','await creation response','creation status','request consent','await primary reader','primary reader snapshot','primary reader complete','primary reader validity','primary response binding','creation schema','secret type','masked field','masked value']);
 const mobileSteps=new Set(['table ARIA','scroll table into view','focus table','press ArrowRight','horizontal scroll response','document offsets','document bounds','main box presence','main viewport bounds','device geometry read','device left inset','device right inset','device width','no legacy panels','no dialogs']);
 export function v3DiagnosticStage(scope,step){return scope==='fresh'&&freshSteps.has(step)?`fresh consent / ${step}`:scope==='mobile'&&mobileSteps.has(step)?`mobile socket / ${step}`:'v3 diagnostic / unknown';}
 export async function checkFreshV3Consent(page,{base,context,expect,mark,diagnostics}){
@@ -17,13 +17,33 @@ export async function checkFreshV3Consent(page,{base,context,expect,mark,diagnos
  step('consent unchecked');await expect(consent).not.toBeChecked();
  step('creation disabled');await expect(page.getByRole('button',{name:'Create invitation',exact:true})).toBeDisabled();
  step('acknowledge consent');await consent.check();
- step('register creation response');diagnostics?.response(null);const pending=page.waitForResponse(r=>r.url()===base+'/api/enrollment/invitations'&&r.request().method()==='POST');
- step('submit creation');await page.getByRole('button',{name:'Create invitation',exact:true}).click();
- step('await creation response');const response=await pending;diagnostics?.response(response);
- step('creation status');expect(response.status()).toBe(201);
- step('request consent');expect(response.request().postDataJSON().collectionAcknowledged).toBe(true);
- step('creation response bytes');const bytes=await response.body();
- step('creation JSON decode');return JSON.parse(bytes.toString('utf8'));
+ let capture;
+ try{
+  step('arm primary reader');capture=await page.evaluate(()=>window.__traceboltEnrollmentBody.arm());
+  step('register creation response');diagnostics?.response(null);const pending=page.waitForResponse(r=>r.url()===base+'/api/enrollment/invitations'&&r.request().method()==='POST');
+  step('submit creation');await page.getByRole('button',{name:'Create invitation',exact:true}).click();
+  step('await creation response');const response=await pending;diagnostics?.response(response);
+  step('creation status');expect(response.status()).toBe(201);
+  step('request consent');expect(response.request().postDataJSON().collectionAcknowledged).toBe(true);
+  // Observe only the application's original bounded reader. A failed secondary
+  // CDP body lookup is not evidence of either primary success or primary failure.
+  step('await primary reader');await expect.poll(()=>page.evaluate(id=>window.__traceboltEnrollmentBody.state(id),capture)).not.toMatch(/^(armed|waiting|reading)$/);
+  step('primary reader snapshot');const primary=await page.evaluate(id=>window.__traceboltEnrollmentBody.snapshot(id),capture);diagnostics?.primary(primary);
+  step('primary reader complete');expect(primary.phase).toBe('complete');
+  step('primary reader validity');expect(primary.eof===true&&primary.signalAborted===false&&primary.requests===1).toBe(true);
+  step('primary response binding');const consumed=await page.evaluate(id=>window.__traceboltEnrollmentBody.take(id),capture);
+  expect(consumed!==null).toBe(true);expect(consumed.status).toBe(201);expect(consumed.requestBody===response.request().postData()).toBe(true);
+  const created=consumed.body;
+  step('creation schema');expect(created?.schemaVersion==='tracebolt.enrollment-invitation.v2').toBe(true);
+  step('secret type');expect(typeof created.invitationSecret).toBe('string');
+  step('masked field');const input=page.getByLabel('One-time invitation secret',{exact:true});await expect(input).toHaveAttribute('type','password');
+  step('masked value');expect(await input.inputValue()===created.invitationSecret).toBe(true);
+  return created;
+ }finally{
+  // Destructive take plus unconditional clear: no observer secret survives into
+  // public-command, screenshot, dismissal or protected-session checks.
+  try{await page.evaluate(()=>window.__traceboltEnrollmentBody.clear());}catch{}
+ }
 }
 export async function checkV3Viewport(page,{expect,mark=()=>{}}){
  const step=value=>mark(v3DiagnosticStage('mobile',value));
@@ -62,15 +82,25 @@ export function readV3MobileSnapshot(){
  return {tableCount:Math.min(tables.length,100),rowCount:Math.min(system?.querySelectorAll('tbody tr').length??0,10000),tablePresent:Boolean(table),tableFocused:Boolean(table&&document.activeElement===table),systemPresent:Boolean(system),systemBusy:system?.getAttribute('aria-busy')==='true',alertPresent:Boolean(system?.querySelector('[role=alert]')),privateInert:Boolean(document.querySelector('.auth-private-view[inert]')),documentVisible:document.visibilityState==='visible',scrollLeft:table?.scrollLeft,scrollTop:table?.scrollTop,scrollWidth:table?.scrollWidth,clientWidth:table?.clientWidth,clientHeight:table?.clientHeight,tableLeft:t?.left,tableTop:t?.top,tableWidth:t?.width,tableHeight:t?.height,windowX:scrollX,windowY:scrollY,viewportWidth:innerWidth,viewportHeight:innerHeight,documentWidth:document.documentElement.scrollWidth,documentHeight:document.documentElement.scrollHeight,bodyWidth:document.body.scrollWidth,bodyHeight:document.body.scrollHeight,mainLeft:m?.left,mainTop:m?.top,mainWidth:m?.width,mainHeight:m?.height,mainClientWidth:main?.clientWidth,mainScrollTop:main?.scrollTop,deviceLeft:d&&m?d.left-m.left:undefined,deviceRight:d&&m?m.right-d.right:undefined,deviceWidth:d?.width,deviceAvailable:main&&style?main.clientWidth-parseFloat(style.paddingLeft)-parseFloat(style.paddingRight):undefined};
 }
 export function createV3FailureDiagnostics(page,browser){
- const transport=createBrowserTransportDiagnostics(page,browser),events=[];let response=null,operation='other';
+ const transport=createBrowserTransportDiagnostics(page,browser),events=[];let response=null,operation='other',primary=null;
  const resource=url=>{try{const path=new URL(url).pathname;return path==='/api/enrollment'?'enrollment-status':path==='/api/enrollment/invitations'?'enrollment-create':/^\/api\/devices\/agent_[a-f0-9]{32}\/inventory\/system$/.test(path)?'system-status':/^\/api\/devices\/agent_[a-f0-9]{32}\/inventory\/system\/query$/.test(path)?'system-query':null;}catch{return null;}};
  const record=(request,phase,status=0)=>{const route=resource(request.url()),method=request.method();if(route&&events.length<32&&['GET','POST'].includes(method)&&Number.isInteger(status)&&status>=0&&status<=599)events.push({resource:route,method,phase,status});};
  const listeners=[['request',r=>record(r,'request')],['response',r=>record(r.request(),'response',r.status())],['requestfailed',r=>record(r,'failed')]];
  for(const [event,listener]of listeners)page.on(event,listener);
  return {
+  primary(value){primary=sanitizeV3PrimarySnapshot(value);},
   response(value){response=value;},operation(value){operation=value==='response-body'?'response-body':'other';},
-  capture(error){let detail=null;try{detail=transport.capture(operation,error,{response});}catch{}let status=null;try{const value=response?.status();if(Number.isInteger(value)&&value>=100&&value<=599)status=value;}catch{}return {responseStatus:status,transport:detail,events:events.slice()};},
+  capture(error){let detail=null;try{detail=transport.capture(operation,error,{response});}catch{}let status=null;try{const value=response?.status();if(Number.isInteger(value)&&value>=100&&value<=599)status=value;}catch{}return {responseStatus:status,transport:detail,events:events.slice(),...(primary?{primary}: {})};},
   async mobile(){return sanitizeV3MobileSnapshot(await page.evaluate(readV3MobileSnapshot));},
-  dispose(){transport.dispose();for(const [event,listener]of listeners)page.off(event,listener);response=null;events.length=0;},
+  dispose(){transport.dispose();for(const [event,listener]of listeners)page.off(event,listener);response=null;primary=null;events.length=0;},
  };
+}
+
+export function sanitizeV3PrimarySnapshot(value){
+ if(!value||typeof value!=='object')return null;
+ const phases=new Set(['armed','waiting','reading','complete','aborted','failed','invalid','cancelled','oversized','invalidated','duplicate','missing','missing-body','invalid-request','cleared']);
+ const safe={phase:phases.has(value.phase)?value.phase:'unknown'};
+ for(const [key,maximum]of [['requests',2],['status',599],['bytes',262145]])if(Number.isInteger(value[key])&&value[key]>=0&&value[key]<=maximum)safe[key]=value[key];
+ for(const key of ['eof','signalAborted'])if(typeof value[key]==='boolean')safe[key]=value[key];
+ return safe;
 }

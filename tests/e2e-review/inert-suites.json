@@ -3,6 +3,7 @@
   "scope": "Only reviewed, inert *.test.mjs suites directly inside tests/e2e-review. Browser runners, Python/native gates and all other paths are outside this manifest and are never discovered for execution.",
   "entries": [
     "public-command-contract.test.mjs",
+    "endpoint-child-shutdown.test.mjs",
     "windows-inventory-fixtures.test.mjs",
     "resource-history-fixtures.test.mjs",
     "application-check-settings-fixtures.test.mjs",

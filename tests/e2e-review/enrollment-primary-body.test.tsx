@@ -82,3 +82,16 @@ it('unusable request bodies and absent response streams never become complete',a
 it('superseded capture cannot restore late private bytes or replace the next response',async()=>{
  let held!:ReadableStreamDefaultController<Uint8Array>;const first=new Response(new ReadableStream<Uint8Array>({start(value){held=value;}}),{status:201}),second=json({newCapture:true},201);let count=0;vi.stubGlobal('fetch',vi.fn(async()=>count++===0?first:second));uninstall=installEnrollmentPrimaryBody({url:url()});const old=observer().arm(),original=await observedFetch(),pending=consume(original),fresh=observer().arm();held.enqueue(new TextEncoder().encode(JSON.stringify({invitationSecret:secret})));held.close();await pending;expect(observer().take(old)).toBeNull();await consume(await observedFetch());expect(observer().take(fresh).body).toEqual({newCapture:true});expect(count).toBe(2);
 });
+
+for(const event of ['pagehide','hashchange',AUTH_REQUIRED_EVENT,'hidden'] as const)it(`invalidation before first POST stays terminal: ${event}`,async()=>{
+ const f=install(),token=observer().arm();
+ if(event==='hidden'){vi.spyOn(document,'visibilityState','get').mockReturnValue('hidden');document.dispatchEvent(new Event('visibilitychange'));}else window.dispatchEvent(new Event(event));
+ expect(observer().state(token)).toBe('invalidated');
+ const response=await observedFetch();expect(response).toBe(f.response);await consume(response);
+ expect(observer().state(token)).toBe('invalidated');expect(observer().take(token)).toBeNull();expect(observer().snapshot(token).eof).toBe(false);expect(f.fetch).toHaveBeenCalledTimes(1);
+});
+it('clear before the first POST stays missing and explicit rearm starts a separate capture',async()=>{
+ const responses=[json(creation(),201),json(creation(),201)],original=vi.fn(async()=>responses.shift()!);vi.stubGlobal('fetch',original);uninstall=installEnrollmentPrimaryBody({url:url()});
+ const old=observer().arm();observer().clear();await consume(await observedFetch());expect(observer().state(old)).toBe('missing');expect(observer().take(old)).toBeNull();
+ const next=observer().arm();expect(next).not.toBe(old);await consume(await observedFetch());expect(observer().state(next)).toBe('complete');expect(observer().take(next)?.status).toBe(201);expect(observer().take(old)).toBeNull();expect(original).toHaveBeenCalledTimes(2);
+});

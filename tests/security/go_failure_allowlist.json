@@ -1,7 +1,5 @@
 {
-  "schemaVersion": 1,
-  "sourceCommit": "fccc4b00cd8a144afd58e4b995747afab7a10022",
-  "goSourceSha256": "3db417c8d1e73d1b6f8563219fd4952a635eeb0082d352f9258e4475db397c1e",
+  "goSourceSha256": "237aa079d5021bc734c09112574044fe361ab2fc3cc92d68450081fd86d320fb",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -679,6 +677,9 @@
       "TestApplicationCheckStatusOriginHostAndCrossSiteBoundary",
       "TestApplicationCheckStatusRechecksSession",
       "TestApplicationChecksV2NamedReadAndPrivateFieldBoundary",
+      "TestApplicationChecksV2StatusPrivacyAllowsTimestampDigits",
+      "TestApplicationChecksV2StatusPrivacyRejectsConfiguration",
+      "TestApplicationChecksV2StatusPrivacyRejectsMalformedShape",
       "TestBootstrapAdmissionBoundedAndFailClosedClock",
       "TestBoundaryGuards",
       "TestCachedUpdatesOperatorGuardsAndBoundedUnknown",
@@ -3468,5 +3469,7 @@
       "TestSupportBundleRejectsUnavailableHealthyMetric",
       "TestSystemInventoryOperatorActualTLSHTTPAllPagesAndDelayedExpiry"
     ]
-  }
+  },
+  "schemaVersion": 1,
+  "sourceCommit": "fccc4b00cd8a144afd58e4b995747afab7a10022"
 }
