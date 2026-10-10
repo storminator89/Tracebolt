@@ -295,7 +295,7 @@ func setupGUIController(ctx context.Context, b setupgate.Binding) (r setupgate.R
 		}()
 		stage := func(value string) { r.Stage = value }
 		if setupgate.CheckPreflight(stage, setupgate.PreflightSteps{
-			Launch:       func() error { var err error; preflight, err = setupLaunch(ctx, exe); return err },
+			Launch:       func() error { var err error; preflight, err = setupLaunchInitialChooser(ctx, exe, stage); return err },
 			Choose:       func() error { return preflight.chooseObserved(ctx, public, stage) },
 			Consent:      func() error { return preflight.consentObserved(ctx, http, stage) },
 			Cancel:       func() error { return setupClick(preflight.window, 2) },
@@ -309,7 +309,7 @@ func setupGUIController(ctx context.Context, b setupgate.Binding) (r setupgate.R
 		r.Checks["preflightCancelUnchanged"] = true
 	}
 	r.Stage = "bootstrap-launch"
-	g, e := setupLaunch(ctx, exe)
+	g, e := setupLaunchInitialChooser(ctx, exe, func(s string) { r.Stage = s })
 	if e != nil {
 		return r
 	}

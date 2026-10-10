@@ -187,7 +187,7 @@ class SetupGate(unittest.TestCase):
         with self.assertRaises(runner.shared.Rejected): self.validate(r)
 
     def test_finite_go_python_contract_parity(self):
-        source = (ROOT / "internal/windowsacceptance/setupgate/gate.go").read_text() + (ROOT / "internal/windowsacceptance/setupgate/removal_failure.go").read_text() + (ROOT / "internal/windowsacceptance/setupgate/click_sequence.go").read_text() + (ROOT / "internal/windowsacceptance/setupgate/retention_stages.go").read_text()
+        source = (ROOT / "internal/windowsacceptance/setupgate/gate.go").read_text() + (ROOT / "internal/windowsacceptance/setupgate/removal_failure.go").read_text() + (ROOT / "internal/windowsacceptance/setupgate/click_sequence.go").read_text() + (ROOT / "internal/windowsacceptance/setupgate/retention_stages.go").read_text() + (ROOT / "internal/windowsacceptance/setupgate/initial_chooser.go").read_text()
         for name in runner.APPROVALS:
             self.assertIn('"' + name + '"', source)
         for name in runner.FALSE_COVERAGE | runner.STAGES | set(runner.CHECKS):
@@ -216,8 +216,9 @@ class SetupGate(unittest.TestCase):
 
     def test_chooser_branch_labels_are_failure_only_for_all_cases(self):
         self.assertEqual(len(runner.CHOOSER_CLICK_FAILURE_STAGES), 32)
+        self.assertEqual(len(runner.INITIAL_CHOOSER_FAILURE_STAGES), 5)
         for which in runner.CHECKS:
-            for stage in runner.CHOOSER_CLICK_FAILURE_STAGES:
+            for stage in runner.CHOOSER_CLICK_FAILURE_STAGES | runner.INITIAL_CHOOSER_FAILURE_STAGES:
                 value = report(which)
                 value.update(status="failed", stage=stage, reason="operation_failed")
                 with self.subTest(case=which, stage=stage):

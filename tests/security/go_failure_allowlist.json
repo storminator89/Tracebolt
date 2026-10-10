@@ -1,5 +1,5 @@
 {
-  "goSourceSha256": "ee7b2345523d7b1d48bc2c638e24618bbad8518c7acf168faa7dbd6bbd161123",
+  "goSourceSha256": "b379185bd8e61356ea83ee6b08eed21091be8ab22e2a6e4b194f2cdde8485a8b",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -2988,6 +2988,18 @@
       "TestFrameProgressRejectsContradictoryAndPrivateEvidence",
       "TestFreshFailureStagesStayFiniteAndInert",
       "TestFreshPrerequisitePipelineStopsBeforeLaterChecks",
+      "TestInitialChooserAbsentDiscoveryAndDisabledTimeout",
+      "TestInitialChooserAttemptIsSpentBeforeSuccessOrFailure",
+      "TestInitialChooserDisabledThenEnabledOnlyPostsAfterReadiness",
+      "TestInitialChooserDiscoveryAndReadinessShareOriginalBudget",
+      "TestInitialChooserFailuresNeverRetryOrLeakErrors",
+      "TestInitialChooserFirstClickKeepsExistingGuardsAndSinglePost",
+      "TestInitialChooserInvalidDisabledObservationNeverWaits",
+      "TestInitialChooserInvalidInputsAreInert",
+      "TestInitialChooserLateCallbacksAndCancellationNeverPost",
+      "TestInitialChooserNativeOptInBoundary",
+      "TestInitialChooserOwnershipRejectsEveryChangedPinOrNativeFailure",
+      "TestInitialChooserSuccessAllowsOrdinaryLaterClickWithoutReadiness",
       "TestPreflightSequenceEveryFailureStops",
       "TestRemovalFailureParserExactEnvelopeAndPairs",
       "TestRemovalFailureReportCannotGrantAcceptance",

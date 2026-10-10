@@ -6,10 +6,13 @@ func TestChooserBranchStagesAreFailureOnlyAcrossCases(t *testing.T) {
 	if len(ChooserClickFailureStages) != 32 {
 		t.Fatal("finite chooser vocabulary changed")
 	}
+	if len(InitialChooserFailureStages) != 5 {
+		t.Fatal("finite initial chooser vocabulary changed")
+	}
 	for _, which := range Cases {
 		_, b, _ := authorized()
 		b.Case = which
-		for _, stage := range ChooserClickFailureStages {
+		for _, stage := range append(append([]string{}, ChooserClickFailureStages...), InitialChooserFailureStages...) {
 			r := NewReport(b)
 			r.Status, r.Stage, r.Reason = "failed", stage, "operation_failed"
 			r.ApprovalValidated, r.NativeActionsAttempted, r.PlatformDisposalRequired = true, true, true

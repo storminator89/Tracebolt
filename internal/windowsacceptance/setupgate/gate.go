@@ -23,6 +23,7 @@ var Checks = map[string][]string{
 func init() {
 	Stages = append(Stages, RemovalFailureStages...)
 	Stages = append(Stages, ChooserClickFailureStages...)
+	Stages = append(Stages, InitialChooserFailureStages...)
 	Stages = append(Stages, RetentionFailureStages...)
 	Checks["http-install-uninstall"] = append(append([]string{}, Checks["install-uninstall"]...), "httpAcknowledgementOff", "httpExplicitlyAcknowledged")
 }
@@ -120,7 +121,7 @@ func (r Report) Validate() error {
 	if Contains(RetentionFailureStages, r.Stage) && (r.Status != "failed" || !NormalCase(r.Case)) {
 		return ErrGuard
 	}
-	if Contains(ChooserClickFailureStages, r.Stage) && r.Status != "failed" {
+	if (Contains(ChooserClickFailureStages, r.Stage) || Contains(InitialChooserFailureStages, r.Stage)) && r.Status != "failed" {
 		return ErrGuard
 	}
 	if Contains(RemovalFailureStages, r.Stage) || !Contains([]string{"none", "authorization", "desktop_unavailable", "operation_failed", "deadline", "inspection_required"}, r.Reason) {
