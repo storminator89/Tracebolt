@@ -18,6 +18,26 @@ test('fixture rejects hidden/arbitrary selections, narrowed record IDs and omitt
 test('same synthetic header sample keeps its original capture across content polling',()=>{
  const before=windowsBrowserFixture(at,'event-content',at,at),after=windowsBrowserFixture('2026-10-07T12:00:13Z','event-content',at,at);assert.equal(before.events.collectedAt,after.events.collectedAt);assert.equal(before.events.generationId,after.events.generationId);
 });
+test('later EN mobile requests keep the real session disclosure ceiling without changing request or receipt expiry',()=>{
+ const start=Date.parse('2026-10-10T12:00:00Z'),sessionExpiresAt='2026-10-10T12:20:00Z';
+ for(const seconds of [155,310,620,930]){
+  const fixture=createWindowsEventContentFixture(),serverNow=new Date(start+seconds*1000).toISOString(),headers=windowsBrowserFixture(serverNow,'event-content',serverNow,serverNow).events,args={serverNow,sessionExpiresAt,headers,enabled:true};
+  const created=fixture.response({...args,action:'create',body:request(args)}),requestExpiry=created.request.description.expiresAt;
+  fixture.complete();const accepted=fixture.response({...args,action:'',body:null}),receipt=structuredClone(accepted.request.receipt);
+  const query={identity:accepted.request.description.identity},result=fixture.response({...args,action:'query',body:query});
+  const wanted=new Date(Math.min(Date.parse(requestExpiry),Date.parse(sessionExpiresAt))).toISOString();
+  assert.equal(result.expiresAt,wanted);assert.equal(accepted.request.description.expiresAt,requestExpiry);assert.deepEqual(result.receipt,receipt);assert.equal(receipt.expiresAt,requestExpiry);
+  assert.equal(Date.parse(requestExpiry)-Date.parse(serverNow),900000);assert.ok(Date.parse(result.expiresAt)<=Date.parse(sessionExpiresAt));
+  const later=fixture.response({...args,serverNow:new Date(Date.parse(serverNow)+3000).toISOString(),action:'query',body:query});
+  assert.equal(later.expiresAt,wanted);assert.deepEqual(later.receipt,receipt);assert.deepEqual(later.report,result.report);
+ }
+});
+test('selected-message fixture validates the same original session ceiling as the production consumer',()=>{
+ const source=fs.readFileSync(new URL('./windows-event-content-browser.mjs',import.meta.url),'utf8');
+ assert.match(source,/validEventContentResult\(result,record,sessionExpiresAt\)/);
+ assert.doesNotMatch(source,/validEventContentResult\(result,record\)/);
+ assert.doesNotMatch(source,/record\.description\.expiresAt\s*=|record\.receipt\.expiresAt\s*=|(?<![\w.])sessionExpiresAt\s*=/);
+});
 test('selected-message case is really called inside existing EN/DE desktop/mobile Windows loop',()=>{
  const runner=fs.readFileSync(new URL('./windows-inventory-browser.mjs',import.meta.url),'utf8'),helper=fs.readFileSync(new URL('./windows-event-content-browser.mjs',import.meta.url),'utf8'),entry=fs.readFileSync(new URL('./windows-inventory-fixtures.test.mjs',import.meta.url),'utf8'),manifest=JSON.parse(fs.readFileSync(new URL('./inert-suites.json',import.meta.url),'utf8'));
  assert.equal(typeof exerciseWindowsEventContent,'function');assert.match(windowsEventContentDisclosure,/UI-only fixture/);assert.match(windowsEventContentDisclosure,/no native event read/);assert.equal(new Set(windowsEventContentStages).size,windowsEventContentStages.length);assert.ok(windowsEventContentStages.every(s=>/^content-[a-z-]+$/.test(s)));
