@@ -1,5 +1,5 @@
 {
-  "goSourceSha256": "015251a273fbdfefb9f60536f32673cf44200200a2561f56ab17bed14beb618e",
+  "goSourceSha256": "7d6ae2684ed5b5358b0a9d3309327fe39ee7e1bfca4c69318d37d0b11680b988",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -3421,6 +3421,7 @@
       "TestFixedCurrentExecutable",
       "TestInvalidRequestNeverStartsProcess",
       "TestProcessConstructionFailureIsFiniteUnavailable",
+      "TestReapedAssertionRejectsLiveAndUnwaitedChild",
       "TestRequestCanonicalAndBounded",
       "TestServeBoundsInputAndOutputWrites",
       "TestServeDeniesAbsentOrChangedAuthority",

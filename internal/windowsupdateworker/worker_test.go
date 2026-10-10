@@ -327,14 +327,66 @@ func fixtureFactory(t *testing.T, mode string, child **exec.Cmd) commandFactory 
 	}
 }
 
+func childReaped(child *exec.Cmd) bool {
+	// Cmd.Wait records ProcessState only after Process.Wait returns. Exited is
+	// not suitable here: a signal-killed Unix child reports Exited() == false.
+	if child == nil || child.Process == nil || child.ProcessState == nil ||
+		child.Process.Pid <= 0 || child.ProcessState.Pid() != child.Process.Pid {
+		return false
+	}
+	// Wait releases the process handle. Do not probe with Kill: Windows marks
+	// a waited process released and returns EINVAL, rather than ErrProcessDone.
+	// WithHandle must not expose a usable handle after Wait on either platform.
+	handleAvailable := false
+	err := child.Process.WithHandle(func(uintptr) { handleAvailable = true })
+	return err != nil && !handleAvailable
+}
+
 func assertReaped(t *testing.T, child *exec.Cmd) {
 	t.Helper()
-	if child == nil || child.Process == nil || child.ProcessState == nil {
-		t.Fatal("child was not started and synchronously waited")
+	if !childReaped(child) {
+		t.Fatal("child was not synchronously waited or retained a usable process handle")
 	}
-	if err := child.Process.Kill(); !errors.Is(err, os.ErrProcessDone) {
-		t.Fatalf("child still had a live/unreaped process handle: %v", err)
+}
+
+func TestReapedAssertionRejectsLiveAndUnwaitedChild(t *testing.T) {
+	if childReaped(nil) || childReaped(&exec.Cmd{}) {
+		t.Fatal("unstarted child was reported reaped")
 	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	var child *exec.Cmd
+	command, err := fixtureFactory(t, "blocked", &child)(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	command.Env, err = workerEnvironment()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := command.Start(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		cancel()
+		if command.ProcessState == nil {
+			_ = command.Wait()
+		}
+	})
+	if childReaped(child) {
+		t.Fatal("live child was reported reaped")
+	}
+	if err := command.Process.Kill(); err != nil {
+		t.Fatal(err)
+	}
+	if childReaped(child) {
+		t.Fatal("killed but unwaited child was reported reaped")
+	}
+	var exit *exec.ExitError
+	if err := command.Wait(); !errors.As(err, &exit) {
+		t.Fatalf("blocked child did not report its killed exit: %v", err)
+	}
+	assertReaped(t, child)
 }
 
 func TestSubprocessBudgetKillsAndReaps(t *testing.T) {
