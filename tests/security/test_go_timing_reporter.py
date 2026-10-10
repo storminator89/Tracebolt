@@ -1,5 +1,6 @@
-"""Inert timing/privacy and shell-status fixtures; never execute Go tests."""
+"""Inert timing/privacy and runner-status fixtures; never execute Go tests."""
 import contextlib
+import importlib.util
 import io
 import json
 import os
@@ -7,8 +8,8 @@ from pathlib import Path
 import subprocess
 import sys
 import tempfile
-import textwrap
 import unittest
+from unittest.mock import Mock, patch
 from unittest import mock
 
 import report_go_failure as r
@@ -130,29 +131,40 @@ class CLITests(unittest.TestCase):
         self.assertNotIn(SECRET, output.getvalue())
         self.assertNotIn("success_timings", output.getvalue())
 
-    @unittest.skipUnless(os.name == "posix", "inert Bash workflow fixture")
     def test_workflow_report_failure_neither_fails_success_nor_hides_go_failure(self):
-        source = (r.ROOT / ".github/workflows/validate.yml").read_text()
-        block = source.split("      - name: Unit and race tests\n", 1)[1].split("      - name: Build local binaries\n", 1)[0]
-        script = textwrap.dedent(block.split("        run: |\n", 1)[1])
-        self.assertIn("report_go_failure.py --success", script)
-        self.assertIn("--exit-code 0", script)
-        # Both commands are local inert shell stubs; repository binaries and
-        # reporters are not executed. Exercise the actual checked-in shell.
-        with tempfile.TemporaryDirectory() as temp:
-            for name, body in {"go": 'exit "$INERT_GO_STATUS"', "python3": 'printf "%s\\n" "$*" >> "$INERT_CALLS"; exit 19'}.items():
-                path = Path(temp) / name
-                path.write_text("#!/bin/sh\n" + body + "\n")
-                path.chmod(0o700)
-            calls = Path(temp) / "calls"
-            for status in (0, 7):
-                calls.write_text("")
-                env = {**os.environ, "PATH": temp + os.pathsep + os.environ.get("PATH", ""),
-                       "RUNNER_TEMP": temp, "INERT_GO_STATUS": str(status), "INERT_CALLS": str(calls)}
-                result = subprocess.run(["bash", "-c", script], env=env, capture_output=True, text=True, timeout=5)
-                self.assertEqual(result.returncode, 0 if status == 0 else 1)
-                self.assertEqual("--success" in calls.read_text(), status == 0)
-                self.assertIn("--exit-code " + str(status), calls.read_text())
+        # Exercise the checked-in shard runner with an inert subprocess. Optional
+        # timing diagnostics cannot turn a Go failure into success or vice versa;
+        # mandatory exact completion evidence is checked separately by the runner.
+        spec = importlib.util.spec_from_file_location("inert_shards", r.ROOT / "tests/security/go_race_shards.py")
+        runner = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(runner)
+        plan = {"schemaVersion": 1, "commit": "a" * 40, "runId": "1", "runAttempt": "1",
+                "goSourceSha256": "b" * 64, "packages": {"localrmm/a": True},
+                "shards": [["localrmm/a"], [], []]}
+        for status in (0, 7):
+            with tempfile.TemporaryDirectory() as temp:
+                destination = Path(temp) / "report" / "completion.json"
+                def inert_process(command, **kwargs):
+                    for event in [{"Action": "start", "Package": "localrmm/a"},
+                                  {"Action": "pass", "Package": "localrmm/a", "Elapsed": 1}]:
+                        kwargs["stdout"].write(runner.canonical(event) + b"\n")
+                    kwargs["stdout"].flush()
+                    process = Mock(); process.wait.return_value = status
+                    return process
+                with patch.dict(os.environ, {"RUNNER_TEMP": temp}), \
+                     patch.object(runner.subprocess, "Popen", side_effect=inert_process), \
+                     patch.object(runner.reporter, "main", return_value=19) as report, \
+                     contextlib.redirect_stdout(io.StringIO()):
+                    if status == 0:
+                        runner.run_shard(plan, {}, 0, destination)
+                        self.assertTrue(destination.is_file())
+                    else:
+                        with self.assertRaises(ValueError):
+                            runner.run_shard(plan, {}, 0, destination)
+                        self.assertFalse(destination.exists())
+                    args = report.call_args.args[0]
+                    self.assertEqual("--success" in args, status == 0)
+                    self.assertEqual(args[args.index("--exit-code") + 1], str(status))
 
 
 if __name__ == "__main__":
