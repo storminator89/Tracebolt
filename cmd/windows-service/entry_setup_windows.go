@@ -111,7 +111,7 @@ func main() {
 			},
 		}, progress)
 		if err != nil {
-			setupWizardFailure(err, progress)
+			progress(setupRemovalFailureText(err))
 		}
 		return err
 	}

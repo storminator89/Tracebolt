@@ -171,32 +171,48 @@ type setupWizardRemovalSteps struct {
 	wait         func(context.Context) error
 }
 
-func setupWizardUninstall(ctx context.Context, s setupWizardRemovalSteps, progress func(string)) error {
+func setupWizardUninstall(ctx context.Context, s setupWizardRemovalSteps, progress func(string)) (err error) {
+	step := "validate"
+	var detail error
+	defer func() {
+		if err != nil {
+			if detail == nil {
+				detail = err
+			}
+			err = &removalFailure{step: step, original: err, detail: detail}
+		}
+	}()
 	if ctx == nil || s.receipt == nil || s.inspectOwned == nil || s.inspect == nil || s.stop == nil || s.remove == nil || s.pending == nil || s.wait == nil || progress == nil {
 		return errLifecycle
 	}
 	ctx, cancel := context.WithTimeout(ctx, 45*time.Second)
 	defer cancel()
+	step = "context"
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
+	step = "receipt"
 	r, err := s.receipt()
 	if err != nil {
 		return err
 	}
+	step = "owned"
 	snap, err := s.inspectOwned(ctx, r)
 	if err != nil {
 		return err
 	}
+	step = "state"
 	if snap.State != windowsservice.Running && snap.State != windowsservice.Stopped {
 		return errSetupRemovalPending
 	}
 	if snap.State == windowsservice.Running {
 		progress("Stopping the exact receipt-owned service once. Files, identity and grants will remain.")
+		step = "stop"
 		if _, err = s.stop(ctx, r); err != nil {
 			return err
 		}
 		for {
+			step = "stop-observe"
 			snap, err = s.inspectOwned(ctx, r)
 			if err != nil {
 				return err
@@ -204,44 +220,62 @@ func setupWizardUninstall(ctx context.Context, s setupWizardRemovalSteps, progre
 			if snap.State == windowsservice.Stopped {
 				break
 			}
+			step = "stop-state"
 			if snap.State != windowsservice.Running && snap.State != windowsservice.StopPending {
 				return errSetupRemovalPending
 			}
-			if s.wait(ctx) != nil {
+			step = "stop-wait"
+			if detail = s.wait(ctx); detail != nil {
 				return errSetupRemovalPending
 			}
 		}
 	}
+	step = "pre-delete"
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
 	progress("Requesting removal of the owned, stopped service. Waiting for SCM to confirm absence.")
+	step = "delete"
 	result, err := s.remove(ctx, r)
 	if err != nil {
 		return err
 	}
+	step = "delete-result"
 	if !result.Requested || !result.DeletePending || !result.StateRetained {
 		return errSetupRemovalPending
 	}
 	progress("Service deletion is pending. Waiting for SCM to confirm absence.")
 	for {
+		step = "absence-inspect"
 		snap, err = s.inspect(ctx)
 		if err != nil {
-			if s.pending(err) && s.wait(ctx) == nil {
-				continue
+			detail = err
+			if s.pending(err) {
+				step = "absence-wait"
+				detail = s.wait(ctx)
+				if detail == nil {
+					continue
+				}
 			}
 			return errSetupRemovalPending
 		}
 		if !snap.Exists {
 			break
 		}
+		step = "absence-owned"
 		if _, err = s.inspectOwned(ctx, r); err != nil {
-			if s.pending(err) && s.wait(ctx) == nil {
-				continue
+			detail = err
+			if s.pending(err) {
+				step = "absence-wait"
+				detail = s.wait(ctx)
+				if detail == nil {
+					continue
+				}
 			}
 			return errSetupRemovalPending
 		}
-		if s.wait(ctx) != nil {
+		step = "absence-wait"
+		if detail = s.wait(ctx); detail != nil {
 			return errSetupRemovalPending
 		}
 	}

@@ -23,10 +23,15 @@ import (
 var setupUser32 = windows.NewLazySystemDLL("user32.dll")
 var setupKernel32 = windows.NewLazySystemDLL("kernel32.dll")
 
+// Preserve pointer lifetime through this wrapper, not just LazyProc.Call.
+//
+//go:uintptrescapes
 func setupCall(name string, args ...uintptr) uintptr {
 	r, _, _ := setupUser32.NewProc(name).Call(args...)
 	return r
 }
+
+//go:uintptrescapes
 func setupKernel(name string, args ...uintptr) uintptr {
 	r, _, _ := setupKernel32.NewProc(name).Call(args...)
 	return r
@@ -45,6 +50,10 @@ func setupText(hwnd uintptr) string {
 }
 func setupControl(hwnd uintptr, id int) uintptr { return setupCall("GetDlgItem", hwnd, uintptr(id)) }
 func setupEnabled(hwnd uintptr) bool            { return hwnd != 0 && setupCall("IsWindowEnabled", hwnd) != 0 }
+
+// WM_GETTEXT/WM_SETTEXT carry pointers through this additional wrapper.
+//
+//go:uintptrescapes
 func setupSend(hwnd uintptr, msg uint32, wparam, lparam uintptr) (uintptr, error) {
 	var result uintptr
 	r := setupCall("SendMessageTimeoutW", hwnd, uintptr(msg), wparam, lparam, 2, 2000, uintptr(unsafe.Pointer(&result)))
@@ -275,16 +284,23 @@ func (g *setupGUI) waitExit(ctx context.Context, expected uint32) error {
 	return nil
 }
 func (g *setupGUI) choose(ctx context.Context, path string) error {
+	return g.chooseObserved(ctx, path, func(string) {})
+}
+func (g *setupGUI) chooseObserved(ctx context.Context, path string, stage func(string)) error {
+	stage("chooser-click")
 	if setupClick(g.window, 102) != nil {
 		return setupgate.ErrGuard
 	}
 	var dialog uintptr
+	stage("chooser-dialog")
 	if setupAwait(ctx, 10*time.Second, func() bool { dialog = setupWindow(g.pid, "#32770"); return dialog != 0 }) != nil {
 		return setupgate.ErrGuard
 	}
+	stage("chooser-title")
 	if setupText(dialog) != "Choose public bootstrap only (never the invitation)" {
 		return setupgate.ErrGuard
 	}
+	stage("chooser-edit")
 	combo := setupControl(dialog, 1148)
 	edit := setupControl(combo, 1001)
 	if edit == 0 {
@@ -293,12 +309,15 @@ func (g *setupGUI) choose(ctx context.Context, path string) error {
 	if edit == 0 {
 		return setupgate.ErrGuard
 	}
+	stage("chooser-set-text")
 	if _, e := setupSend(edit, 0x000c, 0, uintptr(unsafe.Pointer(setupUTF(path)))); e != nil {
 		return e
 	}
+	stage("chooser-open")
 	if setupClick(dialog, 1) != nil {
 		return setupgate.ErrGuard
 	}
+	stage("chooser-validated")
 	return setupAwait(ctx, 10*time.Second, func() bool { return setupWindow(g.pid, "#32770") == 0 && setupEnabled(setupControl(g.window, 1)) })
 }
 func (g *setupGUI) consent(ctx context.Context, http bool) error {

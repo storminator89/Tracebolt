@@ -130,6 +130,9 @@ var setupDiagnosticPairs = [...][2]string{
 	{"service_trust_root", "open_failed"},
 	{"service_trust_root", "reparse"},
 	{"service_trust_root", "type_invalid"},
+	{"service_apply_stop_control", "failed"},
+	{"service_apply_delete", "failed"},
+	{"service_apply_stop_inspect", "failed"},
 }
 
 // SetupDiagnosticPairs returns a copy of the finite setup vocabulary in stable

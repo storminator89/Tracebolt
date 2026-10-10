@@ -296,7 +296,7 @@ func setupGUIController(ctx context.Context, b setupgate.Binding) (r setupgate.R
 		stage := func(value string) { r.Stage = value }
 		if setupgate.CheckPreflight(stage, setupgate.PreflightSteps{
 			Launch:       func() error { var err error; preflight, err = setupLaunch(ctx, exe); return err },
-			Choose:       func() error { return preflight.choose(ctx, public) },
+			Choose:       func() error { return preflight.chooseObserved(ctx, public, stage) },
 			Consent:      func() error { return preflight.consentObserved(ctx, http, stage) },
 			Cancel:       func() error { return setupClick(preflight.window, 2) },
 			Exit:         func() error { return preflight.waitExit(ctx, 0) },
@@ -308,13 +308,13 @@ func setupGUIController(ctx context.Context, b setupgate.Binding) (r setupgate.R
 		}
 		r.Checks["preflightCancelUnchanged"] = true
 	}
-	r.Stage = "bootstrap"
+	r.Stage = "bootstrap-launch"
 	g, e := setupLaunch(ctx, exe)
 	if e != nil {
 		return r
 	}
 	defer g.dispose()
-	if g.choose(ctx, public) != nil {
+	if g.chooseObserved(ctx, public, func(s string) { r.Stage = s }) != nil {
 		return r
 	}
 	r.Checks["publicBootstrapChosen"] = true
@@ -623,6 +623,11 @@ func setupGUIController(ctx context.Context, b setupgate.Binding) (r setupgate.R
 				return strings.ReplaceAll(setupText(setupControl(u.window, 2)), "&", "") == "Close"
 			})
 			r.Stage = observation.Stage(text)
+			r.Reason = "operation_failed"
+			if stage, reason, ok := setupgate.ParseRemovalFailure(text); ok {
+				r.Stage = stage
+				r.Reason = reason
+			}
 			return observation.Ready()
 		}) != nil {
 			return r
