@@ -1,5 +1,17 @@
 # Changelog
 
+## 2026-10-10 — Independent opt-in Windows CPU and physical-RAM policies
+
+- Reuse the percentage evidence engine for existing observed-processor-group CPU and physical RAM not immediately available, with independently disabled policies, tagged storage, revisions, history and durable floors. Keep disk v1 state/API/fixture bytes unchanged.
+- Evaluate enabled disk/CPU/RAM checks from one accepted-source transaction on the coordinated Windows scheduler; keep zero source reads when all are disabled. Preserve distinct-source 60-second confirmation/recovery, hysteresis, unknown states and final session/certificate authority checks.
+- Wire strict metric-bound operator routes and EN/DE Health controls through shared UI lifecycle logic, with exact Go/TypeScript fixtures and real synthetic enrollment-to-operator tests. No collection/grant expansion, AI export, notifications, native acceptance or full Windows Health parity is claimed.
+
+## 2026-10-10 — Opt-in Windows system-volume capacity checks
+
+- Add a default-off, per-device manager policy over existing caller-visible quota-aware system-volume percentage metadata, with durable incidents and explicit threshold/hysteresis semantics. No new native reads, grants, service actions, AI export or notifications.
+- Require advancing original captures across confirmation/recovery, preserve monotonic evidence floors through unknown/restart, and close changed/disabled policy episodes explicitly without claiming recovery.
+- Add isolated authenticated reads, shared-admin CSRF/revision-checked settings, EN/DE Health controls, bounded persistence, cross-language fixtures and end-to-end synthetic enrollment/API coverage. Native, hosted-browser and release acceptance remain separate gates.
+
 ## 2026-10-10 — Wire selected Windows event messages
 
 - Add a separate stopped-service content grant and an exact selected Application/System message path through the existing sender, manager and Logs view. Preserve five-scope Setup and header-only grants; require independent HTTP plaintext acknowledgement.

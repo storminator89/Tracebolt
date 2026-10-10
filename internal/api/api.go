@@ -34,6 +34,7 @@ type Server struct {
 	linuxCVE            *linuxCVEState
 	health              *healthMonitor
 	windowsContact      *windowsContactMonitor
+	windowsCapacity     *windowsCapacityMonitor
 	store               *store.Store
 	port                int
 	web                 string

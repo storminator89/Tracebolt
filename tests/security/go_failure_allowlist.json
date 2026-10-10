@@ -1,5 +1,5 @@
 {
-  "goSourceSha256": "fb23369992bc5aad085a425a901939602876cb1bef412baddf506636dc63c911",
+  "goSourceSha256": "5efdf75fd197ccbe84424a87963c81a102aa5d91262cad01461e90c4605646d1",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -897,6 +897,16 @@
       "TestSystemInventoryMetadataFairReadPreservesOperatorGuards",
       "TestSystemInventoryMetadataFinalOutputRechecksIdentityAndSession",
       "TestSystemPageFinalOutputRechecksAfterEncodingAndSession",
+      "TestWindowsCapacityAuthenticatedReadOnlyAndPolicyMutation",
+      "TestWindowsCapacityAuthorityRecheckedAndMissingDevicesHidden",
+      "TestWindowsCapacityDisabledMonitorDoesNotReadSource",
+      "TestWindowsCapacityFinalClockCannotReleaseExpiredHistory",
+      "TestWindowsCapacityMonitorCapacityUsesOneSourceRead",
+      "TestWindowsCapacityMonitorFailureRestartOmissionAndCancellation",
+      "TestWindowsCapacityOffDoesNotReadEnrollment",
+      "TestWindowsCapacityOmissionAndRevocationResetConfirmation",
+      "TestWindowsCapacityPolicyFinalAuthorityMustRejectBeforeWrite",
+      "TestWindowsCapacityPolicyStrictValidationAndReadRole",
       "TestWindowsContactAuthenticatedReadOnlyAndAuthority",
       "TestWindowsContactFinalAuthoritySessionAndTimeRecheck",
       "TestWindowsContactMonitorFailureRestartAndCancellation",
@@ -912,6 +922,14 @@
       "TestWindowsEventConfiguredOperatorTLSLifecycle",
       "TestWindowsEventOperatorTLSRoutesAndNamedReadExclusion",
       "TestWindowsEventSessionBindingIsDomainSeparatedOpaque",
+      "TestWindowsHealthProductionSchedulerSerializesSourceAdmission",
+      "TestWindowsResourceAuthenticatedIndependentPolicyPipeline",
+      "TestWindowsResourceFinalClockAndNewestSourceTruth",
+      "TestWindowsResourceLogoutRevokesBeforeWriteAndJoinsLease",
+      "TestWindowsResourceMissingMetricAndMonitorRestartRemainUnknown",
+      "TestWindowsResourceMonitorSharesOneSourceTransactionAtCapacity",
+      "TestWindowsResourceRechecksCurrentAuthorityBeforeWriteAndRelease",
+      "TestWindowsResourceRouteBodyAndReadRoleBoundaries",
       "TestWindowsSetupCapabilitiesAbsentOnDeveloper",
       "TestWindowsSetupCapabilitiesExactPublicGuardedTLSContract",
       "TestWindowsUpdatesOperatorSessionAndResponseTimeExpiry",
@@ -1536,6 +1554,9 @@
       "TestTwentyFiveOperationalRetainedBudget",
       "TestTwentyFivePopulatedRecordsRetainFrames",
       "TestV4GenerationAdmitsOnlyExactBoundedAIRequestAndKeepsConsumeFloor",
+      "TestWindowsCapacityAuthorityExpiryCancellationAndAdmission",
+      "TestWindowsCapacitySourceReadsDoNotWriteEnrollmentState",
+      "TestWindowsCapacityUsesOriginalAcceptedReceiptOnly",
       "TestWindowsContactAuthorityExpiryCancellationAndAdmission",
       "TestWindowsContactSourceReadsDoNotWriteEnrollmentState",
       "TestWindowsContactUsesOriginalAcceptedReceiptOnly",
@@ -2064,6 +2085,7 @@
       "TestValidateGuidedHandoffIsLocalAndPreservesState",
       "TestWindowsBootstrapRouteBoundariesRemainClosed",
       "TestWindowsCapabilityGrantDigestDetectsReplacementWithoutCollection",
+      "TestWindowsCapacityAcceptedReceiptMonitorAndOperatorPipeline",
       "TestWindowsContactAcceptedReceiptMonitorAndOperatorPipeline",
       "TestWindowsEventConsentCreateOnlyAndReenable",
       "TestWindowsEventConsentRejectsIncompleteForeignAndFailedStorage",
@@ -2123,6 +2145,7 @@
       "TestWindowsProcessMetricsIngressStrictVersionAndScope",
       "TestWindowsProcessMetricsMaximalCombinedEnvelopePreservesCountsAndCapture",
       "TestWindowsProcessMetricsPendingRevocationReplacementAndConsentRace",
+      "TestWindowsResourceAcceptedReceiptMonitorAndOperatorPipeline",
       "TestWindowsServiceStartupAll32CombinationsBothTransportAdmissions",
       "TestWindowsServiceStartupCapabilityV4ExplicitSelectionsAndOlderScopeIsolation",
       "TestWindowsServiceStartupCaptureFloorAndPreSendRevocation",
@@ -2767,6 +2790,11 @@
       "TestJournalAIStoreSharesHealthRateBudget",
       "TestNoteLimit",
       "TestPruneHealthAnalysesWorksWithoutProviderApproval",
+      "TestWindowsCapacityConcurrentPolicyRevisionAndIsolation",
+      "TestWindowsCapacityFailedWritesAndCorruptionPreserveState",
+      "TestWindowsCapacityNeverTouchesHealthAnalysisOrAlarms",
+      "TestWindowsCapacityPersistenceReadOnlyAndDefaultOff",
+      "TestWindowsCapacityStorageBoundAndInvalidIdentity",
       "TestWindowsContactCancelledAndFailedTransactionsDoNotChangeHistory",
       "TestWindowsContactCannotTransferBoundHistory",
       "TestWindowsContactConcurrentEvaluationOneOpenIncident",
@@ -2774,7 +2802,11 @@
       "TestWindowsContactDeviceLimitAndBoundedList",
       "TestWindowsContactDurableRestartAndReadOnlyGET",
       "TestWindowsContactFreshSchemaIsEmptyAndCanonicalIdentityRequired",
-      "TestWindowsContactNeverTouchesHealthAnalysisOrAlarms"
+      "TestWindowsContactNeverTouchesHealthAnalysisOrAlarms",
+      "TestWindowsResourceBoundedDeviceAndMetricAdmission",
+      "TestWindowsResourceFailedWritesAndTagCorruptionRemainIntact",
+      "TestWindowsResourceIndependentPoliciesPersistWithoutDiskMigration",
+      "TestWindowsResourceOptimisticRacesAndIndependentFloors"
     ],
     "localrmm/internal/systeminventory": [
       "TestAdmissionRetainedUntilSynchronousReturn",
@@ -3096,6 +3128,19 @@
     "localrmm/internal/windowsagentconfig": [
       "TestWindowsStoreSchemasRemainSeparateAndFixed"
     ],
+    "localrmm/internal/windowscapacity": [
+      "TestWindowsCapacityCanonicalCorruptionAndBounds",
+      "TestWindowsCapacityDisableReenableNeverClaimsRecovery",
+      "TestWindowsCapacityExpiryEdgesAndViewsDoNotMutate",
+      "TestWindowsCapacityPolicyDefaultsAndValidation",
+      "TestWindowsCapacityRepeatedSamplesCannotConfirmOrRecover",
+      "TestWindowsCapacityRestartsGapsAndRollback",
+      "TestWindowsCapacityRetentionAndHistoryLimit",
+      "TestWindowsCapacityThresholdHysteresisAndOriginalEvidence",
+      "TestWindowsCapacityUnknownNeverRecovers",
+      "TestWindowsCapacityUnknownPreservesReceiptAndCaptureFloors",
+      "TestWindowsCapacityViewWireFixture"
+    ],
     "localrmm/internal/windowsconsole": [
       "TestConsoleSerializationWaitIsCancellable",
       "TestContextDiagnosticAtEveryBoundary",
@@ -3362,6 +3407,13 @@
       "TestSelfRetentionMissingDeniedAndLegacyEquality",
       "TestSelfRetentionReadPriorityWithinUnchangedBudget",
       "TestSelfRetentionSamplerAndEverySmallerBudget"
+    ],
+    "localrmm/internal/windowsresource": [
+      "TestResourceCanonicalEnvelopeAndFixture",
+      "TestResourceDisableRestartAndPolicyRevision",
+      "TestResourceDistinctSamplesAndHysteresis",
+      "TestResourceTagDefaultOffAndSelection",
+      "TestResourceUnknownFloorsAndIndependentCaptureTimes"
     ],
     "localrmm/internal/windowsservice": [
       "TestAncestorTrustAdmissionNeverClaimsEffectiveTokenReadAccess",

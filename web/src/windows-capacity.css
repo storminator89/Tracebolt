@@ -1,0 +1,20 @@
+.windows-capacity{min-width:0;margin-bottom:24px;padding-bottom:20px;border-bottom:1px solid var(--line)}
+.windows-capacity>header{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.windows-capacity h2,.windows-capacity h3{font-size:15px}
+.windows-capacity h2,.windows-capacity header button{display:flex;align-items:center;gap:7px}
+.windows-capacity p,.windows-capacity dt,.windows-capacity-assessment>span{font-size:12px;color:var(--secondary);overflow-wrap:anywhere}
+.windows-capacity-scope{margin:10px 0 16px}
+.windows-capacity-assessment{display:flex;flex-direction:column;gap:7px;padding:14px 16px;background:var(--panel);border:1px solid var(--line);border-radius:8px}
+.windows-capacity-assessment>strong{font-size:18px;font-weight:600;overflow-wrap:anywhere}
+.windows-capacity-times{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 20px;margin:14px 0 18px}
+.windows-capacity-times>div{min-width:0}
+.windows-capacity dd{font-size:12px;margin:4px 0 0;overflow-wrap:anywhere}
+.windows-capacity-incidents{list-style:none;padding:0;margin:12px 0}
+.windows-capacity-incidents>li{padding:14px 0;border-bottom:1px solid var(--line)}
+.windows-capacity-incident-heading{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;font-size:12px}
+.windows-capacity-incident-heading>span{color:var(--secondary);min-width:0;overflow-wrap:anywhere}
+.windows-capacity-incident-heading code{font-size:11px}
+.windows-capacity-incidents .windows-capacity-times{margin-bottom:0}
+@media(max-width:600px){.windows-capacity-times{grid-template-columns:1fr}.windows-capacity>header{align-items:flex-start}.windows-capacity-incident-heading{flex-direction:column}}
+
+.windows-capacity-form{display:grid;gap:14px;padding:14px 0}.windows-capacity-form>label{display:flex;align-items:center;gap:10px;font-size:13px}.windows-capacity-enable{display:flex;align-items:center;gap:8px;font-size:13px}.windows-capacity-form input[type=number]{max-width:90px;padding:7px;border:1px solid var(--line);border-radius:5px;background:var(--panel);color:inherit}.windows-capacity-actions{display:flex;gap:14px;flex-wrap:wrap}.windows-capacity-incidents details{font-size:12px;margin-top:10px}.windows-capacity-incidents summary{cursor:pointer}

@@ -1,0 +1,90 @@
+{
+  "cpu": {
+    "schemaVersion": "tracebolt.windows-resource-view.v1",
+    "deviceId": "agent_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "serverNow": "2026-10-10T12:01:00Z",
+    "certificateExpiresAt": "2026-10-11T12:00:00Z",
+    "policy": {
+      "enabled": true,
+      "thresholdPercent": 90,
+      "revision": 1
+    },
+    "status": "pressure",
+    "evaluatedAt": "2026-10-10T12:01:00Z",
+    "observation": {
+      "value": 95,
+      "collectedAt": "2026-10-10T12:01:00Z",
+      "receivedAt": "2026-10-10T12:01:00Z",
+      "sequence": 61
+    },
+    "incidents": [
+      {
+        "id": "wcapacity_0000000000000001",
+        "policyRevision": 1,
+        "thresholdPercent": 90,
+        "openedAt": "2026-10-10T12:01:00Z",
+        "lastConfirmedAt": "2026-10-10T12:01:00Z",
+        "openingObservation": {
+          "value": 95,
+          "collectedAt": "2026-10-10T12:01:00Z",
+          "receivedAt": "2026-10-10T12:01:00Z",
+          "sequence": 61
+        },
+        "lastHighObservation": {
+          "value": 95,
+          "collectedAt": "2026-10-10T12:01:00Z",
+          "receivedAt": "2026-10-10T12:01:00Z",
+          "sequence": 61
+        },
+        "resolvedAt": null,
+        "recoveryObservation": null,
+        "closedReason": ""
+      }
+    ],
+    "metric": "cpu"
+  },
+  "memory": {
+    "schemaVersion": "tracebolt.windows-resource-view.v1",
+    "deviceId": "agent_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "serverNow": "2026-10-10T12:01:00Z",
+    "certificateExpiresAt": "2026-10-11T12:00:00Z",
+    "policy": {
+      "enabled": true,
+      "thresholdPercent": 90,
+      "revision": 1
+    },
+    "status": "pressure",
+    "evaluatedAt": "2026-10-10T12:01:00Z",
+    "observation": {
+      "value": 95,
+      "collectedAt": "2026-10-10T12:01:00Z",
+      "receivedAt": "2026-10-10T12:01:00Z",
+      "sequence": 61
+    },
+    "incidents": [
+      {
+        "id": "wcapacity_0000000000000001",
+        "policyRevision": 1,
+        "thresholdPercent": 90,
+        "openedAt": "2026-10-10T12:01:00Z",
+        "lastConfirmedAt": "2026-10-10T12:01:00Z",
+        "openingObservation": {
+          "value": 95,
+          "collectedAt": "2026-10-10T12:01:00Z",
+          "receivedAt": "2026-10-10T12:01:00Z",
+          "sequence": 61
+        },
+        "lastHighObservation": {
+          "value": 95,
+          "collectedAt": "2026-10-10T12:01:00Z",
+          "receivedAt": "2026-10-10T12:01:00Z",
+          "sequence": 61
+        },
+        "resolvedAt": null,
+        "recoveryObservation": null,
+        "closedReason": ""
+      }
+    ],
+    "metric": "memory"
+  }
+}
