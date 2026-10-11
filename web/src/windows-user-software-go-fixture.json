@@ -1,0 +1,423 @@
+[
+  {
+    "name": "notConfigured",
+    "query": {
+      "accountContextId": "",
+      "source": "",
+      "search": "",
+      "sort": "name-asc",
+      "limit": 2,
+      "cursor": ""
+    },
+    "page": {
+      "accountContextId": "",
+      "source": "",
+      "schemaVersion": "tracebolt.windows-selected-user-software-page.v1",
+      "deviceId": "agent_00000000000000000000000000000001",
+      "serverNow": "2027-01-15T08:00:10Z",
+      "status": "not_configured",
+      "authorityUntil": null,
+      "grantId": null,
+      "grantRevision": null,
+      "complete": null,
+      "latestAttempt": null,
+      "search": "",
+      "sort": "name-asc",
+      "limit": 2,
+      "offset": 0,
+      "matchingCount": 0,
+      "rows": [],
+      "nextCursor": "",
+      "cursorExpiresAt": null
+    }
+  },
+  {
+    "name": "completeFirst",
+    "query": {
+      "accountContextId": "",
+      "source": "",
+      "search": "",
+      "sort": "name-asc",
+      "limit": 2,
+      "cursor": ""
+    },
+    "page": {
+      "accountContextId": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "source": "",
+      "schemaVersion": "tracebolt.windows-selected-user-software-page.v1",
+      "deviceId": "agent_00000000000000000000000000000001",
+      "serverNow": "2027-01-15T08:00:10Z",
+      "status": "ready",
+      "authorityUntil": "2027-01-16T08:00:00Z",
+      "grantId": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "grantRevision": 1,
+      "complete": {
+        "manifest": {
+          "accountContextId": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+          "accountLabel": "Selected account dddddddd",
+          "captureNonce": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+          "hkcuStatus": "complete",
+          "msixStatus": "complete",
+          "schemaVersion": "tracebolt.windows-selected-user-software-manifest.v1",
+          "scope": "windows-selected-user-software-v1",
+          "source": "selected-account-hkcu-msix",
+          "coverage": "selected_account_complete",
+          "deviceId": "agent_00000000000000000000000000000001",
+          "senderBinding": "aaca42fa3e4c6bab8910690d6345c0dff3df997e77db06a8af400834152c7677",
+          "grantId": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "grantRevision": 1,
+          "sequence": 1,
+          "generationId": "sample_684d3f4a8879839b5a9942ba8ac22174",
+          "captureStartedAt": "2027-01-15T08:00:10Z",
+          "captureFinishedAt": "2027-01-15T08:00:10Z",
+          "expiresAt": "2027-01-16T08:00:10Z",
+          "rowCount": 3,
+          "rowsBytes": 826,
+          "rowsSha256": "acc9fd7b2bfe7c2b31b95ca020d37ea374dd04aba85ccfcf321f3145ad2f85e9",
+          "chunkCount": 1
+        },
+        "manifestSha256": "54fb2f5e5e6e9e140d6a47a68698640ca368aabb96ae09a6833f1bff03b431f3",
+        "receivedAt": "2027-01-15T08:00:10Z"
+      },
+      "latestAttempt": {
+        "accountContextId": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "accountLabel": "Selected account dddddddd",
+        "captureNonce": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "sequence": 1,
+        "attemptedAt": "2027-01-15T08:00:10Z",
+        "status": "complete",
+        "reason": ""
+      },
+      "search": "",
+      "sort": "name-asc",
+      "limit": 2,
+      "offset": 0,
+      "matchingCount": 3,
+      "rows": [
+        {
+          "registrationId": "0000000000000000000000000000000000000000000000000000000000000001",
+          "source": "hkcu",
+          "name": "InventedSoftware00000",
+          "nameQuality": "observed",
+          "version": "00000",
+          "versionQuality": "observed",
+          "publisher": "Fiktive Firma 00000 東京",
+          "publisherQuality": "observed"
+        },
+        {
+          "registrationId": "0000000000000000000000000000000000000000000000000000000000000002",
+          "source": "msix",
+          "name": "InventedSoftware00001",
+          "nameQuality": "observed",
+          "version": "00001",
+          "versionQuality": "observed",
+          "publisher": "Fiktive Firma 00001 東京",
+          "publisherQuality": "observed"
+        }
+      ],
+      "nextCursor": "eyJhY2NvdW50Q29udGV4dElkIjoiZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZCIsInNvdXJjZSI6IiIsInYiOjEsImRldmljZSI6ImFnZW50XzAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAxIiwiZ3JhbnQiOiJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYiIsInJldmlzaW9uIjoxLCJnZW5lcmF0aW9uIjoic2FtcGxlXzY4NGQzZjRhODg3OTgzOWI1YTk5NDJiYThhYzIyMTc0IiwibWFuaWZlc3QiOiI1NGZiMmY1ZTVlNmU5ZTE0MGQ2YTQ3YTY4Njk4NjQwY2EzNjhhYWJiOTZhZTA5YTY4MzNmMWJmZjAzYjQzMWYzIiwic2VhcmNoIjoiIiwic29ydCI6Im5hbWUtYXNjIiwibGltaXQiOjIsIm9mZnNldCI6Miwic2Vzc2lvbiI6IiIsImV4cGlyZXNBdCI6IjIwMjctMDEtMTVUMDg6MTU6MTBaIn0.VatHe6wYST_PFbu6odxKP1f06UYtY4CvLMN6rp--60M",
+      "cursorExpiresAt": "2027-01-15T08:15:10Z"
+    }
+  },
+  {
+    "name": "completeContinuation",
+    "query": {
+      "accountContextId": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "source": "",
+      "search": "",
+      "sort": "name-asc",
+      "limit": 2,
+      "cursor": "eyJhY2NvdW50Q29udGV4dElkIjoiZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZCIsInNvdXJjZSI6IiIsInYiOjEsImRldmljZSI6ImFnZW50XzAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAxIiwiZ3JhbnQiOiJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYiIsInJldmlzaW9uIjoxLCJnZW5lcmF0aW9uIjoic2FtcGxlXzY4NGQzZjRhODg3OTgzOWI1YTk5NDJiYThhYzIyMTc0IiwibWFuaWZlc3QiOiI1NGZiMmY1ZTVlNmU5ZTE0MGQ2YTQ3YTY4Njk4NjQwY2EzNjhhYWJiOTZhZTA5YTY4MzNmMWJmZjAzYjQzMWYzIiwic2VhcmNoIjoiIiwic29ydCI6Im5hbWUtYXNjIiwibGltaXQiOjIsIm9mZnNldCI6Miwic2Vzc2lvbiI6IiIsImV4cGlyZXNBdCI6IjIwMjctMDEtMTVUMDg6MTU6MTBaIn0.VatHe6wYST_PFbu6odxKP1f06UYtY4CvLMN6rp--60M"
+    },
+    "page": {
+      "accountContextId": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "source": "",
+      "schemaVersion": "tracebolt.windows-selected-user-software-page.v1",
+      "deviceId": "agent_00000000000000000000000000000001",
+      "serverNow": "2027-01-15T08:00:10Z",
+      "status": "ready",
+      "authorityUntil": "2027-01-16T08:00:00Z",
+      "grantId": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "grantRevision": 1,
+      "complete": {
+        "manifest": {
+          "accountContextId": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+          "accountLabel": "Selected account dddddddd",
+          "captureNonce": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+          "hkcuStatus": "complete",
+          "msixStatus": "complete",
+          "schemaVersion": "tracebolt.windows-selected-user-software-manifest.v1",
+          "scope": "windows-selected-user-software-v1",
+          "source": "selected-account-hkcu-msix",
+          "coverage": "selected_account_complete",
+          "deviceId": "agent_00000000000000000000000000000001",
+          "senderBinding": "aaca42fa3e4c6bab8910690d6345c0dff3df997e77db06a8af400834152c7677",
+          "grantId": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "grantRevision": 1,
+          "sequence": 1,
+          "generationId": "sample_684d3f4a8879839b5a9942ba8ac22174",
+          "captureStartedAt": "2027-01-15T08:00:10Z",
+          "captureFinishedAt": "2027-01-15T08:00:10Z",
+          "expiresAt": "2027-01-16T08:00:10Z",
+          "rowCount": 3,
+          "rowsBytes": 826,
+          "rowsSha256": "acc9fd7b2bfe7c2b31b95ca020d37ea374dd04aba85ccfcf321f3145ad2f85e9",
+          "chunkCount": 1
+        },
+        "manifestSha256": "54fb2f5e5e6e9e140d6a47a68698640ca368aabb96ae09a6833f1bff03b431f3",
+        "receivedAt": "2027-01-15T08:00:10Z"
+      },
+      "latestAttempt": {
+        "accountContextId": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "accountLabel": "Selected account dddddddd",
+        "captureNonce": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "sequence": 1,
+        "attemptedAt": "2027-01-15T08:00:10Z",
+        "status": "complete",
+        "reason": ""
+      },
+      "search": "",
+      "sort": "name-asc",
+      "limit": 2,
+      "offset": 2,
+      "matchingCount": 3,
+      "rows": [
+        {
+          "registrationId": "0000000000000000000000000000000000000000000000000000000000000003",
+          "source": "hkcu",
+          "name": "InventedSoftware00002",
+          "nameQuality": "observed",
+          "version": "00002",
+          "versionQuality": "observed",
+          "publisher": "Fiktive Firma 00002 東京",
+          "publisherQuality": "observed"
+        }
+      ],
+      "nextCursor": "",
+      "cursorExpiresAt": "2027-01-15T08:15:10Z"
+    }
+  },
+  {
+    "name": "msixOnly",
+    "query": {
+      "accountContextId": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "source": "msix",
+      "search": "",
+      "sort": "name-asc",
+      "limit": 2,
+      "cursor": ""
+    },
+    "page": {
+      "accountContextId": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "source": "msix",
+      "schemaVersion": "tracebolt.windows-selected-user-software-page.v1",
+      "deviceId": "agent_00000000000000000000000000000001",
+      "serverNow": "2027-01-15T08:00:10Z",
+      "status": "ready",
+      "authorityUntil": "2027-01-16T08:00:00Z",
+      "grantId": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "grantRevision": 1,
+      "complete": {
+        "manifest": {
+          "accountContextId": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+          "accountLabel": "Selected account dddddddd",
+          "captureNonce": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+          "hkcuStatus": "complete",
+          "msixStatus": "complete",
+          "schemaVersion": "tracebolt.windows-selected-user-software-manifest.v1",
+          "scope": "windows-selected-user-software-v1",
+          "source": "selected-account-hkcu-msix",
+          "coverage": "selected_account_complete",
+          "deviceId": "agent_00000000000000000000000000000001",
+          "senderBinding": "aaca42fa3e4c6bab8910690d6345c0dff3df997e77db06a8af400834152c7677",
+          "grantId": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "grantRevision": 1,
+          "sequence": 1,
+          "generationId": "sample_684d3f4a8879839b5a9942ba8ac22174",
+          "captureStartedAt": "2027-01-15T08:00:10Z",
+          "captureFinishedAt": "2027-01-15T08:00:10Z",
+          "expiresAt": "2027-01-16T08:00:10Z",
+          "rowCount": 3,
+          "rowsBytes": 826,
+          "rowsSha256": "acc9fd7b2bfe7c2b31b95ca020d37ea374dd04aba85ccfcf321f3145ad2f85e9",
+          "chunkCount": 1
+        },
+        "manifestSha256": "54fb2f5e5e6e9e140d6a47a68698640ca368aabb96ae09a6833f1bff03b431f3",
+        "receivedAt": "2027-01-15T08:00:10Z"
+      },
+      "latestAttempt": {
+        "accountContextId": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "accountLabel": "Selected account dddddddd",
+        "captureNonce": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "sequence": 1,
+        "attemptedAt": "2027-01-15T08:00:10Z",
+        "status": "complete",
+        "reason": ""
+      },
+      "search": "",
+      "sort": "name-asc",
+      "limit": 2,
+      "offset": 0,
+      "matchingCount": 1,
+      "rows": [
+        {
+          "registrationId": "0000000000000000000000000000000000000000000000000000000000000002",
+          "source": "msix",
+          "name": "InventedSoftware00001",
+          "nameQuality": "observed",
+          "version": "00001",
+          "versionQuality": "observed",
+          "publisher": "Fiktive Firma 00001 東京",
+          "publisherQuality": "observed"
+        }
+      ],
+      "nextCursor": "",
+      "cursorExpiresAt": "2027-01-15T08:15:10Z"
+    }
+  },
+  {
+    "name": "partialHKCU",
+    "query": {
+      "accountContextId": "",
+      "source": "",
+      "search": "",
+      "sort": "name-asc",
+      "limit": 2,
+      "cursor": ""
+    },
+    "page": {
+      "accountContextId": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "source": "",
+      "schemaVersion": "tracebolt.windows-selected-user-software-page.v1",
+      "deviceId": "agent_00000000000000000000000000000001",
+      "serverNow": "2027-01-15T08:01:10Z",
+      "status": "ready",
+      "authorityUntil": "2027-01-16T08:00:00Z",
+      "grantId": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "grantRevision": 1,
+      "complete": {
+        "manifest": {
+          "accountContextId": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+          "accountLabel": "Selected account dddddddd",
+          "captureNonce": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+          "hkcuStatus": "complete",
+          "msixStatus": "unsupported",
+          "schemaVersion": "tracebolt.windows-selected-user-software-manifest.v1",
+          "scope": "windows-selected-user-software-v1",
+          "source": "selected-account-hkcu-msix",
+          "coverage": "selected_account_partial",
+          "deviceId": "agent_00000000000000000000000000000001",
+          "senderBinding": "aaca42fa3e4c6bab8910690d6345c0dff3df997e77db06a8af400834152c7677",
+          "grantId": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "grantRevision": 1,
+          "sequence": 2,
+          "generationId": "sample_30d51c5e2c19c0b677e5a038613044d3",
+          "captureStartedAt": "2027-01-15T08:01:10Z",
+          "captureFinishedAt": "2027-01-15T08:01:10Z",
+          "expiresAt": "2027-01-16T08:01:10Z",
+          "rowCount": 1,
+          "rowsBytes": 276,
+          "rowsSha256": "f539b2047f95cf7cd2dfe5c4aa3c8cfa0187d3f7d636df59bd687285b9a892a3",
+          "chunkCount": 1
+        },
+        "manifestSha256": "1d0b731398ca8c2f48fa1fafb6a618ef8fef07801f185e494a2f28cfc3f57275",
+        "receivedAt": "2027-01-15T08:01:10Z"
+      },
+      "latestAttempt": {
+        "accountContextId": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "accountLabel": "Selected account dddddddd",
+        "captureNonce": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "sequence": 2,
+        "attemptedAt": "2027-01-15T08:01:10Z",
+        "status": "complete",
+        "reason": ""
+      },
+      "search": "",
+      "sort": "name-asc",
+      "limit": 2,
+      "offset": 0,
+      "matchingCount": 1,
+      "rows": [
+        {
+          "registrationId": "0000000000000000000000000000000000000000000000000000000000000001",
+          "source": "hkcu",
+          "name": "InventedSoftware00000",
+          "nameQuality": "observed",
+          "version": "00000",
+          "versionQuality": "observed",
+          "publisher": "Fiktive Firma 00000 東京",
+          "publisherQuality": "observed"
+        }
+      ],
+      "nextCursor": "",
+      "cursorExpiresAt": "2027-01-15T08:16:10Z"
+    }
+  },
+  {
+    "name": "bothUnavailable",
+    "query": {
+      "accountContextId": "",
+      "source": "",
+      "search": "",
+      "sort": "name-asc",
+      "limit": 2,
+      "cursor": ""
+    },
+    "page": {
+      "accountContextId": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "source": "",
+      "schemaVersion": "tracebolt.windows-selected-user-software-page.v1",
+      "deviceId": "agent_00000000000000000000000000000001",
+      "serverNow": "2027-01-15T08:02:10Z",
+      "status": "ready",
+      "authorityUntil": "2027-01-16T08:00:00Z",
+      "grantId": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "grantRevision": 1,
+      "complete": {
+        "manifest": {
+          "accountContextId": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+          "accountLabel": "Selected account dddddddd",
+          "captureNonce": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+          "hkcuStatus": "access_denied",
+          "msixStatus": "unsupported",
+          "schemaVersion": "tracebolt.windows-selected-user-software-manifest.v1",
+          "scope": "windows-selected-user-software-v1",
+          "source": "selected-account-hkcu-msix",
+          "coverage": "selected_account_partial",
+          "deviceId": "agent_00000000000000000000000000000001",
+          "senderBinding": "aaca42fa3e4c6bab8910690d6345c0dff3df997e77db06a8af400834152c7677",
+          "grantId": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "grantRevision": 1,
+          "sequence": 3,
+          "generationId": "sample_24597271c8a9ad70ab4f88091b644121",
+          "captureStartedAt": "2027-01-15T08:02:10Z",
+          "captureFinishedAt": "2027-01-15T08:02:10Z",
+          "expiresAt": "2027-01-16T08:02:10Z",
+          "rowCount": 0,
+          "rowsBytes": 2,
+          "rowsSha256": "49702dcf3f9414eb42184948c4e164043fb91bda78f25b9246d89b38d17f06a1",
+          "chunkCount": 1
+        },
+        "manifestSha256": "55b87a84bacb13ebfdc78e66ddf4899579b7ecfef973be9c5a17c67c0e046d12",
+        "receivedAt": "2027-01-15T08:02:10Z"
+      },
+      "latestAttempt": {
+        "accountContextId": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "accountLabel": "Selected account dddddddd",
+        "captureNonce": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+        "sequence": 3,
+        "attemptedAt": "2027-01-15T08:02:10Z",
+        "status": "complete",
+        "reason": ""
+      },
+      "search": "",
+      "sort": "name-asc",
+      "limit": 2,
+      "offset": 0,
+      "matchingCount": 0,
+      "rows": [],
+      "nextCursor": "",
+      "cursorExpiresAt": "2027-01-15T08:17:10Z"
+    }
+  }
+]

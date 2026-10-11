@@ -46,6 +46,24 @@ jobs:
           --version v0.0.0-setup-candidate
           --source-commit "$SOURCE_COMMIT"
           --output "$RUNNER_TEMP/tracebolt-windows-setup"
+      - name: Build separate foreground helper candidates (never executed or installed)
+        shell: bash
+        run: |
+          set -euo pipefail
+          output="$RUNNER_TEMP/tracebolt-windows-user-software"
+          mkdir "$output"
+          for arch in amd64 arm64; do
+            GOOS=windows GOARCH="$arch" CGO_ENABLED=0 go build -mod=readonly -buildvcs=false -trimpath -o "$output/tracebolt-windows-user-software-$arch.exe" ./cmd/windows-user-software
+          done
+          printf '%s\n' "${{ github.sha }}" > "$output/SOURCE_COMMIT"
+          (cd "$output" && sha256sum *.exe > SHA256SUMS)
+      - name: Preserve separate unsigned foreground helpers for review
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: unsigned-windows-selected-user-software-helpers
+          path: ${{ runner.temp }}/tracebolt-windows-user-software/
+          if-no-files-found: error
+          retention-days: 7
       - name: Preserve unsigned source candidates for review
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
         with:

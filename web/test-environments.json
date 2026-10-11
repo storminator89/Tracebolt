@@ -31,6 +31,7 @@
     "src/windows-resource-context-types.test.ts",
     "src/windows-service-startup-types.test.ts",
     "src/windows-storage-io-types.test.ts",
-    "src/windows-updates-types.test.ts"
+    "src/windows-updates-types.test.ts",
+    "src/windows-user-software-types.test.ts"
   ]
 }

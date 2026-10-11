@@ -239,6 +239,17 @@ func windowsFullServicesOtherBytes(ctx context.Context, t *transaction) (int64, 
 		}
 		extra += n
 	}
+	present, e = windowsUserSoftwareSchemaPresent(ctx, t.conn, enrollmentcrypto.CollectionProfileWindowsInventory)
+	if e != nil {
+		return 0, e
+	}
+	if present {
+		var n int64
+		if t.conn.QueryRowContext(ctx, `SELECT coalesce((SELECT sum(length(body)) FROM wus_authority),0)+coalesce((SELECT sum(reserved_bytes) FROM wus_generations),0)`).Scan(&n) != nil {
+			return 0, ErrStorage
+		}
+		extra += n
+	}
 	return extra, nil
 }
 func readWindowsFullServicesRecord(ctx context.Context, t *transaction, device string) (ledger.Record, error) {

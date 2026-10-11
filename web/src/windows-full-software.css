@@ -27,3 +27,6 @@
 .windows-full-software-details dl{grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
 .windows-full-software-preview{margin-top:0}
 @media(max-width:600px){.windows-full-software-controls{flex-wrap:wrap}.windows-full-software-search{flex-basis:100%}.windows-full-software-controls select{flex:1}.windows-full-software-counts{gap:18px}.windows-full-software-header>div{gap:6px 8px}.windows-full-software-header h3{flex-basis:100%}.windows-full-software-header{align-items:flex-start}.windows-full-software-view{justify-self:start}.windows-full-software-details dl{grid-template-columns:minmax(0,1fr)}}
+
+.windows-software-account{display:flex;align-items:center;gap:8px;margin:10px 0;font-size:12px;color:var(--secondary)}
+.windows-software-account select{padding:6px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--text);font:inherit;max-width:100%}

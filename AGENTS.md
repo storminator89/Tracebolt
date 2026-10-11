@@ -249,6 +249,14 @@ missing material rather than inventing credentials or weakening protection.
   Preserve exact post-grant identity/source generations, original before/after
   times, unavailable-field truth and visible whole-comparison gaps. No install
   times, upgrade/maliciousness inference, AI/export/actions or host grants follow.
+- Selected-account HKCU/MSIX software is a separate default-off foreground source
+  candidate. Read `docs/windows-selected-user-software.md` before consent, local
+  identification-only IPC, account binding, primary v6 or private Software changes.
+  The helper runs once in the selected normal user's own context; Setup never
+  substitutes its elevated account or LocalService. No all-user enumeration,
+  paths/commands, software actions, history comparison, persistent helper or AI
+  export. Source tests and the prior 21-scope native harness do not establish this
+  new source's native acceptance or authorize host grants.
 - Complete Windows machine software generations require a separate default-off
   local scope. Read `docs/windows-full-software-contract.md` before changing its
   HKLM 32/64 source, consent, primary v3 marker, transport, store or UI. Preserve

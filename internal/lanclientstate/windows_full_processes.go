@@ -49,6 +49,9 @@ func (l *WindowsFullProcessesInitializationLease) Mark() error {
 		next.Version = 5
 	}
 	next.WindowsFullProcessesUsed = true
+	if next.WindowsUserSoftwareUsed {
+		next.Version = 6
+	}
 	return v.commit(next)
 }
 func (l *WindowsFullProcessesInitializationLease) Close() error {

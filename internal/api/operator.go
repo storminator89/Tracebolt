@@ -534,6 +534,10 @@ func (h *operatorHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.windowsSoftwareHistoryQuery(w, r)
 		return
 	}
+	if strings.HasPrefix(r.URL.Path, "/api/devices/") && strings.Contains(r.URL.Path, "/windows-selected-user-software") {
+		h.windowsUserSoftwareQuery(w, r)
+		return
+	}
 	if strings.HasPrefix(r.URL.Path, "/api/devices/") && strings.Contains(r.URL.Path, "/windows-full-software") {
 		h.windowsFullSoftwareQuery(w, r)
 		return

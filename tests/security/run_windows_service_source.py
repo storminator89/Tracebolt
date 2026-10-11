@@ -14,9 +14,19 @@ _reporter = importlib.util.module_from_spec(_reporter_spec)
 _reporter_spec.loader.exec_module(_reporter)
 project = _reporter.project
 
-PACKAGES = ("./internal/windowspackage", "./internal/windowssetup", "./internal/windowssetupui", "./internal/windowsstate", "./internal/windowsservice", "./internal/windowsconsole",
+PACKAGES = ("./internal/windowsusersoftwarelocal", "./internal/windowspackage", "./internal/windowssetup", "./internal/windowssetupui", "./internal/windowsstate", "./internal/windowsservice", "./internal/windowsconsole",
             "./internal/windowsagentconfig", "./cmd/windows-service", "./internal/windowsvolumes", "./internal/windowsprocessmetrics", "./internal/windowsnetwork", "./internal/windowsmanaged", "./internal/windowshardware", "./internal/windowshardwareworker", "./internal/windowsstorage", "./internal/windowsstorageworker", "./internal/windowssecuritycoverage", "./internal/windowssecuritycoverageworker")
 REQUIRED = {
+    ("localrmm/internal/windowsservice", "TestObservationDescriptorExtentIgnoresSuccessByteCount"),
+    ("localrmm/internal/windowsservice", "TestObservationDescriptorMemoryFixtures"),
+    ("localrmm/internal/windowsservice", "TestObservationPublicConfigIsExactMarkerNotMeasuredHash"),
+    ("localrmm/internal/windowsservice", "TestObservationSCMAuthorityRejectsUntrustedMutations"),
+    ("localrmm/cmd/windows-service", "TestUserSoftwareCLISeparateAcknowledgementAndDisclosure"),
+    ("localrmm/cmd/windows-service", "TestUserSoftwareConsentRequiresStoppedOwnedServiceBeforeState"),
+    ("localrmm/internal/windowsusersoftwarelocal", "TestConversationRequiresConsentReserveAndSameConnectionNonce"),
+    ("localrmm/internal/windowsusersoftwarelocal", "TestEveryUnsubmittedBeginReleasesChallengeAndConsumedReservation"),
+    ("localrmm/internal/windowsusersoftwarelocal", "TestFatalIdentityFailureNeverCallsAdmissionOrCleanupHandler"),
+    ("localrmm/internal/windowsusersoftwarelocal", "TestOwnStartupPendingThenRunning"),
     ("localrmm/internal/windowssetup", "TestReadAdminV9SoftwareHistoryCannotPromoteEarlierCapabilities"),
     ("localrmm/cmd/windows-service", "TestSoftwareHistoryCLISeparateAcknowledgementAndDisclosure"),
     ("localrmm/cmd/windows-service", "TestSoftwareHistoryConsentRequiresStoppedOwnedServiceBeforeState"),
@@ -238,6 +248,7 @@ def main():
                 stage = arch + " source build"
                 cross = dict(env, GOOS="windows", GOARCH=arch, CGO_ENABLED="0")
                 command(["go", "build", "-buildvcs=false", "-trimpath", "-o", str(Path(folder) / ("service-" + arch + ".exe")), "./cmd/windows-service"], cross, 300)
+                command(["go", "build", "-buildvcs=false", "-trimpath", "-o", str(Path(folder) / ("user-software-" + arch + ".exe")), "./cmd/windows-user-software"], cross, 300)
                 command(["go", "build", "-buildvcs=false", "-trimpath", "-tags=tracebolt_setup", "-ldflags=-H windowsgui", "-o", str(Path(folder) / ("setup-source-" + arch + ".exe")), "./cmd/windows-service"], cross, 300)
         print("PASS: Windows source fixtures and amd64/arm64 builds; no service installation/control, DACL grants, enrollment keys, live console or endpoint observation executed.")
         return 0

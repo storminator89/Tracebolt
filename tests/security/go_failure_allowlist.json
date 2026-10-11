@@ -1,5 +1,5 @@
 {
-  "goSourceSha256": "f69f517710f94161748b3fc19d7838dd771480947127694470b2d5d213f787e0",
+  "goSourceSha256": "95be5a43632c299ee0104b12ed7662f077ed802f5aeefacb7a08f5cf598b7592",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -493,6 +493,8 @@
       "TestUpdatesWorkerEntryRechecksActualParentBeforeReturning",
       "TestUpdatesWorkerNativeWatchdogCannotTargetAnotherProcess",
       "TestUpdatesWorkerWatchdogUsesOnlyInjectedTermination",
+      "TestUserSoftwareCLISeparateAcknowledgementAndDisclosure",
+      "TestUserSoftwareConsentRequiresStoppedOwnedServiceBeforeState",
       "TestVolumeConsentFlagsExplicitAndBounded",
       "TestWindowsActionSetupRequiresExactLocalApproval",
       "TestWindowsBootstrapMustMatchExplicitLocalProfile",
@@ -509,6 +511,7 @@
       "TestWindowsUpdatesHelpDescribesIndependentScope",
       "TestWriteFailureStagesUseFixedFiniteCategory"
     ],
+    "localrmm/cmd/windows-user-software": [],
     "localrmm/deploy/windows-setup": [],
     "localrmm/internal/actionclient": [
       "TestClientCallerDeadlineAndCancellationBoundStalledResponse",
@@ -1111,7 +1114,9 @@
       "TestWindowsStorageIOOperatorSessionAndResponseTimeExpiry",
       "TestWindowsStorageOperatorSessionAndResponseTimeExpiry",
       "TestWindowsUpdatesOperatorSessionAndResponseTimeExpiry",
-      "TestWindowsUpdatesResourceRequiresExistingOperatorRoute"
+      "TestWindowsUpdatesResourceRequiresExistingOperatorRoute",
+      "TestWindowsUserSoftwareOperatorFinalBoundaryHidesRows",
+      "TestWindowsUserSoftwareProtectedOperatorFullPaging"
     ],
     "localrmm/internal/applicationcheck": [
       "TestApplicationConfigOmittedDisabledAndBinding",
@@ -1912,6 +1917,16 @@
       "TestWindowsUpdatesCannotBeAdmittedUnderBasicIdentity",
       "TestWindowsUpdatesDurablePrivateReplayAndCaptureFloor",
       "TestWindowsUpdatesPrivateIndependentExpiryAndReceipt",
+      "TestWindowsUserSoftwareAttemptOriginalExpiryFinalDisclosure",
+      "TestWindowsUserSoftwareBoundaryExpiredPendingHasUnavailableStatus",
+      "TestWindowsUserSoftwareBoundaryMissingSearchIndexCannotProveAbsence",
+      "TestWindowsUserSoftwareBoundaryPostCommitRevocationHidesPage",
+      "TestWindowsUserSoftwareBoundaryPostCommitRevocationHidesReceipt",
+      "TestWindowsUserSoftwareExportInteropVectors",
+      "TestWindowsUserSoftwareFailureKeepsExplicitAttemptAccount",
+      "TestWindowsUserSoftwareFinalClockSessionExpiryAndUsedFence",
+      "TestWindowsUserSoftwarePartialAssemblyAccountSourceCursorIsolation",
+      "TestWindowsUserSoftwareSharesReservationsAndAdmission",
       "TestWindowsVolumeViewIndependentExpiryAndRevocation"
     ],
     "localrmm/internal/enrollmenttransport": [
@@ -1963,6 +1978,8 @@
       "TestTLSConfigAcceptsOnlyDedicatedIssuerAndNormalServerVerification",
       "TestTLSExactStaleRetryAndRestartPreserveOriginalReceipt",
       "TestUnavailableStoreReturns503OnEveryProfile",
+      "TestUserSoftwareLastClockBeforeScopeReceiptRechecksAuthority",
+      "TestUserSoftwareSeparateOriginsAndBlockedBodyAuthority",
       "TestWindowsEventRealTransportBodyDelayRechecksOwnerRevocationAndExpiry",
       "TestWindowsEventRealTransportFinalExpirySuppressesCommittedClaim",
       "TestWindowsEventRealTransportLogoutDiscardsAcceptedContent",
@@ -2785,6 +2802,9 @@
       "TestWindowsUpdatesPreviewPreservesExistingRecord",
       "TestWindowsUpdatesRejectsCollectorBindingAndCaptureRewrite",
       "TestWindowsUpdatesWorkerActivatedReceiptBinding",
+      "TestWindowsUserSoftwareChallengeOwnershipAbortExpiryAndNoRecapture",
+      "TestWindowsUserSoftwareDefaultOffAndUsedRootCannotBeRecreated",
+      "TestWindowsUserSoftwareForegroundToManagerExactRetryAndPages",
       "TestWindowsVolumeConsentCreateOnlyAndReenable",
       "TestWindowsVolumeConsentNeverCreatesOnPreviewDisableOrAccessFailure",
       "TestWindowsVolumeConsentRejectsIncompleteForeignAndFailedStorage",
@@ -2834,7 +2854,9 @@
       "TestWindowsNetworkContextAllFourMarkersAnyOrderPreserveExactPending",
       "TestWindowsNetworkContextV5PreservesAllPriorBytesAndMarkers",
       "TestWindowsProcessMarkerPreservesEveryLegacyPrimaryEncoding",
-      "TestWindowsSoftwareAndServiceUsedMarkersRemainIndependent"
+      "TestWindowsSoftwareAndServiceUsedMarkersRemainIndependent",
+      "TestWindowsUserSoftwareFenceBeforeOtherScopesPreservesPending",
+      "TestWindowsUserSoftwareV6PreservesAllPriorBytes"
     ],
     "localrmm/internal/lanconfig": [
       "TestNamedApplicationCheckCapabilityStrictLoading",
@@ -4427,6 +4449,10 @@
       "TestNativeSCMStructureABI",
       "TestNativeTrustedACLMemoryFixtures",
       "TestNonWindowsPublicAPIsRejectWithoutMutation",
+      "TestObservationDescriptorExtentIgnoresSuccessByteCount",
+      "TestObservationDescriptorMemoryFixtures",
+      "TestObservationPublicConfigIsExactMarkerNotMeasuredHash",
+      "TestObservationSCMAuthorityRejectsUntrustedMutations",
       "TestObservationWorkerExactRestrictedIdentityAndRunningParent",
       "TestObservationWorkerIdentityFailurePrecedesStateReads",
       "TestObservationWorkerRejectsOrphanAndPIDReuse",
@@ -4698,6 +4724,41 @@
       "TestSubprocessInheritedPipeDoesNotStallWait",
       "TestSubprocessResponsesAndEnvironment",
       "TestWorkerFixture"
+    ],
+    "localrmm/internal/windowsusersoftware": [
+      "TestAccountSourceAndCoverageContract",
+      "TestBoundsAndStrictSelectedAccountProtocol",
+      "TestInterruptedReservationNeverRecaptures",
+      "TestReserveConsumesAndBindsAccountBeforeFinish",
+      "TestSelectedAccountScopeCannotPromoteMachineOrHistory"
+    ],
+    "localrmm/internal/windowsusersoftwareledger": [],
+    "localrmm/internal/windowsusersoftwarelocal": [
+      "TestChallengeExpiryAndRecipient",
+      "TestClientDeclineDoesNotReserveOrCapture",
+      "TestClientNativeTimeoutExitsWithoutFurtherReadsOrSubmit",
+      "TestConversationRequiresConsentReserveAndSameConnectionNonce",
+      "TestEmptySourcesAreCompleteAndOptionalFieldsRemainUnavailable",
+      "TestEveryUnsubmittedBeginReleasesChallengeAndConsumedReservation",
+      "TestFailedSourcesNeverPromotePrefixesAndPartialIsExplicit",
+      "TestFailureReasonsRemainFinite",
+      "TestFatalIdentityFailureNeverCallsAdmissionOrCleanupHandler",
+      "TestFixedReadOnlySourceAndIPCSeparation",
+      "TestHKCUEnumeratedExactlyOnceMSIXConsistencyTwice",
+      "TestIdentityOnlyPipeQueryAndPublicServerProof",
+      "TestOwnStartupPendingThenRunning",
+      "TestOwnStartupRejectsCancelDeadlineIdentityAndPIDDrift",
+      "TestSourceMutationDuplicateAndAggregateCapDiscardPrefixes",
+      "TestUTF16NoRepairExpansionOrTruncation",
+      "TestWireRejectsUnknownDuplicateOversizeAndNoncanonical"
+    ],
+    "localrmm/internal/windowsusersoftwarewire": [
+      "TestIndependentOriginAndTLSShapeFailClosed",
+      "TestIndependentSignatureOriginalTimeExpiryAndStatelessReplayBoundary",
+      "TestIndependentSignaturePurposeActionBodyIdentityAndFraming",
+      "TestIndependentSlowBodyRechecksTimeAndAuthorization",
+      "TestMachineSoftwareSignatureCannotAuthorizeSelectedAccount",
+      "TestUserSoftwareHTTPProofIsPurposeAndBodyBound"
     ],
     "localrmm/internal/windowsvolumes": [
       "TestBoundsAndCounts",

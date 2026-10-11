@@ -89,3 +89,13 @@ files and does not revoke manager trust. Follow the
 [retained-state/removal guide](windows-setup-preview.md#cancellation-retained-state-and-service-removal)
 instead of deleting state to retry setup. Builds, CI and screenshots do not
 by themselves authorize host changes or establish native acceptance.
+
+### Optional selected-account software source
+
+[Selected-account HKCU/MSIX capture](windows-selected-user-software.md) adds a
+separate default-off receive scope and one-shot normal-user foreground helper,
+with private account/source filtering in Software. It is not included in the
+21-scope Setup consent, installed by Setup, shipped in the historical preview or
+accepted by the current-profile native harness. Separate unsigned helper build
+artifacts and exact source instructions are documented; native acceptance and
+runtime provisioning remain separately gated.

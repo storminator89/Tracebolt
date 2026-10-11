@@ -84,6 +84,7 @@ type credential struct {
 	ServiceActionSetup                 *serviceActionSetupMarker `json:"serviceActionSetup,omitempty"`
 	WindowsNetworkContextInitialized   bool                      `json:"windowsNetworkContextInitialized,omitempty"`
 	WindowsFullProcessesInitialized    bool                      `json:"windowsFullProcessesInitialized,omitempty"`
+	WindowsUserSoftwareInitialized     bool                      `json:"windowsUserSoftwareInitialized,omitempty"`
 	WindowsFullSoftwareInitialized     bool                      `json:"windowsFullSoftwareInitialized,omitempty"`
 	WindowsFullServicesInitialized     bool                      `json:"windowsFullServicesInitialized,omitempty"`
 	WindowsHistoryAuthorityInitialized bool                      `json:"windowsHistoryAuthorityInitialized,omitempty"`
@@ -97,6 +98,7 @@ type transaction struct {
 	beforeCommit                    []func() error
 	originalWindowsNetworkContext   map[string]bool
 	originalWindowsFullProcesses    map[string]bool
+	originalWindowsUserSoftware     map[string]bool
 	originalWindowsFullSoftware     map[string]bool
 	originalWindowsFullServices     map[string]bool
 	engine                          *enrollmentstate.Engine
@@ -387,7 +389,7 @@ func (s *Store) load(ctx context.Context, conn *sql.Conn) (*transaction, error) 
 	if err != nil {
 		return nil, ErrStorage
 	}
-	t := &transaction{ctx: ctx, issuerDER: s.issuerDER, conn: conn, engine: engine, credentials: make(map[string]credential), originalLedger: raw, originalCredentials: make(map[string][]byte), originalRenewals: make(map[string][]byte), originalServiceActionSetup: make(map[string]serviceActionSetupMarker), originalWindowsActionSetup: make(map[string]windowsActionSetupMarker), originalWindowsHistoryAuthority: make(map[string]bool), originalWindowsEventAuthority: make(map[string]bool), originalWindowsFullServices: make(map[string]bool), originalWindowsFullSoftware: make(map[string]bool), originalWindowsFullProcesses: make(map[string]bool), originalWindowsNetworkContext: make(map[string]bool), operational: map[string]operationalRecord{}, originalOperational: map[string][]byte{}, inventory: map[string]inventoryRecord{}, originalInventory: map[string][]byte{}, overview: map[string]overviewRecord{}, originalOverview: map[string][]byte{}}
+	t := &transaction{ctx: ctx, issuerDER: s.issuerDER, conn: conn, engine: engine, credentials: make(map[string]credential), originalLedger: raw, originalCredentials: make(map[string][]byte), originalRenewals: make(map[string][]byte), originalServiceActionSetup: make(map[string]serviceActionSetupMarker), originalWindowsActionSetup: make(map[string]windowsActionSetupMarker), originalWindowsHistoryAuthority: make(map[string]bool), originalWindowsEventAuthority: make(map[string]bool), originalWindowsFullServices: make(map[string]bool), originalWindowsFullSoftware: make(map[string]bool), originalWindowsUserSoftware: make(map[string]bool), originalWindowsFullProcesses: make(map[string]bool), originalWindowsNetworkContext: make(map[string]bool), operational: map[string]operationalRecord{}, originalOperational: map[string][]byte{}, inventory: map[string]inventoryRecord{}, originalInventory: map[string][]byte{}, overview: map[string]overviewRecord{}, originalOverview: map[string][]byte{}}
 	if conn.QueryRowContext(ctx, "SELECT count(*),coalesce(max(length(body)),0) FROM enrollment_credentials").Scan(&count, &n) != nil || count > s.config.RecordLimit || n > maxCredentialBytes {
 		return nil, ErrStorage
 	}
@@ -440,6 +442,9 @@ func (s *Store) load(ctx context.Context, conn *sql.Conn) (*transaction, error) 
 		if c.WindowsFullSoftwareInitialized {
 			t.originalWindowsFullSoftware[id] = true
 		}
+		if c.WindowsUserSoftwareInitialized {
+			t.originalWindowsUserSoftware[id] = true
+		}
 		if c.WindowsFullProcessesInitialized {
 			t.originalWindowsFullProcesses[id] = true
 		}
@@ -463,6 +468,9 @@ func (s *Store) load(ctx context.Context, conn *sql.Conn) (*transaction, error) 
 		return nil, err
 	}
 	if err = validateWindowsFullSoftwareState(ctx, t, s.config.Binding.CollectionProfile); err != nil {
+		return nil, err
+	}
+	if err = validateWindowsUserSoftwareState(ctx, t, s.config.Binding.CollectionProfile); err != nil {
 		return nil, err
 	}
 	if err = validateWindowsFullProcessesState(ctx, t, s.config.Binding.CollectionProfile); err != nil {
@@ -508,6 +516,9 @@ func (t *transaction) validMetadata(s enrollmentstate.Snapshot, c credential) bo
 		return false
 	}
 	if c.WindowsFullSoftwareInitialized && (s.Platform != "windows" || s.Binding.CollectionProfile != enrollmentcrypto.CollectionProfileWindowsInventory) {
+		return false
+	}
+	if c.WindowsUserSoftwareInitialized && (s.Platform != "windows" || s.Binding.CollectionProfile != enrollmentcrypto.CollectionProfileWindowsInventory) {
 		return false
 	}
 	if c.WindowsFullProcessesInitialized && (s.Platform != "windows" || s.Binding.CollectionProfile != enrollmentcrypto.CollectionProfileWindowsInventory) {
@@ -600,6 +611,9 @@ func (s *Store) transact(ctx context.Context, action func(*transaction) error) e
 		if t.originalWindowsFullSoftware[id] && !c.WindowsFullSoftwareInitialized {
 			return ErrStorage
 		}
+		if t.originalWindowsUserSoftware[id] && !c.WindowsUserSoftwareInitialized {
+			return ErrStorage
+		}
 		if t.originalWindowsFullProcesses[id] && !c.WindowsFullProcessesInitialized {
 			return ErrStorage
 		}
@@ -667,6 +681,12 @@ func (s *Store) transact(ctx context.Context, action func(*transaction) error) e
 		return err
 	}
 	if err = validateWindowsFullSoftwareState(ctx, t, s.config.Binding.CollectionProfile); err != nil {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		return err
+	}
+	if err = validateWindowsUserSoftwareState(ctx, t, s.config.Binding.CollectionProfile); err != nil {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
@@ -784,6 +804,15 @@ func validateSchema(ctx context.Context, conn *sql.Conn, profile string) error {
 	}
 	if fullSoftwareEnabled {
 		for _, obj := range windowsFullSoftwareSchemaObjects() {
+			expected[obj.Name] = obj
+		}
+	}
+	userSoftwareEnabled, userSoftwareErr := windowsUserSoftwareSchemaPresent(ctx, conn, profile)
+	if userSoftwareErr != nil {
+		return userSoftwareErr
+	}
+	if userSoftwareEnabled {
+		for _, obj := range windowsUserSoftwareSchemaObjects() {
 			expected[obj.Name] = obj
 		}
 	}
