@@ -3,6 +3,7 @@
  * TLS warning bypass, secret screenshots, traces, request logs or storage dumps.
  */
 import {createRequire} from 'node:module';
+import {validSnapshot} from '../../web/src/enrollment-types.ts';
 import {installEnrollmentPrimaryBody} from './enrollment-primary-body.mjs';
 import {createBrowserTransportDiagnostics} from './browser-transport-diagnostics.mjs';
 import {createBrowserInvitation} from './enrollment-create-diagnostics.mjs';
@@ -24,7 +25,7 @@ const sourceSha=process.env.TRACEBOLT_SOURCE_SHA||null;
 const base=`http://127.0.0.1:${Number(process.env.ENROLLMENT_REVIEW_PORT||19889)}`;
 const password='TRACEBOLT_ENROLLMENT_BROWSER_FIXTURE_NOT_A_REAL_PASSWORD';
 const results=[],screenshots=[],secrets=[];
-let transportDiagnostics,creationTransportFailure=null,creationPrimaryFailure=null,terminationTransportFailure=null;
+let transportDiagnostics,creationTransportFailure=null,creationPrimaryFailure=null,terminationTransportFailure=null,terminationPrimaryFailure=null;
 let browser,server,context,pipe,waiting,currentTest='',stage='setup',runtimeErrorCount=0,fatal=false;
 const apiSmoke=process.argv.includes('--api-smoke');
 // Temporary, explicit quarantine. Keep the scenarios and their strict checks;
@@ -67,18 +68,22 @@ async function nativeClaim(created){mark('native claim');await control('start',{
 async function review(page,id){mark('review invitation');const dialog=page.getByRole('dialog');if(await dialog.count())await page.keyboard.press('Escape');await page.getByRole('button',{name:'Refresh enrollment status'}).click();await expect(page.getByRole('button',{name:`Review invitation ${id}`,exact:true})).toBeVisible();await page.getByRole('button',{name:`Review invitation ${id}`,exact:true}).click();await expect(page.getByRole('dialog',{name:'Review invitation',exact:true})).toBeVisible();}
 async function checkClean(page){const value=await page.evaluate(()=>JSON.stringify({local:{...localStorage},session:{...sessionStorage}}));expect(secrets.some(s=>value.includes(s))||value.includes(password)).toBe(false);expect(secrets.some(s=>page.url().includes(s))).toBe(false);}
 async function shot(page,name){mark('safe viewport capture');const visible=await page.evaluate(()=>document.body.innerText+'\n'+[...document.querySelectorAll('input')].map(i=>i.value).join('\n'));expect(secrets.some(s=>visible.includes(s))||visible.includes(password)).toBe(false);await expect(page.locator('.enrollment-secret')).toHaveCount(0);await expect(page.locator('.enrollment-comparison')).toHaveCount(0);await expect(page.locator('.enrollment-fingerprint')).toHaveCount(0);await page.screenshot({path:path.join(out,`${name}.png`),fullPage:false,animations:'disabled'});const bytes=await fs.readFile(path.join(out,`${name}.png`));screenshots.push({file:`${name}.png`,sourceSha,sha256:createHash('sha256').update(bytes).digest('hex'),publicSafe:true,fullPage:false,viewport:page.viewportSize(),locale:await page.locator('html').getAttribute('lang'),fixtureDisclosure:'Disposable loopback enrollment with explicit unencrypted HTTP-test profile; no real endpoint, secret, comparison value or telemetry',test:currentTest});}
-async function check(name,run,options){if(!includeQuarantined&&quarantinedNames.has(name)){results.push({name,status:'SKIPPED',reason:quarantineReason,durationMs:0});console.log(`SKIP ${name}: ${quarantineReason}`);return;}currentTest=name;stage='fixture setup';creationTransportFailure=null;creationPrimaryFailure=null;terminationTransportFailure=null;const begin=Date.now();try{await start(options);await run();results.push({name,status:'PASS',durationMs:Date.now()-begin});console.log(`PASS ${name}`);}catch{results.push({name,status:'FAIL',stage,durationMs:Date.now()-begin,error:'Assertion failed; secret-bearing diagnostics intentionally withheld.',...(creationTransportFailure?{transportFailure:creationTransportFailure}:{}),...(creationPrimaryFailure?{primaryFailure:creationPrimaryFailure}:{}),...(terminationTransportFailure?{terminationTransportFailure}:{})});console.log(`FAIL ${name} (${stage})`);}finally{transportDiagnostics?.dispose();transportDiagnostics=null;if(context)await context.close();context=null;await stop();secrets.length=0;}}
-async function terminate(page,label){
- const expected={ 'Cancel invitation':['canceled','Canceled'], 'Reject':['rejected','Rejected'], 'Revoke identity':['revoked','Revoked'] }[label];
+async function check(name,run,options){if(!includeQuarantined&&quarantinedNames.has(name)){results.push({name,status:'SKIPPED',reason:quarantineReason,durationMs:0});console.log(`SKIP ${name}: ${quarantineReason}`);return;}currentTest=name;stage='fixture setup';creationTransportFailure=null;creationPrimaryFailure=null;terminationTransportFailure=null;terminationPrimaryFailure=null;const begin=Date.now();try{await start(options);await run();results.push({name,status:'PASS',durationMs:Date.now()-begin});console.log(`PASS ${name}`);}catch{results.push({name,status:'FAIL',stage,durationMs:Date.now()-begin,error:'Assertion failed; secret-bearing diagnostics intentionally withheld.',...(creationTransportFailure?{transportFailure:creationTransportFailure}:{}),...(creationPrimaryFailure?{primaryFailure:creationPrimaryFailure}:{}),...(terminationTransportFailure?{terminationTransportFailure}:{}),...(terminationPrimaryFailure?{terminationPrimaryFailure}:{})});console.log(`FAIL ${name} (${stage})`);}finally{transportDiagnostics?.dispose();transportDiagnostics=null;if(context)await context.close();context=null;await stop();secrets.length=0;}}
+async function terminate(page,label,baseline,claim=baseline.claim){
+ const invitationID=baseline.invitationID;
+ const expected={ 'Cancel invitation':['canceled','Canceled','created'], 'Reject':['rejected','Rejected','claimed_pending'], 'Revoke identity':['revoked','Revoked','activated'] }[label];
  if(!expected)throw new Error('UNSUPPORTED_TEST_ACTION');
- let response,responseStatus=null,failurePhase=null,readingBody=false;
+ let capture,response,responseStatus=null,failurePhase=null;
+ const url=`${base}/api/enrollment/${invitationID}/terminate`;
  try{
   mark('open termination confirmation');await page.getByRole('button',{name:label,exact:true}).click();
   const confirmation=page.getByRole('group',{name:'Confirm termination',exact:true});await expect(confirmation).toBeVisible();
+  mark('arm termination primary reader');
+  capture=await page.evaluate(scope=>window.__traceboltEnrollmentBody.armTermination(scope),{invitationID,action:expected[0]});
   // A click completes before the async mutation commits. Register the response
   // waiter first, then require both the committed response and the rendered UI.
   mark('await committed termination response');
-  const responsePending=page.waitForResponse(r=>r.request().method()==='POST'&&r.url().startsWith(`${base}/api/enrollment/`)&&r.url().endsWith('/terminate'));
+  const responsePending=page.waitForResponse(r=>r.request().method()==='POST'&&r.url()===url);
   // Passive observers distinguish the first rejected operation without replacing
   // either Promise.all input or allowing a late rejection to change the report.
   responsePending.catch(()=>{failurePhase??='await committed termination response';});
@@ -87,9 +92,25 @@ async function terminate(page,label){
   clickPending.catch(()=>{failurePhase??='submit termination';});
   [response]=await Promise.all([responsePending,clickPending]);
   mark('verify termination response status');responseStatus=response.status();expect(responseStatus).toBe(200);
-  mark('read committed termination body');readingBody=true;
-  const committed=await response.json();readingBody=false;
-  mark('verify committed termination state');expect(committed.state).toBe(expected[0]);
+  mark('await termination primary reader');
+  await expect.poll(()=>page.evaluate(id=>window.__traceboltEnrollmentBody.state(id),capture)).not.toMatch(/^(armed|waiting|reading)$/);
+  mark('verify termination primary completion');
+  const primary=await page.evaluate(id=>window.__traceboltEnrollmentBody.snapshot(id),capture);
+  expect(primary.phase==='complete'&&primary.eof===true&&primary.signalAborted===false&&primary.requests===1).toBe(true);
+  const consumed=await page.evaluate(id=>window.__traceboltEnrollmentBody.take(id),capture);
+  mark('verify termination request binding');
+  expect(consumed!==null).toBe(true);expect(consumed.status).toBe(200);
+  expect(consumed.requestBody===response.request().postData()).toBe(true);
+  const requested=JSON.parse(consumed.requestBody);
+  expect(requested!==null&&typeof requested==='object'&&!Array.isArray(requested)&&typeof requested.requestId==='string'&&/^request_[a-f0-9]{32}$/.test(requested.requestId)&&Number.isSafeInteger(requested.expectedRevision)&&requested.expectedRevision>=1&&requested.action===expected[0]).toBe(true);
+  const committed=consumed.body;
+  mark('verify committed termination state');
+  // EOF and terminal-looking UI are not enough: reconciliation could render a
+  // terminal GET after rejecting a malformed POST. Validate the primary DTO.
+  expect(validSnapshot(committed)).toBe(true);
+  expect(committed.invitationID===invitationID&&committed.revision>requested.expectedRevision&&committed.platform==='linux'&&committed.binding.origin===base&&committed.binding.profile==='http-test'&&committed.termination.requestID===requested.requestId&&committed.termination.from===expected[2]).toBe(true);
+  expect(committed.platform===baseline.platform&&['instanceID','origin','profile','collectionProfile','issuerFingerprint'].every(key=>committed.binding[key]===baseline.binding[key])&&committed.claim.keyFingerprint===claim.keyFingerprint&&committed.claim.comparisonCode===claim.comparisonCode).toBe(true);
+  expect(committed.state).toBe(expected[0]);
   mark('verify rendered terminal state');
   await expect(page.getByRole('dialog',{name:'Review invitation',exact:true}).locator('.enrollment-created-meta')).toContainText(expected[1]);
   await expect(confirmation).toHaveCount(0);
@@ -97,8 +118,11 @@ async function terminate(page,label){
   if(failurePhase)mark(failurePhase);
   // Capture only the existing closed transport vocabulary, before case cleanup.
   // Never export the response, raw error, URL, identity or terminal body value.
-  try{terminationTransportFailure={...transportDiagnostics.capture(readingBody?'response-body':'other',error,{response}),httpStatus:Number.isInteger(responseStatus)&&responseStatus>=100&&responseStatus<=599?responseStatus:null};}catch{}
+  try{terminationPrimaryFailure=await page.evaluate(id=>window.__traceboltEnrollmentBody.snapshot(id),capture);}catch{}
+  try{terminationTransportFailure={...transportDiagnostics.capture('other',error,{response}),httpStatus:Number.isInteger(responseStatus)&&responseStatus>=100&&responseStatus<=599?responseStatus:null};}catch{}
   throw error;
+ }finally{
+  try{await page.evaluate(()=>window.__traceboltEnrollmentBody.clear());}catch{}
  }
 }
 
@@ -152,15 +176,15 @@ try{
    const input=page.getByLabel('One-time invitation secret',{exact:true});
    mark('public bootstrap export');const downloadWait=page.waitForEvent('download');await page.getByRole('button',{name:'Download bootstrap file',exact:true}).click();const download=await downloadWait;const file=await download.path();const raw=await fs.readFile(file,'utf8');expect(raw.includes(created.invitationSecret)||raw.includes('PRIVATE KEY')).toBe(false);expect(JSON.stringify(JSON.parse(raw))).toBe(JSON.stringify(created.bootstrap));await download.delete();
    await page.getByRole('button',{name:'Reveal invitation secret'}).click();await expect(input).toHaveAttribute('type','text');await page.getByRole('button',{name:'Hide invitation secret'}).click();await expect(input).toHaveAttribute('type','password');await checkClean(page);
-   mark('close reload and cancellation');await page.keyboard.press('Escape');await page.reload();await expect(page.getByLabel('One-time invitation secret')).toHaveCount(0);await page.getByRole('button',{name:/^Invitations/}).click();await review(page,created.snapshot.invitationID);await expect(page.getByRole('dialog')).toContainText('only at creation');await terminate(page,'Cancel invitation');expect((await list()).items[0].state).toBe('canceled');await expect(page.getByRole('button',{name:'Approve device',exact:true})).toHaveCount(0);await checkClean(page);
+   mark('close reload and cancellation');await page.keyboard.press('Escape');await page.reload();await expect(page.getByLabel('One-time invitation secret')).toHaveCount(0);await page.getByRole('button',{name:/^Invitations/}).click();await review(page,created.snapshot.invitationID);await expect(page.getByRole('dialog')).toContainText('only at creation');await terminate(page,'Cancel invitation',created.snapshot);expect((await list()).items[0].state).toBe('canceled');await expect(page.getByRole('button',{name:'Approve device',exact:true})).toHaveCount(0);await checkClean(page);
   });
   await check('Native claim comparison gates one approval, activation remains unknown without telemetry, and revocation stops the native identity',async()=>{
    const page=await pageAt();const created=await create(page);const native=await nativeClaim(created);await review(page,created.snapshot.invitationID);mark('bound comparison');const text=(await page.locator('.enrollment-fingerprint code').innerText()).replace(/\s/g,'');const comparison=(await page.locator('.enrollment-comparison code').innerText()).replace(/\s/g,'');expect(text===native.keyFingerprint&&comparison===native.comparisonCode).toBe(true);await expect(page.getByRole('button',{name:'Approve device',exact:true})).toBeDisabled();const checkbox=page.getByRole('checkbox',{name:'I compared the full fingerprint and comparison value on the device.'});await checkbox.check();await page.keyboard.press('Escape');await review(page,created.snapshot.invitationID);await expect(checkbox).not.toBeChecked();await checkbox.check();
    mark('single approval and real native activation');let approvals=0;page.on('request',r=>{if(r.url().endsWith('/approve'))approvals++;});await page.getByRole('button',{name:'Approve device',exact:true}).dblclick();await expect.poll(async()=>(await control('status')).phase,{timeout:18000}).toBe('activated');expect(approvals).toBe(1);await page.getByRole('button',{name:'Check status',exact:true}).click();await expect(page.locator('.enrollment-created-meta')).toContainText('Identity activated');await expect(page.getByRole('dialog')).toContainText('do not confirm');await page.keyboard.press('Escape');await page.reload();await expect(page.locator('.device-table tbody tr')).toHaveCount(1);await expect(page.locator('.device-table')).toContainText('Unknown');
-   mark('revoke confirmation and terminal native status');await page.getByRole('button',{name:/^Invitations/}).click();await review(page,created.snapshot.invitationID);await page.getByRole('button',{name:'Revoke identity'}).click();await page.getByRole('button',{name:'Back',exact:true}).click();expect((await list()).items[0].state).toBe('activated');await terminate(page,'Revoke identity');expect((await list()).items[0].state).toBe('revoked');await control('resume');await expect.poll(async()=>(await control('status')).phase,{timeout:12000}).toBe('terminal');await checkClean(page);
+   mark('revoke confirmation and terminal native status');await page.getByRole('button',{name:/^Invitations/}).click();await review(page,created.snapshot.invitationID);await page.getByRole('button',{name:'Revoke identity'}).click();await page.getByRole('button',{name:'Back',exact:true}).click();expect((await list()).items[0].state).toBe('activated');await terminate(page,'Revoke identity',created.snapshot,native);expect((await list()).items[0].state).toBe('revoked');await control('resume');await expect.poll(async()=>(await control('status')).phase,{timeout:12000}).toBe('terminal');await checkClean(page);
   });
   await check('Pending native device can be rejected without granting an identity',async()=>{
-   const page=await pageAt();const created=await create(page);await nativeClaim(created);await review(page,created.snapshot.invitationID);await terminate(page,'Reject');mark('terminal rejection');const state=(await list()).items[0];expect(state.state).toBe('rejected');expect(state.approval.deviceID).toBe('');await expect.poll(async()=>(await control('status')).phase,{timeout:12000}).toBe('terminal');await expect(page.getByRole('button',{name:'Approve device',exact:true})).toHaveCount(0);
+   const page=await pageAt();const created=await create(page);const native=await nativeClaim(created);await review(page,created.snapshot.invitationID);await terminate(page,'Reject',created.snapshot,native);mark('terminal rejection');const state=(await list()).items[0];expect(state.state).toBe('rejected');expect(state.approval.deviceID).toBe('');await expect.poll(async()=>(await control('status')).phase,{timeout:12000}).toBe('terminal');await expect(page.getByRole('button',{name:'Approve device',exact:true})).toHaveCount(0);
   });
   await check('Lost committed creation response stays uncertain, reconciles one record and never retries or restores the secret',async()=>{
    const page=await pageAt();mark('lost creation response');let posts=0;await page.route('**/api/enrollment/invitations',async route=>{posts++;await route.fetch();await route.abort('failed');});await page.getByRole('button',{name:'Add device',exact:true}).click();await page.getByRole('button',{name:'Create invitation',exact:true}).click();await expect(page.getByRole('dialog').getByRole('alert')).toContainText('Creation is unconfirmed');await expect(page.getByRole('button',{name:'Create invitation',exact:true})).toHaveCount(0);await expect(page.getByLabel('One-time invitation secret')).toHaveCount(0);expect((await list()).items.length).toBe(1);await page.getByRole('dialog').getByRole('button',{name:'Check status',exact:true}).click();expect(posts).toBe(1);await page.keyboard.press('Escape');await page.reload();expect((await list()).items.length).toBe(1);expect(posts).toBe(1);await checkClean(page);

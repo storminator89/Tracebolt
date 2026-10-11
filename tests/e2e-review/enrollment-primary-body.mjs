@@ -6,17 +6,19 @@ export function installEnrollmentPrimaryBody({url}){
  const originalFetch=globalThis.fetch,maximum=262144;
  let serial=0,current=null;
  const detach=entry=>{entry.signal?.removeEventListener('abort',entry.abort);};
- const discard=(entry,phase)=>{entry.phase=phase;entry.chunks=[];entry.body=null;entry.requestBody=null;detach(entry);};
+ const discard=(entry,phase)=>{entry.phase=phase;entry.chunks=[];entry.body=null;entry.requestBody=null;entry.url=null;entry.action=null;detach(entry);};
  const clear=()=>{if(current)discard(current,'cleared');current=null;};
  const invalidate=()=>{if(current)discard(current,'invalidated');};
  const hidden=()=>{if(document.visibilityState==='hidden')invalidate();};
- const matches=(input,init)=>{
+ const matches=(entry,input,init)=>{
   const method=String(init?.method??(typeof input==='object'?input.method:undefined)??'GET').toUpperCase();
-  return method==='POST'&&new URL(typeof input==='object'?input.url:String(input),globalThis.location.href).href===target.href;
+  return method==='POST'&&new URL(typeof input==='object'?input.url:String(input),globalThis.location.href).href===entry.url;
  };
+ const validTerminationRequest=(body,action)=>{try{const value=JSON.parse(body);return value&&typeof value==='object'&&!Array.isArray(value)&&value.action===action&&typeof value.requestId==='string'&&/^request_[a-f0-9]{32}$/.test(value.requestId)&&Number.isSafeInteger(value.expectedRevision)&&value.expectedRevision>=1;}catch{return false;}};
+ const arm=(url,action=null)=>{clear();current={id:++serial,url,action,phase:'armed',requests:0,status:0,bytes:0,eof:false,signalAborted:false,chunks:[],body:null,requestBody:null,signal:null,abort:null};return serial;};
  const freeze=value=>{const queue=[value];while(queue.length){const item=queue.pop();if(item&&typeof item==='object'){queue.push(...Object.values(item));Object.freeze(item);}}return value;};
  async function observedFetch(input,init){
-  const entry=current&&matches(input,init)?current:null;
+  const entry=current&&matches(current,input,init)?current:null;
   if(entry){
    entry.requests=Math.min(2,entry.requests+1);
    if(entry.requests!==1)discard(entry,'duplicate');
@@ -24,6 +26,7 @@ export function installEnrollmentPrimaryBody({url}){
    // Still forward the original request; only a new explicit arm can observe it.
    else if(entry.phase!=='armed')discard(entry,entry.phase);
    else if(typeof init?.body!=='string'||new TextEncoder().encode(init.body).byteLength>2048)discard(entry,'invalid-request');
+   else if(entry.action&&!validTerminationRequest(init.body,entry.action))discard(entry,'invalid-request');
    else{
     entry.requestBody=init.body;entry.phase='waiting';entry.signal=init?.signal;
     entry.abort=()=>{entry.signalAborted=true;discard(entry,'aborted');};
@@ -67,7 +70,12 @@ export function installEnrollmentPrimaryBody({url}){
   return response;
  }
  const observer=Object.freeze({
-  arm(){clear();current={id:++serial,phase:'armed',requests:0,status:0,bytes:0,eof:false,signalAborted:false,chunks:[],body:null,requestBody:null,signal:null,abort:null};return serial;},
+  arm(){return arm(target.href);},
+  armTermination({invitationID,action}={}){
+   clear();
+   if(typeof invitationID!=='string'||!/^invite_[a-f0-9]{32}$/.test(invitationID)||!['canceled','rejected','revoked'].includes(action))throw new Error('Invalid synthetic termination observation scope');
+   return arm(new URL(`/api/enrollment/${invitationID}/terminate`,target).href,action);
+  },
   state(id){return current?.id===id?current.phase:'missing';},
   snapshot(id){const entry=current?.id===id?current:null;return entry?{phase:entry.phase,requests:entry.requests,status:entry.status,bytes:entry.bytes,eof:entry.eof,signalAborted:entry.signalAborted}:{phase:'missing'};},
   take(id){
