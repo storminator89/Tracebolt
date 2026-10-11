@@ -15,9 +15,12 @@ import time
 from urllib.parse import urlsplit
 
 SCHEMA = "tracebolt.windows-linux-native-parity.v1"
+CURRENT_SCHEMA = "tracebolt.windows-linux-native-parity.v2"
+CURRENT_PROFILE = {"schema": "tracebolt.windows-native-current-profile.v1", "setupContract": "fresh-twenty-one-read-admin-scopes-v1", "consentVersion": "tracebolt.windows-capability-consent.v14", "receiptVersion": 12, "renewal": True}
+CURRENT_PHASES = ("manager-browser", "setup", "event-fixture", "own-restart", "remove")
 PHASES = ("manager-browser", "setup", "event-fixture", "event-enable", "updates-enable", "event-disable", "updates-disable")
 REASONS = frozenset(("contract_rejected", "target_mismatch", "artifact_mismatch", "source_mismatch", "private_path_rejected", "phase_replay", "deadline", "clock_changed", "secure_handoff_required", "native_operation_failed", "native_observation_unavailable", "manager_exited", "browser_incomplete", "cleanup_unverified", "read_admin_native_gate_unavailable", "complete"))
-CHECKS = frozenset(("native_actions_attempted", "endpoint_binding", "fresh_host", "setup_launched", "installed_hash", "scm_running", "scm_stopped", "grant_enabled", "grant_disabled", "grant_independence", "synthetic_event_written", "real_manager_started", "real_browser_finished", "browser_cleanup", "manager_cleanup"))
+CHECKS = frozenset(("native_actions_attempted", "endpoint_binding", "fresh_host", "setup_launched", "installed_hash", "scm_running", "scm_stopped", "grant_enabled", "grant_disabled", "grant_independence", "synthetic_event_written", "real_manager_started", "real_browser_finished", "browser_cleanup", "manager_cleanup", "current_receipt", "current_grants", "current_credential", "same_identity", "own_restart", "receipt_owned_removal", "scm_absent", "retained_state_preserved", "browser_evidence_verified"))
 HEX64 = re.compile(r"[0-9a-f]{64}\Z")
 HEX40 = re.compile(r"[0-9a-f]{40}\Z")
 IDENT = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.:-]{0,95}\Z")
@@ -89,9 +92,24 @@ def synthetic_message(run_id):
     ident(run_id)
     return "Tracebolt native parity synthetic Application event " + run_id
 
+def is_current(p):
+    return type(p) is dict and p.get("schema") == CURRENT_SCHEMA
+
+def phases(p):
+    return CURRENT_PHASES if is_current(p) else PHASES
+
+def validate_current_profile(value):
+    exact(value, CURRENT_PROFILE)
+    need(value == CURRENT_PROFILE and type(value["receiptVersion"]) is int and type(value["renewal"]) is bool)
+    return value
+
 def validate_plan(p, now=None):
-    exact(p, ("schema", "runId", "source", "notBeforeUnix", "expiresUnix", "targets", "tls", "artifacts", "phases", "syntheticEvent"))
-    need(p["schema"] == SCHEMA)
+    current = is_current(p)
+    keys = ("schema", "runId", "source", "notBeforeUnix", "expiresUnix", "targets", "tls", "artifacts", "phases", "syntheticEvent")
+    exact(p, keys + (("currentProfile", "historyQuery") if current else ()))
+    need(p["schema"] in {SCHEMA, CURRENT_SCHEMA})
+    if current:
+        validate_current_profile(p["currentProfile"])
     need(type(p["runId"]) is str and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,63}", p["runId"]) is not None)
     exact(p["source"], ("commit", "tree", "inventorySHA256"))
     sha(p["source"]["commit"], 40); sha(p["source"]["tree"], 40); sha(p["source"]["inventorySHA256"])
@@ -105,12 +123,16 @@ def validate_plan(p, now=None):
         keys = ("id", "machineIdSHA256", "workspace", "sourceRoot", "sourceInventory", "sourceCommitObject", "osBuild")
         if role == "windows":
             keys += ("publicBootstrap",)
+            if current: keys += ("platform",)
         if role == "linux":
             keys += ("lanConfig", "enrollmentConfig", "webRoot", "webInventory", "browserRoot", "browserInventory")
         exact(t, keys)
         ident(t["id"]); sha(t["machineIdSHA256"])
         need(type(t["osBuild"]) is str and re.fullmatch(r"[0-9A-Za-z._-]{1,64}", t["osBuild"]) is not None)
-        for key in set(keys) - {"id", "machineIdSHA256", "osBuild"}:
+        if role == "windows" and current:
+            need(t["platform"] in {"windows-11-x64", "windows-server-2025-x64"})
+            need(t["osBuild"].isdigit() and (int(t["osBuild"]) >= 22000 if t["platform"] == "windows-11-x64" else t["osBuild"] == "26100"))
+        for key in set(keys) - {"id", "machineIdSHA256", "osBuild", "platform"}:
             absolute(t[key], role)
     need(p["targets"]["windows"]["id"] != p["targets"]["linux"]["id"])
     need(p["targets"]["windows"]["machineIdSHA256"] != p["targets"]["linux"]["machineIdSHA256"])
@@ -129,7 +151,7 @@ def validate_plan(p, now=None):
         absolute(a["path"], "windows" if name in {"setup", "service", "setupManifest", "setupSourceInputs"} else "linux")
     need(p["targets"]["linux"]["webInventory"] == p["artifacts"]["webInventory"]["path"])
     need(p["targets"]["linux"]["browserInventory"] == p["artifacts"]["browserInventory"]["path"])
-    exact(p["phases"], PHASES)
+    exact(p["phases"], phases(p))
     for phase, cfg in p["phases"].items():
         exact(cfg, ("approvalRef", "targetId")); ident(cfg["approvalRef"])
         need(cfg["targetId"] == p["targets"]["linux" if phase == "manager-browser" else "windows"]["id"])
@@ -140,6 +162,16 @@ def validate_plan(p, now=None):
     need(e["messageSHA256"] == digest(synthetic_message(p["runId"]).encode()))
     ident(e["preparationApprovalRef"])
     absolute(e["messageResourcePath"], "windows"); sha(e["messageResourceSHA256"])
+    if current:
+        # Exactly one bounded Application search and one selected-message request.
+        # Approval references correlate an external human approval, never grant it.
+        q = p["historyQuery"]
+        exact(q, ("approvalRef", "messagesApprovalRef", "channel", "eventId", "startUnix", "endUnix", "maxRows", "maxMessages"))
+        ident(q["approvalRef"]); ident(q["messagesApprovalRef"])
+        need(q["approvalRef"] != q["messagesApprovalRef"])
+        need(q["channel"] == "Application" and type(q["eventId"]) is int and q["eventId"] == e["eventId"])
+        need(type(q["startUnix"]) is int and type(q["endUnix"]) is int and p["notBeforeUnix"] <= q["startUnix"] < q["endUnix"] < p["expiresUnix"] and q["startUnix"] % 60 == 0 and q["endUnix"] % 60 == 0)
+        need(type(q["maxRows"]) is int and q["maxRows"] == 100 and type(q["maxMessages"]) is int and q["maxMessages"] == 1)
     return p
 
 def no_links(path):
@@ -299,22 +331,29 @@ def verify_inventory(root, inventory, expected_hash, expected_tree=None, depende
         need(inventory_tree(rows) == expected_tree, "source_mismatch")
     return rows
 
-def require_current_setup_gate():
-    # v1 observes only five scopes. Current fresh GUI installs twelve. Neither
-    # the old plan nor its broad approval reference can authorize that expansion.
-    raise Rejected("read_admin_native_gate_unavailable")
+def require_current_setup_gate(p=None):
+    # Historical v1 cannot authorize expanded fresh Setup. Only the exact current
+    # contract may proceed to ordinary native/action-time authorization checks.
+    if not is_current(p):
+        raise Rejected("read_admin_native_gate_unavailable")
+    validate_plan(p)
 
 def require_native_opt_in(args, role, p):
     need(__import__("sys").version_info >= (3, 12), "contract_rejected")
     need(__import__("sys").flags.isolated and __import__("sys").dont_write_bytecode, "contract_rejected")
     need(args.execute and args.target_id == p["targets"][role]["id"])
-    need(args.phase in PHASES and p["phases"][args.phase]["targetId"] == args.target_id)
+    need(args.phase in phases(p) and p["phases"][args.phase]["targetId"] == args.target_id)
     need(args.approval_reference == p["phases"][args.phase]["approvalRef"])
+    browser_hash = getattr(args, "browser_report_sha256", None)
+    if is_current(p) and args.phase == "remove":
+        sha(browser_hash)
+    else:
+        need(browser_hash is None)
     need(not any(k in os.environ for k in ("CI", "GITHUB_ACTIONS", "TF_BUILD", "BUILD_BUILDID")))
     # The actual action-time authorization must be obtained OUTSIDE this harness.
     # Neither these flags nor this reference authenticate the approving person.
     need(__import__("sys").stdin.isatty(), "secure_handoff_required")
-    require_current_setup_gate()  # Before native adapter import or host access.
+    require_current_setup_gate(p)  # Before native adapter import or host access.
 
 REQUIRED_CHECKS = {
     "setup": {"native_actions_attempted", "fresh_host", "setup_launched", "installed_hash", "scm_running", "scm_stopped", "endpoint_binding"},
@@ -323,6 +362,18 @@ REQUIRED_CHECKS = {
 }
 for _phase in ("event-enable", "updates-enable", "event-disable", "updates-disable"):
     REQUIRED_CHECKS[_phase] = {"native_actions_attempted", "installed_hash", "scm_running", "scm_stopped", "endpoint_binding", "grant_independence", "grant_enabled" if _phase.endswith("enable") else "grant_disabled"}
+
+CURRENT_REQUIRED_CHECKS = {
+    "setup": REQUIRED_CHECKS["setup"] | {"current_receipt", "current_grants", "current_credential"},
+    "event-fixture": REQUIRED_CHECKS["event-fixture"] | {"endpoint_binding", "current_receipt", "current_grants", "current_credential"},
+    "manager-browser": REQUIRED_CHECKS["manager-browser"],
+    "own-restart": {"native_actions_attempted", "installed_hash", "scm_running", "scm_stopped", "endpoint_binding", "current_receipt", "current_grants", "current_credential", "same_identity", "own_restart"},
+    "remove": {"native_actions_attempted", "installed_hash", "scm_running", "scm_stopped", "endpoint_binding", "current_receipt", "current_grants", "current_credential", "receipt_owned_removal", "scm_absent", "retained_state_preserved", "browser_evidence_verified"},
+}
+
+def required_checks(p, phase):
+    need(phase in phases(p))
+    return (CURRENT_REQUIRED_CHECKS if is_current(p) else REQUIRED_CHECKS)[phase]
 
 _active_budget = None
 class RunBudget:
@@ -344,14 +395,14 @@ def check_time(expires):
     return expires - time.time()
 
 def report(p, plan_hash, phase, checks, status, reason, elapsed):
-    need(phase in PHASES and reason in REASONS and status in {"observed_phase", "blocked", "unknown"})
+    need(phase in phases(p) and reason in REASONS and status in {"observed_phase", "blocked", "unknown"})
     need(type(checks) is dict and set(checks) <= CHECKS and all(type(v) is bool for v in checks.values()))
     need(type(elapsed) in {int, float} and 0 <= elapsed <= 7201)
     if status == "observed_phase":
-        need(reason == "complete" and set(checks) == REQUIRED_CHECKS[phase] and all(checks.values()))
+        need(reason == "complete" and set(checks) == required_checks(p, phase) and all(checks.values()))
     else:
         need(reason != "complete")
-    return {"schema": SCHEMA + ".evidence", "runId": p["runId"], "planSHA256": plan_hash, "source": p["source"], "phase": phase,
+    return {"schema": p["schema"] + ".evidence", "runId": p["runId"], "planSHA256": plan_hash, "source": p["source"], "phase": phase,
             "status": status, "reason": reason, "checks": checks, "elapsedSeconds": int(elapsed), "nativeExecution": checks.get("native_actions_attempted", False),
             "fullAcceptance": False, "manualStatementsAcceptedAsEvidence": False, "rawDataExported": False,
             "artifactSHA256": {k: a["sha256"] for k, a in p["artifacts"].items()}}

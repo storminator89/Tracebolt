@@ -11,9 +11,9 @@ import ssl
 import subprocess
 import time
 from urllib.parse import urlsplit
-from contract import Rejected, need, read_regular, strict_json, digest, verify_artifact, verify_inventory, private_directory, no_links, canonical, trusted_path, check_time, exact, verify_executable_header
+from contract import Rejected, need, read_regular, strict_json, digest, verify_artifact, verify_inventory, private_directory, no_links, canonical, trusted_path, check_time, exact, verify_executable_header, is_current, require_current_setup_gate
 
-MARKERS = frozenset(("PARITY_BROWSER_BASELINE_OBSERVED", "PARITY_BROWSER_EVENT_ENABLE_READY", "PARITY_BROWSER_UPDATES_ENABLE_READY", "PARITY_BROWSER_EVENT_DISABLE_READY", "PARITY_BROWSER_UPDATES_DISABLE_READY", "PARITY_BROWSER_SECURE_LOGIN_HANDOFF", "PARITY_BROWSER_EVENT_REQUEST_HANDOFF"))
+MARKERS = frozenset(("PARITY_BROWSER_BASELINE_OBSERVED", "PARITY_BROWSER_EVENT_ENABLE_READY", "PARITY_BROWSER_UPDATES_ENABLE_READY", "PARITY_BROWSER_EVENT_DISABLE_READY", "PARITY_BROWSER_UPDATES_DISABLE_READY", "PARITY_BROWSER_SECURE_LOGIN_HANDOFF", "PARITY_BROWSER_EVENT_REQUEST_HANDOFF", "PARITY_BROWSER_CURRENT_PROFILE_OBSERVED", "PARITY_BROWSER_HISTORY_SEARCH_HANDOFF", "PARITY_BROWSER_HISTORY_MESSAGES_HANDOFF", "PARITY_BROWSER_OWN_RESTART_READY"))
 
 @contextmanager
 def target_lock():
@@ -79,6 +79,17 @@ def check_listener(value, expected_origin, expires):
     except (ValueError, OSError):
         raise Rejected("contract_rejected") from None
 
+def validate_enrollment_mode(e, p):
+    need(type(e) is dict)
+    keys = {"schemaVersion", "profile", "collectionProfile", "instanceId", "issuerCertificateFile", "issuerPrivateKeyFile", "issuerRootFile", "expectedIssuerFingerprint", "bootstrapServerCAFile"}
+    if is_current(p):
+        need(set(e) <= keys | {"automaticRenewal"})
+        need(e.get("schemaVersion") == "tracebolt.enrollment-config.renewable.v1" and e.get("automaticRenewal") is True and e.get("profile") == "tls")
+    else:
+        need(set(e) <= keys)
+        need(e.get("schemaVersion") == "tracebolt.enrollment-config.v2" and e.get("profile") == "tls")
+    need(e.get("collectionProfile", "basic-readonly-v1") in {"basic-readonly-v1", "managed-operations-v3"})
+
 def verify_config(p):
     t = p["targets"]["linux"]
     c = strict_json(protected_file(t["lanConfig"]), 16384)
@@ -97,9 +108,7 @@ def verify_config(p):
     workspace = private_directory(t["workspace"])
     need(state != workspace and not list(state.iterdir()), "native_observation_unavailable")
     e = strict_json(protected_file(t["enrollmentConfig"]), 16384)
-    need(set(e) <= {"schemaVersion", "profile", "collectionProfile", "instanceId", "issuerCertificateFile", "issuerPrivateKeyFile", "issuerRootFile", "expectedIssuerFingerprint", "bootstrapServerCAFile"})
-    need(e.get("schemaVersion") == "tracebolt.enrollment-config.v2" and e.get("profile") == "tls")
-    need(e.get("collectionProfile", "basic-readonly-v1") in {"basic-readonly-v1", "managed-operations-v3"})
+    validate_enrollment_mode(e, p)
     for key in ("issuerCertificateFile", "issuerRootFile", "bootstrapServerCAFile"):
         protected_file(e[key])
     protected_file(e["issuerPrivateKeyFile"], secret=True)
@@ -152,7 +161,7 @@ def await_tls(manager, p, config):
 def browser_spec(p, plan_hash):
     t = p["targets"]["linux"]
     output = str(Path(t["workspace"]) / (p["runId"] + "-browser.json"))
-    return {"schema": "tracebolt.windows-linux-native-parity.browser.v1", "runId": p["runId"], "planSHA256": plan_hash,
+    spec = {"schema": "tracebolt.windows-linux-native-parity.browser.v2" if is_current(p) else "tracebolt.windows-linux-native-parity.browser.v1", "runId": p["runId"], "planSHA256": plan_hash,
                 "source": p["source"], "expiresUnix": p["expiresUnix"], "operatorOrigin": p["tls"]["operatorOrigin"],
                 "chromium": p["artifacts"]["chromium"], "browserRoot": t["browserRoot"],
                 "syntheticEvent": {k: p["syntheticEvent"][k] for k in ("source", "eventId", "messageSHA256")},
@@ -161,12 +170,17 @@ def browser_spec(p, plan_hash):
                 "windowsBindingPath": str(Path(t["workspace"]) / (p["runId"] + "-windows-binding.json")),
                 "windowsTargetId": p["targets"]["windows"]["id"], "windowsMachineIdSHA256": p["targets"]["windows"]["machineIdSHA256"],
                 "setupSHA256": p["artifacts"]["setup"]["sha256"], "serviceSHA256": p["artifacts"]["service"]["sha256"]}
+    if is_current(p):
+        spec.update(currentProfile=p["currentProfile"], historyQuery=p["historyQuery"], windowsPlatform=p["targets"]["windows"]["platform"])
+    return spec
 
 BROWSER_CHECKS = {"publicBootstrapSaved", "endpointBindingObserved", "singleFreshWindowsIdentity", "baselineDefaultOff", "syntheticHeaderObserved", "eventRequestObserved", "eventResultObserved", "eventMessageRendered", "updatesObserved", "updatesRendered", "eventDisabledObserved", "updatesDisabledObserved", "browserClosed"}
 BROWSER_REASONS = {"complete", "contract_rejected", "deadline", "clock_changed", "wrong_origin", "artifact_mismatch", "private_path_rejected", "dependency_unavailable", "browser_unavailable", "session_lost", "identity_mismatch", "invalid_response", "stale_capture", "request_conflict", "event_unknown", "updates_unknown", "ui_unavailable", "cleanup_unverified"}
 BROWSER_OMISSIONS = ["baseline_source_completeness", "health_policy_lifecycle", "worker_faults_and_replay", "online_updates", "update_installation", "service_actions", "reboot", "upgrade_repair"]
 
 def validate_browser_result(r, p, plan_hash, passed=False):
+    if is_current(p):
+        return validate_current_browser_result(r, p, plan_hash, passed)
     exact(r, ("schema", "runId", "planSHA256", "source", "status", "reason", "fullAcceptance", "nativeExecution", "checks", "observations", "omissions"))
     need(r["schema"] == "tracebolt.windows-linux-native-parity.browser-result.v1" and r["runId"] == p["runId"]
          and r["planSHA256"] == plan_hash and r["source"] == p["source"] and r["fullAcceptance"] is False
@@ -191,7 +205,48 @@ def validate_browser_result(r, p, plan_hash, passed=False):
         need(r["reason"] != "complete", "browser_incomplete")
     return r
 
+# Exact mirror of the sanitized current browser result. This contains no raw
+# inventory, personal labels, history header/message text or credential bytes.
+CURRENT_BROWSER_CHECKS = {"publicBootstrapSaved", "endpointBindingObserved", "singleFreshWindowsIdentity", "currentScopeBindingsObserved", "stableIdentityObserved", "currentCredentialObserved", "historyDefaultIdleObserved", "historySearchRequestObserved", "historySearchResultObserved", "syntheticHistoryHeaderObserved", "historyMessagesRequestObserved", "historyMessageResultObserved", "historyMessageRendered", "privateHistoryDiscardObserved", "ownRestartBindingObserved", "postRestartInventoryObserved", "browserClosed"}
+CURRENT_BROWSER_OMISSIONS = ["baseline_source_completeness", "retained_history_completeness", "renewal_cutover", "health_policy_lifecycle", "worker_faults_and_replay", "online_updates", "update_installation", "service_actions", "reboot", "upgrade_repair"]
+CURRENT_BROWSER_SCOPES = ("windows-inventory-v1", "windows-application-system-event-headers-v1", "windows-visible-volumes-v1", "windows-process-metrics-v1", "windows-network-endpoints-v1", "windows-service-startup-v1", "windows-complete-services-v1", "windows-complete-machine-software-v1", "windows-adapter-context-v1", "windows-patch-context-v1", "windows-security-posture-v1", "windows-session-context-v1", "windows-hardware-context-v1", "windows-storage-context-v1", "windows-security-coverage-v1", "windows-complete-processes-v1", "windows-network-context-v1", "windows-resource-context-v1", "windows-storage-io-v1", "windows-machine-software-history-v1", "windows-application-system-event-history-v1")
+SOURCE_OUTCOMES = {"not_observed", "observed", "partial", "legitimately_absent", "unsupported", "denied", "budget_exceeded", "unavailable"}
+
+def validate_current_browser_result(r, p, plan_hash, passed=False):
+    exact(r, ("schema", "runId", "planSHA256", "source", "currentProfile", "status", "reason", "fullAcceptance", "nativeExecution", "checks", "observations", "omissions"))
+    need(r["schema"] == "tracebolt.windows-linux-native-parity.browser-result.v2" and r["runId"] == p["runId"]
+         and r["planSHA256"] == plan_hash and r["source"] == p["source"] and r["currentProfile"] == p["currentProfile"]
+         and r["fullAcceptance"] is False and type(r["nativeExecution"]) is bool and r["status"] in {"passed", "blocked"}
+         and r["reason"] in BROWSER_REASONS | {"read_admin_native_gate_unavailable"} and r["omissions"] == CURRENT_BROWSER_OMISSIONS, "browser_incomplete")
+    from contract import validate_current_profile
+    validate_current_profile(r["currentProfile"])
+    exact(r["checks"], CURRENT_BROWSER_CHECKS); need(all(type(v) is bool for v in r["checks"].values()), "browser_incomplete")
+    o = r["observations"]; ch = r["checks"]
+    exact(o, ("scopeCount", "grantCount", "coverage", "scopeOutcomes", "historySearchQuality", "historySearchRows", "historySearchComplete", "historySearchTruncated", "historyMessageQuality", "historyEndpointStatus", "retainedHistoryCoverage", "patchCoverage", "renewalExecution"))
+    need(type(o["scopeCount"]) is int and o["scopeCount"] in {0, 21} and type(o["grantCount"]) is int and o["grantCount"] in {0, 20}
+         and (o["scopeCount"] == 21) == (o["grantCount"] == 20), "browser_incomplete")
+    exact(o["scopeOutcomes"], CURRENT_BROWSER_SCOPES)
+    need(o["coverage"] in {"partial", "not_assessed"} and all(v in SOURCE_OUTCOMES for v in o["scopeOutcomes"].values()), "browser_incomplete")
+    qualities = {"not_observed", "observed", "bounded", "partial", "unavailable"}
+    need(o["historySearchQuality"] in qualities and o["historyMessageQuality"] in qualities
+         and type(o["historySearchRows"]) is int and 0 <= o["historySearchRows"] <= 100
+         and type(o["historySearchComplete"]) is bool and type(o["historySearchTruncated"]) is bool
+         and o["historyEndpointStatus"] in {"not_observed", "", "checking", "disabled", "denied", "reader_unavailable", "budget_exhausted", "result_lost", "expired", "canceled"}
+         and o["retainedHistoryCoverage"] == "not_assessed" and o["patchCoverage"] == "not_assessed" and o["renewalExecution"] == "not_observed", "browser_incomplete")
+    need(not ch["currentScopeBindingsObserved"] or o["scopeCount"] == 21 and o["grantCount"] == 20, "browser_incomplete")
+    need(not ch["historySearchResultObserved"] or o["historySearchQuality"] != "not_observed", "browser_incomplete")
+    need(not ch["syntheticHistoryHeaderObserved"] or ch["historySearchResultObserved"] and o["historySearchRows"] > 0, "browser_incomplete")
+    need(not ch["historyMessagesRequestObserved"] or ch["syntheticHistoryHeaderObserved"], "browser_incomplete")
+    need(not ch["historyMessageResultObserved"] or ch["historyMessagesRequestObserved"] and o["historyMessageQuality"] == "observed", "browser_incomplete")
+    need(not ch["historyMessageRendered"] or ch["historyMessageResultObserved"], "browser_incomplete")
+    if r["status"] == "passed" or passed:
+        need(r["status"] == "passed" and r["reason"] == "complete" and r["nativeExecution"] and all(ch.values()), "browser_incomplete")
+    else:
+        need(r["reason"] != "complete", "browser_incomplete")
+    return r
+
 def operate(p, plan_hash, checks):
+    require_current_setup_gate(p)
     t = p["targets"]["linux"]
     for name in ("manager", "node", "chromium"):
         raw = verify_artifact(p["artifacts"][name], 64 << 20) if name == "manager" else verify_executable_header(p["artifacts"][name])
@@ -223,7 +278,7 @@ def operate(p, plan_hash, checks):
                 env[k] = os.environ[k]
         need("DISPLAY" in env or "WAYLAND_DISPLAY" in env, "secure_handoff_required")
         check_time(p["expiresUnix"])
-        browser = subprocess.Popen([p["artifacts"]["node"]["path"], str(Path(t["sourceRoot"]) / "tests/windows_linux_native_parity/browser.mjs")],
+        browser = subprocess.Popen([p["artifacts"]["node"]["path"], str(Path(t["sourceRoot"]) / "tests/windows_linux_native_parity/browser.mjs"), *(["--current-profile"] if is_current(p) else [])],
                                    stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, env=env, shell=False, start_new_session=True)
         browser.stdin.write(canonical(spec)); browser.stdin.close()
         # Read bounded fixed markers without printing raw browser/OS diagnostics.

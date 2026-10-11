@@ -1,6 +1,13 @@
 # Manual real Windows → Linux → browser parity subset
 
-**Current source compatibility block:** this v1 harness observes only the old
+The explicitly versioned current-v2 route is documented in
+[CURRENT_PROFILE.md](CURRENT_PROFILE.md). It supports fresh twenty-one-scope
+consent v14/receipt12 and renewable TLS without changing historical v1 evidence.
+Only portable/inert checks have run; native execution remains separately gated.
+
+## Historical v1 route (kept fail-closed)
+
+**Historical v1 compatibility block:** this v1 harness observes only the old
 five-scope Setup baseline. Fresh Setup now selects the twelve-scope Read admin
 profile, including personal user/domain/session and join metadata, with explicit
 unchecked consent. An old five-scope approval or broad phase reference cannot
