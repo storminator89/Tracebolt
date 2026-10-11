@@ -1,5 +1,5 @@
 {
-  "goSourceSha256": "e31a0e66f9445d5b43e0d638569a6a3da1c062adc32f79a1816f438dab426f43",
+  "goSourceSha256": "0221efdb8809e1bc2410477e6d49043970394d74efb5d9eafc32aa489d054ba2",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"

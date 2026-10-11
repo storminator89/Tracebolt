@@ -245,9 +245,35 @@ func TestWorkerFixture(t *testing.T) {
 	}
 	mode = strings.TrimPrefix(mode, "worker-fixture:")
 	if mode == "pipe-holder" {
-		// Finite descendant fixture: it retains stdout after its worker parent
-		// exits, then closes naturally without touching any native source.
-		time.Sleep(800 * time.Millisecond)
+		// Keep stdout open until the test explicitly releases this inert
+		// descendant. The deadline also bounds cleanup if the test disappears.
+		status := os.NewFile(3, "fixture-status")
+		release := os.NewFile(4, "fixture-release")
+		time.AfterFunc(30*time.Second, func() { os.Exit(96) })
+		if status == nil || release == nil {
+			os.Exit(96)
+		}
+		if _, err := status.Write([]byte{'R'}); err != nil {
+			os.Exit(96)
+		}
+		var command [1]byte
+		if _, err := io.ReadFull(release, command[:]); err != nil || command[0] != 'P' {
+			os.Exit(96)
+		}
+		// The test probes only after collect has returned and reaped the
+		// direct child. Prove this process still owns its inherited pipe.
+		info, err := os.Stdout.Stat()
+		if err != nil || info.Mode()&os.ModeNamedPipe == 0 {
+			os.Exit(96)
+		}
+		if _, err := status.Write([]byte{'H'}); err != nil {
+			os.Exit(96)
+		}
+		if _, err := io.ReadFull(release, command[:]); err != io.EOF {
+			os.Exit(96)
+		}
+		// Leave status open until process exit, including race-runtime exit
+		// cleanup, so the test can wait for EOF rather than guess a sleep.
 		os.Exit(0)
 	}
 	if mode == "inherited-pipe" {
@@ -261,9 +287,14 @@ func TestWorkerFixture(t *testing.T) {
 			os.Exit(94)
 		}
 		holder.Stdout = os.Stdout
+		status := os.NewFile(3, "fixture-status")
+		release := os.NewFile(4, "fixture-release")
+		holder.ExtraFiles = []*os.File{status, release}
 		if holder.Start() != nil {
 			os.Exit(95)
 		}
+		_ = status.Close()
+		_ = release.Close()
 		_ = holder.Process.Release()
 	}
 	if mode == "blocked" || mode == "never-read" {
@@ -431,21 +462,71 @@ func TestSubprocessInheritedPipeDoesNotStallWait(t *testing.T) {
 	if runtime.GOOS != "linux" {
 		t.Skip("Linux process-lifetime fixture")
 	}
+	statusRead, statusWrite, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = statusRead.Close(); _ = statusWrite.Close() })
+	releaseRead, releaseWrite, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = releaseRead.Close(); _ = releaseWrite.Close() })
+	t.Cleanup(func() {
+		_ = statusWrite.Close()
+		_ = releaseRead.Close()
+		_ = releaseWrite.Close()
+		if err := statusRead.SetReadDeadline(time.Now().Add(10 * time.Second)); err != nil {
+			t.Error(err)
+			return
+		}
+		// At most the ready/probe bytes can remain on a failed assertion.
+		// EOF proves the holder has closed its inherited descriptors.
+		remaining, err := io.ReadAll(io.LimitReader(statusRead, 3))
+		if err != nil || len(remaining) > 2 {
+			t.Error("inherited-pipe holder did not finish bounded cleanup")
+		}
+	})
 	var child *exec.Cmd
-	start := time.Now()
-	snapshot, err := collect(context.Background(), requestFixture(), 10*time.Second, fixtureFactory(t, "inherited-pipe", &child))
-	// The inert holder has its own fixed 800ms lifetime (plus race-runtime exit
-	// delay). Wait for that fixture to finish before leaving the test process.
-	defer time.Sleep(2 * time.Second)
+	factory := fixtureFactory(t, "inherited-pipe", &child)
+	snapshot, err := collect(context.Background(), requestFixture(), 10*time.Second, func(ctx context.Context) (*exec.Cmd, error) {
+		command, err := factory(ctx)
+		if err == nil {
+			command.ExtraFiles = []*os.File{statusWrite, releaseRead}
+		}
+		return command, err
+	})
+	_ = statusWrite.Close()
+	_ = releaseRead.Close()
 	if err != nil || snapshot.History.Reason != windowspatchcontext.ErrUnavailable.Error() || snapshot.History.Quality != "unavailable" {
 		t.Fatalf("inherited pipe was not rejected: %+v %v", snapshot, err)
 	}
-	if time.Since(start) > 1500*time.Millisecond {
-		t.Fatal("Wait retained the descendant pipe instead of honoring WaitDelay")
-	}
 	assertReaped(t, child)
+	if !child.ProcessState.Success() {
+		t.Fatal("inherited-pipe worker did not exit successfully")
+	}
 	if child.WaitDelay != pipeWaitDelay {
 		t.Fatal("pipe wait bound missing")
+	}
+	// Startup, scheduling and the race runtime's child-exit delay do not
+	// belong in a wall-clock assertion. Instead, require the holder to be
+	// alive with stdout still open after collect has returned and reaped.
+	deadline := time.Now().Add(10 * time.Second)
+	if err := statusRead.SetReadDeadline(deadline); err != nil {
+		t.Fatal(err)
+	}
+	if err := releaseWrite.SetWriteDeadline(deadline); err != nil {
+		t.Fatal(err)
+	}
+	var status [1]byte
+	if _, err := io.ReadFull(statusRead, status[:]); err != nil || status[0] != 'R' {
+		t.Fatal("inherited-pipe holder was not ready")
+	}
+	if _, err := releaseWrite.Write([]byte{'P'}); err != nil {
+		t.Fatal("inherited-pipe holder exited before the probe")
+	}
+	if _, err := io.ReadFull(statusRead, status[:]); err != nil || status[0] != 'H' {
+		t.Fatal("Wait did not return while the descendant still held its pipe")
 	}
 }
 

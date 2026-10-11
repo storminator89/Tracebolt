@@ -20,6 +20,9 @@ func TestFixedReadOnlySourceAndIPCSeparation(t *testing.T) {
 			t.Fatal(e)
 		}
 		s := string(b)
+		if file == "msix_windows.go" && !strings.Contains(s, "//go:uintptrescapes\nfunc (p *comObject) call(index int, args ...uintptr) error {") {
+			t.Fatal("COM forwarding must preserve caller pointer lifetime with uintptrescapes; pointer conversions stay directly in call arguments")
+		}
 		compact := strings.NewReplacer(" ", "", "\t", "", "\n", "").Replace(s)
 		for _, marker := range markers {
 			if !strings.Contains(compact, strings.ReplaceAll(marker, " ", "")) {

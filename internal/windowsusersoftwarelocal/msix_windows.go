@@ -31,6 +31,11 @@ var packageIdIID = windows.GUID{Data1: 0x1adb665e, Data2: 0x37c7, Data3: 0x4790,
 
 type comObject struct{ vtable *[32]uintptr }
 
+// Callers pass Go pointer conversions directly in this method's argument list.
+// The directive preserves their heap address and lifetime through the variadic
+// forwarding buffer and SyscallN, as in x/sys/windows.Proc.Call.
+//
+//go:uintptrescapes
 func (p *comObject) call(index int, args ...uintptr) error {
 	if p == nil || p.vtable == nil || index < 0 || index >= 32 {
 		return errMalformed
