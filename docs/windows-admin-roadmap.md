@@ -24,6 +24,7 @@ remote desktop is deferred.
 - [Caller-visible routing metadata and raw interface counters](windows-network-context.md), with exact uint64 values and independent private paging
 - [Security Center antivirus registration/status and TPM presence/version](windows-security-coverage.md), with explicit client/server and provider-access limits
 - Event headers, separately approved selected messages and offline cached updates
+- [Bounded older Windows event search and deliberately selected historical messages](windows-event-history-runtime.md), with an independent default-off grant and same-session receipt-bound followup
 - Concise fresh Read admin setup with explicit unchecked consent; service control
   remains separately optional
 
@@ -53,9 +54,10 @@ The remaining data areas below can progress independently.
    privilege expansion.
 5. **Changes and history.** Observed machine-software registration/version changes
    from complete comparable generations are implemented in a separate scope.
-   Broader inventory diffs and bounded older-event retrieval, continuation and
-   search remain open. Partial captures must not invent an uninstall or erase
-   log gaps. Broader content/retention requires explicit scope.
+   Bounded older-event search and selected-message followup are implemented in
+   a separate scope. Broader inventory diffs, retained-event continuation and
+   retention remain open. Partial captures must not invent an uninstall or
+   erase log gaps. Broader content/retention requires explicit scope.
 
 ## Native acceptance and release
 

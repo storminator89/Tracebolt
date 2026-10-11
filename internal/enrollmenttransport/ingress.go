@@ -44,6 +44,8 @@ import (
 	"localrmm/internal/windowsfullprocesseswire"
 	"localrmm/internal/windowsfullserviceswire"
 	"localrmm/internal/windowsfullsoftwarewire"
+	"localrmm/internal/windowshistorycache"
+	"localrmm/internal/windowshistorywire"
 	"localrmm/internal/windowsnetworkcontextwire"
 )
 
@@ -56,6 +58,7 @@ var ErrConfiguration = errors.New("enrollment ingress configuration is invalid")
 // Construct one per listener; sharing its address preserves the admission bound.
 type Ingress struct {
 	windowsActions             *windowsactionmanager.Manager
+	windowsHistory             *windowshistorycache.Cache
 	windowsEvents              *windowseventcache.Cache
 	packages                   *packagecontroller.Manager
 	actions                    *actionmanager.Manager
@@ -139,7 +142,7 @@ func (h *Ingress) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		failure(w, http.StatusServiceUnavailable, "storage_unavailable")
 		return
 	}
-	if h.telemetryPath == "/v1/windows/agent/telemetry" && (r == nil || r.URL == nil || r.URL.Path != h.telemetryPath && !windowsEventPath(r.URL.Path) && !windowsfullserviceswire.ValidPath(r.URL.Path) && !windowsfullsoftwarewire.ValidPath(r.URL.Path) && !windowsfullprocesseswire.ValidPath(r.URL.Path) && !windowsnetworkcontextwire.ValidPath(r.URL.Path) && !strings.HasPrefix(r.URL.Path, "/v1/windows-service-actions/")) {
+	if h.telemetryPath == "/v1/windows/agent/telemetry" && (r == nil || r.URL == nil || r.URL.Path != h.telemetryPath && !windowsEventPath(r.URL.Path) && !windowsHistoryPath(r.URL.Path) && !windowsfullserviceswire.ValidPath(r.URL.Path) && !windowsfullsoftwarewire.ValidPath(r.URL.Path) && !windowsfullprocesseswire.ValidPath(r.URL.Path) && !windowsnetworkcontextwire.ValidPath(r.URL.Path) && !strings.HasPrefix(r.URL.Path, "/v1/windows-service-actions/")) {
 		failure(w, http.StatusNotFound, "not_found")
 		return
 	}
@@ -167,6 +170,10 @@ func (h *Ingress) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if r != nil && r.URL != nil && strings.HasPrefix(r.URL.Path, windowsnetworkcontextwire.PathPrefix) {
 		h.windowsNetworkContext(w, r)
+		return
+	}
+	if r != nil && r.URL != nil && strings.HasPrefix(r.URL.Path, windowshistorywire.PathPrefix) {
+		h.windowsHistoryRequest(w, r)
 		return
 	}
 	if r != nil && r.URL != nil && strings.HasPrefix(r.URL.Path, windowseventwire.PathPrefix) {

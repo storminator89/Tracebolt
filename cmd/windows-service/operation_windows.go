@@ -67,6 +67,8 @@ func nativeReceiptOperation(ctx context.Context, r request, receipt installRecei
 		return softwareHistoryOperation(ctx, r, receipt.Service, windowsservice.InspectOwned, lanclient.ConfigureWindowsSoftwareHistory)
 	case "full-software-preview", "full-software-enable", "full-software-disable":
 		return fullSoftwareOperation(ctx, r, receipt.Service, windowsservice.InspectOwned, lanclient.ConfigureWindowsFullSoftware)
+	case "event-history-preview", "event-history-enable", "event-history-disable":
+		return eventHistoryOperation(ctx, r, receipt.Service, windowsservice.InspectOwned, lanclient.ConfigureWindowsEventHistory)
 	case "event-content-preview", "event-content-enable", "event-content-disable":
 		return eventContentOperation(ctx, r, receipt.Service, windowsservice.InspectOwned, lanclient.ConfigureWindowsEventContent)
 	case "updates-preview", "updates-enable", "updates-disable":

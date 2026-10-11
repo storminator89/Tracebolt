@@ -368,14 +368,14 @@ func (w *wizard) render() bool {
 		setText(w.controls[idNext], "&Next >")
 		intro := "Choose the public bootstrap JSON supplied by your manager operator. The file must be a regular local file, no larger than 64 KiB.\r\n\r\nThis is public manager identity and trust material only. Do not choose a file containing an invitation, password, private key or other secret. The invitation is entered later in a separate console with input hidden.\r\n\r\nThis setup is for a fresh endpoint only. Existing service, enrollment, grants or setup state are never adopted or reset. HTTPS is the default. Explicit isolated HTTP-test bootstraps require a separate plaintext-risk approval.\r\n\r\nAfter choosing a valid bootstrap, review the full data scope and compare all public trust values independently. Installation only begins after you explicitly approve the read scopes, service, persistent identity and trust comparison.\r\n\r\nNo browser is opened and nothing is downloaded by this wizard."
 		if w.flow.readAdmin {
-			intro = "Read admin includes manufacturer/model, identifying physical chassis and BIOS serials, firmware vendor/version/date, power/battery, device and activity, services and software, network, updates and security, personal users/session metadata, local drive letters and volume GUIDs, and storage-provider device identifiers/friendly labels and health/status. Service control is separate.\r\n\r\nChoose the manager's public bootstrap JSON, a regular local file up to 64 KiB. Never put an invitation, password or private key in this file. Enter the invitation later in the hidden-input console.\r\n\r\nNext, review the grouped data scope and public trust values. All consent boxes start unchecked. Nothing is installed until you explicitly approve and choose Install."
+			intro = "Read admin includes manufacturer/model, identifying physical chassis and BIOS serials, firmware vendor/version/date, power/battery, device and activity, services and software, network, updates and security, personal users/session metadata, local drive letters and volume GUIDs, and storage-provider device identifiers/friendly labels and health/status. Bounded Application/System event history and selected historical messages are included; messages may contain credentials, personal data and secrets. Service control is separate.\r\n\r\nChoose the manager's public bootstrap JSON, a regular local file up to 64 KiB. Never put an invitation, password or private key in this file. Enter the invitation later in the hidden-input console.\r\n\r\nNext, review the grouped data scope and public trust values. All consent boxes start unchecked. Nothing is installed until you explicitly approve and choose Install."
 		}
 		if w.control("EDIT", intro, esMultiline|esReadOnly|esAutoVScroll|wsVScroll|wsTabStop|wsBorder, idInputText, true) == 0 {
 			return false
 		}
 		if w.flow.readAdmin {
 			setText(w.heading, "Step 1 of 3: Read admin setup")
-			if w.control("STATIC", "Read admin: 19 read scopes. Review and explicitly approve on the next page.", 0, idReadAdmin, true) == 0 {
+			if w.control("STATIC", "Read admin: 21 read scopes. Review and explicitly approve on the next page.", 0, idReadAdmin, true) == 0 {
 				return false
 			}
 		}
@@ -393,7 +393,7 @@ func (w *wizard) render() bool {
 		w.content = w.control("EDIT", reviewText(reviewPresentation(w.config, w.flow.readAdmin, w.flow.details), w.flow.trust), esMultiline|esReadOnly|esAutoVScroll|wsVScroll|wsTabStop|wsBorder, idReviewText, true)
 		scopeText := "I approve the exact five READ scopes and the full privacy disclosure above."
 		if w.flow.readAdmin {
-			scopeText = "I approve all 20 Read admin scopes, including chassis/BIOS serials, drive letters/volume GUIDs, storage-provider device identifiers/friendly labels, and personal user/domain/session metadata."
+			scopeText = "I approve all 21 Read admin scopes, including identifying/personal metadata, bounded Application/System history and selected messages that may contain credentials or other secrets."
 			if w.control("BUTTON", "Scope &details", wsTabStop, idDetails, true) == 0 {
 				return false
 			}

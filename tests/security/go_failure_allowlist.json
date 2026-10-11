@@ -1,5 +1,5 @@
 {
-  "goSourceSha256": "396cc82d98677cdbf8d45d26ba665f8dc8fbf768ba1b0d86c8f887844c64531e",
+  "goSourceSha256": "f69f517710f94161748b3fc19d7838dd771480947127694470b2d5d213f787e0",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -261,6 +261,11 @@
       "TestEventContentWorkerNativeWatchdogCannotTargetAnotherProcess",
       "TestEventContentWorkerRechecksCreatorAtEveryBoundary",
       "TestEventContentWorkerWatchdogUsesOnlyInjectedTermination",
+      "TestEventHistoryConsentExplicitSeparateAndDisclosed",
+      "TestEventHistoryConsentOwnedStoppedAndCancellationGuard",
+      "TestEventHistoryFreshReadAdminV14Receipt12ExactSeparateAuthority",
+      "TestEventHistoryFreshSetupFailureAndReconcileKeepOriginalReceipt",
+      "TestEventHistoryWorkerRechecksCreatorAtEveryBoundary",
       "TestFreshChildEnvironmentAddsOnlyTrustedSystemDrive",
       "TestFreshChildEnvironmentRejectsInvalidDirectoryWithoutDisclosure",
       "TestFreshChildEnvironmentRejectsNULAndRetainsEmptyValues",
@@ -468,7 +473,7 @@
       "TestSetupWindowsPermissionCauseHasFiniteStartupCode",
       "TestSetupWizardCanceledBeforeApplyIsInert",
       "TestSetupWizardDeletionPendingIsObservedNotRetried",
-      "TestSetupWizardFreshReadAdminUsesV13AndExactHTTPAcknowledgement",
+      "TestSetupWizardFreshReadAdminUsesV14AndExactHTTPAcknowledgement",
       "TestSetupWizardInstallOrderingAndEveryBoundary",
       "TestSetupWizardPublicBootstrapPreviewAndExplicitTransportConsent",
       "TestSetupWizardRejectsSecretAndHTTPBootstrap",
@@ -1076,6 +1081,8 @@
       "TestWindowsFullSoftwareOperatorFinalBoundaryHidesRows",
       "TestWindowsFullSoftwareProtectedOperatorFullPaging",
       "TestWindowsHealthProductionSchedulerSerializesSourceAdmission",
+      "TestWindowsHistoryOperatorRequiresExplicitScopeCSRFAndKnownQuery",
+      "TestWindowsHistoryOperatorSearchAndSelectedMessages",
       "TestWindowsNetworkContextOperatorFinalBoundaryHidesRows",
       "TestWindowsNetworkContextProtectedOperatorFullPaging",
       "TestWindowsResourceAuthenticatedIndependentPolicyPipeline",
@@ -1507,7 +1514,8 @@
       "TestRenewalSignerWaitCannotCrossPredecessorExpiryOrRevocation",
       "TestRenewalWindowsEventMaintenancePreservesRetainedAuthority",
       "TestRenewalWindowsTelemetryBeyondAnchorExpiryPreservesReplay",
-      "TestSystemInventoryServicePropagatesTrustedClockAcrossReadBoundaries"
+      "TestSystemInventoryServicePropagatesTrustedClockAcrossReadBoundaries",
+      "TestWindowsHistoryRenewalPreservesReceiptCacheAndSelectedClaim"
     ],
     "localrmm/internal/enrollmentstate": [
       "TestApprovalCASAndExactRetry",
@@ -1862,6 +1870,11 @@
       "TestWindowsHardwareAllUnknownPartialPreservesUsefulRetention",
       "TestWindowsHardwareRetentionExpiryOmissionAndReplacement",
       "TestWindowsHardwareRetentionNeedsRealValue",
+      "TestWindowsHistoryEmptyIsAcceptedButHasNoMessages",
+      "TestWindowsHistoryFinalBatchClockCannotLowerFloor",
+      "TestWindowsHistoryFinalLiveExpiryAndSessionGuardRollback",
+      "TestWindowsHistoryOldContentConsentAndMissingUsedStateFailClosed",
+      "TestWindowsHistorySearchMessagesReceiptExpiryAndNoDurableText",
       "TestWindowsInventoryCannotBeWrittenIntoBasicStore",
       "TestWindowsInventoryDurableViewRetryHistoryAndScope",
       "TestWindowsInventoryViewRechecksClockFreshnessAndExpiry",
@@ -1955,6 +1968,7 @@
       "TestWindowsEventRealTransportLogoutDiscardsAcceptedContent",
       "TestWindowsEventRealTransportPartialRetryImmutableHeaders",
       "TestWindowsEventRealTransportPurposeSequenceProfileAndForeignCertificate",
+      "TestWindowsHistoryRealTransportSearchSelectedMessagesAndPurpose",
       "TestWindowsIngressRejectsNativePackageRoutesBeforeDispatch",
       "TestWindowsServiceActionTransportThroughBrokerAndDurableStatus",
       "TestZeroConfigurationAndPlaintextTLSSeparation"
@@ -2271,6 +2285,8 @@
       "TestEventContentConsentCreateOnlyRetainsIndependentFloors",
       "TestEventContentConsentManifestIndependentAndFixed",
       "TestEventContentConsentUsedMissingAmbiguousStateNeverRepaired",
+      "TestEventHistoryConsentIndependentCreateDisableReenable",
+      "TestEventHistoryConsentRejectsOldAndMissingUsedAuthority",
       "TestExactRetryAfterCommittedResponseLoss",
       "TestForegroundExactPendingRetryThenContinues",
       "TestForegroundInvalidConfigDoesNotOpenState",
@@ -2490,6 +2506,13 @@
       "TestWindowsEventContentStorageFailuresPreventCapture",
       "TestWindowsEventContentTerminalRejectionErasesPending",
       "TestWindowsEventContentTimerClearsUnsentContent",
+      "TestWindowsEventHistoryEmptySearchAndRevokedPending",
+      "TestWindowsEventHistoryHardWorkerBudgetRemainsExplicit",
+      "TestWindowsEventHistoryLostClaimAndRestartNeverCapture",
+      "TestWindowsEventHistoryNoGrantAndDisableNeverRead",
+      "TestWindowsEventHistoryPipelineExactRetryAndNoDurableContent",
+      "TestWindowsEventHistoryRenewalKeepsAnchorGrantFloorAndPendingBytes",
+      "TestWindowsEventHistorySelectedFollowupKeepsOriginalExpiry",
       "TestWindowsEventsActualSenderIngressStoreRetryAndDisable",
       "TestWindowsEventsIngressRejectsScopeContentAndProfileConfusion",
       "TestWindowsEventsPendingRevocationAndConsentRace",
@@ -2609,6 +2632,7 @@
       "TestWindowsReadAdminV13DigestsRejectParentHistoryRotationBetweenReads",
       "TestWindowsReadAdminV13FreshCoverageRootNeverAdopted",
       "TestWindowsReadAdminV13RequiresFreshExactCoverageConsent",
+      "TestWindowsReadAdminV14HistoryCannotPromoteOldConsent",
       "TestWindowsReadAdminV5ConsentBytesRemainHistorical",
       "TestWindowsReadAdminV6FreshHardwareRootNeverAdopted",
       "TestWindowsReadAdminV6HardwareDigestAndRequirements",
@@ -3866,6 +3890,21 @@
       "TestInvalidOrCanceledCollectionNeverReachesSource",
       "TestStrictHeaderContractRejectsContentAndQualityLies"
     ],
+    "localrmm/internal/windowseventhistory": [
+      "TestBoundedSearchOnlyRendersHundredWithSingleLookahead",
+      "TestEmptyExhaustedSearchAndSourceFailureDiffer",
+      "TestNativeAPISurfaceStaysReadOnly",
+      "TestNativeRejectsBeforeRead",
+      "TestNativeTaxonomy",
+      "TestParseSelectedValues",
+      "TestProviderBounds",
+      "TestRejectMalformedMetadata",
+      "TestScalarUnusedStorageIsIgnored",
+      "TestSearchCancellationAndUntrustedReports",
+      "TestSearchRangeAndTypedXPath",
+      "TestSearchValidatesEveryReturnedIdentityAndFilter",
+      "TestUnsupportedSearchIsUnavailableNotEmptySuccess"
+    ],
     "localrmm/internal/windowseventrequest": [
       "TestCancellationExpiryAndClockRollbackCannotReopen",
       "TestClaimOnceAndFreshConsentRecheck",
@@ -4039,6 +4078,39 @@
       "TestSubprocessCallerCancellationKillsAndReaps",
       "TestSubprocessResponsesAndEnvironment",
       "TestWorkerFixture"
+    ],
+    "localrmm/internal/windowshistorycache": [
+      "TestHistoryCacheReceiptBeforePublishAndLostSearchCannotRefillOrSelect",
+      "TestHistoryCacheSameSessionFollowupOriginalExpiryAndReplacement",
+      "TestHistoryCacheWaitedSessionExpiryDropsAcceptedBytes"
+    ],
+    "localrmm/internal/windowshistoryrequest": [
+      "TestConsentPurposeAndAcknowledgements",
+      "TestMessageFollowupAcceptsOnlyExactRows",
+      "TestMessagesRequireExactAcceptedReceiptAndPreserveExpiry",
+      "TestOriginalBoundsAndConsumeOnce"
+    ],
+    "localrmm/internal/windowshistorystate": [
+      "TestHistoryExactCapabilityAndConsumeOnceFloors",
+      "TestHistoryMissingUsedAndAmbiguousStateCannotBeReinitialized"
+    ],
+    "localrmm/internal/windowshistorywire": [
+      "TestMessagesWireBindsOriginalSearchReceipt",
+      "TestOldEventContentProofCannotPromoteToHistory",
+      "TestOriginAndTLSShapeFailClosed",
+      "TestSearchWireNoMessageSmuggling",
+      "TestSearchWireRoundTripEmptyAndHundredHeaders",
+      "TestSignatureOriginalTimeExpiryAndStatelessReplayBoundary",
+      "TestSignaturePurposeActionBodyIdentityAndFraming",
+      "TestSlowBodyRechecksTimeAndAuthorization"
+    ],
+    "localrmm/internal/windowshistoryworker": [
+      "TestHistoryWorkerProcessFixture",
+      "TestOwnedHistoryWorkerBudgetOverflowAndErrorReap",
+      "TestSearchWorkerConsumesBeforeReadAndRechecks",
+      "TestSearchWorkerFailureAndSecondAuthorityDenial",
+      "TestSearchWorkerRetainsTruthfulUnavailableReport",
+      "TestWorkerClonesSearchPointersAndRejectsUnknownInput"
     ],
     "localrmm/internal/windowsinventory": [
       "TestCPUIntervalValidation",
@@ -4441,6 +4513,7 @@
     "localrmm/internal/windowssetup": [
       "TestCompatibilityExactAndNoExtensions",
       "TestReadAdminContractCannotUseFiveScopeAdvertisement",
+      "TestReadAdminV10HistoryRequiresDistinctAdvertisement",
       "TestReadAdminV2ContractNeverPromotesHistoricalAdvertisements",
       "TestReadAdminV3StorageCannotPromoteEarlierCapabilities",
       "TestReadAdminV4SecurityCoverageCannotPromoteEarlierCapabilities",

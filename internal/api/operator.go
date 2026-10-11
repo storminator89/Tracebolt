@@ -376,7 +376,7 @@ func (h *operatorHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if r.URL.Path == "/v1/windows/setup-capabilities" || r.URL.Path == "/v1/windows/read-admin-setup-capabilities" || r.URL.Path == "/v1/windows/read-admin-setup-capabilities-v2" || r.URL.Path == "/v1/windows/read-admin-setup-capabilities-v3" || r.URL.Path == "/v1/windows/read-admin-setup-capabilities-v4" || r.URL.Path == "/v1/windows/read-admin-setup-capabilities-v5" || r.URL.Path == "/v1/windows/read-admin-setup-capabilities-v6" || r.URL.Path == "/v1/windows/read-admin-setup-capabilities-v7" || r.URL.Path == "/v1/windows/read-admin-setup-capabilities-v8" || r.URL.Path == "/v1/windows/read-admin-setup-capabilities-v9" {
+	if r.URL.Path == "/v1/windows/setup-capabilities" || r.URL.Path == "/v1/windows/read-admin-setup-capabilities" || r.URL.Path == "/v1/windows/read-admin-setup-capabilities-v2" || r.URL.Path == "/v1/windows/read-admin-setup-capabilities-v3" || r.URL.Path == "/v1/windows/read-admin-setup-capabilities-v4" || r.URL.Path == "/v1/windows/read-admin-setup-capabilities-v5" || r.URL.Path == "/v1/windows/read-admin-setup-capabilities-v6" || r.URL.Path == "/v1/windows/read-admin-setup-capabilities-v7" || r.URL.Path == "/v1/windows/read-admin-setup-capabilities-v8" || r.URL.Path == "/v1/windows/read-admin-setup-capabilities-v9" || r.URL.Path == "/v1/windows/read-admin-setup-capabilities-v10" {
 		h.windowsSetupCapabilities(w, r)
 		return
 	}
@@ -548,6 +548,10 @@ func (h *operatorHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if strings.HasPrefix(r.URL.Path, "/api/devices/") && strings.HasSuffix(r.URL.Path, "/windows-inventory") {
 		h.windowsInventoryView(w, r)
+		return
+	}
+	if strings.HasPrefix(r.URL.Path, "/api/devices/") && strings.Contains(r.URL.Path, "/windows-event-history") {
+		h.windowsHistory(w, r)
 		return
 	}
 	if strings.HasPrefix(r.URL.Path, "/api/devices/") && strings.Contains(r.URL.Path, "/windows-event-content") {

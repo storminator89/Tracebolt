@@ -8,6 +8,7 @@ import (
 	"localrmm/internal/windowsfullservices"
 	"localrmm/internal/windowsfullsoftware"
 	"localrmm/internal/windowshardware"
+	"localrmm/internal/windowshistoryrequest"
 	"localrmm/internal/windowsmanaged"
 	"localrmm/internal/windowsnetwork"
 	"localrmm/internal/windowsnetworkcontext"
@@ -28,7 +29,7 @@ import (
 const WindowsCapabilityConsentVersionV5 = "tracebolt.windows-capability-consent.v5"
 
 // WindowsReadAdminScopes is the historical V5 ordered scope set. Fresh Setup
-// uses WindowsReadAdminScopesV13; this contract is never expanded in place.
+// uses WindowsReadAdminScopesV14; this contract is never expanded in place.
 func WindowsReadAdminScopes() []string {
 	return []string{enrollmentcrypto.CollectionProfileWindowsInventory, windowseventhealth.Scope, windowsvolumes.Scope, windowsprocessmetrics.Scope, windowsnetwork.Scope, windowsmanaged.ServiceStartupScope, windowsfullservices.Scope, windowsfullsoftware.Scope, windowsadapters.Scope, windowspatchcontext.Scope, windowssecurity.Scope, windowssessions.Scope}
 }
@@ -262,6 +263,28 @@ func WindowsReadAdminNoticesV13(insecure bool) []string {
 	n := append(WindowsReadAdminNoticesV12(insecure), windowsfullsoftware.HistoryPrivacy)
 	if insecure {
 		n = append(n, windowsfullsoftware.HistoryHTTPPrivacy)
+	}
+	return n
+}
+
+// V14 adds separately acknowledged on-demand Application/System history and
+// selected historical messages. Earlier profiles and receipts grant neither.
+const WindowsCapabilityConsentVersionV14 = "tracebolt.windows-capability-consent.v14"
+
+func WindowsReadAdminScopesV14() []string {
+	return append(WindowsReadAdminScopesV13(), windowshistoryrequest.Scope)
+}
+func validWindowsReadAdminConsentV14(c WindowsCapabilityConsent) bool {
+	return c.SchemaVersion == WindowsCapabilityConsentVersionV14 && c.CollectionProfile == enrollmentcrypto.CollectionProfileWindowsInventory && c.Acknowledged && reflect.DeepEqual(c.Scopes, WindowsReadAdminScopesV14())
+}
+func WindowsReadAdminGroupsV14() []WindowsReadAdminGroup {
+	g := WindowsReadAdminGroupsV13()
+	return append(g, WindowsReadAdminGroup{"Event history and sensitive messages", "Explicit on-demand Application/System history in one UTC interval of at most seven days within the last thirty days, with optional numeric level/event-ID filters. At most 100 bounded header rows; up to 16 exact accepted rows may be selected for sensitive historical message text. Event messages may contain credentials, personal information and other secrets. Original fifteen-minute expiry bounds history and selected-message results; operator-only memory, no AI/export/health/actions.", []string{windowshistoryrequest.Scope}, "Local Application/System Event Log APIs under the existing limited token. Search is a bounded snapshot, not complete retained-log browsing; missing, denied and bounded sources remain explicit. No Security channel, arbitrary XPath, raw XML, subscriptions, remote reads, provider installation or privilege change.", "not_checked", "not_verified"})
+}
+func WindowsReadAdminNoticesV14(insecure bool) []string {
+	n := append(WindowsReadAdminNoticesV13(insecure), windowshistoryrequest.Privacy)
+	if insecure {
+		n = append(n, windowshistoryrequest.HTTPPrivacy)
 	}
 	return n
 }

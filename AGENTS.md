@@ -215,6 +215,12 @@ missing material rather than inventing credentials or weakening protection.
   digest/index binding, per-field unavailable states and old grants. The fresh
   five-scope coordinator remains unchanged; source fixtures never authorize a
   native configuration read, new persistent grant or service/security change.
+- Bounded older Windows event search is a fresh default-off scope. Read
+  `docs/windows-event-history-runtime.md` before changing its typed UTC search,
+  receipt-linked selected-message followup, consume-once floor, session cache or
+  fresh twenty-one-scope consent. Old twenty-scope and current-content v1 grants
+  never promote. Preserve original search expiry, stable identity and final live
+  credential/session guards; no arbitrary query, native grant or release follows.
 - Selected Windows event messages and cached Windows Update inspection have
   separate default-off runtime/manager/UI source paths. Read
   `docs/windows-event-content-runtime.md`, `docs/windows-event-content-manager.md`,

@@ -18,6 +18,7 @@ import (
 	"localrmm/internal/enrollmentstore"
 	"localrmm/internal/journalcache"
 	"localrmm/internal/windowseventcache"
+	"localrmm/internal/windowshistorycache"
 	"net/netip"
 	"sync"
 	"time"
@@ -43,21 +44,23 @@ type Signer interface {
 }
 type Service struct{ *serviceState }
 type serviceState struct {
-	store                    *enrollmentstore.Store
-	journal                  *journalcache.Cache
-	windowsEvents            *windowseventcache.Cache
-	windowsEventsInitialized bool
-	signer                   Signer
-	binding                  enrollmentstate.Binding
-	now                      func() time.Time
-	issuerExpiry             time.Time
-	issuerStart              time.Time
-	mu                       sync.Mutex
-	challenges               map[string]challengeEntry
-	peers                    map[netip.Addr]peerWindow
-	signing                  chan struct{}
-	proofs                   chan struct{}
-	global                   peerWindow
+	store                     *enrollmentstore.Store
+	journal                   *journalcache.Cache
+	windowsHistory            *windowshistorycache.Cache
+	windowsHistoryInitialized bool
+	windowsEvents             *windowseventcache.Cache
+	windowsEventsInitialized  bool
+	signer                    Signer
+	binding                   enrollmentstate.Binding
+	now                       func() time.Time
+	issuerExpiry              time.Time
+	issuerStart               time.Time
+	mu                        sync.Mutex
+	challenges                map[string]challengeEntry
+	peers                     map[netip.Addr]peerWindow
+	signing                   chan struct{}
+	proofs                    chan struct{}
+	global                    peerWindow
 }
 type challengeEntry struct {
 	renewal *enrollmentcrypto.RenewalContext
@@ -94,7 +97,7 @@ func New(store *enrollmentstore.Store, signer Signer, now func() time.Time) (*Se
 	if !now().Before(cert.NotAfter) || now().Before(cert.NotBefore) {
 		return nil, ErrConfiguration
 	}
-	return &Service{&serviceState{store: store, journal: journalcache.New(store, now), windowsEvents: windowseventcache.New(store, now), signer: signer, binding: cfg.Binding, now: now, issuerExpiry: cert.NotAfter, issuerStart: cert.NotBefore, challenges: make(map[string]challengeEntry), peers: make(map[netip.Addr]peerWindow), signing: make(chan struct{}, 1), proofs: make(chan struct{}, 2)}}, nil
+	return &Service{&serviceState{store: store, journal: journalcache.New(store, now), windowsEvents: windowseventcache.New(store, now), windowsHistory: windowshistorycache.New(store, now), signer: signer, binding: cfg.Binding, now: now, issuerExpiry: cert.NotAfter, issuerStart: cert.NotBefore, challenges: make(map[string]challengeEntry), peers: make(map[netip.Addr]peerWindow), signing: make(chan struct{}, 1), proofs: make(chan struct{}, 2)}}, nil
 }
 func newID(prefix string) (string, error) {
 	var b [16]byte

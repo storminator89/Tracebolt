@@ -9,11 +9,13 @@ is not in the published Windows preview and has not passed native installation,
 LocalService provider-access, reboot or GUI acceptance. It does not
 change a download pin or authorize running an installer on any host.
 
-## Fresh Read admin, six readable groups
+## Fresh Read admin, seven readable groups
 
-The prominent fresh Setup profile is **Read admin**, covering these twenty
+The prominent fresh Setup profile is **Read admin**, covering these twenty-one
 scopes. Selecting that profile does not grant consent: the scope acknowledgement
-starts unchecked. Personal user/domain/session labels, identifying chassis/BIOS serial metadata, local drive letters/volume GUIDs and storage-provider device identifiers/friendly labels, antivirus product names/status and TPM presence/version, local route metadata, interface aliases and raw traffic/error/discard counters, CPU models/source-labeled counts, installed SMBIOS RAM versus OS-usable RAM, current/limit and remaining commit capacity, aggregate pagefile allocated/in-use capacity, and aggregate local PerfDisk (_Total) throughput/operations/latency/queue lengths with the sample window are explicitly named.
+starts unchecked. Personal user/domain/session labels, identifying chassis/BIOS serial metadata, local drive letters/volume GUIDs and storage-provider device identifiers/friendly labels, antivirus product names/status and TPM presence/version, local route metadata, interface aliases and raw traffic/error/discard counters, CPU models/source-labeled counts, installed SMBIOS RAM versus OS-usable RAM, current/limit and remaining commit capacity, aggregate pagefile allocated/in-use capacity, and aggregate local PerfDisk (_Total) throughput/operations/latency/queue lengths with the sample window are explicitly named. Bounded Application/System history
+and selected historical messages have their own group and sensitive-content
+warning; messages may contain credentials, personal information and other secrets.
 The review starts with concise scope/requirement groups and offers the full
 privacy notices as optional details. Back or choosing another bootstrap clears
 all acknowledgements. HTTP-test requires its own unchecked plaintext-risk
@@ -43,8 +45,9 @@ fresh-Setup choice or a required upgrade step.
 | Storage | `windows-storage-context-v1` | Local drive-letter/volume-GUID mapping and fixed storage-provider identifiers, friendly labels, media/bus, size and provider health/status |
 | Storage | `windows-storage-io-v1` | [Eight fixed local aggregate PerfDisk counters: read/write throughput, operations and latency, average/current queue lengths, with measured sample timing](windows-storage-io.md); no per-disk attribution or health verdict |
 | Updates and security | `windows-security-coverage-v1` | [Security Center antivirus names/state/signatures on Windows clients; TPM presence/version](windows-security-coverage.md) |
+| Event history and sensitive messages | `windows-application-system-event-history-v1` | [Bounded on-demand Application/System history, plus selected exact historical messages](windows-event-history-runtime.md); operator-only memory and original fifteen-minute expiry |
 
-The authoritative fresh list (`WindowsReadAdminScopesV13`) and grouped requirement manifest are
+The authoritative fresh list (`WindowsReadAdminScopesV14`) and grouped requirement manifest are
 `internal/lanclient/windows_read_admin_profile.go`. Coverage, exclusions and
 bounded provider behavior remain the contracts in the individual scope guides.
 
@@ -59,8 +62,11 @@ quota omissions remain visible. History supports operator-only search/paging;
 no AI, export, health or action authority is granted. There are no new native
 reads, provider prerequisites or privileges.
 
-Read admin is not every possible Windows read feature. Selected event-message
-content and cached WUA update inspection remain independently consented. Service
+Read admin is not every possible Windows read feature. Selected sampled-event message
+content and cached WUA update inspection remain independently consented. Fresh
+v14 separately includes bounded historical searches and selected historical
+messages, with explicit sensitive-content disclosure; see
+[history runtime](windows-event-history-runtime.md). Service
 control remains distinctly optional and separate; no action broker, service
 allowlist, account change or AI/provider access is configured by this profile.
 
@@ -69,8 +75,8 @@ allowlist, account change or AI/provider access is configured by this profile.
 Setup requires the existing supported platform/package and fixed protected-path
 preflight, a fresh inventory bootstrap, matching transport and a compatible
 manager. Its new bodyless public compatibility route is
-`/v1/windows/read-admin-setup-capabilities-v9`, with exact contract
-`fresh-twenty-read-admin-scopes-v1`. Historical v8/nineteen-scope and v7/eighteen-scope, v6/seventeen-scope, v5/sixteen-scope, v4/fifteen-scope,
+`/v1/windows/read-admin-setup-capabilities-v10`, with exact contract
+`fresh-twenty-one-read-admin-scopes-v1`. Historical v9/twenty-scope, v8/nineteen-scope and v7/eighteen-scope, v6/seventeen-scope, v5/sixteen-scope, v4/fifteen-scope,
 v3/fourteen-scope and v2/thirteen-scope advertisements remain exact. The
 historical twelve-scope route and
 `fresh-twelve-read-admin-scopes-v1` response remain byte-for-byte unchanged. The old five-scope route and response remain
@@ -95,10 +101,12 @@ patch compliance. Caller-visible sessions are not a complete user/account list. 
 
 ## Fresh authority and receipts
 
-Consent version `tracebolt.windows-capability-consent.v13` admits only the exact
-ordered twenty-scope set, including separately acknowledged software-change history.
-Earlier v1-v12 retain their original scope sets and cannot authorize history.
-Fresh Read admin uses outer installer receipt 11. Historical v12 keeps receipt 10; v11 keeps receipt 9; v10 keeps receipt 8; v9 keeps receipt 7; historical
+Consent version `tracebolt.windows-capability-consent.v14` admits only the exact
+ordered twenty-one-scope set, including separately acknowledged software-change
+history and bounded Application/System history with selected sensitive messages.
+Earlier v1-v13 retain their original scope sets and cannot authorize event history.
+Fresh Read admin uses outer installer receipt 12. Historical v13 keeps its exact
+twenty scopes and receipt 11; historical v12 keeps receipt 10; v11 keeps receipt 9; v10 keeps receipt 8; v9 keeps receipt 7; historical
 v8 keeps receipt 6, v7 keeps receipt 5 and v6 keeps receipt 4. Historical v5 keeps
 its exact twelve-scope set and outer receipt version 3. The existing five-scope
 v3 consent continues to use outer receipt version 2 with exactly four extension
@@ -107,14 +115,14 @@ digests. V1 ordinary receipts and the old serialized forms are unchanged.
 The same fresh transaction stages the owned service disabled, retains protected
 intent/phase evidence, creates/activates the identity through hidden invitation
 entry and separate manager fingerprint approval, and checks that every selected
-extension root is genuinely absent. All nineteen extension scope operations are then applied
+extension root is genuinely absent. All twenty extension scope operations are then applied
 through their existing protected consent APIs. Each operation rechecks the
 original activated sender, unchanged protected phase receipt, and exact owned,
 stopped, disabled service. Missing or changed authority stops the next operation.
-All nineteen enabled scope digests, including original grant IDs, must read back correctly
-before the existing startup transition can begin. History reuses the software
-protected store and irreversible primary used marker; there are still eighteen
-extension roots. Its explicit enable rotates the software parent grant/revision
+All twenty enabled scope digests, including original grant IDs, must read back correctly
+before the existing startup transition can begin. Software-change history reuses the software
+protected store and irreversible primary used marker; event history adds its independent root, for nineteen
+extension roots. Software-history enable rotates the software parent grant/revision
 and the final software/history digests bind the same exact current consent.
 Full process/service/software inspection
 also validates the primary used marker and independent generation state.
@@ -222,11 +230,11 @@ synthetic source evidence only.
 
 Native acceptance remains deferred until the missing Admin-data features are
 ready. Existing launch/aggregation guards stay closed: historical profile fixture
-approvals cannot validate the current twenty-scope receipt11/v13 profile. No native controller was extended or run by this increment.
+approvals cannot validate the current twenty-one-scope receipt12/v14 profile. No native controller was extended or run by this increment.
 
 Before release, separately approve an exact-artifact disposable fresh-install
 run covering TLS/HTTP disclosure, initially unchecked full consent, GUI
-Back/Cancel/repeated-click flows, disabled staging, all twenty scopes and
+Back/Cancel/repeated-click flows, disabled staging, all twenty-one scopes and
 actual unchanged LocalService readable/denied/absent providers. Include grant/
 startup interruptions, original-age private data, and reboot/shutdown. Fixture
 checks, cross-builds and hosted source/browser CI establish none of these native
