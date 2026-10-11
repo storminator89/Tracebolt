@@ -14,7 +14,7 @@ func NewWindowsSetupHTTPClient(origin, profile string, serverCAPEM []byte) (*htt
 	return newWindowsSetupHTTPClient(origin, profile, serverCAPEM, windowssetup.CapabilitiesPath)
 }
 func newWindowsSetupHTTPClient(origin, profile string, serverCAPEM []byte, path string) (*http.Client, error) {
-	if path != windowssetup.CapabilitiesPath && path != windowssetup.ReadAdminCapabilitiesPath && path != windowssetup.ReadAdminCapabilitiesPathV2 && path != windowssetup.ReadAdminCapabilitiesPathV3 {
+	if path != windowssetup.CapabilitiesPath && path != windowssetup.ReadAdminCapabilitiesPath && path != windowssetup.ReadAdminCapabilitiesPathV2 && path != windowssetup.ReadAdminCapabilitiesPathV3 && path != windowssetup.ReadAdminCapabilitiesPathV4 {
 		return nil, ErrConfiguration
 	}
 	c, err := NewPublicBootstrapHTTPClient(origin, profile, serverCAPEM, "invite_00000000000000000000000000000001")

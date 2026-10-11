@@ -11,9 +11,9 @@ change a download pin or authorize running an installer on any host.
 
 ## Fresh Read admin, six readable groups
 
-The prominent fresh Setup profile is **Read admin**, covering these fourteen
+The prominent fresh Setup profile is **Read admin**, covering these fifteen
 scopes. Selecting that profile does not grant consent: the scope acknowledgement
-starts unchecked. Personal user/domain/session labels, identifying chassis/BIOS serial metadata, local drive letters/volume GUIDs and storage-provider device identifiers/friendly labels are explicitly named.
+starts unchecked. Personal user/domain/session labels, identifying chassis/BIOS serial metadata, local drive letters/volume GUIDs and storage-provider device identifiers/friendly labels, antivirus product names/status and TPM presence/version are explicitly named.
 The review starts with concise scope/requirement groups and offers the full
 privacy notices as optional details. Back or choosing another bootstrap clears
 all acknowledgements. HTTP-test requires its own unchecked plaintext-risk
@@ -36,10 +36,11 @@ fresh-Setup choice or a required upgrade step.
 | Updates and security | `windows-security-posture-v1` | Independent Defender status and local Firewall profile configuration |
 | Users and sessions | `windows-session-context-v1` | Caller-visible WTS sessions/personal labels and local join context |
 | Device and activity | `windows-hardware-context-v1` | Manufacturer/model, source-labeled chassis and BIOS serial, firmware and system battery/power |
-
 | Storage | `windows-storage-context-v1` | Local drive-letter/volume-GUID mapping and fixed storage-provider identifiers, friendly labels, media/bus, size and provider health/status |
 
-The authoritative fresh list (`WindowsReadAdminScopesV7`) and grouped requirement manifest are
+| Updates and security | `windows-security-coverage-v1` | [Security Center antivirus names/state/signatures on Windows clients; TPM presence/version](windows-security-coverage.md) |
+
+The authoritative fresh list (`WindowsReadAdminScopesV8`) and grouped requirement manifest are
 `internal/lanclient/windows_read_admin_profile.go`. Coverage, exclusions and
 bounded provider behavior remain the contracts in the individual scope guides.
 Read admin is not every possible Windows read feature. Selected event-message
@@ -52,8 +53,8 @@ allowlist, account change or AI/provider access is configured by this profile.
 Setup requires the existing supported platform/package and fixed protected-path
 preflight, a fresh inventory bootstrap, matching transport and a compatible
 manager. Its new bodyless public compatibility route is
-`/v1/windows/read-admin-setup-capabilities-v3`, with exact contract
-`fresh-fourteen-read-admin-scopes-v1`. The historical v2/thirteen-scope advertisement remains exact. The historical twelve-scope route and
+`/v1/windows/read-admin-setup-capabilities-v4`, with exact contract
+`fresh-fifteen-read-admin-scopes-v1`. The historical v3/fourteen-scope advertisement remains exact. The historical v2/thirteen-scope advertisement remains exact. The historical twelve-scope route and
 `fresh-twelve-read-admin-scopes-v1` response remain byte-for-byte unchanged. The old five-scope route and response remain
 unchanged. An older/mismatched manager blocks before installation writes; no
 invitation, credential or telemetry is sent in this check.
@@ -61,7 +62,7 @@ invitation, credential or telemetry is sent in this check.
 The grouped manifest names local system/process/volume APIs, Application/System
 Event Log, SCM, HKLM 32/64 registration views, IP Helper, fixed registry/WUA COM,
 Defender WMI, Firewall COM, WTS, NetGetJoinInformation, fixed local CIMV2
-ComputerSystem/BIOS/SystemEnclosure queries, GetSystemPowerStatus, fixed local drive-root APIs and MSFT_PhysicalDisk prerequisites. This
+ComputerSystem/BIOS/SystemEnclosure queries, GetSystemPowerStatus, fixed local drive-root APIs and MSFT_PhysicalDisk, client Security Center COM and TPM Base Services prerequisites. This
 increment does **not** query those providers during setup. Their availability is
 `not_checked`; actual service-token access is `not_verified`. Administrator
 access during installation could not establish LocalService readability anyway.
@@ -76,10 +77,10 @@ patch compliance. Caller-visible sessions are not a complete user/account list.
 
 ## Fresh authority and receipts
 
-Consent version `tracebolt.windows-capability-consent.v7` admits only the exact
-ordered fourteen-scope set, including identifying storage metadata. Earlier v1-v6
-retain their original scope sets and cannot authorize storage context. Historical
-v6 keeps outer receipt 4; fresh Read admin uses outer installer receipt version 5. Historical v5 keeps
+Consent version `tracebolt.windows-capability-consent.v8` admits only the exact
+ordered fifteen-scope set, including Security Center antivirus and TPM metadata. Earlier v1-v7
+retain their original scope sets and cannot authorize security coverage. Historical
+v7 keeps outer receipt 5 and v6 keeps receipt 4; fresh Read admin uses outer installer receipt version 6. Historical v5 keeps
 its exact twelve-scope set and outer receipt version 3. The existing five-scope
 v3 consent continues to use outer receipt version 2 with exactly four extension
 digests. V1 ordinary receipts and the old serialized forms are unchanged.

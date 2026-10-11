@@ -9,7 +9,7 @@ before native acceptance and a new release.
 
 ## Current development source
 
-Fresh Setup offers **Read admin** with fourteen explicitly disclosed read scopes,
+Fresh Setup offers **Read admin** with fifteen explicitly disclosed read scopes,
 grouped into concise sections. Consent starts unchecked, including the personal
 session labels and identifying serial metadata. The manager and endpoint must
 implement the same profile. Selecting it does not prove access under the
@@ -21,7 +21,7 @@ installed service identity.
 | Inventory | Process CPU/working-set RAM, complete caller-visible Win32 services, HKLM 32/64 machine software generations | Processes remain bounded; no drivers, ACL-invisible services, per-user/Store or portable-app completeness |
 | Network | Numeric TCP/UDP endpoints, adapter link state/speed, configured DNS and gateway addresses | Snapshot PID attribution only; no traffic capture, DNS lookup, routes or traffic/error counters |
 | Updates | Build labels, bounded retained update history, checked reboot indicators | History is not current patch compliance; no online update scan or Windows CVE assessment |
-| Security | Independent Defender observations and local Firewall profile configuration | No overall protection/effective-policy verdict; BitLocker, Secure Boot, TPM and third-party AV remain open |
+| Security | Independent Defender/Firewall plus [Security Center antivirus registration/status and TPM presence/version](windows-security-coverage.md) | Client-only Security Center; no protection, TPM readiness or effective-policy verdict. BitLocker and Secure Boot remain open |
 | Users / Sessions | Caller-visible WTS sessions and local domain/workgroup join context | No complete account discovery, session actions or remote desktop |
 | Storage | Drive letters mapped to volume GUIDs and provider-reported physical-disk status, media and bus | Independent snapshots; no guessed physical topology, SMART verdict or I/O latency/throughput |
 | Hardware / power | Manufacturer/model, separately labeled chassis/BIOS serial, firmware and system battery/power | No validated unique hardware identity, RAM-module inventory or battery-health claim |
@@ -58,7 +58,7 @@ The unsigned x64
 [v0.1.0-windows-preview.1](https://github.com/storminator89/Tracebolt/releases/tag/v0.1.0-windows-preview.1)
 contains the older **five-scope** setup: base inventory, Application/System event
 headers, volume metadata, process metrics and numeric network endpoints.
-It does not contain the current fourteen-scope Read admin profile or later
+It does not contain the current fifteen-scope Read admin profile or later
 complete inventory, context, message-content and cached-update additions.
 
 Its accepted native subset covers fresh hosted **Windows Server 2025 x64** with a

@@ -7,7 +7,7 @@ remaining work. Source changes are not automatically included in published asset
 ## Current development
 
 Windows development adds complete service/machine-software browsing, richer
-network/update/security/session/hardware/storage context and fresh fourteen-scope Read
+network/update/security/session/hardware/storage context and fresh fifteen-scope Read
 admin setup. Selected event messages, cached update inspection, health policies
 and service control retain their separate scope and acceptance requirements.
 These additions are not in the older Windows preview. Missing Admin data comes

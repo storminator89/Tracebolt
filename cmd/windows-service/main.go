@@ -28,6 +28,7 @@ import (
 	"localrmm/internal/windowspatchworker"
 	"localrmm/internal/windowsprocessmetrics"
 	"localrmm/internal/windowssecurity"
+	"localrmm/internal/windowssecuritycoverageworker"
 	"localrmm/internal/windowssecurityworker"
 	"localrmm/internal/windowsservice"
 	"localrmm/internal/windowssessions"
@@ -84,6 +85,16 @@ func run(ctx context.Context, args []string, out, stderr io.Writer) int {
 			source = "disks"
 		}
 		if runStorageContextWorker(ctx, os.Stdin, out, source) != nil {
+			return 1
+		}
+		return 0
+	}
+	if len(args) == 1 && (args[0] == windowssecuritycoverageworker.WorkerArgument || args[0] == windowssecuritycoverageworker.TPMWorkerArgument) {
+		source := "antivirus"
+		if args[0] == windowssecuritycoverageworker.TPMWorkerArgument {
+			source = "tpm"
+		}
+		if runSecurityCoverageWorker(ctx, os.Stdin, out, source) != nil {
 			return 1
 		}
 		return 0

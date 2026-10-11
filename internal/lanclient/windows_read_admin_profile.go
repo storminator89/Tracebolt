@@ -12,6 +12,7 @@ import (
 	"localrmm/internal/windowspatchcontext"
 	"localrmm/internal/windowsprocessmetrics"
 	"localrmm/internal/windowssecurity"
+	"localrmm/internal/windowssecuritycoverage"
 	"localrmm/internal/windowssessions"
 	"localrmm/internal/windowsstorage"
 	"localrmm/internal/windowsvolumes"
@@ -109,4 +110,29 @@ func WindowsReadAdminNoticesV7(insecure bool) []string {
 		notices = append(notices, windowsstorage.HTTPPrivacy)
 	}
 	return notices
+}
+
+// V8 adds Security Center AV registration/status and public TPM presence/version.
+// All earlier consent/profile bytes retain their exact authority.
+const WindowsCapabilityConsentVersionV8 = "tracebolt.windows-capability-consent.v8"
+
+func WindowsReadAdminScopesV8() []string {
+	return append(WindowsReadAdminScopesV7(), windowssecuritycoverage.Scope)
+}
+func validWindowsReadAdminConsentV8(c WindowsCapabilityConsent) bool {
+	return c.SchemaVersion == WindowsCapabilityConsentVersionV8 && c.CollectionProfile == enrollmentcrypto.CollectionProfileWindowsInventory && c.Acknowledged && reflect.DeepEqual(c.Scopes, WindowsReadAdminScopesV8())
+}
+func WindowsReadAdminGroupsV8() []WindowsReadAdminGroup {
+	g := WindowsReadAdminGroupsV7()
+	g[3].Summary += " Security Center registered antivirus product names/state/signature status on supported Windows clients; TPM supported-device presence/version."
+	g[3].Scopes = append(g[3].Scopes, windowssecuritycoverage.Scope)
+	g[3].Prerequisites += " Security Center COM is unsupported on Windows Server; TPM Base Services reports only public device presence/version. No TPM readiness or BitLocker protection is inferred. BitLocker status requires separately designed access and remains unavailable under this profile."
+	return g
+}
+func WindowsReadAdminNoticesV8(insecure bool) []string {
+	n := append(WindowsReadAdminNoticesV7(insecure), windowssecuritycoverage.Privacy)
+	if insecure {
+		n = append(n, windowssecuritycoverage.HTTPPrivacy)
+	}
+	return n
 }

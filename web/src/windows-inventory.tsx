@@ -70,7 +70,7 @@ export function WindowsInventoryWorkspace({ resource, initialTab, fullServices }
             {fullSoftware && <WindowsFullSoftwarePanel {...fullSoftware}/>}
             {selected === 'device' && <WindowsContextPanel resource={resource} kind="hardwareContext"/>}
             {selected === 'sessions' && <WindowsContextPanel resource={resource} kind="sessionContext"/>}
-            {selected === 'security' && <WindowsContextPanel resource={resource} kind="securityPosture"/>}
+            {selected === 'security' && <><WindowsContextPanel resource={resource} kind="securityPosture"/><WindowsContextPanel resource={resource} kind="securityCoverage"/></>}
             {selected === 'updates' && <><WindowsContextPanel resource={resource} kind="patchContext"/><WindowsContextPanel resource={resource} kind="updates"/></>}
             {selected === 'endpoints' && <WindowsNetworkPanel resource={resource}/>}
             {selected === 'storage' && <><WindowsContextPanel resource={resource} kind="storageContext"/><WindowsStoragePanel resource={resource}/></>}

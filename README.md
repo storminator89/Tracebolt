@@ -22,6 +22,7 @@ This page describes the current source; downloadable prereleases cover less.
 - **Windows inspection:** process CPU/RAM, volumes, numeric network endpoints,
   complete caller-visible Win32 services and machine software registrations,
   adapter configuration, build/update history, Defender/Firewall posture,
+  client Security Center antivirus registration/status, TPM presence/version,
   sessions/join context, hardware/firmware/power details, drive-letter mapping
   and physical-disk provider status.
 - **Windows logs and updates:** Application/System event headers, separately

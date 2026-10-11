@@ -126,5 +126,6 @@ LocalService provider visibility, current Windows variants and passive/absent
 Defender behavior, local Firewall profile semantics, provider timeout behavior,
 protected consent revocation/replacement and native-to-manager-to-browser flow.
 This increment authorizes no host reads, grants, installation, scans, updates,
-firewall changes or remediation. TPM, Secure Boot and BitLocker remain deferred
-roadmap scopes; recovery keys are outside this design.
+firewall changes or remediation. Security Center antivirus registration and TPM presence/version are covered by the
+separate [security coverage](windows-security-coverage.md) source scope. TPM
+readiness, Secure Boot and BitLocker remain deferred; recovery keys are excluded.

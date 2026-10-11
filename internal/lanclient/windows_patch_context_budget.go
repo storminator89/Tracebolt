@@ -6,6 +6,7 @@ import (
 	"localrmm/internal/windowshardware"
 	"localrmm/internal/windowspatchcontext"
 	"localrmm/internal/windowssecurity"
+	"localrmm/internal/windowssecuritycoverage"
 	"localrmm/internal/windowssessions"
 	"localrmm/internal/windowsstorage"
 	"localrmm/internal/windowsupdates"
@@ -203,4 +204,28 @@ func collectWindowsContextGroup(ctx context.Context, sequence uint64, jobs []fun
 		}
 	}
 	return nil
+}
+
+func securityCoverageWithBudget(collect securityCoverageCollector) securityCoverageCollector {
+	if collect == nil {
+		return nil
+	}
+	return func(ctx context.Context, r windowssecuritycoverage.Request) (windowssecuritycoverage.Snapshot, error) {
+		if e := ctx.Err(); e != nil {
+			return windowssecuritycoverage.Snapshot{}, e
+		}
+		bounded, cancel, run := patchOptionalContext(ctx)
+		defer cancel()
+		if !run {
+			return windowssecuritycoverage.Empty(r, windowssecuritycoverage.ErrBudget.Error()), nil
+		}
+		s, e := collect(bounded, r)
+		if ctx.Err() != nil {
+			return windowssecuritycoverage.Snapshot{}, ctx.Err()
+		}
+		if errors.Is(bounded.Err(), context.DeadlineExceeded) && (e == nil || errors.Is(e, context.DeadlineExceeded) || errors.Is(e, context.Canceled)) {
+			return windowssecuritycoverage.Empty(r, windowssecuritycoverage.ErrBudget.Error()), nil
+		}
+		return s, e
+	}
 }
