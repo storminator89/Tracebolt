@@ -340,3 +340,21 @@ requires all six cases and all four Windows images. Browser execution and pixel
 inspection must occur on ordinary hosted browser CI before claiming acceptance.
 `node --test tests/e2e-review/windows-fleet-fixtures.test.mjs` checks the seam and
 wiring without a browser, network listener or native collection.
+
+### Windows patch context in Updates
+
+The same synthetic Windows inventory browser case includes a separately granted
+`patchContext` sibling beside cached Updates. It uses the production validator and
+UI with invented edition/release/build, independent reboot-source states and
+bounded retained WUA history. History is neither current installed inventory nor
+patch coverage. The helper performs no native read, grant or update action.
+
+Completion requires eight viewport captures: compact
+`synthetic-windows-patch-context-{1440,390}-{en,de}.png` and expanded
+`synthetic-windows-patch-history-{1440,390}-{en,de}.png`. Source SHA, test, locale,
+viewport and fixture disclosure must agree with the runner manifest. These are
+real browser pixels of synthetic data, never native Windows acceptance.
+
+`windows-patch-context-fixtures.test.mjs` is imported by the existing Windows
+fixture gate and checks binding, absent/empty/partial/failure/expiry states and
+screenshot-completion requirements without launching a browser.

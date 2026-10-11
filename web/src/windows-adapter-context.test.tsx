@@ -57,7 +57,7 @@ describe('Compact adapter context in the existing Network tab', () => {
     });
     it('uses German labels, decimal formatting and the existing keyboard tab order', async () => {
         setLocale('de', false); render(<Harness/>); await flush(); fireEvent.keyDown(screen.getByRole('tab', { name: 'Schnittstellen' }), { key: 'ArrowRight' }); expect(screen.getByRole('tab', { name: 'Netzwerk' })).toHaveFocus();
-        expect(screen.getByText('TX-Verbindungsgeschwindigkeit')).toBeVisible(); expect(screen.getByText('2,5 Gbit/s')).toBeVisible(); expect(screen.getByText('Inaktiv')).toBeVisible(); expect(screen.getByText('Lokaler Endpunkt')).toBeVisible();
+        expect(screen.getByText('Linkrate (TX)')).toBeVisible(); expect(screen.getByText('2,5 Gbit/s')).toBeVisible(); expect(screen.getByText('Inaktiv')).toBeVisible(); expect(screen.getByText('Lokaler Endpunkt')).toBeVisible();
         fireEvent.keyDown(screen.getByRole('tab', { name: 'Netzwerk' }), { key: 'ArrowRight' }); expect(screen.getByRole('tab', { name: 'Speicher' })).toHaveFocus();
     });
     it('renders names as inert text and keeps details collapsed after navigation', async () => {

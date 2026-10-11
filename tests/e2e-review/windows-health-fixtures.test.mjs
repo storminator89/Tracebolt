@@ -1,3 +1,4 @@
+import {requireWindowsPatchContextEvidence} from './windows-patch-context-browser.mjs';
 /** Inert fixture and assertion-source checks; no browser or host collection. */
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -46,7 +47,7 @@ test('the real runner success boundary rejects a no-op Windows callback before r
  const check=parsed.statements.find(node=>ts.isFunctionDeclaration(node)&&node.name?.text==='check');assert.ok(check);
  // Execute only the actual success/failure wrapper. Its process/browser setup
  // and teardown are inert here; no Playwright assertion is mocked or replaced.
- const globals={Date,console:{log(){}},start:async()=>{},stop:async()=>{},context:null,currentTest:'',results:[],screenshots:[],sourceSha:'a'.repeat(40),requireWindowsHealthEvidence,requireWindowsAdapterContextEvidence,windowsInventoryFailureStage:()=> 'fixture-before-completion'};
+ const globals={Date,console:{log(){}},start:async()=>{},stop:async()=>{},context:null,currentTest:'',results:[],screenshots:[],sourceSha:'a'.repeat(40),requireWindowsHealthEvidence,requireWindowsAdapterContextEvidence,requireWindowsPatchContextEvidence,windowsInventoryFailureStage:()=> 'fixture-before-completion'};
  for(const name of new Set([...check.getText(parsed).matchAll(/\b\w+CaseName\b/g)].map(match=>match[0])))globals[name]=name;
  const run=vm.runInNewContext('('+check.getText(parsed)+')',globals);
  await run(globals.windowsInventoryCaseName,async()=>{});
@@ -57,6 +58,10 @@ test('the real runner success boundary rejects a no-op Windows callback before r
  assert.equal(globals.results[0].status,'FAIL');assert.equal(globals.results[0].stage,'adapter-completion');
  globals.results.length=0;
  for(const locale of ['en','de'])for(const width of [1440,390])globals.screenshots.push({file:`synthetic-windows-adapter-context-${width}-${locale}.png`,sourceSha:globals.sourceSha,test:globals.windowsInventoryCaseName,locale,viewport:{width,height:width===390?844:1000},publicSafe:true,fullPage:false,fixtureDisclosure:'Invented adapter context; no native collection.'});
+ await run(globals.windowsInventoryCaseName,async()=>{});
+ assert.equal(globals.results[0].status,'FAIL');assert.equal(globals.results[0].stage,'patch-context-completion');
+ globals.results.length=0;
+ for(const kind of ['context','history'])for(const locale of ['en','de'])for(const width of [1440,390])globals.screenshots.push({file:`synthetic-windows-patch-${kind}-${width}-${locale}.png`,sourceSha:globals.sourceSha,test:globals.windowsInventoryCaseName,locale,viewport:{width,height:width===390?844:1000},publicSafe:true,fullPage:false,fixtureDisclosure:'Invented patch context; no native collection.'});
  await run(globals.windowsInventoryCaseName,async()=>{});
  assert.equal(globals.results[0].status,'PASS');
 });

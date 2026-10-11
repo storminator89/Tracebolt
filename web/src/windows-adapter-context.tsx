@@ -14,7 +14,7 @@ const copy = {
         scope: 'About adapter observations', note: 'Link state and directional link speeds are reported by Windows. They do not establish reachability or measured throughput. Configured numeric DNS servers and gateways do not establish a working resolver, preferred route or Internet connection. Interface indices may change. This separate read-only scope performs no DNS lookup or network probe.'
     },
     de: {
-        title: 'Adapter', name: 'Adapter', state: 'Verbindungszustand', tx: 'TX-Verbindungsgeschwindigkeit', rx: 'RX-Verbindungsgeschwindigkeit', addresses: 'DNS & Gateways', dns: 'DNS-Server', gateways: 'Gateways', indices: 'Schnittstellenindizes', captured: 'Adapter erfasst',
+        title: 'Adapter', name: 'Adapter', state: 'Verbindungszustand', tx: 'Linkrate (TX)', rx: 'Linkrate (RX)', addresses: 'DNS & Gateways', dns: 'DNS-Server', gateways: 'Gateways', indices: 'Schnittstellenindizes', captured: 'Adapter erfasst',
         up: 'Aktiv', down: 'Inaktiv', testing: 'Testbetrieb', unknown: 'Unbekannt', dormant: 'Ruhend', 'not-present': 'Nicht vorhanden', 'lower-layer-down': 'Untere Schicht inaktiv',
         observed: 'Auflistung im Umfang vollständig', bounded: 'Begrenzte Auflistung', partial: 'Teilweise aufgelistet', denied: 'Zugriff verweigert', unavailable: 'Nicht verfügbar', unsupported: 'Nicht unterstützt',
         shown: 'angezeigt', observedCount: 'beobachtet', atLeast: 'mindestens', omitted: 'Adapter durch Erfassungs- oder Übertragungsgrenzen ausgelassen.', empty: 'Keine Adapter im für den Aufrufer sichtbaren Umfang zurückgegeben.', failed: 'Keine Adapterzeilen verfügbar. Dies belegt nicht, dass keine Adapter vorhanden sind.',

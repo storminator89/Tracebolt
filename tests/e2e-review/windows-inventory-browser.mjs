@@ -1,3 +1,4 @@
+import {exerciseWindowsPatchContext} from './windows-patch-context-browser.mjs';
 import {windowsFullSoftwareLegacyRead} from './windows-full-software-browser.mjs';
 import {windowsFullServicesLegacyRead} from './windows-full-services-browser.mjs';
 import {createWindowsServiceHealthFixtureState,exerciseWindowsServiceHealth,windowsServiceHealthFixturePath,windowsServiceHealthStageNames} from './windows-service-health-browser.mjs';
@@ -26,7 +27,7 @@ const {windowsNetwork,windowsAdapterContext,windowsVolumes,windowsHealthDevice,w
 export const windowsInventoryCaseName='Synthetic Windows inventory shares device charts and explicit enrollment consent without Linux reads';
 export const windowsInventoryFixtureDisclosure='Real loopback HTTP-test fixture login with intercepted invented Windows inventory and resource history in the production UI. UI-only evidence; no native endpoint acceptance, collection, invitation, service installation or external request.';
 let stage='setup';
-const stages=new Set(['setup',...windowsEventContentStages,'login','overview','overview-history','os-provenance','inventory','storage','network','network-stale','network-expired','network-partial','network-empty','network-denied','network-unavailable','network-truncated','process-metrics','process-controls','service-software-controls','process-metrics-stale','process-metrics-expired','events',...windowsHealthStageNames,...windowsContactHistoryStageNames,...windowsCapacityStageNames,...windowsResourceStageNames,...windowsServiceHealthStageNames,'logs',...windowsLogsStageNames,'legacy','updates','partial','denied','enrollment','access-loss']);
+const stages=new Set(['setup',...windowsEventContentStages,'login','overview','overview-history','os-provenance','inventory','storage','network','network-stale','network-expired','network-partial','network-empty','network-denied','network-unavailable','network-truncated','process-metrics','process-controls','service-software-controls','process-metrics-stale','process-metrics-expired','events',...windowsHealthStageNames,...windowsContactHistoryStageNames,...windowsCapacityStageNames,...windowsResourceStageNames,...windowsServiceHealthStageNames,'logs',...windowsLogsStageNames,'legacy','updates','patch-context','partial','denied','enrollment','access-loss']);
 export const windowsInventoryFailureStage=()=>stages.has(stage)?stage:'setup';
 const mark=value=>{stage=value;};
 export function windowsBrowserFixture(now,phase='fresh',networkPhaseAt=now,logsPhaseAt=now){
@@ -326,6 +327,7 @@ export async function windowsInventoryBrowserCase({pageAt,login,expect,base,shot
   await page.getByRole('tab',{name:locale==='de'?'Inventar':'Inventory',exact:true}).click();
   mark('updates');phase='updates';updatesCapturedAt=new Date(clockNow-2000).toISOString();await page.getByRole('button',{name:locale==='de'?'Windows-Inventar aktualisieren':'Refresh Windows inventory',exact:true}).click();
   await exerciseWindowsUpdates({page,expect,locale,width,shot});
+  mark('patch-context');await exerciseWindowsPatchContext({page,expect,locale,width,shot});
   mark('legacy');phase='legacy';await page.getByRole('button',{name:locale==='de'?'Windows-Inventar aktualisieren':'Refresh Windows inventory',exact:true}).click();
   await page.getByRole('tab',{name:locale==='de'?'Speicher':'Storage',exact:true}).click();
   await expect(page.getByText(locale==='de'?/Eine separate lokale Zustimmung ist erforderlich/:/Separate local consent is required/)).toBeVisible();

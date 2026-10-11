@@ -1,3 +1,4 @@
+import './windows-patch-context-fixtures.test.mjs';
 import './windows-service-health-fixtures.test.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';

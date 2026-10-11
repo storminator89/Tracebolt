@@ -118,6 +118,13 @@ preview and are not silently expanded. No upgrade enables the new local grant.
 [Windows fleet hostname/IP search](docs/windows-fleet-identity.md) is also implemented
 in source using already-reported metadata. These inventory and fleet slices are
 unreleased draft work; exact-source hosted CI and native acceptance remain separate.
+Current draft source also adds [adapter link state/speed and DNS/gateway context](docs/windows-adapter-context.md)
+and [Windows build, retained update history and reboot indicators](docs/windows-patch-context.md)
+in the existing Network and Updates tabs. These independent local scopes are
+default-off. Complete inventory/fleet source is in [PR #40](https://github.com/storminator89/Tracebolt/pull/40),
+and adapter context in [PR #41](https://github.com/storminator89/Tracebolt/pull/41);
+none changes the published preview or establishes native acceptance.
+
 The [prioritized Windows admin roadmap](docs/windows-admin-roadmap.md) tracks the
 remaining complete process inventory, security and patch posture, network/storage
 diagnostics, user and hardware context, and software-change history. The

@@ -94,6 +94,11 @@ export function useWindowsInventory(deviceId: string, enabled: boolean, sessionK
     const updates = view && (status === 'fresh' || status === 'stale') && !updatesAhead && updatesAge >= 0 && updatesAge < 86400000 ? view.updates ?? null : null;
     const updatesStale = updates !== null && (status !== 'fresh' || updatesAge > 120000);
     const updatesExpired = Boolean(view?.updates) && Number.isFinite(updatesAge) && updatesAge >= 86400000;
-    return { adapterContext, adapterContextStale, adapterContextExpired, updates, updatesStale, updatesExpired, updatesAhead, serviceStartup, serviceStartupStale, elapsedMS: age, network, networkStale, networkExpired, processMetrics, processMetricsStale, volumes, volumesStale, events, eventsStale, view, snapshot: view && (status === 'fresh' || status === 'stale') ? view.snapshot : null, status, loading: enabled && loading, error: enabled ? error : null, refresh: () => void read() };
+    const patchContextAge = view?.patchContext ? inventoryAge(view.serverNow, view.patchContext.collectedAt) + age : Infinity;
+    const patchContextAhead = Boolean(view?.patchContext && (!Number.isFinite(updatesAcceptedAge) || inventoryAge(view.patchContext.collectedAt, view.serverNow) > updatesAcceptedAge));
+    const patchContext = view && (status === 'fresh' || status === 'stale') && !patchContextAhead && patchContextAge >= 0 && patchContextAge < 86400000 ? view.patchContext ?? null : null;
+    const patchContextStale = patchContext !== null && (status !== 'fresh' || patchContextAge > 120000);
+    const patchContextExpired = Boolean(view?.patchContext) && Number.isFinite(patchContextAge) && patchContextAge >= 86400000;
+    return { patchContext, patchContextStale, patchContextExpired, patchContextAhead, adapterContext, adapterContextStale, adapterContextExpired, updates, updatesStale, updatesExpired, updatesAhead, serviceStartup, serviceStartupStale, elapsedMS: age, network, networkStale, networkExpired, processMetrics, processMetricsStale, volumes, volumesStale, events, eventsStale, view, snapshot: view && (status === 'fresh' || status === 'stale') ? view.snapshot : null, status, loading: enabled && loading, error: enabled ? error : null, refresh: () => void read() };
 }
 export type WindowsInventoryResource = ReturnType<typeof useWindowsInventory>;

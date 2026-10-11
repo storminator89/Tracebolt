@@ -42,3 +42,13 @@ test('new gate is independent and preserves all existing ordinary and native cas
  assert.match(flow,/for\(const locale of \['en','de'\]\)for\(const width of \[1440,390\]\)/);assert.match(flow,/pageNumber<=7/);assert.match(flow,/info\.laterSearch/);assert.match(flow,/byte-short/);assert.ok(flow.indexOf("stage='expiry'")<flow.indexOf("stage='disabled'"));assert.match(flow,/cursor-binding/);assert.match(flow,/response\.status\(\)\)\.toBe\(409\)/);assert.match(flow,/near-expiry/);assert.match(flow,/route\.continue\(\)/);assert.match(flow,/route\.fetch\(\{timeout:5000\}\)/);assert.match(flow,/queries\.slice\(stopped\)\.every\(query=>query\.cursor===''/);
  assert.match(windowsFullServicesCaseName,/SQLite-backed/);assert.match(windowsFullServicesDisclosure,/no native Windows read/);assert.match(flow,/Läuft \(running\)/);assert.match(flow,/search\.fill\('Läuft'\)/);assert.doesNotMatch(flow,/chromium\.launch|createServer|writeFile|execFileSync|spawn\(/);
 });
+
+test('revocation failure reports fixed assertion checkpoints without raw diagnostics',()=>{
+ const flow=read('./windows-full-services-browser.mjs'),runner=read('./windows-full-services-runner.mjs');
+ const checkpoints=[['revoked-control',"await windowsFullServicesFixtureControl(page,base,'revoke')"],['revoked-refresh',"await panel.getByRole('button',{name:'Refresh service page',exact:true}).click()"],['revoked-alert',"await expect(panel.getByRole('alert')).toContainText('no longer authorized')"],['revoked-clear','await expect(rows).toHaveCount(0)'],['final-external','expect(external).toEqual([])'],['final-writes','expect(unexpected).toEqual([])'],['final-query-limits','expect(queries.every(query=>query.limit===100)).toBe(true)'],['final-storage','const stored=await page.evaluate'],['final-cursor-count','expect(bindingRejects).toBe(13)']];
+ const tail=flow.slice(flow.indexOf("stage='revoked';"));let previous=-1;
+ for(const [name,assertion] of checkpoints){const mark="stage='"+name+"';";const offset=tail.indexOf(mark);assert.ok(offset>previous,name);assert.ok(tail.slice(offset+mark.length).startsWith(assertion),name);assert.ok(flow.slice(0,flow.indexOf("let stage=")).includes("'"+name+"'"),name);previous=offset;}
+ assert.match(flow,/windowsFullServicesFailureStage=\(\)=>stages\.has\(stage\)\?stage:'setup'/);
+ assert.match(runner,/catch\{console\.log\('FAIL: complete Windows services hosted browser gate; raw diagnostics withheld\.'\);\}/);
+ assert.doesNotMatch(runner,/console\.(?:log|error)\((?:error|err|raw|details|response)/);
+});

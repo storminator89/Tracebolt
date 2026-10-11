@@ -1,3 +1,4 @@
+import { WindowsPatchContextPanel } from './windows-patch-context';
 import { WindowsFullServicesPanel } from './windows-full-services';
 import { WindowsFullSoftwarePanel } from './windows-full-software';
 import { WindowsUpdatesPanel } from './windows-updates';
@@ -67,7 +68,7 @@ export function WindowsInventoryWorkspace({ resource, initialTab, fullServices }
         <div role="tabpanel" id={`${id}-panel`} aria-labelledby={`${id}-${selected}`}>
             {selected === 'services' && fullServices && <><WindowsFullServicesPanel {...fullServices}/><h3 className="windows-full-services-preview-label">{locale === 'de' ? 'Begrenzte Dienstvorschau: getrennte Quelle, höchstens 128 Zeilen' : 'Bounded service preview: separate source, at most 128 rows'}</h3></>}
             {fullSoftware && <WindowsFullSoftwarePanel {...fullSoftware}/>}
-            {selected === 'updates' && <WindowsUpdatesPanel resource={resource}/>}
+            {selected === 'updates' && <><WindowsPatchContextPanel resource={resource}/><WindowsUpdatesPanel resource={resource}/></>}
             {selected === 'endpoints' && <WindowsNetworkPanel resource={resource}/>}
             {selected === 'storage' && <WindowsStoragePanel resource={resource}/>}
             {section && <Section className={fullSoftware ? "windows-inventory-scope windows-full-software-preview" : undefined} >{fullSoftware && <summary>{locale === 'de' ? 'Begrenzte Vorschau · getrennte Quelle, bis zu 128 Zeilen' : 'Bounded preview · separate source, up to 128 rows'}</summary>}

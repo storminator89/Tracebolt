@@ -1,3 +1,4 @@
+import {addWindowsPatchContextFixture} from './windows-patch-context-browser.mjs';
 /** Assertion helper for the existing authenticated synthetic loopback
  * runner. This file launches no browser, changes no shared allowlist and reads
  * no host. Importing or source-testing it is not a hosted-browser pass. */
@@ -23,6 +24,7 @@ export function windowsUpdatesBrowserFixture({serverNow,capturedAt,phase='bounde
  if(['denied','unavailable'].includes(phase))Object.assign(view.updates,{quality:phase,reason:phase==='denied'?'windows_updates_access_denied':'windows_updates_offline_not_verified',countExact:false,rows:[],observedCount:0,truncated:false});
  if(phase==='legacy')delete view.updates;
  if(age>=86400000){view.status='unavailable';view.snapshot=null;delete view.updates;}
+ addWindowsPatchContextFixture(view,phase);
  if(!validWindowsInventoryView(view,view.deviceId))throw new Error('Invalid synthetic cached update fixture');
  return view;
 }

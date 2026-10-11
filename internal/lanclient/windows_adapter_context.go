@@ -87,7 +87,10 @@ func appendWindowsAdapterContext(ctx context.Context, m Material, f frame, c win
 	return f, b, nil
 }
 func validateWindowsAdapterContextFrame(f frame, fields map[string]json.RawMessage) error {
-	if f.SchemaVersion != FrameWindowsAdapterContextVersion {
+	if f.SchemaVersion == FrameWindowsPatchContextVersion && f.WindowsAdapterContext == nil && len(fields["windowsAdapterContext"]) == 0 {
+		return nil
+	}
+	if f.SchemaVersion != FrameWindowsAdapterContextVersion && f.SchemaVersion != FrameWindowsPatchContextVersion {
 		if f.WindowsAdapterContext != nil || len(fields["windowsAdapterContext"]) != 0 {
 			return ErrState
 		}

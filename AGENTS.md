@@ -126,6 +126,12 @@ file as navigation and project constraints, never as permission to act on a host
   wire v8 or its private Network view. Preserve all old grants/frames and the
   five-scope coordinator. No probes, DNS resolution, routes, traffic or privilege
   expansion; source fixtures never authorize host reads or grants.
+- Windows build/history/reboot context is a separate default-off local scope.
+  Read `docs/windows-patch-context.md` before changing fixed registry/WUA sources,
+  isolated-worker authority, consent or wire v9. Never read pending-file-operation
+  values or infer current installation/compliance from retained history. Keep old
+  grants/frames unchanged, unknown reboot sources and checked-source coverage.
+  No host read, online scan, grant, install, reboot or security change is implied.
 - Windows configured service startup metadata is a separate default-off local
   capability. Read `docs/windows-service-startup.md` before changing consent,
   aggregate native-buffer handling or wire v6. Preserve the original service-row

@@ -3,7 +3,7 @@
 export async function exerciseWindowsAdapterContext({page,expect,locale,width,shot,disclosure}){
  const panel=page.locator('.windows-inventory [role="tabpanel"]'),adapters=panel.locator('.windows-adapter-context'),table=adapters.locator('.windows-adapter-table');
  const row=name=>table.getByRole('row').filter({has:page.getByText(name,{exact:true})});
- const labels=locale==='de'?['Adapter','Verbindungszustand','TX-Verbindungsgeschwindigkeit','RX-Verbindungsgeschwindigkeit','DNS & Gateways']:['Adapter','Link state','TX link speed','RX link speed','DNS & gateways'];
+ const labels=locale==='de'?['Adapter','Verbindungszustand','Linkrate (TX)','Linkrate (RX)','DNS & Gateways']:['Adapter','Link state','TX link speed','RX link speed','DNS & gateways'];
  const ethernet=row('Fixture Ethernet'),wifi=row('Fixture Wi-Fi'),tunnel=row('Fixture tunnel');
  await expect(table.locator('tbody tr')).toHaveCount(3);
  for(const label of labels){

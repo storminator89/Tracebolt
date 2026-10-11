@@ -290,7 +290,7 @@ func (a *automation) invoke(ctx context.Context, name string, flags uint16, args
 	if e := ctx.Err(); e != nil {
 		return variant{}, e
 	}
-	if a == nil || a.object == nil || len(args) > 1 {
+	if a == nil || a.object == nil || len(args) > 2 {
 		return variant{}, ErrInvalid
 	}
 	str, e := windows.UTF16PtrFromString(name)

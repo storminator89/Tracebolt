@@ -82,6 +82,12 @@ It holds the existing installer lease, attempts stop/start once and observes SCM
 with bounded polling. It does not add remote target-service control or
 repair/upgrade. The published preview and its native acceptance do not cover it.
 
+The separate [patch-context source candidate](windows-patch-context.md) adds fixed
+Windows edition/release/build revision, bounded local WUA history and checked
+reboot indicators to Updates. It is default-off, private and read-only. Retained
+events never prove current installed status or patch compliance, and negative
+indicators never prove that all reboot causes are absent. Native acceptance is pending.
+
 The [cached Windows Update runtime candidate](windows-update-runtime.md) adds
 separate local consent, a bounded isolated reader, v7 sender/manager support and
 an operator-only Updates view. Cache freshness remains unknown; an empty cached

@@ -39,7 +39,8 @@
     "workspace-navigation-browser.test.mjs",
     "windows-capacity-fixtures.test.mjs",
     "windows-resource-fixtures.test.mjs",
-    "windows-service-health-fixtures.test.mjs"
+    "windows-service-health-fixtures.test.mjs",
+    "windows-patch-context-fixtures.test.mjs"
   ],
   "excluded": []
 }
