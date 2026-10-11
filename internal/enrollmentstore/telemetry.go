@@ -77,6 +77,9 @@ func (s *Store) SaveObservation(ctx context.Context, invitationID, certificateHa
 			if e != nil || old.WindowsInventory == nil {
 				return ErrStorage
 			}
+			if old.WindowsSecurityPosture != nil && !frame.WindowsInventory.CollectedAt.After(old.WindowsSecurityPosture.CollectedAt) {
+				return lanstore.ErrReplay
+			}
 			if old.WindowsPatchContext != nil && !frame.WindowsInventory.CollectedAt.After(old.WindowsPatchContext.CollectedAt) {
 				return lanstore.ErrReplay
 			}

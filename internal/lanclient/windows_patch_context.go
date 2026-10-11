@@ -99,7 +99,10 @@ func appendWindowsPatchContext(ctx context.Context, m Material, f frame, c windo
 	return f, b, nil
 }
 func validateWindowsPatchContextFrame(f frame, fields map[string]json.RawMessage) error {
-	if f.SchemaVersion != FrameWindowsPatchContextVersion {
+	if f.SchemaVersion == FrameWindowsSecurityPostureVersion && f.WindowsPatchContext == nil && len(fields["windowsPatchContext"]) == 0 {
+		return nil
+	}
+	if f.SchemaVersion != FrameWindowsPatchContextVersion && f.SchemaVersion != FrameWindowsSecurityPostureVersion {
 		if f.WindowsPatchContext != nil || len(fields["windowsPatchContext"]) != 0 {
 			return ErrState
 		}

@@ -11,6 +11,7 @@ import (
 	"localrmm/internal/windowsnetwork"
 	"localrmm/internal/windowspatchcontext"
 	"localrmm/internal/windowsprocessmetrics"
+	"localrmm/internal/windowssecurity"
 	"localrmm/internal/windowsupdates"
 	"localrmm/internal/windowsvolumes"
 	"time"
@@ -19,6 +20,7 @@ import (
 // WindowsInventoryView exposes only the latest profile-bound bounded frame.
 // It has no fallback to Linux operations, an old healthy generation or host reads.
 type WindowsInventoryView struct {
+	SecurityPosture     *windowssecurity.Snapshot              `json:"securityPosture,omitempty"`
 	SchemaVersion       string                                 `json:"schemaVersion"`
 	DeviceID            string                                 `json:"deviceId"`
 	CollectionProfile   string                                 `json:"collectionProfile"`
@@ -94,6 +96,7 @@ func (s *Store) WindowsInventoryView(ctx context.Context, id string, now time.Ti
 			out.Updates = frame.WindowsUpdates
 			out.AdapterContext = frame.WindowsAdapterContext
 			out.PatchContext = frame.WindowsPatchContext
+			out.SecurityPosture = frame.WindowsSecurityPosture
 			out.Sequence = &seq
 			out.ReceivedAt = &received
 			out.Status = "fresh"
@@ -111,6 +114,7 @@ func (s *Store) WindowsInventoryView(ctx context.Context, id string, now time.Ti
 				out.Updates = nil
 				out.AdapterContext = nil
 				out.PatchContext = nil
+				out.SecurityPosture = nil
 			}
 		}
 		if identity.State == enrollmentstate.Revoked || identity.State == enrollmentstate.Canceled || identity.State == enrollmentstate.Rejected || identity.State == enrollmentstate.Expired || identity.Intent.NotAfter > 0 && now.Unix() >= identity.Intent.NotAfter {
@@ -124,6 +128,7 @@ func (s *Store) WindowsInventoryView(ctx context.Context, id string, now time.Ti
 			out.Updates = nil
 			out.AdapterContext = nil
 			out.PatchContext = nil
+			out.SecurityPosture = nil
 		}
 		return nil
 	})
@@ -151,6 +156,7 @@ func (v WindowsInventoryView) RecheckAt(now time.Time) (WindowsInventoryView, er
 		v.Updates = nil
 		v.AdapterContext = nil
 		v.PatchContext = nil
+		v.SecurityPosture = nil
 		return v, nil
 	}
 	if v.Snapshot != nil {
@@ -175,6 +181,7 @@ func (v WindowsInventoryView) RecheckAt(now time.Time) (WindowsInventoryView, er
 			v.Updates = nil
 			v.AdapterContext = nil
 			v.PatchContext = nil
+			v.SecurityPosture = nil
 		}
 	}
 	if v.Events != nil && now.Sub(v.Events.CollectedAt) >= 24*time.Hour {
@@ -198,6 +205,9 @@ func (v WindowsInventoryView) RecheckAt(now time.Time) (WindowsInventoryView, er
 	if v.AdapterContext != nil && (v.Snapshot == nil || now.Sub(v.AdapterContext.CollectedAt) >= 24*time.Hour) {
 		v.AdapterContext = nil
 		v.PatchContext = nil
+	}
+	if v.SecurityPosture != nil && (v.Snapshot == nil || now.Sub(v.SecurityPosture.CollectedAt) >= 24*time.Hour) {
+		v.SecurityPosture = nil
 	}
 	return v, nil
 }

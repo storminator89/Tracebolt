@@ -1,5 +1,7 @@
 {
-  "goSourceSha256": "f37a1338c87b49f10b302365bd2f58f0da37e0cbd781b224b9d9627b112f9880",
+  "schemaVersion": 1,
+  "sourceCommit": "fccc4b00cd8a144afd58e4b995747afab7a10022",
+  "goSourceSha256": "945834d2be102a4b90c353ed8251eebe67931c83da95e64407b18839bc6cfa8b",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -342,6 +344,13 @@
       "TestRestartPartialOutputAndReleaseFailureNeverBecomeSuccess",
       "TestRestartPublicDeadlineBeginsBeforeReceiptAcquisition",
       "TestRetainedBootstrapValidationCapturesCategoryBeforePublicCollapse",
+      "TestSecurityPostureConsentErrorsAndInvalidModes",
+      "TestSecurityPostureConsentFlagsExplicitAndBounded",
+      "TestSecurityPostureConsentNeverConfiguresWithMissingDependencies",
+      "TestSecurityPostureDisclosureMustCompleteBeforeDispatch",
+      "TestSecurityPostureFlagsDoNotAuthorizeAnotherScope",
+      "TestSecurityPostureRequiresOwnedStoppedService",
+      "TestSecurityPostureWorkerEntryRechecksActualParentBeforeReturning",
       "TestServiceStartupConsentErrorsAndInvalidModes",
       "TestServiceStartupConsentFlagsExplicitAndBounded",
       "TestServiceStartupConsentNeverConfiguresWithMissingDependencies",
@@ -2320,6 +2329,19 @@
       "TestWindowsProcessMetricsMaximalCombinedEnvelopePreservesCountsAndCapture",
       "TestWindowsProcessMetricsPendingRevocationReplacementAndConsentRace",
       "TestWindowsResourceAcceptedReceiptMonitorAndOperatorPipeline",
+      "TestWindowsSecurityPostureAllBlockedOptionalSourcesStillSendBase",
+      "TestWindowsSecurityPostureConsentCreateOnlyAndReenable",
+      "TestWindowsSecurityPostureConsentFreshCreateRacesAndFailuresDoNotAdopt",
+      "TestWindowsSecurityPostureConsentMissingExistingRecordFailsClosedEveryMode",
+      "TestWindowsSecurityPostureConsentNeverCreatesOnPreviewDisableOrAccessFailure",
+      "TestWindowsSecurityPostureConsentRejectsIncompleteForeignAndFailedStorage",
+      "TestWindowsSecurityPostureConsentSeparateProtectedManifest",
+      "TestWindowsSecurityPostureConsentStorageIsolation",
+      "TestWindowsSecurityPostureEndToEndSelectionsAndAuthority",
+      "TestWindowsSecurityPostureFrameRejectsCrossScopeAndUnknownData",
+      "TestWindowsSecurityPostureInvalidRequestDoesNotReadHost",
+      "TestWindowsSecurityPosturePreviewPreservesExistingRecord",
+      "TestWindowsSecurityPostureRetryRestartAndRevocation",
       "TestWindowsServiceAcceptedReceiptMonitorAndOperatorPipeline",
       "TestWindowsServiceStartupAll32CombinationsBothTransportAdmissions",
       "TestWindowsServiceStartupCapabilityV4ExplicitSelectionsAndOlderScopeIsolation",
@@ -3692,6 +3714,35 @@
       "TestResourceTagDefaultOffAndSelection",
       "TestResourceUnknownFloorsAndIndependentCaptureTimes"
     ],
+    "localrmm/internal/windowssecurity": [
+      "TestActivationIntegrityAcceptsOnlyHighAndSystem",
+      "TestActivationIntegrityRejectsMalformedNativeRecords",
+      "TestActivationTokenFailuresCloseHandlesAndStop",
+      "TestActivationTrustNativeSurfaceIsReadOnlyAndFailClosed",
+      "TestActivationTrustPrecedesCOMOnLockedThread",
+      "TestCanonicalFixtureAndContradictions",
+      "TestIndependentSourcesNeverInferGlobalProtection",
+      "TestPartialFieldsAndOpaqueErrors",
+      "TestSeparateGrantBeforeAnyNativeRead"
+    ],
+    "localrmm/internal/windowssecurityworker": [
+      "TestBoundedOutputCancelsAndDoesNotRetainOverflow",
+      "TestFixedCurrentExecutable",
+      "TestIndependentProviderTimeoutKeepsSibling",
+      "TestInvalidRequestNeverStartsProcess",
+      "TestProcessConstructionFailureIsFiniteUnavailable",
+      "TestReapedAssertionRejectsLiveAndUnwaitedChild",
+      "TestRequestCanonicalAndBounded",
+      "TestServeBoundsInputAndOutputWrites",
+      "TestServeDeniesAbsentOrChangedAuthority",
+      "TestServeMalformedInputHasNoAuthorityOrNativeRead",
+      "TestServeRevalidatesBeforeAndAfterNative",
+      "TestServeRevalidatesFailedNativeAndRejectsForeignSnapshot",
+      "TestSubprocessBudgetKillsAndReaps",
+      "TestSubprocessCallerCancellationKillsAndReaps",
+      "TestSubprocessResponsesAndEnvironment",
+      "TestWorkerFixture"
+    ],
     "localrmm/internal/windowsservice": [
       "TestAncestorTrustAdmissionNeverClaimsEffectiveTokenReadAccess",
       "TestApplyRemovalDiagnosticsLeaveStartErrorsUnchanged",
@@ -4105,7 +4156,5 @@
       "TestSystemInventoryOperatorActualTLSHTTPAllPagesAndDelayedExpiry"
     ],
     "localrmm/web/scripts": []
-  },
-  "schemaVersion": 1,
-  "sourceCommit": "fccc4b00cd8a144afd58e4b995747afab7a10022"
+  }
 }

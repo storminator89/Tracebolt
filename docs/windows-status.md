@@ -38,6 +38,12 @@ path for native link state, directional speeds and numeric DNS/gateway addresses
 in the existing Network tab. It is not part of the five-scope setup or published
 preview, and its native acceptance remains pending.
 
+Separately consented [Defender and Windows Firewall posture](windows-security-posture.md)
+now has a source path and private Security tab. It reports independent local
+source states, including denial/unknowns and passive Defender, without asserting
+overall protection or effective firewall policy. It is outside the five-scope
+setup and published preview; native acceptance remains pending.
+
 These scopes do not establish whole-machine coverage or Linux feature parity.
 Configured service-startup metadata is a separate default-off source capability;
 it is not included in the five-scope Setup choice. Windows event-message content,

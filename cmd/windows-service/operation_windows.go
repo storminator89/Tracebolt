@@ -65,6 +65,8 @@ func nativeReceiptOperation(ctx context.Context, r request, receipt installRecei
 		return updatesOperation(ctx, r, receipt.Service, windowsservice.InspectOwned, lanclient.ConfigureWindowsUpdates)
 	case "service-startup-preview", "service-startup-enable", "service-startup-disable":
 		return serviceStartupOperation(ctx, r, receipt.Service, windowsservice.InspectOwned, lanclient.ConfigureWindowsServiceStartup)
+	case "security-posture-preview", "security-posture-enable", "security-posture-disable":
+		return securityPostureOperation(ctx, r, receipt.Service, windowsservice.InspectOwned, lanclient.ConfigureWindowsSecurityPosture)
 	case "patch-context-preview", "patch-context-enable", "patch-context-disable":
 		return patchContextOperation(ctx, r, receipt.Service, windowsservice.InspectOwned, lanclient.ConfigureWindowsPatchContext)
 	case "adapter-context-preview", "adapter-context-enable", "adapter-context-disable":

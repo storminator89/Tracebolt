@@ -126,6 +126,12 @@ file as navigation and project constraints, never as permission to act on a host
   wire v8 or its private Network view. Preserve all old grants/frames and the
   five-scope coordinator. No probes, DNS resolution, routes, traffic or privilege
   expansion; source fixtures never authorize host reads or grants.
+- Windows Defender/Firewall posture is a separate default-off local scope.
+  Read `docs/windows-security-posture.md` before changing fixed local WMI/COM
+  reads, independent provider workers, consent, v10 wire or private Security UI.
+  Denied/absent/passive sources never prove overall protection; Firewall reports
+  local configuration, not effective policy or reachability. No scans, rules,
+  credentials, remote queries, privileges or host permission follows from tests.
 - Windows build/history/reboot context is a separate default-off local scope.
   Read `docs/windows-patch-context.md` before changing fixed registry/WUA sources,
   isolated-worker authority, consent or wire v9. Never read pending-file-operation
