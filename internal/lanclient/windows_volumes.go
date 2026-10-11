@@ -56,10 +56,10 @@ func appendWindowsVolumes(ctx context.Context, m Material, f frame, c windowsvol
 	return f, b, nil
 }
 func validateWindowsVolumesFrame(f frame, fields map[string]json.RawMessage) error {
-	if (f.SchemaVersion == FrameWindowsProcessMetricsVersion || f.SchemaVersion == FrameWindowsNetworkVersion || f.SchemaVersion == FrameWindowsServiceStartupVersion || (f.SchemaVersion == FrameWindowsUpdatesVersion || (f.SchemaVersion == FrameWindowsAdapterContextVersion || (f.SchemaVersion == FrameWindowsPatchContextVersion || f.SchemaVersion == FrameWindowsSecurityPostureVersion)))) && f.WindowsVolumes == nil && len(fields["windowsVolumes"]) == 0 {
+	if (f.SchemaVersion == FrameWindowsProcessMetricsVersion || f.SchemaVersion == FrameWindowsNetworkVersion || f.SchemaVersion == FrameWindowsServiceStartupVersion || (f.SchemaVersion == FrameWindowsUpdatesVersion || (f.SchemaVersion == FrameWindowsAdapterContextVersion || (f.SchemaVersion == FrameWindowsPatchContextVersion || (f.SchemaVersion == FrameWindowsSecurityPostureVersion || f.SchemaVersion == FrameWindowsSessionContextVersion))))) && f.WindowsVolumes == nil && len(fields["windowsVolumes"]) == 0 {
 		return nil
 	}
-	if f.SchemaVersion != FrameWindowsCapabilitiesVersion && f.SchemaVersion != FrameWindowsProcessMetricsVersion && f.SchemaVersion != FrameWindowsNetworkVersion && f.SchemaVersion != FrameWindowsServiceStartupVersion && f.SchemaVersion != FrameWindowsUpdatesVersion && f.SchemaVersion != FrameWindowsAdapterContextVersion && f.SchemaVersion != FrameWindowsPatchContextVersion && f.SchemaVersion != FrameWindowsSecurityPostureVersion {
+	if f.SchemaVersion != FrameWindowsCapabilitiesVersion && f.SchemaVersion != FrameWindowsProcessMetricsVersion && f.SchemaVersion != FrameWindowsNetworkVersion && f.SchemaVersion != FrameWindowsServiceStartupVersion && f.SchemaVersion != FrameWindowsUpdatesVersion && f.SchemaVersion != FrameWindowsAdapterContextVersion && f.SchemaVersion != FrameWindowsPatchContextVersion && f.SchemaVersion != FrameWindowsSecurityPostureVersion && f.SchemaVersion != FrameWindowsSessionContextVersion {
 		if f.WindowsVolumes != nil || len(fields["windowsVolumes"]) != 0 {
 			return ErrState
 		}

@@ -1,7 +1,5 @@
 {
-  "schemaVersion": 1,
-  "sourceCommit": "fccc4b00cd8a144afd58e4b995747afab7a10022",
-  "goSourceSha256": "945834d2be102a4b90c353ed8251eebe67931c83da95e64407b18839bc6cfa8b",
+  "goSourceSha256": "a0a69eac0a8c41bbc3d8619cb14c2709d8128c53856fe6b0361f461ee4f0455a",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -357,6 +355,13 @@
       "TestServiceStartupDisclosureMustCompleteBeforeDispatch",
       "TestServiceStartupFlagsDoNotAuthorizeAnotherScope",
       "TestServiceStartupRequiresOwnedStoppedService",
+      "TestSessionContextConsentErrorsAndInvalidModes",
+      "TestSessionContextConsentFlagsExplicitAndBounded",
+      "TestSessionContextConsentNeverConfiguresWithMissingDependencies",
+      "TestSessionContextDisclosureMustCompleteBeforeDispatch",
+      "TestSessionContextFlagsDoNotAuthorizeAnotherScope",
+      "TestSessionContextRequiresOwnedStoppedService",
+      "TestSessionContextWorkerEntryRechecksActualParentBeforeReturning",
       "TestSetupCauseCategoriesAreIdentityBasedAndFinite",
       "TestSetupConsoleOnlyControlCAndBreakCancelCooperatively",
       "TestSetupDiagnosticEveryInjectedStage",
@@ -2362,6 +2367,21 @@
       "TestWindowsServiceStartupPreviewPreservesExistingRecord",
       "TestWindowsServiceStartupRechecksGrantImmediatelyBeforeNativeSeam",
       "TestWindowsServiceStartupSenderRetryRestartDenialAndIndependentDisable",
+      "TestWindowsSessionContextAllBlockedOptionalSourcesStillSendBase",
+      "TestWindowsSessionContextConsentCreateOnlyAndReenable",
+      "TestWindowsSessionContextConsentFreshCreateRacesAndFailuresDoNotAdopt",
+      "TestWindowsSessionContextConsentMissingExistingRecordFailsClosedEveryMode",
+      "TestWindowsSessionContextConsentNeverCreatesOnPreviewDisableOrAccessFailure",
+      "TestWindowsSessionContextConsentRejectsIncompleteForeignAndFailedStorage",
+      "TestWindowsSessionContextConsentSeparateProtectedManifest",
+      "TestWindowsSessionContextConsentStorageIsolation",
+      "TestWindowsSessionContextEndToEndSelectionsAndAuthority",
+      "TestWindowsSessionContextFrameBudgetPreservesBaseAndSelf",
+      "TestWindowsSessionContextFrameRejectsCrossScopeAndUnknownData",
+      "TestWindowsSessionContextInvalidRequestDoesNotReadHost",
+      "TestWindowsSessionContextOldV10RetryBytesAndReplacement",
+      "TestWindowsSessionContextPreviewPreservesExistingRecord",
+      "TestWindowsSessionContextRetryRestartAndRevocation",
       "TestWindowsSetupCompatibilityResponseBoundedAndExact",
       "TestWindowsSetupExplicitHTTPProfileKeepsOriginalTransport",
       "TestWindowsSetupTransportDoesNotBroadenProofTransport",
@@ -3850,6 +3870,31 @@
       "TestViewCurrentSourceAuthorityAndCanonicalCorruption",
       "TestWindowsServiceSharedViewFixture"
     ],
+    "localrmm/internal/windowssessions": [
+      "TestBoundedUTF16AndNativeSessionSelection",
+      "TestCanonicalFixtureAndClosedModel",
+      "TestFittingPreservesCountsOriginalAgeAndGrant",
+      "TestIndependentSourcesConsentAndCancellation",
+      "TestNativeLabelEscapingFitsWithoutLosingObservedCount"
+    ],
+    "localrmm/internal/windowssessionworker": [
+      "TestBoundedOutputCancelsAndDoesNotRetainOverflow",
+      "TestFixedCurrentExecutable",
+      "TestIndependentProviderTimeoutKeepsSibling",
+      "TestInvalidRequestNeverStartsProcess",
+      "TestProcessConstructionFailureIsFiniteUnavailable",
+      "TestReapedAssertionRejectsLiveAndUnwaitedChild",
+      "TestRequestCanonicalAndBounded",
+      "TestServeBoundsInputAndOutputWrites",
+      "TestServeDeniesAbsentOrChangedAuthority",
+      "TestServeMalformedInputHasNoAuthorityOrNativeRead",
+      "TestServeRevalidatesBeforeAndAfterNative",
+      "TestServeRevalidatesFailedNativeAndRejectsForeignSnapshot",
+      "TestSubprocessBudgetKillsAndReaps",
+      "TestSubprocessCallerCancellationKillsAndReaps",
+      "TestSubprocessResponsesAndEnvironment",
+      "TestWorkerFixture"
+    ],
     "localrmm/internal/windowssetup": [
       "TestCompatibilityExactAndNoExtensions"
     ],
@@ -4156,5 +4201,7 @@
       "TestSystemInventoryOperatorActualTLSHTTPAllPagesAndDelayedExpiry"
     ],
     "localrmm/web/scripts": []
-  }
+  },
+  "schemaVersion": 1,
+  "sourceCommit": "fccc4b00cd8a144afd58e4b995747afab7a10022"
 }

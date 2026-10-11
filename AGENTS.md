@@ -126,6 +126,12 @@ file as navigation and project constraints, never as permission to act on a host
   wire v8 or its private Network view. Preserve all old grants/frames and the
   five-scope coordinator. No probes, DNS resolution, routes, traffic or privilege
   expansion; source fixtures never authorize host reads or grants.
+- Windows caller-visible sessions and local join context are a separate default-off
+  local scope. Read `docs/windows-session-context.md` before changing fixed WTS/
+  NetGetJoinInformation reads, worker bounds, consent, v11 wire or private UI.
+  Personal labels require explicit disclosure. Unknown counts/denied fields are
+  never empty/full-account assertions. No remote queries, impersonation, session
+  actions, accounts, credentials or host permission follows from source tests.
 - Windows Defender/Firewall posture is a separate default-off local scope.
   Read `docs/windows-security-posture.md` before changing fixed local WMI/COM
   reads, independent provider workers, consent, v10 wire or private Security UI.

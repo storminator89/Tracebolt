@@ -13,6 +13,7 @@ import (
 	"localrmm/internal/windowsnetwork"
 	"localrmm/internal/windowsprocessmetrics"
 	"localrmm/internal/windowssecurity"
+	"localrmm/internal/windowssessions"
 	"localrmm/internal/windowsstate"
 	"localrmm/internal/windowsvolumes"
 	"net/http"
@@ -29,6 +30,10 @@ type windowsContextAuthorityCase struct {
 
 func windowsContextAuthorityCases(m Material) []windowsContextAuthorityCase {
 	return []windowsContextAuthorityCase{
+		{"sessions", sessionConsentFixture(m), windowsSessionContextConsentDirectory(m), windowsSessionContextOptions("", false), func(d windowsContextConsentDependencies) bool {
+			c, ok := readWindowsSessionContextConsentWithDependencies(m, d)
+			return ok && c == sessionConsentFixture(m)
+		}},
 		{"security", securityConsentFixture(m), windowsSecurityPostureConsentDirectory(m), windowsSecurityPostureOptions("", false), func(d windowsContextConsentDependencies) bool {
 			c, ok := readWindowsSecurityPostureConsentWithDependencies(m, d)
 			return ok && c == securityConsentFixture(m)
@@ -75,9 +80,12 @@ func runWindowsContextAuthorityScope(m Material, state *lanclientstate.State, se
 	var volumes func() (windowsvolumes.Consent, bool)
 	var process func() (windowsprocessmetrics.Consent, bool)
 	var network func() (windowsnetwork.Consent, bool)
+	var sessions func() (windowssessions.Consent, bool)
 	var security func() (windowssecurity.Consent, bool)
 	var startup func() (windowsmanaged.ServiceStartupConsent, bool)
 	switch name {
+	case "sessions":
+		sessions = func() (windowssessions.Consent, bool) { return readWindowsSessionContextConsentWithDependencies(m, d) }
 	case "security":
 		security = func() (windowssecurity.Consent, bool) { return readWindowsSecurityPostureConsentWithDependencies(m, d) }
 	case "events":
@@ -95,7 +103,7 @@ func runWindowsContextAuthorityScope(m Material, state *lanclientstate.State, se
 			return readWindowsServiceStartupConsentWithDependencies(m, d)
 		}
 	}
-	return runUsingStateWithSecurityPostureAuthorityDependencies(context.Background(), m, state, nil, nil, nil, startupWindowsSource, send, events, eventSourceFixture, volumes, volumeSourceFixture, process, processSourceFixture, network, networkSourceFixture, startup, serviceStartupSourceFixture, nil, nil, nil, nil, nil, nil, security, securitySourceFixture, func() bool { return currentWindowsContextMaterial(m, d.reload) })
+	return runUsingStateWithSessionContextAuthorityDependencies(context.Background(), m, state, nil, nil, nil, startupWindowsSource, send, events, eventSourceFixture, volumes, volumeSourceFixture, process, processSourceFixture, network, networkSourceFixture, startup, serviceStartupSourceFixture, nil, nil, nil, nil, nil, nil, security, securitySourceFixture, sessions, sessionSourceFixture, func() bool { return currentWindowsContextMaterial(m, d.reload) })
 }
 
 func TestWindowsContextReadersRequireCurrentAuthorityBeforeReceipt(t *testing.T) {
@@ -176,7 +184,7 @@ func TestWindowsContextReadersRecheckAuthorityAfterCapture(t *testing.T) {
 			defer state.Close()
 			reads := 0
 			postCapture := 2
-			if c.name == "startup" || c.name == "security" {
+			if c.name == "startup" || c.name == "security" || c.name == "sessions" {
 				postCapture = 3 // Startup also checks immediately before its source.
 			}
 			d := contextAuthorityDependencies(t, c, reload)

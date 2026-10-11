@@ -1,0 +1,24 @@
+.windows-session-context{min-width:0}
+.windows-session-context>.windows-inventory-section-header{margin-bottom:16px}
+.windows-session-context h4{display:flex;align-items:center;gap:8px;margin:0;font-size:13px;font-weight:600}
+.windows-session-context h4 svg{flex-shrink:0;color:var(--secondary)}
+.windows-session-membership{display:flex;flex-wrap:wrap;align-items:baseline;gap:9px 14px;padding:14px 16px;margin-bottom:20px;border:1px solid var(--line);border-radius:10px;font-size:13px;min-width:0}
+.windows-session-membership h4{flex:1 1 180px}
+.windows-session-join-kind{color:var(--secondary)}
+.windows-session-join-name{font-weight:600;overflow-wrap:anywhere;min-width:0;max-width:100%}
+.windows-session-quality{color:var(--secondary);border:1px solid var(--line);border-radius:20px;padding:3px 8px;font-size:11px;white-space:nowrap}
+.windows-session-heading{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px}
+.windows-session-table{margin-top:12px}
+.windows-session-table th:first-child{width:12%}
+.windows-session-table th:nth-child(2),.windows-session-table th:nth-child(3){width:27%}
+.windows-session-table th:last-child{width:14%}
+.windows-session-table bdi{overflow-wrap:anywhere;min-width:0}
+.windows-session-details{margin-top:18px;padding-top:12px;border-top:1px solid var(--line);font-size:12px;line-height:1.6;color:var(--secondary)}
+.windows-session-details summary{cursor:pointer;color:var(--text);font-weight:600}
+.windows-session-details summary:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+.windows-session-details dl{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}
+.windows-session-details dt{font-weight:600;margin-bottom:4px}
+.windows-session-details dd{margin:0;overflow-wrap:anywhere}
+.windows-session-note{font-size:12px;line-height:1.6;color:var(--secondary);margin:14px 0 0}
+@media(max-width:600px){.windows-session-membership{padding:12px;gap:8px 12px}.windows-session-membership h4{flex-basis:100%}.windows-session-table th{width:auto}.windows-session-table td{grid-template-columns:minmax(90px,34%) minmax(0,1fr)}.windows-session-details dl{grid-template-columns:1fr 1fr}}
+@media(max-width:360px){.windows-session-details dl{grid-template-columns:1fr}}
