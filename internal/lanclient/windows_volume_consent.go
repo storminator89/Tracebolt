@@ -21,15 +21,17 @@ func windowsVolumeOptions(sid string, create bool) windowsstate.Options {
 	return windowsstate.Options{RuntimeSID: sid, Names: []string{"consent.json"}, LockName: "visible-volumes.lock", TempName: "visible-volumes.tmp", MaxBytes: 1024, Create: create}
 }
 func readWindowsVolumeConsent(m Material) (windowsvolumes.Consent, bool) {
-	if !m.valid() || !m.config.windowsInventory() {
+	return readWindowsVolumeConsentWithDependencies(m, windowsContextConsentDependencies{Load, openWindowsContextConsent})
+}
+
+func readWindowsVolumeConsentWithDependencies(m Material, dependencies windowsContextConsentDependencies) (windowsvolumes.Consent, bool) {
+	// Current activated identity is required before every receipt read, including
+	// pending retries and the post-capture/pre-send authority boundaries.
+	if !currentWindowsContextMaterial(m, dependencies.reload) || dependencies.open == nil {
 		return windowsvolumes.Consent{}, false
 	}
-	sid, e := windowsservice.LookupServiceSID()
-	if e != nil {
-		return windowsvolumes.Consent{}, false
-	}
-	s, e := windowsstate.Open(windowsVolumeConsentDirectory(m), windowsVolumeOptions(sid, false))
-	if e != nil {
+	s, e := dependencies.open(windowsVolumeConsentDirectory(m), windowsVolumeOptions("", false))
+	if e != nil || s == nil {
 		return windowsvolumes.Consent{}, false
 	}
 	defer s.Close()

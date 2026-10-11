@@ -9,6 +9,8 @@ RUN npm ci --ignore-scripts
 COPY web/ ./
 # TypeScript checks the shared, entirely synthetic Go/UI contract fixture.
 COPY internal/api/testdata/complete-overview-synthetic.json /src/internal/api/testdata/complete-overview-synthetic.json
+# Keep the shared synthetic Windows patch-context contract available to TypeScript.
+COPY internal/windowspatchcontext/testdata/snapshot.json /src/internal/windowspatchcontext/testdata/snapshot.json
 # Preserve the Go-to-TypeScript Windows contact wire contract during typecheck.
 COPY tests/fixtures/windows-contact-view.json /src/tests/fixtures/windows-contact-view.json
 COPY tests/fixtures/windows-capacity-view.json /src/tests/fixtures/windows-capacity-view.json

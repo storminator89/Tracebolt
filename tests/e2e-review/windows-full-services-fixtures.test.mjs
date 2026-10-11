@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import {windowsFullServicesFixtureQuery,windowsFullServicesAbsentPage,windowsFullServicesLegacyRead,windowsFullServicesFixtureControl,windowsFullServicesCaseName,windowsFullServicesDisclosure} from './windows-full-services-browser.mjs';
+import {windowsFullServicesFixtureQuery,windowsFullServicesAbsentPage,windowsFullServicesLegacyRead,windowsFullServicesFixtureControl,windowsFullServicesBrowserCase,windowsFullServicesCaseName,windowsFullServicesDisclosure} from './windows-full-services-browser.mjs';
 const device='agent_'+'a'.repeat(32),prefix='/api/devices/'+device,base='http://127.0.0.1:19887';
 const query={search:'',sort:'name-asc',limit:100,cursor:''};
 const input=(changes={})=>({pathname:prefix+'/windows-full-services/query',search:'',method:'POST',headers:{'x-csrf-token':'synthetic-csrf'},raw:JSON.stringify(query),...changes});
@@ -51,4 +51,15 @@ test('revocation failure reports fixed assertion checkpoints without raw diagnos
  assert.match(flow,/windowsFullServicesFailureStage=\(\)=>stages\.has\(stage\)\?stage:'setup'/);
  assert.match(runner,/catch\{console\.log\('FAIL: complete Windows services hosted browser gate; raw diagnostics withheld\.'\);\}/);
  assert.doesNotMatch(runner,/console\.(?:log|error)\((?:error|err|raw|details|response)/);
+});
+
+test('actual service browser route admits only the exact software navigation read and retains mutation rejection',async()=>{
+ let handler;const stopped=new Error('stop after route registration');
+ const page={request:{get:async()=>({status:()=>200,json:async()=>({deviceId:device,rowCount:1,firstName:'InventedService',laterName:'InventedService',laterSearch:'Invented'}),dispose:async()=>{}})},route:async(pattern,callback)=>{assert.equal(pattern,'**/*');handler=callback;},locator:()=>{throw stopped;}};
+ await assert.rejects(windowsFullServicesBrowserCase({page,base,login:async()=>{},expect:()=>{throw Error('unexpected assertion');},shot:async()=>{throw Error('unexpected screenshot');}}),error=>error===stopped);
+ const invoke=async(changes={})=>{const data={url:base+prefix+'/windows-full-software/query',method:'POST',headers:{'x-csrf-token':'synthetic-csrf'},raw:JSON.stringify(query),...changes},actions=[];await handler({request:()=>({url:()=>data.url,method:()=>data.method,headers:()=>data.headers,postData:()=>data.raw}),continue:async()=>actions.push('continue'),abort:async reason=>actions.push('abort:'+reason)});return actions;};
+ assert.deepEqual(await invoke(),['continue']);
+ for(const changes of [{url:'http://external.invalid'+prefix+'/windows-full-software/query'},{url:base+prefix+'/windows-full-software/query?query=private'},{url:base+'/api/devices/agent_'+'b'.repeat(32)+'/windows-full-software/query'},{url:base+prefix+'/windows-full-software/grant'},{url:base+prefix+'/windows-full-services/grant'},{method:'GET'},{method:'DELETE'},{headers:{}},{raw:'{}'},{raw:'null'},{raw:JSON.stringify({...query,scope:true})},{raw:JSON.stringify({...query,limit:101})},{raw:JSON.stringify({...query,sort:'arbitrary-sql'})}])assert.deepEqual(await invoke(changes),['abort:blockedbyclient']);
+ assert.deepEqual(await invoke({url:base+prefix+'/windows-full-services/query'}),['continue']);
+ assert.deepEqual(await invoke({url:base+prefix,method:'GET'}),['continue']);
 });

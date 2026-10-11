@@ -21,15 +21,17 @@ func windowsAdapterContextOptions(sid string, create bool) windowsstate.Options 
 	return windowsstate.Options{RuntimeSID: sid, Names: []string{"consent.json"}, LockName: "adapter-context.lock", TempName: "adapter-context.tmp", MaxBytes: 1024, Create: create}
 }
 func readWindowsAdapterContextConsent(m Material) (windowsadapters.Consent, bool) {
-	if !m.valid() || !m.config.windowsInventory() {
+	return readWindowsAdapterContextConsentWithDependencies(m, windowsContextConsentDependencies{Load, openWindowsContextConsent})
+}
+
+func readWindowsAdapterContextConsentWithDependencies(m Material, dependencies windowsContextConsentDependencies) (windowsadapters.Consent, bool) {
+	// Current activated identity is required before every receipt read, including
+	// pending retries and the post-capture/pre-send authority boundaries.
+	if !currentWindowsContextMaterial(m, dependencies.reload) || dependencies.open == nil {
 		return windowsadapters.Consent{}, false
 	}
-	sid, e := windowsservice.LookupServiceSID()
-	if e != nil {
-		return windowsadapters.Consent{}, false
-	}
-	s, e := windowsstate.Open(windowsAdapterContextConsentDirectory(m), windowsAdapterContextOptions(sid, false))
-	if e != nil {
+	s, e := dependencies.open(windowsAdapterContextConsentDirectory(m), windowsAdapterContextOptions("", false))
+	if e != nil || s == nil {
 		return windowsadapters.Consent{}, false
 	}
 	defer s.Close()

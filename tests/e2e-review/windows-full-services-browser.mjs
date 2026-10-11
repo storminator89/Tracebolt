@@ -3,6 +3,7 @@
 import {createRequire} from 'node:module';
 import {fileURLToPath} from 'node:url';
 import path from 'node:path';
+import {windowsFullSoftwareFixtureQuery} from './windows-full-software-browser.mjs';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../..');
 const require=createRequire(path.join(root,'web/package.json'));
 const {build}=require('esbuild');
@@ -69,6 +70,14 @@ export async function windowsFullServicesBrowserCase({page,expect,base,login,sho
    if(!query){unexpected.push('invalid-query');return route.abort('blockedbyclient');}
    queries.push({search:query.search,sort:query.sort,limit:query.limit,cursor:query.cursor});
    if(hold){const current=hold;hold=null;const response=await route.fetch({timeout:5000});current.arrived();await current.promise;try{return await route.fulfill({response});}catch{if(!current.canceled)throw new Error('Unexpected held-read failure');return;}}
+   return route.continue();
+  }
+  // Navigation visits Software while retiring a held service page. Its exact
+  // protected query is a read, not an unexpected mutation; production still
+  // enforces the real session/CSRF and independent software scope.
+  if(url.pathname===prefix+'/windows-full-software/query'){
+   const query=windowsFullSoftwareFixtureQuery({pathname:url.pathname,search:url.search,method:request.method(),headers:request.headers(),raw:request.postData()},prefix);
+   if(!query){unexpected.push('invalid-navigation-query');return route.abort('blockedbyclient');}
    return route.continue();
   }
   if(request.method()!=='GET'&&!['/api/auth/login','/api/auth/logout'].includes(url.pathname)){unexpected.push('unexpected-write');return route.abort('blockedbyclient');}

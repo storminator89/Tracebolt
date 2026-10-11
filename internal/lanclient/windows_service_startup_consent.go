@@ -21,15 +21,17 @@ func windowsServiceStartupOptions(sid string, create bool) windowsstate.Options 
 	return windowsstate.Options{RuntimeSID: sid, Names: []string{"consent.json"}, LockName: "service-startup.lock", TempName: "service-startup.tmp", MaxBytes: 1024, Create: create}
 }
 func readWindowsServiceStartupConsent(m Material) (windowsmanaged.ServiceStartupConsent, bool) {
-	if !m.valid() || !m.config.windowsInventory() {
+	return readWindowsServiceStartupConsentWithDependencies(m, windowsContextConsentDependencies{Load, openWindowsContextConsent})
+}
+
+func readWindowsServiceStartupConsentWithDependencies(m Material, dependencies windowsContextConsentDependencies) (windowsmanaged.ServiceStartupConsent, bool) {
+	// Current activated identity is required before every receipt read, including
+	// pending retries and the post-capture/pre-send authority boundaries.
+	if !currentWindowsContextMaterial(m, dependencies.reload) || dependencies.open == nil {
 		return windowsmanaged.ServiceStartupConsent{}, false
 	}
-	sid, e := windowsservice.LookupServiceSID()
-	if e != nil {
-		return windowsmanaged.ServiceStartupConsent{}, false
-	}
-	s, e := windowsstate.Open(windowsServiceStartupConsentDirectory(m), windowsServiceStartupOptions(sid, false))
-	if e != nil {
+	s, e := dependencies.open(windowsServiceStartupConsentDirectory(m), windowsServiceStartupOptions("", false))
+	if e != nil || s == nil {
 		return windowsmanaged.ServiceStartupConsent{}, false
 	}
 	defer s.Close()

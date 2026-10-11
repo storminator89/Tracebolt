@@ -21,15 +21,17 @@ func windowsProcessMetricsOptions(sid string, create bool) windowsstate.Options 
 	return windowsstate.Options{RuntimeSID: sid, Names: []string{"consent.json"}, LockName: "process-metrics.lock", TempName: "process-metrics.tmp", MaxBytes: 1024, Create: create}
 }
 func readWindowsProcessMetricsConsent(m Material) (windowsprocessmetrics.Consent, bool) {
-	if !m.valid() || !m.config.windowsInventory() {
+	return readWindowsProcessMetricsConsentWithDependencies(m, windowsContextConsentDependencies{Load, openWindowsContextConsent})
+}
+
+func readWindowsProcessMetricsConsentWithDependencies(m Material, dependencies windowsContextConsentDependencies) (windowsprocessmetrics.Consent, bool) {
+	// Current activated identity is required before every receipt read, including
+	// pending retries and the post-capture/pre-send authority boundaries.
+	if !currentWindowsContextMaterial(m, dependencies.reload) || dependencies.open == nil {
 		return windowsprocessmetrics.Consent{}, false
 	}
-	sid, e := windowsservice.LookupServiceSID()
-	if e != nil {
-		return windowsprocessmetrics.Consent{}, false
-	}
-	s, e := windowsstate.Open(windowsProcessMetricsConsentDirectory(m), windowsProcessMetricsOptions(sid, false))
-	if e != nil {
+	s, e := dependencies.open(windowsProcessMetricsConsentDirectory(m), windowsProcessMetricsOptions("", false))
+	if e != nil || s == nil {
 		return windowsprocessmetrics.Consent{}, false
 	}
 	defer s.Close()

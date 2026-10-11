@@ -21,15 +21,17 @@ func windowsEventOptions(sid string, create bool) windowsstate.Options {
 	return windowsstate.Options{RuntimeSID: sid, Names: []string{"consent.json"}, LockName: "event-metadata.lock", TempName: "event-metadata.tmp", MaxBytes: 1024, Create: create}
 }
 func readWindowsEventConsent(m Material) (windowseventhealth.Consent, bool) {
-	if !m.valid() || !m.config.windowsInventory() {
+	return readWindowsEventConsentWithDependencies(m, windowsContextConsentDependencies{Load, openWindowsContextConsent})
+}
+
+func readWindowsEventConsentWithDependencies(m Material, dependencies windowsContextConsentDependencies) (windowseventhealth.Consent, bool) {
+	// Current activated identity is required before every receipt read, including
+	// pending retries and the post-capture/pre-send authority boundaries.
+	if !currentWindowsContextMaterial(m, dependencies.reload) || dependencies.open == nil {
 		return windowseventhealth.Consent{}, false
 	}
-	sid, e := windowsservice.LookupServiceSID()
-	if e != nil {
-		return windowseventhealth.Consent{}, false
-	}
-	s, e := windowsstate.Open(windowsEventConsentDirectory(m), windowsEventOptions(sid, false))
-	if e != nil {
+	s, e := dependencies.open(windowsEventConsentDirectory(m), windowsEventOptions("", false))
+	if e != nil || s == nil {
 		return windowseventhealth.Consent{}, false
 	}
 	defer s.Close()

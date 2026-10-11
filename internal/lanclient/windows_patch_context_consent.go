@@ -26,7 +26,7 @@ func readWindowsPatchContextConsent(m Material) (windowspatchcontext.Consent, bo
 	}
 	// Pending retries do not start the native child. Recheck activated identity
 	// here too, before reading consent, at every sender authority boundary.
-	if !currentWindowsPatchContextMaterial(m, Load) {
+	if !currentWindowsContextMaterial(m, Load) {
 		return windowspatchcontext.Consent{}, false
 	}
 	sid, e := windowsservice.LookupServiceSID()
@@ -147,14 +147,4 @@ func updateWindowsPatchContextConsent(binding, mode string, open func(bool) (pat
 		return zero, ErrState
 	}
 	return WindowsPatchContextConsentResult{windowspatchcontext.Scope, c.Enabled, true}, nil
-}
-
-// reload is a private test seam; production always uses Load. The protected
-// config/ready receipt is read again even after Load to catch replacement races.
-func currentWindowsPatchContextMaterial(m Material, reload func(string) (Material, error)) bool {
-	if !m.valid() || !m.config.windowsInventory() || reload == nil {
-		return false
-	}
-	current, e := reload(m.configPath)
-	return e == nil && current.binding == m.binding && current.config == m.config && validateUpdatesActivatedMaterial(m.configPath, current) == nil
 }

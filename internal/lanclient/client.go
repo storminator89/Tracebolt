@@ -232,49 +232,27 @@ func runUsingStateWithCollectors(ctx context.Context, m Material, state *lanclie
 // All dependencies are private per-attempt values. Tests can exercise staging
 // and transport without reading any production observation source.
 func runUsingStateWithSources(ctx context.Context, m Material, state *lanclientstate.State, collectOperations func(context.Context, time.Time) operational.Snapshot, collectPackages func(context.Context, string, time.Time) (linuxpackages.Snapshot, error), collectBasic func() model.Device) (Report, error) {
-	return runUsingStateWithDependencies(ctx, m, state, collectOperations, collectPackages, collectBasic, collectWindowsForProcessMetrics, nil)
+	return runUsingStateWithCurrentDependencies(ctx, m, state, collectOperations, collectPackages, collectBasic, collectWindowsForProcessMetrics, nil)
 }
 
 // Dependencies are per-attempt and private: fixture transports never open listeners.
-func runUsingStateWithDependencies(ctx context.Context, m Material, state *lanclientstate.State, collectOperations func(context.Context, time.Time) operational.Snapshot, collectPackages func(context.Context, string, time.Time) (linuxpackages.Snapshot, error), collectBasic func() model.Device, collectWindows windowsCollector, send func(*http.Request) (*http.Response, error)) (Report, error) {
-	return runUsingStateWithPatchContextDependencies(ctx, m, state, collectOperations, collectPackages, collectBasic, collectWindows, send, func() (windowseventhealth.Consent, bool) { return readWindowsEventConsent(m) }, windowseventhealth.Collect, func() (windowsvolumes.Consent, bool) { return readWindowsVolumeConsent(m) }, windowsvolumes.Collect, func() (windowsprocessmetrics.Consent, bool) { return readWindowsProcessMetricsConsent(m) }, nativeProcessMetricCollector(m.processSampler), func() (windowsnetwork.Consent, bool) { return readWindowsNetworkConsent(m) }, windowsnetwork.Collect, func() (windowsmanaged.ServiceStartupConsent, bool) { return readWindowsServiceStartupConsent(m) }, windowsmanaged.CollectServiceStartup, func() (windowsupdates.Consent, bool) { return readWindowsUpdatesConsent(m) }, windowsupdateworker.Collect, func() (windowsadapters.Consent, bool) { return readWindowsAdapterContextConsent(m) }, windowsadapters.Collect, func() (windowspatchcontext.Consent, bool) { return readWindowsPatchContextConsent(m) }, windowspatchworker.Collect)
+func runUsingStateWithCurrentDependencies(ctx context.Context, m Material, state *lanclientstate.State, collectOperations func(context.Context, time.Time) operational.Snapshot, collectPackages func(context.Context, string, time.Time) (linuxpackages.Snapshot, error), collectBasic func() model.Device, collectWindows windowsCollector, send func(*http.Request) (*http.Response, error)) (Report, error) {
+	return runUsingStateWithPatchContextAuthorityDependencies(ctx, m, state, collectOperations, collectPackages, collectBasic, collectWindows, send, func() (windowseventhealth.Consent, bool) { return readWindowsEventConsent(m) }, windowseventhealth.Collect, func() (windowsvolumes.Consent, bool) { return readWindowsVolumeConsent(m) }, windowsvolumes.Collect, func() (windowsprocessmetrics.Consent, bool) { return readWindowsProcessMetricsConsent(m) }, nativeProcessMetricCollector(m.processSampler), func() (windowsnetwork.Consent, bool) { return readWindowsNetworkConsent(m) }, windowsnetwork.Collect, func() (windowsmanaged.ServiceStartupConsent, bool) { return readWindowsServiceStartupConsent(m) }, windowsmanaged.CollectServiceStartup, func() (windowsupdates.Consent, bool) { return readWindowsUpdatesConsent(m) }, windowsupdateworker.Collect, func() (windowsadapters.Consent, bool) { return readWindowsAdapterContextConsent(m) }, windowsadapters.Collect, func() (windowspatchcontext.Consent, bool) { return readWindowsPatchContextConsent(m) }, windowspatchworker.Collect, func() bool { return currentWindowsContextMaterial(m, Load) })
 }
 
-func runUsingStateWithEventDependencies(ctx context.Context, m Material, state *lanclientstate.State, collectOperations func(context.Context, time.Time) operational.Snapshot, collectPackages func(context.Context, string, time.Time) (linuxpackages.Snapshot, error), collectBasic func() model.Device, collectWindows windowsCollector, send func(*http.Request) (*http.Response, error), readConsent func() (windowseventhealth.Consent, bool), collectEvents eventCollector) (Report, error) {
-	return runUsingStateWithCapabilityDependencies(ctx, m, state, collectOperations, collectPackages, collectBasic, collectWindows, send, readConsent, collectEvents, nil, nil)
-}
-
-func runUsingStateWithCapabilityDependencies(ctx context.Context, m Material, state *lanclientstate.State, collectOperations func(context.Context, time.Time) operational.Snapshot, collectPackages func(context.Context, string, time.Time) (linuxpackages.Snapshot, error), collectBasic func() model.Device, collectWindows windowsCollector, send func(*http.Request) (*http.Response, error), readConsent func() (windowseventhealth.Consent, bool), collectEvents eventCollector, readVolumes func() (windowsvolumes.Consent, bool), collectVolumes volumeCollector) (Report, error) {
-	return runUsingStateWithProcessMetricsDependencies(ctx, m, state, collectOperations, collectPackages, collectBasic, collectWindows, send, readConsent, collectEvents, readVolumes, collectVolumes, nil, nil)
-}
-
-func runUsingStateWithProcessMetricsDependencies(ctx context.Context, m Material, state *lanclientstate.State, collectOperations func(context.Context, time.Time) operational.Snapshot, collectPackages func(context.Context, string, time.Time) (linuxpackages.Snapshot, error), collectBasic func() model.Device, collectWindows windowsCollector, send func(*http.Request) (*http.Response, error), readConsent func() (windowseventhealth.Consent, bool), collectEvents eventCollector, readVolumes func() (windowsvolumes.Consent, bool), collectVolumes volumeCollector, readProcessMetrics func() (windowsprocessmetrics.Consent, bool), collectProcessMetrics processMetricCollector) (Report, error) {
-	return runUsingStateWithNetworkDependencies(ctx, m, state, collectOperations, collectPackages, collectBasic, collectWindows, send, readConsent, collectEvents, readVolumes, collectVolumes, readProcessMetrics, collectProcessMetrics, nil, nil)
-}
-
-func runUsingStateWithNetworkDependencies(ctx context.Context, m Material, state *lanclientstate.State, collectOperations func(context.Context, time.Time) operational.Snapshot, collectPackages func(context.Context, string, time.Time) (linuxpackages.Snapshot, error), collectBasic func() model.Device, collectWindows windowsCollector, send func(*http.Request) (*http.Response, error), readConsent func() (windowseventhealth.Consent, bool), collectEvents eventCollector, readVolumes func() (windowsvolumes.Consent, bool), collectVolumes volumeCollector, readProcessMetrics func() (windowsprocessmetrics.Consent, bool), collectProcessMetrics processMetricCollector, readNetwork func() (windowsnetwork.Consent, bool), collectNetwork networkCollector) (Report, error) {
-	return runUsingStateWithServiceStartupDependencies(ctx, m, state, collectOperations, collectPackages, collectBasic, collectWindows, send, readConsent, collectEvents, readVolumes, collectVolumes, readProcessMetrics, collectProcessMetrics, readNetwork, collectNetwork, nil, nil)
-}
-
-func runUsingStateWithServiceStartupDependencies(ctx context.Context, m Material, state *lanclientstate.State, collectOperations func(context.Context, time.Time) operational.Snapshot, collectPackages func(context.Context, string, time.Time) (linuxpackages.Snapshot, error), collectBasic func() model.Device, collectWindows windowsCollector, send func(*http.Request) (*http.Response, error), readConsent func() (windowseventhealth.Consent, bool), collectEvents eventCollector, readVolumes func() (windowsvolumes.Consent, bool), collectVolumes volumeCollector, readProcessMetrics func() (windowsprocessmetrics.Consent, bool), collectProcessMetrics processMetricCollector, readNetwork func() (windowsnetwork.Consent, bool), collectNetwork networkCollector, readServiceStartup func() (windowsmanaged.ServiceStartupConsent, bool), collectServiceStartup serviceStartupCollector) (Report, error) {
-	return runUsingStateWithUpdatesDependencies(ctx, m, state, collectOperations, collectPackages, collectBasic, collectWindows, send, readConsent, collectEvents, readVolumes, collectVolumes, readProcessMetrics, collectProcessMetrics, readNetwork, collectNetwork, readServiceStartup, collectServiceStartup, nil, nil)
-}
-
-func runUsingStateWithUpdatesDependencies(ctx context.Context, m Material, state *lanclientstate.State, collectOperations func(context.Context, time.Time) operational.Snapshot, collectPackages func(context.Context, string, time.Time) (linuxpackages.Snapshot, error), collectBasic func() model.Device, collectWindows windowsCollector, send func(*http.Request) (*http.Response, error), readConsent func() (windowseventhealth.Consent, bool), collectEvents eventCollector, readVolumes func() (windowsvolumes.Consent, bool), collectVolumes volumeCollector, readProcessMetrics func() (windowsprocessmetrics.Consent, bool), collectProcessMetrics processMetricCollector, readNetwork func() (windowsnetwork.Consent, bool), collectNetwork networkCollector, readServiceStartup func() (windowsmanaged.ServiceStartupConsent, bool), collectServiceStartup serviceStartupCollector, readUpdates func() (windowsupdates.Consent, bool), collectUpdates updatesCollector) (Report, error) {
-	return runUsingStateWithAdapterContextDependencies(ctx, m, state, collectOperations, collectPackages, collectBasic, collectWindows, send, readConsent, collectEvents, readVolumes, collectVolumes, readProcessMetrics, collectProcessMetrics, readNetwork, collectNetwork, readServiceStartup, collectServiceStartup, readUpdates, collectUpdates, nil, nil)
-}
-
-func runUsingStateWithAdapterContextDependencies(ctx context.Context, m Material, state *lanclientstate.State, collectOperations func(context.Context, time.Time) operational.Snapshot, collectPackages func(context.Context, string, time.Time) (linuxpackages.Snapshot, error), collectBasic func() model.Device, collectWindows windowsCollector, send func(*http.Request) (*http.Response, error), readConsent func() (windowseventhealth.Consent, bool), collectEvents eventCollector, readVolumes func() (windowsvolumes.Consent, bool), collectVolumes volumeCollector, readProcessMetrics func() (windowsprocessmetrics.Consent, bool), collectProcessMetrics processMetricCollector, readNetwork func() (windowsnetwork.Consent, bool), collectNetwork networkCollector, readServiceStartup func() (windowsmanaged.ServiceStartupConsent, bool), collectServiceStartup serviceStartupCollector, readUpdates func() (windowsupdates.Consent, bool), collectUpdates updatesCollector, readAdapterContext func() (windowsadapters.Consent, bool), collectAdapterContext adapterContextCollector) (Report, error) {
-	return runUsingStateWithPatchContextDependencies(ctx, m, state, collectOperations, collectPackages, collectBasic, collectWindows, send, readConsent, collectEvents, readVolumes, collectVolumes, readProcessMetrics, collectProcessMetrics, readNetwork, collectNetwork, readServiceStartup, collectServiceStartup, readUpdates, collectUpdates, readAdapterContext, collectAdapterContext, nil, nil)
-}
-
-func runUsingStateWithPatchContextDependencies(ctx context.Context, m Material, state *lanclientstate.State, collectOperations func(context.Context, time.Time) operational.Snapshot, collectPackages func(context.Context, string, time.Time) (linuxpackages.Snapshot, error), collectBasic func() model.Device, collectWindows windowsCollector, send func(*http.Request) (*http.Response, error), readConsent func() (windowseventhealth.Consent, bool), collectEvents eventCollector, readVolumes func() (windowsvolumes.Consent, bool), collectVolumes volumeCollector, readProcessMetrics func() (windowsprocessmetrics.Consent, bool), collectProcessMetrics processMetricCollector, readNetwork func() (windowsnetwork.Consent, bool), collectNetwork networkCollector, readServiceStartup func() (windowsmanaged.ServiceStartupConsent, bool), collectServiceStartup serviceStartupCollector, readUpdates func() (windowsupdates.Consent, bool), collectUpdates updatesCollector, readAdapterContext func() (windowsadapters.Consent, bool), collectAdapterContext adapterContextCollector, readPatchContext func() (windowspatchcontext.Consent, bool), collectPatchContext patchContextCollector) (Report, error) {
+func runUsingStateWithPatchContextAuthorityDependencies(ctx context.Context, m Material, state *lanclientstate.State, collectOperations func(context.Context, time.Time) operational.Snapshot, collectPackages func(context.Context, string, time.Time) (linuxpackages.Snapshot, error), collectBasic func() model.Device, collectWindows windowsCollector, send func(*http.Request) (*http.Response, error), readConsent func() (windowseventhealth.Consent, bool), collectEvents eventCollector, readVolumes func() (windowsvolumes.Consent, bool), collectVolumes volumeCollector, readProcessMetrics func() (windowsprocessmetrics.Consent, bool), collectProcessMetrics processMetricCollector, readNetwork func() (windowsnetwork.Consent, bool), collectNetwork networkCollector, readServiceStartup func() (windowsmanaged.ServiceStartupConsent, bool), collectServiceStartup serviceStartupCollector, readUpdates func() (windowsupdates.Consent, bool), collectUpdates updatesCollector, readAdapterContext func() (windowsadapters.Consent, bool), collectAdapterContext adapterContextCollector, readPatchContext func() (windowspatchcontext.Consent, bool), collectPatchContext patchContextCollector, currentMaterial func() bool) (Report, error) {
 	report := Report{SchemaVersion: "tracebolt.agent-run.v1", Status: "failed", Profile: m.config.Profile}
 	if ctx.Err() != nil {
 		return report, ctx.Err()
 	}
 	if !m.valid() {
 		return report, ErrConfiguration
+	}
+	currentAuthority := func() bool {
+		return !m.config.windowsInventory() || currentMaterial != nil && currentMaterial()
+	}
+	if !currentAuthority() {
+		return report, ErrState
 	}
 	consent, enabled := windowseventhealth.Consent{}, false
 	if m.config.windowsInventory() && readConsent != nil {
@@ -323,6 +301,11 @@ func runUsingStateWithPatchContextDependencies(ctx context.Context, m Material, 
 		collectUpdates = updatesWithPatchBudget(collectUpdates)
 		collectPatchContext = patchContextWithBudget(collectPatchContext)
 	}
+	// A reader may observe identity loss as disabled scope. Reject that loss
+	// before it can be mistaken for an ordinary revocation of pending data.
+	if !currentAuthority() {
+		return report, ErrState
+	}
 	pending, e := state.Pending()
 	if e != nil {
 		return report, ErrState
@@ -338,6 +321,9 @@ func runUsingStateWithPatchContextDependencies(ctx context.Context, m Material, 
 			return report, ctx.Err()
 		}
 		unconsented := f.WindowsEvents != nil && (!enabled || f.WindowsEvents.GrantID != consent.GrantID) || f.WindowsVolumes != nil && (!volumesEnabled || f.WindowsVolumes.GrantID != volumeConsent.GrantID) || f.WindowsProcessMetrics != nil && (!processEnabled || f.WindowsProcessMetrics.GrantID != processConsent.GrantID) || f.WindowsNetwork != nil && (!networkEnabled || f.WindowsNetwork.GrantID != networkConsent.GrantID) || f.WindowsServiceStartup != nil && (!startupEnabled || f.WindowsServiceStartup.GrantID != startupConsent.GrantID) || f.WindowsUpdates != nil && (!updatesEnabled || f.WindowsUpdates.GrantID != updatesConsent.GrantID) || f.WindowsAdapterContext != nil && (!adapterEnabled || f.WindowsAdapterContext.GrantID != adapterConsent.GrantID) || f.WindowsPatchContext != nil && (!patchEnabled || f.WindowsPatchContext.GrantID != patchConsent.GrantID)
+		if !currentAuthority() {
+			return report, ErrState
+		}
 		if stale(f, time.Now().UTC()) || unconsented {
 			if state.Discard(pending.Digest) != nil {
 				return report, ErrState
@@ -352,6 +338,9 @@ func runUsingStateWithPatchContextDependencies(ctx context.Context, m Material, 
 	if pending == nil {
 		if ctx.Err() != nil {
 			return report, ctx.Err()
+		}
+		if !currentAuthority() {
+			return report, ErrState
 		}
 		sequence, e := state.NextSequence()
 		if e != nil {
@@ -440,6 +429,9 @@ func runUsingStateWithPatchContextDependencies(ctx context.Context, m Material, 
 		if f.WindowsEvents != nil && !sameEventConsent(readConsent, consent, m.binding) || f.WindowsVolumes != nil && !sameVolumeConsent(readVolumes, volumeConsent, m.binding) || f.WindowsProcessMetrics != nil && !sameProcessMetricConsent(readProcessMetrics, processConsent, m.binding) || f.WindowsNetwork != nil && !sameNetworkConsent(readNetwork, networkConsent, m.binding) || f.WindowsServiceStartup != nil && !sameServiceStartupConsent(readServiceStartup, startupConsent, m.binding) || f.WindowsUpdates != nil && !sameUpdatesConsent(readUpdates, updatesConsent, m.binding) || f.WindowsAdapterContext != nil && !sameAdapterContextConsent(readAdapterContext, adapterConsent, m.binding) || f.WindowsPatchContext != nil && !samePatchContextConsent(readPatchContext, patchConsent, m.binding) {
 			return report, ErrState
 		}
+		if !currentAuthority() {
+			return report, ErrState
+		}
 		p, e := state.Stage(sequence, body)
 		if e != nil {
 			return report, ErrState
@@ -480,6 +472,9 @@ func runUsingStateWithPatchContextDependencies(ctx context.Context, m Material, 
 	}
 	if ctx.Err() != nil {
 		return report, ctx.Err()
+	}
+	if !currentAuthority() {
+		return report, ErrState
 	}
 	response, e := send(req)
 	if e != nil {

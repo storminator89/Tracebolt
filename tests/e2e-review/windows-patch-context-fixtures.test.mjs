@@ -4,6 +4,19 @@ import fs from 'node:fs';
 import {windowsUpdatesBrowserFixture} from './windows-updates-browser.mjs';
 import {requireWindowsPatchContextEvidence,windowsPatchContextDisclosure} from './windows-patch-context-browser.mjs';
 const serverNow='2026-10-07T12:00:10Z',capturedAt='2026-10-07T12:00:00Z';
+test('Docker web typecheck receives only the shared synthetic patch snapshot',()=>{
+ const read=name=>fs.readFileSync(new URL(name,import.meta.url),'utf8');
+ const docker=read('../../Dockerfile'),webStage=docker.split('FROM --platform=$BUILDPLATFORM golang:')[0],runtimeStage=docker.split('FROM scratch AS runtime')[1];
+ const fixture='internal/windowspatchcontext/testdata/snapshot.json',copy=`COPY ${fixture} /src/${fixture}\n`;
+ assert.ok(webStage.includes(copy));
+ assert.ok(webStage.indexOf(copy)<webStage.indexOf('RUN npm run build'));
+ assert.doesNotMatch(webStage,/^COPY internal\/\s/m);
+ assert.doesNotMatch(runtimeStage,/windowspatchcontext|testdata\/snapshot\.json/);
+ const ignore=read('../../.dockerignore').split(/\r?\n/);
+ assert.ok(ignore.includes('!internal/')&&ignore.includes('!internal/**'));
+ assert.match(read('../../web/src/windows-patch-context-types.test.ts'),/import goFixture from '\.\.\/\.\.\/internal\/windowspatchcontext\/testdata\/snapshot\.json'/);
+ assert.equal(JSON.parse(read(`../../${fixture}`)).schemaVersion,'tracebolt.windows-patch-context.v1');
+});
 test('patch fixtures retain base binding and distinguish empty, partial, denied, absent and expired history',()=>{
  assert.match(windowsPatchContextDisclosure,/UI-only fixture evidence/);
  for(const phase of ['bounded','empty','partial','partial-empty','denied','unavailable','legacy']){

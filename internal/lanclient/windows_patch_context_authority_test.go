@@ -21,7 +21,7 @@ import (
 
 // The reload seam substitutes native Windows material loading only. These tests
 // use actual protected disposable config/ready bytes and the production guard.
-func patchActivatedFixture(t *testing.T) (Material, func() bool, func(string)) {
+func windowsActivatedMaterialFixture(t *testing.T) (Material, func(string) (Material, error), func(string)) {
 	t.Helper()
 	m := windowsMaterialFixture(t, "http-test")
 	m.configPath = filepath.Join(filepath.Dir(m.config.StateDirectory), "agent.json")
@@ -38,13 +38,11 @@ func patchActivatedFixture(t *testing.T) (Material, func() bool, func(string)) {
 	}
 	current := m
 	var loadErr error
-	check := func() bool {
-		return currentWindowsPatchContextMaterial(m, func(got string) (Material, error) {
-			if got != m.configPath {
-				t.Fatal("reload path")
-			}
-			return current, loadErr
-		})
+	reload := func(got string) (Material, error) {
+		if got != m.configPath {
+			t.Fatal("reload path")
+		}
+		return current, loadErr
 	}
 	change := func(kind string) {
 		switch kind {
@@ -71,15 +69,15 @@ func patchActivatedFixture(t *testing.T) (Material, func() bool, func(string)) {
 			t.Fatal(kind)
 		}
 	}
-	if !check() {
+	if !currentWindowsContextMaterial(m, reload) {
 		t.Fatal("valid activated fixture rejected")
 	}
-	return m, check, change
+	return m, reload, change
 }
 func TestWindowsPatchContextCurrentIdentitySuppressesPendingRetry(t *testing.T) {
 	for _, kind := range []string{"identity-replaced", "config-replaced", "ready-removed", "ready-replaced", "load-denied"} {
 		t.Run(kind, func(t *testing.T) {
-			m, current, change := patchActivatedFixture(t)
+			m, reload, change := windowsActivatedMaterialFixture(t)
 			state, e := lanclientstate.InitializeNew(m.config.StateDirectory, m.binding)
 			if e != nil {
 				t.Fatal(e)
@@ -98,21 +96,25 @@ func TestWindowsPatchContextCurrentIdentitySuppressesPendingRetry(t *testing.T) 
 				}
 				return nil, errors.New("fixture offline")
 			}
-			read := func() (windowspatchcontext.Consent, bool) { return c, current() }
-			_, e = runPatchOnly(context.Background(), m, state, send, read, func(ctx context.Context, r windowspatchcontext.Request) (windowspatchcontext.Snapshot, error) {
+			read := func() (windowspatchcontext.Consent, bool) { return c, currentWindowsContextMaterial(m, reload) }
+			_, e = runPatchOnlyWithAuthority(context.Background(), m, state, send, read, func(ctx context.Context, r windowspatchcontext.Request) (windowspatchcontext.Snapshot, error) {
 				calls++
 				return patchSourceFixture(ctx, r)
-			})
+			}, func() bool { return currentWindowsContextMaterial(m, reload) })
 			if !errors.Is(e, ErrTransport) || sent.WindowsPatchContext == nil {
 				t.Fatal("missing pending", e)
 			}
-			first := sent.Sequence
+			first, pendingErr := state.Pending()
+			if pendingErr != nil || first == nil {
+				t.Fatal("pending fixture", pendingErr)
+			}
 			change(kind)
-			report, e := runPatchOnly(context.Background(), m, state, send, read, func(context.Context, windowspatchcontext.Request) (windowspatchcontext.Snapshot, error) {
+			report, e := runPatchOnlyWithAuthority(context.Background(), m, state, send, read, func(context.Context, windowspatchcontext.Request) (windowspatchcontext.Snapshot, error) {
 				t.Fatal("stale identity recollected patch")
 				return windowspatchcontext.Snapshot{}, nil
-			})
-			if !errors.Is(e, ErrTransport) || !report.DiscardedUnconsented || report.RetriedPending || sent.WindowsPatchContext != nil || sent.Sequence <= first || calls != 1 || len(bodies) != 2 || bytes.Equal(bodies[0], bodies[1]) {
+			}, func() bool { return currentWindowsContextMaterial(m, reload) })
+			retained, pendingErr := state.Pending()
+			if !errors.Is(e, ErrState) || report.DiscardedUnconsented || report.RetriedPending || calls != 1 || len(bodies) != 1 || pendingErr != nil || retained == nil || retained.Digest != first.Digest || !bytes.Equal(retained.Body(), first.Body()) {
 				t.Fatal("stale private patch retried", e, report)
 			}
 		})
@@ -122,7 +124,7 @@ func TestWindowsPatchContextCurrentIdentityAfterCaptureAndBeforeSend(t *testing.
 	for _, kind := range []string{"identity-replaced", "config-replaced", "ready-removed"} {
 		for _, phase := range []string{"after-capture", "before-send"} {
 			t.Run(kind+"/"+phase, func(t *testing.T) {
-				m, current, change := patchActivatedFixture(t)
+				m, reload, change := windowsActivatedMaterialFixture(t)
 				state, e := lanclientstate.InitializeNew(m.config.StateDirectory, m.binding)
 				if e != nil {
 					t.Fatal(e)
@@ -131,19 +133,19 @@ func TestWindowsPatchContextCurrentIdentityAfterCaptureAndBeforeSend(t *testing.
 				c := patchConsentFixture(m)
 				reads := 0
 				sent := false
-				_, e = runPatchOnly(context.Background(), m, state, func(*http.Request) (*http.Response, error) { sent = true; return nil, nil }, func() (windowspatchcontext.Consent, bool) {
+				_, e = runPatchOnlyWithAuthority(context.Background(), m, state, func(*http.Request) (*http.Response, error) { sent = true; return nil, nil }, func() (windowspatchcontext.Consent, bool) {
 					reads++
 					if phase == "before-send" && reads == 4 {
 						change(kind)
 					}
-					return c, current()
+					return c, currentWindowsContextMaterial(m, reload)
 				}, func(ctx context.Context, r windowspatchcontext.Request) (windowspatchcontext.Snapshot, error) {
 					s, e := patchSourceFixture(ctx, r)
 					if phase == "after-capture" {
 						change(kind)
 					}
 					return s, e
-				})
+				}, func() bool { return currentWindowsContextMaterial(m, reload) })
 				if !errors.Is(e, ErrState) || sent {
 					t.Fatal("stale identity sent", e, reads)
 				}

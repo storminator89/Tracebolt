@@ -21,15 +21,17 @@ func windowsNetworkOptions(sid string, create bool) windowsstate.Options {
 	return windowsstate.Options{RuntimeSID: sid, Names: []string{"consent.json"}, LockName: "network.lock", TempName: "network.tmp", MaxBytes: 1024, Create: create}
 }
 func readWindowsNetworkConsent(m Material) (windowsnetwork.Consent, bool) {
-	if !m.valid() || !m.config.windowsInventory() {
+	return readWindowsNetworkConsentWithDependencies(m, windowsContextConsentDependencies{Load, openWindowsContextConsent})
+}
+
+func readWindowsNetworkConsentWithDependencies(m Material, dependencies windowsContextConsentDependencies) (windowsnetwork.Consent, bool) {
+	// Current activated identity is required before every receipt read, including
+	// pending retries and the post-capture/pre-send authority boundaries.
+	if !currentWindowsContextMaterial(m, dependencies.reload) || dependencies.open == nil {
 		return windowsnetwork.Consent{}, false
 	}
-	sid, e := windowsservice.LookupServiceSID()
-	if e != nil {
-		return windowsnetwork.Consent{}, false
-	}
-	s, e := windowsstate.Open(windowsNetworkConsentDirectory(m), windowsNetworkOptions(sid, false))
-	if e != nil {
+	s, e := dependencies.open(windowsNetworkConsentDirectory(m), windowsNetworkOptions("", false))
+	if e != nil || s == nil {
 		return windowsnetwork.Consent{}, false
 	}
 	defer s.Close()
