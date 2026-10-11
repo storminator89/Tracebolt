@@ -1,7 +1,7 @@
 import { WindowsContextPanel } from './windows-retained-context';
 import { WindowsServiceActionsPanel } from './windows-service-actions';
 import { WindowsFullServicesPanel } from './windows-full-services';
-import { WindowsFullSoftwarePanel } from './windows-full-software';
+import { WindowsSoftwareWorkspace } from './windows-software-history';
 import { WindowsFullProcessesPanel } from './windows-full-processes';
 import { WindowsServiceStartupNote } from './windows-service-startup';
 import { WindowsInventoryTable, useWindowsInventoryTableControls } from './windows-inventory-tables';
@@ -78,7 +78,7 @@ export function WindowsInventoryWorkspace({ resource, initialTab, fullServices }
         <div className="windows-inventory-tabs" role="tablist" aria-label={c.source}>{tabs.map((key, index) => <button type="button" key={key} id={`${id}-${key}`} role="tab" aria-selected={selected === key} aria-controls={`${id}-panel`} tabIndex={selected === key ? 0 : -1} onClick={() => select(key)} onKeyDown={event => { const next = event.key === 'ArrowRight' ? (index + 1) % tabs.length : event.key === 'ArrowLeft' ? (index + tabs.length - 1) % tabs.length : event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : null; if (next !== null) { event.preventDefault(); select(tabs[next]); document.getElementById(`${id}-${tabs[next]}`)?.focus(); } }}>{c[key]}</button>)}</div>
         <div role="tabpanel" id={`${id}-panel`} aria-labelledby={`${id}-${selected}`}>
             {selected === 'services' && fullServices && <><WindowsServiceActionsPanel {...fullServices}/><WindowsFullServicesPanel {...fullServices}/><h3 className="windows-full-services-preview-label">{locale === 'de' ? 'Begrenzte Dienstvorschau: getrennte Quelle, höchstens 128 Zeilen' : 'Bounded service preview: separate source, at most 128 rows'}</h3></>}
-            {fullSoftware && <WindowsFullSoftwarePanel {...fullSoftware}/>}
+            {fullSoftware && <WindowsSoftwareWorkspace key={`${fullSoftware.deviceId}:${fullSoftware.sessionKey}`} {...fullSoftware}/>}
             {fullProcesses && <WindowsFullProcessesPanel {...fullProcesses}>{legacySection ?? <InventoryState resource={resource}/>}</WindowsFullProcessesPanel>}
             {selected === 'device' && <><WindowsContextPanel resource={resource} kind="hardwareContext"/><WindowsContextPanel resource={resource} kind="resourceContext"/></>}
             {selected === 'sessions' && <WindowsContextPanel resource={resource} kind="sessionContext"/>}

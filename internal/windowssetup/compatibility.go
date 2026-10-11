@@ -35,6 +35,9 @@ const ReadAdminContractV7 = "fresh-eighteen-read-admin-scopes-v1"
 const ReadAdminCapabilitiesPathV8 = "/v1/windows/read-admin-setup-capabilities-v8"
 const ReadAdminContractV8 = "fresh-nineteen-read-admin-scopes-v1"
 
+const ReadAdminCapabilitiesPathV9 = "/v1/windows/read-admin-setup-capabilities-v9"
+const ReadAdminContractV9 = "fresh-twenty-read-admin-scopes-v1"
+
 var ErrCompatibility = errors.New("manager is unavailable or does not support this Windows Setup contract; update the manager and obtain a new Windows bootstrap export")
 
 // Capabilities binds finite protocol support to the public bootstrap's manager.
@@ -99,6 +102,12 @@ func ExpectedReadAdminV8(manager, enrollment, agent string) Capabilities {
 	return c
 }
 
+func ExpectedReadAdminV9(manager, enrollment, agent string) Capabilities {
+	c := Expected(manager, enrollment, agent)
+	c.SetupContract = ReadAdminContractV9
+	return c
+}
+
 func CapabilityPath(c Capabilities) (string, error) {
 	switch c.SetupContract {
 	case FreshReadContract:
@@ -111,6 +120,8 @@ func CapabilityPath(c Capabilities) (string, error) {
 		return ReadAdminCapabilitiesPathV3, nil
 	case ReadAdminContractV4:
 		return ReadAdminCapabilitiesPathV4, nil
+	case ReadAdminContractV9:
+		return ReadAdminCapabilitiesPathV9, nil
 	case ReadAdminContractV8:
 		return ReadAdminCapabilitiesPathV8, nil
 	case ReadAdminContractV7:
@@ -126,7 +137,7 @@ func CapabilityPath(c Capabilities) (string, error) {
 // Match accepts only the exact bounded canonical finite contract. Old or newer
 // incompatible support cannot be mistaken for the exact selected receiver.
 func Match(raw []byte, expected Capabilities) error {
-	if len(raw) == 0 || len(raw) > 2048 || expected.SchemaVersion != CapabilitiesVersion || (expected.SetupContract != FreshReadContract && expected.SetupContract != ReadAdminContract && expected.SetupContract != ReadAdminContractV2 && expected.SetupContract != ReadAdminContractV3 && expected.SetupContract != ReadAdminContractV4 && expected.SetupContract != ReadAdminContractV5 && expected.SetupContract != ReadAdminContractV6 && expected.SetupContract != ReadAdminContractV7 && expected.SetupContract != ReadAdminContractV8) || expected.ManagerInstanceID == "" || expected.EnrollmentOrigin == "" || expected.AgentOrigin == "" || expected.CollectionProfile != "windows-inventory-v1" {
+	if len(raw) == 0 || len(raw) > 2048 || expected.SchemaVersion != CapabilitiesVersion || (expected.SetupContract != FreshReadContract && expected.SetupContract != ReadAdminContract && expected.SetupContract != ReadAdminContractV2 && expected.SetupContract != ReadAdminContractV3 && expected.SetupContract != ReadAdminContractV4 && expected.SetupContract != ReadAdminContractV5 && expected.SetupContract != ReadAdminContractV6 && expected.SetupContract != ReadAdminContractV7 && expected.SetupContract != ReadAdminContractV8 && expected.SetupContract != ReadAdminContractV9) || expected.ManagerInstanceID == "" || expected.EnrollmentOrigin == "" || expected.AgentOrigin == "" || expected.CollectionProfile != "windows-inventory-v1" {
 		return ErrCompatibility
 	}
 	var got Capabilities

@@ -28,7 +28,7 @@ import (
 const WindowsCapabilityConsentVersionV5 = "tracebolt.windows-capability-consent.v5"
 
 // WindowsReadAdminScopes is the historical V5 ordered scope set. Fresh Setup
-// uses WindowsReadAdminScopesV12; this contract is never expanded in place.
+// uses WindowsReadAdminScopesV13; this contract is never expanded in place.
 func WindowsReadAdminScopes() []string {
 	return []string{enrollmentcrypto.CollectionProfileWindowsInventory, windowseventhealth.Scope, windowsvolumes.Scope, windowsprocessmetrics.Scope, windowsnetwork.Scope, windowsmanaged.ServiceStartupScope, windowsfullservices.Scope, windowsfullsoftware.Scope, windowsadapters.Scope, windowspatchcontext.Scope, windowssecurity.Scope, windowssessions.Scope}
 }
@@ -237,6 +237,31 @@ func WindowsReadAdminNoticesV12(insecure bool) []string {
 	n := append(WindowsReadAdminNoticesV11(insecure), windowsstorageio.Privacy)
 	if insecure {
 		n = append(n, windowsstorageio.HTTPPrivacy)
+	}
+	return n
+}
+
+// V13 adds explicit manager-side software-change history. It reuses the complete
+// software grant with a distinct scope; no provider read or privilege is added.
+const WindowsCapabilityConsentVersionV13 = "tracebolt.windows-capability-consent.v13"
+
+func WindowsReadAdminScopesV13() []string {
+	return append(WindowsReadAdminScopesV12(), windowsfullsoftware.HistoryScope)
+}
+func validWindowsReadAdminConsentV13(c WindowsCapabilityConsent) bool {
+	return c.SchemaVersion == WindowsCapabilityConsentVersionV13 && c.CollectionProfile == enrollmentcrypto.CollectionProfileWindowsInventory && c.Acknowledged && reflect.DeepEqual(c.Scopes, WindowsReadAdminScopesV13())
+}
+func WindowsReadAdminGroupsV13() []WindowsReadAdminGroup {
+	g := WindowsReadAdminGroupsV12()
+	g[1].Summary += " Manager comparison of complete comparable HKLM 32/64 generations records observed registration add/remove and field/version differences. Seven-day original-observation retention from the earlier capture, at most 1024 change rows / 1 MiB per device; quota gaps remain visible. No actual install times, upgrade inference or application identity across reinstalls; operator search/paging only, no AI/export/health/actions."
+	g[1].Scopes = append(g[1].Scopes, windowsfullsoftware.HistoryScope)
+	g[1].Prerequisites += " Separate default-off history approval under the same exact current identity, source and software grant. The first complete generation after approval is a fresh baseline. No actual install times, upgrade inference or application identity across reinstalls; operator search/paging only, no AI/export/health/actions. No new native reads or privileges."
+	return g
+}
+func WindowsReadAdminNoticesV13(insecure bool) []string {
+	n := append(WindowsReadAdminNoticesV12(insecure), windowsfullsoftware.HistoryPrivacy)
+	if insecure {
+		n = append(n, windowsfullsoftware.HistoryHTTPPrivacy)
 	}
 	return n
 }

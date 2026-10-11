@@ -9,7 +9,7 @@ before native acceptance and a new release.
 
 ## Current development source
 
-Fresh Setup offers **Read admin** with nineteen explicitly disclosed read scopes,
+Fresh Setup offers **Read admin** with twenty explicitly disclosed read scopes,
 grouped into concise sections. Consent starts unchecked, including the personal
 session labels and identifying serial metadata. The manager and endpoint must
 implement the same profile. Selecting it does not prove access under the
@@ -20,6 +20,7 @@ installed service identity.
 | Fleet and resources | Reported hostname/IP search, CPU/RAM/volume observations, resource history | Original age and partial/unavailable sources remain visible; capacity is not disk health |
 | CPU and memory context | [CPU models and source-labeled processor counts, installed SMBIOS RAM, OS-usable/available RAM, commit current/limit/remaining and aggregate pagefile capacity/use](windows-resource-context.md) | Independent sources; no pagefile names/paths, paging-I/O/thrashing/health verdict or change to CPU utilization sampling |
 | Inventory | [Complete caller-visible process snapshots](windows-full-processes-contract.md), separate process CPU/working-set RAM sample, complete caller-visible Win32 services, HKLM 32/64 machine software generations | CPU/RAM remains a separately consented 128-row sample; no drivers, ACL-invisible services, per-user/Store or portable-app completeness |
+| Software history | [Observed HKLM registration and metadata changes](windows-software-history.md) between complete comparable generations | Separate explicit seven-day history grant; whole-comparison quota gaps are visible. No actual install times or upgrade inference |
 | Network | Numeric TCP/UDP endpoints, adapter link/DNS/gateway context, [caller-visible routes and raw interface octet/error/discard counters](windows-network-context.md) | Separate source snapshots without index joins; counters may reset, are not rates or guaranteed since-boot totals. No traffic capture, probes or DNS lookup |
 | Updates | Build labels, bounded retained update history, checked reboot indicators | History is not current patch compliance; no online update scan or Windows CVE assessment |
 | Security | Independent Defender/Firewall plus [Security Center antivirus registration/status and TPM presence/version](windows-security-coverage.md) | Client-only Security Center; no protection, TPM readiness or effective-policy verdict. BitLocker and Secure Boot remain open |
@@ -33,13 +34,9 @@ their fixed local providers, exact grants and privacy notices. Disabled or denie
 providers remain unknown/unavailable; Setup does not install providers or widen
 service privileges to obtain data. Existing grant bytes keep their exact scope.
 
-A historical v14 maximum-composition fixture can fail frame fitting when existing
-bounded envelopes coexist with a synthetically padded 16 KiB observation. That
-padding is not built-in collector output and does not establish native
-reachability. Fresh CPU/memory-context v15 reserves the bounded base preview
-before row binding; old wire/retry bytes and full generations remain unchanged.
-Fresh aggregate storage-I/O v16 reserves 26 KiB for that base preview and keeps
-the same frame ceiling. See [frame bounds](windows-storage-io.md#worker-transport-and-privacy).
+Current storage-I/O transport reserves a bounded 26 KiB base preview within the
+unchanged frame ceiling. Complete inventory and derived history use their separate
+bounded transport/store. See [frame bounds](windows-storage-io.md#worker-transport-and-privacy).
 
 ## Separate optional features
 
@@ -67,7 +64,7 @@ The unsigned x64
 [v0.1.0-windows-preview.1](https://github.com/storminator89/Tracebolt/releases/tag/v0.1.0-windows-preview.1)
 contains the older **five-scope** setup: base inventory, Application/System event
 headers, volume metadata, process metrics and numeric network endpoints.
-It does not contain the current nineteen-scope Read admin profile or later
+It does not contain the current twenty-scope Read admin profile or later
 complete inventory, context, message-content and cached-update additions.
 
 Its accepted native subset covers fresh hosted **Windows Server 2025 x64** with a

@@ -1,0 +1,319 @@
+[
+  {
+    "name": "awaiting",
+    "query": {
+      "search": "",
+      "sort": "observed-desc",
+      "limit": 100,
+      "cursor": ""
+    },
+    "page": {
+      "schemaVersion": "tracebolt.windows-software-history-page.v1",
+      "deviceId": "agent_00000000000000000000000000000001",
+      "serverNow": "2027-01-15T08:00:10Z",
+      "status": "awaiting",
+      "authorityUntil": "2027-01-16T08:00:00Z",
+      "grantId": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "grantRevision": 1,
+      "historyDigest": "",
+      "comparison": null,
+      "latestAttempt": null,
+      "gapCount": 0,
+      "omittedChanges": 0,
+      "expiredChanges": 0,
+      "retainedCount": 0,
+      "search": "",
+      "limit": 100,
+      "offset": 0,
+      "matchingCount": 0,
+      "rows": [],
+      "nextCursor": "",
+      "cursorExpiresAt": null
+    }
+  },
+  {
+    "name": "baseline",
+    "query": {
+      "search": "",
+      "sort": "observed-desc",
+      "limit": 100,
+      "cursor": ""
+    },
+    "page": {
+      "schemaVersion": "tracebolt.windows-software-history-page.v1",
+      "deviceId": "agent_00000000000000000000000000000001",
+      "serverNow": "2027-01-15T08:00:10Z",
+      "status": "ready",
+      "authorityUntil": "2027-01-16T08:00:00Z",
+      "grantId": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "grantRevision": 1,
+      "historyDigest": "64afc428b17127ad77b1c010cef4364e5ef854952f58a3fb07745f05ab4ca99b",
+      "comparison": {
+        "status": "baseline",
+        "reason": "no_baseline",
+        "beforeObservedAt": null,
+        "afterObservedAt": "2027-01-15T08:00:10Z",
+        "expiresAt": "2027-01-22T08:00:10Z",
+        "observedChanges": 0
+      },
+      "latestAttempt": {
+        "sequence": 1,
+        "attemptedAt": "2027-01-15T08:00:10Z",
+        "status": "complete",
+        "reason": ""
+      },
+      "gapCount": 0,
+      "omittedChanges": 0,
+      "expiredChanges": 0,
+      "retainedCount": 0,
+      "search": "",
+      "limit": 100,
+      "offset": 0,
+      "matchingCount": 0,
+      "rows": [],
+      "nextCursor": "",
+      "cursorExpiresAt": "2027-01-15T08:15:10Z"
+    }
+  },
+  {
+    "name": "observedChanges",
+    "query": {
+      "search": "",
+      "sort": "observed-desc",
+      "limit": 100,
+      "cursor": ""
+    },
+    "page": {
+      "schemaVersion": "tracebolt.windows-software-history-page.v1",
+      "deviceId": "agent_00000000000000000000000000000001",
+      "serverNow": "2027-01-15T08:01:10Z",
+      "status": "ready",
+      "authorityUntil": "2027-01-16T08:00:00Z",
+      "grantId": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "grantRevision": 1,
+      "historyDigest": "faf7cac725047228527c3a86b0429d3c68a11c7ec3a4d62e00b38597f3521f84",
+      "comparison": {
+        "status": "compared",
+        "reason": "",
+        "beforeObservedAt": "2027-01-15T08:00:10Z",
+        "afterObservedAt": "2027-01-15T08:01:10Z",
+        "expiresAt": "2027-01-22T08:00:10Z",
+        "observedChanges": 2
+      },
+      "latestAttempt": {
+        "sequence": 2,
+        "attemptedAt": "2027-01-15T08:01:10Z",
+        "status": "complete",
+        "reason": ""
+      },
+      "gapCount": 0,
+      "omittedChanges": 0,
+      "expiredChanges": 0,
+      "retainedCount": 2,
+      "search": "",
+      "limit": 100,
+      "offset": 0,
+      "matchingCount": 2,
+      "rows": [
+        {
+          "id": "00e725136aa4bfb7af1aeff58c23c427b74e7316d4ea45393d5f1df5cae37474",
+          "kind": "metadata_changed",
+          "registrationId": "0000000000000000000000000000000000000000000000000000000000000001",
+          "registryView": "64",
+          "beforeObservedAt": "2027-01-15T08:00:10Z",
+          "afterObservedAt": "2027-01-15T08:01:10Z",
+          "expiresAt": "2027-01-22T08:00:10Z",
+          "before": {
+            "registrationId": "0000000000000000000000000000000000000000000000000000000000000001",
+            "registryView": "64",
+            "name": "Duplicate 東京",
+            "nameQuality": "observed",
+            "version": "2",
+            "versionQuality": "observed",
+            "publisher": null,
+            "publisherQuality": "unavailable"
+          },
+          "after": {
+            "registrationId": "0000000000000000000000000000000000000000000000000000000000000001",
+            "registryView": "64",
+            "name": "Duplicate 東京",
+            "nameQuality": "observed",
+            "version": "1",
+            "versionQuality": "observed",
+            "publisher": null,
+            "publisherQuality": "unavailable"
+          },
+          "changedFields": [
+            "version"
+          ]
+        },
+        {
+          "id": "c601e4f539ee30a8fd33781d1acd12e5c8124b1290c1d62e39d3d1d0c784f2a1",
+          "kind": "registration_removed",
+          "registrationId": "0000000000000000000000000000000000000000000000000000000000000002",
+          "registryView": "32",
+          "beforeObservedAt": "2027-01-15T08:00:10Z",
+          "afterObservedAt": "2027-01-15T08:01:10Z",
+          "expiresAt": "2027-01-22T08:00:10Z",
+          "before": {
+            "registrationId": "0000000000000000000000000000000000000000000000000000000000000002",
+            "registryView": "32",
+            "name": "Duplicate 東京",
+            "nameQuality": "observed",
+            "version": null,
+            "versionQuality": "unavailable",
+            "publisher": null,
+            "publisherQuality": "unavailable"
+          },
+          "after": null,
+          "changedFields": []
+        }
+      ],
+      "nextCursor": "",
+      "cursorExpiresAt": "2027-01-15T08:16:10Z"
+    }
+  },
+  {
+    "name": "firstPage",
+    "query": {
+      "search": "",
+      "sort": "observed-desc",
+      "limit": 1,
+      "cursor": ""
+    },
+    "page": {
+      "schemaVersion": "tracebolt.windows-software-history-page.v1",
+      "deviceId": "agent_00000000000000000000000000000001",
+      "serverNow": "2027-01-15T08:01:10Z",
+      "status": "ready",
+      "authorityUntil": "2027-01-16T08:00:00Z",
+      "grantId": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "grantRevision": 1,
+      "historyDigest": "faf7cac725047228527c3a86b0429d3c68a11c7ec3a4d62e00b38597f3521f84",
+      "comparison": {
+        "status": "compared",
+        "reason": "",
+        "beforeObservedAt": "2027-01-15T08:00:10Z",
+        "afterObservedAt": "2027-01-15T08:01:10Z",
+        "expiresAt": "2027-01-22T08:00:10Z",
+        "observedChanges": 2
+      },
+      "latestAttempt": {
+        "sequence": 2,
+        "attemptedAt": "2027-01-15T08:01:10Z",
+        "status": "complete",
+        "reason": ""
+      },
+      "gapCount": 0,
+      "omittedChanges": 0,
+      "expiredChanges": 0,
+      "retainedCount": 2,
+      "search": "",
+      "limit": 1,
+      "offset": 0,
+      "matchingCount": 2,
+      "rows": [
+        {
+          "id": "00e725136aa4bfb7af1aeff58c23c427b74e7316d4ea45393d5f1df5cae37474",
+          "kind": "metadata_changed",
+          "registrationId": "0000000000000000000000000000000000000000000000000000000000000001",
+          "registryView": "64",
+          "beforeObservedAt": "2027-01-15T08:00:10Z",
+          "afterObservedAt": "2027-01-15T08:01:10Z",
+          "expiresAt": "2027-01-22T08:00:10Z",
+          "before": {
+            "registrationId": "0000000000000000000000000000000000000000000000000000000000000001",
+            "registryView": "64",
+            "name": "Duplicate 東京",
+            "nameQuality": "observed",
+            "version": "2",
+            "versionQuality": "observed",
+            "publisher": null,
+            "publisherQuality": "unavailable"
+          },
+          "after": {
+            "registrationId": "0000000000000000000000000000000000000000000000000000000000000001",
+            "registryView": "64",
+            "name": "Duplicate 東京",
+            "nameQuality": "observed",
+            "version": "1",
+            "versionQuality": "observed",
+            "publisher": null,
+            "publisherQuality": "unavailable"
+          },
+          "changedFields": [
+            "version"
+          ]
+        }
+      ],
+      "nextCursor": "eyJ2IjoxLCJkZXZpY2UiOiJhZ2VudF8wMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMSIsImdyYW50IjoiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmIiLCJyZXZpc2lvbiI6MSwiZ2VuZXJhdGlvbiI6ImZhZjdjYWM3MjUwNDcyMjg1MjdjM2E4NmIwNDI5ZDNjNjhhMTFjN2VjM2E0ZDYyZTAwYjM4NTk3ZjM1MjFmODQiLCJtYW5pZmVzdCI6IndpbmRvd3MtbWFjaGluZS1zb2Z0d2FyZS1oaXN0b3J5LXYxIiwic2VhcmNoIjoiIiwic29ydCI6Im9ic2VydmVkLWRlc2MiLCJsaW1pdCI6MSwib2Zmc2V0IjoxLCJzZXNzaW9uIjoiIiwiZXhwaXJlc0F0IjoiMjAyNy0wMS0xNVQwODoxNjoxMFoifQ.s_OMHHJex6jALPi8ddBBSWd1-q9pvCAM_E64FQRKPSQ",
+      "cursorExpiresAt": "2027-01-15T08:16:10Z"
+    }
+  },
+  {
+    "name": "continuation",
+    "query": {
+      "search": "",
+      "sort": "observed-desc",
+      "limit": 1,
+      "cursor": "eyJ2IjoxLCJkZXZpY2UiOiJhZ2VudF8wMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMSIsImdyYW50IjoiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmIiLCJyZXZpc2lvbiI6MSwiZ2VuZXJhdGlvbiI6ImZhZjdjYWM3MjUwNDcyMjg1MjdjM2E4NmIwNDI5ZDNjNjhhMTFjN2VjM2E0ZDYyZTAwYjM4NTk3ZjM1MjFmODQiLCJtYW5pZmVzdCI6IndpbmRvd3MtbWFjaGluZS1zb2Z0d2FyZS1oaXN0b3J5LXYxIiwic2VhcmNoIjoiIiwic29ydCI6Im9ic2VydmVkLWRlc2MiLCJsaW1pdCI6MSwib2Zmc2V0IjoxLCJzZXNzaW9uIjoiIiwiZXhwaXJlc0F0IjoiMjAyNy0wMS0xNVQwODoxNjoxMFoifQ.s_OMHHJex6jALPi8ddBBSWd1-q9pvCAM_E64FQRKPSQ"
+    },
+    "page": {
+      "schemaVersion": "tracebolt.windows-software-history-page.v1",
+      "deviceId": "agent_00000000000000000000000000000001",
+      "serverNow": "2027-01-15T08:01:10Z",
+      "status": "ready",
+      "authorityUntil": "2027-01-16T08:00:00Z",
+      "grantId": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "grantRevision": 1,
+      "historyDigest": "faf7cac725047228527c3a86b0429d3c68a11c7ec3a4d62e00b38597f3521f84",
+      "comparison": {
+        "status": "compared",
+        "reason": "",
+        "beforeObservedAt": "2027-01-15T08:00:10Z",
+        "afterObservedAt": "2027-01-15T08:01:10Z",
+        "expiresAt": "2027-01-22T08:00:10Z",
+        "observedChanges": 2
+      },
+      "latestAttempt": {
+        "sequence": 2,
+        "attemptedAt": "2027-01-15T08:01:10Z",
+        "status": "complete",
+        "reason": ""
+      },
+      "gapCount": 0,
+      "omittedChanges": 0,
+      "expiredChanges": 0,
+      "retainedCount": 2,
+      "search": "",
+      "limit": 1,
+      "offset": 1,
+      "matchingCount": 2,
+      "rows": [
+        {
+          "id": "c601e4f539ee30a8fd33781d1acd12e5c8124b1290c1d62e39d3d1d0c784f2a1",
+          "kind": "registration_removed",
+          "registrationId": "0000000000000000000000000000000000000000000000000000000000000002",
+          "registryView": "32",
+          "beforeObservedAt": "2027-01-15T08:00:10Z",
+          "afterObservedAt": "2027-01-15T08:01:10Z",
+          "expiresAt": "2027-01-22T08:00:10Z",
+          "before": {
+            "registrationId": "0000000000000000000000000000000000000000000000000000000000000002",
+            "registryView": "32",
+            "name": "Duplicate 東京",
+            "nameQuality": "observed",
+            "version": null,
+            "versionQuality": "unavailable",
+            "publisher": null,
+            "publisherQuality": "unavailable"
+          },
+          "after": null,
+          "changedFields": []
+        }
+      ],
+      "nextCursor": "",
+      "cursorExpiresAt": "2027-01-15T08:16:10Z"
+    }
+  }
+]

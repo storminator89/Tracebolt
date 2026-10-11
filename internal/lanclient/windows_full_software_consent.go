@@ -30,6 +30,16 @@ type WindowsFullSoftwareConsentResult struct {
 // This function is reachable only through the independent stopped-owned-service
 // CLI. It neither widens existing grants nor changes the original sender ledger.
 func ConfigureWindowsFullSoftware(path, mode string, acknowledged, insecure bool) (WindowsFullSoftwareConsentResult, error) {
+	return configureWindowsFullSoftware(path, mode, acknowledged, insecure, false)
+}
+
+// ConfigureWindowsSoftwareHistory changes only the separately acknowledged manager
+// history scope. Ordinary software must already be enabled; no native scope is granted.
+func ConfigureWindowsSoftwareHistory(path, mode string, acknowledged, insecure bool) (WindowsFullSoftwareConsentResult, error) {
+	return configureWindowsFullSoftware(path, mode, acknowledged, insecure, true)
+}
+
+func configureWindowsFullSoftware(path, mode string, acknowledged, insecure, history bool) (WindowsFullSoftwareConsentResult, error) {
 	zero := WindowsFullSoftwareConsentResult{}
 	if mode != "preview" && mode != "enable" && mode != "disable" || acknowledged != (mode == "enable") {
 		return zero, ErrConfiguration
@@ -50,7 +60,7 @@ func ConfigureWindowsFullSoftware(path, mode string, acknowledged, insecure bool
 	if e != nil {
 		return zero, ErrState
 	}
-	out, e := updateWindowsFullSoftwareConsent(m.config.AgentID, m.binding, mode, func(create bool) (windowsfullsoftware.Storage, error) {
+	out, e := updateWindowsSoftwareConsent(m.config.AgentID, m.binding, mode, history, func(create bool) (windowsfullsoftware.Storage, error) {
 		return windowsstate.Open(windowsFullSoftwareDirectory(m), windowsFullSoftwareOptions(sid, create))
 	}, func() time.Time { return time.Now().UTC() }, main)
 	if e != nil || main.Close() != nil {
@@ -59,7 +69,15 @@ func ConfigureWindowsFullSoftware(path, mode string, acknowledged, insecure bool
 	return out, nil
 }
 func updateWindowsFullSoftwareConsent(device, binding, mode string, open func(bool) (windowsfullsoftware.Storage, error), now func() time.Time, marker fullSoftwareUsedMarker) (WindowsFullSoftwareConsentResult, error) {
+	return updateWindowsSoftwareConsent(device, binding, mode, false, open, now, marker)
+}
+
+func updateWindowsSoftwareConsent(device, binding, mode string, history bool, open func(bool) (windowsfullsoftware.Storage, error), now func() time.Time, marker fullSoftwareUsedMarker) (WindowsFullSoftwareConsentResult, error) {
 	zero := WindowsFullSoftwareConsentResult{}
+	scope := windowsfullsoftware.Scope
+	if history {
+		scope = windowsfullsoftware.HistoryScope
+	}
 	if open == nil || now == nil || marker == nil || mode != "preview" && mode != "enable" && mode != "disable" {
 		return zero, ErrConfiguration
 	}
@@ -78,7 +96,7 @@ func updateWindowsFullSoftwareConsent(device, binding, mode string, open func(bo
 		}
 		return zero, ErrState
 	}
-	if errors.Is(e, os.ErrNotExist) && mode == "enable" {
+	if errors.Is(e, os.ErrNotExist) && mode == "enable" && !history {
 		if marker.Mark() != nil {
 			return zero, ErrState
 		}
@@ -86,7 +104,7 @@ func updateWindowsFullSoftwareConsent(device, binding, mode string, open func(bo
 		fresh = e == nil
 	}
 	if errors.Is(e, os.ErrNotExist) && mode != "enable" {
-		return WindowsFullSoftwareConsentResult{windowsfullsoftware.Scope, false, true}, nil
+		return WindowsFullSoftwareConsentResult{scope, false, true}, nil
 	}
 	if e != nil || st == nil {
 		return zero, ErrState
@@ -114,18 +132,32 @@ func updateWindowsFullSoftwareConsent(device, binding, mode string, open func(bo
 	if e != nil {
 		return zero, ErrState
 	}
-	change := mode == "enable" && !c.Enabled || mode == "disable" && c.Enabled
+	if history && mode == "enable" && !c.Enabled {
+		return zero, ErrConfiguration
+	}
+	enabled := c.Enabled
+	if history {
+		enabled = c.Enabled && c.HistoryScope == windowsfullsoftware.HistoryScope
+	}
+	change := mode == "enable" && !enabled || mode == "disable" && enabled
 	if change {
 		at := now().UTC()
 		if !windowsfullsoftware.ValidTime(at) || !c.ChangedAt.IsZero() && at.Before(c.ChangedAt) || c.Revision == windowsfullsoftware.MaxSequence {
 			return zero, ErrState
 		}
-		if mode == "enable" {
+		if history || mode == "enable" || c.HistoryScope != "" {
 			var id [16]byte
 			if _, e = rand.Read(id[:]); e != nil {
 				return zero, ErrState
 			}
-			c = windowsfullsoftware.Consent{SchemaVersion: windowsfullsoftware.ConsentVersion, Scope: windowsfullsoftware.Scope, SenderBinding: binding, GrantID: hex.EncodeToString(id[:]), Revision: c.Revision + 1, Enabled: true, ChangedAt: at}
+			next := windowsfullsoftware.Consent{SchemaVersion: windowsfullsoftware.ConsentVersion, Scope: windowsfullsoftware.Scope, SenderBinding: binding, GrantID: hex.EncodeToString(id[:]), Revision: c.Revision + 1, Enabled: mode == "enable", ChangedAt: at}
+			if history {
+				next.Enabled = c.Enabled
+				if mode == "enable" {
+					next.HistoryScope = windowsfullsoftware.HistoryScope
+				}
+			}
+			c = next
 		} else {
 			c.Enabled = false
 			c.Revision++
@@ -139,7 +171,11 @@ func updateWindowsFullSoftwareConsent(device, binding, mode string, open func(bo
 	if state.Close() != nil {
 		return zero, ErrState
 	}
-	return WindowsFullSoftwareConsentResult{windowsfullsoftware.Scope, c.Enabled, true}, nil
+	enabled = c.Enabled
+	if history {
+		enabled = c.Enabled && c.HistoryScope == windowsfullsoftware.HistoryScope
+	}
+	return WindowsFullSoftwareConsentResult{scope, enabled, true}, nil
 }
 
 type fullSoftwareUsedMarker interface {

@@ -1,0 +1,10 @@
+.windows-software-views{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 18px}
+.windows-software-views button[aria-pressed=true]{border-color:var(--accent);color:var(--accent);background:var(--bg)}
+.windows-software-history{min-width:0;padding-top:4px}
+.windows-history-comparison{font-size:12px;line-height:1.6;margin:12px 0}.windows-history-comparison time{color:var(--secondary);margin-left:8px;white-space:nowrap}
+.windows-history-counts{margin:16px 0;gap:10px 22px}.windows-history-counts dd{font-size:15px}
+.windows-software-history td{vertical-align:top;white-space:pre-wrap;unicode-bidi:plaintext}.windows-software-history td small{display:block;color:var(--secondary);font-size:11px;margin-top:4px}
+.windows-history-row-details{max-width:340px;min-width:60px;font-size:12px}.windows-history-row-details summary{cursor:pointer;color:var(--accent);width:fit-content}.windows-history-row-details dl{display:grid;gap:10px;margin:12px 0}.windows-history-row-details dt{font-weight:600;color:var(--secondary);margin-bottom:4px}.windows-history-row-details dd{margin:0;overflow-wrap:anywhere}.windows-history-row-details dd>span{display:block;margin:3px 0}.windows-history-row-details p{color:var(--secondary);line-height:1.5}.windows-history-row-details summary:focus-visible,.windows-software-history button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+@media(max-width:600px){.windows-history-counts{gap:10px 18px}.windows-history-counts>div{min-width:100px}.windows-history-row-details{max-width:100%}.windows-history-comparison time{display:block;margin:4px 0 0}.windows-software-history td small{margin-left:0}}
+
+.windows-history-attempt{font-size:12px;color:var(--secondary);margin:6px 0}

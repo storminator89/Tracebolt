@@ -22,6 +22,7 @@
     "windows-contact-history-fixtures.test.mjs",
     "windows-full-services-fixtures.test.mjs",
     "windows-full-software-fixtures.test.mjs",
+    "windows-software-history-fixtures.test.mjs",
     "windows-full-processes-fixtures.test.mjs",
     "windows-network-context-fixtures.test.mjs",
     "windows-fleet-fixtures.test.mjs",

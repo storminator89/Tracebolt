@@ -25,3 +25,10 @@ func (s *Service) MaintainWindowsFullSoftware(ctx context.Context, now time.Time
 func (s *Service) RecheckWindowsFullSoftwarePage(ctx context.Context, p windowsfullsoftware.Page, now time.Time) error {
 	return s.store.RecheckWindowsFullSoftwarePage(enrollmentstore.WithWindowsFullSoftwareClock(ctx, s.Now), p, now)
 }
+
+func (s *Service) WindowsSoftwareHistoryPage(ctx context.Context, id string, q windowsfullsoftware.Query, now time.Time) (windowsfullsoftware.HistoryPage, error) {
+	return s.store.WindowsSoftwareHistoryPage(enrollmentstore.WithWindowsFullSoftwareClock(ctx, s.Now), id, q, now)
+}
+func (s *Service) RecheckWindowsSoftwareHistoryPage(ctx context.Context, p windowsfullsoftware.HistoryPage, now time.Time) error {
+	return s.store.RecheckWindowsSoftwareHistoryPage(enrollmentstore.WithWindowsFullSoftwareClock(ctx, s.Now), p, now)
+}

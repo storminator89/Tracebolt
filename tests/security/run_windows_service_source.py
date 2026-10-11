@@ -17,6 +17,12 @@ project = _reporter.project
 PACKAGES = ("./internal/windowspackage", "./internal/windowssetup", "./internal/windowssetupui", "./internal/windowsstate", "./internal/windowsservice", "./internal/windowsconsole",
             "./internal/windowsagentconfig", "./cmd/windows-service", "./internal/windowsvolumes", "./internal/windowsprocessmetrics", "./internal/windowsnetwork", "./internal/windowsmanaged", "./internal/windowshardware", "./internal/windowshardwareworker", "./internal/windowsstorage", "./internal/windowsstorageworker", "./internal/windowssecuritycoverage", "./internal/windowssecuritycoverageworker")
 REQUIRED = {
+    ("localrmm/internal/windowssetup", "TestReadAdminV9SoftwareHistoryCannotPromoteEarlierCapabilities"),
+    ("localrmm/cmd/windows-service", "TestSoftwareHistoryCLISeparateAcknowledgementAndDisclosure"),
+    ("localrmm/cmd/windows-service", "TestSoftwareHistoryConsentRequiresStoppedOwnedServiceBeforeState"),
+    ("localrmm/cmd/windows-service", "TestReadAdminV13FreshProfileReceipt11ExactNineteenGrants"),
+    ("localrmm/cmd/windows-service", "TestReadAdminV13FreshGrantFailuresAndOriginalSenderGuard"),
+    ("localrmm/cmd/windows-service", "TestFreshReadAdminV13ReconcilePinsSoftwareHistoryDigestAndNeverPromotesReceipts"),
     ("localrmm/internal/windowssecuritycoverage", "TestCoverageNativeReadOnlySourceContract"),
     ("localrmm/internal/windowssecuritycoverage", "TestEscapedProductNamesFitBeforeEnvelopeEncoding"),
     ("localrmm/internal/windowssecuritycoverageworker", "TestServeDeniesAbsentOrChangedAuthority"),

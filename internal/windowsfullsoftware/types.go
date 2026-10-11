@@ -60,6 +60,7 @@ type Consent struct {
 	Revision      uint64    `json:"revision"`
 	Enabled       bool      `json:"enabled"`
 	ChangedAt     time.Time `json:"changedAt"`
+	HistoryScope  string    `json:"historyScope,omitempty"`
 }
 
 type Row struct {

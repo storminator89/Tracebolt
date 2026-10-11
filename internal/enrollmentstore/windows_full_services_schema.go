@@ -212,7 +212,7 @@ func windowsFullServicesOtherBytes(ctx context.Context, t *transaction) (int64, 
 	}
 	if present {
 		var n int64
-		if t.conn.QueryRowContext(ctx, `SELECT coalesce((SELECT sum(length(body)) FROM wfw_authority),0)+coalesce((SELECT sum(reserved_bytes) FROM wfw_generations),0)`).Scan(&n) != nil {
+		if t.conn.QueryRowContext(ctx, `SELECT coalesce((SELECT sum(length(body)) FROM wfw_authority),0)+coalesce((SELECT sum(reserved_bytes) FROM wfw_generations),0)+1048576*(SELECT count(*) FROM wfw_history)`).Scan(&n) != nil {
 			return 0, ErrStorage
 		}
 		extra += n

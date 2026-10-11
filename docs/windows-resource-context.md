@@ -55,7 +55,7 @@ This scope introduced the exact eighteen-scope Read admin profile with consent v
 outer receipt 9 and a new bodyless capability-v7 route:
 `/v1/windows/read-admin-setup-capabilities-v7`, returning contract
 `fresh-eighteen-read-admin-scopes-v1`. Current fresh Setup uses the separately
-extended [nineteen-scope storage-I/O profile](windows-storage-io.md). Earlier advertisements, consent scope sets
+current [fresh Read admin profile](windows-read-admin-setup.md). Earlier advertisements, consent scope sets
 and receipt bytes remain exact; no older grant is promoted. The full scope
 checkbox and HTTP-test risk checkbox start unchecked and clear on Back or
 bootstrap replacement. No manual feature command or migration is required.

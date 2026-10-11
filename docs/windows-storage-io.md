@@ -50,9 +50,10 @@ requires explicit local scope acknowledgement; isolated HTTP-test additionally
 requires the separate full plaintext-risk acknowledgement. Older grants never
 expand, and the storage-capacity/provider grant does not authorize this read.
 
-Fresh Read admin has exactly nineteen scopes: consent v12, outer receipt 10,
-bodyless `/v1/windows/read-admin-setup-capabilities-v8`, and contract
-`fresh-nineteen-read-admin-scopes-v1`. The concise Storage group and full details
+Current fresh Read admin has twenty scopes, including the separate
+[software-history grant](windows-software-history.md): consent v13, outer receipt
+11, bodyless `/v1/windows/read-admin-setup-capabilities-v9`, and contract
+`fresh-twenty-read-admin-scopes-v1`. The concise Storage group and full details
 name aggregate throughput, operations, latency, queues and sample timing.
 Scope and HTTP-test acknowledgements start unchecked and clear on Back or
 bootstrap replacement. Earlier consent sets, receipt bytes, advertisements and
@@ -60,7 +61,7 @@ historical development commands remain unchanged. No migration is required.
 
 Every selected sibling must be genuinely absent for fresh creation. Setup keeps
 the owned service disabled, checks the original activated identity and protected
-phase before/after each grant, and verifies all eighteen extension digests before
+phase before/after each grant, and verifies all nineteen extension scope digests before
 startup. Partial evidence is retained without rollback, repair, re-enrollment or
 automatic retry. Setup does not query counters to prove LocalService access or
 change permissions to make a provider succeed.

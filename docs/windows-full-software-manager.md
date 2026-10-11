@@ -48,6 +48,10 @@ physical database/WAL caps still apply. Each manager maintenance tick reclaims a
 most 256 rows and 16 chunks from one garbage software generation; reservations
 remain until its final physical records are removed. Independent floors remain.
 
+The separately acknowledged [change-history scope](windows-software-history.md)
+adds a fixed 1 MiB reservation inside these same ceilings. Legacy software grants
+remain limited to their original 24-hour inventory retention and browsing.
+
 ## Protected operator query
 
 POST `/api/devices/{agent_id}/windows-full-software/query` requires a current

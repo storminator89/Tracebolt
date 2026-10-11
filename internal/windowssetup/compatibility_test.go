@@ -165,3 +165,20 @@ func TestReadAdminV8StorageIOCannotPromoteEarlierCapabilities(t *testing.T) {
 		}
 	}
 }
+
+func TestReadAdminV9SoftwareHistoryCannotPromoteEarlierCapabilities(t *testing.T) {
+	fresh := ExpectedReadAdminV9("manager", "https://enroll", "https://agent")
+	path, e := CapabilityPath(fresh)
+	if e != nil || path != ReadAdminCapabilitiesPathV9 {
+		t.Fatal(path, e)
+	}
+	contracts := []Capabilities{Expected("manager", "https://enroll", "https://agent"), ExpectedReadAdmin("manager", "https://enroll", "https://agent"), ExpectedReadAdminV2("manager", "https://enroll", "https://agent"), ExpectedReadAdminV3("manager", "https://enroll", "https://agent"), ExpectedReadAdminV4("manager", "https://enroll", "https://agent"), ExpectedReadAdminV5("manager", "https://enroll", "https://agent"), ExpectedReadAdminV6("manager", "https://enroll", "https://agent"), ExpectedReadAdminV7("manager", "https://enroll", "https://agent"), ExpectedReadAdminV8("manager", "https://enroll", "https://agent"), fresh}
+	for i, c := range contracts {
+		raw, _ := json.Marshal(c)
+		for j, want := range contracts {
+			if (Match(raw, want) == nil) != (i == j) {
+				t.Fatal("contracts conflated", i, j)
+			}
+		}
+	}
+}

@@ -34,6 +34,7 @@ type Transaction interface {
 }
 
 var schema = []inventoryledger.SchemaObject{
+	{Type: "table", Name: "wfw_history", SQL: `CREATE TABLE wfw_history(device TEXT PRIMARY KEY NOT NULL,body BLOB NOT NULL CHECK(length(body)>0 AND length(body)<=1048576)) STRICT`},
 	{Type: "table", Name: "wfw_meta", SQL: `CREATE TABLE wfw_meta(id INTEGER PRIMARY KEY CHECK(id=1),version INTEGER NOT NULL CHECK(version=1),cursor_key BLOB NOT NULL CHECK(length(cursor_key)=32),last_time TEXT NOT NULL) STRICT`},
 	{Type: "table", Name: "wfw_authority", SQL: `CREATE TABLE wfw_authority(device TEXT PRIMARY KEY NOT NULL,invitation TEXT NOT NULL UNIQUE REFERENCES enrollment_credentials(invitation_id),certificate TEXT NOT NULL,body BLOB NOT NULL CHECK(length(body)>0 AND length(body)<=16384)) STRICT`},
 	{Type: "table", Name: "wfw_generations", SQL: `CREATE TABLE wfw_generations(device TEXT NOT NULL,generation TEXT NOT NULL,state TEXT NOT NULL CHECK(state IN ('staging','current','garbage')),manifest BLOB NOT NULL CHECK(length(manifest)>0 AND length(manifest)<=4096),manifest_hash TEXT NOT NULL,started_at TEXT NOT NULL,completed_at TEXT NOT NULL,next_chunk INTEGER NOT NULL CHECK(next_chunk>=0 AND next_chunk<=512),next_row INTEGER NOT NULL CHECK(next_row>=0 AND next_row<=32768),last_registration TEXT NOT NULL,reserved_bytes INTEGER NOT NULL CHECK(reserved_bytes>=0),stored_bytes INTEGER NOT NULL CHECK(stored_bytes>=0),declared_rows INTEGER NOT NULL CHECK(declared_rows>=0 AND declared_rows<=32768),declared_chunks INTEGER NOT NULL CHECK(declared_chunks>=1 AND declared_chunks<=512),PRIMARY KEY(device,generation)) STRICT`},
@@ -129,10 +130,15 @@ func Budgets(ctx context.Context, tx Transaction, extraBytes int64) error {
 	if tx.QueryRowContext(ctx, `SELECT coalesce(sum(reserved_bytes),0),coalesce(sum(declared_rows),0),coalesce(sum(declared_chunks),0),count(*) FROM wfw_generations`).Scan(&bytes, &rows, &chunks, &gens) != nil {
 		return ErrStorage
 	}
+	var histories int64
+	if tx.QueryRowContext(ctx, `SELECT count(*) FROM wfw_history`).Scan(&histories) != nil {
+		return ErrStorage
+	}
+	bytes += histories * windowsfullsoftware.MaxHistoryBytes
 	if bytes+extraBytes > MaxGlobalBytes || rows > MaxGlobalRows || chunks > MaxGlobalChunks || gens > MaxGlobalGenerations {
 		return windowsfullsoftware.ErrBudget
 	}
-	rr, e := tx.QueryContext(ctx, `SELECT sum(reserved_bytes),count(*) FROM wfw_generations GROUP BY device`)
+	rr, e := tx.QueryContext(ctx, `SELECT coalesce(sum(g.reserved_bytes),0)+CASE WHEN h.device IS NULL THEN 0 ELSE 1048576 END,count(g.generation) FROM wfw_generations g LEFT JOIN wfw_history h ON h.device=g.device GROUP BY g.device`)
 	if e != nil {
 		return ErrStorage
 	}
@@ -157,13 +163,17 @@ func Reserve(ctx context.Context, tx Transaction, device string, bytes int64, ro
 	if tx.QueryRowContext(ctx, `SELECT coalesce(sum(reserved_bytes),0),coalesce(sum(declared_rows),0),coalesce(sum(declared_chunks),0),count(*) FROM wfw_generations`).Scan(&heldBytes, &heldRows, &heldChunks, &generations) != nil {
 		return ErrStorage
 	}
-	if heldBytes+bytes+extra > MaxGlobalBytes || heldRows+int64(rows) > MaxGlobalRows || heldChunks+int64(chunks) > MaxGlobalChunks || generations+1 > MaxGlobalGenerations {
+	var histories, own int64
+	if tx.QueryRowContext(ctx, `SELECT count(*),coalesce(sum(CASE WHEN device=? THEN 1 ELSE 0 END),0) FROM wfw_history`, device).Scan(&histories, &own) != nil {
+		return ErrStorage
+	}
+	if heldBytes+bytes+extra+histories*windowsfullsoftware.MaxHistoryBytes > MaxGlobalBytes || heldRows+int64(rows) > MaxGlobalRows || heldChunks+int64(chunks) > MaxGlobalChunks || generations+1 > MaxGlobalGenerations {
 		return windowsfullsoftware.ErrBudget
 	}
 	if tx.QueryRowContext(ctx, `SELECT coalesce(sum(reserved_bytes),0),count(*) FROM wfw_generations WHERE device=?`, device).Scan(&heldBytes, &generations) != nil {
 		return ErrStorage
 	}
-	if heldBytes+bytes > MaxDeviceBytes || generations+1 > MaxDeviceGenerations {
+	if heldBytes+bytes+own*windowsfullsoftware.MaxHistoryBytes > MaxDeviceBytes || generations+1 > MaxDeviceGenerations {
 		return windowsfullsoftware.ErrBudget
 	}
 	return nil
