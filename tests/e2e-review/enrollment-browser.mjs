@@ -62,7 +62,7 @@ async function pageAt({mobile=false,skew=false}={}){
 }
 async function list(){const response=await context.request.get(`${base}/api/enrollment`);expect(response.status()).toBe(200);return response.json();}
 async function post(route,data){const session=await(await context.request.get(`${base}/api/auth/session`)).json();return context.request.post(`${base}/api/enrollment/${route}`,{headers:{Origin:base,'X-CSRF-Token':session.csrfToken},data});}
-async function create(page,invocation='single'){return createBrowserInvitation(page,{base,mark,expect,secrets,invocation,transportDiagnostics,recordTransportFailure:detail=>{creationTransportFailure=detail;},recordPrimaryFailure:detail=>{creationPrimaryFailure=detail;}});}
+async function create(page,invocation='single',submit){return createBrowserInvitation(page,{base,mark,expect,secrets,invocation,submit,transportDiagnostics,recordTransportFailure:detail=>{creationTransportFailure=detail;},recordPrimaryFailure:detail=>{creationPrimaryFailure=detail;}});}
 async function nativeClaim(created){mark('native claim');await control('start',{secret:created.invitationSecret,bootstrap:created.bootstrap});await expect.poll(async()=>{const items=(await list()).items;return items.find(v=>v.invitationID===created.snapshot.invitationID)?.state;},{timeout:12000}).toBe('claimed_pending');return control('status');}
 async function review(page,id){mark('review invitation');const dialog=page.getByRole('dialog');if(await dialog.count())await page.keyboard.press('Escape');await page.getByRole('button',{name:'Refresh enrollment status'}).click();await expect(page.getByRole('button',{name:`Review invitation ${id}`,exact:true})).toBeVisible();await page.getByRole('button',{name:`Review invitation ${id}`,exact:true}).click();await expect(page.getByRole('dialog',{name:'Review invitation',exact:true})).toBeVisible();}
 async function checkClean(page){const value=await page.evaluate(()=>JSON.stringify({local:{...localStorage},session:{...sessionStorage}}));expect(secrets.some(s=>value.includes(s))||value.includes(password)).toBe(false);expect(secrets.some(s=>page.url().includes(s))).toBe(false);}
@@ -77,8 +77,9 @@ async function terminate(page,label){
  // waiter first, then require both the committed response and the rendered UI.
  mark('await committed termination response');
  const responsePending=page.waitForResponse(r=>r.request().method()==='POST'&&r.url().startsWith(`${base}/api/enrollment/`)&&r.url().endsWith('/terminate'));
- await confirmation.getByRole('button',{name:'Confirm termination',exact:true}).click();
- const response=await responsePending;expect(response.status()).toBe(200);
+ // Observe the response before invoking the click, including a synchronous
+ // click failure. Either failure rejects promptly; success still requires both.
+ const [response]=await Promise.all([responsePending,Promise.resolve().then(()=>confirmation.getByRole('button',{name:'Confirm termination',exact:true}).click())]);expect(response.status()).toBe(200);
  const committed=await response.json();expect(committed.state).toBe(expected[0]);
  mark('verify rendered terminal state');
  await expect(page.getByRole('dialog',{name:'Review invitation',exact:true}).locator('.enrollment-created-meta')).toContainText(expected[1]);
@@ -121,7 +122,18 @@ try{
    const page=await pageAt();mark('disabled real enrollment');await expect(page.getByRole('button',{name:'Add device',exact:true})).toBeDisabled();expect((await list()).enabled).toBe(false);await page.route('**/api/enrollment',route=>route.abort('failed'));await page.getByRole('button',{name:'Refresh enrollment status'}).click();await expect(page.locator('.enrollment-panel [role=alert]')).toBeVisible();await expect(page.getByRole('button',{name:'Add device',exact:true})).toBeDisabled();
   },{enabled:false});
   await check('One creation request keeps its secret masked and ephemeral; bootstrap download contains only public configuration',async()=>{
-   const page=await pageAt();mark('single pending create');await page.getByRole('button',{name:'Add device',exact:true}).click();let release,entered;const gate=new Promise(r=>release=r),intercepted=new Promise(r=>entered=r);let posts=0;await page.route('**/api/enrollment/invitations',async route=>{posts++;entered();await gate;await route.continue();});const response=page.waitForResponse(r=>r.url()===`${base}/api/enrollment/invitations`);await page.getByRole('button',{name:'Create invitation',exact:true}).dblclick();await intercepted;await expect(page.getByRole('button',{name:'Create invitation',exact:true})).toBeDisabled();expect(posts).toBe(1);release();const created=await(await response).json();secrets.push(created.invitationSecret);const input=page.getByLabel('One-time invitation secret',{exact:true});await expect(input).toHaveAttribute('type','password');expect(await input.inputValue()===created.invitationSecret).toBe(true);await page.unroute('**/api/enrollment/invitations');
+   const page=await pageAt();let release,entered;const gate=new Promise(r=>release=r),intercepted=new Promise(r=>entered=r);let posts=0;
+   await page.route('**/api/enrollment/invitations',async route=>{posts++;entered();await gate;await route.continue();});
+   // Retain the held double-click and one-write assertion, but consume only the
+   // production primary reader through the same strict helper as other creates.
+   let created;
+   try{
+    created=await create(page,'single',async button=>{
+     try{await button.dblclick();await intercepted;await expect(button).toBeDisabled();expect(posts).toBe(1);}finally{release();}
+    });
+    expect(posts).toBe(1);
+   }finally{release();await page.unroute('**/api/enrollment/invitations');}
+   const input=page.getByLabel('One-time invitation secret',{exact:true});
    mark('public bootstrap export');const downloadWait=page.waitForEvent('download');await page.getByRole('button',{name:'Download bootstrap file',exact:true}).click();const download=await downloadWait;const file=await download.path();const raw=await fs.readFile(file,'utf8');expect(raw.includes(created.invitationSecret)||raw.includes('PRIVATE KEY')).toBe(false);expect(JSON.stringify(JSON.parse(raw))).toBe(JSON.stringify(created.bootstrap));await download.delete();
    await page.getByRole('button',{name:'Reveal invitation secret'}).click();await expect(input).toHaveAttribute('type','text');await page.getByRole('button',{name:'Hide invitation secret'}).click();await expect(input).toHaveAttribute('type','password');await checkClean(page);
    mark('close reload and cancellation');await page.keyboard.press('Escape');await page.reload();await expect(page.getByLabel('One-time invitation secret')).toHaveCount(0);await page.getByRole('button',{name:/^Invitations/}).click();await review(page,created.snapshot.invitationID);await expect(page.getByRole('dialog')).toContainText('only at creation');await terminate(page,'Cancel invitation');expect((await list()).items[0].state).toBe('canceled');await expect(page.getByRole('button',{name:'Approve device',exact:true})).toHaveCount(0);await checkClean(page);
