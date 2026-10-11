@@ -45,6 +45,8 @@ var ErrCertificate = errors.New("issued certificate violates the fixed enrollmen
 // ChallengeContext comes from the server's bounded, expiring challenge record,
 // never from untrusted body fields. A constructor does not itself grant trust.
 type ChallengeContext struct {
+	RenewalPolicy     string `json:"renewalPolicy,omitempty"`
+	AgentOrigin       string `json:"agentOrigin,omitempty"`
 	ManagerInstanceID string `json:"managerInstanceId"`
 	Profile           string `json:"profile"`
 	Origin            string `json:"origin"`
@@ -55,6 +57,8 @@ type ChallengeContext struct {
 	ExpiresAt         int64  `json:"expiresAt"`
 }
 type ClaimMetadata struct {
+	RenewalPolicy     string
+	AgentOrigin       string
 	ManagerInstanceID string
 	Profile           string
 	Origin            string
@@ -75,6 +79,8 @@ type VerifiedClaim struct {
 	publicKeyDER   []byte
 }
 
+func (v VerifiedClaim) RenewalPolicy() string      { return v.metadata.RenewalPolicy }
+func (v VerifiedClaim) AgentOrigin() string        { return v.metadata.AgentOrigin }
 func (v VerifiedClaim) Valid() bool                { return v.seal }
 func (v VerifiedClaim) Metadata() ClaimMetadata    { return v.metadata }
 func (v VerifiedClaim) InstanceID() string         { return v.metadata.ManagerInstanceID }

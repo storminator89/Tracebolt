@@ -82,6 +82,11 @@ func Load(ctx context.Context, path string, device DeviceAuthority, actor ActorA
 	if lanconfig.StrictObject(raw, &c, "version", "enabled", "managerId", "endpointId", "incarnationDigest", "rootPolicyDigest", "transportProfile", "httpTestAcknowledged", "stateFile", "privateKeyFile", "localScopeAcknowledged") != nil || !valid(c) || device == nil || actor == nil {
 		return nil, ErrConfiguration
 	}
+	// Enrollment policy must admit this exact scope before opening the
+	// separate package store, whose startup records durable session state.
+	if e = device(ctx, c.EndpointID, c.IncarnationDigest, time.Now().UTC()); e != nil {
+		return nil, e
+	}
 	key, e := lanconfig.ReadProtected(c.PrivateKeyFile, true, ed25519.PrivateKeySize)
 	if e != nil || len(key) != ed25519.PrivateKeySize {
 		return nil, ErrConfiguration
@@ -114,6 +119,9 @@ func Load(ctx context.Context, path string, device DeviceAuthority, actor ActorA
 func newManager(ctx context.Context, c Config, key []byte, store packageupdate.DurableStore, device DeviceAuthority, actor ActorAuthority, now func() time.Time) (*Manager, error) {
 	if !valid(c) || len(key) != 64 || store == nil || device == nil || actor == nil || now == nil {
 		return nil, ErrConfiguration
+	}
+	if e := device(ctx, c.EndpointID, c.IncarnationDigest, now().UTC()); e != nil {
+		return nil, e
 	}
 	raw, e := store.Open(ctx, c.Binding())
 	if e != nil {

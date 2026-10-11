@@ -82,15 +82,19 @@ type Binding struct {
 }
 
 type Config struct {
-	Binding         Binding
-	InvitationTTL   int64
-	PendingTTL      int64
-	RecordLimit     int
-	InvitationLimit int
-	PendingLimit    int
+	AutomaticRenewal   bool   `json:",omitempty"`
+	RenewalAgentOrigin string `json:",omitempty"`
+	Binding            Binding
+	InvitationTTL      int64
+	PendingTTL         int64
+	RecordLimit        int
+	InvitationLimit    int
+	PendingLimit       int
 }
 
 type ClaimBinding struct {
+	RenewalPolicy  string `json:"renewalPolicy,omitempty"`
+	AgentOrigin    string `json:"agentOrigin,omitempty"`
 	ClaimID        string `json:"claimID"`
 	RequestID      string `json:"requestID"`
 	KeyFingerprint string `json:"keyFingerprint"`

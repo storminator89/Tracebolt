@@ -386,7 +386,7 @@ func pruneWindowsContextStep(ctx context.Context, t *transaction, slot uint64, n
 	if err != nil {
 		return ErrStorage
 	}
-	if identity.State != enrollmentstate.Activated || identity.Intent.NotAfter <= now.Unix() {
+	if identity.State != enrollmentstate.Activated || t.currentCredentialNotAfter(identity) <= now.Unix() {
 		return forgetWindowsContext(ctx, t, id)
 	}
 	c, ok := t.credentials[id]

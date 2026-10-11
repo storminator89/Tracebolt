@@ -79,7 +79,7 @@ func (s *Store) PackageView(ctx context.Context, id string, now time.Time) (Pack
 				out.Snapshot = nil
 			}
 		}
-		if snapshot.State == enrollmentstate.Revoked || snapshot.State == enrollmentstate.Canceled || snapshot.State == enrollmentstate.Rejected || snapshot.State == enrollmentstate.Expired || snapshot.Intent.NotAfter > 0 && now.Unix() >= snapshot.Intent.NotAfter {
+		if snapshot.State == enrollmentstate.Revoked || snapshot.State == enrollmentstate.Canceled || snapshot.State == enrollmentstate.Rejected || snapshot.State == enrollmentstate.Expired || t.currentCredentialNotAfter(snapshot) > 0 && now.Unix() >= t.currentCredentialNotAfter(snapshot) {
 			out.Status = "revoked"
 		}
 		return nil

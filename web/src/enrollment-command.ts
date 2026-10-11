@@ -14,6 +14,7 @@ export function publicEnrollmentArguments(value: unknown, snapshot: EnrollmentSn
         const encoded = btoa(Array.from(new TextEncoder().encode(bootstrap.serverCaPem), byte => String.fromCharCode(byte)).join(''));
         command += ` --server-ca-base64 ${shellQuote(encoded)}`;
     } else command += ' --insecure-http-test';
+    if (bootstrap.renewalPolicy) command += ' --automatic-certificate-renewal';
     return command;
 }
 

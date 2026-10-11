@@ -26,10 +26,17 @@ func (e *Engine) Claim(ctx context.Context, c ClaimCommand, proof enrollmentcryp
 	}
 	s := r.snapshot
 	h := proof.InvitationHash()
+	policy := ""
+	if e.config.AutomaticRenewal {
+		policy = enrollmentcrypto.RenewalPolicySameKey
+	}
+	if proof.RenewalPolicy() != policy || proof.AgentOrigin() != e.config.RenewalAgentOrigin {
+		return Snapshot{}, ErrProof
+	}
 	if !proof.Valid() || proof.InstanceID() != s.Binding.InstanceID || proof.Profile() != s.Binding.Profile || proof.Origin() != s.Binding.Origin || proof.CollectionProfile() != s.Binding.CollectionProfile || proof.InvitationID() != s.InvitationID || proof.ClaimID() != c.ClaimID || proof.RequestID() != c.Control.RequestID || proof.ExpiresAt() <= c.Control.Now || subtle.ConstantTimeCompare(r.verifier[:], h[:]) != 1 {
 		return Snapshot{}, ErrProof
 	}
-	b := ClaimBinding{ClaimID: proof.ClaimID(), RequestID: proof.RequestID(), KeyFingerprint: proof.KeyFingerprint(), CSRHash: proof.CSRHash(), ClaimHash: proof.ClaimHash(), ComparisonCode: proof.ComparisonCode(), At: c.Control.Now}
+	b := ClaimBinding{RenewalPolicy: proof.RenewalPolicy(), AgentOrigin: proof.AgentOrigin(), ClaimID: proof.ClaimID(), RequestID: proof.RequestID(), KeyFingerprint: proof.KeyFingerprint(), CSRHash: proof.CSRHash(), ClaimHash: proof.ClaimHash(), ComparisonCode: proof.ComparisonCode(), At: c.Control.Now}
 	if s.State == ClaimedPending {
 		b.At = s.Claim.At
 		if b != s.Claim {
@@ -73,6 +80,9 @@ func expectedIntent(r record) enrollmentcrypto.Intent {
 }
 
 func validateSigningIntent(r record, s Snapshot) error {
+	if s.Claim.RenewalPolicy != "" && s.Intent.NotAfter-s.Intent.NotBefore > enrollmentcrypto.RenewalLifetimeSeconds {
+		return ErrInvalid
+	}
 	r.snapshot = s
 	if enrollmentcrypto.ValidateIntent(expectedIntent(r)) != nil {
 		return ErrInvalid

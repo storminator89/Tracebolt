@@ -81,6 +81,9 @@ func validBinding(b Binding) bool {
 }
 
 func validateConfig(c Config) error {
+	if c.AutomaticRenewal && (c.Binding.Profile != "tls" || !validOrigin(c.RenewalAgentOrigin, "tls")) || !c.AutomaticRenewal && c.RenewalAgentOrigin != "" {
+		return ErrInvalid
+	}
 	if !validBinding(c.Binding) || c.InvitationTTL < 1 || c.InvitationTTL > MaxInvitationTTL || c.PendingTTL < 1 || c.PendingTTL > MaxPendingTTL || c.RecordLimit < 1 || c.RecordLimit > MaxRecords || c.InvitationLimit < 1 || c.InvitationLimit > MaxInvitations || c.PendingLimit < 1 || c.PendingLimit > MaxPending || c.InvitationLimit > c.RecordLimit || c.PendingLimit > c.RecordLimit {
 		return ErrInvalid
 	}
@@ -158,6 +161,9 @@ func deadline(s Snapshot) int64 {
 // ValidateSnapshot checks the complete public record, including state-specific
 // presence and chronology. It cannot confer authority or restore private state.
 func ValidateSnapshot(s Snapshot) error {
+	if s.Claim.RenewalPolicy != "" && (s.Claim.RenewalPolicy != enrollmentcrypto.RenewalPolicySameKey || s.Binding.Profile != "tls" || !validOrigin(s.Claim.AgentOrigin, "tls")) || s.Claim.RenewalPolicy == "" && s.Claim.AgentOrigin != "" {
+		return ErrInvalid
+	}
 	if s.Version != SnapshotVersion || !validBinding(s.Binding) || !validID(s.InvitationID, "invite") || !validID(s.CreateRequestID, "request") || !validPlatform(s.Platform) || s.Revision < 1 || s.Revision > MaxRevision || !validTime(s.CreatedAt) || !validTime(s.DeadlineAt) || !validTime(s.UpdatedAt) || s.UpdatedAt < s.CreatedAt {
 		return ErrInvalid
 	}

@@ -32,10 +32,11 @@ type journalLocal struct {
 
 func journalStateDirectory(c Config) string { return filepath.Join(c.StateDirectory, "journal") }
 func journalLeaf(m Material) string {
-	if len(m.certificate.Certificate) == 0 {
+	der := m.authorityDER()
+	if len(der) == 0 {
 		return ""
 	}
-	sum := sha256.Sum256(m.certificate.Certificate[0])
+	sum := sha256.Sum256(der)
 	return hex.EncodeToString(sum[:])
 }
 func journalContext(m Material, local journalLocal) journalpolicy.Context {

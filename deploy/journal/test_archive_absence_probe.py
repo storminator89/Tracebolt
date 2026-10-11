@@ -173,6 +173,23 @@ class JournalAbsenceProbeTests(unittest.TestCase):
         fs.max_chunk = 7
         self.assertEqual(0, self.run_probe(fs)[0])
 
+    def test_renewal_config_is_exact_and_does_not_read_manifest_or_credentials(self):
+        c = valid_config()
+        c.update(schemaVersion="tracebolt.lan-agent.v6",
+                 renewalManifestFile="/var/lib/tracebolt-agent/enrollment/renewal-manifest.json")
+        fs = FakeProbeOS(c)
+        self.assertEqual((0, b'{"journalStateAbsent":true}\n'), self.run_probe(fs))
+        self.assertEqual([CONFIG], sorted(set(fs.read_paths)))
+        for field, value in (("renewalManifestFile", ""),
+                             ("renewalManifestFile", "/tmp/renewal-manifest.json"),
+                             ("schemaVersion", "tracebolt.lan-agent.v5"),
+                             ("profile", "http-test")):
+            wrong = dict(c)
+            wrong[field] = value
+            self.assert_rejected(FakeProbeOS(wrong))
+        del c["renewalManifestFile"]
+        self.assert_rejected(FakeProbeOS(c))
+
     def test_identity_and_arguments_are_strict_before_any_path_access(self):
         variants = [((0, 0, 0), (GID,) * 3, []), ((UID, UID, 0), (GID,) * 3, []),
                     ((UID,) * 3, (GID, GID, 0), []), ((UID,) * 3, (0, 0, 0), []),

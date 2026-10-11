@@ -95,3 +95,38 @@ describe('operator-owned certificate expiry', () => {
         expect(region.querySelector('time')).toHaveAttribute('datetime', value.expiresAt);
     });
 });
+
+function renewable(status: NonNullable<AgentCertificate['renewal']>['status'] = 'healthy'): AgentCertificate {
+    const value = certificate(72 * 3600000);
+    return { ...value, renewal: { status, enabled: true, identityGeneration: `identity_${'a'.repeat(32)}`, credentialGeneration: 2, currentNotAfter: value.expiresAt!, authorityExpiresAt: '2026-11-01T12:00:00Z' } };
+}
+describe('explicit automatic certificate renewal', () => {
+    it('shows compact status with collapsed authority details, without replacement advice', () => {
+        render(<AgentCertificatePanel value={renewable()}/>);
+        expect(screen.getByText('Automatic renewal: Enabled')).toBeVisible();
+        expect(screen.queryByText('Automatic renewal is unavailable.')).toBeNull();
+        expect(screen.getByText('Certificate generation')).not.toBeVisible();
+        expect(screen.getByText('Certificate details', {selector:'summary'}).parentElement).not.toHaveAttribute('open');
+        act(() => setLocale('de', false));
+        expect(screen.getByText('Automatische Erneuerung: Aktiv')).toBeVisible();
+    });
+    it.each(['due','retrying','blocked','inconsistent','revoked'] as const)('shows the manager renewal state %s without offering credential actions', status => {
+        render(<AgentCertificatePanel value={renewable(status)}/>);
+        expect(document.querySelector('.certificate-guidance')).toHaveTextContent('Automatic renewal:');
+        expect(screen.queryByRole('button')).toBeNull();
+    });
+    it('never lets healthy renewal hide an expired current certificate', () => {
+        const value = renewable(); value.checkedAt = value.expiresAt!;
+        render(<AgentCertificatePanel value={value}/>);
+        expect(screen.getByText('Automatic renewal: Expired')).toBeVisible();
+        expect(screen.queryByText('Automatic renewal: Enabled')).toBeNull();
+    });
+    it.each([
+        { identityGeneration: `identity_${'0'.repeat(32)}` }, { credentialGeneration: 0 },
+        { currentNotAfter: '2026-10-09T12:00:00Z' }, { authorityExpiresAt: '2026-10-06T12:00:00Z' },
+        { status: 'renewed-forever' },
+    ])('rejects inconsistent renewal metadata %j', change => {
+        const value = renewable();
+        expect(certificateExpiry({ ...value, renewal: {...value.renewal, ...change} })).toEqual({state:'unknown',certificate:null});
+    });
+});

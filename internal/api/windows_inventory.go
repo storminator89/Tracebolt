@@ -29,7 +29,7 @@ func (h *operatorHandler) windowsEnrollmentClient(w http.ResponseWriter, r *http
 	}
 	path := strings.TrimPrefix(r.URL.Path, windowsEnrollmentPrefix)
 	switch path {
-	case "challenge", "claim", "status", "credential", "activate":
+	case "challenge", "claim", "status", "credential", "activate", "renewal/challenge", "renewal/status", "renewal/issue", "renewal/activate":
 	default:
 		fail(w, 404, "not_found", "Enrollment route is unavailable.")
 		return

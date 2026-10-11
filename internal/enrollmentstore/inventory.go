@@ -169,7 +169,7 @@ func (s *Store) loadInventory(ctx context.Context, t *transaction) error {
 			return ErrStorage
 		}
 		snap, e := t.engine.Get(id)
-		if e != nil || !validInventoryRecord(snap, r) {
+		if e != nil || !validInventoryRecord(snap, r, t.currentCredentialNotAfter(snap)) {
 			rows.Close()
 			return ErrStorage
 		}
@@ -223,8 +223,9 @@ func (s *Store) loadInventory(ctx context.Context, t *transaction) error {
 	}
 	return validateInventoryMetadata(ctx, t)
 }
-func validInventoryRecord(snap enrollmentstate.Snapshot, r inventoryRecord) bool {
-	if !completeProfile(snap.Binding.CollectionProfile) || snap.Platform != "linux" || snap.Activation.At == 0 || snap.Issuance.CertificateHash == "" || !validStoreTime(r.StartedAt) || !validStoreTime(r.LastAt) || r.StartedAt.Location() != time.UTC || r.LastAt.Location() != time.UTC || r.LastAt.Before(r.StartedAt) || r.StartedAt.Unix() < snap.Activation.At || r.LastAt.Unix() >= snap.Intent.NotAfter {
+func validInventoryRecord(snap enrollmentstate.Snapshot, r inventoryRecord, authorityExpiry ...int64) bool {
+	notAfter := recordAuthorityExpiry(snap, authorityExpiry...)
+	if !completeProfile(snap.Binding.CollectionProfile) || snap.Platform != "linux" || snap.Activation.At == 0 || snap.Issuance.CertificateHash == "" || !validStoreTime(r.StartedAt) || !validStoreTime(r.LastAt) || r.StartedAt.Location() != time.UTC || r.LastAt.Location() != time.UTC || r.LastAt.Before(r.StartedAt) || r.StartedAt.Unix() < snap.Activation.At || r.LastAt.Unix() >= notAfter {
 		return false
 	}
 	if r.MaintenanceAt != nil && (!validStoreTime(*r.MaintenanceAt) || r.MaintenanceAt.Location() != time.UTC || r.MaintenanceAt.Before(r.StartedAt)) {
@@ -261,7 +262,7 @@ func (s *Store) saveInventory(ctx context.Context, t *transaction) error {
 	}
 	for id, r := range t.inventory {
 		snap, e := t.engine.Get(id)
-		if e != nil || !validInventoryRecord(snap, r) {
+		if e != nil || !validInventoryRecord(snap, r, t.currentCredentialNotAfter(snap)) {
 			return ErrStorage
 		}
 		raw, _ := json.Marshal(r)
@@ -306,31 +307,11 @@ func (s *Store) inventoryAuthority(t *transaction, id, certificateHash string, n
 	if !completeProfile(snap.Binding.CollectionProfile) || snap.Platform != "linux" {
 		return zero, enrollmentstate.ErrProof
 	}
-	if snap.State != enrollmentstate.Activated {
-		return zero, enrollmentstate.ErrState
-	}
-	if snap.Issuance.CertificateHash != certificateHash {
-		return zero, enrollmentstate.ErrProof
-	}
-	if now.Unix() < snap.UpdatedAt || now.Unix() < snap.Intent.NotBefore {
-		return zero, enrollmentstate.ErrInvalid
-	}
-	if now.Unix() >= snap.Intent.NotAfter {
-		return zero, enrollmentstate.ErrExpired
+	if e = t.authorizeCurrentCredential(snap, certificateHash, now); e != nil {
+		return zero, e
 	}
 	if r, ok := t.inventory[id]; ok && (now.Before(r.LastAt) || r.MaintenanceAt != nil && now.Before(*r.MaintenanceAt)) {
 		return zero, enrollmentstate.ErrInvalid
-	}
-	c, ok := t.credentials[id]
-	if !ok {
-		return zero, ErrStorage
-	}
-	intent, e := t.engine.TrustedRecordedIntent(id)
-	if e != nil {
-		return zero, ErrStorage
-	}
-	if _, e = enrollmentcrypto.VerifyIssued(c.DER, s.issuerDER, intent, now); e != nil {
-		return zero, enrollmentstate.ErrProof
 	}
 	return snap, nil
 }
@@ -340,7 +321,7 @@ func (s *Store) inventoryOperatorAuthority(t *transaction, device string, now ti
 	}
 	for _, snap := range t.engine.Snapshots() {
 		if snap.Approval.DeviceID == device {
-			return s.inventoryAuthority(t, snap.InvitationID, snap.Issuance.CertificateHash, now)
+			return s.inventoryAuthority(t, snap.InvitationID, t.currentCertificateHash(snap), now)
 		}
 	}
 	return enrollmentstate.Snapshot{}, enrollmentstate.ErrNotFound
@@ -743,7 +724,7 @@ func (s *Store) InventoryView(ctx context.Context, device string, now time.Time)
 		}
 		out, e = inventoryStatus(ctx, t, snap, now)
 		if e == nil {
-			out.readState = &inventoryViewReadState{checkedAt: now, certificateNotAfter: snap.Intent.NotAfter}
+			out.readState = &inventoryViewReadState{checkedAt: now, certificateNotAfter: t.currentCredentialNotAfter(snap)}
 			touchInventory(t, snap.InvitationID, now)
 		}
 		return e

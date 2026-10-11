@@ -60,6 +60,7 @@ type serviceState struct {
 	global                   peerWindow
 }
 type challengeEntry struct {
+	renewal *enrollmentcrypto.RenewalContext
 	context enrollmentcrypto.ChallengeContext
 	purpose string
 }
@@ -190,8 +191,11 @@ type Challenge struct {
 // does not disclose whether an invitation exists. peer is parsed RemoteAddr IP,
 // never a forwarded header. Challenge loss/restart requires a new challenge.
 func (s *Service) Challenge(peer, invitationID, claimID, purpose string) (Challenge, error) {
-	if s == nil || s.serviceState == nil || !enrollmentcrypto.ValidID(invitationID, "invite_") || !enrollmentcrypto.ValidID(claimID, "claim_") || (purpose != "claim" && purpose != "status" && purpose != "credential" && purpose != "activation") {
+	if s == nil || s.serviceState == nil || !enrollmentcrypto.ValidID(invitationID, "invite_") || !enrollmentcrypto.ValidID(claimID, "claim_") || (purpose != "claim" && purpose != "status" && purpose != "credential" && purpose != "activation" && !enrollmentcrypto.ValidRenewalPurpose(purpose)) {
 		return Challenge{}, ErrChallenge
+	}
+	if enrollmentcrypto.ValidRenewalPurpose(purpose) && (!s.AutomaticRenewal() || s.binding.Profile != "tls") {
+		return Challenge{}, enrollmentstate.ErrNotImplemented
 	}
 	ip, e := netip.ParseAddr(peer)
 	if e != nil || ip.Zone() != "" {
@@ -238,6 +242,10 @@ func (s *Service) Challenge(peer, invitationID, claimID, purpose string) (Challe
 		return Challenge{}, e
 	}
 	c := enrollmentcrypto.ChallengeContext{ManagerInstanceID: s.binding.InstanceID, Profile: s.binding.Profile, Origin: s.binding.Origin, CollectionProfile: s.binding.CollectionProfile, InvitationID: invitationID, ClaimID: claimID, Challenge: nonce, ExpiresAt: now.Add(challengeTTL).Unix()}
+	if s.AutomaticRenewal() {
+		c.RenewalPolicy = enrollmentcrypto.RenewalPolicySameKey
+		c.AgentOrigin = s.RenewalAgentOrigin()
+	}
 	s.challenges[nonce] = challengeEntry{context: c, purpose: purpose}
 	return Challenge{SchemaVersion: "tracebolt.enrollment-challenge.v2", Context: c, Purpose: purpose, ServerNow: now}, nil
 }
@@ -405,6 +413,9 @@ func (s *Service) issue(ctx context.Context, id string) error {
 		}
 		now := s.now().UTC()
 		start := now.Add(-30 * time.Second)
+		if s.AutomaticRenewal() {
+			start = now
+		}
 		if start.Before(s.issuerStart) {
 			start = s.issuerStart
 		}

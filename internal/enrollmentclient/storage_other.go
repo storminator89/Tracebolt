@@ -13,3 +13,7 @@ func (*localStore) Write(string, []byte) error      { return ErrState }
 func (*localStore) TelemetryExists() (bool, error)  { return false, ErrState }
 func (*localStore) EnsureTelemetry() error          { return ErrState }
 func (*localStore) Close() error                    { return nil }
+
+func openEnrollmentStore(path string, existing, renewable bool) (*localStore, error) {
+	return nil, ErrState
+}

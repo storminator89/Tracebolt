@@ -46,13 +46,13 @@ func (s *Store) WindowsSoftwareHistoryPage(ctx context.Context, device string, q
 		if !found {
 			return enrollmentstate.ErrNotFound
 		}
-		snap, e = s.windowsFullSoftwareAuthority(t, snap.InvitationID, snap.Issuance.CertificateHash, now)
+		snap, e = s.windowsFullSoftwareAuthority(t, snap.InvitationID, t.currentCertificateHash(snap), now)
 		if e != nil {
 			return e
 		}
-		until := time.Unix(snap.Intent.NotAfter, 0).UTC()
+		until := time.Unix(t.currentCredentialNotAfter(snap), 0).UTC()
 		authorityUntil = until
-		invitation, certificate = snap.InvitationID, snap.Issuance.CertificateHash
+		invitation, certificate = snap.InvitationID, t.currentCertificateHash(snap)
 		present, e := windowsFullSoftwareSchemaPresent(ctx, t.conn, s.config.Binding.CollectionProfile)
 		if e != nil {
 			return e
@@ -85,7 +85,7 @@ func (s *Store) WindowsSoftwareHistoryPage(ctx context.Context, device string, q
 				return e
 			}
 			now = fresh
-			if _, e = s.windowsFullSoftwareAuthority(t, snap.InvitationID, snap.Issuance.CertificateHash, fresh); e != nil {
+			if _, e = s.windowsFullSoftwareAuthority(t, snap.InvitationID, t.currentCertificateHash(snap), fresh); e != nil {
 				return e
 			}
 			if _, e = fullSoftwareSession(ctx, fresh); e != nil {
@@ -190,7 +190,7 @@ func (s *Store) recheckWindowsSoftwareHistoryPage(ctx context.Context, p windows
 			if !found {
 				return enrollmentstate.ErrNotFound
 			}
-			if _, e := s.windowsFullSoftwareAuthority(t, snap.InvitationID, snap.Issuance.CertificateHash, checked); e != nil {
+			if _, e := s.windowsFullSoftwareAuthority(t, snap.InvitationID, t.currentCertificateHash(snap), checked); e != nil {
 				return e
 			}
 			if _, e := fullSoftwareSession(ctx, checked); e != nil {

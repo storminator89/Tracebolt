@@ -47,8 +47,8 @@ func setupWizardReadAdminDisclosure(insecure bool) string {
 	return out.String()
 }
 
-func setupWizardReadAdminAcknowledgedBootstrap(raw []byte, insecure bool) (enrollmentclient.Bootstrap, lanclient.WindowsCapabilityConsent, error) {
-	b, _, e := setupWizardAcknowledgedBootstrap(raw, insecure)
+func setupWizardReadAdminAcknowledgedBootstrap(raw []byte, insecure bool, renewal ...bool) (enrollmentclient.Bootstrap, lanclient.WindowsCapabilityConsent, error) {
+	b, _, e := setupWizardAcknowledgedBootstrap(raw, insecure, renewal...)
 	if e != nil {
 		return b, lanclient.WindowsCapabilityConsent{}, e
 	}

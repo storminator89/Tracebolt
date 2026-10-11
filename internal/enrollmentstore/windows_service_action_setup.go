@@ -112,7 +112,7 @@ func InspectWindowsServiceActionSetup(ctx context.Context, path string, issuerDE
 	if err != nil {
 		return zero, err
 	}
-	if _, err = s.windowsFullServicesAuthority(t, snap.InvitationID, snap.Issuance.CertificateHash, now); err != nil {
+	if _, err = s.windowsFullServicesAuthority(t, snap.InvitationID, t.currentCertificateHash(snap), now); err != nil {
 		return zero, err
 	}
 	out := WindowsActionSetupInspection{Config: config, Identity: snap, Status: "absent"}

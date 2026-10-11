@@ -1,5 +1,5 @@
 {
-  "goSourceSha256": "89f8b11b3b41c8da79dc20273af60304564ed30e527cc999f113b33cb2bc0ded",
+  "goSourceSha256": "4c82b7094016af96f00bb5c897df90a8af0fe20556a13e87789468c62f32491b",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -19,7 +19,9 @@
       "TestOnlinePreparationCancellationAndBadFetchDoNotStage",
       "TestOnlinePreparationGateBeforeFetchAndProtectedPublicSnapshot",
       "TestOnlinePreparationRejectsBeforeFetch",
-      "TestOperationGuidancePreservesPendingAndRecoveryBoundaries"
+      "TestOnlineRenewalMismatchRejectedBeforeSnapshot",
+      "TestOperationGuidancePreservesPendingAndRecoveryBoundaries",
+      "TestServiceCLIRejectsRenewalOutsideFreshHTTPSBeforeInspection"
     ],
     "localrmm/cmd/dev-agent": [
       "TestHelpAndFailClosedArguments"
@@ -28,6 +30,7 @@
       "TestCLIRejectsSecretArgumentsWithoutEchoingValues",
       "TestHiddenTerminalBracketedPasteSyntheticFixtures",
       "TestHiddenTerminalPromptSyntheticFixture",
+      "TestRenewalFlagCannotChangeRetainedValidationAuthority",
       "TestShellQuotedHandoffPath"
     ],
     "localrmm/cmd/http-test-setup": [
@@ -187,7 +190,11 @@
     ],
     "localrmm/cmd/package-guard": [],
     "localrmm/cmd/package-helper": [],
-    "localrmm/cmd/package-manager-init": [],
+    "localrmm/cmd/package-manager-init": [
+      "TestPackageInitializationPermitsProtectedPublicIssuerPermissions",
+      "TestPackageInitializationRejectsPrivateMaterialAsPublicIssuer",
+      "TestPackageInitializationRequiresEnrollmentSource"
+    ],
     "localrmm/cmd/package-runner": [],
     "localrmm/cmd/socket-owner-reader": [
       "TestArgumentBoundaryIsInert",
@@ -296,6 +303,7 @@
       "TestFreshReadSetupReconcileStrictCanonicalAndCancellation",
       "TestFreshReadSetupRejectsAutomaticPlanBeforeJournal",
       "TestFreshReadSetupRejectsOldConsentAndMissingScopesWithoutOperations",
+      "TestFreshWizardRenewalConsentIsExactAndPreservesTwentyScopes",
       "TestFullProcessesCLISeparateAcknowledgementAndDisclosure",
       "TestFullProcessesConsentRequiresStoppedOwnedServiceBeforeState",
       "TestFullServicesCLISeparateAcknowledgementAndDisclosure",
@@ -384,6 +392,7 @@
       "TestRemovalFailureCauseFiniteAndHostileSafe",
       "TestRemovalFailureEveryStepPreservesCauseAndMutationCounts",
       "TestRemovalSequencePendingStatesAndFailureWaitKeepSingleMutation",
+      "TestRenewalLifecycleFlagIsFreshTLSOnlyAndDisclosed",
       "TestResourceContextWorkerEntryRechecksActualParentBeforeReturning",
       "TestRestartAcceptanceCompletePlanGrammar",
       "TestRestartAcceptanceFilePinsPermitProductionReads",
@@ -714,6 +723,8 @@
       "TestReadAdminNativeTransactionKeepsCoordinatorLockAtEveryOperation",
       "TestReadAdminRequiresExplicitCompleteProfileBeforeEffects",
       "TestReadAdminValidationChildDoesNotInheritLock",
+      "TestRenewalFreshInstallerPreflightRejectsMismatchWithoutEffects",
+      "TestRenewalInstallPlanRequiresExactFreshTLSConsent",
       "TestRestartResetFailuresNeverReachStart",
       "TestTransactionJournalAndEnrollmentBeforeStart",
       "TestUninstallNeverRequestsIdentityOrAccountDeletion",
@@ -974,6 +985,7 @@
       "TestPackageSourceRemainsUnassessedAndExcludedFromAI",
       "TestPackageUpdateBodyReadDoesNotHoldSessionGate",
       "TestPackageUpdateGoViewContract",
+      "TestPackageUpdateRenewalUnsupportedIsExplicit",
       "TestPackageUpdateRequestRejectsEvidenceAndNestedAliases",
       "TestPackageUpdateRoutesAreExact",
       "TestPackageUpdateSQLiteSimulationThroughAuthenticatedAPI",
@@ -1001,6 +1013,8 @@
       "TestPublicBootstrapRejectsNoncanonicalCredentialHeaderMapKeys",
       "TestPublicBootstrapUnavailableOnDevelopmentSurface",
       "TestReadContract",
+      "TestRenewalIngressRejectsHTTPAndOldTLSExplicitly",
+      "TestRenewalOperatorReadSuppliesSeparateDisableRevision",
       "TestResourceHistoryDeltaBootstrapFutureAndTerminalAreFull",
       "TestResourceHistoryDeltaCanonicalCursor",
       "TestResourceHistoryDeltaOuterOperatorAdmission",
@@ -1390,6 +1404,15 @@
       "TestPlatformBootstrapAdmission",
       "TestPreparedHandoffNeverRecreatesMissingSenderDomain",
       "TestPrivateHandlesRedactFormattingAndGenericJSON",
+      "TestRenewalClientIntegratedCutoverPreservesOriginalArtifacts",
+      "TestRenewalClientInterruptedInitialReadyPublicationResumesExactly",
+      "TestRenewalClientLostLocalManifestCommitReconcilesWithoutNetwork",
+      "TestRenewalClientLostRepliesReconcileAfterRestart",
+      "TestRenewalClientManifestRollbackAndCandidateConflictFailClosed",
+      "TestRenewalClientRequiresFreshExplicitTLSConsent",
+      "TestRenewalClientUsedStateNeverReinitialized",
+      "TestRenewalSchedulerFailureJoinsBeforeReturning",
+      "TestRenewalSchedulerOnlyQuiescesAtActualCutover",
       "TestRuntimeRejectsRemotePlatformBeforeLedgerMutation",
       "TestSnapshotPlatformMustMatchTrustedRuntime",
       "TestStorageActiveTamperingPoisonsHandle",
@@ -1422,6 +1445,8 @@
       "TestWrongValidSecretDoesNotRebindSavedClaim"
     ],
     "localrmm/internal/enrollmentconfig": [
+      "TestAutomaticRenewalConfigIsExplicitFreshTLSOnly",
+      "TestAutomaticRenewalModeCannotAdoptExistingManagerStore",
       "TestOptionalCollectionProfileAndExactModeBinding",
       "TestWindowsDatabaseFragmentsCannotBeAdoptedAsFreshOrManualState",
       "TestWindowsSidecarNeedsExplicitOptInAndPreservesPrimaryBinding"
@@ -1434,6 +1459,7 @@
       "TestFixedIntentRejectsIssuedPrivilegeAndIdentityChanges",
       "TestImplementedCollectionProofDomainsRemainDistinct",
       "TestOrdinaryGeneratedProofsBindSelectedCollectionProfile",
+      "TestRenewalProofSeparatesIdentityGenerationPurposeAndShortChallenge",
       "TestStatusProofPurposeAndContext",
       "TestStatusStrictContract",
       "TestWindowsInventoryConsentIsSeparateFromLinuxManagedProfiles"
@@ -1471,6 +1497,15 @@
       "TestProfileCapabilitiesOlderManagedScopeDoesNotClaimCompleteInventory",
       "TestProfileCapabilitiesOptionalIdentityDoesNotChangeOSQuality",
       "TestProfileCapabilitiesPreserveBasicAndUnknownScope",
+      "TestRenewablePackageInitializationFailsBeforeWrites",
+      "TestRenewalBlocksBeforeWindowWrongPurposeAndExpiredPredecessor",
+      "TestRenewalDisableKeepsCurrentCredentialAndStatus",
+      "TestRenewalDurableInitialIntentCannotExceedSevenDays",
+      "TestRenewalFinalActivationClockCannotCrossPredecessorExpiry",
+      "TestRenewalPolicyCannotAdoptExistingOrSignedHTTPIdentity",
+      "TestRenewalSameKeyExactRetryActivationRetirementAndRestart",
+      "TestRenewalSignerWaitCannotCrossPredecessorExpiryOrRevocation",
+      "TestRenewalWindowsTelemetryBeyondAnchorExpiryPreservesReplay",
       "TestSystemInventoryServicePropagatesTrustedClockAcrossReadBoundaries"
     ],
     "localrmm/internal/enrollmentstate": [
@@ -1589,6 +1624,7 @@
       "TestCompleteUpdatesTrustedClockSuppressesExpiredReadResults",
       "TestCompleteUpdatesUnknownComparisonsAndEmptyKnownSet",
       "TestCompleteUpdatesUnsupportedFailureRetainsReceiptAcrossRestart",
+      "TestCurrentCredentialAuthorityKeepsAnchorAndRejectsRetiredLeaf",
       "TestDeliveryFreshProofExpiryAndStoredCertificateLookup",
       "TestDeliveryRejectsCrossOriginAndWrongApprovedKeyProofs",
       "TestDeliveryRequiresPurposeBoundProofAndPersistsExactRetry",
@@ -1643,8 +1679,10 @@
       "TestJournalSequenceExhaustionFailsWithoutWrap",
       "TestJournalStaleRecordedLeafCannotAuthorizeAfterLeafChange",
       "TestJournalStatusReadAdmissionAndClock",
+      "TestLegacyCompleteIdentityRetainsNativePackageAuthority",
       "TestMetadataReadCohortCancellationAndCertificateWait",
       "TestMetadataReadCohortSharesMaintenanceHandoff",
+      "TestNativePackageRenewalPolicyFailsClosed",
       "TestNetworkContextBackendReviewExpiredPendingHasUnavailableStatus",
       "TestNetworkContextBackendReviewMissingSearchIndexCannotProveAbsence",
       "TestNetworkContextBackendReviewPostCommitRevocationHidesPage",
@@ -1660,12 +1698,14 @@
       "TestOperationalSaveReencodesMutationAfterLoad",
       "TestOperationalSchemaCannotAdoptBasicStore",
       "TestPackageFrameValidationCacheDetachesEveryMutableMember",
+      "TestPackageInitializationInspectionIsReadOnlyAndExact",
       "TestPackageLatestOnlyReplayReopenRevocationAndExpiry",
       "TestPackageMetadataQueuedReadObservesRevocation",
       "TestPackageMetadataReadCancellationTimeoutAndSQLWait",
       "TestPackageMetadataReadRechecksAuthorityAndOriginalExpiry",
       "TestPackageMetadataReadWaitsBehindMaintenance",
       "TestPackageProfileCannotAdoptLegacyFramesOrStores",
+      "TestPendingRenewalCandidateHasNoOrdinaryAuthority",
       "TestProcessesBackendReviewExpiredPendingHasUnavailableStatus",
       "TestProcessesBackendReviewMissingSearchIndexCannotProveAbsence",
       "TestProcessesBackendReviewPostCommitRevocationHidesPage",
@@ -1892,6 +1932,7 @@
       "TestNetworkContextComposedCompleteGenerationBothTransports",
       "TestNetworkContextLastClockBeforeScopeReceiptRechecksAuthority",
       "TestNetworkContextSeparateOriginsAndBlockedBodyAuthority",
+      "TestPackageRenewalUnsupportedIsExplicit",
       "TestRealHTTPGuardsAndSignatureMetadata",
       "TestRealIngressActivatedIdentityReplayReusedConnectionRevocation",
       "TestRequestContractGuards",
@@ -2348,6 +2389,16 @@
       "TestReadAdminV5SetupTransportUsesBodylessDistinctPath",
       "TestReadAdminV6SetupTransportUsesBodylessDistinctPath",
       "TestRedirectAndCancellationDoNotSendElsewhere",
+      "TestRenewalBindingMatchesExistingScopeWireDomains",
+      "TestRenewalLinuxReadScopesAndHelperAuthorityRemainOriginal",
+      "TestRenewalMaterialLoadsCurrentLeafAfterAnchorExpiry",
+      "TestRenewalMaterialPreservesBindingAndPendingBytes",
+      "TestRenewalMaterialRejectsWrongCurrentCredentialAndManifest",
+      "TestRenewalProfilesKeepExactFrameShapesAndCreateOnlyState",
+      "TestRenewalQuiescedSenderStateNeedsNoLiveLeafAndNeverRecreates",
+      "TestRenewalSchemaNeverPromotesLegacyConfig",
+      "TestRenewalWindowsAllTwentyScopesRetainExactReceipts",
+      "TestRenewalWindowsSoftwareHistoryRetainsExactGrantAndPack",
       "TestSelfRetentionAllFrameRefits",
       "TestSelfRetentionFreshConsentAndExactPendingRetry",
       "TestSelfRetentionProcessReservesSelfAlongsideFullVolumeFrame",
@@ -3117,7 +3168,10 @@
       "TestValidCallerBeforeAnyProviderWork"
     ],
     "localrmm/internal/packagecontroller": [
+      "TestAuthorityDenialPrecedesEveryNativePackageOperation",
+      "TestAuthorityDenialPrecedesManagerStoreAdmission",
       "TestExplicitInitializationIsCreateOnlyAndNeverGeneratesKey",
+      "TestInitializationRequiresExactAuthorityBeforeKeyOrStoreAccess",
       "TestNativeControllerCannotBindWindowsEnrollmentScope",
       "TestNativeCurrentAuthorityAndLostPreparation",
       "TestNativeSQLiteExactDispatchResultsAndReopen",
@@ -3224,6 +3278,7 @@
       "TestBoundedBridgeRejectsRetainedCapturesAndLiveManualPages",
       "TestRetainedLocalGrantNeedsExactBoundedAIApproval"
     ],
+    "localrmm/internal/renewalidentity": [],
     "localrmm/internal/rules": [
       "TestNativeInputsDoNotBecomeDemoEvidence",
       "TestRulesAndCounterexamples"
@@ -3710,6 +3765,7 @@
       "TestAdapterContextNativeDecoderFieldsAndExclusions"
     ],
     "localrmm/internal/windowsagentconfig": [
+      "TestRenewableEnrollmentSchemaDoesNotExtendLegacyState",
       "TestWindowsStoreSchemasRemainSeparateAndFixed"
     ],
     "localrmm/internal/windowscapacity": [
@@ -4394,6 +4450,9 @@
       "TestReadAdminV9SoftwareHistoryCannotPromoteEarlierCapabilities"
     ],
     "localrmm/internal/windowssetupui": [
+      "TestAutomaticRenewalLayoutKeepsSeparateCheckboxVisible",
+      "TestAutomaticRenewalNeedsSeparateFreshUncheckedConsent",
+      "TestAutomaticRenewalPreviewRequiresTLSAndDisclosure",
       "TestAutomationControlIDsStayStable",
       "TestCancelBeforeApplyIsInert",
       "TestCancelRetainsOperationUntilHookReturned",
@@ -4446,6 +4505,8 @@
       "TestNoNonWindowsNativeFallback",
       "TestOptionsPolicyFixtures",
       "TestPathPolicyFixtures",
+      "TestRenewalProtectedManifestInterruptedWriteRetainsOriginalAuthority",
+      "TestRenewalProtectedMissingUsedManifestOrTransactionFailsClosed",
       "TestStateNativeDirectoryOptionsPreserveBinding",
       "TestStateNativeReparseFailureHasNoFallback",
       "TestWindowsDescriptorConversionInMemory",

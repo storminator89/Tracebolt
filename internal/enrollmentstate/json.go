@@ -150,13 +150,17 @@ func shape(v any, t reflect.Type) bool {
 	switch t.Kind() {
 	case reflect.Struct:
 		m, ok := v.(map[string]any)
-		if !ok || len(m) != t.NumField() {
+		if !ok || len(m) > t.NumField() {
 			return false
 		}
 		for i := 0; i < t.NumField(); i++ {
 			f := t.Field(i)
-			name := f.Tag.Get("json")
+			tag := strings.Split(f.Tag.Get("json"), ",")
+			name := tag[0]
 			child, ok := m[name]
+			if !ok && len(tag) == 2 && tag[1] == "omitempty" {
+				continue
+			}
 			if !ok || !shape(child, f.Type) {
 				return false
 			}

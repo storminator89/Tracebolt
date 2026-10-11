@@ -43,6 +43,19 @@ class Tests(unittest.TestCase):
         self.archive.chmod(0o600)
         self.manifest["assets"][self.archive.name] = dict(sha256=b.digest(self.archive.read_bytes()), size=self.archive.stat().st_size)
 
+    def test_renewal_flag_is_fresh_https_only_and_forwarded(self):
+        self.package()
+        command = b.installer_command(args("--automatic-certificate-renewal"), self.root, self.manifest, "amd64")
+        self.assertIn("--automatic-certificate-renewal", command)
+        self.assertIn("--require-complete-profile", command)
+        self.assertNotIn("--automatic-certificate-renewal", b.installer_command(args(), self.root, self.manifest, "amd64"))
+        for conflict in ("--resume", "--resume-read-admin", "--insecure-http-test"):
+            with self.subTest(conflict=conflict), self.assertRaises(b.Rejected):
+                args("--automatic-certificate-renewal", conflict)
+        for action in ("upgrade", "revoke-socket-owners"):
+            with self.subTest(action=action), self.assertRaises(b.Rejected):
+                b.parse_args(["--action", action, "--automatic-certificate-renewal"])
+
     def test_complete_regular_verified_archive_loads_inert_modules_only(self):
         self.package()
         with mock.patch.object(b.subprocess, "Popen", side_effect=AssertionError("unexpected child")), \

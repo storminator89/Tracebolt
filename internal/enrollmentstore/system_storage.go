@@ -127,10 +127,11 @@ func validSystemMeta(m systeminventory.SectionMeta) bool {
 	}
 	return validStoreTime(m.ObservedAt) && systeminventory.ValidateSectionMeta(m, n) == nil
 }
-func validSystemRecord(snap enrollmentstate.Snapshot, r systemRecord) bool {
+func validSystemRecord(snap enrollmentstate.Snapshot, r systemRecord, authorityExpiry ...int64) bool {
+	notAfter := recordAuthorityExpiry(snap, authorityExpiry...)
 	p := r.Receipt
 	expected, e := systemwire.GenerationID(snap.Approval.DeviceID, p.Sequence)
-	if !completeProfile(snap.Binding.CollectionProfile) || snap.Platform != "linux" || snap.Activation.At == 0 || snap.Issuance.CertificateHash == "" || e != nil || p.SchemaVersion != systemwire.ReceiptVersion || p.DeviceID != snap.Approval.DeviceID || p.GenerationID != expected || !enrollmentcrypto.ValidHash(p.BodyHash) || !validStoreTime(p.CollectedAt) || !validStoreTime(p.ReceivedAt) || p.CollectedAt.Location() != time.UTC || p.ReceivedAt.Location() != time.UTC || p.CollectedAt.After(p.ReceivedAt) || p.ReceivedAt.Sub(p.CollectedAt) > SystemMaxAge || p.ReceivedAt.Unix() < snap.Activation.At || p.ReceivedAt.Unix() >= snap.Intent.NotAfter {
+	if !completeProfile(snap.Binding.CollectionProfile) || snap.Platform != "linux" || snap.Activation.At == 0 || snap.Issuance.CertificateHash == "" || e != nil || p.SchemaVersion != systemwire.ReceiptVersion || p.DeviceID != snap.Approval.DeviceID || p.GenerationID != expected || !enrollmentcrypto.ValidHash(p.BodyHash) || !validStoreTime(p.CollectedAt) || !validStoreTime(p.ReceivedAt) || p.CollectedAt.Location() != time.UTC || p.ReceivedAt.Location() != time.UTC || p.CollectedAt.After(p.ReceivedAt) || p.ReceivedAt.Sub(p.CollectedAt) > SystemMaxAge || p.ReceivedAt.Unix() < snap.Activation.At || p.ReceivedAt.Unix() >= notAfter {
 		return false
 	}
 	if snap.Termination.At != 0 && p.ReceivedAt.Unix() > snap.Termination.At {
@@ -188,7 +189,7 @@ func validSystemRecord(snap enrollmentstate.Snapshot, r systemRecord) bool {
 		identity := r.EndpointIdentity
 		p := identity.Receipt
 		expected, e := systemwire.GenerationID(snap.Approval.DeviceID, p.Sequence)
-		if e != nil || p.SchemaVersion != systemwire.ReceiptVersion || p.DeviceID != snap.Approval.DeviceID || p.GenerationID != expected || !enrollmentcrypto.ValidHash(p.BodyHash) || !validStoreTime(p.CollectedAt) || !validStoreTime(p.ReceivedAt) || p.CollectedAt.Location() != time.UTC || p.ReceivedAt.Location() != time.UTC || p.CollectedAt.After(p.ReceivedAt) || p.ReceivedAt.Sub(p.CollectedAt) > SystemMaxAge || p.Sequence > r.Receipt.Sequence || p.CollectedAt.After(r.Receipt.CollectedAt) || p.ReceivedAt.After(r.Receipt.ReceivedAt) || p.ReceivedAt.Unix() < snap.Activation.At || p.ReceivedAt.Unix() >= snap.Intent.NotAfter {
+		if e != nil || p.SchemaVersion != systemwire.ReceiptVersion || p.DeviceID != snap.Approval.DeviceID || p.GenerationID != expected || !enrollmentcrypto.ValidHash(p.BodyHash) || !validStoreTime(p.CollectedAt) || !validStoreTime(p.ReceivedAt) || p.CollectedAt.Location() != time.UTC || p.ReceivedAt.Location() != time.UTC || p.CollectedAt.After(p.ReceivedAt) || p.ReceivedAt.Sub(p.CollectedAt) > SystemMaxAge || p.Sequence > r.Receipt.Sequence || p.CollectedAt.After(r.Receipt.CollectedAt) || p.ReceivedAt.After(r.Receipt.ReceivedAt) || p.ReceivedAt.Unix() < snap.Activation.At || p.ReceivedAt.Unix() >= notAfter {
 			return false
 		}
 		if p.Sequence == r.Receipt.Sequence && p != r.Receipt {
@@ -206,7 +207,7 @@ func validSystemRecord(snap enrollmentstate.Snapshot, r systemRecord) bool {
 		updates := r.CachedUpdates
 		p := updates.Receipt
 		expected, e := systemwire.GenerationID(snap.Approval.DeviceID, p.Sequence)
-		if e != nil || p.SchemaVersion != systemwire.ReceiptVersion || p.DeviceID != snap.Approval.DeviceID || p.GenerationID != expected || !enrollmentcrypto.ValidHash(p.BodyHash) || !validStoreTime(p.CollectedAt) || !validStoreTime(p.ReceivedAt) || p.CollectedAt.Location() != time.UTC || p.ReceivedAt.Location() != time.UTC || p.CollectedAt.After(p.ReceivedAt) || p.ReceivedAt.Sub(p.CollectedAt) > SystemMaxAge || p.Sequence > r.Receipt.Sequence || p.CollectedAt.After(r.Receipt.CollectedAt) || p.ReceivedAt.After(r.Receipt.ReceivedAt) || p.ReceivedAt.Unix() < snap.Activation.At || p.ReceivedAt.Unix() >= snap.Intent.NotAfter {
+		if e != nil || p.SchemaVersion != systemwire.ReceiptVersion || p.DeviceID != snap.Approval.DeviceID || p.GenerationID != expected || !enrollmentcrypto.ValidHash(p.BodyHash) || !validStoreTime(p.CollectedAt) || !validStoreTime(p.ReceivedAt) || p.CollectedAt.Location() != time.UTC || p.ReceivedAt.Location() != time.UTC || p.CollectedAt.After(p.ReceivedAt) || p.ReceivedAt.Sub(p.CollectedAt) > SystemMaxAge || p.Sequence > r.Receipt.Sequence || p.CollectedAt.After(r.Receipt.CollectedAt) || p.ReceivedAt.After(r.Receipt.ReceivedAt) || p.ReceivedAt.Unix() < snap.Activation.At || p.ReceivedAt.Unix() >= notAfter {
 			return false
 		}
 		if p.Sequence == r.Receipt.Sequence && p != r.Receipt {
@@ -220,10 +221,10 @@ func validSystemRecord(snap enrollmentstate.Snapshot, r systemRecord) bool {
 			return false
 		}
 	}
-	if r.JournalGeneration != nil && !validJournalGeneration(snap, *r.JournalGeneration) {
+	if r.JournalGeneration != nil && !validJournalGeneration(snap, *r.JournalGeneration, notAfter) {
 		return false
 	}
-	if r.JournalRequest != nil && !validJournalRecord(snap, *r.JournalRequest) {
+	if r.JournalRequest != nil && !validJournalRecord(snap, *r.JournalRequest, notAfter) {
 		return false
 	}
 	if r.JournalRequest != nil && r.JournalRequest.Description.SchemaVersion == journalrequest.SchemaVersionV2 {
@@ -273,7 +274,7 @@ func (s *Store) loadSystemMetadata(ctx context.Context, t *transaction) error {
 		}
 		canon, _ := json.Marshal(r)
 		snap, e := t.engine.Get(id)
-		if e != nil || !bytes.Equal(raw, canon) || !validSystemRecord(snap, r) {
+		if e != nil || !bytes.Equal(raw, canon) || !validSystemRecord(snap, r, t.currentCredentialNotAfter(snap)) {
 			rows.Close()
 			return ErrStorage
 		}
@@ -365,28 +366,8 @@ func (s *Store) systemAuthority(t *transaction, id, hash string, now time.Time) 
 	if !completeProfile(snap.Binding.CollectionProfile) || snap.Platform != "linux" {
 		return zero, enrollmentstate.ErrProof
 	}
-	if snap.State != enrollmentstate.Activated {
-		return zero, enrollmentstate.ErrState
-	}
-	if snap.Issuance.CertificateHash != hash {
-		return zero, enrollmentstate.ErrProof
-	}
-	if now.Unix() < snap.UpdatedAt || now.Unix() < snap.Intent.NotBefore {
-		return zero, enrollmentstate.ErrInvalid
-	}
-	if now.Unix() >= snap.Intent.NotAfter {
-		return zero, enrollmentstate.ErrExpired
-	}
-	c, ok := t.credentials[id]
-	if !ok {
-		return zero, ErrStorage
-	}
-	intent, e := t.engine.TrustedRecordedIntent(id)
-	if e != nil {
-		return zero, ErrStorage
-	}
-	if _, e = enrollmentcrypto.VerifyIssued(c.DER, s.issuerDER, intent, now); e != nil {
-		return zero, enrollmentstate.ErrProof
+	if e = t.authorizeCurrentCredential(snap, hash, now); e != nil {
+		return zero, e
 	}
 	if r, ok := t.system[id]; ok && (now.Before(r.Receipt.ReceivedAt) || r.MaintenanceAt != nil && now.Before(*r.MaintenanceAt)) {
 		return zero, enrollmentstate.ErrInvalid
@@ -526,7 +507,7 @@ func (s *Store) SaveSystemObservation(ctx context.Context, id, hash string, raw 
 			record.setSection(name, complete)
 		}
 		b, e := json.Marshal(record)
-		if e != nil || len(b) > systemMetadataLimit || !validSystemRecord(snap, record) {
+		if e != nil || len(b) > systemMetadataLimit || !validSystemRecord(snap, record, t.currentCredentialNotAfter(snap)) {
 			return ErrStorage
 		}
 		if _, e = t.conn.ExecContext(ctx, `UPDATE enrollment_system_authority SET body=? WHERE invitation_id=?`, b, id); e != nil {
@@ -592,7 +573,7 @@ func (s *Store) checkSystemAdmission(ctx context.Context, t *transaction, _ stri
 func validateSystemRecords(t *transaction) error {
 	for id, r := range t.system {
 		snap, e := t.engine.Get(id)
-		if e != nil || !validSystemRecord(snap, r) {
+		if e != nil || !validSystemRecord(snap, r, t.currentCredentialNotAfter(snap)) {
 			return ErrStorage
 		}
 	}

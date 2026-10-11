@@ -88,7 +88,7 @@ func (s *Store) WindowsInventoryView(ctx context.Context, id string, now time.Ti
 			return nil
 		}
 		out.Status = "awaiting"
-		out.certificateNotAfter = identity.Intent.NotAfter
+		out.certificateNotAfter = t.currentCredentialNotAfter(identity)
 		c, ok := t.credentials[identity.InvitationID]
 		if ok && len(c.Frame) > 0 {
 			frame, err := t.validateFrame(c.Frame, c.Replay.ReceivedAt)
@@ -148,7 +148,7 @@ func (s *Store) WindowsInventoryView(ctx context.Context, id string, now time.Ti
 				out.RetainedContext = nil
 			}
 		}
-		if identity.State == enrollmentstate.Revoked || identity.State == enrollmentstate.Canceled || identity.State == enrollmentstate.Rejected || identity.State == enrollmentstate.Expired || identity.Intent.NotAfter > 0 && now.Unix() >= identity.Intent.NotAfter {
+		if identity.State == enrollmentstate.Revoked || identity.State == enrollmentstate.Canceled || identity.State == enrollmentstate.Rejected || identity.State == enrollmentstate.Expired || t.currentCredentialNotAfter(identity) > 0 && now.Unix() >= t.currentCredentialNotAfter(identity) {
 			out.Status = "revoked"
 			out.Snapshot = nil
 			out.Events = nil

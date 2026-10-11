@@ -355,7 +355,7 @@ func (w *wizard) render() bool {
 		destroyWindow.Call(h)
 	}
 	w.pageControls = nil
-	for _, id := range []int{idChoose, idUninstall, idScope, idService, idIdentity, idCompared, idHTTPRisk, idReadAdmin, idDetails, idSelectedFile, idReviewText, idOperationText, idInputText} {
+	for _, id := range []int{idChoose, idUninstall, idScope, idService, idIdentity, idCompared, idHTTPRisk, idAutomaticRenewal, idReadAdmin, idDetails, idSelectedFile, idReviewText, idOperationText, idInputText} {
 		delete(w.controls, id)
 	}
 	enable(w.controls[idBack], w.flow.page == pageReview)
@@ -393,7 +393,7 @@ func (w *wizard) render() bool {
 		w.content = w.control("EDIT", reviewText(reviewPresentation(w.config, w.flow.readAdmin, w.flow.details), w.flow.trust), esMultiline|esReadOnly|esAutoVScroll|wsVScroll|wsTabStop|wsBorder, idReviewText, true)
 		scopeText := "I approve the exact five READ scopes and the full privacy disclosure above."
 		if w.flow.readAdmin {
-			scopeText = "I approve all 14 Read admin scopes, including chassis/BIOS serials, drive letters/volume GUIDs, storage-provider device identifiers/friendly labels, and personal user/domain/session metadata."
+			scopeText = "I approve all 20 Read admin scopes, including chassis/BIOS serials, drive letters/volume GUIDs, storage-provider device identifiers/friendly labels, and personal user/domain/session metadata."
 			if w.control("BUTTON", "Scope &details", wsTabStop, idDetails, true) == 0 {
 				return false
 			}
@@ -412,6 +412,12 @@ func (w *wizard) render() bool {
 				id   int
 				text string
 			}{idHTTPRisk, "I accept plaintext invitation and selected-scope telemetry, and forged manager-response risks for this HTTP test."})
+		}
+		if w.flow.trust.AutomaticRenewal {
+			checks = append(checks, struct {
+				id   int
+				text string
+			}{idAutomaticRenewal, "I approve recurring seven-day certificates for this same identity/key until revocation or issuer/scope expiry."})
 		}
 		for _, c := range checks {
 			h := w.control("BUTTON", c.text, bsAutoCheckbox|bsMultiline|wsTabStop, c.id, true)
@@ -490,7 +496,7 @@ func (w *wizard) command(id int) {
 			}
 			setText(w.controls[idDetails], label)
 		}
-	case idScope, idService, idIdentity, idCompared, idHTTPRisk:
+	case idScope, idService, idIdentity, idCompared, idHTTPRisk, idAutomaticRenewal:
 		if w.flow.page != pageReview || w.flow.busy || w.flow.attempted {
 			return
 		}
@@ -499,6 +505,7 @@ func (w *wizard) command(id int) {
 		w.flow.identity = checked(w.controls[idIdentity])
 		w.flow.compared = checked(w.controls[idCompared])
 		w.flow.httpAcknowledged = w.flow.trust.HTTPTest && checked(w.controls[idHTTPRisk])
+		w.flow.renewalAcknowledged = w.flow.trust.AutomaticRenewal && checked(w.controls[idAutomaticRenewal])
 		w.updateActions()
 	case idNext:
 		if !w.layoutOK {
@@ -536,6 +543,10 @@ func (w *wizard) start(kind operation, confirmed bool) {
 		return
 	}
 	httpApproved := w.flow.httpApproved()
+	renewalApproved := w.flow.canInstall() && w.flow.renewalAcknowledged
+	if kind == opInstall && w.flow.trust.AutomaticRenewal && ((!w.flow.readAdmin && w.hooks.InstallRenewable == nil) || (w.flow.readAdmin && w.hooks.InstallReadAdminRenewable == nil)) {
+		return
+	}
 	readAdmin := w.flow.readAdmin
 	if kind == opInstall && readAdmin && !readAdminAvailable(w.config, w.hooks) {
 		return
@@ -569,7 +580,11 @@ func (w *wizard) start(kind operation, confirmed bool) {
 	go func() {
 		var err error
 		if kind == opInstall {
-			if readAdmin {
+			if renewalApproved && readAdmin {
+				err = w.hooks.InstallReadAdminRenewable(ctx, data, renewalApproved, w.reportProgress)
+			} else if renewalApproved {
+				err = w.hooks.InstallRenewable(ctx, data, renewalApproved, w.reportProgress)
+			} else if readAdmin {
 				err = w.hooks.InstallReadAdmin(ctx, data, httpApproved, w.reportProgress)
 			} else {
 				err = w.hooks.Install(ctx, data, httpApproved, w.reportProgress)

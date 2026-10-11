@@ -350,7 +350,7 @@ func validateCompleteUpdatesRecords(ctx context.Context, t *transaction) error {
 		}
 		snap, e := t.engine.Get(id)
 		canonical, _ := json.Marshal(r)
-		if e != nil || !bytes.Equal(raw, canonical) || !validCompleteUpdatesRecord(snap, r) {
+		if e != nil || !bytes.Equal(raw, canonical) || !validCompleteUpdatesRecord(snap, r, t.currentCredentialNotAfter(snap)) {
 			return ErrStorage
 		}
 	}

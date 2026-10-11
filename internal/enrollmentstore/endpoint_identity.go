@@ -99,13 +99,13 @@ func (v EndpointIdentityView) RecheckAt(now time.Time) (EndpointIdentityView, er
 // reads. Call only within an admitted transaction; retain original authority/age.
 func (s *Store) endpointIdentityFromSnapshot(t *transaction, snap enrollmentstate.Snapshot, now time.Time) (EndpointIdentityView, error) {
 	out := EndpointIdentityView{SchemaVersion: "tracebolt.endpoint-identity-view.v1", DeviceID: snap.Approval.DeviceID, Status: "unknown", ServerNow: now, MaxAgeSeconds: int64(SystemMaxAge / time.Second)}
-	out.readState = &systemViewReadState{checkedAt: now, certificateNotAfter: snap.Intent.NotAfter}
-	status := systemIdentityStatus(snap, now)
+	out.readState = &systemViewReadState{checkedAt: now, certificateNotAfter: t.currentCredentialNotAfter(snap)}
+	status := systemIdentityStatus(snap, now, t.currentCredentialNotAfter(snap))
 	if status != "awaiting" {
 		out.Status = status
 		return out, nil
 	}
-	if _, e := s.systemAuthority(t, snap.InvitationID, snap.Issuance.CertificateHash, now); e != nil {
+	if _, e := s.systemAuthority(t, snap.InvitationID, t.currentCertificateHash(snap), now); e != nil {
 		return EndpointIdentityView{}, e
 	}
 	out.Status = "not_collected"

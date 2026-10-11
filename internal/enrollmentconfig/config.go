@@ -25,10 +25,12 @@ import (
 )
 
 const SchemaVersion = "tracebolt.enrollment-config.v2"
+const RenewableSchemaVersion = "tracebolt.enrollment-config.renewable.v1"
 
 var ErrConfiguration = errors.New("enrollment configuration or protected material is invalid")
 
 type Config struct {
+	AutomaticRenewal          bool   `json:"automaticRenewal,omitempty"`
 	CollectionProfile         string `json:"collectionProfile,omitempty"`
 	SchemaVersion             string `json:"schemaVersion"`
 	Profile                   string `json:"profile"`
@@ -82,10 +84,22 @@ func (m Material) StoreConfig() enrollmentstate.Config {
 	}
 	v := m.value
 	cfg := enrollmentstate.DefaultConfig(enrollmentstate.Binding{InstanceID: v.config.InstanceID, Profile: v.config.Profile, Origin: v.lan.OperatorOrigin, CollectionProfile: v.config.CollectionProfile, IssuerFingerprint: v.issuer.Fingerprint()})
+	cfg.AutomaticRenewal = v.config.AutomaticRenewal
+	if cfg.AutomaticRenewal {
+		cfg.RenewalAgentOrigin = v.lan.AgentOrigin
+	}
 	cfg.RecordLimit = enrollmentservice.MaxRecords
 	cfg.InvitationLimit = enrollmentservice.MaxRecords
 	cfg.PendingLimit = enrollmentservice.MaxRecords
 	return cfg
+}
+
+// Renewal is a fresh, immutable manager policy, never inferred from TLS alone.
+func validRenewalConfig(c Config, lan lanconfig.Config) bool {
+	if c.SchemaVersion == SchemaVersion {
+		return !c.AutomaticRenewal
+	}
+	return c.SchemaVersion == RenewableSchemaVersion && c.AutomaticRenewal && c.Profile == lanconfig.TLS && lan.Profile == lanconfig.TLS
 }
 func parseCertificate(raw []byte) (*x509.Certificate, error) {
 	block, rest := pem.Decode(raw)
@@ -111,7 +125,7 @@ func Load(path string, lan lanconfig.Material, now time.Time) (Material, error) 
 		return fail()
 	}
 	var c Config
-	if lanconfig.StrictObject(raw, &c, "schemaVersion", "profile", "instanceId", "issuerCertificateFile", "issuerPrivateKeyFile", "issuerRootFile", "expectedIssuerFingerprint", "bootstrapServerCAFile", "collectionProfile") != nil || c.SchemaVersion != SchemaVersion || c.Profile != lan.Config.Profile || !enrollmentcrypto.ValidID(c.InstanceID, "manager_") || !enrollmentcrypto.ValidHash(c.ExpectedIssuerFingerprint) {
+	if lanconfig.StrictObject(raw, &c, "schemaVersion", "profile", "instanceId", "issuerCertificateFile", "issuerPrivateKeyFile", "issuerRootFile", "expectedIssuerFingerprint", "bootstrapServerCAFile", "collectionProfile", "automaticRenewal") != nil || !validRenewalConfig(c, lan.Config) || c.Profile != lan.Config.Profile || !enrollmentcrypto.ValidID(c.InstanceID, "manager_") || !enrollmentcrypto.ValidHash(c.ExpectedIssuerFingerprint) {
 		return fail()
 	}
 	if c.CollectionProfile == "" {
@@ -210,6 +224,10 @@ func (m Material) marker() []byte {
 	v := m.value
 	server := sha256.Sum256(v.serverCAPEM)
 	root := sha256.Sum256(v.issuer.RootDER())
+	if v.config.AutomaticRenewal {
+		raw, _ := json.Marshal(struct{ SchemaVersion, Profile, InstanceID, OperatorOrigin, AgentOrigin, CollectionProfile, IssuerFingerprint, IssuerRootFingerprint, ServerTrustHash, RenewalPolicy string }{"tracebolt.identity-mode.renewable.v1", v.config.Profile, v.config.InstanceID, v.lan.OperatorOrigin, v.lan.AgentOrigin, v.config.CollectionProfile, v.issuer.Fingerprint(), hex.EncodeToString(root[:]), hex.EncodeToString(server[:]), "same-key-v1"})
+		return raw
+	}
 	raw, _ := json.Marshal(struct{ SchemaVersion, Profile, InstanceID, OperatorOrigin, AgentOrigin, CollectionProfile, IssuerFingerprint, IssuerRootFingerprint, ServerTrustHash string }{"tracebolt.identity-mode.v2", v.config.Profile, v.config.InstanceID, v.lan.OperatorOrigin, v.lan.AgentOrigin, v.config.CollectionProfile, v.issuer.Fingerprint(), hex.EncodeToString(root[:]), hex.EncodeToString(server[:])})
 	return raw
 }

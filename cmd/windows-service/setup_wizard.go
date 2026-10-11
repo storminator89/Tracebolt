@@ -53,9 +53,9 @@ func setupWizardBootstrap(raw []byte) (enrollmentclient.Bootstrap, error) {
 	}
 	return b, nil
 }
-func setupWizardAcknowledgedBootstrap(raw []byte, insecureAcknowledged bool) (enrollmentclient.Bootstrap, lanclient.WindowsCapabilityConsent, error) {
+func setupWizardAcknowledgedBootstrap(raw []byte, insecureAcknowledged bool, renewal ...bool) (enrollmentclient.Bootstrap, lanclient.WindowsCapabilityConsent, error) {
 	b, err := setupWizardBootstrap(raw)
-	if err != nil || validateWindowsBootstrapConsent(b, enrollmentcrypto.CollectionProfileWindowsInventory, insecureAcknowledged) != nil {
+	if err != nil || validateWindowsBootstrapConsent(b, enrollmentcrypto.CollectionProfileWindowsInventory, insecureAcknowledged) != nil || validateWindowsRenewalConsent(b, renewal...) != nil {
 		return enrollmentclient.Bootstrap{}, lanclient.WindowsCapabilityConsent{}, enrollmentclient.ErrBootstrap
 	}
 	consent := setupWizardConsent()
@@ -68,7 +68,7 @@ func setupWizardPreview(raw []byte) (windowssetupui.TrustPreview, error) {
 	if err != nil {
 		return windowssetupui.TrustPreview{}, err
 	}
-	p := windowssetupui.TrustPreview{ManagerID: b.ManagerInstanceID, EnrollmentOrigin: b.EnrollmentOrigin, AgentOrigin: b.AgentOrigin, HTTPTest: b.Profile == "http-test"}
+	p := windowssetupui.TrustPreview{AutomaticRenewal: b.RenewalPolicy != "", ManagerID: b.ManagerInstanceID, EnrollmentOrigin: b.EnrollmentOrigin, AgentOrigin: b.AgentOrigin, HTTPTest: b.Profile == "http-test"}
 	for _, field := range []struct{ label, value string }{{"Server CA", b.ServerCAPEM}, {"Issuer root", b.IssuerRootPEM}, {"Issuer", b.IssuerPEM}} {
 		rest := []byte(field.value)
 		for len(bytes.TrimSpace(rest)) > 0 {

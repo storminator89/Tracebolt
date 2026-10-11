@@ -46,7 +46,7 @@ func nativeOperation(ctx context.Context, r request, out, stderr io.Writer) (res
 	case "run-service":
 		return nil, windowsservice.Run(ctx, runService)
 	case "install":
-		return install(ctx, r.bootstrap, r.collectionProfile, r.insecureHTTP, out, stderr)
+		return install(ctx, r.bootstrap, r.collectionProfile, r.insecureHTTP, out, stderr, r.automaticRenewal)
 	}
 	return withReceiptLease(ctx, openReceiptStore, func(receipt installReceipt, lease receiptStore) (any, error) {
 		return nativeReceiptOperation(ctx, r, receipt, lease, out, stderr)
@@ -104,7 +104,7 @@ func nativeReceiptOperation(ctx context.Context, r request, receipt installRecei
 		if err != nil || snapshot.State != windowsservice.Stopped {
 			return nil, marked(windowsservice.PhaseRuntimeInstallation, windowsservice.ReasonInvalidConfiguration, err)
 		}
-		if err = enroll(ctx, receipt.Service.Layout, r.collectionProfile, r.insecureHTTP, out, stderr); err != nil {
+		if err = enroll(ctx, receipt.Service.Layout, r.collectionProfile, r.insecureHTTP, out, stderr, r.automaticRenewal); err != nil {
 			return nil, err
 		}
 		return struct {
@@ -128,16 +128,16 @@ func openReceiptStore() (windowsservice.Layout, receiptStore, error) {
 	}
 	return layout, store, nil
 }
-func install(ctx context.Context, bootstrapPath, selectedProfile string, insecure bool, out, stderr io.Writer) (any, error) {
-	return setup(ctx, bootstrapPath, nativeSetupSteps(selectedProfile, insecure, out, stderr))
+func install(ctx context.Context, bootstrapPath, selectedProfile string, insecure bool, out, stderr io.Writer, renewal ...bool) (any, error) {
+	return setup(ctx, bootstrapPath, nativeSetupSteps(selectedProfile, insecure, out, stderr, renewal...))
 }
-func nativeSetupSteps(selectedProfile string, insecure bool, out, stderr io.Writer) setupSteps {
+func nativeSetupSteps(selectedProfile string, insecure bool, out, stderr io.Writer, renewal ...bool) setupSteps {
 	return setupSteps{
 		plan:          windowsservice.Plan,
 		readBootstrap: func(path string) ([]byte, error) { return windowsstate.ReadProtectedInstaller(path, false, 64<<10) },
 		validateBootstrap: func(raw []byte) error {
 			b, err := enrollmentclient.ParseBootstrap(raw)
-			if err != nil || validateWindowsBootstrapConsent(b, selectedProfile, insecure) != nil {
+			if err != nil || validateWindowsBootstrapConsent(b, selectedProfile, insecure) != nil || validateWindowsRenewalConsent(b, renewal...) != nil {
 				return errLifecycle
 			}
 			return nil
@@ -158,7 +158,7 @@ func nativeSetupSteps(selectedProfile string, insecure bool, out, stderr io.Writ
 			return nil
 		},
 		enroll: func(ctx context.Context, layout windowsservice.Layout) error {
-			return enroll(ctx, layout, selectedProfile, insecure, out, stderr)
+			return enroll(ctx, layout, selectedProfile, insecure, out, stderr, renewal...)
 		},
 		start: windowsservice.ApplyStart,
 	}
@@ -170,6 +170,14 @@ func prepareRuntime(layout windowsservice.Layout, receipt windowsservice.Receipt
 			err = setupFailed(stage, err)
 		}
 	}()
+	b, parseErr := enrollmentclient.ParseBootstrap(raw)
+	if parseErr != nil {
+		return errLifecycle
+	}
+	enrollmentOptions := windowsagentconfig.Enrollment(receipt.ServiceSID, true)
+	if b.SchemaVersion == enrollmentclient.RenewableBootstrapVersion {
+		enrollmentOptions = windowsagentconfig.EnrollmentRenewable(receipt.ServiceSID, true)
+	}
 	store, err := windowsstate.Open(layout.StateRoot, windowsagentconfig.RuntimeRoot(receipt.ServiceSID, true))
 	if err != nil {
 		return setupFailedCategory(stage, setupCauseCategory(err), errLifecycle)
@@ -180,7 +188,7 @@ func prepareRuntime(layout windowsservice.Layout, receipt windowsservice.Receipt
 		return setupFailedCategory(stage, setupCauseCategory(e), errLifecycle)
 	}
 	stage = "runtime_enrollment_create"
-	child, err := store.CreateDirectoryStore("enrollment", windowsagentconfig.Enrollment(receipt.ServiceSID, true))
+	child, err := store.CreateDirectoryStore("enrollment", enrollmentOptions)
 	if err != nil {
 		return setupFailedCategory(stage, setupCauseCategory(err), errLifecycle)
 	}
@@ -224,7 +232,7 @@ func bootstrap(layout windowsservice.Layout) (result enrollmentclient.Bootstrap,
 	}
 	return b, nil
 }
-func enroll(ctx context.Context, layout windowsservice.Layout, selectedProfile string, insecure bool, out, stderr io.Writer) (err error) {
+func enroll(ctx context.Context, layout windowsservice.Layout, selectedProfile string, insecure bool, out, stderr io.Writer, renewal ...bool) (err error) {
 	stage := "enrollment_bootstrap_read"
 	category := ""
 	defer func() {
@@ -240,11 +248,11 @@ func enroll(ctx context.Context, layout windowsservice.Layout, selectedProfile s
 		return err
 	}
 	stage = "enrollment_bootstrap_validate"
-	if validateWindowsBootstrapConsent(b, selectedProfile, insecure) != nil {
+	if validateWindowsBootstrapConsent(b, selectedProfile, insecure) != nil || validateWindowsRenewalConsent(b, renewal...) != nil {
 		return marked(windowsservice.PhaseBootstrap, windowsservice.ReasonInvalidConfiguration, errLifecycle)
 	}
 	stage = "enrollment_before_display"
-	result, err := enrollmentclient.Run(ctx, b, enrollmentclient.Options{StateDirectory: layout.EnrollmentRoot, ClaimOnly: true, InsecureHTTPAcknowledged: insecure, WindowsInventoryAcknowledged: selectedProfile == enrollmentcrypto.CollectionProfileWindowsInventory, Display: func(d enrollmentclient.TrustDisplay) (displayErr error) {
+	result, err := enrollmentclient.Run(ctx, b, enrollmentclient.Options{AutomaticRenewalAcknowledged: len(renewal) == 1 && renewal[0], StateDirectory: layout.EnrollmentRoot, ClaimOnly: true, InsecureHTTPAcknowledged: insecure, WindowsInventoryAcknowledged: selectedProfile == enrollmentcrypto.CollectionProfileWindowsInventory, Display: func(d enrollmentclient.TrustDisplay) (displayErr error) {
 		stage = "enrollment_display"
 		defer func() {
 			if displayErr == nil {
@@ -314,6 +322,9 @@ func runService(ctx context.Context, ready func()) error {
 	if err != nil {
 		return marked(windowsservice.PhaseBootstrap, windowsservice.ReasonInvalidConfiguration, err)
 	}
+	if err = enrollmentclient.PrepareServiceRenewal(ctx, b, layout.EnrollmentRoot); err != nil {
+		return marked(windowsservice.PhaseHandoff, windowsservice.ReasonHandoffInvalid, err)
+	}
 	return runPendingWindowsProfile(ctx, filepath.Join(layout.EnrollmentRoot, "agent.json"), b.Profile == "http-test", ready, pendingHooks{
 		identity: windowsservice.ValidateRuntimeIdentity,
 		inspect: func() (enrollmentclient.ServiceState, error) {
@@ -330,11 +341,7 @@ func runService(ctx context.Context, ready func()) error {
 			return enrollmentclient.MarkServiceReady(b, layout.EnrollmentRoot, b.Profile == "http-test")
 		},
 		sender: func(ctx context.Context, path string) error {
-			material, err := lanclient.Load(path)
-			if err != nil {
-				return marked(windowsservice.PhaseHandoff, windowsservice.ReasonHandoffInvalid, err)
-			}
-			_, err = lanclient.RunForeground(ctx, material, time.Minute, nil)
+			_, err := enrollmentclient.RunRenewableForeground(ctx, path, time.Minute, nil)
 			return err
 		},
 		wait: func(ctx context.Context) error {

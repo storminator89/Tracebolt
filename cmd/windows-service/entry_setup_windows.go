@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"golang.org/x/sys/windows"
 	"io"
+	"localrmm/internal/enrollmentclient"
 	"localrmm/internal/lanclient"
 	"localrmm/internal/windowspackage"
 	"localrmm/internal/windowsservice"
@@ -41,9 +42,9 @@ func main() {
 		setupWizardAlert("This Setup package is incomplete or corrupt. Obtain the reviewed Setup.exe and verify its release provenance. Nothing was installed.")
 		os.Exit(2)
 	}
-	config := windowssetupui.Config{Version: manifest.Version, SourceCommit: manifest.SourceCommit, PayloadSHA256: manifest.SHA256, Architecture: manifest.Architecture, Disclosure: setupWizardDisclosure(), HTTPDisclosure: setupWizardHTTPDisclosure(), ReadAdminDisclosure: setupWizardReadAdminDisclosure(false), ReadAdminHTTPDisclosure: setupWizardReadAdminDisclosure(true), ReadAdminSummary: setupWizardReadAdminSummary(), ReadAdminHTTPSummary: setupWizardReadAdminHTTPRiskSummary}
+	config := windowssetupui.Config{AutomaticRenewalDisclosure: enrollmentclient.AutomaticRenewalPrivacy, Version: manifest.Version, SourceCommit: manifest.SourceCommit, PayloadSHA256: manifest.SHA256, Architecture: manifest.Architecture, Disclosure: setupWizardDisclosure(), HTTPDisclosure: setupWizardHTTPDisclosure(), ReadAdminDisclosure: setupWizardReadAdminDisclosure(false), ReadAdminHTTPDisclosure: setupWizardReadAdminDisclosure(true), ReadAdminSummary: setupWizardReadAdminSummary(), ReadAdminHTTPSummary: setupWizardReadAdminHTTPRiskSummary}
 	hooks := windowssetupui.Hooks{Preview: setupWizardPreview}
-	installProfile := func(ctx context.Context, raw []byte, insecureAcknowledged bool, readAdmin bool, progress func(string)) error {
+	installProfile := func(ctx context.Context, raw []byte, insecureAcknowledged bool, readAdmin bool, renewalAcknowledged bool, progress func(string)) error {
 		acknowledgedBootstrap := setupWizardAcknowledgedBootstrap
 		if readAdmin {
 			acknowledgedBootstrap = setupWizardReadAdminAcknowledgedBootstrap
@@ -56,7 +57,7 @@ func main() {
 				if manifest.Validate(payload) != nil {
 					return errLifecycle
 				}
-				_, _, err := acknowledgedBootstrap(b, insecureAcknowledged)
+				_, _, err := acknowledgedBootstrap(b, insecureAcknowledged, renewalAcknowledged)
 				if err != nil {
 					return errLifecycle
 				}
@@ -89,11 +90,11 @@ func main() {
 				return r.BootstrapPath, r.Close, nil
 			},
 			install: func(ctx context.Context, path string) error {
-				_, consent, err := acknowledgedBootstrap(raw, insecureAcknowledged)
+				_, consent, err := acknowledgedBootstrap(raw, insecureAcknowledged, renewalAcknowledged)
 				if err != nil {
 					return err
 				}
-				_, err = installReadObservationWithProgress(ctx, path, consent, console, console, progress)
+				_, err = installReadObservationWithProgress(ctx, path, consent, console, console, progress, renewalAcknowledged)
 				return err
 			},
 		}
@@ -104,10 +105,16 @@ func main() {
 		return err
 	}
 	hooks.Install = func(ctx context.Context, raw []byte, insecure bool, progress func(string)) error {
-		return installProfile(ctx, raw, insecure, false, progress)
+		return installProfile(ctx, raw, insecure, false, false, progress)
 	}
 	hooks.InstallReadAdmin = func(ctx context.Context, raw []byte, insecure bool, progress func(string)) error {
-		return installProfile(ctx, raw, insecure, true, progress)
+		return installProfile(ctx, raw, insecure, true, false, progress)
+	}
+	hooks.InstallRenewable = func(ctx context.Context, raw []byte, renewal bool, progress func(string)) error {
+		return installProfile(ctx, raw, false, false, renewal, progress)
+	}
+	hooks.InstallReadAdminRenewable = func(ctx context.Context, raw []byte, renewal bool, progress func(string)) error {
+		return installProfile(ctx, raw, false, true, renewal, progress)
 	}
 	hooks.Uninstall = func(ctx context.Context, progress func(string)) error {
 		err := setupWizardUninstallWithLease(ctx, openReceiptStore, setupWizardRemovalSteps{

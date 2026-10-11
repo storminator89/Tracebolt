@@ -179,6 +179,10 @@ func (b *LinuxBackend) Inspect(ctx context.Context, r Request) (HostFacts, error
 				return facts, ErrArtifact
 			}
 			facts.Profile = bootstrap.Profile
+			facts.AutomaticRenewal = bootstrap.RenewalPolicy != ""
+			if facts.AutomaticRenewal != r.AutomaticRenewalAcknowledged {
+				return facts, ErrContract
+			}
 		}
 	}
 	if e := h.readAdminUpgradeGuard(r); e != nil {

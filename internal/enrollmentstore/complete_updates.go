@@ -99,7 +99,7 @@ func readCompleteUpdatesRecord(ctx context.Context, t *transaction, id string) (
 	}
 	canonical, _ := json.Marshal(r)
 	snap, e := t.engine.Get(id)
-	if e != nil || !bytes.Equal(raw, canonical) || !validCompleteUpdatesRecord(snap, r) {
+	if e != nil || !bytes.Equal(raw, canonical) || !validCompleteUpdatesRecord(snap, r, t.currentCredentialNotAfter(snap)) {
 		return completeUpdatesRecord{}, ErrStorage
 	}
 	return r, nil
@@ -107,7 +107,7 @@ func readCompleteUpdatesRecord(ctx context.Context, t *transaction, id string) (
 func saveCompleteUpdatesRecord(ctx context.Context, t *transaction, id string, r completeUpdatesRecord) error {
 	snap, e := t.engine.Get(id)
 	raw, err := json.Marshal(r)
-	if e != nil || err != nil || len(raw) > 12288 || !validCompleteUpdatesRecord(snap, r) {
+	if e != nil || err != nil || len(raw) > 12288 || !validCompleteUpdatesRecord(snap, r, t.currentCredentialNotAfter(snap)) {
 		return ErrStorage
 	}
 	if _, e = t.conn.ExecContext(ctx, `INSERT INTO enrollment_complete_updates_authority VALUES(?,?) ON CONFLICT(invitation_id) DO UPDATE SET body=excluded.body`, id, raw); e != nil {
@@ -129,8 +129,9 @@ func validCompleteUpdatesManifest(b InventoryBinding, m updategeneration.Manifes
 	digest, e := updategeneration.ManifestDigest(m)
 	return b.valid() && e == nil && b.ManifestHash == digest && b.GenerationID == m.GenerationID
 }
-func validCompleteUpdatesRecord(snap enrollmentstate.Snapshot, r completeUpdatesRecord) bool {
-	if !completeProfile(snap.Binding.CollectionProfile) || snap.Platform != "linux" || snap.Activation.At == 0 || snap.Issuance.CertificateHash == "" || !validStoreTime(r.StartedAt) || !validStoreTime(r.LastAt) || r.StartedAt.Location() != time.UTC || r.LastAt.Location() != time.UTC || r.LastAt.Before(r.StartedAt) || r.StartedAt.Unix() < snap.Activation.At || r.LastAt.Unix() >= snap.Intent.NotAfter || snap.Termination.At != 0 && r.LastAt.Unix() > snap.Termination.At {
+func validCompleteUpdatesRecord(snap enrollmentstate.Snapshot, r completeUpdatesRecord, authorityExpiry ...int64) bool {
+	notAfter := recordAuthorityExpiry(snap, authorityExpiry...)
+	if !completeProfile(snap.Binding.CollectionProfile) || snap.Platform != "linux" || snap.Activation.At == 0 || snap.Issuance.CertificateHash == "" || !validStoreTime(r.StartedAt) || !validStoreTime(r.LastAt) || r.StartedAt.Location() != time.UTC || r.LastAt.Location() != time.UTC || r.LastAt.Before(r.StartedAt) || r.StartedAt.Unix() < snap.Activation.At || r.LastAt.Unix() >= notAfter || snap.Termination.At != 0 && r.LastAt.Unix() > snap.Termination.At {
 		return false
 	}
 	if r.MaintenanceAt != nil && (!validStoreTime(*r.MaintenanceAt) || r.MaintenanceAt.Location() != time.UTC || r.MaintenanceAt.Before(r.StartedAt)) {
@@ -191,28 +192,8 @@ func (s *Store) completeUpdatesAuthority(ctx context.Context, t *transaction, id
 	if !completeProfile(snap.Binding.CollectionProfile) || snap.Platform != "linux" {
 		return zero, completeUpdatesRecord{}, enrollmentstate.ErrProof
 	}
-	if snap.State != enrollmentstate.Activated {
-		return zero, completeUpdatesRecord{}, enrollmentstate.ErrState
-	}
-	if snap.Issuance.CertificateHash != hash {
-		return zero, completeUpdatesRecord{}, enrollmentstate.ErrProof
-	}
-	if now.Unix() < snap.UpdatedAt || now.Unix() < snap.Intent.NotBefore {
-		return zero, completeUpdatesRecord{}, enrollmentstate.ErrInvalid
-	}
-	if now.Unix() >= snap.Intent.NotAfter {
-		return zero, completeUpdatesRecord{}, enrollmentstate.ErrExpired
-	}
-	c, ok := t.credentials[id]
-	if !ok {
-		return zero, completeUpdatesRecord{}, ErrStorage
-	}
-	intent, e := t.engine.TrustedRecordedIntent(id)
-	if e != nil {
-		return zero, completeUpdatesRecord{}, ErrStorage
-	}
-	if _, e = enrollmentcrypto.VerifyIssued(c.DER, s.issuerDER, intent, now); e != nil {
-		return zero, completeUpdatesRecord{}, enrollmentstate.ErrProof
+	if e = t.authorizeCurrentCredential(snap, hash, now); e != nil {
+		return zero, completeUpdatesRecord{}, e
 	}
 	r, e := readCompleteUpdatesRecord(ctx, t, id)
 	if errors.Is(e, inventoryledger.ErrNotFound) {
@@ -232,7 +213,7 @@ func (s *Store) completeUpdatesOperator(ctx context.Context, t *transaction, dev
 	}
 	for _, snap := range t.engine.Snapshots() {
 		if snap.Approval.DeviceID == device {
-			return s.completeUpdatesAuthority(ctx, t, snap.InvitationID, snap.Issuance.CertificateHash, now)
+			return s.completeUpdatesAuthority(ctx, t, snap.InvitationID, t.currentCertificateHash(snap), now)
 		}
 	}
 	return enrollmentstate.Snapshot{}, completeUpdatesRecord{}, enrollmentstate.ErrNotFound

@@ -177,7 +177,7 @@ func (s *Store) loadOverview(ctx context.Context, t *transaction) error {
 		}
 		canonical, _ := json.Marshal(r)
 		snap, e := t.engine.Get(id)
-		if e != nil || section != r.Binding.Section || !bytes.Equal(canonical, raw) || !validOverviewRecord(snap, r) {
+		if e != nil || section != r.Binding.Section || !bytes.Equal(canonical, raw) || !validOverviewRecord(snap, r, t.currentCredentialNotAfter(snap)) {
 			rows.Close()
 			return ErrStorage
 		}
@@ -194,8 +194,9 @@ func (s *Store) loadOverview(ctx context.Context, t *transaction) error {
 	}
 	return validateOverviewMetadata(ctx, t)
 }
-func validOverviewRecord(snap enrollmentstate.Snapshot, r overviewRecord) bool {
-	if !completeProfile(snap.Binding.CollectionProfile) || snap.Platform != "linux" || snap.Activation.At == 0 || snap.Issuance.CertificateHash == "" || !validStoreTime(r.StartedAt) || !validStoreTime(r.LastAt) || r.StartedAt.Location() != time.UTC || r.LastAt.Location() != time.UTC || r.LastAt.Before(r.StartedAt) || r.StartedAt.Unix() < snap.Activation.At || r.LastAt.Unix() >= snap.Intent.NotAfter {
+func validOverviewRecord(snap enrollmentstate.Snapshot, r overviewRecord, authorityExpiry ...int64) bool {
+	notAfter := recordAuthorityExpiry(snap, authorityExpiry...)
+	if !completeProfile(snap.Binding.CollectionProfile) || snap.Platform != "linux" || snap.Activation.At == 0 || snap.Issuance.CertificateHash == "" || !validStoreTime(r.StartedAt) || !validStoreTime(r.LastAt) || r.StartedAt.Location() != time.UTC || r.LastAt.Location() != time.UTC || r.LastAt.Before(r.StartedAt) || r.StartedAt.Unix() < snap.Activation.At || r.LastAt.Unix() >= notAfter {
 		return false
 	}
 	if r.MaintenanceAt != nil && (!validStoreTime(*r.MaintenanceAt) || r.MaintenanceAt.Location() != time.UTC || r.MaintenanceAt.Before(r.StartedAt)) {
@@ -236,7 +237,7 @@ func (s *Store) saveOverview(ctx context.Context, t *transaction) error {
 			return ErrStorage
 		}
 		snap, e := t.engine.Get(id)
-		if e != nil || !validOverviewRecord(snap, r) {
+		if e != nil || !validOverviewRecord(snap, r, t.currentCredentialNotAfter(snap)) {
 			return ErrStorage
 		}
 		raw, e := json.Marshal(r)
@@ -273,31 +274,11 @@ func (s *Store) overviewAuthority(t *transaction, id, certificateHash, section s
 	if !completeProfile(snap.Binding.CollectionProfile) || snap.Platform != "linux" {
 		return zero, enrollmentstate.ErrProof
 	}
-	if snap.State != enrollmentstate.Activated {
-		return zero, enrollmentstate.ErrState
-	}
-	if snap.Issuance.CertificateHash != certificateHash {
-		return zero, enrollmentstate.ErrProof
-	}
-	if now.Unix() < snap.UpdatedAt || now.Unix() < snap.Intent.NotBefore {
-		return zero, enrollmentstate.ErrInvalid
-	}
-	if now.Unix() >= snap.Intent.NotAfter {
-		return zero, enrollmentstate.ErrExpired
+	if e = t.authorizeCurrentCredential(snap, certificateHash, now); e != nil {
+		return zero, e
 	}
 	if r, ok := t.overview[overviewRecordKey(id, section)]; ok && (now.Before(r.LastAt) || r.MaintenanceAt != nil && now.Before(*r.MaintenanceAt)) {
 		return zero, enrollmentstate.ErrInvalid
-	}
-	c, ok := t.credentials[id]
-	if !ok {
-		return zero, ErrStorage
-	}
-	intent, e := t.engine.TrustedRecordedIntent(id)
-	if e != nil {
-		return zero, ErrStorage
-	}
-	if _, e = enrollmentcrypto.VerifyIssued(c.DER, s.issuerDER, intent, now); e != nil {
-		return zero, enrollmentstate.ErrProof
 	}
 	return snap, nil
 }
@@ -307,7 +288,7 @@ func (s *Store) overviewOperatorAuthority(t *transaction, device, section string
 	}
 	for _, snap := range t.engine.Snapshots() {
 		if snap.Approval.DeviceID == device {
-			return s.overviewAuthority(t, snap.InvitationID, snap.Issuance.CertificateHash, section, now)
+			return s.overviewAuthority(t, snap.InvitationID, t.currentCertificateHash(snap), section, now)
 		}
 	}
 	return enrollmentstate.Snapshot{}, enrollmentstate.ErrNotFound
@@ -760,7 +741,7 @@ func (s *Store) OverviewView(ctx context.Context, device string, now time.Time) 
 		if e != nil {
 			return e
 		}
-		out.boundary = statusOutputBoundary(out, snap.Intent.NotAfter)
+		out.boundary = statusOutputBoundary(out, t.currentCredentialNotAfter(snap))
 		touchOverview(t, snap.InvitationID, "processes", now)
 		touchOverview(t, snap.InvitationID, "volumes", now)
 		return nil
@@ -800,7 +781,7 @@ func (s *Store) OverviewPage(ctx context.Context, device string, req overviewled
 		if e != nil {
 			return e
 		}
-		out.boundary = overviewBoundary(now, snap.Intent.NotAfter)
+		out.boundary = overviewBoundary(now, t.currentCredentialNotAfter(snap))
 		out.ServerNow = now
 		out.PageResult, e = overviewLedger().Page(ctx, t.conn, overviewDevice(device, req.Section), req, now, t.overviewKey)
 		if e == nil {

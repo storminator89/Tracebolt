@@ -34,13 +34,13 @@ func (s *Store) HealthInputs(ctx context.Context, services map[string][]string, 
 			in := health.Input{DeviceID: id, Services: map[string]health.ServiceSample{}}
 			in.Authorized = snap.Platform == "linux" && snap.State == enrollmentstate.Activated
 			if in.Authorized {
-				_, authorityErr := s.systemAuthority(t, snap.InvitationID, snap.Issuance.CertificateHash, now)
+				_, authorityErr := s.systemAuthority(t, snap.InvitationID, t.currentCertificateHash(snap), now)
 				if errors.Is(authorityErr, ErrStorage) {
 					return authorityErr
 				}
 				in.Authorized = authorityErr == nil
 				if in.Authorized {
-					in.AuthorityUntil = time.Unix(snap.Intent.NotAfter, 0).UTC()
+					in.AuthorityUntil = time.Unix(t.currentCredentialNotAfter(snap), 0).UTC()
 				}
 			}
 			if !in.Authorized {

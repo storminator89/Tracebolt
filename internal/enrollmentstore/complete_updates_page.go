@@ -47,7 +47,7 @@ func completeUpdatesGenerationStatus(g completeUpdatesGeneration, now time.Time)
 	return CompleteUpdatesGenerationStatus{Manifest: g.Manifest, State: state, StartedAt: g.Started, ExpiresAt: expiry, CompletedAt: g.Completed, AcceptedChunks: uint32(g.NextChunk), AcceptedRows: uint64(g.NextRow)}
 }
 func completeUpdatesStatus(ctx context.Context, t *transaction, snap enrollmentstate.Snapshot, r completeUpdatesRecord, now time.Time) (CompleteUpdatesStatus, error) {
-	out := CompleteUpdatesStatus{DeviceID: snap.Approval.DeviceID, ServerNow: now, Sequence: r.Binding.Sequence, Status: "awaiting", boundary: overviewBoundary(now, snap.Intent.NotAfter)}
+	out := CompleteUpdatesStatus{DeviceID: snap.Approval.DeviceID, ServerNow: now, Sequence: r.Binding.Sequence, Status: "awaiting", boundary: overviewBoundary(now, t.currentCredentialNotAfter(snap))}
 	if c := r.Complete; c != nil {
 		expiry := c.Manifest.CollectedAt.Add(inventoryledger.ObservationTTL)
 		state := "complete"
@@ -344,7 +344,7 @@ func (s *Store) CompleteUpdatesPage(ctx context.Context, device string, req inve
 			expires = g.Retired.Add(inventoryledger.CursorTTL)
 		}
 		cursor.Expires = completeUpdatesStamp(expires)
-		out = CompleteUpdatesPageResult{Binding: g.Binding, Manifest: g.Manifest, StartedAt: g.Started, CompletedAt: g.Completed, ServerNow: now, Items: make([]cachedupdates.Candidate, 0, req.Limit), TotalRows: uint64(g.Manifest.CandidateCount), CursorExpiresAt: expires, boundary: overviewBoundary(now, snap.Intent.NotAfter)}
+		out = CompleteUpdatesPageResult{Binding: g.Binding, Manifest: g.Manifest, StartedAt: g.Started, CompletedAt: g.Completed, ServerNow: now, Items: make([]cachedupdates.Candidate, 0, req.Limit), TotalRows: uint64(g.Manifest.CandidateCount), CursorExpiresAt: expires, boundary: overviewBoundary(now, t.currentCredentialNotAfter(snap))}
 		out.boundary.limit(expires, inventoryledger.ErrCursorExpired)
 		rows, e := t.conn.QueryContext(ctx, `SELECT ordinal,body,body_hash FROM enrollment_complete_updates_rows WHERE device=? AND generation=? AND ordinal>=? AND ordinal<? ORDER BY ordinal LIMIT ?`, device, cursor.Generation, cursor.Next, g.NextRow, inventoryledger.MaxScanRows)
 		if e != nil {

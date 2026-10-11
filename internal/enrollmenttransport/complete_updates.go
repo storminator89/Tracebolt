@@ -51,6 +51,8 @@ func (h *Ingress) completeUpdates(w http.ResponseWriter, r *http.Request) {
 		}
 		defer release()
 		var err error
+		r = withVerifiedTLSCertificate(r)
+		ctx = enrollmentstore.WithCompleteUpdatesClock(r.Context(), h.now)
 		identity, err = h.store.AuthorizeCertificate(ctx, r.TLS.PeerCertificates[0].Raw, h.now())
 		if err != nil {
 			storeFailure(w, err)

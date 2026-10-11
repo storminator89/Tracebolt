@@ -37,22 +37,23 @@ const (
 )
 
 type Request struct {
-	Action                 Action
-	UpgradeCoordinatorFD   int // Borrowed existing installer lock; full read-admin upgrade only.
-	Apply                  bool
-	PendingService         bool
-	RequireCompleteProfile bool
-	ExpectedAgentOrigin    string
-	Resume                 bool
-	AgentBinary            string
-	AgentSHA256            string
-	EnrollBinary           string
-	EnrollSHA256           string
-	BootstrapFile          string
-	InsecureHTTPTest       bool
-	SourceArchive          string
-	SourceSHA256           string
-	BootstrapSHA256        string
+	Action                       Action
+	UpgradeCoordinatorFD         int // Borrowed existing installer lock; full read-admin upgrade only.
+	Apply                        bool
+	PendingService               bool
+	RequireCompleteProfile       bool
+	ExpectedAgentOrigin          string
+	Resume                       bool
+	AgentBinary                  string
+	AgentSHA256                  string
+	EnrollBinary                 string
+	EnrollSHA256                 string
+	BootstrapFile                string
+	InsecureHTTPTest             bool
+	AutomaticRenewalAcknowledged bool
+	SourceArchive                string
+	SourceSHA256                 string
+	BootstrapSHA256              string
 }
 
 // HostFacts are observations made by a trusted local preflight, never network or
@@ -61,6 +62,7 @@ type HostFacts struct {
 	inspectionStage                                                                      Operation // Fixed local diagnostic only; never a request or host value.
 	Linux, SystemdAvailable, Root, AccountCompatible, InstallationOwned, EnrollmentReady bool
 	Profile                                                                              string
+	AutomaticRenewal                                                                     bool
 	CollectionProfile                                                                    string
 	AgentOrigin                                                                          string
 	RetainedPreparation, InstallationRemoved                                             bool
@@ -82,6 +84,9 @@ type Plan struct {
 }
 
 func BuildPlan(r Request, h HostFacts) (Plan, error) {
+	if r.AutomaticRenewalAcknowledged && (r.Action != Install || r.Resume || r.InsecureHTTPTest) || r.Action == Install && r.AutomaticRenewalAcknowledged != h.AutomaticRenewal {
+		return Plan{}, ErrContract
+	}
 	if r.UpgradeCoordinatorFD != 0 && (r.UpgradeCoordinatorFD < 3 || r.Action != Upgrade || !r.Apply) {
 		return Plan{}, ErrContract
 	}

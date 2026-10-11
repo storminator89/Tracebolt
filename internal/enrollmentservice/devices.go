@@ -4,6 +4,7 @@ import (
 	"context"
 	"localrmm/internal/enrollmentcrypto"
 	"localrmm/internal/enrollmentstate"
+	"localrmm/internal/enrollmentstore"
 	"localrmm/internal/model"
 	"time"
 )
@@ -19,8 +20,12 @@ func (s *Service) Devices(ctx context.Context, now time.Time) ([]model.Device, e
 	snapshots := make([]enrollmentstate.Snapshot, 0, len(views))
 	observations := make(map[string]model.Device, len(views))
 	received := make(map[string]time.Time, len(views))
+	renewals := make(map[string]enrollmentstore.RenewalView, len(views))
 	for _, view := range views {
 		snapshots = append(snapshots, view.Snapshot)
+		if view.Renewal != nil {
+			renewals[view.Snapshot.Approval.DeviceID] = *view.Renewal
+		}
 		if view.Observation != nil {
 			sample := view.Observation
 			observations[sample.Device.ID] = sample.Device
@@ -69,12 +74,18 @@ func (s *Service) Devices(ctx context.Context, now time.Time) ([]model.Device, e
 			expires := time.Unix(snapshot.Intent.NotAfter, 0).UTC()
 			d.AgentCertificate.ExpiresAt = &expires
 		}
+		if renewal, ok := renewals[id]; ok {
+			envelope := s.renewalEnvelope(renewal)
+			expiry := time.Unix(renewal.Current.Intent.NotAfter, 0).UTC()
+			d.AgentCertificate.ExpiresAt = &expiry
+			d.AgentCertificate.Renewal = &model.AgentCertificateRenewal{Status: envelope.Status, Enabled: renewal.Enabled, IdentityGeneration: renewal.IdentityGeneration, CredentialGeneration: renewal.CredentialGeneration, CurrentNotAfter: expiry, AuthorityExpiresAt: s.issuerExpiry.UTC()}
+		}
 		trust, detail := "limited", "Approval is recorded; credential activation and a first observation are still required."
 		if snapshot.State == enrollmentstate.Activated {
 			trust = "supported"
 			detail = "Approved enrollment key and committed activation; this does not establish overall health or service installation."
 		}
-		if snapshot.State == enrollmentstate.Revoked || snapshot.State == enrollmentstate.Canceled || snapshot.State == enrollmentstate.Rejected || snapshot.State == enrollmentstate.Expired || snapshot.Intent.NotAfter > 0 && now.Unix() >= snapshot.Intent.NotAfter {
+		if snapshot.State == enrollmentstate.Revoked || snapshot.State == enrollmentstate.Canceled || snapshot.State == enrollmentstate.Rejected || snapshot.State == enrollmentstate.Expired || d.AgentCertificate.ExpiresAt != nil && !now.Before(*d.AgentCertificate.ExpiresAt) {
 			trust = "denied"
 			detail = "Enrollment is revoked, terminated or expired; new observations are rejected."
 		}

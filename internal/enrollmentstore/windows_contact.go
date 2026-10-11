@@ -2,7 +2,7 @@ package enrollmentstore
 
 import (
 	"context"
-	"localrmm/internal/enrollmentcrypto"
+	"errors"
 	"localrmm/internal/enrollmentstate"
 	"localrmm/internal/windowscontact"
 	"localrmm/internal/windowsmanaged"
@@ -35,7 +35,14 @@ func (s *Store) WindowsContactInputs(ctx context.Context, now time.Time) ([]wind
 				continue
 			}
 			in := windowscontact.Input{DeviceID: snap.Approval.DeviceID, InvitationID: snap.InvitationID, CertificateHash: snap.Issuance.CertificateHash}
-			if snap.Platform != "windows" || snap.Binding.CollectionProfile != windowsmanaged.CollectionProfile || snap.State != enrollmentstate.Activated || now.Unix() < snap.UpdatedAt || now.Unix() < snap.Intent.NotBefore || now.Unix() >= snap.Intent.NotAfter {
+			if snap.Platform != "windows" || snap.Binding.CollectionProfile != windowsmanaged.CollectionProfile {
+				out = append(out, in)
+				continue
+			}
+			if err := t.authorizeCurrentCredential(snap, t.currentCertificateHash(snap), now); err != nil {
+				if errors.Is(err, ErrStorage) {
+					return err
+				}
 				out = append(out, in)
 				continue
 			}
@@ -43,20 +50,11 @@ func (s *Store) WindowsContactInputs(ctx context.Context, now time.Time) ([]wind
 			if !ok {
 				return ErrStorage
 			}
-			intent, err := t.engine.TrustedRecordedIntent(snap.InvitationID)
-			if err != nil {
-				return ErrStorage
-			}
-			cert, err := enrollmentcrypto.VerifyIssued(c.DER, s.issuerDER, intent, now)
-			if err != nil || cert.CertificateHash() != snap.Issuance.CertificateHash {
-				out = append(out, in)
-				continue
-			}
 			if !c.Replay.ReceivedAt.IsZero() && now.Before(c.Replay.ReceivedAt) {
 				return enrollmentstate.ErrInvalid
 			}
 			in.Authorized = true
-			in.AuthorityUntil = time.Unix(snap.Intent.NotAfter, 0).UTC()
+			in.AuthorityUntil = time.Unix(t.currentCredentialNotAfter(snap), 0).UTC()
 			// transact already validates the credential's exact frame, hash,
 			// platform/profile and replay tuple. Never replace receipt time by now.
 			in.ReceivedAt = c.Replay.ReceivedAt

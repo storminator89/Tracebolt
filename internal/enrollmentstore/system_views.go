@@ -83,14 +83,15 @@ func systemDevice(t *transaction, device string) (enrollmentstate.Snapshot, erro
 	}
 	return enrollmentstate.Snapshot{}, enrollmentstate.ErrNotFound
 }
-func systemIdentityStatus(snap enrollmentstate.Snapshot, now time.Time) string {
+func systemIdentityStatus(snap enrollmentstate.Snapshot, now time.Time, authorityExpiry ...int64) string {
+	notAfter := recordAuthorityExpiry(snap, authorityExpiry...)
 	switch snap.State {
 	case enrollmentstate.Revoked, enrollmentstate.Canceled, enrollmentstate.Rejected:
 		return "revoked"
 	case enrollmentstate.Expired:
 		return "expired"
 	}
-	if snap.Intent.NotAfter > 0 && now.Unix() >= snap.Intent.NotAfter {
+	if notAfter > 0 && now.Unix() >= notAfter {
 		return "expired"
 	}
 	if !completeProfile(snap.Binding.CollectionProfile) || snap.State != enrollmentstate.Activated || snap.Platform != "linux" {
@@ -125,8 +126,8 @@ func (s *Store) SystemView(ctx context.Context, device string, now time.Time) (S
 		if e != nil {
 			return e
 		}
-		out.readState = &systemViewReadState{checkedAt: now, certificateNotAfter: snap.Intent.NotAfter}
-		out.Status = systemIdentityStatus(snap, now)
+		out.readState = &systemViewReadState{checkedAt: now, certificateNotAfter: t.currentCredentialNotAfter(snap)}
+		out.Status = systemIdentityStatus(snap, now, t.currentCredentialNotAfter(snap))
 		r, ok := t.system[snap.InvitationID]
 		if !ok {
 			return nil
@@ -137,7 +138,7 @@ func (s *Store) SystemView(ctx context.Context, device string, now time.Time) (S
 		if out.Status != "awaiting" {
 			return nil
 		}
-		if _, e = s.systemAuthority(t, snap.InvitationID, snap.Issuance.CertificateHash, now); e != nil {
+		if _, e = s.systemAuthority(t, snap.InvitationID, t.currentCertificateHash(snap), now); e != nil {
 			return e
 		}
 		out.readState.observationAt = r.Receipt.CollectedAt
@@ -316,7 +317,7 @@ func (s *Store) SystemPage(ctx context.Context, device string, req SystemPageReq
 		if e != nil {
 			return e
 		}
-		if _, e = s.systemAuthority(t, snap.InvitationID, snap.Issuance.CertificateHash, now); e != nil {
+		if _, e = s.systemAuthority(t, snap.InvitationID, t.currentCertificateHash(snap), now); e != nil {
 			return e
 		}
 		r, ok := t.system[snap.InvitationID]
@@ -350,7 +351,7 @@ func (s *Store) SystemPage(ctx context.Context, device string, req SystemPageReq
 			return ErrSystemCursor
 		}
 		out = SystemPageResult{SocketOwnerProvenance: section.SocketOwnerProvenance, Section: req.Section, GenerationID: req.GenerationID, Meta: section.Meta, Status: systemAge(section.Meta.ObservedAt, now), TotalRows: *section.Meta.ObservedCount, Services: []systeminventory.Service{}, Sockets: []systeminventory.Socket{}}
-		out.boundary = overviewBoundary(now, snap.Intent.NotAfter)
+		out.boundary = overviewBoundary(now, t.currentCredentialNotAfter(snap))
 		out.boundary.limit(section.Meta.ObservedAt.Add(SystemRetention), ErrSystemConflict)
 		out.boundary.limit(cursor.ExpiresAt, ErrSystemCursorExpired)
 		rows, e := t.conn.QueryContext(ctx, `SELECT ordinal,body FROM enrollment_system_rows WHERE invitation_id=? AND section=? AND ordinal>=? ORDER BY ordinal LIMIT ?`, snap.InvitationID, req.Section, cursor.Next, SystemPageScanRows)
@@ -515,7 +516,7 @@ func (s *Store) SystemCleanup(ctx context.Context, device string, now time.Time)
 			return nil
 		}
 		r.MaintenanceAt = &now
-		if !validSystemRecord(snap, r) {
+		if !validSystemRecord(snap, r, t.currentCredentialNotAfter(snap)) {
 			return ErrStorage
 		}
 		raw, e := json.Marshal(r)

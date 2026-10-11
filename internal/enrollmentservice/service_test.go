@@ -35,7 +35,7 @@ type fixture struct {
 	config  enrollmentstate.Config
 }
 
-func newFixture(t *testing.T, profile string) *fixture {
+func newFixture(t *testing.T, profile string, renewable ...bool) *fixture {
 	t.Helper()
 	now := time.Now().UTC().Truncate(time.Second)
 	rp, rk, _ := ed25519.GenerateKey(rand.Reader)
@@ -63,6 +63,10 @@ func newFixture(t *testing.T, profile string) *fixture {
 		origin = "http://127.0.0.1:8443"
 	}
 	cfg := enrollmentstate.DefaultConfig(enrollmentstate.Binding{InstanceID: id("manager", 1), Profile: profile, Origin: origin, CollectionProfile: enrollmentcrypto.CollectionProfile, IssuerFingerprint: issuer.Fingerprint()})
+	if len(renewable) == 1 && renewable[0] {
+		cfg.AutomaticRenewal = true
+		cfg.RenewalAgentOrigin = "https://agent.test"
+	}
 	cfg.RecordLimit = MaxRecords
 	cfg.InvitationLimit = MaxRecords
 	cfg.PendingLimit = MaxRecords
@@ -140,7 +144,13 @@ func claimForPlatform(t *testing.T, f *fixture, platform string) (enrollmentstat
 	if e != nil {
 		t.Fatal(e)
 	}
-	b, _ := json.Marshal(map[string]string{"schemaVersion": enrollmentcrypto.ClaimVersion, "managerInstanceId": c.Context.ManagerInstanceID, "profile": c.Context.Profile, "origin": c.Context.Origin, "collectionProfile": c.Context.CollectionProfile, "invitationId": c.Context.InvitationID, "claimId": c.Context.ClaimID, "requestId": id("request", 2), "challenge": c.Context.Challenge, "invitationSecret": created.Secret(), "csr": base64.RawStdEncoding.EncodeToString(csr), "proof": base64.RawStdEncoding.EncodeToString(ed25519.Sign(key, m))})
+	body := map[string]string{"schemaVersion": enrollmentcrypto.ClaimVersion, "managerInstanceId": c.Context.ManagerInstanceID, "profile": c.Context.Profile, "origin": c.Context.Origin, "collectionProfile": c.Context.CollectionProfile, "invitationId": c.Context.InvitationID, "claimId": c.Context.ClaimID, "requestId": id("request", 2), "challenge": c.Context.Challenge, "invitationSecret": created.Secret(), "csr": base64.RawStdEncoding.EncodeToString(csr), "proof": base64.RawStdEncoding.EncodeToString(ed25519.Sign(key, m))}
+	if c.Context.RenewalPolicy != "" {
+		body["schemaVersion"] = enrollmentcrypto.RenewableClaimVersion
+		body["renewalPolicy"] = c.Context.RenewalPolicy
+		body["agentOrigin"] = c.Context.AgentOrigin
+	}
+	b, _ := json.Marshal(body)
 	pending, e := f.service.Claim(ctx, c.Context.Challenge, b)
 	if e != nil {
 		t.Fatal(e)

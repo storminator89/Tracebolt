@@ -62,8 +62,11 @@ func (t *bootstrapTransport) RoundTrip(r *http.Request) (*http.Response, error) 
 		return nil, errDestination
 	}
 	switch r.URL.Path {
-	case t.pathPrefix + "challenge", t.pathPrefix + "claim", t.pathPrefix + "status", t.pathPrefix + "credential", t.pathPrefix + "activate":
+	case t.pathPrefix + "renewal/challenge", t.pathPrefix + "renewal/status", t.pathPrefix + "renewal/issue", t.pathPrefix + "renewal/activate", t.pathPrefix + "challenge", t.pathPrefix + "claim", t.pathPrefix + "status", t.pathPrefix + "credential", t.pathPrefix + "activate":
 	default:
+		return nil, errDestination
+	}
+	if r.URL.Scheme != "https" && (r.URL.Path == t.pathPrefix+"renewal/challenge" || r.URL.Path == t.pathPrefix+"renewal/status" || r.URL.Path == t.pathPrefix+"renewal/issue" || r.URL.Path == t.pathPrefix+"renewal/activate") {
 		return nil, errDestination
 	}
 	for _, h := range []string{"Cookie", "Origin", "Authorization", "Proxy-Authorization", "Forwarded", "X-Forwarded-Host", "X-Forwarded-Proto"} {

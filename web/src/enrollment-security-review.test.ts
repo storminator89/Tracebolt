@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { publicBootstrap } from './enrollment-types';
+import { selectEnrollmentCommand, verifiedDownloadCommand, OFFICIAL_LINUX_BOOTSTRAP_PIN } from './verified-download-command';
+import { publicEnrollmentArguments } from './enrollment-command';
 import type { EnrollmentBootstrap, EnrollmentSnapshot } from './enrollment-types';
 
 // This is certificate framing data for UI contract tests, not a trusted X.509
@@ -62,4 +64,23 @@ describe('independent enrollment public-export boundary', () => {
     const changed = { ...item, binding: { ...item.binding, collectionProfile: secret } };
     expect(publicBootstrap({ ...bootstrap, collectionProfile: secret }, changed, secret)).toBeNull();
   });
+});
+
+it('exports only the exact TLS renewal policy and never promotes legacy bootstraps', () => {
+  const {item, bootstrap} = fixture();
+  const renewable = {...bootstrap, schemaVersion:'tracebolt.enrollment-bootstrap.renewable.v1', renewalPolicy:'same-key-v1'};
+  expect(publicBootstrap(renewable,item,'')).toEqual(renewable);
+  expect(publicBootstrap({...bootstrap, renewalPolicy:'same-key-v1'},item,'')).toBeNull();
+  expect(publicBootstrap({...renewable, renewalPolicy:'any-key'},item,'')).toBeNull();
+  expect(publicBootstrap({...renewable, profile:'http-test'}, {...item,binding:{...item.binding,profile:'http-test'}}, '')).toBeNull();
+  expect(publicBootstrap({...renewable, unexpected:'field'},item,'')).toBeNull();
+});
+
+it('does not route renewable enrollment to the incompatible pinned release', () => {
+  const {item,bootstrap}=fixture();
+  const snapshot={...item,version:'tracebolt.enrollment-state.v2',state:'created',platform:'linux',revision:1,createRequestID:'request_'+ '1'.repeat(32),createdAt:1,deadlineAt:2,updatedAt:1,claim:{claimID:'',keyFingerprint:'',comparisonCode:''},approval:{deviceID:''},intent:{deviceID:'',notAfter:0},issuance:{},activation:{},termination:{}} as EnrollmentSnapshot;
+  const renewable={...bootstrap,schemaVersion:'tracebolt.enrollment-bootstrap.renewable.v1',renewalPolicy:'same-key-v1'};
+  expect(verifiedDownloadCommand(OFFICIAL_LINUX_BOOTSTRAP_PIN,renewable,snapshot,'a'.repeat(64))).toBeNull();
+  expect(publicEnrollmentArguments(renewable,snapshot,'a'.repeat(64))).toContain(' --automatic-certificate-renewal');
+  expect(selectEnrollmentCommand(renewable,snapshot,'a'.repeat(64))?.kind).toBe('prepared-local');
 });

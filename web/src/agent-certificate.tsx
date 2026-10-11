@@ -14,7 +14,7 @@ const copy = {
         unknownHelp: 'Refresh device metadata. If expiry stays unknown, ask an administrator to check issuance or approval.',
         manual: 'Plan a separately authorized certificate replacement and new manual approval. A new approval receives a new device ID.',
         guided: 'Ask an administrator to plan a separately authorized replacement enrollment. Existing identity and history are not automatically renewed or merged.',
-        renewal: 'Automatic renewal is unavailable.',
+        renewal: 'Automatic renewal is unavailable.', automatic: 'Automatic renewal', healthy: 'Enabled', due: 'Renewal due', retrying: 'Retrying renewal', blocked: 'Renewal blocked', inconsistent: 'Check local state', revoked: 'Revoked', generation: 'Certificate generation', authority: 'Renewal authority ends', renewalHelp: 'Check the agent and manager connection before this certificate expires. Preserve the agent state.', renewalScope: 'Same identity and key. Collection permissions and their expiry remain unchanged.',
         atCheck: 'Status at manager check', details: 'Certificate details', nextStep: 'Ask an administrator to plan a separately authorized certificate replacement.',
     },
     de: {
@@ -23,7 +23,7 @@ const copy = {
         unknownHelp: 'Gerätedaten aktualisieren. Bleibt der Ablauf unbekannt, Ausstellung oder Freigabe durch einen Administrator prüfen lassen.',
         manual: 'Separat freigegebenen Zertifikatsaustausch mit neuer manueller Freigabe planen. Eine neue Freigabe erhält eine neue Geräte-ID.',
         guided: 'Eine separat freigegebene Neuanmeldung mit einem Administrator planen. Bestehende Identität und Historie werden nicht automatisch erneuert oder zusammengeführt.',
-        renewal: 'Automatische Erneuerung ist nicht verfügbar.',
+        renewal: 'Automatische Erneuerung ist nicht verfügbar.', automatic: 'Automatische Erneuerung', healthy: 'Aktiv', due: 'Erneuerung fällig', retrying: 'Erneuerung wird wiederholt', blocked: 'Erneuerung blockiert', inconsistent: 'Lokalen Zustand prüfen', revoked: 'Widerrufen', generation: 'Zertifikatsgeneration', authority: 'Erneuerungsfreigabe endet', renewalHelp: 'Agent und Verbindung zum Manager vor dem Zertifikatsablauf prüfen. Den Agent-Zustand erhalten.', renewalScope: 'Gleiche Identität und gleicher Schlüssel. Datenfreigaben und deren Ablauf bleiben unverändert.',
         atCheck: 'Status bei Managerprüfung', details: 'Zertifikatsdetails', nextStep: 'Einen separat freigegebenen Zertifikatsaustausch mit einem Administrator planen.',
     },
 };
@@ -37,7 +37,16 @@ function timestamp(value: unknown): value is string {
 export function certificateExpiry(value: unknown): { state: ExpiryState; certificate: AgentCertificate | null } {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return { state: 'unknown', certificate: null };
     const item = value as Record<string, unknown>;
-    if (Object.keys(item).sort().join(',') !== 'checkedAt,expiresAt,source' || (item.source !== 'manual-approval' && item.source !== 'guided-enrollment') || !timestamp(item.checkedAt) || (item.expiresAt !== null && !timestamp(item.expiresAt))) return { state: 'unknown', certificate: null };
+    if (!['checkedAt,expiresAt,source', 'checkedAt,expiresAt,renewal,source'].includes(Object.keys(item).sort().join(',')) || (item.source !== 'manual-approval' && item.source !== 'guided-enrollment') || !timestamp(item.checkedAt) || (item.expiresAt !== null && !timestamp(item.expiresAt))) return { state: 'unknown', certificate: null };
+    if ('renewal' in item) {
+        const r = item.renewal;
+        if (!r || typeof r !== 'object' || Array.isArray(r)) return { state: 'unknown', certificate: null };
+        const renewal = r as Record<string, unknown>;
+        if (item.source !== 'guided-enrollment' || Object.keys(renewal).sort().join(',') !== 'authorityExpiresAt,credentialGeneration,currentNotAfter,enabled,identityGeneration,status' ||
+            !['healthy', 'due', 'retrying', 'blocked', 'inconsistent', 'expired', 'revoked'].includes(String(renewal.status)) || typeof renewal.enabled !== 'boolean' ||
+            typeof renewal.identityGeneration !== 'string' || !/^identity_[a-f0-9]{32}$/.test(renewal.identityGeneration) || renewal.identityGeneration === 'identity_' + '0'.repeat(32) || !Number.isSafeInteger(renewal.credentialGeneration) || Number(renewal.credentialGeneration) < 1 ||
+            !timestamp(renewal.currentNotAfter) || renewal.currentNotAfter !== item.expiresAt || !timestamp(renewal.authorityExpiresAt) || Date.parse(renewal.authorityExpiresAt) < Date.parse(renewal.currentNotAfter)) return { state: 'unknown', certificate: null };
+    }
     const certificate = item as unknown as AgentCertificate;
     if (certificate.expiresAt === null) return { state: 'unknown', certificate };
     const remaining = Date.parse(certificate.expiresAt) - Date.parse(certificate.checkedAt);
@@ -47,6 +56,8 @@ export function certificateExpiry(value: unknown): { state: ExpiryState; certifi
 export function AgentCertificatePanel({ value }: { value: unknown }) {
     const [locale] = useLocale(), labels = copy[locale], id = useId();
     const { state, certificate } = certificateExpiry(value);
+    const renewal = certificate?.renewal;
+    const renewalState = renewal && (state === 'expired' && renewal.status !== 'revoked' ? 'expired' : renewal.status);
     return <section className={`agent-certificate ${state}`} aria-labelledby={id}>
         <header>
             <h2 id={id}><Clock3 size={17}/>{labels.title}</h2>
@@ -59,11 +70,12 @@ export function AgentCertificatePanel({ value }: { value: unknown }) {
             <div><dt>{labels.expiry}</dt><dd>{certificate.expiresAt ? <time dateTime={certificate.expiresAt}>{fullDate(certificate.expiresAt)}</time> : '—'}</dd></div>
             <div><dt>{labels.checked}</dt><dd><time dateTime={certificate.checkedAt}>{fullDate(certificate.checkedAt)}</time></dd></div>
         </dl>}
-        <p className="certificate-guidance">{state === 'unknown' ? labels.unknownHelp : state !== 'current' ? labels.nextStep : null} {labels.renewal}</p>
+        {renewal && <p className="certificate-guidance"><strong>{labels.automatic}: {renewalState ? labels[renewalState] : labels.unknown}</strong>{renewalState && ['retrying', 'blocked', 'inconsistent', 'expired'].includes(renewalState) ? ` · ${labels.renewalHelp}` : null}</p>}
+        {!renewal && <p className="certificate-guidance">{state === 'unknown' ? labels.unknownHelp : state !== 'current' ? labels.nextStep : null} {labels.renewal}</p>}
         {certificate && <details className="certificate-details">
             <summary>{labels.details}</summary>
             <p>{labels.scope}</p>
-            <p>{certificate.source === 'manual-approval' ? labels.manual : labels.guided}</p>
+            {renewal ? <><p>{labels.renewalScope}</p><dl><div><dt>{labels.generation}</dt><dd>{renewal.credentialGeneration}</dd></div><div><dt>{labels.authority}</dt><dd><time dateTime={renewal.authorityExpiresAt}>{fullDate(renewal.authorityExpiresAt)}</time></dd></div></dl></> : <p>{certificate.source === 'manual-approval' ? labels.manual : labels.guided}</p>}
         </details>}
     </section>;
 }

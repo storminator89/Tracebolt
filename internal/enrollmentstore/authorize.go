@@ -26,31 +26,25 @@ func (s *Store) AuthorizeCertificate(ctx context.Context, der []byte, now time.T
 	fingerprint := hex.EncodeToString(sum[:])
 	return s.command(ctx, func(t *transaction) (enrollmentstate.Snapshot, error) {
 		for _, snapshot := range t.engine.Snapshots() {
-			if snapshot.Issuance.CertificateHash != fingerprint {
+			if snapshot.Issuance.CertificateHash == "" {
 				continue
 			}
 			cred, ok := t.credentials[snapshot.InvitationID]
 			if !ok {
 				return enrollmentstate.Snapshot{}, ErrStorage
 			}
-			if !bytes.Equal(cred.DER, der) {
-				return enrollmentstate.Snapshot{}, enrollmentstate.ErrProof
-			}
-			if snapshot.State != enrollmentstate.Activated {
-				return enrollmentstate.Snapshot{}, enrollmentstate.ErrState
-			}
-			if now.Unix() < snapshot.UpdatedAt || now.Unix() < snapshot.Intent.NotBefore {
-				return enrollmentstate.Snapshot{}, enrollmentstate.ErrInvalid
-			}
-			if now.Unix() >= snapshot.Intent.NotAfter {
-				return enrollmentstate.Snapshot{}, enrollmentstate.ErrExpired
-			}
-			intent, err := t.engine.TrustedRecordedIntent(snapshot.InvitationID)
+			_, currentDER, currentHash, err := t.currentCredential(snapshot, cred)
 			if err != nil {
-				return enrollmentstate.Snapshot{}, ErrStorage
+				return enrollmentstate.Snapshot{}, err
 			}
-			if _, err = enrollmentcrypto.VerifyIssued(der, s.issuerDER, intent, now); err != nil {
+			if currentHash != fingerprint {
+				continue
+			}
+			if !bytes.Equal(currentDER, der) {
 				return enrollmentstate.Snapshot{}, enrollmentstate.ErrProof
+			}
+			if err = t.authorizeCurrentCredential(snapshot, fingerprint, now); err != nil {
+				return enrollmentstate.Snapshot{}, err
 			}
 			return snapshot, nil
 		}

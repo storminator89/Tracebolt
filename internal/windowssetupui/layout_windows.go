@@ -118,7 +118,7 @@ func (w *wizard) applyLayout() bool {
 	if ok, _, _ := getClientRect.Call(w.window, uintptr(unsafe.Pointer(&client))); ok == 0 {
 		return false
 	}
-	l, ok := layoutForClient(int(client.Right-client.Left), int(client.Bottom-client.Top), w.dpi, w.flow.page, w.flow.trust.HTTPTest)
+	l, ok := layoutForClient(int(client.Right-client.Left), int(client.Bottom-client.Top), w.dpi, w.flow.page, w.flow.trust.HTTPTest, w.flow.trust.AutomaticRenewal)
 	if !ok {
 		return false
 	}
@@ -145,7 +145,7 @@ func (w *wizard) updateActions() {
 	for _, id := range []int{idChoose, idUninstall} {
 		enable(w.controls[id], ready && w.flow.page == pageInput)
 	}
-	for _, id := range []int{idScope, idService, idIdentity, idCompared, idHTTPRisk} {
+	for _, id := range []int{idScope, idService, idIdentity, idCompared, idHTTPRisk, idAutomaticRenewal} {
 		enable(w.controls[id], ready && w.flow.page == pageReview)
 	}
 	enable(w.controls[idDetails], ready && w.flow.page == pageReview && w.flow.readAdmin)

@@ -73,7 +73,7 @@ func loadActionSetupMaterial(path string) (Material, error) {
 		return Material{}, ErrConfiguration
 	}
 	var c Config
-	if lanconfig.StrictObject(raw, &c, "schemaVersion", "profile", "managerOrigin", "agentId", "certificateFile", "privateKeyFile", "serverCAFile", "stateDirectory", "insecureHTTPAcknowledged", "collectionProfile") != nil || !c.complete() {
+	if decodeConfig(raw, &c) != nil || !c.complete() {
 		return Material{}, ErrConfiguration
 	}
 	m, err := loadConfig(c)

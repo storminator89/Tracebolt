@@ -38,12 +38,12 @@ func (s *Store) CachedUpdatesView(ctx context.Context, device string, now time.T
 		if e != nil {
 			return e
 		}
-		status := systemIdentityStatus(snap, now)
+		status := systemIdentityStatus(snap, now, t.currentCredentialNotAfter(snap))
 		if status != "awaiting" {
 			out.Status = status
 			return nil
 		}
-		if _, e = s.systemAuthority(t, snap.InvitationID, snap.Issuance.CertificateHash, now); e != nil {
+		if _, e = s.systemAuthority(t, snap.InvitationID, t.currentCertificateHash(snap), now); e != nil {
 			return e
 		}
 		out.Status = "not_collected"

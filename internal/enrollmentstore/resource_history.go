@@ -223,7 +223,7 @@ func (s *Store) ResourceHistory(ctx context.Context, device string, now time.Tim
 			return e
 		}
 		out = EmptyResourceHistory(device, current, "awaiting")
-		out.certificateNotAfter = snap.Intent.NotAfter
+		out.certificateNotAfter = t.currentCredentialNotAfter(snap)
 		if current.Unix() < snap.UpdatedAt || current.Unix() < snap.Intent.NotBefore {
 			return enrollmentstate.ErrInvalid
 		}
@@ -231,7 +231,7 @@ func (s *Store) ResourceHistory(ctx context.Context, device string, now time.Tim
 			out.Status = "revoked"
 			return nil
 		}
-		if snap.State == enrollmentstate.Expired || snap.Intent.NotAfter > 0 && current.Unix() >= snap.Intent.NotAfter {
+		if snap.State == enrollmentstate.Expired || t.currentCredentialNotAfter(snap) > 0 && current.Unix() >= t.currentCredentialNotAfter(snap) {
 			out.Status = "expired"
 			return nil
 		}
@@ -268,7 +268,7 @@ func (s *Store) ResourceHistory(ctx context.Context, device string, now time.Tim
 			}
 			canonical, _ := json.Marshal(p)
 			seq, _ := strconv.ParseUint(p.Sequence, 10, 64)
-			if !bytes.Equal(canonical, raw) || bucket != p.CollectedAt.Unix()/60 || seq <= previous || seq > c.Replay.Sequence || !last.IsZero() && !p.CollectedAt.After(last) || p.CollectedAt.After(c.Replay.CollectedAt) || p.ReceivedAt.After(c.Replay.ReceivedAt) || p.ReceivedAt.Unix() < snap.Activation.At || p.ReceivedAt.Unix() >= snap.Intent.NotAfter {
+			if !bytes.Equal(canonical, raw) || bucket != p.CollectedAt.Unix()/60 || seq <= previous || seq > c.Replay.Sequence || !last.IsZero() && !p.CollectedAt.After(last) || p.CollectedAt.After(c.Replay.CollectedAt) || p.ReceivedAt.After(c.Replay.ReceivedAt) || p.ReceivedAt.Unix() < snap.Activation.At || p.ReceivedAt.Unix() >= t.currentCredentialNotAfter(snap) {
 				return ErrStorage
 			}
 			previous = seq

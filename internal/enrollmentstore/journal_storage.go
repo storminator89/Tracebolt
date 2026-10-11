@@ -13,10 +13,11 @@ import (
 	"localrmm/internal/journalview"
 )
 
-func validJournalRecord(snap enrollmentstate.Snapshot, r journalrequest.Record) bool {
+func validJournalRecord(snap enrollmentstate.Snapshot, r journalrequest.Record, authorityExpiry ...int64) bool {
+	notAfter := recordAuthorityExpiry(snap, authorityExpiry...)
 	d := r.Description
 	last := journalrequest.LastEvent(r)
-	return journalrequest.Validate(r) == nil && d.DeviceID == snap.Approval.DeviceID && d.CreatedAt.Unix() >= snap.Activation.At && last.Unix() < snap.Intent.NotAfter && (snap.Termination.At == 0 || last.Unix() <= snap.Termination.At)
+	return journalrequest.Validate(r) == nil && d.DeviceID == snap.Approval.DeviceID && d.CreatedAt.Unix() >= snap.Activation.At && last.Unix() < notAfter && (snap.Termination.At == 0 || last.Unix() <= snap.Termination.At)
 }
 
 // Every operation checks current profile, platform, activation, leaf, expiry,
@@ -41,7 +42,7 @@ func (s *Store) journalOperatorAuthority(t *transaction, device string, now time
 	if err != nil {
 		return enrollmentstate.Snapshot{}, systemRecord{}, err
 	}
-	return s.journalAuthority(t, snap.InvitationID, snap.Issuance.CertificateHash, now)
+	return s.journalAuthority(t, snap.InvitationID, t.currentCertificateHash(snap), now)
 }
 func currentJournal(r systemRecord, snap enrollmentstate.Snapshot, identity *journalrequest.Identity) (journalrequest.Record, error) {
 	if r.JournalRequest == nil {
@@ -57,7 +58,7 @@ func currentJournal(r systemRecord, snap enrollmentstate.Snapshot, identity *jou
 	return query, nil
 }
 func (s *Store) saveJournalRecord(ctx context.Context, t *transaction, snap enrollmentstate.Snapshot, system systemRecord, query journalrequest.Record) error {
-	if !validJournalRecord(snap, query) {
+	if !validJournalRecord(snap, query, t.currentCredentialNotAfter(snap)) {
 		return journalrequest.ErrInvalid
 	}
 	system.JournalRequest = &query
@@ -71,7 +72,7 @@ func (s *Store) saveJournalSystem(ctx context.Context, t *transaction, snap enro
 	if len(b) > systemMetadataLimit {
 		return ErrSystemCapacity
 	}
-	if !validSystemRecord(snap, system) {
+	if !validSystemRecord(snap, system, t.currentCredentialNotAfter(snap)) {
 		return ErrStorage
 	}
 	result, err := t.conn.ExecContext(ctx, `UPDATE enrollment_system_authority SET body=? WHERE invitation_id=?`, b, snap.InvitationID)
@@ -403,7 +404,7 @@ func (s *Store) JournalRequestStatus(ctx context.Context, device string, now tim
 		if err != nil {
 			return err
 		}
-		certificateNotAfter = snap.Intent.NotAfter
+		certificateNotAfter = t.currentCredentialNotAfter(snap)
 		query, err := currentJournal(system, snap, nil)
 		if err != nil {
 			return err

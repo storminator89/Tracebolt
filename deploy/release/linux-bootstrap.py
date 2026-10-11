@@ -418,8 +418,10 @@ def parse_args(argv):
     parser.add_argument("--invitation-id")
     parser.add_argument("--bootstrap-sha256")
     parser.add_argument("--server-ca-base64")
+    parser.add_argument("--automatic-certificate-renewal", action="store_true", help="Explicit fresh HTTPS same-key seven-day certificate renewal until revocation or issuer/scope expiry; no key rotation or scope expansion")
     parser.add_argument("--insecure-http-test", action="store_true")
     args = parser.parse_args(argv)
+    require(not args.automatic_certificate_renewal or args.action == "install" and not args.resume and not args.resume_read_admin and not args.insecure_http_test, "Automatic certificate renewal requires a fresh HTTPS installation; no upgrade, reconsent or transport fallback.")
     require(not args.upgrade_read_admin or args.action == "upgrade" and not args.read_admin and not args.resume_read_admin, "Read-admin upgrade requires the upgrade action and cannot install, resume or add scopes.")
     require(not args.resume_read_admin or args.read_admin, "Read-admin resume requires the same explicit read-admin profile.")
     require(not args.read_admin or args.action == "install" and not args.resume, "Read-admin is a fresh installation path; existing upgrades/native installer recovery stay separate.")
@@ -468,8 +470,8 @@ def installer_command(args, directory, manifest, arch):
             command.extend(["--" + name.replace("_", "-"), getattr(args, name)])
     if args.read_admin:
         command.extend(["--require-complete-profile", "--require-agent-origin", args.read_admin_agent_origin])
-    for name in ("pending_service", "resume", "insecure_http_test"):
-        if getattr(args, name) and not (name == "pending_service" and args.read_admin):
+    for name in ("pending_service", "resume", "insecure_http_test", "automatic_certificate_renewal"):
+        if getattr(args, name, False) and not (name == "pending_service" and args.read_admin):
             command.append("--" + name.replace("_", "-"))
     return command
 

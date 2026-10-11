@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"localrmm/internal/actionhelper"
 	"localrmm/internal/agentloop"
+	"localrmm/internal/enrollmentclient"
 	"localrmm/internal/journalhelper"
 	"localrmm/internal/lanclient"
 	"os"
@@ -138,7 +139,7 @@ func main() {
 		os.Exit(runPendingService(ctx, pendingServiceOptions{BootstrapPath: *enrollmentBootstrap, StateDirectory: *enrollmentState, ConfigPath: *path, Identity: *identity, InsecureHTTPTest: *insecurePending, Interval: *interval}, os.Stdout, os.Stderr, defaultPendingServiceHooks()))
 	}
 	material, e := lanclient.Load(*path)
-	if e != nil {
+	if e != nil && !*foreground {
 		fmt.Fprintln(os.Stderr, "Tracebolt agent configuration rejected.")
 		os.Exit(2)
 	}
@@ -149,7 +150,7 @@ func main() {
 	defer stop()
 	if *foreground {
 		encoder := json.NewEncoder(os.Stdout)
-		_, e := lanclient.RunForeground(ctx, material, *interval, func(event agentloop.Event) error {
+		_, e := enrollmentclient.RunRenewableForeground(ctx, *path, *interval, func(event agentloop.Event) error {
 			return encoder.Encode(struct {
 				SchemaVersion string          `json:"schemaVersion"`
 				Event         agentloop.Event `json:"event"`

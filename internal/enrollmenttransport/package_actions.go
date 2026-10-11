@@ -50,6 +50,7 @@ func (h *Ingress) packageActions(w http.ResponseWriter, r *http.Request) {
 		}
 		defer release()
 		var err error
+		r = withVerifiedTLSCertificate(r)
 		identity, err = h.store.AuthorizeCertificate(r.Context(), r.TLS.PeerCertificates[0].Raw, h.now())
 		if err != nil {
 			storeFailure(w, err)
@@ -147,6 +148,8 @@ func (h *Ingress) packageActions(w http.ResponseWriter, r *http.Request) {
 }
 func packageActionFailure(w http.ResponseWriter, e error) {
 	switch {
+	case errors.Is(e, enrollmentstore.ErrPackageRenewalUnsupported):
+		failure(w, http.StatusConflict, "package_action_renewal_unsupported")
 	case errors.Is(e, packageupdate.ErrNotFound):
 		failure(w, 404, "package_action_not_found")
 	case errors.Is(e, packageupdate.ErrConflict):

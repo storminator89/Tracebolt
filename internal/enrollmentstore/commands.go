@@ -37,7 +37,20 @@ func (s *Store) Terminate(ctx context.Context, c enrollmentstate.TerminalCommand
 	})
 }
 func (s *Store) Activate(ctx context.Context, c enrollmentstate.Control, proof enrollmentcrypto.VerifiedActivation) (enrollmentstate.Snapshot, error) {
-	return s.command(ctx, func(t *transaction) (enrollmentstate.Snapshot, error) { return t.engine.Activate(ctx, c, proof) })
+	return s.command(ctx, func(t *transaction) (enrollmentstate.Snapshot, error) {
+		out, err := t.engine.Activate(ctx, c, proof)
+		if err != nil {
+			return out, err
+		}
+		value := t.credentials[c.InvitationID]
+		if value.Renewal != nil && value.Renewal.Current.Generation == 1 && value.Renewal.Revision < out.Revision {
+			value.Renewal.Revision = out.Revision
+			value.Renewal.Current.ActivatedAt = out.Activation.At
+			value.Renewal.UpdatedAt = out.Activation.At
+			t.credentials[c.InvitationID] = value
+		}
+		return out, nil
+	})
 }
 
 // CommitIssued stores the exact DER, immutable intent and empty delivery/replay
@@ -50,7 +63,11 @@ func (s *Store) CommitIssued(ctx context.Context, c enrollmentstate.Control, pro
 			return enrollmentstate.Snapshot{}, err
 		}
 		if _, ok := t.credentials[c.InvitationID]; !ok {
-			t.credentials[c.InvitationID] = credential{DER: proof.DER()}
+			value := credential{DER: proof.DER()}
+			if out.Claim.RenewalPolicy == enrollmentcrypto.RenewalPolicySameKey {
+				value.Renewal = initialRenewal(proof, c.Now, out.Revision)
+			}
+			t.credentials[c.InvitationID] = value
 		}
 		return out, nil
 	})

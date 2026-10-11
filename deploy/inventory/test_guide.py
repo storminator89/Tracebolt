@@ -147,6 +147,33 @@ class Fixture(f.Fixture):
 
 
 class WorkflowTests(unittest.TestCase):
+    def test_renewal_config_is_explicit_tls_only_and_keeps_scope_workflow(self):
+        x = Fixture()
+        x.config.update(schemaVersion="tracebolt.lan-agent.v6",
+                        renewalManifestFile="/var/lib/tracebolt-agent/enrollment/renewal-manifest.json")
+        config_before = copy.deepcopy(x.config)
+        result = x.run(True)
+        self.assertTrue(result["completed"])
+        self.assertEqual(x.config, config_before)
+        self.assertTrue(all(x.enabled.values()))
+        self.assertFalse(result["collectionPerformed"])
+        self.assertTrue(all("renewal-manifest" not in " ".join(call) for call in x.calls))
+
+    def test_renewal_config_never_promotes_legacy_or_plaintext(self):
+        for profile, version, manifest in (
+                ("tls", "tracebolt.lan-agent.v5", ""),
+                ("tls", "tracebolt.lan-agent.v6", "/tmp/renewal-manifest.json"),
+                ("tls", "tracebolt.lan-agent.v6", ""),
+                ("http-test", "tracebolt.lan-agent.v6",
+                 "/var/lib/tracebolt-agent/enrollment/renewal-manifest.json")):
+            x = Fixture(profile)
+            x.config.update(schemaVersion=version, renewalManifestFile=manifest)
+            with self.subTest(profile=profile, version=version, manifest=manifest):
+                with self.assertRaises(g.Rejected):
+                    x.run()
+                self.assertFalse(x.events)
+                self.assertFalse(any(x.enabled.values()))
+
     def test_read_admin_verify_only_never_reenables_revoked_scope(self):
         x = Fixture()
         x.grant("overview")

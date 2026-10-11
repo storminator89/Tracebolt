@@ -22,6 +22,9 @@ import (
 )
 
 type Options struct {
+	// AutomaticRenewalAcknowledged is fresh, explicit local same-key consent.
+	AutomaticRenewalAcknowledged bool
+	renewalReconcile             bool
 	// ClaimOnly returns only after a fresh bound-key status confirms commitment.
 	// ResumeOnly opens an existing service-bound identity and never claims/prompts.
 	ClaimOnly, ResumeOnly    bool
@@ -57,6 +60,7 @@ type Result struct {
 type ledger struct{ *ledgerData }
 
 type ledgerData struct {
+	RenewalReadyPublished       bool                    `json:"renewalReadyPublished,omitempty"`
 	Version                     string                  `json:"version"`
 	Bootstrap                   Bootstrap               `json:"bootstrap"`
 	Seed                        string                  `json:"seed"`
@@ -80,10 +84,12 @@ type ledgerData struct {
 }
 
 const ledgerVersion = "tracebolt.enrollment-client-state.v2"
+const renewableLedgerVersion = "tracebolt.enrollment-client-state.renewable.v1"
 
 type session struct{ *sessionData }
 
 type sessionData struct {
+	renewalNow                func() time.Time // trusted test clock; production uses time.Now
 	store                     *localStore
 	l                         ledger
 	opts                      Options
@@ -98,6 +104,9 @@ type sessionData struct {
 // resets keys/state or installs anything. Uncertain network outcomes reconcile
 // with a fresh bound-key status proof; only uncommitted claims ask for the secret.
 func Run(ctx context.Context, b Bootstrap, o Options) (Result, error) {
+	if !o.ResumeOnly && (b.RenewalPolicy != "") != o.AutomaticRenewalAcknowledged {
+		return Result{}, ErrBootstrap
+	}
 	if o.ClaimOnly && o.ResumeOnly || o.ResumeOnly && o.Secret != nil || !o.ResumeOnly && (b.CollectionProfile == enrollmentcrypto.CollectionProfileWindowsInventory) != o.WindowsInventoryAcknowledged {
 		return Result{}, ErrBootstrap
 	}
@@ -122,9 +131,9 @@ func Run(ctx context.Context, b Bootstrap, o Options) (Result, error) {
 	}
 	var st *localStore
 	if o.ResumeOnly {
-		st, err = openExistingStore(o.StateDirectory)
+		st, err = openEnrollmentStore(o.StateDirectory, true, b.RenewalPolicy != "")
 	} else {
-		st, err = openStore(o.StateDirectory)
+		st, err = openEnrollmentStore(o.StateDirectory, false, b.RenewalPolicy != "")
 	}
 	if err != nil {
 		return Result{}, err
@@ -304,7 +313,11 @@ func (s *session) load(b Bootstrap) error {
 		}
 		seed := key.Seed()
 		defer clear(seed)
-		s.l = ledger{&ledgerData{Version: ledgerVersion, Bootstrap: b, Seed: base64.RawStdEncoding.EncodeToString(seed), CSR: base64.RawStdEncoding.EncodeToString(csr)}}
+		version := ledgerVersion
+		if b.RenewalPolicy != "" {
+			version = renewableLedgerVersion
+		}
+		s.l = ledger{&ledgerData{Version: version, Bootstrap: b, Seed: base64.RawStdEncoding.EncodeToString(seed), CSR: base64.RawStdEncoding.EncodeToString(csr)}}
 		for _, p := range []struct {
 			dst    *string
 			prefix string
@@ -325,7 +338,11 @@ func (s *session) load(b Bootstrap) error {
 			return ErrState
 		}
 	}
-	if s.l.Version != ledgerVersion || s.l.Bootstrap != b {
+	expectedVersion := ledgerVersion
+	if b.RenewalPolicy != "" {
+		expectedVersion = renewableLedgerVersion
+	}
+	if s.l.Version != expectedVersion || s.l.Bootstrap != b {
 		return ErrState
 	}
 	seen := map[string]bool{}
@@ -378,10 +395,22 @@ func (s *session) load(b Bootstrap) error {
 		if e != nil {
 			return ErrState
 		}
-		if _, e = enrollmentcrypto.VerifyIssued(der, s.issuerDER, s.l.Intent, time.Now()); e != nil {
+		verificationTime := time.Now()
+		if b.RenewalPolicy != "" && s.l.SenderInitializationStarted {
+			if !s.opts.renewalReconcile {
+				if _, e := s.loadRenewalManifest(); e != nil {
+					return ErrState
+				}
+			}
+			verificationTime = time.Unix(s.l.Intent.NotBefore, 0)
+		}
+		if _, e = enrollmentcrypto.VerifyIssued(der, s.issuerDER, s.l.Intent, verificationTime); e != nil {
 			return ErrState
 		}
 	} else if s.l.Intent != (enrollmentcrypto.Intent{}) || s.l.ActivationAttempted || s.l.Activated {
+		return ErrState
+	}
+	if s.l.RenewalReadyPublished && (b.RenewalPolicy == "" || !s.l.HandoffPrepared) {
 		return ErrState
 	}
 	if s.l.Activated && !s.l.ActivationAttempted || s.l.SenderInitializationStarted && !s.l.Activated || s.l.HandoffPrepared && !s.l.SenderInitializationStarted {
