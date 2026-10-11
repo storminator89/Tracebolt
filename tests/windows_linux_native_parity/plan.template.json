@@ -1,0 +1,125 @@
+{
+  "schema": "tracebolt.windows-linux-native-parity.v1",
+  "runId": "REPLACE_RUN_ID",
+  "source": {
+    "commit": "0000000000000000000000000000000000000000",
+    "tree": "0000000000000000000000000000000000000000",
+    "inventorySHA256": "0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "notBeforeUnix": 0,
+  "expiresUnix": 0,
+  "targets": {
+    "windows": {
+      "id": "REPLACE_WINDOWS_TARGET_ID",
+      "machineIdSHA256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "osBuild": "REPLACE_EXACT_OS_BUILD",
+      "workspace": "C:\\REPLACE\\workspace",
+      "sourceRoot": "C:\\REPLACE\\sourceRoot",
+      "sourceInventory": "C:\\REPLACE\\sourceInventory",
+      "sourceCommitObject": "C:\\REPLACE\\sourceCommitObject",
+      "publicBootstrap": "C:\\REPLACE\\workspace\\public-bootstrap.json"
+    },
+    "linux": {
+      "id": "REPLACE_LINUX_TARGET_ID",
+      "machineIdSHA256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "osBuild": "REPLACE_EXACT_OS_BUILD",
+      "workspace": "/REPLACE/workspace",
+      "sourceRoot": "/REPLACE/sourceRoot",
+      "sourceInventory": "/REPLACE/sourceInventory",
+      "sourceCommitObject": "/REPLACE/sourceCommitObject",
+      "lanConfig": "/REPLACE/lanConfig",
+      "enrollmentConfig": "/REPLACE/enrollmentConfig",
+      "webRoot": "/REPLACE/webRoot",
+      "webInventory": "/REPLACE/webInventory",
+      "browserRoot": "/REPLACE/browserRoot",
+      "browserInventory": "/REPLACE/browserInventory"
+    }
+  },
+  "tls": {
+    "operatorOrigin": "https://operator.invalid:8443",
+    "agentOrigin": "https://agent.invalid:8444",
+    "custodian": "REPLACE_TLS_CUSTODIAN",
+    "privateNetworkApprovalRef": "REPLACE_NETWORK_APPROVAL",
+    "serverCertificateSHA256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "managerInstanceId": "manager_00000000000000000000000000000000",
+    "issuerFingerprint": "0000000000000000000000000000000000000000000000000000000000000000",
+    "bootstrapServerCASHA256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "bootstrapIssuerRootSHA256": "0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "artifacts": {
+    "setup": {
+      "path": "C:\\REPLACE\\setup",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "service": {
+      "path": "C:\\REPLACE\\service",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "setupManifest": {
+      "path": "C:\\REPLACE\\setupManifest",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "setupSourceInputs": {
+      "path": "C:\\REPLACE\\setupSourceInputs",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "manager": {
+      "path": "/REPLACE/manager",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "webInventory": {
+      "path": "/REPLACE/webInventory",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "browserInventory": {
+      "path": "/REPLACE/browserInventory",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "node": {
+      "path": "/REPLACE/node",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "chromium": {
+      "path": "/REPLACE/chromium",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    }
+  },
+  "phases": {
+    "manager-browser": {
+      "approvalRef": "REPLACE_manager-browser_APPROVAL",
+      "targetId": "REPLACE_LINUX_TARGET_ID"
+    },
+    "setup": {
+      "approvalRef": "REPLACE_setup_APPROVAL",
+      "targetId": "REPLACE_WINDOWS_TARGET_ID"
+    },
+    "event-fixture": {
+      "approvalRef": "REPLACE_event-fixture_APPROVAL",
+      "targetId": "REPLACE_WINDOWS_TARGET_ID"
+    },
+    "event-enable": {
+      "approvalRef": "REPLACE_event-enable_APPROVAL",
+      "targetId": "REPLACE_WINDOWS_TARGET_ID"
+    },
+    "updates-enable": {
+      "approvalRef": "REPLACE_updates-enable_APPROVAL",
+      "targetId": "REPLACE_WINDOWS_TARGET_ID"
+    },
+    "event-disable": {
+      "approvalRef": "REPLACE_event-disable_APPROVAL",
+      "targetId": "REPLACE_WINDOWS_TARGET_ID"
+    },
+    "updates-disable": {
+      "approvalRef": "REPLACE_updates-disable_APPROVAL",
+      "targetId": "REPLACE_WINDOWS_TARGET_ID"
+    }
+  },
+  "syntheticEvent": {
+    "source": "TraceboltParity-REPLACE_RUN_ID",
+    "eventId": 42,
+    "messageSHA256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "preparationApprovalRef": "REPLACE_EVENT_FIXTURE_APPROVAL",
+    "messageResourcePath": "C:\\REPLACE\\message-resource.dll",
+    "messageResourceSHA256": "0000000000000000000000000000000000000000000000000000000000000000"
+  }
+}

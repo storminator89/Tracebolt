@@ -20,7 +20,7 @@ COVERAGE = {
 }
 
 SHARD_COVERAGE = [
-    ('  backend-checks:\n', '  go-race:\n', '6d29940b1f175df97203e9e7df32a4da28f86bb38bf5b3cd7a88c189c523ab97'),
+    ('  backend-checks:\n', '  go-race:\n', 'df9b077b16ef0d63d97cc727b9436c6169615f9dc344f6e317deafff157e521e'),
     ('  go-race:\n', '  backend:\n', '105a1ee6f737da7f864e531ba5bcd2131b493349606fa0a016851d7df1f97550'),
     ('  backend:\n', '  transport-smoke:\n', '31fe09e170c4aab4adc0238ad240c639cd8c225fecfa89afe87f27a219bc6740'),
 ]
