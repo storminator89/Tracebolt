@@ -35,6 +35,21 @@ class OverviewCompletionTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             gate.validate(endpoint_events(), require_overview=True)
 
+    def test_query_diagnostics_neither_replace_nor_disrupt_completion(self):
+        diagnostics = [
+            "complete operator overview query diagnostic: section=volumes status=http_429 failure=status storage_busy=true",
+            "complete operator overview busy retry: section=processes outcome=recovered",
+        ]
+        events = valid_events()
+        events[8:8] = [marker(payload, gate.ROOT + "/tls") for payload in diagnostics]
+        self.assertIsNone(gate.validate(events, require_overview=True))
+        for index in range(len(valid_events())):
+            missing = valid_events()
+            del missing[index]
+            missing[0:0] = [marker(payload, gate.ROOT + "/tls") for payload in diagnostics]
+            with self.subTest(index=index), self.assertRaises(ValueError):
+                gate.validate(missing, require_overview=True)
+
     def test_every_required_event_is_required(self):
         events = valid_events()
         for index in range(len(events)):

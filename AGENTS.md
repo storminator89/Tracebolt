@@ -13,8 +13,9 @@ file as navigation and project constraints, never as permission to act on a host
   fingerprint/comparison approval; Linux `lan-agent` supports one-shot or bounded
   foreground reporting. A Linux/systemd `agent-service` candidate adds read-only preflight and separately
   authorized install/restart/upgrade/uninstall; actual service acceptance is a
-  manual disposable-VM gate. Windows/macOS LAN clients, verified boot persistence
-  and automatic renewal are not shipped. `make run` is the synthetic developer
+  manual disposable-VM gate. An unsigned Windows LAN preview is published; macOS LAN clients, verified boot
+  persistence and automatic renewal are not shipped. Read `docs/windows-status.md`
+  for the exact released source and remaining native gates. `make run` is the synthetic developer
   manager, not the LAN startup command.
 - Obtain the required approval for deployment exposure, persistent credential or
   trust changes, firewall/global settings, service installation and destructive
@@ -101,11 +102,11 @@ file as navigation and project constraints, never as permission to act on a host
   existing managed-evidence export blocks. Health-summary approval never permits
   raw logs, dump data, autonomous tools, shell commands or remediation. Fixtures
   do not authorize a real provider call, API-key entry or runtime scope grant.
-- For the source-only fresh five-scope Windows observation coordinator, read
+- For the fresh five-scope Windows observation coordinator, read
   `docs/windows-read-observation-setup.md`. Keep SCM disabled until activated
   identity and all exact grants are durably verified; retain indeterminate
-  transitions for read-only reconciliation. No public/released command exists,
-  and existing service/grant receipts must not be promoted.
+  transitions for read-only reconciliation. The released preview exposes the fresh GUI Setup path, not a direct combined
+  command-line operation. Existing service/grant receipts must not be promoted.
 - Windows caller-visible volume metadata is a separate default-off local grant.
   Read `docs/windows-volume-inventory.md` before changing its consent, capacity
   semantics or v3 wire shape. Keep v1/event-v2 identities and bytes compatible;
@@ -126,6 +127,34 @@ file as navigation and project constraints, never as permission to act on a host
   digest/index binding, per-field unavailable states and old grants. The fresh
   five-scope coordinator remains unchanged; source fixtures never authorize a
   native configuration read, new persistent grant or service/security change.
+- Selected Windows event messages and cached Windows Update inspection have
+  separate default-off runtime/manager/UI source paths. Read
+  `docs/windows-event-content-runtime.md`, `docs/windows-event-content-manager.md`,
+  `docs/windows-event-content-wire.md`, `docs/windows-event-content-request.md`,
+  `docs/windows-event-content.md`, `docs/windows-update-inspection.md` and
+  `docs/windows-update-runtime.md` before changing them. Existing five-scope Setup or event-header grants authorize neither.
+  Keep message content out of durable telemetry and AI/provider export; preserve
+  exact selections, original expiry, session-bound ephemeral content and durable
+  consume-once boundaries. Never reset missing used state or recapture lost results.
+  Cached WUA inspection must remain offline and must not download, install,
+  accept update terms, reboot, upgrade WUA or change service/network settings.
+  Fixtures/cross-builds do not authorize native reads or create a local grant.
+- Windows system-volume capacity health is a separate default-off manager policy.
+  Read `docs/windows-capacity-health.md` before changing its thresholds or lifecycle.
+  Preserve caller-quota semantics, advancing-source confirmation, durable floors,
+  unknown evidence and explicit non-recovery policy closure. Never route it into
+  Linux Health/AI/alarm admission or infer native scope/service-action permission.
+- Windows CPU and physical-RAM policies are independent default-off manager scopes.
+  Read `docs/windows-resource-health.md` before changing their shared percentage
+  engine, tagged storage, API or UI. Preserve disk v1 bytes, exact observed-group
+  CPU and physical-memory semantics, independent opt-ins/floors, one coordinated
+  source read, and unknown evidence. No host collection, AI or alarm grant follows.
+- Selected Windows service checks are a separate default-off manager policy.
+  Read `docs/windows-service-health.md` before changing exact-name selection,
+  discrete state evaluation, source admission, API or UI. Keep native
+  `internal/windowsservice` lifecycle code separate from the manager-only
+  `internal/windowsservicehealth` package. Missing/duplicate rows never prove down;
+  preserve positive partial-row scope, original capture, authority and durable floors.
 - Follow Go/Node versions and dependency locks in this revision. Validate commands
   against actual flags/config. Distinguish runtime tests from cross-builds, skipped
   container tests, and proposed functionality. Never invent install/enroll flags.

@@ -171,6 +171,49 @@ type setupWizardRemovalSteps struct {
 	wait           func(context.Context) error
 }
 
+const setupRemovalCompletedText = "Service removal confirmed. Executable, public bootstrap and all private state remain; manager trust was not revoked. Reinstallation remains blocked."
+
+// The native GUI shares the CLI installer lease, including stop/deletion polling
+// and release. Do not display its completion message until the lease is checked
+// and closed successfully; an error still retains all private state.
+func setupWizardUninstallWithLease(ctx context.Context, open receiptOpener, s setupWizardRemovalSteps, progress func(string)) error {
+	if progress == nil {
+		return errLifecycle
+	}
+	complete := false
+	_, err := withReceiptLease(ctx, open, func(retained installReceipt, _ receiptStore) (any, error) {
+		s.receipt = func() (windowsservice.Receipt, error) { return retained.Service, nil }
+		return nil, setupWizardUninstall(ctx, s, func(text string) {
+			if text == setupRemovalCompletedText {
+				complete = true
+				return
+			}
+			progress(text)
+		})
+	})
+	if err == nil && complete {
+		progress(setupRemovalCompletedText)
+	}
+	if err != nil {
+		// Acquisition or final lease failure occurs outside the removal body.
+		// Keep the existing finite receipt-stage diagnostic when no earlier
+		// removal phase is present, without hiding any combined primary cause.
+		found := false
+		if chain, valid := setupErrorChain(err); valid {
+			for _, current := range chain {
+				if e, ok := current.(*removalFailure); ok && e != nil {
+					found = true
+					break
+				}
+			}
+		}
+		if !found {
+			err = &removalFailure{step: "receipt", original: err, detail: err}
+		}
+	}
+	return err
+}
+
 func setupWizardUninstall(ctx context.Context, s setupWizardRemovalSteps, progress func(string)) (err error) {
 	step := "validate"
 	var detail error
@@ -274,6 +317,6 @@ func setupWizardUninstall(ctx context.Context, s setupWizardRemovalSteps, progre
 			return errSetupRemovalPending
 		}
 	}
-	progress("Service removal confirmed. Executable, public bootstrap and all private state remain; manager trust was not revoked. Reinstallation remains blocked.")
+	progress(setupRemovalCompletedText)
 	return nil
 }

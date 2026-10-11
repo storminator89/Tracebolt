@@ -29,9 +29,18 @@ dashboard with light and dark themes.
   suggestions from explicitly approved Health incidents or service-log evidence.
 
 Each feature depends on its platform and approved scope. Unavailable, partial and
-stale observations stay visible. Windows event headers contain no message bodies;
-Windows Update/CVE assessment is not implemented. AI provider/data approval is
-separate, and suggestions remain unconfirmed.
+stale observations stay visible. Windows event headers contain no message bodies.
+The published preview has no Windows Update/CVE assessment. The current source
+adds separately consented [cached Windows Update inspection](docs/windows-update-runtime.md)
+and [selected event messages](docs/windows-event-content-runtime.md); both still
+need installed-service/native acceptance. A separate default-off
+[system-volume capacity policy](docs/windows-capacity-health.md) uses only the
+existing quota-aware metric. Independent default-off [CPU and physical-RAM policies](docs/windows-resource-health.md)
+use their existing basic samples. Separate default-off [service checks](docs/windows-service-health.md)
+let administrators select reported services that should be running; missing rows
+remain unknown. Overall Windows health remains unassessed and
+native acceptance remains pending. AI provider/data approval is separate, and suggestions
+remain unconfirmed.
 
 ![Tracebolt Linux log workspace with service selection and time-window controls](docs/screenshots/2026-10-09-main-ui/log-workspace.png)
 
@@ -74,12 +83,44 @@ LAN operation. [Demo troubleshooting](docs/troubleshooting.md#local-demo).
 
 ### Windows preview
 
-**There is no published Windows Setup download yet.** The unsigned source-built
-wizard implements fresh installation and five explicitly approved read scopes.
-Some native x64 phases have passed, but complete installed-service acceptance is
-still blocked. Start with [Windows status and limitations](docs/windows-status.md)
-before the [Setup preview guide](docs/windows-setup-preview.md). Do not use the
-Linux installation command on Windows.
+The unsigned x64 [v0.1.0-windows-preview.1 prerelease](https://github.com/storminator89/Tracebolt/releases/tag/v0.1.0-windows-preview.1)
+is available, with fresh installation and five explicitly approved read scopes.
+Read the [prerelease installation guide](docs/windows-prerelease-install.md) and
+[Windows status and limitations](docs/windows-status.md) before installing.
+The accepted hosted Windows Server 2025 subset does not prove Windows 10/11,
+reboot, upgrade or ARM64 support. Do not use the Linux installation command on Windows.
+
+Read the [dated Windows parity review status](docs/windows-parity-review-status.md)
+for subsequent source progress, CI evidence and remaining priorities. The
+[Linux/Windows parity matrix](docs/windows-linux-parity.md) preserves a historical
+baseline; its table is not a current runtime-coverage claim.
+
+Cached Update inspection and exact selected event messages are separate default-off
+source candidates wired into Updates and Logs. Sibling [PR #31](https://github.com/storminator89/Tracebolt/pull/31)
+and [PR #32](https://github.com/storminator89/Tracebolt/pull/32) add opt-in Windows
+disk/CPU/RAM and selected-service health policies. PR #29's documentation changes
+do not add that runtime implementation. These newer features remain outside the
+unchanged published preview. Source/fixture checks do not establish native acceptance.
+
+| Cached Windows Updates, unreleased source preview | Mobile device overview, German |
+| --- | --- |
+| [<img src="docs/screenshots/2026-10-10-windows-parity/windows-cached-updates.png" width="660" alt="Tracebolt cached Windows Updates with invented update rows and explicit unknown cache freshness">](docs/screenshots/2026-10-10-windows-parity/windows-cached-updates.png) | [<img src="docs/screenshots/2026-10-10-windows-parity/windows-mobile-de.png" width="220" alt="German mobile Windows device overview with invented inventory data">](docs/screenshots/2026-10-10-windows-parity/windows-mobile-de.png) |
+
+*Actual 10 October source-preview captures with invented Windows data.
+[Inventory screenshot and exact-source provenance](docs/screenshots/2026-10-10-windows-parity/README.md). Native Windows acceptance remains separate.*
+
+![Tracebolt selected Windows event messages with invented text, original expiry and partial availability](docs/screenshots/2026-10-10-windows-parity/windows-selected-messages.png)
+
+*Selected Windows event messages, unreleased source preview with invented data.
+Original expiry and per-record availability stay visible.
+[Exact source and fixture boundaries](docs/screenshots/2026-10-10-windows-parity/README.md#selected-windows-event-messages).*
+
+![Tracebolt Windows CPU health policy with an invented open incident, explicit threshold and original observation times](docs/screenshots/2026-10-10-windows-parity/windows-health-policy.png)
+
+*Windows CPU health policy, an unreleased source candidate in
+[PR #31](https://github.com/storminator89/Tracebolt/pull/31), shown with invented data.
+This separate implementation is not part of the published Windows preview.
+[Exact source and fixture boundaries](docs/screenshots/2026-10-10-windows-parity/README.md#windows-health-policy).*
 
 ## Platform support
 
@@ -88,7 +129,7 @@ Linux installation command on Windows.
 | Manager | Linux, native or Docker; exact-revision CI records architecture and runtime coverage |
 | Published Linux read-admin | amd64; Ubuntu 24.04 or Debian 13, systemd, cgroup v2, kernel 6.5+; actual host acceptance still required |
 | Linux arm64 / Raspberry Pi | Source/read-only testing; public installation remains closed pending privileged native acceptance |
-| Windows | Implemented bounded read-only inventory and unsigned Setup preview; no published installer, full lifecycle acceptance, reboot/upgrade proof or ARM64 runtime acceptance |
+| Windows | Published unsigned x64 read-only prerelease; bounded hosted Windows Server 2025 subset accepted, with Windows 10/11, full lifecycle, reboot/upgrade and ARM64 runtime gates still open |
 | macOS | Limited standalone read-only collector; no supported LAN installation path |
 
 The main agent is unprivileged. Linux journal and socket-owner helpers need
@@ -109,6 +150,10 @@ Run `make test`, `make build` and the [web checks](web/README.md#checks). Consul
 container and native coverage; a cross-build or screenshot is not host acceptance.
 
 **Development pilot.** Production hardening and fleet-scale validation remain
-open. No project license has been selected; public source availability does not
-grant an open-source license. Dependencies retain their
-[own notices](docs/dependencies/edwards25519.md).
+open.
+
+## License
+
+Tracebolt is licensed under the [Apache License 2.0](LICENSE)
+(SPDX: `Apache-2.0`). Third-party dependencies retain their own licenses and
+notices, including the [Edwards25519 dependency notice](docs/dependencies/edwards25519.md).

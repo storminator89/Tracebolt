@@ -1,3 +1,8 @@
+import {createWindowsServiceHealthFixtureState,exerciseWindowsServiceHealth,windowsServiceHealthFixturePath,windowsServiceHealthStageNames} from './windows-service-health-browser.mjs';
+import {exerciseWindowsResources,windowsResourceBrowserFixture,windowsResourceFixtureMetric,windowsResourceStageNames} from './windows-resource-browser.mjs';
+import {exerciseWindowsCapacity,windowsCapacityBrowserFixture,windowsCapacityStageNames} from './windows-capacity-browser.mjs';
+import {createWindowsEventContentFixture,exerciseWindowsEventContent,windowsEventContentStages} from './windows-event-content-browser.mjs';
+import {windowsUpdatesBrowserFixture,exerciseWindowsUpdates} from './windows-updates-browser.mjs';
 import {withWindowsOSProvenance,exerciseWindowsOSProvenance} from './windows-os-provenance-browser.mjs';
 import {exerciseWindowsContactHistory,windowsContactBrowserFixture,windowsContactHistoryStageNames} from './windows-contact-history-browser.mjs';
 import {exerciseWindowsHealth,windowsHealthStageNames} from './windows-health-browser.mjs';
@@ -18,7 +23,7 @@ const {windowsNetwork,windowsVolumes,windowsHealthDevice,windowsDeviceId,windows
 export const windowsInventoryCaseName='Synthetic Windows inventory shares device charts and explicit enrollment consent without Linux reads';
 export const windowsInventoryFixtureDisclosure='Real loopback HTTP-test fixture login with intercepted invented Windows inventory and resource history in the production UI. UI-only evidence; no native endpoint acceptance, collection, invitation, service installation or external request.';
 let stage='setup';
-const stages=new Set(['setup','login','overview','overview-history','os-provenance','inventory','storage','network','network-stale','network-expired','network-partial','network-empty','network-denied','network-unavailable','network-truncated','process-metrics','process-controls','service-software-controls','process-metrics-stale','process-metrics-expired','events',...windowsHealthStageNames,...windowsContactHistoryStageNames,'logs',...windowsLogsStageNames,'legacy','partial','denied','enrollment','access-loss']);
+const stages=new Set(['setup',...windowsEventContentStages,'login','overview','overview-history','os-provenance','inventory','storage','network','network-stale','network-expired','network-partial','network-empty','network-denied','network-unavailable','network-truncated','process-metrics','process-controls','service-software-controls','process-metrics-stale','process-metrics-expired','events',...windowsHealthStageNames,...windowsContactHistoryStageNames,...windowsCapacityStageNames,...windowsResourceStageNames,...windowsServiceHealthStageNames,'logs',...windowsLogsStageNames,'legacy','updates','partial','denied','enrollment','access-loss']);
 export const windowsInventoryFailureStage=()=>stages.has(stage)?stage:'setup';
 const mark=value=>{stage=value;};
 export function windowsBrowserFixture(now,phase='fresh',networkPhaseAt=now,logsPhaseAt=now){
@@ -98,15 +103,63 @@ export async function windowsFixtureResponseTime(page){
  if(!Number.isSafeInteger(at)||at<=0)throw new Error('Synthetic fixture clock unavailable');
  return new Date(at).toISOString();
 }
+// Read the real fixture session once, in the awaited test flow. A passive CDP
+// response-body observer can lose its body handle when a UI request is canceled
+// or navigation intervenes. The API context shares this page's cookie jar, while
+// this read neither renews the immutable session expiry nor changes the UI flow.
+export async function windowsFixtureSessionExpiry(page,base){
+ try{
+  const target=new URL('/api/auth/session',base);
+  if(target.origin!==base||target.protocol!=='http:'||target.hostname!=='127.0.0.1')throw new Error();
+  const response=await page.request.get(target.href,{maxRedirects:0,timeout:5000});
+  try{
+   if(response.status()!==200)throw new Error();
+   const value=await response.json(),expires=Date.parse(value?.expiresAt),now=Date.parse(value?.serverNow);
+   if(value?.authenticated!==true||typeof value.expiresAt!=='string'||typeof value.serverNow!=='string'||!Number.isFinite(expires)||!Number.isFinite(now)||expires<=now)throw new Error();
+   return value.expiresAt;
+  }finally{await response.dispose();}
+ }catch{throw new Error('Windows fixture session expiry unavailable');}
+}
+/** Independent invented percentage ledgers for one mounted detail walkthrough.
+ * A sibling phase never resets an accepted policy revision or rewrites closure time. */
+export function createWindowsPercentageFixtureState(){
+ const phases={disk:'capacity-disabled',cpu:'cpu-disabled',memory:'memory-disabled'},origins={disk:null,cpu:null,memory:null},closedAt={disk:null,cpu:null,memory:null};
+ const select=phase=>windowsCapacityStageNames.includes(phase)?'disk':windowsResourceStageNames.includes(phase)?phase.split('-')[0]:null;
+ return {
+  setPhase(phase,at){
+   const metric=select(phase);if(!metric)return false;
+   if(!Number.isFinite(Date.parse(at)))throw new Error('Invalid invented percentage phase time');
+   const stages=metric==='disk'?windowsCapacityStageNames:windowsResourceStageNames.filter(value=>value.startsWith(metric+'-'));
+   if(stages.indexOf(phase)<stages.indexOf(phases[metric]))throw new Error('Invented percentage revision rollback');
+   if(phase===phases[metric]&&origins[metric]!==null)return true;
+   phases[metric]=phase;
+   if(phase==='capacity-disabled'||phase===`${metric}-disabled`)origins[metric]=at;
+   if(phase==='capacity-closed'||phase===`${metric}-policy-changed`)closedAt[metric]??=at;
+   return true;
+  },
+  capacity(at){const view=windowsCapacityBrowserFixture(at,origins.disk??at,phases.disk);if(closedAt.disk&&phases.disk==='capacity-closed')view.incidents[0].resolvedAt=closedAt.disk;return view;},
+  resource(metric,at){if(!['cpu','memory'].includes(metric))throw new Error('Invalid invented resource metric');const view=windowsResourceBrowserFixture(metric,at,origins[metric]??at,phases[metric]);if(closedAt[metric]&&phases[metric]===`${metric}-policy-changed`)view.incidents[0].resolvedAt=closedAt[metric];return view;},
+ };
+}
 export async function windowsInventoryBrowserCase({pageAt,login,expect,base,shot}){
- const page=await pageAt('/devices/'+windowsDeviceId),prefix='/api/devices/'+windowsDeviceId,unexpected=[],writes=[],external=[];let phase='fresh',networkPhaseAt=null,logsPhaseAt=null,contactPhaseAt=null,osObservedAt=null;
- const syntheticPaths=new Set([prefix,prefix+'/windows-inventory',prefix+'/windows-contact',prefix+'/resource-history','/api/overview','/api/windows/enrollment']);
+ const page=await pageAt('/devices/'+windowsDeviceId),prefix='/api/devices/'+windowsDeviceId,unexpected=[],writes=[],external=[];let phase='fresh',networkPhaseAt=null,logsPhaseAt=null,contactPhaseAt=null,percentagePolicyFixtures=createWindowsPercentageFixtureState(),servicePolicyFixtures=createWindowsServiceHealthFixtureState(),osObservedAt=null,updatesCapturedAt=null;
+ const syntheticPaths=new Set([prefix,prefix+'/windows-inventory',prefix+'/windows-contact',prefix+'/windows-capacity',prefix+'/windows-resource/cpu',prefix+'/windows-resource/memory',prefix+'/windows-services',prefix+'/resource-history','/api/overview','/api/windows/enrollment']);
  // A bounded virtual clock makes the five-second private-row expiry deterministic.
+ const eventContent=createWindowsEventContentFixture();let eventSessionExpires=null;
  let clockNow=Date.now();await page.clock.install({time:new Date(clockNow)});await page.clock.pauseAt(new Date(clockNow+1000));clockNow+=1000;
  const now=()=>new Date(clockNow).toISOString();
  await page.route('**/*',async route=>{
   const request=route.request(),url=new URL(request.url());
   if(url.origin!==base){external.push('external');return route.abort('blockedbyclient');}
+  if(url.pathname===prefix+'/windows-event-content'||['create','query','cancel'].some(action=>url.pathname===prefix+'/windows-event-content/'+action)){
+   const action=url.pathname===prefix+'/windows-event-content'?'':url.pathname.split('/').at(-1);
+   if(url.search||request.method()!==(action?'POST':'GET')||action&&phase!=='event-content'){unexpected.push('unexpected-content-route');return route.abort('blockedbyclient');}
+   if(action&&!request.headers()['x-csrf-token']){unexpected.push('missing-content-csrf');return route.abort('blockedbyclient');}
+   const at=await windowsFixtureResponseTime(page),headers=windowsBrowserFixture(at,phase,networkPhaseAt??at,logsPhaseAt??at).events;
+   await expect.poll(()=>eventSessionExpires!==null).toBe(true);
+   const value=eventContent.response({action,body:action?request.postDataJSON():null,serverNow:at,sessionExpiresAt:eventSessionExpires,headers,enabled:phase==='event-content'});
+   return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(value)});
+  }
   if(request.method()!=='GET'&&!(request.method()==='POST'&&url.pathname==='/api/auth/login')){writes.push('write');return route.abort('blockedbyclient');}
   if(!syntheticPaths.has(url.pathname)){
    if(url.pathname.startsWith(prefix+'/')){unexpected.push('unexpected-device-read');return route.fulfill({status:404,contentType:'application/json',body:JSON.stringify({error:{code:'fixture_unexpected_route'}})});}
@@ -114,15 +167,24 @@ export async function windowsInventoryBrowserCase({pageAt,login,expect,base,shot
   }
   if(url.pathname===prefix+'/windows-inventory'&&(url.search||request.postData()!==null))throw new Error('Unexpected Windows query');
   if(url.pathname===prefix+'/windows-contact'&&(url.search||request.postData()!==null)){unexpected.push('unexpected-contact-query');return route.abort('blockedbyclient');}
+  if(url.pathname===prefix+'/windows-capacity'&&(url.search||request.postData()!==null)){unexpected.push('unexpected-capacity-query');return route.abort('blockedbyclient');}
+  const servicePolicy=windowsServiceHealthFixturePath(url.pathname,prefix);
+  if(servicePolicy&&(url.search||request.postData()!==null)){unexpected.push('unexpected-service-policy-query');return route.abort('blockedbyclient');}
+  const resourceMetric=windowsResourceFixtureMetric(url.pathname,prefix);
+  if(resourceMetric&&(url.search||request.postData()!==null)){unexpected.push('unexpected-resource-query');return route.abort('blockedbyclient');}
   const reply=data=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(data)}),at=await windowsFixtureResponseTime(page),device=windowsHealthBrowserDevice(at,phase,osObservedAt??undefined);
   if(url.pathname===prefix+'/windows-inventory'){
    if(phase==='session')return route.fulfill({status:401,contentType:'application/json',body:JSON.stringify({error:{code:'authentication_required'}})});
+   if(phase==='updates')return reply(windowsUpdatesBrowserFixture({serverNow:at,capturedAt:updatesCapturedAt}));
    return reply(windowsBrowserFixture(at,phase,networkPhaseAt??at,logsPhaseAt??at));
   }
   if(url.pathname===prefix+'/windows-contact'){
    if(phase==='contact-denied')return route.fulfill({status:403,contentType:'application/json',body:JSON.stringify({error:{code:'fixture_access_denied'}})});
    contactPhaseAt??=at;return reply(windowsContactBrowserFixture(at,contactPhaseAt,phase));
   }
+  if(url.pathname===prefix+'/windows-capacity')return reply(percentagePolicyFixtures.capacity(at));
+  if(resourceMetric)return reply(percentagePolicyFixtures.resource(resourceMetric,at));
+  if(servicePolicy)return reply(servicePolicyFixtures.view(at));
   // Invented retained OS observation: later receipt/server times may advance,
   // but metadata reads or Evidence visits cannot refresh this admitted capture.
   if(url.pathname===prefix){osObservedAt??=device.evidence.find(({id})=>id==='local-windows-os')?.collectedAt??null;return reply(device);}
@@ -130,11 +192,11 @@ export async function windowsInventoryBrowserCase({pageAt,login,expect,base,shot
   if(url.pathname==='/api/overview'){osObservedAt??=device.evidence.find(({id})=>id==='local-windows-os')?.collectedAt??null;return reply({generatedAt:at,devices:[device],cases:[],activity:[],stats:{totalDevices:1,healthyDevices:0,attentionDevices:0,unknownDevices:1,openCases:0,criticalCases:0}});}
   if(url.pathname==='/api/windows/enrollment')return reply({schemaVersion:'tracebolt.enrollment-operator.v2',serverNow:at,enabled:true,platforms:['windows'],recordLimit:25,collectionProfile:'windows-inventory-v1',collectionPrivacy:'windows_inventory_metadata_may_be_sensitive',items:[]});
  });
- mark('login');await login(page);
+ mark('login');await login(page);eventSessionExpires=await windowsFixtureSessionExpiry(page,base);
  for(const locale of ['en','de'])for(const width of [1440,390]){
   await page.setViewportSize({width,height:width===390?844:1000});
   const language=page.locator('select[aria-label="Language"],select[aria-label="Sprache"]');await language.selectOption(locale);
-  phase='fresh';await page.goto(`${base}/#/devices/${windowsDeviceId}`);await expect(page.locator('html')).toHaveAttribute('lang',locale);
+  servicePolicyFixtures=createWindowsServiceHealthFixtureState();phase='fresh';percentagePolicyFixtures=createWindowsPercentageFixtureState();await page.goto(`${base}/#/devices/${windowsDeviceId}`);await expect(page.locator('html')).toHaveAttribute('lang',locale);
   mark('overview');await expect(page.getByRole('heading',{name:'fixture-windows',exact:true})).toBeVisible();
   mark('overview-history');await settleWindowsHistory(page,expect,async ms=>{clockNow+=ms;await page.clock.runFor(ms);});
   await expect(page.getByRole('img',{name:/^(System volume|Systemvolume)/})).toBeVisible();
@@ -236,13 +298,19 @@ export async function windowsInventoryBrowserCase({pageAt,login,expect,base,shot
   mark('events');await page.getByRole('tab',{name:'Health',exact:true}).click();
   await exerciseWindowsHealth({page,expect,locale,width,shot,disclosure:windowsInventoryFixtureDisclosure,setPhase:value=>{phase=value;contactPhaseAt=now();},mark,now});
   await exerciseWindowsContactHistory({page,expect,locale,width,shot,setPhase:value=>{phase=value;if(value==='contact-overdue')contactPhaseAt=now();},mark,advance:async ms=>{clockNow+=ms;await page.clock.runFor(ms);}});
+  await exerciseWindowsCapacity({page,expect,locale,width,shot,setPhase:value=>{phase=value;percentagePolicyFixtures.setPhase(value,now());},mark});
+  await exerciseWindowsResources({page,expect,locale,width,shot,setPhase:value=>{phase=value;percentagePolicyFixtures.setPhase(value,now());},mark});
+  await exerciseWindowsServiceHealth({page,expect,locale,width,shot,setPhase:value=>{phase=value;servicePolicyFixtures.setPhase(value,now());},mark});
   mark('events');
   await expect(page.getByText(locale==='de'?'Zugriff verweigert':'Access denied',{exact:true})).toBeVisible();
   await page.getByText(locale==='de'?'Ereignisse ansehen':'View events',{exact:true}).click();await expect(page.getByText('Invented Event Provider',{exact:true})).toBeVisible();
   expect(await page.locator('.windows-inventory').evaluate(el=>el.scrollWidth<=el.clientWidth+1)).toBe(true);
   await shot(page,`synthetic-windows-events-${width}-${locale}`,windowsInventoryFixtureDisclosure);
   mark('logs');await windowsLogsBrowserCase({page,expect,base,mark,deviceId:windowsDeviceId,locale,width,shot,disclosure:windowsInventoryFixtureDisclosure,setPhase:value=>{phase=value;logsPhaseAt=value==='logs-expiring'?now():null;},advance:async ms=>{clockNow+=ms;await page.clock.runFor(ms);}});
+  await exerciseWindowsEventContent({page,expect,locale,width,shot,fixture:eventContent,mark,setPhase:value=>{phase=value;logsPhaseAt=value==='event-content'?now():null;},advance:async ms=>{clockNow+=ms;await page.clock.runFor(ms);}});
   await page.getByRole('tab',{name:locale==='de'?'Inventar':'Inventory',exact:true}).click();
+  mark('updates');phase='updates';updatesCapturedAt=new Date(clockNow-2000).toISOString();await page.getByRole('button',{name:locale==='de'?'Windows-Inventar aktualisieren':'Refresh Windows inventory',exact:true}).click();
+  await exerciseWindowsUpdates({page,expect,locale,width,shot});
   mark('legacy');phase='legacy';await page.getByRole('button',{name:locale==='de'?'Windows-Inventar aktualisieren':'Refresh Windows inventory',exact:true}).click();
   await page.getByRole('tab',{name:locale==='de'?'Speicher':'Storage',exact:true}).click();
   await expect(page.getByText(locale==='de'?/Eine separate lokale Zustimmung ist erforderlich/:/Separate local consent is required/)).toBeVisible();

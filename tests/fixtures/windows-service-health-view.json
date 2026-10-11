@@ -1,0 +1,448 @@
+{
+  "attention": {
+    "schemaVersion": "tracebolt.windows-service-view.v1",
+    "deviceId": "agent_11111111111111111111111111111111",
+    "serverNow": "2026-10-10T12:02:00Z",
+    "certificateExpiresAt": "2026-10-10T14:00:00Z",
+    "policy": {
+      "enabled": true,
+      "services": [
+        "FixtureService"
+      ],
+      "revision": 1
+    },
+    "status": "attention",
+    "evaluatedAt": "2026-10-10T12:02:00Z",
+    "checks": [
+      {
+        "name": "FixtureService",
+        "status": "attention",
+        "observation": {
+          "state": "stopped",
+          "collectedAt": "2026-10-10T12:02:00Z",
+          "receivedAt": "2026-10-10T12:02:00Z",
+          "sequence": 5
+        }
+      }
+    ],
+    "incidents": [
+      {
+        "id": "wservice_0000000000000001",
+        "name": "FixtureService",
+        "policyRevision": 1,
+        "openedAt": "2026-10-10T12:02:00Z",
+        "lastConfirmedAt": "2026-10-10T12:02:00Z",
+        "openingObservation": {
+          "state": "stopped",
+          "collectedAt": "2026-10-10T12:02:00Z",
+          "receivedAt": "2026-10-10T12:02:00Z",
+          "sequence": 5
+        },
+        "lastBadObservation": {
+          "state": "stopped",
+          "collectedAt": "2026-10-10T12:02:00Z",
+          "receivedAt": "2026-10-10T12:02:00Z",
+          "sequence": 5
+        },
+        "resolvedAt": null,
+        "recoveryObservation": null,
+        "closedReason": ""
+      }
+    ],
+    "inventory": {
+      "collectedAt": "2026-10-10T12:02:00Z",
+      "receivedAt": "2026-10-10T12:02:00Z",
+      "sequence": 5,
+      "quality": "healthy",
+      "complete": true,
+      "truncated": false,
+      "countExact": true,
+      "observedCount": 2,
+      "services": [
+        {
+          "name": "FixtureService",
+          "displayName": "Fixture service",
+          "state": "stopped"
+        },
+        {
+          "name": "Other",
+          "displayName": "",
+          "state": "running"
+        }
+      ]
+    }
+  },
+  "disabled": {
+    "schemaVersion": "tracebolt.windows-service-view.v1",
+    "deviceId": "agent_11111111111111111111111111111111",
+    "serverNow": "2026-10-10T12:00:00Z",
+    "certificateExpiresAt": "2026-10-10T14:00:00Z",
+    "policy": {
+      "enabled": false,
+      "services": [],
+      "revision": 0
+    },
+    "status": "disabled",
+    "evaluatedAt": null,
+    "checks": [],
+    "incidents": [],
+    "inventory": {
+      "collectedAt": "2026-10-10T12:00:00Z",
+      "receivedAt": "2026-10-10T12:00:00Z",
+      "sequence": 1,
+      "quality": "healthy",
+      "complete": true,
+      "truncated": false,
+      "countExact": true,
+      "observedCount": 2,
+      "services": [
+        {
+          "name": "FixtureService",
+          "displayName": "Fixture service",
+          "state": "stopped"
+        },
+        {
+          "name": "Other",
+          "displayName": "",
+          "state": "running"
+        }
+      ]
+    }
+  },
+  "pending": {
+    "schemaVersion": "tracebolt.windows-service-view.v1",
+    "deviceId": "agent_11111111111111111111111111111111",
+    "serverNow": "2026-10-10T12:00:00Z",
+    "certificateExpiresAt": "2026-10-10T14:00:00Z",
+    "policy": {
+      "enabled": true,
+      "services": [
+        "FixtureService"
+      ],
+      "revision": 1
+    },
+    "status": "pending",
+    "evaluatedAt": "2026-10-10T12:00:00Z",
+    "checks": [
+      {
+        "name": "FixtureService",
+        "status": "pending",
+        "observation": {
+          "state": "stopped",
+          "collectedAt": "2026-10-10T12:00:00Z",
+          "receivedAt": "2026-10-10T12:00:00Z",
+          "sequence": 1
+        }
+      }
+    ],
+    "incidents": [],
+    "inventory": {
+      "collectedAt": "2026-10-10T12:00:00Z",
+      "receivedAt": "2026-10-10T12:00:00Z",
+      "sequence": 1,
+      "quality": "healthy",
+      "complete": true,
+      "truncated": false,
+      "countExact": true,
+      "observedCount": 2,
+      "services": [
+        {
+          "name": "FixtureService",
+          "displayName": "Fixture service",
+          "state": "stopped"
+        },
+        {
+          "name": "Other",
+          "displayName": "",
+          "state": "running"
+        }
+      ]
+    }
+  },
+  "policyChanged": {
+    "schemaVersion": "tracebolt.windows-service-view.v1",
+    "deviceId": "agent_11111111111111111111111111111111",
+    "serverNow": "2026-10-10T12:06:30Z",
+    "certificateExpiresAt": "2026-10-10T14:00:00Z",
+    "policy": {
+      "enabled": false,
+      "services": [
+        "FixtureService"
+      ],
+      "revision": 2
+    },
+    "status": "disabled",
+    "evaluatedAt": null,
+    "checks": [
+      {
+        "name": "FixtureService",
+        "status": "unknown",
+        "observation": null
+      }
+    ],
+    "incidents": [
+      {
+        "id": "wservice_0000000000000002",
+        "name": "FixtureService",
+        "policyRevision": 1,
+        "openedAt": "2026-10-10T12:06:30Z",
+        "lastConfirmedAt": "2026-10-10T12:06:30Z",
+        "openingObservation": {
+          "state": "paused",
+          "collectedAt": "2026-10-10T12:06:30Z",
+          "receivedAt": "2026-10-10T12:06:30Z",
+          "sequence": 14
+        },
+        "lastBadObservation": {
+          "state": "paused",
+          "collectedAt": "2026-10-10T12:06:30Z",
+          "receivedAt": "2026-10-10T12:06:30Z",
+          "sequence": 14
+        },
+        "resolvedAt": "2026-10-10T12:06:30Z",
+        "recoveryObservation": null,
+        "closedReason": "policy-changed"
+      },
+      {
+        "id": "wservice_0000000000000001",
+        "name": "FixtureService",
+        "policyRevision": 1,
+        "openedAt": "2026-10-10T12:02:00Z",
+        "lastConfirmedAt": "2026-10-10T12:02:00Z",
+        "openingObservation": {
+          "state": "stopped",
+          "collectedAt": "2026-10-10T12:02:00Z",
+          "receivedAt": "2026-10-10T12:02:00Z",
+          "sequence": 5
+        },
+        "lastBadObservation": {
+          "state": "stopped",
+          "collectedAt": "2026-10-10T12:02:00Z",
+          "receivedAt": "2026-10-10T12:02:00Z",
+          "sequence": 5
+        },
+        "resolvedAt": "2026-10-10T12:04:00Z",
+        "recoveryObservation": {
+          "state": "running",
+          "collectedAt": "2026-10-10T12:04:00Z",
+          "receivedAt": "2026-10-10T12:04:00Z",
+          "sequence": 9
+        },
+        "closedReason": "running"
+      }
+    ],
+    "inventory": {
+      "collectedAt": "2026-10-10T12:06:30Z",
+      "receivedAt": "2026-10-10T12:06:30Z",
+      "sequence": 14,
+      "quality": "healthy",
+      "complete": true,
+      "truncated": false,
+      "countExact": true,
+      "observedCount": 2,
+      "services": [
+        {
+          "name": "FixtureService",
+          "displayName": "Fixture service",
+          "state": "paused"
+        },
+        {
+          "name": "Other",
+          "displayName": "",
+          "state": "running"
+        }
+      ]
+    }
+  },
+  "recovered": {
+    "schemaVersion": "tracebolt.windows-service-view.v1",
+    "deviceId": "agent_11111111111111111111111111111111",
+    "serverNow": "2026-10-10T12:04:00Z",
+    "certificateExpiresAt": "2026-10-10T14:00:00Z",
+    "policy": {
+      "enabled": true,
+      "services": [
+        "FixtureService"
+      ],
+      "revision": 1
+    },
+    "status": "running",
+    "evaluatedAt": "2026-10-10T12:04:00Z",
+    "checks": [
+      {
+        "name": "FixtureService",
+        "status": "running",
+        "observation": {
+          "state": "running",
+          "collectedAt": "2026-10-10T12:04:00Z",
+          "receivedAt": "2026-10-10T12:04:00Z",
+          "sequence": 9
+        }
+      }
+    ],
+    "incidents": [
+      {
+        "id": "wservice_0000000000000001",
+        "name": "FixtureService",
+        "policyRevision": 1,
+        "openedAt": "2026-10-10T12:02:00Z",
+        "lastConfirmedAt": "2026-10-10T12:02:00Z",
+        "openingObservation": {
+          "state": "stopped",
+          "collectedAt": "2026-10-10T12:02:00Z",
+          "receivedAt": "2026-10-10T12:02:00Z",
+          "sequence": 5
+        },
+        "lastBadObservation": {
+          "state": "stopped",
+          "collectedAt": "2026-10-10T12:02:00Z",
+          "receivedAt": "2026-10-10T12:02:00Z",
+          "sequence": 5
+        },
+        "resolvedAt": "2026-10-10T12:04:00Z",
+        "recoveryObservation": {
+          "state": "running",
+          "collectedAt": "2026-10-10T12:04:00Z",
+          "receivedAt": "2026-10-10T12:04:00Z",
+          "sequence": 9
+        },
+        "closedReason": "running"
+      }
+    ],
+    "inventory": {
+      "collectedAt": "2026-10-10T12:04:00Z",
+      "receivedAt": "2026-10-10T12:04:00Z",
+      "sequence": 9,
+      "quality": "healthy",
+      "complete": true,
+      "truncated": false,
+      "countExact": true,
+      "observedCount": 2,
+      "services": [
+        {
+          "name": "FixtureService",
+          "displayName": "Fixture service",
+          "state": "running"
+        },
+        {
+          "name": "Other",
+          "displayName": "",
+          "state": "running"
+        }
+      ]
+    }
+  },
+  "unknown": {
+    "schemaVersion": "tracebolt.windows-service-view.v1",
+    "deviceId": "agent_11111111111111111111111111111111",
+    "serverNow": "2026-10-10T12:00:00Z",
+    "certificateExpiresAt": "2026-10-10T14:00:00Z",
+    "policy": {
+      "enabled": true,
+      "services": [
+        "FixtureService"
+      ],
+      "revision": 1
+    },
+    "status": "unknown",
+    "evaluatedAt": null,
+    "checks": [
+      {
+        "name": "FixtureService",
+        "status": "unknown",
+        "observation": null
+      }
+    ],
+    "incidents": [],
+    "inventory": {
+      "collectedAt": "2026-10-10T12:00:00Z",
+      "receivedAt": "2026-10-10T12:00:00Z",
+      "sequence": 1,
+      "quality": "healthy",
+      "complete": true,
+      "truncated": false,
+      "countExact": true,
+      "observedCount": 2,
+      "services": [
+        {
+          "name": "FixtureService",
+          "displayName": "Fixture service",
+          "state": "stopped"
+        },
+        {
+          "name": "Other",
+          "displayName": "",
+          "state": "running"
+        }
+      ]
+    }
+  },
+  "unknownOpen": {
+    "schemaVersion": "tracebolt.windows-service-view.v1",
+    "deviceId": "agent_11111111111111111111111111111111",
+    "serverNow": "2026-10-10T12:02:30Z",
+    "certificateExpiresAt": "2026-10-10T14:00:00Z",
+    "policy": {
+      "enabled": true,
+      "services": [
+        "FixtureService"
+      ],
+      "revision": 1
+    },
+    "status": "unknown",
+    "evaluatedAt": "2026-10-10T12:02:30Z",
+    "checks": [
+      {
+        "name": "FixtureService",
+        "status": "unknown",
+        "observation": null
+      }
+    ],
+    "incidents": [
+      {
+        "id": "wservice_0000000000000001",
+        "name": "FixtureService",
+        "policyRevision": 1,
+        "openedAt": "2026-10-10T12:02:00Z",
+        "lastConfirmedAt": "2026-10-10T12:02:00Z",
+        "openingObservation": {
+          "state": "stopped",
+          "collectedAt": "2026-10-10T12:02:00Z",
+          "receivedAt": "2026-10-10T12:02:00Z",
+          "sequence": 5
+        },
+        "lastBadObservation": {
+          "state": "stopped",
+          "collectedAt": "2026-10-10T12:02:00Z",
+          "receivedAt": "2026-10-10T12:02:00Z",
+          "sequence": 5
+        },
+        "resolvedAt": null,
+        "recoveryObservation": null,
+        "closedReason": ""
+      }
+    ],
+    "inventory": {
+      "collectedAt": "2026-10-10T12:02:30Z",
+      "receivedAt": "2026-10-10T12:02:30Z",
+      "sequence": 6,
+      "quality": "healthy",
+      "complete": true,
+      "truncated": false,
+      "countExact": true,
+      "observedCount": 2,
+      "services": [
+        {
+          "name": "FixtureService",
+          "displayName": "Fixture service",
+          "state": "start_pending"
+        },
+        {
+          "name": "Other",
+          "displayName": "",
+          "state": "running"
+        }
+      ]
+    }
+  }
+}

@@ -25,13 +25,18 @@
     "device-inventory-browser-contracts.test.mjs",
     "health-dashboard-browser.test.mjs",
     "service-action-display-fixtures.test.mjs",
+    "windows-event-content-fixtures.test.mjs",
     "windows-health-fixtures.test.mjs",
     "windows-logs-diagnostics.test.mjs",
     "windows-logs-fixtures.test.mjs",
     "windows-logs-labels.test.mjs",
     "windows-os-provenance-fixtures.test.mjs",
     "windows-service-software-fixtures.test.mjs",
-    "workspace-navigation-browser.test.mjs"
+    "windows-updates-fixtures.test.mjs",
+    "workspace-navigation-browser.test.mjs",
+    "windows-capacity-fixtures.test.mjs",
+    "windows-resource-fixtures.test.mjs",
+    "windows-service-health-fixtures.test.mjs"
   ],
   "excluded": []
 }

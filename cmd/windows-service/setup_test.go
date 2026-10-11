@@ -43,7 +43,8 @@ func (f *setupFixture) Write(name string, b []byte) error {
 	}
 	return f.call(step)
 }
-func (f *setupFixture) Close() error { return f.call("close") }
+func (f *setupFixture) Verify() error { return f.call("verify-journal") }
+func (f *setupFixture) Close() error  { return f.call("close") }
 func (f *setupFixture) operations() setupSteps {
 	return setupSteps{
 		plan: func(context.Context) (windowsservice.InstallPlan, error) {
@@ -77,7 +78,7 @@ func TestSetupWritesIntentBeforeSCMAndPreparedReceiptBeforeEnrollment(t *testing
 	if _, err := setup(context.Background(), "fixture", f.operations()); err != nil {
 		t.Fatal("fixture setup failed")
 	}
-	want := []string{"plan", "read-bootstrap", "validate-bootstrap", "create-journal", "intent.json", "apply", "receipt.json", "prepare", "prepared-receipt", "close", "preclaim", "enroll", "start", "close"}
+	want := []string{"plan", "read-bootstrap", "validate-bootstrap", "create-journal", "intent.json", "apply", "receipt.json", "prepare", "prepared-receipt", "verify-journal", "preclaim", "enroll", "verify-journal", "start", "close"}
 	if !reflect.DeepEqual(f.steps, want) {
 		t.Fatal("setup side-effect order changed")
 	}
@@ -88,7 +89,7 @@ func TestSetupWritesIntentBeforeSCMAndPreparedReceiptBeforeEnrollment(t *testing
 	}
 }
 func TestSetupFailuresNeverSkipReceiptOrStart(t *testing.T) {
-	for _, stage := range []string{"plan", "read-bootstrap", "validate-bootstrap", "create-journal", "intent.json", "apply", "receipt.json", "prepare", "prepared-receipt", "close", "preclaim", "enroll"} {
+	for _, stage := range []string{"plan", "read-bootstrap", "validate-bootstrap", "create-journal", "intent.json", "apply", "receipt.json", "prepare", "prepared-receipt", "verify-journal", "preclaim", "enroll"} {
 		t.Run(stage, func(t *testing.T) {
 			f := &setupFixture{fail: stage}
 			if _, err := setup(context.Background(), "fixture", f.operations()); err == nil {

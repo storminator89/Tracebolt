@@ -110,7 +110,16 @@ verification levels.
 ## Creation response observation
 
 The shared creation helper uses fixed first/second invocation labels for the
-route/session-loss case and single elsewhere. It observes the application's
+route/session-loss case and single elsewhere, including the quarantined held
+double-click creation. That case still checks the disabled submit control and
+exactly one POST before releasing the response; it uses the same primary-reader
+and masked-value gates instead of a secondary DevTools body retrieval.
+Submission and response waits are observed together: either failure clears the
+observer promptly, even if the other is held, while acceptance requires both to
+succeed. Late settlement cannot change later-case stages. The held route is
+released and unregistered on failure as well as success.
+
+It observes the application's
 original bounded fetch reader for the exact loopback invitation POST. It never
 clones a Response, creates another reader, fetches DevTools response bytes or
 retries a mutation. The original Response, read values, bytes and errors remain
@@ -146,3 +155,37 @@ The inert helper suite and enrollment-primary-body.test.tsx exercise finite
 stages and real production decoder/UI behavior with synthetic streams. They do
 not launch Chromium or establish hosted browser/native acceptance. The latter
 suite is explicitly included in the existing independent UI regression target.
+
+### Termination primary-reader acceptance
+
+Cancel, reject and revoke use the same bounded primary-reader observer. A
+separate termination arm is bound to the exact loopback invitation URL and the
+selected action. Each scenario supplies its existing creation snapshot; reject
+and revoke additionally reuse the native claim's existing comparison evidence.
+No request, mutation retry, secondary body read, response clone or timeout is
+added. The exact original thirteen scenarios and quarantine gates remain.
+
+Acceptance requires the one real UI POST, HTTP 200, complete primary UTF-8/JSON
+within the unchanged bound, EOF, one request, no observed abort, and exact equality
+with the browser request body. The parsed request must contain the expected
+action, a valid request ID and a positive safe revision. The committed body must
+pass the production snapshot validator, advance that revision, bind the intended
+invitation and termination request/prior state, and retain the expected platform,
+all five manager-binding fields, fingerprint and comparison code. The dialog must
+then render the intended terminal state and remove its confirmation. Existing
+scenario checks of durable state and native terminal behavior are unchanged.
+
+Primary JSON and terminal-looking UI alone are insufficient: after rejecting an
+invalid POST snapshot, the application can reconcile from its existing GET and
+render a terminal state. The helper rejects mismatched primary identity/claim
+fields before accepting that UI. The selected synthetic UI suite executes the
+actual helper, observer, production decoder and React component together and
+verifies this failure path for all three actions.
+
+Termination capture is ephemeral and destructive-on-take. Abort, including after
+EOF, lifecycle invalidation, wrong action/request shape, duplicate request,
+reader/UTF-8/JSON failure and cancellation all prevent acceptance. Helper failure
+and completion clear remaining capture. Reports expose only fixed stages and
+bounded primary/transport fields, never URLs, IDs, bodies or raw errors. These
+source-only tests do not explain the earlier browser request abort or establish
+hosted Chromium acceptance; that gate still requires an exact-revision CI run.

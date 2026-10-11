@@ -7,11 +7,13 @@ container does not give it a reliable view of the endpoint.
 
 This is a self-hosted pilot implementation, not a production security assurance.
 Building an image does not deploy anything. No image registry account, registry
-upload, paid service or project license is selected by this setup.
+upload or paid service is selected by this setup.
 
 ## Image and runtime boundary
 
 - Multi-stage build: Node builds the UI; Go builds a static Linux manager.
+- The project [Apache License 2.0](../LICENSE) is included at
+  `/tracebolt/licenses/LICENSE`, alongside the pinned dependency notice.
 - Shell-free final image; fixed UID/GID `65532:65532`; no package manager.
   A public CA bundle supports optional outbound HTTPS integrations. Agent
   authentication still uses only the explicitly supplied agent CA.
@@ -131,8 +133,8 @@ acceptance gates.
 
 Docker Engine on Linux and alternative compatible runtimes can avoid a paid
 hosted service; check the runtime provider's current licensing terms. Docker
-Desktop licensing depends on use. Tracebolt has not selected a project license;
-public source availability does not grant one.
+Desktop licensing depends on use. Tracebolt uses the [Apache License 2.0](../LICENSE);
+third-party dependencies retain their own licenses and notices.
 
 ## Explicit HTTP LAN test profile
 

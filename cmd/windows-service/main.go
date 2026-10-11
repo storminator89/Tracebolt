@@ -9,6 +9,10 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"localrmm/internal/windowseventrequest"
+	"localrmm/internal/windowseventworker"
+	"localrmm/internal/windowsupdateworker"
+	"os"
 
 	"localrmm/internal/enrollmentclient"
 	"localrmm/internal/enrollmentcrypto"
@@ -18,6 +22,7 @@ import (
 	"localrmm/internal/windowsnetwork"
 	"localrmm/internal/windowsprocessmetrics"
 	"localrmm/internal/windowsservice"
+	"localrmm/internal/windowsupdates"
 	"localrmm/internal/windowsvolumes"
 	"path/filepath"
 )
@@ -29,18 +34,32 @@ type request struct {
 type operation func(context.Context, request, io.Writer, io.Writer) (any, error)
 
 func run(ctx context.Context, args []string, out, stderr io.Writer) int {
+	if len(args) == 1 && args[0] == windowseventworker.WorkerArgument {
+		if runEventContentWorker(ctx, os.Stdin, out) != nil {
+			return 1
+		}
+		return 0
+	}
+	if len(args) == 1 && args[0] == windowsupdateworker.WorkerArgument {
+		if runUpdatesWorker(ctx, os.Stdin, out) != nil {
+			return 1
+		}
+		return 0
+	}
 	return runWith(ctx, args, out, stderr, nativeOperation)
 }
 func runWith(ctx context.Context, args []string, out, stderr io.Writer, perform operation) int {
 	flags := flag.NewFlagSet("windows-service", flag.ContinueOnError)
 	flags.SetOutput(io.Discard)
-	names := []string{"plan", "inspect", "install", "enroll", "start", "stop", "uninstall", "run-service", "events-preview", "events-enable", "events-disable", "volumes-preview", "volumes-enable", "volumes-disable", "process-metrics-preview", "process-metrics-enable", "process-metrics-disable", "network-preview", "network-enable", "network-disable", "service-startup-preview", "service-startup-enable", "service-startup-disable"}
+	names := []string{"plan", "inspect", "install", "enroll", "start", "stop", "restart", "uninstall", "run-service", "events-preview", "events-enable", "events-disable", "volumes-preview", "volumes-enable", "volumes-disable", "process-metrics-preview", "process-metrics-enable", "process-metrics-disable", "network-preview", "network-enable", "network-disable", "service-startup-preview", "service-startup-enable", "service-startup-disable", "updates-preview", "updates-enable", "updates-disable", "event-content-preview", "event-content-enable", "event-content-disable"}
 	modes := map[string]*bool{}
 	for _, n := range names {
 		modes[n] = flags.Bool(n, false, "")
 	}
 	apply := flags.Bool("apply", false, "")
 	consent := flags.Bool("basic-readonly", false, "")
+	eventContentConsent := flags.Bool("selected-application-system-event-messages", false, "")
+	updatesConsent := flags.Bool("cached-windows-updates", false, "")
 	serviceStartupConsent := flags.Bool("service-startup-metadata", false, "")
 	networkConsent := flags.Bool("network-endpoints", false, "")
 	processMetricsConsent := flags.Bool("process-cpu-memory", false, "")
@@ -72,12 +91,14 @@ func runWith(ctx context.Context, args []string, out, stderr io.Writer, perform 
 			mode = n
 		}
 	}
+	eventContentMode := mode == "event-content-preview" || mode == "event-content-enable" || mode == "event-content-disable"
+	updatesMode := mode == "updates-preview" || mode == "updates-enable" || mode == "updates-disable"
 	serviceStartupMode := mode == "service-startup-preview" || mode == "service-startup-enable" || mode == "service-startup-disable"
 	networkMode := mode == "network-preview" || mode == "network-enable" || mode == "network-disable"
 	processMetricsMode := mode == "process-metrics-preview" || mode == "process-metrics-enable" || mode == "process-metrics-disable"
-	mutate := mode == "service-startup-enable" || mode == "service-startup-disable" || mode == "network-enable" || mode == "network-disable" || mode == "process-metrics-enable" || mode == "process-metrics-disable" || mode == "install" || mode == "enroll" || mode == "start" || mode == "stop" || mode == "uninstall" || mode == "events-enable" || mode == "events-disable" || mode == "volumes-enable" || mode == "volumes-disable"
+	mutate := mode == "event-content-enable" || mode == "event-content-disable" || mode == "updates-enable" || mode == "updates-disable" || mode == "service-startup-enable" || mode == "service-startup-disable" || mode == "network-enable" || mode == "network-disable" || mode == "process-metrics-enable" || mode == "process-metrics-disable" || mode == "install" || mode == "enroll" || mode == "start" || mode == "stop" || mode == "restart" || mode == "uninstall" || mode == "events-enable" || mode == "events-disable" || mode == "volumes-enable" || mode == "volumes-disable"
 	needsConsent := mode == "install" || mode == "enroll"
-	if *serviceStartupConsent != (mode == "service-startup-enable") || *networkConsent != (mode == "network-enable") || *processMetricsConsent != (mode == "process-metrics-enable") || *volumeConsent != (mode == "volumes-enable") || *eventConsent != (mode == "events-enable") || flags.NArg() != 0 || mode == "" || *apply != mutate || (*consent || *windowsConsent) != needsConsent || *consent && *windowsConsent || *insecure && !*windowsConsent && !processMetricsMode && !networkMode && !serviceStartupMode && mode != "events-preview" && mode != "events-enable" && mode != "events-disable" && mode != "volumes-preview" && mode != "volumes-enable" && mode != "volumes-disable" || (mode == "install") != (*bootstrap != "") {
+	if *eventContentConsent != (mode == "event-content-enable") || *updatesConsent != (mode == "updates-enable") || *serviceStartupConsent != (mode == "service-startup-enable") || *networkConsent != (mode == "network-enable") || *processMetricsConsent != (mode == "process-metrics-enable") || *volumeConsent != (mode == "volumes-enable") || *eventConsent != (mode == "events-enable") || flags.NArg() != 0 || mode == "" || *apply != mutate || (*consent || *windowsConsent) != needsConsent || *consent && *windowsConsent || *insecure && !*windowsConsent && !processMetricsMode && !networkMode && !serviceStartupMode && !updatesMode && !eventContentMode && mode != "events-preview" && mode != "events-enable" && mode != "events-disable" && mode != "volumes-preview" && mode != "volumes-enable" && mode != "volumes-disable" || (mode == "install") != (*bootstrap != "") {
 		fmt.Fprintln(stderr, "Operation flags rejected. Review --help; explicit apply and exactly one scope acknowledgement are required where stated.")
 		return 2
 	}
@@ -93,6 +114,26 @@ func runWith(ctx context.Context, args []string, out, stderr io.Writer, perform 
 		profile = enrollmentcrypto.CollectionProfileWindowsInventory
 		if _, err := fmt.Fprintln(out, enrollmentclient.WindowsInventoryPrivacy); err != nil {
 			return 1
+		}
+	}
+	if *eventContentConsent || mode == "event-content-preview" {
+		if n, err := fmt.Fprintln(out, windowseventrequest.Privacy); err != nil || n != len(windowseventrequest.Privacy)+1 {
+			return 1
+		}
+		if *insecure {
+			if n, err := fmt.Fprintln(out, windowseventrequest.HTTPPrivacy); err != nil || n != len(windowseventrequest.HTTPPrivacy)+1 {
+				return 1
+			}
+		}
+	}
+	if *updatesConsent || mode == "updates-preview" {
+		if n, err := fmt.Fprintln(out, windowsupdates.Privacy); err != nil || n != len(windowsupdates.Privacy)+1 {
+			return 1
+		}
+		if *insecure {
+			if n, err := fmt.Fprintln(out, windowsupdates.HTTPPrivacy); err != nil || n != len(windowsupdates.HTTPPrivacy)+1 {
+				return 1
+			}
 		}
 	}
 	if *serviceStartupConsent {
@@ -150,8 +191,26 @@ func runWith(ctx context.Context, args []string, out, stderr io.Writer, perform 
 			return 1
 		}
 	}
+	// The public restart budget starts before layout/receipt/lease acquisition,
+	// not only when the SCM engine is entered. Native calls remain synchronous.
+	if mode == "restart" {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, windowsservice.RestartTimeout)
+		defer cancel()
+	}
 	result, err := perform(ctx, request{mode: mode, bootstrap: *bootstrap, collectionProfile: profile, insecureHTTP: *insecure}, out, stderr)
 	if err != nil {
+		// Only the finite own-agent restart result is emitted on failure. Other
+		// operation result semantics remain unchanged; no raw error is encoded.
+		if mode == "restart" {
+			partial, ok := result.(windowsservice.RestartResult)
+			if !ok {
+				partial = windowsservice.RestartResult{Outcome: "not-requested", Phase: "receipt", StateRetained: true}
+			}
+			if writeErr := writeLifecycleResult(out, partial); writeErr != nil {
+				reportDiagnostic(stderr, marked(windowsservice.PhaseLifecycle, windowsservice.ReasonResultWrite, writeErr))
+			}
+		}
 		reportDiagnostic(stderr, marked(windowsservice.PhaseLifecycle, windowsservice.ReasonOperationFailed, err))
 		fmt.Fprintln(stderr, "Preserve the service and protected state for inspection; no reset or automatic cleanup was performed.")
 		return 1
@@ -171,6 +230,25 @@ func runWith(ctx context.Context, args []string, out, stderr io.Writer, perform 
 	}
 	return 0
 }
+func writeLifecycleResult(out io.Writer, result any) error {
+	data, err := json.Marshal(result)
+	if err != nil {
+		return err
+	}
+	if len(data) > 64<<10 {
+		return errLifecycle
+	}
+	data = append(data, '\n')
+	n, err := out.Write(data)
+	if err != nil {
+		return err
+	}
+	if n != len(data) {
+		return io.ErrShortWrite
+	}
+	return nil
+}
+
 func usage(out io.Writer) {
 	fmt.Fprintln(out, "Tracebolt Windows service source candidate (HTTPS by default). No Windows installation/reboot acceptance is established.")
 	fmt.Fprintln(out, "Read only: --plan | --inspect")
@@ -180,7 +258,8 @@ func usage(out io.Writer) {
 	fmt.Fprintln(out, "Disposable Windows inventory HTTP test only: additionally supply --insecure-http-test with a matching http-test bootstrap. Basic Windows remains TLS-only.")
 	fmt.Fprintln(out, enrollmentclient.WindowsInventoryHTTPPrivacy)
 	fmt.Fprintln(out, "Windows inventory scope: "+enrollmentclient.WindowsInventoryPrivacy)
-	fmt.Fprintln(out, "Approved lifecycle: --start --apply | --stop --apply | --uninstall --apply")
+	fmt.Fprintln(out, "Restart is local own-agent lifecycle only: requires a running receipt-owned service, attempts stop/start once, and observes SCM within a cooperative 45-second budget. Initially stopped/pending services are rejected. Native calls can outlast the budget; unknown outcomes need inspection, never automatic retry. No health/reporting/reboot proof or remote other-service authority.")
+	fmt.Fprintln(out, "Approved lifecycle: --start --apply | --stop --apply | --restart --apply | --uninstall --apply")
 	fmt.Fprintln(out, "Stopped installed inventory service: --events-preview | --events-enable --apply --application-system-event-headers | --events-disable --apply. HTTP-test additionally requires --insecure-http-test. No automatic service restart.")
 	fmt.Fprintln(out, windowseventhealth.Privacy)
 	fmt.Fprintln(out, "Stopped installed inventory service: --volumes-preview | --volumes-enable --apply --visible-volumes | --volumes-disable --apply. HTTP-test additionally requires --insecure-http-test. No automatic service restart.")
@@ -195,6 +274,12 @@ func usage(out io.Writer) {
 	fmt.Fprintln(out, "Stopped installed inventory service: --service-startup-preview | --service-startup-enable --apply --service-startup-metadata | --service-startup-disable --apply. HTTP-test additionally requires --insecure-http-test. No automatic service restart.")
 	fmt.Fprintln(out, windowsmanaged.ServiceStartupPrivacy)
 	fmt.Fprintln(out, windowsmanaged.ServiceStartupHTTPPrivacy)
+	fmt.Fprintln(out, "Stopped owned inventory service, separate selected message-content scope: --event-content-preview | --event-content-enable --apply --selected-application-system-event-messages | --event-content-disable --apply. HTTP-test additionally requires --insecure-http-test. No automatic service restart.")
+	fmt.Fprintln(out, windowseventrequest.Privacy)
+	fmt.Fprintln(out, windowseventrequest.HTTPPrivacy)
+	fmt.Fprintln(out, "Stopped owned inventory service, separate cached Windows Update scope: --updates-preview | --updates-enable --apply --cached-windows-updates | --updates-disable --apply. HTTP-test additionally requires --insecure-http-test. No automatic service restart.")
+	fmt.Fprintln(out, windowsupdates.Privacy)
+	fmt.Fprintln(out, windowsupdates.HTTPPrivacy)
 	fmt.Fprintln(out, "SCM-only runtime: --run-service (rejects an ordinary console)")
 	fmt.Fprintln(out, "Installation creates one LocalService SCM service, a scoped service SID and protected durable state, then asks for a hidden invitation and starts pending enrollment. Review these persistent changes and obtain action-time approval before applying. Public fingerprint/comparison approval in the manager remains mandatory.")
 	fmt.Fprintln(out, "Basic scope: bounded OS, uptime, physical RAM and system-volume observation. No expanded hostname/IP/process/software/event content collection, Windows Update/CVE, remote commands or service-control requests from a manager. Production TLS is required; Linux managed profiles are rejected.")

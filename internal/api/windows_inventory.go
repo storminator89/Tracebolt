@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"errors"
 	"localrmm/internal/enrollmentcrypto"
 	"localrmm/internal/enrollmentservice"
@@ -8,6 +9,7 @@ import (
 	"localrmm/internal/enrollmentstore"
 	"net/http"
 	"strings"
+	"time"
 )
 
 const windowsEnrollmentPrefix = "/v2/windows/enrollment/"
@@ -61,8 +63,18 @@ func (h *operatorHandler) windowsInventoryView(w http.ResponseWriter, r *http.Re
 		fail(w, 404, "not_found", "Windows inventory is not configured.")
 		return
 	}
-	source := h.windowsEnrollment.enrollment
-	view, err := source.WindowsInventoryView(r.Context(), parts[3], source.Now())
+	h.writeWindowsInventoryView(w, r, h.windowsEnrollment.enrollment, parts[3])
+}
+
+// This read-only projection seam keeps response-time expiry/session checks
+// testable with invented retained snapshots; it never invokes an endpoint source.
+type windowsInventorySource interface {
+	Now() time.Time
+	WindowsInventoryView(context.Context, string, time.Time) (enrollmentstore.WindowsInventoryView, error)
+}
+
+func (h *operatorHandler) writeWindowsInventoryView(w http.ResponseWriter, r *http.Request, source windowsInventorySource, deviceID string) {
+	view, err := source.WindowsInventoryView(r.Context(), deviceID, source.Now())
 	if errors.Is(err, enrollmentstate.ErrNotFound) {
 		fail(w, 404, "not_found", "Device not found.")
 		return

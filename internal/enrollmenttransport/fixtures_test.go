@@ -105,7 +105,11 @@ func newCollectionFixture(t *testing.T, profile, collection string, activate boo
 	secret := base64.RawURLEncoding.EncodeToString(bytes.Repeat([]byte{32}, 32))
 	hash, _ := enrollmentcrypto.InvitationHash(secret)
 	ctx := context.Background()
-	f.snapshot, err = f.store.CreateInvitation(ctx, enrollmentstate.CreateCommand{InvitationID: id("invite", 1), RequestID: id("request", 1), InvitationHash: hex.EncodeToString(hash[:]), Platform: "linux", Now: now.Unix()})
+	platform := "linux"
+	if collection == enrollmentcrypto.CollectionProfileWindowsInventory {
+		platform = "windows"
+	}
+	f.snapshot, err = f.store.CreateInvitation(ctx, enrollmentstate.CreateCommand{InvitationID: id("invite", 1), RequestID: id("request", 1), InvitationHash: hex.EncodeToString(hash[:]), Platform: platform, Now: now.Unix()})
 	if err != nil {
 		t.Fatal(err)
 	}

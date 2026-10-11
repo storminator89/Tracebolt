@@ -158,7 +158,12 @@ func NewLANOperatorHandler(app *Server, c LANOperatorConfig) (http.Handler, erro
 		return nil, applicationcheck.ErrConfiguration
 	}
 	var windowsContact *windowsContactMonitor
+	var windowsCapacity *windowsCapacityMonitor
 	if c.WindowsEnrollment != nil {
+		windowsCapacity, err = newWindowsCapacityMonitor(app.store, c.WindowsEnrollment)
+		if err != nil {
+			return nil, err
+		}
 		windowsContact, err = newWindowsContactMonitor(app.store, c.WindowsEnrollment)
 		if err != nil {
 			return nil, err
@@ -175,6 +180,7 @@ func NewLANOperatorHandler(app *Server, c LANOperatorConfig) (http.Handler, erro
 	app.lanPackages = nil
 	app.health = nil
 	app.windowsContact = windowsContact
+	app.windowsCapacity = windowsCapacity
 	app.journalAI = nil
 	app.linuxCVE = nil
 	app.aiCollectionProfile = "basic-readonly-v1"
@@ -509,6 +515,18 @@ func (h *operatorHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if strings.HasPrefix(r.URL.Path, "/api/devices/") && strings.HasSuffix(r.URL.Path, "/windows-inventory") {
 		h.windowsInventoryView(w, r)
+		return
+	}
+	if strings.HasPrefix(r.URL.Path, "/api/devices/") && strings.Contains(r.URL.Path, "/windows-event-content") {
+		h.windowsEventContent(w, r)
+		return
+	}
+	if strings.HasPrefix(r.URL.Path, "/api/devices/") && strings.Contains(r.URL.Path, "/windows-services") {
+		h.windowsServiceAPI(w, r)
+		return
+	}
+	if strings.HasPrefix(r.URL.Path, "/api/devices/") && (strings.Contains(r.URL.Path, "/windows-capacity") || strings.Contains(r.URL.Path, "/windows-resource")) {
+		h.windowsCapacityAPI(w, r)
 		return
 	}
 	if strings.HasPrefix(r.URL.Path, "/api/devices/") && strings.Contains(r.URL.Path, "/windows-contact") {

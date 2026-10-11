@@ -1,0 +1,51 @@
+name: Windows own-restart acceptance source
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  source-only:
+    name: Inert contracts and tagged cross-builds
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      - name: Install locked validator dependencies (no browser launch)
+        working-directory: web
+        run: npm ci
+      - name: Pure contracts, ordering, bounded non-killing supervision
+        env:
+          GOTOOLCHAIN: local
+        run: |
+          python3 -I -B -m unittest discover -s tests/windows_own_restart_native -p 'test_*.py' -v
+          python3 -I -O -B -m unittest discover -s tests/windows_own_restart_native -p 'test_*.py' -v
+          node --test tests/windows_own_restart_native/browser.test.mjs
+          go test -race -buildvcs=false -count=1 ./internal/windowsacceptance/restartgate
+          go test -race -buildvcs=false -count=1 -tags=tracebolt_restart_acceptance ./cmd/windows-service -run '^TestRestartAcceptance'
+      - name: Compile dedicated controller without running any native entry
+        env:
+          GOTOOLCHAIN: local
+          CGO_ENABLED: '0'
+          GOOS: windows
+        run: |
+          GOARCH=amd64 go test -c -buildvcs=false -tags=tracebolt_restart_acceptance -o "$RUNNER_TEMP/restart-acceptance-amd64.test.exe" ./cmd/windows-service
+          GOARCH=arm64 go test -c -buildvcs=false -tags=tracebolt_restart_acceptance -o "$RUNNER_TEMP/restart-acceptance-arm64.test.exe" ./cmd/windows-service
+          echo 'Source compilation only. Native execution, host authority and acceptance remain unproved.'

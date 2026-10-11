@@ -11,6 +11,9 @@ COPY web/ ./
 COPY internal/api/testdata/complete-overview-synthetic.json /src/internal/api/testdata/complete-overview-synthetic.json
 # Preserve the Go-to-TypeScript Windows contact wire contract during typecheck.
 COPY tests/fixtures/windows-contact-view.json /src/tests/fixtures/windows-contact-view.json
+COPY tests/fixtures/windows-capacity-view.json /src/tests/fixtures/windows-capacity-view.json
+COPY tests/fixtures/windows-resource-view.json /src/tests/fixtures/windows-resource-view.json
+COPY tests/fixtures/windows-service-health-view.json /src/tests/fixtures/windows-service-health-view.json
 # Shared proactive identity contract and its TypeScript declaration; no test runner.
 COPY tests/e2e-review/proactive-ai-browser.mjs tests/e2e-review/proactive-ai-browser.d.mts /src/tests/e2e-review/
 RUN npm run build
@@ -33,7 +36,8 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -buildvcs=false
 FROM scratch AS runtime
 COPY --from=build /out/manager /tracebolt/manager
 COPY --from=build /out/action-setup /tracebolt/action-setup
-# Preserve the pinned dependency notice with the distributed static binary.
+# Preserve the project license and pinned dependency notice in the distribution.
+COPY --chmod=0444 LICENSE /tracebolt/licenses/LICENSE
 COPY --chmod=0444 docs/dependencies/edwards25519-LICENSE.txt /tracebolt/licenses/edwards25519-LICENSE.txt
 # Public system roots support optional outbound HTTPS integrations; agent trust
 # still uses only its explicitly configured private CA pool.

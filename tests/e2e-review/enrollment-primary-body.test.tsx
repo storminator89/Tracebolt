@@ -1,10 +1,12 @@
 /** Production bounded decoder + UI, synthetic streams only; not browser evidence. */
-import {act,cleanup,fireEvent,render,screen,waitFor} from '../../web/node_modules/@testing-library/react/dist/index.js';
+import {act,cleanup,fireEvent,render,screen,waitFor,within} from '../../web/node_modules/@testing-library/react/dist/index.js';
 import {afterEach,beforeEach,describe,expect,it,vi} from '../../web/node_modules/vitest/dist/index.js';
 import {installEnrollmentPrimaryBody} from './enrollment-primary-body.mjs';
 import {EnrollmentSection} from '../../web/src/enrollment';
 import {abortProtectedRequests,AUTH_REQUIRED_EVENT,mutate} from '../../web/src/api';
 import {setLocale} from '../../web/src/i18n';
+import {validSnapshot} from '../../web/src/enrollment-types';
+import enrollmentBrowserSource from './enrollment-browser.mjs?raw';
 const secret='A'.repeat(43),invite='invite_'+'1'.repeat(32),url=()=>new URL('/api/enrollment/invitations',location.href).href;
 const observer=()=> (globalThis as any).__traceboltEnrollmentBody;
 let uninstall:(()=>void)|undefined;
@@ -94,4 +96,101 @@ it('clear before the first POST stays missing and explicit rearm starts a separa
  const responses=[json(creation(),201),json(creation(),201)],original=vi.fn(async()=>responses.shift()!);vi.stubGlobal('fetch',original);uninstall=installEnrollmentPrimaryBody({url:url()});
  const old=observer().arm();observer().clear();await consume(await observedFetch());expect(observer().state(old)).toBe('missing');expect(observer().take(old)).toBeNull();
  const next=observer().arm();expect(next).not.toBe(old);await consume(await observedFetch());expect(observer().state(next)).toBe('complete');expect(observer().take(next)?.status).toBe(201);expect(observer().take(old)).toBeNull();expect(original).toHaveBeenCalledTimes(2);
+});
+
+it('repeated creation clicks use one production POST/reader and clear the accepted masked secret',async()=>{
+ const value=creation();let held!:ReadableStreamDefaultController<Uint8Array>,readerSpy:any,response!:Response;
+ const original=vi.fn(async(path:string)=>{
+  if(path==='/api/session')return json({csrfToken:'synthetic'});
+  if(path==='/api/enrollment')return json({serverNow:new Date().toISOString(),schemaVersion:'tracebolt.enrollment-operator.v2',enabled:true,platforms:['linux'],recordLimit:25,items:[]});
+  expect(path).toBe('/api/enrollment/invitations');value.serverNow=new Date().toISOString();const body=new ReadableStream<Uint8Array>({start(controller){held=controller;}});readerSpy=vi.spyOn(body,'getReader');response=new Response(body,{status:201});vi.spyOn(response,'clone');vi.spyOn(response,'json');return response;
+ });vi.stubGlobal('fetch',original);uninstall=installEnrollmentPrimaryBody({url:url()});
+ render(<EnrollmentSection onChanged={()=>{}} onDevice={()=>{}} deviceIds={[]}/>);await waitFor(()=>expect(screen.getByRole('button',{name:'Add device',exact:true})).toBeEnabled());fireEvent.click(screen.getByRole('button',{name:'Add device',exact:true}));
+ const token=observer().arm(),button=screen.getByRole('button',{name:'Create invitation',exact:true});fireEvent.click(button,{detail:1});fireEvent.click(button,{detail:2});fireEvent.doubleClick(button,{detail:2});await waitFor(()=>expect(held).toBeDefined());expect(button).toBeDisabled();expect(observer().take(token)).toBeNull();expect(screen.queryByLabelText('One-time invitation secret')).toBeNull();
+ expect(original.mock.calls.filter(([path])=>path==='/api/enrollment/invitations')).toHaveLength(1);
+ await act(async()=>{held.enqueue(new TextEncoder().encode(JSON.stringify(value)));held.close();});const input=await screen.findByLabelText('One-time invitation secret');expect(input).toHaveAttribute('type','password');expect(input).toHaveValue(secret);expect(observer().snapshot(token)).toMatchObject({requests:1,status:201,eof:true,signalAborted:false,phase:'complete'});expect(observer().take(token).body).toEqual(value);expect(observer().take(token)).toBeNull();expect(readerSpy).toHaveBeenCalledTimes(1);expect(response.clone).not.toHaveBeenCalled();expect(response.json).not.toHaveBeenCalled();
+ expect(JSON.stringify({...localStorage,...sessionStorage})).not.toContain(secret);expect(location.href).not.toContain(secret);fireEvent.keyDown(document,{key:'Escape'});expect(screen.queryByLabelText('One-time invitation secret')).toBeNull();
+});
+for(const [initial,action,label,status] of [['created','canceled','Cancel invitation','Canceled'],['claimed_pending','rejected','Reject','Rejected'],['activated','revoked','Revoke identity','Revoked']] as const)for(const outcome of ['valid','wrong terminal state','HTTP failure'] as const)it(`production terminal UI ${action}: ${outcome}`,async()=>{
+ const item=creation().snapshot;item.state=initial;item.revision=2;item.intent.notAfter=item.deadlineAt;
+ if(initial==='activated')item.approval.deviceID='agent_'+'6'.repeat(32);
+ let held!:ReadableStreamDefaultController<Uint8Array>,submitted:any;
+ const original=vi.fn(async(path:string,init?:RequestInit)=>{
+  if(path==='/api/session')return json({csrfToken:'synthetic'});
+  if(path==='/api/enrollment')return json({serverNow:new Date().toISOString(),schemaVersion:'tracebolt.enrollment-operator.v2',enabled:true,platforms:['linux'],recordLimit:25,items:[item]});
+  expect(path).toBe(`/api/enrollment/${invite}/terminate`);expect(init?.method).toBe('POST');submitted=JSON.parse(String(init?.body));return new Response(new ReadableStream<Uint8Array>({start(controller){held=controller;}}),{status:outcome==='HTTP failure'?403:200});
+ });vi.stubGlobal('fetch',original);
+ render(<EnrollmentSection onChanged={()=>{}} onDevice={()=>{}} deviceIds={[]}/>);fireEvent.click(await screen.findByRole('button',{name:/^Invitations/}));fireEvent.click(screen.getByRole('button',{name:`Review invitation ${invite}`,exact:true}));const dialog=screen.getByRole('dialog',{name:'Review invitation',exact:true});
+ fireEvent.click(within(dialog).getByRole('button',{name:label,exact:true}));const group=within(dialog).getByRole('group',{name:'Confirm termination',exact:true});expect(submitted).toBeUndefined();
+ fireEvent.click(within(group).getByRole('button',{name:'Back',exact:true}));expect(submitted).toBeUndefined();expect(within(dialog).queryByRole('group',{name:'Confirm termination',exact:true})).toBeNull();
+ fireEvent.click(within(dialog).getByRole('button',{name:label,exact:true}));const confirmation=within(dialog).getByRole('button',{name:'Confirm termination',exact:true});fireEvent.click(confirmation);fireEvent.click(confirmation);await waitFor(()=>expect(held).toBeDefined());expect(confirmation).toBeDisabled();expect(dialog.querySelector('.enrollment-created-meta')).not.toHaveTextContent(status);
+ const committed={...item,state:outcome==='wrong terminal state'?'approved':action,revision:3,termination:{requestID:submitted.requestId,from:initial,at:item.updatedAt}};await act(async()=>{held.enqueue(new TextEncoder().encode(JSON.stringify(committed)));held.close();});if(outcome!=='valid'){await within(dialog).findByRole('alert');expect(dialog.querySelector('.enrollment-created-meta')).not.toHaveTextContent(status);expect(original.mock.calls.filter(([path])=>path.endsWith('/terminate'))).toHaveLength(1);return;}await waitFor(()=>expect(dialog.querySelector('.enrollment-created-meta')).toHaveTextContent(status));expect(within(dialog).queryByRole('group',{name:'Confirm termination',exact:true})).toBeNull();expect(within(dialog).queryByRole('button',{name:label,exact:true})).toBeNull();expect(within(dialog).queryByRole('button',{name:'Approve device',exact:true})).toBeNull();
+ expect(original.mock.calls.filter(([path])=>path.endsWith('/terminate'))).toHaveLength(1);expect(submitted).toMatchObject({expectedRevision:2,action});expect(item.deadlineAt).toBe(committed.deadlineAt);expect(item.claim.keyFingerprint).toBe(committed.claim.keyFingerprint);expect(item.claim.comparisonCode).toBe(committed.claim.comparisonCode);
+});
+
+// Execute the browser helper itself with actual production UI/decoder and inert
+// streams. A rejected POST may trigger the app's existing reconciliation GET;
+// terminal-looking reconciled UI must never hide invalid primary evidence.
+for(const [initial,action,label,rendered] of [['created','canceled','Cancel invitation','Canceled'],['claimed_pending','rejected','Reject','Rejected'],['activated','revoked','Revoke identity','Revoked']] as const)for(const field of ['valid','version','platform','binding.instanceID','binding.origin','binding.profile','binding.collectionProfile','binding.issuerFingerprint','claim.keyFingerprint','claim.comparisonCode'] as const)it(`actual termination helper ${action}: ${field} with reconciliation`,async()=>{
+ const item=creation().snapshot;item.state=initial;item.revision=2;item.intent.notAfter=item.deadlineAt;let terminal:any=null,posts=0,reads=0,bodyReads=0,primaryReader:any,responseWait:(value:any)=>void=()=>{};
+ const original=vi.fn(async(path:string,init?:RequestInit)=>{
+  if(path==='/api/session')return json({csrfToken:'synthetic'});
+  if(path==='/api/enrollment'){reads++;return json({serverNow:new Date().toISOString(),schemaVersion:'tracebolt.enrollment-operator.v2',enabled:true,platforms:['linux'],recordLimit:25,items:[terminal||item]});}
+  expect(path).toBe(`/api/enrollment/${invite}/terminate`);posts++;
+  const requested=JSON.parse(String(init?.body));terminal={...structuredClone(item),revision:3,state:action,termination:{requestID:requested.requestId,from:initial,at:item.updatedAt}};
+  const invalid=structuredClone(terminal);
+  if(field!=='valid'){const [section,key]=field.split('.');if(key)invalid[section][key]='INERT_WRONG_PRIMARY_FIELD';else invalid[section]='INERT_WRONG_PRIMARY_FIELD';}
+  if(field!=='version'&&field!=='binding.profile')expect(validSnapshot(invalid)).toBe(true);
+  const response=json(invalid);primaryReader=vi.spyOn(response.body!,'getReader');vi.spyOn(response,'clone').mockImplementation(()=>{throw new Error('Secondary reader forbidden');});queueMicrotask(()=>responseWait({json(){bodyReads++;throw new Error('Secondary CDP body unavailable');},status:()=>200,url:()=>location.origin+path,request:()=>({method:()=> 'POST',url:()=>location.origin+path,postData:()=>String(init?.body)})}));return response;
+ });vi.stubGlobal('fetch',original);uninstall=installEnrollmentPrimaryBody({url:url()});
+ render(<EnrollmentSection onChanged={()=>{}} onDevice={()=>{}} deviceIds={[]}/>);fireEvent.click(await screen.findByRole('button',{name:/^Invitations/}));fireEvent.click(screen.getByRole('button',{name:`Review invitation ${invite}`,exact:true}));
+ function locator(get:()=>HTMLElement[]){return {get,async click(){expect(get()).toHaveLength(1);fireEvent.click(get()[0]);},getByRole(role:any,options:any){return locator(()=>get().flatMap(node=>within(node).queryAllByRole(role,options)));},locator(selector:string){return locator(()=>get().flatMap(node=>[...node.querySelectorAll(selector)] as HTMLElement[]));}};}
+ const page={getByRole(role:any,options:any){return locator(()=>screen.queryAllByRole(role,options));},evaluate(fn:any,arg:any){return Promise.resolve(fn(arg));},waitForResponse(predicate:any){return new Promise(resolve=>{responseWait=value=>{expect(predicate(value)).toBe(true);resolve(value);};});}};
+ const checks:any=(value:any)=>({toBe(want:any){expect(value).toBe(want);},async toBeVisible(){await waitFor(()=>expect(value.get()).toHaveLength(1));},async toContainText(want:string){await waitFor(()=>{expect(value.get()).toHaveLength(1);expect(value.get()[0]).toHaveTextContent(want);});},async toHaveCount(want:number){await waitFor(()=>expect(value.get()).toHaveLength(want));}});
+ checks.poll=(fn:any)=>({not:{async toMatch(pattern:RegExp){await waitFor(async()=>expect(await fn()).not.toMatch(pattern));}}});
+ const source=enrollmentBrowserSource,start=source.indexOf('async function terminate('),end=source.indexOf('\n\ntry{',start);
+ const helper=Function('expect','validSnapshot','base','mark','transportDiagnostics','let terminationPrimaryFailure=null,terminationTransportFailure=null;'+source.slice(start,end)+';return terminate;')(checks,validSnapshot,location.origin,()=>{},{capture:()=>({operation:'other',category:'other'})});
+ const result=helper(page,label,item).then(()=>({error:null}),error=>({error}));const completed=await result;
+ if(field==='valid')expect(completed.error).toBeNull();else expect(completed.error).not.toBeNull();
+ await waitFor(()=>expect(screen.getByRole('dialog').querySelector('.enrollment-created-meta')).toHaveTextContent(rendered));
+ expect(posts).toBe(1);expect(reads).toBe(field==='valid'?1:2);expect(bodyReads).toBe(0);expect(primaryReader).toHaveBeenCalledTimes(1);expect(screen.queryByRole('group',{name:'Confirm termination'})).toBeNull();expect(observer().state(1)).toBe('missing');
+});
+
+const terminalURL=()=>`/api/enrollment/${invite}/terminate`;
+const terminalBody=(action='canceled')=>JSON.stringify({requestId:'request_'+'7'.repeat(32),expectedRevision:2,action});
+function armTerminal(action='canceled'){return observer().armTermination({invitationID:invite,action});}
+async function terminalFetch(signal?:AbortSignal,body=terminalBody(),path=terminalURL()){return fetch(path,{method:'POST',body,signal});}
+for(const outcome of ['abort','failure','malformed','invalid UTF8','truncated','oversized','cancelled','missing-body'] as const)it(`termination primary ${outcome} cannot be consumed`,async()=>{
+ let held!:ReadableStreamDefaultController<Uint8Array>;const controller=new AbortController();
+ const response=outcome==='missing-body'?new Response(null,{status:200}):new Response(new ReadableStream<Uint8Array>({start(value){held=value;}}),{status:200});
+ const original=vi.fn(async()=>response);vi.stubGlobal('fetch',original);uninstall=installEnrollmentPrimaryBody({url:url()});const token=armTerminal(),returned=await terminalFetch(controller.signal);
+ if(outcome!=='missing-body'){
+  const reader=returned.body!.getReader();if(outcome==='cancelled')await reader.cancel();else if(outcome==='abort'){controller.abort();held.close();await reader.read();}
+  else if(outcome==='failure'){const pending=reader.read();held.error(new Error('INERT_PRIVATE_FAILURE'));await expect(pending).rejects.toThrow('INERT_PRIVATE_FAILURE');}
+  else{held.enqueue(outcome==='oversized'?new Uint8Array(262145):outcome==='invalid UTF8'?new Uint8Array([255]):new TextEncoder().encode(outcome==='truncated'?'{"x":1':'not-json'));held.close();await reader.read();await reader.read();}
+ }
+ expect(observer().state(token)).not.toBe('complete');expect(observer().take(token)).toBeNull();expect(original).toHaveBeenCalledTimes(1);expect(JSON.stringify(observer().snapshot(token))).not.toContain('INERT_PRIVATE_FAILURE');
+});
+for(const event of ['pagehide','hashchange',AUTH_REQUIRED_EVENT,'hidden','abort','clear'] as const)for(const when of ['before request','during read','after EOF'] as const)it(`termination cleanup ${event} ${when}`,async()=>{
+ let held!:ReadableStreamDefaultController<Uint8Array>;const response=new Response(new ReadableStream<Uint8Array>({start(value){held=value;}}),{status:200}),controller=new AbortController(),original=vi.fn(async()=>response);
+ vi.stubGlobal('fetch',original);uninstall=installEnrollmentPrimaryBody({url:url()});const token=armTerminal();
+ const invalidate=()=>{if(event==='abort')controller.abort();else if(event==='clear')observer().clear();else if(event==='hidden'){vi.spyOn(document,'visibilityState','get').mockReturnValue('hidden');document.dispatchEvent(new Event('visibilitychange'));}else window.dispatchEvent(new Event(event));};
+ if(when==='before request')invalidate();const returned=await terminalFetch(controller.signal),reader=returned.body!.getReader();held.enqueue(new TextEncoder().encode('{"private":"'+secret+'"}'));await reader.read();
+ if(when==='during read')invalidate();held.close();await reader.read();if(when==='after EOF'){expect(observer().state(token)).toBe('complete');invalidate();}
+ expect(observer().take(token)).toBeNull();expect(observer().state(token)).not.toBe('complete');expect(JSON.stringify(observer().snapshot(token))).not.toContain(secret);expect(original).toHaveBeenCalledTimes(1);
+});
+it('termination arm matches only its exact action and bounded request',async()=>{
+ for(const body of [terminalBody('rejected'),'{}','not-json',JSON.stringify({requestId:'bad',expectedRevision:2,action:'canceled'}),JSON.stringify({requestId:'request_'+'7'.repeat(32),expectedRevision:0,action:'canceled'}),new Uint8Array([1]),'x'.repeat(2049)]){
+  const original=vi.fn(async()=>json({state:'canceled'}));vi.stubGlobal('fetch',original);uninstall=installEnrollmentPrimaryBody({url:url()});const token=armTerminal();await consume(await terminalFetch(undefined,body as any));expect(observer().state(token)).toBe('invalid-request');expect(observer().take(token)).toBeNull();expect(original).toHaveBeenCalledTimes(1);uninstall!();uninstall=undefined;
+ }
+});
+it('termination duplicate and wrong invitation cannot provide primary success',async()=>{
+ const original=vi.fn(async()=>json({state:'canceled'}));vi.stubGlobal('fetch',original);uninstall=installEnrollmentPrimaryBody({url:url()});const token=armTerminal();
+ await consume(await terminalFetch(undefined,terminalBody(),terminalURL().replace(invite,'invite_'+'f'.repeat(32))));expect(observer().state(token)).toBe('armed');expect(observer().take(token)).toBeNull();
+ await consume(await terminalFetch());expect(observer().state(token)).toBe('complete');await consume(await terminalFetch());expect(observer().state(token)).toBe('duplicate');expect(observer().take(token)).toBeNull();expect(original).toHaveBeenCalledTimes(3);
+});
+it('invalid termination arm clears prior capture without widening creation scope',async()=>{
+ const original=vi.fn(async()=>json(creation(),201));vi.stubGlobal('fetch',original);uninstall=installEnrollmentPrimaryBody({url:url()});const created=observer().arm();await consume(await observedFetch());expect(observer().state(created)).toBe('complete');
+ for(const scope of [{invitationID:'../invitations',action:'canceled'},{invitationID:invite,action:'approved'},{invitationID:invite+'?x',action:'rejected'},{}])expect(()=>observer().armTermination(scope)).toThrow('Invalid synthetic termination observation scope');
+ expect(observer().take(created)).toBeNull();const next=observer().arm();await consume(await observedFetch());expect(observer().take(next).status).toBe(201);
 });

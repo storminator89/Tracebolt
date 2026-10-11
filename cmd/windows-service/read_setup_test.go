@@ -50,7 +50,8 @@ func (f *readSetupFixture) Write(name string, raw []byte) error {
 	}
 	return nil
 }
-func (f *readSetupFixture) Close() error { return f.call("close") }
+func (f *readSetupFixture) Verify() error { return f.call("verify-journal") }
+func (f *readSetupFixture) Close() error  { return f.call("close") }
 func readSetupConsentFixture() lanclient.WindowsCapabilityConsent {
 	return lanclient.WindowsCapabilityConsent{SchemaVersion: lanclient.WindowsCapabilityConsentVersionV3, CollectionProfile: enrollmentcrypto.CollectionProfileWindowsInventory, Scopes: readSetupScopes(), Acknowledged: true}
 }
@@ -155,7 +156,7 @@ func TestFreshReadSetupOneConsentBeforeFirstStart(t *testing.T) {
 	before("configured", "start")
 }
 func TestFreshReadSetupEveryFailureRetainsStateWithoutStart(t *testing.T) {
-	for _, stage := range []string{"plan", "bootstrap", "validate", "journal", "write-intent.json", "install-disabled", "write-receipt.json", "fresh-scopes", "prepare", "close", "verify-disabled", "claim-started", "claim", "activation-started", "activate-identity", "identity", "grants-started", "configure", "verify-grants", "grant-digests", "grants-verified", "startup-transition-started", "activate-startup", "configured"} {
+	for _, stage := range []string{"plan", "bootstrap", "validate", "journal", "write-intent.json", "install-disabled", "write-receipt.json", "fresh-scopes", "prepare", "verify-journal", "verify-disabled", "claim-started", "claim", "activation-started", "activate-identity", "identity", "grants-started", "configure", "verify-grants", "grant-digests", "grants-verified", "startup-transition-started", "activate-startup", "configured"} {
 		t.Run(stage, func(t *testing.T) {
 			f := &readSetupFixture{fail: stage}
 			if _, err := setupReadObservation(context.Background(), "fixture", readSetupConsentFixture(), f.hooks()); err == nil {

@@ -77,6 +77,11 @@ func (s *Store) SaveObservation(ctx context.Context, invitationID, certificateHa
 			if e != nil || old.WindowsInventory == nil {
 				return ErrStorage
 			}
+			// Updates use the exact base capture, so the monotonic base floor
+			// below also survives any number of later update-absent frames.
+			if old.WindowsUpdates != nil && !frame.WindowsInventory.CollectedAt.After(old.WindowsUpdates.CollectedAt) {
+				return lanstore.ErrReplay
+			}
 			// A later base capture carries the startup capture floor through any
 			// number of scope-absent frames without a new ledger or migration.
 			if old.WindowsServiceStartup != nil && !frame.WindowsInventory.CollectedAt.After(old.WindowsServiceStartup.CollectedAt) {

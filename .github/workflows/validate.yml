@@ -69,6 +69,16 @@ jobs:
         env:
           PYTHONDONTWRITEBYTECODE: '1'
         run: python tests/security/run_native_smoke.py --expect-platform ${{ matrix.platform }} --expect-arch ${{ matrix.arch }}
+      - name: Windows parity inert source and ABI fixtures (no host collection)
+        if: matrix.platform == 'windows'
+        env:
+          GOTOOLCHAIN: local
+        run: go test -buildvcs=false -count=1 ./internal/windowseventcontent ./internal/windowseventrequest ./internal/windowseventwire ./internal/windowseventstate ./internal/windowseventworker ./internal/windowsupdates ./internal/windowsupdateworker
+      - name: Vet Windows parity sources (no host collection)
+        if: matrix.platform == 'windows'
+        env:
+          GOTOOLCHAIN: local
+        run: go vet -buildvcs=false ./internal/windowseventcontent ./internal/windowseventrequest ./internal/windowseventwire ./internal/windowseventstate ./internal/windowseventworker ./internal/windowsupdates ./internal/windowsupdateworker
       - name: Execute ARM64 Linux installer and helper fixture tests natively
         if: matrix.platform == 'linux' && matrix.arch == 'arm64'
         env:
@@ -294,6 +304,8 @@ jobs:
           cache: false
       - name: Check release cleanup and journal setup with inert fixtures
         run: |
+          python3 -I -B -m unittest discover -s tests/windows_linux_native_parity -p 'test_*.py' -v
+          python3 -I -O -B -m unittest discover -s tests/windows_linux_native_parity -p 'test_*.py' -v
           python3 -B -m unittest discover -s tests/release -p 'test_*.py' -v
           python3 -B -m unittest discover -s deploy/journal -p 'test_*.py' -v
           python3 -B -m unittest discover -s deploy/inventory -p 'test_*.py' -v
@@ -534,6 +546,7 @@ jobs:
           node tests/e2e-review/check-inert-suites.mjs --self-test
           node tests/e2e-review/check-inert-suites.mjs
           node --test tests/e2e-review/public-command-contract.test.mjs
+          node --test tests/windows_linux_native_parity/browser.test.mjs
           node --test tests/e2e-review/endpoint-child-shutdown.test.mjs tests/e2e-review/windows-inventory-fixtures.test.mjs tests/e2e-review/resource-history-fixtures.test.mjs tests/e2e-review/application-check-settings-fixtures.test.mjs tests/e2e-review/investigations-fixtures.test.mjs tests/e2e-review/alarm-browser-diagnostics.test.mjs tests/e2e-review/browser-transport-diagnostics.test.mjs tests/e2e-review/enrollment-create-diagnostics.test.mjs tests/e2e-review/v3-failure-diagnostics.test.mjs tests/e2e-review/alarm-settings-fixtures.test.mjs tests/e2e-review/cve-continuation-fixtures.test.mjs tests/e2e-review/cve-detail-pages-fixtures.test.mjs tests/e2e-review/proactive-ai-fixtures.test.mjs tests/e2e-review/journal-ai-fixtures.test.mjs tests/e2e-review/package-updates-fixtures.test.mjs tests/e2e-review/journal-browse-fixtures.test.mjs tests/e2e-review/windows-contact-history-fixtures.test.mjs
       - name: Production build
         run: npm run build
@@ -576,11 +589,31 @@ jobs:
         env:
           TRACEBOLT_SOURCE_SHA: ${{ github.sha }}
         run: node tests/e2e-review/lan-browser.mjs
-      - name: Guided enrollment reduced browser gate (10 required, 3 quarantined)
+      - name: Guided enrollment full browser gate (13 required, no skips)
         if: ${{ !cancelled() }}
         env:
           TRACEBOLT_SOURCE_SHA: ${{ github.sha }}
-        run: node tests/e2e-review/enrollment-browser.mjs
+          TRACEBOLT_REVIEW_QUARANTINED: '1'
+        run: |
+          set -euo pipefail
+          node tests/e2e-review/enrollment-browser.mjs
+          node --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          import fs from 'node:fs';
+          try {
+            const r=JSON.parse(fs.readFileSync('artifacts/review/enrollment-browser-results.json','utf8'));
+            assert.match(process.env.TRACEBOLT_SOURCE_SHA??'',/^[a-f0-9]{40}$/);
+            assert.equal(r.sourceSha,process.env.TRACEBOLT_SOURCE_SHA);
+            assert.equal(r.runtimeErrorCount,0);
+            for(const key of ['secretsExported','privateKeysExported','telemetryExported'])assert.equal(r[key],false);
+            assert.equal(r.quarantine.active,false);
+            assert.deepEqual(r.summary,{passed:13,failed:0,skipped:0,fullEnrollmentAcceptance:true,setupFailure:false});
+            assert.equal(r.results.length,13);
+            assert.equal(new Set(r.results.map(c=>c.name)).size,13);
+            assert.ok(r.results.every(c=>c.status==='PASS'&&typeof c.name==='string'&&c.name.length>0));
+          } catch { throw new Error('Incomplete, mismatched or unsafe full enrollment browser evidence'); }
+          console.log('PASS: exact-source 13/13 enrollment browser cases, no skips or runtime errors.');
+          JS
       - name: Synthetic operational, package and conditional-review browser acceptance
         if: ${{ !cancelled() }}
         env:

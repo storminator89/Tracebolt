@@ -1,0 +1,21 @@
+.windows-service-health .windows-service-picker{min-width:0;display:grid;gap:12px}
+.windows-service-health .windows-service-picker fieldset{min-width:0;border:1px solid var(--line);border-radius:7px;padding:12px}
+.windows-service-health .windows-service-picker legend{font-size:13px;font-weight:600;padding:0 5px}
+.windows-service-health .windows-service-picker label{font-size:13px}
+.windows-service-health .windows-service-picker input[type=search]{display:block;width:100%;max-width:100%;box-sizing:border-box;margin-top:6px;padding:9px;border:1px solid var(--line);border-radius:5px;background:var(--panel);color:inherit}
+.windows-service-health .windows-service-options,.windows-service-health .windows-service-selections,.windows-service-health .windows-service-checks{list-style:none;padding:0;margin:0;min-width:0}
+.windows-service-health .windows-service-options{max-height:320px;overflow-y:auto;overflow-x:hidden;margin-top:12px}
+.windows-service-health .windows-service-options>li{padding:10px 0;border-bottom:1px solid var(--line)}
+.windows-service-health .windows-service-options label{display:flex;align-items:flex-start;gap:9px;overflow-wrap:anywhere}
+.windows-service-health .windows-service-options input{flex-shrink:0;margin-top:3px}
+.windows-service-health .windows-service-options span{display:grid;gap:4px;min-width:0}
+.windows-service-health .windows-service-options small,.windows-service-health .windows-service-selections small{display:block;color:var(--secondary);font-size:11px;overflow-wrap:anywhere}
+.windows-service-health .windows-service-selections>li{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px;border:1px solid var(--line);border-radius:6px;margin-bottom:6px;min-width:0}
+.windows-service-health .windows-service-selections span{font-size:12px;overflow-wrap:anywhere;min-width:0}
+.windows-service-health .windows-service-selections button{flex-shrink:0;min-width:32px;min-height:32px}
+.windows-service-health .windows-service-checks>li{padding:12px 0;border-bottom:1px solid var(--line)}
+.windows-service-health .windows-service-check-heading{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;font-size:13px;overflow-wrap:anywhere}
+.windows-service-health code{overflow-wrap:anywhere;white-space:break-spaces}
+@media(max-width:600px){.windows-service-health .windows-service-check-heading{flex-direction:column}.windows-service-health .windows-service-picker fieldset{padding:9px}}
+
+.windows-service-health .windows-service-check-heading small{display:block;margin-top:4px;color:var(--secondary);font-size:11px}

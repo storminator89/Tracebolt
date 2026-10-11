@@ -78,9 +78,17 @@ func removalNativeCause(err error) string {
 }
 func setupRemovalFailureText(err error) string {
 	step, reason := "unknown", "failed"
-	if e, ok := err.(*removalFailure); ok && e != nil && removalStepValid(e.step) {
-		step = e.step
-		reason = removalCause(e.detail)
+	// Lease verification/closure can add a secondary error. Preserve the
+	// primary removal stage with bounded, panic-contained metadata traversal;
+	// never format arbitrary causes or invoke custom Is/As methods.
+	if chain, valid := setupErrorChain(err); valid {
+		for _, current := range chain {
+			if e, ok := current.(*removalFailure); ok && e != nil && removalStepValid(e.step) {
+				step = e.step
+				reason = removalCause(e.detail)
+				break
+			}
+		}
 	}
 	return "Service removal did not complete. Removal diagnostic: " + step + "; " + reason + ". Files, identity and grants remain; inspect retained state before any further action."
 }

@@ -1,5 +1,44 @@
 # Changelog
 
+## 2026-10-10 — Independent opt-in Windows service checks
+
+- Add explicit should-be-running selections from current readable Windows service names, with a separate disabled-by-default manager policy and discrete stopped/paused confirmation, running recovery and retained unknown history.
+- Keep exact-name ambiguity fail-closed, missing rows unknown, original capture/receipt evidence and durable identity/sequence floors. Share the existing coordinated accepted-source read without adding native collection, grants or service actions.
+- Wire bounded durable storage, shared-admin same-origin/CSRF/revision-checked API, EN/DE Health chooser, cross-language fixtures and accepted-frame-to-authenticated-API tests. Native, hosted-browser and release acceptance remain separate gates; AI and alarms are unchanged.
+
+## 2026-10-10 — Independent opt-in Windows CPU and physical-RAM policies
+
+- Reuse the percentage evidence engine for existing observed-processor-group CPU and physical RAM not immediately available, with independently disabled policies, tagged storage, revisions, history and durable floors. Keep disk v1 state/API/fixture bytes unchanged.
+- Evaluate enabled disk/CPU/RAM checks from one accepted-source transaction on the coordinated Windows scheduler; keep zero source reads when all are disabled. Preserve distinct-source 60-second confirmation/recovery, hysteresis, unknown states and final session/certificate authority checks.
+- Wire strict metric-bound operator routes and EN/DE Health controls through shared UI lifecycle logic, with exact Go/TypeScript fixtures and real synthetic enrollment-to-operator tests. No collection/grant expansion, AI export, notifications, native acceptance or full Windows Health parity is claimed.
+
+## 2026-10-10 — Opt-in Windows system-volume capacity checks
+
+- Add a default-off, per-device manager policy over existing caller-visible quota-aware system-volume percentage metadata, with durable incidents and explicit threshold/hysteresis semantics. No new native reads, grants, service actions, AI export or notifications.
+- Require advancing original captures across confirmation/recovery, preserve monotonic evidence floors through unknown/restart, and close changed/disabled policy episodes explicitly without claiming recovery.
+- Add isolated authenticated reads, shared-admin CSRF/revision-checked settings, EN/DE Health controls, bounded persistence, cross-language fixtures and end-to-end synthetic enrollment/API coverage. Native, hosted-browser and release acceptance remain separate gates.
+
+## 2026-10-10 — Wire selected Windows event messages
+
+- Add a separate stopped-service content grant and an exact selected Application/System message path through the existing sender, manager and Logs view. Preserve five-scope Setup and header-only grants; require independent HTTP plaintext acknowledgement.
+- Commit parent claim-attempt and child consume-once metadata before an isolated native read. Keep bounded exact retries in memory, fixed original expiry, immutable header selection, explicit missing/denied/partial/lost results and no message text in durable telemetry, diagnostics or AI export.
+- Bind manager retrieval to the originating administrative session; clear content on expiry, access loss, cancellation and shutdown. Preserve full-width record IDs and render untrusted message text without HTML interpretation.
+- Add synthetic mTLS/signed-HTTP, private-state, subprocess, session/API, EN/DE UI and browser fixtures. Native Event Log, installed-service, real Windows-to-Linux interoperability and release acceptance remain separate gates.
+
+## 2026-10-10 — Opt-in cached Windows Updates end-to-end source candidate
+
+- Add a separate stopped-service local grant, bounded current-executable WUA worker, signed v7 sender path, durable manager admission and a shared EN/DE Updates tab. Refresh reads accepted cached observations only; unknown cache freshness and partial/denied results stay explicit, and an empty cache never means fully patched.
+- Preserve the five-scope Setup receipt, old v1-v6 frames and pending bytes, restricted service identity, original inspection/receipt times, frame budgets, capture floors and private expiry. The worker verifies the exact live SCM creator/service SID and protected executable/config before and after capture; parent deadline, reaping and a child watchdog bound owned-worker lifetime, not WUA-internal work. A read-only High/System-integrity and no-impersonation gate precedes COM activation without changing token or registry settings.
+- Add consent, worker-lifetime, signed transport/retry, private API and dashboard/source-browser fixtures. Native WUA and installed-service acceptance, real Windows/Linux-manager interoperability and release remain separate gates. No new scope is enabled or existing preview binary upgraded by this source change.
+- Refresh README, Windows status and installation/help navigation for the published unsigned x64 preview, keeping released bytes and newer source capabilities separate. Event-message content is still a foundation rather than a working UI feature.
+
+## 2026-10-10 — Windows parity read foundations (not yet wired)
+
+- Add a source-linked Linux/Windows parity matrix that separates implemented code, released bytes and exact native acceptance. Preserve the published preview and existing five-scope Setup.
+- Add a separate bounded native Application/System message reader for exact selected event identities, fixed privacy/error contracts and explicit unavailable/truncated results. Add independent local-consent and digest-only request lifecycle contracts with immutable 15-minute expiry; message text is not added to durable Windows telemetry.
+- Add an explicitly consented cached/offline WUA software-update inspection source with strict row/string budgets and unknown cache freshness. It cannot scan online, download, install, accept update terms, reboot or upgrade WUA.
+- These are portable-fixture/cross-build foundations, with no production caller, new CLI grant, manager route or dashboard feature yet. End-to-end integration and independently approved native acceptance remain separate increments.
+
 ## 2026-10-08 — Bounded Windows service startup source candidate
 
 - Add one default-off startup metadata scope, explicit stopped-service opt-in, strict v6 sender/store support and one EN/DE column in the existing Services table. Preserve old consent compatibility, persisted retry bytes and the exact five-scope fresh coordinator. The separate OS-provenance fix restores already-approved evidence in newly generated observations.

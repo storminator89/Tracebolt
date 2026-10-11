@@ -64,7 +64,7 @@ compatible source/fixture tests leave native privileged acceptance outstanding.
 | --- | --- | --- |
 | Central manager | Separate `cmd/lan-manager`, Admin UI, authenticated operator API, approved agent ingress; Docker or native Linux execution | Production assurance, automatic provisioning, HA/shared SQLite writers |
 | Linux endpoint | Native `cmd/lan-agent --config …`, one-shot or bounded foreground reporting; optional `cmd/enroll-agent` with explicit guided-v2 configuration; `cmd/agent-service` with explicit fixed-path operations and fresh combined read-admin setup | Verified OS reboot persistence, automatic renewal or remote updater; native Ubuntu TLS acceptance is recorded above; other host/profile combinations remain separate |
-| Windows endpoint | Native bounded read-only collector, shared-dashboard path and unsigned fresh-host Setup source preview; some x64 native phases recorded in [Windows status](windows-status.md) | Published Setup download, complete installed-service acceptance, interactive UAC/reboot/upgrade/full-removal proof or ARM64 runtime acceptance |
+| Windows endpoint | [Published unsigned x64 prerelease](windows-prerelease-install.md), bounded read-only inventory and shared dashboard; accepted hosted Windows Server 2025 subset in [Windows status](windows-status.md) | Windows 10/11, real Linux-manager/browser interoperability, interactive UAC/reboot/upgrade/full-removal proof or ARM64 runtime acceptance |
 | macOS endpoint | Native `cmd/agent` bounded stdout-only collector; limited platform reads | Supported LAN sender, installed service or fleet deployment |
 | Docker architectures | Linux amd64 TLS and explicit HTTP-test lifecycle gates; Linux arm64 cross-build support | arm64 runtime acceptance from cross-building alone |
 
@@ -151,7 +151,8 @@ SQLite without a separate database server. Docker packaging needs a running
 Docker Engine, Compose **v2** and BuildKit; inspect `docker version` and
 `docker compose version` before using them. Docker access is powerful host access;
 do not “fix” it by changing socket permissions or group membership silently.
-Check runtime licensing before installation; no project license has been selected.
+Check runtime licensing before installation. Tracebolt uses the
+[Apache License 2.0](../LICENSE); third-party components retain their own licenses.
 
 Go modules are locked by `go.mod`/`go.sum`; npm uses `web/package-lock.json`.
 Builds need dependency/image registry access. Docker base tags are version-selected,
@@ -654,21 +655,25 @@ Installationsweg vor und frage vor Zugangsdaten-, Vertrauens-, Firewall- oder
 Dienständerungen. Erfinde keine Installer-/Enrollment-Befehle. Berichte klar,
 was wirklich getestet wurde und welche manuellen Schritte noch fehlen.“
 
-## Unreleased Windows Setup.exe preview
+## Published unsigned Windows Setup preview
 
 The [fresh-host Windows Setup preview](windows-setup-preview.md) adds a native
 wizard with embedded versioned/hash-bound service payload, public manager-export
 selection, explicit five-scope/identity/service consent, hidden invitation entry
 and separate manager approval. It supports HTTPS by default and separately
 acknowledged disposable HTTP-test. The matching manager compatibility route is
-required before installation writes. This is an unsigned source-built preview,
-not a new public Windows release or acceptance on the user's host. Partial-state
-recovery, actual-EXE native approval and release provenance remain explicit gates.
+required before installation writes. The unsigned x64
+[v0.1.0-windows-preview.1](windows-prerelease-install.md) publishes exact bytes from
+an accepted hosted Windows Server 2025 subset. Read [Windows status](windows-status.md)
+for the exact source/run and unproven Windows 10/11, reboot, upgrade and ARM64
+boundaries. This does not establish acceptance on the user's host.
 
-## Unreleased Windows one-choice observation source
+## Windows one-choice observation scope
 
 The [fresh Windows observation coordinator](windows-read-observation-setup.md)
 combines the five supported read scopes under one explicit upfront local choice.
 It stages a fresh SCM service disabled until activation and protected grants are
-verified. This is source-only: the new separate Setup build is an unreleased preview, and existing Windows
-identities/lifecycle commands are unchanged.
+verified. The published preview contains this five-scope flow. Existing Windows
+identities and grants are not promoted. New cached-Update source support requires
+its own [local approval and native acceptance](windows-update-runtime.md) and is
+not included in those published bytes.

@@ -104,7 +104,9 @@ test('only recognized synthetic GET responses sample the browser clock after req
  assert.equal((await route(prefix+'/unrecognized')).status,404);assert.equal((await route(prefix,{method:'POST'})).abort,'blockedbyclient');assert.equal((await route(prefix,{origin:'https://outside.invalid'})).abort,'blockedbyclient');
  await assert.rejects(route(prefix+'/windows-inventory?unexpected=1'),/Unexpected Windows query/);await assert.rejects(route(prefix+'/windows-inventory',{body:'invented-body'}),/Unexpected Windows query/);
  assert.equal((await route(prefix+'/windows-contact?unexpected=1')).abort,'blockedbyclient');assert.equal((await route(prefix+'/windows-contact',{body:'invented-body'})).abort,'blockedbyclient');assert.equal(evaluations,0);
- const accepted=await route(prefix+'/windows-contact');assert.equal(accepted.status,200);assert.equal(JSON.parse(accepted.body).serverNow,now);assert.equal(evaluations,1);
+ assert.equal((await route(prefix+'/windows-capacity?unexpected=1')).abort,'blockedbyclient');assert.equal((await route(prefix+'/windows-capacity',{body:'invented-body'})).abort,'blockedbyclient');assert.equal((await route(prefix+'/windows-capacity/policy',{method:'POST',body:'{}'})).abort,'blockedbyclient');assert.equal(evaluations,0);
+ const capacity=await route(prefix+'/windows-capacity');assert.equal(capacity.status,200);assert.equal(JSON.parse(capacity.body).status,'disabled');assert.equal(JSON.parse(capacity.body).policy.enabled,false);assert.equal(evaluations,1);
+ const accepted=await route(prefix+'/windows-contact');assert.equal(accepted.status,200);assert.equal(JSON.parse(accepted.body).serverNow,now);assert.equal(evaluations,2);
 });
 
 test('an unusable synthetic browser clock never falls back to preadvanced host time',async()=>{

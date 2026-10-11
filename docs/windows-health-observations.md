@@ -53,8 +53,11 @@ boundary for investigations and AI workflows and must not be generalized just
 to populate this view. The [Windows contact evaluator](windows-contact-history.md)
 now has its own receipt-only authority contract, duration policy, durable history
 and operator-only read boundary. It does not add disk thresholds, service
-selection, AI export or notifications. Caller-capacity disk rules and other
-checks still need their own policies; this is not full Linux Health parity.
+selection, AI export or notifications. The separate default-off [system-volume capacity policy](windows-capacity-health.md)
+now adds source-spanning capacity incidents from the same accepted disk metric.
+Independent default-off [CPU and physical-RAM policies](windows-resource-health.md)
+now apply the same evidence rules to their exact existing basic measurements.
+Service/event rules still need their own policies; this is not full Linux Health parity.
 
 ## Verification boundary
 

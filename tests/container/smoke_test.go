@@ -117,13 +117,18 @@ func containerLifecycle(t *testing.T, profile string) {
 		t.Fatal("unconfigured image did not fail promptly")
 	}
 	run("docker", args...)
-	// Verify the exact source notice is present in the actual distribution image.
-	noticePath := filepath.Join(t.TempDir(), "edwards25519-LICENSE.txt")
-	run("docker", "cp", name+":/tracebolt/licenses/edwards25519-LICENSE.txt", noticePath)
-	distributedNotice, noticeErr := os.ReadFile(noticePath)
-	sourceNotice, sourceErr := os.ReadFile(filepath.Join("..", "..", "docs", "dependencies", "edwards25519-LICENSE.txt"))
-	if noticeErr != nil || sourceErr != nil || len(sourceNotice) == 0 || !bytes.Equal(distributedNotice, sourceNotice) {
-		t.Fatal("container dependency notice missing or changed")
+	// Verify the exact source licenses are present in the actual distribution image.
+	for _, notice := range []struct{ name, source string }{
+		{"LICENSE", filepath.Join("..", "..", "LICENSE")},
+		{"edwards25519-LICENSE.txt", filepath.Join("..", "..", "docs", "dependencies", "edwards25519-LICENSE.txt")},
+	} {
+		noticePath := filepath.Join(t.TempDir(), notice.name)
+		run("docker", "cp", name+":/tracebolt/licenses/"+notice.name, noticePath)
+		distributedNotice, noticeErr := os.ReadFile(noticePath)
+		sourceNotice, sourceErr := os.ReadFile(notice.source)
+		if noticeErr != nil || sourceErr != nil || len(sourceNotice) == 0 || !bytes.Equal(distributedNotice, sourceNotice) {
+			t.Fatalf("container license missing or changed: %s", notice.name)
+		}
 	}
 	roots := x509.NewCertPool()
 	if !roots.AppendCertsFromPEM(creds.ca) {

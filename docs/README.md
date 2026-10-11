@@ -14,12 +14,12 @@ source candidates. Follow each guide's status and platform limits.
 | Connect a fresh supported Linux machine | [Verified dashboard download](dashboard-verified-download.md), then [read-admin scope and onboarding](read-admin-onboarding.md) |
 | Update a completed Linux read-admin installation | [Same-identity, same-scope update](read-admin-upgrade.md) |
 | Add inventory to an existing activated Linux agent | [One-time inventory setup](guided-inventory-setup.md) |
-| Understand Windows availability | [Windows status](windows-status.md), then [unsigned Setup preview](windows-setup-preview.md) |
+| Understand Windows availability | [Windows status](windows-status.md), then [unsigned prerelease guide](windows-prerelease-install.md) |
 | Evaluate a Raspberry Pi or Linux ARM64 endpoint | [ARM64 support and native acceptance gates](linux-arm64-support.md) |
 | Diagnose a failed or incomplete setup | [Troubleshooting](troubleshooting.md) |
 
-Linux `v0.1.0-rc.3` is the published endpoint release. Windows Setup is unsigned
-and unreleased. The local demo is separate from authenticated LAN operation;
+Linux `v0.1.0-rc.3` and the unsigned x64 Windows
+`v0.1.0-windows-preview.1` are published endpoint prereleases. The local demo is separate from authenticated LAN operation;
 copying a demo command does not deploy a manager or connect real endpoints.
 
 ## Use the dashboard
@@ -32,7 +32,9 @@ copying a demo command does not deploy a manager or connect real endpoints.
   [numeric network endpoints](windows-network-endpoints.md).
 - **Performance and Health:** [24-hour resource history](resource-history.md),
   [Linux Health](health-dashboard.md),
-  [Windows system-volume observations](windows-health-observations.md) and
+  [Windows system-volume observations](windows-health-observations.md),
+  [opt-in Windows capacity checks](windows-capacity-health.md),
+  [CPU and physical-RAM policies](windows-resource-health.md) and
   [Windows event-header Health](windows-event-health.md).
 - **Logs:** [Linux exact-service captures](journal-content-mvp.md),
   [retained journal browsing](retained-journal-browsing.md) and
@@ -40,7 +42,11 @@ copying a demo command does not deploy a manager or connect real endpoints.
   Windows Logs does not fetch message bodies or older event history.
 - **Packages and findings:** [complete cached APT candidates](complete-cached-updates-extension.md)
   and [Debian/Ubuntu CVE coverage](linux-cve-warnings.md).
-  Cached candidates are not an installation guarantee or Windows Update support.
+  Cached candidates are not an installation guarantee. Separate
+  [Selected Windows event messages](windows-event-content-runtime.md) connect exact
+  header selection to an expiring private Logs view under separate local consent.
+  [Windows cached Update inspection](windows-update-runtime.md) is a default-off
+  source candidate with native acceptance still pending.
 - **Checks and notifications:** [application checks](application-checks.md),
   [DNS/TCP checks](application-network-checks.md) and [alarm delivery](alarm-delivery.md).
   Provider acceptance does not prove that a person received an alert.
@@ -60,6 +66,7 @@ common empty, stale and pending states.
 - [Backup, update, rollback and removal](installation.md#10-stop-back-up-restore-update-uninstall)
 - [Linux read-admin upgrade](read-admin-upgrade.md)
 - [Windows cancellation and retained state](windows-setup-preview.md#cancellation-retained-state-and-service-removal)
+- [Local own-agent Windows restart source candidate](windows-own-service-restart.md)
 - [Local support bundle and review before sharing](support-bundle.md)
 - [Security review and boundaries](lan-security-review.md)
 

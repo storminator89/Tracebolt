@@ -75,32 +75,34 @@ type Replay struct {
 	ReceivedAt  time.Time `json:"receivedAt"`
 }
 type credential struct {
-	DER                []byte                    `json:"der"`
-	Delivery           Delivery                  `json:"delivery"`
-	Replay             Replay                    `json:"replay"`
-	Frame              []byte                    `json:"frame"`
-	ServiceActionSetup *serviceActionSetupMarker `json:"serviceActionSetup,omitempty"`
+	DER                              []byte                    `json:"der"`
+	Delivery                         Delivery                  `json:"delivery"`
+	Replay                           Replay                    `json:"replay"`
+	Frame                            []byte                    `json:"frame"`
+	ServiceActionSetup               *serviceActionSetupMarker `json:"serviceActionSetup,omitempty"`
+	WindowsEventAuthorityInitialized bool                      `json:"windowsEventAuthorityInitialized,omitempty"`
 }
 type transaction struct {
-	conn                       *sql.Conn
-	engine                     *enrollmentstate.Engine
-	credentials                map[string]credential
-	originalLedger             []byte
-	originalCredentials        map[string][]byte
-	originalServiceActionSetup map[string]serviceActionSetupMarker
-	operational                map[string]operationalRecord
-	originalOperational        map[string][]byte
-	validatedFrames            map[frameValidationKey]lanstore.Frame
-	inventory                  map[string]inventoryRecord
-	originalInventory          map[string][]byte
-	inventoryKey               inventoryledger.CursorKey
-	overview                   map[string]overviewRecord
-	originalOverview           map[string][]byte
-	overviewKey                overviewledger.CursorKey
-	overviewEnabled            bool
-	completeUpdatesEnabled     bool
-	completeUpdatesKey         completeUpdatesCursorKey
-	system                     map[string]systemRecord
+	conn                          *sql.Conn
+	engine                        *enrollmentstate.Engine
+	credentials                   map[string]credential
+	originalLedger                []byte
+	originalCredentials           map[string][]byte
+	originalServiceActionSetup    map[string]serviceActionSetupMarker
+	originalWindowsEventAuthority map[string]bool
+	operational                   map[string]operationalRecord
+	originalOperational           map[string][]byte
+	validatedFrames               map[frameValidationKey]lanstore.Frame
+	inventory                     map[string]inventoryRecord
+	originalInventory             map[string][]byte
+	inventoryKey                  inventoryledger.CursorKey
+	overview                      map[string]overviewRecord
+	originalOverview              map[string][]byte
+	overviewKey                   overviewledger.CursorKey
+	overviewEnabled               bool
+	completeUpdatesEnabled        bool
+	completeUpdatesKey            completeUpdatesCursorKey
+	system                        map[string]systemRecord
 }
 
 // Open rejects existing insecure paths; it never chmods or adopts them. The
@@ -368,7 +370,7 @@ func (s *Store) load(ctx context.Context, conn *sql.Conn) (*transaction, error) 
 	if err != nil {
 		return nil, ErrStorage
 	}
-	t := &transaction{conn: conn, engine: engine, credentials: make(map[string]credential), originalLedger: raw, originalCredentials: make(map[string][]byte), originalServiceActionSetup: make(map[string]serviceActionSetupMarker), operational: map[string]operationalRecord{}, originalOperational: map[string][]byte{}, inventory: map[string]inventoryRecord{}, originalInventory: map[string][]byte{}, overview: map[string]overviewRecord{}, originalOverview: map[string][]byte{}}
+	t := &transaction{conn: conn, engine: engine, credentials: make(map[string]credential), originalLedger: raw, originalCredentials: make(map[string][]byte), originalServiceActionSetup: make(map[string]serviceActionSetupMarker), originalWindowsEventAuthority: make(map[string]bool), operational: map[string]operationalRecord{}, originalOperational: map[string][]byte{}, inventory: map[string]inventoryRecord{}, originalInventory: map[string][]byte{}, overview: map[string]overviewRecord{}, originalOverview: map[string][]byte{}}
 	if conn.QueryRowContext(ctx, "SELECT count(*),coalesce(max(length(body)),0) FROM enrollment_credentials").Scan(&count, &n) != nil || count > s.config.RecordLimit || n > maxCredentialBytes {
 		return nil, ErrStorage
 	}
@@ -404,6 +406,9 @@ func (s *Store) load(ctx context.Context, conn *sql.Conn) (*transaction, error) 
 			return nil, ErrStorage
 		}
 		t.credentials[id] = c
+		if c.WindowsEventAuthorityInitialized {
+			t.originalWindowsEventAuthority[id] = true
+		}
 		t.originalCredentials[id] = body
 		if c.ServiceActionSetup != nil {
 			t.originalServiceActionSetup[id] = *c.ServiceActionSetup
@@ -417,6 +422,9 @@ func (s *Store) load(ctx context.Context, conn *sql.Conn) (*transaction, error) 
 		if ok != (snapshot.Issuance.CertificateHash != "") {
 			return nil, ErrStorage
 		}
+	}
+	if err = validateWindowsEventUsedState(ctx, t, s.config.Binding.CollectionProfile); err != nil {
+		return nil, err
 	}
 	if err = s.loadOperational(ctx, t); err != nil {
 		return nil, ErrStorage
@@ -439,6 +447,9 @@ func (s *Store) load(ctx context.Context, conn *sql.Conn) (*transaction, error) 
 	return t, nil
 }
 func (t *transaction) validMetadata(s enrollmentstate.Snapshot, c credential) bool {
+	if c.WindowsEventAuthorityInitialized && (s.Platform != "windows" || s.Binding.CollectionProfile != enrollmentcrypto.CollectionProfileWindowsInventory) {
+		return false
+	}
 	if !validServiceActionSetupMarker(s, c.ServiceActionSetup) {
 		return false
 	}
@@ -496,7 +507,13 @@ func (s *Store) transact(ctx context.Context, action func(*transaction) error) e
 	if err = action(t); err != nil {
 		return err
 	}
+	if err = validateWindowsEventUsedState(ctx, t, s.config.Binding.CollectionProfile); err != nil {
+		return err
+	}
 	for id, c := range t.credentials {
+		if t.originalWindowsEventAuthority[id] && !c.WindowsEventAuthorityInitialized {
+			return ErrStorage
+		}
 		if original, ok := t.originalServiceActionSetup[id]; ok && (c.ServiceActionSetup == nil || original != *c.ServiceActionSetup) {
 			return ErrStorage
 		}
@@ -573,6 +590,15 @@ func validateSchema(ctx context.Context, conn *sql.Conn, profile string) error {
 	expected := map[string]inventoryledger.SchemaObject{
 		"enrollment_state":       {Type: "table", Name: "enrollment_state", SQL: stateSchema},
 		"enrollment_credentials": {Type: "table", Name: "enrollment_credentials", SQL: credentialSchema},
+	}
+	windowsEventsEnabled, windowsEventsErr := windowsEventSchemaPresent(ctx, conn, profile)
+	if windowsEventsErr != nil {
+		return windowsEventsErr
+	}
+	if windowsEventsEnabled {
+		for _, obj := range windowsEventObjects() {
+			expected[obj.Name] = obj
+		}
 	}
 	historyEnabled, historyErr := resourceHistoryPresent(ctx, conn)
 	if historyErr != nil {
