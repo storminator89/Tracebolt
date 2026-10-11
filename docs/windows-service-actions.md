@@ -23,10 +23,13 @@ or network client. Its fixed image is
 KnownFolder API). The source command takes no arguments and only enters SCM
 service dispatch; it does not initialize authority at startup.
 
-The create-only setup path **requires** an independently approved, already
-installed, stopped broker with reviewed protected executable and explicit SCM
-ACL. This increment does not install that service or apply any target ACL. If
-those prerequisites are absent or cannot be inspected, setup fails closed.
+The legacy `--service-actions-setup` path **requires** an independently approved,
+already installed, stopped broker with reviewed protected executable, public SCM
+installation marker and explicit SCM ACL. It does not install a service or apply
+target ACLs. The separate [fresh provisioning CLI](windows-action-provisioning.md)
+now stages a new disabled broker beside the stopped owned observer, with an exact
+plan digest and initially unchecked local consent for its disclosed changes.
+Existing roots, services, images and used authority are never adopted.
 
 The dedicated virtual account is an explicit setup prerequisite, not a runtime
 account migration. Unlike LocalService, virtual accounts can authenticate to
@@ -50,8 +53,9 @@ Unknown, inherited/callback, missing or unreadable descriptors fail closed. No
 runtime ACL/account repair is attempted, and safe Windows defaults are not
 assumed. The native gate must prove both isolation and the exact query access
 needed for mutual peer inspection. Full process/token/thread/default checks run
-inside the broker; the client proves fixed SCM PID and token identity without
-opening the broker's threads. An observation worker must not inherit any
+inside the broker; the client proves fixed SCM PID, public configuration/account/
+restricted-SID settings, installation marker and held live process image. No
+foreign primary token or broker thread is opened. An observation worker must not inherit any
 broker token or action-capable handle. Administrator changes are not atomically
 excluded by these checks.
 
@@ -133,13 +137,21 @@ enrollment authority without extending it, capabilities, previews or deadlines.
 The observer reports bounded broker capabilities and relays the original signed
 bytes once over a fixed local pipe. The pipe is local-only, first-instance,
 non-inheritable and protected by an explicit DACL. The agent's rights deliberately
-exclude FILE_CREATE_PIPE_INSTANCE. Both sides verify the peer's current
-own-process SCM PID in a held process handle and fixed token identity: the
-broker virtual-account SID with its restricted SID, or the observation service
-LocalService user with its enabled dedicated service SID. A shared account alone,
-a different service and same-token collection workers are insufficient. The client requests identification-only security
-quality of service. Identity-query denial never causes fallback to account-only
-trust or impersonation. No broker token or action-capable handle is inherited.
+exclude FILE_CREATE_PIPE_INSTANCE. Both sides verify the peer's current own-process Running SCM PID, fixed public
+configuration, marker and image in a held live process. Query-limited plus
+SYNCHRONIZE access is explicit; WAIT_TIMEOUT proves liveness even if an exited
+process used exit code 259. Client proof attests the broker's protected SCM launch
+identity, not a remotely read primary token. The broker independently checks its
+own virtual-account token and restricted SID.
+
+After reading a bounded first frame, the broker additionally queries the pipe
+client's identification-only token on a dedicated pinned OS thread, immediately
+reverts and verifies reversion before checking exact LocalService user and enabled
+observer SID. No handler, file, state or action access occurs in that identity
+context. Failed reversion stops serving. A shared account, different service or
+same-token worker PID is insufficient. Denial never falls back to debug privilege,
+account-only trust or effect-capable impersonation. No broker token or
+action-capable handle is inherited.
 
 There is one pipe instance and one mutation slot, canonical size-limited frames,
 a 50-second connection budget and overlapped pipe I/O. Before disconnecting, the
@@ -208,3 +220,26 @@ Primary Windows contracts: [CreateNamedPipe](https://learn.microsoft.com/en-us/w
 [token rights](https://learn.microsoft.com/en-us/windows/win32/secauthz/access-rights-for-access-token-objects),
 [virtual-account network identity](https://learn.microsoft.com/en-us/windows-server/identity/ad-ds/manage/understand-service-accounts#virtual-accounts),
 and [file/directory access-right differences](https://learn.microsoft.com/en-us/windows/win32/wmisdk/file-and-directory-access-rights-constants).
+
+## Retained action history
+
+The Services control panel has a collapsed **Saved action history** view. Opening
+it reads at most the existing ledger's 64 approvals, newest first. Selecting a
+row reads its exact receipt: approving operator, original approval and one-time
+claim timestamps, original start deadline, saved state, and latest reported
+attempted/requested/observed flags. Results have no completion timestamp in the
+source ledger, so the UI does not invent one or use the read time as completion.
+An observed Running or Stopped state remains broker evidence, not application
+health. Claimed work without a terminal report stays execution-unconfirmed.
+
+The operator-only GET routes are `windows-service-actions/history` and
+`windows-service-actions/history/{action_id}` under the selected device. Both
+require the existing named Windows service control capability and read only the
+current live enrollment through `ViewAt`, including its final expiry/revocation
+checks. The returned binding is the original action admission binding; an
+expired, revoked or different incarnation does not gain an archive fallback.
+The bounded list and receipt expose no signed envelope, key or execution route.
+Closing, refresh, navigation or loss of session discards the displayed history;
+reopening rereads saved status. There is no retry action, retention reset, pruning,
+automatic action or additional host grant. The existing 64-job capacity fence is
+unchanged. This UI/API source addition does not establish native acceptance.

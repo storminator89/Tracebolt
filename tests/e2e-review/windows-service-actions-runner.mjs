@@ -7,16 +7,18 @@ import {createServer} from 'node:http';
 import {createRequire} from 'node:module';
 import {fileURLToPath} from 'node:url';
 import {createWindowsServiceActionsFixture,exerciseWindowsServiceActions,windowsServiceActionsRoute,windowsServiceActionsCaseName,windowsServiceActionsDisclosure,windowsServiceActionsFailureStage,requireWindowsServiceActionsEvidence} from './windows-service-actions-browser.mjs';
+import {createWindowsServiceActionHistoryFixture,windowsServiceActionHistoryRoute,exerciseWindowsServiceActionHistory,windowsServiceActionHistoryCaseName,requireWindowsServiceActionHistoryEvidence} from './windows-service-action-history-browser.mjs';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../..'),require=createRequire(path.join(root,'web/package.json'));
 const {chromium,expect}=require('@playwright/test');
 const out=path.join(root,'artifacts/review'),dist=path.join(root,'web/dist'),temporary=await fs.mkdtemp(path.join(os.tmpdir(),'tracebolt-windows-actions-browser-'));
-const sourceSha=process.env.TRACEBOLT_SOURCE_SHA??null,screenshots=[],variants=[];let browser,context,server,timer,errors=0,apiRequests=0,passed=false;
+const sourceSha=process.env.TRACEBOLT_SOURCE_SHA??null,screenshots=[],historyScreenshots=[],variants=[],historyVariants=[];let browser,context,server,timer,errors=0,apiRequests=0,passed=false;
 await fs.mkdir(out,{recursive:true});
 const failure=()=>new Error('Synthetic Windows action browser gate failed; raw state withheld.');
 async function shot(page,name,fixtureDisclosure){
- if(!/^synthetic-windows-service-actions-(1440|390)-(en|de)$/.test(name)||fixtureDisclosure!==windowsServiceActionsDisclosure)throw failure();
+ if(!/^synthetic-windows-service-(actions|action-history)-(1440|390)-(en|de)$/.test(name)||fixtureDisclosure!==windowsServiceActionsDisclosure)throw failure();
  await page.screenshot({path:path.join(out,name+'.png'),fullPage:false,animations:'disabled'});
- screenshots.push({file:name+'.png',sourceSha,publicSafe:true,fullPage:false,viewport:page.viewportSize(),locale:await page.locator('html').getAttribute('lang'),fixtureDisclosure,test:windowsServiceActionsCaseName});
+ const isHistory=name.startsWith('synthetic-windows-service-action-history-');
+ (isHistory?historyScreenshots:screenshots).push({file:name+'.png',sourceSha,publicSafe:true,fullPage:false,viewport:page.viewportSize(),locale:await page.locator('html').getAttribute('lang'),fixtureDisclosure,test:isHistory?windowsServiceActionHistoryCaseName:windowsServiceActionsCaseName});
 }
 async function run(){
  if(!/^[a-f0-9]{40}$/.test(sourceSha??''))throw failure();
@@ -46,14 +48,22 @@ async function run(){
   expect(state.blocked).toEqual([]);expect(state.external).toEqual([]);expect(await context.cookies()).toEqual([]);
   const stored=await page.evaluate(()=>JSON.stringify({local:{...localStorage},session:{...sessionStorage}}));for(const value of [fixture.preview.preview.id,fixture.preview.preview.digest,fixture.session.csrfToken])expect(stored.includes(value)).toBe(false);
   variants.push({locale,width,...details});await context.close();context=null;
+  const historyFixture=createWindowsServiceActionHistoryFixture(),historyState={blocked:[],external:[]};
+  context=await browser.newContext({viewport:{width,height:width===390?844:1000},locale:'en-GB'});const historyPage=await context.newPage();historyPage.on('pageerror',()=>errors++);
+  await historyPage.clock.install({time:new Date(historyFixture.now)});await historyPage.clock.pauseAt(new Date(Date.parse(historyFixture.now)+100));
+  await historyPage.route('**/*',windowsServiceActionHistoryRoute({base,fixture:historyFixture,state:historyState}));
+  const historyDetails=await exerciseWindowsServiceActionHistory({page:historyPage,expect,base,fixture:historyFixture,locale,width,shot});
+  expect(historyState.blocked).toEqual([]);expect(historyState.external).toEqual([]);expect(await context.cookies()).toEqual([]);
+  const historyStorage=await historyPage.evaluate(()=>JSON.stringify({local:{...localStorage},session:{...sessionStorage}}));for(const detail of historyFixture.details)expect(historyStorage.includes(detail.job.identity.jobId)).toBe(false);
+  historyVariants.push({locale,width,...historyDetails});await context.close();context=null;
  }
- requireWindowsServiceActionsEvidence(screenshots,sourceSha);if(errors||apiRequests||variants.length!==4)throw failure();
+ requireWindowsServiceActionsEvidence(screenshots,sourceSha);requireWindowsServiceActionHistoryEvidence(historyScreenshots,sourceSha);if(errors||apiRequests||variants.length!==4)throw failure();if(historyVariants.length!==4)throw failure();
 }
 try{await Promise.race([run(),new Promise((_,reject)=>{timer=setTimeout(()=>reject(failure()),120000);})]);passed=true;}
 catch{console.log('FAIL: synthetic Windows action browser gate; raw diagnostics withheld.');}
 finally{
  clearTimeout(timer);try{if(context)await context.close();}catch{passed=false;}try{if(browser)await browser.close();}catch{passed=false;}
  if(server){server.closeAllConnections();await new Promise(resolve=>server.close(resolve));}
- const report={sourceSha,createdAt:new Date().toISOString(),name:windowsServiceActionsCaseName,status:passed?'PASS':'FAIL',stage:windowsServiceActionsFailureStage(),scope:windowsServiceActionsDisclosure,variants:passed?variants:[],runtimeErrorCount:errors,requestsToRealAPI:apiRequests,browserAcceptance:passed,durableStoreAcceptance:false,nativeAcceptance:false,secretsExported:false,realTelemetryExported:false};
- await fs.writeFile(path.join(out,'windows-service-actions-results.json'),JSON.stringify(report,null,2));await fs.writeFile(path.join(out,'windows-service-actions-manifest.json'),JSON.stringify({sourceSha,screenshots},null,2));await fs.rm(temporary,{recursive:true,force:true});process.exitCode=passed?0:1;
+ const report={sourceSha,createdAt:new Date().toISOString(),name:windowsServiceActionsCaseName,status:passed?'PASS':'FAIL',stage:windowsServiceActionsFailureStage(),scope:windowsServiceActionsDisclosure,variants:passed?variants:[],historyVariants:passed?historyVariants:[],runtimeErrorCount:errors,requestsToRealAPI:apiRequests,browserAcceptance:passed,durableStoreAcceptance:false,nativeAcceptance:false,secretsExported:false,realTelemetryExported:false};
+ await fs.writeFile(path.join(out,'windows-service-actions-results.json'),JSON.stringify(report,null,2));await fs.writeFile(path.join(out,'windows-service-actions-manifest.json'),JSON.stringify({sourceSha,screenshots:[...screenshots,...historyScreenshots]},null,2));await fs.rm(temporary,{recursive:true,force:true});process.exitCode=passed?0:1;
 }

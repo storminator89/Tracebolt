@@ -51,9 +51,10 @@ bounded transport/store. See [frame bounds](windows-storage-io.md#worker-transpo
   manager policies over already accepted observations. Missing data stays unknown.
 - [Fleet groups](fleet-groups-health.md): manual device organization and reviewed
   one-time disk/CPU/RAM settings. New members do not inherit settings automatically.
-- [Selected service control](windows-service-actions.md): a separately authorized
-  source workflow with a restricted broker and exact reviewed target. Read admin
-  does not install the broker or grant service actions. Native acceptance is pending.
+- [Selected service control](windows-service-actions.md): exact reviewed targets,
+  explicit approvals and saved action receipts. Separate [fresh broker setup](windows-action-provisioning.md)
+  creates a disabled restricted broker after exact local approval; Read admin
+  does not grant service actions. Native activation and acceptance are pending.
 
 ![Cached Windows Update inspection with explicit coverage and freshness limits](screenshots/2026-10-10-windows-parity/windows-cached-updates.png)
 

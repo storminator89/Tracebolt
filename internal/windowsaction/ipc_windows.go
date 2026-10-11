@@ -14,8 +14,9 @@ import (
 )
 
 // One persistent first instance is reused. Concurrency is bounded to one, and
-// all handles are non-inheritable. No worker, action, or network goroutine is
-// spawned from a request. A submission response loss never triggers a retry.
+// all handles are non-inheritable. The only request goroutine is the isolated
+// identification-token query; it never dispatches an action or network call.
+// A submission response loss never triggers a retry.
 func Serve(ctx context.Context, b *Broker) error { return serveReady(ctx, b, nil) }
 func serveReady(ctx context.Context, b *Broker, ready chan<- struct{}) error {
 	if ctx == nil || b == nil || verifyBrokerProcess(b.policy) != nil {
@@ -43,34 +44,42 @@ func serveReady(ctx context.Context, b *Broker, ready chan<- struct{}) error {
 		if e != nil && !errors.Is(e, windows.ERROR_PIPE_CONNECTED) {
 			return e
 		}
-		func() {
+		conversationErr := func() error {
 			defer windows.DisconnectNamedPipe(h)
 			reqCtx, cancel := context.WithTimeout(ctx, 50*time.Second)
 			defer cancel()
-			var pid uint32
-			if windows.GetNamedPipeClientProcessId(h, &pid) != nil {
-				return
-			}
-			peer, e := openPeer(pid, AgentName, b.policy.AgentSID, false)
+			// ImpersonateNamedPipeClient identifies the last-read context. Read
+			// only a size/deadline-bounded unauthenticated frame before admission;
+			// no request is decoded, dispatched or persisted until proof succeeds.
+			raw, e := readFrame(reqCtx, h)
 			if e != nil {
-				return
+				return e
+			}
+			peer, e := openObservationPeer(reqCtx, h, b.policy.AgentSID)
+			if e != nil {
+				return e
 			}
 			defer peer.close()
-			raw, e := readFrame(reqCtx, h)
-			if e != nil || peer.check() != nil {
-				return
+			if e = peer.check(); e != nil {
+				return e
 			}
 			reqCtx = context.WithValue(reqCtx, peerCheckKey{}, func() error { return peer.check() })
 			response := dispatch(reqCtx, b, raw)
-			if peer.check() != nil {
-				return
+			if peer.failedRevert {
+				return errPeerRevert
+			}
+			if e = peer.check(); e != nil {
+				return e
 			}
 			raw, e = json.Marshal(response)
 			if e != nil {
-				return
+				return e
 			}
-			_ = respondAwaitACK(reqCtx, raw, func(ctx context.Context, b []byte) error { return writeFrame(ctx, h, b) }, func(ctx context.Context) ([]byte, error) { return readFrame(ctx, h) })
+			return respondAwaitACK(reqCtx, raw, func(ctx context.Context, b []byte) error { return writeFrame(ctx, h, b) }, func(ctx context.Context) ([]byte, error) { return readFrame(ctx, h) })
 		}()
+		if errors.Is(conversationErr, errPeerRevert) {
+			return errPeerRevert
+		}
 	}
 	return ctx.Err()
 }
@@ -100,7 +109,7 @@ func callNative(ctx context.Context, r Request) (Response, error) {
 	if e != nil {
 		return Response{}, e
 	}
-	peer, e := openPeer(pid, BrokerName, sid, false)
+	peer, e := openBrokerPeer(h, pid, sid)
 	if e != nil {
 		return Response{}, e
 	}

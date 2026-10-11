@@ -276,7 +276,7 @@ missing material rather than inventing credentials or weakening protection.
   services, software, paths/accounts/configuration and AI export are excluded.
   Native/host grants and runtime acceptance require separate approval.
 - Selected Windows service control is a separate default-off source candidate.
-  Read `docs/windows-service-actions.md` before broker, named-pipe, setup, permit,
+  Read `docs/windows-service-actions.md` and `docs/windows-action-provisioning.md` before broker, named-pipe, setup, permit,
   ledger or UI changes. Keep the distinct restricted service SID, key domain,
   protected broker/target ACLs, exact review, one-control semantics and immutable
   consumed state. Old read grants and Linux restart authority never promote.

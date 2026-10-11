@@ -32,6 +32,8 @@ remote desktop is deferred.
 - [Bounded older Windows event search and deliberately selected historical messages](windows-event-history-runtime.md), with an independent default-off grant and same-session receipt-bound followup
 - Concise fresh Read admin setup with explicit unchecked consent; service control
   remains separately optional
+- [Selected-service action receipts and explicit fresh broker setup](windows-action-provisioning.md),
+  with separate authority; native activation and action acceptance remain pending
 
 Implementation is not a release or native provider-access result. The
 [individual scope guides](windows-read-admin-setup.md) define the coverage and
@@ -78,8 +80,9 @@ published five-scope approval as consent for the current Read admin profile.
 
 ## Next management workflows
 
-Prioritize useful retained job results, shared monitoring settings, incident
-acknowledgement, maintenance and notifications. Then add explicit software and
+Selected-service action receipts and manual shared disk/CPU/RAM settings are
+implemented. Prioritize incident acknowledgement, maintenance and notifications,
+then explicit software and
 Windows Update jobs with reviewed targets and individual outcomes. Broader
 exact-target service/update actions require separately
 reviewed authority, explicit approval, least-privilege execution and durable

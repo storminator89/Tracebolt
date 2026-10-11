@@ -20,7 +20,7 @@ func TestFixedReadOnlySourceAndIPCSeparation(t *testing.T) {
 			t.Fatal(e)
 		}
 		s := string(b)
-		if file == "msix_windows.go" && !strings.Contains(s, "//go:uintptrescapes\nfunc (p *comObject) call(index int, args ...uintptr) error {") {
+		if file == "msix_windows.go" && !comForwarderLifetimeSource(s) {
 			t.Fatal("COM forwarding must preserve caller pointer lifetime with uintptrescapes; pointer conversions stay directly in call arguments")
 		}
 		compact := strings.NewReplacer(" ", "", "\t", "", "\n", "").Replace(s)
@@ -66,6 +66,27 @@ func TestIdentityOnlyPipeQueryAndPublicServerProof(t *testing.T) {
 	for _, bad := range []string{"OpenProcessToken(", "InspectOwned(", "LoadReceipt(", "ApplyInstall(", "ApplyStart(", "verifyExecutable(", "os.Open(", "ReadFile(", "SERVICE_CHANGE_CONFIG", "READ_CONTROL|windows.SYNCHRONIZE"} {
 		if strings.Contains(s, bad) {
 			t.Fatalf("proof exceeds read-only public scope %s", bad)
+		}
+	}
+}
+
+// Windows checkouts may use CRLF. Normalize only line endings; the directive
+// must still be immediately adjacent to this exact forwarding declaration.
+func comForwarderLifetimeSource(source string) bool {
+	return strings.Contains(strings.ReplaceAll(source, "\r\n", "\n"), "//go:uintptrescapes\nfunc (p *comObject) call(index int, args ...uintptr) error {")
+}
+
+func TestCOMForwarderLifetimeSourceLineEndings(t *testing.T) {
+	declaration := "func (p *comObject) call(index int, args ...uintptr) error {"
+	for _, ending := range []string{"\n", "\r\n"} {
+		valid := "//go:uintptrescapes" + ending + declaration
+		if !comForwarderLifetimeSource(valid) {
+			t.Fatalf("valid line ending %q rejected", ending)
+		}
+		for _, invalid := range []string{declaration, "//go:noinline" + ending + declaration, "//go:uintptrescapes" + ending + "func other() {}" + ending + declaration, "//go:uintptrescapes" + ending + strings.Replace(declaration, "call(", "other(", 1)} {
+			if comForwarderLifetimeSource(invalid) {
+				t.Fatalf("missing or misplaced lifetime contract accepted for %q", ending)
+			}
 		}
 	}
 }

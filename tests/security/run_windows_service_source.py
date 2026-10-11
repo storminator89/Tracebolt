@@ -14,9 +14,20 @@ _reporter = importlib.util.module_from_spec(_reporter_spec)
 _reporter_spec.loader.exec_module(_reporter)
 project = _reporter.project
 
-PACKAGES = ("./internal/windowsusersoftwarelocal", "./internal/windowspackage", "./internal/windowssetup", "./internal/windowssetupui", "./internal/windowsstate", "./internal/windowsservice", "./internal/windowsconsole",
+PACKAGES = ("./internal/windowsaction", "./internal/windowsusersoftwarelocal", "./internal/windowspackage", "./internal/windowssetup", "./internal/windowssetupui", "./internal/windowsstate", "./internal/windowsservice", "./internal/windowsconsole",
             "./internal/windowsagentconfig", "./cmd/windows-service", "./internal/windowsvolumes", "./internal/windowsprocessmetrics", "./internal/windowsnetwork", "./internal/windowsmanaged", "./internal/windowshardware", "./internal/windowshardwareworker", "./internal/windowsstorage", "./internal/windowsstorageworker", "./internal/windowssecuritycoverage", "./internal/windowssecuritycoverageworker")
 REQUIRED = {
+    ("localrmm/internal/windowsaction", "TestProvisionCreatesOnlyAfterExactApprovalAndKeepsStages"),
+    ("localrmm/internal/windowsaction", "TestProvisionFailureAndCancellationNeverRetryOrComplete"),
+    ("localrmm/internal/windowsaction", "TestProvisionRechecksDriftAndArtifactBeforeAnyFence"),
+    ("localrmm/internal/windowsaction", "TestProvisionUsedReceiptNeverFallsBackToLegacy"),
+    ("localrmm/internal/windowsaction", "TestProvisionJournalFailureAndLeaseLossPrecedeEffects"),
+    ("localrmm/internal/windowsaction", "TestProvisionNativeChangesStayExplicitAndDisabled"),
+    ("localrmm/internal/windowsaction", "TestActionPeerPrimaryTokenIsSelfOnly"),
+    ("localrmm/internal/windowsaction", "TestActionPublicBrokerProofNeedsNoForeignTokenOrPrivateFile"),
+    ("localrmm/internal/windowsaction", "TestActionPipeIdentityRevertsBeforeAnyAdmission"),
+    ("localrmm/cmd/windows-service", "TestActionProvisionRequiresSeparateUncheckedExactConsent"),
+    ("localrmm/cmd/windows-service", "TestActionProvisionCannotMixWithReadAdminModes"),
     ("localrmm/internal/windowsservice", "TestObservationDescriptorExtentIgnoresSuccessByteCount"),
     ("localrmm/internal/windowsservice", "TestObservationDescriptorMemoryFixtures"),
     ("localrmm/internal/windowsservice", "TestObservationPublicConfigIsExactMarkerNotMeasuredHash"),

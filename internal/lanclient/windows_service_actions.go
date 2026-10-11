@@ -18,12 +18,14 @@ import (
 )
 
 type WindowsActionRelayGrant struct {
-	Version          string                `json:"version"`
-	Enabled          bool                  `json:"enabled"`
-	SenderBinding    string                `json:"senderBinding"`
-	ManagerOrigin    string                `json:"managerOrigin"`
-	Binding          windowsaction.Binding `json:"binding"`
-	HTTPAcknowledged bool                  `json:"httpAcknowledged"`
+	Version           string                `json:"version"`
+	Enabled           bool                  `json:"enabled"`
+	SenderBinding     string                `json:"senderBinding"`
+	ManagerOrigin     string                `json:"managerOrigin"`
+	Binding           windowsaction.Binding `json:"binding"`
+	HTTPAcknowledged  bool                  `json:"httpAcknowledged"`
+	ProvisionDigest   string                `json:"provisionDigest,omitempty"`
+	BrokerImageDigest string                `json:"brokerImageDigest,omitempty"`
 }
 
 func windowsActionRelayOptions(sid string, create bool) windowsstate.Options {
@@ -33,7 +35,7 @@ func windowsActionRelayPath(m Material) string {
 	return filepath.Dir(filepath.Dir(m.config.StateDirectory)) + "-action-relay"
 }
 func validateWindowsActionGrant(m Material, g WindowsActionRelayGrant) error {
-	if !m.config.windowsInventory() || g.Version != "tracebolt.windows-service-action-relay.v1" || !windowsaction.ValidBinding(g.Binding) || g.SenderBinding != m.binding || g.ManagerOrigin != m.config.ManagerOrigin || g.Binding.EndpointID != m.config.AgentID || g.Binding.IncarnationDigest != "sha256:"+journalLeaf(m) || g.HTTPAcknowledged != (m.config.Profile == "http-test") {
+	if !m.config.windowsInventory() || !validWindowsActionRelayVersion(g) || !windowsaction.ValidBinding(g.Binding) || g.SenderBinding != m.binding || g.ManagerOrigin != m.config.ManagerOrigin || g.Binding.EndpointID != m.config.AgentID || g.Binding.IncarnationDigest != "sha256:"+journalLeaf(m) || g.HTTPAcknowledged != (m.config.Profile == "http-test") {
 		return ErrConfiguration
 	}
 	return nil
@@ -52,10 +54,20 @@ func ValidateWindowsActionRelaySetup(path string, b windowsaction.Binding, httpA
 	if e != nil || validateUpdatesActivatedMaterial(path, m) != nil {
 		return ErrState
 	}
-	return validateWindowsActionGrant(m, WindowsActionRelayGrant{"tracebolt.windows-service-action-relay.v1", true, m.binding, m.config.ManagerOrigin, b, httpAcknowledged})
+	return validateWindowsActionGrant(m, WindowsActionRelayGrant{"tracebolt.windows-service-action-relay.v1", true, m.binding, m.config.ManagerOrigin, b, httpAcknowledged, "", ""})
 }
 
 func InitializeWindowsActionRelayCreateOnly(path string, b windowsaction.Binding, httpAcknowledged bool) error {
+	return initializeWindowsActionRelay(path, b, httpAcknowledged, "", "")
+}
+
+func InitializeWindowsActionProvisionedRelay(path string, b windowsaction.Binding, httpAcknowledged bool, planDigest, imageDigest string) error {
+	if !windowsaction.ValidDigest(planDigest) || !windowsaction.ValidDigest(imageDigest) {
+		return ErrConfiguration
+	}
+	return initializeWindowsActionRelay(path, b, httpAcknowledged, planDigest, imageDigest)
+}
+func initializeWindowsActionRelay(path string, b windowsaction.Binding, httpAcknowledged bool, planDigest, imageDigest string) error {
 	if ValidateGuidedHandoff(path) != nil {
 		return ErrState
 	}
@@ -63,7 +75,12 @@ func InitializeWindowsActionRelayCreateOnly(path string, b windowsaction.Binding
 	if e != nil || validateUpdatesActivatedMaterial(path, m) != nil {
 		return ErrState
 	}
-	g := WindowsActionRelayGrant{"tracebolt.windows-service-action-relay.v1", true, m.binding, m.config.ManagerOrigin, b, httpAcknowledged}
+	g := WindowsActionRelayGrant{"tracebolt.windows-service-action-relay.v1", true, m.binding, m.config.ManagerOrigin, b, httpAcknowledged, "", ""}
+	if planDigest != "" || imageDigest != "" {
+		g.Version = "tracebolt.windows-service-action-relay.v2"
+		g.ProvisionDigest = planDigest
+		g.BrokerImageDigest = imageDigest
+	}
 	if validateWindowsActionGrant(m, g) != nil {
 		return ErrConfiguration
 	}
@@ -109,13 +126,14 @@ type windowsActionBroker interface {
 	Status(context.Context, windowsaction.Identity) (windowsaction.Result, error)
 }
 type windowsActionSender struct {
-	material Material
-	client   *http.Client
-	broker   windowsActionBroker
-	local    func(Material) (WindowsActionRelayGrant, error)
-	current  func(Material) bool
-	now      func() time.Time
-	exchange func(context.Context, string, uint64, []byte) ([]byte, int, error)
+	material    Material
+	client      *http.Client
+	broker      windowsActionBroker
+	local       func(Material) (WindowsActionRelayGrant, error)
+	current     func(Material) bool
+	now         func() time.Time
+	exchange    func(context.Context, string, uint64, []byte) ([]byte, int, error)
+	peerQueries func(context.Context, windowsaction.Binding, string) error
 }
 
 func openWindowsActionSender(m Material) *windowsActionSender {
@@ -124,6 +142,7 @@ func openWindowsActionSender(m Material) *windowsActionSender {
 	}
 	s := &windowsActionSender{material: m, client: newHTTPClient(m.tlsConfig, m.config.Profile == "http-test"), broker: windowsaction.Client{}, local: readWindowsActionRelay, current: func(m Material) bool { return currentWindowsContextMaterial(m, Load) }, now: func() time.Time { return time.Now().UTC() }}
 	s.exchange = s.request
+	s.peerQueries = windowsaction.EnableObserverPeerQueries
 	return s
 }
 func (s *windowsActionSender) Close() {
@@ -147,6 +166,9 @@ func (s *windowsActionSender) Run(ctx context.Context) string {
 		return "disabled"
 	}
 	if e != nil || !s.recheck(g) {
+		return "denied"
+	}
+	if g.Version == "tracebolt.windows-service-action-relay.v2" && (s.peerQueries == nil || s.peerQueries(ctx, g.Binding, g.BrokerImageDigest) != nil || !s.recheck(g)) {
 		return "denied"
 	}
 	caps, e := s.broker.Capabilities(ctx)
@@ -278,4 +300,56 @@ func runWindowsActionLoop(ctx context.Context, s *windowsActionSender) {
 		case <-timer.C:
 		}
 	}
+}
+
+// Relay v1 bytes and behavior remain unchanged. Query-only process consent is
+// fresh v2 authority and cannot be inferred from an old read/action grant.
+func validWindowsActionRelayVersion(g WindowsActionRelayGrant) bool {
+	switch g.Version {
+	case "tracebolt.windows-service-action-relay.v1":
+		return g.ProvisionDigest == "" && g.BrokerImageDigest == ""
+	case "tracebolt.windows-service-action-relay.v2":
+		return windowsaction.ValidDigest(g.ProvisionDigest) && windowsaction.ValidDigest(g.BrokerImageDigest)
+	}
+	return false
+}
+func ValidateWindowsActionRelayFreshSetup(path string, b windowsaction.Binding, http bool) error {
+	if e := ValidateWindowsActionRelaySetup(path, b, http); e != nil {
+		return e
+	}
+	m, e := Load(path)
+	if e != nil {
+		return e
+	}
+	sid, e := windowsservice.LookupServiceSID()
+	if e != nil {
+		return e
+	}
+	s, e := windowsstate.Open(windowsActionRelayPath(m), windowsActionRelayOptions(sid, false))
+	if e == nil {
+		s.Close()
+		return ErrState
+	}
+	if !errors.Is(e, os.ErrNotExist) {
+		return ErrState
+	}
+	return nil
+}
+func VerifyWindowsActionProvisionedRelay(path string, b windowsaction.Binding, http bool, planDigest, imageDigest string) error {
+	if e := ValidateWindowsActionRelaySetup(path, b, http); e != nil {
+		return e
+	}
+	m, e := Load(path)
+	if e != nil {
+		return e
+	}
+	g, e := readWindowsActionRelay(m)
+	if e != nil {
+		return e
+	}
+	want := WindowsActionRelayGrant{"tracebolt.windows-service-action-relay.v2", true, m.binding, m.config.ManagerOrigin, b, http, planDigest, imageDigest}
+	if g != want {
+		return ErrState
+	}
+	return nil
 }

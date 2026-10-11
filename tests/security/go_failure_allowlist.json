@@ -1,5 +1,5 @@
 {
-  "goSourceSha256": "0221efdb8809e1bc2410477e6d49043970394d74efb5d9eafc32aa489d054ba2",
+  "goSourceSha256": "0aaa9129bc77804cfa52bee7efa92710d79b5a166ba14d8fad2be3028fead2cf",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -240,6 +240,8 @@
       "TestReadOnlyPrerequisitesRejectSourceAndEveryMutatingMode"
     ],
     "localrmm/cmd/windows-service": [
+      "TestActionProvisionCannotMixWithReadAdminModes",
+      "TestActionProvisionRequiresSeparateUncheckedExactConsent",
       "TestAdapterContextConsentErrorsAndInvalidModes",
       "TestAdapterContextConsentFlagsExplicitAndBounded",
       "TestAdapterContextConsentNeverConfiguresWithMissingDependencies",
@@ -1104,6 +1106,9 @@
       "TestWindowsServiceActionAPIGoldenInterop",
       "TestWindowsServiceActionAPILinuxGrantIsInsufficient",
       "TestWindowsServiceActionAPIThreeOpsAndExactApproval",
+      "TestWindowsServiceActionHistoryAPIGoldenInterop",
+      "TestWindowsServiceActionHistoryAccessAndFinalSession",
+      "TestWindowsServiceActionHistoryBoundedReadOnlyAndDetails",
       "TestWindowsServiceAndPercentagesShareSingleSourcePass",
       "TestWindowsServiceAuthenticatedDefaultOffAndPolicy",
       "TestWindowsServiceAuthorityRechecksAndFailureEpoch",
@@ -1814,6 +1819,7 @@
       "TestTwentyFivePopulatedRecordsRetainFrames",
       "TestV4GenerationAdmitsOnlyExactBoundedAIRequestAndKeepsConsumeFloor",
       "TestWindowsActionFinalObservationPreservesAuthorityAndSuccessfulClock",
+      "TestWindowsActionHistoryViewPreservesFinalAuthority",
       "TestWindowsCapacityAuthorityExpiryCancellationAndAdmission",
       "TestWindowsCapacitySourceReadsDoNotWriteEnrollmentState",
       "TestWindowsCapacityUsesOriginalAcceptedReceiptOnly",
@@ -2485,6 +2491,7 @@
       "TestSystemNativeTLSHTTPExactRetryBeforeRecapture",
       "TestValidateGuidedHandoffIsLocalAndPreservesState",
       "TestWindowsActionManagerIngressRelayBrokerThreeOperationsAndLostResponse",
+      "TestWindowsActionRelayV2DoesNotPromoteLegacyQueryConsent",
       "TestWindowsAdapterContextConsentCreateOnlyAndReenable",
       "TestWindowsAdapterContextConsentFreshCreateRacesAndFailuresDoNotAdopt",
       "TestWindowsAdapterContextConsentMissingExistingRecordFailsClosedEveryMode",
@@ -3792,7 +3799,11 @@
       "TestUninstallProgressOnlyRecognizesExactBoundedParagraphs"
     ],
     "localrmm/internal/windowsaction": [
+      "TestActionPeerPrimaryTokenIsSelfOnly",
+      "TestActionPipeIdentityRevertsBeforeAnyAdmission",
+      "TestActionPublicBrokerProofNeedsNoForeignTokenOrPrivateFile",
       "TestBindingsCanonicalAndNoLinuxAdmission",
+      "TestBrokerPublicMarkerHasExactProtectedInstallationShape",
       "TestBrokerSCMDescriptorNeverGrantsObservationConfigControl",
       "TestBrokerServiceNeverReportsCleanUnexpectedExit",
       "TestClockAdvancingDuringSaveCannotReviveRejectedPermit",
@@ -3801,9 +3812,18 @@
       "TestHeldNormalVolumeRootDoesNotConfuseAddDirectoryWithFileAppend",
       "TestInitialPendingPausedUnknownAndStoppedRestartNeverControl",
       "TestMissingUsedStateCrashAndDisabledNeverInitialize",
+      "TestObservationPipeTokenRequiresExactServiceIdentity",
       "TestPartialRestartDriftLateRevocationAndAccessDenied",
+      "TestPeerLivenessQueryACEStaysProcessOnly",
       "TestPipeACLAndStrictIPC",
       "TestPipeBusyRetriesOnlyBeforeConnectionWithinOriginalContext",
+      "TestProvisionCreatesOnlyAfterExactApprovalAndKeepsStages",
+      "TestProvisionFailureAndCancellationNeverRetryOrComplete",
+      "TestProvisionFixedServiceSIDAndLegacyPolicyBytes",
+      "TestProvisionJournalFailureAndLeaseLossPrecedeEffects",
+      "TestProvisionNativeChangesStayExplicitAndDisabled",
+      "TestProvisionRechecksDriftAndArtifactBeforeAnyFence",
+      "TestProvisionUsedReceiptNeverFallsBackToLegacy",
       "TestResponseConsumptionACKKeepsBufferedReplyAliveAndBounded",
       "TestRestrictedBrokerLogonSIDIsExactAndTokenOnly",
       "TestSequenceGapsAndRejectedExpiryCannotRevive",
@@ -4742,6 +4762,7 @@
     ],
     "localrmm/internal/windowsusersoftwareledger": [],
     "localrmm/internal/windowsusersoftwarelocal": [
+      "TestCOMForwarderLifetimeSourceLineEndings",
       "TestChallengeExpiryAndRecipient",
       "TestClientDeclineDoesNotReserveOrCapture",
       "TestClientNativeTimeoutExitsWithoutFurtherReadsOrSubmit",

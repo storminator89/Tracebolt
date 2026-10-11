@@ -54,6 +54,9 @@ type request struct {
 type operation func(context.Context, request, io.Writer, io.Writer) (any, error)
 
 func run(ctx context.Context, args []string, out, stderr io.Writer) int {
+	if len(args) > 0 && args[0] == "--service-actions-provision" {
+		return runActionProvision(ctx, args[1:], out, stderr, nativeActionProvision)
+	}
 	if len(args) > 0 && args[0] == "--service-actions-setup" {
 		return runActionSetup(ctx, args[1:], out, stderr, nativeActionSetup)
 	}
@@ -524,6 +527,7 @@ func writeLifecycleResult(out io.Writer, result any) error {
 }
 
 func usage(out io.Writer) {
+	fmt.Fprintln(out, "Separate selected service control provisioning: --service-actions-provision --policy-file <reviewed policy> --broker-file <matching broker.exe> --artifact-manifest <public manifest>. Read-only plan first; --apply --approve <exact plan digest> --acknowledge-service-control is separate local consent. Broker remains disabled and observer stopped. No target action.")
 	fmt.Fprintln(out, "Fresh HTTPS renewable bootstrap only: add --automatic-certificate-renewal. "+enrollmentclient.AutomaticRenewalPrivacy)
 	fmt.Fprintln(out, "One-time existing-agent read-admin consent: --read-admin-preview; --read-admin-enable --apply --twelve-read-admin-scopes. Compatible receipt-owned installed binary and stopped activated inventory service required. HTTP-test also requires --insecure-http-test. No binary upgrade, repair, service start, service control, event-message content or cached WUA inspection is included.")
 	fmt.Fprintln(out, "Complete caller-visible Win32 services, separately consented with the owned service stopped: --full-services-preview; --full-services-enable --apply --complete-win32-services; --full-services-disable --apply. HTTP-test also requires --insecure-http-test. No old grant authorizes this scope.")

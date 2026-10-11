@@ -1,0 +1,7 @@
+/* History stays secondary to the current action and never overflows narrow views. */
+.windows-service-action-history { margin-block: .75rem; }
+.windows-service-action-history-content { overflow-wrap: anywhere; }
+.windows-service-action-history-list { list-style: none; padding: 0; max-height: 28rem; overflow-y: auto; }
+.windows-service-action-history-list > li { padding-block: .6rem; border-bottom: 1px solid var(--border); }
+.windows-service-action-history-list p { margin-block: .4rem; }
+.windows-service-action-history-receipt { padding: .5rem; margin-block: .5rem; border-left: 2px solid var(--border); }

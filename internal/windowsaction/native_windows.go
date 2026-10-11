@@ -172,6 +172,11 @@ func boundedString(b []byte, p *uint16, minimum uintptr) (string, error) {
 // Every admitted native configuration input is bounded and pinned. The first
 // slice supports no dependencies, triggers, recovery, scripts or command args.
 func configurationDigest(h windows.Handle, exe, expectedAccount string) (string, error) {
+	return configurationDigestMode(h, exe, expectedAccount, false)
+}
+
+// Only explicit create-only provisioning may inspect disabled staging.
+func configurationDigestMode(h windows.Handle, exe, expectedAccount string, disabled bool) (string, error) {
 	var n uint32
 	e := windows.QueryServiceConfig(h, nil, 0, &n)
 	if !errors.Is(e, windows.ERROR_INSUFFICIENT_BUFFER) || n < uint32(unsafe.Sizeof(windows.QUERY_SERVICE_CONFIG{})) || n > 8192 {
@@ -203,7 +208,7 @@ func configurationDigest(h windows.Handle, exe, expectedAccount string) (string,
 	if e != nil {
 		return "", e
 	}
-	if c.ServiceType != windows.SERVICE_WIN32_OWN_PROCESS || c.StartType != windows.SERVICE_DEMAND_START && c.StartType != windows.SERVICE_AUTO_START || c.ErrorControl > 1 {
+	if c.ServiceType != windows.SERVICE_WIN32_OWN_PROCESS || (disabled && c.StartType != windows.SERVICE_DISABLED || !disabled && c.StartType != windows.SERVICE_DEMAND_START && c.StartType != windows.SERVICE_AUTO_START) || c.ErrorControl > 1 {
 		return "", ErrBinding
 	}
 	failure, e := config2(h, windows.SERVICE_CONFIG_FAILURE_ACTIONS)
@@ -425,6 +430,12 @@ func hashHandle(h windows.Handle) (string, error) {
 	return "sha256:" + hex.EncodeToString(hash.Sum(nil)), nil
 }
 func ReviewExistingSetup(p Policy) error {
+	if p.ProvisioningVersion != "" {
+		return ErrInvalid
+	}
+	return reviewSetup(p, false)
+}
+func reviewSetup(p Policy, disabled bool) error {
 	if ValidatePolicy(p) != nil {
 		return ErrInvalid
 	}
@@ -446,19 +457,27 @@ func ReviewExistingSetup(p Policy) error {
 	if e != nil {
 		return e
 	}
-	if _, e = configurationDigest(h, exe, BrokerAccount); e != nil {
+	if _, e = configurationDigestMode(h, exe, BrokerAccount, disabled); e != nil {
 		return e
 	}
 	info, e := config2(h, windows.SERVICE_CONFIG_SERVICE_SID_INFO)
 	if e != nil || *(*uint32)(unsafe.Pointer(&info[0])) != windows.SERVICE_SID_TYPE_RESTRICTED {
 		return ErrBinding
 	}
-	held, _, e := holdExecutable(exe)
+	held, file, e := holdExecutable(exe)
 	for _, handle := range held {
 		defer windows.CloseHandle(handle)
 	}
 	if e != nil {
 		return e
+	}
+	hash, e := hashHandle(file)
+	if e != nil {
+		return e
+	}
+	marker, e := brokerMarker(h)
+	if e != nil || marker != brokerPublicMarkerPrefix+p.Binding.InstallationID+"; executable-sha256="+strings.TrimPrefix(hash, "sha256:") {
+		return ErrBinding
 	}
 	b, e := serviceSID(BrokerName)
 	if e != nil || b != p.BrokerSID {

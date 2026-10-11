@@ -73,12 +73,12 @@ jobs:
         if: matrix.platform == 'windows'
         env:
           GOTOOLCHAIN: local
-        run: go test -buildvcs=false -count=1 ./internal/windowseventhistory ./internal/windowshistoryrequest ./internal/windowshistorywire ./internal/windowshistorystate ./internal/windowshistoryworker ./internal/windowseventcontent ./internal/windowseventrequest ./internal/windowseventwire ./internal/windowseventstate ./internal/windowseventworker ./internal/windowsupdates ./internal/windowsupdateworker ./internal/windowsusersoftware ./internal/windowsusersoftwarewire ./internal/windowsusersoftwarelocal ./cmd/windows-user-software ./internal/windowsfullsoftware ./internal/windowsfullsoftwarewire ./internal/windowsfullprocesses ./internal/windowsfullprocesseswire ./internal/windowsadapters ./internal/windowshardware ./internal/windowshardwareworker ./internal/windowsstorage ./internal/windowsstorageworker ./internal/windowssecuritycoverage ./internal/windowssecuritycoverageworker
+        run: go test -buildvcs=false -count=1 ./internal/windowseventhistory ./internal/windowshistoryrequest ./internal/windowshistorywire ./internal/windowshistorystate ./internal/windowshistoryworker ./internal/windowseventcontent ./internal/windowseventrequest ./internal/windowseventwire ./internal/windowseventstate ./internal/windowseventworker ./internal/windowsupdates ./internal/windowsupdateworker ./internal/windowsusersoftware ./internal/windowsusersoftwarewire ./internal/windowsusersoftwarelocal ./internal/windowsaction ./cmd/windows-user-software ./internal/windowsfullsoftware ./internal/windowsfullsoftwarewire ./internal/windowsfullprocesses ./internal/windowsfullprocesseswire ./internal/windowsadapters ./internal/windowshardware ./internal/windowshardwareworker ./internal/windowsstorage ./internal/windowsstorageworker ./internal/windowssecuritycoverage ./internal/windowssecuritycoverageworker
       - name: Vet Windows parity sources (no host collection)
         if: matrix.platform == 'windows'
         env:
           GOTOOLCHAIN: local
-        run: go vet -buildvcs=false ./internal/windowseventhistory ./internal/windowshistoryrequest ./internal/windowshistorywire ./internal/windowshistorystate ./internal/windowshistoryworker ./internal/windowseventcontent ./internal/windowseventrequest ./internal/windowseventwire ./internal/windowseventstate ./internal/windowseventworker ./internal/windowsupdates ./internal/windowsupdateworker ./internal/windowsusersoftware ./internal/windowsusersoftwarewire ./internal/windowsusersoftwarelocal ./cmd/windows-user-software ./internal/windowsfullsoftware ./internal/windowsfullsoftwarewire ./internal/windowsfullprocesses ./internal/windowsfullprocesseswire ./internal/windowsadapters ./internal/windowshardware ./internal/windowshardwareworker ./internal/windowsstorage ./internal/windowsstorageworker ./internal/windowssecuritycoverage ./internal/windowssecuritycoverageworker
+        run: go vet -buildvcs=false ./internal/windowseventhistory ./internal/windowshistoryrequest ./internal/windowshistorywire ./internal/windowshistorystate ./internal/windowshistoryworker ./internal/windowseventcontent ./internal/windowseventrequest ./internal/windowseventwire ./internal/windowseventstate ./internal/windowseventworker ./internal/windowsupdates ./internal/windowsupdateworker ./internal/windowsusersoftware ./internal/windowsusersoftwarewire ./internal/windowsusersoftwarelocal ./internal/windowsaction ./cmd/windows-user-software ./internal/windowsfullsoftware ./internal/windowsfullsoftwarewire ./internal/windowsfullprocesses ./internal/windowsfullprocesseswire ./internal/windowsadapters ./internal/windowshardware ./internal/windowshardwareworker ./internal/windowsstorage ./internal/windowsstorageworker ./internal/windowssecuritycoverage ./internal/windowssecuritycoverageworker
       - name: Execute ARM64 Linux installer and helper fixture tests natively
         if: matrix.platform == 'linux' && matrix.arch == 'arm64'
         env:
@@ -86,6 +86,50 @@ jobs:
         run: |
           go test -race -buildvcs=false ./internal/agentinstall ./internal/socketowner ./internal/systeminventory ./internal/operational ./internal/completeoverview ./internal/linuxpackages ./internal/cachedupdates ./internal/assessment ./cmd/agent-service
           CGO_ENABLED=0 go build -buildvcs=false ./cmd/lan-manager ./cmd/action-setup ./cmd/lan-agent ./cmd/enroll-agent ./cmd/agent-service ./cmd/socket-owner-reader
+
+  windows-action-source:
+    name: Unsigned Windows action source (${{ matrix.arch }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [amd64, arm64]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Build matching source images without Windows execution
+        env:
+          GOOS: windows
+          GOARCH: ${{ matrix.arch }}
+          CGO_ENABLED: '0'
+          GOTOOLCHAIN: local
+        run: |
+          mkdir -p artifacts/windows-action-source
+          go build -buildvcs=false -trimpath -o artifacts/windows-action-source/tracebolt-windows-service.exe ./cmd/windows-service
+          go build -buildvcs=false -trimpath -o artifacts/windows-action-source/tracebolt-windows-action-broker.exe ./cmd/windows-action-broker
+          python3 - <<'PY'
+          import hashlib, json, os
+          from pathlib import Path
+          root = Path('artifacts/windows-action-source')
+          for name in ('tracebolt-windows-service', 'tracebolt-windows-action-broker'):
+              digest = hashlib.sha256((root / (name + '.exe')).read_bytes()).hexdigest()
+              manifest = {'schemaVersion': 'tracebolt.windows-setup-package.v1', 'version': 'v0.0.0-source', 'sourceCommit': os.environ['GITHUB_SHA'], 'architecture': os.environ['GOARCH'], 'sha256': digest}
+              (root / (name + '.manifest.json')).write_text(json.dumps(manifest, separators=(',', ':')) + '\n')
+          (root / 'SOURCE-ONLY.txt').write_text('Unsigned source artifacts. No native installation, ACL grant, service start, target action, release or acceptance is established. Review matching source and exact hashes before separately authorized native use.\n')
+          PY
+      - name: Upload unsigned source artifacts only
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: windows-action-source-${{ matrix.arch }}-${{ github.sha }}
+          path: artifacts/windows-action-source/
+          if-no-files-found: error
+          retention-days: 3
 
   package-dense-race:
     name: Dense package race (${{ matrix.topology }}/${{ matrix.profile }})

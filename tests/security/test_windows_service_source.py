@@ -208,6 +208,23 @@ class GateTests(unittest.TestCase):
         self.assertIn('"-tags=tracebolt_setup"', source)
         self.assertNotIn('tracebolt_setup_native', source)
         self.assertNotIn('run_windows_setup_acceptance', source)
+    def test_action_provisioning_source_is_required_without_host_actions(self):
+        self.assertIn("./internal/windowsaction", gate.PACKAGES)
+        required = ("localrmm/internal/windowsaction", "TestProvisionUsedReceiptNeverFallsBackToLegacy")
+        self.assertIn(required, gate.REQUIRED)
+        rows = [dict(Package=p, Test=t, Action="pass") for p, t in gate.REQUIRED if (p, t) != required]
+        with self.assertRaises(ValueError):
+            gate.check_events(b"\n".join(json.dumps(x).encode() for x in rows))
+        root = Path(__file__).resolve().parents[2]
+        source = (root / "internal/windowsaction/provision_windows.go").read_text()
+        self.assertIn("windows.SERVICE_DISABLED", source)
+        for forbidden in ("windows.StartService(", "windows.ControlService(", "windows.DeleteService("):
+            self.assertNotIn(forbidden, source)
+        workflow = (root / ".github/workflows/validate.yml").read_text()
+        self.assertIn("Unsigned Windows action source", workflow)
+        self.assertIn("windows-action-source-${{ matrix.arch }}-${{ github.sha }}", workflow)
+        self.assertIn("No native installation, ACL grant, service start, target action, release or acceptance", workflow)
+
     def test_malformed_stream(self):
         for raw in (b"[]",b"not json",b"",b" "*(32*1024*1024+1)):
             with self.assertRaises(ValueError):gate.check_events(raw)

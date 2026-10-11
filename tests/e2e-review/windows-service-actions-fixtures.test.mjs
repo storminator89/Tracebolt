@@ -83,3 +83,18 @@ test('hosted hook and inert import preserve existing roots and budgets, and cann
  assert.doesNotMatch(helper,/chromium\.launch|createServer|writeFile|execFile|spawn\(|fetch\(|page\.request|newContext\(/);
  assert.equal(typeof exerciseWindowsServiceActions,'function');
 });
+
+
+import {createWindowsServiceActionHistoryFixture,windowsServiceActionHistoryRoute,windowsServiceActionHistoryCaseName,requireWindowsServiceActionHistoryEvidence} from './windows-service-action-history-browser.mjs';
+test('retained history routes only the bounded same-identity GET vectors and never approve',async()=>{
+ const fixture=createWindowsServiceActionHistoryFixture(),state={blocked:[],external:[]},handler=windowsServiceActionHistoryRoute({base,fixture,state}),prefix='/api/devices/'+fixture.device.id+'/windows-service-actions/history';
+ const invoke=async(path,method='GET',raw=null)=>{let result;await handler({request:()=>({url:()=>base+path,method:()=>method,postData:()=>raw,headers:()=>({})}),fulfill:async value=>{result=JSON.parse(value.body);},abort:async value=>{result={abort:value};}});return result;};
+ assert.deepEqual(await invoke(prefix),fixture.history);assert.deepEqual(await invoke(prefix+'/'+fixture.details[0].job.identity.jobId),fixture.details[0]);
+ for(const [path,method,raw] of [[prefix,'POST','{}'],[prefix,'GET','{}'],[prefix+'?cursor=old','GET',null],[prefix+'/action_'+ 'f'.repeat(32),'GET',null]])assert.deepEqual(await invoke(path,method,raw),{abort:'blockedbyclient'});
+ assert.deepEqual(fixture.historyCounts,{list:1,detail:1});assert.equal(fixture.counts.approve,0);assert.equal(fixture.counts.preview,0);
+});
+test('history requires four distinct source-bound screenshots through the existing hosted gate',()=>{
+ const rows=evidence().map(row=>({...row,file:row.file.replace('service-actions','service-action-history'),test:windowsServiceActionHistoryCaseName}));
+ assert.deepEqual(requireWindowsServiceActionHistoryEvidence(rows,sourceSha),{screens:4,nativeAcceptance:false});assert.throws(()=>requireWindowsServiceActionHistoryEvidence(rows.slice(1),sourceSha));assert.throws(()=>requireWindowsServiceActionHistoryEvidence(rows,'b'.repeat(40)));
+ const runner=read('./windows-service-actions-runner.mjs');assert.match(runner,/requireWindowsServiceActionHistoryEvidence\(historyScreenshots,sourceSha\)/);assert.match(runner,/historyVariants.length!==4/);assert.match(runner,/historyStorage.includes\(detail.job.identity.jobId\)/);
+});
