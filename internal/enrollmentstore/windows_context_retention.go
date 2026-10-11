@@ -12,6 +12,7 @@ import (
 	"localrmm/internal/windowshardware"
 	"localrmm/internal/windowspatchcontext"
 	"localrmm/internal/windowssecurity"
+	"localrmm/internal/windowssecuritycoverage"
 	"localrmm/internal/windowssessions"
 	"localrmm/internal/windowsstorage"
 	"localrmm/internal/windowsupdates"
@@ -25,16 +26,17 @@ const windowsContextRetentionSchema = `CREATE TABLE enrollment_windows_context_r
 const windowsContextRetentionBytes = 80 << 10
 
 type WindowsContextRetained struct {
-	Updates         *windowsupdates.Snapshot      `json:"updates,omitempty"`
-	PatchContext    *windowspatchcontext.Snapshot `json:"patchContext,omitempty"`
-	SecurityPosture *windowssecurity.Snapshot     `json:"securityPosture,omitempty"`
-	SessionContext  *windowssessions.Snapshot     `json:"sessionContext,omitempty"`
-	HardwareContext *windowshardware.Snapshot     `json:"hardwareContext,omitempty"`
-	StorageContext  *windowsstorage.Snapshot      `json:"storageContext,omitempty"`
+	Updates          *windowsupdates.Snapshot          `json:"updates,omitempty"`
+	PatchContext     *windowspatchcontext.Snapshot     `json:"patchContext,omitempty"`
+	SecurityPosture  *windowssecurity.Snapshot         `json:"securityPosture,omitempty"`
+	SessionContext   *windowssessions.Snapshot         `json:"sessionContext,omitempty"`
+	HardwareContext  *windowshardware.Snapshot         `json:"hardwareContext,omitempty"`
+	StorageContext   *windowsstorage.Snapshot          `json:"storageContext,omitempty"`
+	SecurityCoverage *windowssecuritycoverage.Snapshot `json:"securityCoverage,omitempty"`
 }
 
 func (v WindowsContextRetained) empty() bool {
-	return v.Updates == nil && v.PatchContext == nil && v.SecurityPosture == nil && v.SessionContext == nil && v.HardwareContext == nil && v.StorageContext == nil
+	return v.Updates == nil && v.PatchContext == nil && v.SecurityPosture == nil && v.SessionContext == nil && v.HardwareContext == nil && v.StorageContext == nil && v.SecurityCoverage == nil
 }
 func contextObserved(q string) bool { return q == "observed" || q == "partial" }
 func usefulPatch(s *windowspatchcontext.Snapshot) bool {
@@ -136,6 +138,9 @@ func validRetainedContext(v WindowsContextRetained, f lanstore.Frame) bool {
 	if s := v.StorageContext; s != nil && (f.WindowsStorageContext == nil || windowsstorage.Validate(*s) != nil || !usefulStorage(s) || !valid(s.GrantID, f.WindowsStorageContext.GrantID, s.CollectedAt)) {
 		return false
 	}
+	if s := v.SecurityCoverage; s != nil && (f.WindowsSecurityCoverage == nil || windowssecuritycoverage.Validate(*s) != nil || !usefulCoverage(s) || !valid(s.GrantID, f.WindowsSecurityCoverage.GrantID, s.CollectedAt)) {
+		return false
+	}
 	return true
 }
 func readRetainedWindowsContext(ctx context.Context, t *transaction, id string, f lanstore.Frame) (WindowsContextRetained, error) {
@@ -177,6 +182,9 @@ func (v *WindowsContextRetained) expire(now time.Time) {
 	if v.StorageContext != nil && now.Sub(v.StorageContext.CollectedAt) >= 24*time.Hour {
 		v.StorageContext = nil
 	}
+	if v.SecurityCoverage != nil && now.Sub(v.SecurityCoverage.CollectedAt) >= 24*time.Hour {
+		v.SecurityCoverage = nil
+	}
 }
 func retainWindowsContext(ctx context.Context, t *transaction, id string, old, current lanstore.Frame, now time.Time) error {
 	if current.WindowsInventory == nil {
@@ -206,6 +214,9 @@ func retainWindowsContext(ctx context.Context, t *transaction, id string, old, c
 	if current.WindowsStorageContext == nil || v.StorageContext != nil && v.StorageContext.GrantID != current.WindowsStorageContext.GrantID {
 		v.StorageContext = nil
 	}
+	if current.WindowsSecurityCoverage == nil || v.SecurityCoverage != nil && v.SecurityCoverage.GrantID != current.WindowsSecurityCoverage.GrantID {
+		v.SecurityCoverage = nil
+	}
 	if s := current.WindowsUpdates; s != nil && contextObserved(s.Quality) {
 		v.Updates = s
 	}
@@ -223,6 +234,9 @@ func retainWindowsContext(ctx context.Context, t *transaction, id string, old, c
 	}
 	if s := current.WindowsStorageContext; usefulStorage(s) {
 		v.StorageContext = s
+	}
+	if s := current.WindowsSecurityCoverage; usefulCoverage(s) {
+		v.SecurityCoverage = s
 	}
 	v.expire(now)
 	v.fitRetentionBudget()
@@ -274,6 +288,9 @@ func retainedWindowsContextView(v WindowsContextRetained, f lanstore.Frame, now 
 	}
 	if v.StorageContext != nil && f.WindowsStorageContext != nil && !v.StorageContext.CollectedAt.Before(f.WindowsStorageContext.CollectedAt) {
 		v.StorageContext = nil
+	}
+	if v.SecurityCoverage != nil && f.WindowsSecurityCoverage != nil && !v.SecurityCoverage.CollectedAt.Before(f.WindowsSecurityCoverage.CollectedAt) {
+		v.SecurityCoverage = nil
 	}
 	if v.empty() {
 		return nil
@@ -415,9 +432,27 @@ func (v *WindowsContextRetained) fitRetentionBudget() {
 		if v.StorageContext != nil {
 			choose(v.StorageContext.CollectedAt, func() { v.StorageContext = nil })
 		}
+		if v.SecurityCoverage != nil {
+			choose(v.SecurityCoverage.CollectedAt, func() { v.SecurityCoverage = nil })
+		}
 		if oldest.IsZero() {
 			return
 		}
 		drop()
 	}
+}
+
+func usefulCoverage(s *windowssecuritycoverage.Snapshot) bool {
+	if s == nil {
+		return false
+	}
+	if s.TPM.Presence != "unknown" || s.Antivirus.ReportedCount != nil && *s.Antivirus.ReportedCount == 0 && s.Antivirus.Quality == "observed" {
+		return true
+	}
+	for _, p := range s.Antivirus.Rows {
+		if p.Name != nil || p.State != "unknown" || p.SignatureStatus != "unknown" {
+			return true
+		}
+	}
+	return false
 }

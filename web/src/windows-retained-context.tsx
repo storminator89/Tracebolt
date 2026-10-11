@@ -1,3 +1,4 @@
+import { WindowsSecurityCoveragePanel } from './windows-security-coverage';
 import { WindowsStorageContextPanel } from './windows-storage-context';
 import { WindowsHardwareContextPanel } from './windows-hardware-context';
 import { WindowsSessionContextPanel } from './windows-session-context';
@@ -8,8 +9,8 @@ import { inventoryAge } from './complete-packages-types';
 import { useLocale } from './i18n';
 import type { WindowsInventoryResource } from './windows-inventory-resource';
 
-type ContextKind = 'updates' | 'patchContext' | 'securityPosture' | 'sessionContext' | 'hardwareContext' | 'storageContext';
-const panels = { storageContext: WindowsStorageContextPanel, hardwareContext: WindowsHardwareContextPanel, updates: WindowsUpdatesPanel, patchContext: WindowsPatchContextPanel, securityPosture: WindowsSecurityPosturePanel, sessionContext: WindowsSessionContextPanel };
+type ContextKind = 'securityCoverage' | 'updates' | 'patchContext' | 'securityPosture' | 'sessionContext' | 'hardwareContext' | 'storageContext';
+const panels = { securityCoverage: WindowsSecurityCoveragePanel, storageContext: WindowsStorageContextPanel, hardwareContext: WindowsHardwareContextPanel, updates: WindowsUpdatesPanel, patchContext: WindowsPatchContextPanel, securityPosture: WindowsSecurityPosturePanel, sessionContext: WindowsSessionContextPanel };
 
 /** Never merge generations or replace the latest attempt's source failure. */
 export function WindowsContextPanel({ resource, kind }: { resource: WindowsInventoryResource; kind: ContextKind }) {

@@ -177,3 +177,27 @@ func windowsReadAdminScopesV7Absent(root, sid string, open func(string, windowss
 	}
 	return nil
 }
+
+func WindowsReadAdminScopesV8Absent(root, sid string) error {
+	return windowsReadAdminScopesV8Absent(root, sid, func(path string, options windowsstate.Options) (capabilityInspectionStore, error) {
+		s, e := windowsstate.Open(path, options)
+		if e != nil {
+			return nil, e
+		}
+		return s, nil
+	})
+}
+func windowsReadAdminScopesV8Absent(root, sid string, open func(string, windowsstate.Options) (capabilityInspectionStore, error)) error {
+	if windowsReadAdminScopesV7Absent(root, sid, open) != nil {
+		return ErrState
+	}
+	s, e := open(root+"-security-coverage", windowsSecurityCoverageOptions(sid, false))
+	if s != nil {
+		_ = s.Close()
+		return ErrState
+	}
+	if !errors.Is(e, os.ErrNotExist) {
+		return ErrState
+	}
+	return nil
+}

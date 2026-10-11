@@ -17,6 +17,7 @@ remote desktop is deferred.
   disk/CPU/RAM/selected-service checks
 - Adapter link/DNS/gateway, build/update history/reboot, Defender/Firewall,
   session/join, hardware/firmware/power and drive-letter/provider-disk context
+- [Security Center antivirus registration/status and TPM presence/version](windows-security-coverage.md), with explicit client/server and provider-access limits
 - Event headers, separately approved selected messages and offline cached updates
 - Concise fresh Read admin setup with explicit unchecked consent; service control
   remains separately optional
@@ -38,7 +39,7 @@ The remaining data areas below can progress independently.
    visible collection limits and unambiguous missing/denied results. Broader
    software coverage needs its own user-context design; per-user/Store and
    portable apps are not covered by machine HKLM registrations.
-3. **Security and patch detail.** BitLocker state, Secure Boot/TPM, third-party AV
+3. **Security and patch detail.** BitLocker state, Secure Boot and TPM readiness where legitimately accessible,
    and trustworthy update freshness/applicability/CVE evidence. Never read
    recovery keys or infer “secure” or “fully patched” from absent data.
 4. **Network and hardware detail.** Routes, traffic/error counters and CPU/RAM

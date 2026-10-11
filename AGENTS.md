@@ -117,7 +117,7 @@ missing material rather than inventing credentials or weakening protection.
   identity and all exact grants are durably verified; retain indeterminate
   transitions for read-only reconciliation. The released five-scope preview exposes its GUI path; the current fresh GUI
   uses Read admin below. Existing service/grant receipts must not be promoted.
-- The fourteen-scope Windows Read admin source profile is the prominent fresh
+- The fifteen-scope Windows Read admin source profile is the prominent fresh
   Setup choice; actual scope consent remains unchecked. Read
   `docs/windows-read-admin-setup.md`. Preserve legacy consent/receipt bytes and
   historical development interfaces, disabled fresh staging and exact identity/
@@ -160,6 +160,12 @@ missing material rather than inventing credentials or weakening protection.
   Personal labels require explicit disclosure. Unknown counts/denied fields are
   never empty/full-account assertions. No remote queries, impersonation, session
   actions, accounts, credentials or host permission follows from source tests.
+- Windows Security Center antivirus and TPM presence/version are a separate default-off scope.
+  Read `docs/windows-security-coverage.md` before fixed client WSC/TBS sources,
+  worker bounds, wire v14, fresh fifteen-scope consent v8/receipt 6 or private UI.
+  Server WSC is unsupported; unknowns never imply protection or TPM readiness.
+  No reserved TPM fields, raw TPM commands, owner auth, BitLocker reads/keys,
+  remediation paths, privileges or host acceptance follows from source tests.
 - Windows Defender/Firewall posture is a separate default-off local scope.
   Read `docs/windows-security-posture.md` before changing fixed local WMI/COM
   reads, independent provider workers, consent, v10 wire or private Security UI.

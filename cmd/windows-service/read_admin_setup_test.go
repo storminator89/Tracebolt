@@ -82,7 +82,7 @@ func TestReadAdminWizardGroupedChoiceDisclosureAndLegacyChoice(t *testing.T) {
 	}
 	for _, insecure := range []bool{false, true} {
 		text := setupWizardReadAdminDisclosure(insecure)
-		for _, word := range []string{"14 explicit read scopes", "physical chassis serial (Win32_SystemEnclosure)", "BIOS serial metadata", "manufacturer/model", "firmware vendor/version/date", "power/battery", "Users and sessions", "personal", "Provider presence has not been checked", "LocalService", "cached WUA", "service control", "Selected event-message"} {
+		for _, word := range []string{"15 explicit read scopes", "physical chassis serial (Win32_SystemEnclosure)", "BIOS serial metadata", "manufacturer/model", "firmware vendor/version/date", "power/battery", "Users and sessions", "personal", "Provider presence has not been checked", "LocalService", "cached WUA", "service control", "Selected event-message"} {
 			if !strings.Contains(text, word) {
 				t.Fatal("missing", word)
 			}
@@ -144,7 +144,7 @@ func TestReadAdminWizardSummaryKeepsAllGroupsAndExplicitExclusions(t *testing.T)
 			t.Fatal("group scope omitted")
 		}
 	}
-	for _, word := range []string{"14 read scopes", "physical chassis serial (Win32_SystemEnclosure)", "BIOS serial metadata", "personal", "LocalService", "unverified", "event-message", "cached WUA", "service control", "external-AI", "Scope details"} {
+	for _, word := range []string{"15 read scopes", "physical chassis serial (Win32_SystemEnclosure)", "BIOS serial metadata", "personal", "LocalService", "unverified", "event-message", "cached WUA", "service control", "external-AI", "Scope details"} {
 		if !strings.Contains(text, word) {
 			t.Fatal("summary omits", word)
 		}
@@ -158,7 +158,7 @@ func freshReadAdminFixtureHooks(f *readSetupFixture) readSetupSteps {
 	h := f.hooks()
 	h.configure = func(_ string, c lanclient.WindowsCapabilityConsent) (lanclient.WindowsCapabilityConsentResult, error) {
 		f.configured++
-		if !reflect.DeepEqual(c, freshReadAdminSetupConsent(false)) {
+		if !reflect.DeepEqual(c, freshReadAdminSetupConsent(false)) && !reflect.DeepEqual(c, historicalReadAdminV7Consent()) {
 			return lanclient.WindowsCapabilityConsentResult{}, errLifecycle
 		}
 		if f.partial {
@@ -178,7 +178,7 @@ func freshReadAdminFixtureHooks(f *readSetupFixture) readSetupSteps {
 
 func TestReadAdminV7FreshProfileReceipt5ExactThirteenGrants(t *testing.T) {
 	f := &readSetupFixture{}
-	c := freshReadAdminSetupConsent(false)
+	c := historicalReadAdminV7Consent()
 	if _, e := setupReadObservation(context.Background(), "fixture", c, freshReadAdminFixtureHooks(f)); e != nil {
 		t.Fatal(e)
 	}
@@ -227,12 +227,12 @@ func TestReadAdminV7FreshProfileReceipt5ExactThirteenGrants(t *testing.T) {
 func TestReadAdminV7FreshGrantFailuresAndOriginalSenderGuard(t *testing.T) {
 	for _, phase := range []string{"fresh-scopes", "grants-started", "configure", "verify-grants", "grant-digests", "grants-verified", "startup-transition-started"} {
 		f := &readSetupFixture{fail: phase}
-		if _, e := setupReadObservation(context.Background(), "fixture", freshReadAdminSetupConsent(false), freshReadAdminFixtureHooks(f)); e == nil || f.started != 0 || f.transitioned != 0 {
+		if _, e := setupReadObservation(context.Background(), "fixture", historicalReadAdminV7Consent(), freshReadAdminFixtureHooks(f)); e == nil || f.started != 0 || f.transitioned != 0 {
 			t.Fatal("incomplete authority started", phase, e)
 		}
 	}
 	f := &readSetupFixture{partial: true}
-	if _, e := setupReadObservation(context.Background(), "fixture", freshReadAdminSetupConsent(false), freshReadAdminFixtureHooks(f)); e == nil || f.started != 0 || f.record.ReadSetup.Phase != "grants-incomplete" || f.record.ReadSetup.Grants.FailedScope != "windows-storage-context-v1" || len(f.record.ReadSetup.Grants.AppliedScopes) != 12 {
+	if _, e := setupReadObservation(context.Background(), "fixture", historicalReadAdminV7Consent(), freshReadAdminFixtureHooks(f)); e == nil || f.started != 0 || f.record.ReadSetup.Phase != "grants-incomplete" || f.record.ReadSetup.Grants.FailedScope != "windows-storage-context-v1" || len(f.record.ReadSetup.Grants.AppliedScopes) != 12 {
 		t.Fatal("partial storage failure erased evidence")
 	}
 	f = &readSetupFixture{}
@@ -271,14 +271,14 @@ func TestReadAdminV7FreshGrantFailuresAndOriginalSenderGuard(t *testing.T) {
 		}
 		return lanclient.WindowsCapabilityConsentResult{}, errLifecycle
 	}
-	if _, e := setupReadObservation(context.Background(), "fixture", freshReadAdminSetupConsent(false), h); e == nil || f.started != 0 || f.transitioned != 0 {
+	if _, e := setupReadObservation(context.Background(), "fixture", historicalReadAdminV7Consent(), h); e == nil || f.started != 0 || f.transitioned != 0 {
 		t.Fatal("guard failure started")
 	}
 }
 
 func TestFreshReadAdminV7LifecycleLeaseRequiresExactCompletedReceipt5(t *testing.T) {
 	setup := &readSetupFixture{}
-	if _, e := setupReadObservation(context.Background(), "fixture", freshReadAdminSetupConsent(false), freshReadAdminFixtureHooks(setup)); e != nil {
+	if _, e := setupReadObservation(context.Background(), "fixture", historicalReadAdminV7Consent(), freshReadAdminFixtureHooks(setup)); e != nil {
 		t.Fatal(e)
 	}
 	for _, kind := range []string{"exact", "receipt2", "receipt3", "missing-storage", "staged", "wrong-consent"} {
@@ -334,5 +334,149 @@ func TestReadAdminHistoricalV6ReceiptBytesRemainSeparate(t *testing.T) {
 	raw, _ := json.Marshal(old)
 	if _, e := decodeInstallReceipt(raw, old.Service.Layout); e == nil {
 		t.Fatal("old receipt gained storage authority")
+	}
+}
+
+func historicalReadAdminV7Consent() lanclient.WindowsCapabilityConsent {
+	return lanclient.WindowsCapabilityConsent{SchemaVersion: lanclient.WindowsCapabilityConsentVersionV7, CollectionProfile: "windows-inventory-v1", Scopes: lanclient.WindowsReadAdminScopesV7(), Acknowledged: true}
+}
+
+func TestFreshReadAdminV8LifecycleLeaseRequiresExactCompletedReceipt6(t *testing.T) {
+	setup := &readSetupFixture{}
+	if _, e := setupReadObservation(context.Background(), "fixture", freshReadAdminSetupConsent(false), freshReadAdminFixtureHooks(setup)); e != nil {
+		t.Fatal(e)
+	}
+	for _, kind := range []string{"exact", "receipt2", "receipt3", "missing-security-coverage", "staged", "wrong-consent"} {
+		var receipt installReceipt
+		json.Unmarshal(setup.raw, &receipt)
+		switch kind {
+		case "receipt2":
+			receipt.Version = 2
+		case "receipt3":
+			receipt.Version = 3
+		case "missing-security-coverage":
+			receipt.ReadSetup.GrantDigests = receipt.ReadSetup.GrantDigests[:13]
+		case "staged":
+			receipt.Service.Version = 2
+		case "wrong-consent":
+			receipt.ReadSetup.Consent = readAdminSetupConsent(false)
+		}
+		raw, _ := json.Marshal(receipt)
+		lease := &lifecycleLeaseFixture{raw: raw, layout: receipt.Service.Layout}
+		calls := 0
+		_, e := withReceiptLease(context.Background(), lease.open, func(owned installReceipt, held receiptStore) (any, error) {
+			calls++
+			if !lease.held.Load() || held != lease || owned.Version != 6 || !completeReadSetup(owned) || owned.Service.Version != 1 {
+				t.Fatal("lifecycle ownership not bound")
+			}
+			return nil, nil
+		})
+		wantCalls := 0
+		if kind == "exact" {
+			wantCalls = 1
+		}
+		if (e == nil) != (kind == "exact") || calls != wantCalls || lease.held.Load() || lease.closes != 1 {
+			t.Fatal("wrong lifecycle admission", kind, e, calls)
+		}
+	}
+}
+
+func TestReadAdminV8FreshGrantFailuresAndOriginalSenderGuard(t *testing.T) {
+	for _, phase := range []string{"fresh-scopes", "grants-started", "configure", "verify-grants", "grant-digests", "grants-verified", "startup-transition-started"} {
+		f := &readSetupFixture{fail: phase}
+		if _, e := setupReadObservation(context.Background(), "fixture", freshReadAdminSetupConsent(false), freshReadAdminFixtureHooks(f)); e == nil || f.started != 0 || f.transitioned != 0 {
+			t.Fatal("incomplete authority started", phase, e)
+		}
+	}
+	f := &readSetupFixture{partial: true}
+	if _, e := setupReadObservation(context.Background(), "fixture", freshReadAdminSetupConsent(false), freshReadAdminFixtureHooks(f)); e == nil || f.started != 0 || f.record.ReadSetup.Phase != "grants-incomplete" || f.record.ReadSetup.Grants.FailedScope != "windows-security-coverage-v1" || len(f.record.ReadSetup.Grants.AppliedScopes) != 13 {
+		t.Fatal("partial security-coverage failure erased evidence")
+	}
+	f = &readSetupFixture{}
+	h := freshReadAdminFixtureHooks(f)
+	h.configure = func(_ string, c lanclient.WindowsCapabilityConsent) (lanclient.WindowsCapabilityConsentResult, error) {
+		if _, e := readAdminFreshGrantReceipt(f.raw, c, strings.Repeat("a", 64)); e != nil {
+			t.Fatal("original phase rejected", e)
+		}
+		if _, e := readAdminFreshGrantReceipt(f.raw, c, strings.Repeat("b", 64)); e == nil {
+			t.Fatal("replacement identity admitted")
+		}
+		for _, kind := range []string{"version", "phase", "consent", "prepared", "service", "binding", "extra"} {
+			var bad installReceipt
+			json.Unmarshal(f.raw, &bad)
+			switch kind {
+			case "version":
+				bad.Version = 3
+			case "phase":
+				bad.ReadSetup.Phase = "configured"
+			case "consent":
+				bad.ReadSetup.Consent = readAdminSetupConsent(false)
+			case "prepared":
+				bad.Prepared = false
+			case "service":
+				bad.Service.Version = 1
+			case "binding":
+				bad.ReadSetup.SenderBinding = ""
+			}
+			raw, _ := json.Marshal(bad)
+			if kind == "extra" {
+				raw = append(raw[:len(raw)-1], []byte(`,"extra":true}`)...)
+			}
+			if _, e := readAdminFreshGrantReceipt(raw, c, strings.Repeat("a", 64)); e == nil {
+				t.Fatal("mutated fresh phase admitted", kind)
+			}
+		}
+		return lanclient.WindowsCapabilityConsentResult{}, errLifecycle
+	}
+	if _, e := setupReadObservation(context.Background(), "fixture", freshReadAdminSetupConsent(false), h); e == nil || f.started != 0 || f.transitioned != 0 {
+		t.Fatal("guard failure started")
+	}
+}
+
+func TestReadAdminV8FreshProfileReceipt6ExactFourteenGrants(t *testing.T) {
+	f := &readSetupFixture{}
+	c := freshReadAdminSetupConsent(false)
+	if _, e := setupReadObservation(context.Background(), "fixture", c, freshReadAdminFixtureHooks(f)); e != nil {
+		t.Fatal(e)
+	}
+	if f.record.Version != 6 || !completeReadSetup(f.record) || len(f.record.ReadSetup.GrantDigests) != 14 || f.record.ReadSetup.GrantDigests[13].Scope != "windows-security-coverage-v1" || f.started != 1 {
+		t.Fatal("missing fresh receipt6 authority")
+	}
+	if _, e := decodeInstallReceipt(f.raw, f.record.Service.Layout); e != nil {
+		t.Fatal(e)
+	}
+	for _, version := range []int{1, 2, 3, 4, 5} {
+		bad := f.record
+		bad.Version = version
+		raw, _ := json.Marshal(bad)
+		if _, e := decodeInstallReceipt(raw, f.record.Service.Layout); e == nil {
+			t.Fatal("old receipt promoted", version)
+		}
+	}
+	for _, consent := range []lanclient.WindowsCapabilityConsent{readSetupConsentFixture(), readAdminSetupConsent(false)} {
+		bad := f.record
+		progress := *f.record.ReadSetup
+		bad.ReadSetup = &progress
+		progress.Consent = consent
+		raw, _ := json.Marshal(bad)
+		if _, e := decodeInstallReceipt(raw, f.record.Service.Layout); e == nil {
+			t.Fatal("old consent promoted to receipt6")
+		}
+	}
+	for _, kind := range []string{"security-coverage-missing", "security-coverage-misordered", "security-coverage-invalid"} {
+		var bad installReceipt
+		json.Unmarshal(f.raw, &bad)
+		switch kind {
+		case "security-coverage-missing":
+			bad.ReadSetup.GrantDigests = bad.ReadSetup.GrantDigests[:13]
+		case "security-coverage-misordered":
+			bad.ReadSetup.GrantDigests[12], bad.ReadSetup.GrantDigests[13] = bad.ReadSetup.GrantDigests[13], bad.ReadSetup.GrantDigests[12]
+		case "security-coverage-invalid":
+			bad.ReadSetup.GrantDigests[13].SHA256 = ""
+		}
+		raw, _ := json.Marshal(bad)
+		if _, e := decodeInstallReceipt(raw, bad.Service.Layout); e == nil {
+			t.Fatal("invalid security-coverage digest admitted", kind)
+		}
 	}
 }

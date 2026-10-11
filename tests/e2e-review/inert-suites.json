@@ -44,6 +44,7 @@
     "windows-security-posture-fixtures.test.mjs",
     "windows-session-context-fixtures.test.mjs",
     "windows-service-actions-fixtures.test.mjs",
+    "windows-security-coverage-fixtures.test.mjs",
     "windows-hardware-context-fixtures.test.mjs",
     "windows-storage-context-fixtures.test.mjs"
   ],

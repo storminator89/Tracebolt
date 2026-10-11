@@ -15,8 +15,13 @@ _reporter_spec.loader.exec_module(_reporter)
 project = _reporter.project
 
 PACKAGES = ("./internal/windowspackage", "./internal/windowssetup", "./internal/windowssetupui", "./internal/windowsstate", "./internal/windowsservice", "./internal/windowsconsole",
-            "./internal/windowsagentconfig", "./cmd/windows-service", "./internal/windowsvolumes", "./internal/windowsprocessmetrics", "./internal/windowsnetwork", "./internal/windowsmanaged", "./internal/windowshardware", "./internal/windowshardwareworker", "./internal/windowsstorage", "./internal/windowsstorageworker")
+            "./internal/windowsagentconfig", "./cmd/windows-service", "./internal/windowsvolumes", "./internal/windowsprocessmetrics", "./internal/windowsnetwork", "./internal/windowsmanaged", "./internal/windowshardware", "./internal/windowshardwareworker", "./internal/windowsstorage", "./internal/windowsstorageworker", "./internal/windowssecuritycoverage", "./internal/windowssecuritycoverageworker")
 REQUIRED = {
+    ("localrmm/internal/windowssecuritycoverage", "TestCoverageNativeReadOnlySourceContract"),
+    ("localrmm/internal/windowssecuritycoverage", "TestEscapedProductNamesFitBeforeEnvelopeEncoding"),
+    ("localrmm/internal/windowssecuritycoverageworker", "TestServeDeniesAbsentOrChangedAuthority"),
+    ("localrmm/internal/windowssecuritycoverageworker", "TestIndependentProviderTimeoutKeepsSibling"),
+    ("localrmm/cmd/windows-service", "TestReadAdminV8FreshProfileReceipt6ExactFourteenGrants"),
     ("localrmm/internal/windowsstorage", "TestStorageCanonicalBoundsAndMeaning"),
     ("localrmm/internal/windowsstorage", "TestDriveMappingExactRootsSkipsRemoteAndKeepsDenied"),
     ("localrmm/internal/windowsstorageworker", "TestServeDeniesAbsentOrChangedAuthority"),
