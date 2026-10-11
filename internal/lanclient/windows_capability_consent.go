@@ -9,18 +9,22 @@ import (
 	"localrmm/internal/enrollmentcrypto"
 	"localrmm/internal/windowsadapters"
 	"localrmm/internal/windowseventhealth"
+	"localrmm/internal/windowsfullprocesses"
 	"localrmm/internal/windowsfullservices"
 	"localrmm/internal/windowsfullsoftware"
 	"localrmm/internal/windowshardware"
 	"localrmm/internal/windowsmanaged"
 	"localrmm/internal/windowsnetwork"
+	"localrmm/internal/windowsnetworkcontext"
 	"localrmm/internal/windowspatchcontext"
 	"localrmm/internal/windowsprocessmetrics"
+	"localrmm/internal/windowsresourcecontext"
 	"localrmm/internal/windowssecurity"
 	"localrmm/internal/windowssecuritycoverage"
 	"localrmm/internal/windowssessions"
 	"localrmm/internal/windowsstate"
 	"localrmm/internal/windowsstorage"
+	"localrmm/internal/windowsstorageio"
 	"localrmm/internal/windowsvolumes"
 	"os"
 )
@@ -57,8 +61,8 @@ type WindowsCapabilityConsent struct {
 }
 
 func (r WindowsCapabilityConsent) Validate() error {
-	if r.SchemaVersion == WindowsCapabilityConsentVersionV5 || r.SchemaVersion == WindowsCapabilityConsentVersionV6 || r.SchemaVersion == WindowsCapabilityConsentVersionV7 || r.SchemaVersion == WindowsCapabilityConsentVersionV8 {
-		if !validWindowsReadAdminConsent(r) && !validWindowsReadAdminConsentV6(r) && !validWindowsReadAdminConsentV7(r) && !validWindowsReadAdminConsentV8(r) {
+	if r.SchemaVersion == WindowsCapabilityConsentVersionV5 || r.SchemaVersion == WindowsCapabilityConsentVersionV6 || r.SchemaVersion == WindowsCapabilityConsentVersionV7 || r.SchemaVersion == WindowsCapabilityConsentVersionV8 || r.SchemaVersion == WindowsCapabilityConsentVersionV9 || r.SchemaVersion == WindowsCapabilityConsentVersionV10 || r.SchemaVersion == WindowsCapabilityConsentVersionV11 || r.SchemaVersion == WindowsCapabilityConsentVersionV12 {
+		if !validWindowsReadAdminConsent(r) && !validWindowsReadAdminConsentV6(r) && !validWindowsReadAdminConsentV7(r) && !validWindowsReadAdminConsentV8(r) && !validWindowsReadAdminConsentV9(r) && !validWindowsReadAdminConsentV10(r) && !validWindowsReadAdminConsentV11(r) && !validWindowsReadAdminConsentV12(r) {
 			return ErrConfiguration
 		}
 		return nil
@@ -121,16 +125,16 @@ type WindowsCapabilityConsentResult struct {
 // and FailedScope may have an indeterminate write outcome. Never rollback,
 // erase, re-enroll or enable unselected scopes to recover.
 func ConfigureWindowsCapabilities(path string, r WindowsCapabilityConsent) (WindowsCapabilityConsentResult, error) {
-	if r.SchemaVersion == WindowsCapabilityConsentVersionV5 || r.SchemaVersion == WindowsCapabilityConsentVersionV6 || r.SchemaVersion == WindowsCapabilityConsentVersionV7 || r.SchemaVersion == WindowsCapabilityConsentVersionV8 {
+	if r.SchemaVersion == WindowsCapabilityConsentVersionV5 || r.SchemaVersion == WindowsCapabilityConsentVersionV6 || r.SchemaVersion == WindowsCapabilityConsentVersionV7 || r.SchemaVersion == WindowsCapabilityConsentVersionV8 || r.SchemaVersion == WindowsCapabilityConsentVersionV9 || r.SchemaVersion == WindowsCapabilityConsentVersionV10 || r.SchemaVersion == WindowsCapabilityConsentVersionV11 || r.SchemaVersion == WindowsCapabilityConsentVersionV12 {
 		return WindowsCapabilityConsentResult{}, ErrConfiguration
 	}
 	return configureWindowsCapabilities(path, r, nil)
 }
 
-// V5 and V6 require a live owned/stopped service and protected phase guard before and
+// Every Read admin version requires a live owned/stopped service and protected phase guard before and
 // after each exact scope operation, plus the unchanged activated sender identity.
 func ConfigureWindowsReadAdminCapabilities(path string, r WindowsCapabilityConsent, guard func() error) (WindowsCapabilityConsentResult, error) {
-	if (!validWindowsReadAdminConsent(r) && !validWindowsReadAdminConsentV6(r) && !validWindowsReadAdminConsentV7(r) && !validWindowsReadAdminConsentV8(r)) || guard == nil {
+	if (!validWindowsReadAdminConsent(r) && !validWindowsReadAdminConsentV6(r) && !validWindowsReadAdminConsentV7(r) && !validWindowsReadAdminConsentV8(r) && !validWindowsReadAdminConsentV9(r) && !validWindowsReadAdminConsentV10(r) && !validWindowsReadAdminConsentV11(r) && !validWindowsReadAdminConsentV12(r)) || guard == nil {
 		return WindowsCapabilityConsentResult{}, ErrConfiguration
 	}
 	binding, e := WindowsCapabilityIdentity(path, r)
@@ -171,6 +175,12 @@ func configureWindowsCapabilities(path string, r WindowsCapabilityConsent, guard
 			}()
 		}
 		switch scope {
+		case windowsstorageio.Scope:
+			_, err := ConfigureWindowsStorageIO(path, "enable", true, r.InsecureHTTPAcknowledged)
+			return err
+		case windowsresourcecontext.Scope:
+			_, err := ConfigureWindowsResourceContext(path, "enable", true, r.InsecureHTTPAcknowledged)
+			return err
 		case windowsstorage.Scope:
 			_, err := ConfigureWindowsStorageContext(path, "enable", true, r.InsecureHTTPAcknowledged)
 			return err
@@ -182,6 +192,12 @@ func configureWindowsCapabilities(path string, r WindowsCapabilityConsent, guard
 			return err
 		case windowsfullservices.Scope:
 			_, err := ConfigureWindowsFullServices(path, "enable", true, r.InsecureHTTPAcknowledged)
+			return err
+		case windowsnetworkcontext.Scope:
+			_, err := ConfigureWindowsNetworkContext(path, "enable", true, r.InsecureHTTPAcknowledged)
+			return err
+		case windowsfullprocesses.Scope:
+			_, err := ConfigureWindowsFullProcesses(path, "enable", true, r.InsecureHTTPAcknowledged)
 			return err
 		case windowsfullsoftware.Scope:
 			_, err := ConfigureWindowsFullSoftware(path, "enable", true, r.InsecureHTTPAcknowledged)
@@ -321,6 +337,12 @@ func WindowsCapabilityGrantDigests(path string, r WindowsCapabilityConsent) ([]W
 }
 func readWindowsCapabilityConsent(m Material, scope string) (any, bool) {
 	switch scope {
+	case windowsstorageio.Scope:
+		c, ok := readWindowsStorageIOConsent(m)
+		return c, ok
+	case windowsresourcecontext.Scope:
+		c, ok := readWindowsResourceContextConsent(m)
+		return c, ok
 	case windowsstorage.Scope:
 		c, ok := readWindowsStorageContextConsent(m)
 		return c, ok
@@ -332,6 +354,12 @@ func readWindowsCapabilityConsent(m Material, scope string) (any, bool) {
 		return c, ok
 	case windowsfullservices.Scope:
 		c, ok := readWindowsFullServicesGrant(m)
+		return c, ok
+	case windowsnetworkcontext.Scope:
+		c, ok := readWindowsNetworkContextGrant(m)
+		return c, ok
+	case windowsfullprocesses.Scope:
+		c, ok := readWindowsFullProcessesGrant(m)
 		return c, ok
 	case windowsfullsoftware.Scope:
 		c, ok := readWindowsFullSoftwareGrant(m)

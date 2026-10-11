@@ -25,6 +25,8 @@ import (
 	"localrmm/internal/windowspatchcontext"
 	"localrmm/internal/windowspatchworker"
 	"localrmm/internal/windowsprocessmetrics"
+	"localrmm/internal/windowsresourcecontext"
+	"localrmm/internal/windowsresourceworker"
 	"localrmm/internal/windowssecurity"
 	"localrmm/internal/windowssecuritycoverage"
 	"localrmm/internal/windowssecuritycoverageworker"
@@ -32,6 +34,8 @@ import (
 	"localrmm/internal/windowssessions"
 	"localrmm/internal/windowssessionworker"
 	"localrmm/internal/windowsstorage"
+	"localrmm/internal/windowsstorageio"
+	"localrmm/internal/windowsstorageioworker"
 	"localrmm/internal/windowsstorageworker"
 	"localrmm/internal/windowsupdates"
 	"localrmm/internal/windowsupdateworker"
@@ -43,6 +47,8 @@ import (
 )
 
 type frame struct {
+	WindowsStorageIO        *windowsstorageio.Snapshot             `json:"windowsStorageIO,omitempty"`
+	WindowsResourceContext  *windowsresourcecontext.Snapshot       `json:"windowsResourceContext,omitempty"`
 	WindowsHardwareContext  *windowshardware.Snapshot              `json:"windowsHardwareContext,omitempty"`
 	WindowsStorageContext   *windowsstorage.Snapshot               `json:"windowsStorageContext,omitempty"`
 	WindowsSecurityCoverage *windowssecuritycoverage.Snapshot      `json:"windowsSecurityCoverage,omitempty"`
@@ -72,6 +78,13 @@ type receipt struct {
 	Duplicate     bool      `json:"duplicate"`
 }
 type Report struct {
+	WindowsFullProcessesStatus      string `json:"windowsFullProcessesStatus,omitempty"`
+	WindowsFullProcessesSequence    uint64 `json:"windowsFullProcessesSequence,omitempty"`
+	WindowsFullProcessesOperations  uint8  `json:"windowsFullProcessesOperations,omitempty"`
+	WindowsNetworkContextStatus     string `json:"windowsNetworkContextStatus,omitempty"`
+	WindowsNetworkContextSequence   uint64 `json:"windowsNetworkContextSequence,omitempty"`
+	WindowsNetworkContextOperations uint8  `json:"windowsNetworkContextOperations,omitempty"`
+
 	WindowsFullServicesStatus     string `json:"windowsFullServicesStatus,omitempty"`
 	WindowsFullServicesSequence   uint64 `json:"windowsFullServicesSequence,omitempty"`
 	WindowsFullServicesOperations uint8  `json:"windowsFullServicesOperations,omitempty"`
@@ -158,6 +171,16 @@ func Run(ctx context.Context, m Material) (Report, error) {
 			return report, fullErr
 		}
 		defer fullSoftware.Close()
+		fullProcesses, fullErr := openWindowsFullProcessesSender(m, state)
+		if fullErr != nil {
+			return report, fullErr
+		}
+		defer fullProcesses.Close()
+		networkContext, fullErr := openWindowsNetworkContextSender(m, state)
+		if fullErr != nil {
+			return report, fullErr
+		}
+		defer networkContext.Close()
 		report, err := runUsingState(ctx, m, state)
 		if ctx.Err() == nil {
 			report.WindowsEventContentStatus = runWindowsEventContentAttempt(ctx, events)
@@ -165,6 +188,12 @@ func Run(ctx context.Context, m Material) (Report, error) {
 				return report, e
 			}
 			if e := runWindowsFullSoftwareAttempt(ctx, fullSoftware, &report); e != nil {
+				return report, e
+			}
+			if e := runWindowsFullProcessesAttempt(ctx, fullProcesses, &report); e != nil {
+				return report, e
+			}
+			if e := runWindowsNetworkContextAttempt(ctx, networkContext, &report); e != nil {
 				return report, e
 			}
 		}
@@ -252,7 +281,7 @@ func runUsingStateWithSources(ctx context.Context, m Material, state *lanclients
 
 // Dependencies are per-attempt and private: fixture transports never open listeners.
 func runUsingStateWithCurrentDependencies(ctx context.Context, m Material, state *lanclientstate.State, collectOperations func(context.Context, time.Time) operational.Snapshot, collectPackages func(context.Context, string, time.Time) (linuxpackages.Snapshot, error), collectBasic func() model.Device, collectWindows windowsCollector, send func(*http.Request) (*http.Response, error)) (Report, error) {
-	return runUsingStateWithSecurityCoverageAuthorityDependencies(ctx, m, state, collectOperations, collectPackages, collectBasic, collectWindows, send, func() (windowseventhealth.Consent, bool) { return readWindowsEventConsent(m) }, windowseventhealth.Collect, func() (windowsvolumes.Consent, bool) { return readWindowsVolumeConsent(m) }, windowsvolumes.Collect, func() (windowsprocessmetrics.Consent, bool) { return readWindowsProcessMetricsConsent(m) }, nativeProcessMetricCollector(m.processSampler), func() (windowsnetwork.Consent, bool) { return readWindowsNetworkConsent(m) }, windowsnetwork.Collect, func() (windowsmanaged.ServiceStartupConsent, bool) { return readWindowsServiceStartupConsent(m) }, windowsmanaged.CollectServiceStartup, func() (windowsupdates.Consent, bool) { return readWindowsUpdatesConsent(m) }, windowsupdateworker.Collect, func() (windowsadapters.Consent, bool) { return readWindowsAdapterContextConsent(m) }, windowsadapters.Collect, func() (windowspatchcontext.Consent, bool) { return readWindowsPatchContextConsent(m) }, windowspatchworker.Collect, func() (windowssecurity.Consent, bool) { return readWindowsSecurityPostureConsent(m) }, windowssecurityworker.Collect, func() (windowssessions.Consent, bool) { return readWindowsSessionContextConsent(m) }, windowssessionworker.Collect, func() (windowshardware.Consent, bool) { return readWindowsHardwareContextConsent(m) }, windowshardwareworker.Collect, func() (windowsstorage.Consent, bool) { return readWindowsStorageContextConsent(m) }, windowsstorageworker.Collect, func() (windowssecuritycoverage.Consent, bool) { return readWindowsSecurityCoverageConsent(m) }, windowssecuritycoverageworker.Collect, func() bool { return currentWindowsContextMaterial(m, Load) })
+	return runUsingStateWithStorageIOAuthorityDependencies(ctx, m, state, collectOperations, collectPackages, collectBasic, collectWindows, send, func() (windowseventhealth.Consent, bool) { return readWindowsEventConsent(m) }, windowseventhealth.Collect, func() (windowsvolumes.Consent, bool) { return readWindowsVolumeConsent(m) }, windowsvolumes.Collect, func() (windowsprocessmetrics.Consent, bool) { return readWindowsProcessMetricsConsent(m) }, nativeProcessMetricCollector(m.processSampler), func() (windowsnetwork.Consent, bool) { return readWindowsNetworkConsent(m) }, windowsnetwork.Collect, func() (windowsmanaged.ServiceStartupConsent, bool) { return readWindowsServiceStartupConsent(m) }, windowsmanaged.CollectServiceStartup, func() (windowsupdates.Consent, bool) { return readWindowsUpdatesConsent(m) }, windowsupdateworker.Collect, func() (windowsadapters.Consent, bool) { return readWindowsAdapterContextConsent(m) }, windowsadapters.Collect, func() (windowspatchcontext.Consent, bool) { return readWindowsPatchContextConsent(m) }, windowspatchworker.Collect, func() (windowssecurity.Consent, bool) { return readWindowsSecurityPostureConsent(m) }, windowssecurityworker.Collect, func() (windowssessions.Consent, bool) { return readWindowsSessionContextConsent(m) }, windowssessionworker.Collect, func() (windowshardware.Consent, bool) { return readWindowsHardwareContextConsent(m) }, windowshardwareworker.Collect, func() (windowsstorage.Consent, bool) { return readWindowsStorageContextConsent(m) }, windowsstorageworker.Collect, func() (windowssecuritycoverage.Consent, bool) { return readWindowsSecurityCoverageConsent(m) }, windowssecuritycoverageworker.Collect, func() (windowsresourcecontext.Consent, bool) { return readWindowsResourceContextConsent(m) }, windowsresourceworker.Collect, func() (windowsstorageio.Consent, bool) { return readWindowsStorageIOConsent(m) }, windowsstorageioworker.Collect, func() bool { return currentWindowsContextMaterial(m, Load) })
 }
 
 func runUsingStateWithSessionContextAuthorityDependencies(ctx context.Context, m Material, state *lanclientstate.State, collectOperations func(context.Context, time.Time) operational.Snapshot, collectPackages func(context.Context, string, time.Time) (linuxpackages.Snapshot, error), collectBasic func() model.Device, collectWindows windowsCollector, send func(*http.Request) (*http.Response, error), readConsent func() (windowseventhealth.Consent, bool), collectEvents eventCollector, readVolumes func() (windowsvolumes.Consent, bool), collectVolumes volumeCollector, readProcessMetrics func() (windowsprocessmetrics.Consent, bool), collectProcessMetrics processMetricCollector, readNetwork func() (windowsnetwork.Consent, bool), collectNetwork networkCollector, readServiceStartup func() (windowsmanaged.ServiceStartupConsent, bool), collectServiceStartup serviceStartupCollector, readUpdates func() (windowsupdates.Consent, bool), collectUpdates updatesCollector, readAdapterContext func() (windowsadapters.Consent, bool), collectAdapterContext adapterContextCollector, readPatchContext func() (windowspatchcontext.Consent, bool), collectPatchContext patchContextCollector, readSecurityPosture func() (windowssecurity.Consent, bool), collectSecurityPosture securityPostureCollector, readSessionContext func() (windowssessions.Consent, bool), collectSessionContext sessionContextCollector, currentMaterial func() bool) (Report, error) {
@@ -268,6 +297,14 @@ func runUsingStateWithStorageContextAuthorityDependencies(ctx context.Context, m
 }
 
 func runUsingStateWithSecurityCoverageAuthorityDependencies(ctx context.Context, m Material, state *lanclientstate.State, collectOperations func(context.Context, time.Time) operational.Snapshot, collectPackages func(context.Context, string, time.Time) (linuxpackages.Snapshot, error), collectBasic func() model.Device, collectWindows windowsCollector, send func(*http.Request) (*http.Response, error), readConsent func() (windowseventhealth.Consent, bool), collectEvents eventCollector, readVolumes func() (windowsvolumes.Consent, bool), collectVolumes volumeCollector, readProcessMetrics func() (windowsprocessmetrics.Consent, bool), collectProcessMetrics processMetricCollector, readNetwork func() (windowsnetwork.Consent, bool), collectNetwork networkCollector, readServiceStartup func() (windowsmanaged.ServiceStartupConsent, bool), collectServiceStartup serviceStartupCollector, readUpdates func() (windowsupdates.Consent, bool), collectUpdates updatesCollector, readAdapterContext func() (windowsadapters.Consent, bool), collectAdapterContext adapterContextCollector, readPatchContext func() (windowspatchcontext.Consent, bool), collectPatchContext patchContextCollector, readSecurityPosture func() (windowssecurity.Consent, bool), collectSecurityPosture securityPostureCollector, readSessionContext func() (windowssessions.Consent, bool), collectSessionContext sessionContextCollector, readHardwareContext func() (windowshardware.Consent, bool), collectHardwareContext hardwareContextCollector, readStorageContext func() (windowsstorage.Consent, bool), collectStorageContext storageContextCollector, readSecurityCoverage func() (windowssecuritycoverage.Consent, bool), collectSecurityCoverage securityCoverageCollector, currentMaterial func() bool) (Report, error) {
+	return runUsingStateWithResourceContextAuthorityDependencies(ctx, m, state, collectOperations, collectPackages, collectBasic, collectWindows, send, readConsent, collectEvents, readVolumes, collectVolumes, readProcessMetrics, collectProcessMetrics, readNetwork, collectNetwork, readServiceStartup, collectServiceStartup, readUpdates, collectUpdates, readAdapterContext, collectAdapterContext, readPatchContext, collectPatchContext, readSecurityPosture, collectSecurityPosture, readSessionContext, collectSessionContext, readHardwareContext, collectHardwareContext, readStorageContext, collectStorageContext, readSecurityCoverage, collectSecurityCoverage, nil, nil, currentMaterial)
+}
+
+func runUsingStateWithResourceContextAuthorityDependencies(ctx context.Context, m Material, state *lanclientstate.State, collectOperations func(context.Context, time.Time) operational.Snapshot, collectPackages func(context.Context, string, time.Time) (linuxpackages.Snapshot, error), collectBasic func() model.Device, collectWindows windowsCollector, send func(*http.Request) (*http.Response, error), readConsent func() (windowseventhealth.Consent, bool), collectEvents eventCollector, readVolumes func() (windowsvolumes.Consent, bool), collectVolumes volumeCollector, readProcessMetrics func() (windowsprocessmetrics.Consent, bool), collectProcessMetrics processMetricCollector, readNetwork func() (windowsnetwork.Consent, bool), collectNetwork networkCollector, readServiceStartup func() (windowsmanaged.ServiceStartupConsent, bool), collectServiceStartup serviceStartupCollector, readUpdates func() (windowsupdates.Consent, bool), collectUpdates updatesCollector, readAdapterContext func() (windowsadapters.Consent, bool), collectAdapterContext adapterContextCollector, readPatchContext func() (windowspatchcontext.Consent, bool), collectPatchContext patchContextCollector, readSecurityPosture func() (windowssecurity.Consent, bool), collectSecurityPosture securityPostureCollector, readSessionContext func() (windowssessions.Consent, bool), collectSessionContext sessionContextCollector, readHardwareContext func() (windowshardware.Consent, bool), collectHardwareContext hardwareContextCollector, readStorageContext func() (windowsstorage.Consent, bool), collectStorageContext storageContextCollector, readSecurityCoverage func() (windowssecuritycoverage.Consent, bool), collectSecurityCoverage securityCoverageCollector, readResourceContext func() (windowsresourcecontext.Consent, bool), collectResourceContext resourceContextCollector, currentMaterial func() bool) (Report, error) {
+	return runUsingStateWithStorageIOAuthorityDependencies(ctx, m, state, collectOperations, collectPackages, collectBasic, collectWindows, send, readConsent, collectEvents, readVolumes, collectVolumes, readProcessMetrics, collectProcessMetrics, readNetwork, collectNetwork, readServiceStartup, collectServiceStartup, readUpdates, collectUpdates, readAdapterContext, collectAdapterContext, readPatchContext, collectPatchContext, readSecurityPosture, collectSecurityPosture, readSessionContext, collectSessionContext, readHardwareContext, collectHardwareContext, readStorageContext, collectStorageContext, readSecurityCoverage, collectSecurityCoverage, readResourceContext, collectResourceContext, nil, nil, currentMaterial)
+}
+
+func runUsingStateWithStorageIOAuthorityDependencies(ctx context.Context, m Material, state *lanclientstate.State, collectOperations func(context.Context, time.Time) operational.Snapshot, collectPackages func(context.Context, string, time.Time) (linuxpackages.Snapshot, error), collectBasic func() model.Device, collectWindows windowsCollector, send func(*http.Request) (*http.Response, error), readConsent func() (windowseventhealth.Consent, bool), collectEvents eventCollector, readVolumes func() (windowsvolumes.Consent, bool), collectVolumes volumeCollector, readProcessMetrics func() (windowsprocessmetrics.Consent, bool), collectProcessMetrics processMetricCollector, readNetwork func() (windowsnetwork.Consent, bool), collectNetwork networkCollector, readServiceStartup func() (windowsmanaged.ServiceStartupConsent, bool), collectServiceStartup serviceStartupCollector, readUpdates func() (windowsupdates.Consent, bool), collectUpdates updatesCollector, readAdapterContext func() (windowsadapters.Consent, bool), collectAdapterContext adapterContextCollector, readPatchContext func() (windowspatchcontext.Consent, bool), collectPatchContext patchContextCollector, readSecurityPosture func() (windowssecurity.Consent, bool), collectSecurityPosture securityPostureCollector, readSessionContext func() (windowssessions.Consent, bool), collectSessionContext sessionContextCollector, readHardwareContext func() (windowshardware.Consent, bool), collectHardwareContext hardwareContextCollector, readStorageContext func() (windowsstorage.Consent, bool), collectStorageContext storageContextCollector, readSecurityCoverage func() (windowssecuritycoverage.Consent, bool), collectSecurityCoverage securityCoverageCollector, readResourceContext func() (windowsresourcecontext.Consent, bool), collectResourceContext resourceContextCollector, readStorageIO func() (windowsstorageio.Consent, bool), collectStorageIO storageIOCollector, currentMaterial func() bool) (Report, error) {
 	report := Report{SchemaVersion: "tracebolt.agent-run.v1", Status: "failed", Profile: m.config.Profile}
 	if ctx.Err() != nil {
 		return report, ctx.Err()
@@ -359,10 +396,26 @@ func runUsingStateWithSecurityCoverageAuthorityDependencies(ctx context.Context,
 	if coverageEnabled {
 		collectSecurityCoverage = securityCoverageWithBudget(collectSecurityCoverage)
 	}
+	resourceConsent, resourceEnabled := windowsresourcecontext.Consent{}, false
+	if m.config.windowsInventory() && readResourceContext != nil {
+		resourceConsent, resourceEnabled = readResourceContext()
+		resourceEnabled = resourceEnabled && validResourceContextConsent(resourceConsent, m.binding)
+	}
+	if resourceEnabled {
+		collectResourceContext = resourceContextWithBudget(collectResourceContext)
+	}
+	storageIOConsent, storageIOEnabled := windowsstorageio.Consent{}, false
+	if m.config.windowsInventory() && readStorageIO != nil {
+		storageIOConsent, storageIOEnabled = readStorageIO()
+		storageIOEnabled = storageIOEnabled && validStorageIOConsent(storageIOConsent, m.binding)
+	}
+	if storageIOEnabled {
+		collectStorageIO = storageIOWithBudget(collectStorageIO)
+	}
 	if securityEnabled {
 		collectSecurityPosture = securityPostureWithBudget(collectSecurityPosture)
 	}
-	if patchEnabled || securityEnabled || sessionEnabled || hardwareEnabled || storageEnabled || coverageEnabled {
+	if patchEnabled || securityEnabled || sessionEnabled || hardwareEnabled || storageEnabled || coverageEnabled || resourceEnabled || storageIOEnabled {
 		collectUpdates = updatesWithPatchBudget(collectUpdates)
 		collectPatchContext = patchContextWithBudget(collectPatchContext)
 	}
@@ -384,7 +437,7 @@ func runUsingStateWithSecurityCoverageAuthorityDependencies(ctx context.Context,
 		if ctx.Err() != nil {
 			return report, ctx.Err()
 		}
-		unconsented := f.WindowsEvents != nil && (!enabled || f.WindowsEvents.GrantID != consent.GrantID) || f.WindowsVolumes != nil && (!volumesEnabled || f.WindowsVolumes.GrantID != volumeConsent.GrantID) || f.WindowsProcessMetrics != nil && (!processEnabled || f.WindowsProcessMetrics.GrantID != processConsent.GrantID) || f.WindowsNetwork != nil && (!networkEnabled || f.WindowsNetwork.GrantID != networkConsent.GrantID) || f.WindowsServiceStartup != nil && (!startupEnabled || f.WindowsServiceStartup.GrantID != startupConsent.GrantID) || f.WindowsUpdates != nil && (!updatesEnabled || f.WindowsUpdates.GrantID != updatesConsent.GrantID) || f.WindowsAdapterContext != nil && (!adapterEnabled || f.WindowsAdapterContext.GrantID != adapterConsent.GrantID) || f.WindowsPatchContext != nil && (!patchEnabled || f.WindowsPatchContext.GrantID != patchConsent.GrantID) || f.WindowsSecurityPosture != nil && (!securityEnabled || f.WindowsSecurityPosture.GrantID != securityConsent.GrantID) || f.WindowsSessionContext != nil && (!sessionEnabled || f.WindowsSessionContext.GrantID != sessionConsent.GrantID) || f.WindowsHardwareContext != nil && (!hardwareEnabled || f.WindowsHardwareContext.GrantID != hardwareConsent.GrantID) || f.WindowsStorageContext != nil && (!storageEnabled || f.WindowsStorageContext.GrantID != storageConsent.GrantID) || f.WindowsSecurityCoverage != nil && (!coverageEnabled || f.WindowsSecurityCoverage.GrantID != coverageConsent.GrantID)
+		unconsented := f.WindowsEvents != nil && (!enabled || f.WindowsEvents.GrantID != consent.GrantID) || f.WindowsVolumes != nil && (!volumesEnabled || f.WindowsVolumes.GrantID != volumeConsent.GrantID) || f.WindowsProcessMetrics != nil && (!processEnabled || f.WindowsProcessMetrics.GrantID != processConsent.GrantID) || f.WindowsNetwork != nil && (!networkEnabled || f.WindowsNetwork.GrantID != networkConsent.GrantID) || f.WindowsServiceStartup != nil && (!startupEnabled || f.WindowsServiceStartup.GrantID != startupConsent.GrantID) || f.WindowsUpdates != nil && (!updatesEnabled || f.WindowsUpdates.GrantID != updatesConsent.GrantID) || f.WindowsAdapterContext != nil && (!adapterEnabled || f.WindowsAdapterContext.GrantID != adapterConsent.GrantID) || f.WindowsPatchContext != nil && (!patchEnabled || f.WindowsPatchContext.GrantID != patchConsent.GrantID) || f.WindowsSecurityPosture != nil && (!securityEnabled || f.WindowsSecurityPosture.GrantID != securityConsent.GrantID) || f.WindowsSessionContext != nil && (!sessionEnabled || f.WindowsSessionContext.GrantID != sessionConsent.GrantID) || f.WindowsHardwareContext != nil && (!hardwareEnabled || f.WindowsHardwareContext.GrantID != hardwareConsent.GrantID) || f.WindowsStorageContext != nil && (!storageEnabled || f.WindowsStorageContext.GrantID != storageConsent.GrantID) || f.WindowsSecurityCoverage != nil && (!coverageEnabled || f.WindowsSecurityCoverage.GrantID != coverageConsent.GrantID) || f.WindowsResourceContext != nil && (!resourceEnabled || f.WindowsResourceContext.GrantID != resourceConsent.GrantID) || f.WindowsStorageIO != nil && (!storageIOEnabled || f.WindowsStorageIO.GrantID != storageIOConsent.GrantID)
 		if !currentAuthority() {
 			return report, ErrState
 		}
@@ -424,8 +477,31 @@ func runUsingStateWithSecurityCoverageAuthorityDependencies(ctx context.Context,
 		if e != nil {
 			return report, e
 		}
+		if storageIOEnabled {
+			// Fresh v16 only. Reserve before PID selection or service digest
+			// capture; never refit a pending body or a row-bound snapshot.
+			if !currentAuthority() || !sameStorageIOConsent(readStorageIO, storageIOConsent, m.binding) {
+				return report, ErrState
+			}
+			bounded, err := windowsmanaged.FitPreviewBudgetWithSelfPID(*f.WindowsInventory, windowsStorageIOBaseBytes, selfPID)
+			if err != nil {
+				return report, ErrObservation
+			}
+			f.WindowsInventory = &bounded
+		} else if resourceEnabled {
+			// Fresh v15 only. Reserve before PID selection or service digest
+			// capture; never refit a pending body or a row-bound snapshot.
+			if !currentAuthority() || !sameResourceContextConsent(readResourceContext, resourceConsent, m.binding) {
+				return report, ErrState
+			}
+			bounded, err := windowsmanaged.FitPreviewBudgetWithSelfPID(*f.WindowsInventory, windowsResourceContextBaseBytes, selfPID)
+			if err != nil {
+				return report, ErrObservation
+			}
+			f.WindowsInventory = &bounded
+		}
 		earlierJobs := []func(context.Context) error{}
-		if patchEnabled || securityEnabled || sessionEnabled || hardwareEnabled || storageEnabled || coverageEnabled {
+		if patchEnabled || securityEnabled || sessionEnabled || hardwareEnabled || storageEnabled || coverageEnabled || resourceEnabled || storageIOEnabled {
 			collectEvents = eventsWithPrimaryReserve(collectEvents, f.WindowsInventory.CollectedAt)
 			collectVolumes = volumesWithPrimaryReserve(collectVolumes, f.WindowsInventory.CollectedAt)
 			collectProcessMetrics = processMetricsWithPrimaryReserve(collectProcessMetrics)
@@ -596,7 +672,7 @@ func runUsingStateWithSecurityCoverageAuthorityDependencies(ctx context.Context,
 		// their original first opportunity on odd sequences; isolated contexts
 		// get it on even sequences. Retries never collect or advance this order.
 		// Serialization still follows the original canonical wire order.
-		if sequence%2 == 0 && (patchEnabled || securityEnabled || sessionEnabled || hardwareEnabled || storageEnabled || coverageEnabled) {
+		if sequence%2 == 0 && (patchEnabled || securityEnabled || sessionEnabled || hardwareEnabled || storageEnabled || coverageEnabled || resourceEnabled || storageIOEnabled) {
 			jobs := []func(context.Context) error{}
 			if updatesEnabled {
 				jobs = append(jobs, func(sourceCtx context.Context) error {
@@ -756,6 +832,54 @@ func runUsingStateWithSecurityCoverageAuthorityDependencies(ctx context.Context,
 					return nil
 				})
 			}
+			if resourceEnabled {
+				jobs = append(jobs, func(sourceCtx context.Context) error {
+					if !currentAuthority() || !sameResourceContextConsent(readResourceContext, resourceConsent, m.binding) {
+						return ErrState
+					}
+					if collectResourceContext == nil {
+						return ErrConfiguration
+					}
+					snapshot, err := collectResourceContext(sourceCtx, windowsresourcecontext.Request{Consent: resourceConsent, SenderBinding: m.binding, GenerationID: f.WindowsInventory.GenerationID, CollectedAt: f.WindowsInventory.CollectedAt})
+					if !currentAuthority() || !sameResourceContextConsent(readResourceContext, resourceConsent, m.binding) {
+						return ErrState
+					}
+					if sourceCtx.Err() != nil {
+						return sourceCtx.Err()
+					}
+					if err != nil {
+						return ErrObservation
+					}
+					collectResourceContext = func(context.Context, windowsresourcecontext.Request) (windowsresourcecontext.Snapshot, error) {
+						return snapshot, err
+					}
+					return nil
+				})
+			}
+			if storageIOEnabled {
+				jobs = append(jobs, func(sourceCtx context.Context) error {
+					if !currentAuthority() || !sameStorageIOConsent(readStorageIO, storageIOConsent, m.binding) {
+						return ErrState
+					}
+					if collectStorageIO == nil {
+						return ErrConfiguration
+					}
+					snapshot, err := collectStorageIO(sourceCtx, windowsstorageio.Request{Consent: storageIOConsent, SenderBinding: m.binding, GenerationID: f.WindowsInventory.GenerationID, CollectedAt: f.WindowsInventory.CollectedAt})
+					if !currentAuthority() || !sameStorageIOConsent(readStorageIO, storageIOConsent, m.binding) {
+						return ErrState
+					}
+					if sourceCtx.Err() != nil {
+						return sourceCtx.Err()
+					}
+					if err != nil {
+						return ErrObservation
+					}
+					collectStorageIO = func(context.Context, windowsstorageio.Request) (windowsstorageio.Snapshot, error) {
+						return snapshot, err
+					}
+					return nil
+				})
+			}
 			if e = collectWindowsContextGroup(captureCtx, sequence, jobs); e != nil {
 				return report, e
 			}
@@ -875,10 +999,31 @@ func runUsingStateWithSecurityCoverageAuthorityDependencies(ctx context.Context,
 				return report, e
 			}
 		}
+		if resourceEnabled {
+			if !sameResourceContextConsent(readResourceContext, resourceConsent, m.binding) {
+				return report, ErrState
+			}
+			f, body, e = appendWindowsResourceContext(captureCtx, m, f, resourceConsent, collectResourceContext)
+			if e != nil {
+				return report, e
+			}
+		}
 		if ctx.Err() != nil {
 			return report, ctx.Err()
 		}
-		if f.WindowsEvents != nil && !sameEventConsent(readConsent, consent, m.binding) || f.WindowsVolumes != nil && !sameVolumeConsent(readVolumes, volumeConsent, m.binding) || f.WindowsProcessMetrics != nil && !sameProcessMetricConsent(readProcessMetrics, processConsent, m.binding) || f.WindowsNetwork != nil && !sameNetworkConsent(readNetwork, networkConsent, m.binding) || f.WindowsServiceStartup != nil && !sameServiceStartupConsent(readServiceStartup, startupConsent, m.binding) || f.WindowsUpdates != nil && !sameUpdatesConsent(readUpdates, updatesConsent, m.binding) || f.WindowsAdapterContext != nil && !sameAdapterContextConsent(readAdapterContext, adapterConsent, m.binding) || f.WindowsPatchContext != nil && !samePatchContextConsent(readPatchContext, patchConsent, m.binding) || f.WindowsSecurityPosture != nil && !sameSecurityPostureConsent(readSecurityPosture, securityConsent, m.binding) || f.WindowsSessionContext != nil && !sameSessionContextConsent(readSessionContext, sessionConsent, m.binding) || f.WindowsHardwareContext != nil && !sameHardwareContextConsent(readHardwareContext, hardwareConsent, m.binding) || f.WindowsStorageContext != nil && !sameStorageContextConsent(readStorageContext, storageConsent, m.binding) || f.WindowsSecurityCoverage != nil && !sameSecurityCoverageConsent(readSecurityCoverage, coverageConsent, m.binding) {
+		if storageIOEnabled {
+			if !sameStorageIOConsent(readStorageIO, storageIOConsent, m.binding) {
+				return report, ErrState
+			}
+			f, body, e = appendWindowsStorageIO(captureCtx, m, f, storageIOConsent, collectStorageIO)
+			if e != nil {
+				return report, e
+			}
+		}
+		if ctx.Err() != nil {
+			return report, ctx.Err()
+		}
+		if f.WindowsEvents != nil && !sameEventConsent(readConsent, consent, m.binding) || f.WindowsVolumes != nil && !sameVolumeConsent(readVolumes, volumeConsent, m.binding) || f.WindowsProcessMetrics != nil && !sameProcessMetricConsent(readProcessMetrics, processConsent, m.binding) || f.WindowsNetwork != nil && !sameNetworkConsent(readNetwork, networkConsent, m.binding) || f.WindowsServiceStartup != nil && !sameServiceStartupConsent(readServiceStartup, startupConsent, m.binding) || f.WindowsUpdates != nil && !sameUpdatesConsent(readUpdates, updatesConsent, m.binding) || f.WindowsAdapterContext != nil && !sameAdapterContextConsent(readAdapterContext, adapterConsent, m.binding) || f.WindowsPatchContext != nil && !samePatchContextConsent(readPatchContext, patchConsent, m.binding) || f.WindowsSecurityPosture != nil && !sameSecurityPostureConsent(readSecurityPosture, securityConsent, m.binding) || f.WindowsSessionContext != nil && !sameSessionContextConsent(readSessionContext, sessionConsent, m.binding) || f.WindowsHardwareContext != nil && !sameHardwareContextConsent(readHardwareContext, hardwareConsent, m.binding) || f.WindowsStorageContext != nil && !sameStorageContextConsent(readStorageContext, storageConsent, m.binding) || f.WindowsSecurityCoverage != nil && !sameSecurityCoverageConsent(readSecurityCoverage, coverageConsent, m.binding) || f.WindowsResourceContext != nil && !sameResourceContextConsent(readResourceContext, resourceConsent, m.binding) || f.WindowsStorageIO != nil && !sameStorageIOConsent(readStorageIO, storageIOConsent, m.binding) {
 			return report, ErrState
 		}
 		if !currentAuthority() {
@@ -893,7 +1038,7 @@ func runUsingStateWithSecurityCoverageAuthorityDependencies(ctx context.Context,
 	if ctx.Err() != nil {
 		return report, ctx.Err()
 	}
-	if f.WindowsEvents != nil && !sameEventConsent(readConsent, consent, m.binding) || f.WindowsVolumes != nil && !sameVolumeConsent(readVolumes, volumeConsent, m.binding) || f.WindowsProcessMetrics != nil && !sameProcessMetricConsent(readProcessMetrics, processConsent, m.binding) || f.WindowsNetwork != nil && !sameNetworkConsent(readNetwork, networkConsent, m.binding) || f.WindowsServiceStartup != nil && !sameServiceStartupConsent(readServiceStartup, startupConsent, m.binding) || f.WindowsUpdates != nil && !sameUpdatesConsent(readUpdates, updatesConsent, m.binding) || f.WindowsAdapterContext != nil && !sameAdapterContextConsent(readAdapterContext, adapterConsent, m.binding) || f.WindowsPatchContext != nil && !samePatchContextConsent(readPatchContext, patchConsent, m.binding) || f.WindowsSecurityPosture != nil && !sameSecurityPostureConsent(readSecurityPosture, securityConsent, m.binding) || f.WindowsSessionContext != nil && !sameSessionContextConsent(readSessionContext, sessionConsent, m.binding) || f.WindowsHardwareContext != nil && !sameHardwareContextConsent(readHardwareContext, hardwareConsent, m.binding) || f.WindowsStorageContext != nil && !sameStorageContextConsent(readStorageContext, storageConsent, m.binding) || f.WindowsSecurityCoverage != nil && !sameSecurityCoverageConsent(readSecurityCoverage, coverageConsent, m.binding) {
+	if f.WindowsEvents != nil && !sameEventConsent(readConsent, consent, m.binding) || f.WindowsVolumes != nil && !sameVolumeConsent(readVolumes, volumeConsent, m.binding) || f.WindowsProcessMetrics != nil && !sameProcessMetricConsent(readProcessMetrics, processConsent, m.binding) || f.WindowsNetwork != nil && !sameNetworkConsent(readNetwork, networkConsent, m.binding) || f.WindowsServiceStartup != nil && !sameServiceStartupConsent(readServiceStartup, startupConsent, m.binding) || f.WindowsUpdates != nil && !sameUpdatesConsent(readUpdates, updatesConsent, m.binding) || f.WindowsAdapterContext != nil && !sameAdapterContextConsent(readAdapterContext, adapterConsent, m.binding) || f.WindowsPatchContext != nil && !samePatchContextConsent(readPatchContext, patchConsent, m.binding) || f.WindowsSecurityPosture != nil && !sameSecurityPostureConsent(readSecurityPosture, securityConsent, m.binding) || f.WindowsSessionContext != nil && !sameSessionContextConsent(readSessionContext, sessionConsent, m.binding) || f.WindowsHardwareContext != nil && !sameHardwareContextConsent(readHardwareContext, hardwareConsent, m.binding) || f.WindowsStorageContext != nil && !sameStorageContextConsent(readStorageContext, storageConsent, m.binding) || f.WindowsSecurityCoverage != nil && !sameSecurityCoverageConsent(readSecurityCoverage, coverageConsent, m.binding) || f.WindowsResourceContext != nil && !sameResourceContextConsent(readResourceContext, resourceConsent, m.binding) || f.WindowsStorageIO != nil && !sameStorageIOConsent(readStorageIO, storageIOConsent, m.binding) {
 		return report, ErrState
 	}
 	report.Sequence = pending.Sequence
@@ -928,7 +1073,7 @@ func runUsingStateWithSecurityCoverageAuthorityDependencies(ctx context.Context,
 	if !currentAuthority() {
 		return report, ErrState
 	}
-	if f.WindowsSecurityPosture != nil && !sameSecurityPostureConsent(readSecurityPosture, securityConsent, m.binding) || f.WindowsSessionContext != nil && !sameSessionContextConsent(readSessionContext, sessionConsent, m.binding) || f.WindowsHardwareContext != nil && !sameHardwareContextConsent(readHardwareContext, hardwareConsent, m.binding) || f.WindowsStorageContext != nil && !sameStorageContextConsent(readStorageContext, storageConsent, m.binding) || f.WindowsSecurityCoverage != nil && !sameSecurityCoverageConsent(readSecurityCoverage, coverageConsent, m.binding) {
+	if f.WindowsSecurityPosture != nil && !sameSecurityPostureConsent(readSecurityPosture, securityConsent, m.binding) || f.WindowsSessionContext != nil && !sameSessionContextConsent(readSessionContext, sessionConsent, m.binding) || f.WindowsHardwareContext != nil && !sameHardwareContextConsent(readHardwareContext, hardwareConsent, m.binding) || f.WindowsStorageContext != nil && !sameStorageContextConsent(readStorageContext, storageConsent, m.binding) || f.WindowsSecurityCoverage != nil && !sameSecurityCoverageConsent(readSecurityCoverage, coverageConsent, m.binding) || f.WindowsResourceContext != nil && !sameResourceContextConsent(readResourceContext, resourceConsent, m.binding) || f.WindowsStorageIO != nil && !sameStorageIOConsent(readStorageIO, storageIOConsent, m.binding) {
 		return report, ErrState
 	}
 	response, e := send(req)
@@ -1089,6 +1234,12 @@ func decodeFrameForConfig(raw []byte, sequence uint64, c Config) (frame, error) 
 	if c.windowsInventory() && len(fields["windowsSecurityCoverage"]) > 0 {
 		want++
 	}
+	if c.windowsInventory() && len(fields["windowsResourceContext"]) > 0 {
+		want++
+	}
+	if c.windowsInventory() && len(fields["windowsStorageIO"]) > 0 {
+		want++
+	}
 	if c.windowsInventory() && len(fields["windowsSecurityPosture"]) > 0 {
 		want++
 	}
@@ -1115,7 +1266,7 @@ func decodeFrameForConfig(raw []byte, sequence uint64, c Config) (frame, error) 
 		if validateWindowsFrame(f, fields, c) != nil {
 			return f, ErrState
 		}
-	} else if f.WindowsInventory != nil || f.WindowsEvents != nil || f.WindowsVolumes != nil || f.WindowsProcessMetrics != nil || f.WindowsNetwork != nil || f.WindowsServiceStartup != nil || f.WindowsUpdates != nil || f.WindowsAdapterContext != nil || f.WindowsPatchContext != nil || f.WindowsSecurityPosture != nil || f.WindowsSessionContext != nil || f.WindowsHardwareContext != nil || f.WindowsStorageContext != nil || f.WindowsSecurityCoverage != nil {
+	} else if f.WindowsInventory != nil || f.WindowsEvents != nil || f.WindowsVolumes != nil || f.WindowsProcessMetrics != nil || f.WindowsNetwork != nil || f.WindowsServiceStartup != nil || f.WindowsUpdates != nil || f.WindowsAdapterContext != nil || f.WindowsPatchContext != nil || f.WindowsSecurityPosture != nil || f.WindowsSessionContext != nil || f.WindowsHardwareContext != nil || f.WindowsStorageContext != nil || f.WindowsSecurityCoverage != nil || f.WindowsResourceContext != nil {
 		return f, ErrState
 	} else if c.SchemaVersion == OperationalConfigVersion || c.complete() {
 		if f.Packages != nil || f.SchemaVersion != FrameOperationalVersion || f.Sequence == 0 || f.Sequence > operational.MaxSafeInteger || (c.CollectionProfile != operational.CollectionProfile && !c.complete()) || f.Operational == nil || len(fields["operational"]) > operational.MaxSnapshotBytes || exactOperationalJSON(fields["operational"]) != nil || operational.Validate(*f.Operational) != nil || f.Observation.Platform != "linux" || f.Operational.CollectedAt.After(f.Observation.GeneratedAt) {
@@ -1204,6 +1355,9 @@ func stale(f frame, now time.Time) bool {
 	}
 	if f.WindowsSecurityCoverage != nil {
 		times = append(times, f.WindowsSecurityCoverage.CollectedAt)
+	}
+	if f.WindowsResourceContext != nil {
+		times = append(times, f.WindowsResourceContext.CollectedAt)
 	}
 	if f.WindowsSecurityPosture != nil {
 		times = append(times, f.WindowsSecurityPosture.CollectedAt)

@@ -98,13 +98,13 @@ func appendWindowsStorageContext(ctx context.Context, m Material, f frame, c win
 	return f, b, nil
 }
 func validateWindowsStorageContextFrame(f frame, fields map[string]json.RawMessage) error {
-	if f.SchemaVersion != FrameWindowsStorageContextVersion && f.SchemaVersion != FrameWindowsSecurityCoverageVersion {
+	if f.SchemaVersion != FrameWindowsStorageContextVersion && f.SchemaVersion != FrameWindowsSecurityCoverageVersion && f.SchemaVersion != FrameWindowsResourceContextVersion && f.SchemaVersion != FrameWindowsStorageIOVersion {
 		if f.WindowsStorageContext != nil || len(fields["windowsStorageContext"]) != 0 {
 			return ErrState
 		}
 		return nil
 	}
-	if f.SchemaVersion == FrameWindowsSecurityCoverageVersion && f.WindowsStorageContext == nil && len(fields["windowsStorageContext"]) == 0 {
+	if (f.SchemaVersion == FrameWindowsSecurityCoverageVersion || (f.SchemaVersion == FrameWindowsResourceContextVersion || f.SchemaVersion == FrameWindowsStorageIOVersion)) && f.WindowsStorageContext == nil && len(fields["windowsStorageContext"]) == 0 {
 		return nil
 	}
 	if f.WindowsStorageContext == nil || f.WindowsInventory == nil {

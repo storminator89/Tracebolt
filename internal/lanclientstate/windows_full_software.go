@@ -45,6 +45,12 @@ func (l *WindowsFullSoftwareInitializationLease) Mark() error {
 	}
 	next := v.record
 	next.Version = 3
+	if next.WindowsFullProcessesUsed {
+		next.Version = 4
+	}
+	if next.WindowsNetworkContextUsed {
+		next.Version = 5
+	}
 	next.WindowsFullSoftwareUsed = true
 	return v.commit(next)
 }

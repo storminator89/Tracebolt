@@ -1,3 +1,4 @@
+import {windowsFullProcessesLegacyRead} from './windows-full-processes-browser.mjs';
 /** Actual Go/SQLite page vectors, intercepted at the browser transport seam.
  * This is UI interoperability evidence, not a live ledger or native host gate. */
 import fs from 'node:fs';
@@ -61,6 +62,10 @@ export async function windowsFullSoftwareBrowserCase({page,expect,base,login,sho
    if(mode==='expiry'){vector.page.serverNow=new Date(Date.parse(vector.page.complete.manifest.expiresAt)-750).toISOString();vector.page.cursorExpiresAt=vector.page.complete.manifest.expiresAt;vector.page.authorityUntil=vector.page.complete.manifest.expiresAt;}
    if(hold){const pending=hold;hold=null;pending.arrived();await pending.promise;try{return await fulfill(route,vector.page);}catch{return;}}
    return fulfill(route,vector.page);
+  }
+  if(url.pathname===prefix+'/windows-full-processes/query'){
+   try{return await windowsFullProcessesLegacyRead({route,page,base,prefix,serverNow:new Date(Date.parse(first.page.serverNow)+Date.now()-began).toISOString()});}
+   catch{unexpected.push('unexpected-full-processes-query');return route.abort('blockedbyclient');}
   }
   if(request.method()!=='GET'&&!['/api/auth/login','/api/auth/logout'].includes(url.pathname)){unexpected.push('unexpected-write');return route.abort('blockedbyclient');}
   if(url.pathname===prefix){const device=windowsDevice();device.id=deviceId;device.agentCertificate.expiresAt='2027-02-15T08:00:00Z';return fulfill(route,device);}

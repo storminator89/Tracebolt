@@ -113,10 +113,13 @@ func appendWindowsSecurityCoverage(ctx context.Context, m Material, f frame, c w
 	return f, b, nil
 }
 func validateWindowsSecurityCoverageFrame(f frame, fields map[string]json.RawMessage) error {
-	if f.SchemaVersion != FrameWindowsSecurityCoverageVersion {
+	if f.SchemaVersion != FrameWindowsSecurityCoverageVersion && f.SchemaVersion != FrameWindowsResourceContextVersion && f.SchemaVersion != FrameWindowsStorageIOVersion {
 		if f.WindowsSecurityCoverage != nil || len(fields["windowsSecurityCoverage"]) != 0 {
 			return ErrState
 		}
+		return nil
+	}
+	if (f.SchemaVersion == FrameWindowsResourceContextVersion || f.SchemaVersion == FrameWindowsStorageIOVersion) && f.WindowsSecurityCoverage == nil && len(fields["windowsSecurityCoverage"]) == 0 {
 		return nil
 	}
 	if f.WindowsSecurityCoverage == nil || f.WindowsInventory == nil {

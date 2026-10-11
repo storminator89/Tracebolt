@@ -6,6 +6,10 @@ inventory, event-header and volume grants do not cover process CPU/RAM. Original
 identities, profiles, enrollment/sender manifests and sequence floors remain
 unchanged. Source fixtures and cross-compilation are not native acceptance.
 
+The separately consented [complete process inventory](windows-full-processes-contract.md)
+adds snapshot identifiers and names only. It does not expand this 128-row metrics
+scope or join another capture to its PID-plus-creation-time measurements.
+
 ## Explicit scope
 
 The owned stopped service can preview `windows-service --process-metrics-preview`.

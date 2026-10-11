@@ -40,9 +40,11 @@ read, installation, service change, ACL grant or release.
   is separate. PhysicalDisk Size is provider-reported device size, never a volume
   capacity, used-space or free-space measurement.
 
-I/O throughput and latency, SMART attributes/self-tests, temperature, wear,
-reliability counters and topology joins are deferred. They need separate
-source/interval/identity semantics; no value is invented from capacity or status.
+Separately consented [aggregate PerfDisk I/O](windows-storage-io.md) now provides
+throughput, operations, latency and queue context. It is never joined to these
+drive, volume or provider rows. Per-disk attribution, SMART attributes/self-tests,
+temperature, wear, reliability counters and topology joins remain deferred; no
+value is invented from capacity or status.
 
 Official API references:
 [GetLogicalDrives](https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-getlogicaldrives),

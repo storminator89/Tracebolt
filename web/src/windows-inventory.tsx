@@ -2,6 +2,7 @@ import { WindowsContextPanel } from './windows-retained-context';
 import { WindowsServiceActionsPanel } from './windows-service-actions';
 import { WindowsFullServicesPanel } from './windows-full-services';
 import { WindowsFullSoftwarePanel } from './windows-full-software';
+import { WindowsFullProcessesPanel } from './windows-full-processes';
 import { WindowsServiceStartupNote } from './windows-service-startup';
 import { WindowsInventoryTable, useWindowsInventoryTableControls } from './windows-inventory-tables';
 import { WindowsNetworkPanel } from './windows-network';
@@ -57,34 +58,37 @@ export function WindowsInventoryWorkspace({ resource, initialTab, fullServices }
     const tableKind = selected === 'services' || selected === 'software' ? selected : null;
     const [tableControls, setTableControls] = useWindowsInventoryTableControls(resource, tableKind);
     const snapshot = resource.snapshot, section = selected !== 'storage' && selected !== 'endpoints' && selected !== 'updates' && selected !== 'security' && selected !== 'sessions' && selected !== 'device' ? snapshot?.[selected] : null, data = snapshot && (selected === 'hostname' || selected === 'network') ? dataRows(snapshot, selected, locale) : null;
-    // Shared device/session context is not consent; the software API admits its independent grant.
+    // Shared device/session context is not consent; every private generation API admits its independent grant.
     const fullSoftware = selected === 'software' && fullServices;
+    const fullProcesses = selected === 'processes' && fullServices;
     const Section = fullSoftware ? 'details' : 'div';
     const rows = data?.rows.filter(row => row.some(value => value.toLocaleLowerCase(locale).includes(query.toLocaleLowerCase(locale)))) ?? [];
     const select = (key: TabKey) => { setSelected(key); setQuery(''); };
-    return <section className="windows-inventory" aria-label={c.title}>
-        {!fullSoftware && <InventoryState resource={resource}/>}
-        <div className="windows-inventory-tabs" role="tablist" aria-label={c.source}>{tabs.map((key, index) => <button type="button" key={key} id={`${id}-${key}`} role="tab" aria-selected={selected === key} aria-controls={`${id}-panel`} tabIndex={selected === key ? 0 : -1} onClick={() => select(key)} onKeyDown={event => { const next = event.key === 'ArrowRight' ? (index + 1) % tabs.length : event.key === 'ArrowLeft' ? (index + tabs.length - 1) % tabs.length : event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : null; if (next !== null) { event.preventDefault(); select(tabs[next]); document.getElementById(`${id}-${tabs[next]}`)?.focus(); } }}>{c[key]}</button>)}</div>
-        <div role="tabpanel" id={`${id}-panel`} aria-labelledby={`${id}-${selected}`}>
-            {selected === 'services' && fullServices && <><WindowsServiceActionsPanel {...fullServices}/><WindowsFullServicesPanel {...fullServices}/><h3 className="windows-full-services-preview-label">{locale === 'de' ? 'Begrenzte Dienstvorschau: getrennte Quelle, höchstens 128 Zeilen' : 'Bounded service preview: separate source, at most 128 rows'}</h3></>}
-            {fullSoftware && <WindowsFullSoftwarePanel {...fullSoftware}/>}
-            {selected === 'device' && <WindowsContextPanel resource={resource} kind="hardwareContext"/>}
-            {selected === 'sessions' && <WindowsContextPanel resource={resource} kind="sessionContext"/>}
-            {selected === 'security' && <><WindowsContextPanel resource={resource} kind="securityPosture"/><WindowsContextPanel resource={resource} kind="securityCoverage"/></>}
-            {selected === 'updates' && <><WindowsContextPanel resource={resource} kind="patchContext"/><WindowsContextPanel resource={resource} kind="updates"/></>}
-            {selected === 'endpoints' && <WindowsNetworkPanel resource={resource}/>}
-            {selected === 'storage' && <><WindowsContextPanel resource={resource} kind="storageContext"/><WindowsStoragePanel resource={resource}/></>}
-            {section && <Section className={fullSoftware ? "windows-inventory-scope windows-full-software-preview" : undefined} >{fullSoftware && <summary>{locale === 'de' ? 'Begrenzte Vorschau · getrennte Quelle, bis zu 128 Zeilen' : 'Bounded preview · separate source, up to 128 rows'}</summary>}
-                {fullSoftware && <InventoryState resource={resource}/>}
+    const legacySection = section && <Section className={fullSoftware ? "windows-inventory-scope windows-full-software-preview" : undefined} >{fullSoftware && <summary>{locale === 'de' ? 'Begrenzte Vorschau · getrennte Quelle, bis zu 128 Zeilen' : 'Bounded preview · separate source, up to 128 rows'}</summary>}
+                {(fullSoftware || fullProcesses) && <InventoryState resource={resource}/>}
                 <div className="windows-inventory-section-header"><h3>{c[selected]}</h3><span className={`windows-inventory-quality quality-${section.quality}`}>{c[section.quality]}</span></div>
                 {(section.quality === 'healthy' || section.quality === 'partial') && <p className="windows-inventory-count">{sectionCount(section, locale, selected === 'processes' || tableKind !== null)}</p>}{section.truncated && <p className="windows-inventory-caution">{c.truncated}</p>}
                 {selected === 'processes' && <WindowsProcessMetricsNote resource={resource} locale={locale}/>}
                 {selected === 'services' && <WindowsServiceStartupNote resource={resource} locale={locale}/>}
                 {section.rows.length > 0 ? selected === 'processes' && snapshot ? <WindowsProcessTable key={`${resource.view?.deviceId}:${snapshot.generationId}:${snapshot.collectedAt}`} snapshot={snapshot} metrics={resource.processMetrics} locale={locale} controls={processControls} onChange={setProcessControls}/> : tableKind && snapshot ? <WindowsInventoryTable snapshot={snapshot} serviceStartup={resource.serviceStartup} kind={tableKind} locale={locale} controls={tableControls} onChange={setTableControls}/> : data && <><label className="windows-inventory-search" htmlFor={`${id}-search`}>{c.search}<input id={`${id}-search`} type="search" value={query} maxLength={256} onChange={event => setQuery(event.target.value)}/></label>{rows.length ? <div className="windows-inventory-table-wrap"><table className="windows-inventory-table"><caption className="sr-only">{c[selected]}</caption><thead><tr>{data.headers.map(header => <th key={header} scope="col">{header}</th>)}</tr></thead><tbody>{rows.map((row, index) => <tr key={index}>{row.map((value, col) => <td key={col} data-label={data.headers[col]}>{value}</td>)}</tr>)}</tbody></table></div> : <p>{c.noMatches}</p>}</> : <p className="windows-inventory-empty">{section.quality === 'healthy' ? c.empty : c.missing}</p>}
                 <details className="windows-inventory-scope"><summary>{c.bounds}</summary><dl><div><dt>{c.sourceLabel}</dt><dd>{section.source}</dd></div><div><dt>{c.scopeLabel}</dt><dd>{section.scope}</dd></div></dl><p>{c.counts}</p></details>
-            </Section>}
+            </Section>;
+    return <section className="windows-inventory" aria-label={c.title}>
+        {!fullSoftware && !fullProcesses && <InventoryState resource={resource}/>}
+        <div className="windows-inventory-tabs" role="tablist" aria-label={c.source}>{tabs.map((key, index) => <button type="button" key={key} id={`${id}-${key}`} role="tab" aria-selected={selected === key} aria-controls={`${id}-panel`} tabIndex={selected === key ? 0 : -1} onClick={() => select(key)} onKeyDown={event => { const next = event.key === 'ArrowRight' ? (index + 1) % tabs.length : event.key === 'ArrowLeft' ? (index + tabs.length - 1) % tabs.length : event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : null; if (next !== null) { event.preventDefault(); select(tabs[next]); document.getElementById(`${id}-${tabs[next]}`)?.focus(); } }}>{c[key]}</button>)}</div>
+        <div role="tabpanel" id={`${id}-panel`} aria-labelledby={`${id}-${selected}`}>
+            {selected === 'services' && fullServices && <><WindowsServiceActionsPanel {...fullServices}/><WindowsFullServicesPanel {...fullServices}/><h3 className="windows-full-services-preview-label">{locale === 'de' ? 'Begrenzte Dienstvorschau: getrennte Quelle, höchstens 128 Zeilen' : 'Bounded service preview: separate source, at most 128 rows'}</h3></>}
+            {fullSoftware && <WindowsFullSoftwarePanel {...fullSoftware}/>}
+            {fullProcesses && <WindowsFullProcessesPanel {...fullProcesses}>{legacySection ?? <InventoryState resource={resource}/>}</WindowsFullProcessesPanel>}
+            {selected === 'device' && <><WindowsContextPanel resource={resource} kind="hardwareContext"/><WindowsContextPanel resource={resource} kind="resourceContext"/></>}
+            {selected === 'sessions' && <WindowsContextPanel resource={resource} kind="sessionContext"/>}
+            {selected === 'security' && <><WindowsContextPanel resource={resource} kind="securityPosture"/><WindowsContextPanel resource={resource} kind="securityCoverage"/></>}
+            {selected === 'updates' && <><WindowsContextPanel resource={resource} kind="patchContext"/><WindowsContextPanel resource={resource} kind="updates"/></>}
+            {selected === 'endpoints' && <WindowsNetworkPanel key={`${fullServices?.deviceId}:${fullServices?.sessionKey}`} resource={resource} context={fullServices}/>}
+            {selected === 'storage' && <><WindowsContextPanel resource={resource} kind="storageIO"/><WindowsContextPanel resource={resource} kind="storageContext"/><WindowsStoragePanel resource={resource}/></>}
+            {!fullProcesses && legacySection}
         </div>
-        {!fullSoftware && selected !== 'security' && selected !== 'sessions' && selected !== 'device' && <><p className="windows-inventory-privacy"><Info size={15}/>{c.privacy}</p><p className="windows-inventory-exclusions">{c.scope}</p></>}
+        {!fullSoftware && !fullProcesses && selected !== 'security' && selected !== 'sessions' && selected !== 'device' && <><p className="windows-inventory-privacy"><Info size={15}/>{c.privacy}</p><p className="windows-inventory-exclusions">{c.scope}</p></>}
     </section>;
 }
 export function WindowsDeviceOverview({ device, resource, sessionKey, onInventory, onDetails }: { device: Device; resource: WindowsInventoryResource; sessionKey: string | null; onInventory?: () => void; onDetails: () => void }) {

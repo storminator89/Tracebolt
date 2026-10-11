@@ -115,4 +115,5 @@ ordinary LocalService visibility, link-state/speed behavior, DNS/gateway coverag
 protected sibling ACLs, stopped-service consent, disable/re-enable and actual
 Windows-to-Linux-manager-to-browser operation. Tests must not enable adapters,
 change DNS/routes, loosen ACLs or create missing native cases merely to pass.
-Route tables, byte/error counters and packet traffic remain a later slice.
+Route tables and raw byte/error/discard counters now have a [separate explicit
+source scope](windows-network-context.md). Packet traffic remains excluded.

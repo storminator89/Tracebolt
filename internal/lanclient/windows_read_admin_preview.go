@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"localrmm/internal/windowsadapters"
 	"localrmm/internal/windowseventhealth"
+	"localrmm/internal/windowsfullprocesses"
 	"localrmm/internal/windowsfullservices"
 	"localrmm/internal/windowsfullsoftware"
 	"localrmm/internal/windowsmanaged"
@@ -135,6 +136,9 @@ func previewWindowsReadAdminScope(path, scope string, insecure bool) (bool, erro
 		return r.Enabled, e
 	case windowsfullservices.Scope:
 		r, e := ConfigureWindowsFullServices(path, "preview", false, insecure)
+		return r.Enabled, e
+	case windowsfullprocesses.Scope:
+		r, e := ConfigureWindowsFullProcesses(path, "preview", false, insecure)
 		return r.Enabled, e
 	case windowsfullsoftware.Scope:
 		r, e := ConfigureWindowsFullSoftware(path, "preview", false, insecure)

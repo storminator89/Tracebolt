@@ -23,6 +23,18 @@ const ReadAdminContractV3 = "fresh-fourteen-read-admin-scopes-v1"
 const ReadAdminCapabilitiesPathV4 = "/v1/windows/read-admin-setup-capabilities-v4"
 const ReadAdminContractV4 = "fresh-fifteen-read-admin-scopes-v1"
 
+const ReadAdminCapabilitiesPathV5 = "/v1/windows/read-admin-setup-capabilities-v5"
+const ReadAdminContractV5 = "fresh-sixteen-read-admin-scopes-v1"
+
+const ReadAdminCapabilitiesPathV6 = "/v1/windows/read-admin-setup-capabilities-v6"
+const ReadAdminContractV6 = "fresh-seventeen-read-admin-scopes-v1"
+
+const ReadAdminCapabilitiesPathV7 = "/v1/windows/read-admin-setup-capabilities-v7"
+const ReadAdminContractV7 = "fresh-eighteen-read-admin-scopes-v1"
+
+const ReadAdminCapabilitiesPathV8 = "/v1/windows/read-admin-setup-capabilities-v8"
+const ReadAdminContractV8 = "fresh-nineteen-read-admin-scopes-v1"
+
 var ErrCompatibility = errors.New("manager is unavailable or does not support this Windows Setup contract; update the manager and obtain a new Windows bootstrap export")
 
 // Capabilities binds finite protocol support to the public bootstrap's manager.
@@ -63,6 +75,30 @@ func ExpectedReadAdminV4(manager, enrollment, agent string) Capabilities {
 	return c
 }
 
+func ExpectedReadAdminV5(manager, enrollment, agent string) Capabilities {
+	c := Expected(manager, enrollment, agent)
+	c.SetupContract = ReadAdminContractV5
+	return c
+}
+
+func ExpectedReadAdminV6(manager, enrollment, agent string) Capabilities {
+	c := Expected(manager, enrollment, agent)
+	c.SetupContract = ReadAdminContractV6
+	return c
+}
+
+func ExpectedReadAdminV7(manager, enrollment, agent string) Capabilities {
+	c := Expected(manager, enrollment, agent)
+	c.SetupContract = ReadAdminContractV7
+	return c
+}
+
+func ExpectedReadAdminV8(manager, enrollment, agent string) Capabilities {
+	c := Expected(manager, enrollment, agent)
+	c.SetupContract = ReadAdminContractV8
+	return c
+}
+
 func CapabilityPath(c Capabilities) (string, error) {
 	switch c.SetupContract {
 	case FreshReadContract:
@@ -75,6 +111,14 @@ func CapabilityPath(c Capabilities) (string, error) {
 		return ReadAdminCapabilitiesPathV3, nil
 	case ReadAdminContractV4:
 		return ReadAdminCapabilitiesPathV4, nil
+	case ReadAdminContractV8:
+		return ReadAdminCapabilitiesPathV8, nil
+	case ReadAdminContractV7:
+		return ReadAdminCapabilitiesPathV7, nil
+	case ReadAdminContractV6:
+		return ReadAdminCapabilitiesPathV6, nil
+	case ReadAdminContractV5:
+		return ReadAdminCapabilitiesPathV5, nil
 	}
 	return "", ErrCompatibility
 }
@@ -82,7 +126,7 @@ func CapabilityPath(c Capabilities) (string, error) {
 // Match accepts only the exact bounded canonical finite contract. Old or newer
 // incompatible support cannot be mistaken for the exact selected receiver.
 func Match(raw []byte, expected Capabilities) error {
-	if len(raw) == 0 || len(raw) > 2048 || expected.SchemaVersion != CapabilitiesVersion || (expected.SetupContract != FreshReadContract && expected.SetupContract != ReadAdminContract && expected.SetupContract != ReadAdminContractV2 && expected.SetupContract != ReadAdminContractV3 && expected.SetupContract != ReadAdminContractV4) || expected.ManagerInstanceID == "" || expected.EnrollmentOrigin == "" || expected.AgentOrigin == "" || expected.CollectionProfile != "windows-inventory-v1" {
+	if len(raw) == 0 || len(raw) > 2048 || expected.SchemaVersion != CapabilitiesVersion || (expected.SetupContract != FreshReadContract && expected.SetupContract != ReadAdminContract && expected.SetupContract != ReadAdminContractV2 && expected.SetupContract != ReadAdminContractV3 && expected.SetupContract != ReadAdminContractV4 && expected.SetupContract != ReadAdminContractV5 && expected.SetupContract != ReadAdminContractV6 && expected.SetupContract != ReadAdminContractV7 && expected.SetupContract != ReadAdminContractV8) || expected.ManagerInstanceID == "" || expected.EnrollmentOrigin == "" || expected.AgentOrigin == "" || expected.CollectionProfile != "windows-inventory-v1" {
 		return ErrCompatibility
 	}
 	var got Capabilities

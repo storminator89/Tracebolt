@@ -3,8 +3,10 @@ package lanclient
 import (
 	"errors"
 	"localrmm/internal/lanclientstate"
+	"localrmm/internal/windowsfullprocesses"
 	"localrmm/internal/windowsfullservices"
 	"localrmm/internal/windowsfullsoftware"
+	"localrmm/internal/windowsnetworkcontext"
 	"localrmm/internal/windowsservice"
 	"localrmm/internal/windowsstate"
 	"os"
@@ -192,6 +194,180 @@ func windowsReadAdminScopesV8Absent(root, sid string, open func(string, windowss
 		return ErrState
 	}
 	s, e := open(root+"-security-coverage", windowsSecurityCoverageOptions(sid, false))
+	if s != nil {
+		_ = s.Close()
+		return ErrState
+	}
+	if !errors.Is(e, os.ErrNotExist) {
+		return ErrState
+	}
+	return nil
+}
+
+func readWindowsFullProcessesGrant(m Material) (windowsfullprocesses.Consent, bool) {
+	zero := windowsfullprocesses.Consent{}
+	if !currentWindowsContextMaterial(m, Load) {
+		return zero, false
+	}
+	primary, e := lanclientstate.AcquireWindowsFullProcessesInitialization(m.config.StateDirectory, m.binding)
+	if e != nil {
+		return zero, false
+	}
+	defer primary.Close()
+	used, e := primary.Used()
+	if e != nil || !used {
+		return zero, false
+	}
+	sid, e := windowsservice.LookupServiceSID()
+	if e != nil {
+		return zero, false
+	}
+	store, e := windowsstate.Open(windowsFullProcessesDirectory(m), windowsFullProcessesOptions(sid, false))
+	if e != nil {
+		return zero, false
+	}
+	defer store.Close()
+	state, e := windowsfullprocesses.OpenState(store, m.config.AgentID, m.binding)
+	if e != nil {
+		return zero, false
+	}
+	defer state.Close()
+	raw, e := store.Read("consent.json")
+	if e != nil {
+		return zero, false
+	}
+	c, e := windowsfullprocesses.DecodeConsent(raw)
+	if e != nil || c.SenderBinding != m.binding || !c.Enabled || state.Close() != nil || primary.Close() != nil {
+		return zero, false
+	}
+	return c, true
+}
+
+func WindowsReadAdminScopesV9Absent(root, sid string) error {
+	return windowsReadAdminScopesV9Absent(root, sid, func(path string, options windowsstate.Options) (capabilityInspectionStore, error) {
+		s, e := windowsstate.Open(path, options)
+		if e != nil {
+			return nil, e
+		}
+		return s, nil
+	})
+}
+func windowsReadAdminScopesV9Absent(root, sid string, open func(string, windowsstate.Options) (capabilityInspectionStore, error)) error {
+	if windowsReadAdminScopesV8Absent(root, sid, open) != nil {
+		return ErrState
+	}
+	s, e := open(root+"-full-processes", windowsFullProcessesOptions(sid, false))
+	if s != nil {
+		_ = s.Close()
+		return ErrState
+	}
+	if !errors.Is(e, os.ErrNotExist) {
+		return ErrState
+	}
+	return nil
+}
+
+func readWindowsNetworkContextGrant(m Material) (windowsnetworkcontext.Consent, bool) {
+	zero := windowsnetworkcontext.Consent{}
+	if !currentWindowsContextMaterial(m, Load) {
+		return zero, false
+	}
+	primary, e := lanclientstate.AcquireWindowsNetworkContextInitialization(m.config.StateDirectory, m.binding)
+	if e != nil {
+		return zero, false
+	}
+	defer primary.Close()
+	used, e := primary.Used()
+	if e != nil || !used {
+		return zero, false
+	}
+	sid, e := windowsservice.LookupServiceSID()
+	if e != nil {
+		return zero, false
+	}
+	store, e := windowsstate.Open(windowsNetworkContextDirectory(m), windowsNetworkContextOptions(sid, false))
+	if e != nil {
+		return zero, false
+	}
+	defer store.Close()
+	state, e := windowsnetworkcontext.OpenState(store, m.config.AgentID, m.binding)
+	if e != nil {
+		return zero, false
+	}
+	defer state.Close()
+	raw, e := store.Read("consent.json")
+	if e != nil {
+		return zero, false
+	}
+	c, e := windowsnetworkcontext.DecodeConsent(raw)
+	if e != nil || c.SenderBinding != m.binding || !c.Enabled || state.Close() != nil || primary.Close() != nil {
+		return zero, false
+	}
+	return c, true
+}
+
+func WindowsReadAdminScopesV10Absent(root, sid string) error {
+	return windowsReadAdminScopesV10Absent(root, sid, func(path string, options windowsstate.Options) (capabilityInspectionStore, error) {
+		s, e := windowsstate.Open(path, options)
+		if e != nil {
+			return nil, e
+		}
+		return s, nil
+	})
+}
+func windowsReadAdminScopesV10Absent(root, sid string, open func(string, windowsstate.Options) (capabilityInspectionStore, error)) error {
+	if windowsReadAdminScopesV9Absent(root, sid, open) != nil {
+		return ErrState
+	}
+	s, e := open(root+"-network-context", windowsNetworkContextOptions(sid, false))
+	if s != nil {
+		_ = s.Close()
+		return ErrState
+	}
+	if !errors.Is(e, os.ErrNotExist) {
+		return ErrState
+	}
+	return nil
+}
+
+func WindowsReadAdminScopesV11Absent(root, sid string) error {
+	return windowsReadAdminScopesV11Absent(root, sid, func(path string, options windowsstate.Options) (capabilityInspectionStore, error) {
+		s, e := windowsstate.Open(path, options)
+		if e != nil {
+			return nil, e
+		}
+		return s, nil
+	})
+}
+func windowsReadAdminScopesV11Absent(root, sid string, open func(string, windowsstate.Options) (capabilityInspectionStore, error)) error {
+	if windowsReadAdminScopesV10Absent(root, sid, open) != nil {
+		return ErrState
+	}
+	s, e := open(root+"-resource-context", windowsResourceContextOptions(sid, false))
+	if s != nil {
+		_ = s.Close()
+		return ErrState
+	}
+	if !errors.Is(e, os.ErrNotExist) {
+		return ErrState
+	}
+	return nil
+}
+
+func WindowsReadAdminScopesV12Absent(root, sid string) error {
+	return windowsReadAdminScopesV12Absent(root, sid, func(path string, options windowsstate.Options) (capabilityInspectionStore, error) {
+		s, e := windowsstate.Open(path, options)
+		if e != nil {
+			return nil, e
+		}
+		return s, nil
+	})
+}
+func windowsReadAdminScopesV12Absent(root, sid string, open func(string, windowsstate.Options) (capabilityInspectionStore, error)) error {
+	if windowsReadAdminScopesV11Absent(root, sid, open) != nil {
+		return ErrState
+	}
+	s, e := open(root+"-storage-io", windowsStorageIOOptions(sid, false))
 	if s != nil {
 		_ = s.Close()
 		return ErrState

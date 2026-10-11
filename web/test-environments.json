@@ -23,9 +23,14 @@
     "src/windows-contact-clock.test.ts",
     "src/windows-contact-types.test.ts",
     "src/windows-event-content-types.test.ts",
+    "src/windows-full-processes-types.test.ts",
     "src/windows-health-clock.test.ts",
     "src/windows-inventory-types.test.ts",
+    "src/windows-network-context-interop.test.ts",
+    "src/windows-network-context-types.test.ts",
+    "src/windows-resource-context-types.test.ts",
     "src/windows-service-startup-types.test.ts",
+    "src/windows-storage-io-types.test.ts",
     "src/windows-updates-types.test.ts"
   ]
 }

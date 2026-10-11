@@ -19,12 +19,17 @@ This page describes the current source; downloadable prereleases cover less.
 - **Linux inspection:** visible processes and mounts, dpkg software, services,
   connections, selected service logs, cached APT candidates and bounded
   Debian/Ubuntu CVE warnings.
-- **Windows inspection:** process CPU/RAM, volumes, numeric network endpoints,
+- **Windows inspection:** complete caller-visible process snapshots, a separate
+  bounded process CPU/RAM sample, volumes, numeric network endpoints,
   complete caller-visible Win32 services and machine software registrations,
   adapter configuration, build/update history, Defender/Firewall posture,
   client Security Center antivirus registration/status, TPM presence/version,
   sessions/join context, hardware/firmware/power details, drive-letter mapping
-  and physical-disk provider status.
+  and physical-disk provider status. Separately consented
+  [CPU/memory context](docs/windows-resource-context.md) adds source-labeled
+  processor counts, installed/usable RAM, commit capacity and aggregate pagefile use.
+  Independent [aggregate disk I/O](docs/windows-storage-io.md) adds local PerfDisk
+  throughput, operations, latency, queue lengths and sample timing.
 - **Windows logs and updates:** Application/System event headers, separately
   approved selected message reads, and offline cached Windows Update inspection.
 - **Optional monitoring:** platform-specific health checks, manager-side
@@ -32,8 +37,9 @@ This page describes the current source; downloadable prereleases cover less.
 
 Collection depends on the endpoint's explicitly approved scope and accessible
 sources. Windows software covers HKLM registrations, not every installed app;
-process inventory is still a bounded sample. Cached updates do not prove patch
-compliance, and security observations do not prove that a device is protected.
+complete process inventory does not expand the separate 128-row CPU/RAM sample.
+Cached updates do not prove patch compliance, and security observations do not
+prove that a device is protected.
 [Windows scope and limitations](docs/windows-status.md).
 
 ## Get started
@@ -111,7 +117,7 @@ credentials and content on the network. Production hardening remains open.
 
 ## What is next
 
-Finish the missing Windows Admin data: storage/performance, complete processes,
+Finish the missing Windows Admin data: storage/performance, broader process metrics,
 broader security/network detail and useful change history. Then validate fresh
 native installation and the real manager-to-endpoint flow before a new release.
 There is no existing-user migration rollout. Remote desktop is deferred.

@@ -73,12 +73,12 @@ jobs:
         if: matrix.platform == 'windows'
         env:
           GOTOOLCHAIN: local
-        run: go test -buildvcs=false -count=1 ./internal/windowseventcontent ./internal/windowseventrequest ./internal/windowseventwire ./internal/windowseventstate ./internal/windowseventworker ./internal/windowsupdates ./internal/windowsupdateworker ./internal/windowsfullsoftware ./internal/windowsfullsoftwarewire ./internal/windowsadapters ./internal/windowshardware ./internal/windowshardwareworker ./internal/windowsstorage ./internal/windowsstorageworker ./internal/windowssecuritycoverage ./internal/windowssecuritycoverageworker
+        run: go test -buildvcs=false -count=1 ./internal/windowseventcontent ./internal/windowseventrequest ./internal/windowseventwire ./internal/windowseventstate ./internal/windowseventworker ./internal/windowsupdates ./internal/windowsupdateworker ./internal/windowsfullsoftware ./internal/windowsfullsoftwarewire ./internal/windowsfullprocesses ./internal/windowsfullprocesseswire ./internal/windowsadapters ./internal/windowshardware ./internal/windowshardwareworker ./internal/windowsstorage ./internal/windowsstorageworker ./internal/windowssecuritycoverage ./internal/windowssecuritycoverageworker
       - name: Vet Windows parity sources (no host collection)
         if: matrix.platform == 'windows'
         env:
           GOTOOLCHAIN: local
-        run: go vet -buildvcs=false ./internal/windowseventcontent ./internal/windowseventrequest ./internal/windowseventwire ./internal/windowseventstate ./internal/windowseventworker ./internal/windowsupdates ./internal/windowsupdateworker ./internal/windowsfullsoftware ./internal/windowsfullsoftwarewire ./internal/windowsadapters ./internal/windowshardware ./internal/windowshardwareworker ./internal/windowsstorage ./internal/windowsstorageworker ./internal/windowssecuritycoverage ./internal/windowssecuritycoverageworker
+        run: go vet -buildvcs=false ./internal/windowseventcontent ./internal/windowseventrequest ./internal/windowseventwire ./internal/windowseventstate ./internal/windowseventworker ./internal/windowsupdates ./internal/windowsupdateworker ./internal/windowsfullsoftware ./internal/windowsfullsoftwarewire ./internal/windowsfullprocesses ./internal/windowsfullprocesseswire ./internal/windowsadapters ./internal/windowshardware ./internal/windowshardwareworker ./internal/windowsstorage ./internal/windowsstorageworker ./internal/windowssecuritycoverage ./internal/windowssecuritycoverageworker
       - name: Execute ARM64 Linux installer and helper fixture tests natively
         if: matrix.platform == 'linux' && matrix.arch == 'arm64'
         env:
@@ -548,12 +548,15 @@ jobs:
           node --test tests/e2e-review/public-command-contract.test.mjs
           node --test tests/windows_linux_native_parity/browser.test.mjs
           node --test tests/e2e-review/endpoint-child-shutdown.test.mjs tests/e2e-review/windows-inventory-fixtures.test.mjs tests/e2e-review/resource-history-fixtures.test.mjs tests/e2e-review/application-check-settings-fixtures.test.mjs tests/e2e-review/investigations-fixtures.test.mjs tests/e2e-review/alarm-browser-diagnostics.test.mjs tests/e2e-review/browser-transport-diagnostics.test.mjs tests/e2e-review/enrollment-create-diagnostics.test.mjs tests/e2e-review/v3-failure-diagnostics.test.mjs tests/e2e-review/alarm-settings-fixtures.test.mjs tests/e2e-review/cve-continuation-fixtures.test.mjs tests/e2e-review/cve-detail-pages-fixtures.test.mjs tests/e2e-review/proactive-ai-fixtures.test.mjs tests/e2e-review/journal-ai-fixtures.test.mjs tests/e2e-review/package-updates-fixtures.test.mjs tests/e2e-review/journal-browse-fixtures.test.mjs tests/e2e-review/windows-contact-history-fixtures.test.mjs
-      - name: Complete Windows services inert browser contract
+      - name: Complete Windows inventory inert browser contracts
         working-directory: .
         run: |
           node --test tests/e2e-review/windows-full-services-fixtures.test.mjs
           node --test tests/e2e-review/windows-full-software-fixtures.test.mjs
+          node --test tests/e2e-review/windows-full-processes-fixtures.test.mjs
+          node --test tests/e2e-review/windows-network-context-fixtures.test.mjs
           node --test tests/e2e-review/windows-fleet-fixtures.test.mjs
+          node --test tests/e2e-review/windows-storage-io-fixtures.test.mjs
       - name: Production build
         run: npm run build
 
@@ -610,6 +613,22 @@ jobs:
         env:
           TRACEBOLT_SOURCE_SHA: ${{ github.sha }}
         run: node tests/e2e-review/windows-full-software-runner.mjs
+      - name: Complete Windows processes SQLite-vector browser gate
+        if: ${{ !cancelled() }}
+        env:
+          TRACEBOLT_SOURCE_SHA: ${{ github.sha }}
+        run: node tests/e2e-review/windows-full-processes-runner.mjs
+      - name: Windows routes and exact raw counters synthetic browser gate
+        if: ${{ !cancelled() }}
+        env:
+          TRACEBOLT_SOURCE_SHA: ${{ github.sha }}
+        run: node tests/e2e-review/windows-network-context-runner.mjs
+      - name: Windows aggregate disk IO synthetic browser gate (16 required screenshots)
+        if: ${{ !cancelled() }}
+        timeout-minutes: 5
+        env:
+          TRACEBOLT_SOURCE_SHA: ${{ github.sha }}
+        run: node tests/e2e-review/windows-storage-io-runner.mjs
       - name: Guided enrollment full browser gate (13 required, no skips)
         if: ${{ !cancelled() }}
         env:
@@ -853,6 +872,13 @@ jobs:
             artifacts/review/fleet-identity-browser-manifest.json
             artifacts/review/windows-full-software-results.json
             artifacts/review/windows-full-software-manifest.json
+            artifacts/review/windows-full-processes-results.json
+            artifacts/review/windows-full-processes-manifest.json
+            artifacts/review/windows-network-context-results.json
+            artifacts/review/windows-network-context-manifest.json
+            artifacts/review/windows-storage-io/windows-storage-io-results.json
+            artifacts/review/windows-storage-io/windows-storage-io-manifest.json
+            artifacts/review/windows-storage-io/synthetic-windows-storage-io-*.png
             artifacts/review/journal-browser-results.json
             artifacts/review/journal-browser-manifest.json
             artifacts/review/complete-overview-browser-results.json

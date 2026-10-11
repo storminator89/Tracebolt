@@ -3,14 +3,24 @@
 `Run(Config, Hooks) error` uses fixed Win32 controls through `x/sys/windows`,
 without WebView, browser navigation, downloads, third-party GUI packages, or a
 second installation engine. The caller supplies the embedded service provenance,
-complete thirteen-scope Read admin disclosure and existing coordinator hooks.
+complete nineteen-scope Read admin disclosure and existing coordinator hooks.
 Read admin is the only presented fresh profile; it is not an extra opt-in above
-a five-scope default. Review starts with five readable groups and offers full
+a five-scope default. Review starts with six readable groups and offers full
 scope/provider details through an optional details button. The fresh profile explicitly
 names manufacturer/model, physical chassis serial from Win32_SystemEnclosure,
 BIOS serial metadata, firmware vendor/version/date, and power/battery. Identifying
-serial metadata is covered by the new v6 consent and outer receipt version 4;
-historical twelve-scope v5/receipt3 and five-scope v3/receipt2 bytes are unchanged.
+serial metadata remains explicitly disclosed alongside storage-provider identifiers,
+av product names/status, TPM presence/version, complete process snapshot fields,
+and the new route prefixes/next hops/indices/metrics/protocol/origin, interface
+aliases and exact raw octet/error/discard counters. CPU model/source-labeled
+processor counts, installed SMBIOS versus OS-usable RAM, commit current/limit
+and remaining capacity, and aggregate pagefile allocated/in-use capacity are
+explicitly disclosed. Pagefile names/paths are excluded; this adds no paging-I/O,
+thrashing or health verdict and does not change the CPU sampler. Fresh approval uses consent
+v12 and outer receipt 10. Historical v1-v11 consent and receipts remain unchanged;
+old grants never authorize the independent storage-I/O scope.
+Counters are not rates or since-boot totals, and the independently captured tables
+are not joined. Setup does not query providers or grant new native privileges.
 
 The three pages choose a public bootstrap, review trust and scope, and display
 operation status. The selected public file is bounded to 64 KiB; Windows permits
@@ -27,7 +37,7 @@ mandatory. No existing installation is adopted by this fresh-only wizard.
 HTTPS remains the default, with no downgrade or fallback. A validated bootstrap
 can explicitly select isolated HTTP-test. Both origins must then use HTTP; mixed
 transport is rejected. The complete separate HTTP disclosure is mandatory and
-an additional unchecked checkbox acknowledges plaintext invitation, thirteen-scope
+an additional unchecked checkbox acknowledges plaintext invitation, nineteen-scope
 telemetry and forged manager-response risks. The install hook receives `true`
 only after this additional approval; TLS always receives `false`. Back and new
 input clear the HTTP acknowledgement too.

@@ -8,10 +8,12 @@ attestation, or BitLocker protection. No native host read has been performed.
 
 ## Exact fresh approval
 
-`windows-security-coverage-v1` is a new default-off local scope. Fresh Read admin
-uses consent v8 with fifteen exact scopes and outer receipt 6. Historical
+`windows-security-coverage-v1` is a new default-off local scope. Its initial fresh profile
+used consent v8 with fifteen exact scopes and outer receipt 6. Current fresh Read
+admin adds the independent [complete process scope](windows-full-processes-contract.md)
+with consent v9, sixteen scopes, outer receipt 7 and capability V5. Historical
 consent v1–v7, receipts, worker modes and five-scope Setup remain unchanged;
-none authorize the new scope. The fresh installer checks the exact public
+none authorize the new scope. The preserved fifteen-scope profile checks the exact public
 `/v1/windows/read-admin-setup-capabilities-v4` advertisement and
 `fresh-fifteen-read-admin-scopes-v1` contract before enrollment.
 

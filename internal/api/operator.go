@@ -376,7 +376,7 @@ func (h *operatorHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if r.URL.Path == "/v1/windows/setup-capabilities" || r.URL.Path == "/v1/windows/read-admin-setup-capabilities" || r.URL.Path == "/v1/windows/read-admin-setup-capabilities-v2" || r.URL.Path == "/v1/windows/read-admin-setup-capabilities-v3" || r.URL.Path == "/v1/windows/read-admin-setup-capabilities-v4" {
+	if r.URL.Path == "/v1/windows/setup-capabilities" || r.URL.Path == "/v1/windows/read-admin-setup-capabilities" || r.URL.Path == "/v1/windows/read-admin-setup-capabilities-v2" || r.URL.Path == "/v1/windows/read-admin-setup-capabilities-v3" || r.URL.Path == "/v1/windows/read-admin-setup-capabilities-v4" || r.URL.Path == "/v1/windows/read-admin-setup-capabilities-v5" || r.URL.Path == "/v1/windows/read-admin-setup-capabilities-v6" || r.URL.Path == "/v1/windows/read-admin-setup-capabilities-v7" || r.URL.Path == "/v1/windows/read-admin-setup-capabilities-v8" {
 		h.windowsSetupCapabilities(w, r)
 		return
 	}
@@ -532,6 +532,14 @@ func (h *operatorHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if strings.HasPrefix(r.URL.Path, "/api/devices/") && strings.Contains(r.URL.Path, "/windows-full-software") {
 		h.windowsFullSoftwareQuery(w, r)
+		return
+	}
+	if strings.HasPrefix(r.URL.Path, "/api/devices/") && strings.Contains(r.URL.Path, "/windows-full-processes") {
+		h.windowsFullProcessesQuery(w, r)
+		return
+	}
+	if strings.HasPrefix(r.URL.Path, "/api/devices/") && strings.Contains(r.URL.Path, "/windows-network-context") {
+		h.windowsNetworkContextQuery(w, r)
 		return
 	}
 	if strings.HasPrefix(r.URL.Path, "/api/devices/") && strings.HasSuffix(r.URL.Path, "/windows-inventory") {

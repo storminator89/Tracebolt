@@ -204,8 +204,8 @@ func windowsFullServicesOtherBytes(ctx context.Context, t *transaction) (int64, 
 		}
 		extra += n
 	}
-	// The global byte ceiling is shared with the other complete Windows domain.
-	// Read only its reservations and authority bytes; do not recurse into budgets.
+	// The global byte ceiling is shared across all complete Windows domains.
+	// Count reservations and authority bytes without recursive budget checks.
 	present, e = windowsFullSoftwareSchemaPresent(ctx, t.conn, enrollmentcrypto.CollectionProfileWindowsInventory)
 	if e != nil {
 		return 0, e
@@ -213,6 +213,28 @@ func windowsFullServicesOtherBytes(ctx context.Context, t *transaction) (int64, 
 	if present {
 		var n int64
 		if t.conn.QueryRowContext(ctx, `SELECT coalesce((SELECT sum(length(body)) FROM wfw_authority),0)+coalesce((SELECT sum(reserved_bytes) FROM wfw_generations),0)`).Scan(&n) != nil {
+			return 0, ErrStorage
+		}
+		extra += n
+	}
+	present, e = windowsFullProcessesSchemaPresent(ctx, t.conn, enrollmentcrypto.CollectionProfileWindowsInventory)
+	if e != nil {
+		return 0, e
+	}
+	if present {
+		var n int64
+		if t.conn.QueryRowContext(ctx, `SELECT coalesce((SELECT sum(length(body)) FROM wfp_authority),0)+coalesce((SELECT sum(reserved_bytes) FROM wfp_generations),0)`).Scan(&n) != nil {
+			return 0, ErrStorage
+		}
+		extra += n
+	}
+	present, e = windowsNetworkContextSchemaPresent(ctx, t.conn, enrollmentcrypto.CollectionProfileWindowsInventory)
+	if e != nil {
+		return 0, e
+	}
+	if present {
+		var n int64
+		if t.conn.QueryRowContext(ctx, `SELECT coalesce((SELECT sum(length(body)) FROM wnc_authority),0)+coalesce((SELECT sum(reserved_bytes) FROM wnc_generations),0)`).Scan(&n) != nil {
 			return 0, ErrStorage
 		}
 		extra += n

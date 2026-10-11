@@ -23,7 +23,7 @@ func namedReadRoute(r *http.Request) bool {
 	if len(parts) < 6 || parts[1] != "api" || parts[2] != "devices" || !enrollmentcrypto.ValidID(parts[3], "agent_") {
 		return false
 	}
-	if len(parts) == 6 && (parts[4] == "windows-full-services" || parts[4] == "windows-full-software") && parts[5] == "query" {
+	if len(parts) == 6 && (parts[4] == "windows-full-services" || parts[4] == "windows-full-software" || parts[4] == "windows-full-processes" || parts[4] == "windows-network-context") && parts[5] == "query" {
 		return true
 	}
 	if len(parts) == 6 && parts[4] == "journal" && parts[5] == "query" {

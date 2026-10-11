@@ -97,3 +97,71 @@ func TestReadAdminV4SecurityCoverageCannotPromoteEarlierCapabilities(t *testing.
 		}
 	}
 }
+
+func TestReadAdminV5FullProcessesCannotPromoteEarlierCapabilities(t *testing.T) {
+	fresh := ExpectedReadAdminV5("manager", "https://enroll", "https://agent")
+	path, e := CapabilityPath(fresh)
+	if e != nil || path != ReadAdminCapabilitiesPathV5 {
+		t.Fatal(path, e)
+	}
+	contracts := []Capabilities{Expected("manager", "https://enroll", "https://agent"), ExpectedReadAdmin("manager", "https://enroll", "https://agent"), ExpectedReadAdminV2("manager", "https://enroll", "https://agent"), ExpectedReadAdminV3("manager", "https://enroll", "https://agent"), ExpectedReadAdminV4("manager", "https://enroll", "https://agent"), fresh}
+	for i, c := range contracts {
+		raw, _ := json.Marshal(c)
+		for j, want := range contracts {
+			if (Match(raw, want) == nil) != (i == j) {
+				t.Fatal("contracts conflated", i, j)
+			}
+		}
+	}
+}
+
+func TestReadAdminV6NetworkContextCannotPromoteEarlierCapabilities(t *testing.T) {
+	fresh := ExpectedReadAdminV6("manager", "https://enroll", "https://agent")
+	path, e := CapabilityPath(fresh)
+	if e != nil || path != ReadAdminCapabilitiesPathV6 {
+		t.Fatal(path, e)
+	}
+	contracts := []Capabilities{Expected("manager", "https://enroll", "https://agent"), ExpectedReadAdmin("manager", "https://enroll", "https://agent"), ExpectedReadAdminV2("manager", "https://enroll", "https://agent"), ExpectedReadAdminV3("manager", "https://enroll", "https://agent"), ExpectedReadAdminV4("manager", "https://enroll", "https://agent"), ExpectedReadAdminV5("manager", "https://enroll", "https://agent"), fresh}
+	for i, c := range contracts {
+		raw, _ := json.Marshal(c)
+		for j, want := range contracts {
+			if (Match(raw, want) == nil) != (i == j) {
+				t.Fatal("contracts conflated", i, j)
+			}
+		}
+	}
+}
+
+func TestReadAdminV7ResourceContextCannotPromoteEarlierCapabilities(t *testing.T) {
+	fresh := ExpectedReadAdminV7("manager", "https://enroll", "https://agent")
+	path, e := CapabilityPath(fresh)
+	if e != nil || path != ReadAdminCapabilitiesPathV7 {
+		t.Fatal(path, e)
+	}
+	contracts := []Capabilities{Expected("manager", "https://enroll", "https://agent"), ExpectedReadAdmin("manager", "https://enroll", "https://agent"), ExpectedReadAdminV2("manager", "https://enroll", "https://agent"), ExpectedReadAdminV3("manager", "https://enroll", "https://agent"), ExpectedReadAdminV4("manager", "https://enroll", "https://agent"), ExpectedReadAdminV5("manager", "https://enroll", "https://agent"), ExpectedReadAdminV6("manager", "https://enroll", "https://agent"), fresh}
+	for i, c := range contracts {
+		raw, _ := json.Marshal(c)
+		for j, want := range contracts {
+			if (Match(raw, want) == nil) != (i == j) {
+				t.Fatal("contracts conflated", i, j)
+			}
+		}
+	}
+}
+
+func TestReadAdminV8StorageIOCannotPromoteEarlierCapabilities(t *testing.T) {
+	fresh := ExpectedReadAdminV8("manager", "https://enroll", "https://agent")
+	path, e := CapabilityPath(fresh)
+	if e != nil || path != ReadAdminCapabilitiesPathV8 {
+		t.Fatal(path, e)
+	}
+	contracts := []Capabilities{Expected("manager", "https://enroll", "https://agent"), ExpectedReadAdmin("manager", "https://enroll", "https://agent"), ExpectedReadAdminV2("manager", "https://enroll", "https://agent"), ExpectedReadAdminV3("manager", "https://enroll", "https://agent"), ExpectedReadAdminV4("manager", "https://enroll", "https://agent"), ExpectedReadAdminV5("manager", "https://enroll", "https://agent"), ExpectedReadAdminV6("manager", "https://enroll", "https://agent"), ExpectedReadAdminV7("manager", "https://enroll", "https://agent"), fresh}
+	for i, c := range contracts {
+		raw, _ := json.Marshal(c)
+		for j, want := range contracts {
+			if (Match(raw, want) == nil) != (i == j) {
+				t.Fatal("contracts conflated", i, j)
+			}
+		}
+	}
+}

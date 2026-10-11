@@ -5,6 +5,7 @@ import fs from 'node:fs';
 import {createRequire} from 'node:module';
 import {fileURLToPath} from 'node:url';
 import {windowsFullServicesAbsentPage,windowsFullServicesFixtureQuery} from './windows-full-services-browser.mjs';
+import {windowsFullProcessesAbsentPage,windowsFullProcessesFixtureQuery} from './windows-full-processes-browser.mjs';
 const require=createRequire(new URL('../../web/package.json',import.meta.url));
 const built=require('esbuild').buildSync({stdin:{contents:"export {windowsView,windowsNow} from './windows-inventory-fixture'; export {windowsHealthDevice} from './windows-health-fixture'; export {validWindowsActionView} from './windows-service-action-types';",resolveDir:fileURLToPath(new URL('../../web/src/',import.meta.url)),loader:'ts'},bundle:true,platform:'node',format:'esm',write:false,logLevel:'silent'});
 const {windowsView,windowsNow,windowsHealthDevice,validWindowsActionView}=await import('data:text/javascript;base64,'+Buffer.from(built.outputFiles[0].text).toString('base64'));
@@ -54,6 +55,13 @@ export function windowsServiceActionsRoute({base,fixture,state}){
    const query=windowsFullServicesFixtureQuery({pathname:url.pathname,search:url.search,method,headers:request.headers(),raw},prefix);
    if(!query||request.headers()['x-csrf-token']!==csrf||request.headers()['origin']!==base)return block('inventory-query');
    return reply(windowsFullServicesAbsentPage(fixture.device.id,query,fixture.now));
+  }
+  // The initial inventory tab can read its independent process scope before
+  // the operator selects Services. This synthetic identity has no such grant.
+  if(url.pathname===prefix+'/windows-full-processes/query'){
+   const query=windowsFullProcessesFixtureQuery({pathname:url.pathname,search:url.search,method,headers:request.headers(),raw},prefix);
+   if(!query||request.headers()['x-csrf-token']!==csrf||request.headers()['origin']!==base||request.headers()['content-type']!=='application/json')return block('process-inventory-query');
+   return reply(windowsFullProcessesAbsentPage(fixture.device.id,query,fixture.now));
   }
   if(method!=='GET'||raw!==null)return block('unexpected-write');
   if(url.pathname==='/api/auth/session')return reply(fixture.session);

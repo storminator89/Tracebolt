@@ -1,3 +1,4 @@
+import {requireWindowsResourceContextEvidence,windowsResourceContextDisclosure} from './windows-resource-context-browser.mjs';
 import {requireWindowsSecurityCoverageEvidence,windowsSecurityCoverageDisclosure} from './windows-security-coverage-browser.mjs';
 import {requireWindowsStorageContextEvidence,windowsStorageContextDisclosure} from './windows-storage-context-browser.mjs';
 import {requireWindowsHardwareContextEvidence,windowsHardwareContextDisclosure} from './windows-hardware-context-browser.mjs';
@@ -52,7 +53,7 @@ test('the real runner success boundary rejects a no-op Windows callback before r
  const check=parsed.statements.find(node=>ts.isFunctionDeclaration(node)&&node.name?.text==='check');assert.ok(check);
  // Execute only the actual success/failure wrapper. Its process/browser setup
  // and teardown are inert here; no Playwright assertion is mocked or replaced.
- const globals={Date,console:{log(){}},start:async()=>{},stop:async()=>{},context:null,currentTest:'',results:[],screenshots:[],sourceSha:'a'.repeat(40),requireWindowsHealthEvidence,requireWindowsAdapterContextEvidence,requireWindowsPatchContextEvidence,requireWindowsSecurityCoverageEvidence,requireWindowsSecurityPostureEvidence,requireWindowsSessionContextEvidence,requireWindowsHardwareContextEvidence,requireWindowsStorageContextEvidence,windowsInventoryFailureStage:()=> 'fixture-before-completion'};
+ const globals={Date,console:{log(){}},start:async()=>{},stop:async()=>{},context:null,currentTest:'',results:[],screenshots:[],sourceSha:'a'.repeat(40),requireWindowsHealthEvidence,requireWindowsAdapterContextEvidence,requireWindowsPatchContextEvidence,requireWindowsSecurityCoverageEvidence,requireWindowsSecurityPostureEvidence,requireWindowsSessionContextEvidence,requireWindowsHardwareContextEvidence,requireWindowsStorageContextEvidence,requireWindowsResourceContextEvidence,windowsInventoryFailureStage:()=> 'fixture-before-completion'};
  for(const name of new Set([...check.getText(parsed).matchAll(/\b\w+CaseName\b/g)].map(match=>match[0])))globals[name]=name;
  const run=vm.runInNewContext('('+check.getText(parsed)+')',globals);
  await run(globals.windowsInventoryCaseName,async()=>{});
@@ -95,6 +96,10 @@ test('the real runner success boundary rejects a no-op Windows callback before r
  assert.equal(globals.results[0].status,'FAIL');assert.equal(globals.results[0].stage,'storage-context-completion');
  globals.results.length=0;
  for(const kind of ['summary','details','current-failure','retained-details'])for(const locale of ['en','de'])for(const width of [1440,390])globals.screenshots.push({file:`synthetic-windows-storage-context-${kind}-${width}-${locale}.png`,sourceSha:globals.sourceSha,test:globals.windowsInventoryCaseName,locale,viewport:{width,height:width===390?844:1000},publicSafe:true,fullPage:false,fixtureDisclosure:windowsStorageContextDisclosure});
+ await run(globals.windowsInventoryCaseName,async()=>{});
+ assert.equal(globals.results[0].status,'FAIL');assert.equal(globals.results[0].stage,'resource-context-completion');
+ globals.results.length=0;
+ for(const kind of ['summary','details','current-failure','retained-details'])for(const locale of ['en','de'])for(const width of [1440,390])globals.screenshots.push({file:`synthetic-windows-resource-context-${kind}-${width}-${locale}.png`,sourceSha:globals.sourceSha,test:globals.windowsInventoryCaseName,locale,viewport:{width,height:width===390?844:1000},publicSafe:true,fullPage:false,fixtureDisclosure:windowsResourceContextDisclosure});
  await run(globals.windowsInventoryCaseName,async()=>{});
  assert.equal(globals.results[0].status,'PASS');
 });

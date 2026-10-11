@@ -375,7 +375,7 @@ func (w *wizard) render() bool {
 		}
 		if w.flow.readAdmin {
 			setText(w.heading, "Step 1 of 3: Read admin setup")
-			if w.control("STATIC", "Read admin: 15 read scopes. Review and explicitly approve on the next page.", 0, idReadAdmin, true) == 0 {
+			if w.control("STATIC", "Read admin: 19 read scopes. Review and explicitly approve on the next page.", 0, idReadAdmin, true) == 0 {
 				return false
 			}
 		}

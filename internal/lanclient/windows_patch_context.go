@@ -99,10 +99,10 @@ func appendWindowsPatchContext(ctx context.Context, m Material, f frame, c windo
 	return f, b, nil
 }
 func validateWindowsPatchContextFrame(f frame, fields map[string]json.RawMessage) error {
-	if (f.SchemaVersion == FrameWindowsSecurityPostureVersion || (f.SchemaVersion == FrameWindowsSessionContextVersion || (f.SchemaVersion == FrameWindowsHardwareContextVersion || (f.SchemaVersion == FrameWindowsStorageContextVersion || f.SchemaVersion == FrameWindowsSecurityCoverageVersion)))) && f.WindowsPatchContext == nil && len(fields["windowsPatchContext"]) == 0 {
+	if (f.SchemaVersion == FrameWindowsSecurityPostureVersion || (f.SchemaVersion == FrameWindowsSessionContextVersion || (f.SchemaVersion == FrameWindowsHardwareContextVersion || (f.SchemaVersion == FrameWindowsStorageContextVersion || (f.SchemaVersion == FrameWindowsSecurityCoverageVersion || (f.SchemaVersion == FrameWindowsResourceContextVersion || f.SchemaVersion == FrameWindowsStorageIOVersion)))))) && f.WindowsPatchContext == nil && len(fields["windowsPatchContext"]) == 0 {
 		return nil
 	}
-	if f.SchemaVersion != FrameWindowsPatchContextVersion && f.SchemaVersion != FrameWindowsSecurityPostureVersion && f.SchemaVersion != FrameWindowsSessionContextVersion && f.SchemaVersion != FrameWindowsHardwareContextVersion && f.SchemaVersion != FrameWindowsStorageContextVersion && f.SchemaVersion != FrameWindowsSecurityCoverageVersion {
+	if f.SchemaVersion != FrameWindowsPatchContextVersion && f.SchemaVersion != FrameWindowsSecurityPostureVersion && f.SchemaVersion != FrameWindowsSessionContextVersion && f.SchemaVersion != FrameWindowsHardwareContextVersion && f.SchemaVersion != FrameWindowsStorageContextVersion && f.SchemaVersion != FrameWindowsSecurityCoverageVersion && f.SchemaVersion != FrameWindowsResourceContextVersion && f.SchemaVersion != FrameWindowsStorageIOVersion {
 		if f.WindowsPatchContext != nil || len(fields["windowsPatchContext"]) != 0 {
 			return ErrState
 		}

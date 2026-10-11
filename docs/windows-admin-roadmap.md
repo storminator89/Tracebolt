@@ -11,12 +11,16 @@ remote desktop is deferred.
 
 ## Already in the source
 
-- Complete caller-visible Win32 services and HKLM 32/64 machine software
+- [Complete caller-visible process snapshots](windows-full-processes-contract.md),
+  Win32 services and HKLM 32/64 machine software
   generations, with bounded search/paging
 - Fleet hostname/IP search, resource observations and independent optional
   disk/CPU/RAM/selected-service checks
 - Adapter link/DNS/gateway, build/update history/reboot, Defender/Firewall,
   session/join, hardware/firmware/power and drive-letter/provider-disk context
+- [Aggregate storage I/O](windows-storage-io.md): local PerfDisk (_Total) throughput, operations, read/write latency and average/current queue context with the actual sample window
+- [CPU and memory context](windows-resource-context.md): model/source-labeled processor counts, installed SMBIOS versus OS-usable RAM, commit current/limit/remaining and aggregate pagefile capacity/use
+- [Caller-visible routing metadata and raw interface counters](windows-network-context.md), with exact uint64 values and independent private paging
 - [Security Center antivirus registration/status and TPM presence/version](windows-security-coverage.md), with explicit client/server and provider-access limits
 - Event headers, separately approved selected messages and offline cached updates
 - Concise fresh Read admin setup with explicit unchecked consent; service control
@@ -31,20 +35,21 @@ exclusions; do not treat a complete registration list as every installed app.
 Drive-letter mapping and physical-disk provider status are implemented in source.
 The remaining data areas below can progress independently.
 
-1. **Storage and performance.** Extend [drive/volume and provider context](windows-storage-context.md) with I/O latency,
-   queue/throughput and memory commit/pagefile pressure. Add physical disk/SMART
+1. **Storage and performance.** [Aggregate PerfDisk I/O](windows-storage-io.md) is implemented independently of [drive/volume and provider context](windows-storage-context.md). Per-disk attribution and real paging-I/O measurements remain open. Commit capacity and aggregate pagefile use are implemented, but do not prove paging pressure or thrashing. Add physical disk/SMART
    information only where safely supported. Capacity is not disk health; no
    driver installation or elevation to fill a missing field.
-2. **Complete process inventory.** Use one coherent generation with search/paging,
-   visible collection limits and unambiguous missing/denied results. Broader
-   software coverage needs its own user-context design; per-user/Store and
-   portable apps are not covered by machine HKLM registrations.
+2. **Broader process metrics and software.** Complete basic process snapshots now
+   have generation-pinned search/paging. CPU/RAM remains a separately consented
+   128-row sample; extending it needs creation-identity-safe measurement and its
+   own explicit scope. Broader software coverage needs a user-context design;
+   per-user/Store and portable apps are not covered by machine HKLM registrations.
 3. **Security and patch detail.** BitLocker state, Secure Boot and TPM readiness where legitimately accessible,
    and trustworthy update freshness/applicability/CVE evidence. Never read
    recovery keys or infer “secure” or “fully patched” from absent data.
-4. **Network and hardware detail.** Routes, traffic/error counters and CPU/RAM
-   configuration, with honest virtual/unsupported/provider limits. No automatic
-   probes, packet content or privilege expansion.
+4. **Hardware and measurement detail.** Broader RAM-module and processor topology detail beyond the current source-labeled CPU counts and installed/usable RAM totals, with honest virtual/unsupported/provider limits. Routes and raw traffic/error/discard
+   counters are implemented in a separate scope; rates would need their own
+   identity-safe measurement design. No automatic probes, packet content or
+   privilege expansion.
 5. **Changes and history.** Software version/install/remove changes from comparable
    complete generations; useful inventory diffs; bounded older-event retrieval,
    continuation and search. Partial captures must not invent an uninstall or

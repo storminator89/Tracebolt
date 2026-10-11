@@ -24,6 +24,14 @@ func (h *operatorHandler) windowsSetupCapabilities(w http.ResponseWriter, r *htt
 	expected := windowssetup.Expected(b.ManagerInstanceID, b.EnrollmentOrigin, b.AgentOrigin)
 	if r.URL.Path == windowssetup.ReadAdminCapabilitiesPath {
 		expected = windowssetup.ExpectedReadAdmin(b.ManagerInstanceID, b.EnrollmentOrigin, b.AgentOrigin)
+	} else if r.URL.Path == windowssetup.ReadAdminCapabilitiesPathV8 {
+		expected = windowssetup.ExpectedReadAdminV8(b.ManagerInstanceID, b.EnrollmentOrigin, b.AgentOrigin)
+	} else if r.URL.Path == windowssetup.ReadAdminCapabilitiesPathV7 {
+		expected = windowssetup.ExpectedReadAdminV7(b.ManagerInstanceID, b.EnrollmentOrigin, b.AgentOrigin)
+	} else if r.URL.Path == windowssetup.ReadAdminCapabilitiesPathV6 {
+		expected = windowssetup.ExpectedReadAdminV6(b.ManagerInstanceID, b.EnrollmentOrigin, b.AgentOrigin)
+	} else if r.URL.Path == windowssetup.ReadAdminCapabilitiesPathV5 {
+		expected = windowssetup.ExpectedReadAdminV5(b.ManagerInstanceID, b.EnrollmentOrigin, b.AgentOrigin)
 	} else if r.URL.Path == windowssetup.ReadAdminCapabilitiesPathV4 {
 		expected = windowssetup.ExpectedReadAdminV4(b.ManagerInstanceID, b.EnrollmentOrigin, b.AgentOrigin)
 	} else if r.URL.Path == windowssetup.ReadAdminCapabilitiesPathV3 {
