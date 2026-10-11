@@ -154,7 +154,7 @@ export function createWindowsPercentageFixtureState(){
  };
 }
 export async function windowsInventoryBrowserCase({pageAt,login,expect,base,shot}){
- const page=await pageAt('/devices/'+windowsDeviceId),prefix='/api/devices/'+windowsDeviceId,unexpected=[],writes=[],external=[];let phase='fresh',networkPhaseAt=null,logsPhaseAt=null,contactPhaseAt=null,percentagePolicyFixtures=createWindowsPercentageFixtureState(),servicePolicyFixtures=createWindowsServiceHealthFixtureState(),osObservedAt=null,updatesCapturedAt=null,sessionsRetainedCapturedAt=null;
+ const page=await pageAt('/devices/'+windowsDeviceId),prefix='/api/devices/'+windowsDeviceId,unexpected=[],writes=[],external=[];let phase='fresh',networkPhaseAt=null,logsPhaseAt=null,contactPhaseAt=null,percentagePolicyFixtures=createWindowsPercentageFixtureState(),servicePolicyFixtures=createWindowsServiceHealthFixtureState(),osObservedAt=null,updatesCapturedAt=null,securityCoverageCapturedAt=null,securityCoverageRetainedCapturedAt=null,sessionsRetainedCapturedAt=null;
  const syntheticPaths=new Set([prefix,prefix+'/windows-inventory',prefix+'/windows-contact',prefix+'/windows-capacity',prefix+'/windows-resource/cpu',prefix+'/windows-resource/memory',prefix+'/windows-services',prefix+'/resource-history','/api/overview','/api/windows/enrollment']);
  // A bounded virtual clock makes the five-second private-row expiry deterministic.
  const eventContent=createWindowsEventContentFixture();let eventSessionExpires=null;
@@ -201,8 +201,8 @@ export async function windowsInventoryBrowserCase({pageAt,login,expect,base,shot
    if(phase.startsWith('hardware-'))return reply(windowsHardwareContextBrowserFixture({serverNow:at,capturedAt:updatesCapturedAt,phase:phase.slice('hardware-'.length),retainedCapturedAt:sessionsRetainedCapturedAt}));
    if(phase==='sessions')return reply(windowsSessionContextBrowserFixture({serverNow:at,capturedAt:updatesCapturedAt}));
    if(phase==='sessions-retained')return reply(windowsSessionContextBrowserFixture({serverNow:at,capturedAt:updatesCapturedAt,phase:'retained',retainedCapturedAt:sessionsRetainedCapturedAt}));
-   if(phase==='security-coverage')return reply(windowsSecurityCoverageBrowserFixture({serverNow:at,capturedAt:updatesCapturedAt}));
-   if(phase.startsWith('security-coverage-'))return reply(windowsSecurityCoverageBrowserFixture({serverNow:at,capturedAt:updatesCapturedAt,phase:phase.slice('security-coverage-'.length),retainedCapturedAt:sessionsRetainedCapturedAt}));
+   if(phase==='security-coverage')return reply(windowsSecurityCoverageBrowserFixture({serverNow:at,capturedAt:securityCoverageCapturedAt}));
+   if(phase.startsWith('security-coverage-'))return reply(windowsSecurityCoverageBrowserFixture({serverNow:at,capturedAt:securityCoverageCapturedAt,phase:phase.slice('security-coverage-'.length),retainedCapturedAt:securityCoverageRetainedCapturedAt}));
    if(phase==='security')return reply(windowsSecurityPostureBrowserFixture({serverNow:at,capturedAt:updatesCapturedAt}));
    if(phase==='updates')return reply(windowsUpdatesBrowserFixture({serverNow:at,capturedAt:updatesCapturedAt}));
    return reply(windowsBrowserFixture(at,phase,networkPhaseAt??at,logsPhaseAt??at));
@@ -343,9 +343,10 @@ export async function windowsInventoryBrowserCase({pageAt,login,expect,base,shot
   await exerciseWindowsUpdates({page,expect,locale,width,shot});
   mark('patch-context');await exerciseWindowsPatchContext({page,expect,locale,width,shot});
   mark('security');phase='security';await page.getByRole('button',{name:locale==='de'?'Windows-Inventar aktualisieren':'Refresh Windows inventory',exact:true}).click();await exerciseWindowsSecurityPosture({page,expect,locale,width,shot});
-  mark('security-coverage');phase='security-coverage';await page.getByRole('button',{name:locale==='de'?'Windows-Inventar aktualisieren':'Refresh Windows inventory',exact:true}).click();await exerciseWindowsSecurityCoverage({page,expect,locale,width,shot});
+  // Coverage owns its capture times; the later sessions stage cannot initialize them.
+  mark('security-coverage');phase='security-coverage';securityCoverageCapturedAt=new Date(clockNow-2000).toISOString();await page.getByRole('button',{name:locale==='de'?'Windows-Inventar aktualisieren':'Refresh Windows inventory',exact:true}).click();await exerciseWindowsSecurityCoverage({page,expect,locale,width,shot});
   for(const state of ['unsupported-antivirus','denied-tpm','not-found','empty','bounded']){mark('security-coverage-'+state);phase='security-coverage-'+state;await page.getByRole('button',{name:locale==='de'?'Windows-Inventar aktualisieren':'Refresh Windows inventory',exact:true}).click();await exerciseWindowsSecurityCoverageState({page,expect,locale,phase:state});}
-  mark('security-coverage-retained');phase='security-coverage-retained';await page.getByRole('button',{name:locale==='de'?'Windows-Inventar aktualisieren':'Refresh Windows inventory',exact:true}).click();await exerciseWindowsSecurityCoverageRetained({page,expect,locale,width,shot,capturedAt:updatesCapturedAt,retainedCapturedAt:sessionsRetainedCapturedAt});
+  mark('security-coverage-retained');phase='security-coverage-retained';securityCoverageRetainedCapturedAt=new Date(Date.parse(securityCoverageCapturedAt)-3600000).toISOString();await page.getByRole('button',{name:locale==='de'?'Windows-Inventar aktualisieren':'Refresh Windows inventory',exact:true}).click();await exerciseWindowsSecurityCoverageRetained({page,expect,locale,width,shot,capturedAt:securityCoverageCapturedAt,retainedCapturedAt:securityCoverageRetainedCapturedAt});
   mark('sessions');phase='sessions';await page.getByRole('button',{name:locale==='de'?'Windows-Inventar aktualisieren':'Refresh Windows inventory',exact:true}).click();await exerciseWindowsSessionContext({page,expect,locale,width,shot});
   mark('sessions-retained');phase='sessions-retained';sessionsRetainedCapturedAt=new Date(Date.parse(updatesCapturedAt)-3600000).toISOString();await page.getByRole('button',{name:locale==='de'?'Windows-Inventar aktualisieren':'Refresh Windows inventory',exact:true}).click();await exerciseWindowsSessionRetainedContext({page,expect,locale,width,shot,capturedAt:updatesCapturedAt,retainedCapturedAt:sessionsRetainedCapturedAt});
   mark('hardware');phase='hardware';await page.getByRole('button',{name:locale==='de'?'Windows-Inventar aktualisieren':'Refresh Windows inventory',exact:true}).click();await exerciseWindowsHardwareContext({page,expect,locale,width,shot});
