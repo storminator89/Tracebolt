@@ -310,10 +310,11 @@ func validDigest(s string) bool {
 }
 
 type diskRecord struct {
-	Version      int          `json:"version"`
-	Binding      string       `json:"binding"`
-	LastSequence uint64       `json:"lastSequence"`
-	Pending      *diskPending `json:"pending"`
+	WindowsFullServicesUsed bool         `json:"windowsFullServicesUsed,omitempty"`
+	Version                 int          `json:"version"`
+	Binding                 string       `json:"binding"`
+	LastSequence            uint64       `json:"lastSequence"`
+	Pending                 *diskPending `json:"pending"`
 }
 type diskPending struct {
 	Sequence uint64 `json:"sequence"`
@@ -322,6 +323,9 @@ type diskPending struct {
 }
 
 func encodeRecord(v diskRecord) ([]byte, error) {
+	if v.Version == stateVersion && v.WindowsFullServicesUsed || v.Version == 2 && !v.WindowsFullServicesUsed {
+		return nil, ErrCorrupt
+	}
 	raw, err := json.Marshal(v)
 	if err != nil || len(raw) > MaxStateBytes {
 		return nil, ErrCorrupt
@@ -376,9 +380,12 @@ func decodeRecord(raw []byte) (diskRecord, error) {
 	}
 	f, err := strictObject(raw, "version", "binding", "lastSequence", "pending")
 	if err != nil {
-		return v, err
+		f, err = strictObject(raw, "version", "binding", "lastSequence", "pending", "windowsFullServicesUsed")
+		if err != nil || !scalar(f["windowsFullServicesUsed"], &v.WindowsFullServicesUsed) || !v.WindowsFullServicesUsed {
+			return v, ErrCorrupt
+		}
 	}
-	if !scalar(f["version"], &v.Version) || v.Version != stateVersion || !scalar(f["binding"], &v.Binding) || !validDigest(v.Binding) || !scalar(f["lastSequence"], &v.LastSequence) || v.LastSequence > MaxSequence {
+	if !scalar(f["version"], &v.Version) || (v.Version != stateVersion && v.Version != 2 || (v.Version == 2) != v.WindowsFullServicesUsed) || !scalar(f["binding"], &v.Binding) || !validDigest(v.Binding) || !scalar(f["lastSequence"], &v.LastSequence) || v.LastSequence > MaxSequence {
 		return v, ErrCorrupt
 	}
 	if bytes.Equal(bytes.TrimSpace(f["pending"]), []byte("null")) {

@@ -52,33 +52,36 @@ type receipt struct {
 	Duplicate     bool      `json:"duplicate"`
 }
 type Report struct {
-	WindowsEventContentStatus   string `json:"windowsEventContentStatus,omitempty"`
-	CachedUpdatesStatus         string `json:"cachedUpdatesStatus,omitempty"`
-	CachedUpdatesSequence       uint64 `json:"cachedUpdatesSequence,omitempty"`
-	CachedUpdatesOperations     uint8  `json:"cachedUpdatesOperations,omitempty"`
-	ProcessesStatus             string `json:"processesStatus,omitempty"`
-	ProcessesSequence           uint64 `json:"processesSequence,omitempty"`
-	VolumesStatus               string `json:"volumesStatus,omitempty"`
-	VolumesSequence             uint64 `json:"volumesSequence,omitempty"`
-	OverviewOperations          uint8  `json:"overviewOperations,omitempty"`
-	JournalStatus               string `json:"journalStatus,omitempty"`
-	SchemaVersion               string `json:"schemaVersion"`
-	Status                      string `json:"status"`
-	Profile                     string `json:"profile"`
-	Sequence                    uint64 `json:"sequence,omitempty"`
-	Duplicate                   bool   `json:"duplicate"`
-	RetriedPending              bool   `json:"retriedPending"`
-	DiscardedUnconsented        bool   `json:"discardedUnconsented,omitempty"`
-	DiscardedStale              bool   `json:"discardedStale"`
-	AvailablePercentageFields   int    `json:"availablePercentageFields"`
-	UnavailablePercentageFields int    `json:"unavailablePercentageFields"`
-	InventoryStatus             string `json:"inventoryStatus,omitempty"`
-	InventorySequence           uint64 `json:"inventorySequence,omitempty"`
-	InventoryOperations         uint8  `json:"inventoryOperations,omitempty"`
-	SystemStatus                string `json:"systemStatus,omitempty"`
-	SystemSequence              uint64 `json:"systemSequence,omitempty"`
-	SystemRetriedPending        bool   `json:"systemRetriedPending,omitempty"`
-	SystemDiscardedStale        bool   `json:"systemDiscardedStale,omitempty"`
+	WindowsFullServicesStatus     string `json:"windowsFullServicesStatus,omitempty"`
+	WindowsFullServicesSequence   uint64 `json:"windowsFullServicesSequence,omitempty"`
+	WindowsFullServicesOperations uint8  `json:"windowsFullServicesOperations,omitempty"`
+	WindowsEventContentStatus     string `json:"windowsEventContentStatus,omitempty"`
+	CachedUpdatesStatus           string `json:"cachedUpdatesStatus,omitempty"`
+	CachedUpdatesSequence         uint64 `json:"cachedUpdatesSequence,omitempty"`
+	CachedUpdatesOperations       uint8  `json:"cachedUpdatesOperations,omitempty"`
+	ProcessesStatus               string `json:"processesStatus,omitempty"`
+	ProcessesSequence             uint64 `json:"processesSequence,omitempty"`
+	VolumesStatus                 string `json:"volumesStatus,omitempty"`
+	VolumesSequence               uint64 `json:"volumesSequence,omitempty"`
+	OverviewOperations            uint8  `json:"overviewOperations,omitempty"`
+	JournalStatus                 string `json:"journalStatus,omitempty"`
+	SchemaVersion                 string `json:"schemaVersion"`
+	Status                        string `json:"status"`
+	Profile                       string `json:"profile"`
+	Sequence                      uint64 `json:"sequence,omitempty"`
+	Duplicate                     bool   `json:"duplicate"`
+	RetriedPending                bool   `json:"retriedPending"`
+	DiscardedUnconsented          bool   `json:"discardedUnconsented,omitempty"`
+	DiscardedStale                bool   `json:"discardedStale"`
+	AvailablePercentageFields     int    `json:"availablePercentageFields"`
+	UnavailablePercentageFields   int    `json:"unavailablePercentageFields"`
+	InventoryStatus               string `json:"inventoryStatus,omitempty"`
+	InventorySequence             uint64 `json:"inventorySequence,omitempty"`
+	InventoryOperations           uint8  `json:"inventoryOperations,omitempty"`
+	SystemStatus                  string `json:"systemStatus,omitempty"`
+	SystemSequence                uint64 `json:"systemSequence,omitempty"`
+	SystemRetriedPending          bool   `json:"systemRetriedPending,omitempty"`
+	SystemDiscardedStale          bool   `json:"systemDiscardedStale,omitempty"`
 }
 
 // Run preserves the legacy one-shot collection/delivery behavior. The explicitly
@@ -122,9 +125,17 @@ func Run(ctx context.Context, m Material) (Report, error) {
 		// foreground attempts retain their original20s budget separately.
 		events := openWindowsEventContentSender(m)
 		defer events.Close()
+		fullServices, fullErr := openWindowsFullServicesSender(m, state)
+		if fullErr != nil {
+			return report, fullErr
+		}
+		defer fullServices.Close()
 		report, err := runUsingState(ctx, m, state)
 		if ctx.Err() == nil {
 			report.WindowsEventContentStatus = runWindowsEventContentAttempt(ctx, events)
+			if e := runWindowsFullServicesAttempt(ctx, fullServices, &report); e != nil {
+				return report, e
+			}
 		}
 		return report, err
 	}

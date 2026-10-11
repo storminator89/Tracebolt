@@ -1,3 +1,4 @@
+import { WindowsFullServicesPanel } from './windows-full-services';
 import { WindowsUpdatesPanel } from './windows-updates';
 import { WindowsServiceStartupNote } from './windows-service-startup';
 import { WindowsInventoryTable, useWindowsInventoryTableControls } from './windows-inventory-tables';
@@ -48,7 +49,7 @@ function dataRows(snapshot: WindowsInventorySnapshot, key: 'hostname' | 'network
         case 'network': return { headers: [c.name, c.index, c.address, c.prefix], rows: snapshot.network.rows.map(row => [row.name, String(row.index), row.address, String(row.prefixLength)]) };
     }
 }
-export function WindowsInventoryWorkspace({ resource, initialTab }: { resource: WindowsInventoryResource; initialTab?: 'storage' }) {
+export function WindowsInventoryWorkspace({ resource, initialTab, fullServices }: { resource: WindowsInventoryResource; initialTab?: 'storage'; fullServices?: { deviceId: string; sessionKey: string | null; enabled: boolean } }) {
     const [locale] = useLocale(), c = copy[locale], id = useId(), [selected, setSelected] = useState<TabKey>(initialTab ?? 'processes'), [query, setQuery] = useState('');
     const [processControls, setProcessControls] = useWindowsProcessControls(resource, selected === 'processes');
     const tableKind = selected === 'services' || selected === 'software' ? selected : null;
@@ -60,6 +61,7 @@ export function WindowsInventoryWorkspace({ resource, initialTab }: { resource: 
         <InventoryState resource={resource}/>
         <div className="windows-inventory-tabs" role="tablist" aria-label={c.source}>{tabs.map((key, index) => <button type="button" key={key} id={`${id}-${key}`} role="tab" aria-selected={selected === key} aria-controls={`${id}-panel`} tabIndex={selected === key ? 0 : -1} onClick={() => select(key)} onKeyDown={event => { const next = event.key === 'ArrowRight' ? (index + 1) % tabs.length : event.key === 'ArrowLeft' ? (index + tabs.length - 1) % tabs.length : event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : null; if (next !== null) { event.preventDefault(); select(tabs[next]); document.getElementById(`${id}-${tabs[next]}`)?.focus(); } }}>{c[key]}</button>)}</div>
         <div role="tabpanel" id={`${id}-panel`} aria-labelledby={`${id}-${selected}`}>
+            {selected === 'services' && fullServices && <><WindowsFullServicesPanel {...fullServices}/><h3 className="windows-full-services-preview-label">{locale === 'de' ? 'Begrenzte Dienstvorschau: getrennte Quelle, höchstens 128 Zeilen' : 'Bounded service preview: separate source, at most 128 rows'}</h3></>}
             {selected === 'updates' && <WindowsUpdatesPanel resource={resource}/>}
             {selected === 'endpoints' && <WindowsNetworkPanel resource={resource}/>}
             {selected === 'storage' && <WindowsStoragePanel resource={resource}/>}

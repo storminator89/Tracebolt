@@ -1,3 +1,4 @@
+import {windowsFullServicesLegacyRead} from './windows-full-services-browser.mjs';
 import {createWindowsServiceHealthFixtureState,exerciseWindowsServiceHealth,windowsServiceHealthFixturePath,windowsServiceHealthStageNames} from './windows-service-health-browser.mjs';
 import {exerciseWindowsResources,windowsResourceBrowserFixture,windowsResourceFixtureMetric,windowsResourceStageNames} from './windows-resource-browser.mjs';
 import {exerciseWindowsCapacity,windowsCapacityBrowserFixture,windowsCapacityStageNames} from './windows-capacity-browser.mjs';
@@ -159,6 +160,10 @@ export async function windowsInventoryBrowserCase({pageAt,login,expect,base,shot
    await expect.poll(()=>eventSessionExpires!==null).toBe(true);
    const value=eventContent.response({action,body:action?request.postDataJSON():null,serverNow:at,sessionExpiresAt:eventSessionExpires,headers,enabled:phase==='event-content'});
    return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(value)});
+  }
+  if(url.pathname===prefix+'/windows-full-services/query'){
+   try{return await windowsFullServicesLegacyRead({route,page,base,prefix,serverNow:await windowsFixtureResponseTime(page)});}
+   catch{unexpected.push('unexpected-full-services-query');return route.abort('blockedbyclient');}
   }
   if(request.method()!=='GET'&&!(request.method()==='POST'&&url.pathname==='/api/auth/login')){writes.push('write');return route.abort('blockedbyclient');}
   if(!syntheticPaths.has(url.pathname)){

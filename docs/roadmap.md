@@ -1,5 +1,8 @@
 # Linux pilot roadmap
 
+Windows work has its own [prioritized daily-administration roadmap](windows-admin-roadmap.md),
+including complete inventories, desktop support and read-only diagnostic gaps.
+
 This is the ordered plan for making the Linux pilot easier to install and useful
 for everyday device inspection. An item being planned or implemented does not
 mean it has passed its release or host checks.

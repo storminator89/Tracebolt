@@ -6,7 +6,7 @@ See what your machines report, investigate changes and keep the original evidenc
 in view. Tracebolt combines a Go manager, native agents and an English/German
 dashboard with light and dark themes.
 
-[Get started](#get-started) · [Help and guides](docs/README.md) · [Windows status](docs/windows-status.md) · [Roadmap](docs/roadmap.md)
+[Get started](#get-started) · [Help and guides](docs/README.md) · [Windows status](docs/windows-status.md) · [Windows admin roadmap](docs/windows-admin-roadmap.md) · [Linux roadmap](docs/roadmap.md)
 
 ![Tracebolt device overview with CPU, memory and disk history](docs/screenshots/2026-10-09-main-ui/resource-history-dark.png)
 
@@ -101,6 +101,23 @@ and [PR #32](https://github.com/storminator89/Tracebolt/pull/32) add opt-in Wind
 disk/CPU/RAM and selected-service health policies. PR #29's documentation changes
 do not add that runtime implementation. These newer features remain outside the
 unchanged published preview. Source/fixture checks do not establish native acceptance.
+
+### Complete Windows service inventory source slice
+
+A separately consented [complete caller-visible Win32 service generation](docs/windows-full-services-contract.md)
+adds resumed SCM enumeration and bounded server-side search/paging beyond the
+legacy 128/2,048-row preview ceilings. It is default-off and source-only pending
+separate native/host acceptance. Drivers and ACL-invisible services remain outside
+the caller scope; machine/user/Store/portable software completeness is separate
+work. Existing selected-service alarms continue using their clearly bounded
+preview and are not silently expanded. No upgrade enables the new local grant.
+
+The [prioritized Windows admin roadmap](docs/windows-admin-roadmap.md) covers full
+software/process inventories, fleet hostname/IP search, security and patch posture,
+network/storage diagnostics, user and hardware context, and software-change history.
+These are planned or in-development increments, not released features. The
+[Windows11x64 acceptance matrix](docs/windows11-acceptance-matrix.md) makes the
+desktop and lifecycle checks explicit.
 
 | Cached Windows Updates, unreleased source preview | Mobile device overview, German |
 | --- | --- |

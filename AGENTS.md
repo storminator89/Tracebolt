@@ -149,6 +149,13 @@ file as navigation and project constraints, never as permission to act on a host
   engine, tagged storage, API or UI. Preserve disk v1 bytes, exact observed-group
   CPU and physical-memory semantics, independent opt-ins/floors, one coordinated
   source read, and unknown evidence. No host collection, AI or alarm grant follows.
+- Complete caller-visible Win32 service generations are a separate default-off
+  local source extension. Read `docs/windows-full-services-contract.md` before
+  consent, sender-state, native resume, chunk transport, store or UI changes.
+  Preserve the mandatory primary used-marker, exact pending telemetry, independent
+  generation floors, original age and all old grants. Drivers, ACL-invisible
+  services, software, paths/accounts/configuration and AI export are excluded.
+  Native/host grants and runtime acceptance require separate approval.
 - Selected Windows service checks are a separate default-off manager policy.
   Read `docs/windows-service-health.md` before changing exact-name selection,
   discrete state evaluation, source admission, API or UI. Keep native

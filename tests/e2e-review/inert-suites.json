@@ -19,7 +19,8 @@
     "journal-ai-fixtures.test.mjs",
     "package-updates-fixtures.test.mjs",
     "journal-browse-fixtures.test.mjs",
-    "windows-contact-history-fixtures.test.mjs"
+    "windows-contact-history-fixtures.test.mjs",
+    "windows-full-services-fixtures.test.mjs"
   ],
   "imported": [
     "device-inventory-browser-contracts.test.mjs",

@@ -1,0 +1,36 @@
+# Windows 11 x64 compatibility and acceptance matrix
+
+Source audit: 11 October 2026. Merged main `04fd9413d0bed4b3643e0fe60de45b6e6b7d3f97`, tree `5086354209f453517137f6043f61331e825a458b` (PR37). Published preview remains source `14719116bdb663d13e4bcaef434a4374a6265fe6`. The complete-services candidate is unpublished and separately reviewed; it is not part of either artifact.
+
+## Finding
+
+Windows 11 x64 is technically consistent with the current production implementation. No client/server SKU rejection was found in production entry, installer, service or collector paths. This is a source-based compatibility assessment, not native Windows 11 acceptance or a minimum-build support guarantee.
+
+- `deploy/windows-setup/pe_resources.py:81–100` emits the Windows 10+ supported-OS GUID, `requireAdministrator` for Setup and `asInvoker` for the service. The application identity pins architecture, not Server edition. No auto-elevation or uiAccess exception is requested.
+- `internal/windowssetupui/ui_windows.go:155–183` requires the DPI APIs and successful Per-Monitor-V2 context; missing procedures or rejected DPI context fail closed. Microsoft dates PMv2 to Windows 10 version 1703. The lower-level AdjustWindowRectExForDpi API dates to 1607. Thus Go's general Windows 10 floor alone is not a supported Setup minimum.
+- `go.mod` pins Go 1.27.1. Go's official minimum requirements specify Windows 10 or Windows Server 2016 and later for Go 1.21+. All Windows 11 builds postdate the identified GUI requirements, but the full API surface was not individually minimum-version certified.
+- `internal/windowsservice/service.go`, `native_windows.go` and `runtime_windows.go` use SCM, LocalService and a service-specific SID. Those are not Server-only features; actual token/ACL and least-privilege reads still require native evidence.
+- `internal/windowsevents/source_windows.go`, `internal/windowseventcontent/source_windows.go` and `internal/windowsupdates/native_windows.go` use native Event Log/WUA APIs available on desktop Windows. Availability does not imply permission, populated offline update cache, message-provider resources or successful LocalService COM activation.
+- The current native controllers intentionally reject other targets: `tests/windows_linux_native_parity/windows_native.py:verify_target`, `tests/windows_own_restart_native/windows_native.py:verify_target` and `cmd/windows-service/restart_acceptance_native_windows_test.go:restartTarget` pin Server 2025 and the approved target/build. The Go restart controller requires ProductType 3/build 26100. They must not be relabelled or relaxed ad hoc into Windows 11 evidence.
+- `windows-latest` CI is not Windows 11 acceptance. The recorded released-preview native subset was four fresh hosted Server 2025 x64 cases with a fixture manager. It did not establish a real Linux manager/browser path, interactive UAC/SmartScreen, reboot or upgrade.
+
+Primary API references: [Go minimum requirements](https://go.dev/wiki/MinimumRequirements), [Per-Monitor-V2](https://learn.microsoft.com/en-us/windows/win32/hidpi/dpi-awareness-context), [AdjustWindowRectExForDpi](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-adjustwindowrectexfordpi), [WUA Search](https://learn.microsoft.com/en-us/windows/win32/api/wuapi/nf-wuapi-iupdatesearcher-search), [EvtQuery](https://learn.microsoft.com/en-us/windows/win32/api/winevt/nf-winevt-evtquery).
+
+## Windows 11 x64 gate
+
+Every row is **PENDING: not executed**. Select and record exact Windows 11 edition/build/patch, x64 architecture, target identity, source tree, Setup/service hashes, manager build and browser version before execution. Pro/Enterprise are separate observations, not automatic Home or ARM64 certification. Use a disposable approved target and synthetic/non-sensitive fixtures. Installation, identity/grant creation, service restart/removal and security changes require their applicable action-time approvals; source development does not provide them. Human handles secure prompts and credentials. Do not bypass SmartScreen, UAC, browser certificate warnings, ACLs or target locks.
+
+| Gate | Required observable result | Evidence boundary |
+| --- | --- | --- |
+| Fresh install / package | Exact hash-verified x64 Setup, fresh-state preflight, architecture checks, payload hash and fixed paths; cancellation before Install leaves no installation | Record original artifacts and result; unsigned status remains visible |
+| UAC / GUI / console | Human elevation flow; readable 100/150/200% DPI, monitor-change behavior, keyboard navigation and initial chooser; invitation remains masked and ephemeral | No recording of invitation/credentials; do not infer from automated Server UI |
+| Service / identity | Exact receipt-owned service runs under LocalService with expected enabled service SID and restricted privileges; no adoption or ACL repair | Read only approved public/token metadata, never private key/state bytes |
+| Enrollment / real manager | Fresh explicit scopes, public comparison approval, actual Linux manager and browser, at least two advancing authenticated observations, rejection/revocation and expiry behavior | No fixture manager substitution; retain bounded public identity/source correlation |
+| Baseline data sources | CPU/RAM/system volume, processes/services/software preview, interfaces/endpoints, optional volumes/process metrics and startup data agree with bounded same-context native references | Preserve caller-visible scope, timestamps, truncation and denied/unknown values; no admin reference equality promise |
+| Update inspection | Separate opt-in; offline WUA cache of not-installed, non-hidden software candidates; always-unknown cache freshness, bounded candidate fields and partial/denied outcomes; empty results never mean compliant | No installed update history, global pending-reboot status or patch-compliance claim; no online scan, update installation or reboot added |
+| Event headers / messages | Application/System headers; separate consent for exact selected message reads; missing provider/access denial, bounded rendering and ephemeral clearing | No Security channel or historic full-log collection implied |
+| Full services candidate | Only after separate reviewed/pinned build: fresh complete-services consent, resume enumeration, exact generation/count/digest, search beyond128 and page boundaries, restart/expiry/revocation and partial source outcomes | Currently unpublished; legacy alarm policies remain limited to their own preview evidence |
+| Own-agent restart | Separately approved one-shot receipt/SID/config/hash-bound restart; old process termination/new generation; manager continuity; unknown outcomes never automatically retried | Other-service actions, graceful drain, repair and upgrade are separate claims |
+| Uninstall | Approved receipt-owned service removal with exact preconditions; explicit retained executable/bootstrap/identity/counters/grants and manager trust | Not complete file/data uninstall; no automatic secret/state deletion or manager revocation |
+
+Sleep/resume, reboot startup, same-identity upgrade/repair, ARM64 runtime, package signing and broader desktop editions remain additional release gates. This matrix is a source-review checklist, not an executable Windows 11 native controller or a success report.

@@ -1,7 +1,11 @@
 # Windows service and software browsing
 
-This incremental source candidate improves the existing Windows inventory UI.
-It does not implement complete-host inventory or change collection consent.
+The original preview browsing path below remains bounded. A separate default-off
+[complete caller-visible Win32 service generation](windows-full-services-contract.md)
+source slice now adds resumed SCM enumeration, frozen durable chunks and protected
+manager-side search/pages after new explicit local consent. It does not widen old
+grants or selected-service alarm sources. Drivers, ACL-invisible services and full
+software inventory remain outside that slice. Source tests are not native acceptance.
 
 ## Current usable slice
 
@@ -40,7 +44,10 @@ that a browser or Windows endpoint passed; those results must be reported
 separately. No local browser, native collector, service or permission change is
 part of this candidate.
 
-## Complete-inventory follow-on design, not implemented
+## Broader complete-inventory follow-on design
+
+The service-specific source slice above implements its own contract. The broader
+process/software plan below remains unimplemented and is not a runtime grant.
 
 The native `windowsinventory` provider currently caps process, service and
 software enumeration at 2,048 rows; service enumeration also has one 256 KiB
@@ -50,10 +57,10 @@ buffer. `windowsmanaged` then trims transmission to 128 rows per section under
 `systeminventory`/`fullinventory` paths are useful patterns, but their Linux
 schemas and authority cannot be relabeled as Windows approval.
 
-The smallest actual complete-generation vertical slice should be one section,
-processes, through consent, native enumeration, durable sender, signed transport,
-authority store and operator UI together. Services and software can reuse that
-reviewed path afterward. Do not publish a pure reassembly library as completed
+The first complete-generation vertical slice is caller-visible Win32 services,
+with independent consent, native enumeration, durable sender, signed transport,
+authority store and operator UI. Machine software is the next separate scope;
+processes and wider user-context software need their own reviewed follow-ons. Do not publish a pure reassembly library as completed
 inventory support. The following is a review plan, not an implemented contract:
 
 - Introduce a separate default-off local scope, provisionally

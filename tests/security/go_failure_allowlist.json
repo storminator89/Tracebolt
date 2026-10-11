@@ -1,5 +1,5 @@
 {
-  "goSourceSha256": "1d912ce9596ee00af5c838d2a7beddf2a38c0891a8f4f73cee86e93922a40138",
+  "goSourceSha256": "676cba80c2a64f3a696e58d80173ce10337899655f0a75afa1981d3ffc49517a",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -272,6 +272,7 @@
       "TestFreshReadSetupReconcileStrictCanonicalAndCancellation",
       "TestFreshReadSetupRejectsAutomaticPlanBeforeJournal",
       "TestFreshReadSetupRejectsOldConsentAndMissingScopesWithoutOperations",
+      "TestFullServicesCLISeparateAcknowledgementAndDisclosure",
       "TestGUILeaseCombinedFailureKeepsPrimaryFiniteDiagnostic",
       "TestGUIRemovalSharesLeaseAcrossAllEffectsAndRelease",
       "TestIndependentGUILeasePreservesKnownRemovalFailure",
@@ -955,6 +956,8 @@
       "TestWindowsEventConfiguredOperatorTLSLifecycle",
       "TestWindowsEventOperatorTLSRoutesAndNamedReadExclusion",
       "TestWindowsEventSessionBindingIsDomainSeparatedOpaque",
+      "TestWindowsFullServicesOperatorFinalBoundaryHidesRows",
+      "TestWindowsFullServicesProtectedOperatorFullPaging",
       "TestWindowsHealthProductionSchedulerSerializesSourceAdmission",
       "TestWindowsResourceAuthenticatedIndependentPolicyPipeline",
       "TestWindowsResourceFinalClockAndNewestSourceTruth",
@@ -1392,6 +1395,10 @@
     "localrmm/internal/enrollmentstore": [
       "TestAuthorizeCertificateRequiresExactActivatedCurrentDurableIdentity",
       "TestAuthorizeCertificateUnavailableNeverMeansUnauthorized",
+      "TestBackendReviewExpiredPendingHasUnavailableStatus",
+      "TestBackendReviewMissingSearchIndexCannotProveAbsence",
+      "TestBackendReviewPostCommitRevocationHidesPage",
+      "TestBackendReviewPostCommitRevocationHidesReceipt",
       "TestCachedUpdatesAndEndpointIdentityRetainIndependentOriginalAges",
       "TestCachedUpdatesExactRetryRestartOrdinaryReportsDoNotRefresh",
       "TestCachedUpdatesExpiredCleanupSurvivesLaterOrdinaryFrame",
@@ -1547,6 +1554,9 @@
       "TestResourceHistoryMinuteBoundAndMaintenanceDoNotChangeReplay",
       "TestResourceHistoryOptionalSchemaPreservesExistingIdentityAndNoBackfill",
       "TestRetainedBrowseRequiresNewReportedGrantAndKeepsConsumeFloor",
+      "TestReviewerFinalPageGuardCannotUseClockBeforeConnectionWait",
+      "TestReviewerFinalRecheckCannotUseClockBeforeConnectionWait",
+      "TestReviewerFullServicesOriginalExpiryAcrossFinalConnectionWait",
       "TestServiceActionCanceledPersistenceReleasesNoApproval",
       "TestServiceActionObservedExpiryCannotRevive",
       "TestServiceActionPreviewExpiryCannotReviveAfterFailedApproval",
@@ -1614,6 +1624,20 @@
       "TestWindowsEventMissingUsedAuthorityRowsNeverReset",
       "TestWindowsEventMissingUsedSchemaNeverReinitialized",
       "TestWindowsEventTerminalEndpointStatusAndGrantDisable",
+      "TestWindowsFullServicesBoundedSteadyStateCleanup",
+      "TestWindowsFullServicesCompleteSearchIntegrityBoundedCost",
+      "TestWindowsFullServicesCrossChunkFoldIdentityAndStagingExpiry",
+      "TestWindowsFullServicesCurrentAuthorityClockAndUsedState",
+      "TestWindowsFullServicesDigestReservationAndCommitAtomicity",
+      "TestWindowsFullServicesExportLargeInteropVectors",
+      "TestWindowsFullServicesExportPageFixture",
+      "TestWindowsFullServicesFinalGuardReadOnlyAndCanceledWait",
+      "TestWindowsFullServicesLargeGenerationRetryRestartPagingAndFailure",
+      "TestWindowsFullServicesNonUTCSessionExpiryKeepsExactCursorDeadline",
+      "TestWindowsFullServicesQuotaReservationBeforeWriteAndCleanupFloors",
+      "TestWindowsFullServicesSixSortsAndOriginalExpiry",
+      "TestWindowsFullServicesTrustedIngressOriginRequiredAndDurable",
+      "TestWindowsFullServicesZeroScopeDisableFloorsAndCursorIsolation",
       "TestWindowsInventoryCannotBeWrittenIntoBasicStore",
       "TestWindowsInventoryDurableViewRetryHistoryAndScope",
       "TestWindowsInventoryViewRechecksClockFreshnessAndExpiry",
@@ -1641,6 +1665,8 @@
       "TestCompleteUpdatesRequiresFreshMatchingCollectionProfile",
       "TestCopiedIngressHandlesShareCertificateAdmission",
       "TestEndpointIdentityTLSHTTPActivationReplayAndRevocation",
+      "TestFullServicesLastClockBeforeScopeReceiptRechecksAuthority",
+      "TestFullServicesSeparateOriginsAndBlockedBodyAuthority",
       "TestJournalGenerationRealTransportAndOperatorCAS",
       "TestJournalGenerationV2ScopeAuthenticatedTransportAndOperatorView",
       "TestJournalOperatorCreationAndPageRechecksBodyTimeAndSession",
@@ -1990,6 +2016,7 @@
       "TestFrameShapeAndCollectionIsolation",
       "TestFreshWindowsCapabilityScopePreflightOnlyAcceptsMissingRoots",
       "TestFullAdminSenderRequiresExplicitV2GrantAndFreshInspection",
+      "TestFullServicesLocalExpiryNeverCapturesOrAcknowledges",
       "TestGenerationBoundSenderRejectsOldRequestsWithoutCapture",
       "TestGenerationChangedAfterCaptureDiscardsOldBody",
       "TestGenerationFailureKeepsOrdinaryAgentLoopRunning",
@@ -2000,6 +2027,9 @@
       "TestGuidedSenderNeverInitializesMissingLedger",
       "TestGuidedSenderRejectsMissingFilesAndBinding",
       "TestHTTPMaterialRejectsExpiredAndWrongRoleBeforeState",
+      "TestIndependentDisabledFullServicesSynchronizesOnlyScope",
+      "TestIndependentFullServicesBurstsBoundedAndPendingNeverRecaptured",
+      "TestIndependentUsedFullServicesRootCannotBeRecreated",
       "TestInventoryNativeAllocationIsDurableBeforeSource",
       "TestInventoryNativeBudgetResumesBeforeCapture",
       "TestInventoryNativeCaptureFailureAndCancellationRetainAllocation",
@@ -2148,6 +2178,10 @@
       "TestWindowsEventsActualSenderIngressStoreRetryAndDisable",
       "TestWindowsEventsIngressRejectsScopeContentAndProfileConfusion",
       "TestWindowsEventsPendingRevocationAndConsentRace",
+      "TestWindowsFullServicesConsentFreshOnlyDefaultOffAndIndependent",
+      "TestWindowsFullServicesRealTLSAndSignedHTTP2049LostACKRestartPages",
+      "TestWindowsFullServicesSchedulingIsolation",
+      "TestWindowsFullServicesWholeRootLossAndInterruptedInitStayFenced",
       "TestWindowsInventoryExactRetryAndHTTPPathSignature",
       "TestWindowsInventoryFrameComesFromOneConsentedReport",
       "TestWindowsInventoryNoCollectionOutsideExactConsent",
@@ -2268,7 +2302,9 @@
       "TestRejectedLedgerNeverCleansTemporaryFile",
       "TestStrictStateJSONRejectsCorruption",
       "TestUnsafeDirectoriesAreRejectedWithoutRepair",
-      "TestValidateExistingPreservesSenderTemporary"
+      "TestValidateExistingPreservesSenderTemporary",
+      "TestWindowsFullServicesMarkerPreservesV1BytesAndPending",
+      "TestWindowsFullServicesMarkerStrictVersionBoundary"
     ],
     "localrmm/internal/lanconfig": [
       "TestNamedApplicationCheckCapabilityStrictLoading",
@@ -3363,6 +3399,28 @@
       "TestSubprocessResponsesAndEnvironment",
       "TestWorkerFixture"
     ],
+    "localrmm/internal/windowsfullservices": [
+      "TestCapturedCrashRetainsFailureAndFrozenPackRecovery",
+      "TestFullServiceGenerationBeyondBothLegacyCaps",
+      "TestFullServicesNativeGateRequiresSeparateExactOptIn",
+      "TestLongUnicodeAndMissingFieldsRemainIdentifiable",
+      "TestMessagesRejectAmbiguityAndChangedBindings",
+      "TestNativeFullServicesCallerVisibleEnumeration",
+      "TestNativeServicePIDValidityIsStateBound",
+      "TestNativeServiceStringBoundsAndOwnedUnicode",
+      "TestPendingPackBudgetAndPoisonedWrites",
+      "TestResumedEnumerationCompleteAndFailureTruth",
+      "TestStateExactRetryRestartDisableExpiryAndUsedFloor",
+      "TestTerminalResumeAndPartialDenialNeverPromotePrefix"
+    ],
+    "localrmm/internal/windowsfullservicesledger": [],
+    "localrmm/internal/windowsfullserviceswire": [
+      "TestFullServicesHTTPProofIsPurposeAndBodyBound",
+      "TestIndependentOriginAndTLSShapeFailClosed",
+      "TestIndependentSignatureOriginalTimeExpiryAndStatelessReplayBoundary",
+      "TestIndependentSignaturePurposeActionBodyIdentityAndFraming",
+      "TestIndependentSlowBodyRechecksTimeAndAuthorization"
+    ],
     "localrmm/internal/windowsinventory": [
       "TestCPUIntervalValidation",
       "TestCancelledCollectionNeverStartsOrContinues",
@@ -3718,7 +3776,9 @@
       "TestJournalHandlerReadinessBusyAndEndpointBinding",
       "TestReadAdminFullReadinessSequenceDuringMaintenance"
     ],
-    "localrmm/tests/e2e-review/lanfixture": [],
+    "localrmm/tests/e2e-review/lanfixture": [
+      "TestFullServicesBrowserFixtureRealProtectedPages"
+    ],
     "localrmm/tests/e2e-review/overviewfixture": [],
     "localrmm/tests/e2e-review/v3fixture": [],
     "localrmm/tests/lanclient": [
