@@ -1,5 +1,5 @@
 /** Production bounded decoder + UI, synthetic streams only; not browser evidence. */
-import {act,cleanup,fireEvent,render,screen,waitFor} from '../../web/node_modules/@testing-library/react/dist/index.js';
+import {act,cleanup,fireEvent,render,screen,waitFor,within} from '../../web/node_modules/@testing-library/react/dist/index.js';
 import {afterEach,beforeEach,describe,expect,it,vi} from '../../web/node_modules/vitest/dist/index.js';
 import {installEnrollmentPrimaryBody} from './enrollment-primary-body.mjs';
 import {EnrollmentSection} from '../../web/src/enrollment';
@@ -94,4 +94,34 @@ it('clear before the first POST stays missing and explicit rearm starts a separa
  const responses=[json(creation(),201),json(creation(),201)],original=vi.fn(async()=>responses.shift()!);vi.stubGlobal('fetch',original);uninstall=installEnrollmentPrimaryBody({url:url()});
  const old=observer().arm();observer().clear();await consume(await observedFetch());expect(observer().state(old)).toBe('missing');expect(observer().take(old)).toBeNull();
  const next=observer().arm();expect(next).not.toBe(old);await consume(await observedFetch());expect(observer().state(next)).toBe('complete');expect(observer().take(next)?.status).toBe(201);expect(observer().take(old)).toBeNull();expect(original).toHaveBeenCalledTimes(2);
+});
+
+it('repeated creation clicks use one production POST/reader and clear the accepted masked secret',async()=>{
+ const value=creation();let held!:ReadableStreamDefaultController<Uint8Array>,readerSpy:any,response!:Response;
+ const original=vi.fn(async(path:string)=>{
+  if(path==='/api/session')return json({csrfToken:'synthetic'});
+  if(path==='/api/enrollment')return json({serverNow:new Date().toISOString(),schemaVersion:'tracebolt.enrollment-operator.v2',enabled:true,platforms:['linux'],recordLimit:25,items:[]});
+  expect(path).toBe('/api/enrollment/invitations');value.serverNow=new Date().toISOString();const body=new ReadableStream<Uint8Array>({start(controller){held=controller;}});readerSpy=vi.spyOn(body,'getReader');response=new Response(body,{status:201});vi.spyOn(response,'clone');vi.spyOn(response,'json');return response;
+ });vi.stubGlobal('fetch',original);uninstall=installEnrollmentPrimaryBody({url:url()});
+ render(<EnrollmentSection onChanged={()=>{}} onDevice={()=>{}} deviceIds={[]}/>);await waitFor(()=>expect(screen.getByRole('button',{name:'Add device',exact:true})).toBeEnabled());fireEvent.click(screen.getByRole('button',{name:'Add device',exact:true}));
+ const token=observer().arm(),button=screen.getByRole('button',{name:'Create invitation',exact:true});fireEvent.click(button,{detail:1});fireEvent.click(button,{detail:2});fireEvent.doubleClick(button,{detail:2});await waitFor(()=>expect(held).toBeDefined());expect(button).toBeDisabled();expect(observer().take(token)).toBeNull();expect(screen.queryByLabelText('One-time invitation secret')).toBeNull();
+ expect(original.mock.calls.filter(([path])=>path==='/api/enrollment/invitations')).toHaveLength(1);
+ await act(async()=>{held.enqueue(new TextEncoder().encode(JSON.stringify(value)));held.close();});const input=await screen.findByLabelText('One-time invitation secret');expect(input).toHaveAttribute('type','password');expect(input).toHaveValue(secret);expect(observer().snapshot(token)).toMatchObject({requests:1,status:201,eof:true,signalAborted:false,phase:'complete'});expect(observer().take(token).body).toEqual(value);expect(observer().take(token)).toBeNull();expect(readerSpy).toHaveBeenCalledTimes(1);expect(response.clone).not.toHaveBeenCalled();expect(response.json).not.toHaveBeenCalled();
+ expect(JSON.stringify({...localStorage,...sessionStorage})).not.toContain(secret);expect(location.href).not.toContain(secret);fireEvent.keyDown(document,{key:'Escape'});expect(screen.queryByLabelText('One-time invitation secret')).toBeNull();
+});
+for(const [initial,action,label,status] of [['created','canceled','Cancel invitation','Canceled'],['claimed_pending','rejected','Reject','Rejected'],['activated','revoked','Revoke identity','Revoked']] as const)for(const outcome of ['valid','wrong terminal state','HTTP failure'] as const)it(`production terminal UI ${action}: ${outcome}`,async()=>{
+ const item=creation().snapshot;item.state=initial;item.revision=2;item.intent.notAfter=item.deadlineAt;
+ if(initial==='activated')item.approval.deviceID='agent_'+'6'.repeat(32);
+ let held!:ReadableStreamDefaultController<Uint8Array>,submitted:any;
+ const original=vi.fn(async(path:string,init?:RequestInit)=>{
+  if(path==='/api/session')return json({csrfToken:'synthetic'});
+  if(path==='/api/enrollment')return json({serverNow:new Date().toISOString(),schemaVersion:'tracebolt.enrollment-operator.v2',enabled:true,platforms:['linux'],recordLimit:25,items:[item]});
+  expect(path).toBe(`/api/enrollment/${invite}/terminate`);expect(init?.method).toBe('POST');submitted=JSON.parse(String(init?.body));return new Response(new ReadableStream<Uint8Array>({start(controller){held=controller;}}),{status:outcome==='HTTP failure'?403:200});
+ });vi.stubGlobal('fetch',original);
+ render(<EnrollmentSection onChanged={()=>{}} onDevice={()=>{}} deviceIds={[]}/>);fireEvent.click(await screen.findByRole('button',{name:/^Invitations/}));fireEvent.click(screen.getByRole('button',{name:`Review invitation ${invite}`,exact:true}));const dialog=screen.getByRole('dialog',{name:'Review invitation',exact:true});
+ fireEvent.click(within(dialog).getByRole('button',{name:label,exact:true}));const group=within(dialog).getByRole('group',{name:'Confirm termination',exact:true});expect(submitted).toBeUndefined();
+ fireEvent.click(within(group).getByRole('button',{name:'Back',exact:true}));expect(submitted).toBeUndefined();expect(within(dialog).queryByRole('group',{name:'Confirm termination',exact:true})).toBeNull();
+ fireEvent.click(within(dialog).getByRole('button',{name:label,exact:true}));const confirmation=within(dialog).getByRole('button',{name:'Confirm termination',exact:true});fireEvent.click(confirmation);fireEvent.click(confirmation);await waitFor(()=>expect(held).toBeDefined());expect(confirmation).toBeDisabled();expect(dialog.querySelector('.enrollment-created-meta')).not.toHaveTextContent(status);
+ const committed={...item,state:outcome==='wrong terminal state'?'approved':action,revision:3,termination:{requestID:submitted.requestId,from:initial,at:item.updatedAt}};await act(async()=>{held.enqueue(new TextEncoder().encode(JSON.stringify(committed)));held.close();});if(outcome!=='valid'){await within(dialog).findByRole('alert');expect(dialog.querySelector('.enrollment-created-meta')).not.toHaveTextContent(status);expect(original.mock.calls.filter(([path])=>path.endsWith('/terminate'))).toHaveLength(1);return;}await waitFor(()=>expect(dialog.querySelector('.enrollment-created-meta')).toHaveTextContent(status));expect(within(dialog).queryByRole('group',{name:'Confirm termination',exact:true})).toBeNull();expect(within(dialog).queryByRole('button',{name:label,exact:true})).toBeNull();expect(within(dialog).queryByRole('button',{name:'Approve device',exact:true})).toBeNull();
+ expect(original.mock.calls.filter(([path])=>path.endsWith('/terminate'))).toHaveLength(1);expect(submitted).toMatchObject({expectedRevision:2,action});expect(item.deadlineAt).toBe(committed.deadlineAt);expect(item.claim.keyFingerprint).toBe(committed.claim.keyFingerprint);expect(item.claim.comparisonCode).toBe(committed.claim.comparisonCode);
 });

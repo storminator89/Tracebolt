@@ -586,11 +586,31 @@ jobs:
         env:
           TRACEBOLT_SOURCE_SHA: ${{ github.sha }}
         run: node tests/e2e-review/lan-browser.mjs
-      - name: Guided enrollment reduced browser gate (10 required, 3 quarantined)
+      - name: Guided enrollment full browser gate (13 required, no skips)
         if: ${{ !cancelled() }}
         env:
           TRACEBOLT_SOURCE_SHA: ${{ github.sha }}
-        run: node tests/e2e-review/enrollment-browser.mjs
+          TRACEBOLT_REVIEW_QUARANTINED: '1'
+        run: |
+          set -euo pipefail
+          node tests/e2e-review/enrollment-browser.mjs
+          node --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          import fs from 'node:fs';
+          try {
+            const r=JSON.parse(fs.readFileSync('artifacts/review/enrollment-browser-results.json','utf8'));
+            assert.match(process.env.TRACEBOLT_SOURCE_SHA??'',/^[a-f0-9]{40}$/);
+            assert.equal(r.sourceSha,process.env.TRACEBOLT_SOURCE_SHA);
+            assert.equal(r.runtimeErrorCount,0);
+            for(const key of ['secretsExported','privateKeysExported','telemetryExported'])assert.equal(r[key],false);
+            assert.equal(r.quarantine.active,false);
+            assert.deepEqual(r.summary,{passed:13,failed:0,skipped:0,fullEnrollmentAcceptance:true,setupFailure:false});
+            assert.equal(r.results.length,13);
+            assert.equal(new Set(r.results.map(c=>c.name)).size,13);
+            assert.ok(r.results.every(c=>c.status==='PASS'&&typeof c.name==='string'&&c.name.length>0));
+          } catch { throw new Error('Incomplete, mismatched or unsafe full enrollment browser evidence'); }
+          console.log('PASS: exact-source 13/13 enrollment browser cases, no skips or runtime errors.');
+          JS
       - name: Synthetic operational, package and conditional-review browser acceptance
         if: ${{ !cancelled() }}
         env:

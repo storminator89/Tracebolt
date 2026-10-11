@@ -110,7 +110,16 @@ verification levels.
 ## Creation response observation
 
 The shared creation helper uses fixed first/second invocation labels for the
-route/session-loss case and single elsewhere. It observes the application's
+route/session-loss case and single elsewhere, including the quarantined held
+double-click creation. That case still checks the disabled submit control and
+exactly one POST before releasing the response; it uses the same primary-reader
+and masked-value gates instead of a secondary DevTools body retrieval.
+Submission and response waits are observed together: either failure clears the
+observer promptly, even if the other is held, while acceptance requires both to
+succeed. Late settlement cannot change later-case stages. The held route is
+released and unregistered on failure as well as success.
+
+It observes the application's
 original bounded fetch reader for the exact loopback invitation POST. It never
 clones a Response, creates another reader, fetches DevTools response bytes or
 retries a mutation. The original Response, read values, bytes and errors remain

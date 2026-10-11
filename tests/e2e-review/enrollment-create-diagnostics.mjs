@@ -7,7 +7,7 @@ export function invitationCreationStage(invocation,phase){
  const step=phases.has(phase)?phase:'unknown';
  return `create invitation ${call}: ${step}`;
 }
-export async function createBrowserInvitation(page,{base,mark,expect,secrets,invocation='single',transportDiagnostics,recordTransportFailure=()=>{},recordPrimaryFailure=()=>{}}){
+export async function createBrowserInvitation(page,{base,mark,expect,secrets,invocation='single',submit=button=>button.click(),transportDiagnostics,recordTransportFailure=()=>{},recordPrimaryFailure=()=>{}}){
  const step=phase=>mark(invitationCreationStage(invocation,phase));
  let capture,response;
  try{
@@ -19,8 +19,13 @@ export async function createBrowserInvitation(page,{base,mark,expect,secrets,inv
   // primary reader; no CDP body retrieval, clone, second read or mutation retry.
   const responsePending=page.waitForResponse(r=>r.url()===`${base}/api/enrollment/invitations`&&r.request().method()==='POST');
   step('submit');
-  await page.getByRole('button',{name:'Create invitation',exact:true}).click();
-  step('await response');response=await responsePending;
+  // Observe both promises before invoking submit, including synchronous throws.
+  // Either failure must clear private observation even while the other is held;
+  // success still requires both, and a late submit cannot change later stages.
+  let awaitingSubmission=true;
+  const submitPending=Promise.resolve().then(()=>submit(page.getByRole('button',{name:'Create invitation',exact:true}))).then(()=>{if(awaitingSubmission)step('await response');});
+  try{[response]=await Promise.all([responsePending,submitPending]);}
+  finally{awaitingSubmission=false;}
   step('response status');expect(response.status()).toBe(201);
   step('await primary reader');
   await expect.poll(()=>page.evaluate(id=>window.__traceboltEnrollmentBody.state(id),capture)).not.toMatch(/^(armed|waiting|reading)$/);
