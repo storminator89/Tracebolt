@@ -53,14 +53,14 @@ use their [version-specific guide](windows-prerelease-install.md) for those byte
    manager responses can be forged, and the manager is not authenticated. There
    is no HTTPS-error fallback. Production must use HTTPS.
 5. Install checks the package and fresh-host boundary, then makes one bounded,
-   exact-origin request to `/v1/windows/read-admin-setup-capabilities`. Old, mismatched or
+   exact-origin request to the current [Read admin compatibility route](windows-read-admin-setup.md#requirements-are-not-access-results). Old, mismatched or
    unreachable managers fail before any file/service/key/grant changes. No
    credential or invitation is sent by this public compatibility check.
 6. A dedicated local console displays manager trust, the fresh device fingerprint
    and comparison value. Enter the invitation only at its hidden prompt. Keep
    the console open. Approve the matching public identity separately in the
    manager. The staged service remains disabled while approval is pending.
-7. The existing hardened coordinator verifies activation and all twelve exact
+7. The existing hardened coordinator verifies activation and all explicitly approved exact
    identity-bound grants before changing only the owned service to automatic
    startup and requesting Start. Setup reports **start requested**. Check the
    manager separately for the first accepted report. Start is not reporting or
@@ -75,8 +75,8 @@ a running operation is cooperatively cancelled and retains the same partial-stat
 boundaries described below. Geometry and on-screen control-bound tests do not
 establish visual readability, human UAC or desktop-specific acceptance.
 
-The exact twelve scopes and source requirements are in the
-[Read admin profile](windows-read-admin-setup.md#fresh-read-admin-five-readable-groups).
+The current exact scopes and source requirements are in the
+[Read admin profile](windows-read-admin-setup.md#fresh-read-admin-six-readable-groups).
 Selected event-message content, cached WUA search, remote commands/actions and
 external AI are not granted by this profile.
 

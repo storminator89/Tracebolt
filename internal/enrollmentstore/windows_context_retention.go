@@ -9,14 +9,16 @@ import (
 	"localrmm/internal/enrollmentstate"
 	"localrmm/internal/inventoryledger"
 	"localrmm/internal/lanstore"
+	"localrmm/internal/windowshardware"
 	"localrmm/internal/windowspatchcontext"
 	"localrmm/internal/windowssecurity"
 	"localrmm/internal/windowssessions"
+	"localrmm/internal/windowsstorage"
 	"localrmm/internal/windowsupdates"
 	"time"
 )
 
-// Only four bounded context snapshots, never a history or synthetic generation.
+// Only six bounded context snapshots, never a history or synthetic generation.
 // This optional cache is not authority: the latest authenticated frame must
 // still carry the same grant. Missing cache state loses availability only.
 const windowsContextRetentionSchema = `CREATE TABLE enrollment_windows_context_retained(invitation_id TEXT PRIMARY KEY NOT NULL REFERENCES enrollment_credentials(invitation_id) ON DELETE CASCADE, body BLOB NOT NULL CHECK(length(body)>0 AND length(body)<=81920)) STRICT`
@@ -27,10 +29,12 @@ type WindowsContextRetained struct {
 	PatchContext    *windowspatchcontext.Snapshot `json:"patchContext,omitempty"`
 	SecurityPosture *windowssecurity.Snapshot     `json:"securityPosture,omitempty"`
 	SessionContext  *windowssessions.Snapshot     `json:"sessionContext,omitempty"`
+	HardwareContext *windowshardware.Snapshot     `json:"hardwareContext,omitempty"`
+	StorageContext  *windowsstorage.Snapshot      `json:"storageContext,omitempty"`
 }
 
 func (v WindowsContextRetained) empty() bool {
-	return v.Updates == nil && v.PatchContext == nil && v.SecurityPosture == nil && v.SessionContext == nil
+	return v.Updates == nil && v.PatchContext == nil && v.SecurityPosture == nil && v.SessionContext == nil && v.HardwareContext == nil && v.StorageContext == nil
 }
 func contextObserved(q string) bool { return q == "observed" || q == "partial" }
 func usefulPatch(s *windowspatchcontext.Snapshot) bool {
@@ -45,6 +49,57 @@ func usefulSecurity(s *windowssecurity.Snapshot) bool {
 func usefulSessions(s *windowssessions.Snapshot) bool {
 	return s != nil && (contextObserved(s.Sessions.Quality) || contextObserved(s.Join.Quality))
 }
+func usefulHardware(s *windowshardware.Snapshot) bool {
+	if s == nil {
+		return false
+	}
+	// A successful provider call can still contain only unknown sentinels.
+	// Preserve the prior useful capture unless this whole scope has a value.
+	return s.System.Manufacturer.Value != nil || s.System.Model.Value != nil ||
+		s.Firmware.Vendor.Value != nil || s.Firmware.Version.Value != nil ||
+		s.Firmware.ReleaseDate.Value != nil || s.Firmware.SerialNumber.Value != nil ||
+		s.Chassis.SerialNumber.Value != nil || s.Power.ACLineStatus == "online" ||
+		s.Power.ACLineStatus == "offline" || s.Power.BatteryPresence == "present" ||
+		s.Power.BatteryPresence == "absent" || s.Power.Charging == "yes" ||
+		s.Power.Charging == "no" || s.Power.BatteryPercent != nil || s.Power.EstimatedSeconds != nil
+}
+
+func usefulStorage(s *windowsstorage.Snapshot) bool {
+	if s == nil {
+		return false
+	}
+	if s.Drives.Quality == "observed" && s.Drives.Complete && len(s.Drives.Rows) == 0 || s.Disks.Quality == "observed" && s.Disks.Complete && len(s.Disks.Rows) == 0 {
+		return true
+	}
+	for _, r := range s.Drives.Rows {
+		if r.Quality == "observed" && r.VolumeGUID != nil {
+			return true
+		}
+	}
+	for _, r := range s.Disks.Rows {
+		if r.DeviceID.Value != nil || r.FriendlyName.Value != nil || knownStorageHealth(r.HealthStatus) || knownStorageOperation(r.OperationalStatus) || knownStorageBus(r.BusType) || knownStorageMedia(r.MediaType) || r.SizeBytes != nil {
+			return true
+		}
+	}
+	return false
+}
+
+// Unknown, Other, reserved and unrecognized enum codes stay in the current
+// observation, but alone cannot replace a prior useful capture or refresh age.
+func knownStorageHealth(n *uint16) bool { return n != nil && *n <= 2 }
+func knownStorageBus(n *uint16) bool {
+	return n != nil && (*n >= 1 && *n <= 13 || *n >= 15 && *n <= 17)
+}
+func knownStorageMedia(n *uint16) bool { return n != nil && (*n == 3 || *n == 4 || *n == 5) }
+func knownStorageOperation(values []uint16) bool {
+	for _, n := range values {
+		if n >= 2 && n <= 18 {
+			return true
+		}
+	}
+	return false
+}
+
 func windowsContextRetentionPresent(ctx context.Context, conn *sql.Conn) (bool, error) {
 	var n int
 	if conn.QueryRowContext(ctx, `SELECT count(*) FROM sqlite_master WHERE name='enrollment_windows_context_retained'`).Scan(&n) != nil {
@@ -73,6 +128,12 @@ func validRetainedContext(v WindowsContextRetained, f lanstore.Frame) bool {
 		return false
 	}
 	if s := v.SessionContext; s != nil && (f.WindowsSessionContext == nil || windowssessions.Validate(*s) != nil || !usefulSessions(s) || !valid(s.GrantID, f.WindowsSessionContext.GrantID, s.CollectedAt)) {
+		return false
+	}
+	if s := v.HardwareContext; s != nil && (f.WindowsHardwareContext == nil || windowshardware.Validate(*s) != nil || !usefulHardware(s) || !valid(s.GrantID, f.WindowsHardwareContext.GrantID, s.CollectedAt)) {
+		return false
+	}
+	if s := v.StorageContext; s != nil && (f.WindowsStorageContext == nil || windowsstorage.Validate(*s) != nil || !usefulStorage(s) || !valid(s.GrantID, f.WindowsStorageContext.GrantID, s.CollectedAt)) {
 		return false
 	}
 	return true
@@ -110,6 +171,12 @@ func (v *WindowsContextRetained) expire(now time.Time) {
 	if v.SessionContext != nil && now.Sub(v.SessionContext.CollectedAt) >= 24*time.Hour {
 		v.SessionContext = nil
 	}
+	if v.HardwareContext != nil && now.Sub(v.HardwareContext.CollectedAt) >= 24*time.Hour {
+		v.HardwareContext = nil
+	}
+	if v.StorageContext != nil && now.Sub(v.StorageContext.CollectedAt) >= 24*time.Hour {
+		v.StorageContext = nil
+	}
 }
 func retainWindowsContext(ctx context.Context, t *transaction, id string, old, current lanstore.Frame, now time.Time) error {
 	if current.WindowsInventory == nil {
@@ -133,6 +200,12 @@ func retainWindowsContext(ctx context.Context, t *transaction, id string, old, c
 	if current.WindowsSessionContext == nil || v.SessionContext != nil && v.SessionContext.GrantID != current.WindowsSessionContext.GrantID {
 		v.SessionContext = nil
 	}
+	if current.WindowsHardwareContext == nil || v.HardwareContext != nil && v.HardwareContext.GrantID != current.WindowsHardwareContext.GrantID {
+		v.HardwareContext = nil
+	}
+	if current.WindowsStorageContext == nil || v.StorageContext != nil && v.StorageContext.GrantID != current.WindowsStorageContext.GrantID {
+		v.StorageContext = nil
+	}
 	if s := current.WindowsUpdates; s != nil && contextObserved(s.Quality) {
 		v.Updates = s
 	}
@@ -145,7 +218,14 @@ func retainWindowsContext(ctx context.Context, t *transaction, id string, old, c
 	if s := current.WindowsSessionContext; usefulSessions(s) {
 		v.SessionContext = s
 	}
+	if s := current.WindowsHardwareContext; usefulHardware(s) {
+		v.HardwareContext = s
+	}
+	if s := current.WindowsStorageContext; usefulStorage(s) {
+		v.StorageContext = s
+	}
 	v.expire(now)
+	v.fitRetentionBudget()
 	present, err := windowsContextRetentionPresent(ctx, t.conn)
 	if err != nil {
 		return err
@@ -188,6 +268,12 @@ func retainedWindowsContextView(v WindowsContextRetained, f lanstore.Frame, now 
 	}
 	if v.SessionContext != nil && f.WindowsSessionContext != nil && !v.SessionContext.CollectedAt.Before(f.WindowsSessionContext.CollectedAt) {
 		v.SessionContext = nil
+	}
+	if v.HardwareContext != nil && f.WindowsHardwareContext != nil && !v.HardwareContext.CollectedAt.Before(f.WindowsHardwareContext.CollectedAt) {
+		v.HardwareContext = nil
+	}
+	if v.StorageContext != nil && f.WindowsStorageContext != nil && !v.StorageContext.CollectedAt.Before(f.WindowsStorageContext.CollectedAt) {
+		v.StorageContext = nil
 	}
 	if v.empty() {
 		return nil
@@ -292,4 +378,46 @@ func (s *Store) MaintainWindowsContext(ctx context.Context, slot uint64, now tim
 		return enrollmentstate.ErrInvalid
 	}
 	return s.transact(ctx, func(t *transaction) error { return pruneWindowsContextStep(ctx, t, slot, now.UTC()) })
+}
+
+// The cache is optional availability, not authority. Keep its historical 80 KiB
+// table contract and evict oldest whole captures if independently full contexts
+// would exceed it; no original age, scope or grant is rewritten.
+func (v *WindowsContextRetained) fitRetentionBudget() {
+	for {
+		raw, e := json.Marshal(v)
+		if e != nil || len(raw) <= windowsContextRetentionBytes {
+			return
+		}
+		var oldest time.Time
+		drop := func() {}
+		choose := func(at time.Time, clear func()) {
+			if oldest.IsZero() || at.Before(oldest) {
+				oldest = at
+				drop = clear
+			}
+		}
+		if v.Updates != nil {
+			choose(v.Updates.CollectedAt, func() { v.Updates = nil })
+		}
+		if v.PatchContext != nil {
+			choose(v.PatchContext.CollectedAt, func() { v.PatchContext = nil })
+		}
+		if v.SecurityPosture != nil {
+			choose(v.SecurityPosture.CollectedAt, func() { v.SecurityPosture = nil })
+		}
+		if v.SessionContext != nil {
+			choose(v.SessionContext.CollectedAt, func() { v.SessionContext = nil })
+		}
+		if v.HardwareContext != nil {
+			choose(v.HardwareContext.CollectedAt, func() { v.HardwareContext = nil })
+		}
+		if v.StorageContext != nil {
+			choose(v.StorageContext.CollectedAt, func() { v.StorageContext = nil })
+		}
+		if oldest.IsZero() {
+			return
+		}
+		drop()
+	}
 }

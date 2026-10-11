@@ -7,7 +7,7 @@ import (
 )
 
 func readAdminUIFixture() (Config, Hooks) {
-	return Config{Disclosure: "legacy-five", HTTPDisclosure: "legacy-http", ReadAdminDisclosure: "twelve-full-details", ReadAdminHTTPDisclosure: "twelve-http-details", ReadAdminSummary: "twelve-grouped-summary", ReadAdminHTTPSummary: "explicit-plaintext-risk-summary"}, Hooks{InstallReadAdmin: func(context.Context, []byte, bool, func(string)) error { return nil }}
+	return Config{Disclosure: "legacy-five", HTTPDisclosure: "legacy-http", ReadAdminDisclosure: "thirteen-full-details", ReadAdminHTTPDisclosure: "thirteen-http-details", ReadAdminSummary: "thirteen-grouped-summary", ReadAdminHTTPSummary: "explicit-plaintext-risk-summary"}, Hooks{InstallReadAdmin: func(context.Context, []byte, bool, func(string)) error { return nil }}
 }
 
 func selectedReadAdminFlow(t *testing.T) *flow {

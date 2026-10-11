@@ -1,7 +1,10 @@
 # Windows parity review status
 
+> Historical reference. For current functionality and priorities, use the
+> [project overview](../../README.md) and [guides](../README.md).
+
 Review snapshot: **11 October 2026, 00:46 UTC**. This page records subsequent source
-and CI progress. The [parity matrix](windows-linux-parity.md) retains its historical
+and CI progress. The [parity matrix](windows-parity-baseline-2026-10-10.md) retains its historical
 10 October baseline at `3ba4459a3151223ce98ac58c40471afa73576365`; its table is
 not a current runtime-coverage claim.
 
@@ -55,10 +58,10 @@ The published unsigned x64
 [v0.1.0-windows-preview.1](https://github.com/storminator89/Tracebolt/releases/tag/v0.1.0-windows-preview.1)
 remains unchanged. It contains none of these later cached-Update, selected-message
 or health-policy increments. Existing Setup receipts and manager upgrades do not
-grant new endpoint scopes. The [preview status](windows-status.md) and
-[installation evidence](windows-prerelease-install.md#selected-native-evidence)
+grant new endpoint scopes. The [preview status](../windows-status.md) and
+[installation evidence](../windows-prerelease-install.md#selected-native-evidence)
 retain their own exact-byte and limited hosted Windows Server 2025 boundaries.
-The [five Windows screenshots and provenance](screenshots/2026-10-10-windows-parity/README.md)
+The [five Windows screenshots and provenance](../screenshots/2026-10-10-windows-parity/README.md)
 are genuine dashboard captures using invented data, not native acceptance evidence.
 
 ## Remaining priorities

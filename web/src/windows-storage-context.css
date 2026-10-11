@@ -1,0 +1,25 @@
+.windows-storage-context{min-width:0;margin-bottom:24px;padding-bottom:20px;border-bottom:1px solid var(--line)}
+.windows-storage-groups{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:24px;margin-top:16px}
+.windows-storage-group{min-width:0}
+.windows-storage-heading{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;padding-bottom:10px;border-bottom:1px solid var(--line)}
+.windows-storage-heading h4{display:flex;align-items:center;gap:7px;margin:0;font-size:13px;font-weight:600}
+.windows-storage-heading svg{color:var(--secondary);flex-shrink:0}
+.windows-storage-heading>span,.windows-storage-reason{font-size:11px;color:var(--secondary)}
+.windows-storage-group dl,.windows-storage-details dl{margin:0;font-size:12px;line-height:1.5}
+.windows-storage-group dl>div,.windows-storage-details dl>div{display:grid;grid-template-columns:minmax(65px,0.4fr) minmax(0,1fr);gap:10px;padding:9px 0}
+.windows-storage-group dd,.windows-storage-details dd{margin:0;min-width:0;font-weight:500;overflow-wrap:anywhere}
+.windows-storage-context bdi,.windows-storage-context dt{overflow-wrap:anywhere}
+.windows-storage-context small{display:block;color:var(--secondary);font-size:11px;font-weight:400;margin-top:3px}
+.windows-storage-disk{padding:10px 0;border-bottom:1px solid var(--line)}
+.windows-storage-disk:last-child{border-bottom:0}
+.windows-storage-context h5{font-size:12px;font-weight:600;margin:0 0 6px}
+.windows-storage-disk p{font-size:12px;line-height:1.5;margin:5px 0;color:var(--secondary);overflow-wrap:anywhere}
+.windows-storage-health strong{color:var(--text);font-weight:500}
+.windows-storage-details{margin-top:16px;padding-top:12px;border-top:1px solid var(--line);font-size:12px;line-height:1.6;color:var(--secondary)}
+.windows-storage-details summary{cursor:pointer;color:var(--text);font-weight:600}
+.windows-storage-details summary:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+.windows-storage-details p{margin:9px 0}
+.windows-storage-provider-details{margin-top:12px}
+.windows-storage-drives dt>bdi{font-weight:600;color:var(--text)}
+.windows-storage-drives dd>bdi{font-size:11px;color:var(--secondary)}
+@media(max-width:600px){.windows-storage-groups{grid-template-columns:1fr;gap:16px}.windows-storage-details dl>div{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}}

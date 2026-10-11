@@ -4,6 +4,16 @@ For installation/deployment requests, read **[docs/installation.md](docs/install
 first, then the relevant `deploy/` templates and current CLI source. Treat this
 file as navigation and project constraints, never as permission to act on a host.
 
+**Fastest supported installation:** use the runbook's
+[installation-agent fast path](docs/installation.md#fast-path-for-installation-agents).
+Inspect the real target and existing state first; use the Linux Docker Compose
+manager with approved protected configuration, then the verified dashboard Linux
+read-admin command on a supported endpoint. Confirm authenticated login, service
+state and fresh non-synthetic observations. The local demo is not deployment;
+current Windows Read admin needs matching source artifacts and native acceptance.
+Ask for required credential/trust, exposure and host-service approvals, and report
+missing material rather than inventing credentials or weakening protection.
+
 - Inspect the selected computer, OS/architecture, checkout/revision, existing work,
   toolchain, private paths and requested scope before changing anything. Preserve
   user edits. Do not assume the editing environment is the deployment server.
@@ -107,7 +117,7 @@ file as navigation and project constraints, never as permission to act on a host
   identity and all exact grants are durably verified; retain indeterminate
   transitions for read-only reconciliation. The released five-scope preview exposes its GUI path; the current fresh GUI
   uses Read admin below. Existing service/grant receipts must not be promoted.
-- The twelve-scope Windows Read admin source profile is the prominent fresh
+- The fourteen-scope Windows Read admin source profile is the prominent fresh
   Setup choice; actual scope consent remains unchecked. Read
   `docs/windows-read-admin-setup.md`. Preserve legacy consent/receipt bytes and
   historical development interfaces, disabled fresh staging and exact identity/
@@ -134,6 +144,16 @@ file as navigation and project constraints, never as permission to act on a host
   wire v8 or its private Network view. Preserve all old grants/frames and the
   five-scope coordinator. No probes, DNS resolution, routes, traffic or privilege
   expansion; source fixtures never authorize host reads or grants.
+- Windows drive-letter mapping and storage-provider context are a separate default-off local scope.
+  Read `docs/windows-storage-context.md` before fixed local roots/MSFT_PhysicalDisk,
+  worker bounds, v13 transport or private Storage UI changes. No physical serials,
+  SMART claims, guessed physical joins, remote reads, host grants or privileges.
+- Windows hardware and power context is a separate default-off local scope.
+  Read `docs/windows-hardware-context.md` before fixed local WMI/power sources,
+  isolated workers, identifying-serial consent, v12 wire or private Device UI.
+  Preserve source-labeled chassis and BIOS serial meanings, unknown sentinels,
+  independent source failures and old receipt bytes. No firmware writes, raw
+  SMBIOS, UUID, license/recovery keys, host grants or native acceptance follows.
 - Windows caller-visible sessions and local join context are a separate default-off
   local scope. Read `docs/windows-session-context.md` before changing fixed WTS/
   NetGetJoinInformation reads, worker bounds, consent, v11 wire or private UI.

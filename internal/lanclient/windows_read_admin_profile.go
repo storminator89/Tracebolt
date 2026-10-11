@@ -6,20 +6,24 @@ import (
 	"localrmm/internal/windowseventhealth"
 	"localrmm/internal/windowsfullservices"
 	"localrmm/internal/windowsfullsoftware"
+	"localrmm/internal/windowshardware"
 	"localrmm/internal/windowsmanaged"
 	"localrmm/internal/windowsnetwork"
 	"localrmm/internal/windowspatchcontext"
 	"localrmm/internal/windowsprocessmetrics"
 	"localrmm/internal/windowssecurity"
 	"localrmm/internal/windowssessions"
+	"localrmm/internal/windowsstorage"
 	"localrmm/internal/windowsvolumes"
 	"reflect"
 )
 
-// V5 is a new exact read-admin choice, never an interpretation of an old receipt.
-// It grants local read scopes only; it does not change the service token or ACLs.
+// V5 retains its historical exact twelve-scope contract, including serialized
+// consent and receipt bindings. It never authorizes hardware serial metadata.
 const WindowsCapabilityConsentVersionV5 = "tracebolt.windows-capability-consent.v5"
 
+// WindowsReadAdminScopes is the historical V5 ordered scope set. Fresh Setup
+// uses WindowsReadAdminScopesV6; this contract is never expanded in place.
 func WindowsReadAdminScopes() []string {
 	return []string{enrollmentcrypto.CollectionProfileWindowsInventory, windowseventhealth.Scope, windowsvolumes.Scope, windowsprocessmetrics.Scope, windowsnetwork.Scope, windowsmanaged.ServiceStartupScope, windowsfullservices.Scope, windowsfullsoftware.Scope, windowsadapters.Scope, windowspatchcontext.Scope, windowssecurity.Scope, windowssessions.Scope}
 }
@@ -53,6 +57,56 @@ func WindowsReadAdminNotices(insecure bool) []string {
 	notices := []string{windowsmanaged.ServiceStartupPrivacy, windowsfullservices.Privacy, windowsfullsoftware.Privacy, windowsadapters.Privacy, windowspatchcontext.Privacy, windowssecurity.Privacy, windowssessions.Privacy}
 	if insecure {
 		notices = append(notices, windowsmanaged.ServiceStartupHTTPPrivacy, windowsfullservices.HTTPPrivacy, windowsfullsoftware.HTTPPrivacy, windowsadapters.HTTPPrivacy, windowspatchcontext.HTTPPrivacy, windowssecurity.HTTPPrivacy, windowssessions.HTTPPrivacy)
+	}
+	return notices
+}
+
+// V6 is the fresh thirteen-scope profile. Hardware identifiers require a new
+// acknowledgement; historical V5 consent and receipt bytes remain unchanged.
+const WindowsCapabilityConsentVersionV6 = "tracebolt.windows-capability-consent.v6"
+
+func WindowsReadAdminScopesV6() []string {
+	return append(WindowsReadAdminScopes(), windowshardware.Scope)
+}
+
+func validWindowsReadAdminConsentV6(c WindowsCapabilityConsent) bool {
+	return c.SchemaVersion == WindowsCapabilityConsentVersionV6 && c.CollectionProfile == enrollmentcrypto.CollectionProfileWindowsInventory && c.Acknowledged && reflect.DeepEqual(c.Scopes, WindowsReadAdminScopesV6())
+}
+
+func WindowsReadAdminGroupsV6() []WindowsReadAdminGroup {
+	groups := WindowsReadAdminGroups()
+	groups[0].Summary = "Bounded inventory, event headers, volumes, process CPU and memory; manufacturer/model, physical chassis serial (Win32_SystemEnclosure) and BIOS serial metadata, firmware vendor/version/date, and power/battery."
+	groups[0].Scopes = append(groups[0].Scopes, windowshardware.Scope)
+	groups[0].Prerequisites += " Fixed local hardware WMI classes and power status API under the existing service token. Identifying serial metadata is explicitly included; no provider installation, remote queries or configuration changes."
+	return groups
+}
+
+func WindowsReadAdminNoticesV6(insecure bool) []string {
+	notices := append(WindowsReadAdminNotices(insecure), windowshardware.Privacy)
+	if insecure {
+		notices = append(notices, windowshardware.HTTPPrivacy)
+	}
+	return notices
+}
+
+// V7 adds an independently consented storage scope. Historical V1-V6 bytes remain exact.
+const WindowsCapabilityConsentVersionV7 = "tracebolt.windows-capability-consent.v7"
+
+func WindowsReadAdminScopesV7() []string {
+	return append(WindowsReadAdminScopesV6(), windowsstorage.Scope)
+}
+func validWindowsReadAdminConsentV7(c WindowsCapabilityConsent) bool {
+	return c.SchemaVersion == WindowsCapabilityConsentVersionV7 && c.CollectionProfile == enrollmentcrypto.CollectionProfileWindowsInventory && c.Acknowledged && reflect.DeepEqual(c.Scopes, WindowsReadAdminScopesV7())
+}
+func WindowsReadAdminGroupsV7() []WindowsReadAdminGroup {
+	groups := WindowsReadAdminGroupsV6()
+	groups = append(groups, WindowsReadAdminGroup{"Storage", "Local drive letters and exact volume GUID mapping; storage-provider device identifiers/friendly labels, media, bus, size and provider health/status.", []string{windowsstorage.Scope}, "Local volume APIs and fixed MSFT_PhysicalDisk WMI under the same service token. No physical serial/unique IDs, SMART, remote shares or guessed physical joins; RAID, virtual and unsupported/denied visibility remains explicit.", "not_checked", "not_verified"})
+	return groups
+}
+func WindowsReadAdminNoticesV7(insecure bool) []string {
+	notices := append(WindowsReadAdminNoticesV6(insecure), windowsstorage.Privacy)
+	if insecure {
+		notices = append(notices, windowsstorage.HTTPPrivacy)
 	}
 	return notices
 }

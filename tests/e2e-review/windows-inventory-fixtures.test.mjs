@@ -1,3 +1,5 @@
+import './windows-hardware-context-fixtures.test.mjs';
+import './windows-storage-context-fixtures.test.mjs';
 import './windows-session-context-fixtures.test.mjs';
 import './windows-service-actions-fixtures.test.mjs';
 import './windows-security-posture-fixtures.test.mjs';

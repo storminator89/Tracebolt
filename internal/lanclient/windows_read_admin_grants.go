@@ -127,3 +127,53 @@ func windowsReadAdminScopesAbsent(root, sid string, open func(string, windowssta
 	}
 	return nil
 }
+
+// WindowsReadAdminScopesV6Absent retains the exact V5 absence checks and adds
+// the independently protected hardware root. Existing state is never adopted.
+func WindowsReadAdminScopesV6Absent(root, sid string) error {
+	return windowsReadAdminScopesV6Absent(root, sid, func(path string, options windowsstate.Options) (capabilityInspectionStore, error) {
+		s, e := windowsstate.Open(path, options)
+		if e != nil {
+			return nil, e
+		}
+		return s, nil
+	})
+}
+func windowsReadAdminScopesV6Absent(root, sid string, open func(string, windowsstate.Options) (capabilityInspectionStore, error)) error {
+	if windowsReadAdminScopesAbsent(root, sid, open) != nil {
+		return ErrState
+	}
+	s, e := open(root+"-hardware-context", windowsHardwareContextOptions(sid, false))
+	if s != nil {
+		_ = s.Close()
+		return ErrState
+	}
+	if !errors.Is(e, os.ErrNotExist) {
+		return ErrState
+	}
+	return nil
+}
+
+func WindowsReadAdminScopesV7Absent(root, sid string) error {
+	return windowsReadAdminScopesV7Absent(root, sid, func(path string, options windowsstate.Options) (capabilityInspectionStore, error) {
+		s, e := windowsstate.Open(path, options)
+		if e != nil {
+			return nil, e
+		}
+		return s, nil
+	})
+}
+func windowsReadAdminScopesV7Absent(root, sid string, open func(string, windowsstate.Options) (capabilityInspectionStore, error)) error {
+	if windowsReadAdminScopesV6Absent(root, sid, open) != nil {
+		return ErrState
+	}
+	s, e := open(root+"-storage-context", windowsStorageContextOptions(sid, false))
+	if s != nil {
+		_ = s.Close()
+		return ErrState
+	}
+	if !errors.Is(e, os.ErrNotExist) {
+		return ErrState
+	}
+	return nil
+}

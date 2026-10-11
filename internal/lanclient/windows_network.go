@@ -93,10 +93,10 @@ func appendWindowsNetwork(ctx context.Context, m Material, f frame, c windowsnet
 	return f, b, nil
 }
 func validateWindowsNetworkFrame(f frame, fields map[string]json.RawMessage) error {
-	if (f.SchemaVersion == FrameWindowsServiceStartupVersion || (f.SchemaVersion == FrameWindowsUpdatesVersion || (f.SchemaVersion == FrameWindowsAdapterContextVersion || (f.SchemaVersion == FrameWindowsPatchContextVersion || (f.SchemaVersion == FrameWindowsSecurityPostureVersion || f.SchemaVersion == FrameWindowsSessionContextVersion))))) && f.WindowsNetwork == nil && len(fields["windowsNetwork"]) == 0 {
+	if (f.SchemaVersion == FrameWindowsServiceStartupVersion || (f.SchemaVersion == FrameWindowsUpdatesVersion || (f.SchemaVersion == FrameWindowsAdapterContextVersion || (f.SchemaVersion == FrameWindowsPatchContextVersion || (f.SchemaVersion == FrameWindowsSecurityPostureVersion || (f.SchemaVersion == FrameWindowsSessionContextVersion || (f.SchemaVersion == FrameWindowsHardwareContextVersion || f.SchemaVersion == FrameWindowsStorageContextVersion))))))) && f.WindowsNetwork == nil && len(fields["windowsNetwork"]) == 0 {
 		return nil
 	}
-	if f.SchemaVersion != FrameWindowsNetworkVersion && f.SchemaVersion != FrameWindowsServiceStartupVersion && f.SchemaVersion != FrameWindowsUpdatesVersion && f.SchemaVersion != FrameWindowsAdapterContextVersion && f.SchemaVersion != FrameWindowsPatchContextVersion && f.SchemaVersion != FrameWindowsSecurityPostureVersion && f.SchemaVersion != FrameWindowsSessionContextVersion {
+	if f.SchemaVersion != FrameWindowsNetworkVersion && f.SchemaVersion != FrameWindowsServiceStartupVersion && f.SchemaVersion != FrameWindowsUpdatesVersion && f.SchemaVersion != FrameWindowsAdapterContextVersion && f.SchemaVersion != FrameWindowsPatchContextVersion && f.SchemaVersion != FrameWindowsSecurityPostureVersion && f.SchemaVersion != FrameWindowsSessionContextVersion && f.SchemaVersion != FrameWindowsHardwareContextVersion && f.SchemaVersion != FrameWindowsStorageContextVersion {
 		if f.WindowsNetwork != nil || len(fields["windowsNetwork"]) != 0 {
 			return ErrState
 		}

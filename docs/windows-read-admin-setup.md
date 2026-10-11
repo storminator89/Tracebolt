@@ -9,11 +9,11 @@ is not in the published Windows preview and has not passed native installation,
 LocalService provider-access, reboot or GUI acceptance. It does not
 change a download pin or authorize running an installer on any host.
 
-## Fresh Read admin, five readable groups
+## Fresh Read admin, six readable groups
 
-The prominent fresh Setup profile is **Read admin**, covering these twelve
+The prominent fresh Setup profile is **Read admin**, covering these fourteen
 scopes. Selecting that profile does not grant consent: the scope acknowledgement
-starts unchecked, and personal user/domain/session metadata is explicitly named.
+starts unchecked. Personal user/domain/session labels, identifying chassis/BIOS serial metadata, local drive letters/volume GUIDs and storage-provider device identifiers/friendly labels are explicitly named.
 The review starts with concise scope/requirement groups and offers the full
 privacy notices as optional details. Back or choosing another bootstrap clears
 all acknowledgements. HTTP-test requires its own unchecked plaintext-risk
@@ -35,8 +35,11 @@ fresh-Setup choice or a required upgrade step.
 | Updates and security | `windows-patch-context-v1` | Build labels, retained WUA history and fixed reboot indicators |
 | Updates and security | `windows-security-posture-v1` | Independent Defender status and local Firewall profile configuration |
 | Users and sessions | `windows-session-context-v1` | Caller-visible WTS sessions/personal labels and local join context |
+| Device and activity | `windows-hardware-context-v1` | Manufacturer/model, source-labeled chassis and BIOS serial, firmware and system battery/power |
 
-The authoritative ordered list and grouped requirement manifest are
+| Storage | `windows-storage-context-v1` | Local drive-letter/volume-GUID mapping and fixed storage-provider identifiers, friendly labels, media/bus, size and provider health/status |
+
+The authoritative fresh list (`WindowsReadAdminScopesV7`) and grouped requirement manifest are
 `internal/lanclient/windows_read_admin_profile.go`. Coverage, exclusions and
 bounded provider behavior remain the contracts in the individual scope guides.
 Read admin is not every possible Windows read feature. Selected event-message
@@ -49,14 +52,16 @@ allowlist, account change or AI/provider access is configured by this profile.
 Setup requires the existing supported platform/package and fixed protected-path
 preflight, a fresh inventory bootstrap, matching transport and a compatible
 manager. Its new bodyless public compatibility route is
-`/v1/windows/read-admin-setup-capabilities`, with exact contract
-`fresh-twelve-read-admin-scopes-v1`. The old five-scope route and response remain
+`/v1/windows/read-admin-setup-capabilities-v3`, with exact contract
+`fresh-fourteen-read-admin-scopes-v1`. The historical v2/thirteen-scope advertisement remains exact. The historical twelve-scope route and
+`fresh-twelve-read-admin-scopes-v1` response remain byte-for-byte unchanged. The old five-scope route and response remain
 unchanged. An older/mismatched manager blocks before installation writes; no
 invitation, credential or telemetry is sent in this check.
 
 The grouped manifest names local system/process/volume APIs, Application/System
 Event Log, SCM, HKLM 32/64 registration views, IP Helper, fixed registry/WUA COM,
-Defender WMI, Firewall COM, WTS and NetGetJoinInformation prerequisites. This
+Defender WMI, Firewall COM, WTS, NetGetJoinInformation, fixed local CIMV2
+ComputerSystem/BIOS/SystemEnclosure queries, GetSystemPowerStatus, fixed local drive-root APIs and MSFT_PhysicalDisk prerequisites. This
 increment does **not** query those providers during setup. Their availability is
 `not_checked`; actual service-token access is `not_verified`. Administrator
 access during installation could not establish LocalService readability anyway.
@@ -71,21 +76,22 @@ patch compliance. Caller-visible sessions are not a complete user/account list.
 
 ## Fresh authority and receipts
 
-Consent version `tracebolt.windows-capability-consent.v5` admits only the exact
-ordered twelve-scope set, with explicit acknowledgement. Earlier v1-v4 consent
-versions retain their original scope sets and cannot authorize this profile.
-Fresh Read admin uses outer installer receipt version 3. The existing five-scope
+Consent version `tracebolt.windows-capability-consent.v7` admits only the exact
+ordered fourteen-scope set, including identifying storage metadata. Earlier v1-v6
+retain their original scope sets and cannot authorize storage context. Historical
+v6 keeps outer receipt 4; fresh Read admin uses outer installer receipt version 5. Historical v5 keeps
+its exact twelve-scope set and outer receipt version 3. The existing five-scope
 v3 consent continues to use outer receipt version 2 with exactly four extension
 digests. V1 ordinary receipts and the old serialized forms are unchanged.
 
 The same fresh transaction stages the owned service disabled, retains protected
 intent/phase evidence, creates/activates the identity through hidden invitation
 entry and separate manager fingerprint approval, and checks that every selected
-extension root is genuinely absent. All eleven extension grants are then applied
+extension root is genuinely absent. All thirteen extension grants are then applied
 through their existing protected consent APIs. Each operation rechecks the
 original activated sender, unchanged protected phase receipt, and exact owned,
 stopped, disabled service. Missing or changed authority stops the next operation.
-All enabled grant digests, including original grant IDs, must read back correctly
+All thirteen enabled grant digests, including original grant IDs, must read back correctly
 before the existing startup transition can begin. Full service/software inspection
 also validates the primary used marker and independent generation state.
 
@@ -150,7 +156,7 @@ or delivery gate for the current fresh-install target.
 
 The foreground primary attempt retains its 20-second budget and 72 KiB frame.
 Fresh odd sequences give the earlier-provider group first opportunity; fresh
-even sequences collect the isolated patch/Security/Sessions group first. Each
+even sequences collect the isolated patch/Security/Sessions/Hardware group first. Each
 group rotates its leading source across successive turns. All optional providers
 respect the existing three-second remaining primary-delivery reserve and a
 maximum five-second parent budget, retaining any tighter native bounds. No cached-WUA
@@ -182,20 +188,19 @@ synthetic source evidence only.
 
 ## Required native acceptance
 
-The manual Setup approval contract now names all twelve scopes, but current
-native launch and aggregation deliberately stop before effects: the historical
-five-scope fixture/receipt/frame gate cannot validate this profile. The same
-restriction applies to the old parity Setup and browser entrypoints. Implement
-the actual twelve-scope acceptance support before requesting that manual run;
-older approval or evidence cannot substitute for it. See the
-[native gate boundary](../tests/windows_native_acceptance/README.md).
+Native acceptance remains deferred until the missing Admin-data features are
+ready. Existing launch/aggregation guards stay closed: historical five- or
+twelve-scope fixture approvals cannot validate the thirteen-scope receipt4/v6
+profile. No native controller was extended or run by this increment.
 
-Before release/activation, separately approve an exact-artifact disposable native
-fresh-install run covering Read admin; TLS/explicit HTTP risk choice; initially
-unchecked consent; concise groups and full details; GUI Back/new-file, Cancel and
-repeated-click flows; disabled staging and all twelve scopes; actual LocalService
-readable/denied/absent providers; interruptions at the grant/startup boundary;
-retained partial state; manager accepted data, latest failure and original-age
-context; and reboot/shutdown. Fixture tests, cross-builds, hosted source CI and a
-successful installer-admin check establish none of those native results.
-Existing-binary upgrade, migration and reconsent are not gates for this target.
+Before release, separately approve an exact-artifact disposable fresh-install
+run covering TLS/HTTP disclosure, initially unchecked full consent, GUI
+Back/Cancel/repeated-click flows, disabled staging, all thirteen scopes and
+actual unchanged LocalService readable/denied/absent providers. Include grant/
+startup interruptions, original-age private data, and reboot/shutdown. Fixture
+checks, cross-builds and hosted source/browser CI establish none of these native
+results. Migration and existing-binary upgrade remain outside this target.
+
+The new [storage context](windows-storage-context.md) displays provider health/status,
+not SMART or physical-health proof. RAID/virtual/Storage Spaces visibility and
+unknown sources stay explicit. Throughput/latency and physical topology joins are deferred.

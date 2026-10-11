@@ -12,7 +12,7 @@ import (
 )
 
 func TestWindowsSetupCapabilitiesExactPublicGuardedTLSContract(t *testing.T) {
-	for _, admin := range []bool{false, true} {
+	for _, profile := range []int{0, 1, 2, 3} {
 		for _, kind := range []string{"exact", "wrong-host", "missing-tls", "old-tls", "http", "disabled", "post", "body", "cookie", "authorization", "forwarded", "query", "escaped", "limit"} {
 			t.Run(kind, func(t *testing.T) {
 				b := downloadFixtureBootstrap()
@@ -22,8 +22,12 @@ func TestWindowsSetupCapabilitiesExactPublicGuardedTLSContract(t *testing.T) {
 				b.CollectionProfile = "windows-inventory-v1"
 				h := &operatorHandler{authority: "127.0.0.1:8787", origin: b.EnrollmentOrigin, windowsEnrollment: &operatorHandler{enrollment: &enrollmentservice.Service{}, enrollmentBootstrap: b}}
 				path := windowssetup.CapabilitiesPath
-				if admin {
+				if profile == 1 {
 					path = windowssetup.ReadAdminCapabilitiesPath
+				} else if profile == 3 {
+					path = windowssetup.ReadAdminCapabilitiesPathV3
+				} else if profile == 2 {
+					path = windowssetup.ReadAdminCapabilitiesPathV2
 				}
 				r := httptest.NewRequest(http.MethodGet, h.origin+path, nil)
 				r.RemoteAddr = "127.0.0.1:1234"
@@ -75,8 +79,12 @@ func TestWindowsSetupCapabilitiesExactPublicGuardedTLSContract(t *testing.T) {
 					return
 				}
 				expected := windowssetup.Expected(b.ManagerInstanceID, b.EnrollmentOrigin, b.AgentOrigin)
-				if admin {
+				if profile == 1 {
 					expected = windowssetup.ExpectedReadAdmin(b.ManagerInstanceID, b.EnrollmentOrigin, b.AgentOrigin)
+				} else if profile == 3 {
+					expected = windowssetup.ExpectedReadAdminV3(b.ManagerInstanceID, b.EnrollmentOrigin, b.AgentOrigin)
+				} else if profile == 2 {
+					expected = windowssetup.ExpectedReadAdminV2(b.ManagerInstanceID, b.EnrollmentOrigin, b.AgentOrigin)
 				}
 				want, _ := json.Marshal(expected)
 				if w.Code != 200 || string(want) != w.Body.String() || w.Header().Get("Access-Control-Allow-Origin") != "" || w.Header().Get("Set-Cookie") != "" || w.Header().Get("Cache-Control") != "no-store" {

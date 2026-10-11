@@ -73,12 +73,12 @@ jobs:
         if: matrix.platform == 'windows'
         env:
           GOTOOLCHAIN: local
-        run: go test -buildvcs=false -count=1 ./internal/windowseventcontent ./internal/windowseventrequest ./internal/windowseventwire ./internal/windowseventstate ./internal/windowseventworker ./internal/windowsupdates ./internal/windowsupdateworker ./internal/windowsfullsoftware ./internal/windowsfullsoftwarewire ./internal/windowsadapters
+        run: go test -buildvcs=false -count=1 ./internal/windowseventcontent ./internal/windowseventrequest ./internal/windowseventwire ./internal/windowseventstate ./internal/windowseventworker ./internal/windowsupdates ./internal/windowsupdateworker ./internal/windowsfullsoftware ./internal/windowsfullsoftwarewire ./internal/windowsadapters ./internal/windowshardware ./internal/windowshardwareworker ./internal/windowsstorage ./internal/windowsstorageworker
       - name: Vet Windows parity sources (no host collection)
         if: matrix.platform == 'windows'
         env:
           GOTOOLCHAIN: local
-        run: go vet -buildvcs=false ./internal/windowseventcontent ./internal/windowseventrequest ./internal/windowseventwire ./internal/windowseventstate ./internal/windowseventworker ./internal/windowsupdates ./internal/windowsupdateworker ./internal/windowsfullsoftware ./internal/windowsfullsoftwarewire ./internal/windowsadapters
+        run: go vet -buildvcs=false ./internal/windowseventcontent ./internal/windowseventrequest ./internal/windowseventwire ./internal/windowseventstate ./internal/windowseventworker ./internal/windowsupdates ./internal/windowsupdateworker ./internal/windowsfullsoftware ./internal/windowsfullsoftwarewire ./internal/windowsadapters ./internal/windowshardware ./internal/windowshardwareworker ./internal/windowsstorage ./internal/windowsstorageworker
       - name: Execute ARM64 Linux installer and helper fixture tests natively
         if: matrix.platform == 'linux' && matrix.arch == 'arm64'
         env:

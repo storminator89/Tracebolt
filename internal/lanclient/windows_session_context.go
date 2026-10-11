@@ -88,7 +88,7 @@ func appendWindowsSessionContext(ctx context.Context, m Material, f frame, c win
 	return f, b, nil
 }
 func validateWindowsSessionContextFrame(f frame, fields map[string]json.RawMessage) error {
-	if f.SchemaVersion != FrameWindowsSessionContextVersion {
+	if f.SchemaVersion != FrameWindowsSessionContextVersion && !((f.SchemaVersion == FrameWindowsHardwareContextVersion || f.SchemaVersion == FrameWindowsStorageContextVersion) && len(fields["windowsSessionContext"]) != 0) {
 		if f.WindowsSessionContext != nil || len(fields["windowsSessionContext"]) != 0 {
 			return ErrState
 		}
