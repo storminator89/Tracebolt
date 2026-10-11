@@ -9,6 +9,7 @@ import { readFile, lstat, open, realpath } from 'node:fs/promises';
 import { isAbsolute, dirname, resolve, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createRequire } from 'node:module';
+import { CURRENT_SCHEMA, CURRENT_MARKERS, validateCurrentProfile, validateHistoryQuery, currentResultSummary, validateCurrentResult, finishCurrentSummary, validateCurrentEndpointBinding, observeCurrentProfile } from './current_browser.mjs';
 
 export const SCHEMA = 'tracebolt.windows-linux-native-parity.browser.v1';
 export const REASONS = ['complete', 'contract_rejected', 'deadline', 'clock_changed', 'wrong_origin', 'artifact_mismatch', 'private_path_rejected', 'dependency_unavailable', 'browser_unavailable', 'session_lost', 'identity_mismatch', 'invalid_response', 'stale_capture', 'request_conflict', 'event_unknown', 'updates_unknown', 'ui_unavailable', 'cleanup_unverified', 'read_admin_native_gate_unavailable'];
@@ -22,8 +23,9 @@ export class Refusal extends Error { constructor(reason) { super(REASONS.include
 export function need(ok, reason = 'contract_rejected') { if (!ok) throw new Refusal(reason); }
 export const syntheticMessage = runId => `Tracebolt native parity synthetic Application event ${runId}`;
 export function validateSpec(spec, now = Date.now()) {
-  need(exact(spec, ['schema', 'runId', 'planSHA256', 'source', 'expiresUnix', 'operatorOrigin', 'agentOrigin', 'managerInstanceId', 'issuerFingerprint', 'bootstrapServerCASHA256', 'bootstrapIssuerRootSHA256', 'windowsBindingPath', 'windowsTargetId', 'windowsMachineIdSHA256', 'setupSHA256', 'serviceSHA256', 'chromium', 'browserRoot', 'syntheticEvent', 'outputPath', 'workspace']));
-  need(spec.schema === SCHEMA && typeof spec.runId === 'string' && /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,95}$/.test(spec.runId) && hex(spec.planSHA256));
+  const current = spec?.schema === CURRENT_SCHEMA;
+  need(exact(spec, [...(current ? ['currentProfile', 'historyQuery', 'windowsPlatform'] : []), 'schema', 'runId', 'planSHA256', 'source', 'expiresUnix', 'operatorOrigin', 'agentOrigin', 'managerInstanceId', 'issuerFingerprint', 'bootstrapServerCASHA256', 'bootstrapIssuerRootSHA256', 'windowsBindingPath', 'windowsTargetId', 'windowsMachineIdSHA256', 'setupSHA256', 'serviceSHA256', 'chromium', 'browserRoot', 'syntheticEvent', 'outputPath', 'workspace']));
+  need((spec.schema === SCHEMA || current) && typeof spec.runId === 'string' && /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,95}$/.test(spec.runId) && hex(spec.planSHA256));
   need(exact(spec.source, ['commit', 'tree', 'inventorySHA256']) && hex(spec.source.commit, 40) && hex(spec.source.tree, 40) && hex(spec.source.inventorySHA256));
   need(Number.isSafeInteger(spec.expiresUnix) && spec.expiresUnix * 1000 > now && spec.expiresUnix * 1000 - now <= 7200000, 'deadline');
   let origin; try { origin = new URL(spec.operatorOrigin); } catch { throw new Refusal('wrong_origin'); }
@@ -37,6 +39,7 @@ export function validateSpec(spec, now = Date.now()) {
   for (const value of [spec.chromium.path, spec.browserRoot, spec.outputPath, spec.workspace, spec.windowsBindingPath]) need(typeof value === 'string' && isAbsolute(value) && resolve(value) === value && !/[\0\r\n]/.test(value));
   need(dirname(spec.outputPath) === spec.workspace && spec.outputPath !== spec.workspace, 'private_path_rejected');
   need(exact(spec.syntheticEvent, ['source', 'eventId', 'messageSHA256']) && spec.syntheticEvent.source === `TraceboltParity-${spec.runId}` && Number.isSafeInteger(spec.syntheticEvent.eventId) && spec.syntheticEvent.eventId >= 1 && spec.syntheticEvent.eventId <= 65535 && spec.syntheticEvent.messageSHA256 === hash(syntheticMessage(spec.runId)));
+  if (current) { need(['windows-11-x64', 'windows-server-2025-x64'].includes(spec.windowsPlatform)); validateCurrentProfile(spec.currentProfile); validateHistoryQuery(spec.historyQuery, spec, now); }
   return spec;
 }
 export function sameIdentity(a, b) { return Boolean(a && b && a.id === b.id && a.sequence === b.sequence && a.queryDigest === b.queryDigest); }
@@ -60,11 +63,13 @@ export function renderedUpdatesMatch(updates, visibleRows, locale) {
 }
 export function usableUpdates(updates) { return updates?.cacheFreshness === 'unknown' && (updates.quality === 'observed' || updates.quality === 'partial' && updates.rows.length > 0); }
 export function resultSummary(spec) {
+  if (spec.schema === CURRENT_SCHEMA) return currentResultSummary(spec);
   return { schema: 'tracebolt.windows-linux-native-parity.browser-result.v1', runId: spec.runId, planSHA256: spec.planSHA256, source: { ...spec.source }, status: 'blocked', reason: 'browser_unavailable', fullAcceptance: false, nativeExecution: false,
     checks: Object.fromEntries(CHECKS.map(key => [key, false])), observations: { eventQuality: 'not_observed', updatesQuality: 'not_observed', updatesRows: 0, updatesCountExact: false, updatesTruncated: false, updatesRendering: 'not_observed', cacheFreshness: 'unknown', patchCoverage: 'not_assessed' },
     omissions: [...OMITTED] };
 }
 export function validateResult(report, spec) {
+  if (spec.schema === CURRENT_SCHEMA) return validateCurrentResult(report, spec, REASONS);
   need(exact(report, ['schema', 'runId', 'planSHA256', 'source', 'status', 'reason', 'fullAcceptance', 'nativeExecution', 'checks', 'observations', 'omissions']));
   need(report.schema === 'tracebolt.windows-linux-native-parity.browser-result.v1' && report.runId === spec.runId && report.planSHA256 === spec.planSHA256 && exact(report.source, ['commit', 'tree', 'inventorySHA256']) && ['commit', 'tree', 'inventorySHA256'].every(key => report.source[key] === spec.source[key]));
   need(['passed', 'blocked'].includes(report.status) && REASONS.includes(report.reason) && report.fullAcceptance === false && typeof report.nativeExecution === 'boolean');
@@ -89,6 +94,7 @@ export function inspectRequest(description, posted, binding) {
   need(Date.parse(description.createdAt) >= binding.phaseStarted && Date.parse(description.expiresAt) > Date.now(), 'stale_capture');
 }
 export function finishSummary(report) {
+  if (report.schema === 'tracebolt.windows-linux-native-parity.browser-result.v2') return finishCurrentSummary(report);
   if (report.nativeExecution && CHECKS.every(key => report.checks[key] === true)) { report.status = 'passed'; report.reason = 'complete'; }
   else { report.status = 'blocked'; report.reason = !report.checks.eventResultObserved || !report.checks.eventMessageRendered ? 'event_unknown' : 'updates_unknown'; }
   return report;
@@ -136,27 +142,33 @@ export async function loadValidators(root, dependencyRoot) {
   // or weakened parallel wire contract can turn an invalid response into a pass.
   const require = await pinnedDependencies(root, dependencyRoot);
   const esbuild = require('esbuild');
-  const source = ['windows-inventory-types', 'windows-event-content-types', 'enrollment-types'].map(name => `export * from ${JSON.stringify(join(root, 'web/src', `${name}.ts`))};`).join('\n');
+  const source = ['windows-inventory-types', 'windows-event-content-types', 'enrollment-types'].map(name => `export * from ${JSON.stringify(join(root, 'web/src', `${name}.ts`))};`).join('\n') + `\nexport { validEventHistoryView, validEventHistoryResult, validHistorySearch, eventHistoryNanos } from ${JSON.stringify(join(root, 'web/src/windows-event-history-types.ts'))};`;
   const built = await esbuild.build({ stdin: { contents: source, resolveDir: root, loader: 'ts' }, bundle: true, write: false, platform: 'node', format: 'esm', logLevel: 'silent' });
   return import(`data:text/javascript;base64,${Buffer.from(built.outputFiles[0].text).toString('base64')}`);
 }
 export function validateEndpointBinding(value, spec, identity, bootstrapSHA256) {
+  if (spec.schema === CURRENT_SCHEMA) return validateCurrentEndpointBinding(value, spec, identity, bootstrapSHA256);
   need(exact(value, ['schema', 'runId', 'planSHA256', 'source', 'windowsTargetId', 'windowsMachineIdSHA256', 'setupSHA256', 'serviceSHA256', 'deviceId', 'certificateHash', 'invitationIdSHA256', 'bootstrapSHA256']), 'invalid_response');
   need(value.schema === 'tracebolt.windows-linux-native-parity.endpoint-binding.v1' && value.runId === spec.runId && value.planSHA256 === spec.planSHA256 && exact(value.source, ['commit', 'tree', 'inventorySHA256']) && ['commit', 'tree', 'inventorySHA256'].every(key => value.source[key] === spec.source[key]), 'identity_mismatch');
   need(['windowsTargetId', 'windowsMachineIdSHA256', 'setupSHA256', 'serviceSHA256'].every(key => value[key] === spec[key]) && value.deviceId === identity.deviceId && value.certificateHash === identity.certificateHash && value.invitationIdSHA256 === hash(identity.invitationId) && value.bootstrapSHA256 === bootstrapSHA256, 'identity_mismatch');
   return value;
 }
-async function endpointBinding(spec, identity, bootstrapSHA256) {
-  let info; try { info = await lstat(spec.windowsBindingPath); } catch (error) { if (error.code === 'ENOENT') return false; throw new Refusal('private_path_rejected'); }
+export async function readPrivateEvidence(path) {
+  let info; try { info = await lstat(path); } catch (error) { if (error.code === 'ENOENT') return false; throw new Refusal('private_path_rejected'); }
   need(info.isFile() && !info.isSymbolicLink() && info.nlink === 1 && info.size > 0 && info.size <= 32768 && info.uid === process.geteuid() && (info.mode & 0o777) === 0o600, 'private_path_rejected');
-  const raw = await readFile(spec.windowsBindingPath); need(raw.length === info.size, 'private_path_rejected');
+  await noLinks(path); const raw = await readFile(path); need(raw.length === info.size, 'private_path_rejected');
   let value; try { value = JSON.parse(raw.toString('utf8')); } catch { throw new Refusal('invalid_response'); }
   need(canonicalJSON(value) === raw.toString('utf8'), 'invalid_response');
-  validateEndpointBinding(value, spec, identity, bootstrapSHA256); return true;
+  return value;
+}
+async function endpointBinding(spec, identity, bootstrapSHA256) {
+  const value = await readPrivateEvidence(spec.windowsBindingPath); if (!value) return false;
+  return validateEndpointBinding(value, spec, identity, bootstrapSHA256);
 }
 export function validateBootstrap(value, spec, invitationId) {
-  need(exact(value, ['schemaVersion', 'managerInstanceId', 'profile', 'enrollmentOrigin', 'agentOrigin', 'collectionProfile', 'invitationId', 'serverCaPem', 'issuerRootPem', 'issuerPem']), 'invalid_response');
-  need(value.schemaVersion === 'tracebolt.enrollment-bootstrap.v2' && value.managerInstanceId === spec.managerInstanceId && value.profile === 'tls' && value.enrollmentOrigin === spec.operatorOrigin && value.agentOrigin === spec.agentOrigin && value.collectionProfile === 'windows-inventory-v1' && value.invitationId === invitationId && /^invite_[a-f0-9]{32}$/.test(invitationId), 'identity_mismatch');
+  const current = spec.schema === CURRENT_SCHEMA;
+  need(exact(value, [...(current ? ['renewalPolicy'] : []), 'schemaVersion', 'managerInstanceId', 'profile', 'enrollmentOrigin', 'agentOrigin', 'collectionProfile', 'invitationId', 'serverCaPem', 'issuerRootPem', 'issuerPem']), 'invalid_response');
+  need((current ? value.schemaVersion === 'tracebolt.enrollment-bootstrap.renewable.v1' && value.renewalPolicy === 'same-key-v1' : value.schemaVersion === 'tracebolt.enrollment-bootstrap.v2') && value.managerInstanceId === spec.managerInstanceId && value.profile === 'tls' && value.enrollmentOrigin === spec.operatorOrigin && value.agentOrigin === spec.agentOrigin && value.collectionProfile === 'windows-inventory-v1' && value.invitationId === invitationId && /^invite_[a-f0-9]{32}$/.test(invitationId), 'identity_mismatch');
   const certificates = (pem, max) => {
     need(typeof pem === 'string' && Buffer.byteLength(pem) <= 16384, 'invalid_response');
     const blocks = pem.match(/-----BEGIN CERTIFICATE-----[\r\n\t ]+[A-Za-z0-9+/=\r\n\t ]+-----END CERTIFICATE-----/g);
@@ -209,7 +221,7 @@ export async function closeBrowserObserved(browser, report, timeoutMS = 35000) {
 export async function observe(spec, report, validators, chromium, emit = line => process.stdout.write(line)) {
   const checkTime = budget(spec.expiresUnix), began = Date.now(); let browser, context, page, fatal = null;
   const emitted = new Set();
-  const marker = name => { guard(); need(MARKERS.has(name) && !emitted.has(name)); emitted.add(name); emit(`${name}\n`); };
+  const marker = name => { guard(); need((MARKERS.has(name) || spec.schema === CURRENT_SCHEMA && CURRENT_MARKERS.includes(name)) && !emitted.has(name)); emitted.add(name); emit(`${name}\n`); };
   let closing = null;
   const closeOwned = () => browser ? closing ??= closeBrowserObserved(browser, report) : Promise.resolve(false);
   const stop = () => { fatal ??= new Refusal('browser_unavailable'); void closeOwned(); };
@@ -222,7 +234,7 @@ export async function observe(spec, report, validators, chromium, emit = line =>
   // GET only, fixed same-origin routes, bounded streaming and redirect refusal.
   // Cookies remain in the nonpersistent browser context and are never returned.
   const read = async (path, limit = 128 * 1024) => {
-    guard(); need(/^\/api\/(windows\/enrollment|devices\/agent_[a-f0-9]{32}\/(windows-inventory|windows-event-content))$/.test(path));
+    guard(); need((spec.schema === CURRENT_SCHEMA ? /^\/api\/(windows\/enrollment|devices\/agent_[a-f0-9]{32}(?:\/(windows-inventory|windows-event-content|windows-event-history))?)$/ : /^\/api\/(windows\/enrollment|devices\/agent_[a-f0-9]{32}\/(windows-inventory|windows-event-content))$/).test(path));
     const result = await page.evaluate(async ({ path, limit, origin }) => {
       if (location.origin !== origin) return { status: 0, value: null };
       const controller = new AbortController(), timer = setTimeout(() => controller.abort(), 10000);
@@ -287,8 +299,11 @@ export async function observe(spec, report, validators, chromium, emit = line =>
       need(/^agent_[a-f0-9]{32}$/.test(row.approval.deviceID) && row.intent.deviceID === row.approval.deviceID && hex(row.issuance.certificateHash) && row.activation.at >= row.createdAt, 'identity_mismatch');
       return { deviceId: row.approval.deviceID, certificateHash: row.issuance.certificateHash, invitationId: row.invitationID };
     });
-    await until(() => endpointBinding(spec, identity, bootstrapSHA256));
+    const endpointProof = await until(() => endpointBinding(spec, identity, bootstrapSHA256));
     report.checks.endpointBindingObserved = true; report.checks.singleFreshWindowsIdentity = true;
+    if (spec.schema === CURRENT_SCHEMA) {
+      await observeCurrentProfile({ spec, report, validators, page, identity, endpointProof, began, guard, until, read, visible, marker, fail: error => { fatal ??= error instanceof Refusal ? error : new Refusal('invalid_response'); } });
+    } else {
     const inventoryPath = `/api/devices/${identity.deviceId}/windows-inventory`, contentPath = `/api/devices/${identity.deviceId}/windows-event-content`;
     let sessionBinding = null, sessionExpires = null, floor = 0n, captureFloor = -Infinity, sequence = 0;
     const content = async () => {
@@ -435,6 +450,7 @@ export async function observe(spec, report, validators, chromium, emit = line =>
       const text = await panel.locator('.windows-inventory-empty').textContent(); return /not included in this report|in dieser Meldung nicht enthalten/.test(text ?? '');
     });
     report.checks.updatesDisabledObserved = true; await checkIdentity();
+    }
   } catch (error) {
     fatal ??= error instanceof Refusal ? error : new Refusal('browser_unavailable');
     report.status = 'blocked'; report.reason = fatal.reason; throw fatal;
@@ -455,11 +471,12 @@ export function requireCurrentSetupGate() {
 export async function main() {
   let spec, report, safeOutput = false;
   try {
-    requireCurrentSetupGate(); // Before spec/files/dependencies/browser access.
+    const current = process.argv.length === 3 && process.argv[2] === '--current-profile';
+    if (!current) requireCurrentSetupGate(); // Historical entry fails before any input or files.
     // Direct native entry is interactive-only. Keep module imports and pure
     // source tests available in CI; the private child stdin is intentionally a pipe.
     need(!['CI', 'GITHUB_ACTIONS', 'TF_BUILD', 'BUILD_BUILDID'].some(key => Object.hasOwn(process.env, key)));
-    need(process.argv.length === 2); spec = await readSpec(); report = resultSummary(spec); await validateFiles(spec); safeOutput = true;
+    need(current); spec = await readSpec(); need(spec.schema === CURRENT_SCHEMA); report = resultSummary(spec); await validateFiles(spec); safeOutput = true;
     const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
     let validators, chromium;
     try { validators = await loadValidators(root, spec.browserRoot); ({ chromium } = createRequire(join(spec.browserRoot, 'package.json'))('@playwright/test')); }

@@ -1,6 +1,8 @@
 /** Portable logic/contract checks only. These never launch a browser, Windows
  * process or manager and are not native/read-scope/real-browser evidence. */
 import test from 'node:test';
+// Keep current-profile portable contracts on the existing CI test entry.
+import './current_browser.test.mjs';
 import { EventEmitter } from 'node:events';
 import { existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';

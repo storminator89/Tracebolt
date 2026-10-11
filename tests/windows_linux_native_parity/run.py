@@ -36,13 +36,14 @@ def _source_only(name):
     return module
 _source_only("contract")
 import contract
-from contract import Rejected, PHASES, need, load_plan, require_native_opt_in, verify_inventory, verify_commit, trusted_path, validate_phase_report, begin_phase, report, write_new, private_directory, read_regular, strict_json
+from contract import Rejected, PHASES, CURRENT_PHASES, is_current, need, load_plan, require_native_opt_in, verify_inventory, verify_commit, trusted_path, validate_phase_report, begin_phase, report, write_new, private_directory, read_regular, strict_json
 
 ORDER = ("setup", "event-fixture", "event-enable", "updates-enable", "event-disable", "updates-disable")
 
 def previous_phase(p, phase, plan_hash):
-    if phase in ORDER and phase != ORDER[0]:
-        prior = ORDER[ORDER.index(phase) - 1]
+    order = ("setup", "event-fixture", "own-restart", "remove") if is_current(p) else ORDER
+    if phase in order and phase != order[0]:
+        prior = order[order.index(phase) - 1]
         path = Path(p["targets"]["windows"]["workspace"]) / (p["runId"] + "-" + prior + ".result.json")
         r = strict_json(read_regular(path, 32 << 10), 32 << 10)
         validate_phase_report(r, p, plan_hash, prior)
@@ -65,14 +66,15 @@ def main(argv=None):
     action.add_argument("--check-plan", action="store_true")
     action.add_argument("--execute", action="store_true")
     parser.add_argument("--target-id")
-    parser.add_argument("--phase", choices=PHASES)
+    parser.add_argument("--phase", choices=tuple(dict.fromkeys((*PHASES, *CURRENT_PHASES))))
     parser.add_argument("--approval-reference")
+    parser.add_argument("--browser-report-sha256")
     args = parser.parse_args(argv)
     p = None; workspace = None; checks = {}; start = time.monotonic(); lock = None; old_signals = {}
     try:
         p = load_plan(args.plan, args.plan_sha256)
         if args.check_plan:
-            need(args.target_id is None and args.phase is None and args.approval_reference is None)
+            need(args.target_id is None and args.phase is None and args.approval_reference is None and args.browser_report_sha256 is None)
             print("SOURCE CONTRACT VALIDATED ONLY; native execution and authorization not established.")
             return 0
         contract._active_budget = contract.RunBudget(p["expiresUnix"])
@@ -101,6 +103,17 @@ def main(argv=None):
         verify_inventory(target["sourceRoot"], target["sourceInventory"], p["source"]["inventorySHA256"], p["source"]["tree"], trusted=True)
         need(Path(__file__).resolve() == Path(target["sourceRoot"]) / "tests/windows_linux_native_parity/run.py", "source_mismatch")
         previous_phase(p, args.phase, args.plan_sha256)
+        if is_current(p) and args.phase == "remove":
+            # Transfer only the completed sanitized Linux phase evidence under
+            # private custody. Bind every field to this exact plan/artifact set.
+            path = Path(target["workspace"]) / (p["runId"] + "-manager-browser.result.json")
+            trusted_path(path)
+            raw = read_regular(path, 32 << 10)
+            need(contract.digest(raw) == args.browser_report_sha256, "browser_incomplete")
+            value = strict_json(raw, 32 << 10)
+            need(raw == contract.canonical(value), "native_observation_unavailable")
+            validate_phase_report(value, p, args.plan_sha256, "manager-browser")
+            checks["browser_evidence_verified"] = True
         if role == "windows":
             adapter.verify_package(p)
         contract.check_time(p["expiresUnix"])
@@ -111,6 +124,8 @@ def main(argv=None):
             adapter.operate(p, args.plan_sha256, checks)
         result = report(p, args.plan_sha256, args.phase, checks, "observed_phase", "complete", time.monotonic() - start)
         write_new(workspace / (p["runId"] + "-" + args.phase + ".result.json"), result)
+        if is_current(p) and args.phase == "manager-browser":
+            print("PUBLIC MANAGER/BROWSER PHASE SHA256=" + contract.digest(contract.canonical(result)), flush=True)
         print("OBSERVED NATIVE PHASE ONLY; full acceptance remains false.")
         return 0
     except Exception as exc:
