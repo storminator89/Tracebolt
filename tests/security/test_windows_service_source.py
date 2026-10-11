@@ -171,6 +171,25 @@ class GateTests(unittest.TestCase):
         self.assertIn("COPY --from=web /src/web/dist /tracebolt/web", runtime_stage)
         self.assertNotIn("/src/web/src", runtime_stage)
         self.assertNotIn("windows-service-startup-vectors", runtime_stage)
+    def test_action_history_fixture_survives_restricted_docker_web_inputs(self):
+        root = Path(__file__).resolve().parents[2]
+        fixture = "tests/fixtures/windows-service-action-history.json"
+        docker = (root / "Dockerfile").read_text()
+        ignore = (root / ".dockerignore").read_text().splitlines()
+        web_stage = docker.split("FROM --platform=$BUILDPLATFORM golang:")[0]
+        runtime_stage = docker.split("FROM scratch AS runtime")[1]
+        copy = f"COPY {fixture} /src/{fixture}"
+        self.assertEqual(web_stage.splitlines().count(copy), 1)
+        self.assertLess(web_stage.index(copy), web_stage.index("RUN npm run build"))
+        self.assertEqual(ignore.count("!" + fixture), 1)
+        self.assertLess(ignore.index("tests/fixtures/**"), ignore.index("!" + fixture))
+        self.assertNotIn("!tests/**", ignore)
+        self.assertNotIn("!tests/fixtures/**", ignore)
+        source = (root / "web/src/windows-service-action-history.test.tsx").read_text()
+        self.assertIn("'../../" + fixture + "'", source)
+        self.assertGreater(len(json.loads((root / fixture).read_text())), 0)
+        self.assertNotIn(fixture, runtime_stage)
+
     def test_network_mocks_are_mandatory_without_native_reads(self):
         self.assertIn("./internal/windowsnetwork", gate.PACKAGES)
         for name in ("TestNativeNetworkInjectedFourTables", "TestNativeNetworkReturnCodesAndBounds", "TestNativeNetworkDWORDLayouts", "TestFourTablesAndNetworkByteOrder", "TestMalformedAndTrailingNativeTables", "TestBufferGrowthBoundAndCancellation", "TestBoundedCountsStableRowsAndBudget", "TestShrinkingTableIgnoresSurplusAllocation", "TestTCPListenerHasNoRemotePeer"):

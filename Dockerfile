@@ -20,6 +20,7 @@ COPY tests/fixtures/windows-resource-view.json /src/tests/fixtures/windows-resou
 COPY tests/fixtures/windows-service-health-view.json /src/tests/fixtures/windows-service-health-view.json
 # Exact synthetic selected Windows action operator output used by TypeScript.
 COPY tests/fixtures/windows-service-action-view.json /src/tests/fixtures/windows-service-action-view.json
+COPY tests/fixtures/windows-service-action-history.json /src/tests/fixtures/windows-service-action-history.json
 # Shared proactive identity contract and its TypeScript declaration; no test runner.
 COPY tests/e2e-review/proactive-ai-browser.mjs tests/e2e-review/proactive-ai-browser.d.mts /src/tests/e2e-review/
 RUN npm run build

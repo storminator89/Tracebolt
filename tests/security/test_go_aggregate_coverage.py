@@ -61,6 +61,9 @@ class CoverageTests(unittest.TestCase):
         self.assertEqual(check_coverage(self.source), {DENSE, GUIDED})
 
     def test_partition_matrix_and_aggregate_failure_handling_changes_fail(self):
+        # Mutate only the pinned backend orchestration. Earlier independent jobs
+        # may legitimately use the same upload-artifact or failure-handling keys.
+        block = between(self.source, SHARD_COVERAGE[0][0], SHARD_COVERAGE[-1][1])
         for old, new in [
             ("shard: [0, 1, 2]", "shard: [0, 1]"),
             ("needs: [backend-checks, go-race, package-dense-race]", "needs: [go-race]"),
@@ -72,9 +75,9 @@ class CoverageTests(unittest.TestCase):
             ("--check-needs", "--help"),
         ]:
             with self.subTest(change=new):
-                self.assertIn(old, self.source)
+                self.assertEqual(block.count(old), 1)
                 with self.assertRaises(ValueError):
-                    check_coverage(self.source.replace(old, new, 1))
+                    check_coverage(self.source.replace(block, block.replace(old, new, 1), 1))
 
     def test_extra_missing_unanchored_exclusion_or_weakened_runner_fails(self):
         runner = (ROOT / "tests/security/go_race_shards.py").read_bytes()
