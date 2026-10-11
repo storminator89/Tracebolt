@@ -20,6 +20,7 @@ type installReceipt struct {
 	ReadSetup *readSetupProgress     `json:"readSetup,omitempty"`
 }
 type setupJournal interface {
+	Verify() error
 	Write(string, []byte) error
 	Close() error
 }
@@ -71,7 +72,20 @@ func setup(ctx context.Context, bootstrapPath string, s setupSteps) (result any,
 	if err != nil || admin == nil {
 		return nil, marked(windowsservice.PhaseReceipt, windowsservice.ReasonStateRejected, err)
 	}
-	defer admin.Close()
+	defer func() {
+		// Keep the exclusive installer journal held through enrollment and the
+		// final service request. An eventual close failure is reported after
+		// those effects; it is never described as a mutation-free failure.
+		if closeErr := joinLifecycleErrors(admin.Close(), lifecycleContextError(ctx)); closeErr != nil {
+			cleanup := setupFailed("journal_close", marked(windowsservice.PhaseReceipt, windowsservice.ReasonStateRejected, closeErr))
+			if err != nil {
+				// Seal the original failure location before adding a later
+				// close error; both causes remain reachable for diagnosis.
+				err = setupFailed(stage, err)
+			}
+			err = joinLifecycleErrors(err, cleanup)
+		}
+	}()
 	stage = "intent_encode"
 	intent, err := json.Marshal(plan)
 	if err != nil {
@@ -111,8 +125,8 @@ func setup(ctx context.Context, bootstrapPath string, s setupSteps) (result any,
 	if err = admin.Write("receipt.json", saved); err != nil {
 		return nil, marked(windowsservice.PhaseReceipt, windowsservice.ReasonStateRejected, err)
 	}
-	stage = "journal_close"
-	if err = admin.Close(); err != nil {
+	stage = "journal_verify"
+	if err = admin.Verify(); err != nil {
 		return nil, marked(windowsservice.PhaseReceipt, windowsservice.ReasonStateRejected, err)
 	}
 	stage = "owned_verify"
@@ -122,6 +136,13 @@ func setup(ctx context.Context, bootstrapPath string, s setupSteps) (result any,
 	stage = "enrollment"
 	if err = s.enroll(ctx, plan.Layout); err != nil {
 		return nil, marked(windowsservice.PhaseEnrollment, windowsservice.ReasonEnrollmentFailed, err)
+	}
+	stage = "journal_verify"
+	if err = admin.Verify(); err != nil {
+		return nil, marked(windowsservice.PhaseReceipt, windowsservice.ReasonStateRejected, err)
+	}
+	if err = ctx.Err(); err != nil {
+		return nil, err
 	}
 	stage = "service_start"
 	result, err = s.start(ctx, receipt)

@@ -66,6 +66,12 @@ A later source revision does not inherit exact-artifact native acceptance.
 
 ## Newer source candidates
 
+[Local own-agent restart](windows-own-service-restart.md) adds an explicit
+receipt-bound `--restart --apply` source command for the fixed Tracebolt service.
+It holds the existing installer lease, attempts stop/start once and observes SCM
+with bounded polling. It does not add remote target-service control or
+repair/upgrade. The published preview and its native acceptance do not cover it.
+
 The [cached Windows Update runtime candidate](windows-update-runtime.md) adds
 separate local consent, a bounded isolated reader, v7 sender/manager support and
 an operator-only Updates view. Cache freshness remains unknown; an empty cached

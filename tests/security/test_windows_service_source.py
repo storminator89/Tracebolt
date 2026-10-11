@@ -9,6 +9,30 @@ import unittest
 spec=importlib.util.spec_from_file_location("source_gate",Path(__file__).with_name("run_windows_service_source.py"))
 gate=importlib.util.module_from_spec(spec);spec.loader.exec_module(gate)
 class GateTests(unittest.TestCase):
+    def test_own_service_restart_and_shared_lease_fixtures_are_mandatory(self):
+        names = {
+            "localrmm/internal/windowsservice": (
+                "TestRestartOneHandleExactlyOnceAndHistoricalSCMOutcome",
+                "TestRestartCancellationAndLateReturnsFenceLaterEffects",
+                "TestRestartNativeControlErrorsNeverRetryOrCompensate",
+                "TestNativeRestartHandleAccessIsMinimal",
+            ),
+            "localrmm/cmd/windows-service": (
+                "TestRestartCLIExplicitDispatchHoldsLeaseAndEmitsResult",
+                "TestRestartPartialOutputAndReleaseFailureNeverBecomeSuccess",
+                "TestReceiptLeaseExcludesConcurrentLifecycleAndConsent",
+                "TestGUIRemovalSharesLeaseAcrossAllEffectsAndRelease",
+                "TestSetupJournalHeldThroughEffectsAndCloseFailureRetainsResult",
+            ),
+        }
+        for package, tests in names.items():
+            for name in tests:
+                required = (package, name)
+                self.assertIn(required, gate.REQUIRED)
+                rows = [dict(Package=p, Test=t, Action="pass") for p,t in gate.REQUIRED if (p,t) != required]
+                with self.assertRaises(ValueError):
+                    gate.check_events(b"\n".join(json.dumps(x).encode() for x in rows))
+
     def test_startup_digest_fixture_stays_canonical_under_autocrlf_checkout(self):
         root = Path(__file__).resolve().parents[2]
         name = "web/src/windows-service-startup-go-fixture.json"

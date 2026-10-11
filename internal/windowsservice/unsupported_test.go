@@ -34,3 +34,13 @@ func TestNonWindowsPublicAPIsRejectWithoutMutation(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestRestartUnsupportedWithoutNativeEffects(t *testing.T) {
+	if _, err := ApplyRestart(context.Background(), Receipt{}, unsupportedLease{}); !errors.Is(err, ErrUnsupported) {
+		t.Fatal(err)
+	}
+}
+
+type unsupportedLease struct{}
+
+func (unsupportedLease) Verify() error { return nil }

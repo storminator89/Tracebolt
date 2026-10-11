@@ -73,6 +73,15 @@ marks only the SCM object for deletion; other open handles can delay deletion.
 It does not stop the service implicitly or delete binaries/private state. The
 caller must observe absence separately before claiming deletion completed.
 
+`ApplyRestart(ctx, receipt, lease)` is a separate explicit own-agent operation.
+It requires an initially Running owned service and the already-held protected
+installer lease, retains one minimal-rights SCM handle across one STOP and one
+START, revalidates ownership/executable bytes before START, and observes both
+transitions within a cooperative 45-second budget. Native calls can outlast that
+budget. Ambiguous effects are never retried or compensated; partial typed results
+remain available with errors. [Full command, exclusion and outcome contract](../../docs/windows-own-service-restart.md).
+This is not remote other-service control, repair/upgrade, health or reboot proof.
+
 `InspectRemoval(ctx, receipt)` is the read-only post-delete observation API. It
 validates the original completed receipt and resolved layout before opening SCM
 with query-only access. A still-present object must match every expected SCM

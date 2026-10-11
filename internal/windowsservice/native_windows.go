@@ -45,7 +45,7 @@ type nativeService struct{ handle windows.Handle }
 
 func (s *nativeService) Close() error               { return windows.CloseServiceHandle(s.handle) }
 func openSCM(rights uint32) (windows.Handle, error) { return windows.OpenSCManager(nil, nil, rights) }
-func (windowsBackend) Open(a access) (service, error) {
+func serviceAccessRights(a access) (uint32, error) {
 	rights := uint32(windows.SERVICE_QUERY_CONFIG | windows.SERVICE_QUERY_STATUS)
 	switch a {
 	case readAccess:
@@ -53,18 +53,34 @@ func (windowsBackend) Open(a access) (service, error) {
 		rights |= windows.SERVICE_START
 	case stopAccess:
 		rights |= windows.SERVICE_STOP
+	case restartAccess:
+		rights |= windows.SERVICE_START | windows.SERVICE_STOP
 	case deleteAccess:
 		rights |= windows.DELETE
 	case configureAccess:
 		rights |= windows.SERVICE_CHANGE_CONFIG
 	default:
-		return nil, setupStageError("service_open_access", "invalid", ErrMismatch)
+		return 0, setupStageError("service_open_access", "invalid", ErrMismatch)
+	}
+	return rights, nil
+}
+func (windowsBackend) Open(a access) (result service, err error) {
+	rights, err := serviceAccessRights(a)
+	if err != nil {
+		return nil, err
 	}
 	scm, err := openSCM(windows.SC_MANAGER_CONNECT)
 	if err != nil {
 		return nil, setupStageError("service_open_scm", "failed", err)
 	}
-	defer windows.CloseServiceHandle(scm)
+	defer func() {
+		closeErr := windows.CloseServiceHandle(scm)
+		// Restart owns any returned service even with an error, and closes it
+		// before releasing its lease. Keep legacy Open error semantics intact.
+		if a == restartAccess {
+			err = errors.Join(err, closeErr)
+		}
+	}()
 	name := windows.StringToUTF16Ptr(Name)
 	h, err := windows.OpenService(scm, name, rights)
 	if errors.Is(err, windows.ERROR_SERVICE_DOES_NOT_EXIST) {

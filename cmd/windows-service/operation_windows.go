@@ -48,10 +48,12 @@ func nativeOperation(ctx context.Context, r request, out, stderr io.Writer) (res
 	case "install":
 		return install(ctx, r.bootstrap, r.collectionProfile, r.insecureHTTP, out, stderr)
 	}
-	receipt, err := loadReceipt()
-	if err != nil {
-		return nil, err
-	}
+	return withReceiptLease(ctx, openReceiptStore, func(receipt installReceipt, lease receiptStore) (any, error) {
+		return nativeReceiptOperation(ctx, r, receipt, lease, out, stderr)
+	})
+}
+
+func nativeReceiptOperation(ctx context.Context, r request, receipt installReceipt, lease receiptStore, out, stderr io.Writer) (any, error) {
 	switch r.mode {
 	case "event-content-preview", "event-content-enable", "event-content-disable":
 		return eventContentOperation(ctx, r, receipt.Service, windowsservice.InspectOwned, lanclient.ConfigureWindowsEventContent)
@@ -88,31 +90,23 @@ func nativeOperation(ctx context.Context, r request, out, stderr io.Writer) (res
 		return struct {
 			Status string `json:"status"`
 		}{"claim committed; start remains an explicit local operation"}, nil
-	case "start":
-		return windowsservice.ApplyStart(ctx, receipt.Service)
-	case "stop":
-		return windowsservice.ApplyStop(ctx, receipt.Service)
-	case "uninstall":
-		return windowsservice.ApplyUninstall(ctx, receipt.Service)
+	case "start", "stop", "restart", "uninstall":
+		return serviceLifecycleOperation(ctx, r.mode, receipt.Service, lease, serviceLifecycleSteps{
+			start: windowsservice.ApplyStart, stop: windowsservice.ApplyStop, uninstall: windowsservice.ApplyUninstall, restart: windowsservice.ApplyRestart,
+		})
 	}
 	return nil, errLifecycle
 }
-func loadReceipt() (installReceipt, error) {
+func openReceiptStore() (windowsservice.Layout, receiptStore, error) {
 	layout, err := windowsservice.ResolveLayout()
 	if err != nil {
-		return installReceipt{}, marked(windowsservice.PhaseReceipt, windowsservice.ReasonStateRejected, errLifecycle)
+		return layout, nil, marked(windowsservice.PhaseReceipt, windowsservice.ReasonStateRejected, err)
 	}
 	store, err := windowsstate.Open(installerPath(layout), windowsagentconfig.Installer(false))
 	if err != nil {
-		return installReceipt{}, marked(windowsservice.PhaseReceipt, windowsservice.ReasonStateRejected, errLifecycle)
+		return layout, nil, marked(windowsservice.PhaseReceipt, windowsservice.ReasonStateRejected, err)
 	}
-	defer store.Close()
-	raw, err := store.Read("receipt.json")
-	if err != nil {
-		return installReceipt{}, marked(windowsservice.PhaseReceipt, windowsservice.ReasonStateRejected, errLifecycle)
-	}
-	defer clear(raw)
-	return decodeInstallReceipt(raw, layout)
+	return layout, store, nil
 }
 func install(ctx context.Context, bootstrapPath, selectedProfile string, insecure bool, out, stderr io.Writer) (any, error) {
 	return setup(ctx, bootstrapPath, nativeSetupSteps(selectedProfile, insecure, out, stderr))

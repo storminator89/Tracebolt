@@ -145,6 +145,7 @@ const (
 	stopAccess
 	deleteAccess
 	configureAccess
+	restartAccess
 )
 
 type service interface {

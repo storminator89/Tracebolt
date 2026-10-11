@@ -34,6 +34,28 @@ func installReadObservationWithProgress(ctx context.Context, bootstrapPath strin
 		return nil, setupFailedCategory("fresh_disclosure", "failed", err)
 	}
 	s := nativeSetupSteps(enrollmentcrypto.CollectionProfileWindowsInventory, consent.InsecureHTTPAcknowledged, out, stderr)
+	// Progress writes borrow the create-only journal that setup already holds.
+	// Reopening it would deadlock/fail its existing cross-process exclusive lock.
+	var journal *windowsstate.Store
+	var journalLayout windowsservice.Layout
+	createJournal := s.createJournal
+	s.createJournal = func(layout windowsservice.Layout) (setupJournal, error) {
+		created, err := createJournal(layout)
+		if err != nil {
+			return created, err
+		}
+		var ok bool
+		journal, ok = created.(*windowsstate.Store)
+		if !ok {
+			if created != nil {
+				_ = created.Close()
+			}
+			return nil, errLifecycle
+		}
+		journalLayout = layout
+		return journal, nil
+	}
+
 	s.plan = windowsservice.PlanFreshReadSetup
 	s.apply = windowsservice.ApplyFreshReadSetup
 	enrollStep := s.enroll
@@ -54,19 +76,21 @@ func installReadObservationWithProgress(ctx context.Context, bootstrapPath strin
 	return setupReadObservation(ctx, bootstrapPath, consent, readSetupSteps{
 		setup: s,
 		updateReceipt: func(layout windowsservice.Layout, previous, next []byte) error {
-			store, err := windowsstate.Open(installerPath(layout), windowsagentconfig.Installer(false))
+			if journal == nil || layout != journalLayout {
+				return errLifecycle
+			}
+			raw, err := journal.Read("receipt.json")
 			if err != nil {
 				return err
 			}
-			defer store.Close()
-			raw, err := store.Read("receipt.json")
-			if err != nil || !bytes.Equal(raw, previous) {
+			defer clear(raw)
+			if !bytes.Equal(raw, previous) {
 				return errLifecycle
 			}
-			if err = store.Write("receipt.json", next); err != nil {
+			if err = journal.Write("receipt.json", next); err != nil {
 				return err
 			}
-			return store.Close()
+			return journal.Verify()
 		},
 		ensureFreshScopes: func(receipt windowsservice.Receipt) error {
 			return lanclient.WindowsCapabilityScopesAbsent(receipt.Layout.StateRoot, receipt.ServiceSID)

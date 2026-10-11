@@ -67,7 +67,10 @@ func setupErrorChain(err error) (chain []error, valid bool) {
 			if len(children) > 32-len(chain)-len(pending) {
 				return nil, false
 			}
-			pending = append(pending, children...)
+			// LIFO traversal visits the primary (first) branch before cleanup.
+			for i := len(children) - 1; i >= 0; i-- {
+				pending = append(pending, children[i])
+			}
 		case interface{ Unwrap() error }:
 			pending = append(pending, e.Unwrap())
 		}

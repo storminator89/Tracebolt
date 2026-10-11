@@ -1,6 +1,8 @@
 package freshgate
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"strings"
 	"testing"
@@ -100,5 +102,23 @@ func TestChildFailureReportDefaultsAndStrictValues(t *testing.T) {
 	r.ChildFailureStage, r.ChildFailureCategory = "none", "none"
 	if r.Validate() != nil {
 		t.Fatal("observed zero rejected")
+	}
+}
+
+func TestJournalVerificationDiagnosticsAppendWithoutRenumbering(t *testing.T) {
+	const originalCount = 456
+	const originalDigest = "fb2b1e29222de9b919c159769b7a2508d22a9095bb90323239a506350bee5b99"
+	var original strings.Builder
+	for _, p := range childFailurePairs[:originalCount] {
+		original.WriteString(p[0] + "/" + p[1] + "\n")
+	}
+	digest := sha256.Sum256([]byte(original.String()))
+	if hex.EncodeToString(digest[:]) != originalDigest {
+		t.Fatal("existing child diagnostic codes changed")
+	}
+	for _, category := range []string{"failed", "interrupted", "access_denied", "not_found", "unsupported", "state_policy", "state_integrity", "state_storage", "state_poisoned", "state_closed"} {
+		if code := ChildFailureExitCode("journal_verify", category); code < childFailureCodeBase+originalCount {
+			t.Fatal("new diagnostic did not append")
+		}
 	}
 }

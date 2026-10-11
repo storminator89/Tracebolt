@@ -30,7 +30,7 @@ func assertSetupDiagnosis(t *testing.T, err error, wantStage, wantCategory strin
 	}
 }
 func TestSetupDiagnosticEveryInjectedStage(t *testing.T) {
-	for step, stage := range map[string]string{"plan": "service_plan", "read-bootstrap": "bootstrap_read", "validate-bootstrap": "bootstrap_validate", "create-journal": "journal_create", "intent.json": "intent_write", "apply": "service_install", "receipt.json": "receipt_write", "prepare": "runtime_prepare", "prepared-receipt": "prepared_receipt_write", "close": "journal_close", "preclaim": "owned_verify", "enroll": "enrollment", "start": "service_start"} {
+	for step, stage := range map[string]string{"plan": "service_plan", "read-bootstrap": "bootstrap_read", "validate-bootstrap": "bootstrap_validate", "create-journal": "journal_create", "intent.json": "intent_write", "apply": "service_install", "receipt.json": "receipt_write", "prepare": "runtime_prepare", "prepared-receipt": "prepared_receipt_write", "close": "journal_close", "verify-journal": "journal_verify", "preclaim": "owned_verify", "enroll": "enrollment", "start": "service_start"} {
 		t.Run(step, func(t *testing.T) {
 			f := &setupFixture{fail: step}
 			_, err := setup(context.Background(), "fixture", f.operations())
@@ -46,7 +46,7 @@ func TestSetupDiagnosticEveryInjectedStage(t *testing.T) {
 	assertSetupDiagnosis(t, err, "setup_validate", "failed")
 }
 func TestReadSetupDiagnosticEveryInjectedStage(t *testing.T) {
-	for step, stage := range map[string]string{"plan": "fresh_plan", "bootstrap": "bootstrap_read", "validate": "bootstrap_validate", "journal": "journal_create", "write-intent.json": "intent_write", "install-disabled": "service_install", "write-receipt.json": "receipt_write", "fresh-scopes": "scopes_absent", "prepare": "runtime_prepare", "close": "journal_close", "verify-disabled": "owned_verify", "claim-started": "claim_record", "claim": "enrollment", "activation-started": "activation_record", "activate-identity": "identity_activate", "identity": "identity_read", "grants-started": "grants_record", "configure": "grants_configure", "verify-grants": "grants_verify", "grant-digests": "grants_digests", "grants-verified": "grants_verified_record", "startup-transition-started": "startup_record", "activate-startup": "startup_activate", "configured": "configured_record", "start": "service_start"} {
+	for step, stage := range map[string]string{"plan": "fresh_plan", "bootstrap": "bootstrap_read", "validate": "bootstrap_validate", "journal": "journal_create", "write-intent.json": "intent_write", "install-disabled": "service_install", "write-receipt.json": "receipt_write", "fresh-scopes": "scopes_absent", "prepare": "runtime_prepare", "close": "journal_close", "verify-journal": "journal_verify", "verify-disabled": "owned_verify", "claim-started": "claim_record", "claim": "enrollment", "activation-started": "activation_record", "activate-identity": "identity_activate", "identity": "identity_read", "grants-started": "grants_record", "configure": "grants_configure", "verify-grants": "grants_verify", "grant-digests": "grants_digests", "grants-verified": "grants_verified_record", "startup-transition-started": "startup_record", "activate-startup": "startup_activate", "configured": "configured_record", "start": "service_start"} {
 		t.Run(step, func(t *testing.T) {
 			f := &readSetupFixture{fail: step}
 			_, err := setupReadObservation(context.Background(), "fixture", readSetupConsentFixture(), f.hooks())

@@ -93,3 +93,16 @@ func TestNativeSCMStructureABI(t *testing.T) {
 		t.Fatal("unexpected Windows service configuration ABI")
 	}
 }
+
+func TestNativeRestartHandleAccessIsMinimal(t *testing.T) {
+	query := uint32(windows.SERVICE_QUERY_CONFIG | windows.SERVICE_QUERY_STATUS)
+	for a, want := range map[access]uint32{readAccess: query, startAccess: query | windows.SERVICE_START, stopAccess: query | windows.SERVICE_STOP, deleteAccess: query | windows.DELETE, configureAccess: query | windows.SERVICE_CHANGE_CONFIG, restartAccess: query | windows.SERVICE_START | windows.SERVICE_STOP} {
+		got, err := serviceAccessRights(a)
+		if err != nil || got != want {
+			t.Fatal(a, got, want, err)
+		}
+	}
+	if _, err := serviceAccessRights(access(255)); err == nil {
+		t.Fatal("invalid access accepted")
+	}
+}

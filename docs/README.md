@@ -66,6 +66,7 @@ common empty, stale and pending states.
 - [Backup, update, rollback and removal](installation.md#10-stop-back-up-restore-update-uninstall)
 - [Linux read-admin upgrade](read-admin-upgrade.md)
 - [Windows cancellation and retained state](windows-setup-preview.md#cancellation-retained-state-and-service-removal)
+- [Local own-agent Windows restart source candidate](windows-own-service-restart.md)
 - [Local support bundle and review before sharing](support-bundle.md)
 - [Security review and boundaries](lan-security-review.md)
 
