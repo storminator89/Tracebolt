@@ -84,11 +84,17 @@ Read the [prerelease installation guide](docs/windows-prerelease-install.md) and
 The accepted hosted Windows Server 2025 subset does not prove Windows 10/11,
 reboot, upgrade or ARM64 support. Do not use the Linux installation command on Windows.
 
-Newer source work is tracked in the [Linux/Windows parity matrix](docs/windows-linux-parity.md).
+Read the [dated Windows parity review status](docs/windows-parity-review-status.md)
+for subsequent source progress, CI evidence and remaining priorities. The
+[Linux/Windows parity matrix](docs/windows-linux-parity.md) preserves a historical
+baseline; its table is not a current runtime-coverage claim.
+
 Cached Update inspection and exact selected event messages are separate default-off
-source candidates wired into Updates and Logs. Their source/fixture evidence is
-separate from native acceptance. Neither is added to the published preview by
-updating the manager.
+source candidates wired into Updates and Logs. Sibling [PR #31](https://github.com/storminator89/Tracebolt/pull/31)
+and [PR #32](https://github.com/storminator89/Tracebolt/pull/32) add opt-in Windows
+disk/CPU/RAM and selected-service health policies. PR #29's documentation changes
+do not add that runtime implementation. These newer features remain outside the
+unchanged published preview. Source/fixture checks do not establish native acceptance.
 
 | Cached Windows Updates, unreleased source preview | Mobile device overview, German |
 | --- | --- |
