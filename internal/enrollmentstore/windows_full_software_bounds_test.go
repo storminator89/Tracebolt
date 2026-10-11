@@ -90,7 +90,69 @@ func TestWindowsFullSoftwareMaximumRowsAndByteShortPages(t *testing.T) {
 		for i := range rows {
 			rows[i] = softwareRow(i+1, nil, nil, nil, "64")
 		}
-		msgs := f.capture(t, 1, rows)
+		msgs, e := windowsfullsoftware.Build(f.snap.Approval.DeviceID, f.consent, 1, windowsfullsoftware.Capture{StartedAt: f.at, FinishedAt: f.at, Complete: true, Rows: rows})
+		if e != nil {
+			t.Fatal(e)
+		}
+		// Test-only capacity setup: keep real first/final store admission, but
+		// batch middle chunks through the production ledger in one transaction.
+		// This retains every row, quota and final digest/page check without
+		// repeatedly scanning the growing store. The 2051-row retry/restart
+		// tests separately exercise end-to-end per-chunk store admission.
+		if _, e = f.apply(t, msgs[0], f.at); e != nil {
+			t.Fatal(e)
+		}
+		ctx := WithWindowsFullSoftwareIngressOrigin(context.Background(), f.snap.Binding.Origin)
+		e = f.s.transact(ctx, func(tx *transaction) error {
+			r, e := softwareledger.LoadRecord(ctx, tx.conn, f.snap.Approval.DeviceID)
+			if e != nil {
+				return e
+			}
+			for _, message := range msgs[1 : len(msgs)-1] {
+				raw, e := windowsfullsoftware.EncodeMessage(message)
+				if e != nil {
+					return e
+				}
+				m, e := windowsfullsoftware.DecodeMessage(raw)
+				if e != nil {
+					return e
+				}
+				snap, e := f.s.windowsFullSoftwareAuthority(tx, f.snap.InvitationID, f.cert.CertificateHash(), f.at)
+				if e != nil {
+					return e
+				}
+				if m.DeviceID != snap.Approval.DeviceID || m.Consent != r.Consent || r.IngressOrigin != f.snap.Binding.Origin || r.LastAt.After(f.at) {
+					return enrollmentstate.ErrProof
+				}
+				if e = softwareledger.Clock(ctx, tx.conn, f.at); e != nil {
+					return e
+				}
+				extra, e := windowsFullSoftwareOtherBytes(ctx, tx)
+				if e != nil {
+					return e
+				}
+				if _, e = softwareledger.Apply(ctx, tx.conn, m, raw, &r, f.at, extra); e != nil {
+					return e
+				}
+				if e = softwareledger.SaveRecord(ctx, tx.conn, m.DeviceID, f.snap.InvitationID, f.cert.CertificateHash(), r); e != nil {
+					return e
+				}
+				if e = windowsFullSoftwareBudget(ctx, tx); e != nil {
+					return e
+				}
+			}
+			tx.beforeCommit = append(tx.beforeCommit, func() error {
+				_, e := f.s.windowsFullSoftwareAuthority(tx, f.snap.InvitationID, f.cert.CertificateHash(), f.at)
+				return e
+			})
+			return nil
+		})
+		if e != nil {
+			t.Fatal(e)
+		}
+		if _, e = f.apply(t, msgs[len(msgs)-1], f.at); e != nil {
+			t.Fatal(e)
+		}
 		p := f.page(t, softwareQuery(), f.at)
 		if p.MatchingCount != 32768 || p.Complete.Manifest.RowCount != 32768 || len(p.Rows) != 100 || msgs[0].Manifest.RowsBytes > windowsfullsoftware.MaxSourceBytes {
 			t.Fatal("maximum complete generation rejected")
