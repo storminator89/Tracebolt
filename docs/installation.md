@@ -1,69 +1,69 @@
 # Installation runbook: humans and automation agents
 
-Start here when given this repository to install. **This is a self-hosted LAN
-pilot, not an unattended fleet installer.** The supported path today is a
-Docker or native Linux central manager plus native Linux senders. The default
-manual-v1 mode uses preprovided approved material; optional guided-v2 adds a
-hidden-terminal bootstrap and deliberate operator approval. Reporting can run
-once or repeatedly in the foreground. The Linux/systemd installer
-adds explicit service operations and the fresh combined read-admin path below.
-A repository link alone does not authorize a deployment or
-provide credentials. Read the checklist before executing the quickstart.
-For task-oriented navigation and common problems, see [Help and guides](README.md)
-and [Troubleshooting](troubleshooting.md). Windows has a separate
-[unsigned, unreleased Setup preview](windows-status.md); it is not covered by
-the published Linux endpoint installation command.
+Use a Linux native or Docker **LAN manager** for real devices. The loopback
+`cmd/manager` demo is separate. Tracebolt is a development pilot, not an unattended
+fleet installer. A repository link does not provide deployment approval or
+credentials. [Guides](README.md) · [Troubleshooting](troubleshooting.md).
 
-For a fresh supported Linux endpoint, the normal published-release path is the
-**[verified dashboard download](dashboard-verified-download.md)**: copy one public
-installation command, run it deliberately as root in a local terminal after
-approving account/service and persistent identity creation, enter the invitation
-only at the hidden prompt, then compare and approve the device in the dashboard.
-Downloads, release verification and artifact checks are internal to that command;
-no endpoint Go build, file transfer or manual checksum step is needed. Review the
-supported platform and existing prerequisites first; dependencies are not installed.
+## Fast path for installation agents
 
-**Current release:** the dashboard pins `v0.1.0-rc.3`, built from
-`405f57f184e75736477cbd3af7a2536ddfe0e6f6`. Its [build/publication](https://github.com/storminator89/Tracebolt/actions/runs/37573387512) and
-[all-asset public-byte/provenance check](https://github.com/storminator89/Tracebolt/actions/runs/37574492167) passed. The complete
-`managed-operations-v3` profile selects `--read-admin` and the validated agent
-ingress, with one combined terminal approval for inventory, network identity,
-current/future exact-service journals and isolated socket-owner metadata. The main
-agent remains nonroot; the separate socket helper's broad process-memory authority
-is explicitly disclosed.
+1. **Inspect first:** confirm the actual target OS/architecture, chosen clean
+   revision, existing configuration/state and Docker Engine/Compose v2. Preserve
+   existing work; the editing computer may not be the deployment server.
+2. **Prepare approved material:** use the [preflight](#2-preflight-and-approval-checklist)
+   and [TLS/config checklist](#material-and-filesystem-checklist). Docker needs
+   protected configuration, server TLS material and operator authentication.
+   **Add device** enrollment additionally needs the explicitly configured
+   [guided-v2 issuer](#6b-optional-guided-v2-bootstrap-compare-approve-and-report);
+   the default TLS example is manual-v1. Stop at missing credentials or approval.
+3. **Start the manager:** use the exact [Docker commands](#4-quickstart-tls-docker-manager-preprovided-material):
+   set `TRACEBOLT_CONFIG_DIR` and the approved `TRACEBOLT_BIND_IP`, use
+   `docker compose -f deploy/compose.yaml` with `config`, `build manager`, then
+   `up --no-build -d manager`. The default bind is loopback; LAN exposure needs
+   deliberate approval. This builds the manager from source, not a release image.
+4. **Connect Linux:** on a supported amd64 Ubuntu 24.04/Debian 13 endpoint
+   (systemd, cgroup v2, kernel 6.5+), use **Add device** and its
+   [verified rc.3 command](dashboard-verified-download.md). Review the combined
+   [read-admin scope](read-admin-onboarding.md), enter the invitation only at the
+   hidden local prompt, compare/approve the device fingerprint, and keep the
+   terminal open until setup finishes. Do not build or invent an endpoint installer.
+5. **Smoke-check the real result:** confirm Compose reports the manager running,
+   normal TLS login works and protected data requires authentication. For an
+   installed Linux endpoint check `systemctl is-active tracebolt-agent.service`
+   and `systemctl is-enabled tracebolt-agent.service`, then confirm fresh real
+   device observations and actual source coverage in the dashboard. See
+   [acceptance](#7-acceptance-establish-evidence-not-just-uptime); uptime alone is
+   insufficient. Do not restart/revoke a real device just to test it.
 
-The [one-command read-admin guide](read-admin-onboarding.md) describes that scope
-and the required hidden invitation entry and dashboard fingerprint approval. Keep
-the local terminal open until all phases finish. Basic/non-complete profiles retain
-ordinary pending-service behavior. A missing or incompatible pin cannot downgrade
-a complete installation. Manager deployment is separate; see the
-[fresh Docker-manager guide](http-complete-first-start.md).
+Before changing persistent identities/trust, network exposure/firewall or host
+accounts/services, obtain the required approval. Keep passwords, invitations and
+private keys out of arguments, environment, chat and logs. Do not bypass TLS or
+reset state. If approved TLS material is unavailable, explain the blocker; the
+[disposable HTTP test](http-complete-first-start.md) is only an explicitly approved
+isolated alternative, with plaintext credential/content risks.
 
-For a completed read-admin v2 installation, rc.3 supports the
-[same-identity, same-scope update](read-admin-upgrade.md) with a local terminal
-approval and no new enrollment. The [native Ubuntu TLS gate](https://github.com/storminator89/Tracebolt/actions/runs/37572468648) passed
-the verified rc.2-to-405f source-built replacement, all four upgrade checks, all six
-functional checks and cleanup. Released rc.3 artifacts are independently verified
-above; the user's download-based Debian/HTTP upgrade and actual OS reboot remain
-separate local acceptance steps.
+**Windows:** use the separate [status and setup guide](windows-status.md). The
+published unsigned five-scope preview is older than current source-only Read
+admin. Do not use the Linux command on Windows or claim the new profile is released.
 
-For an existing activated v3 agent, the [one-time inventory collection guide](guided-inventory-setup.md)
-can group the existing full process/mount and full cached APT grants into one
-explicit local confirmation. It checks actual installed CLI support, preserves
-the identity and counters, and does not upgrade the agent or configure journals.
-Hostname/interfaces remain a separate optional selection.
+## Other supported development paths
 
-For the separate default-off service-action workflow, read the
-[guided create-only action setup candidate](guided-service-action-setup.md). Its
-manager and endpoint source commands never upgrade the installed pinned release;
-compatible source/fixture tests leave native privileged acceptance outstanding.
+- [Native Linux manager](#5-native-linux-manager-alternative) when Docker is not the chosen path
+- [Manual-v1 certificate approval and foreground sender](#6-default-manual-v1-sign-in-approve-a-public-certificate-run-linux)
+- [Existing Linux read-admin update](read-admin-upgrade.md) and [inventory opt-in](guided-inventory-setup.md)
+- Separate default-off [service-action setup](guided-service-action-setup.md)
 
-## 1. Choose the correct milestone
+The public Linux command selects **v0.1.0-rc.3**. Detailed release provenance and
+native evidence remain in [read-admin onboarding](read-admin-onboarding.md) and
+[download verification](dashboard-verified-download.md). Manager deployment is
+separate from endpoint releases; no manager update silently replaces an agent.
 
-| Component | Available now | Not provided by this milestone |
+## 1. Current component and platform support
+
+| Component | Available now | Current limits |
 | --- | --- | --- |
 | Central manager | Separate `cmd/lan-manager`, Admin UI, authenticated operator API, approved agent ingress; Docker or native Linux execution | Production assurance, automatic provisioning, HA/shared SQLite writers |
-| Linux endpoint | Native `cmd/lan-agent --config …`, one-shot or bounded foreground reporting; optional `cmd/enroll-agent` with explicit guided-v2 configuration; `cmd/agent-service` with explicit fixed-path operations and fresh combined read-admin setup | Verified OS reboot persistence, automatic renewal or remote updater; native Ubuntu TLS acceptance is recorded above; other host/profile combinations remain separate |
+| Linux endpoint | Native `cmd/lan-agent --config …`, one-shot or bounded foreground reporting; optional `cmd/enroll-agent` with explicit guided-v2 configuration; `cmd/agent-service` with explicit fixed-path operations and fresh combined read-admin setup | Verified OS reboot persistence, automatic renewal or remote updater; native evidence is linked in the read-admin guide; other host/profile combinations remain separate |
 | Windows endpoint | [Published unsigned x64 prerelease](windows-prerelease-install.md), bounded read-only inventory and shared dashboard; accepted hosted Windows Server 2025 subset in [Windows status](windows-status.md) | Windows 10/11, real Linux-manager/browser interoperability, interactive UAC/reboot/upgrade/full-removal proof or ARM64 runtime acceptance |
 | macOS endpoint | Native `cmd/agent` bounded stdout-only collector; limited platform reads | Supported LAN sender, installed service or fleet deployment |
 | Docker architectures | Linux amd64 TLS and explicit HTTP-test lifecycle gates; Linux arm64 cross-build support | arm64 runtime acceptance from cross-building alone |
@@ -324,7 +324,8 @@ bytes/timestamps and stops on invalid state/configuration. Ctrl+C/SIGTERM stops
 it; no service or boot persistence is installed. See the [sender contract](lan-agent.md)
 and [foreground loop](agent-loop.md).
 
-Windows/macOS: stop here for LAN installation. You may separately build/run the
+This Linux sender path does not apply to Windows/macOS. For Windows use its
+[separate setup guide](windows-status.md). You may separately build/run the
 stdout collector with `go build -buildvcs=false -trimpath -o bin/agent ./cmd/agent`
 on macOS (use `bin/agent.exe` on Windows) and its `--support-bundle` flag, but that
 prints local observation data and does not send it to this manager. Review/export
@@ -655,25 +656,19 @@ Installationsweg vor und frage vor Zugangsdaten-, Vertrauens-, Firewall- oder
 Dienständerungen. Erfinde keine Installer-/Enrollment-Befehle. Berichte klar,
 was wirklich getestet wurde und welche manuellen Schritte noch fehlen.“
 
-## Published unsigned Windows Setup preview
+## Windows installation paths
 
-The [fresh-host Windows Setup preview](windows-setup-preview.md) adds a native
-wizard with embedded versioned/hash-bound service payload, public manager-export
-selection, explicit five-scope/identity/service consent, hidden invitation entry
-and separate manager approval. It supports HTTPS by default and separately
-acknowledged disposable HTTP-test. The matching manager compatibility route is
-required before installation writes. The unsigned x64
-[v0.1.0-windows-preview.1](windows-prerelease-install.md) publishes exact bytes from
-an accepted hosted Windows Server 2025 subset. Read [Windows status](windows-status.md)
-for the exact source/run and unproven Windows 10/11, reboot, upgrade and ARM64
-boundaries. This does not establish acceptance on the user's host.
+The published unsigned x64 [Windows preview](windows-prerelease-install.md)
+contains a five-scope read-only setup and a limited hosted Server 2025 acceptance
+result. Use that release guide for its exact binaries and prerequisites.
 
-## Windows one-choice observation scope
+The current [Read admin source setup](windows-read-admin-setup.md) offers the complete
+explicitly disclosed read profile. It needs matching reviewed source-built Setup,
+service and manager artifacts, with actual consent unchecked. Native/provider
+acceptance and a new release remain pending. No Windows migration rollout is
+required for the current fresh-install target. [Current limits and priorities](windows-status.md).
 
-The [fresh Windows observation coordinator](windows-read-observation-setup.md)
-combines the five supported read scopes under one explicit upfront local choice.
-It stages a fresh SCM service disabled until activation and protected grants are
-verified. The published preview contains this five-scope flow. Existing Windows
-identities and grants are not promoted. New cached-Update source support requires
-its own [local approval and native acceptance](windows-update-runtime.md) and is
-not included in those published bytes.
+Both paths require protected setup resources, hidden invitation entry, deliberate
+fingerprint approval and appropriate host authorization. Keep the service staged
+disabled until activation and exact grants are verified. Neither path grants
+selected message content, cached updates or service control implicitly.

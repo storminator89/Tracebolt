@@ -1,89 +1,63 @@
-# Help and guides
+# Guides
 
-Start with the task you want to complete. Tracebolt is a self-hosted development
-pilot; feature implementation, a published artifact and native host acceptance
-are separate milestones. Detailed design documents may describe unreleased
-source candidates. Follow each guide's status and platform limits.
+Start with the task you want to complete. The [project overview](../README.md)
+describes current development functionality. The published endpoint prereleases
+have their own installation guides and narrower feature sets.
 
-## Start here
+## Setup
 
-| I want to… | Read this |
-| --- | --- |
-| Try the dashboard locally | [Local demo](../README.md#try-the-local-dashboard) |
-| Run the manager on Linux or Docker | [Installation runbook](installation.md) and [Docker packaging](docker.md) |
-| Connect a fresh supported Linux machine | [Verified dashboard download](dashboard-verified-download.md), then [read-admin scope and onboarding](read-admin-onboarding.md) |
-| Update a completed Linux read-admin installation | [Same-identity, same-scope update](read-admin-upgrade.md) |
-| Add inventory to an existing activated Linux agent | [One-time inventory setup](guided-inventory-setup.md) |
-| Understand Windows availability | [Windows status](windows-status.md), then [unsigned prerelease guide](windows-prerelease-install.md) |
-| Evaluate a Raspberry Pi or Linux ARM64 endpoint | [ARM64 support and native acceptance gates](linux-arm64-support.md) |
-| Diagnose a failed or incomplete setup | [Troubleshooting](troubleshooting.md) |
+- [Local dashboard demo](../README.md#try-the-local-dashboard)
+- [Linux/Docker manager installation](installation.md)
+- [Connect a Linux device](dashboard-verified-download.md) and [review its read-admin scope](read-admin-onboarding.md)
+- [Windows current functionality and limits](windows-status.md)
+- [Current Windows Read admin setup](windows-read-admin-setup.md), source only
+- [Install the older published Windows preview](windows-prerelease-install.md)
+- [Troubleshoot missing data or incomplete setup](troubleshooting.md)
 
-Linux `v0.1.0-rc.3` and the unsigned x64 Windows
-`v0.1.0-windows-preview.1` are published endpoint prereleases. The local demo is separate from authenticated LAN operation;
-copying a demo command does not deploy a manager or connect real endpoints.
+## Everyday use
 
-## Use the dashboard
+- **Devices:** search reported hostnames/IPs, open a device, and check original
+  observation time and source coverage. [Fleet identity](fleet-endpoint-identity.md),
+  [Windows identity](windows-fleet-identity.md), [resource history](resource-history.md).
+- **Inventory:** browse/search the collected generation. Linux has separate
+  [process/mount](complete-overview-extension.md) and package data; Windows has
+  [services](windows-full-services-contract.md) and
+  [machine software](windows-full-software-contract.md). A bounded sample is not
+  a complete inventory.
+- **Logs:** choose an exact [Linux service and time window](journal-content-mvp.md)
+  or approved [retained service history](retained-journal-browsing.md). Windows
+  offers [event-header browsing](windows-logs-sample-browser.md) and separately
+  approved [selected messages](windows-event-content-runtime.md).
+- **Storage:** [drive-letter mappings and physical-disk provider context](windows-storage-context.md), with independent source coverage and no inferred disk-health verdict.
+- **Updates and security:** inspect [cached APT candidates](complete-cached-updates-extension.md)
+  and [Linux CVE coverage](linux-cve-warnings.md), or Windows
+  [build/history/reboot context](windows-patch-context.md),
+  [cached updates](windows-update-runtime.md) and [Defender/Firewall posture](windows-security-posture.md).
+- **Health:** [Linux checks](health-dashboard.md); Windows
+  [disk](windows-capacity-health.md), [CPU/RAM](windows-resource-health.md) and
+  [selected-service](windows-service-health.md) policies.
+- **Optional settings:** [application checks](application-checks.md),
+  [DNS/TCP checks](application-network-checks.md), [webhook alarms](alarm-delivery.md),
+  [Health AI](proactive-ai-diagnostics.md) and [service-log AI](proactive-service-log-ai.md).
 
-- **Devices and inventory:** [hostname/interface identity](endpoint-identity-ui.md),
-  [complete process/mount overview](complete-overview-extension.md),
-  [Windows inventory](windows-inventory-dashboard.md),
-  [Windows volume capacity](windows-volume-inventory.md),
-  [process CPU/RAM](windows-process-metrics.md) and
-  [numeric network endpoints](windows-network-endpoints.md).
-- **Performance and Health:** [24-hour resource history](resource-history.md),
-  [Linux Health](health-dashboard.md),
-  [Windows system-volume observations](windows-health-observations.md),
-  [opt-in Windows capacity checks](windows-capacity-health.md),
-  [CPU and physical-RAM policies](windows-resource-health.md) and
-  [Windows event-header Health](windows-event-health.md).
-- **Logs:** [Linux exact-service captures](journal-content-mvp.md),
-  [retained journal browsing](retained-journal-browsing.md) and
-  [Windows accepted event-header samples](windows-logs-sample-browser.md).
-  Windows Logs does not fetch message bodies or older event history.
-- **Packages and findings:** [complete cached APT candidates](complete-cached-updates-extension.md)
-  and [Debian/Ubuntu CVE coverage](linux-cve-warnings.md).
-  Cached candidates are not an installation guarantee. Separate
-  [Selected Windows event messages](windows-event-content-runtime.md) connect exact
-  header selection to an expiring private Logs view under separate local consent.
-  [Windows patch context](windows-patch-context.md) covers build, retained history and checked reboot indicators in source;
-  [Windows cached Update inspection](windows-update-runtime.md) is a default-off
-  source candidate with native acceptance still pending.
-- **Checks and notifications:** [application checks](application-checks.md),
-  [DNS/TCP checks](application-network-checks.md) and [alarm delivery](alarm-delivery.md).
-  Provider acceptance does not prove that a person received an alert.
-- **Optional AI:** [Health-based suggestions](proactive-ai-diagnostics.md),
-  [separately approved service-log AI](proactive-service-log-ai.md) and
-  [optional settings persistence](ai-settings-persistence.md).
+Opening a view does not grant collection, service control or external data
+sharing. A fresh report is not an overall health verdict. Unavailable, partial
+and stale results retain their original meaning.
 
-Opening a view does not grant an endpoint new permissions. A selected profile
-is not proof of received data. Keep original observation times, partial results
-and unavailable sources in view; [troubleshooting](troubleshooting.md) explains
-common empty, stale and pending states.
+## Operations and technical references
 
-## Operate safely
+- [Trust and TLS](lan-trust.md), [named operators](named-operator-auth.md) and [security boundaries](lan-security-review.md)
+- [Backup, restore and removal](installation.md#10-stop-back-up-restore-update-uninstall)
+- [Windows retained state and service removal](windows-setup-preview.md#cancellation-retained-state-and-service-removal)
+- [Support bundle and review before sharing](support-bundle.md)
+- Separate controlled-action scope: [Linux services](guided-service-action-setup.md),
+  [Windows services](windows-service-actions.md), [selected APT updates](selected-package-updates-native.md)
+- Existing development interfaces: [Linux read-admin update](read-admin-upgrade.md)
+  and [inventory opt-in](guided-inventory-setup.md)
+- [Frontend development](../web/README.md), [LAN runtime](lan-runtime.md),
+  [client tests](../tests/lanclient/README.md), [Windows packaging](windows-setup-release.md)
+- [Product scope](product-plan.md), [Windows priorities](windows-admin-roadmap.md), [Linux priorities](roadmap.md)
 
-- [Preflight and approval checklist](installation.md#2-preflight-and-approval-checklist)
-- [TLS, identities and trust](lan-trust.md)
-- [Backup, update, rollback and removal](installation.md#10-stop-back-up-restore-update-uninstall)
-- [Linux read-admin upgrade](read-admin-upgrade.md)
-- [Windows cancellation and retained state](windows-setup-preview.md#cancellation-retained-state-and-service-removal)
-- [Local own-agent Windows restart source candidate](windows-own-service-restart.md)
-- [Local support bundle and review before sharing](support-bundle.md)
-- [Security review and boundaries](lan-security-review.md)
-
-Service actions and native APT installation have their own local authorization
-and acceptance gates. They are not enabled by ordinary read-only onboarding:
-[service-action setup](guided-service-action-setup.md) ·
-[selected package updates](selected-package-updates-native.md).
-
-## Develop and review
-
-[Repository instructions](../AGENTS.md) · [Frontend workflow](../web/README.md) ·
-[LAN runtime](lan-runtime.md) · [LAN client tests](../tests/lanclient/README.md) ·
-[Windows packaging](windows-setup-release.md) · [UI acceptance history](ui-acceptance.md) ·
-[Current screenshot gallery](screenshots/2026-10-09-main-ui/README.md) ·
-[Roadmap](roadmap.md) · [Changelog](../CHANGELOG.md)
-
-Screenshots show actual rendered UI with invented fixtures. Their linked
-source/run records establish what was captured; they do not establish native
-collection, endpoint installation or production readiness.
+Scope contracts, release manifests and acceptance records remain alongside the
+implementation they describe. Prior milestone/test narratives are kept in the
+[archive](archive/README.md); they are not current setup instructions.

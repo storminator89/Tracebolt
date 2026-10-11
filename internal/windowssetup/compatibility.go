@@ -17,6 +17,8 @@ const ReadAdminContract = "fresh-twelve-read-admin-scopes-v1"
 // V2 is a distinct public route; the old advertisements retain exact bytes.
 const ReadAdminCapabilitiesPathV2 = "/v1/windows/read-admin-setup-capabilities-v2"
 const ReadAdminContractV2 = "fresh-thirteen-read-admin-scopes-v1"
+const ReadAdminCapabilitiesPathV3 = "/v1/windows/read-admin-setup-capabilities-v3"
+const ReadAdminContractV3 = "fresh-fourteen-read-admin-scopes-v1"
 
 var ErrCompatibility = errors.New("manager is unavailable or does not support this Windows Setup contract; update the manager and obtain a new Windows bootstrap export")
 
@@ -46,6 +48,11 @@ func ExpectedReadAdminV2(manager, enrollment, agent string) Capabilities {
 	c.SetupContract = ReadAdminContractV2
 	return c
 }
+func ExpectedReadAdminV3(manager, enrollment, agent string) Capabilities {
+	c := Expected(manager, enrollment, agent)
+	c.SetupContract = ReadAdminContractV3
+	return c
+}
 
 func CapabilityPath(c Capabilities) (string, error) {
 	switch c.SetupContract {
@@ -55,6 +62,8 @@ func CapabilityPath(c Capabilities) (string, error) {
 		return ReadAdminCapabilitiesPath, nil
 	case ReadAdminContractV2:
 		return ReadAdminCapabilitiesPathV2, nil
+	case ReadAdminContractV3:
+		return ReadAdminCapabilitiesPathV3, nil
 	}
 	return "", ErrCompatibility
 }
@@ -62,7 +71,7 @@ func CapabilityPath(c Capabilities) (string, error) {
 // Match accepts only the exact bounded canonical finite contract. Old or newer
 // incompatible support cannot be mistaken for the exact selected receiver.
 func Match(raw []byte, expected Capabilities) error {
-	if len(raw) == 0 || len(raw) > 2048 || expected.SchemaVersion != CapabilitiesVersion || (expected.SetupContract != FreshReadContract && expected.SetupContract != ReadAdminContract && expected.SetupContract != ReadAdminContractV2) || expected.ManagerInstanceID == "" || expected.EnrollmentOrigin == "" || expected.AgentOrigin == "" || expected.CollectionProfile != "windows-inventory-v1" {
+	if len(raw) == 0 || len(raw) > 2048 || expected.SchemaVersion != CapabilitiesVersion || (expected.SetupContract != FreshReadContract && expected.SetupContract != ReadAdminContract && expected.SetupContract != ReadAdminContractV2 && expected.SetupContract != ReadAdminContractV3) || expected.ManagerInstanceID == "" || expected.EnrollmentOrigin == "" || expected.AgentOrigin == "" || expected.CollectionProfile != "windows-inventory-v1" {
 		return ErrCompatibility
 	}
 	var got Capabilities

@@ -1,111 +1,81 @@
-# Windows daily-administration roadmap
+# Windows priorities
 
-Updated 11 October 2026. This is the prioritized product plan, not a list of
-released capabilities. Deliver working collector → manager → dashboard slices;
-use focused functional/security regressions and required CI rather than delaying
-features for marginal test polish. A confirmed authorization or data-integrity
-defect still blocks the affected feature.
+The immediate goal is useful, dependable Admin data in the shared dashboard.
+Finish these source features first, then validate fresh native installation and
+publish compatible artifacts. Current development and the older downloadable
+preview are described in [Windows status](windows-status.md).
 
-Current delivery targets a fresh clean development installation. There are no
-existing user installations, and publishing a preview does not establish a
-deployed user base. Migration, old-to-new binary upgrade and existing-agent
-reconsent are not current release/delivery gates. Preserve historical code and
-evidence; native fresh-install, provider and explicit consent acceptance remain.
-Delivery order: finish the current package, then missing Admin data, then native
-acceptance/release, then broader management. Integrated remote desktop remains
-deferred. Read admin is the prominent fresh Setup profile with concise groups, optional
-full details and initially unchecked scope consent. Service control remains a
-separate optional approval.
+There are no existing user installations. Migration, binary upgrade and
+reconsent are not delivery gates for this fresh-install target. Integrated
+remote desktop is deferred.
 
-## Current starting point
+## Already in the source
 
-- **Published:** unsigned x64 Windows preview.1, source `14719116`, with five
-  explicitly approved observation scopes. Its accepted native subset is fresh
-  Windows Server 2025 x64 with a fixture manager.
-- **Merged, not released:** tree `5086354` on main `04fd9413` adds separately
-  consented selected event messages and offline WUA cache inspection, Windows
-  resource/selected-service policies, and local receipt-bound own-agent restart.
-  Source/hosted CI is not installed-feature or Windows 11 acceptance.
-- **Merged, not released ([PR #40](https://github.com/storminator89/Tracebolt/pull/40)):** complete caller-visible Win32 service and separately
-  consented HKLM 32/64 machine software registration generations, bounded transport,
-  server-side search and paging. Native acceptance and release remain separate gates. The existing service-health chooser still uses its bounded preview;
-  complete browsing does not silently expand alarm authority.
-- **Merged, not released ([PR #39](https://github.com/storminator89/Tracebolt/pull/39)):**
-  fleet search/display using already-reported Windows hostname and interface IPs.
-  Existing Linux identity scope and stable device routing IDs remain separate;
-  native acceptance remains a separate gate.
+- Complete caller-visible Win32 services and HKLM 32/64 machine software
+  generations, with bounded search/paging
+- Fleet hostname/IP search, resource observations and independent optional
+  disk/CPU/RAM/selected-service checks
+- Adapter link/DNS/gateway, build/update history/reboot, Defender/Firewall,
+  session/join, hardware/firmware/power and drive-letter/provider-disk context
+- Event headers, separately approved selected messages and offline cached updates
+- Concise fresh Read admin setup with explicit unchecked consent; service control
+  remains separately optional
 
-The published preview still transmits at most 128 process, service and software
-rows per section, potentially fewer under the byte budget. Browsing a page of
-that sample is not complete inventory. Software currently means HKLM uninstall
-registrations; offline update candidates are not a patch-compliance verdict.
+Implementation is not a release or native provider-access result. The
+[individual scope guides](windows-read-admin-setup.md) define the coverage and
+exclusions; do not treat a complete registration list as every installed app.
 
-## Prioritized delivery
+## Missing Admin data
 
-| Order | Increment and useful admin outcome | Status and boundary |
-| --- | --- | --- |
-| 1 | **Dependable inventories:** finish all caller-visible Win32 services; then complete machine-wide software registrations and processes with generation-bound search/paging. Find an item beyond the old 128-row sample and distinguish absent from unreadable/incomplete. | Services and machine software registrations are implemented as separate default-off source scopes; complete processes remain planned. Machine software covers caller-visible HKLM 32/64 uninstall registrations, with optional-field quality and duplicate registrations preserved. Per-user/MSIX/Store coverage needs an explicit user-context design; LocalService HKCU is not the logged-on user. Arbitrary portable EXEs cannot be promised discoverable without a separately approved filesystem scope. |
-| 2 | **Recognizable fleet:** search and display Windows reported hostname/IPv4/IPv6, original age and partial coverage. Later add cross-device inventory queries. | Merged PR #39; native evidence and release remain separate. Uses existing consented metadata without additional collection, IP-based routing, DNS lookup or provider export. Missing/stale identity stays visible. |
-| 3 | **Patch and security posture:** Windows edition/release/build revision, installed-update history, applicable update freshness and global pending-reboot reasons; Defender/AV status, firewall profiles, BitLocker state, Secure Boot and TPM state. | [Edition/release/build, bounded retained history and three reboot indicators](windows-patch-context.md) now have a separate default-off source implementation; native acceptance remains pending. [Defender and local Firewall posture](windows-security-posture.md) also have a separate default-off source slice with independent provider workers and a private Security view; native acceptance remains pending. Freshness/CVE, third-party AV inventory, BitLocker, Secure Boot and TPM remain planned. Show unavailable/unsupported/error explicitly; no “secure” or “fully patched” verdict from absent data. Cached WUA remains offline unless a separately disclosed future online scope is approved. Never collect recovery keys, credentials or key material; no update installation, reboot, firewall/AV changes or remediation implied. |
-| 4 | **Network diagnosis:** DNS configuration, default gateways/routes, adapter link state/speed and traffic/error counters alongside existing numeric socket observations. | Adapter link state/speed and numeric DNS/gateway context are an independently consented source candidate; native acceptance remains pending. Routes and traffic/error counters remain planned. No packet payload capture, credential collection, automatic probes or stable process ownership inferred from a PID snapshot. |
-| 5 | **Storage/performance diagnosis:** familiar drive letters and volume mapping, I/O latency/queues/throughput, physical disk/SMART health where supported, and memory commit/pagefile pressure. | Planned incremental fields and UI. Capacity is not disk health; working set is not private/committed allocation. Report inaccessible, virtual/RAID and unsupported measurements honestly; no driver installation or elevation to obtain a value. |
-| 6 | **Help-desk context:** active/disconnected console and RDP sessions, domain/join state, hardware make/model/serial, CPU/RAM configuration, BIOS/firmware and laptop battery state. | [Caller-visible Sessions/join](windows-session-context.md) and [hardware/firmware/power](windows-hardware-context.md) are implemented source slices. Fresh Read admin v6 explicitly discloses personal labels and identifying serial metadata; native acceptance remains deferred. CPU/RAM module configuration remains planned. Keep collection least-privileged and optional; no user-profile crawling, session control, passwords, tokens or private documents. |
-| 7 | **Changes and historical troubleshooting:** software install/remove/version-change history, useful inventory diffs, bounded event time-range/older-event retrieval and source-wide search with continuation. | Planned. Compare complete compatible generations; missing/partial capture must not invent an uninstall. Preserve capture/receipt times and distinguish log rollover/clears/lost continuation. Additional channels and retained message content require explicit scope/retention. Current message search covers only already fetched selected messages. |
-| 8 | **Operational follow-through:** link evidence to purposeful incident acknowledgement/maintenance/delivery, and later separately approved exact Windows service/update actions. | Planned after reliable read-only evidence. Existing alarms and provider approvals do not grant new data sharing or privileged actions. Local Tracebolt restart is not remote control of arbitrary services. |
+Drive-letter mapping and physical-disk provider status are implemented in source.
+The remaining data areas below can progress independently.
 
-## Common delivery rules
+1. **Storage and performance.** Extend [drive/volume and provider context](windows-storage-context.md) with I/O latency,
+   queue/throughput and memory commit/pagefile pressure. Add physical disk/SMART
+   information only where safely supported. Capacity is not disk health; no
+   driver installation or elevation to fill a missing field.
+2. **Complete process inventory.** Use one coherent generation with search/paging,
+   visible collection limits and unambiguous missing/denied results. Broader
+   software coverage needs its own user-context design; per-user/Store and
+   portable apps are not covered by machine HKLM registrations.
+3. **Security and patch detail.** BitLocker state, Secure Boot/TPM, third-party AV
+   and trustworthy update freshness/applicability/CVE evidence. Never read
+   recovery keys or infer “secure” or “fully patched” from absent data.
+4. **Network and hardware detail.** Routes, traffic/error counters and CPU/RAM
+   configuration, with honest virtual/unsupported/provider limits. No automatic
+   probes, packet content or privilege expansion.
+5. **Changes and history.** Software version/install/remove changes from comparable
+   complete generations; useful inventory diffs; bounded older-event retrieval,
+   continuation and search. Partial captures must not invent an uninstall or
+   erase log gaps. Broader content/retention requires explicit scope.
 
-Every increment includes its actual data source and caller-visible coverage,
-source failures, bounded work/transport/storage, original capture/receipt age,
-and a usable English/German screen. Keep one coherent generation across pages;
-do not hide truncation or treat unknown as healthy. A manager update must not
-promote existing endpoint consent into broader collection. Named-operator access,
-session expiry and revocation must apply to the new view; metadata does not
-automatically enter AI, exports or notifications.
+## Native acceptance and release
 
-For each slice, demonstrate the production path with synthetic fixtures and
-focused regressions, then ordinary exact-source CI. Mark native acceptance
-separately and state which OS/architecture and installed identities were tested.
-Do not let an extra manual native grant block unrelated source development.
+After missing Admin data is complete, validate the exact matching Setup, service,
+manager and dashboard on fresh Windows targets. The
+[Windows 11 checklist](windows11-acceptance-matrix.md) covers real installation,
+human UAC, hidden invitation/identity approval, service-token reads and actual
+manager/browser data. A hosted Server 2025 result is not Windows 11 evidence.
 
-## Deferred interaction scope
+Keep source CI, browser fixtures and native results distinct. Reboot/sleep,
+signing, ARM64 and complete removal need explicit evidence. Do not reuse the
+published five-scope approval as consent for the current Read admin profile.
 
-Integrated remote desktop is deferred. Keep the current work focused on useful
-administrative observation and separately authorized, narrowly targeted service
-management. This deferral does not remove the planned exact Windows service
-actions or imply approval for any remote control, service mutation or host grant.
+## Later management work
 
-## Windows 11 and lifecycle gate
+Connect trustworthy evidence to incident acknowledgement, maintenance and
+notifications. Broader exact-target service/update actions require separately
+reviewed authority, explicit approval, least-privilege execution and durable
+one-use records. Local Tracebolt restart is not arbitrary remote control.
+Remote desktop, general file management and unattended remediation remain out
+of the current scope.
 
-Windows 11 x64 is an intended desktop target consistent with the current production
-API/manifests; it has no native acceptance result yet. The
-[explicit Windows 11 matrix](windows11-acceptance-matrix.md) covers installation,
-human UAC, service identity, real enrollment/manager/browser, data sources,
-update cache, events, full services, own-agent restart and retained-state removal.
-The existing Server 2025 controllers have exact target locks and must not be
-relabeled as desktop evidence. `windows-latest` is not Windows 11 proof.
+## Rules for every feature
 
-Reboot/sleep recovery, signing, ARM64 runtime and deliberate complete uninstall
-remain separate lifecycle work. Existing upgrade/repair source is historical
-development work, not a migration plan or a gate for this fresh-install target. No date or full
-parity claim is made by this roadmap. See [current Windows status](windows-status.md),
-[the historical Linux/Windows comparison](windows-linux-parity.md), and
-[complete service scope](windows-full-services-contract.md), and
-[machine software scope](windows-full-software-contract.md).
-
-## Adapter context source candidate
-
-The existing Network tab now has a separately consented, bounded source path for
-native operational state, directional link speeds and numeric DNS/gateway
-configuration. See [the scope and remaining native gate](windows-adapter-context.md).
-Route tables and traffic byte/error counters remain open; source checks do not
-establish Windows runtime acceptance or a released feature.
-
-### Caller-visible session context
-
-[Users / Sessions](windows-session-context.md) is now a separate default-off
-source slice with bounded local WTS rows and independent local domain/workgroup
-join context, explicit personal-metadata disclosure and private EN/DE UI. It does
-not establish full account discovery or directory/connectivity health. Native
-acceptance remains pending; hosted synthetic browser evidence is separate from provider proof; account management
-and integrated remote desktop remain deferred.
+Keep screens compact, readable and bilingual, with useful screenshots rather
+than repeated status prose. Show source, original age, bounds and failure states.
+Unknown is not healthy. New collection is default-off and explicitly disclosed;
+manager updates do not expand local grants. Preserve session expiry/revocation
+and keep operator-only metadata out of AI, exports and notifications unless
+separately approved. Use focused regressions and required CI; a real authorization
+or data-integrity defect blocks the affected feature.

@@ -19,6 +19,7 @@ import (
 	"localrmm/internal/windowsprocessmetrics"
 	"localrmm/internal/windowssecurity"
 	"localrmm/internal/windowssessions"
+	"localrmm/internal/windowsstorage"
 	"localrmm/internal/windowsupdates"
 	"localrmm/internal/windowsvolumes"
 	"reflect"
@@ -32,6 +33,7 @@ const FrameOperationalVersion = "tracebolt.agent-telemetry.v2"
 const FramePackagesVersion = "tracebolt.agent-telemetry.v3"
 const FrameWindowsProcessMetricsVersion = "tracebolt.agent-telemetry.windows.v4"
 const FrameWindowsHardwareContextVersion = "tracebolt.agent-telemetry.windows.v12"
+const FrameWindowsStorageContextVersion = "tracebolt.agent-telemetry.windows.v13"
 const FrameWindowsSessionContextVersion = "tracebolt.agent-telemetry.windows.v11"
 const FrameWindowsSecurityPostureVersion = "tracebolt.agent-telemetry.windows.v10"
 const FrameWindowsPatchContextVersion = "tracebolt.agent-telemetry.windows.v9"
@@ -53,6 +55,7 @@ var ErrStale = errors.New("agent observation is stale or future-dated")
 
 type Frame struct {
 	WindowsHardwareContext *windowshardware.Snapshot              `json:"windowsHardwareContext,omitempty"`
+	WindowsStorageContext  *windowsstorage.Snapshot               `json:"windowsStorageContext,omitempty"`
 	WindowsSessionContext  *windowssessions.Snapshot              `json:"windowsSessionContext,omitempty"`
 	WindowsSecurityPosture *windowssecurity.Snapshot              `json:"windowsSecurityPosture,omitempty"`
 	SchemaVersion          string                                 `json:"schemaVersion"`
@@ -357,6 +360,33 @@ func ValidateFrame(raw []byte, now time.Time) (Frame, error) {
 		}
 		shapeType = reflect.StructOf(fields)
 	}
+	if object["schemaVersion"] == FrameWindowsStorageContextVersion {
+		fields := []reflect.StructField{
+			{Name: "SchemaVersion", Type: reflect.TypeOf(""), Tag: `json:"schemaVersion"`},
+			{Name: "Sequence", Type: reflect.TypeOf(uint64(0)), Tag: `json:"sequence"`},
+			{Name: "Observation", Type: reflect.TypeOf(bundle.Bundle{}), Tag: `json:"observation"`},
+			{Name: "WindowsInventory", Type: reflect.TypeOf((*windowsmanaged.Snapshot)(nil)), Tag: `json:"windowsInventory"`},
+			{Name: "WindowsStorageContext", Type: reflect.TypeOf((*windowsstorage.Snapshot)(nil)), Tag: `json:"windowsStorageContext"`},
+		}
+		for _, field := range []reflect.StructField{
+			{Name: "WindowsHardwareContext", Type: reflect.TypeOf((*windowshardware.Snapshot)(nil)), Tag: `json:"windowsHardwareContext"`},
+			{Name: "WindowsSessionContext", Type: reflect.TypeOf((*windowssessions.Snapshot)(nil)), Tag: `json:"windowsSessionContext"`},
+			{Name: "WindowsSecurityPosture", Type: reflect.TypeOf((*windowssecurity.Snapshot)(nil)), Tag: `json:"windowsSecurityPosture"`},
+			{Name: "WindowsPatchContext", Type: reflect.TypeOf((*windowspatchcontext.Snapshot)(nil)), Tag: `json:"windowsPatchContext"`},
+			{Name: "WindowsAdapterContext", Type: reflect.TypeOf((*windowsadapters.Snapshot)(nil)), Tag: `json:"windowsAdapterContext"`},
+			{Name: "WindowsUpdates", Type: reflect.TypeOf((*windowsupdates.Snapshot)(nil)), Tag: `json:"windowsUpdates"`},
+			{Name: "WindowsEvents", Type: reflect.TypeOf((*windowseventhealth.Snapshot)(nil)), Tag: `json:"windowsEvents"`},
+			{Name: "WindowsVolumes", Type: reflect.TypeOf((*windowsvolumes.Snapshot)(nil)), Tag: `json:"windowsVolumes"`},
+			{Name: "WindowsProcessMetrics", Type: reflect.TypeOf((*windowsprocessmetrics.Snapshot)(nil)), Tag: `json:"windowsProcessMetrics"`},
+			{Name: "WindowsNetwork", Type: reflect.TypeOf((*windowsnetwork.Snapshot)(nil)), Tag: `json:"windowsNetwork"`},
+			{Name: "WindowsServiceStartup", Type: reflect.TypeOf((*windowsmanaged.ServiceStartupSnapshot)(nil)), Tag: `json:"windowsServiceStartup"`},
+		} {
+			if _, present := object[field.Tag.Get("json")]; present {
+				fields = append(fields, field)
+			}
+		}
+		shapeType = reflect.StructOf(fields)
+	}
 	if !shape(value, shapeType) {
 		return frame, ErrFrame
 	}
@@ -381,7 +411,7 @@ func ValidateFrame(raw []byte, now time.Time) (Frame, error) {
 		return frame, ErrFrame
 	}
 	b := frame.Observation
-	if (frame.SchemaVersion != FrameVersion && frame.SchemaVersion != FrameOperationalVersion && frame.SchemaVersion != FramePackagesVersion && frame.SchemaVersion != FrameWindowsInventoryVersion && frame.SchemaVersion != FrameWindowsEventsVersion && frame.SchemaVersion != FrameWindowsCapabilitiesVersion && frame.SchemaVersion != FrameWindowsProcessMetricsVersion && frame.SchemaVersion != FrameWindowsNetworkVersion && frame.SchemaVersion != FrameWindowsServiceStartupVersion && frame.SchemaVersion != FrameWindowsUpdatesVersion && frame.SchemaVersion != FrameWindowsAdapterContextVersion && frame.SchemaVersion != FrameWindowsPatchContextVersion && frame.SchemaVersion != FrameWindowsSecurityPostureVersion && frame.SchemaVersion != FrameWindowsSessionContextVersion && frame.SchemaVersion != FrameWindowsHardwareContextVersion) || frame.Sequence == 0 || frame.Sequence > 1<<63-1 || b.SchemaVersion != bundle.SchemaVersion || b.Product != "Tracebolt" || b.Version == "" || len(b.Version) > 64 || b.Platform != b.Observation.Platform || b.Scope != "single-read-only-local-observation" {
+	if (frame.SchemaVersion != FrameVersion && frame.SchemaVersion != FrameOperationalVersion && frame.SchemaVersion != FramePackagesVersion && frame.SchemaVersion != FrameWindowsInventoryVersion && frame.SchemaVersion != FrameWindowsEventsVersion && frame.SchemaVersion != FrameWindowsCapabilitiesVersion && frame.SchemaVersion != FrameWindowsProcessMetricsVersion && frame.SchemaVersion != FrameWindowsNetworkVersion && frame.SchemaVersion != FrameWindowsServiceStartupVersion && frame.SchemaVersion != FrameWindowsUpdatesVersion && frame.SchemaVersion != FrameWindowsAdapterContextVersion && frame.SchemaVersion != FrameWindowsPatchContextVersion && frame.SchemaVersion != FrameWindowsSecurityPostureVersion && frame.SchemaVersion != FrameWindowsSessionContextVersion && frame.SchemaVersion != FrameWindowsHardwareContextVersion && frame.SchemaVersion != FrameWindowsStorageContextVersion) || frame.Sequence == 0 || frame.Sequence > 1<<63-1 || b.SchemaVersion != bundle.SchemaVersion || b.Product != "Tracebolt" || b.Version == "" || len(b.Version) > 64 || b.Platform != b.Observation.Platform || b.Scope != "single-read-only-local-observation" {
 		return frame, ErrFrame
 	}
 	if len(b.Architecture) == 0 || len(b.Architecture) > 32 || len(b.Privacy) > 16 {
@@ -397,10 +427,10 @@ func ValidateFrame(raw []byte, now time.Time) (Frame, error) {
 		return frame, ErrFrame
 	}
 	if frame.SchemaVersion == FrameVersion {
-		if frame.Operational != nil || frame.Packages != nil || frame.WindowsInventory != nil || frame.WindowsEvents != nil || frame.WindowsVolumes != nil || frame.WindowsProcessMetrics != nil || frame.WindowsNetwork != nil || frame.WindowsServiceStartup != nil || frame.WindowsUpdates != nil || frame.WindowsAdapterContext != nil || frame.WindowsPatchContext != nil || frame.WindowsSecurityPosture != nil || frame.WindowsSessionContext != nil || frame.WindowsHardwareContext != nil {
+		if frame.Operational != nil || frame.Packages != nil || frame.WindowsInventory != nil || frame.WindowsEvents != nil || frame.WindowsVolumes != nil || frame.WindowsProcessMetrics != nil || frame.WindowsNetwork != nil || frame.WindowsServiceStartup != nil || frame.WindowsUpdates != nil || frame.WindowsAdapterContext != nil || frame.WindowsPatchContext != nil || frame.WindowsSecurityPosture != nil || frame.WindowsSessionContext != nil || frame.WindowsHardwareContext != nil || frame.WindowsStorageContext != nil {
 			return frame, ErrFrame
 		}
-	} else if frame.SchemaVersion == FrameWindowsInventoryVersion || frame.SchemaVersion == FrameWindowsEventsVersion || frame.SchemaVersion == FrameWindowsCapabilitiesVersion || frame.SchemaVersion == FrameWindowsProcessMetricsVersion || frame.SchemaVersion == FrameWindowsNetworkVersion || frame.SchemaVersion == FrameWindowsServiceStartupVersion || (frame.SchemaVersion == FrameWindowsUpdatesVersion || (frame.SchemaVersion == FrameWindowsAdapterContextVersion || (frame.SchemaVersion == FrameWindowsPatchContextVersion || (frame.SchemaVersion == FrameWindowsSecurityPostureVersion || (frame.SchemaVersion == FrameWindowsSessionContextVersion || frame.SchemaVersion == FrameWindowsHardwareContextVersion))))) {
+	} else if frame.SchemaVersion == FrameWindowsInventoryVersion || frame.SchemaVersion == FrameWindowsEventsVersion || frame.SchemaVersion == FrameWindowsCapabilitiesVersion || frame.SchemaVersion == FrameWindowsProcessMetricsVersion || frame.SchemaVersion == FrameWindowsNetworkVersion || frame.SchemaVersion == FrameWindowsServiceStartupVersion || (frame.SchemaVersion == FrameWindowsUpdatesVersion || (frame.SchemaVersion == FrameWindowsAdapterContextVersion || (frame.SchemaVersion == FrameWindowsPatchContextVersion || (frame.SchemaVersion == FrameWindowsSecurityPostureVersion || (frame.SchemaVersion == FrameWindowsSessionContextVersion || (frame.SchemaVersion == FrameWindowsHardwareContextVersion || frame.SchemaVersion == FrameWindowsStorageContextVersion)))))) {
 		if frame.Sequence > operational.MaxSafeInteger || frame.Operational != nil || frame.Packages != nil || frame.WindowsInventory == nil || b.Platform != "windows" || windowsmanaged.Validate(*frame.WindowsInventory) != nil || len(encoded) > MaxPackageObservationBytes {
 			return frame, ErrFrame
 		}
@@ -411,7 +441,7 @@ func ValidateFrame(raw []byte, now time.Time) (Frame, error) {
 		if _, err := windowsmanaged.Decode(members["windowsInventory"]); err != nil {
 			return frame, ErrFrame
 		}
-		if frame.SchemaVersion == FrameWindowsEventsVersion || (frame.SchemaVersion == FrameWindowsCapabilitiesVersion || frame.SchemaVersion == FrameWindowsProcessMetricsVersion || frame.SchemaVersion == FrameWindowsNetworkVersion || frame.SchemaVersion == FrameWindowsServiceStartupVersion || (frame.SchemaVersion == FrameWindowsUpdatesVersion || (frame.SchemaVersion == FrameWindowsAdapterContextVersion || (frame.SchemaVersion == FrameWindowsPatchContextVersion || (frame.SchemaVersion == FrameWindowsSecurityPostureVersion || (frame.SchemaVersion == FrameWindowsSessionContextVersion || frame.SchemaVersion == FrameWindowsHardwareContextVersion)))))) && frame.WindowsEvents != nil {
+		if frame.SchemaVersion == FrameWindowsEventsVersion || (frame.SchemaVersion == FrameWindowsCapabilitiesVersion || frame.SchemaVersion == FrameWindowsProcessMetricsVersion || frame.SchemaVersion == FrameWindowsNetworkVersion || frame.SchemaVersion == FrameWindowsServiceStartupVersion || (frame.SchemaVersion == FrameWindowsUpdatesVersion || (frame.SchemaVersion == FrameWindowsAdapterContextVersion || (frame.SchemaVersion == FrameWindowsPatchContextVersion || (frame.SchemaVersion == FrameWindowsSecurityPostureVersion || (frame.SchemaVersion == FrameWindowsSessionContextVersion || (frame.SchemaVersion == FrameWindowsHardwareContextVersion || frame.SchemaVersion == FrameWindowsStorageContextVersion))))))) && frame.WindowsEvents != nil {
 			events, e := windowseventhealth.Decode(members["windowsEvents"])
 			if e != nil || events.GenerationID != frame.WindowsInventory.GenerationID || events.CollectedAt.After(b.GeneratedAt) {
 				return frame, ErrFrame
@@ -422,7 +452,7 @@ func ValidateFrame(raw []byte, now time.Time) (Frame, error) {
 		} else if frame.WindowsEvents != nil || len(members["windowsEvents"]) != 0 {
 			return frame, ErrFrame
 		}
-		if frame.SchemaVersion == FrameWindowsCapabilitiesVersion || (frame.SchemaVersion == FrameWindowsProcessMetricsVersion || frame.SchemaVersion == FrameWindowsNetworkVersion || frame.SchemaVersion == FrameWindowsServiceStartupVersion || (frame.SchemaVersion == FrameWindowsUpdatesVersion || (frame.SchemaVersion == FrameWindowsAdapterContextVersion || (frame.SchemaVersion == FrameWindowsPatchContextVersion || (frame.SchemaVersion == FrameWindowsSecurityPostureVersion || (frame.SchemaVersion == FrameWindowsSessionContextVersion || frame.SchemaVersion == FrameWindowsHardwareContextVersion)))))) && len(members["windowsVolumes"]) != 0 {
+		if frame.SchemaVersion == FrameWindowsCapabilitiesVersion || (frame.SchemaVersion == FrameWindowsProcessMetricsVersion || frame.SchemaVersion == FrameWindowsNetworkVersion || frame.SchemaVersion == FrameWindowsServiceStartupVersion || (frame.SchemaVersion == FrameWindowsUpdatesVersion || (frame.SchemaVersion == FrameWindowsAdapterContextVersion || (frame.SchemaVersion == FrameWindowsPatchContextVersion || (frame.SchemaVersion == FrameWindowsSecurityPostureVersion || (frame.SchemaVersion == FrameWindowsSessionContextVersion || (frame.SchemaVersion == FrameWindowsHardwareContextVersion || frame.SchemaVersion == FrameWindowsStorageContextVersion))))))) && len(members["windowsVolumes"]) != 0 {
 			volumes, e := windowsvolumes.Decode(members["windowsVolumes"])
 			if e != nil || volumes.GenerationID != frame.WindowsInventory.GenerationID || volumes.CollectedAt.After(b.GeneratedAt) {
 				return frame, ErrFrame
@@ -433,7 +463,7 @@ func ValidateFrame(raw []byte, now time.Time) (Frame, error) {
 		} else if frame.WindowsVolumes != nil {
 			return frame, ErrFrame
 		}
-		if frame.SchemaVersion == FrameWindowsProcessMetricsVersion || (frame.SchemaVersion == FrameWindowsNetworkVersion || frame.SchemaVersion == FrameWindowsServiceStartupVersion || (frame.SchemaVersion == FrameWindowsUpdatesVersion || (frame.SchemaVersion == FrameWindowsAdapterContextVersion || (frame.SchemaVersion == FrameWindowsPatchContextVersion || (frame.SchemaVersion == FrameWindowsSecurityPostureVersion || (frame.SchemaVersion == FrameWindowsSessionContextVersion || frame.SchemaVersion == FrameWindowsHardwareContextVersion)))))) && len(members["windowsProcessMetrics"]) != 0 {
+		if frame.SchemaVersion == FrameWindowsProcessMetricsVersion || (frame.SchemaVersion == FrameWindowsNetworkVersion || frame.SchemaVersion == FrameWindowsServiceStartupVersion || (frame.SchemaVersion == FrameWindowsUpdatesVersion || (frame.SchemaVersion == FrameWindowsAdapterContextVersion || (frame.SchemaVersion == FrameWindowsPatchContextVersion || (frame.SchemaVersion == FrameWindowsSecurityPostureVersion || (frame.SchemaVersion == FrameWindowsSessionContextVersion || (frame.SchemaVersion == FrameWindowsHardwareContextVersion || frame.SchemaVersion == FrameWindowsStorageContextVersion))))))) && len(members["windowsProcessMetrics"]) != 0 {
 			metrics, e := windowsprocessmetrics.Decode(members["windowsProcessMetrics"])
 			if e != nil || metrics.GenerationID != frame.WindowsInventory.GenerationID || metrics.CollectedAt.After(b.GeneratedAt) || metrics.CollectedAt.Before(frame.WindowsInventory.CollectedAt) {
 				return frame, ErrFrame
@@ -456,7 +486,7 @@ func ValidateFrame(raw []byte, now time.Time) (Frame, error) {
 		} else if frame.WindowsProcessMetrics != nil || len(members["windowsProcessMetrics"]) != 0 {
 			return frame, ErrFrame
 		}
-		if frame.SchemaVersion == FrameWindowsNetworkVersion || (frame.SchemaVersion == FrameWindowsServiceStartupVersion || (frame.SchemaVersion == FrameWindowsUpdatesVersion || (frame.SchemaVersion == FrameWindowsAdapterContextVersion || (frame.SchemaVersion == FrameWindowsPatchContextVersion || (frame.SchemaVersion == FrameWindowsSecurityPostureVersion || (frame.SchemaVersion == FrameWindowsSessionContextVersion || frame.SchemaVersion == FrameWindowsHardwareContextVersion)))))) && len(members["windowsNetwork"]) != 0 {
+		if frame.SchemaVersion == FrameWindowsNetworkVersion || (frame.SchemaVersion == FrameWindowsServiceStartupVersion || (frame.SchemaVersion == FrameWindowsUpdatesVersion || (frame.SchemaVersion == FrameWindowsAdapterContextVersion || (frame.SchemaVersion == FrameWindowsPatchContextVersion || (frame.SchemaVersion == FrameWindowsSecurityPostureVersion || (frame.SchemaVersion == FrameWindowsSessionContextVersion || (frame.SchemaVersion == FrameWindowsHardwareContextVersion || frame.SchemaVersion == FrameWindowsStorageContextVersion))))))) && len(members["windowsNetwork"]) != 0 {
 			network, e := windowsnetwork.Decode(members["windowsNetwork"])
 			if e != nil || network.GenerationID != frame.WindowsInventory.GenerationID || network.CollectedAt.After(b.GeneratedAt) || network.CollectedAt.Before(frame.WindowsInventory.CollectedAt) {
 				return frame, ErrFrame
@@ -467,7 +497,7 @@ func ValidateFrame(raw []byte, now time.Time) (Frame, error) {
 		} else if frame.WindowsNetwork != nil || len(members["windowsNetwork"]) != 0 {
 			return frame, ErrFrame
 		}
-		if frame.SchemaVersion == FrameWindowsServiceStartupVersion || (frame.SchemaVersion == FrameWindowsUpdatesVersion || (frame.SchemaVersion == FrameWindowsAdapterContextVersion || (frame.SchemaVersion == FrameWindowsPatchContextVersion || (frame.SchemaVersion == FrameWindowsSecurityPostureVersion || (frame.SchemaVersion == FrameWindowsSessionContextVersion || frame.SchemaVersion == FrameWindowsHardwareContextVersion))))) && len(members["windowsServiceStartup"]) != 0 {
+		if frame.SchemaVersion == FrameWindowsServiceStartupVersion || (frame.SchemaVersion == FrameWindowsUpdatesVersion || (frame.SchemaVersion == FrameWindowsAdapterContextVersion || (frame.SchemaVersion == FrameWindowsPatchContextVersion || (frame.SchemaVersion == FrameWindowsSecurityPostureVersion || (frame.SchemaVersion == FrameWindowsSessionContextVersion || (frame.SchemaVersion == FrameWindowsHardwareContextVersion || frame.SchemaVersion == FrameWindowsStorageContextVersion)))))) && len(members["windowsServiceStartup"]) != 0 {
 			startup, e := windowsmanaged.DecodeServiceStartup(members["windowsServiceStartup"])
 			digest, digestErr := windowsmanaged.ServiceStartupRowsSHA256(frame.WindowsInventory.Services.Rows)
 			if e != nil || digestErr != nil || startup.GenerationID != frame.WindowsInventory.GenerationID || startup.ServicesSHA256 != digest || int(startup.RequestedCount) != len(frame.WindowsInventory.Services.Rows) || startup.CollectedAt.After(b.GeneratedAt) || startup.CollectedAt.Before(frame.WindowsInventory.CollectedAt) {
@@ -479,7 +509,7 @@ func ValidateFrame(raw []byte, now time.Time) (Frame, error) {
 		} else if frame.WindowsServiceStartup != nil || len(members["windowsServiceStartup"]) != 0 {
 			return frame, ErrFrame
 		}
-		if frame.SchemaVersion == FrameWindowsUpdatesVersion || (frame.SchemaVersion == FrameWindowsAdapterContextVersion || (frame.SchemaVersion == FrameWindowsPatchContextVersion || (frame.SchemaVersion == FrameWindowsSecurityPostureVersion || (frame.SchemaVersion == FrameWindowsSessionContextVersion || frame.SchemaVersion == FrameWindowsHardwareContextVersion)))) && len(members["windowsUpdates"]) != 0 {
+		if frame.SchemaVersion == FrameWindowsUpdatesVersion || (frame.SchemaVersion == FrameWindowsAdapterContextVersion || (frame.SchemaVersion == FrameWindowsPatchContextVersion || (frame.SchemaVersion == FrameWindowsSecurityPostureVersion || (frame.SchemaVersion == FrameWindowsSessionContextVersion || (frame.SchemaVersion == FrameWindowsHardwareContextVersion || frame.SchemaVersion == FrameWindowsStorageContextVersion))))) && len(members["windowsUpdates"]) != 0 {
 			updates, e := windowsupdates.Decode(members["windowsUpdates"])
 			if e != nil || windowsupdates.ValidateBinding(updates, frame.WindowsInventory.GenerationID, updates.GrantID, frame.WindowsInventory.CollectedAt) != nil || updates.CollectedAt.After(b.GeneratedAt) {
 				return frame, ErrFrame
@@ -495,7 +525,7 @@ func ValidateFrame(raw []byte, now time.Time) (Frame, error) {
 		} else if frame.WindowsUpdates != nil || len(members["windowsUpdates"]) != 0 {
 			return frame, ErrFrame
 		}
-		if frame.SchemaVersion == FrameWindowsAdapterContextVersion || (frame.SchemaVersion == FrameWindowsPatchContextVersion || (frame.SchemaVersion == FrameWindowsSecurityPostureVersion || (frame.SchemaVersion == FrameWindowsSessionContextVersion || frame.SchemaVersion == FrameWindowsHardwareContextVersion))) && len(members["windowsAdapterContext"]) != 0 {
+		if frame.SchemaVersion == FrameWindowsAdapterContextVersion || (frame.SchemaVersion == FrameWindowsPatchContextVersion || (frame.SchemaVersion == FrameWindowsSecurityPostureVersion || (frame.SchemaVersion == FrameWindowsSessionContextVersion || (frame.SchemaVersion == FrameWindowsHardwareContextVersion || frame.SchemaVersion == FrameWindowsStorageContextVersion)))) && len(members["windowsAdapterContext"]) != 0 {
 			adapters, e := windowsadapters.Decode(members["windowsAdapterContext"])
 			if e != nil || adapters.GenerationID != frame.WindowsInventory.GenerationID || !adapters.CollectedAt.Equal(frame.WindowsInventory.CollectedAt) || adapters.CollectedAt.After(b.GeneratedAt) {
 				return frame, ErrFrame
@@ -509,7 +539,7 @@ func ValidateFrame(raw []byte, now time.Time) (Frame, error) {
 		} else if frame.WindowsAdapterContext != nil || len(members["windowsAdapterContext"]) != 0 {
 			return frame, ErrFrame
 		}
-		if frame.SchemaVersion == FrameWindowsPatchContextVersion || (frame.SchemaVersion == FrameWindowsSecurityPostureVersion || (frame.SchemaVersion == FrameWindowsSessionContextVersion || frame.SchemaVersion == FrameWindowsHardwareContextVersion)) && len(members["windowsPatchContext"]) != 0 {
+		if frame.SchemaVersion == FrameWindowsPatchContextVersion || (frame.SchemaVersion == FrameWindowsSecurityPostureVersion || (frame.SchemaVersion == FrameWindowsSessionContextVersion || (frame.SchemaVersion == FrameWindowsHardwareContextVersion || frame.SchemaVersion == FrameWindowsStorageContextVersion))) && len(members["windowsPatchContext"]) != 0 {
 			s, e := windowspatchcontext.Decode(members["windowsPatchContext"])
 			if e != nil || windowspatchcontext.ValidateBinding(s, frame.WindowsInventory.GenerationID, s.GrantID, frame.WindowsInventory.CollectedAt) != nil || s.CollectedAt.After(b.GeneratedAt) {
 				return frame, ErrFrame
@@ -523,7 +553,7 @@ func ValidateFrame(raw []byte, now time.Time) (Frame, error) {
 		} else if frame.WindowsPatchContext != nil || len(members["windowsPatchContext"]) != 0 {
 			return frame, ErrFrame
 		}
-		if frame.SchemaVersion == FrameWindowsSecurityPostureVersion || (frame.SchemaVersion == FrameWindowsSessionContextVersion || frame.SchemaVersion == FrameWindowsHardwareContextVersion) && len(members["windowsSecurityPosture"]) != 0 {
+		if frame.SchemaVersion == FrameWindowsSecurityPostureVersion || (frame.SchemaVersion == FrameWindowsSessionContextVersion || (frame.SchemaVersion == FrameWindowsHardwareContextVersion || frame.SchemaVersion == FrameWindowsStorageContextVersion)) && len(members["windowsSecurityPosture"]) != 0 {
 			s, e := windowssecurity.Decode(members["windowsSecurityPosture"])
 			if e != nil || windowssecurity.ValidateBinding(s, frame.WindowsInventory.GenerationID, s.GrantID, frame.WindowsInventory.CollectedAt) != nil || s.CollectedAt.After(b.GeneratedAt) {
 				return frame, ErrFrame
@@ -537,7 +567,7 @@ func ValidateFrame(raw []byte, now time.Time) (Frame, error) {
 		} else if frame.WindowsSecurityPosture != nil || len(members["windowsSecurityPosture"]) != 0 {
 			return frame, ErrFrame
 		}
-		if frame.SchemaVersion == FrameWindowsSessionContextVersion || frame.SchemaVersion == FrameWindowsHardwareContextVersion && len(members["windowsSessionContext"]) != 0 {
+		if frame.SchemaVersion == FrameWindowsSessionContextVersion || (frame.SchemaVersion == FrameWindowsHardwareContextVersion || frame.SchemaVersion == FrameWindowsStorageContextVersion) && len(members["windowsSessionContext"]) != 0 {
 			s, e := windowssessions.Decode(members["windowsSessionContext"])
 			if e != nil || windowssessions.ValidateBinding(s, frame.WindowsInventory.GenerationID, s.GrantID, frame.WindowsInventory.CollectedAt) != nil || s.CollectedAt.After(b.GeneratedAt) {
 				return frame, ErrFrame
@@ -551,7 +581,7 @@ func ValidateFrame(raw []byte, now time.Time) (Frame, error) {
 		} else if frame.WindowsSessionContext != nil || len(members["windowsSessionContext"]) != 0 {
 			return frame, ErrFrame
 		}
-		if frame.SchemaVersion == FrameWindowsHardwareContextVersion {
+		if frame.SchemaVersion == FrameWindowsHardwareContextVersion || frame.SchemaVersion == FrameWindowsStorageContextVersion && len(members["windowsHardwareContext"]) != 0 {
 			s, e := windowshardware.Decode(members["windowsHardwareContext"])
 			if e != nil || windowshardware.ValidateBinding(s, frame.WindowsInventory.GenerationID, s.GrantID, frame.WindowsInventory.CollectedAt) != nil || s.CollectedAt.After(b.GeneratedAt) {
 				return frame, ErrFrame
@@ -565,6 +595,20 @@ func ValidateFrame(raw []byte, now time.Time) (Frame, error) {
 		} else if frame.WindowsHardwareContext != nil || len(members["windowsHardwareContext"]) != 0 {
 			return frame, ErrFrame
 		}
+		if frame.SchemaVersion == FrameWindowsStorageContextVersion {
+			s, e := windowsstorage.Decode(members["windowsStorageContext"])
+			if e != nil || windowsstorage.ValidateBinding(s, frame.WindowsInventory.GenerationID, s.GrantID, frame.WindowsInventory.CollectedAt) != nil || s.CollectedAt.After(b.GeneratedAt) {
+				return frame, ErrFrame
+			}
+			if frame.WindowsHardwareContext != nil && s.GrantID == frame.WindowsHardwareContext.GrantID || frame.WindowsSessionContext != nil && s.GrantID == frame.WindowsSessionContext.GrantID || frame.WindowsSecurityPosture != nil && s.GrantID == frame.WindowsSecurityPosture.GrantID || frame.WindowsEvents != nil && s.GrantID == frame.WindowsEvents.GrantID || frame.WindowsVolumes != nil && s.GrantID == frame.WindowsVolumes.GrantID || frame.WindowsProcessMetrics != nil && s.GrantID == frame.WindowsProcessMetrics.GrantID || frame.WindowsNetwork != nil && s.GrantID == frame.WindowsNetwork.GrantID || frame.WindowsServiceStartup != nil && s.GrantID == frame.WindowsServiceStartup.GrantID || frame.WindowsUpdates != nil && s.GrantID == frame.WindowsUpdates.GrantID || frame.WindowsAdapterContext != nil && s.GrantID == frame.WindowsAdapterContext.GrantID || frame.WindowsPatchContext != nil && s.GrantID == frame.WindowsPatchContext.GrantID {
+				return frame, ErrFrame
+			}
+			if now.Sub(s.CollectedAt) > SampleMaxAge || s.CollectedAt.Sub(now) > AllowedClockSkew {
+				return frame, ErrStale
+			}
+		} else if frame.WindowsStorageContext != nil || len(members["windowsStorageContext"]) != 0 {
+			return frame, ErrFrame
+		}
 
 		at := frame.WindowsInventory.CollectedAt
 		if at.After(b.GeneratedAt) || at.After(b.Observation.LastSeen) {
@@ -574,7 +618,7 @@ func ValidateFrame(raw []byte, now time.Time) (Frame, error) {
 			return frame, ErrStale
 		}
 	} else {
-		if frame.WindowsInventory != nil || frame.WindowsEvents != nil || frame.WindowsVolumes != nil || frame.WindowsProcessMetrics != nil || frame.WindowsNetwork != nil || frame.WindowsServiceStartup != nil || frame.WindowsUpdates != nil || frame.WindowsAdapterContext != nil || frame.WindowsPatchContext != nil || frame.WindowsSecurityPosture != nil || frame.WindowsSessionContext != nil || frame.WindowsHardwareContext != nil {
+		if frame.WindowsInventory != nil || frame.WindowsEvents != nil || frame.WindowsVolumes != nil || frame.WindowsProcessMetrics != nil || frame.WindowsNetwork != nil || frame.WindowsServiceStartup != nil || frame.WindowsUpdates != nil || frame.WindowsAdapterContext != nil || frame.WindowsPatchContext != nil || frame.WindowsSecurityPosture != nil || frame.WindowsSessionContext != nil || frame.WindowsHardwareContext != nil || frame.WindowsStorageContext != nil {
 			return frame, ErrFrame
 		}
 		if frame.SchemaVersion == FrameOperationalVersion && frame.Packages != nil {
@@ -760,12 +804,18 @@ func shape(value any, t reflect.Type) bool {
 // FrameMatchesCollectionProfile accepts only the profile from trusted durable
 // identity state, never a profile claimed by the incoming payload itself.
 func FrameMatchesCollectionProfile(frame Frame, profile string) bool {
-	if (frame.WindowsInventory != nil || frame.WindowsEvents != nil || frame.WindowsVolumes != nil || frame.WindowsProcessMetrics != nil || frame.WindowsNetwork != nil || frame.WindowsServiceStartup != nil || frame.WindowsUpdates != nil || frame.WindowsAdapterContext != nil || frame.WindowsPatchContext != nil || frame.WindowsSecurityPosture != nil || frame.WindowsSessionContext != nil || frame.WindowsHardwareContext != nil) && profile != windowsmanaged.CollectionProfile {
+	if (frame.WindowsInventory != nil || frame.WindowsEvents != nil || frame.WindowsVolumes != nil || frame.WindowsProcessMetrics != nil || frame.WindowsNetwork != nil || frame.WindowsServiceStartup != nil || frame.WindowsUpdates != nil || frame.WindowsAdapterContext != nil || frame.WindowsPatchContext != nil || frame.WindowsSecurityPosture != nil || frame.WindowsSessionContext != nil || frame.WindowsHardwareContext != nil || frame.WindowsStorageContext != nil) && profile != windowsmanaged.CollectionProfile {
 		return false
 	}
 	switch profile {
 	case windowsmanaged.CollectionProfile:
 		if frame.WindowsInventory == nil || frame.WindowsInventory.CollectionProfile != profile || frame.Operational != nil || frame.Packages != nil || frame.Observation.Platform != "windows" {
+			return false
+		}
+		if frame.SchemaVersion == FrameWindowsStorageContextVersion {
+			return frame.WindowsStorageContext != nil
+		}
+		if frame.WindowsStorageContext != nil {
 			return false
 		}
 		if frame.SchemaVersion == FrameWindowsHardwareContextVersion {

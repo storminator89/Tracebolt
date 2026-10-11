@@ -1,3 +1,4 @@
+import { validWindowsStorageContext, usefulWindowsStorageContext, type WindowsStorageContext } from './windows-storage-context-types';
 import { validWindowsHardwareContext, usefulWindowsHardwareContext, type WindowsHardwareContext } from './windows-hardware-context-types';
 import { validWindowsSessionContext, type WindowsSessionContext } from './windows-session-context-types';
 import { validWindowsSecurityPosture, type WindowsSecurityPosture } from './windows-security-posture-types';
@@ -30,7 +31,7 @@ export interface WindowsInventorySnapshot {
     hostname: WindowsInventorySection<WindowsHostname>; processes: WindowsInventorySection<WindowsProcess>; services: WindowsInventorySection<WindowsService>; software: WindowsInventorySection<WindowsSoftware>; network: WindowsInventorySection<WindowsInterface>;
 }
 export interface WindowsContextRetained {
-    updates?: WindowsUpdates; patchContext?: WindowsPatchContext; securityPosture?: WindowsSecurityPosture; sessionContext?: WindowsSessionContext; hardwareContext?: WindowsHardwareContext;
+    updates?: WindowsUpdates; patchContext?: WindowsPatchContext; securityPosture?: WindowsSecurityPosture; sessionContext?: WindowsSessionContext; hardwareContext?: WindowsHardwareContext; storageContext?: WindowsStorageContext;
 }
 export interface WindowsInventoryView {
     retainedContext?: WindowsContextRetained;
@@ -45,7 +46,7 @@ export interface WindowsInventoryView {
     patchContext?: WindowsPatchContext;
     securityPosture?: WindowsSecurityPosture;
     sessionContext?: WindowsSessionContext;
-    hardwareContext?: WindowsHardwareContext;
+    hardwareContext?: WindowsHardwareContext; storageContext?: WindowsStorageContext;
     status: WindowsInventoryStatus; sequence: number | null; receivedAt: string | null; snapshot: WindowsInventorySnapshot | null;
 }
 const exact = (value: unknown, keys: readonly string[]): value is Record<string, unknown> => value !== null && typeof value === 'object' && !Array.isArray(value) && Object.keys(value).length === keys.length && keys.every(key => Object.hasOwn(value, key));
@@ -83,7 +84,7 @@ export function validWindowsInventorySnapshot(value: unknown): value is WindowsI
     return new TextEncoder().encode(encoded).byteLength <= WINDOWS_INVENTORY_SNAPSHOT_BYTES;
 }
 export function validWindowsInventoryView(value: unknown, deviceId: string): value is WindowsInventoryView {
-    if (!exact(value, ['schemaVersion', 'deviceId', 'collectionProfile', 'serverNow', 'maxAgeSeconds', 'status', 'sequence', 'receivedAt', 'snapshot', ...(value !== null && typeof value === 'object' && Object.hasOwn(value, 'retainedContext') ? ['retainedContext'] : []), ...(value !== null && typeof value === 'object' && Object.hasOwn(value, 'events') ? ['events'] : []), ...(value !== null && typeof value === 'object' && Object.hasOwn(value, 'volumes') ? ['volumes'] : []), ...(value !== null && typeof value === 'object' && Object.hasOwn(value, 'processMetrics') ? ['processMetrics'] : []), ...(value !== null && typeof value === 'object' && Object.hasOwn(value, 'network') ? ['network'] : []), ...(value !== null && typeof value === 'object' && Object.hasOwn(value, 'adapterContext') ? ['adapterContext'] : []), ...(value !== null && typeof value === 'object' && Object.hasOwn(value, 'serviceStartup') ? ['serviceStartup'] : []), ...(value !== null && typeof value === 'object' && Object.hasOwn(value, 'updates') ? ['updates'] : []), ...(value !== null && typeof value === 'object' && Object.hasOwn(value, 'patchContext') ? ['patchContext'] : []), ...(value !== null && typeof value === 'object' && Object.hasOwn(value, 'securityPosture') ? ['securityPosture'] : []), ...(value !== null && typeof value === 'object' && Object.hasOwn(value, 'sessionContext') ? ['sessionContext'] : []), ...(value !== null && typeof value === 'object' && Object.hasOwn(value, 'hardwareContext') ? ['hardwareContext'] : [])]) || value.schemaVersion !== 'tracebolt.windows-inventory-view.v1' || value.collectionProfile !== 'windows-inventory-v1' || !validWindowsDeviceId(deviceId) || value.deviceId !== deviceId || !timestamp(value.serverNow) || value.maxAgeSeconds !== 120 || typeof value.status !== 'string' || !['not_configured', 'awaiting', 'fresh', 'stale', 'unavailable', 'revoked'].includes(value.status)) return false;
+    if (!exact(value, ['schemaVersion', 'deviceId', 'collectionProfile', 'serverNow', 'maxAgeSeconds', 'status', 'sequence', 'receivedAt', 'snapshot', ...(value !== null && typeof value === 'object' && Object.hasOwn(value, 'retainedContext') ? ['retainedContext'] : []), ...(value !== null && typeof value === 'object' && Object.hasOwn(value, 'events') ? ['events'] : []), ...(value !== null && typeof value === 'object' && Object.hasOwn(value, 'volumes') ? ['volumes'] : []), ...(value !== null && typeof value === 'object' && Object.hasOwn(value, 'processMetrics') ? ['processMetrics'] : []), ...(value !== null && typeof value === 'object' && Object.hasOwn(value, 'network') ? ['network'] : []), ...(value !== null && typeof value === 'object' && Object.hasOwn(value, 'adapterContext') ? ['adapterContext'] : []), ...(value !== null && typeof value === 'object' && Object.hasOwn(value, 'serviceStartup') ? ['serviceStartup'] : []), ...(value !== null && typeof value === 'object' && Object.hasOwn(value, 'updates') ? ['updates'] : []), ...(value !== null && typeof value === 'object' && Object.hasOwn(value, 'patchContext') ? ['patchContext'] : []), ...(value !== null && typeof value === 'object' && Object.hasOwn(value, 'securityPosture') ? ['securityPosture'] : []), ...(value !== null && typeof value === 'object' && Object.hasOwn(value, 'sessionContext') ? ['sessionContext'] : []), ...(value !== null && typeof value === 'object' && Object.hasOwn(value, 'hardwareContext') ? ['hardwareContext'] : []), ...(value !== null && typeof value === 'object' && Object.hasOwn(value, 'storageContext') ? ['storageContext'] : [])]) || value.schemaVersion !== 'tracebolt.windows-inventory-view.v1' || value.collectionProfile !== 'windows-inventory-v1' || !validWindowsDeviceId(deviceId) || value.deviceId !== deviceId || !timestamp(value.serverNow) || value.maxAgeSeconds !== 120 || typeof value.status !== 'string' || !['not_configured', 'awaiting', 'fresh', 'stale', 'unavailable', 'revoked'].includes(value.status)) return false;
     const receipt = integer(value.sequence, Number.MAX_SAFE_INTEGER) && value.sequence > 0 && timestamp(value.receivedAt) && inventoryAge(value.serverNow, value.receivedAt) >= 0;
     if (!(value.sequence === null && value.receivedAt === null) && !receipt) return false;
     if (Object.hasOwn(value, 'events') && (!validWindowsInventorySnapshot(value.snapshot) || !validWindowsEvents(value.events, value.snapshot.generationId, value.serverNow))) return false;
@@ -96,6 +97,8 @@ export function validWindowsInventoryView(value: unknown, deviceId: string): val
     if (Object.hasOwn(value, 'patchContext') && (!validWindowsInventorySnapshot(value.snapshot) || !validWindowsPatchContext(value.patchContext, value.snapshot, value.serverNow))) return false;
     if (Object.hasOwn(value, 'securityPosture') && (!validWindowsInventorySnapshot(value.snapshot) || !validWindowsSecurityPosture(value.securityPosture, value.snapshot, value.serverNow))) return false;
     if (Object.hasOwn(value, 'sessionContext') && (!validWindowsInventorySnapshot(value.snapshot) || !validWindowsSessionContext(value.sessionContext, value.snapshot, value.serverNow))) return false;
+    if (Object.hasOwn(value, 'storageContext') && (!validWindowsInventorySnapshot(value.snapshot) || !validWindowsStorageContext(value.storageContext, value.snapshot, value.serverNow))) return false;
+    if (value.storageContext && [value.events, value.volumes, value.processMetrics, value.network, value.adapterContext, value.serviceStartup, value.updates, value.patchContext, value.securityPosture, value.sessionContext, value.hardwareContext].some(extension => extension !== undefined && (extension as { grantId: string }).grantId === (value.storageContext as WindowsStorageContext).grantId)) return false;
     if (Object.hasOwn(value, 'hardwareContext') && (!validWindowsInventorySnapshot(value.snapshot) || !validWindowsHardwareContext(value.hardwareContext, value.snapshot, value.serverNow))) return false;
     if (value.hardwareContext && [value.events, value.volumes, value.processMetrics, value.network, value.adapterContext, value.serviceStartup, value.updates, value.patchContext, value.securityPosture, value.sessionContext].some(extension => extension !== undefined && (extension as { grantId: string }).grantId === (value.hardwareContext as WindowsHardwareContext).grantId)) return false;
     if (Object.hasOwn(value, 'retainedContext') && !validRetainedContext(value)) return false;
@@ -104,7 +107,7 @@ export function validWindowsInventoryView(value: unknown, deviceId: string): val
     if (value.patchContext && [value.events, value.volumes, value.processMetrics, value.network, value.adapterContext, value.serviceStartup, value.updates].some(extension => extension !== undefined && (extension as { grantId: string }).grantId === (value.patchContext as WindowsPatchContext).grantId)) return false;
     if (value.adapterContext && [value.events, value.volumes, value.processMetrics, value.network, value.serviceStartup, value.updates].some(extension => extension !== undefined && (extension as { grantId: string }).grantId === (value.adapterContext as WindowsAdapterContext).grantId)) return false;
     if (value.updates && [value.events, value.volumes, value.processMetrics, value.network, value.adapterContext, value.serviceStartup].some(extension => extension !== undefined && (extension as { grantId: string }).grantId === (value.updates as WindowsUpdates).grantId)) return false;
-    if (value.status !== 'fresh' && value.status !== 'stale') return !Object.hasOwn(value, 'retainedContext') && !Object.hasOwn(value, 'events') && !Object.hasOwn(value, 'volumes') && !Object.hasOwn(value, 'processMetrics') && !Object.hasOwn(value, 'network') && !Object.hasOwn(value, 'adapterContext') && !Object.hasOwn(value, 'serviceStartup') && !Object.hasOwn(value, 'updates') && !Object.hasOwn(value, 'patchContext') && !Object.hasOwn(value, 'securityPosture') && !Object.hasOwn(value, 'sessionContext') && !Object.hasOwn(value, 'hardwareContext') && value.snapshot === null && (!['not_configured', 'awaiting'].includes(value.status) || value.sequence === null);
+    if (value.status !== 'fresh' && value.status !== 'stale') return !Object.hasOwn(value, 'retainedContext') && !Object.hasOwn(value, 'events') && !Object.hasOwn(value, 'volumes') && !Object.hasOwn(value, 'processMetrics') && !Object.hasOwn(value, 'network') && !Object.hasOwn(value, 'adapterContext') && !Object.hasOwn(value, 'serviceStartup') && !Object.hasOwn(value, 'updates') && !Object.hasOwn(value, 'patchContext') && !Object.hasOwn(value, 'securityPosture') && !Object.hasOwn(value, 'sessionContext') && !Object.hasOwn(value, 'hardwareContext') && !Object.hasOwn(value, 'storageContext') && value.snapshot === null && (!['not_configured', 'awaiting'].includes(value.status) || value.sequence === null);
     if (!receipt || !validWindowsInventorySnapshot(value.snapshot)) return false;
     if (value.processMetrics && inventoryAge((value.processMetrics as WindowsProcessMetrics).collectedAt, value.receivedAt as string) > 30000) return false;
     if (value.network && inventoryAge((value.network as WindowsNetwork).collectedAt, value.receivedAt as string) > 30000) return false;
@@ -115,6 +118,7 @@ export function validWindowsInventoryView(value: unknown, deviceId: string): val
     if (value.securityPosture && inventoryAge((value.securityPosture as WindowsSecurityPosture).collectedAt, value.receivedAt as string) > 30000) return false;
     if (value.sessionContext && inventoryAge((value.sessionContext as WindowsSessionContext).collectedAt, value.receivedAt as string) > 30000) return false;
     if (value.hardwareContext && inventoryAge((value.hardwareContext as WindowsHardwareContext).collectedAt, value.receivedAt as string) > 30000) return false;
+    if (value.storageContext && inventoryAge((value.storageContext as WindowsStorageContext).collectedAt, value.receivedAt as string) > 30000) return false;
     const age = inventoryAge(value.serverNow, value.snapshot.collectedAt);
     const receiptSkew = inventoryAge(value.snapshot.collectedAt, value.receivedAt as string);
     const receiptAge = inventoryAge(value.serverNow, value.receivedAt as string);
@@ -136,7 +140,7 @@ function validRetainedContext(view: Record<string, unknown>): boolean {
     const retained = view.retainedContext;
     if (!retained || typeof retained !== 'object' || Array.isArray(retained) || !validWindowsInventorySnapshot(view.snapshot) || !['fresh', 'stale'].includes(view.status as string)) return false;
     const keys = Object.keys(retained);
-    if (keys.length === 0 || keys.length > 5 || keys.some(k => !['updates', 'patchContext', 'securityPosture', 'sessionContext', 'hardwareContext'].includes(k))) return false;
+    if (keys.length === 0 || keys.length > 6 || keys.some(k => !['updates', 'patchContext', 'securityPosture', 'sessionContext', 'hardwareContext', 'storageContext'].includes(k))) return false;
     for (const key of keys) {
         const old = (retained as Record<string, unknown>)[key], current = view[key];
         if (!old || typeof old !== 'object' || !current || typeof current !== 'object') return false;
@@ -147,6 +151,7 @@ function validRetainedContext(view: Record<string, unknown>): boolean {
             case 'updates': if (!validWindowsUpdates(old, original, view.serverNow as string) || !['observed', 'partial'].includes(old.quality)) return false; break;
             case 'patchContext': if (!validWindowsPatchContext(old, original, view.serverNow as string) || !(['observed', 'partial'].includes(old.history.quality) || Object.values(old.os).some(field => field.value !== null) || Object.values(old.reboot).some(state => state === 'pending' || state === 'clear'))) return false; break;
             case 'securityPosture': if (!validWindowsSecurityPosture(old, original, view.serverNow as string) || ![old.defender.quality, old.firewall.quality].some(q => ['observed', 'partial'].includes(q))) return false; break;
+            case 'storageContext': if (!validWindowsStorageContext(old, original, view.serverNow as string) || !usefulWindowsStorageContext(old)) return false; break;
             case 'hardwareContext': if (!validWindowsHardwareContext(old, original, view.serverNow as string) || !usefulWindowsHardwareContext(old)) return false; break;
             case 'sessionContext': if (!validWindowsSessionContext(old, original, view.serverNow as string) || ![old.sessions.quality, old.join.quality].some(q => ['observed', 'partial'].includes(q))) return false; break;
         }

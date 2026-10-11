@@ -15,8 +15,13 @@ _reporter_spec.loader.exec_module(_reporter)
 project = _reporter.project
 
 PACKAGES = ("./internal/windowspackage", "./internal/windowssetup", "./internal/windowssetupui", "./internal/windowsstate", "./internal/windowsservice", "./internal/windowsconsole",
-            "./internal/windowsagentconfig", "./cmd/windows-service", "./internal/windowsvolumes", "./internal/windowsprocessmetrics", "./internal/windowsnetwork", "./internal/windowsmanaged", "./internal/windowshardware", "./internal/windowshardwareworker")
+            "./internal/windowsagentconfig", "./cmd/windows-service", "./internal/windowsvolumes", "./internal/windowsprocessmetrics", "./internal/windowsnetwork", "./internal/windowsmanaged", "./internal/windowshardware", "./internal/windowshardwareworker", "./internal/windowsstorage", "./internal/windowsstorageworker")
 REQUIRED = {
+    ("localrmm/internal/windowsstorage", "TestStorageCanonicalBoundsAndMeaning"),
+    ("localrmm/internal/windowsstorage", "TestDriveMappingExactRootsSkipsRemoteAndKeepsDenied"),
+    ("localrmm/internal/windowsstorageworker", "TestServeDeniesAbsentOrChangedAuthority"),
+    ("localrmm/internal/windowsstorageworker", "TestIndependentProviderTimeoutKeepsSiblings"),
+    ("localrmm/cmd/windows-service", "TestReadAdminV7FreshProfileReceipt5ExactThirteenGrants"),
     ("localrmm/internal/windowshardware", "TestPowerSentinelsAndNonchargingMidrange"),
     ("localrmm/internal/windowshardware", "TestModelCanonicalBoundsAndSources"),
     ("localrmm/internal/windowshardware", "TestConsentAndIndependentSourceFailures"),

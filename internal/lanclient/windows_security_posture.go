@@ -81,7 +81,7 @@ func appendWindowsSecurityPosture(ctx context.Context, m Material, f frame, c wi
 	return f, b, nil
 }
 func validateWindowsSecurityPostureFrame(f frame, fields map[string]json.RawMessage) error {
-	if f.SchemaVersion != FrameWindowsSecurityPostureVersion && !((f.SchemaVersion == FrameWindowsSessionContextVersion || f.SchemaVersion == FrameWindowsHardwareContextVersion) && len(fields["windowsSecurityPosture"]) != 0) {
+	if f.SchemaVersion != FrameWindowsSecurityPostureVersion && !((f.SchemaVersion == FrameWindowsSessionContextVersion || (f.SchemaVersion == FrameWindowsHardwareContextVersion || f.SchemaVersion == FrameWindowsStorageContextVersion)) && len(fields["windowsSecurityPosture"]) != 0) {
 		if f.WindowsSecurityPosture != nil || len(fields["windowsSecurityPosture"]) != 0 {
 			return ErrState
 		}

@@ -73,7 +73,7 @@ export function WindowsInventoryWorkspace({ resource, initialTab, fullServices }
             {selected === 'security' && <WindowsContextPanel resource={resource} kind="securityPosture"/>}
             {selected === 'updates' && <><WindowsContextPanel resource={resource} kind="patchContext"/><WindowsContextPanel resource={resource} kind="updates"/></>}
             {selected === 'endpoints' && <WindowsNetworkPanel resource={resource}/>}
-            {selected === 'storage' && <WindowsStoragePanel resource={resource}/>}
+            {selected === 'storage' && <><WindowsContextPanel resource={resource} kind="storageContext"/><WindowsStoragePanel resource={resource}/></>}
             {section && <Section className={fullSoftware ? "windows-inventory-scope windows-full-software-preview" : undefined} >{fullSoftware && <summary>{locale === 'de' ? 'Begrenzte Vorschau · getrennte Quelle, bis zu 128 Zeilen' : 'Bounded preview · separate source, up to 128 rows'}</summary>}
                 {fullSoftware && <InventoryState resource={resource}/>}
                 <div className="windows-inventory-section-header"><h3>{c[selected]}</h3><span className={`windows-inventory-quality quality-${section.quality}`}>{c[section.quality]}</span></div>

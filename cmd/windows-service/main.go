@@ -32,6 +32,7 @@ import (
 	"localrmm/internal/windowsservice"
 	"localrmm/internal/windowssessions"
 	"localrmm/internal/windowssessionworker"
+	"localrmm/internal/windowsstorageworker"
 	"localrmm/internal/windowsupdates"
 	"localrmm/internal/windowsvolumes"
 	"path/filepath"
@@ -73,6 +74,16 @@ func run(ctx context.Context, args []string, out, stderr io.Writer) int {
 	}
 	if len(args) == 1 && (args[0] == windowssecurityworker.WorkerArgument || args[0] == windowssecurityworker.FirewallWorkerArgument) {
 		if runSecurityPostureWorker(ctx, os.Stdin, out, args[0] == windowssecurityworker.FirewallWorkerArgument) != nil {
+			return 1
+		}
+		return 0
+	}
+	if len(args) == 1 && (args[0] == windowsstorageworker.WorkerArgument || args[0] == windowsstorageworker.DisksWorkerArgument) {
+		source := "drives"
+		if args[0] == windowsstorageworker.DisksWorkerArgument {
+			source = "disks"
+		}
+		if runStorageContextWorker(ctx, os.Stdin, out, source) != nil {
 			return 1
 		}
 		return 0

@@ -86,5 +86,5 @@ unlimited retention of header details.
    native acceptance under the installed LocalService identity. Cross-builds and
    simulated readers are not native event-content acceptance.
 
-The [Linux/Windows parity matrix](windows-linux-parity.md) tracks the larger goal.
+The [Windows priorities](windows-admin-roadmap.md) tracks the larger goal.
 The published preview and its exact tested assets are not modified by this work.

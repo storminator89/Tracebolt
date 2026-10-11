@@ -2,14 +2,14 @@
 
 This document preserves the five-scope internal contract and its historical
 source/acceptance boundary. The current fresh Setup presents the
-[twelve-scope Read admin profile](windows-read-admin-setup.md) with its own exact
+[current Read admin profile](windows-read-admin-setup.md) with its own exact
 consent and receipt, and actual scope approval initially unchecked. The legacy
 path is not an extra fresh-Setup choice and never expands old approvals.
 
 There are no existing user installations; fresh clean development installation
 is the target. Historical receipts and code remain available without making
 migration, binary upgrade or reconsent a delivery gate. This guide and its
-historical native cases do not authorize current twelve-scope Setup execution.
+historical native cases do not authorize current Read admin Setup execution.
 
 ## One explicit upfront read choice
 

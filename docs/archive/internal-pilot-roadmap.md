@@ -1,5 +1,8 @@
 # Internal pilot roadmap
 
+> Historical reference. For current functionality and priorities, use the
+> [project overview](../../README.md) and [guides](../README.md).
+
 Status: delivery order and remaining acceptance work for one internal-customer
 pilot. Source implementation is identified below; it does not establish deployment
 or native/live acceptance. No dates or production-readiness promise are attached
@@ -19,11 +22,11 @@ read/assessment capabilities. Their source tests do not establish installation
 or acceptance on this pilot's machines.
 
 The UI/log-source amendment still needs target-host acceptance. Source now wires
-default-off [webhook alarms](alarm-delivery.md), [service try-restart](service-action-workflow.md)
-and [manager-side application observations](application-checks.md), including
-[DNS/TCP](application-network-checks.md). Their setup and live/native gates remain
+default-off [webhook alarms](../alarm-delivery.md), [service try-restart](../service-action-workflow.md)
+and [manager-side application observations](../application-checks.md), including
+[DNS/TCP](../application-network-checks.md). Their setup and live/native gates remain
 separate. Package execution, DB/backup adapters, broader log sources and change
-history remain future work; the [package-plan core](selected-package-plan-core.md)
+history remain future work; the [package-plan core](../selected-package-plan-core.md)
 is pure and inert, with no runtime callers.
 
 ## Small prerequisites, applied where needed
@@ -88,7 +91,7 @@ Acceptance:
 
 ## Phase 2: external alarms that can be trusted
 
-The [current source slice](alarm-delivery.md) wires a default-off public HTTPS
+The [current source slice](../alarm-delivery.md) wires a default-off public HTTPS
 generic webhook, persistent health-transition outbox, bounded retries and
 authenticated read-only API status with a compact Settings summary. Details explain
 retained counts and provider acceptance; individual events are not reconciled.
@@ -132,8 +135,8 @@ actor/time/result audit are the minimum, not a general remote-shell platform.
 
 ### 3a. Restart one running, allowlisted service
 
-The [manager/agent/helper/UI workflow](service-action-workflow.md) is wired in
-source, with a separate [create-only manager/endpoint setup guide](guided-service-action-setup.md).
+The [manager/agent/helper/UI workflow](../service-action-workflow.md) is wired in
+source, with a separate [create-only manager/endpoint setup guide](../guided-service-action-setup.md).
 It stays off until named operator authority, protected keys/state, one reviewed
 unit and independent local grants are present. Source/fixture evidence does not
 establish the native acceptance below.
@@ -151,7 +154,7 @@ must never manufacture another execution. Report ambiguity honestly.
 
 ### 3b. Approved APT package updates
 
-The existing [selected-package plan core](selected-package-plan-core.md) only
+The existing [selected-package plan core](../selected-package-plan-core.md) only
 validates inert manifests and hook descriptions. It has no runtime callers and
 does not refresh metadata, invoke APT or install packages.
 
@@ -180,8 +183,8 @@ A test double or successful compile does not pass this execution gate.
 
 ### 4a. HTTP, TLS, DNS and TCP checks
 
-The default-off [HTTP/HTTPS and verified TLS leaf-expiry slice](application-checks.md)
-and [DNS/TCP extension](application-network-checks.md) are wired with protected
+The default-off [HTTP/HTTPS and verified TLS leaf-expiry slice](../application-checks.md)
+and [DNS/TCP extension](../application-network-checks.md) are wired with protected
 target configuration and compact read-only Overview status. All checks run from
 the manager; reachable resources do not establish endpoint or full application
 health. HTTP reports 2xx/non-2xx, DNS checks returned addresses against an explicit
@@ -246,9 +249,9 @@ database support. These are separate decisions after the single-customer pilot.
 
 ## Related boundaries
 
-- [Current on-demand journal design](journal-content-mvp.md)
-- [Linux journal helper](linux-journal-helper.md)
-- [Linux CVE limits](linux-cve-warnings.md)
-- [Existing LAN agent security boundaries](lan-agent-security-review.md)
-- [Controlled-action architecture](controlled-linux-actions.md): companion draft;
+- [Current on-demand journal design](../journal-content-mvp.md)
+- [Linux journal helper](../linux-journal-helper.md)
+- [Linux CVE limits](../linux-cve-warnings.md)
+- [Existing LAN agent security boundaries](../lan-agent-security-review.md)
+- [Controlled-action architecture](../controlled-linux-actions.md): companion draft;
   a design reference is not an installed feature

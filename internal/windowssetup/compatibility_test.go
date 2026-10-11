@@ -63,3 +63,20 @@ func TestReadAdminV2ContractNeverPromotesHistoricalAdvertisements(t *testing.T) 
 		t.Fatal("historical capabilities bytes changed")
 	}
 }
+
+func TestReadAdminV3StorageCannotPromoteEarlierCapabilities(t *testing.T) {
+	fresh := ExpectedReadAdminV3("manager", "https://enroll", "https://agent")
+	path, e := CapabilityPath(fresh)
+	if e != nil || path != ReadAdminCapabilitiesPathV3 {
+		t.Fatal(path, e)
+	}
+	contracts := []Capabilities{Expected("manager", "https://enroll", "https://agent"), ExpectedReadAdmin("manager", "https://enroll", "https://agent"), ExpectedReadAdminV2("manager", "https://enroll", "https://agent"), fresh}
+	for i, c := range contracts {
+		raw, _ := json.Marshal(c)
+		for j, want := range contracts {
+			if (Match(raw, want) == nil) != (i == j) {
+				t.Fatal("contracts conflated", i, j)
+			}
+		}
+	}
+}

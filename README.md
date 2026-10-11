@@ -2,76 +2,44 @@
 
 **Inventory, logs and diagnostics in one self-hosted dashboard.**
 
-See what your machines report, investigate changes and keep the original evidence
-in view. Tracebolt combines a Go manager, native agents and an English/German
-dashboard with light and dark themes.
+Tracebolt combines a Go manager, native endpoint agents and an English/German
+web interface with light and dark themes. It is under active development.
+This page describes the current source; downloadable prereleases cover less.
 
-[Get started](#get-started) · [Help and guides](docs/README.md) · [Windows status](docs/windows-status.md) · [Windows admin roadmap](docs/windows-admin-roadmap.md) · [Linux roadmap](docs/roadmap.md)
+[Get started](#get-started) · [Guides](docs/README.md) · [Windows status](docs/windows-status.md) · [Next steps](#what-is-next)
 
-![Tracebolt device overview with CPU, memory and disk history](docs/screenshots/2026-10-09-main-ui/resource-history-dark.png)
+![Device overview with CPU, memory and disk history](docs/screenshots/2026-10-09-main-ui/resource-history-dark.png)
 
-*Actual dashboard capture with invented test data. [Screenshots and exact-source provenance](docs/screenshots/2026-10-09-main-ui/README.md).*
+*Dashboard capture using invented test data. [Capture details](docs/screenshots/2026-10-09-main-ui/README.md).*
 
-## What you can see
+## What works in the current source
 
-- **Linux inventory:** visible processes, mounts, installed dpkg packages, services
-  and connections, with search, paging and explicit coverage limits.
-- **Resource history:** 24-hour CPU, RAM and root-filesystem charts, with original
-  sample times and gaps instead of invented values.
-- **Linux service logs:** choose an exact service and time window, review the
-  request, then search the captured journal snapshot.
-- **Package evidence:** cached APT candidates and Debian/Ubuntu CVE warnings,
-  with source and coverage limits. A finding is not an exploitability verdict.
-- **Windows read-only preview:** machine and adapter inventory, processes,
-  services, software registrations, volume capacity, per-process CPU/working-set
-  RAM, numeric TCP/UDP endpoints and Application/System event headers.
-- **Optional checks and alerts:** application checks, webhook alarms and AI
-  suggestions from explicitly approved Health incidents or service-log evidence.
+- **Device overview:** hostname/IP search, resource history, source timestamps
+  and explicit missing, stale or partial data.
+- **Linux inspection:** visible processes and mounts, dpkg software, services,
+  connections, selected service logs, cached APT candidates and bounded
+  Debian/Ubuntu CVE warnings.
+- **Windows inspection:** process CPU/RAM, volumes, numeric network endpoints,
+  complete caller-visible Win32 services and machine software registrations,
+  adapter configuration, build/update history, Defender/Firewall posture,
+  sessions/join context, hardware/firmware/power details, drive-letter mapping
+  and physical-disk provider status.
+- **Windows logs and updates:** Application/System event headers, separately
+  approved selected message reads, and offline cached Windows Update inspection.
+- **Optional monitoring:** platform-specific health checks, manager-side
+  application checks, webhook alarms and separately approved AI diagnostics.
 
-Each feature depends on its platform and approved scope. Unavailable, partial and
-stale observations stay visible. Windows event headers contain no message bodies.
-The published preview has no Windows Update/CVE assessment. The current source
-adds separately consented [cached Windows Update inspection](docs/windows-update-runtime.md)
-and [selected event messages](docs/windows-event-content-runtime.md); both still
-need installed-service/native acceptance. A separate default-off
-[system-volume capacity policy](docs/windows-capacity-health.md) uses only the
-existing quota-aware metric. Independent default-off [CPU and physical-RAM policies](docs/windows-resource-health.md)
-use their existing basic samples. Separate default-off [service checks](docs/windows-service-health.md)
-let administrators select reported services that should be running; missing rows
-remain unknown. Overall Windows health remains unassessed and
-native acceptance remains pending. AI provider/data approval is separate, and suggestions
-remain unconfirmed.
-
-![Tracebolt Linux log workspace with service selection and time-window controls](docs/screenshots/2026-10-09-main-ui/log-workspace.png)
-
-Windows hardware/power context is a new source-only, default-off increment with
-source-labeled serial metadata and fresh thirteen-scope Read admin consent.
-See [scope and remaining native gates](docs/windows-hardware-context.md).
+Collection depends on the endpoint's explicitly approved scope and accessible
+sources. Windows software covers HKLM registrations, not every installed app;
+process inventory is still a bounded sample. Cached updates do not prove patch
+compliance, and security observations do not prove that a device is protected.
+[Windows scope and limitations](docs/windows-status.md).
 
 ## Get started
 
-### Connect real Linux devices
-
-1. Follow the [installation runbook](docs/installation.md) to prepare the separate
-   authenticated LAN manager, protected configuration and approved network access.
-2. Use [Add device and the verified Linux download](docs/dashboard-verified-download.md).
-   Run the dashboard's command in the endpoint's local terminal, review the
-   [combined read-admin scope](docs/read-admin-onboarding.md), enter the invitation
-   at its hidden prompt and approve the matching device fingerprint in the dashboard.
-3. Keep the terminal open until setup finishes, then check the first accepted
-   report, source coverage and timestamps. Existing completed read-admin installs
-   use the [same-identity upgrade guide](docs/read-admin-upgrade.md).
-
-The published Linux endpoint release is
-[v0.1.0-rc.3](https://github.com/storminator89/Tracebolt/releases/tag/v0.1.0-rc.3).
-Its public assets are verified; the recorded Ubuntu TLS upgrade gate used a
-source-built replacement. See the [release evidence and remaining host checks](docs/read-admin-onboarding.md).
-Manager deployment is separate from the endpoint release.
-
 ### Try the local dashboard
 
-From a reviewed source checkout, with Go **1.27.1**, Node.js **24**, npm and `make`
-installed, run these commands from the repository root:
+From the repository root, with Go **1.27.1**, Node.js **24**, npm and `make`:
 
 ```sh
 make web
@@ -79,128 +47,95 @@ make build
 ./bin/manager
 ```
 
-Open **http://127.0.0.1:8787**. The demo includes seven synthetic devices **and a
-limited read-only sample of the machine running it**. It binds only to loopback,
-creates local state at `.local/state.db` and stops with Ctrl+C. It does not enroll
-remote devices or install a service. Use `lan-manager` via the runbook for real
-LAN operation. [Demo troubleshooting](docs/troubleshooting.md#local-demo).
+Open **http://127.0.0.1:8787**. This loopback-only demo shows seven synthetic
+devices and a limited read-only sample of the machine running it. State is saved
+in `.local/state.db`; Ctrl+C stops it. It does not connect remote devices or
+install a service. [Demo troubleshooting](docs/troubleshooting.md#local-demo).
 
-### Published Windows preview
+### Connect real devices
 
-The unsigned x64 [v0.1.0-windows-preview.1 prerelease](https://github.com/storminator89/Tracebolt/releases/tag/v0.1.0-windows-preview.1)
-remains unchanged at source [`14719116`](https://github.com/storminator89/Tracebolt/commit/14719116bdb663d13e4bcaef434a4374a6265fe6),
-with fresh installation and five explicitly approved read scopes.
-Read the [prerelease installation guide](docs/windows-prerelease-install.md) and
-[Windows status and limitations](docs/windows-status.md) before installing.
-The accepted hosted Windows Server 2025 subset does not prove Windows 10/11,
-reboot, upgrade or ARM64 support. Do not use the Linux installation command on Windows.
+1. Prepare an authenticated Linux or Docker LAN manager using the
+   [installation guide](docs/installation.md). HTTPS is the default.
+2. **Linux:** use **Add device** and the
+   [verified installation command](docs/dashboard-verified-download.md). Review
+   the read-admin scope locally, enter the invitation at the hidden prompt, then
+   compare and approve the device fingerprint in the dashboard.
+3. **Windows development:** the current fresh Setup offers
+   [Read admin](docs/windows-read-admin-setup.md), with grouped scope details and
+   unchecked consent. It requires matching source-built manager/endpoint
+   artifacts. Native acceptance and a release of this profile are still pending.
+4. Check the first accepted report, observation time and actual source coverage.
+   Choosing a profile does not prove that every provider returned data.
 
-Read the [dated Windows parity review status](docs/windows-parity-review-status.md)
-for subsequent source progress, CI evidence and remaining priorities. The
-[Linux/Windows parity matrix](docs/windows-linux-parity.md) preserves a historical
-baseline; its table is not a current runtime-coverage claim.
+The published Linux endpoint is
+[v0.1.0-rc.3](https://github.com/storminator89/Tracebolt/releases/tag/v0.1.0-rc.3).
+The separate unsigned x64
+[Windows preview.1](https://github.com/storminator89/Tracebolt/releases/tag/v0.1.0-windows-preview.1)
+contains the older five-scope read-only setup, not the current Read admin profile.
+Use its [installation guide](docs/windows-prerelease-install.md) only for those
+published bytes. Manager deployment is separate from both endpoint downloads.
 
-### Current Windows development source
+## Giving this repository to an agent
 
-Merged source at [`829ed26`](https://github.com/storminator89/Tracebolt/commit/829ed26b3f222276f77cd43b40f45d47f07a3b3f)
-includes these later read-only capabilities; none is in the published preview:
+Include the target computer and use this short handoff:
 
-- [Complete caller-visible Win32 services](docs/windows-full-services-contract.md)
-  and [HKLM 32/64 machine software registrations](docs/windows-full-software-contract.md),
-  with generation-bound search/paging beyond the old preview ceilings. Drivers,
-  ACL-invisible services, per-user/Store and portable software are excluded.
-  Selected-service health policies retain their separately bounded authority.
-- [Fleet hostname/IP search](docs/windows-fleet-identity.md) over already-reported
-  metadata, plus [adapter link state/speed and DNS/gateway context](docs/windows-adapter-context.md)
-  and [build labels, retained update history and reboot indicators](docs/windows-patch-context.md)
-  ([merged PR #42](https://github.com/storminator89/Tracebolt/pull/42)). Retained
-  history does not establish current patch compliance.
-- [Defender status and local Firewall profile configuration](docs/windows-security-posture.md)
-  in Security ([merged PR #43](https://github.com/storminator89/Tracebolt/pull/43)).
-  These do not establish overall protection or effective firewall policy;
-  third-party antivirus, BitLocker, Secure Boot and TPM are not covered.
-- [Caller-visible Users / Sessions and local domain/workgroup join context](docs/windows-session-context.md)
-  ([merged PR #44](https://github.com/storminator89/Tracebolt/pull/44)). This is not
-  complete account discovery or account management.
+> Read AGENTS.md and docs/installation.md. Inspect the target OS/architecture,
+> checkout and existing configuration. Use the shortest supported Linux/Docker
+> manager setup, then the dashboard's verified Linux enrollment command. Ask for
+> approval before credential/trust, network or service changes; never put secrets
+> in chat. Check login, the endpoint service and fresh real device data. Report
+> what works and what is still blocked. For Windows, distinguish the published
+> preview from the current source-only Read admin setup.
 
-New host-read scopes are default-off and require explicit local consent. Cached
-[Windows Update inspection](docs/windows-update-runtime.md), [selected event messages](docs/windows-event-content-runtime.md)
-and opt-in [disk/CPU/RAM](https://github.com/storminator89/Tracebolt/pull/31) and
-[selected-service health policies](https://github.com/storminator89/Tracebolt/pull/32)
-are also unreleased source features. Exact-source CI and fixtures do not establish
-native acceptance.
+The [installation-agent fast path](docs/installation.md#fast-path-for-installation-agents)
+points directly to the Compose commands, required configuration and smoke checks.
+There is no zero-configuration production installer; the local demo above is the
+quickest way to look at the dashboard.
 
-The newer source [fresh Windows Read admin setup](docs/windows-read-admin-setup.md)
-presents twelve read scopes prominently, with a concise review and optional full
-scope details. Actual consent boxes start unchecked, including explicit approval
-of personal user/domain/session metadata; the prominent profile grants no consent.
-Provider access still needs verification under the installed service identity.
-Event-message content, cached Update inspection and service control remain separate.
-The [service-action source](docs/windows-service-actions.md) introduced in
-[PR #45](https://github.com/storminator89/Tracebolt/pull/45) remains separate; native
-setup, ACL changes and any target service action remain separately gated.
+## Platform and safety limits
 
-Current development prioritizes fresh installation and dependable read-only data.
-A future updater is separate work, not a prerequisite for these source increments;
-there is no migration rollout to plan. The [Windows admin roadmap](docs/windows-admin-roadmap.md)
-tracks remaining complete process inventory, broader security/network/storage and
-hardware context, and software-change history. The
-[Windows 11 x64 acceptance matrix](docs/windows11-acceptance-matrix.md) records the
-still-open desktop and lifecycle checks. No new release or native Windows 11
-acceptance is claimed.
+- **Manager:** Linux, native or Docker.
+- **Linux release:** amd64, Ubuntu 24.04 or Debian 13, systemd, cgroup v2 and
+  kernel 6.5+. [ARM64/Pi](docs/linux-arm64-support.md) remains a source/testing path.
+- **Windows:** current development targets a fresh x64 installation. The old
+  preview has a limited hosted Server 2025 acceptance result; Windows 10/11,
+  current-source installed-service behavior and reboot remain unverified.
+- **macOS:** a limited standalone collector; no supported LAN installation path.
 
-| Cached Windows Updates, unreleased source preview | Mobile device overview, German |
-| --- | --- |
-| [<img src="docs/screenshots/2026-10-10-windows-parity/windows-cached-updates.png" width="660" alt="Tracebolt cached Windows Updates with invented update rows and explicit unknown cache freshness">](docs/screenshots/2026-10-10-windows-parity/windows-cached-updates.png) | [<img src="docs/screenshots/2026-10-10-windows-parity/windows-mobile-de.png" width="220" alt="German mobile Windows device overview with invented inventory data">](docs/screenshots/2026-10-10-windows-parity/windows-mobile-de.png) |
+The main agent stays unprivileged. Helpers, service control, selected package
+updates, external delivery and AI use have separate permissions. Read admin does
+not grant them all. There is no arbitrary remote shell or integrated remote
+desktop. HTTP is only for explicitly approved isolated tests: it exposes
+credentials and content on the network. Production hardening remains open.
 
-*Actual 10 October source-preview captures with invented Windows data.
-[Inventory screenshot and exact-source provenance](docs/screenshots/2026-10-10-windows-parity/README.md). Native Windows acceptance remains separate.*
+## What is next
 
-![Tracebolt selected Windows event messages with invented text, original expiry and partial availability](docs/screenshots/2026-10-10-windows-parity/windows-selected-messages.png)
+Finish the missing Windows Admin data: storage/performance, complete processes,
+broader security/network detail and useful change history. Then validate fresh
+native installation and the real manager-to-endpoint flow before a new release.
+There is no existing-user migration rollout. Remote desktop is deferred.
 
-*Selected Windows event messages, unreleased source preview with invented data.
-Original expiry and per-record availability stay visible.
-[Exact source and fixture boundaries](docs/screenshots/2026-10-10-windows-parity/README.md#selected-windows-event-messages).*
+[Windows priorities](docs/windows-admin-roadmap.md) · [Linux priorities](docs/roadmap.md)
 
-![Tracebolt Windows CPU health policy with an invented open incident, explicit threshold and original observation times](docs/screenshots/2026-10-10-windows-parity/windows-health-policy.png)
+## A look at the dashboard
 
-*Windows CPU health policy, an unreleased source candidate in
-[PR #31](https://github.com/storminator89/Tracebolt/pull/31), shown with invented data.
-This separate implementation is not part of the published Windows preview.
-[Exact source and fixture boundaries](docs/screenshots/2026-10-10-windows-parity/README.md#windows-health-policy).*
+| Linux service logs | Cached Windows Updates | Mobile overview, German |
+| --- | --- | --- |
+| [<img src="docs/screenshots/2026-10-09-main-ui/log-workspace.png" width="360" alt="Linux Logs workspace with service selection and time-window controls">](docs/screenshots/2026-10-09-main-ui/log-workspace.png) | [<img src="docs/screenshots/2026-10-10-windows-parity/windows-cached-updates.png" width="360" alt="Windows cached update rows with explicit freshness and coverage limits">](docs/screenshots/2026-10-10-windows-parity/windows-cached-updates.png) | [<img src="docs/screenshots/2026-10-10-windows-parity/windows-mobile-de.png" width="150" alt="German mobile Windows overview with inventory counts and observation times">](docs/screenshots/2026-10-10-windows-parity/windows-mobile-de.png) |
 
-## Platform support
+*Genuine dashboard captures with invented test data; click to enlarge. Windows
+examples show unreleased source previews. These illustrate the recorded source,
+not native acceptance. [Linux capture details](docs/screenshots/2026-10-09-main-ui/README.md)
+and [Windows capture details](docs/screenshots/2026-10-10-windows-parity/README.md).*
 
-| Component | Current boundary |
-| --- | --- |
-| Manager | Linux, native or Docker; exact-revision CI records architecture and runtime coverage |
-| Published Linux read-admin | amd64; Ubuntu 24.04 or Debian 13, systemd, cgroup v2, kernel 6.5+; actual host acceptance still required |
-| Linux arm64 / Raspberry Pi | Source/read-only testing; public installation remains closed pending privileged native acceptance |
-| Windows | Published unsigned x64 read-only prerelease; bounded hosted Windows Server 2025 subset accepted, with Windows 10/11, full lifecycle, reboot/upgrade and ARM64 runtime gates still open |
-| macOS | Limited standalone read-only collector; no supported LAN installation path |
+## Development
 
-The main agent is unprivileged. Linux journal and socket-owner helpers need
-explicit local approval; the socket helper has broad process-memory authority.
-Review the [exact scope](docs/read-admin-onboarding.md#exactly-what-the-one-approval-covers).
-HTTPS is the default. [Isolated HTTP testing](docs/http-complete-first-start.md)
-exposes credentials and content to the network. There is no arbitrary remote
-shell or automatic package updater. Selected APT installation is a
-[source candidate](docs/selected-package-updates-native.md); the published
-installer does not enable it.
-
-## Help and development
-
-[All guides](docs/README.md) · [Troubleshooting](docs/troubleshooting.md) · [Web development](web/README.md) · [Security boundaries](docs/lan-security-review.md) · [Repository workflow](AGENTS.md) · [Changelog](CHANGELOG.md)
-
-Run `make test`, `make build` and the [web checks](web/README.md#checks). Consult
-[exact-revision CI](https://github.com/storminator89/Tracebolt/actions) for browser,
-container and native coverage; a cross-build or screenshot is not host acceptance.
-
-**Development pilot.** Production hardening and fleet-scale validation remain
-open.
+Run `make test`, `make build` and the [frontend checks](web/README.md#checks).
+Follow [repository constraints](AGENTS.md) and the [technical guides](docs/README.md).
+CI, fixtures and screenshots describe their exercised scope; they do not replace
+native host acceptance.
 
 ## License
 
-Tracebolt is licensed under the [Apache License 2.0](LICENSE)
-(SPDX: `Apache-2.0`). Third-party dependencies retain their own licenses and
-notices, including the [Edwards25519 dependency notice](docs/dependencies/edwards25519.md).
+[Apache License 2.0](LICENSE). Dependencies retain their own
+[licenses and notices](docs/dependencies/edwards25519.md).

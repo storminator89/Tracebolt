@@ -143,8 +143,8 @@ func TestFreshReadSetupReconcileStrictCanonicalAndCancellation(t *testing.T) {
 	}
 }
 
-func TestFreshReadAdminV6ReconcilePinsHardwareDigestAndNeverPromotesReceipts(t *testing.T) {
-	for _, failure := range []string{"", "disabled", "identity", "changed-identity", "hardware-missing", "hardware-changed", "hardware-changed-second", "old-receipt"} {
+func TestFreshReadAdminV7ReconcilePinsStorageDigestAndNeverPromotesReceipts(t *testing.T) {
+	for _, failure := range []string{"", "disabled", "identity", "changed-identity", "storage-missing", "storage-changed", "storage-changed-second", "old-receipt"} {
 		t.Run(failure, func(t *testing.T) {
 			f := reconcileSetupCase(t)
 			var intent readSetupIntent
@@ -153,7 +153,7 @@ func TestFreshReadAdminV6ReconcilePinsHardwareDigestAndNeverPromotesReceipts(t *
 			json.Unmarshal(f.receipt, &receipt)
 			consent := freshReadAdminSetupConsent(false)
 			intent.Consent, receipt.ReadSetup.Consent = consent, consent
-			receipt.Version = 4
+			receipt.Version = 5
 			receipt.ReadSetup.Grants.AppliedScopes = consent.Scopes[1:]
 			digests := []lanclient.WindowsCapabilityGrantDigest{}
 			for _, scope := range consent.Scopes[1:] {
@@ -173,11 +173,11 @@ func TestFreshReadAdminV6ReconcilePinsHardwareDigestAndNeverPromotesReceipts(t *
 					t.Fatal("consent changed")
 				}
 				got := append([]lanclient.WindowsCapabilityGrantDigest(nil), digests...)
-				if failure == "hardware-missing" {
-					got = got[:11]
+				if failure == "storage-missing" {
+					got = got[:12]
 				}
-				if failure == "hardware-changed" || failure == "hardware-changed-second" && f.digestCalls > 1 {
-					got[11].SHA256 = strings.Repeat("e", 64)
+				if failure == "storage-changed" || failure == "storage-changed-second" && f.digestCalls > 1 {
+					got[12].SHA256 = strings.Repeat("e", 64)
 				}
 				return got, nil
 			}
@@ -189,10 +189,10 @@ func TestFreshReadAdminV6ReconcilePinsHardwareDigestAndNeverPromotesReceipts(t *
 				return
 			}
 			if e != nil || !result.ReceiptFinalized || f.writes != 1 {
-				t.Fatal("fresh receipt4 effect not finalized", e)
+				t.Fatal("fresh receipt5 effect not finalized", e)
 			}
 			json.Unmarshal(f.receipt, &receipt)
-			if receipt.Version != 4 || !completeReadSetup(receipt) {
+			if receipt.Version != 5 || !completeReadSetup(receipt) {
 				t.Fatal("fresh receipt version changed")
 			}
 		})

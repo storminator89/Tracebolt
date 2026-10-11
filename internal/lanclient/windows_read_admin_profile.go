@@ -13,6 +13,7 @@ import (
 	"localrmm/internal/windowsprocessmetrics"
 	"localrmm/internal/windowssecurity"
 	"localrmm/internal/windowssessions"
+	"localrmm/internal/windowsstorage"
 	"localrmm/internal/windowsvolumes"
 	"reflect"
 )
@@ -84,6 +85,28 @@ func WindowsReadAdminNoticesV6(insecure bool) []string {
 	notices := append(WindowsReadAdminNotices(insecure), windowshardware.Privacy)
 	if insecure {
 		notices = append(notices, windowshardware.HTTPPrivacy)
+	}
+	return notices
+}
+
+// V7 adds an independently consented storage scope. Historical V1-V6 bytes remain exact.
+const WindowsCapabilityConsentVersionV7 = "tracebolt.windows-capability-consent.v7"
+
+func WindowsReadAdminScopesV7() []string {
+	return append(WindowsReadAdminScopesV6(), windowsstorage.Scope)
+}
+func validWindowsReadAdminConsentV7(c WindowsCapabilityConsent) bool {
+	return c.SchemaVersion == WindowsCapabilityConsentVersionV7 && c.CollectionProfile == enrollmentcrypto.CollectionProfileWindowsInventory && c.Acknowledged && reflect.DeepEqual(c.Scopes, WindowsReadAdminScopesV7())
+}
+func WindowsReadAdminGroupsV7() []WindowsReadAdminGroup {
+	groups := WindowsReadAdminGroupsV6()
+	groups = append(groups, WindowsReadAdminGroup{"Storage", "Local drive letters and exact volume GUID mapping; storage-provider device identifiers/friendly labels, media, bus, size and provider health/status.", []string{windowsstorage.Scope}, "Local volume APIs and fixed MSFT_PhysicalDisk WMI under the same service token. No physical serial/unique IDs, SMART, remote shares or guessed physical joins; RAID, virtual and unsupported/denied visibility remains explicit.", "not_checked", "not_verified"})
+	return groups
+}
+func WindowsReadAdminNoticesV7(insecure bool) []string {
+	notices := append(WindowsReadAdminNoticesV6(insecure), windowsstorage.Privacy)
+	if insecure {
+		notices = append(notices, windowsstorage.HTTPPrivacy)
 	}
 	return notices
 }

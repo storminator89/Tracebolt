@@ -1,5 +1,8 @@
 # Windows / Linux feature parity roadmap
 
+> Historical reference. For current functionality and priorities, use the
+> [project overview](../../README.md) and [guides](../README.md).
+
 Source audit dated **10 October 2026**, baseline commit
 `3ba4459a3151223ce98ac58c40471afa73576365`, tree
 `310bd49647d1a7f4ce44e2295e33d6ec6bd69012`.
@@ -17,7 +20,7 @@ parity. Neither platform currently offers an unrestricted remote-management suit
    and cross-builds establish only the behavior they exercise.
 2. **Released bytes:** a Windows preview does not contain every later main-branch
    change. The selected packaged-Setup evidence in the
-   [prerelease guide](windows-prerelease-install.md#selected-native-evidence)
+   [prerelease guide](../windows-prerelease-install.md#selected-native-evidence)
    binds source `14719116bdb663d13e4bcaef434a4374a6265fe6`, tree
    `d2ec1451a0fb4332a48f0ee48b17c35eca807ad4`, and
    [run 38069058865, attempt 1](https://github.com/storminator89/Tracebolt/actions/runs/38069058865).
@@ -32,7 +35,7 @@ parity. Neither platform currently offers an unrestricted remote-management suit
    interoperability, reboot, upgrade, full data removal or ARM64 runtime. The
    current audit baseline does not inherit exact-source native acceptance.
 
-Linux is also bounded: [the installation runbook](installation.md) records the
+Linux is also bounded: [the installation runbook](../installation.md) records the
 rc.3 read-admin path and a specific Ubuntu TLS same-identity upgrade gate. Selected
 APT installation and guided service-action setup are separately scoped source
 candidates. They must not be presented as generally released Linux capabilities.
@@ -43,33 +46,33 @@ The unsigned x64 [v0.1.0-windows-preview.1](https://github.com/storminator89/Tra
 was published on 10 October 2026 from the exact accepted bytes above. This does
 not alter the baseline comparison below.
 
-- [Selected event messages](windows-event-content-runtime.md) now have a separate
+- [Selected event messages](../windows-event-content-runtime.md) now have a separate
   default-off source path through protected local consent, exact header selection,
   durable consume-before-read isolation, authenticated request/result transport,
   session-bound ephemeral manager cache and the shared Logs view. It is not in the
   published preview. Native Event Log/installed-service and real Windows-to-Linux
   acceptance remain open; retained-history navigation and content search remain
   future work.
-- [Cached Windows Update inspection](windows-update-runtime.md) now has a
+- [Cached Windows Update inspection](../windows-update-runtime.md) now has a
   default-off source path through protected local consent, an isolated reader,
   signed v7 telemetry, durable private manager admission and the shared Updates
   tab. It is not in the published preview. Native WUA/installed-service acceptance
   and real Windows-to-Linux-manager/browser proof remain separate gates.
-- [System-volume capacity checks](windows-capacity-health.md) add a separate,
+- [System-volume capacity checks](../windows-capacity-health.md) add a separate,
   default-off manager policy and durable incident history over the existing
   caller-visible, quota-aware Windows disk percentage. This is a source-only
   increment with EN/DE Health controls, not full Windows Health parity. It adds
   no native collection, local grant, service action, AI export or notification.
   Native quota/installed-service behavior, real Windows-to-Linux interoperability
   and hosted-browser acceptance remain separate gates.
-- [CPU and physical-RAM policies](windows-resource-health.md) reuse the same
+- [CPU and physical-RAM policies](../windows-resource-health.md) reuse the same
   percentage evidence engine through independent default-off metric-bound state,
   routes and EN/DE controls. CPU remains observed-processor-group utilization;
   RAM remains physical memory not immediately available. Confirmation/recovery
   needs distinct advancing source observations. Disk opt-in never enables these
   policies. No host scope, AI or notification is added, and native/browser
   acceptance remain separate open work.
-- [Selected-service checks](windows-service-health.md) add an independent default-off
+- [Selected-service checks](../windows-service-health.md) add an independent default-off
   should-be-running policy over unique exact reported names, with a readable EN/DE
   chooser, discrete stopped/paused confirmation and running recovery, durable
   history and the same coordinated source read. Missing or duplicate rows always
@@ -104,50 +107,50 @@ P3 is a later extension. Lifecycle evidence is a parallel release gate.
 
 ### Concrete source map
 
-- Inventory and limits: [`windowsinventory/report.go`](../internal/windowsinventory/report.go),
-  [`windowsmanaged/types.go`](../internal/windowsmanaged/types.go),
-  [`windowsmanaged/service_startup_windows.go`](../internal/windowsmanaged/service_startup_windows.go),
-  [`windowsprocessmetrics`](../internal/windowsprocessmetrics),
-  [`windowsvolumes`](../internal/windowsvolumes), [`windowsnetwork`](../internal/windowsnetwork).
+- Inventory and limits: [`windowsinventory/report.go`](../../internal/windowsinventory/report.go),
+  [`windowsmanaged/types.go`](../../internal/windowsmanaged/types.go),
+  [`windowsmanaged/service_startup_windows.go`](../../internal/windowsmanaged/service_startup_windows.go),
+  [`windowsprocessmetrics`](../../internal/windowsprocessmetrics),
+  [`windowsvolumes`](../../internal/windowsvolumes), [`windowsnetwork`](../../internal/windowsnetwork).
 - Consent and frame boundaries:
-  [`windows_capability_consent.go`](../internal/lanclient/windows_capability_consent.go),
-  [`windows_event_consent.go`](../internal/lanclient/windows_event_consent.go),
-  [`protocol.go`](../internal/lanstore/protocol.go),
-  [`windows_inventory.go`](../internal/api/windows_inventory.go).
+  [`windows_capability_consent.go`](../../internal/lanclient/windows_capability_consent.go),
+  [`windows_event_consent.go`](../../internal/lanclient/windows_event_consent.go),
+  [`protocol.go`](../../internal/lanstore/protocol.go),
+  [`windows_inventory.go`](../../internal/api/windows_inventory.go).
   Consent v4 allows a selected sixth startup-metadata scope; it does not change
   the existing five-scope Setup coordinator or old receipts.
-- Shared platform routing and sample views: [`details.tsx`](../web/src/details.tsx),
-  [`windows-inventory.tsx`](../web/src/windows-inventory.tsx),
-  [`windows-inventory-tables.tsx`](../web/src/windows-inventory-tables.tsx),
-  [`device-inventory.tsx`](../web/src/device-inventory.tsx).
-- Logs: [`windowsevents/events.go`](../internal/windowsevents/events.go),
-  [`windowsevents/source_windows.go`](../internal/windowsevents/source_windows.go),
-  [`windowseventhealth/contract.go`](../internal/windowseventhealth/contract.go),
-  [`windows-logs.tsx`](../web/src/windows-logs.tsx),
-  [Linux retained browsing](retained-journal-browsing.md).
-- Health: [`windowscontact/contact.go`](../internal/windowscontact/contact.go),
-  [`api/windows_contact.go`](../internal/api/windows_contact.go),
-  [`enrollmentstore/health.go`](../internal/enrollmentstore/health.go),
-  [`health/health.go`](../internal/health/health.go),
-  [Windows contact boundaries](windows-contact-history.md).
-- Updates and actions: [`packagecollector/source_linux.go`](../internal/packagecollector/source_linux.go),
-  [`cachedupdates/source_linux.go`](../internal/cachedupdates/source_linux.go),
-  [`linuxcve/evaluate.go`](../internal/linuxcve/evaluate.go),
-  [`actionhelper/backend.go`](../internal/actionhelper/backend.go),
-  [`api/service_actions.go`](../internal/api/service_actions.go),
-  [selected APT candidate](selected-package-updates-native.md),
-  [guided service-action candidate](guided-service-action-setup.md).
-- AI: [`analysis/packet.go`](../internal/analysis/packet.go) keeps `BuildPacket`
+- Shared platform routing and sample views: [`details.tsx`](../../web/src/details.tsx),
+  [`windows-inventory.tsx`](../../web/src/windows-inventory.tsx),
+  [`windows-inventory-tables.tsx`](../../web/src/windows-inventory-tables.tsx),
+  [`device-inventory.tsx`](../../web/src/device-inventory.tsx).
+- Logs: [`windowsevents/events.go`](../../internal/windowsevents/events.go),
+  [`windowsevents/source_windows.go`](../../internal/windowsevents/source_windows.go),
+  [`windowseventhealth/contract.go`](../../internal/windowseventhealth/contract.go),
+  [`windows-logs.tsx`](../../web/src/windows-logs.tsx),
+  [Linux retained browsing](../retained-journal-browsing.md).
+- Health: [`windowscontact/contact.go`](../../internal/windowscontact/contact.go),
+  [`api/windows_contact.go`](../../internal/api/windows_contact.go),
+  [`enrollmentstore/health.go`](../../internal/enrollmentstore/health.go),
+  [`health/health.go`](../../internal/health/health.go),
+  [Windows contact boundaries](../windows-contact-history.md).
+- Updates and actions: [`packagecollector/source_linux.go`](../../internal/packagecollector/source_linux.go),
+  [`cachedupdates/source_linux.go`](../../internal/cachedupdates/source_linux.go),
+  [`linuxcve/evaluate.go`](../../internal/linuxcve/evaluate.go),
+  [`actionhelper/backend.go`](../../internal/actionhelper/backend.go),
+  [`api/service_actions.go`](../../internal/api/service_actions.go),
+  [selected APT candidate](../selected-package-updates-native.md),
+  [guided service-action candidate](../guided-service-action-setup.md).
+- AI: [`analysis/packet.go`](../../internal/analysis/packet.go) keeps `BuildPacket`
   limited to empty/basic-readonly provenance;
-  [`analysis/health.go`](../internal/analysis/health.go) and
-  [`analysis/journal.go`](../internal/analysis/journal.go) are separate scopes.
-  [`windbgcontract/readiness.go`](../internal/windbgcontract/readiness.go) cannot
-  report a connected implementation; see [WinDbg scope](windows-windbg-mcp-candidate.md).
-- Setup/lifecycle: [`cmd/windows-service/setup_wizard.go`](../cmd/windows-service/setup_wizard.go),
-  [`cmd/windows-service/read_setup.go`](../cmd/windows-service/read_setup.go),
-  [`windowsservice/service.go`](../internal/windowsservice/service.go),
-  [`windowsservice/removal.go`](../internal/windowsservice/removal.go),
-  [retained-state semantics](windows-prerelease-install.md#cancellation-and-partial-state).
+  [`analysis/health.go`](../../internal/analysis/health.go) and
+  [`analysis/journal.go`](../../internal/analysis/journal.go) are separate scopes.
+  [`windbgcontract/readiness.go`](../../internal/windbgcontract/readiness.go) cannot
+  report a connected implementation; see [WinDbg scope](../windows-windbg-mcp-candidate.md).
+- Setup/lifecycle: [`cmd/windows-service/setup_wizard.go`](../../cmd/windows-service/setup_wizard.go),
+  [`cmd/windows-service/read_setup.go`](../../cmd/windows-service/read_setup.go),
+  [`windowsservice/service.go`](../../internal/windowsservice/service.go),
+  [`windowsservice/removal.go`](../../internal/windowsservice/removal.go),
+  [retained-state semantics](../windows-prerelease-install.md#cancellation-and-partial-state).
 
 ## First functional increment: useful event messages
 
