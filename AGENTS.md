@@ -121,6 +121,11 @@ file as navigation and project constraints, never as permission to act on a host
   attribution only, explicit HTTP disclosure, exact retry and private operator
   expiry. No DNS, process joins, traffic payloads or AI export; source fixtures
   never authorize a host network read or a service/security change.
+- Windows adapter link/DNS/gateway context is a separate default-off local scope.
+  Read `docs/windows-adapter-context.md` before changing native bounds, consent,
+  wire v8 or its private Network view. Preserve all old grants/frames and the
+  five-scope coordinator. No probes, DNS resolution, routes, traffic or privilege
+  expansion; source fixtures never authorize host reads or grants.
 - Windows configured service startup metadata is a separate default-off local
   capability. Read `docs/windows-service-startup.md` before changing consent,
   aggregate native-buffer handling or wire v6. Preserve the original service-row

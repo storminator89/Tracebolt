@@ -2,6 +2,9 @@ import './windows-service-health-fixtures.test.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import {createRequire} from 'node:module';
+import {fileURLToPath} from 'node:url';
+import {requireWindowsAdapterContextEvidence} from './windows-adapter-context-browser.mjs';
 import {remountWindowsDevice,settleWindowsHistory,windowsBrowserFixture,windowsInventoryFixtureDisclosure,windowsInventoryFailureStage,windowsFixtureSessionExpiry} from './windows-inventory-browser.mjs';
 function fixtureSessionRead({status=200,value={authenticated:true,serverNow:'2026-10-10T12:00:00Z',expiresAt:'2026-10-10T12:20:00Z',csrfToken:'PRIVATE_INERT_SESSION_VALUE'},fetchFailure=false,bodyFailure=false,disposeFailure=false}={}){
  const calls=[],response={status:()=>status,async json(){calls.push('json');if(bodyFailure)throw new Error('PRIVATE_INERT_BODY_FAILURE');return value;},async dispose(){calls.push('dispose');if(disposeFailure)throw new Error('PRIVATE_INERT_DISPOSE_FAILURE');}};
@@ -119,6 +122,50 @@ test('additive network overlay keeps hosted browser safeguards and desktop/mobil
  assert.match(source,/clockNow\+=6000;await page\.clock\.runFor\(6000\)/);assert.match(source,/API owning PID/);assert.match(source,/Besitzende PID laut API/);assert.match(source,/networkTable\.getByRole\('link'\)/);
  assert.ok(source.includes("await expect(networkTable.getByText('fixture.exe',{exact:true})).toHaveCount(0)"));
  assert.doesNotMatch(source,/chromium\.launch|newContext\(|execFile|spawn\(|writeFile|ignoreHTTPSErrors/);
+});
+
+test('hosted adapter rows use the production fixture with distinct grant and exact base capture binding',async()=>{
+ const require=createRequire(new URL('../../web/package.json',import.meta.url)),{build}=require('esbuild');
+ const built=await build({stdin:{contents:"export {windowsAdapterContext} from './windows-adapter-context-fixture'; export {validWindowsInventoryView} from './windows-inventory-types';",resolveDir:fileURLToPath(new URL('../../web/src/',import.meta.url)),loader:'ts'},bundle:true,platform:'node',format:'esm',write:false,logLevel:'silent'});
+ const {windowsAdapterContext,validWindowsInventoryView}=await import('data:text/javascript;base64,'+Buffer.from(built.outputFiles[0].text).toString('base64'));
+ const now='2026-10-07T12:00:10Z',fixture=windowsAdapterContext();
+ for(const phase of ['fresh','stale','metrics-stale','network-empty','network-denied','network-unavailable','network-partial','network-truncated','network-stale','network-expiring']){
+  const view=windowsBrowserFixture(now,phase),adapter=view.adapterContext;
+  assert.equal(validWindowsInventoryView(view,view.deviceId),true);
+  assert.deepEqual(adapter,{...fixture,generationId:view.snapshot.generationId,collectedAt:view.snapshot.collectedAt});
+  for(const key of ['events','volumes','processMetrics','network'])assert.notEqual(adapter.grantId,view[key].grantId);
+  for(const change of [{collectedAt:new Date(Date.parse(adapter.collectedAt)+1).toISOString()},{generationId:`sample_${'b'.repeat(32)}`},{grantId:view.network.grantId}])assert.equal(validWindowsInventoryView({...view,adapterContext:{...adapter,...change}},view.deviceId),false);
+ }
+ assert.deepEqual(fixture.rows.map(row=>row.state),['up','down','unknown']);
+ assert.deepEqual([fixture.rows[0].txLinkBps,fixture.rows[0].rxLinkBps],[1000000000,2500000000]);
+ const expired=windowsBrowserFixture('2026-10-07T12:00:16Z','network-expiring',now);
+ assert.equal(expired.snapshot,null);assert.equal(Object.hasOwn(expired,'adapterContext'),false);
+ assert.equal(Object.hasOwn(windowsBrowserFixture(now,'legacy'),'adapterContext'),false);
+ const mutated=windowsBrowserFixture(now);mutated.adapterContext.rows[0].dnsServers.addresses.length=0;
+ assert.deepEqual(windowsBrowserFixture(now).adapterContext.rows,fixture.rows,'independent responses cannot mutate the source rows');
+});
+
+test('adapter screenshot completion requires every source-bound locale and viewport without a browser',()=>{
+ const sourceSha='a'.repeat(40),testName='Invented Windows case';
+ const fixture=()=>['en','de'].flatMap(locale=>[1440,390].map(width=>({file:`synthetic-windows-adapter-context-${width}-${locale}.png`,sourceSha,test:testName,locale,viewport:{width,height:width===390?844:1000},publicSafe:true,fullPage:false,fixtureDisclosure:'Invented adapter context; no native collection.'})));
+ assert.deepEqual(requireWindowsAdapterContextEvidence(fixture(),sourceSha,testName),{adapters:4});
+ assert.throws(()=>requireWindowsAdapterContextEvidence([],sourceSha,testName),/completion evidence/);
+ for(let index=0;index<4;index++){
+  const missing=fixture();missing.splice(index,1);assert.throws(()=>requireWindowsAdapterContextEvidence(missing,sourceSha,testName),/completion evidence/);
+  const duplicate=fixture();duplicate[index]={...duplicate[(index+1)%4]};assert.throws(()=>requireWindowsAdapterContextEvidence(duplicate,sourceSha,testName),/completion evidence/);
+ }
+ for(const mutate of [item=>{item.sourceSha='b'.repeat(40);},item=>{item.test='Another case';},item=>{item.locale='de';},item=>{item.viewport.width=390;},item=>{item.viewport.height=844;},item=>{item.publicSafe=false;},item=>{item.fullPage=true;},item=>{item.fixtureDisclosure='';}]){
+  const invalid=fixture();mutate(invalid[0]);assert.throws(()=>requireWindowsAdapterContextEvidence(invalid,sourceSha,testName),/completion evidence/);
+ }
+});
+
+test('adapter checks extend the existing Network flow without changing sessions, clocks or endpoint scope',()=>{
+ const source=fs.readFileSync(new URL('./windows-adapter-context-browser.mjs',import.meta.url),'utf8'),flow=fs.readFileSync(new URL('./windows-inventory-browser.mjs',import.meta.url),'utf8');
+ assert.match(flow,/exerciseWindowsAdapterContext\(\{page,expect,locale,width,shot,disclosure:windowsInventoryFixtureDisclosure\}\)/);
+ assert.match(flow,/networkTable=networkPanel\.locator\('\.windows-inventory-table'\)/);assert.match(flow,/const panel=networkPanel/);
+ assert.ok(source.includes('synthetic-windows-adapter-context-${width}-${locale}'));
+ assert.match(source,/details\[open\]/);assert.match(source,/toBeHidden\(\)/);assert.match(source,/toHaveCount\(1\)/);assert.match(source,/toBeInViewport\(\{ratio:1\}\)/);assert.match(source,/bounds\.right<=panel\.right\+1/);
+ assert.doesNotMatch(source,/chromium\.launch|newContext\(|execFile|spawn\(|writeFile|fetch\(|page\.route|page\.clock|setDefaultTimeout|waitForTimeout/);
 });
 
 

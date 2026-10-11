@@ -1,0 +1,11 @@
+.windows-adapter-context{margin-bottom:22px}
+.windows-adapter-table th:first-child{width:24%}
+.windows-adapter-table th:last-child{width:25%}
+.windows-adapter-addresses summary{cursor:pointer;font-size:12px}
+.windows-adapter-addresses summary:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+.windows-adapter-addresses dl{font-size:12px;margin:10px 0 0}
+.windows-adapter-addresses dl>div+div{margin-top:10px}
+.windows-adapter-addresses dt{color:var(--secondary);font-weight:600;margin-bottom:4px}
+.windows-adapter-addresses dd{margin:0;overflow-wrap:anywhere}
+.windows-adapter-addresses ul{list-style:none;padding:0;margin:0;line-height:1.65}
+.windows-adapter-list-quality{display:block;color:var(--secondary);margin-bottom:4px}

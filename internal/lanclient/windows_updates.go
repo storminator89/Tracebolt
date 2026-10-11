@@ -126,7 +126,10 @@ func trimWindowsUpdateSibling(ctx context.Context, f *frame) bool {
 }
 
 func validateWindowsUpdatesFrame(f frame, fields map[string]json.RawMessage) error {
-	if f.SchemaVersion != FrameWindowsUpdatesVersion {
+	if f.SchemaVersion == FrameWindowsAdapterContextVersion && f.WindowsUpdates == nil && len(fields["windowsUpdates"]) == 0 {
+		return nil
+	}
+	if f.SchemaVersion != FrameWindowsUpdatesVersion && f.SchemaVersion != FrameWindowsAdapterContextVersion {
 		if f.WindowsUpdates != nil || len(fields["windowsUpdates"]) != 0 {
 			return ErrState
 		}

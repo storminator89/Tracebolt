@@ -65,6 +65,8 @@ func nativeReceiptOperation(ctx context.Context, r request, receipt installRecei
 		return updatesOperation(ctx, r, receipt.Service, windowsservice.InspectOwned, lanclient.ConfigureWindowsUpdates)
 	case "service-startup-preview", "service-startup-enable", "service-startup-disable":
 		return serviceStartupOperation(ctx, r, receipt.Service, windowsservice.InspectOwned, lanclient.ConfigureWindowsServiceStartup)
+	case "adapter-context-preview", "adapter-context-enable", "adapter-context-disable":
+		return adapterContextOperation(ctx, r, receipt.Service, windowsservice.InspectOwned, lanclient.ConfigureWindowsAdapterContext)
 	case "network-preview", "network-enable", "network-disable":
 		return networkOperation(ctx, r, receipt.Service, windowsservice.InspectOwned, lanclient.ConfigureWindowsNetwork)
 	case "process-metrics-preview", "process-metrics-enable", "process-metrics-disable":

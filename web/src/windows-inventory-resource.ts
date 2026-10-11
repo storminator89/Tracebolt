@@ -78,6 +78,10 @@ export function useWindowsInventory(deviceId: string, enabled: boolean, sessionK
     const network = view && (status === 'fresh' || status === 'stale') && networkAge < 86400000 ? view.network ?? null : null;
     const networkStale = network !== null && (networkAge < 0 || networkAge > 120000 || !view?.receivedAt || inventoryAge(view.serverNow, view.receivedAt) + age > 120000);
     const networkExpired = Boolean(view?.network) && Number.isFinite(networkAge) && networkAge >= 86400000;
+    const adapterContextAge = view?.adapterContext ? inventoryAge(view.serverNow, view.adapterContext.collectedAt) + age : Infinity;
+    const adapterContext = view && (status === 'fresh' || status === 'stale') && adapterContextAge < 86400000 ? view.adapterContext ?? null : null;
+    const adapterContextStale = adapterContext !== null && (adapterContextAge < 0 || adapterContextAge > 120000 || !view?.receivedAt || inventoryAge(view.serverNow, view.receivedAt) + age > 120000);
+    const adapterContextExpired = Boolean(view?.adapterContext) && Number.isFinite(adapterContextAge) && adapterContextAge >= 86400000;
     const startupAge = view?.serviceStartup ? inventoryAge(view.serverNow, view.serviceStartup.collectedAt) + age : Infinity;
     const serviceStartup = view && (status === 'fresh' || status === 'stale') && startupAge < 86400000 ? view.serviceStartup ?? null : null;
     const serviceStartupStale = serviceStartup !== null && (status !== 'fresh' || startupAge < 0 || startupAge > 120000);
@@ -90,6 +94,6 @@ export function useWindowsInventory(deviceId: string, enabled: boolean, sessionK
     const updates = view && (status === 'fresh' || status === 'stale') && !updatesAhead && updatesAge >= 0 && updatesAge < 86400000 ? view.updates ?? null : null;
     const updatesStale = updates !== null && (status !== 'fresh' || updatesAge > 120000);
     const updatesExpired = Boolean(view?.updates) && Number.isFinite(updatesAge) && updatesAge >= 86400000;
-    return { updates, updatesStale, updatesExpired, updatesAhead, serviceStartup, serviceStartupStale, elapsedMS: age, network, networkStale, networkExpired, processMetrics, processMetricsStale, volumes, volumesStale, events, eventsStale, view, snapshot: view && (status === 'fresh' || status === 'stale') ? view.snapshot : null, status, loading: enabled && loading, error: enabled ? error : null, refresh: () => void read() };
+    return { adapterContext, adapterContextStale, adapterContextExpired, updates, updatesStale, updatesExpired, updatesAhead, serviceStartup, serviceStartupStale, elapsedMS: age, network, networkStale, networkExpired, processMetrics, processMetricsStale, volumes, volumesStale, events, eventsStale, view, snapshot: view && (status === 'fresh' || status === 'stale') ? view.snapshot : null, status, loading: enabled && loading, error: enabled ? error : null, refresh: () => void read() };
 }
 export type WindowsInventoryResource = ReturnType<typeof useWindowsInventory>;

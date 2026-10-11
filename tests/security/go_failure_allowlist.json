@@ -1,5 +1,5 @@
 {
-  "goSourceSha256": "16d60959ca15b746b934b1af352940e2445b6dd8a3618167a6ffc752c0945b36",
+  "goSourceSha256": "aa86854fceb431a1b7ea8164dffb61f78d075b6e8d26b88808ab1fb182f47c55",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -229,6 +229,12 @@
       "TestReadOnlyPrerequisitesRejectSourceAndEveryMutatingMode"
     ],
     "localrmm/cmd/windows-service": [
+      "TestAdapterContextConsentErrorsAndInvalidModes",
+      "TestAdapterContextConsentFlagsExplicitAndBounded",
+      "TestAdapterContextConsentNeverConfiguresWithMissingDependencies",
+      "TestAdapterContextDisclosureMustCompleteBeforeDispatch",
+      "TestAdapterContextFlagsDoNotAuthorizeAnotherScope",
+      "TestAdapterContextRequiresOwnedStoppedService",
       "TestCLIFinitePhaseReasonDoesNotEchoCause",
       "TestConcurrentStopAcceptsOnlyCooperativePendingOutcomes",
       "TestConcurrentStopDoesNotHidePendingAuthorityFailures",
@@ -2195,6 +2201,20 @@
       "TestSystemNativeMissingStateAndFuturePendingFailBeforeSource",
       "TestSystemNativeTLSHTTPExactRetryBeforeRecapture",
       "TestValidateGuidedHandoffIsLocalAndPreservesState",
+      "TestWindowsAdapterContextConsentCreateOnlyAndReenable",
+      "TestWindowsAdapterContextConsentFreshCreateRacesAndFailuresDoNotAdopt",
+      "TestWindowsAdapterContextConsentMissingExistingRecordFailsClosedEveryMode",
+      "TestWindowsAdapterContextConsentNeverCreatesOnPreviewDisableOrAccessFailure",
+      "TestWindowsAdapterContextConsentRejectsIncompleteForeignAndFailedStorage",
+      "TestWindowsAdapterContextConsentSeparateProtectedManifest",
+      "TestWindowsAdapterContextConsentStorageIsolation",
+      "TestWindowsAdapterContextEndToEndSelectionsAndAuthority",
+      "TestWindowsAdapterContextFrameBudgetPreservesBindings",
+      "TestWindowsAdapterContextInvalidRequestDoesNotReadHost",
+      "TestWindowsAdapterContextPendingReplacementAndPreSendChecks",
+      "TestWindowsAdapterContextPreviewPreservesExistingRecord",
+      "TestWindowsAdapterContextRetryRestartAndConsentRecheck",
+      "TestWindowsAdapterContextWireRejectsPromotedOrMalformedFrames",
       "TestWindowsBootstrapRouteBoundariesRemainClosed",
       "TestWindowsCapabilityGrantDigestDetectsReplacementWithoutCollection",
       "TestWindowsCapacityAcceptedReceiptMonitorAndOperatorPipeline",
@@ -3270,6 +3290,12 @@
       "TestUninstallPendingPredicateAndReadOrderUnchanged",
       "TestUninstallPendingSequenceDoesNotLatchEarlierSuccess",
       "TestUninstallProgressOnlyRecognizesExactBoundedParagraphs"
+    ],
+    "localrmm/internal/windowsadapters": [
+      "TestAdapterContextCollectionContractAndBudget",
+      "TestAdapterContextNativeCallFlagsBoundsAndClear",
+      "TestAdapterContextNativeDecoderBoundsAndPartial",
+      "TestAdapterContextNativeDecoderFieldsAndExclusions"
     ],
     "localrmm/internal/windowsagentconfig": [
       "TestWindowsStoreSchemasRemainSeparateAndFixed"

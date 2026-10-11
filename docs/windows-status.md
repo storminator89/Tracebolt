@@ -33,6 +33,11 @@ hostnames and IPv4/IPv6 interface addresses, with partial/unavailable states and
 original capture age. See [Windows fleet display](windows-fleet-identity.md).
 This manager/UI projection adds no local grant or collection.
 
+Separately consented [adapter context](windows-adapter-context.md) now has a source
+path for native link state, directional speeds and numeric DNS/gateway addresses
+in the existing Network tab. It is not part of the five-scope setup or published
+preview, and its native acceptance remains pending.
+
 These scopes do not establish whole-machine coverage or Linux feature parity.
 Configured service-startup metadata is a separate default-off source capability;
 it is not included in the five-scope Setup choice. Windows event-message content,
