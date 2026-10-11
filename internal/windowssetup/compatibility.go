@@ -11,6 +11,8 @@ import (
 const CapabilitiesPath = "/v1/windows/setup-capabilities"
 const CapabilitiesVersion = "tracebolt.windows-setup-capabilities.v1"
 const FreshReadContract = "fresh-five-read-scopes-v1"
+const ReadAdminCapabilitiesPath = "/v1/windows/read-admin-setup-capabilities"
+const ReadAdminContract = "fresh-twelve-read-admin-scopes-v1"
 
 var ErrCompatibility = errors.New("manager is unavailable or does not support this Windows Setup contract; update the manager and obtain a new Windows bootstrap export")
 
@@ -29,10 +31,26 @@ func Expected(manager, enrollment, agent string) Capabilities {
 	return Capabilities{CapabilitiesVersion, manager, enrollment, agent, "windows-inventory-v1", FreshReadContract}
 }
 
+func ExpectedReadAdmin(manager, enrollment, agent string) Capabilities {
+	c := Expected(manager, enrollment, agent)
+	c.SetupContract = ReadAdminContract
+	return c
+}
+
+func CapabilityPath(c Capabilities) (string, error) {
+	switch c.SetupContract {
+	case FreshReadContract:
+		return CapabilitiesPath, nil
+	case ReadAdminContract:
+		return ReadAdminCapabilitiesPath, nil
+	}
+	return "", ErrCompatibility
+}
+
 // Match accepts only the exact bounded canonical finite contract. Old or newer
 // incompatible support cannot be mistaken for this Setup's five-scope receiver.
 func Match(raw []byte, expected Capabilities) error {
-	if len(raw) == 0 || len(raw) > 2048 || expected.SchemaVersion != CapabilitiesVersion || expected.SetupContract != FreshReadContract || expected.ManagerInstanceID == "" || expected.EnrollmentOrigin == "" || expected.AgentOrigin == "" || expected.CollectionProfile != "windows-inventory-v1" {
+	if len(raw) == 0 || len(raw) > 2048 || expected.SchemaVersion != CapabilitiesVersion || (expected.SetupContract != FreshReadContract && expected.SetupContract != ReadAdminContract) || expected.ManagerInstanceID == "" || expected.EnrollmentOrigin == "" || expected.AgentOrigin == "" || expected.CollectionProfile != "windows-inventory-v1" {
 		return ErrCompatibility
 	}
 	var got Capabilities

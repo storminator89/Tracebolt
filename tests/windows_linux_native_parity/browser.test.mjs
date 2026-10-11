@@ -11,7 +11,7 @@ import { createHash, X509Certificate } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { readFile, mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
-import { SCHEMA, CHECKS, REASONS, Refusal, validateSpec, validateResult, resultSummary, finishSummary, freshCapture, fiveScopeBaseline, advancingSample, sameIdentity, sameEvent, syntheticMessage, usableUpdates, renderedUpdatesMatch, inspectRequest, budget, canonicalJSON, validateBootstrap, validateEndpointBinding, observe, loadValidators, pinnedDependencies, guardedResponseBody, closeBrowserObserved } from './browser.mjs';
+import { requireCurrentSetupGate, SCHEMA, CHECKS, REASONS, Refusal, validateSpec, validateResult, resultSummary, finishSummary, freshCapture, fiveScopeBaseline, advancingSample, sameIdentity, sameEvent, syntheticMessage, usableUpdates, renderedUpdatesMatch, inspectRequest, budget, canonicalJSON, validateBootstrap, validateEndpointBinding, observe, loadValidators, pinnedDependencies, guardedResponseBody, closeBrowserObserved } from './browser.mjs';
 const hash = value => createHash('sha256').update(value).digest('hex');
 function spec() {
   return { schema: SCHEMA, runId: 'portable-only-13', planSHA256: hash('plan'), source: { commit: 'ab'.repeat(20), tree: 'cd'.repeat(20), inventorySHA256: hash('source') }, expiresUnix: Math.floor(Date.now() / 1000) + 600, operatorOrigin: 'https://manager.test:8443', agentOrigin: 'https://manager.test:9443', managerInstanceId: `manager_${'ab'.repeat(16)}`, issuerFingerprint: hash('issuer'), bootstrapServerCASHA256: hash('server ca'), bootstrapIssuerRootSHA256: hash('issuer root'), windowsBindingPath: '/tmp/private/portable-only-13-windows-binding.json', windowsTargetId: 'approved-test-vm', windowsMachineIdSHA256: hash('windows machine'), setupSHA256: hash('setup'), serviceSHA256: hash('service'), chromium: { path: '/tmp/browser', sha256: hash('browser') }, browserRoot: '/tmp/runtime', syntheticEvent: { source: 'TraceboltParity-portable-only-13', eventId: 123, messageSHA256: hash(syntheticMessage('portable-only-13')) }, outputPath: '/tmp/private/result.json', workspace: '/tmp/private' };
@@ -280,4 +280,9 @@ test('direct main refuses every CI marker before input or native work while pure
     assert.equal(run.status, 0, flag); assert.equal(run.stderr, '', flag);
     assert.deepEqual(JSON.parse(run.stdout), { status: 2, inputRead: false }, flag);
   }
+});
+
+
+test('historical five-scope browser entry cannot authorize current twelve-scope Setup', () => {
+  assert.throws(() => requireCurrentSetupGate(), error => error instanceof Refusal && error.reason === 'read_admin_native_gate_unavailable');
 });

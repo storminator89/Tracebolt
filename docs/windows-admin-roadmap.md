@@ -6,6 +6,15 @@ use focused functional/security regressions and required CI rather than delaying
 features for marginal test polish. A confirmed authorization or data-integrity
 defect still blocks the affected feature.
 
+Current delivery targets a fresh clean development installation. There are no
+existing user installations, and publishing a preview does not establish a
+deployed user base. Migration, old-to-new binary upgrade and existing-agent
+reconsent are not current release/delivery gates. Preserve historical code and
+evidence; native fresh-install, provider and explicit consent acceptance remain.
+Read admin is the prominent fresh Setup profile with concise groups, optional
+full details and initially unchecked scope consent. Service control remains a
+separate optional approval.
+
 ## Current starting point
 
 - **Published:** unsigned x64 Windows preview.1, source `14719116`, with five
@@ -75,8 +84,9 @@ update cache, events, full services, own-agent restart and retained-state remova
 The existing Server 2025 controllers have exact target locks and must not be
 relabeled as desktop evidence. `windows-latest` is not Windows 11 proof.
 
-Reboot/sleep recovery, same-identity upgrade/repair, signing, ARM64 runtime and
-deliberate complete uninstall remain separate lifecycle work. No date or full
+Reboot/sleep recovery, signing, ARM64 runtime and deliberate complete uninstall
+remain separate lifecycle work. Existing upgrade/repair source is historical
+development work, not a migration plan or a gate for this fresh-install target. No date or full
 parity claim is made by this roadmap. See [current Windows status](windows-status.md),
 [the historical Linux/Windows comparison](windows-linux-parity.md), and
 [complete service scope](windows-full-services-contract.md), and

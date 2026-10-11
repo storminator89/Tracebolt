@@ -3,7 +3,10 @@
 `Run(Config, Hooks) error` uses fixed Win32 controls through `x/sys/windows`,
 without WebView, browser navigation, downloads, third-party GUI packages, or a
 second installation engine. The caller supplies the embedded service provenance,
-complete five-scope disclosure and existing coordinator hooks.
+complete twelve-scope Read admin disclosure and existing coordinator hooks.
+Read admin is the only presented fresh profile; it is not an extra opt-in above
+a five-scope default. Review starts with five readable groups and offers full
+scope/provider details through an optional details button.
 
 The three pages choose a public bootstrap, review trust and scope, and display
 operation status. The selected public file is bounded to 64 KiB; Windows permits
@@ -20,7 +23,7 @@ mandatory. No existing installation is adopted by this fresh-only wizard.
 HTTPS remains the default, with no downgrade or fallback. A validated bootstrap
 can explicitly select isolated HTTP-test. Both origins must then use HTTP; mixed
 transport is rejected. The complete separate HTTP disclosure is mandatory and
-an additional unchecked checkbox acknowledges plaintext invitation, five-scope
+an additional unchecked checkbox acknowledges plaintext invitation, twelve-scope
 telemetry and forged manager-response risks. The install hook receives `true`
 only after this additional approval; TLS always receives `false`. Back and new
 input clear the HTTP acknowledgement too.
@@ -52,7 +55,9 @@ acceptance. Those require a separately approved disposable Windows gate.
 Native automation contract: window class `TraceboltFreshSetupWizard`; button IDs
 1 Next/Install, 2 Cancel/Close, 101 Back, 102 Choose file, 103 Uninstall, and
 104/105/106/107 scope/service/identity/trust checkboxes. The HTTP-risk checkbox is
-108 and exists only for explicit HTTP-test. Display IDs are
+108 and exists only for explicit HTTP-test. Control 109 is the static Read admin
+profile label; 110 switches between Scope details and the grouped summary. Neither
+grants consent or changes the selected scopes. Display IDs are
 200 heading, 201 provenance, 202 note/status, 203 selected file, 204 review and
 205 operation status. The standard public-file
 dialog title is `Choose public bootstrap only (never the invitation)`. No hidden

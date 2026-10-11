@@ -108,6 +108,10 @@ or public observation, AI/provider packets, health policies, alarms, exports or
 notifications. EN/DE Security shows compact source rows, original capture and
 collapsed source detail. There is no global green protection/compliance badge.
 
+See [combined context fairness](windows-context-fairness.md) for alternating
+fresh-cycle source priority and separately dated previous captures beside the
+latest unavailable attempt. This does not change grants or telemetry versions.
+
 ## Verification boundary
 
 Portable fixtures exercise canonical bounds/unknowns, independent provider

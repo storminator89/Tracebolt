@@ -14,6 +14,7 @@ const (
 	PlanUpdates             Capability = "plan_updates"
 	ExecuteUpdates          Capability = "execute_updates"
 	RestartService          Capability = "restart_service"
+	WindowsServiceControl   Capability = "windows_service_control"
 	ManageAlarms            Capability = "manage_alarms"
 	ManageApplicationChecks Capability = "manage_application_checks"
 	MaxOperators                       = 32
@@ -52,6 +53,8 @@ func capabilityBit(c Capability) uint8 {
 		return 16
 	case ManageApplicationChecks:
 		return 32
+	case WindowsServiceControl:
+		return 64
 	default:
 		return 0
 	}
@@ -123,8 +126,8 @@ func (s Session) Named() bool     { return s.actor.id != "" }
 // Capabilities returns a defensive display snapshot, not a mutation permit.
 // Call BeginCapability immediately before short privileged dispatch work.
 func (s Session) Capabilities() []Capability {
-	out := make([]Capability, 0, 6)
-	for _, c := range []Capability{Read, PlanUpdates, ExecuteUpdates, RestartService, ManageAlarms, ManageApplicationChecks} {
+	out := make([]Capability, 0, 7)
+	for _, c := range []Capability{Read, PlanUpdates, ExecuteUpdates, RestartService, ManageAlarms, ManageApplicationChecks, WindowsServiceControl} {
 		if s.actor.grants&capabilityBit(c) != 0 {
 			out = append(out, c)
 		}

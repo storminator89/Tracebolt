@@ -229,3 +229,6 @@ func (m *Manager) Available() bool { return m.live() == nil }
 func (m *Manager) MatchesBinding(b enrollmentstate.Binding) bool {
 	return m != nil && m.store != nil && m.store.Config().Binding == b
 }
+
+// PublicKey returns the public command pin for cross-domain key separation.
+func (m *Manager) PublicKey() ed25519.PublicKey { return m.keyPublic() }

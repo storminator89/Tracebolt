@@ -51,7 +51,7 @@ func reconcileReadObservation(ctx context.Context, intentRaw, receiptRaw []byte,
 		return zero, errLifecycle
 	}
 	p := retained.ReadSetup
-	if retained.Version != 2 || !retained.Prepared || !retained.Service.Complete || p == nil || validateReadSetupConsent(p.Consent) != nil || !reflect.DeepEqual(intent.Consent, p.Consent) || !validReadSetupBinding(p.SenderBinding) || !validReadSetupDigests(p.GrantDigests) || !p.Grants.MetadataScopeVerified || p.Grants.FailedScope != "" || !reflect.DeepEqual(p.Grants.AppliedScopes, readSetupScopes()[1:]) {
+	if p == nil || retained.Version != readSetupReceiptVersion(p.Consent) || !retained.Prepared || !retained.Service.Complete || validateReadSetupConsent(p.Consent) != nil || !reflect.DeepEqual(intent.Consent, p.Consent) || !validReadSetupBinding(p.SenderBinding) || !validReadSetupConsentDigests(p.Consent, p.GrantDigests) || !p.Grants.MetadataScopeVerified || p.Grants.FailedScope != "" || !reflect.DeepEqual(p.Grants.AppliedScopes, p.Consent.Scopes[1:]) {
 		return zero, errLifecycle
 	}
 	already := completeReadSetup(retained)

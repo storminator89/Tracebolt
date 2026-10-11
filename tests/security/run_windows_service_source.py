@@ -17,6 +17,16 @@ project = _reporter.project
 PACKAGES = ("./internal/windowspackage", "./internal/windowssetup", "./internal/windowssetupui", "./internal/windowsstate", "./internal/windowsservice", "./internal/windowsconsole",
             "./internal/windowsagentconfig", "./cmd/windows-service", "./internal/windowsvolumes", "./internal/windowsprocessmetrics", "./internal/windowsnetwork", "./internal/windowsmanaged")
 REQUIRED = {
+    ("localrmm/cmd/windows-service", "TestReadAdminFreshProfileUsesDistinctReceiptAndExactElevenGrants"),
+    ("localrmm/cmd/windows-service", "TestReadAdminFreshFailuresNeverStartIncompleteAuthority"),
+    ("localrmm/cmd/windows-service", "TestReadAdminFreshGrantGuardPinsOriginalRecordedSender"),
+    ("localrmm/cmd/windows-service", "TestReadAdminReconsentOneExplicitScopeExtensionPreservesOriginalReceipt"),
+    ("localrmm/cmd/windows-service", "TestReadAdminReconsentRejectsMissingAuthorityBeforeCreation"),
+    ("localrmm/cmd/windows-service", "TestReadAdminReconsentEveryFailureRetainsPartialEvidenceAndNeverStarts"),
+    ("localrmm/cmd/windows-service", "TestReadAdminCLIRequiresExplicitNewAcknowledgementAndFullDisclosure"),
+    ("localrmm/internal/windowssetupui", "TestReadAdminFreshProfileKeepsConsentUncheckedAcrossNavigation"),
+    ("localrmm/internal/windowssetupui", "TestReadAdminBusyAndRepeatedDetailsCannotExpandConsent"),
+    ("localrmm/internal/windowssetup", "TestReadAdminContractCannotUseFiveScopeAdvertisement"),
     ("localrmm/cmd/windows-service", "TestRestartPublicDeadlineBeginsBeforeReceiptAcquisition"),
     ("localrmm/cmd/windows-service", "TestReceiptLeaseChecksElapsedDeadlineAfterSynchronousWork"),
     ("localrmm/cmd/windows-service", "TestGUILeaseCombinedFailureKeepsPrimaryFiniteDiagnostic"),

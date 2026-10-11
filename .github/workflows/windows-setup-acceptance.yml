@@ -1,5 +1,9 @@
 name: Manual disposable packaged Windows Setup GUI acceptance
 
+# Current fresh twelve-scope approval parses only. Native launch/aggregation are
+# fail-closed until the twelve-scope fixture, receipt and frame gate is implemented.
+# Historical five-scope evidence is unchanged and never authorizes this profile.
+
 # A separate exact-source consent contract; never push, pull_request, schedule,
 # workflow_call, workflow_run or the old coordinator-only acceptance approval.
 on:
@@ -20,12 +24,12 @@ on:
         default: false
         type: boolean
       identity:
-        description: 'Approve persistent endpoint keys/identity and five exact grants, fixture public fingerprint/comparison approval; no production manager identity'
+        description: 'Approve persistent endpoint keys/identity and twelve exact scope grants, fixture public fingerprint/comparison approval; no production manager identity'
         required: true
         default: false
         type: boolean
-      five_read_scopes:
-        description: 'Approve bounded inventory/names/hostname/interfaces, Application/System event headers, volume capacities, process CPU/working-set, numeric TCP/UDP metadata/PIDs; no content/traffic/AI export'
+      twelve_read_admin_scopes:
+        description: 'Approve all twelve Read admin scopes: inventory/hostname/interfaces, event headers, volumes, process CPU/RAM, TCP/UDP/PIDs, service startup, complete Win32 services, complete HKLM software, adapter/DNS/gateway, build/update-history/reboot, Defender/Firewall, personal user/domain/session and join metadata; no event content, cached updates, control or AI'
         required: true
         default: false
         type: boolean
@@ -40,7 +44,7 @@ on:
         default: false
         type: boolean
       http_plaintext:
-        description: 'Separately approve one HTTP-test loopback GUI case: invitation, identity and five-scope telemetry are plaintext and manager responses forgeable; synthetic disposable data only, no TLS downgrade'
+        description: 'Separately approve one HTTP-test loopback GUI case: invitation, identity and all twelve scopes, including personal user/domain/session/join metadata, are plaintext and manager responses forgeable; synthetic disposable data only, no TLS downgrade'
         required: true
         default: false
         type: boolean
@@ -68,12 +72,12 @@ jobs:
     timeout-minutes: 40
     env:
       TRACEBOLT_SETUP_SOURCE: ${{ inputs.expected_source_sha }}
-      TRACEBOLT_SETUP_PROFILE: packaged-setup-gui-v1
+      TRACEBOLT_SETUP_PROFILE: packaged-setup-gui-read-admin-v2
       TRACEBOLT_SETUP_CASE: ${{ matrix.case }}
       TRACEBOLT_SETUP_APPROVE_APP_ACLS: ${{ inputs.app_acls }}
       TRACEBOLT_SETUP_APPROVE_SERVICES: ${{ inputs.services }}
       TRACEBOLT_SETUP_APPROVE_IDENTITY: ${{ inputs.identity }}
-      TRACEBOLT_SETUP_APPROVE_FIVE_READ_SCOPES: ${{ inputs.five_read_scopes }}
+      TRACEBOLT_SETUP_APPROVE_TWELVE_READ_ADMIN_SCOPES: ${{ inputs.twelve_read_admin_scopes }}
       TRACEBOLT_SETUP_APPROVE_SYNTHETIC_CONSOLE: ${{ inputs.synthetic_console }}
       TRACEBOLT_SETUP_APPROVE_LOOPBACK_TLS: ${{ inputs.loopback_tls }}
       TRACEBOLT_SETUP_APPROVE_HTTP_PLAINTEXT: ${{ inputs.http_plaintext }}
@@ -141,11 +145,11 @@ jobs:
       actions: read
     env:
       TRACEBOLT_SETUP_SOURCE: ${{ inputs.expected_source_sha }}
-      TRACEBOLT_SETUP_PROFILE: packaged-setup-gui-v1
+      TRACEBOLT_SETUP_PROFILE: packaged-setup-gui-read-admin-v2
       TRACEBOLT_SETUP_APPROVE_APP_ACLS: ${{ inputs.app_acls }}
       TRACEBOLT_SETUP_APPROVE_SERVICES: ${{ inputs.services }}
       TRACEBOLT_SETUP_APPROVE_IDENTITY: ${{ inputs.identity }}
-      TRACEBOLT_SETUP_APPROVE_FIVE_READ_SCOPES: ${{ inputs.five_read_scopes }}
+      TRACEBOLT_SETUP_APPROVE_TWELVE_READ_ADMIN_SCOPES: ${{ inputs.twelve_read_admin_scopes }}
       TRACEBOLT_SETUP_APPROVE_SYNTHETIC_CONSOLE: ${{ inputs.synthetic_console }}
       TRACEBOLT_SETUP_APPROVE_LOOPBACK_TLS: ${{ inputs.loopback_tls }}
       TRACEBOLT_SETUP_APPROVE_HTTP_PLAINTEXT: ${{ inputs.http_plaintext }}

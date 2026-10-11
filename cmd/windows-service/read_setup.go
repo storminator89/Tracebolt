@@ -46,14 +46,14 @@ func readSetupScopes() []string {
 	return []string{enrollmentcrypto.CollectionProfileWindowsInventory, windowseventhealth.Scope, windowsvolumes.Scope, windowsprocessmetrics.Scope, windowsnetwork.Scope}
 }
 func validateReadSetupConsent(c lanclient.WindowsCapabilityConsent) error {
-	if c.Validate() != nil || c.SchemaVersion != lanclient.WindowsCapabilityConsentVersionV3 || !reflect.DeepEqual(c.Scopes, readSetupScopes()) {
+	if c.Validate() != nil || !(c.SchemaVersion == lanclient.WindowsCapabilityConsentVersionV3 && reflect.DeepEqual(c.Scopes, readSetupScopes()) || c.SchemaVersion == lanclient.WindowsCapabilityConsentVersionV5 && reflect.DeepEqual(c.Scopes, lanclient.WindowsReadAdminScopes())) {
 		return errLifecycle
 	}
 	return nil
 }
 func completeReadSetup(r installReceipt) bool {
 	p := r.ReadSetup
-	return r.Version == 2 && r.Prepared && r.Service.Version == 1 && r.Service.Complete && p != nil && validateReadSetupConsent(p.Consent) == nil && p.Phase == "configured" && validReadSetupBinding(p.SenderBinding) && p.Grants.MetadataScopeVerified && p.Grants.FailedScope == "" && reflect.DeepEqual(p.Grants.AppliedScopes, readSetupScopes()[1:]) && validReadSetupDigests(p.GrantDigests)
+	return p != nil && r.Version == readSetupReceiptVersion(p.Consent) && r.Prepared && r.Service.Version == 1 && r.Service.Complete && p != nil && validateReadSetupConsent(p.Consent) == nil && p.Phase == "configured" && validReadSetupBinding(p.SenderBinding) && p.Grants.MetadataScopeVerified && p.Grants.FailedScope == "" && reflect.DeepEqual(p.Grants.AppliedScopes, p.Consent.Scopes[1:]) && validReadSetupConsentDigests(p.Consent, p.GrantDigests)
 }
 
 type readSetupJournal struct {
@@ -114,7 +114,7 @@ func setupReadObservation(ctx context.Context, bootstrap string, consent lanclie
 				if json.Unmarshal(raw, &retained) != nil || retained.Service.Version != 2 {
 					return errLifecycle
 				}
-				retained.Version = 2
+				retained.Version = readSetupReceiptVersion(consent)
 				retained.ReadSetup = progress
 				raw, err = json.Marshal(retained)
 			default:
@@ -219,7 +219,7 @@ func setupReadObservation(ctx context.Context, bootstrap string, consent lanclie
 			return grantErr
 		}
 		stage = "grants_result"
-		if !result.MetadataScopeVerified || result.FailedScope != "" || !reflect.DeepEqual(result.AppliedScopes, readSetupScopes()[1:]) {
+		if !result.MetadataScopeVerified || result.FailedScope != "" || !reflect.DeepEqual(result.AppliedScopes, consent.Scopes[1:]) {
 			return errLifecycle
 		}
 		stage = "grants_verify"
@@ -228,7 +228,7 @@ func setupReadObservation(ctx context.Context, bootstrap string, consent lanclie
 		}
 		stage = "grants_digests"
 		progress.GrantDigests, err = hooks.grantDigests(path, consent)
-		if err != nil || !validReadSetupDigests(progress.GrantDigests) {
+		if err != nil || !validReadSetupConsentDigests(consent, progress.GrantDigests) {
 			return errLifecycle
 		}
 		stage = "identity_recheck"
@@ -302,6 +302,9 @@ func writeReadSetupDisclosure(out io.Writer, c lanclient.WindowsCapabilityConsen
 	if c.InsecureHTTPAcknowledged {
 		notices = append(notices, enrollmentclient.WindowsInventoryHTTPPrivacy, windowseventhealth.HTTPPrivacy, windowsvolumes.HTTPPrivacy, windowsprocessmetrics.HTTPPrivacy, windowsnetwork.HTTPPrivacy)
 	}
+	if c.SchemaVersion == lanclient.WindowsCapabilityConsentVersionV5 {
+		notices = append(notices, lanclient.WindowsReadAdminNotices(c.InsecureHTTPAcknowledged)...)
+	}
 	for _, notice := range notices {
 		text := notice + "\n"
 		if n, err := io.WriteString(out, text); err != nil || n != len(text) {
@@ -317,7 +320,18 @@ type readSetupIntent struct {
 }
 
 func validReadSetupDigests(values []lanclient.WindowsCapabilityGrantDigest) bool {
-	scopes := readSetupScopes()[1:]
+	return validReadSetupScopeDigests(readSetupScopes()[1:], values)
+}
+func validReadSetupConsentDigests(c lanclient.WindowsCapabilityConsent, values []lanclient.WindowsCapabilityGrantDigest) bool {
+	return validateReadSetupConsent(c) == nil && validReadSetupScopeDigests(c.Scopes[1:], values)
+}
+func readSetupReceiptVersion(c lanclient.WindowsCapabilityConsent) int {
+	if c.SchemaVersion == lanclient.WindowsCapabilityConsentVersionV5 {
+		return 3
+	}
+	return 2
+}
+func validReadSetupScopeDigests(scopes []string, values []lanclient.WindowsCapabilityGrantDigest) bool {
 	if len(values) != len(scopes) {
 		return false
 	}

@@ -21,7 +21,11 @@ func (h *operatorHandler) windowsSetupCapabilities(w http.ResponseWriter, r *htt
 		return
 	}
 	b := h.windowsEnrollment.enrollmentBootstrap
-	raw, err := json.Marshal(windowssetup.Expected(b.ManagerInstanceID, b.EnrollmentOrigin, b.AgentOrigin))
+	expected := windowssetup.Expected(b.ManagerInstanceID, b.EnrollmentOrigin, b.AgentOrigin)
+	if r.URL.Path == windowssetup.ReadAdminCapabilitiesPath {
+		expected = windowssetup.ExpectedReadAdmin(b.ManagerInstanceID, b.EnrollmentOrigin, b.AgentOrigin)
+	}
+	raw, err := json.Marshal(expected)
 	if err != nil || len(raw) > 2048 {
 		fail(w, 503, "capabilities_unavailable", "Capabilities are unavailable.")
 		return

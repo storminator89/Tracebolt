@@ -84,7 +84,38 @@ See `docs/windows-expanded-acceptance-approval.md`. Source checks and Windows
 cross-builds do not authorize or establish native execution. Production Linux
 manager/store/dashboard and fresh installer acceptance remain unproven.
 
-## Packaged GUI controller fresh prerequisites
+## Fresh Read admin approval compatibility
+
+Current fresh Setup installs twelve read scopes after explicit unchecked consent.
+The manual packaged-GUI workflow now requires `packaged-setup-gui-read-admin-v2`
+and the separate `TWELVE_READ_ADMIN_SCOPES` approval, including personal
+user/domain/session and join metadata. Persistent identity, service/app permissions
+and HTTP plaintext risk remain distinct default-false approvals. Old profile or
+five-scope approval, including mixed old/new approval, is rejected before work.
+
+This is **approval parsing only**. Native launch and current-run aggregation are
+blocked unconditionally before building, staging, starting a fixture/GUI, reading
+Windows host state or publishing a package. No flag or environment override exists.
+The controller independently checks this boundary. Source tests and ordinary CI
+remain available; historical published five-scope reports and pins are unchanged.
+
+A later twelve-scope native implementation must separately cover:
+
+- `fixture/setup_capabilities.go`: the new Read admin capabilities route, not only
+  the historical five-scope route;
+- `cmd/windows-service/setup_acceptance_native_windows_test.go`: exact fresh
+  v3 outer receipts and v5 twelve-scope consent, instead of `setupReceipt` v2;
+- `setup_retained_state_test.go`: all eleven extension grant/state retention
+  bindings, instead of the four historical extension roots/digests;
+- `setupgate/frame_progress.go` and the fixture protocol: twelve-scope source and
+  frame evidence, instead of the historical two v5/five-scope frames;
+- real GUI consent/reset/disclosure and each scope's native LocalService result,
+  preserving denied/unavailable/partial evidence without permission expansion.
+
+The existing report schemas, `twoFiveScopeFrames` checks and fixture validators
+remain explicitly historical. Do not rename those checks into twelve-scope proof.
+
+## Packaged GUI controller fresh prerequisites (historical five-scope gate)
 
 The packaged GUI controller receives a restricted environment. Before its first
 KnownFolder lookup, it derives only `SystemDrive` from the Windows API's system

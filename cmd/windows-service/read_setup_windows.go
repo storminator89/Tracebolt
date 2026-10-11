@@ -93,6 +93,9 @@ func installReadObservationWithProgress(ctx context.Context, bootstrapPath strin
 			return journal.Verify()
 		},
 		ensureFreshScopes: func(receipt windowsservice.Receipt) error {
+			if consent.SchemaVersion == lanclient.WindowsCapabilityConsentVersionV5 {
+				return lanclient.WindowsReadAdminScopesAbsent(receipt.Layout.StateRoot, receipt.ServiceSID)
+			}
 			return lanclient.WindowsCapabilityScopesAbsent(receipt.Layout.StateRoot, receipt.ServiceSID)
 		},
 		activateIdentity: func(ctx context.Context, receipt windowsservice.Receipt) error {
@@ -117,7 +120,40 @@ func installReadObservationWithProgress(ctx context.Context, bootstrapPath strin
 		},
 		identity: lanclient.WindowsCapabilityIdentity,
 		configure: func(path string, consent lanclient.WindowsCapabilityConsent) (lanclient.WindowsCapabilityConsentResult, error) {
-			progress("Manager approved this identity. Applying and verifying the five explicitly approved local read scopes.")
+			progress("Manager approved this identity. Applying and verifying only the explicitly selected local read scopes.")
+			if consent.SchemaVersion == lanclient.WindowsCapabilityConsentVersionV5 {
+				if journal == nil {
+					return lanclient.WindowsCapabilityConsentResult{}, errLifecycle
+				}
+				initial, e := journal.Read("receipt.json")
+				if e != nil {
+					return lanclient.WindowsCapabilityConsentResult{}, e
+				}
+				return lanclient.ConfigureWindowsReadAdminCapabilities(path, consent, func() error {
+					if ctx.Err() != nil {
+						return ctx.Err()
+					}
+					if journal == nil || journal.Verify() != nil {
+						return errLifecycle
+					}
+					raw, e := journal.Read("receipt.json")
+					if e != nil {
+						return e
+					}
+					if !bytes.Equal(raw, initial) {
+						return errLifecycle
+					}
+					binding, e := lanclient.WindowsCapabilityIdentity(path, consent)
+					if e != nil {
+						return e
+					}
+					owned, e := readAdminFreshGrantReceipt(raw, consent, binding)
+					if e != nil {
+						return e
+					}
+					return s.verifyOwned(ctx, owned)
+				})
+			}
 			return lanclient.ConfigureWindowsCapabilities(path, consent)
 		},
 		verifyGrants:    lanclient.VerifyWindowsCapabilities,

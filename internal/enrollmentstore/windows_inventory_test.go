@@ -19,6 +19,11 @@ import (
 
 func activeWindowsStore(t *testing.T, profile string) (fixture, *Store, string, enrollmentstate.Snapshot, enrollmentcrypto.VerifiedCertificate) {
 	t.Helper()
+	return activeWindowsStoreTTL(t, profile, 24*time.Hour)
+}
+
+func activeWindowsStoreTTL(t *testing.T, profile string, ttl time.Duration) (fixture, *Store, string, enrollmentstate.Snapshot, enrollmentcrypto.VerifiedCertificate) {
+	t.Helper()
 	f := newFixture(t)
 	f.config.Binding.CollectionProfile = windowsmanaged.CollectionProfile
 	f.config.RecordLimit = 25
@@ -48,7 +53,7 @@ func activeWindowsStore(t *testing.T, profile string) (fixture, *Store, string, 
 	if e != nil {
 		t.Fatal(e)
 	}
-	v, e = s.BeginIssuance(ctx, enrollmentstate.IntentCommand{Control: f.control(v, 4), IntentID: id("intent", 1), SerialHex: fmt.Sprintf("%032x", 1), TemplateVersion: enrollmentstate.TemplateVersion, NotBefore: testNow, NotAfter: testNow + 86400})
+	v, e = s.BeginIssuance(ctx, enrollmentstate.IntentCommand{Control: f.control(v, 4), IntentID: id("intent", 1), SerialHex: fmt.Sprintf("%032x", 1), TemplateVersion: enrollmentstate.TemplateVersion, NotBefore: testNow, NotAfter: testNow + int64(ttl/time.Second)})
 	if e != nil {
 		t.Fatal(e)
 	}

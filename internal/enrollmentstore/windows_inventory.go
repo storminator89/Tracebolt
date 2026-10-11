@@ -18,9 +18,10 @@ import (
 	"time"
 )
 
-// WindowsInventoryView exposes only the latest profile-bound bounded frame.
-// It has no fallback to Linux operations, an old healthy generation or host reads.
+// WindowsInventoryView exposes the latest profile-bound bounded frame and
+// separately labeled original context captures. It never synthesizes a generation.
 type WindowsInventoryView struct {
+	RetainedContext     *WindowsContextRetained                `json:"retainedContext,omitempty"`
 	SessionContext      *windowssessions.Snapshot              `json:"sessionContext,omitempty"`
 	SecurityPosture     *windowssecurity.Snapshot              `json:"securityPosture,omitempty"`
 	SchemaVersion       string                                 `json:"schemaVersion"`
@@ -100,6 +101,11 @@ func (s *Store) WindowsInventoryView(ctx context.Context, id string, now time.Ti
 			out.PatchContext = frame.WindowsPatchContext
 			out.SecurityPosture = frame.WindowsSecurityPosture
 			out.SessionContext = frame.WindowsSessionContext
+			retained, err := readRetainedWindowsContext(ctx, t, identity.InvitationID, frame)
+			if err != nil {
+				return err
+			}
+			out.RetainedContext = retainedWindowsContextView(retained, frame, now)
 			out.Sequence = &seq
 			out.ReceivedAt = &received
 			out.Status = "fresh"
@@ -119,6 +125,7 @@ func (s *Store) WindowsInventoryView(ctx context.Context, id string, now time.Ti
 				out.PatchContext = nil
 				out.SecurityPosture = nil
 				out.SessionContext = nil
+				out.RetainedContext = nil
 			}
 		}
 		if identity.State == enrollmentstate.Revoked || identity.State == enrollmentstate.Canceled || identity.State == enrollmentstate.Rejected || identity.State == enrollmentstate.Expired || identity.Intent.NotAfter > 0 && now.Unix() >= identity.Intent.NotAfter {
@@ -134,6 +141,7 @@ func (s *Store) WindowsInventoryView(ctx context.Context, id string, now time.Ti
 			out.PatchContext = nil
 			out.SecurityPosture = nil
 			out.SessionContext = nil
+			out.RetainedContext = nil
 		}
 		return nil
 	})
@@ -163,6 +171,7 @@ func (v WindowsInventoryView) RecheckAt(now time.Time) (WindowsInventoryView, er
 		v.PatchContext = nil
 		v.SecurityPosture = nil
 		v.SessionContext = nil
+		v.RetainedContext = nil
 		return v, nil
 	}
 	if v.Snapshot != nil {
@@ -189,6 +198,7 @@ func (v WindowsInventoryView) RecheckAt(now time.Time) (WindowsInventoryView, er
 			v.PatchContext = nil
 			v.SecurityPosture = nil
 			v.SessionContext = nil
+			v.RetainedContext = nil
 		}
 	}
 	if v.Events != nil && now.Sub(v.Events.CollectedAt) >= 24*time.Hour {
@@ -211,6 +221,8 @@ func (v WindowsInventoryView) RecheckAt(now time.Time) (WindowsInventoryView, er
 	}
 	if v.AdapterContext != nil && (v.Snapshot == nil || now.Sub(v.AdapterContext.CollectedAt) >= 24*time.Hour) {
 		v.AdapterContext = nil
+	}
+	if v.PatchContext != nil && (v.Snapshot == nil || now.Sub(v.PatchContext.CollectedAt) >= 24*time.Hour) {
 		v.PatchContext = nil
 	}
 	if v.SecurityPosture != nil && (v.Snapshot == nil || now.Sub(v.SecurityPosture.CollectedAt) >= 24*time.Hour) {
@@ -218,6 +230,14 @@ func (v WindowsInventoryView) RecheckAt(now time.Time) (WindowsInventoryView, er
 	}
 	if v.SessionContext != nil && (v.Snapshot == nil || now.Sub(v.SessionContext.CollectedAt) >= 24*time.Hour) {
 		v.SessionContext = nil
+	}
+	if v.RetainedContext != nil {
+		copy := *v.RetainedContext
+		copy.expire(now)
+		v.RetainedContext = &copy
+		if copy.empty() || v.Snapshot == nil {
+			v.RetainedContext = nil
+		}
 	}
 	return v, nil
 }

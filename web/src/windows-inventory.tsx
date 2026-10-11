@@ -1,9 +1,7 @@
-import { WindowsSessionContextPanel } from './windows-session-context';
-import { WindowsSecurityPosturePanel } from './windows-security-posture';
-import { WindowsPatchContextPanel } from './windows-patch-context';
+import { WindowsContextPanel } from './windows-retained-context';
+import { WindowsServiceActionsPanel } from './windows-service-actions';
 import { WindowsFullServicesPanel } from './windows-full-services';
 import { WindowsFullSoftwarePanel } from './windows-full-software';
-import { WindowsUpdatesPanel } from './windows-updates';
 import { WindowsServiceStartupNote } from './windows-service-startup';
 import { WindowsInventoryTable, useWindowsInventoryTableControls } from './windows-inventory-tables';
 import { WindowsNetworkPanel } from './windows-network';
@@ -68,11 +66,11 @@ export function WindowsInventoryWorkspace({ resource, initialTab, fullServices }
         {!fullSoftware && <InventoryState resource={resource}/>}
         <div className="windows-inventory-tabs" role="tablist" aria-label={c.source}>{tabs.map((key, index) => <button type="button" key={key} id={`${id}-${key}`} role="tab" aria-selected={selected === key} aria-controls={`${id}-panel`} tabIndex={selected === key ? 0 : -1} onClick={() => select(key)} onKeyDown={event => { const next = event.key === 'ArrowRight' ? (index + 1) % tabs.length : event.key === 'ArrowLeft' ? (index + tabs.length - 1) % tabs.length : event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : null; if (next !== null) { event.preventDefault(); select(tabs[next]); document.getElementById(`${id}-${tabs[next]}`)?.focus(); } }}>{c[key]}</button>)}</div>
         <div role="tabpanel" id={`${id}-panel`} aria-labelledby={`${id}-${selected}`}>
-            {selected === 'services' && fullServices && <><WindowsFullServicesPanel {...fullServices}/><h3 className="windows-full-services-preview-label">{locale === 'de' ? 'Begrenzte Dienstvorschau: getrennte Quelle, höchstens 128 Zeilen' : 'Bounded service preview: separate source, at most 128 rows'}</h3></>}
+            {selected === 'services' && fullServices && <><WindowsServiceActionsPanel {...fullServices}/><WindowsFullServicesPanel {...fullServices}/><h3 className="windows-full-services-preview-label">{locale === 'de' ? 'Begrenzte Dienstvorschau: getrennte Quelle, höchstens 128 Zeilen' : 'Bounded service preview: separate source, at most 128 rows'}</h3></>}
             {fullSoftware && <WindowsFullSoftwarePanel {...fullSoftware}/>}
-            {selected === 'sessions' && <WindowsSessionContextPanel resource={resource}/>}
-            {selected === 'security' && <WindowsSecurityPosturePanel resource={resource}/>}
-            {selected === 'updates' && <><WindowsPatchContextPanel resource={resource}/><WindowsUpdatesPanel resource={resource}/></>}
+            {selected === 'sessions' && <WindowsContextPanel resource={resource} kind="sessionContext"/>}
+            {selected === 'security' && <WindowsContextPanel resource={resource} kind="securityPosture"/>}
+            {selected === 'updates' && <><WindowsContextPanel resource={resource} kind="patchContext"/><WindowsContextPanel resource={resource} kind="updates"/></>}
             {selected === 'endpoints' && <WindowsNetworkPanel resource={resource}/>}
             {selected === 'storage' && <WindowsStoragePanel resource={resource}/>}
             {section && <Section className={fullSoftware ? "windows-inventory-scope windows-full-software-preview" : undefined} >{fullSoftware && <summary>{locale === 'de' ? 'Begrenzte Vorschau · getrennte Quelle, bis zu 128 Zeilen' : 'Bounded preview · separate source, up to 128 rows'}</summary>}

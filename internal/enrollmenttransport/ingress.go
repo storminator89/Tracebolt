@@ -38,6 +38,7 @@ import (
 	"localrmm/internal/packagecontroller"
 	"localrmm/internal/signedhttp"
 	"localrmm/internal/systemwire"
+	"localrmm/internal/windowsactionmanager"
 	"localrmm/internal/windowseventcache"
 	"localrmm/internal/windowseventwire"
 	"localrmm/internal/windowsfullserviceswire"
@@ -52,6 +53,7 @@ var ErrConfiguration = errors.New("enrollment ingress configuration is invalid")
 // Ingress is fixed to one store, profile, exact agent origin and dedicated issuer.
 // Construct one per listener; sharing its address preserves the admission bound.
 type Ingress struct {
+	windowsActions             *windowsactionmanager.Manager
 	windowsEvents              *windowseventcache.Cache
 	packages                   *packagecontroller.Manager
 	actions                    *actionmanager.Manager
@@ -135,7 +137,7 @@ func (h *Ingress) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		failure(w, http.StatusServiceUnavailable, "storage_unavailable")
 		return
 	}
-	if h.telemetryPath == "/v1/windows/agent/telemetry" && (r == nil || r.URL == nil || r.URL.Path != h.telemetryPath && !windowsEventPath(r.URL.Path) && !windowsfullserviceswire.ValidPath(r.URL.Path) && !windowsfullsoftwarewire.ValidPath(r.URL.Path)) {
+	if h.telemetryPath == "/v1/windows/agent/telemetry" && (r == nil || r.URL == nil || r.URL.Path != h.telemetryPath && !windowsEventPath(r.URL.Path) && !windowsfullserviceswire.ValidPath(r.URL.Path) && !windowsfullsoftwarewire.ValidPath(r.URL.Path) && !strings.HasPrefix(r.URL.Path, "/v1/windows-service-actions/")) {
 		failure(w, http.StatusNotFound, "not_found")
 		return
 	}
@@ -159,6 +161,10 @@ func (h *Ingress) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if r != nil && r.URL != nil && strings.HasPrefix(r.URL.Path, windowseventwire.PathPrefix) {
 		h.windowsEventRequest(w, r)
+		return
+	}
+	if r != nil && r.URL != nil && strings.HasPrefix(r.URL.Path, "/v1/windows-service-actions/") {
+		h.windowsServiceActions(w, r)
 		return
 	}
 	if r != nil && r.URL != nil && strings.HasPrefix(r.URL.Path, "/v3/package-actions/") {

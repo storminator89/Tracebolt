@@ -55,6 +55,8 @@ func nativeOperation(ctx context.Context, r request, out, stderr io.Writer) (res
 
 func nativeReceiptOperation(ctx context.Context, r request, receipt installReceipt, lease receiptStore, out, stderr io.Writer) (any, error) {
 	switch r.mode {
+	case "read-admin-preview", "read-admin-enable":
+		return nativeReadAdminReconsent(ctx, r, receipt, lease)
 	case "full-services-preview", "full-services-enable", "full-services-disable":
 		return fullServicesOperation(ctx, r, receipt.Service, windowsservice.InspectOwned, lanclient.ConfigureWindowsFullServices)
 	case "full-software-preview", "full-software-enable", "full-software-disable":

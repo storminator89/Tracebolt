@@ -5,6 +5,7 @@ import (
 	"errors"
 	"localrmm/internal/enrollmentservice"
 	"localrmm/internal/model"
+	"localrmm/internal/windowsactionwire"
 	"localrmm/internal/windowseventwire"
 	"net/http"
 	"sort"
@@ -40,7 +41,7 @@ func mergedWindowsDevices(ctx context.Context, primary, windows *enrollmentservi
 }
 func withWindowsIngress(primary, windows http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r != nil && r.URL != nil && (strings.HasPrefix(r.URL.Path, "/v1/windows/") || strings.HasPrefix(r.URL.Path, windowseventwire.PathPrefix)) {
+		if r != nil && r.URL != nil && (strings.HasPrefix(r.URL.Path, "/v1/windows/") || strings.HasPrefix(r.URL.Path, windowseventwire.PathPrefix) || strings.HasPrefix(r.URL.Path, windowsactionwire.PathPrefix)) {
 			if (!windowsAgentPath(r.URL.Path)) || windows == nil {
 				http.NotFound(w, r)
 				return
@@ -55,7 +56,7 @@ func withWindowsIngress(primary, windows http.Handler) http.Handler {
 // Explicit Windows-only routes; never forward arbitrary Linux journal/actions.
 func windowsAgentPath(path string) bool {
 	switch path {
-	case "/v1/windows/agent/telemetry", windowseventwire.CapabilityPath, windowseventwire.PeekPath, windowseventwire.ClaimPath, windowseventwire.ResultPath, windowseventwire.StatusPath:
+	case windowsactionwire.CapabilitiesPath, windowsactionwire.PeekPath, windowsactionwire.ClaimPath, windowsactionwire.ResultPath, "/v1/windows/agent/telemetry", windowseventwire.CapabilityPath, windowseventwire.PeekPath, windowseventwire.ClaimPath, windowseventwire.ResultPath, windowseventwire.StatusPath:
 		return true
 	}
 	return false

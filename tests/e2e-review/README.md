@@ -358,3 +358,36 @@ real browser pixels of synthetic data, never native Windows acceptance.
 `windows-patch-context-fixtures.test.mjs` is imported by the existing Windows
 fixture gate and checks binding, absent/empty/partial/failure/expiry states and
 screenshot-completion requirements without launching a browser.
+
+### Windows previous session capture
+
+The existing `sessions` stage keeps its eight English/German summary and source
+detail captures at 1440×1000 and 390×844. The additive `sessions-retained` stage
+uses the same intercepted inventory response and existing refresh button. It
+shows a current unavailable/budget result alongside an independently dated,
+one-hour-older useful session/join snapshot under the exact same grant and a
+different generation. Only invented personal labels appear. Server-time advances
+never change either capture time; the older snapshot expires independently.
+
+The previous capture must start collapsed, expand with its original date and
+an explicit warning that it does not establish current state, and collapse
+again after tab navigation. The current unavailable result remains on the page.
+Eight additional viewport-only captures are required before the same Windows
+case can pass: `synthetic-windows-sessions-current-failure-{1440,390}-{en,de}.png`
+and `synthetic-windows-sessions-retained-details-{1440,390}-{en,de}.png`.
+Normal scrolling centers each compact region away from the app/test banner.
+The first capture requires the current date and unavailable result in its
+viewport while the previous capture is collapsed. The second requires the
+older date and caution after expansion. The exact budget failure and both
+original dates are asserted; both complete sections need not fit simultaneously.
+The existing `sessions-completion` check now requires
+all sixteen session records with exact source SHA, case, locale, dimensions,
+viewport-only/public-safe flags and fixture disclosure. Inert omission,
+duplicate and metadata controls reject the former eight- and twelve-record results.
+
+Run `node --test tests/e2e-review/windows-session-context-fixtures.test.mjs
+tests/e2e-review/windows-health-fixtures.test.mjs` for the focused inert checks.
+These checks do not produce screenshots. Hosted browser execution and independent
+pixel review remain unverified until performed; no new browser harness, endpoint,
+clock advance, native read, installation, grant, account or permission change is
+part of this source-only scenario.

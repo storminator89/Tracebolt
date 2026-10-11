@@ -1,13 +1,15 @@
-# Fresh Windows observation setup: source-only coordinator
+# Legacy five-scope Windows observation coordinator
 
-This is an isolated production-source candidate, not an available installation
-command, release download, native acceptance result or permission to install.
-The existing Windows commands and existing identities are unchanged. The separate
-[Setup.exe preview](windows-setup-preview.md) now invokes this source entry point
-through an explicit local wizard; it is unsigned and unreleased. There is no new
-lifecycle CLI flag, automatic dashboard download pin, provenance assertion or
-release-gate override. The exact distributed executable must satisfy the real
-gates below before broader release.
+This document preserves the five-scope internal contract and its historical
+source/acceptance boundary. The current fresh Setup presents the
+[twelve-scope Read admin profile](windows-read-admin-setup.md) with its own exact
+consent and receipt, and actual scope approval initially unchecked. The legacy
+path is not an extra fresh-Setup choice and never expands old approvals.
+
+There are no existing user installations; fresh clean development installation
+is the target. Historical receipts and code remain available without making
+migration, binary upgrade or reconsent a delivery gate. This guide and its
+historical native cases do not authorize current twelve-scope Setup execution.
 
 ## One explicit upfront read choice
 

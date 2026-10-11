@@ -73,6 +73,14 @@ test('the real runner success boundary rejects a no-op Windows callback before r
  globals.results.length=0;
  for(const kind of ['summary','details'])for(const locale of ['en','de'])for(const width of [1440,390])globals.screenshots.push({file:`synthetic-windows-sessions-${kind}-${width}-${locale}.png`,sourceSha:globals.sourceSha,test:globals.windowsInventoryCaseName,locale,viewport:{width,height:width===390?844:1000},publicSafe:true,fullPage:false,fixtureDisclosure:windowsSessionContextDisclosure});
  await run(globals.windowsInventoryCaseName,async()=>{});
+ assert.equal(globals.results[0].status,'FAIL');assert.equal(globals.results[0].stage,'sessions-completion');
+ globals.results.length=0;
+ for(const locale of ['en','de'])for(const width of [1440,390])globals.screenshots.push({file:`synthetic-windows-sessions-retained-details-${width}-${locale}.png`,sourceSha:globals.sourceSha,test:globals.windowsInventoryCaseName,locale,viewport:{width,height:width===390?844:1000},publicSafe:true,fullPage:false,fixtureDisclosure:windowsSessionContextDisclosure});
+ await run(globals.windowsInventoryCaseName,async()=>{});
+ assert.equal(globals.results[0].status,'FAIL');assert.equal(globals.results[0].stage,'sessions-completion');
+ globals.results.length=0;
+ for(const locale of ['en','de'])for(const width of [1440,390])globals.screenshots.push({file:`synthetic-windows-sessions-current-failure-${width}-${locale}.png`,sourceSha:globals.sourceSha,test:globals.windowsInventoryCaseName,locale,viewport:{width,height:width===390?844:1000},publicSafe:true,fullPage:false,fixtureDisclosure:windowsSessionContextDisclosure});
+ await run(globals.windowsInventoryCaseName,async()=>{});
  assert.equal(globals.results[0].status,'PASS');
 });
 

@@ -379,6 +379,280 @@ func runUsingStateWithSessionContextAuthorityDependencies(ctx context.Context, m
 		if e != nil {
 			return report, e
 		}
+		earlierJobs := []func(context.Context) error{}
+		if patchEnabled || securityEnabled || sessionEnabled {
+			collectEvents = eventsWithPrimaryReserve(collectEvents, f.WindowsInventory.CollectedAt)
+			collectVolumes = volumesWithPrimaryReserve(collectVolumes, f.WindowsInventory.CollectedAt)
+			collectProcessMetrics = processMetricsWithPrimaryReserve(collectProcessMetrics)
+			collectNetwork = networkWithPrimaryReserve(collectNetwork)
+			collectServiceStartup = serviceStartupWithPrimaryReserve(collectServiceStartup)
+			collectAdapterContext = adapterContextWithPrimaryReserve(collectAdapterContext)
+
+			if enabled {
+				earlierJobs = append(earlierJobs, func(sourceCtx context.Context) error {
+					if !currentAuthority() || !sameEventConsent(readConsent, consent, m.binding) {
+						return ErrState
+					}
+					if collectEvents == nil {
+						return ErrConfiguration
+					}
+
+					snapshot, err := collectEvents(sourceCtx, f.WindowsInventory.GenerationID, consent, m.binding)
+					if !currentAuthority() || !sameEventConsent(readConsent, consent, m.binding) {
+						return ErrState
+					}
+					if sourceCtx.Err() != nil {
+						return sourceCtx.Err()
+					}
+					if err != nil {
+						return ErrObservation
+					}
+					collectEvents = func(context.Context, string, windowseventhealth.Consent, string) (windowseventhealth.Snapshot, error) {
+						return snapshot, nil
+					}
+					return nil
+				})
+			}
+
+			if volumesEnabled {
+				earlierJobs = append(earlierJobs, func(sourceCtx context.Context) error {
+					if !currentAuthority() || !sameVolumeConsent(readVolumes, volumeConsent, m.binding) {
+						return ErrState
+					}
+					if collectVolumes == nil {
+						return ErrConfiguration
+					}
+
+					snapshot, err := collectVolumes(sourceCtx, f.WindowsInventory.GenerationID, volumeConsent, m.binding)
+					if !currentAuthority() || !sameVolumeConsent(readVolumes, volumeConsent, m.binding) {
+						return ErrState
+					}
+					if sourceCtx.Err() != nil {
+						return sourceCtx.Err()
+					}
+					if err != nil {
+						return ErrObservation
+					}
+					collectVolumes = func(context.Context, string, windowsvolumes.Consent, string) (windowsvolumes.Snapshot, error) {
+						return snapshot, nil
+					}
+					return nil
+				})
+			}
+
+			if processEnabled {
+				earlierJobs = append(earlierJobs, func(sourceCtx context.Context) error {
+					if !currentAuthority() || !sameProcessMetricConsent(readProcessMetrics, processConsent, m.binding) {
+						return ErrState
+					}
+					if collectProcessMetrics == nil {
+						return ErrConfiguration
+					}
+					pids := make([]uint32, 0, len(f.WindowsInventory.Processes.Rows))
+					for _, row := range f.WindowsInventory.Processes.Rows {
+						pids = append(pids, row.PID)
+					}
+					snapshot, err := collectProcessMetrics(sourceCtx, pids, f.WindowsInventory.GenerationID, processConsent.GrantID, f.WindowsInventory.CollectedAt)
+					if !currentAuthority() || !sameProcessMetricConsent(readProcessMetrics, processConsent, m.binding) {
+						return ErrState
+					}
+					if sourceCtx.Err() != nil {
+						return sourceCtx.Err()
+					}
+					if err != nil {
+						return ErrObservation
+					}
+					collectProcessMetrics = func(context.Context, []uint32, string, string, time.Time) (windowsprocessmetrics.Snapshot, error) {
+						return snapshot, nil
+					}
+					return nil
+				})
+			}
+
+			if networkEnabled {
+				earlierJobs = append(earlierJobs, func(sourceCtx context.Context) error {
+					if !currentAuthority() || !sameNetworkConsent(readNetwork, networkConsent, m.binding) {
+						return ErrState
+					}
+					if collectNetwork == nil {
+						return ErrConfiguration
+					}
+
+					snapshot, err := collectNetwork(sourceCtx, f.WindowsInventory.GenerationID, networkConsent.GrantID, time.Now().UTC())
+					if !currentAuthority() || !sameNetworkConsent(readNetwork, networkConsent, m.binding) {
+						return ErrState
+					}
+					if sourceCtx.Err() != nil {
+						return sourceCtx.Err()
+					}
+					if err != nil {
+						return ErrObservation
+					}
+					collectNetwork = func(context.Context, string, string, time.Time) (windowsnetwork.Snapshot, error) {
+						return snapshot, nil
+					}
+					return nil
+				})
+			}
+
+			if startupEnabled {
+				earlierJobs = append(earlierJobs, func(sourceCtx context.Context) error {
+					if !currentAuthority() || !sameServiceStartupConsent(readServiceStartup, startupConsent, m.binding) {
+						return ErrState
+					}
+					if collectServiceStartup == nil {
+						return ErrConfiguration
+					}
+					rows := append([]windowsmanaged.Service{}, f.WindowsInventory.Services.Rows...)
+					snapshot, err := collectServiceStartup(sourceCtx, rows, f.WindowsInventory.GenerationID, startupConsent.GrantID, f.WindowsInventory.CollectedAt)
+					if !currentAuthority() || !sameServiceStartupConsent(readServiceStartup, startupConsent, m.binding) {
+						return ErrState
+					}
+					if sourceCtx.Err() != nil {
+						return sourceCtx.Err()
+					}
+					if err != nil {
+						return ErrObservation
+					}
+					collectServiceStartup = func(context.Context, []windowsmanaged.Service, string, string, time.Time) (windowsmanaged.ServiceStartupSnapshot, error) {
+						return snapshot, nil
+					}
+					return nil
+				})
+			}
+
+			if adapterEnabled {
+				earlierJobs = append(earlierJobs, func(sourceCtx context.Context) error {
+					if !currentAuthority() || !sameAdapterContextConsent(readAdapterContext, adapterConsent, m.binding) {
+						return ErrState
+					}
+					if collectAdapterContext == nil {
+						return ErrConfiguration
+					}
+
+					snapshot, err := collectAdapterContext(sourceCtx, f.WindowsInventory.GenerationID, adapterConsent.GrantID, f.WindowsInventory.CollectedAt)
+					if !currentAuthority() || !sameAdapterContextConsent(readAdapterContext, adapterConsent, m.binding) {
+						return ErrState
+					}
+					if sourceCtx.Err() != nil {
+						return sourceCtx.Err()
+					}
+					if err != nil {
+						return ErrObservation
+					}
+					collectAdapterContext = func(context.Context, string, string, time.Time) (windowsadapters.Snapshot, error) {
+						return snapshot, nil
+					}
+					return nil
+				})
+			}
+		}
+		// Alternate the first group on fresh sequences. Existing providers retain
+		// their original first opportunity on odd sequences; isolated contexts
+		// get it on even sequences. Retries never collect or advance this order.
+		// Serialization still follows the original canonical wire order.
+		if sequence%2 == 0 && (patchEnabled || securityEnabled || sessionEnabled) {
+			jobs := []func(context.Context) error{}
+			if updatesEnabled {
+				jobs = append(jobs, func(sourceCtx context.Context) error {
+					if !currentAuthority() || !sameUpdatesConsent(readUpdates, updatesConsent, m.binding) {
+						return ErrState
+					}
+					if collectUpdates == nil {
+						return ErrConfiguration
+					}
+					snapshot, err := collectUpdates(sourceCtx, windowsupdates.Request{Consent: updatesConsent, SenderBinding: m.binding, GenerationID: f.WindowsInventory.GenerationID, CollectedAt: f.WindowsInventory.CollectedAt})
+					if !currentAuthority() || !sameUpdatesConsent(readUpdates, updatesConsent, m.binding) {
+						return ErrState
+					}
+					if sourceCtx.Err() != nil {
+						return sourceCtx.Err()
+					}
+					if err != nil {
+						return ErrObservation
+					}
+					collectUpdates = func(context.Context, windowsupdates.Request) (windowsupdates.Snapshot, error) { return snapshot, err }
+					return nil
+				})
+			}
+			if patchEnabled {
+				jobs = append(jobs, func(sourceCtx context.Context) error {
+					if !currentAuthority() || !samePatchContextConsent(readPatchContext, patchConsent, m.binding) {
+						return ErrState
+					}
+					if collectPatchContext == nil {
+						return ErrConfiguration
+					}
+					snapshot, err := collectPatchContext(sourceCtx, windowspatchcontext.Request{Consent: patchConsent, SenderBinding: m.binding, GenerationID: f.WindowsInventory.GenerationID, CollectedAt: f.WindowsInventory.CollectedAt})
+					if !currentAuthority() || !samePatchContextConsent(readPatchContext, patchConsent, m.binding) {
+						return ErrState
+					}
+					if sourceCtx.Err() != nil {
+						return sourceCtx.Err()
+					}
+					if err != nil {
+						return ErrObservation
+					}
+					collectPatchContext = func(context.Context, windowspatchcontext.Request) (windowspatchcontext.Snapshot, error) {
+						return snapshot, err
+					}
+					return nil
+				})
+			}
+			if securityEnabled {
+				jobs = append(jobs, func(sourceCtx context.Context) error {
+					if !currentAuthority() || !sameSecurityPostureConsent(readSecurityPosture, securityConsent, m.binding) {
+						return ErrState
+					}
+					if collectSecurityPosture == nil {
+						return ErrConfiguration
+					}
+					snapshot, err := collectSecurityPosture(sourceCtx, windowssecurity.Request{Consent: securityConsent, SenderBinding: m.binding, GenerationID: f.WindowsInventory.GenerationID, CollectedAt: f.WindowsInventory.CollectedAt})
+					if !currentAuthority() || !sameSecurityPostureConsent(readSecurityPosture, securityConsent, m.binding) {
+						return ErrState
+					}
+					if sourceCtx.Err() != nil {
+						return sourceCtx.Err()
+					}
+					if err != nil {
+						return ErrObservation
+					}
+					collectSecurityPosture = func(context.Context, windowssecurity.Request) (windowssecurity.Snapshot, error) { return snapshot, err }
+					return nil
+				})
+			}
+			if sessionEnabled {
+				jobs = append(jobs, func(sourceCtx context.Context) error {
+					if !currentAuthority() || !sameSessionContextConsent(readSessionContext, sessionConsent, m.binding) {
+						return ErrState
+					}
+					if collectSessionContext == nil {
+						return ErrConfiguration
+					}
+					snapshot, err := collectSessionContext(sourceCtx, windowssessions.Request{Consent: sessionConsent, SenderBinding: m.binding, GenerationID: f.WindowsInventory.GenerationID, CollectedAt: f.WindowsInventory.CollectedAt})
+					if !currentAuthority() || !sameSessionContextConsent(readSessionContext, sessionConsent, m.binding) {
+						return ErrState
+					}
+					if sourceCtx.Err() != nil {
+						return sourceCtx.Err()
+					}
+					if err != nil {
+						return ErrObservation
+					}
+					collectSessionContext = func(context.Context, windowssessions.Request) (windowssessions.Snapshot, error) { return snapshot, err }
+					return nil
+				})
+			}
+			if e = collectWindowsContextGroup(captureCtx, sequence, jobs); e != nil {
+				return report, e
+			}
+		}
+		// Earlier sources rotate within their own group too. Their read results
+		// are cached only for this attempt; assembly retains exact base row/PID
+		// bindings and the original canonical append order.
+		if e = collectWindowsContextGroup(captureCtx, sequence, earlierJobs); e != nil {
+			return report, e
+		}
 		if enabled {
 			f, body, e = appendWindowsEvents(captureCtx, m, f, consent, collectEvents)
 			if e != nil {

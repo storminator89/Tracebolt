@@ -72,14 +72,16 @@ func protectedDescriptor(o Options) (*windows.SECURITY_DESCRIPTOR, error) {
 func creationOwner(o Options) (string, error) {
 	// This queries the effective token; it never enables privileges or changes
 	// the token. Service SID owners are supported by SE_GROUP_OWNER, documented
-	// on SERVICE_SID_INFO. A generic LocalService owner is deliberately rejected.
+	// on SERVICE_SID_INFO. An exact RuntimeSID TokenUser is also an eligible
+	// owner, without requiring duplicate group membership. A generic LocalService
+	// owner is deliberately rejected.
 	token := windows.GetCurrentThreadEffectiveToken()
 	u, e := token.GetTokenUser()
-	if e != nil {
+	if e != nil || u.User.Sid == nil || !u.User.Sid.IsValid() {
 		return "", ErrPolicy
 	}
-	if u.User.Sid.String() == systemSID {
-		return systemSID, nil
+	if owner := creationOwnerFromUser(o, u.User.Sid.String()); owner != "" {
+		return owner, nil
 	}
 	g, e := token.GetTokenGroups()
 	if e != nil {

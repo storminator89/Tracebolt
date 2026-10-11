@@ -18,3 +18,21 @@ func TestCompatibilityExactAndNoExtensions(t *testing.T) {
 		}
 	}
 }
+
+func TestReadAdminContractCannotUseFiveScopeAdvertisement(t *testing.T) {
+	old := Expected("manager", "https://enroll", "https://agent")
+	newer := ExpectedReadAdmin("manager", "https://enroll", "https://agent")
+	a, _ := json.Marshal(old)
+	b, _ := json.Marshal(newer)
+	if Match(a, newer) == nil || Match(b, old) == nil || Match(b, newer) != nil {
+		t.Fatal("contracts conflated")
+	}
+	path, e := CapabilityPath(newer)
+	if e != nil || path != ReadAdminCapabilitiesPath {
+		t.Fatal("wrong read-admin route")
+	}
+	old.SetupContract = "future"
+	if _, e := CapabilityPath(old); e == nil {
+		t.Fatal("unknown contract")
+	}
+}

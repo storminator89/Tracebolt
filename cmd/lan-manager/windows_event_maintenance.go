@@ -20,7 +20,10 @@ func runWindowsEventMaintenance(ctx context.Context, s *enrollmentservice.Servic
 	tick := 0
 	return windowsEventMaintenanceLoop(ctx, func(ctx context.Context, now time.Time) error {
 		tick++
-		e := s.MaintainWindowsFullServices(ctx, now)
+		e := s.MaintainWindowsContext(ctx, uint64(tick), now)
+		if servicesErr := s.MaintainWindowsFullServices(ctx, now); e == nil {
+			e = servicesErr
+		}
 		if softwareErr := s.MaintainWindowsFullSoftware(ctx, now); e == nil {
 			e = softwareErr
 		}

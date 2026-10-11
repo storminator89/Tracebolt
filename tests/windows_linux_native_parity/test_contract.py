@@ -108,7 +108,9 @@ class ContractTests(unittest.TestCase):
         with patch.dict(os.environ, {}, clear=True), patch('sys.stdin.isatty', return_value=True), patch('sys.flags', types.SimpleNamespace(isolated=True)):
             with patch('sys.dont_write_bytecode', True):
                 pass
-            c.require_native_opt_in(good,'linux',p)
+            with self.assertRaises(c.Rejected) as blocked:
+                c.require_native_opt_in(good,'linux',p)
+            self.assertEqual(blocked.exception.reason, 'read_admin_native_gate_unavailable')
             for field in ('execute','target_id','phase','approval_reference'):
                 a = copy.copy(good); setattr(a,field,None)
                 with self.subTest(field=field), self.assertRaises(c.Rejected): c.require_native_opt_in(a,'linux',p)
@@ -116,6 +118,17 @@ class ContractTests(unittest.TestCase):
                 for value in ('true',''):
                     with self.subTest(key=key,value=value),patch.dict(os.environ, {key:value}),self.assertRaises(c.Rejected):c.require_native_opt_in(good,'linux',p)
             with patch('sys.stdin.isatty',return_value=False), self.assertRaises(c.Rejected): c.require_native_opt_in(good,'linux',p)
+
+    def test_current_setup_is_blocked_before_any_native_operation(self):
+        with patch.object(windows, "layout") as layout, patch.object(windows, "inspect") as inspect, patch.object(windows.subprocess, "Popen") as launch:
+            checks = {}
+            with self.assertRaises(c.Rejected) as blocked:
+                windows.operate(plan(), "setup", checks)
+            self.assertEqual(blocked.exception.reason, "read_admin_native_gate_unavailable")
+            self.assertEqual(checks, {})
+            layout.assert_not_called(); inspect.assert_not_called(); launch.assert_not_called()
+        # Parser remains available for historical inert v1 fixtures only.
+        self.assertEqual(c.validate_plan(plan())["schema"], c.SCHEMA)
 
     def test_evidence_rejects_raw_or_invented_checks(self):
         for checks in ({'eventText':'secret'}, {'scm_running':1}, {'manual_pass':True}):

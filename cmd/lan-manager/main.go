@@ -29,6 +29,7 @@ import (
 	"localrmm/internal/operatorauth"
 	"localrmm/internal/packagecontroller"
 	"localrmm/internal/store"
+	"localrmm/internal/windowsactionmanager"
 	"log"
 	"net"
 	"net/http"
@@ -99,6 +100,7 @@ func prepareWithApplicationChecks(m lanconfig.Material, enrollment *enrollmentco
 		return nil, e
 	}
 	var actions *actionmanager.Manager
+	var windowsActions *windowsactionmanager.Manager
 	var packageActions *packagecontroller.Manager
 	var enrolledStore *enrollmentstore.Store
 	var enrolledService *enrollmentservice.Service
@@ -109,6 +111,9 @@ func prepareWithApplicationChecks(m lanconfig.Material, enrollment *enrollmentco
 	fail := func(err error) (*prepared, error) {
 		if packageActions != nil {
 			packageActions.Close()
+		}
+		if windowsActions != nil {
+			windowsActions.Close()
 		}
 		if actions != nil {
 			actions.Close()
@@ -205,11 +210,40 @@ func prepareWithApplicationChecks(m lanconfig.Material, enrollment *enrollmentco
 			return fail(e)
 		}
 	}
+
+	if c.WindowsServiceActionsConfigFile != "" {
+		if windowsStore == nil || windowsIngress == nil || !auth.Named() {
+			return fail(windowsactionmanager.ErrConfiguration)
+		}
+		forbidden := []ed25519.PublicKey{}
+		if actions != nil {
+			forbidden = append(forbidden, actions.PublicKey())
+		}
+		for _, der := range append([][]byte{enrollment.Issuer().IssuerDER(), enrollment.Issuer().RootDER()}, m.Server.Certificate...) {
+			cert, err := x509.ParseCertificate(der)
+			if err != nil {
+				return fail(windowsactionmanager.ErrConfiguration)
+			}
+			if pub, ok := cert.PublicKey.(ed25519.PublicKey); ok {
+				forbidden = append(forbidden, pub)
+			}
+		}
+		windowsActions, e = windowsactionmanager.Load(context.Background(), windowsStore, c.WindowsServiceActionsConfigFile, forbidden...)
+		if e != nil {
+			return fail(e)
+		}
+		if e = windowsIngress.ConfigureWindowsServiceActions(windowsActions); e != nil {
+			return fail(e)
+		}
+	}
 	if c.PackageActionsConfigFile != "" {
 		if enrolledStore == nil || enrolledIngress == nil || !auth.Named() {
 			return fail(packagecontroller.ErrConfiguration)
 		}
 		forbidden := []ed25519.PublicKey{}
+		if windowsActions != nil {
+			forbidden = append(forbidden, windowsActions.PublicKey())
+		}
 		for _, der := range append([][]byte{enrollment.Issuer().IssuerDER(), enrollment.Issuer().RootDER()}, m.Server.Certificate...) {
 			cert, err := x509.ParseCertificate(der)
 			if err != nil {
@@ -266,6 +300,9 @@ func prepareWithApplicationChecks(m lanconfig.Material, enrollment *enrollmentco
 			if packageActions != nil {
 				packageActions.Close()
 			}
+			if windowsActions != nil {
+				windowsActions.Close()
+			}
 			if actions != nil {
 				actions.Close()
 			}
@@ -308,7 +345,7 @@ func prepareWithApplicationChecks(m lanconfig.Material, enrollment *enrollmentco
 			return nil, e
 		}
 	}
-	operatorConfig := api.LANOperatorConfig{PackageActions: packageActions, AISettings: aiSettings, AlarmSettings: alarmWorker, ApplicationCheckSettings: applicationChecks, ServiceActions: actions, Origin: c.OperatorOrigin, Auth: auth, Registry: registry, InsecureHTTPTest: c.Profile == lanconfig.HTTPTest, Devices: func() ([]model.Device, error) {
+	operatorConfig := api.LANOperatorConfig{WindowsServiceActions: windowsActions, PackageActions: packageActions, AISettings: aiSettings, AlarmSettings: alarmWorker, ApplicationCheckSettings: applicationChecks, ServiceActions: actions, Origin: c.OperatorOrigin, Auth: auth, Registry: registry, InsecureHTTPTest: c.Profile == lanconfig.HTTPTest, Devices: func() ([]model.Device, error) {
 		return trustStore.Devices(context.Background(), registry.List(), time.Now().UTC())
 	}}
 	if enrolledService != nil {

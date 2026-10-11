@@ -33,9 +33,9 @@ func assertReachableLayout(t *testing.T, l map[int]box, width, height, dpi int, 
 	ids := []int{idHeading, idProvenance, idNote, idCancel, idNext, idBack}
 	switch p {
 	case pageInput:
-		ids = append(ids, idInputText, idSelectedFile, idChoose, idUninstall)
+		ids = append(ids, idInputText, idReadAdmin, idSelectedFile, idChoose, idUninstall)
 	case pageReview:
-		ids = append(ids, idReviewText, idScope, idService, idIdentity, idCompared)
+		ids = append(ids, idReviewText, idScope, idService, idIdentity, idCompared, idDetails)
 		if httpTest {
 			ids = append(ids, idHTTPRisk)
 		}

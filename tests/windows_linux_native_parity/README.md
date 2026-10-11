@@ -1,5 +1,21 @@
 # Manual real Windows → Linux → browser parity subset
 
+**Current source compatibility block:** this v1 harness observes only the old
+five-scope Setup baseline. Fresh Setup now selects the twelve-scope Read admin
+profile, including personal user/domain/session and join metadata, with explicit
+unchecked consent. An old five-scope approval or broad phase reference cannot
+authorize that expanded profile. Native coordinator/Setup/browser entrypoints
+therefore fail closed with `read_admin_native_gate_unavailable`, before host or
+process work. There is no override. Portable contracts remain testable.
+
+The steps below document the historical five-scope harness only; do not invoke
+them for current Setup. A new native gate must bind full twelve-scope consent,
+v3 receipt/all eleven extension grants, and fresh independent evidence for the
+seven additional scopes, including complete service/software generations and
+original partial/denied/unknown quality. This is missing native automation source
+coverage, not a native test failure or a reason to skip ordinary feature CI.
+Published historical evidence and release/download pins are unchanged.
+
 This is **opt-in test source**, not a native acceptance report or permission to
 operate a computer. It is off by default. Ordinary Validate runs only portable
 contracts and injected adapter tests; no workflow starts this native harness.
@@ -8,7 +24,7 @@ changed source or mismatched targets. The Python coordinator also requires
 interactive stdin and isolated Python; its browser child instead requires a
 private pipe carrying the exact canonical nonsecret spec.
 
-The runnable path is the actual unsigned Setup and installed service, production
+The historical path uses the actual unsigned Setup and installed service, production
 `cmd/lan-manager`, its durable stores, matching compiled dashboard, and a real
 sandboxed Chromium session. There is no fixture manager, response routing, fake
 clock, production bypass endpoint or credential shortcut. Missing capability is
@@ -27,7 +43,8 @@ After successful *automatic observations*, the finite browser report can establi
 - real cached WUA inspection and its quality/unknown-freshness/empty-state or row
   rendering, followed by observed independent grant withdrawal.
 
-The five-scope baseline verifies fresh independent grant-bound siblings only.
+The historical five-scope baseline verifies fresh independent grant-bound siblings
+only. It neither approves nor verifies current twelve-scope Read admin Setup.
 Their native partial/denied/availability quality is preserved; complete or usable
 rows for every baseline source are not established (`baseline_source_completeness`
 is an explicit omission).
@@ -71,7 +88,8 @@ browser bytes, private paths, both origins and TLS custodian, expiry and operati
   its isolated browser; ordinary read-only observations; direct human login,
   invitation creation/download and exact fingerprint approval; selected synthetic
   event request after its real UI disclosure; two explicit public-file transfers.
-- `setup`: launch the exact GUI, human UAC/trust/five-scope/persistent-identity
+- `setup` (historical only; blocked for current source): launch the exact GUI,
+  human UAC/trust/five-scope/persistent-identity
   consent and hidden invitation entry, then stop/read only the fixed public
   identity artifacts/restart the owned Tracebolt service for target correlation.
 - `event-fixture`: after the separate preparation approval below, format and write
