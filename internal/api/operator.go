@@ -59,6 +59,7 @@ type LANOperatorConfig struct {
 	CVEProgress *linuxcveprogress.Cache
 }
 type operatorHandler struct {
+	fleetGroupSources        []fleetGroupSource
 	windowsActions           windowsServiceActionManager
 	packageUpdatesManager    packageUpdateManager
 	alarmSettings            *alarmdelivery.Settings
@@ -491,6 +492,10 @@ func (h *operatorHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if session.Named() && !namedReadRoute(r) {
 		fail(w, 403, "operator_capability_required", "This named account does not have permission for this administrative operation.")
+		return
+	}
+	if r.URL.Path == "/api/fleet/groups" || strings.HasPrefix(r.URL.Path, "/api/fleet/groups/") {
+		h.fleetGroupsAPI(w, r)
 		return
 	}
 	if r.URL.Path == "/api/ai/journal" || strings.HasPrefix(r.URL.Path, "/api/ai/journal/") {

@@ -69,12 +69,12 @@ func (s *Store) WindowsCapacityStates(ctx context.Context) (map[string]windowsca
 func (s *Store) EvaluateWindowsCapacity(ctx context.Context, input windowscapacity.Input, now time.Time, epoch string) (windowscapacity.State, error) {
 	return s.updateWindowsCapacity(ctx, input.DeviceID, func(state *windowscapacity.State) error { return state.Evaluate(input, now, epoch) })
 }
-func (s *Store) ConfigureWindowsCapacity(ctx context.Context, input windowscapacity.Input, enabled bool, threshold int, expected uint64, now time.Time) (windowscapacity.State, error) {
+func (s *Store) ConfigureWindowsCapacity(ctx context.Context, input windowscapacity.Input, enabled bool, threshold int, expected uint64, now time.Time, guard ...func() error) (windowscapacity.State, error) {
 	return s.updateWindowsCapacity(ctx, input.DeviceID, func(state *windowscapacity.State) error {
 		return state.Configure(input, enabled, threshold, expected, now)
-	})
+	}, guard...)
 }
-func (s *Store) updateWindowsCapacity(ctx context.Context, id string, update func(*windowscapacity.State) error) (windowscapacity.State, error) {
+func (s *Store) updateWindowsCapacity(ctx context.Context, id string, update func(*windowscapacity.State) error, guard ...func() error) (windowscapacity.State, error) {
 	if !windowscontact.ValidDeviceID(id) {
 		return windowscapacity.State{}, windowscapacity.ErrInvalid
 	}
@@ -105,6 +105,9 @@ func (s *Store) updateWindowsCapacity(ctx context.Context, id string, update fun
 			return windowscapacity.State{}, err
 		}
 	}
+	if err = runPolicyGuards(ctx, guard); err != nil {
+		return windowscapacity.State{}, err
+	}
 	if err = update(&state); err != nil {
 		return windowscapacity.State{}, err
 	}
@@ -118,8 +121,29 @@ func (s *Store) updateWindowsCapacity(ctx context.Context, id string, update fun
 	if _, err = tx.ExecContext(ctx, "INSERT INTO windows_capacity_devices(id,body) VALUES(?,?) ON CONFLICT(id) DO UPDATE SET body=excluded.body", id, body); err != nil {
 		return windowscapacity.State{}, err
 	}
+	if err = runPolicyGuards(ctx, guard); err != nil {
+		return windowscapacity.State{}, err
+	}
 	if err = tx.Commit(); err != nil {
 		return windowscapacity.State{}, err
 	}
 	return state, nil
+}
+
+// Guards run after acquiring the single SQLite connection and immediately before
+// commit. They may inspect live clocks/session cancellation only; acquiring the
+// enrollment database here would invert the existing lock order.
+func runPolicyGuards(ctx context.Context, guards []func() error) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	for _, guard := range guards {
+		if guard == nil {
+			return windowscapacity.ErrInvalid
+		}
+		if err := guard(); err != nil {
+			return err
+		}
+	}
+	return nil
 }

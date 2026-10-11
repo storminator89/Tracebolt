@@ -233,6 +233,11 @@ missing material rather than inventing credentials or weakening protection.
   Cached WUA inspection must remain offline and must not download, install,
   accept update terms, reboot, upgrade WUA or change service/network settings.
   Fixtures/cross-builds do not authorize native reads or create a local grant.
+- Manual fleet groups and reviewed one-setting Windows health apply are manager-side
+  organizational source features. Read `docs/fleet-groups-health.md`. Preserve
+  private stable original identity bindings, current admission and exact revisions.
+  Groups never grant scope or automatic inheritance; sequential writes stop on
+  conflict/uncertainty and never retry an unconfirmed POST.
 - Windows system-volume capacity health is a separate default-off manager policy.
   Read `docs/windows-capacity-health.md` before changing its thresholds or lifecycle.
   Preserve caller-quota semantics, advancing-source confirmation, durable floors,

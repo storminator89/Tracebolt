@@ -1,5 +1,5 @@
 {
-  "goSourceSha256": "95be5a43632c299ee0104b12ed7662f077ed802f5aeefacb7a08f5cf598b7592",
+  "goSourceSha256": "86eac79e8bf3f4fb91f0dcd47484526760eeceb4de7193687ba5cd1251fde6db",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -901,6 +901,9 @@
       "TestFleetEndpointIdentityOperatorGuards",
       "TestFleetEndpointIdentityPostEncodeExpirySessionAndExactBytes",
       "TestFleetEndpointIdentityResponseCapIncludesNewline",
+      "TestFleetGroupsLinuxAdmissionAndIssuerExpiry",
+      "TestFleetGroupsOperatorCASRolesAndNoPolicyGrant",
+      "TestFleetGroupsStableOriginalIdentityAndSafeProjection",
       "TestFleetIdentitiesOperatorGuards",
       "TestFleetIdentitiesV2ResponseCapIncludesNewline",
       "TestFleetIdentitiesWindowsFinalOutputAuthoritySessionAndCancellation",
@@ -1088,6 +1091,7 @@
       "TestWindowsHistoryOperatorSearchAndSelectedMessages",
       "TestWindowsNetworkContextOperatorFinalBoundaryHidesRows",
       "TestWindowsNetworkContextProtectedOperatorFullPaging",
+      "TestWindowsPercentagePolicyTransactionClockRejectsBeforeCommit",
       "TestWindowsResourceAuthenticatedIndependentPolicyPipeline",
       "TestWindowsResourceFinalClockAndNewestSourceTruth",
       "TestWindowsResourceLogoutRevokesBeforeWriteAndJoinsLease",
@@ -3405,6 +3409,8 @@
       "TestAlarmSyntheticTestRestartDisableAndUncertainty",
       "TestAlarmWorkerShutdownPersistsUncertaintyBeforeReturn",
       "TestDurableMutationAndSeed",
+      "TestFleetGroupsBoundedCASAndPrivateIdentity",
+      "TestFleetGroupsCanonicalCorruptionAndBounds",
       "TestHealthAnalysesReadIsReadOnly",
       "TestHealthAnalysesRejectCorruptRecordState",
       "TestHealthAnalysisCancellationAndRecovery",
@@ -3440,6 +3446,8 @@
       "TestWindowsContactDurableRestartAndReadOnlyGET",
       "TestWindowsContactFreshSchemaIsEmptyAndCanonicalIdentityRequired",
       "TestWindowsContactNeverTouchesHealthAnalysisOrAlarms",
+      "TestWindowsPercentagePolicyFinalGuardPreservesState",
+      "TestWindowsPercentagePolicyGuardAfterConnectionWait",
       "TestWindowsResourceBoundedDeviceAndMetricAdmission",
       "TestWindowsResourceFailedWritesAndTagCorruptionRemainIntact",
       "TestWindowsResourceIndependentPoliciesPersistWithoutDiskMigration",

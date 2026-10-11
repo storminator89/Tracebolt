@@ -2,8 +2,8 @@
 
 The current development source targets a fresh x64 Read admin installation.
 It is ahead of the published Windows preview and has not yet passed the current
-profile's native installation/provider acceptance. Finish missing Admin data
-before native acceptance and a new release.
+profile's native installation/provider acceptance. Current priorities combine
+remaining Admin data with useful fleet monitoring and management workflows.
 
 [Guides](README.md) · [Fresh Read admin setup](windows-read-admin-setup.md) · [Next priorities](windows-admin-roadmap.md)
 
@@ -49,6 +49,8 @@ bounded transport/store. See [frame bounds](windows-storage-io.md#worker-transpo
 - [Disk](windows-capacity-health.md), [CPU/RAM](windows-resource-health.md) and
   [selected-service checks](windows-service-health.md): independent default-off
   manager policies over already accepted observations. Missing data stays unknown.
+- [Fleet groups](fleet-groups-health.md): manual device organization and reviewed
+  one-time disk/CPU/RAM settings. New members do not inherit settings automatically.
 - [Selected service control](windows-service-actions.md): a separately authorized
   source workflow with a restricted broker and exact reviewed target. Read admin
   does not install the broker or grant service actions. Native acceptance is pending.
@@ -64,7 +66,7 @@ The unsigned x64
 [v0.1.0-windows-preview.1](https://github.com/storminator89/Tracebolt/releases/tag/v0.1.0-windows-preview.1)
 contains the older **five-scope** setup: base inventory, Application/System event
 headers, volume metadata, process metrics and numeric network endpoints.
-It does not contain the current twenty-scope Read admin profile or later
+It does not contain the current twenty-one-scope Read admin profile or later
 complete inventory, context, message-content and cached-update additions.
 
 Its accepted native subset covers fresh hosted **Windows Server 2025 x64** with a

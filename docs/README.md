@@ -24,7 +24,8 @@ have their own installation guides and narrower feature sets.
   [process snapshots](windows-full-processes-contract.md),
   [services](windows-full-services-contract.md) and
   [machine software](windows-full-software-contract.md). A bounded sample is not
-  a complete inventory. Separately acknowledged [software change history](windows-software-history.md)
+  a complete inventory. Optional [selected-account software](windows-selected-user-software.md)
+  adds explicitly captured HKCU and Store registrations. Separately acknowledged [software change history](windows-software-history.md)
   retains observed registration/metadata differences with original times and visible gaps.
 - **Logs:** choose an exact [Linux service and time window](journal-content-mvp.md)
   or approved [retained service history](retained-journal-browsing.md). Windows
@@ -37,7 +38,8 @@ have their own installation guides and narrower feature sets.
   [cached updates](windows-update-runtime.md) and [Defender/Firewall posture](windows-security-posture.md).
 - **Health:** [Linux checks](health-dashboard.md); Windows
   [disk](windows-capacity-health.md), [CPU/RAM](windows-resource-health.md) and
-  [selected-service](windows-service-health.md) policies.
+  [selected-service](windows-service-health.md) policies. Use [fleet groups](fleet-groups-health.md)
+  to organize devices and review one-time Windows disk/CPU/RAM settings.
 - **Optional settings:** [application checks](application-checks.md),
   [DNS/TCP checks](application-network-checks.md), [webhook alarms](alarm-delivery.md),
   [Health AI](proactive-ai-diagnostics.md) and [service-log AI](proactive-service-log-ai.md).

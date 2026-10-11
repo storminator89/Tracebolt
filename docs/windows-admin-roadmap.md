@@ -1,8 +1,10 @@
 # Windows priorities
 
-The immediate goal is useful, dependable Admin data in the shared dashboard.
-Finish these source features first, then validate fresh native installation and
-publish compatible artifacts. Current development and the older downloadable
+The immediate goal is useful daily administration: finish the current inventory
+and fleet workflows, then expand job results, monitoring and controlled
+software/update management. Close remaining Admin data gaps alongside that work.
+Validate fresh native installation before publishing compatible Windows artifacts.
+Current development and the older downloadable
 preview are described in [Windows status](windows-status.md).
 
 There are no existing user installations. Migration, binary upgrade and
@@ -16,6 +18,9 @@ remote desktop is deferred.
   generations, with bounded search/paging
 - Fleet hostname/IP search, resource observations and independent optional
   disk/CPU/RAM/selected-service checks
+- [Manual fleet groups and reviewed one-time Windows disk/CPU/RAM settings](fleet-groups-health.md)
+- [Selected-account HKCU and Store software capture](windows-selected-user-software.md),
+  with separate consent and an explicit normal-user foreground helper
 - Adapter link/DNS/gateway, build/update history/reboot, Defender/Firewall,
   session/join, hardware/firmware/power and drive-letter/provider-disk context
 - [Observed machine-software change history](windows-software-history.md), with a separate explicit scope, original before/after observation times, bounded private paging and visible comparison gaps
@@ -43,8 +48,8 @@ The remaining data areas below can progress independently.
 2. **Broader process metrics and software.** Complete basic process snapshots now
    have generation-pinned search/paging. CPU/RAM remains a separately consented
    128-row sample; extending it needs creation-identity-safe measurement and its
-   own explicit scope. Broader software coverage needs a user-context design;
-   per-user/Store and portable apps are not covered by machine HKLM registrations.
+   own explicit scope. Selected-account HKCU/Store capture is implemented;
+   it does not enumerate all user profiles or discover arbitrary portable apps.
 3. **Security and patch detail.** BitLocker state, Secure Boot and TPM readiness where legitimately accessible,
    and trustworthy update freshness/applicability/CVE evidence. Never read
    recovery keys or infer “secure” or “fully patched” from absent data.
@@ -61,7 +66,7 @@ The remaining data areas below can progress independently.
 
 ## Native acceptance and release
 
-After missing Admin data is complete, validate the exact matching Setup, service,
+Before a Windows release, validate the exact matching Setup, service,
 manager and dashboard on fresh Windows targets. The
 [Windows 11 checklist](windows11-acceptance-matrix.md) covers real installation,
 human UAC, hidden invitation/identity approval, service-token reads and actual
@@ -71,14 +76,16 @@ Keep source CI, browser fixtures and native results distinct. Reboot/sleep,
 signing, ARM64 and complete removal need explicit evidence. Do not reuse the
 published five-scope approval as consent for the current Read admin profile.
 
-## Later management work
+## Next management workflows
 
-Connect trustworthy evidence to incident acknowledgement, maintenance and
-notifications. Broader exact-target service/update actions require separately
+Prioritize useful retained job results, shared monitoring settings, incident
+acknowledgement, maintenance and notifications. Then add explicit software and
+Windows Update jobs with reviewed targets and individual outcomes. Broader
+exact-target service/update actions require separately
 reviewed authority, explicit approval, least-privilege execution and durable
 one-use records. Local Tracebolt restart is not arbitrary remote control.
-Remote desktop, general file management and unattended remediation remain out
-of the current scope.
+Automatic responses need their own bounded policies and local grants; they are
+planned, not implicitly enabled by monitoring. Remote desktop remains deferred.
 
 ## Rules for every feature
 

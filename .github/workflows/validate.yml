@@ -554,11 +554,13 @@ jobs:
           node --test tests/e2e-review/windows-full-services-fixtures.test.mjs
           node --test tests/e2e-review/windows-full-software-fixtures.test.mjs
           node --test tests/e2e-review/windows-software-history-fixtures.test.mjs
+          node --test tests/e2e-review/windows-user-software-fixtures.test.mjs
           node --test tests/e2e-review/windows-full-processes-fixtures.test.mjs
           node --test tests/e2e-review/windows-network-context-fixtures.test.mjs
           node --test tests/e2e-review/windows-fleet-fixtures.test.mjs
           node --test tests/e2e-review/windows-storage-io-fixtures.test.mjs
           node --test tests/e2e-review/certificate-renewal-fixtures.test.mjs
+          node --test tests/e2e-review/fleet-groups-fixtures.test.mjs
       - name: Production build
         run: npm run build
 
@@ -621,12 +623,24 @@ jobs:
         env:
           TRACEBOLT_SOURCE_SHA: ${{ github.sha }}
         run: node tests/e2e-review/windows-software-history-runner.mjs
+      - name: Selected-account software full-App browser gate (8 required screenshots)
+        if: ${{ !cancelled() }}
+        timeout-minutes: 6
+        env:
+          TRACEBOLT_SOURCE_SHA: ${{ github.sha }}
+        run: node tests/e2e-review/windows-user-software-runner.mjs
       - name: Windows event history search and selected messages (8 required screenshots)
         if: ${{ !cancelled() }}
         timeout-minutes: 6
         env:
           TRACEBOLT_SOURCE_SHA: ${{ github.sha }}
         run: node tests/e2e-review/windows-event-history-runner.mjs
+      - name: Manual fleet groups and reviewed health apply (12 required screenshots)
+        if: ${{ !cancelled() }}
+        timeout-minutes: 6
+        env:
+          TRACEBOLT_SOURCE_SHA: ${{ github.sha }}
+        run: node tests/e2e-review/fleet-groups-runner.mjs
       - name: Complete Windows processes SQLite-vector browser gate
         if: ${{ !cancelled() }}
         env:
@@ -888,8 +902,12 @@ jobs:
             artifacts/review/windows-full-software-manifest.json
             artifacts/review/windows-software-history-results.json
             artifacts/review/windows-software-history-manifest.json
+            artifacts/review/windows-user-software-results.json
+            artifacts/review/windows-user-software-manifest.json
             artifacts/review/windows-event-history-results.json
             artifacts/review/windows-event-history-manifest.json
+            artifacts/review/fleet-groups-results.json
+            artifacts/review/fleet-groups-manifest.json
             artifacts/review/windows-full-processes-results.json
             artifacts/review/windows-full-processes-manifest.json
             artifacts/review/windows-network-context-results.json

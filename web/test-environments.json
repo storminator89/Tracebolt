@@ -10,6 +10,7 @@
     "src/complete-packages-types.test.ts",
     "src/complete-updates-types.test.ts",
     "src/endpoint-identity-types.test.ts",
+    "src/fleet-groups-workflow.test.ts",
     "src/journal-browse-types.test.ts",
     "src/journal-types.test.ts",
     "src/linux-cve-types.test.ts",
