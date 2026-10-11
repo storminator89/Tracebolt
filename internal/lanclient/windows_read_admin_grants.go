@@ -377,3 +377,12 @@ func windowsReadAdminScopesV12Absent(root, sid string, open func(string, windows
 	}
 	return nil
 }
+
+// History uses the same protected software root and irreversible used marker.
+// Checking the V12 roots also excludes any existing history-bearing software grant.
+func WindowsReadAdminScopesV13Absent(root, sid string) error {
+	return WindowsReadAdminScopesV12Absent(root, sid)
+}
+func windowsReadAdminScopesV13Absent(root, sid string, open func(string, windowsstate.Options) (capabilityInspectionStore, error)) error {
+	return windowsReadAdminScopesV12Absent(root, sid, open)
+}

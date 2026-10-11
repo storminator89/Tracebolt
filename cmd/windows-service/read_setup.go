@@ -13,6 +13,7 @@ import (
 	"localrmm/internal/enrollmentcrypto"
 	"localrmm/internal/lanclient"
 	"localrmm/internal/windowseventhealth"
+	"localrmm/internal/windowsfullsoftware"
 	"localrmm/internal/windowsnetwork"
 	"localrmm/internal/windowsprocessmetrics"
 	"localrmm/internal/windowsservice"
@@ -46,7 +47,7 @@ func readSetupScopes() []string {
 	return []string{enrollmentcrypto.CollectionProfileWindowsInventory, windowseventhealth.Scope, windowsvolumes.Scope, windowsprocessmetrics.Scope, windowsnetwork.Scope}
 }
 func validateReadSetupConsent(c lanclient.WindowsCapabilityConsent) error {
-	if c.Validate() != nil || !(c.SchemaVersion == lanclient.WindowsCapabilityConsentVersionV3 && reflect.DeepEqual(c.Scopes, readSetupScopes()) || c.SchemaVersion == lanclient.WindowsCapabilityConsentVersionV5 && reflect.DeepEqual(c.Scopes, lanclient.WindowsReadAdminScopes()) || c.SchemaVersion == lanclient.WindowsCapabilityConsentVersionV6 && reflect.DeepEqual(c.Scopes, lanclient.WindowsReadAdminScopesV6()) || c.SchemaVersion == lanclient.WindowsCapabilityConsentVersionV7 && reflect.DeepEqual(c.Scopes, lanclient.WindowsReadAdminScopesV7()) || c.SchemaVersion == lanclient.WindowsCapabilityConsentVersionV8 && reflect.DeepEqual(c.Scopes, lanclient.WindowsReadAdminScopesV8()) || c.SchemaVersion == lanclient.WindowsCapabilityConsentVersionV9 && reflect.DeepEqual(c.Scopes, lanclient.WindowsReadAdminScopesV9()) || c.SchemaVersion == lanclient.WindowsCapabilityConsentVersionV10 && reflect.DeepEqual(c.Scopes, lanclient.WindowsReadAdminScopesV10()) || c.SchemaVersion == lanclient.WindowsCapabilityConsentVersionV11 && reflect.DeepEqual(c.Scopes, lanclient.WindowsReadAdminScopesV11()) || c.SchemaVersion == lanclient.WindowsCapabilityConsentVersionV12 && reflect.DeepEqual(c.Scopes, lanclient.WindowsReadAdminScopesV12())) {
+	if c.Validate() != nil || !(c.SchemaVersion == lanclient.WindowsCapabilityConsentVersionV3 && reflect.DeepEqual(c.Scopes, readSetupScopes()) || c.SchemaVersion == lanclient.WindowsCapabilityConsentVersionV5 && reflect.DeepEqual(c.Scopes, lanclient.WindowsReadAdminScopes()) || c.SchemaVersion == lanclient.WindowsCapabilityConsentVersionV6 && reflect.DeepEqual(c.Scopes, lanclient.WindowsReadAdminScopesV6()) || c.SchemaVersion == lanclient.WindowsCapabilityConsentVersionV7 && reflect.DeepEqual(c.Scopes, lanclient.WindowsReadAdminScopesV7()) || c.SchemaVersion == lanclient.WindowsCapabilityConsentVersionV8 && reflect.DeepEqual(c.Scopes, lanclient.WindowsReadAdminScopesV8()) || c.SchemaVersion == lanclient.WindowsCapabilityConsentVersionV9 && reflect.DeepEqual(c.Scopes, lanclient.WindowsReadAdminScopesV9()) || c.SchemaVersion == lanclient.WindowsCapabilityConsentVersionV10 && reflect.DeepEqual(c.Scopes, lanclient.WindowsReadAdminScopesV10()) || c.SchemaVersion == lanclient.WindowsCapabilityConsentVersionV11 && reflect.DeepEqual(c.Scopes, lanclient.WindowsReadAdminScopesV11()) || c.SchemaVersion == lanclient.WindowsCapabilityConsentVersionV12 && reflect.DeepEqual(c.Scopes, lanclient.WindowsReadAdminScopesV12()) || c.SchemaVersion == lanclient.WindowsCapabilityConsentVersionV13 && reflect.DeepEqual(c.Scopes, lanclient.WindowsReadAdminScopesV13())) {
 		return errLifecycle
 	}
 	return nil
@@ -304,6 +305,8 @@ func writeReadSetupDisclosure(out io.Writer, c lanclient.WindowsCapabilityConsen
 	}
 	if c.SchemaVersion == lanclient.WindowsCapabilityConsentVersionV5 {
 		notices = append(notices, lanclient.WindowsReadAdminNotices(c.InsecureHTTPAcknowledged)...)
+	} else if c.SchemaVersion == lanclient.WindowsCapabilityConsentVersionV13 {
+		notices = append(notices, lanclient.WindowsReadAdminNoticesV13(c.InsecureHTTPAcknowledged)...)
 	} else if c.SchemaVersion == lanclient.WindowsCapabilityConsentVersionV12 {
 		notices = append(notices, lanclient.WindowsReadAdminNoticesV12(c.InsecureHTTPAcknowledged)...)
 	} else if c.SchemaVersion == lanclient.WindowsCapabilityConsentVersionV11 {
@@ -337,9 +340,29 @@ func validReadSetupDigests(values []lanclient.WindowsCapabilityGrantDigest) bool
 	return validReadSetupScopeDigests(readSetupScopes()[1:], values)
 }
 func validReadSetupConsentDigests(c lanclient.WindowsCapabilityConsent, values []lanclient.WindowsCapabilityGrantDigest) bool {
-	return validateReadSetupConsent(c) == nil && validReadSetupScopeDigests(c.Scopes[1:], values)
+	if validateReadSetupConsent(c) != nil || !validReadSetupScopeDigests(c.Scopes[1:], values) {
+		return false
+	}
+	if c.SchemaVersion == lanclient.WindowsCapabilityConsentVersionV13 {
+		software, history := "", ""
+		for _, grant := range values {
+			if grant.Scope == windowsfullsoftware.Scope {
+				software = grant.SHA256
+			}
+			if grant.Scope == windowsfullsoftware.HistoryScope {
+				history = grant.SHA256
+			}
+		}
+		if software == "" || software != history {
+			return false
+		}
+	}
+	return true
 }
 func readSetupReceiptVersion(c lanclient.WindowsCapabilityConsent) int {
+	if c.SchemaVersion == lanclient.WindowsCapabilityConsentVersionV13 {
+		return 11
+	}
 	if c.SchemaVersion == lanclient.WindowsCapabilityConsentVersionV12 {
 		return 10
 	}

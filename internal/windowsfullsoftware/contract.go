@@ -33,6 +33,9 @@ func ValidTime(t time.Time) bool {
 }
 func ValidSequence(v uint64) bool { return v > 0 && v <= MaxSequence }
 func ValidateConsent(c Consent) error {
+	if c.HistoryScope != "" && c.HistoryScope != HistoryScope {
+		return ErrInvalid
+	}
 	if c.SchemaVersion != ConsentVersion || c.Scope != Scope || !ValidHex(c.SenderBinding, 64) || !ValidHex(c.GrantID, 32) || !ValidSequence(c.Revision) || !ValidTime(c.ChangedAt) {
 		return ErrInvalid
 	}

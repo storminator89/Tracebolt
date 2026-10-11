@@ -61,8 +61,8 @@ type WindowsCapabilityConsent struct {
 }
 
 func (r WindowsCapabilityConsent) Validate() error {
-	if r.SchemaVersion == WindowsCapabilityConsentVersionV5 || r.SchemaVersion == WindowsCapabilityConsentVersionV6 || r.SchemaVersion == WindowsCapabilityConsentVersionV7 || r.SchemaVersion == WindowsCapabilityConsentVersionV8 || r.SchemaVersion == WindowsCapabilityConsentVersionV9 || r.SchemaVersion == WindowsCapabilityConsentVersionV10 || r.SchemaVersion == WindowsCapabilityConsentVersionV11 || r.SchemaVersion == WindowsCapabilityConsentVersionV12 {
-		if !validWindowsReadAdminConsent(r) && !validWindowsReadAdminConsentV6(r) && !validWindowsReadAdminConsentV7(r) && !validWindowsReadAdminConsentV8(r) && !validWindowsReadAdminConsentV9(r) && !validWindowsReadAdminConsentV10(r) && !validWindowsReadAdminConsentV11(r) && !validWindowsReadAdminConsentV12(r) {
+	if r.SchemaVersion == WindowsCapabilityConsentVersionV5 || r.SchemaVersion == WindowsCapabilityConsentVersionV6 || r.SchemaVersion == WindowsCapabilityConsentVersionV7 || r.SchemaVersion == WindowsCapabilityConsentVersionV8 || r.SchemaVersion == WindowsCapabilityConsentVersionV9 || r.SchemaVersion == WindowsCapabilityConsentVersionV10 || r.SchemaVersion == WindowsCapabilityConsentVersionV11 || r.SchemaVersion == WindowsCapabilityConsentVersionV12 || r.SchemaVersion == WindowsCapabilityConsentVersionV13 {
+		if !validWindowsReadAdminConsent(r) && !validWindowsReadAdminConsentV6(r) && !validWindowsReadAdminConsentV7(r) && !validWindowsReadAdminConsentV8(r) && !validWindowsReadAdminConsentV9(r) && !validWindowsReadAdminConsentV10(r) && !validWindowsReadAdminConsentV11(r) && !validWindowsReadAdminConsentV12(r) && !validWindowsReadAdminConsentV13(r) {
 			return ErrConfiguration
 		}
 		return nil
@@ -125,7 +125,7 @@ type WindowsCapabilityConsentResult struct {
 // and FailedScope may have an indeterminate write outcome. Never rollback,
 // erase, re-enroll or enable unselected scopes to recover.
 func ConfigureWindowsCapabilities(path string, r WindowsCapabilityConsent) (WindowsCapabilityConsentResult, error) {
-	if r.SchemaVersion == WindowsCapabilityConsentVersionV5 || r.SchemaVersion == WindowsCapabilityConsentVersionV6 || r.SchemaVersion == WindowsCapabilityConsentVersionV7 || r.SchemaVersion == WindowsCapabilityConsentVersionV8 || r.SchemaVersion == WindowsCapabilityConsentVersionV9 || r.SchemaVersion == WindowsCapabilityConsentVersionV10 || r.SchemaVersion == WindowsCapabilityConsentVersionV11 || r.SchemaVersion == WindowsCapabilityConsentVersionV12 {
+	if r.SchemaVersion == WindowsCapabilityConsentVersionV5 || r.SchemaVersion == WindowsCapabilityConsentVersionV6 || r.SchemaVersion == WindowsCapabilityConsentVersionV7 || r.SchemaVersion == WindowsCapabilityConsentVersionV8 || r.SchemaVersion == WindowsCapabilityConsentVersionV9 || r.SchemaVersion == WindowsCapabilityConsentVersionV10 || r.SchemaVersion == WindowsCapabilityConsentVersionV11 || r.SchemaVersion == WindowsCapabilityConsentVersionV12 || r.SchemaVersion == WindowsCapabilityConsentVersionV13 {
 		return WindowsCapabilityConsentResult{}, ErrConfiguration
 	}
 	return configureWindowsCapabilities(path, r, nil)
@@ -134,7 +134,7 @@ func ConfigureWindowsCapabilities(path string, r WindowsCapabilityConsent) (Wind
 // Every Read admin version requires a live owned/stopped service and protected phase guard before and
 // after each exact scope operation, plus the unchanged activated sender identity.
 func ConfigureWindowsReadAdminCapabilities(path string, r WindowsCapabilityConsent, guard func() error) (WindowsCapabilityConsentResult, error) {
-	if (!validWindowsReadAdminConsent(r) && !validWindowsReadAdminConsentV6(r) && !validWindowsReadAdminConsentV7(r) && !validWindowsReadAdminConsentV8(r) && !validWindowsReadAdminConsentV9(r) && !validWindowsReadAdminConsentV10(r) && !validWindowsReadAdminConsentV11(r) && !validWindowsReadAdminConsentV12(r)) || guard == nil {
+	if (!validWindowsReadAdminConsent(r) && !validWindowsReadAdminConsentV6(r) && !validWindowsReadAdminConsentV7(r) && !validWindowsReadAdminConsentV8(r) && !validWindowsReadAdminConsentV9(r) && !validWindowsReadAdminConsentV10(r) && !validWindowsReadAdminConsentV11(r) && !validWindowsReadAdminConsentV12(r) && !validWindowsReadAdminConsentV13(r)) || guard == nil {
 		return WindowsCapabilityConsentResult{}, ErrConfiguration
 	}
 	binding, e := WindowsCapabilityIdentity(path, r)
@@ -198,6 +198,9 @@ func configureWindowsCapabilities(path string, r WindowsCapabilityConsent, guard
 			return err
 		case windowsfullprocesses.Scope:
 			_, err := ConfigureWindowsFullProcesses(path, "enable", true, r.InsecureHTTPAcknowledged)
+			return err
+		case windowsfullsoftware.HistoryScope:
+			_, err := ConfigureWindowsSoftwareHistory(path, "enable", true, r.InsecureHTTPAcknowledged)
 			return err
 		case windowsfullsoftware.Scope:
 			_, err := ConfigureWindowsFullSoftware(path, "enable", true, r.InsecureHTTPAcknowledged)
@@ -361,6 +364,9 @@ func readWindowsCapabilityConsent(m Material, scope string) (any, bool) {
 	case windowsfullprocesses.Scope:
 		c, ok := readWindowsFullProcessesGrant(m)
 		return c, ok
+	case windowsfullsoftware.HistoryScope:
+		c, ok := readWindowsFullSoftwareGrant(m)
+		return c, ok && c.HistoryScope == windowsfullsoftware.HistoryScope
 	case windowsfullsoftware.Scope:
 		c, ok := readWindowsFullSoftwareGrant(m)
 		return c, ok
@@ -413,6 +419,22 @@ func windowsCapabilityGrantDigests(r WindowsCapabilityConsent, read func(string)
 		}
 		digest := sha256.Sum256(raw)
 		result = append(result, WindowsCapabilityGrantDigest{scope, hex.EncodeToString(digest[:])})
+	}
+	if r.SchemaVersion == WindowsCapabilityConsentVersionV13 {
+		// The two explicit scopes share one current parent consent. Reject a
+		// rotation between reads rather than record mismatched grant authority.
+		software, history := "", ""
+		for _, grant := range result {
+			if grant.Scope == windowsfullsoftware.Scope {
+				software = grant.SHA256
+			}
+			if grant.Scope == windowsfullsoftware.HistoryScope {
+				history = grant.SHA256
+			}
+		}
+		if software == "" || software != history {
+			return nil, ErrState
+		}
 	}
 	return result, nil
 }

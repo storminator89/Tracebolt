@@ -24,7 +24,8 @@ have their own installation guides and narrower feature sets.
   [process snapshots](windows-full-processes-contract.md),
   [services](windows-full-services-contract.md) and
   [machine software](windows-full-software-contract.md). A bounded sample is not
-  a complete inventory.
+  a complete inventory. Separately acknowledged [software change history](windows-software-history.md)
+  retains observed registration/metadata differences with original times and visible gaps.
 - **Logs:** choose an exact [Linux service and time window](journal-content-mvp.md)
   or approved [retained service history](retained-journal-browsing.md). Windows
   offers [event-header browsing](windows-logs-sample-browser.md) and separately

@@ -18,6 +18,7 @@ remote desktop is deferred.
   disk/CPU/RAM/selected-service checks
 - Adapter link/DNS/gateway, build/update history/reboot, Defender/Firewall,
   session/join, hardware/firmware/power and drive-letter/provider-disk context
+- [Observed machine-software change history](windows-software-history.md), with a separate explicit scope, original before/after observation times, bounded private paging and visible comparison gaps
 - [Aggregate storage I/O](windows-storage-io.md): local PerfDisk (_Total) throughput, operations, read/write latency and average/current queue context with the actual sample window
 - [CPU and memory context](windows-resource-context.md): model/source-labeled processor counts, installed SMBIOS versus OS-usable RAM, commit current/limit/remaining and aggregate pagefile capacity/use
 - [Caller-visible routing metadata and raw interface counters](windows-network-context.md), with exact uint64 values and independent private paging
@@ -50,10 +51,11 @@ The remaining data areas below can progress independently.
    counters are implemented in a separate scope; rates would need their own
    identity-safe measurement design. No automatic probes, packet content or
    privilege expansion.
-5. **Changes and history.** Software version/install/remove changes from comparable
-   complete generations; useful inventory diffs; bounded older-event retrieval,
-   continuation and search. Partial captures must not invent an uninstall or
-   erase log gaps. Broader content/retention requires explicit scope.
+5. **Changes and history.** Observed machine-software registration/version changes
+   from complete comparable generations are implemented in a separate scope.
+   Broader inventory diffs and bounded older-event retrieval, continuation and
+   search remain open. Partial captures must not invent an uninstall or erase
+   log gaps. Broader content/retention requires explicit scope.
 
 ## Native acceptance and release
 

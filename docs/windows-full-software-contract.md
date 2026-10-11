@@ -76,8 +76,11 @@ service:
 
 An HTTP-test identity also requires `--insecure-http-test` and the complete
 plaintext disclosure. These commands document source behavior, not permission to
-run them on a host. The five-scope GUI Setup remains unchanged. Service inventory
-consent does not imply software consent, and a manager upgrade grants neither.
+run them on a host. The current fresh GUI Read admin profile includes this inventory and separately
+discloses [derived change history](windows-software-history.md); its history
+retention requires the additional explicit history scope. The published preview
+still has the historical five-scope GUI. Service inventory consent does not imply
+software or history consent, and a manager upgrade grants none of them.
 
 First software enable writes an irreversible software-used marker into version
 3 of the existing mandatory primary sender record before creating its sidecar.

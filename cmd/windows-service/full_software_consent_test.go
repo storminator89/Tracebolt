@@ -89,3 +89,80 @@ func TestFullSoftwareConsentRequiresStoppedOwnedServiceBeforeState(t *testing.T)
 		t.Fatal("unowned service reached state")
 	}
 }
+
+func TestSoftwareHistoryCLISeparateAcknowledgementAndDisclosure(t *testing.T) {
+	for _, mode := range []string{"preview", "enable", "disable"} {
+		t.Run(mode, func(t *testing.T) {
+			args := []string{"--software-history-" + mode}
+			if mode != "preview" {
+				args = append(args, "--apply")
+			}
+			if mode == "enable" {
+				args = append(args, "--machine-software-history")
+			}
+			for _, http := range []bool{false, true} {
+				runArgs := append([]string{}, args...)
+				if http {
+					runArgs = append(runArgs, "--insecure-http-test")
+				}
+				var out, errout bytes.Buffer
+				called := false
+				code := runWith(context.Background(), runArgs, &out, &errout, func(_ context.Context, r request, _ io.Writer, _ io.Writer) (any, error) {
+					called = true
+					if r.mode != "software-history-"+mode || r.insecureHTTP != http {
+						t.Fatal("wrong operation")
+					}
+					if mode == "enable" || mode == "preview" {
+						if !strings.Contains(out.String(), windowsfullsoftware.HistoryPrivacy) || http && !strings.Contains(out.String(), windowsfullsoftware.HistoryHTTPPrivacy) {
+							t.Fatal("missing pre-dispatch disclosure")
+						}
+					}
+					return nil, nil
+				})
+				if code != 0 || !called {
+					t.Fatal(mode, http, code, errout.String())
+				}
+			}
+		})
+	}
+	for _, args := range [][]string{{"--software-history-enable", "--apply"}, {"--software-history-enable", "--machine-software-history"}, {"--software-history-preview", "--apply"}, {"--software-history-disable", "--apply", "--machine-software-history"}, {"--software-history-enable", "--apply", "--machine-software-history", "--windows-inventory"}, {"--install", "--apply", "--windows-inventory", "--machine-software-history", "--bootstrap-file=C:\\fixture"}} {
+		var out bytes.Buffer
+		called := false
+		code := runWith(context.Background(), args, &out, &out, func(context.Context, request, io.Writer, io.Writer) (any, error) { called = true; return nil, nil })
+		if code != 2 || called {
+			t.Fatal("scope flags overlapped", args, code)
+		}
+	}
+}
+
+func TestSoftwareHistoryConsentRequiresStoppedOwnedServiceBeforeState(t *testing.T) {
+	for _, state := range []windowsservice.State{windowsservice.Running, windowsservice.Stopped} {
+		calls := 0
+		result, err := softwareHistoryOperation(context.Background(), request{mode: "software-history-enable"}, windowsservice.Receipt{}, func(context.Context, windowsservice.Receipt) (windowsservice.Snapshot, error) {
+			return windowsservice.Snapshot{State: state}, nil
+		}, func(_ string, mode string, ack, http bool) (lanclient.WindowsFullSoftwareConsentResult, error) {
+			calls++
+			if mode != "enable" || !ack || http {
+				t.Fatal("wrong consent route")
+			}
+			return lanclient.WindowsFullSoftwareConsentResult{Scope: windowsfullsoftware.HistoryScope, Enabled: true}, nil
+		})
+		if state == windowsservice.Stopped {
+			if err != nil || calls != 1 || !result.Enabled {
+				t.Fatal("stopped operation rejected")
+			}
+		} else if err == nil || calls != 0 {
+			t.Fatal("running service read/wrote extension state")
+		}
+	}
+	calls := 0
+	_, err := softwareHistoryOperation(context.Background(), request{mode: "software-history-preview"}, windowsservice.Receipt{}, func(context.Context, windowsservice.Receipt) (windowsservice.Snapshot, error) {
+		return windowsservice.Snapshot{}, errors.New("unowned")
+	}, func(string, string, bool, bool) (lanclient.WindowsFullSoftwareConsentResult, error) {
+		calls++
+		return lanclient.WindowsFullSoftwareConsentResult{}, nil
+	})
+	if err == nil || calls != 0 {
+		t.Fatal("unowned service reached state")
+	}
+}

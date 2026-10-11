@@ -12,7 +12,7 @@ import (
 )
 
 func TestWindowsSetupCapabilitiesExactPublicGuardedTLSContract(t *testing.T) {
-	for _, profile := range []int{0, 1, 2, 3, 4, 5, 6, 7, 8} {
+	for _, profile := range []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9} {
 		for _, kind := range []string{"exact", "wrong-host", "missing-tls", "old-tls", "http", "disabled", "post", "body", "cookie", "authorization", "forwarded", "query", "escaped", "limit"} {
 			t.Run(kind, func(t *testing.T) {
 				b := downloadFixtureBootstrap()
@@ -24,6 +24,8 @@ func TestWindowsSetupCapabilitiesExactPublicGuardedTLSContract(t *testing.T) {
 				path := windowssetup.CapabilitiesPath
 				if profile == 1 {
 					path = windowssetup.ReadAdminCapabilitiesPath
+				} else if profile == 9 {
+					path = windowssetup.ReadAdminCapabilitiesPathV9
 				} else if profile == 8 {
 					path = windowssetup.ReadAdminCapabilitiesPathV8
 				} else if profile == 7 {
@@ -91,6 +93,8 @@ func TestWindowsSetupCapabilitiesExactPublicGuardedTLSContract(t *testing.T) {
 				expected := windowssetup.Expected(b.ManagerInstanceID, b.EnrollmentOrigin, b.AgentOrigin)
 				if profile == 1 {
 					expected = windowssetup.ExpectedReadAdmin(b.ManagerInstanceID, b.EnrollmentOrigin, b.AgentOrigin)
+				} else if profile == 9 {
+					expected = windowssetup.ExpectedReadAdminV9(b.ManagerInstanceID, b.EnrollmentOrigin, b.AgentOrigin)
 				} else if profile == 8 {
 					expected = windowssetup.ExpectedReadAdminV8(b.ManagerInstanceID, b.EnrollmentOrigin, b.AgentOrigin)
 				} else if profile == 7 {

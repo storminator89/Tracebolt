@@ -553,6 +553,7 @@ jobs:
         run: |
           node --test tests/e2e-review/windows-full-services-fixtures.test.mjs
           node --test tests/e2e-review/windows-full-software-fixtures.test.mjs
+          node --test tests/e2e-review/windows-software-history-fixtures.test.mjs
           node --test tests/e2e-review/windows-full-processes-fixtures.test.mjs
           node --test tests/e2e-review/windows-network-context-fixtures.test.mjs
           node --test tests/e2e-review/windows-fleet-fixtures.test.mjs
@@ -613,6 +614,12 @@ jobs:
         env:
           TRACEBOLT_SOURCE_SHA: ${{ github.sha }}
         run: node tests/e2e-review/windows-full-software-runner.mjs
+      - name: Windows software history browser gate (20 required screenshots)
+        if: ${{ !cancelled() }}
+        timeout-minutes: 6
+        env:
+          TRACEBOLT_SOURCE_SHA: ${{ github.sha }}
+        run: node tests/e2e-review/windows-software-history-runner.mjs
       - name: Complete Windows processes SQLite-vector browser gate
         if: ${{ !cancelled() }}
         env:
@@ -872,6 +879,8 @@ jobs:
             artifacts/review/fleet-identity-browser-manifest.json
             artifacts/review/windows-full-software-results.json
             artifacts/review/windows-full-software-manifest.json
+            artifacts/review/windows-software-history-results.json
+            artifacts/review/windows-software-history-manifest.json
             artifacts/review/windows-full-processes-results.json
             artifacts/review/windows-full-processes-manifest.json
             artifacts/review/windows-network-context-results.json

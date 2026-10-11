@@ -86,7 +86,7 @@ func TestSetupWizardPublicBootstrapPreviewAndExplicitTransportConsent(t *testing
 	}
 }
 
-func TestSetupWizardFreshReadAdminUsesV12AndExactHTTPAcknowledgement(t *testing.T) {
+func TestSetupWizardFreshReadAdminUsesV13AndExactHTTPAcknowledgement(t *testing.T) {
 	for _, profile := range []string{"tls", "http-test"} {
 		b, _ := setupPublicBootstrapFixture(t, profile)
 		raw, _ := json.Marshal(b)
@@ -96,8 +96,8 @@ func TestSetupWizardFreshReadAdminUsesV12AndExactHTTPAcknowledgement(t *testing.
 			if (e == nil) != allowed {
 				t.Fatal("HTTP acknowledgement widened", profile, ack)
 			}
-			if allowed && (consent.SchemaVersion != "tracebolt.windows-capability-consent.v12" || len(consent.Scopes) != 19 || consent.Scopes[18] != "windows-storage-io-v1" || consent.InsecureHTTPAcknowledged != ack || validateReadSetupConsent(consent) != nil || readSetupReceiptVersion(consent) != 10) {
-				t.Fatal("fresh setup did not select exact V12 receipt10")
+			if allowed && (consent.SchemaVersion != "tracebolt.windows-capability-consent.v13" || len(consent.Scopes) != 20 || consent.Scopes[19] != "windows-machine-software-history-v1" || consent.InsecureHTTPAcknowledged != ack || validateReadSetupConsent(consent) != nil || readSetupReceiptVersion(consent) != 11) {
+				t.Fatal("fresh setup did not select exact V13 receipt11")
 			}
 		}
 	}

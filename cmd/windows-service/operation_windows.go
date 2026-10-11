@@ -63,6 +63,8 @@ func nativeReceiptOperation(ctx context.Context, r request, receipt installRecei
 		return networkContextOperation(ctx, r, receipt.Service, windowsservice.InspectOwned, lanclient.ConfigureWindowsNetworkContext)
 	case "full-processes-preview", "full-processes-enable", "full-processes-disable":
 		return fullProcessesOperation(ctx, r, receipt.Service, windowsservice.InspectOwned, lanclient.ConfigureWindowsFullProcesses)
+	case "software-history-preview", "software-history-enable", "software-history-disable":
+		return softwareHistoryOperation(ctx, r, receipt.Service, windowsservice.InspectOwned, lanclient.ConfigureWindowsSoftwareHistory)
 	case "full-software-preview", "full-software-enable", "full-software-disable":
 		return fullSoftwareOperation(ctx, r, receipt.Service, windowsservice.InspectOwned, lanclient.ConfigureWindowsFullSoftware)
 	case "event-content-preview", "event-content-enable", "event-content-disable":

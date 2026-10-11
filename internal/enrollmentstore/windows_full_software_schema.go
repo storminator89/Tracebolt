@@ -174,6 +174,22 @@ func validateWindowsFullSoftwareState(ctx context.Context, t *transaction, profi
 	if t.conn.QueryRowContext(ctx, `SELECT (SELECT count(*) FROM wfw_rows r LEFT JOIN wfw_generations g ON r.device=g.device AND r.generation=g.generation WHERE g.generation IS NULL)+(SELECT count(*) FROM wfw_chunks c LEFT JOIN wfw_generations g ON c.device=g.device AND c.generation=g.generation WHERE g.generation IS NULL)`).Scan(&orphans) != nil || orphans != 0 {
 		return ErrStorage
 	}
+	var histories int
+	if t.conn.QueryRowContext(ctx, `SELECT count(*) FROM wfw_history`).Scan(&histories) != nil {
+		return ErrStorage
+	}
+	expectedHistories := 0
+	for device, r := range known {
+		if r.Consent.Enabled && r.Consent.HistoryScope != "" {
+			expectedHistories++
+			if _, err := ledger.LoadHistory(ctx, t.conn, device, r.Consent); err != nil {
+				return ErrStorage
+			}
+		}
+	}
+	if histories != expectedHistories {
+		return ErrStorage
+	}
 	return windowsFullSoftwareBudget(ctx, t)
 }
 func windowsFullSoftwareOtherBytes(ctx context.Context, t *transaction) (int64, error) {

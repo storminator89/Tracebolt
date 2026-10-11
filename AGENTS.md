@@ -117,7 +117,7 @@ missing material rather than inventing credentials or weakening protection.
   identity and all exact grants are durably verified; retain indeterminate
   transitions for read-only reconciliation. The released five-scope preview exposes its GUI path; the current fresh GUI
   uses Read admin below. Existing service/grant receipts must not be promoted.
-- The nineteen-scope Windows Read admin source profile is the prominent fresh
+- The twenty-scope Windows Read admin source profile is the prominent fresh
   Setup choice; actual scope consent remains unchecked. Read
   `docs/windows-read-admin-setup.md`. Preserve legacy consent/receipt bytes and
   historical development interfaces, disabled fresh staging and exact identity/
@@ -230,6 +230,12 @@ missing material rather than inventing credentials or weakening protection.
   engine, tagged storage, API or UI. Preserve disk v1 bytes, exact observed-group
   CPU and physical-memory semantics, independent opt-ins/floors, one coordinated
   source read, and unknown evidence. No host collection, AI or alarm grant follows.
+- Windows machine-software change history is a separate explicit default-off scope.
+  Read `docs/windows-software-history.md` before changing its consent, complete
+  comparison, seven-day derived retention, shared reservation or private paging.
+  Preserve exact post-grant identity/source generations, original before/after
+  times, unavailable-field truth and visible whole-comparison gaps. No install
+  times, upgrade/maliciousness inference, AI/export/actions or host grants follow.
 - Complete Windows machine software generations require a separate default-off
   local scope. Read `docs/windows-full-software-contract.md` before changing its
   HKLM 32/64 source, consent, primary v3 marker, transport, store or UI. Preserve

@@ -94,6 +94,9 @@ func Apply(ctx context.Context, tx Transaction, m windowsfullsoftware.Message, r
 		if e := MarkGarbage(ctx, tx, m.DeviceID, r.Pending); e != nil {
 			return zero, e
 		}
+		if e := ResetHistory(ctx, tx, m.DeviceID, m.Consent); e != nil {
+			return zero, e
+		}
 		r.Consent = m.Consent
 		r.ScopeRaw = bytes.Clone(raw)
 		r.ScopeReceipt = Receipt(m, raw, now)
@@ -248,6 +251,9 @@ func Apply(ctx context.Context, tx Transaction, m windowsfullsoftware.Message, r
 		digest, size, e := windowsfullsoftware.RowsDigest(all)
 		if e != nil || digest != manifest.RowsSHA256 || size != manifest.RowsBytes || len(all) != manifest.RowCount {
 			return zero, windowsfullsoftware.ErrConflict
+		}
+		if e = ObserveHistory(ctx, tx, m, *r, all, now); e != nil {
+			return zero, e
 		}
 		if e = MarkGarbage(ctx, tx, m.DeviceID, r.Current); e != nil {
 			return zero, e

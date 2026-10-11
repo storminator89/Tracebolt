@@ -392,6 +392,23 @@ func (s *Store) MaintainWindowsFullSoftware(ctx context.Context, now time.Time) 
 				return e
 			}
 			changed := false
+			if r.Consent.Enabled && r.Consent.HistoryScope != "" {
+				h, err := ledger.LoadHistory(ctx, t.conn, snap.Approval.DeviceID, r.Consent)
+				if err != nil {
+					return err
+				}
+				pruned := ledger.PruneHistory(&h, now)
+				if snap.State != enrollmentstate.Activated || now.Unix() >= snap.Intent.NotAfter {
+					h.Changes = []windowsfullsoftware.HistoryChange{}
+					h.Comparison = nil
+					pruned = true
+				}
+				if pruned {
+					if err = ledger.SaveHistory(ctx, t.conn, snap.Approval.DeviceID, h); err != nil {
+						return err
+					}
+				}
+			}
 			for _, pending := range []bool{false, true} {
 				id := r.Current
 				if pending {

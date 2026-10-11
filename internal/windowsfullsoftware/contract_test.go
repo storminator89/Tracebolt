@@ -12,7 +12,7 @@ import (
 )
 
 func testConsent() Consent {
-	return Consent{ConsentVersion, Scope, strings.Repeat("a", 64), strings.Repeat("b", 32), 1, true, time.Date(2026, 10, 11, 0, 0, 0, 0, time.UTC)}
+	return Consent{ConsentVersion, Scope, strings.Repeat("a", 64), strings.Repeat("b", 32), 1, true, time.Date(2026, 10, 11, 0, 0, 0, 0, time.UTC), ""}
 }
 func testRows(n int) []Row {
 	rows := make([]Row, n)

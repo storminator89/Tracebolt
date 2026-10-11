@@ -9,6 +9,21 @@ import unittest
 spec=importlib.util.spec_from_file_location("source_gate",Path(__file__).with_name("run_windows_service_source.py"))
 gate=importlib.util.module_from_spec(spec);spec.loader.exec_module(gate)
 class GateTests(unittest.TestCase):
+    def test_history_scope_fresh_setup_fixtures_are_mandatory(self):
+        required = {
+            ("localrmm/internal/windowssetup", "TestReadAdminV9SoftwareHistoryCannotPromoteEarlierCapabilities"),
+            ("localrmm/cmd/windows-service", "TestSoftwareHistoryCLISeparateAcknowledgementAndDisclosure"),
+            ("localrmm/cmd/windows-service", "TestSoftwareHistoryConsentRequiresStoppedOwnedServiceBeforeState"),
+            ("localrmm/cmd/windows-service", "TestReadAdminV13FreshProfileReceipt11ExactNineteenGrants"),
+            ("localrmm/cmd/windows-service", "TestReadAdminV13FreshGrantFailuresAndOriginalSenderGuard"),
+            ("localrmm/cmd/windows-service", "TestFreshReadAdminV13ReconcilePinsSoftwareHistoryDigestAndNeverPromotesReceipts"),
+        }
+        for item in required:
+            self.assertIn(item, gate.REQUIRED)
+            rows = [dict(Package=p, Test=t, Action="pass") for p,t in gate.REQUIRED if (p,t) != item]
+            with self.assertRaises(ValueError):
+                gate.check_events(b"\n".join(json.dumps(x).encode() for x in rows))
+
     def test_own_service_restart_and_shared_lease_fixtures_are_mandatory(self):
         names = {
             "localrmm/internal/windowsservice": (
