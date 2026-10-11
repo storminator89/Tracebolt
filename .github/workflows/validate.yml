@@ -304,6 +304,8 @@ jobs:
           cache: false
       - name: Check release cleanup and journal setup with inert fixtures
         run: |
+          python3 -I -B -m unittest discover -s tests/windows_linux_native_parity -p 'test_*.py' -v
+          python3 -I -O -B -m unittest discover -s tests/windows_linux_native_parity -p 'test_*.py' -v
           python3 -B -m unittest discover -s tests/release -p 'test_*.py' -v
           python3 -B -m unittest discover -s deploy/journal -p 'test_*.py' -v
           python3 -B -m unittest discover -s deploy/inventory -p 'test_*.py' -v
@@ -544,6 +546,7 @@ jobs:
           node tests/e2e-review/check-inert-suites.mjs --self-test
           node tests/e2e-review/check-inert-suites.mjs
           node --test tests/e2e-review/public-command-contract.test.mjs
+          node --test tests/windows_linux_native_parity/browser.test.mjs
           node --test tests/e2e-review/endpoint-child-shutdown.test.mjs tests/e2e-review/windows-inventory-fixtures.test.mjs tests/e2e-review/resource-history-fixtures.test.mjs tests/e2e-review/application-check-settings-fixtures.test.mjs tests/e2e-review/investigations-fixtures.test.mjs tests/e2e-review/alarm-browser-diagnostics.test.mjs tests/e2e-review/browser-transport-diagnostics.test.mjs tests/e2e-review/enrollment-create-diagnostics.test.mjs tests/e2e-review/v3-failure-diagnostics.test.mjs tests/e2e-review/alarm-settings-fixtures.test.mjs tests/e2e-review/cve-continuation-fixtures.test.mjs tests/e2e-review/cve-detail-pages-fixtures.test.mjs tests/e2e-review/proactive-ai-fixtures.test.mjs tests/e2e-review/journal-ai-fixtures.test.mjs tests/e2e-review/package-updates-fixtures.test.mjs tests/e2e-review/journal-browse-fixtures.test.mjs tests/e2e-review/windows-contact-history-fixtures.test.mjs
       - name: Production build
         run: npm run build
