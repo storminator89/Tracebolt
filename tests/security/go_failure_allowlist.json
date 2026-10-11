@@ -1,5 +1,5 @@
 {
-  "goSourceSha256": "86b8696d16ad2eb4cd266c90c32adcf014381c09a89c58794a3fb455e4372584",
+  "goSourceSha256": "1d912ce9596ee00af5c838d2a7beddf2a38c0891a8f4f73cee86e93922a40138",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -285,6 +285,7 @@
       "TestNetworkFlagsDoNotAuthorizeAnotherScope",
       "TestNetworkRequiresOwnedStoppedService",
       "TestOtherLifecycleErrorStillDiscardsResult",
+      "TestOwnRestartNativeAcceptance",
       "TestPackagedSetupGUINative",
       "TestPendingCancellationDuringBackoffIsGraceful",
       "TestPendingExpiryDuringBackoffStopsWithoutSecondResume",
@@ -312,6 +313,13 @@
       "TestRemovalFailureCauseFiniteAndHostileSafe",
       "TestRemovalFailureEveryStepPreservesCauseAndMutationCounts",
       "TestRemovalSequencePendingStatesAndFailureWaitKeepSingleMutation",
+      "TestRestartAcceptanceCompletePlanGrammar",
+      "TestRestartAcceptanceFilePinsPermitProductionReads",
+      "TestRestartAcceptanceGenerationAndClockContracts",
+      "TestRestartAcceptanceNativeEntryIsExplicit",
+      "TestRestartAcceptancePlanRejectsMissingAuthority",
+      "TestRestartAcceptancePythonBridge",
+      "TestRestartAcceptanceStrictJSON",
       "TestRestartCLIExplicitDispatchHoldsLeaseAndEmitsResult",
       "TestRestartCLIRejectsImplicitOrExpandedAuthority",
       "TestRestartNativeCLIRejectsNonWindows",
@@ -3136,6 +3144,20 @@
       "TestExtensionObservationNeverClaimsFreshOrchestration",
       "TestFiniteObservationQualities",
       "TestFiniteSelection"
+    ],
+    "localrmm/internal/windowsacceptance/restartgate": [
+      "TestCLINeverAdmitsEffectfulNegativeOrIncompletePositive",
+      "TestExactCLIResultGrammar",
+      "TestFixedCommandHasNoInjectedArgumentsOrEnvironment",
+      "TestSequenceRequiresExactlyTwoOrderedCommands",
+      "TestSequenceUncertaintyAndEveryFailedPrerequisiteArePermanent",
+      "TestSupervisorCancellationRetainsWaitAndCannotRecover",
+      "TestSupervisorDeadlineIsUnknownAndStillWaitsWithoutKilling",
+      "TestSupervisorFiniteSuccessAndFailureWithoutRawStderr",
+      "TestSupervisorNotificationPanicCannotAbandonStartedProcess",
+      "TestSupervisorOutputOverflowDrainsWithoutRetentionOrAbandonment",
+      "TestSupervisorRefusesBeforeLaunchAndUnknownIOCannotPass",
+      "TestWallDriftUsesMonotonicDuration"
     ],
     "localrmm/internal/windowsacceptance/setupgate": [
       "TestChooserBranchStagesAreFailureOnlyAcrossCases",

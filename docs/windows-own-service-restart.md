@@ -144,3 +144,13 @@ native acceptance.
 - [QueryServiceStatusEx and PID/state validity](https://learn.microsoft.com/en-us/windows/win32/api/winsvc/nf-winsvc-queryservicestatusex)
 - [Starting a service requires subsequent status observation](https://learn.microsoft.com/en-us/windows/win32/services/starting-a-service)
 - [ControlService synchronous control behavior](https://learn.microsoft.com/en-us/windows/win32/api/winsvc/nf-winsvc-controlservice)
+
+## Separate default-off native acceptance source
+
+The [own-restart native acceptance case](windows-own-service-restart-native.md)
+provides a separately approved, source-only harness for an already installed
+PR36 agent and an existing isolated real manager. It is independent of the
+seven-phase Windows/Linux parity plan. Portable fixtures and cross-builds do not
+establish a native pass; this increment executes no host lifecycle operation.
+The case distinguishes old-process exit from graceful drain and limits its
+retention claims to public identity, receipt and fresh accepted inventory.

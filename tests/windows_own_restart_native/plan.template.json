@@ -1,0 +1,158 @@
+{
+  "schema": "tracebolt.windows-own-restart-native.v1",
+  "runId": "REPLACE_RUN_ID",
+  "notBeforeUnix": 0,
+  "expiresUnix": 0,
+  "targetService": "TraceboltWindowsAgent",
+  "sources": {
+    "harness": {
+      "commit": "0000000000000000000000000000000000000000",
+      "tree": "0000000000000000000000000000000000000000",
+      "inventorySHA256": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "application": {
+      "commit": "858d7846b4fa2f7b3cdaf672c067400d894369a4",
+      "tree": "91999db7fcf6687795ba052b0029e670c01b01c7",
+      "inventorySHA256": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "manager": {
+      "commit": "0000000000000000000000000000000000000000",
+      "tree": "0000000000000000000000000000000000000000",
+      "inventorySHA256": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "dashboard": {
+      "commit": "0000000000000000000000000000000000000000",
+      "tree": "0000000000000000000000000000000000000000",
+      "inventorySHA256": "0000000000000000000000000000000000000000000000000000000000000000"
+    }
+  },
+  "targets": {
+    "windows": {
+      "id": "REPLACE_WINDOWS_TARGET",
+      "machineIdSHA256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "osBuild": "REPLACE_BUILD",
+      "workspace": "C:\\REPLACE\\workspace",
+      "sourcePaths": {
+        "harness": {
+          "root": "C:\\REPLACE\\harness",
+          "inventory": "C:\\REPLACE\\harness.inventory",
+          "commitObject": "C:\\REPLACE\\harness.commit"
+        },
+        "application": {
+          "root": "C:\\REPLACE\\application",
+          "inventory": "C:\\REPLACE\\application.inventory",
+          "commitObject": "C:\\REPLACE\\application.commit"
+        }
+      }
+    },
+    "linux": {
+      "id": "REPLACE_LINUX_TARGET",
+      "machineIdSHA256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "osBuild": "REPLACE_BUILD",
+      "workspace": "/REPLACE/workspace",
+      "sourcePaths": {
+        "harness": {
+          "root": "/REPLACE/harness",
+          "inventory": "/REPLACE/harness.inventory",
+          "commitObject": "/REPLACE/harness.commit"
+        },
+        "application": {
+          "root": "/REPLACE/application",
+          "inventory": "/REPLACE/application.inventory",
+          "commitObject": "/REPLACE/application.commit"
+        },
+        "manager": {
+          "root": "/REPLACE/manager",
+          "inventory": "/REPLACE/manager.inventory",
+          "commitObject": "/REPLACE/manager.commit"
+        },
+        "dashboard": {
+          "root": "/REPLACE/dashboard",
+          "inventory": "/REPLACE/dashboard.inventory",
+          "commitObject": "/REPLACE/dashboard.commit"
+        }
+      },
+      "lanConfig": "/REPLACE/lan.json",
+      "enrollmentConfig": "/REPLACE/enroll.json",
+      "webRoot": "/REPLACE/web",
+      "browserRoot": "/REPLACE/browser"
+    }
+  },
+  "artifacts": {
+    "controller": {
+      "path": "C:\\REPLACE\\controller",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "service": {
+      "path": "C:\\REPLACE\\service",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "manager": {
+      "path": "/REPLACE/manager",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "node": {
+      "path": "/REPLACE/node",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "chromium": {
+      "path": "/REPLACE/chromium",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "webInventory": {
+      "path": "/REPLACE/webInventory",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "browserInventory": {
+      "path": "/REPLACE/browserInventory",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    }
+  },
+  "tls": {
+    "operatorOrigin": "https://REPLACE.invalid:8443",
+    "agentOrigin": "https://REPLACE.invalid:8444",
+    "managerInstanceId": "manager_12121212121212121212121212121212",
+    "issuerFingerprint": "535c6f8eb511f5d966a1b0725df92ebf27514faba945cbbd698e23ac72c41757",
+    "serverCertificateSHA256": "b3eacd33433b31b5252351032c9b3e7a2e7aa7738d5decdf0dd6c62680853c06",
+    "bootstrapServerCASHA256": "6959097001d10501ac7d54c0bdb8db61420f658f2922cc26e46d536119a31126",
+    "bootstrapIssuerRootSHA256": "4813494d137e1631bba301d5acab6e7bb7aa74ce1185d456565ef51d737677b2",
+    "custodian": "test-custodian",
+    "networkApprovalRef": "test-network-approval"
+  },
+  "selected": {
+    "deviceId": "agent_34343434343434343434343434343434",
+    "certificateSHA256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "invitationIdSHA256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "receiptSHA256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "intentSHA256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "publicSHA256": {
+      "bootstrap": "0000000000000000000000000000000000000000000000000000000000000000",
+      "config": "0000000000000000000000000000000000000000000000000000000000000000",
+      "ready": "0000000000000000000000000000000000000000000000000000000000000000",
+      "certificate": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "grantIds": {
+      "events": "00000000000000000000000000000000",
+      "volumes": "00000000000000000000000000000000",
+      "processMetrics": "00000000000000000000000000000000",
+      "network": "00000000000000000000000000000000"
+    }
+  },
+  "managerProcess": {
+    "pid": 0,
+    "startTicks": "0",
+    "uid": 0,
+    "executableSHA256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "lanConfigSHA256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "enrollmentConfigSHA256": "0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "approvals": {
+    "ownRestartTwoInvocations": "REPLACE_ownRestartTwoInvocations_APPROVAL",
+    "linuxBrowserReadOnly": "REPLACE_linuxBrowserReadOnly_APPROVAL",
+    "publicBoundaryTransfers": "REPLACE_publicBoundaryTransfers_APPROVAL"
+  },
+  "handoff": {
+    "windowsBaseline": "C:\\REPLACE\\workspace\\REPLACE_RUN_ID-baseline.json",
+    "linuxCompletion": "/REPLACE/workspace/REPLACE_RUN_ID-completion.json"
+  }
+}
