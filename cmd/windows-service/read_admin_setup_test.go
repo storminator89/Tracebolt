@@ -84,7 +84,7 @@ func TestReadAdminWizardGroupedChoiceDisclosureAndLegacyChoice(t *testing.T) {
 	}
 	for _, insecure := range []bool{false, true} {
 		text := setupWizardReadAdminDisclosure(insecure)
-		for _, word := range []string{"20 explicit read scopes", "physical chassis serial (Win32_SystemEnclosure)", "BIOS serial metadata", "manufacturer/model", "firmware vendor/version/date", "power/battery", "Users and sessions", "personal", "Provider presence has not been checked", "LocalService", "cached WUA", "service control", "Selected event-message"} {
+		for _, word := range []string{"21 explicit read scopes", "physical chassis serial (Win32_SystemEnclosure)", "BIOS serial metadata", "manufacturer/model", "firmware vendor/version/date", "power/battery", "Users and sessions", "personal", "Provider presence has not been checked", "LocalService", "cached WUA", "service control", "Selected event-message"} {
 			if !strings.Contains(text, word) {
 				t.Fatal("missing", word)
 			}
@@ -146,7 +146,7 @@ func TestReadAdminWizardSummaryKeepsAllGroupsAndExplicitExclusions(t *testing.T)
 			t.Fatal("group scope omitted")
 		}
 	}
-	for _, word := range []string{"20 read scopes", "physical chassis serial (Win32_SystemEnclosure)", "BIOS serial metadata", "personal", "LocalService", "unverified", "event-message", "cached WUA", "service control", "external-AI", "Scope details"} {
+	for _, word := range []string{"21 read scopes", "physical chassis serial (Win32_SystemEnclosure)", "BIOS serial metadata", "personal", "LocalService", "unverified", "event-message", "cached WUA", "service control", "external-AI", "Scope details"} {
 		if !strings.Contains(text, word) {
 			t.Fatal("summary omits", word)
 		}
@@ -160,7 +160,7 @@ func freshReadAdminFixtureHooks(f *readSetupFixture) readSetupSteps {
 	h := f.hooks()
 	h.configure = func(_ string, c lanclient.WindowsCapabilityConsent) (lanclient.WindowsCapabilityConsentResult, error) {
 		f.configured++
-		if !reflect.DeepEqual(c, freshReadAdminSetupConsent(false)) && !reflect.DeepEqual(c, historicalReadAdminV7Consent()) && !reflect.DeepEqual(c, historicalReadAdminV8Consent()) && !reflect.DeepEqual(c, historicalReadAdminV9Consent()) && !reflect.DeepEqual(c, historicalReadAdminV10Consent()) && !reflect.DeepEqual(c, historicalReadAdminV11Consent()) && !reflect.DeepEqual(c, historicalReadAdminV12Consent()) {
+		if !reflect.DeepEqual(c, freshReadAdminSetupConsent(false)) && !reflect.DeepEqual(c, historicalReadAdminV7Consent()) && !reflect.DeepEqual(c, historicalReadAdminV8Consent()) && !reflect.DeepEqual(c, historicalReadAdminV9Consent()) && !reflect.DeepEqual(c, historicalReadAdminV10Consent()) && !reflect.DeepEqual(c, historicalReadAdminV11Consent()) && !reflect.DeepEqual(c, historicalReadAdminV12Consent()) && !reflect.DeepEqual(c, historicalReadAdminV13Consent()) {
 			return lanclient.WindowsCapabilityConsentResult{}, errLifecycle
 		}
 		if f.partial {
@@ -927,7 +927,7 @@ func TestReadAdminResourceContextDisclosureIncludesExactSemanticsAndHTTPRisk(t *
 		}
 	}
 	c := freshReadAdminSetupConsent(false)
-	if c.SchemaVersion != lanclient.WindowsCapabilityConsentVersionV13 || len(c.Scopes) != 20 || c.Scopes[17] != "windows-resource-context-v1" || c.Scopes[18] != "windows-storage-io-v1" || c.InsecureHTTPAcknowledged {
+	if c.SchemaVersion != lanclient.WindowsCapabilityConsentVersionV14 || len(c.Scopes) != 21 || c.Scopes[17] != "windows-resource-context-v1" || c.Scopes[18] != "windows-storage-io-v1" || c.InsecureHTTPAcknowledged {
 		t.Fatal("wrong fresh resource authority")
 	}
 }
@@ -1131,7 +1131,7 @@ func TestReadAdminStorageIODisclosureIncludesExactSemanticsAndHTTPRisk(t *testin
 		}
 	}
 	c := freshReadAdminSetupConsent(false)
-	if c.SchemaVersion != lanclient.WindowsCapabilityConsentVersionV13 || len(c.Scopes) != 20 || c.Scopes[18] != "windows-storage-io-v1" || c.InsecureHTTPAcknowledged {
+	if c.SchemaVersion != lanclient.WindowsCapabilityConsentVersionV14 || len(c.Scopes) != 21 || c.Scopes[18] != "windows-storage-io-v1" || c.InsecureHTTPAcknowledged {
 		t.Fatal("wrong fresh storage I/O authority")
 	}
 }
@@ -1141,7 +1141,7 @@ func historicalReadAdminV12Consent() lanclient.WindowsCapabilityConsent {
 }
 func TestFreshReadAdminV13LifecycleLeaseRequiresExactCompletedReceipt11(t *testing.T) {
 	setup := &readSetupFixture{}
-	if _, e := setupReadObservation(context.Background(), "fixture", freshReadAdminSetupConsent(false), freshReadAdminFixtureHooks(setup)); e != nil {
+	if _, e := setupReadObservation(context.Background(), "fixture", historicalReadAdminV13Consent(), freshReadAdminFixtureHooks(setup)); e != nil {
 		t.Fatal(e)
 	}
 	for _, kind := range []string{"exact", "receipt2", "receipt3", "missing-software-history", "staged", "wrong-consent"} {
@@ -1182,12 +1182,12 @@ func TestFreshReadAdminV13LifecycleLeaseRequiresExactCompletedReceipt11(t *testi
 func TestReadAdminV13FreshGrantFailuresAndOriginalSenderGuard(t *testing.T) {
 	for _, phase := range []string{"fresh-scopes", "grants-started", "configure", "verify-grants", "grant-digests", "grants-verified", "startup-transition-started"} {
 		f := &readSetupFixture{fail: phase}
-		if _, e := setupReadObservation(context.Background(), "fixture", freshReadAdminSetupConsent(false), freshReadAdminFixtureHooks(f)); e == nil || f.started != 0 || f.transitioned != 0 {
+		if _, e := setupReadObservation(context.Background(), "fixture", historicalReadAdminV13Consent(), freshReadAdminFixtureHooks(f)); e == nil || f.started != 0 || f.transitioned != 0 {
 			t.Fatal("incomplete authority started", phase, e)
 		}
 	}
 	f := &readSetupFixture{partial: true}
-	if _, e := setupReadObservation(context.Background(), "fixture", freshReadAdminSetupConsent(false), freshReadAdminFixtureHooks(f)); e == nil || f.started != 0 || f.record.ReadSetup.Phase != "grants-incomplete" || f.record.ReadSetup.Grants.FailedScope != "windows-machine-software-history-v1" || len(f.record.ReadSetup.Grants.AppliedScopes) != 18 {
+	if _, e := setupReadObservation(context.Background(), "fixture", historicalReadAdminV13Consent(), freshReadAdminFixtureHooks(f)); e == nil || f.started != 0 || f.record.ReadSetup.Phase != "grants-incomplete" || f.record.ReadSetup.Grants.FailedScope != "windows-machine-software-history-v1" || len(f.record.ReadSetup.Grants.AppliedScopes) != 18 {
 		t.Fatal("partial software-history failure erased evidence")
 	}
 	f = &readSetupFixture{}
@@ -1226,14 +1226,14 @@ func TestReadAdminV13FreshGrantFailuresAndOriginalSenderGuard(t *testing.T) {
 		}
 		return lanclient.WindowsCapabilityConsentResult{}, errLifecycle
 	}
-	if _, e := setupReadObservation(context.Background(), "fixture", freshReadAdminSetupConsent(false), h); e == nil || f.started != 0 || f.transitioned != 0 {
+	if _, e := setupReadObservation(context.Background(), "fixture", historicalReadAdminV13Consent(), h); e == nil || f.started != 0 || f.transitioned != 0 {
 		t.Fatal("guard failure started")
 	}
 }
 
 func TestReadAdminV13FreshProfileReceipt11ExactNineteenGrants(t *testing.T) {
 	f := &readSetupFixture{}
-	c := freshReadAdminSetupConsent(false)
+	c := historicalReadAdminV13Consent()
 	if _, e := setupReadObservation(context.Background(), "fixture", c, freshReadAdminFixtureHooks(f)); e != nil {
 		t.Fatal(e)
 	}
@@ -1296,7 +1296,11 @@ func TestReadAdminSoftwareHistoryDisclosureAndFreshAuthority(t *testing.T) {
 		}
 	}
 	c := freshReadAdminSetupConsent(false)
-	if c.SchemaVersion != lanclient.WindowsCapabilityConsentVersionV13 || len(c.Scopes) != 20 || c.Scopes[19] != "windows-machine-software-history-v1" || readSetupReceiptVersion(c) != 11 || c.InsecureHTTPAcknowledged {
+	if c.SchemaVersion != lanclient.WindowsCapabilityConsentVersionV14 || len(c.Scopes) != 21 || c.Scopes[19] != "windows-machine-software-history-v1" || readSetupReceiptVersion(c) != 12 || c.InsecureHTTPAcknowledged {
 		t.Fatal("wrong history authority")
 	}
+}
+
+func historicalReadAdminV13Consent() lanclient.WindowsCapabilityConsent {
+	return lanclient.WindowsCapabilityConsent{SchemaVersion: lanclient.WindowsCapabilityConsentVersionV13, CollectionProfile: "windows-inventory-v1", Scopes: lanclient.WindowsReadAdminScopesV13(), Acknowledged: true}
 }

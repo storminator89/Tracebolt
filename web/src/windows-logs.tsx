@@ -7,6 +7,7 @@ import type { WindowsEvent, WindowsEventChannel } from './windows-events-types';
 import './windows-logs.css';
 import { useWindowsEventContent } from './windows-event-content-resource';
 import { WindowsEventContentPanel } from './windows-event-content';
+import { WindowsEventHistoryPanel } from './windows-event-history';
 import { validSelectedEvent } from './windows-event-content-types';
 
 const PAGE_SIZE = 10;
@@ -64,6 +65,7 @@ export function WindowsLogsPanel({ resource, contentAccess }: { resource: Window
     const canPrevious = Boolean(events && rows.length > 0 && index > 0 && !resource.loading), canNext = Boolean(events && rows.length > 0 && index + 1 < pageCount && !resource.loading);
     const columns = [de ? 'Ereigniszeit' : 'Event time', de ? 'Kanal' : 'Channel', de ? 'Stufe' : 'Level', 'Provider', de ? 'Ereignis-ID' : 'Event ID', de ? 'Datensatz-ID' : 'Record ID'];
     return <section className="windows-inventory windows-logs" aria-label={de ? 'Windows-Logs' : 'Windows logs'}>
+        {contentAccess && <WindowsEventHistoryPanel key={`${contentAccess.deviceId}:${contentAccess.sessionKey}`} {...contentAccess}/>}
         <div className="windows-inventory-section-header"><h2>{de ? 'Windows-Ereignisköpfe' : 'Windows event headers'}</h2><button type="button" className="button small" disabled={resource.loading || resource.error === 'session' || resource.status === 'revoked'} onClick={resource.refresh}>{de ? 'Stichprobe aktualisieren' : 'Refresh sample'}</button></div>
         <p className="windows-logs-boundary">{de ? 'Nur die gemeldete Stichprobe: bis zu 16 Köpfe je Kanal. Filter und Seiten lesen keine älteren Ereignisse nach.' : 'Reported sample only: up to 16 headers per channel. Filters and pages do not retrieve older events.'}</p>
         <p role={resource.error ? 'alert' : 'status'}>{state}</p>

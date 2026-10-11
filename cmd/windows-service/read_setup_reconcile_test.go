@@ -487,7 +487,7 @@ func TestFreshReadAdminV13ReconcilePinsSoftwareHistoryDigestAndNeverPromotesRece
 			var receipt installReceipt
 			json.Unmarshal(f.intent, &intent)
 			json.Unmarshal(f.receipt, &receipt)
-			consent := freshReadAdminSetupConsent(false)
+			consent := historicalReadAdminV13Consent()
 			intent.Consent, receipt.ReadSetup.Consent = consent, consent
 			receipt.Version = 11
 			receipt.ReadSetup.Grants.AppliedScopes = consent.Scopes[1:]

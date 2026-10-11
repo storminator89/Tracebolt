@@ -91,6 +91,7 @@ type Report struct {
 	WindowsFullSoftwareStatus     string `json:"windowsFullSoftwareStatus,omitempty"`
 	WindowsFullSoftwareSequence   uint64 `json:"windowsFullSoftwareSequence,omitempty"`
 	WindowsFullSoftwareOperations uint8  `json:"windowsFullSoftwareOperations,omitempty"`
+	WindowsEventHistoryStatus     string `json:"windowsEventHistoryStatus,omitempty"`
 	WindowsEventContentStatus     string `json:"windowsEventContentStatus,omitempty"`
 	CachedUpdatesStatus           string `json:"cachedUpdatesStatus,omitempty"`
 	CachedUpdatesSequence         uint64 `json:"cachedUpdatesSequence,omitempty"`
@@ -160,6 +161,8 @@ func Run(ctx context.Context, m Material) (Report, error) {
 		// Preserve the preexisting one-shot caller-context contract. Legacy
 		// foreground attempts retain their original20s budget separately.
 		events := openWindowsEventContentSender(m)
+		history := openWindowsEventHistorySender(m)
+		defer history.Close()
 		defer events.Close()
 		fullServices, fullErr := openWindowsFullServicesSender(m, state)
 		if fullErr != nil {
@@ -184,6 +187,7 @@ func Run(ctx context.Context, m Material) (Report, error) {
 		report, err := runUsingState(ctx, m, state)
 		if ctx.Err() == nil {
 			report.WindowsEventContentStatus = runWindowsEventContentAttempt(ctx, events)
+			report.WindowsEventHistoryStatus = runWindowsEventHistoryAttempt(ctx, history)
 			if e := runWindowsFullServicesAttempt(ctx, fullServices, &report); e != nil {
 				return report, e
 			}

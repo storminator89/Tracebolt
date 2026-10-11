@@ -75,49 +75,51 @@ type Replay struct {
 	ReceivedAt  time.Time `json:"receivedAt"`
 }
 type credential struct {
-	Renewal                          *renewalRecord            `json:"renewal,omitempty"`
-	WindowsActionSetup               *windowsActionSetupMarker `json:"windowsActionSetup,omitempty"`
-	DER                              []byte                    `json:"der"`
-	Delivery                         Delivery                  `json:"delivery"`
-	Replay                           Replay                    `json:"replay"`
-	Frame                            []byte                    `json:"frame"`
-	ServiceActionSetup               *serviceActionSetupMarker `json:"serviceActionSetup,omitempty"`
-	WindowsNetworkContextInitialized bool                      `json:"windowsNetworkContextInitialized,omitempty"`
-	WindowsFullProcessesInitialized  bool                      `json:"windowsFullProcessesInitialized,omitempty"`
-	WindowsFullSoftwareInitialized   bool                      `json:"windowsFullSoftwareInitialized,omitempty"`
-	WindowsFullServicesInitialized   bool                      `json:"windowsFullServicesInitialized,omitempty"`
-	WindowsEventAuthorityInitialized bool                      `json:"windowsEventAuthorityInitialized,omitempty"`
+	Renewal                            *renewalRecord            `json:"renewal,omitempty"`
+	WindowsActionSetup                 *windowsActionSetupMarker `json:"windowsActionSetup,omitempty"`
+	DER                                []byte                    `json:"der"`
+	Delivery                           Delivery                  `json:"delivery"`
+	Replay                             Replay                    `json:"replay"`
+	Frame                              []byte                    `json:"frame"`
+	ServiceActionSetup                 *serviceActionSetupMarker `json:"serviceActionSetup,omitempty"`
+	WindowsNetworkContextInitialized   bool                      `json:"windowsNetworkContextInitialized,omitempty"`
+	WindowsFullProcessesInitialized    bool                      `json:"windowsFullProcessesInitialized,omitempty"`
+	WindowsFullSoftwareInitialized     bool                      `json:"windowsFullSoftwareInitialized,omitempty"`
+	WindowsFullServicesInitialized     bool                      `json:"windowsFullServicesInitialized,omitempty"`
+	WindowsHistoryAuthorityInitialized bool                      `json:"windowsHistoryAuthorityInitialized,omitempty"`
+	WindowsEventAuthorityInitialized   bool                      `json:"windowsEventAuthorityInitialized,omitempty"`
 }
 type transaction struct {
-	ctx                           context.Context
-	issuerDER                     []byte
-	originalWindowsActionSetup    map[string]windowsActionSetupMarker
-	conn                          *sql.Conn
-	beforeCommit                  []func() error
-	originalWindowsNetworkContext map[string]bool
-	originalWindowsFullProcesses  map[string]bool
-	originalWindowsFullSoftware   map[string]bool
-	originalWindowsFullServices   map[string]bool
-	engine                        *enrollmentstate.Engine
-	credentials                   map[string]credential
-	originalLedger                []byte
-	originalCredentials           map[string][]byte
-	originalRenewals              map[string][]byte
-	originalServiceActionSetup    map[string]serviceActionSetupMarker
-	originalWindowsEventAuthority map[string]bool
-	operational                   map[string]operationalRecord
-	originalOperational           map[string][]byte
-	validatedFrames               map[frameValidationKey]lanstore.Frame
-	inventory                     map[string]inventoryRecord
-	originalInventory             map[string][]byte
-	inventoryKey                  inventoryledger.CursorKey
-	overview                      map[string]overviewRecord
-	originalOverview              map[string][]byte
-	overviewKey                   overviewledger.CursorKey
-	overviewEnabled               bool
-	completeUpdatesEnabled        bool
-	completeUpdatesKey            completeUpdatesCursorKey
-	system                        map[string]systemRecord
+	ctx                             context.Context
+	issuerDER                       []byte
+	originalWindowsActionSetup      map[string]windowsActionSetupMarker
+	conn                            *sql.Conn
+	beforeCommit                    []func() error
+	originalWindowsNetworkContext   map[string]bool
+	originalWindowsFullProcesses    map[string]bool
+	originalWindowsFullSoftware     map[string]bool
+	originalWindowsFullServices     map[string]bool
+	engine                          *enrollmentstate.Engine
+	credentials                     map[string]credential
+	originalLedger                  []byte
+	originalCredentials             map[string][]byte
+	originalRenewals                map[string][]byte
+	originalServiceActionSetup      map[string]serviceActionSetupMarker
+	originalWindowsHistoryAuthority map[string]bool
+	originalWindowsEventAuthority   map[string]bool
+	operational                     map[string]operationalRecord
+	originalOperational             map[string][]byte
+	validatedFrames                 map[frameValidationKey]lanstore.Frame
+	inventory                       map[string]inventoryRecord
+	originalInventory               map[string][]byte
+	inventoryKey                    inventoryledger.CursorKey
+	overview                        map[string]overviewRecord
+	originalOverview                map[string][]byte
+	overviewKey                     overviewledger.CursorKey
+	overviewEnabled                 bool
+	completeUpdatesEnabled          bool
+	completeUpdatesKey              completeUpdatesCursorKey
+	system                          map[string]systemRecord
 }
 
 // Open rejects existing insecure paths; it never chmods or adopts them. The
@@ -385,7 +387,7 @@ func (s *Store) load(ctx context.Context, conn *sql.Conn) (*transaction, error) 
 	if err != nil {
 		return nil, ErrStorage
 	}
-	t := &transaction{ctx: ctx, issuerDER: s.issuerDER, conn: conn, engine: engine, credentials: make(map[string]credential), originalLedger: raw, originalCredentials: make(map[string][]byte), originalRenewals: make(map[string][]byte), originalServiceActionSetup: make(map[string]serviceActionSetupMarker), originalWindowsActionSetup: make(map[string]windowsActionSetupMarker), originalWindowsEventAuthority: make(map[string]bool), originalWindowsFullServices: make(map[string]bool), originalWindowsFullSoftware: make(map[string]bool), originalWindowsFullProcesses: make(map[string]bool), originalWindowsNetworkContext: make(map[string]bool), operational: map[string]operationalRecord{}, originalOperational: map[string][]byte{}, inventory: map[string]inventoryRecord{}, originalInventory: map[string][]byte{}, overview: map[string]overviewRecord{}, originalOverview: map[string][]byte{}}
+	t := &transaction{ctx: ctx, issuerDER: s.issuerDER, conn: conn, engine: engine, credentials: make(map[string]credential), originalLedger: raw, originalCredentials: make(map[string][]byte), originalRenewals: make(map[string][]byte), originalServiceActionSetup: make(map[string]serviceActionSetupMarker), originalWindowsActionSetup: make(map[string]windowsActionSetupMarker), originalWindowsHistoryAuthority: make(map[string]bool), originalWindowsEventAuthority: make(map[string]bool), originalWindowsFullServices: make(map[string]bool), originalWindowsFullSoftware: make(map[string]bool), originalWindowsFullProcesses: make(map[string]bool), originalWindowsNetworkContext: make(map[string]bool), operational: map[string]operationalRecord{}, originalOperational: map[string][]byte{}, inventory: map[string]inventoryRecord{}, originalInventory: map[string][]byte{}, overview: map[string]overviewRecord{}, originalOverview: map[string][]byte{}}
 	if conn.QueryRowContext(ctx, "SELECT count(*),coalesce(max(length(body)),0) FROM enrollment_credentials").Scan(&count, &n) != nil || count > s.config.RecordLimit || n > maxCredentialBytes {
 		return nil, ErrStorage
 	}
@@ -423,6 +425,9 @@ func (s *Store) load(ctx context.Context, conn *sql.Conn) (*transaction, error) 
 		t.credentials[id] = c
 		if c.WindowsActionSetup != nil {
 			t.originalWindowsActionSetup[id] = *c.WindowsActionSetup
+		}
+		if c.WindowsHistoryAuthorityInitialized {
+			t.originalWindowsHistoryAuthority[id] = true
 		}
 		if c.WindowsEventAuthorityInitialized {
 			t.originalWindowsEventAuthority[id] = true
@@ -469,6 +474,9 @@ func (s *Store) load(ctx context.Context, conn *sql.Conn) (*transaction, error) 
 	if err = validateWindowsEventUsedState(ctx, t, s.config.Binding.CollectionProfile); err != nil {
 		return nil, err
 	}
+	if err = validateWindowsHistoryUsedState(ctx, t, s.config.Binding.CollectionProfile); err != nil {
+		return nil, err
+	}
 	if err = validateWindowsContextRetentionCount(ctx, t, s.config.Binding.CollectionProfile); err != nil {
 		return nil, err
 	}
@@ -508,7 +516,7 @@ func (t *transaction) validMetadata(s enrollmentstate.Snapshot, c credential) bo
 	if c.WindowsNetworkContextInitialized && (s.Platform != "windows" || s.Binding.CollectionProfile != enrollmentcrypto.CollectionProfileWindowsInventory) {
 		return false
 	}
-	if c.WindowsEventAuthorityInitialized && (s.Platform != "windows" || s.Binding.CollectionProfile != enrollmentcrypto.CollectionProfileWindowsInventory) {
+	if (c.WindowsEventAuthorityInitialized || c.WindowsHistoryAuthorityInitialized) && (s.Platform != "windows" || s.Binding.CollectionProfile != enrollmentcrypto.CollectionProfileWindowsInventory) {
 		return false
 	}
 	if !validWindowsActionSetupMarker(s, c.WindowsActionSetup, credentialAuthorityExpiry(s, c)) {
@@ -579,6 +587,9 @@ func (s *Store) transact(ctx context.Context, action func(*transaction) error) e
 	if err = validateWindowsEventUsedState(ctx, t, s.config.Binding.CollectionProfile); err != nil {
 		return err
 	}
+	if err = validateWindowsHistoryUsedState(ctx, t, s.config.Binding.CollectionProfile); err != nil {
+		return err
+	}
 	for id, c := range t.credentials {
 		if original, ok := t.originalWindowsActionSetup[id]; ok && (c.WindowsActionSetup == nil || original != *c.WindowsActionSetup) {
 			return ErrStorage
@@ -593,6 +604,9 @@ func (s *Store) transact(ctx context.Context, action func(*transaction) error) e
 			return ErrStorage
 		}
 		if t.originalWindowsNetworkContext[id] && !c.WindowsNetworkContextInitialized {
+			return ErrStorage
+		}
+		if t.originalWindowsHistoryAuthority[id] && !c.WindowsHistoryAuthorityInitialized {
 			return ErrStorage
 		}
 		if t.originalWindowsEventAuthority[id] && !c.WindowsEventAuthorityInitialized {
@@ -743,6 +757,15 @@ func validateSchema(ctx context.Context, conn *sql.Conn, profile string) error {
 	}
 	if windowsEventsEnabled {
 		for _, obj := range windowsEventObjects() {
+			expected[obj.Name] = obj
+		}
+	}
+	historyEventsEnabled, historyEventsErr := windowsHistorySchemaPresent(ctx, conn, profile)
+	if historyEventsErr != nil {
+		return historyEventsErr
+	}
+	if historyEventsEnabled {
+		for _, obj := range windowsHistoryObjects() {
 			expected[obj.Name] = obj
 		}
 	}

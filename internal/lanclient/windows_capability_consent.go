@@ -13,6 +13,7 @@ import (
 	"localrmm/internal/windowsfullservices"
 	"localrmm/internal/windowsfullsoftware"
 	"localrmm/internal/windowshardware"
+	"localrmm/internal/windowshistoryrequest"
 	"localrmm/internal/windowsmanaged"
 	"localrmm/internal/windowsnetwork"
 	"localrmm/internal/windowsnetworkcontext"
@@ -61,8 +62,8 @@ type WindowsCapabilityConsent struct {
 }
 
 func (r WindowsCapabilityConsent) Validate() error {
-	if r.SchemaVersion == WindowsCapabilityConsentVersionV5 || r.SchemaVersion == WindowsCapabilityConsentVersionV6 || r.SchemaVersion == WindowsCapabilityConsentVersionV7 || r.SchemaVersion == WindowsCapabilityConsentVersionV8 || r.SchemaVersion == WindowsCapabilityConsentVersionV9 || r.SchemaVersion == WindowsCapabilityConsentVersionV10 || r.SchemaVersion == WindowsCapabilityConsentVersionV11 || r.SchemaVersion == WindowsCapabilityConsentVersionV12 || r.SchemaVersion == WindowsCapabilityConsentVersionV13 {
-		if !validWindowsReadAdminConsent(r) && !validWindowsReadAdminConsentV6(r) && !validWindowsReadAdminConsentV7(r) && !validWindowsReadAdminConsentV8(r) && !validWindowsReadAdminConsentV9(r) && !validWindowsReadAdminConsentV10(r) && !validWindowsReadAdminConsentV11(r) && !validWindowsReadAdminConsentV12(r) && !validWindowsReadAdminConsentV13(r) {
+	if r.SchemaVersion == WindowsCapabilityConsentVersionV5 || r.SchemaVersion == WindowsCapabilityConsentVersionV6 || r.SchemaVersion == WindowsCapabilityConsentVersionV7 || r.SchemaVersion == WindowsCapabilityConsentVersionV8 || r.SchemaVersion == WindowsCapabilityConsentVersionV9 || r.SchemaVersion == WindowsCapabilityConsentVersionV10 || r.SchemaVersion == WindowsCapabilityConsentVersionV11 || r.SchemaVersion == WindowsCapabilityConsentVersionV12 || r.SchemaVersion == WindowsCapabilityConsentVersionV13 || r.SchemaVersion == WindowsCapabilityConsentVersionV14 {
+		if !validWindowsReadAdminConsent(r) && !validWindowsReadAdminConsentV6(r) && !validWindowsReadAdminConsentV7(r) && !validWindowsReadAdminConsentV8(r) && !validWindowsReadAdminConsentV9(r) && !validWindowsReadAdminConsentV10(r) && !validWindowsReadAdminConsentV11(r) && !validWindowsReadAdminConsentV12(r) && !validWindowsReadAdminConsentV13(r) && !validWindowsReadAdminConsentV14(r) {
 			return ErrConfiguration
 		}
 		return nil
@@ -125,7 +126,7 @@ type WindowsCapabilityConsentResult struct {
 // and FailedScope may have an indeterminate write outcome. Never rollback,
 // erase, re-enroll or enable unselected scopes to recover.
 func ConfigureWindowsCapabilities(path string, r WindowsCapabilityConsent) (WindowsCapabilityConsentResult, error) {
-	if r.SchemaVersion == WindowsCapabilityConsentVersionV5 || r.SchemaVersion == WindowsCapabilityConsentVersionV6 || r.SchemaVersion == WindowsCapabilityConsentVersionV7 || r.SchemaVersion == WindowsCapabilityConsentVersionV8 || r.SchemaVersion == WindowsCapabilityConsentVersionV9 || r.SchemaVersion == WindowsCapabilityConsentVersionV10 || r.SchemaVersion == WindowsCapabilityConsentVersionV11 || r.SchemaVersion == WindowsCapabilityConsentVersionV12 || r.SchemaVersion == WindowsCapabilityConsentVersionV13 {
+	if r.SchemaVersion == WindowsCapabilityConsentVersionV5 || r.SchemaVersion == WindowsCapabilityConsentVersionV6 || r.SchemaVersion == WindowsCapabilityConsentVersionV7 || r.SchemaVersion == WindowsCapabilityConsentVersionV8 || r.SchemaVersion == WindowsCapabilityConsentVersionV9 || r.SchemaVersion == WindowsCapabilityConsentVersionV10 || r.SchemaVersion == WindowsCapabilityConsentVersionV11 || r.SchemaVersion == WindowsCapabilityConsentVersionV12 || r.SchemaVersion == WindowsCapabilityConsentVersionV13 || r.SchemaVersion == WindowsCapabilityConsentVersionV14 {
 		return WindowsCapabilityConsentResult{}, ErrConfiguration
 	}
 	return configureWindowsCapabilities(path, r, nil)
@@ -134,7 +135,7 @@ func ConfigureWindowsCapabilities(path string, r WindowsCapabilityConsent) (Wind
 // Every Read admin version requires a live owned/stopped service and protected phase guard before and
 // after each exact scope operation, plus the unchanged activated sender identity.
 func ConfigureWindowsReadAdminCapabilities(path string, r WindowsCapabilityConsent, guard func() error) (WindowsCapabilityConsentResult, error) {
-	if (!validWindowsReadAdminConsent(r) && !validWindowsReadAdminConsentV6(r) && !validWindowsReadAdminConsentV7(r) && !validWindowsReadAdminConsentV8(r) && !validWindowsReadAdminConsentV9(r) && !validWindowsReadAdminConsentV10(r) && !validWindowsReadAdminConsentV11(r) && !validWindowsReadAdminConsentV12(r) && !validWindowsReadAdminConsentV13(r)) || guard == nil {
+	if (!validWindowsReadAdminConsent(r) && !validWindowsReadAdminConsentV6(r) && !validWindowsReadAdminConsentV7(r) && !validWindowsReadAdminConsentV8(r) && !validWindowsReadAdminConsentV9(r) && !validWindowsReadAdminConsentV10(r) && !validWindowsReadAdminConsentV11(r) && !validWindowsReadAdminConsentV12(r) && !validWindowsReadAdminConsentV13(r) && !validWindowsReadAdminConsentV14(r)) || guard == nil {
 		return WindowsCapabilityConsentResult{}, ErrConfiguration
 	}
 	binding, e := WindowsCapabilityIdentity(path, r)
@@ -175,6 +176,9 @@ func configureWindowsCapabilities(path string, r WindowsCapabilityConsent, guard
 			}()
 		}
 		switch scope {
+		case windowshistoryrequest.Scope:
+			_, err := ConfigureWindowsEventHistory(path, "enable", true, r.InsecureHTTPAcknowledged)
+			return err
 		case windowsstorageio.Scope:
 			_, err := ConfigureWindowsStorageIO(path, "enable", true, r.InsecureHTTPAcknowledged)
 			return err
@@ -340,6 +344,9 @@ func WindowsCapabilityGrantDigests(path string, r WindowsCapabilityConsent) ([]W
 }
 func readWindowsCapabilityConsent(m Material, scope string) (any, bool) {
 	switch scope {
+	case windowshistoryrequest.Scope:
+		c, ok := readWindowsEventHistoryGrant(m)
+		return c, ok
 	case windowsstorageio.Scope:
 		c, ok := readWindowsStorageIOConsent(m)
 		return c, ok
@@ -420,7 +427,7 @@ func windowsCapabilityGrantDigests(r WindowsCapabilityConsent, read func(string)
 		digest := sha256.Sum256(raw)
 		result = append(result, WindowsCapabilityGrantDigest{scope, hex.EncodeToString(digest[:])})
 	}
-	if r.SchemaVersion == WindowsCapabilityConsentVersionV13 {
+	if r.SchemaVersion == WindowsCapabilityConsentVersionV13 || r.SchemaVersion == WindowsCapabilityConsentVersionV14 {
 		// The two explicit scopes share one current parent consent. Reject a
 		// rotation between reads rather than record mismatched grant authority.
 		software, history := "", ""

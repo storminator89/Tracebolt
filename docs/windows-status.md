@@ -9,9 +9,9 @@ before native acceptance and a new release.
 
 ## Current development source
 
-Fresh Setup offers **Read admin** with twenty explicitly disclosed read scopes,
+Fresh Setup offers **Read admin** with twenty-one explicitly disclosed read scopes,
 grouped into concise sections. Consent starts unchecked, including the personal
-session labels and identifying serial metadata. The manager and endpoint must
+session labels, identifying serial metadata and selected historical-message risks. The manager and endpoint must
 implement the same profile. Selecting it does not prove access under the
 installed service identity.
 
@@ -27,7 +27,7 @@ installed service identity.
 | Users / Sessions | Caller-visible WTS sessions and local domain/workgroup join context | No complete account discovery, session actions or remote desktop |
 | Storage | Drive letters mapped to volume GUIDs, provider-reported physical-disk status/media/bus and separately consented [aggregate PerfDisk throughput, operations, latency and queue context](windows-storage-io.md) | Independent snapshots; no guessed topology, per-disk completeness, SMART or health verdict. Missing counters and idle latency remain unavailable |
 | Hardware / power | Manufacturer/model, separately labeled chassis/BIOS serial, firmware and system battery/power | No validated unique hardware identity, RAM-module inventory or battery-health claim |
-| Logs | Application/System event headers | Message content is a separate approval; no full retained-event browsing |
+| Logs | Recent Application/System headers and [bounded older-event search plus selected messages](windows-event-history-runtime.md) | Fresh explicit history grant; one channel, UTC window, 100-header cap and original 15-minute expiry. No complete retained-log claim |
 
 [Read admin scope contract](windows-read-admin-setup.md) links these fields to
 their fixed local providers, exact grants and privacy notices. Disabled or denied

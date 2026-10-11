@@ -3,9 +3,9 @@
 `Run(Config, Hooks) error` uses fixed Win32 controls through `x/sys/windows`,
 without WebView, browser navigation, downloads, third-party GUI packages, or a
 second installation engine. The caller supplies the embedded service provenance,
-complete nineteen-scope Read admin disclosure and existing coordinator hooks.
+complete twenty-one-scope Read admin disclosure and existing coordinator hooks.
 Read admin is the only presented fresh profile; it is not an extra opt-in above
-a five-scope default. Review starts with six readable groups and offers full
+a five-scope default. Review starts with seven readable groups and offers full
 scope/provider details through an optional details button. The fresh profile explicitly
 names manufacturer/model, physical chassis serial from Win32_SystemEnclosure,
 BIOS serial metadata, firmware vendor/version/date, and power/battery. Identifying
@@ -17,8 +17,10 @@ processor counts, installed SMBIOS versus OS-usable RAM, commit current/limit
 and remaining capacity, and aggregate pagefile allocated/in-use capacity are
 explicitly disclosed. Pagefile names/paths are excluded; this adds no paging-I/O,
 thrashing or health verdict and does not change the CPU sampler. Fresh approval uses consent
-v12 and outer receipt 10. Historical v1-v11 consent and receipts remain unchanged;
-old grants never authorize the independent storage-I/O scope.
+v14 and outer receipt 12. Historical v1-v13 consent and receipts remain unchanged;
+old grants never authorize the independent event-history scope. Bounded historical
+headers and selected sensitive messages are disclosed together as a separate
+group, and the initially unchecked scope control names the message-content risk.
 Counters are not rates or since-boot totals, and the independently captured tables
 are not joined. Setup does not query providers or grant new native privileges.
 

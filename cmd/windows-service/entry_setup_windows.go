@@ -73,7 +73,7 @@ func main() {
 				defer cancel()
 				expected := windowssetup.Expected(b.ManagerInstanceID, b.EnrollmentOrigin, b.AgentOrigin)
 				if readAdmin {
-					expected = windowssetup.ExpectedReadAdminV9(b.ManagerInstanceID, b.EnrollmentOrigin, b.AgentOrigin)
+					expected = windowssetup.ExpectedReadAdminV10(b.ManagerInstanceID, b.EnrollmentOrigin, b.AgentOrigin)
 				}
 				return lanclient.CheckWindowsSetupManager(requestCtx, b.EnrollmentOrigin, b.Profile, []byte(b.ServerCAPEM), expected)
 			},

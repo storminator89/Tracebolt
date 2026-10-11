@@ -21,7 +21,7 @@ revocation or the original issuer/explicit scope authority expires. The signed
 initial claim binds that consent and both exact origins. HTTP-test renewal is
 unsupported and fails without a transport downgrade.
 
-The fresh Linux Read admin and Windows twenty-scope Read admin grants retain
+The fresh Linux Read admin and Windows versioned Read admin grants retain
 exactly their originally approved collection and helper scopes. Certificate renewal
 does not grant a new scope, extend a separately expiring grant, rotate a private
 key, upgrade a binary, replace an issuer, install a service or repair missing state.

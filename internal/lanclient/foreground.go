@@ -41,6 +41,8 @@ func runForeground(ctx context.Context, m Material, interval time.Duration, obse
 	}
 	defer state.Close()
 	events := openWindowsEventContentSender(m)
+	history := openWindowsEventHistorySender(m)
+	defer history.Close()
 	defer events.Close()
 	fullServices, e := openWindowsFullServicesSender(m, state)
 	if e != nil {
@@ -140,6 +142,7 @@ func runForeground(ctx context.Context, m Material, interval time.Duration, obse
 		}
 		if parent.Err() == nil {
 			report.WindowsEventContentStatus = runWindowsEventContentAttempt(parent, events)
+			report.WindowsEventHistoryStatus = runWindowsEventHistoryAttempt(parent, history)
 			if e := runWindowsFullServicesAttempt(parent, fullServices, &report); e != nil {
 				err = e
 			}

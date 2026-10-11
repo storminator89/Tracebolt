@@ -11,6 +11,8 @@ import (
 	"io"
 	"localrmm/internal/windowseventrequest"
 	"localrmm/internal/windowseventworker"
+	"localrmm/internal/windowshistoryrequest"
+	"localrmm/internal/windowshistoryworker"
 	"localrmm/internal/windowsupdateworker"
 	"os"
 
@@ -53,6 +55,12 @@ type operation func(context.Context, request, io.Writer, io.Writer) (any, error)
 func run(ctx context.Context, args []string, out, stderr io.Writer) int {
 	if len(args) > 0 && args[0] == "--service-actions-setup" {
 		return runActionSetup(ctx, args[1:], out, stderr, nativeActionSetup)
+	}
+	if len(args) == 1 && args[0] == windowshistoryworker.WorkerArgument {
+		if runEventHistoryWorker(ctx, os.Stdin, out) != nil {
+			return 1
+		}
+		return 0
 	}
 	if len(args) == 1 && args[0] == windowseventworker.WorkerArgument {
 		if runEventContentWorker(ctx, os.Stdin, out) != nil {
@@ -153,7 +161,7 @@ func run(ctx context.Context, args []string, out, stderr io.Writer) int {
 func runWith(ctx context.Context, args []string, out, stderr io.Writer, perform operation) int {
 	flags := flag.NewFlagSet("windows-service", flag.ContinueOnError)
 	flags.SetOutput(io.Discard)
-	names := []string{"software-history-preview", "software-history-enable", "software-history-disable", "network-context-preview", "network-context-enable", "network-context-disable", "full-processes-preview", "full-processes-enable", "full-processes-disable", "read-admin-preview", "read-admin-enable", "session-context-preview", "session-context-enable", "session-context-disable", "security-posture-preview", "security-posture-enable", "security-posture-disable", "patch-context-preview", "patch-context-enable", "patch-context-disable", "adapter-context-preview", "adapter-context-enable", "adapter-context-disable", "full-software-preview", "full-software-enable", "full-software-disable", "full-services-preview", "full-services-enable", "full-services-disable", "plan", "inspect", "install", "enroll", "start", "stop", "restart", "uninstall", "run-service", "events-preview", "events-enable", "events-disable", "volumes-preview", "volumes-enable", "volumes-disable", "process-metrics-preview", "process-metrics-enable", "process-metrics-disable", "network-preview", "network-enable", "network-disable", "service-startup-preview", "service-startup-enable", "service-startup-disable", "updates-preview", "updates-enable", "updates-disable", "event-content-preview", "event-content-enable", "event-content-disable"}
+	names := []string{"software-history-preview", "software-history-enable", "software-history-disable", "network-context-preview", "network-context-enable", "network-context-disable", "full-processes-preview", "full-processes-enable", "full-processes-disable", "read-admin-preview", "read-admin-enable", "session-context-preview", "session-context-enable", "session-context-disable", "security-posture-preview", "security-posture-enable", "security-posture-disable", "patch-context-preview", "patch-context-enable", "patch-context-disable", "adapter-context-preview", "adapter-context-enable", "adapter-context-disable", "full-software-preview", "full-software-enable", "full-software-disable", "full-services-preview", "full-services-enable", "full-services-disable", "plan", "inspect", "install", "enroll", "start", "stop", "restart", "uninstall", "run-service", "events-preview", "events-enable", "events-disable", "volumes-preview", "volumes-enable", "volumes-disable", "process-metrics-preview", "process-metrics-enable", "process-metrics-disable", "network-preview", "network-enable", "network-disable", "service-startup-preview", "service-startup-enable", "service-startup-disable", "updates-preview", "updates-enable", "updates-disable", "event-content-preview", "event-content-enable", "event-content-disable", "event-history-preview", "event-history-enable", "event-history-disable"}
 	modes := map[string]*bool{}
 	for _, n := range names {
 		modes[n] = flags.Bool(n, false, "")
@@ -161,6 +169,7 @@ func runWith(ctx context.Context, args []string, out, stderr io.Writer, perform 
 	apply := flags.Bool("apply", false, "")
 	readAdminConsent := flags.Bool("twelve-read-admin-scopes", false, "")
 	consent := flags.Bool("basic-readonly", false, "")
+	eventHistoryConsent := flags.Bool("application-system-event-history-and-messages", false, "")
 	eventContentConsent := flags.Bool("selected-application-system-event-messages", false, "")
 	updatesConsent := flags.Bool("cached-windows-updates", false, "")
 	networkContextConsent := flags.Bool("routes-interface-counters", false, "")
@@ -214,6 +223,7 @@ func runWith(ctx context.Context, args []string, out, stderr io.Writer, perform 
 	softwareHistoryMode := mode == "software-history-preview" || mode == "software-history-enable" || mode == "software-history-disable"
 	fullSoftwareMode := mode == "full-software-preview" || mode == "full-software-enable" || mode == "full-software-disable"
 	fullServicesMode := mode == "full-services-preview" || mode == "full-services-enable" || mode == "full-services-disable"
+	eventHistoryMode := mode == "event-history-preview" || mode == "event-history-enable" || mode == "event-history-disable"
 	eventContentMode := mode == "event-content-preview" || mode == "event-content-enable" || mode == "event-content-disable"
 	updatesMode := mode == "updates-preview" || mode == "updates-enable" || mode == "updates-disable"
 	serviceStartupMode := mode == "service-startup-preview" || mode == "service-startup-enable" || mode == "service-startup-disable"
@@ -223,9 +233,9 @@ func runWith(ctx context.Context, args []string, out, stderr io.Writer, perform 
 	adapterContextMode := mode == "adapter-context-preview" || mode == "adapter-context-enable" || mode == "adapter-context-disable"
 	networkMode := mode == "network-preview" || mode == "network-enable" || mode == "network-disable"
 	processMetricsMode := mode == "process-metrics-preview" || mode == "process-metrics-enable" || mode == "process-metrics-disable"
-	mutate := mode == "software-history-enable" || mode == "software-history-disable" || mode == "network-context-enable" || mode == "network-context-disable" || mode == "full-processes-enable" || mode == "full-processes-disable" || mode == "read-admin-enable" || mode == "session-context-enable" || mode == "session-context-disable" || mode == "security-posture-enable" || mode == "security-posture-disable" || mode == "patch-context-enable" || mode == "patch-context-disable" || mode == "adapter-context-enable" || mode == "adapter-context-disable" || mode == "full-software-enable" || mode == "full-software-disable" || mode == "full-services-enable" || mode == "full-services-disable" || mode == "event-content-enable" || mode == "event-content-disable" || mode == "updates-enable" || mode == "updates-disable" || mode == "service-startup-enable" || mode == "service-startup-disable" || mode == "network-enable" || mode == "network-disable" || mode == "process-metrics-enable" || mode == "process-metrics-disable" || mode == "install" || mode == "enroll" || mode == "start" || mode == "stop" || mode == "restart" || mode == "uninstall" || mode == "events-enable" || mode == "events-disable" || mode == "volumes-enable" || mode == "volumes-disable"
+	mutate := mode == "event-history-enable" || mode == "event-history-disable" || mode == "software-history-enable" || mode == "software-history-disable" || mode == "network-context-enable" || mode == "network-context-disable" || mode == "full-processes-enable" || mode == "full-processes-disable" || mode == "read-admin-enable" || mode == "session-context-enable" || mode == "session-context-disable" || mode == "security-posture-enable" || mode == "security-posture-disable" || mode == "patch-context-enable" || mode == "patch-context-disable" || mode == "adapter-context-enable" || mode == "adapter-context-disable" || mode == "full-software-enable" || mode == "full-software-disable" || mode == "full-services-enable" || mode == "full-services-disable" || mode == "event-content-enable" || mode == "event-content-disable" || mode == "updates-enable" || mode == "updates-disable" || mode == "service-startup-enable" || mode == "service-startup-disable" || mode == "network-enable" || mode == "network-disable" || mode == "process-metrics-enable" || mode == "process-metrics-disable" || mode == "install" || mode == "enroll" || mode == "start" || mode == "stop" || mode == "restart" || mode == "uninstall" || mode == "events-enable" || mode == "events-disable" || mode == "volumes-enable" || mode == "volumes-disable"
 	needsConsent := mode == "install" || mode == "enroll"
-	if *softwareHistoryConsent != (mode == "software-history-enable") || *networkContextConsent != (mode == "network-context-enable") || *fullProcessesConsent != (mode == "full-processes-enable") || *readAdminConsent != (mode == "read-admin-enable") || *sessionContextConsent != (mode == "session-context-enable") || *securityPostureConsent != (mode == "security-posture-enable") || *patchContextConsent != (mode == "patch-context-enable") || *adapterContextConsent != (mode == "adapter-context-enable") || *fullSoftwareConsent != (mode == "full-software-enable") || *fullServicesConsent != (mode == "full-services-enable") || *eventContentConsent != (mode == "event-content-enable") || *updatesConsent != (mode == "updates-enable") || *serviceStartupConsent != (mode == "service-startup-enable") || *networkConsent != (mode == "network-enable") || *processMetricsConsent != (mode == "process-metrics-enable") || *volumeConsent != (mode == "volumes-enable") || *eventConsent != (mode == "events-enable") || flags.NArg() != 0 || mode == "" || *apply != mutate || (*consent || *windowsConsent) != needsConsent || *consent && *windowsConsent || *insecure && !*windowsConsent && !readAdminMode && !processMetricsMode && !networkMode && !patchContextMode && !securityPostureMode && !sessionContextMode && !adapterContextMode && !serviceStartupMode && !updatesMode && !eventContentMode && !fullServicesMode && !fullSoftwareMode && !softwareHistoryMode && !fullProcessesMode && !networkContextMode && mode != "events-preview" && mode != "events-enable" && mode != "events-disable" && mode != "volumes-preview" && mode != "volumes-enable" && mode != "volumes-disable" || (mode == "install") != (*bootstrap != "") {
+	if *eventHistoryConsent != (mode == "event-history-enable") || *softwareHistoryConsent != (mode == "software-history-enable") || *networkContextConsent != (mode == "network-context-enable") || *fullProcessesConsent != (mode == "full-processes-enable") || *readAdminConsent != (mode == "read-admin-enable") || *sessionContextConsent != (mode == "session-context-enable") || *securityPostureConsent != (mode == "security-posture-enable") || *patchContextConsent != (mode == "patch-context-enable") || *adapterContextConsent != (mode == "adapter-context-enable") || *fullSoftwareConsent != (mode == "full-software-enable") || *fullServicesConsent != (mode == "full-services-enable") || *eventContentConsent != (mode == "event-content-enable") || *updatesConsent != (mode == "updates-enable") || *serviceStartupConsent != (mode == "service-startup-enable") || *networkConsent != (mode == "network-enable") || *processMetricsConsent != (mode == "process-metrics-enable") || *volumeConsent != (mode == "volumes-enable") || *eventConsent != (mode == "events-enable") || flags.NArg() != 0 || mode == "" || *apply != mutate || (*consent || *windowsConsent) != needsConsent || *consent && *windowsConsent || *insecure && !*windowsConsent && !readAdminMode && !processMetricsMode && !networkMode && !patchContextMode && !securityPostureMode && !sessionContextMode && !adapterContextMode && !serviceStartupMode && !updatesMode && !eventContentMode && !eventHistoryMode && !fullServicesMode && !fullSoftwareMode && !softwareHistoryMode && !fullProcessesMode && !networkContextMode && mode != "events-preview" && mode != "events-enable" && mode != "events-disable" && mode != "volumes-preview" && mode != "volumes-enable" && mode != "volumes-disable" || (mode == "install") != (*bootstrap != "") {
 		fmt.Fprintln(stderr, "Operation flags rejected. Review --help; explicit apply and exactly one scope acknowledgement are required where stated.")
 		return 2
 	}
@@ -303,6 +313,16 @@ func runWith(ctx context.Context, args []string, out, stderr io.Writer, perform 
 		}
 		if *insecure {
 			if n, e := fmt.Fprintln(out, windowsfullsoftware.HTTPPrivacy); e != nil || n != len(windowsfullsoftware.HTTPPrivacy)+1 {
+				return 1
+			}
+		}
+	}
+	if *eventHistoryConsent || mode == "event-history-preview" {
+		if n, err := fmt.Fprintln(out, windowshistoryrequest.Privacy); err != nil || n != len(windowshistoryrequest.Privacy)+1 {
+			return 1
+		}
+		if *insecure {
+			if n, err := fmt.Fprintln(out, windowshistoryrequest.HTTPPrivacy); err != nil || n != len(windowshistoryrequest.HTTPPrivacy)+1 {
 				return 1
 			}
 		}
@@ -533,6 +553,9 @@ func usage(out io.Writer) {
 	fmt.Fprintln(out, windowsmanaged.ServiceStartupPrivacy)
 	fmt.Fprintln(out, windowsmanaged.ServiceStartupHTTPPrivacy)
 	fmt.Fprintln(out, "Stopped owned inventory service, separate selected message-content scope: --event-content-preview | --event-content-enable --apply --selected-application-system-event-messages | --event-content-disable --apply. HTTP-test additionally requires --insecure-http-test. No automatic service restart.")
+	fmt.Fprintln(out, "Stopped owned inventory service, separate history and selected historical message scope: --event-history-preview | --event-history-enable --apply --application-system-event-history-and-messages | --event-history-disable --apply. HTTP-test additionally requires --insecure-http-test. No automatic service restart.")
+	fmt.Fprintln(out, windowshistoryrequest.Privacy)
+	fmt.Fprintln(out, windowshistoryrequest.HTTPPrivacy)
 	fmt.Fprintln(out, windowseventrequest.Privacy)
 	fmt.Fprintln(out, windowseventrequest.HTTPPrivacy)
 	fmt.Fprintln(out, "Stopped owned inventory service, separate cached Windows Update scope: --updates-preview | --updates-enable --apply --cached-windows-updates | --updates-disable --apply. HTTP-test additionally requires --insecure-http-test. No automatic service restart.")

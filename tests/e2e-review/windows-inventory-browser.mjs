@@ -29,8 +29,8 @@ import path from 'node:path';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../..');
 const require=createRequire(path.join(root,'web/package.json'));
 const {build}=require('esbuild');
-const fixtureModule=await build({stdin:{contents:"export * from './windows-inventory-fixture'; export {windowsHealthDevice} from './windows-health-fixture'; export * from './windows-volumes-fixture'; export * from './windows-network-fixture'; export {windowsAdapterContext} from './windows-adapter-context-fixture'; export * from './resource-history-fixture'; export {validWindowsInventoryView} from './windows-inventory-types';",resolveDir:path.join(root,'web/src'),loader:'ts'},bundle:true,platform:'node',format:'esm',write:false,logLevel:'silent'});
-const {windowsNetwork,windowsAdapterContext,windowsVolumes,windowsHealthDevice,windowsDeviceId,windowsNow,windowsSection,windowsView,historyFixture,validWindowsInventoryView}=await import('data:text/javascript;base64,'+Buffer.from(fixtureModule.outputFiles[0].text).toString('base64'));
+const fixtureModule=await build({stdin:{contents:"export * from './windows-inventory-fixture'; export {historyView} from './windows-event-history-fixture'; export {validEventHistoryView} from './windows-event-history-types'; export {windowsHealthDevice} from './windows-health-fixture'; export * from './windows-volumes-fixture'; export * from './windows-network-fixture'; export {windowsAdapterContext} from './windows-adapter-context-fixture'; export * from './resource-history-fixture'; export {validWindowsInventoryView} from './windows-inventory-types';",resolveDir:path.join(root,'web/src'),loader:'ts'},bundle:true,platform:'node',format:'esm',write:false,logLevel:'silent'});
+const {windowsNetwork,windowsAdapterContext,windowsVolumes,windowsHealthDevice,windowsDeviceId,windowsNow,windowsSection,windowsView,historyFixture,validWindowsInventoryView,historyView,validEventHistoryView}=await import('data:text/javascript;base64,'+Buffer.from(fixtureModule.outputFiles[0].text).toString('base64'));
 export const windowsInventoryCaseName='Synthetic Windows inventory shares device charts and explicit enrollment consent without Linux reads';
 export const windowsInventoryFixtureDisclosure='Real loopback HTTP-test fixture login with intercepted invented Windows inventory and resource history in the production UI. UI-only evidence; no native endpoint acceptance, collection, invitation, service installation or external request.';
 let stage='setup';
@@ -155,6 +155,15 @@ export function createWindowsPercentageFixtureState(){
   resource(metric,at){if(!['cpu','memory'].includes(metric))throw new Error('Invalid invented resource metric');const view=windowsResourceBrowserFixture(metric,at,origins[metric]??at,phases[metric]);if(closedAt[metric]&&phases[metric]===`${metric}-policy-changed`)view.incidents[0].resolvedAt=closedAt[metric];return view;},
  };
 }
+// The legacy inventory walkthrough has no history grant. Only its passive status
+// read is represented; every history action and unexpected request still fails.
+export async function windowsEventHistoryLegacyRead({route,base,prefix,serverNow,sessionExpiresAt}){
+ const request=route.request(),url=new URL(request.url());
+ if(prefix!=='/api/devices/'+windowsDeviceId||url.origin!==base||url.pathname!==prefix+'/windows-event-history'||url.search||request.method()!=='GET'||request.postData()!==null)throw new Error('Unexpected synthetic history status request');
+ const view=historyView(serverNow,sessionExpiresAt);view.localStatus='disabled';view.capability.enabled=false;
+ if(!validEventHistoryView(view,view.deviceId,sessionExpiresAt))throw new Error('Invalid synthetic disabled history status');
+ return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(view)});
+}
 export async function windowsInventoryBrowserCase({pageAt,login,expect,base,shot}){
  const page=await pageAt('/devices/'+windowsDeviceId),prefix='/api/devices/'+windowsDeviceId,unexpected=[],writes=[],external=[];let phase='fresh',networkPhaseAt=null,logsPhaseAt=null,contactPhaseAt=null,percentagePolicyFixtures=createWindowsPercentageFixtureState(),servicePolicyFixtures=createWindowsServiceHealthFixtureState(),osObservedAt=null,updatesCapturedAt=null,securityCoverageCapturedAt=null,securityCoverageRetainedCapturedAt=null,sessionsRetainedCapturedAt=null;
  const syntheticPaths=new Set([prefix,prefix+'/windows-inventory',prefix+'/windows-contact',prefix+'/windows-capacity',prefix+'/windows-resource/cpu',prefix+'/windows-resource/memory',prefix+'/windows-services',prefix+'/resource-history','/api/overview','/api/windows/enrollment']);
@@ -165,6 +174,10 @@ export async function windowsInventoryBrowserCase({pageAt,login,expect,base,shot
  await page.route('**/*',async route=>{
   const request=route.request(),url=new URL(request.url());
   if(url.origin!==base){external.push('external');return route.abort('blockedbyclient');}
+  if(url.pathname===prefix+'/windows-event-history'){
+   try{await expect.poll(()=>eventSessionExpires!==null).toBe(true);return await windowsEventHistoryLegacyRead({route,base,prefix,serverNow:await windowsFixtureResponseTime(page),sessionExpiresAt:eventSessionExpires});}
+   catch{unexpected.push('unexpected-history-status');return route.abort('blockedbyclient');}
+  }
   if(url.pathname===prefix+'/windows-event-content'||['create','query','cancel'].some(action=>url.pathname===prefix+'/windows-event-content/'+action)){
    const action=url.pathname===prefix+'/windows-event-content'?'':url.pathname.split('/').at(-1);
    if(url.search||request.method()!==(action?'POST':'GET')||action&&phase!=='event-content'){unexpected.push('unexpected-content-route');return route.abort('blockedbyclient');}

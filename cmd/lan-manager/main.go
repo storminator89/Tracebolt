@@ -123,6 +123,7 @@ func prepareWithApplicationChecks(m lanconfig.Material, enrollment *enrollmentco
 		}
 		if windowsService != nil {
 			windowsService.CloseWindowsEventContent()
+			windowsService.CloseWindowsHistory()
 		}
 		if windowsStore != nil {
 			windowsStore.Close()
@@ -186,11 +187,17 @@ func prepareWithApplicationChecks(m lanconfig.Material, enrollment *enrollmentco
 		if err = windowsService.InitializeWindowsEventContent(context.Background()); err != nil {
 			return fail(err)
 		}
+		if err = windowsService.InitializeWindowsHistory(context.Background()); err != nil {
+			return fail(err)
+		}
 		windowsIngress, err = enrollmenttransport.New(windowsStore, enrollment.Issuer().IssuerDER(), c.AgentOrigin, windowsService.JournalCache())
 		if err != nil {
 			return fail(err)
 		}
 		if err = windowsIngress.ConfigureWindowsEventContent(windowsService.WindowsEventCache()); err != nil {
+			return fail(err)
+		}
+		if err = windowsIngress.ConfigureWindowsHistory(windowsService.WindowsHistoryCache()); err != nil {
 			return fail(err)
 		}
 	}
@@ -325,6 +332,7 @@ func prepareWithApplicationChecks(m lanconfig.Material, enrollment *enrollmentco
 			}
 			if windowsService != nil {
 				windowsService.CloseWindowsEventContent()
+				windowsService.CloseWindowsHistory()
 			}
 			if windowsStore != nil {
 				windowsStore.Close()

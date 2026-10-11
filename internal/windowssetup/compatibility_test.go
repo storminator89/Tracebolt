@@ -182,3 +182,17 @@ func TestReadAdminV9SoftwareHistoryCannotPromoteEarlierCapabilities(t *testing.T
 		}
 	}
 }
+
+func TestReadAdminV10HistoryRequiresDistinctAdvertisement(t *testing.T) {
+	fresh := ExpectedReadAdminV10("manager", "https://enroll", "https://agent")
+	old := ExpectedReadAdminV9("manager", "https://enroll", "https://agent")
+	raw, _ := json.Marshal(fresh)
+	legacy, _ := json.Marshal(old)
+	if Match(raw, fresh) != nil || Match(legacy, fresh) == nil || Match(raw, old) == nil {
+		t.Fatal("history contract promoted legacy capabilities")
+	}
+	path, e := CapabilityPath(fresh)
+	if e != nil || path != ReadAdminCapabilitiesPathV10 || path == ReadAdminCapabilitiesPathV9 {
+		t.Fatal("history route not separated")
+	}
+}

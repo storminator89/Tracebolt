@@ -386,3 +386,28 @@ func WindowsReadAdminScopesV13Absent(root, sid string) error {
 func windowsReadAdminScopesV13Absent(root, sid string, open func(string, windowsstate.Options) (capabilityInspectionStore, error)) error {
 	return windowsReadAdminScopesV12Absent(root, sid, open)
 }
+
+// Fresh event history must have its own genuinely absent protected root.
+func WindowsReadAdminScopesV14Absent(root, sid string) error {
+	return windowsReadAdminScopesV14Absent(root, sid, func(path string, o windowsstate.Options) (capabilityInspectionStore, error) {
+		s, e := windowsstate.Open(path, o)
+		if e != nil {
+			return nil, e
+		}
+		return s, nil
+	})
+}
+func windowsReadAdminScopesV14Absent(root, sid string, open func(string, windowsstate.Options) (capabilityInspectionStore, error)) error {
+	if windowsReadAdminScopesV13Absent(root, sid, open) != nil {
+		return ErrState
+	}
+	s, e := open(root+"-event-history", windowsEventHistoryOptions(sid, false))
+	if s != nil {
+		_ = s.Close()
+		return ErrState
+	}
+	if !errors.Is(e, os.ErrNotExist) {
+		return ErrState
+	}
+	return nil
+}

@@ -7,6 +7,7 @@ import (
 	"localrmm/internal/model"
 	"localrmm/internal/windowsactionwire"
 	"localrmm/internal/windowseventwire"
+	"localrmm/internal/windowshistorywire"
 	"net/http"
 	"sort"
 	"strings"
@@ -41,7 +42,7 @@ func mergedWindowsDevices(ctx context.Context, primary, windows *enrollmentservi
 }
 func withWindowsIngress(primary, windows http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r != nil && r.URL != nil && (strings.HasPrefix(r.URL.Path, "/v1/windows/") || strings.HasPrefix(r.URL.Path, windowseventwire.PathPrefix) || strings.HasPrefix(r.URL.Path, windowsactionwire.PathPrefix)) {
+		if r != nil && r.URL != nil && (strings.HasPrefix(r.URL.Path, "/v1/windows/") || strings.HasPrefix(r.URL.Path, windowseventwire.PathPrefix) || strings.HasPrefix(r.URL.Path, windowshistorywire.PathPrefix) || strings.HasPrefix(r.URL.Path, windowsactionwire.PathPrefix)) {
 			if (!windowsAgentPath(r.URL.Path)) || windows == nil {
 				http.NotFound(w, r)
 				return

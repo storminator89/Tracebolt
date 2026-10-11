@@ -34,6 +34,9 @@ func runWindowsEventMaintenance(ctx context.Context, s *enrollmentservice.Servic
 			e = networkErr
 		}
 		if tick%5 == 0 {
+			if historyErr := s.MaintainWindowsHistory(ctx, now); e == nil {
+				e = historyErr
+			}
 			if eventErr := s.MaintainWindowsEventContent(ctx, now); e == nil {
 				e = eventErr
 			}

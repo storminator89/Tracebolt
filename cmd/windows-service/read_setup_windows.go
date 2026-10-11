@@ -93,6 +93,9 @@ func installReadObservationWithProgress(ctx context.Context, bootstrapPath strin
 			return journal.Verify()
 		},
 		ensureFreshScopes: func(receipt windowsservice.Receipt) error {
+			if consent.SchemaVersion == lanclient.WindowsCapabilityConsentVersionV14 {
+				return lanclient.WindowsReadAdminScopesV14Absent(receipt.Layout.StateRoot, receipt.ServiceSID)
+			}
 			if consent.SchemaVersion == lanclient.WindowsCapabilityConsentVersionV13 {
 				return lanclient.WindowsReadAdminScopesV13Absent(receipt.Layout.StateRoot, receipt.ServiceSID)
 			}
@@ -145,7 +148,7 @@ func installReadObservationWithProgress(ctx context.Context, bootstrapPath strin
 		identity: lanclient.WindowsCapabilityIdentity,
 		configure: func(path string, consent lanclient.WindowsCapabilityConsent) (lanclient.WindowsCapabilityConsentResult, error) {
 			progress("Manager approved this identity. Applying and verifying only the explicitly selected local read scopes.")
-			if consent.SchemaVersion == lanclient.WindowsCapabilityConsentVersionV5 || consent.SchemaVersion == lanclient.WindowsCapabilityConsentVersionV6 || consent.SchemaVersion == lanclient.WindowsCapabilityConsentVersionV7 || consent.SchemaVersion == lanclient.WindowsCapabilityConsentVersionV8 || consent.SchemaVersion == lanclient.WindowsCapabilityConsentVersionV9 || consent.SchemaVersion == lanclient.WindowsCapabilityConsentVersionV10 || consent.SchemaVersion == lanclient.WindowsCapabilityConsentVersionV11 || consent.SchemaVersion == lanclient.WindowsCapabilityConsentVersionV12 || consent.SchemaVersion == lanclient.WindowsCapabilityConsentVersionV13 {
+			if consent.SchemaVersion == lanclient.WindowsCapabilityConsentVersionV5 || consent.SchemaVersion == lanclient.WindowsCapabilityConsentVersionV6 || consent.SchemaVersion == lanclient.WindowsCapabilityConsentVersionV7 || consent.SchemaVersion == lanclient.WindowsCapabilityConsentVersionV8 || consent.SchemaVersion == lanclient.WindowsCapabilityConsentVersionV9 || consent.SchemaVersion == lanclient.WindowsCapabilityConsentVersionV10 || consent.SchemaVersion == lanclient.WindowsCapabilityConsentVersionV11 || consent.SchemaVersion == lanclient.WindowsCapabilityConsentVersionV12 || consent.SchemaVersion == lanclient.WindowsCapabilityConsentVersionV13 || consent.SchemaVersion == lanclient.WindowsCapabilityConsentVersionV14 {
 				if journal == nil {
 					return lanclient.WindowsCapabilityConsentResult{}, errLifecycle
 				}
