@@ -94,10 +94,13 @@ describe('explicit one-setting Windows group health review', () => {
     it('stops before writes if group membership or revision changed after review', async () => {
         render(<Harness/>); await review('disk', true); groups.groups[0].revision++; fireEvent.click(screen.getByRole('button', { name: 'Apply reviewed setting' })); await flush(); expect(posts()).toHaveLength(0); expect(screen.getByText('Conflict · review again')).toBeVisible(); expect(screen.getByText('Not attempted')).toBeVisible();
     });
-    it('does not attribute matching readback after an uncertain POST to our write and stops remaining devices', async () => {
-        render(<Harness/>); await review('disk', true); const defaultRequest = vi.mocked(request).getMockImplementation()!; let attempted = false;
-        vi.mocked(request).mockImplementation(async (path, options, cap) => { if (options?.method === 'POST') { attempted = true; throw new Error('lost response'); } if (attempted && path.endsWith('/windows-capacity')) return policy(windowsDeviceId, 'disk', true); return defaultRequest(path, options, cap); });
-        fireEvent.click(screen.getByRole('button', { name: 'Apply reviewed setting' })); await flush(); expect(posts()).toHaveLength(1); expect(screen.getByText('Unconfirmed · write may have happened')).toBeVisible(); expect(screen.getByText(/does not prove our write succeeded/)).toBeVisible(); expect(screen.getByText('Not attempted')).toBeVisible(); await advance(15000); expect(posts()).toHaveLength(1);
+    it.each(['disk', 'memory'] as const)('does not attribute matching %s readback after an uncertain POST to our write and stops remaining devices', async metric => {
+        render(<Harness/>); await review(metric, true); const defaultRequest = vi.mocked(request).getMockImplementation()!; let attempted = false;
+        vi.mocked(request).mockImplementation(async (path, options, cap) => { if (options?.method === 'POST') { attempted = true; throw new Error('lost response'); } if (attempted && path.endsWith(metric === 'disk' ? '/windows-capacity' : '/windows-resource/memory')) return policy(windowsDeviceId, metric, true); return defaultRequest(path, options, cap); });
+        fireEvent.click(screen.getByRole('button', { name: 'Apply reviewed setting' })); await flush(); expect(posts()).toHaveLength(1); expect(screen.getByText('Unconfirmed · write may have happened')).toBeVisible(); expect(screen.getByText(/does not prove our write succeeded/)).toBeVisible(); expect(screen.getByText('Not attempted')).toBeVisible();
+        const outcome = screen.getByText(windowsDeviceId).closest('tr')!.querySelector('td:last-child')!;
+        expect(outcome.textContent).toBe('Unconfirmed · write may have happenedCurrent policy matches, but this does not prove our write succeeded.');
+        await advance(15000); expect(posts()).toHaveLength(1);
     });
     it('stops after policy conflict and does not retry', async () => {
         render(<Harness/>); await review('disk', true); const defaultRequest = vi.mocked(request).getMockImplementation()!; vi.mocked(request).mockImplementation(async (path, options, cap) => options?.method === 'POST' ? Promise.reject(new APIError('conflict', 409)) : defaultRequest(path, options, cap));

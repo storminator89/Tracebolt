@@ -22,3 +22,23 @@ test('helper is inert and hosted runner keeps real loopback login with finite sa
  assert.match(runner,/http:\/\/127\.0\.0\.1:19909/);assert.match(runner,/requireFleetGroupsEvidence\(screenshots,sourceSha\)/);assert.match(runner,/liveStoreAcceptance:false/);assert.match(runner,/fleet-groups-results.json/);assert.match(runner,/fleet-groups-manifest.json/);assert.match(runner,/300000/);assert.match(runner,/process.exitCode=passed\?0:1/);assert.doesNotMatch(runner,/ignoreHTTPSErrors|console\.log\(.*error/);
  assert.match(helper,/Current policy matches, but this does not prove our write succeeded/);assert.match(helper,/Stop remaining writes/);assert.match(helper,/removeUnavailableMembers,false/);assert.doesNotMatch(helper,/page\.getByRole\('table'\)/);assert.match(helper,/page\.getByRole\('dialog'\)\.getByRole\('table'\)/);assert.match(helper,/await page\.reload\(\)/);
 });
+
+test('uncertain readback checks the exact first-device outcome cell and bounded failure stages',()=>{
+ const helper=fs.readFileSync(new URL('./fleet-groups-browser.mjs',import.meta.url),'utf8');
+ const uncertain=helper.slice(helper.indexOf("stage='uncertain-review';mode='uncertain'"),helper.indexOf("stage='stop';mode='hold'"));
+ assert.match(uncertain,/getByRole\('dialog'\)\.getByRole\('row'\)\.filter\(\{hasText:ids.first\}\)\.getByRole\('cell'\)\.last\(\)/);
+ assert.match(uncertain,/expect\(uncertainOutcome\)\.toHaveText\('Unconfirmed · write may have happenedCurrent policy matches, but this does not prove our write succeeded\.'\)/);
+ assert.doesNotMatch(uncertain,/getByText\('Unconfirmed · write may have happened'/);
+ assert.match(uncertain,/expect\(policyPosts\)\.toBe\(uncertainBefore\+1\)/);
+ assert.match(uncertain,/getByText\('Not attempted',\{exact:true\}\)/);
+ for(const stage of ['review','apply','result','remaining','count','close']){
+  assert.ok(uncertain.includes(`stage='uncertain-${stage}'`));
+  assert.ok(helper.slice(0,helper.indexOf('export function guardFleetGroupsRoute')).includes(`'uncertain-${stage}'`));
+ }
+});
+
+test('fleet dialog retains desktop and compact mobile inner spacing',()=>{
+ const css=fs.readFileSync(new URL('../../web/src/fleet-groups.css',import.meta.url),'utf8');
+ assert.match(css.split('@media')[0],/\.fleet-group-dialog \.dialog\{[^}]*padding:28px[;}]/);
+ assert.match(css,/\@media\(max-width:600px\)\{.*\.fleet-group-dialog \.dialog\{padding:22px\}/);
+});

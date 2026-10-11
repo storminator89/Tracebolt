@@ -11,7 +11,7 @@ export const fleetGroupsDisclosure='Production UI and real disposable loopback l
 export const fleetGroupIds={first:`agent_${'7'.repeat(32)}`,second:`agent_${'2'.repeat(32)}`,linux:`agent_${'3'.repeat(32)}`,group:`group_${'4'.repeat(32)}`,created:`group_${'5'.repeat(32)}`};
 let stage='setup',failures=0,pending=0;
 export const fleetGroupsRouteState=()=>({failures,pending});
-export const fleetGroupsFailureStage=()=>new Set(['setup','login','groups','review','apply','conflict','uncertain','stop','layout','complete']).has(stage)?stage:'setup';
+export const fleetGroupsFailureStage=()=>new Set(['setup','login','groups','review','apply','conflict','uncertain','uncertain-review','uncertain-apply','uncertain-result','uncertain-remaining','uncertain-count','uncertain-close','stop','layout','complete']).has(stage)?stage:'setup';
 export function guardFleetGroupsRoute(route,handler){pending++;return Promise.resolve().then(()=>handler(route)).catch(async()=>{failures++;try{await route.abort('failed');}catch{/* Teardown already ended the request. */}}).finally(()=>{pending--;});}
 export function fleetGroupsBrowserFixture(serverNow,expiresAt){
  const source=windowsCapacityDevice(),devices=[{id:fleetGroupIds.first,name:'Synthetic Desk One',platform:'windows'},{id:fleetGroupIds.second,name:'Synthetic Desk Two',platform:'windows'},{id:fleetGroupIds.linux,name:'Synthetic Linux',platform:'linux'}];
@@ -79,7 +79,15 @@ export async function fleetGroupsBrowserCase({page,expect,base,login,shot}){
   // Failure outcomes use the same production dialog and exact routes; never loosen routing.
   if(locale==='en'&&width===1440){
    stage='conflict';mode='conflict';await prepare('disk');const previous=policyPosts;await apply();await expect(page.getByText('Conflict · review again',{exact:true})).toBeVisible();await expect(page.getByText('Not attempted',{exact:true})).toBeVisible();expect(policyPosts).toBe(previous+1);await close();
-   stage='uncertain';mode='uncertain';await prepare('memory');const uncertainBefore=policyPosts;await apply();await expect(page.getByText('Unconfirmed · write may have happened',{exact:true})).toBeVisible();await expect(page.getByText('Current policy matches, but this does not prove our write succeeded.',{exact:true})).toBeVisible();await expect(page.getByText('Not attempted',{exact:true})).toBeVisible();expect(policyPosts).toBe(uncertainBefore+1);await close();
+   stage='uncertain-review';mode='uncertain';await prepare('memory');const uncertainBefore=policyPosts;
+   stage='uncertain-apply';await apply();
+   // The readback disclaimer is a child of the outcome cell. An exact text
+   // locator for the status alone stops matching once reconciliation completes.
+   stage='uncertain-result';const uncertainOutcome=page.getByRole('dialog').getByRole('row').filter({hasText:ids.first}).getByRole('cell').last();
+   await expect(uncertainOutcome).toBeVisible();await expect(uncertainOutcome).toHaveText('Unconfirmed · write may have happenedCurrent policy matches, but this does not prove our write succeeded.');
+   stage='uncertain-remaining';await expect(page.getByText('Not attempted',{exact:true})).toBeVisible();
+   stage='uncertain-count';expect(policyPosts).toBe(uncertainBefore+1);
+   stage='uncertain-close';await close();
    stage='stop';mode='hold';await prepare('disk');const stoppedBefore=policyPosts;await apply();await expect.poll(()=>held).toBe(true);await page.getByRole('button',{name:'Stop remaining writes',exact:true}).click();assert.ok(release);release();release=null;await expect(page.getByText('Unconfirmed · write may have happened',{exact:true})).toBeVisible();await expect(page.getByText('Not attempted',{exact:true})).toBeVisible();expect(policyPosts).toBe(stoppedBefore+1);await close();mode='normal';
   }
  }
