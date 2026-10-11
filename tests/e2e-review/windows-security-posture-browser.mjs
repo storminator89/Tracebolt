@@ -30,6 +30,8 @@ export async function exerciseWindowsSecurityPosture({page,expect,locale,width,s
  await expect(panel).toBeVisible();await expect(defender.locator('.windows-security-mode')).toHaveText(de?'Normalmodus':'Normal mode');
  await expect(defender.locator('.windows-security-quality')).toHaveText(de?'Beobachtet':'Observed');await expect(firewall.locator('.windows-security-quality')).toHaveText(de?'Teilweise':'Partial');
  await expect(details).toHaveCount(2);for(const item of await details.all())await expect(item).not.toHaveAttribute('open');
+ const explanation=firewall.getByText(de?'Einige Werte für Windows-Firewall konnten nicht ermittelt werden (Unbekannt). Status der Quelle auf dem Gerät prüfen.':'Some Windows Firewall values could not be determined (Unknown). Check the source status on the device.',{exact:true});
+ await expect(explanation).toHaveCount(1);await expect(explanation).toBeVisible();
  await expect(defender.getByText('1.437.1234.0',{exact:true})).toBeHidden();
  await expect(defender).toContainText(de?'Andere Antivirusprodukte werden nicht geprüft.':'Other antivirus products are not assessed.');
  await expect(firewall).toContainText(de?'Wirksame Richtlinien und Netzwerkerreichbarkeit werden nicht geprüft.':'Effective policy and network connectivity are not checked.');
@@ -48,7 +50,7 @@ export async function exerciseWindowsSecurityPosture({page,expect,locale,width,s
  expect(await table.evaluate(el=>{const r=el.getBoundingClientRect(),p=el.closest('.windows-security-card').getBoundingClientRect();return r.left>=p.left-1&&r.right<=p.right+1&&el.scrollWidth<=el.clientWidth+1;})).toBe(true);
  await shot(page,`synthetic-windows-security-firewall-${width}-${locale}`,windowsSecurityPostureDisclosure);
  await details.first().locator('> summary').click();await expect(defender.getByText('1.437.1234.0',{exact:true})).toBeVisible();await expect(defender).toContainText(de?'1 Tag':'1 day');
- await details.last().locator('> summary').click();await expect(firewall).toContainText(de?'Einige Felder waren nicht verfügbar.':'Some fields were not available.');
+ await details.last().locator('> summary').click();await expect(explanation).toHaveCount(1);await expect(explanation).toBeVisible();await expect(details.last()).not.toContainText(de?'Einige Werte für':'Some Windows Firewall values');
  await expect(panel.locator('a,img,iframe,form,input,button')).toHaveCount(0);
  await defender.evaluate(el=>el.scrollIntoView({block:'start',inline:'nearest',behavior:'instant'}));
  await shot(page,`synthetic-windows-security-details-${width}-${locale}`,windowsSecurityPostureDisclosure);

@@ -102,6 +102,13 @@ func runForeground(ctx context.Context, m Material, interval time.Duration, obse
 		go func() { defer close(actionsDone); runActionLoop(actionContext, actions) }()
 		defer func() { stopActions(); <-actionsDone; actions.Close() }()
 	}
+	if m.config.windowsInventory() {
+		actions := openWindowsActionSender(m)
+		actionContext, stopActions := context.WithCancel(ctx)
+		actionsDone := make(chan struct{})
+		go func() { defer close(actionsDone); runWindowsActionLoop(actionContext, actions) }()
+		defer func() { stopActions(); <-actionsDone; actions.Close() }()
+	}
 	return agentloop.Run(ctx, agentloop.Config{Interval: interval}, agentloop.Dependencies{Clock: clock, Random: random, Observe: observe, Attempt: func(parent context.Context) agentloop.Result {
 		journal.prune()
 		events.prune()

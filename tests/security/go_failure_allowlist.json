@@ -1,5 +1,5 @@
 {
-  "goSourceSha256": "a0a69eac0a8c41bbc3d8619cb14c2709d8128c53856fe6b0361f461ee4f0455a",
+  "goSourceSha256": "8007530b4de5f307bf6ee5767517be50cf912fa163ad2716f8f7c3284bdefa87",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -194,6 +194,10 @@
       "TestCancellationDoesNotFinishBeforeRuntimeCleanup",
       "TestCoordinatedCancellationExitsCleanly",
       "TestEntryUsesOnlyInjectedRuntime"
+    ],
+    "localrmm/cmd/windows-action-broker": [],
+    "localrmm/cmd/windows-action-manager-setup": [
+      "TestWindowsServiceActionSetupRequiresExactExplicitArguments"
     ],
     "localrmm/cmd/windows-agent": [
       "TestEventDeniedRemainsExplicit",
@@ -417,6 +421,7 @@
       "TestUpdatesWorkerNativeWatchdogCannotTargetAnotherProcess",
       "TestUpdatesWorkerWatchdogUsesOnlyInjectedTermination",
       "TestVolumeConsentFlagsExplicitAndBounded",
+      "TestWindowsActionSetupRequiresExactLocalApproval",
       "TestWindowsBootstrapMustMatchExplicitLocalProfile",
       "TestWindowsEventContentCanceledInspectionCannotWriteConsent",
       "TestWindowsEventContentHelpDescribesIndependentScope",
@@ -1001,6 +1006,10 @@
       "TestWindowsResourceMonitorSharesOneSourceTransactionAtCapacity",
       "TestWindowsResourceRechecksCurrentAuthorityBeforeWriteAndRelease",
       "TestWindowsResourceRouteBodyAndReadRoleBoundaries",
+      "TestWindowsServiceActionAPICSFRActorAndStaleGuards",
+      "TestWindowsServiceActionAPIGoldenInterop",
+      "TestWindowsServiceActionAPILinuxGrantIsInsufficient",
+      "TestWindowsServiceActionAPIThreeOpsAndExactApproval",
       "TestWindowsServiceAndPercentagesShareSingleSourcePass",
       "TestWindowsServiceAuthenticatedDefaultOffAndPolicy",
       "TestWindowsServiceAuthorityRechecksAndFailureEpoch",
@@ -1592,6 +1601,7 @@
       "TestResourceHistoryMinuteBoundAndMaintenanceDoNotChangeReplay",
       "TestResourceHistoryOptionalSchemaPreservesExistingIdentityAndNoBackfill",
       "TestRetainedBrowseRequiresNewReportedGrantAndKeepsConsumeFloor",
+      "TestReviewWindowsActionFinalClaimExpiryMustPersistClock",
       "TestReviewerFinalPageGuardCannotUseClockBeforeConnectionWait",
       "TestReviewerFinalRecheckCannotUseClockBeforeConnectionWait",
       "TestReviewerFullServicesOriginalExpiryAcrossFinalConnectionWait",
@@ -1652,6 +1662,7 @@
       "TestTwentyFiveOperationalRetainedBudget",
       "TestTwentyFivePopulatedRecordsRetainFrames",
       "TestV4GenerationAdmitsOnlyExactBoundedAIRequestAndKeepsConsumeFloor",
+      "TestWindowsActionFinalObservationPreservesAuthorityAndSuccessfulClock",
       "TestWindowsCapacityAuthorityExpiryCancellationAndAdmission",
       "TestWindowsCapacitySourceReadsDoNotWriteEnrollmentState",
       "TestWindowsCapacityUsesOriginalAcceptedReceiptOnly",
@@ -1702,6 +1713,11 @@
       "TestWindowsInventoryViewRechecksClockFreshnessAndExpiry",
       "TestWindowsNetworkIndependentExpiryAndRevocation",
       "TestWindowsProcessMetricsIndependentExpiryAndRevocation",
+      "TestWindowsServiceActionMissingUsedRowsHardStop",
+      "TestWindowsServiceActionSetupInspectionReadOnlyAndFenced",
+      "TestWindowsServiceActionSignerSubstitutionAtomicAndIntervention",
+      "TestWindowsServiceActionStaleCapabilityExpiryAndClockFloor",
+      "TestWindowsServiceActionThreeOperationsClaimOnceAndResults",
       "TestWindowsServiceSourceRetainsOriginalSnapshotAndReceipt",
       "TestWindowsServiceStartupIndependentExpiryAndRevocation",
       "TestWindowsUpdatesCannotBeAdmittedUnderBasicIdentity",
@@ -1756,6 +1772,7 @@
       "TestWindowsEventRealTransportPartialRetryImmutableHeaders",
       "TestWindowsEventRealTransportPurposeSequenceProfileAndForeignCertificate",
       "TestWindowsIngressRejectsNativePackageRoutesBeforeDispatch",
+      "TestWindowsServiceActionTransportThroughBrokerAndDurableStatus",
       "TestZeroConfigurationAndPlaintextTLSSeparation"
     ],
     "localrmm/internal/fixtures": [],
@@ -2222,6 +2239,7 @@
       "TestSystemNativeMissingStateAndFuturePendingFailBeforeSource",
       "TestSystemNativeTLSHTTPExactRetryBeforeRecapture",
       "TestValidateGuidedHandoffIsLocalAndPreservesState",
+      "TestWindowsActionManagerIngressRelayBrokerThreeOperationsAndLostResponse",
       "TestWindowsAdapterContextConsentCreateOnlyAndReenable",
       "TestWindowsAdapterContextConsentFreshCreateRacesAndFailuresDoNotAdopt",
       "TestWindowsAdapterContextConsentMissingExistingRecordFailsClosedEveryMode",
@@ -3367,6 +3385,28 @@
       "TestUninstallPendingSequenceDoesNotLatchEarlierSuccess",
       "TestUninstallProgressOnlyRecognizesExactBoundedParagraphs"
     ],
+    "localrmm/internal/windowsaction": [
+      "TestBindingsCanonicalAndNoLinuxAdmission",
+      "TestBrokerSCMDescriptorNeverGrantsObservationConfigControl",
+      "TestBrokerServiceNeverReportsCleanUnexpectedExit",
+      "TestClockAdvancingDuringSaveCannotReviveRejectedPermit",
+      "TestClockFloorAndOriginalDeadline",
+      "TestDedicatedBrokerObjectIsolationRejectsSharedAccountAndStealingRights",
+      "TestHeldNormalVolumeRootDoesNotConfuseAddDirectoryWithFileAppend",
+      "TestInitialPendingPausedUnknownAndStoppedRestartNeverControl",
+      "TestMissingUsedStateCrashAndDisabledNeverInitialize",
+      "TestPartialRestartDriftLateRevocationAndAccessDenied",
+      "TestPipeACLAndStrictIPC",
+      "TestPipeBusyRetriesOnlyBeforeConnectionWithinOriginalContext",
+      "TestResponseConsumptionACKKeepsBufferedReplyAliveAndBounded",
+      "TestRestrictedBrokerLogonSIDIsExactAndTokenOnly",
+      "TestSequenceGapsAndRejectedExpiryCannotRevive",
+      "TestStorageFailureBeforeEffectCannotControl",
+      "TestThreeOperationsPersistBeforeEffectAndDurableResult"
+    ],
+    "localrmm/internal/windowsactionjob": [],
+    "localrmm/internal/windowsactionmanager": [],
+    "localrmm/internal/windowsactionwire": [],
     "localrmm/internal/windowsadapters": [
       "TestAdapterContextCollectionContractAndBudget",
       "TestAdapterContextNativeCallFlagsBoundsAndClear",
@@ -3927,6 +3967,7 @@
     ],
     "localrmm/internal/windowsstate": [
       "TestACLPolicyFixtures",
+      "TestCreationOwnerExactVirtualAccountUser",
       "TestDefaultStreamFixtures",
       "TestDescriptorParserFixtures",
       "TestDirectoryParserFixtures",

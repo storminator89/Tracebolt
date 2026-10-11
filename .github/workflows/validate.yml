@@ -595,6 +595,11 @@ jobs:
         env:
           TRACEBOLT_SOURCE_SHA: ${{ github.sha }}
         run: node tests/e2e-review/lan-browser.mjs
+      - name: Synthetic Windows service approval browser gate
+        if: ${{ !cancelled() }}
+        env:
+          TRACEBOLT_SOURCE_SHA: ${{ github.sha }}
+        run: node tests/e2e-review/windows-service-actions-runner.mjs
       - name: Complete Windows services real-store browser gate
         if: ${{ !cancelled() }}
         env:
@@ -834,6 +839,8 @@ jobs:
             artifacts/review/lan-browser-manifest.json
             artifacts/review/windows-full-services-results.json
             artifacts/review/windows-full-services-manifest.json
+            artifacts/review/windows-service-actions-results.json
+            artifacts/review/windows-service-actions-manifest.json
             artifacts/review/enrollment-browser-results.json
             artifacts/review/enrollment-browser-manifest.json
             artifacts/review/conditional-browser-results.json

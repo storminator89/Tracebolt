@@ -65,7 +65,8 @@ mask is accepted. The owner must be one of those trusted principals. LocalServic
 (`S-1-5-19`) is never an accepted owner or ACE: its shared identity must not obtain
 implicit owner `WRITE_DAC` authority over another service's state.
 
-Creation chooses SYSTEM if it is the token user; otherwise an owner-enabled,
+Creation chooses SYSTEM or the exact configured runtime service SID if it is
+the token user; otherwise an owner-enabled,
 non-deny-only service SID or Administrators group actually present in the
 effective token. SERVICE_SID_TYPE_UNRESTRICTED supplies `SE_GROUP_OWNER`, and
 RESTRICTED includes UNRESTRICTED. No token/privilege/owner changes are attempted.

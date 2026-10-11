@@ -185,6 +185,12 @@ file as navigation and project constraints, never as permission to act on a host
   generation floors, original age and all old grants. Drivers, ACL-invisible
   services, software, paths/accounts/configuration and AI export are excluded.
   Native/host grants and runtime acceptance require separate approval.
+- Selected Windows service control is a separate default-off source candidate.
+  Read `docs/windows-service-actions.md` before broker, named-pipe, setup, permit,
+  ledger or UI changes. Keep the distinct restricted service SID, key domain,
+  protected broker/target ACLs, exact review, one-control semantics and immutable
+  consumed state. Old read grants and Linux restart authority never promote.
+  Source fixtures/cross-builds do not authorize native setup, ACLs or actions.
 - Selected Windows service checks are a separate default-off manager policy.
   Read `docs/windows-service-health.md` before changing exact-name selection,
   discrete state evaluation, source admission, API or UI. Keep native

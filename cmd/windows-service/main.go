@@ -43,6 +43,9 @@ type request struct {
 type operation func(context.Context, request, io.Writer, io.Writer) (any, error)
 
 func run(ctx context.Context, args []string, out, stderr io.Writer) int {
+	if len(args) > 0 && args[0] == "--service-actions-setup" {
+		return runActionSetup(ctx, args[1:], out, stderr, nativeActionSetup)
+	}
 	if len(args) == 1 && args[0] == windowseventworker.WorkerArgument {
 		if runEventContentWorker(ctx, os.Stdin, out) != nil {
 			return 1

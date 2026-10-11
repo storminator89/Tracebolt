@@ -22,6 +22,7 @@ import (
 	"localrmm/internal/offlinecatalog"
 	"localrmm/internal/operatorauth"
 	"localrmm/internal/packagecontroller"
+	"localrmm/internal/windowsactionmanager"
 	"math"
 	"net"
 	"net/http"
@@ -32,9 +33,10 @@ import (
 )
 
 type LANOperatorConfig struct {
-	PackageActions *packagecontroller.Manager
-	AISettings     *aiconfig.Settings
-	AlarmSettings  *alarmdelivery.Settings
+	WindowsServiceActions *windowsactionmanager.Manager
+	PackageActions        *packagecontroller.Manager
+	AISettings            *aiconfig.Settings
+	AlarmSettings         *alarmdelivery.Settings
 	// ApplicationChecks is an inert, read-only view of the explicit startup worker.
 	ApplicationChecks *applicationcheck.Monitor
 	// ApplicationCheckSettings supplies the separately authorized managed controller.
@@ -57,6 +59,7 @@ type LANOperatorConfig struct {
 	CVEProgress *linuxcveprogress.Cache
 }
 type operatorHandler struct {
+	windowsActions           windowsServiceActionManager
 	packageUpdatesManager    packageUpdateManager
 	alarmSettings            *alarmdelivery.Settings
 	applicationChecks        *applicationcheck.Monitor
@@ -137,6 +140,9 @@ func NewLANOperatorHandler(app *Server, c LANOperatorConfig) (http.Handler, erro
 	}
 	if c.PackageActions != nil && (c.Enrollment == nil || !c.Auth.Named() || !c.PackageActions.MatchesBinding(c.Enrollment.Binding()) || c.PackageActions.TransportProfile() != actionmanager.Profile(profile)) {
 		return nil, errors.New("package action authority does not match enrolled named operator boundary")
+	}
+	if c.WindowsServiceActions != nil && (c.WindowsEnrollment == nil || !c.Auth.Named() || !c.WindowsServiceActions.MatchesBinding(c.WindowsEnrollment.Binding()) || c.WindowsServiceActions.TransportProfile() != windowsactionmanager.Profile(profile)) {
+		return nil, errors.New("Windows service action authority does not match the named Windows enrollment boundary")
 	}
 	if c.ServiceActions != nil && (c.Enrollment == nil || !c.Auth.Named() || !c.ServiceActions.MatchesBinding(c.Enrollment.Binding()) || c.ServiceActions.TransportProfile() != actionmanager.Profile(profile)) {
 		return nil, errors.New("service action authority does not match the named operator enrollment boundary")
@@ -230,6 +236,9 @@ func NewLANOperatorHandler(app *Server, c LANOperatorConfig) (http.Handler, erro
 		packages = c.PackageActions
 	}
 	h := &operatorHandler{packageUpdatesManager: packages, alarmSettings: c.AlarmSettings, applicationChecks: c.ApplicationChecks, applicationCheckSettings: c.ApplicationCheckSettings, actions: actions, app: app, origin: c.Origin, authority: u.Host, auth: c.Auth, registry: c.Registry, insecureHTTPTest: c.InsecureHTTPTest, cookieName: cookieName, enrollment: c.Enrollment, enrollmentBootstrap: c.EnrollmentBootstrap}
+	if c.WindowsServiceActions != nil {
+		h.windowsActions = c.WindowsServiceActions
+	}
 	if c.WindowsEnrollment != nil {
 		h.windowsEnrollment = &operatorHandler{app: app, origin: c.Origin, authority: u.Host, auth: c.Auth, registry: c.Registry, insecureHTTPTest: c.InsecureHTTPTest, cookieName: cookieName, enrollment: c.WindowsEnrollment, enrollmentBootstrap: c.WindowsEnrollmentBootstrap}
 	}
@@ -462,6 +471,10 @@ func (h *operatorHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if _, _, ok := packageUpdateRoute(r); ok {
 		h.packageUpdates(w, r)
+		return
+	}
+	if _, _, ok := windowsServiceActionRoute(r); ok {
+		h.windowsServiceActions(w, r)
 		return
 	}
 	if _, _, ok := serviceActionRoute(r); ok {

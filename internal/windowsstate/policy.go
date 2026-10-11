@@ -154,3 +154,15 @@ func validateSecurity(p securityPolicy, runtimeSID string, installerOnly bool) e
 	}
 	return nil
 }
+
+// The user SID is an eligible explicit owner. This narrow virtual-account case
+// does not accept a shared account, a different service SID or installer stores.
+func creationOwnerFromUser(o Options, user string) string {
+	if user == systemSID {
+		return systemSID
+	}
+	if !o.InstallerOnly && validRuntimeSID(o.RuntimeSID) && user == o.RuntimeSID {
+		return user
+	}
+	return ""
+}

@@ -23,7 +23,10 @@ describe('Compact private Security tab', () => {
         expect(panel.querySelector('time')).toHaveAttribute('dateTime', windowsView().snapshot!.collectedAt);
         expect(screen.getByText('1.437.1234.0')).not.toBeVisible(); expect(details().every(d => !d.open)).toBe(true);
         fireEvent.click(details()[0].querySelector('summary')!); expect(screen.getByText('1.437.1234.0')).toBeVisible(); expect(screen.getByText(de ? '1 Tag' : '1 day')).toBeVisible();
-        fireEvent.click(details()[1].querySelector('summary')!); expect(screen.getByText(de ? 'Einige Felder waren nicht verfügbar.' : 'Some fields were not available.')).toBeVisible();
+        const summary = de ? 'Einige Werte für Windows-Firewall konnten nicht ermittelt werden (Unbekannt). Status der Quelle auf dem Gerät prüfen.' : 'Some Windows Firewall values could not be determined (Unknown). Check the source status on the device.';
+        expect(screen.getByText(summary)).toBeVisible(); expect(details()[1].open).toBe(false);
+        fireEvent.click(details()[1].querySelector('summary')!); expect(screen.getAllByText(summary)).toHaveLength(1);
+        expect(details().some(d => d.textContent?.includes(summary))).toBe(false);
         const table = within(panel).getByRole('table'), headers = within(table).getAllByRole('columnheader').map(c => c.textContent);
         expect(within(table).getAllByRole('row')).toHaveLength(4); for (const row of within(table).getAllByRole('row').slice(1)) expect(within(row).getAllByRole('cell').map(c => c.dataset.label)).toEqual(headers);
         expect(panel).toHaveTextContent(de ? 'Andere Antivirusprodukte werden nicht geprüft.' : 'Other antivirus products are not assessed.'); expect(panel).toHaveTextContent(de ? 'Wirksame Richtlinien und Netzwerkerreichbarkeit werden nicht geprüft.' : 'Effective policy and network connectivity are not checked.');
@@ -35,6 +38,45 @@ describe('Compact private Security tab', () => {
     });
     it.each(['denied', 'unavailable'] as const)('keeps %s source independent of readable firewall', async quality => {
         const v = windowsSecurityPostureView(); Object.assign(v.securityPosture.defender, { quality, reason: quality === 'denied' ? 'windows_security_posture_access_denied' : 'windows_security_posture_unavailable', mode: 'unknown', serviceEnabled: 'unknown', antivirusEnabled: 'unknown', realTimeProtectionEnabled: 'unknown', signatureVersion: null, signatureAgeDays: null }); vi.mocked(request).mockResolvedValue(v); render(<Harness/>); await ready(); const panel = screen.getByRole('region', { name: 'Microsoft Defender' }); expect(panel).toHaveTextContent(quality === 'denied' ? 'Access denied' : 'Unavailable'); expect(panel).toHaveTextContent('Unknown mode'); expect(screen.getByRole('table', { name: 'Windows Firewall' })).toBeVisible();
+    });
+    const reasons = [
+        ['windows_security_posture_access_denied', 'access was denied', 'Zugriff auf'],
+        ['windows_security_posture_unavailable', 'could not all be read', 'konnten nicht vollständig gelesen werden'],
+        ['windows_security_posture_unsupported_platform', 'is unsupported on this platform', 'wird auf dieser Plattform nicht unterstützt'],
+        ['windows_security_posture_invalid_metadata', 'returned invalid data', 'lieferte ungültige Daten'],
+        ['windows_security_posture_bounds', 'collection limit reached', 'Erfassungsgrenze für'],
+        ['windows_security_posture_partial_result', 'could not be determined', 'konnten nicht ermittelt werden'],
+        ['windows_security_posture_budget_exhausted', 'read timed out', 'Zeitlimit beim Lesen von'],
+    ] as const;
+    for (const locale of ['en', 'de'] as const) for (const source of ['defender', 'firewall'] as const) {
+        it.each(reasons)(`explains ${source} %s visibly once with a read-only next step in ${locale}`, async (reason, en, de) => {
+            const v = windowsSecurityPostureView(), unavailable = ['windows_security_posture_access_denied', 'windows_security_posture_unavailable', 'windows_security_posture_unsupported_platform'].includes(reason);
+            if (source === 'defender') Object.assign(v.securityPosture.defender, unavailable ? { mode: 'unknown', serviceEnabled: 'unknown', antivirusEnabled: 'unknown', realTimeProtectionEnabled: 'unknown', signatureVersion: null, signatureAgeDays: null } : { signatureAgeDays: null });
+            else if (unavailable) v.securityPosture.firewall.profiles.forEach(p => { p.active = p.enabled = 'unknown'; });
+            Object.assign(v.securityPosture[source], { reason, quality: reason === 'windows_security_posture_access_denied' ? 'denied' : unavailable ? 'unavailable' : 'partial' });
+            setLocale(locale, false); vi.mocked(request).mockResolvedValue(v); render(<Harness/>); await ready(locale);
+            const name = source === 'defender' ? 'Microsoft Defender' : locale === 'de' ? 'Windows-Firewall' : 'Windows Firewall', panel = screen.getByRole('region', { name });
+            const summaries = within(panel).getAllByText(new RegExp(locale === 'de' ? de : en));
+            expect(summaries).toHaveLength(1); expect(summaries[0]).toBeVisible(); expect(summaries[0]).toHaveTextContent(name); expect(summaries[0]).toHaveTextContent(locale === 'de' ? 'Unbekannt' : 'Unknown');
+            const retry = ['windows_security_posture_invalid_metadata', 'windows_security_posture_bounds', 'windows_security_posture_budget_exhausted'].includes(reason);
+            expect(summaries[0]).toHaveTextContent(locale === 'de' ? retry ? 'Die nächste Erfassung prüfen.' : 'Status der Quelle auf dem Gerät prüfen.' : retry ? 'Check the next capture.' : 'Check the source status on the device.');
+            expect(details().every(d => !d.open)).toBe(true); expect(summaries[0].closest('details')).toBeNull();
+            expect(panel).not.toHaveTextContent(/administrator|elevat|berechtigung|unprotected|healthy|compliant|coverage|abdeckung/i);
+            expect(panel.querySelector('a,button,form,input')).toBeNull(); expect(request).toHaveBeenCalledTimes(1);
+        });
+    }
+    it.each(['windows_security_posture_access_denied', 'windows_security_posture_unavailable'] as const)('preserves readable fields when only part of a source reports %s', async reason => {
+        const v = windowsSecurityPostureView(); Object.assign(v.securityPosture.defender, { quality: 'partial', reason, signatureAgeDays: null }); v.securityPosture.firewall.reason = reason;
+        vi.mocked(request).mockResolvedValue(v); render(<Harness/>); await ready();
+        expect(screen.getByText('Normal mode')).toBeVisible(); expect(within(screen.getByRole('region', { name: 'Microsoft Defender' })).getAllByText('On')[0]).toBeVisible();
+        expect(screen.getByText('Active')).toBeVisible(); expect(within(screen.getByRole('table', { name: 'Windows Firewall' })).getAllByText('On')).toHaveLength(2);
+        expect(screen.getAllByText('Partial')).toHaveLength(2); expect(screen.getAllByText(/Check the source status on the device/)).toHaveLength(2); expect(details().every(d => !d.open)).toBe(true);
+    });
+    it('leaves fully observed sources compact without adding summaries or requests', async () => {
+        const v = windowsSecurityPostureView(); Object.assign(v.securityPosture.firewall, { quality: 'observed', reason: '' }); Object.assign(v.securityPosture.firewall.profiles[2], { active: 'off', enabled: 'on' });
+        vi.mocked(request).mockResolvedValue(v); render(<Harness/>); await ready();
+        const panel = screen.getByRole('region', { name: 'Security' }); expect(panel.querySelectorAll('.windows-security-note')).toHaveLength(2);
+        expect(screen.queryByText(/Check the source status|Check the next capture/)).toBeNull(); expect(request).toHaveBeenCalledTimes(1);
     });
     it('resets details after tab navigation and replacement grant/generation', async () => {
         render(<Harness/>); await ready(); fireEvent.click(details()[0].querySelector('summary')!); fireEvent.click(screen.getByRole('tab', { name: 'Hostname' })); fireEvent.click(screen.getByRole('tab', { name: 'Security' })); expect(details()[0].open).toBe(false);

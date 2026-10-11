@@ -185,3 +185,21 @@ func TestErrorsNeverEchoInput(t *testing.T) {
 		t.Fatal("input leaked")
 	}
 }
+
+func TestCreationOwnerExactVirtualAccountUser(t *testing.T) {
+	o := Options{RuntimeSID: testSID}
+	if got := creationOwnerFromUser(o, testSID); got != testSID {
+		t.Fatal("exact virtual account user rejected", got)
+	}
+	for _, user := range []string{"S-1-5-19", "S-1-5-20", "S-1-5-80-9-8-7-6-5", "S-1-5-32-544", ""} {
+		if got := creationOwnerFromUser(o, user); got != "" {
+			t.Fatal("unbound user accepted", user, got)
+		}
+	}
+	if creationOwnerFromUser(Options{InstallerOnly: true}, testSID) != "" || creationOwnerFromUser(Options{RuntimeSID: "S-1-5-19"}, "S-1-5-19") != "" {
+		t.Fatal("installer/shared-account owner widened")
+	}
+	if creationOwnerFromUser(Options{InstallerOnly: true}, systemSID) != systemSID {
+		t.Fatal("SYSTEM owner changed")
+	}
+}

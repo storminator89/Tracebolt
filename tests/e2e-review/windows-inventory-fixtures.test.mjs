@@ -1,4 +1,5 @@
 import './windows-session-context-fixtures.test.mjs';
+import './windows-service-actions-fixtures.test.mjs';
 import './windows-security-posture-fixtures.test.mjs';
 import './windows-patch-context-fixtures.test.mjs';
 import './windows-service-health-fixtures.test.mjs';
