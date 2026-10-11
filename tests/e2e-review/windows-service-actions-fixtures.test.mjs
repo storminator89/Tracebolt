@@ -49,6 +49,24 @@ test('all unexpected API writes are blocked while unrelated read scopes remain e
 test('only exact loopback origins are usable without any request',()=>{
  for(const base of ['https://127.0.0.1:19890','http://localhost:19890','http://example.invalid','http://127.0.0.1:19890/path','http://user:pass@127.0.0.1:19890','invalid'])assert.throws(()=>windowsServiceActionsRoute({base,fixture:createWindowsServiceActionsFixture(),state:{blocked:[],external:[]}}));
 });
+test('opening the default Processes tab is an authenticated read and never grants a process scope',async()=>{
+ const f=setup(),query={search:'',sort:'pid-asc',limit:100,cursor:''};
+ const result=await f.invoke(f.prefix+'/windows-full-processes/query',{method:'POST',headers:f.headers,raw:JSON.stringify(query)});
+ assert.equal(result.status,200);assert.equal(result.value.schemaVersion,'tracebolt.windows-full-processes-page.v1');
+ assert.equal(result.value.deviceId,f.fixture.device.id);assert.equal(result.value.status,'not_configured');
+ assert.equal(result.value.authorityUntil,null);assert.equal(result.value.grantId,null);assert.equal(result.value.complete,null);assert.deepEqual(result.value.rows,[]);
+ assert.deepEqual(f.state,{blocked:[],external:[]});assert.deepEqual(f.fixture.counts,{preview:0,approve:0,status:0});
+});
+test('synthetic process read rejects unauthenticated, malformed or action-shaped requests',async()=>{
+ const query={search:'',sort:'pid-asc',limit:100,cursor:''};
+ for(const change of [f=>({method:'GET'}),f=>({headers:{}}),f=>({headers:{...f.headers,'x-csrf-token':'wrong'}}),f=>({headers:{...f.headers,origin:'https://outside.invalid'}}),f=>({headers:{...f.headers,'content-type':'text/plain'}}),f=>({raw:JSON.stringify({...query,limit:101})}),f=>({raw:JSON.stringify({...query,grant:true})}),f=>({raw:'{"search":"","sort":"pid-asc","limit":100,"cursor":"","limit":100}'})]){
+  const f=setup(),result=await f.invoke(f.prefix+'/windows-full-processes/query',{method:'POST',headers:f.headers,raw:JSON.stringify(query),...change(f)});
+  assert.deepEqual(result,{abort:'blockedbyclient'});assert.equal(f.state.blocked.length,1);assert.deepEqual(f.fixture.counts,{preview:0,approve:0,status:0});
+ }
+ for(const suffix of ['/query?private=1','/query/extra','/enable']){
+  const f=setup();assert.deepEqual(await f.invoke(f.prefix+'/windows-full-processes'+suffix,{method:'POST',headers:f.headers,raw:JSON.stringify(query)}),{abort:'blockedbyclient'});
+ }
+});
 const sourceSha='a'.repeat(40),evidence=()=>['en','de'].flatMap(locale=>[1440,390].map(width=>({file:`synthetic-windows-service-actions-${width}-${locale}.png`,sourceSha,test:windowsServiceActionsCaseName,locale,viewport:{width,height:width===390?844:1000},fullPage:false,publicSafe:true,fixtureDisclosure:windowsServiceActionsDisclosure})));
 test('completion requires exactly four captured source-bound locale/viewport evidence entries',()=>{
  assert.deepEqual(requireWindowsServiceActionsEvidence(evidence(),sourceSha),{screens:4,durableStoreAcceptance:false,nativeAcceptance:false});

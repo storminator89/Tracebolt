@@ -20,7 +20,10 @@ _spec.loader.exec_module(reporter)
 ROOT = Path(__file__).resolve().parents[2]
 SHARDS = 3
 INVENTORY_PACKAGE = "localrmm/internal/enrollmentstore"
-INVENTORY_PREFIXES = {"services": "TestWindowsFullServices", "software": "TestWindowsFullSoftware"}
+INVENTORY_PREFIXES = {
+    "services": "TestWindowsFullServices", "software": "TestWindowsFullSoftware",
+    "processes": "TestWindowsFullProcesses", "network-context": "TestWindowsNetworkContext",
+}
 SKIP = "^(TestIndependentPackageStoreDenseCapacityAndActualIngress|TestGuidedThreeBinaryEnrollmentAndForeground)$"
 WEIGHTS = Path(__file__).with_name("go_race_weights.json")
 MAX_PACKAGES = 1024
@@ -385,7 +388,7 @@ def main(argv=None):
             run_shard(plan, allowed, args.shard, args.report)
         else:
             count = verify_reports(plan, load_reports(args.verify, plan["runAttempt"]))
-            print(f"PASS: exact Go race coverage across {SHARDS} shards and {count} packages, including both exact inventory groups; build/runtime and dedicated dense gates succeeded.")
+            print(f"PASS: exact Go race coverage across {SHARDS} shards and {count} packages, including all {len(plan['inventoryTests'])} exact inventory groups; build/runtime and dedicated dense gates succeeded.")
         return 0
     except (OSError, ValueError, TypeError, OverflowError, RecursionError, KeyError):
         print("FAIL: incomplete or invalid Go race coverage; raw source/runtime output withheld.")

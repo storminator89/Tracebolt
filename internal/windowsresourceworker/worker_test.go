@@ -564,11 +564,15 @@ func TestIndependentProviderTimeoutKeepsSiblings(t *testing.T) {
 }
 
 func TestFairDeadlinePreservesLaterProviders(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
 	var children [4]*exec.Cmd
+	// Reserve each child's race-runtime exit delay in the shared fixture budget.
+	// Keep the provider limit longer than the parent: without fair sharing, the
+	// first blocked child must still consume the entire caller deadline.
+	fixtureAllowance := time.Duration(len(children)) * raceFixtureExitDelay
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second+fixtureAllowance)
+	defer cancel()
 	commands := []commandFactory{fixtureFactory(t, "blocked", &children[0]), fixtureFactory(t, "success", &children[1]), fixtureFactory(t, "success", &children[2]), fixtureFactory(t, "success", &children[3])}
-	s, err := collectProviders(ctx, requestFixture(), 2*time.Second, commands)
+	s, err := collectProviders(ctx, requestFixture(), 2*time.Second+fixtureAllowance, commands)
 	if err != nil || s.Processors.Reason != windowsresourcecontext.ErrBudget.Error() || s.InstalledMemory.Quality != "observed" || s.Memory.Quality != "observed" || s.Pagefiles.Quality != "observed" {
 		t.Fatal("first blocked provider consumed sibling budget", err)
 	}

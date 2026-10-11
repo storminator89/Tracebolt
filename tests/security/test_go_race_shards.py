@@ -304,8 +304,8 @@ class InventoryTests(unittest.TestCase):
     def test_exact_source_partition_is_complete_disjoint_and_keeps_future_defaults(self):
         names = self.allowed[self.package]
         default = set(names) - set(self.moved)
-        self.assertEqual(len(self.groups["services"]), 14)
-        self.assertEqual(len(self.groups["software"]), 14)
+        self.assertEqual({group: len(roots) for group, roots in self.groups.items()},
+                         {"services": 14, "software": 14, "processes": 16, "network-context": 13})
         self.assertEqual(default | set(self.moved), names)
         self.assertEqual(len(self.moved), len(set(self.moved)))
         self.assertFalse(default.intersection(self.moved))
@@ -317,9 +317,11 @@ class InventoryTests(unittest.TestCase):
                              name in self.moved or bool(shards.re.fullmatch(shards.SKIP, name)))
         for name in ("TestNewUnrelated", "ExampleNew", "FuzzNew", self.moved[0] + "New"):
             self.assertIsNone(shards.re.fullmatch(skip, name))
-        changed = {**self.allowed, self.package: names | {"TestWindowsFullSoftwareNew"}}
-        self.assertIn("TestWindowsFullSoftwareNew", shards.inventory_tests(changed)["software"])
-        self.assertNotIn("TestWindowsFullSoftwareNew", self.groups["software"])
+        for group, prefix in shards.INVENTORY_PREFIXES.items():
+            new = prefix + "New"
+            changed = {**self.allowed, self.package: names | {new}}
+            self.assertIn(new, shards.inventory_tests(changed)[group])
+            self.assertNotIn(new, self.groups[group])
 
     def test_selected_commands_keep_race_count_budget_and_exact_roots(self):
         for names in self.groups.values():
@@ -336,45 +338,52 @@ class InventoryTests(unittest.TestCase):
             shards.inventory_tests({self.package: {"TestUnrelated"}})
 
     def test_inventory_requires_all_roots_once_passed_and_no_default_overlap(self):
-        names = self.groups["services"]
-        data = inventory_events(names)
-        shards.normalize(raw(data), {self.package: True}, names)
-        missing = data[:1] + data[4:]
-        skipped = copy.deepcopy(data); skipped[3]["Action"] = "skip"
-        duplicate = data[:4] + data[1:4] + data[4:]
-        foreign = copy.deepcopy(data); foreign[1]["Test"] = "TestOther"
-        for records in (missing, skipped, duplicate, foreign):
-            with self.assertRaises(ValueError):
-                shards.normalize(raw(records), {self.package: True}, names)
-        with self.assertRaises(ValueError):
-            shards.normalize(raw(data), {self.package: True}, excluded_tests=self.moved)
+        for group, names in self.groups.items():
+            with self.subTest(group=group):
+                data = inventory_events(names)
+                shards.normalize(raw(data), {self.package: True}, names)
+                missing = data[:1] + data[4:]
+                skipped = copy.deepcopy(data); skipped[3]["Action"] = "skip"
+                duplicate = data[:4] + data[1:4] + data[4:]
+                foreign = copy.deepcopy(data); foreign[1]["Test"] = "TestOther"
+                failed = copy.deepcopy(data); failed[3]["Action"] = "fail"
+                skipped_child = data[:2] + [{"Action": "skip", "Package": self.package,
+                                             "Test": names[0] + "/child"}] + data[2:]
+                for records in (missing, skipped, duplicate, foreign, failed, skipped_child):
+                    with self.assertRaises(ValueError):
+                        shards.normalize(raw(records), {self.package: True}, names)
+                with self.assertRaises(ValueError):
+                    shards.normalize(raw(data), {self.package: True}, excluded_tests=self.moved)
 
-    def test_aggregate_requires_both_exact_source_bound_inventory_completions(self):
+    def test_aggregate_requires_all_exact_source_bound_inventory_completions(self):
         report = shards.make_report(self.plan, 0, self.default, 0, self.raw)
         reports = [report] + [shards.make_report(self.plan, i, b"", 0) for i in (1, 2)]
         self.assertEqual(shards.verify_reports(self.plan, reports), 1)
         self.assertNotIn(b"PRIVATE", shards.canonical(report))
-        for change in (lambda r: r["inventory"].pop("software"),
-                       lambda r: r["inventory"]["services"].update(status="skip"),
-                       lambda r: r["inventory"]["services"]["tests"].pop(),
-                       lambda r: r["inventory"]["services"]["tests"].append(self.moved[0]),
-                       lambda r: r["inventory"]["services"].update(Output="PRIVATE"),
-                       lambda r: r["inventory"]["services"].update(elapsedSeconds=True)):
-            changed = copy.deepcopy(reports); change(changed[0])
-            with self.assertRaises(ValueError):
-                shards.verify_reports(self.plan, changed)
-        with self.assertRaises(ValueError):
-            shards.make_report(self.plan, 0, self.default, 0, {"services": self.raw["services"]})
-        changed_plan = copy.deepcopy(self.plan)
-        changed_plan["inventoryTests"]["software"].append("TestWindowsFullSoftwareNew")
-        with self.assertRaises(ValueError):
-            shards.verify_reports(changed_plan, reports)
+        for group in self.groups:
+            with self.subTest(group=group):
+                for change in (lambda r: r["inventory"].pop(group),
+                               lambda r: r["inventory"][group].update(status="skip"),
+                               lambda r: r["inventory"][group]["tests"].pop(),
+                               lambda r: r["inventory"][group]["tests"].append(self.groups[group][0]),
+                               lambda r: r["inventory"][group].update(Output="PRIVATE"),
+                               lambda r: r["inventory"][group].update(elapsedSeconds=True)):
+                    changed = copy.deepcopy(reports); change(changed[0])
+                    with self.assertRaises(ValueError):
+                        shards.verify_reports(self.plan, changed)
+                incomplete = {key: value for key, value in self.raw.items() if key != group}
+                with self.assertRaises(ValueError):
+                    shards.make_report(self.plan, 0, self.default, 0, incomplete)
+                changed_plan = copy.deepcopy(self.plan)
+                changed_plan["inventoryTests"][group].append(shards.INVENTORY_PREFIXES[group] + "New")
+                with self.assertRaises(ValueError):
+                    shards.verify_reports(changed_plan, reports)
 
     def test_runner_splits_only_enrollmentstore_and_fails_closed_per_invocation(self):
         plan = copy.deepcopy(self.plan)
         plan["packages"]["localrmm/other"] = True
         plan["shards"][0].append("localrmm/other")
-        for fail_group in (None, "services", "software"):
+        for fail_group in (None, "packages", "default", *self.groups):
             with tempfile.TemporaryDirectory() as tmp:
                 destination = Path(tmp) / "report" / "completion.json"
                 commands = []
@@ -399,9 +408,11 @@ class InventoryTests(unittest.TestCase):
                         with self.assertRaises(ValueError):
                             shards.run_shard(plan, self.allowed, 0, destination)
                         self.assertFalse(destination.exists())
+                        expected = ["packages", "default", *self.groups].index(fail_group) + 1
+                        self.assertEqual(len(commands), expected)
                     else:
                         shards.run_shard(plan, self.allowed, 0, destination)
-                        self.assertEqual(len(commands), 4)
+                        self.assertEqual(len(commands), 2 + len(self.groups))
                         report = json.loads(destination.read_bytes())
                         reports = [report] + [shards.make_report(plan, i, b"", 0) for i in (1, 2)]
                         self.assertEqual(shards.verify_reports(plan, reports), 2)
