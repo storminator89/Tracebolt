@@ -1,6 +1,6 @@
 # Windows status and limitations
 
-**Status checked: 10 October 2026. The unsigned x64
+**Status checked: 11 October 2026. The unsigned x64
 [v0.1.0-windows-preview.1 prerelease](https://github.com/storminator89/Tracebolt/releases/tag/v0.1.0-windows-preview.1)
 is published.**
 
@@ -99,9 +99,23 @@ fixtures and builds do not establish native Event Log reading under the installe
 service or real Windows-to-Linux interoperability. See the
 [manager boundary](windows-event-content-manager.md) and
 [wire contract](windows-event-content-wire.md). Service actions, broader Health/AI,
-complete inventory generations and lifecycle improvements remain in the
+complete process inventory and lifecycle improvements remain in the
 [parity roadmap](windows-linux-parity.md). Existing grants are never widened by a
 source or manager update.
+
+## Complete inventory and fleet source slices
+
+Separate default-off [complete Win32 service](windows-full-services-contract.md)
+and [machine software registration](windows-full-software-contract.md) scopes are
+implemented from local consent through bounded complete-generation transport to
+protected search and paging. Software covers caller-visible HKLM 32/64 uninstall
+registrations, retaining duplicates and unavailable optional fields. Complete
+processes, per-user/MSIX/Store and portable-program discovery remain planned.
+
+[Fleet hostname/IP display and search](windows-fleet-identity.md) is implemented
+using existing Windows metadata in draft [PR #39](https://github.com/storminator89/Tracebolt/pull/39).
+These are unreleased source slices; exact-source hosted CI and native acceptance
+remain separate from the published preview and its five-scope receipts.
 
 ## Newer manager-only capacity policy
 

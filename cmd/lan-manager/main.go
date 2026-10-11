@@ -169,6 +169,9 @@ func prepareWithApplicationChecks(m lanconfig.Material, enrollment *enrollmentco
 		if err = windowsService.InitializeWindowsFullServices(context.Background()); err != nil {
 			return fail(err)
 		}
+		if err = windowsService.InitializeWindowsFullSoftware(context.Background()); err != nil {
+			return fail(err)
+		}
 		if err = windowsService.InitializeWindowsEventContent(context.Background()); err != nil {
 			return fail(err)
 		}

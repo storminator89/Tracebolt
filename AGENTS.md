@@ -149,6 +149,12 @@ file as navigation and project constraints, never as permission to act on a host
   engine, tagged storage, API or UI. Preserve disk v1 bytes, exact observed-group
   CPU and physical-memory semantics, independent opt-ins/floors, one coordinated
   source read, and unknown evidence. No host collection, AI or alarm grant follows.
+- Complete Windows machine software generations require a separate default-off
+  local scope. Read `docs/windows-full-software-contract.md` before changing its
+  HKLM 32/64 source, consent, primary v3 marker, transport, store or UI. Preserve
+  independent software/service floors and exact old primary bytes; old scopes
+  never promote. Per-user, MSIX/Store, portable programs, paths and commands are
+  excluded. Source fixtures never authorize native reads or host grants.
 - Complete caller-visible Win32 service generations are a separate default-off
   local source extension. Read `docs/windows-full-services-contract.md` before
   consent, sender-state, native resume, chunk transport, store or UI changes.

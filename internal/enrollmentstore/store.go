@@ -80,12 +80,14 @@ type credential struct {
 	Replay                           Replay                    `json:"replay"`
 	Frame                            []byte                    `json:"frame"`
 	ServiceActionSetup               *serviceActionSetupMarker `json:"serviceActionSetup,omitempty"`
+	WindowsFullSoftwareInitialized   bool                      `json:"windowsFullSoftwareInitialized,omitempty"`
 	WindowsFullServicesInitialized   bool                      `json:"windowsFullServicesInitialized,omitempty"`
 	WindowsEventAuthorityInitialized bool                      `json:"windowsEventAuthorityInitialized,omitempty"`
 }
 type transaction struct {
 	conn                          *sql.Conn
 	beforeCommit                  []func() error
+	originalWindowsFullSoftware   map[string]bool
 	originalWindowsFullServices   map[string]bool
 	engine                        *enrollmentstate.Engine
 	credentials                   map[string]credential
@@ -373,7 +375,7 @@ func (s *Store) load(ctx context.Context, conn *sql.Conn) (*transaction, error) 
 	if err != nil {
 		return nil, ErrStorage
 	}
-	t := &transaction{conn: conn, engine: engine, credentials: make(map[string]credential), originalLedger: raw, originalCredentials: make(map[string][]byte), originalServiceActionSetup: make(map[string]serviceActionSetupMarker), originalWindowsEventAuthority: make(map[string]bool), originalWindowsFullServices: make(map[string]bool), operational: map[string]operationalRecord{}, originalOperational: map[string][]byte{}, inventory: map[string]inventoryRecord{}, originalInventory: map[string][]byte{}, overview: map[string]overviewRecord{}, originalOverview: map[string][]byte{}}
+	t := &transaction{conn: conn, engine: engine, credentials: make(map[string]credential), originalLedger: raw, originalCredentials: make(map[string][]byte), originalServiceActionSetup: make(map[string]serviceActionSetupMarker), originalWindowsEventAuthority: make(map[string]bool), originalWindowsFullServices: make(map[string]bool), originalWindowsFullSoftware: make(map[string]bool), operational: map[string]operationalRecord{}, originalOperational: map[string][]byte{}, inventory: map[string]inventoryRecord{}, originalInventory: map[string][]byte{}, overview: map[string]overviewRecord{}, originalOverview: map[string][]byte{}}
 	if conn.QueryRowContext(ctx, "SELECT count(*),coalesce(max(length(body)),0) FROM enrollment_credentials").Scan(&count, &n) != nil || count > s.config.RecordLimit || n > maxCredentialBytes {
 		return nil, ErrStorage
 	}
@@ -416,6 +418,9 @@ func (s *Store) load(ctx context.Context, conn *sql.Conn) (*transaction, error) 
 		if c.WindowsFullServicesInitialized {
 			t.originalWindowsFullServices[id] = true
 		}
+		if c.WindowsFullSoftwareInitialized {
+			t.originalWindowsFullSoftware[id] = true
+		}
 		if c.ServiceActionSetup != nil {
 			t.originalServiceActionSetup[id] = *c.ServiceActionSetup
 		}
@@ -430,6 +435,9 @@ func (s *Store) load(ctx context.Context, conn *sql.Conn) (*transaction, error) 
 		}
 	}
 	if err = validateWindowsFullServicesState(ctx, t, s.config.Binding.CollectionProfile); err != nil {
+		return nil, err
+	}
+	if err = validateWindowsFullSoftwareState(ctx, t, s.config.Binding.CollectionProfile); err != nil {
 		return nil, err
 	}
 	if err = validateWindowsEventUsedState(ctx, t, s.config.Binding.CollectionProfile); err != nil {
@@ -457,6 +465,9 @@ func (s *Store) load(ctx context.Context, conn *sql.Conn) (*transaction, error) 
 }
 func (t *transaction) validMetadata(s enrollmentstate.Snapshot, c credential) bool {
 	if c.WindowsFullServicesInitialized && (s.Platform != "windows" || s.Binding.CollectionProfile != enrollmentcrypto.CollectionProfileWindowsInventory) {
+		return false
+	}
+	if c.WindowsFullSoftwareInitialized && (s.Platform != "windows" || s.Binding.CollectionProfile != enrollmentcrypto.CollectionProfileWindowsInventory) {
 		return false
 	}
 	if c.WindowsEventAuthorityInitialized && (s.Platform != "windows" || s.Binding.CollectionProfile != enrollmentcrypto.CollectionProfileWindowsInventory) {
@@ -531,6 +542,9 @@ func (s *Store) transact(ctx context.Context, action func(*transaction) error) e
 		if t.originalWindowsFullServices[id] && !c.WindowsFullServicesInitialized {
 			return ErrStorage
 		}
+		if t.originalWindowsFullSoftware[id] && !c.WindowsFullSoftwareInitialized {
+			return ErrStorage
+		}
 		if t.originalWindowsEventAuthority[id] && !c.WindowsEventAuthorityInitialized {
 			return ErrStorage
 		}
@@ -576,6 +590,12 @@ func (s *Store) transact(ctx context.Context, action func(*transaction) error) e
 		return storageError(ctx)
 	}
 	if err = validateWindowsFullServicesState(ctx, t, s.config.Binding.CollectionProfile); err != nil {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		return err
+	}
+	if err = validateWindowsFullSoftwareState(ctx, t, s.config.Binding.CollectionProfile); err != nil {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
@@ -637,6 +657,15 @@ func validateSchema(ctx context.Context, conn *sql.Conn, profile string) error {
 	}
 	if fullServicesEnabled {
 		for _, obj := range windowsFullServicesSchemaObjects() {
+			expected[obj.Name] = obj
+		}
+	}
+	fullSoftwareEnabled, fullSoftwareErr := windowsFullSoftwareSchemaPresent(ctx, conn, profile)
+	if fullSoftwareErr != nil {
+		return fullSoftwareErr
+	}
+	if fullSoftwareEnabled {
+		for _, obj := range windowsFullSoftwareSchemaObjects() {
 			expected[obj.Name] = obj
 		}
 	}

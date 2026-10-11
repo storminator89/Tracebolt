@@ -47,6 +47,11 @@ func runForeground(ctx context.Context, m Material, interval time.Duration, obse
 		return agentloop.Summary{Reason: agentloop.InvalidState}, agentloop.ErrState
 	}
 	defer fullServices.Close()
+	fullSoftware, e := openWindowsFullSoftwareSender(m, state)
+	if e != nil {
+		return agentloop.Summary{Reason: agentloop.InvalidState}, agentloop.ErrState
+	}
+	defer fullSoftware.Close()
 	var inventory *inventorySender
 	var system *systemSender
 	if m.config.complete() {
@@ -119,6 +124,9 @@ func runForeground(ctx context.Context, m Material, interval time.Duration, obse
 		if parent.Err() == nil {
 			report.WindowsEventContentStatus = runWindowsEventContentAttempt(parent, events)
 			if e := runWindowsFullServicesAttempt(parent, fullServices, &report); e != nil {
+				err = e
+			}
+			if e := runWindowsFullSoftwareAttempt(parent, fullSoftware, &report); e != nil {
 				err = e
 			}
 		}

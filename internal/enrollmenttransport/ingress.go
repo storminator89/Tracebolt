@@ -41,6 +41,7 @@ import (
 	"localrmm/internal/windowseventcache"
 	"localrmm/internal/windowseventwire"
 	"localrmm/internal/windowsfullserviceswire"
+	"localrmm/internal/windowsfullsoftwarewire"
 )
 
 const MaxInFlight = 2
@@ -134,7 +135,7 @@ func (h *Ingress) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		failure(w, http.StatusServiceUnavailable, "storage_unavailable")
 		return
 	}
-	if h.telemetryPath == "/v1/windows/agent/telemetry" && (r == nil || r.URL == nil || r.URL.Path != h.telemetryPath && !windowsEventPath(r.URL.Path) && !windowsfullserviceswire.ValidPath(r.URL.Path)) {
+	if h.telemetryPath == "/v1/windows/agent/telemetry" && (r == nil || r.URL == nil || r.URL.Path != h.telemetryPath && !windowsEventPath(r.URL.Path) && !windowsfullserviceswire.ValidPath(r.URL.Path) && !windowsfullsoftwarewire.ValidPath(r.URL.Path)) {
 		failure(w, http.StatusNotFound, "not_found")
 		return
 	}
@@ -150,6 +151,10 @@ func (h *Ingress) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if r != nil && r.URL != nil && strings.HasPrefix(r.URL.Path, windowsfullserviceswire.PathPrefix) {
 		h.windowsFullServices(w, r)
+		return
+	}
+	if r != nil && r.URL != nil && strings.HasPrefix(r.URL.Path, windowsfullsoftwarewire.PathPrefix) {
+		h.windowsFullSoftware(w, r)
 		return
 	}
 	if r != nil && r.URL != nil && strings.HasPrefix(r.URL.Path, windowseventwire.PathPrefix) {

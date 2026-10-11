@@ -521,9 +521,12 @@ func TestWindowsFullServicesBoundedSteadyStateCleanup(t *testing.T) {
 	f := newFullServicesFixture(t, "tls")
 	defer f.s.Close()
 	f.grant(t)
+	// This case proves repeated bounded reclamation, not maximum ingest size.
+	// 2,051 rows span 17 chunks, crossing both the 256-row and 16-chunk tick
+	// limits. CompleteSearchIntegrityBoundedCost retains the 8,192-row boundary.
 	for seq := uint64(1); seq <= 4; seq++ {
 		at := f.at.Add(time.Duration(seq-1) * time.Minute)
-		for _, m := range f.messages(t, seq, 8192, at) {
+		for _, m := range f.messages(t, seq, 2051, at) {
 			if _, e := f.apply(t, m, at); e != nil {
 				t.Fatal("capture", seq, e)
 			}
@@ -534,6 +537,9 @@ func TestWindowsFullServicesBoundedSteadyStateCleanup(t *testing.T) {
 		var beforeRows, beforeChunks int
 		f.s.db.QueryRow(`SELECT count(*) FROM wfs_rows WHERE generation<>?`, f.page(t, fullQuery(), at).Complete.Manifest.GenerationID).Scan(&beforeRows)
 		f.s.db.QueryRow(`SELECT count(*) FROM wfs_chunks WHERE generation<>?`, f.page(t, fullQuery(), at).Complete.Manifest.GenerationID).Scan(&beforeChunks)
+		if beforeRows <= 256 || beforeChunks <= 16 {
+			t.Fatal("fixture must exceed both cleanup tick limits")
+		}
 		if e := f.s.MaintainWindowsFullServices(context.Background(), at.Add(time.Second)); e != nil {
 			t.Fatal(e)
 		}

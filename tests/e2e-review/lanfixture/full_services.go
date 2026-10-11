@@ -241,6 +241,11 @@ func (f *fullServicesFixture) sample(kind string) error {
 		return f.apply(windowsfullservices.Message{SchemaVersion: windowsfullservices.MessageVersion, Operation: "failure", DeviceID: f.snap.Approval.DeviceID, Consent: f.consent, Sequence: f.sequence, AttemptedAt: &now, Reason: "access_denied"})
 	}
 	count := 2051
+	if kind == "near-expiry" {
+		// Expiry has its own one-row generation to separate its short original
+		// lifetime from bulk-ingest cost. Bulk phases keep all 2,051 rows.
+		count = 1
+	}
 	if kind == "empty" {
 		count = 0
 	}

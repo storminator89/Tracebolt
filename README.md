@@ -102,20 +102,25 @@ disk/CPU/RAM and selected-service health policies. PR #29's documentation change
 do not add that runtime implementation. These newer features remain outside the
 unchanged published preview. Source/fixture checks do not establish native acceptance.
 
-### Complete Windows service inventory source slice
+### Complete Windows inventory source slices
 
 A separately consented [complete caller-visible Win32 service generation](docs/windows-full-services-contract.md)
 adds resumed SCM enumeration and bounded server-side search/paging beyond the
 legacy 128/2,048-row preview ceilings. It is default-off and source-only pending
 separate native/host acceptance. Drivers and ACL-invisible services remain outside
-the caller scope; machine/user/Store/portable software completeness is separate
+the caller scope. A separate default-off [complete machine software registration
+extension](docs/windows-full-software-contract.md) adds HKLM 32/64 generations,
+retained optional-field quality and duplicate registrations, and protected full
+search/pages. Per-user, Store and portable program coverage remains separate
 work. Existing selected-service alarms continue using their clearly bounded
 preview and are not silently expanded. No upgrade enables the new local grant.
 
-The [prioritized Windows admin roadmap](docs/windows-admin-roadmap.md) covers full
-software/process inventories, fleet hostname/IP search, security and patch posture,
-network/storage diagnostics, user and hardware context, and software-change history.
-These are planned or in-development increments, not released features. The
+[Windows fleet hostname/IP search](docs/windows-fleet-identity.md) is also implemented
+in source using already-reported metadata. These inventory and fleet slices are
+unreleased draft work; exact-source hosted CI and native acceptance remain separate.
+The [prioritized Windows admin roadmap](docs/windows-admin-roadmap.md) tracks the
+remaining complete process inventory, security and patch posture, network/storage
+diagnostics, user and hardware context, and software-change history. The
 [Windows11x64 acceptance matrix](docs/windows11-acceptance-matrix.md) makes the
 desktop and lifecycle checks explicit.
 

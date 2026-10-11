@@ -1,0 +1,29 @@
+.windows-full-software{min-width:0;padding:4px 0 0}
+.windows-full-software-header,.windows-full-software-header>div{display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px}
+.windows-full-software-header{justify-content:space-between;gap:12px}
+.windows-full-software-header h3{margin:0;font-size:15px}
+.windows-full-software-source,.windows-full-software-view,.windows-full-software-complete{display:inline-flex;align-items:center;white-space:nowrap;font-size:11px;line-height:1.5;border:1px solid var(--line);border-radius:5px;padding:2px 6px;color:var(--secondary)}
+.windows-full-software-complete{border-color:transparent;color:var(--accent)}
+.windows-full-software-meta{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px 18px;margin:18px 0 16px}
+.windows-full-software-age{font-size:11px;color:var(--secondary)}
+.windows-full-software-counts{display:flex;flex-wrap:wrap;gap:18px 28px;margin:0}
+.windows-full-software-counts>div{display:flex;align-items:baseline;gap:7px}
+.windows-full-software-counts dt{font-size:12px;color:var(--secondary)}
+.windows-full-software-counts dd{margin:0;font-size:17px;font-weight:600;font-variant-numeric:tabular-nums}
+.windows-full-software-controls{display:flex;align-items:center;gap:8px;margin:0 0 16px;min-width:0}
+.windows-full-software-search{display:flex;align-items:center;gap:8px;flex:1;min-width:0;border:1px solid var(--line);border-radius:6px;padding:0 10px;color:var(--secondary);background:var(--bg)}
+.windows-full-software-search input{min-width:0;width:100%;border:0;background:transparent;color:var(--text);font:inherit;font-size:12px;padding:9px 0;outline:none}
+.windows-full-software-controls select{min-width:0;max-width:100%;padding:8px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--text);font:inherit;font-size:12px}
+.windows-full-software-search:focus-within,.windows-full-software-controls select:focus-visible,.windows-full-software button:focus-visible,.windows-full-software-details summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.windows-full-software td{white-space:pre-wrap;unicode-bidi:plaintext}
+.windows-full-software td:first-child{font-weight:500}
+.windows-full-software-missing{color:var(--secondary);font-weight:400;font-size:12px}
+.windows-full-software-pagination{display:flex;align-items:center;justify-content:flex-end;gap:8px;margin:14px 0;font-size:12px;color:var(--secondary);font-variant-numeric:tabular-nums}
+.windows-full-software-pagination>span{margin-right:5px}
+.windows-full-software-pagination button{min-width:36px;min-height:36px;justify-content:center}
+.windows-full-software-status{padding:22px 0;margin:0;color:var(--secondary);font-size:13px}
+.windows-full-software-attempt{margin:12px 0;color:var(--warning);font-size:12px}
+.windows-full-software-details{margin-top:14px;padding:12px 0}
+.windows-full-software-details dl{grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
+.windows-full-software-preview{margin-top:0}
+@media(max-width:600px){.windows-full-software-controls{flex-wrap:wrap}.windows-full-software-search{flex-basis:100%}.windows-full-software-controls select{flex:1}.windows-full-software-counts{gap:18px}.windows-full-software-header>div{gap:6px 8px}.windows-full-software-header h3{flex-basis:100%}.windows-full-software-header{align-items:flex-start}.windows-full-software-view{justify-self:start}.windows-full-software-details dl{grid-template-columns:minmax(0,1fr)}}

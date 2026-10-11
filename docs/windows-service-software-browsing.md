@@ -4,10 +4,13 @@ The original preview browsing path below remains bounded. A separate default-off
 [complete caller-visible Win32 service generation](windows-full-services-contract.md)
 source slice now adds resumed SCM enumeration, frozen durable chunks and protected
 manager-side search/pages after new explicit local consent. It does not widen old
-grants or selected-service alarm sources. Drivers, ACL-invisible services and full
-software inventory remain outside that slice. Source tests are not native acceptance.
+grants or selected-service alarm sources. Drivers and ACL-invisible services remain outside that slice. A separate
+[complete machine software registration extension](windows-full-software-contract.md)
+now has its own default-off HKLM 32/64 consent, native reader, frozen generation
+and protected manager search/pages. Per-user, MSIX/Store and portable discovery
+remain excluded. Source tests are not native acceptance.
 
-## Current usable slice
+## Original bounded-preview browsing
 
 Services and Software now have literal, case-insensitive search, ascending and
 descending sorting, and 25-row local pages. Services sort by name, numeric PID or
@@ -42,89 +45,24 @@ mobile cell labels. Hosted fixtures cover English/German at 1440 and 390 pixels
 inside the existing restricted loopback runner. Source/DOM checks do not establish
 that a browser or Windows endpoint passed; those results must be reported
 separately. No local browser, native collector, service or permission change is
-part of this candidate.
+part of that original preview-only UI slice.
 
-## Broader complete-inventory follow-on design
+## Remaining wider-coverage work
 
-The service-specific source slice above implements its own contract. The broader
-process/software plan below remains unimplemented and is not a runtime grant.
+Complete caller-visible services and machine software registrations now have
+separate source contracts linked above. Their new local consent, native readers,
+exact protected generations, independent durable floors, bounded transport,
+manager search/pages and operator UI do not widen the old preview receipts.
+Current runtime and native-acceptance limits are documented in those contracts.
 
-The native `windowsinventory` provider currently caps process, service and
-software enumeration at 2,048 rows; service enumeration also has one 256 KiB
-buffer. `windowsmanaged` then trims transmission to 128 rows per section under
-48 KiB. Local pagination cannot restore omitted rows. The Linux
-`completeoverview`/`overviewgeneration`/`overviewwire` and
-`systeminventory`/`fullinventory` paths are useful patterns, but their Linux
-schemas and authority cannot be relabeled as Windows approval.
+Complete process enumeration remains a separate follow-on. Per-user software,
+MSIX/Store registrations and portable/unregistered application discovery also
+need an explicit source and user-context design. LocalService HKCU is not the
+interactive user's registry. Scanning user profiles or arbitrary executable paths
+is not authorized by machine-registration consent.
 
-The first complete-generation vertical slice is caller-visible Win32 services,
-with independent consent, native enumeration, durable sender, signed transport,
-authority store and operator UI. Machine software is the next separate scope;
-processes and wider user-context software need their own reviewed follow-ons. Do not publish a pure reassembly library as completed
-inventory support. The following is a review plan, not an implemented contract:
-
-- Introduce a separate default-off local scope, provisionally
-  `windows-complete-inventory-v1`, and a new versioned complete-generation wire
-  contract. Explicit disclosure includes every selected section, its retained
-  labels, destination/HTTP risk, cadence and limits. Fresh installer selections
-  need a new acknowledged profile version. Never extend the old five-scope
-  approval, increase v1-v5 limits or promote old grants/receipts. A manager upgrade
-  cannot enable endpoint capture. Existing identities and counters stay intact.
-- Capture only the approved caller-visible API scope under the existing limited
-  identity. A fully enumerated Toolhelp snapshot is not a whole-machine access
-  claim. SCM can omit inaccessible services; registry coverage is machine
-  uninstall registrations in the disclosed views, excluding per-user, Store,
-  portable and unregistered applications. Startup mode, executable paths,
-  account identity, configuration and other service details require separate
-  disclosure and are outside this work.
-- Freeze one generation before transfer. Preserve capture start/finish, source,
-  scope, field outcomes and count truth. Stable ordering must retain duplicate
-  registration rows without inventing a cross-generation application identity.
-  Denied/read-failed/changed/time-limited enumeration cannot become complete
-  zero or a promoted prefix. A successful scoped zero requires positive complete
-  enumeration evidence. Per-field denial is distinct from enumeration failure.
-- Each section gets an independent identity/grant-bound durable sequence floor,
-  deterministic generation binding, manifest digest, declared count and byte
-  reservations. Chunks carry generation, manifest digest, index and count. A
-  duplicate must be byte-identical; changed bytes at the same position fail.
-  Promotion requires all rows, exact count/order and final digest, atomically.
-  Failed/incomplete work retains the previous completed generation with its
-  original age plus a separate latest-attempt status.
-- Restart drains the protected original pending generation before recapture;
-  lost acknowledgments replay the exact bytes and preserve original times.
-  Revoke/disable suppresses capture and delivery without resetting sequence
-  floors or adopting an uncertain store. Server authorization is rechecked in
-  the same transaction as reads/writes. Re-enabling cannot refresh a dormant
-  capture or grant it another lifetime. Old/expired pending generations fail
-  closed under the original expiry; cleanup never resets floors.
-- Operator cursors bind device, section, exact generation/sequence/hash, literal
-  query, sort, row position, original expiry and current grant through an
-  authenticated cursor. No page can splice generations. A replaced generation
-  either remains available within explicit retired-generation grace or returns
-  a restart-required error; it never silently reads the current replacement.
-  Revoked/expired/unknown data is not an empty successful page. Search over a
-  bounded scan may return an empty nonterminal continuation.
-- Proposed fail-closed ceilings: 32,768 processes, 8,192 services, 32,768 machine
-  registrations; 128 MiB total source work and 16 MiB encoded per section; one
-  15-second cooperative collection attempt. Native API blocking/cancellation
-  behavior needs independent verification; a cooperative deadline is not hard
-  cancellation. No unbounded registry walk, SCM resume loop or goroutine escape
-  is acceptable. Ceiling exhaustion records failure, never complete truncation.
-- Proposed transport ceilings: 128 rows and 64 KiB fully encoded per chunk,
-  whichever binds first; one shared 20-second/64-operation transfer burst.
-  Proposed operator pages: 100 rows/256 KiB, 15-minute cursor/grace, original
-  24-hour capture retention. Proposed store ceilings: three retained generations
-  per section/device, 48 MiB per device, 128 MiB global, 200,000 reserved rows and
-  4,096 chunks globally. These are rejection limits, not supported-size promises;
-  lower byte/count limits may bind first. Reservations precede writes; admission
-  failure cannot mutate the current pointer. Reuse reviewed physical DB/WAL
-  admission only after proving its Windows authority integration.
-
-Before publication, independently review the composed consent/native/wire/store/UI
-slice and run invented 513+ row end-to-end TLS and signed-HTTP fixtures, loss and
-exact retry, restart, revocation, expiry, source change, duplicates, denied fields,
-complete zero, malformed chunks/cursors, budget exhaustion and prior-generation
-preservation. Separately approved disposable Windows execution must verify real
-LocalService visibility, paging, native bounded work and shutdown. A real manager
-and hosted UI gate must prove generation-consistent display. No such new native
-acceptance or runtime grant is claimed by this UI-only change.
+Any future source must preserve scoped complete-versus-unavailable truth,
+duplicate and stable source identities, exact retries and original expiry,
+consume-once state, current identity/grant authority and bounded complete-generation
+search. A successful scoped enumeration is not proof of every program on a host.
+Native acceptance, broader local grants and release approval remain separate.

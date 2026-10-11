@@ -19,6 +19,8 @@ reporter = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(reporter)
 ROOT = Path(__file__).resolve().parents[2]
 SHARDS = 3
+INVENTORY_PACKAGE = "localrmm/internal/enrollmentstore"
+INVENTORY_PREFIXES = {"services": "TestWindowsFullServices", "software": "TestWindowsFullSoftware"}
 SKIP = "^(TestIndependentPackageStoreDenseCapacityAndActualIngress|TestGuidedThreeBinaryEnrollmentAndForeground)$"
 WEIGHTS = Path(__file__).with_name("go_race_weights.json")
 MAX_PACKAGES = 1024
@@ -92,6 +94,29 @@ def validate_partition(packages, groups):
         raise ValueError("incomplete or overlapping partition")
 
 
+def inventory_tests(allowed):
+    """Move only exact roots from the existing, source-verified vocabulary.
+
+    The default invocation still runs everything except these roots and the two
+    unchanged dedicated exclusions. New unrelated tests/examples/fuzz seeds stay
+    included without extending a scheduling allowlist.
+    """
+    names = allowed.get(INVENTORY_PACKAGE, ())
+    groups = {group: sorted(name for name in names if name.startswith(prefix))
+              for group, prefix in INVENTORY_PREFIXES.items()}
+    moved = [name for group in groups.values() for name in group]
+    if (any(not group for group in groups.values()) or len(moved) != len(set(moved))
+            or any(not reporter.IDENT.fullmatch(name) or re.fullmatch(SKIP, name) for name in moved)):
+        raise ValueError("invalid inventory partition")
+    return groups
+
+
+def exact_tests(names):
+    if not names or list(names) != sorted(set(names)) or any(not reporter.IDENT.fullmatch(name) for name in names):
+        raise ValueError("invalid test selection")
+    return "^(" + "|".join(names) + ")$"
+
+
 def context(env):
     value = {"commit": env.get("GITHUB_SHA", ""), "runId": env.get("GITHUB_RUN_ID", ""),
              "runAttempt": env.get("GITHUB_RUN_ATTEMPT", "")}
@@ -121,16 +146,20 @@ def discover():
     if checked_capture(["go", "env", "GOOS", "GOARCH"]) != b"linux\namd64\n":
         raise ValueError("wrong target")
     packages = package_rows(checked_capture(LIST_COMMAND), allowed)
+    if not packages.get(INVENTORY_PACKAGE):
+        raise ValueError("missing inventory package")
     groups = partition(packages, weights(WEIGHTS.read_bytes()))
     plan = {"schemaVersion": 1, **ctx, "goSourceSha256": reporter.derive_allowlist(ROOT)["goSourceSha256"],
-            "packages": packages, "shards": groups}
+            "packages": packages, "shards": groups, "inventoryTests": inventory_tests(allowed)}
     return plan, allowed
 
 
-def normalize(raw, expected):
+def normalize(raw, expected, required_tests=None, excluded_tests=()):
     if not raw or len(raw) > reporter.MAX_FILE or not raw.endswith(b"\n"):
         raise ValueError("invalid events")
     started, completed = set(), {}
+    required = set(required_tests or ())
+    running, passed = set(), set()
     for count, line in enumerate(io.BytesIO(raw), 1):
         if count > reporter.MAX_EVENTS or len(line) > reporter.MAX_LINE:
             raise ValueError("invalid events")
@@ -145,6 +174,21 @@ def normalize(raw, expected):
         if package not in expected or package in completed:
             raise ValueError("unexpected package")
         test = event.get("Test", "")
+        root = test.split("/", 1)[0]
+        if package == INVENTORY_PACKAGE and root in excluded_tests:
+            raise ValueError("overlapping inventory test")
+        if required and test:
+            if root not in required or action == "skip":
+                raise ValueError("unexpected or skipped inventory test")
+            if test == root:
+                if action == "run":
+                    if root in running or root in passed:
+                        raise ValueError("duplicate inventory test")
+                    running.add(root)
+                elif action == "pass":
+                    if root not in running or root in passed:
+                        raise ValueError("missing or duplicate inventory run")
+                    passed.add(root)
         if not test and action == "start":
             if package in started:
                 raise ValueError("duplicate start")
@@ -160,27 +204,40 @@ def normalize(raw, expected):
                                   "elapsedSeconds": round(event["Elapsed"], 3)}
     if started != set(expected) or set(completed) != set(expected):
         raise ValueError("missing package completion")
+    if required and (running != required or passed != required):
+        raise ValueError("missing inventory test completion")
     return [completed[p] for p in sorted(completed)]
 
 
-def command_for(packages):
+def command_for(packages, *, selected=(), excluded=()):
     if not packages or any(not reporter.PACKAGE.fullmatch(p) for p in packages):
         raise ValueError("invalid selected packages")
+    if (selected or excluded) and (packages != [INVENTORY_PACKAGE] or (selected and excluded)):
+        raise ValueError("invalid inventory invocation")
+    skip = SKIP + ("|" + exact_tests(excluded) if excluded else "")
+    selection = ["-run", exact_tests(selected)] if selected else []
     return ["go", "test", "-race", "-json", "-p", "1", "-buildvcs=false", *packages,
-            "-skip", SKIP, "-count=1", "-timeout=15m"]
+            *selection, "-skip", skip, "-count=1", "-timeout=15m"]
 
 
-def make_report(plan, shard, raw, exit_code):
+def make_report(plan, shard, raw, exit_code, inventory_raw=None):
     if type(shard) is not int or not 0 <= shard < SHARDS or type(exit_code) is not int or exit_code != 0:
         raise ValueError("failed shard")
     validate_partition(plan["packages"], plan["shards"])
     selected = {p: plan["packages"][p] for p in plan["shards"][shard]}
-    records = normalize(raw, selected) if selected else []
+    groups = plan["inventoryTests"] if INVENTORY_PACKAGE in selected else {}
+    moved = {name for names in groups.values() for name in names}
+    records = normalize(raw, selected, excluded_tests=moved) if selected else []
+    inventory_raw = {} if inventory_raw is None else inventory_raw
+    if set(inventory_raw) != set(groups):
+        raise ValueError("missing inventory invocation")
+    inventory = {group: {**normalize(inventory_raw[group], {INVENTORY_PACKAGE: True}, names)[0], "tests": names}
+                 for group, names in groups.items()}
     if not selected and raw:
         raise ValueError("unexpected empty-shard output")
     return {"schemaVersion": 1, "planSha256": digest(plan),
             **{k: plan[k] for k in ("commit", "runId", "runAttempt", "goSourceSha256")},
-            "shard": shard, "exitCode": 0, "packages": records}
+            "shard": shard, "exitCode": 0, "packages": records, "inventory": inventory}
 
 
 def check_needs(raw):
@@ -204,9 +261,9 @@ def verify_reports(plan, reports):
         reference = make_report(plan, shard, b"", 0) if not plan["shards"][shard] else {
             "schemaVersion": 1, "planSha256": digest(plan),
             **{k: plan[k] for k in ("commit", "runId", "runAttempt", "goSourceSha256")},
-            "shard": shard, "exitCode": 0, "packages": []}
+            "shard": shard, "exitCode": 0, "packages": [], "inventory": {}}
         if set(report) != set(reference) or any(type(report[k]) is not type(reference[k]) or report[k] != reference[k]
-                for k in reference if k != "packages"):
+                for k in reference if k not in {"packages", "inventory"}):
             raise ValueError("foreign report")
         records = report["packages"]
         if not isinstance(records, list) or len(records) != len(plan["shards"][shard]):
@@ -219,6 +276,19 @@ def verify_reports(plan, reports):
             reporter.validate_event({"Action": "pass", "Elapsed": record["elapsedSeconds"]})
             if record["elapsedSeconds"] != round(record["elapsedSeconds"], 3):
                 raise ValueError("unnormalized duration")
+        groups = plan["inventoryTests"] if INVENTORY_PACKAGE in plan["shards"][shard] else {}
+        inventory = report["inventory"]
+        if not isinstance(inventory, dict) or set(inventory) != set(groups):
+            raise ValueError("missing inventory records")
+        for group, names in groups.items():
+            record = inventory[group]
+            if (not isinstance(record, dict) or set(record) != {"package", "status", "elapsedSeconds", "tests"}
+                    or record["package"] != INVENTORY_PACKAGE or record["status"] != "pass"
+                    or record["tests"] != names):
+                raise ValueError("invalid inventory record")
+            reporter.validate_event({"Action": "pass", "Elapsed": record["elapsedSeconds"]})
+            if record["elapsedSeconds"] != round(record["elapsedSeconds"], 3):
+                raise ValueError("unnormalized inventory duration")
     return len(plan["packages"])
 
 
@@ -252,28 +322,43 @@ def run_shard(plan, allowed, shard, destination):
     if destination.exists() or destination.is_symlink() or destination.parent.is_symlink():
         raise ValueError("existing report")
     packages = plan["shards"][shard]
-    raw, elapsed, status = b"", 0, 0
-    with tempfile.TemporaryDirectory(prefix="go-race-", dir=os.environ["RUNNER_TEMP"]) as private:
-        events, errors = Path(private) / "events.jsonl", Path(private) / "stderr"
-        for path in (events, errors):
-            path.touch(mode=0o600, exist_ok=False)
-        if packages:
+    raw, inventory_raw, elapsed = b"", {}, 0
+    ordinary = [package for package in packages if package != INVENTORY_PACKAGE]
+    invocations = [("packages", command_for(ordinary))] if ordinary else []
+    if INVENTORY_PACKAGE in packages:
+        groups = plan["inventoryTests"]
+        moved = sorted(name for names in groups.values() for name in names)
+        invocations.append(("default", command_for([INVENTORY_PACKAGE], excluded=moved)))
+        invocations.extend((group, command_for([INVENTORY_PACKAGE], selected=names))
+                           for group, names in groups.items())
+    for label, command in invocations:
+        with tempfile.TemporaryDirectory(prefix="go-race-", dir=os.environ["RUNNER_TEMP"]) as private:
+            events, errors = Path(private) / "events.jsonl", Path(private) / "stderr"
+            for path in (events, errors):
+                path.touch(mode=0o600, exist_ok=False)
             start = time.monotonic()
             with events.open("wb") as output, errors.open("wb") as error:
-                process = subprocess.Popen(command_for(packages), cwd=ROOT, stdout=output, stderr=error)
+                process = subprocess.Popen(command, cwd=ROOT, stdout=output, stderr=error)
                 while True:
                     try:
                         status = process.wait(timeout=60)
                         break
                     except subprocess.TimeoutExpired:
-                        print(f"GO_RACE_PROGRESS shard={shard} elapsedSeconds={int(time.monotonic() - start)}", flush=True)
-            elapsed = int(time.monotonic() - start)
-            raw = reporter.read_private(events, reporter.MAX_FILE)
+                        print(f"GO_RACE_PROGRESS shard={shard} invocation={label} elapsedSeconds={int(time.monotonic() - start)}", flush=True)
+            duration = int(time.monotonic() - start)
+            elapsed += duration
+            current = reporter.read_private(events, reporter.MAX_FILE)
             reporter.read_private(errors, reporter.MAX_STDERR)
-            # Existing exact-source allowlisted bounded diagnostics remain intact.
+            # Keep exact-source, bounded diagnostics for every independent run.
             reporter.main((["--success"] if status == 0 else []) + ["--events", str(events), "--stderr", str(errors),
-                          "--exit-code", str(status), "--elapsed-seconds", str(elapsed)])
-        report = make_report(plan, shard, raw, status)
+                          "--exit-code", str(status), "--elapsed-seconds", str(duration)])
+            if status != 0:
+                raise ValueError("failed invocation")
+            if label in INVENTORY_PREFIXES:
+                inventory_raw[label] = current
+            else:
+                raw += current
+    report = make_report(plan, shard, raw, 0, inventory_raw)
     destination.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
     with destination.open("xb") as stream:
         stream.write(canonical(report) + b"\n")
@@ -300,7 +385,7 @@ def main(argv=None):
             run_shard(plan, allowed, args.shard, args.report)
         else:
             count = verify_reports(plan, load_reports(args.verify, plan["runAttempt"]))
-            print(f"PASS: exact Go race coverage across {SHARDS} shards and {count} packages; build/runtime and dedicated dense gates succeeded.")
+            print(f"PASS: exact Go race coverage across {SHARDS} shards and {count} packages, including both exact inventory groups; build/runtime and dedicated dense gates succeeded.")
         return 0
     except (OSError, ValueError, TypeError, OverflowError, RecursionError, KeyError):
         print("FAIL: incomplete or invalid Go race coverage; raw source/runtime output withheld.")

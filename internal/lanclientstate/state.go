@@ -310,6 +310,7 @@ func validDigest(s string) bool {
 }
 
 type diskRecord struct {
+	WindowsFullSoftwareUsed bool         `json:"windowsFullSoftwareUsed,omitempty"`
 	WindowsFullServicesUsed bool         `json:"windowsFullServicesUsed,omitempty"`
 	Version                 int          `json:"version"`
 	Binding                 string       `json:"binding"`
@@ -322,8 +323,22 @@ type diskPending struct {
 	Body     []byte `json:"body"`
 }
 
+// Versions preserve exact v1/v2 encoding for endpoints that have never enabled
+// software. v3 is an explicit irreversible software opt-in, independently of
+// the service marker; neither marker can be inferred from another scope.
+func validWindowsExtensionVersion(v diskRecord) bool {
+	switch v.Version {
+	case stateVersion:
+		return !v.WindowsFullServicesUsed && !v.WindowsFullSoftwareUsed
+	case 2:
+		return v.WindowsFullServicesUsed && !v.WindowsFullSoftwareUsed
+	case 3:
+		return v.WindowsFullSoftwareUsed
+	}
+	return false
+}
 func encodeRecord(v diskRecord) ([]byte, error) {
-	if v.Version == stateVersion && v.WindowsFullServicesUsed || v.Version == 2 && !v.WindowsFullServicesUsed {
+	if !validWindowsExtensionVersion(v) {
 		return nil, ErrCorrupt
 	}
 	raw, err := json.Marshal(v)
@@ -378,14 +393,33 @@ func decodeRecord(raw []byte) (diskRecord, error) {
 	if len(raw) == 0 || len(raw) > MaxStateBytes {
 		return v, ErrCorrupt
 	}
-	f, err := strictObject(raw, "version", "binding", "lastSequence", "pending")
+	var f map[string]json.RawMessage
+	var err error
+	for _, keys := range [][]string{
+		{"version", "binding", "lastSequence", "pending"},
+		{"version", "binding", "lastSequence", "pending", "windowsFullServicesUsed"},
+		{"version", "binding", "lastSequence", "pending", "windowsFullSoftwareUsed"},
+		{"version", "binding", "lastSequence", "pending", "windowsFullServicesUsed", "windowsFullSoftwareUsed"},
+	} {
+		f, err = strictObject(raw, keys...)
+		if err == nil {
+			break
+		}
+	}
 	if err != nil {
-		f, err = strictObject(raw, "version", "binding", "lastSequence", "pending", "windowsFullServicesUsed")
-		if err != nil || !scalar(f["windowsFullServicesUsed"], &v.WindowsFullServicesUsed) || !v.WindowsFullServicesUsed {
+		return v, ErrCorrupt
+	}
+	if raw, ok := f["windowsFullServicesUsed"]; ok {
+		if !scalar(raw, &v.WindowsFullServicesUsed) || !v.WindowsFullServicesUsed {
 			return v, ErrCorrupt
 		}
 	}
-	if !scalar(f["version"], &v.Version) || (v.Version != stateVersion && v.Version != 2 || (v.Version == 2) != v.WindowsFullServicesUsed) || !scalar(f["binding"], &v.Binding) || !validDigest(v.Binding) || !scalar(f["lastSequence"], &v.LastSequence) || v.LastSequence > MaxSequence {
+	if raw, ok := f["windowsFullSoftwareUsed"]; ok {
+		if !scalar(raw, &v.WindowsFullSoftwareUsed) || !v.WindowsFullSoftwareUsed {
+			return v, ErrCorrupt
+		}
+	}
+	if !scalar(f["version"], &v.Version) || !validWindowsExtensionVersion(v) || !scalar(f["binding"], &v.Binding) || !validDigest(v.Binding) || !scalar(f["lastSequence"], &v.LastSequence) || v.LastSequence > MaxSequence {
 		return v, ErrCorrupt
 	}
 	if bytes.Equal(bytes.TrimSpace(f["pending"]), []byte("null")) {

@@ -304,3 +304,24 @@ Pure omission, duplicate and metadata negative controls check that completion
 contract without a browser. Completion metadata alone does not prove pixel
 content, native collection or host acceptance. The helper's strict DOM assertions,
 the hosted run and independent pixel review remain the visual evidence.
+
+## Fleet identity browser coverage
+
+`node tests/e2e-review/fleet-identity-browser.mjs` retains five Linux real-store
+cases and adds one Windows UI interoperability case. Windows uses exported
+production-handler vectors at an authenticated GET transport seam, with invented
+Windows overview rows; it does not establish live Windows store or native-host
+acceptance. Synthetic device bindings and advancing response time are adapted,
+while original capture, receipt and expiry times remain unchanged. Real operator
+login, CSRF logout, unauthorized responses and existing request deadlines remain
+in effect.
+
+The Windows case checks compact hostname/IPv4 display, disclosed IPv6/interface
+scope, local hostname/dual-stack search, OS filtering, unavailable hostname with
+partial addresses, suspension clearing, exported expiry and real session loss.
+Four viewport screenshots cover English/German at 1440×1000 and 390×844. The
+existing fleet report/manifest pins source SHA, disclosure and PNG SHA-256; CI
+requires all six cases and all four Windows images. Browser execution and pixel
+inspection must occur on ordinary hosted browser CI before claiming acceptance.
+`node --test tests/e2e-review/windows-fleet-fixtures.test.mjs` checks the seam and
+wiring without a browser, network listener or native collection.

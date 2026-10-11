@@ -1,3 +1,4 @@
+import {windowsFullSoftwareLegacyRead} from './windows-full-software-browser.mjs';
 import {windowsFullServicesLegacyRead} from './windows-full-services-browser.mjs';
 import {createWindowsServiceHealthFixtureState,exerciseWindowsServiceHealth,windowsServiceHealthFixturePath,windowsServiceHealthStageNames} from './windows-service-health-browser.mjs';
 import {exerciseWindowsResources,windowsResourceBrowserFixture,windowsResourceFixtureMetric,windowsResourceStageNames} from './windows-resource-browser.mjs';
@@ -165,6 +166,10 @@ export async function windowsInventoryBrowserCase({pageAt,login,expect,base,shot
    try{return await windowsFullServicesLegacyRead({route,page,base,prefix,serverNow:await windowsFixtureResponseTime(page)});}
    catch{unexpected.push('unexpected-full-services-query');return route.abort('blockedbyclient');}
   }
+  if(url.pathname===prefix+'/windows-full-software/query'){
+   try{return await windowsFullSoftwareLegacyRead({route,page,base,prefix,serverNow:await windowsFixtureResponseTime(page)});}
+   catch{unexpected.push('unexpected-full-software-query');return route.abort('blockedbyclient');}
+  }
   if(request.method()!=='GET'&&!(request.method()==='POST'&&url.pathname==='/api/auth/login')){writes.push('write');return route.abort('blockedbyclient');}
   if(!syntheticPaths.has(url.pathname)){
    if(url.pathname.startsWith(prefix+'/')){unexpected.push('unexpected-device-read');return route.fulfill({status:404,contentType:'application/json',body:JSON.stringify({error:{code:'fixture_unexpected_route'}})});}
@@ -209,7 +214,7 @@ export async function windowsInventoryBrowserCase({pageAt,login,expect,base,shot
   mark('os-provenance');await exerciseWindowsOSProvenance({page,expect,locale,width,shot,disclosure:windowsInventoryFixtureDisclosure,observedAt:osObservedAt});
   mark('inventory');await page.getByRole('tab',{name:locale==='de'?'Inventar':'Inventory',exact:true}).click();
   for(const label of [locale==='de'?'Prozesse':'Processes',locale==='de'?'Dienste':'Services','Software','Hostname',locale==='de'?'Schnittstellen':'Interfaces']){
-   await page.getByRole('tab',{name:label,exact:true}).click();await expect(page.locator('.windows-inventory-table')).toBeVisible();
+   await page.getByRole('tab',{name:label,exact:true}).click();if(label==='Software')await page.locator('.windows-full-software-preview>summary').click();await expect(page.locator('.windows-inventory-table')).toBeVisible();
    expect(await page.locator('.windows-inventory').evaluate(el=>el.scrollWidth<=el.clientWidth+1)).toBe(true);
   }
   await expect(page.getByText('192.0.2.40',{exact:true})).toBeVisible();

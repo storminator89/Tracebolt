@@ -55,6 +55,9 @@ type Report struct {
 	WindowsFullServicesStatus     string `json:"windowsFullServicesStatus,omitempty"`
 	WindowsFullServicesSequence   uint64 `json:"windowsFullServicesSequence,omitempty"`
 	WindowsFullServicesOperations uint8  `json:"windowsFullServicesOperations,omitempty"`
+	WindowsFullSoftwareStatus     string `json:"windowsFullSoftwareStatus,omitempty"`
+	WindowsFullSoftwareSequence   uint64 `json:"windowsFullSoftwareSequence,omitempty"`
+	WindowsFullSoftwareOperations uint8  `json:"windowsFullSoftwareOperations,omitempty"`
 	WindowsEventContentStatus     string `json:"windowsEventContentStatus,omitempty"`
 	CachedUpdatesStatus           string `json:"cachedUpdatesStatus,omitempty"`
 	CachedUpdatesSequence         uint64 `json:"cachedUpdatesSequence,omitempty"`
@@ -130,10 +133,18 @@ func Run(ctx context.Context, m Material) (Report, error) {
 			return report, fullErr
 		}
 		defer fullServices.Close()
+		fullSoftware, fullErr := openWindowsFullSoftwareSender(m, state)
+		if fullErr != nil {
+			return report, fullErr
+		}
+		defer fullSoftware.Close()
 		report, err := runUsingState(ctx, m, state)
 		if ctx.Err() == nil {
 			report.WindowsEventContentStatus = runWindowsEventContentAttempt(ctx, events)
 			if e := runWindowsFullServicesAttempt(ctx, fullServices, &report); e != nil {
+				return report, e
+			}
+			if e := runWindowsFullSoftwareAttempt(ctx, fullSoftware, &report); e != nil {
 				return report, e
 			}
 		}

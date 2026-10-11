@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"io"
 	"net"
 	"net/http"
@@ -19,6 +20,7 @@ import (
 
 	"golang.org/x/crypto/argon2"
 	"localrmm/internal/api"
+	"localrmm/internal/enrollmentstore"
 	"localrmm/internal/lantrust"
 	"localrmm/internal/model"
 	"localrmm/internal/operatorauth"
@@ -184,9 +186,19 @@ func TestFullServicesBrowserFixtureRealProtectedPages(t *testing.T) {
 				t.Fatal("disabled rows")
 			}
 		case "near-expiry":
+			if p.Complete == nil || p.Complete.Manifest.RowCount != 1 || len(p.Rows) != 1 || p.CursorExpiresAt == nil || !p.CursorExpiresAt.Equal(p.Complete.Manifest.ExpiresAt) {
+				t.Fatal("dedicated near-expiry generation missing")
+			}
 			remaining := p.Complete.Manifest.ExpiresAt.Sub(p.ServerNow)
 			if remaining < 5*time.Second || remaining > 8*time.Second {
 				t.Fatal("near-expiry interval", remaining)
+			}
+			expires := p.Complete.Manifest.ExpiresAt
+			if e := enrollmentstore.ValidateWindowsFullServicesPageAt(p, expires.Add(-time.Nanosecond)); e != nil {
+				t.Fatal("original near-expiry deadline rejected early", e)
+			}
+			if e := enrollmentstore.ValidateWindowsFullServicesPageAt(p, expires); !errors.Is(e, windowsfullservices.ErrConflict) {
+				t.Fatal("original near-expiry deadline extended", e)
 			}
 		default:
 			if p.MatchingCount != 2051 {
