@@ -174,3 +174,13 @@ There is no general repair/reset, automatic upgrade or fresh-install resume.
 **Uninstall service** retains application files and identity/state, and does not
 revoke manager trust. Read [retained-state and removal behavior](windows-setup-preview.md#cancellation-retained-state-and-service-removal)
 before acting; never delete state to force another installation.
+
+## Caller-visible Users / Sessions source candidate
+
+A separate default-off [session and local join context](windows-session-context.md)
+adds fixed local WTS session IDs, bounded permitted user/domain labels, state and
+Console/RDP/unknown, plus independent domain/workgroup join status/name. The
+private EN/DE Users / Sessions view preserves exact original age, caller-visible
+counts and denied/unknown fields. Version11 does not promote older grants or
+wire bytes. Native acceptance and hosted visual verification remain separate;
+no account/session action or integrated remote desktop is included.

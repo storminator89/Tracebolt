@@ -89,3 +89,12 @@ native operational state, directional link speeds and numeric DNS/gateway
 configuration. See [the scope and remaining native gate](windows-adapter-context.md).
 Route tables and traffic byte/error counters remain open; source checks do not
 establish Windows runtime acceptance or a released feature.
+
+### Caller-visible session context
+
+[Users / Sessions](windows-session-context.md) is now a separate default-off
+source slice with bounded local WTS rows and independent local domain/workgroup
+join context, explicit personal-metadata disclosure and private EN/DE UI. It does
+not establish full account discovery or directory/connectivity health. Native
+acceptance and hosted visual verification remain pending; account management
+and integrated remote desktop remain deferred.

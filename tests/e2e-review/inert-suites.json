@@ -41,7 +41,8 @@
     "windows-resource-fixtures.test.mjs",
     "windows-service-health-fixtures.test.mjs",
     "windows-patch-context-fixtures.test.mjs",
-    "windows-security-posture-fixtures.test.mjs"
+    "windows-security-posture-fixtures.test.mjs",
+    "windows-session-context-fixtures.test.mjs"
   ],
   "excluded": []
 }

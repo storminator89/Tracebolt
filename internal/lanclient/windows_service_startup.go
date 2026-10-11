@@ -104,10 +104,10 @@ func appendWindowsServiceStartup(ctx context.Context, m Material, f frame, c win
 	return f, b, nil
 }
 func validateWindowsServiceStartupFrame(f frame, fields map[string]json.RawMessage) error {
-	if (f.SchemaVersion == FrameWindowsUpdatesVersion || (f.SchemaVersion == FrameWindowsAdapterContextVersion || (f.SchemaVersion == FrameWindowsPatchContextVersion || f.SchemaVersion == FrameWindowsSecurityPostureVersion))) && f.WindowsServiceStartup == nil && len(fields["windowsServiceStartup"]) == 0 {
+	if (f.SchemaVersion == FrameWindowsUpdatesVersion || (f.SchemaVersion == FrameWindowsAdapterContextVersion || (f.SchemaVersion == FrameWindowsPatchContextVersion || (f.SchemaVersion == FrameWindowsSecurityPostureVersion || f.SchemaVersion == FrameWindowsSessionContextVersion)))) && f.WindowsServiceStartup == nil && len(fields["windowsServiceStartup"]) == 0 {
 		return nil
 	}
-	if f.SchemaVersion != FrameWindowsServiceStartupVersion && f.SchemaVersion != FrameWindowsUpdatesVersion && f.SchemaVersion != FrameWindowsAdapterContextVersion && f.SchemaVersion != FrameWindowsPatchContextVersion && f.SchemaVersion != FrameWindowsSecurityPostureVersion {
+	if f.SchemaVersion != FrameWindowsServiceStartupVersion && f.SchemaVersion != FrameWindowsUpdatesVersion && f.SchemaVersion != FrameWindowsAdapterContextVersion && f.SchemaVersion != FrameWindowsPatchContextVersion && f.SchemaVersion != FrameWindowsSecurityPostureVersion && f.SchemaVersion != FrameWindowsSessionContextVersion {
 		if f.WindowsServiceStartup != nil || len(fields["windowsServiceStartup"]) != 0 {
 			return ErrState
 		}

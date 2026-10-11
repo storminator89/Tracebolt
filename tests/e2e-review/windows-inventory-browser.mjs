@@ -1,3 +1,4 @@
+import {exerciseWindowsSessionContext,windowsSessionContextBrowserFixture} from './windows-session-context-browser.mjs';
 import {exerciseWindowsSecurityPosture,windowsSecurityPostureBrowserFixture} from './windows-security-posture-browser.mjs';
 import {exerciseWindowsPatchContext} from './windows-patch-context-browser.mjs';
 import {windowsFullSoftwareLegacyRead} from './windows-full-software-browser.mjs';
@@ -28,7 +29,7 @@ const {windowsNetwork,windowsAdapterContext,windowsVolumes,windowsHealthDevice,w
 export const windowsInventoryCaseName='Synthetic Windows inventory shares device charts and explicit enrollment consent without Linux reads';
 export const windowsInventoryFixtureDisclosure='Real loopback HTTP-test fixture login with intercepted invented Windows inventory and resource history in the production UI. UI-only evidence; no native endpoint acceptance, collection, invitation, service installation or external request.';
 let stage='setup';
-const stages=new Set(['setup',...windowsEventContentStages,'login','overview','overview-history','os-provenance','inventory','storage','network','network-stale','network-expired','network-partial','network-empty','network-denied','network-unavailable','network-truncated','process-metrics','process-controls','service-software-controls','process-metrics-stale','process-metrics-expired','events',...windowsHealthStageNames,...windowsContactHistoryStageNames,...windowsCapacityStageNames,...windowsResourceStageNames,...windowsServiceHealthStageNames,'logs',...windowsLogsStageNames,'legacy','updates','patch-context','security','partial','denied','enrollment','access-loss']);
+const stages=new Set(['setup',...windowsEventContentStages,'login','overview','overview-history','os-provenance','inventory','storage','network','network-stale','network-expired','network-partial','network-empty','network-denied','network-unavailable','network-truncated','process-metrics','process-controls','service-software-controls','process-metrics-stale','process-metrics-expired','events',...windowsHealthStageNames,...windowsContactHistoryStageNames,...windowsCapacityStageNames,...windowsResourceStageNames,...windowsServiceHealthStageNames,'logs',...windowsLogsStageNames,'legacy','updates','patch-context','security','sessions','partial','denied','enrollment','access-loss']);
 export const windowsInventoryFailureStage=()=>stages.has(stage)?stage:'setup';
 const mark=value=>{stage=value;};
 export function windowsBrowserFixture(now,phase='fresh',networkPhaseAt=now,logsPhaseAt=now){
@@ -191,6 +192,7 @@ export async function windowsInventoryBrowserCase({pageAt,login,expect,base,shot
   const reply=data=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(data)}),at=await windowsFixtureResponseTime(page),device=windowsHealthBrowserDevice(at,phase,osObservedAt??undefined);
   if(url.pathname===prefix+'/windows-inventory'){
    if(phase==='session')return route.fulfill({status:401,contentType:'application/json',body:JSON.stringify({error:{code:'authentication_required'}})});
+   if(phase==='sessions')return reply(windowsSessionContextBrowserFixture({serverNow:at,capturedAt:updatesCapturedAt}));
    if(phase==='security')return reply(windowsSecurityPostureBrowserFixture({serverNow:at,capturedAt:updatesCapturedAt}));
    if(phase==='updates')return reply(windowsUpdatesBrowserFixture({serverNow:at,capturedAt:updatesCapturedAt}));
    return reply(windowsBrowserFixture(at,phase,networkPhaseAt??at,logsPhaseAt??at));
@@ -331,6 +333,7 @@ export async function windowsInventoryBrowserCase({pageAt,login,expect,base,shot
   await exerciseWindowsUpdates({page,expect,locale,width,shot});
   mark('patch-context');await exerciseWindowsPatchContext({page,expect,locale,width,shot});
   mark('security');phase='security';await page.getByRole('button',{name:locale==='de'?'Windows-Inventar aktualisieren':'Refresh Windows inventory',exact:true}).click();await exerciseWindowsSecurityPosture({page,expect,locale,width,shot});
+  mark('sessions');phase='sessions';await page.getByRole('button',{name:locale==='de'?'Windows-Inventar aktualisieren':'Refresh Windows inventory',exact:true}).click();await exerciseWindowsSessionContext({page,expect,locale,width,shot});
   mark('legacy');phase='legacy';await page.getByRole('button',{name:locale==='de'?'Windows-Inventar aktualisieren':'Refresh Windows inventory',exact:true}).click();
   await page.getByRole('tab',{name:locale==='de'?'Speicher':'Storage',exact:true}).click();
   await expect(page.getByText(locale==='de'?/Eine separate lokale Zustimmung ist erforderlich/:/Separate local consent is required/)).toBeVisible();
