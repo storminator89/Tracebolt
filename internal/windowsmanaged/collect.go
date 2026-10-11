@@ -218,12 +218,16 @@ func trimProcesses(s *Section[Process], limit int, selfPID uint32) error {
 // timestamps, provenance, or a native failure. Every step strictly removes a
 // row; the record caps bound both encoding work and the number of iterations.
 func fitBytesWithSelfPID(s *Snapshot, selfPID uint32) error {
+	return fitPreviewBytesWithSelfPID(s, selfPID, MaxSnapshotBytes)
+}
+
+func fitPreviewBytesWithSelfPID(s *Snapshot, selfPID uint32, max int) error {
 	for {
 		b, err := json.Marshal(s)
 		if err != nil {
 			return ErrInvalidSnapshot
 		}
-		if len(b) <= MaxSnapshotBytes {
+		if len(b) <= max {
 			return nil
 		}
 		rows := []any{s.Processes.Rows, s.Services.Rows, s.Software.Rows, s.Network.Rows}
@@ -320,4 +324,26 @@ func deviceFromReport(r windowsinventory.Report) model.Device {
 		model.Capability{ID: "logs", Name: "Event content", Status: "unsupported", Detail: "Event content is outside this profile."},
 		model.Capability{ID: "remote_actions", Name: "Remote actions", Status: "unsupported", Detail: "Service actions and updates are outside this profile."})
 	return d
+}
+
+// FitPreviewBudgetWithSelfPID reserves space for an explicitly selected newer
+// frame before any row-bound collector is called. Counts, original capture and
+// native failure provenance survive; an admitted self PID cannot be dropped.
+// The old collector continues to use its exact MaxSnapshotBytes ceiling.
+func FitPreviewBudgetWithSelfPID(s Snapshot, max int, selfPID uint32) (Snapshot, error) {
+	if max <= 0 || max > MaxSnapshotBytes || Validate(s) != nil {
+		return Snapshot{}, ErrInvalidSnapshot
+	}
+	raw, e := json.Marshal(s)
+	if e != nil {
+		return Snapshot{}, ErrInvalidSnapshot
+	}
+	copy, e := Decode(raw)
+	if e != nil {
+		return Snapshot{}, e
+	}
+	if e = fitPreviewBytesWithSelfPID(&copy, selfPID, max); e != nil {
+		return Snapshot{}, e
+	}
+	return copy, Validate(copy)
 }

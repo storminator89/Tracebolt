@@ -1,3 +1,4 @@
+import {windowsFullProcessesFixtureQuery} from './windows-full-processes-browser.mjs';
 /** Source-only browser gate for real SQLite-backed operator pages. Native Windows
  * capture, endpoint consent and host/service operations are outside this gate. */
 import {createRequire} from 'node:module';
@@ -75,6 +76,11 @@ export async function windowsFullServicesBrowserCase({page,expect,base,login,sho
   // Navigation visits Software while retiring a held service page. Its exact
   // protected query is a read, not an unexpected mutation; production still
   // enforces the real session/CSRF and independent software scope.
+  if(url.pathname===prefix+'/windows-full-processes/query'){
+   const query=windowsFullProcessesFixtureQuery({pathname:url.pathname,search:url.search,method:request.method(),headers:request.headers(),raw:request.postData()},prefix);
+   if(!query){unexpected.push('invalid-process-navigation-query');return route.abort('blockedbyclient');}
+   return route.continue();
+  }
   if(url.pathname===prefix+'/windows-full-software/query'){
    const query=windowsFullSoftwareFixtureQuery({pathname:url.pathname,search:url.search,method:request.method(),headers:request.headers(),raw:request.postData()},prefix);
    if(!query){unexpected.push('invalid-navigation-query');return route.abort('blockedbyclient');}

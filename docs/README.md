@@ -21,6 +21,7 @@ have their own installation guides and narrower feature sets.
   [Windows identity](windows-fleet-identity.md), [resource history](resource-history.md).
 - **Inventory:** browse/search the collected generation. Linux has separate
   [process/mount](complete-overview-extension.md) and package data; Windows has
+  [process snapshots](windows-full-processes-contract.md),
   [services](windows-full-services-contract.md) and
   [machine software](windows-full-software-contract.md). A bounded sample is not
   a complete inventory.
@@ -28,7 +29,7 @@ have their own installation guides and narrower feature sets.
   or approved [retained service history](retained-journal-browsing.md). Windows
   offers [event-header browsing](windows-logs-sample-browser.md) and separately
   approved [selected messages](windows-event-content-runtime.md).
-- **Storage:** [drive-letter mappings and physical-disk provider context](windows-storage-context.md), with independent source coverage and no inferred disk-health verdict.
+- **Storage:** [drive-letter mappings and physical-disk provider context](windows-storage-context.md), plus separately consented [aggregate PerfDisk I/O](windows-storage-io.md), with independent source coverage and no inferred disk-health verdict.
 - **Updates and security:** inspect [cached APT candidates](complete-cached-updates-extension.md)
   and [Linux CVE coverage](linux-cve-warnings.md), or Windows
   [build/history/reboot context](windows-patch-context.md),

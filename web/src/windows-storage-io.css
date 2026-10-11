@@ -1,0 +1,22 @@
+.windows-storage-io{min-width:0;margin-top:24px;padding-top:20px;border-top:1px solid var(--line)}
+.windows-storage-io .windows-inventory-section-header{align-items:flex-start}
+.windows-storage-io h3{display:flex;gap:7px;align-items:center;min-width:0;overflow-wrap:anywhere}
+.windows-storage-io svg{color:var(--secondary);flex-shrink:0}
+.windows-storage-io-quality{font-size:11px;color:var(--secondary);white-space:nowrap}
+.windows-storage-io-window{display:flex;flex-wrap:wrap;gap:4px 18px;color:var(--secondary);font-size:11px;line-height:1.6;margin-top:6px}
+.windows-storage-io-window>span{min-width:0;overflow-wrap:anywhere}
+.windows-storage-io-groups{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px 28px;margin-top:14px}
+.windows-storage-io-groups>section{min-width:0}
+.windows-storage-io h4{margin:0;padding-bottom:8px;border-bottom:1px solid var(--line);font-size:12px;font-weight:600}
+.windows-storage-io dl{margin:0;font-size:12px;line-height:1.5}
+.windows-storage-io dl>div{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px;padding:6px 0}
+.windows-storage-io dt{color:var(--secondary);overflow-wrap:anywhere}
+.windows-storage-io dd{margin:0;font-weight:500;min-width:0;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+.windows-storage-io-missing,.windows-storage-io-including{color:var(--secondary);font-size:11px;font-weight:400}
+.windows-storage-io-including{margin:3px 0 0;line-height:1.5}
+.windows-storage-io-details{margin-top:14px;padding-top:12px;border-top:1px solid var(--line);font-size:12px;line-height:1.6;color:var(--secondary)}
+.windows-storage-io-details summary{cursor:pointer;color:var(--text);font-weight:600}
+.windows-storage-io-details summary:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+.windows-storage-io-details p{margin:9px 0}
+.windows-storage-io-details dd{color:var(--text)}
+@media(max-width:600px){.windows-storage-io-groups{grid-template-columns:1fr;gap:14px}.windows-storage-io .windows-inventory-section-header{flex-wrap:wrap}.windows-storage-io-quality{margin-left:23px}.windows-storage-io dl>div{grid-template-columns:minmax(0,1fr) minmax(0,1.1fr)}}

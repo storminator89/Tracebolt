@@ -12,10 +12,12 @@ import (
 	"localrmm/internal/windowsnetwork"
 	"localrmm/internal/windowspatchcontext"
 	"localrmm/internal/windowsprocessmetrics"
+	"localrmm/internal/windowsresourcecontext"
 	"localrmm/internal/windowssecurity"
 	"localrmm/internal/windowssecuritycoverage"
 	"localrmm/internal/windowssessions"
 	"localrmm/internal/windowsstorage"
+	"localrmm/internal/windowsstorageio"
 	"localrmm/internal/windowsupdates"
 	"localrmm/internal/windowsvolumes"
 	"time"
@@ -29,6 +31,8 @@ type WindowsInventoryView struct {
 	HardwareContext     *windowshardware.Snapshot              `json:"hardwareContext,omitempty"`
 	StorageContext      *windowsstorage.Snapshot               `json:"storageContext,omitempty"`
 	SecurityCoverage    *windowssecuritycoverage.Snapshot      `json:"securityCoverage,omitempty"`
+	ResourceContext     *windowsresourcecontext.Snapshot       `json:"resourceContext,omitempty"`
+	StorageIO           *windowsstorageio.Snapshot             `json:"storageIO,omitempty"`
 	SecurityPosture     *windowssecurity.Snapshot              `json:"securityPosture,omitempty"`
 	SchemaVersion       string                                 `json:"schemaVersion"`
 	DeviceID            string                                 `json:"deviceId"`
@@ -110,6 +114,8 @@ func (s *Store) WindowsInventoryView(ctx context.Context, id string, now time.Ti
 			out.HardwareContext = frame.WindowsHardwareContext
 			out.StorageContext = frame.WindowsStorageContext
 			out.SecurityCoverage = frame.WindowsSecurityCoverage
+			out.ResourceContext = frame.WindowsResourceContext
+			out.StorageIO = frame.WindowsStorageIO
 			retained, err := readRetainedWindowsContext(ctx, t, identity.InvitationID, frame)
 			if err != nil {
 				return err
@@ -137,6 +143,8 @@ func (s *Store) WindowsInventoryView(ctx context.Context, id string, now time.Ti
 				out.HardwareContext = nil
 				out.StorageContext = nil
 				out.SecurityCoverage = nil
+				out.ResourceContext = nil
+				out.StorageIO = nil
 				out.RetainedContext = nil
 			}
 		}
@@ -156,6 +164,8 @@ func (s *Store) WindowsInventoryView(ctx context.Context, id string, now time.Ti
 			out.HardwareContext = nil
 			out.StorageContext = nil
 			out.SecurityCoverage = nil
+			out.ResourceContext = nil
+			out.StorageIO = nil
 			out.RetainedContext = nil
 		}
 		return nil
@@ -189,6 +199,8 @@ func (v WindowsInventoryView) RecheckAt(now time.Time) (WindowsInventoryView, er
 		v.HardwareContext = nil
 		v.StorageContext = nil
 		v.SecurityCoverage = nil
+		v.ResourceContext = nil
+		v.StorageIO = nil
 		v.RetainedContext = nil
 		return v, nil
 	}
@@ -219,6 +231,8 @@ func (v WindowsInventoryView) RecheckAt(now time.Time) (WindowsInventoryView, er
 			v.HardwareContext = nil
 			v.StorageContext = nil
 			v.SecurityCoverage = nil
+			v.ResourceContext = nil
+			v.StorageIO = nil
 			v.RetainedContext = nil
 		}
 	}
@@ -260,6 +274,12 @@ func (v WindowsInventoryView) RecheckAt(now time.Time) (WindowsInventoryView, er
 	}
 	if v.SecurityCoverage != nil && (v.Snapshot == nil || now.Sub(v.SecurityCoverage.CollectedAt) >= 24*time.Hour) {
 		v.SecurityCoverage = nil
+	}
+	if v.ResourceContext != nil && (v.Snapshot == nil || now.Sub(v.ResourceContext.CollectedAt) >= 24*time.Hour) {
+		v.ResourceContext = nil
+	}
+	if v.StorageIO != nil && (v.Snapshot == nil || now.Sub(v.StorageIO.CollectedAt) >= 24*time.Hour) {
+		v.StorageIO = nil
 	}
 	if v.RetainedContext != nil {
 		copy := *v.RetainedContext

@@ -207,7 +207,7 @@ func TestFreshReadAdminV8ReconcilePinsSecurityCoverageDigestAndNeverPromotesRece
 			var receipt installReceipt
 			json.Unmarshal(f.intent, &intent)
 			json.Unmarshal(f.receipt, &receipt)
-			consent := freshReadAdminSetupConsent(false)
+			consent := historicalReadAdminV8Consent()
 			intent.Consent, receipt.ReadSetup.Consent = consent, consent
 			receipt.Version = 6
 			receipt.ReadSetup.Grants.AppliedScopes = consent.Scopes[1:]
@@ -249,6 +249,230 @@ func TestFreshReadAdminV8ReconcilePinsSecurityCoverageDigestAndNeverPromotesRece
 			}
 			json.Unmarshal(f.receipt, &receipt)
 			if receipt.Version != 6 || !completeReadSetup(receipt) {
+				t.Fatal("fresh receipt version changed")
+			}
+		})
+	}
+}
+
+func TestFreshReadAdminV9ReconcilePinsFullProcessesDigestAndNeverPromotesReceipts(t *testing.T) {
+	for _, failure := range []string{"", "disabled", "identity", "changed-identity", "full-processes-missing", "full-processes-changed", "full-processes-changed-second", "old-receipt"} {
+		t.Run(failure, func(t *testing.T) {
+			f := reconcileSetupCase(t)
+			var intent readSetupIntent
+			var receipt installReceipt
+			json.Unmarshal(f.intent, &intent)
+			json.Unmarshal(f.receipt, &receipt)
+			consent := historicalReadAdminV9Consent()
+			intent.Consent, receipt.ReadSetup.Consent = consent, consent
+			receipt.Version = 7
+			receipt.ReadSetup.Grants.AppliedScopes = consent.Scopes[1:]
+			digests := []lanclient.WindowsCapabilityGrantDigest{}
+			for _, scope := range consent.Scopes[1:] {
+				digests = append(digests, lanclient.WindowsCapabilityGrantDigest{Scope: scope, SHA256: strings.Repeat("d", 64)})
+			}
+			receipt.ReadSetup.GrantDigests = digests
+			if failure == "old-receipt" {
+				receipt.Version = 3
+			}
+			f.intent, _ = json.Marshal(intent)
+			f.receipt, _ = json.Marshal(receipt)
+			f.fail, f.disabled = failure, failure == "disabled"
+			h := f.hooks()
+			h.grantDigests = func(_ string, c lanclient.WindowsCapabilityConsent) ([]lanclient.WindowsCapabilityGrantDigest, error) {
+				f.digestCalls++
+				if c.SchemaVersion != consent.SchemaVersion {
+					t.Fatal("consent changed")
+				}
+				got := append([]lanclient.WindowsCapabilityGrantDigest(nil), digests...)
+				if failure == "full-processes-missing" {
+					got = got[:14]
+				}
+				if failure == "full-processes-changed" || failure == "full-processes-changed-second" && f.digestCalls > 1 {
+					got[14].SHA256 = strings.Repeat("e", 64)
+				}
+				return got, nil
+			}
+			result, e := reconcileReadObservation(context.Background(), f.intent, f.receipt, h)
+			if failure != "" {
+				if e == nil || f.writes != 0 {
+					t.Fatal("unproved fresh completion written", failure)
+				}
+				return
+			}
+			if e != nil || !result.ReceiptFinalized || f.writes != 1 {
+				t.Fatal("fresh receipt7 effect not finalized", e)
+			}
+			json.Unmarshal(f.receipt, &receipt)
+			if receipt.Version != 7 || !completeReadSetup(receipt) {
+				t.Fatal("fresh receipt version changed")
+			}
+		})
+	}
+}
+
+func TestFreshReadAdminV10ReconcilePinsNetworkContextDigestAndNeverPromotesReceipts(t *testing.T) {
+	for _, failure := range []string{"", "disabled", "identity", "changed-identity", "network-context-missing", "network-context-changed", "network-context-changed-second", "old-receipt"} {
+		t.Run(failure, func(t *testing.T) {
+			f := reconcileSetupCase(t)
+			var intent readSetupIntent
+			var receipt installReceipt
+			json.Unmarshal(f.intent, &intent)
+			json.Unmarshal(f.receipt, &receipt)
+			consent := historicalReadAdminV10Consent()
+			intent.Consent, receipt.ReadSetup.Consent = consent, consent
+			receipt.Version = 8
+			receipt.ReadSetup.Grants.AppliedScopes = consent.Scopes[1:]
+			digests := []lanclient.WindowsCapabilityGrantDigest{}
+			for _, scope := range consent.Scopes[1:] {
+				digests = append(digests, lanclient.WindowsCapabilityGrantDigest{Scope: scope, SHA256: strings.Repeat("d", 64)})
+			}
+			receipt.ReadSetup.GrantDigests = digests
+			if failure == "old-receipt" {
+				receipt.Version = 3
+			}
+			f.intent, _ = json.Marshal(intent)
+			f.receipt, _ = json.Marshal(receipt)
+			f.fail, f.disabled = failure, failure == "disabled"
+			h := f.hooks()
+			h.grantDigests = func(_ string, c lanclient.WindowsCapabilityConsent) ([]lanclient.WindowsCapabilityGrantDigest, error) {
+				f.digestCalls++
+				if c.SchemaVersion != consent.SchemaVersion {
+					t.Fatal("consent changed")
+				}
+				got := append([]lanclient.WindowsCapabilityGrantDigest(nil), digests...)
+				if failure == "network-context-missing" {
+					got = got[:15]
+				}
+				if failure == "network-context-changed" || failure == "network-context-changed-second" && f.digestCalls > 1 {
+					got[15].SHA256 = strings.Repeat("e", 64)
+				}
+				return got, nil
+			}
+			result, e := reconcileReadObservation(context.Background(), f.intent, f.receipt, h)
+			if failure != "" {
+				if e == nil || f.writes != 0 {
+					t.Fatal("unproved fresh completion written", failure)
+				}
+				return
+			}
+			if e != nil || !result.ReceiptFinalized || f.writes != 1 {
+				t.Fatal("fresh receipt8 effect not finalized", e)
+			}
+			json.Unmarshal(f.receipt, &receipt)
+			if receipt.Version != 8 || !completeReadSetup(receipt) {
+				t.Fatal("fresh receipt version changed")
+			}
+		})
+	}
+}
+
+func TestFreshReadAdminV11ReconcilePinsResourceContextDigestAndNeverPromotesReceipts(t *testing.T) {
+	for _, failure := range []string{"", "disabled", "identity", "changed-identity", "resource-context-missing", "resource-context-changed", "resource-context-changed-second", "old-receipt"} {
+		t.Run(failure, func(t *testing.T) {
+			f := reconcileSetupCase(t)
+			var intent readSetupIntent
+			var receipt installReceipt
+			json.Unmarshal(f.intent, &intent)
+			json.Unmarshal(f.receipt, &receipt)
+			consent := historicalReadAdminV11Consent()
+			intent.Consent, receipt.ReadSetup.Consent = consent, consent
+			receipt.Version = 9
+			receipt.ReadSetup.Grants.AppliedScopes = consent.Scopes[1:]
+			digests := []lanclient.WindowsCapabilityGrantDigest{}
+			for _, scope := range consent.Scopes[1:] {
+				digests = append(digests, lanclient.WindowsCapabilityGrantDigest{Scope: scope, SHA256: strings.Repeat("d", 64)})
+			}
+			receipt.ReadSetup.GrantDigests = digests
+			if failure == "old-receipt" {
+				receipt.Version = 3
+			}
+			f.intent, _ = json.Marshal(intent)
+			f.receipt, _ = json.Marshal(receipt)
+			f.fail, f.disabled = failure, failure == "disabled"
+			h := f.hooks()
+			h.grantDigests = func(_ string, c lanclient.WindowsCapabilityConsent) ([]lanclient.WindowsCapabilityGrantDigest, error) {
+				f.digestCalls++
+				if c.SchemaVersion != consent.SchemaVersion {
+					t.Fatal("consent changed")
+				}
+				got := append([]lanclient.WindowsCapabilityGrantDigest(nil), digests...)
+				if failure == "resource-context-missing" {
+					got = got[:16]
+				}
+				if failure == "resource-context-changed" || failure == "resource-context-changed-second" && f.digestCalls > 1 {
+					got[16].SHA256 = strings.Repeat("e", 64)
+				}
+				return got, nil
+			}
+			result, e := reconcileReadObservation(context.Background(), f.intent, f.receipt, h)
+			if failure != "" {
+				if e == nil || f.writes != 0 {
+					t.Fatal("unproved fresh completion written", failure)
+				}
+				return
+			}
+			if e != nil || !result.ReceiptFinalized || f.writes != 1 {
+				t.Fatal("fresh receipt9 effect not finalized", e)
+			}
+			json.Unmarshal(f.receipt, &receipt)
+			if receipt.Version != 9 || !completeReadSetup(receipt) {
+				t.Fatal("fresh receipt version changed")
+			}
+		})
+	}
+}
+
+func TestFreshReadAdminV12ReconcilePinsStorageIODigestAndNeverPromotesReceipts(t *testing.T) {
+	for _, failure := range []string{"", "disabled", "identity", "changed-identity", "storage-io-missing", "storage-io-changed", "storage-io-changed-second", "old-receipt"} {
+		t.Run(failure, func(t *testing.T) {
+			f := reconcileSetupCase(t)
+			var intent readSetupIntent
+			var receipt installReceipt
+			json.Unmarshal(f.intent, &intent)
+			json.Unmarshal(f.receipt, &receipt)
+			consent := freshReadAdminSetupConsent(false)
+			intent.Consent, receipt.ReadSetup.Consent = consent, consent
+			receipt.Version = 10
+			receipt.ReadSetup.Grants.AppliedScopes = consent.Scopes[1:]
+			digests := []lanclient.WindowsCapabilityGrantDigest{}
+			for _, scope := range consent.Scopes[1:] {
+				digests = append(digests, lanclient.WindowsCapabilityGrantDigest{Scope: scope, SHA256: strings.Repeat("d", 64)})
+			}
+			receipt.ReadSetup.GrantDigests = digests
+			if failure == "old-receipt" {
+				receipt.Version = 3
+			}
+			f.intent, _ = json.Marshal(intent)
+			f.receipt, _ = json.Marshal(receipt)
+			f.fail, f.disabled = failure, failure == "disabled"
+			h := f.hooks()
+			h.grantDigests = func(_ string, c lanclient.WindowsCapabilityConsent) ([]lanclient.WindowsCapabilityGrantDigest, error) {
+				f.digestCalls++
+				if c.SchemaVersion != consent.SchemaVersion {
+					t.Fatal("consent changed")
+				}
+				got := append([]lanclient.WindowsCapabilityGrantDigest(nil), digests...)
+				if failure == "storage-io-missing" {
+					got = got[:17]
+				}
+				if failure == "storage-io-changed" || failure == "storage-io-changed-second" && f.digestCalls > 1 {
+					got[17].SHA256 = strings.Repeat("e", 64)
+				}
+				return got, nil
+			}
+			result, e := reconcileReadObservation(context.Background(), f.intent, f.receipt, h)
+			if failure != "" {
+				if e == nil || f.writes != 0 {
+					t.Fatal("unproved fresh completion written", failure)
+				}
+				return
+			}
+			if e != nil || !result.ReceiptFinalized || f.writes != 1 {
+				t.Fatal("fresh receipt10 effect not finalized", e)
+			}
+			json.Unmarshal(f.receipt, &receipt)
+			if receipt.Version != 10 || !completeReadSetup(receipt) {
 				t.Fatal("fresh receipt version changed")
 			}
 		})

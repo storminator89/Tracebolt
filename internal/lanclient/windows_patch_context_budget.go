@@ -5,10 +5,12 @@ import (
 	"errors"
 	"localrmm/internal/windowshardware"
 	"localrmm/internal/windowspatchcontext"
+	"localrmm/internal/windowsresourcecontext"
 	"localrmm/internal/windowssecurity"
 	"localrmm/internal/windowssecuritycoverage"
 	"localrmm/internal/windowssessions"
 	"localrmm/internal/windowsstorage"
+	"localrmm/internal/windowsstorageio"
 	"localrmm/internal/windowsupdates"
 	"time"
 )
@@ -225,6 +227,54 @@ func securityCoverageWithBudget(collect securityCoverageCollector) securityCover
 		}
 		if errors.Is(bounded.Err(), context.DeadlineExceeded) && (e == nil || errors.Is(e, context.DeadlineExceeded) || errors.Is(e, context.Canceled)) {
 			return windowssecuritycoverage.Empty(r, windowssecuritycoverage.ErrBudget.Error()), nil
+		}
+		return s, e
+	}
+}
+
+func resourceContextWithBudget(collect resourceContextCollector) resourceContextCollector {
+	if collect == nil {
+		return nil
+	}
+	return func(ctx context.Context, r windowsresourcecontext.Request) (windowsresourcecontext.Snapshot, error) {
+		if e := ctx.Err(); e != nil {
+			return windowsresourcecontext.Snapshot{}, e
+		}
+		bounded, cancel, run := patchOptionalContext(ctx)
+		defer cancel()
+		if !run {
+			return windowsresourcecontext.Empty(r, windowsresourcecontext.ErrBudget.Error()), nil
+		}
+		s, e := collect(bounded, r)
+		if ctx.Err() != nil {
+			return windowsresourcecontext.Snapshot{}, ctx.Err()
+		}
+		if errors.Is(bounded.Err(), context.DeadlineExceeded) && (e == nil || errors.Is(e, context.DeadlineExceeded) || errors.Is(e, context.Canceled)) {
+			return windowsresourcecontext.Empty(r, windowsresourcecontext.ErrBudget.Error()), nil
+		}
+		return s, e
+	}
+}
+
+func storageIOWithBudget(collect storageIOCollector) storageIOCollector {
+	if collect == nil {
+		return nil
+	}
+	return func(ctx context.Context, r windowsstorageio.Request) (windowsstorageio.Snapshot, error) {
+		if e := ctx.Err(); e != nil {
+			return windowsstorageio.Snapshot{}, e
+		}
+		bounded, cancel, run := patchOptionalContext(ctx)
+		defer cancel()
+		if !run {
+			return windowsstorageio.Empty(r, windowsstorageio.ErrBudget.Error()), nil
+		}
+		s, e := collect(bounded, r)
+		if ctx.Err() != nil {
+			return windowsstorageio.Snapshot{}, ctx.Err()
+		}
+		if errors.Is(bounded.Err(), context.DeadlineExceeded) && (e == nil || errors.Is(e, context.DeadlineExceeded) || errors.Is(e, context.Canceled)) {
+			return windowsstorageio.Empty(r, windowsstorageio.ErrBudget.Error()), nil
 		}
 		return s, e
 	}

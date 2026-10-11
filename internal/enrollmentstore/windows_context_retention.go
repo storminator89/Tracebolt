@@ -11,15 +11,17 @@ import (
 	"localrmm/internal/lanstore"
 	"localrmm/internal/windowshardware"
 	"localrmm/internal/windowspatchcontext"
+	"localrmm/internal/windowsresourcecontext"
 	"localrmm/internal/windowssecurity"
 	"localrmm/internal/windowssecuritycoverage"
 	"localrmm/internal/windowssessions"
 	"localrmm/internal/windowsstorage"
+	"localrmm/internal/windowsstorageio"
 	"localrmm/internal/windowsupdates"
 	"time"
 )
 
-// Only six bounded context snapshots, never a history or synthetic generation.
+// Only bounded independent context snapshots, never a history or synthetic generation.
 // This optional cache is not authority: the latest authenticated frame must
 // still carry the same grant. Missing cache state loses availability only.
 const windowsContextRetentionSchema = `CREATE TABLE enrollment_windows_context_retained(invitation_id TEXT PRIMARY KEY NOT NULL REFERENCES enrollment_credentials(invitation_id) ON DELETE CASCADE, body BLOB NOT NULL CHECK(length(body)>0 AND length(body)<=81920)) STRICT`
@@ -33,10 +35,12 @@ type WindowsContextRetained struct {
 	HardwareContext  *windowshardware.Snapshot         `json:"hardwareContext,omitempty"`
 	StorageContext   *windowsstorage.Snapshot          `json:"storageContext,omitempty"`
 	SecurityCoverage *windowssecuritycoverage.Snapshot `json:"securityCoverage,omitempty"`
+	ResourceContext  *windowsresourcecontext.Snapshot  `json:"resourceContext,omitempty"`
+	StorageIO        *windowsstorageio.Snapshot        `json:"storageIO,omitempty"`
 }
 
 func (v WindowsContextRetained) empty() bool {
-	return v.Updates == nil && v.PatchContext == nil && v.SecurityPosture == nil && v.SessionContext == nil && v.HardwareContext == nil && v.StorageContext == nil && v.SecurityCoverage == nil
+	return v.Updates == nil && v.PatchContext == nil && v.SecurityPosture == nil && v.SessionContext == nil && v.HardwareContext == nil && v.StorageContext == nil && v.SecurityCoverage == nil && v.ResourceContext == nil && v.StorageIO == nil
 }
 func contextObserved(q string) bool { return q == "observed" || q == "partial" }
 func usefulPatch(s *windowspatchcontext.Snapshot) bool {
@@ -141,6 +145,12 @@ func validRetainedContext(v WindowsContextRetained, f lanstore.Frame) bool {
 	if s := v.SecurityCoverage; s != nil && (f.WindowsSecurityCoverage == nil || windowssecuritycoverage.Validate(*s) != nil || !usefulCoverage(s) || !valid(s.GrantID, f.WindowsSecurityCoverage.GrantID, s.CollectedAt)) {
 		return false
 	}
+	if s := v.ResourceContext; s != nil && (f.WindowsResourceContext == nil || windowsresourcecontext.Validate(*s) != nil || !usefulResource(s) || !valid(s.GrantID, f.WindowsResourceContext.GrantID, s.CollectedAt)) {
+		return false
+	}
+	if s := v.StorageIO; s != nil && (f.WindowsStorageIO == nil || windowsstorageio.Validate(*s) != nil || !usefulStorageIO(s) || !valid(s.GrantID, f.WindowsStorageIO.GrantID, s.CollectedAt)) {
+		return false
+	}
 	return true
 }
 func readRetainedWindowsContext(ctx context.Context, t *transaction, id string, f lanstore.Frame) (WindowsContextRetained, error) {
@@ -185,6 +195,12 @@ func (v *WindowsContextRetained) expire(now time.Time) {
 	if v.SecurityCoverage != nil && now.Sub(v.SecurityCoverage.CollectedAt) >= 24*time.Hour {
 		v.SecurityCoverage = nil
 	}
+	if v.ResourceContext != nil && now.Sub(v.ResourceContext.CollectedAt) >= 24*time.Hour {
+		v.ResourceContext = nil
+	}
+	if v.StorageIO != nil && now.Sub(v.StorageIO.CollectedAt) >= 24*time.Hour {
+		v.StorageIO = nil
+	}
 }
 func retainWindowsContext(ctx context.Context, t *transaction, id string, old, current lanstore.Frame, now time.Time) error {
 	if current.WindowsInventory == nil {
@@ -217,6 +233,12 @@ func retainWindowsContext(ctx context.Context, t *transaction, id string, old, c
 	if current.WindowsSecurityCoverage == nil || v.SecurityCoverage != nil && v.SecurityCoverage.GrantID != current.WindowsSecurityCoverage.GrantID {
 		v.SecurityCoverage = nil
 	}
+	if current.WindowsResourceContext == nil || v.ResourceContext != nil && v.ResourceContext.GrantID != current.WindowsResourceContext.GrantID {
+		v.ResourceContext = nil
+	}
+	if current.WindowsStorageIO == nil || v.StorageIO != nil && v.StorageIO.GrantID != current.WindowsStorageIO.GrantID {
+		v.StorageIO = nil
+	}
 	if s := current.WindowsUpdates; s != nil && contextObserved(s.Quality) {
 		v.Updates = s
 	}
@@ -237,6 +259,12 @@ func retainWindowsContext(ctx context.Context, t *transaction, id string, old, c
 	}
 	if s := current.WindowsSecurityCoverage; usefulCoverage(s) {
 		v.SecurityCoverage = s
+	}
+	if s := current.WindowsResourceContext; usefulResource(s) {
+		v.ResourceContext = s
+	}
+	if s := current.WindowsStorageIO; usefulStorageIO(s) {
+		v.StorageIO = s
 	}
 	v.expire(now)
 	v.fitRetentionBudget()
@@ -291,6 +319,12 @@ func retainedWindowsContextView(v WindowsContextRetained, f lanstore.Frame, now 
 	}
 	if v.SecurityCoverage != nil && f.WindowsSecurityCoverage != nil && !v.SecurityCoverage.CollectedAt.Before(f.WindowsSecurityCoverage.CollectedAt) {
 		v.SecurityCoverage = nil
+	}
+	if v.ResourceContext != nil && f.WindowsResourceContext != nil && !v.ResourceContext.CollectedAt.Before(f.WindowsResourceContext.CollectedAt) {
+		v.ResourceContext = nil
+	}
+	if v.StorageIO != nil && f.WindowsStorageIO != nil && !v.StorageIO.CollectedAt.Before(f.WindowsStorageIO.CollectedAt) {
+		v.StorageIO = nil
 	}
 	if v.empty() {
 		return nil
@@ -435,6 +469,12 @@ func (v *WindowsContextRetained) fitRetentionBudget() {
 		if v.SecurityCoverage != nil {
 			choose(v.SecurityCoverage.CollectedAt, func() { v.SecurityCoverage = nil })
 		}
+		if v.ResourceContext != nil {
+			choose(v.ResourceContext.CollectedAt, func() { v.ResourceContext = nil })
+		}
+		if v.StorageIO != nil {
+			choose(v.StorageIO.CollectedAt, func() { v.StorageIO = nil })
+		}
 		if oldest.IsZero() {
 			return
 		}
@@ -455,4 +495,20 @@ func usefulCoverage(s *windowssecuritycoverage.Snapshot) bool {
 		}
 	}
 	return false
+}
+
+func usefulResource(s *windowsresourcecontext.Snapshot) bool {
+	if s == nil {
+		return false
+	}
+	for _, row := range s.Processors.Rows {
+		if row.Name.Value != nil || row.Architecture.Value != nil || row.Cores.Value != nil || row.LogicalProcessors.Value != nil {
+			return true
+		}
+	}
+	return s.InstalledMemory.Quality == "observed" || s.Memory.Quality == "observed" || s.Pagefiles.Quality == "observed"
+}
+
+func usefulStorageIO(s *windowsstorageio.Snapshot) bool {
+	return s != nil && windowsstorageio.Meaningful(*s)
 }

@@ -117,7 +117,7 @@ missing material rather than inventing credentials or weakening protection.
   identity and all exact grants are durably verified; retain indeterminate
   transitions for read-only reconciliation. The released five-scope preview exposes its GUI path; the current fresh GUI
   uses Read admin below. Existing service/grant receipts must not be promoted.
-- The fifteen-scope Windows Read admin source profile is the prominent fresh
+- The nineteen-scope Windows Read admin source profile is the prominent fresh
   Setup choice; actual scope consent remains unchecked. Read
   `docs/windows-read-admin-setup.md`. Preserve legacy consent/receipt bytes and
   historical development interfaces, disabled fresh staging and exact identity/
@@ -129,6 +129,12 @@ missing material rather than inventing credentials or weakening protection.
   Read `docs/windows-volume-inventory.md` before changing its consent, capacity
   semantics or v3 wire shape. Keep v1/event-v2 identities and bytes compatible;
   fresh combined approval is a reusable contract, not an automatic installer grant.
+- Complete caller-visible Windows process snapshots are a separate default-off scope.
+  Read `docs/windows-full-processes-contract.md` before consent, Toolhelp bounds,
+  primary v4 used markers, generations or private paging changes. Snapshot PIDs
+  never join retained metrics; old CPU/RAM remains separately consented and capped
+  at 128. Cutoffs fail complete attempts, never promote prefixes. No process
+  handles, paths, commands, owners, privileges or native acceptance follows.
 - Windows per-process CPU and working-set memory is a separate default-off
   capability. Read `docs/windows-process-metrics.md` before changing consent,
   CPU accounting or wire v4. Preserve old grants, PID-creation attribution, exact
@@ -144,10 +150,28 @@ missing material rather than inventing credentials or weakening protection.
   wire v8 or its private Network view. Preserve all old grants/frames and the
   five-scope coordinator. No probes, DNS resolution, routes, traffic or privilege
   expansion; source fixtures never authorize host reads or grants.
+- Windows caller-visible routes and raw interface counters are a separate default-off
+  local generation. Read `docs/windows-network-context.md` before consent v10,
+  receipt8/V6, primary v5 used-state, IP Helper tables or private Network changes.
+  Keep ordinary v14 bytes/budgets, exact independent retries and original expiry.
+  No cross-table index joins, rates, since-boot totals, probes, packets, MACs/GUIDs,
+  privileged reads, host grants or native acceptance follows from source tests.
 - Windows drive-letter mapping and storage-provider context are a separate default-off local scope.
   Read `docs/windows-storage-context.md` before fixed local roots/MSFT_PhysicalDisk,
   worker bounds, v13 transport or private Storage UI changes. No physical serials,
   SMART claims, guessed physical joins, remote reads, host grants or privileges.
+- Windows aggregate storage I/O is a separate default-off local scope.
+  Read `docs/windows-storage-io.md` before fixed PDH PhysicalDisk(_Total) counters,
+  two-sample timing, isolated workers, consent v12/receipt10 or wire v16. Keep
+  counter validity, finite nonnegative values and idle-latency suppression. No
+  per-disk completeness, topology joins, SMART, health/AI/action authority, counter
+  enablement, host grant or native acceptance follows from source fixtures.
+- Windows CPU and memory context is a separate default-off local scope.
+  Read `docs/windows-resource-context.md` before fixed processor/memory/pagefile
+  sources, consent v11/receipt9 or private resource-context UI changes. Keep
+  source-labeled processor counts, SMBIOS-installed versus OS-usable RAM and
+  aggregate-only pagefile capacity/use distinct; no names/paths, paging-I/O,
+  thrashing or health inference, CPU sampler change, host grant or native claim.
 - Windows hardware and power context is a separate default-off local scope.
   Read `docs/windows-hardware-context.md` before fixed local WMI/power sources,
   isolated workers, identifying-serial consent, v12 wire or private Device UI.

@@ -52,6 +52,16 @@ func runForeground(ctx context.Context, m Material, interval time.Duration, obse
 		return agentloop.Summary{Reason: agentloop.InvalidState}, agentloop.ErrState
 	}
 	defer fullSoftware.Close()
+	fullProcesses, e := openWindowsFullProcessesSender(m, state)
+	if e != nil {
+		return agentloop.Summary{Reason: agentloop.InvalidState}, agentloop.ErrState
+	}
+	defer fullProcesses.Close()
+	networkContext, e := openWindowsNetworkContextSender(m, state)
+	if e != nil {
+		return agentloop.Summary{Reason: agentloop.InvalidState}, agentloop.ErrState
+	}
+	defer networkContext.Close()
 	var inventory *inventorySender
 	var system *systemSender
 	if m.config.complete() {
@@ -134,6 +144,12 @@ func runForeground(ctx context.Context, m Material, interval time.Duration, obse
 				err = e
 			}
 			if e := runWindowsFullSoftwareAttempt(parent, fullSoftware, &report); e != nil {
+				err = e
+			}
+			if e := runWindowsFullProcessesAttempt(parent, fullProcesses, &report); e != nil {
+				err = e
+			}
+			if e := runWindowsNetworkContextAttempt(parent, networkContext, &report); e != nil {
 				err = e
 			}
 		}

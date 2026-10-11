@@ -89,13 +89,13 @@ func appendWindowsHardwareContext(ctx context.Context, m Material, f frame, c wi
 	return f, b, nil
 }
 func validateWindowsHardwareContextFrame(f frame, fields map[string]json.RawMessage) error {
-	if f.SchemaVersion != FrameWindowsHardwareContextVersion && f.SchemaVersion != FrameWindowsStorageContextVersion && f.SchemaVersion != FrameWindowsSecurityCoverageVersion {
+	if f.SchemaVersion != FrameWindowsHardwareContextVersion && f.SchemaVersion != FrameWindowsStorageContextVersion && f.SchemaVersion != FrameWindowsSecurityCoverageVersion && f.SchemaVersion != FrameWindowsResourceContextVersion && f.SchemaVersion != FrameWindowsStorageIOVersion {
 		if f.WindowsHardwareContext != nil || len(fields["windowsHardwareContext"]) != 0 {
 			return ErrState
 		}
 		return nil
 	}
-	if (f.SchemaVersion == FrameWindowsStorageContextVersion || f.SchemaVersion == FrameWindowsSecurityCoverageVersion) && f.WindowsHardwareContext == nil && len(fields["windowsHardwareContext"]) == 0 {
+	if (f.SchemaVersion == FrameWindowsStorageContextVersion || (f.SchemaVersion == FrameWindowsSecurityCoverageVersion || (f.SchemaVersion == FrameWindowsResourceContextVersion || f.SchemaVersion == FrameWindowsStorageIOVersion))) && f.WindowsHardwareContext == nil && len(fields["windowsHardwareContext"]) == 0 {
 		return nil
 	}
 	if f.WindowsHardwareContext == nil || f.WindowsInventory == nil {

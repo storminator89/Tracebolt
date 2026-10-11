@@ -202,7 +202,7 @@ func TestWindowsContextFairnessRetentionRetryAndAuthority(t *testing.T) {
 }
 
 func TestWindowsContextFairnessRotatesFullBudgetPastSlowSibling(t *testing.T) {
-	for _, sourceCount := range []int{3, 6} {
+	for _, sourceCount := range []int{3, 6, 9} {
 		for turn := 0; turn < sourceCount; turn++ {
 			parent, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 			ctx := context.WithValue(parent, patchBudgetKey{}, patchSourceBudget{40 * time.Millisecond, 50 * time.Millisecond})

@@ -27,6 +27,12 @@ func runWindowsEventMaintenance(ctx context.Context, s *enrollmentservice.Servic
 		if softwareErr := s.MaintainWindowsFullSoftware(ctx, now); e == nil {
 			e = softwareErr
 		}
+		if processesErr := s.MaintainWindowsFullProcesses(ctx, now); e == nil {
+			e = processesErr
+		}
+		if networkErr := s.MaintainWindowsNetworkContext(ctx, now); e == nil {
+			e = networkErr
+		}
 		if tick%5 == 0 {
 			if eventErr := s.MaintainWindowsEventContent(ctx, now); e == nil {
 				e = eventErr

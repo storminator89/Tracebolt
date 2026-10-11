@@ -11,9 +11,9 @@ change a download pin or authorize running an installer on any host.
 
 ## Fresh Read admin, six readable groups
 
-The prominent fresh Setup profile is **Read admin**, covering these fifteen
+The prominent fresh Setup profile is **Read admin**, covering these nineteen
 scopes. Selecting that profile does not grant consent: the scope acknowledgement
-starts unchecked. Personal user/domain/session labels, identifying chassis/BIOS serial metadata, local drive letters/volume GUIDs and storage-provider device identifiers/friendly labels, antivirus product names/status and TPM presence/version are explicitly named.
+starts unchecked. Personal user/domain/session labels, identifying chassis/BIOS serial metadata, local drive letters/volume GUIDs and storage-provider device identifiers/friendly labels, antivirus product names/status and TPM presence/version, local route metadata, interface aliases and raw traffic/error/discard counters, CPU models/source-labeled counts, installed SMBIOS RAM versus OS-usable RAM, current/limit and remaining commit capacity, aggregate pagefile allocated/in-use capacity, and aggregate local PerfDisk (_Total) throughput/operations/latency/queue lengths with the sample window are explicitly named.
 The review starts with concise scope/requirement groups and offers the full
 privacy notices as optional details. Back or choosing another bootstrap clears
 all acknowledgements. HTTP-test requires its own unchecked plaintext-risk
@@ -26,20 +26,24 @@ fresh-Setup choice or a required upgrade step.
 | Device and activity | `windows-inventory-v1` | Existing bounded system, hostname/interface, process/service/software preview |
 | Device and activity | `windows-application-system-event-headers-v1` | Application/System event headers, without messages |
 | Device and activity | `windows-visible-volumes-v1` | Caller-visible volume metadata and capacity |
-| Device and activity | `windows-process-metrics-v1` | Per-process CPU and working-set RAM |
+| Device and activity | `windows-process-metrics-v1` | Per-process CPU and working-set RAM, limited to 128 base-preview PIDs |
+| Device and activity | `windows-complete-processes-v1` | [Complete caller-visible Toolhelp snapshot PID/parent PID/name/thread count](windows-full-processes-contract.md), independent of metrics |
 | Network | `windows-network-endpoints-v1` | Numeric TCP/UDP endpoints and API-snapshot PID |
 | Services and software | `windows-service-startup-v1` | Configured startup metadata for the bounded service rows |
 | Services and software | `windows-complete-services-v1` | Complete bounded caller-visible Win32 service generations |
 | Services and software | `windows-complete-machine-software-v1` | Complete bounded HKLM 32/64 uninstall-registration generations |
 | Network | `windows-adapter-context-v1` | Adapter link state/speed, configured DNS and gateway addresses |
+| Network | `windows-network-context-v1` | [Caller-visible route prefixes/next hops/index/metric/protocol/origin and interface aliases/raw octet/error/discard counters](windows-network-context.md), independent complete context without joins or rates |
 | Updates and security | `windows-patch-context-v1` | Build labels, retained WUA history and fixed reboot indicators |
 | Updates and security | `windows-security-posture-v1` | Independent Defender status and local Firewall profile configuration |
 | Users and sessions | `windows-session-context-v1` | Caller-visible WTS sessions/personal labels and local join context |
+| Device and activity | `windows-resource-context-v1` | [CPU model/architecture/source-labeled processor counts, installed SMBIOS RAM, OS-usable/available RAM, commit current/limit/remaining and aggregate pagefile allocated/in-use capacity](windows-resource-context.md); no names/paths or paging-I/O/health claims |
 | Device and activity | `windows-hardware-context-v1` | Manufacturer/model, source-labeled chassis and BIOS serial, firmware and system battery/power |
 | Storage | `windows-storage-context-v1` | Local drive-letter/volume-GUID mapping and fixed storage-provider identifiers, friendly labels, media/bus, size and provider health/status |
+| Storage | `windows-storage-io-v1` | [Eight fixed local aggregate PerfDisk counters: read/write throughput, operations and latency, average/current queue lengths, with measured sample timing](windows-storage-io.md); no per-disk attribution or health verdict |
 | Updates and security | `windows-security-coverage-v1` | [Security Center antivirus names/state/signatures on Windows clients; TPM presence/version](windows-security-coverage.md) |
 
-The authoritative fresh list (`WindowsReadAdminScopesV8`) and grouped requirement manifest are
+The authoritative fresh list (`WindowsReadAdminScopesV12`) and grouped requirement manifest are
 `internal/lanclient/windows_read_admin_profile.go`. Coverage, exclusions and
 bounded provider behavior remain the contracts in the individual scope guides.
 Read admin is not every possible Windows read feature. Selected event-message
@@ -52,8 +56,10 @@ allowlist, account change or AI/provider access is configured by this profile.
 Setup requires the existing supported platform/package and fixed protected-path
 preflight, a fresh inventory bootstrap, matching transport and a compatible
 manager. Its new bodyless public compatibility route is
-`/v1/windows/read-admin-setup-capabilities-v4`, with exact contract
-`fresh-fifteen-read-admin-scopes-v1`. The historical v3/fourteen-scope advertisement remains exact. The historical v2/thirteen-scope advertisement remains exact. The historical twelve-scope route and
+`/v1/windows/read-admin-setup-capabilities-v8`, with exact contract
+`fresh-nineteen-read-admin-scopes-v1`. Historical v7/eighteen-scope, v6/seventeen-scope, v5/sixteen-scope, v4/fifteen-scope,
+v3/fourteen-scope and v2/thirteen-scope advertisements remain exact. The
+historical twelve-scope route and
 `fresh-twelve-read-admin-scopes-v1` response remain byte-for-byte unchanged. The old five-scope route and response remain
 unchanged. An older/mismatched manager blocks before installation writes; no
 invitation, credential or telemetry is sent in this check.
@@ -61,7 +67,7 @@ invitation, credential or telemetry is sent in this check.
 The grouped manifest names local system/process/volume APIs, Application/System
 Event Log, SCM, HKLM 32/64 registration views, IP Helper, fixed registry/WUA COM,
 Defender WMI, Firewall COM, WTS, NetGetJoinInformation, fixed local CIMV2
-ComputerSystem/BIOS/SystemEnclosure queries, GetSystemPowerStatus, fixed local drive-root APIs and MSFT_PhysicalDisk, client Security Center COM and TPM Base Services prerequisites. This
+ComputerSystem/BIOS/SystemEnclosure queries, GetSystemPowerStatus, fixed local drive-root APIs and MSFT_PhysicalDisk, client Security Center COM and TPM Base Services, fixed Win32_Processor properties, GetPhysicallyInstalledSystemMemory, GetPerformanceInfo aggregate EnumPageFilesW, and eight fixed local PDH PhysicalDisk(_Total) counter prerequisites. This
 increment does **not** query those providers during setup. Their availability is
 `not_checked`; actual service-token access is `not_verified`. Administrator
 access during installation could not establish LocalService readability anyway.
@@ -72,14 +78,15 @@ account, firewall, network or Windows setting is changed to make a read succeed.
 The main service keeps LocalService and its existing SID/privilege contract.
 Defender passive/absent/denied and Firewall local configuration are not overall
 protection or effective-policy proof. Retained update history is not current
-patch compliance. Caller-visible sessions are not a complete user/account list.
+patch compliance. Caller-visible sessions are not a complete user/account list. Installed SMBIOS RAM is not OS-usable RAM. Remaining commit capacity is limit minus current committed bytes from one valid source capture; aggregate pagefile capacity/use does not measure paging I/O, thrashing or health. This scope does not change the CPU utilization sampler.
 
 ## Fresh authority and receipts
 
-Consent version `tracebolt.windows-capability-consent.v8` admits only the exact
-ordered fifteen-scope set, including Security Center antivirus and TPM metadata. Earlier v1-v7
-retain their original scope sets and cannot authorize security coverage. Historical
-v7 keeps outer receipt 5 and v6 keeps receipt 4; fresh Read admin uses outer installer receipt version 6. Historical v5 keeps
+Consent version `tracebolt.windows-capability-consent.v12` admits only the exact
+ordered nineteen-scope set, including aggregate storage I/O.
+Earlier v1-v11 retain their original scope sets and cannot authorize this new scope.
+Fresh Read admin uses outer installer receipt 10. Historical v11 keeps receipt 9; v10 keeps receipt 8; v9 keeps receipt 7; historical
+v8 keeps receipt 6, v7 keeps receipt 5 and v6 keeps receipt 4. Historical v5 keeps
 its exact twelve-scope set and outer receipt version 3. The existing five-scope
 v3 consent continues to use outer receipt version 2 with exactly four extension
 digests. V1 ordinary receipts and the old serialized forms are unchanged.
@@ -87,12 +94,12 @@ digests. V1 ordinary receipts and the old serialized forms are unchanged.
 The same fresh transaction stages the owned service disabled, retains protected
 intent/phase evidence, creates/activates the identity through hidden invitation
 entry and separate manager fingerprint approval, and checks that every selected
-extension root is genuinely absent. All thirteen extension grants are then applied
+extension root is genuinely absent. All eighteen extension grants are then applied
 through their existing protected consent APIs. Each operation rechecks the
 original activated sender, unchanged protected phase receipt, and exact owned,
 stopped, disabled service. Missing or changed authority stops the next operation.
-All thirteen enabled grant digests, including original grant IDs, must read back correctly
-before the existing startup transition can begin. Full service/software inspection
+All eighteen enabled grant digests, including original grant IDs, must read back correctly
+before the existing startup transition can begin. Full process/service/software inspection
 also validates the primary used marker and independent generation state.
 
 Partial writes retain completed scopes and the potentially indeterminate failed
@@ -155,8 +162,16 @@ or delivery gate for the current fresh-install target.
 ## Collection budget and truthful partial data
 
 The foreground primary attempt retains its 20-second budget and 72 KiB frame.
+Fresh storage-I/O wire v16 reserves a 26 KiB bounded base preview before
+process/startup row binding; historical resource-context v15 keeps its 28 KiB
+reservation. The [storage-I/O guide](windows-storage-io.md#worker-transport-and-privacy)
+describes the independent 2 KiB envelope and unchanged composed frame bounds.
+Pending retry bytes and independent complete generations remain unchanged.
+The [resource-context guide](windows-resource-context.md#bounded-collection-and-transport)
+documents the synthetic historical v14 maximum-composition fitting limitation
+and why it is not native-reachability evidence.
 Fresh odd sequences give the earlier-provider group first opportunity; fresh
-even sequences collect the isolated patch/Security/Sessions/Hardware group first. Each
+even sequences collect the isolated context group, now including CPU/memory and aggregate storage I/O, first. Each
 group rotates its leading source across successive turns. All optional providers
 respect the existing three-second remaining primary-delivery reserve and a
 maximum five-second parent budget, retaining any tighter native bounds. No cached-WUA
@@ -179,7 +194,7 @@ non-returning native API or arbitrary OS scheduling delay. The profile promises
 explicit authorized coverage; unavailable providers are never reported as
 healthy-empty or proof that protection, inventory or membership is complete.
 
-Complete services and software retain their independent bounded generations and
+Route/counter context and complete processes, services and software retain their independent bounded generations and
 bursts after the primary attempt. They do not enlarge or precede the primary
 frame's collection budget; they can extend the total foreground iteration. The
 combined twelve-scope fixture checks both scheduling turns, primary/frame bounds,
@@ -189,13 +204,12 @@ synthetic source evidence only.
 ## Required native acceptance
 
 Native acceptance remains deferred until the missing Admin-data features are
-ready. Existing launch/aggregation guards stay closed: historical five- or
-twelve-scope fixture approvals cannot validate the thirteen-scope receipt4/v6
-profile. No native controller was extended or run by this increment.
+ready. Existing launch/aggregation guards stay closed: historical profile fixture
+approvals cannot validate the current nineteen-scope receipt10/v12 profile. No native controller was extended or run by this increment.
 
 Before release, separately approve an exact-artifact disposable fresh-install
 run covering TLS/HTTP disclosure, initially unchecked full consent, GUI
-Back/Cancel/repeated-click flows, disabled staging, all thirteen scopes and
+Back/Cancel/repeated-click flows, disabled staging, all nineteen scopes and
 actual unchanged LocalService readable/denied/absent providers. Include grant/
 startup interruptions, original-age private data, and reboot/shutdown. Fixture
 checks, cross-builds and hosted source/browser CI establish none of these native
@@ -203,4 +217,4 @@ results. Migration and existing-binary upgrade remain outside this target.
 
 The new [storage context](windows-storage-context.md) displays provider health/status,
 not SMART or physical-health proof. RAID/virtual/Storage Spaces visibility and
-unknown sources stay explicit. Throughput/latency and physical topology joins are deferred.
+unknown sources stay explicit. [Aggregate storage I/O](windows-storage-io.md) is independently sampled; per-disk attribution, paging-I/O measurement and physical topology joins remain deferred.

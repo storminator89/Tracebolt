@@ -270,3 +270,24 @@ Subsequent status reads retain the discovered version/bound; responses cannot
 silently switch versions until fresh discovery.
 No setup grant, native dispatch, provider call or production acceptance follows
 from browser fixtures. Unit/API/component coverage is executable with `npm test`.
+
+## Windows CPU and memory context (source candidate)
+
+The existing Device tab has a compact CPU & memory group for the independent,
+default-off `windows-resource-context-v1` scope. It separates Win32_Processor
+model/source counts (up to four complete rows), SMBIOS-installed RAM, OS-usable
+physical RAM, committed bytes/current limit/remaining capacity, and aggregate
+pagefile allocated/in-use bytes. Source and exact canonical uint64 byte details
+start collapsed. Unknown sources stay unknown; zero pagefiles is explicit. This
+context does not change the CPU sampler or percentage-health policies, infer
+socket topology, or assess pressure, health or thrashing.
+
+Current source failures stay visible alongside an optional previous whole
+capture, which keeps its original age and grant binding. Auth, visibility,
+identity and expiry changes clear private values. No values enter AI/provider
+exports. EN/DE focused contract/UI tests and shared browser-fixture stages cover
+these boundaries; the browser completion gate requires 16 source-bound captures
+across desktop/mobile, summary/details and latest-failure/retained states.
+Inert fixture tests and jsdom tests are not browser or native Windows acceptance.
+No hosted/browser/native acceptance, host grants or release follows from this
+source-only work.

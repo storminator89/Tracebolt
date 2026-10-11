@@ -46,7 +46,7 @@ func readSetupScopes() []string {
 	return []string{enrollmentcrypto.CollectionProfileWindowsInventory, windowseventhealth.Scope, windowsvolumes.Scope, windowsprocessmetrics.Scope, windowsnetwork.Scope}
 }
 func validateReadSetupConsent(c lanclient.WindowsCapabilityConsent) error {
-	if c.Validate() != nil || !(c.SchemaVersion == lanclient.WindowsCapabilityConsentVersionV3 && reflect.DeepEqual(c.Scopes, readSetupScopes()) || c.SchemaVersion == lanclient.WindowsCapabilityConsentVersionV5 && reflect.DeepEqual(c.Scopes, lanclient.WindowsReadAdminScopes()) || c.SchemaVersion == lanclient.WindowsCapabilityConsentVersionV6 && reflect.DeepEqual(c.Scopes, lanclient.WindowsReadAdminScopesV6()) || c.SchemaVersion == lanclient.WindowsCapabilityConsentVersionV7 && reflect.DeepEqual(c.Scopes, lanclient.WindowsReadAdminScopesV7()) || c.SchemaVersion == lanclient.WindowsCapabilityConsentVersionV8 && reflect.DeepEqual(c.Scopes, lanclient.WindowsReadAdminScopesV8())) {
+	if c.Validate() != nil || !(c.SchemaVersion == lanclient.WindowsCapabilityConsentVersionV3 && reflect.DeepEqual(c.Scopes, readSetupScopes()) || c.SchemaVersion == lanclient.WindowsCapabilityConsentVersionV5 && reflect.DeepEqual(c.Scopes, lanclient.WindowsReadAdminScopes()) || c.SchemaVersion == lanclient.WindowsCapabilityConsentVersionV6 && reflect.DeepEqual(c.Scopes, lanclient.WindowsReadAdminScopesV6()) || c.SchemaVersion == lanclient.WindowsCapabilityConsentVersionV7 && reflect.DeepEqual(c.Scopes, lanclient.WindowsReadAdminScopesV7()) || c.SchemaVersion == lanclient.WindowsCapabilityConsentVersionV8 && reflect.DeepEqual(c.Scopes, lanclient.WindowsReadAdminScopesV8()) || c.SchemaVersion == lanclient.WindowsCapabilityConsentVersionV9 && reflect.DeepEqual(c.Scopes, lanclient.WindowsReadAdminScopesV9()) || c.SchemaVersion == lanclient.WindowsCapabilityConsentVersionV10 && reflect.DeepEqual(c.Scopes, lanclient.WindowsReadAdminScopesV10()) || c.SchemaVersion == lanclient.WindowsCapabilityConsentVersionV11 && reflect.DeepEqual(c.Scopes, lanclient.WindowsReadAdminScopesV11()) || c.SchemaVersion == lanclient.WindowsCapabilityConsentVersionV12 && reflect.DeepEqual(c.Scopes, lanclient.WindowsReadAdminScopesV12())) {
 		return errLifecycle
 	}
 	return nil
@@ -304,6 +304,14 @@ func writeReadSetupDisclosure(out io.Writer, c lanclient.WindowsCapabilityConsen
 	}
 	if c.SchemaVersion == lanclient.WindowsCapabilityConsentVersionV5 {
 		notices = append(notices, lanclient.WindowsReadAdminNotices(c.InsecureHTTPAcknowledged)...)
+	} else if c.SchemaVersion == lanclient.WindowsCapabilityConsentVersionV12 {
+		notices = append(notices, lanclient.WindowsReadAdminNoticesV12(c.InsecureHTTPAcknowledged)...)
+	} else if c.SchemaVersion == lanclient.WindowsCapabilityConsentVersionV11 {
+		notices = append(notices, lanclient.WindowsReadAdminNoticesV11(c.InsecureHTTPAcknowledged)...)
+	} else if c.SchemaVersion == lanclient.WindowsCapabilityConsentVersionV10 {
+		notices = append(notices, lanclient.WindowsReadAdminNoticesV10(c.InsecureHTTPAcknowledged)...)
+	} else if c.SchemaVersion == lanclient.WindowsCapabilityConsentVersionV9 {
+		notices = append(notices, lanclient.WindowsReadAdminNoticesV9(c.InsecureHTTPAcknowledged)...)
 	} else if c.SchemaVersion == lanclient.WindowsCapabilityConsentVersionV8 {
 		notices = append(notices, lanclient.WindowsReadAdminNoticesV8(c.InsecureHTTPAcknowledged)...)
 	} else if c.SchemaVersion == lanclient.WindowsCapabilityConsentVersionV7 {
@@ -332,6 +340,18 @@ func validReadSetupConsentDigests(c lanclient.WindowsCapabilityConsent, values [
 	return validateReadSetupConsent(c) == nil && validReadSetupScopeDigests(c.Scopes[1:], values)
 }
 func readSetupReceiptVersion(c lanclient.WindowsCapabilityConsent) int {
+	if c.SchemaVersion == lanclient.WindowsCapabilityConsentVersionV12 {
+		return 10
+	}
+	if c.SchemaVersion == lanclient.WindowsCapabilityConsentVersionV11 {
+		return 9
+	}
+	if c.SchemaVersion == lanclient.WindowsCapabilityConsentVersionV10 {
+		return 8
+	}
+	if c.SchemaVersion == lanclient.WindowsCapabilityConsentVersionV9 {
+		return 7
+	}
 	if c.SchemaVersion == lanclient.WindowsCapabilityConsentVersionV8 {
 		return 6
 	}

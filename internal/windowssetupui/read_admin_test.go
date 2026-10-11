@@ -7,7 +7,7 @@ import (
 )
 
 func readAdminUIFixture() (Config, Hooks) {
-	return Config{Disclosure: "legacy-five", HTTPDisclosure: "legacy-http", ReadAdminDisclosure: "thirteen-full-details", ReadAdminHTTPDisclosure: "thirteen-http-details", ReadAdminSummary: "thirteen-grouped-summary", ReadAdminHTTPSummary: "explicit-plaintext-risk-summary"}, Hooks{InstallReadAdmin: func(context.Context, []byte, bool, func(string)) error { return nil }}
+	return Config{Disclosure: "legacy-five", HTTPDisclosure: "legacy-http", ReadAdminDisclosure: "nineteen-full-details", ReadAdminHTTPDisclosure: "nineteen-http-details", ReadAdminSummary: "nineteen-grouped-summary", ReadAdminHTTPSummary: "explicit-plaintext-risk-summary"}, Hooks{InstallReadAdmin: func(context.Context, []byte, bool, func(string)) error { return nil }}
 }
 
 func selectedReadAdminFlow(t *testing.T) *flow {
@@ -96,5 +96,29 @@ func TestReadAdminReviewUsesSummaryWithOptionalExactDetails(t *testing.T) {
 	c.ReadAdminSummary = ""
 	if readAdminAvailable(c, h) {
 		t.Fatal("missing concise disclosure admitted")
+	}
+}
+
+func TestReadAdminResourceContextHTTPConsentStartsUncheckedAndClears(t *testing.T) {
+	f := selectedReadAdminFlow(t)
+	f.trust.HTTPTest = true
+	f.trust.EnrollmentOrigin = strings.Replace(f.trust.EnrollmentOrigin, "https://", "http://", 1)
+	f.trust.AgentOrigin = strings.Replace(f.trust.AgentOrigin, "https://", "http://", 1)
+	if !validTrust(f.trust) {
+		t.Fatal("invalid HTTP fixture")
+	}
+	if !f.next() || f.scope || f.httpAcknowledged || f.canInstall() {
+		t.Fatal("fresh HTTP consent granted")
+	}
+	f.scope, f.service, f.identity, f.compared = true, true, true, true
+	if f.canInstall() {
+		t.Fatal("scope approval granted plaintext approval")
+	}
+	f.httpAcknowledged = true
+	if !f.canInstall() || !f.httpApproved() {
+		t.Fatal("exact explicit approval rejected")
+	}
+	if !f.back() || f.scope || f.httpAcknowledged || !f.next() || f.canInstall() {
+		t.Fatal("navigation reused consent")
 	}
 }

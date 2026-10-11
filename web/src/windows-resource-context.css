@@ -1,0 +1,20 @@
+.windows-resource-context{min-width:0;margin-top:24px;padding-top:20px;border-top:1px solid var(--line)}
+.windows-resource-context>.windows-inventory-section-header h3{display:flex;align-items:center;gap:7px}
+.windows-resource-context svg{color:var(--secondary);flex-shrink:0}
+.windows-resource-groups{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:18px 32px;margin-top:16px}
+.windows-resource-groups>section{min-width:0}
+.windows-resource-groups h4{display:flex;align-items:center;gap:7px;margin:0;padding-bottom:9px;border-bottom:1px solid var(--line);font-size:13px;font-weight:600}
+.windows-resource-groups h4>span{margin-left:auto;font-size:11px;color:var(--secondary);font-weight:400}
+.windows-resource-context dl{margin:0;font-size:12px;line-height:1.5}
+.windows-resource-context dl>div{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px;padding:7px 0}
+.windows-resource-context dt{color:var(--secondary);overflow-wrap:anywhere}
+.windows-resource-context dd{margin:0;font-weight:500;min-width:0;overflow-wrap:anywhere}
+.windows-resource-context bdi{overflow-wrap:anywhere}
+.windows-resource-none{font-size:12px;line-height:1.5;margin:10px 0}
+.windows-resource-details{margin-top:16px;padding-top:12px;border-top:1px solid var(--line);font-size:12px;line-height:1.6;color:var(--secondary)}
+.windows-resource-details summary{cursor:pointer;color:var(--text);font-weight:600}
+.windows-resource-details summary:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+.windows-resource-details p{margin:9px 0}
+.windows-resource-details dd{color:var(--text)}
+.windows-resource-processor h5{font-size:12px;margin:12px 0 4px}
+@media(max-width:600px){.windows-resource-groups{grid-template-columns:1fr;gap:14px}.windows-resource-context dl>div{grid-template-columns:minmax(0,1fr) minmax(0,1.1fr)}}

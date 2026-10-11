@@ -12,7 +12,7 @@ import (
 )
 
 func TestWindowsSetupCapabilitiesExactPublicGuardedTLSContract(t *testing.T) {
-	for _, profile := range []int{0, 1, 2, 3, 4} {
+	for _, profile := range []int{0, 1, 2, 3, 4, 5, 6, 7, 8} {
 		for _, kind := range []string{"exact", "wrong-host", "missing-tls", "old-tls", "http", "disabled", "post", "body", "cookie", "authorization", "forwarded", "query", "escaped", "limit"} {
 			t.Run(kind, func(t *testing.T) {
 				b := downloadFixtureBootstrap()
@@ -24,6 +24,14 @@ func TestWindowsSetupCapabilitiesExactPublicGuardedTLSContract(t *testing.T) {
 				path := windowssetup.CapabilitiesPath
 				if profile == 1 {
 					path = windowssetup.ReadAdminCapabilitiesPath
+				} else if profile == 8 {
+					path = windowssetup.ReadAdminCapabilitiesPathV8
+				} else if profile == 7 {
+					path = windowssetup.ReadAdminCapabilitiesPathV7
+				} else if profile == 6 {
+					path = windowssetup.ReadAdminCapabilitiesPathV6
+				} else if profile == 5 {
+					path = windowssetup.ReadAdminCapabilitiesPathV5
 				} else if profile == 4 {
 					path = windowssetup.ReadAdminCapabilitiesPathV4
 				} else if profile == 3 {
@@ -83,6 +91,14 @@ func TestWindowsSetupCapabilitiesExactPublicGuardedTLSContract(t *testing.T) {
 				expected := windowssetup.Expected(b.ManagerInstanceID, b.EnrollmentOrigin, b.AgentOrigin)
 				if profile == 1 {
 					expected = windowssetup.ExpectedReadAdmin(b.ManagerInstanceID, b.EnrollmentOrigin, b.AgentOrigin)
+				} else if profile == 8 {
+					expected = windowssetup.ExpectedReadAdminV8(b.ManagerInstanceID, b.EnrollmentOrigin, b.AgentOrigin)
+				} else if profile == 7 {
+					expected = windowssetup.ExpectedReadAdminV7(b.ManagerInstanceID, b.EnrollmentOrigin, b.AgentOrigin)
+				} else if profile == 6 {
+					expected = windowssetup.ExpectedReadAdminV6(b.ManagerInstanceID, b.EnrollmentOrigin, b.AgentOrigin)
+				} else if profile == 5 {
+					expected = windowssetup.ExpectedReadAdminV5(b.ManagerInstanceID, b.EnrollmentOrigin, b.AgentOrigin)
 				} else if profile == 4 {
 					expected = windowssetup.ExpectedReadAdminV4(b.ManagerInstanceID, b.EnrollmentOrigin, b.AgentOrigin)
 				} else if profile == 3 {

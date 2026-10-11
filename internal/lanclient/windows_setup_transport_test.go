@@ -292,3 +292,93 @@ func TestReadAdminV4SetupTransportUsesBodylessDistinctPath(t *testing.T) {
 		t.Fatal("foreign request reached network")
 	}
 }
+
+func TestReadAdminV5SetupTransportUsesBodylessDistinctPath(t *testing.T) {
+	want := windowssetup.ExpectedReadAdminV5("manager", "http://127.0.0.1", "http://127.0.0.1")
+	for _, contract := range []string{windowssetup.FreshReadContract, windowssetup.ReadAdminContract, windowssetup.ReadAdminContractV2, windowssetup.ReadAdminContractV3, windowssetup.ReadAdminContractV4, windowssetup.ReadAdminContractV5} {
+		calls := 0
+		c := &http.Client{Transport: setupRoundTripFunc(func(r *http.Request) (*http.Response, error) {
+			calls++
+			if r.URL.Path != windowssetup.ReadAdminCapabilitiesPathV5 || r.Method != "GET" || r.Body != nil || r.Header.Get("Authorization") != "" || r.Header.Get("Cookie") != "" {
+				t.Fatal("unsafe compatibility request")
+			}
+			response := want
+			response.SetupContract = contract
+			raw, _ := json.Marshal(response)
+			return &http.Response{StatusCode: 200, Header: http.Header{"Content-Type": []string{"application/json"}}, Body: io.NopCloser(bytes.NewReader(raw))}, nil
+		})}
+		e := checkWindowsSetupManager(context.Background(), c, want.EnrollmentOrigin, want)
+		if (e == nil) != (contract == windowssetup.ReadAdminContractV5) || calls != 1 {
+			t.Fatal("wrong contract admitted", contract, e)
+		}
+	}
+	c, e := newWindowsSetupHTTPClient(want.EnrollmentOrigin, "http-test", nil, windowssetup.ReadAdminCapabilitiesPathV5)
+	if e != nil {
+		t.Fatal(e)
+	}
+	defer c.CloseIdleConnections()
+	tr := c.Transport.(*publicBootstrapTransport)
+	calls := 0
+	tr.next = setupRoundTripFunc(func(*http.Request) (*http.Response, error) {
+		calls++
+		return &http.Response{StatusCode: 200, Header: http.Header{}, Body: http.NoBody}, nil
+	})
+	for _, path := range []string{windowssetup.CapabilitiesPath, windowssetup.ReadAdminCapabilitiesPath, windowssetup.ReadAdminCapabilitiesPathV2, windowssetup.ReadAdminCapabilitiesPathV3, windowssetup.ReadAdminCapabilitiesPathV4, windowssetup.ReadAdminCapabilitiesPathV5, "/v2/windows/enrollment/claim"} {
+		r, _ := http.NewRequest("GET", want.EnrollmentOrigin+path, nil)
+		response, e := tr.RoundTrip(r)
+		if response != nil {
+			response.Body.Close()
+		}
+		if (e == nil) != (path == windowssetup.ReadAdminCapabilitiesPathV5) {
+			t.Fatal("route broadened")
+		}
+	}
+	if calls != 1 {
+		t.Fatal("foreign request reached network")
+	}
+}
+
+func TestReadAdminV6SetupTransportUsesBodylessDistinctPath(t *testing.T) {
+	want := windowssetup.ExpectedReadAdminV6("manager", "http://127.0.0.1", "http://127.0.0.1")
+	for _, contract := range []string{windowssetup.FreshReadContract, windowssetup.ReadAdminContract, windowssetup.ReadAdminContractV2, windowssetup.ReadAdminContractV3, windowssetup.ReadAdminContractV4, windowssetup.ReadAdminContractV5, windowssetup.ReadAdminContractV6} {
+		calls := 0
+		c := &http.Client{Transport: setupRoundTripFunc(func(r *http.Request) (*http.Response, error) {
+			calls++
+			if r.URL.Path != windowssetup.ReadAdminCapabilitiesPathV6 || r.Method != "GET" || r.Body != nil || r.Header.Get("Authorization") != "" || r.Header.Get("Cookie") != "" {
+				t.Fatal("unsafe compatibility request")
+			}
+			response := want
+			response.SetupContract = contract
+			raw, _ := json.Marshal(response)
+			return &http.Response{StatusCode: 200, Header: http.Header{"Content-Type": []string{"application/json"}}, Body: io.NopCloser(bytes.NewReader(raw))}, nil
+		})}
+		e := checkWindowsSetupManager(context.Background(), c, want.EnrollmentOrigin, want)
+		if (e == nil) != (contract == windowssetup.ReadAdminContractV6) || calls != 1 {
+			t.Fatal("wrong contract admitted", contract, e)
+		}
+	}
+	c, e := newWindowsSetupHTTPClient(want.EnrollmentOrigin, "http-test", nil, windowssetup.ReadAdminCapabilitiesPathV6)
+	if e != nil {
+		t.Fatal(e)
+	}
+	defer c.CloseIdleConnections()
+	tr := c.Transport.(*publicBootstrapTransport)
+	calls := 0
+	tr.next = setupRoundTripFunc(func(*http.Request) (*http.Response, error) {
+		calls++
+		return &http.Response{StatusCode: 200, Header: http.Header{}, Body: http.NoBody}, nil
+	})
+	for _, path := range []string{windowssetup.CapabilitiesPath, windowssetup.ReadAdminCapabilitiesPath, windowssetup.ReadAdminCapabilitiesPathV2, windowssetup.ReadAdminCapabilitiesPathV3, windowssetup.ReadAdminCapabilitiesPathV4, windowssetup.ReadAdminCapabilitiesPathV5, windowssetup.ReadAdminCapabilitiesPathV6, "/v2/windows/enrollment/claim"} {
+		r, _ := http.NewRequest("GET", want.EnrollmentOrigin+path, nil)
+		response, e := tr.RoundTrip(r)
+		if response != nil {
+			response.Body.Close()
+		}
+		if (e == nil) != (path == windowssetup.ReadAdminCapabilitiesPathV6) {
+			t.Fatal("route broadened")
+		}
+	}
+	if calls != 1 {
+		t.Fatal("foreign request reached network")
+	}
+}

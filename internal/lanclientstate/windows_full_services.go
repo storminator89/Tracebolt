@@ -48,6 +48,12 @@ func (l *WindowsFullServicesInitializationLease) Mark() error {
 	if next.WindowsFullSoftwareUsed {
 		next.Version = 3
 	}
+	if next.WindowsFullProcessesUsed {
+		next.Version = 4
+	}
+	if next.WindowsNetworkContextUsed {
+		next.Version = 5
+	}
 	next.WindowsFullServicesUsed = true
 	return v.commit(next)
 }

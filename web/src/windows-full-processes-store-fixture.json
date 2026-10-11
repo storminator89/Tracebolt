@@ -1,0 +1,3254 @@
+[
+  {
+    "name": "unavailable",
+    "query": {
+      "search": "",
+      "sort": "pid-asc",
+      "limit": 100,
+      "cursor": ""
+    },
+    "page": {
+      "schemaVersion": "tracebolt.windows-full-processes-page.v1",
+      "deviceId": "agent_00000000000000000000000000000001",
+      "serverNow": "2027-01-15T08:00:10Z",
+      "status": "unavailable",
+      "authorityUntil": "2027-01-16T08:00:00Z",
+      "grantId": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "grantRevision": 1,
+      "complete": null,
+      "latestAttempt": {
+        "sequence": 1,
+        "attemptedAt": "2027-01-15T08:00:10Z",
+        "status": "source_failed",
+        "reason": "access_denied"
+      },
+      "search": "",
+      "sort": "pid-asc",
+      "limit": 100,
+      "offset": 0,
+      "matchingCount": 0,
+      "rows": [],
+      "nextCursor": "",
+      "cursorExpiresAt": null
+    }
+  },
+  {
+    "name": "first2051",
+    "query": {
+      "search": "",
+      "sort": "pid-asc",
+      "limit": 100,
+      "cursor": ""
+    },
+    "page": {
+      "schemaVersion": "tracebolt.windows-full-processes-page.v1",
+      "deviceId": "agent_00000000000000000000000000000001",
+      "serverNow": "2027-01-15T08:00:10Z",
+      "status": "ready",
+      "authorityUntil": "2027-01-16T08:00:00Z",
+      "grantId": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "grantRevision": 1,
+      "complete": {
+        "manifest": {
+          "schemaVersion": "tracebolt.windows-complete-processes-manifest.v1",
+          "scope": "windows-complete-processes-v1",
+          "source": "toolhelp-process-snapshot",
+          "coverage": "caller_visible_process_snapshot_complete",
+          "deviceId": "agent_00000000000000000000000000000001",
+          "senderBinding": "a4c7871d6af716dcdf9174265160e94c5dfff3d6cc46a45c800c201a43555747",
+          "grantId": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "grantRevision": 1,
+          "sequence": 2,
+          "generationId": "sample_434747f2ccf190890bf9eb7526e3e83c",
+          "captureStartedAt": "2027-01-15T08:00:10Z",
+          "captureFinishedAt": "2027-01-15T08:00:10Z",
+          "expiresAt": "2027-01-16T08:00:10Z",
+          "rowCount": 2051,
+          "rowsBytes": 196514,
+          "rowsSha256": "4b4f708922c451067aaae72cd124ec6d1d1d1a7930d2ab05425037a620b74fcd",
+          "chunkCount": 17
+        },
+        "manifestSha256": "13aa412f18ba0c03ab5f0f1d61c09b2cab2002c1ba54ae2f371e323ed764ffb4",
+        "receivedAt": "2027-01-15T08:00:10Z"
+      },
+      "latestAttempt": {
+        "sequence": 2,
+        "attemptedAt": "2027-01-15T08:00:10Z",
+        "status": "complete",
+        "reason": ""
+      },
+      "search": "",
+      "sort": "pid-asc",
+      "limit": 100,
+      "offset": 0,
+      "matchingCount": 2051,
+      "rows": [
+        {
+          "pid": 0,
+          "parentPid": 0,
+          "name": "InventedProcess00000",
+          "nameQuality": "observed",
+          "threads": 1
+        },
+        {
+          "pid": 1,
+          "parentPid": 0,
+          "name": "InventedProcess00001",
+          "nameQuality": "observed",
+          "threads": 2
+        },
+        {
+          "pid": 2,
+          "parentPid": 1,
+          "name": "InventedProcess00002",
+          "nameQuality": "observed",
+          "threads": 3
+        },
+        {
+          "pid": 3,
+          "parentPid": 1,
+          "name": "InventedProcess00003",
+          "nameQuality": "observed",
+          "threads": 4
+        },
+        {
+          "pid": 4,
+          "parentPid": 2,
+          "name": "InventedProcess00004",
+          "nameQuality": "observed",
+          "threads": 5
+        },
+        {
+          "pid": 5,
+          "parentPid": 2,
+          "name": "InventedProcess00005",
+          "nameQuality": "observed",
+          "threads": 6
+        },
+        {
+          "pid": 6,
+          "parentPid": 3,
+          "name": "InventedProcess00006",
+          "nameQuality": "observed",
+          "threads": 7
+        },
+        {
+          "pid": 7,
+          "parentPid": 3,
+          "name": "InventedProcess00007",
+          "nameQuality": "observed",
+          "threads": 8
+        },
+        {
+          "pid": 8,
+          "parentPid": 4,
+          "name": "InventedProcess00008",
+          "nameQuality": "observed",
+          "threads": 9
+        },
+        {
+          "pid": 9,
+          "parentPid": 4,
+          "name": "InventedProcess00009",
+          "nameQuality": "observed",
+          "threads": 10
+        },
+        {
+          "pid": 10,
+          "parentPid": 5,
+          "name": "InventedProcess00010",
+          "nameQuality": "observed",
+          "threads": 11
+        },
+        {
+          "pid": 11,
+          "parentPid": 5,
+          "name": "InventedProcess00011",
+          "nameQuality": "observed",
+          "threads": 12
+        },
+        {
+          "pid": 12,
+          "parentPid": 6,
+          "name": "InventedProcess00012",
+          "nameQuality": "observed",
+          "threads": 13
+        },
+        {
+          "pid": 13,
+          "parentPid": 6,
+          "name": "InventedProcess00013",
+          "nameQuality": "observed",
+          "threads": 14
+        },
+        {
+          "pid": 14,
+          "parentPid": 7,
+          "name": "InventedProcess00014",
+          "nameQuality": "observed",
+          "threads": 15
+        },
+        {
+          "pid": 15,
+          "parentPid": 7,
+          "name": "InventedProcess00015",
+          "nameQuality": "observed",
+          "threads": 16
+        },
+        {
+          "pid": 16,
+          "parentPid": 8,
+          "name": "InventedProcess00016",
+          "nameQuality": "observed",
+          "threads": 1
+        },
+        {
+          "pid": 17,
+          "parentPid": 8,
+          "name": "InventedProcess00017",
+          "nameQuality": "observed",
+          "threads": 2
+        },
+        {
+          "pid": 18,
+          "parentPid": 9,
+          "name": "InventedProcess00018",
+          "nameQuality": "observed",
+          "threads": 3
+        },
+        {
+          "pid": 19,
+          "parentPid": 9,
+          "name": "InventedProcess00019",
+          "nameQuality": "observed",
+          "threads": 4
+        },
+        {
+          "pid": 20,
+          "parentPid": 10,
+          "name": "InventedProcess00020",
+          "nameQuality": "observed",
+          "threads": 5
+        },
+        {
+          "pid": 21,
+          "parentPid": 10,
+          "name": "InventedProcess00021",
+          "nameQuality": "observed",
+          "threads": 6
+        },
+        {
+          "pid": 22,
+          "parentPid": 11,
+          "name": "InventedProcess00022",
+          "nameQuality": "observed",
+          "threads": 7
+        },
+        {
+          "pid": 23,
+          "parentPid": 11,
+          "name": "InventedProcess00023",
+          "nameQuality": "observed",
+          "threads": 8
+        },
+        {
+          "pid": 24,
+          "parentPid": 12,
+          "name": "InventedProcess00024",
+          "nameQuality": "observed",
+          "threads": 9
+        },
+        {
+          "pid": 25,
+          "parentPid": 12,
+          "name": "InventedProcess00025",
+          "nameQuality": "observed",
+          "threads": 10
+        },
+        {
+          "pid": 26,
+          "parentPid": 13,
+          "name": "InventedProcess00026",
+          "nameQuality": "observed",
+          "threads": 11
+        },
+        {
+          "pid": 27,
+          "parentPid": 13,
+          "name": "InventedProcess00027",
+          "nameQuality": "observed",
+          "threads": 12
+        },
+        {
+          "pid": 28,
+          "parentPid": 14,
+          "name": "InventedProcess00028",
+          "nameQuality": "observed",
+          "threads": 13
+        },
+        {
+          "pid": 29,
+          "parentPid": 14,
+          "name": "InventedProcess00029",
+          "nameQuality": "observed",
+          "threads": 14
+        },
+        {
+          "pid": 30,
+          "parentPid": 15,
+          "name": "InventedProcess00030",
+          "nameQuality": "observed",
+          "threads": 15
+        },
+        {
+          "pid": 31,
+          "parentPid": 15,
+          "name": "InventedProcess00031",
+          "nameQuality": "observed",
+          "threads": 16
+        },
+        {
+          "pid": 32,
+          "parentPid": 16,
+          "name": "InventedProcess00032",
+          "nameQuality": "observed",
+          "threads": 1
+        },
+        {
+          "pid": 33,
+          "parentPid": 16,
+          "name": "InventedProcess00033",
+          "nameQuality": "observed",
+          "threads": 2
+        },
+        {
+          "pid": 34,
+          "parentPid": 17,
+          "name": "InventedProcess00034",
+          "nameQuality": "observed",
+          "threads": 3
+        },
+        {
+          "pid": 35,
+          "parentPid": 17,
+          "name": "InventedProcess00035",
+          "nameQuality": "observed",
+          "threads": 4
+        },
+        {
+          "pid": 36,
+          "parentPid": 18,
+          "name": "InventedProcess00036",
+          "nameQuality": "observed",
+          "threads": 5
+        },
+        {
+          "pid": 37,
+          "parentPid": 18,
+          "name": "InventedProcess00037",
+          "nameQuality": "observed",
+          "threads": 6
+        },
+        {
+          "pid": 38,
+          "parentPid": 19,
+          "name": "InventedProcess00038",
+          "nameQuality": "observed",
+          "threads": 7
+        },
+        {
+          "pid": 39,
+          "parentPid": 19,
+          "name": "InventedProcess00039",
+          "nameQuality": "observed",
+          "threads": 8
+        },
+        {
+          "pid": 40,
+          "parentPid": 20,
+          "name": "InventedProcess00040",
+          "nameQuality": "observed",
+          "threads": 9
+        },
+        {
+          "pid": 41,
+          "parentPid": 20,
+          "name": "InventedProcess00041",
+          "nameQuality": "observed",
+          "threads": 10
+        },
+        {
+          "pid": 42,
+          "parentPid": 21,
+          "name": "InventedProcess00042",
+          "nameQuality": "observed",
+          "threads": 11
+        },
+        {
+          "pid": 43,
+          "parentPid": 21,
+          "name": "InventedProcess00043",
+          "nameQuality": "observed",
+          "threads": 12
+        },
+        {
+          "pid": 44,
+          "parentPid": 22,
+          "name": "InventedProcess00044",
+          "nameQuality": "observed",
+          "threads": 13
+        },
+        {
+          "pid": 45,
+          "parentPid": 22,
+          "name": "InventedProcess00045",
+          "nameQuality": "observed",
+          "threads": 14
+        },
+        {
+          "pid": 46,
+          "parentPid": 23,
+          "name": "InventedProcess00046",
+          "nameQuality": "observed",
+          "threads": 15
+        },
+        {
+          "pid": 47,
+          "parentPid": 23,
+          "name": "InventedProcess00047",
+          "nameQuality": "observed",
+          "threads": 16
+        },
+        {
+          "pid": 48,
+          "parentPid": 24,
+          "name": "InventedProcess00048",
+          "nameQuality": "observed",
+          "threads": 1
+        },
+        {
+          "pid": 49,
+          "parentPid": 24,
+          "name": "InventedProcess00049",
+          "nameQuality": "observed",
+          "threads": 2
+        },
+        {
+          "pid": 50,
+          "parentPid": 25,
+          "name": "InventedProcess00050",
+          "nameQuality": "observed",
+          "threads": 3
+        },
+        {
+          "pid": 51,
+          "parentPid": 25,
+          "name": "InventedProcess00051",
+          "nameQuality": "observed",
+          "threads": 4
+        },
+        {
+          "pid": 52,
+          "parentPid": 26,
+          "name": "InventedProcess00052",
+          "nameQuality": "observed",
+          "threads": 5
+        },
+        {
+          "pid": 53,
+          "parentPid": 26,
+          "name": "InventedProcess00053",
+          "nameQuality": "observed",
+          "threads": 6
+        },
+        {
+          "pid": 54,
+          "parentPid": 27,
+          "name": "InventedProcess00054",
+          "nameQuality": "observed",
+          "threads": 7
+        },
+        {
+          "pid": 55,
+          "parentPid": 27,
+          "name": "InventedProcess00055",
+          "nameQuality": "observed",
+          "threads": 8
+        },
+        {
+          "pid": 56,
+          "parentPid": 28,
+          "name": "InventedProcess00056",
+          "nameQuality": "observed",
+          "threads": 9
+        },
+        {
+          "pid": 57,
+          "parentPid": 28,
+          "name": "InventedProcess00057",
+          "nameQuality": "observed",
+          "threads": 10
+        },
+        {
+          "pid": 58,
+          "parentPid": 29,
+          "name": "InventedProcess00058",
+          "nameQuality": "observed",
+          "threads": 11
+        },
+        {
+          "pid": 59,
+          "parentPid": 29,
+          "name": "InventedProcess00059",
+          "nameQuality": "observed",
+          "threads": 12
+        },
+        {
+          "pid": 60,
+          "parentPid": 30,
+          "name": "InventedProcess00060",
+          "nameQuality": "observed",
+          "threads": 13
+        },
+        {
+          "pid": 61,
+          "parentPid": 30,
+          "name": "InventedProcess00061",
+          "nameQuality": "observed",
+          "threads": 14
+        },
+        {
+          "pid": 62,
+          "parentPid": 31,
+          "name": "InventedProcess00062",
+          "nameQuality": "observed",
+          "threads": 15
+        },
+        {
+          "pid": 63,
+          "parentPid": 31,
+          "name": "InventedProcess00063",
+          "nameQuality": "observed",
+          "threads": 16
+        },
+        {
+          "pid": 64,
+          "parentPid": 32,
+          "name": "InventedProcess00064",
+          "nameQuality": "observed",
+          "threads": 1
+        },
+        {
+          "pid": 65,
+          "parentPid": 32,
+          "name": "InventedProcess00065",
+          "nameQuality": "observed",
+          "threads": 2
+        },
+        {
+          "pid": 66,
+          "parentPid": 33,
+          "name": "InventedProcess00066",
+          "nameQuality": "observed",
+          "threads": 3
+        },
+        {
+          "pid": 67,
+          "parentPid": 33,
+          "name": "InventedProcess00067",
+          "nameQuality": "observed",
+          "threads": 4
+        },
+        {
+          "pid": 68,
+          "parentPid": 34,
+          "name": "InventedProcess00068",
+          "nameQuality": "observed",
+          "threads": 5
+        },
+        {
+          "pid": 69,
+          "parentPid": 34,
+          "name": "InventedProcess00069",
+          "nameQuality": "observed",
+          "threads": 6
+        },
+        {
+          "pid": 70,
+          "parentPid": 35,
+          "name": "InventedProcess00070",
+          "nameQuality": "observed",
+          "threads": 7
+        },
+        {
+          "pid": 71,
+          "parentPid": 35,
+          "name": "InventedProcess00071",
+          "nameQuality": "observed",
+          "threads": 8
+        },
+        {
+          "pid": 72,
+          "parentPid": 36,
+          "name": "InventedProcess00072",
+          "nameQuality": "observed",
+          "threads": 9
+        },
+        {
+          "pid": 73,
+          "parentPid": 36,
+          "name": "InventedProcess00073",
+          "nameQuality": "observed",
+          "threads": 10
+        },
+        {
+          "pid": 74,
+          "parentPid": 37,
+          "name": "InventedProcess00074",
+          "nameQuality": "observed",
+          "threads": 11
+        },
+        {
+          "pid": 75,
+          "parentPid": 37,
+          "name": "InventedProcess00075",
+          "nameQuality": "observed",
+          "threads": 12
+        },
+        {
+          "pid": 76,
+          "parentPid": 38,
+          "name": "InventedProcess00076",
+          "nameQuality": "observed",
+          "threads": 13
+        },
+        {
+          "pid": 77,
+          "parentPid": 38,
+          "name": "InventedProcess00077",
+          "nameQuality": "observed",
+          "threads": 14
+        },
+        {
+          "pid": 78,
+          "parentPid": 39,
+          "name": "InventedProcess00078",
+          "nameQuality": "observed",
+          "threads": 15
+        },
+        {
+          "pid": 79,
+          "parentPid": 39,
+          "name": "InventedProcess00079",
+          "nameQuality": "observed",
+          "threads": 16
+        },
+        {
+          "pid": 80,
+          "parentPid": 40,
+          "name": "InventedProcess00080",
+          "nameQuality": "observed",
+          "threads": 1
+        },
+        {
+          "pid": 81,
+          "parentPid": 40,
+          "name": "InventedProcess00081",
+          "nameQuality": "observed",
+          "threads": 2
+        },
+        {
+          "pid": 82,
+          "parentPid": 41,
+          "name": "InventedProcess00082",
+          "nameQuality": "observed",
+          "threads": 3
+        },
+        {
+          "pid": 83,
+          "parentPid": 41,
+          "name": "InventedProcess00083",
+          "nameQuality": "observed",
+          "threads": 4
+        },
+        {
+          "pid": 84,
+          "parentPid": 42,
+          "name": "InventedProcess00084",
+          "nameQuality": "observed",
+          "threads": 5
+        },
+        {
+          "pid": 85,
+          "parentPid": 42,
+          "name": "InventedProcess00085",
+          "nameQuality": "observed",
+          "threads": 6
+        },
+        {
+          "pid": 86,
+          "parentPid": 43,
+          "name": "InventedProcess00086",
+          "nameQuality": "observed",
+          "threads": 7
+        },
+        {
+          "pid": 87,
+          "parentPid": 43,
+          "name": "InventedProcess00087",
+          "nameQuality": "observed",
+          "threads": 8
+        },
+        {
+          "pid": 88,
+          "parentPid": 44,
+          "name": "InventedProcess00088",
+          "nameQuality": "observed",
+          "threads": 9
+        },
+        {
+          "pid": 89,
+          "parentPid": 44,
+          "name": "InventedProcess00089",
+          "nameQuality": "observed",
+          "threads": 10
+        },
+        {
+          "pid": 90,
+          "parentPid": 45,
+          "name": "InventedProcess00090",
+          "nameQuality": "observed",
+          "threads": 11
+        },
+        {
+          "pid": 91,
+          "parentPid": 45,
+          "name": "InventedProcess00091",
+          "nameQuality": "observed",
+          "threads": 12
+        },
+        {
+          "pid": 92,
+          "parentPid": 46,
+          "name": "InventedProcess00092",
+          "nameQuality": "observed",
+          "threads": 13
+        },
+        {
+          "pid": 93,
+          "parentPid": 46,
+          "name": "InventedProcess00093",
+          "nameQuality": "observed",
+          "threads": 14
+        },
+        {
+          "pid": 94,
+          "parentPid": 47,
+          "name": "InventedProcess00094",
+          "nameQuality": "observed",
+          "threads": 15
+        },
+        {
+          "pid": 95,
+          "parentPid": 47,
+          "name": "InventedProcess00095",
+          "nameQuality": "observed",
+          "threads": 16
+        },
+        {
+          "pid": 96,
+          "parentPid": 48,
+          "name": "InventedProcess00096",
+          "nameQuality": "observed",
+          "threads": 1
+        },
+        {
+          "pid": 97,
+          "parentPid": 48,
+          "name": "InventedProcess00097",
+          "nameQuality": "observed",
+          "threads": 2
+        },
+        {
+          "pid": 98,
+          "parentPid": 49,
+          "name": "InventedProcess00098",
+          "nameQuality": "observed",
+          "threads": 3
+        },
+        {
+          "pid": 99,
+          "parentPid": 49,
+          "name": "InventedProcess00099",
+          "nameQuality": "observed",
+          "threads": 4
+        }
+      ],
+      "nextCursor": "eyJ2IjoxLCJkZXZpY2UiOiJhZ2VudF8wMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMSIsImdyYW50IjoiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmIiLCJyZXZpc2lvbiI6MSwiZ2VuZXJhdGlvbiI6InNhbXBsZV80MzQ3NDdmMmNjZjE5MDg5MGJmOWViNzUyNmUzZTgzYyIsIm1hbmlmZXN0IjoiMTNhYTQxMmYxOGJhMGMwM2FiNWYwZjFkNjFjMDliMmNhYjIwMDJjMWJhNTRhZTJmMzcxZTMyM2VkNzY0ZmZiNCIsInNlYXJjaCI6IiIsInNvcnQiOiJwaWQtYXNjIiwibGltaXQiOjEwMCwib2Zmc2V0IjoxMDAsInNlc3Npb24iOiIiLCJleHBpcmVzQXQiOiIyMDI3LTAxLTE1VDA4OjE1OjEwWiJ9.ILCiIL_x_S7yhUY1NtVuEWpLjbQV7uFEp5mKxVWfRpk",
+      "cursorExpiresAt": "2027-01-15T08:15:10Z"
+    }
+  },
+  {
+    "name": "second100",
+    "query": {
+      "search": "",
+      "sort": "pid-asc",
+      "limit": 100,
+      "cursor": "eyJ2IjoxLCJkZXZpY2UiOiJhZ2VudF8wMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMSIsImdyYW50IjoiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmIiLCJyZXZpc2lvbiI6MSwiZ2VuZXJhdGlvbiI6InNhbXBsZV80MzQ3NDdmMmNjZjE5MDg5MGJmOWViNzUyNmUzZTgzYyIsIm1hbmlmZXN0IjoiMTNhYTQxMmYxOGJhMGMwM2FiNWYwZjFkNjFjMDliMmNhYjIwMDJjMWJhNTRhZTJmMzcxZTMyM2VkNzY0ZmZiNCIsInNlYXJjaCI6IiIsInNvcnQiOiJwaWQtYXNjIiwibGltaXQiOjEwMCwib2Zmc2V0IjoxMDAsInNlc3Npb24iOiIiLCJleHBpcmVzQXQiOiIyMDI3LTAxLTE1VDA4OjE1OjEwWiJ9.ILCiIL_x_S7yhUY1NtVuEWpLjbQV7uFEp5mKxVWfRpk"
+    },
+    "page": {
+      "schemaVersion": "tracebolt.windows-full-processes-page.v1",
+      "deviceId": "agent_00000000000000000000000000000001",
+      "serverNow": "2027-01-15T08:00:10Z",
+      "status": "ready",
+      "authorityUntil": "2027-01-16T08:00:00Z",
+      "grantId": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "grantRevision": 1,
+      "complete": {
+        "manifest": {
+          "schemaVersion": "tracebolt.windows-complete-processes-manifest.v1",
+          "scope": "windows-complete-processes-v1",
+          "source": "toolhelp-process-snapshot",
+          "coverage": "caller_visible_process_snapshot_complete",
+          "deviceId": "agent_00000000000000000000000000000001",
+          "senderBinding": "a4c7871d6af716dcdf9174265160e94c5dfff3d6cc46a45c800c201a43555747",
+          "grantId": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "grantRevision": 1,
+          "sequence": 2,
+          "generationId": "sample_434747f2ccf190890bf9eb7526e3e83c",
+          "captureStartedAt": "2027-01-15T08:00:10Z",
+          "captureFinishedAt": "2027-01-15T08:00:10Z",
+          "expiresAt": "2027-01-16T08:00:10Z",
+          "rowCount": 2051,
+          "rowsBytes": 196514,
+          "rowsSha256": "4b4f708922c451067aaae72cd124ec6d1d1d1a7930d2ab05425037a620b74fcd",
+          "chunkCount": 17
+        },
+        "manifestSha256": "13aa412f18ba0c03ab5f0f1d61c09b2cab2002c1ba54ae2f371e323ed764ffb4",
+        "receivedAt": "2027-01-15T08:00:10Z"
+      },
+      "latestAttempt": {
+        "sequence": 2,
+        "attemptedAt": "2027-01-15T08:00:10Z",
+        "status": "complete",
+        "reason": ""
+      },
+      "search": "",
+      "sort": "pid-asc",
+      "limit": 100,
+      "offset": 100,
+      "matchingCount": 2051,
+      "rows": [
+        {
+          "pid": 100,
+          "parentPid": 50,
+          "name": "InventedProcess00100",
+          "nameQuality": "observed",
+          "threads": 5
+        },
+        {
+          "pid": 101,
+          "parentPid": 50,
+          "name": "InventedProcess00101",
+          "nameQuality": "observed",
+          "threads": 6
+        },
+        {
+          "pid": 102,
+          "parentPid": 51,
+          "name": "InventedProcess00102",
+          "nameQuality": "observed",
+          "threads": 7
+        },
+        {
+          "pid": 103,
+          "parentPid": 51,
+          "name": "InventedProcess00103",
+          "nameQuality": "observed",
+          "threads": 8
+        },
+        {
+          "pid": 104,
+          "parentPid": 52,
+          "name": "InventedProcess00104",
+          "nameQuality": "observed",
+          "threads": 9
+        },
+        {
+          "pid": 105,
+          "parentPid": 52,
+          "name": "InventedProcess00105",
+          "nameQuality": "observed",
+          "threads": 10
+        },
+        {
+          "pid": 106,
+          "parentPid": 53,
+          "name": "InventedProcess00106",
+          "nameQuality": "observed",
+          "threads": 11
+        },
+        {
+          "pid": 107,
+          "parentPid": 53,
+          "name": "InventedProcess00107",
+          "nameQuality": "observed",
+          "threads": 12
+        },
+        {
+          "pid": 108,
+          "parentPid": 54,
+          "name": "InventedProcess00108",
+          "nameQuality": "observed",
+          "threads": 13
+        },
+        {
+          "pid": 109,
+          "parentPid": 54,
+          "name": "InventedProcess00109",
+          "nameQuality": "observed",
+          "threads": 14
+        },
+        {
+          "pid": 110,
+          "parentPid": 55,
+          "name": "InventedProcess00110",
+          "nameQuality": "observed",
+          "threads": 15
+        },
+        {
+          "pid": 111,
+          "parentPid": 55,
+          "name": "InventedProcess00111",
+          "nameQuality": "observed",
+          "threads": 16
+        },
+        {
+          "pid": 112,
+          "parentPid": 56,
+          "name": "InventedProcess00112",
+          "nameQuality": "observed",
+          "threads": 1
+        },
+        {
+          "pid": 113,
+          "parentPid": 56,
+          "name": "InventedProcess00113",
+          "nameQuality": "observed",
+          "threads": 2
+        },
+        {
+          "pid": 114,
+          "parentPid": 57,
+          "name": "InventedProcess00114",
+          "nameQuality": "observed",
+          "threads": 3
+        },
+        {
+          "pid": 115,
+          "parentPid": 57,
+          "name": "InventedProcess00115",
+          "nameQuality": "observed",
+          "threads": 4
+        },
+        {
+          "pid": 116,
+          "parentPid": 58,
+          "name": "InventedProcess00116",
+          "nameQuality": "observed",
+          "threads": 5
+        },
+        {
+          "pid": 117,
+          "parentPid": 58,
+          "name": "InventedProcess00117",
+          "nameQuality": "observed",
+          "threads": 6
+        },
+        {
+          "pid": 118,
+          "parentPid": 59,
+          "name": "InventedProcess00118",
+          "nameQuality": "observed",
+          "threads": 7
+        },
+        {
+          "pid": 119,
+          "parentPid": 59,
+          "name": "InventedProcess00119",
+          "nameQuality": "observed",
+          "threads": 8
+        },
+        {
+          "pid": 120,
+          "parentPid": 60,
+          "name": "InventedProcess00120",
+          "nameQuality": "observed",
+          "threads": 9
+        },
+        {
+          "pid": 121,
+          "parentPid": 60,
+          "name": "InventedProcess00121",
+          "nameQuality": "observed",
+          "threads": 10
+        },
+        {
+          "pid": 122,
+          "parentPid": 61,
+          "name": "InventedProcess00122",
+          "nameQuality": "observed",
+          "threads": 11
+        },
+        {
+          "pid": 123,
+          "parentPid": 61,
+          "name": "InventedProcess00123",
+          "nameQuality": "observed",
+          "threads": 12
+        },
+        {
+          "pid": 124,
+          "parentPid": 62,
+          "name": "InventedProcess00124",
+          "nameQuality": "observed",
+          "threads": 13
+        },
+        {
+          "pid": 125,
+          "parentPid": 62,
+          "name": "InventedProcess00125",
+          "nameQuality": "observed",
+          "threads": 14
+        },
+        {
+          "pid": 126,
+          "parentPid": 63,
+          "name": "InventedProcess00126",
+          "nameQuality": "observed",
+          "threads": 15
+        },
+        {
+          "pid": 127,
+          "parentPid": 63,
+          "name": "InventedProcess00127",
+          "nameQuality": "observed",
+          "threads": 16
+        },
+        {
+          "pid": 128,
+          "parentPid": 64,
+          "name": "InventedProcess00128",
+          "nameQuality": "observed",
+          "threads": 1
+        },
+        {
+          "pid": 129,
+          "parentPid": 64,
+          "name": "InventedProcess00129",
+          "nameQuality": "observed",
+          "threads": 2
+        },
+        {
+          "pid": 130,
+          "parentPid": 65,
+          "name": "InventedProcess00130",
+          "nameQuality": "observed",
+          "threads": 3
+        },
+        {
+          "pid": 131,
+          "parentPid": 65,
+          "name": "InventedProcess00131",
+          "nameQuality": "observed",
+          "threads": 4
+        },
+        {
+          "pid": 132,
+          "parentPid": 66,
+          "name": "InventedProcess00132",
+          "nameQuality": "observed",
+          "threads": 5
+        },
+        {
+          "pid": 133,
+          "parentPid": 66,
+          "name": "InventedProcess00133",
+          "nameQuality": "observed",
+          "threads": 6
+        },
+        {
+          "pid": 134,
+          "parentPid": 67,
+          "name": "InventedProcess00134",
+          "nameQuality": "observed",
+          "threads": 7
+        },
+        {
+          "pid": 135,
+          "parentPid": 67,
+          "name": "InventedProcess00135",
+          "nameQuality": "observed",
+          "threads": 8
+        },
+        {
+          "pid": 136,
+          "parentPid": 68,
+          "name": "InventedProcess00136",
+          "nameQuality": "observed",
+          "threads": 9
+        },
+        {
+          "pid": 137,
+          "parentPid": 68,
+          "name": "InventedProcess00137",
+          "nameQuality": "observed",
+          "threads": 10
+        },
+        {
+          "pid": 138,
+          "parentPid": 69,
+          "name": "InventedProcess00138",
+          "nameQuality": "observed",
+          "threads": 11
+        },
+        {
+          "pid": 139,
+          "parentPid": 69,
+          "name": "InventedProcess00139",
+          "nameQuality": "observed",
+          "threads": 12
+        },
+        {
+          "pid": 140,
+          "parentPid": 70,
+          "name": "InventedProcess00140",
+          "nameQuality": "observed",
+          "threads": 13
+        },
+        {
+          "pid": 141,
+          "parentPid": 70,
+          "name": "InventedProcess00141",
+          "nameQuality": "observed",
+          "threads": 14
+        },
+        {
+          "pid": 142,
+          "parentPid": 71,
+          "name": "InventedProcess00142",
+          "nameQuality": "observed",
+          "threads": 15
+        },
+        {
+          "pid": 143,
+          "parentPid": 71,
+          "name": "InventedProcess00143",
+          "nameQuality": "observed",
+          "threads": 16
+        },
+        {
+          "pid": 144,
+          "parentPid": 72,
+          "name": "InventedProcess00144",
+          "nameQuality": "observed",
+          "threads": 1
+        },
+        {
+          "pid": 145,
+          "parentPid": 72,
+          "name": "InventedProcess00145",
+          "nameQuality": "observed",
+          "threads": 2
+        },
+        {
+          "pid": 146,
+          "parentPid": 73,
+          "name": "InventedProcess00146",
+          "nameQuality": "observed",
+          "threads": 3
+        },
+        {
+          "pid": 147,
+          "parentPid": 73,
+          "name": "InventedProcess00147",
+          "nameQuality": "observed",
+          "threads": 4
+        },
+        {
+          "pid": 148,
+          "parentPid": 74,
+          "name": "InventedProcess00148",
+          "nameQuality": "observed",
+          "threads": 5
+        },
+        {
+          "pid": 149,
+          "parentPid": 74,
+          "name": "InventedProcess00149",
+          "nameQuality": "observed",
+          "threads": 6
+        },
+        {
+          "pid": 150,
+          "parentPid": 75,
+          "name": "InventedProcess00150",
+          "nameQuality": "observed",
+          "threads": 7
+        },
+        {
+          "pid": 151,
+          "parentPid": 75,
+          "name": "InventedProcess00151",
+          "nameQuality": "observed",
+          "threads": 8
+        },
+        {
+          "pid": 152,
+          "parentPid": 76,
+          "name": "InventedProcess00152",
+          "nameQuality": "observed",
+          "threads": 9
+        },
+        {
+          "pid": 153,
+          "parentPid": 76,
+          "name": "InventedProcess00153",
+          "nameQuality": "observed",
+          "threads": 10
+        },
+        {
+          "pid": 154,
+          "parentPid": 77,
+          "name": "InventedProcess00154",
+          "nameQuality": "observed",
+          "threads": 11
+        },
+        {
+          "pid": 155,
+          "parentPid": 77,
+          "name": "InventedProcess00155",
+          "nameQuality": "observed",
+          "threads": 12
+        },
+        {
+          "pid": 156,
+          "parentPid": 78,
+          "name": "InventedProcess00156",
+          "nameQuality": "observed",
+          "threads": 13
+        },
+        {
+          "pid": 157,
+          "parentPid": 78,
+          "name": "InventedProcess00157",
+          "nameQuality": "observed",
+          "threads": 14
+        },
+        {
+          "pid": 158,
+          "parentPid": 79,
+          "name": "InventedProcess00158",
+          "nameQuality": "observed",
+          "threads": 15
+        },
+        {
+          "pid": 159,
+          "parentPid": 79,
+          "name": "InventedProcess00159",
+          "nameQuality": "observed",
+          "threads": 16
+        },
+        {
+          "pid": 160,
+          "parentPid": 80,
+          "name": "InventedProcess00160",
+          "nameQuality": "observed",
+          "threads": 1
+        },
+        {
+          "pid": 161,
+          "parentPid": 80,
+          "name": "InventedProcess00161",
+          "nameQuality": "observed",
+          "threads": 2
+        },
+        {
+          "pid": 162,
+          "parentPid": 81,
+          "name": "InventedProcess00162",
+          "nameQuality": "observed",
+          "threads": 3
+        },
+        {
+          "pid": 163,
+          "parentPid": 81,
+          "name": "InventedProcess00163",
+          "nameQuality": "observed",
+          "threads": 4
+        },
+        {
+          "pid": 164,
+          "parentPid": 82,
+          "name": "InventedProcess00164",
+          "nameQuality": "observed",
+          "threads": 5
+        },
+        {
+          "pid": 165,
+          "parentPid": 82,
+          "name": "InventedProcess00165",
+          "nameQuality": "observed",
+          "threads": 6
+        },
+        {
+          "pid": 166,
+          "parentPid": 83,
+          "name": "InventedProcess00166",
+          "nameQuality": "observed",
+          "threads": 7
+        },
+        {
+          "pid": 167,
+          "parentPid": 83,
+          "name": "InventedProcess00167",
+          "nameQuality": "observed",
+          "threads": 8
+        },
+        {
+          "pid": 168,
+          "parentPid": 84,
+          "name": "InventedProcess00168",
+          "nameQuality": "observed",
+          "threads": 9
+        },
+        {
+          "pid": 169,
+          "parentPid": 84,
+          "name": "InventedProcess00169",
+          "nameQuality": "observed",
+          "threads": 10
+        },
+        {
+          "pid": 170,
+          "parentPid": 85,
+          "name": "InventedProcess00170",
+          "nameQuality": "observed",
+          "threads": 11
+        },
+        {
+          "pid": 171,
+          "parentPid": 85,
+          "name": "InventedProcess00171",
+          "nameQuality": "observed",
+          "threads": 12
+        },
+        {
+          "pid": 172,
+          "parentPid": 86,
+          "name": "InventedProcess00172",
+          "nameQuality": "observed",
+          "threads": 13
+        },
+        {
+          "pid": 173,
+          "parentPid": 86,
+          "name": "InventedProcess00173",
+          "nameQuality": "observed",
+          "threads": 14
+        },
+        {
+          "pid": 174,
+          "parentPid": 87,
+          "name": "InventedProcess00174",
+          "nameQuality": "observed",
+          "threads": 15
+        },
+        {
+          "pid": 175,
+          "parentPid": 87,
+          "name": "InventedProcess00175",
+          "nameQuality": "observed",
+          "threads": 16
+        },
+        {
+          "pid": 176,
+          "parentPid": 88,
+          "name": "InventedProcess00176",
+          "nameQuality": "observed",
+          "threads": 1
+        },
+        {
+          "pid": 177,
+          "parentPid": 88,
+          "name": "InventedProcess00177",
+          "nameQuality": "observed",
+          "threads": 2
+        },
+        {
+          "pid": 178,
+          "parentPid": 89,
+          "name": "InventedProcess00178",
+          "nameQuality": "observed",
+          "threads": 3
+        },
+        {
+          "pid": 179,
+          "parentPid": 89,
+          "name": "InventedProcess00179",
+          "nameQuality": "observed",
+          "threads": 4
+        },
+        {
+          "pid": 180,
+          "parentPid": 90,
+          "name": "InventedProcess00180",
+          "nameQuality": "observed",
+          "threads": 5
+        },
+        {
+          "pid": 181,
+          "parentPid": 90,
+          "name": "InventedProcess00181",
+          "nameQuality": "observed",
+          "threads": 6
+        },
+        {
+          "pid": 182,
+          "parentPid": 91,
+          "name": "InventedProcess00182",
+          "nameQuality": "observed",
+          "threads": 7
+        },
+        {
+          "pid": 183,
+          "parentPid": 91,
+          "name": "InventedProcess00183",
+          "nameQuality": "observed",
+          "threads": 8
+        },
+        {
+          "pid": 184,
+          "parentPid": 92,
+          "name": "InventedProcess00184",
+          "nameQuality": "observed",
+          "threads": 9
+        },
+        {
+          "pid": 185,
+          "parentPid": 92,
+          "name": "InventedProcess00185",
+          "nameQuality": "observed",
+          "threads": 10
+        },
+        {
+          "pid": 186,
+          "parentPid": 93,
+          "name": "InventedProcess00186",
+          "nameQuality": "observed",
+          "threads": 11
+        },
+        {
+          "pid": 187,
+          "parentPid": 93,
+          "name": "InventedProcess00187",
+          "nameQuality": "observed",
+          "threads": 12
+        },
+        {
+          "pid": 188,
+          "parentPid": 94,
+          "name": "InventedProcess00188",
+          "nameQuality": "observed",
+          "threads": 13
+        },
+        {
+          "pid": 189,
+          "parentPid": 94,
+          "name": "InventedProcess00189",
+          "nameQuality": "observed",
+          "threads": 14
+        },
+        {
+          "pid": 190,
+          "parentPid": 95,
+          "name": "InventedProcess00190",
+          "nameQuality": "observed",
+          "threads": 15
+        },
+        {
+          "pid": 191,
+          "parentPid": 95,
+          "name": "InventedProcess00191",
+          "nameQuality": "observed",
+          "threads": 16
+        },
+        {
+          "pid": 192,
+          "parentPid": 96,
+          "name": "InventedProcess00192",
+          "nameQuality": "observed",
+          "threads": 1
+        },
+        {
+          "pid": 193,
+          "parentPid": 96,
+          "name": "InventedProcess00193",
+          "nameQuality": "observed",
+          "threads": 2
+        },
+        {
+          "pid": 194,
+          "parentPid": 97,
+          "name": "InventedProcess00194",
+          "nameQuality": "observed",
+          "threads": 3
+        },
+        {
+          "pid": 195,
+          "parentPid": 97,
+          "name": "InventedProcess00195",
+          "nameQuality": "observed",
+          "threads": 4
+        },
+        {
+          "pid": 196,
+          "parentPid": 98,
+          "name": "InventedProcess00196",
+          "nameQuality": "observed",
+          "threads": 5
+        },
+        {
+          "pid": 197,
+          "parentPid": 98,
+          "name": "InventedProcess00197",
+          "nameQuality": "observed",
+          "threads": 6
+        },
+        {
+          "pid": 198,
+          "parentPid": 99,
+          "name": "InventedProcess00198",
+          "nameQuality": "observed",
+          "threads": 7
+        },
+        {
+          "pid": 199,
+          "parentPid": 99,
+          "name": "InventedProcess00199",
+          "nameQuality": "observed",
+          "threads": 8
+        }
+      ],
+      "nextCursor": "eyJ2IjoxLCJkZXZpY2UiOiJhZ2VudF8wMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMSIsImdyYW50IjoiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmIiLCJyZXZpc2lvbiI6MSwiZ2VuZXJhdGlvbiI6InNhbXBsZV80MzQ3NDdmMmNjZjE5MDg5MGJmOWViNzUyNmUzZTgzYyIsIm1hbmlmZXN0IjoiMTNhYTQxMmYxOGJhMGMwM2FiNWYwZjFkNjFjMDliMmNhYjIwMDJjMWJhNTRhZTJmMzcxZTMyM2VkNzY0ZmZiNCIsInNlYXJjaCI6IiIsInNvcnQiOiJwaWQtYXNjIiwibGltaXQiOjEwMCwib2Zmc2V0IjoyMDAsInNlc3Npb24iOiIiLCJleHBpcmVzQXQiOiIyMDI3LTAxLTE1VDA4OjE1OjEwWiJ9.c95Z42VNN5oUvvzLw-IhtVBYe6IIuvfyuOnPDZkduF4",
+      "cursorExpiresAt": "2027-01-15T08:15:10Z"
+    }
+  },
+  {
+    "name": "offset700",
+    "query": {
+      "search": "",
+      "sort": "pid-asc",
+      "limit": 100,
+      "cursor": "eyJ2IjoxLCJkZXZpY2UiOiJhZ2VudF8wMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMSIsImdyYW50IjoiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmIiLCJyZXZpc2lvbiI6MSwiZ2VuZXJhdGlvbiI6InNhbXBsZV80MzQ3NDdmMmNjZjE5MDg5MGJmOWViNzUyNmUzZTgzYyIsIm1hbmlmZXN0IjoiMTNhYTQxMmYxOGJhMGMwM2FiNWYwZjFkNjFjMDliMmNhYjIwMDJjMWJhNTRhZTJmMzcxZTMyM2VkNzY0ZmZiNCIsInNlYXJjaCI6IiIsInNvcnQiOiJwaWQtYXNjIiwibGltaXQiOjEwMCwib2Zmc2V0Ijo3MDAsInNlc3Npb24iOiIiLCJleHBpcmVzQXQiOiIyMDI3LTAxLTE1VDA4OjE1OjEwWiJ9.f_Cc9HvDymiQdec0yZmLeBDpXlHQNx29efegudFiHOo"
+    },
+    "page": {
+      "schemaVersion": "tracebolt.windows-full-processes-page.v1",
+      "deviceId": "agent_00000000000000000000000000000001",
+      "serverNow": "2027-01-15T08:00:10Z",
+      "status": "ready",
+      "authorityUntil": "2027-01-16T08:00:00Z",
+      "grantId": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "grantRevision": 1,
+      "complete": {
+        "manifest": {
+          "schemaVersion": "tracebolt.windows-complete-processes-manifest.v1",
+          "scope": "windows-complete-processes-v1",
+          "source": "toolhelp-process-snapshot",
+          "coverage": "caller_visible_process_snapshot_complete",
+          "deviceId": "agent_00000000000000000000000000000001",
+          "senderBinding": "a4c7871d6af716dcdf9174265160e94c5dfff3d6cc46a45c800c201a43555747",
+          "grantId": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "grantRevision": 1,
+          "sequence": 2,
+          "generationId": "sample_434747f2ccf190890bf9eb7526e3e83c",
+          "captureStartedAt": "2027-01-15T08:00:10Z",
+          "captureFinishedAt": "2027-01-15T08:00:10Z",
+          "expiresAt": "2027-01-16T08:00:10Z",
+          "rowCount": 2051,
+          "rowsBytes": 196514,
+          "rowsSha256": "4b4f708922c451067aaae72cd124ec6d1d1d1a7930d2ab05425037a620b74fcd",
+          "chunkCount": 17
+        },
+        "manifestSha256": "13aa412f18ba0c03ab5f0f1d61c09b2cab2002c1ba54ae2f371e323ed764ffb4",
+        "receivedAt": "2027-01-15T08:00:10Z"
+      },
+      "latestAttempt": {
+        "sequence": 2,
+        "attemptedAt": "2027-01-15T08:00:10Z",
+        "status": "complete",
+        "reason": ""
+      },
+      "search": "",
+      "sort": "pid-asc",
+      "limit": 100,
+      "offset": 700,
+      "matchingCount": 2051,
+      "rows": [
+        {
+          "pid": 700,
+          "parentPid": 350,
+          "name": "InventedProcess00700",
+          "nameQuality": "observed",
+          "threads": 13
+        },
+        {
+          "pid": 701,
+          "parentPid": 350,
+          "name": "InventedProcess00701",
+          "nameQuality": "observed",
+          "threads": 14
+        },
+        {
+          "pid": 702,
+          "parentPid": 351,
+          "name": "InventedProcess00702",
+          "nameQuality": "observed",
+          "threads": 15
+        },
+        {
+          "pid": 703,
+          "parentPid": 351,
+          "name": "InventedProcess00703",
+          "nameQuality": "observed",
+          "threads": 16
+        },
+        {
+          "pid": 704,
+          "parentPid": 352,
+          "name": "InventedProcess00704",
+          "nameQuality": "observed",
+          "threads": 1
+        },
+        {
+          "pid": 705,
+          "parentPid": 352,
+          "name": "InventedProcess00705",
+          "nameQuality": "observed",
+          "threads": 2
+        },
+        {
+          "pid": 706,
+          "parentPid": 353,
+          "name": "InventedProcess00706",
+          "nameQuality": "observed",
+          "threads": 3
+        },
+        {
+          "pid": 707,
+          "parentPid": 353,
+          "name": "InventedProcess00707",
+          "nameQuality": "observed",
+          "threads": 4
+        },
+        {
+          "pid": 708,
+          "parentPid": 354,
+          "name": "InventedProcess00708",
+          "nameQuality": "observed",
+          "threads": 5
+        },
+        {
+          "pid": 709,
+          "parentPid": 354,
+          "name": "InventedProcess00709",
+          "nameQuality": "observed",
+          "threads": 6
+        },
+        {
+          "pid": 710,
+          "parentPid": 355,
+          "name": "InventedProcess00710",
+          "nameQuality": "observed",
+          "threads": 7
+        },
+        {
+          "pid": 711,
+          "parentPid": 355,
+          "name": "InventedProcess00711",
+          "nameQuality": "observed",
+          "threads": 8
+        },
+        {
+          "pid": 712,
+          "parentPid": 356,
+          "name": "InventedProcess00712",
+          "nameQuality": "observed",
+          "threads": 9
+        },
+        {
+          "pid": 713,
+          "parentPid": 356,
+          "name": "InventedProcess00713",
+          "nameQuality": "observed",
+          "threads": 10
+        },
+        {
+          "pid": 714,
+          "parentPid": 357,
+          "name": "InventedProcess00714",
+          "nameQuality": "observed",
+          "threads": 11
+        },
+        {
+          "pid": 715,
+          "parentPid": 357,
+          "name": "InventedProcess00715",
+          "nameQuality": "observed",
+          "threads": 12
+        },
+        {
+          "pid": 716,
+          "parentPid": 358,
+          "name": "InventedProcess00716",
+          "nameQuality": "observed",
+          "threads": 13
+        },
+        {
+          "pid": 717,
+          "parentPid": 358,
+          "name": "InventedProcess00717",
+          "nameQuality": "observed",
+          "threads": 14
+        },
+        {
+          "pid": 718,
+          "parentPid": 359,
+          "name": "InventedProcess00718",
+          "nameQuality": "observed",
+          "threads": 15
+        },
+        {
+          "pid": 719,
+          "parentPid": 359,
+          "name": "InventedProcess00719",
+          "nameQuality": "observed",
+          "threads": 16
+        },
+        {
+          "pid": 720,
+          "parentPid": 360,
+          "name": "InventedProcess00720",
+          "nameQuality": "observed",
+          "threads": 1
+        },
+        {
+          "pid": 721,
+          "parentPid": 360,
+          "name": "InventedProcess00721",
+          "nameQuality": "observed",
+          "threads": 2
+        },
+        {
+          "pid": 722,
+          "parentPid": 361,
+          "name": "InventedProcess00722",
+          "nameQuality": "observed",
+          "threads": 3
+        },
+        {
+          "pid": 723,
+          "parentPid": 361,
+          "name": "InventedProcess00723",
+          "nameQuality": "observed",
+          "threads": 4
+        },
+        {
+          "pid": 724,
+          "parentPid": 362,
+          "name": "InventedProcess00724",
+          "nameQuality": "observed",
+          "threads": 5
+        },
+        {
+          "pid": 725,
+          "parentPid": 362,
+          "name": "InventedProcess00725",
+          "nameQuality": "observed",
+          "threads": 6
+        },
+        {
+          "pid": 726,
+          "parentPid": 363,
+          "name": "InventedProcess00726",
+          "nameQuality": "observed",
+          "threads": 7
+        },
+        {
+          "pid": 727,
+          "parentPid": 363,
+          "name": "InventedProcess00727",
+          "nameQuality": "observed",
+          "threads": 8
+        },
+        {
+          "pid": 728,
+          "parentPid": 364,
+          "name": "InventedProcess00728",
+          "nameQuality": "observed",
+          "threads": 9
+        },
+        {
+          "pid": 729,
+          "parentPid": 364,
+          "name": "InventedProcess00729",
+          "nameQuality": "observed",
+          "threads": 10
+        },
+        {
+          "pid": 730,
+          "parentPid": 365,
+          "name": "InventedProcess00730",
+          "nameQuality": "observed",
+          "threads": 11
+        },
+        {
+          "pid": 731,
+          "parentPid": 365,
+          "name": "InventedProcess00731",
+          "nameQuality": "observed",
+          "threads": 12
+        },
+        {
+          "pid": 732,
+          "parentPid": 366,
+          "name": "InventedProcess00732",
+          "nameQuality": "observed",
+          "threads": 13
+        },
+        {
+          "pid": 733,
+          "parentPid": 366,
+          "name": "InventedProcess00733",
+          "nameQuality": "observed",
+          "threads": 14
+        },
+        {
+          "pid": 734,
+          "parentPid": 367,
+          "name": "InventedProcess00734",
+          "nameQuality": "observed",
+          "threads": 15
+        },
+        {
+          "pid": 735,
+          "parentPid": 367,
+          "name": "InventedProcess00735",
+          "nameQuality": "observed",
+          "threads": 16
+        },
+        {
+          "pid": 736,
+          "parentPid": 368,
+          "name": "InventedProcess00736",
+          "nameQuality": "observed",
+          "threads": 1
+        },
+        {
+          "pid": 737,
+          "parentPid": 368,
+          "name": "InventedProcess00737",
+          "nameQuality": "observed",
+          "threads": 2
+        },
+        {
+          "pid": 738,
+          "parentPid": 369,
+          "name": "InventedProcess00738",
+          "nameQuality": "observed",
+          "threads": 3
+        },
+        {
+          "pid": 739,
+          "parentPid": 369,
+          "name": "InventedProcess00739",
+          "nameQuality": "observed",
+          "threads": 4
+        },
+        {
+          "pid": 740,
+          "parentPid": 370,
+          "name": "InventedProcess00740",
+          "nameQuality": "observed",
+          "threads": 5
+        },
+        {
+          "pid": 741,
+          "parentPid": 370,
+          "name": "InventedProcess00741",
+          "nameQuality": "observed",
+          "threads": 6
+        },
+        {
+          "pid": 742,
+          "parentPid": 371,
+          "name": "InventedProcess00742",
+          "nameQuality": "observed",
+          "threads": 7
+        },
+        {
+          "pid": 743,
+          "parentPid": 371,
+          "name": "InventedProcess00743",
+          "nameQuality": "observed",
+          "threads": 8
+        },
+        {
+          "pid": 744,
+          "parentPid": 372,
+          "name": "InventedProcess00744",
+          "nameQuality": "observed",
+          "threads": 9
+        },
+        {
+          "pid": 745,
+          "parentPid": 372,
+          "name": "InventedProcess00745",
+          "nameQuality": "observed",
+          "threads": 10
+        },
+        {
+          "pid": 746,
+          "parentPid": 373,
+          "name": "InventedProcess00746",
+          "nameQuality": "observed",
+          "threads": 11
+        },
+        {
+          "pid": 747,
+          "parentPid": 373,
+          "name": "InventedProcess00747",
+          "nameQuality": "observed",
+          "threads": 12
+        },
+        {
+          "pid": 748,
+          "parentPid": 374,
+          "name": "InventedProcess00748",
+          "nameQuality": "observed",
+          "threads": 13
+        },
+        {
+          "pid": 749,
+          "parentPid": 374,
+          "name": "InventedProcess00749",
+          "nameQuality": "observed",
+          "threads": 14
+        },
+        {
+          "pid": 750,
+          "parentPid": 375,
+          "name": "InventedProcess00750",
+          "nameQuality": "observed",
+          "threads": 15
+        },
+        {
+          "pid": 751,
+          "parentPid": 375,
+          "name": "InventedProcess00751",
+          "nameQuality": "observed",
+          "threads": 16
+        },
+        {
+          "pid": 752,
+          "parentPid": 376,
+          "name": "InventedProcess00752",
+          "nameQuality": "observed",
+          "threads": 1
+        },
+        {
+          "pid": 753,
+          "parentPid": 376,
+          "name": "InventedProcess00753",
+          "nameQuality": "observed",
+          "threads": 2
+        },
+        {
+          "pid": 754,
+          "parentPid": 377,
+          "name": "InventedProcess00754",
+          "nameQuality": "observed",
+          "threads": 3
+        },
+        {
+          "pid": 755,
+          "parentPid": 377,
+          "name": "InventedProcess00755",
+          "nameQuality": "observed",
+          "threads": 4
+        },
+        {
+          "pid": 756,
+          "parentPid": 378,
+          "name": "InventedProcess00756",
+          "nameQuality": "observed",
+          "threads": 5
+        },
+        {
+          "pid": 757,
+          "parentPid": 378,
+          "name": "InventedProcess00757",
+          "nameQuality": "observed",
+          "threads": 6
+        },
+        {
+          "pid": 758,
+          "parentPid": 379,
+          "name": "InventedProcess00758",
+          "nameQuality": "observed",
+          "threads": 7
+        },
+        {
+          "pid": 759,
+          "parentPid": 379,
+          "name": "InventedProcess00759",
+          "nameQuality": "observed",
+          "threads": 8
+        },
+        {
+          "pid": 760,
+          "parentPid": 380,
+          "name": "InventedProcess00760",
+          "nameQuality": "observed",
+          "threads": 9
+        },
+        {
+          "pid": 761,
+          "parentPid": 380,
+          "name": "InventedProcess00761",
+          "nameQuality": "observed",
+          "threads": 10
+        },
+        {
+          "pid": 762,
+          "parentPid": 381,
+          "name": "InventedProcess00762",
+          "nameQuality": "observed",
+          "threads": 11
+        },
+        {
+          "pid": 763,
+          "parentPid": 381,
+          "name": "InventedProcess00763",
+          "nameQuality": "observed",
+          "threads": 12
+        },
+        {
+          "pid": 764,
+          "parentPid": 382,
+          "name": "InventedProcess00764",
+          "nameQuality": "observed",
+          "threads": 13
+        },
+        {
+          "pid": 765,
+          "parentPid": 382,
+          "name": "InventedProcess00765",
+          "nameQuality": "observed",
+          "threads": 14
+        },
+        {
+          "pid": 766,
+          "parentPid": 383,
+          "name": "InventedProcess00766",
+          "nameQuality": "observed",
+          "threads": 15
+        },
+        {
+          "pid": 767,
+          "parentPid": 383,
+          "name": "InventedProcess00767",
+          "nameQuality": "observed",
+          "threads": 16
+        },
+        {
+          "pid": 768,
+          "parentPid": 384,
+          "name": "InventedProcess00768",
+          "nameQuality": "observed",
+          "threads": 1
+        },
+        {
+          "pid": 769,
+          "parentPid": 384,
+          "name": "InventedProcess00769",
+          "nameQuality": "observed",
+          "threads": 2
+        },
+        {
+          "pid": 770,
+          "parentPid": 385,
+          "name": "InventedProcess00770",
+          "nameQuality": "observed",
+          "threads": 3
+        },
+        {
+          "pid": 771,
+          "parentPid": 385,
+          "name": "InventedProcess00771",
+          "nameQuality": "observed",
+          "threads": 4
+        },
+        {
+          "pid": 772,
+          "parentPid": 386,
+          "name": "InventedProcess00772",
+          "nameQuality": "observed",
+          "threads": 5
+        },
+        {
+          "pid": 773,
+          "parentPid": 386,
+          "name": "InventedProcess00773",
+          "nameQuality": "observed",
+          "threads": 6
+        },
+        {
+          "pid": 774,
+          "parentPid": 387,
+          "name": "InventedProcess00774",
+          "nameQuality": "observed",
+          "threads": 7
+        },
+        {
+          "pid": 775,
+          "parentPid": 387,
+          "name": "InventedProcess00775",
+          "nameQuality": "observed",
+          "threads": 8
+        },
+        {
+          "pid": 776,
+          "parentPid": 388,
+          "name": "InventedProcess00776",
+          "nameQuality": "observed",
+          "threads": 9
+        },
+        {
+          "pid": 777,
+          "parentPid": 388,
+          "name": "InventedProcess00777",
+          "nameQuality": "observed",
+          "threads": 10
+        },
+        {
+          "pid": 778,
+          "parentPid": 389,
+          "name": "InventedProcess00778",
+          "nameQuality": "observed",
+          "threads": 11
+        },
+        {
+          "pid": 779,
+          "parentPid": 389,
+          "name": "InventedProcess00779",
+          "nameQuality": "observed",
+          "threads": 12
+        },
+        {
+          "pid": 780,
+          "parentPid": 390,
+          "name": "InventedProcess00780",
+          "nameQuality": "observed",
+          "threads": 13
+        },
+        {
+          "pid": 781,
+          "parentPid": 390,
+          "name": "InventedProcess00781",
+          "nameQuality": "observed",
+          "threads": 14
+        },
+        {
+          "pid": 782,
+          "parentPid": 391,
+          "name": "InventedProcess00782",
+          "nameQuality": "observed",
+          "threads": 15
+        },
+        {
+          "pid": 783,
+          "parentPid": 391,
+          "name": "InventedProcess00783",
+          "nameQuality": "observed",
+          "threads": 16
+        },
+        {
+          "pid": 784,
+          "parentPid": 392,
+          "name": "InventedProcess00784",
+          "nameQuality": "observed",
+          "threads": 1
+        },
+        {
+          "pid": 785,
+          "parentPid": 392,
+          "name": "InventedProcess00785",
+          "nameQuality": "observed",
+          "threads": 2
+        },
+        {
+          "pid": 786,
+          "parentPid": 393,
+          "name": "InventedProcess00786",
+          "nameQuality": "observed",
+          "threads": 3
+        },
+        {
+          "pid": 787,
+          "parentPid": 393,
+          "name": "InventedProcess00787",
+          "nameQuality": "observed",
+          "threads": 4
+        },
+        {
+          "pid": 788,
+          "parentPid": 394,
+          "name": "InventedProcess00788",
+          "nameQuality": "observed",
+          "threads": 5
+        },
+        {
+          "pid": 789,
+          "parentPid": 394,
+          "name": "InventedProcess00789",
+          "nameQuality": "observed",
+          "threads": 6
+        },
+        {
+          "pid": 790,
+          "parentPid": 395,
+          "name": "InventedProcess00790",
+          "nameQuality": "observed",
+          "threads": 7
+        },
+        {
+          "pid": 791,
+          "parentPid": 395,
+          "name": "InventedProcess00791",
+          "nameQuality": "observed",
+          "threads": 8
+        },
+        {
+          "pid": 792,
+          "parentPid": 396,
+          "name": "InventedProcess00792",
+          "nameQuality": "observed",
+          "threads": 9
+        },
+        {
+          "pid": 793,
+          "parentPid": 396,
+          "name": "InventedProcess00793",
+          "nameQuality": "observed",
+          "threads": 10
+        },
+        {
+          "pid": 794,
+          "parentPid": 397,
+          "name": "InventedProcess00794",
+          "nameQuality": "observed",
+          "threads": 11
+        },
+        {
+          "pid": 795,
+          "parentPid": 397,
+          "name": "InventedProcess00795",
+          "nameQuality": "observed",
+          "threads": 12
+        },
+        {
+          "pid": 796,
+          "parentPid": 398,
+          "name": "InventedProcess00796",
+          "nameQuality": "observed",
+          "threads": 13
+        },
+        {
+          "pid": 797,
+          "parentPid": 398,
+          "name": "InventedProcess00797",
+          "nameQuality": "observed",
+          "threads": 14
+        },
+        {
+          "pid": 798,
+          "parentPid": 399,
+          "name": "InventedProcess00798",
+          "nameQuality": "observed",
+          "threads": 15
+        },
+        {
+          "pid": 799,
+          "parentPid": 399,
+          "name": "InventedProcess00799",
+          "nameQuality": "observed",
+          "threads": 16
+        }
+      ],
+      "nextCursor": "eyJ2IjoxLCJkZXZpY2UiOiJhZ2VudF8wMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMSIsImdyYW50IjoiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmIiLCJyZXZpc2lvbiI6MSwiZ2VuZXJhdGlvbiI6InNhbXBsZV80MzQ3NDdmMmNjZjE5MDg5MGJmOWViNzUyNmUzZTgzYyIsIm1hbmlmZXN0IjoiMTNhYTQxMmYxOGJhMGMwM2FiNWYwZjFkNjFjMDliMmNhYjIwMDJjMWJhNTRhZTJmMzcxZTMyM2VkNzY0ZmZiNCIsInNlYXJjaCI6IiIsInNvcnQiOiJwaWQtYXNjIiwibGltaXQiOjEwMCwib2Zmc2V0Ijo4MDAsInNlc3Npb24iOiIiLCJleHBpcmVzQXQiOiIyMDI3LTAxLTE1VDA4OjE1OjEwWiJ9.6ufxzXt8xFT8o0e2QTGxvSS9cKqu9pTuAbyNVz6Jix0",
+      "cursorExpiresAt": "2027-01-15T08:15:10Z"
+    }
+  },
+  {
+    "name": "search2049",
+    "query": {
+      "search": "02049",
+      "sort": "pid-asc",
+      "limit": 100,
+      "cursor": ""
+    },
+    "page": {
+      "schemaVersion": "tracebolt.windows-full-processes-page.v1",
+      "deviceId": "agent_00000000000000000000000000000001",
+      "serverNow": "2027-01-15T08:00:10Z",
+      "status": "ready",
+      "authorityUntil": "2027-01-16T08:00:00Z",
+      "grantId": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "grantRevision": 1,
+      "complete": {
+        "manifest": {
+          "schemaVersion": "tracebolt.windows-complete-processes-manifest.v1",
+          "scope": "windows-complete-processes-v1",
+          "source": "toolhelp-process-snapshot",
+          "coverage": "caller_visible_process_snapshot_complete",
+          "deviceId": "agent_00000000000000000000000000000001",
+          "senderBinding": "a4c7871d6af716dcdf9174265160e94c5dfff3d6cc46a45c800c201a43555747",
+          "grantId": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "grantRevision": 1,
+          "sequence": 2,
+          "generationId": "sample_434747f2ccf190890bf9eb7526e3e83c",
+          "captureStartedAt": "2027-01-15T08:00:10Z",
+          "captureFinishedAt": "2027-01-15T08:00:10Z",
+          "expiresAt": "2027-01-16T08:00:10Z",
+          "rowCount": 2051,
+          "rowsBytes": 196514,
+          "rowsSha256": "4b4f708922c451067aaae72cd124ec6d1d1d1a7930d2ab05425037a620b74fcd",
+          "chunkCount": 17
+        },
+        "manifestSha256": "13aa412f18ba0c03ab5f0f1d61c09b2cab2002c1ba54ae2f371e323ed764ffb4",
+        "receivedAt": "2027-01-15T08:00:10Z"
+      },
+      "latestAttempt": {
+        "sequence": 2,
+        "attemptedAt": "2027-01-15T08:00:10Z",
+        "status": "complete",
+        "reason": ""
+      },
+      "search": "02049",
+      "sort": "pid-asc",
+      "limit": 100,
+      "offset": 0,
+      "matchingCount": 1,
+      "rows": [
+        {
+          "pid": 2049,
+          "parentPid": 1024,
+          "name": "InventedProcess02049",
+          "nameQuality": "observed",
+          "threads": 2
+        }
+      ],
+      "nextCursor": "",
+      "cursorExpiresAt": "2027-01-15T08:15:10Z"
+    }
+  },
+  {
+    "name": "priorCompleteLatestFailed",
+    "query": {
+      "search": "",
+      "sort": "pid-asc",
+      "limit": 100,
+      "cursor": ""
+    },
+    "page": {
+      "schemaVersion": "tracebolt.windows-full-processes-page.v1",
+      "deviceId": "agent_00000000000000000000000000000001",
+      "serverNow": "2027-01-15T08:00:10Z",
+      "status": "ready",
+      "authorityUntil": "2027-01-16T08:00:00Z",
+      "grantId": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "grantRevision": 1,
+      "complete": {
+        "manifest": {
+          "schemaVersion": "tracebolt.windows-complete-processes-manifest.v1",
+          "scope": "windows-complete-processes-v1",
+          "source": "toolhelp-process-snapshot",
+          "coverage": "caller_visible_process_snapshot_complete",
+          "deviceId": "agent_00000000000000000000000000000001",
+          "senderBinding": "a4c7871d6af716dcdf9174265160e94c5dfff3d6cc46a45c800c201a43555747",
+          "grantId": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "grantRevision": 1,
+          "sequence": 2,
+          "generationId": "sample_434747f2ccf190890bf9eb7526e3e83c",
+          "captureStartedAt": "2027-01-15T08:00:10Z",
+          "captureFinishedAt": "2027-01-15T08:00:10Z",
+          "expiresAt": "2027-01-16T08:00:10Z",
+          "rowCount": 2051,
+          "rowsBytes": 196514,
+          "rowsSha256": "4b4f708922c451067aaae72cd124ec6d1d1d1a7930d2ab05425037a620b74fcd",
+          "chunkCount": 17
+        },
+        "manifestSha256": "13aa412f18ba0c03ab5f0f1d61c09b2cab2002c1ba54ae2f371e323ed764ffb4",
+        "receivedAt": "2027-01-15T08:00:10Z"
+      },
+      "latestAttempt": {
+        "sequence": 3,
+        "attemptedAt": "2027-01-15T08:00:10Z",
+        "status": "source_failed",
+        "reason": "access_denied"
+      },
+      "search": "",
+      "sort": "pid-asc",
+      "limit": 100,
+      "offset": 0,
+      "matchingCount": 2051,
+      "rows": [
+        {
+          "pid": 0,
+          "parentPid": 0,
+          "name": "InventedProcess00000",
+          "nameQuality": "observed",
+          "threads": 1
+        },
+        {
+          "pid": 1,
+          "parentPid": 0,
+          "name": "InventedProcess00001",
+          "nameQuality": "observed",
+          "threads": 2
+        },
+        {
+          "pid": 2,
+          "parentPid": 1,
+          "name": "InventedProcess00002",
+          "nameQuality": "observed",
+          "threads": 3
+        },
+        {
+          "pid": 3,
+          "parentPid": 1,
+          "name": "InventedProcess00003",
+          "nameQuality": "observed",
+          "threads": 4
+        },
+        {
+          "pid": 4,
+          "parentPid": 2,
+          "name": "InventedProcess00004",
+          "nameQuality": "observed",
+          "threads": 5
+        },
+        {
+          "pid": 5,
+          "parentPid": 2,
+          "name": "InventedProcess00005",
+          "nameQuality": "observed",
+          "threads": 6
+        },
+        {
+          "pid": 6,
+          "parentPid": 3,
+          "name": "InventedProcess00006",
+          "nameQuality": "observed",
+          "threads": 7
+        },
+        {
+          "pid": 7,
+          "parentPid": 3,
+          "name": "InventedProcess00007",
+          "nameQuality": "observed",
+          "threads": 8
+        },
+        {
+          "pid": 8,
+          "parentPid": 4,
+          "name": "InventedProcess00008",
+          "nameQuality": "observed",
+          "threads": 9
+        },
+        {
+          "pid": 9,
+          "parentPid": 4,
+          "name": "InventedProcess00009",
+          "nameQuality": "observed",
+          "threads": 10
+        },
+        {
+          "pid": 10,
+          "parentPid": 5,
+          "name": "InventedProcess00010",
+          "nameQuality": "observed",
+          "threads": 11
+        },
+        {
+          "pid": 11,
+          "parentPid": 5,
+          "name": "InventedProcess00011",
+          "nameQuality": "observed",
+          "threads": 12
+        },
+        {
+          "pid": 12,
+          "parentPid": 6,
+          "name": "InventedProcess00012",
+          "nameQuality": "observed",
+          "threads": 13
+        },
+        {
+          "pid": 13,
+          "parentPid": 6,
+          "name": "InventedProcess00013",
+          "nameQuality": "observed",
+          "threads": 14
+        },
+        {
+          "pid": 14,
+          "parentPid": 7,
+          "name": "InventedProcess00014",
+          "nameQuality": "observed",
+          "threads": 15
+        },
+        {
+          "pid": 15,
+          "parentPid": 7,
+          "name": "InventedProcess00015",
+          "nameQuality": "observed",
+          "threads": 16
+        },
+        {
+          "pid": 16,
+          "parentPid": 8,
+          "name": "InventedProcess00016",
+          "nameQuality": "observed",
+          "threads": 1
+        },
+        {
+          "pid": 17,
+          "parentPid": 8,
+          "name": "InventedProcess00017",
+          "nameQuality": "observed",
+          "threads": 2
+        },
+        {
+          "pid": 18,
+          "parentPid": 9,
+          "name": "InventedProcess00018",
+          "nameQuality": "observed",
+          "threads": 3
+        },
+        {
+          "pid": 19,
+          "parentPid": 9,
+          "name": "InventedProcess00019",
+          "nameQuality": "observed",
+          "threads": 4
+        },
+        {
+          "pid": 20,
+          "parentPid": 10,
+          "name": "InventedProcess00020",
+          "nameQuality": "observed",
+          "threads": 5
+        },
+        {
+          "pid": 21,
+          "parentPid": 10,
+          "name": "InventedProcess00021",
+          "nameQuality": "observed",
+          "threads": 6
+        },
+        {
+          "pid": 22,
+          "parentPid": 11,
+          "name": "InventedProcess00022",
+          "nameQuality": "observed",
+          "threads": 7
+        },
+        {
+          "pid": 23,
+          "parentPid": 11,
+          "name": "InventedProcess00023",
+          "nameQuality": "observed",
+          "threads": 8
+        },
+        {
+          "pid": 24,
+          "parentPid": 12,
+          "name": "InventedProcess00024",
+          "nameQuality": "observed",
+          "threads": 9
+        },
+        {
+          "pid": 25,
+          "parentPid": 12,
+          "name": "InventedProcess00025",
+          "nameQuality": "observed",
+          "threads": 10
+        },
+        {
+          "pid": 26,
+          "parentPid": 13,
+          "name": "InventedProcess00026",
+          "nameQuality": "observed",
+          "threads": 11
+        },
+        {
+          "pid": 27,
+          "parentPid": 13,
+          "name": "InventedProcess00027",
+          "nameQuality": "observed",
+          "threads": 12
+        },
+        {
+          "pid": 28,
+          "parentPid": 14,
+          "name": "InventedProcess00028",
+          "nameQuality": "observed",
+          "threads": 13
+        },
+        {
+          "pid": 29,
+          "parentPid": 14,
+          "name": "InventedProcess00029",
+          "nameQuality": "observed",
+          "threads": 14
+        },
+        {
+          "pid": 30,
+          "parentPid": 15,
+          "name": "InventedProcess00030",
+          "nameQuality": "observed",
+          "threads": 15
+        },
+        {
+          "pid": 31,
+          "parentPid": 15,
+          "name": "InventedProcess00031",
+          "nameQuality": "observed",
+          "threads": 16
+        },
+        {
+          "pid": 32,
+          "parentPid": 16,
+          "name": "InventedProcess00032",
+          "nameQuality": "observed",
+          "threads": 1
+        },
+        {
+          "pid": 33,
+          "parentPid": 16,
+          "name": "InventedProcess00033",
+          "nameQuality": "observed",
+          "threads": 2
+        },
+        {
+          "pid": 34,
+          "parentPid": 17,
+          "name": "InventedProcess00034",
+          "nameQuality": "observed",
+          "threads": 3
+        },
+        {
+          "pid": 35,
+          "parentPid": 17,
+          "name": "InventedProcess00035",
+          "nameQuality": "observed",
+          "threads": 4
+        },
+        {
+          "pid": 36,
+          "parentPid": 18,
+          "name": "InventedProcess00036",
+          "nameQuality": "observed",
+          "threads": 5
+        },
+        {
+          "pid": 37,
+          "parentPid": 18,
+          "name": "InventedProcess00037",
+          "nameQuality": "observed",
+          "threads": 6
+        },
+        {
+          "pid": 38,
+          "parentPid": 19,
+          "name": "InventedProcess00038",
+          "nameQuality": "observed",
+          "threads": 7
+        },
+        {
+          "pid": 39,
+          "parentPid": 19,
+          "name": "InventedProcess00039",
+          "nameQuality": "observed",
+          "threads": 8
+        },
+        {
+          "pid": 40,
+          "parentPid": 20,
+          "name": "InventedProcess00040",
+          "nameQuality": "observed",
+          "threads": 9
+        },
+        {
+          "pid": 41,
+          "parentPid": 20,
+          "name": "InventedProcess00041",
+          "nameQuality": "observed",
+          "threads": 10
+        },
+        {
+          "pid": 42,
+          "parentPid": 21,
+          "name": "InventedProcess00042",
+          "nameQuality": "observed",
+          "threads": 11
+        },
+        {
+          "pid": 43,
+          "parentPid": 21,
+          "name": "InventedProcess00043",
+          "nameQuality": "observed",
+          "threads": 12
+        },
+        {
+          "pid": 44,
+          "parentPid": 22,
+          "name": "InventedProcess00044",
+          "nameQuality": "observed",
+          "threads": 13
+        },
+        {
+          "pid": 45,
+          "parentPid": 22,
+          "name": "InventedProcess00045",
+          "nameQuality": "observed",
+          "threads": 14
+        },
+        {
+          "pid": 46,
+          "parentPid": 23,
+          "name": "InventedProcess00046",
+          "nameQuality": "observed",
+          "threads": 15
+        },
+        {
+          "pid": 47,
+          "parentPid": 23,
+          "name": "InventedProcess00047",
+          "nameQuality": "observed",
+          "threads": 16
+        },
+        {
+          "pid": 48,
+          "parentPid": 24,
+          "name": "InventedProcess00048",
+          "nameQuality": "observed",
+          "threads": 1
+        },
+        {
+          "pid": 49,
+          "parentPid": 24,
+          "name": "InventedProcess00049",
+          "nameQuality": "observed",
+          "threads": 2
+        },
+        {
+          "pid": 50,
+          "parentPid": 25,
+          "name": "InventedProcess00050",
+          "nameQuality": "observed",
+          "threads": 3
+        },
+        {
+          "pid": 51,
+          "parentPid": 25,
+          "name": "InventedProcess00051",
+          "nameQuality": "observed",
+          "threads": 4
+        },
+        {
+          "pid": 52,
+          "parentPid": 26,
+          "name": "InventedProcess00052",
+          "nameQuality": "observed",
+          "threads": 5
+        },
+        {
+          "pid": 53,
+          "parentPid": 26,
+          "name": "InventedProcess00053",
+          "nameQuality": "observed",
+          "threads": 6
+        },
+        {
+          "pid": 54,
+          "parentPid": 27,
+          "name": "InventedProcess00054",
+          "nameQuality": "observed",
+          "threads": 7
+        },
+        {
+          "pid": 55,
+          "parentPid": 27,
+          "name": "InventedProcess00055",
+          "nameQuality": "observed",
+          "threads": 8
+        },
+        {
+          "pid": 56,
+          "parentPid": 28,
+          "name": "InventedProcess00056",
+          "nameQuality": "observed",
+          "threads": 9
+        },
+        {
+          "pid": 57,
+          "parentPid": 28,
+          "name": "InventedProcess00057",
+          "nameQuality": "observed",
+          "threads": 10
+        },
+        {
+          "pid": 58,
+          "parentPid": 29,
+          "name": "InventedProcess00058",
+          "nameQuality": "observed",
+          "threads": 11
+        },
+        {
+          "pid": 59,
+          "parentPid": 29,
+          "name": "InventedProcess00059",
+          "nameQuality": "observed",
+          "threads": 12
+        },
+        {
+          "pid": 60,
+          "parentPid": 30,
+          "name": "InventedProcess00060",
+          "nameQuality": "observed",
+          "threads": 13
+        },
+        {
+          "pid": 61,
+          "parentPid": 30,
+          "name": "InventedProcess00061",
+          "nameQuality": "observed",
+          "threads": 14
+        },
+        {
+          "pid": 62,
+          "parentPid": 31,
+          "name": "InventedProcess00062",
+          "nameQuality": "observed",
+          "threads": 15
+        },
+        {
+          "pid": 63,
+          "parentPid": 31,
+          "name": "InventedProcess00063",
+          "nameQuality": "observed",
+          "threads": 16
+        },
+        {
+          "pid": 64,
+          "parentPid": 32,
+          "name": "InventedProcess00064",
+          "nameQuality": "observed",
+          "threads": 1
+        },
+        {
+          "pid": 65,
+          "parentPid": 32,
+          "name": "InventedProcess00065",
+          "nameQuality": "observed",
+          "threads": 2
+        },
+        {
+          "pid": 66,
+          "parentPid": 33,
+          "name": "InventedProcess00066",
+          "nameQuality": "observed",
+          "threads": 3
+        },
+        {
+          "pid": 67,
+          "parentPid": 33,
+          "name": "InventedProcess00067",
+          "nameQuality": "observed",
+          "threads": 4
+        },
+        {
+          "pid": 68,
+          "parentPid": 34,
+          "name": "InventedProcess00068",
+          "nameQuality": "observed",
+          "threads": 5
+        },
+        {
+          "pid": 69,
+          "parentPid": 34,
+          "name": "InventedProcess00069",
+          "nameQuality": "observed",
+          "threads": 6
+        },
+        {
+          "pid": 70,
+          "parentPid": 35,
+          "name": "InventedProcess00070",
+          "nameQuality": "observed",
+          "threads": 7
+        },
+        {
+          "pid": 71,
+          "parentPid": 35,
+          "name": "InventedProcess00071",
+          "nameQuality": "observed",
+          "threads": 8
+        },
+        {
+          "pid": 72,
+          "parentPid": 36,
+          "name": "InventedProcess00072",
+          "nameQuality": "observed",
+          "threads": 9
+        },
+        {
+          "pid": 73,
+          "parentPid": 36,
+          "name": "InventedProcess00073",
+          "nameQuality": "observed",
+          "threads": 10
+        },
+        {
+          "pid": 74,
+          "parentPid": 37,
+          "name": "InventedProcess00074",
+          "nameQuality": "observed",
+          "threads": 11
+        },
+        {
+          "pid": 75,
+          "parentPid": 37,
+          "name": "InventedProcess00075",
+          "nameQuality": "observed",
+          "threads": 12
+        },
+        {
+          "pid": 76,
+          "parentPid": 38,
+          "name": "InventedProcess00076",
+          "nameQuality": "observed",
+          "threads": 13
+        },
+        {
+          "pid": 77,
+          "parentPid": 38,
+          "name": "InventedProcess00077",
+          "nameQuality": "observed",
+          "threads": 14
+        },
+        {
+          "pid": 78,
+          "parentPid": 39,
+          "name": "InventedProcess00078",
+          "nameQuality": "observed",
+          "threads": 15
+        },
+        {
+          "pid": 79,
+          "parentPid": 39,
+          "name": "InventedProcess00079",
+          "nameQuality": "observed",
+          "threads": 16
+        },
+        {
+          "pid": 80,
+          "parentPid": 40,
+          "name": "InventedProcess00080",
+          "nameQuality": "observed",
+          "threads": 1
+        },
+        {
+          "pid": 81,
+          "parentPid": 40,
+          "name": "InventedProcess00081",
+          "nameQuality": "observed",
+          "threads": 2
+        },
+        {
+          "pid": 82,
+          "parentPid": 41,
+          "name": "InventedProcess00082",
+          "nameQuality": "observed",
+          "threads": 3
+        },
+        {
+          "pid": 83,
+          "parentPid": 41,
+          "name": "InventedProcess00083",
+          "nameQuality": "observed",
+          "threads": 4
+        },
+        {
+          "pid": 84,
+          "parentPid": 42,
+          "name": "InventedProcess00084",
+          "nameQuality": "observed",
+          "threads": 5
+        },
+        {
+          "pid": 85,
+          "parentPid": 42,
+          "name": "InventedProcess00085",
+          "nameQuality": "observed",
+          "threads": 6
+        },
+        {
+          "pid": 86,
+          "parentPid": 43,
+          "name": "InventedProcess00086",
+          "nameQuality": "observed",
+          "threads": 7
+        },
+        {
+          "pid": 87,
+          "parentPid": 43,
+          "name": "InventedProcess00087",
+          "nameQuality": "observed",
+          "threads": 8
+        },
+        {
+          "pid": 88,
+          "parentPid": 44,
+          "name": "InventedProcess00088",
+          "nameQuality": "observed",
+          "threads": 9
+        },
+        {
+          "pid": 89,
+          "parentPid": 44,
+          "name": "InventedProcess00089",
+          "nameQuality": "observed",
+          "threads": 10
+        },
+        {
+          "pid": 90,
+          "parentPid": 45,
+          "name": "InventedProcess00090",
+          "nameQuality": "observed",
+          "threads": 11
+        },
+        {
+          "pid": 91,
+          "parentPid": 45,
+          "name": "InventedProcess00091",
+          "nameQuality": "observed",
+          "threads": 12
+        },
+        {
+          "pid": 92,
+          "parentPid": 46,
+          "name": "InventedProcess00092",
+          "nameQuality": "observed",
+          "threads": 13
+        },
+        {
+          "pid": 93,
+          "parentPid": 46,
+          "name": "InventedProcess00093",
+          "nameQuality": "observed",
+          "threads": 14
+        },
+        {
+          "pid": 94,
+          "parentPid": 47,
+          "name": "InventedProcess00094",
+          "nameQuality": "observed",
+          "threads": 15
+        },
+        {
+          "pid": 95,
+          "parentPid": 47,
+          "name": "InventedProcess00095",
+          "nameQuality": "observed",
+          "threads": 16
+        },
+        {
+          "pid": 96,
+          "parentPid": 48,
+          "name": "InventedProcess00096",
+          "nameQuality": "observed",
+          "threads": 1
+        },
+        {
+          "pid": 97,
+          "parentPid": 48,
+          "name": "InventedProcess00097",
+          "nameQuality": "observed",
+          "threads": 2
+        },
+        {
+          "pid": 98,
+          "parentPid": 49,
+          "name": "InventedProcess00098",
+          "nameQuality": "observed",
+          "threads": 3
+        },
+        {
+          "pid": 99,
+          "parentPid": 49,
+          "name": "InventedProcess00099",
+          "nameQuality": "observed",
+          "threads": 4
+        }
+      ],
+      "nextCursor": "eyJ2IjoxLCJkZXZpY2UiOiJhZ2VudF8wMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMSIsImdyYW50IjoiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmIiLCJyZXZpc2lvbiI6MSwiZ2VuZXJhdGlvbiI6InNhbXBsZV80MzQ3NDdmMmNjZjE5MDg5MGJmOWViNzUyNmUzZTgzYyIsIm1hbmlmZXN0IjoiMTNhYTQxMmYxOGJhMGMwM2FiNWYwZjFkNjFjMDliMmNhYjIwMDJjMWJhNTRhZTJmMzcxZTMyM2VkNzY0ZmZiNCIsInNlYXJjaCI6IiIsInNvcnQiOiJwaWQtYXNjIiwibGltaXQiOjEwMCwib2Zmc2V0IjoxMDAsInNlc3Npb24iOiIiLCJleHBpcmVzQXQiOiIyMDI3LTAxLTE1VDA4OjE1OjEwWiJ9.ILCiIL_x_S7yhUY1NtVuEWpLjbQV7uFEp5mKxVWfRpk",
+      "cursorExpiresAt": "2027-01-15T08:15:10Z"
+    }
+  },
+  {
+    "name": "duplicateNamesUnavailableZero",
+    "query": {
+      "search": "",
+      "sort": "pid-asc",
+      "limit": 100,
+      "cursor": ""
+    },
+    "page": {
+      "schemaVersion": "tracebolt.windows-full-processes-page.v1",
+      "deviceId": "agent_00000000000000000000000000000001",
+      "serverNow": "2027-01-15T08:00:10Z",
+      "status": "ready",
+      "authorityUntil": "2027-01-16T08:00:00Z",
+      "grantId": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "grantRevision": 1,
+      "complete": {
+        "manifest": {
+          "schemaVersion": "tracebolt.windows-complete-processes-manifest.v1",
+          "scope": "windows-complete-processes-v1",
+          "source": "toolhelp-process-snapshot",
+          "coverage": "caller_visible_process_snapshot_complete",
+          "deviceId": "agent_00000000000000000000000000000001",
+          "senderBinding": "a4c7871d6af716dcdf9174265160e94c5dfff3d6cc46a45c800c201a43555747",
+          "grantId": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "grantRevision": 1,
+          "sequence": 4,
+          "generationId": "sample_b60a4c91726a860476b5f6447f8df9f2",
+          "captureStartedAt": "2027-01-15T08:00:10Z",
+          "captureFinishedAt": "2027-01-15T08:00:10Z",
+          "expiresAt": "2027-01-16T08:00:10Z",
+          "rowCount": 3,
+          "rowsBytes": 242,
+          "rowsSha256": "f338e7eb4d79ec6ffb36ce7c4aa295bcce9eba2284b23af6e17278fe25f77ab4",
+          "chunkCount": 1
+        },
+        "manifestSha256": "5b688402d4a68503e95da5cf02dc3881de2d99431a6710316f1110f4101fd51d",
+        "receivedAt": "2027-01-15T08:00:10Z"
+      },
+      "latestAttempt": {
+        "sequence": 4,
+        "attemptedAt": "2027-01-15T08:00:10Z",
+        "status": "complete",
+        "reason": ""
+      },
+      "search": "",
+      "sort": "pid-asc",
+      "limit": 100,
+      "offset": 0,
+      "matchingCount": 3,
+      "rows": [
+        {
+          "pid": 0,
+          "parentPid": 0,
+          "name": null,
+          "nameQuality": "unavailable",
+          "threads": 0
+        },
+        {
+          "pid": 2,
+          "parentPid": 0,
+          "name": "Same 東京",
+          "nameQuality": "observed",
+          "threads": 1
+        },
+        {
+          "pid": 10,
+          "parentPid": 2,
+          "name": "Same 東京",
+          "nameQuality": "observed",
+          "threads": 3
+        }
+      ],
+      "nextCursor": "",
+      "cursorExpiresAt": "2027-01-15T08:15:10Z"
+    }
+  },
+  {
+    "name": "completeZero",
+    "query": {
+      "search": "",
+      "sort": "pid-asc",
+      "limit": 100,
+      "cursor": ""
+    },
+    "page": {
+      "schemaVersion": "tracebolt.windows-full-processes-page.v1",
+      "deviceId": "agent_00000000000000000000000000000001",
+      "serverNow": "2027-01-15T08:00:10Z",
+      "status": "ready",
+      "authorityUntil": "2027-01-16T08:00:00Z",
+      "grantId": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "grantRevision": 1,
+      "complete": {
+        "manifest": {
+          "schemaVersion": "tracebolt.windows-complete-processes-manifest.v1",
+          "scope": "windows-complete-processes-v1",
+          "source": "toolhelp-process-snapshot",
+          "coverage": "caller_visible_process_snapshot_complete",
+          "deviceId": "agent_00000000000000000000000000000001",
+          "senderBinding": "a4c7871d6af716dcdf9174265160e94c5dfff3d6cc46a45c800c201a43555747",
+          "grantId": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "grantRevision": 1,
+          "sequence": 5,
+          "generationId": "sample_3bd2c51cf3b51e6adb20c02123121b18",
+          "captureStartedAt": "2027-01-15T08:00:10Z",
+          "captureFinishedAt": "2027-01-15T08:00:10Z",
+          "expiresAt": "2027-01-16T08:00:10Z",
+          "rowCount": 0,
+          "rowsBytes": 2,
+          "rowsSha256": "6b36a22758250163f6afe5bc133548e5fab34cc59b779ad2cdb79703b7741a4d",
+          "chunkCount": 1
+        },
+        "manifestSha256": "e6f436abd05283c8be741316414ca3b1fc7d226b6e36b740a7c793db053dbb9d",
+        "receivedAt": "2027-01-15T08:00:10Z"
+      },
+      "latestAttempt": {
+        "sequence": 5,
+        "attemptedAt": "2027-01-15T08:00:10Z",
+        "status": "complete",
+        "reason": ""
+      },
+      "search": "",
+      "sort": "pid-asc",
+      "limit": 100,
+      "offset": 0,
+      "matchingCount": 0,
+      "rows": [],
+      "nextCursor": "",
+      "cursorExpiresAt": "2027-01-15T08:15:10Z"
+    }
+  }
+]

@@ -310,12 +310,14 @@ func validDigest(s string) bool {
 }
 
 type diskRecord struct {
-	WindowsFullSoftwareUsed bool         `json:"windowsFullSoftwareUsed,omitempty"`
-	WindowsFullServicesUsed bool         `json:"windowsFullServicesUsed,omitempty"`
-	Version                 int          `json:"version"`
-	Binding                 string       `json:"binding"`
-	LastSequence            uint64       `json:"lastSequence"`
-	Pending                 *diskPending `json:"pending"`
+	WindowsNetworkContextUsed bool         `json:"windowsNetworkContextUsed,omitempty"`
+	WindowsFullProcessesUsed  bool         `json:"windowsFullProcessesUsed,omitempty"`
+	WindowsFullSoftwareUsed   bool         `json:"windowsFullSoftwareUsed,omitempty"`
+	WindowsFullServicesUsed   bool         `json:"windowsFullServicesUsed,omitempty"`
+	Version                   int          `json:"version"`
+	Binding                   string       `json:"binding"`
+	LastSequence              uint64       `json:"lastSequence"`
+	Pending                   *diskPending `json:"pending"`
 }
 type diskPending struct {
 	Sequence uint64 `json:"sequence"`
@@ -323,17 +325,21 @@ type diskPending struct {
 	Body     []byte `json:"body"`
 }
 
-// Versions preserve exact v1/v2 encoding for endpoints that have never enabled
-// software. v3 is an explicit irreversible software opt-in, independently of
-// the service marker; neither marker can be inferred from another scope.
+// Versions preserve exact v1-v4 encoding until network-context opt-in.
+// V5 independently fences route/counter state without implying any other
+// extension marker or changing primary sequence and exact pending bytes.
 func validWindowsExtensionVersion(v diskRecord) bool {
 	switch v.Version {
 	case stateVersion:
-		return !v.WindowsFullServicesUsed && !v.WindowsFullSoftwareUsed
+		return !v.WindowsNetworkContextUsed && !v.WindowsFullProcessesUsed && !v.WindowsFullServicesUsed && !v.WindowsFullSoftwareUsed
 	case 2:
-		return v.WindowsFullServicesUsed && !v.WindowsFullSoftwareUsed
+		return !v.WindowsNetworkContextUsed && !v.WindowsFullProcessesUsed && v.WindowsFullServicesUsed && !v.WindowsFullSoftwareUsed
 	case 3:
-		return v.WindowsFullSoftwareUsed
+		return !v.WindowsNetworkContextUsed && v.WindowsFullSoftwareUsed && !v.WindowsFullProcessesUsed
+	case 4:
+		return !v.WindowsNetworkContextUsed && v.WindowsFullProcessesUsed
+	case 5:
+		return v.WindowsNetworkContextUsed
 	}
 	return false
 }
@@ -400,6 +406,18 @@ func decodeRecord(raw []byte) (diskRecord, error) {
 		{"version", "binding", "lastSequence", "pending", "windowsFullServicesUsed"},
 		{"version", "binding", "lastSequence", "pending", "windowsFullSoftwareUsed"},
 		{"version", "binding", "lastSequence", "pending", "windowsFullServicesUsed", "windowsFullSoftwareUsed"},
+		{"version", "binding", "lastSequence", "pending", "windowsFullProcessesUsed"},
+		{"version", "binding", "lastSequence", "pending", "windowsFullProcessesUsed", "windowsFullServicesUsed"},
+		{"version", "binding", "lastSequence", "pending", "windowsFullProcessesUsed", "windowsFullSoftwareUsed"},
+		{"version", "binding", "lastSequence", "pending", "windowsFullProcessesUsed", "windowsFullServicesUsed", "windowsFullSoftwareUsed"},
+		{"windowsNetworkContextUsed", "version", "binding", "lastSequence", "pending"},
+		{"windowsNetworkContextUsed", "version", "binding", "lastSequence", "pending", "windowsFullServicesUsed"},
+		{"windowsNetworkContextUsed", "version", "binding", "lastSequence", "pending", "windowsFullSoftwareUsed"},
+		{"windowsNetworkContextUsed", "version", "binding", "lastSequence", "pending", "windowsFullServicesUsed", "windowsFullSoftwareUsed"},
+		{"windowsNetworkContextUsed", "version", "binding", "lastSequence", "pending", "windowsFullProcessesUsed"},
+		{"windowsNetworkContextUsed", "version", "binding", "lastSequence", "pending", "windowsFullProcessesUsed", "windowsFullServicesUsed"},
+		{"windowsNetworkContextUsed", "version", "binding", "lastSequence", "pending", "windowsFullProcessesUsed", "windowsFullSoftwareUsed"},
+		{"windowsNetworkContextUsed", "version", "binding", "lastSequence", "pending", "windowsFullProcessesUsed", "windowsFullServicesUsed", "windowsFullSoftwareUsed"},
 	} {
 		f, err = strictObject(raw, keys...)
 		if err == nil {
@@ -408,6 +426,16 @@ func decodeRecord(raw []byte) (diskRecord, error) {
 	}
 	if err != nil {
 		return v, ErrCorrupt
+	}
+	if raw, ok := f["windowsNetworkContextUsed"]; ok {
+		if !scalar(raw, &v.WindowsNetworkContextUsed) || !v.WindowsNetworkContextUsed {
+			return v, ErrCorrupt
+		}
+	}
+	if raw, ok := f["windowsFullProcessesUsed"]; ok {
+		if !scalar(raw, &v.WindowsFullProcessesUsed) || !v.WindowsFullProcessesUsed {
+			return v, ErrCorrupt
+		}
 	}
 	if raw, ok := f["windowsFullServicesUsed"]; ok {
 		if !scalar(raw, &v.WindowsFullServicesUsed) || !v.WindowsFullServicesUsed {

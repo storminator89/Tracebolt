@@ -1,3 +1,4 @@
+import './windows-resource-context-fixtures.test.mjs';
 import './windows-security-coverage-fixtures.test.mjs';
 import './windows-hardware-context-fixtures.test.mjs';
 import './windows-storage-context-fixtures.test.mjs';

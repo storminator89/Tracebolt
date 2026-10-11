@@ -1,0 +1,4555 @@
+[
+  {
+    "name": "schemaAbsent",
+    "query": {
+      "kind": "route",
+      "search": "",
+      "sort": "source-asc",
+      "limit": 100,
+      "cursor": ""
+    },
+    "page": {
+      "kind": "route",
+      "schemaVersion": "tracebolt.windows-network-context-page.v1",
+      "deviceId": "agent_00000000000000000000000000000001",
+      "serverNow": "2027-01-15T08:00:10Z",
+      "status": "not_configured",
+      "authorityUntil": null,
+      "grantId": null,
+      "grantRevision": null,
+      "complete": null,
+      "latestAttempt": null,
+      "search": "",
+      "sort": "source-asc",
+      "limit": 100,
+      "offset": 0,
+      "matchingCount": 0,
+      "rows": [],
+      "nextCursor": "",
+      "cursorExpiresAt": null
+    }
+  },
+  {
+    "name": "unavailable",
+    "query": {
+      "kind": "route",
+      "search": "",
+      "sort": "source-asc",
+      "limit": 100,
+      "cursor": ""
+    },
+    "page": {
+      "kind": "route",
+      "schemaVersion": "tracebolt.windows-network-context-page.v1",
+      "deviceId": "agent_00000000000000000000000000000001",
+      "serverNow": "2027-01-15T08:00:10Z",
+      "status": "unavailable",
+      "authorityUntil": "2027-01-16T08:00:00Z",
+      "grantId": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "grantRevision": 1,
+      "complete": null,
+      "latestAttempt": {
+        "sequence": 1,
+        "attemptedAt": "2027-01-15T08:00:10Z",
+        "status": "source_failed",
+        "reason": "access_denied"
+      },
+      "search": "",
+      "sort": "source-asc",
+      "limit": 100,
+      "offset": 0,
+      "matchingCount": 0,
+      "rows": [],
+      "nextCursor": "",
+      "cursorExpiresAt": null
+    }
+  },
+  {
+    "name": "first257",
+    "query": {
+      "kind": "route",
+      "search": "",
+      "sort": "source-asc",
+      "limit": 100,
+      "cursor": ""
+    },
+    "page": {
+      "kind": "route",
+      "schemaVersion": "tracebolt.windows-network-context-page.v1",
+      "deviceId": "agent_00000000000000000000000000000001",
+      "serverNow": "2027-01-15T08:00:10Z",
+      "status": "ready",
+      "authorityUntil": "2027-01-16T08:00:00Z",
+      "grantId": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "grantRevision": 1,
+      "complete": {
+        "manifest": {
+          "schemaVersion": "tracebolt.windows-network-context-manifest.v1",
+          "scope": "windows-network-context-v1",
+          "source": "ip-helper-routes-and-raw-interface-counters",
+          "coverage": "caller_visible_tables_complete_nonatomic",
+          "deviceId": "agent_00000000000000000000000000000001",
+          "senderBinding": "7495bae7f75c103752a498ed82f79d2f29f21f27b5499eddf7702fe6eb8931dd",
+          "grantId": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "grantRevision": 1,
+          "sequence": 2,
+          "generationId": "sample_ed23de556bcb89a86e96ea59f75ca3fd",
+          "captureStartedAt": "2027-01-15T08:00:10Z",
+          "captureFinishedAt": "2027-01-15T08:00:10Z",
+          "expiresAt": "2027-01-16T08:00:10Z",
+          "rowCount": 257,
+          "rowsBytes": 42224,
+          "rowsSha256": "96f5804ced6f581c828c68a3f529a62d90fea0d7b9953171bb861249e9f2438c",
+          "chunkCount": 3
+        },
+        "manifestSha256": "a4a79f22f244f780347129b9eeaa611f8d96c04fafd48533a30a11f4a2c587be",
+        "receivedAt": "2027-01-15T08:00:10Z"
+      },
+      "latestAttempt": {
+        "sequence": 2,
+        "attemptedAt": "2027-01-15T08:00:10Z",
+        "status": "complete",
+        "reason": ""
+      },
+      "search": "",
+      "sort": "source-asc",
+      "limit": 100,
+      "offset": 0,
+      "matchingCount": 257,
+      "rows": [
+        {
+          "id": 1,
+          "kind": "route",
+          "interfaceIndex": 1,
+          "route": {
+            "destination": "2001:db8::/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 0,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 2,
+          "kind": "route",
+          "interfaceIndex": 2,
+          "route": {
+            "destination": "2001:db8::1/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 1,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 3,
+          "kind": "route",
+          "interfaceIndex": 3,
+          "route": {
+            "destination": "2001:db8::2/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 2,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 4,
+          "kind": "route",
+          "interfaceIndex": 4,
+          "route": {
+            "destination": "2001:db8::3/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 3,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 5,
+          "kind": "route",
+          "interfaceIndex": 5,
+          "route": {
+            "destination": "2001:db8::4/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 4,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 6,
+          "kind": "route",
+          "interfaceIndex": 6,
+          "route": {
+            "destination": "2001:db8::5/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 5,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 7,
+          "kind": "route",
+          "interfaceIndex": 7,
+          "route": {
+            "destination": "2001:db8::6/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 6,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 8,
+          "kind": "route",
+          "interfaceIndex": 8,
+          "route": {
+            "destination": "2001:db8::7/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 7,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 9,
+          "kind": "route",
+          "interfaceIndex": 9,
+          "route": {
+            "destination": "2001:db8::8/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 8,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 10,
+          "kind": "route",
+          "interfaceIndex": 10,
+          "route": {
+            "destination": "2001:db8::9/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 9,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 11,
+          "kind": "route",
+          "interfaceIndex": 11,
+          "route": {
+            "destination": "2001:db8::10/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 10,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 12,
+          "kind": "route",
+          "interfaceIndex": 12,
+          "route": {
+            "destination": "2001:db8::11/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 11,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 13,
+          "kind": "route",
+          "interfaceIndex": 13,
+          "route": {
+            "destination": "2001:db8::12/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 12,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 14,
+          "kind": "route",
+          "interfaceIndex": 14,
+          "route": {
+            "destination": "2001:db8::13/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 13,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 15,
+          "kind": "route",
+          "interfaceIndex": 15,
+          "route": {
+            "destination": "2001:db8::14/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 14,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 16,
+          "kind": "route",
+          "interfaceIndex": 16,
+          "route": {
+            "destination": "2001:db8::15/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 15,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 17,
+          "kind": "route",
+          "interfaceIndex": 17,
+          "route": {
+            "destination": "2001:db8::16/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 16,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 18,
+          "kind": "route",
+          "interfaceIndex": 18,
+          "route": {
+            "destination": "2001:db8::17/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 17,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 19,
+          "kind": "route",
+          "interfaceIndex": 19,
+          "route": {
+            "destination": "2001:db8::18/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 18,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 20,
+          "kind": "route",
+          "interfaceIndex": 20,
+          "route": {
+            "destination": "2001:db8::19/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 19,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 21,
+          "kind": "route",
+          "interfaceIndex": 21,
+          "route": {
+            "destination": "2001:db8::20/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 20,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 22,
+          "kind": "route",
+          "interfaceIndex": 22,
+          "route": {
+            "destination": "2001:db8::21/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 21,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 23,
+          "kind": "route",
+          "interfaceIndex": 23,
+          "route": {
+            "destination": "2001:db8::22/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 22,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 24,
+          "kind": "route",
+          "interfaceIndex": 24,
+          "route": {
+            "destination": "2001:db8::23/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 23,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 25,
+          "kind": "route",
+          "interfaceIndex": 25,
+          "route": {
+            "destination": "2001:db8::24/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 24,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 26,
+          "kind": "route",
+          "interfaceIndex": 26,
+          "route": {
+            "destination": "2001:db8::25/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 25,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 27,
+          "kind": "route",
+          "interfaceIndex": 27,
+          "route": {
+            "destination": "2001:db8::26/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 26,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 28,
+          "kind": "route",
+          "interfaceIndex": 28,
+          "route": {
+            "destination": "2001:db8::27/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 27,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 29,
+          "kind": "route",
+          "interfaceIndex": 29,
+          "route": {
+            "destination": "2001:db8::28/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 28,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 30,
+          "kind": "route",
+          "interfaceIndex": 30,
+          "route": {
+            "destination": "2001:db8::29/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 29,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 31,
+          "kind": "route",
+          "interfaceIndex": 31,
+          "route": {
+            "destination": "2001:db8::30/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 30,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 32,
+          "kind": "route",
+          "interfaceIndex": 32,
+          "route": {
+            "destination": "2001:db8::31/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 31,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 33,
+          "kind": "route",
+          "interfaceIndex": 33,
+          "route": {
+            "destination": "2001:db8::32/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 32,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 34,
+          "kind": "route",
+          "interfaceIndex": 34,
+          "route": {
+            "destination": "2001:db8::33/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 33,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 35,
+          "kind": "route",
+          "interfaceIndex": 35,
+          "route": {
+            "destination": "2001:db8::34/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 34,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 36,
+          "kind": "route",
+          "interfaceIndex": 36,
+          "route": {
+            "destination": "2001:db8::35/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 35,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 37,
+          "kind": "route",
+          "interfaceIndex": 37,
+          "route": {
+            "destination": "2001:db8::36/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 36,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 38,
+          "kind": "route",
+          "interfaceIndex": 38,
+          "route": {
+            "destination": "2001:db8::37/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 37,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 39,
+          "kind": "route",
+          "interfaceIndex": 39,
+          "route": {
+            "destination": "2001:db8::38/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 38,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 40,
+          "kind": "route",
+          "interfaceIndex": 40,
+          "route": {
+            "destination": "2001:db8::39/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 39,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 41,
+          "kind": "route",
+          "interfaceIndex": 41,
+          "route": {
+            "destination": "2001:db8::40/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 40,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 42,
+          "kind": "route",
+          "interfaceIndex": 42,
+          "route": {
+            "destination": "2001:db8::41/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 41,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 43,
+          "kind": "route",
+          "interfaceIndex": 43,
+          "route": {
+            "destination": "2001:db8::42/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 42,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 44,
+          "kind": "route",
+          "interfaceIndex": 44,
+          "route": {
+            "destination": "2001:db8::43/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 43,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 45,
+          "kind": "route",
+          "interfaceIndex": 45,
+          "route": {
+            "destination": "2001:db8::44/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 44,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 46,
+          "kind": "route",
+          "interfaceIndex": 46,
+          "route": {
+            "destination": "2001:db8::45/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 45,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 47,
+          "kind": "route",
+          "interfaceIndex": 47,
+          "route": {
+            "destination": "2001:db8::46/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 46,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 48,
+          "kind": "route",
+          "interfaceIndex": 48,
+          "route": {
+            "destination": "2001:db8::47/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 47,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 49,
+          "kind": "route",
+          "interfaceIndex": 49,
+          "route": {
+            "destination": "2001:db8::48/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 48,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 50,
+          "kind": "route",
+          "interfaceIndex": 50,
+          "route": {
+            "destination": "2001:db8::49/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 49,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 51,
+          "kind": "route",
+          "interfaceIndex": 51,
+          "route": {
+            "destination": "2001:db8::50/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 50,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 52,
+          "kind": "route",
+          "interfaceIndex": 52,
+          "route": {
+            "destination": "2001:db8::51/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 51,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 53,
+          "kind": "route",
+          "interfaceIndex": 53,
+          "route": {
+            "destination": "2001:db8::52/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 52,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 54,
+          "kind": "route",
+          "interfaceIndex": 54,
+          "route": {
+            "destination": "2001:db8::53/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 53,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 55,
+          "kind": "route",
+          "interfaceIndex": 55,
+          "route": {
+            "destination": "2001:db8::54/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 54,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 56,
+          "kind": "route",
+          "interfaceIndex": 56,
+          "route": {
+            "destination": "2001:db8::55/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 55,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 57,
+          "kind": "route",
+          "interfaceIndex": 57,
+          "route": {
+            "destination": "2001:db8::56/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 56,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 58,
+          "kind": "route",
+          "interfaceIndex": 58,
+          "route": {
+            "destination": "2001:db8::57/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 57,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 59,
+          "kind": "route",
+          "interfaceIndex": 59,
+          "route": {
+            "destination": "2001:db8::58/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 58,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 60,
+          "kind": "route",
+          "interfaceIndex": 60,
+          "route": {
+            "destination": "2001:db8::59/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 59,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 61,
+          "kind": "route",
+          "interfaceIndex": 61,
+          "route": {
+            "destination": "2001:db8::60/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 60,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 62,
+          "kind": "route",
+          "interfaceIndex": 62,
+          "route": {
+            "destination": "2001:db8::61/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 61,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 63,
+          "kind": "route",
+          "interfaceIndex": 63,
+          "route": {
+            "destination": "2001:db8::62/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 62,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 64,
+          "kind": "route",
+          "interfaceIndex": 64,
+          "route": {
+            "destination": "2001:db8::63/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 63,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 65,
+          "kind": "route",
+          "interfaceIndex": 65,
+          "route": {
+            "destination": "2001:db8::64/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 64,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 66,
+          "kind": "route",
+          "interfaceIndex": 66,
+          "route": {
+            "destination": "2001:db8::65/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 65,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 67,
+          "kind": "route",
+          "interfaceIndex": 67,
+          "route": {
+            "destination": "2001:db8::66/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 66,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 68,
+          "kind": "route",
+          "interfaceIndex": 68,
+          "route": {
+            "destination": "2001:db8::67/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 67,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 69,
+          "kind": "route",
+          "interfaceIndex": 69,
+          "route": {
+            "destination": "2001:db8::68/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 68,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 70,
+          "kind": "route",
+          "interfaceIndex": 70,
+          "route": {
+            "destination": "2001:db8::69/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 69,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 71,
+          "kind": "route",
+          "interfaceIndex": 71,
+          "route": {
+            "destination": "2001:db8::70/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 70,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 72,
+          "kind": "route",
+          "interfaceIndex": 72,
+          "route": {
+            "destination": "2001:db8::71/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 71,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 73,
+          "kind": "route",
+          "interfaceIndex": 73,
+          "route": {
+            "destination": "2001:db8::72/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 72,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 74,
+          "kind": "route",
+          "interfaceIndex": 74,
+          "route": {
+            "destination": "2001:db8::73/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 73,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 75,
+          "kind": "route",
+          "interfaceIndex": 75,
+          "route": {
+            "destination": "2001:db8::74/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 74,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 76,
+          "kind": "route",
+          "interfaceIndex": 76,
+          "route": {
+            "destination": "2001:db8::75/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 75,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 77,
+          "kind": "route",
+          "interfaceIndex": 77,
+          "route": {
+            "destination": "2001:db8::76/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 76,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 78,
+          "kind": "route",
+          "interfaceIndex": 78,
+          "route": {
+            "destination": "2001:db8::77/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 77,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 79,
+          "kind": "route",
+          "interfaceIndex": 79,
+          "route": {
+            "destination": "2001:db8::78/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 78,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 80,
+          "kind": "route",
+          "interfaceIndex": 80,
+          "route": {
+            "destination": "2001:db8::79/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 79,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 81,
+          "kind": "route",
+          "interfaceIndex": 81,
+          "route": {
+            "destination": "2001:db8::80/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 80,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 82,
+          "kind": "route",
+          "interfaceIndex": 82,
+          "route": {
+            "destination": "2001:db8::81/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 81,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 83,
+          "kind": "route",
+          "interfaceIndex": 83,
+          "route": {
+            "destination": "2001:db8::82/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 82,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 84,
+          "kind": "route",
+          "interfaceIndex": 84,
+          "route": {
+            "destination": "2001:db8::83/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 83,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 85,
+          "kind": "route",
+          "interfaceIndex": 85,
+          "route": {
+            "destination": "2001:db8::84/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 84,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 86,
+          "kind": "route",
+          "interfaceIndex": 86,
+          "route": {
+            "destination": "2001:db8::85/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 85,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 87,
+          "kind": "route",
+          "interfaceIndex": 87,
+          "route": {
+            "destination": "2001:db8::86/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 86,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 88,
+          "kind": "route",
+          "interfaceIndex": 88,
+          "route": {
+            "destination": "2001:db8::87/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 87,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 89,
+          "kind": "route",
+          "interfaceIndex": 89,
+          "route": {
+            "destination": "2001:db8::88/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 88,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 90,
+          "kind": "route",
+          "interfaceIndex": 90,
+          "route": {
+            "destination": "2001:db8::89/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 89,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 91,
+          "kind": "route",
+          "interfaceIndex": 91,
+          "route": {
+            "destination": "2001:db8::90/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 90,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 92,
+          "kind": "route",
+          "interfaceIndex": 92,
+          "route": {
+            "destination": "2001:db8::91/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 91,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 93,
+          "kind": "route",
+          "interfaceIndex": 93,
+          "route": {
+            "destination": "2001:db8::92/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 92,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 94,
+          "kind": "route",
+          "interfaceIndex": 94,
+          "route": {
+            "destination": "2001:db8::93/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 93,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 95,
+          "kind": "route",
+          "interfaceIndex": 95,
+          "route": {
+            "destination": "2001:db8::94/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 94,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 96,
+          "kind": "route",
+          "interfaceIndex": 96,
+          "route": {
+            "destination": "2001:db8::95/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 95,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 97,
+          "kind": "route",
+          "interfaceIndex": 97,
+          "route": {
+            "destination": "2001:db8::96/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 96,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 98,
+          "kind": "route",
+          "interfaceIndex": 98,
+          "route": {
+            "destination": "2001:db8::97/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 97,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 99,
+          "kind": "route",
+          "interfaceIndex": 99,
+          "route": {
+            "destination": "2001:db8::98/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 98,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 100,
+          "kind": "route",
+          "interfaceIndex": 100,
+          "route": {
+            "destination": "2001:db8::99/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 99,
+            "protocol": 2,
+            "origin": 0
+          }
+        }
+      ],
+      "nextCursor": "eyJraW5kIjoicm91dGUiLCJ2IjoxLCJkZXZpY2UiOiJhZ2VudF8wMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMSIsImdyYW50IjoiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmIiLCJyZXZpc2lvbiI6MSwiZ2VuZXJhdGlvbiI6InNhbXBsZV9lZDIzZGU1NTZiY2I4OWE4NmU5NmVhNTlmNzVjYTNmZCIsIm1hbmlmZXN0IjoiYTRhNzlmMjJmMjQ0Zjc4MDM0NzEyOWI5ZWVhYTYxMWY4ZDk2YzA0ZmFmZDQ4NTMzYTMwYTExZjRhMmM1ODdiZSIsInNlYXJjaCI6IiIsInNvcnQiOiJzb3VyY2UtYXNjIiwibGltaXQiOjEwMCwib2Zmc2V0IjoxMDAsInNlc3Npb24iOiIiLCJleHBpcmVzQXQiOiIyMDI3LTAxLTE1VDA4OjE1OjEwWiJ9.VkeyiLOh2YzZyTi6wbydbWIFFwtQtcT73Oe5Eavg5xU",
+      "cursorExpiresAt": "2027-01-15T08:15:10Z"
+    }
+  },
+  {
+    "name": "second100",
+    "query": {
+      "kind": "route",
+      "search": "",
+      "sort": "source-asc",
+      "limit": 100,
+      "cursor": "eyJraW5kIjoicm91dGUiLCJ2IjoxLCJkZXZpY2UiOiJhZ2VudF8wMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMSIsImdyYW50IjoiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmIiLCJyZXZpc2lvbiI6MSwiZ2VuZXJhdGlvbiI6InNhbXBsZV9lZDIzZGU1NTZiY2I4OWE4NmU5NmVhNTlmNzVjYTNmZCIsIm1hbmlmZXN0IjoiYTRhNzlmMjJmMjQ0Zjc4MDM0NzEyOWI5ZWVhYTYxMWY4ZDk2YzA0ZmFmZDQ4NTMzYTMwYTExZjRhMmM1ODdiZSIsInNlYXJjaCI6IiIsInNvcnQiOiJzb3VyY2UtYXNjIiwibGltaXQiOjEwMCwib2Zmc2V0IjoxMDAsInNlc3Npb24iOiIiLCJleHBpcmVzQXQiOiIyMDI3LTAxLTE1VDA4OjE1OjEwWiJ9.VkeyiLOh2YzZyTi6wbydbWIFFwtQtcT73Oe5Eavg5xU"
+    },
+    "page": {
+      "kind": "route",
+      "schemaVersion": "tracebolt.windows-network-context-page.v1",
+      "deviceId": "agent_00000000000000000000000000000001",
+      "serverNow": "2027-01-15T08:00:10Z",
+      "status": "ready",
+      "authorityUntil": "2027-01-16T08:00:00Z",
+      "grantId": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "grantRevision": 1,
+      "complete": {
+        "manifest": {
+          "schemaVersion": "tracebolt.windows-network-context-manifest.v1",
+          "scope": "windows-network-context-v1",
+          "source": "ip-helper-routes-and-raw-interface-counters",
+          "coverage": "caller_visible_tables_complete_nonatomic",
+          "deviceId": "agent_00000000000000000000000000000001",
+          "senderBinding": "7495bae7f75c103752a498ed82f79d2f29f21f27b5499eddf7702fe6eb8931dd",
+          "grantId": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "grantRevision": 1,
+          "sequence": 2,
+          "generationId": "sample_ed23de556bcb89a86e96ea59f75ca3fd",
+          "captureStartedAt": "2027-01-15T08:00:10Z",
+          "captureFinishedAt": "2027-01-15T08:00:10Z",
+          "expiresAt": "2027-01-16T08:00:10Z",
+          "rowCount": 257,
+          "rowsBytes": 42224,
+          "rowsSha256": "96f5804ced6f581c828c68a3f529a62d90fea0d7b9953171bb861249e9f2438c",
+          "chunkCount": 3
+        },
+        "manifestSha256": "a4a79f22f244f780347129b9eeaa611f8d96c04fafd48533a30a11f4a2c587be",
+        "receivedAt": "2027-01-15T08:00:10Z"
+      },
+      "latestAttempt": {
+        "sequence": 2,
+        "attemptedAt": "2027-01-15T08:00:10Z",
+        "status": "complete",
+        "reason": ""
+      },
+      "search": "",
+      "sort": "source-asc",
+      "limit": 100,
+      "offset": 100,
+      "matchingCount": 257,
+      "rows": [
+        {
+          "id": 101,
+          "kind": "route",
+          "interfaceIndex": 101,
+          "route": {
+            "destination": "2001:db8::100/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 100,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 102,
+          "kind": "route",
+          "interfaceIndex": 102,
+          "route": {
+            "destination": "2001:db8::101/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 101,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 103,
+          "kind": "route",
+          "interfaceIndex": 103,
+          "route": {
+            "destination": "2001:db8::102/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 102,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 104,
+          "kind": "route",
+          "interfaceIndex": 104,
+          "route": {
+            "destination": "2001:db8::103/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 103,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 105,
+          "kind": "route",
+          "interfaceIndex": 105,
+          "route": {
+            "destination": "2001:db8::104/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 104,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 106,
+          "kind": "route",
+          "interfaceIndex": 106,
+          "route": {
+            "destination": "2001:db8::105/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 105,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 107,
+          "kind": "route",
+          "interfaceIndex": 107,
+          "route": {
+            "destination": "2001:db8::106/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 106,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 108,
+          "kind": "route",
+          "interfaceIndex": 108,
+          "route": {
+            "destination": "2001:db8::107/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 107,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 109,
+          "kind": "route",
+          "interfaceIndex": 109,
+          "route": {
+            "destination": "2001:db8::108/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 108,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 110,
+          "kind": "route",
+          "interfaceIndex": 110,
+          "route": {
+            "destination": "2001:db8::109/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 109,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 111,
+          "kind": "route",
+          "interfaceIndex": 111,
+          "route": {
+            "destination": "2001:db8::110/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 110,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 112,
+          "kind": "route",
+          "interfaceIndex": 112,
+          "route": {
+            "destination": "2001:db8::111/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 111,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 113,
+          "kind": "route",
+          "interfaceIndex": 113,
+          "route": {
+            "destination": "2001:db8::112/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 112,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 114,
+          "kind": "route",
+          "interfaceIndex": 114,
+          "route": {
+            "destination": "2001:db8::113/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 113,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 115,
+          "kind": "route",
+          "interfaceIndex": 115,
+          "route": {
+            "destination": "2001:db8::114/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 114,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 116,
+          "kind": "route",
+          "interfaceIndex": 116,
+          "route": {
+            "destination": "2001:db8::115/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 115,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 117,
+          "kind": "route",
+          "interfaceIndex": 117,
+          "route": {
+            "destination": "2001:db8::116/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 116,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 118,
+          "kind": "route",
+          "interfaceIndex": 118,
+          "route": {
+            "destination": "2001:db8::117/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 117,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 119,
+          "kind": "route",
+          "interfaceIndex": 119,
+          "route": {
+            "destination": "2001:db8::118/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 118,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 120,
+          "kind": "route",
+          "interfaceIndex": 120,
+          "route": {
+            "destination": "2001:db8::119/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 119,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 121,
+          "kind": "route",
+          "interfaceIndex": 121,
+          "route": {
+            "destination": "2001:db8::120/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 120,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 122,
+          "kind": "route",
+          "interfaceIndex": 122,
+          "route": {
+            "destination": "2001:db8::121/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 121,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 123,
+          "kind": "route",
+          "interfaceIndex": 123,
+          "route": {
+            "destination": "2001:db8::122/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 122,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 124,
+          "kind": "route",
+          "interfaceIndex": 124,
+          "route": {
+            "destination": "2001:db8::123/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 123,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 125,
+          "kind": "route",
+          "interfaceIndex": 125,
+          "route": {
+            "destination": "2001:db8::124/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 124,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 126,
+          "kind": "route",
+          "interfaceIndex": 126,
+          "route": {
+            "destination": "2001:db8::125/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 125,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 127,
+          "kind": "route",
+          "interfaceIndex": 127,
+          "route": {
+            "destination": "2001:db8::126/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 126,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 128,
+          "kind": "route",
+          "interfaceIndex": 128,
+          "route": {
+            "destination": "2001:db8::127/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 127,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 129,
+          "kind": "route",
+          "interfaceIndex": 129,
+          "route": {
+            "destination": "2001:db8::128/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 128,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 130,
+          "kind": "route",
+          "interfaceIndex": 130,
+          "route": {
+            "destination": "2001:db8::129/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 129,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 131,
+          "kind": "route",
+          "interfaceIndex": 131,
+          "route": {
+            "destination": "2001:db8::130/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 130,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 132,
+          "kind": "route",
+          "interfaceIndex": 132,
+          "route": {
+            "destination": "2001:db8::131/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 131,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 133,
+          "kind": "route",
+          "interfaceIndex": 133,
+          "route": {
+            "destination": "2001:db8::132/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 132,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 134,
+          "kind": "route",
+          "interfaceIndex": 134,
+          "route": {
+            "destination": "2001:db8::133/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 133,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 135,
+          "kind": "route",
+          "interfaceIndex": 135,
+          "route": {
+            "destination": "2001:db8::134/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 134,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 136,
+          "kind": "route",
+          "interfaceIndex": 136,
+          "route": {
+            "destination": "2001:db8::135/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 135,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 137,
+          "kind": "route",
+          "interfaceIndex": 137,
+          "route": {
+            "destination": "2001:db8::136/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 136,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 138,
+          "kind": "route",
+          "interfaceIndex": 138,
+          "route": {
+            "destination": "2001:db8::137/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 137,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 139,
+          "kind": "route",
+          "interfaceIndex": 139,
+          "route": {
+            "destination": "2001:db8::138/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 138,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 140,
+          "kind": "route",
+          "interfaceIndex": 140,
+          "route": {
+            "destination": "2001:db8::139/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 139,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 141,
+          "kind": "route",
+          "interfaceIndex": 141,
+          "route": {
+            "destination": "2001:db8::140/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 140,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 142,
+          "kind": "route",
+          "interfaceIndex": 142,
+          "route": {
+            "destination": "2001:db8::141/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 141,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 143,
+          "kind": "route",
+          "interfaceIndex": 143,
+          "route": {
+            "destination": "2001:db8::142/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 142,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 144,
+          "kind": "route",
+          "interfaceIndex": 144,
+          "route": {
+            "destination": "2001:db8::143/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 143,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 145,
+          "kind": "route",
+          "interfaceIndex": 145,
+          "route": {
+            "destination": "2001:db8::144/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 144,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 146,
+          "kind": "route",
+          "interfaceIndex": 146,
+          "route": {
+            "destination": "2001:db8::145/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 145,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 147,
+          "kind": "route",
+          "interfaceIndex": 147,
+          "route": {
+            "destination": "2001:db8::146/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 146,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 148,
+          "kind": "route",
+          "interfaceIndex": 148,
+          "route": {
+            "destination": "2001:db8::147/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 147,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 149,
+          "kind": "route",
+          "interfaceIndex": 149,
+          "route": {
+            "destination": "2001:db8::148/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 148,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 150,
+          "kind": "route",
+          "interfaceIndex": 150,
+          "route": {
+            "destination": "2001:db8::149/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 149,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 151,
+          "kind": "route",
+          "interfaceIndex": 151,
+          "route": {
+            "destination": "2001:db8::150/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 150,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 152,
+          "kind": "route",
+          "interfaceIndex": 152,
+          "route": {
+            "destination": "2001:db8::151/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 151,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 153,
+          "kind": "route",
+          "interfaceIndex": 153,
+          "route": {
+            "destination": "2001:db8::152/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 152,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 154,
+          "kind": "route",
+          "interfaceIndex": 154,
+          "route": {
+            "destination": "2001:db8::153/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 153,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 155,
+          "kind": "route",
+          "interfaceIndex": 155,
+          "route": {
+            "destination": "2001:db8::154/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 154,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 156,
+          "kind": "route",
+          "interfaceIndex": 156,
+          "route": {
+            "destination": "2001:db8::155/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 155,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 157,
+          "kind": "route",
+          "interfaceIndex": 157,
+          "route": {
+            "destination": "2001:db8::156/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 156,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 158,
+          "kind": "route",
+          "interfaceIndex": 158,
+          "route": {
+            "destination": "2001:db8::157/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 157,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 159,
+          "kind": "route",
+          "interfaceIndex": 159,
+          "route": {
+            "destination": "2001:db8::158/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 158,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 160,
+          "kind": "route",
+          "interfaceIndex": 160,
+          "route": {
+            "destination": "2001:db8::159/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 159,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 161,
+          "kind": "route",
+          "interfaceIndex": 161,
+          "route": {
+            "destination": "2001:db8::160/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 160,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 162,
+          "kind": "route",
+          "interfaceIndex": 162,
+          "route": {
+            "destination": "2001:db8::161/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 161,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 163,
+          "kind": "route",
+          "interfaceIndex": 163,
+          "route": {
+            "destination": "2001:db8::162/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 162,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 164,
+          "kind": "route",
+          "interfaceIndex": 164,
+          "route": {
+            "destination": "2001:db8::163/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 163,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 165,
+          "kind": "route",
+          "interfaceIndex": 165,
+          "route": {
+            "destination": "2001:db8::164/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 164,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 166,
+          "kind": "route",
+          "interfaceIndex": 166,
+          "route": {
+            "destination": "2001:db8::165/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 165,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 167,
+          "kind": "route",
+          "interfaceIndex": 167,
+          "route": {
+            "destination": "2001:db8::166/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 166,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 168,
+          "kind": "route",
+          "interfaceIndex": 168,
+          "route": {
+            "destination": "2001:db8::167/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 167,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 169,
+          "kind": "route",
+          "interfaceIndex": 169,
+          "route": {
+            "destination": "2001:db8::168/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 168,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 170,
+          "kind": "route",
+          "interfaceIndex": 170,
+          "route": {
+            "destination": "2001:db8::169/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 169,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 171,
+          "kind": "route",
+          "interfaceIndex": 171,
+          "route": {
+            "destination": "2001:db8::170/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 170,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 172,
+          "kind": "route",
+          "interfaceIndex": 172,
+          "route": {
+            "destination": "2001:db8::171/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 171,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 173,
+          "kind": "route",
+          "interfaceIndex": 173,
+          "route": {
+            "destination": "2001:db8::172/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 172,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 174,
+          "kind": "route",
+          "interfaceIndex": 174,
+          "route": {
+            "destination": "2001:db8::173/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 173,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 175,
+          "kind": "route",
+          "interfaceIndex": 175,
+          "route": {
+            "destination": "2001:db8::174/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 174,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 176,
+          "kind": "route",
+          "interfaceIndex": 176,
+          "route": {
+            "destination": "2001:db8::175/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 175,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 177,
+          "kind": "route",
+          "interfaceIndex": 177,
+          "route": {
+            "destination": "2001:db8::176/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 176,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 178,
+          "kind": "route",
+          "interfaceIndex": 178,
+          "route": {
+            "destination": "2001:db8::177/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 177,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 179,
+          "kind": "route",
+          "interfaceIndex": 179,
+          "route": {
+            "destination": "2001:db8::178/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 178,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 180,
+          "kind": "route",
+          "interfaceIndex": 180,
+          "route": {
+            "destination": "2001:db8::179/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 179,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 181,
+          "kind": "route",
+          "interfaceIndex": 181,
+          "route": {
+            "destination": "2001:db8::180/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 180,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 182,
+          "kind": "route",
+          "interfaceIndex": 182,
+          "route": {
+            "destination": "2001:db8::181/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 181,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 183,
+          "kind": "route",
+          "interfaceIndex": 183,
+          "route": {
+            "destination": "2001:db8::182/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 182,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 184,
+          "kind": "route",
+          "interfaceIndex": 184,
+          "route": {
+            "destination": "2001:db8::183/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 183,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 185,
+          "kind": "route",
+          "interfaceIndex": 185,
+          "route": {
+            "destination": "2001:db8::184/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 184,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 186,
+          "kind": "route",
+          "interfaceIndex": 186,
+          "route": {
+            "destination": "2001:db8::185/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 185,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 187,
+          "kind": "route",
+          "interfaceIndex": 187,
+          "route": {
+            "destination": "2001:db8::186/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 186,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 188,
+          "kind": "route",
+          "interfaceIndex": 188,
+          "route": {
+            "destination": "2001:db8::187/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 187,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 189,
+          "kind": "route",
+          "interfaceIndex": 189,
+          "route": {
+            "destination": "2001:db8::188/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 188,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 190,
+          "kind": "route",
+          "interfaceIndex": 190,
+          "route": {
+            "destination": "2001:db8::189/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 189,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 191,
+          "kind": "route",
+          "interfaceIndex": 191,
+          "route": {
+            "destination": "2001:db8::190/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 190,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 192,
+          "kind": "route",
+          "interfaceIndex": 192,
+          "route": {
+            "destination": "2001:db8::191/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 191,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 193,
+          "kind": "route",
+          "interfaceIndex": 193,
+          "route": {
+            "destination": "2001:db8::192/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 192,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 194,
+          "kind": "route",
+          "interfaceIndex": 194,
+          "route": {
+            "destination": "2001:db8::193/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 193,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 195,
+          "kind": "route",
+          "interfaceIndex": 195,
+          "route": {
+            "destination": "2001:db8::194/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 194,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 196,
+          "kind": "route",
+          "interfaceIndex": 196,
+          "route": {
+            "destination": "2001:db8::195/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 195,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 197,
+          "kind": "route",
+          "interfaceIndex": 197,
+          "route": {
+            "destination": "2001:db8::196/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 196,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 198,
+          "kind": "route",
+          "interfaceIndex": 198,
+          "route": {
+            "destination": "2001:db8::197/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 197,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 199,
+          "kind": "route",
+          "interfaceIndex": 199,
+          "route": {
+            "destination": "2001:db8::198/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 198,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 200,
+          "kind": "route",
+          "interfaceIndex": 200,
+          "route": {
+            "destination": "2001:db8::199/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 199,
+            "protocol": 2,
+            "origin": 0
+          }
+        }
+      ],
+      "nextCursor": "eyJraW5kIjoicm91dGUiLCJ2IjoxLCJkZXZpY2UiOiJhZ2VudF8wMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMSIsImdyYW50IjoiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmIiLCJyZXZpc2lvbiI6MSwiZ2VuZXJhdGlvbiI6InNhbXBsZV9lZDIzZGU1NTZiY2I4OWE4NmU5NmVhNTlmNzVjYTNmZCIsIm1hbmlmZXN0IjoiYTRhNzlmMjJmMjQ0Zjc4MDM0NzEyOWI5ZWVhYTYxMWY4ZDk2YzA0ZmFmZDQ4NTMzYTMwYTExZjRhMmM1ODdiZSIsInNlYXJjaCI6IiIsInNvcnQiOiJzb3VyY2UtYXNjIiwibGltaXQiOjEwMCwib2Zmc2V0IjoyMDAsInNlc3Npb24iOiIiLCJleHBpcmVzQXQiOiIyMDI3LTAxLTE1VDA4OjE1OjEwWiJ9.hxwRLOtN3qZG6xNSqzuOIr_d_ksvK4dXZCxtUmUnCiU",
+      "cursorExpiresAt": "2027-01-15T08:15:10Z"
+    }
+  },
+  {
+    "name": "lateSearch",
+    "query": {
+      "kind": "route",
+      "search": "::256/",
+      "sort": "source-asc",
+      "limit": 100,
+      "cursor": ""
+    },
+    "page": {
+      "kind": "route",
+      "schemaVersion": "tracebolt.windows-network-context-page.v1",
+      "deviceId": "agent_00000000000000000000000000000001",
+      "serverNow": "2027-01-15T08:00:10Z",
+      "status": "ready",
+      "authorityUntil": "2027-01-16T08:00:00Z",
+      "grantId": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "grantRevision": 1,
+      "complete": {
+        "manifest": {
+          "schemaVersion": "tracebolt.windows-network-context-manifest.v1",
+          "scope": "windows-network-context-v1",
+          "source": "ip-helper-routes-and-raw-interface-counters",
+          "coverage": "caller_visible_tables_complete_nonatomic",
+          "deviceId": "agent_00000000000000000000000000000001",
+          "senderBinding": "7495bae7f75c103752a498ed82f79d2f29f21f27b5499eddf7702fe6eb8931dd",
+          "grantId": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "grantRevision": 1,
+          "sequence": 2,
+          "generationId": "sample_ed23de556bcb89a86e96ea59f75ca3fd",
+          "captureStartedAt": "2027-01-15T08:00:10Z",
+          "captureFinishedAt": "2027-01-15T08:00:10Z",
+          "expiresAt": "2027-01-16T08:00:10Z",
+          "rowCount": 257,
+          "rowsBytes": 42224,
+          "rowsSha256": "96f5804ced6f581c828c68a3f529a62d90fea0d7b9953171bb861249e9f2438c",
+          "chunkCount": 3
+        },
+        "manifestSha256": "a4a79f22f244f780347129b9eeaa611f8d96c04fafd48533a30a11f4a2c587be",
+        "receivedAt": "2027-01-15T08:00:10Z"
+      },
+      "latestAttempt": {
+        "sequence": 2,
+        "attemptedAt": "2027-01-15T08:00:10Z",
+        "status": "complete",
+        "reason": ""
+      },
+      "search": "::256/",
+      "sort": "source-asc",
+      "limit": 100,
+      "offset": 0,
+      "matchingCount": 1,
+      "rows": [
+        {
+          "id": 257,
+          "kind": "route",
+          "interfaceIndex": 1,
+          "route": {
+            "destination": "2001:db8::256/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 256,
+            "protocol": 2,
+            "origin": 0
+          }
+        }
+      ],
+      "nextCursor": "",
+      "cursorExpiresAt": "2027-01-15T08:15:10Z"
+    }
+  },
+  {
+    "name": "retainedLatestFailed",
+    "query": {
+      "kind": "route",
+      "search": "",
+      "sort": "source-asc",
+      "limit": 100,
+      "cursor": ""
+    },
+    "page": {
+      "kind": "route",
+      "schemaVersion": "tracebolt.windows-network-context-page.v1",
+      "deviceId": "agent_00000000000000000000000000000001",
+      "serverNow": "2027-01-15T08:00:10Z",
+      "status": "ready",
+      "authorityUntil": "2027-01-16T08:00:00Z",
+      "grantId": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "grantRevision": 1,
+      "complete": {
+        "manifest": {
+          "schemaVersion": "tracebolt.windows-network-context-manifest.v1",
+          "scope": "windows-network-context-v1",
+          "source": "ip-helper-routes-and-raw-interface-counters",
+          "coverage": "caller_visible_tables_complete_nonatomic",
+          "deviceId": "agent_00000000000000000000000000000001",
+          "senderBinding": "7495bae7f75c103752a498ed82f79d2f29f21f27b5499eddf7702fe6eb8931dd",
+          "grantId": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "grantRevision": 1,
+          "sequence": 2,
+          "generationId": "sample_ed23de556bcb89a86e96ea59f75ca3fd",
+          "captureStartedAt": "2027-01-15T08:00:10Z",
+          "captureFinishedAt": "2027-01-15T08:00:10Z",
+          "expiresAt": "2027-01-16T08:00:10Z",
+          "rowCount": 257,
+          "rowsBytes": 42224,
+          "rowsSha256": "96f5804ced6f581c828c68a3f529a62d90fea0d7b9953171bb861249e9f2438c",
+          "chunkCount": 3
+        },
+        "manifestSha256": "a4a79f22f244f780347129b9eeaa611f8d96c04fafd48533a30a11f4a2c587be",
+        "receivedAt": "2027-01-15T08:00:10Z"
+      },
+      "latestAttempt": {
+        "sequence": 3,
+        "attemptedAt": "2027-01-15T08:00:10Z",
+        "status": "source_failed",
+        "reason": "access_denied"
+      },
+      "search": "",
+      "sort": "source-asc",
+      "limit": 100,
+      "offset": 0,
+      "matchingCount": 257,
+      "rows": [
+        {
+          "id": 1,
+          "kind": "route",
+          "interfaceIndex": 1,
+          "route": {
+            "destination": "2001:db8::/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 0,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 2,
+          "kind": "route",
+          "interfaceIndex": 2,
+          "route": {
+            "destination": "2001:db8::1/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 1,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 3,
+          "kind": "route",
+          "interfaceIndex": 3,
+          "route": {
+            "destination": "2001:db8::2/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 2,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 4,
+          "kind": "route",
+          "interfaceIndex": 4,
+          "route": {
+            "destination": "2001:db8::3/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 3,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 5,
+          "kind": "route",
+          "interfaceIndex": 5,
+          "route": {
+            "destination": "2001:db8::4/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 4,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 6,
+          "kind": "route",
+          "interfaceIndex": 6,
+          "route": {
+            "destination": "2001:db8::5/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 5,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 7,
+          "kind": "route",
+          "interfaceIndex": 7,
+          "route": {
+            "destination": "2001:db8::6/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 6,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 8,
+          "kind": "route",
+          "interfaceIndex": 8,
+          "route": {
+            "destination": "2001:db8::7/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 7,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 9,
+          "kind": "route",
+          "interfaceIndex": 9,
+          "route": {
+            "destination": "2001:db8::8/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 8,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 10,
+          "kind": "route",
+          "interfaceIndex": 10,
+          "route": {
+            "destination": "2001:db8::9/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 9,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 11,
+          "kind": "route",
+          "interfaceIndex": 11,
+          "route": {
+            "destination": "2001:db8::10/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 10,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 12,
+          "kind": "route",
+          "interfaceIndex": 12,
+          "route": {
+            "destination": "2001:db8::11/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 11,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 13,
+          "kind": "route",
+          "interfaceIndex": 13,
+          "route": {
+            "destination": "2001:db8::12/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 12,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 14,
+          "kind": "route",
+          "interfaceIndex": 14,
+          "route": {
+            "destination": "2001:db8::13/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 13,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 15,
+          "kind": "route",
+          "interfaceIndex": 15,
+          "route": {
+            "destination": "2001:db8::14/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 14,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 16,
+          "kind": "route",
+          "interfaceIndex": 16,
+          "route": {
+            "destination": "2001:db8::15/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 15,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 17,
+          "kind": "route",
+          "interfaceIndex": 17,
+          "route": {
+            "destination": "2001:db8::16/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 16,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 18,
+          "kind": "route",
+          "interfaceIndex": 18,
+          "route": {
+            "destination": "2001:db8::17/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 17,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 19,
+          "kind": "route",
+          "interfaceIndex": 19,
+          "route": {
+            "destination": "2001:db8::18/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 18,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 20,
+          "kind": "route",
+          "interfaceIndex": 20,
+          "route": {
+            "destination": "2001:db8::19/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 19,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 21,
+          "kind": "route",
+          "interfaceIndex": 21,
+          "route": {
+            "destination": "2001:db8::20/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 20,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 22,
+          "kind": "route",
+          "interfaceIndex": 22,
+          "route": {
+            "destination": "2001:db8::21/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 21,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 23,
+          "kind": "route",
+          "interfaceIndex": 23,
+          "route": {
+            "destination": "2001:db8::22/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 22,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 24,
+          "kind": "route",
+          "interfaceIndex": 24,
+          "route": {
+            "destination": "2001:db8::23/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 23,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 25,
+          "kind": "route",
+          "interfaceIndex": 25,
+          "route": {
+            "destination": "2001:db8::24/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 24,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 26,
+          "kind": "route",
+          "interfaceIndex": 26,
+          "route": {
+            "destination": "2001:db8::25/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 25,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 27,
+          "kind": "route",
+          "interfaceIndex": 27,
+          "route": {
+            "destination": "2001:db8::26/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 26,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 28,
+          "kind": "route",
+          "interfaceIndex": 28,
+          "route": {
+            "destination": "2001:db8::27/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 27,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 29,
+          "kind": "route",
+          "interfaceIndex": 29,
+          "route": {
+            "destination": "2001:db8::28/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 28,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 30,
+          "kind": "route",
+          "interfaceIndex": 30,
+          "route": {
+            "destination": "2001:db8::29/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 29,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 31,
+          "kind": "route",
+          "interfaceIndex": 31,
+          "route": {
+            "destination": "2001:db8::30/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 30,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 32,
+          "kind": "route",
+          "interfaceIndex": 32,
+          "route": {
+            "destination": "2001:db8::31/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 31,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 33,
+          "kind": "route",
+          "interfaceIndex": 33,
+          "route": {
+            "destination": "2001:db8::32/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 32,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 34,
+          "kind": "route",
+          "interfaceIndex": 34,
+          "route": {
+            "destination": "2001:db8::33/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 33,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 35,
+          "kind": "route",
+          "interfaceIndex": 35,
+          "route": {
+            "destination": "2001:db8::34/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 34,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 36,
+          "kind": "route",
+          "interfaceIndex": 36,
+          "route": {
+            "destination": "2001:db8::35/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 35,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 37,
+          "kind": "route",
+          "interfaceIndex": 37,
+          "route": {
+            "destination": "2001:db8::36/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 36,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 38,
+          "kind": "route",
+          "interfaceIndex": 38,
+          "route": {
+            "destination": "2001:db8::37/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 37,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 39,
+          "kind": "route",
+          "interfaceIndex": 39,
+          "route": {
+            "destination": "2001:db8::38/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 38,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 40,
+          "kind": "route",
+          "interfaceIndex": 40,
+          "route": {
+            "destination": "2001:db8::39/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 39,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 41,
+          "kind": "route",
+          "interfaceIndex": 41,
+          "route": {
+            "destination": "2001:db8::40/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 40,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 42,
+          "kind": "route",
+          "interfaceIndex": 42,
+          "route": {
+            "destination": "2001:db8::41/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 41,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 43,
+          "kind": "route",
+          "interfaceIndex": 43,
+          "route": {
+            "destination": "2001:db8::42/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 42,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 44,
+          "kind": "route",
+          "interfaceIndex": 44,
+          "route": {
+            "destination": "2001:db8::43/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 43,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 45,
+          "kind": "route",
+          "interfaceIndex": 45,
+          "route": {
+            "destination": "2001:db8::44/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 44,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 46,
+          "kind": "route",
+          "interfaceIndex": 46,
+          "route": {
+            "destination": "2001:db8::45/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 45,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 47,
+          "kind": "route",
+          "interfaceIndex": 47,
+          "route": {
+            "destination": "2001:db8::46/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 46,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 48,
+          "kind": "route",
+          "interfaceIndex": 48,
+          "route": {
+            "destination": "2001:db8::47/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 47,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 49,
+          "kind": "route",
+          "interfaceIndex": 49,
+          "route": {
+            "destination": "2001:db8::48/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 48,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 50,
+          "kind": "route",
+          "interfaceIndex": 50,
+          "route": {
+            "destination": "2001:db8::49/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 49,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 51,
+          "kind": "route",
+          "interfaceIndex": 51,
+          "route": {
+            "destination": "2001:db8::50/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 50,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 52,
+          "kind": "route",
+          "interfaceIndex": 52,
+          "route": {
+            "destination": "2001:db8::51/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 51,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 53,
+          "kind": "route",
+          "interfaceIndex": 53,
+          "route": {
+            "destination": "2001:db8::52/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 52,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 54,
+          "kind": "route",
+          "interfaceIndex": 54,
+          "route": {
+            "destination": "2001:db8::53/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 53,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 55,
+          "kind": "route",
+          "interfaceIndex": 55,
+          "route": {
+            "destination": "2001:db8::54/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 54,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 56,
+          "kind": "route",
+          "interfaceIndex": 56,
+          "route": {
+            "destination": "2001:db8::55/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 55,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 57,
+          "kind": "route",
+          "interfaceIndex": 57,
+          "route": {
+            "destination": "2001:db8::56/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 56,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 58,
+          "kind": "route",
+          "interfaceIndex": 58,
+          "route": {
+            "destination": "2001:db8::57/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 57,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 59,
+          "kind": "route",
+          "interfaceIndex": 59,
+          "route": {
+            "destination": "2001:db8::58/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 58,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 60,
+          "kind": "route",
+          "interfaceIndex": 60,
+          "route": {
+            "destination": "2001:db8::59/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 59,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 61,
+          "kind": "route",
+          "interfaceIndex": 61,
+          "route": {
+            "destination": "2001:db8::60/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 60,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 62,
+          "kind": "route",
+          "interfaceIndex": 62,
+          "route": {
+            "destination": "2001:db8::61/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 61,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 63,
+          "kind": "route",
+          "interfaceIndex": 63,
+          "route": {
+            "destination": "2001:db8::62/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 62,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 64,
+          "kind": "route",
+          "interfaceIndex": 64,
+          "route": {
+            "destination": "2001:db8::63/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 63,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 65,
+          "kind": "route",
+          "interfaceIndex": 65,
+          "route": {
+            "destination": "2001:db8::64/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 64,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 66,
+          "kind": "route",
+          "interfaceIndex": 66,
+          "route": {
+            "destination": "2001:db8::65/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 65,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 67,
+          "kind": "route",
+          "interfaceIndex": 67,
+          "route": {
+            "destination": "2001:db8::66/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 66,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 68,
+          "kind": "route",
+          "interfaceIndex": 68,
+          "route": {
+            "destination": "2001:db8::67/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 67,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 69,
+          "kind": "route",
+          "interfaceIndex": 69,
+          "route": {
+            "destination": "2001:db8::68/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 68,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 70,
+          "kind": "route",
+          "interfaceIndex": 70,
+          "route": {
+            "destination": "2001:db8::69/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 69,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 71,
+          "kind": "route",
+          "interfaceIndex": 71,
+          "route": {
+            "destination": "2001:db8::70/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 70,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 72,
+          "kind": "route",
+          "interfaceIndex": 72,
+          "route": {
+            "destination": "2001:db8::71/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 71,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 73,
+          "kind": "route",
+          "interfaceIndex": 73,
+          "route": {
+            "destination": "2001:db8::72/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 72,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 74,
+          "kind": "route",
+          "interfaceIndex": 74,
+          "route": {
+            "destination": "2001:db8::73/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 73,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 75,
+          "kind": "route",
+          "interfaceIndex": 75,
+          "route": {
+            "destination": "2001:db8::74/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 74,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 76,
+          "kind": "route",
+          "interfaceIndex": 76,
+          "route": {
+            "destination": "2001:db8::75/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 75,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 77,
+          "kind": "route",
+          "interfaceIndex": 77,
+          "route": {
+            "destination": "2001:db8::76/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 76,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 78,
+          "kind": "route",
+          "interfaceIndex": 78,
+          "route": {
+            "destination": "2001:db8::77/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 77,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 79,
+          "kind": "route",
+          "interfaceIndex": 79,
+          "route": {
+            "destination": "2001:db8::78/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 78,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 80,
+          "kind": "route",
+          "interfaceIndex": 80,
+          "route": {
+            "destination": "2001:db8::79/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 79,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 81,
+          "kind": "route",
+          "interfaceIndex": 81,
+          "route": {
+            "destination": "2001:db8::80/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 80,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 82,
+          "kind": "route",
+          "interfaceIndex": 82,
+          "route": {
+            "destination": "2001:db8::81/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 81,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 83,
+          "kind": "route",
+          "interfaceIndex": 83,
+          "route": {
+            "destination": "2001:db8::82/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 82,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 84,
+          "kind": "route",
+          "interfaceIndex": 84,
+          "route": {
+            "destination": "2001:db8::83/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 83,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 85,
+          "kind": "route",
+          "interfaceIndex": 85,
+          "route": {
+            "destination": "2001:db8::84/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 84,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 86,
+          "kind": "route",
+          "interfaceIndex": 86,
+          "route": {
+            "destination": "2001:db8::85/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 85,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 87,
+          "kind": "route",
+          "interfaceIndex": 87,
+          "route": {
+            "destination": "2001:db8::86/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 86,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 88,
+          "kind": "route",
+          "interfaceIndex": 88,
+          "route": {
+            "destination": "2001:db8::87/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 87,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 89,
+          "kind": "route",
+          "interfaceIndex": 89,
+          "route": {
+            "destination": "2001:db8::88/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 88,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 90,
+          "kind": "route",
+          "interfaceIndex": 90,
+          "route": {
+            "destination": "2001:db8::89/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 89,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 91,
+          "kind": "route",
+          "interfaceIndex": 91,
+          "route": {
+            "destination": "2001:db8::90/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 90,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 92,
+          "kind": "route",
+          "interfaceIndex": 92,
+          "route": {
+            "destination": "2001:db8::91/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 91,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 93,
+          "kind": "route",
+          "interfaceIndex": 93,
+          "route": {
+            "destination": "2001:db8::92/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 92,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 94,
+          "kind": "route",
+          "interfaceIndex": 94,
+          "route": {
+            "destination": "2001:db8::93/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 93,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 95,
+          "kind": "route",
+          "interfaceIndex": 95,
+          "route": {
+            "destination": "2001:db8::94/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 94,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 96,
+          "kind": "route",
+          "interfaceIndex": 96,
+          "route": {
+            "destination": "2001:db8::95/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 95,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 97,
+          "kind": "route",
+          "interfaceIndex": 97,
+          "route": {
+            "destination": "2001:db8::96/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 96,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 98,
+          "kind": "route",
+          "interfaceIndex": 98,
+          "route": {
+            "destination": "2001:db8::97/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 97,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 99,
+          "kind": "route",
+          "interfaceIndex": 99,
+          "route": {
+            "destination": "2001:db8::98/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 98,
+            "protocol": 2,
+            "origin": 0
+          }
+        },
+        {
+          "id": 100,
+          "kind": "route",
+          "interfaceIndex": 100,
+          "route": {
+            "destination": "2001:db8::99/128",
+            "destinationScopeId": 0,
+            "nextHop": "::",
+            "metric": 99,
+            "protocol": 2,
+            "origin": 0
+          }
+        }
+      ],
+      "nextCursor": "eyJraW5kIjoicm91dGUiLCJ2IjoxLCJkZXZpY2UiOiJhZ2VudF8wMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMSIsImdyYW50IjoiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmIiLCJyZXZpc2lvbiI6MSwiZ2VuZXJhdGlvbiI6InNhbXBsZV9lZDIzZGU1NTZiY2I4OWE4NmU5NmVhNTlmNzVjYTNmZCIsIm1hbmlmZXN0IjoiYTRhNzlmMjJmMjQ0Zjc4MDM0NzEyOWI5ZWVhYTYxMWY4ZDk2YzA0ZmFmZDQ4NTMzYTMwYTExZjRhMmM1ODdiZSIsInNlYXJjaCI6IiIsInNvcnQiOiJzb3VyY2UtYXNjIiwibGltaXQiOjEwMCwib2Zmc2V0IjoxMDAsInNlc3Npb24iOiIiLCJleHBpcmVzQXQiOiIyMDI3LTAxLTE1VDA4OjE1OjEwWiJ9.VkeyiLOh2YzZyTi6wbydbWIFFwtQtcT73Oe5Eavg5xU",
+      "cursorExpiresAt": "2027-01-15T08:15:10Z"
+    }
+  },
+  {
+    "name": "scopedRoutes",
+    "query": {
+      "kind": "route",
+      "search": "",
+      "sort": "source-asc",
+      "limit": 100,
+      "cursor": ""
+    },
+    "page": {
+      "kind": "route",
+      "schemaVersion": "tracebolt.windows-network-context-page.v1",
+      "deviceId": "agent_00000000000000000000000000000001",
+      "serverNow": "2027-01-15T08:00:10Z",
+      "status": "ready",
+      "authorityUntil": "2027-01-16T08:00:00Z",
+      "grantId": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "grantRevision": 1,
+      "complete": {
+        "manifest": {
+          "schemaVersion": "tracebolt.windows-network-context-manifest.v1",
+          "scope": "windows-network-context-v1",
+          "source": "ip-helper-routes-and-raw-interface-counters",
+          "coverage": "caller_visible_tables_complete_nonatomic",
+          "deviceId": "agent_00000000000000000000000000000001",
+          "senderBinding": "7495bae7f75c103752a498ed82f79d2f29f21f27b5499eddf7702fe6eb8931dd",
+          "grantId": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "grantRevision": 1,
+          "sequence": 4,
+          "generationId": "sample_20aaaab310047b8fe622b425f463a702",
+          "captureStartedAt": "2027-01-15T08:00:10Z",
+          "captureFinishedAt": "2027-01-15T08:00:10Z",
+          "expiresAt": "2027-01-16T08:00:10Z",
+          "rowCount": 4,
+          "rowsBytes": 796,
+          "rowsSha256": "5a94df42de95c19aa183d10dc4f5680939e8846a38f186d6b835955c774aef5e",
+          "chunkCount": 1
+        },
+        "manifestSha256": "864e5fe0b88ca167edee0f66d3630dedce3303f74a0699b8f32cbf280b30d67d",
+        "receivedAt": "2027-01-15T08:00:10Z"
+      },
+      "latestAttempt": {
+        "sequence": 4,
+        "attemptedAt": "2027-01-15T08:00:10Z",
+        "status": "complete",
+        "reason": ""
+      },
+      "search": "",
+      "sort": "source-asc",
+      "limit": 100,
+      "offset": 0,
+      "matchingCount": 2,
+      "rows": [
+        {
+          "id": 1,
+          "kind": "route",
+          "interfaceIndex": 7,
+          "route": {
+            "destination": "fe80::/64",
+            "destinationScopeId": 7,
+            "nextHop": "fe80::1%7",
+            "metric": 4294967295,
+            "protocol": 2,
+            "origin": 3
+          }
+        },
+        {
+          "id": 2,
+          "kind": "route",
+          "interfaceIndex": 7,
+          "route": {
+            "destination": "0.0.0.0/0",
+            "destinationScopeId": 0,
+            "nextHop": "192.0.2.1",
+            "metric": 15,
+            "protocol": 10006,
+            "origin": 0
+          }
+        }
+      ],
+      "nextCursor": "",
+      "cursorExpiresAt": "2027-01-15T08:15:10Z"
+    }
+  },
+  {
+    "name": "exactCounters",
+    "query": {
+      "kind": "interface",
+      "search": "",
+      "sort": "source-asc",
+      "limit": 100,
+      "cursor": ""
+    },
+    "page": {
+      "kind": "interface",
+      "schemaVersion": "tracebolt.windows-network-context-page.v1",
+      "deviceId": "agent_00000000000000000000000000000001",
+      "serverNow": "2027-01-15T08:00:10Z",
+      "status": "ready",
+      "authorityUntil": "2027-01-16T08:00:00Z",
+      "grantId": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "grantRevision": 1,
+      "complete": {
+        "manifest": {
+          "schemaVersion": "tracebolt.windows-network-context-manifest.v1",
+          "scope": "windows-network-context-v1",
+          "source": "ip-helper-routes-and-raw-interface-counters",
+          "coverage": "caller_visible_tables_complete_nonatomic",
+          "deviceId": "agent_00000000000000000000000000000001",
+          "senderBinding": "7495bae7f75c103752a498ed82f79d2f29f21f27b5499eddf7702fe6eb8931dd",
+          "grantId": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "grantRevision": 1,
+          "sequence": 4,
+          "generationId": "sample_20aaaab310047b8fe622b425f463a702",
+          "captureStartedAt": "2027-01-15T08:00:10Z",
+          "captureFinishedAt": "2027-01-15T08:00:10Z",
+          "expiresAt": "2027-01-16T08:00:10Z",
+          "rowCount": 4,
+          "rowsBytes": 796,
+          "rowsSha256": "5a94df42de95c19aa183d10dc4f5680939e8846a38f186d6b835955c774aef5e",
+          "chunkCount": 1
+        },
+        "manifestSha256": "864e5fe0b88ca167edee0f66d3630dedce3303f74a0699b8f32cbf280b30d67d",
+        "receivedAt": "2027-01-15T08:00:10Z"
+      },
+      "latestAttempt": {
+        "sequence": 4,
+        "attemptedAt": "2027-01-15T08:00:10Z",
+        "status": "complete",
+        "reason": ""
+      },
+      "search": "",
+      "sort": "source-asc",
+      "limit": 100,
+      "offset": 0,
+      "matchingCount": 2,
+      "rows": [
+        {
+          "id": 3,
+          "kind": "interface",
+          "interfaceIndex": 7,
+          "counters": {
+            "alias": "Synthetic 東京 interface",
+            "aliasQuality": "observed",
+            "inOctets": "18446744073709551615",
+            "outOctets": "9007199254740993",
+            "inErrors": "0",
+            "outErrors": "4294967296",
+            "inDiscards": "2",
+            "outDiscards": "3"
+          }
+        },
+        {
+          "id": 4,
+          "kind": "interface",
+          "interfaceIndex": 12,
+          "counters": {
+            "alias": null,
+            "aliasQuality": "unavailable",
+            "inOctets": "0",
+            "outOctets": "0",
+            "inErrors": "0",
+            "outErrors": "0",
+            "inDiscards": "0",
+            "outDiscards": "0"
+          }
+        }
+      ],
+      "nextCursor": "",
+      "cursorExpiresAt": "2027-01-15T08:15:10Z"
+    }
+  },
+  {
+    "name": "allByInterface",
+    "query": {
+      "kind": "all",
+      "search": "",
+      "sort": "interface-desc",
+      "limit": 100,
+      "cursor": ""
+    },
+    "page": {
+      "kind": "all",
+      "schemaVersion": "tracebolt.windows-network-context-page.v1",
+      "deviceId": "agent_00000000000000000000000000000001",
+      "serverNow": "2027-01-15T08:00:10Z",
+      "status": "ready",
+      "authorityUntil": "2027-01-16T08:00:00Z",
+      "grantId": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "grantRevision": 1,
+      "complete": {
+        "manifest": {
+          "schemaVersion": "tracebolt.windows-network-context-manifest.v1",
+          "scope": "windows-network-context-v1",
+          "source": "ip-helper-routes-and-raw-interface-counters",
+          "coverage": "caller_visible_tables_complete_nonatomic",
+          "deviceId": "agent_00000000000000000000000000000001",
+          "senderBinding": "7495bae7f75c103752a498ed82f79d2f29f21f27b5499eddf7702fe6eb8931dd",
+          "grantId": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "grantRevision": 1,
+          "sequence": 4,
+          "generationId": "sample_20aaaab310047b8fe622b425f463a702",
+          "captureStartedAt": "2027-01-15T08:00:10Z",
+          "captureFinishedAt": "2027-01-15T08:00:10Z",
+          "expiresAt": "2027-01-16T08:00:10Z",
+          "rowCount": 4,
+          "rowsBytes": 796,
+          "rowsSha256": "5a94df42de95c19aa183d10dc4f5680939e8846a38f186d6b835955c774aef5e",
+          "chunkCount": 1
+        },
+        "manifestSha256": "864e5fe0b88ca167edee0f66d3630dedce3303f74a0699b8f32cbf280b30d67d",
+        "receivedAt": "2027-01-15T08:00:10Z"
+      },
+      "latestAttempt": {
+        "sequence": 4,
+        "attemptedAt": "2027-01-15T08:00:10Z",
+        "status": "complete",
+        "reason": ""
+      },
+      "search": "",
+      "sort": "interface-desc",
+      "limit": 100,
+      "offset": 0,
+      "matchingCount": 4,
+      "rows": [
+        {
+          "id": 4,
+          "kind": "interface",
+          "interfaceIndex": 12,
+          "counters": {
+            "alias": null,
+            "aliasQuality": "unavailable",
+            "inOctets": "0",
+            "outOctets": "0",
+            "inErrors": "0",
+            "outErrors": "0",
+            "inDiscards": "0",
+            "outDiscards": "0"
+          }
+        },
+        {
+          "id": 3,
+          "kind": "interface",
+          "interfaceIndex": 7,
+          "counters": {
+            "alias": "Synthetic 東京 interface",
+            "aliasQuality": "observed",
+            "inOctets": "18446744073709551615",
+            "outOctets": "9007199254740993",
+            "inErrors": "0",
+            "outErrors": "4294967296",
+            "inDiscards": "2",
+            "outDiscards": "3"
+          }
+        },
+        {
+          "id": 1,
+          "kind": "route",
+          "interfaceIndex": 7,
+          "route": {
+            "destination": "fe80::/64",
+            "destinationScopeId": 7,
+            "nextHop": "fe80::1%7",
+            "metric": 4294967295,
+            "protocol": 2,
+            "origin": 3
+          }
+        },
+        {
+          "id": 2,
+          "kind": "route",
+          "interfaceIndex": 7,
+          "route": {
+            "destination": "0.0.0.0/0",
+            "destinationScopeId": 0,
+            "nextHop": "192.0.2.1",
+            "metric": 15,
+            "protocol": 10006,
+            "origin": 0
+          }
+        }
+      ],
+      "nextCursor": "",
+      "cursorExpiresAt": "2027-01-15T08:15:10Z"
+    }
+  },
+  {
+    "name": "completeEmpty",
+    "query": {
+      "kind": "all",
+      "search": "",
+      "sort": "interface-desc",
+      "limit": 100,
+      "cursor": ""
+    },
+    "page": {
+      "kind": "all",
+      "schemaVersion": "tracebolt.windows-network-context-page.v1",
+      "deviceId": "agent_00000000000000000000000000000001",
+      "serverNow": "2027-01-15T08:00:10Z",
+      "status": "ready",
+      "authorityUntil": "2027-01-16T08:00:00Z",
+      "grantId": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "grantRevision": 1,
+      "complete": {
+        "manifest": {
+          "schemaVersion": "tracebolt.windows-network-context-manifest.v1",
+          "scope": "windows-network-context-v1",
+          "source": "ip-helper-routes-and-raw-interface-counters",
+          "coverage": "caller_visible_tables_complete_nonatomic",
+          "deviceId": "agent_00000000000000000000000000000001",
+          "senderBinding": "7495bae7f75c103752a498ed82f79d2f29f21f27b5499eddf7702fe6eb8931dd",
+          "grantId": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "grantRevision": 1,
+          "sequence": 5,
+          "generationId": "sample_8200d0d1fbf4068f1d6fe475212a068b",
+          "captureStartedAt": "2027-01-15T08:00:10Z",
+          "captureFinishedAt": "2027-01-15T08:00:10Z",
+          "expiresAt": "2027-01-16T08:00:10Z",
+          "rowCount": 0,
+          "rowsBytes": 2,
+          "rowsSha256": "6e37b4b61b8c5ec5f18a72b3dd83e44bef38ee7761a92ed6f8da52c2f490d56d",
+          "chunkCount": 1
+        },
+        "manifestSha256": "ede16b75707f464301340568acb5c683e8fb8a3b6c34d96c4fda35d80b3daa01",
+        "receivedAt": "2027-01-15T08:00:10Z"
+      },
+      "latestAttempt": {
+        "sequence": 5,
+        "attemptedAt": "2027-01-15T08:00:10Z",
+        "status": "complete",
+        "reason": ""
+      },
+      "search": "",
+      "sort": "interface-desc",
+      "limit": 100,
+      "offset": 0,
+      "matchingCount": 0,
+      "rows": [],
+      "nextCursor": "",
+      "cursorExpiresAt": "2027-01-15T08:15:10Z"
+    }
+  }
+]

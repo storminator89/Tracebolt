@@ -22,7 +22,10 @@
     "windows-contact-history-fixtures.test.mjs",
     "windows-full-services-fixtures.test.mjs",
     "windows-full-software-fixtures.test.mjs",
-    "windows-fleet-fixtures.test.mjs"
+    "windows-full-processes-fixtures.test.mjs",
+    "windows-network-context-fixtures.test.mjs",
+    "windows-fleet-fixtures.test.mjs",
+    "windows-storage-io-fixtures.test.mjs"
   ],
   "imported": [
     "device-inventory-browser-contracts.test.mjs",
@@ -46,7 +49,8 @@
     "windows-service-actions-fixtures.test.mjs",
     "windows-security-coverage-fixtures.test.mjs",
     "windows-hardware-context-fixtures.test.mjs",
-    "windows-storage-context-fixtures.test.mjs"
+    "windows-storage-context-fixtures.test.mjs",
+    "windows-resource-context-fixtures.test.mjs"
   ],
   "excluded": []
 }
