@@ -124,7 +124,7 @@ test('OS capture uses the existing four rounds and finite stage without a new cl
  assert.match(runner,/for\(const locale of \['en','de'\]\)for\(const width of \[1440,390\]\)/);assert.match(runner,/'overview-history','os-provenance','inventory'/);
  assert.match(runner,/mark\('os-provenance'\);await exerciseWindowsOSProvenance\(\{page,expect,locale,width,shot,disclosure:windowsInventoryFixtureDisclosure,observedAt:osObservedAt\}\)/);
  assert.match(runner,/observedAt:osObservedAt\}\);\s*mark\('inventory'\);await page\.getByRole\('tab',\{name:locale==='de'\?'Inventar':'Inventory',exact:true\}\)\.click\(\)/);
- assert.match(gate,/import '\.\/windows-os-provenance-fixtures\.test\.mjs'/);assert.equal((hosted.match(/await check\(/g)||[]).length,26);assert.match(hosted,/check\(windowsInventoryCaseName,[^\n]+,'20m'\)/);
+ assert.match(gate,/import '\.\/windows-os-provenance-fixtures\.test\.mjs'/);assert.equal((hosted.match(/await check\(/g)||[]).length,27);assert.match(hosted,/check\(windowsInventoryCaseName,[^\n]+,'20m'\)/);
  // The additive selected-content case has one bounded 3-second status poll.
  // OS provenance itself still adds no clock or request (guarded below).
  assert.equal((runner.match(/page\.clock\.runFor\(/g)||[]).length,6);assert.equal((runner.match(/page\.clock\.install\(/g)||[]).length,1);assert.equal((runner.match(/page\.clock\.pauseAt\(/g)||[]).length,1);

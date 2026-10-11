@@ -1,5 +1,5 @@
 {
-  "goSourceSha256": "4c82b7094016af96f00bb5c897df90a8af0fe20556a13e87789468c62f32491b",
+  "goSourceSha256": "396cc82d98677cdbf8d45d26ba665f8dc8fbf768ba1b0d86c8f887844c64531e",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -1505,6 +1505,7 @@
       "TestRenewalPolicyCannotAdoptExistingOrSignedHTTPIdentity",
       "TestRenewalSameKeyExactRetryActivationRetirementAndRestart",
       "TestRenewalSignerWaitCannotCrossPredecessorExpiryOrRevocation",
+      "TestRenewalWindowsEventMaintenancePreservesRetainedAuthority",
       "TestRenewalWindowsTelemetryBeyondAnchorExpiryPreservesReplay",
       "TestSystemInventoryServicePropagatesTrustedClockAcrossReadBoundaries"
     ],

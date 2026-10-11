@@ -306,7 +306,9 @@ func (s *Store) ReportWindowsEventCapability(ctx context.Context, device, cert s
 			return e
 		}
 		if c.CertificateHash != snap.Issuance.CertificateHash {
-			return enrollmentstate.ErrProof
+			// The peer is authenticated above; a foreign body binding remains
+			// an invalid capability, preserving the existing HTTP 400 contract.
+			return windowseventrequest.ErrInvalid
 		}
 		if c.Consent.Profile != snap.Binding.Profile {
 			return enrollmentstate.ErrProof
@@ -643,7 +645,12 @@ func (s *Store) maintainWindowsEventContent(ctx context.Context, t *transaction,
 		if e != nil {
 			return nil, e
 		}
-		snap, authorityErr := s.windowsEventIdentity(t, id, a.certificate, now)
+		// Maintenance has no authenticated transport leaf. Resolve the live
+		// credential separately from the immutable original scope binding.
+		snap, authorityErr := s.windowsEventIdentity(t, id, "", now)
+		if authorityErr == nil && a.certificate != snap.Issuance.CertificateHash {
+			return nil, ErrStorage
+		}
 		if authorityErr != nil && !errors.Is(authorityErr, ErrWindowsEventUnavailable) && !errors.Is(authorityErr, enrollmentstate.ErrNotFound) {
 			return nil, authorityErr
 		}

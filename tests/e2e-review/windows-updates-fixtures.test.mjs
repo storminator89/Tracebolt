@@ -21,7 +21,7 @@ test('fresh, stale, skew and expiry retain original inspection age',()=>{
 
 test('cached Updates is wired once per existing locale/viewport loop with a fixed capture and no new scope',()=>{
  const source=fs.readFileSync(new URL('./windows-inventory-browser.mjs',import.meta.url),'utf8'),runner=fs.readFileSync(new URL('./lan-browser.mjs',import.meta.url),'utf8'),gate=fs.readFileSync(new URL('./windows-inventory-fixtures.test.mjs',import.meta.url),'utf8');
- assert.equal((runner.match(/await check\(/g)||[]).length,26);
+ assert.equal((runner.match(/await check\(/g)||[]).length,27);
  assert.match(source,/windowsUpdatesBrowserFixture\(\{serverNow:at,capturedAt:updatesCapturedAt\}\)/);
  assert.match(source,/mark\('updates'\);phase='updates';updatesCapturedAt=new Date\(clockNow-2000\).toISOString\(\)/);
  assert.match(source,/exerciseWindowsUpdates\(\{page,expect,locale,width,shot\}\)/);
