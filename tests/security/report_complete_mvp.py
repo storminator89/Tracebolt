@@ -19,6 +19,11 @@ OPERATOR_RESOURCE = r"enrollment|devices|operational|system|packages|endpoint_id
 OPERATOR_FAILURE = r"request|deadline|transport|body|oversize|decode|http_400|http_401|http_403|http_404|http_409|http_429|http_503|http_other"
 OPERATOR_READ = re.compile(r"complete operator read diagnostic: resource=(" + OPERATOR_RESOURCE + r") failure=(" + OPERATOR_FAILURE + r")")
 OPERATOR_RETRY = re.compile(r"complete operator busy retry: resource=(" + OPERATOR_RESOURCE + r") outcome=(recovered|failed)")
+OVERVIEW_SECTION = r"processes|volumes|other"
+OVERVIEW_STATUS = r"none|http_200|http_400|http_401|http_403|http_404|http_409|http_429|http_503|http_other"
+OVERVIEW_FAILURE = r"request|deadline|transport|body|oversize|decode|trailing|status|other"
+OVERVIEW_PAGE = re.compile(r"complete operator overview query diagnostic: section=(" + OVERVIEW_SECTION + r") status=(" + OVERVIEW_STATUS + r") failure=(" + OVERVIEW_FAILURE + r") storage_busy=(true|false)")
+OVERVIEW_RETRY = re.compile(r"complete operator overview busy retry: section=(" + OVERVIEW_SECTION + r") outcome=(recovered|failed)")
 # Exact immutable source payloads map to constants; input text is never emitted.
 FAILURES = {
     "complete_native_event_phase_invalid": {"category": "complete_native_event_phase_invalid", "stage": "sender"},
@@ -449,6 +454,12 @@ def project(event):
     match = OPERATOR_RETRY.fullmatch(payload)
     if match is not None:
         return {"profile": profile, "stage": "operator", "category": "operator_busy_retry", "resource": match.group(1), "outcome": match.group(2)}
+    match = OVERVIEW_PAGE.fullmatch(payload)
+    if match is not None:
+        return {"profile": profile, "stage": "complete_overview", "category": "overview_page", "section": match.group(1), "status": match.group(2), "failure": match.group(3), "storageBusy": match.group(4) == "true"}
+    match = OVERVIEW_RETRY.fullmatch(payload)
+    if match is not None:
+        return {"profile": profile, "stage": "complete_overview", "category": "overview_page_busy_retry", "section": match.group(1), "outcome": match.group(2)}
     match = STATUS.fullmatch(payload)
     if match is not None:
         return {"profile": profile, "stage": "observation", "category": "native_report", "packageStatus": match.group(1), "servicesCoverage": match.group(2), "servicesReason": match.group(3), "socketsCoverage": match.group(4), "socketsReason": match.group(5)}

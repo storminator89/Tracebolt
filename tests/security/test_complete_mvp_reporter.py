@@ -39,6 +39,29 @@ class ProjectionTests(unittest.TestCase):
             self.assertNotIn("private", json.dumps(value))
             self.assertTrue(value is None or value["category"] == "unclassified")
 
+    def test_overview_page_diagnostics_project_finite_subtypes_only(self):
+        for test, profile in reporter.PROFILES.items():
+            for section in reporter.OVERVIEW_SECTION.split("|"):
+                for status in reporter.OVERVIEW_STATUS.split("|"):
+                    for failure in reporter.OVERVIEW_FAILURE.split("|"):
+                        for busy in ["true", "false"]:
+                            payload = f"complete operator overview query diagnostic: section={section} status={status} failure={failure} storage_busy={busy}"
+                            self.assertEqual(reporter.project(event(payload, test)), {"profile": profile, "stage": "complete_overview", "category": "overview_page", "section": section, "status": status, "failure": failure, "storageBusy": busy == "true"})
+                for outcome in ["recovered", "failed"]:
+                    self.assertEqual(reporter.project(event(f"complete operator overview busy retry: section={section} outcome={outcome}", test)), {"profile": profile, "stage": "complete_overview", "category": "overview_page_busy_retry", "section": section, "outcome": outcome})
+
+    def test_overview_diagnostics_reject_private_or_ambiguous_fields(self):
+        good = "complete operator overview query diagnostic: section=processes status=http_429 failure=status storage_busy=true"
+        for old in ["processes", "http_429", "status storage", "true"]:
+            payload = good.replace(old, "private-fixture-secret", 1)
+            value = reporter.project(event(payload))
+            self.assertEqual(value["category"], "unclassified")
+            self.assertNotIn("private-fixture", json.dumps(value))
+        for payload in [good + " cursor=private-fixture-cursor", good + " body=private-fixture-body", good + " csrf=private-fixture-csrf", good + "\nprivate-fixture-error", good + " storage_busy=false", good.replace("true", "True"), "complete operator overview busy retry: section=private-fixture-device outcome=recovered", "complete operator overview busy retry: section=volumes outcome=private-fixture-error"]:
+            value = reporter.project(event(payload))
+            self.assertTrue(value is None or value["category"] == "unclassified")
+            self.assertNotIn("private-fixture", json.dumps(value))
+
     def test_exact_scope_and_full_source_line_only(self):
         good = event("complete_positive_package_required")
         for key, value in [("Package", "other"), ("Action", "pass"), ("Test", reporter.ROOT + "/tls/extra"), ("Test", []), ("Output", "prefix" + good["Output"]), ("Output", good["Output"] + "private-fixture\n"), ("Output", good["Output"].replace("complete_mvp_process_test.go", "private.go")), ("Output", good["Output"].replace(":123:", ":0:")), ("Output", good["Output"].rstrip("\n"))]:

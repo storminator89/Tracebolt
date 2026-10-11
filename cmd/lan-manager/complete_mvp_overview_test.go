@@ -229,7 +229,7 @@ func completeMVPOverviewEvidence(v completeMVPOverviewView) (string, error) {
 	return fmt.Sprintf("processes=complete countExact=true processRows=%d volumes=complete countExact=true volumeRows=%d", p.ObservedCount, vv.ObservedCount), nil
 }
 
-func completeMVPOverviewRead(t *testing.T, get func(string, any), call func(string, any, string) (int, []byte), csrf, device string) completeMVPOverviewObservation {
+func completeMVPOverviewRead(t *testing.T, get func(string, any), query func(completeMVPOverviewQueryInput) (completeMVPOverviewPage, completeMVPOverviewQueryResult), device string) completeMVPOverviewObservation {
 	t.Helper()
 	var view completeMVPOverviewView
 	get("/api/devices/"+device+"/inventory/overview", &view)
@@ -237,15 +237,15 @@ func completeMVPOverviewRead(t *testing.T, get func(string, any), call func(stri
 	if e != nil {
 		t.Fatal(e)
 	}
-	processes, pp := completeMVPOverviewRows(t, call, csrf, view, "processes", view.Processes.Complete)
-	volumes, vp := completeMVPOverviewRows(t, call, csrf, view, "volumes", view.Volumes.Complete)
+	processes, pp := completeMVPOverviewRows(t, query, view, "processes", view.Processes.Complete)
+	volumes, vp := completeMVPOverviewRows(t, query, view, "volumes", view.Volumes.Complete)
 	if e = completeMVPOverviewValidateRows(view, processes, volumes); e != nil {
 		t.Fatal(e)
 	}
 	t.Logf("complete overview observation: stage=first %s processPages=%d volumePages=%d manifest=validated", evidence, pp, vp)
 	return completeMVPOverviewObservation{view, pp, vp}
 }
-func completeMVPOverviewRows(t *testing.T, call func(string, any, string) (int, []byte), csrf string, view completeMVPOverviewView, section string, complete *completeMVPOverviewComplete) ([]overviewgeneration.Row, int) {
+func completeMVPOverviewRows(t *testing.T, query func(completeMVPOverviewQueryInput) (completeMVPOverviewPage, completeMVPOverviewQueryResult), view completeMVPOverviewView, section string, complete *completeMVPOverviewComplete) ([]overviewgeneration.Row, int) {
 	t.Helper()
 	rows := []overviewgeneration.Row{}
 	cursor := ""
@@ -253,15 +253,18 @@ func completeMVPOverviewRows(t *testing.T, call func(string, any, string) (int, 
 	pages := 0
 	totalBytes := 0
 	for {
-		status, raw := call("/api/devices/"+view.DeviceID+"/inventory/overview/query", map[string]any{"section": section, "generationId": complete.Binding.GenerationID, "cursor": cursor, "search": "", "limit": 100}, csrf)
-		var page completeMVPOverviewPage
-		decoder := json.NewDecoder(bytes.NewReader(raw))
-		decoder.DisallowUnknownFields()
-		if status != http.StatusOK || len(raw) > 256<<10 || decoder.Decode(&page) != nil || decoder.Decode(new(any)) != io.EOF {
-			clear(raw)
+		page, result := query(completeMVPOverviewQueryInput{Section: section, GenerationID: complete.Binding.GenerationID, Cursor: cursor, Search: "", Limit: 100})
+		if result.retried {
+			outcome := "recovered"
+			if result.failure != "" {
+				outcome = "failed"
+			}
+			t.Logf("complete operator overview busy retry: section=%s outcome=%s", completeMVPOverviewQuerySection(section), outcome)
+		}
+		if result.failure != "" {
+			t.Log(completeMVPOverviewQueryDiagnostic(section, result))
 			t.Fatal("complete_overview_page_contract")
 		}
-		clear(raw)
 		if e := completeMVPOverviewPageValid(view, section, complete, page); e != nil {
 			t.Fatal(e)
 		}
@@ -518,21 +521,19 @@ func completeMVPOverviewMarkerProbe(t *testing.T) {
 			t.Fatal("complete_overview_probe_decode")
 		}
 	}
-	call := func(path string, input any, csrf string) (int, []byte) {
-		if path != "/api/devices/"+view.DeviceID+"/inventory/overview/query" || csrf != "inert-fixture-csrf" {
-			t.Fatal("complete_overview_probe_path")
-		}
-		request := input.(map[string]any)
-		section := request["section"].(string)
+	query := func(input completeMVPOverviewQueryInput) (completeMVPOverviewPage, completeMVPOverviewQueryResult) {
+		section := input.Section
 		c, rows := view.Processes.Complete, processes
 		if section == "volumes" {
 			c, rows = view.Volumes.Complete, volumes
 		}
 		page := completeMVPOverviewPage{SchemaVersion: "tracebolt.complete-overview-page.v1", DeviceID: view.DeviceID, Section: section, ServerNow: view.ServerNow, Binding: c.Binding, Manifest: c.Manifest, CollectedAt: c.Manifest.CollectedAt, CompletedAt: c.CompletedAt, RetainedUntil: c.RetainedUntil, TotalRows: uint64(len(rows)), Items: rows, ScannedRows: len(rows), Exhausted: true, CursorExpiresAt: view.ServerNow.Add(time.Minute)}
-		raw, _ := json.Marshal(page)
-		return http.StatusOK, raw
+		if input.GenerationID != c.Binding.GenerationID || input.Cursor != "" || input.Search != "" || input.Limit != 100 {
+			t.Fatal("complete_overview_probe_query")
+		}
+		return page, completeMVPOverviewQueryResult{status: http.StatusOK, retried: section == "processes"}
 	}
-	observed := completeMVPOverviewRead(t, get, call, "inert-fixture-csrf", view.DeviceID)
+	observed := completeMVPOverviewRead(t, get, query, view.DeviceID)
 	prior := completeMVPObservation{metricSequence: 1, metricAt: view.ServerNow}
 	ordinary := completeMVPObservation{metricSequence: 2, metricAt: view.ServerNow.Add(time.Second)}
 	view.ServerNow = view.ServerNow.Add(time.Second)

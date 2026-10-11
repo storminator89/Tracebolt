@@ -7,10 +7,11 @@
     "dev": "vite build --watch",
     "build": "tsc -b && vite build",
     "typecheck": "tsc -b",
-    "test": "vitest run",
+    "test": "npm run test:environments && vitest run",
     "test:watch": "vitest",
     "preview": "vite preview --host 127.0.0.1",
-    "screenshots": "node scripts/capture-screenshots.mjs"
+    "screenshots": "node scripts/capture-screenshots.mjs",
+    "test:environments": "node --test scripts/test-environments-check.node.mjs && node scripts/check-test-environments.mjs"
   },
   "dependencies": {
     "@fontsource/inter": "5.2.8",
