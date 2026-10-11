@@ -44,6 +44,10 @@ remain unconfirmed.
 
 ![Tracebolt Linux log workspace with service selection and time-window controls](docs/screenshots/2026-10-09-main-ui/log-workspace.png)
 
+Windows hardware/power context is a new source-only, default-off increment with
+source-labeled serial metadata and fresh thirteen-scope Read admin consent.
+See [scope and remaining native gates](docs/windows-hardware-context.md).
+
 ## Get started
 
 ### Connect real Linux devices

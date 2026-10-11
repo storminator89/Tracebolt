@@ -107,7 +107,7 @@ file as navigation and project constraints, never as permission to act on a host
   identity and all exact grants are durably verified; retain indeterminate
   transitions for read-only reconciliation. The released five-scope preview exposes its GUI path; the current fresh GUI
   uses Read admin below. Existing service/grant receipts must not be promoted.
-- The twelve-scope Windows Read admin source profile is the prominent fresh
+- The thirteen-scope Windows Read admin source profile is the prominent fresh
   Setup choice; actual scope consent remains unchecked. Read
   `docs/windows-read-admin-setup.md`. Preserve legacy consent/receipt bytes and
   historical development interfaces, disabled fresh staging and exact identity/
@@ -134,6 +134,12 @@ file as navigation and project constraints, never as permission to act on a host
   wire v8 or its private Network view. Preserve all old grants/frames and the
   five-scope coordinator. No probes, DNS resolution, routes, traffic or privilege
   expansion; source fixtures never authorize host reads or grants.
+- Windows hardware and power context is a separate default-off local scope.
+  Read `docs/windows-hardware-context.md` before fixed local WMI/power sources,
+  isolated workers, identifying-serial consent, v12 wire or private Device UI.
+  Preserve source-labeled chassis and BIOS serial meanings, unknown sentinels,
+  independent source failures and old receipt bytes. No firmware writes, raw
+  SMBIOS, UUID, license/recovery keys, host grants or native acceptance follows.
 - Windows caller-visible sessions and local join context are a separate default-off
   local scope. Read `docs/windows-session-context.md` before changing fixed WTS/
   NetGetJoinInformation reads, worker bounds, consent, v11 wire or private UI.

@@ -46,7 +46,7 @@ func readSetupScopes() []string {
 	return []string{enrollmentcrypto.CollectionProfileWindowsInventory, windowseventhealth.Scope, windowsvolumes.Scope, windowsprocessmetrics.Scope, windowsnetwork.Scope}
 }
 func validateReadSetupConsent(c lanclient.WindowsCapabilityConsent) error {
-	if c.Validate() != nil || !(c.SchemaVersion == lanclient.WindowsCapabilityConsentVersionV3 && reflect.DeepEqual(c.Scopes, readSetupScopes()) || c.SchemaVersion == lanclient.WindowsCapabilityConsentVersionV5 && reflect.DeepEqual(c.Scopes, lanclient.WindowsReadAdminScopes())) {
+	if c.Validate() != nil || !(c.SchemaVersion == lanclient.WindowsCapabilityConsentVersionV3 && reflect.DeepEqual(c.Scopes, readSetupScopes()) || c.SchemaVersion == lanclient.WindowsCapabilityConsentVersionV5 && reflect.DeepEqual(c.Scopes, lanclient.WindowsReadAdminScopes()) || c.SchemaVersion == lanclient.WindowsCapabilityConsentVersionV6 && reflect.DeepEqual(c.Scopes, lanclient.WindowsReadAdminScopesV6())) {
 		return errLifecycle
 	}
 	return nil
@@ -304,6 +304,8 @@ func writeReadSetupDisclosure(out io.Writer, c lanclient.WindowsCapabilityConsen
 	}
 	if c.SchemaVersion == lanclient.WindowsCapabilityConsentVersionV5 {
 		notices = append(notices, lanclient.WindowsReadAdminNotices(c.InsecureHTTPAcknowledged)...)
+	} else if c.SchemaVersion == lanclient.WindowsCapabilityConsentVersionV6 {
+		notices = append(notices, lanclient.WindowsReadAdminNoticesV6(c.InsecureHTTPAcknowledged)...)
 	}
 	for _, notice := range notices {
 		text := notice + "\n"
@@ -326,6 +328,9 @@ func validReadSetupConsentDigests(c lanclient.WindowsCapabilityConsent, values [
 	return validateReadSetupConsent(c) == nil && validReadSetupScopeDigests(c.Scopes[1:], values)
 }
 func readSetupReceiptVersion(c lanclient.WindowsCapabilityConsent) int {
+	if c.SchemaVersion == lanclient.WindowsCapabilityConsentVersionV6 {
+		return 4
+	}
 	if c.SchemaVersion == lanclient.WindowsCapabilityConsentVersionV5 {
 		return 3
 	}

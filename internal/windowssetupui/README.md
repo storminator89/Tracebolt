@@ -3,10 +3,14 @@
 `Run(Config, Hooks) error` uses fixed Win32 controls through `x/sys/windows`,
 without WebView, browser navigation, downloads, third-party GUI packages, or a
 second installation engine. The caller supplies the embedded service provenance,
-complete twelve-scope Read admin disclosure and existing coordinator hooks.
+complete thirteen-scope Read admin disclosure and existing coordinator hooks.
 Read admin is the only presented fresh profile; it is not an extra opt-in above
 a five-scope default. Review starts with five readable groups and offers full
-scope/provider details through an optional details button.
+scope/provider details through an optional details button. The fresh profile explicitly
+names manufacturer/model, physical chassis serial from Win32_SystemEnclosure,
+BIOS serial metadata, firmware vendor/version/date, and power/battery. Identifying
+serial metadata is covered by the new v6 consent and outer receipt version 4;
+historical twelve-scope v5/receipt3 and five-scope v3/receipt2 bytes are unchanged.
 
 The three pages choose a public bootstrap, review trust and scope, and display
 operation status. The selected public file is bounded to 64 KiB; Windows permits
@@ -23,7 +27,7 @@ mandatory. No existing installation is adopted by this fresh-only wizard.
 HTTPS remains the default, with no downgrade or fallback. A validated bootstrap
 can explicitly select isolated HTTP-test. Both origins must then use HTTP; mixed
 transport is rejected. The complete separate HTTP disclosure is mandatory and
-an additional unchecked checkbox acknowledges plaintext invitation, twelve-scope
+an additional unchecked checkbox acknowledges plaintext invitation, thirteen-scope
 telemetry and forged manager-response risks. The install hook receives `true`
 only after this additional approval; TLS always receives `false`. Back and new
 input clear the HTTP acknowledgement too.

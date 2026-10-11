@@ -1,0 +1,18 @@
+.windows-hardware-context{min-width:0}
+.windows-hardware-context>.windows-inventory-section-header{margin-bottom:16px}
+.windows-hardware-groups{display:grid;grid-template-columns:1fr 1fr;gap:20px 32px;min-width:0}
+.windows-hardware-group{min-width:0}
+.windows-hardware-heading{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;padding-bottom:10px;border-bottom:1px solid var(--line)}
+.windows-hardware-heading h4{display:flex;align-items:center;gap:7px;margin:0;font-size:13px;font-weight:600}
+.windows-hardware-heading h4 svg{flex-shrink:0;color:var(--secondary)}
+.windows-hardware-quality{font-size:11px;color:var(--secondary)}
+.windows-hardware-group dl,.windows-hardware-details dl{margin:0;font-size:12px;line-height:1.5}
+.windows-hardware-group dl>div,.windows-hardware-details dl>div{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.2fr);gap:10px;padding:9px 0}
+.windows-hardware-group dt{color:var(--secondary);overflow-wrap:anywhere}
+.windows-hardware-group dd,.windows-hardware-details dd{margin:0;font-weight:500;min-width:0;overflow-wrap:anywhere}
+.windows-hardware-group bdi{overflow-wrap:anywhere}
+.windows-hardware-details{margin-top:18px;padding-top:12px;border-top:1px solid var(--line);font-size:12px;line-height:1.6;color:var(--secondary)}
+.windows-hardware-details summary{cursor:pointer;color:var(--text);font-weight:600}
+.windows-hardware-details summary:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+.windows-hardware-details p{margin:9px 0}
+@media(max-width:600px){.windows-hardware-groups{grid-template-columns:1fr;gap:16px}.windows-hardware-group dl>div{grid-template-columns:minmax(0,1fr) minmax(0,1.15fr)}}

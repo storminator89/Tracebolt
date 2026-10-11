@@ -21,7 +21,7 @@ or delivery gates. Existing development source and historical evidence remain.
 
 ## New Read admin source increment
 
-A separate [twelve-scope Read admin source profile](windows-read-admin-setup.md)
+A separate [thirteen-scope Read admin source profile](windows-read-admin-setup.md)
 is the prominent fresh Setup choice, with grouped provider requirements and
 distinct fresh receipts. Its actual scope consent stays unchecked until the
 operator deliberately approves it. Existing reconsent source is preserved
@@ -30,8 +30,15 @@ fresh-Setup choice. Fresh native setup, provider presence/readability and consen
 remain separate gates. The combined source also alternates collection priority
 and retains independently dated context beside the latest source failure. Event-message content, cached WUA inspection and service control
 are separate optional approvals. The current manual native Setup gate is
-fail-closed pending real twelve-scope fixture, receipt and frame support; its
+fail-closed pending real thirteen-scope fixture, receipt and frame support; its
 historical five-scope approval/evidence cannot authorize the new profile.
+
+A new [hardware and power source slice](windows-hardware-context.md) adds a
+compact private Device view for manufacturer/model, source-labeled chassis and
+BIOS serial, firmware metadata and battery/power. Fresh Setup discloses serial
+metadata under consent v6 and outer receipt4. Older scopes/receipts never grant
+it. This is source-only; actual Windows provider and installation acceptance
+remain deferred until missing Admin data is complete.
 
 ## Published preview read scope
 

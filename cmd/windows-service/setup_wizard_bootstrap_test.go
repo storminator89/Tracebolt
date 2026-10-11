@@ -85,3 +85,20 @@ func TestSetupWizardPublicBootstrapPreviewAndExplicitTransportConsent(t *testing
 		}
 	}
 }
+
+func TestSetupWizardFreshReadAdminUsesV6AndExactHTTPAcknowledgement(t *testing.T) {
+	for _, profile := range []string{"tls", "http-test"} {
+		b, _ := setupPublicBootstrapFixture(t, profile)
+		raw, _ := json.Marshal(b)
+		for _, ack := range []bool{false, true} {
+			_, consent, e := setupWizardReadAdminAcknowledgedBootstrap(raw, ack)
+			allowed := ack == (profile == "http-test")
+			if (e == nil) != allowed {
+				t.Fatal("HTTP acknowledgement widened", profile, ack)
+			}
+			if allowed && (consent.SchemaVersion != "tracebolt.windows-capability-consent.v6" || len(consent.Scopes) != 13 || consent.Scopes[12] != "windows-hardware-context-v1" || consent.InsecureHTTPAcknowledged != ack || validateReadSetupConsent(consent) != nil || readSetupReceiptVersion(consent) != 4) {
+				t.Fatal("fresh setup did not select exact V6 receipt4")
+			}
+		}
+	}
+}

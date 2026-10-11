@@ -36,3 +36,30 @@ func TestReadAdminContractCannotUseFiveScopeAdvertisement(t *testing.T) {
 		t.Fatal("unknown contract")
 	}
 }
+
+func TestReadAdminV2ContractNeverPromotesHistoricalAdvertisements(t *testing.T) {
+	fresh := ExpectedReadAdminV2("manager", "https://enroll", "https://agent")
+	if path, e := CapabilityPath(fresh); e != nil || path != ReadAdminCapabilitiesPathV2 {
+		t.Fatal("wrong fresh path", e)
+	}
+	contracts := []Capabilities{Expected("manager", "https://enroll", "https://agent"), ExpectedReadAdmin("manager", "https://enroll", "https://agent"), fresh}
+	for i, contract := range contracts {
+		raw, _ := json.Marshal(contract)
+		for j, expected := range contracts {
+			if (Match(raw, expected) == nil) != (i == j) {
+				t.Fatal("contracts conflated", i, j)
+			}
+		}
+	}
+	raw, _ := json.Marshal(fresh)
+	for _, bad := range []string{string(raw) + "\n", strings.TrimSuffix(string(raw), "}") + `,"extra":true}`, strings.Replace(string(raw), `"setupContract":`, `"setupContract":"duplicate","setupContract":`, 1)} {
+		if Match([]byte(bad), fresh) == nil {
+			t.Fatal("noncanonical fresh contract admitted")
+		}
+	}
+	const legacy = `{"schemaVersion":"tracebolt.windows-setup-capabilities.v1","managerInstanceId":"manager","enrollmentOrigin":"https://enroll","agentOrigin":"https://agent","collectionProfile":"windows-inventory-v1","setupContract":"fresh-twelve-read-admin-scopes-v1"}`
+	old, _ := json.Marshal(contracts[1])
+	if string(old) != legacy {
+		t.Fatal("historical capabilities bytes changed")
+	}
+}

@@ -93,6 +93,9 @@ func installReadObservationWithProgress(ctx context.Context, bootstrapPath strin
 			return journal.Verify()
 		},
 		ensureFreshScopes: func(receipt windowsservice.Receipt) error {
+			if consent.SchemaVersion == lanclient.WindowsCapabilityConsentVersionV6 {
+				return lanclient.WindowsReadAdminScopesV6Absent(receipt.Layout.StateRoot, receipt.ServiceSID)
+			}
 			if consent.SchemaVersion == lanclient.WindowsCapabilityConsentVersionV5 {
 				return lanclient.WindowsReadAdminScopesAbsent(receipt.Layout.StateRoot, receipt.ServiceSID)
 			}
@@ -121,7 +124,7 @@ func installReadObservationWithProgress(ctx context.Context, bootstrapPath strin
 		identity: lanclient.WindowsCapabilityIdentity,
 		configure: func(path string, consent lanclient.WindowsCapabilityConsent) (lanclient.WindowsCapabilityConsentResult, error) {
 			progress("Manager approved this identity. Applying and verifying only the explicitly selected local read scopes.")
-			if consent.SchemaVersion == lanclient.WindowsCapabilityConsentVersionV5 {
+			if consent.SchemaVersion == lanclient.WindowsCapabilityConsentVersionV5 || consent.SchemaVersion == lanclient.WindowsCapabilityConsentVersionV6 {
 				if journal == nil {
 					return lanclient.WindowsCapabilityConsentResult{}, errLifecycle
 				}

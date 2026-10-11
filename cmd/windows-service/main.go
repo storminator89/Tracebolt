@@ -21,6 +21,7 @@ import (
 	"localrmm/internal/windowseventhealth"
 	"localrmm/internal/windowsfullservices"
 	"localrmm/internal/windowsfullsoftware"
+	"localrmm/internal/windowshardwareworker"
 	"localrmm/internal/windowsmanaged"
 	"localrmm/internal/windowsnetwork"
 	"localrmm/internal/windowspatchcontext"
@@ -75,6 +76,25 @@ func run(ctx context.Context, args []string, out, stderr io.Writer) int {
 			return 1
 		}
 		return 0
+	}
+	if len(args) == 1 {
+		source := ""
+		switch args[0] {
+		case windowshardwareworker.WorkerArgument:
+			source = "system"
+		case windowshardwareworker.FirmwareWorkerArgument:
+			source = "firmware"
+		case windowshardwareworker.ChassisWorkerArgument:
+			source = "chassis"
+		case windowshardwareworker.PowerWorkerArgument:
+			source = "power"
+		}
+		if source != "" {
+			if runHardwareContextWorker(ctx, os.Stdin, out, source) != nil {
+				return 1
+			}
+			return 0
+		}
 	}
 	return runWith(ctx, args, out, stderr, nativeOperation)
 }
