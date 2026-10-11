@@ -148,6 +148,7 @@ func (w *wizard) updateActions() {
 	for _, id := range []int{idScope, idService, idIdentity, idCompared, idHTTPRisk} {
 		enable(w.controls[id], ready && w.flow.page == pageReview)
 	}
+	enable(w.controls[idDetails], ready && w.flow.page == pageReview && w.flow.readAdmin)
 }
 
 // A monitor that cannot contain even the minimum client is unsupported. Before

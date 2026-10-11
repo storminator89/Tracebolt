@@ -11,6 +11,12 @@ import (
 // no-proxy/no-redirect transport with exactly one public bodyless GET. The
 // placeholder is only constructor validation; no invitation is transmitted.
 func NewWindowsSetupHTTPClient(origin, profile string, serverCAPEM []byte) (*http.Client, error) {
+	return newWindowsSetupHTTPClient(origin, profile, serverCAPEM, windowssetup.CapabilitiesPath)
+}
+func newWindowsSetupHTTPClient(origin, profile string, serverCAPEM []byte, path string) (*http.Client, error) {
+	if path != windowssetup.CapabilitiesPath && path != windowssetup.ReadAdminCapabilitiesPath {
+		return nil, ErrConfiguration
+	}
 	c, err := NewPublicBootstrapHTTPClient(origin, profile, serverCAPEM, "invite_00000000000000000000000000000001")
 	if err != nil {
 		return nil, err
@@ -20,7 +26,7 @@ func NewWindowsSetupHTTPClient(origin, profile string, serverCAPEM []byte) (*htt
 		c.CloseIdleConnections()
 		return nil, ErrConfiguration
 	}
-	t.path = windowssetup.CapabilitiesPath
+	t.path = path
 	return c, nil
 }
 
@@ -30,7 +36,11 @@ func CheckWindowsSetupManager(ctx context.Context, origin, profile string, serve
 	if ctx == nil {
 		return windowssetup.ErrCompatibility
 	}
-	c, err := NewWindowsSetupHTTPClient(origin, profile, serverCAPEM)
+	path, err := windowssetup.CapabilityPath(expected)
+	if err != nil {
+		return windowssetup.ErrCompatibility
+	}
+	c, err := newWindowsSetupHTTPClient(origin, profile, serverCAPEM, path)
 	if err != nil {
 		return windowssetup.ErrCompatibility
 	}
@@ -38,7 +48,11 @@ func CheckWindowsSetupManager(ctx context.Context, origin, profile string, serve
 	return checkWindowsSetupManager(ctx, c, origin, expected)
 }
 func checkWindowsSetupManager(ctx context.Context, c *http.Client, origin string, expected windowssetup.Capabilities) error {
-	r, err := http.NewRequestWithContext(ctx, http.MethodGet, origin+windowssetup.CapabilitiesPath, nil)
+	path, err := windowssetup.CapabilityPath(expected)
+	if err != nil {
+		return windowssetup.ErrCompatibility
+	}
+	r, err := http.NewRequestWithContext(ctx, http.MethodGet, origin+path, nil)
 	if err != nil {
 		return windowssetup.ErrCompatibility
 	}

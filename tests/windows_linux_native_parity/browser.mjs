@@ -11,7 +11,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createRequire } from 'node:module';
 
 export const SCHEMA = 'tracebolt.windows-linux-native-parity.browser.v1';
-export const REASONS = ['complete', 'contract_rejected', 'deadline', 'clock_changed', 'wrong_origin', 'artifact_mismatch', 'private_path_rejected', 'dependency_unavailable', 'browser_unavailable', 'session_lost', 'identity_mismatch', 'invalid_response', 'stale_capture', 'request_conflict', 'event_unknown', 'updates_unknown', 'ui_unavailable', 'cleanup_unverified'];
+export const REASONS = ['complete', 'contract_rejected', 'deadline', 'clock_changed', 'wrong_origin', 'artifact_mismatch', 'private_path_rejected', 'dependency_unavailable', 'browser_unavailable', 'session_lost', 'identity_mismatch', 'invalid_response', 'stale_capture', 'request_conflict', 'event_unknown', 'updates_unknown', 'ui_unavailable', 'cleanup_unverified', 'read_admin_native_gate_unavailable'];
 export const OMITTED = ['baseline_source_completeness', 'health_policy_lifecycle', 'worker_faults_and_replay', 'online_updates', 'update_installation', 'service_actions', 'reboot', 'upgrade_repair'];
 export const CHECKS = ['publicBootstrapSaved', 'endpointBindingObserved', 'singleFreshWindowsIdentity', 'baselineDefaultOff', 'syntheticHeaderObserved', 'eventRequestObserved', 'eventResultObserved', 'eventMessageRendered', 'updatesObserved', 'updatesRendered', 'eventDisabledObserved', 'updatesDisabledObserved', 'browserClosed'];
 const MARKERS = new Set(['PARITY_BROWSER_SECURE_LOGIN_HANDOFF', 'PARITY_BROWSER_BASELINE_OBSERVED', 'PARITY_BROWSER_EVENT_ENABLE_READY', 'PARITY_BROWSER_EVENT_REQUEST_HANDOFF', 'PARITY_BROWSER_UPDATES_ENABLE_READY', 'PARITY_BROWSER_EVENT_DISABLE_READY', 'PARITY_BROWSER_UPDATES_DISABLE_READY']);
@@ -45,6 +45,7 @@ export function freshCapture(captured, server, minimum = 0, now = Date.now()) {
   const capture = Date.parse(captured), clock = Date.parse(server);
   return Number.isFinite(capture) && Number.isFinite(clock) && capture >= minimum && capture <= clock && clock - capture <= 120000 && Math.abs(clock - now) <= 30000 && now - capture <= 150000;
 }
+// Historical five-scope observation only, never current twelve-scope approval.
 // Grant-bound presence/freshness only. Per-source partial/denied data stays
 // partial/denied; baseline_source_completeness is an explicit report omission.
 export function fiveScopeBaseline(view, minimum, now = Date.now()) {
@@ -447,9 +448,14 @@ export async function observe(spec, report, validators, chromium, emit = line =>
   need(report.checks.browserClosed, 'cleanup_unverified');
   return finishSummary(report);
 }
+export function requireCurrentSetupGate() {
+  // The v1 baseline cannot prove or authorize fresh twelve-scope Read admin.
+  throw new Refusal('read_admin_native_gate_unavailable');
+}
 export async function main() {
   let spec, report, safeOutput = false;
   try {
+    requireCurrentSetupGate(); // Before spec/files/dependencies/browser access.
     // Direct native entry is interactive-only. Keep module imports and pure
     // source tests available in CI; the private child stdin is intentionally a pipe.
     need(!['CI', 'GITHUB_ACTIONS', 'TF_BUILD', 'BUILD_BUILDID'].some(key => Object.hasOwn(process.env, key)));

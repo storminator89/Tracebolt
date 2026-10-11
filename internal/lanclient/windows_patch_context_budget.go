@@ -138,3 +138,20 @@ func sessionContextWithBudget(collect sessionContextCollector) sessionContextCol
 		return s, e
 	}
 }
+
+// Each optional group rotates its leading source on successive odd/even pairs.
+// Each gets the existing full ceiling when its group and source lead; a slow
+// sibling cannot permanently consume that opportunity. No scheduler state or
+// pending retry bytes are changed.
+func collectWindowsContextGroup(ctx context.Context, sequence uint64, jobs []func(context.Context) error) error {
+	for index := range jobs {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		offset := int(((sequence - 1) / 2) % uint64(len(jobs)))
+		if err := jobs[(offset+index)%len(jobs)](ctx); err != nil {
+			return err
+		}
+	}
+	return nil
+}

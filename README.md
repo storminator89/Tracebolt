@@ -81,10 +81,11 @@ creates local state at `.local/state.db` and stops with Ctrl+C. It does not enro
 remote devices or install a service. Use `lan-manager` via the runbook for real
 LAN operation. [Demo troubleshooting](docs/troubleshooting.md#local-demo).
 
-### Windows preview
+### Published Windows preview
 
 The unsigned x64 [v0.1.0-windows-preview.1 prerelease](https://github.com/storminator89/Tracebolt/releases/tag/v0.1.0-windows-preview.1)
-is available, with fresh installation and five explicitly approved read scopes.
+remains unchanged at source [`14719116`](https://github.com/storminator89/Tracebolt/commit/14719116bdb663d13e4bcaef434a4374a6265fe6),
+with fresh installation and five explicitly approved read scopes.
 Read the [prerelease installation guide](docs/windows-prerelease-install.md) and
 [Windows status and limitations](docs/windows-status.md) before installing.
 The accepted hosted Windows Server 2025 subset does not prove Windows 10/11,
@@ -95,41 +96,54 @@ for subsequent source progress, CI evidence and remaining priorities. The
 [Linux/Windows parity matrix](docs/windows-linux-parity.md) preserves a historical
 baseline; its table is not a current runtime-coverage claim.
 
-Cached Update inspection and exact selected event messages are separate default-off
-source candidates wired into Updates and Logs. Sibling [PR #31](https://github.com/storminator89/Tracebolt/pull/31)
-and [PR #32](https://github.com/storminator89/Tracebolt/pull/32) add opt-in Windows
-disk/CPU/RAM and selected-service health policies. PR #29's documentation changes
-do not add that runtime implementation. These newer features remain outside the
-unchanged published preview. Source/fixture checks do not establish native acceptance.
+### Current Windows development source
 
-### Complete Windows inventory source slices
+Merged source at [`829ed26`](https://github.com/storminator89/Tracebolt/commit/829ed26b3f222276f77cd43b40f45d47f07a3b3f)
+includes these later read-only capabilities; none is in the published preview:
 
-A separately consented [complete caller-visible Win32 service generation](docs/windows-full-services-contract.md)
-adds resumed SCM enumeration and bounded server-side search/paging beyond the
-legacy 128/2,048-row preview ceilings. It is default-off and source-only pending
-separate native/host acceptance. Drivers and ACL-invisible services remain outside
-the caller scope. A separate default-off [complete machine software registration
-extension](docs/windows-full-software-contract.md) adds HKLM 32/64 generations,
-retained optional-field quality and duplicate registrations, and protected full
-search/pages. Per-user, Store and portable program coverage remains separate
-work. Existing selected-service alarms continue using their clearly bounded
-preview and are not silently expanded. No upgrade enables the new local grant.
+- [Complete caller-visible Win32 services](docs/windows-full-services-contract.md)
+  and [HKLM 32/64 machine software registrations](docs/windows-full-software-contract.md),
+  with generation-bound search/paging beyond the old preview ceilings. Drivers,
+  ACL-invisible services, per-user/Store and portable software are excluded.
+  Selected-service health policies retain their separately bounded authority.
+- [Fleet hostname/IP search](docs/windows-fleet-identity.md) over already-reported
+  metadata, plus [adapter link state/speed and DNS/gateway context](docs/windows-adapter-context.md)
+  and [build labels, retained update history and reboot indicators](docs/windows-patch-context.md)
+  ([merged PR #42](https://github.com/storminator89/Tracebolt/pull/42)). Retained
+  history does not establish current patch compliance.
+- [Defender status and local Firewall profile configuration](docs/windows-security-posture.md)
+  in Security ([merged PR #43](https://github.com/storminator89/Tracebolt/pull/43)).
+  These do not establish overall protection or effective firewall policy;
+  third-party antivirus, BitLocker, Secure Boot and TPM are not covered.
+- [Caller-visible Users / Sessions and local domain/workgroup join context](docs/windows-session-context.md)
+  ([merged PR #44](https://github.com/storminator89/Tracebolt/pull/44)). This is not
+  complete account discovery or account management.
 
-[Windows fleet hostname/IP search](docs/windows-fleet-identity.md) is also implemented
-in source using already-reported metadata. These inventory and fleet slices are
-unreleased draft work; exact-source hosted CI and native acceptance remain separate.
-Current draft source also adds [adapter link state/speed and DNS/gateway context](docs/windows-adapter-context.md)
-and [Windows build, retained update history and reboot indicators](docs/windows-patch-context.md)
-in the existing Network and Updates tabs. These independent local scopes are
-default-off. Complete inventory/fleet source is in [PR #40](https://github.com/storminator89/Tracebolt/pull/40),
-and adapter context in [PR #41](https://github.com/storminator89/Tracebolt/pull/41);
-none changes the published preview or establishes native acceptance.
+New host-read scopes are default-off and require explicit local consent. Cached
+[Windows Update inspection](docs/windows-update-runtime.md), [selected event messages](docs/windows-event-content-runtime.md)
+and opt-in [disk/CPU/RAM](https://github.com/storminator89/Tracebolt/pull/31) and
+[selected-service health policies](https://github.com/storminator89/Tracebolt/pull/32)
+are also unreleased source features. Exact-source CI and fixtures do not establish
+native acceptance.
 
-The [prioritized Windows admin roadmap](docs/windows-admin-roadmap.md) tracks the
-remaining complete process inventory, security and patch posture, network/storage
-diagnostics, user and hardware context, and software-change history. The
-[Windows11x64 acceptance matrix](docs/windows11-acceptance-matrix.md) makes the
-desktop and lifecycle checks explicit.
+The newer source [fresh Windows Read admin setup](docs/windows-read-admin-setup.md)
+presents twelve read scopes prominently, with a concise review and optional full
+scope details. Actual consent boxes start unchecked, including explicit approval
+of personal user/domain/session metadata; the prominent profile grants no consent.
+Provider access still needs verification under the installed service identity.
+Event-message content, cached Update inspection and service control remain separate.
+The [service-action source](docs/windows-service-actions.md) introduced in
+[PR #45](https://github.com/storminator89/Tracebolt/pull/45) remains separate; native
+setup, ACL changes and any target service action remain separately gated.
+
+Current development prioritizes fresh installation and dependable read-only data.
+A future updater is separate work, not a prerequisite for these source increments;
+there is no migration rollout to plan. The [Windows admin roadmap](docs/windows-admin-roadmap.md)
+tracks remaining complete process inventory, broader security/network/storage and
+hardware context, and software-change history. The
+[Windows 11 x64 acceptance matrix](docs/windows11-acceptance-matrix.md) records the
+still-open desktop and lifecycle checks. No new release or native Windows 11
+acceptance is claimed.
 
 | Cached Windows Updates, unreleased source preview | Mobile device overview, German |
 | --- | --- |

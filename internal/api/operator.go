@@ -376,7 +376,7 @@ func (h *operatorHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if r.URL.Path == "/v1/windows/setup-capabilities" {
+	if r.URL.Path == "/v1/windows/setup-capabilities" || r.URL.Path == "/v1/windows/read-admin-setup-capabilities" {
 		h.windowsSetupCapabilities(w, r)
 		return
 	}

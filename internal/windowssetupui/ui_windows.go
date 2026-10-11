@@ -160,7 +160,7 @@ func Run(c Config, h Hooks) error {
 	if runtime.GOARCH != c.Architecture {
 		return ErrConfiguration
 	}
-	w := &wizard{config: c, hooks: h, controls: make(map[int]uintptr)}
+	w := &wizard{config: c, hooks: h, flow: freshFlow(c, h), controls: make(map[int]uintptr)}
 	if !activeWizard.CompareAndSwap(nil, w) {
 		return ErrUI
 	}
@@ -355,7 +355,7 @@ func (w *wizard) render() bool {
 		destroyWindow.Call(h)
 	}
 	w.pageControls = nil
-	for _, id := range []int{idChoose, idUninstall, idScope, idService, idIdentity, idCompared, idHTTPRisk, idSelectedFile, idReviewText, idOperationText, idInputText} {
+	for _, id := range []int{idChoose, idUninstall, idScope, idService, idIdentity, idCompared, idHTTPRisk, idReadAdmin, idDetails, idSelectedFile, idReviewText, idOperationText, idInputText} {
 		delete(w.controls, id)
 	}
 	enable(w.controls[idBack], w.flow.page == pageReview)
@@ -367,8 +367,17 @@ func (w *wizard) render() bool {
 		setText(w.heading, "Step 1 of 3: Choose the public bootstrap")
 		setText(w.controls[idNext], "&Next >")
 		intro := "Choose the public bootstrap JSON supplied by your manager operator. The file must be a regular local file, no larger than 64 KiB.\r\n\r\nThis is public manager identity and trust material only. Do not choose a file containing an invitation, password, private key or other secret. The invitation is entered later in a separate console with input hidden.\r\n\r\nThis setup is for a fresh endpoint only. Existing service, enrollment, grants or setup state are never adopted or reset. HTTPS is the default. Explicit isolated HTTP-test bootstraps require a separate plaintext-risk approval.\r\n\r\nAfter choosing a valid bootstrap, review the full data scope and compare all public trust values independently. Installation only begins after you explicitly approve the read scopes, service, persistent identity and trust comparison.\r\n\r\nNo browser is opened and nothing is downloaded by this wizard."
+		if w.flow.readAdmin {
+			intro = "Read admin sets up device and activity, services and software, network, updates and security, and personal users/session metadata. Service control is separate.\r\n\r\nChoose the manager's public bootstrap JSON, a regular local file up to 64 KiB. Never put an invitation, password or private key in this file. Enter the invitation later in the hidden-input console.\r\n\r\nNext, review the grouped data scope and public trust values. All consent boxes start unchecked. Nothing is installed until you explicitly approve and choose Install."
+		}
 		if w.control("EDIT", intro, esMultiline|esReadOnly|esAutoVScroll|wsVScroll|wsTabStop|wsBorder, idInputText, true) == 0 {
 			return false
+		}
+		if w.flow.readAdmin {
+			setText(w.heading, "Step 1 of 3: Read admin setup")
+			if w.control("STATIC", "Read admin: 12 read scopes. Review and explicitly approve on the next page.", 0, idReadAdmin, true) == 0 {
+				return false
+			}
 		}
 		w.selected = w.control("EDIT", w.fileName, esReadOnly|wsTabStop|wsBorder, idSelectedFile, true)
 		choose := w.control("BUTTON", "Choose &file...", wsTabStop, idChoose, true)
@@ -381,12 +390,19 @@ func (w *wizard) render() bool {
 	case pageReview:
 		setText(w.heading, "Step 2 of 3: Review scope, service, identity and trust")
 		setText(w.controls[idNext], "&Install")
-		w.content = w.control("EDIT", reviewText(w.config, w.flow.trust), esMultiline|esReadOnly|esAutoVScroll|wsVScroll|wsTabStop|wsBorder, idReviewText, true)
+		w.content = w.control("EDIT", reviewText(reviewPresentation(w.config, w.flow.readAdmin, w.flow.details), w.flow.trust), esMultiline|esReadOnly|esAutoVScroll|wsVScroll|wsTabStop|wsBorder, idReviewText, true)
+		scopeText := "I approve the exact five READ scopes and the full privacy disclosure above."
+		if w.flow.readAdmin {
+			scopeText = "I approve all 12 Read admin scopes, including personal user/domain/session metadata."
+			if w.control("BUTTON", "Scope &details", wsTabStop, idDetails, true) == 0 {
+				return false
+			}
+		}
 		checks := []struct {
 			id   int
 			text string
 		}{
-			{idScope, "I approve the exact five READ scopes and the full privacy disclosure above."},
+			{idScope, scopeText},
 			{idService, "I approve a LocalService Windows service and automatic startup after verified activation and grants."},
 			{idIdentity, "I approve creation and protected storage of a persistent device identity on this computer."},
 			{idCompared, "I independently compared the manager ID, both origins and every full trust fingerprint above."},
@@ -395,7 +411,7 @@ func (w *wizard) render() bool {
 			checks = append(checks, struct {
 				id   int
 				text string
-			}{idHTTPRisk, "I accept plaintext invitation and five-scope telemetry, and forged manager-response risks for this HTTP test."})
+			}{idHTTPRisk, "I accept plaintext invitation and selected-scope telemetry, and forged manager-response risks for this HTTP test."})
 		}
 		for _, c := range checks {
 			h := w.control("BUTTON", c.text, bsAutoCheckbox|bsMultiline|wsTabStop, c.id, true)
@@ -465,6 +481,15 @@ func (w *wizard) command(id int) {
 		setText(w.selected, w.fileName+" (public bootstrap validated)")
 		w.updateActions()
 		setFocus.Call(w.controls[idNext])
+	case idDetails:
+		if w.flow.toggleDetails() {
+			setText(w.content, reviewText(reviewPresentation(w.config, w.flow.readAdmin, w.flow.details), w.flow.trust))
+			label := "Scope &details"
+			if w.flow.details {
+				label = "Scope &summary"
+			}
+			setText(w.controls[idDetails], label)
+		}
 	case idScope, idService, idIdentity, idCompared, idHTTPRisk:
 		if w.flow.page != pageReview || w.flow.busy || w.flow.attempted {
 			return
@@ -511,6 +536,10 @@ func (w *wizard) start(kind operation, confirmed bool) {
 		return
 	}
 	httpApproved := w.flow.httpApproved()
+	readAdmin := w.flow.readAdmin
+	if kind == opInstall && readAdmin && !readAdminAvailable(w.config, w.hooks) {
+		return
+	}
 	if !w.flow.begin(kind, confirmed) {
 		return
 	}
@@ -540,7 +569,11 @@ func (w *wizard) start(kind operation, confirmed bool) {
 	go func() {
 		var err error
 		if kind == opInstall {
-			err = w.hooks.Install(ctx, data, httpApproved, w.reportProgress)
+			if readAdmin {
+				err = w.hooks.InstallReadAdmin(ctx, data, httpApproved, w.reportProgress)
+			} else {
+				err = w.hooks.Install(ctx, data, httpApproved, w.reportProgress)
+			}
 		} else {
 			err = w.hooks.Uninstall(ctx, w.reportProgress)
 		}

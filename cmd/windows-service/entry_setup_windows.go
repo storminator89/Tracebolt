@@ -41,9 +41,13 @@ func main() {
 		setupWizardAlert("This Setup package is incomplete or corrupt. Obtain the reviewed Setup.exe and verify its release provenance. Nothing was installed.")
 		os.Exit(2)
 	}
-	config := windowssetupui.Config{Version: manifest.Version, SourceCommit: manifest.SourceCommit, PayloadSHA256: manifest.SHA256, Architecture: manifest.Architecture, Disclosure: setupWizardDisclosure(), HTTPDisclosure: setupWizardHTTPDisclosure()}
+	config := windowssetupui.Config{Version: manifest.Version, SourceCommit: manifest.SourceCommit, PayloadSHA256: manifest.SHA256, Architecture: manifest.Architecture, Disclosure: setupWizardDisclosure(), HTTPDisclosure: setupWizardHTTPDisclosure(), ReadAdminDisclosure: setupWizardReadAdminDisclosure(false), ReadAdminHTTPDisclosure: setupWizardReadAdminDisclosure(true), ReadAdminSummary: setupWizardReadAdminSummary(), ReadAdminHTTPSummary: setupWizardReadAdminHTTPRiskSummary}
 	hooks := windowssetupui.Hooks{Preview: setupWizardPreview}
-	hooks.Install = func(ctx context.Context, raw []byte, insecureAcknowledged bool, progress func(string)) error {
+	installProfile := func(ctx context.Context, raw []byte, insecureAcknowledged bool, readAdmin bool, progress func(string)) error {
+		acknowledgedBootstrap := setupWizardAcknowledgedBootstrap
+		if readAdmin {
+			acknowledgedBootstrap = setupWizardReadAdminAcknowledgedBootstrap
+		}
 		ctx, stop := context.WithCancel(ctx)
 		defer stop()
 		var console io.Writer
@@ -52,7 +56,7 @@ func main() {
 				if manifest.Validate(payload) != nil {
 					return errLifecycle
 				}
-				_, _, err := setupWizardAcknowledgedBootstrap(b, insecureAcknowledged)
+				_, _, err := acknowledgedBootstrap(b, insecureAcknowledged)
 				if err != nil {
 					return errLifecycle
 				}
@@ -66,7 +70,11 @@ func main() {
 				}
 				requestCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
 				defer cancel()
-				return lanclient.CheckWindowsSetupManager(requestCtx, b.EnrollmentOrigin, b.Profile, []byte(b.ServerCAPEM), windowssetup.Expected(b.ManagerInstanceID, b.EnrollmentOrigin, b.AgentOrigin))
+				expected := windowssetup.Expected(b.ManagerInstanceID, b.EnrollmentOrigin, b.AgentOrigin)
+				if readAdmin {
+					expected = windowssetup.ExpectedReadAdmin(b.ManagerInstanceID, b.EnrollmentOrigin, b.AgentOrigin)
+				}
+				return lanclient.CheckWindowsSetupManager(requestCtx, b.EnrollmentOrigin, b.Profile, []byte(b.ServerCAPEM), expected)
 			},
 			console: func() (func() error, error) {
 				w, close, err := setupWizardConsole(stop)
@@ -81,7 +89,7 @@ func main() {
 				return r.BootstrapPath, r.Close, nil
 			},
 			install: func(ctx context.Context, path string) error {
-				_, consent, err := setupWizardAcknowledgedBootstrap(raw, insecureAcknowledged)
+				_, consent, err := acknowledgedBootstrap(raw, insecureAcknowledged)
 				if err != nil {
 					return err
 				}
@@ -94,6 +102,12 @@ func main() {
 			setupWizardFailure(err, progress)
 		}
 		return err
+	}
+	hooks.Install = func(ctx context.Context, raw []byte, insecure bool, progress func(string)) error {
+		return installProfile(ctx, raw, insecure, false, progress)
+	}
+	hooks.InstallReadAdmin = func(ctx context.Context, raw []byte, insecure bool, progress func(string)) error {
+		return installProfile(ctx, raw, insecure, true, progress)
 	}
 	hooks.Uninstall = func(ctx context.Context, progress func(string)) error {
 		err := setupWizardUninstallWithLease(ctx, openReceiptStore, setupWizardRemovalSteps{

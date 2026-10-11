@@ -26,7 +26,7 @@ _provenance_spec = importlib.util.spec_from_file_location("_setup_job_provenance
 provenance = importlib.util.module_from_spec(_provenance_spec)
 _provenance_spec.loader.exec_module(provenance)
 require = shared.require
-PROFILE = "packaged-setup-gui-v1"
+PROFILE = "packaged-setup-gui-read-admin-v2"
 VERSION = "v0.0.0-setup-candidate"
 REPORT_NAME = "tracebolt-windows-setup-acceptance.json"
 PUBLIC_DIRECTORY = "tracebolt-setup-tested-public"
@@ -38,7 +38,7 @@ PUBLIC_FILES = {SETUP_NAME, SERVICE_NAME, "setup-package-amd64.json", "build-man
 _resource_spec = importlib.util.spec_from_file_location("_setup_public_pe", ROOT / "deploy/windows-setup/pe_resources.py")
 resources = importlib.util.module_from_spec(_resource_spec)
 _resource_spec.loader.exec_module(resources)
-APPROVALS = ("APP_ACLS", "SERVICES", "IDENTITY", "FIVE_READ_SCOPES", "SYNTHETIC_CONSOLE", "LOOPBACK_TLS", "HTTP_PLAINTEXT", "STOP_REMOVE_OWNED_SERVICE", "RETAIN_FOR_VM_DISPOSAL")
+APPROVALS = ("APP_ACLS", "SERVICES", "IDENTITY", "TWELVE_READ_ADMIN_SCOPES", "SYNTHETIC_CONSOLE", "LOOPBACK_TLS", "HTTP_PLAINTEXT", "STOP_REMOVE_OWNED_SERVICE", "RETAIN_FOR_VM_DISPOSAL")
 NORMAL = {"install-uninstall", "http-install-uninstall"}
 BASE = {"acknowledgementsOff", "publicBootstrapChosen", "realGUIExercised", "hiddenConsoleExercised", "noEchoVerified", "pendingStoppedDisabled", "reopenBlocked", "filesAndStateRetained", "workerTerminated", "consoleReleased"}
 CHECKS = {
@@ -59,7 +59,7 @@ STAGES = {"bootstrap-launch", "chooser-click", "chooser-dialog", "chooser-title"
 
 # Wrapper-only diagnostics: these are not native controller reports or evidence.
 # Never include exception messages, commands, paths, output, or environment values.
-PRE_NATIVE_STAGES = frozenset({"authorization", "checkout", "toolchain", "dependencies",
+PRE_NATIVE_STAGES = frozenset({"authorization", "native-profile", "checkout", "toolchain", "dependencies",
     "staging", "package-build", "package-validation", "driver-build", "source-recheck", "run-binding"})
 
 class PreNativeFailure(shared.Rejected):
@@ -80,11 +80,18 @@ def authorize_common(env):
     source = env.get("TRACEBOLT_SETUP_SOURCE", "")
     require(shared.valid_source(source) and env.get("GITHUB_SHA") == source)
     require(env.get("TRACEBOLT_SETUP_PROFILE") == PROFILE)
+    require("TRACEBOLT_SETUP_APPROVE_FIVE_READ_SCOPES" not in env)
     fixed = {"GITHUB_EVENT_NAME": "workflow_dispatch", "GITHUB_REPOSITORY": "storminator89/Tracebolt", "GITHUB_REPOSITORY_OWNER": "storminator89", "GITHUB_ACTOR": "storminator89", "GITHUB_TRIGGERING_ACTOR": "storminator89", "GITHUB_REPOSITORY_OWNER_ID": "30489872", "GITHUB_ACTOR_ID": "30489872", "GITHUB_RUN_ATTEMPT": "1", "GITHUB_ACTIONS": "true", "RUNNER_ARCH": "X64", "RUNNER_ENVIRONMENT": "github-hosted"}
     require(all(env.get(k) == v for k, v in fixed.items()))
     require(re.fullmatch(r"[1-9][0-9]{0,23}", env.get("GITHUB_RUN_ID", "")) is not None)
     require(all(env.get("TRACEBOLT_SETUP_APPROVE_" + a) == "true" for a in APPROVALS))
     return source
+
+def require_native_profile():
+    # The preserved driver/fixture proves only five-scope v2 receipts and v5
+    # frames. Full twelve-scope consent cannot turn it into current acceptance.
+    # There is deliberately no environment/flag override for this missing gate.
+    raise shared.Rejected("read_admin_native_gate_unavailable")
 
 def authorize(env):
     source = authorize_common(env)
@@ -283,6 +290,7 @@ def aggregate_reports(reports, source, run_id, execution_provenance=None, public
 
 def run_aggregate(env, root=ROOT):
     source = authorize_aggregate(env)
+    require_native_profile()  # Never relabel/publish historical five-scope proof.
     # The ephemeral API credential is confined to in-process provenance reads.
     child_env = {k: v for k, v in env.items() if k not in {provenance.TOKEN_ENV, "GITHUB_TOKEN", "GH_TOKEN"}}
     shared.verify_checkout(shared.child_environment(child_env), source, root)
@@ -312,6 +320,8 @@ def run_aggregate(env, root=ROOT):
 def run_native(env, root=ROOT):
     with pre_native_step("authorization"):
         source = authorize(env)  # Before staging/build/processes/native actions.
+    with pre_native_step("native-profile"):
+        require_native_profile()
     with pre_native_step("checkout"):
         child = shared.child_environment(env)
         shared.verify_checkout(child, source, root)
@@ -371,7 +381,7 @@ def main(argv=None, env=None):
         if args == ["--check-authorization"]:
             source = authorize(values)
             shared.verify_checkout(shared.child_environment(values), source, ROOT)
-            print("PASS: separate packaged-GUI approvals and exact clean source verified; no native effects.")
+            print("PASS: fresh twelve-scope approval syntax and exact clean source verified only; native acceptance remains blocked by the missing twelve-scope gate.")
             return 0
         if args == ["--aggregate"]:
             run_aggregate(values)

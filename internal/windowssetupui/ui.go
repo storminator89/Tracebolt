@@ -24,13 +24,17 @@ var (
 	ErrUI            = errors.New("Windows setup UI is unavailable")
 )
 
-// Config contains public provenance and the caller's complete five-scope privacy
-// disclosure. Disclosure is shown verbatim, with a scrollable review control.
+// Config contains public provenance and the caller's complete privacy disclosure.
+// Read admin uses a concise summary, with complete scope details available in the
+// same scrollable review control. Profile presentation never grants consent.
 // HTTPDisclosure must additionally contain every full plaintext-risk notice
 // when a validated public bootstrap explicitly selects isolated HTTP-test.
 type Config struct {
 	Version, SourceCommit, PayloadSHA256, Architecture, Disclosure string
 	HTTPDisclosure                                                 string
+	ReadAdminDisclosure, ReadAdminHTTPDisclosure                   string
+	ReadAdminSummary, ReadAdminHTTPSummary                         string
+	concise                                                        bool
 }
 
 // TrustPreview contains only validated public bootstrap identity and trust.
@@ -54,9 +58,10 @@ type TrustPreview struct {
 // whose separate local plaintext-risk checkbox was checked. It is always false
 // for TLS. Hooks must verify the same immutable bootstrap transport themselves.
 type Hooks struct {
-	Preview   func(publicBootstrap []byte) (TrustPreview, error)
-	Install   func(context.Context, []byte, bool, func(string)) error
-	Uninstall func(context.Context, func(string)) error
+	Preview          func(publicBootstrap []byte) (TrustPreview, error)
+	Install          func(context.Context, []byte, bool, func(string)) error
+	InstallReadAdmin func(context.Context, []byte, bool, func(string)) error
+	Uninstall        func(context.Context, func(string)) error
 }
 
 type page uint8
@@ -84,6 +89,8 @@ type flow struct {
 	trust                                      TrustPreview
 	scope, service, identity, compared         bool
 	httpAcknowledged                           bool
+	readAdmin                                  bool
+	details                                    bool
 	operation                                  operation
 	busy, attempted, cancelRequested, finished bool
 	result                                     error
@@ -92,6 +99,7 @@ type flow struct {
 func (f *flow) clearConsent() {
 	f.scope, f.service, f.identity, f.compared = false, false, false, false
 	f.httpAcknowledged = false
+	f.details = false
 }
 
 func (f *flow) clearSelection() bool {
@@ -194,7 +202,8 @@ func validConfig(c Config, h Hooks) bool {
 	return publicLine(c.Version, 128) && publicLine(c.SourceCommit, 128) &&
 		validDigest(c.PayloadSHA256) && (c.Architecture == "amd64" || c.Architecture == "arm64") &&
 		validDisclosure(c.Disclosure) && (c.HTTPDisclosure == "" || validDisclosure(c.HTTPDisclosure)) &&
-		h.Preview != nil && h.Install != nil && h.Uninstall != nil
+		h.Preview != nil && h.Install != nil && h.Uninstall != nil &&
+		((c.ReadAdminDisclosure == "" && c.ReadAdminHTTPDisclosure == "" && c.ReadAdminSummary == "" && c.ReadAdminHTTPSummary == "" && h.InstallReadAdmin == nil) || readAdminAvailable(c, h))
 }
 
 func validDisclosure(s string) bool {
@@ -289,10 +298,49 @@ func reviewText(c Config, t TrustPreview) string {
 		b.WriteString("\r\n\r\n")
 	}
 	b.WriteString(strings.ReplaceAll(strings.ReplaceAll(c.Disclosure, "\r\n", "\n"), "\n", "\r\n"))
-	b.WriteString("\r\n\r\nSERVICE AND IDENTITY\r\nInstall a Windows service running as LocalService with its own service SID, protected local files and persistent device identity. The fresh coordinator keeps startup disabled until that identity is activated and all five exact grants are verified; it then configures automatic startup and requests Start. Existing services, identities, grants or setup state block this fresh installer. No upgrade or recovery is performed.\r\n\r\nA separate local console will request the invitation with input hidden. Never paste the invitation into this wizard, a file, command line, environment variable or log. When the console shows the public device identity, compare it with the pending device and approve it separately in your manager dashboard while setup waits. Keep both windows open until the operation finishes. This wizard does not open a browser.\r\n\r\nCancellation after Install may leave durable changes. Existing files, identity and state are retained for inspection; cancellation is not rollback. HTTPS is the default. No transport downgrade or fallback is performed. An explicitly marked HTTP-test bootstrap requires its own plaintext-risk acknowledgement.")
+	if c.concise {
+		b.WriteString("\r\n\r\nSERVICE AND IDENTITY\r\nInstall a LocalService Windows service with protected files and a persistent device identity. Startup stays disabled until manager approval and all selected grants are verified; Setup then enables automatic startup and requests Start.\r\n\r\nEnter the invitation only in the separate hidden-input console. Compare the device fingerprint and approve it in the manager. Keep both windows open until Setup finishes.\r\n\r\nCancel may leave durable changes for inspection. Existing state is never adopted or reset.")
+		return b.String()
+	}
+	b.WriteString("\r\n\r\nSERVICE AND IDENTITY\r\nInstall a Windows service running as LocalService with its own service SID, protected local files and persistent device identity. The fresh coordinator keeps startup disabled until that identity is activated and all selected exact grants are verified; it then configures automatic startup and requests Start. Existing services, identities, grants or setup state block this fresh installer. No upgrade or recovery is performed.\r\n\r\nA separate local console will request the invitation with input hidden. Never paste the invitation into this wizard, a file, command line, environment variable or log. When the console shows the public device identity, compare it with the pending device and approve it separately in your manager dashboard while setup waits. Keep both windows open until the operation finishes. This wizard does not open a browser.\r\n\r\nCancellation after Install may leave durable changes. Existing files, identity and state are retained for inspection; cancellation is not rollback. HTTPS is the default. No transport downgrade or fallback is performed. An explicitly marked HTTP-test bootstrap requires its own plaintext-risk acknowledgement.")
 	return b.String()
 }
 
 const installCompleted = "Service start requested. First report and startup after reboot remain unverified."
 const uninstallCompleted = "Service removal completed. Installed files, identity and state are retained. Manager identity has not been revoked."
 const interruptedMessage = "The operation did not complete. Durable changes may exist; files, identity and state are retained. Inspect the retained state before any further action. This wizard will not retry or reset it."
+
+func readAdminAvailable(c Config, h Hooks) bool {
+	return validDisclosure(c.ReadAdminDisclosure) && validDisclosure(c.ReadAdminHTTPDisclosure) && validDisclosure(c.ReadAdminSummary) && validDisclosure(c.ReadAdminHTTPSummary) && h.InstallReadAdmin != nil
+}
+
+// The configured fresh profile is fixed for this wizard. The current Setup
+// supplies Read admin; legacy callers remain compatible internally. All actual
+// consent stays unchecked, including after Back or choosing another bootstrap.
+func freshFlow(c Config, h Hooks) flow {
+	return flow{readAdmin: readAdminAvailable(c, h)}
+}
+func reviewProfile(c Config, readAdmin bool) Config {
+	if readAdmin {
+		c.Disclosure = c.ReadAdminDisclosure
+		c.HTTPDisclosure = c.ReadAdminHTTPDisclosure
+	}
+	return c
+}
+
+func reviewPresentation(c Config, readAdmin, details bool) Config {
+	c = reviewProfile(c, readAdmin)
+	if readAdmin && !details {
+		c.Disclosure, c.HTTPDisclosure = c.ReadAdminSummary, c.ReadAdminHTTPSummary
+		c.concise = true
+	}
+	return c
+}
+
+func (f *flow) toggleDetails() bool {
+	if f.page != pageReview || f.busy || f.attempted || !f.readAdmin {
+		return false
+	}
+	f.details = !f.details
+	return true
+}

@@ -7,10 +7,16 @@ import (
 	"encoding/json"
 	"errors"
 	"localrmm/internal/enrollmentcrypto"
+	"localrmm/internal/windowsadapters"
 	"localrmm/internal/windowseventhealth"
+	"localrmm/internal/windowsfullservices"
+	"localrmm/internal/windowsfullsoftware"
 	"localrmm/internal/windowsmanaged"
 	"localrmm/internal/windowsnetwork"
+	"localrmm/internal/windowspatchcontext"
 	"localrmm/internal/windowsprocessmetrics"
+	"localrmm/internal/windowssecurity"
+	"localrmm/internal/windowssessions"
 	"localrmm/internal/windowsstate"
 	"localrmm/internal/windowsvolumes"
 	"os"
@@ -48,6 +54,12 @@ type WindowsCapabilityConsent struct {
 }
 
 func (r WindowsCapabilityConsent) Validate() error {
+	if r.SchemaVersion == WindowsCapabilityConsentVersionV5 {
+		if !validWindowsReadAdminConsent(r) {
+			return ErrConfiguration
+		}
+		return nil
+	}
 	v2 := r.SchemaVersion == WindowsCapabilityConsentVersionV2
 	v3 := r.SchemaVersion == WindowsCapabilityConsentVersionV3
 	v4 := r.SchemaVersion == WindowsCapabilityConsentVersionV4
@@ -106,6 +118,34 @@ type WindowsCapabilityConsentResult struct {
 // and FailedScope may have an indeterminate write outcome. Never rollback,
 // erase, re-enroll or enable unselected scopes to recover.
 func ConfigureWindowsCapabilities(path string, r WindowsCapabilityConsent) (WindowsCapabilityConsentResult, error) {
+	if r.SchemaVersion == WindowsCapabilityConsentVersionV5 {
+		return WindowsCapabilityConsentResult{}, ErrConfiguration
+	}
+	return configureWindowsCapabilities(path, r, nil)
+}
+
+// V5 requires a live owned/stopped service and protected phase guard before and
+// after each exact scope operation, plus the unchanged activated sender identity.
+func ConfigureWindowsReadAdminCapabilities(path string, r WindowsCapabilityConsent, guard func() error) (WindowsCapabilityConsentResult, error) {
+	if !validWindowsReadAdminConsent(r) || guard == nil {
+		return WindowsCapabilityConsentResult{}, ErrConfiguration
+	}
+	binding, e := WindowsCapabilityIdentity(path, r)
+	if e != nil {
+		return WindowsCapabilityConsentResult{}, e
+	}
+	return configureWindowsCapabilities(path, r, func() error {
+		if e := guard(); e != nil {
+			return e
+		}
+		current, e := WindowsCapabilityIdentity(path, r)
+		if e != nil || current != binding {
+			return ErrState
+		}
+		return nil
+	})
+}
+func configureWindowsCapabilities(path string, r WindowsCapabilityConsent, guard func() error) (WindowsCapabilityConsentResult, error) {
 	if r.Validate() != nil {
 		return WindowsCapabilityConsentResult{}, ErrConfiguration
 	}
@@ -116,8 +156,36 @@ func ConfigureWindowsCapabilities(path string, r WindowsCapabilityConsent) (Wind
 	if err != nil || !m.config.windowsInventory() || r.InsecureHTTPAcknowledged != (m.config.Profile == "http-test") {
 		return WindowsCapabilityConsentResult{}, ErrConfiguration
 	}
-	return applyWindowsCapabilities(r, func(scope string) error {
+	return applyWindowsCapabilities(r, func(scope string) (err error) {
+		if guard != nil {
+			if err = guard(); err != nil {
+				return err
+			}
+			defer func() {
+				if e := guard(); e != nil {
+					err = ErrState
+				}
+			}()
+		}
 		switch scope {
+		case windowsfullservices.Scope:
+			_, err := ConfigureWindowsFullServices(path, "enable", true, r.InsecureHTTPAcknowledged)
+			return err
+		case windowsfullsoftware.Scope:
+			_, err := ConfigureWindowsFullSoftware(path, "enable", true, r.InsecureHTTPAcknowledged)
+			return err
+		case windowsadapters.Scope:
+			_, err := ConfigureWindowsAdapterContext(path, "enable", true, r.InsecureHTTPAcknowledged)
+			return err
+		case windowspatchcontext.Scope:
+			_, err := ConfigureWindowsPatchContext(path, "enable", true, r.InsecureHTTPAcknowledged)
+			return err
+		case windowssecurity.Scope:
+			_, err := ConfigureWindowsSecurityPosture(path, "enable", true, r.InsecureHTTPAcknowledged)
+			return err
+		case windowssessions.Scope:
+			_, err := ConfigureWindowsSessionContext(path, "enable", true, r.InsecureHTTPAcknowledged)
+			return err
 		case windowseventhealth.Scope:
 			_, err := ConfigureWindowsEventMetadata(path, "enable", true, r.InsecureHTTPAcknowledged)
 			return err
@@ -237,26 +305,45 @@ func WindowsCapabilityGrantDigests(path string, r WindowsCapabilityConsent) ([]W
 	if err != nil {
 		return nil, err
 	}
-	return windowsCapabilityGrantDigests(r, func(scope string) (any, bool) {
-		switch scope {
-		case windowseventhealth.Scope:
-			c, ok := readWindowsEventConsent(m)
-			return c, ok
-		case windowsvolumes.Scope:
-			c, ok := readWindowsVolumeConsent(m)
-			return c, ok
-		case windowsprocessmetrics.Scope:
-			c, ok := readWindowsProcessMetricsConsent(m)
-			return c, ok
-		case windowsmanaged.ServiceStartupScope:
-			c, ok := readWindowsServiceStartupConsent(m)
-			return c, ok
-		case windowsnetwork.Scope:
-			c, ok := readWindowsNetworkConsent(m)
-			return c, ok
-		}
-		return nil, false
-	})
+	return windowsCapabilityGrantDigests(r, func(scope string) (any, bool) { return readWindowsCapabilityConsent(m, scope) })
+}
+func readWindowsCapabilityConsent(m Material, scope string) (any, bool) {
+	switch scope {
+	case windowsfullservices.Scope:
+		c, ok := readWindowsFullServicesGrant(m)
+		return c, ok
+	case windowsfullsoftware.Scope:
+		c, ok := readWindowsFullSoftwareGrant(m)
+		return c, ok
+	case windowsadapters.Scope:
+		c, ok := readWindowsAdapterContextConsent(m)
+		return c, ok
+	case windowspatchcontext.Scope:
+		c, ok := readWindowsPatchContextConsent(m)
+		return c, ok
+	case windowssecurity.Scope:
+		c, ok := readWindowsSecurityPostureConsent(m)
+		return c, ok
+	case windowssessions.Scope:
+		c, ok := readWindowsSessionContextConsent(m)
+		return c, ok
+	case windowseventhealth.Scope:
+		c, ok := readWindowsEventConsent(m)
+		return c, ok
+	case windowsvolumes.Scope:
+		c, ok := readWindowsVolumeConsent(m)
+		return c, ok
+	case windowsprocessmetrics.Scope:
+		c, ok := readWindowsProcessMetricsConsent(m)
+		return c, ok
+	case windowsmanaged.ServiceStartupScope:
+		c, ok := readWindowsServiceStartupConsent(m)
+		return c, ok
+	case windowsnetwork.Scope:
+		c, ok := readWindowsNetworkConsent(m)
+		return c, ok
+	}
+	return nil, false
 }
 func windowsCapabilityGrantDigests(r WindowsCapabilityConsent, read func(string) (any, bool)) ([]WindowsCapabilityGrantDigest, error) {
 	if r.Validate() != nil || read == nil {

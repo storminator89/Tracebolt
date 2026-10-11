@@ -1,6 +1,7 @@
 package lanclient
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"io"
@@ -107,5 +108,52 @@ func TestWindowsSetupExplicitHTTPProfileKeepsOriginalTransport(t *testing.T) {
 	}
 	if calls != 1 {
 		t.Fatal("invalid selection reached network")
+	}
+}
+
+func TestReadAdminSetupTransportUsesSeparateExactPublicPath(t *testing.T) {
+	want := windowssetup.ExpectedReadAdmin("manager_00000000000000000000000000000001", "http://127.0.0.1", "http://127.0.0.1")
+	for _, legacy := range []bool{false, true} {
+		calls := 0
+		c := &http.Client{Transport: setupRoundTripFunc(func(r *http.Request) (*http.Response, error) {
+			calls++
+			if r.URL.Path != windowssetup.ReadAdminCapabilitiesPath || r.Method != "GET" || r.Body != nil || r.Header.Get("Authorization") != "" || r.Header.Get("Cookie") != "" {
+				t.Fatal("unsafe compatibility request")
+			}
+			response := want
+			if legacy {
+				response.SetupContract = windowssetup.FreshReadContract
+			}
+			raw, _ := json.Marshal(response)
+			return &http.Response{StatusCode: 200, Header: http.Header{"Content-Type": []string{"application/json"}}, Body: io.NopCloser(bytes.NewReader(raw))}, nil
+		})}
+		e := checkWindowsSetupManager(context.Background(), c, want.EnrollmentOrigin, want)
+		if (e == nil) == legacy || calls != 1 {
+			t.Fatal("wrong contract admitted", legacy, e)
+		}
+	}
+	c, e := newWindowsSetupHTTPClient("http://127.0.0.1", "http-test", nil, windowssetup.ReadAdminCapabilitiesPath)
+	if e != nil {
+		t.Fatal(e)
+	}
+	defer c.CloseIdleConnections()
+	tr := c.Transport.(*publicBootstrapTransport)
+	calls := 0
+	tr.next = setupRoundTripFunc(func(*http.Request) (*http.Response, error) {
+		calls++
+		return &http.Response{StatusCode: 200, Header: http.Header{}, Body: http.NoBody}, nil
+	})
+	for _, path := range []string{windowssetup.ReadAdminCapabilitiesPath, windowssetup.CapabilitiesPath, "/v2/enrollment/claim"} {
+		r, _ := http.NewRequest("GET", "http://127.0.0.1"+path, nil)
+		response, e := tr.RoundTrip(r)
+		if response != nil {
+			response.Body.Close()
+		}
+		if (e == nil) != (path == windowssetup.ReadAdminCapabilitiesPath) {
+			t.Fatal("transport route widened")
+		}
+	}
+	if calls != 1 {
+		t.Fatal("foreign request reached network")
 	}
 }

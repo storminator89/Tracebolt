@@ -102,11 +102,19 @@ file as navigation and project constraints, never as permission to act on a host
   existing managed-evidence export blocks. Health-summary approval never permits
   raw logs, dump data, autonomous tools, shell commands or remediation. Fixtures
   do not authorize a real provider call, API-key entry or runtime scope grant.
-- For the fresh five-scope Windows observation coordinator, read
+- For the historical five-scope Windows observation coordinator, read
   `docs/windows-read-observation-setup.md`. Keep SCM disabled until activated
   identity and all exact grants are durably verified; retain indeterminate
-  transitions for read-only reconciliation. The released preview exposes the fresh GUI Setup path, not a direct combined
-  command-line operation. Existing service/grant receipts must not be promoted.
+  transitions for read-only reconciliation. The released five-scope preview exposes its GUI path; the current fresh GUI
+  uses Read admin below. Existing service/grant receipts must not be promoted.
+- The twelve-scope Windows Read admin source profile is the prominent fresh
+  Setup choice; actual scope consent remains unchecked. Read
+  `docs/windows-read-admin-setup.md`. Preserve legacy consent/receipt bytes and
+  historical development interfaces, disabled fresh staging and exact identity/
+  phase guards. There are no existing user installations: migration, binary
+  upgrade and reconsent are not delivery gates for this fresh-install target.
+  Provider-access proof, privilege expansion, event-content/cache grants and
+  service control remain separate.
 - Windows caller-visible volume metadata is a separate default-off local grant.
   Read `docs/windows-volume-inventory.md` before changing its consent, capacity
   semantics or v3 wire shape. Keep v1/event-v2 identities and bytes compatible;

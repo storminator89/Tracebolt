@@ -109,6 +109,10 @@ No public/basic, provider/AI, health policy or action permission is expanded.
 The EN/DE Updates panel shows a compact build line and checked reboot status;
 source reasons and retained history are available in collapsed details.
 
+See [combined context fairness](windows-context-fairness.md) for alternating
+fresh-cycle source priority and separately dated previous captures beside the
+latest unavailable attempt. This does not change grants or telemetry versions.
+
 ## Verification boundary
 
 Portable tests cover exact consent, disclosure failure, bounded/partial sources,

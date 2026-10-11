@@ -8,11 +8,11 @@ import (
 	"time"
 )
 
-const Profile = "packaged-setup-gui-v1"
+const Profile = "packaged-setup-gui-read-admin-v2"
 const Schema = "tracebolt.windows-setup-acceptance.v2"
 
 var ErrGuard = errors.New("packaged Setup acceptance boundary rejected")
-var Approvals = []string{"APP_ACLS", "SERVICES", "IDENTITY", "FIVE_READ_SCOPES", "SYNTHETIC_CONSOLE", "LOOPBACK_TLS", "HTTP_PLAINTEXT", "STOP_REMOVE_OWNED_SERVICE", "RETAIN_FOR_VM_DISPOSAL"}
+var Approvals = []string{"APP_ACLS", "SERVICES", "IDENTITY", "TWELVE_READ_ADMIN_SCOPES", "SYNTHETIC_CONSOLE", "LOOPBACK_TLS", "HTTP_PLAINTEXT", "STOP_REMOVE_OWNED_SERVICE", "RETAIN_FOR_VM_DISPOSAL"}
 var Cases = []string{"install-uninstall", "cancel-hidden-input", "pending-transport", "http-install-uninstall"}
 var Checks = map[string][]string{
 	"install-uninstall":   {"preflightCancelUnchanged", "acknowledgementsOff", "publicBootstrapChosen", "realGUIExercised", "hiddenConsoleExercised", "noEchoVerified", "pendingStoppedDisabled", "approvalWithheld", "managerFixtureApproved", "completedReceipt", "limitedServiceToken", "twoFiveScopeFrames", "volumeCapacity", "processCPUDelta", "tcpFixture", "reopenBlocked", "uninstallCancelUnchanged", "deletePendingObserved", "serviceAbsent", "receiptAndGrantsVerified", "filesAndStateRetained", "workerTerminated", "consoleReleased"},
@@ -51,7 +51,18 @@ type Binding struct {
 	Deadline                                                                                           time.Time
 }
 
+// RequireNativeProfile rejects current fresh Setup until the twelve-scope
+// capability fixture, v3 receipt retention and native frame evidence exist.
+// Historical report/schema validation below remains five-scope only.
+func RequireNativeProfile() error {
+	return ErrGuard
+}
+
+// Authorize validates fresh twelve-scope approval syntax only, never readiness.
 func Authorize(env map[string]string, b Binding, now time.Time) error {
+	if _, legacy := env["TRACEBOLT_SETUP_APPROVE_FIVE_READ_SCOPES"]; legacy {
+		return ErrGuard
+	}
 	if !hex40.MatchString(b.Source) || b.Source != b.CompiledSource || env["GITHUB_SHA"] != b.Source || env["TRACEBOLT_SETUP_SOURCE"] != b.Source || env["TRACEBOLT_SETUP_PROFILE"] != Profile || !Contains(Cases, b.Case) || env["TRACEBOLT_SETUP_CASE"] != b.Case || !safeID.MatchString(b.Machine) || env["COMPUTERNAME"] != b.Machine || env["TRACEBOLT_SETUP_MACHINE"] != b.Machine || !now.Before(b.Deadline) || b.Deadline.Sub(now) > 15*time.Minute {
 		return ErrGuard
 	}

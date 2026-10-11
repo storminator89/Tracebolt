@@ -62,7 +62,7 @@ func setupAuthorization() (setupgate.Binding, error) {
 		return setupgate.Binding{}, setupgate.ErrGuard
 	}
 	b := setupgate.Binding{Source: env["TRACEBOLT_SETUP_SOURCE"], CompiledSource: setupCompiledSource, DriverHash: env["TRACEBOLT_SETUP_DRIVER_SHA256"], SetupHash: env["TRACEBOLT_SETUP_SETUP_SHA256"], ServiceHash: env["TRACEBOLT_SETUP_SERVICE_SHA256"], SourceInputsHash: env["TRACEBOLT_SETUP_SOURCE_INPUTS_SHA256"], RunID: env["TRACEBOLT_SETUP_RUN_ID"], Machine: env["TRACEBOLT_SETUP_MACHINE"], Case: env["TRACEBOLT_SETUP_CASE"], Deadline: time.Unix(deadline, 0)}
-	if setupgate.Authorize(env, b, time.Now()) != nil {
+	if setupgate.Authorize(env, b, time.Now()) != nil || setupgate.RequireNativeProfile() != nil {
 		return b, setupgate.ErrGuard
 	}
 	b.Machine, e = os.Hostname()
@@ -218,6 +218,11 @@ func setupStartInstall(ctx context.Context, g *setupGUI, path string, http bool)
 }
 func setupGUIController(ctx context.Context, b setupgate.Binding) (r setupgate.Report) {
 	r = setupgate.NewReport(b)
+	// Defense in depth for direct controller invocation: no desktop, fixture,
+	// installer, service or grant work while only the historical gate exists.
+	if setupgate.RequireNativeProfile() != nil {
+		return r
+	}
 	r.ApprovalValidated = true
 	r.Stage = "desktop"
 	r.Reason = "desktop_unavailable"

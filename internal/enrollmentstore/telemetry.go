@@ -136,6 +136,18 @@ func (s *Store) SaveObservation(ctx context.Context, invitationID, certificateHa
 			}
 			t.retainOperational(invitationID, frame.Operational)
 		}
+		if frame.WindowsInventory != nil {
+			var old lanstore.Frame
+			if len(c.Frame) > 0 {
+				old, err = t.validateFrame(c.Frame, previous.ReceivedAt)
+				if err != nil {
+					return ErrStorage
+				}
+			}
+			if err = retainWindowsContext(ctx, t, invitationID, old, frame, receivedAt); err != nil {
+				return err
+			}
+		}
 		c.Replay = Replay{Sequence: frame.Sequence, PayloadHash: digest, GeneratedAt: frame.Observation.GeneratedAt.UTC(), CollectedAt: frame.Observation.Observation.LastSeen.UTC(), ReceivedAt: receivedAt}
 		c.Frame = raw
 		t.credentials[invitationID] = c

@@ -12,6 +12,22 @@ For the dated native results and current release blockers, read
 [Windows status and limitations](windows-status.md). Some x64 setup/telemetry
 phases have passed; final service removal and complete acceptance remain open.
 
+## Current fresh Read admin source profile
+
+The current source wizard presents [Read admin](windows-read-admin-setup.md),
+covering twelve exact scopes in five readable groups with optional full details.
+Actual data, service, identity and trust acknowledgements all start unchecked.
+The historical five-scope receipt remains internally compatible, but is not an
+extra fresh Setup choice. Read admin uses its distinct manager compatibility
+route and receipt, including personal session labels and all selected-scope HTTP
+disclosures. Event-message content, cached WUA inspection and service control
+remain separate. Provider presence is not checked and LocalService readability
+is unverified. This source has not passed native/released-artifact acceptance.
+There are no existing user installations; fresh clean development installation
+is the target, without migration or existing-binary upgrade/reconsent gates.
+Published five-scope preview bytes and their historical acceptance are unchanged;
+use their [version-specific guide](windows-prerelease-install.md) for those bytes.
+
 ## What a human does
 
 1. Obtain the separately reviewed Setup.exe and its exact source/hash manifest
@@ -26,7 +42,7 @@ phases have passed; final service removal and complete acceptance remain open.
    configuration manually, build endpoint binaries, or put the secret in a file.
 3. Launch Setup, accept the Windows administrator prompt deliberately, and select
    that public export. Check the displayed manager origins and complete trust
-   fingerprints independently. Review all five full collection notices, the
+   fingerprints independently. Review the five Read admin groups and optional full twelve-scope details, the
    limited LocalService service/automatic-start changes, persistent identity, and
    trust acknowledgements. Every checkbox begins unchecked. Back or a changed
    export clears acknowledgement. No silent-install or secret command-line mode
@@ -37,14 +53,14 @@ phases have passed; final service removal and complete acceptance remain open.
    manager responses can be forged, and the manager is not authenticated. There
    is no HTTPS-error fallback. Production must use HTTPS.
 5. Install checks the package and fresh-host boundary, then makes one bounded,
-   exact-origin request to `/v1/windows/setup-capabilities`. Old, mismatched or
+   exact-origin request to `/v1/windows/read-admin-setup-capabilities`. Old, mismatched or
    unreachable managers fail before any file/service/key/grant changes. No
    credential or invitation is sent by this public compatibility check.
 6. A dedicated local console displays manager trust, the fresh device fingerprint
    and comparison value. Enter the invitation only at its hidden prompt. Keep
    the console open. Approve the matching public identity separately in the
    manager. The staged service remains disabled while approval is pending.
-7. The existing hardened coordinator verifies activation and all five exact
+7. The existing hardened coordinator verifies activation and all twelve exact
    identity-bound grants before changing only the owned service to automatic
    startup and requesting Start. Setup reports **start requested**. Check the
    manager separately for the first accepted report. Start is not reporting or
@@ -59,10 +75,10 @@ a running operation is cooperatively cancelled and retains the same partial-stat
 boundaries described below. Geometry and on-screen control-bound tests do not
 establish visual readability, human UAC or desktop-specific acceptance.
 
-The five scopes are bounded Windows inventory, Application/System event headers,
-caller-visible volumes, per-process CPU/working-set, and numeric TCP/UDP endpoint
-metadata. Configured service-startup metadata, event-message content, remote
-commands/actions, Windows Update/CVE and external AI are not granted.
+The exact twelve scopes and source requirements are in the
+[Read admin profile](windows-read-admin-setup.md#fresh-read-admin-five-readable-groups).
+Selected event-message content, cached WUA search, remote commands/actions and
+external AI are not granted by this profile.
 
 ## Compatible manager requirement
 
@@ -71,24 +87,12 @@ Setup**, with the existing guided Windows enrollment authority enabled. The old
 published Linux rc.3 endpoint release does not supply this new compatibility
 route. A source commit identifies bytes, not a reviewed or deployed manager.
 
-For an existing Linux/Docker manager, an authorized administrator must follow
-[installation runbook, update and backup](installation.md#10-stop-back-up-restore-update-uninstall):
-keep a consistent stopped state backup and the exact old image, preserve protected
-configuration/issuer custody and existing volume, review migration compatibility,
-build the manager image from the selected Setup revision, and replace only the
-known manager container using the existing Compose file and approved origins.
-For example, in that reviewed source checkout and using the existing approved
-configuration, `docker compose -f deploy/compose.yaml build manager` builds the
-TLS template; `docker compose -f deploy/compose.yaml up --no-build -d manager`
-replaces that configured service. These are administrator maintenance steps,
-not authorization to execute, change network exposure or copy a different
-Compose profile. The user's existing HTTP pilot must use its reviewed existing
-HTTP Compose/configuration instead. Never delete volumes or create another empty
-manager to bypass old state. Native-manager users replace the reviewed binary and
-matching web assets while preserving protected configuration/state under the same
-stopped-backup procedure. Verify Windows invitation creation and obtain a fresh
-public export after the update. The wizard diagnoses compatibility; it does not
-upgrade a manager remotely.
+For the current fresh clean development target, provision the reviewed matching
+manager under the separately authorized [installation runbook](installation.md).
+Keep HTTPS as default, protected issuer custody and explicit manager/device
+approval. The source compatibility check diagnoses a mismatch before Setup
+writes; it does not install or update a manager. A published preview does not
+establish a deployed user base or require an old-to-new migration plan.
 
 ## Cancellation, retained state, and service removal
 

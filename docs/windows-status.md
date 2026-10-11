@@ -14,9 +14,28 @@ The Linux `v0.1.0-rc.3` release is not a Windows installer.
 [Help index](README.md) · [Published preview guide](windows-prerelease-install.md) ·
 [Parity roadmap](windows-linux-parity.md) · [Source Setup guide](windows-setup-preview.md)
 
-## Implemented read scope
+**Development target:** there are no existing user installations. Published
+preview artifacts do not imply deployments. Fresh clean installation is the
+current target; migration, existing-binary upgrade and reconsent are not release
+or delivery gates. Existing development source and historical evidence remain.
 
-The fresh Setup coordinator requests one explicit local approval for these five
+## New Read admin source increment
+
+A separate [twelve-scope Read admin source profile](windows-read-admin-setup.md)
+is the prominent fresh Setup choice, with grouped provider requirements and
+distinct fresh receipts. Its actual scope consent stays unchecked until the
+operator deliberately approves it. Existing reconsent source is preserved
+as a development interface. Published five-scope artifacts remain unchanged. The old five-scope internal compatibility path is not an extra
+fresh-Setup choice. Fresh native setup, provider presence/readability and consent acceptance
+remain separate gates. The combined source also alternates collection priority
+and retains independently dated context beside the latest source failure. Event-message content, cached WUA inspection and service control
+are separate optional approvals. The current manual native Setup gate is
+fail-closed pending real twelve-scope fixture, receipt and frame support; its
+historical five-scope approval/evidence cannot authorize the new profile.
+
+## Published preview read scope
+
+The published preview Setup coordinator requests one explicit local approval for these five
 scopes. Hidden invitation entry and separate manager fingerprint/comparison
 approval remain required.
 
@@ -46,7 +65,7 @@ setup and published preview; native acceptance remains pending.
 
 These scopes do not establish whole-machine coverage or Linux feature parity.
 Configured service-startup metadata is a separate default-off source capability;
-it is not included in the five-scope Setup choice. Windows event-message content,
+it is not included in the published five-scope Setup. Windows event-message content,
 Windows Update/CVE, remote service actions and external-AI export are not granted
 by this setup.
 

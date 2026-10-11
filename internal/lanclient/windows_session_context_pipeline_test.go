@@ -327,6 +327,10 @@ func TestWindowsSessionContextFrameBudgetPreservesBaseAndSelf(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	f, _, err = appendWindowsPatchContext(ctx, m, f, patchConsentFixture(m), patchSourceFixture)
+	if err != nil {
+		t.Fatal(err)
+	}
 	f, _, err = appendWindowsSecurityPosture(ctx, m, f, securityConsentFixture(m), securitySourceFixture)
 	if err != nil {
 		t.Fatal(err)
@@ -347,6 +351,9 @@ func TestWindowsSessionContextFrameBudgetPreservesBaseAndSelf(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatal(err)
+	}
+	if f.WindowsUpdates == nil || f.WindowsPatchContext == nil || f.WindowsSecurityPosture == nil || f.WindowsSessionContext == nil {
+		t.Fatal("frame fitting omitted a granted context envelope")
 	}
 	after, _ := json.Marshal(f.WindowsInventory)
 	if len(raw) > MaxFrameBytes || !bytes.Equal(base, after) || f.WindowsServiceStartup.ServicesSHA256 != digest || !f.WindowsSessionContext.CollectedAt.Equal(capture) || *f.WindowsSessionContext.Sessions.ObservedCount != 32 || *f.WindowsSessionContext.Sessions.TruncatedCount == 0 || f.WindowsSessionContext.Sessions.RetainedCount+*f.WindowsSessionContext.Sessions.TruncatedCount != 32 {

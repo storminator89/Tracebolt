@@ -13,6 +13,8 @@ const (
 	idIdentity          = 106
 	idCompared          = 107
 	idHTTPRisk          = 108
+	idReadAdmin         = 109
+	idDetails           = 110
 	idHeading           = 200
 	idProvenance        = 201
 	idNote              = 202
@@ -95,11 +97,13 @@ func layoutForClient(width, height, dpi int, p page, httpTest bool) (map[int]box
 	switch p {
 	case pageInput:
 		fileY := bodyBottom - 30
-		l[idInputText] = box{margin, bodyTop, contentWidth, fileY - gap - bodyTop}
+		l[idInputText] = box{margin, bodyTop, contentWidth, fileY - 40 - gap - bodyTop}
+		l[idReadAdmin] = box{margin, fileY - 40, contentWidth, 32}
 		l[idSelectedFile] = box{margin, fileY, contentWidth - gap - 168, 30}
 		l[idChoose] = box{w - margin - 168, fileY, 168, 30}
 		l[idUninstall] = box{margin, buttonsY, 190, 30}
 	case pageReview:
+		l[idDetails] = box{margin, buttonsY, 190, 30}
 		ids := []int{idScope, idService, idIdentity, idCompared}
 		if httpTest {
 			ids = append(ids, idHTTPRisk)

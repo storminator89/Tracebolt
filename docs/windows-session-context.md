@@ -109,6 +109,10 @@ observation, AI/provider inputs, health policies, exports, notifications and
 alarms. The EN/DE UI has compact membership/session rows and collapsed source
 scope/count details, with no session action or remote-desktop integration.
 
+See [combined context fairness](windows-context-fairness.md) for alternating
+fresh-cycle source priority and separately dated previous captures beside the
+latest unavailable attempt. This does not change grants or telemetry versions.
+
 ## Verification boundary
 
 Essential portable fixtures cover canonical model and native parsers, consent,
@@ -117,8 +121,10 @@ sender-to-manager TLS ingress and signed HTTP-test handlers, exact retry/restart
 original expiry, old-wire rejection and private UI lifetime/navigation. Transport
 handler fixtures are not a real socket/TLS handshake. Windows amd64/arm64 builds
 establish compilation only. The existing hosted inventory browser flow now navigates Users / Sessions,
-opens source details, verifies remount clearing and requires eight exact-source
-EN/DE desktop/mobile summary/detail captures. Actual hosted pixel review remains
+opens source details, verifies remount clearing and requires sixteen exact-source
+EN/DE desktop/mobile captures: the existing eight summary/detail views plus four
+current-failure and four expanded previous-capture views. Each date remains
+visible in its own capture; the two sections need not fit one viewport. Actual hosted pixel review remains
 a publication gate; local Chromium socket creation is unavailable.
 
 Separately authorized disposable Windows acceptance must establish actual

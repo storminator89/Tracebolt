@@ -448,6 +448,9 @@ func (s *Store) load(ctx context.Context, conn *sql.Conn) (*transaction, error) 
 	if err = validateWindowsEventUsedState(ctx, t, s.config.Binding.CollectionProfile); err != nil {
 		return nil, err
 	}
+	if err = validateWindowsContextRetentionCount(ctx, t, s.config.Binding.CollectionProfile); err != nil {
+		return nil, err
+	}
 	if err = s.loadOperational(ctx, t); err != nil {
 		return nil, ErrStorage
 	}
@@ -670,6 +673,17 @@ func validateSchema(ctx context.Context, conn *sql.Conn, profile string) error {
 		for _, obj := range windowsActionSchemaObjects() {
 			expected[obj.Name] = obj
 		}
+	}
+	retainedEnabled, retainedErr := windowsContextRetentionPresent(ctx, conn)
+	if retainedErr != nil {
+		return retainedErr
+	}
+	if retainedEnabled {
+		if profile != enrollmentcrypto.CollectionProfileWindowsInventory {
+			return ErrStorage
+		}
+		obj := windowsContextRetentionObject()
+		expected[obj.Name] = obj
 	}
 	windowsEventsEnabled, windowsEventsErr := windowsEventSchemaPresent(ctx, conn, profile)
 	if windowsEventsErr != nil {

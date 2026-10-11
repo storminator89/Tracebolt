@@ -28,7 +28,13 @@ func (s *Store) BeginIssuance(ctx context.Context, c enrollmentstate.IntentComma
 	return s.command(ctx, func(t *transaction) (enrollmentstate.Snapshot, error) { return t.engine.BeginIssuance(ctx, c) })
 }
 func (s *Store) Terminate(ctx context.Context, c enrollmentstate.TerminalCommand) (enrollmentstate.Snapshot, error) {
-	return s.command(ctx, func(t *transaction) (enrollmentstate.Snapshot, error) { return t.engine.Terminate(ctx, c) })
+	return s.command(ctx, func(t *transaction) (enrollmentstate.Snapshot, error) {
+		out, err := t.engine.Terminate(ctx, c)
+		if err == nil {
+			err = forgetWindowsContext(ctx, t, c.Control.InvitationID)
+		}
+		return out, err
+	})
 }
 func (s *Store) Activate(ctx context.Context, c enrollmentstate.Control, proof enrollmentcrypto.VerifiedActivation) (enrollmentstate.Snapshot, error) {
 	return s.command(ctx, func(t *transaction) (enrollmentstate.Snapshot, error) { return t.engine.Activate(ctx, c, proof) })

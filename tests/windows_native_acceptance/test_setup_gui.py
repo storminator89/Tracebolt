@@ -39,7 +39,7 @@ def report(which="install-uninstall"):
 
 class SetupPreNativeDiagnostics(unittest.TestCase):
     def test_each_pre_native_failure_is_finite_private_and_stops_before_launch(self):
-        stages = ["authorization", "checkout", "toolchain", "dependencies", "staging",
+        stages = ["authorization", "native-profile", "checkout", "toolchain", "dependencies", "staging",
                   "package-build", "package-validation", "driver-build", "source-recheck", "run-binding"]
         self.assertEqual(set(stages), runner.PRE_NATIVE_STAGES)
         secret = "DO_NOT_EXPORT_PATH_COMMAND_ENV_BODY"
@@ -57,6 +57,9 @@ class SetupPreNativeDiagnostics(unittest.TestCase):
                     checkout_stages = iter(["checkout", "source-recheck"])
                     process_stages = iter(["dependencies", "package-build", "driver-build"])
                     stack.enter_context(mock.patch.object(runner, "authorize", side_effect=lambda env: step("authorization", "a" * 40)))
+                    # Inject the missing native gate only to exercise historical
+                    # failure diagnostics; no subprocess/native call can occur.
+                    stack.enter_context(mock.patch.object(runner, "require_native_profile", side_effect=lambda: step("native-profile")))
                     stack.enter_context(mock.patch.object(runner.shared, "child_environment", return_value={}))
                     stack.enter_context(mock.patch.object(runner.shared, "verify_checkout", side_effect=lambda *a: step(next(checkout_stages))))
                     stack.enter_context(mock.patch.object(runner.shared, "verify_go", side_effect=lambda *a: step("toolchain")))
@@ -110,6 +113,33 @@ class SetupGate(unittest.TestCase):
                     with self.assertRaises(runner.shared.Rejected):
                         runner.run_native(bad)
                     checkout.assert_not_called()
+    def test_fresh_twelve_scope_parsing_never_promotes_legacy_approval(self):
+        env = allowed()
+        self.assertEqual(runner.PROFILE, "packaged-setup-gui-read-admin-v2")
+        self.assertIn("TWELVE_READ_ADMIN_SCOPES", runner.APPROVALS)
+        self.assertNotIn("FIVE_READ_SCOPES", runner.APPROVALS)
+        self.assertEqual(runner.authorize(env), "a" * 40)  # Parsing only.
+        for profile in (runner.PROFILE, "packaged-setup-gui-v1"):
+            for present in (False, True):
+                legacy = dict(env, TRACEBOLT_SETUP_PROFILE=profile, TRACEBOLT_SETUP_APPROVE_FIVE_READ_SCOPES="true")
+                if not present:
+                    legacy.pop("TRACEBOLT_SETUP_APPROVE_TWELVE_READ_ADMIN_SCOPES")
+                with self.subTest(profile=profile, twelve=present), self.assertRaises(runner.shared.Rejected):
+                    runner.authorize(legacy)
+        old = dict(env, TRACEBOLT_SETUP_PROFILE="packaged-setup-gui-v1")
+        with self.assertRaises(runner.shared.Rejected):
+            runner.authorize(old)
+
+    def test_current_approval_cannot_launch_or_aggregate_five_scope_gate(self):
+        for method, os_name in ((runner.run_native, "Windows"), (runner.run_aggregate, "Linux")):
+            with self.subTest(method=method.__name__), mock.patch.object(runner.shared, "verify_checkout") as checkout, mock.patch.object(runner.shared, "command") as command, mock.patch.object(runner.tempfile, "mkdtemp") as staging, mock.patch.object(runner.provenance, "verify_current_run") as provenance:
+                with self.assertRaises(runner.shared.Rejected):
+                    method(dict(allowed(), RUNNER_OS=os_name))
+                checkout.assert_not_called()
+                command.assert_not_called()
+                staging.assert_not_called()
+                provenance.assert_not_called()
+
     def test_four_distinct_passes_no_cross_case_invention(self):
         for case in runner.CHECKS:
             r = report(case)
@@ -294,6 +324,9 @@ class SetupGate(unittest.TestCase):
         driver = (ROOT / "cmd/windows-service/setup_acceptance_native_windows_test.go").read_text()
         controller = driver.split("func setupGUIController(", 1)[1]
         restore = "setupgate.PrepareControllerEnvironment(windows.GetSystemWindowsDirectory, os.Setenv)"
+        self.assertLess(controller.index("setupgate.RequireNativeProfile()"), controller.index("setupInteractiveDesktop()"))
+        authorization = driver.split("func setupAuthorization()", 1)[1].split("func TestPackagedSetupGUINative", 1)[0]
+        self.assertLess(authorization.index("setupgate.RequireNativeProfile()"), authorization.index("os.Hostname()"))
         self.assertLess(controller.index("setupInteractiveDesktop()"), controller.index(restore))
         self.assertLess(controller.index(restore), controller.index("windowsservice.ResolveLayout()"))
         self.assertLess(controller.index("setupgate.CheckFreshPrerequisites("), controller.index("r.NativeActionsAttempted = true"))
@@ -309,6 +342,14 @@ class SetupGate(unittest.TestCase):
         for event in ("push:", "pull_request:", "schedule:", "workflow_call:", "workflow_run:"):
             self.assertNotIn(event, text)
         self.assertEqual(text.count("default: false"), len(runner.APPROVALS))
+        self.assertIn("twelve_read_admin_scopes:", text)
+        self.assertIn("personal user/domain/session", text)
+        self.assertIn("all twelve scopes", text)
+        self.assertNotIn("inputs.five_read_scopes", text)
+        self.assertNotIn("TRACEBOLT_SETUP_APPROVE_FIVE_READ_SCOPES:", text)
+        self.assertEqual(text.count("TRACEBOLT_SETUP_PROFILE: " + runner.PROFILE), 2)
+        for approval in runner.APPROVALS:
+            self.assertIn("TRACEBOLT_SETUP_APPROVE_" + approval + ":", text)
         for case in runner.CHECKS: self.assertIn(case, text)
         for binding in ("github.actor_id == '30489872'", "github.repository_owner_id == '30489872'", "github.run_attempt == 1", "runs-on: windows-2025", "report_validated == 'true'", "persist-credentials: false"):
             self.assertIn(binding, text)
@@ -455,7 +496,9 @@ class SetupPublicDelivery(unittest.TestCase):
             package = temp / "tracebolt-setup-package-input"
             package.mkdir()
             for name, raw in files.items(): (package / name).write_bytes(raw)
-            with self.assertRaises(runner.provenance.Rejected): runner.run_aggregate(env)
+            # Historical aggregation contract only; bypass compatibility with an
+            # inert injected seam, never broaden actual native approval.
+            with mock.patch.object(runner, "require_native_profile"), self.assertRaises(runner.provenance.Rejected): runner.run_aggregate(env)
             self.assertFalse((temp / runner.ACCEPTED_DIRECTORY).exists())
             self.assertFalse((temp / runner.AGGREGATE_REPORT).exists())
             self.assertFalse((temp / "outputs").exists())
@@ -506,7 +549,9 @@ class SetupPublicDelivery(unittest.TestCase):
             package = temp / "tracebolt-setup-package-input"
             package.mkdir()
             for name, raw in files.items(): (package / name).write_bytes(raw)
-            evidence = runner.run_aggregate(env)
+            # Historical report/package mechanics only; all effects are mocked.
+            with mock.patch.object(runner, "require_native_profile"):
+                evidence = runner.run_aggregate(env)
             verify.assert_called_once_with(env, "a" * 40, reports, files)
             self.assertNotIn("TRACEBOLT_SETUP_API_TOKEN", checkout.call_args.args[0])
             self.assertEqual(evidence["schema"], "tracebolt.windows-setup-native-subset.v2")

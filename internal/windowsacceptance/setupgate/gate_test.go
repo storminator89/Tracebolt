@@ -90,3 +90,31 @@ func setupGateFrameProgressFixture() FrameProgress {
 		Telemetry:  fixture.TelemetryObservation{Admitted: 2, Accepted: 2},
 	}
 }
+
+// No native API, fixture server or installer is invoked by this test.
+func TestFreshTwelveApprovalParsingDoesNotEnableHistoricalNativeGate(t *testing.T) {
+	e, b, now := authorized()
+	if Profile != "packaged-setup-gui-read-admin-v2" || !Contains(Approvals, "TWELVE_READ_ADMIN_SCOPES") || Contains(Approvals, "FIVE_READ_SCOPES") {
+		t.Fatal("fresh profile approval mismatch")
+	}
+	if Authorize(e, b, now) != nil || RequireNativeProfile() == nil {
+		t.Fatal("fresh approval must parse without enabling the historical native gate")
+	}
+	for _, legacyProfile := range []string{Profile, "packaged-setup-gui-v1"} {
+		for _, full := range []bool{false, true} {
+			e, b, now := authorized()
+			e["TRACEBOLT_SETUP_PROFILE"] = legacyProfile
+			e["TRACEBOLT_SETUP_APPROVE_FIVE_READ_SCOPES"] = "true"
+			if !full {
+				delete(e, "TRACEBOLT_SETUP_APPROVE_TWELVE_READ_ADMIN_SCOPES")
+			}
+			if Authorize(e, b, now) == nil {
+				t.Fatal("legacy or mixed scope approval accepted")
+			}
+		}
+	}
+	e["TRACEBOLT_SETUP_PROFILE"] = "packaged-setup-gui-v1"
+	if Authorize(e, b, now) == nil {
+		t.Fatal("old profile relabeled")
+	}
+}

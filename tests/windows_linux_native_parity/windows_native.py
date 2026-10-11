@@ -12,7 +12,7 @@ import re
 import subprocess
 import ssl
 import time
-from contract import Rejected, need, digest, read_regular, verify_artifact, synthetic_message, strict_json, no_links, canonical, write_new, trusted_path, check_time
+from contract import Rejected, need, digest, read_regular, verify_artifact, synthetic_message, strict_json, no_links, canonical, write_new, trusted_path, check_time, require_current_setup_gate
 
 SERVICE = "TraceboltWindowsAgent"
 GRANTS = {
@@ -331,6 +331,8 @@ def endpoint_binding(p, plan_hash, snapshot):
             "certificateHash": certificate_hash, "invitationIdSHA256": digest(bootstrap["invitationId"].encode()), "bootstrapSHA256": digest(supplied)}
 
 def operate(p, phase, checks, plan_hash=None):
+    if phase == "setup":
+        require_current_setup_gate()  # Before layout/SCM/installer access.
     expires = p["expiresUnix"]; artifact = Path(p["artifacts"]["service"]["path"])
     expected_hash = p["artifacts"]["service"]["sha256"]
     files, data = layout(); installed = files / "tracebolt-windows-service.exe"
@@ -341,7 +343,7 @@ def operate(p, phase, checks, plan_hash=None):
         checks["fresh_host"] = True
         trusted_path(p["targets"]["windows"]["publicBootstrap"])
         bootstrap_bytes(read_regular(p["targets"]["windows"]["publicBootstrap"], 64 << 10), p)
-        print("SECURE HANDOFF: Use the real manager dashboard to create the Windows invitation and download its public bootstrap. In Setup, review TLS origins/fingerprints, five scopes and identity/service consent. Enter the invitation ONLY in Setup's hidden console, then independently approve the fingerprint in the real dashboard. No invitation or credential is read by this harness.", flush=True)
+        print("SECURE HANDOFF: Use the real manager dashboard to create the Windows invitation and download its public bootstrap. Historical five-scope Setup only: review TLS origins/fingerprints and separate scope, persistent identity and service consent. Current twelve-scope Read admin Setup is blocked pending a matching native gate; old consent cannot cover it. Enter the invitation ONLY in Setup's hidden console, then independently approve the fingerprint in the real dashboard. No invitation or credential is read by this harness.", flush=True)
         check_time(expires)
         proc = subprocess.Popen([p["artifacts"]["setup"]["path"]], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
                                 stderr=subprocess.DEVNULL, env={"SystemRoot": windows_directory()}, shell=False)

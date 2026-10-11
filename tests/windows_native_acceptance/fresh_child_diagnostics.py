@@ -456,6 +456,16 @@ CHILD_FAILURE_PAIRS={
     ('bootstrap_retained_validate', 'enrollment_bootstrap'),
     ('service_start', 'access_denied'),
     ('startup_activate', 'access_denied'),
+    ('journal_verify', 'failed'),
+    ('journal_verify', 'interrupted'),
+    ('journal_verify', 'access_denied'),
+    ('journal_verify', 'not_found'),
+    ('journal_verify', 'unsupported'),
+    ('journal_verify', 'state_policy'),
+    ('journal_verify', 'state_integrity'),
+    ('journal_verify', 'state_storage'),
+    ('journal_verify', 'state_poisoned'),
+    ('journal_verify', 'state_closed'),
 }
 SERVICE_FAILURE_PAIRS={
     ('service_acl_ace', 'failed'),

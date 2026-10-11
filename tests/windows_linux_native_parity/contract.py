@@ -16,7 +16,7 @@ from urllib.parse import urlsplit
 
 SCHEMA = "tracebolt.windows-linux-native-parity.v1"
 PHASES = ("manager-browser", "setup", "event-fixture", "event-enable", "updates-enable", "event-disable", "updates-disable")
-REASONS = frozenset(("contract_rejected", "target_mismatch", "artifact_mismatch", "source_mismatch", "private_path_rejected", "phase_replay", "deadline", "clock_changed", "secure_handoff_required", "native_operation_failed", "native_observation_unavailable", "manager_exited", "browser_incomplete", "cleanup_unverified", "complete"))
+REASONS = frozenset(("contract_rejected", "target_mismatch", "artifact_mismatch", "source_mismatch", "private_path_rejected", "phase_replay", "deadline", "clock_changed", "secure_handoff_required", "native_operation_failed", "native_observation_unavailable", "manager_exited", "browser_incomplete", "cleanup_unverified", "read_admin_native_gate_unavailable", "complete"))
 CHECKS = frozenset(("native_actions_attempted", "endpoint_binding", "fresh_host", "setup_launched", "installed_hash", "scm_running", "scm_stopped", "grant_enabled", "grant_disabled", "grant_independence", "synthetic_event_written", "real_manager_started", "real_browser_finished", "browser_cleanup", "manager_cleanup"))
 HEX64 = re.compile(r"[0-9a-f]{64}\Z")
 HEX40 = re.compile(r"[0-9a-f]{40}\Z")
@@ -299,6 +299,11 @@ def verify_inventory(root, inventory, expected_hash, expected_tree=None, depende
         need(inventory_tree(rows) == expected_tree, "source_mismatch")
     return rows
 
+def require_current_setup_gate():
+    # v1 observes only five scopes. Current fresh GUI installs twelve. Neither
+    # the old plan nor its broad approval reference can authorize that expansion.
+    raise Rejected("read_admin_native_gate_unavailable")
+
 def require_native_opt_in(args, role, p):
     need(__import__("sys").version_info >= (3, 12), "contract_rejected")
     need(__import__("sys").flags.isolated and __import__("sys").dont_write_bytecode, "contract_rejected")
@@ -309,6 +314,7 @@ def require_native_opt_in(args, role, p):
     # The actual action-time authorization must be obtained OUTSIDE this harness.
     # Neither these flags nor this reference authenticate the approving person.
     need(__import__("sys").stdin.isatty(), "secure_handoff_required")
+    require_current_setup_gate()  # Before native adapter import or host access.
 
 REQUIRED_CHECKS = {
     "setup": {"native_actions_attempted", "fresh_host", "setup_launched", "installed_hash", "scm_running", "scm_stopped", "endpoint_binding"},
