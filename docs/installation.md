@@ -151,7 +151,8 @@ SQLite without a separate database server. Docker packaging needs a running
 Docker Engine, Compose **v2** and BuildKit; inspect `docker version` and
 `docker compose version` before using them. Docker access is powerful host access;
 do not “fix” it by changing socket permissions or group membership silently.
-Check runtime licensing before installation; no project license has been selected.
+Check runtime licensing before installation. Tracebolt uses the
+[Apache License 2.0](../LICENSE); third-party components retain their own licenses.
 
 Go modules are locked by `go.mod`/`go.sum`; npm uses `web/package-lock.json`.
 Builds need dependency/image registry access. Docker base tags are version-selected,

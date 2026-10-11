@@ -1,6 +1,7 @@
 # Allowlist only the source inputs needed for the image.
 **
 !Dockerfile
+!LICENSE
 !go.mod
 !go.sum
 !cmd/

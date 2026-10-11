@@ -1,0 +1,56 @@
+{
+  "sourceCommit": "415d807143e28ade626b4e997842127d515f161e",
+  "sourceTree": "578ac40bb84e287b0dfb8ff99683d9d05dc710e4",
+  "reviewedHead": "1b8c16402ec463c97630d1e08eca8129b8c79e63",
+  "workflowRun": 38086475900,
+  "workflowAttempt": 1,
+  "artifactId": 11682384530,
+  "artifactSHA256": "9d7e1a19efbe6910194138dccfc17d084c924e2e72f7062eb2f1e375579d58a0",
+  "screenshots": [
+    {
+      "file": "windows-cached-updates.png",
+      "sourceSha": "415d807143e28ade626b4e997842127d515f161e",
+      "publicSafe": true,
+      "fullPage": false,
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "locale": "en",
+      "fixtureDisclosure": "Invented cached Windows Update metadata in the production UI. UI-only fixture evidence; no native WUA read, endpoint consent, online scan, download, installation, reboot or AI call.",
+      "test": "Synthetic Windows inventory shares device charts and explicit enrollment consent without Linux reads",
+      "originalFile": "synthetic-windows-updates-1440-en.png",
+      "sha256": "ec273b8fd4210cb0fa396d08f5e381909f7e16ca87ad602bac8c4e7091c916a8"
+    },
+    {
+      "file": "windows-inventory.png",
+      "sourceSha": "415d807143e28ade626b4e997842127d515f161e",
+      "publicSafe": true,
+      "fullPage": false,
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "locale": "en",
+      "fixtureDisclosure": "Real loopback HTTP-test fixture login with intercepted invented Windows inventory and resource history in the production UI. UI-only evidence; no native endpoint acceptance, collection, invitation, service installation or external request.",
+      "test": "Synthetic Windows inventory shares device charts and explicit enrollment consent without Linux reads",
+      "originalFile": "synthetic-windows-inventory-1440-en.png",
+      "sha256": "79a32cb8052124d0b5cee677e7fb30e935d0fee864d7fcf58da47d5842be1b94"
+    },
+    {
+      "file": "windows-mobile-de.png",
+      "sourceSha": "415d807143e28ade626b4e997842127d515f161e",
+      "publicSafe": true,
+      "fullPage": false,
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "locale": "de",
+      "fixtureDisclosure": "Real loopback HTTP-test fixture login with intercepted invented Windows inventory and resource history in the production UI. UI-only evidence; no native endpoint acceptance, collection, invitation, service installation or external request.",
+      "test": "Synthetic Windows inventory shares device charts and explicit enrollment consent without Linux reads",
+      "originalFile": "synthetic-windows-overview-390-de.png",
+      "sha256": "5bffaeacbcc4754fa902e45ef3986d854f92f0b576623d5276eaf7af17d5603c"
+    }
+  ]
+}

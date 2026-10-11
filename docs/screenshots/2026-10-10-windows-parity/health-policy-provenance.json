@@ -1,0 +1,42 @@
+{
+  "sourceCommit": "d8fae504f2d881dce016d1dc3b10c742b6997a09",
+  "sourceTree": "e5e4fc7289680abce96a60ecc63eb3000e09cab6",
+  "reviewedHead": "72bfa0dbe200a6c63d5deb1d46aaa3bb93b96ab6",
+  "sourcePullRequest": "https://github.com/storminator89/Tracebolt/pull/31",
+  "workflowRun": 38093714484,
+  "workflowAttempt": 1,
+  "workflowConclusion": "success",
+  "browserJobId": 114336736701,
+  "browserJobConclusion": "success",
+  "artifactId": 11685806804,
+  "artifactName": "ui-review-d8fae504f2d881dce016d1dc3b10c742b6997a09",
+  "artifactSHA256": "e09e59341386e9c44f81aa9241418ad6929e2a96341dcefd3cc70684d31aaeef",
+  "sourceManifest": "lan-browser-manifest.json",
+  "sourceManifestSHA256": "48f09dbcada80156e05ad8ff01be0e0934753fa8ee7fad9dc49ce10142fd95b3",
+  "sourceResults": "lan-browser-results.json",
+  "sourceResultsSHA256": "a3eedff2048ebb90ad80309ec097b30e2930316542880730cdcf601bda51d455",
+  "sourceResultsSummary": {
+    "passed": 26,
+    "failed": 0,
+    "setupFailure": false
+  },
+  "visualReview": "Original 1440x1000 PNG inspected at original resolution. Invented 94% CPU observation, 90% threshold, open incident, original collection and acceptance times, observed-processor-group limitation and HTTP-test warning remain visible. The original image is preserved without alteration.",
+  "screenshots": [
+    {
+      "file": "windows-health-policy.png",
+      "sourceSha": "d8fae504f2d881dce016d1dc3b10c742b6997a09",
+      "publicSafe": true,
+      "fullPage": false,
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "locale": "en",
+      "fixtureDisclosure": "Invented independent CPU/RAM policies, observations and incidents in the compiled UI with real loopback fixture login. CPU uses the existing GetSystemTimes observed processor group, not an all-group aggregate. RAM is physical RAM not immediately available: 100 × (ullTotalPhys − ullAvailPhys) / ullTotalPhys from GlobalMemoryStatusEx. Enabled policies are injected by read-only fixtures; no policy save, native Windows read, local grant, installed-service acceptance, notification, AI call or deployment.",
+      "test": "Synthetic Windows inventory shares device charts and explicit enrollment consent without Linux reads",
+      "originalFile": "synthetic-windows-cpu-policy-pressure-1440-en.png",
+      "sha256": "aeb837ac064d023a6dabe4a19e89046229a890326cfd8c8ebf2ed5266433fd79",
+      "bytes": 105755
+    }
+  ]
+}
