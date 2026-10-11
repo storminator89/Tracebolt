@@ -3,6 +3,7 @@ package windowsusersoftwarelocal
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"localrmm/internal/windowsusersoftware"
@@ -145,4 +146,32 @@ func singleSource(ctx context.Context, read sourceReader) ([]windowsusersoftware
 		return nil, failureStatus(e)
 	}
 	return rows, "complete"
+}
+
+// copyHString bounds before any native copy and decodes only the complete owned
+// buffer. The caller retains its HSTRING until this function has returned.
+func copyHString(address uintptr, length uint32, read func(uintptr, []byte) (uintptr, error)) (*string, error) {
+	if length > windowsusersoftware.MaxFieldUTF16 || length > 0 && (address == 0 || read == nil) {
+		return nil, errMalformed
+	}
+	var bytes [windowsusersoftware.MaxFieldUTF16 * 2]byte
+	var units [windowsusersoftware.MaxFieldUTF16]uint16
+	if length > 0 {
+		size := int(length) * 2
+		copied, err := read(address, bytes[:size])
+		if err != nil {
+			return nil, windowsusersoftware.ErrUnavailable
+		}
+		if copied != uintptr(size) {
+			return nil, errMalformed
+		}
+		for i := 0; i < int(length); i++ {
+			units[i] = binary.LittleEndian.Uint16(bytes[2*i : 2*i+2])
+		}
+	}
+	text, ok := decodeUTF16(units[:length])
+	if !ok {
+		return nil, errMalformed
+	}
+	return &text, nil
 }

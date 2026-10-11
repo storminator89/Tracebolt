@@ -10,7 +10,7 @@ import (
 func TestFixedReadOnlySourceAndIPCSeparation(t *testing.T) {
 	sources := map[string][]string{
 		"registry_windows.go": {"registry.CURRENT_USER", "reg", "DisplayName", "DisplayVersion", "Publisher"},
-		"msix_windows.go":     {"manager.call(12,0,", "id.text(12)", "id.text(6)", "id.text(10)"},
+		"msix_windows.go":     {"manager.call(12,0,", "id.text(12)", "id.text(6)", "id.text(10)", "deferdeleteHString.Call(h)", "returncopyHString(ptr,n,", "windows.ReadProcessMemory(windows.CurrentProcess(),address,"},
 		"ipc_windows.go":      {"FILE_FLAG_FIRST_PIPE_INSTANCE", "PIPE_REJECT_REMOTE_CLIENTS", "InheritHandle:0", "SECURITY_IDENTIFICATION"},
 		"peer_windows.go":     {"OpenCurrentProcessToken", "SecurityIdentification", "OpenThreadToken", "RevertToSelf", "TOKEN_QUERY", "SERVICE_WIN32_OWN_PROCESS", "serviceRunning", "TokenElevation", "TokenIntegrityLevel", "TokenSessionId"},
 	}
@@ -26,7 +26,7 @@ func TestFixedReadOnlySourceAndIPCSeparation(t *testing.T) {
 				t.Fatalf("%s misses %s", file, marker)
 			}
 		}
-		for _, forbidden := range []string{`"os/exec"`, `"localrmm/internal/windowsaction"`, `registry.LOCAL_MACHINE`, `registry.USERS`, `registry.WOW64_32KEY`, `registry.WOW64_64KEY`, `windows.OpenProcessToken(`, `AdjustTokenPrivileges(`, `SetSecurityInfo(`} {
+		for _, forbidden := range []string{`"os/exec"`, `"localrmm/internal/windowsaction"`, `registry.LOCAL_MACHINE`, `registry.USERS`, `registry.WOW64_32KEY`, `registry.WOW64_64KEY`, `windows.OpenProcessToken(`, `windows.OpenProcess(`, `unsafe.Pointer(ptr)`, `AdjustTokenPrivileges(`, `SetSecurityInfo(`} {
 			if strings.Contains(s, forbidden) {
 				t.Fatalf("%s crosses source boundary: %s", file, forbidden)
 			}

@@ -95,18 +95,16 @@ func (p *comObject) text(index int) (*string, error) {
 	}
 	var n uint32
 	ptr, _, _ := rawHString.Call(h, uintptr(unsafe.Pointer(&n)))
-	if n > windowsusersoftware.MaxFieldUTF16 || n > 0 && ptr == 0 {
-		return nil, errMalformed
-	}
-	var units []uint16
-	if n > 0 {
-		units = unsafe.Slice((*uint16)(unsafe.Pointer(ptr)), int(n))
-	}
-	text, ok := decodeUTF16(units)
-	if !ok {
-		return nil, errMalformed
-	}
-	return &text, nil
+	// The HSTRING owns this borrowed address until the deferred delete above.
+	// Keep it as a native address: x/sys accepts uintptr and copies into Go-owned
+	// storage without manufacturing a Go pointer/slice over foreign allocation.
+	// Only the fixed current-process pseudohandle is used, never OpenProcess.
+	// https://learn.microsoft.com/en-us/windows/win32/api/memoryapi/nf-memoryapi-readprocessmemory
+	return copyHString(ptr, n, func(address uintptr, target []byte) (uintptr, error) {
+		var copied uintptr
+		err := windows.ReadProcessMemory(windows.CurrentProcess(), address, &target[0], uintptr(len(target)), &copied)
+		return copied, err
+	})
 }
 func readMSIX(ctx context.Context) ([]windowsusersoftware.Row, error) {
 	if e := ctx.Err(); e != nil {

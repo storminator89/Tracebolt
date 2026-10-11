@@ -2,9 +2,11 @@ package windowsusersoftwarelocal
 
 import (
 	"context"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"localrmm/internal/windowsusersoftware"
+	"strings"
 	"testing"
 	"time"
 	"unicode/utf16"
@@ -87,5 +89,71 @@ func TestHKCUEnumeratedExactlyOnceMSIXConsistencyTwice(t *testing.T) {
 	collectSources(context.Background(), func(context.Context) ([]windowsusersoftware.Row, error) { h++; return []windowsusersoftware.Row{}, nil }, func(context.Context) ([]windowsusersoftware.Row, error) { m++; return []windowsusersoftware.Row{}, nil }, time.Now().UTC())
 	if h != 1 || m != 2 {
 		t.Fatalf("wrong enumeration count hkcu=%d msix=%d", h, m)
+	}
+}
+
+func TestHStringCopyUsesExactBoundedOwnedUTF16(t *testing.T) {
+	calls := 0
+	reader := func(address uintptr, target []byte) (uintptr, error) {
+		calls++
+		if address != 42 || len(target) != 4 {
+			t.Fatal("copy boundary changed")
+		}
+		binary.LittleEndian.PutUint16(target, 0xd83d)
+		binary.LittleEndian.PutUint16(target[2:], 0xde00)
+		return uintptr(len(target)), nil
+	}
+	value, err := copyHString(42, 2, reader)
+	if err != nil || value == nil || *value != "😀" || calls != 1 {
+		t.Fatalf("copy result %v %v calls=%d", value, err, calls)
+	}
+	for _, tc := range []struct {
+		address uintptr
+		length  uint32
+	}{{42, windowsusersoftware.MaxFieldUTF16 + 1}, {0, 1}} {
+		calls = 0
+		value, err = copyHString(tc.address, tc.length, reader)
+		if err == nil || value != nil || calls != 0 {
+			t.Fatal("invalid length/address reached native reader")
+		}
+	}
+	calls = 0
+	value, err = copyHString(0, 0, reader)
+	if err != nil || value == nil || *value != "" || calls != 0 {
+		t.Fatal("empty HSTRING required a native read")
+	}
+	value, err = copyHString(42, windowsusersoftware.MaxFieldUTF16, func(_ uintptr, target []byte) (uintptr, error) {
+		if len(target) != windowsusersoftware.MaxFieldUTF16*2 {
+			t.Fatal("maximum buffer changed")
+		}
+		for i := 0; i < len(target); i += 2 {
+			target[i] = 'a'
+		}
+		return uintptr(len(target)), nil
+	})
+	if err != nil || value == nil || *value != strings.Repeat("a", windowsusersoftware.MaxFieldUTF16) {
+		t.Fatal("maximum legal field rejected")
+	}
+	for _, count := range []uintptr{0, 1, 3, 5} {
+		value, err = copyHString(42, 2, func(_ uintptr, target []byte) (uintptr, error) { target[0] = 'x'; return count, nil })
+		if err == nil || value != nil {
+			t.Fatal("partial or oversized byte count exposed a prefix")
+		}
+	}
+	value, err = copyHString(42, 2, func(_ uintptr, target []byte) (uintptr, error) {
+		target[0] = 'x'
+		return 4, windowsusersoftware.ErrDenied
+	})
+	if !errors.Is(err, windowsusersoftware.ErrUnavailable) || value != nil {
+		t.Fatal("failed copy exposed content")
+	}
+	for _, unit := range []uint16{0, 0xd800, 0xdc00} {
+		value, err = copyHString(42, 1, func(_ uintptr, target []byte) (uintptr, error) {
+			binary.LittleEndian.PutUint16(target, unit)
+			return 2, nil
+		})
+		if err == nil || value != nil {
+			t.Fatal("invalid UTF16 accepted")
+		}
 	}
 }

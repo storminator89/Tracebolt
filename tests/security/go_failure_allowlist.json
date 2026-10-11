@@ -1,5 +1,5 @@
 {
-  "goSourceSha256": "86eac79e8bf3f4fb91f0dcd47484526760eeceb4de7193687ba5cd1251fde6db",
+  "goSourceSha256": "e31a0e66f9445d5b43e0d638569a6a3da1c062adc32f79a1816f438dab426f43",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -4753,6 +4753,7 @@
       "TestFatalIdentityFailureNeverCallsAdmissionOrCleanupHandler",
       "TestFixedReadOnlySourceAndIPCSeparation",
       "TestHKCUEnumeratedExactlyOnceMSIXConsistencyTwice",
+      "TestHStringCopyUsesExactBoundedOwnedUTF16",
       "TestIdentityOnlyPipeQueryAndPublicServerProof",
       "TestOwnStartupPendingThenRunning",
       "TestOwnStartupRejectsCancelDeadlineIdentityAndPIDDrift",
