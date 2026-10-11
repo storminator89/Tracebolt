@@ -13,7 +13,7 @@ import fs from 'node:fs';
 import {createRequire} from 'node:module';
 import {fileURLToPath} from 'node:url';
 import {requireWindowsAdapterContextEvidence} from './windows-adapter-context-browser.mjs';
-import {remountWindowsDevice,settleWindowsHistory,windowsBrowserFixture,windowsInventoryFixtureDisclosure,windowsInventoryFailureStage,windowsFixtureSessionExpiry} from './windows-inventory-browser.mjs';
+import {remountWindowsDevice,settleWindowsHistory,windowsBrowserFixture,windowsInventoryFixtureDisclosure,windowsInventoryFailureStage,windowsFixtureSessionExpiry,windowsEventHistoryLegacyRead} from './windows-inventory-browser.mjs';
 function fixtureSessionRead({status=200,value={authenticated:true,serverNow:'2026-10-10T12:00:00Z',expiresAt:'2026-10-10T12:20:00Z',csrfToken:'PRIVATE_INERT_SESSION_VALUE'},fetchFailure=false,bodyFailure=false,disposeFailure=false}={}){
  const calls=[],response={status:()=>status,async json(){calls.push('json');if(bodyFailure)throw new Error('PRIVATE_INERT_BODY_FAILURE');return value;},async dispose(){calls.push('dispose');if(disposeFailure)throw new Error('PRIVATE_INERT_DISPOSE_FAILURE');}};
  return {calls,page:{request:{async get(url,options){calls.push({url,options});if(fetchFailure)throw new Error('PRIVATE_INERT_REQUEST_FAILURE');return response;}}}};
@@ -300,3 +300,24 @@ import './windows-event-content-fixtures.test.mjs';
 
 // Additive, reviewed read-only system-volume capacity display fixtures.
 import './windows-capacity-fixtures.test.mjs';
+
+// History metadata is a separate disabled source in the older inventory walk.
+import {guardWindowsEventHistoryRoute,windowsEventHistoryRouteState} from './windows-event-history-browser.mjs';
+test('legacy inventory permits only a disabled history status read, never a history action',async()=>{
+ const base='http://127.0.0.1:19886',prefix='/api/devices/agent_'+'7'.repeat(32),serverNow='2026-10-11T20:00:00.123456789Z',sessionExpiresAt='2026-10-11T21:00:00Z';
+ const call=async({url=base+prefix+'/windows-event-history',method='GET',body=null}={})=>{
+  let response=null;const route={request:()=>({url:()=>url,method:()=>method,postData:()=>body}),fulfill:async value=>{response=value;}};
+  await windowsEventHistoryLegacyRead({route,base,prefix,serverNow,sessionExpiresAt});return response;
+ };
+ const response=await call(),view=JSON.parse(response.body);assert.equal(response.status,200);assert.equal(view.localStatus,'disabled');assert.equal(view.capability.enabled,false);assert.equal(view.request,null);assert.equal(view.contentStatus,'unavailable');assert.equal(view.capability.expiresAt,'2026-10-11T20:05:00.123456789Z');
+ for(const input of [{method:'POST'},{body:'{}'},{url:base+prefix+'/windows-event-history?all=1'},{url:base+prefix+'/windows-event-history/create'},{url:base+prefix+'/windows-event-history/messages'},{url:'https://example.invalid'+prefix+'/windows-event-history'}])await assert.rejects(call(input),/Unexpected synthetic history status request/);
+});
+test('history route diagnostics retain late failure and pending state through teardown',async()=>{
+ const before=windowsEventHistoryRouteState();let release;const gate=new Promise(resolve=>{release=resolve;});let aborted=0;
+ const pending=guardWindowsEventHistoryRoute({abort:async()=>{aborted++;}},async()=>{await gate;throw new Error('INERT_ROUTE_FAILURE');});
+ assert.deepEqual(windowsEventHistoryRouteState(),{failures:before.failures,pending:before.pending+1});
+ release();await pending;assert.equal(aborted,1);assert.deepEqual(windowsEventHistoryRouteState(),{failures:before.failures+1,pending:before.pending});
+ const runner=fs.readFileSync(new URL('./windows-event-history-runner.mjs',import.meta.url),'utf8');
+ assert.ok(runner.indexOf('const routes=windowsEventHistoryRouteState()')>runner.indexOf('await context.close()'));
+ assert.match(runner,/if\(routes\.failures!==0\|\|routes\.pending!==0\)passed=false/);
+});

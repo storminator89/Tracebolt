@@ -6,11 +6,11 @@ import os from 'node:os';
 import {spawn,execFileSync} from 'node:child_process';
 import {createRequire} from 'node:module';
 import {fileURLToPath} from 'node:url';
-import {windowsEventHistoryBrowserCase,windowsEventHistoryCaseName,windowsEventHistoryDisclosure,windowsEventHistoryFailureStage,requireWindowsEventHistoryEvidence} from './windows-event-history-browser.mjs';
+import {windowsEventHistoryBrowserCase,windowsEventHistoryCaseName,windowsEventHistoryDisclosure,windowsEventHistoryFailureStage,windowsEventHistoryRouteState,requireWindowsEventHistoryEvidence} from './windows-event-history-browser.mjs';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../..'),require=createRequire(path.join(root,'web/package.json'));
 const {chromium,expect}=require('@playwright/test');
 const out=path.join(root,'artifacts/review'),temporary=await fs.mkdtemp(path.join(os.tmpdir(),'tracebolt-event-history-browser-'));
-const sourceSha=process.env.TRACEBOLT_SOURCE_SHA||null,base='http://127.0.0.1:19892',password='TRACEBOLT_BROWSER_FIXTURE_NOT_A_REAL_PASSWORD';
+const sourceSha=process.env.TRACEBOLT_SOURCE_SHA||null,base='http://127.0.0.1:19908',password='TRACEBOLT_BROWSER_FIXTURE_NOT_A_REAL_PASSWORD';
 const screenshots=[];let browser,context,server,timer,errors=0,passed=false,details=null,serverFailed=false;
 await fs.mkdir(out,{recursive:true});
 const safeFailure=()=>new Error('Event-history browser gate failed; raw state intentionally withheld.');
@@ -37,6 +37,7 @@ try{
 }catch{console.log('FAIL: Windows event history hosted browser gate; raw diagnostics withheld.');}
 finally{
  clearTimeout(timer);try{if(context)await context.close();}catch{passed=false;}try{if(browser)await browser.close();}catch{passed=false;}try{await stop();}catch{passed=false;}
- const report={sourceSha,createdAt:new Date().toISOString(),name:windowsEventHistoryCaseName,status:passed?'PASS':'FAIL',stage:windowsEventHistoryFailureStage(),scope:windowsEventHistoryDisclosure,details:passed?details:null,runtimeErrorCount:errors,browserAcceptance:passed,liveStoreAcceptance:false,transport:'intercepted invented history pages',unexecutedNativeGate:true,secretsExported:false,privateKeysExported:false,realTelemetryExported:false};
+ const routes=windowsEventHistoryRouteState();if(routes.failures!==0||routes.pending!==0)passed=false;
+ const report={sourceSha,createdAt:new Date().toISOString(),name:windowsEventHistoryCaseName,status:passed?'PASS':'FAIL',stage:windowsEventHistoryFailureStage(),scope:windowsEventHistoryDisclosure,details:passed?details:null,runtimeErrorCount:errors,routeFailureCount:routes.failures,pendingRouteCount:routes.pending,browserAcceptance:passed,liveStoreAcceptance:false,transport:'intercepted invented history pages',unexecutedNativeGate:true,secretsExported:false,privateKeysExported:false,realTelemetryExported:false};
  await fs.writeFile(path.join(out,'windows-event-history-results.json'),JSON.stringify(report,null,2));await fs.writeFile(path.join(out,'windows-event-history-manifest.json'),JSON.stringify({sourceSha,screenshots},null,2));await fs.rm(temporary,{recursive:true,force:true});process.exitCode=passed?0:1;
 }

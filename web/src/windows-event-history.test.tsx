@@ -2,7 +2,7 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { WindowsEventHistoryPanel } from './windows-event-history';
 import { historyAccepted, historyRecord, historyResult, historyView } from './windows-event-history-fixture';
-import { validEventHistoryResult, validEventHistoryView, validHistorySearch } from './windows-event-history-types';
+import { eventHistoryAge, validEventHistoryResult, validEventHistoryView, validHistorySearch } from './windows-event-history-types';
 import type { EventHistoryResult, EventHistoryView, HistorySearch } from './windows-event-history-types';
 import { eventContentSession } from './windows-event-content-fixture';
 import { windowsDeviceId } from './windows-inventory-fixture';
@@ -67,4 +67,29 @@ it('uses clear German event counts and localized levels', async () => {
     fireEvent.click(screen.getByRole('button', { name: 'Einmal suchen' })); await flush();
     expect(screen.getByText('Suche beendet · 23 Ereignisse')).toBeVisible();
     expect(screen.getByLabelText('Erfasste Ereignisse filtern')).toBeVisible();
+});
+
+it('preserves nanosecond fixture ages and rejects rounded or extended original expiry', () => {
+    const now = '2026-10-11T23:59:59.123456789Z', sessionExpiry = '2026-10-12T01:00:00.987654321Z';
+    const v = historyView(now, sessionExpiry);
+    expect(v.capability!.expiresAt).toBe('2026-10-12T00:04:59.123456789Z');
+    expect(eventHistoryAge(v.capability!.expiresAt, now)).toBe(300000);
+    expect(validEventHistoryView(v, windowsDeviceId, sessionExpiry)).toBe(true);
+    const request = historyAccepted(historyRecord(v));
+    const accepted = { ...v, request, expectedFloor: '1', contentStatus: 'available' as const };
+    expect(request.description.expiresAt).toBe('2026-10-12T00:14:59.123456789Z');
+    expect(eventHistoryAge(request.description.expiresAt, now)).toBe(900000);
+    expect(validEventHistoryView(accepted, windowsDeviceId, sessionExpiry)).toBe(true);
+    const result = historyResult(request);
+    expect(validEventHistoryResult(result, request, sessionExpiry)).toBe(true);
+    const followup = historyAccepted(historyRecord(accepted, undefined, request, [result.report.events[0].event]));
+    expect(followup.description.expiresAt).toBe(request.description.expiresAt);
+    expect(validEventHistoryView({ ...accepted, request: followup, expectedFloor: '2' }, windowsDeviceId, sessionExpiry)).toBe(true);
+    expect(validEventHistoryResult(historyResult(followup), followup, sessionExpiry)).toBe(true);
+    const rounded = structuredClone(v); rounded.capability!.expiresAt = '2026-10-12T00:04:59.123Z';
+    expect(validEventHistoryView(rounded, windowsDeviceId, sessionExpiry)).toBe(false);
+    for (const invalidExpiry of ['2026-10-12T00:14:59.123Z', '2026-10-12T00:15:00.123456789Z']) {
+        const invalid = structuredClone(accepted); invalid.request.description.expiresAt = invalidExpiry; invalid.request.receipt!.expiresAt = invalidExpiry;
+        expect(validEventHistoryView(invalid, windowsDeviceId, sessionExpiry)).toBe(false);
+    }
 });
