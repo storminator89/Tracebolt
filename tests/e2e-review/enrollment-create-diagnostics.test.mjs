@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import {EventEmitter} from 'node:events';
+import {createBrowserTransportDiagnostics} from './browser-transport-diagnostics.mjs';
 import test from 'node:test';
 import {createBrowserInvitation,invitationCreationStage} from './enrollment-create-diagnostics.mjs';
 const secret='INERT_PRIVATE_RESPONSE_ERROR_URL_AND_SECRET_SENTINEL';
@@ -81,7 +83,7 @@ test('quarantined double-click uses the shared primary reader and preserves stri
  assert.match(scenario,/create\(page,'single',async button=>/);assert.match(scenario,/button\.dblclick\(\)/);assert.match(scenario,/expect\(button\)\.toBeDisabled\(\)/);assert.match(scenario,/expect\(posts\)\.toBe\(1\)/);assert.match(scenario,/finally\{release\(\);\}/);assert.match(scenario,/finally\{release\(\);await page\.unroute\('\*\*\/api\/enrollment\/invitations'\);\}/);
  assert.doesNotMatch(scenario,/\.json\(\)|waitForResponse|\.clone\(/);
  for(const retained of ['public bootstrap export','raw.includes(created.invitationSecret)',"raw.includes('PRIVATE KEY')",'JSON.stringify(created.bootstrap)',"toHaveAttribute('type','text')","toHaveAttribute('type','password')",'checkClean(page)',"terminate(page,'Cancel invitation')",".state).toBe('canceled')"])assert.ok(scenario.includes(retained),retained);
- const original=source.slice(source.indexOf('async function terminate('),source.indexOf('\ntry{'));assert.match(original,/response\.status\(\)\)\.toBe\(200\)/);assert.match(original,/committed\.state\)\.toBe\(expected\[0\]\)/);assert.match(original,/toContainText\(expected\[1\]\)/);assert.match(original,/expect\(confirmation\)\.toHaveCount\(0\)/);
+ const original=source.slice(source.indexOf('async function terminate('),source.indexOf('\ntry{'));assert.match(original,/responseStatus=response\.status\(\);expect\(responseStatus\)\.toBe\(200\)/);assert.match(original,/committed\.state\)\.toBe\(expected\[0\]\)/);assert.match(original,/toContainText\(expected\[1\]\)/);assert.match(original,/expect\(confirmation\)\.toHaveCount\(0\)/);
  assert.match(source,/const includeQuarantined=process\.env\.TRACEBOLT_REVIEW_QUARANTINED==='1'/);assert.match(source,/status:'SKIPPED'/);assert.match(source,/runtimeErrorCount===0&&results\.length===13&&results\.every/);
 });
 
@@ -124,15 +126,27 @@ test('actual held-scenario cleanup releases and unregisters its route after earl
  response.reject(f.failure);await nextTurn();assert.equal(result.settled,true);assert.equal(result.error,f.failure);assert.equal(f.clears(),1);assert.equal(continued,1);assert.equal(unregistered,1);assert.deepEqual(f.secrets,[]);
  const stages=[...f.stages];held.resolve();await nextTurn();assert.equal(f.clears(),1);assert.equal(continued,1);assert.equal(unregistered,1);assert.deepEqual(f.stages,stages);assert.equal(f.writes(),1);assert.equal(f.reads(),0);
 });
-function terminalFixture({submit,status=200,committed='canceled',rendered='Canceled'}={}){
+function terminalFixture({submit,status=200,committed='canceled',rendered='Canceled',label='Cancel invitation',failAt,message=secret,capture}={}){
  const source=fs.readFileSync(new URL('./enrollment-browser.mjs',import.meta.url),'utf8'),helper=source.slice(source.indexOf('async function terminate('),source.indexOf('\ntry{'));
- const pending=deferred(),events=[],stages=[],failure=new Error(secret);let writes=0,reads=0;
- const response={status:()=>status,async json(){reads++;return {state:committed};}};
- const confirmation={getByRole(role,options){assert.equal(role,'button');assert.deepEqual(options,{name:'Confirm termination',exact:true});return {click(){events.push('submit');writes++;return submit?submit():Promise.resolve();}};}};
- const page={getByRole(role,options){if(role==='button'){assert.equal(options.name,'Cancel invitation');return {async click(){events.push('open');}};}if(role==='group'){assert.equal(options.name,'Confirm termination');return confirmation;}assert.equal(role,'dialog');assert.equal(options.name,'Review invitation');return {locator(selector){assert.equal(selector,'.enrollment-created-meta');return rendered;}};},waitForResponse(predicate){events.push('register');assert.equal(predicate({request:()=>({method:()=> 'POST'}),url:()=> 'http://127.0.0.1:19889/api/enrollment/invite_synthetic/terminate'}),true);return pending.promise;}};
- const expect=value=>({toBe(expected){assert.equal(value,expected);},async toBeVisible(){assert.equal(value,confirmation);},async toContainText(expected){events.push('rendered');assert.equal(value,expected);},async toHaveCount(expected){assert.equal(value,confirmation);assert.equal(expected,0);events.push('closed');}});
- const terminate=Function('expect','mark','base',helper+';return terminate;')(expect,value=>stages.push(value),'http://127.0.0.1:19889');
- return {pending,response,events,stages,failure,writes:()=>writes,reads:()=>reads,run:()=>terminate(page,'Cancel invitation')};
+ const pending=deferred(),events=[],stages=[],failure=new Error(message);let writes=0,reads=0,captures=0,statusReads=0;
+ const fail=phase=>{if(failAt===phase)throw failure;};
+ const request={failure:()=>({errorText:'net::ERR_ABORTED'}),url:()=>`http://127.0.0.1/${secret}`};
+ const response={request:()=>request,status(){statusReads++;fail('status');return status;},async json(){reads++;fail('body');return {state:committed,privateValue:secret};}};
+ const confirmation={getByRole(role,options){assert.equal(role,'button');assert.deepEqual(options,{name:'Confirm termination',exact:true});fail('submit locator');return {click(){events.push('submit');writes++;fail('submit');return submit?submit():Promise.resolve();}};}};
+ const context=new EventEmitter(),browser=Object.assign(new EventEmitter(),{version:()=> '134.0.6998.0',isConnected:()=>true});
+ const page=Object.assign(new EventEmitter(),{
+  context:()=>context,viewportSize:()=>({width:1440,height:1000}),isClosed:()=>false,
+  getByRole(role,options){
+   if(role==='button'){assert.equal(options.name,label);return {async click(){events.push('open');fail('open');}};}
+   if(role==='group'){assert.equal(options.name,'Confirm termination');return confirmation;}
+   assert.equal(role,'dialog');assert.equal(options.name,'Review invitation');return {locator(selector){assert.equal(selector,'.enrollment-created-meta');return rendered;}};
+  },
+  waitForResponse(predicate){events.push('register');fail('registration');assert.equal(predicate({request:()=>({method:()=> 'POST'}),url:()=> 'http://127.0.0.1:19889/api/enrollment/invite_synthetic/terminate'}),true);return pending.promise;},
+ });
+ const expect=value=>({toBe(expected){assert.equal(value,expected);},async toBeVisible(){assert.equal(value,confirmation);fail('confirmation');},async toContainText(expected){events.push('rendered');fail('rendered');assert.equal(value,expected);},async toHaveCount(expected){assert.equal(value,confirmation);assert.equal(expected,0);fail('closed');events.push('closed');}});
+ const diagnostics=createBrowserTransportDiagnostics(page,browser),transportDiagnostics={capture(...args){captures++;return capture?capture(...args):diagnostics.capture(...args);}};
+ const extracted=Function('expect','mark','base','transportDiagnostics','let terminationTransportFailure=null;'+helper+';return {terminate,detail:()=>terminationTransportFailure};')(expect,value=>stages.push(value),'http://127.0.0.1:19889',transportDiagnostics);
+ return {pending,response,request,page,context,browser,diagnostics,events,stages,failure,detail:extracted.detail,captures:()=>captures,statusReads:()=>statusReads,writes:()=>writes,reads:()=>reads,run:()=>extracted.terminate(page,label)};
 }
 for(const kind of ['synchronous','asynchronous'])test(`terminal ${kind} click failure observes the later response rejection`,async()=>{
  const failure=new Error(secret),f=terminalFixture({submit:()=>{if(kind==='synchronous')throw failure;return Promise.reject(failure);}}),result=outcome(f.run());await nextTurn();assert.equal(result.settled,true);assert.equal(result.error,failure);f.pending.reject(new Error(secret));await nextTurn();assert.equal(f.writes(),1);assert.equal(f.reads(),0);assert.equal(f.events.includes('rendered'),false);
@@ -145,4 +159,107 @@ for(const first of ['response','submit'])test(`terminal ${first}-first success r
 });
 for(const invalid of [{status:409},{committed:'rejected'},{rendered:'Not committed'}])test(`terminal acceptance rejects mismatched ${Object.keys(invalid)[0]}`,async()=>{
  const f=terminalFixture(invalid),result=outcome(f.run());await nextTurn();f.pending.resolve(f.response);await result.done;assert.ok(result.error);assert.equal(f.writes(),1);assert.equal(f.events.includes('closed'),false);
+});
+
+const terminalStages=['open termination confirmation','await committed termination response','submit termination','verify termination response status','read committed termination body','verify committed termination state','verify rendered terminal state'];
+function safeTerminalEvidence(f){
+ const report={stage:f.stages.at(-1),error:'Assertion failed; secret-bearing diagnostics intentionally withheld.',terminationTransportFailure:f.detail()};
+ assert.ok(f.stages.every(stage=>terminalStages.includes(stage)));
+ assert.equal(JSON.stringify(report).includes(secret),false);
+ return report;
+}
+for(const [failAt,phase,writes,reads] of [
+ ['open','open termination confirmation',0,0],['confirmation','open termination confirmation',0,0],
+ ['registration','await committed termination response',0,0],['submit locator','submit termination',0,0],['submit','submit termination',1,0],
+ ['status','verify termination response status',1,0],['body','read committed termination body',1,1],
+ ['rendered','verify rendered terminal state',1,1],['closed','verify rendered terminal state',1,1],
+])test(`terminal ${failAt} failure has a finite exact stage and preserves the original error`,async()=>{
+ const f=terminalFixture({failAt}),result=outcome(f.run());f.pending.resolve(f.response);await result.done;
+ assert.equal(result.error,f.failure);assert.equal(f.stages.at(-1),phase);assert.equal(f.writes(),writes);assert.equal(f.reads(),reads);assert.equal(f.captures(),1);
+ assert.equal(f.detail().operation,failAt==='body'?'response-body':'other');safeTerminalEvidence(f);
+});
+for(const status of [401,409,429,503])test(`terminal HTTP ${status} remains a hard failure before the body read`,async()=>{
+ const f=terminalFixture({status}),result=outcome(f.run());f.pending.resolve(f.response);await result.done;
+ assert.ok(result.error);assert.equal(f.detail().httpStatus,status);assert.equal(f.statusReads(),1);assert.equal(f.stages.at(-1),'verify termination response status');assert.equal(f.writes(),1);assert.equal(f.reads(),0);assert.equal(f.events.includes('rendered'),false);safeTerminalEvidence(f);
+});
+test('terminal wrong committed state remains failure without exporting the body or state value',async()=>{
+ const f=terminalFixture({committed:secret}),result=outcome(f.run());f.pending.resolve(f.response);await result.done;
+ assert.ok(result.error);assert.equal(f.stages.at(-1),'verify committed termination state');assert.equal(f.writes(),1);assert.equal(f.reads(),1);assert.equal(f.events.includes('rendered'),false);safeTerminalEvidence(f);
+});
+test('terminal malformed JSON remains the original body-read failure',async()=>{
+ const f=terminalFixture(),failure=new SyntaxError(secret);f.response.json=async()=>{throw failure;};const result=outcome(f.run());f.pending.resolve(f.response);await result.done;
+ assert.equal(result.error,failure);assert.equal(f.stages.at(-1),'read committed termination body');assert.equal(f.detail().operation,'response-body');assert.equal(f.detail().category,'other');assert.equal(f.writes(),1);assert.equal(f.events.includes('rendered'),false);safeTerminalEvidence(f);
+});
+test('terminal transport snapshot is bounded and captured before cleanup, without a second body read',async()=>{
+ const f=terminalFixture({failAt:'body',message:`Protocol error (Network.getResponseBody): No data found for resource with given identifier\n${secret}`});
+ f.page.emit('requestfailed',f.request);const result=outcome(f.run());f.pending.resolve(f.response);await result.done;
+ assert.equal(result.error,f.failure);assert.equal(f.reads(),1);assert.equal(f.writes(),1);assert.equal(f.captures(),1);
+ assert.deepEqual(f.detail(),{operation:'response-body',category:'body-data-missing',pageClosed:false,pageCrashed:false,contextClosed:false,browserDisconnected:false,browserConnected:true,requestState:'failed',requestFailure:'aborted',configuredViewport:{width:1440,height:1000},preCaptureLayout:null,elapsedMs:null,browserVersion:'134.0.6998.0',httpStatus:200});
+ const before=JSON.stringify(safeTerminalEvidence(f));f.page.emit('close');f.context.emit('close');f.browser.emit('disconnected');f.diagnostics.dispose();assert.equal(JSON.stringify(safeTerminalEvidence(f)),before);
+});
+for(const failAt of ['submit','body','rendered'])test(`terminal ${failAt} original error survives a throwing diagnostic`,async()=>{
+ const f=terminalFixture({failAt,capture(){throw new Error(secret);}}),result=outcome(f.run());f.pending.resolve(f.response);await result.done;
+ assert.equal(result.error,f.failure);assert.equal(f.captures(),1);assert.equal(f.detail(),null);assert.equal(f.writes(),1);safeTerminalEvidence(f);
+});
+for(const first of ['response','submit'])test(`terminal same-turn ${first}-first settlements retain the original Promise.all error and stage`,async()=>{
+ const held=deferred(),f=terminalFixture({submit:()=>held.promise}),responseFailure=new Error(secret),submitFailure=new Error(secret),original=outcome(Promise.all([f.pending.promise,Promise.resolve().then(()=>held.promise)])),result=outcome(f.run());await nextTurn();
+ if(first==='response'){f.pending.reject(responseFailure);held.reject(submitFailure);}else{held.reject(submitFailure);f.pending.reject(responseFailure);}
+ await result.done;await original.done;assert.equal(result.error,original.error);assert.equal(f.stages.at(-1),original.error===responseFailure?'await committed termination response':'submit termination');assert.equal(f.captures(),1);assert.equal(f.writes(),1);assert.equal(f.reads(),0);safeTerminalEvidence(f);
+});
+for(const first of ['response','submit'])for(const late of ['resolve','reject'])test(`terminal ${first} failure cannot be relabeled by a late ${late} or emit a second snapshot`,async()=>{
+ const held=deferred(),f=terminalFixture({submit:()=>held.promise}),result=outcome(f.run());await nextTurn();
+ if(first==='response')f.pending.reject(f.failure);else held.reject(f.failure);
+ await result.done;assert.equal(result.error,f.failure);assert.equal(f.stages.at(-1),first==='response'?'await committed termination response':'submit termination');const before=JSON.stringify({stages:f.stages,...safeTerminalEvidence(f)});
+ if(first==='response')held[late](new Error(secret));else f.pending[late](late==='resolve'?f.response:new Error(secret));await nextTurn();await nextTurn();
+ assert.equal(JSON.stringify({stages:f.stages,...safeTerminalEvidence(f)}),before);assert.equal(f.captures(),1);assert.equal(f.writes(),1);assert.equal(f.reads(),0);assert.equal(f.events.includes('rendered'),false);
+});
+for(const [label,committed,rendered] of [['Cancel invitation','canceled','Canceled'],['Reject','rejected','Rejected'],['Revoke identity','revoked','Revoked']])test(`terminal ${label} retains exact committed, rendered and dismissal assertions`,async()=>{
+ const f=terminalFixture({label,committed,rendered}),result=outcome(f.run());f.pending.resolve(f.response);await result.done;
+ assert.equal(result.error,undefined);assert.deepEqual(f.stages,terminalStages);assert.deepEqual(f.events,['open','register','submit','rendered','closed']);assert.equal(f.writes(),1);assert.equal(f.reads(),1);assert.equal(f.statusReads(),1);assert.equal(f.captures(),0);assert.equal(f.detail(),null);
+});
+test('terminal unsupported action cannot click or disclose its supplied value',async()=>{
+ const f=terminalFixture({label:secret});await assert.rejects(f.run(),error=>error.message==='UNSUPPORTED_TEST_ACTION');assert.equal(f.writes(),0);assert.equal(f.reads(),0);assert.deepEqual(f.events,[]);assert.equal(f.captures(),0);
+});
+test('actual case reporting resets terminal evidence, withholds raw errors and cleans up after the snapshot',async()=>{
+ const source=fs.readFileSync(new URL('./enrollment-browser.mjs',import.meta.url),'utf8'),check=source.slice(source.indexOf('async function check('),source.indexOf('async function terminate('));
+ const events=[],logs=[],detail={operation:'response-body',category:'body-data-missing'};
+ const f=Function('events','logs',`
+  const includeQuarantined=true,quarantinedNames=new Set(),results=[],secrets=[];
+  let currentTest='',stage='',creationTransportFailure=null,creationPrimaryFailure=null,terminationTransportFailure=null;
+  let transportDiagnostics,context;
+  const console={log:value=>logs.push(value)};
+  async function start(){events.push('start');transportDiagnostics={dispose(){events.push('dispose');}};context={async close(){events.push('close');}};}
+  async function stop(){events.push('stop');}
+  ${check}
+  return {check,results,snapshot(value){events.push('capture');terminationTransportFailure=value;stage='read committed termination body';}};
+ `)(events,logs);
+ await f.check('inert first',async()=>{f.snapshot(detail);throw new Error(secret);});
+ await f.check('inert second',async()=>{throw new Error(secret);});
+ assert.equal(f.results.length,2);assert.equal(f.results[0].status,'FAIL');assert.equal(f.results[1].status,'FAIL');assert.deepEqual(f.results[0].terminationTransportFailure,detail);assert.equal('terminationTransportFailure' in f.results[1],false);
+ assert.deepEqual(events,['start','capture','dispose','close','stop','start','dispose','close','stop']);assert.equal(JSON.stringify({results:f.results,logs}).includes(secret),false);
+});
+test('terminal diagnostics retain the existing selected inert suite and fail-closed full browser gate',()=>{
+ const source=fs.readFileSync(new URL('./enrollment-browser.mjs',import.meta.url),'utf8'),workflow=fs.readFileSync(new URL('../../.github/workflows/validate.yml',import.meta.url),'utf8');
+ const manifest=JSON.parse(fs.readFileSync(new URL('./inert-suites.json',import.meta.url),'utf8'));
+ assert.ok(manifest.entries.includes('enrollment-create-diagnostics.test.mjs'));assert.ok(workflow.split('\n').some(line=>line.trim().startsWith('node --test ')&&line.split(/\s+/).includes('tests/e2e-review/enrollment-create-diagnostics.test.mjs')));
+ assert.equal([...source.matchAll(/await check\('/g)].length,13);assert.match(source,/creationTransportFailure=null;creationPrimaryFailure=null;terminationTransportFailure=null/);
+ assert.match(workflow,/r.summary,\{passed:13,failed:0,skipped:0,fullEnrollmentAcceptance:true,setupFailure:false\}/);
+ const helper=source.slice(source.indexOf('async function terminate('),source.indexOf('\ntry{'));
+ assert.doesNotMatch(helper,/setTimeout|setInterval|waitForTimeout|\.clone\(|page\.evaluate|console\.|response\.(?:body|text|finished)\(/);
+ assert.equal([...helper.matchAll(/response\.json\(/g)].length,1);assert.match(helper,/\[response\]=await Promise\.all\(\[responsePending,clickPending\]\)/);
+ assert.match(source,/process\.exitCode=fatal\|\|runtimeErrorCount\|\|results\.some\(r=>r\.status==='FAIL'\)\?1:0/);
+});
+
+test('terminal diagnostic status is only a finite HTTP integer, never a coerced response value',async()=>{
+ const hostile={toString(){throw new Error(secret);}};
+ for(const status of [100,599,0,99,600,200.5,Infinity,NaN,secret,null,undefined,hostile]){
+  const f=terminalFixture();f.response.status=()=>status;const result=outcome(f.run());f.pending.resolve(f.response);await result.done;
+  assert.ok(result.error);assert.equal(f.stages.at(-1),'verify termination response status');assert.equal(f.detail().httpStatus,Number.isInteger(status)&&status>=100&&status<=599?status:null);assert.equal(f.reads(),0);assert.equal(f.writes(),1);safeTerminalEvidence(f);
+ }
+});
+test('terminal missing or throwing status has no invented diagnostic HTTP result',async()=>{
+ for(const failAt of ['registration','submit','status']){
+  const f=terminalFixture({failAt}),result=outcome(f.run());f.pending.resolve(f.response);await result.done;
+  assert.equal(result.error,f.failure);assert.equal(f.detail().httpStatus,null);assert.equal(f.statusReads(),failAt==='status'?1:0);safeTerminalEvidence(f);
+ }
 });
