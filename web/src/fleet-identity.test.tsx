@@ -5,7 +5,7 @@ import { abortProtectedRequests, AUTH_REQUIRED_EVENT } from './api';
 import { DeviceTable } from './components';
 import { FleetIdentityNotice } from './fleet-identity';
 import { useFleetIdentity } from './fleet-identity-resource';
-import { FLEET_IDENTITY_BYTES, fleetIdentityProjection, validFleetIdentityView } from './fleet-identity-types';
+import { FLEET_IDENTITIES_BYTES, fleetIdentityProjection, validFleetIdentityView } from './fleet-identity-types';
 import type { FleetIdentityView } from './fleet-identity-types';
 import { emptyEndpointView, endpointComplete, endpointDevice, endpointFailed, endpointView } from './endpoint-identity-fixtures';
 import { setLocale } from './i18n';
@@ -51,7 +51,7 @@ describe('bounded fleet identity', () => {
  });
  it('makes one protected batch request, shows primary hostname and scoped multiple addresses, and selects the original stable Device', async () => {
   const fetch = vi.fn().mockResolvedValue(response(fleet())), onSelect = vi.fn(); vi.stubGlobal('fetch', fetch); render(<Harness onSelect={onSelect}/>); await screen.findByText('fixture-linux');
-  expect(fetch).toHaveBeenCalledTimes(1); expect(fetch.mock.calls[0][0]).toBe('/api/fleet/endpoint-identities'); expect(fetch.mock.calls[0][1]).toMatchObject({ credentials: 'same-origin', headers: { Accept: 'application/json' } }); expect(fetch.mock.calls[0][1].method).toBeUndefined(); expect(fetch.mock.calls[0][1].body).toBeUndefined();
+  expect(fetch).toHaveBeenCalledTimes(1); expect(fetch.mock.calls[0][0]).toBe('/api/fleet/identities'); expect(fetch.mock.calls[0][1]).toMatchObject({ credentials: 'same-origin', headers: { Accept: 'application/json' } }); expect(fetch.mock.calls[0][1].method).toBeUndefined(); expect(fetch.mock.calls[0][1].body).toBeUndefined();
   const row = screen.getAllByRole('row')[1]; for (const text of ['192.0.2.19', '+4 more IPs']) expect(within(row).getByText(text)).toBeVisible();
   expect(within(row).getByText(`ID: ${endpointDevice}`)).not.toBeVisible(); const disclosure = row.querySelector('details')!; disclosure.open = true; fireEvent(disclosure, new Event('toggle')); await screen.findByText('2001:db8::19'); expect(within(row).getByText(`ID: ${endpointDevice}`)).toBeVisible(); expect(within(row).getByText('eth0 · link-local')).toBeVisible(); expect(within(row).queryByText('198.51.100.250')).not.toBeInTheDocument(); expect(within(row).queryByRole('link')).not.toBeInTheDocument();
   fireEvent.click(within(row).getByRole('button', { name: 'Open details: fixture-linux' })); expect(onSelect).toHaveBeenCalledWith(device()); fireEvent.change(screen.getByLabelText('Search'), { target: { value: 'fe80::19' } }); expect(screen.getAllByRole('row')).toHaveLength(2); expect(fetch).toHaveBeenCalledTimes(1);
@@ -78,7 +78,7 @@ describe('bounded fleet identity', () => {
   let finish!: (v: Response) => void; fetch.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; })); refresh(); await waitFor(() => expect(finish).toBeDefined()); rerender(<Harness enabled={false} revision="details"/>); await act(async () => finish(response(fleet()))); expect(screen.queryByText('fixture-linux')).not.toBeInTheDocument(); rerender(<Harness revision="devices"/>); await screen.findByText('fixture-linux'); expect(fetch).toHaveBeenCalledTimes(4);
  });
  it('rejects oversized bytes and invalid batches without visible values', async () => {
-  let canceled = false; const stream = new ReadableStream({ start(c) { c.enqueue(new TextEncoder().encode(' '.repeat(FLEET_IDENTITY_BYTES + 1))); }, cancel() { canceled = true; } }); const fetch = vi.fn().mockResolvedValueOnce(new Response(stream)).mockResolvedValueOnce(response({ ...fleet(), items: [endpointView(), endpointView()] })); vi.stubGlobal('fetch', fetch); render(<Harness/>); await screen.findByRole('alert'); expect(canceled).toBe(true); refresh(); await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Invalid identity data')); expect(screen.queryByText('fixture-linux')).not.toBeInTheDocument();
+  let canceled = false; const stream = new ReadableStream({ start(c) { c.enqueue(new TextEncoder().encode(' '.repeat(FLEET_IDENTITIES_BYTES + 1))); }, cancel() { canceled = true; } }); const fetch = vi.fn().mockResolvedValueOnce(new Response(stream)).mockResolvedValueOnce(response({ ...fleet(), items: [endpointView(), endpointView()] })); vi.stubGlobal('fetch', fetch); render(<Harness/>); await screen.findByRole('alert'); expect(canceled).toBe(true); refresh(); await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Invalid identity data')); expect(screen.queryByText('fixture-linux')).not.toBeInTheDocument();
  });
  it('locks after real HTTP 401 and cannot restore on focus', async () => {
   const fetch = vi.fn().mockResolvedValue(response({}, 401)); vi.stubGlobal('fetch', fetch); render(<Harness/>); await screen.findByRole('alert'); expect(screen.getByRole('button', { name: 'Refresh hostnames and IP addresses' })).toBeDisabled(); act(() => window.dispatchEvent(new Event('focus'))); expect(fetch).toHaveBeenCalledTimes(1);

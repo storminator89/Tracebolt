@@ -58,6 +58,10 @@ function network(value: unknown): value is WindowsInterface {
     const b = mapped ? bytes.slice(12) : bytes;
     return b.length === 4 ? b[0] !== 127 && !(b[0] >= 224 && b[0] <= 239) : !(b.slice(0, 15).every(n => n === 0) && b[15] === 1) && b[0] !== 255;
 }
+/** Reuse the exact base Windows hostname/interface contract for fleet display. */
+export function validWindowsIdentitySections(host: unknown, interfaces: unknown): boolean {
+    return section(host, 1, 1, hostname) && (!host.complete || host.rows.length === 1) && section(interfaces, 64, 512, network);
+}
 export function validWindowsInventorySnapshot(value: unknown): value is WindowsInventorySnapshot {
     if (!exact(value, ['schemaVersion', 'collectionProfile', 'generationId', 'collectedAt', 'hostname', 'processes', 'services', 'software', 'network']) || value.schemaVersion !== 'tracebolt.windows-inventory.v1' || value.collectionProfile !== 'windows-inventory-v1' || typeof value.generationId !== 'string' || !/^sample_[a-f0-9]{32}$/.test(value.generationId) || !timestamp(value.collectedAt) || !section(value.hostname, 1, 1, hostname) || value.hostname.complete && value.hostname.rows.length !== 1 || !section(value.processes, 128, 2048, process) || !section(value.services, 128, 2048, service) || !section(value.software, 128, 2048, software) || !section(value.network, 64, 512, network)) return false;
     // Match Go JSON's HTML escaping in addition to the bounded HTTP reader.

@@ -2,9 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { APIError, AUTH_REQUIRED_EVENT, getProtectedRequestEpoch, request } from './api';
 import { hasLogoutIntent } from './auth';
 import { inventoryAge } from './complete-packages-types';
-import { endpointSnapshotVisible } from './endpoint-identity-types';
-import { FLEET_IDENTITY_BYTES, fleetIdentityProjection, validFleetIdentityView } from './fleet-identity-types';
-import type { FleetIdentityView } from './fleet-identity-types';
+import { FLEET_IDENTITIES_BYTES, fleetIdentityVisible, fleetIdentityProjection, validFleetIdentityView } from './fleet-identity-types';
+import type { AnyFleetIdentityView } from './fleet-identity-types';
 export type FleetIdentityFailure = 'loadError' | 'invalid' | 'timeout' | 'session' | 'clock' | 'busy';
 type Anchor = { mono: number; wall: number };
 const capture = (): Anchor => ({ mono: performance.now(), wall: Date.now() });
@@ -16,9 +15,9 @@ export function useFleetIdentity(enabled: boolean, sessionKey: string | null = n
     const key = retainNavigation ? `${sessionKey ?? ''}` : `${revision}:${sessionKey ?? ''}:${enabled}`;
     const retainedSession = useRef<string | null | undefined>(undefined);
     const workspaceClock = useRef<{ sessionKey: string | null; epoch: number; serverNow: string; anchor: Anchor } | null>(null);
-    const retained = useRef<{ key: string; epoch: number; view: FleetIdentityView; anchor: Anchor } | null>(null);
-    const [data, setData] = useState<{ key: string; view: FleetIdentityView } | null>(null), [loading, setLoading] = useState(false), [recovering, setRecovering] = useState(false), [error, setError] = useState<FleetIdentityFailure | null>(null), [, tick] = useState(0);
-    const alive = useRef(false), locked = useRef(false), suspended = useRef(false), epoch = useRef(0), current = useRef<FleetIdentityView | null>(null);
+    const retained = useRef<{ key: string; epoch: number; view: AnyFleetIdentityView; anchor: Anchor } | null>(null);
+    const [data, setData] = useState<{ key: string; view: AnyFleetIdentityView } | null>(null), [loading, setLoading] = useState(false), [recovering, setRecovering] = useState(false), [error, setError] = useState<FleetIdentityFailure | null>(null), [, tick] = useState(0);
+    const alive = useRef(false), locked = useRef(false), suspended = useRef(false), epoch = useRef(0), current = useRef<AnyFleetIdentityView | null>(null);
     const anchor = useRef<Anchor | null>(null), latestServer = useRef<string | null>(null), pending = useRef<{ controller: AbortController; timeout: number; started: Anchor } | null>(null);
     const cancel = useCallback(() => { epoch.current++; pending.current?.controller.abort(); window.clearTimeout(pending.current?.timeout); pending.current = null; if (alive.current) { setLoading(false); setRecovering(false); } }, []);
     const clear = useCallback((failure: FleetIdentityFailure | null = null) => { cancel(); retained.current = null; anchor.current = null; current.current = null; if (alive.current) { setData(null); setError(failure); } }, [cancel]);
@@ -41,7 +40,7 @@ export function useFleetIdentity(enabled: boolean, sessionKey: string | null = n
             // access epoch, capture anchor and total ten-second deadline.
             for (let attempt = 0; attempt < 2; attempt++) {
                 try {
-                    response = await request<unknown>('/fleet/endpoint-identities', { signal: controller.signal }, FLEET_IDENTITY_BYTES);
+                    response = await request<unknown>('/fleet/identities', { signal: controller.signal }, FLEET_IDENTITIES_BYTES);
                     break;
                 } catch (caught) {
                     if (!active()) return;
@@ -104,8 +103,8 @@ export function useFleetIdentity(enabled: boolean, sessionKey: string | null = n
             const view = current.current;
             if (view && anchor.current) {
                 const age = elapsed(anchor.current);
-                if (view.items.some(item => item.latest && !endpointSnapshotVisible(item, age))) {
-                    current.current = { ...view, items: view.items.map(item => item.latest && !endpointSnapshotVisible(item, age) ? { ...item, status: 'expired', latest: null } : item) }; if (retainNavigation && retained.current) retained.current = { ...retained.current, view: current.current }; setData({ key, view: current.current });
+                if (view.items.some(item => item.latest && !fleetIdentityVisible(item, age))) {
+                    current.current = { ...view, schemaVersion: 'tracebolt.fleet-identities.v2', items: view.items.map(item => item.latest && !fleetIdentityVisible(item, age) ? { ...item, status: 'expired', latest: null } : item) }; if (retainNavigation && retained.current) retained.current = { ...retained.current, view: current.current }; setData({ key, view: current.current });
                 }
             }
             if (base) tick(n => n + 1);

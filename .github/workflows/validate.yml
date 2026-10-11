@@ -809,6 +809,8 @@ jobs:
             artifacts/review/managed-preview-result.json
             artifacts/review/lan-browser-results.json
             artifacts/review/lan-browser-manifest.json
+            artifacts/review/windows-full-services-results.json
+            artifacts/review/windows-full-services-manifest.json
             artifacts/review/enrollment-browser-results.json
             artifacts/review/enrollment-browser-manifest.json
             artifacts/review/conditional-browser-results.json

@@ -28,6 +28,11 @@ approval remain required.
 | Process metrics | Per-process CPU and working-set RAM; CPU starts unknown until a usable second sample |
 | Network endpoints | Numeric TCP/UDP addresses/ports and API-snapshot owning PID; no traffic payloads or DNS lookup |
 
+The source fleet overview now displays and searches already-reported Windows
+hostnames and IPv4/IPv6 interface addresses, with partial/unavailable states and
+original capture age. See [Windows fleet display](windows-fleet-identity.md).
+This manager/UI projection adds no local grant or collection.
+
 These scopes do not establish whole-machine coverage or Linux feature parity.
 Configured service-startup metadata is a separate default-off source capability;
 it is not included in the five-scope Setup choice. Windows event-message content,

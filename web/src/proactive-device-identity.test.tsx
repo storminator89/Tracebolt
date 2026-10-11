@@ -70,7 +70,7 @@ describe('display-only proactive device metadata', () => {
         render(<Harness/>); await open(); expect(selectedDevice()).toHaveAccessibleName(`fixture-linux · ${id}`);
         fireEvent.click(selectedDevice()); fireEvent.click(consent());
         let finish!: (value: unknown) => void;
-        vi.mocked(request).mockImplementation(path => path === '/fleet/endpoint-identities' ? new Promise(resolve => { finish = resolve; }) : Promise.resolve(settings()));
+        vi.mocked(request).mockImplementation(path => path === '/fleet/identities' ? new Promise(resolve => { finish = resolve; }) : Promise.resolve(settings()));
         fireEvent.click(screen.getByRole('button', { name: 'Refresh hostnames and IP addresses' }));
         expect(screen.queryByText('fixture-linux')).not.toBeInTheDocument(); expect(screen.queryByText('192.0.2.19')).not.toBeInTheDocument(); expect(selectedDevice()).toBeChecked(); expect(consent()).toBeChecked();
         const changed = fleet(); changed.items[0].latest!.reportedHostname.value = 'fixture-renamed';
@@ -79,7 +79,7 @@ describe('display-only proactive device metadata', () => {
         fireEvent.click(screen.getByRole('button', { name: 'Refresh hostnames and IP addresses' }));
         await screen.findByText('Reported hostnames and IP addresses are unavailable.'); expect(screen.queryByText('fixture-renamed')).not.toBeInTheDocument(); expect(selectedDevice()).toBeChecked();
         expect(vi.mocked(request).mock.calls.filter(([path]) => path === '/ai/proactive')).toHaveLength(1);
-        expect(vi.mocked(request).mock.calls.filter(([path]) => path === '/fleet/endpoint-identities')).toHaveLength(3);
+        expect(vi.mocked(request).mock.calls.filter(([path]) => path === '/fleet/identities')).toHaveLength(3);
         vi.mocked(mutateRaw).mockResolvedValue({ ...settings(), revision: 'revision-b', enabled: true, deviceIds: [id] });
         fireEvent.click(screen.getByRole('button', { name: 'Approve and enable' }));
         await screen.findByText('Settings saved. No connectivity test was sent.');

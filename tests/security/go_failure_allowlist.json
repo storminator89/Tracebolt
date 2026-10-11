@@ -1,5 +1,5 @@
 {
-  "goSourceSha256": "676cba80c2a64f3a696e58d80173ce10337899655f0a75afa1981d3ffc49517a",
+  "goSourceSha256": "d92277e3b5b81c85aab4873ed154dc78076afbee635645bdddcc21e76800c799",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -789,6 +789,10 @@
       "TestFleetEndpointIdentityOperatorGuards",
       "TestFleetEndpointIdentityPostEncodeExpirySessionAndExactBytes",
       "TestFleetEndpointIdentityResponseCapIncludesNewline",
+      "TestFleetIdentitiesOperatorGuards",
+      "TestFleetIdentitiesV2ResponseCapIncludesNewline",
+      "TestFleetIdentitiesWindowsFinalOutputAuthoritySessionAndCancellation",
+      "TestFleetIdentitiesWindowsHTTPProjectionAndVectors",
       "TestGuidedCapabilitiesDescribeShippedScopeWithoutInstallationClaim",
       "TestHealthMonitorPersistsWithoutUIAndPreservesHistoryOnSourceFailure",
       "TestHealthOperatorAuthenticationCSRFAndDeviceAuthority",
@@ -1492,6 +1496,9 @@
       "TestFleetEndpointIdentityCertificateExpiryKeepsHealthyMember",
       "TestFleetEndpointIdentityPreservesSingleReadAndOriginalBytes",
       "TestFleetEndpointIdentityReadAdmissionCancellationAndPostCommitAge",
+      "TestFleetIdentitiesKeepsLinuxV1Projection",
+      "TestFleetIdentitiesWindowsOriginalSectionsRetryAndRevocation",
+      "TestFleetIdentitiesWindowsReadAdmissionCancellationAndPostCommitExpiry",
       "TestHealthReadsOriginalAcceptedAgeAndExplicitServices",
       "TestHealthRejectsClockBeforeCurrentIdentityAuthority",
       "TestIndependentIssuerAndRevocationRace",

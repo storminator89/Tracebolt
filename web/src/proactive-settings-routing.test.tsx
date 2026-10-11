@@ -25,12 +25,12 @@ it('reuses the App fleet hook on Settings and preserves metadata without another
     vi.mocked(request).mockImplementation(async path => {
         if (path === '/overview') return { devices: [], cases: [], stats: {}, activity: [], generatedAt: endpointView().serverNow };
         if (path === '/capabilities') return { limitations: [] };
-        if (path === '/fleet/endpoint-identities') return { schemaVersion: 'tracebolt.fleet-endpoint-identity.v1', serverNow: endpointView().serverNow, items: [endpointView()] };
+        if (path === '/fleet/identities') return { schemaVersion: 'tracebolt.fleet-endpoint-identity.v1', serverNow: endpointView().serverNow, items: [endpointView()] };
         if (path === '/ai/proactive') return { schemaVersion: 'tracebolt.proactive-ai-settings.v1', revision: 'revision-a', enabled: false, configRevision: 'config-a', providerConfigured: true, baseURL: 'http://127.0.0.1:11434/v1', model: 'fixture-model', deviceIds: [], availableDevices: [{ id: endpointDevice }], dataScope: 'health-summary-v1', logsAllowed: false, resetsOnRestart: true, maxAnalysesPerHour: 6, cooldownMinutes: 30, minIntervalSeconds: 60, reason: '' };
         throw new Error(`Unexpected fixture request: ${path}`);
     });
     render(<App/>); await screen.findByText('Off'); fireEvent.click(screen.getByRole('button', { name: 'Proactive AI diagnostics' })); await screen.findByText('fixture-linux');
-    const identityCalls = () => vi.mocked(request).mock.calls.filter(([path]) => path === '/fleet/endpoint-identities').length;
+    const identityCalls = () => vi.mocked(request).mock.calls.filter(([path]) => path === '/fleet/identities').length;
     expect(identityCalls()).toBe(1);
     for (const hash of ['#settings', '#/settings', '#/settings/']) {
         const shell = document.querySelector('.app-shell');
