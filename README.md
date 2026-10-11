@@ -84,11 +84,37 @@ Read the [prerelease installation guide](docs/windows-prerelease-install.md) and
 The accepted hosted Windows Server 2025 subset does not prove Windows 10/11,
 reboot, upgrade or ARM64 support. Do not use the Linux installation command on Windows.
 
-Newer source work is tracked in the [Linux/Windows parity matrix](docs/windows-linux-parity.md).
+Read the [dated Windows parity review status](docs/windows-parity-review-status.md)
+for subsequent source progress, CI evidence and remaining priorities. The
+[Linux/Windows parity matrix](docs/windows-linux-parity.md) preserves a historical
+baseline; its table is not a current runtime-coverage claim.
+
 Cached Update inspection and exact selected event messages are separate default-off
-source candidates wired into Updates and Logs. Their source/fixture evidence is
-separate from native acceptance. Neither is added to the published preview by
-updating the manager.
+source candidates wired into Updates and Logs. Sibling [PR #31](https://github.com/storminator89/Tracebolt/pull/31)
+and [PR #32](https://github.com/storminator89/Tracebolt/pull/32) add opt-in Windows
+disk/CPU/RAM and selected-service health policies. PR #29's documentation changes
+do not add that runtime implementation. These newer features remain outside the
+unchanged published preview. Source/fixture checks do not establish native acceptance.
+
+| Cached Windows Updates, unreleased source preview | Mobile device overview, German |
+| --- | --- |
+| [<img src="docs/screenshots/2026-10-10-windows-parity/windows-cached-updates.png" width="660" alt="Tracebolt cached Windows Updates with invented update rows and explicit unknown cache freshness">](docs/screenshots/2026-10-10-windows-parity/windows-cached-updates.png) | [<img src="docs/screenshots/2026-10-10-windows-parity/windows-mobile-de.png" width="220" alt="German mobile Windows device overview with invented inventory data">](docs/screenshots/2026-10-10-windows-parity/windows-mobile-de.png) |
+
+*Actual 10 October source-preview captures with invented Windows data.
+[Inventory screenshot and exact-source provenance](docs/screenshots/2026-10-10-windows-parity/README.md). Native Windows acceptance remains separate.*
+
+![Tracebolt selected Windows event messages with invented text, original expiry and partial availability](docs/screenshots/2026-10-10-windows-parity/windows-selected-messages.png)
+
+*Selected Windows event messages, unreleased source preview with invented data.
+Original expiry and per-record availability stay visible.
+[Exact source and fixture boundaries](docs/screenshots/2026-10-10-windows-parity/README.md#selected-windows-event-messages).*
+
+![Tracebolt Windows CPU health policy with an invented open incident, explicit threshold and original observation times](docs/screenshots/2026-10-10-windows-parity/windows-health-policy.png)
+
+*Windows CPU health policy, an unreleased source candidate in
+[PR #31](https://github.com/storminator89/Tracebolt/pull/31), shown with invented data.
+This separate implementation is not part of the published Windows preview.
+[Exact source and fixture boundaries](docs/screenshots/2026-10-10-windows-parity/README.md#windows-health-policy).*
 
 ## Platform support
 
@@ -118,6 +144,10 @@ Run `make test`, `make build` and the [web checks](web/README.md#checks). Consul
 container and native coverage; a cross-build or screenshot is not host acceptance.
 
 **Development pilot.** Production hardening and fleet-scale validation remain
-open. No project license has been selected; public source availability does not
-grant an open-source license. Dependencies retain their
-[own notices](docs/dependencies/edwards25519.md).
+open.
+
+## License
+
+Tracebolt is licensed under the [Apache License 2.0](LICENSE)
+(SPDX: `Apache-2.0`). Third-party dependencies retain their own licenses and
+notices, including the [Edwards25519 dependency notice](docs/dependencies/edwards25519.md).
