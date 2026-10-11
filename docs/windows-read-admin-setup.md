@@ -37,7 +37,6 @@ fresh-Setup choice or a required upgrade step.
 | Users and sessions | `windows-session-context-v1` | Caller-visible WTS sessions/personal labels and local join context |
 | Device and activity | `windows-hardware-context-v1` | Manufacturer/model, source-labeled chassis and BIOS serial, firmware and system battery/power |
 | Storage | `windows-storage-context-v1` | Local drive-letter/volume-GUID mapping and fixed storage-provider identifiers, friendly labels, media/bus, size and provider health/status |
-
 | Updates and security | `windows-security-coverage-v1` | [Security Center antivirus names/state/signatures on Windows clients; TPM presence/version](windows-security-coverage.md) |
 
 The authoritative fresh list (`WindowsReadAdminScopesV8`) and grouped requirement manifest are
