@@ -29,15 +29,16 @@ test('one hosted case preserves real login and CSRF with intercepted synthetic d
 });
 
 test('reported hostname and scoped interface IPs remain read-only display metadata',()=>{
- const fixture=createProactiveAIFixture(),view=fixture.handle('GET','/api/fleet/endpoint-identities',null),item=view.items[0];
- assert.equal(item.deviceId,proactiveAIFixtureDevice);assert.equal(item.latest.reportedHostname.value,proactiveAIFixtureHostname);assert.equal(item.latest.interfaces.items[0].name,'eth0');
+ const fixture=createProactiveAIFixture(),view=fixture.handle('GET','/api/fleet/identities',null),item=view.items[0];
+ assert.equal(view.schemaVersion,'tracebolt.fleet-identities.v2');assert.equal(item.schemaVersion,'tracebolt.endpoint-identity-view.v1');assert.equal(item.latest.scope,'agent-visible-linux-hostname-and-interface-addresses');assert.equal(item.deviceId,proactiveAIFixtureDevice);assert.equal(item.latest.reportedHostname.value,proactiveAIFixtureHostname);assert.equal(item.latest.interfaces.items[0].name,'eth0');
  assert.deepEqual(item.latest.interfaces.items[0].addresses.ipv4.items,[{family:'ipv4',address:proactiveAIFixtureAddresses[0],scope:'private'}]);
  assert.deepEqual(item.latest.interfaces.items[0].addresses.ipv6.items,[{family:'ipv6',address:proactiveAIFixtureAddresses[1],scope:'link-local'}]);
  assert.equal(fixture.counts.identityReads,1);assert.equal(fixture.counts.settingsWrites,0);assert.equal(fixture.settings().enabled,false);
  const body=approval(fixture),packet=proactiveAIResultFixture().items[0].analysis.result.packet;
  for(const value of [proactiveAIFixtureHostname,...proactiveAIFixtureAddresses]){assert.equal(JSON.stringify(body).includes(value),false);assert.equal(JSON.stringify(packet).includes(value),false);}
  assert.deepEqual(body.deviceIds,[proactiveAIFixtureDevice]);assert.throws(()=>fixture.handle('POST',path,{...body,hostname:proactiveAIFixtureHostname}));
- assert.throws(()=>fixture.handle('POST','/api/fleet/endpoint-identities',{}));assert.throws(()=>fixture.handle('GET','/api/fleet/endpoint-identities',{query:'collect'}));
+ for(const pathname of ['/api/fleet/endpoint-identities','/api/fleet/identities?extra=1','/api/fleet/identities/'])assert.throws(()=>fixture.handle('GET',pathname,null));
+ assert.throws(()=>fixture.handle('POST','/api/fleet/identities',{}));assert.throws(()=>fixture.handle('GET','/api/fleet/identities',{query:'collect'}));
  item.latest.reportedHostname.value='mutated';assert.equal(proactiveAIIdentityFixture().items[0].latest.reportedHostname.value,proactiveAIFixtureHostname);
 });
 test('stale and missing identity fixtures preserve original observation meaning',()=>{
@@ -48,3 +49,16 @@ test('stale and missing identity fixtures preserve original observation meaning'
 });
 
 test('hosted health scope keeps its exclusion while pointing to separate service-log approval',()=>{const source=fs.readFileSync(new URL('./proactive-ai-browser.mjs',import.meta.url),'utf8');assert.ok(source.includes('This health-summary scope excludes logs. Service-log AI below needs separate local and provider approval.'));assert.ok(!source.includes('Raw-log sharing is unavailable'));});
+
+// Source-only registration: never imports the browser runner or launches a host.
+test('hosted fleet reads and fault injection target only the current exact v2 path',()=>{
+ const fleet=read('./fleet-identity-browser.mjs'),journal=read('./journal-ai-browser.mjs'),proactive=read('./proactive-ai-browser.mjs'),resource=read('../../web/src/fleet-identity-resource.ts');
+ assert.ok(resource.includes("request<unknown>('/fleet/identities'"));
+ assert.ok(fleet.includes("const fleetPath='/api/fleet/identities'"));
+ assert.ok(fleet.includes("response.url()!==base+'/api/fleet/identities'"));
+ assert.ok(fleet.includes('page.route(base+fleetPath,route=>route.fulfill({status:503'));
+ assert.ok(fleet.includes('page.unroute(base+fleetPath)'));
+ assert.ok(journal.includes("u.pathname==='/api/fleet/identities'&&u.search===''&&method==='GET'&&r.postData()===null"));
+ assert.ok(proactive.includes("url.pathname==='/api/fleet/identities'"));
+ for(const source of [fleet,journal,proactive])assert.ok(!source.includes('/api/fleet/endpoint-identities'));
+});

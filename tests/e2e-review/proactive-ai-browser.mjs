@@ -18,7 +18,7 @@ export function proactiveAIIdentityFixture(status='fresh'){
   item.sequence='1';item.receivedAt=new Date(at+100).toISOString();item.expiresAt=new Date(at+86400000).toISOString();
   item.latest={schemaVersion:'tracebolt.endpoint-identity.v1',generationId:'sample_'+('c'.repeat(32)),collectedAt,durationMs:1,scope:'agent-visible-linux-hostname-and-interface-addresses',reportedHostname:{coverage:'complete',reason:'none',value:proactiveAIFixtureHostname},interfaces:{meta:complete(1),items:[{index:2,name:'eth0',up:true,loopback:false,hardwareKind:'unknown',addresses:{ipv4:{meta:complete(1),items:[{family:'ipv4',address:proactiveAIFixtureAddresses[0],scope:'private'}]},ipv6:{meta:complete(1),items:[{family:'ipv6',address:proactiveAIFixtureAddresses[1],scope:'link-local'}]}}}]}};
  }
- return {schemaVersion:'tracebolt.fleet-endpoint-identity.v1',serverNow,items:[item]};
+ return {schemaVersion:'tracebolt.fleet-identities.v2',serverNow,items:[item]};
 }
 const stages=new Set(['setup','initial','review','close','save','uncertain','refresh','mobile-en','mobile-de','persisted-desktop','persisted-mobile','result-desktop','result-mobile','history','final-guards']);
 let stage='setup';
@@ -36,7 +36,7 @@ export function createProactiveAIFixture(){
  const provider=()=>({revision:current.configRevision,configured:true,provider:'openai-compatible',baseURL:current.baseURL,endpointOrigin:'http://127.0.0.1:11434',model:current.model,keyConfigured:false,useLegacyMaxTokens:false,allowRemoteEvidence:false,storage:current.resetsOnRestart?'memory-only':'protected-file',persistenceAvailable:true,persistentKeyAllowed:false,resetsOnRestart:current.resetsOnRestart,busy:false,limitations:[]});
  const handle=(method,pathname,data)=>{
   if(method==='GET'&&pathname==='/api/ai/proactive'){requireFixture(data===null);counts.settingsReads++;return settings();}
-  if(method==='GET'&&pathname==='/api/fleet/endpoint-identities'){requireFixture(data===null);counts.identityReads++;return proactiveAIIdentityFixture();}
+  if(method==='GET'&&pathname==='/api/fleet/identities'){requireFixture(data===null);counts.identityReads++;return proactiveAIIdentityFixture();}
   if(method==='GET'&&pathname==='/api/ai/config'){requireFixture(data===null);return provider();}
   if(method==='GET'&&pathname==='/api/investigations?scope=open&offset=0'){requireFixture(data===null);counts.resultReads++;return proactiveAIResultFixture();}
   if(method==='POST'&&pathname==='/api/ai/proactive'){
@@ -80,7 +80,7 @@ export async function proactiveAIBrowserCase({pageAt,login,expect,base,shot}){
    if(response.status()===200){const body=await response.json();if(typeof body.csrfToken==='string'){csrf=body.csrfToken;sessionSequence++;}}
    return route.fulfill({response});
   }
-  if(url.pathname.startsWith('/api/ai/')||url.pathname==='/api/investigations'||url.pathname==='/api/fleet/endpoint-identities'){
+  if(url.pathname.startsWith('/api/ai/')||url.pathname==='/api/investigations'||url.pathname==='/api/fleet/identities'){
    try{
     if(method==='GET')requireFixture(request.postData()===null);
     else{const headers=await request.allHeaders();requireFixture(method==='POST'&&headers['content-type']==='application/json'&&csrf!==''&&headers['x-csrf-token']===csrf&&sessionSequence>consumedSession);consumedSession=sessionSequence;}

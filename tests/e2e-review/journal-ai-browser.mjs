@@ -41,7 +41,7 @@ export async function journalAIBrowserCase({pageAt,login,expect,base,shot}){
  await page.route('**/*',async route=>{const r=route.request(),u=new URL(r.url()),method=r.method();
   if(u.origin!==base){external.push('external');return route.abort('blockedbyclient');}
   if(u.pathname==='/api/session'&&method==='GET'){const response=await route.fetch();if(response.status()===200){const value=await response.json();if(typeof value.csrfToken==='string'){csrf=value.csrfToken;sequence++;}}return route.fulfill({response});}
-  if(u.pathname==='/api/fleet/endpoint-identities'&&method==='GET'){const value=proactiveAIIdentityFixture();value.items[0].deviceId=fixture.device;return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(value)});}
+  if(u.pathname==='/api/fleet/identities'&&u.search===''&&method==='GET'&&r.postData()===null){const value=proactiveAIIdentityFixture();value.items[0].deviceId=fixture.device;return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(value)});}
   if(u.pathname.startsWith('/api/ai/journal')||u.pathname==='/api/investigations'){
    try {if(method==='GET')requireFixture(r.postData()===null);else{const headers=await r.allHeaders();requireFixture(method==='POST'&&headers['content-type']==='application/json'&&csrf!==''&&headers['x-csrf-token']===csrf&&sequence>consumed);consumed=sequence;}
     return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(fixture.handle(method,u.pathname+u.search,method==='GET'?null:r.postDataJSON()))});

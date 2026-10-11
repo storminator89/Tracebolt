@@ -28,8 +28,8 @@ async function exactStorageBusy(response){
 }
 function observeReads(page){
  page.on('response',response=>{
-  if(response.request().method()!=='GET'||response.url()!==base+'/api/fleet/endpoint-identities')return;
-  const resource='fleet-endpoint-identities';
+  if(response.request().method()!=='GET'||response.url()!==base+'/api/fleet/identities')return;
+  const resource='fleet-identities';
   if(!resource||readTasks.length>=24)return;
   const status=response.status();const value={resource,status:Number.isInteger(status)&&status>=100&&status<=599?status:0,storageBusy:false};readOutcomes.push(value);
   readTasks.push(exactStorageBusy(response).then(busy=>{value.storageBusy=busy;}).catch(()=>{}));
@@ -48,7 +48,7 @@ async function shot(page,name){mark('invented identity viewport capture');await 
 async function check(name,run){currentTest=name;readOutcomes=[];readTasks=[];mark('fixture setup');const began=Date.now();try{await start();await run();console.log('READ_OUTCOMES '+await readEvidence());results.push({name,status:'PASS',durationMs:Date.now()-began});console.log(`PASS ${name}`);}catch(error){console.log(String(error).slice(0,900));results.push({name,status:'FAIL',stage,durationMs:Date.now()-began,error:'Bounded assertion failure. Fixed read outcomes: '+await readEvidence()});console.log(`FAIL ${name} (${stage})`);}finally{if(context)await context.close();context=null;await stop();}}
 
 async function bounds(page){expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1&&document.body.scrollWidth<=innerWidth+1)).toBe(true);}
-const fleetPath='/api/fleet/endpoint-identities';
+const fleetPath='/api/fleet/identities';
 async function fleetReady(page){await expect(page.locator('.fleet-identity-notice [role=alert]')).toHaveCount(0);await expect(page.getByRole('button',{name:'Refresh hostnames and IP addresses',exact:true})).toBeEnabled();}
 const fleetRow=(page,label='alpha')=>page.locator('.device-table tbody tr').filter({has:page.locator('.fleet-identity-id',{hasText:devices[label]})});
 async function fleetRefresh(page){await page.getByRole('button',{name:'Refresh hostnames and IP addresses',exact:true}).click();await fleetReady(page);}
@@ -57,7 +57,7 @@ try{
  browser=await chromium.launch({headless:true,args:['--no-sandbox'],executablePath:process.env.CHROMIUM_PATH||'/usr/bin/chromium',env:{...process.env,HOME:temporary,XDG_CONFIG_HOME:temporary,XDG_CACHE_HOME:temporary}});
  await check('One bounded fleet read displays escaped hostname and scoped multiple IPs, searches locally and preserves stable routing',async()=>{
   const page=await pageAt();await fleetReady(page);const row=fleetRow(page);await expect(row.locator('strong')).toHaveText(hostname('alpha'));await expect(row).toContainText('192.0.2.19');await expect(row).toContainText('qa-eth0');await expect(row).toContainText(conciseCopy.fleetMore);await expect(row.locator('img,a')).toHaveCount(0);
-  const collection=await get(fleetPath);expect(collection.items.length).toBeLessThanOrEqual(25);expect(collection.items.find(item=>item.deviceId===devices.alpha).latest.reportedHostname.value).toBe(hostname('alpha'));
+  const collection=await get(fleetPath);expect(collection.schemaVersion).toBe('tracebolt.fleet-identities.v2');expect(collection.items.every(item=>item.schemaVersion==='tracebolt.endpoint-identity-view.v1')).toBe(true);expect(collection.items.length).toBeLessThanOrEqual(25);expect(collection.items.find(item=>item.deviceId===devices.alpha).latest.reportedHostname.value).toBe(hostname('alpha'));
   let reads=0;page.on('request',r=>{if(r.url().endsWith(fleetPath))reads++;});await page.getByRole('textbox',{name:'Search devices'}).fill('198.51.100.24');await expect(fleetRow(page)).toBeVisible();await page.getByRole('textbox',{name:'Search devices'}).fill('qa-host-<lab>&alpha');await expect(page.locator('.device-table tbody tr')).toHaveCount(1);expect(reads).toBe(0);await page.getByRole('textbox',{name:'Search devices'}).fill('');
   await page.getByLabel('Sort devices').selectOption('name');const overview=await get('/api/overview');const reported=new Map(collection.items.map(item=>[item.deviceId,item.latest?.reportedHostname.value]));const expected=overview.devices.slice().sort((a,b)=>(reported.get(a.id)||a.name).localeCompare(reported.get(b.id)||b.name,'en')).map(item=>'ID: '+item.id);expect(await page.locator('.device-table .fleet-identity-id').allTextContents()).toEqual(expected);
   await shot(page,'synthetic-fleet-identity-desktop-en');
@@ -105,7 +105,7 @@ try{
   mark('advance original retention expiry');await control('advance',{seconds:86400});await fleetRefresh(page);await expect(fleetRow(page,'beta')).toContainText('Expired');await expect(fleetRow(page,'beta')).not.toContainText('192.0.2.19');
  });
  await check('Failed refresh and suspended visibility clear values; recovery performs a new batch',async()=>{
-  const page=await pageAt();await fleetReady(page);await page.route('**'+fleetPath,route=>route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({error:{code:'inventory_unavailable',message:'Synthetic read failure'}})}));await page.getByRole('button',{name:'Refresh hostnames and IP addresses'}).click();await expect(page.locator('.fleet-identity-notice [role=alert]')).toBeVisible();await expect(page.locator('.device-table')).not.toContainText(hostname('alpha'));await page.unroute('**'+fleetPath);await fleetRefresh(page);await expect(fleetRow(page)).toContainText(hostname('alpha'));
+  const page=await pageAt();await fleetReady(page);await page.route(base+fleetPath,route=>route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({error:{code:'inventory_unavailable',message:'Synthetic read failure'}})}));await page.getByRole('button',{name:'Refresh hostnames and IP addresses'}).click();await expect(page.locator('.fleet-identity-notice [role=alert]')).toBeVisible();await expect(page.locator('.device-table')).not.toContainText(hostname('alpha'));await page.unroute(base+fleetPath);await fleetRefresh(page);await expect(fleetRow(page)).toContainText(hostname('alpha'));
   await page.evaluate(()=>window.dispatchEvent(new Event('blur')));await expect(page.locator('.device-table')).not.toContainText(hostname('alpha'));await page.evaluate(()=>window.dispatchEvent(new Event('focus')));await fleetReady(page);await expect(fleetRow(page)).toContainText(hostname('alpha'));await clean(page);
  });
  await check('Operator logout rejects the batch and clears all fleet observations',async()=>{
