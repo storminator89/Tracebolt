@@ -55,12 +55,20 @@ func nativeOperation(ctx context.Context, r request, out, stderr io.Writer) (res
 
 func nativeReceiptOperation(ctx context.Context, r request, receipt installReceipt, lease receiptStore, out, stderr io.Writer) (any, error) {
 	switch r.mode {
+	case "full-services-preview", "full-services-enable", "full-services-disable":
+		return fullServicesOperation(ctx, r, receipt.Service, windowsservice.InspectOwned, lanclient.ConfigureWindowsFullServices)
+	case "full-software-preview", "full-software-enable", "full-software-disable":
+		return fullSoftwareOperation(ctx, r, receipt.Service, windowsservice.InspectOwned, lanclient.ConfigureWindowsFullSoftware)
 	case "event-content-preview", "event-content-enable", "event-content-disable":
 		return eventContentOperation(ctx, r, receipt.Service, windowsservice.InspectOwned, lanclient.ConfigureWindowsEventContent)
 	case "updates-preview", "updates-enable", "updates-disable":
 		return updatesOperation(ctx, r, receipt.Service, windowsservice.InspectOwned, lanclient.ConfigureWindowsUpdates)
 	case "service-startup-preview", "service-startup-enable", "service-startup-disable":
 		return serviceStartupOperation(ctx, r, receipt.Service, windowsservice.InspectOwned, lanclient.ConfigureWindowsServiceStartup)
+	case "patch-context-preview", "patch-context-enable", "patch-context-disable":
+		return patchContextOperation(ctx, r, receipt.Service, windowsservice.InspectOwned, lanclient.ConfigureWindowsPatchContext)
+	case "adapter-context-preview", "adapter-context-enable", "adapter-context-disable":
+		return adapterContextOperation(ctx, r, receipt.Service, windowsservice.InspectOwned, lanclient.ConfigureWindowsAdapterContext)
 	case "network-preview", "network-enable", "network-disable":
 		return networkOperation(ctx, r, receipt.Service, windowsservice.InspectOwned, lanclient.ConfigureWindowsNetwork)
 	case "process-metrics-preview", "process-metrics-enable", "process-metrics-disable":

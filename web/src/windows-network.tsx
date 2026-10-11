@@ -1,3 +1,4 @@
+import { WindowsAdapterContextPanel } from './windows-adapter-context';
 import { useLocale } from './i18n';
 import { fullDate } from './utils';
 import type { WindowsInventoryResource } from './windows-inventory-resource';
@@ -6,6 +7,9 @@ const copy = {
     de: { title: 'Netzwerk', missing: 'Netzwerkendpunkte sind in dieser Meldung nicht eingerichtet. Eine separate lokale Zustimmung ist erforderlich.', unavailable: 'Kein aktueller Netzwerksnapshot verfügbar. Dies bedeutet nicht, dass keine Endpunkte existieren.', expired: 'Der Netzwerksnapshot ist abgelaufen. Endpunktzeilen werden 24 Stunden nach Erfassung ausgeblendet.', observed: 'Auflistung im Umfang vollständig', bounded: 'Begrenzte Auflistung', partial: 'Teilweise aufgelistet', denied: 'Zugriff verweigert', unavailableQuality: 'Nicht verfügbar', captured: 'Netzwerk erfasst', stale: 'Veraltete Netzwerkbeobachtung. Werte beschreiben die ursprüngliche Erfassung.', shown: 'angezeigt', observedCount: 'beobachtet', atLeast: 'mindestens', omitted: 'Endpunkte durch Erfassungs- oder Übertragungsgrenzen ausgelassen.', empty: 'Keine Endpunkte aus den für den Aufrufer sichtbaren Tabellen zurückgegeben. Dies belegt keine vollständige Geräteabdeckung.', failed: 'Keine Endpunktzeilen verfügbar; dies belegt kein leeres Netzwerk.', protocol: 'Protokoll', family: 'IP-Version', local: 'Lokaler Endpunkt', remote: 'Entfernter Endpunkt', state: 'TCP-Zustand', pid: 'Besitzende PID laut API', notApplicable: 'Nicht anwendbar', scope: 'Umfang & Zuordnung', source: 'Windows-IP-Helper-Tabellen mit besitzender PID: TCP und UDP, IPv4 und IPv6. Nur numerische Adressen und Ports; keine DNS-Abfragen, Prozessnamen, Verkehrsdaten oder entfernten Aktionen.', attribution: 'Die PID ist die Zuordnung der API zum Erfassungszeitpunkt. Sie ist keine verifizierte Programmidentität und kann wiederverwendet werden. UDP-PID 0 bedeutet, dass die Zuordnung nicht verfügbar ist. Lauschende TCP-Endpunkte und UDP haben keine entfernte Gegenstelle; UDP hat keinen TCP-Zustand. Adressen sind sensible, rein lesende Beobachtungen. Nach Ablauf des Basisinventars nach 24 Stunden werden alle privaten Bereiche ausgeblendet.' },
 };
 export function WindowsNetworkPanel({ resource }: { resource: WindowsInventoryResource }) {
+    return <><WindowsAdapterContextPanel resource={resource}/><WindowsEndpointPanel resource={resource}/></>;
+}
+function WindowsEndpointPanel({ resource }: { resource: WindowsInventoryResource }) {
     const [locale] = useLocale(), c = copy[locale], network = resource.network;
     if (!network) return <p role="status" className="windows-inventory-empty">{resource.networkExpired ? c.expired : resource.snapshot ? c.missing : c.unavailable}</p>;
     const headers = [c.protocol, c.family, c.local, c.remote, c.state, c.pid];

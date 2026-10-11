@@ -93,10 +93,10 @@ func appendWindowsNetwork(ctx context.Context, m Material, f frame, c windowsnet
 	return f, b, nil
 }
 func validateWindowsNetworkFrame(f frame, fields map[string]json.RawMessage) error {
-	if (f.SchemaVersion == FrameWindowsServiceStartupVersion || f.SchemaVersion == FrameWindowsUpdatesVersion) && f.WindowsNetwork == nil && len(fields["windowsNetwork"]) == 0 {
+	if (f.SchemaVersion == FrameWindowsServiceStartupVersion || (f.SchemaVersion == FrameWindowsUpdatesVersion || (f.SchemaVersion == FrameWindowsAdapterContextVersion || f.SchemaVersion == FrameWindowsPatchContextVersion))) && f.WindowsNetwork == nil && len(fields["windowsNetwork"]) == 0 {
 		return nil
 	}
-	if f.SchemaVersion != FrameWindowsNetworkVersion && f.SchemaVersion != FrameWindowsServiceStartupVersion && f.SchemaVersion != FrameWindowsUpdatesVersion {
+	if f.SchemaVersion != FrameWindowsNetworkVersion && f.SchemaVersion != FrameWindowsServiceStartupVersion && f.SchemaVersion != FrameWindowsUpdatesVersion && f.SchemaVersion != FrameWindowsAdapterContextVersion && f.SchemaVersion != FrameWindowsPatchContextVersion {
 		if f.WindowsNetwork != nil || len(fields["windowsNetwork"]) != 0 {
 			return ErrState
 		}

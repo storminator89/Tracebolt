@@ -73,12 +73,12 @@ jobs:
         if: matrix.platform == 'windows'
         env:
           GOTOOLCHAIN: local
-        run: go test -buildvcs=false -count=1 ./internal/windowseventcontent ./internal/windowseventrequest ./internal/windowseventwire ./internal/windowseventstate ./internal/windowseventworker ./internal/windowsupdates ./internal/windowsupdateworker
+        run: go test -buildvcs=false -count=1 ./internal/windowseventcontent ./internal/windowseventrequest ./internal/windowseventwire ./internal/windowseventstate ./internal/windowseventworker ./internal/windowsupdates ./internal/windowsupdateworker ./internal/windowsfullsoftware ./internal/windowsfullsoftwarewire ./internal/windowsadapters
       - name: Vet Windows parity sources (no host collection)
         if: matrix.platform == 'windows'
         env:
           GOTOOLCHAIN: local
-        run: go vet -buildvcs=false ./internal/windowseventcontent ./internal/windowseventrequest ./internal/windowseventwire ./internal/windowseventstate ./internal/windowseventworker ./internal/windowsupdates ./internal/windowsupdateworker
+        run: go vet -buildvcs=false ./internal/windowseventcontent ./internal/windowseventrequest ./internal/windowseventwire ./internal/windowseventstate ./internal/windowseventworker ./internal/windowsupdates ./internal/windowsupdateworker ./internal/windowsfullsoftware ./internal/windowsfullsoftwarewire ./internal/windowsadapters
       - name: Execute ARM64 Linux installer and helper fixture tests natively
         if: matrix.platform == 'linux' && matrix.arch == 'arm64'
         env:
@@ -548,6 +548,12 @@ jobs:
           node --test tests/e2e-review/public-command-contract.test.mjs
           node --test tests/windows_linux_native_parity/browser.test.mjs
           node --test tests/e2e-review/endpoint-child-shutdown.test.mjs tests/e2e-review/windows-inventory-fixtures.test.mjs tests/e2e-review/resource-history-fixtures.test.mjs tests/e2e-review/application-check-settings-fixtures.test.mjs tests/e2e-review/investigations-fixtures.test.mjs tests/e2e-review/alarm-browser-diagnostics.test.mjs tests/e2e-review/browser-transport-diagnostics.test.mjs tests/e2e-review/enrollment-create-diagnostics.test.mjs tests/e2e-review/v3-failure-diagnostics.test.mjs tests/e2e-review/alarm-settings-fixtures.test.mjs tests/e2e-review/cve-continuation-fixtures.test.mjs tests/e2e-review/cve-detail-pages-fixtures.test.mjs tests/e2e-review/proactive-ai-fixtures.test.mjs tests/e2e-review/journal-ai-fixtures.test.mjs tests/e2e-review/package-updates-fixtures.test.mjs tests/e2e-review/journal-browse-fixtures.test.mjs tests/e2e-review/windows-contact-history-fixtures.test.mjs
+      - name: Complete Windows services inert browser contract
+        working-directory: .
+        run: |
+          node --test tests/e2e-review/windows-full-services-fixtures.test.mjs
+          node --test tests/e2e-review/windows-full-software-fixtures.test.mjs
+          node --test tests/e2e-review/windows-fleet-fixtures.test.mjs
       - name: Production build
         run: npm run build
 
@@ -589,6 +595,16 @@ jobs:
         env:
           TRACEBOLT_SOURCE_SHA: ${{ github.sha }}
         run: node tests/e2e-review/lan-browser.mjs
+      - name: Complete Windows services real-store browser gate
+        if: ${{ !cancelled() }}
+        env:
+          TRACEBOLT_SOURCE_SHA: ${{ github.sha }}
+        run: node tests/e2e-review/windows-full-services-runner.mjs
+      - name: Complete Windows software SQLite-vector browser gate
+        if: ${{ !cancelled() }}
+        env:
+          TRACEBOLT_SOURCE_SHA: ${{ github.sha }}
+        run: node tests/e2e-review/windows-full-software-runner.mjs
       - name: Guided enrollment full browser gate (13 required, no skips)
         if: ${{ !cancelled() }}
         env:
@@ -728,10 +744,10 @@ jobs:
                   if value.get(key) is not False:
                       raise ValueError('invalid scope')
               summary = value.get('summary', {})
-              if type(summary.get('passed')) is not int or summary['passed'] != 5 or type(summary.get('failed')) is not int or summary['failed'] != 0 or summary.get('setupFailure') is not False:
+              if type(summary.get('passed')) is not int or summary['passed'] != 6 or type(summary.get('failed')) is not int or summary['failed'] != 0 or summary.get('setupFailure') is not False:
                   raise ValueError('incomplete summary')
               cases = value.get('results')
-              if not isinstance(cases, list) or len(cases) != 5:
+              if not isinstance(cases, list) or len(cases) != 6:
                   raise ValueError('wrong case count')
               names = set()
               for case in cases:
@@ -739,9 +755,25 @@ jobs:
                   if case.get('status') != 'PASS' or not isinstance(name, str) or not name or name in names:
                       raise ValueError('invalid case')
                   names.add(name)
+              windows = [case for case in cases if case['name'] == 'Windows fleet hostname and dual-stack search with production-handler vectors and synthetic transport']
+              if len(windows) != 1 or windows[0].get('details') != {'screens': 4, 'transport': 'intercepted production-handler vectors', 'liveStoreAcceptance': False, 'nativeAcceptance': False}:
+                  raise ValueError('wrong Windows boundary')
+              manifest = json.loads(Path('artifacts/review/fleet-identity-browser-manifest.json').read_bytes())
+              if manifest.get('sourceSha') != os.environ['TRACEBOLT_SOURCE_SHA']:
+                  raise ValueError('wrong screenshot source')
+              screens = [item for item in manifest.get('screenshots', []) if item.get('test') == windows[0]['name']]
+              expected = {f'synthetic-windows-fleet-{width}-{locale}.png' for width in (1440, 390) for locale in ('en', 'de')}
+              if len(screens) != 4 or {item.get('file') for item in screens} != expected:
+                  raise ValueError('missing Windows screenshots')
+              import hashlib
+              for item in screens:
+                  if item.get('sourceSha') != os.environ['TRACEBOLT_SOURCE_SHA'] or item.get('publicSafe') is not True or item.get('fullPage') is not False or 'not live Windows manager/store acceptance' not in item.get('fixtureDisclosure', ''):
+                      raise ValueError('invalid Windows screenshot scope')
+                  if item['file'] != f"synthetic-windows-fleet-{item.get('viewport', {}).get('width')}-{item.get('locale')}.png" or hashlib.sha256(Path('artifacts/review', item['file']).read_bytes()).hexdigest() != item.get('sha256'):
+                      raise ValueError('invalid Windows screenshot identity')
           except Exception:
               raise SystemExit('FAIL: incomplete, mismatched or unsafe fleet browser evidence.')
-          print('PASS: five fleet identity browser cases on the exact source; invented metadata only.')
+          print('PASS: five Linux store cases and one Windows vector UI case with four exact-source screenshots; invented metadata only.')
           PYTHON
       - name: Journal request, snapshot and lifecycle browser acceptance
         if: ${{ !cancelled() }}
@@ -800,6 +832,8 @@ jobs:
             artifacts/review/managed-preview-result.json
             artifacts/review/lan-browser-results.json
             artifacts/review/lan-browser-manifest.json
+            artifacts/review/windows-full-services-results.json
+            artifacts/review/windows-full-services-manifest.json
             artifacts/review/enrollment-browser-results.json
             artifacts/review/enrollment-browser-manifest.json
             artifacts/review/conditional-browser-results.json
@@ -810,6 +844,8 @@ jobs:
             artifacts/review/endpoint-browser-manifest.json
             artifacts/review/fleet-identity-browser-results.json
             artifacts/review/fleet-identity-browser-manifest.json
+            artifacts/review/windows-full-software-results.json
+            artifacts/review/windows-full-software-manifest.json
             artifacts/review/journal-browser-results.json
             artifacts/review/journal-browser-manifest.json
             artifacts/review/complete-overview-browser-results.json

@@ -28,12 +28,23 @@ def raw(records):
     return b"".join(shards.canonical(event) + b"\n" for event in records)
 
 
+def inventory_events(names):
+    package = shards.INVENTORY_PACKAGE
+    result = [{"Action": "start", "Package": package}]
+    for name in names:
+        result += [{"Action": "run", "Package": package, "Test": name},
+                   {"Action": "output", "Package": package, "Test": name, "Output": "PRIVATE fixture\n"},
+                   {"Action": "pass", "Package": package, "Test": name, "Elapsed": 1}]
+    result += [{"Action": "pass", "Package": package, "Elapsed": 12.345}]
+    return result
+
+
 class ShardTests(unittest.TestCase):
     def setUp(self):
         self.packages = {"localrmm/a": True, "localrmm/b": True, "localrmm/c": False, "localrmm/new": True}
         self.groups = shards.partition(self.packages, {"localrmm/a": 20, "localrmm/b": 10})
         self.plan = {"schemaVersion": 1, "commit": "a" * 40, "runId": "123", "runAttempt": "1",
-                     "goSourceSha256": "b" * 64, "packages": self.packages, "shards": self.groups}
+                     "goSourceSha256": "b" * 64, "packages": self.packages, "shards": self.groups, "inventoryTests": {}}
         self.reports = [shards.make_report(self.plan, i, raw(events({p: self.packages[p] for p in group})), 0)
                         for i, group in enumerate(self.groups)]
         self.needs = {name: {"result": "success", "outputs": {}} for name in shards.NEEDS}
@@ -220,12 +231,13 @@ class ShardTests(unittest.TestCase):
 
     def test_provenance_and_target_discovery(self):
         env = {"GITHUB_SHA": "a" * 40, "GITHUB_RUN_ID": "123", "GITHUB_RUN_ATTEMPT": "1"}
-        with patch.dict(os.environ, env, clear=True), patch.object(shards.reporter, "load_allowlist", return_value=self.packages), \
+        with patch.dict(os.environ, env, clear=True), patch.object(shards.reporter, "load_allowlist", return_value={**self.packages, shards.INVENTORY_PACKAGE: frozenset()}), \
              patch.object(shards.reporter, "derive_allowlist", return_value={"goSourceSha256": "b" * 64}), \
-             patch.object(shards, "checked_capture", side_effect=[b"a" * 40 + b"\n", b"linux\namd64\n", b"localrmm/a tests\nlocalrmm/b tests\nlocalrmm/c none\n"]):
+             patch.object(shards, "inventory_tests", return_value={}), \
+             patch.object(shards, "checked_capture", side_effect=[b"a" * 40 + b"\n", b"linux\namd64\n", b"localrmm/a tests\nlocalrmm/b tests\nlocalrmm/c none\nlocalrmm/internal/enrollmentstore tests\n"]):
             plan, _ = shards.discover()
             self.assertEqual(plan["commit"], "a" * 40)
-            self.assertEqual(len(plan["packages"]), 3)
+            self.assertEqual(len(plan["packages"]), 4)
         for bad in ({}, {**env, "GITHUB_RUN_ATTEMPT": "0"}, {**env, "GITHUB_SHA": "PRIVATE"}):
             with self.assertRaises(ValueError):
                 shards.context(bad)
@@ -273,6 +285,127 @@ class ShardTests(unittest.TestCase):
                         shards.run_shard(self.plan, self.packages, 0, destination)
                         self.assertEqual(json.loads(destination.read_bytes()), self.reports[0])
                 self.assertIn("GO_RACE_PROGRESS shard=0", output.getvalue())
+                self.assertNotIn("PRIVATE", output.getvalue())
+                self.assertEqual(list(Path(tmp).glob("go-race-*")), [])
+
+
+class InventoryTests(unittest.TestCase):
+    def setUp(self):
+        self.allowed = shards.reporter.load_allowlist()
+        self.groups = shards.inventory_tests(self.allowed)
+        self.moved = sorted(name for names in self.groups.values() for name in names)
+        self.package = shards.INVENTORY_PACKAGE
+        self.plan = {"schemaVersion": 1, "commit": "a" * 40, "runId": "123", "runAttempt": "1",
+                     "goSourceSha256": "b" * 64, "packages": {self.package: True},
+                     "shards": [[self.package], [], []], "inventoryTests": self.groups}
+        self.raw = {group: raw(inventory_events(names)) for group, names in self.groups.items()}
+        self.default = raw(events({self.package: True}))
+
+    def test_exact_source_partition_is_complete_disjoint_and_keeps_future_defaults(self):
+        names = self.allowed[self.package]
+        default = set(names) - set(self.moved)
+        self.assertEqual(len(self.groups["services"]), 14)
+        self.assertEqual(len(self.groups["software"]), 14)
+        self.assertEqual(default | set(self.moved), names)
+        self.assertEqual(len(self.moved), len(set(self.moved)))
+        self.assertFalse(default.intersection(self.moved))
+        command = shards.command_for([self.package], excluded=self.moved)
+        self.assertNotIn("-run", command)
+        skip = command[command.index("-skip") + 1]
+        for name in names:
+            self.assertEqual(bool(shards.re.fullmatch(skip, name)),
+                             name in self.moved or bool(shards.re.fullmatch(shards.SKIP, name)))
+        for name in ("TestNewUnrelated", "ExampleNew", "FuzzNew", self.moved[0] + "New"):
+            self.assertIsNone(shards.re.fullmatch(skip, name))
+        changed = {**self.allowed, self.package: names | {"TestWindowsFullSoftwareNew"}}
+        self.assertIn("TestWindowsFullSoftwareNew", shards.inventory_tests(changed)["software"])
+        self.assertNotIn("TestWindowsFullSoftwareNew", self.groups["software"])
+
+    def test_selected_commands_keep_race_count_budget_and_exact_roots(self):
+        for names in self.groups.values():
+            command = shards.command_for([self.package], selected=names)
+            for flag in ("-race", "-json", "-count=1", "-timeout=15m"):
+                self.assertIn(flag, command)
+            pattern = command[command.index("-run") + 1]
+            self.assertEqual({name for name in self.allowed[self.package] if shards.re.fullmatch(pattern, name)}, set(names))
+        with self.assertRaises(ValueError):
+            shards.command_for(["localrmm/other"], excluded=self.moved)
+        with self.assertRaises(ValueError):
+            shards.command_for([self.package], selected=self.moved, excluded=self.moved)
+        with self.assertRaises(ValueError):
+            shards.inventory_tests({self.package: {"TestUnrelated"}})
+
+    def test_inventory_requires_all_roots_once_passed_and_no_default_overlap(self):
+        names = self.groups["services"]
+        data = inventory_events(names)
+        shards.normalize(raw(data), {self.package: True}, names)
+        missing = data[:1] + data[4:]
+        skipped = copy.deepcopy(data); skipped[3]["Action"] = "skip"
+        duplicate = data[:4] + data[1:4] + data[4:]
+        foreign = copy.deepcopy(data); foreign[1]["Test"] = "TestOther"
+        for records in (missing, skipped, duplicate, foreign):
+            with self.assertRaises(ValueError):
+                shards.normalize(raw(records), {self.package: True}, names)
+        with self.assertRaises(ValueError):
+            shards.normalize(raw(data), {self.package: True}, excluded_tests=self.moved)
+
+    def test_aggregate_requires_both_exact_source_bound_inventory_completions(self):
+        report = shards.make_report(self.plan, 0, self.default, 0, self.raw)
+        reports = [report] + [shards.make_report(self.plan, i, b"", 0) for i in (1, 2)]
+        self.assertEqual(shards.verify_reports(self.plan, reports), 1)
+        self.assertNotIn(b"PRIVATE", shards.canonical(report))
+        for change in (lambda r: r["inventory"].pop("software"),
+                       lambda r: r["inventory"]["services"].update(status="skip"),
+                       lambda r: r["inventory"]["services"]["tests"].pop(),
+                       lambda r: r["inventory"]["services"]["tests"].append(self.moved[0]),
+                       lambda r: r["inventory"]["services"].update(Output="PRIVATE"),
+                       lambda r: r["inventory"]["services"].update(elapsedSeconds=True)):
+            changed = copy.deepcopy(reports); change(changed[0])
+            with self.assertRaises(ValueError):
+                shards.verify_reports(self.plan, changed)
+        with self.assertRaises(ValueError):
+            shards.make_report(self.plan, 0, self.default, 0, {"services": self.raw["services"]})
+        changed_plan = copy.deepcopy(self.plan)
+        changed_plan["inventoryTests"]["software"].append("TestWindowsFullSoftwareNew")
+        with self.assertRaises(ValueError):
+            shards.verify_reports(changed_plan, reports)
+
+    def test_runner_splits_only_enrollmentstore_and_fails_closed_per_invocation(self):
+        plan = copy.deepcopy(self.plan)
+        plan["packages"]["localrmm/other"] = True
+        plan["shards"][0].append("localrmm/other")
+        for fail_group in (None, "services", "software"):
+            with tempfile.TemporaryDirectory() as tmp:
+                destination = Path(tmp) / "report" / "completion.json"
+                commands = []
+                def start(command, **kwargs):
+                    commands.append(command)
+                    if self.package not in command:
+                        group, data = "packages", raw(events({"localrmm/other": True}))
+                    elif "-run" not in command:
+                        group, data = "default", self.default
+                    else:
+                        group = next(group for group, names in self.groups.items()
+                                     if command[command.index("-run") + 1] == shards.exact_tests(names))
+                        data = self.raw[group]
+                    kwargs["stdout"].write(data); kwargs["stdout"].flush()
+                    process = Mock(); process.wait.return_value = 2 if group == fail_group else 0
+                    return process
+                output = io.StringIO()
+                with patch.dict(os.environ, {"RUNNER_TEMP": tmp}), \
+                     patch.object(shards.subprocess, "Popen", side_effect=start), \
+                     patch.object(shards.reporter, "main", return_value=0) as diagnose, contextlib.redirect_stdout(output):
+                    if fail_group:
+                        with self.assertRaises(ValueError):
+                            shards.run_shard(plan, self.allowed, 0, destination)
+                        self.assertFalse(destination.exists())
+                    else:
+                        shards.run_shard(plan, self.allowed, 0, destination)
+                        self.assertEqual(len(commands), 4)
+                        report = json.loads(destination.read_bytes())
+                        reports = [report] + [shards.make_report(plan, i, b"", 0) for i in (1, 2)]
+                        self.assertEqual(shards.verify_reports(plan, reports), 2)
+                    self.assertEqual(diagnose.call_count, len(commands))
                 self.assertNotIn("PRIVATE", output.getvalue())
                 self.assertEqual(list(Path(tmp).glob("go-race-*")), [])
 

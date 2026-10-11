@@ -121,6 +121,17 @@ file as navigation and project constraints, never as permission to act on a host
   attribution only, explicit HTTP disclosure, exact retry and private operator
   expiry. No DNS, process joins, traffic payloads or AI export; source fixtures
   never authorize a host network read or a service/security change.
+- Windows adapter link/DNS/gateway context is a separate default-off local scope.
+  Read `docs/windows-adapter-context.md` before changing native bounds, consent,
+  wire v8 or its private Network view. Preserve all old grants/frames and the
+  five-scope coordinator. No probes, DNS resolution, routes, traffic or privilege
+  expansion; source fixtures never authorize host reads or grants.
+- Windows build/history/reboot context is a separate default-off local scope.
+  Read `docs/windows-patch-context.md` before changing fixed registry/WUA sources,
+  isolated-worker authority, consent or wire v9. Never read pending-file-operation
+  values or infer current installation/compliance from retained history. Keep old
+  grants/frames unchanged, unknown reboot sources and checked-source coverage.
+  No host read, online scan, grant, install, reboot or security change is implied.
 - Windows configured service startup metadata is a separate default-off local
   capability. Read `docs/windows-service-startup.md` before changing consent,
   aggregate native-buffer handling or wire v6. Preserve the original service-row
@@ -149,6 +160,19 @@ file as navigation and project constraints, never as permission to act on a host
   engine, tagged storage, API or UI. Preserve disk v1 bytes, exact observed-group
   CPU and physical-memory semantics, independent opt-ins/floors, one coordinated
   source read, and unknown evidence. No host collection, AI or alarm grant follows.
+- Complete Windows machine software generations require a separate default-off
+  local scope. Read `docs/windows-full-software-contract.md` before changing its
+  HKLM 32/64 source, consent, primary v3 marker, transport, store or UI. Preserve
+  independent software/service floors and exact old primary bytes; old scopes
+  never promote. Per-user, MSIX/Store, portable programs, paths and commands are
+  excluded. Source fixtures never authorize native reads or host grants.
+- Complete caller-visible Win32 service generations are a separate default-off
+  local source extension. Read `docs/windows-full-services-contract.md` before
+  consent, sender-state, native resume, chunk transport, store or UI changes.
+  Preserve the mandatory primary used-marker, exact pending telemetry, independent
+  generation floors, original age and all old grants. Drivers, ACL-invisible
+  services, software, paths/accounts/configuration and AI export are excluded.
+  Native/host grants and runtime acceptance require separate approval.
 - Selected Windows service checks are a separate default-off manager policy.
   Read `docs/windows-service-health.md` before changing exact-name selection,
   discrete state evaluation, source admission, API or UI. Keep native

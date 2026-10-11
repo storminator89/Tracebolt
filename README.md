@@ -6,7 +6,7 @@ See what your machines report, investigate changes and keep the original evidenc
 in view. Tracebolt combines a Go manager, native agents and an English/German
 dashboard with light and dark themes.
 
-[Get started](#get-started) · [Help and guides](docs/README.md) · [Windows status](docs/windows-status.md) · [Roadmap](docs/roadmap.md)
+[Get started](#get-started) · [Help and guides](docs/README.md) · [Windows status](docs/windows-status.md) · [Windows admin roadmap](docs/windows-admin-roadmap.md) · [Linux roadmap](docs/roadmap.md)
 
 ![Tracebolt device overview with CPU, memory and disk history](docs/screenshots/2026-10-09-main-ui/resource-history-dark.png)
 
@@ -101,6 +101,35 @@ and [PR #32](https://github.com/storminator89/Tracebolt/pull/32) add opt-in Wind
 disk/CPU/RAM and selected-service health policies. PR #29's documentation changes
 do not add that runtime implementation. These newer features remain outside the
 unchanged published preview. Source/fixture checks do not establish native acceptance.
+
+### Complete Windows inventory source slices
+
+A separately consented [complete caller-visible Win32 service generation](docs/windows-full-services-contract.md)
+adds resumed SCM enumeration and bounded server-side search/paging beyond the
+legacy 128/2,048-row preview ceilings. It is default-off and source-only pending
+separate native/host acceptance. Drivers and ACL-invisible services remain outside
+the caller scope. A separate default-off [complete machine software registration
+extension](docs/windows-full-software-contract.md) adds HKLM 32/64 generations,
+retained optional-field quality and duplicate registrations, and protected full
+search/pages. Per-user, Store and portable program coverage remains separate
+work. Existing selected-service alarms continue using their clearly bounded
+preview and are not silently expanded. No upgrade enables the new local grant.
+
+[Windows fleet hostname/IP search](docs/windows-fleet-identity.md) is also implemented
+in source using already-reported metadata. These inventory and fleet slices are
+unreleased draft work; exact-source hosted CI and native acceptance remain separate.
+Current draft source also adds [adapter link state/speed and DNS/gateway context](docs/windows-adapter-context.md)
+and [Windows build, retained update history and reboot indicators](docs/windows-patch-context.md)
+in the existing Network and Updates tabs. These independent local scopes are
+default-off. Complete inventory/fleet source is in [PR #40](https://github.com/storminator89/Tracebolt/pull/40),
+and adapter context in [PR #41](https://github.com/storminator89/Tracebolt/pull/41);
+none changes the published preview or establishes native acceptance.
+
+The [prioritized Windows admin roadmap](docs/windows-admin-roadmap.md) tracks the
+remaining complete process inventory, security and patch posture, network/storage
+diagnostics, user and hardware context, and software-change history. The
+[Windows11x64 acceptance matrix](docs/windows11-acceptance-matrix.md) makes the
+desktop and lifecycle checks explicit.
 
 | Cached Windows Updates, unreleased source preview | Mobile device overview, German |
 | --- | --- |

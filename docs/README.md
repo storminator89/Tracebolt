@@ -45,6 +45,7 @@ copying a demo command does not deploy a manager or connect real endpoints.
   Cached candidates are not an installation guarantee. Separate
   [Selected Windows event messages](windows-event-content-runtime.md) connect exact
   header selection to an expiring private Logs view under separate local consent.
+  [Windows patch context](windows-patch-context.md) covers build, retained history and checked reboot indicators in source;
   [Windows cached Update inspection](windows-update-runtime.md) is a default-off
   source candidate with native acceptance still pending.
 - **Checks and notifications:** [application checks](application-checks.md),

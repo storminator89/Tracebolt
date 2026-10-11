@@ -80,10 +80,15 @@ type credential struct {
 	Replay                           Replay                    `json:"replay"`
 	Frame                            []byte                    `json:"frame"`
 	ServiceActionSetup               *serviceActionSetupMarker `json:"serviceActionSetup,omitempty"`
+	WindowsFullSoftwareInitialized   bool                      `json:"windowsFullSoftwareInitialized,omitempty"`
+	WindowsFullServicesInitialized   bool                      `json:"windowsFullServicesInitialized,omitempty"`
 	WindowsEventAuthorityInitialized bool                      `json:"windowsEventAuthorityInitialized,omitempty"`
 }
 type transaction struct {
 	conn                          *sql.Conn
+	beforeCommit                  []func() error
+	originalWindowsFullSoftware   map[string]bool
+	originalWindowsFullServices   map[string]bool
 	engine                        *enrollmentstate.Engine
 	credentials                   map[string]credential
 	originalLedger                []byte
@@ -172,8 +177,8 @@ func Open(path string, config enrollmentstate.Config, issuerDER []byte) (*Store,
 	s := &Store{&storeState{db: db, path: absolute, info: info, config: config, issuerDER: bytes.Clone(issuerDER), operationalReads: make(chan struct{}, 1), inventoryCalls: make(chan struct{}, 1), systemMetadataReads: make(chan struct{}, 1)}}
 	fail := func() (*Store, error) { db.Close(); return nil, ErrStorage }
 	pragmas := []string{"PRAGMA busy_timeout=5000", "PRAGMA journal_mode=WAL", "PRAGMA synchronous=FULL", "PRAGMA foreign_keys=ON", "PRAGMA trusted_schema=OFF", "PRAGMA max_page_count=49152"}
-	if completeProfile(config.Binding.CollectionProfile) {
-		pragmas[len(pragmas)-1] = "PRAGMA max_page_count=131072"
+	if physicalInventoryProfile(config.Binding.CollectionProfile) {
+		pragmas[len(pragmas)-1] = fmt.Sprintf("PRAGMA max_page_count=%d", databaseCap(config.Binding.CollectionProfile)/completeInventoryPageSize)
 		pragmas = append(pragmas, "PRAGMA cache_spill=OFF")
 	}
 	for _, query := range pragmas {
@@ -247,7 +252,7 @@ func Open(path string, config enrollmentstate.Config, issuerDER []byte) (*Store,
 		rollback()
 		return fail()
 	}
-	if completeProfile(s.config.Binding.CollectionProfile) && s.inventoryCapacityBeforeCommit(context.Background(), conn) != nil {
+	if physicalInventoryProfile(s.config.Binding.CollectionProfile) && s.inventoryCapacityBeforeCommit(context.Background(), conn) != nil {
 		rollback()
 		return fail()
 	}
@@ -370,7 +375,7 @@ func (s *Store) load(ctx context.Context, conn *sql.Conn) (*transaction, error) 
 	if err != nil {
 		return nil, ErrStorage
 	}
-	t := &transaction{conn: conn, engine: engine, credentials: make(map[string]credential), originalLedger: raw, originalCredentials: make(map[string][]byte), originalServiceActionSetup: make(map[string]serviceActionSetupMarker), originalWindowsEventAuthority: make(map[string]bool), operational: map[string]operationalRecord{}, originalOperational: map[string][]byte{}, inventory: map[string]inventoryRecord{}, originalInventory: map[string][]byte{}, overview: map[string]overviewRecord{}, originalOverview: map[string][]byte{}}
+	t := &transaction{conn: conn, engine: engine, credentials: make(map[string]credential), originalLedger: raw, originalCredentials: make(map[string][]byte), originalServiceActionSetup: make(map[string]serviceActionSetupMarker), originalWindowsEventAuthority: make(map[string]bool), originalWindowsFullServices: make(map[string]bool), originalWindowsFullSoftware: make(map[string]bool), operational: map[string]operationalRecord{}, originalOperational: map[string][]byte{}, inventory: map[string]inventoryRecord{}, originalInventory: map[string][]byte{}, overview: map[string]overviewRecord{}, originalOverview: map[string][]byte{}}
 	if conn.QueryRowContext(ctx, "SELECT count(*),coalesce(max(length(body)),0) FROM enrollment_credentials").Scan(&count, &n) != nil || count > s.config.RecordLimit || n > maxCredentialBytes {
 		return nil, ErrStorage
 	}
@@ -410,6 +415,12 @@ func (s *Store) load(ctx context.Context, conn *sql.Conn) (*transaction, error) 
 			t.originalWindowsEventAuthority[id] = true
 		}
 		t.originalCredentials[id] = body
+		if c.WindowsFullServicesInitialized {
+			t.originalWindowsFullServices[id] = true
+		}
+		if c.WindowsFullSoftwareInitialized {
+			t.originalWindowsFullSoftware[id] = true
+		}
 		if c.ServiceActionSetup != nil {
 			t.originalServiceActionSetup[id] = *c.ServiceActionSetup
 		}
@@ -422,6 +433,12 @@ func (s *Store) load(ctx context.Context, conn *sql.Conn) (*transaction, error) 
 		if ok != (snapshot.Issuance.CertificateHash != "") {
 			return nil, ErrStorage
 		}
+	}
+	if err = validateWindowsFullServicesState(ctx, t, s.config.Binding.CollectionProfile); err != nil {
+		return nil, err
+	}
+	if err = validateWindowsFullSoftwareState(ctx, t, s.config.Binding.CollectionProfile); err != nil {
+		return nil, err
 	}
 	if err = validateWindowsEventUsedState(ctx, t, s.config.Binding.CollectionProfile); err != nil {
 		return nil, err
@@ -447,6 +464,12 @@ func (s *Store) load(ctx context.Context, conn *sql.Conn) (*transaction, error) 
 	return t, nil
 }
 func (t *transaction) validMetadata(s enrollmentstate.Snapshot, c credential) bool {
+	if c.WindowsFullServicesInitialized && (s.Platform != "windows" || s.Binding.CollectionProfile != enrollmentcrypto.CollectionProfileWindowsInventory) {
+		return false
+	}
+	if c.WindowsFullSoftwareInitialized && (s.Platform != "windows" || s.Binding.CollectionProfile != enrollmentcrypto.CollectionProfileWindowsInventory) {
+		return false
+	}
 	if c.WindowsEventAuthorityInitialized && (s.Platform != "windows" || s.Binding.CollectionProfile != enrollmentcrypto.CollectionProfileWindowsInventory) {
 		return false
 	}
@@ -501,16 +524,27 @@ func (s *Store) transact(ctx context.Context, action func(*transaction) error) e
 	if err != nil {
 		return storageError(ctx)
 	}
-	if completeProfile(s.config.Binding.CollectionProfile) && s.configureInventoryConnection(ctx, conn) != nil {
+	if physicalInventoryProfile(s.config.Binding.CollectionProfile) && s.configureInventoryConnection(ctx, conn) != nil {
 		return storageError(ctx)
 	}
 	if err = action(t); err != nil {
+		return err
+	}
+	// An injected/live read clock may cancel during the action. Preserve the
+	// original cancellation contract before any follow-on schema query or write.
+	if err = ctx.Err(); err != nil {
 		return err
 	}
 	if err = validateWindowsEventUsedState(ctx, t, s.config.Binding.CollectionProfile); err != nil {
 		return err
 	}
 	for id, c := range t.credentials {
+		if t.originalWindowsFullServices[id] && !c.WindowsFullServicesInitialized {
+			return ErrStorage
+		}
+		if t.originalWindowsFullSoftware[id] && !c.WindowsFullSoftwareInitialized {
+			return ErrStorage
+		}
 		if t.originalWindowsEventAuthority[id] && !c.WindowsEventAuthorityInitialized {
 			return ErrStorage
 		}
@@ -555,6 +589,18 @@ func (s *Store) transact(ctx context.Context, action func(*transaction) error) e
 	if err = validateCompleteUpdatesRecords(ctx, t); err != nil {
 		return storageError(ctx)
 	}
+	if err = validateWindowsFullServicesState(ctx, t, s.config.Binding.CollectionProfile); err != nil {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		return err
+	}
+	if err = validateWindowsFullSoftwareState(ctx, t, s.config.Binding.CollectionProfile); err != nil {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		return err
+	}
 	if err = sharedInventoryBudget(ctx, t); err != nil {
 		if ctx.Err() != nil {
 			return ctx.Err()
@@ -570,11 +616,16 @@ func (s *Store) transact(ctx context.Context, action func(*transaction) error) e
 	if s.checkPath() != nil {
 		return ErrStorage
 	}
-	if completeProfile(s.config.Binding.CollectionProfile) && s.inventoryCapacityBeforeCommit(ctx, conn) != nil {
+	if physicalInventoryProfile(s.config.Binding.CollectionProfile) && s.inventoryCapacityBeforeCommit(ctx, conn) != nil {
 		return storageError(ctx)
 	}
 	if err = ctx.Err(); err != nil {
 		return err
+	}
+	for _, check := range t.beforeCommit {
+		if err = check(); err != nil {
+			return err
+		}
 	}
 	if _, err = conn.ExecContext(ctx, "COMMIT"); err != nil {
 		return storageError(ctx)
@@ -597,6 +648,24 @@ func validateSchema(ctx context.Context, conn *sql.Conn, profile string) error {
 	}
 	if windowsEventsEnabled {
 		for _, obj := range windowsEventObjects() {
+			expected[obj.Name] = obj
+		}
+	}
+	fullServicesEnabled, fullServicesErr := windowsFullServicesSchemaPresent(ctx, conn, profile)
+	if fullServicesErr != nil {
+		return fullServicesErr
+	}
+	if fullServicesEnabled {
+		for _, obj := range windowsFullServicesSchemaObjects() {
+			expected[obj.Name] = obj
+		}
+	}
+	fullSoftwareEnabled, fullSoftwareErr := windowsFullSoftwareSchemaPresent(ctx, conn, profile)
+	if fullSoftwareErr != nil {
+		return fullSoftwareErr
+	}
+	if fullSoftwareEnabled {
+		for _, obj := range windowsFullSoftwareSchemaObjects() {
 			expected[obj.Name] = obj
 		}
 	}
@@ -725,7 +794,7 @@ func (s *Store) preflightExisting() error {
 	if _, err = s.load(context.Background(), conn); err != nil {
 		return ErrStorage
 	}
-	if completeProfile(s.config.Binding.CollectionProfile) && s.inventoryReadOnlyCapacity(context.Background(), conn) != nil {
+	if physicalInventoryProfile(s.config.Binding.CollectionProfile) && s.inventoryReadOnlyCapacity(context.Background(), conn) != nil {
 		return ErrStorage
 	}
 	return s.checkPath()

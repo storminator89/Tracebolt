@@ -1,0 +1,5608 @@
+[
+  {
+    "complete": {
+      "manifest": {
+        "schemaVersion": "tracebolt.windows-complete-services-manifest.v1",
+        "scope": "windows-complete-services-v1",
+        "source": "scm-enum-services-status-ex-win32",
+        "coverage": "caller_visible_api_complete",
+        "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "senderBinding": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "grantId": "cccccccccccccccccccccccccccccccc",
+        "grantRevision": 1,
+        "sequence": 1,
+        "generationId": "sample_5eaf60a2349806ed12eca33ab19b3988",
+        "captureStartedAt": "2026-10-11T06:00:00Z",
+        "captureFinishedAt": "2026-10-11T06:00:01Z",
+        "expiresAt": "2026-10-12T06:00:00Z",
+        "rowCount": 617,
+        "rowsBytes": 110602,
+        "rowsSha256": "db5d50def23081015bbb9c05aad462325c57fb816a18e55b2e61da0ee5fd9f4f",
+        "chunkCount": 5
+      },
+      "manifestSha256": "7bd50a6f2b5118e5040026b6056c8730b376eb700d204014d0e836747506a4ea",
+      "receivedAt": "2026-10-11T06:00:02Z"
+    },
+    "rows": [
+      {
+        "name": "FixtureService0000",
+        "displayName": "Synthetic Dienst 0000",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0001",
+        "displayName": "Synthetic Dienst 0001",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 1,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0002",
+        "displayName": "Synthetic Dienst 0002",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 2,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0003",
+        "displayName": "Synthetic Dienst 0003",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0004",
+        "displayName": "Synthetic Dienst 0004",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 4,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0005",
+        "displayName": "Synthetic Dienst 0005",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 5,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0006",
+        "displayName": "Synthetic Dienst 0006",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0007",
+        "displayName": "Synthetic Dienst 0007",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 7,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0008",
+        "displayName": "Synthetic Dienst 0008",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 8,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0009",
+        "displayName": "Synthetic Dienst 0009",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0010",
+        "displayName": "Synthetic Dienst 0010",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 10,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0011",
+        "displayName": "Synthetic Dienst 0011",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 11,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0012",
+        "displayName": "Synthetic Dienst 0012",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0013",
+        "displayName": "Synthetic Dienst 0013",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 13,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0014",
+        "displayName": "Synthetic Dienst 0014",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 14,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0015",
+        "displayName": "Synthetic Dienst 0015",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0016",
+        "displayName": "Synthetic Dienst 0016",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 16,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0017",
+        "displayName": "Synthetic Dienst 0017",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 17,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0018",
+        "displayName": "Synthetic Dienst 0018",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0019",
+        "displayName": "Synthetic Dienst 0019",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 19,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0020",
+        "displayName": "Synthetic Dienst 0020",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 20,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0021",
+        "displayName": "Synthetic Dienst 0021",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0022",
+        "displayName": "Synthetic Dienst 0022",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 22,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0023",
+        "displayName": "Synthetic Dienst 0023",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 23,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0024",
+        "displayName": "Synthetic Dienst 0024",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0025",
+        "displayName": "Synthetic Dienst 0025",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 25,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0026",
+        "displayName": "Synthetic Dienst 0026",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 26,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0027",
+        "displayName": "Synthetic Dienst 0027",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0028",
+        "displayName": "Synthetic Dienst 0028",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 28,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0029",
+        "displayName": "Synthetic Dienst 0029",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 29,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0030",
+        "displayName": "Synthetic Dienst 0030",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0031",
+        "displayName": "Synthetic Dienst 0031",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 31,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0032",
+        "displayName": "Synthetic Dienst 0032",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 32,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0033",
+        "displayName": "Synthetic Dienst 0033",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0034",
+        "displayName": "Synthetic Dienst 0034",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 34,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0035",
+        "displayName": "Synthetic Dienst 0035",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 35,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0036",
+        "displayName": "Synthetic Dienst 0036",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0037",
+        "displayName": "Synthetic Dienst 0037",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 37,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0038",
+        "displayName": "Synthetic Dienst 0038",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 38,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0039",
+        "displayName": "Synthetic Dienst 0039",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0040",
+        "displayName": "Synthetic Dienst 0040",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 40,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0041",
+        "displayName": "Synthetic Dienst 0041",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 41,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0042",
+        "displayName": "Synthetic Dienst 0042",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0043",
+        "displayName": "Synthetic Dienst 0043",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 43,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0044",
+        "displayName": "Synthetic Dienst 0044",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 44,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0045",
+        "displayName": "Synthetic Dienst 0045",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0046",
+        "displayName": "Synthetic Dienst 0046",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 46,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0047",
+        "displayName": "Synthetic Dienst 0047",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 47,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0048",
+        "displayName": "Synthetic Dienst 0048",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0049",
+        "displayName": "Synthetic Dienst 0049",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 49,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0050",
+        "displayName": "Synthetic Dienst 0050",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 50,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0051",
+        "displayName": "Synthetic Dienst 0051",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0052",
+        "displayName": "Synthetic Dienst 0052",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 52,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0053",
+        "displayName": "Synthetic Dienst 0053",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 53,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0054",
+        "displayName": "Synthetic Dienst 0054",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0055",
+        "displayName": "Synthetic Dienst 0055",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 55,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0056",
+        "displayName": "Synthetic Dienst 0056",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 56,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0057",
+        "displayName": "Synthetic Dienst 0057",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0058",
+        "displayName": "Synthetic Dienst 0058",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 58,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0059",
+        "displayName": "Synthetic Dienst 0059",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 59,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0060",
+        "displayName": "Synthetic Dienst 0060",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0061",
+        "displayName": "Synthetic Dienst 0061",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 61,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0062",
+        "displayName": "Synthetic Dienst 0062",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 62,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0063",
+        "displayName": "Synthetic Dienst 0063",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0064",
+        "displayName": "Synthetic Dienst 0064",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 64,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0065",
+        "displayName": "Synthetic Dienst 0065",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 65,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0066",
+        "displayName": "Synthetic Dienst 0066",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0067",
+        "displayName": "Synthetic Dienst 0067",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 67,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0068",
+        "displayName": "Synthetic Dienst 0068",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 68,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0069",
+        "displayName": "Synthetic Dienst 0069",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0070",
+        "displayName": "Synthetic Dienst 0070",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 70,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0071",
+        "displayName": "Synthetic Dienst 0071",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 71,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0072",
+        "displayName": "Synthetic Dienst 0072",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0073",
+        "displayName": "Synthetic Dienst 0073",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 73,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0074",
+        "displayName": "Synthetic Dienst 0074",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 74,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0075",
+        "displayName": "Synthetic Dienst 0075",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0076",
+        "displayName": "Synthetic Dienst 0076",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 76,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0077",
+        "displayName": "Synthetic Dienst 0077",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 77,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0078",
+        "displayName": "Synthetic Dienst 0078",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0079",
+        "displayName": "Synthetic Dienst 0079",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 79,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0080",
+        "displayName": "Synthetic Dienst 0080",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 80,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0081",
+        "displayName": "Synthetic Dienst 0081",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0082",
+        "displayName": "Synthetic Dienst 0082",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 82,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0083",
+        "displayName": "Synthetic Dienst 0083",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 83,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0084",
+        "displayName": "Synthetic Dienst 0084",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0085",
+        "displayName": "Synthetic Dienst 0085",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 85,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0086",
+        "displayName": "Synthetic Dienst 0086",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 86,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0087",
+        "displayName": "Synthetic Dienst 0087",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0088",
+        "displayName": "Synthetic Dienst 0088",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 88,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0089",
+        "displayName": "Synthetic Dienst 0089",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 89,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0090",
+        "displayName": "Synthetic Dienst 0090",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0091",
+        "displayName": "Synthetic Dienst 0091",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 91,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0092",
+        "displayName": "Synthetic Dienst 0092",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 92,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0093",
+        "displayName": "Synthetic Dienst 0093",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0094",
+        "displayName": "Synthetic Dienst 0094",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 94,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0095",
+        "displayName": "Synthetic Dienst 0095",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 95,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0096",
+        "displayName": "Synthetic Dienst 0096",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0097",
+        "displayName": "Synthetic Dienst 0097",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 97,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0098",
+        "displayName": "Synthetic Dienst 0098",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 98,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0099",
+        "displayName": "Synthetic Dienst 0099",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0100",
+        "displayName": "Synthetic Dienst 0100",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 100,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0101",
+        "displayName": "Synthetic Dienst 0101",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 101,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0102",
+        "displayName": "Synthetic Dienst 0102",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0103",
+        "displayName": "Synthetic Dienst 0103",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 103,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0104",
+        "displayName": "Synthetic Dienst 0104",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 104,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0105",
+        "displayName": "Synthetic Dienst 0105",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0106",
+        "displayName": "Synthetic Dienst 0106",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 106,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0107",
+        "displayName": "Synthetic Dienst 0107",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 107,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0108",
+        "displayName": "Synthetic Dienst 0108",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0109",
+        "displayName": "Synthetic Dienst 0109",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 109,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0110",
+        "displayName": "Synthetic Dienst 0110",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 110,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0111",
+        "displayName": "Synthetic Dienst 0111",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0112",
+        "displayName": "Synthetic Dienst 0112",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 112,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0113",
+        "displayName": "Synthetic Dienst 0113",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 113,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0114",
+        "displayName": "Synthetic Dienst 0114",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0115",
+        "displayName": "Synthetic Dienst 0115",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 115,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0116",
+        "displayName": "Synthetic Dienst 0116",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 116,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0117",
+        "displayName": "Synthetic Dienst 0117",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0118",
+        "displayName": "Synthetic Dienst 0118",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 118,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0119",
+        "displayName": "Synthetic Dienst 0119",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 119,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0120",
+        "displayName": "Synthetic Dienst 0120",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0121",
+        "displayName": "Synthetic Dienst 0121",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 121,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0122",
+        "displayName": "Synthetic Dienst 0122",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 122,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0123",
+        "displayName": "Synthetic Dienst 0123",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0124",
+        "displayName": "Synthetic Dienst 0124",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 124,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0125",
+        "displayName": "Synthetic Dienst 0125",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 125,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0126",
+        "displayName": "Synthetic Dienst 0126",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0127",
+        "displayName": "Synthetic Dienst 0127",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 127,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0128",
+        "displayName": "Synthetic Dienst 0128",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 128,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0129",
+        "displayName": "Synthetic Dienst 0129",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0130",
+        "displayName": "Synthetic Dienst 0130",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 130,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0131",
+        "displayName": "Synthetic Dienst 0131",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 131,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0132",
+        "displayName": "Synthetic Dienst 0132",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0133",
+        "displayName": "Synthetic Dienst 0133",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 133,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0134",
+        "displayName": "Synthetic Dienst 0134",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 134,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0135",
+        "displayName": "Synthetic Dienst 0135",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0136",
+        "displayName": "Synthetic Dienst 0136",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 136,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0137",
+        "displayName": "Synthetic Dienst 0137",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 137,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0138",
+        "displayName": "Synthetic Dienst 0138",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0139",
+        "displayName": "Synthetic Dienst 0139",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 139,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0140",
+        "displayName": "Synthetic Dienst 0140",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 140,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0141",
+        "displayName": "Synthetic Dienst 0141",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0142",
+        "displayName": "Synthetic Dienst 0142",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 142,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0143",
+        "displayName": "Synthetic Dienst 0143",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 143,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0144",
+        "displayName": "Synthetic Dienst 0144",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0145",
+        "displayName": "Synthetic Dienst 0145",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 145,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0146",
+        "displayName": "Synthetic Dienst 0146",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 146,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0147",
+        "displayName": "Synthetic Dienst 0147",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0148",
+        "displayName": "Synthetic Dienst 0148",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 148,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0149",
+        "displayName": "Synthetic Dienst 0149",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 149,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0150",
+        "displayName": "Synthetic Dienst 0150",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0151",
+        "displayName": "Synthetic Dienst 0151",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 151,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0152",
+        "displayName": "Synthetic Dienst 0152",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 152,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0153",
+        "displayName": "Synthetic Dienst 0153",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0154",
+        "displayName": "Synthetic Dienst 0154",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 154,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0155",
+        "displayName": "Synthetic Dienst 0155",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 155,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0156",
+        "displayName": "Synthetic Dienst 0156",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0157",
+        "displayName": "Synthetic Dienst 0157",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 157,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0158",
+        "displayName": "Synthetic Dienst 0158",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 158,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0159",
+        "displayName": "Synthetic Dienst 0159",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0160",
+        "displayName": "Synthetic Dienst 0160",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 160,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0161",
+        "displayName": "Synthetic Dienst 0161",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 161,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0162",
+        "displayName": "Synthetic Dienst 0162",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0163",
+        "displayName": "Synthetic Dienst 0163",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 163,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0164",
+        "displayName": "Synthetic Dienst 0164",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 164,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0165",
+        "displayName": "Synthetic Dienst 0165",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0166",
+        "displayName": "Synthetic Dienst 0166",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 166,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0167",
+        "displayName": "Synthetic Dienst 0167",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 167,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0168",
+        "displayName": "Synthetic Dienst 0168",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0169",
+        "displayName": "Synthetic Dienst 0169",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 169,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0170",
+        "displayName": "Synthetic Dienst 0170",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 170,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0171",
+        "displayName": "Synthetic Dienst 0171",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0172",
+        "displayName": "Synthetic Dienst 0172",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 172,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0173",
+        "displayName": "Synthetic Dienst 0173",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 173,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0174",
+        "displayName": "Synthetic Dienst 0174",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0175",
+        "displayName": "Synthetic Dienst 0175",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 175,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0176",
+        "displayName": "Synthetic Dienst 0176",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 176,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0177",
+        "displayName": "Synthetic Dienst 0177",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0178",
+        "displayName": "Synthetic Dienst 0178",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 178,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0179",
+        "displayName": "Synthetic Dienst 0179",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 179,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0180",
+        "displayName": "Synthetic Dienst 0180",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0181",
+        "displayName": "Synthetic Dienst 0181",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 181,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0182",
+        "displayName": "Synthetic Dienst 0182",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 182,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0183",
+        "displayName": "Synthetic Dienst 0183",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0184",
+        "displayName": "Synthetic Dienst 0184",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 184,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0185",
+        "displayName": "Synthetic Dienst 0185",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 185,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0186",
+        "displayName": "Synthetic Dienst 0186",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0187",
+        "displayName": "Synthetic Dienst 0187",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 187,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0188",
+        "displayName": "Synthetic Dienst 0188",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 188,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0189",
+        "displayName": "Synthetic Dienst 0189",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0190",
+        "displayName": "Synthetic Dienst 0190",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 190,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0191",
+        "displayName": "Synthetic Dienst 0191",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 191,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0192",
+        "displayName": "Synthetic Dienst 0192",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0193",
+        "displayName": "Synthetic Dienst 0193",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 193,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0194",
+        "displayName": "Synthetic Dienst 0194",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 194,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0195",
+        "displayName": "Synthetic Dienst 0195",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0196",
+        "displayName": "Synthetic Dienst 0196",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 196,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0197",
+        "displayName": "Synthetic Dienst 0197",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 197,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0198",
+        "displayName": "Synthetic Dienst 0198",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0199",
+        "displayName": "Synthetic Dienst 0199",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 199,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0200",
+        "displayName": "Synthetic Dienst 0200",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 200,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0201",
+        "displayName": "Synthetic Dienst 0201",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0202",
+        "displayName": "Synthetic Dienst 0202",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 202,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0203",
+        "displayName": "Synthetic Dienst 0203",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 203,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0204",
+        "displayName": "Synthetic Dienst 0204",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0205",
+        "displayName": "Synthetic Dienst 0205",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 205,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0206",
+        "displayName": "Synthetic Dienst 0206",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 206,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0207",
+        "displayName": "Synthetic Dienst 0207",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0208",
+        "displayName": "Synthetic Dienst 0208",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 208,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0209",
+        "displayName": "Synthetic Dienst 0209",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 209,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0210",
+        "displayName": "Synthetic Dienst 0210",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0211",
+        "displayName": "Synthetic Dienst 0211",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 211,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0212",
+        "displayName": "Synthetic Dienst 0212",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 212,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0213",
+        "displayName": "Synthetic Dienst 0213",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0214",
+        "displayName": "Synthetic Dienst 0214",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 214,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0215",
+        "displayName": "Synthetic Dienst 0215",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 215,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0216",
+        "displayName": "Synthetic Dienst 0216",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0217",
+        "displayName": "Synthetic Dienst 0217",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 217,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0218",
+        "displayName": "Synthetic Dienst 0218",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 218,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0219",
+        "displayName": "Synthetic Dienst 0219",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0220",
+        "displayName": "Synthetic Dienst 0220",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 220,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0221",
+        "displayName": "Synthetic Dienst 0221",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 221,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0222",
+        "displayName": "Synthetic Dienst 0222",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0223",
+        "displayName": "Synthetic Dienst 0223",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 223,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0224",
+        "displayName": "Synthetic Dienst 0224",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 224,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0225",
+        "displayName": "Synthetic Dienst 0225",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0226",
+        "displayName": "Synthetic Dienst 0226",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 226,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0227",
+        "displayName": "Synthetic Dienst 0227",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 227,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0228",
+        "displayName": "Synthetic Dienst 0228",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0229",
+        "displayName": "Synthetic Dienst 0229",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 229,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0230",
+        "displayName": "Synthetic Dienst 0230",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 230,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0231",
+        "displayName": "Synthetic Dienst 0231",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0232",
+        "displayName": "Synthetic Dienst 0232",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 232,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0233",
+        "displayName": "Synthetic Dienst 0233",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 233,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0234",
+        "displayName": "Synthetic Dienst 0234",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0235",
+        "displayName": "Synthetic Dienst 0235",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 235,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0236",
+        "displayName": "Synthetic Dienst 0236",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 236,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0237",
+        "displayName": "Synthetic Dienst 0237",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0238",
+        "displayName": "Synthetic Dienst 0238",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 238,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0239",
+        "displayName": "Synthetic Dienst 0239",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 239,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0240",
+        "displayName": "Synthetic Dienst 0240",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0241",
+        "displayName": "Synthetic Dienst 0241",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 241,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0242",
+        "displayName": "Synthetic Dienst 0242",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 242,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0243",
+        "displayName": "Synthetic Dienst 0243",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0244",
+        "displayName": "Synthetic Dienst 0244",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 244,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0245",
+        "displayName": "Synthetic Dienst 0245",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 245,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0246",
+        "displayName": "Synthetic Dienst 0246",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0247",
+        "displayName": "Synthetic Dienst 0247",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 247,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0248",
+        "displayName": "Synthetic Dienst 0248",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 248,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0249",
+        "displayName": "Synthetic Dienst 0249",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0250",
+        "displayName": "Synthetic Dienst 0250",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 250,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0251",
+        "displayName": "Synthetic Dienst 0251",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 251,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0252",
+        "displayName": "Synthetic Dienst 0252",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0253",
+        "displayName": "Synthetic Dienst 0253",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 253,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0254",
+        "displayName": "Synthetic Dienst 0254",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 254,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0255",
+        "displayName": "Synthetic Dienst 0255",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0256",
+        "displayName": "Synthetic Dienst 0256",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 256,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0257",
+        "displayName": "Synthetic Dienst 0257",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 257,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0258",
+        "displayName": "Synthetic Dienst 0258",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0259",
+        "displayName": "Synthetic Dienst 0259",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 259,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0260",
+        "displayName": "Synthetic Dienst 0260",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 260,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0261",
+        "displayName": "Synthetic Dienst 0261",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0262",
+        "displayName": "Synthetic Dienst 0262",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 262,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0263",
+        "displayName": "Synthetic Dienst 0263",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 263,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0264",
+        "displayName": "Synthetic Dienst 0264",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0265",
+        "displayName": "Synthetic Dienst 0265",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 265,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0266",
+        "displayName": "Synthetic Dienst 0266",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 266,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0267",
+        "displayName": "Synthetic Dienst 0267",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0268",
+        "displayName": "Synthetic Dienst 0268",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 268,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0269",
+        "displayName": "Synthetic Dienst 0269",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 269,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0270",
+        "displayName": "Synthetic Dienst 0270",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0271",
+        "displayName": "Synthetic Dienst 0271",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 271,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0272",
+        "displayName": "Synthetic Dienst 0272",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 272,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0273",
+        "displayName": "Synthetic Dienst 0273",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0274",
+        "displayName": "Synthetic Dienst 0274",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 274,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0275",
+        "displayName": "Synthetic Dienst 0275",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 275,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0276",
+        "displayName": "Synthetic Dienst 0276",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0277",
+        "displayName": "Synthetic Dienst 0277",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 277,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0278",
+        "displayName": "Synthetic Dienst 0278",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 278,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0279",
+        "displayName": "Synthetic Dienst 0279",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0280",
+        "displayName": "Synthetic Dienst 0280",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 280,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0281",
+        "displayName": "Synthetic Dienst 0281",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 281,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0282",
+        "displayName": "Synthetic Dienst 0282",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0283",
+        "displayName": "Synthetic Dienst 0283",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 283,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0284",
+        "displayName": "Synthetic Dienst 0284",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 284,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0285",
+        "displayName": "Synthetic Dienst 0285",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0286",
+        "displayName": "Synthetic Dienst 0286",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 286,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0287",
+        "displayName": "Synthetic Dienst 0287",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 287,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0288",
+        "displayName": "Synthetic Dienst 0288",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0289",
+        "displayName": "Synthetic Dienst 0289",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 289,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0290",
+        "displayName": "Synthetic Dienst 0290",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 290,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0291",
+        "displayName": "Synthetic Dienst 0291",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0292",
+        "displayName": "Synthetic Dienst 0292",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 292,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0293",
+        "displayName": "Synthetic Dienst 0293",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 293,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0294",
+        "displayName": "Synthetic Dienst 0294",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0295",
+        "displayName": "Synthetic Dienst 0295",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 295,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0296",
+        "displayName": "Synthetic Dienst 0296",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 296,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0297",
+        "displayName": "Synthetic Dienst 0297",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0298",
+        "displayName": "Synthetic Dienst 0298",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 298,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0299",
+        "displayName": "Synthetic Dienst 0299",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 299,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0300",
+        "displayName": "Synthetic Dienst 0300",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0301",
+        "displayName": "Synthetic Dienst 0301",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 301,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0302",
+        "displayName": "Synthetic Dienst 0302",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 302,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0303",
+        "displayName": "Synthetic Dienst 0303",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0304",
+        "displayName": "Synthetic Dienst 0304",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 304,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0305",
+        "displayName": "Synthetic Dienst 0305",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 305,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0306",
+        "displayName": "Synthetic Dienst 0306",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0307",
+        "displayName": "Synthetic Dienst 0307",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 307,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0308",
+        "displayName": "Synthetic Dienst 0308",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 308,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0309",
+        "displayName": "Synthetic Dienst 0309",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0310",
+        "displayName": "Synthetic Dienst 0310",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 310,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0311",
+        "displayName": "Synthetic Dienst 0311",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 311,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0312",
+        "displayName": "Synthetic Dienst 0312",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0313",
+        "displayName": "Synthetic Dienst 0313",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 313,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0314",
+        "displayName": "Synthetic Dienst 0314",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 314,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0315",
+        "displayName": "Synthetic Dienst 0315",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0316",
+        "displayName": "Synthetic Dienst 0316",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 316,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0317",
+        "displayName": "Synthetic Dienst 0317",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 317,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0318",
+        "displayName": "Synthetic Dienst 0318",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0319",
+        "displayName": "Synthetic Dienst 0319",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 319,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0320",
+        "displayName": "Synthetic Dienst 0320",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 320,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0321",
+        "displayName": "Synthetic Dienst 0321",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0322",
+        "displayName": "Synthetic Dienst 0322",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 322,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0323",
+        "displayName": "Synthetic Dienst 0323",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 323,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0324",
+        "displayName": "Synthetic Dienst 0324",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0325",
+        "displayName": "Synthetic Dienst 0325",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 325,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0326",
+        "displayName": "Synthetic Dienst 0326",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 326,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0327",
+        "displayName": "Synthetic Dienst 0327",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0328",
+        "displayName": "Synthetic Dienst 0328",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 328,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0329",
+        "displayName": "Synthetic Dienst 0329",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 329,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0330",
+        "displayName": "Synthetic Dienst 0330",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0331",
+        "displayName": "Synthetic Dienst 0331",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 331,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0332",
+        "displayName": "Synthetic Dienst 0332",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 332,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0333",
+        "displayName": "Synthetic Dienst 0333",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0334",
+        "displayName": "Synthetic Dienst 0334",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 334,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0335",
+        "displayName": "Synthetic Dienst 0335",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 335,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0336",
+        "displayName": "Synthetic Dienst 0336",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0337",
+        "displayName": "Synthetic Dienst 0337",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 337,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0338",
+        "displayName": "Synthetic Dienst 0338",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 338,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0339",
+        "displayName": "Synthetic Dienst 0339",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0340",
+        "displayName": "Synthetic Dienst 0340",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 340,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0341",
+        "displayName": "Synthetic Dienst 0341",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 341,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0342",
+        "displayName": "Synthetic Dienst 0342",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0343",
+        "displayName": "Synthetic Dienst 0343",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 343,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0344",
+        "displayName": "Synthetic Dienst 0344",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 344,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0345",
+        "displayName": "Synthetic Dienst 0345",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0346",
+        "displayName": "Synthetic Dienst 0346",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 346,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0347",
+        "displayName": "Synthetic Dienst 0347",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 347,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0348",
+        "displayName": "Synthetic Dienst 0348",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0349",
+        "displayName": "Synthetic Dienst 0349",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 349,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0350",
+        "displayName": "Synthetic Dienst 0350",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 350,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0351",
+        "displayName": "Synthetic Dienst 0351",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0352",
+        "displayName": "Synthetic Dienst 0352",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 352,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0353",
+        "displayName": "Synthetic Dienst 0353",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 353,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0354",
+        "displayName": "Synthetic Dienst 0354",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0355",
+        "displayName": "Synthetic Dienst 0355",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 355,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0356",
+        "displayName": "Synthetic Dienst 0356",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 356,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0357",
+        "displayName": "Synthetic Dienst 0357",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0358",
+        "displayName": "Synthetic Dienst 0358",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 358,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0359",
+        "displayName": "Synthetic Dienst 0359",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 359,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0360",
+        "displayName": "Synthetic Dienst 0360",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0361",
+        "displayName": "Synthetic Dienst 0361",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 361,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0362",
+        "displayName": "Synthetic Dienst 0362",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 362,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0363",
+        "displayName": "Synthetic Dienst 0363",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0364",
+        "displayName": "Synthetic Dienst 0364",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 364,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0365",
+        "displayName": "Synthetic Dienst 0365",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 365,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0366",
+        "displayName": "Synthetic Dienst 0366",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0367",
+        "displayName": "Synthetic Dienst 0367",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 367,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0368",
+        "displayName": "Synthetic Dienst 0368",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 368,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0369",
+        "displayName": "Synthetic Dienst 0369",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0370",
+        "displayName": "Synthetic Dienst 0370",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 370,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0371",
+        "displayName": "Synthetic Dienst 0371",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 371,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0372",
+        "displayName": "Synthetic Dienst 0372",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0373",
+        "displayName": "Synthetic Dienst 0373",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 373,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0374",
+        "displayName": "Synthetic Dienst 0374",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 374,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0375",
+        "displayName": "Synthetic Dienst 0375",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0376",
+        "displayName": "Synthetic Dienst 0376",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 376,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0377",
+        "displayName": "Synthetic Dienst 0377",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 377,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0378",
+        "displayName": "Synthetic Dienst 0378",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0379",
+        "displayName": "Synthetic Dienst 0379",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 379,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0380",
+        "displayName": "Synthetic Dienst 0380",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 380,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0381",
+        "displayName": "Synthetic Dienst 0381",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0382",
+        "displayName": "Synthetic Dienst 0382",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 382,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0383",
+        "displayName": "Synthetic Dienst 0383",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 383,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0384",
+        "displayName": "Synthetic Dienst 0384",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0385",
+        "displayName": "Synthetic Dienst 0385",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 385,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0386",
+        "displayName": "Synthetic Dienst 0386",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 386,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0387",
+        "displayName": "Synthetic Dienst 0387",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0388",
+        "displayName": "Synthetic Dienst 0388",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 388,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0389",
+        "displayName": "Synthetic Dienst 0389",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 389,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0390",
+        "displayName": "Synthetic Dienst 0390",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0391",
+        "displayName": "Synthetic Dienst 0391",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 391,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0392",
+        "displayName": "Synthetic Dienst 0392",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 392,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0393",
+        "displayName": "Synthetic Dienst 0393",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0394",
+        "displayName": "Synthetic Dienst 0394",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 394,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0395",
+        "displayName": "Synthetic Dienst 0395",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 395,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0396",
+        "displayName": "Synthetic Dienst 0396",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0397",
+        "displayName": "Synthetic Dienst 0397",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 397,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0398",
+        "displayName": "Synthetic Dienst 0398",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 398,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0399",
+        "displayName": "Synthetic Dienst 0399",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0400",
+        "displayName": "Synthetic Dienst 0400",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 400,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0401",
+        "displayName": "Synthetic Dienst 0401",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 401,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0402",
+        "displayName": "Synthetic Dienst 0402",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0403",
+        "displayName": "Synthetic Dienst 0403",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 403,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0404",
+        "displayName": "Synthetic Dienst 0404",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 404,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0405",
+        "displayName": "Synthetic Dienst 0405",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0406",
+        "displayName": "Synthetic Dienst 0406",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 406,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0407",
+        "displayName": "Synthetic Dienst 0407",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 407,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0408",
+        "displayName": "Synthetic Dienst 0408",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0409",
+        "displayName": "Synthetic Dienst 0409",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 409,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0410",
+        "displayName": "Synthetic Dienst 0410",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 410,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0411",
+        "displayName": "Synthetic Dienst 0411",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0412",
+        "displayName": "Synthetic Dienst 0412",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 412,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0413",
+        "displayName": "Synthetic Dienst 0413",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 413,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0414",
+        "displayName": "Synthetic Dienst 0414",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0415",
+        "displayName": "Synthetic Dienst 0415",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 415,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0416",
+        "displayName": "Synthetic Dienst 0416",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 416,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0417",
+        "displayName": "Synthetic Dienst 0417",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0418",
+        "displayName": "Synthetic Dienst 0418",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 418,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0419",
+        "displayName": "Synthetic Dienst 0419",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 419,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0420",
+        "displayName": "Synthetic Dienst 0420",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0421",
+        "displayName": "Synthetic Dienst 0421",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 421,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0422",
+        "displayName": "Synthetic Dienst 0422",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 422,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0423",
+        "displayName": "Synthetic Dienst 0423",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0424",
+        "displayName": "Synthetic Dienst 0424",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 424,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0425",
+        "displayName": "Synthetic Dienst 0425",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 425,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0426",
+        "displayName": "Synthetic Dienst 0426",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0427",
+        "displayName": "Synthetic Dienst 0427",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 427,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0428",
+        "displayName": "Synthetic Dienst 0428",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 428,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0429",
+        "displayName": "Synthetic Dienst 0429",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0430",
+        "displayName": "Synthetic Dienst 0430",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 430,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0431",
+        "displayName": "Synthetic Dienst 0431",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 431,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0432",
+        "displayName": "Synthetic Dienst 0432",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0433",
+        "displayName": "Synthetic Dienst 0433",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 433,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0434",
+        "displayName": "Synthetic Dienst 0434",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 434,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0435",
+        "displayName": "Synthetic Dienst 0435",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0436",
+        "displayName": "Synthetic Dienst 0436",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 436,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0437",
+        "displayName": "Synthetic Dienst 0437",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 437,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0438",
+        "displayName": "Synthetic Dienst 0438",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0439",
+        "displayName": "Synthetic Dienst 0439",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 439,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0440",
+        "displayName": "Synthetic Dienst 0440",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 440,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0441",
+        "displayName": "Synthetic Dienst 0441",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0442",
+        "displayName": "Synthetic Dienst 0442",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 442,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0443",
+        "displayName": "Synthetic Dienst 0443",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 443,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0444",
+        "displayName": "Synthetic Dienst 0444",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0445",
+        "displayName": "Synthetic Dienst 0445",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 445,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0446",
+        "displayName": "Synthetic Dienst 0446",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 446,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0447",
+        "displayName": "Synthetic Dienst 0447",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0448",
+        "displayName": "Synthetic Dienst 0448",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 448,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0449",
+        "displayName": "Synthetic Dienst 0449",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 449,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0450",
+        "displayName": "Synthetic Dienst 0450",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0451",
+        "displayName": "Synthetic Dienst 0451",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 451,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0452",
+        "displayName": "Synthetic Dienst 0452",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 452,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0453",
+        "displayName": "Synthetic Dienst 0453",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0454",
+        "displayName": "Synthetic Dienst 0454",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 454,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0455",
+        "displayName": "Synthetic Dienst 0455",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 455,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0456",
+        "displayName": "Synthetic Dienst 0456",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0457",
+        "displayName": "Synthetic Dienst 0457",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 457,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0458",
+        "displayName": "Synthetic Dienst 0458",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 458,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0459",
+        "displayName": "Synthetic Dienst 0459",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0460",
+        "displayName": "Synthetic Dienst 0460",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 460,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0461",
+        "displayName": "Synthetic Dienst 0461",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 461,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0462",
+        "displayName": "Synthetic Dienst 0462",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0463",
+        "displayName": "Synthetic Dienst 0463",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 463,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0464",
+        "displayName": "Synthetic Dienst 0464",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 464,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0465",
+        "displayName": "Synthetic Dienst 0465",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0466",
+        "displayName": "Synthetic Dienst 0466",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 466,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0467",
+        "displayName": "Synthetic Dienst 0467",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 467,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0468",
+        "displayName": "Synthetic Dienst 0468",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0469",
+        "displayName": "Synthetic Dienst 0469",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 469,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0470",
+        "displayName": "Synthetic Dienst 0470",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 470,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0471",
+        "displayName": "Synthetic Dienst 0471",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0472",
+        "displayName": "Synthetic Dienst 0472",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 472,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0473",
+        "displayName": "Synthetic Dienst 0473",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 473,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0474",
+        "displayName": "Synthetic Dienst 0474",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0475",
+        "displayName": "Synthetic Dienst 0475",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 475,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0476",
+        "displayName": "Synthetic Dienst 0476",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 476,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0477",
+        "displayName": "Synthetic Dienst 0477",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0478",
+        "displayName": "Synthetic Dienst 0478",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 478,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0479",
+        "displayName": "Synthetic Dienst 0479",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 479,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0480",
+        "displayName": "Synthetic Dienst 0480",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0481",
+        "displayName": "Synthetic Dienst 0481",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 481,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0482",
+        "displayName": "Synthetic Dienst 0482",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 482,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0483",
+        "displayName": "Synthetic Dienst 0483",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0484",
+        "displayName": "Synthetic Dienst 0484",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 484,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0485",
+        "displayName": "Synthetic Dienst 0485",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 485,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0486",
+        "displayName": "Synthetic Dienst 0486",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0487",
+        "displayName": "Synthetic Dienst 0487",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 487,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0488",
+        "displayName": "Synthetic Dienst 0488",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 488,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0489",
+        "displayName": "Synthetic Dienst 0489",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0490",
+        "displayName": "Synthetic Dienst 0490",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 490,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0491",
+        "displayName": "Synthetic Dienst 0491",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 491,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0492",
+        "displayName": "Synthetic Dienst 0492",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0493",
+        "displayName": "Synthetic Dienst 0493",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 493,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0494",
+        "displayName": "Synthetic Dienst 0494",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 494,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0495",
+        "displayName": "Synthetic Dienst 0495",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0496",
+        "displayName": "Synthetic Dienst 0496",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 496,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0497",
+        "displayName": "Synthetic Dienst 0497",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 497,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0498",
+        "displayName": "Synthetic Dienst 0498",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0499",
+        "displayName": "Synthetic Dienst 0499",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 499,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0500",
+        "displayName": "Synthetic Dienst 0500",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 500,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0501",
+        "displayName": "Synthetic Dienst 0501",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0502",
+        "displayName": "Synthetic Dienst 0502",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 502,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0503",
+        "displayName": "Synthetic Dienst 0503",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 503,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0504",
+        "displayName": "Synthetic Dienst 0504",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0505",
+        "displayName": "Synthetic Dienst 0505",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 505,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0506",
+        "displayName": "Synthetic Dienst 0506",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 506,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0507",
+        "displayName": "Synthetic Dienst 0507",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0508",
+        "displayName": "Synthetic Dienst 0508",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 508,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0509",
+        "displayName": "Synthetic Dienst 0509",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 509,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0510",
+        "displayName": "Synthetic Dienst 0510",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0511",
+        "displayName": "Synthetic Dienst 0511",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 511,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0512",
+        "displayName": "Synthetic Dienst 0512",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 512,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0513",
+        "displayName": "Synthetic Dienst 0513",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0514",
+        "displayName": "Synthetic Dienst 0514",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 514,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0515",
+        "displayName": "Synthetic Dienst 0515",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 515,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0516",
+        "displayName": "Synthetic Dienst 0516",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0517",
+        "displayName": "Synthetic Dienst 0517",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 517,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0518",
+        "displayName": "Synthetic Dienst 0518",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 518,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0519",
+        "displayName": "Synthetic Dienst 0519",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0520",
+        "displayName": "Synthetic Dienst 0520",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 520,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0521",
+        "displayName": "Synthetic Dienst 0521",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 521,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0522",
+        "displayName": "Synthetic Dienst 0522",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0523",
+        "displayName": "Synthetic Dienst 0523",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 523,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0524",
+        "displayName": "Synthetic Dienst 0524",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 524,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0525",
+        "displayName": "Synthetic Dienst 0525",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0526",
+        "displayName": "Synthetic Dienst 0526",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 526,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0527",
+        "displayName": "Synthetic Dienst 0527",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 527,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0528",
+        "displayName": "Synthetic Dienst 0528",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0529",
+        "displayName": "Synthetic Dienst 0529",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 529,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0530",
+        "displayName": "Synthetic Dienst 0530",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 530,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0531",
+        "displayName": "Synthetic Dienst 0531",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0532",
+        "displayName": "Synthetic Dienst 0532",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 532,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0533",
+        "displayName": "Synthetic Dienst 0533",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 533,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0534",
+        "displayName": "Synthetic Dienst 0534",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0535",
+        "displayName": "Synthetic Dienst 0535",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 535,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0536",
+        "displayName": "Synthetic Dienst 0536",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 536,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0537",
+        "displayName": "Synthetic Dienst 0537",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0538",
+        "displayName": "Synthetic Dienst 0538",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 538,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0539",
+        "displayName": "Synthetic Dienst 0539",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 539,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0540",
+        "displayName": "Synthetic Dienst 0540",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0541",
+        "displayName": "Synthetic Dienst 0541",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 541,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0542",
+        "displayName": "Synthetic Dienst 0542",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 542,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0543",
+        "displayName": "Synthetic Dienst 0543",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0544",
+        "displayName": "Synthetic Dienst 0544",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 544,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0545",
+        "displayName": "Synthetic Dienst 0545",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 545,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0546",
+        "displayName": "Synthetic Dienst 0546",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0547",
+        "displayName": "Synthetic Dienst 0547",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 547,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0548",
+        "displayName": "Synthetic Dienst 0548",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 548,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0549",
+        "displayName": "Synthetic Dienst 0549",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0550",
+        "displayName": "Synthetic Dienst 0550",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 550,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0551",
+        "displayName": "Synthetic Dienst 0551",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 551,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0552",
+        "displayName": "Synthetic Dienst 0552",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0553",
+        "displayName": "Synthetic Dienst 0553",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 553,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0554",
+        "displayName": "Synthetic Dienst 0554",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 554,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0555",
+        "displayName": "Synthetic Dienst 0555",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0556",
+        "displayName": "Synthetic Dienst 0556",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 556,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0557",
+        "displayName": "Synthetic Dienst 0557",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 557,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0558",
+        "displayName": "Synthetic Dienst 0558",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0559",
+        "displayName": "Synthetic Dienst 0559",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 559,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0560",
+        "displayName": "Synthetic Dienst 0560",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 560,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0561",
+        "displayName": "Synthetic Dienst 0561",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0562",
+        "displayName": "Synthetic Dienst 0562",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 562,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0563",
+        "displayName": "Synthetic Dienst 0563",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 563,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0564",
+        "displayName": "Synthetic Dienst 0564",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0565",
+        "displayName": "Synthetic Dienst 0565",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 565,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0566",
+        "displayName": "Synthetic Dienst 0566",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 566,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0567",
+        "displayName": "Synthetic Dienst 0567",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0568",
+        "displayName": "Synthetic Dienst 0568",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 568,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0569",
+        "displayName": "Synthetic Dienst 0569",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 569,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0570",
+        "displayName": "Synthetic Dienst 0570",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0571",
+        "displayName": "Synthetic Dienst 0571",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 571,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0572",
+        "displayName": "Synthetic Dienst 0572",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 572,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0573",
+        "displayName": "Synthetic Dienst 0573",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0574",
+        "displayName": "Synthetic Dienst 0574",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 574,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0575",
+        "displayName": "Synthetic Dienst 0575",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 575,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0576",
+        "displayName": "Synthetic Dienst 0576",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0577",
+        "displayName": "Synthetic Dienst 0577",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 577,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0578",
+        "displayName": "Synthetic Dienst 0578",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 578,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0579",
+        "displayName": "Synthetic Dienst 0579",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0580",
+        "displayName": "Synthetic Dienst 0580",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 580,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0581",
+        "displayName": "Synthetic Dienst 0581",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 581,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0582",
+        "displayName": "Synthetic Dienst 0582",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0583",
+        "displayName": "Synthetic Dienst 0583",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 583,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0584",
+        "displayName": "Synthetic Dienst 0584",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 584,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0585",
+        "displayName": "Synthetic Dienst 0585",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0586",
+        "displayName": "Synthetic Dienst 0586",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 586,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0587",
+        "displayName": "Synthetic Dienst 0587",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 587,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0588",
+        "displayName": "Synthetic Dienst 0588",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0589",
+        "displayName": "Synthetic Dienst 0589",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 589,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0590",
+        "displayName": "Synthetic Dienst 0590",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 590,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0591",
+        "displayName": "Synthetic Dienst 0591",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0592",
+        "displayName": "Synthetic Dienst 0592",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 592,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0593",
+        "displayName": "Synthetic Dienst 0593",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 593,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0594",
+        "displayName": "Synthetic Dienst 0594",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0595",
+        "displayName": "Synthetic Dienst 0595",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 595,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0596",
+        "displayName": "Synthetic Dienst 0596",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 596,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0597",
+        "displayName": "Synthetic Dienst 0597",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0598",
+        "displayName": "Synthetic Dienst 0598",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 598,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0599",
+        "displayName": "Synthetic Dienst 0599",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 599,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0600",
+        "displayName": "Synthetic Dienst 0600",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0601",
+        "displayName": "Synthetic Dienst 0601",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 601,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0602",
+        "displayName": "Synthetic Dienst 0602",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 602,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0603",
+        "displayName": "Synthetic Dienst 0603",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0604",
+        "displayName": "Synthetic Dienst 0604",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 604,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0605",
+        "displayName": "Synthetic Dienst 0605",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 605,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0606",
+        "displayName": "Synthetic Dienst 0606",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0607",
+        "displayName": "Synthetic Dienst 0607",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 607,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0608",
+        "displayName": "Synthetic Dienst 0608",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 608,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0609",
+        "displayName": "Synthetic Dienst 0609",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0610",
+        "displayName": "Synthetic Dienst 0610",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 610,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0611",
+        "displayName": "Synthetic Dienst 0611",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 611,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0612",
+        "displayName": "Synthetic Dienst 0612",
+        "displayNameQuality": "observed",
+        "state": "stopped",
+        "stateQuality": "observed",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0613",
+        "displayName": "Synthetic Dienst 0613",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 613,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0614",
+        "displayName": "Synthetic Dienst 0614",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 614,
+        "pidQuality": "observed"
+      },
+      {
+        "name": "FixtureService0615",
+        "displayName": null,
+        "displayNameQuality": "unavailable",
+        "state": null,
+        "stateQuality": "unavailable",
+        "pid": null,
+        "pidQuality": "unavailable"
+      },
+      {
+        "name": "FixtureService0616",
+        "displayName": "\u003cimg src=x onerror=alert(1)\u003e [.*] ÄÖÜ \u0026 🛠",
+        "displayNameQuality": "observed",
+        "state": "running",
+        "stateQuality": "observed",
+        "pid": 616,
+        "pidQuality": "observed"
+      }
+    ]
+  },
+  {
+    "complete": {
+      "manifest": {
+        "schemaVersion": "tracebolt.windows-complete-services-manifest.v1",
+        "scope": "windows-complete-services-v1",
+        "source": "scm-enum-services-status-ex-win32",
+        "coverage": "caller_visible_api_complete",
+        "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "senderBinding": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "grantId": "cccccccccccccccccccccccccccccccc",
+        "grantRevision": 1,
+        "sequence": 1,
+        "generationId": "sample_5eaf60a2349806ed12eca33ab19b3988",
+        "captureStartedAt": "2026-10-11T06:00:00Z",
+        "captureFinishedAt": "2026-10-11T06:00:01Z",
+        "expiresAt": "2026-10-12T06:00:00Z",
+        "rowCount": 0,
+        "rowsBytes": 2,
+        "rowsSha256": "8aa7fd435eb4d31fefcf5e09db60aa184124d65709961014eced28290a4e3bf5",
+        "chunkCount": 1
+      },
+      "manifestSha256": "e7c7f57096807897e338fd3d812035ad5f4a6c404db4d9a65564c135f87a2764",
+      "receivedAt": "2026-10-11T06:00:02Z"
+    },
+    "rows": []
+  }
+]

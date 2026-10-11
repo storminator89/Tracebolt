@@ -166,6 +166,12 @@ func prepareWithApplicationChecks(m lanconfig.Material, enrollment *enrollmentco
 		if err != nil {
 			return fail(err)
 		}
+		if err = windowsService.InitializeWindowsFullServices(context.Background()); err != nil {
+			return fail(err)
+		}
+		if err = windowsService.InitializeWindowsFullSoftware(context.Background()); err != nil {
+			return fail(err)
+		}
 		if err = windowsService.InitializeWindowsEventContent(context.Background()); err != nil {
 			return fail(err)
 		}
@@ -449,7 +455,7 @@ func runWithApplicationChecks(ctx context.Context, m lanconfig.Material, enrollm
 		go func() {
 			defer close(maintenanceDone)
 			_ = runWindowsEventMaintenance(maintenanceCtx, p.windowsMaintenance, func() {
-				log.Print("Windows event-content maintenance is unavailable; content access remains restricted.")
+				log.Print("Windows inventory/content maintenance is unavailable; retained data remains protected.")
 			})
 		}()
 		defer func() { stopMaintenance(); <-maintenanceDone }()

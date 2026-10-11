@@ -17,6 +17,7 @@ async function checkControls({page,expect,locale,width,kind}){
  const de=locale==='de',service=kind==='services',title=service?(de?'Dienste':'Services'):'Software';
  const workspace=page.locator('.windows-inventory'),panel=workspace.locator('[role="tabpanel"]');
  await page.getByRole('tab',{name:title,exact:true}).click();
+ if(!service)await panel.locator('.windows-full-software-preview>summary').click();
  const table=panel.getByRole('table',{name:title,exact:true}),rows=table.locator('tbody tr');
  const filter=panel.getByRole('searchbox',{name:service?(de?'Erfasste Dienste filtern':'Filter captured services'):(de?'Erfasste Software filtern':'Filter captured software'),exact:true});
  const sort=panel.getByRole('combobox',{name:service?(de?'Erfasste Dienste sortieren':'Sort captured services'):(de?'Erfasste Software sortieren':'Sort captured software'),exact:true});
@@ -107,6 +108,7 @@ export async function exerciseWindowsServiceSoftwareControls({page,expect,locale
   await panel.locator('.windows-inventory-table-controls').scrollIntoViewIfNeeded();await shot(page,`synthetic-windows-${kind}-controls-${width}-${locale}`,disclosure);
   // Leaving and returning must clear even an all-field private filter.
   await filter.fill('[.*]');await page.getByRole('tab',{name:'Hostname',exact:true}).click();await page.getByRole('tab',{name:service?(de?'Dienste':'Services'):'Software',exact:true}).click();
+  if(!service)await panel.locator('.windows-full-software-preview>summary').click();
   await expect(filter).toHaveValue('');await expect(sort).toHaveValue('name-asc');await expect(rows).toHaveCount(25);await expect(previous).toBeDisabled();
  }
  // The shared runner continues the independent process-metrics checks.

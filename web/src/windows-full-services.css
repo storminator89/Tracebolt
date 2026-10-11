@@ -1,0 +1,11 @@
+.windows-full-services{min-width:0;margin:0 0 24px;padding-bottom:22px;border-bottom:2px solid var(--line)}
+.windows-full-services-facts,.windows-full-services-attempt-details{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin:14px 0;font-size:12px}
+.windows-full-services-facts dt,.windows-full-services-attempt-details dt,.windows-full-services-counts dt{font-weight:600;color:var(--secondary);margin-bottom:5px}
+.windows-full-services-facts dd,.windows-full-services-attempt-details dd,.windows-full-services-counts dd{margin:0;overflow-wrap:anywhere;line-height:1.5}
+.windows-full-services-summary{margin:8px 0}
+.windows-full-services-attempt{font-size:12px;line-height:1.5}.windows-full-services-attempt p{margin:6px 0}
+.windows-full-services-counts{display:flex;flex-wrap:wrap;gap:6px 20px;margin:8px 0;font-size:12px}
+.windows-full-services-counts>div{display:flex;gap:6px}.windows-full-services-counts dt{margin:0}
+.windows-full-services-details{margin-top:12px}
+.windows-full-services td{white-space:pre-wrap;unicode-bidi:plaintext}
+.windows-full-services-preview-label{font-size:13px;color:var(--secondary);padding:10px 0}

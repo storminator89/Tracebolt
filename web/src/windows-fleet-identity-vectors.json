@@ -1,0 +1,210 @@
+{
+  "expired": {
+    "schemaVersion": "tracebolt.fleet-identities.v2",
+    "serverNow": "2026-10-11T09:55:09Z",
+    "items": [
+      {
+        "schemaVersion": "tracebolt.windows-fleet-identity-view.v1",
+        "deviceId": "agent_a21d9d6e5fff03eb020bf69c8d49a853",
+        "collectionProfile": "windows-inventory-v1",
+        "serverNow": "2026-10-11T09:55:09Z",
+        "maxAgeSeconds": 120,
+        "status": "expired",
+        "sequence": null,
+        "receivedAt": null,
+        "expiresAt": null,
+        "latest": null
+      }
+    ]
+  },
+  "fresh": {
+    "schemaVersion": "tracebolt.fleet-identities.v2",
+    "serverNow": "2026-10-11T07:55:11Z",
+    "items": [
+      {
+        "schemaVersion": "tracebolt.windows-fleet-identity-view.v1",
+        "deviceId": "agent_0ffce5cf4b9fd59a13dcd6908d54ab45",
+        "collectionProfile": "windows-inventory-v1",
+        "serverNow": "2026-10-11T07:55:11Z",
+        "maxAgeSeconds": 120,
+        "status": "fresh",
+        "sequence": "2",
+        "receivedAt": "2026-10-11T07:55:11Z",
+        "expiresAt": "2026-10-11T09:55:09Z",
+        "latest": {
+          "schemaVersion": "tracebolt.windows-fleet-identity.v1",
+          "collectionProfile": "windows-inventory-v1",
+          "generationId": "sample_00000000000000000000000000000002",
+          "collectedAt": "2026-10-11T07:55:11Z",
+          "hostname": {
+            "source": "Synthetic GetComputerNameExW",
+            "scope": "Caller-visible computer name",
+            "quality": "healthy",
+            "observedCount": 1,
+            "countExact": true,
+            "complete": true,
+            "truncated": false,
+            "rows": [
+              {
+                "value": "synthetic-\u003cfleet\u003e\u0026host"
+              }
+            ]
+          },
+          "network": {
+            "source": "Synthetic GetAdaptersAddresses",
+            "scope": "Caller-visible interface addresses; no sockets or traffic",
+            "quality": "healthy",
+            "observedCount": 2,
+            "countExact": true,
+            "complete": true,
+            "truncated": false,
+            "rows": [
+              {
+                "index": 7,
+                "name": "Fixture Ethernet",
+                "address": "192.0.2.8",
+                "prefixLength": 24
+              },
+              {
+                "index": 7,
+                "name": "Fixture Ethernet",
+                "address": "2001:db8::8",
+                "prefixLength": 64
+              }
+            ]
+          }
+        }
+      }
+    ]
+  },
+  "partial": {
+    "schemaVersion": "tracebolt.fleet-identities.v2",
+    "serverNow": "2026-10-11T07:55:12Z",
+    "items": [
+      {
+        "schemaVersion": "tracebolt.windows-fleet-identity-view.v1",
+        "deviceId": "agent_0ffce5cf4b9fd59a13dcd6908d54ab45",
+        "collectionProfile": "windows-inventory-v1",
+        "serverNow": "2026-10-11T07:55:12Z",
+        "maxAgeSeconds": 120,
+        "status": "fresh",
+        "sequence": "3",
+        "receivedAt": "2026-10-11T07:55:12Z",
+        "expiresAt": "2026-10-11T09:55:09Z",
+        "latest": {
+          "schemaVersion": "tracebolt.windows-fleet-identity.v1",
+          "collectionProfile": "windows-inventory-v1",
+          "generationId": "sample_00000000000000000000000000000003",
+          "collectedAt": "2026-10-11T07:55:12Z",
+          "hostname": {
+            "source": "Synthetic GetComputerNameExW",
+            "scope": "Caller-visible computer name",
+            "quality": "unavailable",
+            "observedCount": 0,
+            "countExact": false,
+            "complete": false,
+            "truncated": false,
+            "rows": []
+          },
+          "network": {
+            "source": "Synthetic GetAdaptersAddresses",
+            "scope": "Caller-visible interface addresses; no sockets or traffic",
+            "quality": "partial",
+            "observedCount": 2,
+            "countExact": false,
+            "complete": false,
+            "truncated": false,
+            "rows": [
+              {
+                "index": 7,
+                "name": "Fixture Ethernet",
+                "address": "192.0.2.8",
+                "prefixLength": 24
+              },
+              {
+                "index": 7,
+                "name": "Fixture Ethernet",
+                "address": "2001:db8::8",
+                "prefixLength": 64
+              }
+            ]
+          }
+        }
+      }
+    ]
+  },
+  "revoked": {
+    "schemaVersion": "tracebolt.fleet-identities.v2",
+    "serverNow": "2026-10-11T07:57:13Z",
+    "items": [
+      {
+        "schemaVersion": "tracebolt.windows-fleet-identity-view.v1",
+        "deviceId": "agent_0ffce5cf4b9fd59a13dcd6908d54ab45",
+        "collectionProfile": "windows-inventory-v1",
+        "serverNow": "2026-10-11T07:57:13Z",
+        "maxAgeSeconds": 120,
+        "status": "revoked",
+        "sequence": null,
+        "receivedAt": null,
+        "expiresAt": null,
+        "latest": null
+      }
+    ]
+  },
+  "stale": {
+    "schemaVersion": "tracebolt.fleet-identities.v2",
+    "serverNow": "2026-10-11T07:57:13Z",
+    "items": [
+      {
+        "schemaVersion": "tracebolt.windows-fleet-identity-view.v1",
+        "deviceId": "agent_0ffce5cf4b9fd59a13dcd6908d54ab45",
+        "collectionProfile": "windows-inventory-v1",
+        "serverNow": "2026-10-11T07:57:13Z",
+        "maxAgeSeconds": 120,
+        "status": "stale",
+        "sequence": "3",
+        "receivedAt": "2026-10-11T07:55:12Z",
+        "expiresAt": "2026-10-11T09:55:09Z",
+        "latest": {
+          "schemaVersion": "tracebolt.windows-fleet-identity.v1",
+          "collectionProfile": "windows-inventory-v1",
+          "generationId": "sample_00000000000000000000000000000003",
+          "collectedAt": "2026-10-11T07:55:12Z",
+          "hostname": {
+            "source": "Synthetic GetComputerNameExW",
+            "scope": "Caller-visible computer name",
+            "quality": "unavailable",
+            "observedCount": 0,
+            "countExact": false,
+            "complete": false,
+            "truncated": false,
+            "rows": []
+          },
+          "network": {
+            "source": "Synthetic GetAdaptersAddresses",
+            "scope": "Caller-visible interface addresses; no sockets or traffic",
+            "quality": "partial",
+            "observedCount": 2,
+            "countExact": false,
+            "complete": false,
+            "truncated": false,
+            "rows": [
+              {
+                "index": 7,
+                "name": "Fixture Ethernet",
+                "address": "192.0.2.8",
+                "prefixLength": 24
+              },
+              {
+                "index": 7,
+                "name": "Fixture Ethernet",
+                "address": "2001:db8::8",
+                "prefixLength": 64
+              }
+            ]
+          }
+        }
+      }
+    ]
+  }
+}

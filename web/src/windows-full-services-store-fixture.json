@@ -1,0 +1,74 @@
+{
+  "schemaVersion": "tracebolt.windows-full-services-page.v1",
+  "deviceId": "agent_00000000000000000000000000000001",
+  "serverNow": "2027-01-15T08:00:10Z",
+  "status": "ready",
+  "authorityUntil": "2027-01-16T08:00:00Z",
+  "grantId": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "grantRevision": 1,
+  "complete": {
+    "manifest": {
+      "schemaVersion": "tracebolt.windows-complete-services-manifest.v1",
+      "scope": "windows-complete-services-v1",
+      "source": "scm-enum-services-status-ex-win32",
+      "coverage": "caller_visible_api_complete",
+      "deviceId": "agent_00000000000000000000000000000001",
+      "senderBinding": "68bfd0f7d9d5492c9fc73a26385753e8bd93cb58104be07897aa36199dbd49fa",
+      "grantId": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "grantRevision": 1,
+      "sequence": 1,
+      "generationId": "sample_d986ba7a6e2ffe34b4a0aae33715f594",
+      "captureStartedAt": "2027-01-15T08:00:10Z",
+      "captureFinishedAt": "2027-01-15T08:00:10Z",
+      "expiresAt": "2027-01-16T08:00:10Z",
+      "rowCount": 3,
+      "rowsBytes": 562,
+      "rowsSha256": "d135a13e7ff91811caac07fe080078266a8eaed5a18f96dd7a70551bd39cc4a2",
+      "chunkCount": 1
+    },
+    "manifestSha256": "90ba2548d5f7aae2165aafe4ea5a27be6fb51f311c7611765ac755339e515a40",
+    "receivedAt": "2027-01-15T08:00:10Z"
+  },
+  "latestAttempt": {
+    "sequence": 1,
+    "attemptedAt": "2027-01-15T08:00:10Z",
+    "status": "complete",
+    "reason": ""
+  },
+  "search": "",
+  "sort": "name-asc",
+  "limit": 100,
+  "offset": 0,
+  "matchingCount": 3,
+  "rows": [
+    {
+      "name": "InventedService00000",
+      "displayName": "Fiktiver Dienst 00000 東京",
+      "displayNameQuality": "observed",
+      "state": "running",
+      "stateQuality": "observed",
+      "pid": 300,
+      "pidQuality": "observed"
+    },
+    {
+      "name": "InventedService00001",
+      "displayName": "Fiktiver Dienst 00001 東京",
+      "displayNameQuality": "observed",
+      "state": "running",
+      "stateQuality": "observed",
+      "pid": 301,
+      "pidQuality": "observed"
+    },
+    {
+      "name": "InventedService00002",
+      "displayName": "Fiktiver Dienst 00002 東京",
+      "displayNameQuality": "observed",
+      "state": "running",
+      "stateQuality": "observed",
+      "pid": 302,
+      "pidQuality": "observed"
+    }
+  ],
+  "nextCursor": "",
+  "cursorExpiresAt": "2027-01-15T08:15:10Z"
+}

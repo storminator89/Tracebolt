@@ -9,15 +9,28 @@ import (
 	"time"
 )
 
-// This manager-owned loop handles only bounded Windows request metadata/cache.
+// This manager-owned loop handles bounded Windows request metadata/cache and complete-generation reclamation.
 // It creates no endpoint grant, credential, source read or background capture.
 func runWindowsEventMaintenance(ctx context.Context, s *enrollmentservice.Service, warn func()) error {
 	if ctx == nil || s == nil || s.Binding().CollectionProfile != enrollmentcrypto.CollectionProfileWindowsInventory {
 		return enrollmentservice.ErrConfiguration
 	}
-	ticker := time.NewTicker(5 * time.Second)
+	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
-	return windowsEventMaintenanceLoop(ctx, s.MaintainWindowsEventContent, s.Now, ticker.C, warn)
+	tick := 0
+	return windowsEventMaintenanceLoop(ctx, func(ctx context.Context, now time.Time) error {
+		tick++
+		e := s.MaintainWindowsFullServices(ctx, now)
+		if softwareErr := s.MaintainWindowsFullSoftware(ctx, now); e == nil {
+			e = softwareErr
+		}
+		if tick%5 == 0 {
+			if eventErr := s.MaintainWindowsEventContent(ctx, now); e == nil {
+				e = eventErr
+			}
+		}
+		return e
+	}, s.Now, ticker.C, warn)
 }
 func windowsEventMaintenanceLoop(ctx context.Context, maintain func(context.Context, time.Time) error, now func() time.Time, ticks <-chan time.Time, warn func()) error {
 	if ctx == nil || maintain == nil || now == nil || ticks == nil {

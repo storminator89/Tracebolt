@@ -285,6 +285,21 @@ host journal or grants access. Native systemd acceptance remains separate.
 
 ## Windows Health evidence layers
 
+The existing Windows inventory case also admits the production synthetic adapter
+fixture into Network with its independent grant and exact base capture/generation.
+Its compact table checks native-state labels, separate TX/RX values, unknown versus
+unavailable speeds, initially collapsed DNS/gateway details, one expanded row and
+panel-bounded desktop/mobile layout. Endpoint assertions remain scoped to their
+own section through empty, denied, partial, stale and expired phases.
+
+Four `synthetic-windows-adapter-context-{1440,390}-{en,de}.png` viewport captures
+are required by the same runner before PASS, with source SHA, case, locale,
+viewport and fixture-disclosure metadata. The existing Node inventory fixture gate
+checks capture/grant admission and omission/metadata negative controls. No case,
+session lifetime, clock advance, route permission or native read is added. These
+inert checks do not create screenshots; a hosted run and independent pixel review
+remain required for visual acceptance.
+
 The Health source-presence case was removed: it passed when the helper returned
 without doing anything and failed on a harmless local helper rename. The existing
 executable clock, route, validator and selector tests retain their separate
@@ -304,3 +319,42 @@ Pure omission, duplicate and metadata negative controls check that completion
 contract without a browser. Completion metadata alone does not prove pixel
 content, native collection or host acceptance. The helper's strict DOM assertions,
 the hosted run and independent pixel review remain the visual evidence.
+
+## Fleet identity browser coverage
+
+`node tests/e2e-review/fleet-identity-browser.mjs` retains five Linux real-store
+cases and adds one Windows UI interoperability case. Windows uses exported
+production-handler vectors at an authenticated GET transport seam, with invented
+Windows overview rows; it does not establish live Windows store or native-host
+acceptance. Synthetic device bindings and advancing response time are adapted,
+while original capture, receipt and expiry times remain unchanged. Real operator
+login, CSRF logout, unauthorized responses and existing request deadlines remain
+in effect.
+
+The Windows case checks compact hostname/IPv4 display, disclosed IPv6/interface
+scope, local hostname/dual-stack search, OS filtering, unavailable hostname with
+partial addresses, suspension clearing, exported expiry and real session loss.
+Four viewport screenshots cover English/German at 1440×1000 and 390×844. The
+existing fleet report/manifest pins source SHA, disclosure and PNG SHA-256; CI
+requires all six cases and all four Windows images. Browser execution and pixel
+inspection must occur on ordinary hosted browser CI before claiming acceptance.
+`node --test tests/e2e-review/windows-fleet-fixtures.test.mjs` checks the seam and
+wiring without a browser, network listener or native collection.
+
+### Windows patch context in Updates
+
+The same synthetic Windows inventory browser case includes a separately granted
+`patchContext` sibling beside cached Updates. It uses the production validator and
+UI with invented edition/release/build, independent reboot-source states and
+bounded retained WUA history. History is neither current installed inventory nor
+patch coverage. The helper performs no native read, grant or update action.
+
+Completion requires eight viewport captures: compact
+`synthetic-windows-patch-context-{1440,390}-{en,de}.png` and expanded
+`synthetic-windows-patch-history-{1440,390}-{en,de}.png`. Source SHA, test, locale,
+viewport and fixture disclosure must agree with the runner manifest. These are
+real browser pixels of synthetic data, never native Windows acceptance.
+
+`windows-patch-context-fixtures.test.mjs` is imported by the existing Windows
+fixture gate and checks binding, absent/empty/partial/failure/expiry states and
+screenshot-completion requirements without launching a browser.

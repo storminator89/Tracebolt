@@ -1,6 +1,6 @@
 # Windows status and limitations
 
-**Status checked: 10 October 2026. The unsigned x64
+**Status checked: 11 October 2026. The unsigned x64
 [v0.1.0-windows-preview.1 prerelease](https://github.com/storminator89/Tracebolt/releases/tag/v0.1.0-windows-preview.1)
 is published.**
 
@@ -27,6 +27,16 @@ approval remain required.
 | Volume metadata | Caller-visible volumes and capacity, with unavailable/partial states |
 | Process metrics | Per-process CPU and working-set RAM; CPU starts unknown until a usable second sample |
 | Network endpoints | Numeric TCP/UDP addresses/ports and API-snapshot owning PID; no traffic payloads or DNS lookup |
+
+The source fleet overview now displays and searches already-reported Windows
+hostnames and IPv4/IPv6 interface addresses, with partial/unavailable states and
+original capture age. See [Windows fleet display](windows-fleet-identity.md).
+This manager/UI projection adds no local grant or collection.
+
+Separately consented [adapter context](windows-adapter-context.md) now has a source
+path for native link state, directional speeds and numeric DNS/gateway addresses
+in the existing Network tab. It is not part of the five-scope setup or published
+preview, and its native acceptance remains pending.
 
 These scopes do not establish whole-machine coverage or Linux feature parity.
 Configured service-startup metadata is a separate default-off source capability;
@@ -72,6 +82,12 @@ It holds the existing installer lease, attempts stop/start once and observes SCM
 with bounded polling. It does not add remote target-service control or
 repair/upgrade. The published preview and its native acceptance do not cover it.
 
+The separate [patch-context source candidate](windows-patch-context.md) adds fixed
+Windows edition/release/build revision, bounded local WUA history and checked
+reboot indicators to Updates. It is default-off, private and read-only. Retained
+events never prove current installed status or patch compliance, and negative
+indicators never prove that all reboot causes are absent. Native acceptance is pending.
+
 The [cached Windows Update runtime candidate](windows-update-runtime.md) adds
 separate local consent, a bounded isolated reader, v7 sender/manager support and
 an operator-only Updates view. Cache freshness remains unknown; an empty cached
@@ -94,9 +110,23 @@ fixtures and builds do not establish native Event Log reading under the installe
 service or real Windows-to-Linux interoperability. See the
 [manager boundary](windows-event-content-manager.md) and
 [wire contract](windows-event-content-wire.md). Service actions, broader Health/AI,
-complete inventory generations and lifecycle improvements remain in the
+complete process inventory and lifecycle improvements remain in the
 [parity roadmap](windows-linux-parity.md). Existing grants are never widened by a
 source or manager update.
+
+## Complete inventory and fleet source slices
+
+Separate default-off [complete Win32 service](windows-full-services-contract.md)
+and [machine software registration](windows-full-software-contract.md) scopes are
+implemented from local consent through bounded complete-generation transport to
+protected search and paging. Software covers caller-visible HKLM 32/64 uninstall
+registrations, retaining duplicates and unavailable optional fields. Complete
+processes, per-user/MSIX/Store and portable-program discovery remain planned.
+
+[Fleet hostname/IP display and search](windows-fleet-identity.md) is implemented
+using existing Windows metadata in draft [PR #39](https://github.com/storminator89/Tracebolt/pull/39).
+These are unreleased source slices; exact-source hosted CI and native acceptance
+remain separate from the published preview and its five-scope receipts.
 
 ## Newer manager-only capacity policy
 

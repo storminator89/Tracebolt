@@ -3,6 +3,8 @@ package enrollmentstore
 import (
 	"context"
 	"database/sql"
+	"fmt"
+	"localrmm/internal/enrollmentcrypto"
 	"os"
 )
 
@@ -16,6 +18,9 @@ const (
 	completeInventoryWALPadding int64 = 72 << 10
 )
 
+func physicalInventoryProfile(profile string) bool {
+	return completeProfile(profile) || profile == enrollmentcrypto.CollectionProfileWindowsInventory
+}
 func databaseCap(profile string) int64 {
 	if completeProfile(profile) {
 		return CompleteInventoryDatabaseBytes
@@ -39,7 +44,7 @@ func sidecarCap(profile, suffix string) int64 {
 }
 func (s *Store) inventoryReadOnlyCapacity(ctx context.Context, c *sql.Conn) error {
 	var size, pages int64
-	if c.QueryRowContext(ctx, "PRAGMA page_size").Scan(&size) != nil || size != completeInventoryPageSize || c.QueryRowContext(ctx, "PRAGMA page_count").Scan(&pages) != nil || pages < 1 || pages > completeInventoryPages {
+	if c.QueryRowContext(ctx, "PRAGMA page_size").Scan(&size) != nil || size != completeInventoryPageSize || c.QueryRowContext(ctx, "PRAGMA page_count").Scan(&pages) != nil || pages < 1 || pages > databaseCap(s.config.Binding.CollectionProfile)/completeInventoryPageSize {
 		return ErrStorage
 	}
 	return nil
@@ -47,7 +52,7 @@ func (s *Store) inventoryReadOnlyCapacity(ctx context.Context, c *sql.Conn) erro
 func (s *Store) configureInventoryConnection(ctx context.Context, c *sql.Conn) error {
 	// These connection settings follow protected schema/ownership restoration.
 	// Reapply to the actual transaction connection after any pool reconnect.
-	for _, q := range []string{"PRAGMA cache_spill=OFF", "PRAGMA max_page_count=131072"} {
+	for _, q := range []string{"PRAGMA cache_spill=OFF", fmt.Sprintf("PRAGMA max_page_count=%d", databaseCap(s.config.Binding.CollectionProfile)/completeInventoryPageSize)} {
 		if _, e := c.ExecContext(ctx, q); e != nil {
 			return ErrStorage
 		}
@@ -63,7 +68,7 @@ func (s *Store) inventoryConnectionCapacity(ctx context.Context, c *sql.Conn) er
 	if c.QueryRowContext(ctx, "PRAGMA journal_mode").Scan(&mode) != nil || mode != "wal" {
 		return ErrStorage
 	}
-	if c.QueryRowContext(ctx, "PRAGMA cache_spill").Scan(&spill) != nil || spill != 0 || c.QueryRowContext(ctx, "PRAGMA max_page_count").Scan(&max) != nil || max != completeInventoryPages || c.QueryRowContext(ctx, "PRAGMA synchronous").Scan(&sync) != nil || sync != 2 {
+	if c.QueryRowContext(ctx, "PRAGMA cache_spill").Scan(&spill) != nil || spill != 0 || c.QueryRowContext(ctx, "PRAGMA max_page_count").Scan(&max) != nil || max != databaseCap(s.config.Binding.CollectionProfile)/completeInventoryPageSize || c.QueryRowContext(ctx, "PRAGMA synchronous").Scan(&sync) != nil || sync != 2 {
 		return ErrStorage
 	}
 	return nil
@@ -73,7 +78,7 @@ func (s *Store) inventoryCapacityBeforeCommit(ctx context.Context, c *sql.Conn) 
 		return ErrStorage
 	}
 	var pages int64
-	if c.QueryRowContext(ctx, "PRAGMA page_count").Scan(&pages) != nil || pages > completeInventoryPages {
+	if c.QueryRowContext(ctx, "PRAGMA page_count").Scan(&pages) != nil || pages > databaseCap(s.config.Binding.CollectionProfile)/completeInventoryPageSize {
 		return ErrStorage
 	}
 	var wal int64
@@ -87,7 +92,7 @@ func (s *Store) inventoryCapacityBeforeCommit(ctx context.Context, c *sql.Conn) 
 	// COMMIT emits at most one frame per dirty database page, plus bounded sector
 	// padding. Reserve for every current page rather than estimating dirty pages.
 	// Automatic checkpointing is an optimization, never the hard cap mechanism.
-	if wal < 0 || wal+32+pages*(completeInventoryPageSize+24)+completeInventoryWALPadding > CompleteInventoryWALBytes {
+	if wal < 0 || wal+32+pages*(completeInventoryPageSize+24)+completeInventoryWALPadding > sidecarCap(s.config.Binding.CollectionProfile, "-wal") {
 		return ErrStorage
 	}
 	return nil

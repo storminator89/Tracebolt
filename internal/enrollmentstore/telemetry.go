@@ -77,6 +77,12 @@ func (s *Store) SaveObservation(ctx context.Context, invitationID, certificateHa
 			if e != nil || old.WindowsInventory == nil {
 				return ErrStorage
 			}
+			if old.WindowsPatchContext != nil && !frame.WindowsInventory.CollectedAt.After(old.WindowsPatchContext.CollectedAt) {
+				return lanstore.ErrReplay
+			}
+			if old.WindowsAdapterContext != nil && !frame.WindowsInventory.CollectedAt.After(old.WindowsAdapterContext.CollectedAt) {
+				return lanstore.ErrReplay
+			}
 			// Updates use the exact base capture, so the monotonic base floor
 			// below also survives any number of later update-absent frames.
 			if old.WindowsUpdates != nil && !frame.WindowsInventory.CollectedAt.After(old.WindowsUpdates.CollectedAt) {

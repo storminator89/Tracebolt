@@ -19,7 +19,10 @@
     "journal-ai-fixtures.test.mjs",
     "package-updates-fixtures.test.mjs",
     "journal-browse-fixtures.test.mjs",
-    "windows-contact-history-fixtures.test.mjs"
+    "windows-contact-history-fixtures.test.mjs",
+    "windows-full-services-fixtures.test.mjs",
+    "windows-full-software-fixtures.test.mjs",
+    "windows-fleet-fixtures.test.mjs"
   ],
   "imported": [
     "device-inventory-browser-contracts.test.mjs",
@@ -36,7 +39,8 @@
     "workspace-navigation-browser.test.mjs",
     "windows-capacity-fixtures.test.mjs",
     "windows-resource-fixtures.test.mjs",
-    "windows-service-health-fixtures.test.mjs"
+    "windows-service-health-fixtures.test.mjs",
+    "windows-patch-context-fixtures.test.mjs"
   ],
   "excluded": []
 }

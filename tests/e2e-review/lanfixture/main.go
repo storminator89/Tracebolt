@@ -23,6 +23,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strconv"
 	"time"
 
@@ -37,6 +38,7 @@ func run() error {
 	web := flag.String("web", "", "built UI directory")
 	fixture := flag.String("fixture", "", "synthetic awaiting-agent contract JSON")
 	ttl := flag.Duration("ttl", time.Minute, "real session expiry for this test")
+	fullServices := flag.Bool("full-services", false, "invented complete Win32 generations through real stores")
 	flag.Parse()
 	host, portText, err := net.SplitHostPort(*listen)
 	if err != nil || host != "127.0.0.1" || *db == "" || *web == "" || *fixture == "" {
@@ -89,9 +91,21 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	handler, err := api.NewLANOperatorHandler(app, api.LANOperatorConfig{Origin: "http://" + *listen, Auth: auth, Registry: registry, InsecureHTTPTest: true, Devices: func() ([]model.Device, error) { return []model.Device{contract.Device}, nil }})
+	operatorConfig := api.LANOperatorConfig{Origin: "http://" + *listen, Auth: auth, Registry: registry, InsecureHTTPTest: true, Devices: func() ([]model.Device, error) { return []model.Device{contract.Device}, nil }}
+	var complete *fullServicesFixture
+	if *fullServices {
+		complete, err = newFullServicesFixture(operatorConfig.Origin, filepath.Dir(*db), &operatorConfig)
+		if err != nil {
+			return err
+		}
+		defer complete.close()
+	}
+	handler, err := api.NewLANOperatorHandler(app, operatorConfig)
 	if err != nil {
 		return err
+	}
+	if complete != nil {
+		handler = complete.handler(handler, auth)
 	}
 	server := &http.Server{Addr: *listen, Handler: handler, ReadHeaderTimeout: 3 * time.Second}
 	return server.ListenAndServe()

@@ -1,3 +1,5 @@
+import { validWindowsPatchContext, type WindowsPatchContext } from './windows-patch-context-types';
+import { validWindowsAdapterContext, type WindowsAdapterContext } from './windows-adapter-context-types';
 import { validWindowsUpdates, type WindowsUpdates } from './windows-updates-types';
 import { validWindowsServiceStartup, type WindowsServiceStartup } from './windows-service-startup-types';
 import { numericWindowsAddress } from './windows-numeric-address';
@@ -30,8 +32,10 @@ export interface WindowsInventoryView {
     volumes?: WindowsVolumes;
     processMetrics?: WindowsProcessMetrics;
     network?: WindowsNetwork;
+    adapterContext?: WindowsAdapterContext;
     serviceStartup?: WindowsServiceStartup;
     updates?: WindowsUpdates;
+    patchContext?: WindowsPatchContext;
     status: WindowsInventoryStatus; sequence: number | null; receivedAt: string | null; snapshot: WindowsInventorySnapshot | null;
 }
 const exact = (value: unknown, keys: readonly string[]): value is Record<string, unknown> => value !== null && typeof value === 'object' && !Array.isArray(value) && Object.keys(value).length === keys.length && keys.every(key => Object.hasOwn(value, key));
@@ -58,6 +62,10 @@ function network(value: unknown): value is WindowsInterface {
     const b = mapped ? bytes.slice(12) : bytes;
     return b.length === 4 ? b[0] !== 127 && !(b[0] >= 224 && b[0] <= 239) : !(b.slice(0, 15).every(n => n === 0) && b[15] === 1) && b[0] !== 255;
 }
+/** Reuse the exact base Windows hostname/interface contract for fleet display. */
+export function validWindowsIdentitySections(host: unknown, interfaces: unknown): boolean {
+    return section(host, 1, 1, hostname) && (!host.complete || host.rows.length === 1) && section(interfaces, 64, 512, network);
+}
 export function validWindowsInventorySnapshot(value: unknown): value is WindowsInventorySnapshot {
     if (!exact(value, ['schemaVersion', 'collectionProfile', 'generationId', 'collectedAt', 'hostname', 'processes', 'services', 'software', 'network']) || value.schemaVersion !== 'tracebolt.windows-inventory.v1' || value.collectionProfile !== 'windows-inventory-v1' || typeof value.generationId !== 'string' || !/^sample_[a-f0-9]{32}$/.test(value.generationId) || !timestamp(value.collectedAt) || !section(value.hostname, 1, 1, hostname) || value.hostname.complete && value.hostname.rows.length !== 1 || !section(value.processes, 128, 2048, process) || !section(value.services, 128, 2048, service) || !section(value.software, 128, 2048, software) || !section(value.network, 64, 512, network)) return false;
     // Match Go JSON's HTML escaping in addition to the bounded HTTP reader.
@@ -65,22 +73,28 @@ export function validWindowsInventorySnapshot(value: unknown): value is WindowsI
     return new TextEncoder().encode(encoded).byteLength <= WINDOWS_INVENTORY_SNAPSHOT_BYTES;
 }
 export function validWindowsInventoryView(value: unknown, deviceId: string): value is WindowsInventoryView {
-    if (!exact(value, ['schemaVersion', 'deviceId', 'collectionProfile', 'serverNow', 'maxAgeSeconds', 'status', 'sequence', 'receivedAt', 'snapshot', ...(value !== null && typeof value === 'object' && Object.hasOwn(value, 'events') ? ['events'] : []), ...(value !== null && typeof value === 'object' && Object.hasOwn(value, 'volumes') ? ['volumes'] : []), ...(value !== null && typeof value === 'object' && Object.hasOwn(value, 'processMetrics') ? ['processMetrics'] : []), ...(value !== null && typeof value === 'object' && Object.hasOwn(value, 'network') ? ['network'] : []), ...(value !== null && typeof value === 'object' && Object.hasOwn(value, 'serviceStartup') ? ['serviceStartup'] : []), ...(value !== null && typeof value === 'object' && Object.hasOwn(value, 'updates') ? ['updates'] : [])]) || value.schemaVersion !== 'tracebolt.windows-inventory-view.v1' || value.collectionProfile !== 'windows-inventory-v1' || !validWindowsDeviceId(deviceId) || value.deviceId !== deviceId || !timestamp(value.serverNow) || value.maxAgeSeconds !== 120 || typeof value.status !== 'string' || !['not_configured', 'awaiting', 'fresh', 'stale', 'unavailable', 'revoked'].includes(value.status)) return false;
+    if (!exact(value, ['schemaVersion', 'deviceId', 'collectionProfile', 'serverNow', 'maxAgeSeconds', 'status', 'sequence', 'receivedAt', 'snapshot', ...(value !== null && typeof value === 'object' && Object.hasOwn(value, 'events') ? ['events'] : []), ...(value !== null && typeof value === 'object' && Object.hasOwn(value, 'volumes') ? ['volumes'] : []), ...(value !== null && typeof value === 'object' && Object.hasOwn(value, 'processMetrics') ? ['processMetrics'] : []), ...(value !== null && typeof value === 'object' && Object.hasOwn(value, 'network') ? ['network'] : []), ...(value !== null && typeof value === 'object' && Object.hasOwn(value, 'adapterContext') ? ['adapterContext'] : []), ...(value !== null && typeof value === 'object' && Object.hasOwn(value, 'serviceStartup') ? ['serviceStartup'] : []), ...(value !== null && typeof value === 'object' && Object.hasOwn(value, 'updates') ? ['updates'] : []), ...(value !== null && typeof value === 'object' && Object.hasOwn(value, 'patchContext') ? ['patchContext'] : [])]) || value.schemaVersion !== 'tracebolt.windows-inventory-view.v1' || value.collectionProfile !== 'windows-inventory-v1' || !validWindowsDeviceId(deviceId) || value.deviceId !== deviceId || !timestamp(value.serverNow) || value.maxAgeSeconds !== 120 || typeof value.status !== 'string' || !['not_configured', 'awaiting', 'fresh', 'stale', 'unavailable', 'revoked'].includes(value.status)) return false;
     const receipt = integer(value.sequence, Number.MAX_SAFE_INTEGER) && value.sequence > 0 && timestamp(value.receivedAt) && inventoryAge(value.serverNow, value.receivedAt) >= 0;
     if (!(value.sequence === null && value.receivedAt === null) && !receipt) return false;
     if (Object.hasOwn(value, 'events') && (!validWindowsInventorySnapshot(value.snapshot) || !validWindowsEvents(value.events, value.snapshot.generationId, value.serverNow))) return false;
     if (Object.hasOwn(value, 'volumes') && (!validWindowsInventorySnapshot(value.snapshot) || !validWindowsVolumes(value.volumes, value.snapshot.generationId, value.serverNow))) return false;
     if (Object.hasOwn(value, 'processMetrics') && (!validWindowsInventorySnapshot(value.snapshot) || !validWindowsProcessMetrics(value.processMetrics, value.snapshot.generationId, value.serverNow) || value.processMetrics.observedCount !== value.snapshot.processes.rows.length || new Set(value.snapshot.processes.rows.map(row => row.pid)).size !== value.snapshot.processes.rows.length || !value.processMetrics.rows.every(row => (value.snapshot as WindowsInventorySnapshot).processes.rows.some(process => process.pid === row.pid)))) return false;
     if (Object.hasOwn(value, 'network') && (!validWindowsInventorySnapshot(value.snapshot) || !validWindowsNetwork(value.network, value.snapshot.generationId, value.serverNow) || inventoryAge(value.network.collectedAt, value.snapshot.collectedAt) < 0)) return false;
+    if (Object.hasOwn(value, 'adapterContext') && (!validWindowsInventorySnapshot(value.snapshot) || !validWindowsAdapterContext(value.adapterContext, value.snapshot.generationId, value.serverNow) || inventoryAge(value.adapterContext.collectedAt, value.snapshot.collectedAt) !== 0)) return false;
     if (Object.hasOwn(value, 'serviceStartup') && (!validWindowsInventorySnapshot(value.snapshot) || !validWindowsServiceStartup(value.serviceStartup, value.snapshot, value.serverNow))) return false;
     if (Object.hasOwn(value, 'updates') && (!validWindowsInventorySnapshot(value.snapshot) || !validWindowsUpdates(value.updates, value.snapshot, value.serverNow))) return false;
-    if (value.updates && [value.events, value.volumes, value.processMetrics, value.network, value.serviceStartup].some(extension => extension !== undefined && (extension as { grantId: string }).grantId === (value.updates as WindowsUpdates).grantId)) return false;
-    if (value.status !== 'fresh' && value.status !== 'stale') return !Object.hasOwn(value, 'events') && !Object.hasOwn(value, 'volumes') && !Object.hasOwn(value, 'processMetrics') && !Object.hasOwn(value, 'network') && !Object.hasOwn(value, 'serviceStartup') && !Object.hasOwn(value, 'updates') && value.snapshot === null && (!['not_configured', 'awaiting'].includes(value.status) || value.sequence === null);
+    if (Object.hasOwn(value, 'patchContext') && (!validWindowsInventorySnapshot(value.snapshot) || !validWindowsPatchContext(value.patchContext, value.snapshot, value.serverNow))) return false;
+    if (value.patchContext && [value.events, value.volumes, value.processMetrics, value.network, value.adapterContext, value.serviceStartup, value.updates].some(extension => extension !== undefined && (extension as { grantId: string }).grantId === (value.patchContext as WindowsPatchContext).grantId)) return false;
+    if (value.adapterContext && [value.events, value.volumes, value.processMetrics, value.network, value.serviceStartup, value.updates].some(extension => extension !== undefined && (extension as { grantId: string }).grantId === (value.adapterContext as WindowsAdapterContext).grantId)) return false;
+    if (value.updates && [value.events, value.volumes, value.processMetrics, value.network, value.adapterContext, value.serviceStartup].some(extension => extension !== undefined && (extension as { grantId: string }).grantId === (value.updates as WindowsUpdates).grantId)) return false;
+    if (value.status !== 'fresh' && value.status !== 'stale') return !Object.hasOwn(value, 'events') && !Object.hasOwn(value, 'volumes') && !Object.hasOwn(value, 'processMetrics') && !Object.hasOwn(value, 'network') && !Object.hasOwn(value, 'adapterContext') && !Object.hasOwn(value, 'serviceStartup') && !Object.hasOwn(value, 'updates') && !Object.hasOwn(value, 'patchContext') && value.snapshot === null && (!['not_configured', 'awaiting'].includes(value.status) || value.sequence === null);
     if (!receipt || !validWindowsInventorySnapshot(value.snapshot)) return false;
     if (value.processMetrics && inventoryAge((value.processMetrics as WindowsProcessMetrics).collectedAt, value.receivedAt as string) > 30000) return false;
     if (value.network && inventoryAge((value.network as WindowsNetwork).collectedAt, value.receivedAt as string) > 30000) return false;
+    if (value.adapterContext && inventoryAge((value.adapterContext as WindowsAdapterContext).collectedAt, value.receivedAt as string) > 30000) return false;
     if (value.serviceStartup && inventoryAge((value.serviceStartup as WindowsServiceStartup).collectedAt, value.receivedAt as string) > 30000) return false;
     if (value.updates && inventoryAge((value.updates as WindowsUpdates).collectedAt, value.receivedAt as string) > 30000) return false;
+    if (value.patchContext && inventoryAge((value.patchContext as WindowsPatchContext).collectedAt, value.receivedAt as string) > 30000) return false;
     const age = inventoryAge(value.serverNow, value.snapshot.collectedAt);
     const receiptSkew = inventoryAge(value.snapshot.collectedAt, value.receivedAt as string);
     const receiptAge = inventoryAge(value.serverNow, value.receivedAt as string);

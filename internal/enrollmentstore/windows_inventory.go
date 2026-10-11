@@ -5,9 +5,11 @@ import (
 	"localrmm/internal/enrollmentcrypto"
 	"localrmm/internal/enrollmentstate"
 	"localrmm/internal/lanstore"
+	"localrmm/internal/windowsadapters"
 	"localrmm/internal/windowseventhealth"
 	"localrmm/internal/windowsmanaged"
 	"localrmm/internal/windowsnetwork"
+	"localrmm/internal/windowspatchcontext"
 	"localrmm/internal/windowsprocessmetrics"
 	"localrmm/internal/windowsupdates"
 	"localrmm/internal/windowsvolumes"
@@ -32,6 +34,8 @@ type WindowsInventoryView struct {
 	Network             *windowsnetwork.Snapshot               `json:"network,omitempty"`
 	ServiceStartup      *windowsmanaged.ServiceStartupSnapshot `json:"serviceStartup,omitempty"`
 	Updates             *windowsupdates.Snapshot               `json:"updates,omitempty"`
+	PatchContext        *windowspatchcontext.Snapshot          `json:"patchContext,omitempty"`
+	AdapterContext      *windowsadapters.Snapshot              `json:"adapterContext,omitempty"`
 	certificateNotAfter int64
 }
 
@@ -88,6 +92,8 @@ func (s *Store) WindowsInventoryView(ctx context.Context, id string, now time.Ti
 			out.Network = frame.WindowsNetwork
 			out.ServiceStartup = frame.WindowsServiceStartup
 			out.Updates = frame.WindowsUpdates
+			out.AdapterContext = frame.WindowsAdapterContext
+			out.PatchContext = frame.WindowsPatchContext
 			out.Sequence = &seq
 			out.ReceivedAt = &received
 			out.Status = "fresh"
@@ -103,6 +109,8 @@ func (s *Store) WindowsInventoryView(ctx context.Context, id string, now time.Ti
 				out.Network = nil
 				out.ServiceStartup = nil
 				out.Updates = nil
+				out.AdapterContext = nil
+				out.PatchContext = nil
 			}
 		}
 		if identity.State == enrollmentstate.Revoked || identity.State == enrollmentstate.Canceled || identity.State == enrollmentstate.Rejected || identity.State == enrollmentstate.Expired || identity.Intent.NotAfter > 0 && now.Unix() >= identity.Intent.NotAfter {
@@ -114,6 +122,8 @@ func (s *Store) WindowsInventoryView(ctx context.Context, id string, now time.Ti
 			out.Network = nil
 			out.ServiceStartup = nil
 			out.Updates = nil
+			out.AdapterContext = nil
+			out.PatchContext = nil
 		}
 		return nil
 	})
@@ -139,6 +149,8 @@ func (v WindowsInventoryView) RecheckAt(now time.Time) (WindowsInventoryView, er
 		v.Network = nil
 		v.ServiceStartup = nil
 		v.Updates = nil
+		v.AdapterContext = nil
+		v.PatchContext = nil
 		return v, nil
 	}
 	if v.Snapshot != nil {
@@ -161,6 +173,8 @@ func (v WindowsInventoryView) RecheckAt(now time.Time) (WindowsInventoryView, er
 			v.Network = nil
 			v.ServiceStartup = nil
 			v.Updates = nil
+			v.AdapterContext = nil
+			v.PatchContext = nil
 		}
 	}
 	if v.Events != nil && now.Sub(v.Events.CollectedAt) >= 24*time.Hour {
@@ -180,6 +194,10 @@ func (v WindowsInventoryView) RecheckAt(now time.Time) (WindowsInventoryView, er
 	}
 	if v.Updates != nil && (v.Snapshot == nil || now.Sub(v.Updates.CollectedAt) >= 24*time.Hour) {
 		v.Updates = nil
+	}
+	if v.AdapterContext != nil && (v.Snapshot == nil || now.Sub(v.AdapterContext.CollectedAt) >= 24*time.Hour) {
+		v.AdapterContext = nil
+		v.PatchContext = nil
 	}
 	return v, nil
 }

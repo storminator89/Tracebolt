@@ -24,7 +24,7 @@ SHARD_COVERAGE = [
     ('  go-race:\n', '  backend:\n', '105a1ee6f737da7f864e531ba5bcd2131b493349606fa0a016851d7df1f97550'),
     ('  backend:\n', '  transport-smoke:\n', '31fe09e170c4aab4adc0238ad240c639cd8c225fecfa89afe87f27a219bc6740'),
 ]
-RUNNER_SHA256 = '1a3f1a2c9cb0d417d959eb68c302677249e58f453c4089f1ed90a540e3fdd1af'
+RUNNER_SHA256 = 'bd41520107fdaee5ab42f5cc0d935c9486683f491f1ab59fa58ec8df7a736d51'
 
 
 def between(source, start, end):

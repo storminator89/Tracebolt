@@ -16,9 +16,12 @@ import (
 	"localrmm/internal/operational"
 	"localrmm/internal/packagecollector"
 	"localrmm/internal/signedhttp"
+	"localrmm/internal/windowsadapters"
 	"localrmm/internal/windowseventhealth"
 	"localrmm/internal/windowsmanaged"
 	"localrmm/internal/windowsnetwork"
+	"localrmm/internal/windowspatchcontext"
+	"localrmm/internal/windowspatchworker"
 	"localrmm/internal/windowsprocessmetrics"
 	"localrmm/internal/windowsupdates"
 	"localrmm/internal/windowsupdateworker"
@@ -42,6 +45,8 @@ type frame struct {
 	WindowsNetwork        *windowsnetwork.Snapshot               `json:"windowsNetwork,omitempty"`
 	WindowsServiceStartup *windowsmanaged.ServiceStartupSnapshot `json:"windowsServiceStartup,omitempty"`
 	WindowsUpdates        *windowsupdates.Snapshot               `json:"windowsUpdates,omitempty"`
+	WindowsPatchContext   *windowspatchcontext.Snapshot          `json:"windowsPatchContext,omitempty"`
+	WindowsAdapterContext *windowsadapters.Snapshot              `json:"windowsAdapterContext,omitempty"`
 }
 type receipt struct {
 	SchemaVersion string    `json:"schemaVersion"`
@@ -52,33 +57,39 @@ type receipt struct {
 	Duplicate     bool      `json:"duplicate"`
 }
 type Report struct {
-	WindowsEventContentStatus   string `json:"windowsEventContentStatus,omitempty"`
-	CachedUpdatesStatus         string `json:"cachedUpdatesStatus,omitempty"`
-	CachedUpdatesSequence       uint64 `json:"cachedUpdatesSequence,omitempty"`
-	CachedUpdatesOperations     uint8  `json:"cachedUpdatesOperations,omitempty"`
-	ProcessesStatus             string `json:"processesStatus,omitempty"`
-	ProcessesSequence           uint64 `json:"processesSequence,omitempty"`
-	VolumesStatus               string `json:"volumesStatus,omitempty"`
-	VolumesSequence             uint64 `json:"volumesSequence,omitempty"`
-	OverviewOperations          uint8  `json:"overviewOperations,omitempty"`
-	JournalStatus               string `json:"journalStatus,omitempty"`
-	SchemaVersion               string `json:"schemaVersion"`
-	Status                      string `json:"status"`
-	Profile                     string `json:"profile"`
-	Sequence                    uint64 `json:"sequence,omitempty"`
-	Duplicate                   bool   `json:"duplicate"`
-	RetriedPending              bool   `json:"retriedPending"`
-	DiscardedUnconsented        bool   `json:"discardedUnconsented,omitempty"`
-	DiscardedStale              bool   `json:"discardedStale"`
-	AvailablePercentageFields   int    `json:"availablePercentageFields"`
-	UnavailablePercentageFields int    `json:"unavailablePercentageFields"`
-	InventoryStatus             string `json:"inventoryStatus,omitempty"`
-	InventorySequence           uint64 `json:"inventorySequence,omitempty"`
-	InventoryOperations         uint8  `json:"inventoryOperations,omitempty"`
-	SystemStatus                string `json:"systemStatus,omitempty"`
-	SystemSequence              uint64 `json:"systemSequence,omitempty"`
-	SystemRetriedPending        bool   `json:"systemRetriedPending,omitempty"`
-	SystemDiscardedStale        bool   `json:"systemDiscardedStale,omitempty"`
+	WindowsFullServicesStatus     string `json:"windowsFullServicesStatus,omitempty"`
+	WindowsFullServicesSequence   uint64 `json:"windowsFullServicesSequence,omitempty"`
+	WindowsFullServicesOperations uint8  `json:"windowsFullServicesOperations,omitempty"`
+	WindowsFullSoftwareStatus     string `json:"windowsFullSoftwareStatus,omitempty"`
+	WindowsFullSoftwareSequence   uint64 `json:"windowsFullSoftwareSequence,omitempty"`
+	WindowsFullSoftwareOperations uint8  `json:"windowsFullSoftwareOperations,omitempty"`
+	WindowsEventContentStatus     string `json:"windowsEventContentStatus,omitempty"`
+	CachedUpdatesStatus           string `json:"cachedUpdatesStatus,omitempty"`
+	CachedUpdatesSequence         uint64 `json:"cachedUpdatesSequence,omitempty"`
+	CachedUpdatesOperations       uint8  `json:"cachedUpdatesOperations,omitempty"`
+	ProcessesStatus               string `json:"processesStatus,omitempty"`
+	ProcessesSequence             uint64 `json:"processesSequence,omitempty"`
+	VolumesStatus                 string `json:"volumesStatus,omitempty"`
+	VolumesSequence               uint64 `json:"volumesSequence,omitempty"`
+	OverviewOperations            uint8  `json:"overviewOperations,omitempty"`
+	JournalStatus                 string `json:"journalStatus,omitempty"`
+	SchemaVersion                 string `json:"schemaVersion"`
+	Status                        string `json:"status"`
+	Profile                       string `json:"profile"`
+	Sequence                      uint64 `json:"sequence,omitempty"`
+	Duplicate                     bool   `json:"duplicate"`
+	RetriedPending                bool   `json:"retriedPending"`
+	DiscardedUnconsented          bool   `json:"discardedUnconsented,omitempty"`
+	DiscardedStale                bool   `json:"discardedStale"`
+	AvailablePercentageFields     int    `json:"availablePercentageFields"`
+	UnavailablePercentageFields   int    `json:"unavailablePercentageFields"`
+	InventoryStatus               string `json:"inventoryStatus,omitempty"`
+	InventorySequence             uint64 `json:"inventorySequence,omitempty"`
+	InventoryOperations           uint8  `json:"inventoryOperations,omitempty"`
+	SystemStatus                  string `json:"systemStatus,omitempty"`
+	SystemSequence                uint64 `json:"systemSequence,omitempty"`
+	SystemRetriedPending          bool   `json:"systemRetriedPending,omitempty"`
+	SystemDiscardedStale          bool   `json:"systemDiscardedStale,omitempty"`
 }
 
 // Run preserves the legacy one-shot collection/delivery behavior. The explicitly
@@ -122,9 +133,25 @@ func Run(ctx context.Context, m Material) (Report, error) {
 		// foreground attempts retain their original20s budget separately.
 		events := openWindowsEventContentSender(m)
 		defer events.Close()
+		fullServices, fullErr := openWindowsFullServicesSender(m, state)
+		if fullErr != nil {
+			return report, fullErr
+		}
+		defer fullServices.Close()
+		fullSoftware, fullErr := openWindowsFullSoftwareSender(m, state)
+		if fullErr != nil {
+			return report, fullErr
+		}
+		defer fullSoftware.Close()
 		report, err := runUsingState(ctx, m, state)
 		if ctx.Err() == nil {
 			report.WindowsEventContentStatus = runWindowsEventContentAttempt(ctx, events)
+			if e := runWindowsFullServicesAttempt(ctx, fullServices, &report); e != nil {
+				return report, e
+			}
+			if e := runWindowsFullSoftwareAttempt(ctx, fullSoftware, &report); e != nil {
+				return report, e
+			}
 		}
 		return report, err
 	}
@@ -205,41 +232,27 @@ func runUsingStateWithCollectors(ctx context.Context, m Material, state *lanclie
 // All dependencies are private per-attempt values. Tests can exercise staging
 // and transport without reading any production observation source.
 func runUsingStateWithSources(ctx context.Context, m Material, state *lanclientstate.State, collectOperations func(context.Context, time.Time) operational.Snapshot, collectPackages func(context.Context, string, time.Time) (linuxpackages.Snapshot, error), collectBasic func() model.Device) (Report, error) {
-	return runUsingStateWithDependencies(ctx, m, state, collectOperations, collectPackages, collectBasic, collectWindowsForProcessMetrics, nil)
+	return runUsingStateWithCurrentDependencies(ctx, m, state, collectOperations, collectPackages, collectBasic, collectWindowsForProcessMetrics, nil)
 }
 
 // Dependencies are per-attempt and private: fixture transports never open listeners.
-func runUsingStateWithDependencies(ctx context.Context, m Material, state *lanclientstate.State, collectOperations func(context.Context, time.Time) operational.Snapshot, collectPackages func(context.Context, string, time.Time) (linuxpackages.Snapshot, error), collectBasic func() model.Device, collectWindows windowsCollector, send func(*http.Request) (*http.Response, error)) (Report, error) {
-	return runUsingStateWithUpdatesDependencies(ctx, m, state, collectOperations, collectPackages, collectBasic, collectWindows, send, func() (windowseventhealth.Consent, bool) { return readWindowsEventConsent(m) }, windowseventhealth.Collect, func() (windowsvolumes.Consent, bool) { return readWindowsVolumeConsent(m) }, windowsvolumes.Collect, func() (windowsprocessmetrics.Consent, bool) { return readWindowsProcessMetricsConsent(m) }, nativeProcessMetricCollector(m.processSampler), func() (windowsnetwork.Consent, bool) { return readWindowsNetworkConsent(m) }, windowsnetwork.Collect, func() (windowsmanaged.ServiceStartupConsent, bool) { return readWindowsServiceStartupConsent(m) }, windowsmanaged.CollectServiceStartup, func() (windowsupdates.Consent, bool) { return readWindowsUpdatesConsent(m) }, windowsupdateworker.Collect)
+func runUsingStateWithCurrentDependencies(ctx context.Context, m Material, state *lanclientstate.State, collectOperations func(context.Context, time.Time) operational.Snapshot, collectPackages func(context.Context, string, time.Time) (linuxpackages.Snapshot, error), collectBasic func() model.Device, collectWindows windowsCollector, send func(*http.Request) (*http.Response, error)) (Report, error) {
+	return runUsingStateWithPatchContextAuthorityDependencies(ctx, m, state, collectOperations, collectPackages, collectBasic, collectWindows, send, func() (windowseventhealth.Consent, bool) { return readWindowsEventConsent(m) }, windowseventhealth.Collect, func() (windowsvolumes.Consent, bool) { return readWindowsVolumeConsent(m) }, windowsvolumes.Collect, func() (windowsprocessmetrics.Consent, bool) { return readWindowsProcessMetricsConsent(m) }, nativeProcessMetricCollector(m.processSampler), func() (windowsnetwork.Consent, bool) { return readWindowsNetworkConsent(m) }, windowsnetwork.Collect, func() (windowsmanaged.ServiceStartupConsent, bool) { return readWindowsServiceStartupConsent(m) }, windowsmanaged.CollectServiceStartup, func() (windowsupdates.Consent, bool) { return readWindowsUpdatesConsent(m) }, windowsupdateworker.Collect, func() (windowsadapters.Consent, bool) { return readWindowsAdapterContextConsent(m) }, windowsadapters.Collect, func() (windowspatchcontext.Consent, bool) { return readWindowsPatchContextConsent(m) }, windowspatchworker.Collect, func() bool { return currentWindowsContextMaterial(m, Load) })
 }
 
-func runUsingStateWithEventDependencies(ctx context.Context, m Material, state *lanclientstate.State, collectOperations func(context.Context, time.Time) operational.Snapshot, collectPackages func(context.Context, string, time.Time) (linuxpackages.Snapshot, error), collectBasic func() model.Device, collectWindows windowsCollector, send func(*http.Request) (*http.Response, error), readConsent func() (windowseventhealth.Consent, bool), collectEvents eventCollector) (Report, error) {
-	return runUsingStateWithCapabilityDependencies(ctx, m, state, collectOperations, collectPackages, collectBasic, collectWindows, send, readConsent, collectEvents, nil, nil)
-}
-
-func runUsingStateWithCapabilityDependencies(ctx context.Context, m Material, state *lanclientstate.State, collectOperations func(context.Context, time.Time) operational.Snapshot, collectPackages func(context.Context, string, time.Time) (linuxpackages.Snapshot, error), collectBasic func() model.Device, collectWindows windowsCollector, send func(*http.Request) (*http.Response, error), readConsent func() (windowseventhealth.Consent, bool), collectEvents eventCollector, readVolumes func() (windowsvolumes.Consent, bool), collectVolumes volumeCollector) (Report, error) {
-	return runUsingStateWithProcessMetricsDependencies(ctx, m, state, collectOperations, collectPackages, collectBasic, collectWindows, send, readConsent, collectEvents, readVolumes, collectVolumes, nil, nil)
-}
-
-func runUsingStateWithProcessMetricsDependencies(ctx context.Context, m Material, state *lanclientstate.State, collectOperations func(context.Context, time.Time) operational.Snapshot, collectPackages func(context.Context, string, time.Time) (linuxpackages.Snapshot, error), collectBasic func() model.Device, collectWindows windowsCollector, send func(*http.Request) (*http.Response, error), readConsent func() (windowseventhealth.Consent, bool), collectEvents eventCollector, readVolumes func() (windowsvolumes.Consent, bool), collectVolumes volumeCollector, readProcessMetrics func() (windowsprocessmetrics.Consent, bool), collectProcessMetrics processMetricCollector) (Report, error) {
-	return runUsingStateWithNetworkDependencies(ctx, m, state, collectOperations, collectPackages, collectBasic, collectWindows, send, readConsent, collectEvents, readVolumes, collectVolumes, readProcessMetrics, collectProcessMetrics, nil, nil)
-}
-
-func runUsingStateWithNetworkDependencies(ctx context.Context, m Material, state *lanclientstate.State, collectOperations func(context.Context, time.Time) operational.Snapshot, collectPackages func(context.Context, string, time.Time) (linuxpackages.Snapshot, error), collectBasic func() model.Device, collectWindows windowsCollector, send func(*http.Request) (*http.Response, error), readConsent func() (windowseventhealth.Consent, bool), collectEvents eventCollector, readVolumes func() (windowsvolumes.Consent, bool), collectVolumes volumeCollector, readProcessMetrics func() (windowsprocessmetrics.Consent, bool), collectProcessMetrics processMetricCollector, readNetwork func() (windowsnetwork.Consent, bool), collectNetwork networkCollector) (Report, error) {
-	return runUsingStateWithServiceStartupDependencies(ctx, m, state, collectOperations, collectPackages, collectBasic, collectWindows, send, readConsent, collectEvents, readVolumes, collectVolumes, readProcessMetrics, collectProcessMetrics, readNetwork, collectNetwork, nil, nil)
-}
-
-func runUsingStateWithServiceStartupDependencies(ctx context.Context, m Material, state *lanclientstate.State, collectOperations func(context.Context, time.Time) operational.Snapshot, collectPackages func(context.Context, string, time.Time) (linuxpackages.Snapshot, error), collectBasic func() model.Device, collectWindows windowsCollector, send func(*http.Request) (*http.Response, error), readConsent func() (windowseventhealth.Consent, bool), collectEvents eventCollector, readVolumes func() (windowsvolumes.Consent, bool), collectVolumes volumeCollector, readProcessMetrics func() (windowsprocessmetrics.Consent, bool), collectProcessMetrics processMetricCollector, readNetwork func() (windowsnetwork.Consent, bool), collectNetwork networkCollector, readServiceStartup func() (windowsmanaged.ServiceStartupConsent, bool), collectServiceStartup serviceStartupCollector) (Report, error) {
-	return runUsingStateWithUpdatesDependencies(ctx, m, state, collectOperations, collectPackages, collectBasic, collectWindows, send, readConsent, collectEvents, readVolumes, collectVolumes, readProcessMetrics, collectProcessMetrics, readNetwork, collectNetwork, readServiceStartup, collectServiceStartup, nil, nil)
-}
-
-func runUsingStateWithUpdatesDependencies(ctx context.Context, m Material, state *lanclientstate.State, collectOperations func(context.Context, time.Time) operational.Snapshot, collectPackages func(context.Context, string, time.Time) (linuxpackages.Snapshot, error), collectBasic func() model.Device, collectWindows windowsCollector, send func(*http.Request) (*http.Response, error), readConsent func() (windowseventhealth.Consent, bool), collectEvents eventCollector, readVolumes func() (windowsvolumes.Consent, bool), collectVolumes volumeCollector, readProcessMetrics func() (windowsprocessmetrics.Consent, bool), collectProcessMetrics processMetricCollector, readNetwork func() (windowsnetwork.Consent, bool), collectNetwork networkCollector, readServiceStartup func() (windowsmanaged.ServiceStartupConsent, bool), collectServiceStartup serviceStartupCollector, readUpdates func() (windowsupdates.Consent, bool), collectUpdates updatesCollector) (Report, error) {
+func runUsingStateWithPatchContextAuthorityDependencies(ctx context.Context, m Material, state *lanclientstate.State, collectOperations func(context.Context, time.Time) operational.Snapshot, collectPackages func(context.Context, string, time.Time) (linuxpackages.Snapshot, error), collectBasic func() model.Device, collectWindows windowsCollector, send func(*http.Request) (*http.Response, error), readConsent func() (windowseventhealth.Consent, bool), collectEvents eventCollector, readVolumes func() (windowsvolumes.Consent, bool), collectVolumes volumeCollector, readProcessMetrics func() (windowsprocessmetrics.Consent, bool), collectProcessMetrics processMetricCollector, readNetwork func() (windowsnetwork.Consent, bool), collectNetwork networkCollector, readServiceStartup func() (windowsmanaged.ServiceStartupConsent, bool), collectServiceStartup serviceStartupCollector, readUpdates func() (windowsupdates.Consent, bool), collectUpdates updatesCollector, readAdapterContext func() (windowsadapters.Consent, bool), collectAdapterContext adapterContextCollector, readPatchContext func() (windowspatchcontext.Consent, bool), collectPatchContext patchContextCollector, currentMaterial func() bool) (Report, error) {
 	report := Report{SchemaVersion: "tracebolt.agent-run.v1", Status: "failed", Profile: m.config.Profile}
 	if ctx.Err() != nil {
 		return report, ctx.Err()
 	}
 	if !m.valid() {
 		return report, ErrConfiguration
+	}
+	currentAuthority := func() bool {
+		return !m.config.windowsInventory() || currentMaterial != nil && currentMaterial()
+	}
+	if !currentAuthority() {
+		return report, ErrState
 	}
 	consent, enabled := windowseventhealth.Consent{}, false
 	if m.config.windowsInventory() && readConsent != nil {
@@ -274,6 +287,25 @@ func runUsingStateWithUpdatesDependencies(ctx context.Context, m Material, state
 		updatesConsent, updatesEnabled = readUpdates()
 		updatesEnabled = updatesEnabled && validUpdatesConsent(updatesConsent, m.binding)
 	}
+	adapterConsent, adapterEnabled := windowsadapters.Consent{}, false
+	if m.config.windowsInventory() && readAdapterContext != nil {
+		adapterConsent, adapterEnabled = readAdapterContext()
+		adapterEnabled = adapterEnabled && validAdapterContextConsent(adapterConsent, m.binding)
+	}
+	patchConsent, patchEnabled := windowspatchcontext.Consent{}, false
+	if m.config.windowsInventory() && readPatchContext != nil {
+		patchConsent, patchEnabled = readPatchContext()
+		patchEnabled = patchEnabled && validPatchContextConsent(patchConsent, m.binding)
+	}
+	if patchEnabled {
+		collectUpdates = updatesWithPatchBudget(collectUpdates)
+		collectPatchContext = patchContextWithBudget(collectPatchContext)
+	}
+	// A reader may observe identity loss as disabled scope. Reject that loss
+	// before it can be mistaken for an ordinary revocation of pending data.
+	if !currentAuthority() {
+		return report, ErrState
+	}
 	pending, e := state.Pending()
 	if e != nil {
 		return report, ErrState
@@ -288,7 +320,10 @@ func runUsingStateWithUpdatesDependencies(ctx context.Context, m Material, state
 		if ctx.Err() != nil {
 			return report, ctx.Err()
 		}
-		unconsented := f.WindowsEvents != nil && (!enabled || f.WindowsEvents.GrantID != consent.GrantID) || f.WindowsVolumes != nil && (!volumesEnabled || f.WindowsVolumes.GrantID != volumeConsent.GrantID) || f.WindowsProcessMetrics != nil && (!processEnabled || f.WindowsProcessMetrics.GrantID != processConsent.GrantID) || f.WindowsNetwork != nil && (!networkEnabled || f.WindowsNetwork.GrantID != networkConsent.GrantID) || f.WindowsServiceStartup != nil && (!startupEnabled || f.WindowsServiceStartup.GrantID != startupConsent.GrantID) || f.WindowsUpdates != nil && (!updatesEnabled || f.WindowsUpdates.GrantID != updatesConsent.GrantID)
+		unconsented := f.WindowsEvents != nil && (!enabled || f.WindowsEvents.GrantID != consent.GrantID) || f.WindowsVolumes != nil && (!volumesEnabled || f.WindowsVolumes.GrantID != volumeConsent.GrantID) || f.WindowsProcessMetrics != nil && (!processEnabled || f.WindowsProcessMetrics.GrantID != processConsent.GrantID) || f.WindowsNetwork != nil && (!networkEnabled || f.WindowsNetwork.GrantID != networkConsent.GrantID) || f.WindowsServiceStartup != nil && (!startupEnabled || f.WindowsServiceStartup.GrantID != startupConsent.GrantID) || f.WindowsUpdates != nil && (!updatesEnabled || f.WindowsUpdates.GrantID != updatesConsent.GrantID) || f.WindowsAdapterContext != nil && (!adapterEnabled || f.WindowsAdapterContext.GrantID != adapterConsent.GrantID) || f.WindowsPatchContext != nil && (!patchEnabled || f.WindowsPatchContext.GrantID != patchConsent.GrantID)
+		if !currentAuthority() {
+			return report, ErrState
+		}
 		if stale(f, time.Now().UTC()) || unconsented {
 			if state.Discard(pending.Digest) != nil {
 				return report, ErrState
@@ -303,6 +338,9 @@ func runUsingStateWithUpdatesDependencies(ctx context.Context, m Material, state
 	if pending == nil {
 		if ctx.Err() != nil {
 			return report, ctx.Err()
+		}
+		if !currentAuthority() {
+			return report, ErrState
 		}
 		sequence, e := state.NextSequence()
 		if e != nil {
@@ -366,10 +404,32 @@ func runUsingStateWithUpdatesDependencies(ctx context.Context, m Material, state
 				return report, e
 			}
 		}
+		if adapterEnabled {
+			if !sameAdapterContextConsent(readAdapterContext, adapterConsent, m.binding) {
+				return report, ErrState
+			}
+			f, body, e = appendWindowsAdapterContext(captureCtx, m, f, adapterConsent, collectAdapterContext)
+			if e != nil {
+				return report, e
+			}
+		}
+
+		if patchEnabled {
+			if !samePatchContextConsent(readPatchContext, patchConsent, m.binding) {
+				return report, ErrState
+			}
+			f, body, e = appendWindowsPatchContext(captureCtx, m, f, patchConsent, collectPatchContext)
+			if e != nil {
+				return report, e
+			}
+		}
 		if ctx.Err() != nil {
 			return report, ctx.Err()
 		}
-		if f.WindowsEvents != nil && !sameEventConsent(readConsent, consent, m.binding) || f.WindowsVolumes != nil && !sameVolumeConsent(readVolumes, volumeConsent, m.binding) || f.WindowsProcessMetrics != nil && !sameProcessMetricConsent(readProcessMetrics, processConsent, m.binding) || f.WindowsNetwork != nil && !sameNetworkConsent(readNetwork, networkConsent, m.binding) || f.WindowsServiceStartup != nil && !sameServiceStartupConsent(readServiceStartup, startupConsent, m.binding) || f.WindowsUpdates != nil && !sameUpdatesConsent(readUpdates, updatesConsent, m.binding) {
+		if f.WindowsEvents != nil && !sameEventConsent(readConsent, consent, m.binding) || f.WindowsVolumes != nil && !sameVolumeConsent(readVolumes, volumeConsent, m.binding) || f.WindowsProcessMetrics != nil && !sameProcessMetricConsent(readProcessMetrics, processConsent, m.binding) || f.WindowsNetwork != nil && !sameNetworkConsent(readNetwork, networkConsent, m.binding) || f.WindowsServiceStartup != nil && !sameServiceStartupConsent(readServiceStartup, startupConsent, m.binding) || f.WindowsUpdates != nil && !sameUpdatesConsent(readUpdates, updatesConsent, m.binding) || f.WindowsAdapterContext != nil && !sameAdapterContextConsent(readAdapterContext, adapterConsent, m.binding) || f.WindowsPatchContext != nil && !samePatchContextConsent(readPatchContext, patchConsent, m.binding) {
+			return report, ErrState
+		}
+		if !currentAuthority() {
 			return report, ErrState
 		}
 		p, e := state.Stage(sequence, body)
@@ -381,7 +441,7 @@ func runUsingStateWithUpdatesDependencies(ctx context.Context, m Material, state
 	if ctx.Err() != nil {
 		return report, ctx.Err()
 	}
-	if f.WindowsEvents != nil && !sameEventConsent(readConsent, consent, m.binding) || f.WindowsVolumes != nil && !sameVolumeConsent(readVolumes, volumeConsent, m.binding) || f.WindowsProcessMetrics != nil && !sameProcessMetricConsent(readProcessMetrics, processConsent, m.binding) || f.WindowsNetwork != nil && !sameNetworkConsent(readNetwork, networkConsent, m.binding) || f.WindowsServiceStartup != nil && !sameServiceStartupConsent(readServiceStartup, startupConsent, m.binding) || f.WindowsUpdates != nil && !sameUpdatesConsent(readUpdates, updatesConsent, m.binding) {
+	if f.WindowsEvents != nil && !sameEventConsent(readConsent, consent, m.binding) || f.WindowsVolumes != nil && !sameVolumeConsent(readVolumes, volumeConsent, m.binding) || f.WindowsProcessMetrics != nil && !sameProcessMetricConsent(readProcessMetrics, processConsent, m.binding) || f.WindowsNetwork != nil && !sameNetworkConsent(readNetwork, networkConsent, m.binding) || f.WindowsServiceStartup != nil && !sameServiceStartupConsent(readServiceStartup, startupConsent, m.binding) || f.WindowsUpdates != nil && !sameUpdatesConsent(readUpdates, updatesConsent, m.binding) || f.WindowsAdapterContext != nil && !sameAdapterContextConsent(readAdapterContext, adapterConsent, m.binding) || f.WindowsPatchContext != nil && !samePatchContextConsent(readPatchContext, patchConsent, m.binding) {
 		return report, ErrState
 	}
 	report.Sequence = pending.Sequence
@@ -412,6 +472,9 @@ func runUsingStateWithUpdatesDependencies(ctx context.Context, m Material, state
 	}
 	if ctx.Err() != nil {
 		return report, ctx.Err()
+	}
+	if !currentAuthority() {
+		return report, ErrState
 	}
 	response, e := send(req)
 	if e != nil {
@@ -559,6 +622,12 @@ func decodeFrameForConfig(raw []byte, sequence uint64, c Config) (frame, error) 
 	if c.windowsInventory() && len(fields["windowsUpdates"]) > 0 {
 		want++
 	}
+	if c.windowsInventory() && len(fields["windowsPatchContext"]) > 0 {
+		want++
+	}
+	if c.windowsInventory() && len(fields["windowsAdapterContext"]) > 0 {
+		want++
+	}
 	if len(fields) != want {
 		return f, ErrState
 	}
@@ -576,7 +645,7 @@ func decodeFrameForConfig(raw []byte, sequence uint64, c Config) (frame, error) 
 		if validateWindowsFrame(f, fields, c) != nil {
 			return f, ErrState
 		}
-	} else if f.WindowsInventory != nil || f.WindowsEvents != nil || f.WindowsVolumes != nil || f.WindowsProcessMetrics != nil || f.WindowsNetwork != nil || f.WindowsServiceStartup != nil || f.WindowsUpdates != nil {
+	} else if f.WindowsInventory != nil || f.WindowsEvents != nil || f.WindowsVolumes != nil || f.WindowsProcessMetrics != nil || f.WindowsNetwork != nil || f.WindowsServiceStartup != nil || f.WindowsUpdates != nil || f.WindowsAdapterContext != nil || f.WindowsPatchContext != nil {
 		return f, ErrState
 	} else if c.SchemaVersion == OperationalConfigVersion || c.complete() {
 		if f.Packages != nil || f.SchemaVersion != FrameOperationalVersion || f.Sequence == 0 || f.Sequence > operational.MaxSafeInteger || (c.CollectionProfile != operational.CollectionProfile && !c.complete()) || f.Operational == nil || len(fields["operational"]) > operational.MaxSnapshotBytes || exactOperationalJSON(fields["operational"]) != nil || operational.Validate(*f.Operational) != nil || f.Observation.Platform != "linux" || f.Operational.CollectedAt.After(f.Observation.GeneratedAt) {
@@ -653,6 +722,12 @@ func stale(f frame, now time.Time) bool {
 	}
 	if f.WindowsUpdates != nil {
 		times = append(times, f.WindowsUpdates.CollectedAt)
+	}
+	if f.WindowsPatchContext != nil {
+		times = append(times, f.WindowsPatchContext.CollectedAt)
+	}
+	if f.WindowsAdapterContext != nil {
+		times = append(times, f.WindowsAdapterContext.CollectedAt)
 	}
 	for _, e := range d.Evidence {
 		times = append(times, e.CollectedAt)
