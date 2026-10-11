@@ -7,6 +7,14 @@ import "localrmm/internal/windowsstate"
 func Enrollment(sid string, create bool) windowsstate.Options {
 	return windowsstate.Options{RuntimeSID: sid, Names: []string{"ledger.json", "agent-key.pem", "agent-cert.pem", "server-ca.pem", "agent.json", "ready.json", "service-enrollment.json"}, Directories: []string{"telemetry"}, LockName: "enrollment.lock", TempName: "enrollment.tmp", MaxBytes: 1 << 20, Create: create}
 }
+
+// EnrollmentRenewable is selected only by a validated fresh renewable bootstrap.
+// Existing Enrollment names and receipts remain byte-for-byte unchanged.
+func EnrollmentRenewable(sid string, create bool) windowsstate.Options {
+	o := Enrollment(sid, create)
+	o.Names = append(o.Names, "renewal-manifest.json", "renewal-transaction.json")
+	return o
+}
 func Sender(sid string, create bool) windowsstate.Options {
 	return windowsstate.Options{RuntimeSID: sid, Names: []string{"state.json"}, LockName: "sender.lock", TempName: "sender.tmp", MaxBytes: 128 << 10, Create: create}
 }

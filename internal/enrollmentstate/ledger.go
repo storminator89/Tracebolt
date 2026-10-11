@@ -151,6 +151,9 @@ func RestoreTrustedLedger(config Config, raw []byte) (*Engine, error) {
 			return nil, ErrInvalid
 		}
 		rec.publicKeyDERBase64 = string(key)
+		if s.Claim.ClaimID != "" && (config.AutomaticRenewal != (s.Claim.RenewalPolicy == enrollmentcrypto.RenewalPolicySameKey) || s.Claim.AgentOrigin != config.RenewalAgentOrigin) {
+			return nil, ErrInvalid
+		}
 		stageN := stage(s.State)
 		revision := stageN
 		if terminal(s.State) {

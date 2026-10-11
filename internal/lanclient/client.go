@@ -1129,11 +1129,11 @@ func collectFrameWithSources(ctx context.Context, c Config, sequence uint64, col
 }
 
 func collectFrameWithDependencies(ctx context.Context, c Config, sequence uint64, collectOperations func(context.Context, time.Time) operational.Snapshot, collectPackages func(context.Context, string, time.Time) (linuxpackages.Snapshot, error), collectBasic func() model.Device, collectWindows windowsCollector) (frame, []byte, error) {
-	if c.SchemaVersion == WindowsInventoryConfigVersion || c.CollectionProfile == enrollmentcrypto.CollectionProfileWindowsInventory {
+	if c.SchemaVersion == WindowsInventoryConfigVersion || c.SchemaVersion == WindowsRenewalConfigVersion || c.CollectionProfile == enrollmentcrypto.CollectionProfileWindowsInventory {
 		return collectWindowsFrame(ctx, c, sequence, collectWindows)
 	}
 	f := frame{SchemaVersion: FrameVersion, Sequence: sequence}
-	if c.SchemaVersion == PackageConfigVersion && c.CollectionProfile != enrollmentcrypto.CollectionProfilePackages {
+	if c.packages() && c.CollectionProfile != enrollmentcrypto.CollectionProfilePackages {
 		return f, nil, ErrConfiguration
 	}
 	if ctx.Err() != nil {
@@ -1151,7 +1151,7 @@ func collectFrameWithDependencies(ctx context.Context, c Config, sequence uint64
 			return f, nil, ErrObservation
 		}
 		f.SchemaVersion, f.Operational = FrameOperationalVersion, &snapshot
-		if c.SchemaVersion == PackageConfigVersion {
+		if c.packages() {
 			bounded, err := operational.TrimForPackageFrame(snapshot)
 			if err != nil {
 				return f, nil, ErrObservation
@@ -1199,9 +1199,9 @@ func decodeFrameForConfig(raw []byte, sequence uint64, c Config) (frame, error) 
 		return f, ErrState
 	}
 	want := 3
-	if c.SchemaVersion == OperationalConfigVersion || c.complete() || c.windowsInventory() {
+	if c.operational() || c.complete() || c.windowsInventory() {
 		want = 4
-	} else if c.SchemaVersion == PackageConfigVersion {
+	} else if c.packages() {
 		want = 5
 	}
 	if c.windowsInventory() && len(fields["windowsEvents"]) > 0 {
@@ -1262,17 +1262,17 @@ func decodeFrameForConfig(raw []byte, sequence uint64, c Config) (frame, error) 
 	if d.Decode(&f) != nil || d.Decode(new(any)) != io.EOF {
 		return f, ErrState
 	}
-	if c.SchemaVersion == WindowsInventoryConfigVersion || c.CollectionProfile == enrollmentcrypto.CollectionProfileWindowsInventory {
+	if c.SchemaVersion == WindowsInventoryConfigVersion || c.SchemaVersion == WindowsRenewalConfigVersion || c.CollectionProfile == enrollmentcrypto.CollectionProfileWindowsInventory {
 		if validateWindowsFrame(f, fields, c) != nil {
 			return f, ErrState
 		}
 	} else if f.WindowsInventory != nil || f.WindowsEvents != nil || f.WindowsVolumes != nil || f.WindowsProcessMetrics != nil || f.WindowsNetwork != nil || f.WindowsServiceStartup != nil || f.WindowsUpdates != nil || f.WindowsAdapterContext != nil || f.WindowsPatchContext != nil || f.WindowsSecurityPosture != nil || f.WindowsSessionContext != nil || f.WindowsHardwareContext != nil || f.WindowsStorageContext != nil || f.WindowsSecurityCoverage != nil || f.WindowsResourceContext != nil {
 		return f, ErrState
-	} else if c.SchemaVersion == OperationalConfigVersion || c.complete() {
+	} else if c.operational() || c.complete() {
 		if f.Packages != nil || f.SchemaVersion != FrameOperationalVersion || f.Sequence == 0 || f.Sequence > operational.MaxSafeInteger || (c.CollectionProfile != operational.CollectionProfile && !c.complete()) || f.Operational == nil || len(fields["operational"]) > operational.MaxSnapshotBytes || exactOperationalJSON(fields["operational"]) != nil || operational.Validate(*f.Operational) != nil || f.Observation.Platform != "linux" || f.Operational.CollectedAt.After(f.Observation.GeneratedAt) {
 			return f, ErrState
 		}
-	} else if c.SchemaVersion == PackageConfigVersion {
+	} else if c.packages() {
 		if c.CollectionProfile != enrollmentcrypto.CollectionProfilePackages || f.SchemaVersion != FramePackagesVersion || f.Sequence == 0 || f.Sequence > operational.MaxSafeInteger || f.Operational == nil || f.Packages == nil || f.Observation.Platform != "linux" || exactPackageFrameJSON(raw) != nil || len(fields["observation"]) > MaxPackageObservationBytes || len(fields["operational"]) > operational.MaxPackageFrameSnapshotBytes || operational.Validate(*f.Operational) != nil || f.Operational.CollectedAt.After(f.Observation.GeneratedAt) {
 			return f, ErrState
 		}
@@ -1309,7 +1309,7 @@ func decodeFrameForConfig(raw []byte, sequence uint64, c Config) (frame, error) 
 		return f, ErrState
 	}
 	encoded, e := json.Marshal(f.Observation)
-	if e != nil || len(encoded) > bundle.MaxBytes || (c.SchemaVersion == PackageConfigVersion && len(encoded) > MaxPackageObservationBytes || c.windowsInventory() && len(encoded) > MaxWindowsObservationBytes) {
+	if e != nil || len(encoded) > bundle.MaxBytes || (c.packages() && len(encoded) > MaxPackageObservationBytes || c.windowsInventory() && len(encoded) > MaxWindowsObservationBytes) {
 		return f, ErrState
 	}
 	return f, nil

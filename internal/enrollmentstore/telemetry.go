@@ -37,17 +37,8 @@ func (s *Store) SaveObservation(ctx context.Context, invitationID, certificateHa
 		if err != nil {
 			return err
 		}
-		if snapshot.State != enrollmentstate.Activated {
-			return enrollmentstate.ErrState
-		}
-		if snapshot.Issuance.CertificateHash != certificateHash {
-			return enrollmentstate.ErrProof
-		}
-		if receivedAt.Unix() < snapshot.UpdatedAt || receivedAt.Unix() < snapshot.Intent.NotBefore {
-			return enrollmentstate.ErrInvalid
-		}
-		if receivedAt.Unix() >= snapshot.Intent.NotAfter {
-			return enrollmentstate.ErrExpired
+		if err := t.authorizeCurrentCredential(snapshot, certificateHash, receivedAt); err != nil {
+			return err
 		}
 		c, ok := t.credentials[invitationID]
 		if !ok {
@@ -191,6 +182,7 @@ type Observation struct {
 type DeviceView struct {
 	Snapshot    enrollmentstate.Snapshot
 	Observation *Observation
+	Renewal     *RenewalView
 }
 
 // DeviceViews joins identity state and current observation in one validated
@@ -203,8 +195,16 @@ func (s *Store) DeviceViews(ctx context.Context) ([]DeviceView, error) {
 				continue
 			}
 			c, ok := t.credentials[snapshot.InvitationID]
+			view := DeviceView{Snapshot: snapshot}
+			if ok && c.Renewal != nil {
+				renewal := renewalView(c.Renewal)
+				if snapshot.State == enrollmentstate.Revoked {
+					renewal.Status = "revoked"
+				}
+				view.Renewal = &renewal
+			}
 			if !ok || len(c.Frame) == 0 {
-				out = append(out, DeviceView{Snapshot: snapshot})
+				out = append(out, view)
 				continue
 			}
 			frame, err := t.validateFrame(c.Frame, c.Replay.ReceivedAt)
@@ -222,7 +222,8 @@ func (s *Store) DeviceViews(ctx context.Context) ([]DeviceView, error) {
 			d.Status = "unknown"
 			d.Tags = []string{"lan", "read-only", "guided-enrollment"}
 			observation := Observation{Device: d, Receipt: lanstore.Receipt{SchemaVersion: "tracebolt.agent-receipt.v1", AgentID: d.ID, Sequence: c.Replay.Sequence, CollectedAt: c.Replay.CollectedAt, ReceivedAt: c.Replay.ReceivedAt}, State: snapshot.State}
-			out = append(out, DeviceView{Snapshot: snapshot, Observation: &observation})
+			view.Observation = &observation
+			out = append(out, view)
 		}
 		return nil
 	})

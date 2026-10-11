@@ -238,6 +238,7 @@ func TestNativeStaleCapabilitiesAndWrongExactApproval(t *testing.T) {
 
 func TestExplicitInitializationIsCreateOnlyAndNeverGeneratesKey(t *testing.T) {
 	f := fixture(t)
+	authority := func(context.Context, string, string, string, time.Time) error { return nil }
 	c := f.config
 	c.StateFile = filepath.Join(filepath.Dir(c.StateFile), "new.sqlite")
 	raw, e := json.Marshal(c)
@@ -248,19 +249,19 @@ func TestExplicitInitializationIsCreateOnlyAndNeverGeneratesKey(t *testing.T) {
 	if e = os.WriteFile(path, raw, 0600); e != nil {
 		t.Fatal(e)
 	}
-	if Initialize(ctx, path, false, f.at) == nil {
+	if Initialize(ctx, path, false, f.at, authority) == nil {
 		t.Fatal("missing acknowledgement accepted")
 	}
-	if Initialize(ctx, path, true, f.at) == nil {
+	if Initialize(ctx, path, true, f.at, authority) == nil {
 		t.Fatal("missing key generated/adopted")
 	}
 	if e = os.WriteFile(c.PrivateKeyFile, f.key, 0600); e != nil {
 		t.Fatal(e)
 	}
-	if e = Initialize(ctx, path, true, f.at); e != nil {
+	if e = Initialize(ctx, path, true, f.at, authority); e != nil {
 		t.Fatal(e)
 	}
-	if Initialize(ctx, path, true, f.at) == nil {
+	if Initialize(ctx, path, true, f.at, authority) == nil {
 		t.Fatal("scope reset accepted")
 	}
 	s, e := packageupdatestore.OpenExisting(ctx, c.StateFile, c.Binding())

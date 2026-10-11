@@ -165,6 +165,20 @@ func validateWindowsBootstrapConsent(b enrollmentclient.Bootstrap, selected stri
 	return nil
 }
 
+// Fresh renewal acknowledgement is independent of collection and transport consent.
+// Omission never adopts renewal authority from a selected bootstrap.
+func validateWindowsRenewalConsent(b enrollmentclient.Bootstrap, acknowledgement ...bool) error {
+	if len(acknowledgement) > 1 {
+		return errLifecycle
+	}
+	approved := len(acknowledgement) == 1 && acknowledgement[0]
+	renewable := b.SchemaVersion == enrollmentclient.RenewableBootstrapVersion && b.RenewalPolicy == "same-key-v1" && b.Profile == "tls"
+	if approved != renewable || b.RenewalPolicy != "" && !renewable {
+		return errLifecycle
+	}
+	return nil
+}
+
 // Strict canonical receipt decoding keeps every legacy v1 byte shape unchanged.
 // Fresh v2 is usable by ordinary lifecycle only after the exact startup transition
 // has completed; unfinished or indeterminate records remain inspection-only.

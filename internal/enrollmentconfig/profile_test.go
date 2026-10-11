@@ -141,3 +141,33 @@ func TestOptionalCollectionProfileAndExactModeBinding(t *testing.T) {
 		}
 	}
 }
+
+func TestAutomaticRenewalModeCannotAdoptExistingManagerStore(t *testing.T) {
+	c, lan, path, now := profileFixture(t)
+	raw, _ := json.Marshal(c)
+	if os.WriteFile(path, raw, 0600) != nil {
+		t.Fatal("fixture write")
+	}
+	legacy, err := Load(path, lan, now)
+	if err != nil || legacy.PrepareMode(lan.Config.StateDirectory, 0) != nil {
+		t.Fatal("legacy fixture")
+	}
+	before, _ := os.ReadFile(filepath.Join(lan.Config.StateDirectory, ModeFile))
+	// Isolate the mode boundary from certificate parsing: both shapes must keep
+	// exact trust/identity values while only explicit renewal policy changes.
+	copyValue := *legacy.value
+	copyValue.config.SchemaVersion = RenewableSchemaVersion
+	copyValue.config.AutomaticRenewal = true
+	fresh := Material{value: &copyValue}
+	if bytes.Equal(fresh.marker(), legacy.marker()) || fresh.PrepareMode(lan.Config.StateDirectory, 0) == nil {
+		t.Fatal("renewal policy adopted existing identity marker")
+	}
+	after, _ := os.ReadFile(filepath.Join(lan.Config.StateDirectory, ModeFile))
+	if !bytes.Equal(before, after) {
+		t.Fatal("rejected policy changed existing marker")
+	}
+	cfg := fresh.StoreConfig()
+	if !cfg.AutomaticRenewal || cfg.RenewalAgentOrigin != lan.Config.AgentOrigin || cfg.RecordLimit != legacy.StoreConfig().RecordLimit {
+		t.Fatal("policy propagation changed origin or capacity")
+	}
+}

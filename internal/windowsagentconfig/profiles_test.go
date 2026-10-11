@@ -28,3 +28,18 @@ func TestWindowsStoreSchemasRemainSeparateAndFixed(t *testing.T) {
 		names[s] = true
 	}
 }
+
+func TestRenewableEnrollmentSchemaDoesNotExtendLegacyState(t *testing.T) {
+	const sid = "S-1-5-80-1-2-3-4-5"
+	old := Enrollment(sid, false)
+	current := EnrollmentRenewable(sid, true)
+	if !current.Create || current.RuntimeSID != sid || current.MaxBytes != old.MaxBytes || len(current.Names) != len(old.Names)+2 || !reflect.DeepEqual(current.Names[:len(old.Names)], old.Names) || !reflect.DeepEqual(current.Names[len(old.Names):], []string{"renewal-manifest.json", "renewal-transaction.json"}) {
+		t.Fatal("fresh renewal schema changed legacy state or bounds")
+	}
+	if !reflect.DeepEqual(Enrollment(sid, false), old) {
+		t.Fatal("renewal schema mutated legacy names")
+	}
+	if EnrollmentRenewable(sid, false).Create {
+		t.Fatal("reader implicitly creates state")
+	}
+}

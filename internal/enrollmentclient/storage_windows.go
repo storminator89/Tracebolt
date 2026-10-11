@@ -21,14 +21,18 @@ type localStore struct {
 	sid   string
 }
 
-func openStore(path string) (*localStore, error)         { return openWindowsStore(path, false) }
-func openExistingStore(path string) (*localStore, error) { return openWindowsStore(path, true) }
-func openWindowsStore(path string, requireLedger bool) (*localStore, error) {
+func openStore(path string) (*localStore, error)         { return openWindowsStore(path, false, false) }
+func openExistingStore(path string) (*localStore, error) { return openWindowsStore(path, true, false) }
+func openWindowsStore(path string, requireLedger, renewable bool) (*localStore, error) {
 	sid, err := windowsservice.LookupServiceSID()
 	if err != nil {
 		return nil, ErrState
 	}
-	st, err := windowsstate.Open(path, windowsagentconfig.Enrollment(sid, false))
+	options := windowsagentconfig.Enrollment(sid, false)
+	if renewable {
+		options = windowsagentconfig.EnrollmentRenewable(sid, false)
+	}
+	st, err := windowsstate.Open(path, options)
 	if err != nil {
 		return nil, ErrState
 	}
@@ -93,4 +97,8 @@ func (s *localStore) Close() error {
 		return ErrState
 	}
 	return nil
+}
+
+func openEnrollmentStore(path string, existing, renewable bool) (*localStore, error) {
+	return openWindowsStore(path, existing, renewable)
 }

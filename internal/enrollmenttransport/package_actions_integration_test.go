@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"localrmm/internal/actionpermit"
 	"localrmm/internal/enrollmentcrypto"
+	"localrmm/internal/enrollmentstate"
 	"localrmm/internal/operatorauth"
 	"localrmm/internal/packagecontroller"
 	"localrmm/internal/packagehelper"
@@ -44,7 +45,13 @@ func TestNativePackageEnrolledTransportExactClaimsAndResults(t *testing.T) {
 			if e := os.WriteFile(cp, raw, 0600); e != nil {
 				t.Fatal(e)
 			}
-			if e := packagecontroller.Initialize(ctx, cp, true, now); e != nil {
+			authority := func(ctx context.Context, manager, device, incarnation string, at time.Time) error {
+				if manager != f.store.Config().Binding.InstanceID {
+					return enrollmentstate.ErrProof
+				}
+				return f.store.AuthorizePackageDevice(ctx, device, incarnation, at)
+			}
+			if e := packagecontroller.Initialize(ctx, cp, true, now, authority); e != nil {
 				t.Fatal(e)
 			}
 			actor := id("operator", 17)

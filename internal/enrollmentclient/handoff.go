@@ -8,6 +8,7 @@ import (
 	"errors"
 	"localrmm/internal/enrollmentcrypto"
 	"localrmm/internal/lanclient"
+	"localrmm/internal/renewalidentity"
 	"os"
 	"path/filepath"
 )
@@ -38,6 +39,14 @@ func (s *session) handoff() (lanclient.Config, []artifact, []byte, error) {
 	if s.l.Bootstrap.CollectionProfile == enrollmentcrypto.CollectionProfileWindowsInventory {
 		c.SchemaVersion = lanclient.WindowsInventoryConfigVersion
 		c.CollectionProfile = enrollmentcrypto.CollectionProfileWindowsInventory
+	}
+	if s.l.Bootstrap.RenewalPolicy != "" {
+		c.SchemaVersion = lanclient.RenewalConfigVersion
+		if s.l.Bootstrap.CollectionProfile == enrollmentcrypto.CollectionProfileWindowsInventory {
+			c.SchemaVersion = lanclient.WindowsRenewalConfigVersion
+		}
+		c.CollectionProfile = s.l.Bootstrap.CollectionProfile
+		c.RenewalManifestFile = filepath.Join(s.opts.StateDirectory, renewalidentity.ManifestName)
 	}
 	if c.Profile == "tls" {
 		c.ServerCAFile = filepath.Join(s.opts.StateDirectory, "server-ca.pem")
@@ -87,6 +96,13 @@ func clearArtifacts(files []artifact) {
 // request. HandoffPrepared protects telemetry continuity independently of the
 // final ready marker, including interrupted marker publication and deletion.
 func (s *session) validateArtifacts() error {
+	if s.l.Bootstrap.RenewalPolicy == "" {
+		for _, name := range []string{renewalidentity.ManifestName, renewalidentity.LedgerName} {
+			if _, e := s.store.Read(name); !errors.Is(e, os.ErrNotExist) {
+				return ErrState
+			}
+		}
+	}
 	expected := map[string][]byte{}
 	var files []artifact
 	var config lanclient.Config
@@ -106,6 +122,9 @@ func (s *session) validateArtifacts() error {
 	for _, name := range []string{"agent-key.pem", "agent-cert.pem", "agent.json", "server-ca.pem", "ready.json"} {
 		raw, e := s.store.Read(name)
 		if errors.Is(e, os.ErrNotExist) {
+			if name == "ready.json" && s.l.RenewalReadyPublished {
+				return ErrState
+			}
 			if (s.l.HandoffPrepared || s.l.SenderInitializationStarted && name != "agent.json") && name != "ready.json" && (name != "server-ca.pem" || s.l.Bootstrap.Profile == "tls") {
 				return ErrState
 			}
@@ -125,7 +144,12 @@ func (s *session) validateArtifacts() error {
 	if e != nil || exists && !s.l.SenderInitializationStarted || !exists && s.l.SenderInitializationStarted {
 		return ErrState
 	}
-	if s.l.SenderInitializationStarted && lanclient.ValidateGuidedState(config) != nil {
+	if s.l.Bootstrap.RenewalPolicy != "" && s.l.SenderInitializationStarted && !s.opts.renewalReconcile {
+		if _, e := s.loadRenewalManifest(); e != nil {
+			return ErrState
+		}
+	}
+	if s.l.SenderInitializationStarted && !s.opts.renewalReconcile && lanclient.ValidateGuidedState(config) != nil {
 		return ErrState
 	}
 	return nil
@@ -146,6 +170,11 @@ func (s *session) publish() (Result, error) {
 			continue
 		}
 		if e = s.writeArtifactIfAbsent(f); e != nil {
+			return Result{}, e
+		}
+	}
+	if s.l.Bootstrap.RenewalPolicy != "" {
+		if e = s.prepareRenewal(); e != nil {
 			return Result{}, e
 		}
 	}
@@ -184,6 +213,12 @@ func (s *session) publish() (Result, error) {
 		}
 	} else if e != nil {
 		return Result{}, e
+	}
+	if s.l.Bootstrap.RenewalPolicy != "" && !s.l.RenewalReadyPublished {
+		s.l.RenewalReadyPublished = true
+		if e = s.save(); e != nil {
+			return Result{}, e
+		}
 	}
 	if e = s.notify("ready"); e != nil {
 		return Result{}, e

@@ -138,6 +138,10 @@ func (s *session) checkServiceDeadline(now time.Time) error {
 		return ErrServiceDeadline
 	}
 	if s.l.Activated {
+		if s.l.Bootstrap.RenewalPolicy != "" {
+			_, err := s.loadRenewalManifest()
+			return err
+		}
 		if s.l.Intent.NotAfter <= now.Unix() {
 			return ErrServiceDeadline
 		}
@@ -171,7 +175,7 @@ func withServiceSession(b Bootstrap, state string, insecure bool, fn func(*sessi
 	if err != nil {
 		return ServiceState{}, err
 	}
-	st, err := openExistingStore(state)
+	st, err := openEnrollmentStore(state, true, b.RenewalPolicy != "")
 	if err != nil {
 		return ServiceState{}, err
 	}
@@ -190,6 +194,14 @@ func (s *session) inspectService() (ServiceState, error) {
 	out := ServiceState{ConfigPath: filepath.Join(s.opts.StateDirectory, "agent.json"), HTTPTest: s.l.Bootstrap.Profile == "http-test"}
 	if err := s.checkServiceDeadline(time.Now()); err != nil {
 		return ServiceState{}, err
+	}
+	// An interrupted first publication is still pending until its final durable
+	// renewable-ready mark. ResumeService may finish only this exact handoff.
+	if s.l.Bootstrap.RenewalPolicy != "" && !s.l.RenewalReadyPublished {
+		if s.service.ReadyObserved {
+			return ServiceState{}, ErrState
+		}
+		return out, nil
 	}
 	raw, err := s.store.Read("ready.json")
 	clear(raw)

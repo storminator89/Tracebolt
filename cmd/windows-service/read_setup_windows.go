@@ -23,7 +23,7 @@ func installReadObservation(ctx context.Context, bootstrapPath string, consent l
 	return installReadObservationWithProgress(ctx, bootstrapPath, consent, out, stderr, nil)
 }
 
-func installReadObservationWithProgress(ctx context.Context, bootstrapPath string, consent lanclient.WindowsCapabilityConsent, out, stderr io.Writer, progress func(string)) (any, error) {
+func installReadObservationWithProgress(ctx context.Context, bootstrapPath string, consent lanclient.WindowsCapabilityConsent, out, stderr io.Writer, progress func(string), renewal ...bool) (any, error) {
 	if progress == nil {
 		progress = func(string) {}
 	}
@@ -33,7 +33,7 @@ func installReadObservationWithProgress(ctx context.Context, bootstrapPath strin
 	if err := writeReadSetupDisclosure(out, consent); err != nil {
 		return nil, setupFailedCategory("fresh_disclosure", "failed", err)
 	}
-	s := nativeSetupSteps(enrollmentcrypto.CollectionProfileWindowsInventory, consent.InsecureHTTPAcknowledged, out, stderr)
+	s := nativeSetupSteps(enrollmentcrypto.CollectionProfileWindowsInventory, consent.InsecureHTTPAcknowledged, out, stderr, renewal...)
 	// Progress writes borrow the create-only journal that setup already holds.
 	// Reopening it would deadlock/fail its existing cross-process exclusive lock.
 	var journal *windowsstate.Store

@@ -104,7 +104,7 @@ func newWindowsEventOperatorFixtureFor(t *testing.T, named bool) windowsEventOpe
 	t.Helper()
 	return newWindowsEventOperatorFixtureWithIssuerLifetime(t, named, 24*time.Hour)
 }
-func newWindowsEventOperatorFixtureWithIssuerLifetime(t *testing.T, named bool, issuerLifetime time.Duration) windowsEventOperatorFixture {
+func newWindowsEventOperatorFixtureWithIssuerLifetime(t *testing.T, named bool, issuerLifetime time.Duration, renewable ...bool) windowsEventOperatorFixture {
 	t.Helper()
 	o := newOperatorFixture(t, time.Hour)
 	now := time.Now().UTC().Truncate(time.Second)
@@ -140,6 +140,10 @@ func newWindowsEventOperatorFixtureWithIssuerLifetime(t *testing.T, named bool, 
 		binding := enrollmentstate.Binding{InstanceID: "manager_" + strings.Repeat("1", 32), Profile: "tls", Origin: o.server.URL, CollectionProfile: collection, IssuerFingerprint: issuer.Fingerprint()}
 		cfg := enrollmentstate.DefaultConfig(binding)
 		cfg.RecordLimit, cfg.InvitationLimit, cfg.PendingLimit = 25, 25, 25
+		if len(renewable) == 1 && renewable[0] {
+			cfg.AutomaticRenewal = true
+			cfg.RenewalAgentOrigin = o.server.URL
+		}
 		store, err := enrollmentstore.Open(filepath.Join(t.TempDir(), "private", name+".db"), cfg, rawIssuer)
 		if err != nil {
 			t.Fatal("synthetic store", err)
@@ -154,6 +158,10 @@ func newWindowsEventOperatorFixtureWithIssuerLifetime(t *testing.T, named bool, 
 			return string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: raw}))
 		}
 		bootstrap := EnrollmentBootstrap{SchemaVersion: "tracebolt.enrollment-bootstrap.v2", ManagerInstanceID: binding.InstanceID, Profile: binding.Profile, EnrollmentOrigin: o.server.URL, AgentOrigin: o.server.URL, CollectionProfile: collection, ServerCAPEM: asPEM(o.server.TLS.Certificates[0].Certificate[1]), IssuerRootPEM: asPEM(rawRoot), IssuerPEM: asPEM(rawIssuer)}
+		if cfg.AutomaticRenewal {
+			bootstrap.SchemaVersion = "tracebolt.enrollment-bootstrap.renewable.v1"
+			bootstrap.RenewalPolicy = enrollmentcrypto.RenewalPolicySameKey
+		}
 		return service, store, bootstrap
 	}
 	linux, _, linuxBootstrap := makeService(enrollmentcrypto.CollectionProfile, "linux")
@@ -229,7 +237,13 @@ func windowsEventOperatorActivate(t *testing.T, service *enrollmentservice.Servi
 	if err != nil {
 		t.Fatal("fixture claim message failed", err)
 	}
-	raw, err := json.Marshal(map[string]string{"schemaVersion": enrollmentcrypto.ClaimVersion, "managerInstanceId": challenge.Context.ManagerInstanceID, "profile": challenge.Context.Profile, "origin": challenge.Context.Origin, "collectionProfile": challenge.Context.CollectionProfile, "invitationId": invitation, "claimId": claimID, "requestId": requestID("2"), "challenge": challenge.Context.Challenge, "invitationSecret": created.Secret(), "csr": base64.RawStdEncoding.EncodeToString(csr), "proof": base64.RawStdEncoding.EncodeToString(ed25519.Sign(key, message))})
+	claimBody := map[string]string{"schemaVersion": enrollmentcrypto.ClaimVersion, "managerInstanceId": challenge.Context.ManagerInstanceID, "profile": challenge.Context.Profile, "origin": challenge.Context.Origin, "collectionProfile": challenge.Context.CollectionProfile, "invitationId": invitation, "claimId": claimID, "requestId": requestID("2"), "challenge": challenge.Context.Challenge, "invitationSecret": created.Secret(), "csr": base64.RawStdEncoding.EncodeToString(csr), "proof": base64.RawStdEncoding.EncodeToString(ed25519.Sign(key, message))}
+	if challenge.Context.RenewalPolicy != "" {
+		claimBody["schemaVersion"] = enrollmentcrypto.RenewableClaimVersion
+		claimBody["renewalPolicy"] = challenge.Context.RenewalPolicy
+		claimBody["agentOrigin"] = challenge.Context.AgentOrigin
+	}
+	raw, err := json.Marshal(claimBody)
 	if err != nil {
 		t.Fatal(err)
 	}

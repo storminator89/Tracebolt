@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"localrmm/internal/enrollmentcrypto"
+	"localrmm/internal/enrollmentstore"
 	"localrmm/internal/operatorauth"
 	"localrmm/internal/packageupdate"
 )
@@ -175,6 +176,10 @@ func (h *operatorHandler) packageManager() packageUpdateManager {
 	return h.packageUpdatesManager
 }
 func packageUpdateError(w http.ResponseWriter, e error) {
+	if errors.Is(e, enrollmentstore.ErrPackageRenewalUnsupported) {
+		fail(w, http.StatusConflict, "package_update_renewal_unsupported", "Native package actions are not supported for automatically renewable identities. Read-admin and separately approved service actions remain available.")
+		return
+	}
 	if errors.Is(e, packageupdate.ErrNotFound) {
 		fail(w, 404, "package_update_not_found", "No saved package operation exists for this exact ID.")
 		return

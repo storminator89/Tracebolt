@@ -558,6 +558,7 @@ jobs:
           node --test tests/e2e-review/windows-network-context-fixtures.test.mjs
           node --test tests/e2e-review/windows-fleet-fixtures.test.mjs
           node --test tests/e2e-review/windows-storage-io-fixtures.test.mjs
+          node --test tests/e2e-review/certificate-renewal-fixtures.test.mjs
       - name: Production build
         run: npm run build
 

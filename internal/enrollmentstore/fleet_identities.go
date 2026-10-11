@@ -3,7 +3,6 @@ package enrollmentstore
 import (
 	"context"
 	"encoding/json"
-	"localrmm/internal/enrollmentcrypto"
 	"localrmm/internal/enrollmentstate"
 	"localrmm/internal/lanstore"
 	"localrmm/internal/windowsmanaged"
@@ -132,7 +131,7 @@ func (s *Store) FleetIdentitiesView(ctx context.Context, now time.Time) (FleetId
 	return out.RecheckAt(now)
 }
 func (s *Store) windowsFleetIdentityFromSnapshot(t *transaction, snap enrollmentstate.Snapshot, now time.Time) (WindowsFleetIdentityView, error) {
-	out := WindowsFleetIdentityView{SchemaVersion: "tracebolt.windows-fleet-identity-view.v1", DeviceID: snap.Approval.DeviceID, CollectionProfile: windowsmanaged.CollectionProfile, ServerNow: now, MaxAgeSeconds: int64(lanstore.SampleMaxAge / time.Second), Status: "awaiting", certificateNotAfter: snap.Intent.NotAfter}
+	out := WindowsFleetIdentityView{SchemaVersion: "tracebolt.windows-fleet-identity-view.v1", DeviceID: snap.Approval.DeviceID, CollectionProfile: windowsmanaged.CollectionProfile, ServerNow: now, MaxAgeSeconds: int64(lanstore.SampleMaxAge / time.Second), Status: "awaiting", certificateNotAfter: t.currentCredentialNotAfter(snap)}
 	if snap.Platform != "windows" || snap.Binding.CollectionProfile != windowsmanaged.CollectionProfile || snap.Binding.Profile != "tls" && snap.Binding.Profile != "http-test" {
 		return WindowsFleetIdentityView{}, ErrStorage
 	}
@@ -144,27 +143,19 @@ func (s *Store) windowsFleetIdentityFromSnapshot(t *transaction, snap enrollment
 		out.Status = "expired"
 		return out, nil
 	}
-	if snap.Intent.NotAfter > 0 && now.Unix() >= snap.Intent.NotAfter {
+	if t.currentCredentialNotAfter(snap) > 0 && now.Unix() >= t.currentCredentialNotAfter(snap) {
 		out.Status = "expired"
 		return out, nil
 	}
 	if snap.State != enrollmentstate.Activated {
 		return out, nil
 	}
-	if now.Unix() < snap.UpdatedAt || now.Unix() < snap.Intent.NotBefore {
-		return WindowsFleetIdentityView{}, enrollmentstate.ErrInvalid
+	if err := t.authorizeCurrentCredential(snap, t.currentCertificateHash(snap), now); err != nil {
+		return WindowsFleetIdentityView{}, err
 	}
 	c, ok := t.credentials[snap.InvitationID]
 	if !ok {
 		return WindowsFleetIdentityView{}, ErrStorage
-	}
-	intent, err := t.engine.TrustedRecordedIntent(snap.InvitationID)
-	if err != nil {
-		return WindowsFleetIdentityView{}, ErrStorage
-	}
-	cert, err := enrollmentcrypto.VerifyIssued(c.DER, s.issuerDER, intent, now)
-	if err != nil || cert.CertificateHash() != snap.Issuance.CertificateHash {
-		return WindowsFleetIdentityView{}, enrollmentstate.ErrProof
 	}
 	if len(c.Frame) == 0 {
 		return out, nil
@@ -175,7 +166,7 @@ func (s *Store) windowsFleetIdentityFromSnapshot(t *transaction, snap enrollment
 	}
 	original := frame.WindowsInventory
 	sequence, received, expires := c.Replay.Sequence, c.Replay.ReceivedAt, original.CollectedAt.Add(24*time.Hour)
-	authorityUntil := time.Unix(snap.Intent.NotAfter, 0).UTC()
+	authorityUntil := time.Unix(t.currentCredentialNotAfter(snap), 0).UTC()
 	if authorityUntil.Before(expires) {
 		expires = authorityUntil
 	}

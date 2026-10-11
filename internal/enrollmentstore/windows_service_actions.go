@@ -28,8 +28,9 @@ func (m windowsActionSetupMarker) digest() string {
 	b, _ := json.Marshal(m)
 	return windowsaction.Digest(b)
 }
-func validWindowsActionSetupMarker(s enrollmentstate.Snapshot, m *windowsActionSetupMarker) bool {
-	return m == nil || s.Binding.CollectionProfile == enrollmentcrypto.CollectionProfileWindowsInventory && s.Platform == "windows" && s.Activation.At != 0 && m.Version == "tracebolt.windows-service-action-setup.v1" && windowsaction.ValidBinding(m.Binding) && m.Binding.ManagerID == s.Binding.InstanceID && m.Binding.EndpointID == s.Approval.DeviceID && m.Binding.IncarnationDigest == "sha256:"+s.Issuance.CertificateHash && validStoreTime(m.InitializedAt) && m.InitializedAt.Unix() >= s.Activation.At && m.InitializedAt.Unix() < s.Intent.NotAfter && (s.Termination.At == 0 || m.InitializedAt.Unix() <= s.Termination.At)
+func validWindowsActionSetupMarker(s enrollmentstate.Snapshot, m *windowsActionSetupMarker, authorityExpiry ...int64) bool {
+	notAfter := recordAuthorityExpiry(s, authorityExpiry...)
+	return m == nil || s.Binding.CollectionProfile == enrollmentcrypto.CollectionProfileWindowsInventory && s.Platform == "windows" && s.Activation.At != 0 && m.Version == "tracebolt.windows-service-action-setup.v1" && windowsaction.ValidBinding(m.Binding) && m.Binding.ManagerID == s.Binding.InstanceID && m.Binding.EndpointID == s.Approval.DeviceID && m.Binding.IncarnationDigest == "sha256:"+s.Issuance.CertificateHash && validStoreTime(m.InitializedAt) && m.InitializedAt.Unix() >= s.Activation.At && m.InitializedAt.Unix() < notAfter && (s.Termination.At == 0 || m.InitializedAt.Unix() <= s.Termination.At)
 }
 func windowsActionSchemaObjects() []inventoryledger.SchemaObject {
 	return []inventoryledger.SchemaObject{{Type: "table", Name: "enrollment_windows_action_meta", SQL: windowsActionMetaSchema}, {Type: "table", Name: "enrollment_windows_action_records", SQL: windowsActionRecordsSchema}}
@@ -82,12 +83,12 @@ func (s *Store) SetupWindowsServiceActionsCreateOnly(ctx context.Context, key ed
 		if e != nil {
 			return e
 		}
-		snap, e = s.windowsFullServicesAuthority(t, snap.InvitationID, snap.Issuance.CertificateHash, now)
+		snap, e = s.windowsFullServicesAuthority(t, snap.InvitationID, t.currentCertificateHash(snap), now)
 		if e != nil {
 			return e
 		}
 		marker := &windowsActionSetupMarker{"tracebolt.windows-service-action-setup.v1", b, now}
-		if !validWindowsActionSetupMarker(snap, marker) {
+		if !validWindowsActionSetupMarker(snap, marker, t.currentCredentialNotAfter(snap)) {
 			return enrollmentstate.ErrProof
 		}
 		r, e := windowsactionjob.New(b, key, now)
@@ -165,7 +166,7 @@ func (s *Store) loadWindowsActionRecords(ctx context.Context, t *transaction) er
 		snap, e := t.engine.Get(id)
 		// A rejection may observe time after enrollment expiry or revocation.
 		// The floor is anti-rollback evidence, not renewed enrollment authority.
-		if e != nil || !validWindowsActionSetupMarker(snap, m) || r.ClockFloor.Unix() >= snap.Intent.NotAfter || (snap.Termination.At != 0 && r.ClockFloor.Unix() > snap.Termination.At) {
+		if e != nil || !validWindowsActionSetupMarker(snap, m, t.currentCredentialNotAfter(snap)) || r.ClockFloor.Unix() >= t.currentCredentialNotAfter(snap) || (snap.Termination.At != 0 && r.ClockFloor.Unix() > snap.Termination.At) {
 			return ErrStorage
 		}
 		delete(markers, id)
@@ -189,7 +190,7 @@ func (s *Store) windowsActionTransaction(ctx context.Context, key ed25519.Public
 			if e != nil {
 				return e
 			}
-			id, hash = snap.InvitationID, snap.Issuance.CertificateHash
+			id, hash = snap.InvitationID, t.currentCertificateHash(snap)
 		}
 		snap, e := s.windowsFullServicesAuthority(t, id, hash, now)
 		if e != nil {
@@ -225,7 +226,7 @@ func (s *Store) windowsActionTransaction(ctx context.Context, key ed25519.Public
 				return ErrStorage
 			}
 		}
-		if len(r.Jobs) > before && r.Jobs[len(r.Jobs)-1].Deadline().Unix() > snap.Intent.NotAfter {
+		if len(r.Jobs) > before && r.Jobs[len(r.Jobs)-1].Deadline().Unix() > t.currentCredentialNotAfter(snap) {
 			return windowsaction.ErrExpired
 		}
 		writeRecord := func() error {

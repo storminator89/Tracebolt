@@ -46,6 +46,7 @@ import (
 type request struct {
 	mode, bootstrap, collectionProfile string
 	insecureHTTP                       bool
+	automaticRenewal                   bool
 }
 type operation func(context.Context, request, io.Writer, io.Writer) (any, error)
 
@@ -177,6 +178,7 @@ func runWith(ctx context.Context, args []string, out, stderr io.Writer, perform 
 	volumeConsent := flags.Bool("visible-volumes", false, "")
 	eventConsent := flags.Bool("application-system-event-headers", false, "")
 	windowsConsent := flags.Bool("windows-inventory", false, "")
+	automaticRenewal := flags.Bool("automatic-certificate-renewal", false, enrollmentclient.AutomaticRenewalPrivacy)
 	insecure := flags.Bool("insecure-http-test", false, "")
 	bootstrap := flags.String("bootstrap-file", "", "")
 	help := flags.Bool("help", false, "")
@@ -202,6 +204,10 @@ func runWith(ctx context.Context, args []string, out, stderr io.Writer, perform 
 			mode = n
 		}
 	}
+	if *automaticRenewal && ((mode != "install" && mode != "enroll") || *insecure) {
+		fmt.Fprintln(stderr, "Automatic certificate renewal requires a fresh HTTPS enrollment and exact renewable bootstrap.")
+		return 2
+	}
 	readAdminMode := mode == "read-admin-preview" || mode == "read-admin-enable"
 	networkContextMode := mode == "network-context-preview" || mode == "network-context-enable" || mode == "network-context-disable"
 	fullProcessesMode := mode == "full-processes-preview" || mode == "full-processes-enable" || mode == "full-processes-disable"
@@ -226,6 +232,11 @@ func runWith(ctx context.Context, args []string, out, stderr io.Writer, perform 
 	if ctx == nil || perform == nil {
 		reportDiagnostic(stderr, marked(windowsservice.PhaseLifecycle, windowsservice.ReasonInvalidConfiguration, nil))
 		return 1
+	}
+	if *automaticRenewal {
+		if n, err := fmt.Fprintln(out, enrollmentclient.AutomaticRenewalPrivacy); err != nil || n != len(enrollmentclient.AutomaticRenewalPrivacy)+1 {
+			return 1
+		}
 	}
 	profile := ""
 	if *consent {
@@ -418,7 +429,7 @@ func runWith(ctx context.Context, args []string, out, stderr io.Writer, perform 
 		ctx, cancel = context.WithTimeout(ctx, windowsservice.RestartTimeout)
 		defer cancel()
 	}
-	result, err := perform(ctx, request{mode: mode, bootstrap: *bootstrap, collectionProfile: profile, insecureHTTP: *insecure}, out, stderr)
+	result, err := perform(ctx, request{automaticRenewal: *automaticRenewal, mode: mode, bootstrap: *bootstrap, collectionProfile: profile, insecureHTTP: *insecure}, out, stderr)
 	if err != nil {
 		if readAdminMode {
 			if partial, ok := result.(readAdminReconsentResult); ok {
@@ -480,6 +491,7 @@ func writeLifecycleResult(out io.Writer, result any) error {
 }
 
 func usage(out io.Writer) {
+	fmt.Fprintln(out, "Fresh HTTPS renewable bootstrap only: add --automatic-certificate-renewal. "+enrollmentclient.AutomaticRenewalPrivacy)
 	fmt.Fprintln(out, "One-time existing-agent read-admin consent: --read-admin-preview; --read-admin-enable --apply --twelve-read-admin-scopes. Compatible receipt-owned installed binary and stopped activated inventory service required. HTTP-test also requires --insecure-http-test. No binary upgrade, repair, service start, service control, event-message content or cached WUA inspection is included.")
 	fmt.Fprintln(out, "Complete caller-visible Win32 services, separately consented with the owned service stopped: --full-services-preview; --full-services-enable --apply --complete-win32-services; --full-services-disable --apply. HTTP-test also requires --insecure-http-test. No old grant authorizes this scope.")
 	fmt.Fprintln(out, "Local route and interface-counter metadata, separately consented with the owned service stopped: --network-context-preview; --network-context-enable --apply --routes-interface-counters; --network-context-disable --apply. HTTP-test also requires --insecure-http-test. Includes route prefix/next-hop/index/metric/protocol/origin, interface aliases and exact raw uint64 octet/error/discard counters. No joins, rates, since-boot claims, MACs, GUIDs, packets, probes, DNS, remote reads or grants.")

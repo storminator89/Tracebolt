@@ -372,12 +372,20 @@ func prepareWithApplicationChecks(m lanconfig.Material, enrollment *enrollmentco
 		}
 		operatorConfig.Enrollment = enrolledService
 		operatorConfig.EnrollmentBootstrap = api.EnrollmentBootstrap{SchemaVersion: "tracebolt.enrollment-bootstrap.v2", ManagerInstanceID: binding.InstanceID, Profile: binding.Profile, EnrollmentOrigin: c.OperatorOrigin, AgentOrigin: c.AgentOrigin, CollectionProfile: binding.CollectionProfile, ServerCAPEM: enrollment.ServerCAPEM(), IssuerRootPEM: enrollment.RootPEM(), IssuerPEM: enrollment.IssuerPEM()}
+		if enrolledService.AutomaticRenewal() {
+			operatorConfig.EnrollmentBootstrap.SchemaVersion = "tracebolt.enrollment-bootstrap.renewable.v1"
+			operatorConfig.EnrollmentBootstrap.RenewalPolicy = "same-key-v1"
+		}
 		operatorConfig.Devices = func() ([]model.Device, error) { return enrolledService.Devices(context.Background(), time.Now().UTC()) }
 	}
 	if windowsService != nil {
 		b := windowsService.Binding()
 		operatorConfig.WindowsEnrollment = windowsService
 		operatorConfig.WindowsEnrollmentBootstrap = api.EnrollmentBootstrap{SchemaVersion: "tracebolt.enrollment-bootstrap.v2", ManagerInstanceID: b.InstanceID, Profile: b.Profile, EnrollmentOrigin: c.OperatorOrigin, AgentOrigin: c.AgentOrigin, CollectionProfile: b.CollectionProfile, ServerCAPEM: enrollment.ServerCAPEM(), IssuerRootPEM: enrollment.RootPEM(), IssuerPEM: enrollment.IssuerPEM()}
+		if windowsService.AutomaticRenewal() {
+			operatorConfig.WindowsEnrollmentBootstrap.SchemaVersion = "tracebolt.enrollment-bootstrap.renewable.v1"
+			operatorConfig.WindowsEnrollmentBootstrap.RenewalPolicy = "same-key-v1"
+		}
 		operatorConfig.Devices = func() ([]model.Device, error) {
 			return mergedWindowsDevices(context.Background(), enrolledService, windowsService, time.Now().UTC())
 		}

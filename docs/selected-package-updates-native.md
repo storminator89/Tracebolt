@@ -75,9 +75,24 @@ this candidate's tests.
   endpoint, incarnation, root-policy digest, transport profile, existing key path
   and private SQLite path. Set `localScopeAcknowledged` only after approval.
   The create-only source command is `package-manager-init --config <path>
-  --ack-local-package-scope`. It reads preexisting protected config/key, creates
-  only the durable record under an existing private directory and never resets
-  state. Manager startup opens existing state only.
+  --enrollment-state <existing-enrollment.sqlite>
+  --enrollment-issuer <public-issuer.pem> --ack-local-package-scope`.
+  The protected public issuer file must contain exactly one certificate, never
+  a private key. Setup first inspects the existing enrollment ledger read-only
+  and verifies its exact manager, activated complete Linux endpoint and original
+  incarnation. Missing, mismatched or unreadable authority fails before reading
+  the package signing key or creating package state. It then reads the existing
+  protected package key and creates only the durable record under an existing
+  private directory; it never resets state. Manager startup opens existing state
+  only, after checking enrollment authority.
+- Fresh automatically renewable identities do not support native package
+  actions. Setup, manager admission and every package operation fail closed
+  with an explicit unsupported result. Disabling renewal does not remove this
+  boundary. Read-admin collection and separately approved service-action scopes
+  are unchanged. Native packages use a separate durable store, whose operation
+  commit is not yet atomic with enrollment credential renewal or revocation;
+  renewal must not inherit that gap. Existing nonrenewable identities retain
+  their existing native package behavior.
 - Set the existing manager config's optional `packageActionsConfigFile` to that
   protected scope. The manager requires named operators and activated complete
   enrollment. Grant `plan_updates` and `execute_updates` independently and

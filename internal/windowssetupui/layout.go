@@ -15,6 +15,7 @@ const (
 	idHTTPRisk          = 108
 	idReadAdmin         = 109
 	idDetails           = 110
+	idAutomaticRenewal  = 111
 	idHeading           = 200
 	idProvenance        = 201
 	idNote              = 202
@@ -72,7 +73,10 @@ func clampWindow(desired, work box, dpi, frameWidth, frameHeight int) (box, bool
 // surrender space first and scroll; consent, status note and navigation never
 // leave the client area. At the minimum 600x440-DIP client, HTTP review still has
 // a 64-DIP scroll viewport and five 32-DIP, two-line checkbox rows.
-func layoutForClient(width, height, dpi int, p page, httpTest bool) (map[int]box, bool) {
+func layoutForClient(width, height, dpi int, p page, httpTest bool, automaticRenewal ...bool) (map[int]box, bool) {
+	if len(automaticRenewal) > 1 || len(automaticRenewal) == 1 && automaticRenewal[0] && httpTest {
+		return nil, false
+	}
 	if dpi < 96 || dpi > 768 {
 		return nil, false
 	}
@@ -107,6 +111,9 @@ func layoutForClient(width, height, dpi int, p page, httpTest bool) (map[int]box
 		ids := []int{idScope, idService, idIdentity, idCompared}
 		if httpTest {
 			ids = append(ids, idHTTPRisk)
+		}
+		if len(automaticRenewal) == 1 && automaticRenewal[0] {
+			ids = append(ids, idAutomaticRenewal)
 		}
 		checkTop := bodyBottom - (len(ids)*32 + (len(ids)-1)*2)
 		l[idReviewText] = box{margin, bodyTop, contentWidth, checkTop - gap - bodyTop}

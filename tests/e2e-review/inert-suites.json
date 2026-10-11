@@ -26,7 +26,8 @@
     "windows-full-processes-fixtures.test.mjs",
     "windows-network-context-fixtures.test.mjs",
     "windows-fleet-fixtures.test.mjs",
-    "windows-storage-io-fixtures.test.mjs"
+    "windows-storage-io-fixtures.test.mjs",
+    "certificate-renewal-fixtures.test.mjs"
   ],
   "imported": [
     "device-inventory-browser-contracts.test.mjs",

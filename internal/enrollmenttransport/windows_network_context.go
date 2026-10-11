@@ -44,6 +44,7 @@ func (h *Ingress) windowsNetworkContext(w http.ResponseWriter, r *http.Request) 
 		}
 		defer release()
 		var e error
+		r = withVerifiedTLSCertificate(r)
 		identity, e = h.store.AuthorizeCertificate(r.Context(), r.TLS.PeerCertificates[0].Raw, h.now())
 		if e != nil {
 			storeFailure(w, e)

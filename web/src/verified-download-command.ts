@@ -35,7 +35,7 @@ export function verifiedDownloadCommand(pin: unknown, value: unknown, snapshot: 
     const publicArguments = publicEnrollmentArguments(value, snapshot, checksum);
     if (publicArguments === null) return null;
     const bootstrap = publicBootstrap(value, snapshot, '');
-    if (!bootstrap) return null;
+    if (!bootstrap || bootstrap.renewalPolicy) return null; // Published rc.3 does not support fresh renewal.
     const complete = bootstrap.collectionProfile === 'managed-operations-v3';
     if (complete && pin.version !== READ_ADMIN_RELEASE_VERSION) return null;
     const installMode = complete

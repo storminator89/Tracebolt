@@ -22,14 +22,13 @@ can retain a future expiry; it remains denied by existing authority checks.
 Reading or refreshing the display never changes issuance, trust, device IDs,
 collection consent, replay state or the certificate's original expiry.
 
-Automatic credential renewal and stable-identity rotation remain unavailable.
-Guided mode directs the operator to plan a separately authorized replacement
-enrollment with an administrator; it does not offer an automatic recovery action.
-Manual mode requires a separately authorized certificate replacement and a fresh
-manual approval, which receives a new opaque device ID. Existing identity/history
-is not automatically merged. No enrollment, renewal or permission button is added.
-See [LAN trust](lan-trust.md) and the [native enrollment client](enrollment-v2/native-client.md)
-for the existing operational boundaries.
+Fresh, explicitly consented TLS identities in matching source builds can use
+[same-key automatic certificate renewal](automatic-certificate-renewal.md). Their
+optional renewal metadata reports current credential expiry, generation and
+healthy/due/retrying/blocked/expired/revoked status. The legacy expiry field is
+still the current checked credential deadline; original scope/history ages do
+not advance. Older profiles and signed HTTP remain nonrenewable, and published
+release pins have not changed. Key rotation and issuer replacement are separate.
 
 The shared model's optional field is operator-only: support bundle encoding,
 local telemetry decoding and LAN telemetry decoding reject endpoint-supplied

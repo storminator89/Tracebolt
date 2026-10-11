@@ -43,11 +43,12 @@ type JournalGenerationView struct {
 	BrowsingContract     string                                 `json:"browsingContract,omitempty"`
 }
 
-func validJournalGeneration(snap enrollmentstate.Snapshot, r journalGenerationRecord) bool {
-	if journalgeneration.ValidateReport(r.Report) != nil || r.DeviceID != snap.Approval.DeviceID || !enrollmentcrypto.ValidHash(r.CertificateHash) || !validStoreTime(r.ReceivedAt) || r.ReceivedAt.Location() != time.UTC || r.Report.ObservedAt.After(r.ReceivedAt) || r.ReceivedAt.Sub(r.Report.ObservedAt) >= JournalGenerationMaxAge || r.ReceivedAt.Unix() < snap.Activation.At || r.ReceivedAt.Unix() >= snap.Intent.NotAfter || r.Report.ObservedAt.Unix() < snap.Activation.At || r.Report.ObservedAt.Add(JournalGenerationMaxAge).Year() > 9999 || snap.Termination.At != 0 && r.ReceivedAt.Unix() > snap.Termination.At {
+func validJournalGeneration(snap enrollmentstate.Snapshot, r journalGenerationRecord, authorityExpiry ...int64) bool {
+	notAfter := recordAuthorityExpiry(snap, authorityExpiry...)
+	if journalgeneration.ValidateReport(r.Report) != nil || r.DeviceID != snap.Approval.DeviceID || !enrollmentcrypto.ValidHash(r.CertificateHash) || !validStoreTime(r.ReceivedAt) || r.ReceivedAt.Location() != time.UTC || r.Report.ObservedAt.After(r.ReceivedAt) || r.ReceivedAt.Sub(r.Report.ObservedAt) >= JournalGenerationMaxAge || r.ReceivedAt.Unix() < snap.Activation.At || r.ReceivedAt.Unix() >= notAfter || r.Report.ObservedAt.Unix() < snap.Activation.At || r.Report.ObservedAt.Add(JournalGenerationMaxAge).Year() > 9999 || snap.Termination.At != 0 && r.ReceivedAt.Unix() > snap.Termination.At {
 		return false
 	}
-	return r.ExpiredAt == nil || validStoreTime(*r.ExpiredAt) && r.ExpiredAt.Location() == time.UTC && !r.ExpiredAt.Before(r.Report.ObservedAt.Add(JournalGenerationMaxAge)) && r.ExpiredAt.Unix() < snap.Intent.NotAfter && (snap.Termination.At == 0 || r.ExpiredAt.Unix() <= snap.Termination.At)
+	return r.ExpiredAt == nil || validStoreTime(*r.ExpiredAt) && r.ExpiredAt.Location() == time.UTC && !r.ExpiredAt.Before(r.Report.ObservedAt.Add(JournalGenerationMaxAge)) && r.ExpiredAt.Unix() < notAfter && (snap.Termination.At == 0 || r.ExpiredAt.Unix() <= snap.Termination.At)
 }
 func journalGenerationIdentity(r *journalGenerationRecord, snap enrollmentstate.Snapshot) error {
 	if r != nil && (r.DeviceID != snap.Approval.DeviceID || r.CertificateHash != snap.Issuance.CertificateHash) {
@@ -121,8 +122,8 @@ func (s *Store) AcceptJournalGeneration(ctx context.Context, id, hash string, re
 		if report.ObservedAt.After(now) || !now.Before(report.ObservedAt.Add(JournalGenerationMaxAge)) {
 			return ErrJournalGenerationStale
 		}
-		next := &journalGenerationRecord{DeviceID: snap.Approval.DeviceID, CertificateHash: hash, Report: report, ReceivedAt: now}
-		if !validJournalGeneration(snap, *next) {
+		next := &journalGenerationRecord{DeviceID: snap.Approval.DeviceID, CertificateHash: snap.Issuance.CertificateHash, Report: report, ReceivedAt: now}
+		if !validJournalGeneration(snap, *next, t.currentCredentialNotAfter(snap)) {
 			return journalrequest.ErrInvalid
 		}
 		system.JournalGeneration = next
@@ -214,7 +215,7 @@ func (s *Store) JournalGenerationStatus(ctx context.Context, device string, now 
 		if err != nil {
 			return err
 		}
-		certificateNotAfter = snap.Intent.NotAfter
+		certificateNotAfter = t.currentCredentialNotAfter(snap)
 		r := system.JournalGeneration
 		if r == nil {
 			return nil

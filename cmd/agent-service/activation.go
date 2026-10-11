@@ -2,9 +2,11 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"localrmm/internal/agentinstall"
 	"localrmm/internal/bootstrapfetch"
+	"localrmm/internal/enrollmentclient"
 	"os"
 	"path/filepath"
 )
@@ -16,7 +18,7 @@ var errOnlinePreparation = errors.New("online bootstrap preparation was not comp
 // publication. No secret, executable, shell command or ambient temp path is used.
 func prepareOnlineBootstrap(ctx context.Context, r agentinstall.Request, in bootstrapfetch.Request, preflight func(context.Context, agentinstall.Request) error, fetch func(context.Context, bootstrapfetch.Request) ([]byte, error)) (agentinstall.Request, func() error, error) {
 	noop := func() error { return nil }
-	if !r.Apply || r.Action != agentinstall.Install || r.BootstrapFile != "" || preflight == nil || fetch == nil || in.ExpectedSHA256 != r.BootstrapSHA256 || in.InsecureHTTPTest != r.InsecureHTTPTest {
+	if !r.Apply || r.Action != agentinstall.Install || r.BootstrapFile != "" || preflight == nil || fetch == nil || in.ExpectedSHA256 != r.BootstrapSHA256 || in.InsecureHTTPTest != r.InsecureHTTPTest || r.AutomaticRenewalAcknowledged && (r.Resume || r.InsecureHTTPTest) {
 		return r, noop, errOnlinePreparation
 	}
 	if preflight(ctx, r) != nil {
@@ -24,6 +26,21 @@ func prepareOnlineBootstrap(ctx context.Context, r agentinstall.Request, in boot
 	}
 	raw, err := fetch(ctx, in)
 	if err != nil || len(raw) == 0 || len(raw) > bootstrapfetch.MaxBootstrapBytes || ctx.Err() != nil {
+		return r, noop, errOnlinePreparation
+	}
+	// Fetch already validated the full public bootstrap. Bind its explicit renewal
+	// contract before even creating a public temporary snapshot.
+	var selected struct {
+		SchemaVersion string `json:"schemaVersion"`
+		RenewalPolicy string `json:"renewalPolicy"`
+		Profile       string `json:"profile"`
+	}
+	if json.Unmarshal(raw, &selected) != nil {
+		return r, noop, errOnlinePreparation
+	}
+	renewable := selected.SchemaVersion == enrollmentclient.RenewableBootstrapVersion && selected.RenewalPolicy == "same-key-v1" && selected.Profile == "tls"
+	legacy := selected.SchemaVersion == enrollmentclient.BootstrapVersion && selected.RenewalPolicy == ""
+	if (!legacy && !renewable) || renewable != r.AutomaticRenewalAcknowledged {
 		return r, noop, errOnlinePreparation
 	}
 	dir, err := os.MkdirTemp("/tmp", "tracebolt-public-bootstrap-")

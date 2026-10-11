@@ -38,7 +38,7 @@ func validateUpdatesActivatedMaterial(path string, m Material) error {
 
 func validateUpdatesActivatedBytes(raw, readyRaw []byte, m Material) error {
 	var current Config
-	if lanconfig.StrictObject(raw, &current, "schemaVersion", "profile", "managerOrigin", "agentId", "certificateFile", "privateKeyFile", "serverCAFile", "stateDirectory", "insecureHTTPAcknowledged", "collectionProfile") != nil || current != m.config || len(m.certificate.Certificate) == 0 {
+	if decodeConfig(raw, &current) != nil || current != m.config || len(m.authorityDER()) == 0 {
 		return ErrState
 	}
 	var ready struct {
@@ -51,7 +51,7 @@ func validateUpdatesActivatedBytes(raw, readyRaw []byte, m Material) error {
 		return ErrState
 	}
 	configHash := sha256.Sum256(raw)
-	certHash := sha256.Sum256(m.certificate.Certificate[0])
+	certHash := sha256.Sum256(m.authorityDER())
 	if ready.ConfigHash != hex.EncodeToString(configHash[:]) || ready.CertificateHash != hex.EncodeToString(certHash[:]) {
 		return ErrState
 	}

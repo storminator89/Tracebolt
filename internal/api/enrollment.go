@@ -2,6 +2,7 @@ package api
 
 import (
 	"bytes"
+	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
 	"encoding/pem"
@@ -23,6 +24,7 @@ import (
 // delivered through the authenticated UI or exact public download; native clients must validate/pin its
 // explicit trust before sending an invitation, never discover trust over HTTP.
 type EnrollmentBootstrap struct {
+	RenewalPolicy     string `json:"renewalPolicy,omitempty"`
 	SchemaVersion     string `json:"schemaVersion"`
 	ManagerInstanceID string `json:"managerInstanceId"`
 	Profile           string `json:"profile"`
@@ -74,6 +76,18 @@ func (h *operatorHandler) enrollmentOperator(w http.ResponseWriter, r *http.Requ
 	if h.enrollment == nil {
 		fail(w, 404, "enrollment_unavailable", "Enrollment is not configured.")
 		return
+	}
+	if r.Method == "GET" {
+		parts := strings.Split(r.URL.Path, "/")
+		if len(parts) == 5 && parts[1] == "api" && parts[2] == "enrollment" && enrollmentcrypto.ValidID(parts[3], "invite_") && parts[4] == "renewal" {
+			result, e := h.enrollment.OperatorRenewal(r.Context(), parts[3])
+			if e != nil {
+				enrollmentOperatorError(w, e)
+				return
+			}
+			write(w, 200, result)
+			return
+		}
 	}
 	if r.Method != "POST" {
 		fail(w, 405, "method_not_allowed", "Method is unsupported.")
@@ -140,6 +154,27 @@ func (h *operatorHandler) enrollmentOperator(w http.ResponseWriter, r *http.Requ
 		write(w, 200, snapshot)
 		return
 	}
+	if parts[4] == "disable-renewal" {
+		var input struct {
+			RequestID        string `json:"requestId"`
+			ExpectedRevision uint64 `json:"expectedRevision"`
+		}
+		if !readObject(w, r, 1024, []string{"requestId", "expectedRevision"}, &input) {
+			return
+		}
+		release, ok := beginOperatorMutation(w, r)
+		if !ok {
+			return
+		}
+		defer release()
+		result, e := h.enrollment.DisableRenewal(r.Context(), parts[3], input.RequestID, input.ExpectedRevision)
+		if e != nil {
+			enrollmentOperatorError(w, e)
+			return
+		}
+		write(w, 200, result)
+		return
+	}
 	if parts[4] == "terminate" {
 		var input struct {
 			RequestID        string                `json:"requestId"`
@@ -189,6 +224,14 @@ func (h *operatorHandler) enrollmentClient(w http.ResponseWriter, r *http.Reques
 	}
 	if len(r.Header.Values("Content-Type")) != 1 || r.Header.Get("Content-Type") != "application/json" || r.ContentLength < 0 {
 		fail(w, 400, "invalid_client_framing", "A bounded JSON request is required.")
+		return
+	}
+	if strings.HasPrefix(r.URL.Path, "/v2/enrollment/renewal/") {
+		if h.insecureHTTPTest || r.TLS == nil || !r.TLS.HandshakeComplete || r.TLS.Version < tls.VersionTLS13 || h.enrollment.Binding().Profile != "tls" {
+			fail(w, 400, "renewal_tls_required", "Automatic renewal requires the fresh TLS identity profile.")
+			return
+		}
+		h.enrollmentRenewal(w, r)
 		return
 	}
 	if r.URL.Path == "/v2/enrollment/challenge" {
@@ -253,6 +296,8 @@ func (h *operatorHandler) enrollmentClient(w http.ResponseWriter, r *http.Reques
 }
 func enrollmentError(w http.ResponseWriter, e error) {
 	switch {
+	case errors.Is(e, enrollmentstate.ErrNotImplemented):
+		fail(w, 400, "renewal_not_enabled", "Automatic renewal requires an explicitly enabled fresh TLS identity.")
 	case errors.Is(e, enrollmentstate.ErrCapacity):
 		fail(w, 409, "enrollment_capacity_reached", "Enrollment retention limit reached; existing identities are not automatically deleted or reset.")
 	case errors.Is(e, enrollmentstore.ErrBusy):
@@ -280,7 +325,16 @@ func validEnrollmentBootstrap(service *enrollmentservice.Service, b EnrollmentBo
 	if httpTest {
 		profile = "http-test"
 	}
-	if b.SchemaVersion != "tracebolt.enrollment-bootstrap.v2" || b.ManagerInstanceID != binding.InstanceID || b.Profile != profile || b.Profile != binding.Profile || b.EnrollmentOrigin != origin || binding.Origin != origin || b.CollectionProfile != binding.CollectionProfile || b.InvitationID != "" {
+	version := "tracebolt.enrollment-bootstrap.v2"
+	if service.AutomaticRenewal() {
+		version = "tracebolt.enrollment-bootstrap.renewable.v1"
+		if b.RenewalPolicy != enrollmentcrypto.RenewalPolicySameKey || b.AgentOrigin != service.RenewalAgentOrigin() || httpTest {
+			return false
+		}
+	} else if b.RenewalPolicy != "" {
+		return false
+	}
+	if b.SchemaVersion != version || b.ManagerInstanceID != binding.InstanceID || b.Profile != profile || b.Profile != binding.Profile || b.EnrollmentOrigin != origin || binding.Origin != origin || b.CollectionProfile != binding.CollectionProfile || b.InvitationID != "" {
 		return false
 	}
 	u, e := url.Parse(b.AgentOrigin)
@@ -380,4 +434,63 @@ func readInvitationInput(w http.ResponseWriter, r *http.Request, profile string)
 		return input, false
 	}
 	return input, true
+}
+
+func (h *operatorHandler) enrollmentRenewal(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path == "/v2/enrollment/renewal/challenge" {
+		var input struct {
+			InvitationID    string `json:"invitationId"`
+			ClaimID         string `json:"claimId"`
+			CertificateHash string `json:"certificateHash"`
+			Purpose         string `json:"purpose"`
+		}
+		if !readObject(w, r, 1024, []string{"invitationId", "claimId", "certificateHash", "purpose"}, &input) {
+			return
+		}
+		peer, _, e := net.SplitHostPort(r.RemoteAddr)
+		if e != nil {
+			fail(w, 400, "invalid_peer", "Native peer is unavailable.")
+			return
+		}
+		result, e := h.enrollment.RenewalChallenge(r.Context(), peer, input.InvitationID, input.ClaimID, input.CertificateHash, input.Purpose)
+		if e != nil {
+			enrollmentError(w, e)
+			return
+		}
+		write(w, 200, result)
+		return
+	}
+	switch r.URL.Path {
+	case "/v2/enrollment/renewal/status", "/v2/enrollment/renewal/issue", "/v2/enrollment/renewal/activate":
+	default:
+		fail(w, 404, "not_found", "Renewal route is unavailable.")
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, enrollmentcrypto.MaxClaimBytes)
+	raw, e := io.ReadAll(r.Body)
+	if e != nil {
+		fail(w, 413, "request_too_large", "Renewal proof exceeds its size limit.")
+		return
+	}
+	var envelope struct {
+		Challenge string `json:"challenge"`
+	}
+	if json.Unmarshal(raw, &envelope) != nil || len(envelope.Challenge) != 43 {
+		fail(w, 400, "invalid_proof", "Renewal proof is invalid.")
+		return
+	}
+	var result enrollmentservice.RenewalEnvelope
+	switch r.URL.Path {
+	case "/v2/enrollment/renewal/status":
+		result, e = h.enrollment.RenewalStatus(r.Context(), envelope.Challenge, raw)
+	case "/v2/enrollment/renewal/issue":
+		result, e = h.enrollment.Renew(r.Context(), envelope.Challenge, raw)
+	case "/v2/enrollment/renewal/activate":
+		result, e = h.enrollment.ActivateRenewal(r.Context(), envelope.Challenge, raw)
+	}
+	if e != nil {
+		enrollmentError(w, e)
+		return
+	}
+	write(w, 200, result)
 }

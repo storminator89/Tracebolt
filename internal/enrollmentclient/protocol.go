@@ -50,7 +50,7 @@ func (w *wireClient) post(ctx context.Context, path string, raw []byte) ([]byte,
 	}
 	// The caller selects only fixed protocol verbs; bootstrap data cannot supply a path.
 	switch path {
-	case "challenge", "claim", "status", "credential", "activate":
+	case "challenge", "claim", "status", "credential", "activate", "renewal/challenge", "renewal/status", "renewal/issue", "renewal/activate":
 	default:
 		return nil, ErrResponse
 	}
@@ -128,7 +128,7 @@ func (s *session) challenge(ctx context.Context, purpose string) (enrollmentcryp
 	c, b := in.Context, s.l.Bootstrap
 	now := time.Now()
 	serverNow, e := time.Parse(time.RFC3339Nano, in.ServerNow)
-	if e != nil || serverNow.Before(now.Add(-time.Minute)) || serverNow.After(now.Add(time.Minute)) || in.SchemaVersion != "tracebolt.enrollment-challenge.v2" || in.Purpose != purpose || c.ManagerInstanceID != b.ManagerInstanceID || c.Profile != b.Profile || c.Origin != b.EnrollmentOrigin || c.CollectionProfile != b.CollectionProfile || c.InvitationID != b.InvitationID || c.ClaimID != s.l.ClaimID || c.ExpiresAt <= now.Unix() || c.ExpiresAt > now.Add(90*time.Second).Unix() {
+	if e != nil || serverNow.Before(now.Add(-time.Minute)) || serverNow.After(now.Add(time.Minute)) || in.SchemaVersion != "tracebolt.enrollment-challenge.v2" || in.Purpose != purpose || c.ManagerInstanceID != b.ManagerInstanceID || c.Profile != b.Profile || c.Origin != b.EnrollmentOrigin || c.CollectionProfile != b.CollectionProfile || c.InvitationID != b.InvitationID || c.ClaimID != s.l.ClaimID || c.RenewalPolicy != b.RenewalPolicy || b.RenewalPolicy != "" && c.AgentOrigin != b.AgentOrigin || c.ExpiresAt <= now.Unix() || c.ExpiresAt > now.Add(90*time.Second).Unix() {
 		return enrollmentcrypto.ChallengeContext{}, ErrResponse
 	}
 	nonce, e := base64.RawURLEncoding.Strict().DecodeString(c.Challenge)
@@ -205,6 +205,11 @@ func (s *session) claim(ctx context.Context) error {
 	defer clear(message)
 	fields := proofBase(c)
 	fields["schemaVersion"] = enrollmentcrypto.ClaimVersion
+	if s.l.Bootstrap.RenewalPolicy != "" {
+		fields["schemaVersion"] = "tracebolt.enrollment-claim.renewable.v1"
+		fields["renewalPolicy"] = s.l.Bootstrap.RenewalPolicy
+		fields["agentOrigin"] = s.l.Bootstrap.AgentOrigin
+	}
 	fields["requestId"] = s.l.ClaimRequestID
 	fields["invitationSecret"] = string(secret)
 	fields["csr"] = s.l.CSR
@@ -259,7 +264,7 @@ func (s *session) acceptSnapshot(v enrollmentstate.Snapshot) error {
 	if enrollmentstate.ValidateSnapshot(v) != nil || v.Binding.InstanceID != b.ManagerInstanceID || v.Binding.Profile != b.Profile || v.Binding.Origin != b.EnrollmentOrigin || v.Binding.CollectionProfile != b.CollectionProfile || v.Binding.IssuerFingerprint != fingerprint(s.issuerDER) || v.InvitationID != b.InvitationID || validatePlatformSnapshot(v, b, runtime.GOOS) != nil || v.Revision < s.l.LastRevision {
 		return ErrResponse
 	}
-	if v.Claim.ClaimID != s.l.ClaimID || v.Claim.RequestID != s.l.ClaimRequestID || v.Claim.KeyFingerprint != fingerprint(s.publicDER) || v.Claim.CSRHash != fingerprint(s.csr) || s.l.ClaimHash == "" || v.Claim.ClaimHash != s.l.ClaimHash || v.Claim.ComparisonCode != s.trust.ComparisonCode {
+	if v.Claim.RenewalPolicy != b.RenewalPolicy || b.RenewalPolicy != "" && v.Claim.AgentOrigin != b.AgentOrigin || v.Claim.ClaimID != s.l.ClaimID || v.Claim.RequestID != s.l.ClaimRequestID || v.Claim.KeyFingerprint != fingerprint(s.publicDER) || v.Claim.CSRHash != fingerprint(s.csr) || s.l.ClaimHash == "" || v.Claim.ClaimHash != s.l.ClaimHash || v.Claim.ComparisonCode != s.trust.ComparisonCode {
 		return ErrResponse
 	}
 	if s.l.CertificateDER != "" && v.State != enrollmentstate.Expired && v.State != enrollmentstate.Canceled && v.State != enrollmentstate.Rejected && v.State != enrollmentstate.Revoked {

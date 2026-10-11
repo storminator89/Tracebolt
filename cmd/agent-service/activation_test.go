@@ -47,7 +47,7 @@ func TestOnlinePreparationGateBeforeFetchAndProtectedPublicSnapshot(t *testing.T
 		if got != in {
 			t.Fatal("fetch contract altered")
 		}
-		return []byte(`{"synthetic":"public-only"}`), nil
+		return []byte(`{"schemaVersion":"tracebolt.enrollment-bootstrap.v2","profile":"http-test"}`), nil
 	}
 	prepared, cleanup, e := prepareOnlineBootstrap(context.Background(), r, in, gate, fetch)
 	if e != nil {
@@ -66,7 +66,7 @@ func TestOnlinePreparationGateBeforeFetchAndProtectedPublicSnapshot(t *testing.T
 		t.Fatal("snapshot directory unsafe")
 	}
 	raw, e := os.ReadFile(prepared.BootstrapFile)
-	if e != nil || string(raw) != `{"synthetic":"public-only"}` {
+	if e != nil || string(raw) != `{"schemaVersion":"tracebolt.enrollment-bootstrap.v2","profile":"http-test"}` {
 		t.Fatal("snapshot bytes changed")
 	}
 	if cleanup() != nil {
@@ -133,5 +133,35 @@ func TestOnlinePreparationCancellationAndBadFetchDoNotStage(t *testing.T) {
 				t.Fatal("bad fetch staged snapshot")
 			}
 		})
+	}
+}
+
+func TestOnlineRenewalMismatchRejectedBeforeSnapshot(t *testing.T) {
+	for _, raw := range []string{
+		`{"schemaVersion":"tracebolt.enrollment-bootstrap.renewable.v1","profile":"tls","renewalPolicy":"same-key-v1"}`,
+		`{"schemaVersion":"tracebolt.enrollment-bootstrap.v2","profile":"tls"}`,
+	} {
+		renewable := strings.Contains(raw, "renewable.v1")
+		r, in := onlineFixtureRequest(), onlineFixtureFetch()
+		r.InsecureHTTPTest = false
+		in.InsecureHTTPTest = false
+		r.AutomaticRenewalAcknowledged = !renewable
+		result, cleanup, err := prepareOnlineBootstrap(context.Background(), r, in,
+			func(context.Context, agentinstall.Request) error { return nil },
+			func(context.Context, bootstrapfetch.Request) ([]byte, error) { return []byte(raw), nil })
+		if err == nil || result != r || result.BootstrapFile != "" || cleanup() != nil {
+			t.Fatal("mismatched renewal staged a snapshot")
+		}
+	}
+}
+
+func TestServiceCLIRejectsRenewalOutsideFreshHTTPSBeforeInspection(t *testing.T) {
+	for _, extra := range [][]string{{"--action", "restart"}, {"--action", "upgrade"}, {"--resume"}, {"--insecure-http-test"}} {
+		backend := &inertBackend{}
+		var out, stderr bytes.Buffer
+		args := append([]string{"--automatic-certificate-renewal"}, extra...)
+		if run(context.Background(), args, &out, &stderr, backend) != 2 || backend.reads != 0 || backend.begins != 0 {
+			t.Fatal("renewal escaped fresh gate")
+		}
 	}
 }

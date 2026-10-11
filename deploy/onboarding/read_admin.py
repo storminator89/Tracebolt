@@ -56,12 +56,17 @@ def make_plan(args, manifest, arch):
               for role in ("agent-service", "enroll-agent", "lan-agent", "socket-owner-reader")}
     hashes["source"] = manifest["assets"][f"tracebolt-{version}-source.tar"]["sha256"]
     require(all(type(h) is str and re.fullmatch(r"[0-9a-f]{64}", h) and h != "0" * 64 for h in hashes.values()), "artifact-hashes")
-    return dict(schemaVersion="tracebolt.read-admin-plan.v2", readProfile=PROFILE,
+    renewable = getattr(args, "automatic_certificate_renewal", False)
+    require(not renewable or not args.insecure_http_test and not getattr(args, "resume_read_admin", False), "fresh-https-renewal-only")
+    plan = dict(schemaVersion="tracebolt.read-admin-plan.v2", readProfile=PROFILE,
         operation="fresh-install", sourceCommit=manifest["sourceCommit"], release=version,
         architecture=arch, artifacts=hashes, bootstrapSHA256=args.bootstrap_sha256,
         enrollmentOrigin=args.manager_origin, agentOrigin=args.read_admin_agent_origin, invitationId=args.invitation_id,
         transportProfile="http-test" if args.insecure_http_test else "tls",
         scopes=list(READ_SCOPES), controlledActions="not-provisioned", limitations=LIMITATIONS.copy())
+    if renewable:
+        plan["automaticCertificateRenewal"] = "same-key-v1"
+    return plan
 
 
 def disclosure(plan):
@@ -77,13 +82,15 @@ def disclosure(plan):
         "The main agent stays nonroot. The command installs the separate read helpers after your explicit dashboard fingerprint/device approval. Keep this terminal open; hidden invitation entry and device identity approval remain required.",
         "Completed phases are retained. A failure shows its exact phase and keeps identity, counters, pending bytes and journal evidence. Existing installations require their separate upgrade/recovery flow.",
         "Details: " + " ".join(plan["limitations"].values())]
+    if plan.get("automaticCertificateRenewal") == "same-key-v1":
+        lines.append("Also approve automatic seven-day certificates for this same device identity and private key until revocation or issuer/explicit scope authority expiry. Existing scopes and their original expiry stay fixed; no key rotation, scope expansion or revival of expired identity is permitted. HTTPS is required.")
     if plan["transportProfile"] == "http-test":
         lines.append("WARNING: disposable HTTP test only. Invitation/session data, inventory and journal content are readable on the network; the manager can be impersonated, and capability metadata is unauthenticated. This confirmation includes that plaintext-content risk. HTTPS is the default; no TLS downgrade is performed.")
     return "\n".join(lines)
 
 
 def phrase(plan):
-    return "INSTALL READ ADMIN" + (" OVER HTTP" if plan["transportProfile"] == "http-test" else "")
+    return "INSTALL READ ADMIN" + (" WITH AUTOMATIC CERTIFICATE RENEWAL" if plan.get("automaticCertificateRenewal") == "same-key-v1" else "") + (" OVER HTTP" if plan["transportProfile"] == "http-test" else "")
 
 
 def identity(plan, facts):

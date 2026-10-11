@@ -145,6 +145,9 @@ func (t *linuxTransaction) Apply(ctx context.Context, op Operation, r Request) e
 		if r.InsecureHTTPTest {
 			args = append(args, "--insecure-http-test")
 		}
+		if r.AutomaticRenewalAcknowledged {
+			args = append(args, "--automatic-certificate-renewal")
+		}
 		return t.h.run(ctx, filepath.Join(t.staged, "enroll-agent"), args, &t.account, true)
 	case OpStop:
 		if e := t.systemctl(ctx, "stop", UnitName); e != nil {

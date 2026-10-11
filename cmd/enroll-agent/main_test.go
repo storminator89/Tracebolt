@@ -23,3 +23,11 @@ func TestShellQuotedHandoffPath(t *testing.T) {
 		t.Fatal(got)
 	}
 }
+
+func TestRenewalFlagCannotChangeRetainedValidationAuthority(t *testing.T) {
+	var out, stderr bytes.Buffer
+	args := []string{"--bootstrap", "/nonexistent-public-bootstrap", "--state-directory", "/nonexistent-private-state", "--validate-service", "--service-identity", "1000:1000", "--automatic-certificate-renewal"}
+	if run(context.Background(), args, &out, &stderr) != 2 || !strings.Contains(stderr.String(), "before private-state access") {
+		t.Fatal("renewal changed offline validation")
+	}
+}

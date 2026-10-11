@@ -61,12 +61,18 @@ def _config(raw):
     text = raw.decode("utf-8", "strict")
     _require("\ufffd" not in text)
     c = json.loads(text, object_pairs_hook=_pairs)
-    _require(type(c) is dict and set(c) == _FIELDS)
+    _require(type(c) is dict)
+    renewable = c.get("schemaVersion") == "tracebolt.lan-agent.v6"
+    fields = _FIELDS | {"renewalManifestFile"} if renewable else _FIELDS
+    _require(set(c) == fields)
     _require(type(c["insecureHTTPAcknowledged"]) is bool)
-    for key in _FIELDS - {"insecureHTTPAcknowledged"}:
+    for key in fields - {"insecureHTTPAcknowledged"}:
         _require(type(c[key]) is str and c[key].isascii())
-    _require(c["schemaVersion"] == "tracebolt.lan-agent.v5" and
+    _require(c["schemaVersion"] in ("tracebolt.lan-agent.v5", "tracebolt.lan-agent.v6") and
              c["collectionProfile"] == "managed-operations-v3")
+    if renewable:
+        _require(c["profile"] == "tls" and
+                 c["renewalManifestFile"] == _BASE + "/renewal-manifest.json")
     _require(c["stateDirectory"] == _BASE + "/telemetry")
     _require(c["certificateFile"] == _BASE + "/agent-cert.pem" and
              c["privateKeyFile"] == _BASE + "/agent-key.pem")

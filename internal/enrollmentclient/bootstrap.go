@@ -33,6 +33,10 @@ var (
 )
 
 const BootstrapVersion = "tracebolt.enrollment-bootstrap.v2"
+const RenewableBootstrapVersion = "tracebolt.enrollment-bootstrap.renewable.v1"
+
+// AutomaticRenewalPrivacy is shown before any create-only local consent.
+const AutomaticRenewalPrivacy = "Allow automatic seven-day certificates for this same device identity and private key until you revoke it or its configured issuer or explicit scope authority expires. Renewal preserves existing collection scopes and their original expiry; it does not rotate the key, expand permissions or renew an expired identity. Production HTTPS is required."
 const maxJSON = 64 << 10
 
 // WindowsInventoryHTTPPrivacy is required in addition to inventory scope consent.
@@ -42,6 +46,7 @@ const WindowsInventoryHTTPPrivacy = "WARNING: HTTP-test sends invitation secrets
 const WindowsInventoryPrivacy = "Windows inventory includes the local hostname, interface names and IP addresses; caller-visible process IDs, parent IDs, names and thread counts; service names, display names, states and PIDs; machine uninstall software names, versions, publishers and registry views; and OS, uptime, CPU, physical RAM and system-volume metrics. These fields can reveal private names, installed software and network topology. Rows are bounded and may be partial, denied or unavailable; counts cover only the reported local API scope. No command lines, executable paths, owners, process memory, MAC addresses, DNS, routes, sockets, event content, remote actions or updates are included. A fresh explicitly acknowledged Windows identity is required; existing basic or Linux ledgers cannot be adopted or reset. Production TLS is the default; disposable HTTP test transport requires an additional explicit plaintext acknowledgement. Inventory stays in the operator view and is excluded from AI export."
 
 type Bootstrap struct {
+	RenewalPolicy     string `json:"renewalPolicy,omitempty"`
 	SchemaVersion     string `json:"schemaVersion"`
 	ManagerInstanceID string `json:"managerInstanceId"`
 	Profile           string `json:"profile"`
@@ -133,7 +138,14 @@ func publicCertificates(raw string) ([]*x509.Certificate, error) {
 }
 func validateBootstrap(b Bootstrap, now time.Time) (TrustDisplay, error) {
 	fail := func() (TrustDisplay, error) { return TrustDisplay{}, ErrBootstrap }
-	if b.SchemaVersion != BootstrapVersion || !enrollmentcrypto.ValidID(b.ManagerInstanceID, "manager_") || !enrollmentcrypto.ValidID(b.InvitationID, "invite_") || !enrollmentcrypto.ValidCollectionProfile(b.CollectionProfile) {
+	if (b.SchemaVersion != BootstrapVersion && b.SchemaVersion != RenewableBootstrapVersion) || !enrollmentcrypto.ValidID(b.ManagerInstanceID, "manager_") || !enrollmentcrypto.ValidID(b.InvitationID, "invite_") || !enrollmentcrypto.ValidCollectionProfile(b.CollectionProfile) {
+		return fail()
+	}
+	if b.SchemaVersion == RenewableBootstrapVersion {
+		if b.Profile != "tls" || b.RenewalPolicy != "same-key-v1" {
+			return fail()
+		}
+	} else if b.RenewalPolicy != "" {
 		return fail()
 	}
 	// Both destinations use the shared exact-origin and explicit-trust policy.
@@ -170,6 +182,9 @@ func validateBootstrap(b Bootstrap, now time.Time) (TrustDisplay, error) {
 	}
 	if b.CollectionProfile == enrollmentcrypto.CollectionProfileWindowsInventory {
 		d.CollectionPrivacy = WindowsInventoryPrivacy
+	}
+	if b.RenewalPolicy != "" {
+		d.CollectionPrivacy += " " + AutomaticRenewalPrivacy
 	}
 	if b.Profile == "tls" {
 		cs, e := publicCertificates(b.ServerCAPEM)
@@ -210,6 +225,9 @@ func decodeShape(d *json.Decoder, t reflect.Type, depth int) error {
 	if depth > 8 {
 		return ErrResponse
 	}
+	for t.Kind() == reflect.Pointer {
+		t = t.Elem()
+	}
 	tok, e := d.Token()
 	if e != nil || tok == nil {
 		return ErrResponse
@@ -220,10 +238,21 @@ func decodeShape(d *json.Decoder, t reflect.Type, depth int) error {
 			return ErrResponse
 		}
 		fields := map[string]reflect.Type{}
-		for i := 0; i < t.NumField(); i++ {
-			f := t.Field(i)
-			fields[f.Tag.Get("json")] = f.Type
+		required := map[string]bool{}
+		var addFields func(reflect.Type)
+		addFields = func(typ reflect.Type) {
+			for i := 0; i < typ.NumField(); i++ {
+				f := typ.Field(i)
+				if f.Anonymous && f.Type.Kind() == reflect.Struct {
+					addFields(f.Type)
+					continue
+				}
+				parts := strings.Split(f.Tag.Get("json"), ",")
+				fields[parts[0]] = f.Type
+				required[parts[0]] = len(parts) == 1 || parts[1] != "omitempty"
+			}
 		}
+		addFields(t)
 		seen := map[string]bool{}
 		for d.More() {
 			k, e := d.Token()
@@ -238,8 +267,13 @@ func decodeShape(d *json.Decoder, t reflect.Type, depth int) error {
 			}
 		}
 		end, e := d.Token()
-		if e != nil || end != json.Delim('}') || len(seen) != len(fields) {
+		if e != nil || end != json.Delim('}') {
 			return ErrResponse
+		}
+		for name, must := range required {
+			if must && !seen[name] {
+				return ErrResponse
+			}
 		}
 	case reflect.String:
 		s, ok := tok.(string)

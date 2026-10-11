@@ -305,7 +305,7 @@ func (s *Store) OperationalView(ctx context.Context, id string, now time.Time) (
 			}
 			out.LastGood = agedLastGood(t.operational[snapshot.InvitationID].LastGood)
 		}
-		if snapshot.State == enrollmentstate.Revoked || snapshot.State == enrollmentstate.Canceled || snapshot.State == enrollmentstate.Rejected || snapshot.State == enrollmentstate.Expired || snapshot.Intent.NotAfter > 0 && now.Unix() >= snapshot.Intent.NotAfter {
+		if snapshot.State == enrollmentstate.Revoked || snapshot.State == enrollmentstate.Canceled || snapshot.State == enrollmentstate.Rejected || snapshot.State == enrollmentstate.Expired || t.currentCredentialNotAfter(snapshot) > 0 && now.Unix() >= t.currentCredentialNotAfter(snapshot) {
 			out.Status = "revoked"
 			if out.Snapshot != nil {
 				ageSnapshot(out.Snapshot)

@@ -60,26 +60,11 @@ func (s *Store) windowsNetworkContextAuthority(t *transaction, id, certificate s
 	if e != nil {
 		return snap, e
 	}
-	if snap.Binding.CollectionProfile != enrollmentcrypto.CollectionProfileWindowsInventory || snap.Platform != "windows" || snap.State != enrollmentstate.Activated || snap.Issuance.CertificateHash != certificate {
+	if snap.Binding.CollectionProfile != enrollmentcrypto.CollectionProfileWindowsInventory || snap.Platform != "windows" {
 		return snap, enrollmentstate.ErrProof
 	}
-	if now.Unix() < snap.UpdatedAt || now.Unix() < snap.Intent.NotBefore {
-		return snap, enrollmentstate.ErrInvalid
-	}
-	if now.Unix() >= snap.Intent.NotAfter {
-		return snap, enrollmentstate.ErrExpired
-	}
-	c, ok := t.credentials[id]
-	if !ok {
-		return snap, ErrStorage
-	}
-	intent, e := t.engine.TrustedRecordedIntent(id)
-	if e != nil {
-		return snap, ErrStorage
-	}
-	cert, e := enrollmentcrypto.VerifyIssued(c.DER, s.issuerDER, intent, now)
-	if e != nil || cert.CertificateHash() != certificate {
-		return snap, enrollmentstate.ErrProof
+	if e = t.authorizeCurrentCredential(snap, certificate, now); e != nil {
+		return snap, e
 	}
 	return snap, nil
 }
@@ -120,8 +105,8 @@ func (s *Store) ApplyWindowsNetworkContext(ctx context.Context, id, certificate 
 		if e != nil {
 			return e
 		}
-		authorityUntil = time.Unix(snap.Intent.NotAfter, 0).UTC()
-		if m.DeviceID != snap.Approval.DeviceID || m.Consent.SenderBinding != windowsnetworkcontext.SenderBinding(snap.Binding.Profile, origin, certificate, m.DeviceID) || m.Consent.ChangedAt.After(now) || m.Consent.ChangedAt.Unix() < snap.Activation.At {
+		authorityUntil = time.Unix(t.currentCredentialNotAfter(snap), 0).UTC()
+		if m.DeviceID != snap.Approval.DeviceID || m.Consent.SenderBinding != windowsnetworkcontext.SenderBinding(snap.Binding.Profile, origin, snap.Issuance.CertificateHash, m.DeviceID) || m.Consent.ChangedAt.After(now) || m.Consent.ChangedAt.Unix() < snap.Activation.At {
 			return enrollmentstate.ErrProof
 		}
 		if e = ledger.Clock(ctx, t.conn, now); e != nil {
@@ -155,7 +140,7 @@ func (s *Store) ApplyWindowsNetworkContext(ctx context.Context, id, certificate 
 			return e
 		}
 		r.LastAt = now
-		if e = ledger.SaveRecord(ctx, t.conn, m.DeviceID, id, certificate, r); e != nil {
+		if e = ledger.SaveRecord(ctx, t.conn, m.DeviceID, id, snap.Issuance.CertificateHash, r); e != nil {
 			return e
 		}
 		c := t.credentials[id]
@@ -261,13 +246,13 @@ func (s *Store) WindowsNetworkContextPage(ctx context.Context, device string, q 
 		if !found {
 			return enrollmentstate.ErrNotFound
 		}
-		snap, e = s.windowsNetworkContextAuthority(t, snap.InvitationID, snap.Issuance.CertificateHash, now)
+		snap, e = s.windowsNetworkContextAuthority(t, snap.InvitationID, t.currentCertificateHash(snap), now)
 		if e != nil {
 			return e
 		}
-		until := time.Unix(snap.Intent.NotAfter, 0).UTC()
+		until := time.Unix(t.currentCredentialNotAfter(snap), 0).UTC()
 		authorityUntil = until
-		invitation, certificate = snap.InvitationID, snap.Issuance.CertificateHash
+		invitation, certificate = snap.InvitationID, t.currentCertificateHash(snap)
 		present, e := windowsNetworkContextSchemaPresent(ctx, t.conn, s.config.Binding.CollectionProfile)
 		if e != nil {
 			return e
@@ -303,7 +288,7 @@ func (s *Store) WindowsNetworkContextPage(ctx context.Context, device string, q 
 				return e
 			}
 			now = fresh
-			if _, e = s.windowsNetworkContextAuthority(t, snap.InvitationID, snap.Issuance.CertificateHash, fresh); e != nil {
+			if _, e = s.windowsNetworkContextAuthority(t, snap.InvitationID, t.currentCertificateHash(snap), fresh); e != nil {
 				return e
 			}
 			if _, e = networkContextSession(ctx, fresh); e != nil {
@@ -404,7 +389,7 @@ func (s *Store) MaintainWindowsNetworkContext(ctx context.Context, now time.Time
 				if e != nil {
 					return e
 				}
-				expired := !now.Before(g.Manifest.ExpiresAt) || snap.State != enrollmentstate.Activated || now.Unix() >= snap.Intent.NotAfter
+				expired := !now.Before(g.Manifest.ExpiresAt) || snap.State != enrollmentstate.Activated || now.Unix() >= t.currentCredentialNotAfter(snap)
 				if pending && !now.Before(g.StartedAt.Add(ledger.StagingTTL)) {
 					expired = true
 				}
@@ -624,7 +609,7 @@ func (s *Store) RecheckWindowsNetworkContextPage(ctx context.Context, p windowsn
 			if !found {
 				return enrollmentstate.ErrNotFound
 			}
-			if _, e := s.windowsNetworkContextAuthority(t, snap.InvitationID, snap.Issuance.CertificateHash, checked); e != nil {
+			if _, e := s.windowsNetworkContextAuthority(t, snap.InvitationID, t.currentCertificateHash(snap), checked); e != nil {
 				return e
 			}
 			if _, e := networkContextSession(ctx, checked); e != nil {

@@ -32,6 +32,7 @@ var (
 type Config struct {
 	Version, SourceCommit, PayloadSHA256, Architecture, Disclosure string
 	HTTPDisclosure                                                 string
+	AutomaticRenewalDisclosure                                     string
 	ReadAdminDisclosure, ReadAdminHTTPDisclosure                   string
 	ReadAdminSummary, ReadAdminHTTPSummary                         string
 	concise                                                        bool
@@ -44,6 +45,7 @@ type TrustPreview struct {
 	ManagerID, EnrollmentOrigin, AgentOrigin string
 	Fingerprints                             []string
 	HTTPTest                                 bool
+	AutomaticRenewal                         bool
 }
 
 // Hooks is the boundary to the existing installation coordinator. Preview must
@@ -61,7 +63,10 @@ type Hooks struct {
 	Preview          func(publicBootstrap []byte) (TrustPreview, error)
 	Install          func(context.Context, []byte, bool, func(string)) error
 	InstallReadAdmin func(context.Context, []byte, bool, func(string)) error
-	Uninstall        func(context.Context, func(string)) error
+	// Renewable hooks accept only the separate fresh same-key renewal acknowledgement.
+	InstallRenewable          func(context.Context, []byte, bool, func(string)) error
+	InstallReadAdminRenewable func(context.Context, []byte, bool, func(string)) error
+	Uninstall                 func(context.Context, func(string)) error
 }
 
 type page uint8
@@ -89,6 +94,7 @@ type flow struct {
 	trust                                      TrustPreview
 	scope, service, identity, compared         bool
 	httpAcknowledged                           bool
+	renewalAcknowledged                        bool
 	readAdmin                                  bool
 	details                                    bool
 	operation                                  operation
@@ -99,6 +105,7 @@ type flow struct {
 func (f *flow) clearConsent() {
 	f.scope, f.service, f.identity, f.compared = false, false, false, false
 	f.httpAcknowledged = false
+	f.renewalAcknowledged = false
 	f.details = false
 }
 
@@ -144,7 +151,7 @@ func (f *flow) back() bool {
 
 func (f *flow) canInstall() bool {
 	return f.page == pageReview && !f.busy && !f.attempted && len(f.bootstrap) != 0 &&
-		f.scope && f.service && f.identity && f.compared && (!f.trust.HTTPTest || f.httpAcknowledged)
+		f.scope && f.service && f.identity && f.compared && (!f.trust.HTTPTest || f.httpAcknowledged) && f.renewalAcknowledged == f.trust.AutomaticRenewal
 }
 
 func (f *flow) httpApproved() bool {
@@ -152,7 +159,7 @@ func (f *flow) httpApproved() bool {
 }
 
 func previewAllowed(c Config, t TrustPreview) bool {
-	return validTrust(t) && (!t.HTTPTest || validDisclosure(c.HTTPDisclosure))
+	return validTrust(t) && (!t.HTTPTest || validDisclosure(c.HTTPDisclosure)) && (!t.AutomaticRenewal || validDisclosure(c.AutomaticRenewalDisclosure))
 }
 
 func (f *flow) begin(kind operation, uninstallConfirmed bool) bool {
@@ -245,6 +252,9 @@ func validOrigin(s string, httpTest bool) bool {
 }
 
 func validTrust(t TrustPreview) bool {
+	if t.AutomaticRenewal && t.HTTPTest {
+		return false
+	}
 	if !publicLine(t.ManagerID, 256) || !validOrigin(t.EnrollmentOrigin, t.HTTPTest) || !validOrigin(t.AgentOrigin, t.HTTPTest) ||
 		len(t.Fingerprints) == 0 || len(t.Fingerprints) > 32 {
 		return false
@@ -295,6 +305,11 @@ func reviewText(c Config, t TrustPreview) string {
 	if t.HTTPTest {
 		b.WriteString("ISOLATED HTTP TEST: SEPARATE RISK APPROVAL REQUIRED\r\n")
 		b.WriteString(strings.ReplaceAll(strings.ReplaceAll(c.HTTPDisclosure, "\r\n", "\n"), "\n", "\r\n"))
+		b.WriteString("\r\n\r\n")
+	}
+	if t.AutomaticRenewal {
+		b.WriteString("AUTOMATIC CERTIFICATE RENEWAL: SEPARATE APPROVAL REQUIRED\r\n")
+		b.WriteString(c.AutomaticRenewalDisclosure)
 		b.WriteString("\r\n\r\n")
 	}
 	b.WriteString(strings.ReplaceAll(strings.ReplaceAll(c.Disclosure, "\r\n", "\n"), "\n", "\r\n"))

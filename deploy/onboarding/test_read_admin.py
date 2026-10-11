@@ -17,8 +17,8 @@ def load(name, path):
 w = load("onboarding", Path(__file__).with_name("read_admin.py"))
 VERSION = "v0.1.0-inert.1"
 
-def plan(http=False, arch="amd64"):
-    args = SimpleNamespace(action="install", resume=False, bootstrap_sha256="d" * 64,
+def plan(http=False, arch="amd64", renewable=False):
+    args = SimpleNamespace(action="install", resume=False, automatic_certificate_renewal=renewable, bootstrap_sha256="d" * 64,
         manager_origin="http://192.168.1.2:8787" if http else "https://manager.example:8443",
         invitation_id="invite_" + "e" * 32, insecure_http_test=http,
         read_admin_agent_origin="http://192.168.1.2:8788" if http else "https://manager.example:8444")
@@ -116,6 +116,20 @@ class Fixture:
         return w.run(self.plan, self, self.install, self.confirm, self.output.append, resume=resume)
 
 class Tests(unittest.TestCase):
+    def test_fresh_renewal_is_separately_named_in_combined_consent_and_scope_unchanged(self):
+        legacy, fresh = plan(), plan(renewable=True)
+        self.assertNotIn("automaticCertificateRenewal", legacy)
+        self.assertEqual(fresh["automaticCertificateRenewal"], "same-key-v1")
+        self.assertEqual(fresh["scopes"], legacy["scopes"])
+        self.assertEqual(fresh["artifacts"], legacy["artifacts"])
+        self.assertEqual(w.phrase(fresh), "INSTALL READ ADMIN WITH AUTOMATIC CERTIFICATE RENEWAL")
+        text = w.disclosure(fresh)
+        for term in ("seven-day", "same device identity and private key", "revocation", "scope authority expiry", "no key rotation", "HTTPS"):
+            self.assertIn(term, text)
+        self.assertNotEqual(w.digest(w.canonical(fresh)), w.digest(w.canonical(legacy)))
+        with self.assertRaises(w.Rejected):
+            plan(http=True, renewable=True)
+
     def test_arm64_plan_has_identical_scopes_and_architecture_bound_hashes(self):
         arm = plan(arch="arm64")
         amd = plan()

@@ -95,6 +95,9 @@ func InvitationHash(secret string) ([32]byte, error) {
 	return sha256.Sum256(append([]byte("tracebolt.invitation.v2\x00"), b...)), nil
 }
 func validContext(c ChallengeContext, now time.Time) bool {
+	if c.RenewalPolicy != "" && (c.RenewalPolicy != RenewalPolicySameKey || c.Profile != "tls" || !canonicalOrigin(c.AgentOrigin, "tls")) || c.RenewalPolicy == "" && c.AgentOrigin != "" {
+		return false
+	}
 	if now.Unix() <= 0 || now.Unix() > 253402300499 || !ValidID(c.ManagerInstanceID, "manager_") || !ValidID(c.InvitationID, "invite_") || !ValidID(c.ClaimID, "claim_") || !ValidCollectionProfile(c.CollectionProfile) || !canonicalOrigin(c.Origin, c.Profile) || c.ExpiresAt <= now.Unix() || c.ExpiresAt > now.Unix()+300 {
 		return false
 	}
@@ -163,6 +166,8 @@ func strictObject(raw []byte, out any, fields ...string) error {
 }
 
 type claimInput struct {
+	RenewalPolicy     string `json:"renewalPolicy"`
+	AgentOrigin       string `json:"agentOrigin"`
 	SchemaVersion     string `json:"schemaVersion"`
 	ManagerInstanceID string `json:"managerInstanceId"`
 	Profile           string `json:"profile"`
@@ -211,11 +216,18 @@ func claimData(c ChallengeContext, requestID string, csr []byte, secret string) 
 	if e != nil {
 		return ClaimMetadata{}, zero, nil, nil, e
 	}
-	m := ClaimMetadata{ManagerInstanceID: c.ManagerInstanceID, Profile: c.Profile, Origin: c.Origin, CollectionProfile: c.CollectionProfile, InvitationID: c.InvitationID, ClaimID: c.ClaimID, RequestID: requestID, KeyFingerprint: hash(key), CSRHash: hash(csr), ExpiresAt: c.ExpiresAt}
+	m := ClaimMetadata{RenewalPolicy: c.RenewalPolicy, AgentOrigin: c.AgentOrigin, ManagerInstanceID: c.ManagerInstanceID, Profile: c.Profile, Origin: c.Origin, CollectionProfile: c.CollectionProfile, InvitationID: c.InvitationID, ClaimID: c.ClaimID, RequestID: requestID, KeyFingerprint: hash(key), CSRHash: hash(csr), ExpiresAt: c.ExpiresAt}
 	base := []string{m.ManagerInstanceID, m.Profile, m.Origin, m.CollectionProfile, m.InvitationID, m.ClaimID, m.RequestID, m.KeyFingerprint, m.CSRHash, hex.EncodeToString(verifier[:])}
-	m.ClaimHash = hash(transcript("Tracebolt enrollment semantic claim v2", base...))
+	domain := "Tracebolt enrollment semantic claim v2"
+	possessionDomain := "Tracebolt enrollment claim possession v2"
+	if c.RenewalPolicy != "" {
+		base = append(base, c.RenewalPolicy, c.AgentOrigin)
+		domain = "Tracebolt enrollment semantic renewable claim v1"
+		possessionDomain = "Tracebolt enrollment renewable claim possession v1"
+	}
+	m.ClaimHash = hash(transcript(domain, base...))
 	m.ComparisonCode = hash(transcript("Tracebolt enrollment comparison v2", m.ManagerInstanceID, m.InvitationID, m.ClaimID, m.KeyFingerprint))[:32]
-	message := transcript("Tracebolt enrollment claim possession v2", append(base, c.Challenge, strconv.FormatInt(c.ExpiresAt, 10))...)
+	message := transcript(possessionDomain, append(base, c.Challenge, strconv.FormatInt(c.ExpiresAt, 10))...)
 	return m, verifier, key, message, nil
 }
 
@@ -234,10 +246,16 @@ func VerifyClaim(raw []byte, c ChallengeContext, now time.Time) (VerifiedClaim, 
 		return out, ErrContract
 	}
 	var in claimInput
-	if strictObject(raw, &in, "schemaVersion", "managerInstanceId", "profile", "origin", "collectionProfile", "invitationId", "claimId", "requestId", "challenge", "invitationSecret", "csr", "proof") != nil {
+	fields := []string{"schemaVersion", "managerInstanceId", "profile", "origin", "collectionProfile", "invitationId", "claimId", "requestId", "challenge", "invitationSecret", "csr", "proof"}
+	version := ClaimVersion
+	if c.RenewalPolicy != "" {
+		fields = append(fields, "renewalPolicy", "agentOrigin")
+		version = RenewableClaimVersion
+	}
+	if strictObject(raw, &in, fields...) != nil {
 		return out, ErrContract
 	}
-	if in.SchemaVersion != ClaimVersion || in.ManagerInstanceID != c.ManagerInstanceID || in.Profile != c.Profile || in.Origin != c.Origin || in.CollectionProfile != c.CollectionProfile || in.InvitationID != c.InvitationID || in.ClaimID != c.ClaimID || in.Challenge != c.Challenge {
+	if in.SchemaVersion != version || in.RenewalPolicy != c.RenewalPolicy || in.AgentOrigin != c.AgentOrigin || in.ManagerInstanceID != c.ManagerInstanceID || in.Profile != c.Profile || in.Origin != c.Origin || in.CollectionProfile != c.CollectionProfile || in.InvitationID != c.InvitationID || in.ClaimID != c.ClaimID || in.Challenge != c.Challenge {
 		return out, ErrProof
 	}
 	csr, e := decodeBase64(in.CSR, MaxCSRBytes)

@@ -75,6 +75,7 @@ type Replay struct {
 	ReceivedAt  time.Time `json:"receivedAt"`
 }
 type credential struct {
+	Renewal                          *renewalRecord            `json:"renewal,omitempty"`
 	WindowsActionSetup               *windowsActionSetupMarker `json:"windowsActionSetup,omitempty"`
 	DER                              []byte                    `json:"der"`
 	Delivery                         Delivery                  `json:"delivery"`
@@ -88,6 +89,8 @@ type credential struct {
 	WindowsEventAuthorityInitialized bool                      `json:"windowsEventAuthorityInitialized,omitempty"`
 }
 type transaction struct {
+	ctx                           context.Context
+	issuerDER                     []byte
 	originalWindowsActionSetup    map[string]windowsActionSetupMarker
 	conn                          *sql.Conn
 	beforeCommit                  []func() error
@@ -99,6 +102,7 @@ type transaction struct {
 	credentials                   map[string]credential
 	originalLedger                []byte
 	originalCredentials           map[string][]byte
+	originalRenewals              map[string][]byte
 	originalServiceActionSetup    map[string]serviceActionSetupMarker
 	originalWindowsEventAuthority map[string]bool
 	operational                   map[string]operationalRecord
@@ -381,7 +385,7 @@ func (s *Store) load(ctx context.Context, conn *sql.Conn) (*transaction, error) 
 	if err != nil {
 		return nil, ErrStorage
 	}
-	t := &transaction{conn: conn, engine: engine, credentials: make(map[string]credential), originalLedger: raw, originalCredentials: make(map[string][]byte), originalServiceActionSetup: make(map[string]serviceActionSetupMarker), originalWindowsActionSetup: make(map[string]windowsActionSetupMarker), originalWindowsEventAuthority: make(map[string]bool), originalWindowsFullServices: make(map[string]bool), originalWindowsFullSoftware: make(map[string]bool), originalWindowsFullProcesses: make(map[string]bool), originalWindowsNetworkContext: make(map[string]bool), operational: map[string]operationalRecord{}, originalOperational: map[string][]byte{}, inventory: map[string]inventoryRecord{}, originalInventory: map[string][]byte{}, overview: map[string]overviewRecord{}, originalOverview: map[string][]byte{}}
+	t := &transaction{ctx: ctx, issuerDER: s.issuerDER, conn: conn, engine: engine, credentials: make(map[string]credential), originalLedger: raw, originalCredentials: make(map[string][]byte), originalRenewals: make(map[string][]byte), originalServiceActionSetup: make(map[string]serviceActionSetupMarker), originalWindowsActionSetup: make(map[string]windowsActionSetupMarker), originalWindowsEventAuthority: make(map[string]bool), originalWindowsFullServices: make(map[string]bool), originalWindowsFullSoftware: make(map[string]bool), originalWindowsFullProcesses: make(map[string]bool), originalWindowsNetworkContext: make(map[string]bool), operational: map[string]operationalRecord{}, originalOperational: map[string][]byte{}, inventory: map[string]inventoryRecord{}, originalInventory: map[string][]byte{}, overview: map[string]overviewRecord{}, originalOverview: map[string][]byte{}}
 	if conn.QueryRowContext(ctx, "SELECT count(*),coalesce(max(length(body)),0) FROM enrollment_credentials").Scan(&count, &n) != nil || count > s.config.RecordLimit || n > maxCredentialBytes {
 		return nil, ErrStorage
 	}
@@ -413,7 +417,7 @@ func (s *Store) load(ctx context.Context, conn *sql.Conn) (*transaction, error) 
 			return nil, ErrStorage
 		}
 		cert, err := enrollmentcrypto.VerifyIssued(c.DER, s.issuerDER, intent, time.Unix(snapshot.Issuance.At, 0))
-		if err != nil || cert.CertificateHash() != snapshot.Issuance.CertificateHash || !t.validMetadata(snapshot, c) {
+		if err != nil || cert.CertificateHash() != snapshot.Issuance.CertificateHash || !s.validRenewalRecord(snapshot, intent, c) || !t.validMetadata(snapshot, c) {
 			return nil, ErrStorage
 		}
 		t.credentials[id] = c
@@ -424,6 +428,7 @@ func (s *Store) load(ctx context.Context, conn *sql.Conn) (*transaction, error) 
 			t.originalWindowsEventAuthority[id] = true
 		}
 		t.originalCredentials[id] = body
+		t.originalRenewals[id], _ = json.Marshal(c.Renewal)
 		if c.WindowsFullServicesInitialized {
 			t.originalWindowsFullServices[id] = true
 		}
@@ -506,10 +511,10 @@ func (t *transaction) validMetadata(s enrollmentstate.Snapshot, c credential) bo
 	if c.WindowsEventAuthorityInitialized && (s.Platform != "windows" || s.Binding.CollectionProfile != enrollmentcrypto.CollectionProfileWindowsInventory) {
 		return false
 	}
-	if !validWindowsActionSetupMarker(s, c.WindowsActionSetup) {
+	if !validWindowsActionSetupMarker(s, c.WindowsActionSetup, credentialAuthorityExpiry(s, c)) {
 		return false
 	}
-	if !validServiceActionSetupMarker(s, c.ServiceActionSetup) {
+	if !validServiceActionSetupMarker(s, c.ServiceActionSetup, credentialAuthorityExpiry(s, c)) {
 		return false
 	}
 	d := c.Delivery
@@ -523,7 +528,7 @@ func (t *transaction) validMetadata(s enrollmentstate.Snapshot, c credential) bo
 	if r == (Replay{}) {
 		return len(c.Frame) == 0
 	}
-	if s.Activation == (enrollmentstate.Activation{}) || r.Sequence == 0 || r.Sequence > enrollmentstate.MaxRevision || !enrollmentcrypto.ValidHash(r.PayloadHash) || r.ReceivedAt.Unix() < s.Activation.At || r.ReceivedAt.Unix() >= s.Intent.NotAfter || !validStoreTime(r.GeneratedAt) || !validStoreTime(r.CollectedAt) || !validStoreTime(r.ReceivedAt) {
+	if s.Activation == (enrollmentstate.Activation{}) || r.Sequence == 0 || r.Sequence > enrollmentstate.MaxRevision || !enrollmentcrypto.ValidHash(r.PayloadHash) || r.ReceivedAt.Unix() < s.Activation.At || r.ReceivedAt.Unix() >= credentialAuthorityExpiry(s, c) || !validStoreTime(r.GeneratedAt) || !validStoreTime(r.CollectedAt) || !validStoreTime(r.ReceivedAt) {
 		return false
 	}
 	if s.Termination.At != 0 && r.ReceivedAt.Unix() > s.Termination.At {
@@ -599,6 +604,13 @@ func (s *Store) transact(ctx context.Context, action func(*transaction) error) e
 		snapshot, err := t.engine.Get(id)
 		if err != nil || !t.validMetadata(snapshot, c) {
 			return enrollmentstate.ErrInvalid
+		}
+		renewalBytes, _ := json.Marshal(c.Renewal)
+		if !bytes.Equal(renewalBytes, t.originalRenewals[id]) {
+			anchor, e := t.engine.TrustedRecordedIntent(id)
+			if e != nil || !s.validRenewalRecord(snapshot, anchor, c) {
+				return enrollmentstate.ErrInvalid
+			}
 		}
 	}
 	raw, err := t.engine.EncodeTrustedLedger()

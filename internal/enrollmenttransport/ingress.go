@@ -228,6 +228,7 @@ func (h *Ingress) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer release()
+	r = withVerifiedTLSCertificate(r)
 	identity, err := h.store.AuthorizeCertificate(r.Context(), r.TLS.PeerCertificates[0].Raw, h.now())
 	if err != nil {
 		storeFailure(w, err)
@@ -249,6 +250,13 @@ func (h *Ingress) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.commit(w, r, identity, raw)
+}
+
+// withVerifiedTLSCertificate must follow verifiedTLS and per-certificate
+// admission. The actual leaf travels independently of immutable grant bindings
+// and is checked again inside every final store transaction.
+func withVerifiedTLSCertificate(r *http.Request) *http.Request {
+	return r.WithContext(enrollmentstore.WithAuthenticatedCertificate(r.Context(), lantrust.Fingerprint(r.TLS.PeerCertificates[0])))
 }
 
 func (h *Ingress) verifiedTLS(r *http.Request, now time.Time) bool {

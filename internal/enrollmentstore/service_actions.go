@@ -162,7 +162,7 @@ func (s *Store) loadServiceActionRecords(ctx context.Context, t *transaction) er
 		}
 		canonical, _ := json.Marshal(r)
 		snap, e := t.engine.Get(id)
-		if e != nil || !bytes.Equal(b, canonical) || r.ManagerID != s.config.Binding.InstanceID || r.DeviceID != snap.Approval.DeviceID || r.IncarnationDigest != "sha256:"+snap.Issuance.CertificateHash || snap.Activation.At == 0 || r.ClockFloor.Unix() < snap.Activation.At || r.ClockFloor.Unix() >= snap.Intent.NotAfter || (snap.Termination.At != 0 && r.ClockFloor.Unix() > snap.Termination.At) {
+		if e != nil || !bytes.Equal(b, canonical) || r.ManagerID != s.config.Binding.InstanceID || r.DeviceID != snap.Approval.DeviceID || r.IncarnationDigest != "sha256:"+snap.Issuance.CertificateHash || snap.Activation.At == 0 || r.ClockFloor.Unix() < snap.Activation.At || r.ClockFloor.Unix() >= t.currentCredentialNotAfter(snap) || (snap.Termination.At != 0 && r.ClockFloor.Unix() > snap.Termination.At) {
 			return ErrStorage
 		}
 		if fenced {
@@ -209,7 +209,7 @@ func (s *Store) InitializeServiceActionIdentity(ctx context.Context, key ed25519
 		if e != nil {
 			return e
 		}
-		if _, e = s.systemAuthority(t, snap.InvitationID, snap.Issuance.CertificateHash, now); e != nil {
+		if _, e = s.systemAuthority(t, snap.InvitationID, t.currentCertificateHash(snap), now); e != nil {
 			return e
 		}
 		r, e := actionjob.New(s.config.Binding.InstanceID, device, "sha256:"+snap.Issuance.CertificateHash, key, now)
@@ -253,7 +253,7 @@ func (s *Store) serviceActionTransaction(ctx context.Context, key ed25519.Public
 			if e != nil {
 				return e
 			}
-			id, hash = snap.InvitationID, snap.Issuance.CertificateHash
+			id, hash = snap.InvitationID, t.currentCertificateHash(snap)
 		}
 		snap, e = s.systemAuthority(t, id, hash, now)
 		if e != nil {

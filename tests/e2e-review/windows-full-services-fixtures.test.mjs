@@ -34,7 +34,7 @@ test('fixture control retains same-origin CSRF and finite response without expor
 });
 test('new gate is independent and preserves all existing ordinary and native case counts/budgets',()=>{
  const runner=read('./windows-full-services-runner.mjs'),flow=read('./windows-full-services-browser.mjs'),legacy=read('./lan-browser.mjs'),workflow=read('../../.github/workflows/validate.yml'),manifest=JSON.parse(read('./inert-suites.json'));
- assert.equal((legacy.match(/await check\(/g)||[]).length,26);assert.match(legacy,/windowsInventoryBrowserCase\(\{pageAt,login,expect,base,shot\}\),'20m'/);
+ assert.equal((legacy.match(/await check\(/g)||[]).length,27);assert.match(legacy,/windowsInventoryBrowserCase\(\{pageAt,login,expect,base,shot\}\),'20m'/);
  assert.equal((read('./enrollment-browser.mjs').match(/await check\('/g)||[]).length,13);
  assert.match(workflow,/Guided enrollment full browser gate \(13 required, no skips\)/);assert.match(workflow,/node tests\/e2e-review\/windows-full-services-runner\.mjs/);assert.match(workflow,/node --test tests\/e2e-review\/windows-full-services-fixtures\.test\.mjs/);assert.ok(manifest.entries.includes('windows-full-services-fixtures.test.mjs'));
  assert.ok(workflow.includes('            artifacts/review/windows-full-services-results.json\n'));assert.ok(workflow.includes('            artifacts/review/windows-full-services-manifest.json\n'));

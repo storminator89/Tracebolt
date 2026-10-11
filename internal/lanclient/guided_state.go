@@ -1,9 +1,13 @@
 package lanclient
 
 import (
+	"crypto/x509"
+	"encoding/hex"
+	"localrmm/internal/enrollmentcrypto"
 	"localrmm/internal/inventorystate"
 	"localrmm/internal/lanclientstate"
 	"localrmm/internal/systemstate"
+	"runtime"
 )
 
 func openSenderState(m Material) (*lanclientstate.State, error) {
@@ -27,7 +31,7 @@ func InitializeGuidedState(c Config) error {
 		return e
 	}
 	var state *lanclientstate.State
-	if c.complete() || c.windowsInventory() {
+	if c.complete() || c.windowsInventory() || c.automaticRenewal() {
 		state, e = lanclientstate.InitializeNew(c.StateDirectory, m.binding)
 	} else {
 		state, e = lanclientstate.Open(c.StateDirectory, m.binding)
@@ -67,13 +71,35 @@ func ValidateGuidedState(c Config) error {
 	if e != nil {
 		return e
 	}
-	if lanclientstate.ValidateExisting(c.StateDirectory, m.binding) != nil {
+	return validateExistingGuidedState(c, m.binding)
+}
+
+// ValidateRenewalSenderState checks continuity while a renewable sender is fully
+// quiesced, including reconciliation after its previous transport leaf expired.
+// The caller must first authenticate anchorDER against the original protected
+// enrollment ledger. This is a read-only state check, never transport authority:
+// it does not load or accept a current credential, initialize paths, repair a
+// missing used ledger, or transmit. Existing exclusive lifetime locks apply.
+func ValidateRenewalSenderState(c Config, anchorDER []byte) error {
+	if !c.automaticRenewal() || c.Validate() != nil || !c.platformAllowed(runtime.GOOS) || len(anchorDER) == 0 || len(anchorDER) > enrollmentcrypto.MaxCertificateBytes {
+		return ErrConfiguration
+	}
+	anchor, err := x509.ParseCertificate(anchorDER)
+	if err != nil || anchor.IsCA || anchor.Subject.CommonName != c.AgentID || anchor.KeyUsage&x509.KeyUsageDigitalSignature == 0 || len(anchor.ExtKeyUsage) != 1 || anchor.ExtKeyUsage[0] != x509.ExtKeyUsageClientAuth || len(anchor.UnknownExtKeyUsage) != 0 {
+		return ErrConfiguration
+	}
+	binding := senderBinding(c, anchor)
+	return validateExistingGuidedState(c, hex.EncodeToString(binding[:]))
+}
+
+func validateExistingGuidedState(c Config, binding string) error {
+	if lanclientstate.ValidateExisting(c.StateDirectory, binding) != nil {
 		return ErrState
 	}
-	if c.complete() && inventorystate.ValidateExisting(inventoryStateDirectory(c), m.binding, c.AgentID) != nil {
+	if c.complete() && inventorystate.ValidateExisting(inventoryStateDirectory(c), binding, c.AgentID) != nil {
 		return ErrState
 	}
-	if c.complete() && systemstate.ValidateExisting(systemStateDirectory(c), systemStateBinding(m)) != nil {
+	if c.complete() && systemstate.ValidateExisting(systemStateDirectory(c), systemStateBinding(Material{binding: binding})) != nil {
 		return ErrState
 	}
 	return nil

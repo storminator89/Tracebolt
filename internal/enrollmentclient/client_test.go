@@ -41,6 +41,8 @@ func testPEM(der []byte) string {
 }
 
 type clientFixture struct {
+	clock                                           time.Time
+	dropRenewalIssueAfter, dropRenewalActivate      bool
 	t                                               *testing.T
 	server                                          *httptest.Server
 	service                                         *enrollmentservice.Service
@@ -93,10 +95,14 @@ func newClientFixture(t *testing.T, profile string, collection ...string) *clien
 		serverCA = testPEM(rd)
 	}
 	binding := enrollmentstate.Binding{InstanceID: testID("manager", 1), Profile: profile, Origin: origin, CollectionProfile: enrollmentcrypto.CollectionProfile, IssuerFingerprint: fingerprint(id)}
-	if len(collection) == 1 {
+	if len(collection) >= 1 {
 		binding.CollectionProfile = collection[0]
 	}
 	cfg := enrollmentstate.DefaultConfig(binding)
+	if len(collection) == 2 && collection[1] == "renewable" {
+		cfg.AutomaticRenewal = true
+		cfg.RenewalAgentOrigin = origin
+	}
 	cfg.RecordLimit = 25
 	cfg.InvitationLimit = 25
 	cfg.PendingLimit = 25
@@ -105,7 +111,12 @@ func newClientFixture(t *testing.T, profile string, collection ...string) *clien
 		t.Fatal(e)
 	}
 	t.Cleanup(func() { store.Close() })
-	f.service, e = enrollmentservice.New(store, issuer, nil)
+	f.clock = now
+	var clock func() time.Time
+	if cfg.AutomaticRenewal {
+		clock = func() time.Time { return f.clock }
+	}
+	f.service, e = enrollmentservice.New(store, issuer, clock)
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -115,6 +126,10 @@ func newClientFixture(t *testing.T, profile string, collection ...string) *clien
 	}
 	f.secret = invitation.Secret()
 	f.bootstrap = Bootstrap{SchemaVersion: BootstrapVersion, ManagerInstanceID: binding.InstanceID, Profile: profile, EnrollmentOrigin: origin, AgentOrigin: origin, CollectionProfile: binding.CollectionProfile, InvitationID: invitation.Snapshot().InvitationID, ServerCAPEM: serverCA, IssuerRootPEM: testPEM(rd), IssuerPEM: testPEM(id)}
+	if cfg.AutomaticRenewal {
+		f.bootstrap.SchemaVersion = RenewableBootstrapVersion
+		f.bootstrap.RenewalPolicy = "same-key-v1"
+	}
 	if profile == "tls" {
 		f.server.StartTLS()
 	} else {
@@ -134,7 +149,32 @@ func (f *clientFixture) serve(w http.ResponseWriter, r *http.Request) {
 	raw, _ := io.ReadAll(io.LimitReader(r.Body, enrollmentcrypto.MaxClaimBytes+1))
 	var out any
 	var e error
-	if path == "challenge" {
+	if path == "renewal/challenge" {
+		var in struct{ InvitationID, ClaimID, CertificateHash, Purpose string }
+		json.Unmarshal(raw, &in)
+		out, e = f.service.RenewalChallenge(r.Context(), "127.0.0.1", in.InvitationID, in.ClaimID, in.CertificateHash, in.Purpose)
+	} else if path == "renewal/status" || path == "renewal/issue" || path == "renewal/activate" {
+		var fields map[string]string
+		json.Unmarshal(raw, &fields)
+		switch path {
+		case "renewal/status":
+			out, e = f.service.RenewalStatus(r.Context(), fields["challenge"], raw)
+		case "renewal/issue":
+			out, e = f.service.Renew(r.Context(), fields["challenge"], raw)
+			if e == nil && f.dropRenewalIssueAfter {
+				f.dropRenewalIssueAfter = false
+				dropConnection(w)
+				return
+			}
+		case "renewal/activate":
+			out, e = f.service.ActivateRenewal(r.Context(), fields["challenge"], raw)
+			if e == nil && f.dropRenewalActivate {
+				f.dropRenewalActivate = false
+				dropConnection(w)
+				return
+			}
+		}
+	} else if path == "challenge" {
 		var in struct{ InvitationID, ClaimID, Purpose string }
 		json.Unmarshal(raw, &in)
 		out, e = f.service.Challenge("127.0.0.1", in.InvitationID, in.ClaimID, in.Purpose)

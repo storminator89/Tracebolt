@@ -19,7 +19,7 @@ func ValidateGuidedHandoff(path string) error {
 		return ErrConfiguration
 	}
 	var c Config
-	if lanconfig.StrictObject(raw, &c, "schemaVersion", "profile", "managerOrigin", "agentId", "certificateFile", "privateKeyFile", "serverCAFile", "stateDirectory", "insecureHTTPAcknowledged", "collectionProfile") != nil || !c.guided() {
+	if decodeConfig(raw, &c) != nil || !c.guided() {
 		return ErrConfiguration
 	}
 	m, e := loadConfig(c)
@@ -40,7 +40,7 @@ func ValidateGuidedHandoff(path string) error {
 		return ErrState
 	}
 	h := sha256.Sum256(raw)
-	leaf := sha256.Sum256(m.certificate.Certificate[0])
+	leaf := sha256.Sum256(m.authorityDER())
 	if ready.ConfigHash != hex.EncodeToString(h[:]) || ready.CertificateHash != hex.EncodeToString(leaf[:]) {
 		return ErrState
 	}

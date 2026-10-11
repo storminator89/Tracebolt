@@ -246,6 +246,7 @@ function CreateInvitation({platform,enrollmentPath,collectionProfile,configurati
   </>:<>
    <div className="enrollment-created-meta"><EnrollmentStatus item={record!} now={now}/><span>{t('Gültig bis {0}',{0:fullDate(enrollmentDate(enrollmentDeadline(record!)))})}</span></div>
    {record?.state==='created'?<div className="enrollment-install">
+    {created.bootstrap.renewalPolicy&&<p role="status">{locale==='de'?'Automatische Zertifikatserneuerung: passender aktueller Quellbuild erforderlich. Die dauerhafte Freigabe wird am Gerät separat bestätigt.':'Automatic certificate renewal requires a matching current source build. Approve ongoing renewal separately on the device.'}</p>}
     {windows&&created.bootstrap.collectionProfile==='windows-inventory-v1'&&<div className="enrollment-windows-install"><h3>{windowsCopy.installTitle}</h3><p>{windowsCopy.install}</p><p>{windowsCopy.release}</p></div>}
     {publicCommand?<div className="enrollment-public-command">
      <h3>{downloadCommand?downloadCopy.title:commandCopy.title}</h3>

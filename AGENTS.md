@@ -17,6 +17,13 @@ missing material rather than inventing credentials or weakening protection.
 - Inspect the selected computer, OS/architecture, checkout/revision, existing work,
   toolchain, private paths and requested scope before changing anything. Preserve
   user edits. Do not assume the editing environment is the deployment server.
+- Fresh same-key automatic certificate renewal is a TLS-only source candidate.
+  Read `docs/automatic-certificate-renewal.md` before changing its policy, scheduler,
+  immutable identity anchor or atomic credential manifest. Keep explicit unchecked
+  local consent, original scopes/floors/ages, current-leaf expiry and final
+  revocation checks; signed HTTP and optional native package actions are unsupported.
+  Existing profiles are not adopted. Source fixtures do not authorize credentials,
+  host installation, trust changes, native acceptance or a release.
 - Current LAN paths: default manual-v1 with preprovided approved material, or
   explicitly configured guided-v2 with a dedicated protected client-auth issuer.
   Linux `enroll-agent` uses a hidden local terminal prompt and deliberate public

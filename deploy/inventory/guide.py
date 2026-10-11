@@ -189,11 +189,21 @@ def config_facts(s, e, facts):
     c = strict_json(raw, 16384)
     fields = {"schemaVersion", "profile", "managerOrigin", "agentId", "certificateFile", "privateKeyFile",
               "serverCAFile", "stateDirectory", "insecureHTTPAcknowledged", "collectionProfile"}
-    require(type(c) is dict and set(c) == fields and c["schemaVersion"] == "tracebolt.lan-agent.v5" and
+    renewable = type(c) is dict and c.get("schemaVersion") == "tracebolt.lan-agent.v6"
+    if renewable:
+        fields |= {"renewalManifestFile"}
+    require(type(c) is dict and set(c) == fields and
+            c["schemaVersion"] in ("tracebolt.lan-agent.v5", "tracebolt.lan-agent.v6") and
             c["collectionProfile"] == s.PROFILE and c["profile"] == facts["profile"] and
             c["managerOrigin"] == facts["origin"] and c["stateDirectory"] == TELEMETRY and
             type(c["agentId"]) is str and re.fullmatch(r"agent_[0-9a-f]{32}", c["agentId"]) is not None and
             c["insecureHTTPAcknowledged"] is (facts["profile"] == "http-test"), "existing-activated-v3-config")
+    # New schema only: the ordinary stopped-agent validator verifies the current
+    # manifest. The guide never reads credentials, rewrites consent, or promotes
+    # an older config because an extra file is present.
+    if renewable:
+        require(c["profile"] == "tls" and c["renewalManifestFile"] ==
+                "/var/lib/tracebolt-agent/enrollment/renewal-manifest.json", "existing-renewable-config")
     return dict(configHash=digest(raw), deviceId=c["agentId"])
 
 

@@ -8,7 +8,6 @@ import (
 	"io"
 	"localrmm/internal/agentloop"
 	"localrmm/internal/enrollmentclient"
-	"localrmm/internal/lanclient"
 	"path/filepath"
 	"time"
 )
@@ -31,12 +30,8 @@ type pendingServiceHooks struct {
 
 func defaultPendingServiceHooks() pendingServiceHooks {
 	return pendingServiceHooks{identity: serviceIdentity, load: enrollmentclient.LoadBootstrap, inspect: enrollmentclient.InspectService, resume: enrollmentclient.ResumeService, markReady: enrollmentclient.MarkServiceReady, stopDeadline: enrollmentclient.StopServiceAtDeadline, sender: func(ctx context.Context, path string, interval time.Duration, out io.Writer) error {
-		material, err := lanclient.Load(path)
-		if err != nil {
-			return enrollmentclient.ErrState
-		}
 		encoder := json.NewEncoder(out)
-		_, err = lanclient.RunForeground(ctx, material, interval, func(event agentloop.Event) error {
+		_, err := enrollmentclient.RunRenewableForeground(ctx, path, interval, func(event agentloop.Event) error {
 			return encoder.Encode(struct {
 				SchemaVersion string          `json:"schemaVersion"`
 				Event         agentloop.Event `json:"event"`
@@ -67,6 +62,12 @@ func runPendingService(ctx context.Context, o pendingServiceOptions, out, errOut
 	if err != nil || (b.Profile == "http-test") != o.InsecureHTTPTest {
 		fmt.Fprintln(errOut, "Pending-service bootstrap/profile rejected.")
 		return 2
+	}
+	if b.RenewalPolicy != "" {
+		if err = enrollmentclient.PrepareServiceRenewal(ctx, b, o.StateDirectory); err != nil {
+			fmt.Fprintln(errOut, "Automatic renewal reconciliation blocked; state preserved.")
+			return 2
+		}
 	}
 	if o.InsecureHTTPTest {
 		fmt.Fprintln(errOut, "WARNING: UNENCRYPTED HTTP TEST. Manager responses are not authenticated; invitations and reports are visible.")

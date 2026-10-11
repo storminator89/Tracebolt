@@ -66,7 +66,8 @@ func (m serviceActionSetupMarker) digest() string {
 	body, _ := json.Marshal(m)
 	return actionpermit.Digest(body)
 }
-func validServiceActionSetupMarker(s enrollmentstate.Snapshot, m *serviceActionSetupMarker) bool {
+func validServiceActionSetupMarker(s enrollmentstate.Snapshot, m *serviceActionSetupMarker, authorityExpiry ...int64) bool {
+	notAfter := recordAuthorityExpiry(s, authorityExpiry...)
 	if m == nil {
 		return true
 	}
@@ -75,7 +76,7 @@ func validServiceActionSetupMarker(s enrollmentstate.Snapshot, m *serviceActionS
 		m.DeviceID == s.Approval.DeviceID && m.IncarnationDigest == "sha256:"+s.Issuance.CertificateHash &&
 		actionpermit.ValidDigest(m.KeyID) && actionjob.ValidTime(m.InitializedAt) &&
 		m.InitializedAt.Unix() >= s.Activation.At && m.InitializedAt.Unix() >= s.Intent.NotBefore &&
-		m.InitializedAt.Unix() < s.Intent.NotAfter && (s.Termination.At == 0 || m.InitializedAt.Unix() <= s.Termination.At)
+		m.InitializedAt.Unix() < notAfter && (s.Termination.At == 0 || m.InitializedAt.Unix() <= s.Termination.At)
 }
 
 // ServiceActionSetupStatus describes the entire manager action domain, not only
@@ -129,7 +130,7 @@ func (s *Store) setupServiceActionsCreateOnly(ctx context.Context, t *transactio
 	if incarnationDigest != "sha256:"+snap.Issuance.CertificateHash {
 		return enrollmentstate.ErrProof
 	}
-	if _, err = s.systemAuthority(t, snap.InvitationID, snap.Issuance.CertificateHash, now); err != nil {
+	if _, err = s.systemAuthority(t, snap.InvitationID, t.currentCertificateHash(snap), now); err != nil {
 		return err
 	}
 	r, err := actionjob.New(s.config.Binding.InstanceID, device, incarnationDigest, key, now)
@@ -137,7 +138,7 @@ func (s *Store) setupServiceActionsCreateOnly(ctx context.Context, t *transactio
 		return err
 	}
 	marker := &serviceActionSetupMarker{Version: serviceActionSetupMarkerVersion, ManagerID: r.ManagerID, DeviceID: r.DeviceID, IncarnationDigest: r.IncarnationDigest, KeyID: actionpermit.Digest(key), InitializedAt: now}
-	if !validServiceActionSetupMarker(snap, marker) {
+	if !validServiceActionSetupMarker(snap, marker, t.currentCredentialNotAfter(snap)) {
 		return ErrStorage
 	}
 	for _, object := range serviceActionFencedSchemaObjects() {
@@ -254,7 +255,7 @@ func InspectServiceActionSetup(ctx context.Context, path string, issuerDER []byt
 	if err != nil {
 		return zero, err
 	}
-	if _, err = s.systemAuthority(t, snap.InvitationID, snap.Issuance.CertificateHash, now); err != nil {
+	if _, err = s.systemAuthority(t, snap.InvitationID, t.currentCertificateHash(snap), now); err != nil {
 		return zero, err
 	}
 	out := ServiceActionSetupInspection{Config: config, Identity: snap, Status: ServiceActionSetupAbsent}

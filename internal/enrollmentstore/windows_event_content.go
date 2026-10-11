@@ -211,19 +211,16 @@ func (s *Store) windowsEventIdentity(t *transaction, device, certificate string,
 		if v.Approval.DeviceID != device {
 			continue
 		}
-		if v.Platform != "windows" || v.Binding.CollectionProfile != enrollmentcrypto.CollectionProfileWindowsInventory || v.State != enrollmentstate.Activated || certificate != "" && v.Issuance.CertificateHash != certificate || now.Unix() < v.UpdatedAt || now.Unix() < v.Intent.NotBefore || now.Unix() >= v.Intent.NotAfter {
+		if v.Platform != "windows" || v.Binding.CollectionProfile != enrollmentcrypto.CollectionProfileWindowsInventory {
 			return v, ErrWindowsEventUnavailable
 		}
-		c, ok := t.credentials[v.InvitationID]
-		if !ok {
-			return v, ErrStorage
+		if certificate == "" {
+			certificate = t.currentCertificateHash(v)
 		}
-		intent, e := t.engine.TrustedRecordedIntent(v.InvitationID)
-		if e != nil {
-			return v, ErrStorage
-		}
-		cert, e := enrollmentcrypto.VerifyIssued(c.DER, s.issuerDER, intent, now)
-		if e != nil || cert.CertificateHash() != v.Issuance.CertificateHash {
+		if err := t.authorizeCurrentCredential(v, certificate, now); err != nil {
+			if errors.Is(err, ErrStorage) || errors.Is(err, enrollmentstate.ErrProof) || errors.Is(err, enrollmentstate.ErrInvalid) {
+				return v, err
+			}
 			return v, ErrWindowsEventUnavailable
 		}
 		return v, nil
@@ -237,6 +234,12 @@ func (s *Store) windowsEventCurrent(ctx context.Context, t *transaction, device,
 	}
 	snap, e := s.windowsEventIdentity(t, device, cert, now)
 	if e != nil {
+		// A retired or mismatched transport leaf has no authority to cancel a
+		// still-live anchor-bound request. Only identity expiry/revocation below
+		// may persist the existing terminal cleanup.
+		if errors.Is(e, enrollmentstate.ErrProof) || errors.Is(e, enrollmentstate.ErrInvalid) || errors.Is(e, ErrStorage) {
+			return snap, a, e
+		}
 		if a.certificate != "" {
 			if ce := cancelWindowsEvent(&a, now); ce != nil {
 				return snap, a, ce
@@ -294,13 +297,18 @@ func windowsEventReady(a windowsEventAuthority, now time.Time) error {
 func (s *Store) ReportWindowsEventCapability(ctx context.Context, device, cert string, c windowseventwire.Capability, now time.Time) (windowseventwire.Capability, error) {
 	var out windowseventwire.Capability
 	raw, e := windowseventwire.EncodeCapability(c)
-	if e != nil || device != c.DeviceID || cert != c.CertificateHash || windowseventwire.CapabilityFresh(c, now) != nil {
+	if e != nil || device != c.DeviceID || windowseventwire.CapabilityFresh(c, now) != nil {
 		return out, windowseventrequest.ErrInvalid
 	}
 	e = s.windowsEventTransaction(ctx, now, func(t *transaction) error {
 		snap, e := s.windowsEventIdentity(t, device, cert, now)
 		if e != nil {
 			return e
+		}
+		if c.CertificateHash != snap.Issuance.CertificateHash {
+			// The peer is authenticated above; a foreign body binding remains
+			// an invalid capability, preserving the existing HTTP 400 contract.
+			return windowseventrequest.ErrInvalid
 		}
 		if c.Consent.Profile != snap.Binding.Profile {
 			return enrollmentstate.ErrProof
@@ -322,7 +330,7 @@ func (s *Store) ReportWindowsEventCapability(ctx context.Context, device, cert s
 		if a.capability != nil && c.CollectedAt.Before(a.capability.CollectedAt) {
 			return windowseventrequest.ErrConflict
 		}
-		if a.capability != nil && (a.certificate != cert || c.PolicyDigest != a.capability.PolicyDigest) || !c.Consent.Enabled {
+		if a.capability != nil && (a.certificate != snap.Issuance.CertificateHash || c.PolicyDigest != a.capability.PolicyDigest) || !c.Consent.Enabled {
 			if e = cancelWindowsEvent(&a, now); e != nil {
 				return e
 			}
@@ -330,7 +338,7 @@ func (s *Store) ReportWindowsEventCapability(ctx context.Context, device, cert s
 		credential := t.credentials[snap.InvitationID]
 		credential.WindowsEventAuthorityInitialized = true
 		t.credentials[snap.InvitationID] = credential
-		a.certificate = cert
+		a.certificate = snap.Issuance.CertificateHash
 		a.capSequence = c.Sequence
 		a.capDigest = windowsEventDigest(raw)
 		a.capability = &c
@@ -374,7 +382,7 @@ func (s *Store) WindowsEventContentStatus(ctx context.Context, device string, no
 		if windowseventwire.ValidLocalStatus(a.localStatus) {
 			out.EndpointStatus = a.localStatus
 		}
-		out.AuthorityUntil = time.Unix(snap.Intent.NotAfter, 0).UTC()
+		out.AuthorityUntil = time.Unix(t.currentCredentialNotAfter(snap), 0).UTC()
 		if a.capability != nil {
 			out.LocalStatus = "enabled"
 			if !a.capability.Consent.Enabled {
@@ -637,7 +645,12 @@ func (s *Store) maintainWindowsEventContent(ctx context.Context, t *transaction,
 		if e != nil {
 			return nil, e
 		}
-		snap, authorityErr := s.windowsEventIdentity(t, id, a.certificate, now)
+		// Maintenance has no authenticated transport leaf. Resolve the live
+		// credential separately from the immutable original scope binding.
+		snap, authorityErr := s.windowsEventIdentity(t, id, "", now)
+		if authorityErr == nil && a.certificate != snap.Issuance.CertificateHash {
+			return nil, ErrStorage
+		}
 		if authorityErr != nil && !errors.Is(authorityErr, ErrWindowsEventUnavailable) && !errors.Is(authorityErr, enrollmentstate.ErrNotFound) {
 			return nil, authorityErr
 		}
@@ -659,7 +672,7 @@ func (s *Store) maintainWindowsEventContent(ctx context.Context, t *transaction,
 		}
 		status := WindowsEventStatus{DeviceID: id, ExpectedFloor: strconv.FormatUint(a.floor, 10), LocalStatus: "unavailable", Request: a.request, Capability: a.capability, ObservedAt: now}
 		if authorityErr == nil {
-			status.AuthorityUntil = time.Unix(snap.Intent.NotAfter, 0).UTC()
+			status.AuthorityUntil = time.Unix(t.currentCredentialNotAfter(snap), 0).UTC()
 			if a.capability != nil {
 				status.LocalStatus = "enabled"
 				if !a.capability.Consent.Enabled {
