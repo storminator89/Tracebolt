@@ -30,6 +30,8 @@ import (
 	"localrmm/internal/packagecontroller"
 	"localrmm/internal/store"
 	"localrmm/internal/windowsactionmanager"
+	"localrmm/internal/windowssoftwarejob"
+	"localrmm/internal/windowssoftwaremanager"
 	"localrmm/internal/windowsupdatejob"
 	"localrmm/internal/windowsupdatemanager"
 	"log"
@@ -104,6 +106,7 @@ func prepareWithApplicationChecks(m lanconfig.Material, enrollment *enrollmentco
 	var actions *actionmanager.Manager
 	var windowsActions *windowsactionmanager.Manager
 	var windowsUpdates *windowsupdatejob.Registry
+	var windowsSoftware *windowssoftwarejob.Registry
 	var packageActions *packagecontroller.Manager
 	var enrolledStore *enrollmentstore.Store
 	var enrolledService *enrollmentservice.Service
@@ -114,6 +117,9 @@ func prepareWithApplicationChecks(m lanconfig.Material, enrollment *enrollmentco
 	fail := func(err error) (*prepared, error) {
 		if packageActions != nil {
 			packageActions.Close()
+		}
+		if windowsSoftware != nil {
+			windowsSoftware.Close()
 		}
 		if windowsUpdates != nil {
 			windowsUpdates.Close()
@@ -292,11 +298,49 @@ func prepareWithApplicationChecks(m lanconfig.Material, enrollment *enrollmentco
 			return fail(e)
 		}
 	}
+	if c.WindowsSoftwareJobsConfigFile != "" {
+		if windowsStore == nil || windowsIngress == nil || !auth.Named() || c.Profile != lanconfig.TLS {
+			return fail(windowssoftwaremanager.ErrConfiguration)
+		}
+		forbidden := []ed25519.PublicKey{}
+		if windowsUpdates != nil {
+			forbidden = append(forbidden, windowsUpdates.PublicKeys()...)
+		}
+		if actions != nil {
+			forbidden = append(forbidden, actions.PublicKey())
+		}
+		if windowsActions != nil {
+			forbidden = append(forbidden, windowsActions.PublicKey())
+		}
+		for _, der := range append([][]byte{enrollment.Issuer().IssuerDER(), enrollment.Issuer().RootDER()}, m.Server.Certificate...) {
+			cert, err := x509.ParseCertificate(der)
+			if err != nil {
+				return fail(windowssoftwaremanager.ErrConfiguration)
+			}
+			if pub, ok := cert.PublicKey.(ed25519.PublicKey); ok {
+				forbidden = append(forbidden, pub)
+			}
+		}
+		windowsSoftware, e = windowssoftwaremanager.LoadRegistry(context.Background(), windowsStore, c.WindowsSoftwareJobsConfigFile, forbidden...)
+		if e != nil {
+			return fail(e)
+		}
+		if e = windowsSoftware.ConfigureOperatorPolicy(func(actor string) bool { return auth.ActorHasCapability(actor, operatorauth.WindowsSoftwareInstall) }); e != nil {
+			return fail(e)
+		}
+
+		if e = windowsIngress.ConfigureWindowsSoftwareRegistry(windowsSoftware); e != nil {
+			return fail(e)
+		}
+	}
 	if c.PackageActionsConfigFile != "" {
 		if enrolledStore == nil || enrolledIngress == nil || !auth.Named() {
 			return fail(packagecontroller.ErrConfiguration)
 		}
 		forbidden := []ed25519.PublicKey{}
+		if windowsSoftware != nil {
+			forbidden = append(forbidden, windowsSoftware.PublicKeys()...)
+		}
 		if windowsUpdates != nil {
 			forbidden = append(forbidden, windowsUpdates.PublicKeys()...)
 		}
@@ -359,6 +403,9 @@ func prepareWithApplicationChecks(m lanconfig.Material, enrollment *enrollmentco
 			if packageActions != nil {
 				packageActions.Close()
 			}
+			if windowsSoftware != nil {
+				windowsSoftware.Close()
+			}
 			if windowsUpdates != nil {
 				windowsUpdates.Close()
 			}
@@ -408,7 +455,7 @@ func prepareWithApplicationChecks(m lanconfig.Material, enrollment *enrollmentco
 			return nil, e
 		}
 	}
-	operatorConfig := api.LANOperatorConfig{WindowsUpdateRegistry: windowsUpdates, WindowsServiceActions: windowsActions, PackageActions: packageActions, AISettings: aiSettings, AlarmSettings: alarmWorker, ApplicationCheckSettings: applicationChecks, ServiceActions: actions, Origin: c.OperatorOrigin, Auth: auth, Registry: registry, InsecureHTTPTest: c.Profile == lanconfig.HTTPTest, Devices: func() ([]model.Device, error) {
+	operatorConfig := api.LANOperatorConfig{WindowsSoftwareRegistry: windowsSoftware, WindowsUpdateRegistry: windowsUpdates, WindowsServiceActions: windowsActions, PackageActions: packageActions, AISettings: aiSettings, AlarmSettings: alarmWorker, ApplicationCheckSettings: applicationChecks, ServiceActions: actions, Origin: c.OperatorOrigin, Auth: auth, Registry: registry, InsecureHTTPTest: c.Profile == lanconfig.HTTPTest, Devices: func() ([]model.Device, error) {
 		return trustStore.Devices(context.Background(), registry.List(), time.Now().UTC())
 	}}
 	if enrolledService != nil {

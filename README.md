@@ -33,6 +33,9 @@ This page describes the current source; downloadable prereleases cover less.
 - **Windows logs and updates:** Application/System event headers, separately
   approved older-event searches and selected message reads, and offline cached
   Windows Update inspection.
+- **Prepared Windows MSI (source):** [one reviewed local x64 package](docs/windows-prepared-msi-jobs.md),
+  compact Software approval and verified single-attempt outcome. Native acceptance
+  and an explicit fresh package grant are still required.
 - **Selected Windows updates (source):** [explicit endpoint setup](docs/windows-selected-update-setup.md),
   a manual fleet worklist, per-device cached-update review, one-time approval,
   optional [explicitly approved one-shot update windows](docs/windows-scheduled-update-jobs.md)
