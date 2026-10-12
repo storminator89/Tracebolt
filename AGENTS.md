@@ -124,7 +124,7 @@ missing material rather than inventing credentials or weakening protection.
   identity and all exact grants are durably verified; retain indeterminate
   transitions for read-only reconciliation. The released five-scope preview exposes its GUI path; the current fresh GUI
   uses Read admin below. Existing service/grant receipts must not be promoted.
-- The twenty-scope Windows Read admin source profile is the prominent fresh
+- The twenty-one-scope Windows Read admin source profile is the prominent fresh
   Setup choice; actual scope consent remains unchecked. Read
   `docs/windows-read-admin-setup.md`. Preserve legacy consent/receipt bytes and
   historical development interfaces, disabled fresh staging and exact identity/
@@ -233,6 +233,13 @@ missing material rather than inventing credentials or weakening protection.
   Cached WUA inspection must remain offline and must not download, install,
   accept update terms, reboot, upgrade WUA or change service/network settings.
   Fixtures/cross-builds do not authorize native reads or create a local grant.
+- Prepared MSI installation is a separate fresh default-off one-attempt source
+  domain. Read `docs/windows-prepared-msi-jobs.md` before changes. Preserve exact
+  protected package custody, package-specific review/native acceptance, separate
+  keys/grants/IPC/ledgers, unchecked named approval and durable no-replay. Never
+  infer safety/offline behavior from a hash, widen WUA/observer privileges, accept
+  caller paths/properties or imply cross-domain serialization. Source tests do not
+  choose or run an installer or authorize host grants, keys or ACL changes.
 - Selected cached Windows update jobs are a separate default-off source domain.
   Read `docs/windows-selected-update-jobs.md` before changing readiness, signed
   executor reports, manager enrollment transactions, consent, claim/attempt/result

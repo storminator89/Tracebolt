@@ -57,6 +57,12 @@ func run(ctx context.Context, args []string, out, stderr io.Writer) int {
 	if len(args) > 0 && args[0] == "--selected-updates-export" {
 		return runUpdateExport(ctx, args[1:], out, stderr, nativeUpdateExport)
 	}
+	if len(args) > 0 && args[0] == "--prepared-msi-provision" {
+		return runSoftwareProvision(ctx, args[1:], out, stderr, nativeSoftwareProvision)
+	}
+	if len(args) > 0 && args[0] == "--prepared-msi-export" {
+		return runSoftwareExport(ctx, args[1:], out, stderr, nativeSoftwareExport)
+	}
 	if len(args) > 0 && args[0] == "--selected-updates-provision" {
 		return runUpdateProvision(ctx, args[1:], out, stderr, nativeUpdateProvision)
 	}

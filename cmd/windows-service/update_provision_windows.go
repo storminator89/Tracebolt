@@ -201,6 +201,9 @@ func guardUpdateExecutorRemoval(ctx context.Context, r windowsservice.Receipt) e
 	return errors.Join(image.Close(), s.Close())
 }
 func uninstallWithUpdateOwnership(ctx context.Context, r windowsservice.Receipt) (windowsservice.ApplyResult, error) {
+	if e := guardSoftwareExecutorRemoval(ctx, r); e != nil {
+		return windowsservice.ApplyResult{}, e
+	}
 	if e := guardUpdateExecutorRemoval(ctx, r); e != nil {
 		return windowsservice.ApplyResult{}, e
 	}

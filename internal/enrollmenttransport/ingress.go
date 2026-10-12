@@ -47,6 +47,7 @@ import (
 	"localrmm/internal/windowshistorycache"
 	"localrmm/internal/windowshistorywire"
 	"localrmm/internal/windowsnetworkcontextwire"
+	"localrmm/internal/windowssoftwarejob"
 	"localrmm/internal/windowsupdatejob"
 	"localrmm/internal/windowsusersoftwarewire"
 )
@@ -61,7 +62,9 @@ var ErrConfiguration = errors.New("enrollment ingress configuration is invalid")
 type Ingress struct {
 	windowsActions             *windowsactionmanager.Manager
 	windowsUpdateJobs          *windowsupdatejob.Manager
+	windowsSoftwareJobs        *windowssoftwarejob.Manager
 	windowsUpdateRegistry      *windowsupdatejob.Registry
+	windowsSoftwareRegistry    *windowssoftwarejob.Registry
 	windowsHistory             *windowshistorycache.Cache
 	windowsEvents              *windowseventcache.Cache
 	packages                   *packagecontroller.Manager
@@ -146,7 +149,7 @@ func (h *Ingress) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		failure(w, http.StatusServiceUnavailable, "storage_unavailable")
 		return
 	}
-	if h.telemetryPath == "/v1/windows/agent/telemetry" && (r == nil || r.URL == nil || r.URL.Path != h.telemetryPath && !windowsEventPath(r.URL.Path) && !windowsHistoryPath(r.URL.Path) && !windowsfullserviceswire.ValidPath(r.URL.Path) && !windowsfullsoftwarewire.ValidPath(r.URL.Path) && !windowsusersoftwarewire.ValidPath(r.URL.Path) && !windowsfullprocesseswire.ValidPath(r.URL.Path) && !windowsnetworkcontextwire.ValidPath(r.URL.Path) && !strings.HasPrefix(r.URL.Path, "/v1/windows-service-actions/") && !strings.HasPrefix(r.URL.Path, windowsUpdateJobsPrefix)) {
+	if h.telemetryPath == "/v1/windows/agent/telemetry" && (r == nil || r.URL == nil || r.URL.Path != h.telemetryPath && !windowsEventPath(r.URL.Path) && !windowsHistoryPath(r.URL.Path) && !windowsfullserviceswire.ValidPath(r.URL.Path) && !windowsfullsoftwarewire.ValidPath(r.URL.Path) && !windowsusersoftwarewire.ValidPath(r.URL.Path) && !windowsfullprocesseswire.ValidPath(r.URL.Path) && !windowsnetworkcontextwire.ValidPath(r.URL.Path) && !strings.HasPrefix(r.URL.Path, "/v1/windows-service-actions/") && !strings.HasPrefix(r.URL.Path, windowsUpdateJobsPrefix) && !strings.HasPrefix(r.URL.Path, windowsSoftwareJobsPrefix)) {
 		failure(w, http.StatusNotFound, "not_found")
 		return
 	}
@@ -190,6 +193,10 @@ func (h *Ingress) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if r != nil && r.URL != nil && strings.HasPrefix(r.URL.Path, windowsUpdateJobsPrefix) {
 		h.windowsUpdateJobRequest(w, r)
+		return
+	}
+	if r != nil && r.URL != nil && strings.HasPrefix(r.URL.Path, windowsSoftwareJobsPrefix) {
+		h.windowsSoftwareJobRequest(w, r)
 		return
 	}
 	if r != nil && r.URL != nil && strings.HasPrefix(r.URL.Path, "/v1/windows-service-actions/") {

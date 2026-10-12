@@ -75,6 +75,15 @@ func (s *Store) windowsUpdateJobKeysDistinct(ctx context.Context, t *transaction
 	if !keyvalidation.Ed25519(manager) || !keyvalidation.Ed25519(executor) || bytes.Equal(manager, executor) {
 		return windowsupdatejob.ErrAuthority
 	}
+	for _, credential := range t.credentials {
+		if other := credential.WindowsSoftwareJobSetup; other != nil {
+			for _, digest := range []string{actionpermit.Digest(manager), actionpermit.Digest(executor)} {
+				if digest == other.Consent.Binding.KeyID || digest == other.Consent.Binding.ExecutorKeyID {
+					return windowsupdatejob.ErrAuthority
+				}
+			}
+		}
+	}
 	certs := [][]byte{s.issuerDER}
 	for _, c := range t.credentials {
 		certs = append(certs, c.DER)

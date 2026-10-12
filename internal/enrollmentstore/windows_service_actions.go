@@ -6,6 +6,7 @@ import (
 	"crypto/ed25519"
 	"database/sql"
 	"encoding/json"
+	"localrmm/internal/actionpermit"
 	"localrmm/internal/enrollmentcrypto"
 	"localrmm/internal/enrollmentstate"
 	"localrmm/internal/inventoryledger"
@@ -42,7 +43,19 @@ func windowsActionSchemaPresent(ctx context.Context, c *sql.Conn) (bool, error) 
 	}
 	return n == 2, nil
 }
+func windowsActionKeySeparate(t *transaction, key ed25519.PublicKey) error {
+	digest := actionpermit.Digest(key)
+	for _, credential := range t.credentials {
+		if other := credential.WindowsSoftwareJobSetup; other != nil && (digest == other.Consent.Binding.KeyID || digest == other.Consent.Binding.ExecutorKeyID) {
+			return windowsaction.ErrBinding
+		}
+	}
+	return nil
+}
 func (s *Store) checkWindowsActionKey(ctx context.Context, t *transaction, key ed25519.PublicKey) error {
+	if e := windowsActionKeySeparate(t, key); e != nil {
+		return e
+	}
 	present, e := windowsActionSchemaPresent(ctx, t.conn)
 	if e != nil {
 		return e
@@ -67,6 +80,9 @@ func (s *Store) SetupWindowsServiceActionsCreateOnly(ctx context.Context, key ed
 		return windowsaction.ErrInvalid
 	}
 	return s.transact(ctx, func(t *transaction) error {
+		if e := windowsActionKeySeparate(t, key); e != nil {
+			return e
+		}
 		present, e := windowsActionSchemaPresent(ctx, t.conn)
 		if e != nil {
 			return e

@@ -17,6 +17,7 @@ const (
 	WindowsServiceControl   Capability = "windows_service_control"
 	WindowsUpdateInstall    Capability = "windows_update_install"
 	WindowsUpdateSchedule   Capability = "windows_update_schedule"
+	WindowsSoftwareInstall  Capability = "windows_software_install"
 	ManageAlarms            Capability = "manage_alarms"
 	ManageApplicationChecks Capability = "manage_application_checks"
 	MaxOperators                       = 32
@@ -61,6 +62,8 @@ func capabilityBit(c Capability) uint16 {
 		return 128
 	case WindowsUpdateSchedule:
 		return 256
+	case WindowsSoftwareInstall:
+		return 512
 	default:
 		return 0
 	}
@@ -133,7 +136,7 @@ func (s Session) Named() bool     { return s.actor.id != "" }
 // Call BeginCapability immediately before short privileged dispatch work.
 func (s Session) Capabilities() []Capability {
 	out := make([]Capability, 0, 9)
-	for _, c := range []Capability{Read, PlanUpdates, ExecuteUpdates, RestartService, ManageAlarms, ManageApplicationChecks, WindowsServiceControl, WindowsUpdateInstall, WindowsUpdateSchedule} {
+	for _, c := range []Capability{Read, PlanUpdates, ExecuteUpdates, RestartService, ManageAlarms, ManageApplicationChecks, WindowsServiceControl, WindowsUpdateInstall, WindowsUpdateSchedule, WindowsSoftwareInstall} {
 		if s.actor.grants&capabilityBit(c) != 0 {
 			out = append(out, c)
 		}

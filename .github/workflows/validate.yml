@@ -114,20 +114,27 @@ jobs:
           go build -buildvcs=false -trimpath -o artifacts/windows-action-source/tracebolt-windows-service.exe ./cmd/windows-service
           go build -buildvcs=false -trimpath -o artifacts/windows-action-source/tracebolt-windows-action-broker.exe ./cmd/windows-action-broker
           go build -buildvcs=false -trimpath -o artifacts/windows-action-source/tracebolt-windows-update-executor.exe ./cmd/windows-update-executor
+          # Prepared MSI installation is deliberately x64-only.
+          if [ "$GOARCH" = amd64 ]; then
+            go build -buildvcs=false -trimpath -o artifacts/windows-action-source/tracebolt-windows-software-executor.exe ./cmd/windows-software-executor
+          fi
           # Compile inert Windows ABI/authority/IPC fixtures on both architectures.
-          # Never run these binaries, create grants/pipes, or dispatch WUA here.
-          for package in windowsupdatejob windowsupdateexecutor windowsupdateipc lanclient; do
+          # Never run these binaries, create grants/pipes, or dispatch WUA/MSI here.
+          for package in windowsupdatejob windowsupdateexecutor windowsupdateipc windowssoftwarejob windowssoftwareexecutor windowssoftwareipc lanclient; do
             go test -c -buildvcs=false -o "$RUNNER_TEMP/${package}-${GOARCH}.test.exe" "./internal/$package"
           done
           python3 - <<'PY'
           import hashlib, json, os
           from pathlib import Path
           root = Path('artifacts/windows-action-source')
-          for name in ('tracebolt-windows-service', 'tracebolt-windows-action-broker', 'tracebolt-windows-update-executor'):
+          names = ['tracebolt-windows-service', 'tracebolt-windows-action-broker', 'tracebolt-windows-update-executor']
+          if os.environ['GOARCH'] == 'amd64':
+              names.append('tracebolt-windows-software-executor')
+          for name in names:
               digest = hashlib.sha256((root / (name + '.exe')).read_bytes()).hexdigest()
               manifest = {'schemaVersion': 'tracebolt.windows-setup-package.v1', 'version': 'v0.0.0-source', 'sourceCommit': os.environ['GITHUB_SHA'], 'architecture': os.environ['GOARCH'], 'sha256': digest}
               (root / (name + '.manifest.json')).write_text(json.dumps(manifest, separators=(',', ':')) + '\n')
-          (root / 'SOURCE-ONLY.txt').write_text('Unsigned source artifacts. No native installation, ACL grant, service start, target action, WUA execution, release or acceptance is established. Review matching source and exact hashes before separately authorized native use.\n')
+          (root / 'SOURCE-ONLY.txt').write_text('Unsigned source artifacts. No native installation, ACL grant, service start, target action, WUA/MSI execution, release or acceptance is established. Review matching source and exact hashes before separately authorized native use.\n')
           PY
       - name: Upload unsigned source artifacts only
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -654,7 +661,7 @@ jobs:
         env:
           TRACEBOLT_SOURCE_SHA: ${{ github.sha }}
         run: node tests/e2e-review/lan-browser.mjs
-      - name: Synthetic Windows service approval browser gate
+      - name: Synthetic Windows action and prepared MSI browser gate (32 existing plus 8 MSI captures)
         if: ${{ !cancelled() }}
         env:
           TRACEBOLT_SOURCE_SHA: ${{ github.sha }}
