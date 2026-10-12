@@ -22,9 +22,11 @@ tests/fixtures/**
 !tests/fixtures/windows-contact-view.json
 !tests/fixtures/windows-capacity-view.json
 !tests/fixtures/windows-resource-view.json
+!tests/fixtures/windows-maintenance-view.json
 !tests/fixtures/windows-service-health-view.json
 !tests/fixtures/windows-service-action-view.json
 !tests/fixtures/windows-service-action-history.json
+!tests/fixtures/windows-incident-inbox-view.json
 # Only this required dependency notice may enter from docs.
 !docs/
 docs/**

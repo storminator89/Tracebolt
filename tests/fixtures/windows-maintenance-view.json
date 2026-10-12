@@ -1,0 +1,246 @@
+{
+  "active": {
+    "schemaVersion": "tracebolt.windows-maintenance.v1",
+    "serverNow": "2026-10-07T12:00:00Z",
+    "authorityExpiresAt": "2026-10-07T12:02:00Z",
+    "targets": [
+      {
+        "key": "6df4201cbb74670b6cb02e0195f6a6deb9ded367f2544ce8f575eec6ffd1eeee",
+        "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "domain": "all",
+        "revision": 0,
+        "changedAt": null,
+        "windows": []
+      },
+      {
+        "key": "aeb890680b972ad652746f581797efbe710cde7a28e8d7b19ea8a9a1756fe210",
+        "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "domain": "contact",
+        "revision": 0,
+        "changedAt": null,
+        "windows": []
+      },
+      {
+        "key": "2735f61be510b4bff2f2025e9633648bb16da3dad1720ac20ed9fc1fdbc4665f",
+        "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "domain": "cpu",
+        "revision": 0,
+        "changedAt": null,
+        "windows": []
+      },
+      {
+        "key": "54051690e8bb4a3f64b78ed08dd40edec3e18a07f691049a38b232b75ce4730b",
+        "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "domain": "disk",
+        "revision": 1,
+        "changedAt": "2026-10-07T12:00:00Z",
+        "windows": [
+          {
+            "id": 1,
+            "startedAt": "2026-10-07T12:00:00Z",
+            "endsAt": "2026-10-07T13:00:00Z",
+            "endedAt": null,
+            "intent": "planned-work"
+          }
+        ]
+      },
+      {
+        "key": "f87a9967cc5394e1407b5b8ca0037561391158350e7abbe381f0c512745a2e20",
+        "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "domain": "memory",
+        "revision": 0,
+        "changedAt": null,
+        "windows": []
+      },
+      {
+        "key": "7b46cb8cb62d7b749c76c983471574c9e6464e8064417e204ff08289ffe78088",
+        "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "domain": "service",
+        "revision": 0,
+        "changedAt": null,
+        "windows": []
+      }
+    ]
+  },
+  "empty": {
+    "schemaVersion": "tracebolt.windows-maintenance.v1",
+    "serverNow": "2026-10-07T12:00:00Z",
+    "authorityExpiresAt": "2026-10-07T12:02:00Z",
+    "targets": [
+      {
+        "key": "6df4201cbb74670b6cb02e0195f6a6deb9ded367f2544ce8f575eec6ffd1eeee",
+        "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "domain": "all",
+        "revision": 0,
+        "changedAt": null,
+        "windows": []
+      },
+      {
+        "key": "aeb890680b972ad652746f581797efbe710cde7a28e8d7b19ea8a9a1756fe210",
+        "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "domain": "contact",
+        "revision": 0,
+        "changedAt": null,
+        "windows": []
+      },
+      {
+        "key": "2735f61be510b4bff2f2025e9633648bb16da3dad1720ac20ed9fc1fdbc4665f",
+        "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "domain": "cpu",
+        "revision": 0,
+        "changedAt": null,
+        "windows": []
+      },
+      {
+        "key": "54051690e8bb4a3f64b78ed08dd40edec3e18a07f691049a38b232b75ce4730b",
+        "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "domain": "disk",
+        "revision": 0,
+        "changedAt": null,
+        "windows": []
+      },
+      {
+        "key": "f87a9967cc5394e1407b5b8ca0037561391158350e7abbe381f0c512745a2e20",
+        "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "domain": "memory",
+        "revision": 0,
+        "changedAt": null,
+        "windows": []
+      },
+      {
+        "key": "7b46cb8cb62d7b749c76c983471574c9e6464e8064417e204ff08289ffe78088",
+        "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "domain": "service",
+        "revision": 0,
+        "changedAt": null,
+        "windows": []
+      }
+    ]
+  },
+  "ended": {
+    "schemaVersion": "tracebolt.windows-maintenance.v1",
+    "serverNow": "2026-10-07T12:01:00Z",
+    "authorityExpiresAt": "2026-10-07T12:03:00Z",
+    "targets": [
+      {
+        "key": "6df4201cbb74670b6cb02e0195f6a6deb9ded367f2544ce8f575eec6ffd1eeee",
+        "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "domain": "all",
+        "revision": 0,
+        "changedAt": null,
+        "windows": []
+      },
+      {
+        "key": "aeb890680b972ad652746f581797efbe710cde7a28e8d7b19ea8a9a1756fe210",
+        "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "domain": "contact",
+        "revision": 0,
+        "changedAt": null,
+        "windows": []
+      },
+      {
+        "key": "2735f61be510b4bff2f2025e9633648bb16da3dad1720ac20ed9fc1fdbc4665f",
+        "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "domain": "cpu",
+        "revision": 0,
+        "changedAt": null,
+        "windows": []
+      },
+      {
+        "key": "54051690e8bb4a3f64b78ed08dd40edec3e18a07f691049a38b232b75ce4730b",
+        "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "domain": "disk",
+        "revision": 2,
+        "changedAt": "2026-10-07T12:01:00Z",
+        "windows": [
+          {
+            "id": 1,
+            "startedAt": "2026-10-07T12:00:00Z",
+            "endsAt": "2026-10-07T13:00:00Z",
+            "endedAt": "2026-10-07T12:01:00Z",
+            "intent": "planned-work"
+          }
+        ]
+      },
+      {
+        "key": "f87a9967cc5394e1407b5b8ca0037561391158350e7abbe381f0c512745a2e20",
+        "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "domain": "memory",
+        "revision": 0,
+        "changedAt": null,
+        "windows": []
+      },
+      {
+        "key": "7b46cb8cb62d7b749c76c983471574c9e6464e8064417e204ff08289ffe78088",
+        "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "domain": "service",
+        "revision": 0,
+        "changedAt": null,
+        "windows": []
+      }
+    ]
+  },
+  "expired": {
+    "schemaVersion": "tracebolt.windows-maintenance.v1",
+    "serverNow": "2026-10-07T13:00:00Z",
+    "authorityExpiresAt": "2026-10-07T13:02:00Z",
+    "targets": [
+      {
+        "key": "6df4201cbb74670b6cb02e0195f6a6deb9ded367f2544ce8f575eec6ffd1eeee",
+        "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "domain": "all",
+        "revision": 0,
+        "changedAt": null,
+        "windows": []
+      },
+      {
+        "key": "aeb890680b972ad652746f581797efbe710cde7a28e8d7b19ea8a9a1756fe210",
+        "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "domain": "contact",
+        "revision": 0,
+        "changedAt": null,
+        "windows": []
+      },
+      {
+        "key": "2735f61be510b4bff2f2025e9633648bb16da3dad1720ac20ed9fc1fdbc4665f",
+        "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "domain": "cpu",
+        "revision": 0,
+        "changedAt": null,
+        "windows": []
+      },
+      {
+        "key": "54051690e8bb4a3f64b78ed08dd40edec3e18a07f691049a38b232b75ce4730b",
+        "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "domain": "disk",
+        "revision": 1,
+        "changedAt": "2026-10-07T12:00:00Z",
+        "windows": [
+          {
+            "id": 1,
+            "startedAt": "2026-10-07T12:00:00Z",
+            "endsAt": "2026-10-07T13:00:00Z",
+            "endedAt": null,
+            "intent": "planned-work"
+          }
+        ]
+      },
+      {
+        "key": "f87a9967cc5394e1407b5b8ca0037561391158350e7abbe381f0c512745a2e20",
+        "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "domain": "memory",
+        "revision": 0,
+        "changedAt": null,
+        "windows": []
+      },
+      {
+        "key": "7b46cb8cb62d7b749c76c983471574c9e6464e8064417e204ff08289ffe78088",
+        "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "domain": "service",
+        "revision": 0,
+        "changedAt": null,
+        "windows": []
+      }
+    ]
+  }
+}

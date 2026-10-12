@@ -612,6 +612,7 @@ jobs:
           node --test tests/e2e-review/certificate-renewal-fixtures.test.mjs
           node --test tests/e2e-review/fleet-groups-fixtures.test.mjs
           node --test tests/e2e-review/windows-incident-inbox-fixtures.test.mjs
+          node --test tests/e2e-review/windows-maintenance-fixtures.test.mjs
       - name: Production build
         run: npm run build
 
@@ -698,6 +699,12 @@ jobs:
         env:
           TRACEBOLT_SOURCE_SHA: ${{ github.sha }}
         run: node tests/e2e-review/windows-incident-inbox-runner.mjs
+      - name: Bounded Windows maintenance review and early end (12 required screenshots)
+        if: ${{ !cancelled() }}
+        timeout-minutes: 6
+        env:
+          TRACEBOLT_SOURCE_SHA: ${{ github.sha }}
+        run: node tests/e2e-review/windows-maintenance-runner.mjs
       - name: Complete Windows processes SQLite-vector browser gate
         if: ${{ !cancelled() }}
         env:
@@ -967,6 +974,8 @@ jobs:
             artifacts/review/fleet-groups-manifest.json
             artifacts/review/windows-incident-inbox-results.json
             artifacts/review/windows-incident-inbox-manifest.json
+            artifacts/review/windows-maintenance-results.json
+            artifacts/review/windows-maintenance-manifest.json
             artifacts/review/windows-full-processes-results.json
             artifacts/review/windows-full-processes-manifest.json
             artifacts/review/windows-network-context-results.json

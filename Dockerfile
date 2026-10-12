@@ -17,10 +17,13 @@ COPY internal/windowssessions/testdata/snapshot.json /src/internal/windowssessio
 COPY tests/fixtures/windows-contact-view.json /src/tests/fixtures/windows-contact-view.json
 COPY tests/fixtures/windows-capacity-view.json /src/tests/fixtures/windows-capacity-view.json
 COPY tests/fixtures/windows-resource-view.json /src/tests/fixtures/windows-resource-view.json
+COPY tests/fixtures/windows-maintenance-view.json /src/tests/fixtures/windows-maintenance-view.json
 COPY tests/fixtures/windows-service-health-view.json /src/tests/fixtures/windows-service-health-view.json
 # Exact synthetic selected Windows action operator output used by TypeScript.
 COPY tests/fixtures/windows-service-action-view.json /src/tests/fixtures/windows-service-action-view.json
 COPY tests/fixtures/windows-service-action-history.json /src/tests/fixtures/windows-service-action-history.json
+# Exact synthetic Windows incident inbox projection used by TypeScript.
+COPY tests/fixtures/windows-incident-inbox-view.json /src/tests/fixtures/windows-incident-inbox-view.json
 # Shared proactive identity contract and its TypeScript declaration; no test runner.
 COPY tests/e2e-review/proactive-ai-browser.mjs tests/e2e-review/proactive-ai-browser.d.mts /src/tests/e2e-review/
 RUN npm run build

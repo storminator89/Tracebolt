@@ -30,7 +30,8 @@
     "windows-storage-io-fixtures.test.mjs",
     "certificate-renewal-fixtures.test.mjs",
     "fleet-groups-fixtures.test.mjs",
-    "windows-incident-inbox-fixtures.test.mjs"
+    "windows-incident-inbox-fixtures.test.mjs",
+    "windows-maintenance-fixtures.test.mjs"
   ],
   "imported": [
     "device-inventory-browser-contracts.test.mjs",

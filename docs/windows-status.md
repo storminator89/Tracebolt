@@ -55,6 +55,10 @@ bounded transport/store. See [frame bounds](windows-storage-io.md#worker-transpo
   manager policies over already accepted observations. Missing data stays unknown.
 - [Fleet groups](fleet-groups-health.md): manual device organization and reviewed
   one-time disk/CPU/RAM settings. New members do not inherit settings automatically.
+- [Windows incident inbox](windows-incident-inbox.md) and [bounded planned
+  maintenance](windows-maintenance.md): retained incident acknowledgement and
+  explicit device/domain windows with original end times. Maintenance marks
+  operator planning only; no evidence, incident or external-alarm suppression.
 - [Selected service control](windows-service-actions.md): exact reviewed targets,
   explicit approvals and saved action receipts. Separate [fresh broker setup](windows-action-provisioning.md)
   creates a disabled restricted broker after exact local approval; Read admin

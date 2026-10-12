@@ -6,6 +6,10 @@ contact, system-volume disk, observed-group CPU, physical-RAM and selected-servi
 episodes. No collector, native permission, enrollment, policy, endpoint action,
 Linux Health input, notification route or AI scope is added or enabled.
 
+The adjacent [planned-maintenance panel](windows-maintenance.md) records bounded
+device/domain windows separately. It does not suppress or alter this inbox or
+join maintenance to incident rows by mutable device ID.
+
 ## Seen is independent of closed
 
 A shared administrator can explicitly acknowledge one exact retained episode.
