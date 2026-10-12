@@ -44,6 +44,7 @@ UI_SHARED = ('web/src/App.tsx', 'web/src/api.ts', 'web/src/types.ts', 'web/src/a
 # Longest prefixes first avoid software/history, MSI and service/action ambiguity.
 FLOWS = {
     'lan': 'tests/e2e-review/lan-browser.mjs',
+    'linux-cve-update-review': 'web/scripts/run-linux-cve-update-review-ci.mjs',
     'shell': 'tests/e2e-review/run.mjs',
     'windows-mutation-coexistence': 'tests/e2e-review/windows-mutation-coexistence-runner.mjs',
     'windows-software-history': 'tests/e2e-review/windows-software-history-runner.mjs',
@@ -77,6 +78,13 @@ FLOWS = {
 # compiler/router below is owned by these same flows. Unknown scripts, general
 # helpers, generators and independent test fixtures retain the broad fallback.
 DOMAIN_SCRIPTS = {
+    'web/scripts/check-linux-cve-update-review-evidence.mjs': {'linux-cve-update-review'},
+    'web/scripts/capture-linux-cve-update-review.mjs': {'linux-cve-update-review'},
+    'web/scripts/run-linux-cve-update-review-ci.mjs': {'linux-cve-update-review'},
+    'web/scripts/linux-cve-update-review-contract.mjs': {'linux-cve-update-review'},
+    'web/scripts/linux-cve-update-review-scenes.json': {'linux-cve-update-review'},
+    'web/scripts/linux-cve-update-review-contract.test.mjs': {'linux-cve-update-review'},
+
     'tests/e2e-review/windows-update-retirement-browser.mjs': {'windows-service-actions'},
     'tests/e2e-review/windows-update-retirement-fixtures.test.mjs': {'windows-service-actions'},
     'web/scripts/capture-windows-fleet-msi-fixtures.mjs': {'windows-fleet-msi'},
@@ -117,7 +125,7 @@ ALIASES = {'windowsmanagedmsiworklist': ['windows-fleet-msi'],
            'windowshardware': ['lan'], 'windowssession': ['lan'], 'windowsadapter': ['lan'],
            'windowsserviceaction': ['windows-service-actions'], 'windowsservicehealth': ['lan'], 'windowsservice': ['lan'], 'proactive': ['lan'],
            'applicationcheck': ['lan'], 'alarm': ['lan'], 'certificate': ['lan'], 'resourcehistory': ['lan'],
-           'linuxcve': ['lan'], 'investigation': ['lan'],'windowsmanagedmsi': ['windows-managed-msi', 'windows-fleet-msi', 'windows-mutation-coexistence'],
+           'linuxcve': ['lan', 'linux-cve-update-review'], 'investigation': ['lan'],'windowsmanagedmsi': ['windows-managed-msi', 'windows-fleet-msi', 'windows-mutation-coexistence'],
            'windowsmutationfence': ['windows-mutation-coexistence'],
            'windowsaction': ['windows-service-actions'], 'windowssoftware': ['windows-service-actions'],
            'windowsuser': ['windows-user-software'], 'windowshistory': ['windows-event-history'],
@@ -351,6 +359,9 @@ def web_checks(plan):
         # This Node fixture extracts LAN's real completion wrapper; Vitest's
         # related-test graph does not discover these inert .test.mjs contracts.
         run(['node', '--test', 'tests/e2e-review/windows-health-fixtures.test.mjs'], stage='ui-windows-health-contract')
+    if 'linux-cve-update-review' in plan.get('flows', []):
+        run(['node', 'web/scripts/capture-linux-cve-update-review.mjs', '--check'], stage='ui-cve-review-contract')
+        run(['node', '--test', 'web/scripts/linux-cve-update-review-contract.test.mjs'], stage='ui-cve-review-evidence-contract')
     if 'windows-service-actions' in plan.get('flows', []):
         run(['node', '--test', 'tests/e2e-review/windows-update-retirement-fixtures.test.mjs'], stage='ui-windows-update-retirement-contract')
     if 'windows-fleet-msi' in plan.get('flows', []):
@@ -377,7 +388,7 @@ def web_checks(plan):
 # Existing full gate validators are reused where available. Other executable
 # runners enforce exact captures internally; require their positive report too.
 BROWSER_REPORTS = {name: name + '-results.json' for name in FLOWS if name.startswith('windows-') or name == 'fleet-groups'}
-BROWSER_REPORTS.update({'lan': 'lan-browser-results.json', 'shell': 'results.json',
+BROWSER_REPORTS.update({'linux-cve-update-review': 'linux-cve-update-review-results.json', 'lan': 'lan-browser-results.json', 'shell': 'results.json',
     'managed': 'managed-preview-result.json', 'enrollment': 'enrollment-browser-results.json',
     'conditional': 'conditional-browser-results.json', 'v3': 'v3-mvp-browser-results.json',
     'fleet-identity': 'fleet-identity-browser-results.json', 'endpoint-identity': 'endpoint-browser-results.json',
@@ -460,6 +471,8 @@ def browser_report(flow, sha):
         raise ValueError('invalid browser report')
     value = reporter.decode(path.read_bytes())
     validate_browser_report(flow, value, sha)
+    if flow == 'linux-cve-update-review':
+        run(['node', 'web/scripts/check-linux-cve-update-review-evidence.mjs', sha], stage='browser-cve-review-evidence')
     if flow == 'windows-fleet-msi':
         catalogue = ROOT / 'artifacts/review/windows-msi-catalogue-results.json'
         if catalogue.is_symlink() or catalogue.stat().st_size > 2 << 20:

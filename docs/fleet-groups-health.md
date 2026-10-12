@@ -2,7 +2,7 @@
 
 The Devices view offers manual named groups and an explicit monitoring-policy
 apply flow. Groups are organizational metadata. They do not authorize collection,
-endpoint control, enrollment, AI, notifications or an automatic policy. Existing
+endpoint control, enrollment, AI, notifications or an automatic policy by membership alone. A separate explicit [ongoing monitoring opt-in](fleet-group-monitoring.md) can bind reviewed Windows members and metrics. Existing
 device `Group` labels remain presentation-only and are not imported.
 
 The private manager store holds at most 25 groups with at most 50 admitted members
@@ -30,7 +30,7 @@ not migrated or inferred from historical labels.
 After opening Fleet groups, a shared administrator can use **Apply monitoring
 policies** for the selected group or for all currently admitted Windows devices
 when no group is selected. A group is an optional selection filter. Creating a
-group is not required. Neither the group nor a new device receives inheritance.
+group is not required. This one-shot flow creates no inheritance. Separately reviewed ongoing assignments are described in [group monitoring](fleet-group-monitoring.md).
 
 The existing dialog contains three compact, initially unchecked policy rows:
 caller-quota system-volume disk usage, observed-group CPU, and physical RAM.
@@ -75,9 +75,11 @@ see [disk](windows-capacity-health.md) and [CPU/RAM](windows-resource-health.md)
 Focused workflow/component checks cover exact multi-policy selection, independent
 thresholds/enable flags, revision conflicts, distinct metric expiry leases,
 partial success, Stop, uncertainty, single-use review and the existing session/
-identity guards. The hosted fixture requests sixteen source-bound EN/DE desktop
-and mobile images: group editing, unchecked/selected policy draft, exact preview
-and per-device results. Its contract checks do not establish rendered pixels.
+identity guards. The hosted fixture requests a canonical source-bound EN/DE desktop/mobile image
+matrix: group editing, unchecked/selected policy draft, exact preview, per-device
+results and separate ongoing-inheritance consent, review, status and stop. Producer
+and evidence validators share that scene matrix. Source contract checks do not
+establish rendered pixels.
 
 Source tests are not native endpoint, installed-service or deployment acceptance.
 Actual hosted rendering and native acceptance remain separate gates. No release,

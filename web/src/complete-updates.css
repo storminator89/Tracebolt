@@ -1,3 +1,7 @@
 .complete-updates .update-details { border-top: 1px solid var(--line); margin: 12px 0; padding-top: 8px; }
 .complete-updates .update-details summary { cursor: pointer; color: var(--secondary); font-size: 12px; padding: 4px 0; }
 .complete-updates .update-details summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 3px; }
+
+.cve-update-review{border:1px solid var(--line);border-left:3px solid var(--accent);border-radius:8px;background:var(--panel-soft);padding:14px;margin-bottom:18px;overflow-wrap:anywhere;font-size:12px}
+.cve-update-review header{display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px}.cve-update-review header>div{display:flex;flex-direction:column;gap:5px;min-width:0}.cve-update-review a{color:var(--accent)}.cve-update-review p{margin:9px 0;line-height:1.6}.cve-update-review .cve-update-times{font-size:11px;color:var(--secondary)}.cve-update-review summary{cursor:pointer;color:var(--secondary)}.cve-update-review summary:focus-visible,.cve-update-review a:focus-visible{outline:2px solid var(--accent);outline-offset:3px}.complete-updates tr.cve-update-match{background:var(--panel-soft);box-shadow:inset 3px 0 var(--accent)}
+@media(max-width:700px){.cve-update-review .button{min-height:40px}.cve-update-review{padding:12px}}

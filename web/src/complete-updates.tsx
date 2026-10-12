@@ -1,6 +1,9 @@
+import { advanceLinuxCVEReviewScan, linuxCVEReviewAuthority, linuxCVEReviewCurrent, linuxCVEReviewSearch, matchLinuxCVEUpdate } from './linux-cve-update-review';
+import type { LinuxCVEUpdateReview, LinuxCVEReviewScan } from './linux-cve-update-review';
+import { LinuxCVEUpdateReviewStrip } from './linux-cve-update-review-strip';
 import { PackageUpdateSelectionCell, PackageUpdateSelectionHeader } from './package-updates';
 import { InventoryLiveStatus } from './inventory-live-status';
-import { useId } from 'react';
+import { useId, useRef } from 'react';
 import { LoaderCircle, RefreshCw, Search, TriangleAlert } from 'lucide-react';
 import { useOperator } from './auth';
 import { useLocale } from './i18n';
@@ -51,16 +54,23 @@ const copy = {
         retention: 'Zeilen laufen 24 Stunden nach ihrer ursprünglichen Erfassung ab. Aktualisieren und Blättern lesen nur gespeicherte Managerdaten und starten weder eine native Abfrage noch eine Metadaten-Aktualisierung.',
     },
 };
-export function CompleteUpdatesPanel({ deviceId, sessionKey }: { deviceId: string; sessionKey?: string }) {
+export function CompleteUpdatesPanel({ deviceId, sessionKey, cveReview, cveReviewExpired, onClearCVEReview }: { deviceId: string; sessionKey?: string; cveReview?: LinuxCVEUpdateReview | null; cveReviewExpired?: boolean; onClearCVEReview?: () => void }) {
     const operator = useOperator(), [locale] = useLocale();
     if (!operator || operator.mode !== 'lan' || !operator.authenticated) return <p>{copy[locale].access}</p>;
-    return <CompleteUpdates key={`${deviceId}:${sessionKey ?? operator.expiresAt ?? ''}`} deviceId={deviceId}/>;
+    const review = cveReview && cveReview.deviceId === deviceId && cveReview.sessionExpiresAt === operator.expiresAt && cveReview.authorityKey === linuxCVEReviewAuthority(operator) && linuxCVEReviewCurrent(cveReview) ? cveReview : null;
+    return <CompleteUpdates key={`${deviceId}:${sessionKey ?? operator.expiresAt ?? ''}:${review ? `${review.assessmentId}:${review.binary.name}:${review.binary.architecture}:${review.anchor.mono}` : 'plain'}`} deviceId={deviceId} cveReview={review} cveReviewExpired={cveReviewExpired} onClearCVEReview={onClearCVEReview}/>;
 }
-function CompleteUpdates({ deviceId }: { deviceId: string }) {
-    const [locale] = useLocale(), labels = copy[locale], id = useId(), resource = useCompleteUpdates(deviceId), { view, page } = resource;
+function CompleteUpdates({ deviceId, cveReview, cveReviewExpired, onClearCVEReview }: { deviceId: string; cveReview: LinuxCVEUpdateReview | null; cveReviewExpired?: boolean; onClearCVEReview?: () => void }) {
+    const [locale] = useLocale(), labels = copy[locale], id = useId(), resource = useCompleteUpdates(deviceId, false, true, cveReview ? linuxCVEReviewSearch(cveReview) : ''), { view, page } = resource;
     const selected = view?.complete, visible = view && completeUpdatesGenerationVisible(view, resource.elapsed), manifest = selected?.manifest;
+    const scan = useRef<LinuxCVEReviewScan | null>(null), scannedPage = useRef<typeof page>(null);
+    if (!view || !cveReview) { scan.current = null; scannedPage.current = null; }
+    if (cveReview && page && page !== scannedPage.current) { scan.current = advanceLinuxCVEReviewScan(scan.current, cveReview, page, resource.scanned); scannedPage.current = page; }
+    const outcome = resource.loading ? 'loading' : resource.error || !visible || !page ? 'unavailable' : scan.current?.match ?? (page.exhausted && resource.scanned === page.totalRows ? 'absent' : 'incomplete');
     const number = (value: number) => new Intl.NumberFormat(locale).format(value), field = (label: string, value: string | number) => <div><dt>{label}</dt><dd>{value}</dd></div>;
     return <section className="package-observations complete-packages complete-updates" aria-labelledby={id} aria-busy={resource.loading}>
+        {cveReview && !visible && <LinuxCVEUpdateReviewStrip review={cveReview} outcome={outcome} generation={selected} clear={onClearCVEReview}/>}
+        {cveReviewExpired && <p role="status" className="package-note">{locale === 'de' ? 'Warnungskontext abgelaufen. CVE-Warnungen erneut öffnen und aktualisieren.' : 'Warning context expired. Reopen and refresh CVE warnings.'}</p>}
         <header className="package-heading"><h3 id={id}>{labels.title}</h3><button type="button" className="button small" disabled={resource.loading || resource.error === 'session'} onClick={resource.refresh} aria-label={labels.refresh} title={labels.refresh}><RefreshCw size={14}/>{locale === 'de' ? 'Aktualisieren' : 'Refresh'}</button></header>
         <p className="package-note">{labels.summary}</p>
         <InventoryLiveStatus state={resource.liveState}/>
@@ -112,9 +122,9 @@ function CompleteUpdates({ deviceId }: { deviceId: string }) {
                     </dl>
                 </details>
             </section>}
-            {visible && <section><form className="complete-package-search" onSubmit={event => { event.preventDefault(); resource.startSearch(); }}><label htmlFor={`${id}-search`}>{labels.search}</label><div><input id={`${id}-search`} type="search" value={resource.search} maxLength={128} onChange={event => resource.changeSearch(event.target.value)} autoComplete="off" spellCheck={false}/><button type="submit" className="button" disabled={resource.loading}><Search size={15}/>{labels.submit}</button></div></form>
+            {visible && <section>{cveReview && <LinuxCVEUpdateReviewStrip review={cveReview} outcome={outcome} generation={selected} clear={onClearCVEReview}/>}<form className="complete-package-search" onSubmit={event => { event.preventDefault(); if (cveReview) onClearCVEReview?.(); else resource.startSearch(); }}><label htmlFor={`${id}-search`}>{labels.search}</label><div><input id={`${id}-search`} type="search" value={resource.search} maxLength={128} readOnly={Boolean(cveReview)} onChange={event => { if (cveReview) onClearCVEReview?.(); else resource.changeSearch(event.target.value); }} autoComplete="off" spellCheck={false}/><button type="submit" className="button" disabled={resource.loading || Boolean(cveReview)}><Search size={15}/>{labels.submit}</button></div></form>
                 {page && <><dl className="package-counts">{field(labels.scanned, `${number(resource.scanned)} / ${number(page.totalRows)}`)}{field(labels.matches, number(resource.matches))}{field(labels.shown, number(page.items.length))}</dl>
-                    {page.items.length > 0 ? <div className="package-table-scroll" role="region" aria-label={labels.title} tabIndex={0}><table><caption className="sr-only">{labels.title}</caption><thead><tr><PackageUpdateSelectionHeader/>{[labels.package, labels.architecture, labels.installedVersion, labels.candidateVersion, labels.state].map(label => <th key={label} scope="col">{label}</th>)}</tr></thead><tbody>{page.items.map(row => <tr key={`${row.name}:${row.architecture}`}><PackageUpdateSelectionCell name={row.name} architecture={row.architecture} held={row.state === 'held'}/><th scope="row">{row.name}</th><td>{row.architecture}</td><td>{row.installedVersion}</td><td>{row.candidateVersion}</td><td>{row.state === 'held' ? labels.heldState : labels.candidate_only}</td></tr>)}</tbody></table></div> : <p role="status">{!page.exhausted ? labels.continuing : page.totalRows === 0 ? manifest!.unknownCount > 0 ? labels.zeroUnknown : labels.zero : resource.matches === 0 ? labels.noMatches : labels.noPageMatches}</p>}
+                    {page.items.length > 0 ? <div className="package-table-scroll" role="region" aria-label={labels.title} tabIndex={0}><table><caption className="sr-only">{labels.title}</caption><thead><tr><PackageUpdateSelectionHeader/>{[labels.package, labels.architecture, labels.installedVersion, labels.candidateVersion, labels.state].map(label => <th key={label} scope="col">{label}</th>)}</tr></thead><tbody>{page.items.map(row => <tr key={`${row.name}:${row.architecture}`} className={cveReview && ['candidate', 'held'].includes(matchLinuxCVEUpdate(cveReview, row) ?? '') ? 'cve-update-match' : undefined}><PackageUpdateSelectionCell name={row.name} architecture={row.architecture} held={row.state === 'held'}/><th scope="row">{row.name}</th><td>{row.architecture}</td><td>{row.installedVersion}</td><td>{row.candidateVersion}</td><td>{row.state === 'held' ? labels.heldState : labels.candidate_only}</td></tr>)}</tbody></table></div> : <p role="status">{!page.exhausted ? labels.continuing : page.totalRows === 0 ? manifest!.unknownCount > 0 ? labels.zeroUnknown : labels.zero : resource.matches === 0 ? labels.noMatches : labels.noPageMatches}</p>}
                     <div className="complete-package-pagination"><p>{page.exhausted ? labels.done : labels.more}</p>{!page.exhausted && <button type="button" className="button" disabled={resource.loading} onClick={resource.next}>{resource.search.trim() ? labels.continue : labels.next}</button>}</div>
                 </>}
             </section>}

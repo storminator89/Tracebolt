@@ -274,7 +274,7 @@ missing material rather than inventing credentials or weakening protection.
 - Manual fleet groups and reviewed one-setting Windows health apply are manager-side
   organizational source features. Read `docs/fleet-groups-health.md`. Preserve
   private stable original identity bindings, current admission and exact revisions.
-  Groups never grant scope or automatic inheritance; sequential writes stop on
+  Groups never grant scope or inheritance by membership alone. Separate explicit ongoing monitoring uses `docs/fleet-group-monitoring.md`; preserve exact opt-ins, original identity, atomic manual override and enrollment-to-operator leases. One-shot sequential writes stop on
   conflict/uncertainty and never retry an unconfirmed POST.
 - Windows system-volume capacity health is a separate default-off manager policy.
   Read `docs/windows-capacity-health.md` before changing its thresholds or lifecycle.

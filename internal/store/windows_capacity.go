@@ -67,14 +67,16 @@ func (s *Store) WindowsCapacityStates(ctx context.Context) (map[string]windowsca
 // stores exactly one device. Cancellation and all errors leave its ledger intact.
 // The process epoch is supplied by the manager monitor and is never authority.
 func (s *Store) EvaluateWindowsCapacity(ctx context.Context, input windowscapacity.Input, now time.Time, epoch string) (windowscapacity.State, error) {
-	return s.updateWindowsCapacity(ctx, input.DeviceID, func(state *windowscapacity.State) error { return state.Evaluate(input, now, epoch) })
+	return s.updateWindowsCapacity(ctx, input.DeviceID, func(state *windowscapacity.State) error { return state.Evaluate(input, now, epoch) }, nil)
 }
 func (s *Store) ConfigureWindowsCapacity(ctx context.Context, input windowscapacity.Input, enabled bool, threshold int, expected uint64, now time.Time, guard ...func() error) (windowscapacity.State, error) {
 	return s.updateWindowsCapacity(ctx, input.DeviceID, func(state *windowscapacity.State) error {
 		return state.Configure(input, enabled, threshold, expected, now)
+	}, func(tx *sql.Tx, _ windowscapacity.State) error {
+		return detachFleetMonitoring(ctx, tx, input.DeviceID, "disk")
 	}, guard...)
 }
-func (s *Store) updateWindowsCapacity(ctx context.Context, id string, update func(*windowscapacity.State) error, guard ...func() error) (windowscapacity.State, error) {
+func (s *Store) updateWindowsCapacity(ctx context.Context, id string, update func(*windowscapacity.State) error, hook func(*sql.Tx, windowscapacity.State) error, guard ...func() error) (windowscapacity.State, error) {
 	if !windowscontact.ValidDeviceID(id) {
 		return windowscapacity.State{}, windowscapacity.ErrInvalid
 	}
@@ -121,6 +123,11 @@ func (s *Store) updateWindowsCapacity(ctx context.Context, id string, update fun
 	}
 	if _, err = tx.ExecContext(ctx, "INSERT INTO windows_capacity_devices(id,body) VALUES(?,?) ON CONFLICT(id) DO UPDATE SET body=excluded.body", id, body); err != nil {
 		return windowscapacity.State{}, err
+	}
+	if hook != nil {
+		if err = hook(tx, state); err != nil {
+			return windowscapacity.State{}, err
+		}
 	}
 	if err = enqueueWindowsNotifications(ctx, tx, beforeNotifications, capacityNotificationEpisodes(state, "disk")); err != nil {
 		return windowscapacity.State{}, err

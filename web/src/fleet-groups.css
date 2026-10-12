@@ -32,3 +32,14 @@
 .fleet-monitoring-counts{font-variant-numeric:tabular-nums}.fleet-monitoring-summary{list-style:none;padding:0;margin:16px 0;font-size:12px;line-height:1.8}
 .fleet-monitoring-policy-result{display:flex;flex-direction:column;gap:3px}.fleet-monitoring-policy-result+.fleet-monitoring-policy-result{margin-top:12px;padding-top:10px;border-top:1px solid var(--line)}.fleet-monitoring-policy-result>strong{font-size:11px;font-weight:500}
 @media(max-width:600px){.fleet-monitoring-setting{grid-template-columns:minmax(0,1fr) 95px;gap:10px}.fleet-monitoring-setting>.fleet-group-enable:first-child{grid-column:1/-1}.fleet-monitoring-setting>.fleet-group-field{grid-column:2;grid-row:2}}
+.fleet-inheritance{margin-top:14px;padding:14px;border:1px solid var(--line);border-radius:6px;max-width:760px;min-width:0}
+.fleet-inheritance h3{font-size:14px;margin:0 0 10px;overflow-wrap:anywhere}.fleet-inheritance h4{font-size:13px}
+.fleet-inheritance p,.fleet-inheritance small,.fleet-inheritance summary{font-size:12px;color:var(--secondary);line-height:1.6;overflow-wrap:anywhere}
+.fleet-inheritance input:not([type=checkbox]){background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:5px;padding:7px;font:inherit;max-width:100%;min-width:0}
+.fleet-inheritance .fleet-group-members small{display:block}.fleet-inheritance>.fleet-group-enable{align-items:flex-start;line-height:1.6}.fleet-inheritance input[type=checkbox]{flex-shrink:0}
+.fleet-inheritance-status{margin-top:16px}.fleet-inheritance-status summary{cursor:pointer}.fleet-inheritance-status-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-top:7px;min-width:0}.fleet-inheritance-status-row span{margin:0;min-width:0}.fleet-inheritance-status-row button{font-size:11px;flex-shrink:0}
+@media(max-width:600px){.fleet-inheritance{padding:12px}.fleet-inheritance-status-row{align-items:flex-start;flex-wrap:wrap}}
+.fleet-inheritance-status .fleet-group-members{max-height:320px;overflow:auto;padding-right:5px}
+.fleet-inheritance-status-row>div{min-width:0;flex:1}.fleet-inheritance-status-row small{display:block;font-size:11px}
+.fleet-inheritance-details{margin-top:14px}.fleet-inheritance-details summary{cursor:pointer}.fleet-inheritance-status summary>span{font-size:11px}
+.fleet-inheritance>.button{margin-top:12px}

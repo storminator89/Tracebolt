@@ -1,3 +1,5 @@
+import { useLinuxCVEUpdateReview } from './linux-cve-update-review';
+import type { LinuxCVEUpdateReview } from './linux-cve-update-review';
 import { WindowsServiceHealthPanel } from './windows-service-health';
 import { useWindowsServiceHealth } from './windows-service-health-resource';
 import { WindowsCapacityPanel } from './windows-capacity';
@@ -44,6 +46,7 @@ export function DeviceDetail({ id, onClose, onCase, initialTab, initialUnit }: {
     const operator = useOperator();
     const [locale] = useLocale();
     const scope = JSON.stringify([id, operator?.mode, operator?.authenticated, operator?.expiresAt]);
+    const cveUpdateReview = useLinuxCVEUpdateReview(id, operator);
     const [tab, setTab] = useState(initialTab ?? 'overview');
     const { device, snapshot, refreshing, accessEnded, error, automaticState, refresh } = useDeviceMetadata(id, scope, operator?.mode === 'lan' && operator.authenticated);
     const [journalUnit, setJournalUnit] = useState(initialUnit && validJournalUnit(initialUnit) ? initialUnit : '');
@@ -51,15 +54,16 @@ export function DeviceDetail({ id, onClose, onCase, initialTab, initialUnit }: {
     const [inventorySource, setInventorySource] = useState<'processes' | 'preview' | 'packages' | 'updates'>();
     const selectTab = (value: string) => {
         if (value === tab) return;
-        setJournalUnit(''); setInventorySource(undefined); setWindowsInventoryTab(undefined); setTab(value);
+        cveUpdateReview.clear(); setJournalUnit(''); setInventorySource(undefined); setWindowsInventoryTab(undefined); setTab(value);
     };
     const openServiceLogs = (unit: string) => {
         if (!validJournalUnit(unit)) return;
         setJournalUnit(unit); setTab('logs');
         document.getElementById('tab-logs')?.focus();
     };
-    const openPackages = () => { setInventorySource('packages'); setTab('inventory'); };
-    const openUpdates = () => { setInventorySource('updates'); setTab('inventory'); document.getElementById('tab-inventory')?.focus(); };
+    const openPackages = () => { cveUpdateReview.clear(); setInventorySource('packages'); setTab('inventory'); };
+    const openUpdates = () => { cveUpdateReview.clear(); setInventorySource('updates'); setTab('inventory'); document.getElementById('tab-inventory')?.focus(); };
+    const reviewUpdates = (value: LinuxCVEUpdateReview) => { if (cveUpdateReview.open(value)) { setInventorySource('updates'); setTab('inventory'); document.getElementById('tab-inventory')?.focus(); } };
     const openDetails = () => { selectTab('details'); document.getElementById('tab-details')?.focus(); };
     const openWindowsStorage = () => { setWindowsInventoryTab('storage'); setTab('inventory'); document.getElementById('tab-inventory')?.focus(); };
     const openWindowsLogs = () => { selectTab('logs'); document.getElementById('tab-logs')?.focus(); };
@@ -112,11 +116,11 @@ export function DeviceDetail({ id, onClose, onCase, initialTab, initialUnit }: {
     {tab === 'health' && windowsAvailable && <><WindowsContactPanel device={device} resource={windowsContact} sessionKey={operator?.expiresAt ?? null} metadataReady={!error && !refreshing && !accessEnded}/><WindowsCapacityPanel device={device} resource={windowsCapacity} sessionKey={operator?.expiresAt ?? null} metadataReady={!error && !refreshing && !accessEnded} invalidateDraft={Boolean(error || accessEnded)} admin={capacityAdmin}/><WindowsCapacityPanel metric="cpu" device={device} resource={windowsCPU} sessionKey={operator?.expiresAt ?? null} metadataReady={!error && !refreshing && !accessEnded} invalidateDraft={Boolean(error || accessEnded)} admin={capacityAdmin}/><WindowsCapacityPanel metric="memory" device={device} resource={windowsMemory} sessionKey={operator?.expiresAt ?? null} metadataReady={!error && !refreshing && !accessEnded} invalidateDraft={Boolean(error || accessEnded)} admin={capacityAdmin}/><WindowsServiceHealthPanel device={device} resource={windowsServices} sessionKey={operator?.expiresAt ?? null} metadataReady={!error && !refreshing && !accessEnded} invalidateDraft={Boolean(error || accessEnded)} admin={capacityAdmin}/><WindowsHealthSummary showContact={false} device={device} resource={windowsInventory} sessionKey={operator?.expiresAt ?? null} metadataReady={!error && !refreshing && !accessEnded} onOpenStorage={openWindowsStorage}/><WindowsEventsPanel resource={windowsInventory} onOpenLogs={openWindowsLogs}/></>}
     {tab === 'health' && healthAvailable && <HealthPanel key={device.id} deviceId={device.id} device={device} sessionKey={operator?.expiresAt} onOpenLogs={openServiceLogs}/> }
     {tab === 'inventory' && windowsAvailable && <WindowsInventoryWorkspace key={`${device.id}:${operator?.expiresAt ?? ''}`} resource={windowsInventory} initialTab={windowsInventoryTab} fullServices={{ deviceId: device.id, sessionKey: operator?.expiresAt ?? null, enabled: !error && !accessEnded }}/> }
-    {tab === 'inventory' && inventoryAvailable && <DeviceInventoryWorkspace key={device.id} deviceId={device.id} initialSource={inventorySource} onOpenLogs={securityAvailable ? openServiceLogs : undefined}/> }
+    {tab === 'inventory' && inventoryAvailable && <DeviceInventoryWorkspace key={device.id} deviceId={device.id} initialSource={inventorySource} cveReview={cveUpdateReview.review} cveReviewExpired={cveUpdateReview.expired} onClearCVEReview={cveUpdateReview.clear} onOpenLogs={securityAvailable ? openServiceLogs : undefined}/> }
     {tab === 'logs' && windowsAvailable && <WindowsLogsPanel key={`${device.id}:${operator?.expiresAt ?? ''}`} resource={windowsInventory} contentAccess={{ deviceId: device.id, admin: operator?.loginMode === 'shared' && operator.hasExplicitMetadata === true, insecure: operator?.insecureTestMode ?? false, sessionKey: operator?.expiresAt ?? null }}/> }
     {tab === 'logs' && securityAvailable && <JournalPanel key={device.id} deviceId={device.id} insecureTestMode={operator.insecureTestMode} sessionKey={operator.expiresAt} initialUnit={journalUnit}/> }
-    {tab === 'cves' && securityAvailable && <LinuxCVEPanel deviceId={device.id} sessionKey={operator.expiresAt ?? undefined}/> }
-    {tab === 'security' && securityAvailable && <DeviceSecurityWorkspace deviceId={device.id} sessionKey={operator.expiresAt ?? undefined} onOpenPackages={openPackages} onOpenUpdates={openUpdates}/>}
+    {tab === 'cves' && securityAvailable && <LinuxCVEPanel deviceId={device.id} sessionKey={operator.expiresAt ?? undefined} onReviewUpdates={reviewUpdates}/> }
+    {tab === 'security' && securityAvailable && <DeviceSecurityWorkspace deviceId={device.id} sessionKey={operator.expiresAt ?? undefined} onOpenPackages={openPackages} onOpenUpdates={openUpdates} onReviewUpdates={reviewUpdates}/>}
     {tab === 'evidence' && <><div className="evidence-list">{device.evidence.map((evidence, index) => <EvidenceCard key={evidence.id} evidence={evidence} index={index}/>)}</div>{!device.evidence.length && <p className="quiet-empty">{t("F\u00FCr dieses Ger\u00E4t sind keine Belege verf\u00FCgbar.")}</p>}</>}
     {tab === 'capabilities' && <DeviceCapabilities key={`${device.id}:${operator?.expiresAt ?? ''}`} device={device}/>}
   </div><div className="drawer-footer"><ShieldCheck size={14}/><span>{tab === 'health' && windowsAvailable ? (locale === 'de' ? 'Manager-Richtlinien · keine Remote-Ausführung' : 'Manager policies · no remote execution') : tab === 'inventory' && windowsAvailable ? (locale === 'de' ? 'Inventarbeobachtungen sind nur lesend' : 'Inventory observations are read-only') : tab === 'details' ? t("Lesende Ger\u00E4teansicht \u00B7 keine Remote-Ausf\u00FChrung") : t("Nur lesend")}</span>{tab === 'details' && <code>{device.id}</code>}</div></>}</section>;

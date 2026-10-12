@@ -232,6 +232,26 @@ class SelectionTests(unittest.TestCase):
         ])
         report.assert_called_once_with('windows-service-actions', SHA)
 
+    def test_cve_bridge_owns_one_changed_flow_and_shared_evidence_validator(self):
+        for filename in ['check-linux-cve-update-review-evidence.mjs', 'capture-linux-cve-update-review.mjs', 'run-linux-cve-update-review-ci.mjs',
+                         'linux-cve-update-review-contract.mjs', 'linux-cve-update-review-scenes.json',
+                         'linux-cve-update-review-contract.test.mjs']:
+            plan = self.select(('M', 'web/scripts/' + filename))
+            self.assertEqual(plan['flows'], ['linux-cve-update-review'])
+            self.assertFalse(plan['broadGo']); self.assertFalse(plan['broadWeb'])
+        plan = self.select(('M', 'web/src/linux-cve-update-review.ts'))
+        self.assertEqual(plan['flows'], ['linux-cve-update-review'])
+        with patch.object(p, 'run') as run:
+            p.web_checks(plan)
+        commands = [call.args[0] for call in run.call_args_list]
+        self.assertEqual(commands.count(['node', 'web/scripts/capture-linux-cve-update-review.mjs', '--check']), 1)
+        self.assertEqual(commands.count(['node', '--test', 'web/scripts/linux-cve-update-review-contract.test.mjs']), 1)
+        for name in ['linux-cve-update-review-results.json', 'linux-cve-update-review-manifest.json', 'synthetic-linux-cve-update-review-*.png']:
+            self.assertIn(name, (ROOT / '.github/workflows/pr-checks.yml').read_text())
+        runner = (ROOT / 'web/scripts/run-linux-cve-update-review-ci.mjs').read_text()
+        self.assertIn("RUNNER_ENVIRONMENT === 'github-hosted'", runner)
+        self.assertIn('await validateEvidence(output, sourceSha)', runner)
+
     def test_owned_script_selection_unions_with_go_dependencies_and_other_flows(self):
         edits = [('M', 'internal/api/windows_maintenance.go'), ('M', 'web/src/windows-maintenance.test.tsx')]
         expected = self.select(*edits)
@@ -239,7 +259,7 @@ class SelectionTests(unittest.TestCase):
         plan = p.select(changes, self.packages, self.files, SHA, generated_allowlist_verified=True)
         self.assertEqual(plan['packages'], expected['packages'])
         self.assertEqual(plan['web'], expected['web'])
-        self.assertEqual(plan['flows'], ['windows-fleet-msi', 'windows-maintenance', 'windows-service-actions'])
+        self.assertEqual(plan['flows'], ['linux-cve-update-review', 'windows-fleet-msi', 'windows-maintenance', 'windows-service-actions'])
         self.assertFalse(plan['broadGo']); self.assertFalse(plan['broadWeb'])
         self.assertEqual(plan, p.select(list(reversed(changes)), self.packages, self.files, SHA,
                                       generated_allowlist_verified=True))

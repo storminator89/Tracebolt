@@ -82,6 +82,9 @@ func (m *windowsCapacityMonitor) evaluate(ctx context.Context) (err error) {
 			return err
 		}
 	}
+	if err = m.reconcileFleetMonitoring(ctx); err != nil {
+		return err
+	}
 	states, err := m.store.WindowsCapacityStates(ctx)
 	if err != nil {
 		return err
@@ -328,17 +331,45 @@ func (h *operatorHandler) windowsCapacityAPI(w http.ResponseWriter, r *http.Requ
 		if !recheck() {
 			return
 		}
-		state, err = m.configurePolicy(r.Context(), in, kind, policy.Enabled, policy.Threshold, policy.Expected, m.source.Now().UTC(), func() error {
-			// No enrollment read while holding the operator SQLite transaction.
-			// Recheck the already-admitted authority deadline and live session
-			// after connection wait and again immediately before commit.
-			end := m.source.Now().UTC()
-			operator, admitted := operatorContext(r)
-			if !admitted || operator.active == nil || !operator.active() || r.Context().Err() != nil || !contactReadTime(now, end) || !end.Before(in.AuthorityUntil) {
-				return windowscapacity.ErrInvalid
+		configure := func(authorityGuard func(time.Time) error) error {
+			var e error
+			state, e = m.configurePolicy(r.Context(), in, kind, policy.Enabled, policy.Threshold, policy.Expected, m.source.Now().UTC(), func() error {
+				// No enrollment read while holding the operator SQLite transaction.
+				// Recheck the already-admitted authority deadline and live session
+				// after connection wait and again immediately before commit.
+				end := m.source.Now().UTC()
+				operator, admitted := operatorContext(r)
+				if !admitted || operator.active == nil || !operator.active() || r.Context().Err() != nil || !contactReadTime(now, end) || !end.Before(in.AuthorityUntil) {
+					return windowscapacity.ErrInvalid
+				}
+				if authorityGuard != nil {
+					if e := authorityGuard(end); e != nil {
+						return windowscapacity.ErrInvalid
+					}
+					final := m.source.Now().UTC()
+					if final.Before(end) || !contactReadTime(now, final) || !final.Before(in.AuthorityUntil) || !operator.active() {
+						return windowscapacity.ErrInvalid
+					}
+				}
+				return nil
+			})
+			return e
+		}
+		if lease, ok := m.source.(windowsMonitoringAuthoritySource); ok {
+			err = lease.WithWindowsMonitoringAuthority(r.Context(), []windowscontact.Input{in.Input}, configure)
+		} else {
+			// Legacy read-only fixtures/sources cannot detach an inherited target without its authority lease.
+			assignments, e := m.store.FleetMonitoringAssignments(r.Context())
+			err = e
+			for _, a := range assignments {
+				if a.Active && a.DeviceID == in.DeviceID && (a.Metric == string(kind) || kind == "" && a.Metric == "disk") {
+					err = windowscapacity.ErrInvalid
+				}
 			}
-			return nil
-		})
+			if err == nil {
+				err = configure(nil)
+			}
+		}
 		if errors.Is(err, windowscapacity.ErrInvalid) {
 			fail(w, 409, "windows_capacity_conflict", "Policy changed or is unavailable. Refresh before saving again.")
 			return

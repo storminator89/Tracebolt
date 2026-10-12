@@ -6,7 +6,7 @@ import os from 'node:os';
 import {spawn,execFileSync} from 'node:child_process';
 import {createRequire} from 'node:module';
 import {fileURLToPath} from 'node:url';
-import {fleetGroupsBrowserCase,fleetGroupsCaseName,fleetGroupsDisclosure,fleetGroupsFailureStage,fleetGroupsRouteState,requireFleetGroupsEvidence} from './fleet-groups-browser.mjs';
+import {fleetGroupsBrowserCase,fleetGroupsCaseName,fleetGroupsDisclosure,fleetGroupsFailureStage,fleetGroupsRouteState,requireFleetGroupsEvidence,fleetGroupsCaptureMatrix} from './fleet-groups-browser.mjs';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../..'),require=createRequire(path.join(root,'web/package.json'));
 const {chromium,expect}=require('@playwright/test');
 const out=path.join(root,'artifacts/review'),temporary=await fs.mkdtemp(path.join(os.tmpdir(),'tracebolt-fleet-groups-browser-'));
@@ -16,8 +16,8 @@ await fs.mkdir(out,{recursive:true});
 const safeFailure=()=>new Error('Fleet-groups browser gate failed; raw state intentionally withheld.');
 async function stop(){if(server&&!serverFailed&&server.exitCode===null){const end=new Promise(resolve=>server.once('exit',resolve));server.kill('SIGTERM');const deadline=setTimeout(()=>server.kill('SIGKILL'),5000);await end;clearTimeout(deadline);}server=null;}
 async function shot(page,name,fixtureDisclosure){
- const match=/^synthetic-fleet-groups-(?:groups|draft|review|results)-(1440|390)-(en|de)$/.exec(name);
- if(!match||page.viewportSize()?.width!==Number(match[1])||await page.locator('html').getAttribute('lang')!==match[2]||fixtureDisclosure!==fleetGroupsDisclosure)throw safeFailure();
+ const capture=fleetGroupsCaptureMatrix.find(row=>row.name===name);
+ if(!capture||page.viewportSize()?.width!==capture.width||page.viewportSize()?.height!==capture.height||await page.locator('html').getAttribute('lang')!==capture.locale||fixtureDisclosure!==fleetGroupsDisclosure)throw safeFailure();
  await page.screenshot({path:path.join(out,name+'.png'),fullPage:false,animations:'disabled'});
  screenshots.push({file:name+'.png',sourceSha,publicSafe:true,fullPage:false,viewport:page.viewportSize(),locale:await page.locator('html').getAttribute('lang'),fixtureDisclosure,test:fleetGroupsCaseName});
 }

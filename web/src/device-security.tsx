@@ -1,3 +1,4 @@
+import type { LinuxCVEUpdateReview } from './linux-cve-update-review';
 import { useId, useState } from 'react';
 import { ArrowRight, Boxes, RefreshCw } from 'lucide-react';
 import { useOperator } from './auth';
@@ -25,13 +26,13 @@ const copy = {
 
 /** The primary Security and CVE tabs share one authoritative reader. Legacy
  * sources are opt-in and mutually exclusive, never parallel background reads. */
-export function DeviceSecurityWorkspace({ deviceId, sessionKey, onOpenPackages, onOpenUpdates }: { deviceId: string; sessionKey?: string | number; onOpenPackages: () => void; onOpenUpdates: () => void }) {
+export function DeviceSecurityWorkspace({ deviceId, sessionKey, onOpenPackages, onOpenUpdates, onReviewUpdates }: { deviceId: string; sessionKey?: string | number; onOpenPackages: () => void; onOpenUpdates: () => void; onReviewUpdates?: (value: LinuxCVEUpdateReview) => void }) {
     const operator = useOperator(), [locale] = useLocale();
     if (operator?.mode !== 'lan' || !operator.authenticated) return <p>{copy[locale].access}</p>;
-    return <DeviceSecuritySession key={JSON.stringify([deviceId, sessionKey ?? null, operator.expiresAt ?? null])} deviceId={deviceId} sessionKey={sessionKey} onOpenPackages={onOpenPackages} onOpenUpdates={onOpenUpdates}/>;
+    return <DeviceSecuritySession key={JSON.stringify([deviceId, sessionKey ?? null, operator.expiresAt ?? null])} deviceId={deviceId} sessionKey={sessionKey} onOpenPackages={onOpenPackages} onOpenUpdates={onOpenUpdates} onReviewUpdates={onReviewUpdates}/>;
 }
 
-function DeviceSecuritySession({ deviceId, sessionKey, onOpenPackages, onOpenUpdates }: { deviceId: string; sessionKey?: string | number; onOpenPackages: () => void; onOpenUpdates: () => void }) {
+function DeviceSecuritySession({ deviceId, sessionKey, onOpenPackages, onOpenUpdates, onReviewUpdates }: { deviceId: string; sessionKey?: string | number; onOpenPackages: () => void; onOpenUpdates: () => void; onReviewUpdates?: (value: LinuxCVEUpdateReview) => void }) {
     const [locale] = useLocale(), labels = copy[locale], id = useId(), [source, setSource] = useState<Source>('current');
     return <section className="device-security-workspace" aria-labelledby={`${id}-title`}>
         <h2 className="sr-only" id={`${id}-title`}>{labels.title}</h2>
@@ -45,7 +46,7 @@ function DeviceSecuritySession({ deviceId, sessionKey, onOpenPackages, onOpenUpd
                 <option value="current">{labels.current}</option><option value="legacy-coverage">{labels.coverage}</option><option value="legacy-packages">{labels.metadata}</option>
             </select>
         </details>
-        {source === 'current' && <LinuxCVEPanel deviceId={deviceId} sessionKey={sessionKey}/>}
+        {source === 'current' && <LinuxCVEPanel deviceId={deviceId} sessionKey={sessionKey} onReviewUpdates={onReviewUpdates}/>}
         {source === 'legacy-coverage' && <SecurityCoveragePanel deviceId={deviceId} sessionKey={sessionKey}/>}
         {source === 'legacy-packages' && <PackageObservationsPanel deviceId={deviceId} sessionKey={sessionKey}/>}
     </section>;
