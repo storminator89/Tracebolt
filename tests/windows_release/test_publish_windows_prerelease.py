@@ -94,8 +94,8 @@ def evidence_fixture(files, raw_reports, execution, *, synthetic_pe=True):
     patch = mock.patch.object(gate.resources, "verify_pe", side_effect=fixtures.fake_pe) if synthetic_pe else nullcontext()
     with patch:
         hashes = gate.validate_public_package(files, SOURCE, reports["install-uninstall"])
-    return {"schema": "tracebolt.windows-setup-native-subset.v2", "source": SOURCE, "runID": "123",
-            "status": "four_case_packaged_gui_subset", "distributionStatus": "unsigned-source-candidate-native-subset",
+    return {"schema": publisher.EVIDENCE_SCHEMA, "source": SOURCE, "runID": "123",
+            "status": publisher.EVIDENCE_STATUS, "distributionStatus": publisher.EVIDENCE_DISTRIBUTION,
             "crossOSRebuildEquivalence": False, "coverage": dict.fromkeys(sorted(gate.FALSE_COVERAGE), False),
             "reports": reports, "publicFilesSHA256": hashes, "executionProvenance": execution}
 
@@ -146,7 +146,7 @@ class FakeAPI:
         self.jobs.append({"id": 104, "name": publisher.AGGREGATE_JOB, "run_id": 123, "head_sha": SOURCE,
                      "run_attempt": 1, "workflow_name": gate.provenance.WORKFLOW_NAME,
                      "status": "completed", "conclusion": "success", "labels": ["ubuntu-24.04"]})
-        self.artifact_listing = {"total_count": 7, "artifacts": []}
+        self.artifact_listing = {"total_count": len(publisher.artifact_names(SOURCE)), "artifacts": []}
         self.archives = {}
         self.routes = {P: repository(), P + "/git/ref/heads/windows-prerelease":
                        {"ref": "refs/heads/windows-prerelease", "object": {"type": "commit", "sha": PUBLISHER_SHA}},
@@ -154,8 +154,8 @@ class FakeAPI:
                        P + "/actions/runs/123": self.run,
                        P + "/actions/runs/123/attempts/1": self.attempt,
                        P + "/actions/workflows/61": self.workflow,
-                       P + "/actions/workflows/windows-setup-acceptance.yml": self.workflow,
-                       P + "/actions/runs/123/attempts/1/jobs?per_page=100": {"total_count": 5, "jobs": self.jobs},
+                       P + "/actions/workflows/" + publisher.NATIVE_WORKFLOW.rsplit("/", 1)[1]: self.workflow,
+                       P + "/actions/runs/123/attempts/1/jobs?per_page=100": {"total_count": len(self.jobs), "jobs": self.jobs},
                        P + "/actions/runs/123/artifacts?per_page=100": self.artifact_listing}
         self.refresh_evidence()
         self.provenance_calls.clear()
@@ -168,10 +168,10 @@ class FakeAPI:
         if synthetic_pe is not None:
             self.synthetic_pe = synthetic_pe
         for number, name in enumerate(sorted(publisher.artifact_names(SOURCE)), 200):
-            if name.startswith("windows-setup-gui-"):
-                case = name[len("windows-setup-gui-"):-(len(SOURCE) + 1)]
+            if name.startswith(publisher.ARTIFACT_PREFIX + "gui-"):
+                case = name[len(publisher.ARTIFACT_PREFIX + "gui-"):-(len(SOURCE) + 1)]
                 contents = {gate.REPORT_NAME: self.reports[case]}
-            elif name.startswith("windows-setup-native-subset-evidence-"):
+            elif name.startswith(publisher.ARTIFACT_PREFIX + "native-subset-evidence-"):
                 continue
             else:
                 contents = self.files
@@ -181,7 +181,7 @@ class FakeAPI:
             require_aggregate_success=True, expected_ref="refs/heads/main", transport=self.provenance_transport)
         self.evidence = publisher.canonical(evidence_fixture(self.files, self.reports, execution,
                                                             synthetic_pe=self.synthetic_pe))
-        evidence_name = "windows-setup-native-subset-evidence-" + SOURCE
+        evidence_name = publisher.ARTIFACT_PREFIX + "native-subset-evidence-" + SOURCE
         identity = 200 + sorted(publisher.artifact_names(SOURCE)).index(evidence_name)
         self.set_artifact(identity, evidence_name, {gate.AGGREGATE_REPORT: self.evidence})
         self.artifact_listing["total_count"] = len(self.artifact_listing["artifacts"])
@@ -314,9 +314,9 @@ class FixtureCase(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
-        (self.root / "docs").mkdir()
+        (self.root / "docs" / publisher.GUIDE_SUBDIRECTORY).mkdir(parents=True)
         for name in publisher.GUIDES:
-            (self.root / "docs" / name).write_text("Synthetic fixture guide only.\n", encoding="utf-8")
+            (self.root / "docs" / publisher.GUIDE_SUBDIRECTORY / name).write_text("Synthetic fixture guide only.\n", encoding="utf-8")
 
     def prepare(self, api=None, frozen=None):
         with mock.patch.object(gate.resources, "verify_pe", side_effect=fixtures.fake_pe):
@@ -761,7 +761,7 @@ class EvidenceAndPlanTests(FixtureCase):
     def test_frozen_plan_reconstruction_detects_new_docs_native_jobs_and_artifacts(self):
         plan, _ = self.prepare()
         for name in publisher.GUIDES:
-            path = self.root / "docs" / name
+            path = self.root / "docs" / publisher.GUIDE_SUBDIRECTORY / name
             original = path.read_bytes()
             path.write_bytes(original + b"changed\n")
             self.reject(self.prepare, FakeAPI(), plan)
@@ -831,7 +831,7 @@ class EvidenceAndPlanTests(FixtureCase):
 
     def test_guides_reject_links_empty_crlf_and_nonregular_files(self):
         name = next(iter(publisher.GUIDES))
-        path = self.root / "docs" / name
+        path = self.root / "docs" / publisher.GUIDE_SUBDIRECTORY / name
         for raw in (b"", b"line\r\n"):
             path.write_bytes(raw)
             self.reject(publisher.read_guides, self.root)

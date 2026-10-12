@@ -610,17 +610,20 @@ func (m *Manager) Submit(ctx context.Context, r Result) error {
 }
 
 type View struct {
-	Coordinated         bool          `json:"coordinated,omitempty"`
-	Mutation            *fence.Status `json:"mutation,omitempty"`
-	MutationCapturedAt  int64         `json:"mutationCapturedAt,omitempty"`
-	Version             string        `json:"version"`
-	DeviceID            string        `json:"deviceId"`
-	ServerNow           int64         `json:"serverNow"`
-	Available           bool          `json:"available"`
-	Reason              string        `json:"reason"`
-	Job                 *PublicJob    `json:"job"`
-	SchedulingAvailable bool          `json:"schedulingAvailable,omitempty"`
-	SchedulingRevoked   bool          `json:"schedulingRevoked,omitempty"`
+	BackgroundExecutor   bool          `json:"backgroundExecutor,omitempty"`
+	ExecutorAvailability string        `json:"executorAvailability,omitempty"`
+	ExecutorObservedAt   int64         `json:"executorObservedAt,omitempty"`
+	Coordinated          bool          `json:"coordinated,omitempty"`
+	Mutation             *fence.Status `json:"mutation,omitempty"`
+	MutationCapturedAt   int64         `json:"mutationCapturedAt,omitempty"`
+	Version              string        `json:"version"`
+	DeviceID             string        `json:"deviceId"`
+	ServerNow            int64         `json:"serverNow"`
+	Available            bool          `json:"available"`
+	Reason               string        `json:"reason"`
+	Job                  *PublicJob    `json:"job"`
+	SchedulingAvailable  bool          `json:"schedulingAvailable,omitempty"`
+	SchedulingRevoked    bool          `json:"schedulingRevoked,omitempty"`
 }
 type PublicJob struct {
 	ID        string        `json:"id"`
@@ -642,10 +645,18 @@ func (m *Manager) View(ctx context.Context, device, actor string, ids ...string)
 	e := m.transaction(ctx, func(_ Current, n int64) error {
 		v.ServerNow = n
 		v.Coordinated = m.record.Consent.MutationPlanDigest != ""
+		if m.record.Consent.Version == BackgroundConsentVersion {
+			v.BackgroundExecutor = true
+			v.ExecutorAvailability = "unknown"
+		}
 		if len(m.record.MutationReport) > 0 {
 			report, _ := VerifyStatement(m.record.MutationReport, m.record.ExecutorPublicKey)
 			v.Mutation = report.Mutation
 			v.MutationCapturedAt = report.IssuedAt
+			if v.BackgroundExecutor && report.Kind == "mutation" && report.Mutation != nil && report.Mutation.Active && report.IssuedAt <= n && n-report.IssuedAt < 60 && n < report.ExpiresAt {
+				v.ExecutorAvailability = "verified_recent"
+				v.ExecutorObservedAt = report.IssuedAt
+			}
 		}
 		v.SchedulingAvailable = m.schedulingAvailable(actor)
 		v.SchedulingRevoked = m.record.ScheduleRevokedAt != 0

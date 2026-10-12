@@ -130,3 +130,5 @@ Keep prepared/standalone v1 and service-broker exclusion checks. No automated te
 here runs a native installer or treats compilation as host acceptance.
 
 Coordinated manager approval requires a signed active-idle observation less than 60 seconds old. Missing, stale, busy or unknown status blocks approval without consuming it. This is a consumption safeguard only; the durable endpoint fence remains the final native admission authority.
+
+The separate fresh [background manual cached-update profile](windows-background-cached-updates.md) removes repeated foreground launch only after new explicit paired setup and activation. It does not adopt this foreground profile or enable scheduling.

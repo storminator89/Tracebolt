@@ -16,14 +16,21 @@ import (
 )
 
 type nativeUpdateImage struct {
-	state    *nativeState
-	observer windowsservice.Receipt
-	parent   *binding
-	file     *binding
-	deleting bool
+	name, version string
+	state         *nativeState
+	observer      windowsservice.Receipt
+	parent        *binding
+	file          *binding
+	deleting      bool
 }
 
 func nativeUpdateImageBackend(ctx context.Context, observer windowsservice.Receipt) (result updateImageBackend, err error) {
+	return nativeNamedUpdateImageBackend(ctx, observer, UpdateExecutorImageName, UpdateExecutorImageVersion)
+}
+func nativeUpdateServiceImageBackend(ctx context.Context, observer windowsservice.Receipt) (updateImageBackend, error) {
+	return nativeNamedUpdateImageBackend(ctx, observer, UpdateServiceImageName, UpdateServiceImageVersion)
+}
+func nativeNamedUpdateImageBackend(ctx context.Context, observer windowsservice.Receipt, name, version string) (result updateImageBackend, err error) {
 	if cancelled(ctx) {
 		return nil, failure("cancelled")
 	}
@@ -31,7 +38,7 @@ func nativeUpdateImageBackend(ctx context.Context, observer windowsservice.Recei
 	if err != nil {
 		return nil, err
 	}
-	s := &nativeUpdateImage{state: base.(*nativeState), observer: observer}
+	s := &nativeUpdateImage{state: base.(*nativeState), observer: observer, name: name, version: version}
 	defer func() {
 		if err != nil {
 			_ = s.Close()
@@ -72,7 +79,7 @@ func nativeUpdateImageBackend(ctx context.Context, observer windowsservice.Recei
 }
 
 func (s *nativeUpdateImage) Path() string {
-	return s.state.layout.ProgramFiles + `\Tracebolt\` + UpdateExecutorImageName
+	return s.state.layout.ProgramFiles + `\Tracebolt\` + s.name
 }
 
 func (s *nativeUpdateImage) Check(ctx context.Context) error {
@@ -93,7 +100,7 @@ func (s *nativeUpdateImage) CheckAbsent(ctx context.Context) error {
 	if s.parent == nil || s.file != nil {
 		return failure("existing-resource")
 	}
-	h, err := windowspath.OpenChild(s.parent.handle, UpdateExecutorImageName, false, windows.GENERIC_READ|windows.READ_CONTROL, windows.FILE_SHARE_READ)
+	h, err := windowspath.OpenChild(s.parent.handle, s.name, false, windows.GENERIC_READ|windows.READ_CONTROL, windows.FILE_SHARE_READ)
 	if err == nil {
 		if windows.CloseHandle(h) != nil {
 			return failure("close-failed")
@@ -114,7 +121,7 @@ func (s *nativeUpdateImage) Create(ctx context.Context, payload []byte) (result 
 	if err != nil {
 		return result, failure("descriptor-create")
 	}
-	h, err := windowspath.CreateChild(s.parent.handle, UpdateExecutorImageName, false, sd)
+	h, err := windowspath.CreateChild(s.parent.handle, s.name, false, sd)
 	if err != nil {
 		return result, failure("file-create")
 	}
@@ -212,7 +219,7 @@ func (s *nativeUpdateImage) Read(ctx context.Context, deleting bool) (result Upd
 			access |= windows.DELETE
 			share = 0
 		}
-		h, openErr := windowspath.OpenChild(s.parent.handle, UpdateExecutorImageName, false, access, share)
+		h, openErr := windowspath.OpenChild(s.parent.handle, s.name, false, access, share)
 		if openErr != nil {
 			return result, failure("file-pin")
 		}
@@ -264,7 +271,7 @@ func (s *nativeUpdateImage) Read(ctx context.Context, deleting bool) (result Upd
 	if err = s.Check(ctx); err != nil {
 		return result, err
 	}
-	return UpdateExecutorImageReceipt{Version: UpdateExecutorImageVersion, Path: b.path, SHA256: digest, Size: size, VolumeSerialNumber: id.volume, FileIndexHigh: id.high, FileIndexLow: id.low}, nil
+	return UpdateExecutorImageReceipt{Version: s.version, Path: b.path, SHA256: digest, Size: size, VolumeSerialNumber: id.volume, FileIndexHigh: id.high, FileIndexLow: id.low}, nil
 }
 
 func readUpdateImage(ctx context.Context, f *os.File) (int64, string, error) {

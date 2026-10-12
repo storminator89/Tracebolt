@@ -35,7 +35,8 @@ const (
 type Adapter struct {
 	checkStart                            func(context.Context, time.Time) error
 	mu                                    sync.Mutex
-	busy, uncertain                       bool
+	busy, uncertain, stopping             bool
+	ownerDone                             chan struct{}
 	open                                  func(context.Context) (comRuntime, error)
 	now                                   func() time.Time
 	prepareLimit, installLimit, idleLimit time.Duration
@@ -82,11 +83,12 @@ func (a *Adapter) PrepareExact(ctx context.Context, selection job.Selection) (jo
 		return nil, err
 	}
 	a.mu.Lock()
-	if a.busy || a.uncertain {
+	if a.busy || a.uncertain || a.stopping {
 		a.mu.Unlock()
 		return nil, ErrClosed
 	}
 	a.busy = true
+	a.ownerDone = make(chan struct{})
 	a.mu.Unlock()
 	p := &prepared{owner: a, requests: make(chan request), stop: make(chan struct{}), done: make(chan struct{}), readySettled: make(chan struct{})}
 	defer close(p.readySettled)
@@ -122,6 +124,9 @@ func (p *prepared) run(ctx context.Context, selection job.Selection, ready chan<
 		p.owner.busy = false
 		// Completion and admission release form one atomic state transition.
 		close(p.done)
+		if p.owner.ownerDone != nil {
+			close(p.owner.ownerDone)
+		}
 		p.owner.mu.Unlock()
 	}()
 	publishReady := func(err error) bool {
@@ -323,5 +328,36 @@ func (p *prepared) Close() error {
 			return ErrUncertain
 		}
 		return nil
+	}
+}
+
+// StopAdmission is irreversible for this process. Cancellation does not stop WUA.
+func (a *Adapter) StopAdmission() {
+	if a != nil {
+		a.mu.Lock()
+		a.stopping = true
+		a.mu.Unlock()
+	}
+}
+
+// Drain waits until all COM objects and the native apartment have really closed.
+// An expired caller wait returns uncertainty; it never clears the shared owner.
+func (a *Adapter) Drain(ctx context.Context) error {
+	if a == nil || ctx == nil {
+		return ErrUnavailable
+	}
+	a.StopAdmission()
+	a.mu.Lock()
+	done := a.ownerDone
+	busy := a.busy
+	a.mu.Unlock()
+	if !busy {
+		return nil
+	}
+	select {
+	case <-done:
+		return nil
+	case <-ctx.Done():
+		return ErrUncertain
 	}
 }

@@ -41,7 +41,11 @@ func nativeManagedMSIProvisionUnderLease(ctx context.Context, in managedMSIInput
 		if in.coordinated == nil {
 			return windowspackage.CheckManagedMSIExclusive(ctx)
 		}
-		if e := windowspackage.CheckCoordinatedMutationExclusive(ctx); e != nil {
+		exclusive := windowspackage.CheckCoordinatedMutationExclusive
+		if in.coordinated.Roster.Version == fence.BackgroundRosterVersion {
+			exclusive = windowspackage.CheckBackgroundMutationExclusive
+		}
+		if e := exclusive(ctx); e != nil {
 			return e
 		}
 		return fence.VerifyStaged(ctx, in.coordinated.Roster)
@@ -281,7 +285,7 @@ func nativeManagedMSIProvisionUnderLease(ctx context.Context, in managedMSIInput
 	result.configDigest = complete.ConfigDigest
 	return nil, nil
 }
-func nativeManagedMSIActivate(ctx context.Context, digest string) error {
+func nativeManagedMSIActivate(ctx context.Context, digest string, proof *windowsmanagedmsiservice.BackgroundRegistrationProof) error {
 	root, e := windowsmanagedmsiipc.RootPath()
 	if e != nil {
 		return e
@@ -309,11 +313,14 @@ func nativeManagedMSIActivate(ctx context.Context, digest string) error {
 	if e != nil || snap.State != windowsservice.Running {
 		return managed.ErrAuthority
 	}
-	intent := struct {
-		Version      string `json:"version"`
-		ConfigDigest string `json:"configDigest"`
-		Acknowledged bool   `json:"acknowledged"`
-	}{managed.Version, digest, true}
+	intent := windowsmanagedmsiservice.Activation{Version: managed.Version, ConfigDigest: digest, Acknowledged: true, Background: proof}
+	if c.Mutation != nil && c.Mutation.Version == fence.BackgroundRosterVersion {
+		intent.Version = windowsmanagedmsiservice.BackgroundActivationVersion
+	}
+	if intent.Validate(c) != nil || proof != nil && time.Now().UTC().Unix() >= proof.Registration.Consent.ExpiresAt {
+		return managed.ErrAuthority
+	}
+
 	b, _ := json.Marshal(intent)
 	if e = s.Write("activation.json", b); e != nil {
 		return e

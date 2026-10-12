@@ -24,7 +24,7 @@ import (
 // executor install consent/configuration. Relay consent alone is insufficient.
 // It must not call this authority or retain locks needed by an executor callback.
 func OpenWindowsUpdateExecutorAuthority(peer windowsupdateipc.PeerConfig, check func(context.Context) error) (job.Authority, error) {
-	if peer.Validate() != nil || check == nil {
+	if peer.Validate() != nil || peer.Version != windowsupdateipc.PeerVersion || check == nil {
 		return nil, job.ErrAuthority
 	}
 	layout, err := windowsservice.ResolveLayout()
@@ -48,6 +48,7 @@ type windowsUpdateAuthoritySnapshot struct {
 }
 
 type windowsUpdateExecutorAuthority struct {
+	publicRead       func(context.Context) (windowsUpdateAuthoritySnapshot, error)
 	layout           windowsservice.Layout
 	path, peerDigest string
 	binding          job.Binding
@@ -68,7 +69,7 @@ func (*windowsUpdateExecutorAuthority) MarshalJSON() ([]byte, error) {
 }
 
 func openWindowsUpdateExecutorAuthority(layout windowsservice.Layout, peer windowsupdateipc.PeerConfig, check func(context.Context) error, reads windowsUpdateAuthorityReads) (*windowsUpdateExecutorAuthority, error) {
-	if peer.Validate() != nil || check == nil || reads.load == nil || reads.grant == nil || reads.now == nil || layout.EnrollmentRoot == "" || layout.SenderRoot != filepath.Join(layout.EnrollmentRoot, "telemetry") {
+	if peer.Validate() != nil || peer.Version != windowsupdateipc.PeerVersion || check == nil || reads.load == nil || reads.grant == nil || reads.now == nil || layout.EnrollmentRoot == "" || layout.SenderRoot != filepath.Join(layout.EnrollmentRoot, "telemetry") {
 		return nil, job.ErrAuthority
 	}
 	raw, err := json.Marshal(peer)
@@ -99,6 +100,9 @@ func (a *windowsUpdateExecutorAuthority) fixedConfig(c Config) bool {
 
 func (a *windowsUpdateExecutorAuthority) read(ctx context.Context) (windowsUpdateAuthoritySnapshot, error) {
 	zero := windowsUpdateAuthoritySnapshot{}
+	if a.publicRead != nil {
+		return a.publicRead(ctx)
+	}
 	if err := ctx.Err(); err != nil {
 		return zero, err
 	}

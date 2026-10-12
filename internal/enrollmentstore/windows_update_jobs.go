@@ -175,7 +175,10 @@ func (s *Store) setupWindowsUpdateJobsCreateOnly(ctx context.Context, key, execu
 		if err != nil {
 			return windowsupdatejob.ErrAuthority
 		}
-		if other := t.credentials[snap.InvitationID].WindowsManagedMSISetup; other != nil && !coordinatedWindowsMutationPair(other.Grant, consent) {
+		// The fresh service receipt proves both durable manager registrations.
+		// Legacy foreground/coordinated profiles retain their original setup order.
+		other := t.credentials[snap.InvitationID].WindowsManagedMSISetup
+		if consent.Version == windowsupdatejob.BackgroundConsentVersion && other == nil || other != nil && !coordinatedWindowsMutationPair(other.Grant, consent) {
 			return windowsupdatejob.ErrConflict
 		}
 		marker := &windowsUpdateJobSetupMarker{Version: "tracebolt.windows-selected-update-setup.v1", Consent: consent, InitializedAt: now}
@@ -257,6 +260,9 @@ func (s *Store) loadWindowsUpdateJobRecords(ctx context.Context, t *transaction)
 	markers := map[string]*windowsUpdateJobSetupMarker{}
 	for id, c := range t.credentials {
 		if c.WindowsUpdateJobSetup != nil {
+			if c.WindowsUpdateJobSetup.Consent.Version == windowsupdatejob.BackgroundConsentVersion && (c.WindowsManagedMSISetup == nil || !coordinatedWindowsMutationPair(c.WindowsManagedMSISetup.Grant, c.WindowsUpdateJobSetup.Consent)) {
+				return ErrStorage
+			}
 			markers[id] = c.WindowsUpdateJobSetup
 		}
 	}

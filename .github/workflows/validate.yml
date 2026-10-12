@@ -114,14 +114,15 @@ jobs:
           go build -buildvcs=false -trimpath -o artifacts/windows-action-source/tracebolt-windows-service.exe ./cmd/windows-service
           go build -buildvcs=false -trimpath -o artifacts/windows-action-source/tracebolt-windows-action-broker.exe ./cmd/windows-action-broker
           go build -buildvcs=false -trimpath -o artifacts/windows-action-source/tracebolt-windows-update-executor.exe ./cmd/windows-update-executor
-          # Prepared and centrally managed MSI installation are deliberately x64-only.
+          # Prepared/managed MSI and the fresh background WUA service are x64-only.
           if [ "$GOARCH" = amd64 ]; then
             go build -buildvcs=false -trimpath -o artifacts/windows-action-source/tracebolt-windows-software-executor.exe ./cmd/windows-software-executor
             go build -buildvcs=false -trimpath -o artifacts/windows-action-source/tracebolt-windows-managed-msi-service.exe ./cmd/windows-managed-msi-service
+            go build -buildvcs=false -trimpath -o artifacts/windows-action-source/tracebolt-windows-update-service.exe ./cmd/windows-update-service
           fi
           # Compile inert Windows ABI/authority/IPC fixtures on both architectures.
           # Never run these binaries, create grants/pipes, or dispatch WUA/MSI here.
-          for package in windowsupdatejob windowsupdateexecutor windowsupdateipc windowssoftwarejob windowssoftwareexecutor windowssoftwareipc windowsmanagedmsi windowsmanagedmsiexecutor windowsmanagedmsiipc windowsmanagedmsiservice lanclient; do
+          for package in windowsupdatejob windowsupdateexecutor windowsupdateipc windowssoftwarejob windowssoftwareexecutor windowssoftwareipc windowsmanagedmsi windowsmanagedmsiexecutor windowsmanagedmsiipc windowsmanagedmsiservice windowsupdateservice lanclient; do
             go test -c -buildvcs=false -o "$RUNNER_TEMP/${package}-${GOARCH}.test.exe" "./internal/$package"
           done
           python3 - <<'PY'
@@ -130,7 +131,7 @@ jobs:
           root = Path('artifacts/windows-action-source')
           names = ['tracebolt-windows-service', 'tracebolt-windows-action-broker', 'tracebolt-windows-update-executor']
           if os.environ['GOARCH'] == 'amd64':
-              names.extend(['tracebolt-windows-software-executor', 'tracebolt-windows-managed-msi-service'])
+              names.extend(['tracebolt-windows-software-executor', 'tracebolt-windows-managed-msi-service', 'tracebolt-windows-update-service'])
           for name in names:
               digest = hashlib.sha256((root / (name + '.exe')).read_bytes()).hexdigest()
               manifest = {'schemaVersion': 'tracebolt.windows-setup-package.v1', 'version': 'v0.0.0-source', 'sourceCommit': os.environ['GITHUB_SHA'], 'architecture': os.environ['GOARCH'], 'sha256': digest}

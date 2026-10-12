@@ -16,6 +16,8 @@ import (
 	"localrmm/internal/windowsupdatesetup"
 )
 
+const backgroundMutationVersion = "tracebolt.windows-coordinated-mutation-setup.v3"
+
 const reusableMutationVersion = "tracebolt.windows-coordinated-mutation-setup.v2"
 const coordinatedMutationVersion = "tracebolt.windows-coordinated-mutation-setup.v1"
 const coordinatedMutationDisclosure = "Set up separate managed MSI delivery/install and selected cached Windows Update permissions on this exact endpoint. The deployment service runs as LocalSystem; package custom actions are not sandboxed and can affect services, applications and the network. Only package/native-reviewed synchronous MSI without detached deployment or rollback work is eligible. This paired profile supports manual update approval, not scheduled intents. Windows Updates still require an explicitly launched elevated foreground executor and process-query approval. One durable shared owner blocks the other domain; crashes, unknown completion and partial setup require intervention, never automatic unlock, retry, reset or reboot. Prepared MSI and service-control brokers remain incompatible."
@@ -42,11 +44,15 @@ type coordinatedMutationResult struct {
 	MSI             managed.SetupRegistration `json:"msi"`
 	WUA             job.SetupRegistration     `json:"wua"`
 	MSIConfigDigest string                    `json:"msiConfigDigest"`
+	WUAConfigDigest string                    `json:"wuaConfigDigest,omitempty"`
 	FenceDigest     string                    `json:"fenceDigest"`
 }
 
 func (p coordinatedMutationPlan) Digest() string {
 	b, _ := json.Marshal(p)
+	if p.Version == backgroundMutationVersion {
+		return managed.Digest(append([]byte("Tracebolt fresh background Windows mutation setup v3\x00"), b...))
+	}
 	if p.Version == reusableMutationVersion {
 		return managed.Digest(append([]byte("Tracebolt fresh reusable Windows mutation setup v2\x00"), b...))
 	}
@@ -54,8 +60,15 @@ func (p coordinatedMutationPlan) Digest() string {
 }
 func (p coordinatedMutationPlan) Validate() error {
 	m, w := p.MSI, p.WUA
-	reusable := p.Version == reusableMutationVersion
-	if (p.Version != coordinatedMutationVersion && !reusable) || (m.Offer.Version == managed.ReusableOfferVersion) != reusable || !reusable && (p.Disclosure != coordinatedMutationDisclosure || m.Version != "tracebolt.windows-managed-msi-endpoint-plan.v1") || reusable && (p.Disclosure != coordinatedMutationDisclosure+" "+managed.ReusableDisclosure || m.Version != "tracebolt.windows-managed-msi-endpoint-plan.v3") || m.MutationPlanDigest != "" || m.Offer.Validate() != nil || w.Validate() != nil || w.Version != windowsupdatesetup.Version || w.ScheduleScope != "" || w.MutationPlanDigest != "" || m.Observer != w.Observer || lanclient.WindowsUpdateSetupIdentity(m.Identity) != w.Identity || bytes.Equal(m.Offer.ManagerPublicKey, w.Offer.ManagerPublicKey) || m.Artifact.Architecture != "amd64" || w.Artifact.Architecture != "amd64" {
+	background := p.Version == backgroundMutationVersion
+	reusable := p.Version == reusableMutationVersion || background
+	expectedDisclosure := coordinatedMutationDisclosure + " " + managed.ReusableDisclosure
+	wuaVersion := windowsupdatesetup.Version
+	if background {
+		expectedDisclosure = windowsupdatesetup.BackgroundDisclosure + " " + managed.ReusableDisclosure
+		wuaVersion = windowsupdatesetup.BackgroundVersion
+	}
+	if (p.Version != coordinatedMutationVersion && !reusable) || (m.Offer.Version == managed.ReusableOfferVersion) != reusable || !reusable && (p.Disclosure != coordinatedMutationDisclosure || m.Version != "tracebolt.windows-managed-msi-endpoint-plan.v1") || reusable && (p.Disclosure != expectedDisclosure || m.Version != "tracebolt.windows-managed-msi-endpoint-plan.v3") || m.MutationPlanDigest != "" || m.Offer.Validate() != nil || w.Validate() != nil || w.Version != wuaVersion || w.ScheduleScope != "" || w.MutationPlanDigest != "" || m.Observer != w.Observer || lanclient.WindowsUpdateSetupIdentity(m.Identity) != w.Identity || bytes.Equal(m.Offer.ManagerPublicKey, w.Offer.ManagerPublicKey) || m.Artifact.Architecture != "amd64" || w.Artifact.Architecture != "amd64" {
 		return managed.ErrAuthority
 	}
 	return nil
@@ -66,6 +79,9 @@ func (p coordinatedMutationPlan) FencePlan() fence.Plan {
 	v := ""
 	if p.Version == reusableMutationVersion {
 		v = fence.ReusablePlanVersion
+	}
+	if p.Version == backgroundMutationVersion {
+		v = fence.BackgroundPlanVersion
 	}
 	return fence.Plan{Version: v, Identity: fence.Identity{ManagerID: b.ManagerID, DeviceID: b.DeviceID, IncarnationDigest: b.IncarnationDigest}, PlanDigest: p.Digest(), MSIOfferDigest: digest(p.MSI.Offer), WUAOfferDigest: digest(p.WUA.Offer), MSIArtifactDigest: digest(p.MSI.Artifact), WUAArtifactDigest: digest(p.WUA.Artifact)}
 }
@@ -88,11 +104,14 @@ func runCoordinatedMutationProvision(ctx context.Context, args []string, out, st
 	risk := f.Bool("acknowledge-localsystem-risk", false, "")
 	relay := f.Bool("acknowledge-observer-relay", false, "")
 	query := f.Bool("acknowledge-observer-process-query", false, "")
-	if f.Parse(args) != nil || f.NArg() != 0 || ctx == nil || perform == nil || *mo == "" || *mi == "" || *mm == "" || *wo == "" || *wi == "" || *wm == "" || *apply != (*digest != "") || *ack != *apply || *delivery != *apply || (*install || *reusable) != *apply || *install && *reusable || *updates != *apply || *risk != *apply || *relay != *apply || *query != *apply {
+	background := f.Bool("background-updates", false, "")
+	backgroundAck := f.Bool("acknowledge-background-updates", false, "")
+	if f.Parse(args) != nil || f.NArg() != 0 || ctx == nil || perform == nil || *mo == "" || *mi == "" || *mm == "" || *wo == "" || *wi == "" || *wm == "" || *apply != (*digest != "") || *ack != *apply || *delivery != *apply || (*install || *reusable) != *apply || *install && *reusable || *updates != *apply || *risk != *apply || *relay != *apply || *query != *apply || *backgroundAck != (*background && *apply) {
 		fmt.Fprintln(stderr, "Use --coordinated-mutations-provision with both --msi-manager-offer, --msi-service-file, --msi-artifact-manifest and --update-manager-offer, --update-executor-file, --update-artifact-manifest. Review is read-only. Apply requires --apply --approve <exact review digest> and all acknowledgements: coordinated-mutations, managed-delivery, one-managed-install, selected-updates, localsystem-risk, observer-relay, observer-process-query.")
 		return 2
 	}
 	var input coordinatedMutationInput
+	input.WUA.background = *background
 	input.Apply = *apply
 	input.Digest = *digest
 	raw, e := readSoftwareSetupInput(*mo, 16384)
@@ -100,7 +119,7 @@ func runCoordinatedMutationProvision(ctx context.Context, args []string, out, st
 		return 1
 	}
 	input.MSI.offer, e = managed.DecodeSetupOffer(bytes.TrimSuffix(raw, []byte("\n")))
-	if e != nil || *apply && (input.MSI.offer.Version == managed.ReusableOfferVersion) != *reusable {
+	if e != nil || *background && input.MSI.offer.Version != managed.ReusableOfferVersion || *apply && (input.MSI.offer.Version == managed.ReusableOfferVersion) != *reusable {
 		return 1
 	}
 	raw, e = readUpdateSetupInput(*wo, 16384)
@@ -129,7 +148,11 @@ func runCoordinatedMutationProvision(ctx context.Context, args []string, out, st
 			return 1
 		}
 	}
-	fmt.Fprintln(stderr, coordinatedMutationDisclosure)
+	if *background {
+		fmt.Fprintln(stderr, windowsupdatesetup.BackgroundDisclosure)
+	} else {
+		fmt.Fprintln(stderr, coordinatedMutationDisclosure)
+	}
 	if input.MSI.offer.Version == managed.ReusableOfferVersion {
 		fmt.Fprintln(stderr, managed.ReusableDisclosure)
 	}
@@ -145,7 +168,11 @@ func runCoordinatedMutationProvision(ctx context.Context, args []string, out, st
 		if json.NewEncoder(out).Encode(result) != nil {
 			return 1
 		}
-		fmt.Fprintln(stderr, "Both exact participants are bound. Deployment service stays disabled and the observer stays stopped. Finalize both manager registrations, then explicitly start the observer and separately activate the MSI service or launch the WUA foreground executor.")
+		if *background {
+			fmt.Fprintln(stderr, "Both services stay disabled and the observer stays stopped. Finalize both manager registrations, then explicitly start the observer and activate each service with its exact configuration digest. WUA activation requires the manager-signed registration receipt.")
+		} else {
+			fmt.Fprintln(stderr, "Both exact participants are bound. Deployment service stays disabled and the observer stays stopped. Finalize both manager registrations, then explicitly start the observer and separately activate the MSI service or launch the WUA foreground executor.")
+		}
 	} else {
 		if result.Plan.Validate() != nil || json.NewEncoder(out).Encode(result.Plan) != nil {
 			return 1

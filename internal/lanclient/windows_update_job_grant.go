@@ -5,6 +5,8 @@ import (
 	"crypto/ed25519"
 	"crypto/x509"
 	"encoding/json"
+	"errors"
+	"io/fs"
 	"path/filepath"
 	"time"
 
@@ -16,6 +18,8 @@ import (
 	"localrmm/internal/windowsupdateipc"
 	"localrmm/internal/windowsupdatejob"
 )
+
+const WindowsBackgroundUpdateRelayGrantVersion = "tracebolt.windows-selected-update-observer-relay.v3"
 
 const WindowsUpdateRelayGrantVersion = "tracebolt.windows-selected-update-observer-relay.v2"
 const WindowsUpdateRelayScope = "windows-selected-update-observer-relay-v1"
@@ -47,7 +51,7 @@ func windowsUpdateRelayOptions(sid string, create bool) windowsstate.Options {
 	return windowsstate.Options{RuntimeSID: sid, Names: []string{"grant.json"}, LockName: "relay.lock", TempName: "relay.tmp", MaxBytes: 4096, Create: create}
 }
 func validateWindowsUpdateRelayGrant(m Material, g WindowsUpdateRelayGrant, now time.Time) error {
-	if !m.config.windowsInventory() || m.config.Profile != "tls" || g.Version != WindowsUpdateRelayGrantVersion || g.Scope != WindowsUpdateRelayScope || !g.Acknowledged || g.SenderBinding != m.binding || g.ManagerOrigin != m.config.ManagerOrigin || !windowsupdatejob.ValidBinding(g.Binding) || g.Binding.DeviceID != m.config.AgentID || g.Binding.IncarnationDigest != "sha256:"+journalLeaf(m) || !keyvalidation.Ed25519(g.ManagerPublicKey) || !keyvalidation.Ed25519(g.ExecutorPublicKey) || actionpermit.Digest(g.ManagerPublicKey) != g.Binding.KeyID || actionpermit.Digest(g.ExecutorPublicKey) != g.Binding.ExecutorKeyID || g.ExpiresAt <= 0 || g.ExpiresAt > 253402300799 || now.Unix() <= 0 || now.Unix() >= g.ExpiresAt {
+	if !m.config.windowsInventory() || m.config.Profile != "tls" || !(g.Version == WindowsUpdateRelayGrantVersion && g.ExecutorPeer.Version == windowsupdateipc.PeerVersion || g.Version == WindowsBackgroundUpdateRelayGrantVersion && g.ExecutorPeer.Version == windowsupdateipc.ServicePeerVersion) || g.Scope != WindowsUpdateRelayScope || !g.Acknowledged || g.SenderBinding != m.binding || g.ManagerOrigin != m.config.ManagerOrigin || !windowsupdatejob.ValidBinding(g.Binding) || g.Binding.DeviceID != m.config.AgentID || g.Binding.IncarnationDigest != "sha256:"+journalLeaf(m) || !keyvalidation.Ed25519(g.ManagerPublicKey) || !keyvalidation.Ed25519(g.ExecutorPublicKey) || actionpermit.Digest(g.ManagerPublicKey) != g.Binding.KeyID || actionpermit.Digest(g.ExecutorPublicKey) != g.Binding.ExecutorKeyID || g.ExpiresAt <= 0 || g.ExpiresAt > 253402300799 || now.Unix() <= 0 || now.Unix() >= g.ExpiresAt {
 		return ErrConfiguration
 	}
 	if g.ExecutorPeer.Validate() != nil || g.ExecutorPeer.Binding != g.Binding || !bytes.Equal(g.ExecutorPeer.ExecutorPublicKey, g.ExecutorPublicKey) {
@@ -112,7 +116,7 @@ func InitializeWindowsUpdateRelayCreateOnly(path string, g WindowsUpdateRelayGra
 	if !currentWindowsUpdateRelayMaterial(m, Load) {
 		return ErrState
 	}
-	store, e := windowsstate.Open(windowsUpdateRelayPath(m), windowsUpdateRelayOptions(sid, true))
+	store, e := windowsstate.Open(windowsUpdateRelayPathFor(m, g.Version), windowsUpdateRelayOptions(sid, true))
 	if e != nil {
 		return ErrState
 	}
@@ -132,13 +136,13 @@ func readWindowsUpdateRelay(m Material) (WindowsUpdateRelayGrant, error) {
 	if e != nil {
 		return g, e
 	}
-	store, e := windowsstate.Open(windowsUpdateRelayPath(m), windowsUpdateRelayOptions(sid, false))
+	store, version, e := openWindowsUpdateRelayStore(m, sid)
 	if e != nil {
 		return g, e
 	}
 	defer store.Close()
 	raw, e := store.Read("grant.json")
-	if e != nil || decodeWindowsUpdateRelayJSON(raw, &g, 4096) != nil || store.Close() != nil {
+	if e != nil || decodeWindowsUpdateRelayJSON(raw, &g, 4096) != nil || g.Version != version || store.Close() != nil {
 		return g, ErrState
 	}
 	return g, nil
@@ -153,4 +157,28 @@ func currentWindowsUpdateRelayMaterial(m Material, reload func(string) (Material
 	}
 	current, e := reload(m.configPath)
 	return e == nil && current.valid() && current.binding == m.binding && current.config == m.config && bytes.Equal(current.authorityDER(), m.authorityDER()) && len(current.certificate.Certificate) > 0 && bytes.Equal(current.certificate.Certificate[0], m.certificate.Certificate[0]) && validateUpdatesActivatedMaterial(m.configPath, current) == nil
+}
+
+func windowsUpdateRelayPathFor(m Material, v string) string {
+	if v == WindowsBackgroundUpdateRelayGrantVersion {
+		return filepath.Dir(filepath.Dir(m.config.StateDirectory)) + "-background-update-job-relay"
+	}
+	return windowsUpdateRelayPath(m)
+}
+func openWindowsUpdateRelayStore(m Material, sid string) (*windowsstate.Store, string, error) {
+	old, oe := windowsstate.Open(windowsUpdateRelayPath(m), windowsUpdateRelayOptions(sid, false))
+	fresh, fe := windowsstate.Open(windowsUpdateRelayPathFor(m, WindowsBackgroundUpdateRelayGrantVersion), windowsUpdateRelayOptions(sid, false))
+	if old != nil && errors.Is(fe, fs.ErrNotExist) {
+		return old, WindowsUpdateRelayGrantVersion, nil
+	}
+	if fresh != nil && errors.Is(oe, fs.ErrNotExist) {
+		return fresh, WindowsBackgroundUpdateRelayGrantVersion, nil
+	}
+	if old != nil {
+		old.Close()
+	}
+	if fresh != nil {
+		fresh.Close()
+	}
+	return nil, "", ErrState
 }

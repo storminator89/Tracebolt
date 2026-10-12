@@ -16,7 +16,7 @@ func MutationParticipant(c Consent) fence.Participant {
 	return fence.Participant{Domain: fence.CachedWUA, BindingDigest: actionpermit.Digest(b), GrantDigest: actionpermit.Digest(raw), ManagerKeyDigest: c.Binding.KeyID, ExecutorKeyDigest: c.Binding.ExecutorKeyID}
 }
 func ValidMutationRoster(r *fence.Roster, c Consent) bool {
-	if r == nil || r.Validate() != nil || c.Version != CoordinatedConsentVersion || c.Validate() != nil {
+	if r == nil || r.Validate() != nil || (c.Version != CoordinatedConsentVersion && c.Version != BackgroundConsentVersion) || (c.Version == BackgroundConsentVersion) != (r.Version == fence.BackgroundRosterVersion) || c.Validate() != nil {
 		return false
 	}
 	b := c.Binding

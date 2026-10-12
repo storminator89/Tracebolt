@@ -44,6 +44,15 @@ ACCEPTED_SOURCE_TREE = "d2ec1451a0fb4332a48f0ee48b17c35eca807ad4"
 NATIVE_WORKFLOW = ".github/workflows/windows-setup-acceptance.yml"
 PUBLISH_WORKFLOW = ".github/workflows/windows-prerelease.yml"
 AGGREGATE_JOB = "Validate four reports and preserve exact tested public bytes (no rebuild)"
+ARTIFACT_PREFIX = "windows-setup-"
+EVIDENCE_SCHEMA = "tracebolt.windows-setup-native-subset.v2"
+EVIDENCE_STATUS = "four_case_packaged_gui_subset"
+EVIDENCE_DISTRIBUTION = "unsigned-source-candidate-native-subset"
+PLAN_SCHEMA = "tracebolt.windows-prerelease-plan.v2"
+MANIFEST_SCHEMA = "tracebolt.windows-prerelease.v2"
+RELEASE_DISTRIBUTION = "unsigned-windows-prerelease-native-subset"
+REQUIRE_REPORT_TREE = False
+GUIDE_SUBDIRECTORY = "windows-prerelease-historical"
 GUIDES = {"windows-prerelease-install.md", "windows-prerelease-changelog.md"}
 RELEASE_MANIFEST = "release-manifest.json"
 ASSETS = gate.PUBLIC_FILES | {gate.AGGREGATE_REPORT, RELEASE_MANIFEST} | GUIDES
@@ -317,7 +326,13 @@ def check_ref(value, ref, sha):
             value["object"].get("type") == "commit" and value["object"].get("sha") == sha, "Source lease or tag changed; stopped without overwrite.")
 
 
+def require_accepted_tree():
+    require(type(ACCEPTED_SOURCE_TREE) is str and HEX40.fullmatch(ACCEPTED_SOURCE_TREE),
+            "Current publication is disabled until a separately approved native run is reviewed and its exact tree is pinned.")
+
+
 def publisher_lease(api, request):
+    require_accepted_tree()
     check_repository(api.request("GET", PREFIX))
     check_ref(api.request("GET", PREFIX + "/git/ref/" + request["publisherRef"].removeprefix("refs/")), request["publisherRef"], request["publisherSHA"])
     commit = api.request("GET", PREFIX + "/git/commits/" + request["source"])
@@ -358,8 +373,8 @@ def verify_native_run(api, request, *, execution=None):
     require(type(workflow) is dict and type(workflow.get("id")) is int and workflow["id"] == workflow_id and workflow.get("path") == NATIVE_WORKFLOW and
             workflow.get("name") == gate.provenance.WORKFLOW_NAME)
     jobs = api.request("GET", PREFIX + f"/actions/runs/{run_id}/attempts/1/jobs?per_page=100")
-    require(type(jobs) is dict and type(jobs.get("total_count")) is int and jobs["total_count"] == 5 and
-            type(jobs.get("jobs")) is list and len(jobs["jobs"]) == 5, "Native jobs are missing, repeated, or ambiguous.")
+    require(type(jobs) is dict and type(jobs.get("total_count")) is int and jobs["total_count"] == len(gate.CHECKS) + 1 and
+            type(jobs.get("jobs")) is list and len(jobs["jobs"]) == len(gate.CHECKS) + 1, "Native jobs are missing, repeated, or ambiguous.")
     expected = {"Actual packaged GUI - " + case: "windows-2025" for case in gate.CHECKS}
     expected[AGGREGATE_JOB] = "ubuntu-24.04"
     selected, runners = {}, {}
@@ -368,14 +383,14 @@ def verify_native_run(api, request, *, execution=None):
         require(positive_id(job.get("id")) and type(job.get("run_id")) is int and job["run_id"] == run_id and job.get("head_sha") == source and
                 job.get("status") == "completed" and job.get("conclusion") == "success" and
                 type(job.get("run_attempt")) is int and job["run_attempt"] == 1 and
-                job.get("workflow_name") == gate.provenance.WORKFLOW_NAME, "All four native cases and aggregation must succeed.")
+                job.get("workflow_name") == gate.provenance.WORKFLOW_NAME, "All profile-native cases and aggregation must succeed.")
         labels = job.get("labels")
         require(labels == [expected[job["name"]]], "Unexpected native runner label.")
         if job["name"] != AGGREGATE_JOB:
             require(positive_id(job.get("runner_id")), "Native runner registration ID must be positive.")
             runners[job["name"].removeprefix("Actual packaged GUI - ")] = job["runner_id"]
         selected[job["name"]] = job["id"]
-    require(len(set(selected.values())) == 5 and len(runners) == len(set(runners.values())) == 4)
+    require(len(set(selected.values())) == len(gate.CHECKS) + 1 and len(runners) == len(set(runners.values())) == len(gate.CHECKS))
     # This pinned pure validator repeats every proof-relevant required step,
     # hosted label and registration predicate without another artifact download.
     try:
@@ -394,10 +409,10 @@ def verify_native_run(api, request, *, execution=None):
 
 
 def artifact_names(source):
-    names = {"windows-setup-gui-" + case + "-" + source: {gate.REPORT_NAME} for case in gate.CHECKS}
-    names.update({"windows-setup-public-input-" + source: gate.PUBLIC_FILES,
-                  "windows-setup-native-subset-public-" + source: gate.PUBLIC_FILES,
-                  "windows-setup-native-subset-evidence-" + source: {gate.AGGREGATE_REPORT}})
+    names = {ARTIFACT_PREFIX + "gui-" + case + "-" + source: {gate.REPORT_NAME} for case in gate.CHECKS}
+    names.update({ARTIFACT_PREFIX + "public-input-" + source: gate.PUBLIC_FILES,
+                  ARTIFACT_PREFIX + "native-subset-public-" + source: gate.PUBLIC_FILES,
+                  ARTIFACT_PREFIX + "native-subset-evidence-" + source: {gate.AGGREGATE_REPORT}})
     return names
 
 
@@ -472,12 +487,16 @@ def validate_evidence(raw, files, raw_reports, request):
     require(type(evidence) is dict and "executionProvenance" in evidence)
     execution = evidence["executionProvenance"]
     reports = gate.aggregate_reports(raw_reports, request["source"], request["acceptanceRunID"], execution, files)
+    if REQUIRE_REPORT_TREE:
+        require_accepted_tree()
+        require(all(report["sourceTree"] == ACCEPTED_SOURCE_TREE for report in reports.values()),
+                "Native report tree differs from the independently accepted current source tree.")
     hashes = gate.validate_public_package(files, request["source"], reports["install-uninstall"])
-    expected = {"schema": "tracebolt.windows-setup-native-subset.v2", "source": request["source"],
-                "runID": request["acceptanceRunID"], "status": "four_case_packaged_gui_subset",
-                "distributionStatus": "unsigned-source-candidate-native-subset", "crossOSRebuildEquivalence": False,
+    expected = {"schema": EVIDENCE_SCHEMA, "source": request["source"],
+                "runID": request["acceptanceRunID"], "status": EVIDENCE_STATUS,
+                "distributionStatus": EVIDENCE_DISTRIBUTION, "crossOSRebuildEquivalence": False,
                 "coverage": dict.fromkeys(sorted(gate.FALSE_COVERAGE), False), "reports": reports, "publicFilesSHA256": hashes, "executionProvenance": execution}
-    require(evidence == expected and raw == canonical(expected), "Finite accepted evidence does not match all four immutable reports and package bytes.")
+    require(evidence == expected and raw == canonical(expected), "Finite accepted evidence does not match every profile report and package byte.")
     require(all(raw_reports[case] == canonical(report) for case, report in reports.items()), "Noncanonical native report rejected.")
     return evidence
 
@@ -490,9 +509,9 @@ def verify_execution(api, request, artifacts, native, evidence, files, raw_repor
     run = request["acceptanceRunID"]
     routes = {PREFIX + "/actions/runs/" + run + suffix for suffix in
               ("", "/attempts/1", "/attempts/1/jobs?per_page=100", "/artifacts?per_page=100")}
-    routes.add(PREFIX + "/actions/workflows/windows-setup-acceptance.yml")
-    names = {"windows-setup-gui-" + case + "-" + request["source"] for case in gate.CHECKS}
-    names.add("windows-setup-public-input-" + request["source"])
+    routes.add(PREFIX + "/actions/workflows/" + NATIVE_WORKFLOW.rsplit("/", 1)[1])
+    names = {ARTIFACT_PREFIX + "gui-" + case + "-" + request["source"] for case in gate.CHECKS}
+    names.add(ARTIFACT_PREFIX + "public-input-" + request["source"])
     for name in names:
         path = PREFIX + "/actions/artifacts/" + str(artifacts[name]["id"])
         routes.update({path, path + "/zip"})
@@ -519,14 +538,16 @@ def verify_execution(api, request, artifacts, native, evidence, files, raw_repor
 
 def verify_public_execution(api, request, plan, files):
     evidence = strict_json(files[gate.AGGREGATE_REPORT], BOUNDS[gate.AGGREGATE_REPORT])
-    require(type(evidence) is dict and evidence.get("schema") == "tracebolt.windows-setup-native-subset.v2" and
+    require(type(evidence) is dict and evidence.get("schema") == EVIDENCE_SCHEMA and
             type(evidence.get("reports")) is dict and set(evidence["reports"]) == set(gate.CHECKS) and
             files[gate.AGGREGATE_REPORT] == canonical(evidence))
     # Native aggregation enforces this canonical raw-byte form. The proof below
     # must also match each stored report hash and each independently fetched ZIP.
     reports = {case: gate.canonical(report) for case, report in evidence["reports"].items()}
-    return verify_execution(api, request, plan["artifacts"], plan["native"], evidence,
-                            {name: files[name] for name in gate.PUBLIC_FILES}, reports)
+    package = {name: files[name] for name in gate.PUBLIC_FILES}
+    if REQUIRE_REPORT_TREE:
+        validate_evidence(files[gate.AGGREGATE_REPORT], package, reports, request)
+    return verify_execution(api, request, plan["artifacts"], plan["native"], evidence, package, reports)
 
 
 def verify_frozen_metadata(api, request, plan, files):
@@ -545,7 +566,7 @@ def file_entries(files):
 def read_guides(root=ROOT):
     files = {}
     for name in sorted(GUIDES):
-        path = root / "docs" / name
+        path = root / "docs" / GUIDE_SUBDIRECTORY / name
         require(not path.is_symlink())
         meta = path.lstat()
         require(stat.S_ISREG(meta.st_mode) and meta.st_nlink == 1 and 0 < meta.st_size <= BOUNDS[name])
@@ -557,14 +578,15 @@ def read_guides(root=ROOT):
 
 
 def validate_plan(value, request):
+    require_accepted_tree()
     require(type(value) is dict and set(value) == {"schema", "request", "sourceTree", "native", "artifacts", "assets"} and
-            value["schema"] == "tracebolt.windows-prerelease-plan.v2" and value["request"] == request and value["sourceTree"] == ACCEPTED_SOURCE_TREE)
+            value["schema"] == PLAN_SCHEMA and value["request"] == request and value["sourceTree"] == ACCEPTED_SOURCE_TREE)
     require(type(value["native"]) is dict and set(value["native"]) == {"workflowID", "jobs", "runners"} and positive_id(value["native"]["workflowID"]))
     jobs = value["native"]["jobs"]
-    require(type(jobs) is dict and set(jobs) == {"Actual packaged GUI - " + case for case in gate.CHECKS} | {AGGREGATE_JOB} and all(positive_id(i) for i in jobs.values()) and len(set(jobs.values())) == 5)
+    require(type(jobs) is dict and set(jobs) == {"Actual packaged GUI - " + case for case in gate.CHECKS} | {AGGREGATE_JOB} and all(positive_id(i) for i in jobs.values()) and len(set(jobs.values())) == len(gate.CHECKS) + 1)
     runners = value["native"]["runners"]
     require(type(runners) is dict and set(runners) == set(gate.CHECKS) and
-            all(positive_id(i) for i in runners.values()) and len(set(runners.values())) == 4)
+            all(positive_id(i) for i in runners.values()) and len(set(runners.values())) == len(gate.CHECKS))
     artifacts = value["artifacts"]
     require(type(artifacts) is dict and set(artifacts) == set(artifact_names(request["source"])))
     for name, entry in artifacts.items():
@@ -590,19 +612,19 @@ def prepare(api, request, *, frozen=None, root=ROOT):
     for name, entry in sorted(artifacts.items()):
         downloaded[name] = unpack_archive(api.artifact(entry["id"], entry["size"]), entry, names[name])
     source = request["source"]
-    files = downloaded["windows-setup-native-subset-public-" + source]
-    require(files == downloaded["windows-setup-public-input-" + source], "Accepted package is not byte-for-byte identical to the tested TLS package.")
-    raw_reports = {case: downloaded["windows-setup-gui-" + case + "-" + source][gate.REPORT_NAME] for case in gate.CHECKS}
-    raw_evidence = downloaded["windows-setup-native-subset-evidence-" + source][gate.AGGREGATE_REPORT]
+    files = downloaded[ARTIFACT_PREFIX + "native-subset-public-" + source]
+    require(files == downloaded[ARTIFACT_PREFIX + "public-input-" + source], "Accepted package is not byte-for-byte identical to the tested TLS package.")
+    raw_reports = {case: downloaded[ARTIFACT_PREFIX + "gui-" + case + "-" + source][gate.REPORT_NAME] for case in gate.CHECKS}
+    raw_evidence = downloaded[ARTIFACT_PREFIX + "native-subset-evidence-" + source][gate.AGGREGATE_REPORT]
     evidence = validate_evidence(raw_evidence, files, raw_reports, request)
     execution = verify_execution(api, request, artifacts, native, evidence, files, raw_reports)
     public = {**files, gate.AGGREGATE_REPORT: raw_evidence, **read_guides(root)}
     # This is a separate binding document. Original six files, filenames,
     # embedded candidate version and build metadata are never rewritten.
-    manifest = {"schema": "tracebolt.windows-prerelease.v2", "repository": REPOSITORY, "repositoryID": REPO_ID,
+    manifest = {"schema": MANIFEST_SCHEMA, "repository": REPOSITORY, "repositoryID": REPO_ID,
         "version": request["version"], "sourceCommit": source, "sourceTree": ACCEPTED_SOURCE_TREE,
         "embeddedVersion": gate.VERSION, "architectures": ["amd64"], "authenticode": "unsigned",
-        "distributionStatus": "unsigned-windows-prerelease-native-subset", "nativeWorkflow": NATIVE_WORKFLOW,
+        "distributionStatus": RELEASE_DISTRIBUTION, "nativeWorkflow": NATIVE_WORKFLOW,
         "acceptanceRunID": request["acceptanceRunID"], "acceptanceRunAttempt": 1, "acceptanceBranch": "main", "native": native, "artifacts": artifacts, "executionProvenance": execution,
         "publisherWorkflow": PUBLISH_WORKFLOW, "publisherSourceCommit": request["publisherSHA"],
         "publisherRunID": request["publisherRunID"], "publisherRunAttempt": 1, "coverage": dict.fromkeys(sorted(gate.FALSE_COVERAGE), False),
@@ -610,7 +632,7 @@ def prepare(api, request, *, frozen=None, root=ROOT):
         "assets": file_entries(public)}
     public[RELEASE_MANIFEST] = canonical(manifest)
     require(set(public) == ASSETS and all(0 < len(raw) <= BOUNDS[name] for name, raw in public.items()))
-    plan = {"schema": "tracebolt.windows-prerelease-plan.v2", "request": request, "sourceTree": ACCEPTED_SOURCE_TREE,
+    plan = {"schema": PLAN_SCHEMA, "request": request, "sourceTree": ACCEPTED_SOURCE_TREE,
             "native": native, "artifacts": artifacts, "assets": file_entries(public)}
     validate_plan(plan, request)
     require(frozen is None or plan == frozen, "Frozen verification plan no longer matches the exact release bytes.")
@@ -760,6 +782,7 @@ def main(argv=None, env=None):
     args = parser.parse_args(argv)
     env = os.environ if env is None else env
     request = authorize(env, args.publish)
+    require_accepted_tree()
     verify_checkout(request)
     frozen = decode_plan(env, request) if args.publish else None
     # Even the write job performs all preparation with a read-only client first.

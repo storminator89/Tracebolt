@@ -16,6 +16,7 @@ import (
 	"localrmm/internal/windowsservice"
 	"localrmm/internal/windowsstate"
 	"localrmm/internal/windowsupdateipc"
+	"localrmm/internal/windowsupdateservice"
 	"localrmm/internal/windowsupdatesetup"
 )
 
@@ -32,9 +33,16 @@ func nativeUpdateProvision(ctx context.Context, in updateProvisionInput) (result
 func nativeUpdateProvisionUnderLease(ctx context.Context, in updateProvisionInput, result *updateProvisionResult, receipt installReceipt, lease receiptStore) (any, error) {
 	profile := func() error {
 		if in.coordinated == nil {
+			if in.background {
+				return windowspackage.CheckBackgroundUpdateFresh(ctx)
+			}
 			return windowspackage.CheckManagedMSIAbsent(ctx)
 		}
-		if e := windowspackage.CheckCoordinatedMutationExclusive(ctx); e != nil {
+		exclusive := windowspackage.CheckCoordinatedMutationExclusive
+		if in.background {
+			exclusive = windowspackage.CheckBackgroundMutationExclusive
+		}
+		if e := exclusive(ctx); e != nil {
 			return e
 		}
 		return fence.VerifyStaged(ctx, in.coordinated.Roster)
@@ -69,6 +77,9 @@ func nativeUpdateProvisionUnderLease(ctx context.Context, in updateProvisionInpu
 		return nil, e
 	}
 	newPlan := windowsupdatesetup.NewPlan
+	if in.background {
+		newPlan = windowsupdatesetup.NewBackgroundPlan
+	}
 	if in.schedule {
 		newPlan = windowsupdatesetup.NewScheduledPlan
 	}
@@ -83,7 +94,13 @@ func nativeUpdateProvisionUnderLease(ctx context.Context, in updateProvisionInpu
 		}
 	}
 	result.plan = p
-	image, e := windowspackage.OpenUpdateExecutorImage(ctx, receipt.Service)
+	imageFunc := windowspackage.OpenUpdateExecutorImage
+	options := windowsupdateipc.StoreOptions()
+	if in.background {
+		imageFunc = windowspackage.OpenUpdateServiceImage
+		options = windowsupdateipc.ServiceStoreOptions()
+	}
+	image, e := imageFunc(ctx, receipt.Service)
 	if e != nil {
 		return nil, e
 	}
@@ -96,10 +113,10 @@ func nativeUpdateProvisionUnderLease(ctx context.Context, in updateProvisionInpu
 		return nil
 	}
 	fresh := func(ctx context.Context, p windowsupdatesetup.Plan) error {
-		if exact(ctx, p) != nil || image.CheckAbsent(ctx) != nil {
+		if exact(ctx, p) != nil || image.CheckAbsent(ctx) != nil || in.background && windowsupdateservice.CheckAbsent(ctx) != nil {
 			return windowsupdatesetup.ErrExisting
 		}
-		s, e := windowsstate.Open(p.StateRoot, windowsupdateipc.StoreOptions())
+		s, e := windowsstate.Open(p.StateRoot, options)
 		if s != nil {
 			_ = s.Close()
 			return windowsupdatesetup.ErrExisting
@@ -118,11 +135,13 @@ func nativeUpdateProvisionUnderLease(ctx context.Context, in updateProvisionInpu
 		}
 		return nil, image.Close()
 	}
-	hooks := windowsupdatesetup.Hooks{Check: exact, Fresh: fresh, CreateStore: func(ctx context.Context, p windowsupdatesetup.Plan) (windowsupdatesetup.Store, error) {
+	hooks := windowsupdatesetup.Hooks{CreateService: windowsupdateservice.CreateDisabled, VerifyService: func(ctx context.Context, c windowsupdateipc.Config) error {
+		return windowsupdateservice.CheckInstalled(ctx, c, false)
+	}, Check: exact, Fresh: fresh, CreateStore: func(ctx context.Context, p windowsupdatesetup.Plan) (windowsupdatesetup.Store, error) {
 		if exact(ctx, p) != nil {
 			return nil, errLifecycle
 		}
-		o := windowsupdateipc.StoreOptions()
+		o := options
 		o.Create = true
 		return windowsstate.Open(p.StateRoot, o)
 	}, CreateImage: image.Create, VerifyImage: image.Verify, CreateRelay: func(ctx context.Context, g lanclient.WindowsUpdateRelayGrant) error {

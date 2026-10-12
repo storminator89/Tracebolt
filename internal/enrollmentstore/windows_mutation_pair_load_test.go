@@ -103,3 +103,72 @@ func TestCoordinatedWindowsMutationPairSetupAndReload(t *testing.T) {
 		})
 	}
 }
+
+// The new manual service profile requires the MSI registration first. The
+// existing coordinated test above deliberately still covers either order.
+func TestBackgroundWindowsMutationRequiresRegisteredMSIPeer(t *testing.T) {
+	for _, kind := range []string{"missing", "mismatch", "matching"} {
+		t.Run(kind, func(t *testing.T) {
+			f := newWindowsSoftwareStoreFixture(t, false)
+			ctx := context.Background()
+			mk, me := f.key.Public().(ed25519.PublicKey), f.executor.Public().(ed25519.PublicKey)
+			wk := ed25519.NewKeyFromSeed(bytes.Repeat([]byte{117}, 32)).Public().(ed25519.PublicKey)
+			we := ed25519.NewKeyFromSeed(bytes.Repeat([]byte{118}, 32)).Public().(ed25519.PublicKey)
+			m := managedStoreGrant(f)
+			m.Version = msi.ReusableGrantVersion
+			m.ReusableAcknowledged = true
+			m.MutationPlanDigest = msi.Digest([]byte("fresh background pair"))
+			w := job.Consent{Version: job.BackgroundConsentVersion, BackgroundAcknowledged: true, Scope: job.Scope, Binding: job.Binding{ManagerID: m.Binding.ManagerID, DeviceID: m.Binding.DeviceID, IncarnationDigest: m.Binding.IncarnationDigest, KeyID: msi.Digest(wk), ExecutorKeyID: msi.Digest(we), ExecutorID: id("executor", 8), GrantID: id("grant", 9)}, Enabled: true, Acknowledged: true, ExpiresAt: m.ExpiresAt, MutationPlanDigest: m.MutationPlanDigest}
+			raw, _ := json.Marshal(w.Binding)
+			m.PeerBindingDigest = msi.Digest(raw)
+			raw, _ = json.Marshal(m.Binding)
+			w.PeerBindingDigest = msi.Digest(raw)
+			if !coordinatedWindowsMutationPair(m, w) {
+				t.Fatal("invalid fixture")
+			}
+			if kind != "missing" {
+				if e := f.store.SetupWindowsManagedMSIFleetCreateOnly(ctx, mk, me, m, f.at, false); e != nil {
+					t.Fatal(e)
+				}
+			}
+			if kind == "mismatch" {
+				w.PeerBindingDigest = msi.Digest([]byte("another peer"))
+			}
+			e := f.store.SetupWindowsUpdateJobsCreateOnly(ctx, wk, we, w, f.at)
+			if kind != "matching" {
+				if !errors.Is(e, job.ErrConflict) {
+					t.Fatal("incomplete peer registered background WUA:", e)
+				}
+				if e = f.store.OpenWindowsUpdateJobs(ctx, wk); !errors.Is(e, job.ErrUnavailable) {
+					t.Fatal("rejected registration created state:", e)
+				}
+				if kind == "mismatch" {
+					r, e := f.store.ReadRegisteredWindowsManagedMSI(ctx, m.Binding, mk)
+					if e != nil || r.Grant != m {
+						t.Fatal("MSI peer changed:", e)
+					}
+				}
+				return
+			}
+			if e != nil {
+				t.Fatal(e)
+			}
+			if e = f.store.Close(); e != nil {
+				t.Fatal(e)
+			}
+			reopened, e := Open(f.path, f.fixture.config, f.fixture.issuerDER)
+			if e != nil {
+				t.Fatal(e)
+			}
+			defer reopened.Close()
+			mr, e := reopened.ReadRegisteredWindowsManagedMSI(ctx, m.Binding, mk)
+			if e != nil || mr.Grant != m {
+				t.Fatal("MSI registration lost:", e)
+			}
+			wr, e := reopened.ReadRegisteredWindowsUpdateJob(ctx, w.Binding, wk)
+			if e != nil || wr.Consent != w {
+				t.Fatal("WUA registration lost:", e)
+			}
+		})
+	}
+}

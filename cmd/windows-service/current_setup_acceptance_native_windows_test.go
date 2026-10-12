@@ -771,18 +771,87 @@ func currentSetupPlatform() (string, uint32, uint32, error) {
 	hash := sha256.Sum256([]byte("Tracebolt current hosted machine v1\n" + strings.ToLower(id)))
 	return hex.EncodeToString(hash[:]), v.BuildNumber, uint32(ubr), nil
 }
-func currentSetupOptionalsOff(l windowsservice.Layout) error {
-	paths := []string{filepath.Join(l.ProgramData, "Tracebolt-action-broker"), filepath.Join(l.ProgramData, "Tracebolt-action-broker-setup"), filepath.Join(filepath.Dir(l.StateRoot), "windows-update-executor"), filepath.Join(l.ProgramFiles, "Tracebolt", "tracebolt-windows-action-broker.exe"), filepath.Join(l.ProgramFiles, "Tracebolt", "tracebolt-windows-update-executor.exe")}
-	for _, suffix := range []string{"event-content", "updates", "update-job-relay", "action-relay", "user-software"} {
+
+// currentSetupOptionalPaths enumerates only namespaces implemented in this
+// source. Prepared v1, managed v1/fleet v2 and reusable v3 retain their actual
+// distinct custody/executor/relay roots; reusable jobs share the managed roots.
+// Public registration/config records are inside these protected roots. CLI
+// exports go to stdout, not an invented fixed public-registration pathname.
+func currentSetupOptionalPaths(l windowsservice.Layout) []string {
+	paths := []string{}
+	for _, name := range []string{"Tracebolt-action-broker", "Tracebolt-action-broker-setup"} {
+		paths = append(paths, filepath.Join(l.ProgramData, name))
+	}
+	for _, name := range []string{"windows-update-executor", "windows-software-executor", "windows-software-package", "windows-managed-msi-service", "windows-managed-msi-package", "windows-mutation-fence", "windows-update-service"} {
+		paths = append(paths, filepath.Join(filepath.Dir(l.StateRoot), name))
+	}
+	for _, name := range []string{"tracebolt-windows-action-broker.exe", "tracebolt-windows-update-executor.exe", "tracebolt-windows-software-executor.exe", "tracebolt-windows-managed-msi-service.exe", "tracebolt-windows-update-service.exe"} {
+		paths = append(paths, filepath.Join(l.ProgramFiles, "Tracebolt", name))
+	}
+	for _, suffix := range []string{"event-content", "updates", "update-job-relay", "action-relay", "user-software", "software-job-relay", "managed-msi-relay", "background-update-job-relay"} {
 		paths = append(paths, l.StateRoot+"-"+suffix)
 	}
-	for _, path := range paths {
-		_, e := os.Lstat(path)
-		if !errors.Is(e, os.ErrNotExist) {
+	return paths
+}
+func currentSetupOptionalServices() []string {
+	// Prepared MSI and historical selected WUA executors remain foreground.
+	// The fresh background WUA profile has its own separately implemented
+	// service. All three optional public SCM registrations must stay absent,
+	// even when stopped. This is absence evidence, not action acceptance.
+	return []string{"TraceboltWindowsActionBroker", "TraceboltWindowsDeployment", "TraceboltWindowsCachedUpdate"}
+}
+func currentSetupOptionalsOffWith(l windowsservice.Layout, pathAbsent, serviceAbsent func(string) bool) error {
+	for _, path := range currentSetupOptionalPaths(l) {
+		if !pathAbsent(path) {
+			return setupgate.ErrGuard
+		}
+	}
+	for _, name := range currentSetupOptionalServices() {
+		if !serviceAbsent(name) {
 			return setupgate.ErrGuard
 		}
 	}
 	return nil
+}
+func currentSetupOptionalsOff(l windowsservice.Layout) error {
+	// Read-only absence probes only. No optional setup, MSI/WUA call, service
+	// control, repair or public registration is performed or accepted here.
+	scm, e := windows.OpenSCManager(nil, nil, windows.SC_MANAGER_CONNECT)
+	if e != nil {
+		return setupgate.ErrGuard
+	}
+	defer windows.CloseServiceHandle(scm)
+	return currentSetupOptionalsOffWith(l, func(path string) bool {
+		_, e := os.Lstat(path)
+		return errors.Is(e, os.ErrNotExist)
+	}, func(name string) bool {
+		h, e := windows.OpenService(scm, setupUTF(name), windows.SERVICE_QUERY_STATUS)
+		if e == nil {
+			windows.CloseServiceHandle(h)
+			return false
+		}
+		return errors.Is(e, windows.ERROR_SERVICE_DOES_NOT_EXIST)
+	})
+}
+
+// Inert injected checks, including every newly covered MSI path. No native
+// probe is invoked by this regression; native acceptance still needs approval.
+func TestCurrentSetupOptionalsRejectEveryPresence(t *testing.T) {
+	l := windowsservice.Layout{ProgramData: `C:\ProgramData`, ProgramFiles: `C:\Program Files`, StateRoot: `C:\ProgramData\Tracebolt\windows-agent`}
+	absent := func(string) bool { return true }
+	if currentSetupOptionalsOffWith(l, absent, absent) != nil {
+		t.Fatal("absent fixture rejected")
+	}
+	for _, path := range currentSetupOptionalPaths(l) {
+		if currentSetupOptionalsOffWith(l, func(p string) bool { return p != path }, absent) == nil {
+			t.Fatal("optional path presence accepted", path)
+		}
+	}
+	for _, name := range currentSetupOptionalServices() {
+		if currentSetupOptionalsOffWith(l, absent, func(n string) bool { return n != name }) == nil {
+			t.Fatal("optional service presence accepted", name)
+		}
+	}
 }
 func (g *setupGUI) currentConsentObserved(ctx context.Context, stage func(string)) error {
 	// Exact current profile, separate unchecked renewal consent, and Back reset.

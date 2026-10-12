@@ -30,7 +30,7 @@ func Serve(ctx context.Context, s *Server) error {
 		return ErrPeer
 	}
 	sa := windows.SecurityAttributes{Length: uint32(unsafe.Sizeof(windows.SecurityAttributes{})), SecurityDescriptor: sd}
-	h, e := windows.CreateNamedPipe(windows.StringToUTF16Ptr(PipeName), windows.PIPE_ACCESS_DUPLEX|windows.FILE_FLAG_FIRST_PIPE_INSTANCE|windows.FILE_FLAG_OVERLAPPED, windows.PIPE_TYPE_BYTE|windows.PIPE_READMODE_BYTE|windows.PIPE_WAIT|windows.PIPE_REJECT_REMOTE_CLIENTS, 1, MaxMessageBytes+4, MaxMessageBytes+4, 5000, &sa)
+	h, e := windows.CreateNamedPipe(windows.StringToUTF16Ptr(s.config.pipeName()), windows.PIPE_ACCESS_DUPLEX|windows.FILE_FLAG_FIRST_PIPE_INSTANCE|windows.FILE_FLAG_OVERLAPPED, windows.PIPE_TYPE_BYTE|windows.PIPE_READMODE_BYTE|windows.PIPE_WAIT|windows.PIPE_REJECT_REMOTE_CLIENTS, 1, MaxMessageBytes+4, MaxMessageBytes+4, 5000, &sa)
 	if e != nil {
 		return job.ErrUnavailable
 	}
@@ -124,7 +124,7 @@ func callNative(ctx context.Context, c PeerConfig, r request) (response, error) 
 	defer cancel()
 	// No retry of an acquired connection or any write. Pipe busy is availability,
 	// not permission to resend a previously lost submit.
-	h, e := windows.CreateFile(windows.StringToUTF16Ptr(PipeName), pipeClientAccess, 0, nil, windows.OPEN_EXISTING, windows.FILE_FLAG_OVERLAPPED|windows.SECURITY_SQOS_PRESENT|windows.SECURITY_IDENTIFICATION, 0)
+	h, e := windows.CreateFile(windows.StringToUTF16Ptr(c.pipeName()), pipeClientAccess, 0, nil, windows.OPEN_EXISTING, windows.FILE_FLAG_OVERLAPPED|windows.SECURITY_SQOS_PRESENT|windows.SECURITY_IDENTIFICATION, 0)
 	if e != nil {
 		return response{}, job.ErrUnavailable
 	}
@@ -172,6 +172,8 @@ func callNative(ctx context.Context, c PeerConfig, r request) (response, error) 
 }
 
 type executorPeer struct {
+	service       bool
+	pins          []windows.Handle
 	pipe, process windows.Handle
 	pid           uint32
 	created       uint64
@@ -187,7 +189,7 @@ func openExecutorPeer(ctx context.Context, pipe windows.Handle, c PeerConfig) (*
 	if e != nil {
 		return nil, ErrPeer
 	}
-	p := &executorPeer{pipe: pipe, process: process, pid: pid, path: c.Executable}
+	p := &executorPeer{pipe: pipe, process: process, pid: pid, path: c.Executable, service: c.Version == ServicePeerVersion}
 	p.created, e = processCreated(process)
 	if e != nil || p.check(ctx) != nil {
 		p.close()
@@ -195,7 +197,13 @@ func openExecutorPeer(ctx context.Context, pipe windows.Handle, c PeerConfig) (*
 	}
 	return p, nil
 }
-func (p *executorPeer) close() { windows.CloseHandle(p.process) }
+func (p *executorPeer) close() {
+	for _, h := range p.pins {
+		windows.CloseHandle(h)
+	}
+	p.pins = nil
+	windows.CloseHandle(p.process)
+}
 func (p *executorPeer) check(ctx context.Context) error {
 	if ctx == nil || ctx.Err() != nil {
 		return ErrPeer
@@ -211,6 +219,9 @@ func (p *executorPeer) check(ctx context.Context) error {
 	var path [512]uint16
 	n := uint32(len(path))
 	if windows.QueryFullProcessImageName(p.process, 0, &path[0], &n) != nil || n == 0 || n >= uint32(len(path)) || windows.UTF16ToString(path[:n]) != p.path {
+		return ErrPeer
+	}
+	if p.service && (checkUpdateServiceSCM(p.pid, p.path) != nil) {
 		return ErrPeer
 	}
 	return ctx.Err()

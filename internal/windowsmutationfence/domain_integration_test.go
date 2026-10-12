@@ -220,6 +220,11 @@ func newPair(t *testing.T, reusable ...bool) *pairedDomains {
 		f.grant.Version = msi.ReusableGrantVersion
 		f.grant.ReusableAcknowledged = true
 	}
+	if len(reusable) > 1 && reusable[1] {
+		plan.Version = fence.BackgroundPlanVersion
+		f.consent.Version = wua.BackgroundConsentVersion
+		f.consent.BackgroundAcknowledged = true
+	}
 	f.shared = fence.NewIntegrationFence(t, plan, msi.MutationParticipant(f.grant), wua.MutationParticipant(f.consent), f.now)
 	f.msiSession = f.shared.Session(t, fence.ManagedMSI)
 	f.wuaSession = f.shared.Session(t, fence.CachedWUA)
@@ -341,6 +346,9 @@ func (f *pairedDomains) prepareWUA(t *testing.T) {
 	if e != nil || view.Job == nil || view.Job.Preview == nil {
 		t.Fatal("no real signed preview", e)
 	}
+	if f.consent.Version == wua.BackgroundConsentVersion && (!view.BackgroundExecutor || view.ExecutorAvailability != "unknown" || view.ExecutorObservedAt != 0 || view.SchedulingAvailable) {
+		t.Fatal("configuration claimed live background availability", view)
+	}
 	// Relay an executor-signed snapshot of the real shared test fence, bound to
 	// this manager's exact durable readiness challenge. Coordinated approval
 	// must pass the same fresh active-idle gate as production.
@@ -367,6 +375,12 @@ func (f *pairedDomains) prepareWUA(t *testing.T) {
 	}
 	if e = manager.Report(ctx, signed); e != nil {
 		t.Fatal(e)
+	}
+	if f.consent.Version == wua.BackgroundConsentVersion {
+		observed, e := manager.View(ctx, device, actor)
+		if e != nil || observed.ExecutorAvailability != "verified_recent" || observed.ExecutorObservedAt != f.at.Load() {
+			t.Fatal("signed service status unavailable", observed, e)
+		}
 	}
 	if e = manager.Approve(ctx, device, actor, job, view.Job.Preview.Digest, true); e != nil {
 		t.Fatal(e)

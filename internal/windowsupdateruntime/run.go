@@ -47,8 +47,8 @@ func Run(ctx context.Context, allowObserverProcessQuery bool) error {
 		return e
 	}
 	config, e := windowsupdateipc.DecodeConfig(raw)
-	if e != nil {
-		return e
+	if e != nil || config.Version == windowsupdateipc.ServiceConfigVersion {
+		return job.ErrAuthority
 	}
 	if windowsupdatesetup.VerifyInstalled(store, config) != nil {
 		return job.ErrAuthority

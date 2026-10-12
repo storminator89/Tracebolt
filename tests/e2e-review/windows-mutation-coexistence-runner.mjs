@@ -23,7 +23,7 @@ async function run(){
  if(!/^[a-f0-9]{40}$/.test(sourceSha??''))throw failure();const realDist=await fs.realpath(dist);await fs.access(path.join(realDist,'index.html'));
  browser=await chromium.launch({headless:true,args:['--no-sandbox'],env:{...process.env,HOME:temporary,XDG_CONFIG_HOME:temporary,XDG_CACHE_HOME:temporary}});
  for(const locale of ['en','de'])for(const width of [1440,390]){
-  const fixture=createWindowsMutationCoexistenceFixture(),state={blocked:[],external:[]};
+  const fixture=createWindowsMutationCoexistenceFixture('managed_msi',true),state={blocked:[],external:[]};
   context=await browser.newContext({viewport:{width,height:width===390?844:1000},locale:'en-GB',serviceWorkers:'block'});
   const page=await context.newPage();page.on('pageerror',()=>errors++);await page.clock.install({time:new Date(fixture.now)});await page.clock.pauseAt(new Date(Date.parse(fixture.now)+100));
   await page.route('**/*',windowsMutationCoexistenceRoute({base:windowsMutationCoexistenceOrigin,fixture,state,asset:async(route,pathname)=>{

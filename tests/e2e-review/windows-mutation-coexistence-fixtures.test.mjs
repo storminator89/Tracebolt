@@ -56,7 +56,7 @@ test('bounded inventory-query POST remains read-only and asset traffic never esc
 });
 
 const sha='a'.repeat(40),evidence=()=>['software','updates'].flatMap(surface=>['blocked','released'].flatMap(phase=>['en','de'].flatMap(locale=>[1440,390].map(width=>({file:`synthetic-windows-mutation-coexistence-${surface}-${phase}-${width}-${locale}.png`,sourceSha:sha,test:windowsMutationCoexistenceCaseName,locale,viewport:{width,height:width===390?844:1000},publicSafe:true,fullPage:false,fixtureDisclosure:windowsMutationCoexistenceDisclosure,sha256:'b'.repeat(64)})))));
-const details=()=>({softwareMounted:true,updatesMounted:true,blockedSharedOwner:true,exactRecoveryReadback:true,compactSummary:true,releasedReadback:true,originalOutcomesRetained:true,reloadReadback:true,readOnly:true,softwareReads:6,updateReads:6,mutationWrites:0,secondTargetWrites:0,realAPIRequests:0,nativeAcceptance:false});
+const details=()=>({softwareMounted:true,updatesMounted:true,blockedSharedOwner:true,exactRecoveryReadback:true,compactSummary:true,releasedReadback:true,originalOutcomesRetained:true,reloadReadback:true,backgroundRecentEvidence:true,backgroundUnknownAvailability:true,manualOnly:true,readOnly:true,softwareReads:6,updateReads:6,mutationWrites:0,secondTargetWrites:0,realAPIRequests:0,nativeAcceptance:false});
 const manifest=()=>({sourceSha:sha,screenshots:evidence()});
 const report=()=>({sourceSha:sha,createdAt:'2026-10-12T00:00:00.000Z',name:windowsMutationCoexistenceCaseName,status:'PASS',stage:'complete',scope:windowsMutationCoexistenceDisclosure,variants:['en','de'].flatMap(locale=>[1440,390].map(width=>({locale,width,...details()}))),runtimeErrorCount:0,requestsToRealAPI:0,browserAcceptance:true,durableStoreAcceptance:false,nativeAcceptance:false,secretsExported:false,realTelemetryExported:false});
 
@@ -91,4 +91,19 @@ test('additive hosted source uses production validators, both mounted panes and 
  for(const name of ['windows-managed-msi-fixtures.test.mjs','windows-mutation-coexistence-fixtures.test.mjs']){assert.ok(suites.entries.includes(name));assert.ok(workflow.includes('node --test tests/e2e-review/'+name));}
  for(const name of ['windows-managed-msi-runner.mjs','windows-mutation-coexistence-runner.mjs'])assert.ok(workflow.includes('node tests/e2e-review/'+name));
  assert.ok(workflow.includes('requireWindowsMutationCoexistenceReport'));assert.ok(workflow.includes('windows-mutation-coexistence-results.json'));assert.ok(workflow.includes('windows-mutation-coexistence-manifest.json'));
+});
+
+
+test('background hosted fixture keeps signed recency separate from configuration and saved results',()=>{
+ const legacy=createWindowsMutationCoexistenceFixture();
+ for(const field of ['backgroundExecutor','executorAvailability','executorObservedAt'])assert.equal(Object.hasOwn(legacy.coexistenceSaved('updates'),field),false);
+ for(const owner of ['managed_msi','cached_wua']){
+  const f=createWindowsMutationCoexistenceFixture(owner,true),recent=f.coexistenceSaved('updates'),original=structuredClone(recent.job.result);
+  assert.equal(recent.backgroundExecutor,true);assert.equal(recent.executorAvailability,'verified_recent');assert.equal(recent.executorObservedAt,recent.mutationCapturedAt);assert.equal(recent.mutation.active,true);assert.equal(Object.hasOwn(recent,'schedulingAvailable'),false);assert.equal(Object.hasOwn(recent.job,'schedule'),false);
+  f.coexistenceSetPhase('released');const unknown=f.coexistenceSaved('updates');assert.equal(unknown.backgroundExecutor,true);assert.equal(unknown.executorAvailability,'unknown');assert.equal(Object.hasOwn(unknown,'executorObservedAt'),false);assert.deepEqual(unknown.job.result,original);assert.equal(f.coexistenceCounts.mutationWrites,0);
+ }
+ assert.throws(()=>createWindowsMutationCoexistenceFixture('managed_msi','true'));
+ const helper=read('./windows-mutation-coexistence-browser.mjs'),runner=read('./windows-mutation-coexistence-runner.mjs');
+ for(const gate of ['.windows-update-executor-status','backgroundRecentEvidence:true','backgroundUnknownAvailability:true','manualOnly:true',"'Schedule this update'","'Revoke scheduling'"])assert.ok(helper.includes(gate),gate);
+ assert.ok(runner.includes("createWindowsMutationCoexistenceFixture('managed_msi',true)"));
 });

@@ -11,6 +11,7 @@ import (
 	"os"
 	"time"
 
+	job "localrmm/internal/windowsupdatejob"
 	"localrmm/internal/windowsupdatemanager"
 )
 
@@ -46,6 +47,13 @@ func run(args []string, out io.Writer) error {
 	}
 	if offer != nil {
 		return json.NewEncoder(out).Encode(offer)
+	}
+	if plan.Registration != nil && plan.Registration.Version == job.BackgroundRegistrationVersion {
+		activation, e := windowsupdatemanager.ExportBackgroundActivation(plan)
+		if e != nil {
+			return e
+		}
+		return json.NewEncoder(out).Encode(activation)
 	}
 	notice := "Created one exact manager/device update domain. The original LAN config is unchanged. No listener, endpoint launch, scan or install was started. Preserve all setup files and the enrollment database."
 	if plan.Request.AdditionalDevice {

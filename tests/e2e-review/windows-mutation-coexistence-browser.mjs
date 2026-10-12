@@ -7,7 +7,7 @@ const built=require('esbuild').buildSync({stdin:{contents:"export {validManagedV
 const {validManagedView,validUpdateJobView,validUpdateJobHistory,validMutationStatus}=await import('data:text/javascript;base64,'+Buffer.from(built.outputFiles[0].text).toString('base64'));
 export const windowsMutationCoexistenceOrigin=windowsManagedMSIOrigin;
 export const windowsMutationCoexistenceCaseName='Synthetic shared MSI and WUA blocking, exact recovery details and released status in both compiled views';
-export const windowsMutationCoexistenceDisclosure='Entirely intercepted invented coordinated MSI/WUA status metadata. Both Software and Updates display the same saved shared owner, exact terminal-recovery details, then an externally supplied released snapshot while original domain results remain unchanged. Only read-only status and bounded inventory queries are exercised. No real API, package upload, grant, key, native installer, WUA, host mutation, remote unlock, recovery action, installation or reboot. Browser evidence is not durable-store or native acceptance.';
+export const windowsMutationCoexistenceDisclosure='Entirely intercepted invented coordinated MSI/WUA status metadata. Both Software and Updates display the same saved shared owner, exact terminal-recovery details, then an externally supplied released snapshot while original domain results remain unchanged. The fresh background WUA fixture shows recent signed evidence followed by unknown availability, with manual approvals only. Only read-only status and bounded inventory queries are exercised. No real API, package upload, grant, key, native installer, WUA, host mutation, remote unlock, recovery action, installation or reboot. Browser evidence is not durable-store or native acceptance.';
 export const windowsMutationCoexistenceSurfaces=Object.freeze(['software','updates']);
 export const windowsMutationCoexistencePhases=Object.freeze(['blocked','released']);
 const stages=new Set(['setup','document','blocked','released','reload','complete']);let stage='setup';
@@ -15,14 +15,14 @@ export const windowsMutationCoexistenceFailureStage=()=>stages.has(stage)?stage:
 const fail=()=>{throw new Error('Synthetic coordinated mutation evidence missing, unsafe or mismatched');};
 const exact=(v,keys)=>v!==null&&typeof v==='object'&&!Array.isArray(v)&&Object.keys(v).length===keys.length&&keys.every(k=>Object.hasOwn(v,k));
 
-export function createWindowsMutationCoexistenceFixture(owner='managed_msi'){
- if(!['managed_msi','cached_wua'].includes(owner))fail();
+export function createWindowsMutationCoexistenceFixture(owner='managed_msi',backgroundExecutor=false){
+ if(!['managed_msi','cached_wua'].includes(owner)||typeof backgroundExecutor!=='boolean')fail();
  const base=createWindowsManagedMSIFixture(),at=Date.parse(base.now)/1000,transfer='transfer_'+'9'.repeat(32),update='update_'+'8'.repeat(32);
  const counts={softwareReads:0,updateReads:0,historyReads:0,mutationWrites:0,secondTargetWrites:0},msiOwns=owner==='managed_msi';let phase='blocked';
  const managedResult=Object.freeze({returnCodeKnown:msiOwns,jobId:'software_'+transfer.slice(9),envelopeDigest:'sha256:'+'a'.repeat(64),attempted:msiOwns,outcome:msiOwns?'succeeded':'not_attempted',returnCode:0,registrationVerified:msiOwns?'yes':'unknown',completedAt:at});
  const updateResult=Object.freeze({jobId:update,envelopeDigest:'sha256:'+'b'.repeat(64),attempted:!msiOwns,outcome:msiOwns?'not_attempted':'succeeded',operationResult:msiOwns?0:2,hresult:0,rebootRequired:msiOwns?'unknown':'no',completedAt:at});
  const snapshot=()=>phase==='blocked'?{active:true,blocked:true,domain:owner,jobId:msiOwns?transfer:update,phase:'completion_recorded',recovery:'exact_terminal_receipt',revision:'7',retained:1}:{active:true,blocked:false,phase:'idle',revision:'9',retained:1};
- const fixture={...base,device:{...base.device,name:'SYNTHETIC · Paired MSI and cached Updates'},session:{...base.session,capabilities:['read','windows_managed_msi_deliver','windows_managed_msi_install','windows_update_install']},coexistenceCounts:counts,coexistenceOwner:owner,coexistenceJob:msiOwns?transfer:update,
+ const fixture={...base,device:{...base.device,name:'SYNTHETIC · Paired MSI and cached Updates'},session:{...base.session,capabilities:['read','windows_managed_msi_deliver','windows_managed_msi_install','windows_update_install']},coexistenceCounts:counts,coexistenceBackgroundExecutor:backgroundExecutor,coexistenceOwner:owner,coexistenceJob:msiOwns?transfer:update,
   coexistencePhase:()=>phase,
   coexistenceSetPhase(next){if(phase!=='blocked'||next!=='released')fail();phase=next;},
   coexistenceSaved(surface){return view(surface);},
@@ -39,7 +39,8 @@ export function createWindowsMutationCoexistenceFixture(owner='managed_msi'){
    if(!validManagedView(value,fixture.device.id))fail();return structuredClone(value);
   }
   if(surface==='updates'){
-   const value={...shared,version:'tracebolt.windows-selected-update-job.v1',deviceId:fixture.device.id,serverNow:at,available:false,reason:'job_pending_or_intervention',job:{id:update,selection:fixture.selection,state:'complete',reason:'ready',preview:null,result:updateResult}};
+   const background=backgroundExecutor?{backgroundExecutor:true,executorAvailability:phase==='blocked'?'verified_recent':'unknown',...(phase==='blocked'?{executorObservedAt:at}:{})}:{};
+   const value={...shared,...background,version:'tracebolt.windows-selected-update-job.v1',deviceId:fixture.device.id,serverNow:at,available:false,reason:'job_pending_or_intervention',job:{id:update,selection:fixture.selection,state:'complete',reason:'ready',preview:null,result:updateResult}};
    if(!validUpdateJobView(value,fixture.device.id,fixture.session.actorId))fail();return structuredClone(value);
   }
   fail();
@@ -88,6 +89,15 @@ export async function exerciseWindowsMutationCoexistence({page,expect,base,fixtu
   await expect(shared).toHaveCount(1);await expect(summary).toBeVisible();
   await expect(panel.getByRole('checkbox')).toHaveCount(0);await expect(panel.getByRole('combobox')).toHaveCount(0);
   await expect(shared.getByRole('button')).toHaveCount(0);
+  if(surface==='updates'){
+   if(!fixture.coexistenceBackgroundExecutor)fail();
+   const executor=panel.locator('.windows-update-executor-status');await expect(executor).toBeVisible();
+   await expect(executor).toContainText(de?'Update-Hintergrunddienst · Nur manuelle Freigaben':'Background update service · Manual approvals only');
+   await expect(executor).toContainText(phase==='blocked'?(de?'Zuletzt bestätigt · Verfügbarkeit nicht live geprüft':'Recent confirmation · Availability not checked live'):(de?'Verfügbarkeit unbekannt':'Availability unknown'));
+   if(phase==='released')await expect(executor).not.toContainText(de?'Zuletzt':'Recent');
+   await expect(panel.getByText(de?'Dieses Update planen':'Schedule this update',{exact:true})).toHaveCount(0);
+   await expect(panel.getByText(de?'Planungsberechtigung widerrufen':'Revoke scheduling',{exact:true})).toHaveCount(0);
+  }
   if(phase==='blocked'){
    await expect(summary).toContainText(de?'Blockiert durch':'Blocked by');await expect(summary).toContainText(fixture.coexistenceOwner==='managed_msi'?'MSI':de?'Windows-Update':'Windows Update');
    await expect(summary).not.toContainText(fixture.coexistenceJob);
@@ -109,11 +119,11 @@ export async function exerciseWindowsMutationCoexistence({page,expect,base,fixtu
  stage='reload';await page.reload();for(const surface of windowsMutationCoexistenceSurfaces)await verify(surface,'released',false);
  expect(fixture.coexistenceCounts.mutationWrites).toBe(0);expect(fixture.coexistenceCounts.secondTargetWrites).toBe(0);
  expect(fixture.managedAttempts).toEqual({reserve:0,upload:0,complete:0,deliver:0,review:0,approve:0});expect(fixture.updateCounts.approve).toBe(0);expect(fixture.softwareCounts.approve).toBe(0);
- stage='complete';return {softwareMounted:true,updatesMounted:true,blockedSharedOwner:true,exactRecoveryReadback:true,compactSummary:true,releasedReadback:true,originalOutcomesRetained:true,reloadReadback:true,readOnly:true,softwareReads:fixture.coexistenceCounts.softwareReads,updateReads:fixture.coexistenceCounts.updateReads,mutationWrites:0,secondTargetWrites:0,realAPIRequests:0,nativeAcceptance:false};
+ stage='complete';return {softwareMounted:true,updatesMounted:true,blockedSharedOwner:true,exactRecoveryReadback:true,compactSummary:true,releasedReadback:true,originalOutcomesRetained:true,reloadReadback:true,backgroundRecentEvidence:true,backgroundUnknownAvailability:true,manualOnly:true,readOnly:true,softwareReads:fixture.coexistenceCounts.softwareReads,updateReads:fixture.coexistenceCounts.updateReads,mutationWrites:0,secondTargetWrites:0,realAPIRequests:0,nativeAcceptance:false};
 }
 
 export function requireWindowsMutationCoexistenceDetails(d){
- const truths=['softwareMounted','updatesMounted','blockedSharedOwner','exactRecoveryReadback','compactSummary','releasedReadback','originalOutcomesRetained','reloadReadback','readOnly'],zeros=['mutationWrites','secondTargetWrites','realAPIRequests'];
+ const truths=['softwareMounted','updatesMounted','blockedSharedOwner','exactRecoveryReadback','compactSummary','releasedReadback','originalOutcomesRetained','reloadReadback','backgroundRecentEvidence','backgroundUnknownAvailability','manualOnly','readOnly'],zeros=['mutationWrites','secondTargetWrites','realAPIRequests'];
  if(!exact(d,[...truths,'softwareReads','updateReads',...zeros,'nativeAcceptance'])||truths.some(k=>d[k]!==true)||zeros.some(k=>d[k]!==0)||!Number.isSafeInteger(d.softwareReads)||d.softwareReads<2||!Number.isSafeInteger(d.updateReads)||d.updateReads<2||d.nativeAcceptance!==false)fail();
  return {readOnly:true,nativeAcceptance:false};
 }

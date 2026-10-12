@@ -1,5 +1,6 @@
 import { mutationApprovalReady } from './windows-mutation-status-types';
 import { WindowsMutationStatus } from './windows-mutation-status';
+import { WindowsUpdateExecutorStatus } from './windows-update-executor-status';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { APIError, AUTH_REQUIRED_EVENT, getProtectedRequestEpoch, mutateRaw, request } from './api';
 import { hasLogoutIntent, useOperator, validOperatorSession } from './auth';
@@ -112,7 +113,7 @@ export function WindowsUpdateJobSession({device,actor,sessionKey,rows,initialJob
  const localTime=(at:number)=>new Date(at*1000).toLocaleString(locale,{year:'numeric',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',timeZoneName:'short'});
  const utc=(at:number)=>new Date(at*1000).toISOString().replace('T',' ').replace('.000Z',' UTC');
  return <section aria-label={c.title} className="windows-update-jobs">
- {view?.coordinated&&<WindowsMutationStatus status={view.mutation} capturedAt={view.mutationCapturedAt} serverNow={anchor.current?anchor.current.server+(performance.now()-anchor.current.mono)/1000:view.serverNow}/>}
+ {view?.backgroundExecutor?<WindowsUpdateExecutorStatus key={`${view.serverNow}:${view.executorObservedAt}:${view.executorAvailability}`} view={view}/>:view?.coordinated&&<WindowsMutationStatus status={view.mutation} capturedAt={view.mutationCapturedAt} serverNow={anchor.current?anchor.current.server+(performance.now()-anchor.current.mono)/1000:view.serverNow}/>}
   <div className="windows-inventory-section-header"><h3>{c.title}</h3><button type="button" className="button small" disabled={busy} onClick={()=>void run('read')}>{c.read}</button></div>
   {memory.full&&<p role="alert">{sc.safetyCapacity}</p>}{busy&&<p role="status">{c.pending}</p>}{error&&<p role="alert">{c[error]}</p>}
   {view?.reason==='executor_not_configured'&&<p>{c.inactive}</p>}{view?.reason==='operator_capability_required'&&<p>{c.access}</p>}{view?.reason==='tls_required'&&<p>{c.inactive}</p>}{view?.reason==='capacity_exhausted'&&<p role="status">{c.capacity}</p>}

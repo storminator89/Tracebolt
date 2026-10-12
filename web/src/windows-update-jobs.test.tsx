@@ -190,3 +190,50 @@ it.each(['en','de'] as const)('mounts compact coordinated owner and preserves th
 it('does not invite coordinated update approval without fresh idle evidence',async()=>{
  vi.mocked(mutateRaw).mockImplementation(async(_path,body)=>({...previewView(JSON.parse(body).requestId),coordinated:true}) as never);await open();await review();fireEvent.click(screen.getByRole('checkbox'));expect(screen.getByRole('button',{name:'Approve this update once'})).toBeDisabled();expect(document.body).toHaveTextContent('Shared status awaits the executor.');expect(mutateRaw).toHaveBeenCalledTimes(1);
 });
+
+const backgroundView=(value:UpdateJobView=view(),recent=false):UpdateJobView=>({...value,coordinated:true,backgroundExecutor:true,executorAvailability:recent?'verified_recent':'unknown',...(recent?{executorObservedAt:seconds}:{}),mutationCapturedAt:seconds,mutation:{active:true,blocked:false,phase:'idle',revision:'9',retained:1}});
+it('strictly validates background evidence without promoting configuration or changing old views',()=>{
+ expect(validUpdateJobView(view(),device,actor)).toBe(true);expect(validUpdateJobView(backgroundView(),device,actor)).toBe(true);
+ const recent=backgroundView(view(),true);expect(validUpdateJobView(recent,device,actor)).toBe(true);
+ for(const patch of [{backgroundExecutor:false},{backgroundExecutor:undefined},{coordinated:undefined},{executorAvailability:undefined},{executorAvailability:'running'},{executorObservedAt:0},{executorObservedAt:seconds+1},{executorObservedAt:seconds-1},{serverNow:seconds+60},{schedulingAvailable:true},{schedulingRevoked:true},{mutation:{active:false,blocked:true,phase:'unavailable',revision:'9',retained:1,recovery:'intervention_required'}}])expect(validUpdateJobView({...recent,...patch},device,actor)).toBe(false);
+ expect(validUpdateJobView({...backgroundView(),executorObservedAt:seconds},device,actor)).toBe(false);expect(validUpdateJobView({...view(),executorAvailability:'unknown'},device,actor)).toBe(false);expect(validUpdateJobView({...view(),executorObservedAt:seconds},device,actor)).toBe(false);
+ const scheduledBackground=backgroundView(scheduled(`update_${'7'.repeat(32)}`));scheduledBackground.schedulingAvailable=false;expect(validUpdateJobView(scheduledBackground,device,actor)).toBe(false);
+ expect(validUpdateJobView({...recent,serverNow:seconds+59},device,actor)).toBe(true);
+});
+it.each(['en','de'] as const)('keeps background unknown and saved results visible with collapsed details in %s',async locale=>{
+ setLocale(locale,false);const de=locale==='de',id=`update_${'7'.repeat(32)}`,history=validHistory(id);
+ const result=backgroundView({...approved(id),job:{...approved(id).job!,state:'complete',result:{jobId:id,envelopeDigest:digest,attempted:true,outcome:'uncertain',operationResult:3,hresult:0,rebootRequired:'unknown',completedAt:seconds}}});
+ vi.mocked(request).mockImplementation(async path=>structuredClone(path==='/auth/session'?session:path.endsWith('?history=1')?history:result) as never);await open();
+ const status=document.querySelector('.windows-update-executor-status')!;
+ expect(status).toBeVisible();expect(status).toHaveTextContent(de?'Update-Hintergrunddienst · Nur manuelle Freigaben':'Background update service · Manual approvals only');expect(status).toHaveTextContent(de?'Verfügbarkeit unbekannt':'Availability unknown');expect(status).not.toHaveTextContent(/recent|zuletzt|running|läuft/i);
+ expect(screen.getByText(de?/Die Antwort ist unbestätigt/:/The response is unconfirmed/)).toBeVisible();expect(screen.getByText(de?'Auftragsdetails':'Job details',{selector:'summary'}).closest('details')).not.toHaveAttribute('open');
+ expect(screen.queryByText(de?'Dieses Update planen':'Schedule this update')).toBeNull();expect(screen.queryByText(de?'Planungsberechtigung widerrufen':'Revoke scheduling')).toBeNull();expect(screen.queryByRole('checkbox')).toBeNull();
+ fireEvent.click(screen.getByText(de?'Gespeicherte Updateaufträge':'Saved update jobs',{selector:'summary'}));fireEvent.click(screen.getByRole('button',{name:de?'Gespeicherte Aufträge lesen':'Read saved jobs'}));await flush();
+ fireEvent.click(screen.getByRole('button',{name:`${de?'Gespeicherten Auftrag öffnen':'Open saved job'} · ${id}`}));await flush();expect(document.querySelector('.windows-update-executor-status')).toHaveTextContent(de?'Verfügbarkeit unbekannt':'Availability unknown');expect(mutateRaw).not.toHaveBeenCalled();
+});
+it.each(['en','de'] as const)('ages recent background evidence to unknown without a read or changing its saved owner in %s',async locale=>{
+ setLocale(locale,false);const de=locale==='de',result=backgroundView(view(),true);result.mutationCapturedAt=seconds-59;result.executorObservedAt=seconds-59;
+ vi.mocked(request).mockImplementation(async path=>structuredClone(path==='/auth/session'?session:result) as never);await open();const reads=vi.mocked(request).mock.calls.length;
+ expect(document.querySelector('.windows-update-executor-status')).toHaveTextContent(de?'Zuletzt bestätigt · Verfügbarkeit nicht live geprüft':'Recent confirmation · Availability not checked live');
+ await act(async()=>vi.advanceTimersByTime(1000));
+ expect(document.querySelector('.windows-update-executor-status')).toHaveTextContent(de?'Verfügbarkeit unbekannt':'Availability unknown');expect(document.querySelector('.windows-update-executor-status')).not.toHaveTextContent(/recent|zuletzt/i);
+ expect(document.querySelector('.windows-mutation-status')).toHaveTextContent(de?'Gespeicherter gemeinsamer Status':'Saved shared status');expect(document.querySelector('.windows-mutation-status')).toHaveTextContent(de?'Kein Besitzer gespeichert':'No owner saved');expect(request).toHaveBeenCalledTimes(reads);expect(mutateRaw).not.toHaveBeenCalled();
+});
+it('keeps background manual approval explicit and never exposes a schedule even with scheduling permission',async()=>{
+ vi.mocked(request).mockImplementation(async path=>structuredClone(path==='/auth/session'?scheduleSession():backgroundView(view(),true)) as never);
+ vi.mocked(mutateRaw).mockImplementation(async(_path,body)=>backgroundView(previewView(JSON.parse(body).requestId),true) as never);await open();await review();
+ expect(screen.getByRole('checkbox')).not.toBeChecked();expect(screen.getByRole('button',{name:'Approve this update once'})).toBeDisabled();expect(screen.queryByText('Schedule this update')).toBeNull();expect(screen.queryByText('Revoke scheduling')).toBeNull();expect(document.querySelector('.windows-update-executor-status')).not.toHaveTextContent(/running/i);
+ fireEvent.click(screen.getByRole('button',{name:'Dismiss review'}));expect(screen.queryByRole('checkbox')).toBeNull();expect(mutateRaw).toHaveBeenCalledTimes(1);
+});
+it('omits the background profile from unchanged foreground views',async()=>{await open();expect(document.querySelector('.windows-update-executor-status')).toBeNull()});
+it('shows configured-only background availability as unknown without inventing shared evidence',async()=>{
+ const configured=backgroundView();delete configured.mutation;delete configured.mutationCapturedAt;expect(validUpdateJobView(configured,device,actor)).toBe(true);
+ vi.mocked(request).mockImplementation(async path=>structuredClone(path==='/auth/session'?session:configured) as never);await open();
+ expect(document.querySelector('.windows-update-executor-status')).toHaveTextContent('Availability unknown');expect(document.body).toHaveTextContent('Shared status awaits the executor.');expect(document.querySelector('.windows-mutation-status')).toBeNull();expect(mutateRaw).not.toHaveBeenCalled();
+});
+it('dismissal does not renew the original background status clock',async()=>{
+ const recent=(value:UpdateJobView)=>({...backgroundView(value,true),executorObservedAt:seconds-58,mutationCapturedAt:seconds-58});
+ vi.mocked(request).mockImplementation(async path=>structuredClone(path==='/auth/session'?session:recent(view())) as never);vi.mocked(mutateRaw).mockImplementation(async(_path,body)=>recent(previewView(JSON.parse(body).requestId)) as never);
+ await open();await review();await act(async()=>vi.advanceTimersByTime(1000));fireEvent.click(screen.getByRole('button',{name:'Dismiss review'}));await act(async()=>vi.advanceTimersByTime(1000));
+ expect(document.querySelector('.windows-update-executor-status')).toHaveTextContent('Availability unknown');expect(document.querySelector('.windows-update-executor-status')).not.toHaveTextContent('Recent');expect(mutateRaw).toHaveBeenCalledTimes(1);
+});

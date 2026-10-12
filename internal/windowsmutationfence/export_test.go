@@ -27,12 +27,18 @@ func NewIntegrationFence(t *testing.T, p Plan, msi, wua Participant, now func() 
 	if p.Version == ReusablePlanVersion {
 		r.Version = ReusableRosterVersion
 	}
+	if p.Version == BackgroundPlanVersion {
+		r.Version = BackgroundRosterVersion
+	}
 	if e = setupChange(context.Background(), r, nil, now().Unix(), f.open); e != nil {
 		t.Fatal(e)
 	}
 	a := testActivation()
 	if p.Version == ReusablePlanVersion {
 		a.Version = ReusableActivationVersion
+	}
+	if p.Version == BackgroundPlanVersion {
+		a.Version = BackgroundActivationVersion
 	}
 	if e = setupChange(context.Background(), r, &a, now().Unix(), f.open); e != nil {
 		t.Fatal(e)

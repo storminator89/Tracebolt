@@ -10,6 +10,9 @@ import (
 	"localrmm/internal/windowsservice"
 )
 
+const UpdateServiceImageName = "tracebolt-windows-update-service.exe"
+const UpdateServiceImageVersion = "tracebolt.windows-update-service-image.v1"
+
 const UpdateExecutorImageName = "tracebolt-windows-update-executor.exe"
 const UpdateExecutorImageVersion = "tracebolt.windows-update-executor-image.v1"
 
@@ -28,7 +31,7 @@ type UpdateExecutorImageReceipt struct {
 }
 
 func (r UpdateExecutorImageReceipt) Validate() error {
-	if r.Version != UpdateExecutorImageVersion || !windowspath.Canonical(r.Path) || !strings.HasSuffix(r.Path, `\Tracebolt\`+UpdateExecutorImageName) || !strings.HasPrefix(r.SHA256, "sha256:") || !lowerHex(strings.TrimPrefix(r.SHA256, "sha256:"), 64) || r.Size < 512 || r.Size > MaxPayloadBytes || r.VolumeSerialNumber == 0 && r.FileIndexHigh == 0 && r.FileIndexLow == 0 {
+	if !((r.Version == UpdateExecutorImageVersion && strings.HasSuffix(r.Path, `\Tracebolt\`+UpdateExecutorImageName)) || (r.Version == UpdateServiceImageVersion && strings.HasSuffix(r.Path, `\Tracebolt\`+UpdateServiceImageName))) || !windowspath.Canonical(r.Path) || !strings.HasPrefix(r.SHA256, "sha256:") || !lowerHex(strings.TrimPrefix(r.SHA256, "sha256:"), 64) || r.Size < 512 || r.Size > MaxPayloadBytes || r.VolumeSerialNumber == 0 && r.FileIndexHigh == 0 && r.FileIndexLow == 0 {
 		return failure("image-receipt")
 	}
 	return nil
@@ -225,4 +228,8 @@ func (s *updateExecutorImage) Close() error {
 		s.closeErr = s.backend.Close()
 	}
 	return s.closeErr
+}
+
+func OpenUpdateServiceImage(ctx context.Context, observer windowsservice.Receipt) (UpdateExecutorImage, error) {
+	return openUpdateExecutorImageWith(ctx, observer, runtime.GOARCH, nativeUpdateServiceImageBackend)
 }

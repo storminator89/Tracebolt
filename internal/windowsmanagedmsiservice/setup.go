@@ -48,7 +48,11 @@ func CheckProfile(ctx context.Context, c windowsmanagedmsiipc.Config) error {
 	if c.Mutation == nil {
 		return CheckExclusive(ctx)
 	}
-	if windowspackage.CheckCoordinatedMutationExclusive(ctx) != nil {
+	exclusive := windowspackage.CheckCoordinatedMutationExclusive
+	if c.Mutation.Version == fence.BackgroundRosterVersion {
+		exclusive = windowspackage.CheckBackgroundMutationExclusive
+	}
+	if exclusive(ctx) != nil {
 		return managed.ErrAuthority
 	}
 	s, e := fence.Open(ctx, *c.Mutation, fence.ManagedMSI, time.Now)
