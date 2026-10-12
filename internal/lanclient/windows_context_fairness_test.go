@@ -22,12 +22,20 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"testing/synctest"
 	"time"
 )
 
 // A consistently slow earlier adapter must not win every fresh cycle. All
 // sources and transport are injected; no host source or network is accessed.
 func TestWindowsContextFairnessRetentionRetryAndAuthority(t *testing.T) {
+	// Advance source deadlines only when the injected collectors block. Real
+	// crypto, fitting and durable sender/manager I/O still run, but race/host
+	// latency must not consume this fixture's scaled scheduling budget.
+	synctest.Test(t, testWindowsContextFairnessRetentionRetryAndAuthority)
+}
+
+func testWindowsContextFairnessRetentionRetryAndAuthority(t *testing.T) {
 	f := newWindowsManagerFixtureForTransport(t, enrollmentcrypto.CollectionProfileWindowsInventory, "windows", "http-test")
 	state, err := lanclientstate.InitializeNew(f.material.config.StateDirectory, f.material.binding)
 	if err != nil {
@@ -42,6 +50,10 @@ func TestWindowsContextFairnessRetentionRetryAndAuthority(t *testing.T) {
 	lost := false
 	run := func() Report {
 		t.Helper()
+		// Separate fresh capture times even when no provider waits (disabled
+		// scopes). The manager's real monotonic capture guard stays in force;
+		// a pending retry must still retain its original bytes and timestamps.
+		time.Sleep(time.Millisecond)
 		parent, cancel := context.WithTimeout(context.Background(), 800*time.Millisecond)
 		defer cancel()
 		ctx := context.WithValue(parent, patchBudgetKey{}, patchSourceBudget{15 * time.Millisecond, 250 * time.Millisecond})
@@ -202,6 +214,11 @@ func TestWindowsContextFairnessRetentionRetryAndAuthority(t *testing.T) {
 }
 
 func TestWindowsContextFairnessRotatesFullBudgetPastSlowSibling(t *testing.T) {
+	// These are cooperative source deadlines, not host-performance limits.
+	synctest.Test(t, testWindowsContextFairnessRotatesFullBudgetPastSlowSibling)
+}
+
+func testWindowsContextFairnessRotatesFullBudgetPastSlowSibling(t *testing.T) {
 	for _, sourceCount := range []int{3, 6, 9} {
 		for turn := 0; turn < sourceCount; turn++ {
 			parent, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
