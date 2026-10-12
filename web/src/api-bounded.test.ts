@@ -42,3 +42,44 @@ describe('bounded raw catalog API helper', () => {
   }
  });
 });
+
+describe('exact scheduled MSI preview response budget', () => {
+ const path = `/windows-managed-msi/worklists/worklist_${'a'.repeat(32)}/schedule-preview`;
+ const maximum = 2 * 1024 * 1024;
+ it('sends the exact preview once through the real CSRF and bounded request helpers', async () => {
+  const raw = JSON.stringify({ revision: 3, startAt: 1791799320, endAt: 1791799620 });
+  const fetch = vi.fn().mockResolvedValueOnce(json({ csrfToken: 'fixture-csrf' })).mockResolvedValueOnce(json({ items: [], excluded: [] }));
+  const beforeSend = vi.fn(() => true); vi.stubGlobal('fetch', fetch);
+  await expect(mutateRaw(path, raw, {}, undefined, maximum, beforeSend)).resolves.toEqual({ items: [], excluded: [] });
+  expect(beforeSend).toHaveBeenCalledOnce();
+  expect(fetch.mock.calls.map(call => call[0])).toEqual(['/api/session', `/api${path}`]);
+  expect(fetch.mock.calls[1][1]).toEqual(expect.objectContaining({ method: 'POST', body: raw, headers: expect.objectContaining({ 'X-CSRF-Token': 'fixture-csrf' }) }));
+ });
+ it('keeps the final pre-send guard before the preview POST', async () => {
+  const fetch = vi.fn().mockResolvedValue(json({ csrfToken: 'fixture-csrf' })); vi.stubGlobal('fetch', fetch);
+  await expect(mutateRaw(path, '{}', {}, undefined, maximum, () => false)).rejects.toHaveProperty('name', 'AbortError');
+  expect(fetch.mock.calls.map(call => call[0])).toEqual(['/api/session']);
+ });
+ it.each([`${path}/`, `${path}?unexpected=1`, path.replace('worklist_', 'agent_'), '/security/catalog'])('does not widen the response budget for %s', async other => {
+  const fetch = vi.fn(); vi.stubGlobal('fetch', fetch);
+  await expect(request(other, { method: 'POST' }, maximum)).rejects.toThrow();
+  expect(fetch).not.toHaveBeenCalled();
+ });
+ it('rejects a larger caller cap before any fetch', async () => {
+  const fetch = vi.fn(); vi.stubGlobal('fetch', fetch);
+  await expect(request(path, { method: 'POST' }, maximum + 1)).rejects.toThrow();
+  expect(fetch).not.toHaveBeenCalled();
+ });
+ it('accepts the exact response limit and rejects one extra streamed byte', async () => {
+  const raw = JSON.stringify({ value: 'x'.repeat(maximum - 12) });
+  expect(new TextEncoder().encode(raw).byteLength).toBe(maximum);
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(raw)));
+  await expect(request(path, { method: 'POST' }, maximum)).resolves.toHaveProperty('value');
+  const cancel = vi.fn();
+  const chunks = [new TextEncoder().encode(raw), new Uint8Array([32])];
+  const body = new ReadableStream({ pull(controller) { controller.enqueue(chunks.shift()!); }, cancel }, { highWaterMark: 0 });
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(body, { headers: { 'Content-Length': '2' } })));
+  await expect(request(path, { method: 'POST' }, maximum)).rejects.toThrow();
+  expect(cancel).toHaveBeenCalledOnce();expect(body.locked).toBe(false);
+ });
+});
