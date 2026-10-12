@@ -107,7 +107,7 @@ func testRoster(p Plan, id string) Roster {
 	return Roster{Plan: p, FenceID: id, MSI: Participant{ManagedMSI, testDigest("msi-binding"), testDigest("msi-grant"), testDigest("msi-manager"), testDigest("msi-executor")}, WUA: Participant{CachedWUA, testDigest("wua-binding"), testDigest("wua-grant"), testDigest("wua-manager"), testDigest("wua-executor")}}
 }
 func testActivation() Activation {
-	return Activation{testDigest("msi-receipt"), testDigest("msi-config"), testDigest("wua-receipt"), testDigest("wua-config")}
+	return Activation{"", testDigest("msi-receipt"), testDigest("msi-config"), testDigest("wua-receipt"), testDigest("wua-config")}
 }
 func testOwner(domain string, seq uint64) Owner {
 	prefix := "update_"

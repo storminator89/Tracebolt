@@ -21,11 +21,13 @@ func windowsManagedMSIArtifactRoute(r *http.Request) (string, bool) {
 		return "", false
 	}
 	op := strings.TrimPrefix(r.URL.Path, base+"/")
-	return op, op == "reserve" || op == "upload" || op == "complete"
+	return op, op == "reserve" || op == "upload" || op == "complete" || op == "reserve-reusable" || op == "retire"
 }
 
-// No endpoint ID, arbitrary path, URL, delete, replacement or installation API
-// exists in the shared custody domain. Membership grants no delivery authority.
+// No arbitrary path, URL or installation API exists in shared custody. V3 alone
+// supports explicitly reviewed retirement of exact app-owned bytes and a later
+// explicit upload. V1/v2 cannot retire or replace. Membership grants no delivery
+// or installation authority.
 func (h *operatorHandler) windowsManagedMSIArtifactAPI(w http.ResponseWriter, r *http.Request) {
 	op, ok := windowsManagedMSIArtifactRoute(r)
 	if !ok {
@@ -74,6 +76,31 @@ func (h *operatorHandler) windowsManagedMSIArtifactAPI(w http.ResponseWriter, r 
 	}
 	var e error
 	switch op {
+	case "retire":
+		var in struct {
+			ArtifactID   string `json:"artifactId"`
+			Acknowledged bool   `json:"acknowledged"`
+		}
+		if !readObject(w, r, 256, []string{"artifactId", "acknowledged"}, &in) {
+			return
+		}
+		e = registry.Artifact().RetireArtifact(r.Context(), actor, in.ArtifactID, in.Acknowledged)
+	case "reserve-reusable":
+		var in struct {
+			Package                 json.RawMessage `json:"package"`
+			NativeAcceptanceDigest  string          `json:"nativeAcceptanceDigest"`
+			PublisherStatus         string          `json:"publisherStatus"`
+			PublisherEvidenceDigest string          `json:"publisherEvidenceDigest"`
+		}
+		if !readObject(w, r, 4096, []string{"package", "nativeAcceptanceDigest", "publisherStatus", "publisherEvidenceDigest"}, &in) {
+			return
+		}
+		selection, ok := decodeSoftwarePackageSelection(in.Package)
+		if !ok {
+			managedMSIError(w, msi.ErrInvalid)
+			return
+		}
+		e = registry.Artifact().ReserveReusableUpload(r.Context(), actor, selection, in.NativeAcceptanceDigest, in.PublisherStatus, in.PublisherEvidenceDigest)
 	case "reserve":
 		var in struct {
 			Package                json.RawMessage `json:"package"`

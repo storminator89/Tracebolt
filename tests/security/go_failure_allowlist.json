@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "sourceCommit": "fccc4b00cd8a144afd58e4b995747afab7a10022",
-  "goSourceSha256": "4dd6c5686dfc0da23af14d5609c1536b7d1db6780628dbd63cd2ce7e849a9770",
+  "goSourceSha256": "8baa8bb420b058944fd59c770ba1d955f0cd09ef9aaeeebd3944c8815821708f",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -1768,6 +1768,7 @@
       "TestManagedMSIRejectsPreparedKeyReuse",
       "TestManagedMSISetupFreshPreservesPreparedBytes",
       "TestManagedMSIUploadIntentImmutableAndFinalClock",
+      "TestManagedReusableFreshStoreAndArtifactRetirement",
       "TestMetadataReadCohortCancellationAndCertificateWait",
       "TestMetadataReadCohortSharesMaintenanceHandoff",
       "TestNativePackageRenewalPolicyFailsClosed",
@@ -4417,6 +4418,7 @@
       "TestManagedNativeOutcomeVocabulary",
       "TestManagedPartialCreationAndFailedCheckpointFence",
       "TestManagedPendingChunkExactResume",
+      "TestManagedReusableConsentAndSignatureDomainsStaySeparate",
       "TestManagedUncertainFinalizationNeverRestarts",
       "TestManagedUnexplainedPayloadFences"
     ],
@@ -4440,6 +4442,8 @@
       "TestManagedManagerLateInterventionIsNotImportOrInstall",
       "TestManagedManagerReleaseRechecksAfterCommitWait",
       "TestManagedUploadCheckpointAndCompletionUncertaintyRetainSameBytes",
+      "TestReusableManagerDifferentPackageAfterReviewedRetirementRestart",
+      "TestReusableSharedRetirementKeepsOtherUnresolvedTarget",
       "TestSpoolChangedUnacknowledgedTailIsNeverOverwritten",
       "TestSpoolSingleLinkExactChunksAndSameByteRecovery"
     ],
@@ -4463,6 +4467,10 @@
       "TestProductionSchemaAndPublicRedaction",
       "TestPublicCoordinatedConstructorsRejectWrongSession",
       "TestRestartAndCopiedCapabilityCannotDispatch",
+      "TestReusableMSIRetirementBoundedWithoutLifetimeQuota",
+      "TestReusableMSIRetirementRechecksCurrentAuthorityAfterWait",
+      "TestReusableMSISettledRetirementRestartDifferentPackage",
+      "TestReusableMSIUncertainCannotRetireOrAdvance",
       "TestSavedDomainReceiptAfterCrashBeforeFenceCompletion",
       "TestTwoDomainsHaveOneOwner",
       "TestUncertainFinalStartWriteNeverCallsNativeGuard",

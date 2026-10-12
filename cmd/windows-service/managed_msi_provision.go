@@ -28,6 +28,9 @@ type managedMSIPlan struct {
 
 func (p managedMSIPlan) Digest() string {
 	b, _ := json.Marshal(p)
+	if p.Offer.Version == managed.ReusableOfferVersion {
+		return managed.Digest(append([]byte("Tracebolt reusable MSI endpoint setup v3\x00"), b...))
+	}
 	return managed.Digest(append([]byte("Tracebolt managed MSI endpoint setup v1\x00"), b...))
 }
 

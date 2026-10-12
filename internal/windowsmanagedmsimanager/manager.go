@@ -9,6 +9,7 @@ import (
 	msi "localrmm/internal/windowsmanagedmsi"
 	fence "localrmm/internal/windowsmutationfence"
 	"reflect"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -289,17 +290,26 @@ func (m *Manager) deliver(ctx context.Context, actor, id string, ack bool, artif
 		if bindingDigest != msi.BindingDigest(m.binding) || !msi.ValidDigest(artifactID) {
 			return msi.ErrConflict
 		}
-		r, e := m.artifact.read(ctx)
+		m.artifact.mu.Lock()
+		defer m.artifact.mu.Unlock()
+		r, e := m.artifact.store.ReadWindowsManagedMSIArtifact(msi.WithFinalCheck(ctx, m.artifact.check), m.artifact.key)
 		if e != nil {
 			return e
 		}
-		if r.Artifact == nil || r.Artifact.CompletedAt == 0 || msi.ArtifactIdentity(*r.Artifact) != artifactID {
+		if r.RetirementStarted || r.Retired || r.Artifact == nil || r.Artifact.CompletedAt == 0 || msi.ArtifactIdentity(*r.Artifact) != artifactID {
 			return msi.ErrConflict
 		}
 		shared = r.Artifact
 	}
 	_, e := m.transaction(ctx, actor, "deliver", func(r *msi.Record, c msi.Current, n int64) error {
 		if shared != nil {
+			if r.Grant.Version == msi.ReusableGrantVersion && r.TransferID != "" {
+				next, e := msi.NextManagerJob(*r)
+				if e != nil {
+					return e
+				}
+				*r = next
+			}
 			if r.Artifact != nil || r.TransferID != "" {
 				return msi.ErrConsumed
 			}
@@ -313,6 +323,12 @@ func (m *Manager) deliver(ctx context.Context, actor, id string, ack bool, artif
 			return msi.ErrConsumed
 		}
 		p := msi.Permit{Version: msi.Version, Kind: "deliver", TransferID: id, Binding: m.binding, LeafDigest: c.LeafDigest, Package: r.Artifact.Package, NativeAcceptanceDigest: r.Artifact.NativeAcceptanceDigest, ActorID: actor, IssuedAt: n, ExpiresAt: min(n+86400, r.Grant.ExpiresAt, c.LeafNotAfter)}
+		if r.Grant.Version == msi.ReusableGrantVersion {
+			if r.Jobs.Sequence == 0 {
+				r.Jobs.Sequence = 1
+			}
+			p = msi.PermitForGrant(p, r.Grant, r.Jobs.Sequence, *r.Artifact)
+		}
 		raw, e := msi.SignPermit(p, m.key)
 		if e != nil {
 			return e
@@ -352,6 +368,9 @@ func (m *Manager) Review(ctx context.Context, actor string, packageReview, terms
 			return msi.ErrUnavailable
 		}
 		p := msi.Permit{Version: msi.Version, Kind: "readiness", TransferID: r.TransferID, Binding: m.binding, LeafDigest: c.LeafDigest, Package: r.Artifact.Package, NativeAcceptanceDigest: r.Artifact.NativeAcceptanceDigest, ActorID: actor, IssuedAt: n, ExpiresAt: min(n+60, r.Grant.ExpiresAt, c.LeafNotAfter), Sequence: sequence, MaintenanceUntil: min(n+600, r.Grant.ExpiresAt, c.LeafNotAfter), PackageReviewAccepted: true, TermsAccepted: true}
+		if r.Grant.Version == msi.ReusableGrantVersion {
+			p = msi.PermitForGrant(p, r.Grant, r.Jobs.Sequence, *r.Artifact)
+		}
 		if len(synchronous) == 1 && synchronous[0] {
 			p.SynchronousReviewDigest = msi.SynchronousReviewDigest(p.Package, p.NativeAcceptanceDigest)
 		}
@@ -422,7 +441,10 @@ func (m *Manager) Poll(ctx context.Context) (msi.PollResponse, error) {
 	_, e := m.transaction(ctx, "", "", func(r *msi.Record, c msi.Current, n int64) error {
 		var raw []byte
 		var claim *int64
-		if len(r.DeliveryPermit) != 0 && len(r.DeliveryReport) == 0 {
+		if len(r.RetirePermit) != 0 && len(r.RetiredReport) == 0 && r.RetireClaimedAt == 0 {
+			raw = r.RetirePermit
+			claim = &r.RetireClaimedAt
+		} else if len(r.DeliveryPermit) != 0 && len(r.DeliveryReport) == 0 {
 			raw = r.DeliveryPermit
 			claim = &r.DeliveryClaimedAt
 		} else if len(r.ReadinessPermit) != 0 && r.ReadinessClaimedAt == 0 {
@@ -465,6 +487,7 @@ func (m *Manager) Chunk(ctx context.Context, q msi.ChunkRequest) (msi.Chunk, err
 	defer m.mu.Unlock()
 	var p msi.Permit
 	var actor string
+	var custody []string
 	check := func() error {
 		_, e := m.transaction(ctx, "", "", func(r *msi.Record, c msi.Current, n int64) error {
 			var e error
@@ -473,6 +496,7 @@ func (m *Manager) Chunk(ctx context.Context, q msi.ChunkRequest) (msi.Chunk, err
 				return msi.ErrInvalid
 			}
 			actor = p.ActorID
+			custody = artifactCustody(*r.Artifact)
 			if !m.allowed(actor, "deliver") {
 				return msi.ErrAuthority
 			}
@@ -495,7 +519,7 @@ func (m *Manager) Chunk(ctx context.Context, q msi.ChunkRequest) (msi.Chunk, err
 	if e := check(); e != nil {
 		return msi.Chunk{}, e
 	}
-	data, e := m.spool.ReadChunk(ctx, p.Package, q.Index, check)
+	data, e := m.spool.ReadChunk(ctx, p.Package, q.Index, check, custody...)
 	if e != nil {
 		return msi.Chunk{}, e
 	}
@@ -509,6 +533,15 @@ func (m *Manager) Report(ctx context.Context, raw []byte) error {
 	defer m.mu.Unlock()
 	_, e := m.transaction(ctx, "", "", func(r *msi.Record, _ msi.Current, n int64) error {
 		report, e := msi.VerifyReport(raw, r.ExecutorPublicKey)
+		// The relay may still hold A's immutable retirement while the operator
+		// has explicitly delivered B. Acknowledge only its exact retained digest
+		// so the next ordinary poll can convey B; no report or floor is rewritten.
+		if e == nil && r.Grant.Version == msi.ReusableGrantVersion && report.Kind == "retired" && report.Binding == m.binding && report.JobSequence == r.Jobs.RetiredFloor && len(r.Jobs.Recent) > 0 {
+			last := r.Jobs.Recent[len(r.Jobs.Recent)-1]
+			if report.TransferID == last.TransferID && msi.Digest(raw) == last.RetirementDigest {
+				return nil
+			}
+		}
 		if e != nil || report.Binding != m.binding || report.TransferID != r.TransferID || r.Artifact == nil || report.Package != r.Artifact.Package || report.NativeAcceptanceDigest != r.Artifact.NativeAcceptanceDigest || report.CapturedAt > n {
 			return msi.ErrAuthority
 		}
@@ -537,6 +570,10 @@ func (m *Manager) Report(ctx context.Context, raw []byte) error {
 			dest = &r.ReadinessReport
 			permit = r.ReadinessPermit
 			claim = r.ReadinessClaimedAt
+		case "retired":
+			dest = &r.RetiredReport
+			permit = r.RetirePermit
+			claim = r.RetireClaimedAt
 		case "result":
 			dest = &r.ResultReport
 			permit = r.InstallPermit
@@ -554,7 +591,7 @@ func (m *Manager) Report(ctx context.Context, raw []byte) error {
 		if e != nil || claim == 0 || report.CapturedAt < claim || report.PermitDigest != msi.Digest(permit) {
 			return msi.ErrAuthority
 		}
-		if report.Kind != "result" && !(report.Kind == "delivery" && report.State == "intervention_required") && (n >= p.ExpiresAt || report.CapturedAt >= p.ExpiresAt) {
+		if report.Kind != "result" && report.Kind != "retired" && !(report.Kind == "delivery" && report.State == "intervention_required") && (n >= p.ExpiresAt || report.CapturedAt >= p.ExpiresAt) {
 			return msi.ErrExpired
 		}
 		if report.Kind == "result" && (report.Result.JobID != "software_"+strings.TrimPrefix(r.TransferID, "transfer_") || report.Result.EnvelopeDigest != report.PermitDigest) {
@@ -567,25 +604,34 @@ func (m *Manager) Report(ctx context.Context, raw []byte) error {
 }
 
 type View struct {
-	BindingDigest          string         `json:"bindingDigest,omitempty"`
-	ArtifactID             *string        `json:"artifactId,omitempty"`
-	Coordinated            bool           `json:"coordinated,omitempty"`
-	Mutation               *fence.Status  `json:"mutation,omitempty"`
-	MutationCapturedAt     int64          `json:"mutationCapturedAt,omitempty"`
-	Version                string         `json:"version"`
-	DeviceID               string         `json:"deviceId"`
-	ServerNow              int64          `json:"serverNow"`
-	State                  string         `json:"state"`
-	Package                *msi.Selection `json:"package"`
-	NativeAcceptanceDigest string         `json:"nativeAcceptanceDigest"`
-	TransferID             string         `json:"transferId"`
-	ReadinessDigest        string         `json:"readinessDigest"`
-	ExpiresAt              int64          `json:"expiresAt"`
-	Readiness              *msi.Readiness `json:"readiness"`
-	Result                 *msi.Result    `json:"result"`
-	UploadOffset           int64          `json:"uploadOffset"`
-	UploadPendingDigest    string         `json:"uploadPendingDigest"`
-	CanReview              bool           `json:"canReview"`
+	Reusable                bool             `json:"reusable,omitempty"`
+	JobSequence             string           `json:"jobSequence,omitempty"`
+	RetiredFloor            string           `json:"retiredFloor,omitempty"`
+	History                 []msi.RetiredJob `json:"history,omitempty"`
+	PublisherStatus         string           `json:"publisherStatus,omitempty"`
+	PublisherEvidenceDigest string           `json:"publisherEvidenceDigest,omitempty"`
+	ResultDigest            string           `json:"resultDigest,omitempty"`
+	CanRetire               bool             `json:"canRetire,omitempty"`
+	GrantExpiresAt          int64            `json:"grantExpiresAt,omitempty"`
+	BindingDigest           string           `json:"bindingDigest,omitempty"`
+	ArtifactID              *string          `json:"artifactId,omitempty"`
+	Coordinated             bool             `json:"coordinated,omitempty"`
+	Mutation                *fence.Status    `json:"mutation,omitempty"`
+	MutationCapturedAt      int64            `json:"mutationCapturedAt,omitempty"`
+	Version                 string           `json:"version"`
+	DeviceID                string           `json:"deviceId"`
+	ServerNow               int64            `json:"serverNow"`
+	State                   string           `json:"state"`
+	Package                 *msi.Selection   `json:"package"`
+	NativeAcceptanceDigest  string           `json:"nativeAcceptanceDigest"`
+	TransferID              string           `json:"transferId"`
+	ReadinessDigest         string           `json:"readinessDigest"`
+	ExpiresAt               int64            `json:"expiresAt"`
+	Readiness               *msi.Readiness   `json:"readiness"`
+	Result                  *msi.Result      `json:"result"`
+	UploadOffset            int64            `json:"uploadOffset"`
+	UploadPendingDigest     string           `json:"uploadPendingDigest"`
+	CanReview               bool             `json:"canReview"`
 }
 
 func (m *Manager) View(ctx context.Context) (View, error) {
@@ -593,7 +639,9 @@ func (m *Manager) View(ctx context.Context) (View, error) {
 	defer m.mu.Unlock()
 	var shared *msi.Artifact
 	if m.artifact != nil {
-		r, e := m.artifact.read(ctx)
+		m.artifact.mu.Lock()
+		defer m.artifact.mu.Unlock()
+		r, e := m.artifact.store.ReadWindowsManagedMSIArtifact(msi.WithFinalCheck(ctx, m.artifact.check), m.artifact.key)
 		if e != nil {
 			return View{}, e
 		}
@@ -601,6 +649,14 @@ func (m *Manager) View(ctx context.Context) (View, error) {
 	}
 	var v View
 	_, e := m.transaction(ctx, "", "", func(r *msi.Record, _ msi.Current, n int64) error {
+		if r.Grant.Version == msi.ReusableGrantVersion && len(r.RetiredReport) > 0 && shared != nil && r.Artifact != nil && msi.ArtifactIdentity(*r.Artifact) != msi.ArtifactIdentity(*shared) {
+			next, err := msi.NextManagerJob(*r)
+			if err != nil {
+				return err
+			}
+			next.Artifact = shared
+			r = &next
+		}
 		v = View{Version: msi.Version, DeviceID: m.binding.DeviceID, ServerNow: n, State: "empty", TransferID: r.TransferID}
 		if m.artifact != nil {
 			v.BindingDigest = msi.BindingDigest(m.binding)
@@ -616,6 +672,13 @@ func (m *Manager) View(ctx context.Context) (View, error) {
 			}
 		}
 		v.Coordinated = r.Grant.MutationPlanDigest != ""
+		if r.Grant.Version == msi.ReusableGrantVersion {
+			v.Reusable = true
+			v.JobSequence = strconv.FormatUint(r.Jobs.Sequence, 10)
+			v.RetiredFloor = strconv.FormatUint(r.Jobs.RetiredFloor, 10)
+			v.History = r.Jobs.Recent
+			v.GrantExpiresAt = r.Grant.ExpiresAt
+		}
 		if len(r.MutationReport) > 0 {
 			report, _ := msi.VerifyReport(r.MutationReport, r.ExecutorPublicKey)
 			v.Mutation = report.Mutation
@@ -627,6 +690,8 @@ func (m *Manager) View(ctx context.Context) (View, error) {
 			v.UploadOffset = r.Artifact.Offset
 			v.UploadPendingDigest = r.Artifact.PendingDigest
 			v.NativeAcceptanceDigest = r.Artifact.NativeAcceptanceDigest
+			v.PublisherStatus = r.Artifact.PublisherStatus
+			v.PublisherEvidenceDigest = r.Artifact.PublisherEvidenceDigest
 			v.State = "upload_incomplete"
 			if r.Artifact.CompletedAt != 0 {
 				v.State = "uploaded"
@@ -664,6 +729,21 @@ func (m *Manager) View(ctx context.Context) (View, error) {
 			report, _ := msi.VerifyReport(r.ResultReport, r.ExecutorPublicKey)
 			v.Result = report.Result
 			v.State = "complete"
+			if v.Reusable {
+				v.ResultDigest = msi.Digest(r.ResultReport)
+				v.CanRetire = msi.SettledResult(report) && len(r.RetirePermit) == 0 && v.Mutation != nil && !v.Mutation.Blocked && v.Mutation.Active && n-v.MutationCapturedAt < 60
+			}
+		}
+		if len(r.RetirePermit) > 0 {
+			v.State = "retirement_pending"
+			p, _ := msi.VerifyPermit(r.RetirePermit, r.PublicKey)
+			v.ExpiresAt = p.ExpiresAt
+			if n >= p.ExpiresAt {
+				v.State = "intervention_required"
+			}
+		}
+		if len(r.RetiredReport) > 0 {
+			v.State = "retired"
 		}
 		if v.ExpiresAt != 0 && n >= v.ExpiresAt {
 			if v.State == "claimed" || v.State == "delivery_pending" && r.DeliveryClaimedAt != 0 || v.State == "readiness_pending" && r.ReadinessClaimedAt != 0 {
@@ -713,6 +793,20 @@ func (m *Manager) CheckRelease(ctx context.Context, raw []byte, deliveryDigest s
 			return e
 		}
 		actor, kind = p.ActorID, p.Kind
+		var exact []byte
+		switch p.Kind {
+		case "deliver":
+			exact = r.DeliveryPermit
+		case "readiness":
+			exact = r.ReadinessPermit
+		case "install":
+			exact = r.InstallPermit
+		case "retire":
+			exact = r.RetirePermit
+		}
+		if !bytes.Equal(raw, exact) || p.TransferID != r.TransferID || !msi.PermitMatchesGrant(p, r.Grant) {
+			return msi.ErrConsumed
+		}
 		deadline = min(deadline, p.ExpiresAt)
 		if !m.allowed(actor, kind) || p.Binding != r.Grant.Binding {
 			return msi.ErrAuthority

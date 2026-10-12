@@ -110,7 +110,12 @@ func (s *Store) WindowsManagedMSIArtifactTransaction(ctx context.Context, key ed
 		if e = fn(&after, at); e != nil {
 			return e
 		}
-		if after.Validate() != nil || after.Version != before.Version || after.ClockFloor != at.Unix() || msi.ArtifactTransition(before.Artifact, after.Artifact) != nil {
+		if after.RetirementStarted && !before.RetirementStarted {
+			if e := validateMSIArtifactRetirement(ctx, t.conn, before, after); e != nil {
+				return e
+			}
+		}
+		if after.Validate() != nil || after.Version != before.Version || after.ClockFloor != at.Unix() || msi.ArtifactRecordTransition(before, after) != nil {
 			return msi.ErrIntegrity
 		}
 		t.beforeCommit = append(t.beforeCommit, func() error {

@@ -46,8 +46,8 @@ func OpenSpool(stateDirectory string) (*Spool, error) {
 
 // Append is a single bounded raw chunk. Its exact pending intent is durable
 // before entry. Identical unacknowledged tail bytes may be resumed, never changed.
-func (s *Spool) Append(ctx context.Context, a msi.Artifact, data []byte, final func() error) (string, error) {
-	if s == nil || ctx == nil || final == nil || !msi.ValidSelection(a.Package) || a.Offset < 0 || a.Offset >= a.Package.Size || !msi.ValidDigest(a.PrefixDigest) || len(data) != int(min(int64(ChunkBytes), a.Package.Size-a.Offset)) || a.PendingDigest == "" || len(data) != a.PendingSize || len(data) == 0 || len(data) > ChunkBytes || msi.Digest(data) != a.PendingDigest || int64(a.PendingIndex)*ChunkBytes != a.Offset {
+func (s *Spool) Append(ctx context.Context, a msi.Artifact, data []byte, final func() error, custody ...func(string) error) (string, error) {
+	if len(custody) > 1 || (a.PublisherStatus != "") != (len(custody) == 1) || s == nil || ctx == nil || final == nil || !msi.ValidSelection(a.Package) || a.Offset < 0 || a.Offset >= a.Package.Size || !msi.ValidDigest(a.PrefixDigest) || len(data) != int(min(int64(ChunkBytes), a.Package.Size-a.Offset)) || a.PendingDigest == "" || len(data) != a.PendingSize || len(data) == 0 || len(data) > ChunkBytes || msi.Digest(data) != a.PendingDigest || int64(a.PendingIndex)*ChunkBytes != a.Offset {
 		return "", ErrSpool
 	}
 	s.mu.Lock()
@@ -55,14 +55,14 @@ func (s *Spool) Append(ctx context.Context, a msi.Artifact, data []byte, final f
 	if s.failed || s.check() != nil || final() != nil {
 		return "", ErrSpool
 	}
-	prefix, e := s.appendChunk(ctx, a, data, final)
+	prefix, e := s.appendChunk(ctx, a, data, final, custody...)
 	if e != nil {
 		s.failed = true
 	}
 	return prefix, e
 }
-func (s *Spool) ReadChunk(ctx context.Context, selection windowssoftwarejob.Selection, index uint32, final func() error) ([]byte, error) {
-	if s == nil || ctx == nil || final == nil || !windowssoftwarejob.ValidSelection(selection) || selection.Size > MaxArtifactBytes || uint64(index) >= 4096 || int64(index)*ChunkBytes >= selection.Size {
+func (s *Spool) ReadChunk(ctx context.Context, selection windowssoftwarejob.Selection, index uint32, final func() error, custody ...string) ([]byte, error) {
+	if len(custody) > 1 || len(custody) == 1 && !msi.ValidDigest(custody[0]) || s == nil || ctx == nil || final == nil || !windowssoftwarejob.ValidSelection(selection) || selection.Size > MaxArtifactBytes || uint64(index) >= 4096 || int64(index)*ChunkBytes >= selection.Size {
 		return nil, ErrSpool
 	}
 	s.mu.Lock()
@@ -80,7 +80,7 @@ func (s *Spool) ReadChunk(ctx context.Context, selection windowssoftwarejob.Sele
 	if e := final(); e != nil {
 		return nil, e
 	}
-	data, e := s.readChunk(ctx, selection, index)
+	data, e := s.readChunk(ctx, selection, index, custody...)
 	if e != nil {
 		if errors.Is(e, context.Canceled) || errors.Is(e, context.DeadlineExceeded) {
 			s.cache = nil
@@ -98,3 +98,24 @@ func (s *Spool) ReadChunk(ctx context.Context, selection windowssoftwarejob.Sele
 	return data, nil
 }
 func byteDigest(b []byte) string { h := sha256.Sum256(b); return "sha256:" + hex.EncodeToString(h[:]) }
+
+func (s *Spool) Retire(ctx context.Context, a msi.Artifact, final func() error) error {
+	if s == nil || ctx == nil || final == nil || a.Validate(a.CompletedAt) != nil || a.CompletedAt == 0 || !msi.ValidPublisherEvidence(a.PublisherStatus, a.PublisherEvidenceDigest) {
+		return ErrSpool
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.failed || s.check() != nil {
+		return ErrSpool
+	}
+	if e := final(); e != nil {
+		return e
+	}
+	if e := s.retire(ctx, a, final); e != nil {
+		s.failed = true
+		return e
+	}
+	s.cache = nil
+	s.uploadCache = nil
+	return nil
+}

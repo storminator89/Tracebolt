@@ -81,7 +81,7 @@ func (s *windowsManagedMSISender) Run(ctx context.Context) string {
 	if e != nil || status.Version != managed.Version || !s.recheck(ctx, g) {
 		return "unavailable"
 	}
-	if len(status.MutationReport) > 0 {
+	if len(status.MutationReport) > 0 && !(status.Reusable && status.State == "retired") {
 		report, e := managed.VerifyReport(status.MutationReport, g.ExecutorPublicKey)
 		if e != nil || report.Kind != "mutation" || report.Binding != g.Binding || report.CapturedAt > s.now().Unix() || s.now().Unix()-report.CapturedAt > 60 {
 			return "denied"
@@ -110,7 +110,7 @@ func (s *windowsManagedMSISender) Run(ctx context.Context) string {
 			return "pending"
 		}
 	}
-	if status.State == "intervention_required" || status.Attempted {
+	if status.State == "intervention_required" || status.Attempted && !(status.Reusable && (status.State == "retired" || status.State == "succeeded" || status.State == "failed" || status.State == "busy" || status.State == "restart_required")) {
 		return status.State
 	}
 	raw, e := s.exchange(ctx, managedMSIPrefix+"poll", []byte("{}"))

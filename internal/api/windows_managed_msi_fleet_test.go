@@ -44,7 +44,7 @@ func TestManagedFleetReadRechecksPinnedCapabilityAfterWait(t *testing.T) {
 	}
 }
 func TestManagedFleetArtifactRoutesAreFixed(t *testing.T) {
-	for _, suffix := range []string{"", "/reserve", "/upload", "/complete"} {
+	for _, suffix := range []string{"", "/reserve", "/upload", "/complete", "/reserve-reusable", "/retire"} {
 		r := httptest.NewRequest("GET", "https://manager.invalid/api/windows-managed-msi/artifact"+suffix, nil)
 		if _, ok := windowsManagedMSIArtifactRoute(r); !ok {
 			t.Fatal(suffix)

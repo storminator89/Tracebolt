@@ -128,7 +128,7 @@ func (s *Store) SetupWindowsManagedMSICreateOnly(ctx context.Context, key, execu
 }
 
 func (s *Store) setupWindowsManagedMSICreateOnly(ctx context.Context, key, executorKey ed25519.PublicKey, consent windowsmanagedmsi.Grant, now time.Time, additional, fleet bool) error {
-	if s == nil || s.storeState == nil || ctx == nil || !validStoreTime(now) || consent.Validate() != nil || !consent.DeliveryEnabled || !consent.DeliveryAcknowledged || !consent.ServiceRiskAcknowledged || !keyvalidation.Ed25519(key) || !keyvalidation.Ed25519(executorKey) || consent.Binding.KeyID != actionpermit.Digest(key) || consent.Binding.ExecutorKeyID != actionpermit.Digest(executorKey) {
+	if s == nil || s.storeState == nil || ctx == nil || !validStoreTime(now) || consent.Validate() != nil || consent.Version == windowsmanagedmsi.ReusableGrantVersion && !fleet || !consent.DeliveryEnabled || !consent.DeliveryAcknowledged || !consent.ServiceRiskAcknowledged || !keyvalidation.Ed25519(key) || !keyvalidation.Ed25519(executorKey) || consent.Binding.KeyID != actionpermit.Digest(key) || consent.Binding.ExecutorKeyID != actionpermit.Digest(executorKey) {
 		return windowsmanagedmsi.ErrInvalid
 	}
 	return s.transact(ctx, func(t *transaction) error {
@@ -145,7 +145,7 @@ func (s *Store) setupWindowsManagedMSICreateOnly(ctx context.Context, key, execu
 				count++
 				old := c.WindowsManagedMSISetup
 				b := old.Grant.Binding
-				if !fleet || !additional || old.Version != windowsManagedMSIFleetSetupVersion || b.KeyID != consent.Binding.KeyID || managedMSIBindingAlias(b, consent.Binding) {
+				if !fleet || !additional || old.Version != windowsManagedMSIFleetSetupVersion || (old.Grant.Version == windowsmanagedmsi.ReusableGrantVersion) != (consent.Version == windowsmanagedmsi.ReusableGrantVersion) || b.KeyID != consent.Binding.KeyID || managedMSIBindingAlias(b, consent.Binding) {
 					return windowsmanagedmsi.ErrConflict
 				}
 			}
@@ -209,7 +209,11 @@ func (s *Store) setupWindowsManagedMSICreateOnly(ctx context.Context, key, execu
 			if _, err = t.conn.ExecContext(ctx, windowsManagedMSIFleetArtifactSchema); err != nil {
 				return ErrStorage
 			}
-			raw, _ := json.Marshal(windowsmanagedmsi.ArtifactRecord{Version: windowsmanagedmsi.ArtifactRecordVersion, ClockFloor: now.Unix()})
+			a := windowsmanagedmsi.ArtifactRecord{Version: windowsmanagedmsi.ArtifactRecordVersion, ClockFloor: now.Unix()}
+			if consent.Version == windowsmanagedmsi.ReusableGrantVersion {
+				a.Version = windowsmanagedmsi.ReusableArtifactRecordVersion
+			}
+			raw, _ := json.Marshal(a)
 			if _, err = t.conn.ExecContext(ctx, `INSERT INTO enrollment_windows_msi_fleet_artifact VALUES(1,?)`, raw); err != nil {
 				return ErrStorage
 			}
@@ -337,7 +341,10 @@ func (s *Store) loadWindowsManagedMSIRecords(ctx context.Context, t *transaction
 		if r.TransferID != "" {
 			transfers[r.TransferID] = true
 		}
-		if fleet && r.Artifact != nil && (r.TransferID == "" || artifact.Artifact == nil || artifact.Artifact.CompletedAt == 0 || *r.Artifact != *artifact.Artifact) {
+		if fleet && (r.Grant.Version == windowsmanagedmsi.ReusableGrantVersion) != (artifact.Version == windowsmanagedmsi.ReusableArtifactRecordVersion) {
+			return ErrStorage
+		}
+		if fleet && r.Artifact != nil && len(r.RetiredReport) == 0 && (r.TransferID == "" || artifact.Artifact == nil || artifact.Artifact.CompletedAt == 0 || *r.Artifact != *artifact.Artifact || artifact.RetirementStarted || artifact.Retired) {
 			return ErrStorage
 		}
 		delete(markers, id)

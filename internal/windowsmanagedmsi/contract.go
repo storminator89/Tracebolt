@@ -84,6 +84,7 @@ func (b Binding) Validate() error {
 func ValidBinding(b Binding) bool { return b.Validate() == nil }
 
 type Grant struct {
+	ReusableAcknowledged    bool    `json:"reusableAcknowledged,omitempty"`
 	MutationPlanDigest      string  `json:"mutationPlanDigest,omitempty"`
 	PeerBindingDigest       string  `json:"peerBindingDigest,omitempty"`
 	Version                 string  `json:"version"`
@@ -97,7 +98,10 @@ type Grant struct {
 }
 
 func (g Grant) Validate() error {
-	if !(g.Version == GrantVersion && g.MutationPlanDigest == "" && g.PeerBindingDigest == "" || g.Version == CoordinatedGrantVersion && ValidDigest(g.MutationPlanDigest) && ValidDigest(g.PeerBindingDigest)) || g.Binding.Validate() != nil || !ValidTime(g.ExpiresAt) || g.DeliveryEnabled && (!g.DeliveryAcknowledged || !g.ServiceRiskAcknowledged) || g.InstallEnabled && (!g.InstallAcknowledged || !g.ServiceRiskAcknowledged) {
+	if g.ReusableAcknowledged != (g.Version == ReusableGrantVersion) {
+		return ErrInvalid
+	}
+	if !(g.Version == GrantVersion && g.MutationPlanDigest == "" && g.PeerBindingDigest == "" || (g.Version == CoordinatedGrantVersion || g.Version == ReusableGrantVersion) && ValidDigest(g.MutationPlanDigest) && ValidDigest(g.PeerBindingDigest)) || g.Binding.Validate() != nil || !ValidTime(g.ExpiresAt) || g.DeliveryEnabled && (!g.DeliveryAcknowledged || !g.ServiceRiskAcknowledged) || g.InstallEnabled && (!g.InstallAcknowledged || !g.ServiceRiskAcknowledged) {
 		return ErrInvalid
 	}
 	return nil
@@ -107,6 +111,10 @@ func (g Grant) Validate() error {
 // can transport only a still-valid same-identity permit; it never extends expiry.
 // The endpoint requires the current signed leaf attestation on each relay call.
 type Permit struct {
+	JobSequence             uint64    `json:"jobSequence,string,omitempty"`
+	PublisherStatus         string    `json:"publisherStatus,omitempty"`
+	PublisherEvidenceDigest string    `json:"publisherEvidenceDigest,omitempty"`
+	RetireResultDigest      string    `json:"retireResultDigest,omitempty"`
 	SynchronousReviewDigest string    `json:"synchronousReviewDigest,omitempty"`
 	Version                 string    `json:"version"`
 	Kind                    string    `json:"kind"`
@@ -126,13 +134,17 @@ type Permit struct {
 }
 
 func (p Permit) Validate() error {
-	if p.Version != Version || !ValidTransferID(p.TransferID) || p.Binding.Validate() != nil || !ValidDigest(p.LeafDigest) || !ValidSelection(p.Package) || !ValidDigest(p.NativeAcceptanceDigest) || !enrollmentcrypto.ValidID(p.ActorID, "operator_") || !ValidTime(p.IssuedAt) || !ValidTime(p.ExpiresAt) || p.ExpiresAt <= p.IssuedAt {
+	if p.validateReusable() != nil || (p.Version != Version && p.Version != ReusableVersion) || !ValidTransferID(p.TransferID) || p.Binding.Validate() != nil || !ValidDigest(p.LeafDigest) || !ValidSelection(p.Package) || !ValidDigest(p.NativeAcceptanceDigest) || !enrollmentcrypto.ValidID(p.ActorID, "operator_") || !ValidTime(p.IssuedAt) || !ValidTime(p.ExpiresAt) || p.ExpiresAt <= p.IssuedAt {
 		return ErrInvalid
 	}
 	if p.SynchronousReviewDigest != "" && p.SynchronousReviewDigest != SynchronousReviewDigest(p.Package, p.NativeAcceptanceDigest) {
 		return ErrInvalid
 	}
 	switch p.Kind {
+	case "retire":
+		if p.Version != ReusableVersion || !ValidDigest(p.RetireResultDigest) || p.ExpiresAt-p.IssuedAt > 60 || p.Sequence != 0 || p.MaintenanceUntil != 0 || p.ReadinessDigest != "" || !p.PackageReviewAccepted || !p.TermsAccepted || p.SynchronousReviewDigest == "" {
+			return ErrInvalid
+		}
 	case "deliver":
 		if p.SynchronousReviewDigest != "" || p.ExpiresAt-p.IssuedAt > int64(DeliveryLifetime/time.Second) || p.Sequence != 0 || p.MaintenanceUntil != 0 || p.ReadinessDigest != "" || p.PackageReviewAccepted || p.TermsAccepted {
 			return ErrInvalid
@@ -152,29 +164,38 @@ func (p Permit) Validate() error {
 }
 
 type Report struct {
-	Mutation               *fence.Status `json:"mutation,omitempty"`
-	Version                string        `json:"version"`
-	Kind                   string        `json:"kind"`
-	Binding                Binding       `json:"binding"`
-	TransferID             string        `json:"transferId"`
-	PermitDigest           string        `json:"permitDigest"`
-	Package                Selection     `json:"package"`
-	NativeAcceptanceDigest string        `json:"nativeAcceptanceDigest"`
-	CapturedAt             int64         `json:"capturedAt"`
-	Offset                 int64         `json:"offset"`
-	State                  string        `json:"state"`
-	Readiness              *Readiness    `json:"readiness,omitempty"`
-	Result                 *Result       `json:"result,omitempty"`
+	JobSequence            uint64              `json:"jobSequence,string,omitempty"`
+	Retirement             *RetirementEvidence `json:"retirement,omitempty"`
+	Mutation               *fence.Status       `json:"mutation,omitempty"`
+	Version                string              `json:"version"`
+	Kind                   string              `json:"kind"`
+	Binding                Binding             `json:"binding"`
+	TransferID             string              `json:"transferId"`
+	PermitDigest           string              `json:"permitDigest"`
+	Package                Selection           `json:"package"`
+	NativeAcceptanceDigest string              `json:"nativeAcceptanceDigest"`
+	CapturedAt             int64               `json:"capturedAt"`
+	Offset                 int64               `json:"offset"`
+	State                  string              `json:"state"`
+	Readiness              *Readiness          `json:"readiness,omitempty"`
+	Result                 *Result             `json:"result,omitempty"`
 }
 
 func (r Report) Validate() error {
-	if r.Version != Version || r.Binding.Validate() != nil || !ValidTransferID(r.TransferID) || !ValidDigest(r.PermitDigest) || !ValidSelection(r.Package) || !ValidDigest(r.NativeAcceptanceDigest) || !ValidTime(r.CapturedAt) || r.Offset < 0 || r.Offset > r.Package.Size {
+	if (r.Version != Version && r.Version != ReusableVersion) || (r.Version == ReusableVersion) != (r.JobSequence > 0) || r.Version == Version && r.Retirement != nil || r.Binding.Validate() != nil || !ValidTransferID(r.TransferID) || !ValidDigest(r.PermitDigest) || !ValidSelection(r.Package) || !ValidDigest(r.NativeAcceptanceDigest) || !ValidTime(r.CapturedAt) || r.Offset < 0 || r.Offset > r.Package.Size {
 		return ErrInvalid
 	}
 	if r.Kind != "mutation" && r.Mutation != nil {
 		return ErrInvalid
 	}
+	if r.Kind != "retired" && r.Retirement != nil {
+		return ErrInvalid
+	}
 	switch r.Kind {
+	case "retired":
+		if r.Version != ReusableVersion || r.State != "retired" || r.Retirement == nil || r.Retirement.Validate() != nil || r.Readiness != nil || r.Result != nil || r.Offset != r.Package.Size {
+			return ErrInvalid
+		}
 	case "mutation":
 		if r.Mutation == nil || r.Mutation.Validate() != nil || r.State != r.Mutation.Phase || r.Readiness != nil || r.Result != nil {
 			return ErrInvalid
@@ -208,6 +229,16 @@ type signedReport struct {
 
 func message(domain string, v any) []byte {
 	b, _ := json.Marshal(v)
+	version := Version
+	switch x := v.(type) {
+	case Permit:
+		version = x.Version
+	case Report:
+		version = x.Version
+	}
+	if version == ReusableVersion {
+		return append([]byte("Tracebolt reusable managed MSI "+domain+" v3\x00"), b...)
+	}
 	return append([]byte("Tracebolt managed MSI "+domain+" v1\x00"), b...)
 }
 func validPrivate(k ed25519.PrivateKey) bool {
@@ -283,6 +314,7 @@ type ReportRequest struct {
 	Report []byte `json:"report"`
 }
 type Status struct {
+	Reusable       bool   `json:"reusable,omitempty"`
 	MutationReport []byte `json:"mutationReport,omitempty"`
 	Version        string `json:"version"`
 	TransferID     string `json:"transferId"`

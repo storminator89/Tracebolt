@@ -13,6 +13,7 @@ import (
 	"time"
 )
 
+const ReusableSetupVersion = "tracebolt.windows-managed-msi-service-setup.v3"
 const CoordinatedSetupVersion = "tracebolt.windows-managed-msi-service-setup.v2"
 const SetupVersion = "tracebolt.windows-managed-msi-service-setup.v1"
 
@@ -33,7 +34,7 @@ func mustJSON(v any) []byte { b, _ := json.Marshal(v); return b }
 func VerifySetup(s managed.Storage, c windowsmanagedmsiipc.Config) (SetupReceipt, error) {
 	var r SetupReceipt
 	raw, e := s.Read("setup-receipt.json")
-	if e != nil || managed.Canonical(raw, &r, managed.MaxRecordBytes) != nil || !(r.Version == SetupVersion && c.Mutation == nil || r.Version == CoordinatedSetupVersion && c.Mutation != nil) || !r.Complete || !managed.ValidDigest(r.PlanDigest) || c.Validate() != nil || r.ConfigDigest != managed.Digest(mustJSON(c)) || r.Registration.Validate() != nil || r.Registration.Grant != c.Grant || !bytes.Equal(r.Registration.ExecutorPublicKey, c.ExecutorPublicKey) || r.Image.Validate() != nil || r.Image.Path != c.Executable || r.Image.SHA256 != c.ExecutableDigest || r.ServiceMarker != Marker(c) {
+	if e != nil || managed.Canonical(raw, &r, managed.MaxRecordBytes) != nil || !(r.Version == SetupVersion && c.Mutation == nil || (r.Version == CoordinatedSetupVersion || r.Version == ReusableSetupVersion) && (r.Version == ReusableSetupVersion) == (c.Grant.Version == managed.ReusableGrantVersion) && c.Mutation != nil) || !r.Complete || !managed.ValidDigest(r.PlanDigest) || c.Validate() != nil || r.ConfigDigest != managed.Digest(mustJSON(c)) || r.Registration.Validate() != nil || r.Registration.Grant != c.Grant || !bytes.Equal(r.Registration.ExecutorPublicKey, c.ExecutorPublicKey) || r.Image.Validate() != nil || r.Image.Path != c.Executable || r.Image.SHA256 != c.ExecutableDigest || r.ServiceMarker != Marker(c) {
 		return r, managed.ErrIntegrity
 	}
 	return r, nil

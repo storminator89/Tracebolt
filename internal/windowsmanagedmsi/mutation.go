@@ -14,7 +14,7 @@ func MutationParticipant(g Grant) fence.Participant {
 	return fence.Participant{Domain: fence.ManagedMSI, BindingDigest: Digest(b), GrantDigest: Digest(raw), ManagerKeyDigest: g.Binding.KeyID, ExecutorKeyDigest: g.Binding.ExecutorKeyID}
 }
 func ValidMutationRoster(r *fence.Roster, g Grant) bool {
-	if r == nil || r.Validate() != nil || g.Version != CoordinatedGrantVersion || g.Validate() != nil {
+	if r == nil || r.Validate() != nil || (g.Version != CoordinatedGrantVersion && g.Version != ReusableGrantVersion) || (g.Version == ReusableGrantVersion) != (r.Version == fence.ReusableRosterVersion) || g.Validate() != nil {
 		return false
 	}
 	b := g.Binding
@@ -24,11 +24,19 @@ func NewCoordinatedEndpointRecord(g Grant, manager, executor []byte, at int64, r
 	r := EndpointRecord{Version: Version, Grant: g, ManagerPublicKey: append([]byte(nil), manager...), ExecutorPublicKey: append([]byte(nil), executor...), ClockFloor: at, PrefixDigest: Digest(nil)}
 	r.Version = CoordinatedEndpointVersion
 	r.Mutation = &roster
+	if g.Version == ReusableGrantVersion {
+		r.Version = ReusableEndpointVersion
+		r.Jobs = NewJobLedger()
+	}
 	return r, r.Validate()
 }
 
 func mutationOwner(p Permit, raw []byte) fence.Owner {
-	return fence.Owner{Domain: fence.ManagedMSI, JobID: p.TransferID, TransferID: p.TransferID, Sequence: p.Sequence, PermitDigest: Digest(raw)}
+	sequence := p.Sequence
+	if p.Version == ReusableVersion {
+		sequence = p.JobSequence
+	}
+	return fence.Owner{Domain: fence.ManagedMSI, JobID: p.TransferID, TransferID: p.TransferID, Sequence: sequence, PermitDigest: Digest(raw)}
 }
 func (r EndpointRecord) validateMutationCompletion() error {
 	c := r.MutationCompletion
