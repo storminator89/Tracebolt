@@ -7,9 +7,9 @@ test('invented group fixture projects only public names and exact admitted IDs',
  const fixture=fleetGroupsBrowserFixture(now,expiry);assert.equal(fixture.view.groups[0].unavailableMembers,1);assert.equal(fixture.view.devices.length,3);assert.deepEqual(Object.keys(fixture.view.groups[0]).sort(),['id','memberIds','name','revision','unavailableMembers']);assert.ok(fixture.metadata.every(d=>d.agentCertificate.checkedAt===now));
  for(const metric of ['disk','cpu','memory'])for(const enabled of [false,true]){const policy={enabled,thresholdPercent:90,revision:enabled?1:0},view=fleetGroupsPolicyFixture(now,expiry,fleetGroupIds.first,metric,policy);assert.deepEqual(view.policy,policy);assert.equal(view.status,enabled?'unknown':'disabled');assert.equal(view.observation,null);assert.equal(view.metric,metric==='disk'?undefined:metric);}
 });
-test('completion requires exactly twelve source-bound EN/DE desktop/mobile screenshots',()=>{
- const source='a'.repeat(40),rows=[];for(const kind of ['groups','review','results'])for(const locale of ['en','de'])for(const width of [1440,390])rows.push({file:`synthetic-fleet-groups-${kind}-${width}-${locale}.png`,sourceSha:source,test:fleetGroupsCaseName,viewport:{width,height:width===390?844:1000},locale,fullPage:false,publicSafe:true,fixtureDisclosure:fleetGroupsDisclosure});
- assert.deepEqual(requireFleetGroupsEvidence(rows,source),{groups:4,review:4,results:4});
+test('completion requires exactly sixteen source-bound EN/DE desktop/mobile screenshots',()=>{
+ const source='a'.repeat(40),rows=[];for(const kind of ['groups','draft','review','results'])for(const locale of ['en','de'])for(const width of [1440,390])rows.push({file:`synthetic-fleet-groups-${kind}-${width}-${locale}.png`,sourceSha:source,test:fleetGroupsCaseName,viewport:{width,height:width===390?844:1000},locale,fullPage:false,publicSafe:true,fixtureDisclosure:fleetGroupsDisclosure});
+ assert.deepEqual(requireFleetGroupsEvidence(rows,source),{groups:4,draft:4,review:4,results:4});
  for(let index=0;index<rows.length;index++)for(const changed of [null,{sourceSha:'b'.repeat(40)},{fullPage:true},{publicSafe:false},{fixtureDisclosure:'native'},{test:'other'},{viewport:{width:800,height:600}}])assert.throws(()=>requireFleetGroupsEvidence(changed?rows.map((r,i)=>i===index?{...r,...changed}:r):rows.filter((_,i)=>i!==index),source));
  assert.throws(()=>requireFleetGroupsEvidence([...rows,rows[0]],source));
 });
@@ -27,7 +27,7 @@ test('uncertain readback checks the exact first-device outcome cell and bounded 
  const helper=fs.readFileSync(new URL('./fleet-groups-browser.mjs',import.meta.url),'utf8');
  const uncertain=helper.slice(helper.indexOf("stage='uncertain-review';mode='uncertain'"),helper.indexOf("stage='stop';mode='hold'"));
  assert.match(uncertain,/getByRole\('dialog'\)\.getByRole\('row'\)\.filter\(\{hasText:ids.first\}\)\.getByRole\('cell'\)\.last\(\)/);
- assert.match(uncertain,/expect\(uncertainOutcome\)\.toHaveText\('Unconfirmed · write may have happenedCurrent policy matches, but this does not prove our write succeeded\.'\)/);
+ assert.match(uncertain,/expect\(uncertainOutcome\)\.toHaveText\('Physical RAM percentageUnconfirmed · write may have happenedCurrent policy matches, but this does not prove our write succeeded\.'\)/);
  assert.doesNotMatch(uncertain,/getByText\('Unconfirmed · write may have happened'/);
  assert.match(uncertain,/expect\(policyPosts\)\.toBe\(uncertainBefore\+1\)/);
  assert.match(uncertain,/getByText\('Not attempted',\{exact:true\}\)/);
@@ -45,7 +45,7 @@ test('fleet dialog retains desktop and compact mobile inner spacing',()=>{
 
 test('compact mobile rows keep all policy cells in the viewport without losing table semantics',()=>{
  const css=fs.readFileSync(new URL('../../web/src/fleet-groups.css',import.meta.url),'utf8'),ui=fs.readFileSync(new URL('../../web/src/fleet-groups.tsx',import.meta.url),'utf8'),helper=fs.readFileSync(new URL('./fleet-groups-browser.mjs',import.meta.url),'utf8');
- const mobile=css.slice(css.lastIndexOf('@media'));
+ const mobile=css.slice(css.indexOf('/* Keep the table semantics'));
  assert.doesNotMatch(css,/min-width:450px/);
  assert.match(mobile,/\.fleet-group-table-wrap\{overflow-x:visible\}/);
  assert.match(mobile,/grid-template-columns:minmax\(0,1fr\)/);
