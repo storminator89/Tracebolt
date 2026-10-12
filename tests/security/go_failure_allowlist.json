@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "sourceCommit": "fccc4b00cd8a144afd58e4b995747afab7a10022",
-  "goSourceSha256": "32cb10204542fa67dd1fb89c0b3ffea617fb550f8f7c2a4da35b331ffa4e481e",
+  "goSourceSha256": "b2c6aa2f096b6dea9c47abfcaf9bd762ec09bea5b9195334cae49db9d1d3edee",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -255,6 +255,10 @@
       "TestConcurrentStopDoesNotHidePendingAuthorityFailures",
       "TestConcurrentStopPreservesInvalidHandoffAndMarkerFailure",
       "TestCooperativePendingOutcomeRejectsMixedAndDiagnosedFailures",
+      "TestCurrentPackagedSetupGUINative",
+      "TestCurrentSetupCanonicalSenderRequiresAllUsedMarkersAndOriginalFloor",
+      "TestCurrentSetupGrantSpecsExactOrderedTwentyAndHistoryProof",
+      "TestCurrentSetupPendingRejectsHistoricalReceiptAndConsent",
       "TestEventConsentFlagsExplicitAndBounded",
       "TestEventContentConsentErrorsAndInvalidModes",
       "TestEventContentConsentFlagsExplicitAndBounded",
@@ -416,6 +420,7 @@
       "TestRestartPartialOutputAndReleaseFailureNeverBecomeSuccess",
       "TestRestartPublicDeadlineBeginsBeforeReceiptAcquisition",
       "TestRetainedBootstrapValidationCapturesCategoryBeforePublicCollapse",
+      "TestScheduledUpdateSetupRequiresSeparateFreshFlagAndAcknowledgement",
       "TestSecurityCoverageWorkerEntryRechecksActualParentBeforeReturning",
       "TestSecurityPostureConsentErrorsAndInvalidModes",
       "TestSecurityPostureConsentFlagsExplicitAndBounded",
@@ -1153,6 +1158,8 @@
       "TestWindowsUpdateJobAPIUsesLiveClockAtEnrollmentCommit",
       "TestWindowsUpdateJobFinalConfigurationWaitCannotOutliveSession",
       "TestWindowsUpdateRegistryTwoDeviceAPIToTLSRelay",
+      "TestWindowsUpdateSchedulingRequiresBothCapabilitiesAndFreshConsent",
+      "TestWindowsUpdateSchedulingRevocationHasExplicitSavedEvidence",
       "TestWindowsUpdatesOperatorSessionAndResponseTimeExpiry",
       "TestWindowsUpdatesResourceRequiresExistingOperatorRoute",
       "TestWindowsUserSoftwareOperatorFinalBoundaryHidesRows",
@@ -1975,6 +1982,12 @@
       "TestWindowsUpdateJobSetupRejectsImplicitConsentAndKeyReuse",
       "TestWindowsUpdateJobSignedLifecycleConsumeOnceAndHistoryPreserved",
       "TestWindowsUpdateJobSuccessfulFinalClockAndConsentStayFixed",
+      "TestWindowsUpdateScheduleCancelVersusClaimSerializes",
+      "TestWindowsUpdateScheduleEnrollmentRoundTrip",
+      "TestWindowsUpdateScheduleFinalIssuanceExpiryKeepsOnlyRejectionFloor",
+      "TestWindowsUpdateScheduleStartupIsolatesExpiredAndRevokedRegistryMembers",
+      "TestWindowsUpdateScheduleStartupRemovalAndExplicitRevokePersist",
+      "TestWindowsUpdateScheduleTransactionRejectsReservationDeletionAndWindowExtension",
       "TestWindowsUpdateSetupExpectedCurrentLeafCannotBeSubstituted",
       "TestWindowsUpdateSetupFinalInputGuardPrecedesLastExpiryCheck",
       "TestWindowsUpdateSetupInspectionIsReadOnlyAndRefusesFencedDomain",
@@ -3702,8 +3715,20 @@
       "TestReadinessFailsClosed",
       "TestVersionParsing"
     ],
+    "localrmm/internal/windowsacceptance/currentsetupgate": [
+      "TestCurrentGateNeverPromotesHistoricalProfilesOrScopeReceipt",
+      "TestCurrentGateRetainsUnknownProviderTruth",
+      "TestExactAuthorizationFailClosed",
+      "TestFiniteReportCoverageAndIndeterminateTruth"
+    ],
     "localrmm/internal/windowsacceptance/fixture": [
       "TestConcurrentSyntheticObservationAndClose",
+      "TestCurrentDoesNotBroadenLegacyOrTransport",
+      "TestCurrentGenerationCrossChunkDigestFloorsAndAuthority",
+      "TestCurrentInitialRenewableEnrollmentAndCapabilities",
+      "TestCurrentObservationClosedValidation",
+      "TestCurrentOrdinaryAndFourIndependentDomains",
+      "TestCurrentSourceCaptureFloorsAndStrictTelemetry",
       "TestExpandedExactDuplicateBeforeCaptureAge",
       "TestExpandedIndependentCaptureFences",
       "TestExpandedMalformedRealDecodersFailClosed",
@@ -4871,6 +4896,12 @@
       "TestReadinessNeverPromotesObservationOrUnknown",
       "TestRejectedExpiryFloorSurvivesRestart",
       "TestReopenPreservesClaimAndApprovalBytes",
+      "TestScheduleCancelChangedFactsExpiryAndLostReadinessAreTerminal",
+      "TestScheduleClockRollbackAndImmutableTransition",
+      "TestScheduleFreshReadinessIssuesOnceAndExecutesOnce",
+      "TestScheduleNeedsFreshConsentAndExplicitApproval",
+      "TestSchedulePermitRejectedByManualOnlyExecutorAndManualBytesUnchanged",
+      "TestScheduleRetainsThirtyTwoReservationsAndNoEarlyInstallSequence",
       "TestSetupHandoffPreservesExactOriginalAuthority",
       "TestShorterConsentOrCurrentLeafCannotExtendNativeStart",
       "TestSignedExecutorReadinessAndResultRelay",
@@ -4928,6 +4959,7 @@
       "TestSourceNilAndFailureOwnership"
     ],
     "localrmm/internal/windowsupdatesetup": [
+      "TestFreshScheduledSetupNeverPromotesManualPlan",
       "TestFreshUpdateSetupCoreSuccess",
       "TestFreshUpdateSetupRejectsIdentityExpiryAndExisting",
       "TestFreshUpdateSetupRemovalPreservesUsedState",

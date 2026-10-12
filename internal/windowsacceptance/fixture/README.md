@@ -174,3 +174,51 @@ Empty tables, UDP, other ports and unrelated loopback addresses do not prove the
 peer endpoint. If ordinary bounded native collection omits the peer row, the
 gate fails honestly; it does not widen collection, elevate permissions or join
 process metadata to make the check pass.
+
+## Separate current Read admin peer
+
+`StartCurrentReadAdmin(ctx)` explicitly starts the fresh CURRENT21 loopback TLS
+peer. It never changes `Start`, `StartSelected`, `StartExpanded`, the historical
+five-scope capabilities or their evidence contract. The current peer advertises
+only the v10/fresh-twenty-one Read admin contract. Its public bootstrap uses
+`.renewable.v1`/`same-key-v1`, and its real initial claim binds that policy and the
+exact agent origin. Initial credential generation is one with the normal
+seven-day maximum validity; disposable root/issuer lifetime is longer. The peer
+still terminates after 45 minutes. No renewal cycle/cutover is simulated or
+claimed, and no renewal endpoint is offered.
+
+Ordinary current Windows telemetry uses `lanstore.ValidateFrame`, including
+latest v16, excludes the independently consented cached-update scope, retains
+independent original-capture floors for all fifteen ordinary source domains and
+records exact frame hashes. Current full-services, full-software, full-processes
+and network-context scope/chunk/failure routes use their production strict
+message validators and receipt wire shapes. Each binds the activated identity,
+original sender binding and exact fresh consent, has its own sequence/capture
+floor, checks original expiry and whole-generation digest, preserves exact retry
+receipts, and refuses incomplete, reordered or altered transfers. This process-local
+peer only permits one fresh grant per domain, not adoption or reconsent.
+
+No raw body or rows are persisted. Pending independent generations retain rolling
+SHA-256 state, counts, receipt metadata, hashed service identity keys and at most
+one bounded service ordering name until completion/next failure/close. These are
+private transient validation state, never serialized as evidence. The public
+`CurrentEvidence()` is a finite, closed metadata projection with source scope,
+quality counts, terminal failure labels, row counts and exact accepted hashes.
+Source text, hostnames, serials, addresses, metric values, commands and event
+content are not exposed. Memory clearing is best effort, not secure erasure.
+
+`CurrentObservation.Ready()` means initial renewable enrollment, at least one
+accepted v16 ordinary frame, and a terminal observation from each ordinary and
+all four independent source domains. Explicit denied/unsupported/resource-limit
+failures count as protocol progress and remain failures in metadata. It never
+means full provider coverage. The setup gate additionally requires advancing
+ordinary receipts. Software history and event history are `grant_only` and remain
+`not_run`: their setup grants need independent receipt checks, and this peer does
+not compute software comparisons, accept event-history capability reports or
+issue history/message requests. `fullAcceptance`, `nativeProviderProof` and
+`renewalCycleProved` are always false. There is no Linux manager, durable store,
+SCM/ACL/privilege action, native collector, remote write or persistent trust API.
+
+Portable tests exercise invented protocol bytes and in-memory keys only. They
+do not start these listeners or execute Windows APIs, enrollment on a host,
+installed-service operations, or native acceptance.

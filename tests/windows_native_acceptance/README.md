@@ -17,6 +17,10 @@ ancestor ACLs or silently choose another host. A hosted Windows image can fail
 the driver's strict prerequisite checks and requires separate review, not an
 exception here.
 
+The separate current twenty-one-scope renewable TLS packaged-Setup source gate is
+documented in [CURRENT_SETUP.md](CURRENT_SETUP.md). Its new workflow and schemas
+do not reuse the historical approval or evidence below.
+
 ## Boundaries
 
 - Only `storminator89/Tracebolt`, a GitHub-hosted `windows-2025` X64 runner, and
@@ -86,7 +90,9 @@ manager/store/dashboard and fresh installer acceptance remain unproven.
 
 ## Fresh Read admin approval compatibility
 
-Current fresh Setup installs twelve read scopes after explicit unchecked consent.
+The preserved historical Read admin gate below parses the former twelve-scope approval.
+Current fresh Setup installs twenty-one scopes; use the separately versioned
+[CURRENT21 gate](CURRENT_SETUP.md) for that source contract.
 The manual packaged-GUI workflow now requires `packaged-setup-gui-read-admin-v2`
 and the separate `TWELVE_READ_ADMIN_SCOPES` approval, including personal
 user/domain/session and join metadata. Persistent identity, service/app permissions

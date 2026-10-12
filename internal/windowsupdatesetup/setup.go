@@ -24,6 +24,7 @@ import (
 )
 
 const Version = "tracebolt.windows-selected-update-provision.v1"
+const ScheduleDisclosure = job.ScheduleDisclosure
 const KeyVersion = "tracebolt.windows-update-executor-key.v1"
 const ProcessQueryDisclosure = "A separately launched elevated executor may explicitly grant only PROCESS_QUERY_LIMITED_INFORMATION and SYNCHRONIZE to this exact observation service SID for that process lifetime. This setup records acknowledgement only; launch still requires --run-foreground --allow-observer-process-query. No token, thread, SCM, account or observation privilege is granted."
 
@@ -43,13 +44,31 @@ type Plan struct {
 	InstallDisclosure      string                               `json:"installDisclosure"`
 	RelayDisclosure        string                               `json:"relayDisclosure"`
 	ProcessQueryDisclosure string                               `json:"processQueryDisclosure"`
+	ScheduleScope          string                               `json:"scheduleScope,omitempty"`
+	ScheduleDisclosure     string                               `json:"scheduleDisclosure,omitempty"`
 }
 
 func NewPlan(o job.SetupOffer, a windowspackage.Manifest, identity lanclient.WindowsUpdateSetupIdentity, r windowsservice.Receipt) (Plan, error) {
 	p := Plan{Version: Version, Offer: o, Artifact: a, Identity: identity, Observer: r, Executable: r.Layout.ProgramFiles + `\Tracebolt\tracebolt-windows-update-executor.exe`, StateRoot: strings.TrimSuffix(r.Layout.StateRoot, `\windows-agent`) + `\windows-update-executor`, RelayRoot: r.Layout.StateRoot + "-update-job-relay", InstallDisclosure: job.Disclosure, RelayDisclosure: lanclient.WindowsUpdateRelayDisclosure, ProcessQueryDisclosure: ProcessQueryDisclosure}
 	return p, p.Validate()
 }
+
+// NewScheduledPlan is fresh create-only provisioning, never an upgrade of an
+// existing manual grant. NewPlan retains its original version and JSON bytes.
+func NewScheduledPlan(o job.SetupOffer, a windowspackage.Manifest, identity lanclient.WindowsUpdateSetupIdentity, r windowsservice.Receipt) (Plan, error) {
+	p, err := NewPlan(o, a, identity, r)
+	if err != nil {
+		return p, err
+	}
+	p.ScheduleScope = job.ScheduleScope
+	p.ScheduleDisclosure = ScheduleDisclosure
+	return p, p.Validate()
+}
 func (p Plan) Validate() error {
+	if p.ScheduleScope == "" && p.ScheduleDisclosure != "" || p.ScheduleScope != "" && (p.ScheduleScope != job.ScheduleScope || p.ScheduleDisclosure != ScheduleDisclosure) {
+		return ErrSetup
+	}
+
 	i, o, r := p.Identity, p.Offer, p.Observer
 	raw, _ := json.Marshal(p.Artifact)
 	if _, e := windowspackage.ParseManifest(raw); e != nil {
@@ -65,6 +84,7 @@ func (p Plan) Digest() string { b, _ := json.Marshal(p); return actionpermit.Dig
 type Approval struct {
 	Digest                       string
 	Install, Relay, ProcessQuery bool
+	Schedule                     bool
 }
 type Store interface {
 	Read(string) ([]byte, error)
@@ -121,7 +141,7 @@ func apply(ctx context.Context, p Plan, payload []byte, a Approval, h Hooks, gen
 	}
 	p = immutable
 	payload = bytes.Clone(payload)
-	if ctx == nil || p.Validate() != nil || p.Artifact.Validate(payload) != nil || a.Digest != p.Digest() || !a.Install || !a.Relay || !a.ProcessQuery || h.Check == nil || h.Fresh == nil || h.CreateStore == nil || h.CreateImage == nil || h.VerifyImage == nil || h.CreateRelay == nil || h.VerifyRelay == nil || generate == nil || now == nil {
+	if ctx == nil || p.Validate() != nil || p.Artifact.Validate(payload) != nil || a.Digest != p.Digest() || !a.Install || !a.Relay || !a.ProcessQuery || a.Schedule != (p.ScheduleScope != "") || h.Check == nil || h.Fresh == nil || h.CreateStore == nil || h.CreateImage == nil || h.VerifyImage == nil || h.CreateRelay == nil || h.VerifyRelay == nil || generate == nil || now == nil {
 		return registration, ErrSetup
 	}
 	guard := func() error {
@@ -197,6 +217,11 @@ func apply(ctx context.Context, p Plan, payload []byte, a Approval, h Hooks, gen
 			}
 			b := job.Binding{ManagerID: p.Offer.ManagerID, DeviceID: p.Offer.DeviceID, IncarnationDigest: p.Offer.IncarnationDigest, ExecutorID: executor, ExecutorKeyID: actionpermit.Digest(pub), GrantID: grant, KeyID: actionpermit.Digest(p.Offer.ManagerPublicKey)}
 			consent := job.Consent{Version: job.ConsentVersion, Scope: job.Scope, Binding: b, Enabled: true, Acknowledged: true, ExpiresAt: p.Offer.ExpiresAt}
+			if p.ScheduleScope != "" {
+				consent.Version = job.ScheduledConsentVersion
+				consent.ScheduleScope = p.ScheduleScope
+				consent.ScheduleAcknowledged = true
+			}
 			registration = job.SetupRegistration{Version: job.SetupRegistrationVersion, Offer: p.Offer, Consent: consent, ExecutorPublicKey: bytes.Clone(pub)}
 			if registration.Validate() != nil {
 				return registration, ErrSetup
@@ -309,7 +334,7 @@ func VerifyInstalled(s Store, c windowsupdateipc.Config) error {
 		return ErrSetup
 	}
 	r := job.SetupRegistration{Version: job.SetupRegistrationVersion, Offer: p.Offer, Consent: c.Consent, ExecutorPublicKey: c.ExecutorPublicKey}
-	if r.Validate() != nil || !bytes.Equal(c.ManagerPublicKey, p.Offer.ManagerPublicKey) {
+	if r.Validate() != nil || c.Consent.ScheduleScope != p.ScheduleScope || c.Consent.ScheduleAcknowledged != (p.ScheduleScope != "") || !bytes.Equal(c.ManagerPublicKey, p.Offer.ManagerPublicKey) {
 		return ErrSetup
 	}
 	return s.Verify()

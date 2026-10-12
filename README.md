@@ -34,7 +34,8 @@ This page describes the current source; downloadable prereleases cover less.
   approved older-event searches and selected message reads, and offline cached
   Windows Update inspection.
 - **Selected Windows updates (source):** [explicit endpoint setup](docs/windows-selected-update-setup.md),
-  a manual fleet worklist, per-device cached-update review, one-time approval
+  a manual fleet worklist, per-device cached-update review, one-time approval,
+  optional [explicitly approved one-shot update windows](docs/windows-scheduled-update-jobs.md)
   and saved executor outcomes. Native setup and update execution still need acceptance.
 - **Selected-account software:** an explicitly consented foreground capture of
   that Windows user's HKCU and Store registrations, with source filters and paging.

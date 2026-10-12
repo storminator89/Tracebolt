@@ -362,7 +362,10 @@ func (s *Store) windowsUpdateJobCurrent(t *transaction, id string, binding windo
 // or erasing/replacing a consumed signed record. Unsigned readiness slots remain
 // replaceable; signed history, original ages, envelopes and results do not.
 func windowsUpdateJobTransition(before, after windowsupdatejob.Record, now int64) error {
-	if before.Version != after.Version || before.Consent != after.Consent || !bytes.Equal(before.PublicKey, after.PublicKey) || !bytes.Equal(before.ExecutorPublicKey, after.ExecutorPublicKey) || after.Sequence < before.Sequence || after.ReadinessSequence < before.ReadinessSequence || after.ClockFloor < before.ClockFloor || after.ClockFloor > now {
+	if err := windowsupdatejob.CheckScheduleTransition(before, after); err != nil {
+		return err
+	}
+	if before.Version != after.Version || before.Consent != after.Consent || !bytes.Equal(before.PublicKey, after.PublicKey) || !bytes.Equal(before.ExecutorPublicKey, after.ExecutorPublicKey) || after.Sequence < before.Sequence || after.ReadinessSequence < before.ReadinessSequence || after.ClockFloor < before.ClockFloor || after.ClockFloor > now || after.SchedulePolicyFloor > now {
 		return windowsupdatejob.ErrInvalid
 	}
 	// Replacing the unsigned readiness slot must issue a strictly newer signed
@@ -383,7 +386,7 @@ func windowsUpdateJobTransition(before, after windowsupdatejob.Record, now int64
 		}
 	}
 	for _, old := range before.Jobs {
-		if len(old.Envelope) == 0 {
+		if len(old.Envelope) == 0 || old.Schedule != nil {
 			continue
 		}
 		found := false
@@ -423,6 +426,12 @@ func windowsUpdateJobFinalDeadline(before, after windowsupdatejob.Record, curren
 	}
 	for _, j := range after.Jobs {
 		prior, exists := old[j.ID]
+		if j.Schedule != nil && prior.Schedule == nil {
+			a := j.Schedule.Approval
+			if fresh >= a.Baseline.ExpiresAt || a.EndAt > current.LeafNotAfter || a.EndAt > after.Consent.ExpiresAt {
+				return windowsupdatejob.ErrExpired
+			}
+		}
 		newChallenge := !exists || !bytes.Equal(prior.Challenge, j.Challenge)
 		newReadinessClaim := j.ReadinessClaimedAt != 0 && prior.ReadinessClaimedAt == 0
 		if newChallenge || newReadinessClaim {
@@ -492,7 +501,7 @@ func (s *Store) WindowsUpdateJobTransaction(ctx context.Context, binding windows
 		if err != nil {
 			return err
 		}
-		floor := max(original.ClockFloor, rejected)
+		floor := max(original.ClockFloor, rejected, original.SchedulePolicyFloor)
 		current, authorityErr := s.windowsUpdateJobCurrent(t, snap.InvitationID, binding, original.Consent, initial)
 		if initial.Before(now) || initial.Unix() < floor {
 			operationErr = windowsupdatejob.ErrExpired

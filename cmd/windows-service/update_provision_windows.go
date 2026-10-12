@@ -46,7 +46,11 @@ func nativeUpdateProvision(ctx context.Context, in updateProvisionInput) (result
 		if e != nil {
 			return nil, e
 		}
-		p, e := windowsupdatesetup.NewPlan(in.offer, in.artifact, identity, receipt.Service)
+		newPlan := windowsupdatesetup.NewPlan
+		if in.schedule {
+			newPlan = windowsupdatesetup.NewScheduledPlan
+		}
+		p, e := newPlan(in.offer, in.artifact, identity, receipt.Service)
 		if e != nil {
 			return nil, e
 		}

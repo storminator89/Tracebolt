@@ -84,6 +84,10 @@ owned-service removal. This result does not transfer to later source or prove
 Windows 10/11, real Linux-manager/shared-browser interoperability or reboot.
 Exact artifact/source evidence is in the [published installation guide](windows-prerelease-install.md#selected-native-evidence).
 
+## Current hosted Setup acceptance source
+
+A separately versioned [current21 TLS-only hosted gate](../tests/windows_native_acceptance/CURRENT_SETUP.md) now supplies three fresh Server2025 cases, receipt12/twenty-grant verification, finite provider outcomes and exact tested-byte aggregation. This is source infrastructure only; no current native pass or release eligibility is claimed. The historical four-case evidence and publisher pin remain unchanged. Windows11, real Linux-manager/browser, event-history requests and renewal cutover stay separately unproved.
+
 ## Before installing or releasing
 
 Current-source Windows 11/provider/service-identity acceptance, real manager

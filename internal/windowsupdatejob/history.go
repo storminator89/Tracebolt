@@ -8,14 +8,15 @@ import (
 const HistoryVersion = "tracebolt.windows-selected-update-history.v1"
 
 type JobSummary struct {
-	ID          string    `json:"id"`
-	Selection   Selection `json:"selection"`
-	State       string    `json:"state"`
-	Reason      string    `json:"reason"`
-	Result      *Result   `json:"result"`
-	RequestedAt int64     `json:"requestedAt"`
-	ApprovedAt  int64     `json:"approvedAt"`
-	ClaimedAt   int64     `json:"claimedAt"`
+	ID          string        `json:"id"`
+	Selection   Selection     `json:"selection"`
+	State       string        `json:"state"`
+	Reason      string        `json:"reason"`
+	Result      *Result       `json:"result"`
+	RequestedAt int64         `json:"requestedAt"`
+	ApprovedAt  int64         `json:"approvedAt"`
+	ClaimedAt   int64         `json:"claimedAt"`
+	Schedule    *ScheduleView `json:"schedule,omitempty"`
 }
 type History struct {
 	Version           string       `json:"version"`
@@ -38,6 +39,12 @@ func publicJob(j Job, n int64, key []byte) PublicJob {
 	if j.Preview != nil && (j.State == "approved" || j.State == "preview") && n >= j.Preview.ExpiresAt {
 		p.State = "expired"
 	}
+	if j.Schedule != nil {
+		p.Schedule = scheduleView(j)
+		if p.State == "expired" || !scheduleActive(j, n) && (j.State == "scheduled" || j.State == "requested" || j.State == "approved") {
+			p.State = "schedule_expired"
+		}
+	}
 	return p
 }
 func (m *Manager) History(ctx context.Context, device string) (History, error) {
@@ -51,7 +58,7 @@ func (m *Manager) History(ctx context.Context, device string) (History, error) {
 		h.ServerNow = n
 		h.Available = !m.blocked(n, "")
 		h.Reason = "ready"
-		h.RemainingCapacity = MaxJobs - int(m.record.Sequence)
+		h.RemainingCapacity = MaxJobs - reservedOperations(m.record)
 		if !h.Available {
 			h.Reason = "job_pending_or_intervention"
 			if h.RemainingCapacity == 0 {
@@ -61,7 +68,7 @@ func (m *Manager) History(ctx context.Context, device string) (History, error) {
 		for i := len(m.record.Jobs) - 1; i >= 0; i-- {
 			j := m.record.Jobs[i]
 			p := publicJob(j, n, m.record.PublicKey)
-			h.Jobs = append(h.Jobs, JobSummary{j.ID, j.Selection, p.State, p.Reason, j.Result, j.RequestedAt, j.ApprovedAt, j.ClaimedAt})
+			h.Jobs = append(h.Jobs, JobSummary{j.ID, j.Selection, p.State, p.Reason, j.Result, j.RequestedAt, j.ApprovedAt, j.ClaimedAt, p.Schedule})
 		}
 		return nil
 	})

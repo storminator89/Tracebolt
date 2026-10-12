@@ -85,7 +85,7 @@ func (r ExecutorRecord) Validate() error {
 	ids := map[string]bool{}
 	for _, a := range r.Attempts {
 		p, e := Verify(a.Envelope, r.PublicKey)
-		if e != nil || p.Preview.Binding != r.Consent.Binding || p.Sequence <= seq || ids[p.Preview.ID] || a.ClaimedAt < p.ApprovedAt || a.ClaimedAt >= p.Preview.ExpiresAt || a.ClaimedAt > r.ClockFloor {
+		if e != nil || p.Preview.Binding != r.Consent.Binding || p.Sequence <= seq || ids[p.Preview.ID] || a.ClaimedAt < p.IssuedAt() || a.ClaimedAt >= p.Preview.ExpiresAt || a.ClaimedAt > r.ClockFloor {
 			return ErrIntegrity
 		}
 		seq = p.Sequence
@@ -212,7 +212,10 @@ func (x *Executor) currentPermit(c Current, p Permit) (int64, error) {
 	if p.Preview.Binding != c.Binding {
 		return n, x.rejectTime(n, ErrAuthority)
 	}
-	if n < p.ApprovedAt || n >= p.Preview.ExpiresAt {
+	if p.Schedule != nil && (!x.record.Consent.ScheduleAcknowledged || x.record.Consent.ScheduleScope != ScheduleScope) {
+		return n, x.rejectTime(n, ErrAuthority)
+	}
+	if n < p.IssuedAt() || n >= p.Preview.ExpiresAt {
 		return n, x.rejectTime(n, ErrExpired)
 	}
 	return n, nil

@@ -93,41 +93,51 @@ func (r Result) Validate() error {
 }
 
 type Job struct {
-	Challenge          []byte    `json:"challenge"`
-	ReadinessClaimedAt int64     `json:"readinessClaimedAt"`
-	ReadinessReport    []byte    `json:"readinessReport"`
-	ResultReport       []byte    `json:"resultReport"`
-	ID                 string    `json:"id"`
-	ActorID            string    `json:"actorId"`
-	Selection          Selection `json:"selection"`
-	RequestedAt        int64     `json:"requestedAt"`
-	State              string    `json:"state"`
-	Reason             string    `json:"reason"`
-	Preview            *Preview  `json:"preview"`
-	ApprovedAt         int64     `json:"approvedAt"`
-	Envelope           []byte    `json:"envelope"`
-	ClaimedAt          int64     `json:"claimedAt"`
-	Result             *Result   `json:"result"`
+	Challenge          []byte           `json:"challenge"`
+	ReadinessClaimedAt int64            `json:"readinessClaimedAt"`
+	ReadinessReport    []byte           `json:"readinessReport"`
+	ResultReport       []byte           `json:"resultReport"`
+	ID                 string           `json:"id"`
+	ActorID            string           `json:"actorId"`
+	Selection          Selection        `json:"selection"`
+	RequestedAt        int64            `json:"requestedAt"`
+	State              string           `json:"state"`
+	Reason             string           `json:"reason"`
+	Preview            *Preview         `json:"preview"`
+	ApprovedAt         int64            `json:"approvedAt"`
+	Envelope           []byte           `json:"envelope"`
+	ClaimedAt          int64            `json:"claimedAt"`
+	Result             *Result          `json:"result"`
+	Schedule           *ScheduledIntent `json:"schedule,omitempty"`
 }
 type Record struct {
-	Version           string  `json:"version"`
-	Consent           Consent `json:"consent"`
-	PublicKey         []byte  `json:"publicKey"`
-	ExecutorPublicKey []byte  `json:"executorPublicKey"`
-	ClockFloor        int64   `json:"clockFloor"`
-	Sequence          uint64  `json:"sequence,string"`
-	ReadinessSequence uint64  `json:"readinessSequence,string"`
-	Jobs              []Job   `json:"jobs"`
+	Version             string  `json:"version"`
+	Consent             Consent `json:"consent"`
+	PublicKey           []byte  `json:"publicKey"`
+	ExecutorPublicKey   []byte  `json:"executorPublicKey"`
+	ClockFloor          int64   `json:"clockFloor"`
+	Sequence            uint64  `json:"sequence,string"`
+	ReadinessSequence   uint64  `json:"readinessSequence,string"`
+	Jobs                []Job   `json:"jobs"`
+	ScheduleGeneration  uint64  `json:"scheduleGeneration,string,omitempty"`
+	ScheduleRevokedAt   int64   `json:"scheduleRevokedAt,omitempty"`
+	SchedulePolicyFloor int64   `json:"schedulePolicyFloor,omitempty"`
 }
 
 // NewRecord only prepares bytes for a future separately authorized create-only
 // provisioner. It writes nothing and is never called by Open, API or recovery.
 func NewRecordWithExecutor(c Consent, key, executorKey ed25519.PublicKey, now int64) (Record, error) {
 	r := Record{Version: Version, Consent: c, PublicKey: bytes.Clone(key), ExecutorPublicKey: bytes.Clone(executorKey), ClockFloor: now, Jobs: []Job{}}
+	if c.ScheduleAcknowledged {
+		r.ScheduleGeneration = 1
+	}
 	return r, r.Validate()
 }
 func (r Record) Validate() error {
 	if r.Version != Version || r.Consent.Validate() != nil || !keyvalidation.Ed25519(r.PublicKey) || !keyvalidation.Ed25519(r.ExecutorPublicKey) || actionpermit.Digest(r.ExecutorPublicKey) != r.Consent.Binding.ExecutorKeyID || actionpermit.Digest(r.PublicKey) != r.Consent.Binding.KeyID || !validTime(r.ClockFloor) || r.Jobs == nil || len(r.Jobs) > MaxJobs+1 {
+		return ErrIntegrity
+	}
+	if r.validateScheduleAuthority() != nil {
 		return ErrIntegrity
 	}
 	ids := map[string]bool{}
@@ -161,7 +171,14 @@ func (r Record) Validate() error {
 		if j.Preview != nil && (j.Preview.Validate() != nil || j.Preview.ID != j.ID || j.Preview.ActorID != j.ActorID || j.Preview.Binding != r.Consent.Binding || j.Preview.Readiness.Selection != j.Selection || j.Preview.CreatedAt < j.RequestedAt || j.Preview.CreatedAt > r.ClockFloor) {
 			return ErrIntegrity
 		}
+		if j.Schedule != nil && r.validateScheduledJob(j) != nil {
+			return ErrIntegrity
+		}
 		switch j.State {
+		case "scheduled", "schedule_canceled", "schedule_blocked", "schedule_expired":
+			if j.Schedule == nil || j.ClaimedAt != 0 || j.Result != nil {
+				return ErrIntegrity
+			}
 		case "requested":
 			if len(j.Envelope) != 0 || j.Preview != nil || j.Reason != "readiness_pending" {
 				return ErrIntegrity
@@ -205,7 +222,7 @@ func (r Record) Validate() error {
 			return ErrIntegrity
 		}
 	}
-	if seq != r.Sequence || seq > MaxJobs || readinessSeq != r.ReadinessSequence {
+	if seq != r.Sequence || seq > MaxJobs || readinessSeq != r.ReadinessSequence || reservedOperations(r) > MaxJobs {
 		return ErrIntegrity
 	}
 	return nil
@@ -232,6 +249,7 @@ type Manager struct {
 	transactionStore   TransactionStore
 	configurationCheck func() error
 	operatorAllowed    func(string) bool
+	scheduleAllowed    func(string) bool
 	binding            Binding
 	mu                 sync.Mutex
 	store              Storage
@@ -293,7 +311,7 @@ func (m *Manager) current(c Current, n int64) error {
 	if c.Binding != m.Binding() || !c.Enabled || c.Revoked || !actionpermit.ValidDigest(c.LeafDigest) || c.LeafGeneration == 0 || !m.record.Consent.Enabled || !m.record.Consent.Acknowledged {
 		return ErrAuthority
 	}
-	if !validTime(n) || n < m.record.ClockFloor || c.LeafNotBefore > n || n >= c.LeafNotAfter || n >= m.record.Consent.ExpiresAt {
+	if !validTime(n) || n < max(m.record.ClockFloor, m.record.SchedulePolicyFloor) || c.LeafNotBefore > n || n >= c.LeafNotAfter || n >= m.record.Consent.ExpiresAt {
 		return ErrExpired
 	}
 	return nil
@@ -313,7 +331,7 @@ func (m *Manager) save(n int64) error {
 // expired request must not revive after a clock rollback or process restart.
 func (m *Manager) observeTime() (int64, error) {
 	n := m.now().UTC().Unix()
-	if !validTime(n) || n < m.record.ClockFloor {
+	if !validTime(n) || n < max(m.record.ClockFloor, m.record.SchedulePolicyFloor) {
 		return n, ErrExpired
 	}
 	if n > m.record.ClockFloor {
@@ -368,11 +386,17 @@ func (m *Manager) transaction(ctx context.Context, fn func(Current, int64) error
 	return e
 }
 func (m *Manager) blocked(n int64, except string) bool {
-	if m.record.Sequence >= MaxJobs {
+	if reservedOperations(m.record) >= MaxJobs {
 		return true
 	}
 	for _, j := range m.record.Jobs {
 		if j.ID == except {
+			continue
+		}
+		if j.Schedule != nil && scheduleActive(j, n) {
+			return true
+		}
+		if j.Schedule != nil && (j.State == "scheduled" || j.State == "schedule_canceled" || j.State == "schedule_blocked" || j.State == "schedule_expired") {
 			continue
 		}
 		if j.State == "requested" {
@@ -410,7 +434,7 @@ func (m *Manager) Request(ctx context.Context, device, actor, id string, s Selec
 		// are never pruned. A discarded unsigned preview can no longer approve.
 		kept := make([]Job, 0, len(m.record.Jobs)+1)
 		for _, old := range m.record.Jobs {
-			if len(old.Envelope) > 0 {
+			if len(old.Envelope) > 0 || old.Schedule != nil {
 				kept = append(kept, old)
 			}
 		}
@@ -470,7 +494,7 @@ func (m *Manager) Approve(ctx context.Context, device, actor, id, d string, ack 
 			if j.ID != id {
 				continue
 			}
-			if j.ActorID != actor || j.Preview == nil || j.Preview.Digest != d {
+			if j.Schedule != nil || j.ActorID != actor || j.Preview == nil || j.Preview.Digest != d {
 				return ErrConflict
 			}
 			if len(j.Envelope) > 0 {
@@ -511,6 +535,9 @@ func (m *Manager) Claim(ctx context.Context, id string) ([]byte, error) {
 				continue
 			}
 			if m.transactionStore != nil && (m.operatorAllowed == nil || !m.operatorAllowed(j.ActorID)) {
+				return ErrAuthority
+			}
+			if j.Schedule != nil && !m.scheduleAuthorized(j) {
 				return ErrAuthority
 			}
 			if j.State != "approved" {
@@ -570,20 +597,23 @@ func (m *Manager) Submit(ctx context.Context, r Result) error {
 }
 
 type View struct {
-	Version   string     `json:"version"`
-	DeviceID  string     `json:"deviceId"`
-	ServerNow int64      `json:"serverNow"`
-	Available bool       `json:"available"`
-	Reason    string     `json:"reason"`
-	Job       *PublicJob `json:"job"`
+	Version             string     `json:"version"`
+	DeviceID            string     `json:"deviceId"`
+	ServerNow           int64      `json:"serverNow"`
+	Available           bool       `json:"available"`
+	Reason              string     `json:"reason"`
+	Job                 *PublicJob `json:"job"`
+	SchedulingAvailable bool       `json:"schedulingAvailable,omitempty"`
+	SchedulingRevoked   bool       `json:"schedulingRevoked,omitempty"`
 }
 type PublicJob struct {
-	ID        string    `json:"id"`
-	Selection Selection `json:"selection"`
-	State     string    `json:"state"`
-	Reason    string    `json:"reason"`
-	Preview   *Preview  `json:"preview"`
-	Result    *Result   `json:"result"`
+	ID        string        `json:"id"`
+	Selection Selection     `json:"selection"`
+	State     string        `json:"state"`
+	Reason    string        `json:"reason"`
+	Preview   *Preview      `json:"preview"`
+	Result    *Result       `json:"result"`
+	Schedule  *ScheduleView `json:"schedule,omitempty"`
 }
 
 func (m *Manager) View(ctx context.Context, device, actor string, ids ...string) (View, error) {
@@ -595,11 +625,13 @@ func (m *Manager) View(ctx context.Context, device, actor string, ids ...string)
 	}
 	e := m.transaction(ctx, func(_ Current, n int64) error {
 		v.ServerNow = n
+		v.SchedulingAvailable = m.schedulingAvailable(actor)
+		v.SchedulingRevoked = m.record.ScheduleRevokedAt != 0
 		v.Available = !m.blocked(n, "")
 		v.Reason = "ready"
 		if !v.Available {
 			v.Reason = "job_pending_or_intervention"
-			if m.record.Sequence >= MaxJobs {
+			if reservedOperations(m.record) >= MaxJobs {
 				v.Reason = "capacity_exhausted"
 			}
 		}
@@ -621,17 +653,18 @@ func (m *Manager) View(ctx context.Context, device, actor string, ids ...string)
 					return ErrConflict
 				}
 			}
-			v.Job = &PublicJob{ID: j.ID, Selection: j.Selection, State: j.State, Reason: j.Reason, Result: j.Result}
-			if j.State == "requested" {
+			public := publicJob(j, n, m.record.PublicKey)
+			v.Job = &public
+			if j.Schedule == nil && j.State == "requested" {
 				challenge, _ := VerifyChallenge(j.Challenge, m.record.PublicKey)
 				if n >= challenge.Deadline {
 					v.Job.State = "expired"
 				}
 			}
-			if j.Preview != nil && (j.State == "approved" || j.State == "preview") && n >= j.Preview.ExpiresAt {
+			if j.Schedule == nil && j.Preview != nil && (j.State == "approved" || j.State == "preview") && n >= j.Preview.ExpiresAt {
 				v.Job.State = "expired"
 			}
-			if j.ActorID == actor && j.State == "preview" && n < j.Preview.ExpiresAt {
+			if j.Schedule == nil && j.ActorID == actor && j.State == "preview" && n < j.Preview.ExpiresAt {
 				v.Job.Preview = j.Preview
 			}
 		}

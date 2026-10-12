@@ -29,3 +29,18 @@ func TestSelectedUpdateSetupRequiresIndependentApproval(t *testing.T) {
 		}
 	}
 }
+
+func TestScheduledUpdateSetupRequiresSeparateFreshFlagAndAcknowledgement(t *testing.T) {
+	base := []string{"--manager-offer", "x", "--executor-file", "y", "--artifact-manifest", "z"}
+	apply := []string{"--apply", "--approve", "sha256:x", "--acknowledge-selected-updates", "--acknowledge-observer-relay", "--acknowledge-observer-process-query"}
+	for _, extra := range [][]string{{"--acknowledge-scheduled-updates"}, {"--allow-scheduled-updates", "--acknowledge-scheduled-updates"}, append(append([]string{}, apply...), "--allow-scheduled-updates"), append(append([]string{}, apply...), "--acknowledge-scheduled-updates")} {
+		called := false
+		code := runUpdateProvision(context.Background(), append(append([]string{}, base...), extra...), io.Discard, io.Discard, func(context.Context, updateProvisionInput) (updateProvisionResult, error) {
+			called = true
+			return updateProvisionResult{}, nil
+		})
+		if code != 2 || called {
+			t.Fatal("scheduled setup inferred local acknowledgement", extra, code)
+		}
+	}
+}

@@ -18,6 +18,14 @@ import (
 // The root private key lives only in this call, never in the fixture handle or
 // filesystem. It is not provisioning for a production or ordinary LAN manager.
 func newDisposableAuthority(now time.Time) (*enrollmentissuer.Issuer, tls.Certificate, error) {
+	return newDisposableAuthorityMode(now, false)
+}
+
+func newDisposableAuthorityMode(now time.Time, current bool) (*enrollmentissuer.Issuer, tls.Certificate, error) {
+	rootLifetime, issuerLifetime := 24*time.Hour, 12*time.Hour
+	if current {
+		rootLifetime, issuerLifetime = 30*24*time.Hour, 14*24*time.Hour
+	}
 	bad := func() (*enrollmentissuer.Issuer, tls.Certificate, error) { return nil, tls.Certificate{}, ErrFixture }
 	rp, rk, e := ed25519.GenerateKey(rand.Reader)
 	if e != nil {
@@ -40,7 +48,7 @@ func newDisposableAuthority(now time.Time) (*enrollmentissuer.Issuer, tls.Certif
 		}
 	}()
 	now = now.UTC()
-	root := &x509.Certificate{SerialNumber: big.NewInt(1), Subject: pkix.Name{CommonName: "Disposable Windows acceptance root; not production"}, NotBefore: now.Add(-time.Hour), NotAfter: now.Add(24 * time.Hour), IsCA: true, BasicConstraintsValid: true, MaxPathLen: 1, KeyUsage: x509.KeyUsageCertSign, SubjectKeyId: []byte("windows-acceptance-root")}
+	root := &x509.Certificate{SerialNumber: big.NewInt(1), Subject: pkix.Name{CommonName: "Disposable Windows acceptance root; not production"}, NotBefore: now.Add(-time.Hour), NotAfter: now.Add(rootLifetime), IsCA: true, BasicConstraintsValid: true, MaxPathLen: 1, KeyUsage: x509.KeyUsageCertSign, SubjectKeyId: []byte("windows-acceptance-root")}
 	rd, e := x509.CreateCertificate(rand.Reader, root, root, rp, rk)
 	if e != nil {
 		return bad()
@@ -49,7 +57,7 @@ func newDisposableAuthority(now time.Time) (*enrollmentissuer.Issuer, tls.Certif
 	if e != nil {
 		return bad()
 	}
-	intermediate := &x509.Certificate{SerialNumber: big.NewInt(2), Subject: pkix.Name{CommonName: "Disposable Windows acceptance client-only issuer"}, NotBefore: now.Add(-time.Hour), NotAfter: now.Add(12 * time.Hour), IsCA: true, BasicConstraintsValid: true, MaxPathLen: 0, MaxPathLenZero: true, KeyUsage: x509.KeyUsageCertSign, ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth}, SubjectKeyId: []byte("windows-acceptance-issuer")}
+	intermediate := &x509.Certificate{SerialNumber: big.NewInt(2), Subject: pkix.Name{CommonName: "Disposable Windows acceptance client-only issuer"}, NotBefore: now.Add(-time.Hour), NotAfter: now.Add(issuerLifetime), IsCA: true, BasicConstraintsValid: true, MaxPathLen: 0, MaxPathLenZero: true, KeyUsage: x509.KeyUsageCertSign, ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth}, SubjectKeyId: []byte("windows-acceptance-issuer")}
 	id, e := x509.CreateCertificate(rand.Reader, intermediate, root, ip, rk)
 	if e != nil {
 		return bad()

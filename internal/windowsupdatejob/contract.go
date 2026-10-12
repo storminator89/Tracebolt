@@ -19,12 +19,15 @@ import (
 )
 
 const (
-	Version         = "tracebolt.windows-selected-update-job.v1"
-	Scope           = "windows-selected-cached-update-install-v1"
-	ConsentVersion  = "tracebolt.windows-selected-update-consent.v1"
-	MaxJobs         = 32
-	MaxBytes        = 512 << 10
-	PreviewLifetime = 60 * time.Second
+	Version                 = "tracebolt.windows-selected-update-job.v1"
+	Scope                   = "windows-selected-cached-update-install-v1"
+	ConsentVersion          = "tracebolt.windows-selected-update-consent.v1"
+	ScheduledConsentVersion = "tracebolt.windows-selected-update-consent.v2"
+	ScheduledPermitVersion  = "tracebolt.windows-selected-update-job.v2"
+	ScheduleScope           = "windows-selected-cached-update-schedule-v1"
+	MaxJobs                 = 32
+	MaxBytes                = 512 << 10
+	PreviewLifetime         = 60 * time.Second
 	// Disclosure is a fresh local approval, never an observation receipt upgrade.
 	Disclosure = "Allow separately approved installation of one exact cached Windows software update through a dedicated elevated executor. Installation may interrupt applications and require a later restart. Only already-downloaded, already-accepted-license, noninteractive, non-bundled updates that require no source media or network are eligible. No downloads, license acceptance, forced application closure, automatic reboot, service-control grant or arbitrary command is authorized."
 )
@@ -66,16 +69,18 @@ func ValidBinding(b Binding) bool {
 }
 
 type Consent struct {
-	Version      string  `json:"version"`
-	Scope        string  `json:"scope"`
-	Binding      Binding `json:"binding"`
-	Enabled      bool    `json:"enabled"`
-	Acknowledged bool    `json:"acknowledged"`
-	ExpiresAt    int64   `json:"expiresAt"`
+	Version              string  `json:"version"`
+	Scope                string  `json:"scope"`
+	Binding              Binding `json:"binding"`
+	Enabled              bool    `json:"enabled"`
+	Acknowledged         bool    `json:"acknowledged"`
+	ExpiresAt            int64   `json:"expiresAt"`
+	ScheduleScope        string  `json:"scheduleScope,omitempty"`
+	ScheduleAcknowledged bool    `json:"scheduleAcknowledged,omitempty"`
 }
 
 func (c Consent) Validate() error {
-	if c.Version != ConsentVersion || c.Scope != Scope || !ValidBinding(c.Binding) || !validTime(c.ExpiresAt) || c.Enabled && !c.Acknowledged {
+	if !(c.Version == ConsentVersion && c.ScheduleScope == "" && !c.ScheduleAcknowledged || c.Version == ScheduledConsentVersion && c.ScheduleScope == ScheduleScope && c.ScheduleAcknowledged) || c.Scope != Scope || !ValidBinding(c.Binding) || !validTime(c.ExpiresAt) || c.Enabled && !c.Acknowledged {
 		return ErrInvalid
 	}
 	return nil
@@ -195,14 +200,19 @@ func (p Preview) Validate() error {
 }
 
 type Permit struct {
-	Version    string  `json:"version"`
-	Preview    Preview `json:"preview"`
-	Sequence   uint64  `json:"sequence,string"`
-	ApprovedAt int64   `json:"approvedAt"`
+	Version        string            `json:"version"`
+	Preview        Preview           `json:"preview"`
+	Sequence       uint64            `json:"sequence,string"`
+	ApprovedAt     int64             `json:"approvedAt"`
+	PermitIssuedAt int64             `json:"permitIssuedAt,omitempty"`
+	Schedule       *ScheduleApproval `json:"schedule,omitempty"`
 }
 
 func (p Permit) Validate() error {
-	if p.Version != Version || p.Preview.Validate() != nil || p.Preview.Readiness.Reason() != "ready" || p.Sequence == 0 || p.ApprovedAt < p.Preview.CreatedAt || p.ApprovedAt >= p.Preview.ExpiresAt {
+	if p.Schedule != nil {
+		return p.validateScheduled()
+	}
+	if p.Version != Version || p.PermitIssuedAt != 0 || p.Preview.Validate() != nil || p.Preview.Readiness.Reason() != "ready" || p.Sequence == 0 || p.ApprovedAt < p.Preview.CreatedAt || p.ApprovedAt >= p.Preview.ExpiresAt {
 		return ErrInvalid
 	}
 	return nil
@@ -215,6 +225,9 @@ type envelope struct {
 
 func signingMessage(p Permit) []byte {
 	raw, _ := json.Marshal(p)
+	if p.Version == ScheduledPermitVersion {
+		return append([]byte("Tracebolt scheduled cached WUA install v2\x00"), raw...)
+	}
 	return append([]byte("Tracebolt selected cached WUA install v1\x00"), raw...)
 }
 func Sign(p Permit, k ed25519.PrivateKey) ([]byte, error) {

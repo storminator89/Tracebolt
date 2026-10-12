@@ -50,7 +50,7 @@ type updateAPIFixture struct {
 	device, id string
 }
 
-func newUpdateAPIFixture(t *testing.T, caps []operatorauth.Capability) updateAPIFixture {
+func newUpdateAPIFixture(t *testing.T, caps []operatorauth.Capability, scheduling ...bool) updateAPIFixture {
 	t.Helper()
 	app := setup(t)
 	auth, e := operatorauth.New(operatorauth.Config{Operators: []operatorauth.Operator{{ID: namedActorID, Username: "reader", PasswordHash: testOperatorHash(), Capabilities: caps}}})
@@ -66,6 +66,11 @@ func newUpdateAPIFixture(t *testing.T, caps []operatorauth.Capability) updateAPI
 	key := ed25519.NewKeyFromSeed(bytes.Repeat([]byte{62}, 32))
 	b := windowsupdatejob.Binding{ManagerID: "manager_" + strings.Repeat("1", 32), DeviceID: namedDeviceID, IncarnationDigest: actionpermit.Digest([]byte("anchor")), ExecutorID: "executor_" + strings.Repeat("3", 32), ExecutorKeyID: actionpermit.Digest(apiExecutorKey.Public().(ed25519.PublicKey)), GrantID: "grant_" + strings.Repeat("4", 32), KeyID: actionpermit.Digest(key.Public().(ed25519.PublicKey))}
 	c := windowsupdatejob.Consent{Version: windowsupdatejob.ConsentVersion, Scope: windowsupdatejob.Scope, Binding: b, Enabled: true, Acknowledged: true, ExpiresAt: at + 3600}
+	if len(scheduling) == 1 && scheduling[0] {
+		c.Version = windowsupdatejob.ScheduledConsentVersion
+		c.ScheduleScope = windowsupdatejob.ScheduleScope
+		c.ScheduleAcknowledged = true
+	}
 	record, e := windowsupdatejob.NewRecordWithExecutor(c, key.Public().(ed25519.PublicKey), apiExecutorKey.Public().(ed25519.PublicKey), at)
 	if e != nil {
 		t.Fatal(e)
@@ -79,6 +84,14 @@ func newUpdateAPIFixture(t *testing.T, caps []operatorauth.Capability) updateAPI
 	m, e := windowsupdatejob.Open(s, a, updateAPIReadiness{r}, key, time.Now)
 	if e != nil {
 		t.Fatal(e)
+	}
+	if len(scheduling) == 1 && scheduling[0] {
+		if e = m.ConfigureOperatorPolicy(func(actor string) bool { return auth.ActorHasCapability(actor, operatorauth.WindowsUpdateInstall) }); e != nil {
+			t.Fatal(e)
+		}
+		if e = m.ConfigureSchedulePolicy(context.Background(), func(actor string) bool { return auth.ActorHasCapability(actor, operatorauth.WindowsUpdateSchedule) }); e != nil {
+			t.Fatal(e)
+		}
 	}
 	app.mu.Lock()
 	app.lanOnly = true
@@ -195,15 +208,24 @@ func TestWindowsUpdateJobAPIDefaultOffAndNoExecutorIngress(t *testing.T) {
 }
 
 func TestWindowsUpdateJobAPIBodyReadDoesNotHoldSessionGate(t *testing.T) {
-	for _, op := range []string{"request", "preview", "approve"} {
+	for _, op := range []string{"request", "preview", "approve", "schedule", "cancel-schedule", "revoke-scheduling"} {
 		t.Run(op, func(t *testing.T) {
-			f := newUpdateAPIFixture(t, []operatorauth.Capability{operatorauth.Read, operatorauth.WindowsUpdateInstall})
+			f := newUpdateAPIFixture(t, []operatorauth.Capability{operatorauth.Read, operatorauth.WindowsUpdateInstall, operatorauth.WindowsUpdateSchedule})
 			raw := `{"requestId":"` + f.id + `"}`
 			if op == "request" {
 				raw = `{"requestId":"` + f.id + `","updateId":"` + f.selection.UpdateID + `","revision":3}`
 			}
 			if op == "approve" {
 				raw = `{"previewId":"` + f.id + `","previewDigest":"` + actionpermit.Digest([]byte("fixture")) + `","acknowledged":true}`
+			}
+			if op == "schedule" {
+				raw = `{"previewId":"` + f.id + `","previewDigest":"` + actionpermit.Digest([]byte("fixture")) + `","startAt":1800000000,"endAt":1800000060,"acknowledged":true}`
+			}
+			if op == "cancel-schedule" {
+				raw = `{"scheduleId":"` + f.id + `","scheduleDigest":"` + actionpermit.Digest([]byte("fixture")) + `"}`
+			}
+			if op == "revoke-scheduling" {
+				raw = `{"acknowledged":true}`
 			}
 			body := &gatedAlarmBody{started: make(chan struct{}), allow: make(chan struct{}), reader: strings.NewReader(raw)}
 			r := httptest.NewRequest("POST", "https://manager.invalid/api/devices/"+f.device+"/windows-update-jobs/"+op, body)
@@ -260,5 +282,44 @@ func TestWindowsUpdateHistoryAndExactQueriesAreReadOnlyAndStrict(t *testing.T) {
 		if bytes.Contains(raw, []byte(`"`+private+`":`)) {
 			t.Fatal("history leaked executable/review authority", private)
 		}
+	}
+}
+
+func TestWindowsUpdateSchedulingRequiresBothCapabilitiesAndFreshConsent(t *testing.T) {
+	for _, caps := range [][]operatorauth.Capability{{operatorauth.Read}, {operatorauth.Read, operatorauth.WindowsUpdateInstall}, {operatorauth.Read, operatorauth.WindowsUpdateSchedule}, {operatorauth.Read, operatorauth.ExecuteUpdates, operatorauth.WindowsServiceControl}} {
+		f := newUpdateAPIFixture(t, caps)
+		for _, route := range []string{"schedule", "cancel-schedule", "revoke-scheduling"} {
+			if code, _ := f.call(t, "POST", "/"+route, map[string]any{"acknowledged": true}, nil); code != 403 {
+				t.Fatal("inferred scheduling permission", caps, route, code)
+			}
+		}
+	}
+	f := newUpdateAPIFixture(t, []operatorauth.Capability{operatorauth.Read, operatorauth.WindowsUpdateInstall, operatorauth.WindowsUpdateSchedule})
+	if code, v := f.call(t, "GET", "", nil, nil); code != 200 || v["schedulingAvailable"] == true {
+		t.Fatal("manual consent promoted", code, v)
+	}
+	if code, _ := f.call(t, "POST", "/revoke-scheduling", map[string]any{"acknowledged": true}, nil); code != 403 {
+		t.Fatal("manual grant admitted scheduling mutation", code)
+	}
+}
+
+func TestWindowsUpdateSchedulingRevocationHasExplicitSavedEvidence(t *testing.T) {
+	f := newUpdateAPIFixture(t, []operatorauth.Capability{operatorauth.Read, operatorauth.WindowsUpdateInstall, operatorauth.WindowsUpdateSchedule}, true)
+	if code, v := f.call(t, "GET", "", nil, nil); code != 200 || v["schedulingAvailable"] != true || v["schedulingRevoked"] == true {
+		t.Fatal(code, v)
+	}
+	if code, _ := f.call(t, "POST", "/revoke-scheduling", map[string]any{"acknowledged": false}, nil); code != 400 {
+		t.Fatal("unchecked revocation", code)
+	}
+	for _, suffix := range []string{"/schedule", "/cancel-schedule", "/revoke-scheduling"} {
+		if code, _ := f.call(t, "POST", suffix, map[string]any{"acknowledged": true, "actorId": namedActorID}, nil); code != 400 {
+			t.Fatal("extra authority field accepted", suffix, code)
+		}
+	}
+	if code, v := f.call(t, "POST", "/revoke-scheduling", map[string]any{"acknowledged": true}, nil); code != 200 || v["schedulingRevoked"] != true || v["schedulingAvailable"] == true {
+		t.Fatal(code, v)
+	}
+	if code, v := f.call(t, "GET", "", nil, nil); code != 200 || v["schedulingRevoked"] != true || v["schedulingAvailable"] == true {
+		t.Fatal("revocation not reconcilable by GET", code, v)
 	}
 }

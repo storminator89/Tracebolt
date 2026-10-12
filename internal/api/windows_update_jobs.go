@@ -34,11 +34,29 @@ func windowsUpdateJobRoute(r *http.Request) (string, string, bool) {
 	op := ""
 	if len(p) == 6 {
 		op = p[5]
-		if op != "request" && op != "approve" && op != "preview" {
+		if op != "request" && op != "approve" && op != "preview" && !windowsUpdateScheduleOperation(op) {
 			return "", "", false
 		}
 	}
 	return p[3], op, true
+}
+func windowsUpdateScheduleOperation(op string) bool {
+	return op == "schedule" || op == "cancel-schedule" || op == "revoke-scheduling"
+}
+
+// One short install-capability lease also fences the separately required live
+// scheduling capability. Never nest session leases or hold one during body reads.
+func (h *operatorHandler) beginWindowsUpdateMutation(w http.ResponseWriter, r *http.Request, op string) (string, func(), bool) {
+	actor, release, ok := h.app.beginOperatorCapability(w, r, operatorauth.WindowsUpdateInstall)
+	if !ok {
+		return "", nil, false
+	}
+	if windowsUpdateScheduleOperation(op) && !h.auth.ActorHasCapability(actor, operatorauth.WindowsUpdateSchedule) {
+		release()
+		fail(w, 403, "operator_capability_required", "Separate named Windows update install and scheduling permissions are required.")
+		return "", nil, false
+	}
+	return actor, release, true
 }
 func (h *operatorHandler) windowsUpdateManager(device string) *windowsupdatejob.Manager {
 	if h.windowsUpdateRegistry != nil {
@@ -90,7 +108,7 @@ func (h *operatorHandler) windowsUpdateJobsAPI(w http.ResponseWriter, r *http.Re
 		return
 	}
 	manager := h.windowsUpdateManager(device)
-	actor, release, ok := h.app.beginOperatorCapability(w, r, operatorauth.WindowsUpdateInstall)
+	actor, release, ok := h.beginWindowsUpdateMutation(w, r, op)
 	if !ok {
 		return
 	}
@@ -124,6 +142,41 @@ func (h *operatorHandler) windowsUpdateJobsAPI(w http.ResponseWriter, r *http.Re
 		}
 		selectedID = in.RequestID
 		mutate = func() error { return manager.Review(r.Context(), device, actor, in.RequestID) }
+	} else if op == "schedule" {
+		var in struct {
+			PreviewID     string `json:"previewId"`
+			PreviewDigest string `json:"previewDigest"`
+			StartAt       int64  `json:"startAt"`
+			EndAt         int64  `json:"endAt"`
+			Acknowledged  bool   `json:"acknowledged"`
+		}
+		if !readObject(w, r, 1024, []string{"previewId", "previewDigest", "startAt", "endAt", "acknowledged"}, &in) {
+			return
+		}
+		selectedID = in.PreviewID
+		mutate = func() error {
+			return manager.Schedule(r.Context(), device, actor, in.PreviewID, in.PreviewDigest, in.StartAt, in.EndAt, in.Acknowledged)
+		}
+	} else if op == "cancel-schedule" {
+		var in struct {
+			ScheduleID     string `json:"scheduleId"`
+			ScheduleDigest string `json:"scheduleDigest"`
+		}
+		if !readObject(w, r, 512, []string{"scheduleId", "scheduleDigest"}, &in) {
+			return
+		}
+		selectedID = in.ScheduleID
+		mutate = func() error {
+			return manager.CancelSchedule(r.Context(), device, actor, in.ScheduleID, in.ScheduleDigest)
+		}
+	} else if op == "revoke-scheduling" {
+		var in struct {
+			Acknowledged bool `json:"acknowledged"`
+		}
+		if !readObject(w, r, 128, []string{"acknowledged"}, &in) {
+			return
+		}
+		mutate = func() error { return manager.RevokeScheduling(r.Context(), device, actor, in.Acknowledged) }
 	} else {
 		var in struct {
 			PreviewID     string `json:"previewId"`
@@ -138,7 +191,7 @@ func (h *operatorHandler) windowsUpdateJobsAPI(w http.ResponseWriter, r *http.Re
 			return manager.Approve(r.Context(), device, actor, in.PreviewID, in.PreviewDigest, in.Acknowledged)
 		}
 	}
-	currentActor, release, ok := h.app.beginOperatorCapability(w, r, operatorauth.WindowsUpdateInstall)
+	currentActor, release, ok := h.beginWindowsUpdateMutation(w, r, op)
 	if !ok {
 		return
 	}
@@ -153,19 +206,24 @@ func (h *operatorHandler) windowsUpdateJobsAPI(w http.ResponseWriter, r *http.Re
 		windowsUpdateJobError(w, e)
 		return
 	}
-	h.writeWindowsUpdateJobs(w, r, device, selectedID)
+	if selectedID == "" {
+		h.writeWindowsUpdateJobs(w, r, device)
+	} else {
+		h.writeWindowsUpdateJobs(w, r, device, selectedID)
+	}
 }
 
 // Supply the live clock and session guard through the manager to the same
 // enrollment commit fence. A timestamp sampled before SQLite waits is not enough.
 func (h *operatorHandler) windowsUpdateJobContext(r *http.Request, mutation bool) context.Context {
+	_, op, _ := windowsUpdateJobRoute(r)
 	ctx := enrollmentstore.WithOverviewClock(r.Context(), h.auth.Now)
 	owner, ok := operatorContext(r)
 	return windowsupdatejob.WithFinalCheck(ctx, func() error {
 		if !ok || !h.auth.Now().Before(owner.session.ExpiresAt) || owner.session.Lifetime().Err() != nil || owner.active == nil || !owner.active() {
 			return windowsupdatejob.ErrAuthority
 		}
-		if mutation && (!owner.session.Named() || !h.auth.ActorHasCapability(owner.session.ActorID(), operatorauth.WindowsUpdateInstall)) {
+		if mutation && (!owner.session.Named() || !h.auth.ActorHasCapability(owner.session.ActorID(), operatorauth.WindowsUpdateInstall) || windowsUpdateScheduleOperation(op) && !h.auth.ActorHasCapability(owner.session.ActorID(), operatorauth.WindowsUpdateSchedule)) {
 			return windowsupdatejob.ErrAuthority
 		}
 		return nil
@@ -207,6 +265,9 @@ func (h *operatorHandler) writeWindowsUpdateJobs(w http.ResponseWriter, r *http.
 			return
 		}
 	}
+	if !can || !h.auth.ActorHasCapability(owner.session.ActorID(), operatorauth.WindowsUpdateSchedule) {
+		v.SchedulingAvailable = false
+	}
 	if !can {
 		v.Available = false
 		v.Reason = "operator_capability_required"
@@ -215,6 +276,7 @@ func (h *operatorHandler) writeWindowsUpdateJobs(w http.ResponseWriter, r *http.
 		}
 	}
 	if h.insecureHTTPTest {
+		v.SchedulingAvailable = false
 		v.Available = false
 		v.Reason = "tls_required"
 		if v.Job != nil {

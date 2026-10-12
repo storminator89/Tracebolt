@@ -131,7 +131,7 @@ func newSetupFixture(t *testing.T) *setupFixture {
 	return f
 }
 func (f *setupFixture) apply() (job.SetupRegistration, error) {
-	return apply(context.Background(), f.p, f.payload, Approval{f.p.Digest(), true, true, true}, f.h, func() (ed25519.PrivateKey, string, string, error) {
+	return apply(context.Background(), f.p, f.payload, Approval{Digest: f.p.Digest(), Install: true, Relay: true, ProcessQuery: true, Schedule: f.p.ScheduleScope != ""}, f.h, func() (ed25519.PrivateKey, string, string, error) {
 		f.generated++
 		return ed25519.NewKeyFromSeed(bytes.Repeat([]byte{32}, 32)), "executor_" + strings.Repeat("7", 32), "grant_" + strings.Repeat("8", 32), nil
 	}, func() time.Time { return f.now })
@@ -312,5 +312,43 @@ func TestFreshUpdateSetupRemovalRejectsUnresolvedConsumedAttempts(t *testing.T) 
 				t.Fatal("unresolved attempt retired authority", e)
 			}
 		})
+	}
+}
+
+func TestFreshScheduledSetupNeverPromotesManualPlan(t *testing.T) {
+	f := newSetupFixture(t)
+	manual, _ := json.Marshal(f.p)
+	if bytes.Contains(manual, []byte("schedule")) {
+		t.Fatal("manual plan bytes gained schedule fields")
+	}
+	scheduled, err := NewScheduledPlan(f.p.Offer, f.p.Artifact, f.p.Identity, f.p.Observer)
+	if err != nil || scheduled.Digest() == f.p.Digest() || scheduled.ScheduleScope != job.ScheduleScope || scheduled.ScheduleDisclosure != job.ScheduleDisclosure {
+		t.Fatal("schedule plan lacks distinct review", err)
+	}
+	for _, tc := range []struct {
+		plan        Plan
+		acknowledge bool
+	}{{scheduled, false}, {f.p, true}} {
+		if _, err := apply(context.Background(), tc.plan, f.payload, Approval{Digest: tc.plan.Digest(), Install: true, Relay: true, ProcessQuery: true, Schedule: tc.acknowledge}, f.h, generateMaterial, func() time.Time { return f.now }); err == nil || f.created != 0 || f.generated != 0 {
+			t.Fatal("schedule acknowledgement inferred or added to manual setup")
+		}
+	}
+	f.p = scheduled
+	r, err := f.apply()
+	if err != nil || r.Consent.Version != job.ScheduledConsentVersion || r.Consent.ScheduleScope != job.ScheduleScope || !r.Consent.ScheduleAcknowledged || r.Consent.ExpiresAt != scheduled.Offer.ExpiresAt {
+		t.Fatal("fresh scheduling registration", err)
+	}
+	if VerifyInstalled(f.s, f.config(t)) != nil {
+		t.Fatal("fresh scheduling setup did not verify")
+	}
+	var saved Plan
+	if decode(f.s.files["provision.json"], &saved) != nil {
+		t.Fatal("plan")
+	}
+	saved.ScheduleScope = ""
+	saved.ScheduleDisclosure = ""
+	f.s.files["provision.json"], _ = json.Marshal(saved)
+	if VerifyInstalled(f.s, f.config(t)) == nil {
+		t.Fatal("manual plan adopted scheduling consent")
 	}
 }
