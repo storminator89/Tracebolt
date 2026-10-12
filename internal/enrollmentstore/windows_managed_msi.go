@@ -237,7 +237,7 @@ func (s *Store) loadWindowsManagedMSIRecords(ctx context.Context, t *transaction
 	markers := map[string]*windowsManagedMSISetupMarker{}
 	for id, c := range t.credentials {
 		if c.WindowsManagedMSISetup != nil {
-			if c.WindowsActionSetup != nil || c.WindowsUpdateJobSetup != nil || c.WindowsSoftwareJobSetup != nil {
+			if c.WindowsActionSetup != nil || c.WindowsSoftwareJobSetup != nil || c.WindowsUpdateJobSetup != nil && !coordinatedWindowsMutationPair(c.WindowsManagedMSISetup.Grant, c.WindowsUpdateJobSetup.Consent) {
 				return ErrStorage
 			}
 			markers[id] = c.WindowsManagedMSISetup

@@ -140,3 +140,31 @@ func TestWindowsManagedMSIConfigurationSeparateDefaultOff(t *testing.T) {
 		t.Fatal("managed MSI accepted plaintext")
 	}
 }
+
+// Composition changes only a new activation value; neither staged source is
+// rewritten and neither domain config is replaced or promoted.
+func TestCoordinatedWindowsMutationActivationKeepsBothReferences(t *testing.T) {
+	base := Config{SchemaVersion: SchemaVersion, Profile: TLS, OperatorListen: "127.0.0.1:8080", AgentListen: "127.0.0.1:8081", OperatorOrigin: "https://manager.invalid:8080", AgentOrigin: "https://manager.invalid:8081", TLSCertificateFile: "/protected/cert", TLSPrivateKeyFile: "/protected/key", AgentClientCAFile: "/protected/ca", OperatorAuthFile: "/protected/auth", StateDirectory: "/protected/state", WebDirectory: "/protected/web", WindowsInventoryEnabled: true}
+	msi, wua := base, base
+	msi.WindowsManagedMSIConfigFile = "/protected/state/windows-managed-msi-setup/manager.json"
+	wua.WindowsUpdateJobsConfigFile = "/protected/state/windows-update-setup/manager.json"
+	beforeM, _ := json.Marshal(msi)
+	beforeW, _ := json.Marshal(wua)
+	activation := wua
+	activation.WindowsManagedMSIConfigFile = msi.WindowsManagedMSIConfigFile
+	raw, _ := json.Marshal(activation)
+	var decoded Config
+	if json.Unmarshal(raw, &decoded) != nil || decoded.Validate() != nil || decoded.WindowsManagedMSIConfigFile != msi.WindowsManagedMSIConfigFile || decoded.WindowsUpdateJobsConfigFile != wua.WindowsUpdateJobsConfigFile {
+		t.Fatal("exact two-domain activation rejected")
+	}
+	afterM, _ := json.Marshal(msi)
+	afterW, _ := json.Marshal(wua)
+	if string(beforeM) != string(afterM) || string(beforeW) != string(afterW) {
+		t.Fatal("composition rewrote staged inputs")
+	}
+	decoded.WindowsManagedMSIConfigFile = ""
+	decoded.WindowsUpdateJobsConfigFile = ""
+	if decoded != base {
+		t.Fatal("unrelated activation field changed")
+	}
+}

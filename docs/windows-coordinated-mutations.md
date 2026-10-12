@@ -41,8 +41,22 @@ Both local participants must have exact durable config, receipt, image and relay
 proofs before shared activation. Partial setup remains disabled/fenced and must
 not be retried or reset. The deployment service is still staged disabled; WUA is
 never installed as a service or silently started. Finalize the MSI manager
-registration first, then the matching WUA registration, preserving the manager
-configuration that includes both domains. The output contains both public
+registration first, then the matching WUA registration. Each finalize must retain
+its own original prepare LAN-config path and bytes; passing the MSI staged LAN
+config to WUA finalize is unsupported and rejected. Preserve the original inputs
+and both generated staged LAN files.
+
+After both finalize operations complete, explicitly create and review a separate
+protected activation LAN config: copy all fields from the WUA staged LAN output,
+then add the exact `windowsManagedMSIConfigFile` reference from the MSI staged LAN
+output. Verify both source outputs use the same original manager, state directory,
+TLS, operator and listener settings and differ only in their separate optional
+domain references. The activation file must retain both exact manager-config
+paths. Do not overwrite an original input, staged output, domain config, key or
+receipt; no grant or authority is created by composing these two references.
+Starting the manager still independently validates both original domain bindings,
+keys, receipts and enrolled records. This manual source activation step requires
+its own host authorization. The output contains both public
 registrations; save each named registration object using the already approved
 public-file handoff. Start the observer explicitly, activate the MSI service with
 its exact public configuration digest, and launch WUA only through its existing

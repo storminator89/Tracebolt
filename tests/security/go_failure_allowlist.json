@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "sourceCommit": "fccc4b00cd8a144afd58e4b995747afab7a10022",
-  "goSourceSha256": "e850ef625978c0004dd883ce1ab50cf177e76a323215d8d2fcbe1d84f3b40b05",
+  "goSourceSha256": "03ac53c1dc96eafd4807ed67d78334fed201738f50dc91ce253e43a224760e48",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -1704,6 +1704,7 @@
       "TestCompleteUpdatesUnknownComparisonsAndEmptyKnownSet",
       "TestCompleteUpdatesUnsupportedFailureRetainsReceiptAcrossRestart",
       "TestCoordinatedWindowsMutationPairRequiresFreshReciprocalIdentity",
+      "TestCoordinatedWindowsMutationPairSetupAndReload",
       "TestCurrentCredentialAuthorityKeepsAnchorAndRejectsRetiredLeaf",
       "TestDeliveryFreshProofExpiryAndStoredCertificateLookup",
       "TestDeliveryRejectsCrossOriginAndWrongApprovedKeyProofs",
@@ -3035,6 +3036,7 @@
       "TestWindowsUserSoftwareV6PreservesAllPriorBytes"
     ],
     "localrmm/internal/lanconfig": [
+      "TestCoordinatedWindowsMutationActivationKeepsBothReferences",
       "TestNamedApplicationCheckCapabilityStrictLoading",
       "TestNamedAuthStrictVersionProfileAndNestedParsing",
       "TestNamedProtectedConfigLoadAndSnapshotIsolation",
