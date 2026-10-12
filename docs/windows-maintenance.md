@@ -15,7 +15,11 @@ calendar, automatic response or generic scheduler.
 ## Deliberate, bounded windows
 
 A shared administrator selects the exact identity and scope, a required purpose
-(`planned-work`, `investigation`, or `other`), and reviews an absolute UTC end time.
+(`planned-work`, `investigation`, or `other`), and reviews an absolute end time.
+Compact dates use the browser’s local timezone with an explicit UTC offset;
+expandable exact details retain the original UTC instant, full device ID and
+reviewed revision. Duplicate device names receive distinguishing ID suffixes;
+all selections and writes still use the unchanged opaque identity/domain key.
 The manager starts the window at its actual transaction time. The end must be at
 least one minute and at most 24 hours later. An active whole-device window cannot
 overlap a domain window; independent domain windows can coexist. A window cannot
