@@ -5,8 +5,8 @@ storage, TLS relay ingress, named-operator request/review/approval/status and th
 compact EN/DE Updates view. The composed source now connects the dedicated
 [WUA adapter](windows-cached-update-adapter.md) through an explicitly administrator-
 launched foreground executor and authenticated update-only local IPC. It opens only
-already-provisioned exact protected state; a native provisioning workflow is not
-supplied. No host grant, process/SCM ACL change, update installation, reboot, native
+exact protected state created by the separately approved fresh post-enrollment
+setup command below. No host grant, process/SCM ACL change, update installation, reboot, native
 Windows acceptance or release is established by this source work.
 
 ## Authority and activation
@@ -23,7 +23,8 @@ opcode or an expansion of observation privileges.
 creates only the separate manager tables and reciprocal immutable credential
 marker using supplied public keys/consent. It never creates a key or host grant,
 and refuses an existing domain rather than adopting, resetting or repairing it.
-There is no shipped setup command for the elevated executor. Incomplete or
+The source setup commands prepare and register one exact endpoint; they are not
+a released installer or native acceptance. Incomplete or
 missing used records/markers/tables fail closed.
 
 The optional protected LAN setting `windowsUpdateJobsConfigFile` is absent by
@@ -134,13 +135,68 @@ provide identity, cached-content, EULA, bundle and source-media facts;
 provides interaction, network and reboot behavior. These APIs establish the design
 requirements, not native acceptance of this source contract.
 
+## Fresh endpoint setup and owned removal (source candidate)
+
+Use the matching source-built observation-service and executor artifacts after
+separately approved TLS enrollment. This is one create-only selected-update
+installation for one exact admitted device/original identity, with the manager
+preparation's original absolute expiry and 32-job lifetime allowance. Read admin
+and service-control consent authorize none of these steps. See the dedicated
+setup runbook for the separate manager preparation/registration commands.
+
+Stop the owned observation service first. Review locally with:
+
+```
+tracebolt-windows-service.exe --selected-updates-provision --manager-offer C:\Reviewed\offer.json --executor-file C:\Reviewed\tracebolt-windows-update-executor.exe --artifact-manifest C:\Reviewed\executor.manifest.json
+```
+
+The read-only plan binds the original protected bootstrap, current activated TLS
+leaf, device/anchor, separate manager public key, original expiry, stopped service
+receipt and exact executor image. Independently review its digest and disclosures.
+Apply repeats those same arguments with all of:
+
+```
+--apply --approve sha256:<exact-review-digest> --acknowledge-selected-updates --acknowledge-observer-relay --acknowledge-observer-process-query
+```
+
+Only apply generates the dedicated signing key after durable intent, copies the
+create-only fixed executable, initializes original consent and used state, and
+creates the exact public IPC/observer relay binding. It never starts the observer
+or executor and changes no observation, process, account or service permissions.
+The key/state root is SYSTEM/Administrators-only. The relay stays in the separate
+exact observer-SID store; earlier read/service grants and bytes are unchanged.
+Existing, partial, replaced, expired or uncertain material fails closed. No
+repair, reset, adoption, migration or HTTP fallback exists.
+
+Successful apply writes only the public canonical registration to stdout;
+disclosures and diagnostics use stderr. Save that public output for the separately
+approved manager finalize step. `--selected-updates-export` re-exports only the
+same completed public registration after a lost output, without rekeying or
+extending its expiry. Actual foreground launch remains a separate approval and
+requires `--run-foreground --allow-observer-process-query`; the recorded process
+query acknowledgement alone never grants that permission.
+
+For removal, stop the observer and foreground executor, then review
+`tracebolt-windows-service.exe --selected-updates-remove`. Apply additionally
+requires `--apply --approve sha256:<removal-review-digest>
+--acknowledge-remove-selected-updates`. Complete original ownership, exclusive
+executor-state access and no unresolved/failed/uncertain attempt are required.
+Removal first records a permanent runtime-blocking intent, retires the exact
+relay, replaces the managed key record with a nonsecret retirement marker, and
+removes only the original image by its protected receipt/file identity. This is
+logical key retirement, not a claim of forensic disk erasure. Original consent,
+used results and removal evidence remain. Unknown or partial state blocks;
+there is no automatic cleanup/retry. Observer-only uninstall is blocked until
+this separate authority is retired, so it cannot silently orphan a live key.
+Removal cannot revoke a delivered permit, stop WUA work or undo an installation.
+
 ## Executor readiness, status and exact evidence outbox
 
 `OpenExecutor` requires an explicitly supplied dedicated Ed25519 private key and
 verifies both its seed/public correspondence and the exact stored executor pin.
 It opens only the already-protected `executor.json`, `started.json` and
-`receipt.json`; it never initializes, adopts or repairs them. Key custody
-and create-only provisioning remain separate native gates. The composed foreground
+`receipt.json`; it never initializes, adopts or repairs them. The fresh setup source creates the independent protected key only after its
+durable reviewed intent; actual key custody and provisioning remain separate native gates. The composed foreground
 runtime below opens this state and supplies the dedicated local relay transport.
 
 `Executor.Readiness` verifies the manager signature, immutable binding, exact
@@ -245,21 +301,23 @@ remaining separately approved native provisioning/acceptance gates.
 
 The current source composes the signed executor ledger, cached-only WUA adapter,
 fresh observer relay, and a separately administrator-launched foreground command.
-This is a usable source entry path once its exact protected state is separately
-provisioned. It is not a released installer, a service installation, or native
+This is a usable source entry path after the explicit fresh provisioning flow
+completes. It is not a released installer, a service installation, or native
 Windows acceptance. Source fixtures and Windows cross-builds grant no host rights.
 
 The dedicated binary is `tracebolt-windows-update-executor.exe`, fixed under the
 machine KnownFolder Program Files `Tracebolt` directory. Start it explicitly as
-an administrator with `--run-foreground`. There is no alternate configuration or
+an administrator with `--run-foreground`. The foreground command has no alternate configuration or
 IPC-supplied path, SCM entry point, account creator, key generator, state reset,
-repair, or adoption command. Existing observation/service-control permissions
+repair, or adoption operation. Existing observation/service-control permissions
 cannot activate it. The observation client imports only the public update IPC
 client and cannot read the executor signing key or call the installer adapter.
 
 The separate `Tracebolt\windows-update-executor` ProgramData root must already
-be a valid `windowsstate` SYSTEM/Administrators-only store with the exact schema
-returned by `windowsupdateipc.StoreOptions()`. Its immutable `config.json`
+be a valid `windowsstate` SYSTEM/Administrators-only store with the exact fresh
+schema returned by `windowsupdateipc.StoreOptions()`. Provisioning intent, phase
+evidence and a completed transaction are mandatory; a removal intent blocks
+launch. Earlier preprovided shapes are never adopted. Its immutable `config.json`
 contains only public configuration: exact install consent/binding, independent
 manager/executor public pins, the expected executable path/hash, the completed
 observation-service ownership receipt, and explicit process-query acknowledgement.

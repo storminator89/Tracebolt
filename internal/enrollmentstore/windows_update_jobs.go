@@ -147,6 +147,9 @@ func (s *Store) SetupWindowsUpdateJobsCreateOnly(ctx context.Context, key, execu
 		if err != nil {
 			return err
 		}
+		if err = checkWindowsUpdateSetupExpectedLeaf(ctx, current); err != nil {
+			return err
+		}
 		r, err := windowsupdatejob.NewRecordWithExecutor(consent, key, executorKey, now.Unix())
 		if err != nil {
 			return err
@@ -170,6 +173,11 @@ func (s *Store) SetupWindowsUpdateJobsCreateOnly(ctx context.Context, key, execu
 		c.WindowsUpdateJobSetup = marker
 		t.credentials[snap.InvitationID] = c
 		t.beforeCommit = append(t.beforeCommit, func() error {
+			// Protected review inputs may block on reads. Check them before the
+			// last fresh clock/current-authority sample, never after it.
+			if err := windowsupdatejob.CheckFinal(ctx); err != nil {
+				return err
+			}
 			fresh, err := windowsUpdateJobNow(ctx, now)
 			if err != nil || fresh.Before(now) {
 				return windowsupdatejob.ErrExpired

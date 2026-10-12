@@ -33,6 +33,9 @@ This page describes the current source; downloadable prereleases cover less.
 - **Windows logs and updates:** Application/System event headers, separately
   approved older-event searches and selected message reads, and offline cached
   Windows Update inspection.
+- **Selected Windows updates (source):** [explicit one-device setup](docs/windows-selected-update-setup.md),
+  exact cached-update review, one-time approval and saved executor outcomes.
+  Native setup and update execution still need acceptance.
 - **Selected-account software:** an explicitly consented foreground capture of
   that Windows user's HKCU and Store registrations, with source filters and paging.
 - **Fleet groups:** organize devices and review one-time disk/CPU/RAM alert

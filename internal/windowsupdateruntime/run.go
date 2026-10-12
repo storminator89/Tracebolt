@@ -13,6 +13,7 @@ import (
 	"localrmm/internal/windowsupdateexecutor"
 	"localrmm/internal/windowsupdateipc"
 	job "localrmm/internal/windowsupdatejob"
+	"localrmm/internal/windowsupdatesetup"
 	"time"
 )
 
@@ -46,6 +47,9 @@ func Run(ctx context.Context, allowObserverProcessQuery bool) error {
 	if e != nil {
 		return e
 	}
+	if windowsupdatesetup.VerifyInstalled(store, config) != nil {
+		return job.ErrAuthority
+	}
 	peer, e := config.Peer()
 	if e != nil {
 		return e
@@ -56,7 +60,7 @@ func Run(ctx context.Context, allowObserverProcessQuery bool) error {
 	}
 	defer guard.Close()
 	check := func(c context.Context) error {
-		if c == nil || c.Err() != nil || windowsupdateexecutor.VerifyForegroundContext() != nil || guard.Check(c) != nil || store.Verify() != nil {
+		if c == nil || c.Err() != nil || windowsupdateexecutor.VerifyForegroundContext() != nil || guard.Check(c) != nil || store.Verify() != nil || windowsupdatesetup.VerifyInstalled(store, config) != nil {
 			return job.ErrAuthority
 		}
 		current, e := store.Read("config.json")

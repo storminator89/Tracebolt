@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "sourceCommit": "fccc4b00cd8a144afd58e4b995747afab7a10022",
-  "goSourceSha256": "9af73504cc280987df7336065ab09febc55eee351909e558b5371d3b9444fb02",
+  "goSourceSha256": "0cbf9b03ccc17dee09e9e86d816cbffb09ff6778fd3ffcb235acf25f26650a68",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -424,6 +424,7 @@
       "TestSecurityPostureFlagsDoNotAuthorizeAnotherScope",
       "TestSecurityPostureRequiresOwnedStoppedService",
       "TestSecurityPostureWorkerEntryRechecksActualParentBeforeReturning",
+      "TestSelectedUpdateSetupRequiresIndependentApproval",
       "TestServiceStartupConsentErrorsAndInvalidModes",
       "TestServiceStartupConsentFlagsExplicitAndBounded",
       "TestServiceStartupConsentNeverConfiguresWithMissingDependencies",
@@ -516,6 +517,9 @@
       "TestWriteFailureStagesUseFixedFiniteCategory"
     ],
     "localrmm/cmd/windows-update-executor": [],
+    "localrmm/cmd/windows-update-manager-setup": [
+      "TestSetupCommandRequiresExactExplicitPhaseAndAcknowledgement"
+    ],
     "localrmm/cmd/windows-user-software": [],
     "localrmm/deploy/windows-setup": [],
     "localrmm/internal/actionclient": [
@@ -1948,6 +1952,9 @@
       "TestWindowsUpdateJobSetupRejectsImplicitConsentAndKeyReuse",
       "TestWindowsUpdateJobSignedLifecycleConsumeOnceAndHistoryPreserved",
       "TestWindowsUpdateJobSuccessfulFinalClockAndConsentStayFixed",
+      "TestWindowsUpdateSetupExpectedCurrentLeafCannotBeSubstituted",
+      "TestWindowsUpdateSetupFinalInputGuardPrecedesLastExpiryCheck",
+      "TestWindowsUpdateSetupInspectionIsReadOnlyAndRefusesFencedDomain",
       "TestWindowsUpdatesCannotBeAdmittedUnderBasicIdentity",
       "TestWindowsUpdatesDurablePrivateReplayAndCaptureFloor",
       "TestWindowsUpdatesPrivateIndependentExpiryAndReceipt",
@@ -2835,6 +2842,7 @@
       "TestWindowsUpdateExecutorAuthorityRejectsMissingDisabledOrReplacedState",
       "TestWindowsUpdateExecutorAuthorityRejectsRenewalManagerMismatchAtOpen",
       "TestWindowsUpdateExecutorAuthorityRenewedLeafOutlivesOriginalAnchor",
+      "TestWindowsUpdateFreshSetupIdentity",
       "TestWindowsUpdateRelayDefaultOffAndGrantAuthority",
       "TestWindowsUpdateRelayExactSignedRoundTrip",
       "TestWindowsUpdateRelayExpiredOutboxIsNotRenewed",
@@ -4319,7 +4327,13 @@
       "TestProvisionEveryFailureRetainsAndNeverContinues",
       "TestProvisionOrderingAndPinLifetime",
       "TestProvisionRejectsInputsWithoutNativeCalls",
-      "TestUnsupportedHasNoNativeFallback"
+      "TestUnsupportedHasNoNativeFallback",
+      "TestUpdateExecutorImageBadProofAndCancelledOrClosedSession",
+      "TestUpdateExecutorImageChangedIdentityDigestLinkOrProtectionRejected",
+      "TestUpdateExecutorImageCreateVerifyOwnedRemove",
+      "TestUpdateExecutorImageExistingPartialAndUnownedRejected",
+      "TestUpdateExecutorImageMutationsFailClosedWithoutRetry",
+      "TestUpdateExecutorImageSnapshotAndManifestValidationBeforeMutation"
     ],
     "localrmm/internal/windowspatchcontext": [
       "TestPatchContextBoundedHistoryAndIndependentIndicators",
@@ -4821,6 +4835,7 @@
       "TestReadinessNeverPromotesObservationOrUnknown",
       "TestRejectedExpiryFloorSurvivesRestart",
       "TestReopenPreservesClaimAndApprovalBytes",
+      "TestSetupHandoffPreservesExactOriginalAuthority",
       "TestShorterConsentOrCurrentLeafCannotExtendNativeStart",
       "TestSignedExecutorReadinessAndResultRelay",
       "TestSourceErrorCannotReturnUsableReadiness",
@@ -4830,7 +4845,14 @@
       "TestWorkflowExactApprovalClaimAndResult"
     ],
     "localrmm/internal/windowsupdatemanager": [
-      "TestSelectedUpdateConfigRequiresFreshExactTLSAuthority"
+      "TestGeneratedSetupConfigRequiresExactCompletionAfterFinalWrite",
+      "TestSelectedUpdateConfigRequiresFreshExactTLSAuthority",
+      "TestSetupProtectedCreationRejectsUnsafePathsWithoutRepair",
+      "TestUpdateSetupExpiryAfterBlockingReadRetainsFence",
+      "TestUpdateSetupFinalizeOrderAndRetainedUncertainty",
+      "TestUpdateSetupPartialPreparationRetainsEvidenceAndNeverInitializes",
+      "TestUpdateSetupPreparationIsPurposeSeparateAndPublicOnly",
+      "TestUpdateSetupReviewDigestBindsIdentityScopePathsOperatorsAndPins"
     ],
     "localrmm/internal/windowsupdateruntime": [],
     "localrmm/internal/windowsupdates": [
@@ -4858,6 +4880,13 @@
       "TestResultTruthAndNoCleanConclusionFromEmptyCache",
       "TestSanitizedMetadata",
       "TestSourceNilAndFailureOwnership"
+    ],
+    "localrmm/internal/windowsupdatesetup": [
+      "TestFreshUpdateSetupCoreSuccess",
+      "TestFreshUpdateSetupRejectsIdentityExpiryAndExisting",
+      "TestFreshUpdateSetupRemovalPreservesUsedState",
+      "TestFreshUpdateSetupRemovalRejectsUnresolvedConsumedAttempts",
+      "TestFreshUpdateSetupRetainsFailedTransactionEvidence"
     ],
     "localrmm/internal/windowsupdateworker": [
       "TestBoundedOutputCancelsAndDoesNotRetainOverflow",

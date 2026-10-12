@@ -54,6 +54,15 @@ type request struct {
 type operation func(context.Context, request, io.Writer, io.Writer) (any, error)
 
 func run(ctx context.Context, args []string, out, stderr io.Writer) int {
+	if len(args) > 0 && args[0] == "--selected-updates-export" {
+		return runUpdateExport(ctx, args[1:], out, stderr, nativeUpdateExport)
+	}
+	if len(args) > 0 && args[0] == "--selected-updates-provision" {
+		return runUpdateProvision(ctx, args[1:], out, stderr, nativeUpdateProvision)
+	}
+	if len(args) > 0 && args[0] == "--selected-updates-remove" {
+		return runUpdateRemove(ctx, args[1:], out, stderr, nativeUpdateRemove)
+	}
 	if len(args) > 0 && args[0] == "--service-actions-provision" {
 		return runActionProvision(ctx, args[1:], out, stderr, nativeActionProvision)
 	}

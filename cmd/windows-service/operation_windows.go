@@ -116,7 +116,7 @@ func nativeReceiptOperation(ctx context.Context, r request, receipt installRecei
 		}{"claim committed; start remains an explicit local operation"}, nil
 	case "start", "stop", "restart", "uninstall":
 		return serviceLifecycleOperation(ctx, r.mode, receipt.Service, lease, serviceLifecycleSteps{
-			start: windowsservice.ApplyStart, stop: windowsservice.ApplyStop, uninstall: windowsservice.ApplyUninstall, restart: windowsservice.ApplyRestart,
+			start: windowsservice.ApplyStart, stop: windowsservice.ApplyStop, uninstall: uninstallWithUpdateOwnership, restart: windowsservice.ApplyRestart,
 		})
 	}
 	return nil, errLifecycle

@@ -16,6 +16,14 @@ vi.mock('./api', async original => ({ ...await original<typeof import('./api')>(
 vi.mock('./auth', async original => ({ ...await original<typeof import('./auth')>(), useOperator: vi.fn() }));
 const operator = { mode: 'lan' as const, authenticated: true, expiresAt: '2026-10-07T13:00:00Z', insecureTestMode: false, logout: vi.fn(), theme: 'light' as const, setTheme: vi.fn() };
 const flush = () => act(async () => {});
+function expectOnlySetupGuide() {
+    const links = document.querySelectorAll('a');
+    expect(links).toHaveLength(1);
+    expect(links[0]).toHaveAttribute('href', 'https://github.com/storminator89/Tracebolt/blob/main/docs/windows-selected-update-setup.md');
+    expect(links[0]).toHaveAttribute('target', '_blank');
+    expect(links[0]).toHaveAttribute('rel', 'noreferrer');
+    expect(links[0].closest('details')).not.toHaveAttribute('open');
+}
 function resource(view: WindowsInventoryView = windowsUpdatesView()): WindowsInventoryResource { return { updates: view.updates ?? null, updatesStale: view.status === 'stale', updatesExpired: false, updatesAhead: false, serviceStartup: null, serviceStartupStale: false, elapsedMS: 0, view, snapshot: view.snapshot, status: view.status, loading: false, error: null, refresh: vi.fn(), processMetrics: null, processMetricsStale: false, network: null, networkStale: false, networkExpired: false, adapterContext: null, adapterContextStale: false, adapterContextExpired: false, patchContext: null, patchContextStale: false, patchContextExpired: false, patchContextAhead: false, storageIO: null, storageIOStale: false, storageIOExpired: false, storageIOAhead: false, storageContext: null, storageContextStale: false, storageContextExpired: false, storageContextAhead: false, resourceContext: null, resourceContextStale: false, resourceContextExpired: false, resourceContextAhead: false, hardwareContext: null, hardwareContextStale: false, hardwareContextExpired: false, hardwareContextAhead: false, sessionContext: null, sessionContextStale: false, sessionContextExpired: false, sessionContextAhead: false, securityCoverage: null, securityCoverageStale: false, securityCoverageExpired: false, securityCoverageAhead: false, securityPosture: null, securityPostureStale: false, securityPostureExpired: false, securityPostureAhead: false, volumes: null, volumesStale: false, events: null, eventsStale: false }; }
 function Harness({ id = windowsDeviceId, session = 'fixture', enabled = true }: { id?: string; session?: string; enabled?: boolean }) { return <WindowsInventoryWorkspace key={`${id}:${session}`} resource={useWindowsInventory(id, enabled, session)}/>; }
 const select = () => fireEvent.click(screen.getByRole('tab', { name: 'Updates' }));
@@ -47,11 +55,11 @@ describe('read-only cached Windows Updates panel', () => {
         expect(screen.getByText(de ? /kein CVE-Abgleich/ : /not a CVE match/)).toBeVisible(); expect(screen.getByText(de ? /Beobachtungsumfang umfasst keine Updateaktionen/ : /observation scope performs no update actions/)).toBeVisible();
         expect(screen.getByText(de ? /Es startet keine Online-Suche/ : /It does not start an online scan/)).toBeVisible();
         expect(screen.getByText(de ? /Höchstens 128 native Einträge/ : /At most 128 native entries/)).toBeVisible();
-        expect(screen.queryByRole('link')).toBeNull(); expect(screen.queryByRole('button', { name: /scan|download|install|reboot|export|grant|enable|apply/i })).toBeNull(); expect(request).not.toHaveBeenCalled(); expect(mutate).not.toHaveBeenCalled();
+        expectOnlySetupGuide(); expect(screen.queryByRole('button', { name: /scan|download|install|reboot|export|grant|enable|apply/i })).toBeNull(); expect(request).not.toHaveBeenCalled(); expect(mutate).not.toHaveBeenCalled();
     });
     it('renders markup-shaped title only as inert text, without executable elements, links or source mutation', () => {
-        const v = windowsUpdatesView(); v.updates.rows[0].title = '<img src=x onerror=alert(1)> & <script>alert(1)</script>'; const before = JSON.stringify(v);
-        render(<WindowsInventoryWorkspace resource={resource(v)}/>); select(); expect(screen.getByText(v.updates.rows[0].title)).toBeVisible(); expect(document.querySelector('img, script, iframe, a')).toBeNull(); expect(JSON.stringify(v)).toBe(before);
+        const v = windowsUpdatesView(); v.updates.rows[0].title = '<img src=x onerror=alert(1)> & <script>alert(1)</script> <a href="https://untrusted.invalid/">not a link</a>'; const before = JSON.stringify(v);
+        render(<WindowsInventoryWorkspace resource={resource(v)}/>); select(); expect(screen.getByText(v.updates.rows[0].title)).toBeVisible(); expect(document.querySelector('img, script, iframe')).toBeNull(); expectOnlySetupGuide(); expect(JSON.stringify(v)).toBe(before);
     });
     it('uses keyboard tab selection and leaves other Windows subviews intact', async () => {
         render(<Harness/>); await flush(); fireEvent.keyDown(screen.getByRole('tab', { name: 'Software' }), { key: 'ArrowRight' }); expect(screen.getByRole('tab', { name: 'Updates' })).toHaveFocus(); expect(screen.getByText('Synthetic cached update 001')).toBeVisible();

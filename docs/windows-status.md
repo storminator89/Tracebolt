@@ -46,6 +46,10 @@ bounded transport/store. See [frame bounds](windows-storage-io.md#worker-transpo
 - [Cached Windows Update inspection](windows-update-runtime.md): an independently
   granted offline cache read. Freshness stays unknown; no scan, download,
   installation or reboot is performed.
+- [Selected cached update jobs](windows-selected-update-setup.md): separate fresh
+  manager/Windows setup, exact revision approval and a dedicated foreground executor.
+  One fixed device binding; no download, license acceptance or automatic reboot.
+  Native setup and installation acceptance remain pending.
 - [Disk](windows-capacity-health.md), [CPU/RAM](windows-resource-health.md) and
   [selected-service checks](windows-service-health.md): independent default-off
   manager policies over already accepted observations. Missing data stays unknown.

@@ -1,6 +1,8 @@
 // Package windowspackage provisions the fixed fresh Windows package payload.
 // It never installs, configures, or starts an SCM service, creates credentials,
-// adopts existing objects, repairs ACLs, or deletes even a partial installation.
+// adopts existing objects, or repairs ACLs. Main-package provisioning never
+// deletes even a partial installation. The separate update-executor image helper
+// permits removal only with the original successful create's ownership receipt.
 package windowspackage
 
 import (

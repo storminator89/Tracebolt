@@ -36,6 +36,7 @@ COPY internal/ internal/
 RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -buildvcs=false -trimpath -ldflags='-s -w' -o /out/manager ./cmd/lan-manager \
     && CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -buildvcs=false -trimpath -ldflags='-s -w' -o /out/action-setup ./cmd/action-setup \
     && CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -buildvcs=false -trimpath -ldflags='-s -w' -o /out/windows-action-manager-setup ./cmd/windows-action-manager-setup \
+    && CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -buildvcs=false -trimpath -ldflags='-s -w' -o /out/windows-update-manager-setup ./cmd/windows-update-manager-setup \
     && mkdir -p /out/data/state /out/run/tracebolt \
     && chmod 0700 /out/data /out/data/state \
     && chown -R 65532:65532 /out/data
@@ -45,6 +46,7 @@ FROM scratch AS runtime
 COPY --from=build /out/manager /tracebolt/manager
 COPY --from=build /out/action-setup /tracebolt/action-setup
 COPY --from=build /out/windows-action-manager-setup /tracebolt/windows-action-manager-setup
+COPY --from=build /out/windows-update-manager-setup /tracebolt/windows-update-manager-setup
 # Preserve the project license and pinned dependency notice in the distribution.
 COPY --chmod=0444 LICENSE /tracebolt/licenses/LICENSE
 COPY --chmod=0444 docs/dependencies/edwards25519-LICENSE.txt /tracebolt/licenses/edwards25519-LICENSE.txt
