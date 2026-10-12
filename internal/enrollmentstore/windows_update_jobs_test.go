@@ -584,3 +584,38 @@ func TestWindowsUpdateJobDynamicAuthorityLossAtFinalCommit(t *testing.T) {
 		})
 	}
 }
+
+func TestWindowsUpdateJobReadinessSequenceCannotRollbackOrReuse(t *testing.T) {
+	f := newWindowsUpdateStoreFixture(t, true)
+	_, before, _ := f.record(t)
+	challenge := windowsupdatejob.Challenge{Version: windowsupdatejob.RelayVersion, Binding: f.consent.Binding, JobID: id("update", 7), Selection: windowsupdatejob.Selection{UpdateID: "11111111-2222-3333-4444-555555555555", Revision: 1}, IssuedAt: f.at.Unix(), Deadline: f.at.Unix() + 120, Sequence: 1}
+	raw, err := windowsupdatejob.SignChallenge(challenge, f.key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	after := before
+	after.ReadinessSequence = 1
+	after.Jobs = []windowsupdatejob.Job{{Challenge: raw}}
+	if err = windowsUpdateJobTransition(before, after, f.at.Unix()); err != nil {
+		t.Fatal("fresh sequence rejected", err)
+	}
+	before = after
+	after.ReadinessSequence = 0
+	if err = windowsUpdateJobTransition(before, after, f.at.Unix()); err == nil {
+		t.Fatal("readiness floor rolled back")
+	}
+	after.ReadinessSequence = 1
+	challenge.JobID = id("update", 8)
+	raw, _ = windowsupdatejob.SignChallenge(challenge, f.key)
+	after.Jobs = []windowsupdatejob.Job{{Challenge: raw}}
+	if err = windowsUpdateJobTransition(before, after, f.at.Unix()); err == nil {
+		t.Fatal("replacement reused signed sequence")
+	}
+	challenge.Sequence = 2
+	raw, _ = windowsupdatejob.SignChallenge(challenge, f.key)
+	after.ReadinessSequence = 2
+	after.Jobs = []windowsupdatejob.Job{{Challenge: raw}}
+	if err = windowsUpdateJobTransition(before, after, f.at.Unix()); err != nil {
+		t.Fatal("same-second newer sequence rejected", err)
+	}
+}

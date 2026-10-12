@@ -340,7 +340,7 @@ func executorFixture(t *testing.T, f *workflowFixture, n ExecutorAdapter) (*Exec
 	raw, _ := EncodeExecutorRecord(r)
 	c, _ := json.Marshal(f.consent)
 	s := &memoryStore{files: map[string][]byte{"executor.json": raw, "started.json": c, "receipt.json": c}}
-	x, e := OpenExecutor(s, f.guard, n, func() time.Time { return f.at })
+	x, e := OpenExecutor(s, f.guard, n, executorKey(), func() time.Time { return f.at })
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -364,7 +364,7 @@ func TestExecutorPersistsAttemptBeforeOneNativeCall(t *testing.T) {
 	if _, e = x.Execute(context.Background(), raw); !errors.Is(e, ErrConsumed) || n.installs != 1 {
 		t.Fatal("native retry")
 	}
-	x, e = OpenExecutor(s, f.guard, n, func() time.Time { return f.at })
+	x, e = OpenExecutor(s, f.guard, n, executorKey(), func() time.Time { return f.at })
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -409,7 +409,7 @@ func TestExecutorUncertaintyAndCrashNeverRetry(t *testing.T) {
 		}
 		before := n.installs
 		s.fail = 0
-		x, e := OpenExecutor(s, f.guard, n, func() time.Time { return f.at })
+		x, e := OpenExecutor(s, f.guard, n, executorKey(), func() time.Time { return f.at })
 		if e != nil {
 			t.Fatal(e)
 		}
@@ -458,7 +458,7 @@ func TestRejectedExpiryFloorSurvivesRestart(t *testing.T) {
 	if _, e = m.Claim(context.Background(), f.id); !errors.Is(e, ErrExpired) {
 		t.Fatal("expired manager job revived", e)
 	}
-	x, e = OpenExecutor(s, f.guard, InactiveExecutor{}, func() time.Time { return f.at })
+	x, e = OpenExecutor(s, f.guard, InactiveExecutor{}, executorKey(), func() time.Time { return f.at })
 	if e != nil {
 		t.Fatal(e)
 	}

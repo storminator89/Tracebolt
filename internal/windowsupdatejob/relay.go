@@ -23,11 +23,13 @@ type Challenge struct {
 	JobID     string    `json:"jobId"`
 	Selection Selection `json:"selection"`
 	IssuedAt  int64     `json:"issuedAt"`
-	Deadline  int64     `json:"deadline"`
+	// Independent of the bounded approved-install sequence.
+	Sequence uint64 `json:"sequence,string"`
+	Deadline int64  `json:"deadline"`
 }
 
 func (c Challenge) Validate() error {
-	if c.Version != RelayVersion || !ValidBinding(c.Binding) || !enrollmentcrypto.ValidID(c.JobID, "update_") || !ValidSelection(c.Selection) || !validTime(c.IssuedAt) || !validTime(c.Deadline) || c.Deadline <= c.IssuedAt || c.Deadline-c.IssuedAt > 120 {
+	if c.Version != RelayVersion || c.Sequence == 0 || !ValidBinding(c.Binding) || !enrollmentcrypto.ValidID(c.JobID, "update_") || !ValidSelection(c.Selection) || !validTime(c.IssuedAt) || !validTime(c.Deadline) || c.Deadline <= c.IssuedAt || c.Deadline-c.IssuedAt > 120 {
 		return ErrInvalid
 	}
 	return nil

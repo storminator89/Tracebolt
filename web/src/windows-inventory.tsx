@@ -88,7 +88,7 @@ export function WindowsInventoryWorkspace({ resource, initialTab, fullServices }
             {selected === 'storage' && <><WindowsContextPanel resource={resource} kind="storageIO"/><WindowsContextPanel resource={resource} kind="storageContext"/><WindowsStoragePanel resource={resource}/></>}
             {!fullProcesses && legacySection}
         </div>
-        {!fullSoftware && !fullProcesses && selected !== 'security' && selected !== 'sessions' && selected !== 'device' && <><p className="windows-inventory-privacy"><Info size={15}/>{c.privacy}</p><p className="windows-inventory-exclusions">{c.scope}</p></>}
+        {!fullSoftware && !fullProcesses && selected !== 'security' && selected !== 'sessions' && selected !== 'device' && selected !== 'updates' && <><p className="windows-inventory-privacy"><Info size={15}/>{c.privacy}</p><p className="windows-inventory-exclusions">{c.scope}</p></>}
     </section>;
 }
 export function WindowsDeviceOverview({ device, resource, sessionKey, onInventory, onDetails }: { device: Device; resource: WindowsInventoryResource; sessionKey: string | null; onInventory?: () => void; onDetails: () => void }) {

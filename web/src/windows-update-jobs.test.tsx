@@ -22,6 +22,30 @@ beforeEach(()=>{vi.useFakeTimers();vi.setSystemTime(now);setLocale('en',false);v
 afterEach(()=>{cleanup();vi.useRealTimers();vi.restoreAllMocks()});
 describe('selected cached Windows update jobs',()=>{
  it('reviews exact GUID/revision and requires unchecked one-time approval',async()=>{await open();await review();const approve=screen.getByRole('button',{name:'Approve this update once'});expect(approve).toBeDisabled();expect(screen.getByRole('checkbox')).not.toBeChecked();fireEvent.click(screen.getByRole('checkbox'));fireEvent.click(approve);fireEvent.click(approve);await flush();expect(mutateRaw).toHaveBeenCalledTimes(2);const req=JSON.parse(vi.mocked(mutateRaw).mock.calls[0][1]);expect(req).toMatchObject(selection);expect(req.requestId).toMatch(/^update_[a-f0-9]{32}$/);expect(JSON.parse(vi.mocked(mutateRaw).mock.calls[1][1])).toEqual({previewId:req.requestId,previewDigest:digest,acknowledged:true});expect(screen.getByRole('status')).toHaveTextContent('awaiting one-time claim');expect(screen.queryByRole('checkbox')).toBeNull()});
+ it.each(['en','de'] as const)('distinguishes readiness from setup without obscuring consent in %s',async locale=>{
+  setLocale(locale,false);const de=locale==='de';await open();
+  fireEvent.change(screen.getByRole('combobox'),{target:{value:`${selection.updateId}:3`}});
+  fireEvent.click(screen.getByRole('button',{name:de?'Bereitschaft prüfen':'Check readiness'}));await flush();
+  const readiness=screen.getByText(de?'Bereitschaftsdetails':'Readiness details',{selector:'summary'});
+  const setup=screen.getByText(de?'Update-Einrichtung & Grenzen':'Update setup & limits',{selector:'summary'});
+  expect(readiness.closest('details')).not.toHaveAttribute('open');expect(setup.closest('details')).not.toHaveAttribute('open');
+  expect(screen.queryByText(de?'Installationsdetails':'Installation details')).toBeNull();
+  expect(screen.getByText(de?/Prüfung gültig bis/:/Review expires/)).toBeVisible();
+  expect(screen.getByRole('checkbox',{name:de?/mögliche Unterbrechungen/:/possible interruption/})).toBeVisible();
+  expect(screen.getByRole('checkbox')).not.toBeChecked();expect(screen.getByRole('button',{name:de?'Dieses Update einmal freigeben':'Approve this update once'})).toBeDisabled();
+  fireEvent.click(readiness);expect(screen.getByText(de?/Lizenz bereits angenommen/:/license already accepted/)).toBeVisible();
+  fireEvent.click(setup);expect(screen.getByText(de?/Cache-Inventar belegt keine Installationsbereitschaft/:/Cached inventory does not establish installation readiness/)).toBeVisible();
+  expect(mutateRaw).toHaveBeenCalledTimes(1);
+ });
+ it.each(['en','de'] as const)('keeps reported-result limits and uncertainty outside collapsed details in %s',async locale=>{
+  setLocale(locale,false);const de=locale==='de',id=`update_${'7'.repeat(32)}`;
+  const result:UpdateJobView={...approved(id),job:{...approved(id).job!,state:'complete',result:{jobId:id,envelopeDigest:digest,attempted:true,outcome:'uncertain',operationResult:3,hresult:0,rebootRequired:'unknown',completedAt:seconds}}};
+  vi.mocked(request).mockImplementation(async path=>structuredClone(path==='/auth/session'?session:result) as never);await open();
+  expect(screen.getByText(de?/Die Antwort ist unbestätigt/:/The response is unconfirmed/)).toBeVisible();
+  expect(screen.getByText(de?/Es belegt keine vollständige Patch-Abdeckung/:/does not establish whole-device patch coverage/)).toBeVisible();
+  expect(screen.getByText(de?'Auftragsdetails':'Job details',{selector:'summary'}).closest('details')).not.toHaveAttribute('open');
+  expect(screen.queryByRole('checkbox')).toBeNull();expect(mutateRaw).not.toHaveBeenCalled();
+ });
  it.each(['windows_service_control','execute_updates'] as const)('never promotes %s permission',async capability=>{vi.mocked(useOperator).mockReturnValue({...vi.mocked(useOperator)(),capabilities:['read',capability]} as ReturnType<typeof useOperator>);await open();expect(request).not.toHaveBeenCalled();expect(mutateRaw).not.toHaveBeenCalled();expect(screen.getByText('Update installation is inactive.')).toBeInTheDocument()});
  it.each(['blur','pagehide','popstate','hashchange',AUTH_REQUIRED_EVENT])('drops review on %s',async event=>{await open();await review();act(()=>window.dispatchEvent(new Event(event)));expect(screen.queryByRole('checkbox')).toBeNull();expect(mutateRaw).toHaveBeenCalledTimes(1)});
  it('never retries uncertain approval or revives review from status',async()=>{await open();await review();const id=JSON.parse(vi.mocked(mutateRaw).mock.calls[0][1]).requestId;vi.mocked(mutateRaw).mockRejectedValueOnce(new Error('lost response'));fireEvent.click(screen.getByRole('checkbox'));fireEvent.click(screen.getByRole('button',{name:'Approve this update once'}));await flush();expect(screen.getByRole('alert')).toHaveTextContent('unconfirmed');vi.mocked(request).mockImplementation(async path=>structuredClone(path==='/auth/session'?session:previewView(id)) as never);fireEvent.click(screen.getByRole('button',{name:'Read saved status'}));await flush();expect(screen.queryByRole('checkbox')).toBeNull();expect(mutateRaw).toHaveBeenCalledTimes(2)});
