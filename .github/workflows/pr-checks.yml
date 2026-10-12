@@ -166,10 +166,14 @@ jobs:
             artifacts/review/windows-fleet-msi-manifest.json
             artifacts/review/windows-reusable-msi-results.json
             artifacts/review/windows-reusable-msi-manifest.json
+            artifacts/review/windows-scheduled-msi-results.json
+            artifacts/review/windows-scheduled-msi-manifest.json
             artifacts/review/windows-software-catalogue-results.json
             artifacts/review/windows-saved-msi-manifest.json
             artifacts/review/windows-saved-msi-results.json
             artifacts/review/windows-software-catalogue-manifest.json
+            artifacts/review/windows-msi-catalogue-results.json
+            artifacts/review/windows-msi-catalogue-manifest.json
             artifacts/review/windows-mutation-coexistence-results.json
             artifacts/review/windows-mutation-coexistence-manifest.json
             artifacts/review/enrollment-browser-results.json

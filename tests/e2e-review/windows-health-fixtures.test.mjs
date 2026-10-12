@@ -53,7 +53,9 @@ test('the real runner success boundary rejects a no-op Windows callback before r
  const check=parsed.statements.find(node=>ts.isFunctionDeclaration(node)&&node.name?.text==='check');assert.ok(check);
  // Execute only the actual success/failure wrapper. Its process/browser setup
  // and teardown are inert here; no Playwright assertion is mocked or replaced.
- const globals={Date,console:{log(){}},start:async()=>{},stop:async()=>{},context:null,currentTest:'',results:[],screenshots:[],sourceSha:'a'.repeat(40),requireWindowsHealthEvidence,requireWindowsAdapterContextEvidence,requireWindowsPatchContextEvidence,requireWindowsSecurityCoverageEvidence,requireWindowsSecurityPostureEvidence,requireWindowsSessionContextEvidence,requireWindowsHardwareContextEvidence,requireWindowsStorageContextEvidence,requireWindowsResourceContextEvidence,windowsInventoryFailureStage:()=> 'fixture-before-completion'};
+ // Bind full-run mode explicitly: the focused smoke tier excludes this case,
+ // while this fixture must exercise every Windows completion guard below.
+ const globals={prSmoke:false,Date,console:{log(){}},start:async()=>{},stop:async()=>{},context:null,currentTest:'',results:[],screenshots:[],sourceSha:'a'.repeat(40),requireWindowsHealthEvidence,requireWindowsAdapterContextEvidence,requireWindowsPatchContextEvidence,requireWindowsSecurityCoverageEvidence,requireWindowsSecurityPostureEvidence,requireWindowsSessionContextEvidence,requireWindowsHardwareContextEvidence,requireWindowsStorageContextEvidence,requireWindowsResourceContextEvidence,windowsInventoryFailureStage:()=> 'fixture-before-completion'};
  for(const name of new Set([...check.getText(parsed).matchAll(/\b\w+CaseName\b/g)].map(match=>match[0])))globals[name]=name;
  const run=vm.runInNewContext('('+check.getText(parsed)+')',globals);
  await run(globals.windowsInventoryCaseName,async()=>{});

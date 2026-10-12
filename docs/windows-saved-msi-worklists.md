@@ -1,5 +1,9 @@
 # Saved exact MSI worklists and deliberate batches
 
+The separate fresh manager-only [multi-package catalogue](windows-multi-package-msi-catalogue.md)
+adds four retained payloads within the same aggregate budget. The earlier profiles
+and contracts described below remain unchanged unless that fresh option is selected.
+
 Source candidate only. Existing grants, signed permits/reports, native execution,
 retirement and shared mutation-owner checks remain authoritative. No MSI, NTFS,
 SCM, host service, key, permission, ACL or installation acceptance is established.

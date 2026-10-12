@@ -66,3 +66,32 @@ func TestScheduledBackgroundSetupRequiresCombinedSelectionAndEveryAcknowledgemen
 		}
 	}
 }
+
+func TestScheduledMSISetupRequiresSeparateAcknowledgementAndBackground(t *testing.T) {
+	base := []string{"--msi-manager-offer", "m.json", "--msi-service-file", "m.exe", "--msi-artifact-manifest", "m.manifest.json", "--update-manager-offer", "w.json", "--update-executor-file", "w.exe", "--update-artifact-manifest", "w.manifest.json"}
+	apply := []string{"--apply", "--approve", "sha256:fixture", "--acknowledge-coordinated-mutations", "--acknowledge-managed-delivery", "--acknowledge-reusable-managed-jobs", "--acknowledge-selected-updates", "--acknowledge-localsystem-risk", "--acknowledge-observer-relay", "--acknowledge-observer-process-query", "--background-updates", "--acknowledge-background-updates", "--allow-scheduled-msi", "--acknowledge-scheduled-msi"}
+	for _, missing := range []string{"--background-updates", "--acknowledge-background-updates", "--allow-scheduled-msi", "--acknowledge-scheduled-msi", "--acknowledge-reusable-managed-jobs"} {
+		args := append([]string{}, base...)
+		for _, v := range apply {
+			if v != missing {
+				args = append(args, v)
+			}
+		}
+		code := runCoordinatedMutationProvision(context.Background(), args, io.Discard, io.Discard, func(context.Context, coordinatedMutationInput) (coordinatedMutationResult, error) {
+			t.Fatal("incomplete approval reached setup")
+			return coordinatedMutationResult{}, nil
+		})
+		if code != 2 {
+			t.Fatal("missing acknowledgement did not fail before I/O", missing, code)
+		}
+	}
+	for _, extra := range [][]string{{"--allow-scheduled-msi"}, {"--background-updates", "--allow-scheduled-msi", "--acknowledge-scheduled-msi"}, {"--background-updates", "--acknowledge-scheduled-msi"}} {
+		code := runCoordinatedMutationProvision(context.Background(), append(append([]string{}, base...), extra...), io.Discard, io.Discard, func(context.Context, coordinatedMutationInput) (coordinatedMutationResult, error) {
+			t.Fatal("review gained authority")
+			return coordinatedMutationResult{}, nil
+		})
+		if code != 2 {
+			t.Fatal("bad read-only review admitted", code)
+		}
+	}
+}

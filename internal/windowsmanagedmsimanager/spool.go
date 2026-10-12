@@ -10,6 +10,7 @@ import (
 	msi "localrmm/internal/windowsmanagedmsi"
 	"localrmm/internal/windowssoftwarejob"
 	"path/filepath"
+	"strconv"
 	"sync"
 )
 
@@ -24,6 +25,8 @@ const artifactName = "artifact.msi"
 const spoolName = "windows-managed-msi-spool"
 
 type Spool struct {
+	catalogue   bool
+	slots       []*Spool
 	mu          sync.Mutex
 	directory   string
 	failed      bool
@@ -118,4 +121,32 @@ func (s *Spool) Retire(ctx context.Context, a msi.Artifact, final func() error) 
 	s.cache = nil
 	s.uploadCache = nil
 	return nil
+}
+
+// Four fixed protected namespaces, selected only from validated manager metadata.
+// No request ever supplies a filesystem path or a slot number.
+func catalogueSpoolPath(state string, slot int) string {
+	return SpoolPath(state) + "-catalogue-" + strconv.Itoa(slot)
+}
+func CreateCatalogueSpool(state string) error {
+	for i := 0; i < msi.MaxCatalogueEntries; i++ {
+		if e := createSetupDirectory(catalogueSpoolPath(state, i)); e != nil {
+			return e
+		}
+	}
+	return nil
+}
+func OpenCatalogueSpool(state string) (*Spool, error) {
+	if !filepath.IsAbs(state) || filepath.Clean(state) != state {
+		return nil, ErrSpool
+	}
+	s := &Spool{catalogue: true, directory: SpoolPath(state)}
+	for i := 0; i < msi.MaxCatalogueEntries; i++ {
+		slot := &Spool{directory: catalogueSpoolPath(state, i)}
+		if e := slot.check(); e != nil {
+			return nil, e
+		}
+		s.slots = append(s.slots, slot)
+	}
+	return s, nil
 }

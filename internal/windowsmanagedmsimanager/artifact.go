@@ -28,6 +28,37 @@ func newArtifactManager(ctx context.Context, store msi.ArtifactStore, key ed2551
 	if store == nil || spool == nil || clock == nil || check == nil {
 		return nil, msi.ErrInvalid
 	}
+	if spool.catalogue {
+		cataloguestore, ok := store.(msi.CatalogueStore)
+		if !ok {
+			return nil, msi.ErrUnavailable
+		}
+		catalogue, e := cataloguestore.ReadWindowsMSICatalogue(msi.WithFinalCheck(ctx, check), key)
+		if e != nil {
+			return nil, e
+		}
+		for i, slot := range spool.slots {
+			var a *msi.ArtifactRecord
+			for j := range catalogue.Entries {
+				if int(*catalogue.Entries[j].CatalogueSlot) == i {
+					a = &catalogue.Entries[j]
+				}
+			}
+			if a != nil && a.RetirementStarted && !a.Retired {
+				slot.failed = true
+				continue
+			}
+			if a == nil || a.Retired {
+				e = slot.validateRecord(false, false, 0)
+			} else {
+				e = slot.validateRecord(true, a.Artifact.CompletedAt != 0, a.Artifact.Package.Size)
+			}
+			if e != nil {
+				return nil, e
+			}
+		}
+		return &ArtifactManager{reusable: true, store: store, key: bytes.Clone(key), spool: spool, now: clock, check: check}, nil
+	}
 	r, e := store.ReadWindowsManagedMSIArtifact(msi.WithFinalCheck(ctx, check), key)
 	if e != nil {
 		return nil, e
@@ -98,6 +129,9 @@ func (m *ArtifactManager) ReserveReusableUpload(ctx context.Context, actor strin
 	return m.reserveUpload(ctx, actor, selection, native, status, evidence)
 }
 func (m *ArtifactManager) reserveUpload(ctx context.Context, actor string, selection msi.Selection, native, status, evidence string) error {
+	if m.Catalogue() {
+		return msi.ErrAuthority
+	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if !msi.ValidSelection(selection) || !msi.ValidDigest(native) {
@@ -178,7 +212,11 @@ func (m *ArtifactManager) Upload(ctx context.Context, actor string, q UploadChun
 			return e
 		}}
 	}
-	prefix, e := m.spool.Append(ctx, exact, q.Data, check, custody...)
+	spool, e := m.spoolFor(r)
+	if e != nil {
+		return e
+	}
+	prefix, e := spool.Append(ctx, exact, q.Data, check, custody...)
 	if e != nil {
 		return msi.ErrUncertain
 	}
@@ -221,7 +259,11 @@ func (m *ArtifactManager) CompleteUpload(ctx context.Context, actor string) erro
 		})
 		return e
 	}
-	if _, e = m.spool.ReadChunk(ctx, exact.Package, 0, check, artifactCustody(exact)...); e != nil {
+	spool, e := m.spoolFor(r)
+	if e != nil {
+		return e
+	}
+	if _, e = spool.ReadChunk(ctx, exact.Package, 0, check, artifactCustody(exact)...); e != nil {
 		return msi.ErrUncertain
 	}
 	_, e = m.transaction(ctx, actor, "deliver", func(r *msi.ArtifactRecord, n int64) error {
@@ -248,8 +290,11 @@ func (m *ArtifactManager) RetireArtifact(ctx context.Context, actor, artifactID 
 		return msi.ErrUnavailable
 	}
 	checkReferences := func(r msi.ArtifactRecord) (string, error) {
-		if r.Version != msi.ReusableArtifactRecordVersion || r.Artifact == nil || r.RetirementStarted || r.Retired || msi.ArtifactIdentity(*r.Artifact) != artifactID {
+		if !r.Reusable() || r.Artifact == nil || r.RetirementStarted || r.Retired || msi.ArtifactIdentity(*r.Artifact) != artifactID {
 			return "", msi.ErrConsumed
+		}
+		if r.Catalogue() {
+			return r.CatalogueRetirementEvidence()
 		}
 		bindings, e := m.store.WindowsManagedMSIFleetBindings(ctx, m.key)
 		if e != nil {
@@ -307,8 +352,12 @@ func (m *ArtifactManager) RetireArtifact(ctx context.Context, actor, artifactID 
 		})
 		return e
 	}
-	if e = m.spool.Retire(ctx, *r.Artifact, check); e != nil {
-		m.failed = true
+	spool, e := m.spoolFor(r)
+	if e != nil {
+		return e
+	}
+	if e = spool.Retire(ctx, *r.Artifact, check); e != nil {
+		m.failed = !m.Catalogue()
 		return msi.ErrUncertain
 	}
 	_, e = m.transaction(ctx, actor, "deliver", func(r *msi.ArtifactRecord, _ int64) error {

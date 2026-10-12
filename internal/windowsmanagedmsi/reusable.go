@@ -29,14 +29,14 @@ func (p Permit) validateReusable() error {
 		}
 		return nil
 	}
-	if p.Version != ReusableVersion || p.JobSequence == 0 || !ValidPublisherEvidence(p.PublisherStatus, p.PublisherEvidenceDigest) || p.Kind != "retire" && p.RetireResultDigest != "" {
+	if !ReusableWire(p.Version) || p.JobSequence == 0 || !ValidPublisherEvidence(p.PublisherStatus, p.PublisherEvidenceDigest) || p.Kind != "retire" && p.RetireResultDigest != "" {
 		return ErrInvalid
 	}
 	return nil
 }
 func PermitForGrant(p Permit, g Grant, sequence uint64, a Artifact) Permit {
-	if g.Version == ReusableGrantVersion {
-		p.Version = ReusableVersion
+	if g.Reusable() {
+		p.Version = GrantWire(g)
 		p.JobSequence = sequence
 		p.PublisherStatus = a.PublisherStatus
 		p.PublisherEvidenceDigest = a.PublisherEvidenceDigest
@@ -44,7 +44,7 @@ func PermitForGrant(p Permit, g Grant, sequence uint64, a Artifact) Permit {
 	return p
 }
 func PermitMatchesGrant(p Permit, g Grant) bool {
-	return p.Binding == g.Binding && ((g.Version == ReusableGrantVersion && p.Version == ReusableVersion) || (g.Version != ReusableGrantVersion && p.Version == Version))
+	return p.Binding == g.Binding && p.Version == GrantWire(g)
 }
 
 type RetirementEvidence struct {
@@ -110,7 +110,7 @@ func sameJSON(a, b any) bool {
 	return bytes.Equal(x, y)
 }
 func AdvanceJobLedger(j *JobLedger, p Permit, result, retired Report, retiredRaw []byte) (*JobLedger, error) {
-	if j.Validate() != nil || p.Version != ReusableVersion || p.JobSequence != j.Sequence || j.Sequence == 0 || j.Sequence == ^uint64(0) || j.RetiredFloor+1 != j.Sequence || !SettledResult(result) || retired.Kind != "retired" || retired.Retirement == nil || retired.JobSequence != j.Sequence || retired.Retirement.Validate() != nil {
+	if j.Validate() != nil || !ReusableWire(p.Version) || p.JobSequence != j.Sequence || j.Sequence == 0 || j.Sequence == ^uint64(0) || j.RetiredFloor+1 != j.Sequence || !SettledResult(result) || retired.Kind != "retired" || retired.Retirement == nil || retired.JobSequence != j.Sequence || retired.Retirement.Validate() != nil {
 		return nil, ErrIntegrity
 	}
 	// The caller validates signed report/permit bindings before invoking this.
@@ -123,13 +123,13 @@ func AdvanceJobLedger(j *JobLedger, p Permit, result, retired Report, retiredRaw
 	return n, n.Validate()
 }
 func (r Record) validateReusableRecord() error {
-	if r.Grant.Version != ReusableGrantVersion {
+	if !r.Grant.Reusable() {
 		if r.ArtifactRetiredCount != 0 || r.Version != RecordVersion || r.Jobs != nil || len(r.RetirePermit)+len(r.RetiredReport) != 0 || r.RetireClaimedAt != 0 {
 			return ErrIntegrity
 		}
 		return nil
 	}
-	if r.Version != ReusableRecordVersion || r.Jobs.Validate() != nil {
+	if (r.Version != ReusableRecordVersion && r.Version != ScheduledRecordVersion && !r.Catalogue()) || (r.Version == ScheduledRecordVersion || r.Version == ScheduledCatalogueManagerRecordVersion) != r.Grant.Scheduled() || r.Jobs.Validate() != nil {
 		return ErrIntegrity
 	}
 	if r.Artifact == nil {
@@ -159,7 +159,7 @@ func (r Record) validateReusableRecord() error {
 			continue
 		}
 		p, e := VerifyReport(raw, r.ExecutorPublicKey)
-		if e != nil || p.Version != ReusableVersion || p.JobSequence != r.Jobs.Sequence {
+		if e != nil || p.Version != GrantWire(r.Grant) || p.JobSequence != r.Jobs.Sequence {
 			return ErrIntegrity
 		}
 	}
@@ -184,7 +184,7 @@ func (r Record) validateReusableRecord() error {
 	return nil
 }
 func NextManagerJob(r Record) (Record, error) {
-	if r.Grant.Version != ReusableGrantVersion || r.validateReusableRecord() != nil || len(r.RetiredReport) == 0 {
+	if !r.Grant.Reusable() || r.validateReusableRecord() != nil || len(r.RetiredReport) == 0 {
 		return Record{}, ErrConsumed
 	}
 	p, _ := VerifyPermit(r.DeliveryPermit, r.PublicKey)
@@ -194,10 +194,10 @@ func NextManagerJob(r Record) (Record, error) {
 	if e != nil {
 		return Record{}, e
 	}
-	return Record{Version: r.Version, Grant: r.Grant, PublicKey: r.PublicKey, ExecutorPublicKey: r.ExecutorPublicKey, Jobs: j, ClockFloor: r.ClockFloor}, nil
+	return Record{Version: r.Version, Grant: r.Grant, PublicKey: r.PublicKey, ExecutorPublicKey: r.ExecutorPublicKey, Jobs: j, ClockFloor: r.ClockFloor, SchedulePolicyFloor: r.SchedulePolicyFloor}, nil
 }
 func prepareJobTransition(before, after Record) (Record, error) {
-	if before.Grant.Version != ReusableGrantVersion {
+	if !before.Grant.Reusable() {
 		return before, nil
 	}
 	if sameJSON(before.Jobs, after.Jobs) {
@@ -208,7 +208,7 @@ func prepareJobTransition(before, after Record) (Record, error) {
 		return before, nil
 	}
 	next, e := NextManagerJob(before)
-	if e != nil || !sameJSON(next.Jobs, after.Jobs) || after.TransferID == "" || after.TransferID == before.TransferID || after.ArtifactRetiredCount <= before.ArtifactRetiredCount {
+	if e != nil || !sameJSON(next.Jobs, after.Jobs) || after.TransferID == "" || after.TransferID == before.TransferID || (!before.Catalogue() && after.ArtifactRetiredCount <= before.ArtifactRetiredCount || before.Catalogue() && after.ArtifactRetiredCount == before.ArtifactRetiredCount) {
 		return before, ErrConsumed
 	}
 	return next, nil

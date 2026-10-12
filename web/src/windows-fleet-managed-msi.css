@@ -44,3 +44,21 @@
 .managed-msi-confirm-evidence{margin:0;font-size:11px}.managed-msi-batch-confirmation ol{display:grid;gap:10px;padding-left:20px;max-height:260px;overflow:auto}.managed-msi-batch-confirmation li>span{display:block;font-size:11px}
 .managed-msi-saved-table{display:grid;min-width:0}.managed-msi-saved-table>[role=row]{display:grid;grid-template-columns:minmax(110px,1fr) minmax(160px,2fr);gap:8px;border-top:1px solid var(--line);padding:9px 0}.managed-msi-saved-table-head{font-weight:600}.managed-msi-saved-detail{grid-column:1/-1}
 @media(max-width:600px){.managed-msi-saved{padding:9px}.managed-msi-saved-table>[role=row]{grid-template-columns:minmax(0,1fr)}.managed-msi-saved-table-head{display:none!important}.managed-msi-batch-confirmation{padding:9px}.managed-msi-batch-confirmation ol{padding-left:17px}.managed-msi-saved label{max-width:100%}}
+
+.managed-msi-catalogue{min-width:0;margin-bottom:1rem;font-size:12px}
+.managed-msi-catalogue>header{display:flex;align-items:center;justify-content:space-between;gap:.75rem;flex-wrap:wrap}
+.managed-msi-catalogue h3{font-size:13px;margin:0}
+.managed-msi-catalogue .button{white-space:normal;max-width:100%}
+.managed-msi-catalogue progress{width:100%;max-width:28rem;height:.5rem}
+.managed-msi-catalogue-list{list-style:none;margin:.75rem 0;padding:0;display:grid;gap:.5rem}
+.managed-msi-catalogue-list li{display:flex;align-items:center;justify-content:space-between;gap:.75rem;padding:.65rem;border:1px solid var(--line);border-radius:6px}
+.managed-msi-catalogue-list li>div{min-width:0;overflow-wrap:anywhere}
+.managed-msi-catalogue-list small{display:block;margin-top:.2rem}
+.managed-msi-catalogue-list button[aria-pressed=true]{font-weight:700}
+.managed-msi-catalogue fieldset{margin:.75rem 0;min-width:0}
+.managed-msi-catalogue fieldset label{display:block}
+.managed-msi-catalogue input[type=file]{max-width:100%}
+.managed-msi-catalogue dd{overflow-wrap:anywhere}
+@media(max-width:560px){.managed-msi-catalogue-list li{align-items:stretch;flex-direction:column}.managed-msi-catalogue-list button{align-self:flex-start}}
+.managed-msi-archived-packages>details{border-top:1px solid var(--line);padding-top:8px;margin-top:8px}
+.managed-msi-archived-packages ul{padding-left:18px;display:grid;gap:8px}

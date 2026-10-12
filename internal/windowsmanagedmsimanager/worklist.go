@@ -121,7 +121,7 @@ func (r *Registry) worklistRead(ctx context.Context, actor string) (msi.Worklist
 	return s.ReadWindowsMSIWorklists(ctx, r.artifact.key)
 }
 func worklistMatches(w msi.Worklist, rec msi.Record, t msi.WorklistTarget) bool {
-	return rec.Grant.Binding == t.Binding && rec.Grant.Version == msi.ReusableGrantVersion && rec.Artifact != nil && rec.ArtifactRetiredCount == w.ArtifactRetiredCount && msi.ArtifactIdentity(*rec.Artifact) == w.ArtifactID && rec.TransferID == t.TransferID && rec.Jobs != nil && rec.Jobs.Sequence == t.JobSequence
+	return rec.Grant.Binding == t.Binding && rec.Grant.Reusable() && rec.Artifact != nil && rec.ArtifactRetiredCount == w.ArtifactRetiredCount && msi.ArtifactIdentity(*rec.Artifact) == w.ArtifactID && rec.TransferID == t.TransferID && rec.Jobs != nil && rec.Jobs.Sequence == t.JobSequence
 }
 
 type worklistEvidence struct {
@@ -170,7 +170,7 @@ func (r *Registry) worklistView(ctx context.Context, w msi.Worklist, cache map[s
 			out.Rows = append(out.Rows, row)
 			continue
 		}
-		v, e := m.View(ctx)
+		v, e := m.View(msi.WithCatalogueOccurrence(ctx, w.ArtifactRetiredCount))
 		if e != nil {
 			row.State = "unavailable"
 			out.Rows = append(out.Rows, row)
@@ -202,6 +202,7 @@ func (r *Registry) Worklists(ctx context.Context, actor string) (WorklistsView, 
 	if e != nil {
 		return out, e
 	}
+	out.Version = j.Version
 	out.Enabled = true
 	cache := map[string]worklistEvidence{}
 	for _, w := range j.Worklists {
@@ -256,9 +257,10 @@ func (r *Registry) SaveWorklist(ctx context.Context, actor string, q SaveWorklis
 		bindings = append(bindings, m.Binding())
 		previous = t.DeviceID
 	}
+	ctx = msi.WithCatalogueOccurrence(ctx, occ)
 	_, e = r.worklistWrite(ctx, actor, "read", bindings, func(j *msi.WorklistJournal, a msi.ArtifactRecord, records map[string]msi.Record, at time.Time) error {
 		for _, w := range j.Worklists {
-			if w.ArchivedAt == 0 {
+			if w.ArchivedAt == 0 && (j.Version != msi.CatalogueWorklistVersion || w.ArtifactRetiredCount == occ) {
 				return msi.ErrConflict
 			}
 		}
@@ -301,6 +303,9 @@ func worklistEligible(w msi.Worklist, t msi.WorklistTarget, v View, kind string,
 	}
 	if t.TransferID == "" || v.TransferID != t.TransferID || v.JobSequence != strconv.FormatUint(t.JobSequence, 10) {
 		return "changed"
+	}
+	if (kind == "review" || kind == "approve") && v.Schedule != nil {
+		return "not_eligible"
 	}
 	if kind == "review" {
 		if v.CanReview {
@@ -363,7 +368,7 @@ func (r *Registry) PreviewWorklist(ctx context.Context, actor, id string, revisi
 		m := r.Manager(t.Binding.DeviceID)
 		var v View
 		if m != nil && m.Binding() == t.Binding {
-			v, e = m.View(ctx)
+			v, e = m.View(msi.WithCatalogueOccurrence(ctx, w.ArtifactRetiredCount))
 			if e == nil {
 				reason = worklistEligible(*w, t, v, kind, r.artifact.now().Unix())
 			}
@@ -423,6 +428,11 @@ func (r *Registry) ConfirmWorklist(ctx context.Context, sess WorklistSession, id
 	if q.Kind == "deliver" {
 		kind = "deliver"
 	}
+	occ, err := occurrenceNumber(q.Items[0].ArtifactRetiredCount)
+	if err != nil {
+		return WorklistView{}, err
+	}
+	ctx = msi.WithCatalogueOccurrence(ctx, occ)
 	_, e = r.worklistWrite(ctx, sess.ActorID, kind, bindings, func(j *msi.WorklistJournal, a msi.ArtifactRecord, records map[string]msi.Record, at time.Time) error {
 		w := j.Find(id)
 		if w == nil || w.Revision != q.Revision || w.ArchivedAt != 0 {
@@ -456,7 +466,7 @@ func (r *Registry) ConfirmWorklist(ctx context.Context, sess WorklistSession, id
 					return msi.ErrConsumed
 				}
 				if rec.TransferID != "" {
-					if rec.ArtifactRetiredCount >= w.ArtifactRetiredCount {
+					if !rec.Catalogue() && rec.ArtifactRetiredCount >= w.ArtifactRetiredCount || rec.Catalogue() && a.Assignment(rec.Grant.Binding) != nil {
 						return msi.ErrConsumed
 					}
 					if _, e := msi.NextManagerJob(rec); e != nil {
@@ -464,7 +474,7 @@ func (r *Registry) ConfirmWorklist(ctx context.Context, sess WorklistSession, id
 					}
 				}
 			} else {
-				if !worklistMatches(*w, rec, *t) || item.TransferID != t.TransferID || item.JobSequence != strconv.FormatUint(t.JobSequence, 10) || q.Kind != "retire" && len(rec.InstallPermit) != 0 {
+				if !worklistMatches(*w, rec, *t) || item.TransferID != t.TransferID || item.JobSequence != strconv.FormatUint(t.JobSequence, 10) || q.Kind != "retire" && (len(rec.InstallPermit) != 0 || rec.Schedule != nil) {
 					return msi.ErrConflict
 				}
 				if !rec.Grant.InstallEnabled || !rec.Grant.InstallAcknowledged {

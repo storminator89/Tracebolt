@@ -37,7 +37,7 @@ func (h *operatorHandler) windowsManagedMSIArtifactAPI(w http.ResponseWriter, r 
 		fail(w, 405, "method_not_allowed", "Method is unsupported.")
 		return
 	}
-	if r.URL.RawQuery != "" || r.URL.RawPath != "" || len(r.TransferEncoding) != 0 || len(r.Trailer) != 0 {
+	if r.URL.RawPath != "" || len(r.TransferEncoding) != 0 || len(r.Trailer) != 0 {
 		managedMSIError(w, msi.ErrInvalid)
 		return
 	}
@@ -50,6 +50,9 @@ func (h *operatorHandler) windowsManagedMSIArtifactAPI(w http.ResponseWriter, r 
 	registry := h.windowsManagedMSIRegistry
 	if registry == nil || registry.Artifact() == nil || h.insecureHTTPTest {
 		managedMSIError(w, msi.ErrUnavailable)
+		return
+	}
+	if !pinWindowsMSICatalogueGET(w, &r, registry.Catalogue(), op) {
 		return
 	}
 	owner, ok := operatorContext(r)

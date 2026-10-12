@@ -16,6 +16,16 @@ import (
 	"time"
 )
 
+const CatalogueRegistryVersion = "tracebolt.windows-managed-msi-manager-registry.v5"
+const ScheduledCatalogueRegistryVersion = "tracebolt.windows-managed-msi-manager-registry.v6"
+const CatalogueConfigVersion = "tracebolt.windows-managed-msi-manager-config.v5"
+const ScheduledCatalogueConfigVersion = "tracebolt.windows-managed-msi-manager-config.v6"
+const CatalogueSetupPlanVersion = "tracebolt.windows-managed-msi-manager-setup.v5"
+const ScheduledCatalogueSetupPlanVersion = "tracebolt.windows-managed-msi-manager-setup.v6"
+
+const ScheduledRegistryVersion = "tracebolt.windows-managed-msi-manager-registry.v4"
+const ScheduledConfigVersion = "tracebolt.windows-managed-msi-manager-config.v4"
+const ScheduledSetupPlanVersion = "tracebolt.windows-managed-msi-manager-setup.v4"
 const ReusableRegistryVersion = "tracebolt.windows-managed-msi-manager-registry.v3"
 const ReusableConfigVersion = "tracebolt.windows-managed-msi-manager-config.v3"
 const ReusableSetupPlanVersion = "tracebolt.windows-managed-msi-manager-setup.v3"
@@ -38,7 +48,7 @@ func fleetDevicePath(state, device, name string) string {
 	return filepath.Join(state, "windows-managed-msi-fleet-"+device, name)
 }
 func validFleetConfig(c Config) bool {
-	return (c.Version == FleetConfigVersion || c.Version == ReusableConfigVersion) && c.Enabled && c.Binding.Validate() == nil && absolute(c.StateDirectory) && c.PrivateKeyFile == fleetPath(c.StateDirectory, "manager.key") && c.SetupReceiptFile == fleetDevicePath(c.StateDirectory, c.Binding.DeviceID, "complete.json") && msi.ValidDigest(c.SetupPlanDigest) && msi.ValidDigest(c.SetupRegistrationDigest)
+	return (c.Version == FleetConfigVersion || c.Version == ReusableConfigVersion || c.Version == ScheduledConfigVersion || catalogueConfig(c.Version)) && c.Enabled && c.Binding.Validate() == nil && absolute(c.StateDirectory) && c.PrivateKeyFile == fleetPath(c.StateDirectory, "manager.key") && c.SetupReceiptFile == fleetDevicePath(c.StateDirectory, c.Binding.DeviceID, "complete.json") && msi.ValidDigest(c.SetupPlanDigest) && msi.ValidDigest(c.SetupRegistrationDigest)
 }
 func checkFleetReceipt(c Config) error {
 	var r setupComplete
@@ -46,7 +56,7 @@ func checkFleetReceipt(c Config) error {
 		return ErrConfiguration
 	}
 	raw, _ := json.Marshal(c)
-	if (r.Version != FleetSetupPlanVersion && r.Version != ReusableSetupPlanVersion) || (r.Version == ReusableSetupPlanVersion) != (c.Version == ReusableConfigVersion) || r.PlanDigest != c.SetupPlanDigest || r.RegistrationDigest != c.SetupRegistrationDigest || r.ConfigurationDigest != msi.Digest(raw) {
+	if r.Version != fleetSetupVersion(c.Version) || fleetSetupVersion(c.Version) == "" || r.PlanDigest != c.SetupPlanDigest || r.RegistrationDigest != c.SetupRegistrationDigest || r.ConfigurationDigest != msi.Digest(raw) {
 		return ErrConfiguration
 	}
 	return nil
@@ -54,7 +64,7 @@ func checkFleetReceipt(c Config) error {
 func readFleetRegistry(path, state string, limit int) (RegistryConfig, []Config, []byte, error) {
 	var r RegistryConfig
 	raw, e := lanconfig.ReadProtected(path, true, maxRegistryBytes)
-	if e != nil || msi.Canonical(raw, &r, maxRegistryBytes) != nil || (r.Version != RegistryVersion && r.Version != ReusableRegistryVersion) || !r.Enabled || len(r.ConfigFiles) == 0 || len(r.ConfigFiles) > min(limit, msi.MaxDevices) {
+	if e != nil || msi.Canonical(raw, &r, maxRegistryBytes) != nil || (r.Version != RegistryVersion && r.Version != ReusableRegistryVersion && r.Version != ScheduledRegistryVersion && r.Version != CatalogueRegistryVersion && r.Version != ScheduledCatalogueRegistryVersion) || !r.Enabled || len(r.ConfigFiles) == 0 || len(r.ConfigFiles) > min(limit, msi.MaxDevices) {
 		return r, nil, nil, ErrConfiguration
 	}
 	configs := []Config{}
@@ -66,7 +76,7 @@ func readFleetRegistry(path, state string, limit int) (RegistryConfig, []Config,
 		}
 		paths[p] = true
 		var c Config
-		if _, e := canonicalRead(p, &c); e != nil || !validFleetConfig(c) || (r.Version == ReusableRegistryVersion) != (c.Version == ReusableConfigVersion) || c.StateDirectory != state || c.Binding.ManagerID != r.ManagerID || p != fleetDevicePath(state, c.Binding.DeviceID, "manager.json") || checkFleetReceipt(c) != nil {
+		if _, e := canonicalRead(p, &c); e != nil || !validFleetConfig(c) || r.Version != fleetRegistryVersion(c.Version) || c.StateDirectory != state || c.Binding.ManagerID != r.ManagerID || p != fleetDevicePath(state, c.Binding.DeviceID, "manager.json") || checkFleetReceipt(c) != nil {
 			return r, nil, nil, ErrConfiguration
 		}
 		for _, b := range bindings {
@@ -229,7 +239,7 @@ func LoadRegistry(ctx context.Context, store *enrollmentstore.Store, path, state
 	}
 	for _, c := range configs {
 		saved, err := store.ReadRegisteredWindowsManagedMSI(ctx, c.Binding, pub)
-		if err != nil || (c.Version == ReusableConfigVersion) != (saved.Grant.Version == msi.ReusableGrantVersion) {
+		if err != nil || !fleetGrantProfile(c.Version, saved.Grant) || catalogueConfig(c.Version) != saved.Catalogue() {
 			return nil, ErrConfiguration
 		}
 		if expected[c.Binding.DeviceID] != c.Binding {
@@ -248,7 +258,12 @@ func LoadRegistry(ctx context.Context, store *enrollmentstore.Store, path, state
 		}
 		return nil
 	}
-	spool, e := OpenSpool(state)
+	var spool *Spool
+	if catalogueConfig(configs[0].Version) {
+		spool, e = OpenCatalogueSpool(state)
+	} else {
+		spool, e = OpenSpool(state)
+	}
 	if e != nil {
 		return nil, e
 	}
@@ -331,8 +346,11 @@ func (r *Registry) ArtifactView(ctx context.Context) (ArtifactView, error) {
 	if e != nil {
 		return ArtifactView{}, e
 	}
+	return r.artifactViewRecord(ctx, record)
+}
+func (r *Registry) artifactViewRecord(ctx context.Context, record msi.ArtifactRecord) (ArtifactView, error) {
 	out := ArtifactView{Version: "tracebolt.windows-managed-msi-artifact.v2", ServerNow: r.artifact.now().Unix(), State: "empty", Targets: []ArtifactTarget{}}
-	if record.Version == msi.ReusableArtifactRecordVersion {
+	if record.Reusable() {
 		out.Version = "tracebolt.windows-managed-msi-artifact.v3"
 		out.Reusable = true
 		out.RetiredCount = strconv.FormatUint(record.RetiredCount, 10)
@@ -374,7 +392,7 @@ func (r *Registry) ArtifactView(ctx context.Context) (ArtifactView, error) {
 	}
 	for _, m := range r.ordered {
 		out.Targets = append(out.Targets, ArtifactTarget{m.binding.DeviceID, msi.BindingDigest(m.binding)})
-		if out.Reusable && *out.CanRetire {
+		if out.Reusable && *out.CanRetire && !record.Catalogue() {
 			saved, err := m.store.ReadRegisteredWindowsManagedMSI(msi.WithFinalCheck(ctx, m.configurationCheck), m.binding, m.key.Public().(ed25519.PublicKey))
 			references, referenceErr := msi.ReferencesArtifactOccurrence(saved, record)
 			if err != nil || referenceErr != nil || references && len(saved.RetiredReport) == 0 {
@@ -383,6 +401,64 @@ func (r *Registry) ArtifactView(ctx context.Context) (ArtifactView, error) {
 			}
 		}
 	}
+	if record.Catalogue() && *out.CanRetire {
+		if _, e := record.CatalogueRetirementEvidence(); e != nil {
+			*out.CanRetire = false
+			*out.RetirementBlocked = "awaiting_device_retirement"
+		}
+	}
 	sort.Slice(out.Targets, func(i, j int) bool { return out.Targets[i].DeviceID < out.Targets[j].DeviceID })
 	return out, nil
+}
+
+// Every fresh registry, config and receipt version binds one exact grant profile.
+// A matching reusable capability alone never upgrades an earlier wrapper.
+func fleetSetupVersion(config string) string {
+	switch config {
+	case CatalogueConfigVersion:
+		return CatalogueSetupPlanVersion
+	case ScheduledCatalogueConfigVersion:
+		return ScheduledCatalogueSetupPlanVersion
+	case FleetConfigVersion:
+		return FleetSetupPlanVersion
+	case ReusableConfigVersion:
+		return ReusableSetupPlanVersion
+	case ScheduledConfigVersion:
+		return ScheduledSetupPlanVersion
+	}
+	return ""
+}
+func fleetRegistryVersion(config string) string {
+	switch config {
+	case CatalogueConfigVersion:
+		return CatalogueRegistryVersion
+	case ScheduledCatalogueConfigVersion:
+		return ScheduledCatalogueRegistryVersion
+	case FleetConfigVersion:
+		return RegistryVersion
+	case ReusableConfigVersion:
+		return ReusableRegistryVersion
+	case ScheduledConfigVersion:
+		return ScheduledRegistryVersion
+	}
+	return ""
+}
+func fleetGrantProfile(config string, grant msi.Grant) bool {
+	switch config {
+	case CatalogueConfigVersion:
+		return grant.Version == msi.ReusableGrantVersion
+	case ScheduledCatalogueConfigVersion:
+		return grant.Scheduled()
+	case FleetConfigVersion:
+		return !grant.Reusable()
+	case ReusableConfigVersion:
+		return grant.Version == msi.ReusableGrantVersion
+	case ScheduledConfigVersion:
+		return grant.Scheduled()
+	}
+	return false
+}
+
+func catalogueConfig(version string) bool {
+	return version == CatalogueConfigVersion || version == ScheduledCatalogueConfigVersion
 }

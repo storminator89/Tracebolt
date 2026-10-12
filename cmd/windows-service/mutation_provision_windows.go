@@ -37,7 +37,7 @@ func nativeCoordinatedMutationProvision(ctx context.Context, in coordinatedMutat
 		var m managedMSIResult
 		var w updateProvisionResult
 		// Caller cannot inject already generated material or a nested apply.
-		if in.MSI.apply || in.WUA.apply || in.MSI.coordinated != nil || in.WUA.coordinated != nil {
+		if in.MSI.apply || in.WUA.apply || in.MSI.schedule != in.MSI.offer.Scheduled() || in.MSI.schedule && !in.WUA.background || in.MSI.coordinated != nil || in.WUA.coordinated != nil {
 			return nil, managed.ErrAuthority
 		}
 		if _, e := nativeManagedMSIProvisionUnderLease(ctx, in.MSI, &m, receipt, lease); e != nil {
@@ -47,7 +47,7 @@ func nativeCoordinatedMutationProvision(ctx context.Context, in coordinatedMutat
 			return nil, e
 		}
 		plan := coordinatedMutationPlan{Version: coordinatedMutationVersion, MSI: m.plan, WUA: w.plan, Disclosure: coordinatedMutationDisclosure}
-		if in.MSI.offer.Version == managed.ReusableOfferVersion {
+		if in.MSI.offer.Reusable() {
 			plan.Version = reusableMutationVersion
 			plan.Disclosure += " " + managed.ReusableDisclosure
 		}
@@ -58,6 +58,13 @@ func nativeCoordinatedMutationProvision(ctx context.Context, in coordinatedMutat
 				plan.Version = scheduledBackgroundMutationVersion
 				plan.Disclosure = windowsupdatesetup.ScheduledBackgroundDisclosure + " " + job.BackgroundScheduleDisclosure + " " + managed.ReusableDisclosure
 			}
+		}
+		if in.MSI.schedule {
+			plan.Version = scheduledMSIMutationVersion
+			if in.WUA.schedule {
+				plan.Version = scheduledMSIAndWUAMutationVersion
+			}
+			plan.Disclosure += " " + managed.ScheduledDisclosure
 		}
 		if plan.Validate() != nil {
 			return nil, managed.ErrAuthority
@@ -112,9 +119,14 @@ func nativeCoordinatedMutationProvision(ctx context.Context, in coordinatedMutat
 		id := func(prefix string, start int) string { return prefix + hex.EncodeToString(ids[start:start+16]) }
 		b := managed.Binding{ManagerID: in.MSI.offer.ManagerID, DeviceID: in.MSI.offer.DeviceID, IncarnationDigest: in.MSI.offer.IncarnationDigest, ExecutorID: id("executor_", 0), ExecutorKeyID: managed.Digest(mPub), KeyID: managed.Digest(in.MSI.offer.ManagerPublicKey), DeliveryGrantID: id("grant_", 16), InstallGrantID: id("grant_", 32)}
 		g := managed.Grant{Version: managed.CoordinatedGrantVersion, MutationPlanDigest: plan.Digest(), Binding: b, DeliveryEnabled: true, InstallEnabled: true, DeliveryAcknowledged: true, InstallAcknowledged: true, ServiceRiskAcknowledged: true, ExpiresAt: in.MSI.offer.ExpiresAt}
-		if in.MSI.offer.Version == managed.ReusableOfferVersion {
+		if in.MSI.offer.Reusable() {
 			g.Version = managed.ReusableGrantVersion
 			g.ReusableAcknowledged = true
+		}
+		if in.MSI.schedule {
+			g.Version = managed.ScheduledGrantVersion
+			g.ScheduledEnabled = true
+			g.ScheduledAcknowledged = true
 		}
 		wb := job.Binding{ManagerID: in.WUA.offer.ManagerID, DeviceID: in.WUA.offer.DeviceID, IncarnationDigest: in.WUA.offer.IncarnationDigest, ExecutorID: id("executor_", 48), ExecutorKeyID: managed.Digest(wPub), KeyID: managed.Digest(in.WUA.offer.ManagerPublicKey), GrantID: id("grant_", 64)}
 		consent := job.Consent{Version: job.CoordinatedConsentVersion, MutationPlanDigest: plan.Digest(), Scope: job.Scope, Binding: wb, Enabled: true, Acknowledged: true, ExpiresAt: in.WUA.offer.ExpiresAt}
@@ -132,7 +144,7 @@ func nativeCoordinatedMutationProvision(ctx context.Context, in coordinatedMutat
 		g.PeerBindingDigest = managed.Digest(wbJSON)
 		consent.PeerBindingDigest = managed.Digest(mbJSON)
 		roster := fence.Roster{Plan: plan.FencePlan(), FenceID: fenceID, MSI: managed.MutationParticipant(g), WUA: job.MutationParticipant(consent)}
-		if g.Version == managed.ReusableGrantVersion {
+		if g.Reusable() {
 			roster.Version = fence.ReusableRosterVersion
 			if in.WUA.background {
 				roster.Version = fence.BackgroundRosterVersion

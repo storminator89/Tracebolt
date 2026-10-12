@@ -22,6 +22,7 @@ const windowsManagedMSIMetaSchema = `CREATE TABLE enrollment_windows_managed_msi
 const windowsManagedMSIRecordsSchema = `CREATE TABLE enrollment_windows_managed_msi_records(invitation_id TEXT PRIMARY KEY NOT NULL REFERENCES enrollment_credentials(invitation_id),body BLOB NOT NULL CHECK(length(body)>0 AND length(body)<=262144),setup_fence TEXT NOT NULL CHECK(length(setup_fence)=71),rejected_clock_floor INTEGER NOT NULL CHECK(rejected_clock_floor>=0 AND rejected_clock_floor<=253402300799)) STRICT`
 
 type windowsManagedMSISetupMarker struct {
+	CatalogueVersion string                  `json:"catalogueVersion,omitempty"`
 	WorklistsVersion string                  `json:"worklistsVersion,omitempty"`
 	Version          string                  `json:"version"`
 	Grant            windowsmanagedmsi.Grant `json:"grant"`
@@ -38,7 +39,15 @@ func validWindowsManagedMSISetupMarker(s enrollmentstate.Snapshot, m *windowsMan
 		return true
 	}
 	c, b := m.Grant, m.Grant.Binding
-	return (m.WorklistsVersion == "" || m.WorklistsVersion == windowsmanagedmsi.WorklistVersion && m.Version == windowsManagedMSIFleetSetupVersion && c.Version == windowsmanagedmsi.ReusableGrantVersion) && s.Binding.Profile == "tls" && s.Binding.CollectionProfile == enrollmentcrypto.CollectionProfileWindowsInventory && s.Platform == "windows" && s.Activation.At != 0 && (m.Version == "tracebolt.windows-managed-msi-setup.v1" || m.Version == windowsManagedMSIFleetSetupVersion) && c.Validate() == nil && c.DeliveryEnabled && c.DeliveryAcknowledged && c.ServiceRiskAcknowledged && b.ManagerID == s.Binding.InstanceID && b.DeviceID == s.Approval.DeviceID && b.IncarnationDigest == "sha256:"+s.Issuance.CertificateHash && validStoreTime(m.InitializedAt) && m.InitializedAt.Unix() >= s.Activation.At && m.InitializedAt.Unix() < recordAuthorityExpiry(s, authorityExpiry...) && m.InitializedAt.Unix() < c.ExpiresAt && (s.Termination.At == 0 || m.InitializedAt.Unix() <= s.Termination.At)
+	return (m.CatalogueVersion == "" || m.CatalogueVersion == windowsmanagedmsi.CatalogueVersion && m.WorklistsVersion == windowsmanagedmsi.CatalogueWorklistVersion && c.Reusable()) && (m.CatalogueVersion != "" || m.WorklistsVersion != windowsmanagedmsi.CatalogueWorklistVersion) && (!c.Scheduled() || m.WorklistsVersion == windowsmanagedmsi.WorklistVersion || m.WorklistsVersion == windowsmanagedmsi.CatalogueWorklistVersion) && (m.WorklistsVersion == "" || (m.WorklistsVersion == windowsmanagedmsi.WorklistVersion || m.WorklistsVersion == windowsmanagedmsi.CatalogueWorklistVersion) && m.Version == windowsManagedMSIFleetSetupVersion && c.Reusable()) && s.Binding.Profile == "tls" && s.Binding.CollectionProfile == enrollmentcrypto.CollectionProfileWindowsInventory && s.Platform == "windows" && s.Activation.At != 0 && (m.Version == "tracebolt.windows-managed-msi-setup.v1" || m.Version == windowsManagedMSIFleetSetupVersion) && c.Validate() == nil && c.DeliveryEnabled && c.DeliveryAcknowledged && c.ServiceRiskAcknowledged && b.ManagerID == s.Binding.InstanceID && b.DeviceID == s.Approval.DeviceID && b.IncarnationDigest == "sha256:"+s.Issuance.CertificateHash && validStoreTime(m.InitializedAt) && m.InitializedAt.Unix() >= s.Activation.At && m.InitializedAt.Unix() < recordAuthorityExpiry(s, authorityExpiry...) && m.InitializedAt.Unix() < c.ExpiresAt && (s.Termination.At == 0 || m.InitializedAt.Unix() <= s.Termination.At)
+}
+
+// Earlier fleet profiles retain their original compatibility class. Reusable
+// profiles must be homogeneous: a fresh scheduled grant is never mixed into an
+// existing manual reusable registry, even though both use the reusable payload
+// and worklist formats.
+func compatibleWindowsManagedMSIRegistryGrants(a, b windowsmanagedmsi.Grant) bool {
+	return a.Reusable() == b.Reusable() && (!a.Reusable() || a.Version == b.Version)
 }
 
 func windowsManagedMSISchemaObjects() []inventoryledger.SchemaObject {
@@ -128,8 +137,12 @@ func (s *Store) SetupWindowsManagedMSICreateOnly(ctx context.Context, key, execu
 	return s.setupWindowsManagedMSICreateOnly(ctx, key, executorKey, consent, now, false, false)
 }
 
-func (s *Store) setupWindowsManagedMSICreateOnly(ctx context.Context, key, executorKey ed25519.PublicKey, consent windowsmanagedmsi.Grant, now time.Time, additional, fleet bool) error {
-	if s == nil || s.storeState == nil || ctx == nil || !validStoreTime(now) || consent.Validate() != nil || consent.Version == windowsmanagedmsi.ReusableGrantVersion && !fleet || !consent.DeliveryEnabled || !consent.DeliveryAcknowledged || !consent.ServiceRiskAcknowledged || !keyvalidation.Ed25519(key) || !keyvalidation.Ed25519(executorKey) || consent.Binding.KeyID != actionpermit.Digest(key) || consent.Binding.ExecutorKeyID != actionpermit.Digest(executorKey) {
+func (s *Store) setupWindowsManagedMSICreateOnly(ctx context.Context, key, executorKey ed25519.PublicKey, consent windowsmanagedmsi.Grant, now time.Time, additional, fleet bool, catalogueOption ...bool) error {
+	catalogue := len(catalogueOption) == 1 && catalogueOption[0]
+	if len(catalogueOption) > 1 || catalogue && (!fleet || !consent.Reusable()) {
+		return windowsmanagedmsi.ErrInvalid
+	}
+	if s == nil || s.storeState == nil || ctx == nil || !validStoreTime(now) || consent.Validate() != nil || consent.Reusable() && !fleet || !consent.DeliveryEnabled || !consent.DeliveryAcknowledged || !consent.ServiceRiskAcknowledged || !keyvalidation.Ed25519(key) || !keyvalidation.Ed25519(executorKey) || consent.Binding.KeyID != actionpermit.Digest(key) || consent.Binding.ExecutorKeyID != actionpermit.Digest(executorKey) {
 		return windowsmanagedmsi.ErrInvalid
 	}
 	return s.transact(ctx, func(t *transaction) error {
@@ -146,7 +159,7 @@ func (s *Store) setupWindowsManagedMSICreateOnly(ctx context.Context, key, execu
 				count++
 				old := c.WindowsManagedMSISetup
 				b := old.Grant.Binding
-				if !fleet || !additional || old.Version != windowsManagedMSIFleetSetupVersion || (old.Grant.Version == windowsmanagedmsi.ReusableGrantVersion) != (consent.Version == windowsmanagedmsi.ReusableGrantVersion) || b.KeyID != consent.Binding.KeyID || managedMSIBindingAlias(b, consent.Binding) {
+				if (old.CatalogueVersion != "") != catalogue || !fleet || !additional || old.Version != windowsManagedMSIFleetSetupVersion || !compatibleWindowsManagedMSIRegistryGrants(old.Grant, consent) || b.KeyID != consent.Binding.KeyID || managedMSIBindingAlias(b, consent.Binding) {
 					return windowsmanagedmsi.ErrConflict
 				}
 			}
@@ -178,8 +191,12 @@ func (s *Store) setupWindowsManagedMSICreateOnly(ctx context.Context, key, execu
 			version = windowsManagedMSIFleetSetupVersion
 		}
 		marker := &windowsManagedMSISetupMarker{Version: version, Grant: consent, InitializedAt: now}
-		if fleet && consent.Version == windowsmanagedmsi.ReusableGrantVersion {
+		if fleet && consent.Reusable() {
 			marker.WorklistsVersion = windowsmanagedmsi.WorklistVersion
+			if catalogue {
+				marker.WorklistsVersion = windowsmanagedmsi.CatalogueWorklistVersion
+				marker.CatalogueVersion = windowsmanagedmsi.CatalogueVersion
+			}
 			if additional {
 				for _, c := range t.credentials {
 					if old := c.WindowsManagedMSISetup; old != nil {
@@ -207,6 +224,12 @@ func (s *Store) setupWindowsManagedMSICreateOnly(ctx context.Context, key, execu
 		if err != nil {
 			return err
 		}
+		if catalogue {
+			r.Version = windowsmanagedmsi.CatalogueManagerRecordVersion
+			if consent.Scheduled() {
+				r.Version = windowsmanagedmsi.ScheduledCatalogueManagerRecordVersion
+			}
+		}
 		if !additional {
 			for _, obj := range windowsManagedMSISchemaObjects() {
 				if _, err = t.conn.ExecContext(ctx, obj.SQL); err != nil {
@@ -222,7 +245,7 @@ func (s *Store) setupWindowsManagedMSICreateOnly(ctx context.Context, key, execu
 				if _, err = t.conn.ExecContext(ctx, windowsMSIWorklistsSchema); err != nil {
 					return ErrStorage
 				}
-				j := windowsmanagedmsi.WorklistJournal{Version: windowsmanagedmsi.WorklistVersion, ManagerID: consent.Binding.ManagerID, KeyID: consent.Binding.KeyID, Revision: 1, ClockFloor: now.Unix(), Worklists: []windowsmanagedmsi.Worklist{}}
+				j := windowsmanagedmsi.WorklistJournal{Version: marker.WorklistsVersion, ManagerID: consent.Binding.ManagerID, KeyID: consent.Binding.KeyID, Revision: 1, ClockFloor: now.Unix(), Worklists: []windowsmanagedmsi.Worklist{}}
 				body, _ := json.Marshal(j)
 				if _, err = t.conn.ExecContext(ctx, `INSERT INTO enrollment_windows_msi_worklists VALUES(1,?)`, body); err != nil {
 					return ErrStorage
@@ -232,10 +255,13 @@ func (s *Store) setupWindowsManagedMSICreateOnly(ctx context.Context, key, execu
 				return ErrStorage
 			}
 			a := windowsmanagedmsi.ArtifactRecord{Version: windowsmanagedmsi.ArtifactRecordVersion, ClockFloor: now.Unix()}
-			if consent.Version == windowsmanagedmsi.ReusableGrantVersion {
+			if consent.Reusable() {
 				a.Version = windowsmanagedmsi.ReusableArtifactRecordVersion
 			}
 			raw, _ := json.Marshal(a)
+			if catalogue {
+				raw, _ = json.Marshal(windowsmanagedmsi.CatalogueRecord{Version: windowsmanagedmsi.CatalogueRecordVersion, Revision: 1, ClockFloor: now.Unix(), Entries: []windowsmanagedmsi.ArtifactRecord{}})
+			}
 			if _, err = t.conn.ExecContext(ctx, `INSERT INTO enrollment_windows_msi_fleet_artifact VALUES(1,?)`, raw); err != nil {
 				return ErrStorage
 			}
@@ -328,12 +354,29 @@ func (s *Store) loadWindowsManagedMSIRecords(ctx context.Context, t *transaction
 		return err
 	}
 	var artifact windowsmanagedmsi.ArtifactRecord
+	var catalogue windowsmanagedmsi.CatalogueRecord
+	catalogueRecords := map[string]windowsmanagedmsi.Record{}
 	if fleet {
-		artifact, err = readWindowsManagedMSIArtifact(ctx, t.conn)
+		raw, e := readWindowsMSIArtifactBody(ctx, t.conn)
+		if e != nil {
+			return e
+		}
+		var h struct {
+			Version string `json:"version"`
+		}
+		if json.Unmarshal(raw, &h) != nil {
+			return ErrStorage
+		}
+		if h.Version == windowsmanagedmsi.CatalogueRecordVersion {
+			catalogue, err = windowsmanagedmsi.DecodeCatalogueRecord(raw)
+		} else {
+			artifact, err = windowsmanagedmsi.DecodeArtifactRecord(raw)
+		}
 		if err != nil {
-			return err
+			return ErrStorage
 		}
 	}
+	var registryGrant *windowsmanagedmsi.Grant
 	for rows.Next() {
 		var id, fence string
 		var raw []byte
@@ -345,6 +388,13 @@ func (s *Store) loadWindowsManagedMSIRecords(ctx context.Context, t *transaction
 		m := markers[id]
 		if err != nil || m == nil || (m.Version == windowsManagedMSIFleetSetupVersion) != fleet || !fleet && n != 1 || m.digest() != fence || m.Grant != r.Grant || !bytes.Equal(key, r.PublicKey) || r.ClockFloor < m.InitializedAt.Unix() || rejected != 0 && (rejected < m.InitializedAt.Unix() || rejected > enrollmentstate.MaxTimestamp) || r.Grant.ExpiresAt > issuer.NotAfter.Unix() {
 			return ErrStorage
+		}
+		if registryGrant != nil && !compatibleWindowsManagedMSIRegistryGrants(*registryGrant, r.Grant) {
+			return ErrStorage
+		}
+		if registryGrant == nil {
+			grant := r.Grant
+			registryGrant = &grant
 		}
 		snap, err := t.engine.Get(id)
 		// Rejected observations may outlive the leaf or revocation. They carry
@@ -363,18 +413,44 @@ func (s *Store) loadWindowsManagedMSIRecords(ctx context.Context, t *transaction
 		if r.TransferID != "" {
 			transfers[r.TransferID] = true
 		}
-		if fleet && (r.Grant.Version == windowsmanagedmsi.ReusableGrantVersion) != (artifact.Version == windowsmanagedmsi.ReusableArtifactRecordVersion) {
+		if catalogue.Version != "" {
+			if m.CatalogueVersion != windowsmanagedmsi.CatalogueVersion || !r.Catalogue() {
+				return ErrStorage
+			}
+			catalogueRecords[r.Grant.Binding.DeviceID] = r
+			if r.Artifact != nil {
+				entry := catalogue.Find(r.ArtifactRetiredCount)
+				if entry == nil {
+					if len(r.RetiredReport) == 0 || r.ArtifactRetiredCount > catalogue.Sequence {
+						return ErrStorage
+					}
+				} else {
+					if _, e := windowsmanagedmsi.ReferencesArtifactOccurrence(r, *entry); e != nil {
+						return ErrStorage
+					}
+					if len(r.RetiredReport) == 0 && (entry.Retired || entry.RetirementStarted) {
+						return ErrStorage
+					}
+				}
+			}
+		} else if m.CatalogueVersion != "" || r.Catalogue() {
 			return ErrStorage
 		}
-		if fleet && r.Artifact != nil && artifact.Version == windowsmanagedmsi.ReusableArtifactRecordVersion {
+		if fleet && catalogue.Version == "" && r.Grant.Reusable() != (artifact.Version == windowsmanagedmsi.ReusableArtifactRecordVersion) {
+			return ErrStorage
+		}
+		if fleet && catalogue.Version == "" && r.Artifact != nil && artifact.Version == windowsmanagedmsi.ReusableArtifactRecordVersion {
 			if _, e := windowsmanagedmsi.ReferencesArtifactOccurrence(r, artifact); e != nil {
 				return ErrStorage
 			}
 		}
-		if fleet && r.Artifact != nil && len(r.RetiredReport) == 0 && (r.TransferID == "" || artifact.Artifact == nil || artifact.Artifact.CompletedAt == 0 || *r.Artifact != *artifact.Artifact || artifact.RetirementStarted || artifact.Retired) {
+		if fleet && catalogue.Version == "" && r.Artifact != nil && len(r.RetiredReport) == 0 && (r.TransferID == "" || artifact.Artifact == nil || artifact.Artifact.CompletedAt == 0 || *r.Artifact != *artifact.Artifact || artifact.RetirementStarted || artifact.Retired) {
 			return ErrStorage
 		}
 		delete(markers, id)
+	}
+	if catalogue.Version != "" && validateWindowsMSICatalogueRecords(catalogue, catalogueRecords) != nil {
+		return ErrStorage
 	}
 	if rows.Err() != nil || len(markers) != 0 {
 		return ErrStorage
@@ -435,7 +511,7 @@ func (s *Store) windowsManagedMSICurrent(t *transaction, id string, binding wind
 }
 
 func windowsManagedMSITransition(before, after windowsmanagedmsi.Record, now int64) error {
-	if after.ClockFloor > now {
+	if after.ClockFloor > now || after.SchedulePolicyFloor > now {
 		return windowsmanagedmsi.ErrInvalid
 	}
 	return windowsmanagedmsi.Transition(before, after)
@@ -497,7 +573,7 @@ func (s *Store) WindowsManagedMSITransaction(ctx context.Context, binding window
 				batchAdmitted = operationErr == nil
 			}
 		}
-		floor := max(original.ClockFloor, rejected)
+		floor := max(original.ClockFloor, original.SchedulePolicyFloor, rejected)
 		if batched {
 			floor = max(floor, journal.ClockFloor)
 		}
@@ -604,6 +680,24 @@ func (s *Store) WindowsManagedMSITransaction(ctx context.Context, binding window
 				rejected = observed
 			} else {
 				r.ClockFloor = fresh.Unix()
+			}
+			// Capability loss removes only the original pending schedule on a
+			// rejected operation. Persist it after restoring the callback's input,
+			// so an expiry/session rejection cannot later revive that authority.
+			// This policy-only floor may outlive enrollment and never advances the
+			// successful-job clock or changes permits, claims, or readiness.
+			if allowed := windowsmanagedmsi.SchedulePolicyFrom(ctx); allowed != nil {
+				if err := windowsmanagedmsi.TerminalizeSchedulePolicy(&r, observed, allowed); err != nil {
+					return err
+				}
+				if err := windowsManagedMSITransition(original, r, observed); err != nil {
+					return err
+				}
+			}
+			if operationErr == nil && r.Catalogue() {
+				if e := updateWindowsMSICatalogueAssignment(ctx, t.conn, original, r); e != nil {
+					return e
+				}
 			}
 			body, err := windowsmanagedmsi.EncodeRecord(r)
 			if err != nil {

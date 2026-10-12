@@ -10,7 +10,7 @@ import (
 // A matching plan label alone cannot bypass the old mutual exclusion. Both
 // fresh grants bind the exact independent peer binding and original identity.
 func coordinatedWindowsMutationPair(m managed.Grant, w job.Consent) bool {
-	if m.Validate() != nil || w.Validate() != nil || (m.Version != managed.CoordinatedGrantVersion && m.Version != managed.ReusableGrantVersion) || (w.Version != job.CoordinatedConsentVersion && !w.Background()) || w.Background() && m.Version != managed.ReusableGrantVersion || m.MutationPlanDigest != w.MutationPlanDigest || m.Binding.ManagerID != w.Binding.ManagerID || m.Binding.DeviceID != w.Binding.DeviceID || m.Binding.IncarnationDigest != w.Binding.IncarnationDigest {
+	if m.Validate() != nil || w.Validate() != nil || (m.Version != managed.CoordinatedGrantVersion && !m.Reusable()) || (w.Version != job.CoordinatedConsentVersion && !w.Background()) || w.Background() && !m.Reusable() || m.Scheduled() && !w.Background() || m.MutationPlanDigest != w.MutationPlanDigest || m.Binding.ManagerID != w.Binding.ManagerID || m.Binding.DeviceID != w.Binding.DeviceID || m.Binding.IncarnationDigest != w.Binding.IncarnationDigest {
 		return false
 	}
 	mb, _ := json.Marshal(m.Binding)

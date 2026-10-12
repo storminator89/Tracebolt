@@ -22,13 +22,13 @@ func ReadCompletedReusableRegistration(state, device string) (msi.SetupRegistrat
 	path := fleetDevicePath(state, device, "manager.json")
 	var c Config
 	configRaw, e := canonicalRead(path, &c)
-	if e != nil || c.Version != ReusableConfigVersion || !validFleetConfig(c) || c.StateDirectory != state || c.Binding.DeviceID != device || checkFleetReceipt(c) != nil {
+	if e != nil || (c.Version != ReusableConfigVersion && c.Version != ScheduledConfigVersion && !catalogueConfig(c.Version)) || !validFleetConfig(c) || c.StateDirectory != state || c.Binding.DeviceID != device || checkFleetReceipt(c) != nil {
 		return zero, ErrConfiguration
 	}
 	var r msi.SetupRegistration
 	registrationPath := fleetDevicePath(state, device, "registration.json")
 	raw, e := canonicalRead(registrationPath, &r)
-	if e != nil || r.Version != msi.ReusableRegistrationVersion || r.Validate() != nil || r.Grant.Binding != c.Binding || msi.Digest(raw) != c.SetupRegistrationDigest {
+	if e != nil || !r.Grant.Reusable() || !fleetGrantProfile(c.Version, r.Grant) || r.Validate() != nil || r.Grant.Binding != c.Binding || msi.Digest(raw) != c.SetupRegistrationDigest {
 		return zero, ErrConfiguration
 	}
 	// Recheck the protected generation after the other file reads.

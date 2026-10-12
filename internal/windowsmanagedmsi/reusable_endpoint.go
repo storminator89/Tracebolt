@@ -14,13 +14,13 @@ type RetirablePayload interface {
 }
 
 func (r EndpointRecord) validateReusableEndpoint() error {
-	if r.Grant.Version != ReusableGrantVersion {
-		if r.Version == ReusableEndpointVersion || r.Jobs != nil || len(r.RetirePermit)+len(r.RetiredReport) > 0 {
+	if !r.Grant.Reusable() {
+		if (r.Version == ReusableEndpointVersion || r.Version == ScheduledEndpointVersion) || r.Jobs != nil || len(r.RetirePermit)+len(r.RetiredReport) > 0 {
 			return ErrIntegrity
 		}
 		return nil
 	}
-	if r.Version != ReusableEndpointVersion || r.Jobs.Validate() != nil {
+	if (r.Version != ReusableEndpointVersion && r.Version != ScheduledEndpointVersion) || (r.Version == ScheduledEndpointVersion) != r.Grant.Scheduled() || r.Jobs.Validate() != nil {
 		return ErrIntegrity
 	}
 	if len(r.Delivery) == 0 {
@@ -30,7 +30,7 @@ func (r EndpointRecord) validateReusableEndpoint() error {
 		return nil
 	}
 	p, e := VerifyPermit(r.Delivery, r.ManagerPublicKey)
-	if e != nil || p.Version != ReusableVersion || p.JobSequence != r.Jobs.Sequence {
+	if e != nil || p.Version != GrantWire(r.Grant) || p.JobSequence != r.Jobs.Sequence {
 		return ErrIntegrity
 	}
 	for _, raw := range [][]byte{r.DeliveryReport, r.ReadinessReport, r.ResultReport, r.InterventionReport} {
@@ -38,7 +38,7 @@ func (r EndpointRecord) validateReusableEndpoint() error {
 			continue
 		}
 		v, e := VerifyReport(raw, r.ExecutorPublicKey)
-		if e != nil || v.Version != ReusableVersion || v.JobSequence != p.JobSequence {
+		if e != nil || v.Version != p.Version || v.JobSequence != p.JobSequence {
 			return ErrIntegrity
 		}
 	}
@@ -63,7 +63,7 @@ func (r EndpointRecord) validateReusableEndpoint() error {
 	return nil
 }
 func (x *Endpoint) beginNextJob(p Permit) error {
-	if x.record.Grant.Version != ReusableGrantVersion || x.record.Jobs.Validate() != nil || x.running {
+	if !x.record.Grant.Reusable() || x.record.Jobs.Validate() != nil || x.running {
 		return ErrConsumed
 	}
 	var j *JobLedger
@@ -92,7 +92,7 @@ func (x *Endpoint) beginNextJob(p Permit) error {
 }
 func (x *Endpoint) retire(ctx context.Context, p Permit, raw []byte) error {
 	payload, ok := x.payload.(RetirablePayload)
-	if !ok || x.running || x.record.Grant.Version != ReusableGrantVersion || x.mutation == nil || x.record.MutationCompletion == nil || len(x.record.RetirePermit) > 0 {
+	if !ok || x.running || !x.record.Grant.Reusable() || x.mutation == nil || x.record.MutationCompletion == nil || len(x.record.RetirePermit) > 0 {
 		return ErrConsumed
 	}
 	delivery, _ := VerifyPermit(x.record.Delivery, x.record.ManagerPublicKey)
@@ -127,7 +127,7 @@ func (x *Endpoint) retire(ctx context.Context, p Permit, raw []byte) error {
 		return e
 	}
 	receipt, _ := json.Marshal(x.record.MutationCompletion)
-	v := Report{Version: ReusableVersion, JobSequence: p.JobSequence, Kind: "retired", Binding: p.Binding, TransferID: p.TransferID, PermitDigest: Digest(raw), Package: p.Package, NativeAcceptanceDigest: p.NativeAcceptanceDigest, CapturedAt: x.now().Unix(), Offset: p.Package.Size, State: "retired", Retirement: &RetirementEvidence{ResultDigest: p.RetireResultDigest, ReleaseDigest: Digest(receipt), CustodyDigest: Digest(x.record.ImportReceipt)}}
+	v := Report{Version: p.Version, JobSequence: p.JobSequence, Kind: "retired", Binding: p.Binding, TransferID: p.TransferID, PermitDigest: Digest(raw), Package: p.Package, NativeAcceptanceDigest: p.NativeAcceptanceDigest, CapturedAt: x.now().Unix(), Offset: p.Package.Size, State: "retired", Retirement: &RetirementEvidence{ResultDigest: p.RetireResultDigest, ReleaseDigest: Digest(receipt), CustodyDigest: Digest(x.record.ImportReceipt)}}
 	x.record.RetiredReport, e = SignReport(v, x.key)
 	if e != nil {
 		return e

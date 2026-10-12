@@ -221,11 +221,12 @@ func (w Worklist) Validate() error {
 	return nil
 }
 func (j WorklistJournal) Validate() error {
-	if j.Version != WorklistVersion || !enrollmentcrypto.ValidID(j.ManagerID, "manager_") || !ValidDigest(j.KeyID) || j.Revision == 0 || j.Revision > MaxWorklistRevision || !ValidTime(j.ClockFloor) || j.Worklists == nil || len(j.Worklists) > MaxWorklists {
+	if (j.Version != WorklistVersion && j.Version != CatalogueWorklistVersion) || !enrollmentcrypto.ValidID(j.ManagerID, "manager_") || !ValidDigest(j.KeyID) || j.Revision == 0 || j.Revision > MaxWorklistRevision || !ValidTime(j.ClockFloor) || j.Worklists == nil || len(j.Worklists) > MaxWorklists {
 		return ErrIntegrity
 	}
 	ids := map[string]bool{}
 	active := 0
+	activeOccurrences := map[uint64]bool{}
 	for _, w := range j.Worklists {
 		if w.Validate() != nil || ids[w.ID] || w.CreatedAt > j.ClockFloor || w.ArchivedAt > j.ClockFloor {
 			return ErrIntegrity
@@ -243,6 +244,12 @@ func (j WorklistJournal) Validate() error {
 		}
 		if w.ArchivedAt == 0 {
 			active++
+			if j.Version == CatalogueWorklistVersion {
+				if w.ArtifactRetiredCount == 0 || activeOccurrences[w.ArtifactRetiredCount] {
+					return ErrIntegrity
+				}
+				activeOccurrences[w.ArtifactRetiredCount] = true
+			}
 		}
 		for _, t := range w.Targets {
 			if t.Binding.ManagerID != j.ManagerID || t.Binding.KeyID != j.KeyID {
@@ -250,7 +257,7 @@ func (j WorklistJournal) Validate() error {
 			}
 		}
 	}
-	if active > 1 || len(j.Worklists)-active > MaxWorklists-1 {
+	if j.Version == WorklistVersion && (active > 1 || len(j.Worklists)-active > MaxWorklists-1) || j.Version == CatalogueWorklistVersion && active > MaxCatalogueEntries {
 		return ErrIntegrity
 	}
 	raw, _ := json.Marshal(j)
@@ -334,8 +341,11 @@ func (j *WorklistJournal) FinishDispatch(d WorklistDispatch, before, after Recor
 		b.ClosedAt = now
 		b.CloseReason = "rejected"
 	} else {
-		if after.Grant.Version != ReusableGrantVersion || after.Artifact == nil || after.Jobs == nil || after.ArtifactRetiredCount != w.ArtifactRetiredCount || ArtifactIdentity(*after.Artifact) != w.ArtifactID || after.TransferID != i.Request.TransferID {
+		if !after.Grant.Reusable() || after.Artifact == nil || after.Jobs == nil || after.ArtifactRetiredCount != w.ArtifactRetiredCount || ArtifactIdentity(*after.Artifact) != w.ArtifactID || after.TransferID != i.Request.TransferID {
 			return ErrIntegrity
+		}
+		if (b.Kind == "review" || b.Kind == "approve") && (before.Schedule != nil || after.Schedule != nil) {
+			return ErrConsumed
 		}
 		var raw, old []byte
 		switch b.Kind {
@@ -411,7 +421,7 @@ func WorklistTargetRetired(w Worklist, t WorklistTarget, records map[string]Reco
 	return false
 }
 func worklistRecordMatches(w Worklist, t WorklistTarget, r Record) bool {
-	return r.Grant.Binding == t.Binding && r.Grant.Version == ReusableGrantVersion && r.Artifact != nil && r.ArtifactRetiredCount == w.ArtifactRetiredCount && ArtifactIdentity(*r.Artifact) == w.ArtifactID && r.TransferID == t.TransferID && r.Jobs != nil && r.Jobs.Sequence == t.JobSequence
+	return r.Grant.Binding == t.Binding && r.Grant.Reusable() && r.Artifact != nil && r.ArtifactRetiredCount == w.ArtifactRetiredCount && ArtifactIdentity(*r.Artifact) == w.ArtifactID && r.TransferID == t.TransferID && r.Jobs != nil && r.Jobs.Sequence == t.JobSequence
 }
 func WorklistReconciled(w Worklist, records map[string]Record) bool {
 	if w.ArchivedAt == 0 {

@@ -15,7 +15,7 @@ func (m *Manager) Retire(ctx context.Context, actor, resultDigest string, ack bo
 		return msi.ErrInvalid
 	}
 	_, e := m.transaction(ctx, actor, "install", func(r *msi.Record, c msi.Current, n int64) error {
-		if r.Grant.Version != msi.ReusableGrantVersion || len(r.RetirePermit) > 0 || resultDigest != msi.Digest(r.ResultReport) {
+		if !r.Grant.Reusable() || len(r.RetirePermit) > 0 || resultDigest != msi.Digest(r.ResultReport) {
 			return msi.ErrConsumed
 		}
 		result, e := msi.VerifyReport(r.ResultReport, r.ExecutorPublicKey)

@@ -41,6 +41,8 @@ type Artifact struct {
 // Record contains bounded metadata and signed evidence only, never MSI chunks.
 // Upload intent is permanent even if its exact body never arrived or fsync failed.
 type Record struct {
+	Schedule            *ScheduledIntent `json:"schedule,omitempty"`
+	SchedulePolicyFloor int64            `json:"schedulePolicyFloor,omitempty"`
 	// Manager-owned occurrence metadata; never part of signed endpoint authority.
 	ArtifactRetiredCount uint64            `json:"artifactRetiredCount,string,omitempty"`
 	Jobs                 *JobLedger        `json:"jobs,omitempty"`
@@ -68,17 +70,20 @@ type Record struct {
 
 func NewRecord(g Grant, key, executor ed25519.PublicKey, at int64) (Record, error) {
 	r := Record{Version: RecordVersion, Grant: g, PublicKey: bytes.Clone(key), ExecutorPublicKey: bytes.Clone(executor), ClockFloor: at}
-	if g.Version == ReusableGrantVersion {
+	if g.Reusable() {
 		r.Version = ReusableRecordVersion
+		if g.Scheduled() {
+			r.Version = ScheduledRecordVersion
+		}
 		r.Jobs = NewJobLedger()
 	}
 	return r, r.Validate()
 }
 func (r Record) Validate() error {
-	if r.validateMutationReport() != nil {
+	if r.validateMutationReport() != nil || r.validateSchedule() != nil {
 		return ErrIntegrity
 	}
-	if r.validateReusableRecord() != nil || (r.Version != RecordVersion && r.Version != ReusableRecordVersion) || r.Grant.Validate() != nil || !keyvalidation.Ed25519(r.PublicKey) || !keyvalidation.Ed25519(r.ExecutorPublicKey) || Digest(r.PublicKey) != r.Grant.Binding.KeyID || Digest(r.ExecutorPublicKey) != r.Grant.Binding.ExecutorKeyID || !ValidTime(r.ClockFloor) {
+	if r.validateReusableRecord() != nil || (r.Version != RecordVersion && r.Version != ReusableRecordVersion && r.Version != ScheduledRecordVersion && !r.Catalogue()) || r.Grant.Validate() != nil || !keyvalidation.Ed25519(r.PublicKey) || !keyvalidation.Ed25519(r.ExecutorPublicKey) || Digest(r.PublicKey) != r.Grant.Binding.KeyID || Digest(r.ExecutorPublicKey) != r.Grant.Binding.ExecutorKeyID || !ValidTime(r.ClockFloor) {
 		return ErrIntegrity
 	}
 	if r.Artifact == nil {
@@ -174,13 +179,16 @@ func Transition(before, after Record) error {
 	if after.Validate() != nil || before.Version != after.Version || before.Grant != after.Grant || !bytes.Equal(before.PublicKey, after.PublicKey) || !bytes.Equal(before.ExecutorPublicKey, after.ExecutorPublicKey) || after.ClockFloor < before.ClockFloor {
 		return ErrIntegrity
 	}
-	if before.Grant.Version == ReusableGrantVersion && after.ArtifactRetiredCount < before.ArtifactRetiredCount {
+	if before.Grant.Reusable() && !before.Catalogue() && after.ArtifactRetiredCount < before.ArtifactRetiredCount {
 		return ErrConsumed
 	}
 	var err error
 	before, err = prepareJobTransition(before, after)
 	if err != nil {
 		return err
+	}
+	if ScheduleTransition(before, after) != nil {
+		return ErrConsumed
 	}
 	if !validMutationReportAdvance(before.MutationReport, after.MutationReport, after.ExecutorPublicKey) {
 		return ErrIntegrity
@@ -224,6 +232,9 @@ func Transition(before, after Record) error {
 // FinalDeadline runs after storage/configuration/session waits. Existing durable
 // evidence survives expiry; new authority and first claims never do.
 func FinalDeadline(before, after Record, current Current, at int64) error {
+	if e := ScheduleFinalDeadline(before, after, current, at); e != nil {
+		return e
+	}
 	for _, p := range []struct{ old, next, permit []byte }{{before.DeliveryReport, after.DeliveryReport, after.DeliveryPermit}, {before.ReadinessReport, after.ReadinessReport, after.ReadinessPermit}} {
 		if len(p.next) != 0 && !bytes.Equal(p.old, p.next) {
 			permit, e := VerifyPermit(p.permit, after.PublicKey)

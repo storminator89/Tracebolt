@@ -19,6 +19,9 @@ type RetiredArtifact struct {
 }
 
 func (r ArtifactRecord) validateReusableArtifact() error {
+	if r.Catalogue() {
+		return nil
+	}
 	if r.Version != ReusableArtifactRecordVersion {
 		if r.RetiredCount != 0 || r.RetiredChain != "" || r.RetirementStarted || r.Retired || r.RetirementEvidenceDigest != "" || r.RetiredBy != "" || len(r.Recent) > 0 {
 			return ErrIntegrity
@@ -64,6 +67,9 @@ func NextArtifact(r ArtifactRecord) (ArtifactRecord, error) {
 func ArtifactRecordTransition(a, b ArtifactRecord) error {
 	if a.Version != b.Version || b.ClockFloor < a.ClockFloor || b.Validate() != nil {
 		return ErrIntegrity
+	}
+	if a.Catalogue() {
+		return catalogueArtifactTransition(a, b)
 	}
 	if a.Version != ReusableArtifactRecordVersion {
 		return ArtifactTransition(a.Artifact, b.Artifact)

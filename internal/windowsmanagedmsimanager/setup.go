@@ -27,6 +27,8 @@ const SetupPlanVersion = "tracebolt.windows-managed-msi-manager-setup.v1"
 var ErrSetup = errors.New("windows_managed_msi_setup_blocked_preserve_existing_state")
 
 type SetupRequest struct {
+	Catalogue        bool   `json:"catalogue,omitempty"`
+	Scheduled        bool   `json:"scheduled,omitempty"`
 	Reusable         bool   `json:"reusable,omitempty"`
 	Fleet            bool   `json:"fleet,omitempty"`
 	AdditionalDevice bool   `json:"additionalDevice,omitempty"`
@@ -38,6 +40,7 @@ type SetupRequest struct {
 	RegistrationFile string `json:"registrationFile,omitempty"`
 }
 type SetupPlan struct {
+	ScheduleOperators      []string               `json:"scheduleOperators,omitempty"`
 	OriginalConfigDigests  []string               `json:"originalConfigDigests,omitempty"`
 	OriginalConfigFiles    []string               `json:"originalConfigFiles,omitempty"`
 	OriginalRegistryDigest string                 `json:"originalRegistryDigest,omitempty"`
@@ -122,7 +125,7 @@ func loadSetupInputs(ctx context.Context, q SetupRequest, now time.Time) (setupM
 		return out, ErrSetup
 	}
 	m, e := lanconfig.Load(q.LANConfig)
-	if e != nil || m.Config.Profile != lanconfig.TLS || !m.Config.WindowsInventoryEnabled || q.Reusable && !q.Fleet || q.AdditionalDevice && !q.Fleet || (m.Config.WindowsManagedMSIConfigFile != "") != q.AdditionalDevice || q.Fleet && !enrollmentcrypto.ValidID(q.DeviceID, "agent_") {
+	if e != nil || m.Config.Profile != lanconfig.TLS || !m.Config.WindowsInventoryEnabled || q.Catalogue && (!q.Reusable || !q.Fleet) || q.Reusable && !q.Fleet || q.Scheduled && (!q.Fleet || !q.Reusable) || q.AdditionalDevice && !q.Fleet || (m.Config.WindowsManagedMSIConfigFile != "") != q.AdditionalDevice || q.Fleet && !enrollmentcrypto.ValidID(q.DeviceID, "agent_") {
 		return out, ErrSetup
 	}
 	en, e := enrollmentconfig.Load(q.EnrollmentConfig, m, now)
@@ -139,11 +142,20 @@ func loadSetupInputs(ctx context.Context, q SetupRequest, now time.Time) (setupM
 		if q.Reusable {
 			p.Version = ReusableSetupPlanVersion
 		}
+		if q.Scheduled {
+			p.Version = ScheduledSetupPlanVersion
+		}
+	}
+	if q.Catalogue {
+		p.Version = CatalogueSetupPlanVersion
+		if q.Scheduled {
+			p.Version = ScheduledCatalogueSetupPlanVersion
+		}
 	}
 	var existing []Config
 	if q.AdditionalDevice {
 		registry, configs, raw, e := readFleetRegistry(m.Config.WindowsManagedMSIConfigFile, p.StateDirectory, cfg.RecordLimit)
-		if e != nil || registry.ManagerID != p.ManagerID || (registry.Version == ReusableRegistryVersion) != q.Reusable || len(configs) >= min(cfg.RecordLimit, msi.MaxDevices) {
+		if e != nil || registry.ManagerID != p.ManagerID || registry.Version != setupRegistryVersion(q) || len(configs) >= min(cfg.RecordLimit, msi.MaxDevices) {
 			return out, ErrSetup
 		}
 		pub, e := publicFromPrivate(fleetPath(p.StateDirectory, "manager.key"))
@@ -163,18 +175,27 @@ func loadSetupInputs(ctx context.Context, q SetupRequest, now time.Time) (setupM
 		existing = configs
 	}
 	for _, op := range m.Operators {
+		canInstall, canSchedule := false, false
 		for _, cap := range op.Capabilities {
 			if cap == operatorauth.WindowsManagedMSIDeliver {
 				p.DeliveryOperators = append(p.DeliveryOperators, op.ID)
 			}
+			if cap == operatorauth.WindowsManagedMSISchedule {
+				canSchedule = true
+			}
 			if cap == operatorauth.WindowsManagedMSIInstall {
+				canInstall = true
 				p.InstallOperators = append(p.InstallOperators, op.ID)
 			}
 		}
+		if q.Scheduled && canInstall && canSchedule {
+			p.ScheduleOperators = append(p.ScheduleOperators, op.ID)
+		}
 	}
+	sort.Strings(p.ScheduleOperators)
 	sort.Strings(p.DeliveryOperators)
 	sort.Strings(p.InstallOperators)
-	if len(p.DeliveryOperators) == 0 || len(p.InstallOperators) == 0 {
+	if len(p.DeliveryOperators) == 0 || len(p.InstallOperators) == 0 || q.Scheduled && len(p.ScheduleOperators) == 0 {
 		return out, ErrSetup
 	}
 	var inputs [][]byte
@@ -211,13 +232,13 @@ func loadSetupInputs(ctx context.Context, q SetupRequest, now time.Time) (setupM
 		var offer msi.SetupOffer
 		var prepared setupPrepared
 		offerRaw, e := canonicalRead(setupPlanPath(p, "offer.json"), &offer)
-		if e != nil || offer.Validate() != nil || (offer.Version == msi.ReusableOfferVersion) != q.Reusable {
+		if e != nil || offer.Validate() != nil || offer.Reusable() != q.Reusable || offer.Scheduled() != q.Scheduled {
 			return out, ErrSetup
 		}
 		if _, e = canonicalRead(setupPlanPath(p, "prepared.json"), &prepared); e != nil || prepared.Version != p.Version || !msi.ValidDigest(prepared.PlanDigest) || prepared.OfferDigest != msi.Digest(offerRaw) {
 			return out, ErrSetup
 		}
-		if q.Fleet && (prepared.Plan == nil || prepared.Plan.Version != p.Version || prepared.Plan.Digest != prepared.Plan.digest() || prepared.Plan.Digest != prepared.PlanDigest || prepared.Plan.Request.Phase != "prepare" || prepared.Plan.Request.DeviceID != q.DeviceID || prepared.Plan.Request.LANConfig != q.LANConfig || prepared.Plan.Request.EnrollmentConfig != q.EnrollmentConfig || prepared.Plan.ConfigurationDigest != p.ConfigurationDigest || prepared.Plan.Request.Fleet != q.Fleet || prepared.Plan.Request.Reusable != q.Reusable || prepared.Plan.Request.AdditionalDevice != q.AdditionalDevice || !sameJSON(prepared.Plan.OriginalConfigFiles, p.OriginalConfigFiles) || !sameJSON(prepared.Plan.OriginalConfigDigests, p.OriginalConfigDigests) || prepared.Plan.OriginalRegistryDigest != p.OriginalRegistryDigest || prepared.Plan.ManagerKeyID != p.ManagerKeyID || !sameJSON(prepared.Plan.DeliveryOperators, p.DeliveryOperators) || !sameJSON(prepared.Plan.InstallOperators, p.InstallOperators) || !sameJSON(prepared.Plan.OtherPurposeKeyIDs, p.OtherPurposeKeyIDs)) {
+		if q.Fleet && (prepared.Plan == nil || prepared.Plan.Version != p.Version || prepared.Plan.Digest != prepared.Plan.digest() || prepared.Plan.Digest != prepared.PlanDigest || prepared.Plan.Request.Phase != "prepare" || prepared.Plan.Request.DeviceID != q.DeviceID || prepared.Plan.Request.LANConfig != q.LANConfig || prepared.Plan.Request.EnrollmentConfig != q.EnrollmentConfig || prepared.Plan.ConfigurationDigest != p.ConfigurationDigest || prepared.Plan.Request.Fleet != q.Fleet || prepared.Plan.Request.Reusable != q.Reusable || prepared.Plan.Request.Scheduled != q.Scheduled || prepared.Plan.Request.Catalogue != q.Catalogue || prepared.Plan.Request.AdditionalDevice != q.AdditionalDevice || !sameJSON(prepared.Plan.OriginalConfigFiles, p.OriginalConfigFiles) || !sameJSON(prepared.Plan.OriginalConfigDigests, p.OriginalConfigDigests) || prepared.Plan.OriginalRegistryDigest != p.OriginalRegistryDigest || prepared.Plan.ManagerKeyID != p.ManagerKeyID || !sameJSON(prepared.Plan.DeliveryOperators, p.DeliveryOperators) || !sameJSON(prepared.Plan.InstallOperators, p.InstallOperators) || !sameJSON(prepared.Plan.ScheduleOperators, p.ScheduleOperators) || !sameJSON(prepared.Plan.OtherPurposeKeyIDs, p.OtherPurposeKeyIDs)) {
 			return out, ErrSetup
 		}
 		pub, e := publicFromPrivate(setupPlanKey(p))
@@ -230,7 +251,7 @@ func loadSetupInputs(ctx context.Context, q SetupRequest, now time.Time) (setupM
 		}
 		registrationRaw = bytes.TrimSuffix(registrationRaw, []byte("\n"))
 		reg, e := msi.DecodeSetupRegistration(registrationRaw)
-		if e != nil || !sameJSON(reg.Offer, offer) || (reg.Grant.Version == msi.ReusableGrantVersion) != q.Reusable {
+		if e != nil || !sameJSON(reg.Offer, offer) || reg.Grant.Reusable() != q.Reusable || reg.Grant.Scheduled() != q.Scheduled {
 			return out, ErrSetup
 		}
 		for _, c := range existing {
@@ -276,11 +297,11 @@ func PlanSetup(ctx context.Context, q SetupRequest, now time.Time) (SetupPlan, e
 		return SetupPlan{}, ErrSetup
 	}
 	if q.Phase == "prepare" {
-		if q.RegistrationFile != "" || !absent(setupPlanIntent(p), setupPlanPath(p, "")) || !q.AdditionalDevice && (!absent(SpoolPath(p.StateDirectory)) || q.Fleet && !absent(fleetPath(p.StateDirectory, ""))) {
+		if q.RegistrationFile != "" || !absent(setupPlanIntent(p), setupPlanPath(p, "")) || !q.AdditionalDevice && (!setupSpoolAbsent(p.StateDirectory) || q.Fleet && !absent(fleetPath(p.StateDirectory, ""))) {
 			return SetupPlan{}, ErrSetup
 		}
 	} else {
-		if !absent(setupPlanPath(p, "finalize-started.json"), setupPlanPath(p, "registration.json"), setupPlanPath(p, "manager.json"), setupPlanPath(p, "complete.json"), SetupPlanLANPath(p)) || !q.AdditionalDevice && !absent(SpoolPath(p.StateDirectory)) || q.Fleet && !absent(setupPlanPath(p, "registry.json")) || p.Offer.ManagerID != p.ManagerID || p.Offer.DeviceID != q.DeviceID || p.Offer.ManagerOrigin != p.ManagerOrigin || p.Offer.IncarnationDigest != p.IncarnationDigest {
+		if !absent(setupPlanPath(p, "finalize-started.json"), setupPlanPath(p, "registration.json"), setupPlanPath(p, "manager.json"), setupPlanPath(p, "complete.json"), SetupPlanLANPath(p)) || !q.AdditionalDevice && !setupSpoolAbsent(p.StateDirectory) || q.Fleet && !absent(setupPlanPath(p, "registry.json")) || p.Offer.ManagerID != p.ManagerID || p.Offer.DeviceID != q.DeviceID || p.Offer.ManagerOrigin != p.ManagerOrigin || p.Offer.IncarnationDigest != p.IncarnationDigest {
 			return SetupPlan{}, ErrSetup
 		}
 	}
@@ -366,6 +387,9 @@ func ApplySetup(ctx context.Context, p SetupPlan, approval string, clock func() 
 		if p.Request.Reusable {
 			offer.Version = msi.ReusableOfferVersion
 		}
+		if p.Request.Scheduled {
+			offer.Version = msi.ScheduledOfferVersion
+		}
 		if offer.Validate() != nil || !p.Request.AdditionalDevice && createSetupFile(setupPlanKey(p), key) != nil || live() != nil || create(setupPlanPath(p, "offer.json"), offer) != nil {
 			return nil, ErrSetup
 		}
@@ -383,7 +407,7 @@ func ApplySetup(ctx context.Context, p SetupPlan, approval string, clock func() 
 	if p.Registration == nil || p.Offer == nil {
 		return nil, ErrSetup
 	}
-	if create(setupPlanPath(p, "finalize-started.json"), p) != nil || create(setupPlanPath(p, "registration.json"), p.Registration) != nil || !p.Request.AdditionalDevice && CreateSpool(p.StateDirectory) != nil || live() != nil {
+	if create(setupPlanPath(p, "finalize-started.json"), p) != nil || create(setupPlanPath(p, "registration.json"), p.Registration) != nil || !p.Request.AdditionalDevice && createSetupSpool(p) != nil || live() != nil {
 		return nil, ErrSetup
 	}
 	store, e := enrollmentstore.Open(filepath.Join(p.StateDirectory, enrollmentconfig.WindowsDatabaseFile), m.config, m.enrollment.Issuer().IssuerDER())
@@ -405,7 +429,9 @@ func ApplySetup(ctx context.Context, p SetupPlan, approval string, clock func() 
 		}
 		return inputs()
 	})
-	if p.Request.Fleet {
+	if p.Request.Catalogue {
+		e = store.SetupWindowsMSICatalogueCreateOnly(guarded, p.Offer.ManagerPublicKey, p.Registration.ExecutorPublicKey, p.Registration.Grant, clock().UTC(), p.Request.AdditionalDevice)
+	} else if p.Request.Fleet {
 		e = store.SetupWindowsManagedMSIFleetCreateOnly(guarded, p.Offer.ManagerPublicKey, p.Registration.ExecutorPublicKey, p.Registration.Grant, clock().UTC(), p.Request.AdditionalDevice)
 	} else {
 		e = store.SetupWindowsManagedMSICreateOnly(guarded, p.Offer.ManagerPublicKey, p.Registration.ExecutorPublicKey, p.Registration.Grant, clock().UTC())
@@ -419,14 +445,21 @@ func ApplySetup(ctx context.Context, p SetupPlan, approval string, clock func() 
 		if p.Request.Reusable {
 			c.Version = ReusableConfigVersion
 		}
+		if p.Request.Scheduled {
+			c.Version = ScheduledConfigVersion
+		}
+	}
+	if p.Request.Catalogue {
+		c.Version = CatalogueConfigVersion
+		if p.Request.Scheduled {
+			c.Version = ScheduledCatalogueConfigVersion
+		}
 	}
 	lan := m.lan.Config
 	lan.WindowsManagedMSIConfigFile = setupPlanPath(p, "manager.json")
 	if p.Request.Fleet {
 		registry := RegistryConfig{Version: RegistryVersion, Enabled: true, ManagerID: p.ManagerID, ConfigFiles: append(append([]string(nil), p.OriginalConfigFiles...), setupPlanPath(p, "manager.json"))}
-		if p.Request.Reusable {
-			registry.Version = ReusableRegistryVersion
-		}
+		registry.Version = setupRegistryVersion(p.Request)
 		if create(setupPlanPath(p, "registry.json"), registry) != nil {
 			return nil, ErrSetup
 		}
@@ -466,7 +499,7 @@ func configuredKeyIDs(path string, depth int) ([]string, error) {
 		return nil, ErrSetup
 	}
 	if len(c.ConfigFiles) > 0 {
-		if depth != 0 || len(c.ConfigFiles) > 25 || c.Version != "tracebolt.windows-selected-update-manager-registry.v2" && c.Version != "tracebolt.windows-prepared-msi-manager-registry.v2" && c.Version != RegistryVersion && c.Version != ReusableRegistryVersion {
+		if depth != 0 || len(c.ConfigFiles) > 25 || c.Version != "tracebolt.windows-selected-update-manager-registry.v2" && c.Version != "tracebolt.windows-prepared-msi-manager-registry.v2" && c.Version != RegistryVersion && c.Version != ReusableRegistryVersion && c.Version != ScheduledRegistryVersion && c.Version != CatalogueRegistryVersion && c.Version != ScheduledCatalogueRegistryVersion {
 			return nil, ErrSetup
 		}
 		var out []string
@@ -536,4 +569,38 @@ func setupInspectionMatches(m setupMaterial, in enrollmentstore.WindowsManagedMS
 		delete(expected, b.DeviceID)
 	}
 	return len(expected) == 0
+}
+
+func setupRegistryVersion(q SetupRequest) string {
+	if q.Catalogue {
+		if q.Scheduled {
+			return ScheduledCatalogueRegistryVersion
+		}
+		return CatalogueRegistryVersion
+	}
+	if q.Scheduled {
+		return ScheduledRegistryVersion
+	}
+	if q.Reusable {
+		return ReusableRegistryVersion
+	}
+	return RegistryVersion
+}
+
+func setupSpoolAbsent(state string) bool {
+	if !absent(SpoolPath(state)) {
+		return false
+	}
+	for i := 0; i < msi.MaxCatalogueEntries; i++ {
+		if !absent(catalogueSpoolPath(state, i)) {
+			return false
+		}
+	}
+	return true
+}
+func createSetupSpool(p SetupPlan) error {
+	if p.Request.Catalogue {
+		return CreateCatalogueSpool(p.StateDirectory)
+	}
+	return CreateSpool(p.StateDirectory)
 }

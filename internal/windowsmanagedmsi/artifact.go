@@ -13,16 +13,18 @@ const MaxDevices = 25
 // ArtifactRecord is manager-owned custody metadata, independent of any endpoint
 // grant or leaf. It never contains package bytes or authorizes delivery/install.
 type ArtifactRecord struct {
-	RetiredCount             uint64            `json:"retiredCount,string,omitempty"`
-	RetiredChain             string            `json:"retiredChain,omitempty"`
-	RetirementStarted        bool              `json:"retirementStarted,omitempty"`
-	Retired                  bool              `json:"retired,omitempty"`
-	RetirementEvidenceDigest string            `json:"retirementEvidenceDigest,omitempty"`
-	RetiredBy                string            `json:"retiredBy,omitempty"`
-	Recent                   []RetiredArtifact `json:"recent,omitempty"`
-	Version                  string            `json:"version"`
-	Artifact                 *Artifact         `json:"artifact"`
-	ClockFloor               int64             `json:"clockFloor"`
+	CatalogueSlot            *uint32               `json:"catalogueSlot,omitempty"`
+	Assignments              []CatalogueAssignment `json:"assignments,omitempty"`
+	RetiredCount             uint64                `json:"retiredCount,string,omitempty"`
+	RetiredChain             string                `json:"retiredChain,omitempty"`
+	RetirementStarted        bool                  `json:"retirementStarted,omitempty"`
+	Retired                  bool                  `json:"retired,omitempty"`
+	RetirementEvidenceDigest string                `json:"retirementEvidenceDigest,omitempty"`
+	RetiredBy                string                `json:"retiredBy,omitempty"`
+	Recent                   []RetiredArtifact     `json:"recent,omitempty"`
+	Version                  string                `json:"version"`
+	Artifact                 *Artifact             `json:"artifact"`
+	ClockFloor               int64                 `json:"clockFloor"`
 }
 
 func (a *Artifact) Validate(floor int64) error {
@@ -71,7 +73,7 @@ func ArtifactTransition(before, after *Artifact) error {
 	return nil
 }
 func (r ArtifactRecord) Validate() error {
-	if r.validateReusableArtifact() != nil || (r.Version != ArtifactRecordVersion && r.Version != ReusableArtifactRecordVersion) || !ValidTime(r.ClockFloor) || r.Artifact.Validate(r.ClockFloor) != nil {
+	if r.validateCatalogueArtifact() != nil || r.validateReusableArtifact() != nil || (r.Version != ArtifactRecordVersion && !r.Reusable()) || !ValidTime(r.ClockFloor) || r.Artifact.Validate(r.ClockFloor) != nil {
 		return ErrIntegrity
 	}
 	return nil

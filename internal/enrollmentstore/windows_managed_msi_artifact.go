@@ -29,10 +29,30 @@ func (s *Store) SetupWindowsManagedMSIFleetCreateOnly(ctx context.Context, key, 
 	return s.setupWindowsManagedMSICreateOnly(ctx, key, executor, g, now, additional, true)
 }
 func readWindowsManagedMSIArtifact(ctx context.Context, c *sql.Conn) (msi.ArtifactRecord, error) {
-	var n int
-	var raw []byte
-	if c.QueryRowContext(ctx, `SELECT count(*) FROM enrollment_windows_msi_fleet_artifact`).Scan(&n) != nil || n != 1 || c.QueryRowContext(ctx, `SELECT body FROM enrollment_windows_msi_fleet_artifact WHERE id=1`).Scan(&raw) != nil {
+	raw, e := readWindowsMSIArtifactBody(ctx, c)
+	if e != nil {
+		return msi.ArtifactRecord{}, e
+	}
+	var h struct {
+		Version string `json:"version"`
+	}
+	if json.Unmarshal(raw, &h) != nil {
 		return msi.ArtifactRecord{}, ErrStorage
+	}
+	if h.Version == msi.CatalogueRecordVersion {
+		catalogue, e := msi.DecodeCatalogueRecord(raw)
+		if e != nil {
+			return msi.ArtifactRecord{}, ErrStorage
+		}
+		id, ok := msi.CatalogueOccurrence(ctx)
+		if !ok {
+			return msi.ArtifactRecord{}, msi.ErrConflict
+		}
+		a := catalogue.Find(id)
+		if a == nil {
+			return msi.ArtifactRecord{}, msi.ErrUnavailable
+		}
+		return *a, nil
 	}
 	r, e := msi.DecodeArtifactRecord(raw)
 	if e != nil {
@@ -132,7 +152,22 @@ func (s *Store) WindowsManagedMSIArtifactTransaction(ctx context.Context, key ed
 				return msi.ErrIntegrity
 			}
 			wrote = true
-			if _, e = t.conn.ExecContext(ctx, `UPDATE enrollment_windows_msi_fleet_artifact SET body=? WHERE id=1`, raw); e != nil {
+			if after.Catalogue() {
+				catalogue, err := readWindowsMSICatalogue(ctx, t.conn)
+				if err != nil {
+					return err
+				}
+				entry := catalogue.Find(after.RetiredCount)
+				if entry == nil || catalogue.Revision == ^uint64(0) {
+					return msi.ErrConflict
+				}
+				*entry = after
+				catalogue.Revision++
+				catalogue.ClockFloor = max(catalogue.ClockFloor, after.ClockFloor)
+				if err = writeWindowsMSICatalogue(ctx, t.conn, catalogue); err != nil {
+					return err
+				}
+			} else if _, e = t.conn.ExecContext(ctx, `UPDATE enrollment_windows_msi_fleet_artifact SET body=? WHERE id=1`, raw); e != nil {
 				return ErrStorage
 			}
 			if e = s.loadWindowsManagedMSIRecords(ctx, t); e != nil {

@@ -54,7 +54,7 @@ func (s *Store) loadWindowsMSIWorklists(ctx context.Context, t *transaction) err
 			manager = m.Grant.Binding.ManagerID
 		}
 	}
-	if present != (version == msi.WorklistVersion) || version != "" && version != msi.WorklistVersion {
+	if present != (version == msi.WorklistVersion || version == msi.CatalogueWorklistVersion) || version != "" && version != msi.WorklistVersion && version != msi.CatalogueWorklistVersion {
 		return ErrStorage
 	}
 	if !present {
@@ -64,8 +64,19 @@ func (s *Store) loadWindowsMSIWorklists(ctx context.Context, t *transaction) err
 		return ErrStorage
 	}
 	j, e := readWindowsMSIWorklists(ctx, t.conn)
-	if e != nil || j.KeyID != key || j.ManagerID != manager {
+	if e != nil || j.Version != version || j.KeyID != key || j.ManagerID != manager {
 		return ErrStorage
+	}
+	if version == msi.CatalogueWorklistVersion {
+		catalogue, e := readWindowsMSICatalogue(ctx, t.conn)
+		if e != nil {
+			return ErrStorage
+		}
+		for _, w := range j.Worklists {
+			if w.ArchivedAt == 0 && catalogue.Find(w.ArtifactRetiredCount) == nil {
+				return ErrStorage
+			}
+		}
 	}
 	return nil
 }
@@ -148,9 +159,12 @@ func (s *Store) WindowsMSIWorklistTransaction(ctx context.Context, key ed25519.P
 		if e != nil || initial.Before(now) || initial.Unix() < before.ClockFloor {
 			return msi.ErrExpired
 		}
-		a, e := readWindowsManagedMSIArtifact(ctx, t.conn)
-		if e != nil || a.Version != msi.ReusableArtifactRecordVersion {
-			return msi.ErrUnavailable
+		var a msi.ArtifactRecord
+		if _, selected := msi.CatalogueOccurrence(ctx); before.Version != msi.CatalogueWorklistVersion || selected {
+			a, e = readWindowsManagedMSIArtifact(ctx, t.conn)
+			if e != nil || !a.Reusable() {
+				return msi.ErrUnavailable
+			}
 		}
 		records := map[string]msi.Record{}
 		rows, readErr := t.conn.QueryContext(ctx, `SELECT body FROM enrollment_windows_managed_msi_records`)
@@ -195,7 +209,7 @@ func (s *Store) WindowsMSIWorklistTransaction(ctx context.Context, key ed25519.P
 				return ErrStorage
 			}
 			selected[b.DeviceID] = true
-			if r.Grant.Binding != b || r.Grant.Version != msi.ReusableGrantVersion {
+			if r.Grant.Binding != b || !r.Grant.Reusable() {
 				return msi.ErrAuthority
 			}
 			c, e := s.windowsManagedMSICurrent(t, snap.InvitationID, b, r.Grant, initial)

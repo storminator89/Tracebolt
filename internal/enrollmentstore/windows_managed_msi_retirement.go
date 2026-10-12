@@ -11,6 +11,16 @@ import (
 // All registered references are checked in the same enrollment transaction.
 // Revoked/offline targets with unresolved work still block payload retirement.
 func validateMSIArtifactRetirement(ctx context.Context, c *sql.Conn, before, after msi.ArtifactRecord) error {
+	if before.Catalogue() {
+		proof, e := before.CatalogueRetirementEvidence()
+		if e != nil {
+			return e
+		}
+		if after.RetirementEvidenceDigest != proof {
+			return msi.ErrConflict
+		}
+		return nil
+	}
 	if before.Artifact == nil || before.Version != msi.ReusableArtifactRecordVersion {
 		return msi.ErrAuthority
 	}

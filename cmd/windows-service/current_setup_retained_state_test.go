@@ -212,9 +212,14 @@ func currentRetentionIdentity(r installReceipt, raw map[string][]byte) error {
 	return nil
 }
 
-func currentRetentionReadCore(ctx context.Context, r installReceipt, open currentRetentionOpen, stage func(string), prefix string) (map[string][32]byte, error) {
+func currentRetentionReadCore(ctx context.Context, r installReceipt, open currentRetentionOpen, stage func(string), prefix string, includeInstaller bool) (map[string][32]byte, error) {
 	out := map[string][32]byte{}
 	for _, spec := range currentRetentionCore(r) {
+		if spec.label == "receipt" && !includeInstaller {
+			// GUI removal owns this journal until SCM absence is observed.
+			// The authoritative baseline remains required again after release.
+			continue
+		}
 		stage("current-retention")
 		raw, err := currentRetentionRead(ctx, spec, open)
 		if err != nil {
@@ -256,7 +261,7 @@ func captureCurrentRetainedState(ctx context.Context, r installReceipt, layout w
 	if err != nil || !s.Exists || s.ServiceSID != original.Service.ServiceSID || (s.State != windowsservice.Running && s.State != windowsservice.Stopped) || ctx.Err() != nil {
 		return zero, setupgate.ErrGuard
 	}
-	immutable, err := currentRetentionReadCore(ctx, original, open, stage, "retention-baseline-")
+	immutable, err := currentRetentionReadCore(ctx, original, open, stage, "retention-baseline-", true)
 	if err != nil {
 		return zero, err
 	}
@@ -265,7 +270,7 @@ func captureCurrentRetainedState(ctx context.Context, r installReceipt, layout w
 		return zero, setupgate.ErrGuard
 	}
 	// Bracket active material validation with identical protected immutable bytes.
-	again, err := currentRetentionReadCore(ctx, original, open, stage, "retention-baseline-")
+	again, err := currentRetentionReadCore(ctx, original, open, stage, "retention-baseline-", true)
 	if err != nil {
 		return zero, setupgate.ErrGuard
 	}
@@ -408,52 +413,74 @@ func currentRetentionSender(raw []byte, binding string, floor uint64) bool {
 }
 
 // Call only after the controller has observed this exact held SCM handle
-// stopped and deletion pending. The actual manager-accepted LastSequence is a
-// floor, not the number of frames (discarded requests can consume sequences).
+// stopped and deletion pending. The GUI still owns the installer journal while
+// it waits for that handle's release, so capture only the stopped runtime,
+// identity, grants, history and sender here. The original receipt/intent remain
+// in the authoritative pre-removal baseline; final proof requires a fresh full
+// journal read after GUI completion and independently observed SCM absence.
+// The manager-accepted LastSequence is a floor, not a frame count.
 func (o *currentRetainedState) captureStopped(ctx context.Context, floor uint64, open currentRetentionOpen, stage func(string)) error {
 	if o == nil || o.stopped != nil {
 		return setupgate.ErrGuard
 	}
-	hashes, err := o.verify(ctx, floor, open, stage, "retention-stopped-")
+	hashes, err := o.verify(ctx, floor, open, stage, "retention-stopped-", false)
 	if err != nil {
 		return err
 	}
 	o.stopped = hashes
-	raw, _ := json.Marshal(o.receipt)
-	consent, _ := json.Marshal(o.receipt.ReadSetup.Consent)
-	manifest := hashes["enrollment/renewal-manifest.json"]
-	o.proof = currentsetupgate.ReceiptProof{Verified: true, ReceiptSHA256: currentRetentionDigest(raw), ConsentSHA256: currentRetentionDigest(consent), SenderBinding: o.receipt.ReadSetup.SenderBinding, ManifestSHA256: hex.EncodeToString(manifest[:]), CredentialGeneration: 1, GrantDigests: slices.Clone(o.receipt.ReadSetup.GrantDigests)}
-	clear(raw)
-	clear(consent)
-	if o.proof.Validate() != nil {
-		return setupgate.ErrGuard
-	}
 	return nil
 }
-func (o currentRetainedState) verifyAbsent(ctx context.Context, floor uint64, open currentRetentionOpen, stage func(string)) error {
-	if o.stopped == nil {
+
+func currentRetentionWithoutInstaller(hashes map[string][32]byte) map[string][32]byte {
+	out := make(map[string][32]byte, len(hashes))
+	for name, hash := range hashes {
+		if name != "receipt/intent.json" && name != "receipt/receipt.json" {
+			out[name] = hash
+		}
+	}
+	return out
+}
+
+func (o *currentRetainedState) verifyAbsent(ctx context.Context, floor uint64, open currentRetentionOpen, stage func(string)) error {
+	if o == nil || o.stopped == nil {
 		return setupgate.ErrGuard
 	}
-	hashes, err := o.verify(ctx, floor, open, stage, "verify-retention-")
+	// Full-store receipt/intent validation is mandatory here. Cached receipt
+	// hashes can never complete the proof, even if every stopped byte matches.
+	hashes, err := o.verify(ctx, floor, open, stage, "verify-retention-", true)
 	if err != nil {
 		return setupgate.ErrGuard
 	}
 	stage("verify-retention-stopped-unchanged")
-	if !reflect.DeepEqual(o.stopped, hashes) {
+	if !reflect.DeepEqual(o.stopped, currentRetentionWithoutInstaller(hashes)) {
 		return setupgate.ErrGuard
 	}
+	raw, _ := json.Marshal(o.receipt)
+	consent, _ := json.Marshal(o.receipt.ReadSetup.Consent)
+	manifest := hashes["enrollment/renewal-manifest.json"]
+	proof := currentsetupgate.ReceiptProof{Verified: true, ReceiptSHA256: currentRetentionDigest(raw), ConsentSHA256: currentRetentionDigest(consent), SenderBinding: o.receipt.ReadSetup.SenderBinding, ManifestSHA256: hex.EncodeToString(manifest[:]), CredentialGeneration: 1, GrantDigests: slices.Clone(o.receipt.ReadSetup.GrantDigests)}
+	clear(raw)
+	clear(consent)
+	if proof.Validate() != nil {
+		return setupgate.ErrGuard
+	}
+	o.proof = proof
 	return nil
 }
-func (o currentRetainedState) verify(ctx context.Context, floor uint64, open currentRetentionOpen, stage func(string), prefix string) (map[string][32]byte, error) {
+func (o currentRetainedState) verify(ctx context.Context, floor uint64, open currentRetentionOpen, stage func(string), prefix string, includeInstaller bool) (map[string][32]byte, error) {
 	if ctx == nil || ctx.Err() != nil || stage == nil || open == nil || !completeCurrentReadSetup(o.receipt) || len(o.immutable) == 0 {
 		return nil, setupgate.ErrGuard
 	}
-	core, err := currentRetentionReadCore(ctx, o.receipt, open, stage, prefix)
+	core, err := currentRetentionReadCore(ctx, o.receipt, open, stage, prefix, includeInstaller)
 	if err != nil {
 		return nil, setupgate.ErrGuard
 	}
 	stage(prefix + "immutable-unchanged")
-	if !reflect.DeepEqual(core, o.immutable) {
+	expected := o.immutable
+	if !includeInstaller {
+		expected = currentRetentionWithoutInstaller(expected)
+	}
+	if !reflect.DeepEqual(core, expected) {
 		return nil, setupgate.ErrGuard
 	}
 	r := o.receipt

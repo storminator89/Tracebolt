@@ -11,13 +11,18 @@ import (
 	"time"
 )
 
-func savedMSIStoreFixture(t *testing.T) (windowsSoftwareStoreFixture, msi.Grant, msi.Artifact, msi.WorklistDispatch) {
+func savedMSIStoreFixture(t *testing.T, scheduled ...bool) (windowsSoftwareStoreFixture, msi.Grant, msi.Artifact, msi.WorklistDispatch) {
 	t.Helper()
 	f := newWindowsSoftwareStoreFixture(t, false)
 	ctx := context.Background()
 	g := managedStoreGrant(f)
 	g.Version = msi.ReusableGrantVersion
 	g.ReusableAcknowledged = true
+	if len(scheduled) > 0 && scheduled[0] {
+		g.Version = msi.ScheduledGrantVersion
+		g.ScheduledEnabled = true
+		g.ScheduledAcknowledged = true
+	}
 	g.MutationPlanDigest = msi.Digest([]byte("fresh plan"))
 	g.PeerBindingDigest = msi.Digest([]byte("peer"))
 	key := f.key.Public().(ed25519.PublicKey)
