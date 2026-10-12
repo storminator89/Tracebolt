@@ -37,6 +37,11 @@ export async function windowsFleetProtectedRead({route,base,pathname,transform})
   return await route.fulfill({response,headers,json:transform(await response.json())});
  }finally{await response.dispose();}
 }
+// Frame both rows after each locale/viewport change. Nearest-aligning only the
+// last row can leave the first row partly outside the viewport after resize.
+export async function windowsFleetFrameRows(body){
+ await body.evaluate(el=>el.scrollIntoView({block:'center',inline:'nearest',behavior:'instant'}));
+}
 export async function windowsFleetBrowserCase({pageAt,expect,base,shot,mark}){
  const began=Date.now(),external=[];let mode='ready',fleetReads=0;
  const page=await pageAt('/devices',{prepare:async page=>{
@@ -55,7 +60,7 @@ export async function windowsFleetBrowserCase({pageAt,expect,base,shot,mark}){
   await search.fill('203.0.113.250');await expect(rows).toHaveCount(0);await search.fill('');await expect(rows).toHaveCount(2);expect(fleetReads).toBe(before);
   const platform=page.getByLabel(de?'Nach Betriebssystem filtern':'Filter by operating system');await platform.selectOption('linux');await expect(rows).toHaveCount(0);await platform.selectOption('windows');await expect(rows).toHaveCount(2);await platform.selectOption('all');
   await fresh.locator('summary').focus();await page.keyboard.press('Enter');await expect(fresh.getByText(ipv6,{exact:true})).toBeVisible();await expect(fresh).toContainText('Fixture Ethernet · IPV6 /64');await expect(fresh).toContainText(de?'Windows-LAN-Agent':'Windows LAN agent');await expect(fresh).toContainText(de?'Schnittstellenstatus unbekannt.':'Interface state unknown.');await expect(page).toHaveURL(base+'/#/devices');await fresh.locator('summary').focus();await page.keyboard.press('Space');await expect(fresh.locator('details')).not.toHaveAttribute('open');
-  await rows.last().scrollIntoViewIfNeeded();await expect(fresh).toBeInViewport({ratio:1});await expect(partial).toBeInViewport({ratio:1});await shot(page,`synthetic-windows-fleet-${width}-${locale}`,windowsFleetDisclosure);
+  await windowsFleetFrameRows(page.locator('.device-table tbody'));await expect(fresh).toBeInViewport({ratio:1});await expect(partial).toBeInViewport({ratio:1});await shot(page,`synthetic-windows-fleet-${width}-${locale}`,windowsFleetDisclosure);
  }
  await page.getByLabel(/Language|Sprache/).selectOption('en');
  mark('Windows suspension clears display and search');await page.evaluate(()=>window.dispatchEvent(new Event('blur')));await expect(page.locator('.device-table')).not.toContainText(hostname);await expect(page.locator('.device-table')).not.toContainText(ipv4);const search=page.getByRole('textbox',{name:'Search devices'});await search.fill(ipv6);await expect(rows).toHaveCount(0);await search.fill('');await page.evaluate(()=>window.dispatchEvent(new Event('focus')));await expect(fresh.locator('strong')).toHaveText(hostname);await expect(partial).toContainText(ipv4);
