@@ -1,13 +1,17 @@
 # Current21 hosted packaged Setup gate (source candidate)
 
 This separate gate targets fresh GitHub-hosted Windows Server 2025 x64 only.
-It is executable acceptance source, not a native pass, workflow-dispatch approval,
-release authorization, or proof of Windows 11 or real Linux-manager/browser use.
-The historical `run_setup_gui.py`, `setupgate`, four-case workflow and historical
-reports remain unchanged and cannot satisfy this gate. The release publisher's
-historical accepted-tree pin is unchanged and does not accept current artifacts.
-The separate current publisher adapter remains disabled with an unset accepted
-tree until an actual approved successful run is reviewed and pinned.
+Source `62435ef7e605df0b102e030bf1d68cb255829a90`, tree
+`b66e8a8eaa8cfdb0a5b7108254c930ae244b6763`, passed all three cases and aggregation
+in first-attempt [run 38303755541](https://github.com/storminator89/Tracebolt/actions/runs/38303755541).
+This bounded packaged-GUI result does not authorize another dispatch, installation
+or release, or prove Windows 11, real Linux-manager/shared-dashboard use, complete
+providers, renewal cutover, native restart or reboot. The historical
+`run_setup_gui.py`, `setupgate`, four-case workflow and accepted-tree pin remain
+unchanged and cannot validate current artifacts. The current adapter pins only
+the accepted tree above; current publication remains gated on successful full
+Validate of that exact source, a reviewed later publisher revision, live original
+artifacts and explicit approval. The old preview remains the published download.
 
 ## Exact profile and actions
 

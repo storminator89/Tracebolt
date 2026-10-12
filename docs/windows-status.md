@@ -1,8 +1,9 @@
 # Windows: current functionality and limits
 
 The current development source targets a fresh x64 Read admin installation.
-It is ahead of the published Windows preview and has not yet passed the current
-profile's native installation/provider acceptance. Current priorities combine
+It is ahead of the published Windows preview. The exact source identified below
+passed a bounded hosted packaged-Setup subset; complete provider coverage and
+real manager interoperability remain unproved. Current priorities combine
 remaining Admin data with useful fleet monitoring and management workflows.
 
 [Guides](README.md) · [Fresh Read admin setup](windows-read-admin-setup.md) · [Next priorities](windows-admin-roadmap.md)
@@ -88,11 +89,31 @@ Its accepted native subset covers fresh hosted **Windows Server 2025 x64** with 
 loopback fixture manager: installation, approval/reporting, cancellation and
 owned-service removal. This result does not transfer to later source or prove
 Windows 10/11, real Linux-manager/shared-browser interoperability or reboot.
-Exact artifact/source evidence is in the [published installation guide](windows-prerelease-install.md#selected-native-evidence).
+Exact artifact/source evidence is in the [historical installation guide](windows-prerelease-historical/windows-prerelease-install.md#selected-native-evidence).
 
-## Current hosted Setup acceptance source
+## Current hosted Setup acceptance
 
-A separately versioned [current21 TLS-only hosted gate](../tests/windows_native_acceptance/CURRENT_SETUP.md) now supplies three fresh Server2025 cases, receipt12/twenty-grant verification, finite provider outcomes and exact tested-byte aggregation. This is source infrastructure only; no current native pass or release eligibility is claimed. The historical four-case evidence and publisher pin remain unchanged. Windows11, real Linux-manager/browser, event-history requests and renewal cutover stay separately unproved.
+Source `62435ef7e605df0b102e030bf1d68cb255829a90`, tree
+`b66e8a8eaa8cfdb0a5b7108254c930ae244b6763`, passed the three TLS-only Server 2025 x64
+packaged-Setup cases and aggregator in first-attempt
+[native run 38303755541](https://github.com/storminator89/Tracebolt/actions/runs/38303755541).
+The cases exercised install/service removal, hidden-input cancellation and
+pending-transport interruption. The install case verified receipt12/twenty-grant
+bindings and two accepted ordinary frames; removal left the owned service absent
+while retaining files, keys and state. The six tested package files remain exact.
+Source-input comparison found seven byte-identical files and 2,619 files differing
+only by LF-to-CRLF checkout conversion; this is not cross-OS rebuild equivalence.
+
+This evidence is an **unsigned current21 packaged GUI subset**. Windows 11, a real
+Linux manager/shared dashboard, complete providers, event-history requests,
+renewal cutover, native restart, reboot, human invitation/UAC, ARM64 and optional
+MSI/WUA/service actions or selected-user software remain unproved. See the
+[current gate contract](../tests/windows_native_acceptance/CURRENT_SETUP.md).
+The accepted-tree publisher pin does not release a download: successful exact-source
+full Validate, a separately reviewed later publisher revision, live original
+artifacts and explicit publication approval are still required. Follow the
+[promotion contract](windows-prerelease-publication.md); the published preview
+above stays unchanged until promotion actually completes.
 
 ## Before installing or releasing
 
