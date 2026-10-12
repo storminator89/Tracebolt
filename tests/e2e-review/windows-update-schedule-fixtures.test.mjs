@@ -3,10 +3,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {createWindowsUpdateJobsFixture,requireWindowsUpdateJobsEvidence,windowsUpdateJobsOrigin} from './windows-update-jobs-browser.mjs';
-import {createWindowsUpdateScheduleFixture,windowsUpdateScheduleRoute,exerciseWindowsUpdateSchedule,windowsUpdateScheduleCaseName,windowsUpdateScheduleDisclosure,windowsUpdateScheduleFailureStage,requireWindowsUpdateScheduleEvidence} from './windows-update-schedule-browser.mjs';
+import {createWindowsUpdateScheduleFixture,windowsUpdateScheduleRoute,exerciseWindowsUpdateSchedule,windowsUpdateScheduleCaseName,windowsUpdateScheduleDisclosure,windowsUpdateScheduleFailureStage,requireWindowsUpdateScheduleEvidence,windowsBackgroundUpdateScheduleCaseName,windowsBackgroundUpdateScheduleDisclosure,requireWindowsBackgroundUpdateScheduleEvidence} from './windows-update-schedule-browser.mjs';
 const read=name=>fs.readFileSync(new URL(name,import.meta.url),'utf8'),id='update_'+'9'.repeat(32);
-function setup(){
- const base=windowsUpdateJobsOrigin,fixture=createWindowsUpdateScheduleFixture(),state={blocked:[],external:[]},prefix='/api/devices/'+fixture.device.id+'/windows-update-jobs';
+function setup(profile='standalone'){
+ const base=windowsUpdateJobsOrigin,fixture=createWindowsUpdateScheduleFixture(profile),state={blocked:[],external:[]},prefix='/api/devices/'+fixture.device.id+'/windows-update-jobs';
  const headers={'x-csrf-token':fixture.session.csrfToken,origin:base,'content-type':'application/json'};
  let assetPath=null,continued=false;
  const handler=windowsUpdateScheduleRoute({base,fixture,state,asset:async(_route,path)=>{assetPath=path;}});
@@ -89,4 +89,39 @@ test('schedule source uses the existing genuine screenshot helper, locked runner
  assert.doesNotMatch(runner,/CHROMIUM_PATH|executablePath|ignoreHTTPSErrors|grantPermissions|execFile|spawn\(|go build|setDefaultTimeout/);assert.doesNotMatch(helper,/chromium\.launch|createServer|writeFile|execFile|spawn\(|fetch\(|page\.request|newContext\(|route\.continue|route\.fetch|setTimeout/);
  for(const hook of ["stage='review'","stage='pending'","stage='cancel'","stage='reload'","not.toBeChecked()","toBeDisabled()","capture('review',scheduleDetails)","capture('pending')","capture('canceled')","await page.reload()","exactSaved()","toBeInViewport()","immediateInstallWrites"])assert.ok(helper.includes(hook),hook);
  assert.equal((helper.match(/button.click\(\);button.click\(\);/g)||[]).length,2);assert.match(windowsUpdateScheduleDisclosure,/in-memory fixture/);assert.match(windowsUpdateScheduleDisclosure,/Zero immediate-install writes/);assert.match(windowsUpdateScheduleDisclosure,/No actual TLS authority/);assert.equal(typeof exerciseWindowsUpdateSchedule,'function');
+});
+
+test('fresh combined fixture preserves standalone and manual-background profile boundaries',async()=>{
+ const standalone=createWindowsUpdateScheduleFixture(),manual=createWindowsUpdateJobsFixture(),f=setup('background');
+ for(const value of [standalone.updateView(),manual.updateView()])for(const field of ['backgroundScheduling','backgroundExecutor','coordinated','executorObservedAt','mutation'])assert.equal(Object.hasOwn(value,field),false);
+ assert.equal(standalone.scheduleProfile,'standalone');assert.equal(f.fixture.scheduleProfile,'background');
+ const view=(await f.invoke()).value;assert.equal(view.backgroundScheduling,true);assert.equal(view.backgroundExecutor,true);assert.equal(view.coordinated,true);assert.equal(view.schedulingAvailable,true);assert.equal(view.executorAvailability,'verified_recent');assert.equal(view.executorObservedAt,view.mutationCapturedAt);assert.deepEqual(view.mutation,{active:true,blocked:false,phase:'idle',revision:'1',retained:0});
+ assert.deepEqual(f.fixture.session.capabilities,['read','windows_update_install','windows_update_schedule']);
+ for(const profile of [null,false,true,'manual','combined',{},1])assert.throws(()=>createWindowsUpdateScheduleFixture(profile));
+});
+test('combined background reserves once with separate exact approval, saved window and cancellation readback',async()=>{
+ const f=setup('background');assert.deepEqual(await f.invoke('/schedule',post(approval(f))),{abort:'blockedbyclient'});await reviewed(f);
+ for(const body of [{...approval(f),acknowledged:false},{...approval(f),endAt:f.fixture.scheduleWindow.endAt+60},{...approval(f),previewDigest:'sha256:'+'0'.repeat(64)}])assert.deepEqual(await f.invoke('/schedule',post(body)),{abort:'blockedbyclient'});
+ const saved=(await f.invoke('/schedule',post(approval(f)))).value;assert.equal(saved.backgroundScheduling,true);assert.equal(saved.job.state,'scheduled');assert.equal(saved.job.preview,null);assert.equal(saved.job.result,null);assert.equal(saved.job.schedule.permitIssuedAt,0);assert.deepEqual(saved.job.selection,f.fixture.selection);
+ assert.deepEqual(saved.job.schedule,{version:'tracebolt.windows-selected-update-schedule.v1',digest:f.fixture.scheduleDigest,approvedAt:Date.parse(f.fixture.now)/1000,...f.fixture.scheduleWindow,permitIssuedAt:0,revoked:false});
+ assert.deepEqual((await f.invoke('?jobId='+id)).value,saved);assert.equal((await f.invoke('?history=1')).value.remainingCapacity,31);
+ assert.deepEqual(await f.invoke('/schedule',post(approval(f))),{abort:'blockedbyclient'});
+ const canceled=(await f.invoke('/cancel-schedule',post(cancel(f)))).value;assert.equal(canceled.backgroundScheduling,true);assert.equal(canceled.job.state,'schedule_canceled');assert.deepEqual(canceled.job.schedule,saved.job.schedule);assert.deepEqual(canceled.mutation,saved.mutation);assert.equal(canceled.executorObservedAt,saved.executorObservedAt);
+ assert.deepEqual((await f.invoke()).value,canceled);assert.equal((await f.invoke('?history=1')).value.remainingCapacity,31);assert.deepEqual(await f.invoke('/cancel-schedule',post(cancel(f))),{abort:'blockedbyclient'});
+ assert.deepEqual(f.fixture.scheduleCounts,{schedule:1,cancel:1,immediateInstallWrites:0});assert.equal(f.fixture.updateCounts.request,1);assert.equal(f.fixture.updateCounts.preview,1);assert.equal(f.fixture.updateCounts.approve,0);assert.deepEqual(f.state.external,[]);
+});
+const backgroundEvidence=()=>['status','review','pending','canceled'].flatMap(kind=>['en','de'].flatMap(locale=>[1440,390].map(width=>({file:`synthetic-windows-background-update-schedule-${kind}-${width}-${locale}.png`,sourceSha,test:windowsBackgroundUpdateScheduleCaseName,locale,viewport:{width,height:width===390?844:1000},publicSafe:true,fullPage:false,fixtureDisclosure:windowsBackgroundUpdateScheduleDisclosure}))));
+test('combined evidence requires separate source-bound status and UTC approval captures in every locale and viewport',()=>{
+ assert.deepEqual(requireWindowsBackgroundUpdateScheduleEvidence(backgroundEvidence(),sourceSha),{screens:16,nativeAcceptance:false});
+ for(const mutate of [r=>r.pop(),r=>r.push(r[0]),r=>{r[1]=r[0];},r=>{r[0].file='synthetic-windows-update-schedule-review-1440-en.png';},r=>{r[0].sourceSha='b'.repeat(40);},r=>{r[0].locale='de';},r=>{r[0].viewport.width=800;},r=>{r[0].viewport.height=844;},r=>{r[0].fullPage=true;},r=>{r[0].publicSafe=false;},r=>{r[0].fixtureDisclosure=windowsUpdateScheduleDisclosure;},r=>{r[0].test=windowsUpdateScheduleCaseName;}]){const rows=backgroundEvidence();mutate(rows);assert.throws(()=>requireWindowsBackgroundUpdateScheduleEvidence(rows,sourceSha));}
+ assert.throws(()=>requireWindowsBackgroundUpdateScheduleEvidence(backgroundEvidence(),null));assert.throws(()=>requireWindowsBackgroundUpdateScheduleEvidence(evidence(),sourceSha));assert.throws(()=>requireWindowsUpdateScheduleEvidence(backgroundEvidence(),sourceSha));
+});
+test('hosted combined supplement preserves earlier gates, real screenshot helper and exact bounded runner',()=>{
+ const runner=read('./windows-service-actions-runner.mjs'),helper=read('./windows-update-schedule-browser.mjs');
+ assert.ok(runner.includes("for(const scheduleProfile of ['standalone','background'])"));assert.match(runner,/createWindowsUpdateScheduleFixture\(scheduleProfile\)/);assert.match(runner,/requireWindowsBackgroundUpdateScheduleEvidence\(backgroundScheduleScreenshots,sourceSha\)/);assert.match(runner,/backgroundScheduleVariants.length!==4/);assert.match(runner,/\.\.\.backgroundScheduleScreenshots/);assert.match(runner,/backgroundScheduleVariants:passed\?backgroundScheduleVariants:\[\]/);
+ for(const hook of ["capture('status')","capture('review',scheduleDetails)","capture('pending',jobStatus)","capture('canceled')","await manual.check();await expect(ack).not.toBeChecked();await expect(approve).toBeDisabled();await manual.uncheck()","await expect(executor).toBeInViewport()","await expect(shared).toBeInViewport()","Approved UTC windows","Availability not checked live","separately activated background update service and observer","No download, license acceptance, reboot or retry"])assert.ok(helper.includes(hook),hook);
+ assert.equal((runner.match(/120000/g)||[]).length,1);assert.match(runner,/requireWindowsUpdateScheduleEvidence\(scheduleScreenshots,sourceSha\)/);assert.match(runner,/requireWindowsUpdateJobsEvidence\(updateScreenshots,sourceSha\)/);
+ // The dedicated manual-background coexistence case remains a required independent gate.
+ assert.match(read('./windows-mutation-coexistence-browser.mjs'),/Background update service · Manual approvals only/);assert.match(read('./windows-mutation-coexistence-fixtures.test.mjs'),/schedulingAvailable/);
+ assert.match(windowsBackgroundUpdateScheduleDisclosure,/Fresh combined-background scheduling profile/);assert.match(windowsBackgroundUpdateScheduleDisclosure,/availability is not checked live/);
 });

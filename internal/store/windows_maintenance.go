@@ -14,8 +14,9 @@ import (
 	"localrmm/internal/windowscontact"
 )
 
-// Planning metadata only: this table never changes source evaluation, incident
-// history, acknowledgement, Linux alarms, notifications or endpoint authority.
+// Planning metadata never changes source evaluation, incident history,
+// acknowledgement, Linux alarms or endpoint authority. Windows notification
+// dispatch alone consumes matching windows.
 const windowsMaintenanceSchema = `CREATE TABLE IF NOT EXISTS windows_maintenance(id TEXT NOT NULL, domain TEXT NOT NULL, body BLOB NOT NULL CHECK(length(body)>0 AND length(body)<=4096 AND json_valid(body)), PRIMARY KEY(id,domain))`
 const MaxWindowsMaintenanceTargets = 150
 const MaxWindowsMaintenanceHistory = 4
@@ -246,6 +247,13 @@ func (s *Store) ChangeWindowsMaintenance(ctx context.Context, target WindowsMain
 	}
 	if _, err = tx.ExecContext(ctx, "INSERT INTO windows_maintenance(id,domain,body) VALUES(?,?,?) ON CONFLICT(id,domain) DO UPDATE SET body=excluded.body", target.DeviceID, target.Domain, raw); err != nil {
 		return next, err
+	}
+	if start {
+		// Consume queued work now, so an early end before the worker wakes cannot
+		// release stale backlog. In-flight completion remains truthful, but no retry.
+		if _, err = tx.ExecContext(ctx, `UPDATE windows_notification_outbox SET state=CASE WHEN state='queued' THEN 'suppressed' ELSE state END,stop_retry=1,code='maintenance',finished=CASE WHEN state='queued' THEN ? ELSE finished END WHERE device=? AND json_extract(target,'$.invitationId')=? AND json_extract(target,'$.certificateHash')=? AND (?='all' OR domain=?) AND state IN ('queued','in_flight')`, now.UnixMilli(), target.DeviceID, target.InvitationID, target.CertificateHash, target.Domain, target.Domain); err != nil {
+			return next, err
+		}
 	}
 	final := clock().UTC()
 	if !validMaintenanceTime(final) || final.Before(now) || !final.Before(next.Windows[0].EndsAt) {

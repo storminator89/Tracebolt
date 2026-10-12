@@ -161,3 +161,7 @@ With separate explicit approval on a disposable Windows x64 non-DC:
 These are acceptance source requirements, not an executed native pass or host
 permission. Existing hosted fixtures are synthetic and do not establish SCM,
 NTFS, token, COM or Windows Update acceptance.
+
+A separate fresh [scheduled background profile](windows-scheduled-background-updates.md)
+adds explicitly approved bounded UTC windows. This manual-only v4 profile and its
+original consent/receipt bytes remain unchanged; it cannot adopt scheduling.

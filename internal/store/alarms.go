@@ -55,6 +55,12 @@ func (s *Store) configureAlarms(ctx context.Context, b *alarmdelivery.Binding, a
 	if _, e = tx.ExecContext(ctx, `UPDATE alarm_outbox SET state='suppressed',code=?,finished=? WHERE state='queued' AND (binding<>? OR ?=0)`, code, now.UnixMilli(), key, enabled); e != nil {
 		return e
 	}
+	if _, e = tx.ExecContext(ctx, `UPDATE windows_notification_outbox SET state='uncertain',code='restart_in_flight',finished=? WHERE state='in_flight'`, now.UnixMilli()); e != nil {
+		return e
+	}
+	if _, e = tx.ExecContext(ctx, `UPDATE windows_notification_outbox SET state='suppressed',code=?,finished=? WHERE state='queued' AND (binding<>? OR ?=0)`, code, now.UnixMilli(), key, enabled); e != nil {
+		return e
+	}
 	if _, e = tx.ExecContext(ctx, `UPDATE alarm_settings SET binding=?,enabled=? WHERE id=1`, key, enabled); e != nil {
 		return e
 	}

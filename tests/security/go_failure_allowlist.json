@@ -1,5 +1,7 @@
 {
-  "goSourceSha256": "923d2eb3da895c22cb727f602575ca7dbbdb42bfacd5a32c82596d1c53c72d92",
+  "schemaVersion": 1,
+  "sourceCommit": "fccc4b00cd8a144afd58e4b995747afab7a10022",
+  "goSourceSha256": "1b24ccd9cd5e448ed3c01d5c36e923a3e7667d3fd954c7230d0641856879247e",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -427,6 +429,7 @@
       "TestRestartPartialOutputAndReleaseFailureNeverBecomeSuccess",
       "TestRestartPublicDeadlineBeginsBeforeReceiptAcquisition",
       "TestRetainedBootstrapValidationCapturesCategoryBeforePublicCollapse",
+      "TestScheduledBackgroundSetupRequiresCombinedSelectionAndEveryAcknowledgement",
       "TestScheduledUpdateSetupRequiresSeparateFreshFlagAndAcknowledgement",
       "TestSecurityCoverageWorkerEntryRechecksActualParentBeforeReturning",
       "TestSecurityPostureConsentErrorsAndInvalidModes",
@@ -1002,6 +1005,7 @@
       "TestLinuxCVEVerticalSliceUsesCompleteSourceVersions",
       "TestManagedFleetArtifactRoutesAreFixed",
       "TestManagedFleetReadRechecksPinnedCapabilityAfterWait",
+      "TestManagedMSIOccurrenceRequestPinsRequireCanonicalStrings",
       "TestManagedMSIOperatorRoutesClosed",
       "TestManagedPreviewDisabledByDefault",
       "TestManagedPreviewDoesNotFallBackToManagerSample",
@@ -1133,6 +1137,10 @@
       "TestWindowsMaintenanceWireFixture",
       "TestWindowsNetworkContextOperatorFinalBoundaryHidesRows",
       "TestWindowsNetworkContextProtectedOperatorFullPaging",
+      "TestWindowsNotificationsHTTPExplicitSourceDestinationAndUnchangedV1",
+      "TestWindowsNotificationsNamedAlarmAdminReadOnly",
+      "TestWindowsNotificationsQueueAdapterUsesExistingWorkerWithoutLinuxAdmission",
+      "TestWindowsNotificationsWireFixture",
       "TestWindowsPercentagePolicyTransactionClockRejectsBeforeCommit",
       "TestWindowsResourceAuthenticatedIndependentPolicyPipeline",
       "TestWindowsResourceFinalClockAndNewestSourceTruth",
@@ -1819,6 +1827,10 @@
       "TestReviewerFullServicesOriginalExpiryAcrossFinalConnectionWait",
       "TestReviewerFullSoftwareOriginalExpiryAcrossFinalConnectionWait",
       "TestReviewerNetworkContextOriginalExpiryAcrossFinalConnectionWait",
+      "TestScheduledBackgroundCancelVersusClaimSerializes",
+      "TestScheduledBackgroundEnrollmentReconcilesExactSavedReadinessAfterBusy",
+      "TestScheduledBackgroundFinalCommitRechecksSharedCaptureAfterBlockingChecks",
+      "TestScheduledBackgroundOriginalCapCancellationAndPolicyRemainIrreversible",
       "TestServiceActionCanceledPersistenceReleasesNoApproval",
       "TestServiceActionObservedExpiryCannotRevive",
       "TestServiceActionPreviewExpiryCannotReviveAfterFailedApproval",
@@ -1979,6 +1991,7 @@
       "TestWindowsNetworkContextUsedSchemaLossCannotReinitialize",
       "TestWindowsNetworkContextZeroScopeDisableFloorsAndCursorIsolation",
       "TestWindowsNetworkIndependentExpiryAndRevocation",
+      "TestWindowsNotificationAuthorityRejectsReportAdvancedBeforeClaimLease",
       "TestWindowsProcessMetricsIndependentExpiryAndRevocation",
       "TestWindowsResourceRetentionExpiryOmissionAndReplacement",
       "TestWindowsResourceRetentionRejectsAllUnknownAndAcceptsNoPagefiles",
@@ -2582,6 +2595,7 @@
       "TestRenewalSchemaNeverPromotesLegacyConfig",
       "TestRenewalWindowsAllTwentyScopesRetainExactReceipts",
       "TestRenewalWindowsSoftwareHistoryRetainsExactGrantAndPack",
+      "TestScheduledBackgroundRelayRefreshesSharedStatusBeforeExactReadinessReconciliation",
       "TestSelfRetentionAllFrameRefits",
       "TestSelfRetentionFreshConsentAndExactPendingRetry",
       "TestSelfRetentionProcessReservesSelfAlongsideFullVolumeFrame",
@@ -3644,6 +3658,15 @@
       "TestWindowsMaintenanceHistoryRevisionIsolationAndRestart",
       "TestWindowsMaintenanceScopeOverlapIdentityAndNoEvidenceRequired",
       "TestWindowsMaintenanceTransactionWaitAndFinalGuard",
+      "TestWindowsNotificationsContactReportsResumedAndServiceRunning",
+      "TestWindowsNotificationsDefaultOffNoBackfillAndReadOnly",
+      "TestWindowsNotificationsFinalWriteClockCannotOutliveSourceOrQueue",
+      "TestWindowsNotificationsInFlightMaintenancePreservesTruthAndStopsRetry",
+      "TestWindowsNotificationsMaintenanceConsumesWithoutChangingEvidenceOrBacklog",
+      "TestWindowsNotificationsMetricCollisionsAcceptedPairingAndLinuxIsolation",
+      "TestWindowsNotificationsQueuedMaintenanceAndPolicyChangedNeverRecovery",
+      "TestWindowsNotificationsRestartUncertaintyCapacityAndDurableGap",
+      "TestWindowsNotificationsSourceRevisionDestinationIdentityAndFinalGuards",
       "TestWindowsPercentagePolicyFinalGuardPreservesState",
       "TestWindowsPercentagePolicyGuardAfterConnectionWait",
       "TestWindowsResourceBoundedDeviceAndMetricAdmission",
@@ -3804,7 +3827,10 @@
       "TestCurrentGateNeverPromotesHistoricalProfilesOrScopeReceipt",
       "TestCurrentGateRetainsUnknownProviderTruth",
       "TestExactAuthorizationFailClosed",
-      "TestFiniteReportCoverageAndIndeterminateTruth"
+      "TestFiniteReportCoverageAndIndeterminateTruth",
+      "TestHiddenInputFailureReportNeverBecomesAcceptance",
+      "TestHiddenInputInstallerDiagnosticExactFiniteEnvelope",
+      "TestHiddenInputProbeDistinguishesTerminalAndConsoleFailures"
     ],
     "localrmm/internal/windowsacceptance/fixture": [
       "TestConcurrentSyntheticObservationAndClose",
@@ -4423,7 +4449,8 @@
       "TestManagedPendingChunkExactResume",
       "TestManagedReusableConsentAndSignatureDomainsStaySeparate",
       "TestManagedUncertainFinalizationNeverRestarts",
-      "TestManagedUnexplainedPayloadFences"
+      "TestManagedUnexplainedPayloadFences",
+      "TestReusableOccurrenceReferencesUseFloorEvenForIdenticalCustody"
     ],
     "localrmm/internal/windowsmanagedmsiexecutor": [
       "TestManagedCloseTimerCompletionRaceReturnsCloseError",
@@ -4447,7 +4474,12 @@
       "TestManagedManagerReleaseRechecksAfterCommitWait",
       "TestManagedUploadCheckpointAndCompletionUncertaintyRetainSameBytes",
       "TestReusableManagerDifferentPackageAfterReviewedRetirementRestart",
+      "TestReusableOccurrencePinCanonicalNumbersAndLegacyBytes",
+      "TestReusableOccurrencePinsRejectStaleMutationsAndKeepUnresolvedCustody",
+      "TestReusableRepeatedArtifactProjectsFreshOccurrenceAcrossSkippedPackage",
+      "TestReusableReservePinsInitialEmptyAndRetiredOccurrences",
       "TestReusableSharedRetirementKeepsOtherUnresolvedTarget",
+      "TestReusableViewRejectsUnresolvedOlderOccurrence",
       "TestSpoolChangedUnacknowledgedTailIsNeverOverwritten",
       "TestSpoolSingleLinkExactChunksAndSameByteRecovery"
     ],
@@ -4481,6 +4513,8 @@
       "TestReusableMSISettledRetirementRestartDifferentPackage",
       "TestReusableMSIUncertainCannotRetireOrAdvance",
       "TestSavedDomainReceiptAfterCrashBeforeFenceCompletion",
+      "TestScheduledBackgroundBusyMSIWaitsThenSameReportAdmitsOneWUA",
+      "TestScheduledBackgroundNativeEdgeExpiryAndCleanupKeepDurableOwner",
       "TestTwoDomainsHaveOneOwner",
       "TestUncertainFinalStartWriteNeverCallsNativeGuard",
       "TestUncertainReserveAndDispatchNeverYieldRunnableCapability"
@@ -5126,6 +5160,9 @@
       "TestScheduleNeedsFreshConsentAndExplicitApproval",
       "TestSchedulePermitRejectedByManualOnlyExecutorAndManualBytesUnchanged",
       "TestScheduleRetainsThirtyTwoReservationsAndNoEarlyInstallSequence",
+      "TestScheduledBackgroundRetainsThirtyTwoReservationsWithoutRefund",
+      "TestScheduledBackgroundWaitingDoesNotReviveExpiredOrRevokedAuthority",
+      "TestScheduledBackgroundWaitsForFreshInWindowIdleWithoutChangingIntent",
       "TestSetupHandoffPreservesExactOriginalAuthority",
       "TestShorterConsentOrCurrentLeafCannotExtendNativeStart",
       "TestSignedExecutorReadinessAndResultRelay",
@@ -5197,7 +5234,9 @@
       "TestFreshUpdateSetupRejectsIdentityExpiryAndExisting",
       "TestFreshUpdateSetupRemovalPreservesUsedState",
       "TestFreshUpdateSetupRemovalRejectsUnresolvedConsumedAttempts",
-      "TestFreshUpdateSetupRetainsFailedTransactionEvidence"
+      "TestFreshUpdateSetupRetainsFailedTransactionEvidence",
+      "TestScheduledBackgroundFreshSetupBindsConsentAndRetainsWrappers",
+      "TestScheduledBackgroundPlanCannotBeSmuggledIntoOlderProfiles"
     ],
     "localrmm/internal/windowsupdateworker": [
       "TestBoundedOutputCancelsAndDoesNotRetainOverflow",
@@ -5461,7 +5500,5 @@
       "TestWindowsNetworkContextScopeHasBoundedExplicitReadOnlyContract"
     ],
     "localrmm/web/scripts": []
-  },
-  "schemaVersion": 1,
-  "sourceCommit": "fccc4b00cd8a144afd58e4b995747afab7a10022"
+  }
 }

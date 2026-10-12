@@ -25,6 +25,9 @@ participant digest pins the full fresh grant. Existing versions retain their JSO
 bytes. Per-job signed permits and reports use the distinct reusable-v3 signature
 domain. No renewal or migration is performed by retirement.
 
+The bounded [recent-package chooser](windows-software-catalogue.md) reuses exact
+current/recent review metadata. Missing payload bytes always require explicit re-upload.
+
 ## One job at a time
 
 Upload one reviewed x64 machine MSI, then explicitly deliver it to one named
@@ -38,6 +41,26 @@ one named installation approval remain separate for every package. Grant-wide
 JobSequence increases monotonically; readiness refresh Sequence is independent.
 No group, queue, saved history or earlier package approval approves another job.
 Unselected device Y receives neither a transfer nor a package.
+
+Repeated uploads of the same reviewed package retain their content-derived
+`artifactId` but are separate occurrences. The existing monotonic artifact
+`retiredCount` identifies the current custody occurrence. Each selected manager
+record retains that floor separately from its signed transfer and job sequence;
+legacy singleton/fleet-v2 records and signed permit/report bytes are unchanged.
+Older retired device records are projected as unselected for a later occurrence,
+including A → B on another device → A. Reading never advances the durable job.
+
+Reusable artifact reserve/upload/complete/retire requests pin `retiredCount`.
+Reserve pins the pre-request floor and `expectedArtifactId` (empty for initial
+custody, the displayed content identity for retired custody); the response
+advances the floor only when replacing a retired artifact. Reusable device views and delivery requests include
+`artifactRetiredCount`; review, approval and device retirement also pin exact
+`transferId` and `jobSequence`. These pins are checked inside mutation boundaries.
+A stale same-content request cannot approve or delete a newer occurrence. A
+retired device cannot receive a second job within the same global occurrence. Current
+unresolved assignments still block retirement; older retired reports do not count
+as assignments to the new payload. Missing or contradictory occurrence evidence
+fails closed rather than reconstructing an assignment.
 
 After a known settled result, the exact durable shared-owner receipt must finish
 release. Explicit result-bound retirement then deletes only the imported app-owned

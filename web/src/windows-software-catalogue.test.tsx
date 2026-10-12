@@ -1,0 +1,56 @@
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { request, mutateRaw } from './api';
+import { useOperator } from './auth';
+import { setLocale } from './i18n';
+import { ManagedMSIArtifact } from './windows-managed-msi-artifact';
+import { WindowsFleetManagedMSIWorklist } from './windows-fleet-managed-msi';
+import { managedSoftwareChoices, sameSoftwareChoice, softwareChoiceState } from './windows-software-catalogue';
+import { sameManagedArtifactOccurrence, type ManagedArtifactView, type ReusableManagedReview } from './windows-managed-msi-types';
+import type { Device } from './types';
+vi.mock('./api',async original=>({...await original<typeof import('./api')>(),request:vi.fn(),mutateRaw:vi.fn()}));
+vi.mock('./auth',async original=>({...await original<typeof import('./auth')>(),useOperator:vi.fn()}));
+const digest=(x:string)=>`sha256:${x.repeat(64)}`,now='2026-10-12T10:00:00Z',seconds=Date.parse(now)/1000,expires='2026-10-12T11:00:00Z',device=`agent_${'1'.repeat(32)}`;
+const review=(name='Package A'):ReusableManagedReview=>({package:{sha256:digest('a'),size:1024,productCode:'{11111111-2222-3333-4444-555555555555}',packageCode:'{AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE}',version:'1.2.3',architecture:'amd64',name,termsReviewDigest:digest('b'),reviewReference:'Synthetic source-only review'},nativeAcceptanceDigest:digest('c'),publisherStatus:'unsigned',publisherEvidenceDigest:digest('d')});
+let artifact:ManagedArtifactView,actor:string;
+const session=()=>({mode:'lan',transport:'https',insecureTestMode:false,transportWarning:null,authenticationRequired:true,authenticated:true,csrfToken:'csrf',serverNow:now,expiresAt:expires,expiresInSeconds:3600,loginMode:'named',actorId:actor,capabilities:['read','windows_managed_msi_deliver','windows_managed_msi_install']});
+const history=(n:number,selected=review('Package B'))=>({sequence:String(n),artifactId:digest('f'),...selected,evidenceDigest:digest('e'),actorId:actor});
+const flush=()=>act(async()=>{});
+beforeEach(()=>{actor=`operator_${crypto.randomUUID().replaceAll('-','')}`;artifact={version:'tracebolt.windows-managed-msi-artifact.v3',serverNow:seconds,state:'uploaded',artifactId:digest('e'),...review(),uploadOffset:1024,uploadPendingDigest:'',targets:[{deviceId:device,bindingDigest:digest('1')}],reusable:true,retiredCount:'1',recent:[history(1)],maxRetainedPayloadBytes:128*1048576,canRetire:false,retirementBlocked:'awaiting_device_retirement'};vi.useFakeTimers();vi.setSystemTime(now);setLocale('en',false);vi.mocked(useOperator).mockReturnValue({...session(),theme:'light',logout:vi.fn(),setTheme:vi.fn()} as never);vi.mocked(request).mockReset().mockImplementation(async path=>structuredClone(path==='/auth/session'?session():artifact) as never);vi.mocked(mutateRaw).mockReset()});
+afterEach(()=>{cleanup();vi.useRealTimers();vi.restoreAllMocks()});
+it('restores at most nine full reviewed choices from server history and deduplicates exact reviews only',()=>{
+ artifact={...artifact,retiredCount:'8',recent:Array.from({length:8},(_,i)=>history(i+1,review(`Package ${i}`)))};expect(managedSoftwareChoices(artifact)).toHaveLength(9);
+ artifact.recent![7]={...artifact.recent![7],...review()};expect(managedSoftwareChoices(artifact)).toHaveLength(8);
+ artifact.recent![7]={...artifact.recent![7],...review(),publisherEvidenceDigest:digest('9')};expect(managedSoftwareChoices(artifact)).toHaveLength(9);
+ expect(sameSoftwareChoice(review(),{...review(),package:{...review().package,termsReviewDigest:digest('8')}})).toBe(false);
+ expect(managedSoftwareChoices({...artifact,retiredCount:'0'})).toEqual([]);expect(managedSoftwareChoices(null)).toEqual([]);
+});
+it('labels payload custody independently from saved metadata and rejects uncertain or different occupied custody',()=>{
+ const [a,b]=managedSoftwareChoices(artifact);expect(softwareChoiceState(a,artifact)).toBe('ready');expect(softwareChoiceState(b,artifact)).toBe('blocked');expect(softwareChoiceState(a,artifact,true)).toBe('blocked');
+ artifact={...artifact,state:'retired',retirementBlocked:'not_ready'};expect(softwareChoiceState(a,artifact)).toBe('upload');expect(softwareChoiceState(b,artifact)).toBe('upload');
+ artifact={...artifact,state:'intervention_required',retirementBlocked:'unconfirmed_custody'};expect(softwareChoiceState(a,artifact)).toBe('blocked');expect(softwareChoiceState(b,artifact)).toBe('blocked');
+ artifact={...artifact,state:'upload_incomplete',uploadOffset:0,retirementBlocked:'not_ready'};expect(softwareChoiceState(a,artifact)).toBe('upload');expect(softwareChoiceState(b,artifact)).toBe('blocked');
+});
+it.each(['en','de'] as const)('renders compact recent choices and truthful readiness in %s',async locale=>{
+ setLocale(locale,false);render(<ManagedMSIArtifact actor={actor} expires={expires} onArtifact={()=>{}}/>);await flush();const catalogue=screen.getByRole('region',{name:locale==='de'?'Letzte Pakete':'Recent packages'});expect(within(catalogue).getByText(locale==='de'?'Hier bereit':'Ready here')).toBeVisible();expect(within(catalogue).getByText(locale==='de'?'Blockiert':'Blocked')).toBeVisible();expect(within(catalogue).queryByRole('button')).toBeNull();expect(within(catalogue).getByText(locale==='de'?'Aufbewahrung & Paketwechsel':'Retention & switching').closest('details')).not.toHaveAttribute('open');expect(mutateRaw).not.toHaveBeenCalled();
+});
+it('selection fills the exact saved review only, never fabricates MSI bytes or writes, and reload restores recent choices',async()=>{
+ artifact={...artifact,state:'retired',retirementBlocked:'not_ready'};const ui=render(<ManagedMSIArtifact actor={actor} expires={expires} onArtifact={()=>{}}/>);await flush();const catalogue=screen.getByRole('region',{name:'Recent packages'});fireEvent.click(within(catalogue).getAllByRole('button',{name:'Use saved review'})[1]);expect(screen.getByRole('button',{name:'Upload exact package'})).toBeDisabled();expect(screen.getByText('Choose the exact MSI bytes below. Its saved review never replaces the file.')).toBeVisible();expect(mutateRaw).not.toHaveBeenCalled();
+ ui.unmount();render(<ManagedMSIArtifact actor={actor} expires={expires} onArtifact={()=>{}}/>);await flush();expect(screen.getByRole('region',{name:'Recent packages'})).toHaveTextContent('Package B');expect(screen.queryByRole('button',{name:'Review selected'})).toBeNull();expect(screen.getByRole('button',{name:'Upload exact package'})).toBeDisabled();
+});
+it('clears a previously chosen local file when selecting another saved review',async()=>{
+ artifact={...artifact,state:'retired',retirementBlocked:'not_ready'};render(<ManagedMSIArtifact actor={actor} expires={expires} onArtifact={()=>{}}/>);await flush();fireEvent.change(screen.getByLabelText('Exact x64 machine MSI'),{target:{files:[new File([new Uint8Array(1024)],'fixture.msi')]}});fireEvent.click(screen.getAllByRole('button',{name:'Use saved review'})[1]);expect(screen.getByRole('button',{name:'Upload exact package'})).toBeDisabled();expect(mutateRaw).not.toHaveBeenCalled();
+});
+it('invalidates frozen A selection when the same reviewed A returns in a newer occurrence',async()=>{
+ const devices=[{id:device,name:'Workstation A',platform:'windows',source:'lan',synthetic:false} as Device];render(<WindowsFleetManagedMSIWorklist devices={devices}/>);fireEvent.click(screen.getByRole('button',{name:'Windows MSI worklist'}));await flush();fireEvent.click(screen.getByRole('checkbox',{name:/Workstation A/}));fireEvent.click(screen.getByRole('button',{name:'Freeze device selection'}));expect(screen.getByRole('button',{name:'Open device: Workstation A'})).toBeEnabled();
+ const old=artifact;artifact={...artifact,retiredCount:'2',recent:[history(1),history(2,review())]};expect(sameManagedArtifactOccurrence(artifact,old)).toBe(false);fireEvent.click(screen.getByRole('button',{name:'Read artifact status'}));await flush();expect(screen.getByRole('button',{name:'Open device: Workstation A'})).toBeDisabled();expect(mutateRaw).not.toHaveBeenCalled();
+});
+it('reuses the exact saved review only with matching MSI bytes and pins every custody write',async()=>{
+ const raw=new Uint8Array(1024),hash=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',raw)),x=>x.toString(16).padStart(2,'0')).join(''),saved={...review('Saved exact B'),package:{...review('Saved exact B').package,sha256:`sha256:${hash}`}};
+ artifact={...artifact,state:'retired',retirementBlocked:'not_ready',recent:[history(1,saved)]};
+ vi.mocked(mutateRaw).mockImplementation(async(path,body)=>{const input=JSON.parse(body);if(path.endsWith('/reserve-reusable')){expect(input).toEqual({...saved,retiredCount:'1',expectedArtifactId:digest('e')});const old=artifact;artifact={...artifact,...saved,artifactId:digest('f'),state:'upload_incomplete',uploadOffset:0,retiredCount:'2',recent:[...old.recent!,{sequence:'2',artifactId:old.artifactId,...review(),evidenceDigest:digest('8'),actorId:actor}]}}else if(path.endsWith('/upload')){expect(input.retiredCount).toBe('2');expect(input.packageDigest).toBe(saved.package.sha256);artifact={...artifact,uploadOffset:1024}}else if(path.endsWith('/complete')){expect(input).toEqual({retiredCount:'2'});artifact={...artifact,state:'uploaded',canRetire:true,retirementBlocked:''}}else throw Error();return structuredClone(artifact) as never});
+ render(<ManagedMSIArtifact actor={actor} expires={expires} onArtifact={()=>{}}/>);await flush();fireEvent.click(screen.getAllByRole('button',{name:'Use saved review'})[1]);const file=new File([raw],'exact.msi');Object.defineProperty(file,'arrayBuffer',{value:async()=>raw.slice().buffer});Object.defineProperty(file,'slice',{value:(start:number,end:number)=>({arrayBuffer:async()=>raw.slice(start,end).buffer})});fireEvent.change(screen.getByLabelText('Exact x64 machine MSI'),{target:{files:[file]}});fireEvent.click(screen.getByRole('button',{name:'Upload exact package'}));await act(async()=>{await vi.waitFor(()=>expect(mutateRaw).toHaveBeenCalledTimes(3),{timeout:3000,interval:10})});expect(vi.mocked(mutateRaw).mock.calls.map(([path])=>path.split('/').at(-1))).toEqual(['reserve-reusable','upload','complete']);expect(screen.getByRole('region',{name:'Recent packages'})).toHaveTextContent('Ready here');expect(vi.mocked(request).mock.calls.some(([path])=>path.includes('/devices/'))).toBe(false);
+});
+it('rejects an unconfirmed old retirement readback from a newer same-content occurrence',async()=>{
+ artifact={...artifact,canRetire:true,retirementBlocked:''};render(<ManagedMSIArtifact actor={actor} expires={expires} onArtifact={()=>{}}/>);await flush();vi.mocked(mutateRaw).mockRejectedValueOnce(Error('response lost'));fireEvent.click(screen.getByRole('checkbox'));fireEvent.click(screen.getByRole('button',{name:'Retire shared payload'}));await flush();expect(mutateRaw).toHaveBeenCalledTimes(1);artifact={...artifact,state:'retired',canRetire:false,retirementBlocked:'not_ready',retiredCount:'2',recent:[history(1),history(2,review())]};fireEvent.click(screen.getByRole('button',{name:'Read artifact status'}));await flush();expect(screen.getByRole('alert')).toHaveTextContent('Retirement response unconfirmed');expect(screen.queryByLabelText('Exact x64 machine MSI')).toBeNull();expect(mutateRaw).toHaveBeenCalledTimes(1);
+});

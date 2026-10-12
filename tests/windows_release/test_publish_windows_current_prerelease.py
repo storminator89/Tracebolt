@@ -31,11 +31,11 @@ current = load("_current_report_fixture", ROOT / "tests/windows_native_acceptanc
 TREE = "f" * 40
 
 
-def current_api():
+def current_api(*, cloned_machine=False):
     files, _ = f.fixtures.public_fixture()
     reports = {}
     for index, case in enumerate(gate.CHECKS):
-        report = current.report(case, hex(8 + index)[2:])
+        report = current.report(case, "8" if cloned_machine else hex(8 + index)[2:])
         report.update(setupSHA256=p.digest(files[gate.SETUP_NAME]), serviceSHA256=p.digest(files[gate.SERVICE_NAME]),
                       sourceInputsSHA256=p.digest(files["source-inputs.json"]))
         reports[case] = p.canonical(report)
@@ -98,6 +98,41 @@ class CurrentPublisherTests(unittest.TestCase):
         self.assertEqual(manifest["executionProvenance"], evidence["executionProvenance"])
         self.assertEqual(self.prepare(frozen=plan), (plan, files))
         self.assertEqual(self.api.mutations, [])
+
+    def test_cloned_machine_metadata_requires_distinct_authenticated_execution(self):
+        api = current_api(cloned_machine=True)
+        plan, files = self.prepare(api)
+        evidence = json.loads(files[gate.AGGREGATE_REPORT])
+        reports = evidence["reports"]
+        self.assertEqual(len({r["machineIDSHA256"] for r in reports.values()}), 1)
+        self.assertEqual(len({r["machine"] for r in reports.values()}), 1)
+        proof = evidence["executionProvenance"]
+        self.assertFalse(proof["vmIdentityAttested"])
+        self.assertEqual(len({row["jobID"] for row in proof["cases"].values()}), 3)
+        self.assertEqual(len({row["runnerID"] for row in proof["cases"].values()}), 3)
+        self.assertEqual(gate._validated_reports(api.reports, f.SOURCE, "123", proof, api.files), reports)
+        for missing in (None, {}):
+            self.reject(gate._validated_reports, api.reports, f.SOURCE, "123", missing, api.files)
+        for field in ("jobID", "runnerID"):
+            bad = copy.deepcopy(proof)
+            bad["cases"]["pending-transport"][field] = bad["cases"]["install-uninstall"][field]
+            self.reject(gate.aggregate_reports, api.reports, f.SOURCE, "123", bad, api.files)
+        bad = copy.deepcopy(proof)
+        bad["source"] = "b" * 40
+        self.reject(gate.aggregate_reports, api.reports, f.SOURCE, "123", bad, api.files)
+        for stage in ("fresh-service", "fresh-program-files", "fresh-program-data", "hidden-input", *gate.HIDDEN_INPUT_FAILURE_STAGES):
+            changed = dict(api.reports)
+            value = json.loads(changed["pending-transport"])
+            value.update(status="failed", stage=stage, reason="operation_failed", startup="inspection_required",
+                         checks=dict.fromkeys(gate.CHECKS["pending-transport"], False))
+            changed["pending-transport"] = gate.canonical(value)
+            self.reject(gate.aggregate_reports, changed, f.SOURCE, "123", proof, api.files)
+        self.assertEqual(api.mutations, [])
+        for field in ("id", "runner_id"):
+            changed = current_api(cloned_machine=True)
+            changed.jobs[1][field] = changed.jobs[0][field]
+            self.reject(self.prepare, changed)
+            self.assertEqual(changed.mutations, [])
 
     def test_current_publish_reverifies_originals_before_writes_patch_and_readback(self):
         plan, files = self.prepare()

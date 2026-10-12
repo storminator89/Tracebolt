@@ -18,6 +18,7 @@ COPY tests/fixtures/windows-contact-view.json /src/tests/fixtures/windows-contac
 COPY tests/fixtures/windows-capacity-view.json /src/tests/fixtures/windows-capacity-view.json
 COPY tests/fixtures/windows-resource-view.json /src/tests/fixtures/windows-resource-view.json
 COPY tests/fixtures/windows-maintenance-view.json /src/tests/fixtures/windows-maintenance-view.json
+COPY tests/fixtures/windows-notifications-view.json /src/tests/fixtures/windows-notifications-view.json
 COPY tests/fixtures/windows-service-health-view.json /src/tests/fixtures/windows-service-health-view.json
 # Exact synthetic selected Windows action operator output used by TypeScript.
 COPY tests/fixtures/windows-service-action-view.json /src/tests/fixtures/windows-service-action-view.json

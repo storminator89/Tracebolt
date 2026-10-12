@@ -29,7 +29,11 @@ func validateMSIArtifactRetirement(ctx context.Context, c *sql.Conn, before, aft
 		if e != nil {
 			return ErrStorage
 		}
-		if r.Artifact == nil || msi.ArtifactIdentity(*r.Artifact) != msi.ArtifactIdentity(*before.Artifact) {
+		references, e := msi.ReferencesArtifactOccurrence(r, before)
+		if e != nil {
+			return e
+		}
+		if !references {
 			continue
 		}
 		if len(r.RetiredReport) == 0 {

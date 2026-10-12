@@ -344,6 +344,11 @@ func (s *Store) loadWindowsManagedMSIRecords(ctx context.Context, t *transaction
 		if fleet && (r.Grant.Version == windowsmanagedmsi.ReusableGrantVersion) != (artifact.Version == windowsmanagedmsi.ReusableArtifactRecordVersion) {
 			return ErrStorage
 		}
+		if fleet && r.Artifact != nil && artifact.Version == windowsmanagedmsi.ReusableArtifactRecordVersion {
+			if _, e := windowsmanagedmsi.ReferencesArtifactOccurrence(r, artifact); e != nil {
+				return ErrStorage
+			}
+		}
 		if fleet && r.Artifact != nil && len(r.RetiredReport) == 0 && (r.TransferID == "" || artifact.Artifact == nil || artifact.Artifact.CompletedAt == 0 || *r.Artifact != *artifact.Artifact || artifact.RetirementStarted || artifact.Retired) {
 			return ErrStorage
 		}

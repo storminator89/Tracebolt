@@ -610,6 +610,7 @@ func (m *Manager) Submit(ctx context.Context, r Result) error {
 }
 
 type View struct {
+	BackgroundScheduling bool          `json:"backgroundScheduling,omitempty"`
 	BackgroundExecutor   bool          `json:"backgroundExecutor,omitempty"`
 	ExecutorAvailability string        `json:"executorAvailability,omitempty"`
 	ExecutorObservedAt   int64         `json:"executorObservedAt,omitempty"`
@@ -645,7 +646,8 @@ func (m *Manager) View(ctx context.Context, device, actor string, ids ...string)
 	e := m.transaction(ctx, func(_ Current, n int64) error {
 		v.ServerNow = n
 		v.Coordinated = m.record.Consent.MutationPlanDigest != ""
-		if m.record.Consent.Version == BackgroundConsentVersion {
+		if m.record.Consent.Background() {
+			v.BackgroundScheduling = m.record.Consent.Version == ScheduledBackgroundConsentVersion
 			v.BackgroundExecutor = true
 			v.ExecutorAvailability = "unknown"
 		}

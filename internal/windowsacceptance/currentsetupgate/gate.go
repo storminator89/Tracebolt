@@ -12,6 +12,7 @@ import (
 	"localrmm/internal/windowsacceptance/setupgate"
 	"reflect"
 	"regexp"
+	"strings"
 	"time"
 )
 
@@ -28,6 +29,7 @@ var Checks = map[string][]string{
 }
 
 func init() {
+	Stages = append(Stages, HiddenInputFailureStages...)
 	Stages = append(Stages, setupgate.RemovalFailureStages...)
 	Stages = append(Stages, setupgate.ChooserClickFailureStages...)
 	Stages = append(Stages, setupgate.RetentionFailureStages...)
@@ -138,7 +140,13 @@ func (r Report) Validate() error {
 	if !hex40.MatchString(r.SourceTree) || !hex64.MatchString(r.MachineIDHash) || r.OSBuild != 26100 || r.OSRevision == 0 || r.ReceiptProof.Validate() != nil {
 		return ErrGuard
 	}
-	if !hex64.MatchString(r.SetupHash) || !hex64.MatchString(r.ServiceHash) || !hex64.MatchString(r.DriverHash) || !hex64.MatchString(r.SourceInputsHash) || !decimal.MatchString(r.RunID) || !safeID.MatchString(r.Machine) || r.Schema != Schema || !hex40.MatchString(r.Source) || !Contains(Cases, r.Case) || !Contains(Stages, r.Stage) || !Contains([]string{"blocked", "failed", "passed_packaged_gui_subset"}, r.Status) || (!Contains([]string{"none", "authorization", "desktop_unavailable", "operation_failed", "deadline", "inspection_required"}, r.Reason) && !setupgate.RemovalFailureReason(r.Reason)) || !Contains([]string{"inspection_required", "disabled", "automatic", "absent"}, r.Startup) || r.Frames > 64 || len(r.Checks) != len(Checks[r.Case]) || len(r.Coverage) != len(FalseCoverage) {
+	if !hex64.MatchString(r.SetupHash) || !hex64.MatchString(r.ServiceHash) || !hex64.MatchString(r.DriverHash) || !hex64.MatchString(r.SourceInputsHash) || !decimal.MatchString(r.RunID) || !safeID.MatchString(r.Machine) || r.Schema != Schema || !hex40.MatchString(r.Source) || !Contains(Cases, r.Case) || !Contains(Stages, r.Stage) || !Contains([]string{"blocked", "failed", "passed_packaged_gui_subset"}, r.Status) || (!Contains([]string{"none", "authorization", "desktop_unavailable", "operation_failed", "deadline", "inspection_required"}, r.Reason) && !setupgate.RemovalFailureReason(r.Reason) && !HiddenInputFailureReason(r.Reason)) || !Contains([]string{"inspection_required", "disabled", "automatic", "absent"}, r.Startup) || r.Frames > 64 || len(r.Checks) != len(Checks[r.Case]) || len(r.Coverage) != len(FalseCoverage) {
+		return ErrGuard
+	}
+	if HiddenInputFailureReason(r.Reason) && (r.Status != "failed" || r.Checks["hiddenConsoleExercised"] || !(strings.HasPrefix(r.Reason, "setup_package:") && r.Stage == "hidden-input-installer-before-mutation" || strings.HasPrefix(r.Reason, "setup_service:") && r.Stage == "hidden-input-installer-failed")) {
+		return ErrGuard
+	}
+	if Contains(HiddenInputFailureStages, r.Stage) && (r.Status != "failed" || r.Checks["hiddenConsoleExercised"]) {
 		return ErrGuard
 	}
 	if setupgate.Contains(setupgate.RetentionFailureStages, r.Stage) && (r.Status != "failed" || !NormalCase(r.Case)) {
@@ -147,7 +155,7 @@ func (r Report) Validate() error {
 	if setupgate.Contains(setupgate.ChooserClickFailureStages, r.Stage) && r.Status != "failed" {
 		return ErrGuard
 	}
-	if setupgate.Contains(setupgate.RemovalFailureStages, r.Stage) || !Contains([]string{"none", "authorization", "desktop_unavailable", "operation_failed", "deadline", "inspection_required"}, r.Reason) {
+	if setupgate.Contains(setupgate.RemovalFailureStages, r.Stage) || !HiddenInputFailureReason(r.Reason) && !Contains([]string{"none", "authorization", "desktop_unavailable", "operation_failed", "deadline", "inspection_required"}, r.Reason) {
 		if r.Status != "failed" || !NormalCase(r.Case) || !setupgate.Contains(setupgate.RemovalFailureStages, r.Stage) || !setupgate.RemovalFailureReason(r.Reason) {
 			return ErrGuard
 		}

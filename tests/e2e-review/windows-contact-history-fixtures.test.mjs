@@ -5,7 +5,7 @@ import {windowsContactBrowserFixture,windowsContactHistoryDisclosure} from './wi
 test('Docker web typecheck admits exactly the imported synthetic Go-to-TypeScript fixtures',()=>{
  const read=name=>fs.readFileSync(new URL(name,import.meta.url),'utf8');
  const docker=read('../../Dockerfile'),ignore=read('../../.dockerignore').split(/\r?\n/).map(line=>line.trim()).filter(line=>line&&!line.startsWith('#'));
- const fixtures=['windows-contact-view.json','windows-capacity-view.json','windows-resource-view.json','windows-maintenance-view.json','windows-service-health-view.json','windows-service-action-view.json','windows-service-action-history.json','windows-incident-inbox-view.json'];
+ const fixtures=['windows-contact-view.json','windows-capacity-view.json','windows-resource-view.json','windows-maintenance-view.json','windows-notifications-view.json','windows-service-health-view.json','windows-service-action-view.json','windows-service-action-history.json','windows-incident-inbox-view.json'];
  const webStage=docker.split('FROM --platform=$BUILDPLATFORM golang:')[0],runtimeStage=docker.split('FROM scratch AS runtime')[1];
  for(const fixture of fixtures){
   const path='tests/fixtures/'+fixture,copy=`COPY ${path} /src/${path}`;

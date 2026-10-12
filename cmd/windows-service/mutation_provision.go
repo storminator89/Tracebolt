@@ -16,6 +16,8 @@ import (
 	"localrmm/internal/windowsupdatesetup"
 )
 
+const scheduledBackgroundMutationVersion = "tracebolt.windows-coordinated-mutation-setup.v4"
+
 const backgroundMutationVersion = "tracebolt.windows-coordinated-mutation-setup.v3"
 
 const reusableMutationVersion = "tracebolt.windows-coordinated-mutation-setup.v2"
@@ -50,6 +52,9 @@ type coordinatedMutationResult struct {
 
 func (p coordinatedMutationPlan) Digest() string {
 	b, _ := json.Marshal(p)
+	if p.Version == scheduledBackgroundMutationVersion {
+		return managed.Digest(append([]byte("Tracebolt fresh scheduled background Windows mutation setup v4\x00"), b...))
+	}
 	if p.Version == backgroundMutationVersion {
 		return managed.Digest(append([]byte("Tracebolt fresh background Windows mutation setup v3\x00"), b...))
 	}
@@ -60,15 +65,20 @@ func (p coordinatedMutationPlan) Digest() string {
 }
 func (p coordinatedMutationPlan) Validate() error {
 	m, w := p.MSI, p.WUA
-	background := p.Version == backgroundMutationVersion
+	scheduled := p.Version == scheduledBackgroundMutationVersion
+	background := p.Version == backgroundMutationVersion || scheduled
 	reusable := p.Version == reusableMutationVersion || background
 	expectedDisclosure := coordinatedMutationDisclosure + " " + managed.ReusableDisclosure
 	wuaVersion := windowsupdatesetup.Version
 	if background {
 		expectedDisclosure = windowsupdatesetup.BackgroundDisclosure + " " + managed.ReusableDisclosure
 		wuaVersion = windowsupdatesetup.BackgroundVersion
+		if scheduled {
+			expectedDisclosure = windowsupdatesetup.ScheduledBackgroundDisclosure + " " + job.BackgroundScheduleDisclosure + " " + managed.ReusableDisclosure
+			wuaVersion = windowsupdatesetup.ScheduledBackgroundVersion
+		}
 	}
-	if (p.Version != coordinatedMutationVersion && !reusable) || (m.Offer.Version == managed.ReusableOfferVersion) != reusable || !reusable && (p.Disclosure != coordinatedMutationDisclosure || m.Version != "tracebolt.windows-managed-msi-endpoint-plan.v1") || reusable && (p.Disclosure != expectedDisclosure || m.Version != "tracebolt.windows-managed-msi-endpoint-plan.v3") || m.MutationPlanDigest != "" || m.Offer.Validate() != nil || w.Validate() != nil || w.Version != wuaVersion || w.ScheduleScope != "" || w.MutationPlanDigest != "" || m.Observer != w.Observer || lanclient.WindowsUpdateSetupIdentity(m.Identity) != w.Identity || bytes.Equal(m.Offer.ManagerPublicKey, w.Offer.ManagerPublicKey) || m.Artifact.Architecture != "amd64" || w.Artifact.Architecture != "amd64" {
+	if (p.Version != coordinatedMutationVersion && !reusable) || (m.Offer.Version == managed.ReusableOfferVersion) != reusable || !reusable && (p.Disclosure != coordinatedMutationDisclosure || m.Version != "tracebolt.windows-managed-msi-endpoint-plan.v1") || reusable && (p.Disclosure != expectedDisclosure || m.Version != "tracebolt.windows-managed-msi-endpoint-plan.v3") || m.MutationPlanDigest != "" || m.Offer.Validate() != nil || w.Validate() != nil || w.Version != wuaVersion || (w.ScheduleScope != "") != scheduled || w.MutationPlanDigest != "" || m.Observer != w.Observer || lanclient.WindowsUpdateSetupIdentity(m.Identity) != w.Identity || bytes.Equal(m.Offer.ManagerPublicKey, w.Offer.ManagerPublicKey) || m.Artifact.Architecture != "amd64" || w.Artifact.Architecture != "amd64" {
 		return managed.ErrAuthority
 	}
 	return nil
@@ -80,7 +90,7 @@ func (p coordinatedMutationPlan) FencePlan() fence.Plan {
 	if p.Version == reusableMutationVersion {
 		v = fence.ReusablePlanVersion
 	}
-	if p.Version == backgroundMutationVersion {
+	if p.Version == backgroundMutationVersion || p.Version == scheduledBackgroundMutationVersion {
 		v = fence.BackgroundPlanVersion
 	}
 	return fence.Plan{Version: v, Identity: fence.Identity{ManagerID: b.ManagerID, DeviceID: b.DeviceID, IncarnationDigest: b.IncarnationDigest}, PlanDigest: p.Digest(), MSIOfferDigest: digest(p.MSI.Offer), WUAOfferDigest: digest(p.WUA.Offer), MSIArtifactDigest: digest(p.MSI.Artifact), WUAArtifactDigest: digest(p.WUA.Artifact)}
@@ -106,12 +116,15 @@ func runCoordinatedMutationProvision(ctx context.Context, args []string, out, st
 	query := f.Bool("acknowledge-observer-process-query", false, "")
 	background := f.Bool("background-updates", false, "")
 	backgroundAck := f.Bool("acknowledge-background-updates", false, "")
-	if f.Parse(args) != nil || f.NArg() != 0 || ctx == nil || perform == nil || *mo == "" || *mi == "" || *mm == "" || *wo == "" || *wi == "" || *wm == "" || *apply != (*digest != "") || *ack != *apply || *delivery != *apply || (*install || *reusable) != *apply || *install && *reusable || *updates != *apply || *risk != *apply || *relay != *apply || *query != *apply || *backgroundAck != (*background && *apply) {
-		fmt.Fprintln(stderr, "Use --coordinated-mutations-provision with both --msi-manager-offer, --msi-service-file, --msi-artifact-manifest and --update-manager-offer, --update-executor-file, --update-artifact-manifest. Review is read-only. Apply requires --apply --approve <exact review digest> and all acknowledgements: coordinated-mutations, managed-delivery, one-managed-install, selected-updates, localsystem-risk, observer-relay, observer-process-query.")
+	schedule := f.Bool("allow-scheduled-updates", false, "")
+	scheduleAck := f.Bool("acknowledge-scheduled-updates", false, "")
+	if f.Parse(args) != nil || f.NArg() != 0 || ctx == nil || perform == nil || *mo == "" || *mi == "" || *mm == "" || *wo == "" || *wi == "" || *wm == "" || *apply != (*digest != "") || *ack != *apply || *delivery != *apply || (*install || *reusable) != *apply || *install && *reusable || *updates != *apply || *risk != *apply || *relay != *apply || *query != *apply || *backgroundAck != (*background && *apply) || *schedule && !*background || *scheduleAck != (*schedule && *apply) {
+		fmt.Fprintln(stderr, "Use --coordinated-mutations-provision with both --msi-manager-offer, --msi-service-file, --msi-artifact-manifest and --update-manager-offer, --update-executor-file, --update-artifact-manifest. Review is read-only. Apply requires --apply --approve <exact review digest> and all acknowledgements: coordinated-mutations, managed-delivery, one-managed-install, selected-updates, localsystem-risk, observer-relay, observer-process-query. Fresh background setup additionally needs --background-updates and --acknowledge-background-updates on apply; scheduled background additionally needs --allow-scheduled-updates on review/apply and --acknowledge-scheduled-updates on apply.")
 		return 2
 	}
 	var input coordinatedMutationInput
 	input.WUA.background = *background
+	input.WUA.schedule = *schedule
 	input.Apply = *apply
 	input.Digest = *digest
 	raw, e := readSoftwareSetupInput(*mo, 16384)
@@ -148,7 +161,9 @@ func runCoordinatedMutationProvision(ctx context.Context, args []string, out, st
 			return 1
 		}
 	}
-	if *background {
+	if *schedule {
+		fmt.Fprintln(stderr, windowsupdatesetup.ScheduledBackgroundDisclosure+"\n"+job.BackgroundScheduleDisclosure)
+	} else if *background {
 		fmt.Fprintln(stderr, windowsupdatesetup.BackgroundDisclosure)
 	} else {
 		fmt.Fprintln(stderr, coordinatedMutationDisclosure)

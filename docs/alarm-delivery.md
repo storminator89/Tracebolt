@@ -253,3 +253,12 @@ change itself performs none of those actions.
 were already accepted externally. Start restored managers with alarm delivery
 disabled and reconcile with the receiver before re-enabling. Do not claim
 restore-safe replay or exactly-once recipient delivery from this outbox alone.
+
+## Separately approved Windows sources
+
+[Windows notification policies](windows-notifications.md) reuse this configured
+recipient, serialized worker and HTTPS transport through an explicit Windows queue
+adapter. Recipient setup alone never opts in Windows data. Its original-identity/
+domain queue, payload schema, source approval and counters stay separate from Linux
+Health, AI and the v1 alarm status. Planned Windows maintenance consumes matching
+Windows notification work without changing incidents or evidence.

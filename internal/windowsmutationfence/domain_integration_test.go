@@ -225,6 +225,11 @@ func newPair(t *testing.T, reusable ...bool) *pairedDomains {
 		f.consent.Version = wua.BackgroundConsentVersion
 		f.consent.BackgroundAcknowledged = true
 	}
+	if len(reusable) > 2 && reusable[2] {
+		f.consent.Version = wua.ScheduledBackgroundConsentVersion
+		f.consent.ScheduleScope = wua.ScheduleScope
+		f.consent.ScheduleAcknowledged = true
+	}
 	f.shared = fence.NewIntegrationFence(t, plan, msi.MutationParticipant(f.grant), wua.MutationParticipant(f.consent), f.now)
 	f.msiSession = f.shared.Session(t, fence.ManagedMSI)
 	f.wuaSession = f.shared.Session(t, fence.CachedWUA)

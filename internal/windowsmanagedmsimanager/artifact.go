@@ -13,6 +13,7 @@ import (
 )
 
 type ArtifactManager struct {
+	reusable        bool
 	mu              sync.Mutex
 	store           msi.ArtifactStore
 	key             ed25519.PublicKey
@@ -45,7 +46,7 @@ func newArtifactManager(ctx context.Context, store msi.ArtifactStore, key ed2551
 	if e != nil {
 		return nil, e
 	}
-	return &ArtifactManager{store: store, key: bytes.Clone(key), spool: spool, now: clock, check: check}, nil
+	return &ArtifactManager{reusable: r.Version == msi.ReusableArtifactRecordVersion, store: store, key: bytes.Clone(key), spool: spool, now: clock, check: check}, nil
 }
 func (m *ArtifactManager) transaction(ctx context.Context, actor, kind string, fn func(*msi.ArtifactRecord, int64) error) (msi.ArtifactRecord, error) {
 	if m.failed || ctx == nil {
@@ -62,6 +63,9 @@ func (m *ArtifactManager) transaction(ctx context.Context, actor, kind string, f
 	}
 	r, e := m.store.WindowsManagedMSIArtifactTransaction(msi.WithFinalCheck(ctx, check), m.key, m.now().UTC(), func(r *msi.ArtifactRecord, at time.Time) error {
 		if e := check(); e != nil {
+			return e
+		}
+		if e := checkArtifactOccurrence(ctx, *r); e != nil {
 			return e
 		}
 		return fn(r, at.Unix())
@@ -257,7 +261,11 @@ func (m *ArtifactManager) RetireArtifact(ctx context.Context, actor, artifactID 
 			if e != nil {
 				return "", e
 			}
-			if v.Artifact == nil || msi.ArtifactIdentity(*v.Artifact) != artifactID {
+			references, e := msi.ReferencesArtifactOccurrence(v, r)
+			if e != nil {
+				return "", e
+			}
+			if !references {
 				continue
 			}
 			if len(v.RetiredReport) == 0 {

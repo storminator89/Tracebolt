@@ -347,14 +347,29 @@ func currentSetupGUIController(ctx context.Context, b currentgate.Binding) (r cu
 	}
 	r.Stage = "hidden-input"
 	var screen string
+	terminal := false
 	if setupAwait(ctx, 40*time.Second, func() bool {
-		text, hidden, err := setupConsole(g.pid, secret, nil, false)
-		if err != nil {
-			return false
-		}
-		screen = text
-		return hidden && strings.Contains(strings.Join(strings.Fields(text), " "), "invitation in this console (hidden):")
-	}) != nil {
+		var ready bool
+		screen, ready, terminal = currentgate.ProbeHiddenInput(func(stage string) { r.Stage = stage }, currentgate.HiddenInputSteps{
+			Failure: func(reason string) { r.Reason = reason },
+			Process: func() (bool, error) {
+				status, err := windows.WaitForSingleObject(g.process, 0)
+				if err != nil || status != uint32(windows.WAIT_TIMEOUT) && status != windows.WAIT_OBJECT_0 {
+					return false, setupgate.ErrGuard
+				}
+				return status == windows.WAIT_OBJECT_0, nil
+			},
+			Operation: func() (string, bool) {
+				close := setupControl(g.window, 2)
+				finished := strings.ReplaceAll(setupText(close), "&", "") == "Close" && setupEnabled(close)
+				return g.operationText(), finished
+			},
+			Console: func(observe func(string)) (string, bool, error) {
+				return setupConsoleObserved(g.pid, secret, nil, false, observe)
+			},
+		})
+		return ready || terminal
+	}) != nil || terminal {
 		return r
 	}
 	r.Checks["hiddenConsoleExercised"] = true

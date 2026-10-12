@@ -78,21 +78,27 @@ func (h *operatorHandler) windowsManagedMSIArtifactAPI(w http.ResponseWriter, r 
 	switch op {
 	case "retire":
 		var in struct {
+			RetiredCount string `json:"retiredCount"`
 			ArtifactID   string `json:"artifactId"`
 			Acknowledged bool   `json:"acknowledged"`
 		}
-		if !readObject(w, r, 256, []string{"artifactId", "acknowledged"}, &in) {
+		if !readObject(w, r, 256, []string{"artifactId", "retiredCount", "acknowledged"}, &in) {
+			return
+		}
+		if !pinManagedMSIArtifactOccurrence(w, &r, in.RetiredCount) {
 			return
 		}
 		e = registry.Artifact().RetireArtifact(r.Context(), actor, in.ArtifactID, in.Acknowledged)
 	case "reserve-reusable":
 		var in struct {
+			ExpectedArtifactID      string          `json:"expectedArtifactId"`
+			RetiredCount            string          `json:"retiredCount"`
 			Package                 json.RawMessage `json:"package"`
 			NativeAcceptanceDigest  string          `json:"nativeAcceptanceDigest"`
 			PublisherStatus         string          `json:"publisherStatus"`
 			PublisherEvidenceDigest string          `json:"publisherEvidenceDigest"`
 		}
-		if !readObject(w, r, 4096, []string{"package", "nativeAcceptanceDigest", "publisherStatus", "publisherEvidenceDigest"}, &in) {
+		if !readObject(w, r, 4096, []string{"package", "nativeAcceptanceDigest", "publisherStatus", "publisherEvidenceDigest", "retiredCount", "expectedArtifactId"}, &in) {
 			return
 		}
 		selection, ok := decodeSoftwarePackageSelection(in.Package)
@@ -100,6 +106,12 @@ func (h *operatorHandler) windowsManagedMSIArtifactAPI(w http.ResponseWriter, r 
 			managedMSIError(w, msi.ErrInvalid)
 			return
 		}
+		ctx, err := windowsmanagedmsimanager.WithArtifactReserveOccurrence(r.Context(), in.RetiredCount, in.ExpectedArtifactID)
+		if err != nil {
+			managedMSIError(w, err)
+			return
+		}
+		r = r.WithContext(ctx)
 		e = registry.Artifact().ReserveReusableUpload(r.Context(), actor, selection, in.NativeAcceptanceDigest, in.PublisherStatus, in.PublisherEvidenceDigest)
 	case "reserve":
 		var in struct {
@@ -116,14 +128,35 @@ func (h *operatorHandler) windowsManagedMSIArtifactAPI(w http.ResponseWriter, r 
 		}
 		e = registry.Artifact().ReserveUpload(r.Context(), actor, selection, in.NativeAcceptanceDigest)
 	case "upload":
-		var in windowsmanagedmsimanager.UploadChunk
-		if !readObject(w, r, msi.MaxFrameBytes, []string{"packageDigest", "index", "digest", "data"}, &in) {
+		var in struct {
+			windowsmanagedmsimanager.UploadChunk
+			RetiredCount string `json:"retiredCount,omitempty"`
+		}
+		fields := []string{"packageDigest", "index", "digest", "data"}
+		if registry.Artifact().Reusable() {
+			fields = append(fields, "retiredCount")
+		}
+		if !readObject(w, r, msi.MaxFrameBytes, fields, &in) {
 			return
 		}
-		e = registry.Artifact().Upload(r.Context(), actor, in)
+		if registry.Artifact().Reusable() && !pinManagedMSIArtifactOccurrence(w, &r, in.RetiredCount) {
+			return
+		}
+		e = registry.Artifact().Upload(r.Context(), actor, in.UploadChunk)
 	case "complete":
-		var in struct{}
-		if !readObject(w, r, 2, []string{}, &in) {
+		var in struct {
+			RetiredCount string `json:"retiredCount,omitempty"`
+		}
+		fields := []string{}
+		limit := int64(2)
+		if registry.Artifact().Reusable() {
+			fields = append(fields, "retiredCount")
+			limit = 128
+		}
+		if !readObject(w, r, limit, fields, &in) {
+			return
+		}
+		if registry.Artifact().Reusable() && !pinManagedMSIArtifactOccurrence(w, &r, in.RetiredCount) {
 			return
 		}
 		e = registry.Artifact().CompleteUpload(r.Context(), actor)
@@ -144,4 +177,14 @@ func (h *operatorHandler) windowsManagedMSIArtifactAPI(w http.ResponseWriter, r 
 	if operatorStillActive(w, r) {
 		write(w, 200, view)
 	}
+}
+
+func pinManagedMSIArtifactOccurrence(w http.ResponseWriter, r **http.Request, value string) bool {
+	ctx, err := windowsmanagedmsimanager.WithArtifactRetiredCount((*r).Context(), value)
+	if err != nil {
+		managedMSIError(w, err)
+		return false
+	}
+	*r = (*r).WithContext(ctx)
+	return true
 }

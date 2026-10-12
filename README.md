@@ -45,8 +45,10 @@ This page describes the current source; downloadable prereleases cover less.
 - **Fleet groups:** organize devices and review one-time disk/CPU/RAM alert
   settings for selected Windows members, with individual outcomes.
 - **Windows incidents and maintenance:** a [fleet incident inbox](docs/windows-incident-inbox.md),
-  seen acknowledgements and [planned maintenance](docs/windows-maintenance.md).
-  Planning labels do not suppress alerts.
+  seen acknowledgements, [planned maintenance](docs/windows-maintenance.md) and
+  separately approved [Windows notifications](docs/windows-notifications.md).
+  Maintenance suppresses matching Windows notification dispatch; incidents and
+  evidence continue unchanged.
 - **Optional monitoring:** platform-specific health checks, manager-side
   application checks, webhook alarms and separately approved AI diagnostics.
 

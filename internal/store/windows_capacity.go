@@ -108,6 +108,7 @@ func (s *Store) updateWindowsCapacity(ctx context.Context, id string, update fun
 	if err = runPolicyGuards(ctx, guard); err != nil {
 		return windowscapacity.State{}, err
 	}
+	beforeNotifications := capacityNotificationEpisodes(state, "disk")
 	if err = update(&state); err != nil {
 		return windowscapacity.State{}, err
 	}
@@ -119,6 +120,9 @@ func (s *Store) updateWindowsCapacity(ctx context.Context, id string, update fun
 		return windowscapacity.State{}, err
 	}
 	if _, err = tx.ExecContext(ctx, "INSERT INTO windows_capacity_devices(id,body) VALUES(?,?) ON CONFLICT(id) DO UPDATE SET body=excluded.body", id, body); err != nil {
+		return windowscapacity.State{}, err
+	}
+	if err = enqueueWindowsNotifications(ctx, tx, beforeNotifications, capacityNotificationEpisodes(state, "disk")); err != nil {
 		return windowscapacity.State{}, err
 	}
 	if err = runPolicyGuards(ctx, guard); err != nil {
