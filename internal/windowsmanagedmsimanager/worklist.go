@@ -308,6 +308,24 @@ func worklistEligible(w msi.Worklist, t msi.WorklistTarget, v View, kind string,
 		}
 		return "not_eligible"
 	}
+	if kind == "retire" {
+		if v.State != "complete" {
+			return "not_eligible"
+		}
+		if !msi.ValidDigest(v.ResultDigest) || !msi.SettledResult(msi.Report{Kind: "result", Result: v.Result}) {
+			return "unsettled"
+		}
+		if now >= v.GrantExpiresAt {
+			return "expired"
+		}
+		if v.Mutation == nil || !v.Mutation.Active || v.Mutation.Blocked || v.Mutation.Phase != "idle" || v.MutationCapturedAt > now || now-v.MutationCapturedAt >= 60 {
+			return "busy"
+		}
+		if !v.CanRetire {
+			return "not_eligible"
+		}
+		return ""
+	}
 	if kind != "approve" {
 		return "not_eligible"
 	}
@@ -324,7 +342,7 @@ func worklistEligible(w msi.Worklist, t msi.WorklistTarget, v View, kind string,
 }
 func (r *Registry) PreviewWorklist(ctx context.Context, actor, id string, revision uint64, kind string) (WorklistPreview, error) {
 	out := WorklistPreview{WorklistID: id, Revision: revision, Kind: kind, Items: []msi.WorklistRequest{}, Excluded: []WorklistExcluded{}}
-	if kind != "deliver" && kind != "review" && kind != "approve" {
+	if kind != "deliver" && kind != "review" && kind != "approve" && kind != "retire" {
 		return out, msi.ErrInvalid
 	}
 	j, e := r.worklistRead(ctx, actor)
@@ -368,6 +386,12 @@ func (r *Registry) PreviewWorklist(ctx context.Context, actor, id string, revisi
 				q.Operation = "approve"
 				q.ReadinessDigest = v.ReadinessDigest
 				q.ExpiresAt = min(q.ExpiresAt, v.ExpiresAt)
+			} else if kind == "retire" {
+				q.Operation = "retire"
+				q.ResultDigest = v.ResultDigest
+				// Installation's earlier readiness/permit expiry is historical.
+				// Cleanup reviews today's exact shared-owner status instead.
+				q.ExpiresAt = min(q.ExpiresAt, v.MutationCapturedAt+60)
 			}
 		}
 		if !q.Valid(kind) {
@@ -440,7 +464,7 @@ func (r *Registry) ConfirmWorklist(ctx context.Context, sess WorklistSession, id
 					}
 				}
 			} else {
-				if !worklistMatches(*w, rec, *t) || item.TransferID != t.TransferID || item.JobSequence != strconv.FormatUint(t.JobSequence, 10) || len(rec.InstallPermit) != 0 {
+				if !worklistMatches(*w, rec, *t) || item.TransferID != t.TransferID || item.JobSequence != strconv.FormatUint(t.JobSequence, 10) || q.Kind != "retire" && len(rec.InstallPermit) != 0 {
 					return msi.ErrConflict
 				}
 				if !rec.Grant.InstallEnabled || !rec.Grant.InstallAcknowledged {
@@ -456,6 +480,21 @@ func (r *Registry) ConfirmWorklist(ctx context.Context, sess WorklistSession, id
 						if e != nil || at.Unix() < p.ExpiresAt {
 							return msi.ErrConsumed
 						}
+					}
+				} else if q.Kind == "retire" {
+					result, e := msi.VerifyReport(rec.ResultReport, rec.ExecutorPublicKey)
+					if e != nil || !msi.SettledResult(result) {
+						return msi.ErrUncertain
+					}
+					if len(rec.RetirePermit) != 0 || item.ResultDigest != msi.Digest(rec.ResultReport) {
+						return msi.ErrConflict
+					}
+					shared, e := msi.VerifyReport(rec.MutationReport, rec.ExecutorPublicKey)
+					if e != nil || shared.Mutation == nil || !shared.Mutation.Active || shared.Mutation.Blocked || shared.Mutation.Phase != "idle" || shared.CapturedAt > at.Unix() || at.Unix()-shared.CapturedAt >= 60 {
+						return msi.ErrUnavailable
+					}
+					if item.ExpiresAt > min(rec.Grant.ExpiresAt, shared.CapturedAt+60) {
+						return msi.ErrExpired
 					}
 				} else {
 					rp, e := msi.VerifyPermit(rec.ReadinessPermit, rec.PublicKey)

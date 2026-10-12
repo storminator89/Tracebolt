@@ -61,7 +61,7 @@ func (a WorklistAcknowledgements) Valid(kind string) bool {
 	if kind == "review" {
 		return !a.Acknowledged && a.PackageReviewAccepted && a.TermsAccepted && a.MaintenanceAcknowledged && a.SynchronousReviewAccepted
 	}
-	return (kind == "deliver" || kind == "approve") && a.Acknowledged && !a.PackageReviewAccepted && !a.TermsAccepted && !a.MaintenanceAcknowledged && !a.SynchronousReviewAccepted
+	return (kind == "deliver" || kind == "approve" || kind == "retire") && a.Acknowledged && !a.PackageReviewAccepted && !a.TermsAccepted && !a.MaintenanceAcknowledged && !a.SynchronousReviewAccepted
 }
 
 type WorklistRequest struct {
@@ -74,6 +74,8 @@ type WorklistRequest struct {
 	JobSequence          string `json:"jobSequence"`
 	ReadinessDigest      string `json:"readinessDigest"`
 	ExpiresAt            int64  `json:"expiresAt"`
+	// Retirement-only: omission preserves every existing stage's canonical bytes.
+	ResultDigest string `json:"resultDigest,omitempty"`
 }
 
 func (q WorklistRequest) Valid(kind string) bool {
@@ -82,13 +84,16 @@ func (q WorklistRequest) Valid(kind string) bool {
 		return false
 	}
 	if kind == "deliver" {
-		return q.Operation == "deliver" && q.JobSequence == "" && q.ReadinessDigest == ""
+		return q.Operation == "deliver" && q.JobSequence == "" && q.ReadinessDigest == "" && q.ResultDigest == ""
 	}
 	seq, e := strconv.ParseUint(q.JobSequence, 10, 64)
 	if e != nil || seq == 0 || strconv.FormatUint(seq, 10) != q.JobSequence {
 		return false
 	}
-	return kind == "review" && q.Operation == "review-coordinated" && q.ReadinessDigest == "" || kind == "approve" && q.Operation == "approve" && ValidDigest(q.ReadinessDigest)
+	if kind == "retire" {
+		return q.Operation == "retire" && q.ReadinessDigest == "" && ValidDigest(q.ResultDigest)
+	}
+	return q.ResultDigest == "" && (kind == "review" && q.Operation == "review-coordinated" && q.ReadinessDigest == "" || kind == "approve" && q.Operation == "approve" && ValidDigest(q.ReadinessDigest))
 }
 
 type WorklistBatchItem struct {
@@ -340,12 +345,14 @@ func (j *WorklistJournal) FinishDispatch(d WorklistDispatch, before, after Recor
 			raw, old = after.ReadinessPermit, before.ReadinessPermit
 		case "approve":
 			raw, old = after.InstallPermit, before.InstallPermit
+		case "retire":
+			raw, old = after.RetirePermit, before.RetirePermit
 		}
 		p, e := VerifyPermit(raw, after.PublicKey)
 		if e != nil || len(raw) == 0 || Digest(raw) == Digest(old) || p.ActorID != b.ActorID || p.IssuedAt < b.CreatedAt || p.IssuedAt > now || p.TransferID != i.Request.TransferID || p.JobSequence != after.Jobs.Sequence {
 			return ErrIntegrity
 		}
-		if b.Kind != "deliver" && i.Request.JobSequence != strconv.FormatUint(p.JobSequence, 10) || b.Kind == "approve" && p.ReadinessDigest != i.Request.ReadinessDigest {
+		if b.Kind != "deliver" && i.Request.JobSequence != strconv.FormatUint(p.JobSequence, 10) || b.Kind == "approve" && p.ReadinessDigest != i.Request.ReadinessDigest || b.Kind == "retire" && (p.Kind != "retire" || p.RetireResultDigest != i.Request.ResultDigest || Digest(after.ResultReport) != i.Request.ResultDigest) {
 			return ErrIntegrity
 		}
 		i.State = "issued"
@@ -439,6 +446,12 @@ func WorklistBatchReconciled(w Worklist, b WorklistBatch, records map[string]Rec
 		if target == nil {
 			return false
 		}
+		if b.Kind == "retire" {
+			if !worklistRetirementReconciled(w, *target, item, records) {
+				return false
+			}
+			continue
+		}
 		if WorklistTargetRetired(w, *target, records) {
 			continue
 		}
@@ -469,6 +482,27 @@ func WorklistBatchReconciled(w Worklist, b WorklistBatch, records map[string]Rec
 		}
 	}
 	return true
+}
+
+// A cleanup request is not reconciled by an issued permit or a settled result.
+// Current signed evidence must name its exact permit and reviewed result. Once
+// advanced, the existing validated retirement ledger preserves that same result
+// and the digest of the signed retirement report; it never reconstructs evidence.
+func worklistRetirementReconciled(w Worklist, t WorklistTarget, item WorklistBatchItem, records map[string]Record) bool {
+	r, ok := records[t.Binding.DeviceID]
+	if !ok || r.Grant.Binding != t.Binding || r.Jobs == nil || item.Request.TransferID != t.TransferID || item.Request.JobSequence != strconv.FormatUint(t.JobSequence, 10) {
+		return false
+	}
+	if worklistRecordMatches(w, t, r) {
+		report, e := VerifyReport(r.RetiredReport, r.ExecutorPublicKey)
+		return e == nil && report.Kind == "retired" && report.Binding == t.Binding && report.TransferID == t.TransferID && report.JobSequence == t.JobSequence && report.PermitDigest == item.PermitDigest && Digest(r.RetirePermit) == item.PermitDigest && report.Retirement != nil && report.Retirement.ResultDigest == item.Request.ResultDigest
+	}
+	for _, old := range r.Jobs.Recent {
+		if old.TransferID == t.TransferID && old.Sequence == t.JobSequence && old.Package == w.Package && old.NativeAcceptanceDigest == w.NativeAcceptanceDigest && old.PublisherStatus == w.PublisherStatus && old.PublisherEvidenceDigest == w.PublisherEvidenceDigest && old.ResultDigest == item.Request.ResultDigest && ValidDigest(old.RetirementDigest) {
+			return true
+		}
+	}
+	return false
 }
 
 // Metadata may compact only fully reconciled references proven by the existing

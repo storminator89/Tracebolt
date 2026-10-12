@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "sourceCommit": "fccc4b00cd8a144afd58e4b995747afab7a10022",
-  "goSourceSha256": "e7de16b14b87a0f317d9bfb556ee4eb38425a1b9de26e0287fa3f6bc26613471",
+  "goSourceSha256": "b102cf12c3b1feabebf7439bf92cf0df2697d23e863031510e3131638fb58c25",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -1007,6 +1007,8 @@
       "TestManagedFleetReadRechecksPinnedCapabilityAfterWait",
       "TestManagedMSIOccurrenceRequestPinsRequireCanonicalStrings",
       "TestManagedMSIOperatorRoutesClosed",
+      "TestManagedMSIWorklistRetirementBatchContextCannotDowngrade",
+      "TestManagedMSIWorklistRetirementStrictOptionalBatch",
       "TestManagedMSIWorklistRoutesAndStrictOptionalBatch",
       "TestManagedPreviewDisabledByDefault",
       "TestManagedPreviewDoesNotFallBackToManagerSample",
@@ -1782,6 +1784,10 @@
       "TestManagedMSIWorklistCloseAndFinalFenceDoNotIssue",
       "TestManagedMSIWorklistExpiredDispatchCannotReviveAfterClockRollback",
       "TestManagedMSIWorklistMissingUsedStateAndLegacyStayClosed",
+      "TestManagedMSIWorklistRetirementAtomicIssueRestartAndReplay",
+      "TestManagedMSIWorklistRetirementCompactionRequiresSignedReceipt",
+      "TestManagedMSIWorklistRetirementExpiredDispatchCannotRevive",
+      "TestManagedMSIWorklistRetirementPinsStopAndFinalFence",
       "TestManagedReusableFreshStoreAndArtifactRetirement",
       "TestMetadataReadCohortCancellationAndCertificateWait",
       "TestMetadataReadCohortSharesMaintenanceHandoff",
@@ -4470,7 +4476,9 @@
       "TestManagedReusableConsentAndSignatureDomainsStaySeparate",
       "TestManagedUncertainFinalizationNeverRestarts",
       "TestManagedUnexplainedPayloadFences",
-      "TestReusableOccurrenceReferencesUseFloorEvenForIdenticalCustody"
+      "TestReusableOccurrenceReferencesUseFloorEvenForIdenticalCustody",
+      "TestWorklistOriginalStageCanonicalBytesAndDigests",
+      "TestWorklistRetirementOnlyResultDigest"
     ],
     "localrmm/internal/windowsmanagedmsiexecutor": [
       "TestManagedCloseTimerCompletionRaceReturnsCloseError",
@@ -4503,7 +4511,10 @@
       "TestReusableSharedRetirementKeepsOtherUnresolvedTarget",
       "TestReusableViewRejectsUnresolvedOlderOccurrence",
       "TestSpoolChangedUnacknowledgedTailIsNeverOverwritten",
-      "TestSpoolSingleLinkExactChunksAndSameByteRecovery"
+      "TestSpoolSingleLinkExactChunksAndSameByteRecovery",
+      "TestWorklistRetirementExactSettledResultAndSignedReconciliation",
+      "TestWorklistRetirementPinsAndFreshOwner",
+      "TestWorklistRetirementRejectsUnsettledResults"
     ],
     "localrmm/internal/windowsmanagedmsiservice": [
       "TestBackgroundMSIActivationPreservesLegacyBytesAndDenial",

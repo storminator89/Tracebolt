@@ -756,7 +756,7 @@ func (m *Manager) View(ctx context.Context) (View, error) {
 			v.State = "complete"
 			if v.Reusable {
 				v.ResultDigest = msi.Digest(r.ResultReport)
-				v.CanRetire = msi.SettledResult(report) && len(r.RetirePermit) == 0 && v.Mutation != nil && !v.Mutation.Blocked && v.Mutation.Active && n-v.MutationCapturedAt < 60
+				v.CanRetire = msi.SettledResult(report) && len(r.RetirePermit) == 0 && v.Mutation != nil && !v.Mutation.Blocked && v.Mutation.Active && v.Mutation.Phase == "idle" && v.MutationCapturedAt <= n && n-v.MutationCapturedAt < 60
 			}
 		}
 		if len(r.RetirePermit) > 0 {

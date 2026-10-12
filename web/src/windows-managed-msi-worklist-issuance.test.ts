@@ -1,7 +1,7 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { mutateRaw } from './api';
 afterEach(()=>vi.unstubAllGlobals());
-it.each(['deliver','batches','preview','archive'])('checks the foreground guard after CSRF, before the actual %s POST',async operation=>{
+it.each(['deliver','retire','batches','preview','archive'])('checks the foreground guard after CSRF, before the actual %s POST',async operation=>{
  let resolve!:(response:Response)=>void,foreground=true;
  const fetch=vi.fn().mockImplementationOnce(()=>new Promise<Response>(r=>{resolve=r}));vi.stubGlobal('fetch',fetch);
  const pending=mutateRaw(`/windows-managed-msi/worklists/worklist_${'a'.repeat(32)}/${operation}`,'{}',{},undefined,32768,()=>foreground);

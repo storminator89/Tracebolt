@@ -47,6 +47,34 @@ func TestManagedMSIWorklistWorstCaseMetadataBounds(t *testing.T) {
 		t.Fatal("aggregate bound", len(raw))
 	}
 	t.Logf("nine maximum-count records: %d bytes (limit %d)", len(raw), MaxWorklistJournalBytes)
+	// Retirement adds one digest per exact request, still within the unchanged
+	// metadata ceiling even at maximum target, batch and uint64 string sizes.
+	retirementRaw, _ := json.Marshal(j)
+	retirement, e := DecodeWorklistJournal(retirementRaw)
+	if e != nil {
+		t.Fatal(e)
+	}
+	for wi := range retirement.Worklists {
+		rw := &retirement.Worklists[wi]
+		rw.ArtifactRetiredCount = ^uint64(0)
+		for bi := range rw.Batches {
+			b := &rw.Batches[bi]
+			b.Kind = "retire"
+			for ii := range b.Items {
+				q := &b.Items[ii].Request
+				q.Operation = "retire"
+				q.ArtifactRetiredCount = "18446744073709551615"
+				q.JobSequence = "18446744073709551615"
+				q.ResultDigest = Digest([]byte("exact signed result"))
+			}
+			b.ConfirmationDigest = b.Digest()
+		}
+	}
+	retirementRaw, _ = json.Marshal(retirement)
+	if retirement.Validate() != nil || len(retirementRaw) > MaxWorklistJournalBytes {
+		t.Fatal("retirement aggregate bound", len(retirementRaw))
+	}
+	t.Logf("nine maximum-count retirement records: %d bytes (limit %d)", len(retirementRaw), MaxWorklistJournalBytes)
 	w.Revision = MaxWorklistRevision + 1
 	if w.Validate() == nil {
 		t.Fatal("unsafe UI revision")
