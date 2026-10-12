@@ -159,8 +159,8 @@ func (s *Spool) readChunk(ctx context.Context, sel windowssoftwarejob.Selection,
 		buf := make([]byte, ChunkBytes)
 		var total int64
 		for total < sel.Size {
-			if ctx.Err() != nil {
-				return nil, ErrSpool
+			if e := ctx.Err(); e != nil {
+				return nil, e
 			}
 			count := int(min(int64(ChunkBytes), sel.Size-total))
 			if _, e = io.ReadFull(f, buf[:count]); e != nil {
@@ -186,8 +186,11 @@ func (s *Spool) readChunk(ctx context.Context, sel windowssoftwarejob.Selection,
 	if _, e = f.ReadAt(data, offset); e != nil {
 		return nil, ErrSpool
 	}
-	if byteDigest(data) != s.cache.chunks[index] || unix.Fstat(fd, &after) != nil || !sameArtifact(before, after) || unix.Fstatat(fds[len(fds)-1], artifactName, &named, unix.AT_SYMLINK_NOFOLLOW) != nil || !sameArtifact(named, after) || !parentsUnchanged(path, fds, parents) || ctx.Err() != nil {
+	if byteDigest(data) != s.cache.chunks[index] || unix.Fstat(fd, &after) != nil || !sameArtifact(before, after) || unix.Fstatat(fds[len(fds)-1], artifactName, &named, unix.AT_SYMLINK_NOFOLLOW) != nil || !sameArtifact(named, after) || !parentsUnchanged(path, fds, parents) {
 		return nil, ErrSpool
+	}
+	if e := ctx.Err(); e != nil {
+		return nil, e
 	}
 	return data, nil
 }

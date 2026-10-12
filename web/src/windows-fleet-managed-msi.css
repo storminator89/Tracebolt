@@ -1,0 +1,15 @@
+.windows-fleet-managed-msi .managed-msi-panel{max-width:100%;min-width:0;margin:12px 0;overflow-wrap:anywhere}
+.windows-fleet-managed-msi .managed-msi-panel h3{font-size:13px;margin:0}
+.windows-fleet-managed-msi .managed-msi-panel p{margin:0}
+.windows-fleet-managed-msi .windows-fleet-update-row>div{flex:1}
+.windows-fleet-managed-msi details{font-size:12px;min-width:0}
+.windows-fleet-managed-msi dd{margin:4px 0 10px;overflow-wrap:anywhere}
+.windows-fleet-managed-msi progress{max-width:100%;width:100%}
+.windows-fleet-managed-msi .managed-msi-panel label{font-size:12px;line-height:1.55}
+.windows-fleet-managed-msi input[type=checkbox]{flex-shrink:0;margin-top:3px}
+@media(max-width:600px){.windows-fleet-managed-msi .windows-fleet-update-heading{align-items:flex-start;flex-wrap:wrap}.windows-fleet-managed-msi .managed-msi-panel .button{white-space:normal;max-width:100%;text-align:left}.windows-fleet-managed-msi .managed-msi-panel header{flex-wrap:wrap}.windows-fleet-managed-msi .windows-fleet-update-row>div{width:100%}}
+
+.windows-fleet-managed-msi .windows-fleet-msi-limit{color:var(--secondary);font-size:11px;line-height:1.5}
+.windows-fleet-managed-msi .windows-fleet-msi-limits{color:var(--secondary);margin-top:10px}
+.windows-fleet-managed-msi .windows-fleet-msi-limits summary{cursor:pointer}
+.windows-fleet-managed-msi .windows-fleet-msi-device-id{font-variant-numeric:tabular-nums}

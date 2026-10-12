@@ -62,6 +62,7 @@ var ErrConfiguration = errors.New("enrollment ingress configuration is invalid")
 // Construct one per listener; sharing its address preserves the admission bound.
 type Ingress struct {
 	windowsManagedMSI          *windowsmanagedmsimanager.Manager
+	windowsManagedMSIRegistry  *windowsmanagedmsimanager.Registry
 	windowsActions             *windowsactionmanager.Manager
 	windowsUpdateJobs          *windowsupdatejob.Manager
 	windowsSoftwareJobs        *windowssoftwarejob.Manager

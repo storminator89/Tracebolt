@@ -17,7 +17,7 @@ import (
 const windowsManagedMSIPrefix = "/v1/windows-managed-msi/"
 
 func (h *Ingress) ConfigureWindowsManagedMSI(m *windowsmanagedmsimanager.Manager) error {
-	if !h.valid() || m == nil || h.windowsManagedMSI != nil || !m.OperatorPolicyConfigured() || !m.MatchesStore(h.store) || !m.MatchesBinding(h.store.Config().Binding) || h.profile != "tls" || h.store.Config().Binding.CollectionProfile != enrollmentcrypto.CollectionProfileWindowsInventory {
+	if !h.valid() || m == nil || h.windowsManagedMSI != nil || h.windowsManagedMSIRegistry != nil || !m.OperatorPolicyConfigured() || !m.MatchesStore(h.store) || !m.MatchesBinding(h.store.Config().Binding) || h.profile != "tls" || h.store.Config().Binding.CollectionProfile != enrollmentcrypto.CollectionProfileWindowsInventory {
 		return ErrConfiguration
 	}
 	h.windowsManagedMSI = m
@@ -68,7 +68,7 @@ func validManagedMSIRequest(r *http.Request, authority string) bool {
 }
 func (h *Ingress) windowsManagedMSIRequest(w http.ResponseWriter, r *http.Request) {
 	manager := h.windowsManagedMSI
-	if manager == nil || h.profile != "tls" {
+	if manager == nil && h.windowsManagedMSIRegistry == nil || h.profile != "tls" {
 		failure(w, 404, "windows_managed_msi_not_configured")
 		return
 	}
@@ -88,6 +88,18 @@ func (h *Ingress) windowsManagedMSIRequest(w http.ResponseWriter, r *http.Reques
 	defer release()
 	r = withVerifiedTLSCertificate(r)
 	r = r.WithContext(enrollmentstore.WithOverviewClock(r.Context(), h.now))
+	identity, e := h.store.AuthorizeCertificate(r.Context(), r.TLS.PeerCertificates[0].Raw, h.now())
+	if e != nil {
+		failure(w, 403, "agent_unauthorized")
+		return
+	}
+	if h.windowsManagedMSIRegistry != nil {
+		manager = h.windowsManagedMSIRegistry.Manager(identity.Approval.DeviceID)
+	}
+	if manager == nil || identity.Approval.DeviceID != manager.Binding().DeviceID || "sha256:"+identity.Issuance.CertificateHash != manager.Binding().IncarnationDigest {
+		failure(w, 403, "agent_unauthorized")
+		return
+	}
 	authorize := func() bool {
 		if !h.verifiedTLS(r, h.now()) {
 			return false
@@ -150,4 +162,17 @@ func (h *Ingress) windowsManagedMSIRequest(w http.ResponseWriter, r *http.Reques
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(200)
 	_, _ = w.Write(out)
+}
+
+func (h *Ingress) ConfigureWindowsManagedMSIRegistry(r *windowsmanagedmsimanager.Registry) error {
+	if !h.valid() || r == nil || h.windowsManagedMSI != nil || h.windowsManagedMSIRegistry != nil || h.profile != "tls" || !r.MatchesBinding(h.store.Config().Binding) {
+		return ErrConfiguration
+	}
+	for _, m := range r.Managers() {
+		if !m.MatchesStore(h.store) {
+			return ErrConfiguration
+		}
+	}
+	h.windowsManagedMSIRegistry = r
+	return nil
 }

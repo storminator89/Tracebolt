@@ -20,6 +20,7 @@ import (
 // WindowsManagedMSISetupInspection is a read-only snapshot, never setup authority.
 // The explicit apply transaction must check the current leaf and clock again.
 type WindowsManagedMSISetupInspection struct {
+	Fleet               bool
 	RegisteredBindings  []windowsmanagedmsi.Binding
 	Config              enrollmentstate.Config
 	Identity            enrollmentstate.Snapshot
@@ -108,7 +109,7 @@ func inspectWindowsManagedMSISetup(ctx context.Context, path string, issuerDER [
 		return zero, ErrStorage
 	}
 	config, err := enrollmentstate.TrustedLedgerConfig(raw)
-	if err != nil || config.Binding.CollectionProfile != enrollmentcrypto.CollectionProfileWindowsInventory || config.RecordLimit > 25 || validateIssuer(config, issuerDER) != nil {
+	if err != nil || config.Binding.CollectionProfile != enrollmentcrypto.CollectionProfileWindowsInventory || validateIssuer(config, issuerDER) != nil {
 		return zero, ErrStorage
 	}
 	s := &Store{&storeState{db: db, path: absolute, info: info, config: config, issuerDER: bytes.Clone(issuerDER)}}
@@ -152,6 +153,10 @@ func inspectWindowsManagedMSISetup(ctx context.Context, path string, issuerDER [
 				return zero, ErrStorage
 			}
 			out.Status = "fenced"
+			out.Fleet, err = windowsManagedMSIFleetArtifactPresent(ctx, conn)
+			if err != nil {
+				return zero, err
+			}
 			for _, credential := range t.credentials {
 				if credential.WindowsManagedMSISetup != nil {
 					out.RegisteredDevices++
@@ -174,6 +179,10 @@ func inspectWindowsManagedMSISetup(ctx context.Context, path string, issuerDER [
 				return zero, ErrStorage
 			}
 			out.Status = "fenced"
+			out.Fleet, err = windowsManagedMSIFleetArtifactPresent(ctx, conn)
+			if err != nil {
+				return zero, err
+			}
 		}
 	}
 

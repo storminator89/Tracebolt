@@ -7,6 +7,9 @@ Prepared MSI v1, its bytes, foreground workflow and existing grants remain
 independent. Nothing here promotes an observation, WUA, service-action or prepared
 package grant. Source tests use inert synthetic bytes and establish no native
 acceptance, package choice, deployment or installation.
+For fresh upload-once fleet configuration and the manual per-device worklist, see
+[Windows fleet MSI](windows-fleet-managed-msi.md). Its explicit v2 setup/registry
+never adopts or converts this singleton v1 state.
 
 ## Operator workflow
 

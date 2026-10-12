@@ -6,6 +6,9 @@ operation. This is source code, fixtures and unsigned cross-build evidence;
 no package, endpoint, native acceptance or deployment is selected or approved by
 this document. See [manager setup](windows-managed-msi-manager.md) and the
 [required native gate](windows-managed-msi-native-acceptance.md).
+The separate fresh [fleet v2 worklist](windows-fleet-managed-msi.md) uploads once
+and supports up to 25 explicitly configured targets, with independent delivery
+and one-attempt installation approval per endpoint. Singleton v1 remains unchanged.
 
 This first slice excludes co-enabled Tracebolt WUA, prepared-MSI and service-control
 mutators on that endpoint. Observation remains available. Reciprocal create-only

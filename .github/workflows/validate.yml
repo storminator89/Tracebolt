@@ -623,6 +623,7 @@ jobs:
           node --test tests/e2e-review/windows-maintenance-fixtures.test.mjs
           node --test tests/e2e-review/windows-managed-msi-fixtures.test.mjs
           node --test tests/e2e-review/windows-mutation-coexistence-fixtures.test.mjs
+          node web/scripts/capture-windows-fleet-msi-fixtures.mjs --check
       - name: Production build
         run: npm run build
 
@@ -692,6 +693,11 @@ jobs:
           for(const row of manifest.screenshots)assert.equal(createHash('sha256').update(fs.readFileSync('artifacts/review/'+row.file)).digest('hex'),row.sha256);
           console.log('PASS: both coordinated views, blocked/released snapshots, four exact-source EN-DE viewport variants and 16 verified screenshots; read-only invented metadata.');
           JS
+      - name: Synthetic upload-once MSI manual worklist EN-DE desktop-mobile gate
+        if: ${{ !cancelled() }}
+        env:
+          TRACEBOLT_SOURCE_SHA: ${{ github.sha }}
+        run: node web/scripts/run-windows-fleet-msi-ci.mjs
       - name: Complete Windows services real-store browser gate
         if: ${{ !cancelled() }}
         env:
@@ -987,6 +993,8 @@ jobs:
             artifacts/review/windows-service-actions-manifest.json
             artifacts/review/windows-managed-msi-results.json
             artifacts/review/windows-managed-msi-manifest.json
+            artifacts/review/windows-fleet-msi-results.json
+            artifacts/review/windows-fleet-msi-manifest.json
             artifacts/review/windows-mutation-coexistence-results.json
             artifacts/review/windows-mutation-coexistence-manifest.json
             artifacts/review/enrollment-browser-results.json

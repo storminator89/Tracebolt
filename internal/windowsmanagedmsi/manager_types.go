@@ -74,13 +74,10 @@ func (r Record) Validate() error {
 		}
 		return nil
 	}
+	if r.Artifact.Validate(r.ClockFloor) != nil {
+		return ErrIntegrity
+	}
 	a := r.Artifact
-	if !ValidSelection(a.Package) || !ValidDigest(a.NativeAcceptanceDigest) || !ValidTime(a.IntentAt) || a.IntentAt > r.ClockFloor || a.CompletedAt != 0 && (a.CompletedAt < a.IntentAt || a.CompletedAt > r.ClockFloor) {
-		return ErrIntegrity
-	}
-	if a.Offset < 0 || a.Offset > a.Package.Size || a.Offset != a.Package.Size && a.Offset%MaxChunkBytes != 0 || !ValidDigest(a.PrefixDigest) || a.Offset == 0 && a.PrefixDigest != Digest(nil) || a.Offset > 0 && !ValidDigest(a.LastChunkDigest) || a.Offset == 0 && a.LastChunkDigest != "" || a.PendingDigest == "" && (a.PendingIndex != 0 || a.PendingSize != 0) || a.PendingDigest != "" && (!ValidDigest(a.PendingDigest) || a.PendingIndex >= MaxChunks || int64(a.PendingIndex)*MaxChunkBytes != a.Offset || a.PendingSize != int(min(int64(MaxChunkBytes), a.Package.Size-a.Offset)) || a.PendingSize <= 0) || a.CompletedAt != 0 && (a.Offset != a.Package.Size || a.PrefixDigest != a.Package.SHA256 || a.PendingDigest != "") {
-		return ErrIntegrity
-	}
 	if r.TransferID == "" {
 		if len(r.DeliveryPermit)+len(r.ReadinessPermit)+len(r.InstallPermit)+len(r.DeliveryReport)+len(r.ReadinessReport)+len(r.ResultReport) != 0 || r.DeliveryClaimedAt+r.ReadinessClaimedAt+r.InstallClaimedAt != 0 {
 			return ErrIntegrity
@@ -167,23 +164,8 @@ func Transition(before, after Record) error {
 	if after.Validate() != nil || before.Version != after.Version || before.Grant != after.Grant || !bytes.Equal(before.PublicKey, after.PublicKey) || !bytes.Equal(before.ExecutorPublicKey, after.ExecutorPublicKey) || after.ClockFloor < before.ClockFloor {
 		return ErrIntegrity
 	}
-	if before.Artifact != nil {
-		if after.Artifact == nil {
-			return ErrConsumed
-		}
-		a, b := *before.Artifact, *after.Artifact
-		if a.Package != b.Package || a.NativeAcceptanceDigest != b.NativeAcceptanceDigest || a.IntentAt != b.IntentAt || a.CompletedAt != 0 && a != b {
-			return ErrConsumed
-		}
-		if a.Offset == b.Offset {
-			if a.PrefixDigest != b.PrefixDigest || a.LastChunkDigest != b.LastChunkDigest || a.PendingDigest != "" && (a.PendingIndex != b.PendingIndex || a.PendingDigest != b.PendingDigest || a.PendingSize != b.PendingSize) {
-				return ErrConsumed
-			}
-		} else {
-			if a.PendingDigest == "" || b.Offset != a.Offset+int64(a.PendingSize) || b.LastChunkDigest != a.PendingDigest || b.PendingDigest != "" {
-				return ErrConsumed
-			}
-		}
+	if ArtifactTransition(before.Artifact, after.Artifact) != nil {
+		return ErrConsumed
 	}
 	// A fresh explicit readiness request may supersede only an expired old
 	// challenge, never any installation permit/claim/result. Its sequence advances

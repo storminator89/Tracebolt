@@ -108,7 +108,7 @@ func prepareWithApplicationChecks(m lanconfig.Material, enrollment *enrollmentco
 	var windowsActions *windowsactionmanager.Manager
 	var windowsUpdates *windowsupdatejob.Registry
 	var windowsSoftware *windowssoftwarejob.Registry
-	var managedMSI *windowsmanagedmsimanager.Manager
+	var managedMSI *windowsmanagedmsimanager.Registry
 	var packageActions *packagecontroller.Manager
 	var enrolledStore *enrollmentstore.Store
 	var enrolledService *enrollmentservice.Service
@@ -365,14 +365,14 @@ func prepareWithApplicationChecks(m lanconfig.Material, enrollment *enrollmentco
 				forbidden = append(forbidden, pub)
 			}
 		}
-		managedMSI, e = windowsmanagedmsimanager.Load(context.Background(), windowsStore, c.WindowsManagedMSIConfigFile, c.StateDirectory, forbidden...)
+		managedMSI, e = windowsmanagedmsimanager.LoadRegistry(context.Background(), windowsStore, c.WindowsManagedMSIConfigFile, c.StateDirectory, forbidden...)
 		if e != nil {
 			return fail(e)
 		}
 		if e = managedMSI.ConfigureOperatorPolicy(func(actor string) bool { return auth.ActorHasCapability(actor, operatorauth.WindowsManagedMSIDeliver) }, func(actor string) bool { return auth.ActorHasCapability(actor, operatorauth.WindowsManagedMSIInstall) }); e != nil {
 			return fail(e)
 		}
-		if e = windowsIngress.ConfigureWindowsManagedMSI(managedMSI); e != nil {
+		if e = windowsIngress.ConfigureWindowsManagedMSIRegistry(managedMSI); e != nil {
 			return fail(e)
 		}
 	}
@@ -504,7 +504,7 @@ func prepareWithApplicationChecks(m lanconfig.Material, enrollment *enrollmentco
 			return nil, e
 		}
 	}
-	operatorConfig := api.LANOperatorConfig{WindowsManagedMSI: managedMSI, WindowsSoftwareRegistry: windowsSoftware, WindowsUpdateRegistry: windowsUpdates, WindowsServiceActions: windowsActions, PackageActions: packageActions, AISettings: aiSettings, AlarmSettings: alarmWorker, ApplicationCheckSettings: applicationChecks, ServiceActions: actions, Origin: c.OperatorOrigin, Auth: auth, Registry: registry, InsecureHTTPTest: c.Profile == lanconfig.HTTPTest, Devices: func() ([]model.Device, error) {
+	operatorConfig := api.LANOperatorConfig{WindowsManagedMSIRegistry: managedMSI, WindowsSoftwareRegistry: windowsSoftware, WindowsUpdateRegistry: windowsUpdates, WindowsServiceActions: windowsActions, PackageActions: packageActions, AISettings: aiSettings, AlarmSettings: alarmWorker, ApplicationCheckSettings: applicationChecks, ServiceActions: actions, Origin: c.OperatorOrigin, Auth: auth, Registry: registry, InsecureHTTPTest: c.Profile == lanconfig.HTTPTest, Devices: func() ([]model.Device, error) {
 		return trustStore.Devices(context.Background(), registry.List(), time.Now().UTC())
 	}}
 	if enrolledService != nil {
