@@ -305,7 +305,8 @@ class InventoryTests(unittest.TestCase):
         names = self.allowed[self.package]
         default = set(names) - set(self.moved)
         self.assertEqual({group: len(roots) for group, roots in self.groups.items()},
-                         {"services": 14, "software": 14, "processes": 16, "network-context": 13})
+                         {"services": 14, "software": 14, "processes": 16, "network-context": 13,
+                          "retention-capacity": 4})
         self.assertEqual(default | set(self.moved), names)
         self.assertEqual(len(self.moved), len(set(self.moved)))
         self.assertFalse(default.intersection(self.moved))
@@ -322,6 +323,29 @@ class InventoryTests(unittest.TestCase):
             changed = {**self.allowed, self.package: names | {new}}
             self.assertIn(new, shards.inventory_tests(changed)[group])
             self.assertNotIn(new, self.groups[group])
+
+    def test_retention_capacity_is_exact_source_bound_and_leaves_future_roots_in_default(self):
+        expected = ["TestCompleteInventoryQuotaPreservesPreviousAndReservation",
+                    "TestCompleteOverviewSteadyMinuteCadenceRetainsPagesAndCleans",
+                    "TestTwentyFiveNearMaxConcurrentTransactionWait",
+                    "TestTwentyFiveOperationalRetainedBudget"]
+        self.assertEqual(self.groups["retention-capacity"], expected)
+        for name in expected:
+            with self.subTest(root=name):
+                missing = {**self.allowed, self.package: self.allowed[self.package] - {name}}
+                with self.assertRaises(ValueError):
+                    shards.inventory_tests(missing)
+                future = name + "New"
+                extended = {**self.allowed, self.package: self.allowed[self.package] | {future}}
+                groups = shards.inventory_tests(extended)
+                self.assertEqual(groups, self.groups)
+                commands = [shards.command_for([self.package], excluded=self.moved)] + [
+                    shards.command_for([self.package], selected=roots) for roots in groups.values()]
+                for root in extended[self.package]:
+                    selected = sum(("-run" not in command or bool(shards.re.fullmatch(command[command.index("-run") + 1], root)))
+                                   and not bool(shards.re.fullmatch(command[command.index("-skip") + 1], root))
+                                   for command in commands)
+                    self.assertEqual(selected, 0 if shards.re.fullmatch(shards.SKIP, root) else 1, root)
 
     def test_selected_commands_keep_race_count_budget_and_exact_roots(self):
         for names in self.groups.values():
@@ -375,7 +399,7 @@ class InventoryTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     shards.make_report(self.plan, 0, self.default, 0, incomplete)
                 changed_plan = copy.deepcopy(self.plan)
-                changed_plan["inventoryTests"][group].append(shards.INVENTORY_PREFIXES[group] + "New")
+                changed_plan["inventoryTests"][group].append(self.groups[group][0] + "New")
                 with self.assertRaises(ValueError):
                     shards.verify_reports(changed_plan, reports)
 

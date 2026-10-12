@@ -233,6 +233,13 @@ missing material rather than inventing credentials or weakening protection.
   Cached WUA inspection must remain offline and must not download, install,
   accept update terms, reboot, upgrade WUA or change service/network settings.
   Fixtures/cross-builds do not authorize native reads or create a local grant.
+- Selected cached Windows update jobs are a separate default-off source domain.
+  Read `docs/windows-selected-update-jobs.md` before changing readiness, signed
+  executor reports, manager enrollment transactions, consent, claim/attempt/result
+  ledgers or Updates UI. Keep exact GUID/revision, explicit named approval,
+  distinct manager/executor keys, original age and current-leaf/final guards.
+  Never promote observation/service permissions, retry uncertainty, download,
+  accept EULAs or reboot. Native elevated executor/provisioning remain inactive.
 - Manual fleet groups and reviewed one-setting Windows health apply are manager-side
   organizational source features. Read `docs/fleet-groups-health.md`. Preserve
   private stable original identity bindings, current admission and exact revisions.

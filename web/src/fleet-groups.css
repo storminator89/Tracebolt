@@ -16,4 +16,13 @@
 .fleet-group-members li{padding:9px 0;border-bottom:1px solid var(--line);font-size:12px;overflow-wrap:anywhere}.fleet-group-members span{margin-left:12px;color:var(--secondary)}.fleet-group-members code{display:block;color:var(--secondary);font-size:11px;margin-top:4px}
 .fleet-group-setting{display:grid;grid-template-columns:2fr 1fr;gap:20px}.fleet-group-enable{display:flex;align-items:center;gap:8px;font-size:12px}.fleet-group-limits{padding:12px;border:1px solid var(--line);border-radius:6px;margin:16px 0}.fleet-group-limits summary{cursor:pointer}
 .fleet-group-table-wrap{overflow-x:auto}.fleet-group-table{border-collapse:collapse;width:100%;font-size:12px;table-layout:fixed}.fleet-group-table caption{text-align:left;font-weight:600;padding:12px 0}.fleet-group-table th,.fleet-group-table td{text-align:left;vertical-align:top;padding:12px 10px;border-bottom:1px solid var(--line);overflow-wrap:anywhere}.fleet-group-table th{color:var(--secondary);font-weight:500}.fleet-group-table code{font-size:10px;margin-top:5px;color:var(--secondary)}
-@media(max-width:600px){.fleet-groups{padding:10px 14px}.fleet-group-toolbar{gap:12px}.fleet-group-select{width:100%}.fleet-group-select select{flex:1;max-width:100%;min-width:0}.fleet-group-setting{grid-template-columns:1fr;gap:0}.fleet-group-list li{align-items:flex-start;flex-direction:column}.fleet-group-table{table-layout:auto;min-width:450px}.fleet-group-dialog .dialog{padding:22px}}
+@media(max-width:600px){.fleet-groups{padding:10px 14px}.fleet-group-toolbar{gap:12px}.fleet-group-select{width:100%}.fleet-group-select select{flex:1;max-width:100%;min-width:0}.fleet-group-setting{grid-template-columns:1fr;gap:0}.fleet-group-list li{align-items:flex-start;flex-direction:column}.fleet-group-dialog .dialog{padding:22px}}
+@media(max-width:600px){
+    /* Keep the table semantics in markup while each device becomes a vertical row. */
+    .fleet-group-table-wrap{overflow-x:visible}
+    .fleet-group-table,.fleet-group-table caption,.fleet-group-table tbody{display:block;min-width:0;width:100%}
+    .fleet-group-table thead{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+    .fleet-group-table tbody tr{display:grid;grid-template-columns:minmax(0,1fr);gap:8px;padding:12px 0;border-bottom:1px solid var(--line)}
+    .fleet-group-table td{display:block;min-width:0;padding:0;border:0}
+    .fleet-group-table td[data-label]::before{content:attr(data-label);display:block;margin-bottom:3px;color:var(--secondary);font-size:11px;font-weight:500}
+}

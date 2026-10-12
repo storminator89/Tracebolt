@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { abortProtectedRequests, APIError, AUTH_REQUIRED_EVENT, request } from './api';
 import { setLocale } from './i18n';
@@ -84,6 +84,48 @@ describe('compact manual fleet groups', () => {
 });
 
 describe('explicit one-setting Windows group health review', () => {
+    it.each(['en', 'de'] as const)('keeps exact review and result cells accessible with compact %s labels and one details disclosure', async locale => {
+        const de = locale === 'de';
+        const labels = de ? { groups: 'Flottengruppen', health: 'Health-Einstellung prüfen', metric: 'Eine Einstellung', enabled: 'Diese Richtlinie aktivieren', review: 'Exakte Änderungen prüfen', apply: 'Geprüfte Einstellung anwenden', results: 'Ergebnisse je Gerät', device: 'Gerät / exakte ID', before: 'Geprüfte Richtlinie', outcome: 'Ergebnis', revision: 'Richtlinienversion', off: 'Deaktiviert', on: 'Aktiviert', changed: 'Geändert · bestätigte Antwort', matching: 'Entspricht bereits · nicht geschrieben' } : { groups: 'Fleet groups', health: 'Review health setting', metric: 'One setting', enabled: 'Enable this policy', review: 'Review exact changes', apply: 'Apply reviewed setting', results: 'Per-device results', device: 'Device / exact ID', before: 'Reviewed policy', outcome: 'Outcome', revision: 'Policy revision', off: 'Disabled', on: 'Enabled', changed: 'Changed · confirmed response', matching: 'Currently matching · no write' };
+        const original = vi.mocked(request).getMockImplementation()!;
+        vi.mocked(request).mockImplementation(async (path, options, cap) => path === `/devices/${second}/windows-resource/cpu` ? policy(second, 'cpu', true) : original(path, options, cap));
+        setLocale(locale, false); render(<Harness/>);
+        fireEvent.click(screen.getByRole('button', { name: labels.groups })); await flush();
+        fireEvent.change(screen.getByRole('combobox', { name: labels.groups }), { target: { value: groupId } });
+        fireEvent.click(screen.getByRole('button', { name: labels.health }));
+        fireEvent.change(screen.getByRole('combobox', { name: labels.metric }), { target: { value: 'cpu' } });
+        fireEvent.click(screen.getByRole('checkbox', { name: labels.enabled }));
+        for (const [name, id] of [['Desk One', windowsDeviceId], ['Desk Two', second]]) fireEvent.click(screen.getByRole('checkbox', { name: `${name} ${id}` }));
+        fireEvent.click(screen.getByRole('button', { name: labels.review })); await flush();
+        const dialog = screen.getByRole('dialog'), details = dialog.querySelector('details')!;
+        expect(dialog.querySelectorAll('details')).toHaveLength(1); expect(details).not.toHaveAttribute('open');
+        expect(details).toHaveTextContent(de ? 'Diese Prüfung bindet Gruppenversion' : 'This review freezes the group revision');
+        expect(details).toHaveTextContent(de ? 'Es werden keine Erfassung' : 'This grants no collection');
+        expect(details).toHaveTextContent(de ? 'CPU: gemessene Intervallnutzung' : 'CPU: sampled interval usage');
+        expect(screen.getByText(de ? 'Stopp bei Konflikt oder unklarem Ergebnis. Kein Rollback, keine automatische Wiederholung.' : 'Stops on conflict or uncertainty. No rollback or automatic retry.')).toBeVisible();
+        const table = within(dialog).getByRole('table', { name: labels.review });
+        expect(details.contains(table)).toBe(false); expect(table).toHaveAttribute('role', 'table');
+        expect(within(table).getAllByRole('rowgroup')).toHaveLength(2);
+        expect(within(table).getAllByRole('columnheader').map(cell => cell.textContent)).toEqual([labels.device, labels.before]);
+        for (const [index, id] of [windowsDeviceId, second].entries()) {
+            const row = within(table).getAllByRole('row')[index + 1], cells = within(row).getAllByRole('cell');
+            expect(row).toHaveAttribute('role', 'row'); expect(cells).toHaveLength(2);
+            expect(cells[0]).toHaveTextContent(index ? 'Desk Two' : 'Desk One'); expect(cells[0].querySelector('code')).toHaveTextContent(id);
+            expect(cells[1]).toHaveAttribute('role', 'cell'); expect(cells[1]).toHaveAttribute('data-label', labels.before);
+            expect(cells[1]).toHaveTextContent(`${index ? labels.on : labels.off} · 90%`); expect(cells[1]).toHaveTextContent(`${labels.revision}: ${index}`);
+        }
+        expect(posts()).toHaveLength(0);
+        fireEvent.click(screen.getByRole('button', { name: labels.apply })); await flush();
+        const result = within(dialog).getByRole('table', { name: labels.results });
+        expect(within(result).getAllByRole('columnheader').map(cell => cell.textContent)).toEqual([labels.device, labels.before, labels.outcome]);
+        for (const [index, id] of [windowsDeviceId, second].entries()) {
+            const row = within(result).getAllByRole('row')[index + 1], cells = within(row).getAllByRole('cell');
+            expect(cells).toHaveLength(3); expect(cells[0].querySelector('code')).toHaveTextContent(id);
+            expect(cells[1]).toHaveTextContent(`${index ? labels.on : labels.off} · 90%`); expect(cells[1]).toHaveTextContent(`${labels.revision}: ${index}`);
+            expect(cells[2]).toHaveAttribute('data-label', labels.outcome); expect(cells[2].textContent).toBe(index ? labels.matching : labels.changed);
+        }
+        expect(posts()).toHaveLength(1);
+    });
     it.each(['disk', 'cpu', 'memory'] as const)('freezes exact %s review before a single explicit write', async metric => {
         render(<Harness/>); await review(metric); expect(posts()).toHaveLength(0); expect(screen.getByRole('table')).toHaveTextContent(windowsDeviceId); expect(screen.getByRole('table')).toHaveTextContent('Policy revision: 0'); expect(screen.getByRole('table')).not.toHaveTextContent(second); expect(screen.queryByText(/^Server$/)).toBeNull();
         fireEvent.click(screen.getByRole('button', { name: 'Apply reviewed setting' })); await flush(); expect(posts()).toHaveLength(1); expect(posts()[0][0]).toBe(`/devices/${windowsDeviceId}/${metric === 'disk' ? 'windows-capacity' : `windows-resource/${metric}`}/policy`); expect(JSON.parse(posts()[0][1]!.body as string)).toEqual({ enabled: true, thresholdPercent: 90, expectedRevision: 0 }); expect(screen.getByText('Changed · confirmed response')).toBeVisible(); expect(screen.queryByRole('button', { name: 'Apply reviewed setting' })).toBeNull();

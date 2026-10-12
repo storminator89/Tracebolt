@@ -6,6 +6,7 @@ import { WindowsHardwareContextPanel } from './windows-hardware-context';
 import { WindowsSessionContextPanel } from './windows-session-context';
 import { WindowsSecurityPosturePanel } from './windows-security-posture';
 import { WindowsPatchContextPanel } from './windows-patch-context';
+import { WindowsUpdateJobs } from './windows-update-jobs';
 import { WindowsUpdatesPanel } from './windows-updates';
 import { inventoryAge } from './complete-packages-types';
 import { useLocale } from './i18n';
@@ -22,6 +23,7 @@ export function WindowsContextPanel({ resource, kind }: { resource: WindowsInven
     const previous = visible ? { ...resource, [kind]: old, [`${kind}Stale`]: age > 120000 } : null;
     return <>
         <Panel resource={resource}/>
+        {kind === 'updates' && <WindowsUpdateJobs resource={resource}/>}
         {previous && old && <details className="windows-inventory-bounds" key={`${kind}:${old.grantId}:${old.generationId}:${old.collectedAt}`}>
             <summary>{locale === 'de' ? 'Vorherige Erfassung anzeigen' : 'Show previous capture'}</summary>
             <p className="windows-inventory-caution">{locale === 'de' ? 'Der letzte Versuch hat diese frühere Beobachtung nicht ersetzt. Sie behält ihre ursprüngliche Erfassungszeit und belegt keinen aktuellen Zustand.' : 'The latest attempt did not replace this earlier observation. It keeps its original capture time and does not establish current state.'}</p>

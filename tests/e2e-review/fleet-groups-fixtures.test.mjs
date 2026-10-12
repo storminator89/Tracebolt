@@ -42,3 +42,21 @@ test('fleet dialog retains desktop and compact mobile inner spacing',()=>{
  assert.match(css.split('@media')[0],/\.fleet-group-dialog \.dialog\{[^}]*padding:28px[;}]/);
  assert.match(css,/\@media\(max-width:600px\)\{.*\.fleet-group-dialog \.dialog\{padding:22px\}/);
 });
+
+test('compact mobile rows keep all policy cells in the viewport without losing table semantics',()=>{
+ const css=fs.readFileSync(new URL('../../web/src/fleet-groups.css',import.meta.url),'utf8'),ui=fs.readFileSync(new URL('../../web/src/fleet-groups.tsx',import.meta.url),'utf8'),helper=fs.readFileSync(new URL('./fleet-groups-browser.mjs',import.meta.url),'utf8');
+ const mobile=css.slice(css.lastIndexOf('@media'));
+ assert.doesNotMatch(css,/min-width:450px/);
+ assert.match(mobile,/\.fleet-group-table-wrap\{overflow-x:visible\}/);
+ assert.match(mobile,/grid-template-columns:minmax\(0,1fr\)/);
+ assert.match(mobile,/\.fleet-group-table td\{display:block;min-width:0;padding:0;border:0\}/);
+ assert.match(mobile,/\.fleet-group-table thead\{[^}]*clip-path:inset\(50%\)/);
+ assert.doesNotMatch(mobile,/display:none/);
+ assert.match(mobile,/td\[data-label\]::before\{content:attr\(data-label\)/);
+ for(const role of ['table','rowgroup','row','columnheader','cell'])assert.ok(ui.includes(`role="${role}"`));
+ assert.match(ui,/data-label=\{c.before\}/);assert.match(ui,/data-label=\{c.outcome\}/);
+ assert.match(helper,/expect\(layout.overflow\)\.toBeLessThanOrEqual\(1\)/);
+ assert.match(helper,/expect\(cell.right\)\.toBeGreaterThanOrEqual\(-1\)/);
+ assert.match(helper,/expect\(cell.overflow\)\.toBeLessThanOrEqual\(1\)/);
+ for(const kind of ['review','results'])assert.ok(helper.includes('await verifyPolicyLayout();await shot(page,`synthetic-fleet-groups-'+kind+'-${width}-${locale}`'));
+});

@@ -1,5 +1,5 @@
 {
-  "goSourceSha256": "0aaa9129bc77804cfa52bee7efa92710d79b5a166ba14d8fad2be3028fead2cf",
+  "goSourceSha256": "64024d8fa01c11eba440294ebc723a5fdd0cee478333dadc24cdae8beb6ed519",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -1122,6 +1122,12 @@
       "TestWindowsSetupCapabilitiesExactPublicGuardedTLSContract",
       "TestWindowsStorageIOOperatorSessionAndResponseTimeExpiry",
       "TestWindowsStorageOperatorSessionAndResponseTimeExpiry",
+      "TestWindowsUpdateJobAPIBodyReadDoesNotHoldSessionGate",
+      "TestWindowsUpdateJobAPICSRFOriginActorRevocation",
+      "TestWindowsUpdateJobAPIDefaultOffAndNoExecutorIngress",
+      "TestWindowsUpdateJobAPINoPermissionPromotionAndHTTP",
+      "TestWindowsUpdateJobAPIRequestReviewApprovalAndStatus",
+      "TestWindowsUpdateJobAPIUsesLiveClockAtEnrollmentCommit",
       "TestWindowsUpdatesOperatorSessionAndResponseTimeExpiry",
       "TestWindowsUpdatesResourceRequiresExistingOperatorRoute",
       "TestWindowsUserSoftwareOperatorFinalBoundaryHidesRows",
@@ -1924,6 +1930,20 @@
       "TestWindowsStorageIORetentionRejectsAllUnknownAndAcceptsIdleRates",
       "TestWindowsStorageRetentionExpiryOmissionAndReplacement",
       "TestWindowsStorageUsefulRequiresRecognizedValues",
+      "TestWindowsUpdateJobBusinessRejectionOnlyPersistsTime",
+      "TestWindowsUpdateJobCurrentLeafRetirementKeepsAnchor",
+      "TestWindowsUpdateJobDynamicAuthorityLossAtFinalCommit",
+      "TestWindowsUpdateJobFinalAuthorityExpiryAndClockRollback",
+      "TestWindowsUpdateJobFinalClaimExpiryPreservesExactApproval",
+      "TestWindowsUpdateJobMarkerImmutable",
+      "TestWindowsUpdateJobMissingUsedStateNeverReconstructed",
+      "TestWindowsUpdateJobRestoredApprovalRequiresOriginalOperator",
+      "TestWindowsUpdateJobRevocationOnlyAdvancesRejectionFloor",
+      "TestWindowsUpdateJobServiceActionKeyDomainIsSeparate",
+      "TestWindowsUpdateJobSetupIsFreshExplicitAndPreservesLegacyBytes",
+      "TestWindowsUpdateJobSetupRejectsImplicitConsentAndKeyReuse",
+      "TestWindowsUpdateJobSignedLifecycleConsumeOnceAndHistoryPreserved",
+      "TestWindowsUpdateJobSuccessfulFinalClockAndConsentStayFixed",
       "TestWindowsUpdatesCannotBeAdmittedUnderBasicIdentity",
       "TestWindowsUpdatesDurablePrivateReplayAndCaptureFloor",
       "TestWindowsUpdatesPrivateIndependentExpiryAndReceipt",
@@ -1998,6 +2018,14 @@
       "TestWindowsHistoryRealTransportSearchSelectedMessagesAndPurpose",
       "TestWindowsIngressRejectsNativePackageRoutesBeforeDispatch",
       "TestWindowsServiceActionTransportThroughBrokerAndDurableStatus",
+      "TestWindowsUpdateJobsBodyAndCertificateAdmissionBoundaries",
+      "TestWindowsUpdateJobsCanonicalShapeAndTLSOnly",
+      "TestWindowsUpdateJobsCurrentAndRetiredLeaf",
+      "TestWindowsUpdateJobsExpiredClaimWithholdsEnvelope",
+      "TestWindowsUpdateJobsFinalExpiryDoesNotRestoreClaim",
+      "TestWindowsUpdateJobsForeignEnrolledObserver",
+      "TestWindowsUpdateJobsMetadataClaimsAndExecutorSignatures",
+      "TestWindowsUpdateJobsUnsetAndConfiguration",
       "TestZeroConfigurationAndPlaintextTLSSeparation"
     ],
     "localrmm/internal/fixtures": [],
@@ -2875,7 +2903,8 @@
       "TestNamedProtectedConfigLoadAndSnapshotIsolation",
       "TestProfileValidation",
       "TestProtectedFiles",
-      "TestStrictConfigAndSecretDiagnostics"
+      "TestStrictConfigAndSecretDiagnostics",
+      "TestWindowsUpdateJobsConfigurationIsSeparateDefaultOffTLSOnly"
     ],
     "localrmm/internal/lanstore": [
       "TestAgentTelemetryRejectsOperatorCertificateMetadata",
@@ -4708,6 +4737,29 @@
       "TestSubprocessCallerCancellationKillsAndReaps",
       "TestSubprocessResponsesAndEnvironment",
       "TestWorkerFixture"
+    ],
+    "localrmm/internal/windowsupdatejob": [
+      "TestApprovedCapacityRetainsEveryEnvelope",
+      "TestCompleteSignedHistoryFitsCapacity",
+      "TestCurrentLeafRenewalDoesNotExtendOriginalPreview",
+      "TestExecutorFinalRevocationAndRevisionRecheck",
+      "TestExecutorPersistsAttemptBeforeOneNativeCall",
+      "TestExecutorProofCannotBeForgedByObserverOrOtherRequest",
+      "TestExecutorUncertaintyAndCrashNeverRetry",
+      "TestFreshLocalConsentAndLiveAuthorityFailClosed",
+      "TestInactiveAdapterCannotInstall",
+      "TestOnlyOneLivePreviewAndUnsignedChecksDoNotConsumeCapacity",
+      "TestReadinessNeverPromotesObservationOrUnknown",
+      "TestRejectedExpiryFloorSurvivesRestart",
+      "TestReopenPreservesClaimAndApprovalBytes",
+      "TestSignedExecutorReadinessAndResultRelay",
+      "TestSourceErrorCannotReturnUsableReadiness",
+      "TestStoreUncertaintyAndMissingUsedStateNeverRetry",
+      "TestUpdateDomainRejectsServiceActionAndCanonicalTampering",
+      "TestWorkflowExactApprovalClaimAndResult"
+    ],
+    "localrmm/internal/windowsupdatemanager": [
+      "TestSelectedUpdateConfigRequiresFreshExactTLSAuthority"
     ],
     "localrmm/internal/windowsupdates": [
       "TestActivationIntegrityAcceptsOnlyHighAndSystem",
