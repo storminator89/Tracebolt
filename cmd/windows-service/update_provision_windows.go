@@ -20,6 +20,9 @@ import (
 
 func nativeUpdateProvision(ctx context.Context, in updateProvisionInput) (result updateProvisionResult, err error) {
 	_, err = withReceiptLease(ctx, openReceiptStore, func(receipt installReceipt, lease receiptStore) (any, error) {
+		if e := windowspackage.CheckManagedMSIAbsent(ctx); e != nil {
+			return nil, e
+		}
 		path := filepath.Join(receipt.Service.Layout.EnrollmentRoot, "agent.json")
 		check := func(ctx context.Context) (lanclient.WindowsUpdateSetupIdentity, error) {
 			if ctx.Err() != nil || lease.Verify() != nil {
@@ -124,6 +127,9 @@ func nativeUpdateProvision(ctx context.Context, in updateProvisionInput) (result
 // Keep a failed/uncertain setup from emitting apparently usable registration.
 func nativeUpdateRemove(ctx context.Context, apply bool, approved string) (plan windowsupdatesetup.RemovalPlan, err error) {
 	_, err = withReceiptLease(ctx, openReceiptStore, func(receipt installReceipt, lease receiptStore) (any, error) {
+		if e := windowspackage.CheckManagedMSIAbsent(ctx); e != nil {
+			return nil, e
+		}
 		check := func(ctx context.Context, p windowsupdatesetup.Plan) error {
 			if ctx.Err() != nil || lease.Verify() != nil || p.Observer != receipt.Service {
 				return errLifecycle
@@ -201,6 +207,9 @@ func guardUpdateExecutorRemoval(ctx context.Context, r windowsservice.Receipt) e
 	return errors.Join(image.Close(), s.Close())
 }
 func uninstallWithUpdateOwnership(ctx context.Context, r windowsservice.Receipt) (windowsservice.ApplyResult, error) {
+	if e := windowspackage.CheckManagedMSIAbsent(ctx); e != nil {
+		return windowsservice.ApplyResult{}, e
+	}
 	if e := guardSoftwareExecutorRemoval(ctx, r); e != nil {
 		return windowsservice.ApplyResult{}, e
 	}
@@ -211,6 +220,9 @@ func uninstallWithUpdateOwnership(ctx context.Context, r windowsservice.Receipt)
 }
 func nativeUpdateExport(ctx context.Context) (registration job.SetupRegistration, err error) {
 	_, err = withReceiptLease(ctx, openReceiptStore, func(receipt installReceipt, lease receiptStore) (any, error) {
+		if e := windowspackage.CheckManagedMSIAbsent(ctx); e != nil {
+			return nil, e
+		}
 		snapshot, e := windowsservice.InspectOwned(ctx, receipt.Service)
 		if e != nil || snapshot.State != windowsservice.Stopped || lease.Verify() != nil {
 			return nil, errLifecycle

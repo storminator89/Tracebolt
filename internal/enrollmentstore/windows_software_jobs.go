@@ -72,6 +72,9 @@ func (s *Store) checkWindowsSoftwareJobKey(ctx context.Context, t *transaction, 
 // Both action keys are externally supplied and separate from each other, all
 // enrollment/issuer keys, and the already-established service-control domain.
 func (s *Store) windowsSoftwareJobKeysDistinct(ctx context.Context, t *transaction, manager, executor ed25519.PublicKey) error {
+	if windowsManagedMSIKeyConflict(t, manager, executor) {
+		return windowssoftwarejob.ErrConflict
+	}
 	if !keyvalidation.Ed25519(manager) || !keyvalidation.Ed25519(executor) || bytes.Equal(manager, executor) {
 		return windowssoftwarejob.ErrAuthority
 	}
@@ -170,6 +173,9 @@ func (s *Store) setupWindowsSoftwareJobsCreateOnly(ctx context.Context, key, exe
 		snap, err := systemDevice(t, consent.Binding.DeviceID)
 		if err != nil {
 			return windowssoftwarejob.ErrAuthority
+		}
+		if t.credentials[snap.InvitationID].WindowsManagedMSISetup != nil {
+			return windowssoftwarejob.ErrConflict
 		}
 		marker := &windowsSoftwareJobSetupMarker{Version: "tracebolt.windows-prepared-msi-setup.v1", Consent: consent, InitializedAt: now}
 		if !validWindowsSoftwareJobSetupMarker(snap, marker, t.currentCredentialNotAfter(snap)) {

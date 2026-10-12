@@ -23,6 +23,7 @@ import (
 	"localrmm/internal/operatorauth"
 	"localrmm/internal/packagecontroller"
 	"localrmm/internal/windowsactionmanager"
+	"localrmm/internal/windowsmanagedmsimanager"
 	"localrmm/internal/windowssoftwarejob"
 	"localrmm/internal/windowsupdatejob"
 	"math"
@@ -35,6 +36,7 @@ import (
 )
 
 type LANOperatorConfig struct {
+	WindowsManagedMSI *windowsmanagedmsimanager.Manager
 	// Source-only injection; no CLI/config loader or native executor is supplied.
 	WindowsUpdateJobs       *windowsupdatejob.Manager
 	WindowsSoftwareJobs     *windowssoftwarejob.Manager
@@ -66,6 +68,7 @@ type LANOperatorConfig struct {
 	CVEProgress *linuxcveprogress.Cache
 }
 type operatorHandler struct {
+	windowsManagedMSI        *windowsmanagedmsimanager.Manager
 	windowsUpdateJobs        *windowsupdatejob.Manager
 	windowsSoftwareJobs      *windowssoftwarejob.Manager
 	windowsUpdateRegistry    *windowsupdatejob.Registry
@@ -158,6 +161,9 @@ func NewLANOperatorHandler(app *Server, c LANOperatorConfig) (http.Handler, erro
 	}
 	if c.WindowsUpdateRegistry != nil && (c.WindowsUpdateJobs != nil || c.WindowsEnrollment == nil || !c.Auth.Named() || c.InsecureHTTPTest || !c.WindowsUpdateRegistry.MatchesBinding(c.WindowsEnrollment.Binding())) {
 		return nil, errors.New("selected Windows update registry requires the exact TLS named Windows enrollment boundary")
+	}
+	if c.WindowsManagedMSI != nil && (c.WindowsEnrollment == nil || !c.Auth.Named() || c.InsecureHTTPTest || !c.WindowsManagedMSI.OperatorPolicyConfigured() || !c.WindowsManagedMSI.MatchesBinding(c.WindowsEnrollment.Binding())) {
+		return nil, errors.New("managed MSI requires its exact separately configured TLS named-operator enrollment boundary")
 	}
 	if c.WindowsSoftwareRegistry != nil && (c.WindowsSoftwareJobs != nil || c.WindowsEnrollment == nil || !c.Auth.Named() || c.InsecureHTTPTest || !c.WindowsSoftwareRegistry.MatchesBinding(c.WindowsEnrollment.Binding())) {
 		return nil, errors.New("selected Windows update registry requires the exact TLS named Windows enrollment boundary")
@@ -262,6 +268,7 @@ func NewLANOperatorHandler(app *Server, c LANOperatorConfig) (http.Handler, erro
 	h := &operatorHandler{packageUpdatesManager: packages, alarmSettings: c.AlarmSettings, applicationChecks: c.ApplicationChecks, applicationCheckSettings: c.ApplicationCheckSettings, actions: actions, app: app, origin: c.Origin, authority: u.Host, auth: c.Auth, registry: c.Registry, insecureHTTPTest: c.InsecureHTTPTest, cookieName: cookieName, enrollment: c.Enrollment, enrollmentBootstrap: c.EnrollmentBootstrap}
 	h.windowsUpdateJobs = c.WindowsUpdateJobs
 	h.windowsSoftwareJobs = c.WindowsSoftwareJobs
+	h.windowsManagedMSI = c.WindowsManagedMSI
 	h.windowsUpdateRegistry = c.WindowsUpdateRegistry
 	h.windowsSoftwareRegistry = c.WindowsSoftwareRegistry
 	if c.WindowsServiceActions != nil {
@@ -503,6 +510,10 @@ func (h *operatorHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if _, _, ok := windowsUpdateJobRoute(r); ok {
 		h.windowsUpdateJobsAPI(w, r)
+		return
+	}
+	if _, _, ok := windowsManagedMSIRoute(r); ok {
+		h.windowsManagedMSIAPI(w, r)
 		return
 	}
 	if _, _, ok := windowsSoftwareJobRoute(r); ok {

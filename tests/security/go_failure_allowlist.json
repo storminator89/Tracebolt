@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "sourceCommit": "fccc4b00cd8a144afd58e4b995747afab7a10022",
-  "goSourceSha256": "1fcbb56821f25b554b4502da2e9c3da8e5bca89a61bf7713be2468271eac7a51",
+  "goSourceSha256": "485f881b8399e7c0c6e958816ca3e90e38e35be7b3d00023cf09ad77514d7400",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -216,6 +216,10 @@
       "TestNativeFailuresAreSanitizedAndAtomic",
       "TestShortWriteFails"
     ],
+    "localrmm/cmd/windows-managed-msi-manager-setup": [
+      "TestManagedManagerSetupRequiresSeparateExactApplyApproval"
+    ],
+    "localrmm/cmd/windows-managed-msi-service": [],
     "localrmm/cmd/windows-native-acceptance": [
       "TestAutomaticEventCannotRunApprovedLookingFlags",
       "TestControllerAncestorFailureNeverProvisionsOrStartsPeer",
@@ -329,6 +333,8 @@
       "TestIndependentReceiptLeaseCancellationDuringCloseCannotSucceed",
       "TestIndependentSetupCancellationDuringCloseCannotSucceed",
       "TestIndependentSetupCloseKeepsFirstFailureDiagnosis",
+      "TestManagedMSISetupNeedsEveryFreshLocalScope",
+      "TestManagedMSISetupRejectsPackagePathShellAndImplicitActivation",
       "TestNetworkConsentErrorsAndInvalidModes",
       "TestNetworkConsentFlagsExplicitAndBounded",
       "TestNetworkConsentNeverConfiguresWithMissingDependencies",
@@ -993,6 +999,7 @@
       "TestLinuxCVERecomputesOutgoingFeedAge",
       "TestLinuxCVERejectsMixedOrTruncatedInventory",
       "TestLinuxCVEVerticalSliceUsesCompleteSourceVersions",
+      "TestManagedMSIOperatorRoutesClosed",
       "TestManagedPreviewDisabledByDefault",
       "TestManagedPreviewDoesNotFallBackToManagerSample",
       "TestManagedPreviewHTTPGuardsAndRealSample",
@@ -1751,6 +1758,9 @@
       "TestJournalStaleRecordedLeafCannotAuthorizeAfterLeafChange",
       "TestJournalStatusReadAdmissionAndClock",
       "TestLegacyCompleteIdentityRetainsNativePackageAuthority",
+      "TestManagedMSIRejectsPreparedKeyReuse",
+      "TestManagedMSISetupFreshPreservesPreparedBytes",
+      "TestManagedMSIUploadIntentImmutableAndFinalClock",
       "TestMetadataReadCohortCancellationAndCertificateWait",
       "TestMetadataReadCohortSharesMaintenanceHandoff",
       "TestNativePackageRenewalPolicyFailsClosed",
@@ -2060,6 +2070,9 @@
       "TestJournalRealTransportPurposeAndTerminalExpiry",
       "TestJournalRealTransportResultSearchRetryAndRevocation",
       "TestJournalRealTransportRevocationDuringClaimBody",
+      "TestManagedMSIChunkFrameFits64KiB",
+      "TestManagedMSIFramingDoesNotPromotePreparedOrURLs",
+      "TestManagedMSIRealTLSIngressExactDeliveryReviewInstallReceipt",
       "TestNativePackageEnrolledTransportExactClaimsAndResults",
       "TestNetworkContextComposedCompleteGenerationBothTransports",
       "TestNetworkContextLastClockBeforeScopeReceiptRechecksAuthority",
@@ -2488,6 +2501,11 @@
       "TestJournalSocketKernelCredentialsAndFixedFrame",
       "TestJournalSocketTruncatedFrameRejected",
       "TestMalformedOrEncodedReceiptRetainsPending",
+      "TestManagedMSIExpiredReadinessReportDoesNotStarveExplicitFreshSequence",
+      "TestManagedMSIOnlyReportConflictAllowsFreshPollClassification",
+      "TestManagedMSIRealTLSTransportFrameBoundsAndPolicy",
+      "TestManagedMSISenderMissingGrantNeverOpensPeerOrNetwork",
+      "TestManagedMSITLSRedirectCompressionAndResponseBounds",
       "TestMaterialCannotFallbackToAmbientTrust",
       "TestNetworkContextLocalExpiryNeverCapturesOrAcknowledges",
       "TestOperationalCancellationAndInvalidCollectionNeverStage",
@@ -3021,6 +3039,7 @@
       "TestProfileValidation",
       "TestProtectedFiles",
       "TestStrictConfigAndSecretDiagnostics",
+      "TestWindowsManagedMSIConfigurationSeparateDefaultOff",
       "TestWindowsSoftwareJobsConfigurationIsSeparateDefaultOffTLSOnly",
       "TestWindowsUpdateJobsConfigurationIsSeparateDefaultOffTLSOnly"
     ],
@@ -4380,6 +4399,39 @@
       "TestWindowsManagedOSProvenancePreservesExistingEvidenceAndLegacyReport",
       "TestWindowsManagedOSProvenanceRejectsUntrustedMetadata"
     ],
+    "localrmm/internal/windowsmanagedmsi": [
+      "TestManagedContractDomainsAndBounds",
+      "TestManagedDeliverySeparateReviewAndSingleAttempt",
+      "TestManagedFinalCurrentFenceAndNoRestart",
+      "TestManagedFinalizationCrashMarkerNeverRestarts",
+      "TestManagedFinalizationFailureReportIsDurableAndExact",
+      "TestManagedNativeOutcomeVocabulary",
+      "TestManagedPartialCreationAndFailedCheckpointFence",
+      "TestManagedPendingChunkExactResume",
+      "TestManagedUncertainFinalizationNeverRestarts",
+      "TestManagedUnexplainedPayloadFences"
+    ],
+    "localrmm/internal/windowsmanagedmsiexecutor": [
+      "TestManagedCloseTimerCompletionRaceReturnsCloseError",
+      "TestManagedCompletedAbandonedOwnerReturnsCloseError",
+      "TestManagedCustodyCloseFailureKeepsInstallUncertain",
+      "TestManagedCustodyCloseFailureSuppressesReady"
+    ],
+    "localrmm/internal/windowsmanagedmsiipc": [
+      "TestManagedPipeFreshDomainAndBoundedPayload",
+      "TestManagedRuntimeNativeSourceBoundaries"
+    ],
+    "localrmm/internal/windowsmanagedmsimanager": [
+      "TestManagedManagerExactLifecycleAndOneAttempt",
+      "TestManagedManagerExpiredReadinessNeedsFreshExplicitReview",
+      "TestManagedManagerFinalPermissionAndExpiry",
+      "TestManagedManagerLateInterventionIsNotImportOrInstall",
+      "TestManagedManagerReleaseRechecksAfterCommitWait",
+      "TestManagedUploadCheckpointAndCompletionUncertaintyRetainSameBytes",
+      "TestSpoolChangedUnacknowledgedTailIsNeverOverwritten",
+      "TestSpoolSingleLinkExactChunksAndSameByteRecovery"
+    ],
+    "localrmm/internal/windowsmanagedmsiservice": [],
     "localrmm/internal/windowsnetwork": [
       "TestAddressAndScopeCanonical",
       "TestBoundedCountsStableRowsAndBudget",

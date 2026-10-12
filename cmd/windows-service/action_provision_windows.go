@@ -5,6 +5,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"localrmm/internal/windowspackage"
 	"path/filepath"
 
 	"localrmm/internal/lanclient"
@@ -14,6 +15,9 @@ import (
 
 func nativeActionProvision(ctx context.Context, in actionProvisionInput) (plan windowsaction.ProvisionPlan, err error) {
 	_, err = withReceiptLease(ctx, openReceiptStore, func(receipt installReceipt, lease receiptStore) (any, error) {
+		if e := windowspackage.CheckManagedMSIAbsent(ctx); e != nil {
+			return nil, e
+		}
 		path := filepath.Join(receipt.Service.Layout.EnrollmentRoot, "agent.json")
 		validate := func(ctx context.Context) error {
 			if ctx.Err() != nil || lease.Verify() != nil {

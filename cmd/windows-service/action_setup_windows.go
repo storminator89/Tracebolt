@@ -6,6 +6,7 @@ import (
 	"context"
 	"localrmm/internal/lanclient"
 	"localrmm/internal/windowsaction"
+	"localrmm/internal/windowspackage"
 	"localrmm/internal/windowsservice"
 	"path/filepath"
 	"time"
@@ -13,6 +14,9 @@ import (
 
 func nativeActionSetup(ctx context.Context, in actionSetupInput) error {
 	_, e := withReceiptLease(ctx, openReceiptStore, func(receipt installReceipt, lease receiptStore) (any, error) {
+		if e := windowspackage.CheckManagedMSIAbsent(ctx); e != nil {
+			return nil, e
+		}
 		snapshot, e := windowsservice.InspectOwned(ctx, receipt.Service)
 		if e != nil || snapshot.State != windowsservice.Stopped {
 			return nil, errLifecycle

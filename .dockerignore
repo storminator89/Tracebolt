@@ -17,6 +17,7 @@ tests/**
 tests/e2e-review/**
 !tests/e2e-review/proactive-ai-browser.mjs
 !tests/e2e-review/proactive-ai-browser.d.mts
+!tests/e2e-review/windows-managed-msi-browser.mjs
 !tests/fixtures/
 tests/fixtures/**
 !tests/fixtures/windows-contact-view.json

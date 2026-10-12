@@ -44,6 +44,9 @@ func windowsActionSchemaPresent(ctx context.Context, c *sql.Conn) (bool, error) 
 	return n == 2, nil
 }
 func windowsActionKeySeparate(t *transaction, key ed25519.PublicKey) error {
+	if windowsManagedMSIKeyConflict(t, key) {
+		return windowsaction.ErrBinding
+	}
 	digest := actionpermit.Digest(key)
 	for _, credential := range t.credentials {
 		if other := credential.WindowsSoftwareJobSetup; other != nil && (digest == other.Consent.Binding.KeyID || digest == other.Consent.Binding.ExecutorKeyID) {
@@ -102,6 +105,9 @@ func (s *Store) SetupWindowsServiceActionsCreateOnly(ctx context.Context, key ed
 		snap, e = s.windowsFullServicesAuthority(t, snap.InvitationID, t.currentCertificateHash(snap), now)
 		if e != nil {
 			return e
+		}
+		if t.credentials[snap.InvitationID].WindowsManagedMSISetup != nil || windowsManagedMSIKeyConflict(t, key) {
+			return enrollmentstate.ErrConflict
 		}
 		marker := &windowsActionSetupMarker{"tracebolt.windows-service-action-setup.v1", b, now}
 		if !validWindowsActionSetupMarker(snap, marker, t.currentCredentialNotAfter(snap)) {

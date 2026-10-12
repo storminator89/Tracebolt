@@ -114,3 +114,12 @@ with private account/source filtering in Software. It is not included in the
 accepted by the current-profile native harness. Separate unsigned helper build
 artifacts and exact source instructions are documented; native acceptance and
 runtime provisioning remain separately gated.
+
+## Central managed MSI source candidate
+
+[Central delivery](windows-managed-msi-delivery.md) now has a separate bounded
+source path: chunked manager upload, background protected import, fresh review,
+one separately approved install, and durable per-device outcome. This does not
+change the released profile or imply native acceptance. The dedicated LocalSystem
+service is explicit opt-in and excludes other Tracebolt mutators on that endpoint;
+observation remains available. [Manual native acceptance remains pending](windows-managed-msi-native-acceptance.md).

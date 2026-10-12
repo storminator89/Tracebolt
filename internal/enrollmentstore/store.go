@@ -79,6 +79,7 @@ type credential struct {
 	WindowsActionSetup                 *windowsActionSetupMarker      `json:"windowsActionSetup,omitempty"`
 	WindowsUpdateJobSetup              *windowsUpdateJobSetupMarker   `json:"windowsUpdateJobSetup,omitempty"`
 	WindowsSoftwareJobSetup            *windowsSoftwareJobSetupMarker `json:"windowsSoftwareJobSetup,omitempty"`
+	WindowsManagedMSISetup             *windowsManagedMSISetupMarker  `json:"windowsManagedMSISetup,omitempty"`
 	DER                                []byte                         `json:"der"`
 	Delivery                           Delivery                       `json:"delivery"`
 	Replay                             Replay                         `json:"replay"`
@@ -98,6 +99,7 @@ type transaction struct {
 	originalWindowsActionSetup      map[string]windowsActionSetupMarker
 	originalWindowsUpdateJobSetup   map[string]windowsUpdateJobSetupMarker
 	originalWindowsSoftwareJobSetup map[string]windowsSoftwareJobSetupMarker
+	originalWindowsManagedMSISetup  map[string]windowsManagedMSISetupMarker
 	conn                            *sql.Conn
 	beforeCommit                    []func() error
 	originalWindowsNetworkContext   map[string]bool
@@ -393,7 +395,7 @@ func (s *Store) load(ctx context.Context, conn *sql.Conn) (*transaction, error) 
 	if err != nil {
 		return nil, ErrStorage
 	}
-	t := &transaction{ctx: ctx, issuerDER: s.issuerDER, conn: conn, engine: engine, credentials: make(map[string]credential), originalLedger: raw, originalCredentials: make(map[string][]byte), originalRenewals: make(map[string][]byte), originalServiceActionSetup: make(map[string]serviceActionSetupMarker), originalWindowsActionSetup: make(map[string]windowsActionSetupMarker), originalWindowsUpdateJobSetup: make(map[string]windowsUpdateJobSetupMarker), originalWindowsSoftwareJobSetup: make(map[string]windowsSoftwareJobSetupMarker), originalWindowsHistoryAuthority: make(map[string]bool), originalWindowsEventAuthority: make(map[string]bool), originalWindowsFullServices: make(map[string]bool), originalWindowsFullSoftware: make(map[string]bool), originalWindowsUserSoftware: make(map[string]bool), originalWindowsFullProcesses: make(map[string]bool), originalWindowsNetworkContext: make(map[string]bool), operational: map[string]operationalRecord{}, originalOperational: map[string][]byte{}, inventory: map[string]inventoryRecord{}, originalInventory: map[string][]byte{}, overview: map[string]overviewRecord{}, originalOverview: map[string][]byte{}}
+	t := &transaction{ctx: ctx, issuerDER: s.issuerDER, conn: conn, engine: engine, credentials: make(map[string]credential), originalLedger: raw, originalCredentials: make(map[string][]byte), originalRenewals: make(map[string][]byte), originalServiceActionSetup: make(map[string]serviceActionSetupMarker), originalWindowsActionSetup: make(map[string]windowsActionSetupMarker), originalWindowsUpdateJobSetup: make(map[string]windowsUpdateJobSetupMarker), originalWindowsSoftwareJobSetup: make(map[string]windowsSoftwareJobSetupMarker), originalWindowsManagedMSISetup: make(map[string]windowsManagedMSISetupMarker), originalWindowsHistoryAuthority: make(map[string]bool), originalWindowsEventAuthority: make(map[string]bool), originalWindowsFullServices: make(map[string]bool), originalWindowsFullSoftware: make(map[string]bool), originalWindowsUserSoftware: make(map[string]bool), originalWindowsFullProcesses: make(map[string]bool), originalWindowsNetworkContext: make(map[string]bool), operational: map[string]operationalRecord{}, originalOperational: map[string][]byte{}, inventory: map[string]inventoryRecord{}, originalInventory: map[string][]byte{}, overview: map[string]overviewRecord{}, originalOverview: map[string][]byte{}}
 	if conn.QueryRowContext(ctx, "SELECT count(*),coalesce(max(length(body)),0) FROM enrollment_credentials").Scan(&count, &n) != nil || count > s.config.RecordLimit || n > maxCredentialBytes {
 		return nil, ErrStorage
 	}
@@ -437,6 +439,9 @@ func (s *Store) load(ctx context.Context, conn *sql.Conn) (*transaction, error) 
 		}
 		if c.WindowsSoftwareJobSetup != nil {
 			t.originalWindowsSoftwareJobSetup[id] = *c.WindowsSoftwareJobSetup
+		}
+		if c.WindowsManagedMSISetup != nil {
+			t.originalWindowsManagedMSISetup[id] = *c.WindowsManagedMSISetup
 		}
 		if c.WindowsHistoryAuthorityInitialized {
 			t.originalWindowsHistoryAuthority[id] = true
@@ -516,6 +521,9 @@ func (s *Store) load(ctx context.Context, conn *sql.Conn) (*transaction, error) 
 	if err = s.loadWindowsUpdateJobRecords(ctx, t); err != nil {
 		return nil, err
 	}
+	if err = s.loadWindowsManagedMSIRecords(ctx, t); err != nil {
+		return nil, err
+	}
 	if err = s.loadWindowsSoftwareJobRecords(ctx, t); err != nil {
 		return nil, err
 	}
@@ -547,6 +555,9 @@ func (t *transaction) validMetadata(s enrollmentstate.Snapshot, c credential) bo
 		return false
 	}
 	if !validWindowsUpdateJobSetupMarker(s, c.WindowsUpdateJobSetup, credentialAuthorityExpiry(s, c)) {
+		return false
+	}
+	if !validWindowsManagedMSISetupMarker(s, c.WindowsManagedMSISetup, credentialAuthorityExpiry(s, c)) {
 		return false
 	}
 	if !validWindowsSoftwareJobSetupMarker(s, c.WindowsSoftwareJobSetup, credentialAuthorityExpiry(s, c)) {
@@ -624,6 +635,9 @@ func (s *Store) transact(ctx context.Context, action func(*transaction) error) e
 		return err
 	}
 	for id, c := range t.credentials {
+		if original, ok := t.originalWindowsManagedMSISetup[id]; ok && (c.WindowsManagedMSISetup == nil || original != *c.WindowsManagedMSISetup) {
+			return ErrStorage
+		}
 		if original, ok := t.originalWindowsUpdateJobSetup[id]; ok && (c.WindowsUpdateJobSetup == nil || original != *c.WindowsUpdateJobSetup) {
 			return ErrStorage
 		}
@@ -744,6 +758,9 @@ func (s *Store) transact(ctx context.Context, action func(*transaction) error) e
 	if err = s.loadWindowsUpdateJobRecords(ctx, t); err != nil {
 		return err
 	}
+	if err = s.loadWindowsManagedMSIRecords(ctx, t); err != nil {
+		return err
+	}
 	if err = s.loadWindowsSoftwareJobRecords(ctx, t); err != nil {
 		return err
 	}
@@ -815,6 +832,18 @@ func validateSchema(ctx context.Context, conn *sql.Conn, profile string) error {
 			return ErrStorage
 		}
 		for _, obj := range windowsSoftwareJobSchemaObjects() {
+			expected[obj.Name] = obj
+		}
+	}
+	managedMSIEnabled, e := windowsManagedMSISchemaPresent(ctx, conn)
+	if e != nil {
+		return e
+	}
+	if managedMSIEnabled {
+		if profile != enrollmentcrypto.CollectionProfileWindowsInventory {
+			return ErrStorage
+		}
+		for _, obj := range windowsManagedMSISchemaObjects() {
 			expected[obj.Name] = obj
 		}
 	}

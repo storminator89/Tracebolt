@@ -21,6 +21,9 @@ import (
 
 func nativeSoftwareProvision(ctx context.Context, in softwareProvisionInput) (result softwareProvisionResult, err error) {
 	_, err = withReceiptLease(ctx, openReceiptStore, func(receipt installReceipt, lease receiptStore) (any, error) {
+		if e := windowspackage.CheckManagedMSIAbsent(ctx); e != nil {
+			return nil, e
+		}
 		path := filepath.Join(receipt.Service.Layout.EnrollmentRoot, "agent.json")
 		check := func(ctx context.Context) (lanclient.WindowsSoftwareSetupIdentity, error) {
 			if ctx.Err() != nil || lease.Verify() != nil {
@@ -145,6 +148,9 @@ func guardSoftwareExecutorRemoval(ctx context.Context, r windowsservice.Receipt)
 }
 func nativeSoftwareExport(ctx context.Context) (registration job.SetupRegistration, err error) {
 	_, err = withReceiptLease(ctx, openReceiptStore, func(receipt installReceipt, lease receiptStore) (any, error) {
+		if e := windowspackage.CheckManagedMSIAbsent(ctx); e != nil {
+			return nil, e
+		}
 		snapshot, e := windowsservice.InspectOwned(ctx, receipt.Service)
 		if e != nil || snapshot.State != windowsservice.Stopped || lease.Verify() != nil {
 			return nil, errLifecycle
