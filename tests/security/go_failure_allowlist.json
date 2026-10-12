@@ -1,7 +1,5 @@
 {
-  "schemaVersion": 1,
-  "sourceCommit": "fccc4b00cd8a144afd58e4b995747afab7a10022",
-  "goSourceSha256": "8baa8bb420b058944fd59c770ba1d955f0cd09ef9aaeeebd3944c8815821708f",
+  "goSourceSha256": "923d2eb3da895c22cb727f602575ca7dbbdb42bfacd5a32c82596d1c53c72d92",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -263,6 +261,7 @@
       "TestCurrentPackagedSetupGUINative",
       "TestCurrentSetupCanonicalSenderRequiresAllUsedMarkersAndOriginalFloor",
       "TestCurrentSetupGrantSpecsExactOrderedTwentyAndHistoryProof",
+      "TestCurrentSetupOptionalsRejectEveryPresence",
       "TestCurrentSetupPendingRejectsHistoricalReceiptAndConsent",
       "TestEventConsentFlagsExplicitAndBounded",
       "TestEventContentConsentErrorsAndInvalidModes",
@@ -535,6 +534,7 @@
     "localrmm/cmd/windows-update-manager-setup": [
       "TestSetupCommandRequiresExactExplicitPhaseAndAcknowledgement"
     ],
+    "localrmm/cmd/windows-update-service": [],
     "localrmm/cmd/windows-user-software": [],
     "localrmm/deploy/windows-setup": [],
     "localrmm/internal/actionclient": [
@@ -1627,6 +1627,7 @@
       "TestBackendReviewMissingSearchIndexCannotProveAbsence",
       "TestBackendReviewPostCommitRevocationHidesPage",
       "TestBackendReviewPostCommitRevocationHidesReceipt",
+      "TestBackgroundWindowsMutationRequiresRegisteredMSIPeer",
       "TestCachedUpdatesAndEndpointIdentityRetainIndependentOriginalAges",
       "TestCachedUpdatesExactRetryRestartOrdinaryReportsDoNotRefresh",
       "TestCachedUpdatesExpiredCleanupSurvivesLaterOrdinaryFrame",
@@ -2400,6 +2401,7 @@
       "TestActionSetupReadinessRejectsGrantOrCurrentIdentityChanges",
       "TestAmendmentAcceptPreservesOriginalIdentityAndConsumption",
       "TestAmendmentInvalidModesAndRootNeverReadState",
+      "TestBackgroundRegistrationSignatureCannotPromoteLegacy",
       "TestBootstrapRouteFamiliesRemainIsolated",
       "TestBootstrapTransportPinsOriginPathAndRejectsRedirect",
       "TestBootstrapTransportUsesExplicitServerTrustWithoutClientIdentity",
@@ -2562,6 +2564,7 @@
       "TestPublicBootstrapRejectsNoncanonicalHeaderMapKeys",
       "TestPublicBootstrapTransportPinsOneBodylessPublicRoute",
       "TestPublicBootstrapTransportUsesSharedDNSVetting",
+      "TestPublicUpdateAuthorityNeverReadsPrivateIdentityAndChecksAfterWaits",
       "TestReadAdminSetupTransportUsesSeparateExactPublicPath",
       "TestReadAdminV2SetupTransportUsesBodylessDistinctPath",
       "TestReadAdminV3SetupTransportUsesBodylessDistinctPath",
@@ -4433,6 +4436,7 @@
       "TestManagedRuntimeNativeSourceBoundaries"
     ],
     "localrmm/internal/windowsmanagedmsimanager": [
+      "TestBackgroundPeerCompletionRequiresExactProtectedFiles",
       "TestCoordinatedApprovalRequiresFreshIdleStatusWithoutConsuming",
       "TestManagedFleetOneUploadIndependentTransfersAndCustody",
       "TestManagedFleetSetupUsesFreshPathsAndExactRegistry",
@@ -4447,12 +4451,17 @@
       "TestSpoolChangedUnacknowledgedTailIsNeverOverwritten",
       "TestSpoolSingleLinkExactChunksAndSameByteRecovery"
     ],
-    "localrmm/internal/windowsmanagedmsiservice": [],
+    "localrmm/internal/windowsmanagedmsiservice": [
+      "TestBackgroundMSIActivationPreservesLegacyBytesAndDenial",
+      "TestBackgroundMSIActivationRequiresExactPairedManagerProof"
+    ],
     "localrmm/internal/windowsmutationfence": [
       "TestActualDomainCompletionIsDurableBeforeSharedRelease",
       "TestActualKernelsExcludeBothDirections",
       "TestActualKernelsRecoverOnlySavedLostRelease",
       "TestActualNoStartAndCleanupUncertaintyRemainFenced",
+      "TestBackgroundKernelDurableResultRestartAndUncertainStop",
+      "TestBackgroundMSIAndWUAUseOneSharedOwner",
       "TestBoundedRetainedOwnersAndNoCrossDomainReceipt",
       "TestDomainDurabilityRequiredBeforeRelease",
       "TestExactSavedReceiptFinishesLostRelease",
@@ -5060,6 +5069,7 @@
       "TestPerUpdateFailureAndIncompleteResultsNeverBecomeSuccess",
       "TestPreparationFailClosed",
       "TestPreparationPublicationPoisonsBeforeUnscheduledCaller",
+      "TestServiceDrainWaitsForActualNativeOwner",
       "TestStartFenceExpiresDuringFinalReadiness",
       "TestSuccessfulReplyCannotReleaseAdmissionBeforeCallerDecidesTimeout",
       "TestTimeoutDoesNotReleaseRunningCOMOrPermitRetry",
@@ -5172,7 +5182,14 @@
       "TestSanitizedMetadata",
       "TestSourceNilAndFailureOwnership"
     ],
+    "localrmm/internal/windowsupdateservice": [
+      "TestBackgroundActivationCannotAdoptOldConfig",
+      "TestBackgroundServiceSourceBoundaries"
+    ],
     "localrmm/internal/windowsupdatesetup": [
+      "TestBackgroundManagerActivationBindsExactRegistration",
+      "TestBackgroundSetupMissingAckAndUncertainSCMStayFenced",
+      "TestBackgroundSetupStagesDisabledWithFreshRegistration",
       "TestFreshCoordinatedUpdateSetupPinsRosterAndPreservesStandalone",
       "TestFreshCoordinatedUpdateSetupRejectsPairDriftAndKeepsPartialFence",
       "TestFreshScheduledSetupNeverPromotesManualPlan",
@@ -5444,5 +5461,7 @@
       "TestWindowsNetworkContextScopeHasBoundedExplicitReadOnlyContract"
     ],
     "localrmm/web/scripts": []
-  }
+  },
+  "schemaVersion": 1,
+  "sourceCommit": "fccc4b00cd8a144afd58e4b995747afab7a10022"
 }

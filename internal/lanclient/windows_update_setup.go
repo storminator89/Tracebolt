@@ -78,15 +78,17 @@ func CheckWindowsUpdateRelayAbsent(path string, o job.SetupOffer) error {
 	if e != nil {
 		return ErrState
 	}
-	s, e := windowsstate.Open(windowsUpdateRelayPath(m), windowsUpdateRelayOptions(sid, false))
-	if s != nil {
-		_ = s.Close()
-		return job.ErrConflict
+	for _, version := range []string{WindowsUpdateRelayGrantVersion, WindowsBackgroundUpdateRelayGrantVersion} {
+		s, e := windowsstate.Open(windowsUpdateRelayPathFor(m, version), windowsUpdateRelayOptions(sid, false))
+		if s != nil {
+			s.Close()
+			return job.ErrConflict
+		}
+		if !errors.Is(e, fs.ErrNotExist) {
+			return job.ErrConflict
+		}
 	}
-	if errors.Is(e, fs.ErrNotExist) {
-		return nil
-	}
-	return job.ErrConflict
+	return nil
 }
 func VerifyWindowsUpdateRelaySetup(path string, expected WindowsUpdateRelayGrant) error {
 	m, e := Load(path)

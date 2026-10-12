@@ -17,3 +17,6 @@ func CheckManagedMSIAbsent(context.Context) error    { return managed.ErrUnavail
 func CheckCoordinatedMutationExclusive(context.Context) error { return managed.ErrUnavailable }
 
 func CheckManagedMSIParticipantAbsent(context.Context) error { return managed.ErrUnavailable }
+
+func CheckBackgroundMutationExclusive(context.Context) error { return managed.ErrUnavailable }
+func CheckBackgroundUpdateFresh(context.Context) error       { return managed.ErrUnavailable }

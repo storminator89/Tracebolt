@@ -5,7 +5,9 @@ It is executable acceptance source, not a native pass, workflow-dispatch approva
 release authorization, or proof of Windows 11 or real Linux-manager/browser use.
 The historical `run_setup_gui.py`, `setupgate`, four-case workflow and historical
 reports remain unchanged and cannot satisfy this gate. The release publisher's
-previous accepted-tree pin is unchanged and does not accept current artifacts.
+historical accepted-tree pin is unchanged and does not accept current artifacts.
+The separate current publisher adapter remains disabled with an unset accepted
+tree until an actual approved successful run is reviewed and pinned.
 
 ## Exact profile and actions
 
@@ -35,8 +37,17 @@ cutover or multi-day retained-host operation is proved.
 
 The optional sampled-event-message, cached-update inspection, selected-update
 relay/executor, action relay/broker and selected-account software roots must stay
-absent. This gate does not exercise optional service control, update installation,
-user helpers, event-history searches or historical message requests.
+absent. Prepared MSI executor/custody/relay, managed MSI service/custody/relay and
+the shared mutation-fence roots/images are also checked absent. Reusable v3 uses
+the same managed roots. The background WUA service state/image and its separate observer relay must also
+stay absent. The three implemented optional SCM services,
+`TraceboltWindowsDeployment`, `TraceboltWindowsActionBroker` and
+`TraceboltWindowsCachedUpdate`, must have no public service registration, even if
+stopped. Protected roots contain public setup
+registration/config records; CLI registration export has no fixed file path.
+These are read-only absence checks, not optional MSI/WUA/service-control or
+user-helper acceptance. No event-history search or historical message request
+is exercised. Future optional namespaces require a matching explicit guard change.
 
 ## What receiver evidence means
 
@@ -81,6 +92,10 @@ verified again. The exact tested bytes are copied unchanged, never rebuilt, to
 These are unsigned current source-candidate artifacts only. A later publisher
 change needs review of the actual successful native evidence and an exact accepted
 source commit/tree; no eligible source tree is invented by this implementation.
+Original reports and the tested input package expire after three days. Aggregate
+outputs last seven days but never replace originals: publication must finish
+while all six original artifacts remain live, with exact IDs/digests reverified.
+Missing/expired originals cannot be replaced with a rebuild or same-named upload.
 
 Portable authorization/report/fixture tests and a Windows special-tag cross-build
 check source contracts only. They do not establish host operations or native

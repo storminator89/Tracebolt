@@ -9,8 +9,10 @@ import (
 	"io"
 	"localrmm/internal/lanclient"
 	managed "localrmm/internal/windowsmanagedmsi"
+	"localrmm/internal/windowsmanagedmsiservice"
 	"localrmm/internal/windowspackage"
 	"localrmm/internal/windowsservice"
+	job "localrmm/internal/windowsupdatejob"
 )
 
 type managedMSIPlan struct {
@@ -111,11 +113,33 @@ func runManagedMSIActivate(ctx context.Context, args []string, out, stderr io.Wr
 	apply := f.Bool("apply", false, "")
 	ack := f.Bool("acknowledge-start-localsystem-service", false, "")
 	digest := f.String("approve-config", "", "")
-	if f.Parse(args) != nil || f.NArg() != 0 || !*apply || !*ack || !managed.ValidDigest(*digest) {
-		fmt.Fprintln(stderr, "Activation requires --apply --acknowledge-start-localsystem-service --approve-config sha256:<reviewed public configuration> after manager finalization and observer startup.")
+	backgroundRegistration := f.String("background-registration", "", "")
+	managerActivation := f.String("manager-activation", "", "")
+	if f.Parse(args) != nil || f.NArg() != 0 || !*apply || !*ack || !managed.ValidDigest(*digest) || (*backgroundRegistration == "") != (*managerActivation == "") {
+		fmt.Fprintln(stderr, "Activation requires --apply --acknowledge-start-localsystem-service --approve-config sha256:<reviewed public configuration> after manager finalization and observer startup. Fresh background pairing also requires --background-registration and --manager-activation public files.")
 		return 2
 	}
-	if e := nativeManagedMSIActivate(ctx, *digest); e != nil {
+	var proof *windowsmanagedmsiservice.BackgroundRegistrationProof
+	if *backgroundRegistration != "" {
+		raw, e := readSoftwareSetupInput(*backgroundRegistration, 16385)
+		if e != nil {
+			return 1
+		}
+		registration, e := job.DecodeSetupRegistration(bytes.TrimSuffix(raw, []byte("\n")))
+		if e != nil {
+			return 1
+		}
+		raw, e = readSoftwareSetupInput(*managerActivation, 4096)
+		if e != nil {
+			return 1
+		}
+		var manager job.BackgroundActivation
+		if managed.Canonical(bytes.TrimSuffix(raw, []byte("\n")), &manager, 4096) != nil || manager.Verify(registration) != nil {
+			return 1
+		}
+		proof = &windowsmanagedmsiservice.BackgroundRegistrationProof{Registration: registration, Manager: manager}
+	}
+	if e := nativeManagedMSIActivate(ctx, *digest, proof); e != nil {
 		fmt.Fprintln(stderr, "Deployment service activation is unconfirmed. Preserve its activation intent; do not repeat or reset it.")
 		return 1
 	}

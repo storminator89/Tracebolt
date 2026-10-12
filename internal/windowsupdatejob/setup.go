@@ -11,6 +11,8 @@ import (
 )
 
 const SetupOfferVersion = "tracebolt.windows-selected-update-setup-offer.v1"
+const BackgroundRegistrationVersion = "tracebolt.windows-selected-update-setup-registration.v2"
+
 const SetupRegistrationVersion = "tracebolt.windows-selected-update-setup-registration.v1"
 
 // SetupOffer is public preparation material, not executor installation consent.
@@ -44,7 +46,7 @@ type SetupRegistration struct {
 
 func (r SetupRegistration) Validate() error {
 	b := r.Consent.Binding
-	if r.Version != SetupRegistrationVersion || r.Offer.Validate() != nil || r.Consent.Validate() != nil || !r.Consent.Enabled || !r.Consent.Acknowledged || r.Consent.ExpiresAt != r.Offer.ExpiresAt || b.ManagerID != r.Offer.ManagerID || b.DeviceID != r.Offer.DeviceID || b.IncarnationDigest != r.Offer.IncarnationDigest || b.KeyID != actionpermit.Digest(r.Offer.ManagerPublicKey) || !keyvalidation.Ed25519(r.ExecutorPublicKey) || b.ExecutorKeyID != actionpermit.Digest(r.ExecutorPublicKey) {
+	if !(r.Version == SetupRegistrationVersion && r.Consent.Version != BackgroundConsentVersion || r.Version == BackgroundRegistrationVersion && r.Consent.Version == BackgroundConsentVersion) || r.Offer.Validate() != nil || r.Consent.Validate() != nil || !r.Consent.Enabled || !r.Consent.Acknowledged || r.Consent.ExpiresAt != r.Offer.ExpiresAt || b.ManagerID != r.Offer.ManagerID || b.DeviceID != r.Offer.DeviceID || b.IncarnationDigest != r.Offer.IncarnationDigest || b.KeyID != actionpermit.Digest(r.Offer.ManagerPublicKey) || !keyvalidation.Ed25519(r.ExecutorPublicKey) || b.ExecutorKeyID != actionpermit.Digest(r.ExecutorPublicKey) {
 		return ErrInvalid
 	}
 	return nil

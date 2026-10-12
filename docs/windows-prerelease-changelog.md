@@ -1,126 +1,88 @@
-# Windows x64 unsigned prerelease changelog
+# Current21 Windows Server 2025 x64 preview changelog
 
-This describes the fresh-host Windows Setup candidate and its bounded publication
-contract. It does not itself announce an available release. Use the exact prerelease's `release-manifest.json`, accepted workflow
-run and attached native-subset evidence for its version, source and results.
+Source-only preparation for an **unsigned Windows Server 2025 x64 current21 Read
+admin preview; three-case packaged GUI subset**. The current accepted-tree pin is
+unset, so verification/publication fails closed. This document announces no
+current native pass or downloadable release. Historical five-scope hashes,
+four-case results and HTTP acceptance cannot be reused for current21.
 
+## Current Setup profile
 
-## Selected native evidence
+- Actual packaged native wizard with embedded exact service payload and checked
+  source/package/PE hashes. No executable download or rebuild during promotion.
+- TLS-only native gate; matching-source public bootstrap, independent trust
+  comparison, hidden invitation console and manager compatibility check.
+- Twenty-one fresh Read admin scopes with consent v14/receipt12, original ordered
+  grant bindings, unchecked acknowledgements and Back reset. Scopes include
+  identifying/personal metadata and separately disclosed sensitive historical
+  event messages; consent is not provider completeness.
+- Separately unchecked same-key automatic-renewal enrollment, initial generation1
+  manifest and original identity anchor. No renewal cutover or multi-day proof.
+- Disabled LocalService staging, activation/grant verification before automatic
+  startup and Start, cooperative cancellation and retained uncertain state.
+- Receipt-owned Stop/Delete with delete-pending and final absence verification.
+  Service removal retains files, keys, identity, grants and counters.
 
-The selected packaged-GUI subset passed in [run 38069058865](https://github.com/storminator89/Tracebolt/actions/runs/38069058865),
-attempt 1, on 10 October 2026, using source
-`14719116bdb663d13e4bcaef434a4374a6265fe6` and tree
-`d2ec1451a0fb4332a48f0ee48b17c35eca807ad4`. All four fresh hosted Windows Server
-2025 x64 cases and the aggregate passed. The original accepted Setup SHA-256 is
-`24b635060bbeeefae01ba48acc4510cf8b9e434f8278dab5bbfc0ddef35295c5`;
-the service SHA-256 is
-`05459d54ff6fa582515c2de1d897fee264b5a32b1c4a79048b06a6acb603cccf`.
+## Three-case evidence and publication
 
-This evidence establishes that bounded subset only. It does not establish human
-UAC or invitation entry, a real Linux manager/shared dashboard, Windows 10/11,
-reboot, upgrade, ARM64 runtime, complete file/data uninstall or VM disposal.
-Both executables remain unsigned. The later initial-chooser readiness proposal
-is absent from these accepted bytes. Release availability and the exact version
-must be established by the published release and its own binding manifest.
+`windows-current-setup-acceptance.yml` defines exactly three separate fresh hosted
+Windows Server 2025 x64 jobs: install/service removal, cancellation during hidden
+synthetic invitation entry, and pending approval with transport interruption.
+The fourth job authenticates and aggregates their evidence. It exports exactly
+six retained artifacts: three original reports, the tested six-file input
+package, its unchanged accepted copy, and the finite aggregate.
 
-## Setup wizard
+The strict `tracebolt.windows-current-setup-acceptance.v1` reports bind the same
+source/tree/run and Setup/service/driver/source-input hashes, separate machine
+hashes, OS build/revision and exact consent/grant/receipt proof. The install case
+requires at least two accepted ordinary frames, v16 progress and four independent
+source-domain outcomes. Unsupported/denied/source-failed results remain visible;
+software-history and event-history observations remain `not_run`.
 
-- Native, resizable Windows wizard with DPI-aware layout, scrollable review text,
-  embedded versioned service payload and SHA-256 package validation. It does not
-  fetch an executable at installation time.
-- Public manager bootstrap selection and independent display of manager ID,
-  enrollment/agent origins and full trust fingerprints. The selected public
-  export is validated and held unchanged; there is no invitation file or
-  command-line input route.
-- Exact-manager compatibility check before installation writes. A matching
-  manager/frontend revision with guided Windows enrollment is required; an old
-  manager cannot silently downgrade the setup path.
-- Explicit local approval of five bounded observation scopes: inventory and
-  machine/network identity, Application/System event headers, caller-visible
-  volumes, per-process CPU/working-set and numeric TCP/UDP endpoint metadata.
-  Service/startup, persistent identity and independent trust comparison have
-  separate initially unchecked acknowledgements.
-- Dedicated no-echo local invitation console and separate manager approval of the
-  displayed device fingerprint/comparison value. Staging uses a disabled limited
-  LocalService service; automatic startup and Start are requested only after
-  activation and exact protected grant verification.
-- HTTPS by default; a matching disposable HTTP-test bootstrap requires a separate
-  acknowledgement of plaintext invitation/telemetry and forgeable responses.
-  TLS errors never trigger fallback.
-- Cooperative cancellation, finite public diagnostics and retained partial state.
-  Existing or foreign installations are not adopted or overwritten. Separately
-  confirmed service removal verifies ownership, observes Stop and actual SCM
-  absence, and retains files, keys, identity, counters and grants.
+`tracebolt.windows-current-setup-native-subset.v1` records
+`three_case_current_packaged_gui_subset`,
+`unsigned-current-source-candidate-native-subset` and all current false-coverage
+flags. Authenticated `executionProvenance` binds the owner/repository, exact
+workflow, first attempt on main, required successful job steps, three distinct
+case runner registrations, original artifact IDs, ZIP digests/report bytes and
+tested package hashes. These are job-provenance checks, not hardware attestation.
 
-## Native subset and publication provenance
+The separate manual `windows-current-prerelease.yml` calls the explicit current
+publisher adapter. The historical publisher/parser/workflow remain distinct.
+Only after a successful separately approved current native run is reviewed may a
+later source change pin its actual accepted tree. There is no runtime pin
+argument, schema fallback or acceptance of today's source by default.
 
-The manual `windows-setup-acceptance.yml` gate defines four isolated actual-EXE
-cases on fresh hosted Windows Server 2025 x64 machines: TLS install/service
-removal, separately approved HTTP-test install/service removal, cancellation at
-hidden invitation input, and interrupted transport/cancellation while manager
-approval is pending. Synthetic invitation handling and manager approval use a
-disposable loopback fixture, not a human invitation or a real Linux deployment.
+Publication defaults off and needs explicit approval. A canonical
+`tracebolt.windows-current-prerelease-plan.v1` freezes four job IDs, three runner
+IDs, six original artifact IDs/archive digests and ten asset hashes. Preparation,
+write preparation, pre-write, pre-publication and final readback authenticate live
+provenance again, including independently downloaded original reports/package.
+Compact source/publisher leases and all artifact metadata are rechecked after
+long downloads. Missing/expired originals stop publication even when the
+seven-day aggregate remains. Original reports/input package expire after three
+days; do not defer review/pinning/publication beyond that practical window.
 
-Publication requires all four cases to pass in one successful first-attempt,
-owner-dispatched run on `refs/heads/main`, under source-specific native approval.
-The reports must use strict canonical `tracebolt.windows-setup-acceptance.v2`,
-with the same source and matching Setup, service, driver and source-input hashes.
-Bounded `frameProgress` records inventory/extension readiness and finite telemetry
-outcomes. Both install/removal cases require complete progress and at least two
-accepted v5 frames; cancellation cases retain zero/not-started progress. No raw
-observations are added to the finite evidence.
+The six original files, filenames, candidate version and build metadata are
+unchanged. `tracebolt.windows-current-prerelease.v1` in `release-manifest.json`
+binds the later release version, current evidence, two guides, source/run and
+publisher revision. It hashes the nine other attachments, not itself. The original
+build manifest correctly retains `nativeExecution: false`. No rebuild, renamed
+replacement, signing, overwrite, existing-release adoption or automatic write
+retry is allowed. Publication is prerelease/not-latest and verifies public bytes.
 
-The canonical `tracebolt.windows-setup-native-subset.v2` aggregate adds
-`executionProvenance`. Publication independently authenticates the exact native
-run, attempt, repository/owner/actors, workflow, case jobs and expected steps and
-`windows-2025` labels. It requires four distinct positive case job IDs and four
-distinct positive runner registration IDs, plus exact artifact IDs, archive
-hashes, canonical report hashes and ZIP members. Hostnames may be shared across
-jobs. Neither a hostname nor a runner registration ID attests to VM/hardware
-identity. Fresh isolation relies on standard GitHub-hosted Windows job isolation,
-the reviewed workflow and native fresh-state checks. Artifact REST records have
-no uploader-job field, so case attribution relies on the reviewed one-case-one-
-upload workflow. `vmIdentityAttested` remains false.
+## Explicit limits
 
-The publisher promotes the TLS case's exact six retained public files and the
-unchanged finite accepted evidence. No executable is rebuilt, changed, renamed
-or signed during promotion. The reviewed installation guide and this changelog
-are attached verbatim; only the separate release binding is generated. The v2
-verification plan freezes job and runner registration identities together with
-all seven artifact IDs/archive hashes and all ten release-asset hashes. Live
-provenance verification runs at read-only verification, write preparation,
-before the first write, before publication and at final readback, followed by
-compact lease/native/all-seven-artifact checks. Publication remains a separate
-explicit decision: the five-input manual workflow defaults `publish` to `false`.
+No Windows 11, real Linux-manager/browser interoperability, provider completeness,
+renewal cutover, OS reboot, human invitation/UAC, ARM64 or verified VM disposal is
+claimed. There is no optional MSI, WUA installation, service-control or user-helper
+native acceptance. Checking optional files/roots and public SCM registration are
+absent only checks absence; it never grants optional action authority.
 
-The retained executable names and embedded version intentionally stay
-`v0.0.0-setup-candidate`; the v2 `release-manifest.json` binds the separately
-selected prerelease version to those exact bytes, their source/run evidence and
-`executionProvenance`. The original `SHA256SUMS`, package, source-input and build
-manifests remain unchanged.
-In particular, build-time `nativeExecution: false` remains truthful; the later
-native-subset evidence records the separate gate outcome. A rebuild of the same
-commit is not interchangeable with the retained package.
+Unsigned binaries may trigger warnings or policy blocks. Do not bypass them.
+No all-feature Windows/native-parity claim, Authenticode publisher trust or
+cryptographic attestation follows. A no-overwrite policy is not GitHub platform
+immutability. There is no full file/data uninstall, automatic updater, repair,
+reset, resume, rollback or migration claim.
 
-## Limitations
-
-- Publication makes a point-in-time verification and never overwrites or adopts
-  an existing release. Its no-overwrite policy is not GitHub platform immutability;
-  no repository setting is changed.
-- Both executables are unsigned. Checksums and workflow linkage do not provide
-  an Authenticode publisher identity. Unknown-publisher or SmartScreen warnings
-  and policy blocks remain possible; security protections must not be disabled.
-- Fresh x64 installation only. Human UAC, real invitation entry, real Linux
-  manager/shared-dashboard behavior, Windows desktop coverage, OS reboot,
-  upgrade and ARM64 runtime acceptance remain separate unproven gates.
-- VM disposal is required after native tests but is not verified by the evidence.
-  Cancellation and removal retain state; neither proves complete cleanup.
-- Service start requested does not establish a first accepted report or reboot
-  persistence. A failed transition may require inspection of indeterminate state.
-- No general repair, resume/reset, rollback, automatic updater, Apps & Features
-  registration or full file/data removal. Service removal does not revoke manager
-  trust and does not make retained state eligible for a fresh reinstall.
-- No grant for configured service-startup metadata, event-message content, remote
-  actions, Windows Update/CVE operations or external-AI export.
-
-Read `windows-prerelease-install.md` before considering a test installation.
+Read the attached `windows-prerelease-install.md` before any authorized test.

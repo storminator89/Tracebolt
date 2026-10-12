@@ -20,6 +20,9 @@ import (
 )
 
 const Version = "tracebolt.windows-selected-update-ipc.v1"
+const ServicePeerVersion = "tracebolt.windows-update-service-peer.v1"
+const ServicePipeName = `\\.\pipe\Tracebolt.Windows.CachedUpdateService.v1`
+
 const PeerVersion = "tracebolt.windows-update-executor-peer.v1"
 const PipeName = `\\.\pipe\Tracebolt.Windows.SelectedUpdate.v1`
 const MaxMessageBytes = 64 << 10
@@ -41,7 +44,7 @@ type PeerConfig struct {
 }
 
 func (p PeerConfig) Validate() error {
-	if p.Version != PeerVersion || !job.ValidBinding(p.Binding) || !keyvalidation.Ed25519(p.ExecutorPublicKey) || actionpermit.Digest(p.ExecutorPublicKey) != p.Binding.ExecutorKeyID || !windowspath.Canonical(p.Executable) || !strings.HasSuffix(strings.ToLower(p.Executable), ".exe") || !actionpermit.ValidDigest(p.ExecutableDigest) || !actionpermit.ValidDigest(p.ConfigurationDigest) {
+	if (p.Version != PeerVersion && p.Version != ServicePeerVersion) || p.Version == ServicePeerVersion && !strings.HasSuffix(p.Executable, `\Tracebolt\tracebolt-windows-update-service.exe`) || !job.ValidBinding(p.Binding) || !keyvalidation.Ed25519(p.ExecutorPublicKey) || actionpermit.Digest(p.ExecutorPublicKey) != p.Binding.ExecutorKeyID || !windowspath.Canonical(p.Executable) || !strings.HasSuffix(strings.ToLower(p.Executable), ".exe") || !actionpermit.ValidDigest(p.ExecutableDigest) || !actionpermit.ValidDigest(p.ConfigurationDigest) {
 		return ErrPeer
 	}
 	return nil
@@ -225,4 +228,11 @@ func newHello(c PeerConfig) (hello, error) {
 	h := hello{Version: Version, Nonce: make([]byte, 32), Binding: c.Binding}
 	_, e := rand.Read(h.Nonce)
 	return h, e
+}
+
+func (p PeerConfig) pipeName() string {
+	if p.Version == ServicePeerVersion {
+		return ServicePipeName
+	}
+	return PipeName
 }

@@ -57,7 +57,7 @@ func InspectRemoval(s Store) (RemovalPlan, Plan, windowsupdateipc.Config, error)
 		return zero, p, c, ErrSetup
 	}
 	c, e = windowsupdateipc.DecodeConfig(raw)
-	if e != nil || VerifyInstalled(s, c) != nil {
+	if e != nil || c.Version == windowsupdateipc.ServiceConfigVersion || VerifyInstalled(s, c) != nil {
 		return zero, p, c, ErrSetup
 	}
 	secret, e := s.Read("executor-key.json")

@@ -134,14 +134,11 @@ func run(ctx context.Context, ready func()) error {
 		return e
 	}
 	activation, e := store.Read("activation.json")
-	var intent struct {
-		Version      string `json:"version"`
-		ConfigDigest string `json:"configDigest"`
-		Acknowledged bool   `json:"acknowledged"`
-	}
-	if e != nil || managed.Canonical(activation, &intent, 4096) != nil || intent.Version != managed.Version || !intent.Acknowledged || intent.ConfigDigest != receipt.ConfigDigest {
+	var intent Activation
+	if e != nil || managed.Canonical(activation, &intent, 16384) != nil || intent.Validate(config) != nil || intent.ConfigDigest != receipt.ConfigDigest {
 		return managed.ErrAuthority
 	}
+
 	if e = CheckInstalled(ctx, config, true); e != nil {
 		return e
 	}
@@ -153,6 +150,12 @@ func run(ctx context.Context, ready func()) error {
 	check := func(c context.Context) error {
 		if ctx.Err() != nil || c == nil || c.Err() != nil || windowsmanagedmsiexecutor.VerifyServiceToken() != nil || guard.Check(c) != nil || CheckInstalled(c, config, true) != nil || CheckProfile(c, config) != nil || store.Verify() != nil {
 			return managed.ErrAuthority
+		}
+		if config.Mutation != nil && config.Mutation.Version == fence.BackgroundRosterVersion {
+			currentActivation, ae := store.Read("activation.json")
+			if ae != nil || !bytes.Equal(currentActivation, activation) {
+				return managed.ErrAuthority
+			}
 		}
 		current, e := store.Read("config.json")
 		if e != nil || !bytes.Equal(raw, current) {

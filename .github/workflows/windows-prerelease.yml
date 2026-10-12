@@ -1,5 +1,6 @@
-name: Manual exact-accepted Windows x64 prerelease
+name: Manual historical five-scope Windows x64 prerelease
 
+# Historical profile only; current21 uses windows-current-prerelease.yml.
 # Verification/promotion only. This workflow never builds or runs Windows code.
 on:
   workflow_dispatch:
