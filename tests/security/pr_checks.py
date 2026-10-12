@@ -83,7 +83,7 @@ DOMAIN_SCRIPTS = {
     'web/scripts/run-linux-cve-update-review-ci.mjs': {'linux-cve-update-review'},
     'web/scripts/linux-cve-update-review-contract.mjs': {'linux-cve-update-review'},
     'web/scripts/linux-cve-update-review-scenes.json': {'linux-cve-update-review'},
-    'web/scripts/linux-cve-update-review-contract.test.mjs': {'linux-cve-update-review'},
+    'web/scripts/linux-cve-update-review-contract.node.mjs': {'linux-cve-update-review'},
 
     'tests/e2e-review/windows-update-retirement-browser.mjs': {'windows-service-actions'},
     'tests/e2e-review/windows-update-retirement-fixtures.test.mjs': {'windows-service-actions'},
@@ -418,7 +418,7 @@ def web_checks(plan):
         run(['node', '--test', 'tests/e2e-review/windows-health-fixtures.test.mjs'], stage='ui-windows-health-contract')
     if 'linux-cve-update-review' in plan.get('flows', []):
         run(['node', 'web/scripts/capture-linux-cve-update-review.mjs', '--check'], stage='ui-cve-review-contract')
-        run(['node', '--test', 'web/scripts/linux-cve-update-review-contract.test.mjs'], stage='ui-cve-review-evidence-contract')
+        run(['node', '--test', 'web/scripts/linux-cve-update-review-contract.node.mjs'], stage='ui-cve-review-evidence-contract')
     if 'windows-service-actions' in plan.get('flows', []):
         run(['node', '--test', 'tests/e2e-review/windows-update-retirement-fixtures.test.mjs'], stage='ui-windows-update-retirement-contract')
     if 'windows-fleet-msi' in plan.get('flows', []):
@@ -707,6 +707,53 @@ def lan_failure_location(sha):
         return None
 
 
+# Finite recipe steps; failed reports never admit exception text or runtime values.
+CVE_CAPTURE_STAGES = {
+    'fixture', 'context', 'navigate', 'open-warning', 'open-binaries', 'review-focus',
+    'review-enter', 'candidate', 'updates-focus', 'matched-row', 'unchecked-row',
+    'capture-times', 'layout', 'screenshot', 'final-guards',
+}
+CVE_RUNNER_STAGES = {'launch', 'compile', 'manifest', 'close', 'evidence'}
+
+
+def cve_review_failure_location(sha):
+    try:
+        path = ROOT / 'artifacts/review/linux-cve-update-review-results.json'
+        with os.fdopen(reporter.open_log(path), 'rb') as stream:
+            metadata = os.fstat(stream.fileno())
+            if not stat.S_ISREG(metadata.st_mode) or metadata.st_size > 8192:
+                return None
+            raw = stream.read(8193)
+        if len(raw) > 8192:
+            return None
+        value = reporter.decode(raw)
+        keys = {'sourceSha', 'status', 'browserAcceptance', 'sceneManifestSHA256', 'scenes', 'screenshots',
+                'requestsToRealAPI', 'actualMutationRequests', 'nativeAcceptance', 'disclosure', 'failure'}
+        if (not HEX.fullmatch(sha) or type(value) is not dict or set(value) != keys
+                or value['sourceSha'] != sha or value['status'] != 'FAIL'
+                or value['browserAcceptance'] is not False or value['nativeAcceptance'] is not False
+                or type(value['sceneManifestSHA256']) is not str
+                or not re.fullmatch(r'[a-f0-9]{64}', value['sceneManifestSHA256'])
+                or type(value['disclosure']) is not str or len(value['disclosure']) > 1024
+                or any(type(value[key]) is not int or value[key] != 0
+                       for key in ['scenes', 'screenshots', 'requestsToRealAPI', 'actualMutationRequests'])):
+            return None
+        failure = value['failure']
+        if type(failure) is not dict or set(failure) != {'stage', 'captureIndex'}:
+            return None
+        stage, index = failure['stage'], failure['captureIndex']
+        if type(stage) is not str:
+            return None
+        if stage in CVE_RUNNER_STAGES and index is None:
+            return 'stage=' + stage
+        if stage in CVE_CAPTURE_STAGES and type(index) is int and 0 <= index < 4:
+            locale, width = [('en', 1440), ('en', 390), ('de', 1440), ('de', 390)][index]
+            return 'stage=%s locale=%s width=%d' % (stage, locale, width)
+        return None
+    except (OSError, ValueError, TypeError, KeyError, UnicodeError, OverflowError, RecursionError):
+        return None
+
+
 def browser_checks(plan):
     run(['node', 'tests/e2e-review/lan-browser.mjs', '--pr-smoke'], stage='browser-auth-smoke')
     # The existing shell runner clears its screenshot folder on startup. Run it
@@ -724,6 +771,10 @@ def browser_checks(plan):
         try:
             run(['node', FLOWS[flow]], stage='browser-' + flow, env=env)
         except ValueError:
+            if flow == 'linux-cve-update-review':
+                location = cve_review_failure_location(plan['sha'])
+                if location is not None:
+                    print('FAIL CVE review location: ' + location, flush=True)
             if flow == 'lan':
                 location = lan_failure_location(plan['sha'])
                 if location is not None:

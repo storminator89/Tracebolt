@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import {fleetGroupsBrowserFixture,fleetGroupsPolicyFixture,fleetGroupsMonitoringFixture,fleetGroupsCaptureMatrix,fleetGroupsScenes,fleetGroupsCaptureName,fleetGroupIds,fleetGroupsCaseName,fleetGroupsDisclosure,requireFleetGroupsEvidence,guardFleetGroupsRoute,fleetGroupsRouteState} from './fleet-groups-browser.mjs';
+import {fleetGroupsBrowserFixture,fleetGroupsPolicyFixture,fleetGroupsMonitoringFixture,fleetGroupsMaintenanceFixture,fleetGroupsCaptureMatrix,fleetGroupsScenes,fleetGroupsCaptureName,fleetGroupIds,fleetGroupsCaseName,fleetGroupsDisclosure,requireFleetGroupsEvidence,guardFleetGroupsRoute,fleetGroupsRouteState} from './fleet-groups-browser.mjs';
 const now='2026-10-11T12:00:10Z',expiry='2026-10-11T13:00:00Z';
 test('invented group fixture projects only public names and exact admitted IDs',()=>{
  const fixture=fleetGroupsBrowserFixture(now,expiry);assert.equal(fixture.view.groups[0].unavailableMembers,1);assert.equal(fixture.view.devices.length,3);assert.deepEqual(Object.keys(fixture.view.groups[0]).sort(),['id','memberIds','name','revision','unavailableMembers']);assert.ok(fixture.metadata.every(d=>d.agentCertificate.checkedAt===now));
@@ -73,4 +73,11 @@ test('inheritance fixture and capture contract stay exact, unchecked and source-
  for(const scene of fleetGroupsScenes.filter(scene=>scene.startsWith('inheritance-')))assert.ok(helper.includes(`fleetGroupsCaptureName('${scene}',width,locale)`));
  assert.match(helper,/expect\(consent\)\.not\.toBeChecked\(\)/);assert.match(helper,/expect\(monitoringPosts\)\.toBe\(inheritanceBefore\+2\)/);assert.match(helper,/policy\)\.toEqual\(previousPolicy\)/);
  assert.match(helper,/screens:fleetGroupsCaptureMatrix.length/);assert.match(runner,/requireFleetGroupsEvidence\(screenshots,sourceSha\)/);assert.match(helper,/getByRole\('combobox',\{name:de\?'Flottengruppen':'Fleet groups',exact:true\}\)/);
+});
+
+
+test('group maintenance adds exactly four canonical views and original-identity synthetic target keys',()=>{
+ const fixture=fleetGroupsMaintenanceFixture(now);assert.equal(fixture.members.length,2);assert.equal(fixture.excludedLinuxMembers,1);assert.equal(fixture.unavailableMembers,1);assert.equal(new Set(fixture.members.flatMap(m=>m.targets.map(t=>t.key))).size,12);
+ const scenes=fleetGroupsCaptureMatrix.filter(row=>row.scene.startsWith('maintenance-'));assert.equal(scenes.length,4);assert.deepEqual(new Set(scenes.map(row=>row.locale)),new Set(['en','de']));assert.deepEqual(new Set(scenes.map(row=>row.width)),new Set([1440,390]));
+ const helper=fs.readFileSync(new URL('./fleet-groups-browser.mjs',import.meta.url),'utf8');assert.match(helper,/expect\(maintenanceConsent\)\.not\.toBeChecked\(\)/);assert.match(helper,/expect\(maintenancePosts\)\.toBe\(maintenanceBefore\+2\)/);assert.match(helper,/maintenanceBodies\[0\]\.endsAt\)\.toBe\(maintenanceBodies\[1\]\.endsAt\)/);assert.match(helper,/validGroupMaintenanceView/);
 });

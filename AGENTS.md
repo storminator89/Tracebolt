@@ -291,7 +291,10 @@ missing material rather than inventing credentials or weakening protection.
   separately approved Windows notification dispatch, never incidents/evidence,
   source policies/history or host activity. Preserve in-flight result truth and
   consume queued/retry work without end-of-window backlog. Never join independent
-  snapshots by mutable device ID.
+  snapshots by mutable device ID. For the one-time exact group workflow read
+  `docs/fleet-group-maintenance.md`; preserve the additive group revision/member
+  guard inside each existing maintenance transaction, fixed common end, explicit
+  unchecked review consent, partial outcomes and GET-only uncertain reconciliation.
 - Windows incident notifications are separate default-off source policies. Read
   `docs/windows-notifications.md` before changing exact identity/domain keys,
   recipient-bound approval, atomic transition capture or the Windows claim adapter.

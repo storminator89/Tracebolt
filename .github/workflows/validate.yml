@@ -645,7 +645,7 @@ jobs:
         working-directory: .
         run: |
           node web/scripts/capture-linux-cve-update-review.mjs --check
-          node --test web/scripts/linux-cve-update-review-contract.test.mjs
+          node --test web/scripts/linux-cve-update-review-contract.node.mjs
       - name: Production build
         run: npm run build
 

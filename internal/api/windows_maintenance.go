@@ -73,9 +73,16 @@ func projectWindowsMaintenance(states []store.WindowsMaintenanceState, authority
 }
 
 func (h *operatorHandler) windowsMaintenanceAPI(w http.ResponseWriter, r *http.Request) {
-	const route = "/api/fleet/windows-maintenance"
+	h.serveWindowsMaintenance(w, r, "")
+}
+
+func (h *operatorHandler) serveWindowsMaintenance(w http.ResponseWriter, r *http.Request, groupID string) {
+	route := "/api/fleet/windows-maintenance"
+	if groupID != "" {
+		route = "/api/fleet/groups/" + groupID + "/maintenance"
+	}
 	start := r.URL.Path == route+"/start"
-	end := r.URL.Path == route+"/end"
+	end := groupID == "" && r.URL.Path == route+"/end"
 	mutation := start || end
 	if r.URL.Path != route && !mutation {
 		fail(w, 404, "not_found", "Windows maintenance is unavailable.")
@@ -103,7 +110,7 @@ func (h *operatorHandler) windowsMaintenanceAPI(w http.ResponseWriter, r *http.R
 		return
 	}
 	var key, intent string
-	var revision, endID uint64
+	var revision, endID, groupRevision uint64
 	var endsAt time.Time
 	if mutation {
 		operator, ok := operatorContext(r)
@@ -116,14 +123,24 @@ func (h *operatorHandler) windowsMaintenanceAPI(w http.ResponseWriter, r *http.R
 		}
 		if start {
 			var body struct {
-				Key      string `json:"key"`
-				Revision uint64 `json:"revision"`
-				EndsAt   string `json:"endsAt"`
-				Intent   string `json:"intent"`
+				GroupRevision uint64 `json:"groupRevision"`
+				Key           string `json:"key"`
+				Revision      uint64 `json:"revision"`
+				EndsAt        string `json:"endsAt"`
+				Intent        string `json:"intent"`
 			}
-			if !readObject(w, r, 512, []string{"key", "revision", "endsAt", "intent"}, &body) {
+			keys := []string{"key", "revision", "endsAt", "intent"}
+			if groupID != "" {
+				keys = append(keys, "groupRevision")
+			}
+			if !readObject(w, r, 512, keys, &body) {
 				return
 			}
+			if groupID != "" && (body.GroupRevision < 1 || body.GroupRevision > store.MaxFleetGroupRevision) {
+				fail(w, 400, "invalid_windows_maintenance", "Choose the exact reviewed group revision.")
+				return
+			}
+			groupRevision = body.GroupRevision
 			var err error
 			endsAt, err = time.Parse(time.RFC3339Nano, body.EndsAt)
 			if err != nil || endsAt.Location() != time.UTC || endsAt.Format(time.RFC3339Nano) != body.EndsAt || !store.ValidWindowsMaintenanceIntent(body.Intent) {
@@ -171,9 +188,27 @@ func (h *operatorHandler) windowsMaintenanceAPI(w http.ResponseWriter, r *http.R
 		fail(w, 503, "windows_maintenance_unavailable", "Current Windows identity authority is unavailable.")
 		return
 	}
+	var groupRead *fleetGroupMaintenanceRead
+	if groupID != "" {
+		groupRead, err = h.readFleetGroupMaintenance(r.Context(), groupID, started)
+		if err != nil {
+			fleetGroupMaintenanceError(w, err)
+			return
+		}
+	}
 	recheck := func() bool {
 		if !operatorStillActive(w, r) {
 			return false
+		}
+		// Resolve group storage before the final Windows source read: a SQLite
+		// wait must not hide revocation or replacement from response admission.
+		if groupID != "" {
+			var e error
+			groupRead, e = h.readFleetGroupMaintenance(r.Context(), groupID, started)
+			if e != nil {
+				fleetGroupMaintenanceError(w, e)
+				return false
+			}
 		}
 		at := m.source.Now().UTC()
 		if !contactReadTime(started, at) {
@@ -238,7 +273,7 @@ func (h *operatorHandler) windowsMaintenanceAPI(w http.ResponseWriter, r *http.R
 			return
 		}
 		err = lease.WithWindowsIncidentAuthority(r.Context(), in.Input, func(authorityGuard func(time.Time) error) error {
-			_, e := m.store.ChangeWindowsMaintenance(r.Context(), target, revision, endsAt, intent, endID, m.source.Now, func(sampled, deadline time.Time) error {
+			guard := func(sampled, deadline time.Time) error {
 				at := m.source.Now().UTC()
 				operator, live := operatorContext(r)
 				if !live || operator.active == nil || !operator.active() || r.Context().Err() != nil || !contactReadTime(started, at) || at.Before(sampled) || !at.Before(in.AuthorityUntil) || !deadline.IsZero() && !at.Before(deadline) {
@@ -252,7 +287,13 @@ func (h *operatorHandler) windowsMaintenanceAPI(w http.ResponseWriter, r *http.R
 					return store.ErrWindowsMaintenanceConflict
 				}
 				return nil
-			})
+			}
+			if groupRead != nil {
+				selection := store.FleetGroupMaintenanceSelection{Manager: groupRead.group.Manager, GroupID: groupID, GroupRevision: groupRevision, Identity: monitoringIdentity(groupRead.binding, in.Input)}
+				_, e := m.store.StartFleetGroupMaintenance(r.Context(), selection, target, revision, endsAt, intent, m.source.Now, guard)
+				return e
+			}
+			_, e := m.store.ChangeWindowsMaintenance(r.Context(), target, revision, endsAt, intent, endID, m.source.Now, guard)
 			return e
 		})
 		if errors.Is(err, store.ErrWindowsMaintenanceConflict) {
@@ -277,19 +318,29 @@ func (h *operatorHandler) windowsMaintenanceAPI(w http.ResponseWriter, r *http.R
 		return
 	}
 	now := m.source.Now().UTC()
-	view, err := projectWindowsMaintenance(states, authority, now)
+	var response any
+	var authorityExpiresAt time.Time
+	if groupRead != nil {
+		var view fleetGroupMaintenanceView
+		view, err = projectFleetGroupMaintenance(states, *groupRead, authority, now)
+		response, authorityExpiresAt = view, view.AuthorityExpiresAt
+	} else {
+		var view windowsMaintenanceView
+		view, err = projectWindowsMaintenance(states, authority, now)
+		response, authorityExpiresAt = view, view.AuthorityExpiresAt
+	}
 	if err != nil {
 		fail(w, 409, "windows_maintenance_conflict", "The recorded time or authority changed. Refresh maintenance.")
 		return
 	}
-	raw, err := json.Marshal(view)
-	if err != nil || len(raw) > 262144 {
+	raw, err := json.Marshal(response)
+	if err != nil || len(raw) > 262144 || groupID != "" && len(raw)+1 > 262144 {
 		fail(w, 503, "windows_maintenance_unavailable", "Maintenance metadata exceeds its bounded response.")
 		return
 	}
 	defer clear(raw)
 	final := m.source.Now().UTC()
-	if !contactReadTime(started, final) || final.Before(now) || !final.Before(view.AuthorityExpiresAt) {
+	if !contactReadTime(started, final) || final.Before(now) || !final.Before(authorityExpiresAt) {
 		fail(w, 409, "windows_maintenance_conflict", "Windows authority or the time reference changed. Refresh maintenance.")
 		return
 	}

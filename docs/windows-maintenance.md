@@ -13,6 +13,11 @@ a backlog. Linux Health, alarms and AI admission remain unchanged. Maintenance
 never grants host actions, changes a source policy or reports recovery or health.
 There is no recurrence, future-start calendar, automatic response or generic scheduler.
 
+A separate [reviewed group-maintenance flow](fleet-group-maintenance.md) selects
+exact current Windows members from one original-identity group projection. It
+uses the same single-target maintenance transactions with an additional exact
+group revision/membership guard; each reviewed target has the same fixed end.
+
 ## Deliberate, bounded windows
 
 A shared administrator selects the exact identity and scope, a required purpose

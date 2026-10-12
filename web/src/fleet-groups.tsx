@@ -16,6 +16,9 @@ import type { GroupHealthIO, GroupHealthResult, GroupHealthReview, GroupHealthSe
 import { GroupMonitoring } from './fleet-group-monitoring';
 import { validGroupMonitoringView } from './fleet-group-monitoring-types';
 import type { GroupMonitoringIO, GroupMonitoringView } from './fleet-group-monitoring-types';
+import { GroupMaintenance } from './fleet-group-maintenance';
+import { validGroupMaintenanceView } from './fleet-group-maintenance-workflow';
+import type { GroupMaintenanceIO, GroupMaintenanceView } from './fleet-group-maintenance-workflow';
 import './fleet-groups.css';
 
 const copy = {
@@ -36,11 +39,14 @@ function elapsed(anchor: Anchor): number {
 type GroupSnapshot = { view: FleetGroupsView; started: Anchor; epoch: number; key: string };
 type PolicyLease = { view: WindowsPercentageView; started: Anchor; clockKey: string; metadata: Device };
 type GroupIntent = { groupId?: string; name: string; memberIds: string[]; expectedRevision: number; remove?: boolean; removeUnavailableMembers?: boolean };
+type MaintenanceLease = { view: GroupMaintenanceView; started: Anchor; clockKey: string };
 type MonitoringLease = { view: GroupMonitoringView; started: Anchor; clockKey: string };
-type Commands = { refresh: () => void; hold: (value: boolean) => void; cancel: () => void; save: (intent: GroupIntent) => Promise<boolean>; io: (fresh: boolean) => GroupHealthIO; monitoringIO: (groupId: string, fresh: boolean) => GroupMonitoringIO };
+type Commands = { refresh: () => void; hold: (value: boolean) => void; cancel: () => void; save: (intent: GroupIntent) => Promise<boolean>; io: (fresh: boolean) => GroupHealthIO; monitoringIO: (groupId: string, fresh: boolean) => GroupMonitoringIO; maintenanceIO: (groupId: string, fresh: boolean) => GroupMaintenanceIO };
 const unavailableIO = (): GroupHealthIO => ({ get: async () => { throw new Error('Inactive'); }, post: async () => { throw new Error('Inactive'); }, active: () => false, accept: () => false });
 
 const unavailableMonitoringIO = (): GroupMonitoringIO => ({ active: () => false, get: async () => { throw new Error('Inactive'); }, post: async () => { throw new Error('Inactive'); } });
+
+const unavailableMaintenanceIO = (): GroupMaintenanceIO => ({ active: () => false, get: async () => { throw new Error('Inactive'); }, post: async () => { throw new Error('Inactive'); } });
 
 /** A group selection fails closed while its membership is being checked. No group is an authority grant. */
 export function useFleetGroups(available: boolean, sessionKey: string | null, admin: boolean) {
@@ -49,13 +55,13 @@ export function useFleetGroups(available: boolean, sessionKey: string | null, ad
     const [loading, setLoading] = useState(false), [saving, setSaving] = useState(false), [error, setError] = useState(false), [notice, setNotice] = useState<'saved' | 'deleted' | 'uncertainGroup' | null>(null), [generation, setGeneration] = useState(0);
     const key = JSON.stringify(['fleet-groups', sessionKey]), live = useRef({ enabled, sessionKey, admin });
     live.current = { enabled, sessionKey, admin };
-    const commands = useRef<Commands>({ refresh: () => {}, hold: () => {}, cancel: () => {}, save: async () => false, io: unavailableIO, monitoringIO: unavailableMonitoringIO });
+    const commands = useRef<Commands>({ refresh: () => {}, hold: () => {}, cancel: () => {}, save: async () => false, io: unavailableIO, monitoringIO: unavailableMonitoringIO, maintenanceIO: unavailableMaintenanceIO });
     useEffect(() => {
         let alive = true, suspended = document.visibilityState === 'hidden', locked = false, held = false, operation = 0, reading = false, writing = false;
-        let accepted: GroupSnapshot | null = null, monitoring: MonitoringLease | null = null;
+        let accepted: GroupSnapshot | null = null, monitoring: MonitoringLease | null = null, maintenance: MaintenanceLease | null = null;
         const epoch = getProtectedRequestEpoch(), pending = new Set<AbortController>(), policies = new Map<string, PolicyLease>();
         const abort = () => { operation++; for (const controller of pending) controller.abort(); pending.clear(); };
-        const clear = (failure = false) => { abort(); accepted = null; policies.clear(); monitoring = null; reading = false; writing = false; held = false; if (alive) { setSnapshot(null); setLoading(false); setSaving(false); setError(failure); setGeneration(n => n + 1); } };
+        const clear = (failure = false) => { abort(); accepted = null; policies.clear(); monitoring = null; maintenance = null; reading = false; writing = false; held = false; if (alive) { setSnapshot(null); setLoading(false); setSaving(false); setError(failure); setGeneration(n => n + 1); } };
         const baseActive = () => alive && enabled && live.current.enabled && live.current.sessionKey === sessionKey && live.current.admin === admin && !suspended && !locked && document.visibilityState !== 'hidden' && epoch === getProtectedRequestEpoch() && !hasLogoutIntent();
         const groupActive = () => {
             if (!baseActive() || !accepted || !validWindowsCapacityTimestamp(sessionKey)) return false;
@@ -70,7 +76,11 @@ export function useFleetGroups(available: boolean, sessionKey: string | null, ad
             const age = windowsHealthElapsed(lease.clockKey, epoch, lease.view.serverNow, elapsed(lease.started));
             return groupActive() && Number.isFinite(age) && age < 120000 && inventoryAge(sessionKey!, lease.view.serverNow) > age && lease.view.targets.every(t => inventoryAge(t.certificateExpiresAt, lease.view.serverNow) > age);
         };
-        const allActive = () => groupActive() && [...policies.values()].every(policyActive) && (!monitoring || monitoringActive(monitoring));
+        const maintenanceActive = (lease: MaintenanceLease) => {
+            const age = windowsHealthElapsed(lease.clockKey, epoch, lease.view.serverNow, elapsed(lease.started));
+            return groupActive() && Number.isFinite(age) && age < 120000 && inventoryAge(sessionKey!, lease.view.serverNow) > age && inventoryAge(lease.view.authorityExpiresAt, lease.view.serverNow) > age;
+        };
+        const allActive = () => groupActive() && [...policies.values()].every(policyActive) && (!monitoring || monitoringActive(monitoring)) && (!maintenance || maintenanceActive(maintenance));
         const fetchValue = async (path: string, active: () => boolean, body?: unknown, cap?: number): Promise<{ value: unknown; started: Anchor }> => {
             if (!active()) throw new Error('Inactive');
             const controller = new AbortController(), started = capture(); pending.add(controller);
@@ -122,7 +132,7 @@ export function useFleetGroups(available: boolean, sessionKey: string | null, ad
             finally { if (alive && run === operation) { writing = false; setSaving(false); } }
         };
         const io = (fresh: boolean): GroupHealthIO => {
-            if (fresh) { abort(); policies.clear(); monitoring = null; }
+            if (fresh) { abort(); policies.clear(); monitoring = null; maintenance = null; }
             const run = operation;
             let candidate: { started: Anchor; metadata: Device } | null = null;
             const active = () => run === operation && admin && allActive();
@@ -164,7 +174,7 @@ export function useFleetGroups(available: boolean, sessionKey: string | null, ad
         // Reuse the group resource's private lifetime, request aborts, clock and
         // final post-CSRF session/certificate guards. No independent write lane.
         const monitoringIO = (groupId: string, fresh: boolean): GroupMonitoringIO => {
-            if (fresh) { abort(); policies.clear(); monitoring = null; }
+            if (fresh) { abort(); policies.clear(); monitoring = null; maintenance = null; }
             const run = operation;
             const group = accepted?.view.groups.find(g => g.id === groupId);
             const active = () => run === operation && !!group && allActive();
@@ -189,22 +199,47 @@ export function useFleetGroups(available: boolean, sessionKey: string | null, ad
                 },
             };
         };
+        const maintenanceIO = (groupId: string, fresh: boolean): GroupMaintenanceIO => {
+            if (fresh) { abort(); policies.clear(); monitoring = null; maintenance = null; }
+            const run = operation, group = accepted?.view.groups.find(g => g.id === groupId);
+            const active = () => run === operation && admin && !!group && allActive();
+            const accept = (value: unknown, started: Anchor): GroupMaintenanceView => {
+                if (!active() || !group || !validGroupMaintenanceView(value, groupId) || value.groupRevision !== group.revision || value.groupName !== group.name) throw new Error('Group maintenance changed');
+                const clockKey = JSON.stringify(['fleet-group-maintenance', groupId, sessionKey]);
+                if (!acceptWindowsHealthClock(clockKey, epoch, value.serverNow, elapsed(started))) throw new Error('Invalid maintenance clock');
+                const next = { view: value, started, clockKey };
+                if (!maintenanceActive(next)) throw new Error('Expired maintenance');
+                // Keep the first projection lease throughout the review/sequence.
+                // Refresh reads can tighten it, but cannot extend its original end.
+                if (!maintenance || inventoryAge(value.authorityExpiresAt, maintenance.view.authorityExpiresAt) < 0) maintenance = next;
+                return value;
+            };
+            return {
+                active,
+                get: async () => { const response = await fetchValue(`/fleet/groups/${groupId}/maintenance`, active, undefined, 262144); return accept(response.value, response.started); },
+                post: async body => {
+                    if (!maintenance || body.groupRevision !== group?.revision || !maintenance.view.members.some(m => m.targets.some(t => t.key === body.key && t.revision === body.revision))) throw new Error('No reviewed maintenance lease');
+                    const response = await fetchValue(`/fleet/groups/${groupId}/maintenance/start`, active, body, 262144);
+                    return accept(response.value, response.started);
+                },
+            };
+        };
         const lock = () => { locked = true; clear(); }, suspend = () => { suspended = true; clear(); };
         const restore = () => { if (!alive || locked || document.visibilityState === 'hidden') return; suspended = false; void read(); };
         const visibility = () => document.visibilityState === 'hidden' ? suspend() : restore();
-        commands.current = { refresh: () => { held = false; void read(); }, hold: value => { held = value; }, cancel: () => { if (writing) { setNotice('uncertainGroup'); clear(true); } else if (reading) clear(); else { abort(); policies.clear(); monitoring = null; } }, save, io, monitoringIO };
+        commands.current = { refresh: () => { held = false; void read(); }, hold: value => { held = value; }, cancel: () => { if (writing) { setNotice('uncertainGroup'); clear(true); } else if (reading) clear(); else { abort(); policies.clear(); monitoring = null; maintenance = null; } }, save, io, monitoringIO, maintenanceIO };
         clear(); setNotice(null);
-        if (!enabled) { commands.current = { refresh: () => {}, hold: () => {}, cancel: () => {}, save: async () => false, io: unavailableIO, monitoringIO: unavailableMonitoringIO }; return () => { alive = false; abort(); }; }
+        if (!enabled) { commands.current = { refresh: () => {}, hold: () => {}, cancel: () => {}, save: async () => false, io: unavailableIO, monitoringIO: unavailableMonitoringIO, maintenanceIO: unavailableMaintenanceIO }; return () => { alive = false; abort(); }; }
         if (validWindowsCapacityTimestamp(sessionKey)) void read();
         window.addEventListener(AUTH_REQUIRED_EVENT, lock); window.addEventListener('blur', suspend); window.addEventListener('focus', restore); window.addEventListener('pagehide', suspend); window.addEventListener('hashchange', suspend); document.addEventListener('visibilitychange', visibility);
         const timer = window.setInterval(() => { if (epoch !== getProtectedRequestEpoch() || hasLogoutIntent()) lock(); else if (accepted && !allActive()) clear(true); }, 250);
         const refreshTimer = window.setInterval(() => { if (!held) void read(); }, 15000);
-        return () => { alive = false; abort(); accepted = null; policies.clear(); monitoring = null; window.clearInterval(timer); window.clearInterval(refreshTimer); window.removeEventListener(AUTH_REQUIRED_EVENT, lock); window.removeEventListener('blur', suspend); window.removeEventListener('focus', restore); window.removeEventListener('pagehide', suspend); window.removeEventListener('hashchange', suspend); document.removeEventListener('visibilitychange', visibility); };
+        return () => { alive = false; abort(); accepted = null; policies.clear(); monitoring = null; maintenance = null; window.clearInterval(timer); window.clearInterval(refreshTimer); window.removeEventListener(AUTH_REQUIRED_EVENT, lock); window.removeEventListener('blur', suspend); window.removeEventListener('focus', restore); window.removeEventListener('pagehide', suspend); window.removeEventListener('hashchange', suspend); document.removeEventListener('visibilitychange', visibility); };
     }, [enabled, key, sessionKey, admin]);
     const age = snapshot ? windowsHealthElapsed(key, snapshot.epoch, snapshot.view.serverNow, elapsed(snapshot.started)) : Infinity;
     const view = enabled && snapshot?.key === key && snapshot.epoch === getProtectedRequestEpoch() && !hasLogoutIntent() && age < 120000 && validWindowsCapacityTimestamp(sessionKey) && inventoryAge(sessionKey, snapshot.view.serverNow) > age ? snapshot.view : null;
     const selected = view?.groups.find(group => group.id === selectedId) ?? null;
-    return { requested: activated, activate: () => setActivated(true), view, selected, selectedId, select: (id: string) => { commands.current.cancel(); setSelectedId(id); }, memberIds: selectedId ? new Set(selected?.memberIds ?? []) : null, loading, saving, error, notice, generation, admin, refresh: () => commands.current.refresh(), hold: (value: boolean) => commands.current.hold(value), cancel: () => commands.current.cancel(), save: (intent: GroupIntent) => commands.current.save(intent), io: (fresh = false) => commands.current.io(fresh), monitoringIO: (groupId: string, fresh = false) => commands.current.monitoringIO(groupId, fresh) };
+    return { requested: activated, activate: () => setActivated(true), view, selected, selectedId, select: (id: string) => { commands.current.cancel(); setSelectedId(id); }, memberIds: selectedId ? new Set(selected?.memberIds ?? []) : null, loading, saving, error, notice, generation, admin, refresh: () => commands.current.refresh(), hold: (value: boolean) => commands.current.hold(value), cancel: () => commands.current.cancel(), save: (intent: GroupIntent) => commands.current.save(intent), io: (fresh = false) => commands.current.io(fresh), monitoringIO: (groupId: string, fresh = false) => commands.current.monitoringIO(groupId, fresh), maintenanceIO: (groupId: string, fresh = false) => commands.current.maintenanceIO(groupId, fresh) };
 }
 export type FleetGroupsResource = ReturnType<typeof useFleetGroups>;
 
@@ -299,16 +334,17 @@ function HealthEditor({ resource, group, c, onClose }: { resource: FleetGroupsRe
 export function FleetGroupsControls({ resource }: { resource: FleetGroupsResource }) {
     const [locale] = useLocale(), c = copy[locale];
     const [inheritance, setInheritance] = useState(false);
-    const [dialog, setDialog] = useState<'manage' | 'new' | 'edit' | 'health' | null>(null), [editingId, setEditingId] = useState('');
+    const [dialog, setDialog] = useState<'manage' | 'new' | 'edit' | 'health' | 'maintenance' | null>(null), [editingId, setEditingId] = useState('');
     const close = () => { resource.cancel(); resource.hold(false); setDialog(null); setInheritance(false); };
     const open = (next: typeof dialog) => { resource.cancel(); setInheritance(false); resource.hold(true); setDialog(next); };
     const group = resource.view?.groups.find(g => g.id === editingId) ?? resource.selected;
     if (!resource.requested) return <div className="fleet-groups"><button className="text-button" onClick={resource.activate}><Folder size={15} aria-hidden="true"/>{c.groups}</button></div>;
-    return <div className="fleet-groups"><div className="fleet-group-toolbar"><label className="fleet-group-select"><Folder size={15} aria-hidden="true"/><span>{c.groups}</span><select aria-label={c.groups} value={resource.selectedId} disabled={resource.loading || resource.saving} onChange={event => { close(); resource.select(event.target.value); }}><option value="">{c.all}</option>{resource.selectedId && !resource.selected && <option value={resource.selectedId}>{c.selectedMissing}</option>}{resource.view?.groups.map(item => <option key={item.id} value={item.id}>{item.name} ({item.memberIds.length})</option>)}</select></label><button className="text-button" disabled={!resource.view} onClick={() => open('manage')}><Settings2 size={14} aria-hidden="true"/>{c.manage}</button>{resource.admin && resource.view && (!resource.selectedId || resource.selected) && <button className="text-button" onClick={() => open('health')}>{c.health}</button>}{resource.view && resource.selected && <button className="text-button" aria-expanded={inheritance} onClick={() => { if (inheritance) close(); else { resource.cancel(); setDialog(null); resource.hold(true); setInheritance(true); } }}>{locale === 'de' ? 'Gruppen-Monitoring' : 'Group monitoring'}</button>}<button className="text-button" disabled={resource.loading || resource.saving} onClick={() => { close(); resource.refresh(); }}><RefreshCw size={14} aria-hidden="true"/>{c.refresh}</button></div>
+    return <div className="fleet-groups"><div className="fleet-group-toolbar"><label className="fleet-group-select"><Folder size={15} aria-hidden="true"/><span>{c.groups}</span><select aria-label={c.groups} value={resource.selectedId} disabled={resource.loading || resource.saving} onChange={event => { close(); resource.select(event.target.value); }}><option value="">{c.all}</option>{resource.selectedId && !resource.selected && <option value={resource.selectedId}>{c.selectedMissing}</option>}{resource.view?.groups.map(item => <option key={item.id} value={item.id}>{item.name} ({item.memberIds.length})</option>)}</select></label><button className="text-button" disabled={!resource.view} onClick={() => open('manage')}><Settings2 size={14} aria-hidden="true"/>{c.manage}</button>{resource.admin && resource.view && (!resource.selectedId || resource.selected) && <button className="text-button" onClick={() => open('health')}>{c.health}</button>}{resource.admin && resource.view && resource.selected && <button className="text-button" onClick={() => open('maintenance')}>{locale === 'de' ? 'Gruppenwartung starten' : 'Start group maintenance'}</button>}{resource.view && resource.selected && <button className="text-button" aria-expanded={inheritance} onClick={() => { if (inheritance) close(); else { resource.cancel(); setDialog(null); resource.hold(true); setInheritance(true); } }}>{locale === 'de' ? 'Gruppen-Monitoring' : 'Group monitoring'}</button>}<button className="text-button" disabled={resource.loading || resource.saving} onClick={() => { close(); resource.refresh(); }}><RefreshCw size={14} aria-hidden="true"/>{c.refresh}</button></div>
         {inheritance && resource.view && resource.selected && <GroupMonitoring key={resource.selected.id} resource={resource} group={resource.selected} onClose={close}/>}
         {resource.loading && <p role="status">{c.loading}</p>}{resource.error && <p role="status">{c.unavailable}</p>}{resource.notice && <p role="status">{c[resource.notice]}</p>}
         {dialog === 'manage' && resource.view && <Dialog title={c.manage} onClose={close} className="fleet-group-dialog"><h2>{c.manage}</h2><p>{c.organizational}</p><p>{c.limits}</p>{!resource.admin && <p>{c.readOnly}</p>}<ul className="fleet-group-list">{resource.view.groups.map(item => <li key={item.id}><button className="text-button" onClick={() => { setEditingId(item.id); open('edit'); }}>{item.name}</button><span>{item.memberIds.length}/50 · {c.revision}: {item.revision}{item.unavailableMembers > 0 && <> · {c.unavailableMembers}: {item.unavailableMembers}</>}</span></li>)}</ul>{!resource.view.groups.length && <p>{c.empty}</p>}{resource.admin && <button className="button" disabled={resource.view.groups.length >= 25} onClick={() => open('new')}>{c.create}</button>}</Dialog>}
         {(dialog === 'new' || dialog === 'edit' && group) && <GroupEditor key={dialog === 'new' ? 'new' : group!.id} resource={resource} initial={dialog === 'new' ? null : group} c={c} onClose={close}/>}
+        {dialog === 'maintenance' && resource.view && resource.selected && <GroupMaintenance resource={resource} group={resource.selected} onClose={close}/>}
         {dialog === 'health' && resource.view && (!resource.selectedId || resource.selected) && <HealthEditor resource={resource} group={resource.selected} c={c} onClose={close}/>}
     </div>;
 }

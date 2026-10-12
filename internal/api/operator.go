@@ -570,6 +570,10 @@ func (h *operatorHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.windowsIncidentsAPI(w, r)
 		return
 	}
+	if strings.HasPrefix(r.URL.Path, "/api/fleet/groups/") && strings.Contains(r.URL.Path, "/maintenance") {
+		h.fleetGroupMaintenanceAPI(w, r)
+		return
+	}
 	if strings.HasPrefix(r.URL.Path, "/api/fleet/groups/") && strings.Contains(r.URL.Path, "/monitoring") {
 		h.fleetMonitoringAPI(w, r)
 		return

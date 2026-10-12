@@ -237,7 +237,7 @@ class SelectionTests(unittest.TestCase):
     def test_cve_bridge_owns_one_changed_flow_and_shared_evidence_validator(self):
         for filename in ['check-linux-cve-update-review-evidence.mjs', 'capture-linux-cve-update-review.mjs', 'run-linux-cve-update-review-ci.mjs',
                          'linux-cve-update-review-contract.mjs', 'linux-cve-update-review-scenes.json',
-                         'linux-cve-update-review-contract.test.mjs']:
+                         'linux-cve-update-review-contract.node.mjs']:
             plan = self.select(('M', 'web/scripts/' + filename))
             self.assertEqual(plan['flows'], ['linux-cve-update-review'])
             self.assertFalse(plan['broadGo']); self.assertFalse(plan['broadWeb'])
@@ -247,9 +247,13 @@ class SelectionTests(unittest.TestCase):
             p.web_checks(plan)
         commands = [call.args[0] for call in run.call_args_list]
         self.assertEqual(commands.count(['node', 'web/scripts/capture-linux-cve-update-review.mjs', '--check']), 1)
-        self.assertEqual(commands.count(['node', '--test', 'web/scripts/linux-cve-update-review-contract.test.mjs']), 1)
+        self.assertEqual(commands.count(['node', '--test', 'web/scripts/linux-cve-update-review-contract.node.mjs']), 1)
         for name in ['linux-cve-update-review-results.json', 'linux-cve-update-review-manifest.json', 'synthetic-linux-cve-update-review-*.png']:
             self.assertIn(name, (ROOT / '.github/workflows/pr-checks.yml').read_text())
+        node_contract = ROOT / 'web/scripts/linux-cve-update-review-contract.node.mjs'
+        self.assertTrue(node_contract.is_file())
+        self.assertFalse(node_contract.with_name('linux-cve-update-review-contract.test.mjs').exists())
+        self.assertIn('node --test web/scripts/linux-cve-update-review-contract.node.mjs', (ROOT / '.github/workflows/validate.yml').read_text())
         runner = (ROOT / 'web/scripts/run-linux-cve-update-review-ci.mjs').read_text()
         self.assertIn("RUNNER_ENVIRONMENT === 'github-hosted'", runner)
         self.assertIn('await validateEvidence(output, sourceSha)', runner)
@@ -917,6 +921,74 @@ class VitestFailureTests(unittest.TestCase):
             self.assertEqual(seen[0][1:], (root/'web', 'ui-test'))
             self.assertEqual(output.getvalue(), 'FAIL UI location: web/src/exact.test.tsx assertions=2\n')
             self.assertFalse(Path(seen[0][0][-1].split('=',1)[1]).exists())
+
+
+class CVEReviewFailureTests(unittest.TestCase):
+    def report(self, stage='review-focus', index=0):
+        return {'sourceSha': SHA, 'status': 'FAIL', 'browserAcceptance': False,
+                'sceneManifestSHA256': 'b' * 64, 'scenes': 0, 'screenshots': 0,
+                'requestsToRealAPI': 0, 'actualMutationRequests': 0,
+                'nativeAcceptance': False, 'disclosure': 'private fixture prose is never emitted',
+                'failure': {'stage': stage, 'captureIndex': index}}
+
+    def test_all_closed_stages_and_source_contract(self):
+        capture = (ROOT / 'web/scripts/capture-linux-cve-update-review.mjs').read_text()
+        driver = (ROOT / 'web/scripts/run-linux-cve-update-review-ci.mjs').read_text()
+        self.assertEqual(set(re.findall(r"stage\('([^']+)'\)", capture)), p.CVE_CAPTURE_STAGES)
+        self.assertEqual({'launch'} | set(re.findall(r"onStage\('([^']+)'", capture + driver)), p.CVE_RUNNER_STAGES)
+        self.assertIn('120000', driver)
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary); target = root / 'artifacts/review/linux-cve-update-review-results.json'
+            target.parent.mkdir(parents=True)
+            with patch.object(p, 'ROOT', root):
+                for stage in p.CVE_RUNNER_STAGES:
+                    target.write_text(json.dumps(self.report(stage, None)))
+                    self.assertEqual(p.cve_review_failure_location(SHA), 'stage=' + stage)
+                for stage in p.CVE_CAPTURE_STAGES:
+                    for index, (locale, width) in enumerate([('en', 1440), ('en', 390), ('de', 1440), ('de', 390)]):
+                        target.write_text(json.dumps(self.report(stage, index)))
+                        self.assertEqual(p.cve_review_failure_location(SHA), f'stage={stage} locale={locale} width={width}')
+
+    def test_rejects_unsafe_or_malformed_report(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary); target = root / 'artifacts/review/linux-cve-update-review-results.json'
+            target.parent.mkdir(parents=True)
+            with patch.object(p, 'ROOT', root):
+                values = []
+                for key, value in [('sourceSha', 'c'*40), ('status', 'PASS'), ('browserAcceptance', True),
+                                   ('nativeAcceptance', True), ('sceneManifestSHA256', 'runtime text'),
+                                   ('disclosure', 'x'*1025), ('screenshots', True), ('scenes', 1),
+                                   ('requestsToRealAPI', 1), ('actualMutationRequests', 1), ('extra', 'private')]:
+                    report = self.report(); report[key] = value; values.append(report)
+                for failure in [None, [], {}, {'stage': 'private secret', 'captureIndex': 0},
+                                {'stage': 'review-focus', 'captureIndex': -1}, {'stage': 'review-focus', 'captureIndex': 4},
+                                {'stage': 'review-focus', 'captureIndex': True}, {'stage': 'review-focus', 'captureIndex': None},
+                                {'stage': 'launch', 'captureIndex': 0}, {'stage': [], 'captureIndex': 0},
+                                {'stage': 'review-focus', 'captureIndex': 0, 'error': 'private'}]:
+                    report = self.report(); report['failure'] = failure; values.append(report)
+                for value in values:
+                    target.write_text(json.dumps(value)); self.assertIsNone(p.cve_review_failure_location(SHA))
+                for raw in [b'{"status":"FAIL","status":"PASS"}', b'x'*8193, b'\xff']:
+                    target.write_bytes(raw); self.assertIsNone(p.cve_review_failure_location(SHA))
+                target.unlink(); self.assertIsNone(p.cve_review_failure_location(SHA))
+                target.mkdir(); self.assertIsNone(p.cve_review_failure_location(SHA)); target.rmdir()
+                other = root / 'other.json'; other.write_text(json.dumps(self.report())); target.symlink_to(other)
+                self.assertIsNone(p.cve_review_failure_location(SHA))
+
+    def test_diagnostics_preserve_failure_and_skip_other_flows(self):
+        plan = {'flows': ['linux-cve-update-review'], 'sha': SHA}
+        output = io.StringIO()
+        with patch.object(p, 'run', side_effect=[None, ValueError('private')]), \
+             patch.object(p, 'cve_review_failure_location', return_value='stage=review-focus locale=en width=1440') as location, \
+             redirect_stdout(output):
+            with self.assertRaisesRegex(ValueError, 'private'): p.browser_checks(plan)
+        location.assert_called_once_with(SHA)
+        self.assertIn('FAIL CVE review location: stage=review-focus locale=en width=1440', output.getvalue())
+        self.assertNotIn('private', output.getvalue())
+        with patch.object(p, 'run'), patch.object(p, 'browser_report'), \
+             patch.object(p, 'cve_review_failure_location') as location:
+            p.browser_checks(plan)
+        location.assert_not_called()
 
 
 if __name__ == '__main__':
