@@ -154,12 +154,15 @@ identity or A → B → A payload occurrence cannot replace those references. An
 explicitly disabled feature retains the existing manual view; malformed or failed
 worklist reads fail closed. Singleton v1 and fleet-v2 UI paths are unchanged.
 
-Saving and opening only record/read the plan. Deliver, Review and Approve are
-three separate controls. Each opens one initially unchecked confirmation naming
+Saving and opening only record/read the plan. Deliver, Review, Approve and Review
+package cleanup are four separate controls. Each opens one initially unchecked confirmation naming
 every exact device, package/native/publisher/terms evidence and original request
 expiry. Review additionally acknowledges LocalSystem/custom-action risk, accepted
 terms, the bounded maintenance window and exact synchronous-action evidence.
-Approval pins the enumerated fresh readiness references only. Excluded or newly
+Approval pins the enumerated fresh readiness references only. Package cleanup
+pins each exact settled result and fresh idle shared-owner status, then uses the
+existing per-device retirement permit. It retains failed/restart-required outcomes
+and never retires the shared manager payload. Excluded or newly
 ready devices cannot join an existing confirmation. No acknowledgement survives
 dismissal or advances another stage.
 
@@ -182,8 +185,9 @@ it does not expose standalone delivery/review/approval outside the saved journal
 Archiving is read-only retention, not cancellation or payload retirement. Abandoned
 delivery can still leave the one payload slot occupied under the existing contract.
 
-The existing hosted-only fleet capture driver adds 20 saved-worklist scenes:
-compact summary, expanded evidence, and unchecked delivery/review/approval across
+The existing hosted-only fleet capture driver adds 28 saved-worklist scenes:
+compact summary, expanded evidence, unchecked delivery/review/approval/cleanup,
+and retained failed/restart-required outcomes after cleanup across
 EN/DE at 1440px and 390px. It retains the original fleet, reusable and catalogue
 cases. Its synthetic POST exception is restricted to an exact read-only preview
 path/body; all permit, save, batch, close, archive and retirement writes remain

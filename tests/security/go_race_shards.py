@@ -35,6 +35,9 @@ RETENTION_CAPACITY_TESTS = (
 )
 SKIP = "^(TestIndependentPackageStoreDenseCapacityAndActualIngress|TestGuidedThreeBinaryEnrollmentAndForeground)$"
 WEIGHTS = Path(__file__).with_name("go_race_weights.json")
+# Exact historical multi-run artifact provenance; scheduling only, never proof
+# that the current source passed. Current completion still binds one run/attempt.
+WEIGHT_PROVENANCE_SHA256 = "a73042ff0fd969529659790ecf822abe7b5d32e9f1cae60be0630f1d30ed1b08"
 MAX_PACKAGES = 1024
 MAX_REPORT = 1024 * 1024
 LIST_COMMAND = ["go", "list", "-race", "-buildvcs=false", "-f", "{{.ImportPath}} {{if or .TestGoFiles .XTestGoFiles}}tests{{else}}none{{end}}", "./..."]
@@ -66,13 +69,16 @@ def package_rows(raw, allowed):
 
 def weights(raw):
     value = reporter.decode(raw)
-    if (not isinstance(value, dict) or set(value) != {"schemaVersion", "sourceRun", "milliseconds"}
-            or type(value["schemaVersion"]) is not int or value["schemaVersion"] != 1
-            or value["sourceRun"] != "38058537360/114231878636"
+    if (not isinstance(value, dict) or set(value) != {"schemaVersion", "provenance", "milliseconds"}
+            or type(value["schemaVersion"]) is not int or value["schemaVersion"] != 2
+            or digest(value["provenance"]) != WEIGHT_PROVENANCE_SHA256
             or not isinstance(value["milliseconds"], dict) or len(value["milliseconds"]) > MAX_PACKAGES):
         raise ValueError("invalid weights")
     for package, weight in value["milliseconds"].items():
-        if not reporter.PACKAGE.fullmatch(package) or type(weight) is not int or not 1 <= weight <= 900000:
+        # Enrollmentstore's weight sums its default invocation, four prefix
+        # groups and retention/capacity. This bound changes no execution timeout.
+        limit = 900000 * (1 + len(INVENTORY_PREFIXES) + 1) if package == INVENTORY_PACKAGE else 900000
+        if not reporter.PACKAGE.fullmatch(package) or type(weight) is not int or not 1 <= weight <= limit:
             raise ValueError("invalid weight")
     return value["milliseconds"]
 
@@ -306,27 +312,45 @@ def verify_reports(plan, reports):
 
 
 def load_reports(directory, attempt):
-    expected_dirs = {f"go-race-{attempt}-{shard}" for shard in range(SHARDS)}
-    if directory.is_symlink() or {p.name for p in directory.iterdir()} != expected_dirs:
+    # download-artifact keeps one directory per artifact (merge-multiple=false).
+    # A lost finalize response can leave both uploads visible; accept them only
+    # if both are exactly the same normalized report, never choose a winner.
+    choices = [(f"go-race-{attempt}-{shard}", f"go-race-{attempt}-{shard}-fallback")
+               for shard in range(SHARDS)]
+    allowed_dirs = {name for pair in choices for name in pair}
+    if directory.is_symlink():
+        raise ValueError("invalid artifact directory")
+    actual_dirs = {p.name for p in directory.iterdir()}
+    if actual_dirs - allowed_dirs:
         raise ValueError("missing or extra artifact")
     result = []
-    for name in sorted(expected_dirs):
-        folder = directory / name
-        path = folder / "completion.json"
-        if folder.is_symlink() or not folder.is_dir() or list(folder.iterdir()) != [path] or path.is_symlink():
-            raise ValueError("invalid artifact layout")
-        # Normalized downloaded files are public metadata (artifact mode 0644),
-        # so do not apply the raw-log private-mode requirement here.
-        with os.fdopen(reporter.open_log(path), "rb") as stream:
-            info = os.fstat(stream.fileno())
-            if not stat.S_ISREG(info.st_mode) or info.st_size > MAX_REPORT:
-                raise ValueError("invalid artifact file")
-            raw = stream.read(MAX_REPORT + 1)
-        if len(raw) > MAX_REPORT:
-            raise ValueError("oversized artifact")
-        report = reporter.decode(raw)
-        if not isinstance(report, dict) or report.get("shard") != int(name.rsplit("-", 1)[1]):
-            raise ValueError("artifact shard mismatch")
+    for shard, pair in enumerate(choices):
+        previous = None
+        for name in pair:
+            if name not in actual_dirs:
+                continue
+            folder = directory / name
+            path = folder / "completion.json"
+            if folder.is_symlink() or not folder.is_dir() or list(folder.iterdir()) != [path] or path.is_symlink():
+                raise ValueError("invalid artifact layout")
+            # Normalized downloaded files are public metadata (mode 0644),
+            # so do not apply the raw-log private-mode requirement here.
+            with os.fdopen(reporter.open_log(path), "rb") as stream:
+                info = os.fstat(stream.fileno())
+                if not stat.S_ISREG(info.st_mode) or info.st_size > MAX_REPORT:
+                    raise ValueError("invalid artifact file")
+                raw = stream.read(MAX_REPORT + 1)
+            if len(raw) > MAX_REPORT:
+                raise ValueError("oversized artifact")
+            report = reporter.decode(raw)
+            if (not isinstance(report, dict) or type(report.get("shard")) is not int
+                    or report["shard"] != shard or raw != canonical(report) + b"\n"):
+                raise ValueError("invalid normalized artifact")
+            if previous is not None and raw != previous:
+                raise ValueError("conflicting completion artifacts")
+            previous = raw
+        if previous is None:
+            raise ValueError("missing shard artifact")
         result.append(report)
     return result
 

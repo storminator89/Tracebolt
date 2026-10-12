@@ -155,9 +155,12 @@ export async function createWindowsFleetMSIFixture(now = new Date(Math.floor(Dat
   };
 }
 
-export const windowsSavedMSIScenes = Object.freeze(['compact-summary', 'expanded-evidence', 'delivery-unchecked', 'review-unchecked', 'approval-unchecked']);
-export const windowsSavedMSIDisclosure = 'Synthetic saved reusable-v3 MSI worklists and compiled production UI. Preview POSTs read only fixed invented responses and are counted separately. All confirmation, batch, delivery, review, approval, retirement and other mutations are blocked. No real login, saved plan, device, grant, MSI bytes, installer, native acceptance or release.';
-const savedStage = scene => ({ 'delivery-unchecked': 'deliver', 'review-unchecked': 'review', 'approval-unchecked': 'approve' })[scene];
+export const windowsSavedMSIScenes = Object.freeze(['compact-summary', 'expanded-evidence', 'delivery-unchecked', 'review-unchecked', 'approval-unchecked', 'retirement-unchecked', 'retired-outcomes']);
+export const windowsSavedMSICaptureMatrix = Object.freeze(windowsSavedMSIScenes.flatMap(scene => windowsFleetMSICases.map(testCase => Object.freeze({
+  scene, ...testCase, file: `synthetic-windows-saved-msi-${scene}-${testCase.width}-${testCase.locale}.png`,
+}))));
+export const windowsSavedMSIDisclosure = 'Synthetic saved reusable-v3 MSI worklists and compiled production UI. Preview POSTs read only fixed invented responses and are counted separately. Endpoint package-cleanup previews preserve exact result, transfer, job, occurrence and binding references; retired failures and restart-required results stay distinct. All confirmation, batch, delivery, review, approval, endpoint retirement, global artifact cleanup and other mutations are blocked. No real login, saved plan, device, grant, MSI bytes, installation, uninstallation, native acceptance or release.';
+const savedStage = scene => ({ 'delivery-unchecked': 'deliver', 'review-unchecked': 'review', 'approval-unchecked': 'approve', 'retirement-unchecked': 'retire' })[scene];
 
 /** Invented saved references, never a real durable manager journal or approval. */
 export async function createWindowsSavedMSIFixture(scene, now) {
@@ -205,6 +208,15 @@ export async function createWindowsSavedMSIFixture(scene, now) {
       result: { returnCodeKnown: true, jobId: `software_${'7'.repeat(32)}`, envelopeDigest: digest('8'), attempted: true,
         outcome: 'restart_required', returnCode: 3010, registrationVerified: 'unknown', completedAt: seconds - 20 },
     });
+    if (stage === 'retire' || scene === 'retired-outcomes') {
+      Object.assign(view, {
+        state: scene === 'retired-outcomes' ? 'retired' : 'complete', canReview: false,
+        canRetire: stage === 'retire', resultDigest: digest(index ? 'c' : 'd'),
+        result: { returnCodeKnown: true, jobId: `software_${view.transferId.slice(9)}`, envelopeDigest: digest(index ? '8' : 'e'), attempted: true,
+          outcome: index ? 'restart_required' : 'failed', returnCode: index ? 3010 : 1603,
+          registrationVerified: index ? 'yes' : 'no', completedAt: seconds - 20 },
+      });
+    }
   }
   const targets = devices.map((device, index) => ({
     name: device.name, binding: bindings[index],
@@ -239,6 +251,7 @@ export async function createWindowsSavedMSIFixture(scene, now) {
         jobSequence: stage === 'deliver' ? '' : view.jobSequence,
         readinessDigest: stage === 'approve' ? view.readinessDigest : '',
         expiresAt: stage === 'approve' ? view.expiresAt : seconds + 60,
+        ...(stage === 'retire' ? { resultDigest: view.resultDigest } : {}),
       })),
       excluded: [{ deviceId: devices[2].id, reason: 'unavailable' }],
     },
@@ -332,6 +345,15 @@ export async function checkWindowsFleetMSIFixtures() {
 /** Inert preview exception checks. This does not execute browser interactions. */
 export async function checkWindowsSavedMSIFixtures() {
   const validation = await contracts();
+  assert.deepEqual(windowsSavedMSIScenes, ['compact-summary', 'expanded-evidence', 'delivery-unchecked', 'review-unchecked', 'approval-unchecked', 'retirement-unchecked', 'retired-outcomes']);
+  assert.equal(windowsSavedMSICaptureMatrix.length, 28, 'Hosted saved-worklist matrix must include every new scene');
+  assert.equal(new Set(windowsSavedMSICaptureMatrix.map(testCase => testCase.file)).size, 28);
+  for (const scene of windowsSavedMSIScenes) for (const locale of ['en', 'de']) for (const width of [1440, 390]) {
+    assert.deepEqual(windowsSavedMSICaptureMatrix.find(testCase => testCase.scene === scene && testCase.locale === locale && testCase.width === width), {
+      scene, locale, width, height: width === 390 ? 844 : 1100, file: `synthetic-windows-saved-msi-${scene}-${width}-${locale}.png`,
+    }, 'Hosted scenes require exact EN/DE desktop/mobile variants');
+  }
+  assert.equal(windowsSavedMSICaptureMatrix.filter(testCase => savedStage(testCase.scene)).length, 16);
   let allowedPreviewReads = 0, rejectedMutationRequests = 0;
   for (const scene of windowsSavedMSIScenes) {
     const fixture = await createWindowsSavedMSIFixture(scene, '2026-10-12T10:00:00.000Z');
@@ -353,6 +375,26 @@ export async function checkWindowsSavedMSIFixtures() {
     assert.deepEqual(JSON.parse(saved.body), worklist);
     assert.equal(state.writes.length, 0);
     assert.equal(state.previews.length, 0, 'GETs must not start a stage');
+    if (scene === 'retirement-unchecked' || scene === 'retired-outcomes') {
+      assert.deepEqual(worklist.rows.slice(0, 2).map(row => [row.view.result.outcome, row.view.result.returnCode, row.view.result.registrationVerified]), [
+        ['failed', 1603, 'no'], ['restart_required', 3010, 'yes'],
+      ], 'Cleanup and retirement preserve each independent settled native outcome');
+      assert.equal(fixture.artifact.state, 'uploaded', 'Endpoint retirement cannot imply global artifact cleanup');
+      assert.equal(fixture.artifact.canRetire, false, 'The unavailable assignment still blocks global cleanup');
+    }
+    if (scene === 'retired-outcomes') {
+      assert.equal(fixture.reviewedPreview, undefined, 'Reading retired results cannot preview another stage');
+      for (const view of fixture.views) {
+        assert.equal(view.state, 'retired');
+        assert.equal(view.canRetire, false);
+        assert.equal(view.jobSequence, '1');
+        assert.equal(view.retiredFloor, '0', 'The current retired job is not compacted before the next explicit job');
+        assert.equal(view.history, undefined, 'Current retired result remains in place; history advances with the next job');
+      }
+      const unverified = clone(fixture.views[1]);
+      unverified.result.registrationVerified = 'unknown';
+      assert.equal(validation.validManagedView(unverified, unverified.deviceId), false, 'Retired 3010 cannot invent verified registration');
+    }
     const substituted = clone(worklist);
     substituted.rows[0].view.artifactRetiredCount = '1';
     assert.equal(validation.validWorklistView(substituted), false, 'Same-content occurrence substitution must be rejected');
@@ -386,12 +428,43 @@ export async function checkWindowsSavedMSIFixtures() {
       const changed = clone(expected.response);
       changed.items[0].bindingDigest = digest('0');
       assert.equal(validation.validWorklistPreview(changed, worklist, savedStage(scene)), false, 'Preview must match exact current binding');
+      const stage = savedStage(scene);
+      for (const item of expected.response.items) assert.equal(Object.hasOwn(item, 'resultDigest'), stage === 'retire', 'Only retirement requests carry resultDigest');
+      if (stage === 'retire') {
+        assert.equal(expected.response.kind, 'retire');
+        assert.deepEqual(expected.response.excluded, [{ deviceId: fixture.devices[2].id, reason: 'unavailable' }]);
+        for (const [index, item] of expected.response.items.entries()) {
+          const view = fixture.views[index];
+          assert.equal(item.operation, 'retire');
+          assert.equal(item.resultDigest, view.resultDigest);
+          assert.equal(item.transferId, worklist.targets[index].transferId);
+          assert.equal(item.jobSequence, worklist.targets[index].jobSequence);
+          assert.equal(item.artifactRetiredCount, worklist.artifactRetiredCount);
+          assert.equal(item.bindingDigest, view.bindingDigest);
+          assert.equal(item.readinessDigest, '');
+          assert.equal(view.canRetire, true);
+        }
+        for (const [field, value] of Object.entries({ artifactId: digest('0'), artifactRetiredCount: '1', transferId: `transfer_${'0'.repeat(32)}`, jobSequence: '2', resultDigest: digest('0'), readinessDigest: digest('0'), operation: 'approve' })) {
+          const substituted = clone(expected.response);
+          substituted.items[0][field] = value;
+          assert.equal(validation.validWorklistPreview(substituted, worklist, stage), false, `Cleanup preview cannot substitute ${field}`);
+        }
+        const missing = clone(expected.response);
+        delete missing.items[0].resultDigest;
+        assert.equal(validation.validWorklistPreview(missing, worklist, stage), false, 'Cleanup preview requires the exact settled result');
+      } else {
+        for (const resultDigest of ['', digest('d')]) {
+          const extra = clone(expected.response);
+          extra.items[0].resultDigest = resultDigest;
+          assert.equal(validation.validWorklistPreview(extra, worklist, stage), false, 'Other stages reject even an empty retirement-only field');
+        }
+      }
     } else {
       assert.equal((await request(`${base}/preview`, 'POST', JSON.stringify({ revision: worklist.revision, kind: 'deliver' }))).aborted, 'blockedbyclient');
       rejectedMutationRequests++;
     }
     const writePaths = [
-      '/api/windows-managed-msi/worklists/save', `${base}/batches`, `${base}/archive`, `${base}/close`,
+      '/api/windows-managed-msi/worklists/save', '/api/windows-managed-msi/artifact/retire', `${base}/batches`, `${base}/archive`, `${base}/close`,
       ...['deliver', 'review-coordinated', 'approve', 'retire'].map(operation => `/api/devices/${fixture.devices[0].id}/windows-managed-msi/${operation}`),
     ];
     const initialWrites = state.writes.length;
@@ -402,7 +475,8 @@ export async function checkWindowsSavedMSIFixtures() {
     assert.deepEqual(worklist, initialWorklist, 'Preview reads must leave saved records and acknowledgements unchanged');
     assert.deepEqual(state.external, []);
   }
-  return { scenes: windowsSavedMSIScenes, dtoAndRouteChecks: 'passed', allowedPreviewReads, rejectedMutationRequests, actualMutations: 0, browserExecuted: false, screenshotsCaptured: 0 };
+  return { scenes: windowsSavedMSIScenes, hostedCaptureMatrix: windowsSavedMSICaptureMatrix, dtoAndRouteChecks: 'passed', retirementOnlyResultPins: true,
+    retiredNativeOutcomesPreserved: true, allowedPreviewReads, rejectedMutationRequests, actualMutations: 0, browserExecuted: false, screenshotsCaptured: 0 };
 }
 
 export async function exerciseWindowsFleetMSI({ page, expect, fixture, locale, width, shot }) {
@@ -482,6 +556,7 @@ export async function exerciseWindowsSavedMSI({ page, expect, fixture, scene, lo
     deliver: de ? 'An ausgewählte Geräte verteilen' : 'Deliver selected devices',
     review: de ? 'Installationen prüfen' : 'Review installations',
     approve: de ? 'Bereite Geräte genehmigen' : 'Approve ready devices',
+    retire: de ? 'Paketbereinigung prüfen' : 'Review package cleanup',
     confirm: de ? 'Exakte Anfragen bestätigen' : 'Confirm exact requests',
     unavailable: de ? 'Aktuelle Nachweise nicht verfügbar' : 'Current evidence unavailable',
     history: de ? 'Nur historisches Ergebnis: Installiert; exakte Registrierung geprüft' : 'Historical result only: Installed; exact registration verified',
@@ -540,7 +615,9 @@ export async function exerciseWindowsSavedMSI({ page, expect, fixture, scene, lo
       ? de ? 'Ich genehmige diese exakten Verteilungsanfragen.' : 'I approve these exact delivery requests.'
       : stage === 'approve'
         ? de ? 'Ich genehmige eine Installation genau dieses Pakets auf jedem aufgeführten Gerät.' : 'I approve one installation of this exact package on each listed device.'
-        : de ? /^Ich habe genau dieses Paket und seine nativen\/Herausgebernachweise geprüft/ : /^I reviewed this exact package and its native\/publisher evidence/;
+        : stage === 'retire'
+          ? de ? 'Ich genehmige das Entfernen des anwendungseigenen Pakets auf den Endgeräten nur für diese aufgeführten exakten Ergebnisse.' : 'I approve removal of the app-owned endpoint package for only these listed exact results.'
+          : de ? /^Ich habe genau dieses Paket und seine nativen\/Herausgebernachweise geprüft/ : /^I reviewed this exact package and its native\/publisher evidence/;
     await expect(confirmation.getByRole('checkbox', { name: acknowledgement })).not.toBeChecked();
     const included = confirmation.locator('ol > li');
     await expect(included).toHaveCount(2);
@@ -551,19 +628,61 @@ export async function exerciseWindowsSavedMSI({ page, expect, fixture, scene, lo
       await expect(included.nth(index)).toContainText(request.bindingDigest);
       await expect(included.nth(index)).toContainText(request.transferId);
       if (stage === 'approve') await expect(included.nth(index)).toContainText(request.readinessDigest);
+      if (stage === 'retire') {
+        const result = fixture.views[index].result;
+        await expect(included.nth(index)).toContainText(request.resultDigest);
+        await expect(included.nth(index).getByText(`${request.transferId} · ${request.jobSequence}`, { exact: true })).toHaveCount(1);
+        await expect(confirmation).toContainText(`${de ? 'Paketgeneration' : 'Payload generation'} ${request.artifactRetiredCount}`);
+        await expect(included.nth(index)).toContainText(index
+          ? de ? '3010: Neustart erforderlich' : '3010: Restart required'
+          : de ? 'Installation fehlgeschlagen; Versuch verbraucht' : 'Installation failed; attempt consumed');
+        await expect(included.nth(index)).toContainText(`${de ? 'Rückgabecode' : 'Return code'}: ${result.returnCode}`);
+        await expect(included.nth(index).locator('p').filter({ hasText: `${de ? 'Rückgabecode' : 'Return code'}: ${result.returnCode}` })).toBeVisible();
+        await expect(included.nth(index)).toContainText(index
+          ? de ? 'Exakte Registrierung: Geprüft' : 'Exact registration: Verified'
+          : de ? 'Exakte Registrierung: Nicht geprüft' : 'Exact registration: Not verified');
+        await expect(included.nth(index).locator('.windows-mutation-status')).toContainText(de ? 'Gemeinsamer Status: Kein Besitzer gespeichert' : 'Shared status: No owner saved');
+        await expect(included.nth(index).locator('.windows-mutation-status')).toBeVisible();
+      }
       await expect(included.nth(index)).toContainText(new Date(request.expiresAt * 1000).toISOString());
     }
     await expect(included.filter({ hasText: fixture.devices[2].id })).toHaveCount(0);
     await expect(confirmation).toContainText(de ? 'Von dieser Bestätigung ausgeschlossen' : 'Excluded from this confirmation');
     await expect(confirmation).toContainText(fixture.devices[2].id);
+    await expect(confirmation.locator('ul > li').filter({ hasText: fixture.devices[2].id })).toContainText(de ? 'Nicht verfügbar' : 'Unavailable');
     if (stage === 'review') {
       await expect(confirmation.locator('p').filter({ hasText: 'LocalSystem' })).toBeVisible();
       await expect(confirmation.locator('p').filter({ hasText: de ? 'Synchrone Aktionen müssen geprüft werden.' : 'Synchronous actions must be reviewed.' })).toBeVisible();
+    }
+    if (stage === 'retire') {
+      await expect(confirmation).toContainText(de ? 'Installierte Anwendungen und gespeicherte Ergebnisse bleiben unverändert.' : 'Installed applications and retained outcomes remain unchanged.');
+      await expect(confirmation).toContainText(de ? 'Die gemeinsame Manager-Paketbereinigung bleibt separat.' : 'Shared manager package cleanup is separate.');
+      await expect(confirmation.getByRole('button', { name: labels.approve, exact: true })).toHaveCount(0);
+      await expect(confirmation.getByRole('button', { name: de ? 'Gemeinsamen Paketbestand stilllegen' : 'Retire shared payload', exact: true })).toHaveCount(0);
     }
     expect(state.previews).toEqual([{ method: 'POST', path: fixture.reviewedPreview.path, body: fixture.reviewedPreview.body }]);
     focus = confirmation;
     // References stay collapsed. End alignment keeps the unchecked consent,
     // exact target list, exclusion and disabled control in the mobile shot.
+    block = 'end';
+  } else if (scene === 'retired-outcomes') {
+    const counts = saved.locator('.managed-msi-counts');
+    await expect(counts).toContainText(de ? 'Ausstehend: 0' : 'Pending: 0');
+    await expect(counts).toContainText(de ? 'Erfasste Ergebnisse: 2' : 'Recorded results: 2');
+    await expect(counts).toContainText(de ? 'Prüfen: 3' : 'Attention: 3');
+    for (const [index, device] of fixture.devices.slice(0, 2).entries()) {
+      const row = saved.getByRole('row').filter({ hasText: device.name });
+      await expect(row).toContainText(de ? 'Stillgelegt; kein nächster Auftrag gestartet' : 'Retired; no next job started');
+      await expect(row).toContainText(index
+        ? de ? '3010: Neustart erforderlich' : '3010: Restart required'
+        : de ? 'Installation fehlgeschlagen; Versuch verbraucht' : 'Installation failed; attempt consumed');
+      await expect(row).toContainText(`${de ? 'Rückgabecode' : 'Return code'}: ${fixture.views[index].result.returnCode}`);
+      await expect(row).toContainText(index
+        ? de ? 'Exakte Registrierung: Geprüft' : 'Exact registration: Verified'
+        : de ? 'Exakte Registrierung: Nicht geprüft' : 'Exact registration: Not verified');
+      await expect(row).not.toContainText(de ? 'Installiert; exakte Registrierung geprüft' : 'Installed; exact registration verified');
+    }
+    focus = saved.locator('.managed-msi-saved-table');
     block = 'end';
   } else {
     const counts = saved.locator('.managed-msi-counts');
@@ -593,7 +712,8 @@ export async function exerciseWindowsSavedMSI({ page, expect, fixture, scene, lo
   expect(state.writes).toEqual([]);
   expect(Object.values(fixture.reads.devices)).toEqual([0, 0, 0]);
   return { targetCount: 3, availableTargetCount: 2, historicalOutcomeIsNotCurrent: true,
-    confirmationUnchecked: !!stage, reopenedWithGETOnly: true, previewReads, actualMutationRequests: 0 };
+    confirmationUnchecked: !!stage, reopenedWithGETOnly: true, previewReads, actualMutationRequests: 0,
+    retirementPreviewExact: stage === 'retire', retiredOutcomesPreserved: scene === 'retired-outcomes' };
 }
 
 /** Extra saved-worklist captures; the original 16 fleet captures stay unchanged. */
@@ -603,8 +723,8 @@ export async function captureWindowsSavedMSIFixtures({ browser, expect, output }
   const compiled = await compileWindowsFleetMSIAssets(), captures = [];
   assert(compiled.sourceInputs.some(input => input.file === 'web/src/windows-managed-msi-worklists.tsx'), 'Saved captures must use the actual production worklist UI');
   await mkdir(output, { recursive: true });
-  for (const scene of windowsSavedMSIScenes) for (const testCase of windowsFleetMSICases) {
-    const { locale, width, height } = testCase;
+  for (const { scene, locale, width, height, file: expectedFile } of windowsSavedMSICaptureMatrix) {
+    const testCase = { locale, width, height };
     const fixture = await createWindowsSavedMSIFixture(scene);
     const state = { blocked: [], external: [], writes: [], previews: [], pageErrors: [] };
     const context = await browser.newContext({ viewport: { width, height }, locale: locale === 'de' ? 'de-DE' : 'en-US', deviceScaleFactor: 1, reducedMotion: 'reduce', serviceWorkers: 'block' });
@@ -616,6 +736,7 @@ export async function captureWindowsSavedMSIFixtures({ browser, expect, output }
       const pendingCaptures = [];
       const result = await exerciseWindowsSavedMSI({ page, expect, fixture, scene, state, ...testCase, shot: async (target, name) => {
         const file = `${name}.png`;
+        assert.equal(file, expectedFile, 'Capture must match the checked hosted matrix');
         await target.screenshot({ path: path.join(output, file), animations: 'disabled', fullPage: false });
         pendingCaptures.push({ file, scene, ...testCase, synthetic: true, sourceDigest: compiled.sourceDigest, disclosure: windowsSavedMSIDisclosure });
       } });

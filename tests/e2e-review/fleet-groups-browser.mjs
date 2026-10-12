@@ -6,7 +6,7 @@ import {fileURLToPath} from 'node:url';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../..'),require=createRequire(path.join(root,'web/package.json'));
 const built=await require('esbuild').build({stdin:{contents:"export {windowsCapacityDevice,windowsCapacityView} from './windows-capacity-fixture'; export {windowsResourceView} from './windows-resource-fixture'; export {validFleetGroupsView} from './fleet-groups-types'; export {validWindowsPercentageView} from './windows-capacity-types';",resolveDir:path.join(root,'web/src'),loader:'ts'},bundle:true,platform:'node',format:'esm',write:false,logLevel:'silent'});
 const {windowsCapacityDevice,windowsCapacityView,windowsResourceView,validFleetGroupsView,validWindowsPercentageView}=await import('data:text/javascript;base64,'+Buffer.from(built.outputFiles[0].text).toString('base64'));
-export const fleetGroupsCaseName='Manual fleet groups and one reviewed Windows health setting';
+export const fleetGroupsCaseName='Manual Windows monitoring policies for exact devices';
 export const fleetGroupsDisclosure='Production UI and real disposable loopback login with intercepted invented group membership and policy writes. Hosted browser fixture evidence only; no live group write, endpoint collection, native action, AI, notification or deployment.';
 export const fleetGroupIds={first:`agent_${'7'.repeat(32)}`,second:`agent_${'2'.repeat(32)}`,linux:`agent_${'3'.repeat(32)}`,group:`group_${'4'.repeat(32)}`,created:`group_${'5'.repeat(32)}`};
 let stage='setup',failures=0,pending=0;
@@ -80,31 +80,39 @@ export async function fleetGroupsBrowserCase({page,expect,base,login,shot}){
   await manage.click();await page.getByRole('button',{name:'Synthetic Office',exact:true}).click();await expect(page.getByRole('checkbox',{name:de?'Nicht verfügbare Mitglieder entfernen (1)':'Remove unavailable members (1)',exact:true})).not.toBeChecked();stage='layout';expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);await shot(page,`synthetic-fleet-groups-groups-${width}-${locale}`,fleetGroupsDisclosure);
   await page.getByRole('textbox',{name:de?'Gruppenname':'Group name'}).fill('Synthetic Office reviewed');await page.getByRole('button',{name:de?'Gruppenänderungen prüfen':'Review group changes',exact:true}).click();await expect(page.getByText(de?'Nicht verfügbare Mitglieder bleiben erhalten. (1)':'Unavailable members will be retained. (1)',{exact:true})).toBeVisible();await page.getByRole('button',{name:de?'Geprüfte Gruppe speichern':'Save reviewed group',exact:true}).click();await expect(page.getByRole('dialog')).toHaveCount(0);
   await page.getByRole('combobox',{name:de?'Flottengruppen':'Fleet groups',exact:true}).selectOption(ids.group);
-  const prepare=async metric=>{await page.getByRole('button',{name:de?'Health-Einstellung prüfen':'Review health setting',exact:true}).click();await page.getByRole('combobox',{name:de?'Eine Einstellung':'One setting',exact:true}).selectOption(metric);await page.getByRole('checkbox',{name:de?'Diese Richtlinie aktivieren':'Enable this policy',exact:true}).check();for(const [name,id]of[['Synthetic Desk One',ids.first],['Synthetic Desk Two',ids.second]])await page.getByRole('checkbox',{name:name+' '+id,exact:true}).check();await page.getByRole('button',{name:de?'Exakte Änderungen prüfen':'Review exact changes',exact:true}).click();await expect(page.getByRole('button',{name:de?'Geprüfte Einstellung anwenden':'Apply reviewed setting',exact:true})).toBeEnabled();};
-  const apply=()=>page.getByRole('button',{name:de?'Geprüfte Einstellung anwenden':'Apply reviewed setting',exact:true}).click(),close=()=>page.getByRole('dialog').getByRole('button',{name:de?'Abbrechen':'Cancel',exact:true}).click();
-  stage='review';const before=policyPosts;await prepare('cpu');expect(policyPosts).toBe(before);await expect(page.getByRole('dialog').getByRole('table')).toContainText(ids.first);await expect(page.getByRole('dialog').getByRole('table')).toContainText(ids.second);await expect(page.getByRole('dialog').getByRole('table')).not.toContainText(ids.linux);expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);await verifyPolicyLayout();await shot(page,`synthetic-fleet-groups-review-${width}-${locale}`,fleetGroupsDisclosure);
-  stage='apply';await apply();await expect(page.getByText(de?'Geändert · bestätigte Antwort':'Changed · confirmed response',{exact:true})).toBeVisible();await expect(page.getByText(de?'Entspricht bereits · nicht geschrieben':'Currently matching · no write',{exact:true})).toBeVisible();expect(policyPosts).toBe(before+1);await verifyPolicyLayout();await shot(page,`synthetic-fleet-groups-results-${width}-${locale}`,fleetGroupsDisclosure);await close();
+  const prepare=async (metrics,captureDraft=false)=>{
+   await page.getByRole('button',{name:de?'Monitoring-Richtlinien anwenden':'Apply monitoring policies',exact:true}).click();
+   const labels=de?{disk:'Kapazität des Systemvolumes',cpu:'CPU-Prozentwert',memory:'Physischer RAM-Prozentwert'}:{disk:'System-volume capacity',cpu:'CPU percentage',memory:'Physical RAM percentage'};
+   for(const label of Object.values(labels)){await expect(page.getByRole('checkbox',{name:(de?'Einbeziehen ':'Include ')+label,exact:true})).not.toBeChecked();await expect(page.getByRole('checkbox',{name:(de?'Diese Richtlinie aktivieren':'Enable this policy')+' · '+label,exact:true})).not.toBeChecked();}
+   for(const metric of Array.isArray(metrics)?metrics:[metrics]){await page.getByRole('checkbox',{name:(de?'Einbeziehen ':'Include ')+labels[metric],exact:true}).check();await page.getByRole('checkbox',{name:(de?'Diese Richtlinie aktivieren':'Enable this policy')+' · '+labels[metric],exact:true}).check();}
+   for(const [name,id]of[['Synthetic Desk One',ids.first],['Synthetic Desk Two',ids.second]])await page.getByRole('checkbox',{name:name+' '+id,exact:true}).check();
+   if(captureDraft){expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);await shot(page,`synthetic-fleet-groups-draft-${width}-${locale}`,fleetGroupsDisclosure);}
+   await page.getByRole('button',{name:de?'Exakte Änderungen prüfen':'Review exact changes',exact:true}).click();await expect(page.getByRole('button',{name:de?'Geprüfte Richtlinien anwenden':'Apply reviewed policies',exact:true})).toBeEnabled();
+  };
+  const apply=()=>page.getByRole('button',{name:de?'Geprüfte Richtlinien anwenden':'Apply reviewed policies',exact:true}).click(),close=()=>page.getByRole('dialog').getByRole('button',{name:de?'Abbrechen':'Cancel',exact:true}).click();
+  stage='review';const before=policyPosts;await prepare(['cpu','memory'],true);expect(policyPosts).toBe(before);await expect(page.getByRole('dialog').getByRole('table')).toContainText(ids.first);await expect(page.getByRole('dialog').getByRole('table')).toContainText(ids.second);await expect(page.getByRole('dialog').getByRole('table')).not.toContainText(ids.linux);expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);await verifyPolicyLayout();await shot(page,`synthetic-fleet-groups-review-${width}-${locale}`,fleetGroupsDisclosure);
+  stage='apply';await apply();await expect(page.getByText(de?'Geändert · bestätigte Antwort':'Changed · confirmed response',{exact:true})).toHaveCount(3);await expect(page.getByText(de?'Entspricht bereits · nicht geschrieben':'Currently matching · no write',{exact:true})).toBeVisible();expect(policyPosts).toBe(before+3);await verifyPolicyLayout();await shot(page,`synthetic-fleet-groups-results-${width}-${locale}`,fleetGroupsDisclosure);await close();
   // Failure outcomes use the same production dialog and exact routes; never loosen routing.
   if(locale==='en'&&width===1440){
    stage='conflict';mode='conflict';await prepare('disk');const previous=policyPosts;await apply();await expect(page.getByText('Conflict · review again',{exact:true})).toBeVisible();await expect(page.getByText('Not attempted',{exact:true})).toBeVisible();expect(policyPosts).toBe(previous+1);await close();
-   stage='uncertain-review';mode='uncertain';await prepare('memory');const uncertainBefore=policyPosts;
+   stage='uncertain-review';mode='uncertain';policies.delete(ids.first+':memory');policies.delete(ids.second+':memory');await prepare('memory');const uncertainBefore=policyPosts;
    stage='uncertain-apply';await apply();
    // The readback disclaimer is a child of the outcome cell. An exact text
    // locator for the status alone stops matching once reconciliation completes.
    stage='uncertain-result';const uncertainOutcome=page.getByRole('dialog').getByRole('row').filter({hasText:ids.first}).getByRole('cell').last();
-   await expect(uncertainOutcome).toBeVisible();await expect(uncertainOutcome).toHaveText('Unconfirmed · write may have happenedCurrent policy matches, but this does not prove our write succeeded.');
+   await expect(uncertainOutcome).toBeVisible();await expect(uncertainOutcome).toHaveText('Physical RAM percentageUnconfirmed · write may have happenedCurrent policy matches, but this does not prove our write succeeded.');
    stage='uncertain-remaining';await expect(page.getByText('Not attempted',{exact:true})).toBeVisible();
    stage='uncertain-count';expect(policyPosts).toBe(uncertainBefore+1);
    stage='uncertain-close';await close();
    stage='stop';mode='hold';await prepare('disk');const stoppedBefore=policyPosts;await apply();await expect.poll(()=>held).toBe(true);await page.getByRole('button',{name:'Stop remaining writes',exact:true}).click();assert.ok(release);release();release=null;await expect(page.getByText('Unconfirmed · write may have happened',{exact:true})).toBeVisible();await expect(page.getByText('Not attempted',{exact:true})).toBeVisible();expect(policyPosts).toBe(stoppedBefore+1);await close();mode='normal';
   }
  }
- await expect.poll(()=>fleetGroupsRouteState().pending).toBe(0);expect(external).toEqual([]);expect(unexpected).toEqual([]);expect(failures).toBe(0);stage='complete';return{screens:12,groupWrites:groupPosts,policyWrites:policyPosts,nativeAcceptance:false,liveStoreAcceptance:false};
+ await expect.poll(()=>fleetGroupsRouteState().pending).toBe(0);expect(external).toEqual([]);expect(unexpected).toEqual([]);expect(failures).toBe(0);stage='complete';return{screens:16,groupWrites:groupPosts,policyWrites:policyPosts,nativeAcceptance:false,liveStoreAcceptance:false};
 }
 export function requireFleetGroupsEvidence(rows,sourceSha){
- assert.match(sourceSha??'',/^[a-f0-9]{40}$/);assert.equal(rows.length,12);
- for(const kind of ['groups','review','results'])for(const locale of ['en','de'])for(const width of [1440,390]){
+ assert.match(sourceSha??'',/^[a-f0-9]{40}$/);assert.equal(rows.length,16);
+ for(const kind of ['groups','draft','review','results'])for(const locale of ['en','de'])for(const width of [1440,390]){
   const matches=rows.filter(row=>row.file===`synthetic-fleet-groups-${kind}-${width}-${locale}.png`);assert.equal(matches.length,1);const row=matches[0];assert.equal(row.sourceSha,sourceSha);assert.equal(row.test,fleetGroupsCaseName);assert.equal(row.locale,locale);assert.equal(row.viewport?.width,width);assert.equal(row.viewport?.height,width===390?844:1000);assert.equal(row.fullPage,false);assert.equal(row.publicSafe,true);assert.equal(row.fixtureDisclosure,fleetGroupsDisclosure);
  }
- return{groups:4,review:4,results:4};
+ return{groups:4,draft:4,review:4,results:4};
 }

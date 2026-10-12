@@ -138,7 +138,11 @@ new target or native retry. Reopening performs GETs only. Stop closes unsent
 requests with the latest revision and never claims to cancel already issued work.
 
 Historical outcome/result rendering does not restore current device authority.
-Per-device result-bound retirement and shared payload retirement remain explicit,
-unchanged operations. Neither save, stop, completion nor archive clears unresolved
+The fourth saved-worklist stage, Review package cleanup, explicitly reviews exact
+settled per-device results and dispatches the existing result-bound retirement
+requests in the foreground. It retains native outcome and registration truth,
+requires fresh idle shared-owner status, and does not resume after reload.
+Shared payload retirement remains a separate explicit operation after all signed
+endpoint retirement reports. Neither save, stop, completion nor archive clears unresolved
 assignments or permits another payload. This manager/UI addition creates no new
 endpoint grant, privilege, setup service or native execution operation.

@@ -1,9 +1,9 @@
 name: Validate
 
 on:
-  push:
-    branches: [main]
-  pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 2 * * *'
 
 permissions:
   contents: read
@@ -15,7 +15,6 @@ concurrency:
 jobs:
   debian-security-feed:
     name: Official Debian security feed compatibility
-    if: github.event_name == 'push'
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
@@ -505,9 +504,22 @@ jobs:
           TRACEBOLT_GO_SHARD: ${{ matrix.shard }}
         run: python3 -I -B tests/security/go_race_shards.py --shard "$TRACEBOLT_GO_SHARD" --report "$RUNNER_TEMP/go-race-report/completion.json"
       - name: Upload normalized completion evidence only
+        id: completion-upload
+        continue-on-error: true
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: go-race-${{ github.run_attempt }}-${{ matrix.shard }}
+          path: ${{ runner.temp }}/go-race-report/completion.json
+          if-no-files-found: error
+          retention-days: 1
+      # Retry only transport, with unchanged bytes. A distinct name avoids
+      # deleting/overwriting an artifact whose first finalize was uncertain.
+      # This step is not continue-on-error: two failed uploads fail the job.
+      - name: Retry normalized completion upload once
+        if: ${{ !cancelled() && steps.completion-upload.outcome == 'failure' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: go-race-${{ github.run_attempt }}-${{ matrix.shard }}-fallback
           path: ${{ runner.temp }}/go-race-report/completion.json
           if-no-files-found: error
           retention-days: 1
@@ -605,6 +617,7 @@ jobs:
           node tests/e2e-review/check-inert-suites.mjs --self-test
           node tests/e2e-review/check-inert-suites.mjs
           node --test tests/e2e-review/public-command-contract.test.mjs
+          node --test tests/e2e-review/pr-browser-smoke.test.mjs
           node --test tests/windows_linux_native_parity/browser.test.mjs
           node --test tests/e2e-review/endpoint-child-shutdown.test.mjs tests/e2e-review/windows-inventory-fixtures.test.mjs tests/e2e-review/resource-history-fixtures.test.mjs tests/e2e-review/application-check-settings-fixtures.test.mjs tests/e2e-review/investigations-fixtures.test.mjs tests/e2e-review/alarm-browser-diagnostics.test.mjs tests/e2e-review/browser-transport-diagnostics.test.mjs tests/e2e-review/enrollment-create-diagnostics.test.mjs tests/e2e-review/v3-failure-diagnostics.test.mjs tests/e2e-review/alarm-settings-fixtures.test.mjs tests/e2e-review/cve-continuation-fixtures.test.mjs tests/e2e-review/cve-detail-pages-fixtures.test.mjs tests/e2e-review/proactive-ai-fixtures.test.mjs tests/e2e-review/journal-ai-fixtures.test.mjs tests/e2e-review/package-updates-fixtures.test.mjs tests/e2e-review/journal-browse-fixtures.test.mjs tests/e2e-review/windows-contact-history-fixtures.test.mjs
       - name: Complete Windows inventory inert browser contracts
@@ -729,7 +742,7 @@ jobs:
         env:
           TRACEBOLT_SOURCE_SHA: ${{ github.sha }}
         run: node tests/e2e-review/windows-event-history-runner.mjs
-      - name: Manual fleet groups and reviewed health apply (12 required screenshots)
+      - name: Manual fleet groups and reviewed health apply (16 required screenshots)
         if: ${{ !cancelled() }}
         timeout-minutes: 6
         env:

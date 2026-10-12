@@ -21,6 +21,10 @@ Each deliberate stage previews and enumerates its own eligible individual reques
   action and bounded maintenance review for each listed imported assignment.
 - Approve pins each listed assignment's exact fresh readiness digest and deadline
   and authorizes one installation there. It never approves a later-ready device.
+- Review package cleanup pins each listed settled result and authorizes removal
+  of only that endpoint's app-owned package copy through the existing retirement
+  permit. Its fresh unchecked acknowledgement is separate from installation and
+  from Close batch, which only stops unsent requests.
 
 One clear confirmation covers the enumerated requests in that stage. The browser
 sends them sequentially in the foreground through the existing per-device API.
@@ -35,6 +39,17 @@ remains at most ten minutes. All 25 approvals may not fit one readiness window.
 Review the remaining eligible devices again explicitly when their previous
 readiness request has expired. Previously confirmed acknowledgements never become
 standing or deferred permission.
+
+Cleanup eligibility requires an attempted known-return result: success, verified
+restart-required (3010), busy (1618), or known failure. Unknown return, 1641,
+not-attempted, uncertain registration and unverified 3010 remain excluded. The
+exact signed shared-owner status must be active, unblocked and idle, with capture
+age less than 60 seconds. The cleanup batch deadline uses the original grant,
+current time and that reviewed status's freshness, never an old install permit's
+expiry. Issuance still rechecks current authority and all original retirement
+guards. Each item pins its exact result digest, original binding, transfer,
+grant-wide job sequence and payload occurrence. Other stages omit the new
+retirement-only digest, preserving their canonical bytes and confirmations.
 
 ## Stop and uncertainty
 
@@ -57,8 +72,11 @@ unavailable or revoked device currently successful. Missing retained exact
 transfer/job evidence is unavailable, never reconstructed from a package hash.
 
 Archiving changes presentation only. It neither closes an open batch nor retires
-payloads. Explicit per-device result-bound and shared payload retirement remain
-unchanged. Abandoned imported work can still strand the single payload slot under
+payloads. Batch cleanup uses the existing explicit per-device result-bound
+retirement. Shared payload retirement remains a separate unchecked control,
+available only after all assigned exact jobs have signed retirement reports.
+Failed and restart-required results remain visible after endpoint cleanup; cleanup
+does not turn them into successes. Abandoned imported work can still strand the single payload slot under
 the original contract; this feature adds no native cancellation or cleanup path.
 
 ## Create-only state and bounds
@@ -76,7 +94,11 @@ the unchanged 192 MiB database ceiling. At capacity, archival/save can discard t
 assigned exact job has verified retirement evidence. New stage confirmation may
 compact a closed batch only when its issued requests are reconciled by the exact
 signed MSI records: imported delivery, reported or safely superseded readiness,
-or retired installation. Target references and every execution/replay ledger stay
+or retired installation. A cleanup batch additionally requires its exact signed
+retirement evidence and reviewed result digest, or the same result and signed
+retirement digest retained by the existing job ledger. Permit issuance or a
+settled result alone never permits cleanup-batch compaction.
+Target references and every execution/replay ledger stay
 unchanged. Missing or uncertain evidence blocks compaction. Revisions never reset,
 pruned IDs fail closed, and no native cleanup or automatic archival occurs. These
 are retention bounds, not lifetime operation limits.
@@ -90,7 +112,7 @@ The unchanged payload limits are one 128 MiB manager copy and one separate
 - GET /worklists/{id} reconciles one exact saved worklist.
 - POST /worklists/{id}/preview reads eligibility without issuing a permit.
 - POST /worklists/{id}/batches records one explicit exact stage confirmation.
-- Existing reusable per-device delivery/review/approval bodies may add the strict
+- Existing reusable per-device delivery/review/approval/retirement bodies may add the strict
   batch reference: worklistId, batchId and zero-based item, in that canonical order.
 - POST /worklists/{id}/close requires current revision and exact batch ID.
 - POST /worklists/{id}/archive requires current revision and no open batch.

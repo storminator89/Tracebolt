@@ -1,9 +1,9 @@
-# Manual fleet groups and reviewed Windows health settings
+# Manual fleet groups and reviewed Windows monitoring policies
 
-This manager-side source increment adds manual named groups to the Devices view.
-Groups are organizational metadata. They do not authorize collection, endpoint
-control, enrollment, AI, notifications or an automatic policy. Existing device
-`Group` labels remain presentation-only and are not imported.
+The Devices view offers manual named groups and an explicit monitoring-policy
+apply flow. Groups are organizational metadata. They do not authorize collection,
+endpoint control, enrollment, AI, notifications or an automatic policy. Existing
+device `Group` labels remain presentation-only and are not imported.
 
 The private manager store holds at most 25 groups with at most 50 admitted members
 per group (the two existing 25-device enrollment authorities). A membership binds
@@ -25,32 +25,60 @@ Named operators may inspect/filter groups but cannot mutate them. Reads never
 create, repair or prune a group. Corrupt storage fails closed. Group records are
 not migrated or inferred from historical labels.
 
-## One explicit setting, reviewed devices only
+## Explicit policies, exact selected devices
 
-The administrator chooses one existing Windows percentage policy: caller-quota
-system-volume disk usage, observed-group CPU, or physical RAM. They select the
-currently eligible Windows members, enabled/disabled state and a whole threshold
-from 50 through 99. Review freezes the exact group revision, device IDs/names,
-setting and each current per-device policy revision. New members never inherit a
-setting. Selected service checks remain separate because exact service-name
-admission differs per device.
+After opening Fleet groups, a shared administrator can use **Apply monitoring
+policies** for the selected group or for all currently admitted Windows devices
+when no group is selected. A group is an optional selection filter. Creating a
+group is not required. Neither the group nor a new device receives inheritance.
 
-Apply rechecks the group and then uses the existing per-device GET/POST policy
-endpoints sequentially with each reviewed `expectedRevision`. There is no new
-bulk-authority endpoint, dynamic policy, generic job, rollback or durable retry.
-Each member reports changed, currently matching, conflict, not attempted or
-unconfirmed. A conflict, access loss, cancellation, navigation or uncertain write
-stops remaining writes. An uncertain POST may only be reconciled by GET; a matching
-readback does not prove that this attempt wrote it. Already committed earlier
-members remain changed, so a stopped operation can be partially complete.
+The existing dialog contains three compact, initially unchecked policy rows:
+caller-quota system-volume disk usage, observed-group CPU, and physical RAM.
+For each included policy, the administrator explicitly chooses enabled/disabled
+and a whole threshold from 50 through 99. Enable starts unchecked too. Unselected
+policies remain untouched. They select 1–25 exact current Windows devices, then
+review all chosen settings together. Contact is read-only in this workflow;
+service checks remain per-device because exact-name source admission differs.
+Recipient configuration, external delivery and automatic responses are excluded.
 
-The existing policy endpoints also recheck live session/time and certificate
-expiry after acquiring the operator SQLite connection and immediately before
-commit. Those final callbacks acquire no enrollment locks. Policy evidence,
-independent metric revisions, original age and non-recovery closure semantics are
-unchanged; see [disk](windows-capacity-health.md) and
-[CPU/RAM](windows-resource-health.md).
+Review copies the optional group revision, exact device IDs/names, selected
+settings and every device/metric policy revision before any write. The compact
+preview shows the desired settings once and the previous policy/revision for each
+selected device and metric. It grants no host collection, privilege, service
+control, native execution, AI export or notification permission.
 
-Portable store/API and component fixtures verify the source workflow. They are
-not native endpoint, real browser rendering, installed-service or deployment
-acceptance. No release, host grant, automatic response or migration is included.
+Apply rechecks the group or current device roster and then uses the existing
+per-device GET/POST policy endpoints sequentially with each reviewed
+`expectedRevision`. Policy leases are keyed by both device and metric, so a later
+CPU or RAM read cannot overwrite an earlier disk certificate/metadata expiry
+check. Original session expiry, individual certificate expiries, source metadata
+age and the existing monotonic clock guards still bound the whole review.
+
+Each device/metric reports changed, currently matching, conflict, not attempted
+or unconfirmed. A conflict, access loss, cancellation, navigation or uncertain
+write stops every remaining policy/device. An uncertain POST may only be
+reconciled by GET; matching readback does not prove that this attempt wrote it.
+Earlier confirmed results remain visible after a later conflict or explicit Stop,
+including partial completion within one device. Privacy events such as navigation,
+blur or session loss still clear the private view. There is no rollback, durable
+job or automatic retry. A reviewed selection can be applied only once; a new
+review resets policy and device selections.
+
+The existing policy endpoints recheck live session/time and certificate expiry
+after acquiring the operator SQLite connection and immediately before commit.
+Those final callbacks acquire no enrollment locks. Policy evidence, independent
+metric revisions, original age and non-recovery closure semantics are unchanged;
+see [disk](windows-capacity-health.md) and [CPU/RAM](windows-resource-health.md).
+
+## Verification boundary
+
+Focused workflow/component checks cover exact multi-policy selection, independent
+thresholds/enable flags, revision conflicts, distinct metric expiry leases,
+partial success, Stop, uncertainty, single-use review and the existing session/
+identity guards. The hosted fixture requests sixteen source-bound EN/DE desktop
+and mobile images: group editing, unchecked/selected policy draft, exact preview
+and per-device results. Its contract checks do not establish rendered pixels.
+
+Source tests are not native endpoint, installed-service or deployment acceptance.
+Actual hosted rendering and native acceptance remain separate gates. No release,
+host grant, automatic response or migration is included.

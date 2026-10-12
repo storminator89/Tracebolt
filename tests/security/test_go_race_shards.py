@@ -3,6 +3,7 @@ import contextlib
 import copy
 import importlib.util
 import io
+import itertools
 import json
 import os
 from pathlib import Path
@@ -76,7 +77,8 @@ class ShardTests(unittest.TestCase):
                 shards.validate_partition(self.packages, value)
 
     def test_weights_schema_finite_integer_positive_bounded(self):
-        value = {"schemaVersion": 1, "sourceRun": "38058537360/114231878636", "milliseconds": {"localrmm/a": 100}}
+        value = shards.reporter.decode(shards.WEIGHTS.read_bytes())
+        value["milliseconds"] = {"localrmm/a": 100}
         self.assertEqual(shards.weights(shards.canonical(value)), {"localrmm/a": 100})
         for weight in (True, -1, 0, 900001, 1.1, "100", None):
             value["milliseconds"]["localrmm/a"] = weight
@@ -85,7 +87,56 @@ class ShardTests(unittest.TestCase):
         for data in (b'{}', b'null', b'{"milliseconds":{"localrmm/a":NaN}}', b'{"schemaVersion":1,"schemaVersion":1}'):
             with self.assertRaises(ValueError):
                 shards.weights(data)
-        self.assertEqual(len(shards.weights(shards.WEIGHTS.read_bytes())), 20)
+        self.assertEqual(len(shards.weights(shards.WEIGHTS.read_bytes())), 196)
+
+    def test_only_inventory_aggregate_weight_can_exceed_one_invocation_bound(self):
+        value = shards.reporter.decode(shards.WEIGHTS.read_bytes())
+        for weight in (900001, 1588821, 5400000):
+            value["milliseconds"] = {shards.INVENTORY_PACKAGE: weight}
+            self.assertEqual(shards.weights(shards.canonical(value)), value["milliseconds"])
+        for weight in (True, -1, 0, 5400001, 1588821.0, "1588821", None):
+            value["milliseconds"] = {shards.INVENTORY_PACKAGE: weight}
+            with self.subTest(weight=weight), self.assertRaises(ValueError):
+                shards.weights(shards.canonical(value))
+        value["milliseconds"] = {"localrmm/a": 900001}
+        with self.assertRaises(ValueError):
+            shards.weights(shards.canonical(value))
+        self.assertEqual(shards.weights(shards.WEIGHTS.read_bytes())[shards.INVENTORY_PACKAGE], 1588821)
+        self.assertIn("-timeout=15m", shards.command_for([shards.INVENTORY_PACKAGE]))
+
+    def test_weight_provenance_is_exact_and_not_current_completion_authority(self):
+        value = shards.reporter.decode(shards.WEIGHTS.read_bytes())
+        for mutate in (
+            lambda x: x.update(schemaVersion=1),
+            lambda x: x.update(sourceRun="38058537360/114231878636"),
+            lambda x: x["provenance"].update(commit="a" * 40),
+            lambda x: x["provenance"].update(goSourceSha256="a" * 64),
+            lambda x: x["provenance"]["reports"].pop(),
+            lambda x: x["provenance"]["reports"][0].update(runId="38273976221"),
+            lambda x: x["provenance"]["reports"][0].update(runAttempt="2"),
+            lambda x: x["provenance"]["reports"][0].update(shard=False),
+            lambda x: x["provenance"]["reports"][0].update(artifactId="1"),
+            lambda x: x["provenance"]["reports"][0].update(completionSha256="a" * 64),
+        ):
+            candidate = copy.deepcopy(value); mutate(candidate)
+            with self.assertRaises(ValueError):
+                shards.weights(shards.canonical(candidate))
+        # Historical timing may combine successful shards from two old runs;
+        # current completion must still reject even one different run/attempt.
+        for key, different in (("runId", "999"), ("runAttempt", "2")):
+            reports = copy.deepcopy(self.reports); reports[0][key] = different
+            with self.assertRaises(ValueError):
+                shards.verify_reports(self.plan, reports)
+
+    def test_aggregate_weight_schedules_without_dropping_packages_or_splitting_inventory(self):
+        packages = {shards.INVENTORY_PACKAGE: True, "localrmm/a": True,
+                    "localrmm/b": True, "localrmm/new": True, "localrmm/none": False}
+        timings = {shards.INVENTORY_PACKAGE: 1588821, "localrmm/a": 605923, "localrmm/b": 586978}
+        groups = shards.partition(packages, timings)
+        shards.validate_partition(packages, groups)
+        self.assertEqual([p for p in groups[0] if packages[p]], [shards.INVENTORY_PACKAGE])
+        self.assertEqual(sorted(p for group in groups for p in group), sorted(packages))
+        self.assertEqual(shards.partition(dict(reversed(list(packages.items()))), timings), groups)
 
     def test_exact_go_list_and_race_commands(self):
         self.assertEqual(shards.LIST_COMMAND, ["go", "list", "-race", "-buildvcs=false", "-f", "{{.ImportPath}} {{if or .TestGoFiles .XTestGoFiles}}tests{{else}}none{{end}}", "./..."])
@@ -212,7 +263,7 @@ class ShardTests(unittest.TestCase):
             root = Path(tmp)
             for report in self.reports:
                 folder = root / f"go-race-1-{report['shard']}"; folder.mkdir()
-                (folder / "completion.json").write_bytes(shards.canonical(report))
+                (folder / "completion.json").write_bytes(shards.canonical(report) + b"\n")
             self.assertEqual(shards.load_reports(root, "1"), self.reports)
             with self.assertRaises(ValueError):
                 shards.load_reports(root, "2")
@@ -228,6 +279,74 @@ class ShardTests(unittest.TestCase):
             (root / "go-race-1-0" / "raw.jsonl").touch()
             with self.assertRaises(ValueError):
                 shards.load_reports(root, "1")
+
+    def test_primary_fallback_or_identical_both_cover_every_shard(self):
+        for choices in itertools.product(("primary", "fallback", "both"), repeat=shards.SHARDS):
+            with self.subTest(choices=choices), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                for report, choice in zip(self.reports, choices):
+                    for suffix in ("", "-fallback"):
+                        if choice != "both" and (suffix == "-fallback") != (choice == "fallback"):
+                            continue
+                        folder = root / f"go-race-1-{report['shard']}{suffix}"; folder.mkdir()
+                        (folder / "completion.json").write_bytes(shards.canonical(report) + b"\n")
+                reports = shards.load_reports(root, "1")
+                self.assertEqual(reports, self.reports)
+                self.assertEqual(shards.verify_reports(self.plan, reports), len(self.packages))
+
+    def test_fallback_never_hides_missing_conflicting_or_invalid_artifacts(self):
+        for case in ("missing", "conflict", "wrong-shard", "bool-shard", "extra-file", "unknown-artifact",
+                     "old-attempt", "malformed", "noncanonical", "duplicate-key", "symlink", "oversize"):
+            with self.subTest(case=case), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                for report in self.reports:
+                    folder = root / f"go-race-1-{report['shard']}"; folder.mkdir()
+                    (folder / "completion.json").write_bytes(shards.canonical(report) + b"\n")
+                fallback = root / "go-race-1-0-fallback"; fallback.mkdir()
+                path = fallback / "completion.json"
+                report = copy.deepcopy(self.reports[0])
+                if case == "conflict":
+                    report["packages"][0]["elapsedSeconds"] += 1
+                elif case == "wrong-shard":
+                    report["shard"] = 1
+                elif case == "bool-shard":
+                    report["shard"] = False
+                path.write_bytes(shards.canonical(report) + b"\n")
+                if case == "missing":
+                    (root / "go-race-1-1" / "completion.json").unlink()
+                    (root / "go-race-1-1").rmdir()
+                elif case == "extra-file":
+                    (fallback / "raw.jsonl").touch()
+                elif case == "unknown-artifact":
+                    fallback.rename(root / "go-race-1-0-fallback-2")
+                elif case == "old-attempt":
+                    fallback.rename(root / "go-race-2-0-fallback")
+                elif case == "malformed":
+                    path.write_bytes(b"not JSON\n")
+                elif case == "noncanonical":
+                    path.write_text(json.dumps(report) + "\n")
+                elif case == "duplicate-key":
+                    path.write_bytes(b'{"shard":0,"shard":0}\n')
+                elif case == "symlink":
+                    path.unlink(); path.symlink_to(root / "go-race-1-0" / "completion.json")
+                elif case == "oversize":
+                    path.write_bytes(b" " * (shards.MAX_REPORT + 1))
+                with self.assertRaises(ValueError):
+                    shards.load_reports(root, "1")
+
+    def test_fallback_reports_keep_all_source_run_and_coverage_bindings(self):
+        for mutate in (lambda r: r.update(commit="c" * 40), lambda r: r.update(runId="999"),
+                       lambda r: r.update(runAttempt="2"), lambda r: r.update(goSourceSha256="c" * 64),
+                       lambda r: r.update(planSha256="c" * 64), lambda r: r.update(exitCode=1),
+                       lambda r: r["packages"].pop(), lambda r: r.update(Output="PRIVATE")):
+            with tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                reports = copy.deepcopy(self.reports); mutate(reports[0])
+                for report in reports:
+                    folder = root / f"go-race-1-{report['shard']}-fallback"; folder.mkdir()
+                    (folder / "completion.json").write_bytes(shards.canonical(report) + b"\n")
+                with self.assertRaises(ValueError):
+                    shards.verify_reports(self.plan, shards.load_reports(root, "1"))
 
     def test_provenance_and_target_discovery(self):
         env = {"GITHUB_SHA": "a" * 40, "GITHUB_RUN_ID": "123", "GITHUB_RUN_ATTEMPT": "1"}

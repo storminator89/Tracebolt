@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "sourceCommit": "fccc4b00cd8a144afd58e4b995747afab7a10022",
-  "goSourceSha256": "f4a990ce1764b173c7720eda15b4963220dfd407a6779d86cbbcd3c99cdc60eb",
+  "goSourceSha256": "7df5a26f896ba1bd3c63d8f996a04ef6e633ed85d52c4d65e7d105b798983d62",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -262,9 +262,13 @@
       "TestCoordinatedMutationSetupRequiresEveryDistinctApproval",
       "TestCurrentPackagedSetupGUINative",
       "TestCurrentSetupCanonicalSenderRequiresAllUsedMarkersAndOriginalFloor",
+      "TestCurrentSetupControllerUsesProvisionalSnapshotAndFinalStore",
       "TestCurrentSetupGrantSpecsExactOrderedTwentyAndHistoryProof",
       "TestCurrentSetupOptionalsRejectEveryPresence",
+      "TestCurrentSetupPendingCaptureRespectsWholeTransactionLease",
       "TestCurrentSetupPendingRejectsHistoricalReceiptAndConsent",
+      "TestCurrentSetupPendingSnapshotCannotReplaceAuthoritativeCompletion",
+      "TestCurrentSetupPendingSnapshotKeepsCanonicalAndProtectionFailuresClosed",
       "TestEventConsentFlagsExplicitAndBounded",
       "TestEventContentConsentErrorsAndInvalidModes",
       "TestEventContentConsentFlagsExplicitAndBounded",
@@ -1007,6 +1011,8 @@
       "TestManagedFleetReadRechecksPinnedCapabilityAfterWait",
       "TestManagedMSIOccurrenceRequestPinsRequireCanonicalStrings",
       "TestManagedMSIOperatorRoutesClosed",
+      "TestManagedMSIWorklistRetirementBatchContextCannotDowngrade",
+      "TestManagedMSIWorklistRetirementStrictOptionalBatch",
       "TestManagedMSIWorklistRoutesAndStrictOptionalBatch",
       "TestManagedPreviewDisabledByDefault",
       "TestManagedPreviewDoesNotFallBackToManagerSample",
@@ -1782,6 +1788,10 @@
       "TestManagedMSIWorklistCloseAndFinalFenceDoNotIssue",
       "TestManagedMSIWorklistExpiredDispatchCannotReviveAfterClockRollback",
       "TestManagedMSIWorklistMissingUsedStateAndLegacyStayClosed",
+      "TestManagedMSIWorklistRetirementAtomicIssueRestartAndReplay",
+      "TestManagedMSIWorklistRetirementCompactionRequiresSignedReceipt",
+      "TestManagedMSIWorklistRetirementExpiredDispatchCannotRevive",
+      "TestManagedMSIWorklistRetirementPinsStopAndFinalFence",
       "TestManagedReusableFreshStoreAndArtifactRetirement",
       "TestMetadataReadCohortCancellationAndCertificateWait",
       "TestMetadataReadCohortSharesMaintenanceHandoff",
@@ -4470,7 +4480,9 @@
       "TestManagedReusableConsentAndSignatureDomainsStaySeparate",
       "TestManagedUncertainFinalizationNeverRestarts",
       "TestManagedUnexplainedPayloadFences",
-      "TestReusableOccurrenceReferencesUseFloorEvenForIdenticalCustody"
+      "TestReusableOccurrenceReferencesUseFloorEvenForIdenticalCustody",
+      "TestWorklistOriginalStageCanonicalBytesAndDigests",
+      "TestWorklistRetirementOnlyResultDigest"
     ],
     "localrmm/internal/windowsmanagedmsiexecutor": [
       "TestManagedCloseTimerCompletionRaceReturnsCloseError",
@@ -4503,7 +4515,10 @@
       "TestReusableSharedRetirementKeepsOtherUnresolvedTarget",
       "TestReusableViewRejectsUnresolvedOlderOccurrence",
       "TestSpoolChangedUnacknowledgedTailIsNeverOverwritten",
-      "TestSpoolSingleLinkExactChunksAndSameByteRecovery"
+      "TestSpoolSingleLinkExactChunksAndSameByteRecovery",
+      "TestWorklistRetirementExactSettledResultAndSignedReconciliation",
+      "TestWorklistRetirementPinsAndFreshOwner",
+      "TestWorklistRetirementRejectsUnsettledResults"
     ],
     "localrmm/internal/windowsmanagedmsiservice": [
       "TestBackgroundMSIActivationPreservesLegacyBytesAndDenial",
@@ -5037,6 +5052,8 @@
       "TestPathPolicyFixtures",
       "TestRenewalProtectedManifestInterruptedWriteRetainsOriginalAuthority",
       "TestRenewalProtectedMissingUsedManifestOrTransactionFailsClosed",
+      "TestSetupSnapshotLeafFailsClosedAndClosesExactlyOnce",
+      "TestSetupSnapshotLeafMissingDependenciesStillCloseOwnedHandle",
       "TestStateNativeDirectoryOptionsPreserveBinding",
       "TestStateNativeReparseFailureHasNoFallback",
       "TestWindowsDescriptorConversionInMemory",

@@ -5,6 +5,10 @@ name: Manual historical five-scope Windows x64 prerelease
 on:
   workflow_dispatch:
     inputs:
+      full_validation_run_id:
+        description: 'Exact successful full Validate run ID for the released source SHA (never focused PR checks)'
+        required: true
+        type: string
       expected_source_sha:
         description: 'Exact 40-hex accepted main-branch Setup source commit (the frozen reviewed Setup tree, not this later publisher commit)'
         required: true
@@ -65,6 +69,12 @@ jobs:
           python-version: '3.12'
       - name: Inert publisher regression fixtures
         run: python3 -I -B -m unittest discover -s tests/windows_release -v
+      - name: Require full validation of the exact released source
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FULL_SOURCE_SHA: ${{ inputs.expected_source_sha }}
+          FULL_RUN_ID: ${{ inputs.full_validation_run_id }}
+        run: python3 -I -B tests/security/check_full_validation.py --source-sha "$FULL_SOURCE_SHA" --run-id "$FULL_RUN_ID"
       - name: Verify exact accepted artifacts and freeze immutable IDs, digests, and output hashes
         id: verify
         env:
@@ -91,6 +101,12 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: '3.12'
+      - name: Require full validation of the exact released source
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FULL_SOURCE_SHA: ${{ inputs.expected_source_sha }}
+          FULL_RUN_ID: ${{ inputs.full_validation_run_id }}
+        run: python3 -I -B tests/security/check_full_validation.py --source-sha "$FULL_SOURCE_SHA" --run-id "$FULL_RUN_ID"
       - name: Reverify frozen IDs and exact bytes; create fresh draft, verify uploads, publish once, verify public bytes
         env:
           GITHUB_TOKEN: ${{ github.token }}

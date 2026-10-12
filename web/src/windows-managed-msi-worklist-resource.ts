@@ -2,7 +2,7 @@ import { getProtectedRequestEpoch, mutateRaw, request } from './api';
 import { hasLogoutIntent, validOperatorSession } from './auth';
 import { sameSoftware } from './windows-software-jobs-types';
 import { validManagedView } from './windows-managed-msi-types';
-import { sameWorklistPackage, validWorklistPreview, validWorklistsView, validWorklistView, worklistAcknowledgements, worklistBindingDigest, worklistDispatchBody, worklistPath, type SaveWorklistBody, type WorklistBatch, type WorklistKind, type WorklistPreview, type WorklistsView, type WorklistView } from './windows-managed-msi-worklist-types';
+import { sameWorklistPackage, validWorklistPreview, validWorklistsView, validWorklistView, worklistAcknowledgements, worklistBindingDigest, worklistDispatchBody, worklistPath, type SaveWorklistBody, type WorklistBatch, type WorklistKind, type WorklistPreview, type WorklistRequest, type WorklistsView, type WorklistView } from './windows-managed-msi-worklist-types';
 
 export type WorklistResourceState={data:WorklistsView|null;busy:boolean;running:boolean;preview:WorklistPreview|null;error:''|'invalid'|'unconfirmed'|'closeUnconfirmed'|'stopped';closeUnconfirmed:string;writeUnconfirmed:boolean};
 type Options={actor:string;expires:string;allowed:(stage?:WorklistKind)=>boolean;onChange:(s:WorklistResourceState)=>void};
@@ -44,6 +44,7 @@ export class ManagedMSIWorklistResource {
   this.emit({data,...(closed?{closeUnconfirmed:'',writeUnconfirmed:false,error:'' as const}:{})});return data;
  }
  private async fetch(){const value=await this.bounded(signal=>request<unknown>(worklistPath,{signal},4*1024*1024));if(!validWorklistsView(value))throw Error('invalid');return this.accept(value)}
+ private retirementIssued(w:WorklistView,batchId:string,index:number,q:WorklistRequest){const b=w.batches.find(b=>b.id===batchId),item=b?.items[index],view=w.rows.find(row=>row.deviceId===q.deviceId)?.view;return b?.kind==='retire'&&item?.state==='issued'&&same(item.request,q)&&item.jobSequence===q.jobSequence&&!!view&&sameWorklistPackage(view,w)&&view.bindingDigest===q.bindingDigest&&view.transferId===q.transferId&&view.jobSequence===q.jobSequence&&view.resultDigest===q.resultDigest&&['retirement_pending','retired','intervention_required'].includes(view.state)}
  private async post(path:string,body:unknown,guard:()=>boolean=()=>this.active()){return this.bounded(signal=>mutateRaw<unknown>(path,JSON.stringify(body),{},signal,2*1024*1024,guard))}
  private find(id:string){const w=this.state.data?.worklists.find(w=>w.id===id);if(!w||!this.state.data?.enabled)throw Error('unavailable');return w}
  private put(w:unknown,id?:string){if(!validWorklistView(w)||id&&w.id!==id||!this.state.data)throw Error('invalid');return this.accept({...this.state.data,serverNow:w.serverNow,worklists:[...this.state.data.worklists.filter(old=>old.id!==w.id),w]}).worklists.find(v=>v.id===w.id)!}
@@ -72,7 +73,7 @@ export class ManagedMSIWorklistResource {
  async archive(id:string){if(this.state.busy||this.state.writeUnconfirmed||this.state.closeUnconfirmed||!this.active())return;this.emit({busy:true,error:'',preview:null});let sent=false;try{await this.session();if(!this.active())throw Error();const w=this.find(id);if(w.archivedAt||openBatch(w))throw Error();sent=true;this.put(await this.post(`${worklistPath}/${id}/archive`,{revision:w.revision}),id);await this.fetch()}catch{this.emit({error:sent?'unconfirmed':'invalid',writeUnconfirmed:sent})}finally{this.emit({busy:false})}}
  async confirm(acknowledged:boolean){
   const preview=this.state.preview;if(!acknowledged||!preview||!preview.items.length||this.state.busy||this.state.writeUnconfirmed||!this.active())return;
-  this.stopped=false;this.emit({busy:true,running:true,preview:null,error:''});let confirmed:WorklistBatch|undefined,attemptedConfirmation=false;
+  this.stopped=false;this.emit({busy:true,running:true,preview:null,error:''});let confirmed:WorklistBatch|undefined,attemptedConfirmation=false,unconfirmedRetirement:{index:number;request:WorklistRequest}|undefined;
   try{
    await this.session(preview.kind);if(!this.active()||preview.items.some(q=>q.expiresAt<=this.now()))throw Error();const w=this.find(preview.worklistId);if(w.revision!==preview.revision||openBatch(w))throw Error();
    attemptedConfirmation=true;const next=this.put(await this.post(`${worklistPath}/${w.id}/batches`,{revision:preview.revision,kind:preview.kind,items:preview.items,acknowledgements:worklistAcknowledgements(preview.kind)},()=>this.active(preview.kind)&&preview.items.every(q=>q.expiresAt>this.now())),w.id);
@@ -81,9 +82,11 @@ export class ManagedMSIWorklistResource {
    for(let index=0;index<confirmed.items.length;index++){
     await this.session(preview.kind);if(!this.active()||this.now()>=confirmed.expiresAt||this.now()>=confirmed.items[index].request.expiresAt)throw Error('stopped');
     const item=confirmed.items[index],q=item.request;
+    if(preview.kind==='retire')unconfirmedRetirement={index,request:q};
     const response=await this.bounded(signal=>mutateRaw<unknown>(`/devices/${q.deviceId}/windows-managed-msi/${q.operation}`,JSON.stringify(worklistDispatchBody(next,confirmed!,index)),{},signal,65536,()=>this.active(preview.kind)&&this.now()<confirmed!.expiresAt&&this.now()<q.expiresAt));
-    if(!validManagedView(response,q.deviceId)||!sameWorklistPackage(response,next)||response.bindingDigest!==q.bindingDigest||response.transferId!==q.transferId||preview.kind!=='deliver'&&response.jobSequence!==q.jobSequence||preview.kind==='approve'&&response.readinessDigest!==q.readinessDigest)throw Error('response');
-    await this.fetch();const durable=this.find(w.id).batches.find(b=>b.id===confirmed!.id);if(!durable||durable.items[index].state!=='issued'||durable.items[index].request.transferId!==q.transferId)throw Error('unconfirmed');
+    if(!validManagedView(response,q.deviceId)||!sameWorklistPackage(response,next)||response.bindingDigest!==q.bindingDigest||response.transferId!==q.transferId||preview.kind!=='deliver'&&response.jobSequence!==q.jobSequence||preview.kind==='approve'&&response.readinessDigest!==q.readinessDigest||preview.kind==='retire'&&(response.resultDigest!==q.resultDigest||!['retirement_pending','retired','intervention_required'].includes(response.state)))throw Error('response');
+    await this.fetch();const durable=this.find(w.id).batches.find(b=>b.id===confirmed!.id);if(!durable||durable.items[index].state!=='issued'||!same(durable.items[index].request,q)||preview.kind==='retire'&&!this.retirementIssued(this.find(w.id),confirmed.id,index,q))throw Error('unconfirmed');
+    unconfirmedRetirement=undefined;
     if(!this.active())break;
    }
   }catch{this.stopped=true;this.emit({error:attemptedConfirmation?'unconfirmed':'invalid',writeUnconfirmed:attemptedConfirmation})}
@@ -94,7 +97,14 @@ export class ManagedMSIWorklistResource {
      // Identical review/approval bodies can belong to a different tab. Without
      // this response's batch ID, only read; never adopt another open batch.
      await this.session(undefined,true);await this.fetch();this.emit({error:'unconfirmed',writeUnconfirmed:true});
-    }else{await this.closeRun(this.currentRun.worklistId,this.currentRun.batchId);if(!this.state.closeUnconfirmed)this.emit({writeUnconfirmed:false,error:this.stopped?'stopped':''})}
+    }else{
+     if(unconfirmedRetirement){
+      // A lost/malformed retirement response is reconciled only by exact GET
+      // evidence. Never resend or close against another settled result.
+      await this.session(undefined,true);await this.fetch();
+      if(!this.retirementIssued(this.find(this.currentRun.worklistId),this.currentRun.batchId,unconfirmedRetirement.index,unconfirmedRetirement.request))throw Error('unconfirmed retirement');
+     }
+     await this.closeRun(this.currentRun.worklistId,this.currentRun.batchId);if(!this.state.closeUnconfirmed)this.emit({writeUnconfirmed:false,error:this.stopped?'stopped':''})}
    }catch{this.emit({error:'unconfirmed',writeUnconfirmed:true})}}
    this.currentRun=null;this.emit({busy:false,running:false});
   }
