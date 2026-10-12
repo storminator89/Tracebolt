@@ -96,3 +96,49 @@ protected spool deliveries, scoped retirement with another incomplete payload,
 active-worklist slot retention, strict GET routing, fresh setup flags and compact
 EN/DE UI interruption/uncertainty flows. Inert fixture bytes and signed synthetic
 reports never establish native Windows installer, NTFS, SCM or deployment acceptance.
+
+## Guided package review
+
+The catalogue and the legacy shared-artifact upload now offer a compact package
+form. Choose one local MSI, enter the reviewed name/version, then open **Package
+identity & review evidence** for required identity and evidence. The collapsed
+summary and inline guidance count missing inputs. Expert JSON import remains
+available under Advanced for compatibility; the strict review/reservation request
+is unchanged. Merely choosing files or completing the form sends no request.
+
+The browser derives only the selected file's byte size and SHA-256. It does not
+parse MSI databases, discover ProductCode/PackageCode/version/architecture, inspect
+Authenticode, or perform native acceptance. The reviewed name, three-part MSI
+version, exact nonzero uppercase ProductCode and PackageCode, x64 machine-package
+selection, review reference, and unsigned/unverified publisher label remain
+operator inputs from the completed package review. There is no verified publisher
+option. Existing retained reviews can be reused only for their exact package.
+
+Terms, native acceptance and publisher evidence must already exist for that exact
+package. Enter their existing SHA-256 references or choose each completed evidence
+file (at most 2 MiB) to calculate its byte digest locally. The file contents are not
+uploaded or interpreted. A digest does not verify a document's meaning, establish
+publisher trust, prove native acceptance or create review evidence. There is no
+independent evidence repository or new server-side metadata-verification service.
+This remains a source-stage metadata/evidence-preparation limitation.
+
+MSIs remain limited to 512 bytes through 128 MiB, with the unchanged four-entry,
+shared 128 MiB reservation budget and 32 KiB upload chunks. File size is checked
+before reading. Form/evidence hashing and upload's exact-byte recheck share one
+in-flight hashing bound across component remounts. Changing or clearing the MSI
+invalidates its previous local review; late hashes/imports cannot repopulate a newer
+selection. No local file, review or approval is put in browser persistence.
+
+After successful catalogue reservation, the selected file remains available only
+in that live view for a separate explicit upload click. Reopening a partial entry
+reuses its exact server-retained review and requests only its matching MSI bytes;
+size and hash are checked again before upload. This adds no automatic upload,
+delivery, install, schedule, grant, permit, retry or native action. Unknown writes
+still reconcile by GET only. Display hash abbreviations expand to the complete
+copyable value; request bodies always use full values.
+
+Two additional synthetic changed scenes register the missing-evidence and complete
+guided-review views in EN/DE at 1440px and 390px (eight added PNGs in the existing
+catalogue hosted gate). Local `--check` compiles and checks fixtures/routes only;
+it runs no browser and captures no pixels. Exact-source hosted screenshots and
+separately authorized native acceptance remain distinct outstanding gates.
