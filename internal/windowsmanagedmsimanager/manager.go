@@ -133,6 +133,9 @@ func (m *Manager) transaction(ctx context.Context, actor, kind string, fn func(*
 		if actor != "" && !m.allowed(actor, kind) {
 			return msi.ErrAuthority
 		}
+		if e := checkJobOccurrence(ctx, *r); e != nil {
+			return e
+		}
 		return fn(r, c, at.Unix())
 	})
 	if e == msi.ErrUncertain || e == msi.ErrIntegrity {
@@ -286,6 +289,7 @@ func (m *Manager) deliver(ctx context.Context, actor, id string, ack bool, artif
 		return msi.ErrInvalid
 	}
 	var shared *msi.Artifact
+	var sharedRetiredCount uint64
 	if m.artifact != nil {
 		if bindingDigest != msi.BindingDigest(m.binding) || !msi.ValidDigest(artifactID) {
 			return msi.ErrConflict
@@ -296,6 +300,10 @@ func (m *Manager) deliver(ctx context.Context, actor, id string, ack bool, artif
 		if e != nil {
 			return e
 		}
+		if e := checkArtifactOccurrence(ctx, r); e != nil {
+			return e
+		}
+		sharedRetiredCount = r.RetiredCount
 		if r.RetirementStarted || r.Retired || r.Artifact == nil || r.Artifact.CompletedAt == 0 || msi.ArtifactIdentity(*r.Artifact) != artifactID {
 			return msi.ErrConflict
 		}
@@ -304,6 +312,11 @@ func (m *Manager) deliver(ctx context.Context, actor, id string, ack bool, artif
 	_, e := m.transaction(ctx, actor, "deliver", func(r *msi.Record, c msi.Current, n int64) error {
 		if shared != nil {
 			if r.Grant.Version == msi.ReusableGrantVersion && r.TransferID != "" {
+				// One assigned job per shared custody occurrence. A retired row
+				// becomes selectable only after explicit shared retirement/upload.
+				if sharedRetiredCount <= r.ArtifactRetiredCount {
+					return msi.ErrConsumed
+				}
 				next, e := msi.NextManagerJob(*r)
 				if e != nil {
 					return e
@@ -315,6 +328,7 @@ func (m *Manager) deliver(ctx context.Context, actor, id string, ack bool, artif
 			}
 			a := *shared
 			r.Artifact = &a
+			r.ArtifactRetiredCount = sharedRetiredCount
 		}
 		if r.Artifact == nil || r.Artifact.CompletedAt == 0 {
 			return msi.ErrUnavailable
@@ -604,6 +618,7 @@ func (m *Manager) Report(ctx context.Context, raw []byte) error {
 }
 
 type View struct {
+	ArtifactRetiredCount    string           `json:"artifactRetiredCount,omitempty"`
 	Reusable                bool             `json:"reusable,omitempty"`
 	JobSequence             string           `json:"jobSequence,omitempty"`
 	RetiredFloor            string           `json:"retiredFloor,omitempty"`
@@ -638,6 +653,7 @@ func (m *Manager) View(ctx context.Context) (View, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	var shared *msi.Artifact
+	var sharedRecord msi.ArtifactRecord
 	if m.artifact != nil {
 		m.artifact.mu.Lock()
 		defer m.artifact.mu.Unlock()
@@ -646,16 +662,24 @@ func (m *Manager) View(ctx context.Context) (View, error) {
 			return View{}, e
 		}
 		shared = r.Artifact
+		sharedRecord = r
 	}
 	var v View
 	_, e := m.transaction(ctx, "", "", func(r *msi.Record, _ msi.Current, n int64) error {
-		if r.Grant.Version == msi.ReusableGrantVersion && len(r.RetiredReport) > 0 && shared != nil && r.Artifact != nil && msi.ArtifactIdentity(*r.Artifact) != msi.ArtifactIdentity(*shared) {
-			next, err := msi.NextManagerJob(*r)
+		if r.Grant.Version == msi.ReusableGrantVersion && shared != nil && r.Artifact != nil {
+			current, err := msi.ReferencesArtifactOccurrence(*r, sharedRecord)
 			if err != nil {
 				return err
 			}
-			next.Artifact = shared
-			r = &next
+			if !current {
+				next, err := msi.NextManagerJob(*r)
+				if err != nil {
+					return err
+				}
+				next.Artifact = shared
+				next.ArtifactRetiredCount = sharedRecord.RetiredCount
+				r = &next
+			}
 		}
 		v = View{Version: msi.Version, DeviceID: m.binding.DeviceID, ServerNow: n, State: "empty", TransferID: r.TransferID}
 		if m.artifact != nil {
@@ -674,6 +698,7 @@ func (m *Manager) View(ctx context.Context) (View, error) {
 		v.Coordinated = r.Grant.MutationPlanDigest != ""
 		if r.Grant.Version == msi.ReusableGrantVersion {
 			v.Reusable = true
+			v.ArtifactRetiredCount = strconv.FormatUint(sharedRecord.RetiredCount, 10)
 			v.JobSequence = strconv.FormatUint(r.Jobs.Sequence, 10)
 			v.RetiredFloor = strconv.FormatUint(r.Jobs.RetiredFloor, 10)
 			v.History = r.Jobs.Recent
@@ -846,6 +871,9 @@ func (m *Manager) CheckArtifactReference(ctx context.Context, artifactID, bindin
 	}
 	r, e := m.artifact.read(ctx)
 	if e != nil {
+		return e
+	}
+	if e := checkArtifactOccurrence(ctx, r); e != nil {
 		return e
 	}
 	if r.Artifact == nil || msi.ArtifactIdentity(*r.Artifact) != artifactID {

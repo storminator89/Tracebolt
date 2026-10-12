@@ -52,9 +52,33 @@ _removal_pairs=importlib.util.module_from_spec(_removal_spec)
 _removal_spec.loader.exec_module(_removal_pairs)
 REMOVAL_FAILURE_STAGES={"uninstall-failure-"+step for step in ("unknown","validate","context","receipt","owned","state","stop","stop-observe","stop-state","stop-wait","pre-delete","delete","delete-result","absence-inspect","absence-owned","absence-wait")}
 REMOVAL_FAILURE_REASONS={"failed","receipt_rejected","canceled","deadline","access_denied","cannot_accept_control","not_active","dependent_services","delete_pending"}|{"service:"+s+":"+c+":"+cause for s,c in _removal_pairs.SERVICE_FAILURE_PAIRS if s!="unknown" for cause in ("failed","canceled","deadline","access_denied","cannot_accept_control","not_active","dependent_services","delete_pending")}
+HIDDEN_INPUT_FAILURE_STAGES = {
+    "hidden-input-process-inspect", "hidden-input-process-exited",
+    "hidden-input-installer-compatibility", "hidden-input-installer-before-mutation",
+    "hidden-input-installer-failed", "hidden-input-installer-returned",
+    "hidden-input-console-observation", "hidden-input-console-attach",
+    "hidden-input-console-open-input", "hidden-input-console-open-output",
+    "hidden-input-console-mode", "hidden-input-console-screen-info",
+    "hidden-input-console-screen-bound", "hidden-input-console-screen-read",
+    "hidden-input-console-no-echo", "hidden-input-echo-enabled", "hidden-input-prompt-absent",
+}
 RETENTION_FAILURE_STAGES = {"current-platform", "current-receipt", "current-grants", "current-identity", "current-optionals", "current-retention", "current-consent", 'retention-baseline-immutable-unchanged', 'retention-stopped-immutable-unchanged', 'verify-retention-immutable-unchanged', 'verify-retention-stopped-unchanged', 'retention-baseline-owned', 'retention-baseline-material', 'retention-baseline-receipt', 'retention-baseline-runtime', 'retention-baseline-enrollment', 'retention-baseline-identity', 'retention-stopped-receipt', 'retention-stopped-runtime', 'retention-stopped-enrollment', 'retention-stopped-identity', 'verify-retention-receipt', 'verify-retention-runtime', 'verify-retention-enrollment', 'verify-retention-identity', 'retention-stopped-event-grant', 'retention-stopped-volume-grant', 'retention-stopped-process-grant', 'retention-stopped-network-grant', 'retention-stopped-sender', 'verify-retention-event-grant', 'verify-retention-volume-grant', 'verify-retention-process-grant', 'verify-retention-network-grant', 'verify-retention-sender', 'verify-retention-binary', 'verify-retention-tree'}
 CHOOSER_CLICK_FAILURE_STAGES = {"current-platform", "current-receipt", "current-grants", "current-identity", "current-optionals", "current-retention", "current-consent", 'chooser-click-client-bottom-right', 'chooser-click-client-contained', 'chooser-click-client-rect', 'chooser-click-client-top-left', 'chooser-click-control', 'chooser-click-control-rect', 'chooser-click-dpi-restore', 'chooser-click-dpi-set', 'chooser-click-enabled', 'chooser-click-monitor', 'chooser-click-monitor-info', 'chooser-click-not-iconic', 'chooser-click-post', 'chooser-click-root', 'chooser-click-visible', 'chooser-click-work-contained', 'chooser-open-client-bottom-right', 'chooser-open-client-contained', 'chooser-open-client-rect', 'chooser-open-client-top-left', 'chooser-open-control', 'chooser-open-control-rect', 'chooser-open-dpi-restore', 'chooser-open-dpi-set', 'chooser-open-enabled', 'chooser-open-monitor', 'chooser-open-monitor-info', 'chooser-open-not-iconic', 'chooser-open-post', 'chooser-open-root', 'chooser-open-visible', 'chooser-open-work-contained'}
-STAGES = {"current-platform", "current-receipt", "current-grants", "current-identity", "current-optionals", "current-retention", "current-consent", "bootstrap-launch", "chooser-click", "chooser-dialog", "chooser-title", "chooser-edit", "chooser-set-text", "chooser-open", "chooser-validated", "uninstall-held-status-delete-pending", "uninstall-held-status-invalid-handle", "uninstall-held-status-access-denied", "uninstall-pending-close-failed", "uninstall-pending-close-completed", "authorization", "desktop", "fresh", "fresh-environment", "fresh-layout", "fresh-service", "fresh-program-files", "fresh-program-data", "fixture", "preflight-cancel", "bootstrap", "consent", "install", "hidden-input", "pending", "pending-capture", "pending-claim", "pending-service", "pending-console", "pending-invariant", "pending-retention", "transport", "transport-service", "completion", "frames", "frames-evidence", "reopen", "uninstall-cancel", "uninstall", "verify-retention", "completed", "consent-back", "consent-first-compared", "consent-first-disabled", "consent-first-enabled", "consent-first-http", "consent-first-http-reset", "consent-first-identity", "consent-first-reset", "consent-first-scope", "consent-first-service", "consent-http-absent", "consent-input", "consent-open", "consent-reopen", "consent-review", "consent-review-reset", "consent-second-compared", "consent-second-disabled", "consent-second-enabled", "consent-second-http", "consent-second-http-reset", "consent-second-identity", "consent-second-reset", "consent-second-scope", "consent-second-service", "preflight-cancel-click", "preflight-choose", "preflight-consent", "preflight-exit", "preflight-fresh-service", "preflight-fresh-program-files", "preflight-fresh-program-data", "preflight-launch", "uninstall-absence-inspect", "uninstall-absence-present", "uninstall-cancel-confirmation", "uninstall-cancel-invariant", "uninstall-cancel-return", "uninstall-confirmation", "uninstall-exit", "uninstall-finish", "uninstall-finish-message", "uninstall-held-close", "uninstall-held-close-completed", "uninstall-held-close-failed", "uninstall-held-status", "uninstall-held-stopped", "uninstall-hold-scm", "uninstall-hold-service", "uninstall-launch", "uninstall-operation-failed", "uninstall-owned", "uninstall-pending-close", "uninstall-pending-text", "uninstall-receipt", "uninstall-release", "uninstall-removing", "uninstall-stopping"} | REMOVAL_FAILURE_STAGES | CHOOSER_CLICK_FAILURE_STAGES | RETENTION_FAILURE_STAGES
+STAGES = {"current-platform", "current-receipt", "current-grants", "current-identity", "current-optionals", "current-retention", "current-consent", "bootstrap-launch", "chooser-click", "chooser-dialog", "chooser-title", "chooser-edit", "chooser-set-text", "chooser-open", "chooser-validated", "uninstall-held-status-delete-pending", "uninstall-held-status-invalid-handle", "uninstall-held-status-access-denied", "uninstall-pending-close-failed", "uninstall-pending-close-completed", "authorization", "desktop", "fresh", "fresh-environment", "fresh-layout", "fresh-service", "fresh-program-files", "fresh-program-data", "fixture", "preflight-cancel", "bootstrap", "consent", "install", "hidden-input", "pending", "pending-capture", "pending-claim", "pending-service", "pending-console", "pending-invariant", "pending-retention", "transport", "transport-service", "completion", "frames", "frames-evidence", "reopen", "uninstall-cancel", "uninstall", "verify-retention", "completed", "consent-back", "consent-first-compared", "consent-first-disabled", "consent-first-enabled", "consent-first-http", "consent-first-http-reset", "consent-first-identity", "consent-first-reset", "consent-first-scope", "consent-first-service", "consent-http-absent", "consent-input", "consent-open", "consent-reopen", "consent-review", "consent-review-reset", "consent-second-compared", "consent-second-disabled", "consent-second-enabled", "consent-second-http", "consent-second-http-reset", "consent-second-identity", "consent-second-reset", "consent-second-scope", "consent-second-service", "preflight-cancel-click", "preflight-choose", "preflight-consent", "preflight-exit", "preflight-fresh-service", "preflight-fresh-program-files", "preflight-fresh-program-data", "preflight-launch", "uninstall-absence-inspect", "uninstall-absence-present", "uninstall-cancel-confirmation", "uninstall-cancel-invariant", "uninstall-cancel-return", "uninstall-confirmation", "uninstall-exit", "uninstall-finish", "uninstall-finish-message", "uninstall-held-close", "uninstall-held-close-completed", "uninstall-held-close-failed", "uninstall-held-status", "uninstall-held-stopped", "uninstall-hold-scm", "uninstall-hold-service", "uninstall-launch", "uninstall-operation-failed", "uninstall-owned", "uninstall-pending-close", "uninstall-pending-text", "uninstall-receipt", "uninstall-release", "uninstall-removing", "uninstall-stopping"} | REMOVAL_FAILURE_STAGES | CHOOSER_CLICK_FAILURE_STAGES | RETENTION_FAILURE_STAGES | HIDDEN_INPUT_FAILURE_STAGES
+
+HIDDEN_INPUT_PACKAGE_CODES = {'created-descriptor', 'bootstrap-size', 'file-streams', 'cancelled', 'filesystem-unsupported', 'manifest-invalid', 'payload-machine', 'directory-create', 'file-write', 'file-duplicate', 'object-metadata', 'object-reparse', 'ancestor-dacl', 'existing-resource', 'file-pin', 'object-kind', 'close-failed', 'elevation-unverified', 'payload-pe', 'file-size', 'payload-digest', 'package-incomplete', 'descriptor-query', 'ancestor-writer', 'elevation-required', 'ancestor-ace', 'object-role', 'file-read', 'package-failed', 'file-create', 'payload-size', 'existing-service', 'file-handle', 'layout-invalid', 'directory-case', 'path-binding', 'service-inspection', 'unsupported-platform', 'ancestor-open', 'ancestor-descriptor', 'ancestor-owner', 'architecture-mismatch', 'absence-unverified', 'descriptor-create', 'architecture-invalid', 'file-flush', 'file-digest'}
+HIDDEN_INPUT_SERVICE_PHASES = {'handoff', 'receipt', 'bootstrap', 'unknown', 'runtime_installation', 'lifecycle', 'sender', 'setup', 'retained_state', 'enrollment', 'pending_approval', 'runtime_identity', 'runtime_dispatch'}
+HIDDEN_INPUT_SERVICE_REASONS = {'approval_expired', 'sender_failed', 'invalid_arguments', 'invalid_configuration', 'runtime_read_denied', 'interrupted', 'enrollment_failed', 'result_write', 'input_rejected', 'operation_failed', 'unsupported_platform', 'state_unavailable', 'enrollment_terminal', 'state_rejected', 'unknown', 'identity_rejected', 'handoff_invalid', 'unexpected_exit', 'result_encoding', 'input_failed', 'unsafe_path', 'dispatcher_unavailable'}
+
+def hidden_input_failure_reason(reason):
+    if type(reason) is not str:
+        return False
+    parts = reason.split(":")
+    if len(parts) < 2 or parts[1] not in HIDDEN_INPUT_PACKAGE_CODES:
+        return False
+    return ((len(parts) == 2 and parts[0] == "setup_package") or
+            (len(parts) == 4 and parts[0] == "setup_service" and
+             parts[2] in HIDDEN_INPUT_SERVICE_PHASES and parts[3] in HIDDEN_INPUT_SERVICE_REASONS))
 
 # Wrapper-only diagnostics: these are not native controller reports or evidence.
 # Never include exception messages, commands, paths, output, or environment values.
@@ -123,15 +147,21 @@ def validate_report(raw, source, which):
     require(r["schema"] == "tracebolt.windows-current-setup-acceptance.v1" and r["source"] == source and r["case"] == which and which in CHECKS)
     require(shared.member(r["status"], {"blocked", "failed", "passed_packaged_gui_subset"}) and shared.member(r["stage"], STAGES))
     base_reasons={"none", "authorization", "desktop_unavailable", "operation_failed", "deadline", "inspection_required"}
-    require(shared.member(r["reason"], base_reasons | REMOVAL_FAILURE_REASONS))
+    require(shared.member(r["reason"], base_reasons | REMOVAL_FAILURE_REASONS) or hidden_input_failure_reason(r["reason"]))
     if r["stage"] in RETENTION_FAILURE_STAGES:
         require(r["status"] == "failed" and r["case"] in NORMAL)
     if r["stage"] in CHOOSER_CLICK_FAILURE_STAGES:
         require(r["status"] == "failed")
-    if r["stage"] in REMOVAL_FAILURE_STAGES or r["reason"] not in base_reasons:
+    if r["stage"] in REMOVAL_FAILURE_STAGES or r["reason"] not in base_reasons and not hidden_input_failure_reason(r["reason"]):
         require(r["status"] == "failed" and r["case"] in NORMAL and r["stage"] in REMOVAL_FAILURE_STAGES and r["reason"] in REMOVAL_FAILURE_REASONS)
     require(shared.member(r["startup"], {"inspection_required", "disabled", "automatic", "absent"}))
     require(type(r["checks"]) is dict and set(r["checks"]) == CHECKS[which] and all(type(v) is bool for v in r["checks"].values()))
+    if hidden_input_failure_reason(r["reason"]):
+        require(r["status"] == "failed" and r["checks"]["hiddenConsoleExercised"] is False and
+                ((r["reason"].startswith("setup_package:") and r["stage"] == "hidden-input-installer-before-mutation") or
+                 (r["reason"].startswith("setup_service:") and r["stage"] == "hidden-input-installer-failed")))
+    if r["stage"] in HIDDEN_INPUT_FAILURE_STAGES:
+        require(r["status"] == "failed" and r["checks"]["hiddenConsoleExercised"] is False)
     require(type(r["coverage"]) is dict and set(r["coverage"]) == FALSE_COVERAGE and all(v is False for v in r["coverage"].values()))
     require(all(type(r[k]) is bool for k in ("approvalValidated", "nativeActionsAttempted", "platformDisposalRequired")))
     require(type(r["frames"]) is int and 0 <= r["frames"] <= 64)
@@ -240,25 +270,33 @@ def preserve_public_package(files, destination, source, report):
     require(copied == files)
     validate_public_package(copied, source, report)
 
-def _validated_reports(reports, source, run_id):
+def _validated_report_contents(reports, source, run_id):
+    # Content checks alone establish neither case isolation nor acceptance.
     require(type(reports) is dict and set(reports) == set(CHECKS))
     accepted = {case: validate_report(raw, source, case) for case, raw in reports.items()}
     require(all(raw == canonical(accepted[case]) for case, raw in reports.items()))
     require(all(r["status"] == "passed_packaged_gui_subset" and r["runID"] == run_id for r in accepted.values()))
     for key in ("setupSHA256", "serviceSHA256", "driverSHA256", "sourceInputsSHA256", "sourceTree"):
         require(len({r[key] for r in accepted.values()}) == 1)
-    require(len({r["machineIDSHA256"] for r in accepted.values()}) == len(CHECKS))
     return accepted
 
-def aggregate_reports(reports, source, run_id, execution_provenance=None, public_files=None):
-    accepted = _validated_reports(reports, source, run_id)
-    # Hostnames may be cloned across separate hosted jobs. Distinct execution
-    # evidence is mandatory; report names or random nonces are not a fallback.
+def _validated_reports(reports, source, run_id, execution_provenance=None, public_files=None):
+    accepted = _validated_report_contents(reports, source, run_id)
+    # MachineGuid and hostname may be cloned in a hosted Windows image. Keep
+    # their original report values as descriptive evidence, not VM attestation.
+    # Acceptance instead requires exact-source successful native reports (whose
+    # controller first checks absent service/app directories) AND authenticated
+    # distinct job/runner registrations bound to each original artifact's bytes.
+    # The fresh-VM claim remains GitHub's standard Windows job-isolation contract;
+    # neither self-reported IDs, random nonces nor a report-only check substitutes.
     try:
         provenance.validate_provenance(execution_provenance, source, run_id, reports, public_files)
     except Exception:
         raise shared.Rejected() from None
     return accepted
+
+def aggregate_reports(reports, source, run_id, execution_provenance=None, public_files=None):
+    return _validated_reports(reports, source, run_id, execution_provenance, public_files)
 
 def run_aggregate(env, root=ROOT):
     source = authorize_aggregate(env)
@@ -275,7 +313,7 @@ def run_aggregate(env, root=ROOT):
     for case, name in names.items():
         exact_directory(downloads / name, {REPORT_NAME})
         raw_reports[case] = regular_file(downloads / name / REPORT_NAME, 32 << 10)
-    reports = _validated_reports(raw_reports, source, env["GITHUB_RUN_ID"])
+    reports = _validated_report_contents(raw_reports, source, env["GITHUB_RUN_ID"])
     code, raw_tree = shared.command(["git", "rev-parse", "HEAD^{tree}"], shared.child_environment(child_env), root, 10, 128)
     tree = raw_tree.decode("ascii").strip()
     require(code == 0 and shared.valid_source(tree) and all(r["sourceTree"] == tree for r in reports.values()))

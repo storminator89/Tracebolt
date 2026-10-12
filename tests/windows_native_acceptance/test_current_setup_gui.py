@@ -2,6 +2,7 @@
 import copy
 import importlib.util
 import json
+import re
 from pathlib import Path
 import unittest
 from unittest import mock
@@ -67,10 +68,11 @@ class CurrentSetupContract(unittest.TestCase):
             with self.assertRaises(ValueError):r.validate_frame_progress(bad)
     def test_exact_three_source_run_machine_and_package_binding(self):
         reports={case:r.canonical(report(case,hex(i+8)[2:])) for i,case in enumerate(r.CHECKS)}
-        self.assertEqual(len(r._validated_reports(reports,"a"*40,"123")),3)
-        for field,value in (("sourceTree","0"*40),("serviceSHA256","0"*64),("runID","456"),("machineIDSHA256","8"*64)):
+        self.assertEqual(len(r._validated_report_contents(reports,"a"*40,"123")),3)
+        with self.assertRaises(r.shared.Rejected):r._validated_reports(reports,"a"*40,"123")
+        for field,value in (("sourceTree","0"*40),("serviceSHA256","0"*64),("runID","456")):
             bad=dict(reports);case=list(bad)[1];v=json.loads(bad[case]);v[field]=value;bad[case]=r.canonical(v)
-            with self.assertRaises(r.shared.Rejected):r._validated_reports(bad,"a"*40,"123")
+            with self.assertRaises(r.shared.Rejected):r._validated_report_contents(bad,"a"*40,"123")
     def test_receipt_hashes_grants_and_optional_scopes_cannot_be_omitted(self):
         for key in receipt():
             v=receipt();del v[key]
@@ -80,6 +82,55 @@ class CurrentSetupContract(unittest.TestCase):
             with self.assertRaises(r.shared.Rejected):r.validate_receipt_proof(v)
         v=report();v["checks"]["optionalActionsOff"]=False
         with self.assertRaises(r.shared.Rejected):self.validate(v)
+    def test_hidden_input_failures_remain_finite_failed_evidence(self):
+        go=(r.ROOT/"internal/windowsacceptance/currentsetupgate/hidden_input.go").read_text()
+        literal=go.split("var HiddenInputFailureStages = []string{",1)[1].split("}",1)[0]
+        self.assertEqual(set(re.findall(r'"([a-z-]+)"',literal)),r.HIDDEN_INPUT_FAILURE_STAGES)
+        for case in r.CHECKS:
+            for stage in r.HIDDEN_INPUT_FAILURE_STAGES:
+                v=report(case)
+                v.update(status="failed",stage=stage,reason="operation_failed",startup="inspection_required",frames=0,
+                         frameProgress=r.zero_frame_progress(),receiptProof=report("cancel-hidden-input")["receiptProof"],
+                         checks=dict.fromkeys(r.CHECKS[case],False))
+                self.assertEqual(self.validate(v),v)
+                for key,value in (("stage","hidden-input-private-native-text"),("status","passed_packaged_gui_subset"),("reason","private-native-text")):
+                    bad=copy.deepcopy(v);bad[key]=value
+                    with self.subTest(case=case,stage=stage,key=key),self.assertRaises(r.shared.Rejected):self.validate(bad)
+                v["checks"]["hiddenConsoleExercised"]=True
+                with self.assertRaises(r.shared.Rejected):self.validate(v)
+    def test_installer_diagnostics_are_finite_stage_bound_and_match_source(self):
+        go=(r.ROOT/"internal/windowsacceptance/currentsetupgate/hidden_input.go").read_text()
+        literal=go.split("var hiddenInputPackageCodes = []string{",1)[1].split("}",1)[0]
+        self.assertEqual(set(re.findall(r'"([a-z-]+)"',literal)),r.HIDDEN_INPUT_PACKAGE_CODES)
+        service=(r.ROOT/"internal/windowsservice/diagnostics.go").read_text()
+        self.assertEqual(set(re.findall(r'Phase\w+\s+Phase = "([a-z_]+)"',service)),r.HIDDEN_INPUT_SERVICE_PHASES)
+        self.assertEqual(set(re.findall(r'Reason\w+\s+Reason = "([a-z_]+)"',service)),r.HIDDEN_INPUT_SERVICE_REASONS)
+        for case in r.CHECKS:
+            for stage,reason in (("hidden-input-installer-before-mutation","setup_package:elevation-required"),
+                                 ("hidden-input-installer-failed","setup_service:package-failed:enrollment:input_rejected")):
+                v=report(case)
+                v.update(status="failed",stage=stage,reason=reason,startup="inspection_required",frames=0,
+                         frameProgress=r.zero_frame_progress(),receiptProof=report("cancel-hidden-input")["receiptProof"],
+                         checks=dict.fromkeys(r.CHECKS[case],False))
+                self.assertEqual(self.validate(v),v)
+                for key,value in (("stage","hidden-input-prompt-absent"),("status","passed_packaged_gui_subset"),
+                                  ("reason",reason+":private"),("reason","setup_service:package-failed:private:input_rejected"),
+                                  ("reason","setup_service:package-failed:enrollment:private"),("reason","setup_package:msi-bounds")):
+                    bad=copy.deepcopy(v);bad[key]=value
+                    with self.assertRaises(r.shared.Rejected):self.validate(bad)
+    def test_prompt_diagnostics_preserve_native_deadline_real_console_and_privacy(self):
+        driver=(r.ROOT/"cmd/windows-service/current_setup_acceptance_native_windows_test.go").read_text()
+        probe=driver.split('r.Stage = "hidden-input"',1)[1].split('r.Checks["hiddenConsoleExercised"] = true',1)[0]
+        self.assertIn("setupAwait(ctx, 40*time.Second",probe)
+        self.assertIn("currentgate.ProbeHiddenInput",probe)
+        self.assertIn("setupConsoleObserved(g.pid, secret, nil, false, observe)",probe)
+        self.assertIn("}) != nil || terminal",probe)
+        self.assertNotIn("fmt.",probe)
+        console=(r.ROOT/"cmd/windows-service/setup_acceptance_ui_windows_test.go").read_text()
+        self.assertIn("return setupConsoleObserved(pid, secret, input, enter, func(string) {})",console)
+        self.assertIn("hidden = mode&4 == 0",console)
+        self.assertIn("if n > 64<<10",console)
+        self.assertIn("bytes.Contains(compact, secret)",console)
     def test_workflow_only_manual_and_defaults_false(self):
         source=(r.ROOT/".github/workflows/windows-current-setup-acceptance.yml").read_text()
         self.assertEqual(source.count("default: false"),len(r.APPROVALS))

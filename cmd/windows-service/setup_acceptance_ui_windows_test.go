@@ -401,36 +401,50 @@ type setupInputRecord struct {
 }
 
 func setupConsole(pid uint32, secret []byte, input []byte, enter bool) (text string, hidden bool, err error) {
+	return setupConsoleObserved(pid, secret, input, enter, func(string) {})
+}
+
+// Observations are finite operation names only. Console bytes and native errors
+// stay memory-only, including on failure. The historical driver uses the no-op
+// wrapper above and retains its existing evidence vocabulary and assertions.
+func setupConsoleObserved(pid uint32, secret []byte, input []byte, enter bool, stage func(string)) (text string, hidden bool, err error) {
+	stage("console-attach")
 	setupKernel("FreeConsole")
 	if setupKernel("AttachConsole", uintptr(pid)) == 0 {
 		return "", false, setupgate.ErrGuard
 	}
 	defer setupKernel("FreeConsole")
+	stage("console-open-input")
 	in, e := windows.CreateFile(setupUTF("CONIN$"), windows.GENERIC_READ|windows.GENERIC_WRITE, windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE, nil, windows.OPEN_EXISTING, 0, 0)
 	if e != nil {
 		return "", false, setupgate.ErrGuard
 	}
 	defer windows.CloseHandle(in)
+	stage("console-open-output")
 	out, e := windows.CreateFile(setupUTF("CONOUT$"), windows.GENERIC_READ, windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE, nil, windows.OPEN_EXISTING, 0, 0)
 	if e != nil {
 		return "", false, setupgate.ErrGuard
 	}
 	defer windows.CloseHandle(out)
+	stage("console-mode")
 	var mode uint32
 	if windows.GetConsoleMode(in, &mode) != nil {
 		return "", false, setupgate.ErrGuard
 	}
 	hidden = mode&4 == 0
+	stage("console-screen-info")
 	var info setupConsoleInfo
 	if setupKernel("GetConsoleScreenBufferInfo", uintptr(out), uintptr(unsafe.Pointer(&info))) == 0 || info.Size.X <= 0 || info.Cursor.Y < 0 {
 		return "", false, setupgate.ErrGuard
 	}
+	stage("console-screen-bound")
 	n := int(info.Size.X) * (int(info.Cursor.Y) + 1)
 	if n > 64<<10 {
 		return "", false, setupgate.ErrGuard
 	}
 	buf := make([]uint16, n)
 	defer clear(buf)
+	stage("console-screen-read")
 	var read uint32
 	if setupKernel("ReadConsoleOutputCharacterW", uintptr(out), uintptr(unsafe.Pointer(&buf[0])), uintptr(n), 0, uintptr(unsafe.Pointer(&read))) == 0 || read != uint32(n) {
 		return "", false, setupgate.ErrGuard
@@ -441,6 +455,7 @@ func setupConsole(pid uint32, secret []byte, input []byte, enter bool) (text str
 		b.WriteByte('\n')
 	}
 	text = b.String()
+	stage("console-no-echo")
 	// Memory-only inspection of the full bounded screen; never print on failure.
 	compact := []byte(strings.Join(strings.Fields(text), ""))
 	defer clear(compact)

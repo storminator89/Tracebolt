@@ -48,3 +48,39 @@ test('recipient-specific source approval starts off and separate synthetic suppr
  const policy=windowsNotificationBrowserEnable(null,body,now),muted=windowsNotificationBrowserFixture(later,expiry,started,policy);assert.equal(muted.targets[2].effective,true);assert.equal(muted.targets[2].maintenanceUntil,endsAt);assert.equal(muted.counts.suppressed,1);assert.equal(muted.counts.queued,0);assert.throws(()=>windowsNotificationBrowserEnable(policy,body,now));
  const ended=windowsMaintenanceBrowserChange(started,'end',{key:windowsMaintenanceTargetKey,revision:1,windowId:1},later),after=windowsNotificationBrowserFixture(later,expiry,ended,policy);assert.equal(after.targets[2].maintenanceUntil,null);assert.equal(after.counts.queued,0);assert.equal(after.counts.suppressed,1);
 });
+
+test('actual Playwright exact labels find the EN/DE notification source without option text',async()=>{
+ const {createRequire}=await import('node:module'),require=createRequire(new URL('../../web/package.json',import.meta.url));
+ const path=require('node:path'),playwrightRoot=path.dirname(require.resolve('playwright-core/package.json'));
+ assert.equal(require(path.join(playwrightRoot,'package.json')).version,'1.58.2');
+ const {source}=require(path.join(playwrightRoot,'lib/generated/injectedScriptSource.js'));
+ const {JSDOM,VirtualConsole}=require('jsdom'),React=require('react'),{renderToStaticMarkup}=require('react-dom/server');
+ const web=new URL('../../web/',import.meta.url).pathname;
+ for(const locale of ['en','de']){
+  const view=windowsNotificationBrowserFixture(now,expiry);
+  const bundle=await require('esbuild').build({entryPoints:[path.join(web,'src/windows-notifications.tsx')],bundle:true,platform:'node',format:'cjs',jsx:'automatic',external:['react','react/jsx-runtime'],write:false,logLevel:'silent',loader:{'.css':'empty'},plugins:[{name:'inert-open-notification-view',setup(build){
+   build.onResolve({filter:/^\.\/windows-notifications-resource$/},()=>({path:'resource',namespace:'inert'}));
+   build.onResolve({filter:/^\.\/i18n$/},()=>({path:'locale',namespace:'inert'}));
+   build.onLoad({filter:/.*/,namespace:'inert'},item=>({contents:item.path==='locale'?`export const useLocale=()=>[${JSON.stringify(locale)}];`:`export const useWindowsNotifications=()=>({view:${JSON.stringify(view)},loading:false,writing:false,error:false,notice:null,generation:0,age:0,refresh(){},save(){},isUncertain(){return false;}});`,loader:'js'}));
+  }}]});
+  // Render the actual production component open with inert data, without a request.
+  let stateCalls=0;const react={...React,useState(initial){return [++stateCalls===1?true:initial,()=>{}];}},mod={exports:{}};
+  new Function('require','module','exports',bundle.outputFiles[0].text)(name=>name==='react'?react:require(name),mod,mod.exports);
+  const markup=renderToStaticMarkup(React.createElement(mod.exports.WindowsNotifications,{devices:[],sessionKey:expiry,admin:true}));
+  const virtualConsole=new VirtualConsole();virtualConsole.on('jsdomError',error=>{if(!error.message.includes('getComputedStyle() method: with pseudo-elements'))throw error;});
+  const dom=new JSDOM(markup,{runScripts:'outside-only',virtualConsole});
+  try{
+   const InjectedScript=dom.window.eval('var module={exports:{}};'+source+'\nInjectedScript');
+   const injected=new InjectedScript(dom.window,{isUnderTest:true,sdkLanguage:'javascript',testIdAttributeName:'data-testid',customEngines:[],browserName:'chromium'});
+   const query=selector=>Array.from(injected.querySelectorAll(injected.parseSelector(selector),dom.window.document));
+   const name=locale==='de'?'Gerät und Prüfung':'Device and check',select=dom.window.document.querySelector('select');
+   assert.ok(select);assert.equal(select.getAttribute('aria-label'),name);assert.ok(select.closest('label'));
+   assert.deepEqual(query(`internal:label=${JSON.stringify(name)}s`),[select]);
+   assert.deepEqual(query(`internal:role=combobox[name=${JSON.stringify(name)}s]`),[select]);
+   // Removing only the name in this synthetic DOM reproduces the hosted failure.
+   select.removeAttribute('aria-label');
+   assert.equal(query(`internal:label=${JSON.stringify(name)}s`).length,0);
+   assert.deepEqual(query(`internal:role=combobox[name=${JSON.stringify(name)}s]`),[select]);
+  }finally{dom.window.close();}
+ }
+});

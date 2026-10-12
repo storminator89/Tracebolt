@@ -41,27 +41,29 @@ type Artifact struct {
 // Record contains bounded metadata and signed evidence only, never MSI chunks.
 // Upload intent is permanent even if its exact body never arrived or fsync failed.
 type Record struct {
-	Jobs               *JobLedger        `json:"jobs,omitempty"`
-	RetirePermit       []byte            `json:"retirePermit,omitempty"`
-	RetireClaimedAt    int64             `json:"retireClaimedAt,omitempty"`
-	RetiredReport      []byte            `json:"retiredReport,omitempty"`
-	MutationReport     []byte            `json:"mutationReport,omitempty"`
-	Version            string            `json:"version"`
-	Grant              Grant             `json:"grant"`
-	PublicKey          ed25519.PublicKey `json:"publicKey"`
-	ExecutorPublicKey  ed25519.PublicKey `json:"executorPublicKey"`
-	Artifact           *Artifact         `json:"artifact,omitempty"`
-	TransferID         string            `json:"transferId,omitempty"`
-	DeliveryPermit     []byte            `json:"deliveryPermit,omitempty"`
-	DeliveryClaimedAt  int64             `json:"deliveryClaimedAt"`
-	DeliveryReport     []byte            `json:"deliveryReport,omitempty"`
-	ReadinessPermit    []byte            `json:"readinessPermit,omitempty"`
-	ReadinessClaimedAt int64             `json:"readinessClaimedAt"`
-	ReadinessReport    []byte            `json:"readinessReport,omitempty"`
-	InstallPermit      []byte            `json:"installPermit,omitempty"`
-	InstallClaimedAt   int64             `json:"installClaimedAt"`
-	ResultReport       []byte            `json:"resultReport,omitempty"`
-	ClockFloor         int64             `json:"clockFloor"`
+	// Manager-owned occurrence metadata; never part of signed endpoint authority.
+	ArtifactRetiredCount uint64            `json:"artifactRetiredCount,string,omitempty"`
+	Jobs                 *JobLedger        `json:"jobs,omitempty"`
+	RetirePermit         []byte            `json:"retirePermit,omitempty"`
+	RetireClaimedAt      int64             `json:"retireClaimedAt,omitempty"`
+	RetiredReport        []byte            `json:"retiredReport,omitempty"`
+	MutationReport       []byte            `json:"mutationReport,omitempty"`
+	Version              string            `json:"version"`
+	Grant                Grant             `json:"grant"`
+	PublicKey            ed25519.PublicKey `json:"publicKey"`
+	ExecutorPublicKey    ed25519.PublicKey `json:"executorPublicKey"`
+	Artifact             *Artifact         `json:"artifact,omitempty"`
+	TransferID           string            `json:"transferId,omitempty"`
+	DeliveryPermit       []byte            `json:"deliveryPermit,omitempty"`
+	DeliveryClaimedAt    int64             `json:"deliveryClaimedAt"`
+	DeliveryReport       []byte            `json:"deliveryReport,omitempty"`
+	ReadinessPermit      []byte            `json:"readinessPermit,omitempty"`
+	ReadinessClaimedAt   int64             `json:"readinessClaimedAt"`
+	ReadinessReport      []byte            `json:"readinessReport,omitempty"`
+	InstallPermit        []byte            `json:"installPermit,omitempty"`
+	InstallClaimedAt     int64             `json:"installClaimedAt"`
+	ResultReport         []byte            `json:"resultReport,omitempty"`
+	ClockFloor           int64             `json:"clockFloor"`
 }
 
 func NewRecord(g Grant, key, executor ed25519.PublicKey, at int64) (Record, error) {
@@ -172,6 +174,9 @@ func Transition(before, after Record) error {
 	if after.Validate() != nil || before.Version != after.Version || before.Grant != after.Grant || !bytes.Equal(before.PublicKey, after.PublicKey) || !bytes.Equal(before.ExecutorPublicKey, after.ExecutorPublicKey) || after.ClockFloor < before.ClockFloor {
 		return ErrIntegrity
 	}
+	if before.Grant.Version == ReusableGrantVersion && after.ArtifactRetiredCount < before.ArtifactRetiredCount {
+		return ErrConsumed
+	}
 	var err error
 	before, err = prepareJobTransition(before, after)
 	if err != nil {
@@ -179,6 +184,9 @@ func Transition(before, after Record) error {
 	}
 	if !validMutationReportAdvance(before.MutationReport, after.MutationReport, after.ExecutorPublicKey) {
 		return ErrIntegrity
+	}
+	if before.Artifact != nil && before.ArtifactRetiredCount != after.ArtifactRetiredCount {
+		return ErrConsumed
 	}
 	if ArtifactTransition(before.Artifact, after.Artifact) != nil {
 		return ErrConsumed

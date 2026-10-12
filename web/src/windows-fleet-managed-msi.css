@@ -16,3 +16,16 @@
 .windows-fleet-managed-msi .managed-msi-reusable{display:grid;gap:8px;min-width:0}
 .windows-fleet-managed-msi .managed-msi-reusable article,.windows-fleet-managed-msi .managed-msi-artifact article{border-top:1px solid var(--line);padding-top:8px;margin-top:8px;min-width:0}
 .windows-fleet-managed-msi .managed-msi-publisher{font-size:12px}
+
+.windows-fleet-managed-msi .managed-software-catalogue{display:grid;gap:8px;min-width:0;border:1px solid var(--line);border-radius:8px;padding:10px}
+.windows-fleet-managed-msi .managed-software-catalogue h4{font-size:12px;margin:0}
+.windows-fleet-managed-msi .managed-software-catalogue>p{font-size:11px;color:var(--secondary);line-height:1.5}
+.windows-fleet-managed-msi .managed-software-catalogue ul{list-style:none;padding:0;margin:0;display:grid;gap:8px}
+.windows-fleet-managed-msi .managed-software-catalogue li{display:flex;align-items:center;justify-content:space-between;gap:12px;border-top:1px solid var(--line);padding-top:8px;min-width:0}
+.windows-fleet-managed-msi .managed-software-catalogue li>div{display:grid;gap:3px;min-width:0;overflow-wrap:anywhere}
+.windows-fleet-managed-msi .managed-software-catalogue strong{font-size:12px}
+.windows-fleet-managed-msi .managed-software-catalogue span,.windows-fleet-managed-msi .managed-software-catalogue small{font-size:11px}
+.windows-fleet-managed-msi .managed-software-choice-action{justify-items:end;flex-shrink:0}
+.windows-fleet-managed-msi .managed-software-choice-state{border:1px solid var(--line);border-radius:5px;padding:2px 6px}
+.windows-fleet-managed-msi .managed-software-choice-state.ready{color:var(--accent)}
+@media(max-width:600px){.windows-fleet-managed-msi .managed-software-catalogue li{align-items:flex-start;flex-wrap:wrap}.windows-fleet-managed-msi .managed-software-choice-action{justify-items:start;max-width:100%}}

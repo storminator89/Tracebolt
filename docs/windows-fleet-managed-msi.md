@@ -19,7 +19,9 @@ card accepts the exact MSI and its package-review JSON, verifies the file hash,
 then reserves, uploads 32 KiB chunks and completes the artifact. Its original
 checkpoint and pending-chunk digest permit only an exact-byte upload continuation.
 An unconfirmed upload requires reading the saved artifact before continuing.
-There is no delete, replacement, catalog, bulk approval or automatic deployment.
+Fleet-v2 has no delete, replacement, catalogue, bulk approval or automatic deployment.
+Fresh reusable-v3 adds explicit retirement and a bounded
+[recent-package chooser](windows-software-catalogue.md), never extra payload slots.
 
 The package card shows upload progress, name, version and size. A single visible
 line states one package, up to 25 devices, one attempt per device and pending

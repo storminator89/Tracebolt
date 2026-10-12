@@ -23,9 +23,12 @@ Each drives the actual unmodified packaged Setup's visible controls and hidden
 console. An unavailable interactive desktop fails blocked; no session or UAC
 bypass exists. The controller checks the actual Server2025 product/build (26100)
 and update revision, independently rechecks the hashed MachineGuid, exact
-source/tree, compiled driver and Setup/service/source-input bytes. Hashing a VM
-identifier is correlation, not hardware attestation. Fresh isolation also relies
-on the verified GitHub job allocation and reviewed one-case-one-upload wiring.
+source/tree, compiled driver and Setup/service/source-input bytes. MachineGuid
+and hostname are descriptive correlation fields, not VM identities: hosted images
+can repeat them. Fresh isolation relies on GitHub's standard Windows fresh-VM-per-job
+contract, distinct authenticated job and runner registrations, reviewed
+one-case-one-upload wiring, and each controller's pre-install checks that the
+service and application directories are genuinely absent.
 
 Fresh Setup must show 21 scopes, keep all acknowledgements unchecked, independently
 require same-key renewal consent, and clear those choices after Back. Consent v14,
@@ -69,6 +72,21 @@ Windows 11, renewal cutover, reboot, signing, ARM64 and optional actions remain
 explicitly false. No raw inventory, usernames, serials, paths, event text, keys,
 console buffers or screenshots are uploaded.
 
+## Hidden-input failure diagnostics
+
+The current driver keeps the same 40-second prompt deadline and requires the
+actual attached console, no-echo mode, and invitation prompt. Before reading it,
+the driver distinguishes an exited process or a completed installer failure.
+Console attach, input/output open, mode, bounded screen reads, secret-echo checks,
+echo-enabled mode, and missing prompt now have finite failure stages. These
+observations export no GUI/console content, paths, native error text or secrets.
+Completed installer failures additionally retain only allowlisted package code
+and service phase/reason labels parsed from the complete fixed public failure
+rendering. Unknown, malformed or oversized text keeps the coarse failure label.
+A console-attach failure does not prove that the installer reached console
+allocation. Existing failed reports remain failures; no production fix or native
+pass follows from these diagnostic source changes.
+
 ## Retention, correlation and release boundary
 
 The completed case observes the limited LocalService token, cancel-without-change,
@@ -82,7 +100,10 @@ Incomplete cases must stay stopped/disabled, cannot be retried or uninstalled,
 and retain their exact partial state. VM disposal is required but unverified.
 
 The aggregate job accepts only three canonical current-schema reports from the
-same exact source/tree/run and distinct actual machine hashes. Authenticated
+same exact source/tree/run and mandatory distinct authenticated GitHub job and
+runner registrations. Repeated MachineGuid hashes or hostnames neither establish
+nor disprove fresh job isolation. Report-content validation alone cannot accept
+an aggregate; missing or mismatched execution proof fails closed. Authenticated
 GitHub run, attempt, workflow, jobs and artifact ZIP digests bind each report and
 the successful install/remove job's public package. Package PE/source resources,
 embedded service bytes, full source-input inventory and all file hashes are

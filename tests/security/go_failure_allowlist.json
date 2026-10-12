@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "sourceCommit": "fccc4b00cd8a144afd58e4b995747afab7a10022",
-  "goSourceSha256": "e61d564f372730aa9db82ed31c38d9233cc9a6341ac745719caf80984bf38960",
+  "goSourceSha256": "1b24ccd9cd5e448ed3c01d5c36e923a3e7667d3fd954c7230d0641856879247e",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -1005,6 +1005,7 @@
       "TestLinuxCVEVerticalSliceUsesCompleteSourceVersions",
       "TestManagedFleetArtifactRoutesAreFixed",
       "TestManagedFleetReadRechecksPinnedCapabilityAfterWait",
+      "TestManagedMSIOccurrenceRequestPinsRequireCanonicalStrings",
       "TestManagedMSIOperatorRoutesClosed",
       "TestManagedPreviewDisabledByDefault",
       "TestManagedPreviewDoesNotFallBackToManagerSample",
@@ -3826,7 +3827,10 @@
       "TestCurrentGateNeverPromotesHistoricalProfilesOrScopeReceipt",
       "TestCurrentGateRetainsUnknownProviderTruth",
       "TestExactAuthorizationFailClosed",
-      "TestFiniteReportCoverageAndIndeterminateTruth"
+      "TestFiniteReportCoverageAndIndeterminateTruth",
+      "TestHiddenInputFailureReportNeverBecomesAcceptance",
+      "TestHiddenInputInstallerDiagnosticExactFiniteEnvelope",
+      "TestHiddenInputProbeDistinguishesTerminalAndConsoleFailures"
     ],
     "localrmm/internal/windowsacceptance/fixture": [
       "TestConcurrentSyntheticObservationAndClose",
@@ -4445,7 +4449,8 @@
       "TestManagedPendingChunkExactResume",
       "TestManagedReusableConsentAndSignatureDomainsStaySeparate",
       "TestManagedUncertainFinalizationNeverRestarts",
-      "TestManagedUnexplainedPayloadFences"
+      "TestManagedUnexplainedPayloadFences",
+      "TestReusableOccurrenceReferencesUseFloorEvenForIdenticalCustody"
     ],
     "localrmm/internal/windowsmanagedmsiexecutor": [
       "TestManagedCloseTimerCompletionRaceReturnsCloseError",
@@ -4469,7 +4474,12 @@
       "TestManagedManagerReleaseRechecksAfterCommitWait",
       "TestManagedUploadCheckpointAndCompletionUncertaintyRetainSameBytes",
       "TestReusableManagerDifferentPackageAfterReviewedRetirementRestart",
+      "TestReusableOccurrencePinCanonicalNumbersAndLegacyBytes",
+      "TestReusableOccurrencePinsRejectStaleMutationsAndKeepUnresolvedCustody",
+      "TestReusableRepeatedArtifactProjectsFreshOccurrenceAcrossSkippedPackage",
+      "TestReusableReservePinsInitialEmptyAndRetiredOccurrences",
       "TestReusableSharedRetirementKeepsOtherUnresolvedTarget",
+      "TestReusableViewRejectsUnresolvedOlderOccurrence",
       "TestSpoolChangedUnacknowledgedTailIsNeverOverwritten",
       "TestSpoolSingleLinkExactChunksAndSameByteRecovery"
     ],

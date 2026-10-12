@@ -124,7 +124,7 @@ func AdvanceJobLedger(j *JobLedger, p Permit, result, retired Report, retiredRaw
 }
 func (r Record) validateReusableRecord() error {
 	if r.Grant.Version != ReusableGrantVersion {
-		if r.Version != RecordVersion || r.Jobs != nil || len(r.RetirePermit)+len(r.RetiredReport) != 0 || r.RetireClaimedAt != 0 {
+		if r.ArtifactRetiredCount != 0 || r.Version != RecordVersion || r.Jobs != nil || len(r.RetirePermit)+len(r.RetiredReport) != 0 || r.RetireClaimedAt != 0 {
 			return ErrIntegrity
 		}
 		return nil
@@ -133,7 +133,7 @@ func (r Record) validateReusableRecord() error {
 		return ErrIntegrity
 	}
 	if r.Artifact == nil {
-		if r.Jobs.Sequence != 0 {
+		if r.ArtifactRetiredCount != 0 || r.Jobs.Sequence != 0 {
 			return ErrIntegrity
 		}
 	} else if !ValidPublisherEvidence(r.Artifact.PublisherStatus, r.Artifact.PublisherEvidenceDigest) {
@@ -208,7 +208,7 @@ func prepareJobTransition(before, after Record) (Record, error) {
 		return before, nil
 	}
 	next, e := NextManagerJob(before)
-	if e != nil || !sameJSON(next.Jobs, after.Jobs) || after.TransferID == "" || after.TransferID == before.TransferID {
+	if e != nil || !sameJSON(next.Jobs, after.Jobs) || after.TransferID == "" || after.TransferID == before.TransferID || after.ArtifactRetiredCount <= before.ArtifactRetiredCount {
 		return before, ErrConsumed
 	}
 	return next, nil

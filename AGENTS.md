@@ -237,7 +237,8 @@ missing material rather than inventing credentials or weakening protection.
   `docs/windows-managed-msi-delivery.md` before changes. For fresh upload-once fleet
   v2 setup/registry/worklist also read `docs/windows-fleet-managed-msi.md`.
   Fresh reusable-v3 jobs additionally require `docs/windows-reusable-managed-msi.md`:
-  keep grant-wide sequences separate from readiness, exact reviewed retirement,
+  also read `docs/windows-software-catalogue.md` for recent choices and same-content
+  occurrence pins. Keep grant-wide sequences separate from readiness, exact reviewed retirement,
   original expiry, bounded custody/history and durable retired floors. Uncertainty
   blocks replacement; never claim verified publisher trust from reviewed evidence.
   Keep chunked private custody,

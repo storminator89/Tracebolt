@@ -376,7 +376,8 @@ func (r *Registry) ArtifactView(ctx context.Context) (ArtifactView, error) {
 		out.Targets = append(out.Targets, ArtifactTarget{m.binding.DeviceID, msi.BindingDigest(m.binding)})
 		if out.Reusable && *out.CanRetire {
 			saved, err := m.store.ReadRegisteredWindowsManagedMSI(msi.WithFinalCheck(ctx, m.configurationCheck), m.binding, m.key.Public().(ed25519.PublicKey))
-			if err != nil || saved.Artifact != nil && msi.ArtifactIdentity(*saved.Artifact) == out.ArtifactID && len(saved.RetiredReport) == 0 {
+			references, referenceErr := msi.ReferencesArtifactOccurrence(saved, record)
+			if err != nil || referenceErr != nil || references && len(saved.RetiredReport) == 0 {
 				*out.CanRetire = false
 				*out.RetirementBlocked = "awaiting_device_retirement"
 			}
