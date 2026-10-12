@@ -71,7 +71,7 @@ export async function compileWindowsFleetMSIAssets() {
     .concat(['capture-windows-fleet-msi-fixtures.mjs', 'capture-windows-reusable-msi-fixtures.mjs',
       'capture-windows-scheduled-msi-fixtures.mjs', 'capture-windows-software-catalogue-fixtures.mjs',
       'capture-windows-msi-catalogue-fixtures.mjs', 'run-windows-fleet-msi-ci.mjs',
-      'run-windows-msi-catalogue-ci.mjs'].map(name => path.join(web, 'scripts', name))).sort();
+      'run-windows-msi-catalogue-ci.mjs', 'windows-msi-catalogue-scenes.json'].map(name => path.join(web, 'scripts', name))).sort();
   assert(sourceFiles.some(name => name.endsWith('/windows-fleet-managed-msi.tsx')), 'Production App must include the fleet MSI component');
   const sourceInputs = await Promise.all(sourceFiles.map(async name => ({
     file: path.relative(root, name).split(path.sep).join('/'),
@@ -487,7 +487,7 @@ export async function checkWindowsSavedMSIFixtures() {
     retiredNativeOutcomesPreserved: true, allowedPreviewReads, rejectedMutationRequests, actualMutations: 0, browserExecuted: false, screenshotsCaptured: 0 };
 }
 
-export async function exerciseWindowsFleetMSI({ page, expect, fixture, locale, width, shot }) {
+export async function exerciseWindowsFleetMSI({ page, expect, fixture, locale, width, shot, onCase = () => {} }) {
   const de = locale === 'de', title = de ? 'Windows-MSI-Arbeitsliste' : 'Windows MSI worklist';
   await page.goto(`${windowsFleetMSIOrigin}/#/devices`);
   await expect(page.locator('html')).toHaveAttribute('lang', locale);
@@ -503,6 +503,7 @@ export async function exerciseWindowsFleetMSI({ page, expect, fixture, locale, w
     await shot(page, `synthetic-windows-fleet-msi-${kind}-${width}-${locale}`);
   };
   await capture('uploaded-artifact', worklist.locator('.managed-msi-artifact'));
+  onCase({ scene: 'delivery-unchecked', locale, width });
   const choices = worklist.getByRole('group', { name: de ? 'Geräte auswählen' : 'Select devices', exact: true });
   const freeze = worklist.getByRole('button', { name: de ? 'Geräteauswahl festhalten' : 'Freeze device selection', exact: true });
   await expect(choices.getByRole('checkbox')).toHaveCount(2);
@@ -525,6 +526,7 @@ export async function exerciseWindowsFleetMSI({ page, expect, fixture, locale, w
   await expect(delivery).toBeDisabled();
   expect(fixture.reads.devices[fixture.devices[1].id]).toBe(0);
   await capture('delivery-unchecked');
+  onCase({ scene: 'saved-3010-shared-owner', locale, width });
   await open(fixture.devices[1]).click();
   await expect(panel).toHaveCount(1);
   await expect(panel).toContainText(fixture.devices[1].id);
@@ -535,6 +537,7 @@ export async function exerciseWindowsFleetMSI({ page, expect, fixture, locale, w
   await expect(panel.locator('.windows-mutation-status')).toContainText(de ? 'Blockiert durch Windows-Update' : 'Blocked by Windows Update');
   await expect(panel.locator('.windows-mutation-status details')).not.toHaveAttribute('open');
   await capture('saved-3010-shared-owner');
+  onCase({ scene: 'saved-3010-owner-refreshed', locale, width });
   const savedResult = clone(fixture.views[1].result);
   fixture.showSavedIdleOwner();
   await panel.getByRole('button', { name: de ? 'Gespeicherten Status lesen' : 'Read saved status', exact: true }).click();
@@ -725,7 +728,7 @@ export async function exerciseWindowsSavedMSI({ page, expect, fixture, scene, lo
 }
 
 /** Extra saved-worklist captures; the original 16 fleet captures stay unchanged. */
-export async function captureWindowsSavedMSIFixtures({ browser, expect, output }) {
+export async function captureWindowsSavedMSIFixtures({ browser, expect, output, onCase = () => {} }) {
   assert(browser && typeof browser.newContext === 'function' && typeof expect === 'function');
   assert(typeof output === 'string' && output.length > 0);
   const compiled = await compileWindowsFleetMSIAssets(), captures = [];
@@ -733,6 +736,7 @@ export async function captureWindowsSavedMSIFixtures({ browser, expect, output }
   await mkdir(output, { recursive: true });
   for (const { scene, locale, width, height, file: expectedFile } of windowsSavedMSICaptureMatrix) {
     const testCase = { locale, width, height };
+    onCase({ scene, locale, width });
     const fixture = await createWindowsSavedMSIFixture(scene);
     const state = { blocked: [], external: [], writes: [], previews: [], pageErrors: [] };
     const context = await browser.newContext({ viewport: { width, height }, locale: locale === 'de' ? 'de-DE' : 'en-US', deviceScaleFactor: 1, reducedMotion: 'reduce', serviceWorkers: 'block' });
@@ -765,13 +769,14 @@ export async function captureWindowsSavedMSIFixtures({ browser, expect, output }
 }
 
 /** The caller owns an already-authorized browser. This helper never launches one. */
-export async function captureWindowsFleetMSIFixtures({ browser, expect, output }) {
+export async function captureWindowsFleetMSIFixtures({ browser, expect, output, onCase = () => {} }) {
   assert(browser && typeof browser.newContext === 'function' && typeof expect === 'function');
   assert(typeof output === 'string' && output.length > 0);
   const compiled = await compileWindowsFleetMSIAssets(), captures = [];
   await mkdir(output, { recursive: true });
   for (const testCase of windowsFleetMSICases) {
     const { locale, width, height } = testCase;
+    onCase({ scene: 'uploaded-artifact', locale, width });
     const fixture = await createWindowsFleetMSIFixture();
     const state = { blocked: [], external: [], writes: [], pageErrors: [] };
     const context = await browser.newContext({ viewport: { width, height }, locale: locale === 'de' ? 'de-DE' : 'en-US', deviceScaleFactor: 1, reducedMotion: 'reduce', serviceWorkers: 'block' });
@@ -781,7 +786,7 @@ export async function captureWindowsFleetMSIFixtures({ browser, expect, output }
       const page = await context.newPage();
       page.on('pageerror', error => state.pageErrors.push(error.message));
       const pendingCaptures = [];
-      const result = await exerciseWindowsFleetMSI({ page, expect, fixture, ...testCase, shot: async (target, name) => {
+      const result = await exerciseWindowsFleetMSI({ page, expect, fixture, ...testCase, onCase, shot: async (target, name) => {
         const file = `${name}.png`;
         await target.screenshot({ path: path.join(output, file), animations: 'disabled', fullPage: false });
         pendingCaptures.push({ file, ...testCase, synthetic: true, sourceDigest: compiled.sourceDigest, disclosure: windowsFleetMSIDisclosure });

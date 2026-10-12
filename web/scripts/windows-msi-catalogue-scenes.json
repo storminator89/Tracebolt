@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "scenes": [
+    "catalogue-storage-limit",
+    "selected-package-worklist",
+    "retained-outcome-after-reuse",
+    "guided-review-missing",
+    "guided-review-ready"
+  ],
+  "viewports": [
+    {
+      "locale": "en",
+      "width": 1440,
+      "height": 1100
+    },
+    {
+      "locale": "en",
+      "width": 390,
+      "height": 844
+    },
+    {
+      "locale": "de",
+      "width": 1440,
+      "height": 1100
+    },
+    {
+      "locale": "de",
+      "width": 390,
+      "height": 844
+    }
+  ]
+}

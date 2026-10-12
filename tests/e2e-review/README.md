@@ -391,3 +391,25 @@ These checks do not produce screenshots. Hosted browser execution and independen
 pixel review remain unverified until performed; no new browser harness, endpoint,
 clock advance, native read, installation, grant, account or permission change is
 part of this source-only scenario.
+
+
+## Shared Windows Update fleet window
+
+The existing `windows-service-actions-runner.mjs` also requires two common-window
+scenes from `windows-update-schedule-browser.mjs`, each in English/German at
+1440×1000 and 390×844. The first shows the frozen exact UTC window in an
+initially unchecked per-device prospective review. The second shows a scheduled
+first device and a separately saved revoked/blocked second device. Opening the
+second device is deliberate and GET-only; selecting the window and approving
+the first device cannot advance it. Reopening the first device reads its exact
+saved job, with no replay.
+
+The eight `synthetic-windows-fleet-update-schedule-*.png` captures use the same
+viewport-only screenshot helper and exact source-SHA manifest. They are required
+in addition to all existing foreground/background scheduling and service-action
+checks, under the unchanged 120-second runner budget. Existing CI artifact paths
+already include them; there is no new workflow or browser-launch route. All new
+scene requests are intercepted. The single synthetic scheduling POST changes
+only the in-memory fixture; no real API mutation, grant, native installation or
+release is established. Inert source checks do not produce screenshots or prove
+browser layout; successful hosted captures still require pixel review.

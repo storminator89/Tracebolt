@@ -126,3 +126,67 @@ export function requireWindowsBackgroundUpdateScheduleEvidence(rows,sourceSha){
  }
  return {screens:16,nativeAcceptance:false};
 }
+
+export const windowsFleetUpdateScheduleCaseName='Synthetic Windows fleet shared UTC window and independent per-device schedule summary';
+export const windowsFleetUpdateScheduleDisclosure=windowsBackgroundUpdateScheduleDisclosure+' Temporary fleet window with separate per-device approval. The second device has an independently invented saved revoked schedule and receives GETs only; no real API request or mutation.';
+export const windowsFleetUpdateScheduleScenes=Object.freeze(['shared-window-review','per-device-summary']);
+
+/** Reuse exact first-device scheduling. The other device is read-only saved
+ * evidence with separate ID/revision/digest, never an automatically approved peer. */
+export function createWindowsFleetUpdateScheduleFixture(){
+ const fixture=createWindowsUpdateScheduleFixture('background'),at=Date.parse(fixture.now)/1000;
+ fixture.device.name='SYNTHETIC · Berlin WUA';fixture.secondDevice.name='SYNTHETIC · Hamburg WUA';
+ const second={...fixture.updateView(),deviceId:fixture.secondDevice.id,available:false,reason:'job_pending_or_intervention',schedulingAvailable:false,schedulingRevoked:true,job:{id:fixture.secondSavedID,selection:fixture.secondSelection,state:'schedule_blocked',reason:'schedule_authority_revoked',preview:null,result:null,schedule:{version:'tracebolt.windows-selected-update-schedule.v1',digest:'sha256:'+'c'.repeat(64),approvedAt:at-60,...fixture.scheduleWindow,permitIssuedAt:0,revoked:true}}};
+ if(!validUpdateJobView(second,fixture.secondDevice.id,fixture.session.actorId))throw new Error('Invalid synthetic fleet schedule view');
+ const {preview,...job}=second.job,history={version:'tracebolt.windows-selected-update-history.v1',deviceId:second.deviceId,serverNow:at,available:false,reason:second.reason,remainingCapacity:31,jobs:[{...job,requestedAt:at-60,approvedAt:0,claimedAt:0}]};
+ if(!validUpdateJobHistory(history,fixture.secondDevice.id,fixture.session.actorId))throw new Error('Invalid synthetic fleet schedule history');
+ fixture.secondUpdateView=()=>{fixture.secondUpdateCounts.status++;return structuredClone(second);};
+ fixture.secondUpdateHistory=()=>structuredClone(history);
+ return fixture;
+}
+
+export async function exerciseWindowsFleetUpdateSchedule({page,expect,base,fixture,locale,width,shot}){
+ if(base!==windowsUpdateJobsOrigin||fixture.scheduleProfile!=='background')throw new Error('Invalid synthetic fleet schedule profile');
+ const de=locale==='de',title=de?'Windows-Updatearbeitsliste':'Windows update worklist',worklist=page.getByRole('region',{name:title,exact:true});
+ const utc=at=>new Date(at*1000).toISOString().replace('T',' ').replace('.000Z',' UTC');
+ const noPeerWrites=()=>{expect(fixture.secondPostAttempts).toEqual({request:0,preview:0,approve:0,other:0});expect(fixture.updateCounts.approve).toBe(0);expect(fixture.scheduleCounts.immediateInstallWrites).toBe(0);};
+ const capture=async(kind,target)=>{await target.evaluate(el=>el.scrollIntoView({block:'start',inline:'nearest',behavior:'instant'}));expect(await worklist.evaluate(el=>el.scrollWidth<=el.clientWidth+1)).toBe(true);expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);await shot(page,`synthetic-windows-fleet-update-schedule-${kind}-${width}-${locale}`,windowsFleetUpdateScheduleDisclosure);};
+ stage='document';await page.goto(base+'/#/devices');await page.getByLabel(/Language|Sprache/).selectOption(locale);await expect(page.locator('html')).toHaveAttribute('lang',locale);await worklist.getByRole('button',{name:title,exact:true}).click();
+ const choices=worklist.getByRole('group',{name:de?'Geräte auswählen':'Select devices',exact:true});
+ for(const device of [fixture.device,fixture.secondDevice]){const choice=choices.getByRole('checkbox',{name:new RegExp(device.name)});await expect(choice).not.toBeChecked();await choice.check();}
+ const shared=worklist.getByRole('checkbox',{name:de?'Ein gemeinsames UTC-Zeitfenster verwenden':'Use one shared UTC window',exact:true}),freeze=worklist.getByRole('button',{name:de?'Geräteauswahl festhalten':'Freeze device selection',exact:true});
+ await expect(shared).not.toBeChecked();await shared.check();await expect(freeze).toBeDisabled();
+ await worklist.getByLabel(de?'Gemeinsamer Beginn (UTC)':'Shared start (UTC)',{exact:true}).fill(new Date(fixture.scheduleWindow.startAt*1000).toISOString().slice(0,16));
+ await worklist.getByLabel(de?'Gemeinsames Ende (UTC)':'Shared end (UTC)',{exact:true}).fill(new Date(fixture.scheduleWindow.endAt*1000).toISOString().slice(0,16));
+ await freeze.click();await expect(choices).toHaveCount(0);const fixed=worklist.locator('.windows-fleet-update-window-frozen');for(const at of Object.values(fixture.scheduleWindow))await expect(fixed).toContainText(utc(at));
+ const rows=worklist.locator('.windows-fleet-update-list > li'),first=rows.filter({hasText:fixture.device.name}),second=rows.filter({hasText:fixture.secondDevice.name});
+ const open=(row,device)=>row.getByRole('button',{name:(de?'Gerät öffnen: ':'Open device: ')+device.name,exact:true}),close=(row,device)=>row.getByRole('button',{name:(de?'Gerät schließen: ':'Close device: ')+device.name,exact:true});
+ await expect(rows).toHaveCount(2);await expect(worklist.locator('.windows-update-jobs')).toHaveCount(0);expect(fixture.updateCounts.request).toBe(0);expect(fixture.secondUpdateCounts.status).toBe(0);noPeerWrites();
+ await open(first,fixture.device).click();const panel=first.locator('.windows-update-jobs'),check=de?'Bereitschaft prüfen':'Check readiness',jobStatus=panel.locator(':scope > div[role="status"]');
+ stage='request';await panel.getByRole('combobox').selectOption(`${fixture.selection.updateId}:${fixture.selection.revision}`);await panel.getByRole('button',{name:check,exact:true}).click();await expect(jobStatus).toContainText(de?'Bereitschaft ausstehend':'Readiness pending');
+ stage='readiness';await panel.getByRole('button',{name:de?'Gespeicherten Status lesen':'Read saved status',exact:true}).click();await panel.getByRole('button',{name:check,exact:true}).click();
+ stage='review';const review=panel.getByRole('group',{name:check,exact:true}),schedule=review.locator('details').filter({has:page.getByText(de?'Gemeinsames UTC-Zeitfenster':'Shared UTC window',{exact:true})});
+ await expect(schedule).toHaveAttribute('open','');for(const at of Object.values(fixture.scheduleWindow))await expect(schedule).toContainText(utc(at));await expect(schedule.locator('input[type="datetime-local"]')).toHaveCount(0);
+ const ack=schedule.getByRole('checkbox',{name:de?/vorausschauend für dieses UTC/:/prospectively for this UTC/}),approve=schedule.getByRole('button',{name:de?'Geplantes Update einmal freigeben':'Approve scheduled update once',exact:true});
+ await expect(ack).not.toBeChecked();await expect(approve).toBeDisabled();await expect(panel.getByRole('button',{name:de?'Dieses Update einmal freigeben':'Approve this update once',exact:true})).toHaveCount(0);await expect(schedule.locator('details')).not.toHaveAttribute('open');expect(fixture.secondUpdateCounts.status).toBe(0);noPeerWrites();
+ await capture('shared-window-review',schedule);await expect(ack).toBeInViewport({ratio:1});await expect(approve).toBeInViewport({ratio:1});
+ stage='schedule';await ack.check();await approve.click();await expect(jobStatus).toContainText(de?'Geplant; geeignete Abfrage':'Scheduled; waiting');expect(fixture.scheduleCounts.schedule).toBe(1);expect(fixture.savedSchedule().job.schedule.startAt).toBe(fixture.scheduleWindow.startAt);expect(fixture.savedSchedule().job.schedule.endAt).toBe(fixture.scheduleWindow.endAt);expect(fixture.secondUpdateCounts.status).toBe(0);
+ await expect(second.locator('.windows-fleet-update-outcome')).toHaveText(de?'Nicht begonnen':'Not started');
+ // A deliberate open reads separate previously saved revoked evidence. Nothing
+ // in the shared selection, first approval or first result advances this device.
+ stage='pending';await open(second,fixture.secondDevice).click();await expect(first.locator('.windows-update-jobs')).toHaveCount(0);await expect(second.locator('.windows-update-jobs > div[role="status"]')).toContainText(de?'Planung blockiert':'Schedule blocked');await expect(second.locator('.windows-update-jobs').getByRole('checkbox')).toHaveCount(0);await close(second,fixture.secondDevice).click();
+ await open(first,fixture.device).click();await expect(jobStatus).toContainText(de?'Geplant; geeignete Abfrage':'Scheduled; waiting');expect(fixture.updateReads.exact).toBeGreaterThan(0);await close(first,fixture.device).click();await expect(worklist.locator('.windows-update-jobs')).toHaveCount(0);
+ const firstSummary=first.locator('.windows-fleet-update-row'),secondSummary=second.locator('.windows-fleet-update-row');await expect(firstSummary).toContainText(de?'Geplant; geeignete Abfrage':'Scheduled; waiting');await expect(secondSummary).toContainText(de?'Planung blockiert; Prüfung erforderlich':'Schedule blocked; review required');await expect(firstSummary).toContainText(fixture.selection.updateId);await expect(secondSummary).toContainText(fixture.secondSelection.updateId);for(const summary of [firstSummary,secondSummary])for(const at of Object.values(fixture.scheduleWindow))await expect(summary).toContainText(utc(at));
+ await capture('per-device-summary',worklist.locator('.windows-fleet-update-list'));for(const summary of [firstSummary,secondSummary])await expect(summary).toBeInViewport({ratio:1});
+ noPeerWrites();expect(fixture.scheduleCounts).toEqual({schedule:1,cancel:0,immediateInstallWrites:0});expect(fixture.updateCounts.request).toBe(1);expect(fixture.updateCounts.preview).toBe(1);expect(fixture.secondUpdateCounts).toEqual({request:0,preview:0,approve:0,status:1});
+ stage='complete';return {sharedWindowExact:true,explicitUncheckedPerDeviceApproval:true,noAutomaticNextDevice:true,independentSavedStates:true,exactSavedReadback:true,syntheticScheduleRequests:1,secondDeviceMutationRequests:0,immediateInstallWrites:0,requestsToRealAPI:0,nativeAcceptance:false};
+}
+
+export function requireWindowsFleetUpdateScheduleEvidence(rows,sourceSha){
+ const fail=()=>{throw new Error('Synthetic fleet shared-window UI evidence missing or mismatched');};if(!Array.isArray(rows)||rows.length!==8||!/^[a-f0-9]{40}$/.test(sourceSha??''))fail();
+ for(const kind of windowsFleetUpdateScheduleScenes)for(const locale of ['en','de'])for(const width of [1440,390]){
+  const matches=rows.filter(row=>row?.file===`synthetic-windows-fleet-update-schedule-${kind}-${width}-${locale}.png`);if(matches.length!==1)fail();const row=matches[0];
+  if(row.sourceSha!==sourceSha||row.test!==windowsFleetUpdateScheduleCaseName||row.locale!==locale||row.viewport?.width!==width||row.viewport?.height!==(width===390?844:1000)||row.publicSafe!==true||row.fullPage!==false||row.fixtureDisclosure!==windowsFleetUpdateScheduleDisclosure)fail();
+ }
+ return {screens:8,nativeAcceptance:false};
+}

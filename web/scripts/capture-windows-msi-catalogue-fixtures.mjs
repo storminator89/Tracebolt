@@ -4,15 +4,28 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { createRequire } from 'node:module';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { compileWindowsFleetMSIAssets, createWindowsFleetMSIRoute, createWindowsSavedMSIFixture, windowsFleetMSICases, windowsFleetMSIOrigin } from './capture-windows-fleet-msi-fixtures.mjs';
 
 const require=createRequire(new URL('../package.json',import.meta.url)),clone=value=>structuredClone(value);
-export const msiCatalogueScenes=Object.freeze(['catalogue-storage-limit','selected-package-worklist','retained-outcome-after-reuse','guided-review-missing','guided-review-ready']);
+// One domain-owned source contract supplies producer and Python gate expectations.
+const sceneBytes=await readFile(new URL('./windows-msi-catalogue-scenes.json',import.meta.url));
+assert(sceneBytes.length>0&&sceneBytes.length<=8192);
+const sceneManifest=JSON.parse(sceneBytes.toString('utf8'));
+assert.equal(sceneBytes.toString('utf8'),JSON.stringify(sceneManifest,null,2)+'\n');
+assert.deepEqual(Object.keys(sceneManifest).sort(),['scenes','schemaVersion','viewports']);
+assert.equal(sceneManifest.schemaVersion,1);
+assert(Array.isArray(sceneManifest.scenes)&&sceneManifest.scenes.length>0&&sceneManifest.scenes.length<=8);
+assert(sceneManifest.scenes.every(scene=>typeof scene==='string'&&/^[a-z][a-z0-9-]{0,63}$/.test(scene)));
+assert.equal(new Set(sceneManifest.scenes).size,sceneManifest.scenes.length);
+assert.deepEqual(sceneManifest.viewports,windowsFleetMSICases);
+export const msiCatalogueSceneManifestSHA256=createHash('sha256').update(sceneBytes).digest('hex');
+export const msiCatalogueScenes=Object.freeze([...sceneManifest.scenes]);
+const msiCatalogueViewports=Object.freeze(sceneManifest.viewports.map(testCase=>Object.freeze({...testCase})));
 export const msiCatalogueDisclosure='Synthetic compiled-UI manager multi-package MSI catalogue fixture. All DTOs are invented and every request is intercepted. Only exact GETs are admitted; all writes and external requests are blocked. No real login, MSI bytes, reservation, upload, delivery, installation, retirement, host grant, native acceptance or release.';
-export const msiCatalogueCaptureMatrix=Object.freeze(msiCatalogueScenes.flatMap(scene=>windowsFleetMSICases.map(testCase=>Object.freeze({scene,...testCase,file:`synthetic-windows-msi-catalogue-${scene}-${testCase.width}-${testCase.locale}.png`}))));
+export const msiCatalogueCaptureMatrix=Object.freeze(msiCatalogueScenes.flatMap(scene=>msiCatalogueViewports.map(testCase=>Object.freeze({scene,...testCase,file:`synthetic-windows-msi-catalogue-${scene}-${testCase.width}-${testCase.locale}.png`}))));
 let validation;
 async function contracts(){validation??=(async()=>{const {build}=require('esbuild');const result=await build({stdin:{contents:"export {validManagedCatalogue} from './windows-managed-msi-catalogue-types';export {validManagedArtifact,validManagedView,validReusableManagedReview} from './windows-managed-msi-types';export {validWorklistsView} from './windows-managed-msi-worklist-types';",resolveDir:fileURLToPath(new URL('../src/',import.meta.url)),loader:'ts'},bundle:true,platform:'node',format:'esm',write:false,logLevel:'silent'});return import(`data:text/javascript;base64,${Buffer.from(result.outputFiles[0].text).toString('base64')}`)})();return validation}
 function entry(template,occurrence,name,size=1048576){
@@ -57,7 +70,7 @@ export function createWindowsMSICatalogueRoute({fixture,compiled,state}){
  };
 }
 export async function checkWindowsMSICatalogueFixtures(){
- const v=await contracts();assert.equal(msiCatalogueCaptureMatrix.length,20);assert.equal(new Set(msiCatalogueCaptureMatrix.map(c=>c.file)).size,20);
+ const v=await contracts();assert.equal(msiCatalogueCaptureMatrix.length,msiCatalogueScenes.length*msiCatalogueViewports.length);assert.equal(new Set(msiCatalogueCaptureMatrix.map(c=>c.file)).size,msiCatalogueCaptureMatrix.length);
  for(const scene of msiCatalogueScenes){const fixture=await createWindowsMSICatalogueFixture(scene,'2026-10-12T10:00:00.000Z'),state={blocked:[],external:[],writes:[]},route=createWindowsMSICatalogueRoute({fixture,compiled:{assets:new Map()},state});
   const call=async(suffix,method='GET',body=null)=>{let response;await route({request:()=>({url:()=>windowsFleetMSIOrigin+suffix,method:()=>method,postData:()=>body}),fulfill:value=>{response=value},abort:reason=>{response={aborted:reason}}});return response};
   assert(v.validManagedCatalogue(JSON.parse((await call('/api/windows-managed-msi/catalogue')).body)));assert(v.validWorklistsView(JSON.parse((await call('/api/windows-managed-msi/worklists')).body)));assert.equal((await call(`/api/windows-managed-msi/artifact?artifactRetiredCount=${fixture.selectedOccurrence}`)).status,200);assert.equal((await call('/api/windows-managed-msi/artifact?artifactRetiredCount=999')).aborted,'blockedbyclient');assert.equal((await call('/api/windows-managed-msi/artifact')).aborted,'blockedbyclient');assert.equal((await call('/api/windows-managed-msi/catalogue/reserve','POST','{}')).aborted,'blockedbyclient');assert.equal(state.writes.length,1);

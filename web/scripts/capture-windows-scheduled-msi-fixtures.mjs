@@ -78,10 +78,10 @@ export async function checkWindowsScheduledMSIFixtures(){
  const compiled=await compileWindowsFleetMSIAssets();for(const file of ['web/src/windows-managed-msi-worklists.tsx','web/scripts/capture-windows-scheduled-msi-fixtures.mjs','web/scripts/run-windows-fleet-msi-ci.mjs'])assert(compiled.sourceInputs.some(input=>input.file===file));
  return {mode:'source-only',scenes:scheduledMSIScenes,cases:scheduledMSICaptureMatrix,fleetScenes:fleetScheduledMSIScenes,sourceDigest:compiled.sourceDigest,sourceInputs:compiled.sourceInputs,compiled:true,dtoAndRouteChecks:'passed',actualMutations:0,browserExecuted:false,screenshotsCaptured:0,nativeAcceptance:false,disclosure:scheduledMSIDisclosure};
 }
-export async function captureWindowsScheduledMSIFixtures({browser,expect,output}){
+export async function captureWindowsScheduledMSIFixtures({browser,expect,output,onCase=()=>{}}){
  assert(browser&&typeof browser.newContext==='function'&&typeof expect==='function');const compiled=await compileWindowsFleetMSIAssets(),captures=[];await mkdir(output,{recursive:true});
  for(const testCase of scheduledMSICaptureMatrix){
-  const {scene,locale,width,height,file}=testCase,de=locale==='de',fixture=await createWindowsScheduledMSIFixture(scene),state={blocked:[],external:[],writes:[],previews:[],pageErrors:[]},context=await browser.newContext({viewport:{width,height},locale:de?'de-DE':'en-US',deviceScaleFactor:1,reducedMotion:'reduce',serviceWorkers:'block'});
+  const {scene,locale,width,height,file}=testCase;onCase({scene,locale,width});const de=locale==='de',fixture=await createWindowsScheduledMSIFixture(scene),state={blocked:[],external:[],writes:[],previews:[],pageErrors:[]},context=await browser.newContext({viewport:{width,height},locale:de?'de-DE':'en-US',deviceScaleFactor:1,reducedMotion:'reduce',serviceWorkers:'block'});
   try{
    await context.route('**/*',createWindowsScheduledMSIRoute({fixture,compiled,state}));await context.addInitScript(value=>localStorage.setItem('tracebolt.locale',value),locale);const page=await context.newPage();page.on('pageerror',error=>state.pageErrors.push(error.message));await page.goto(`${windowsFleetMSIOrigin}/#/devices`);
    const title=de?'Windows-MSI-Arbeitsliste':'Windows MSI worklist',worklist=page.getByRole('region',{name:title,exact:true});await worklist.getByRole('button',{name:title,exact:true}).click();let focus,scroll;

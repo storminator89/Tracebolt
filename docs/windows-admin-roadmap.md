@@ -32,8 +32,15 @@ remote desktop is deferred.
 - [Bounded older Windows event search and deliberately selected historical messages](windows-event-history-runtime.md), with an independent default-off grant and same-session receipt-bound followup
 - Concise fresh Read admin setup with explicit unchecked consent; service control
   remains separately optional
-- [Selected cached Windows update jobs and fresh one-device setup](windows-selected-update-setup.md),
-  with explicit local scope, named one-time approval and durable outcomes; native acceptance pending
+- [Selected cached Windows update jobs](windows-selected-update-jobs.md), with
+  independently configured device bindings, exact per-device reviews and named
+  approvals, saved outcomes, and [fresh background UTC scheduling](windows-scheduled-background-updates.md); native acceptance pending
+- [Windows incident acknowledgement](windows-incident-inbox.md),
+  [planned maintenance](windows-maintenance.md) and separately approved
+  [notifications](windows-notifications.md)
+- [Managed MSI fleet delivery](windows-fleet-managed-msi.md),
+  [saved exact worklists](windows-saved-msi-worklists.md), and
+  [bounded scheduled installation](windows-scheduled-managed-msi.md)
 - [Selected-service action receipts and explicit fresh broker setup](windows-action-provisioning.md),
   with separate authority; native activation and action acceptance remain pending
 
@@ -82,16 +89,20 @@ published five-scope approval as consent for the current Read admin profile.
 
 ## Next management workflows
 
-Selected-service action receipts and manual shared disk/CPU/RAM settings are
-implemented. Prioritize incident acknowledgement, maintenance and notifications,
-then software deployment and multi-device Windows Update policies with reviewed
-targets, maintenance windows and individual outcomes. The current selected-update
-source supports one fixed device binding and already-cached updates. Broader
-exact-target service/update actions require separately
-reviewed authority, explicit approval, least-privilege execution and durable
-one-use records. Local Tracebolt restart is not arbitrary remote control.
-Automatic responses need their own bounded policies and local grants; they are
-planned, not implicitly enabled by monitoring. Remote desktop remains deferred.
+Selected-service action receipts, shared disk/CPU/RAM settings, incident
+acknowledgement, planned maintenance, notifications and managed MSI fleet
+workflows are implemented in source. Selected cached update jobs support up to
+25 independently configured device bindings. A temporary fleet worklist can
+hold one common UTC window, while each device retains its exact revision,
+fresh review, separate unchecked approval and independently saved outcome.
+Current fresh background profiles and legacy foreground profiles keep their
+separate consent and activation requirements.
+
+Broader update policies, automatic responses and exact-target actions still need
+their own bounded design, reviewed authority, explicit approval, least-privilege
+execution and durable one-use records. Neither groups nor monitoring grant
+permissions. Local Tracebolt restart is not arbitrary remote control. Remote
+desktop remains deferred.
 
 ## Rules for every feature
 

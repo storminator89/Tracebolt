@@ -47,9 +47,13 @@ bounded transport/store. See [frame bounds](windows-storage-io.md#worker-transpo
   granted offline cache read. Freshness stays unknown; no scan, download,
   installation or reboot is performed.
 - [Selected cached update jobs](windows-selected-update-setup.md): separate fresh
-  manager/Windows setup, exact revision approval and a dedicated foreground executor.
-  One fixed device binding; no download, license acceptance or automatic reboot.
-  Native setup and installation acceptance remain pending.
+  manager/Windows setup and exact per-device revision approval. Each configured
+  device has its own fixed binding and lifetime allowance; the fleet registry
+  admits at most 25 devices. The worklist holds an optional common UTC window,
+  with independent reviews, approvals and saved outcomes. Legacy standalone
+  profiles use the dedicated foreground executor; fresh background profiles
+  require their own consent and service activation. No download, license
+  acceptance or automatic reboot. Native acceptance remains pending.
 - [Background cached updates with approved UTC windows](windows-scheduled-background-updates.md):
   separate fresh combined consent, dedicated activated service and reusable-MSI
   shared fence. Exact readiness, named install/schedule authority, original
