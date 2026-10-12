@@ -140,3 +140,13 @@ No fake clock, TTL override, shortened issuer, old evidence relabeling or contin
 multi-day extension of this plan is permitted. Missing the actual observation
 window leaves cutover unverified. Retained-host operation, eventual revocation,
 receipt-owned removal and target disposal remain separately approved activities.
+
+## Separately optional selected-account software
+
+The selected-account HKCU/MSIX foreground source in
+[`windows-selected-user-software.md`](../../docs/windows-selected-user-software.md)
+is not part of this 21-scope profile. Neither current-profile execution nor its
+source/artifact inventory proves that new helper, IPC, normal-user token, HKCU
+or WinRT acceptance. It remains default off and requires separate explicit
+foreground consent and native gates. The existing exact-profile scope and
+receipt checks remain unchanged.

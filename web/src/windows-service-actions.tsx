@@ -3,6 +3,7 @@ import { APIError, AUTH_REQUIRED_EVENT, getProtectedRequestEpoch, mutateRaw, req
 import { hasLogoutIntent, useOperator, validOperatorSession } from './auth';
 import { useLocale } from './i18n';
 import { fullDate } from './utils';
+import { WindowsServiceActionHistory } from './windows-service-action-history';
 import { actionID, validWindowsActionView } from './windows-service-action-types';
 import type { WindowsActionView, WindowsServiceOperation } from './windows-service-action-types';
 const copy = {
@@ -60,6 +61,7 @@ function Actions({ deviceId, actor, sessionKey, insecure }: { deviceId: string; 
      </>}
     </details>
    </div>}
+   {view.configured&&<WindowsServiceActionHistory deviceId={deviceId} actor={actor} sessionKey={sessionKey} insecure={insecure} serverNow={view.serverNow} labels={c}/>}
    {!view.configured?<p>{c.empty}</p>:!view.available&&!p&&!j&&<p>{c.disabled}</p>}
    {view.available&&!p&&<>
     <p className="windows-inventory-exclusions">{c.interruption}</p>

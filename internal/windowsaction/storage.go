@@ -19,6 +19,9 @@ func LedgerOptions(sid string, create bool) windowsstate.Options {
 // per-target SCM rights. It cannot adopt even an empty existing authority root.
 // The durable started fence lives outside the separately removable ledger.
 func InitializeCreateOnly(path string, p Policy, now time.Time) error {
+	return initializeCreateOnly(path, p, now, ReviewExistingSetup)
+}
+func initializeCreateOnly(path string, p Policy, now time.Time, review func(Policy) error) error {
 	if ValidatePolicy(p) != nil || !p.Enabled || now.Unix() <= 0 || now.Unix() > 253402300799 {
 		return ErrInvalid
 	}
@@ -27,7 +30,7 @@ func InitializeCreateOnly(path string, p Policy, now time.Time) error {
 		return ErrInvalid
 	}
 	// Source setup performs read-only native review before any store creation.
-	if e = ReviewExistingSetup(p); e != nil {
+	if e = review(p); e != nil {
 		return e
 	}
 	root, e := windowsstate.Open(path, AuthorityOptions(p.BrokerSID, true))
@@ -102,6 +105,10 @@ func OpenNativeBroker() (*Broker, func() error, error) {
 		return nil, nil, e
 	}
 	if e = verifyBrokerProcess(b.policy); e != nil {
+		close()
+		return nil, nil, e
+	}
+	if e = enableBrokerPeerQueries(b.policy); e != nil {
 		close()
 		return nil, nil, e
 	}

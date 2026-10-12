@@ -310,6 +310,7 @@ func validDigest(s string) bool {
 }
 
 type diskRecord struct {
+	WindowsUserSoftwareUsed   bool         `json:"windowsUserSoftwareUsed,omitempty"`
 	WindowsNetworkContextUsed bool         `json:"windowsNetworkContextUsed,omitempty"`
 	WindowsFullProcessesUsed  bool         `json:"windowsFullProcessesUsed,omitempty"`
 	WindowsFullSoftwareUsed   bool         `json:"windowsFullSoftwareUsed,omitempty"`
@@ -325,10 +326,16 @@ type diskPending struct {
 	Body     []byte `json:"body"`
 }
 
-// Versions preserve exact v1-v4 encoding until network-context opt-in.
-// V5 independently fences route/counter state without implying any other
-// extension marker or changing primary sequence and exact pending bytes.
+// Versions preserve exact v1-v5 encoding until selected-user software opt-in.
+// V6 independently fences the foreground receive state without implying any
+// other extension marker or changing primary sequence and exact pending bytes.
 func validWindowsExtensionVersion(v diskRecord) bool {
+	if v.Version == 6 {
+		return v.WindowsUserSoftwareUsed
+	}
+	if v.WindowsUserSoftwareUsed {
+		return false
+	}
 	switch v.Version {
 	case stateVersion:
 		return !v.WindowsNetworkContextUsed && !v.WindowsFullProcessesUsed && !v.WindowsFullServicesUsed && !v.WindowsFullSoftwareUsed
@@ -401,24 +408,16 @@ func decodeRecord(raw []byte) (diskRecord, error) {
 	}
 	var f map[string]json.RawMessage
 	var err error
-	for _, keys := range [][]string{
-		{"version", "binding", "lastSequence", "pending"},
-		{"version", "binding", "lastSequence", "pending", "windowsFullServicesUsed"},
-		{"version", "binding", "lastSequence", "pending", "windowsFullSoftwareUsed"},
-		{"version", "binding", "lastSequence", "pending", "windowsFullServicesUsed", "windowsFullSoftwareUsed"},
-		{"version", "binding", "lastSequence", "pending", "windowsFullProcessesUsed"},
-		{"version", "binding", "lastSequence", "pending", "windowsFullProcessesUsed", "windowsFullServicesUsed"},
-		{"version", "binding", "lastSequence", "pending", "windowsFullProcessesUsed", "windowsFullSoftwareUsed"},
-		{"version", "binding", "lastSequence", "pending", "windowsFullProcessesUsed", "windowsFullServicesUsed", "windowsFullSoftwareUsed"},
-		{"windowsNetworkContextUsed", "version", "binding", "lastSequence", "pending"},
-		{"windowsNetworkContextUsed", "version", "binding", "lastSequence", "pending", "windowsFullServicesUsed"},
-		{"windowsNetworkContextUsed", "version", "binding", "lastSequence", "pending", "windowsFullSoftwareUsed"},
-		{"windowsNetworkContextUsed", "version", "binding", "lastSequence", "pending", "windowsFullServicesUsed", "windowsFullSoftwareUsed"},
-		{"windowsNetworkContextUsed", "version", "binding", "lastSequence", "pending", "windowsFullProcessesUsed"},
-		{"windowsNetworkContextUsed", "version", "binding", "lastSequence", "pending", "windowsFullProcessesUsed", "windowsFullServicesUsed"},
-		{"windowsNetworkContextUsed", "version", "binding", "lastSequence", "pending", "windowsFullProcessesUsed", "windowsFullSoftwareUsed"},
-		{"windowsNetworkContextUsed", "version", "binding", "lastSequence", "pending", "windowsFullProcessesUsed", "windowsFullServicesUsed", "windowsFullSoftwareUsed"},
-	} {
+	// The exact known optional-marker subsets preserve the prior strict parser:
+	// present markers must be true, aliases/unknown/duplicate/null keys still fail.
+	markers := []string{"windowsFullServicesUsed", "windowsFullSoftwareUsed", "windowsFullProcessesUsed", "windowsNetworkContextUsed", "windowsUserSoftwareUsed"}
+	for mask := 0; mask < 1<<len(markers); mask++ {
+		keys := []string{"version", "binding", "lastSequence", "pending"}
+		for i, marker := range markers {
+			if mask&(1<<i) != 0 {
+				keys = append(keys, marker)
+			}
+		}
 		f, err = strictObject(raw, keys...)
 		if err == nil {
 			break
@@ -426,6 +425,11 @@ func decodeRecord(raw []byte) (diskRecord, error) {
 	}
 	if err != nil {
 		return v, ErrCorrupt
+	}
+	if raw, ok := f["windowsUserSoftwareUsed"]; ok {
+		if !scalar(raw, &v.WindowsUserSoftwareUsed) || !v.WindowsUserSoftwareUsed {
+			return v, ErrCorrupt
+		}
 	}
 	if raw, ok := f["windowsNetworkContextUsed"]; ok {
 		if !scalar(raw, &v.WindowsNetworkContextUsed) || !v.WindowsNetworkContextUsed {

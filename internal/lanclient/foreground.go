@@ -54,6 +54,13 @@ func runForeground(ctx context.Context, m Material, interval time.Duration, obse
 		return agentloop.Summary{Reason: agentloop.InvalidState}, agentloop.ErrState
 	}
 	defer fullSoftware.Close()
+	userSoftware, e := openWindowsUserSoftwareSender(m, state)
+	if e != nil {
+		return agentloop.Summary{Reason: agentloop.InvalidState}, agentloop.ErrState
+	}
+	defer userSoftware.Close()
+	stopUserSoftware := startWindowsUserSoftwareReceiver(ctx, userSoftware)
+	defer stopUserSoftware()
 	fullProcesses, e := openWindowsFullProcessesSender(m, state)
 	if e != nil {
 		return agentloop.Summary{Reason: agentloop.InvalidState}, agentloop.ErrState
@@ -147,6 +154,9 @@ func runForeground(ctx context.Context, m Material, interval time.Duration, obse
 				err = e
 			}
 			if e := runWindowsFullSoftwareAttempt(parent, fullSoftware, &report); e != nil {
+				err = e
+			}
+			if e := runWindowsUserSoftwareAttempt(parent, userSoftware, &report); e != nil {
 				err = e
 			}
 			if e := runWindowsFullProcessesAttempt(parent, fullProcesses, &report); e != nil {

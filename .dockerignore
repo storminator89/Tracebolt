@@ -24,6 +24,7 @@ tests/fixtures/**
 !tests/fixtures/windows-resource-view.json
 !tests/fixtures/windows-service-health-view.json
 !tests/fixtures/windows-service-action-view.json
+!tests/fixtures/windows-service-action-history.json
 # Only this required dependency notice may enter from docs.
 !docs/
 docs/**

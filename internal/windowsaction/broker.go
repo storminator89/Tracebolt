@@ -19,14 +19,15 @@ const MaxJobs = 64
 // Policy is protected LOCAL installation input. None of its private target
 // configuration is accepted in remote requests or exposed in capabilities.
 type Policy struct {
-	Version      string  `json:"version"`
-	Enabled      bool    `json:"enabled"`
-	Binding      Binding `json:"binding"`
-	PublicKey    []byte  `json:"publicKey"`
-	BrokerSID    string  `json:"brokerSid"`
-	AgentSID     string  `json:"agentSid"`
-	Target       Target  `json:"target"`
-	ReviewDigest string  `json:"reviewDigest"`
+	Version             string  `json:"version"`
+	Enabled             bool    `json:"enabled"`
+	Binding             Binding `json:"binding"`
+	PublicKey           []byte  `json:"publicKey"`
+	BrokerSID           string  `json:"brokerSid"`
+	AgentSID            string  `json:"agentSid"`
+	Target              Target  `json:"target"`
+	ReviewDigest        string  `json:"reviewDigest"`
+	ProvisioningVersion string  `json:"provisioningVersion,omitempty"`
 }
 type Target struct {
 	Name                string `json:"name"`
@@ -46,7 +47,7 @@ func GrantDigest(p Policy) string {
 	return Digest(b)
 }
 func ValidatePolicy(p Policy) error {
-	if p.Version != PolicyVersion || !ValidBinding(p.Binding) || !keyvalidation.Ed25519(p.PublicKey) || p.Binding.KeyID != Digest(p.PublicKey) || !validSID(p.BrokerSID) || !validSID(p.AgentSID) || p.BrokerSID == p.AgentSID || !ValidDigest(p.ReviewDigest) || p.Target.Name != p.Binding.Target || p.Target.Classification != "reviewed-standalone-application" || !windowspath.Canonical(p.Target.Executable) || len(p.Target.Executable) < 7 || !ValidDigest(p.Target.ExecutableDigest) || !ValidDigest(p.Target.ConfigurationDigest) || TargetDigest(p.Target) != p.Binding.TargetDigest || GrantDigest(p) != p.Binding.GrantDigest {
+	if p.Version != PolicyVersion || (p.ProvisioningVersion != "" && p.ProvisioningVersion != ProvisionVersion) || !ValidBinding(p.Binding) || !keyvalidation.Ed25519(p.PublicKey) || p.Binding.KeyID != Digest(p.PublicKey) || !validSID(p.BrokerSID) || !validSID(p.AgentSID) || p.BrokerSID == p.AgentSID || !ValidDigest(p.ReviewDigest) || p.Target.Name != p.Binding.Target || p.Target.Classification != "reviewed-standalone-application" || !windowspath.Canonical(p.Target.Executable) || len(p.Target.Executable) < 7 || !ValidDigest(p.Target.ExecutableDigest) || !ValidDigest(p.Target.ConfigurationDigest) || TargetDigest(p.Target) != p.Binding.TargetDigest || GrantDigest(p) != p.Binding.GrantDigest {
 		return ErrInvalid
 	}
 	return nil

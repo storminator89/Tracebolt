@@ -233,6 +233,18 @@ missing material rather than inventing credentials or weakening protection.
   Cached WUA inspection must remain offline and must not download, install,
   accept update terms, reboot, upgrade WUA or change service/network settings.
   Fixtures/cross-builds do not authorize native reads or create a local grant.
+- Selected cached Windows update jobs are a separate default-off source domain.
+  Read `docs/windows-selected-update-jobs.md` before changing readiness, signed
+  executor reports, manager enrollment transactions, consent, claim/attempt/result
+  ledgers or Updates UI. Keep exact GUID/revision, explicit named approval,
+  distinct manager/executor keys, original age and current-leaf/final guards.
+  Never promote observation/service permissions, retry uncertainty, download,
+  accept EULAs or reboot. Native elevated executor/provisioning remain inactive.
+- Manual fleet groups and reviewed one-setting Windows health apply are manager-side
+  organizational source features. Read `docs/fleet-groups-health.md`. Preserve
+  private stable original identity bindings, current admission and exact revisions.
+  Groups never grant scope or automatic inheritance; sequential writes stop on
+  conflict/uncertainty and never retry an unconfirmed POST.
 - Windows system-volume capacity health is a separate default-off manager policy.
   Read `docs/windows-capacity-health.md` before changing its thresholds or lifecycle.
   Preserve caller-quota semantics, advancing-source confirmation, durable floors,
@@ -249,6 +261,14 @@ missing material rather than inventing credentials or weakening protection.
   Preserve exact post-grant identity/source generations, original before/after
   times, unavailable-field truth and visible whole-comparison gaps. No install
   times, upgrade/maliciousness inference, AI/export/actions or host grants follow.
+- Selected-account HKCU/MSIX software is a separate default-off foreground source
+  candidate. Read `docs/windows-selected-user-software.md` before consent, local
+  identification-only IPC, account binding, primary v6 or private Software changes.
+  The helper runs once in the selected normal user's own context; Setup never
+  substitutes its elevated account or LocalService. No all-user enumeration,
+  paths/commands, software actions, history comparison, persistent helper or AI
+  export. Source tests and the prior 21-scope native harness do not establish this
+  new source's native acceptance or authorize host grants.
 - Complete Windows machine software generations require a separate default-off
   local scope. Read `docs/windows-full-software-contract.md` before changing its
   HKLM 32/64 source, consent, primary v3 marker, transport, store or UI. Preserve
@@ -263,7 +283,7 @@ missing material rather than inventing credentials or weakening protection.
   services, software, paths/accounts/configuration and AI export are excluded.
   Native/host grants and runtime acceptance require separate approval.
 - Selected Windows service control is a separate default-off source candidate.
-  Read `docs/windows-service-actions.md` before broker, named-pipe, setup, permit,
+  Read `docs/windows-service-actions.md` and `docs/windows-action-provisioning.md` before broker, named-pipe, setup, permit,
   ledger or UI changes. Keep the distinct restricted service SID, key domain,
   protected broker/target ACLs, exact review, one-control semantics and immutable
   consumed state. Old read grants and Linux restart authority never promote.

@@ -51,6 +51,8 @@ class SourceDiagnosticTests(unittest.TestCase):
             post_fixture.extend([
                 (["go", "build", "-buildvcs=false", "-trimpath", "-o",
                   str(folder / ("service-" + arch + ".exe")), "./cmd/windows-service"], 300, arch),
+                (["go", "build", "-buildvcs=false", "-trimpath", "-o",
+                  str(folder / ("user-software-" + arch + ".exe")), "./cmd/windows-user-software"], 300, arch),
                 (["go", "build", "-buildvcs=false", "-trimpath", "-tags=tracebolt_setup",
                   "-ldflags=-H windowsgui", "-o", str(folder / ("setup-source-" + arch + ".exe")),
                   "./cmd/windows-service"], 300, arch),

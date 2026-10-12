@@ -45,15 +45,21 @@ type windowsServiceActionView struct {
 
 func windowsServiceActionRoute(r *http.Request) (string, string, bool) {
 	p := strings.Split(r.URL.Path, "/")
-	if len(p) != 5 && len(p) != 6 || p[1] != "api" || p[2] != "devices" || !enrollmentcrypto.ValidID(p[3], "agent_") || p[4] != "windows-service-actions" {
+	if len(p) != 5 && len(p) != 6 && len(p) != 7 || p[1] != "api" || p[2] != "devices" || !enrollmentcrypto.ValidID(p[3], "agent_") || p[4] != "windows-service-actions" {
 		return "", "", false
 	}
 	op := ""
-	if len(p) == 6 {
+	if len(p) >= 6 {
 		op = p[5]
-		if op != "preview" && op != "approve" {
+		if op != "preview" && op != "approve" && op != "history" {
 			return "", "", false
 		}
+	}
+	if len(p) == 7 {
+		if op != "history" || !enrollmentcrypto.ValidID(p[6], "action_") {
+			return "", "", false
+		}
+		op += "/" + p[6]
 	}
 	return p[3], op, true
 }
@@ -63,8 +69,13 @@ func (h *operatorHandler) windowsServiceActions(w http.ResponseWriter, r *http.R
 		fail(w, 404, "not_found", "Windows service action is unavailable.")
 		return
 	}
-	if op == "" && r.Method != "GET" || op != "" && r.Method != "POST" {
+	read := op == "" || op == "history" || strings.HasPrefix(op, "history/")
+	if read && r.Method != "GET" || !read && r.Method != "POST" {
 		fail(w, 405, "method_not_allowed", "Method is unsupported.")
+		return
+	}
+	if op == "history" || strings.HasPrefix(op, "history/") {
+		h.writeWindowsServiceActionHistory(w, r, device, strings.TrimPrefix(op, "history"))
 		return
 	}
 	if op == "" {

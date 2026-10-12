@@ -17,7 +17,7 @@ test('Docker web typecheck admits exactly the synthetic Go-to-TypeScript percent
  assert.ok(webStage.includes('COPY tests/fixtures/windows-service-action-view.json /src/tests/fixtures/windows-service-action-view.json\n'));
  assert.ok(webStage.indexOf('COPY tests/fixtures/windows-service-action-view.json ')<webStage.indexOf('RUN npm run build'));
  assert.match(read('../../web/src/windows-service-actions.test.tsx'),/import golden from '\.\.\/\.\.\/tests\/fixtures\/windows-service-action-view\.json'/);
- assert.deepEqual(ignore.filter(line=>line.startsWith('!tests/fixtures')),['!tests/fixtures/','!tests/fixtures/windows-contact-view.json','!tests/fixtures/windows-capacity-view.json','!tests/fixtures/windows-resource-view.json','!tests/fixtures/windows-service-health-view.json','!tests/fixtures/windows-service-action-view.json']);
+ assert.deepEqual(ignore.filter(line=>line.startsWith('!tests/fixtures')),['!tests/fixtures/','!tests/fixtures/windows-contact-view.json','!tests/fixtures/windows-capacity-view.json','!tests/fixtures/windows-resource-view.json','!tests/fixtures/windows-service-health-view.json','!tests/fixtures/windows-service-action-view.json','!tests/fixtures/windows-service-action-history.json']);
  const parent=ignore.indexOf('!tests/fixtures/');assert.equal(ignore[parent+1],'tests/fixtures/**');assert.equal(ignore[parent+2],'!tests/fixtures/windows-contact-view.json');
  assert.ok(ignore.includes('**')&&ignore.includes('tests/**'));
  assert.doesNotMatch(webStage,/^COPY tests\/\s/m);

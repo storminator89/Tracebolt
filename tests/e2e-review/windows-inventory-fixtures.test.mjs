@@ -246,7 +246,7 @@ test('actual route parser demonstrates queued hash coalescence and the remount b
  function harness(){
   const id=`agent_${'7'.repeat(32)}`,states=[],listeners=[],queued=[];
   const window={location:{hash:`#/devices/${id}`},addEventListener(type,fn){if(type==='hashchange')listeners.push(fn);},removeEventListener(){}};
-  const context=vm.createContext({window,document:{getElementById:()=>null},decodeRouteId:value=>value,useState:init=>[init(),value=>states.push(value)],useRef:value=>({current:value}),useLayoutEffect:fn=>fn(),useEffect:fn=>fn(),Map});
+  const context=vm.createContext({window,document:{getElementById:()=>null},decodeRouteId:value=>value,useState:init=>{let current=init();return [current,value=>{current=typeof value==='function'?value(current):value;states.push(current);}];},useRef:value=>({current:value}),useLayoutEffect:fn=>fn(),useEffect:fn=>fn(),Map});
   vm.runInContext(code+'\nuseRoute();',context);
   const flush=()=>{while(queued.length)queued.shift()();};
   const page={async goto(url){window.location.hash=new URL(url).hash;queued.push(()=>listeners.forEach(fn=>fn()));},locator:selector=>selector};
@@ -255,6 +255,7 @@ test('actual route parser demonstrates queued hash coalescence and the remount b
  const old=harness();
  await old.page.goto('https://fixture.invalid/#/devices');await old.page.goto(`https://fixture.invalid/#/devices/${old.id}`);old.flush();
  assert.equal(old.states.length,2);assert.ok(old.states.every(route=>route.id===old.id),'both queued events can read only the final route');
+ assert.deepEqual(old.states.map(route=>route.revision),[1,2],'each queued navigation advances the remount revision');
  const fixed=harness();
  const expect=selector=>({async toHaveCount(count){assert.equal(selector,'.device-page');assert.equal(count,0);fixed.flush();assert.equal(fixed.states.at(-1).id,undefined);},async toBeVisible(){assert.equal(selector,'.device-table');assert.equal(fixed.states.at(-1).id,undefined);}});
  await remountWindowsDevice(fixed.page,expect,'https://fixture.invalid');fixed.flush();

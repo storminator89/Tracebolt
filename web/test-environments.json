@@ -10,6 +10,7 @@
     "src/complete-packages-types.test.ts",
     "src/complete-updates-types.test.ts",
     "src/endpoint-identity-types.test.ts",
+    "src/fleet-groups-workflow.test.ts",
     "src/journal-browse-types.test.ts",
     "src/journal-types.test.ts",
     "src/linux-cve-types.test.ts",
@@ -31,6 +32,7 @@
     "src/windows-resource-context-types.test.ts",
     "src/windows-service-startup-types.test.ts",
     "src/windows-storage-io-types.test.ts",
-    "src/windows-updates-types.test.ts"
+    "src/windows-updates-types.test.ts",
+    "src/windows-user-software-types.test.ts"
   ]
 }

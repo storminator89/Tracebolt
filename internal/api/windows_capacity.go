@@ -328,7 +328,17 @@ func (h *operatorHandler) windowsCapacityAPI(w http.ResponseWriter, r *http.Requ
 		if !recheck() {
 			return
 		}
-		state, err = m.configurePolicy(r.Context(), in, kind, policy.Enabled, policy.Threshold, policy.Expected, m.source.Now().UTC())
+		state, err = m.configurePolicy(r.Context(), in, kind, policy.Enabled, policy.Threshold, policy.Expected, m.source.Now().UTC(), func() error {
+			// No enrollment read while holding the operator SQLite transaction.
+			// Recheck the already-admitted authority deadline and live session
+			// after connection wait and again immediately before commit.
+			end := m.source.Now().UTC()
+			operator, admitted := operatorContext(r)
+			if !admitted || operator.active == nil || !operator.active() || r.Context().Err() != nil || !contactReadTime(now, end) || !end.Before(in.AuthorityUntil) {
+				return windowscapacity.ErrInvalid
+			}
+			return nil
+		})
 		if errors.Is(err, windowscapacity.ErrInvalid) {
 			fail(w, 409, "windows_capacity_conflict", "Policy changed or is unavailable. Refresh before saving again.")
 			return
@@ -413,10 +423,10 @@ func (m *windowsCapacityMonitor) policyState(ctx context.Context, id string, kin
 	state, err := m.store.WindowsResourceState(ctx, id, kind)
 	return state.Assessment, err
 }
-func (m *windowsCapacityMonitor) configurePolicy(ctx context.Context, in windowscapacity.Input, kind windowsresource.Kind, enabled bool, threshold int, expected uint64, at time.Time) (windowscapacity.State, error) {
+func (m *windowsCapacityMonitor) configurePolicy(ctx context.Context, in windowscapacity.Input, kind windowsresource.Kind, enabled bool, threshold int, expected uint64, at time.Time, guard ...func() error) (windowscapacity.State, error) {
 	if kind == "" {
-		return m.store.ConfigureWindowsCapacity(ctx, in, enabled, threshold, expected, at)
+		return m.store.ConfigureWindowsCapacity(ctx, in, enabled, threshold, expected, at, guard...)
 	}
-	state, err := m.store.ConfigureWindowsResource(ctx, in, kind, enabled, threshold, expected, at)
+	state, err := m.store.ConfigureWindowsResource(ctx, in, kind, enabled, threshold, expected, at, guard...)
 	return state.Assessment, err
 }

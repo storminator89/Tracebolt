@@ -83,3 +83,63 @@ test('hosted hook and inert import preserve existing roots and budgets, and cann
  assert.doesNotMatch(helper,/chromium\.launch|createServer|writeFile|execFile|spawn\(|fetch\(|page\.request|newContext\(/);
  assert.equal(typeof exerciseWindowsServiceActions,'function');
 });
+
+
+import {createWindowsServiceActionHistoryFixture,windowsServiceActionHistoryRoute,windowsServiceActionHistoryCaseName,requireWindowsServiceActionHistoryEvidence} from './windows-service-action-history-browser.mjs';
+test('retained history routes only the bounded same-identity GET vectors and never approve',async()=>{
+ const fixture=createWindowsServiceActionHistoryFixture(),state={blocked:[],external:[]},handler=windowsServiceActionHistoryRoute({base,fixture,state}),prefix='/api/devices/'+fixture.device.id+'/windows-service-actions/history';
+ const invoke=async(path,method='GET',raw=null)=>{let result;await handler({request:()=>({url:()=>base+path,method:()=>method,postData:()=>raw,headers:()=>({})}),fulfill:async value=>{result=JSON.parse(value.body);},abort:async value=>{result={abort:value};}});return result;};
+ assert.deepEqual(await invoke(prefix),fixture.history);assert.deepEqual(await invoke(prefix+'/'+fixture.details[0].job.identity.jobId),fixture.details[0]);
+ for(const [path,method,raw] of [[prefix,'POST','{}'],[prefix,'GET','{}'],[prefix+'?cursor=old','GET',null],[prefix+'/action_'+ 'f'.repeat(32),'GET',null]])assert.deepEqual(await invoke(path,method,raw),{abort:'blockedbyclient'});
+ assert.deepEqual(fixture.historyCounts,{list:1,detail:1});assert.equal(fixture.counts.approve,0);assert.equal(fixture.counts.preview,0);
+});
+test('history requires four distinct source-bound screenshots through the existing hosted gate',()=>{
+ const rows=evidence().map(row=>({...row,file:row.file.replace('service-actions','service-action-history'),test:windowsServiceActionHistoryCaseName}));
+ assert.deepEqual(requireWindowsServiceActionHistoryEvidence(rows,sourceSha),{screens:4,nativeAcceptance:false});assert.throws(()=>requireWindowsServiceActionHistoryEvidence(rows.slice(1),sourceSha));assert.throws(()=>requireWindowsServiceActionHistoryEvidence(rows,'b'.repeat(40)));
+ const runner=read('./windows-service-actions-runner.mjs');assert.match(runner,/requireWindowsServiceActionHistoryEvidence\(historyScreenshots,sourceSha\)/);assert.match(runner,/historyVariants.length!==4/);assert.match(runner,/historyStorage.includes\(detail.job.identity.jobId\)/);
+});
+
+import {createWindowsUpdateJobsFixture,windowsUpdateJobsRoute,exerciseWindowsUpdateJobs,windowsUpdateJobsCaseName,windowsUpdateJobsDisclosure,requireWindowsUpdateJobsEvidence,windowsUpdateJobsOrigin} from './windows-update-jobs-browser.mjs';
+function updateSetup(){
+ const base=windowsUpdateJobsOrigin,fixture=createWindowsUpdateJobsFixture(),state={blocked:[],external:[]},handler=windowsUpdateJobsRoute({base,fixture,state}),prefix='/api/devices/'+fixture.device.id+'/windows-update-jobs';
+ const headers={'x-csrf-token':fixture.session.csrfToken,origin:base,'content-type':'application/json'};
+ const invoke=async(suffix='',{method='GET',raw=null,headers:sent=headers,origin=base}={})=>{let result;await handler({request:()=>({url:()=>origin+prefix+suffix,method:()=>method,postData:()=>raw,headers:()=>sent}),fulfill:async value=>{result=JSON.parse(value.body);},abort:async value=>{result={abort:value};},continue:async()=>{result={continued:true};}});return result;};
+ return {fixture,state,invoke,headers};
+}
+test('update browser fixture requires asynchronous readiness review and one explicit exact approval',async()=>{
+ const f=updateSetup(),id='update_'+'9'.repeat(32),post=raw=>({method:'POST',raw:JSON.stringify(raw)});
+ assert.equal((await f.invoke()).job,null);assert.deepEqual(f.fixture.session.capabilities,['read','windows_update_install']);assert.equal(f.fixture.session.insecureTestMode,false);
+ assert.equal((await f.invoke('/request',post({requestId:id,...f.fixture.selection}))).job.state,'requested');
+ const ready=await f.invoke();assert.equal(ready.job.state,'preview');assert.equal(f.fixture.updateCounts.preview,0);const approval={previewId:id,previewDigest:ready.job.preview.digest,acknowledged:true};
+ assert.deepEqual(await f.invoke('/approve',post(approval)),{abort:'blockedbyclient'});
+ assert.equal((await f.invoke('/preview',post({requestId:id}))).job.preview.id,id);
+ assert.deepEqual(await f.invoke('/approve',post({...approval,acknowledged:false})),{abort:'blockedbyclient'});
+ assert.equal((await f.invoke('/approve',post(approval))).job.state,'approved');
+ const result=await f.invoke();assert.equal(result.job.result.outcome,'succeeded');assert.equal(result.job.result.rebootRequired,'yes');assert.deepEqual(await f.invoke(),result);
+ assert.deepEqual(await f.invoke('/approve',post(approval)),{abort:'blockedbyclient'});assert.deepEqual(f.fixture.updateCounts,{request:1,preview:1,approve:1,status:4});
+ result.job.selection.revision++;assert.deepEqual((await f.invoke()).job.selection,f.fixture.selection);assert.equal(f.fixture.counts.approve,0);assert.equal(f.fixture.counts.preview,0);
+});
+test('update synthetic routing never permits a host operation or malformed request',async()=>{
+ const request={requestId:'update_'+'9'.repeat(32),updateId:'00000001-0000-0000-0000-000000000001',revision:10};
+ for(const change of [{method:'GET'},{headers:{}},{raw:'{}'},{raw:JSON.stringify({...request,revision:11})},{raw:JSON.stringify({...request,force:true})},{raw:' '.repeat(1025)},{origin:'https://outside.invalid'}]){
+  const f=updateSetup();assert.deepEqual(await f.invoke('/request',{method:'POST',raw:JSON.stringify(request),...change}),{abort:'blockedbyclient'});assert.equal(f.fixture.updateCounts.request,0);
+ }
+ for(const suffix of ['/install','/claim','/report','/download','/reboot','/approve?x=1','/request/','/%72equest']){const f=updateSetup();assert.deepEqual(await f.invoke(suffix,{method:'POST',raw:JSON.stringify(request)}),{abort:'blockedbyclient'});}
+});
+test('existing hosted gate requires eight update review/result screenshots without new runner or budget',()=>{
+ const rows=['review','result'].flatMap(kind=>['en','de'].flatMap(locale=>[1440,390].map(width=>({file:`synthetic-windows-update-jobs-${kind}-${width}-${locale}.png`,sourceSha,test:windowsUpdateJobsCaseName,locale,viewport:{width,height:width===390?844:1000},fullPage:false,publicSafe:true,fixtureDisclosure:windowsUpdateJobsDisclosure}))));
+ assert.deepEqual(requireWindowsUpdateJobsEvidence(rows,sourceSha),{screens:8,nativeAcceptance:false});
+ for(const mutate of [r=>r.pop(),r=>r.push(r[0]),r=>{r[0].sourceSha='b'.repeat(40);},r=>{r[0].fixtureDisclosure='native';},r=>{r[0].viewport.width=800;}]){const changed=structuredClone(rows);mutate(changed);assert.throws(()=>requireWindowsUpdateJobsEvidence(changed,sourceSha));}
+ const runner=read('./windows-service-actions-runner.mjs'),helper=read('./windows-update-jobs-browser.mjs');assert.match(runner,/requireWindowsUpdateJobsEvidence\(updateScreenshots,sourceSha\)/);assert.match(runner,/updateVariants.length!==4/);assert.match(runner,/120000/);assert.match(runner,/updateStorage.includes\(value\)/);
+ for(const hook of ["stage='request'","stage='review'","stage='approve'","stage='saved-result'","stage='reload'","button.click();button.click();","not.toBeChecked()","toBeDisabled()","capture('review')","capture('result')"])assert.ok(helper.includes(hook),hook);
+ assert.doesNotMatch(helper,/chromium\.launch|createServer|writeFile|execFile|spawn\(|fetch\(|page\.request|newContext\(/);assert.match(windowsUpdateJobsDisclosure,/No actual TLS authority/);assert.equal(typeof exerciseWindowsUpdateJobs,'function');
+});
+
+test('update HTTPS fixture is wholly intercepted without certificate exceptions or network continuation',async()=>{
+ const fixture=createWindowsUpdateJobsFixture();
+ for(const origin of [base,'https://127.0.0.1:19890','https://outside.invalid'])assert.throws(()=>windowsUpdateJobsRoute({base:origin,fixture,state:{blocked:[],external:[]}}));
+ let assetPath=null,continued=false;const handler=windowsUpdateJobsRoute({base:windowsUpdateJobsOrigin,fixture,state:{blocked:[],external:[]},asset:async(_route,path)=>{assetPath=path;}});
+ await handler({request:()=>({url:()=>windowsUpdateJobsOrigin+'/assets/app.js',method:()=> 'GET',postData:()=>null,headers:()=>({})}),continue:async()=>{continued=true;}});
+ assert.equal(assetPath,'/assets/app.js');assert.equal(continued,false);
+ const helper=read('./windows-update-jobs-browser.mjs'),runner=read('./windows-service-actions-runner.mjs');assert.match(helper,/const open=async\(\)=>\{await page.getByRole\('tab',\{name:de\?'Inventar':'Inventory',exact:true\}\).click\(\);await page.getByRole\('tab',\{name:'Updates'/);assert.doesNotMatch(helper,/route\.continue|route\.fetch/);assert.match(runner,/base:windowsUpdateJobsOrigin/);assert.match(runner,/await route.fulfill\(\{status:200,contentType:contentTypes\[path.extname\(file\)\],body:await fs.readFile\(file\)\}\)/);assert.doesNotMatch(runner,/ignoreHTTPSErrors|grantPermissions|executablePath/);
+});

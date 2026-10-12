@@ -88,3 +88,21 @@ func TestProfileValidation(t *testing.T) {
 		}
 	}
 }
+
+func TestWindowsUpdateJobsConfigurationIsSeparateDefaultOffTLSOnly(t *testing.T) {
+	base := Config{SchemaVersion: SchemaVersion, Profile: TLS, OperatorListen: "127.0.0.1:8080", AgentListen: "127.0.0.1:8081", OperatorOrigin: "https://manager.invalid:8080", AgentOrigin: "https://manager.invalid:8081", TLSCertificateFile: "/tmp/cert", TLSPrivateKeyFile: "/tmp/key", AgentClientCAFile: "/tmp/ca", OperatorAuthFile: "/tmp/auth", StateDirectory: "/tmp/state", WebDirectory: "/tmp/web", WindowsInventoryEnabled: true}
+	if base.Validate() != nil || base.WindowsUpdateJobsConfigFile != "" {
+		t.Fatal("default configuration changed")
+	}
+	base.WindowsUpdateJobsConfigFile = "/tmp/windows-update-jobs.json"
+	if base.Validate() != nil {
+		t.Fatal("explicit TLS config rejected")
+	}
+	for _, change := range []func(*Config){func(c *Config) { c.WindowsInventoryEnabled = false }, func(c *Config) { c.Profile = HTTPTest }, func(c *Config) { c.WindowsUpdateJobsConfigFile = "relative" }, func(c *Config) { c.WindowsUpdateJobsConfigFile = "/tmp/a/../b" }} {
+		other := base
+		change(&other)
+		if other.Validate() == nil {
+			t.Fatal("invalid update-job config admitted")
+		}
+	}
+}

@@ -31,7 +31,7 @@ func setupWizardReadAdminSummary() string {
 	for _, group := range lanclient.WindowsReadAdminGroupsV14() {
 		fmt.Fprintf(&out, "%s: %s\n\n", group.Name, group.Summary)
 	}
-	out.WriteString("Uses the same limited LocalService identity. Provider presence and service-token access are unverified; missing or denied sources remain unknown. No provider installation or privilege change.\n\nSelected event-message text is included only for exact accepted historical search rows, after a deliberate operator request. The profile excludes cached WUA inspection, service control and external-AI access. Full scope disclosures and provider requirements are available under Scope details.")
+	out.WriteString("Uses the same limited LocalService identity. Provider presence and service-token access are unverified; missing or denied sources remain unknown. No provider installation or privilege change.\n\nSelected event-message text is included only for exact accepted historical search rows, after a deliberate operator request. The profile excludes cached WUA inspection, service control and external-AI access. Selected-account HKCU/MSIX software is separate and off. Its foreground helper must be run and approved by the intended normal user; Setup never reads its own account as that user. Full scope disclosures and provider requirements are available under Scope details.")
 	return out.String()
 }
 
@@ -41,7 +41,7 @@ func setupWizardReadAdminDisclosure(insecure bool) string {
 	for _, group := range lanclient.WindowsReadAdminGroupsV14() {
 		fmt.Fprintf(&out, "%s: %s\nRequirements: %s\n\n", group.Name, group.Summary, group.Prerequisites)
 	}
-	out.WriteString("Provider presence has not been checked. Actual LocalService readability is not verified by installer-admin access. Missing or denied sources remain unknown; Setup does not install providers, grant privileges, change ACLs or repair Windows settings.\n\nSelected event-message text from accepted historical search rows is explicitly included in this new fresh history approval. The older independent sampled-event content scope, cached WUA update inspection and service control remain separate optional approvals. No external-AI access is included.\n\nFULL SCOPE DISCLOSURES\n")
+	out.WriteString("Provider presence has not been checked. Actual LocalService readability is not verified by installer-admin access. Missing or denied sources remain unknown; Setup does not install providers, grant privileges, change ACLs or repair Windows settings.\n\nSelected event-message text from accepted historical search rows is explicitly included in this new fresh history approval. The older independent sampled-event content scope, cached WUA update inspection and service control remain separate optional approvals. Selected-account HKCU/MSIX software remains separately default off. Enabling the receive scope does not read an account: run the one-shot foreground helper in the selected normal user session and approve each bounded capture. Never use the elevated Setup account as a substitute. No external-AI access is included.\n\nFULL SCOPE DISCLOSURES\n")
 	_ = writeReadSetupDisclosure(&out, freshReadAdminSetupConsent(insecure))
 	out.WriteString("\nSource-only preview: exact Windows/native acceptance and released artifacts remain separately gated. Existing installations cannot use this fresh installer. Startup remains disabled until identity activation and every selected grant is verified. Interrupted writes retain partial evidence and cannot be retried or reset automatically.")
 	return out.String()

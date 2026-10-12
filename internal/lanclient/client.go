@@ -78,6 +78,9 @@ type receipt struct {
 	Duplicate     bool      `json:"duplicate"`
 }
 type Report struct {
+	WindowsUserSoftwareStatus       string `json:"windowsUserSoftwareStatus,omitempty"`
+	WindowsUserSoftwareSequence     uint64 `json:"windowsUserSoftwareSequence,omitempty"`
+	WindowsUserSoftwareOperations   uint8  `json:"windowsUserSoftwareOperations,omitempty"`
 	WindowsFullProcessesStatus      string `json:"windowsFullProcessesStatus,omitempty"`
 	WindowsFullProcessesSequence    uint64 `json:"windowsFullProcessesSequence,omitempty"`
 	WindowsFullProcessesOperations  uint8  `json:"windowsFullProcessesOperations,omitempty"`
@@ -174,6 +177,11 @@ func Run(ctx context.Context, m Material) (Report, error) {
 			return report, fullErr
 		}
 		defer fullSoftware.Close()
+		userSoftware, fullErr := openWindowsUserSoftwareSender(m, state)
+		if fullErr != nil {
+			return report, fullErr
+		}
+		defer userSoftware.Close()
 		fullProcesses, fullErr := openWindowsFullProcessesSender(m, state)
 		if fullErr != nil {
 			return report, fullErr
@@ -192,6 +200,9 @@ func Run(ctx context.Context, m Material) (Report, error) {
 				return report, e
 			}
 			if e := runWindowsFullSoftwareAttempt(ctx, fullSoftware, &report); e != nil {
+				return report, e
+			}
+			if e := runWindowsUserSoftwareAttempt(ctx, userSoftware, &report); e != nil {
 				return report, e
 			}
 			if e := runWindowsFullProcessesAttempt(ctx, fullProcesses, &report); e != nil {

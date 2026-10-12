@@ -18,12 +18,35 @@ bound to the actual checkout SHA (including a PR merge SHA), source digest,
 workflow run, attempt, shard and complete partition digest.
 
 Each runner keeps `-race`, `-p 1`, `-buildvcs=false`, `-count=1` and the existing
-15-minute per-package test timeout. No package or root-test filter is added.
+15-minute per-package, per-invocation test timeout and 60-minute job budget.
+Enrollmentstore remains on its original shard, with a default invocation and
+source-bound exact-root groups for full services, full software, full processes,
+network context and retention/capacity. Each moved root is excluded only from
+the default invocation and must run and pass exactly once in its selected group;
+missing, skipped, duplicate or overlapping moved-root evidence fails closed.
+Other roots, examples and fuzz seeds remain in the default invocation.
 Only the same anchored dense and guided root tests remain excluded: their
 existing dedicated race jobs, timeouts and positive-completion gates are pinned
 byte-for-byte by the coverage contract. All existing vet, build, CLI, native
 runtime, support-bundle, cross-build and API checks remain in the build/runtime
 job. The frontend/browser dependency chain is unchanged.
+
+The retention/capacity group contains only these four unchanged roots:
+
+- `TestTwentyFiveOperationalRetainedBudget`
+- `TestCompleteOverviewSteadyMinuteCadenceRetainsPagesAndCleans`
+- `TestCompleteInventoryQuotaPreservesPreviousAndReservation`
+- `TestTwentyFiveNearMaxConcurrentTransactionWait`
+
+In successful PR54 job `114579549324`, these roots took 316.99 seconds of the
+613.496-second default enrollmentstore invocation. PR55 and PR56 later exhausted
+that invocation's 15-minute budget at different roots. Splitting the measured
+heavy roots removes cumulative pressure without changing assertions, workloads,
+race flags or either timeout. It is not evidence of a standalone deadlock or a
+runtime speed guarantee. Each root creates its own temporary database and fixture;
+none relies on another root's state. The operational-budget subtests and their
+shared fixture remain together. Similar future names stay in the default run;
+removing or renaming a listed root requires updating the exact partition.
 
 A successful process exit is necessary but insufficient. Every selected package
 must start and have exactly one valid terminal event; any test or build failure
@@ -45,9 +68,10 @@ attempts.
 Raw Go JSONL and stderr remain in private temporary files, are never uploaded,
 and are removed when the runner finishes normally. Existing source-allowlisted
 bounded failure/timing reporting remains available. A once-per-minute progress
-line includes only shard number and elapsed seconds. Artifacts contain only
+line includes only shard number, a fixed invocation label and elapsed seconds. Artifacts contain only
 source/run identifiers, digests, fixed statuses, allowlisted package names and
-bounded elapsed numbers; no raw output, subtest names, private paths or telemetry.
+selected root names and bounded elapsed numbers; no raw output, subtest names,
+private paths or telemetry.
 Artifacts expire after one day.
 
 ## Why three runners

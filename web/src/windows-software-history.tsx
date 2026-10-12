@@ -4,6 +4,7 @@ import { useOperator } from './auth';
 import { useLocale } from './i18n';
 import { fullDate } from './utils';
 import { WindowsFullSoftwarePanel } from './windows-full-software';
+import { WindowsUserSoftwarePanel } from './windows-user-software';
 import { useWindowsSoftwareHistory } from './windows-software-history-resource';
 import type { SoftwareHistoryChange, SoftwareHistoryPage } from './windows-software-history-types';
 import './windows-software-history.css';
@@ -40,8 +41,8 @@ const copy = {
 };
 type Context = { deviceId: string; sessionKey: string | null; enabled?: boolean };
 export function WindowsSoftwareWorkspace(props: Context) {
-    const [locale] = useLocale(), [history, setHistory] = useState(false), id = useId(), c = copy[locale];
-    return <><div className="windows-software-views" role="group" aria-label={c.views}><button type="button" className="button small" aria-pressed={!history} aria-controls={`${id}-view`} onClick={() => setHistory(false)}>{c.inventory}</button><button type="button" className="button small" aria-pressed={history} aria-controls={`${id}-view`} onClick={() => setHistory(true)}>{c.title}</button></div><div id={`${id}-view`}>{history ? <WindowsSoftwareHistoryPanel {...props}/> : <WindowsFullSoftwarePanel {...props}/>}</div></>;
+    const [locale] = useLocale(), [history, setHistory] = useState(false), [selectedUser, setSelectedUser] = useState(false), id = useId(), c = copy[locale];
+    return <><div className="windows-software-views" role="group" aria-label={c.views}><button type="button" className="button small" aria-pressed={!history} aria-controls={`${id}-view`} onClick={() => setHistory(false)}>{c.inventory}</button><button type="button" className="button small" aria-pressed={history} aria-controls={`${id}-view`} onClick={() => setHistory(true)}>{c.title}</button></div>{!history && <label className="windows-software-account" htmlFor={`${id}-account`}>{locale === 'de' ? 'Konto' : 'Account'} <select id={`${id}-account`} value={selectedUser ? 'selected' : 'machine'} onChange={event => setSelectedUser(event.target.value === 'selected')}><option value="machine">{locale === 'de' ? 'Geräteregistrierungen' : 'Machine registrations'}</option><option value="selected">{locale === 'de' ? 'Ausgewähltes Benutzerkonto' : 'Selected user account'}</option></select></label>}<div id={`${id}-view`}>{history ? <WindowsSoftwareHistoryPanel {...props}/> : selectedUser ? <WindowsUserSoftwarePanel {...props}/> : <WindowsFullSoftwarePanel {...props}/>}</div></>;
 }
 export function WindowsSoftwareHistoryPanel({ deviceId, sessionKey, enabled = true }: Context) {
     const operator = useOperator(), [locale] = useLocale();

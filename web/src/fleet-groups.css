@@ -1,0 +1,28 @@
+.fleet-groups{border-top:1px solid var(--line);padding:10px 20px;background:var(--panel);min-width:0}
+.fleet-group-toolbar{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.fleet-group-toolbar .text-button,.fleet-group-select{display:flex;align-items:center;gap:7px;font-size:12px}
+.fleet-group-select{min-width:0;flex-wrap:wrap}.fleet-group-select select{max-width:230px}
+.fleet-groups select,.fleet-group-dialog input:not([type=checkbox]),.fleet-group-dialog select{background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:5px;padding:7px;font:inherit;max-width:100%}
+.fleet-groups>p{font-size:12px;color:var(--secondary);margin:10px 0 0}
+.fleet-group-dialog .dialog{width:min(760px,calc(100vw - 32px));max-height:calc(100dvh - 48px);overflow-y:auto;padding:28px}
+.fleet-group-dialog h2{font-size:19px;padding-right:30px;margin:0 0 16px}.fleet-group-dialog h3{font-size:14px}
+.fleet-group-dialog p,.fleet-group-dialog small,.fleet-group-dialog summary{font-size:12px;color:var(--secondary);line-height:1.6;overflow-wrap:anywhere}
+.fleet-group-field{display:flex;flex-direction:column;gap:7px;font-size:12px;margin:14px 0;min-width:0}
+.fleet-group-choices{padding:8px 12px;max-height:240px;overflow:auto;border:1px solid var(--line);border-radius:6px;margin:16px 0;min-width:0}
+.fleet-group-choices legend{font-size:12px;padding:0 5px}.fleet-group-choices label{display:flex;align-items:flex-start;gap:10px;padding:8px 0;font-size:12px}.fleet-group-choices input{margin-top:3px;flex-shrink:0}
+.fleet-group-choices label>span{min-width:0}.fleet-group-choices small,.fleet-group-table small,.fleet-group-table code{display:block;overflow-wrap:anywhere}.fleet-group-choices strong{overflow-wrap:anywhere}
+.fleet-group-actions{display:flex;gap:16px;align-items:center;flex-wrap:wrap;margin-top:20px;padding-top:15px;border-top:1px solid var(--line)}
+.fleet-group-list,.fleet-group-members{list-style:none;padding:0;margin:16px 0}.fleet-group-list li{padding:12px 0;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:12px}.fleet-group-list span{font-size:11px;color:var(--secondary)}
+.fleet-group-members li{padding:9px 0;border-bottom:1px solid var(--line);font-size:12px;overflow-wrap:anywhere}.fleet-group-members span{margin-left:12px;color:var(--secondary)}.fleet-group-members code{display:block;color:var(--secondary);font-size:11px;margin-top:4px}
+.fleet-group-setting{display:grid;grid-template-columns:2fr 1fr;gap:20px}.fleet-group-enable{display:flex;align-items:center;gap:8px;font-size:12px}.fleet-group-limits{padding:12px;border:1px solid var(--line);border-radius:6px;margin:16px 0}.fleet-group-limits summary{cursor:pointer}
+.fleet-group-table-wrap{overflow-x:auto}.fleet-group-table{border-collapse:collapse;width:100%;font-size:12px;table-layout:fixed}.fleet-group-table caption{text-align:left;font-weight:600;padding:12px 0}.fleet-group-table th,.fleet-group-table td{text-align:left;vertical-align:top;padding:12px 10px;border-bottom:1px solid var(--line);overflow-wrap:anywhere}.fleet-group-table th{color:var(--secondary);font-weight:500}.fleet-group-table code{font-size:10px;margin-top:5px;color:var(--secondary)}
+@media(max-width:600px){.fleet-groups{padding:10px 14px}.fleet-group-toolbar{gap:12px}.fleet-group-select{width:100%}.fleet-group-select select{flex:1;max-width:100%;min-width:0}.fleet-group-setting{grid-template-columns:1fr;gap:0}.fleet-group-list li{align-items:flex-start;flex-direction:column}.fleet-group-dialog .dialog{padding:22px}}
+@media(max-width:600px){
+    /* Keep the table semantics in markup while each device becomes a vertical row. */
+    .fleet-group-table-wrap{overflow-x:visible}
+    .fleet-group-table,.fleet-group-table caption,.fleet-group-table tbody{display:block;min-width:0;width:100%}
+    .fleet-group-table thead{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+    .fleet-group-table tbody tr{display:grid;grid-template-columns:minmax(0,1fr);gap:8px;padding:12px 0;border-bottom:1px solid var(--line)}
+    .fleet-group-table td{display:block;min-width:0;padding:0;border:0}
+    .fleet-group-table td[data-label]::before{content:attr(data-label);display:block;margin-bottom:3px;color:var(--secondary);font-size:11px;font-weight:500}
+}

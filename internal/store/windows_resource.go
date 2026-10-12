@@ -62,15 +62,15 @@ func (s *Store) WindowsResourceStates(ctx context.Context) ([]windowsresource.St
 	}
 	return out, rows.Err()
 }
-func (s *Store) ConfigureWindowsResource(ctx context.Context, in windowscapacity.Input, kind windowsresource.Kind, enabled bool, threshold int, expected uint64, now time.Time) (windowsresource.State, error) {
+func (s *Store) ConfigureWindowsResource(ctx context.Context, in windowscapacity.Input, kind windowsresource.Kind, enabled bool, threshold int, expected uint64, now time.Time, guard ...func() error) (windowsresource.State, error) {
 	return s.updateWindowsResource(ctx, in.DeviceID, kind, func(state *windowsresource.State) error {
 		return state.Configure(in, kind, enabled, threshold, expected, now)
-	})
+	}, guard...)
 }
 func (s *Store) EvaluateWindowsResource(ctx context.Context, in windowscapacity.Input, kind windowsresource.Kind, now time.Time, epoch string) (windowsresource.State, error) {
 	return s.updateWindowsResource(ctx, in.DeviceID, kind, func(state *windowsresource.State) error { return state.Evaluate(in, kind, now, epoch) })
 }
-func (s *Store) updateWindowsResource(ctx context.Context, id string, kind windowsresource.Kind, update func(*windowsresource.State) error) (windowsresource.State, error) {
+func (s *Store) updateWindowsResource(ctx context.Context, id string, kind windowsresource.Kind, update func(*windowsresource.State) error, guard ...func() error) (windowsresource.State, error) {
 	if !windowscontact.ValidDeviceID(id) || !windowsresource.ValidKind(kind) {
 		return windowsresource.State{}, windowscapacity.ErrInvalid
 	}
@@ -101,6 +101,9 @@ func (s *Store) updateWindowsResource(ctx context.Context, id string, kind windo
 			return windowsresource.State{}, err
 		}
 	}
+	if err = runPolicyGuards(ctx, guard); err != nil {
+		return windowsresource.State{}, err
+	}
 	if err = update(&state); err != nil {
 		return windowsresource.State{}, err
 	}
@@ -112,6 +115,9 @@ func (s *Store) updateWindowsResource(ctx context.Context, id string, kind windo
 		return windowsresource.State{}, err
 	}
 	if _, err = tx.ExecContext(ctx, "INSERT INTO windows_resource_devices(id,metric,body) VALUES(?,?,?) ON CONFLICT(id,metric) DO UPDATE SET body=excluded.body", id, kind, body); err != nil {
+		return windowsresource.State{}, err
+	}
+	if err = runPolicyGuards(ctx, guard); err != nil {
 		return windowsresource.State{}, err
 	}
 	if err = tx.Commit(); err != nil {

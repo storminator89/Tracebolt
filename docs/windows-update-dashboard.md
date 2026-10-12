@@ -6,6 +6,10 @@ cached-metadata display, not patch/CVE coverage, online detection, downloads or
 installation support. Native Windows acceptance and hosted-browser acceptance
 are separate gates; synthetic parser/DOM tests do not establish either.
 
+A separate [selected-update job source](windows-selected-update-jobs.md) adds an
+inactive-by-default capability/review surface alongside the read-only cache.
+It requires independent authority and supplies no native installer.
+
 See [cached inspection](windows-update-inspection.md) for the reviewed WUA source
 and separate consent boundary. Existing Windows Setup, inventory and event
 header grants do not authorize this collection.

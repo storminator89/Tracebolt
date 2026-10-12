@@ -1,0 +1,187 @@
+{
+  "actorId": "operator_0123456789abcdef0123456789abcdef",
+  "details": [
+    {
+      "binding": {
+        "endpointId": "agent_0123456789abcdef0123456789abcdef",
+        "grantDigest": "sha256:3492ad65d05a973fef8c825521eeb41ae64625a672a8aeeeabc696e16d62a020",
+        "incarnationDigest": "sha256:06298432e8066b29e2223bcc23aa9504b56ae508fabf3435508869b9c3190e22",
+        "installationId": "broker_22222222222222222222222222222222",
+        "keyId": "sha256:e54893f1c9ff55ad58c5f54e0b16672c3c41f9ef04a8bbd03df7c3e39cecd328",
+        "managerId": "manager_11111111111111111111111111111111",
+        "target": "FixtureService",
+        "targetDigest": "sha256:b79606fb3afea5bd1609ed40b622142f1c98125abcfe89a76a661b0e8e343910"
+      },
+      "claimedAt": "2026-10-11T10:02:02Z",
+      "deviceId": "agent_0123456789abcdef0123456789abcdef",
+      "job": {
+        "actorId": "operator_0123456789abcdef0123456789abcdef",
+        "approvedAt": "2026-10-11T10:02:02Z",
+        "identity": {
+          "envelopeDigest": "sha256:9df35803f0f7b1fdd67d59fe31967ad682bf640d6f0e2b9b294c404b9383f0ae",
+          "jobId": "action_00000000000000000000000000000003",
+          "sequence": "3"
+        },
+        "operation": "restart",
+        "result": {
+          "deadline": 1791712982,
+          "identity": {
+            "envelopeDigest": "sha256:9df35803f0f7b1fdd67d59fe31967ad682bf640d6f0e2b9b294c404b9383f0ae",
+            "jobId": "action_00000000000000000000000000000003",
+            "sequence": "3"
+          },
+          "lastObservedState": 4,
+          "observations": 4,
+          "operation": "restart",
+          "outcome": "running-observed",
+          "phase": "complete",
+          "runningObserved": true,
+          "startAttempted": true,
+          "startRequested": true,
+          "stopAttempted": true,
+          "stopRequested": true,
+          "stoppedObserved": true,
+          "target": "FixtureService",
+          "version": "tracebolt.windows-service-action-result.v1"
+        },
+        "startDeadline": "2026-10-11T10:03:02Z",
+        "state": "complete",
+        "target": "FixtureService"
+      },
+      "schemaVersion": "tracebolt.windows-service-action-history-detail.v1",
+      "serverNow": "2026-10-11T10:03:03Z"
+    },
+    {
+      "binding": {
+        "endpointId": "agent_0123456789abcdef0123456789abcdef",
+        "grantDigest": "sha256:3492ad65d05a973fef8c825521eeb41ae64625a672a8aeeeabc696e16d62a020",
+        "incarnationDigest": "sha256:06298432e8066b29e2223bcc23aa9504b56ae508fabf3435508869b9c3190e22",
+        "installationId": "broker_22222222222222222222222222222222",
+        "keyId": "sha256:e54893f1c9ff55ad58c5f54e0b16672c3c41f9ef04a8bbd03df7c3e39cecd328",
+        "managerId": "manager_11111111111111111111111111111111",
+        "target": "FixtureService",
+        "targetDigest": "sha256:b79606fb3afea5bd1609ed40b622142f1c98125abcfe89a76a661b0e8e343910"
+      },
+      "claimedAt": null,
+      "deviceId": "agent_0123456789abcdef0123456789abcdef",
+      "job": {
+        "actorId": "operator_0123456789abcdef0123456789abcdef",
+        "approvedAt": "2026-10-11T10:01:01Z",
+        "identity": {
+          "envelopeDigest": "sha256:9a94ae9d7babb0f9c0bda4e7539ba397d3b0f91e23fa3a2d1685b628e0068ff5",
+          "jobId": "action_00000000000000000000000000000002",
+          "sequence": "2"
+        },
+        "operation": "stop",
+        "result": null,
+        "startDeadline": "2026-10-11T10:02:01Z",
+        "state": "expired",
+        "target": "FixtureService"
+      },
+      "schemaVersion": "tracebolt.windows-service-action-history-detail.v1",
+      "serverNow": "2026-10-11T10:03:03Z"
+    },
+    {
+      "binding": {
+        "endpointId": "agent_0123456789abcdef0123456789abcdef",
+        "grantDigest": "sha256:3492ad65d05a973fef8c825521eeb41ae64625a672a8aeeeabc696e16d62a020",
+        "incarnationDigest": "sha256:06298432e8066b29e2223bcc23aa9504b56ae508fabf3435508869b9c3190e22",
+        "installationId": "broker_22222222222222222222222222222222",
+        "keyId": "sha256:e54893f1c9ff55ad58c5f54e0b16672c3c41f9ef04a8bbd03df7c3e39cecd328",
+        "managerId": "manager_11111111111111111111111111111111",
+        "target": "FixtureService",
+        "targetDigest": "sha256:b79606fb3afea5bd1609ed40b622142f1c98125abcfe89a76a661b0e8e343910"
+      },
+      "claimedAt": "2026-10-11T10:00:00Z",
+      "deviceId": "agent_0123456789abcdef0123456789abcdef",
+      "job": {
+        "actorId": "operator_0123456789abcdef0123456789abcdef",
+        "approvedAt": "2026-10-11T10:00:00Z",
+        "identity": {
+          "envelopeDigest": "sha256:d4775e8c9e895d97b39901b0d3da5f483aceab1919ad880138b0605fe374ed64",
+          "jobId": "action_00000000000000000000000000000001",
+          "sequence": "1"
+        },
+        "operation": "start",
+        "result": {
+          "deadline": 1791712860,
+          "identity": {
+            "envelopeDigest": "sha256:d4775e8c9e895d97b39901b0d3da5f483aceab1919ad880138b0605fe374ed64",
+            "jobId": "action_00000000000000000000000000000001",
+            "sequence": "1"
+          },
+          "lastObservedState": 4,
+          "observations": 4,
+          "operation": "start",
+          "outcome": "running-observed",
+          "phase": "complete",
+          "runningObserved": true,
+          "startAttempted": true,
+          "startRequested": true,
+          "stopAttempted": false,
+          "stopRequested": false,
+          "stoppedObserved": false,
+          "target": "FixtureService",
+          "version": "tracebolt.windows-service-action-result.v1"
+        },
+        "startDeadline": "2026-10-11T10:01:00Z",
+        "state": "complete",
+        "target": "FixtureService"
+      },
+      "schemaVersion": "tracebolt.windows-service-action-history-detail.v1",
+      "serverNow": "2026-10-11T10:03:03Z"
+    }
+  ],
+  "deviceId": "agent_0123456789abcdef0123456789abcdef",
+  "history": {
+    "binding": {
+      "endpointId": "agent_0123456789abcdef0123456789abcdef",
+      "grantDigest": "sha256:3492ad65d05a973fef8c825521eeb41ae64625a672a8aeeeabc696e16d62a020",
+      "incarnationDigest": "sha256:06298432e8066b29e2223bcc23aa9504b56ae508fabf3435508869b9c3190e22",
+      "installationId": "broker_22222222222222222222222222222222",
+      "keyId": "sha256:e54893f1c9ff55ad58c5f54e0b16672c3c41f9ef04a8bbd03df7c3e39cecd328",
+      "managerId": "manager_11111111111111111111111111111111",
+      "target": "FixtureService",
+      "targetDigest": "sha256:b79606fb3afea5bd1609ed40b622142f1c98125abcfe89a76a661b0e8e343910"
+    },
+    "deviceId": "agent_0123456789abcdef0123456789abcdef",
+    "jobs": [
+      {
+        "approvedAt": "2026-10-11T10:02:02Z",
+        "identity": {
+          "envelopeDigest": "sha256:9df35803f0f7b1fdd67d59fe31967ad682bf640d6f0e2b9b294c404b9383f0ae",
+          "jobId": "action_00000000000000000000000000000003",
+          "sequence": "3"
+        },
+        "operation": "restart",
+        "outcome": "running-observed",
+        "state": "complete"
+      },
+      {
+        "approvedAt": "2026-10-11T10:01:01Z",
+        "identity": {
+          "envelopeDigest": "sha256:9a94ae9d7babb0f9c0bda4e7539ba397d3b0f91e23fa3a2d1685b628e0068ff5",
+          "jobId": "action_00000000000000000000000000000002",
+          "sequence": "2"
+        },
+        "operation": "stop",
+        "outcome": null,
+        "state": "expired"
+      },
+      {
+        "approvedAt": "2026-10-11T10:00:00Z",
+        "identity": {
+          "envelopeDigest": "sha256:d4775e8c9e895d97b39901b0d3da5f483aceab1919ad880138b0605fe374ed64",
+          "jobId": "action_00000000000000000000000000000001",
+          "sequence": "1"
+        },
+        "operation": "start",
+        "outcome": "running-observed",
+        "state": "complete"
+      }
+    ],
+    "limit": 64,
+    "schemaVersion": "tracebolt.windows-service-action-history.v1",
+    "serverNow": "2026-10-11T10:03:03Z"
+  }
+}

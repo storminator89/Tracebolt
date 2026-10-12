@@ -24,6 +24,15 @@ INVENTORY_PREFIXES = {
     "services": "TestWindowsFullServices", "software": "TestWindowsFullSoftware",
     "processes": "TestWindowsFullProcesses", "network-context": "TestWindowsNetworkContext",
 }
+# These four unchanged roots consumed 316.99s of the successful PR54 default
+# invocation. Keep one exact, separately budgeted group on the existing shard;
+# similarly named future roots remain in the default invocation.
+RETENTION_CAPACITY_TESTS = (
+    "TestCompleteInventoryQuotaPreservesPreviousAndReservation",
+    "TestCompleteOverviewSteadyMinuteCadenceRetainsPagesAndCleans",
+    "TestTwentyFiveNearMaxConcurrentTransactionWait",
+    "TestTwentyFiveOperationalRetainedBudget",
+)
 SKIP = "^(TestIndependentPackageStoreDenseCapacityAndActualIngress|TestGuidedThreeBinaryEnrollmentAndForeground)$"
 WEIGHTS = Path(__file__).with_name("go_race_weights.json")
 MAX_PACKAGES = 1024
@@ -107,9 +116,10 @@ def inventory_tests(allowed):
     names = allowed.get(INVENTORY_PACKAGE, ())
     groups = {group: sorted(name for name in names if name.startswith(prefix))
               for group, prefix in INVENTORY_PREFIXES.items()}
+    groups["retention-capacity"] = sorted(RETENTION_CAPACITY_TESTS)
     moved = [name for group in groups.values() for name in group]
     if (any(not group for group in groups.values()) or len(moved) != len(set(moved))
-            or any(not reporter.IDENT.fullmatch(name) or re.fullmatch(SKIP, name) for name in moved)):
+            or any(name not in names or not reporter.IDENT.fullmatch(name) or re.fullmatch(SKIP, name) for name in moved)):
         raise ValueError("invalid inventory partition")
     return groups
 
@@ -325,11 +335,11 @@ def run_shard(plan, allowed, shard, destination):
     if destination.exists() or destination.is_symlink() or destination.parent.is_symlink():
         raise ValueError("existing report")
     packages = plan["shards"][shard]
+    groups = plan["inventoryTests"] if INVENTORY_PACKAGE in packages else {}
     raw, inventory_raw, elapsed = b"", {}, 0
     ordinary = [package for package in packages if package != INVENTORY_PACKAGE]
     invocations = [("packages", command_for(ordinary))] if ordinary else []
     if INVENTORY_PACKAGE in packages:
-        groups = plan["inventoryTests"]
         moved = sorted(name for names in groups.values() for name in names)
         invocations.append(("default", command_for([INVENTORY_PACKAGE], excluded=moved)))
         invocations.extend((group, command_for([INVENTORY_PACKAGE], selected=names))
@@ -357,7 +367,7 @@ def run_shard(plan, allowed, shard, destination):
                           "--exit-code", str(status), "--elapsed-seconds", str(duration)])
             if status != 0:
                 raise ValueError("failed invocation")
-            if label in INVENTORY_PREFIXES:
+            if label in groups:
                 inventory_raw[label] = current
             else:
                 raw += current

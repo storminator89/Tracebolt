@@ -31,12 +31,18 @@ This page describes the current source; downloadable prereleases cover less.
   Independent [aggregate disk I/O](docs/windows-storage-io.md) adds local PerfDisk
   throughput, operations, latency, queue lengths and sample timing.
 - **Windows logs and updates:** Application/System event headers, separately
-  approved selected message reads, and offline cached Windows Update inspection.
+  approved older-event searches and selected message reads, and offline cached
+  Windows Update inspection.
+- **Selected-account software:** an explicitly consented foreground capture of
+  that Windows user's HKCU and Store registrations, with source filters and paging.
+- **Fleet groups:** organize devices and review one-time disk/CPU/RAM alert
+  settings for selected Windows members, with individual outcomes.
 - **Optional monitoring:** platform-specific health checks, manager-side
   application checks, webhook alarms and separately approved AI diagnostics.
 
 Collection depends on the endpoint's explicitly approved scope and accessible
-sources. Windows software covers HKLM registrations, not every installed app;
+sources. Windows software covers machine HKLM registrations plus the separately
+captured account; it does not discover every user's or portable application.
 complete process inventory does not expand the separate 128-row CPU/RAM sample.
 Cached updates do not prove patch compliance, and security observations do not
 prove that a device is protected.
@@ -117,9 +123,10 @@ credentials and content on the network. Production hardening remains open.
 
 ## What is next
 
-Finish the missing Windows Admin data: storage/performance, broader process metrics,
-broader security/network detail and useful change history. Then validate fresh
-native installation and the real manager-to-endpoint flow before a new release.
+Build on the inventory with useful job results, fleet monitoring policies and
+carefully scoped software/update management. Close the remaining Admin data gaps
+alongside that work. Fresh native installation and the real manager-to-endpoint
+flow must be validated before a new Windows release.
 There is no existing-user migration rollout. Remote desktop is deferred.
 
 [Windows priorities](docs/windows-admin-roadmap.md) · [Linux priorities](docs/roadmap.md)

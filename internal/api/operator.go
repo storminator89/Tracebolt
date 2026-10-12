@@ -23,6 +23,7 @@ import (
 	"localrmm/internal/operatorauth"
 	"localrmm/internal/packagecontroller"
 	"localrmm/internal/windowsactionmanager"
+	"localrmm/internal/windowsupdatejob"
 	"math"
 	"net"
 	"net/http"
@@ -33,6 +34,8 @@ import (
 )
 
 type LANOperatorConfig struct {
+	// Source-only injection; no CLI/config loader or native executor is supplied.
+	WindowsUpdateJobs     *windowsupdatejob.Manager
 	WindowsServiceActions *windowsactionmanager.Manager
 	PackageActions        *packagecontroller.Manager
 	AISettings            *aiconfig.Settings
@@ -59,6 +62,8 @@ type LANOperatorConfig struct {
 	CVEProgress *linuxcveprogress.Cache
 }
 type operatorHandler struct {
+	windowsUpdateJobs        *windowsupdatejob.Manager
+	fleetGroupSources        []fleetGroupSource
 	windowsActions           windowsServiceActionManager
 	packageUpdatesManager    packageUpdateManager
 	alarmSettings            *alarmdelivery.Settings
@@ -143,6 +148,9 @@ func NewLANOperatorHandler(app *Server, c LANOperatorConfig) (http.Handler, erro
 	}
 	if c.WindowsServiceActions != nil && (c.WindowsEnrollment == nil || !c.Auth.Named() || !c.WindowsServiceActions.MatchesBinding(c.WindowsEnrollment.Binding()) || c.WindowsServiceActions.TransportProfile() != windowsactionmanager.Profile(profile)) {
 		return nil, errors.New("Windows service action authority does not match the named Windows enrollment boundary")
+	}
+	if c.WindowsUpdateJobs != nil && (!c.WindowsUpdateJobs.EnrollmentOwned() || !c.WindowsUpdateJobs.OperatorPolicyConfigured() || c.WindowsEnrollment == nil || !c.Auth.Named() || c.InsecureHTTPTest || !c.WindowsUpdateJobs.MatchesBinding(c.WindowsEnrollment.Binding())) {
+		return nil, errors.New("selected Windows update jobs require the separate TLS named Windows enrollment boundary")
 	}
 	if c.ServiceActions != nil && (c.Enrollment == nil || !c.Auth.Named() || !c.ServiceActions.MatchesBinding(c.Enrollment.Binding()) || c.ServiceActions.TransportProfile() != actionmanager.Profile(profile)) {
 		return nil, errors.New("service action authority does not match the named operator enrollment boundary")
@@ -236,6 +244,7 @@ func NewLANOperatorHandler(app *Server, c LANOperatorConfig) (http.Handler, erro
 		packages = c.PackageActions
 	}
 	h := &operatorHandler{packageUpdatesManager: packages, alarmSettings: c.AlarmSettings, applicationChecks: c.ApplicationChecks, applicationCheckSettings: c.ApplicationCheckSettings, actions: actions, app: app, origin: c.Origin, authority: u.Host, auth: c.Auth, registry: c.Registry, insecureHTTPTest: c.InsecureHTTPTest, cookieName: cookieName, enrollment: c.Enrollment, enrollmentBootstrap: c.EnrollmentBootstrap}
+	h.windowsUpdateJobs = c.WindowsUpdateJobs
 	if c.WindowsServiceActions != nil {
 		h.windowsActions = c.WindowsServiceActions
 	}
@@ -473,6 +482,10 @@ func (h *operatorHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.packageUpdates(w, r)
 		return
 	}
+	if _, _, ok := windowsUpdateJobRoute(r); ok {
+		h.windowsUpdateJobsAPI(w, r)
+		return
+	}
 	if _, _, ok := windowsServiceActionRoute(r); ok {
 		h.windowsServiceActions(w, r)
 		return
@@ -491,6 +504,10 @@ func (h *operatorHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if session.Named() && !namedReadRoute(r) {
 		fail(w, 403, "operator_capability_required", "This named account does not have permission for this administrative operation.")
+		return
+	}
+	if r.URL.Path == "/api/fleet/groups" || strings.HasPrefix(r.URL.Path, "/api/fleet/groups/") {
+		h.fleetGroupsAPI(w, r)
 		return
 	}
 	if r.URL.Path == "/api/ai/journal" || strings.HasPrefix(r.URL.Path, "/api/ai/journal/") {
@@ -532,6 +549,10 @@ func (h *operatorHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if strings.HasPrefix(r.URL.Path, "/api/devices/") && strings.Contains(r.URL.Path, "/windows-software-history") {
 		h.windowsSoftwareHistoryQuery(w, r)
+		return
+	}
+	if strings.HasPrefix(r.URL.Path, "/api/devices/") && strings.Contains(r.URL.Path, "/windows-selected-user-software") {
+		h.windowsUserSoftwareQuery(w, r)
 		return
 	}
 	if strings.HasPrefix(r.URL.Path, "/api/devices/") && strings.Contains(r.URL.Path, "/windows-full-software") {
