@@ -318,8 +318,25 @@ func (s *Store) windowsUpdateJobCurrent(t *transaction, id string, binding windo
 // or erasing/replacing a consumed signed record. Unsigned readiness slots remain
 // replaceable; signed history, original ages, envelopes and results do not.
 func windowsUpdateJobTransition(before, after windowsupdatejob.Record, now int64) error {
-	if before.Version != after.Version || before.Consent != after.Consent || !bytes.Equal(before.PublicKey, after.PublicKey) || !bytes.Equal(before.ExecutorPublicKey, after.ExecutorPublicKey) || after.Sequence < before.Sequence || after.ClockFloor < before.ClockFloor || after.ClockFloor > now {
+	if before.Version != after.Version || before.Consent != after.Consent || !bytes.Equal(before.PublicKey, after.PublicKey) || !bytes.Equal(before.ExecutorPublicKey, after.ExecutorPublicKey) || after.Sequence < before.Sequence || after.ReadinessSequence < before.ReadinessSequence || after.ClockFloor < before.ClockFloor || after.ClockFloor > now {
 		return windowsupdatejob.ErrInvalid
+	}
+	// Replacing the unsigned readiness slot must issue a strictly newer signed
+	// challenge even when wall-clock issue/deadline values are unchanged.
+	for _, next := range after.Jobs {
+		unchanged := false
+		for _, old := range before.Jobs {
+			if bytes.Equal(old.Challenge, next.Challenge) {
+				unchanged = true
+				break
+			}
+		}
+		if !unchanged {
+			challenge, err := windowsupdatejob.VerifyChallenge(next.Challenge, after.PublicKey)
+			if err != nil || challenge.Sequence <= before.ReadinessSequence {
+				return windowsupdatejob.ErrInvalid
+			}
+		}
 	}
 	for _, old := range before.Jobs {
 		if len(old.Envelope) == 0 {

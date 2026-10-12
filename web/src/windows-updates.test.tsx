@@ -30,7 +30,11 @@ describe('read-only cached Windows Updates panel', () => {
         setLocale(locale, false); const de = locale === 'de'; render(<WindowsInventoryWorkspace resource={resource()}/>); select();
         expect(screen.getByRole('heading', { name: de ? 'Windows-Updates aus dem Cache' : 'Cached Windows Updates' })).toBeVisible();
         expect(screen.getByText(de ? /Die Aktualität des Caches ist unbekannt/ : /Cache freshness is unknown/)).toBeVisible();
-        expect(screen.getByText(de ? /Es startet keine Online-Suche/ : /It does not start an online scan/)).toBeVisible();
+        expect(screen.getByText(de ? /es sucht und installiert keine Updates/ : /it does not scan or install/)).toBeVisible();
+        expect(screen.getByText(de ? /weitere Updates können fehlen/ : /other updates may be missing/)).toBeVisible();
+        expect(screen.getByText(de ? /Es startet keine Online-Suche/ : /It does not start an online scan/)).not.toBeVisible();
+        expect(screen.getByText(de ? /Höchstens 128 native Einträge/ : /At most 128 native entries/)).not.toBeVisible();
+        expect(screen.queryByText(de ? /Namen und lokale Adressen können/ : /Names and local addresses may/)).toBeNull();
         expect(screen.getByRole('searchbox', { name: de ? 'Erfasste Updates filtern' : 'Filter captured updates' })).toHaveAttribute('maxLength', '256');
         expect(screen.getByRole('combobox', { name: de ? 'Erfasste Updates sortieren' : 'Sort captured updates' })).toHaveValue('title-asc');
         expect(document.querySelector('time[datetime="2026-10-07T12:00:00Z"]')).not.toBeNull();
@@ -40,7 +44,9 @@ describe('read-only cached Windows Updates panel', () => {
         for (const row of rows()) expect(within(row).getAllByRole('cell').map(cell => cell.getAttribute('data-label'))).toEqual(headers);
         expect(within(rows()[0]).getByText(de ? 'Ja' : 'Yes')).toBeVisible(); expect(within(rows()[1]).getByText(de ? 'Nein' : 'No')).toBeVisible();
         fireEvent.click(screen.getByText(de ? 'Umfang & Grenzen' : 'Scope & limits'));
-        expect(screen.getByText(de ? /kein CVE-Abgleich/ : /not a CVE match/)).toBeVisible(); expect(screen.getByText(de ? /Keine Updateaktionen/ : /No update actions/)).toBeVisible();
+        expect(screen.getByText(de ? /kein CVE-Abgleich/ : /not a CVE match/)).toBeVisible(); expect(screen.getByText(de ? /Beobachtungsumfang umfasst keine Updateaktionen/ : /observation scope performs no update actions/)).toBeVisible();
+        expect(screen.getByText(de ? /Es startet keine Online-Suche/ : /It does not start an online scan/)).toBeVisible();
+        expect(screen.getByText(de ? /Höchstens 128 native Einträge/ : /At most 128 native entries/)).toBeVisible();
         expect(screen.queryByRole('link')).toBeNull(); expect(screen.queryByRole('button', { name: /scan|download|install|reboot|export|grant|enable|apply/i })).toBeNull(); expect(request).not.toHaveBeenCalled(); expect(mutate).not.toHaveBeenCalled();
     });
     it('renders markup-shaped title only as inert text, without executable elements, links or source mutation', () => {
@@ -95,11 +101,19 @@ describe('Updates share the existing private resource and expiry', () => {
         render(<Harness/>); await ready(); refresh(); await flush(); expect(request).toHaveBeenCalledTimes(2);
         for (const call of vi.mocked(request).mock.calls) expect(call).toEqual([`/devices/${windowsDeviceId}/windows-inventory`, { signal: expect.any(AbortSignal) }, WINDOWS_INVENTORY_VIEW_BYTES]); expect(mutate).not.toHaveBeenCalled();
     });
-    it('lives in the authenticated shared Windows device inventory with no Linux endpoint calls', async () => {
+    it.each(['en', 'de'] as const)('labels only observations read-only and keeps general scope in device details in %s', async locale => {
+        setLocale(locale, false); const de = locale === 'de';
         const history = historyFixture(); history.deviceId = windowsDeviceId;
         vi.mocked(request).mockImplementation(async path => path === `/devices/${windowsDeviceId}` ? windowsDevice() : path.endsWith('/windows-inventory') ? windowsUpdatesView() : path.endsWith('/resource-history') ? history : Promise.reject(new Error('Unexpected fixture route')));
-        render(<DeviceDetail id={windowsDeviceId} onClose={vi.fn()} onCase={vi.fn()}/>); await screen.findByRole('heading', { name: 'fixture-windows' }); fireEvent.click(screen.getByRole('tab', { name: 'Inventory' })); select(); expect(screen.getByText('Synthetic cached update 001')).toBeVisible();
+        render(<DeviceDetail id={windowsDeviceId} onClose={vi.fn()} onCase={vi.fn()}/>); await screen.findByRole('heading', { name: 'fixture-windows' }); fireEvent.click(screen.getByRole('tab', { name: de ? 'Inventar' : 'Inventory' })); select(); expect(screen.getByText('Synthetic cached update 001')).toBeVisible();
+        expect(document.querySelector('.drawer-footer')).toHaveTextContent(de ? 'Inventarbeobachtungen sind nur lesend' : 'Inventory observations are read-only');
+        expect(document.querySelector('.drawer-footer span')?.textContent).not.toBe(de ? 'Nur lesend' : 'Read-only');
         expect(vi.mocked(request).mock.calls.map(([path]) => path).every(path => path === `/devices/${windowsDeviceId}` || path.endsWith('/windows-inventory') || path.endsWith('/resource-history'))).toBe(true); expect(mutate).not.toHaveBeenCalled(); expect(screen.queryByRole('tab', { name: /CVE|Security coverage/ })).toBeNull();
+        fireEvent.click(screen.getByRole('tab', { name: 'Details' }));
+        const scope = screen.getByText(de ? /Die Abdeckung hängt von lokalen APIs/ : /Coverage depends on the local APIs/);
+        expect(scope).not.toBeVisible();
+        fireEvent.click(screen.getByText(de ? 'Hinweise zu diesen Messungen' : 'About these measurements', { selector: 'summary' }));
+        expect(scope).toBeVisible();
     });
     it('keeps filters for a same-generation reread but clears them on changed generation/grant/capture and tab departure', async () => {
         vi.mocked(request).mockResolvedValue(windowsUpdatesView(61)); render(<Harness/>); await ready();

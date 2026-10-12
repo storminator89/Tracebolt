@@ -122,6 +122,13 @@ func runForeground(ctx context.Context, m Material, interval time.Duration, obse
 		defer func() { stopActions(); <-actionsDone; actions.Close() }()
 	}
 	if m.config.windowsInventory() {
+		// Selected update jobs use a different TLS-only local grant and executor
+		// client. Missing or unproven protected peers never poll or claim a job.
+		updateJobs := openWindowsUpdateJobSender(m)
+		updateJobContext, stopUpdateJobs := context.WithCancel(ctx)
+		updateJobsDone := make(chan struct{})
+		go func() { defer close(updateJobsDone); runWindowsUpdateJobLoop(updateJobContext, updateJobs) }()
+		defer func() { stopUpdateJobs(); <-updateJobsDone; updateJobs.Close() }()
 		actions := openWindowsActionSender(m)
 		actionContext, stopActions := context.WithCancel(ctx)
 		actionsDone := make(chan struct{})

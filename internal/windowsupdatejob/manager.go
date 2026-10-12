@@ -116,6 +116,7 @@ type Record struct {
 	ExecutorPublicKey []byte  `json:"executorPublicKey"`
 	ClockFloor        int64   `json:"clockFloor"`
 	Sequence          uint64  `json:"sequence,string"`
+	ReadinessSequence uint64  `json:"readinessSequence,string"`
 	Jobs              []Job   `json:"jobs"`
 }
 
@@ -130,16 +131,17 @@ func (r Record) Validate() error {
 		return ErrIntegrity
 	}
 	ids := map[string]bool{}
-	var seq uint64
+	var seq, readinessSeq uint64
 	for _, j := range r.Jobs {
 		if !enrollmentcrypto.ValidID(j.ID, "update_") || !enrollmentcrypto.ValidID(j.ActorID, "operator_") || !ValidSelection(j.Selection) || !validTime(j.RequestedAt) || j.RequestedAt > r.ClockFloor || ids[j.ID] {
 			return ErrIntegrity
 		}
 		ids[j.ID] = true
 		challenge, err := VerifyChallenge(j.Challenge, r.PublicKey)
-		if err != nil || challenge.Binding != r.Consent.Binding || challenge.JobID != j.ID || challenge.Selection != j.Selection || challenge.IssuedAt != j.RequestedAt {
+		if err != nil || challenge.Binding != r.Consent.Binding || challenge.JobID != j.ID || challenge.Selection != j.Selection || challenge.IssuedAt != j.RequestedAt || challenge.Sequence <= readinessSeq || challenge.Sequence > r.ReadinessSequence {
 			return ErrIntegrity
 		}
+		readinessSeq = challenge.Sequence
 		if j.ReadinessClaimedAt != 0 && (j.ReadinessClaimedAt < j.RequestedAt || j.ReadinessClaimedAt >= challenge.Deadline || j.ReadinessClaimedAt > r.ClockFloor) {
 			return ErrIntegrity
 		}
@@ -203,7 +205,7 @@ func (r Record) Validate() error {
 			return ErrIntegrity
 		}
 	}
-	if seq != r.Sequence || seq > MaxJobs {
+	if seq != r.Sequence || seq > MaxJobs || readinessSeq != r.ReadinessSequence {
 		return ErrIntegrity
 	}
 	return nil
@@ -401,7 +403,7 @@ func (m *Manager) Request(ctx context.Context, device, actor, id string, s Selec
 				return ErrConflict
 			}
 		}
-		if m.blocked(n, "") {
+		if m.blocked(n, "") || m.record.ReadinessSequence == ^uint64(0) {
 			return ErrConflict
 		}
 		// One replaceable unsigned readiness slot; approved/claimed/result records
@@ -413,7 +415,8 @@ func (m *Manager) Request(ctx context.Context, device, actor, id string, s Selec
 			}
 		}
 		m.record.Jobs = kept
-		challenge, err := SignChallenge(Challenge{Version: RelayVersion, Binding: m.Binding(), JobID: id, Selection: s, IssuedAt: n, Deadline: min(n+120, c.LeafNotAfter, m.record.Consent.ExpiresAt)}, m.key)
+		m.record.ReadinessSequence++
+		challenge, err := SignChallenge(Challenge{Sequence: m.record.ReadinessSequence, Version: RelayVersion, Binding: m.Binding(), JobID: id, Selection: s, IssuedAt: n, Deadline: min(n+120, c.LeafNotAfter, m.record.Consent.ExpiresAt)}, m.key)
 		if err != nil {
 			return err
 		}

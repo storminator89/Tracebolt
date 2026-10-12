@@ -113,15 +113,21 @@ jobs:
           mkdir -p artifacts/windows-action-source
           go build -buildvcs=false -trimpath -o artifacts/windows-action-source/tracebolt-windows-service.exe ./cmd/windows-service
           go build -buildvcs=false -trimpath -o artifacts/windows-action-source/tracebolt-windows-action-broker.exe ./cmd/windows-action-broker
+          go build -buildvcs=false -trimpath -o artifacts/windows-action-source/tracebolt-windows-update-executor.exe ./cmd/windows-update-executor
+          # Compile inert Windows ABI/authority/IPC fixtures on both architectures.
+          # Never run these binaries, create grants/pipes, or dispatch WUA here.
+          for package in windowsupdatejob windowsupdateexecutor windowsupdateipc lanclient; do
+            go test -c -buildvcs=false -o "$RUNNER_TEMP/${package}-${GOARCH}.test.exe" "./internal/$package"
+          done
           python3 - <<'PY'
           import hashlib, json, os
           from pathlib import Path
           root = Path('artifacts/windows-action-source')
-          for name in ('tracebolt-windows-service', 'tracebolt-windows-action-broker'):
+          for name in ('tracebolt-windows-service', 'tracebolt-windows-action-broker', 'tracebolt-windows-update-executor'):
               digest = hashlib.sha256((root / (name + '.exe')).read_bytes()).hexdigest()
               manifest = {'schemaVersion': 'tracebolt.windows-setup-package.v1', 'version': 'v0.0.0-source', 'sourceCommit': os.environ['GITHUB_SHA'], 'architecture': os.environ['GOARCH'], 'sha256': digest}
               (root / (name + '.manifest.json')).write_text(json.dumps(manifest, separators=(',', ':')) + '\n')
-          (root / 'SOURCE-ONLY.txt').write_text('Unsigned source artifacts. No native installation, ACL grant, service start, target action, release or acceptance is established. Review matching source and exact hashes before separately authorized native use.\n')
+          (root / 'SOURCE-ONLY.txt').write_text('Unsigned source artifacts. No native installation, ACL grant, service start, target action, WUA execution, release or acceptance is established. Review matching source and exact hashes before separately authorized native use.\n')
           PY
       - name: Upload unsigned source artifacts only
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
