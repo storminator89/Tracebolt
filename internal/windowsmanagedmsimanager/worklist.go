@@ -121,7 +121,7 @@ func (r *Registry) worklistRead(ctx context.Context, actor string) (msi.Worklist
 	return s.ReadWindowsMSIWorklists(ctx, r.artifact.key)
 }
 func worklistMatches(w msi.Worklist, rec msi.Record, t msi.WorklistTarget) bool {
-	return rec.Grant.Binding == t.Binding && rec.Grant.Version == msi.ReusableGrantVersion && rec.Artifact != nil && rec.ArtifactRetiredCount == w.ArtifactRetiredCount && msi.ArtifactIdentity(*rec.Artifact) == w.ArtifactID && rec.TransferID == t.TransferID && rec.Jobs != nil && rec.Jobs.Sequence == t.JobSequence
+	return rec.Grant.Binding == t.Binding && rec.Grant.Reusable() && rec.Artifact != nil && rec.ArtifactRetiredCount == w.ArtifactRetiredCount && msi.ArtifactIdentity(*rec.Artifact) == w.ArtifactID && rec.TransferID == t.TransferID && rec.Jobs != nil && rec.Jobs.Sequence == t.JobSequence
 }
 
 type worklistEvidence struct {
@@ -302,6 +302,9 @@ func worklistEligible(w msi.Worklist, t msi.WorklistTarget, v View, kind string,
 	if t.TransferID == "" || v.TransferID != t.TransferID || v.JobSequence != strconv.FormatUint(t.JobSequence, 10) {
 		return "changed"
 	}
+	if (kind == "review" || kind == "approve") && v.Schedule != nil {
+		return "not_eligible"
+	}
 	if kind == "review" {
 		if v.CanReview {
 			return ""
@@ -464,7 +467,7 @@ func (r *Registry) ConfirmWorklist(ctx context.Context, sess WorklistSession, id
 					}
 				}
 			} else {
-				if !worklistMatches(*w, rec, *t) || item.TransferID != t.TransferID || item.JobSequence != strconv.FormatUint(t.JobSequence, 10) || q.Kind != "retire" && len(rec.InstallPermit) != 0 {
+				if !worklistMatches(*w, rec, *t) || item.TransferID != t.TransferID || item.JobSequence != strconv.FormatUint(t.JobSequence, 10) || q.Kind != "retire" && (len(rec.InstallPermit) != 0 || rec.Schedule != nil) {
 					return msi.ErrConflict
 				}
 				if !rec.Grant.InstallEnabled || !rec.Grant.InstallAcknowledged {

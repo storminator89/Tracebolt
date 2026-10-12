@@ -83,6 +83,42 @@ class SelectionTests(unittest.TestCase):
         for path in ['web/src/App.tsx', 'web/src/api.ts', 'web/src/new-feature.tsx', 'web/package-lock.json']:
             self.assertTrue(self.select(('M', path))['broadWeb'])
 
+    def test_scheduled_msi_product_and_paired_setup_select_existing_hosted_flows(self):
+        msi = {'windows-fleet-msi', 'windows-managed-msi', 'windows-mutation-coexistence'}
+        for path, extra in {
+            'internal/windowsmanagedmsi/schedule.go': set(),
+            'internal/windowsmanagedmsimanager/schedule.go': set(),
+            'internal/api/windows_managed_msi.go': set(),
+            'internal/enrollmentstore/windows_managed_msi_schedule.go': set(),
+            'cmd/windows-managed-msi-manager-setup/main.go': set(),
+            'cmd/windows-service/scheduled_msi_plan_test.go': {'lan'},
+            'cmd/windows-service/managed_msi_provision_windows.go': {'managed'},
+            'cmd/windows-service/mutation_provision_windows.go': {'lan', 'windows-service-actions'},
+            'internal/enrollmentstore/windows_mutation_pair.go': {'enrollment', 'windows-service-actions'},
+        }.items():
+            with self.subTest(path=path):
+                package = 'localrmm/' + str(Path(path).parent)
+                plan = p.select([('M', path)], {package: set()}, {path: {package}}, SHA)
+                self.assertEqual(set(plan['flows']), msi | extra)
+                self.assertEqual(plan['packages'], [package])
+                self.assertFalse(plan['broadGo'])
+                self.assertFalse(plan['broadWeb'])
+        for path in ['web/src/windows-managed-msi-schedule.tsx', 'web/src/windows-managed-msi-schedule-types.ts',
+                     'web/src/windows-managed-msi-schedule.test.tsx']:
+            with self.subTest(path=path):
+                self.assertEqual(set(self.select(('M', path))['flows']), msi)
+
+    def test_scheduled_msi_captures_stay_in_fleet_runner_and_both_artifact_allowlists(self):
+        self.assertEqual(p.FLOWS['windows-fleet-msi'], 'web/scripts/run-windows-fleet-msi-ci.mjs')
+        runner = (ROOT / p.FLOWS['windows-fleet-msi']).read_text()
+        self.assertIn('await captureWindowsScheduledMSIFixtures', runner)
+        self.assertIn('scheduled.captures.length,scheduledMSIScenes.length*4', runner)
+        for name in ['windows-scheduled-msi-results.json', 'windows-scheduled-msi-manifest.json']:
+            self.assertIn(name, runner)
+            for workflow in ['validate.yml', 'pr-checks.yml']:
+                source = (ROOT / '.github/workflows' / workflow).read_text()
+                self.assertEqual(source.count('            artifacts/review/' + name + '\n'), 1)
+
     def test_docs_keep_fixed_safety_checks_without_affected_package_claim(self):
         plan = self.select(('M', 'docs/example.md'))
         self.assertEqual(plan['packages'], [])

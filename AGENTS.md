@@ -365,3 +365,11 @@ window, acknowledgement and original-expiry bindings. Log-backed source/model
 text stays memory-only; durable receipt/attempt metadata must contain no log or
 model prose. The existing managed-profile `BuildPacket` exclusion remains intact.
 See `docs/proactive-service-log-ai.md` for bounds and the native fixture boundary.
+
+- Fresh scheduled central MSI requires `docs/windows-scheduled-managed-msi.md`.
+  Preserve old v1/v2/v3 bytes and separate fresh v4 local consent, exact original
+  occurrence/binding/actor/leaf, one fixed UTC window, one fresh readiness and
+  one short-lived permit. Cancel stops unsent work only; central revocation cannot
+  recall already delivered permits. Keep durable actor terminalization, native
+  local authority/fence checks and separate explicit retirement. No rearm,
+  reschedule, retry, new service, host grant or native acceptance follows.

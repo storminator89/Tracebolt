@@ -27,14 +27,15 @@ func run(args []string, out io.Writer) error {
 	registration := flags.String("registration-file", "", "Protected public Windows setup registration; finalize only")
 	fleet := flags.Bool("fleet", false, "Create fresh upload-once fleet v2; never adopts singleton v1")
 	reusable := flags.Bool("reusable-jobs", false, "Fresh v3 repeated separately approved jobs under original expiry; requires --fleet and coordinated endpoint setup")
+	scheduled := flags.Bool("scheduled-jobs", false, "Fresh v4 explicitly approved UTC MSI windows; requires --fleet --reusable-jobs and paired background endpoint setup")
 	additional := flags.Bool("additional-device", false, "Add one explicitly configured fleet target using the existing fleet key")
 	apply := flags.Bool("apply", false, "Explicitly apply this create-only phase")
 	approve := flags.String("approve-plan", "", "Exact reviewed public plan digest")
 	acknowledge := flags.Bool("ack-managed-msi-delivery-install", false, "Approve the reviewed key preparation or reciprocal persistent managed MSI software authority; each actual install still requires separate named approval")
-	if flags.Parse(args[1:]) != nil || flags.NArg() != 0 || *lan == "" || *en == "" || *device == "" || !*apply && (*approve != "" || *acknowledge) || *apply && (*approve == "" || !*acknowledge) {
+	if flags.Parse(args[1:]) != nil || flags.NArg() != 0 || *scheduled && (!*fleet || !*reusable) || *lan == "" || *en == "" || *device == "" || !*apply && (*approve != "" || *acknowledge) || *apply && (*approve == "" || !*acknowledge) {
 		return windowsmanagedmsimanager.ErrSetup
 	}
-	request := windowsmanagedmsimanager.SetupRequest{Reusable: *reusable, Fleet: *fleet, AdditionalDevice: *additional, Phase: args[0], LANConfig: *lan, EnrollmentConfig: *en, DeviceID: *device, ExpiresAt: *expires, RegistrationFile: *registration}
+	request := windowsmanagedmsimanager.SetupRequest{Scheduled: *scheduled, Reusable: *reusable, Fleet: *fleet, AdditionalDevice: *additional, Phase: args[0], LANConfig: *lan, EnrollmentConfig: *en, DeviceID: *device, ExpiresAt: *expires, RegistrationFile: *registration}
 	plan, e := windowsmanagedmsimanager.PlanSetup(context.Background(), request, time.Now().UTC())
 	if e != nil {
 		return windowsmanagedmsimanager.ErrSetup

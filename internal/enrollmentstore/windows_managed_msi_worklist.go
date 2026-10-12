@@ -195,7 +195,7 @@ func (s *Store) WindowsMSIWorklistTransaction(ctx context.Context, key ed25519.P
 				return ErrStorage
 			}
 			selected[b.DeviceID] = true
-			if r.Grant.Binding != b || r.Grant.Version != msi.ReusableGrantVersion {
+			if r.Grant.Binding != b || !r.Grant.Reusable() {
 				return msi.ErrAuthority
 			}
 			c, e := s.windowsManagedMSICurrent(t, snap.InvitationID, b, r.Grant, initial)

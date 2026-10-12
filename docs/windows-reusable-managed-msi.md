@@ -146,3 +146,11 @@ Shared payload retirement remains a separate explicit operation after all signed
 endpoint retirement reports. Neither save, stop, completion nor archive clears unresolved
 assignments or permits another payload. This manager/UI addition creates no new
 endpoint grant, privilege, setup service or native execution operation.
+
+## Fresh scheduled profile
+
+A separate [scheduled MSI v4 profile](windows-scheduled-managed-msi.md) adds one
+explicit prospective UTC installation approval for an already-imported exact
+assignment. It requires fresh paired background setup and a separate scheduling
+capability; reusable-v3 state and manual approvals never acquire that authority.
+Delivery and both package-retirement operations remain explicit.

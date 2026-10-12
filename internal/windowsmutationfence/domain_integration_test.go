@@ -230,6 +230,11 @@ func newPair(t *testing.T, reusable ...bool) *pairedDomains {
 		f.consent.ScheduleScope = wua.ScheduleScope
 		f.consent.ScheduleAcknowledged = true
 	}
+	if len(reusable) > 3 && reusable[3] {
+		f.grant.Version = msi.ScheduledGrantVersion
+		f.grant.ScheduledEnabled = true
+		f.grant.ScheduledAcknowledged = true
+	}
 	f.shared = fence.NewIntegrationFence(t, plan, msi.MutationParticipant(f.grant), wua.MutationParticipant(f.consent), f.now)
 	f.msiSession = f.shared.Session(t, fence.ManagedMSI)
 	f.wuaSession = f.shared.Session(t, fence.CachedWUA)
@@ -284,8 +289,8 @@ func (f *pairedDomains) prepareMSI(t *testing.T) {
 	copy(data, []byte{0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1})
 	sel := msi.Selection{SHA256: actionpermit.Digest(data), Size: int64(len(data)), ProductCode: "{11111111-1111-1111-1111-111111111111}", PackageCode: "{22222222-2222-2222-2222-222222222222}", Version: "1.2.3", Architecture: "amd64", Name: "Inert fixture MSI", TermsReviewDigest: digest("reviewed terms fixture"), ReviewReference: "inert only"}
 	p := msi.Permit{Version: msi.Version, Kind: "deliver", TransferID: id("transfer_", 9), Binding: f.grant.Binding, LeafDigest: f.msiCurrent.LeafDigest, Package: sel, NativeAcceptanceDigest: digest("inert acceptance fixture"), ActorID: id("operator_", 10), IssuedAt: f.at.Load(), ExpiresAt: f.at.Load() + 600}
-	if f.grant.Version == msi.ReusableGrantVersion {
-		p.Version = msi.ReusableVersion
+	if f.grant.Reusable() {
+		p.Version = msi.GrantWire(f.grant)
 		p.JobSequence = 1
 		p.PublisherStatus = "unverified"
 		p.PublisherEvidenceDigest = digest("publisher review")

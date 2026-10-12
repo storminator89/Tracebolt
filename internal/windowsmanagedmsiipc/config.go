@@ -14,6 +14,7 @@ import (
 
 const ConfigVersion = "tracebolt.windows-managed-msi-service-config.v1"
 
+const ScheduledConfigVersion = "tracebolt.windows-managed-msi-service-config.v4"
 const ReusableConfigVersion = "tracebolt.windows-managed-msi-service-config.v3"
 const CoordinatedConfigVersion = "tracebolt.windows-managed-msi-service-config.v2"
 
@@ -35,7 +36,7 @@ type Config struct {
 }
 
 func (c Config) Validate() error {
-	if !job.ValidDigest(c.ObserverConfigDigest) || c.SenderBinding == "" || c.ManagerOrigin == "" || !(c.Version == ConfigVersion && c.Mutation == nil && c.Grant.MutationPlanDigest == "" || (c.Version == CoordinatedConfigVersion || c.Version == ReusableConfigVersion) && (c.Version == ReusableConfigVersion) == (c.Grant.Version == job.ReusableGrantVersion) && job.ValidMutationRoster(c.Mutation, c.Grant)) || c.Grant.Validate() != nil || !c.Grant.DeliveryEnabled || !c.Grant.DeliveryAcknowledged || !c.Grant.ServiceRiskAcknowledged || !keyvalidation.Ed25519(c.ManagerPublicKey) || !keyvalidation.Ed25519(c.ExecutorPublicKey) || actionpermit.Digest(c.ManagerPublicKey) != c.Grant.Binding.KeyID || actionpermit.Digest(c.ExecutorPublicKey) != c.Grant.Binding.ExecutorKeyID || !c.ObserverReceipt.Complete || c.ObserverReceipt.Version != 1 || c.ObserverReceipt.InstallationID == "" || c.ObserverReceipt.ServiceSID == "" {
+	if !job.ValidDigest(c.ObserverConfigDigest) || c.SenderBinding == "" || c.ManagerOrigin == "" || !(c.Version == ConfigVersion && c.Mutation == nil && c.Grant.MutationPlanDigest == "" || c.validPairedProfile() && job.ValidMutationRoster(c.Mutation, c.Grant)) || c.Grant.Validate() != nil || !c.Grant.DeliveryEnabled || !c.Grant.DeliveryAcknowledged || !c.Grant.ServiceRiskAcknowledged || !keyvalidation.Ed25519(c.ManagerPublicKey) || !keyvalidation.Ed25519(c.ExecutorPublicKey) || actionpermit.Digest(c.ManagerPublicKey) != c.Grant.Binding.KeyID || actionpermit.Digest(c.ExecutorPublicKey) != c.Grant.Binding.ExecutorKeyID || !c.ObserverReceipt.Complete || c.ObserverReceipt.Version != 1 || c.ObserverReceipt.InstallationID == "" || c.ObserverReceipt.ServiceSID == "" {
 		return job.ErrInvalid
 	}
 	return c.peerUnchecked().Validate()
@@ -72,3 +73,15 @@ func StoreOptions() windowsstate.Options {
 }
 
 const ServiceName = "TraceboltWindowsDeployment"
+
+func (c Config) validPairedProfile() bool {
+	switch c.Version {
+	case CoordinatedConfigVersion:
+		return c.Grant.Version == job.CoordinatedGrantVersion
+	case ReusableConfigVersion:
+		return c.Grant.Version == job.ReusableGrantVersion
+	case ScheduledConfigVersion:
+		return c.Grant.Scheduled()
+	}
+	return false
+}

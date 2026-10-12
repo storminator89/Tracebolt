@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "sourceCommit": "fccc4b00cd8a144afd58e4b995747afab7a10022",
-  "goSourceSha256": "7df5a26f896ba1bd3c63d8f996a04ef6e633ed85d52c4d65e7d105b798983d62",
+  "goSourceSha256": "31f4f838d1e9466895b3f86d012c136300475d2a306bbb25a799bb5fb3b572f8",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -217,7 +217,8 @@
       "TestShortWriteFails"
     ],
     "localrmm/cmd/windows-managed-msi-manager-setup": [
-      "TestManagedManagerSetupRequiresSeparateExactApplyApproval"
+      "TestManagedManagerSetupRequiresSeparateExactApplyApproval",
+      "TestScheduledMSIManagerSetupRequiresFreshFleetReusableSelection"
     ],
     "localrmm/cmd/windows-managed-msi-service": [],
     "localrmm/cmd/windows-native-acceptance": [
@@ -339,6 +340,7 @@
       "TestIndependentReceiptLeaseCancellationDuringCloseCannotSucceed",
       "TestIndependentSetupCancellationDuringCloseCannotSucceed",
       "TestIndependentSetupCloseKeepsFirstFailureDiagnosis",
+      "TestLegacyMSIEndpointPlanOmitsScheduledDisclosure",
       "TestManagedMSISetupNeedsEveryFreshLocalScope",
       "TestManagedMSISetupRejectsPackagePathShellAndImplicitActivation",
       "TestNetworkConsentErrorsAndInvalidModes",
@@ -434,6 +436,8 @@
       "TestRestartPublicDeadlineBeginsBeforeReceiptAcquisition",
       "TestRetainedBootstrapValidationCapturesCategoryBeforePublicCollapse",
       "TestScheduledBackgroundSetupRequiresCombinedSelectionAndEveryAcknowledgement",
+      "TestScheduledMSIPairedPlansRetainIndependentWUAScheduling",
+      "TestScheduledMSISetupRequiresSeparateAcknowledgementAndBackground",
       "TestScheduledUpdateSetupRequiresSeparateFreshFlagAndAcknowledgement",
       "TestSecurityCoverageWorkerEntryRechecksActualParentBeforeReturning",
       "TestSecurityPostureConsentErrorsAndInvalidModes",
@@ -1011,6 +1015,8 @@
       "TestManagedFleetReadRechecksPinnedCapabilityAfterWait",
       "TestManagedMSIOccurrenceRequestPinsRequireCanonicalStrings",
       "TestManagedMSIOperatorRoutesClosed",
+      "TestManagedMSIScheduleExactBody",
+      "TestManagedMSIScheduleFinalFenceRequiresBothCapabilities",
       "TestManagedMSIWorklistRetirementBatchContextCannotDowngrade",
       "TestManagedMSIWorklistRetirementStrictOptionalBatch",
       "TestManagedMSIWorklistRoutesAndStrictOptionalBatch",
@@ -1782,6 +1788,15 @@
       "TestManagedFleetArtifactIndependentOfRevokedOrExpiredTarget",
       "TestManagedFleetRejectsAliasedBindingsAndSingletonAdoption",
       "TestManagedMSIRejectsPreparedKeyReuse",
+      "TestManagedMSISchedulePolicyCannotInventFutureFloor",
+      "TestManagedMSISchedulePolicyLegacyBytesRemainUnchanged",
+      "TestManagedMSISchedulePolicyRejectedTransactionsKeepTerminalization",
+      "TestManagedMSISchedulePolicyRetainsIssuedPermitAndClaim",
+      "TestManagedMSISchedulePolicyStartupRequiresExactRegisteredAuthority",
+      "TestManagedMSISchedulePolicyStartupTerminalizesExpiredAndRevoked",
+      "TestManagedMSIScheduledFreshStoreWorklistAndRestart",
+      "TestManagedMSIScheduledRegistryDoesNotAdoptManualReusable",
+      "TestManagedMSIScheduledRequiresFreshWorklistMarker",
       "TestManagedMSISetupFreshPreservesPreparedBytes",
       "TestManagedMSIUploadIntentImmutableAndFinalClock",
       "TestManagedMSIWorklistAtomicIssueRestartAndReplay",
@@ -1846,6 +1861,7 @@
       "TestScheduledBackgroundEnrollmentReconcilesExactSavedReadinessAfterBusy",
       "TestScheduledBackgroundFinalCommitRechecksSharedCaptureAfterBlockingChecks",
       "TestScheduledBackgroundOriginalCapCancellationAndPolicyRemainIrreversible",
+      "TestScheduledMSIPairRequiresBackgroundAndIndependentWUAConsent",
       "TestServiceActionCanceledPersistenceReleasesNoApproval",
       "TestServiceActionObservedExpiryCannotRevive",
       "TestServiceActionPreviewExpiryCannotReviveAfterFailedApproval",
@@ -4468,6 +4484,7 @@
       "TestWindowsManagedOSProvenanceRejectsUntrustedMetadata"
     ],
     "localrmm/internal/windowsmanagedmsi": [
+      "TestLegacyMSIGrantBytesAndDefaultOffRemainExact",
       "TestManagedContractDomainsAndBounds",
       "TestManagedDeliverySeparateReviewAndSingleAttempt",
       "TestManagedFinalCurrentFenceAndNoRestart",
@@ -4481,6 +4498,9 @@
       "TestManagedUncertainFinalizationNeverRestarts",
       "TestManagedUnexplainedPayloadFences",
       "TestReusableOccurrenceReferencesUseFloorEvenForIdenticalCustody",
+      "TestScheduledMSICompatibilityAndSignedIPCBound",
+      "TestScheduledMSIPhysicalFactsComparator",
+      "TestScheduledSetupRequiresFreshExactProfileAndAcknowledgements",
       "TestWorklistOriginalStageCanonicalBytesAndDigests",
       "TestWorklistRetirementOnlyResultDigest"
     ],
@@ -4514,6 +4534,13 @@
       "TestReusableReservePinsInitialEmptyAndRetiredOccurrences",
       "TestReusableSharedRetirementKeepsOtherUnresolvedTarget",
       "TestReusableViewRejectsUnresolvedOlderOccurrence",
+      "TestScheduledMSICancelSerializesWithIssuance",
+      "TestScheduledMSICompletedRegistrationPinsExactProfile",
+      "TestScheduledMSIExactWindowRestartAndSavedOutcome",
+      "TestScheduledMSIFinalReleaseAfterCommitAndCleanupAuthority",
+      "TestScheduledMSIFinalReleaseRechecksActorAndClock",
+      "TestScheduledMSIRevocationFactsWindowAndBusyFence",
+      "TestScheduledManagerPlanKeepsOldRequestBytes",
       "TestSpoolChangedUnacknowledgedTailIsNeverOverwritten",
       "TestSpoolSingleLinkExactChunksAndSameByteRecovery",
       "TestWorklistRetirementExactSettledResultAndSignedReconciliation",
@@ -4522,7 +4549,8 @@
     ],
     "localrmm/internal/windowsmanagedmsiservice": [
       "TestBackgroundMSIActivationPreservesLegacyBytesAndDenial",
-      "TestBackgroundMSIActivationRequiresExactPairedManagerProof"
+      "TestBackgroundMSIActivationRequiresExactPairedManagerProof",
+      "TestScheduledMSIServiceConfigAndActivationPinFullFreshGrant"
     ],
     "localrmm/internal/windowsmutationfence": [
       "TestActualDomainCompletionIsDurableBeforeSharedRelease",
@@ -4552,6 +4580,8 @@
       "TestSavedDomainReceiptAfterCrashBeforeFenceCompletion",
       "TestScheduledBackgroundBusyMSIWaitsThenSameReportAdmitsOneWUA",
       "TestScheduledBackgroundNativeEdgeExpiryAndCleanupKeepDurableOwner",
+      "TestScheduledMSIEndpointOneAttemptAndNativeEdge",
+      "TestScheduledMSIJoinedManagerEndpointFenceRestart",
       "TestTwoDomainsHaveOneOwner",
       "TestUncertainFinalStartWriteNeverCallsNativeGuard",
       "TestUncertainReserveAndDispatchNeverYieldRunnableCapability"

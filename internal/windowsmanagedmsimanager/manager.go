@@ -25,6 +25,8 @@ type Manager struct {
 	now                             func() time.Time
 	configurationCheck              func() error
 	deliveryAllowed, installAllowed func(string) bool
+	schedulePolicy                  func(string) bool
+	scheduledProfile                bool
 	failed                          bool
 }
 
@@ -54,7 +56,7 @@ func open(ctx context.Context, store msi.TransactionStore, b msi.Binding, key ed
 	} else if spool.validateRecord(true, r.Artifact.CompletedAt != 0, r.Artifact.Package.Size) != nil {
 		return nil, msi.ErrIntegrity
 	}
-	return &Manager{artifact: artifact, store: store, binding: b, key: bytes.Clone(key), spool: spool, now: clock, configurationCheck: check}, nil
+	return &Manager{artifact: artifact, store: store, binding: b, key: bytes.Clone(key), spool: spool, now: clock, configurationCheck: check, scheduledProfile: r.Grant.Scheduled()}, nil
 }
 func (m *Manager) Binding() msi.Binding {
 	if m == nil {
@@ -120,7 +122,12 @@ func (m *Manager) transaction(ctx context.Context, actor, kind string, fn func(*
 	if m == nil || m.failed || ctx == nil {
 		return msi.Record{}, msi.ErrUncertain
 	}
+	var scheduledActor string
+	ctx = msi.WithSchedulePolicy(ctx, m.scheduleAllowed)
 	ctx = msi.WithFinalCheck(ctx, func() error {
+		if scheduledActor != "" && !m.scheduleAllowed(scheduledActor) {
+			return msi.ErrAuthority
+		}
 		if e := m.configurationCheck(); e != nil {
 			return e
 		}
@@ -136,7 +143,14 @@ func (m *Manager) transaction(ctx context.Context, actor, kind string, fn func(*
 		if e := checkJobOccurrence(ctx, *r); e != nil {
 			return e
 		}
-		return fn(r, c, at.Unix())
+		if e := msi.TerminalizeSchedulePolicy(r, at.Unix(), m.scheduleAllowed); e != nil {
+			return e
+		}
+		err := fn(r, c, at.Unix())
+		if r.Schedule != nil && !r.Schedule.Terminal() && len(r.ResultReport) == 0 {
+			scheduledActor = r.Schedule.Approval.ActorID
+		}
+		return err
 	})
 	if e == msi.ErrUncertain || e == msi.ErrIntegrity {
 		m.failed = true
@@ -311,7 +325,7 @@ func (m *Manager) deliver(ctx context.Context, actor, id string, ack bool, artif
 	}
 	_, e := m.transaction(ctx, actor, "deliver", func(r *msi.Record, c msi.Current, n int64) error {
 		if shared != nil {
-			if r.Grant.Version == msi.ReusableGrantVersion && r.TransferID != "" {
+			if r.Grant.Reusable() && r.TransferID != "" {
 				// One assigned job per shared custody occurrence. A retired row
 				// becomes selectable only after explicit shared retirement/upload.
 				if sharedRetiredCount <= r.ArtifactRetiredCount {
@@ -337,7 +351,7 @@ func (m *Manager) deliver(ctx context.Context, actor, id string, ack bool, artif
 			return msi.ErrConsumed
 		}
 		p := msi.Permit{Version: msi.Version, Kind: "deliver", TransferID: id, Binding: m.binding, LeafDigest: c.LeafDigest, Package: r.Artifact.Package, NativeAcceptanceDigest: r.Artifact.NativeAcceptanceDigest, ActorID: actor, IssuedAt: n, ExpiresAt: min(n+86400, r.Grant.ExpiresAt, c.LeafNotAfter)}
-		if r.Grant.Version == msi.ReusableGrantVersion {
+		if r.Grant.Reusable() {
 			if r.Jobs.Sequence == 0 {
 				r.Jobs.Sequence = 1
 			}
@@ -360,6 +374,9 @@ func (m *Manager) Review(ctx context.Context, actor string, packageReview, terms
 		return msi.ErrInvalid
 	}
 	_, e := m.transaction(ctx, actor, "install", func(r *msi.Record, c msi.Current, n int64) error {
+		if r.Schedule != nil {
+			return msi.ErrConsumed
+		}
 		if !r.Grant.InstallEnabled || !r.Grant.InstallAcknowledged {
 			return msi.ErrAuthority
 		}
@@ -382,7 +399,7 @@ func (m *Manager) Review(ctx context.Context, actor string, packageReview, terms
 			return msi.ErrUnavailable
 		}
 		p := msi.Permit{Version: msi.Version, Kind: "readiness", TransferID: r.TransferID, Binding: m.binding, LeafDigest: c.LeafDigest, Package: r.Artifact.Package, NativeAcceptanceDigest: r.Artifact.NativeAcceptanceDigest, ActorID: actor, IssuedAt: n, ExpiresAt: min(n+60, r.Grant.ExpiresAt, c.LeafNotAfter), Sequence: sequence, MaintenanceUntil: min(n+600, r.Grant.ExpiresAt, c.LeafNotAfter), PackageReviewAccepted: true, TermsAccepted: true}
-		if r.Grant.Version == msi.ReusableGrantVersion {
+		if r.Grant.Reusable() {
 			p = msi.PermitForGrant(p, r.Grant, r.Jobs.Sequence, *r.Artifact)
 		}
 		if len(synchronous) == 1 && synchronous[0] {
@@ -404,6 +421,9 @@ func (m *Manager) Approve(ctx context.Context, actor, readinessDigest string, ac
 		return msi.ErrInvalid
 	}
 	_, e := m.transaction(ctx, actor, "install", func(r *msi.Record, c msi.Current, n int64) error {
+		if r.Schedule != nil {
+			return msi.ErrConsumed
+		}
 		if !r.Grant.InstallEnabled || !r.Grant.InstallAcknowledged {
 			return msi.ErrAuthority
 		}
@@ -440,6 +460,11 @@ func (m *Manager) Approve(ctx context.Context, actor, readinessDigest string, ac
 func (m *Manager) Poll(ctx context.Context) (msi.PollResponse, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if m.scheduledProfile {
+		if e := m.advanceScheduleLocked(ctx); e != nil {
+			return msi.PollResponse{}, e
+		}
+	}
 	var out msi.PollResponse
 	var actor, kind string
 	var deadline int64
@@ -453,6 +478,9 @@ func (m *Manager) Poll(ctx context.Context) (msi.PollResponse, error) {
 		return nil
 	})
 	_, e := m.transaction(ctx, "", "", func(r *msi.Record, c msi.Current, n int64) error {
+		if r.Schedule != nil && len(r.RetirePermit) == 0 && (r.Schedule.Terminal() || r.Schedule.ReadinessIssuedAt == 0) {
+			return nil
+		}
 		var raw []byte
 		var claim *int64
 		if len(r.RetirePermit) != 0 && len(r.RetiredReport) == 0 && r.RetireClaimedAt == 0 {
@@ -475,6 +503,9 @@ func (m *Manager) Poll(ctx context.Context) (msi.PollResponse, error) {
 			return e
 		}
 		actor, kind = p.ActorID, p.Kind
+		if p.ScheduleDigest != "" && !m.scheduleAllowed(actor) {
+			return msi.ErrAuthority
+		}
 		deadline = p.ExpiresAt
 		if !m.allowed(actor, kind) {
 			return msi.ErrAuthority
@@ -550,7 +581,7 @@ func (m *Manager) Report(ctx context.Context, raw []byte) error {
 		// The relay may still hold A's immutable retirement while the operator
 		// has explicitly delivered B. Acknowledge only its exact retained digest
 		// so the next ordinary poll can convey B; no report or floor is rewritten.
-		if e == nil && r.Grant.Version == msi.ReusableGrantVersion && report.Kind == "retired" && report.Binding == m.binding && report.JobSequence == r.Jobs.RetiredFloor && len(r.Jobs.Recent) > 0 {
+		if e == nil && r.Grant.Reusable() && report.Kind == "retired" && report.Binding == m.binding && report.JobSequence == r.Jobs.RetiredFloor && len(r.Jobs.Recent) > 0 {
 			last := r.Jobs.Recent[len(r.Jobs.Recent)-1]
 			if report.TransferID == last.TransferID && msi.Digest(raw) == last.RetirementDigest {
 				return nil
@@ -618,35 +649,38 @@ func (m *Manager) Report(ctx context.Context, raw []byte) error {
 }
 
 type View struct {
-	ArtifactRetiredCount    string           `json:"artifactRetiredCount,omitempty"`
-	Reusable                bool             `json:"reusable,omitempty"`
-	JobSequence             string           `json:"jobSequence,omitempty"`
-	RetiredFloor            string           `json:"retiredFloor,omitempty"`
-	History                 []msi.RetiredJob `json:"history,omitempty"`
-	PublisherStatus         string           `json:"publisherStatus,omitempty"`
-	PublisherEvidenceDigest string           `json:"publisherEvidenceDigest,omitempty"`
-	ResultDigest            string           `json:"resultDigest,omitempty"`
-	CanRetire               bool             `json:"canRetire,omitempty"`
-	GrantExpiresAt          int64            `json:"grantExpiresAt,omitempty"`
-	BindingDigest           string           `json:"bindingDigest,omitempty"`
-	ArtifactID              *string          `json:"artifactId,omitempty"`
-	Coordinated             bool             `json:"coordinated,omitempty"`
-	Mutation                *fence.Status    `json:"mutation,omitempty"`
-	MutationCapturedAt      int64            `json:"mutationCapturedAt,omitempty"`
-	Version                 string           `json:"version"`
-	DeviceID                string           `json:"deviceId"`
-	ServerNow               int64            `json:"serverNow"`
-	State                   string           `json:"state"`
-	Package                 *msi.Selection   `json:"package"`
-	NativeAcceptanceDigest  string           `json:"nativeAcceptanceDigest"`
-	TransferID              string           `json:"transferId"`
-	ReadinessDigest         string           `json:"readinessDigest"`
-	ExpiresAt               int64            `json:"expiresAt"`
-	Readiness               *msi.Readiness   `json:"readiness"`
-	Result                  *msi.Result      `json:"result"`
-	UploadOffset            int64            `json:"uploadOffset"`
-	UploadPendingDigest     string           `json:"uploadPendingDigest"`
-	CanReview               bool             `json:"canReview"`
+	Schedule                *msi.ScheduleView `json:"schedule,omitempty"`
+	SchedulingAvailable     bool              `json:"schedulingAvailable,omitempty"`
+	LeafExpiresAt           int64             `json:"leafExpiresAt,omitempty"`
+	ArtifactRetiredCount    string            `json:"artifactRetiredCount,omitempty"`
+	Reusable                bool              `json:"reusable,omitempty"`
+	JobSequence             string            `json:"jobSequence,omitempty"`
+	RetiredFloor            string            `json:"retiredFloor,omitempty"`
+	History                 []msi.RetiredJob  `json:"history,omitempty"`
+	PublisherStatus         string            `json:"publisherStatus,omitempty"`
+	PublisherEvidenceDigest string            `json:"publisherEvidenceDigest,omitempty"`
+	ResultDigest            string            `json:"resultDigest,omitempty"`
+	CanRetire               bool              `json:"canRetire,omitempty"`
+	GrantExpiresAt          int64             `json:"grantExpiresAt,omitempty"`
+	BindingDigest           string            `json:"bindingDigest,omitempty"`
+	ArtifactID              *string           `json:"artifactId,omitempty"`
+	Coordinated             bool              `json:"coordinated,omitempty"`
+	Mutation                *fence.Status     `json:"mutation,omitempty"`
+	MutationCapturedAt      int64             `json:"mutationCapturedAt,omitempty"`
+	Version                 string            `json:"version"`
+	DeviceID                string            `json:"deviceId"`
+	ServerNow               int64             `json:"serverNow"`
+	State                   string            `json:"state"`
+	Package                 *msi.Selection    `json:"package"`
+	NativeAcceptanceDigest  string            `json:"nativeAcceptanceDigest"`
+	TransferID              string            `json:"transferId"`
+	ReadinessDigest         string            `json:"readinessDigest"`
+	ExpiresAt               int64             `json:"expiresAt"`
+	Readiness               *msi.Readiness    `json:"readiness"`
+	Result                  *msi.Result       `json:"result"`
+	UploadOffset            int64             `json:"uploadOffset"`
+	UploadPendingDigest     string            `json:"uploadPendingDigest"`
+	CanReview               bool              `json:"canReview"`
 }
 
 func (m *Manager) View(ctx context.Context) (View, error) {
@@ -665,8 +699,8 @@ func (m *Manager) View(ctx context.Context) (View, error) {
 		sharedRecord = r
 	}
 	var v View
-	_, e := m.transaction(ctx, "", "", func(r *msi.Record, _ msi.Current, n int64) error {
-		if r.Grant.Version == msi.ReusableGrantVersion && shared != nil && r.Artifact != nil {
+	_, e := m.transaction(ctx, "", "", func(r *msi.Record, c msi.Current, n int64) error {
+		if r.Grant.Reusable() && shared != nil && r.Artifact != nil {
 			current, err := msi.ReferencesArtifactOccurrence(*r, sharedRecord)
 			if err != nil {
 				return err
@@ -695,8 +729,13 @@ func (m *Manager) View(ctx context.Context) (View, error) {
 				r = &copy
 			}
 		}
+		if r.Grant.Scheduled() {
+			v.SchedulingAvailable = m.schedulePolicy != nil
+			v.LeafExpiresAt = c.LeafNotAfter
+			v.Schedule = r.Schedule.View()
+		}
 		v.Coordinated = r.Grant.MutationPlanDigest != ""
-		if r.Grant.Version == msi.ReusableGrantVersion {
+		if r.Grant.Reusable() {
 			v.Reusable = true
 			v.ArtifactRetiredCount = strconv.FormatUint(sharedRecord.RetiredCount, 10)
 			v.JobSequence = strconv.FormatUint(r.Jobs.Sequence, 10)
@@ -777,6 +816,9 @@ func (m *Manager) View(ctx context.Context) (View, error) {
 				v.State = "expired"
 			}
 		}
+		if r.Schedule != nil {
+			v.CanReview = false
+		}
 		return nil
 	})
 	if e != nil {
@@ -791,9 +833,10 @@ func (m *Manager) CheckRelease(ctx context.Context, raw []byte, deliveryDigest s
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	var actor, kind string
+	var scheduled bool
 	var deadline, floor int64
 	ctx = msi.WithFinalCheck(ctx, func() error {
-		if actor != "" && !m.allowed(actor, kind) {
+		if actor != "" && (!m.allowed(actor, kind) || scheduled && !m.scheduleAllowed(actor)) {
 			return msi.ErrAuthority
 		}
 		if deadline != 0 && m.now().Unix() >= deadline {
@@ -818,6 +861,13 @@ func (m *Manager) CheckRelease(ctx context.Context, raw []byte, deliveryDigest s
 			return e
 		}
 		actor, kind = p.ActorID, p.Kind
+		scheduled = p.ScheduleDigest != ""
+		if p.ScheduleDigest != "" && p.Kind == "install" && !msi.ScheduleDispatchReady(*r, n) {
+			return msi.ErrUnavailable
+		}
+		if p.ScheduleDigest != "" && (r.Schedule == nil || r.Schedule.Terminal() || r.Schedule.Approval.Digest != p.ScheduleDigest || !m.scheduleAllowed(actor)) {
+			return msi.ErrAuthority
+		}
 		var exact []byte
 		switch p.Kind {
 		case "deliver":
@@ -850,7 +900,13 @@ func (m *Manager) CheckRelease(ctx context.Context, raw []byte, deliveryDigest s
 	if e = m.configurationCheck(); e != nil {
 		return e
 	}
+	if scheduled && !m.scheduleAllowed(actor) {
+		return m.blockRevokedScheduleLocked()
+	}
 	if e = msi.CheckFinal(ctx); e != nil {
+		if scheduled && !m.scheduleAllowed(actor) {
+			return m.blockRevokedScheduleLocked()
+		}
 		return e
 	}
 	if e = ctx.Err(); e != nil {
@@ -860,6 +916,14 @@ func (m *Manager) CheckRelease(ctx context.Context, raw []byte, deliveryDigest s
 	fresh := m.now().Unix()
 	if fresh < floor || deadline == 0 || fresh >= deadline {
 		return msi.ErrExpired
+	}
+	if scheduled {
+		if !m.scheduleAllowed(actor) {
+			return m.blockRevokedScheduleLocked()
+		}
+		if committed.Schedule == nil || committed.Schedule.Terminal() || fresh < committed.Schedule.Approval.Request.StartAt || fresh >= committed.Schedule.Approval.Request.EndAt || kind == "install" && !msi.ScheduleDispatchReady(committed, fresh) {
+			return msi.ErrExpired
+		}
 	}
 	return nil
 }

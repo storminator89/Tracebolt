@@ -16,20 +16,24 @@ import (
 )
 
 type managedMSIPlan struct {
-	MutationPlanDigest string                                   `json:"mutationPlanDigest,omitempty"`
-	Version            string                                   `json:"version"`
-	Offer              managed.SetupOffer                       `json:"offer"`
-	Artifact           windowspackage.Manifest                  `json:"artifact"`
-	Identity           lanclient.WindowsManagedMSISetupIdentity `json:"identity"`
-	Observer           windowsservice.Receipt                   `json:"observer"`
-	DeliveryDisclosure string                                   `json:"deliveryDisclosure"`
-	InstallDisclosure  string                                   `json:"installDisclosure"`
-	ServiceDisclosure  string                                   `json:"serviceDisclosure"`
-	RelayDisclosure    string                                   `json:"relayDisclosure"`
+	ScheduledDisclosure string                                   `json:"scheduledDisclosure,omitempty"`
+	MutationPlanDigest  string                                   `json:"mutationPlanDigest,omitempty"`
+	Version             string                                   `json:"version"`
+	Offer               managed.SetupOffer                       `json:"offer"`
+	Artifact            windowspackage.Manifest                  `json:"artifact"`
+	Identity            lanclient.WindowsManagedMSISetupIdentity `json:"identity"`
+	Observer            windowsservice.Receipt                   `json:"observer"`
+	DeliveryDisclosure  string                                   `json:"deliveryDisclosure"`
+	InstallDisclosure   string                                   `json:"installDisclosure"`
+	ServiceDisclosure   string                                   `json:"serviceDisclosure"`
+	RelayDisclosure     string                                   `json:"relayDisclosure"`
 }
 
 func (p managedMSIPlan) Digest() string {
 	b, _ := json.Marshal(p)
+	if p.Offer.Scheduled() {
+		return managed.Digest(append([]byte("Tracebolt scheduled MSI endpoint setup v4\x00"), b...))
+	}
 	if p.Offer.Version == managed.ReusableOfferVersion {
 		return managed.Digest(append([]byte("Tracebolt reusable MSI endpoint setup v3\x00"), b...))
 	}
@@ -37,6 +41,7 @@ func (p managedMSIPlan) Digest() string {
 }
 
 type managedMSIInput struct {
+	schedule    bool
 	coordinated *coordinatedMSIMaterial
 	offer       managed.SetupOffer
 	artifact    windowspackage.Manifest
@@ -72,7 +77,7 @@ func runManagedMSIProvision(ctx context.Context, args []string, out, stderr io.W
 		return 1
 	}
 	offer, e := managed.DecodeSetupOffer(bytes.TrimSuffix(raw, []byte("\n")))
-	if e != nil {
+	if e != nil || offer.Scheduled() {
 		return 1
 	}
 	raw, e = readSoftwareSetupInput(*manifestPath, 4096)

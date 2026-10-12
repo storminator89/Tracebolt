@@ -372,6 +372,9 @@ func prepareWithApplicationChecks(m lanconfig.Material, enrollment *enrollmentco
 		if e = managedMSI.ConfigureOperatorPolicy(func(actor string) bool { return auth.ActorHasCapability(actor, operatorauth.WindowsManagedMSIDeliver) }, func(actor string) bool { return auth.ActorHasCapability(actor, operatorauth.WindowsManagedMSIInstall) }); e != nil {
 			return fail(e)
 		}
+		if e = managedMSI.ConfigureSchedulePolicy(context.Background(), func(actor string) bool { return auth.ActorHasCapability(actor, operatorauth.WindowsManagedMSISchedule) }); e != nil {
+			return fail(e)
+		}
 		if e = windowsIngress.ConfigureWindowsManagedMSIRegistry(managedMSI); e != nil {
 			return fail(e)
 		}

@@ -74,7 +74,7 @@ func checkArtifactOccurrence(ctx context.Context, r msi.ArtifactRecord) error {
 }
 func checkJobOccurrence(ctx context.Context, r msi.Record) error {
 	if p, ok := ctx.Value(jobOccurrenceKey{}).(jobOccurrence); ok {
-		if r.Grant.Version != msi.ReusableGrantVersion || r.ArtifactRetiredCount != p.retiredCount || r.TransferID != p.transferID || r.Jobs == nil || r.Jobs.Sequence != p.sequence {
+		if !r.Grant.Reusable() || r.ArtifactRetiredCount != p.retiredCount || r.TransferID != p.transferID || r.Jobs == nil || r.Jobs.Sequence != p.sequence {
 			return msi.ErrConflict
 		}
 	}

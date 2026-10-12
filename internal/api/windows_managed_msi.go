@@ -25,7 +25,7 @@ func windowsManagedMSIRoute(r *http.Request) (string, string, bool) {
 	if len(p) == 6 {
 		op = p[5]
 		switch op {
-		case "reserve", "upload", "complete", "deliver", "review", "review-coordinated", "approve", "retire":
+		case "reserve", "upload", "complete", "deliver", "review", "review-coordinated", "approve", "retire", "schedule", "cancel-schedule":
 		default:
 			return "", "", false
 		}
@@ -35,7 +35,7 @@ func windowsManagedMSIRoute(r *http.Request) (string, string, bool) {
 func (h *operatorHandler) managedMSIContext(r *http.Request, cap operatorauth.Capability) context.Context {
 	owner, ok := operatorContext(r)
 	return msi.WithFinalCheck(enrollmentstore.WithOverviewClock(r.Context(), h.auth.Now), func() error {
-		if !ok || !owner.session.Named() || !h.auth.Now().Before(owner.session.ExpiresAt) || owner.session.Lifetime().Err() != nil || owner.active == nil || !owner.active() || cap != "" && !h.auth.ActorHasCapability(owner.session.ActorID(), cap) {
+		if !ok || !owner.session.Named() || !h.auth.Now().Before(owner.session.ExpiresAt) || owner.session.Lifetime().Err() != nil || owner.active == nil || !owner.active() || cap != "" && !h.auth.ActorHasCapability(owner.session.ActorID(), cap) || windowsManagedMSIScheduleOperation(r) && !h.auth.ActorHasCapability(owner.session.ActorID(), operatorauth.WindowsManagedMSISchedule) {
 			return msi.ErrAuthority
 		}
 		return nil
@@ -71,7 +71,7 @@ func (h *operatorHandler) windowsManagedMSIAPI(w http.ResponseWriter, r *http.Re
 	cap := operatorauth.Capability("")
 	if op != "" {
 		cap = operatorauth.WindowsManagedMSIDeliver
-		if op == "review" || op == "review-coordinated" || op == "approve" || op == "retire" {
+		if op == "review" || op == "review-coordinated" || op == "approve" || op == "retire" || windowsManagedMSIScheduleOperation(r) {
 			cap = operatorauth.WindowsManagedMSIInstall
 		}
 	}
@@ -95,7 +95,7 @@ func (h *operatorHandler) windowsManagedMSIAPI(w http.ResponseWriter, r *http.Re
 			return
 		}
 		release()
-		if current != actor {
+		if current != actor || windowsManagedMSIScheduleOperation(r) && !h.auth.ActorHasCapability(actor, operatorauth.WindowsManagedMSISchedule) {
 			managedMSIError(w, msi.ErrAuthority)
 			return
 		}
@@ -103,6 +103,20 @@ func (h *operatorHandler) windowsManagedMSIAPI(w http.ResponseWriter, r *http.Re
 	}
 	var e error
 	switch op {
+	case "schedule":
+		var in msi.ScheduleRequest
+		if !readObject(w, r, 4096, []string{"artifactId", "artifactRetiredCount", "bindingDigest", "transferId", "jobSequence", "readinessDigest", "startAt", "endAt", "packageReviewAccepted", "termsAccepted", "serviceRiskAccepted", "synchronousActionsAccepted", "scheduleAccepted"}, &in) {
+			return
+		}
+		e = manager.Schedule(r.Context(), actor, in)
+	case "cancel-schedule":
+		var in struct {
+			ScheduleDigest string `json:"scheduleDigest"`
+		}
+		if !readObject(w, r, 256, []string{"scheduleDigest"}, &in) {
+			return
+		}
+		e = manager.CancelSchedule(r.Context(), actor, in.ScheduleDigest)
 	case "reserve":
 		var in struct {
 			Package                json.RawMessage `json:"package"`
@@ -321,4 +335,10 @@ func (h *operatorHandler) managedMSIReadCapability(actor string) operatorauth.Ca
 		return operatorauth.WindowsManagedMSIDeliver
 	}
 	return operatorauth.WindowsManagedMSIInstall
+}
+
+// Scheduling is a separate prospective authority, required alongside installation.
+func windowsManagedMSIScheduleOperation(r *http.Request) bool {
+	_, op, ok := windowsManagedMSIRoute(r)
+	return ok && (op == "schedule" || op == "cancel-schedule")
 }

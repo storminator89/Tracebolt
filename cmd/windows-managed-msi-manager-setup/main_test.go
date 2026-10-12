@@ -13,3 +13,13 @@ func TestManagedManagerSetupRequiresSeparateExactApplyApproval(t *testing.T) {
 		}
 	}
 }
+
+func TestScheduledMSIManagerSetupRequiresFreshFleetReusableSelection(t *testing.T) {
+	for _, extra := range [][]string{{"--scheduled-jobs"}, {"--scheduled-jobs", "--fleet"}, {"--scheduled-jobs", "--reusable-jobs"}, {"--scheduled-jobs", "--fleet", "--reusable-jobs", "--ack-managed-msi-delivery-install"}} {
+		args := append([]string{"prepare", "--lan-config", "/inert/config", "--enrollment-config", "/inert/enrollment", "--device-id", "agent_11111111111111111111111111111111"}, extra...)
+		var out bytes.Buffer
+		if e := run(args, &out); e == nil || out.Len() != 0 {
+			t.Fatal("scheduled setup escaped required selection", args)
+		}
+	}
+}

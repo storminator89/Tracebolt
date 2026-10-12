@@ -10,7 +10,7 @@ func ReferencesArtifactOccurrence(r Record, a ArtifactRecord) (bool, error) {
 	if a.Version != ReusableArtifactRecordVersion {
 		return a.Artifact != nil && ArtifactIdentity(*r.Artifact) == ArtifactIdentity(*a.Artifact), nil
 	}
-	if r.Grant.Version != ReusableGrantVersion || r.ArtifactRetiredCount > a.RetiredCount {
+	if !r.Grant.Reusable() || r.ArtifactRetiredCount > a.RetiredCount {
 		return false, ErrIntegrity
 	}
 	if r.ArtifactRetiredCount < a.RetiredCount {

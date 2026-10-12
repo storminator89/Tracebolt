@@ -71,6 +71,13 @@ FLOWS = {
 ALIASES = {'windowsmanagedmsiworklist': ['windows-fleet-msi'],
            'windowsmanagedmsireusable': ['windows-fleet-msi'],
            'windowsmanagedmsisaved': ['windows-fleet-msi'],
+           # Paired setup filenames do not carry the windowsmanagedmsi prefix.
+           # Retain their existing managed/LAN/enrollment flow while adding exact
+           # package scheduling and, for the shared pair, WUA coexistence views.
+           'scheduledmsi': ['lan', 'windows-managed-msi', 'windows-fleet-msi', 'windows-mutation-coexistence'],
+           'managedmsiprovision': ['managed', 'windows-managed-msi', 'windows-fleet-msi', 'windows-mutation-coexistence'],
+           'mutationprovision': ['lan', 'windows-managed-msi', 'windows-fleet-msi', 'windows-mutation-coexistence', 'windows-service-actions'],
+           'windowsmutationpair': ['enrollment', 'windows-managed-msi', 'windows-fleet-msi', 'windows-mutation-coexistence', 'windows-service-actions'],
            'windowsreusablemsi': ['windows-fleet-msi'], 'windowssavedmsi': ['windows-fleet-msi'],
            'windowssoftwarecatalogue': ['windows-fleet-msi'],
            'journalai': ['lan'], 'journalbrowse': ['lan'],

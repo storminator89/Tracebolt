@@ -334,8 +334,11 @@ func (j *WorklistJournal) FinishDispatch(d WorklistDispatch, before, after Recor
 		b.ClosedAt = now
 		b.CloseReason = "rejected"
 	} else {
-		if after.Grant.Version != ReusableGrantVersion || after.Artifact == nil || after.Jobs == nil || after.ArtifactRetiredCount != w.ArtifactRetiredCount || ArtifactIdentity(*after.Artifact) != w.ArtifactID || after.TransferID != i.Request.TransferID {
+		if !after.Grant.Reusable() || after.Artifact == nil || after.Jobs == nil || after.ArtifactRetiredCount != w.ArtifactRetiredCount || ArtifactIdentity(*after.Artifact) != w.ArtifactID || after.TransferID != i.Request.TransferID {
 			return ErrIntegrity
+		}
+		if (b.Kind == "review" || b.Kind == "approve") && (before.Schedule != nil || after.Schedule != nil) {
+			return ErrConsumed
 		}
 		var raw, old []byte
 		switch b.Kind {
@@ -411,7 +414,7 @@ func WorklistTargetRetired(w Worklist, t WorklistTarget, records map[string]Reco
 	return false
 }
 func worklistRecordMatches(w Worklist, t WorklistTarget, r Record) bool {
-	return r.Grant.Binding == t.Binding && r.Grant.Version == ReusableGrantVersion && r.Artifact != nil && r.ArtifactRetiredCount == w.ArtifactRetiredCount && ArtifactIdentity(*r.Artifact) == w.ArtifactID && r.TransferID == t.TransferID && r.Jobs != nil && r.Jobs.Sequence == t.JobSequence
+	return r.Grant.Binding == t.Binding && r.Grant.Reusable() && r.Artifact != nil && r.ArtifactRetiredCount == w.ArtifactRetiredCount && ArtifactIdentity(*r.Artifact) == w.ArtifactID && r.TransferID == t.TransferID && r.Jobs != nil && r.Jobs.Sequence == t.JobSequence
 }
 func WorklistReconciled(w Worklist, records map[string]Record) bool {
 	if w.ArchivedAt == 0 {

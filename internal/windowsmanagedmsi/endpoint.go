@@ -82,7 +82,7 @@ func (r EndpointRecord) Validate() error {
 	if r.validateReusableEndpoint() != nil || r.validateMutationCompletion() != nil {
 		return ErrIntegrity
 	}
-	if !(r.Version == Version && r.Mutation == nil && r.Grant.MutationPlanDigest == "" || (r.Version == CoordinatedEndpointVersion || r.Version == ReusableEndpointVersion) && ValidMutationRoster(r.Mutation, r.Grant)) || r.Grant.Validate() != nil || !keyvalidation.Ed25519(r.ManagerPublicKey) || !keyvalidation.Ed25519(r.ExecutorPublicKey) || Digest(r.ManagerPublicKey) != r.Grant.Binding.KeyID || Digest(r.ExecutorPublicKey) != r.Grant.Binding.ExecutorKeyID || !ValidTime(r.ClockFloor) || !ValidDigest(r.PrefixDigest) || len(r.Custody) > 4096 || len(r.ImportReceipt) > 4096 {
+	if !(r.Version == Version && r.Mutation == nil && r.Grant.MutationPlanDigest == "" || (r.Version == CoordinatedEndpointVersion || r.Version == ReusableEndpointVersion || r.Version == ScheduledEndpointVersion) && ValidMutationRoster(r.Mutation, r.Grant)) || r.Grant.Validate() != nil || !keyvalidation.Ed25519(r.ManagerPublicKey) || !keyvalidation.Ed25519(r.ExecutorPublicKey) || Digest(r.ManagerPublicKey) != r.Grant.Binding.KeyID || Digest(r.ExecutorPublicKey) != r.Grant.Binding.ExecutorKeyID || !ValidTime(r.ClockFloor) || !ValidDigest(r.PrefixDigest) || len(r.Custody) > 4096 || len(r.ImportReceipt) > 4096 {
 		return ErrIntegrity
 	}
 	if len(r.Delivery) == 0 {
@@ -132,6 +132,10 @@ func (r EndpointRecord) Validate() error {
 	}
 	if len(r.InstallPermit) > 0 {
 		q, e := VerifyPermit(r.InstallPermit, r.ManagerPublicKey)
+		readyPermit, readyErr := VerifyPermit(r.ReadinessPermit, r.ManagerPublicKey)
+		if q.ScheduleDigest != "" && (readyErr != nil || !sameSchedulePermit(q, readyPermit)) {
+			return ErrIntegrity
+		}
 		if e != nil || q.Kind != "install" || !samePackage(q, p) || len(r.ReadinessReport) == 0 || q.ReadinessDigest != Digest(r.ReadinessReport) || q.IssuedAt > r.ClockFloor {
 			return ErrIntegrity
 		}
@@ -258,6 +262,9 @@ func (x *Endpoint) check(ctx context.Context, p *Permit) error {
 	if g.Validate() != nil || !g.DeliveryEnabled || !c.Enabled || c.Revoked || c.Binding != g.Binding || !ValidDigest(c.LeafDigest) || !ValidTime(n) || n < x.record.ClockFloor || n < c.LeafNotBefore || n >= c.LeafNotAfter || n >= g.ExpiresAt {
 		return ErrAuthority
 	}
+	if p != nil && p.ScheduleDigest != "" && (!g.Scheduled() || n < p.ScheduleStartAt || n >= p.ScheduleEndAt) {
+		return ErrExpired
+	}
 	if p != nil && (!PermitMatchesGrant(*p, g) || n < p.IssuedAt || n >= p.ExpiresAt || p.ExpiresAt > g.ExpiresAt || p.ExpiresAt > c.LeafNotAfter || p.LeafDigest != c.LeafDigest || p.Kind != "deliver" && !g.InstallEnabled) {
 		return ErrExpired
 	}
@@ -313,7 +320,7 @@ func (x *Endpoint) Accept(ctx context.Context, raw []byte) error {
 	case "retire":
 		return x.retire(ctx, p, raw)
 	case "deliver":
-		if p.Version == ReusableVersion && !bytes.Equal(raw, x.record.Delivery) {
+		if ReusableWire(p.Version) && !bytes.Equal(raw, x.record.Delivery) {
 			if e = x.beginNextJob(p); e != nil {
 				return e
 			}
@@ -351,6 +358,12 @@ func (x *Endpoint) Accept(ctx context.Context, raw []byte) error {
 		}
 		if len(x.record.ReadinessPermit) > 0 {
 			old, _ := VerifyPermit(x.record.ReadinessPermit, x.record.ManagerPublicKey)
+			if old.ScheduleDigest != "" && !bytes.Equal(raw, x.record.ReadinessPermit) {
+				return ErrConsumed
+			}
+			if p.ScheduleDigest != "" && (p.Sequence != old.Sequence+1 || p.IssuedAt < old.ExpiresAt) {
+				return ErrConsumed
+			}
 			if p.Sequence <= old.Sequence {
 				if bytes.Equal(raw, x.record.ReadinessPermit) && len(x.record.ReadinessReport) > 0 {
 					return nil
@@ -391,7 +404,7 @@ func (x *Endpoint) Accept(ctx context.Context, raw []byte) error {
 		}
 		q, _ := VerifyPermit(x.record.ReadinessPermit, x.record.ManagerPublicKey)
 		ready, e := VerifyReport(x.record.ReadinessReport, x.record.ExecutorPublicKey)
-		if e != nil || !samePackage(p, q) || p.Sequence != q.Sequence || p.MaintenanceUntil != q.MaintenanceUntil || p.ExpiresAt > q.ExpiresAt || p.SynchronousReviewDigest != q.SynchronousReviewDigest || ready.Readiness == nil || ready.State != "ready" {
+		if e != nil || !samePackage(p, q) || p.Sequence != q.Sequence || p.MaintenanceUntil != q.MaintenanceUntil || p.ExpiresAt > q.ExpiresAt || !sameSchedulePermit(p, q) || p.SynchronousReviewDigest != q.SynchronousReviewDigest || ready.Readiness == nil || ready.State != "ready" {
 			return ErrAuthority
 		}
 		x.record.InstallPermit = bytes.Clone(raw)
@@ -580,7 +593,7 @@ func (x *Endpoint) Status(ctx context.Context) (Status, error) {
 		return s, e
 	}
 	r := x.record
-	s.Reusable = r.Grant.Version == ReusableGrantVersion
+	s.Reusable = r.Grant.Reusable()
 	if len(r.Delivery) == 0 {
 		return s, nil
 	}

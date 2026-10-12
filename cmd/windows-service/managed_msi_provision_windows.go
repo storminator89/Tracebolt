@@ -36,6 +36,9 @@ func nativeManagedMSIProvision(ctx context.Context, in managedMSIInput) (result 
 }
 
 func nativeManagedMSIProvisionUnderLease(ctx context.Context, in managedMSIInput, result *managedMSIResult, receipt installReceipt, lease receiptStore) (any, error) {
+	if in.schedule != in.offer.Scheduled() || in.coordinated != nil && in.coordinated.Grant.Scheduled() != in.offer.Scheduled() {
+		return nil, managed.ErrAuthority
+	}
 	path := filepath.Join(receipt.Service.Layout.EnrollmentRoot, "agent.json")
 	profile := func() error {
 		if in.coordinated == nil {
@@ -69,7 +72,7 @@ func nativeManagedMSIProvisionUnderLease(ctx context.Context, in managedMSIInput
 		return nil, e
 	}
 	p := managedMSIPlan{Version: "tracebolt.windows-managed-msi-endpoint-plan.v1", Offer: in.offer, Artifact: in.artifact, Identity: identity, Observer: receipt.Service, DeliveryDisclosure: managed.DeliveryDisclosure, InstallDisclosure: managed.InstallDisclosure, ServiceDisclosure: managed.ServiceDisclosure, RelayDisclosure: lanclient.WindowsManagedMSIRelayDisclosure}
-	if in.offer.Version == managed.ReusableOfferVersion {
+	if in.offer.Reusable() {
 		p.Version = "tracebolt.windows-managed-msi-endpoint-plan.v3"
 		p.DeliveryDisclosure = managed.ReusableDisclosure
 		p.InstallDisclosure = managed.ReusableDisclosure
@@ -78,8 +81,12 @@ func nativeManagedMSIProvisionUnderLease(ctx context.Context, in managedMSIInput
 		p.Version = "tracebolt.windows-managed-msi-endpoint-plan.v2"
 		p.MutationPlanDigest = in.coordinated.Roster.Plan.PlanDigest
 	}
-	if in.offer.Version == managed.ReusableOfferVersion {
+	if in.offer.Reusable() {
 		p.Version = "tracebolt.windows-managed-msi-endpoint-plan.v3"
+	}
+	if in.offer.Scheduled() {
+		p.Version = "tracebolt.windows-managed-msi-endpoint-plan.v4"
+		p.ScheduledDisclosure = managed.ScheduledDisclosure
 	}
 	result.plan = p
 	root, e := windowsmanagedmsiipc.RootPath()
@@ -110,7 +117,7 @@ func nativeManagedMSIProvisionUnderLease(ctx context.Context, in managedMSIInput
 	if !in.apply {
 		return nil, nil
 	}
-	if in.offer.Version == managed.ReusableOfferVersion && in.coordinated == nil {
+	if in.offer.Reusable() && in.coordinated == nil {
 		return nil, managed.ErrAuthority
 	}
 	if in.coordinated == nil && in.digest != p.Digest() || in.coordinated != nil && in.digest != in.coordinated.Roster.Plan.PlanDigest {
@@ -142,9 +149,12 @@ func nativeManagedMSIProvisionUnderLease(ctx context.Context, in managedMSIInput
 	}{windowsmanagedmsiservice.SetupVersion, p.Digest(), "key"}
 	if in.coordinated != nil {
 		intent.Version = windowsmanagedmsiservice.CoordinatedSetupVersion
-		if in.offer.Version == managed.ReusableOfferVersion {
+		if in.offer.Reusable() {
 			intent.Version = windowsmanagedmsiservice.ReusableSetupVersion
 		}
+	}
+	if in.offer.Scheduled() {
+		intent.Version = windowsmanagedmsiservice.ScheduledSetupVersion
 	}
 	if e = write("setup-intent.json", intent); e != nil {
 		return nil, e
@@ -172,7 +182,7 @@ func nativeManagedMSIProvisionUnderLease(ctx context.Context, in managedMSIInput
 	if b.ExecutorKeyID == identity.LeafPublicKeyDigest || b.KeyID == identity.LeafPublicKeyDigest {
 		return nil, managed.ErrAuthority
 	}
-	if in.offer.Version == managed.ReusableOfferVersion && in.coordinated == nil {
+	if in.offer.Reusable() && in.coordinated == nil {
 		return nil, managed.ErrAuthority
 	}
 	g := managed.Grant{Version: managed.GrantVersion, Binding: b, DeliveryEnabled: true, InstallEnabled: true, DeliveryAcknowledged: true, InstallAcknowledged: true, ServiceRiskAcknowledged: true, ExpiresAt: in.offer.ExpiresAt}
@@ -205,8 +215,11 @@ func nativeManagedMSIProvisionUnderLease(ctx context.Context, in managedMSIInput
 		c.Version = windowsmanagedmsiipc.CoordinatedConfigVersion
 		c.Mutation = &in.coordinated.Roster
 	}
-	if g.Version == managed.ReusableGrantVersion {
+	if g.Reusable() {
 		c.Version = windowsmanagedmsiipc.ReusableConfigVersion
+	}
+	if g.Scheduled() {
+		c.Version = windowsmanagedmsiipc.ScheduledConfigVersion
 	}
 	if c.Validate() != nil {
 		return nil, managed.ErrInvalid
@@ -261,16 +274,22 @@ func nativeManagedMSIProvisionUnderLease(ctx context.Context, in managedMSIInput
 		return nil, managed.ErrAuthority
 	}
 	registration := managed.SetupRegistration{Version: managed.SetupRegistrationVersion, Offer: in.offer, Grant: g, ExecutorPublicKey: pub}
-	if g.Version == managed.ReusableGrantVersion {
+	if g.Reusable() {
 		registration.Version = managed.ReusableRegistrationVersion
+	}
+	if g.Scheduled() {
+		registration.Version = managed.ScheduledRegistrationVersion
 	}
 	raw, _ := json.Marshal(c)
 	complete := windowsmanagedmsiservice.SetupReceipt{Version: windowsmanagedmsiservice.SetupVersion, PlanDigest: p.Digest(), ConfigDigest: managed.Digest(raw), Registration: registration, Image: imageReceipt, ServiceMarker: windowsmanagedmsiservice.Marker(c), Complete: true}
 	if in.coordinated != nil {
 		complete.Version = windowsmanagedmsiservice.CoordinatedSetupVersion
-		if g.Version == managed.ReusableGrantVersion {
+		if g.Reusable() {
 			complete.Version = windowsmanagedmsiservice.ReusableSetupVersion
 		}
+	}
+	if g.Scheduled() {
+		complete.Version = windowsmanagedmsiservice.ScheduledSetupVersion
 	}
 	if e = write("setup-receipt.json", complete); e != nil {
 		return nil, e

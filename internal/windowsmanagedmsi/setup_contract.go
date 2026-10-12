@@ -27,7 +27,7 @@ type SetupOffer struct {
 
 func (o SetupOffer) Validate() error {
 	u, e := url.Parse(o.ManagerOrigin)
-	if (o.Version != SetupOfferVersion && o.Version != ReusableOfferVersion) || !enrollmentcrypto.ValidID(o.ManagerID, "manager_") || !enrollmentcrypto.ValidID(o.DeviceID, "agent_") || !actionpermit.ValidDigest(o.IncarnationDigest) || !keyvalidation.Ed25519(o.ManagerPublicKey) || !ValidTime(o.ExpiresAt) || e != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || u.Path != "" || u.RawPath != "" || u.RawQuery != "" || u.ForceQuery || u.Fragment != "" || u.String() != o.ManagerOrigin {
+	if (o.Version != SetupOfferVersion && !o.Reusable()) || !enrollmentcrypto.ValidID(o.ManagerID, "manager_") || !enrollmentcrypto.ValidID(o.DeviceID, "agent_") || !actionpermit.ValidDigest(o.IncarnationDigest) || !keyvalidation.Ed25519(o.ManagerPublicKey) || !ValidTime(o.ExpiresAt) || e != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || u.Path != "" || u.RawPath != "" || u.RawQuery != "" || u.ForceQuery || u.Fragment != "" || u.String() != o.ManagerOrigin {
 		return ErrInvalid
 	}
 	return nil
@@ -44,7 +44,7 @@ type SetupRegistration struct {
 
 func (r SetupRegistration) Validate() error {
 	b := r.Grant.Binding
-	if (r.Version != SetupRegistrationVersion && r.Version != ReusableRegistrationVersion) || (r.Version == ReusableRegistrationVersion) != (r.Grant.Version == ReusableGrantVersion) || (r.Version == ReusableRegistrationVersion) != (r.Offer.Version == ReusableOfferVersion) || r.Offer.Validate() != nil || r.Grant.Validate() != nil || !r.Grant.DeliveryEnabled || !r.Grant.DeliveryAcknowledged || !r.Grant.InstallEnabled || !r.Grant.InstallAcknowledged || !r.Grant.ServiceRiskAcknowledged || r.Grant.ExpiresAt != r.Offer.ExpiresAt || b.ManagerID != r.Offer.ManagerID || b.DeviceID != r.Offer.DeviceID || b.IncarnationDigest != r.Offer.IncarnationDigest || b.KeyID != actionpermit.Digest(r.Offer.ManagerPublicKey) || !keyvalidation.Ed25519(r.ExecutorPublicKey) || b.ExecutorKeyID != actionpermit.Digest(r.ExecutorPublicKey) {
+	if !r.validProfile() || r.Offer.Validate() != nil || r.Grant.Validate() != nil || !r.Grant.DeliveryEnabled || !r.Grant.DeliveryAcknowledged || !r.Grant.InstallEnabled || !r.Grant.InstallAcknowledged || !r.Grant.ServiceRiskAcknowledged || r.Grant.ExpiresAt != r.Offer.ExpiresAt || b.ManagerID != r.Offer.ManagerID || b.DeviceID != r.Offer.DeviceID || b.IncarnationDigest != r.Offer.IncarnationDigest || b.KeyID != actionpermit.Digest(r.Offer.ManagerPublicKey) || !keyvalidation.Ed25519(r.ExecutorPublicKey) || b.ExecutorKeyID != actionpermit.Digest(r.ExecutorPublicKey) {
 		return ErrInvalid
 	}
 	return nil
