@@ -375,7 +375,7 @@ func (h *operatorHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		fail(w, 400, "invalid_framing", "Chunked request bodies are not accepted.")
 		return
 	}
-	if strings.Contains(r.URL.Path, "//") || strings.Contains(r.URL.Path, "\\") || strings.Contains(r.URL.EscapedPath(), "%") || (r.URL.Path != "/api/investigations" && !resourceHistoryQueryAllowed(r.URL) && r.URL.RawQuery != "") || r.URL.ForceQuery {
+	if strings.Contains(r.URL.Path, "//") || strings.Contains(r.URL.Path, "\\") || strings.Contains(r.URL.EscapedPath(), "%") || (r.URL.Path != "/api/investigations" && !windowsInboxQueryAllowed(r.URL) && !resourceHistoryQueryAllowed(r.URL) && r.URL.RawQuery != "") || r.URL.ForceQuery {
 		fail(w, 400, "invalid_path", "Path is not canonical.")
 		return
 	}
@@ -504,6 +504,10 @@ func (h *operatorHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if session.Named() && !namedReadRoute(r) {
 		fail(w, 403, "operator_capability_required", "This named account does not have permission for this administrative operation.")
+		return
+	}
+	if r.URL.Path == "/api/fleet/windows-incidents" || strings.HasPrefix(r.URL.Path, "/api/fleet/windows-incidents/") {
+		h.windowsIncidentsAPI(w, r)
 		return
 	}
 	if r.URL.Path == "/api/fleet/groups" || strings.HasPrefix(r.URL.Path, "/api/fleet/groups/") {

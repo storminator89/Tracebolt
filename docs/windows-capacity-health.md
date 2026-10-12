@@ -104,9 +104,10 @@ authenticated API. Go-generated view fixtures bind the TypeScript parser.
 Component and synthetic browser fixtures are source verification, not proof of
 native Windows reads, quota behavior, installed-service lifecycle, real
 Windows-to-Linux interoperability or production deployment. Hosted visual/browser
-acceptance and any native work remain separate gates. Selected Windows service
-rules, event-derived diagnostics, acknowledgment/maintenance, notification and
-AI scopes remain future parity work with their own explicit policies.
+acceptance and any native work remain separate gates. Selected service checks and
+the [fleet incident inbox with acknowledgement](windows-incident-inbox.md) are now
+separate manager-side source increments. Maintenance, event-derived diagnostics,
+notification and AI scopes remain future parity work with their own policies.
 
 ## Subsequent source increment
 
