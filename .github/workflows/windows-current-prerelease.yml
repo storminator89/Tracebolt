@@ -1,6 +1,6 @@
 name: Manual current21 Server2025 x64 prerelease
 
-# Current-profile adapter: accepted tree intentionally unset, fail closed.
+# Current-profile adapter: exact reviewed native-subset source tree pinned.
 # Native acceptance and publication both need separate explicit approval.
 # Verification/promotion only. This workflow never builds or runs Windows code.
 on:
@@ -11,7 +11,7 @@ on:
         required: true
         type: string
       expected_source_sha:
-        description: 'Exact 40-hex accepted main-branch Setup source commit (a separately reviewed current tree, presently UNSET, not this later publisher commit)'
+        description: 'Exact 40-hex accepted main-branch Setup source commit (the separately reviewed native-accepted tree, not this later publisher commit)'
         required: true
         type: string
       acceptance_run_id:

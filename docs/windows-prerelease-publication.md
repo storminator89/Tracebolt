@@ -1,22 +1,32 @@
 # Exact accepted Windows prerelease promotion
 
-## Current21 adapter: source-only and disabled
+## Current21 adapter: exact native subset pinned, publication still gated
 
 The intended label is **unsigned Windows Server 2025 x64 current21 Read admin
-preview; three-case packaged GUI subset**. This source preparation is not native
-execution, release approval or a current native pass. The explicit
-`publish-windows-current-prerelease.py` adapter has `ACCEPTED_SOURCE_TREE = None`.
-It fails closed until a later independently reviewed source change pins the
-actual tree from a separately approved successful current native run. Never pin
-an untested checkout, substitute the publisher revision or take the pin from an
-input/environment variable.
+preview; three-case packaged GUI subset**. The current adapter pins tree
+`b66e8a8eaa8cfdb0a5b7108254c930ae244b6763` from source
+`62435ef7e605df0b102e030bf1d68cb255829a90`, accepted by first-attempt
+[native run 38303755541](https://github.com/storminator89/Tracebolt/actions/runs/38303755541).
+All three cases and the aggregator passed. This is bounded native evidence,
+not a published current release or permission for another host installation.
+
+Publication still requires successful **full Validate for that exact source**,
+explicit publication approval and a distinct, later, independently reviewed
+publisher commit. The selected source validation is
+[run 38303779043](https://github.com/storminator89/Tracebolt/actions/runs/38303779043);
+its live successful conclusion is mandatory, never inferred from focused PR
+checks or the native result. Never substitute the publisher revision for the
+accepted source, rebuild accepted assets or take the tree pin from an input or
+environment variable. The historical preview remains the published download
+until a fresh current release is actually verified.
 
 The historical `publish-windows-prerelease.py`, `run_setup_gui.py` and
 `windows-prerelease.yml` retain their historical four-case contract and accepted
 tree. The old publisher attaches the byte-preserved guides under
 `docs/windows-prerelease-historical/`. Historical evidence cannot satisfy the
 current adapter. Current guides are `windows-prerelease-install.md` and
-`windows-prerelease-changelog.md`; their source-candidate wording is deliberate.
+`windows-prerelease-changelog.md`; they describe the accepted subset without
+announcing an available current release.
 
 ## Required native result and practical timing
 
@@ -45,8 +55,11 @@ needs separate approval; a rerun cannot be relabeled attempt one.
 
 ## Manual current publication inputs
 
-`windows-current-prerelease.yml` has five inputs:
+`windows-current-prerelease.yml` has six inputs:
 
+- `full_validation_run_id`: exact successful full `Validate` run for
+  `expected_source_sha`; required again in both verify and publish jobs, never
+  replaced by focused PR checks or a validation run for the publisher commit
 - `expected_source_sha`: exact accepted current native source commit; its live
   tree and every current native report's sourceTree must equal the reviewed pin
 - `acceptance_run_id`: the explicitly selected successful first-attempt current

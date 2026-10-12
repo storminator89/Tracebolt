@@ -88,7 +88,9 @@ install a service. [Demo troubleshooting](docs/troubleshooting.md#local-demo).
 3. **Windows development:** the current fresh Setup offers
    [Read admin](docs/windows-read-admin-setup.md), with grouped scope details and
    unchecked consent. It requires matching source-built manager/endpoint
-   artifacts. Native acceptance and a release of this profile are still pending.
+   artifacts. The exact [accepted source](docs/windows-status.md#current-hosted-setup-acceptance)
+   passed a bounded Server 2025 x64 packaged-Setup subset; publication is still
+   gated on exact-source full validation and reviewed promotion.
 4. Check the first accepted report, observation time and actual source coverage.
    Choosing a profile does not prove that every provider returned data.
 
@@ -97,7 +99,7 @@ The published Linux endpoint is
 The separate unsigned x64
 [Windows preview.1](https://github.com/storminator89/Tracebolt/releases/tag/v0.1.0-windows-preview.1)
 contains the older five-scope read-only setup, not the current Read admin profile.
-Use its [installation guide](docs/windows-prerelease-install.md) only for those
+Use its [historical installation guide](docs/windows-prerelease-historical/windows-prerelease-install.md) only for those
 published bytes. Manager deployment is separate from both endpoint downloads.
 
 ## Giving this repository to an agent
@@ -123,8 +125,9 @@ quickest way to look at the dashboard.
 - **Linux release:** amd64, Ubuntu 24.04 or Debian 13, systemd, cgroup v2 and
   kernel 6.5+. [ARM64/Pi](docs/linux-arm64-support.md) remains a source/testing path.
 - **Windows:** current development targets a fresh x64 installation. The old
-  preview has a limited hosted Server 2025 acceptance result; Windows 10/11,
-  current-source installed-service behavior and reboot remain unverified.
+  preview and the exact accepted current source have bounded hosted Server 2025
+  results. Windows 10/11, real Linux-manager/shared-dashboard interoperability,
+  complete provider coverage, native restart and reboot remain unverified.
 - **macOS:** a limited standalone collector; no supported LAN installation path.
 
 The main agent stays unprivileged. Helpers, service control, selected package
@@ -137,8 +140,9 @@ credentials and content on the network. Production hardening remains open.
 
 Build on the inventory with useful job results, fleet monitoring policies and
 carefully scoped software/update management. Close the remaining Admin data gaps
-alongside that work. Fresh native installation and the real manager-to-endpoint
-flow must be validated before a new Windows release.
+alongside that work. The accepted packaged-Setup subset can support only a bounded
+unsigned preview after its publication gates pass. Real Linux-manager/shared-dashboard
+interoperability and the remaining native scopes still need separate acceptance.
 There is no existing-user migration rollout. Remote desktop is deferred.
 
 [Windows priorities](docs/windows-admin-roadmap.md) · [Linux priorities](docs/roadmap.md)

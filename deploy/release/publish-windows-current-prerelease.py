@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Explicit current21 Server2025 x64 adapter; source-only, publication disabled.
+"""Explicit current21 Server2025 x64 adapter; exact native-subset tree pinned.
 
 The shared publisher retains its historical default profile. This entry point
 selects fixed reviewed contracts before any I/O; no environment or CLI input can
@@ -17,10 +17,10 @@ _spec = importlib.util.spec_from_file_location("_current_windows_gate", ROOT / "
 gate = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(gate)
 
-# Intentionally UNSET. Only a later separately reviewed source change may pin
-# the actual tree from a successful separately approved current native run.
-# Do not use the current checkout, source input, a historical tree or a fixture.
-ACCEPTED_SOURCE_TREE = None
+# Exact source 62435ef7e605df0b102e030bf1d68cb255829a90, accepted by
+# first-attempt current native run 38303755541 (three-case packaged GUI subset).
+# This later publisher revision is distinct; never rebuild the accepted bytes.
+ACCEPTED_SOURCE_TREE = "b66e8a8eaa8cfdb0a5b7108254c930ae244b6763"
 publisher.ACCEPTED_SOURCE_TREE = ACCEPTED_SOURCE_TREE
 publisher.gate = gate
 publisher.NATIVE_WORKFLOW = gate.provenance.WORKFLOW_PATH
