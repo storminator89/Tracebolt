@@ -124,3 +124,19 @@ func TestWindowsSoftwareJobsConfigurationIsSeparateDefaultOffTLSOnly(t *testing.
 		}
 	}
 }
+
+func TestWindowsManagedMSIConfigurationSeparateDefaultOff(t *testing.T) {
+	c := Config{SchemaVersion: SchemaVersion, Profile: TLS, OperatorListen: "127.0.0.1:8080", AgentListen: "127.0.0.1:8081", OperatorOrigin: "https://manager.invalid:8080", AgentOrigin: "https://manager.invalid:8081", TLSCertificateFile: "/tmp/cert", TLSPrivateKeyFile: "/tmp/key", AgentClientCAFile: "/tmp/ca", OperatorAuthFile: "/tmp/auth", StateDirectory: "/tmp/state", WebDirectory: "/tmp/web", WindowsInventoryEnabled: true}
+	if c.WindowsManagedMSIConfigFile != "" {
+		t.Fatal("managed MSI default on")
+	}
+	c.WindowsManagedMSIConfigFile = "/tmp/managed-msi.json"
+	c.WindowsInventoryEnabled = true
+	if c.Validate() != nil {
+		t.Fatal("explicit TLS path rejected")
+	}
+	c.Profile = HTTPTest
+	if c.Validate() == nil {
+		t.Fatal("managed MSI accepted plaintext")
+	}
+}

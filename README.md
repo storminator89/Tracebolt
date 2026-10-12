@@ -163,3 +163,9 @@ native host acceptance.
 
 [Apache License 2.0](LICENSE). Dependencies retain their own
 [licenses and notices](docs/dependencies/edwards25519.md).
+
+The separate [central managed MSI source candidate](docs/windows-managed-msi-delivery.md)
+adds bounded central upload and background delivery before separately approved
+installation on one explicitly set-up Windows x64 endpoint. Native acceptance is
+pending; this first deployment mode excludes other Tracebolt mutators while
+observation remains available.

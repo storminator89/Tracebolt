@@ -72,6 +72,9 @@ func (s *Store) checkWindowsUpdateJobKey(ctx context.Context, t *transaction, ke
 // Both action keys are externally supplied and separate from each other, all
 // enrollment/issuer keys, and the already-established service-control domain.
 func (s *Store) windowsUpdateJobKeysDistinct(ctx context.Context, t *transaction, manager, executor ed25519.PublicKey) error {
+	if windowsManagedMSIKeyConflict(t, manager, executor) {
+		return windowsupdatejob.ErrConflict
+	}
 	if !keyvalidation.Ed25519(manager) || !keyvalidation.Ed25519(executor) || bytes.Equal(manager, executor) {
 		return windowsupdatejob.ErrAuthority
 	}
@@ -171,6 +174,9 @@ func (s *Store) setupWindowsUpdateJobsCreateOnly(ctx context.Context, key, execu
 		snap, err := systemDevice(t, consent.Binding.DeviceID)
 		if err != nil {
 			return windowsupdatejob.ErrAuthority
+		}
+		if t.credentials[snap.InvitationID].WindowsManagedMSISetup != nil {
+			return windowsupdatejob.ErrConflict
 		}
 		marker := &windowsUpdateJobSetupMarker{Version: "tracebolt.windows-selected-update-setup.v1", Consent: consent, InitializedAt: now}
 		if !validWindowsUpdateJobSetupMarker(snap, marker, t.currentCredentialNotAfter(snap)) {

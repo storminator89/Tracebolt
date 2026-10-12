@@ -114,13 +114,14 @@ jobs:
           go build -buildvcs=false -trimpath -o artifacts/windows-action-source/tracebolt-windows-service.exe ./cmd/windows-service
           go build -buildvcs=false -trimpath -o artifacts/windows-action-source/tracebolt-windows-action-broker.exe ./cmd/windows-action-broker
           go build -buildvcs=false -trimpath -o artifacts/windows-action-source/tracebolt-windows-update-executor.exe ./cmd/windows-update-executor
-          # Prepared MSI installation is deliberately x64-only.
+          # Prepared and centrally managed MSI installation are deliberately x64-only.
           if [ "$GOARCH" = amd64 ]; then
             go build -buildvcs=false -trimpath -o artifacts/windows-action-source/tracebolt-windows-software-executor.exe ./cmd/windows-software-executor
+            go build -buildvcs=false -trimpath -o artifacts/windows-action-source/tracebolt-windows-managed-msi-service.exe ./cmd/windows-managed-msi-service
           fi
           # Compile inert Windows ABI/authority/IPC fixtures on both architectures.
           # Never run these binaries, create grants/pipes, or dispatch WUA/MSI here.
-          for package in windowsupdatejob windowsupdateexecutor windowsupdateipc windowssoftwarejob windowssoftwareexecutor windowssoftwareipc lanclient; do
+          for package in windowsupdatejob windowsupdateexecutor windowsupdateipc windowssoftwarejob windowssoftwareexecutor windowssoftwareipc windowsmanagedmsi windowsmanagedmsiexecutor windowsmanagedmsiipc windowsmanagedmsiservice lanclient; do
             go test -c -buildvcs=false -o "$RUNNER_TEMP/${package}-${GOARCH}.test.exe" "./internal/$package"
           done
           python3 - <<'PY'
@@ -129,7 +130,7 @@ jobs:
           root = Path('artifacts/windows-action-source')
           names = ['tracebolt-windows-service', 'tracebolt-windows-action-broker', 'tracebolt-windows-update-executor']
           if os.environ['GOARCH'] == 'amd64':
-              names.append('tracebolt-windows-software-executor')
+              names.extend(['tracebolt-windows-software-executor', 'tracebolt-windows-managed-msi-service'])
           for name in names:
               digest = hashlib.sha256((root / (name + '.exe')).read_bytes()).hexdigest()
               manifest = {'schemaVersion': 'tracebolt.windows-setup-package.v1', 'version': 'v0.0.0-source', 'sourceCommit': os.environ['GITHUB_SHA'], 'architecture': os.environ['GOARCH'], 'sha256': digest}
@@ -620,6 +621,7 @@ jobs:
           node --test tests/e2e-review/fleet-groups-fixtures.test.mjs
           node --test tests/e2e-review/windows-incident-inbox-fixtures.test.mjs
           node --test tests/e2e-review/windows-maintenance-fixtures.test.mjs
+          node --test tests/e2e-review/windows-managed-msi-fixtures.test.mjs
       - name: Production build
         run: npm run build
 
@@ -666,6 +668,11 @@ jobs:
         env:
           TRACEBOLT_SOURCE_SHA: ${{ github.sha }}
         run: node tests/e2e-review/windows-service-actions-runner.mjs
+      - name: Synthetic central MSI separate-stage browser gate (16 captures)
+        if: ${{ !cancelled() }}
+        env:
+          TRACEBOLT_SOURCE_SHA: ${{ github.sha }}
+        run: node tests/e2e-review/windows-managed-msi-runner.mjs
       - name: Complete Windows services real-store browser gate
         if: ${{ !cancelled() }}
         env:
@@ -959,6 +966,8 @@ jobs:
             artifacts/review/windows-full-services-manifest.json
             artifacts/review/windows-service-actions-results.json
             artifacts/review/windows-service-actions-manifest.json
+            artifacts/review/windows-managed-msi-results.json
+            artifacts/review/windows-managed-msi-manifest.json
             artifacts/review/enrollment-browser-results.json
             artifacts/review/enrollment-browser-manifest.json
             artifacts/review/conditional-browser-results.json

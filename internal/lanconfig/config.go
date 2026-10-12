@@ -28,6 +28,7 @@ type Config struct {
 	WindowsServiceActionsConfigFile string `json:"windowsServiceActionsConfigFile,omitempty"`
 	WindowsUpdateJobsConfigFile     string `json:"windowsUpdateJobsConfigFile,omitempty"`
 	WindowsSoftwareJobsConfigFile   string `json:"windowsSoftwareJobsConfigFile,omitempty"`
+	WindowsManagedMSIConfigFile     string `json:"windowsManagedMSIConfigFile,omitempty"`
 	WindowsInventoryEnabled         bool   `json:"windowsInventoryEnabled,omitempty"`
 	PackageActionsConfigFile        string `json:"packageActionsConfigFile,omitempty"`
 	ServiceActionsConfigFile        string `json:"serviceActionsConfigFile,omitempty"`
@@ -144,6 +145,9 @@ func (c *Config) Validate() error {
 	if c.WindowsUpdateJobsConfigFile != "" && (c.Profile != TLS || !c.WindowsInventoryEnabled || !filepath.IsAbs(c.WindowsUpdateJobsConfigFile) || filepath.Clean(c.WindowsUpdateJobsConfigFile) != c.WindowsUpdateJobsConfigFile) {
 		return ErrConfiguration
 	}
+	if c.WindowsManagedMSIConfigFile != "" && (c.Profile != TLS || !c.WindowsInventoryEnabled || !filepath.IsAbs(c.WindowsManagedMSIConfigFile) || filepath.Clean(c.WindowsManagedMSIConfigFile) != c.WindowsManagedMSIConfigFile) {
+		return ErrConfiguration
+	}
 	if c.WindowsSoftwareJobsConfigFile != "" && (c.Profile != TLS || !c.WindowsInventoryEnabled || !filepath.IsAbs(c.WindowsSoftwareJobsConfigFile) || filepath.Clean(c.WindowsSoftwareJobsConfigFile) != c.WindowsSoftwareJobsConfigFile) {
 		return ErrConfiguration
 	}
@@ -201,7 +205,7 @@ func Load(path string) (Material, error) {
 		return fail()
 	}
 	var c Config
-	if StrictObject(raw, &c, "schemaVersion", "profile", "operatorListen", "agentListen", "operatorOrigin", "agentOrigin", "tlsCertificateFile", "tlsPrivateKeyFile", "agentClientCAFile", "operatorAuthFile", "stateDirectory", "webDirectory", "insecureHTTPAcknowledged", "serviceActionsConfigFile", "windowsServiceActionsConfigFile", "windowsUpdateJobsConfigFile", "windowsSoftwareJobsConfigFile", "windowsInventoryEnabled", "packageActionsConfigFile") != nil || c.Validate() != nil {
+	if StrictObject(raw, &c, "schemaVersion", "profile", "operatorListen", "agentListen", "operatorOrigin", "agentOrigin", "tlsCertificateFile", "tlsPrivateKeyFile", "agentClientCAFile", "operatorAuthFile", "stateDirectory", "webDirectory", "insecureHTTPAcknowledged", "serviceActionsConfigFile", "windowsServiceActionsConfigFile", "windowsUpdateJobsConfigFile", "windowsSoftwareJobsConfigFile", "windowsManagedMSIConfigFile", "windowsInventoryEnabled", "packageActionsConfigFile") != nil || c.Validate() != nil {
 		return fail()
 	}
 	auth, e := ReadProtected(c.OperatorAuthFile, true, 32768)

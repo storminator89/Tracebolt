@@ -233,6 +233,13 @@ missing material rather than inventing credentials or weakening protection.
   Cached WUA inspection must remain offline and must not download, install,
   accept update terms, reboot, upgrade WUA or change service/network settings.
   Fixtures/cross-builds do not authorize native reads or create a local grant.
+- Central managed MSI delivery is a fresh separate default-off source domain. Read
+  `docs/windows-managed-msi-delivery.md` before changes. Keep chunked private custody,
+  separate delivery/install consent and keys, dedicated LocalSystem risk disclosure,
+  original leaf/expiry checks, exact package/native review and one-attempt no-replay.
+  Observation remains available; other Tracebolt mutators are excluded in this slice.
+  Never promote prepared-v1 or read permissions. Native setup/install acceptance
+  remains separately approved and pending; see its manual acceptance plan.
 - Prepared MSI installation is a separate fresh default-off one-attempt source
   domain. Read `docs/windows-prepared-msi-jobs.md` before changes. Preserve exact
   protected package custody, package-specific review/native acceptance, separate
