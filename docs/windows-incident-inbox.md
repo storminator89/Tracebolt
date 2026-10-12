@@ -3,12 +3,14 @@
 This manager-side source increment adds a compact, on-demand **Windows incidents**
 inbox above the fleet device list. It projects the existing durable Windows
 contact, system-volume disk, observed-group CPU, physical-RAM and selected-service
-episodes. No collector, native permission, enrollment, policy, endpoint action,
-Linux Health input, notification route or AI scope is added or enabled.
+episodes. The inbox itself adds no collector, native permission, enrollment, policy, endpoint
+action, Linux Health input or AI scope. Separately approved Windows notifications
+now consume future source transitions; see [notification policies](windows-notifications.md).
 
 The adjacent [planned-maintenance panel](windows-maintenance.md) records bounded
-device/domain windows separately. It does not suppress or alter this inbox or
-join maintenance to incident rows by mutable device ID.
+device/domain windows separately. It does not suppress or alter this inbox or join maintenance to incident rows by
+mutable device ID. Notification dispatch suppression uses exact original identity
+and domain in its separate transaction.
 
 ## Seen is independent of closed
 

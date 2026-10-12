@@ -104,6 +104,7 @@ func (s *Store) updateWindowsResource(ctx context.Context, id string, kind windo
 	if err = runPolicyGuards(ctx, guard); err != nil {
 		return windowsresource.State{}, err
 	}
+	beforeNotifications := capacityNotificationEpisodes(state.Assessment, string(kind))
 	if err = update(&state); err != nil {
 		return windowsresource.State{}, err
 	}
@@ -115,6 +116,9 @@ func (s *Store) updateWindowsResource(ctx context.Context, id string, kind windo
 		return windowsresource.State{}, err
 	}
 	if _, err = tx.ExecContext(ctx, "INSERT INTO windows_resource_devices(id,metric,body) VALUES(?,?,?) ON CONFLICT(id,metric) DO UPDATE SET body=excluded.body", id, kind, body); err != nil {
+		return windowsresource.State{}, err
+	}
+	if err = enqueueWindowsNotifications(ctx, tx, beforeNotifications, capacityNotificationEpisodes(state.Assessment, string(kind))); err != nil {
 		return windowsresource.State{}, err
 	}
 	if err = runPolicyGuards(ctx, guard); err != nil {

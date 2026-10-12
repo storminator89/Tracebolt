@@ -7,25 +7,29 @@ const built=require('esbuild').buildSync({stdin:{contents:"export {validUpdateJo
 const {validUpdateJobView,validUpdateJobHistory}=await import('data:text/javascript;base64,'+Buffer.from(built.outputFiles[0].text).toString('base64'));
 export const windowsUpdateScheduleCaseName='Synthetic Windows prospective schedule, exact UTC window and cancellation in the compiled UI';
 export const windowsUpdateScheduleDisclosure='Entirely intercepted invented TLS-session, cached readiness and scheduling metadata in the compiled UI. Separate unchecked prospective consent, one fixed UTC window and cancel/readback exist only in an in-memory fixture. Zero immediate-install writes. No actual TLS authority, local grant, elevated executor, native WUA, real manager write, download, EULA acceptance, installation, reboot or exact-time guarantee. Source/browser evidence is not native acceptance.';
+export const windowsBackgroundUpdateScheduleCaseName='Synthetic background Windows update service, separate UTC approval and cancellation in the compiled UI';
+export const windowsBackgroundUpdateScheduleDisclosure=windowsUpdateScheduleDisclosure+' Fresh combined-background scheduling profile and signed shared-status metadata are synthetic; service availability is not checked live.';
 const stages=new Set(['setup','document','request','readiness','review','schedule','pending','cancel','reload','complete']);let stage='setup';
 export const windowsUpdateScheduleFailureStage=()=>stages.has(stage)?stage:'setup';
 
-export function createWindowsUpdateScheduleFixture(){
+export function createWindowsUpdateScheduleFixture(profile='standalone'){
+ if(!['standalone','background'].includes(profile))throw new Error('Invalid synthetic scheduling profile');
  const manual=createWindowsUpdateJobsFixture(),at=Date.parse(manual.now)/1000,window=Object.freeze({startAt:at+120,endAt:at+420});
  const counts={schedule:0,cancel:0,immediateInstallWrites:0},scheduleDigest='sha256:'+'b'.repeat(64);
+ const background=profile==='background'?{backgroundExecutor:true,backgroundScheduling:true,coordinated:true,executorAvailability:'verified_recent',executorObservedAt:at,mutationCapturedAt:at,mutation:{active:true,blocked:false,phase:'idle',revision:'1',retained:0}}:{};
  let last=null,saved=null;
  const validate=value=>{
   if(!validUpdateJobView(value,manual.device.id,manual.session.actorId))throw new Error('Invalid synthetic schedule view');
   return structuredClone(value);
  };
  const publicView=()=>validate({...saved,available:saved.job.state==='schedule_canceled',reason:saved.job.state==='schedule_canceled'?'ready':'job_pending_or_intervention'});
- const fixture={...manual,device:{...manual.device,name:'SYNTHETIC · Selected cached update schedule'},session:{...manual.session,capabilities:['read','windows_update_install','windows_update_schedule']},scheduleCounts:counts,scheduleWindow:window,scheduleDigest,
-  updateView(){if(saved){manual.updateCounts.status++;return publicView();}last={...manual.updateView(),schedulingAvailable:true};return validate(last);},
+ const fixture={...manual,device:{...manual.device,name:'SYNTHETIC · Selected cached update schedule'},session:{...manual.session,capabilities:['read','windows_update_install','windows_update_schedule']},scheduleCounts:counts,scheduleWindow:window,scheduleDigest,scheduleProfile:profile,
+  updateView(){if(saved){manual.updateCounts.status++;return publicView();}last={...manual.updateView(),...background,schedulingAvailable:true};return validate(last);},
   updateMutation(op,raw){
    // Reusing manual readiness never admits its immediate-install approval route.
    if(op==='approve'){counts.immediateInstallWrites++;return null;}
    if(saved)return null;
-   const value=manual.updateMutation(op,raw);if(!value)return null;last={...value,schedulingAvailable:true};return validate(last);
+   const value=manual.updateMutation(op,raw);if(!value)return null;last={...value,...background,schedulingAvailable:true};return validate(last);
   },
   updateHistory(){
    if(!saved)return manual.updateHistory();
@@ -64,13 +68,21 @@ export function windowsUpdateScheduleRoute({base,fixture,state,asset}){
 
 export async function exerciseWindowsUpdateSchedule({page,expect,base,fixture,locale,width,shot}){
  if(base!==windowsUpdateJobsOrigin)throw new Error('Invalid synthetic schedule origin');
- const de=locale==='de',panel=page.locator('.windows-update-jobs'),check=de?'Bereitschaft prüfen':'Check readiness',read=de?'Gespeicherten Status lesen':'Read saved status',receiptLabel=de?'Auftragsdetails':'Job details';
+ const background=fixture.scheduleProfile==='background',de=locale==='de',panel=page.locator('.windows-update-jobs'),jobStatus=panel.locator(':scope > div[role="status"]'),check=de?'Bereitschaft prüfen':'Check readiness',read=de?'Gespeicherten Status lesen':'Read saved status',receiptLabel=de?'Auftragsdetails':'Job details';
  const open=async()=>{await page.getByRole('tab',{name:de?'Inventar':'Inventory',exact:true}).click();await page.getByRole('tab',{name:'Updates',exact:true}).click();await expect(panel).toBeVisible();};
- const capture=async(kind,target=panel)=>{await target.evaluate(el=>el.scrollIntoView({block:'start',inline:'nearest',behavior:'instant'}));expect(await panel.evaluate(el=>el.scrollWidth<=el.clientWidth+1)).toBe(true);expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);await shot(page,`synthetic-windows-update-schedule-${kind}-${width}-${locale}`,windowsUpdateScheduleDisclosure);};
+ const capture=async(kind,target=panel)=>{await target.evaluate(el=>el.scrollIntoView({block:'start',inline:'nearest',behavior:'instant'}));expect(await panel.evaluate(el=>el.scrollWidth<=el.clientWidth+1)).toBe(true);expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);await shot(page,`synthetic-windows-${background?'background-update':'update'}-schedule-${kind}-${width}-${locale}`,background?windowsBackgroundUpdateScheduleDisclosure:windowsUpdateScheduleDisclosure);};
  const noInstall=()=>{expect(fixture.updateCounts.approve).toBe(0);expect(fixture.scheduleCounts.immediateInstallWrites).toBe(0);expect(fixture.counts.approve).toBe(0);};
  const exactSaved=()=>{const saved=fixture.savedSchedule();expect(saved.job.id).toBe(fixture.savedID());expect(saved.job.selection).toEqual(fixture.selection);expect(saved.job.schedule).toEqual({version:'tracebolt.windows-selected-update-schedule.v1',digest:fixture.scheduleDigest,approvedAt:Date.parse(fixture.now)/1000,...fixture.scheduleWindow,permitIssuedAt:0,revoked:false});noInstall();};
  stage='document';await page.goto(base+'/#/devices/'+fixture.device.id);await page.getByLabel(/Language|Sprache/).selectOption(locale);await expect(page.locator('html')).toHaveAttribute('lang',locale);await open();
- stage='request';await panel.getByRole('combobox').selectOption(`${fixture.selection.updateId}:${fixture.selection.revision}`);await panel.getByRole('button',{name:check,exact:true}).click();await expect(panel.getByRole('status')).toContainText(de?'Bereitschaft ausstehend':'Readiness pending');noInstall();
+ if(background){
+  const executor=panel.locator('.windows-update-executor-status'),shared=panel.locator('.windows-mutation-status');
+  await expect(executor).toContainText(de?'Update-Hintergrunddienst · Genehmigte UTC-Zeitfenster':'Background update service · Approved UTC windows');
+  await expect(executor).toContainText(de?'Zuletzt bestätigt · Verfügbarkeit nicht live geprüft':'Recent confirmation · Availability not checked live');
+  await expect(shared).toContainText(de?'Kein Besitzer gespeichert':'No owner saved');
+  await expect(panel.getByText(de?'Nur manuelle Freigaben':'Manual approvals only',{exact:false})).toHaveCount(0);
+  await capture('status');await expect(executor).toBeInViewport();await expect(shared).toBeInViewport();noInstall();
+ }
+ stage='request';await panel.getByRole('combobox').selectOption(`${fixture.selection.updateId}:${fixture.selection.revision}`);await panel.getByRole('button',{name:check,exact:true}).click();await expect(jobStatus).toContainText(de?'Bereitschaft ausstehend':'Readiness pending');noInstall();
  stage='readiness';await panel.getByRole('button',{name:read,exact:true}).click();await expect(panel.getByRole('button',{name:check,exact:true})).toBeVisible();await panel.getByRole('button',{name:check,exact:true}).click();
  stage='review';const review=panel.getByRole('group',{name:check,exact:true}),scheduleDetails=review.locator('details').filter({has:page.getByText(de?'Dieses Update planen':'Schedule this update',{exact:true})});
  await expect(review).toContainText(fixture.selection.updateId);await expect(scheduleDetails).not.toHaveAttribute('open');await scheduleDetails.locator('summary').first().click();
@@ -78,15 +90,24 @@ export async function exerciseWindowsUpdateSchedule({page,expect,base,fixture,lo
  await scheduleDetails.getByLabel(de?'Beginn (UTC)':'Start (UTC)',{exact:true}).fill(start);await scheduleDetails.getByLabel(de?'Ende (UTC)':'End (UTC)',{exact:true}).fill(end);
  await expect(scheduleDetails.getByLabel(de?'Beginn (UTC)':'Start (UTC)',{exact:true})).toHaveValue(start);await expect(scheduleDetails.getByLabel(de?'Ende (UTC)':'End (UTC)',{exact:true})).toHaveValue(end);
  const ack=scheduleDetails.getByRole('checkbox',{name:de?/vorausschauend für dieses UTC/:/prospectively for this UTC/}),approve=scheduleDetails.getByRole('button',{name:de?'Geplantes Update einmal freigeben':'Approve scheduled update once',exact:true});
+ if(background){
+  const requirements=scheduleDetails.locator('details'),manual=review.getByRole('checkbox',{name:de?/Installation genau dieser Revision und mögliche/:/exact revision and its possible interruption/});
+  await expect(requirements).not.toHaveAttribute('open');await requirements.locator('summary').click();
+  await expect(requirements).toContainText(de?'separat aktivierte Update-Hintergrunddienst und der Beobachter':'separately activated background update service and observer');
+  await expect(requirements).toContainText(de?'Das feste UTC-Zeitfenster begrenzt die Auslösung, nicht den Abschluss.':'The fixed UTC window limits dispatch, not completion.');
+  await expect(requirements).toContainText(de?'Kein Download, keine Lizenzannahme, kein Neustart und kein Wiederholungsversuch':'No download, license acceptance, reboot or retry');
+  await requirements.locator('summary').click();await expect(requirements).not.toHaveAttribute('open');
+  await expect(manual).not.toBeChecked();await manual.check();await expect(ack).not.toBeChecked();await expect(approve).toBeDisabled();await manual.uncheck();
+ }
  await expect(ack).not.toBeChecked();await expect(approve).toBeDisabled();await expect(review.getByRole('button',{name:de?'Dieses Update einmal freigeben':'Approve this update once',exact:true})).toBeDisabled();await expect(scheduleDetails).toContainText(de?'auch bei Abbruch':'even if canceled');noInstall();await capture('review',scheduleDetails);await expect(ack).toBeInViewport();await expect(approve).toBeInViewport();
- stage='schedule';await ack.check();await approve.evaluate(button=>{button.click();button.click();});await expect(panel.getByRole('status')).toContainText(de?'Geplant; geeignete Abfrage':'Scheduled; waiting');expect(fixture.scheduleCounts.schedule).toBe(1);exactSaved();
- stage='pending';await panel.getByRole('button',{name:read,exact:true}).click();await expect(panel.getByRole('status')).toContainText(de?'Geplant; geeignete Abfrage':'Scheduled; waiting');exactSaved();
- const receipt=panel.getByRole('status').locator('details');await expect(receipt).not.toHaveAttribute('open');await receipt.getByText(receiptLabel,{exact:true}).click();await expect(receipt).toContainText(fixture.savedID());for(const at of Object.values(fixture.scheduleWindow))await expect(receipt).toContainText(new Date(at*1000).toISOString().replace('T',' ').replace('.000Z',' UTC'));await receipt.getByText(receiptLabel,{exact:true}).click();
- const cancel=panel.getByRole('button',{name:de?'Diese Planung abbrechen':'Cancel this schedule',exact:true});await expect(cancel).toBeEnabled();await expect(panel.getByRole('button',{name:de?'Dieses Update einmal freigeben':'Approve this update once',exact:true})).toHaveCount(0);await capture('pending');await expect(cancel).toBeInViewport();
- stage='cancel';await cancel.evaluate(button=>{button.click();button.click();});await expect(panel.getByRole('status')).toContainText(de?'Planung vor Abholung abgebrochen':'Schedule canceled before claim');expect(fixture.scheduleCounts.cancel).toBe(1);exactSaved();
- stage='reload';await page.reload();await open();await expect(panel.getByRole('status')).toContainText(de?'Planung vor Abholung abgebrochen':'Schedule canceled before claim');await expect(panel.getByRole('button',{name:de?'Diese Planung abbrechen':'Cancel this schedule',exact:true})).toHaveCount(0);await expect(panel.getByRole('status').locator('details')).not.toHaveAttribute('open');exactSaved();await capture('canceled');
+ stage='schedule';await ack.check();await expect(review.getByRole('button',{name:de?'Dieses Update einmal freigeben':'Approve this update once',exact:true})).toBeDisabled();await approve.evaluate(button=>{button.click();button.click();});await expect(jobStatus).toContainText(de?'Geplant; geeignete Abfrage':'Scheduled; waiting');expect(fixture.scheduleCounts.schedule).toBe(1);exactSaved();
+ stage='pending';await panel.getByRole('button',{name:read,exact:true}).click();await expect(jobStatus).toContainText(de?'Geplant; geeignete Abfrage':'Scheduled; waiting');exactSaved();
+ const receipt=jobStatus.locator('details');await expect(receipt).not.toHaveAttribute('open');await receipt.getByText(receiptLabel,{exact:true}).click();await expect(receipt).toContainText(fixture.savedID());for(const at of Object.values(fixture.scheduleWindow))await expect(receipt).toContainText(new Date(at*1000).toISOString().replace('T',' ').replace('.000Z',' UTC'));await receipt.getByText(receiptLabel,{exact:true}).click();
+ const cancel=panel.getByRole('button',{name:de?'Diese Planung abbrechen':'Cancel this schedule',exact:true});await expect(cancel).toBeEnabled();await expect(panel.getByRole('button',{name:de?'Dieses Update einmal freigeben':'Approve this update once',exact:true})).toHaveCount(0);if(background)await capture('pending',jobStatus);else await capture('pending');await expect(cancel).toBeInViewport();
+ stage='cancel';await cancel.evaluate(button=>{button.click();button.click();});await expect(jobStatus).toContainText(de?'Planung vor Abholung abgebrochen':'Schedule canceled before claim');expect(fixture.scheduleCounts.cancel).toBe(1);exactSaved();
+ stage='reload';await page.reload();await open();await expect(jobStatus).toContainText(de?'Planung vor Abholung abgebrochen':'Schedule canceled before claim');await expect(panel.getByRole('button',{name:de?'Diese Planung abbrechen':'Cancel this schedule',exact:true})).toHaveCount(0);await expect(jobStatus.locator('details')).not.toHaveAttribute('open');exactSaved();await capture('canceled');
  expect(fixture.updateCounts.request).toBe(1);expect(fixture.updateCounts.preview).toBe(1);expect(fixture.scheduleCounts).toEqual({schedule:1,cancel:1,immediateInstallWrites:0});
- stage='complete';return {request:fixture.updateCounts.request,preview:fixture.updateCounts.preview,...fixture.scheduleCounts,explicitUncheckedProspectiveApproval:true,exactSavedWindow:true,pendingReadback:true,cancelReadback:true,reloadReadback:true,duplicateClickGuard:true,nativeAcceptance:false};
+ stage='complete';return {request:fixture.updateCounts.request,preview:fixture.updateCounts.preview,...fixture.scheduleCounts,explicitUncheckedProspectiveApproval:true,exactSavedWindow:true,pendingReadback:true,cancelReadback:true,reloadReadback:true,duplicateClickGuard:true,...(background?{backgroundScheduling:true,compactBackgroundStatus:true,separateManualApproval:true}:{}),nativeAcceptance:false};
 }
 export function requireWindowsUpdateScheduleEvidence(rows,sourceSha){
  const fail=()=>{throw new Error('Synthetic schedule UI evidence missing or mismatched');};if(!Array.isArray(rows)||rows.length!==12||!/^[a-f0-9]{40}$/.test(sourceSha??''))fail();
@@ -95,4 +116,13 @@ export function requireWindowsUpdateScheduleEvidence(rows,sourceSha){
   if(row.sourceSha!==sourceSha||row.test!==windowsUpdateScheduleCaseName||row.locale!==locale||row.viewport?.width!==width||row.viewport?.height!==(width===390?844:1000)||row.publicSafe!==true||row.fullPage!==false||row.fixtureDisclosure!==windowsUpdateScheduleDisclosure)fail();
  }
  return {screens:12,nativeAcceptance:false};
+}
+
+export function requireWindowsBackgroundUpdateScheduleEvidence(rows,sourceSha){
+ const fail=()=>{throw new Error('Synthetic background schedule UI evidence missing or mismatched');};if(!Array.isArray(rows)||rows.length!==16||!/^[a-f0-9]{40}$/.test(sourceSha??''))fail();
+ for(const kind of ['status','review','pending','canceled'])for(const locale of ['en','de'])for(const width of [1440,390]){
+  const matches=rows.filter(row=>row?.file===`synthetic-windows-background-update-schedule-${kind}-${width}-${locale}.png`);if(matches.length!==1)fail();const row=matches[0];
+  if(row.sourceSha!==sourceSha||row.test!==windowsBackgroundUpdateScheduleCaseName||row.locale!==locale||row.viewport?.width!==width||row.viewport?.height!==(width===390?844:1000)||row.publicSafe!==true||row.fullPage!==false||row.fixtureDisclosure!==windowsBackgroundUpdateScheduleDisclosure)fail();
+ }
+ return {screens:16,nativeAcceptance:false};
 }

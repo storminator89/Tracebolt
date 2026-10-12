@@ -740,7 +740,7 @@ jobs:
         env:
           TRACEBOLT_SOURCE_SHA: ${{ github.sha }}
         run: node tests/e2e-review/windows-incident-inbox-runner.mjs
-      - name: Bounded Windows maintenance review and early end (12 required screenshots)
+      - name: Bounded Windows maintenance and notification approval (20 required screenshots)
         if: ${{ !cancelled() }}
         timeout-minutes: 6
         env:

@@ -432,7 +432,11 @@ func prepareWithApplicationChecks(m lanconfig.Material, enrollment *enrollmentco
 	}
 	var alarmWorker *alarmdelivery.Settings
 	if enrollment != nil && enrollment.StoreConfig().Binding.CollectionProfile == enrollmentcrypto.CollectionProfileComplete {
-		alarmWorker, e = alarmdelivery.NewSettings(appStore, c.StateDirectory, managerID, c.Profile, alarms)
+		var alarmQueue alarmdelivery.SettingsQueue = appStore
+		if windowsService != nil {
+			alarmQueue = api.NewWindowsNotificationQueue(appStore, windowsService)
+		}
+		alarmWorker, e = alarmdelivery.NewSettings(alarmQueue, c.StateDirectory, managerID, c.Profile, alarms)
 		if e != nil {
 			appStore.Close()
 			return fail(e)

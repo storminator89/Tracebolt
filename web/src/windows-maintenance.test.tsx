@@ -49,9 +49,9 @@ beforeEach(() => {
 afterEach(() => { cleanup(); abortProtectedRequests(); localStorage.removeItem(LOGOUT_INTENT_KEY); sessionStorage.removeItem(LOGOUT_INTENT_KEY); vi.useRealTimers(); vi.restoreAllMocks(); });
 
 describe('compact Windows maintenance metadata panel', () => {
-    it('starts collapsed, reads once on demand and discloses metadata-only effects', async () => {
+    it('starts collapsed, reads once on demand and discloses suppression without stopping checks', async () => {
         render(<Harness/>); await flush(); expect(request).not.toHaveBeenCalled(); await open();
-        expect(reads()).toHaveLength(1); expect(reads()[0][2]).toBe(256 * 1024); expect(screen.getByText(/Planning label only. Checks, incidents and alarms continue/)).toBeVisible();
+        expect(reads()).toHaveLength(1); expect(reads()[0][2]).toBe(256 * 1024); expect(screen.getByText(/Matching Windows notifications are muted. Checks and incidents continue/)).toBeVisible();
         expect(screen.getByRole('combobox', { name: 'Exact Windows device' })).toHaveValue(''); expect(screen.queryByRole('button', { name: 'Start maintenance' })).toBeNull();
         fireEvent.click(screen.getByRole('button', { name: 'Windows maintenance' })); expect(screen.queryByRole('combobox')).toBeNull();
     });
@@ -190,6 +190,6 @@ describe('compact Windows maintenance metadata panel', () => {
     it('has German intent, UTC review and honest lifecycle labels', async () => {
         setLocale('de', false); render(<Harness/>); fireEvent.click(screen.getByRole('button', { name: 'Windows-Wartung' })); await flush(); fireEvent.change(screen.getByRole('combobox', { name: 'Exaktes Windows-Gerät' }), { target: { value: view.targets[0].key } });
         fireEvent.change(screen.getByRole('combobox', { name: 'Absicht des Operators' }), { target: { value: 'planned-work' } }); fireEvent.click(screen.getByRole('button', { name: 'Wartungsstart prüfen' })); expect(screen.getByText('Geplantes Ende')).toBeVisible(); fireEvent.click(screen.getByRole('button', { name: 'Wartung starten' })); await flush();
-        expect(screen.getByRole('list', { name: 'Aktuelle Wartungsmarkierungen' })).toHaveTextContent('Wartung jetzt · bis'); expect(screen.getByText(/Prüfungen, Vorfälle und Alarme laufen weiter/)).toBeVisible();
+        expect(screen.getByRole('list', { name: 'Aktuelle Wartungsmarkierungen' })).toHaveTextContent('Wartung jetzt · bis'); expect(screen.getByText(/Prüfungen und Vorfälle laufen weiter/)).toBeVisible();
     });
 });

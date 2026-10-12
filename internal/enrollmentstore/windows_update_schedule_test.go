@@ -21,12 +21,15 @@ type scheduledStoreFixture struct {
 	approval  job.ScheduleApproval
 }
 
-func newScheduledStoreFixture(t *testing.T) *scheduledStoreFixture {
+func newScheduledStoreFixture(t *testing.T, background ...bool) *scheduledStoreFixture {
 	t.Helper()
 	f := newWindowsUpdateStoreFixture(t, false)
 	f.consent.Version = job.ScheduledConsentVersion
 	f.consent.ScheduleScope = job.ScheduleScope
 	f.consent.ScheduleAcknowledged = true
+	if len(background) > 0 && background[0] {
+		setupScheduledBackgroundPeer(t, &f)
+	}
 	if e := f.setup(); e != nil {
 		t.Fatal(e)
 	}
@@ -136,8 +139,20 @@ func TestWindowsUpdateScheduleFinalIssuanceExpiryKeepsOnlyRejectionFloor(t *test
 	}
 }
 func TestWindowsUpdateScheduleCancelVersusClaimSerializes(t *testing.T) {
-	s := newScheduledStoreFixture(t)
-	if e := s.m.Report(context.Background(), s.due(t)); e != nil {
+	checkScheduleCancelClaimRace(t, false)
+}
+func TestScheduledBackgroundCancelVersusClaimSerializes(t *testing.T) {
+	checkScheduleCancelClaimRace(t, true)
+}
+func checkScheduleCancelClaimRace(t *testing.T, background bool) {
+	s := newScheduledStoreFixture(t, background)
+	proof := s.due(t)
+	if background {
+		if e := s.m.Report(context.Background(), scheduledStoreShared(t, s, false, s.f.at.Unix(), 1)); e != nil {
+			t.Fatal(e)
+		}
+	}
+	if e := s.m.Report(context.Background(), proof); e != nil {
 		t.Fatal(e)
 	}
 	other := s.open(t, true)

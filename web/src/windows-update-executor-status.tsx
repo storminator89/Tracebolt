@@ -15,7 +15,7 @@ export function WindowsUpdateExecutorStatus({view}:{view:UpdateJobView}) {
  const now=clock.valid?view.serverNow+clock.elapsed/1000:NaN;
  const recent=view.executorAvailability==='verified_recent'&&typeof view.executorObservedAt==='number'&&now>=view.executorObservedAt&&now-view.executorObservedAt<60;
  return <>
-  <p role="status" className="windows-update-executor-status">{de?'Update-Hintergrunddienst · Nur manuelle Freigaben':'Background update service · Manual approvals only'}<br/>{recent?(de?'Zuletzt bestätigt · Verfügbarkeit nicht live geprüft':'Recent confirmation · Availability not checked live'):(de?'Verfügbarkeit unbekannt':'Availability unknown')}</p>
+  <p role="status" className="windows-update-executor-status">{view.backgroundScheduling?(de?'Update-Hintergrunddienst · Genehmigte UTC-Zeitfenster':'Background update service · Approved UTC windows'):(de?'Update-Hintergrunddienst · Nur manuelle Freigaben':'Background update service · Manual approvals only')}<br/>{recent?(de?'Zuletzt bestätigt · Verfügbarkeit nicht live geprüft':'Recent confirmation · Availability not checked live'):(de?'Verfügbarkeit unbekannt':'Availability unknown')}</p>
   <WindowsMutationStatus status={view.mutation} capturedAt={view.mutationCapturedAt} serverNow={Number.isFinite(now)?now:Number.MAX_SAFE_INTEGER}/>
  </>;
 }

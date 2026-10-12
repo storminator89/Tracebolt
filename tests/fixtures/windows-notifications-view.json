@@ -1,0 +1,71 @@
+{
+  "schemaVersion": "tracebolt.windows-notifications.v1",
+  "serverNow": "2026-10-07T12:00:00Z",
+  "authorityExpiresAt": "2026-10-07T12:02:00Z",
+  "destinationHost": "receiver.example.test",
+  "destinationBinding": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "deliveryEnabled": true,
+  "targets": [
+    {
+      "key": "aeb890680b972ad652746f581797efbe710cde7a28e8d7b19ea8a9a1756fe210",
+      "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "domain": "contact",
+      "revision": 0,
+      "enabled": false,
+      "effective": false,
+      "maintenanceUntil": null,
+      "changedAt": null
+    },
+    {
+      "key": "2735f61be510b4bff2f2025e9633648bb16da3dad1720ac20ed9fc1fdbc4665f",
+      "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "domain": "cpu",
+      "revision": 0,
+      "enabled": false,
+      "effective": false,
+      "maintenanceUntil": null,
+      "changedAt": null
+    },
+    {
+      "key": "54051690e8bb4a3f64b78ed08dd40edec3e18a07f691049a38b232b75ce4730b",
+      "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "domain": "disk",
+      "revision": 1,
+      "enabled": true,
+      "effective": true,
+      "maintenanceUntil": "2026-10-07T13:00:00Z",
+      "changedAt": "2026-10-07T12:00:00Z"
+    },
+    {
+      "key": "f87a9967cc5394e1407b5b8ca0037561391158350e7abbe381f0c512745a2e20",
+      "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "domain": "memory",
+      "revision": 0,
+      "enabled": false,
+      "effective": false,
+      "maintenanceUntil": null,
+      "changedAt": null
+    },
+    {
+      "key": "7b46cb8cb62d7b749c76c983471574c9e6464e8064417e204ff08289ffe78088",
+      "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "domain": "service",
+      "revision": 0,
+      "enabled": false,
+      "effective": false,
+      "maintenanceUntil": null,
+      "changedAt": null
+    }
+  ],
+  "counts": {
+    "schemaVersion": "tracebolt.alarm-status.v1",
+    "enabled": true,
+    "queued": 0,
+    "inFlight": 0,
+    "providerAccepted": 1,
+    "failed": 0,
+    "uncertain": 0,
+    "suppressed": 1,
+    "dropped": 0
+  }
+}

@@ -68,6 +68,8 @@ func ValidBinding(b Binding) bool {
 	return enrollmentcrypto.ValidID(b.ManagerID, "manager_") && enrollmentcrypto.ValidID(b.DeviceID, "agent_") && actionpermit.ValidDigest(b.IncarnationDigest) && enrollmentcrypto.ValidID(b.ExecutorID, "executor_") && actionpermit.ValidDigest(b.ExecutorKeyID) && b.ExecutorKeyID != b.KeyID && enrollmentcrypto.ValidID(b.GrantID, "grant_") && actionpermit.ValidDigest(b.KeyID)
 }
 
+const ScheduledBackgroundConsentVersion = "tracebolt.windows-selected-update-consent.v5"
+
 const BackgroundConsentVersion = "tracebolt.windows-selected-update-consent.v4"
 
 const CoordinatedConsentVersion = "tracebolt.windows-selected-update-consent.v3"
@@ -86,8 +88,12 @@ type Consent struct {
 	ScheduleAcknowledged   bool    `json:"scheduleAcknowledged,omitempty"`
 }
 
+func (c Consent) Background() bool {
+	return c.Version == BackgroundConsentVersion || c.Version == ScheduledBackgroundConsentVersion
+}
+
 func (c Consent) Validate() error {
-	if (c.Version == BackgroundConsentVersion) != c.BackgroundAcknowledged || !(c.Version == ConsentVersion && c.MutationPlanDigest == "" && c.PeerBindingDigest == "" && c.ScheduleScope == "" && !c.ScheduleAcknowledged || c.Version == ScheduledConsentVersion && c.MutationPlanDigest == "" && c.PeerBindingDigest == "" && c.ScheduleScope == ScheduleScope && c.ScheduleAcknowledged || (c.Version == CoordinatedConsentVersion || c.Version == BackgroundConsentVersion) && actionpermit.ValidDigest(c.MutationPlanDigest) && actionpermit.ValidDigest(c.PeerBindingDigest) && c.ScheduleScope == "" && !c.ScheduleAcknowledged) || c.Scope != Scope || !ValidBinding(c.Binding) || !validTime(c.ExpiresAt) || c.Enabled && !c.Acknowledged {
+	if c.Background() != c.BackgroundAcknowledged || !(c.Version == ConsentVersion && c.MutationPlanDigest == "" && c.PeerBindingDigest == "" && c.ScheduleScope == "" && !c.ScheduleAcknowledged || c.Version == ScheduledConsentVersion && c.MutationPlanDigest == "" && c.PeerBindingDigest == "" && c.ScheduleScope == ScheduleScope && c.ScheduleAcknowledged || (c.Version == CoordinatedConsentVersion || c.Version == BackgroundConsentVersion) && actionpermit.ValidDigest(c.MutationPlanDigest) && actionpermit.ValidDigest(c.PeerBindingDigest) && c.ScheduleScope == "" && !c.ScheduleAcknowledged || c.Version == ScheduledBackgroundConsentVersion && actionpermit.ValidDigest(c.MutationPlanDigest) && actionpermit.ValidDigest(c.PeerBindingDigest) && c.ScheduleScope == ScheduleScope && c.ScheduleAcknowledged) || c.Scope != Scope || !ValidBinding(c.Binding) || !validTime(c.ExpiresAt) || c.Enabled && !c.Acknowledged {
 		return ErrInvalid
 	}
 	return nil

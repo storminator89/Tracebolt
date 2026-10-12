@@ -24,6 +24,9 @@ import (
 	job "localrmm/internal/windowsupdatejob"
 )
 
+const ScheduledBackgroundVersion = "tracebolt.windows-background-update-provision.v2"
+const ScheduledBackgroundDisclosure = "Run separately approved manual or bounded UTC-window cached update jobs through the dedicated own-process LocalSystem background service after explicit activation. LocalSystem has high machine privileges and machine-network access; native update/custom code is not sandboxed. The observer receives only query/status/read-control on the service and query-limited/synchronize on its process, never start/control, token, key or state rights. Original fixed expiry and 32 lifetime jobs remain. No downloads, EULA acceptance, reboot, repair, automatic retry or unlock is authorized."
+
 const BackgroundVersion = "tracebolt.windows-background-update-provision.v1"
 const BackgroundKeyVersion = "tracebolt.windows-background-update-key.v1"
 const BackgroundDisclosure = "Run manual selected cached update jobs through a dedicated own-process LocalSystem background service after explicit activation. LocalSystem has high machine privileges and machine-network access; native update/custom code is not sandboxed. The observer receives only query/status/read-control on this service and query-limited/synchronize on its process, never start/control, token, key or state rights. Each exact cached GUID/revision still needs fresh named approval; 32 jobs share the original fixed grant lifetime. No scheduling, downloads, EULA acceptance, reboot, repair or automatic retry/unlock is authorized."
@@ -71,24 +74,35 @@ func NewScheduledPlan(o job.SetupOffer, a windowspackage.Manifest, identity lanc
 	p.ScheduleDisclosure = ScheduleDisclosure
 	return p, p.Validate()
 }
+func (p Plan) Background() bool {
+	return p.Version == BackgroundVersion || p.Version == ScheduledBackgroundVersion
+}
+
 func (p Plan) Validate() error {
-	if p.ScheduleScope == "" && p.ScheduleDisclosure != "" || p.ScheduleScope != "" && (p.ScheduleScope != job.ScheduleScope || p.ScheduleDisclosure != ScheduleDisclosure) {
+	scheduleDisclosure := ScheduleDisclosure
+	if p.Version == ScheduledBackgroundVersion {
+		scheduleDisclosure = job.BackgroundScheduleDisclosure
+	}
+	if p.ScheduleScope == "" && p.ScheduleDisclosure != "" || p.ScheduleScope != "" && (p.ScheduleScope != job.ScheduleScope || p.ScheduleDisclosure != scheduleDisclosure) {
 		return ErrSetup
 	}
 
 	i, o, r := p.Identity, p.Offer, p.Observer
 	imageName, rootName, relaySuffix, queryDisclosure := windowspackage.UpdateExecutorImageName, "windows-update-executor", "-update-job-relay", ProcessQueryDisclosure
-	if p.Version == BackgroundVersion {
+	if p.Background() {
 		imageName = windowspackage.UpdateServiceImageName
 		rootName = "windows-update-service"
 		relaySuffix = "-background-update-job-relay"
 		queryDisclosure = BackgroundDisclosure
+		if p.Version == ScheduledBackgroundVersion {
+			queryDisclosure = ScheduledBackgroundDisclosure
+		}
 	}
 	raw, _ := json.Marshal(p.Artifact)
 	if _, e := windowspackage.ParseManifest(raw); e != nil {
 		return ErrSetup
 	}
-	if !(p.Version == Version && p.MutationPlanDigest == "" || p.Version == CoordinatedVersion && actionpermit.ValidDigest(p.MutationPlanDigest) && p.ScheduleScope == "" || p.Version == BackgroundVersion && (p.MutationPlanDigest == "" || actionpermit.ValidDigest(p.MutationPlanDigest)) && p.ScheduleScope == "" && p.ScheduleDisclosure == "") || o.Validate() != nil || p.Artifact.Architecture != runtime.GOARCH || !r.Complete || r.Version != 1 || r.InstallationID == "" || r.ServiceSID == "" || i.ManagerID != o.ManagerID || i.DeviceID != o.DeviceID || i.IncarnationDigest != o.IncarnationDigest || i.ManagerOrigin != o.ManagerOrigin || !actionpermit.ValidDigest(i.ConfigDigest) || !actionpermit.ValidDigest(i.LeafDigest) || !actionpermit.ValidDigest(i.LeafPublicKeyDigest) || i.LeafPublicKeyDigest == actionpermit.Digest(o.ManagerPublicKey) || i.SenderBinding == "" || i.LeafNotBefore <= 0 || i.LeafNotAfter <= i.LeafNotBefore || p.Executable != r.Layout.ProgramFiles+`\Tracebolt\`+imageName || !strings.HasSuffix(r.Layout.StateRoot, `\windows-agent`) || p.StateRoot != strings.TrimSuffix(r.Layout.StateRoot, `\windows-agent`)+`\`+rootName || p.RelayRoot != r.Layout.StateRoot+relaySuffix || p.InstallDisclosure != job.Disclosure || p.RelayDisclosure != lanclient.WindowsUpdateRelayDisclosure || p.ProcessQueryDisclosure != queryDisclosure {
+	if !(p.Version == Version && p.MutationPlanDigest == "" || p.Version == CoordinatedVersion && actionpermit.ValidDigest(p.MutationPlanDigest) && p.ScheduleScope == "" || p.Version == BackgroundVersion && (p.MutationPlanDigest == "" || actionpermit.ValidDigest(p.MutationPlanDigest)) && p.ScheduleScope == "" && p.ScheduleDisclosure == "" || p.Version == ScheduledBackgroundVersion && (p.MutationPlanDigest == "" || actionpermit.ValidDigest(p.MutationPlanDigest)) && p.ScheduleScope == job.ScheduleScope && p.ScheduleDisclosure == job.BackgroundScheduleDisclosure) || o.Validate() != nil || p.Artifact.Architecture != runtime.GOARCH || !r.Complete || r.Version != 1 || r.InstallationID == "" || r.ServiceSID == "" || i.ManagerID != o.ManagerID || i.DeviceID != o.DeviceID || i.IncarnationDigest != o.IncarnationDigest || i.ManagerOrigin != o.ManagerOrigin || !actionpermit.ValidDigest(i.ConfigDigest) || !actionpermit.ValidDigest(i.LeafDigest) || !actionpermit.ValidDigest(i.LeafPublicKeyDigest) || i.LeafPublicKeyDigest == actionpermit.Digest(o.ManagerPublicKey) || i.SenderBinding == "" || i.LeafNotBefore <= 0 || i.LeafNotAfter <= i.LeafNotBefore || p.Executable != r.Layout.ProgramFiles+`\Tracebolt\`+imageName || !strings.HasSuffix(r.Layout.StateRoot, `\windows-agent`) || p.StateRoot != strings.TrimSuffix(r.Layout.StateRoot, `\windows-agent`)+`\`+rootName || p.RelayRoot != r.Layout.StateRoot+relaySuffix || p.InstallDisclosure != job.Disclosure || p.RelayDisclosure != lanclient.WindowsUpdateRelayDisclosure || p.ProcessQueryDisclosure != queryDisclosure {
 		return ErrSetup
 	}
 	return nil
@@ -157,7 +171,7 @@ func apply(ctx context.Context, p Plan, payload []byte, a Approval, h Hooks, gen
 		return registration, ErrSetup
 	}
 	p = immutable
-	background := p.Version == BackgroundVersion
+	background := p.Background()
 	if background && (p.MutationPlanDigest == "" || h.CreateService == nil || h.VerifyService == nil) {
 		return registration, ErrSetup
 	}
@@ -259,6 +273,9 @@ func apply(ctx context.Context, p Plan, payload []byte, a Approval, h Hooks, gen
 			}
 			if p.ScheduleScope != "" {
 				consent.Version = job.ScheduledConsentVersion
+				if background {
+					consent.Version = job.ScheduledBackgroundConsentVersion
+				}
 				consent.ScheduleScope = p.ScheduleScope
 				consent.ScheduleAcknowledged = true
 			}
@@ -410,17 +427,17 @@ func VerifyInstalled(s Store, c windowsupdateipc.Config) error {
 	}
 	raw, e = s.Read("progress.json")
 	var progress Progress
-	if e != nil || decode(raw, &progress) != nil || progress.Version != p.Version || progress.PlanDigest != p.Digest() || !progress.Complete || progress.Attempted != "" || progress.Image == nil || progress.Image.Validate() != nil || progress.Image.Path != p.Executable || progress.Image.SHA256 != "sha256:"+p.Artifact.SHA256 || !sameJSON(progress.Completed, setupStages(p.Version == BackgroundVersion)) || c.Executable != p.Executable || c.ExecutableDigest != progress.Image.SHA256 || c.ObserverReceipt != p.Observer || !c.ObserverProcessQueryAcknowledged {
+	if e != nil || decode(raw, &progress) != nil || progress.Version != p.Version || progress.PlanDigest != p.Digest() || !progress.Complete || progress.Attempted != "" || progress.Image == nil || progress.Image.Validate() != nil || progress.Image.Path != p.Executable || progress.Image.SHA256 != "sha256:"+p.Artifact.SHA256 || !sameJSON(progress.Completed, setupStages(p.Background())) || c.Executable != p.Executable || c.ExecutableDigest != progress.Image.SHA256 || c.ObserverReceipt != p.Observer || !c.ObserverProcessQueryAcknowledged {
 		return ErrSetup
 	}
 	r := job.SetupRegistration{Version: job.SetupRegistrationVersion, Offer: p.Offer, Consent: c.Consent, ExecutorPublicKey: c.ExecutorPublicKey}
-	if p.Version == BackgroundVersion {
+	if p.Background() {
 		r.Version = job.BackgroundRegistrationVersion
 		if VerifyServiceReceipt(s, c) != nil {
 			return ErrSetup
 		}
 	}
-	if r.Validate() != nil || c.Consent.MutationPlanDigest != p.MutationPlanDigest || c.Consent.ScheduleScope != p.ScheduleScope || c.Consent.ScheduleAcknowledged != (p.ScheduleScope != "") || !bytes.Equal(c.ManagerPublicKey, p.Offer.ManagerPublicKey) {
+	if r.Validate() != nil || c.Consent.Background() != p.Background() || (c.Consent.Version == job.ScheduledBackgroundConsentVersion) != (p.Version == ScheduledBackgroundVersion) || c.Consent.MutationPlanDigest != p.MutationPlanDigest || c.Consent.ScheduleScope != p.ScheduleScope || c.Consent.ScheduleAcknowledged != (p.ScheduleScope != "") || !bytes.Equal(c.ManagerPublicKey, p.Offer.ManagerPublicKey) {
 		return ErrSetup
 	}
 	return s.Verify()
@@ -436,7 +453,7 @@ func Relay(p Plan, c windowsupdateipc.Config) (lanclient.WindowsUpdateRelayGrant
 		return lanclient.WindowsUpdateRelayGrant{}, e
 	}
 	v := lanclient.WindowsUpdateRelayGrantVersion
-	if p.Version == BackgroundVersion {
+	if p.Background() {
 		v = lanclient.WindowsBackgroundUpdateRelayGrantVersion
 	}
 	return lanclient.WindowsUpdateRelayGrant{Version: v, Scope: lanclient.WindowsUpdateRelayScope, Enabled: true, Acknowledged: true, SenderBinding: p.Identity.SenderBinding, ManagerOrigin: p.Offer.ManagerOrigin, Binding: c.Consent.Binding, ManagerPublicKey: bytes.Clone(c.ManagerPublicKey), ExecutorPublicKey: bytes.Clone(c.ExecutorPublicKey), ExecutorPeer: peer, ExpiresAt: p.Offer.ExpiresAt}, nil
@@ -475,17 +492,17 @@ type CoordinatedMaterial struct {
 }
 
 func NewCoordinatedPlan(p Plan, digest string) (Plan, error) {
-	if p.Validate() != nil || (p.Version != Version && p.Version != BackgroundVersion) || p.ScheduleScope != "" || !actionpermit.ValidDigest(digest) {
+	if p.Validate() != nil || (p.Version != Version && !p.Background()) || p.ScheduleScope != "" && p.Version != ScheduledBackgroundVersion || !actionpermit.ValidDigest(digest) {
 		return Plan{}, ErrSetup
 	}
-	if p.Version != BackgroundVersion {
+	if !p.Background() {
 		p.Version = CoordinatedVersion
 	}
 	p.MutationPlanDigest = digest
 	return p, p.Validate()
 }
 func ApplyCoordinated(ctx context.Context, p Plan, payload []byte, a Approval, h Hooks, m CoordinatedMaterial) (job.SetupRegistration, error) {
-	if (p.Version != CoordinatedVersion && p.Version != BackgroundVersion) || len(m.Key) != ed25519.PrivateKeySize {
+	if (p.Version != CoordinatedVersion && !p.Background()) || len(m.Key) != ed25519.PrivateKeySize {
 		return job.SetupRegistration{}, ErrSetup
 	}
 	return apply(ctx, p, payload, a, h, func() (ed25519.PrivateKey, string, string, error) {
@@ -533,4 +550,18 @@ func VerifyServiceReceipt(s Store, c windowsupdateipc.Config) error {
 		return ErrSetup
 	}
 	return nil
+}
+
+// NewScheduledBackgroundPlan is fresh-only. Existing foreground or manual
+// background plans/receipts are never promoted or edited by this constructor.
+func NewScheduledBackgroundPlan(o job.SetupOffer, a windowspackage.Manifest, i lanclient.WindowsUpdateSetupIdentity, r windowsservice.Receipt) (Plan, error) {
+	p, e := NewBackgroundPlan(o, a, i, r)
+	if e != nil {
+		return p, e
+	}
+	p.Version = ScheduledBackgroundVersion
+	p.ProcessQueryDisclosure = ScheduledBackgroundDisclosure
+	p.ScheduleScope = job.ScheduleScope
+	p.ScheduleDisclosure = job.BackgroundScheduleDisclosure
+	return p, p.Validate()
 }

@@ -54,6 +54,10 @@ func nativeCoordinatedMutationProvision(ctx context.Context, in coordinatedMutat
 		if in.WUA.background {
 			plan.Version = backgroundMutationVersion
 			plan.Disclosure = windowsupdatesetup.BackgroundDisclosure + " " + managed.ReusableDisclosure
+			if in.WUA.schedule {
+				plan.Version = scheduledBackgroundMutationVersion
+				plan.Disclosure = windowsupdatesetup.ScheduledBackgroundDisclosure + " " + job.BackgroundScheduleDisclosure + " " + managed.ReusableDisclosure
+			}
 		}
 		if plan.Validate() != nil {
 			return nil, managed.ErrAuthority
@@ -117,6 +121,11 @@ func nativeCoordinatedMutationProvision(ctx context.Context, in coordinatedMutat
 		if in.WUA.background {
 			consent.Version = job.BackgroundConsentVersion
 			consent.BackgroundAcknowledged = true
+			if in.WUA.schedule {
+				consent.Version = job.ScheduledBackgroundConsentVersion
+				consent.ScheduleScope = job.ScheduleScope
+				consent.ScheduleAcknowledged = true
+			}
 		}
 		mbJSON, _ := json.Marshal(b)
 		wbJSON, _ := json.Marshal(wb)
@@ -147,7 +156,7 @@ func nativeCoordinatedMutationProvision(ctx context.Context, in coordinatedMutat
 		}
 		wi := in.WUA
 		wi.apply = true
-		wi.approval = windowsupdatesetup.Approval{Digest: plan.Digest(), Install: true, Relay: true, ProcessQuery: true, Background: in.WUA.background}
+		wi.approval = windowsupdatesetup.Approval{Digest: plan.Digest(), Install: true, Relay: true, ProcessQuery: true, Background: in.WUA.background, Schedule: in.WUA.schedule}
 		wi.coordinated = &windowsupdatesetup.CoordinatedMaterial{Roster: roster, Key: wKey, ExecutorID: wb.ExecutorID, GrantID: wb.GrantID}
 		if _, e = nativeUpdateProvisionUnderLease(ctx, wi, &w, receipt, lease); e != nil {
 			return nil, e

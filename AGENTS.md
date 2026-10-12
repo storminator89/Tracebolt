@@ -263,6 +263,12 @@ missing material rather than inventing credentials or weakening protection.
   distinct manager/executor keys, original age and current-leaf/final guards.
   Never promote observation/service permissions, retry uncertainty, download,
   accept EULAs or reboot. Native elevated executor/provisioning remain inactive.
+- Fresh background cached-update UTC scheduling requires
+  `docs/windows-scheduled-background-updates.md`. Preserve standalone v2 and
+  manual background v4 bytes; only fresh explicit v5 consent admits the combined
+  profile. Keep original actor/window/lifetime, immutable outbox reconciliation,
+  issuance-time fresh shared status and actual native-edge fencing. No native
+  retry, refund, window extension, migration or host permission follows.
 - Manual fleet groups and reviewed one-setting Windows health apply are manager-side
   organizational source features. Read `docs/fleet-groups-health.md`. Preserve
   private stable original identity bindings, current admission and exact revisions.
@@ -279,9 +285,18 @@ missing material rather than inventing credentials or weakening protection.
   keep all v1 histories, Linux alarms and AI admission unchanged.
 - Bounded Windows planned maintenance is separate manager-owned metadata. Read
   `docs/windows-maintenance.md`. Preserve original identity, revision, immutable
-  end, current enrollment lease and final clock/session guards. It does not
-  suppress notifications, incidents or evidence, change source policies/history,
-  or authorize host actions. Never join independent snapshots by mutable device ID.
+  end, current enrollment lease and final clock/session guards. It suppresses
+  separately approved Windows notification dispatch, never incidents/evidence,
+  source policies/history or host activity. Preserve in-flight result truth and
+  consume queued/retry work without end-of-window backlog. Never join independent
+  snapshots by mutable device ID.
+- Windows incident notifications are separate default-off source policies. Read
+  `docs/windows-notifications.md` before changing exact identity/domain keys,
+  recipient-bound approval, atomic transition capture or the Windows claim adapter.
+  Existing Linux recipient setup is not Windows data-sharing approval. Preserve
+  old v1 ledgers, no-backfill, genuine recovery pairing, final enrollment/policy/
+  time guards, durable uncertainty and the existing public HTTPS transport.
+  Source fixtures never authorize a recipient, credentials or external delivery.
 - Windows CPU and physical-RAM policies are independent default-off manager scopes.
   Read `docs/windows-resource-health.md` before changing their shared percentage
   engine, tagged storage, API or UI. Preserve disk v1 bytes, exact observed-group

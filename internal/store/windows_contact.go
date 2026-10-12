@@ -96,6 +96,7 @@ func (s *Store) EvaluateWindowsContact(ctx context.Context, input windowscontact
 			return windowscontact.State{}, err
 		}
 	}
+	beforeNotifications := contactNotificationEpisodes(state)
 	if err = state.Evaluate(input, now, epoch); err != nil {
 		return windowscontact.State{}, err
 	}
@@ -104,6 +105,9 @@ func (s *Store) EvaluateWindowsContact(ctx context.Context, input windowscontact
 		return windowscontact.State{}, err
 	}
 	if _, err = tx.ExecContext(ctx, "INSERT INTO windows_contact_devices(id,body) VALUES(?,?) ON CONFLICT(id) DO UPDATE SET body=excluded.body", input.DeviceID, body); err != nil {
+		return windowscontact.State{}, err
+	}
+	if err = enqueueWindowsNotifications(ctx, tx, beforeNotifications, contactNotificationEpisodes(state)); err != nil {
 		return windowscontact.State{}, err
 	}
 	if err = tx.Commit(); err != nil {

@@ -178,7 +178,7 @@ func (s *Store) setupWindowsUpdateJobsCreateOnly(ctx context.Context, key, execu
 		// The fresh service receipt proves both durable manager registrations.
 		// Legacy foreground/coordinated profiles retain their original setup order.
 		other := t.credentials[snap.InvitationID].WindowsManagedMSISetup
-		if consent.Version == windowsupdatejob.BackgroundConsentVersion && other == nil || other != nil && !coordinatedWindowsMutationPair(other.Grant, consent) {
+		if consent.Background() && other == nil || other != nil && !coordinatedWindowsMutationPair(other.Grant, consent) {
 			return windowsupdatejob.ErrConflict
 		}
 		marker := &windowsUpdateJobSetupMarker{Version: "tracebolt.windows-selected-update-setup.v1", Consent: consent, InitializedAt: now}
@@ -260,7 +260,7 @@ func (s *Store) loadWindowsUpdateJobRecords(ctx context.Context, t *transaction)
 	markers := map[string]*windowsUpdateJobSetupMarker{}
 	for id, c := range t.credentials {
 		if c.WindowsUpdateJobSetup != nil {
-			if c.WindowsUpdateJobSetup.Consent.Version == windowsupdatejob.BackgroundConsentVersion && (c.WindowsManagedMSISetup == nil || !coordinatedWindowsMutationPair(c.WindowsManagedMSISetup.Grant, c.WindowsUpdateJobSetup.Consent)) {
+			if c.WindowsUpdateJobSetup.Consent.Background() && (c.WindowsManagedMSISetup == nil || !coordinatedWindowsMutationPair(c.WindowsManagedMSISetup.Grant, c.WindowsUpdateJobSetup.Consent)) {
 				return ErrStorage
 			}
 			markers[id] = c.WindowsUpdateJobSetup
@@ -475,6 +475,11 @@ func windowsUpdateJobFinalDeadline(before, after windowsupdatejob.Record, curren
 		newPreview := j.Preview != nil && (!exists || prior.Preview == nil || *prior.Preview != *j.Preview)
 		newEnvelope := len(j.Envelope) != 0 && len(prior.Envelope) == 0
 		newClaim := j.ClaimedAt != 0 && prior.ClaimedAt == 0
+		if newEnvelope {
+			if e := windowsupdatejob.CheckScheduledMutationIssue(after, j, fresh); e != nil {
+				return e
+			}
+		}
 		if newClaim && (!exists || prior.State != "approved") {
 			return windowsupdatejob.ErrConflict
 		}

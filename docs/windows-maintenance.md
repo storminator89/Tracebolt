@@ -5,12 +5,13 @@ beside the fleet incident inbox. It records current operator planning for an exa
 admitted Windows identity and either all Windows checks or one domain: contact,
 system-volume capacity, CPU, physical RAM, or selected-service checks.
 
-This first slice marks planned maintenance only. It does **not** suppress external
-alarms, notifications, incident rows or evidence. It never pauses collection or
-evaluation, closes an incident, changes acknowledgement, changes a policy, grants
-host actions, or reports recovery or health. Linux Health, alarms and AI admission
-remain unchanged. There is no notification/AI integration, recurrence, future-start
-calendar, automatic response or generic scheduler.
+These windows now suppress matching [explicitly enabled Windows notifications](windows-notifications.md).
+Checks, source evidence, incidents and acknowledgement continue unchanged. Start
+consumes queued matching work; an already in-flight request cannot be recalled, and
+its accepted or uncertain result remains truthful. Early end or expiry never sends
+a backlog. Linux Health, alarms and AI admission remain unchanged. Maintenance
+never grants host actions, changes a source policy or reports recovery or health.
+There is no recurrence, future-start calendar, automatic response or generic scheduler.
 
 ## Deliberate, bounded windows
 

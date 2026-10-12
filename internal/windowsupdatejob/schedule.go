@@ -11,6 +11,8 @@ import (
 	"localrmm/internal/enrollmentcrypto"
 )
 
+const BackgroundScheduleDisclosure = "Allow a named operator with both install and scheduling permission to approve one exact cached Windows update revision for one immutable UTC dispatch window of 1–60 minutes starting within 24 hours. The separately activated background service and authenticated observer must be available. Fresh signed matching readiness and active-idle shared-owner evidence are required before one short-lived permit. Approval consumes one of the original 32 jobs even if canceled, blocked or expired. Installation can continue past the window; no downloads, license acceptance, reboot, automatic retry or unlock is authorized."
+
 const ScheduleVersion = "tracebolt.windows-selected-update-schedule.v1"
 const ScheduleDisclosure = "Allow a named operator to prospectively approve one exact cached Windows update revision for one fixed UTC start window. At the first eligible authenticated observer poll within that window, fresh signed readiness must match the reviewed facts before one short-lived installation permit may be issued. Installation may interrupt applications and continue past the window. The elevated executor must be separately launched in the foreground. No download, license acceptance, automatic reboot, automatic retry or persistent elevated service is authorized. Cancellation after delivery cannot stop installation."
 
@@ -431,6 +433,9 @@ func (m *Manager) issueScheduled(j *Job, n int64) error {
 		j.Schedule.OutcomeAt = n
 		return nil
 	}
+	if e := CheckScheduledMutationIssue(m.record, *j, n); e != nil {
+		return e
+	}
 	if m.record.Sequence >= MaxJobs {
 		return ErrConflict
 	}
@@ -585,4 +590,23 @@ func TerminalizeSchedulePolicy(r *Record, n int64, allowed func(string) bool) er
 	}
 	r.SchedulePolicyFloor = n
 	return r.Validate()
+}
+
+// CheckScheduledMutationIssue is evaluated before signing and again by the
+// enrollment commit fence after blocking work. A stale/busy observation does not
+// change the intent: the same immutable saved readiness report may reconcile
+// while its original deadline and fixed window still permit issuance.
+func CheckScheduledMutationIssue(r Record, j Job, n int64) error {
+	if r.Consent.Version != ScheduledBackgroundConsentVersion || j.Schedule == nil {
+		return nil
+	}
+	a := j.Schedule.Approval
+	if n < a.StartAt || n >= a.EndAt {
+		return ErrExpired
+	}
+	s, e := VerifyStatement(r.MutationReport, r.ExecutorPublicKey)
+	if e != nil || s.Kind != "mutation" || s.Binding != r.Consent.Binding || s.Mutation == nil || !s.Mutation.Active || s.Mutation.Blocked || s.Mutation.Phase != "idle" || s.IssuedAt < a.StartAt || s.IssuedAt > n || n-s.IssuedAt >= 60 || n >= s.ExpiresAt {
+		return ErrUnavailable
+	}
+	return nil
 }

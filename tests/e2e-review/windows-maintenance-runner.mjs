@@ -16,7 +16,7 @@ await fs.mkdir(out,{recursive:true});
 const safeFailure=()=>new Error('Windows-maintenance browser gate failed; raw state intentionally withheld.');
 async function stop(){if(server&&!serverFailed&&server.exitCode===null){const end=new Promise(resolve=>server.once('exit',resolve));server.kill('SIGTERM');const deadline=setTimeout(()=>server.kill('SIGKILL'),5000);await end;clearTimeout(deadline);}server=null;}
 async function shot(page,name,fixtureDisclosure){
- const match=/^synthetic-windows-maintenance-(?:review|active|ended)-(1440|390)-(en|de)$/.exec(name);
+ const match=/^synthetic-windows-maintenance-(?:review|active|ended|notification-review|notification-muted)-(1440|390)-(en|de)$/.exec(name);
  if(!match||page.viewportSize()?.width!==Number(match[1])||await page.locator('html').getAttribute('lang')!==match[2]||fixtureDisclosure!==windowsMaintenanceDisclosure)throw safeFailure();
  await page.screenshot({path:path.join(out,name+'.png'),fullPage:false,animations:'disabled'});
  screenshots.push({file:name+'.png',sourceSha,publicSafe:true,fullPage:false,viewport:page.viewportSize(),locale:await page.locator('html').getAttribute('lang'),fixtureDisclosure,test:windowsMaintenanceCaseName});
@@ -38,6 +38,6 @@ try{
 finally{
  clearTimeout(timer);try{if(context)await context.close();}catch{passed=false;}try{if(browser)await browser.close();}catch{passed=false;}try{await stop();}catch{passed=false;}
  const routes=windowsMaintenanceRouteState();if(routes.failures!==0||routes.pending!==0)passed=false;
- const report={sourceSha,createdAt:new Date().toISOString(),name:windowsMaintenanceCaseName,status:passed?'PASS':'FAIL',stage:windowsMaintenanceFailureStage(),scope:windowsMaintenanceDisclosure,details:passed?details:null,runtimeErrorCount:errors,routeFailureCount:routes.failures,pendingRouteCount:routes.pending,browserAcceptance:passed,liveStoreAcceptance:false,transport:'intercepted invented maintenance metadata with exact start and early-end readbacks',unexecutedNativeGate:true,secretsExported:false,privateKeysExported:false,realTelemetryExported:false};
+ const report={sourceSha,createdAt:new Date().toISOString(),name:windowsMaintenanceCaseName,status:passed?'PASS':'FAIL',stage:windowsMaintenanceFailureStage(),scope:windowsMaintenanceDisclosure,details:passed?details:null,runtimeErrorCount:errors,routeFailureCount:routes.failures,pendingRouteCount:routes.pending,browserAcceptance:passed,liveStoreAcceptance:false,transport:'intercepted invented maintenance and Windows notification metadata with exact source approval/start/end readbacks',unexecutedNativeGate:true,secretsExported:false,privateKeysExported:false,realTelemetryExported:false};
  await fs.writeFile(path.join(out,'windows-maintenance-results.json'),JSON.stringify(report,null,2));await fs.writeFile(path.join(out,'windows-maintenance-manifest.json'),JSON.stringify({sourceSha,screenshots},null,2));await fs.rm(temporary,{recursive:true,force:true});process.exitCode=passed?0:1;
 }

@@ -481,3 +481,45 @@ func (s *Settings) DeliveryEnabled() bool {
 	defer s.mu.RUnlock()
 	return s.config.enabled && !s.blocked
 }
+
+// SourceDestination exposes only the retained host and opaque binding to a
+// separately approved source policy. No URL, token, DNS or provider call occurs.
+type SourceDestination struct {
+	Binding string
+	Host    string
+	Enabled bool
+}
+
+func (s *Settings) SourceDestination() SourceDestination {
+	if s == nil {
+		return SourceDestination{}
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	v := SourceDestination{Enabled: s.config.enabled && !s.blocked}
+	if s.config.binding.Valid() {
+		v.Binding = s.config.binding.Key()
+		if u, e := parseWebhookEndpoint(s.config.endpoint); e == nil {
+			v.Host = u.Hostname()
+		}
+	}
+	return v
+}
+
+// WithSourceDestination serializes a source-policy mutation against recipient
+// changes and sends. The callback must perform no provider I/O. A busy sender is
+// rejected rather than holding a live operator mutation gate through HTTP.
+func (s *Settings) WithSourceDestination(binding string, enabling bool, fn func() error) error {
+	if s == nil || fn == nil {
+		return ErrSettingsUnavailable
+	}
+	if !s.operation.TryLock() {
+		return ErrSettingsBusy
+	}
+	defer s.operation.Unlock()
+	v := s.SourceDestination()
+	if enabling && (!v.Enabled || v.Binding != binding) {
+		return ErrSettingsConflict
+	}
+	return fn()
+}

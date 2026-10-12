@@ -110,3 +110,7 @@ executor, real cached readiness/installation, renewal and retirement races,
 cancellation-versus-claim, disconnect and lost-result cases. No host changes,
 Windows installation, downloads, reboot, account changes, trust changes or native
 acceptance follow from this source candidate.
+
+The separately consented [fresh background scheduling profile](windows-scheduled-background-updates.md)
+reuses this scheduler with a dedicated activated service and shared reusable-MSI
+fence. Existing standalone v2 grants still require their foreground executor.

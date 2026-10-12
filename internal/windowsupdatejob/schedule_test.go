@@ -13,12 +13,18 @@ import (
 	"localrmm/internal/actionpermit"
 )
 
-func scheduleFixture(t *testing.T) *workflowFixture {
+func scheduleFixture(t *testing.T, background ...bool) *workflowFixture {
 	t.Helper()
 	f := fixture(t)
 	f.consent.Version = ScheduledConsentVersion
 	f.consent.ScheduleScope = ScheduleScope
 	f.consent.ScheduleAcknowledged = true
+	if len(background) > 0 && background[0] {
+		f.consent.Version = ScheduledBackgroundConsentVersion
+		f.consent.BackgroundAcknowledged = true
+		f.consent.MutationPlanDigest = actionpermit.Digest([]byte("fresh combined plan"))
+		f.consent.PeerBindingDigest = actionpermit.Digest([]byte("exact MSI peer"))
+	}
 	f.consent.ExpiresAt = f.at.Unix() + 90000
 	f.guard.current.LeafNotAfter = f.at.Unix() + 90000
 	r, e := NewRecordWithExecutor(f.consent, f.key.Public().(ed25519.PublicKey), executorKey().Public().(ed25519.PublicKey), f.at.Unix())
@@ -236,7 +242,13 @@ func TestScheduleCancelChangedFactsExpiryAndLostReadinessAreTerminal(t *testing.
 	}
 }
 func TestScheduleRetainsThirtyTwoReservationsAndNoEarlyInstallSequence(t *testing.T) {
-	f := scheduleFixture(t)
+	checkScheduleLifetimeCapacity(t, false)
+}
+func TestScheduledBackgroundRetainsThirtyTwoReservationsWithoutRefund(t *testing.T) {
+	checkScheduleLifetimeCapacity(t, true)
+}
+func checkScheduleLifetimeCapacity(t *testing.T, background bool) {
+	f := scheduleFixture(t, background)
 	ctx := context.Background()
 	for i := 0; i < MaxJobs; i++ {
 		f.id = fmt.Sprintf("update_%032x", i+1)

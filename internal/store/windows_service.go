@@ -105,6 +105,7 @@ func (s *Store) updateWindowsService(ctx context.Context, id string, update func
 			return windowsservicehealth.State{}, err
 		}
 	}
+	beforeNotifications := serviceNotificationEpisodes(state)
 	if err = update(&state); err != nil {
 		return windowsservicehealth.State{}, err
 	}
@@ -116,6 +117,9 @@ func (s *Store) updateWindowsService(ctx context.Context, id string, update func
 		return windowsservicehealth.State{}, err
 	}
 	if _, err = tx.ExecContext(ctx, "INSERT INTO windows_service_devices(id,body) VALUES(?,?) ON CONFLICT(id) DO UPDATE SET body=excluded.body", id, body); err != nil {
+		return windowsservicehealth.State{}, err
+	}
+	if err = enqueueWindowsNotifications(ctx, tx, beforeNotifications, serviceNotificationEpisodes(state)); err != nil {
 		return windowsservicehealth.State{}, err
 	}
 	if err = tx.Commit(); err != nil {

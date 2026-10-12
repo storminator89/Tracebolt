@@ -82,6 +82,9 @@ func nativeUpdateProvisionUnderLease(ctx context.Context, in updateProvisionInpu
 	}
 	if in.schedule {
 		newPlan = windowsupdatesetup.NewScheduledPlan
+		if in.background {
+			newPlan = windowsupdatesetup.NewScheduledBackgroundPlan
+		}
 	}
 	p, e := newPlan(in.offer, in.artifact, identity, receipt.Service)
 	if e != nil {
