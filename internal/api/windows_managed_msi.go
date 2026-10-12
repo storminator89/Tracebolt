@@ -61,6 +61,9 @@ func (h *operatorHandler) windowsManagedMSIAPI(w http.ResponseWriter, r *http.Re
 		}
 	}
 	manager := h.windowsManagedMSI
+	if h.windowsManagedMSIRegistry != nil {
+		manager = h.windowsManagedMSIRegistry.Manager(device)
+	}
 	if manager == nil || h.insecureHTTPTest || manager.Binding().DeviceID != device {
 		managedMSIError(w, msi.ErrUnavailable)
 		return
@@ -72,13 +75,20 @@ func (h *operatorHandler) windowsManagedMSIAPI(w http.ResponseWriter, r *http.Re
 			cap = operatorauth.WindowsManagedMSIInstall
 		}
 	}
-	r = r.WithContext(h.managedMSIContext(r, cap))
 	owner, valid := operatorContext(r)
 	if !valid || !owner.session.Named() {
 		managedMSIError(w, msi.ErrAuthority)
 		return
 	}
 	actor := owner.session.ActorID()
+	if manager.Fleet() && !h.auth.ActorHasCapability(actor, operatorauth.WindowsManagedMSIDeliver) && !h.auth.ActorHasCapability(actor, operatorauth.WindowsManagedMSIInstall) {
+		managedMSIError(w, msi.ErrAuthority)
+		return
+	}
+	if manager.Fleet() && op == "" {
+		cap = h.managedMSIReadCapability(actor)
+	}
+	r = r.WithContext(h.managedMSIContext(r, cap))
 	if op != "" {
 		current, release, ok := h.app.beginOperatorCapability(w, r, cap)
 		if !ok {
@@ -121,35 +131,68 @@ func (h *operatorHandler) windowsManagedMSIAPI(w http.ResponseWriter, r *http.Re
 		e = manager.CompleteUpload(r.Context(), actor)
 	case "deliver":
 		var in struct {
-			TransferID   string `json:"transferId"`
-			Acknowledged bool   `json:"acknowledged"`
+			ArtifactID    string `json:"artifactId,omitempty"`
+			BindingDigest string `json:"bindingDigest,omitempty"`
+			TransferID    string `json:"transferId"`
+			Acknowledged  bool   `json:"acknowledged"`
 		}
-		if !readObject(w, r, 512, []string{"transferId", "acknowledged"}, &in) {
+		fields := []string{"transferId", "acknowledged"}
+		if manager.Fleet() {
+			fields = append(fields, "artifactId", "bindingDigest")
+		}
+		if !readObject(w, r, 512, fields, &in) {
 			return
 		}
-		e = manager.Deliver(r.Context(), actor, in.TransferID, in.Acknowledged)
+		if manager.Fleet() {
+			e = manager.DeliverArtifact(r.Context(), actor, in.TransferID, in.Acknowledged, in.ArtifactID, in.BindingDigest)
+		} else {
+			e = manager.Deliver(r.Context(), actor, in.TransferID, in.Acknowledged)
+		}
 	case "review", "review-coordinated":
 		var in struct {
-			PackageReviewAccepted     bool `json:"packageReviewAccepted"`
-			SynchronousReviewAccepted bool `json:"synchronousReviewAccepted,omitempty"`
-			TermsAccepted             bool `json:"termsAccepted"`
-			MaintenanceAcknowledged   bool `json:"maintenanceAcknowledged"`
+			ArtifactID                string `json:"artifactId,omitempty"`
+			BindingDigest             string `json:"bindingDigest,omitempty"`
+			PackageReviewAccepted     bool   `json:"packageReviewAccepted"`
+			SynchronousReviewAccepted bool   `json:"synchronousReviewAccepted,omitempty"`
+			TermsAccepted             bool   `json:"termsAccepted"`
+			MaintenanceAcknowledged   bool   `json:"maintenanceAcknowledged"`
 		}
 		fields := []string{"packageReviewAccepted", "termsAccepted", "maintenanceAcknowledged"}
+		if manager.Fleet() {
+			fields = append(fields, "artifactId", "bindingDigest")
+		}
 		if op == "review-coordinated" {
 			fields = append(fields, "synchronousReviewAccepted")
 		}
 		if !readObject(w, r, 512, fields, &in) {
 			return
 		}
+		if manager.Fleet() {
+			if e = manager.CheckArtifactReference(r.Context(), in.ArtifactID, in.BindingDigest); e != nil {
+				managedMSIError(w, e)
+				return
+			}
+		}
 		e = manager.Review(r.Context(), actor, in.PackageReviewAccepted, in.TermsAccepted, in.MaintenanceAcknowledged, in.SynchronousReviewAccepted)
 	case "approve":
 		var in struct {
+			ArtifactID      string `json:"artifactId,omitempty"`
+			BindingDigest   string `json:"bindingDigest,omitempty"`
 			ReadinessDigest string `json:"readinessDigest"`
 			Acknowledged    bool   `json:"acknowledged"`
 		}
-		if !readObject(w, r, 512, []string{"readinessDigest", "acknowledged"}, &in) {
+		fields := []string{"readinessDigest", "acknowledged"}
+		if manager.Fleet() {
+			fields = append(fields, "artifactId", "bindingDigest")
+		}
+		if !readObject(w, r, 512, fields, &in) {
 			return
+		}
+		if manager.Fleet() {
+			if e = manager.CheckArtifactReference(r.Context(), in.ArtifactID, in.BindingDigest); e != nil {
+				managedMSIError(w, e)
+				return
+			}
 		}
 		e = manager.Approve(r.Context(), actor, in.ReadinessDigest, in.Acknowledged)
 	}
@@ -175,4 +218,13 @@ func managedMSIError(w http.ResponseWriter, e error) {
 	default:
 		fail(w, 409, "windows_managed_msi_unavailable", "Managed MSI state is unavailable, expired, consumed or unconfirmed. Read saved status; do not repeat upload, delivery or installation.")
 	}
+}
+
+// Pin one current capability before any shared artifact or per-device wait.
+// Later removal cannot fall back to another capability using an old response.
+func (h *operatorHandler) managedMSIReadCapability(actor string) operatorauth.Capability {
+	if h.auth.ActorHasCapability(actor, operatorauth.WindowsManagedMSIDeliver) {
+		return operatorauth.WindowsManagedMSIDeliver
+	}
+	return operatorauth.WindowsManagedMSIInstall
 }

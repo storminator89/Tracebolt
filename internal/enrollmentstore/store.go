@@ -847,6 +847,13 @@ func validateSchema(ctx context.Context, conn *sql.Conn, profile string) error {
 			expected[obj.Name] = obj
 		}
 	}
+	fleetMSI, e := windowsManagedMSIFleetArtifactPresent(ctx, conn)
+	if e != nil || fleetMSI && !managedMSIEnabled {
+		return ErrStorage
+	}
+	if fleetMSI {
+		expected["enrollment_windows_msi_fleet_artifact"] = inventoryledger.SchemaObject{Type: "table", Name: "enrollment_windows_msi_fleet_artifact", SQL: windowsManagedMSIFleetArtifactSchema}
+	}
 	retainedEnabled, retainedErr := windowsContextRetentionPresent(ctx, conn)
 	if retainedErr != nil {
 		return retainedErr

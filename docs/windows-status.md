@@ -117,6 +117,12 @@ runtime provisioning remain separately gated.
 
 ## Central managed MSI source candidate
 
+The fresh [upload-once fleet worklist](windows-fleet-managed-msi.md) extends central
+custody to at most 25 explicitly configured endpoints. Delivery, exact review and
+one installation attempt remain separate per-device approvals. Native acceptance
+and real host setup remain pending.
+
+
 [Central delivery](windows-managed-msi-delivery.md) now has a separate bounded
 source path: chunked manager upload, background protected import, fresh review,
 one separately approved install, and durable per-device outcome. This does not

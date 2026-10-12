@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "sourceCommit": "fccc4b00cd8a144afd58e4b995747afab7a10022",
-  "goSourceSha256": "03ac53c1dc96eafd4807ed67d78334fed201738f50dc91ce253e43a224760e48",
+  "goSourceSha256": "4dd6c5686dfc0da23af14d5609c1536b7d1db6780628dbd63cd2ce7e849a9770",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -1000,6 +1000,8 @@
       "TestLinuxCVERecomputesOutgoingFeedAge",
       "TestLinuxCVERejectsMixedOrTruncatedInventory",
       "TestLinuxCVEVerticalSliceUsesCompleteSourceVersions",
+      "TestManagedFleetArtifactRoutesAreFixed",
+      "TestManagedFleetReadRechecksPinnedCapabilityAfterWait",
       "TestManagedMSIOperatorRoutesClosed",
       "TestManagedPreviewDisabledByDefault",
       "TestManagedPreviewDoesNotFallBackToManagerSample",
@@ -1761,6 +1763,8 @@
       "TestJournalStaleRecordedLeafCannotAuthorizeAfterLeafChange",
       "TestJournalStatusReadAdmissionAndClock",
       "TestLegacyCompleteIdentityRetainsNativePackageAuthority",
+      "TestManagedFleetArtifactIndependentOfRevokedOrExpiredTarget",
+      "TestManagedFleetRejectsAliasedBindingsAndSingletonAdoption",
       "TestManagedMSIRejectsPreparedKeyReuse",
       "TestManagedMSISetupFreshPreservesPreparedBytes",
       "TestManagedMSIUploadIntentImmutableAndFinalClock",
@@ -2073,6 +2077,7 @@
       "TestJournalRealTransportPurposeAndTerminalExpiry",
       "TestJournalRealTransportResultSearchRetryAndRevocation",
       "TestJournalRealTransportRevocationDuringClaimBody",
+      "TestManagedFleetRegistryLoadAndTLSIdentityRouting",
       "TestManagedMSIChunkFrameFits64KiB",
       "TestManagedMSIFramingDoesNotPromotePreparedOrURLs",
       "TestManagedMSIRealTLSIngressExactDeliveryReviewInstallReceipt",
@@ -4427,6 +4432,8 @@
     ],
     "localrmm/internal/windowsmanagedmsimanager": [
       "TestCoordinatedApprovalRequiresFreshIdleStatusWithoutConsuming",
+      "TestManagedFleetOneUploadIndependentTransfersAndCustody",
+      "TestManagedFleetSetupUsesFreshPathsAndExactRegistry",
       "TestManagedManagerExactLifecycleAndOneAttempt",
       "TestManagedManagerExpiredReadinessNeedsFreshExplicitReview",
       "TestManagedManagerFinalPermissionAndExpiry",

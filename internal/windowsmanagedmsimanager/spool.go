@@ -67,16 +67,33 @@ func (s *Spool) ReadChunk(ctx context.Context, selection windowssoftwarejob.Sele
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.failed || s.check() != nil || final() != nil {
+	if s.failed {
 		return nil, ErrSpool
+	}
+	if s.check() != nil {
+		s.failed = true
+		return nil, ErrSpool
+	}
+	if e := ctx.Err(); e != nil {
+		return nil, e
+	}
+	if e := final(); e != nil {
+		return nil, e
 	}
 	data, e := s.readChunk(ctx, selection, index)
 	if e != nil {
-		s.failed = true
+		if errors.Is(e, context.Canceled) || errors.Is(e, context.DeadlineExceeded) {
+			s.cache = nil
+		} else {
+			s.failed = true
+		}
 		return nil, e
 	}
-	if ctx.Err() != nil || final() != nil {
-		return nil, ErrSpool
+	if e := ctx.Err(); e != nil {
+		return nil, e
+	}
+	if e := final(); e != nil {
+		return nil, e
 	}
 	return data, nil
 }

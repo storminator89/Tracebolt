@@ -25,13 +25,15 @@ func run(args []string, out io.Writer) error {
 	device := flags.String("device-id", "", "Exact already activated Windows identity")
 	expires := flags.Int64("expires-at", 0, "Fixed absolute consent expiry, Unix seconds; prepare only")
 	registration := flags.String("registration-file", "", "Protected public Windows setup registration; finalize only")
+	fleet := flags.Bool("fleet", false, "Create fresh upload-once fleet v2; never adopts singleton v1")
+	additional := flags.Bool("additional-device", false, "Add one explicitly configured fleet target using the existing fleet key")
 	apply := flags.Bool("apply", false, "Explicitly apply this create-only phase")
 	approve := flags.String("approve-plan", "", "Exact reviewed public plan digest")
 	acknowledge := flags.Bool("ack-managed-msi-delivery-install", false, "Approve the reviewed key preparation or reciprocal persistent managed MSI software authority; each actual install still requires separate named approval")
 	if flags.Parse(args[1:]) != nil || flags.NArg() != 0 || *lan == "" || *en == "" || *device == "" || !*apply && (*approve != "" || *acknowledge) || *apply && (*approve == "" || !*acknowledge) {
 		return windowsmanagedmsimanager.ErrSetup
 	}
-	request := windowsmanagedmsimanager.SetupRequest{Phase: args[0], LANConfig: *lan, EnrollmentConfig: *en, DeviceID: *device, ExpiresAt: *expires, RegistrationFile: *registration}
+	request := windowsmanagedmsimanager.SetupRequest{Fleet: *fleet, AdditionalDevice: *additional, Phase: args[0], LANConfig: *lan, EnrollmentConfig: *en, DeviceID: *device, ExpiresAt: *expires, RegistrationFile: *registration}
 	plan, e := windowsmanagedmsimanager.PlanSetup(context.Background(), request, time.Now().UTC())
 	if e != nil {
 		return windowsmanagedmsimanager.ErrSetup
@@ -52,7 +54,7 @@ func run(args []string, out io.Writer) error {
 		Status    string `json:"status"`
 		LANConfig string `json:"lanConfig"`
 		Notice    string `json:"notice"`
-	}{plan.Version, "created", windowsmanagedmsimanager.SetupLANPath(plan.StateDirectory), notice})
+	}{plan.Version, "created", windowsmanagedmsimanager.SetupPlanLANPath(plan), notice})
 }
 func main() {
 	if e := run(os.Args[1:], os.Stdout); e != nil {

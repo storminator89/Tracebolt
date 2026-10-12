@@ -15,6 +15,7 @@ import (
 )
 
 type Manager struct {
+	artifact                        *ArtifactManager
 	mu                              sync.Mutex
 	store                           msi.TransactionStore
 	binding                         msi.Binding
@@ -27,6 +28,9 @@ type Manager struct {
 }
 
 func Open(ctx context.Context, store msi.TransactionStore, b msi.Binding, key ed25519.PrivateKey, spool *Spool, clock func() time.Time, check func() error) (*Manager, error) {
+	return open(ctx, store, b, key, spool, clock, check, nil)
+}
+func open(ctx context.Context, store msi.TransactionStore, b msi.Binding, key ed25519.PrivateKey, spool *Spool, clock func() time.Time, check func() error, artifact *ArtifactManager) (*Manager, error) {
 	if ctx == nil || store == nil || b.Validate() != nil || len(key) != ed25519.PrivateKeySize || !bytes.Equal(key, ed25519.NewKeyFromSeed(key[:32])) || msi.Digest(key.Public().(ed25519.PublicKey)) != b.KeyID || spool == nil || clock == nil || check == nil {
 		return nil, msi.ErrInvalid
 	}
@@ -38,14 +42,18 @@ func Open(ctx context.Context, store msi.TransactionStore, b msi.Binding, key ed
 	if err != nil || r.Validate() != nil {
 		return nil, msi.ErrIntegrity
 	}
-	if r.Artifact == nil {
+	if artifact != nil {
+		if artifact.spool != spool {
+			return nil, msi.ErrIntegrity
+		}
+	} else if r.Artifact == nil {
 		if spool.validateRecord(false, false, 0) != nil {
 			return nil, msi.ErrIntegrity
 		}
 	} else if spool.validateRecord(true, r.Artifact.CompletedAt != 0, r.Artifact.Package.Size) != nil {
 		return nil, msi.ErrIntegrity
 	}
-	return &Manager{store: store, binding: b, key: bytes.Clone(key), spool: spool, now: clock, configurationCheck: check}, nil
+	return &Manager{artifact: artifact, store: store, binding: b, key: bytes.Clone(key), spool: spool, now: clock, configurationCheck: check}, nil
 }
 func (m *Manager) Binding() msi.Binding {
 	if m == nil {
@@ -132,6 +140,9 @@ func (m *Manager) transaction(ctx context.Context, actor, kind string, fn func(*
 	return r, e
 }
 func (m *Manager) ReserveUpload(ctx context.Context, actor string, selection msi.Selection, native string) error {
+	if m.artifact != nil {
+		return msi.ErrAuthority
+	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if !msi.ValidSelection(selection) || !msi.ValidDigest(native) {
@@ -155,6 +166,9 @@ type UploadChunk struct {
 }
 
 func (m *Manager) Upload(ctx context.Context, actor string, q UploadChunk) error {
+	if m.artifact != nil {
+		return msi.ErrAuthority
+	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if q.Index >= msi.MaxChunks || len(q.Data) == 0 || len(q.Data) > msi.MaxChunkBytes || !msi.ValidDigest(q.PackageDigest) || msi.Digest(q.Data) != q.Digest {
@@ -215,6 +229,9 @@ func (m *Manager) Upload(ctx context.Context, actor string, q UploadChunk) error
 	return e
 }
 func (m *Manager) CompleteUpload(ctx context.Context, actor string) error {
+	if m.artifact != nil {
+		return msi.ErrAuthority
+	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	r, e := m.transaction(ctx, actor, "deliver", func(r *msi.Record, _ msi.Current, _ int64) error {
@@ -250,12 +267,45 @@ func (m *Manager) CompleteUpload(ctx context.Context, actor string) error {
 	return e
 }
 func (m *Manager) Deliver(ctx context.Context, actor, id string, ack bool) error {
+	if m.artifact != nil {
+		return msi.ErrAuthority
+	}
+	return m.deliver(ctx, actor, id, ack, "", "")
+}
+func (m *Manager) DeliverArtifact(ctx context.Context, actor, id string, ack bool, artifactID, bindingDigest string) error {
+	if m.artifact == nil {
+		return msi.ErrAuthority
+	}
+	return m.deliver(ctx, actor, id, ack, artifactID, bindingDigest)
+}
+func (m *Manager) deliver(ctx context.Context, actor, id string, ack bool, artifactID, bindingDigest string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if !ack || !msi.ValidTransferID(id) {
 		return msi.ErrInvalid
 	}
+	var shared *msi.Artifact
+	if m.artifact != nil {
+		if bindingDigest != msi.BindingDigest(m.binding) || !msi.ValidDigest(artifactID) {
+			return msi.ErrConflict
+		}
+		r, e := m.artifact.read(ctx)
+		if e != nil {
+			return e
+		}
+		if r.Artifact == nil || r.Artifact.CompletedAt == 0 || msi.ArtifactIdentity(*r.Artifact) != artifactID {
+			return msi.ErrConflict
+		}
+		shared = r.Artifact
+	}
 	_, e := m.transaction(ctx, actor, "deliver", func(r *msi.Record, c msi.Current, n int64) error {
+		if shared != nil {
+			if r.Artifact != nil || r.TransferID != "" {
+				return msi.ErrConsumed
+			}
+			a := *shared
+			r.Artifact = &a
+		}
 		if r.Artifact == nil || r.Artifact.CompletedAt == 0 {
 			return msi.ErrUnavailable
 		}
@@ -517,6 +567,8 @@ func (m *Manager) Report(ctx context.Context, raw []byte) error {
 }
 
 type View struct {
+	BindingDigest          string         `json:"bindingDigest,omitempty"`
+	ArtifactID             *string        `json:"artifactId,omitempty"`
 	Coordinated            bool           `json:"coordinated,omitempty"`
 	Mutation               *fence.Status  `json:"mutation,omitempty"`
 	MutationCapturedAt     int64          `json:"mutationCapturedAt,omitempty"`
@@ -539,9 +591,30 @@ type View struct {
 func (m *Manager) View(ctx context.Context) (View, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	var shared *msi.Artifact
+	if m.artifact != nil {
+		r, e := m.artifact.read(ctx)
+		if e != nil {
+			return View{}, e
+		}
+		shared = r.Artifact
+	}
 	var v View
 	_, e := m.transaction(ctx, "", "", func(r *msi.Record, _ msi.Current, n int64) error {
 		v = View{Version: msi.Version, DeviceID: m.binding.DeviceID, ServerNow: n, State: "empty", TransferID: r.TransferID}
+		if m.artifact != nil {
+			v.BindingDigest = msi.BindingDigest(m.binding)
+			identity := ""
+			if shared != nil {
+				identity = msi.ArtifactIdentity(*shared)
+			}
+			v.ArtifactID = &identity
+			if r.Artifact == nil {
+				copy := *r
+				copy.Artifact = shared
+				r = &copy
+			}
+		}
 		v.Coordinated = r.Grant.MutationPlanDigest != ""
 		if len(r.MutationReport) > 0 {
 			report, _ := msi.VerifyReport(r.MutationReport, r.ExecutorPublicKey)
@@ -668,6 +741,21 @@ func (m *Manager) CheckRelease(ctx context.Context, raw []byte, deliveryDigest s
 	fresh := m.now().Unix()
 	if fresh < floor || deadline == 0 || fresh >= deadline {
 		return msi.ErrExpired
+	}
+	return nil
+}
+
+func (m *Manager) Fleet() bool { return m != nil && m.artifact != nil }
+func (m *Manager) CheckArtifactReference(ctx context.Context, artifactID, bindingDigest string) error {
+	if !m.Fleet() || bindingDigest != msi.BindingDigest(m.binding) || !msi.ValidDigest(artifactID) {
+		return msi.ErrConflict
+	}
+	r, e := m.artifact.read(ctx)
+	if e != nil {
+		return e
+	}
+	if r.Artifact == nil || msi.ArtifactIdentity(*r.Artifact) != artifactID {
+		return msi.ErrConflict
 	}
 	return nil
 }

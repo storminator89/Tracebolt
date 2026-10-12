@@ -234,7 +234,8 @@ missing material rather than inventing credentials or weakening protection.
   accept update terms, reboot, upgrade WUA or change service/network settings.
   Fixtures/cross-builds do not authorize native reads or create a local grant.
 - Central managed MSI delivery is a fresh separate default-off source domain. Read
-  `docs/windows-managed-msi-delivery.md` before changes. Keep chunked private custody,
+  `docs/windows-managed-msi-delivery.md` before changes. For fresh upload-once fleet
+  v2 setup/registry/worklist also read `docs/windows-fleet-managed-msi.md`. Keep chunked private custody,
   separate delivery/install consent and keys, dedicated LocalSystem risk disclosure,
   original leaf/expiry checks, exact package/native review and one-attempt no-replay.
   Observation remains available; standalone deployment excludes other mutators.

@@ -36,7 +36,8 @@ import (
 )
 
 type LANOperatorConfig struct {
-	WindowsManagedMSI *windowsmanagedmsimanager.Manager
+	WindowsManagedMSI         *windowsmanagedmsimanager.Manager
+	WindowsManagedMSIRegistry *windowsmanagedmsimanager.Registry
 	// Source-only injection; no CLI/config loader or native executor is supplied.
 	WindowsUpdateJobs       *windowsupdatejob.Manager
 	WindowsSoftwareJobs     *windowssoftwarejob.Manager
@@ -68,28 +69,29 @@ type LANOperatorConfig struct {
 	CVEProgress *linuxcveprogress.Cache
 }
 type operatorHandler struct {
-	windowsManagedMSI        *windowsmanagedmsimanager.Manager
-	windowsUpdateJobs        *windowsupdatejob.Manager
-	windowsSoftwareJobs      *windowssoftwarejob.Manager
-	windowsUpdateRegistry    *windowsupdatejob.Registry
-	windowsSoftwareRegistry  *windowssoftwarejob.Registry
-	fleetGroupSources        []fleetGroupSource
-	windowsActions           windowsServiceActionManager
-	packageUpdatesManager    packageUpdateManager
-	alarmSettings            *alarmdelivery.Settings
-	applicationChecks        *applicationcheck.Monitor
-	applicationCheckSettings *applicationcheck.Settings
-	actions                  serviceActionManager
-	app                      *Server
-	origin, authority        string
-	auth                     *operatorauth.Manager
-	registry                 *lantrust.Registry
-	insecureHTTPTest         bool
-	cookieName               string
-	enrollment               *enrollmentservice.Service
-	windowsEnrollment        *operatorHandler
-	enrollmentBootstrap      EnrollmentBootstrap
-	bootstrapAdmission       bootstrapAdmission
+	windowsManagedMSI         *windowsmanagedmsimanager.Manager
+	windowsManagedMSIRegistry *windowsmanagedmsimanager.Registry
+	windowsUpdateJobs         *windowsupdatejob.Manager
+	windowsSoftwareJobs       *windowssoftwarejob.Manager
+	windowsUpdateRegistry     *windowsupdatejob.Registry
+	windowsSoftwareRegistry   *windowssoftwarejob.Registry
+	fleetGroupSources         []fleetGroupSource
+	windowsActions            windowsServiceActionManager
+	packageUpdatesManager     packageUpdateManager
+	alarmSettings             *alarmdelivery.Settings
+	applicationChecks         *applicationcheck.Monitor
+	applicationCheckSettings  *applicationcheck.Settings
+	actions                   serviceActionManager
+	app                       *Server
+	origin, authority         string
+	auth                      *operatorauth.Manager
+	registry                  *lantrust.Registry
+	insecureHTTPTest          bool
+	cookieName                string
+	enrollment                *enrollmentservice.Service
+	windowsEnrollment         *operatorHandler
+	enrollmentBootstrap       EnrollmentBootstrap
+	bootstrapAdmission        bootstrapAdmission
 }
 type operatorRequestKey struct{}
 type operatorRequest struct {
@@ -161,6 +163,9 @@ func NewLANOperatorHandler(app *Server, c LANOperatorConfig) (http.Handler, erro
 	}
 	if c.WindowsUpdateRegistry != nil && (c.WindowsUpdateJobs != nil || c.WindowsEnrollment == nil || !c.Auth.Named() || c.InsecureHTTPTest || !c.WindowsUpdateRegistry.MatchesBinding(c.WindowsEnrollment.Binding())) {
 		return nil, errors.New("selected Windows update registry requires the exact TLS named Windows enrollment boundary")
+	}
+	if c.WindowsManagedMSIRegistry != nil && (c.WindowsManagedMSI != nil || c.WindowsEnrollment == nil || !c.Auth.Named() || c.InsecureHTTPTest || !c.WindowsManagedMSIRegistry.MatchesBinding(c.WindowsEnrollment.Binding())) {
+		return nil, errors.New("managed MSI registry requires exact TLS named Windows enrollment boundary")
 	}
 	if c.WindowsManagedMSI != nil && (c.WindowsEnrollment == nil || !c.Auth.Named() || c.InsecureHTTPTest || !c.WindowsManagedMSI.OperatorPolicyConfigured() || !c.WindowsManagedMSI.MatchesBinding(c.WindowsEnrollment.Binding())) {
 		return nil, errors.New("managed MSI requires its exact separately configured TLS named-operator enrollment boundary")
@@ -269,6 +274,7 @@ func NewLANOperatorHandler(app *Server, c LANOperatorConfig) (http.Handler, erro
 	h.windowsUpdateJobs = c.WindowsUpdateJobs
 	h.windowsSoftwareJobs = c.WindowsSoftwareJobs
 	h.windowsManagedMSI = c.WindowsManagedMSI
+	h.windowsManagedMSIRegistry = c.WindowsManagedMSIRegistry
 	h.windowsUpdateRegistry = c.WindowsUpdateRegistry
 	h.windowsSoftwareRegistry = c.WindowsSoftwareRegistry
 	if c.WindowsServiceActions != nil {
@@ -510,6 +516,10 @@ func (h *operatorHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if _, _, ok := windowsUpdateJobRoute(r); ok {
 		h.windowsUpdateJobsAPI(w, r)
+		return
+	}
+	if _, ok := windowsManagedMSIArtifactRoute(r); ok {
+		h.windowsManagedMSIArtifactAPI(w, r)
 		return
 	}
 	if _, _, ok := windowsManagedMSIRoute(r); ok {
