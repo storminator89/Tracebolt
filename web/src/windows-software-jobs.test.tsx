@@ -21,6 +21,34 @@ const review=async()=>{fireEvent.click(screen.getByRole('button',{name:'Check re
 beforeEach(()=>{actor=`operator_${crypto.randomUUID().replaceAll('-','')}`;session.actorId=actor;vi.useFakeTimers();vi.setSystemTime(now);setLocale('en',false);vi.mocked(useOperator).mockReturnValue({...session,mode:'lan',theme:'light',logout:vi.fn(),setTheme:vi.fn(),capabilities:['read','windows_software_install'],loginMode:'named'});vi.mocked(request).mockReset().mockImplementation(async path=>structuredClone(path==='/auth/session'?session:view()) as never);vi.mocked(mutateRaw).mockReset().mockImplementation(async(path,body)=>{const input=JSON.parse(body);return structuredClone(path.endsWith('/request')?previewView(input.requestId):path.endsWith('/preview')?previewView(input.requestId):approved(input.previewId)) as never})});
 afterEach(()=>{cleanup();vi.useRealTimers();vi.restoreAllMocks()});
 describe('prepared MSI workflow',()=>{
+ it.each(['en','de'] as const)('keeps named package evidence stable when the initial read arrives late (%s)',async locale=>{
+  setLocale(locale,false);
+  let release!: (value:SoftwareJobView)=>void;
+  const delayed=new Promise<SoftwareJobView>(resolve=>{release=resolve});
+  vi.mocked(request).mockImplementation(async path=>(path==='/auth/session'?structuredClone(session):delayed) as never);
+  const ui=render(<WindowsSoftwareJobs deviceId={device}/>);
+  fireEvent.click(screen.getByRole('button',{name:locale==='de'?'Vorbereitete MSI installieren':'Install prepared MSI'}));
+  await flush();
+  const panel=ui.container.querySelector('.windows-software-job-review')!,firstDetails=()=>panel.querySelector('details')!;
+  const limits=firstDetails(),label=locale==='de'?'Paket-Hashes & Prüfnachweise':'Package hashes & review evidence';
+  expect(panel).toBeVisible();expect(panel).toHaveAttribute('aria-busy','true');
+  expect(limits.querySelector('summary')).toHaveTextContent(locale==='de'?'Einrichtung & Grenzen':'Setup & limits');
+  expect(screen.queryByText(label,{exact:true})).toBeNull();
+  // Reproduce the old hosted helper's first click while only limits exist.
+  fireEvent.click(firstDetails().querySelector('summary')!);expect(limits).toHaveAttribute('open');
+  await act(async()=>{release(structuredClone(view()))});
+  expect(panel).toHaveAttribute('aria-busy','false');
+  const summary=screen.getByText(label,{exact:true}),evidence=summary.closest('details')!;
+  expect(firstDetails()).toBe(evidence);expect(firstDetails()).not.toBe(limits);expect(evidence).not.toHaveAttribute('open');
+  // Its live details.first() now addresses a different node: the supposed
+  // closing click opens package evidence and violates the final closed check.
+  fireEvent.click(firstDetails().querySelector('summary')!);expect(evidence).toHaveAttribute('open');
+  fireEvent.click(summary);expect(evidence).not.toHaveAttribute('open');
+  // Exact named evidence remains bound through both toggles; limits do not move.
+  fireEvent.click(summary);for(const value of [selection.sha256,selection.productCode,selection.packageCode,selection.termsReviewDigest,selection.reviewReference])expect(evidence).toHaveTextContent(value);
+  fireEvent.click(summary);expect(evidence).not.toHaveAttribute('open');expect(limits).toHaveAttribute('open');
+  expect(panel).toHaveTextContent(device);expect(panel).toHaveTextContent(selection.name);expect(mutateRaw).not.toHaveBeenCalled();
+ });
  it('requires explicit review and two unchecked acknowledgments; sends one exact approval',async()=>{await open();await review();const approve=screen.getByRole('button',{name:'Approve this package once'}),checks=screen.getAllByRole('checkbox');expect(checks).toHaveLength(2);checks.forEach(check=>expect(check).not.toBeChecked());expect(approve).toBeDisabled();fireEvent.click(checks[0]);expect(approve).toBeDisabled();fireEvent.click(checks[1]);fireEvent.click(approve);fireEvent.click(approve);await flush();expect(mutateRaw).toHaveBeenCalledTimes(3);const input=JSON.parse(vi.mocked(mutateRaw).mock.calls[0][1]);expect(input).toEqual({requestId:expect.stringMatching(/^software_[a-f0-9]{32}$/),package:selection});expect(JSON.parse(vi.mocked(mutateRaw).mock.calls[2][1])).toEqual({previewId:input.requestId,previewDigest:digest,acknowledged:true});expect(screen.getByRole('status')).toHaveTextContent('awaiting one-time claim');expect(screen.queryByRole('checkbox')).toBeNull()});
  it.each(['blur','pagehide','popstate',AUTH_REQUIRED_EVENT])('clears review after %s',async event=>{await open();await review();fireEvent.click(screen.getAllByRole('checkbox')[0]);act(()=>window.dispatchEvent(new Event(event)));expect(screen.queryByRole('checkbox')).toBeNull();expect(mutateRaw).toHaveBeenCalledTimes(2)});
  it('expires the original review without automatic mutation',async()=>{await open();await review();await act(async()=>vi.advanceTimersByTimeAsync(61000));expect(screen.queryByRole('checkbox')).toBeNull();expect(mutateRaw).toHaveBeenCalledTimes(2)});
