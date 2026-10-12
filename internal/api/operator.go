@@ -518,6 +518,10 @@ func (h *operatorHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.windowsUpdateJobsAPI(w, r)
 		return
 	}
+	if _, _, ok := windowsMSIWorklistRoute(r); ok {
+		h.windowsMSIWorklistAPI(w, r)
+		return
+	}
 	if _, ok := windowsManagedMSIArtifactRoute(r); ok {
 		h.windowsManagedMSIArtifactAPI(w, r)
 		return

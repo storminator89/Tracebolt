@@ -37,3 +37,6 @@ export function validSoftwareJobView(v:unknown,device:string,actor:string):v is 
  if(j.result!==null&&(j.state!=='complete'||!validResult(j.result,j.id,v.serverNow)))return false;
  return j.state!=='complete'||j.result!==null;
 }
+
+// Shared strict result validation for exact historical MSI references.
+export { validResult as validSoftwareResult };

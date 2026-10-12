@@ -54,7 +54,7 @@ and one attempt for that endpoint. Actual manager/endpoint host setup, persisten
 keys, ACL/service changes and activation remain separately authorized operations;
 this worklist and its fixtures perform none of them.
 
-## Frozen manual selection
+## Frozen manual selection (legacy/manual mode)
 
 Only explicitly registered, visible admitted Windows identities appear in the
 selection. Freezing it records the exact package/artifact, each target binding,
@@ -88,8 +88,9 @@ reviews or approvals.
 In-memory unconfirmed-write references retain the exact device, artifact, binding,
 transfer and relevant readiness reference across row switches and close/reopen.
 Reconciliation is a read of the same device. A different transfer cannot confirm
-an uncertain request. A reload loses local worklist presentation, but rebuilding
+an uncertain request. For legacy v2, a reload loses local worklist presentation, but rebuilding
 it reads the manager's durable state; it does not replay an installation.
+Configured reusable-v3 saved worklists retain the exact selection as described below.
 
 Rows label outcomes as saved state. An unavailable endpoint response removes the
 cached result from the row's status and requires another successful read. A revoked
@@ -139,3 +140,53 @@ EN/DE desktop/mobile PNGs. Use the exact-source commit’s Checks and its retain
 artifact manifest/screenshots to establish hosted browser evidence; a different
 source run is not evidence for this candidate. The separately approved [Windows native gate](windows-managed-msi-native-acceptance.md)
 remain outstanding. No source fixture is host or exact-package native acceptance.
+
+
+## Reusable-v3 saved worklists and foreground batches
+
+See [saved exact worklists](windows-saved-msi-worklists.md) for the authoritative
+state, API, storage bounds and uncertainty contract.
+
+When both the reusable artifact and the protected worklist GET advertise support,
+the compact worklist saves one exact payload occurrence, immutable registered
+target bindings and an optional original group snapshot. A changed group, endpoint
+identity or A → B → A payload occurrence cannot replace those references. An
+explicitly disabled feature retains the existing manual view; malformed or failed
+worklist reads fail closed. Singleton v1 and fleet-v2 UI paths are unchanged.
+
+Saving and opening only record/read the plan. Deliver, Review and Approve are
+three separate controls. Each opens one initially unchecked confirmation naming
+every exact device, package/native/publisher/terms evidence and original request
+expiry. Review additionally acknowledges LocalSystem/custom-action risk, accepted
+terms, the bounded maintenance window and exact synchronous-action evidence.
+Approval pins the enumerated fresh readiness references only. Excluded or newly
+ready devices cannot join an existing confirmation. No acknowledgement survives
+dismissal or advances another stage.
+
+The confirmed batch is foreground-only, sequential and at most 60 seconds.
+The dispatcher sends only the original per-device request plus its exact journal
+reference. It stops on blur, hidden state, navigation, logout, changed capabilities,
+original expiry, failure or explicit Stop. Already sent requests may finish.
+Before closing unsent items, it reads the latest saved revision. Every sent close
+failure, including HTTP 409, remains GET-only until that exact saved batch is
+observed closed; status 409 alone cannot distinguish conflict from commit uncertainty. Opening/reloading never resumes or
+automatically closes an existing batch. No background worker or timeout retry is
+introduced.
+
+Counts distinguish pending rows, recorded results and attention; recorded results
+are not a success count. Historical results remain explicitly historical when
+current authority is unavailable. Return code and exact registration truth remain
+separate, including 3010, consumed 1618/failure and 1641/uncertain outcomes. Row
+detail reuses the existing MSI evidence/result and explicit retirement controls;
+it does not expose standalone delivery/review/approval outside the saved journal.
+Archiving is read-only retention, not cancellation or payload retirement. Abandoned
+delivery can still leave the one payload slot occupied under the existing contract.
+
+The existing hosted-only fleet capture driver adds 20 saved-worklist scenes:
+compact summary, expanded evidence, and unchecked delivery/review/approval across
+EN/DE at 1440px and 390px. It retains the original fleet, reusable and catalogue
+cases. Its synthetic POST exception is restricted to an exact read-only preview
+path/body; all permit, save, batch, close, archive and retirement writes remain
+blocked. Source-only checks do not launch a browser/server or capture screenshots.
+Exact-source hosted captures and separately approved Windows native acceptance
+remain independent gates.

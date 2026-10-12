@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "sourceCommit": "fccc4b00cd8a144afd58e4b995747afab7a10022",
-  "goSourceSha256": "1b24ccd9cd5e448ed3c01d5c36e923a3e7667d3fd954c7230d0641856879247e",
+  "goSourceSha256": "c34584816f77c4821851a2566d85bab24563a80ec845cd0a37b0585a30d90eb2",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -1007,6 +1007,7 @@
       "TestManagedFleetReadRechecksPinnedCapabilityAfterWait",
       "TestManagedMSIOccurrenceRequestPinsRequireCanonicalStrings",
       "TestManagedMSIOperatorRoutesClosed",
+      "TestManagedMSIWorklistRoutesAndStrictOptionalBatch",
       "TestManagedPreviewDisabledByDefault",
       "TestManagedPreviewDoesNotFallBackToManagerSample",
       "TestManagedPreviewHTTPGuardsAndRealSample",
@@ -1777,6 +1778,10 @@
       "TestManagedMSIRejectsPreparedKeyReuse",
       "TestManagedMSISetupFreshPreservesPreparedBytes",
       "TestManagedMSIUploadIntentImmutableAndFinalClock",
+      "TestManagedMSIWorklistAtomicIssueRestartAndReplay",
+      "TestManagedMSIWorklistCloseAndFinalFenceDoNotIssue",
+      "TestManagedMSIWorklistExpiredDispatchCannotReviveAfterClockRollback",
+      "TestManagedMSIWorklistMissingUsedStateAndLegacyStayClosed",
       "TestManagedReusableFreshStoreAndArtifactRetirement",
       "TestMetadataReadCohortCancellationAndCertificateWait",
       "TestMetadataReadCohortSharesMaintenanceHandoff",
@@ -4444,6 +4449,7 @@
       "TestManagedFinalCurrentFenceAndNoRestart",
       "TestManagedFinalizationCrashMarkerNeverRestarts",
       "TestManagedFinalizationFailureReportIsDurableAndExact",
+      "TestManagedMSIWorklistWorstCaseMetadataBounds",
       "TestManagedNativeOutcomeVocabulary",
       "TestManagedPartialCreationAndFailedCheckpointFence",
       "TestManagedPendingChunkExactResume",
@@ -4467,6 +4473,8 @@
       "TestCoordinatedApprovalRequiresFreshIdleStatusWithoutConsuming",
       "TestManagedFleetOneUploadIndependentTransfersAndCustody",
       "TestManagedFleetSetupUsesFreshPathsAndExactRegistry",
+      "TestManagedMSIWorklistCompactionKeepsUnresolvedAndRejectsOldReferences",
+      "TestManagedMSIWorklistDeliberateStagesAndExactReopen",
       "TestManagedManagerExactLifecycleAndOneAttempt",
       "TestManagedManagerExpiredReadinessNeedsFreshExplicitReview",
       "TestManagedManagerFinalPermissionAndExpiry",

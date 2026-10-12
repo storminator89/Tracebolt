@@ -56,7 +56,7 @@ function legacyUnboundedProjection(path: string, method: string): boolean {
     return method === 'POST' && /^\/cases\/[a-z0-9_-]{1,96}\/(?:notes|status)$/.test(path);
 }
 export async function request<T>(path: string, options?: RequestInit, maxResponseBytes?: number): Promise<T> {
-    const responseCap = path === '/fleet/identities' ? 512 * 1024 : /^\/devices\/agent_[0-9a-f]{32}\/windows-services(?:\/policy)?$/.test(path) ? 512 * 1024 : /^\/devices\/agent_[0-9a-f]{32}\/windows-event-(?:content|history)\/query$/.test(path) ? 512 * 1024 : /^\/devices\/agent_[0-9a-f]{32}\/package-updates(?:\/(?:prepare|approve|jobs\/update_[0-9a-f]{32}))?$/.test(path) ? 512 * 1024 : /^\/devices\/agent_[0-9a-f]{32}\/resource-history(?:\?afterSequence=[1-9][0-9]{0,18})?$/.test(path) ? 1536 * 1024 : /^\/investigations\?scope=(?:open|recovered|closed|all)&offset=(?:0|[1-9][0-9]*)$/.test(path) ? 2 * 1024 * 1024 : 262144;
+    const responseCap = path === '/windows-managed-msi/worklists' ? 4 * 1024 * 1024 : /^\/windows-managed-msi\/worklists\/(?:save|worklist_[0-9a-f]{32}\/(?:preview|batches|close|archive))$/.test(path) ? 2 * 1024 * 1024 : path === '/fleet/identities' ? 512 * 1024 : /^\/devices\/agent_[0-9a-f]{32}\/windows-services(?:\/policy)?$/.test(path) ? 512 * 1024 : /^\/devices\/agent_[0-9a-f]{32}\/windows-event-(?:content|history)\/query$/.test(path) ? 512 * 1024 : /^\/devices\/agent_[0-9a-f]{32}\/package-updates(?:\/(?:prepare|approve|jobs\/update_[0-9a-f]{32}))?$/.test(path) ? 512 * 1024 : /^\/devices\/agent_[0-9a-f]{32}\/resource-history(?:\?afterSequence=[1-9][0-9]{0,18})?$/.test(path) ? 1536 * 1024 : /^\/investigations\?scope=(?:open|recovered|closed|all)&offset=(?:0|[1-9][0-9]*)$/.test(path) ? 2 * 1024 * 1024 : 262144;
     if (maxResponseBytes !== undefined && (!Number.isSafeInteger(maxResponseBytes) || maxResponseBytes < 1 || maxResponseBytes > responseCap))
         throw new APIError(t("Der Manager hat keine gültigen JSON-Daten zurückgegeben."));
     const maximum = maxResponseBytes ?? responseCap;
@@ -134,7 +134,7 @@ export async function mutate<T>(path: string, data: unknown, signal?: AbortSigna
 /** Raw catalog JSON is preserved so duplicate keys remain visible to the server.
  * This helper retains the protected epoch across the CSRF read and never accepts
  * caller-supplied credentials or a destination other than the existing API path. */
-export async function mutateRaw<T>(path: string, rawJson: string, headers: Record<string, string> = {}, signal?: AbortSignal, maxResponseBytes = 32768): Promise<T> {
+export async function mutateRaw<T>(path: string, rawJson: string, headers: Record<string, string> = {}, signal?: AbortSignal, maxResponseBytes = 32768, beforeSend?: () => boolean): Promise<T> {
     if (typeof rawJson !== 'string' || new TextEncoder().encode(rawJson).byteLength > 2097152 || Object.keys(headers).some(key => key !== 'X-Tracebolt-Catalog-Revision'))
         throw new APIError(t("Die Anfrage konnte nicht geladen werden (HTTP {0}).", { "0": 400 }), 400);
     const epoch = protectedEpoch;
@@ -143,5 +143,7 @@ export async function mutateRaw<T>(path: string, rawJson: string, headers: Recor
         throw new DOMException(t("Anfrage abgebrochen."), 'AbortError');
     if (typeof csrfToken !== 'string' || csrfToken.length < 1 || csrfToken.length > 256)
         throw new APIError(t("Die Anfrage konnte nicht geladen werden (HTTP {0}).", { "0": 400 }), 400);
+    if (beforeSend && !beforeSend())
+        throw new DOMException(t("Anfrage abgebrochen."), 'AbortError');
     return request<T>(path, { signal, method: 'POST', headers: { ...headers, 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken }, body: rawJson }, maxResponseBytes);
 }
