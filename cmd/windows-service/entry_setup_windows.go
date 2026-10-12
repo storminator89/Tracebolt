@@ -118,7 +118,7 @@ func main() {
 	}
 	hooks.Uninstall = func(ctx context.Context, progress func(string)) error {
 		err := setupWizardUninstallWithLease(ctx, openReceiptStore, setupWizardRemovalSteps{
-			inspectOwned: windowsservice.InspectOwned, inspectRemoval: windowsservice.InspectRemoval, stop: windowsservice.ApplyStop, remove: windowsservice.ApplyUninstall,
+			inspectOwned: windowsservice.InspectOwned, inspectRemoval: windowsservice.InspectRemoval, stop: windowsservice.ApplyStop, remove: uninstallWithUpdateOwnership,
 			pending: func(err error) bool { return windowsservice.CanWaitRemovalObservation(err) && setupRemovalPending(err) },
 			wait: func(ctx context.Context) error {
 				t := time.NewTimer(250 * time.Millisecond)

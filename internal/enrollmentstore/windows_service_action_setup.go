@@ -5,12 +5,15 @@ import (
 	"context"
 	"crypto/ed25519"
 	"database/sql"
+	"localrmm/internal/actionpermit"
 	"localrmm/internal/enrollmentcrypto"
 	"localrmm/internal/enrollmentstate"
+	"localrmm/internal/windowsupdatejob"
 	"net/url"
 	"os"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"time"
 )
 
@@ -24,7 +27,32 @@ type WindowsActionSetupInspection struct {
 // InspectWindowsServiceActionSetup is existing-only and read-only, including
 // WAL shared memory. It cannot create, recover, checkpoint or reset a database.
 func InspectWindowsServiceActionSetup(ctx context.Context, path string, issuerDER []byte, device string, now time.Time) (WindowsActionSetupInspection, error) {
-	zero := WindowsActionSetupInspection{}
+	out, err := inspectWindowsSetup(ctx, path, issuerDER, device, now, false)
+	return WindowsActionSetupInspection{Config: out.Config, Identity: out.Identity, Status: out.Status, PublicKey: out.PublicKey}, err
+}
+
+// WindowsUpdateSetupInspection is a read-only snapshot, never setup authority.
+// The explicit apply transaction must check the current leaf and clock again.
+type WindowsUpdateSetupInspection struct {
+	RegisteredBindings  []windowsupdatejob.Binding
+	Config              enrollmentstate.Config
+	Identity            enrollmentstate.Snapshot
+	Status              string
+	PublicKey           ed25519.PublicKey
+	CurrentLeafDigest   string
+	CurrentLeafNotAfter int64
+	DeviceRegistered    bool
+	RegisteredDevices   int
+}
+
+// InspectWindowsUpdateJobSetup shares the existing protected, existing-only
+// read transaction. It cannot create/checkpoint/recover optional or primary state.
+func InspectWindowsUpdateJobSetup(ctx context.Context, path string, issuerDER []byte, device string, now time.Time) (WindowsUpdateSetupInspection, error) {
+	return inspectWindowsSetup(ctx, path, issuerDER, device, now, true)
+}
+
+func inspectWindowsSetup(ctx context.Context, path string, issuerDER []byte, device string, now time.Time, updates bool) (WindowsUpdateSetupInspection, error) {
+	zero := WindowsUpdateSetupInspection{}
 	if ctx == nil || runtime.GOOS != "linux" {
 		return zero, ErrStorage
 	}
@@ -112,19 +140,52 @@ func InspectWindowsServiceActionSetup(ctx context.Context, path string, issuerDE
 	if err != nil {
 		return zero, err
 	}
-	if _, err = s.windowsFullServicesAuthority(t, snap.InvitationID, t.currentCertificateHash(snap), now); err != nil {
-		return zero, err
-	}
-	out := WindowsActionSetupInspection{Config: config, Identity: snap, Status: "absent"}
-	present, err := windowsActionSchemaPresent(ctx, conn)
-	if err != nil {
-		return zero, err
-	}
-	if present {
-		if conn.QueryRowContext(ctx, `SELECT public_key FROM enrollment_windows_action_meta WHERE id=1`).Scan(&out.PublicKey) != nil {
+	out := WindowsUpdateSetupInspection{Config: config, Identity: snap, Status: "absent"}
+	if updates {
+		if config.Binding.Profile != "tls" || snap.Platform != "windows" || snap.State != enrollmentstate.Activated {
 			return zero, ErrStorage
 		}
-		out.Status = "fenced"
+		hash := t.currentCertificateHash(snap)
+		if err = t.authorizeCurrentCredential(snap, hash, now); err != nil {
+			return zero, err
+		}
+		out.CurrentLeafDigest = "sha256:" + hash
+		out.CurrentLeafNotAfter = t.currentCredentialNotAfter(snap)
+		if !actionpermit.ValidDigest(out.CurrentLeafDigest) {
+			return zero, ErrStorage
+		}
+		present, err := windowsUpdateJobSchemaPresent(ctx, conn)
+		if err != nil {
+			return zero, err
+		}
+		if present {
+			if conn.QueryRowContext(ctx, `SELECT public_key FROM enrollment_windows_update_job_meta WHERE id=1`).Scan(&out.PublicKey) != nil {
+				return zero, ErrStorage
+			}
+			out.Status = "fenced"
+			for _, credential := range t.credentials {
+				if credential.WindowsUpdateJobSetup != nil {
+					out.RegisteredDevices++
+					out.RegisteredBindings = append(out.RegisteredBindings, credential.WindowsUpdateJobSetup.Consent.Binding)
+				}
+			}
+			sort.Slice(out.RegisteredBindings, func(i, j int) bool { return out.RegisteredBindings[i].DeviceID < out.RegisteredBindings[j].DeviceID })
+			out.DeviceRegistered = t.credentials[snap.InvitationID].WindowsUpdateJobSetup != nil
+		}
+	} else {
+		if _, err = s.windowsFullServicesAuthority(t, snap.InvitationID, t.currentCertificateHash(snap), now); err != nil {
+			return zero, err
+		}
+		present, err := windowsActionSchemaPresent(ctx, conn)
+		if err != nil {
+			return zero, err
+		}
+		if present {
+			if conn.QueryRowContext(ctx, `SELECT public_key FROM enrollment_windows_action_meta WHERE id=1`).Scan(&out.PublicKey) != nil {
+				return zero, ErrStorage
+			}
+			out.Status = "fenced"
+		}
 	}
 
 	if s.checkPath() != nil {
@@ -139,6 +200,15 @@ func InspectWindowsServiceActionSetup(ctx context.Context, path string, issuerDE
 			if _, err := os.Lstat(absolute + suffix); !os.IsNotExist(err) {
 				return zero, ErrStorage
 			}
+		}
+	}
+	if updates {
+		fresh, err := windowsUpdateJobNow(ctx, now)
+		if err != nil || fresh.Before(now) {
+			return zero, ErrStorage
+		}
+		if err = t.authorizeCurrentCredential(snap, t.currentCertificateHash(snap), fresh); err != nil {
+			return zero, err
 		}
 	}
 	return out, nil

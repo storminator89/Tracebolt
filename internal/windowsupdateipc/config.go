@@ -60,5 +60,5 @@ func RootPath() (string, error) {
 	return strings.TrimSuffix(l.StateRoot, `\windows-agent`) + `\windows-update-executor`, nil
 }
 func StoreOptions() windowsstate.Options {
-	return windowsstate.Options{InstallerOnly: true, Names: []string{"config.json", "executor-key.json", "started.json", "receipt.json", "executor.json"}, LockName: "executor.lock", TempName: "executor.tmp", MaxBytes: job.MaxBytes}
+	return windowsstate.Options{InstallerOnly: true, Names: []string{"config.json", "executor-key.json", "started.json", "receipt.json", "executor.json", "provision.json", "progress.json", "removed.json"}, LockName: "executor.lock", TempName: "executor.tmp", MaxBytes: job.MaxBytes}
 }

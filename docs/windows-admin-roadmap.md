@@ -32,6 +32,8 @@ remote desktop is deferred.
 - [Bounded older Windows event search and deliberately selected historical messages](windows-event-history-runtime.md), with an independent default-off grant and same-session receipt-bound followup
 - Concise fresh Read admin setup with explicit unchecked consent; service control
   remains separately optional
+- [Selected cached Windows update jobs and fresh one-device setup](windows-selected-update-setup.md),
+  with explicit local scope, named one-time approval and durable outcomes; native acceptance pending
 - [Selected-service action receipts and explicit fresh broker setup](windows-action-provisioning.md),
   with separate authority; native activation and action acceptance remain pending
 
@@ -82,8 +84,9 @@ published five-scope approval as consent for the current Read admin profile.
 
 Selected-service action receipts and manual shared disk/CPU/RAM settings are
 implemented. Prioritize incident acknowledgement, maintenance and notifications,
-then explicit software and
-Windows Update jobs with reviewed targets and individual outcomes. Broader
+then software deployment and multi-device Windows Update policies with reviewed
+targets, maintenance windows and individual outcomes. The current selected-update
+source supports one fixed device binding and already-cached updates. Broader
 exact-target service/update actions require separately
 reviewed authority, explicit approval, least-privilege execution and durable
 one-use records. Local Tracebolt restart is not arbitrary remote control.

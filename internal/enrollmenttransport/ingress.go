@@ -61,6 +61,7 @@ var ErrConfiguration = errors.New("enrollment ingress configuration is invalid")
 type Ingress struct {
 	windowsActions             *windowsactionmanager.Manager
 	windowsUpdateJobs          *windowsupdatejob.Manager
+	windowsUpdateRegistry      *windowsupdatejob.Registry
 	windowsHistory             *windowshistorycache.Cache
 	windowsEvents              *windowseventcache.Cache
 	packages                   *packagecontroller.Manager

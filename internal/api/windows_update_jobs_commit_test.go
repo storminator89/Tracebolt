@@ -66,6 +66,8 @@ func (s *windowsUpdateCommitStore) WindowsUpdateJobTransaction(ctx context.Conte
 }
 
 type windowsUpdateCommitFixture struct {
+	service  *enrollmentservice.Service
+	issuer   *enrollmentissuer.Issuer
 	handler  *operatorHandler
 	session  operatorauth.Session
 	store    *windowsUpdateCommitStore
@@ -76,7 +78,7 @@ type windowsUpdateCommitFixture struct {
 	consent  windowsupdatejob.Consent
 }
 
-func newWindowsUpdateCommitFixture(t *testing.T, ttl time.Duration) windowsUpdateCommitFixture {
+func newWindowsUpdateCommitFixture(t *testing.T, ttl time.Duration, checks ...func() error) windowsUpdateCommitFixture {
 	t.Helper()
 	const origin = "https://manager.invalid"
 	at := time.Now().UTC().Truncate(time.Second)
@@ -133,7 +135,7 @@ func newWindowsUpdateCommitFixture(t *testing.T, ttl time.Duration) windowsUpdat
 		t.Fatal(err)
 	}
 	wrapped := &windowsUpdateCommitStore{store: store}
-	manager, err := windowsupdatejob.OpenTransactional(context.Background(), wrapped, jobBinding, managerKey, clock.now)
+	manager, err := windowsupdatejob.OpenTransactional(context.Background(), wrapped, jobBinding, managerKey, clock.now, checks...)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -160,7 +162,7 @@ func newWindowsUpdateCommitFixture(t *testing.T, ttl time.Duration) windowsUpdat
 	// avoiding unrelated bootstrap/registry setup and any listening test server.
 	handler := &operatorHandler{app: app, auth: auth, origin: origin, authority: "manager.invalid", cookieName: operatorauth.CookieName, windowsUpdateJobs: manager}
 	wrapped.callbacks = 0
-	return windowsUpdateCommitFixture{handler, session, wrapped, clock, snapshot, at, path, consent}
+	return windowsUpdateCommitFixture{service: service, issuer: issuer, handler: handler, session: session, store: wrapped, clock: clock, snapshot: snapshot, at: at, path: path, consent: consent}
 }
 
 func (f windowsUpdateCommitFixture) saved(t *testing.T) ([]byte, int64) {
@@ -262,5 +264,29 @@ func TestWindowsUpdateJobAPIUsesLiveClockAtEnrollmentCommit(t *testing.T) {
 				t.Fatal("rollback changed request bytes or rejection floor")
 			}
 		})
+	}
+}
+
+func TestWindowsUpdateJobFinalConfigurationWaitCannotOutliveSession(t *testing.T) {
+	var f windowsUpdateCommitFixture
+	armed, calls := false, 0
+	f = newWindowsUpdateCommitFixture(t, 30*time.Second, func() error {
+		if armed {
+			calls++
+			if calls == 3 {
+				f.clock.set(f.session.ExpiresAt)
+			}
+		}
+		return nil
+	})
+	before, _ := f.saved(t)
+	armed = true
+	response := f.request(t)
+	if response.Code != 403 || calls != 3 {
+		t.Fatalf("session expired inside final config read: %d %s checks=%d", response.Code, response.Body.String(), calls)
+	}
+	after, floor := f.saved(t)
+	if !bytes.Equal(before, after) || floor != f.session.ExpiresAt.Unix() {
+		t.Fatal("expired final session committed work or lost observation floor")
 	}
 }

@@ -84,7 +84,8 @@ func decodeWindowsUpdateRelayJSON(raw []byte, value any, max int) error {
 
 // InitializeWindowsUpdateRelayCreateOnly is a source-only local provisioning
 // seam. The caller must hold the stopped-owned-service installer lease and have
-// obtained this distinct explicit approval. No CLI or Read admin path invokes it.
+// obtained this distinct explicit approval. The fresh selected-update setup
+// command invokes it; Read admin never does.
 // Supplied original binding, pins and expiry are saved unchanged. Existing roots
 // and partial/used manifests are never adopted, overwritten, repaired or reset.
 // This relay receipt confers no executor or OS installation permission.

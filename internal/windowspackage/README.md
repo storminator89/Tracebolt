@@ -60,3 +60,33 @@ create/write/final-verification failure, cancellation, retained partial results,
 input snapshots, and pin lifetime. Windows tests only build in-memory descriptors
 and inspect request-independent values; they do not inspect or mutate host ACLs,
 SCM, keys, grants or files. Cross-builds are not native installation acceptance.
+
+## Separate selected-update executor image
+
+`OpenUpdateExecutorImage(ctx, observerReceipt)` is a separate source-only helper
+for the fixed KnownFolder Program Files/Tracebolt/
+`tracebolt-windows-update-executor.exe`. The caller must hold the existing
+observer lifecycle lease until the helper is closed, and hold the separate
+executor-state lock during removal. The exact owned observer must remain stopped;
+the helper rechecks its receipt, image and SCM binding before and after phases.
+No shared-directory ACL is changed, no directory is created, and no executor or
+service is launched. This API does not add an image to the Read admin bundle.
+
+`CheckAbsent` is read-only. `Create` validates and snapshots the manifest-bound PE
+payload, uses exclusive create-only access with an atomic SYSTEM/Administrators-
+only protected descriptor, flushes and reads back the bytes, then opens a read
+pin through the same held parent. The original creation's file identity and hash
+must still match. `Create` returns an `UpdateExecutorImageReceipt` only after
+success; the coordinator must retain it in protected transaction state. Failed
+or partial creation supplies no ownership proof and is never adopted or repaired.
+
+`Verify` is read-only and requires that exact original receipt. `Remove` requires
+the same proof and is the sole narrow deletion exception to the main package
+API above. It reopens only the fixed child under the held parent with exclusive
+read/DELETE access, checks original volume/file ID, hash and byte count, protected
+descriptor, one link, default stream, final path and ancestor trust, and rechecks
+the same handle immediately before by-handle disposition. It never deletes by
+pathname, removes a directory, overwrites, retries an uncertain mutation, or
+cleans up a partial/unowned image. Protected intent/completion records remain
+the caller's responsibility. Portable tests use only an injected in-memory
+filesystem; native Windows creation/removal acceptance remains a separate gate.

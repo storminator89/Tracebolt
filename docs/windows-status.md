@@ -46,11 +46,19 @@ bounded transport/store. See [frame bounds](windows-storage-io.md#worker-transpo
 - [Cached Windows Update inspection](windows-update-runtime.md): an independently
   granted offline cache read. Freshness stays unknown; no scan, download,
   installation or reboot is performed.
+- [Selected cached update jobs](windows-selected-update-setup.md): separate fresh
+  manager/Windows setup, exact revision approval and a dedicated foreground executor.
+  One fixed device binding; no download, license acceptance or automatic reboot.
+  Native setup and installation acceptance remain pending.
 - [Disk](windows-capacity-health.md), [CPU/RAM](windows-resource-health.md) and
   [selected-service checks](windows-service-health.md): independent default-off
   manager policies over already accepted observations. Missing data stays unknown.
 - [Fleet groups](fleet-groups-health.md): manual device organization and reviewed
   one-time disk/CPU/RAM settings. New members do not inherit settings automatically.
+- [Windows incident inbox](windows-incident-inbox.md) and [bounded planned
+  maintenance](windows-maintenance.md): retained incident acknowledgement and
+  explicit device/domain windows with original end times. Maintenance marks
+  operator planning only; no evidence, incident or external-alarm suppression.
 - [Selected service control](windows-service-actions.md): exact reviewed targets,
   explicit approvals and saved action receipts. Separate [fresh broker setup](windows-action-provisioning.md)
   creates a disabled restricted broker after exact local approval; Read admin

@@ -9,6 +9,14 @@ import { windowsPatchContextView } from './windows-patch-context-fixture';
 import { windowsUpdates } from './windows-updates-fixture';
 vi.mock('./api', async original => ({ ...await original<typeof import('./api')>(), request: vi.fn() }));
 const flush = () => act(async () => {});
+function expectOnlySetupGuide() {
+    const links = document.querySelectorAll('a');
+    expect(links).toHaveLength(1);
+    expect(links[0]).toHaveAttribute('href', 'https://github.com/storminator89/Tracebolt/blob/main/docs/windows-selected-update-setup.md');
+    expect(links[0]).toHaveAttribute('target', '_blank');
+    expect(links[0]).toHaveAttribute('rel', 'noreferrer');
+    expect(links[0].closest('details')).not.toHaveAttribute('open');
+}
 function Harness({ session = 'fixture' }: { session?: string }) { return <WindowsInventoryWorkspace resource={useWindowsInventory(windowsDeviceId, true, session)}/>; }
 const ready = async () => { await flush(); fireEvent.click(screen.getByRole('tab', { name: 'Updates' })); };
 const refresh = () => fireEvent.click(screen.getByRole('button', { name: 'Refresh Windows inventory' }));
@@ -26,7 +34,7 @@ describe('Compact patch context in the existing Updates tab', () => {
         expect(screen.getByText(de ? 'Deinstallation' : 'Uninstallation')).toBeVisible(); expect(screen.getByText('HRESULT: 80240022')).toBeVisible();
         expect(screen.getByText(de ? /kein aktueller Installationsbestand/ : /not current installed inventory/)).toBeVisible();
         const headers = screen.getAllByRole('columnheader').map(cell => cell.textContent); for (const row of screen.getAllByRole('row').slice(1)) expect(within(row).getAllByRole('cell').map(cell => cell.dataset.label)).toEqual(headers);
-        expect(screen.queryByRole('link')).toBeNull(); expect(screen.queryByRole('button', { name: /install|reboot|enable|grant|scan|apply/i })).toBeNull();
+        expectOnlySetupGuide(); expect(screen.queryByRole('button', { name: /install|reboot|enable|grant|scan|apply/i })).toBeNull();
     });
     it('coexists with separately granted cached rows and resets history details on tab navigation', async () => {
         vi.mocked(request).mockResolvedValue({ ...windowsPatchContextView(), updates: windowsUpdates() }); render(<Harness/>); await ready(); expect(screen.getByText('Synthetic cached update 001')).toBeVisible(); fireEvent.click(details().querySelector('summary')!); expect(screen.getAllByRole('table')).toHaveLength(2);
@@ -37,8 +45,9 @@ describe('Compact patch context in the existing Updates tab', () => {
         v.patchContext.reboot.fileOperations = 'clear'; refresh(); await flush(); expect(screen.getByText('No checked indicator set')).toBeVisible();
     });
     it('keeps denied OS/history quality explicit and renders source titles as inert text', async () => {
-        const v = windowsPatchContextView(); v.patchContext.os.edition = { value: null, quality: 'denied' }; v.patchContext.history.rows[0].title = '<img src=x onerror=alert(1)>'; vi.mocked(request).mockResolvedValue(v); render(<Harness/>); await ready(); fireEvent.click(details().querySelector('summary')!); expect(screen.getByText(/Access denied ·/)).toBeVisible(); expect(screen.getByText('<img src=x onerror=alert(1)>')).toBeVisible(); expect(document.querySelector('img, iframe, a')).toBeNull();
-        Object.assign(v.patchContext.history, { quality: 'denied', reason: 'windows_patch_context_access_denied', countExact: false, totalCount: 0, truncated: false, rows: [] }); refresh(); await flush(); fireEvent.click(details().querySelector('summary')!); expect(screen.getByText(/History unavailable/)).toBeVisible(); expect(screen.queryByText('<img src=x onerror=alert(1)>')).toBeNull();
+        const title = '<img src=x onerror=alert(1)> & <script>alert(1)</script> <a href="https://untrusted.invalid/">not a link</a>';
+        const v = windowsPatchContextView(); v.patchContext.os.edition = { value: null, quality: 'denied' }; v.patchContext.history.rows[0].title = title; vi.mocked(request).mockResolvedValue(v); render(<Harness/>); await ready(); fireEvent.click(details().querySelector('summary')!); expect(screen.getByText(/Access denied ·/)).toBeVisible(); expect(screen.getByText(title)).toBeVisible(); expect(document.querySelector('img, script, iframe')).toBeNull(); expectOnlySetupGuide();
+        Object.assign(v.patchContext.history, { quality: 'denied', reason: 'windows_patch_context_access_denied', countExact: false, totalCount: 0, truncated: false, rows: [] }); refresh(); await flush(); fireEvent.click(details().querySelector('summary')!); expect(screen.getByText(/History unavailable/)).toBeVisible(); expect(screen.queryByText(title)).toBeNull();
     });
     it('hides the subsection when the optional scope is absent or malformed', async () => {
         vi.mocked(request).mockResolvedValue(windowsView()); render(<Harness/>); await ready(); expect(screen.queryByRole('region', { name: 'Patch context' })).toBeNull();

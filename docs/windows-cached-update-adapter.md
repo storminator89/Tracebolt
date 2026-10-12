@@ -90,9 +90,9 @@ the responsibility of the existing executor kernel.
 
 ## Unsupported and unverified
 
-- Foreground invocation, protected-material validation, local IPC and observer
-  relay source are implemented. Fresh protected provisioning and turnkey setup
-  remain unavailable; the command cannot create, adopt or repair that material.
+- Foreground invocation, protected-material validation, local IPC, observer relay
+  and [fresh explicit setup](windows-selected-update-setup.md) are implemented in source.
+  The foreground command itself cannot create, adopt or repair setup material.
 - Native activation requires explicit approval, including the optional
   process-lifetime observer query permission. It has not been performed.
 - Existing read-admin/service-broker rights are not promoted. Standard, filtered,

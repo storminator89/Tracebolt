@@ -55,7 +55,8 @@ and stale results retain their original meaning.
 - [Windows retained state and service removal](windows-setup-preview.md#cancellation-retained-state-and-service-removal)
 - [Support bundle and review before sharing](support-bundle.md)
 - Separate controlled-action scope: [Linux services](guided-service-action-setup.md),
-  [Windows services](windows-service-actions.md), [selected APT updates](selected-package-updates-native.md)
+  [Windows services](windows-service-actions.md), [selected APT updates](selected-package-updates-native.md),
+  [selected Windows update setup](windows-selected-update-setup.md)
 - Existing development interfaces: [Linux read-admin update](read-admin-upgrade.md)
   and [inventory opt-in](guided-inventory-setup.md)
 - [Frontend development](../web/README.md), [LAN runtime](lan-runtime.md),

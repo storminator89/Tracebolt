@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"errors"
+	"fmt"
 	"io"
 	"math/big"
 	"net/http"
@@ -211,16 +212,24 @@ func newWindowsEventOperatorFixtureWithIssuerLifetime(t *testing.T, named bool, 
 	return f
 }
 
-func windowsEventOperatorActivate(t *testing.T, service *enrollmentservice.Service, now time.Time) enrollmentstate.Snapshot {
+func windowsEventOperatorActivate(t *testing.T, service *enrollmentservice.Service, now time.Time, indexes ...int) enrollmentstate.Snapshot {
 	t.Helper()
 	ctx := context.Background()
-	requestID := func(n string) string { return "request_" + strings.Repeat(n, 32) }
+	requestID := func(n string) string {
+		if len(indexes) > 0 {
+			return fmt.Sprintf("request_%032x", indexes[0]*100+int(n[0]))
+		}
+		return "request_" + strings.Repeat(n, 32)
+	}
 	created, err := service.CreateInvitation(ctx, requestID("1"), "windows")
 	if err != nil {
 		t.Fatal("fixture invitation failed", err)
 	}
 	invitation := created.Snapshot().InvitationID
 	claimID := "claim_" + strings.Repeat("2", 32)
+	if len(indexes) > 0 {
+		claimID = fmt.Sprintf("claim_%032x", indexes[0])
+	}
 	_, key, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
 		t.Fatal(err)

@@ -2,25 +2,32 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {windowsContactBrowserFixture,windowsContactHistoryDisclosure} from './windows-contact-history-browser.mjs';
-test('Docker web typecheck admits exactly the synthetic Go-to-TypeScript percentage/contact/service fixtures',()=>{
+test('Docker web typecheck admits exactly the imported synthetic Go-to-TypeScript fixtures',()=>{
  const read=name=>fs.readFileSync(new URL(name,import.meta.url),'utf8');
  const docker=read('../../Dockerfile'),ignore=read('../../.dockerignore').split(/\r?\n/).map(line=>line.trim()).filter(line=>line&&!line.startsWith('#'));
- const webStage=docker.split('FROM --platform=$BUILDPLATFORM golang:')[0];
- assert.ok(webStage.includes('COPY tests/fixtures/windows-contact-view.json /src/tests/fixtures/windows-contact-view.json\n'));
- assert.ok(webStage.indexOf('COPY tests/fixtures/windows-contact-view.json ')<webStage.indexOf('RUN npm run build'));
- assert.ok(webStage.includes('COPY tests/fixtures/windows-resource-view.json /src/tests/fixtures/windows-resource-view.json\n'));
- assert.ok(webStage.indexOf('COPY tests/fixtures/windows-resource-view.json ')<webStage.indexOf('RUN npm run build'));
- assert.ok(webStage.includes('COPY tests/fixtures/windows-service-health-view.json /src/tests/fixtures/windows-service-health-view.json\n'));
- assert.ok(webStage.indexOf('COPY tests/fixtures/windows-service-health-view.json ')<webStage.indexOf('RUN npm run build'));
+ const fixtures=['windows-contact-view.json','windows-capacity-view.json','windows-resource-view.json','windows-maintenance-view.json','windows-service-health-view.json','windows-service-action-view.json','windows-service-action-history.json','windows-incident-inbox-view.json'];
+ const webStage=docker.split('FROM --platform=$BUILDPLATFORM golang:')[0],runtimeStage=docker.split('FROM scratch AS runtime')[1];
+ for(const fixture of fixtures){
+  const path='tests/fixtures/'+fixture,copy=`COPY ${path} /src/${path}`;
+  assert.equal(webStage.split('\n').filter(line=>line===copy).length,1,`${path} needs one exact web-stage COPY`);
+  assert.ok(webStage.indexOf(copy)<webStage.indexOf('RUN npm run build'),`${path} must precede typecheck`);
+  assert.ok(!runtimeStage.includes(path),`${path} must not enter the runtime stage`);
+  assert.ok(Object.keys(JSON.parse(read('../../'+path))).length>0);
+ }
+ // New shared fixture imports must extend this reviewed exact allowlist and COPY
+ // set; an ordinary checkout typecheck alone cannot detect Docker omissions.
+ const sources=fs.readdirSync(new URL('../../web/src/',import.meta.url),{recursive:true}).filter(name=>/\.[cm]?[jt]sx?$/.test(name));
+ const imported=[...new Set(sources.flatMap(name=>[...read('../../web/src/'+name).matchAll(/['"](?:\.\.\/)+tests\/fixtures\/([^'"]+)['"]/g)].map(match=>match[1])))];
+ assert.deepEqual(imported.sort(),[...fixtures].sort(),'every imported test fixture needs explicit container admission');
  assert.match(read('../../web/src/windows-service-health-types.test.ts'),/import wireFixture from '\.\.\/\.\.\/tests\/fixtures\/windows-service-health-view\.json'/);
  assert.match(read('../../web/src/windows-service-health-types.test.ts'),/Object\.entries\(wireFixture\)/);
- assert.ok(webStage.includes('COPY tests/fixtures/windows-service-action-view.json /src/tests/fixtures/windows-service-action-view.json\n'));
- assert.ok(webStage.indexOf('COPY tests/fixtures/windows-service-action-view.json ')<webStage.indexOf('RUN npm run build'));
  assert.match(read('../../web/src/windows-service-actions.test.tsx'),/import golden from '\.\.\/\.\.\/tests\/fixtures\/windows-service-action-view\.json'/);
- assert.deepEqual(ignore.filter(line=>line.startsWith('!tests/fixtures')),['!tests/fixtures/','!tests/fixtures/windows-contact-view.json','!tests/fixtures/windows-capacity-view.json','!tests/fixtures/windows-resource-view.json','!tests/fixtures/windows-service-health-view.json','!tests/fixtures/windows-service-action-view.json','!tests/fixtures/windows-service-action-history.json']);
+ assert.match(read('../../web/src/windows-incident-inbox-types.test.ts'),/import wire from '\.\.\/\.\.\/tests\/fixtures\/windows-incident-inbox-view\.json'/);
+ assert.deepEqual(ignore.filter(line=>line.startsWith('!tests/fixtures')),['!tests/fixtures/',...fixtures.map(name=>'!tests/fixtures/'+name)]);
  const parent=ignore.indexOf('!tests/fixtures/');assert.equal(ignore[parent+1],'tests/fixtures/**');assert.equal(ignore[parent+2],'!tests/fixtures/windows-contact-view.json');
  assert.ok(ignore.includes('**')&&ignore.includes('tests/**'));
- assert.doesNotMatch(webStage,/^COPY tests\/\s/m);
+ assert.ok(!ignore.includes('!tests/**'));
+ assert.doesNotMatch(webStage,/^COPY tests\/(?:fixtures\/)?\s/m);
  assert.match(read('../../web/src/windows-contact-types.test.ts'),/import wireFixture from '\.\.\/\.\.\/tests\/fixtures\/windows-contact-view\.json'/);
  assert.match(read('../../web/src/windows-contact-types.test.ts'),/Object\.entries\(wireFixture\)/);
  assert.ok(JSON.parse(read('../../web/tsconfig.json')).include.includes('src'));

@@ -103,7 +103,7 @@ func prepareWithApplicationChecks(m lanconfig.Material, enrollment *enrollmentco
 	}
 	var actions *actionmanager.Manager
 	var windowsActions *windowsactionmanager.Manager
-	var windowsUpdates *windowsupdatejob.Manager
+	var windowsUpdates *windowsupdatejob.Registry
 	var packageActions *packagecontroller.Manager
 	var enrolledStore *enrollmentstore.Store
 	var enrolledService *enrollmentservice.Service
@@ -278,14 +278,14 @@ func prepareWithApplicationChecks(m lanconfig.Material, enrollment *enrollmentco
 				forbidden = append(forbidden, pub)
 			}
 		}
-		windowsUpdates, e = windowsupdatemanager.Load(context.Background(), windowsStore, c.WindowsUpdateJobsConfigFile, forbidden...)
+		windowsUpdates, e = windowsupdatemanager.LoadRegistry(context.Background(), windowsStore, c.WindowsUpdateJobsConfigFile, forbidden...)
 		if e != nil {
 			return fail(e)
 		}
 		if e = windowsUpdates.ConfigureOperatorPolicy(func(actor string) bool { return auth.ActorHasCapability(actor, operatorauth.WindowsUpdateInstall) }); e != nil {
 			return fail(e)
 		}
-		if e = windowsIngress.ConfigureWindowsUpdateJobs(windowsUpdates); e != nil {
+		if e = windowsIngress.ConfigureWindowsUpdateRegistry(windowsUpdates); e != nil {
 			return fail(e)
 		}
 	}
@@ -295,7 +295,7 @@ func prepareWithApplicationChecks(m lanconfig.Material, enrollment *enrollmentco
 		}
 		forbidden := []ed25519.PublicKey{}
 		if windowsUpdates != nil {
-			forbidden = append(forbidden, windowsUpdates.PublicKey(), windowsUpdates.ExecutorPublicKey())
+			forbidden = append(forbidden, windowsUpdates.PublicKeys()...)
 		}
 		if windowsActions != nil {
 			forbidden = append(forbidden, windowsActions.PublicKey())
@@ -405,7 +405,7 @@ func prepareWithApplicationChecks(m lanconfig.Material, enrollment *enrollmentco
 			return nil, e
 		}
 	}
-	operatorConfig := api.LANOperatorConfig{WindowsUpdateJobs: windowsUpdates, WindowsServiceActions: windowsActions, PackageActions: packageActions, AISettings: aiSettings, AlarmSettings: alarmWorker, ApplicationCheckSettings: applicationChecks, ServiceActions: actions, Origin: c.OperatorOrigin, Auth: auth, Registry: registry, InsecureHTTPTest: c.Profile == lanconfig.HTTPTest, Devices: func() ([]model.Device, error) {
+	operatorConfig := api.LANOperatorConfig{WindowsUpdateRegistry: windowsUpdates, WindowsServiceActions: windowsActions, PackageActions: packageActions, AISettings: aiSettings, AlarmSettings: alarmWorker, ApplicationCheckSettings: applicationChecks, ServiceActions: actions, Origin: c.OperatorOrigin, Auth: auth, Registry: registry, InsecureHTTPTest: c.Profile == lanconfig.HTTPTest, Devices: func() ([]model.Device, error) {
 		return trustStore.Devices(context.Background(), registry.List(), time.Now().UTC())
 	}}
 	if enrolledService != nil {

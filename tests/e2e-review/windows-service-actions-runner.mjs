@@ -7,7 +7,7 @@ import {createServer} from 'node:http';
 import {createRequire} from 'node:module';
 import {fileURLToPath} from 'node:url';
 import {createWindowsServiceActionsFixture,exerciseWindowsServiceActions,windowsServiceActionsRoute,windowsServiceActionsCaseName,windowsServiceActionsDisclosure,windowsServiceActionsFailureStage,requireWindowsServiceActionsEvidence} from './windows-service-actions-browser.mjs';
-import {createWindowsUpdateJobsFixture,windowsUpdateJobsRoute,exerciseWindowsUpdateJobs,windowsUpdateJobsCaseName,windowsUpdateJobsDisclosure,windowsUpdateJobsFailureStage,requireWindowsUpdateJobsEvidence,windowsUpdateJobsOrigin} from './windows-update-jobs-browser.mjs';
+import {createWindowsUpdateJobsFixture,windowsUpdateJobsRoute,exerciseWindowsUpdateJobs,windowsUpdateJobsCaseName,windowsUpdateJobsDisclosure,windowsUpdateJobsFailureStage,requireWindowsUpdateJobsEvidence,requireWindowsUpdateWorklistDetails,windowsUpdateJobsOrigin} from './windows-update-jobs-browser.mjs';
 import {createWindowsServiceActionHistoryFixture,windowsServiceActionHistoryRoute,exerciseWindowsServiceActionHistory,windowsServiceActionHistoryCaseName,requireWindowsServiceActionHistoryEvidence} from './windows-service-action-history-browser.mjs';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../..'),require=createRequire(path.join(root,'web/package.json'));
 const {chromium,expect}=require('@playwright/test');
@@ -16,7 +16,7 @@ const sourceSha=process.env.TRACEBOLT_SOURCE_SHA??null,screenshots=[],historyScr
 await fs.mkdir(out,{recursive:true});
 const failure=()=>new Error('Synthetic Windows action browser gate failed; raw state withheld.');
 async function shot(page,name,fixtureDisclosure){
- const isUpdate=/^synthetic-windows-update-jobs-(review|result)-(1440|390)-(en|de)$/.test(name);
+ const isUpdate=/^synthetic-windows-update-jobs-(review|result|worklist)-(1440|390)-(en|de)$/.test(name);
  if(isUpdate?fixtureDisclosure!==windowsUpdateJobsDisclosure:!/^synthetic-windows-service-(actions|action-history)-(1440|390)-(en|de)$/.test(name)||fixtureDisclosure!==windowsServiceActionsDisclosure)throw failure();
  await page.screenshot({path:path.join(out,name+'.png'),fullPage:false,animations:'disabled'});
  const isHistory=name.startsWith('synthetic-windows-service-action-history-');
@@ -70,8 +70,9 @@ async function run(){
    await route.fulfill({status:200,contentType:contentTypes[path.extname(file)],body:await fs.readFile(file)});
   }}));
   const updateDetails=await exerciseWindowsUpdateJobs({page:updatePage,expect,base:windowsUpdateJobsOrigin,fixture:updateFixture,locale,width,shot});
+  requireWindowsUpdateWorklistDetails(updateDetails);expect(updateFixture.secondPostAttempts).toEqual({request:0,preview:0,approve:0,other:0});
   expect(updateState.blocked).toEqual([]);expect(updateState.external).toEqual([]);expect(await context.cookies()).toEqual([]);
-  const updateStorage=await updatePage.evaluate(()=>JSON.stringify({local:{...localStorage},session:{...sessionStorage}}));for(const value of [updateFixture.savedID(),updateFixture.digest,updateFixture.session.csrfToken])expect(updateStorage.includes(value)).toBe(false);
+  const updateStorage=await updatePage.evaluate(()=>JSON.stringify({local:{...localStorage},session:{...sessionStorage}}));for(const value of [updateFixture.savedID(),updateFixture.secondSavedID,updateFixture.digest,updateFixture.session.csrfToken])expect(updateStorage.includes(value)).toBe(false);
   updateVariants.push({locale,width,...updateDetails});await context.close();context=null;
  }
  requireWindowsServiceActionsEvidence(screenshots,sourceSha);requireWindowsServiceActionHistoryEvidence(historyScreenshots,sourceSha);if(errors||apiRequests||variants.length!==4)throw failure();if(historyVariants.length!==4)throw failure();requireWindowsUpdateJobsEvidence(updateScreenshots,sourceSha);if(updateVariants.length!==4)throw failure();

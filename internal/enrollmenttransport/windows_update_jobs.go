@@ -21,13 +21,26 @@ const windowsUpdateJobsPrefix = "/v1/windows-update-jobs/"
 // starting ingress never provisions a key, local executor, grant, or job store.
 // A file-backed source fixture or a different enrollment store cannot be wired.
 func (h *Ingress) ConfigureWindowsUpdateJobs(m *windowsupdatejob.Manager) error {
-	if !h.valid() || h.windowsUpdateJobs != nil || !m.EnrollmentOwned() || !m.OperatorPolicyConfigured() || !m.MatchesStore(h.store) || !m.MatchesBinding(h.store.Config().Binding) || h.profile != "tls" || h.store.Config().Binding.CollectionProfile != enrollmentcrypto.CollectionProfileWindowsInventory {
+	if !h.valid() || h.windowsUpdateJobs != nil || h.windowsUpdateRegistry != nil || !m.EnrollmentOwned() || !m.OperatorPolicyConfigured() || !m.MatchesStore(h.store) || !m.MatchesBinding(h.store.Config().Binding) || h.profile != "tls" || h.store.Config().Binding.CollectionProfile != enrollmentcrypto.CollectionProfileWindowsInventory {
 		return ErrConfiguration
 	}
 	h.windowsUpdateJobs = m
 	return nil
 }
 
+// ConfigureWindowsUpdateRegistry is explicit trusted startup, not registration.
+func (h *Ingress) ConfigureWindowsUpdateRegistry(registry *windowsupdatejob.Registry) error {
+	if !h.valid() || registry == nil || h.windowsUpdateJobs != nil || h.windowsUpdateRegistry != nil || h.profile != "tls" || !registry.MatchesBinding(h.store.Config().Binding) {
+		return ErrConfiguration
+	}
+	for _, m := range registry.Managers() {
+		if !m.MatchesStore(h.store) {
+			return ErrConfiguration
+		}
+	}
+	h.windowsUpdateRegistry = registry
+	return nil
+}
 func windowsUpdateJobBodyLimit(path string) int64 {
 	switch path {
 	case windowsUpdateJobsPrefix + "poll":
@@ -87,7 +100,7 @@ func decodeWindowsUpdateJobClaim(raw []byte) (string, bool) {
 }
 
 func (h *Ingress) windowsUpdateJobRequest(w http.ResponseWriter, r *http.Request) {
-	if h.windowsUpdateJobs == nil || h.profile != "tls" || h.store.Config().Binding.CollectionProfile != enrollmentcrypto.CollectionProfileWindowsInventory {
+	if h.windowsUpdateJobs == nil && h.windowsUpdateRegistry == nil || h.profile != "tls" || h.store.Config().Binding.CollectionProfile != enrollmentcrypto.CollectionProfileWindowsInventory {
 		failure(w, http.StatusNotFound, "windows_update_jobs_not_configured")
 		return
 	}
@@ -124,7 +137,13 @@ func (h *Ingress) windowsUpdateJobRequest(w http.ResponseWriter, r *http.Request
 		storeFailure(w, err)
 		return
 	}
-	if identity.Approval.DeviceID != h.windowsUpdateJobs.Binding().DeviceID {
+	// Route only from the currently authenticated identity, before reading or
+	// interpreting a claimed target, job ID, or signed report envelope.
+	manager := h.windowsUpdateJobs
+	if h.windowsUpdateRegistry != nil {
+		manager = h.windowsUpdateRegistry.Manager(identity.Approval.DeviceID)
+	}
+	if manager == nil || identity.Approval.DeviceID != manager.Binding().DeviceID || "sha256:"+identity.Issuance.CertificateHash != manager.Binding().IncarnationDigest {
 		failure(w, http.StatusForbidden, "agent_unauthorized")
 		return
 	}
@@ -144,7 +163,7 @@ func (h *Ingress) windowsUpdateJobRequest(w http.ResponseWriter, r *http.Request
 			failure(w, http.StatusBadRequest, "invalid_request")
 			return
 		}
-		pending, e := h.windowsUpdateJobs.Pending(r.Context())
+		pending, e := manager.Pending(r.Context())
 		err = e
 		if err == nil {
 			out, err = json.Marshal(pending)
@@ -156,14 +175,14 @@ func (h *Ingress) windowsUpdateJobRequest(w http.ResponseWriter, r *http.Request
 			return
 		}
 		if r.URL.Path == windowsUpdateJobsPrefix+"readiness-claim" {
-			out, err = h.windowsUpdateJobs.ClaimReadiness(r.Context(), id)
+			out, err = manager.ClaimReadiness(r.Context(), id)
 		} else {
-			out, err = h.windowsUpdateJobs.Claim(r.Context(), id)
+			out, err = manager.Claim(r.Context(), id)
 		}
 	case windowsUpdateJobsPrefix + "report":
 		// Report alone verifies canonical fixed-shape, purpose-bound metadata
 		// signed by the separately pinned executor key. Never call Submit.
-		err = h.windowsUpdateJobs.Report(r.Context(), raw)
+		err = manager.Report(r.Context(), raw)
 	}
 	if err != nil {
 		windowsUpdateJobFailure(w, err)

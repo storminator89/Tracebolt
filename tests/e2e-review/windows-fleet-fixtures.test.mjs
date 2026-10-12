@@ -2,7 +2,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import {windowsFleetFixture,windowsFleetOverview,windowsFleetProtectedRead,windowsFleetDeviceIds,windowsFleetCaseName,windowsFleetDisclosure} from './windows-fleet-browser.mjs';
+import {windowsFleetFixture,windowsFleetOverview,windowsFleetProtectedRead,windowsFleetDeviceIds,windowsFleetCaseName,windowsFleetDisclosure,windowsFleetFrameRows} from './windows-fleet-browser.mjs';
 const read=name=>fs.readFileSync(new URL(name,import.meta.url),'utf8');
 const vectors=JSON.parse(read('../../web/src/windows-fleet-identity-vectors.json'));
 test('Windows browser data keeps the strict v2 contract and original production-vector deadlines',()=>{
@@ -42,4 +42,14 @@ test('hosted fleet runner preserves five Linux cases and requires explicit Windo
  assert.match(flow,/for\(const locale of \['en','de'\]\)for\(const width of \[1440,390\]\)/);for(const value of ['hostname,ipv4,ipv6','Windows suspension clears display and search','Windows exported expiry clears display and search','Windows real session revocation clears intercepted values',"'X-CSRF-Token':auth.csrfToken",'expect(fleetReads).toBe(before)','liveStoreAcceptance:false,nativeAcceptance:false'])assert.ok(flow.includes(value));
  assert.match(flow,/locator\('details'\)\)\.not\.toHaveAttribute\('open'\)/);assert.match(workflow,/summary\['passed'\] != 6/);assert.match(workflow,/missing Windows screenshots/);assert.match(workflow,/hashlib\.sha256\(Path\('artifacts\/review', item\['file'\]\)/);assert.ok(manifest.entries.includes('windows-fleet-fixtures.test.mjs'));
  assert.doesNotMatch(flow,/chromium\.launch|createServer|writeFile|execFileSync|spawn\(|setDefaultTimeout|ignoreHTTPSErrors|grantPermissions/);
+});
+
+test('Windows fleet capture centers the complete row group after each viewport change without weakening visibility',async()=>{
+ const calls=[],body={evaluate:async callback=>callback({scrollIntoView:options=>calls.push(options)})};
+ for(let variant=0;variant<4;variant++)await windowsFleetFrameRows(body);
+ assert.deepEqual(calls,Array.from({length:4},()=>({block:'center',inline:'nearest',behavior:'instant'})));
+ const flow=read('./windows-fleet-browser.mjs');
+ assert.ok(flow.includes("await windowsFleetFrameRows(page.locator('.device-table tbody'));await expect(fresh).toBeInViewport({ratio:1});await expect(partial).toBeInViewport({ratio:1});await shot"));
+ assert.ok(!flow.includes('await rows.last().scrollIntoViewIfNeeded()'));
+ assert.equal((flow.match(/toBeInViewport\(\{ratio:1\}\)/g)||[]).length,2);
 });

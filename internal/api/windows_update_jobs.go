@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"localrmm/internal/enrollmentcrypto"
@@ -12,6 +13,19 @@ import (
 	"localrmm/internal/windowsupdatejob"
 )
 
+func windowsUpdateQueryAllowed(u *url.URL) bool {
+	if u == nil {
+		return false
+	}
+	_, op, ok := windowsUpdateJobRoute(&http.Request{URL: u})
+	if !ok || op != "" {
+		return false
+	}
+	if u.RawQuery == "history=1" {
+		return true
+	}
+	return strings.HasPrefix(u.RawQuery, "jobId=") && enrollmentcrypto.ValidID(strings.TrimPrefix(u.RawQuery, "jobId="), "update_")
+}
 func windowsUpdateJobRoute(r *http.Request) (string, string, bool) {
 	p := strings.Split(r.URL.Path, "/")
 	if len(p) != 5 && len(p) != 6 || p[1] != "api" || p[2] != "devices" || !enrollmentcrypto.ValidID(p[3], "agent_") || p[4] != "windows-update-jobs" {
@@ -26,6 +40,15 @@ func windowsUpdateJobRoute(r *http.Request) (string, string, bool) {
 	}
 	return p[3], op, true
 }
+func (h *operatorHandler) windowsUpdateManager(device string) *windowsupdatejob.Manager {
+	if h.windowsUpdateRegistry != nil {
+		return h.windowsUpdateRegistry.Manager(device)
+	}
+	if h.windowsUpdateJobs != nil && h.windowsUpdateJobs.Binding().DeviceID == device {
+		return h.windowsUpdateJobs
+	}
+	return nil
+}
 func (h *operatorHandler) windowsUpdateJobsAPI(w http.ResponseWriter, r *http.Request) {
 	device, op, ok := windowsUpdateJobRoute(r)
 	if !ok {
@@ -38,16 +61,42 @@ func (h *operatorHandler) windowsUpdateJobsAPI(w http.ResponseWriter, r *http.Re
 	}
 	r = r.WithContext(h.windowsUpdateJobContext(r, op != ""))
 	if op == "" {
-		h.writeWindowsUpdateJobs(w, r, device)
+		q, err := url.ParseQuery(r.URL.RawQuery)
+		if err != nil {
+			windowsUpdateJobError(w, windowsupdatejob.ErrInvalid)
+			return
+		}
+		if len(q) == 0 {
+			h.writeWindowsUpdateJobs(w, r, device)
+			return
+		}
+		if len(q) != 1 {
+			windowsUpdateJobError(w, windowsupdatejob.ErrInvalid)
+			return
+		}
+		if ids, exists := q["jobId"]; exists && len(ids) == 1 && enrollmentcrypto.ValidID(ids[0], "update_") {
+			h.writeWindowsUpdateJobs(w, r, device, ids[0])
+			return
+		}
+		if history, exists := q["history"]; exists && len(history) == 1 && history[0] == "1" {
+			h.writeWindowsUpdateHistory(w, r, device)
+			return
+		}
+		windowsUpdateJobError(w, windowsupdatejob.ErrInvalid)
 		return
 	}
+	if r.URL.RawQuery != "" {
+		windowsUpdateJobError(w, windowsupdatejob.ErrInvalid)
+		return
+	}
+	manager := h.windowsUpdateManager(device)
 	actor, release, ok := h.app.beginOperatorCapability(w, r, operatorauth.WindowsUpdateInstall)
 	if !ok {
 		return
 	}
 	// No session lease spans client-controlled body reads.
 	release()
-	if h.windowsUpdateJobs == nil || h.insecureHTTPTest {
+	if manager == nil || h.insecureHTTPTest {
 		windowsUpdateJobError(w, windowsupdatejob.ErrUnavailable)
 		return
 	}
@@ -64,7 +113,7 @@ func (h *operatorHandler) windowsUpdateJobsAPI(w http.ResponseWriter, r *http.Re
 		}
 		selectedID = in.RequestID
 		mutate = func() error {
-			return h.windowsUpdateJobs.Request(r.Context(), device, actor, in.RequestID, windowsupdatejob.Selection{UpdateID: in.UpdateID, Revision: in.Revision})
+			return manager.Request(r.Context(), device, actor, in.RequestID, windowsupdatejob.Selection{UpdateID: in.UpdateID, Revision: in.Revision})
 		}
 	} else if op == "preview" {
 		var in struct {
@@ -74,7 +123,7 @@ func (h *operatorHandler) windowsUpdateJobsAPI(w http.ResponseWriter, r *http.Re
 			return
 		}
 		selectedID = in.RequestID
-		mutate = func() error { return h.windowsUpdateJobs.Review(r.Context(), device, actor, in.RequestID) }
+		mutate = func() error { return manager.Review(r.Context(), device, actor, in.RequestID) }
 	} else {
 		var in struct {
 			PreviewID     string `json:"previewId"`
@@ -86,7 +135,7 @@ func (h *operatorHandler) windowsUpdateJobsAPI(w http.ResponseWriter, r *http.Re
 		}
 		selectedID = in.PreviewID
 		mutate = func() error {
-			return h.windowsUpdateJobs.Approve(r.Context(), device, actor, in.PreviewID, in.PreviewDigest, in.Acknowledged)
+			return manager.Approve(r.Context(), device, actor, in.PreviewID, in.PreviewDigest, in.Acknowledged)
 		}
 	}
 	currentActor, release, ok := h.app.beginOperatorCapability(w, r, operatorauth.WindowsUpdateInstall)
@@ -133,7 +182,8 @@ func (h *operatorHandler) writeWindowsUpdateJobs(w http.ResponseWriter, r *http.
 			}
 		}
 	}
-	if h.windowsUpdateJobs == nil {
+	manager := h.windowsUpdateManager(device)
+	if manager == nil {
 		devices, e := h.app.devices()
 		if e != nil {
 			h.app.internal(w)
@@ -151,7 +201,7 @@ func (h *operatorHandler) writeWindowsUpdateJobs(w http.ResponseWriter, r *http.
 		}
 	} else {
 		var e error
-		v, e = h.windowsUpdateJobs.View(r.Context(), device, owner.session.ActorID(), ids...)
+		v, e = manager.View(r.Context(), device, owner.session.ActorID(), ids...)
 		if e != nil {
 			windowsUpdateJobError(w, e)
 			return
@@ -170,6 +220,26 @@ func (h *operatorHandler) writeWindowsUpdateJobs(w http.ResponseWriter, r *http.
 		if v.Job != nil {
 			v.Job.Preview = nil
 		}
+	}
+	if operatorStillActive(w, r) {
+		write(w, 200, v)
+	}
+}
+func (h *operatorHandler) writeWindowsUpdateHistory(w http.ResponseWriter, r *http.Request, device string) {
+	m := h.windowsUpdateManager(device)
+	if m == nil || h.insecureHTTPTest {
+		windowsUpdateJobError(w, windowsupdatejob.ErrUnavailable)
+		return
+	}
+	v, e := m.History(r.Context(), device)
+	if e != nil {
+		windowsUpdateJobError(w, e)
+		return
+	}
+	owner, ok := operatorContext(r)
+	if !ok || !owner.session.Named() || !h.auth.ActorHasCapability(owner.session.ActorID(), operatorauth.WindowsUpdateInstall) {
+		v.Available = false
+		v.Reason = "operator_capability_required"
 	}
 	if operatorStillActive(w, r) {
 		write(w, 200, v)

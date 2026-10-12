@@ -191,15 +191,18 @@ type finalCheckKey struct{}
 func WithFinalCheck(ctx context.Context, check func() error) context.Context {
 	previous, _ := ctx.Value(finalCheckKey{}).(func() error)
 	return context.WithValue(ctx, finalCheckKey{}, func() error {
-		if previous != nil {
-			if err := previous(); err != nil {
-				return err
-			}
-		}
+		// Inner manager configuration reads may block. Run them before the
+		// outer API's live session/capability fence, never after that fence.
 		if check == nil {
 			return ErrAuthority
 		}
-		return check()
+		if err := check(); err != nil {
+			return err
+		}
+		if previous != nil {
+			return previous()
+		}
+		return nil
 	})
 }
 func CheckFinal(ctx context.Context) error {
@@ -208,4 +211,38 @@ func CheckFinal(ctx context.Context) error {
 		return nil
 	}
 	return check()
+}
+
+// RegisteredStore adds a validated, authority-free startup read. This separate
+// constructor is used only by the explicitly activated multi-device registry.
+// Expired/revoked members remain routable to a denied live transaction rather
+// than disabling unrelated devices or being silently removed from history.
+type RegisteredStore interface {
+	TransactionStore
+	ReadRegisteredWindowsUpdateJob(context.Context, Binding, ed25519.PublicKey) (Record, error)
+}
+
+func OpenRegisteredTransactional(ctx context.Context, store RegisteredStore, b Binding, key ed25519.PrivateKey, now func() time.Time, check func() error) (*Manager, error) {
+	if ctx == nil || store == nil || !ValidBinding(b) || len(key) != ed25519.PrivateKeySize || !bytes.Equal(key, ed25519.NewKeyFromSeed(key[:ed25519.SeedSize])) || actionpermit.Digest(key.Public().(ed25519.PublicKey)) != b.KeyID || now == nil || check == nil {
+		return nil, ErrInvalid
+	}
+	enrollment := store.WindowsUpdateEnrollmentBinding()
+	if enrollment.InstanceID != b.ManagerID || enrollment.Profile != "tls" || enrollment.CollectionProfile != enrollmentcrypto.CollectionProfileWindowsInventory {
+		return nil, ErrAuthority
+	}
+	if e := check(); e != nil {
+		return nil, e
+	}
+	record, e := store.ReadRegisteredWindowsUpdateJob(WithFinalCheck(ctx, check), b, key.Public().(ed25519.PublicKey))
+	if e != nil {
+		return nil, e
+	}
+	if record.Validate() != nil || record.Consent.Binding != b || !bytes.Equal(record.PublicKey, key.Public().(ed25519.PublicKey)) {
+		return nil, ErrIntegrity
+	}
+	raw, e := EncodeRecord(record)
+	if e != nil {
+		return nil, e
+	}
+	return &Manager{transactionStore: store, binding: b, key: bytes.Clone(key), now: now, configurationCheck: check, record: record, raw: raw}, nil
 }

@@ -250,6 +250,15 @@ missing material rather than inventing credentials or weakening protection.
   Preserve caller-quota semantics, advancing-source confirmation, durable floors,
   unknown evidence and explicit non-recovery policy closure. Never route it into
   Linux Health/AI/alarm admission or infer native scope/service-action permission.
+- The Windows fleet incident inbox and operator acknowledgement are manager-only.
+  Read `docs/windows-incident-inbox.md` before changing identity/domain keys, source
+  deadlines or the enrollment-to-operator commit lease. Seen never means resolved;
+  keep all v1 histories, Linux alarms and AI admission unchanged.
+- Bounded Windows planned maintenance is separate manager-owned metadata. Read
+  `docs/windows-maintenance.md`. Preserve original identity, revision, immutable
+  end, current enrollment lease and final clock/session guards. It does not
+  suppress notifications, incidents or evidence, change source policies/history,
+  or authorize host actions. Never join independent snapshots by mutable device ID.
 - Windows CPU and physical-RAM policies are independent default-off manager scopes.
   Read `docs/windows-resource-health.md` before changing their shared percentage
   engine, tagged storage, API or UI. Preserve disk v1 bytes, exact observed-group
