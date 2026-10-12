@@ -2,9 +2,11 @@
 import importlib.util
 import io
 from contextlib import redirect_stdout
+from copy import deepcopy
 import json
 import os
 from pathlib import Path
+import re
 import tempfile
 from types import SimpleNamespace
 import unittest
@@ -680,6 +682,241 @@ class SelectionTests(unittest.TestCase):
             events = (ROOT / '.github/workflows' / name).read_text().split('permissions:', 1)[0]
             for event in ['  workflow_call:', '  schedule:', '  push:']:
                 self.assertNotIn(event, events)
+
+
+class LANFailureTests(unittest.TestCase):
+    def report(self, failures=()):
+        rows = []
+        for name, code in p.LAN_FAILURE_CASES.items():
+            row = {'name': name, 'status': 'PASS', 'durationMs': 1}
+            if code in failures:
+                row.update(status='FAIL', error='Assertion failed; raw state and credential-bearing diagnostics intentionally withheld.')
+                if code in p.LAN_STAGE_CASES:
+                    row['stage'] = next(iter(p.LAN_FAILURE_STAGES.get(code, {'setup': 'setup'})))
+                if code == 'journal-browse': row['journalDiagnostics'] = None
+                if code in ['alarm-status', 'alarm-settings']: row['alarmDiagnostics'] = {}
+            rows.append(row)
+        return {'sourceSha': SHA, 'createdAt': '2026-10-12T00:00:00Z', 'scope': 'synthetic',
+                'faultInjection': 'synthetic', 'credentialMaterial': 'synthetic', 'screenshots': 'synthetic',
+                'runtimeErrorCount': 0, 'results': rows,
+                'summary': {'passed': len(rows) - len(failures), 'failed': len(failures), 'setupFailure': False}}
+
+    def test_lan_codes_match_existing_case_order_and_cve_stages(self):
+        runner = (ROOT / p.FLOWS['lan']).read_text()
+        names = []
+        for literal, symbol in re.findall(r"await check\((?:'([^']+)'|([A-Za-z][A-Za-z0-9_]+)),", runner):
+            if literal:
+                names.append(literal)
+            else:
+                module = next(filename for imports, filename in re.findall(r"import \{([^}]+)\} from './([^']+)';", runner)
+                              if symbol in imports.split(','))
+                source = (ROOT / 'tests/e2e-review' / module).read_text()
+                names.append(re.search(r'export const ' + symbol + r"\s*=\s*'([^']+)'", source)[1])
+        self.assertEqual(list(p.LAN_FAILURE_CASES), names)
+        self.assertEqual(len(names), 27)
+        self.assertEqual(len(set(p.LAN_FAILURE_CASES.values())), len(names))
+        for code in p.LAN_FAILURE_CASES.values(): self.assertRegex(code, r'^[a-z][a-z0-9-]{0,70}$')
+        self.assertLessEqual(set(p.LAN_FAILURE_STAGES), set(p.LAN_FAILURE_CASES.values()))
+        for stages in p.LAN_FAILURE_STAGES.values():
+            self.assertEqual(len(set(stages.values())), len(stages))
+            for code in stages.values(): self.assertRegex(code, r'^[a-z][a-z0-9-]{0,70}$')
+        source = (ROOT / 'tests/e2e-review/cve-detail-pages-browser.mjs').read_text()
+        self.assertEqual(set(p.LAN_FAILURE_STAGES['cve-detail-pages']),
+                         {
+                             'fixture setup', 'mobile layout', 'desktop layout', 'real login', 'initial summary',
+                             'initial warning navigation', 'omitted warning navigation', 'warning return navigation',
+                             'mapped binary navigation', 'advancing empty scan', 'changed binding',
+                             'expired retained input', 'device navigation isolation', 'session loss isolation',
+                             'fresh login isolation', 'final guards'})
+        for stage in p.LAN_FAILURE_STAGES['cve-detail-pages']: self.assertIn("'" + stage + "'", source)
+
+    def test_lan_all_reviewed_case_stage_coordinates_and_generic_flags(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp); target = root / 'artifacts/review/lan-browser-results.json'
+            target.parent.mkdir(parents=True)
+            with patch.object(p, 'ROOT', root):
+                for name, code in p.LAN_FAILURE_CASES.items():
+                    for stage, label in p.LAN_FAILURE_STAGES.get(code, {None: 'unavailable'}).items():
+                        value = self.report([code])
+                        row = next(row for row in value['results'] if row['name'] == name)
+                        if stage is not None: row['stage'] = stage
+                        target.write_text(json.dumps(value))
+                        with self.subTest(case=code, stage=stage):
+                            self.assertEqual(p.lan_failure_location(SHA), 'case=' + code + ' stage=' + label)
+                value = self.report(['cve-detail-pages', 'journal-browse', 'alarm-status'])
+                marker = 'PRIVATE_RAW_EXCEPTION_URL_DTO_MUST_STAY_WITHHELD'
+                for row in value['results']:
+                    for key in ['journalDiagnostics', 'alarmDiagnostics']:
+                        if key in row: row[key] = {'raw': marker, 'stage': marker, 'nested': {'error': marker}}
+                next(row for row in value['results'] if 'journalDiagnostics' in row)['stage'] = marker
+                value['runtimeErrorCount'] = 7
+                value['summary']['setupFailure'] = True
+                target.write_text(json.dumps(value))
+                result = p.lan_failure_location(SHA)
+                self.assertEqual(result.count('case='), 3)
+                self.assertTrue(result.endswith('; setup-failure; runtime-errors'))
+                self.assertNotIn(marker, result)
+                value = self.report(); target.write_text(json.dumps(value))
+                self.assertIsNone(p.lan_failure_location(SHA))
+                value['runtimeErrorCount'] = 1; target.write_text(json.dumps(value))
+                self.assertEqual(p.lan_failure_location(SHA), 'runtime-errors')
+                value['results'] = value['results'][:3]
+                value['summary'] = {'passed': 3, 'failed': 0, 'setupFailure': True}
+                target.write_text(json.dumps(value))
+                self.assertEqual(p.lan_failure_location(SHA), 'setup-failure; runtime-errors')
+
+    def test_lan_rejects_malformed_types_shapes_counts_duplicates_and_raw_labels(self):
+        good = self.report(['cve-detail-pages'])
+        marker = 'PRIVATE_RAW_EXCEPTION_URL_DTO_MUST_STAY_WITHHELD\n::error::injected'
+        cases = []
+        for key, value in [('sourceSha', 'b' * 40), ('sourceSha', None), ('sourceSha', True),
+                           ('runtimeErrorCount', True), ('runtimeErrorCount', 0.0), ('runtimeErrorCount', -1),
+                           ('runtimeErrorCount', 1000001), ('runtimeErrorCount', '1'), ('runtimeErrorCount', []),
+                           ('results', {}), ('results', None), ('results', good['results'][:-1]),
+                           ('results', good['results'] + [good['results'][0]]),
+                           ('summary', []), ('createdAt', 1), ('scope', {}), ('faultInjection', []),
+                           ('credentialMaterial', None), ('screenshots', []), ('raw', marker)]:
+            cases.append({**good, key: value})
+        for key, value in [('passed', 27), ('failed', 0), ('passed', 26.0), ('failed', True),
+                           ('setupFailure', 0), ('setupFailure', 'false'), ('passed', -1), ('failed', 28), ('raw', marker)]:
+            cases.append({**good, 'summary': {**good['summary'], key: value}})
+        index = next(i for i, row in enumerate(good['results']) if row['status'] == 'FAIL')
+        for key, value in [('name', marker), ('name', []), ('status', True), ('status', marker),
+                           ('durationMs', True), ('durationMs', 1.0), ('durationMs', -1),
+                           ('durationMs', 9007199254740992), ('stage', marker), ('stage', []),
+                           ('stage', 'sparse-search'), ('stage', None), ('error', marker), ('error', {}),
+                           ('raw', marker), ('alarmDiagnostics', {})]:
+            changed = deepcopy(good); changed['results'][index][key] = value; cases.append(changed)
+        for key in ['name', 'status', 'durationMs', 'stage', 'error']:
+            changed = deepcopy(good); del changed['results'][index][key]; cases.append(changed)
+        for key in good:
+            changed = deepcopy(good); del changed[key]; cases.append(changed)
+        for index in [0, 10, 26]:
+            changed = deepcopy(good); changed['results'][index] = changed['results'][1]; cases.append(changed)
+        changed = deepcopy(good); changed['results'].reverse(); cases.append(changed)
+        changed = deepcopy(good); changed['results'][0]['stage'] = 'setup'; cases.append(changed)
+        for code, key in [('journal-browse', 'journalDiagnostics'), ('alarm-status', 'alarmDiagnostics')]:
+            for value in [[], True, marker]:
+                changed = self.report([code])
+                next(row for row in changed['results'] if row['status'] == 'FAIL')[key] = value
+                cases.append(changed)
+        cases += [None, [], 1, True]
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp); target = root / 'artifacts/review/lan-browser-results.json'
+            target.parent.mkdir(parents=True)
+            with patch.object(p, 'ROOT', root):
+                for index, value in enumerate(cases):
+                    target.write_text(json.dumps(value))
+                    with self.subTest(index=index): self.assertIsNone(p.lan_failure_location(SHA))
+                target.write_text(json.dumps(good))
+                for sha in [None, '', SHA.upper(), 'b' * 40, True, [], marker]:
+                    self.assertIsNone(p.lan_failure_location(sha))
+
+    def test_lan_report_file_guards_and_strict_json(self):
+        good = json.dumps(self.report(['cve-detail-pages'])).encode()
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp); target = root / 'artifacts/review/lan-browser-results.json'
+            target.parent.mkdir(parents=True)
+            with patch.object(p, 'ROOT', root):
+                self.assertIsNone(p.lan_failure_location(SHA))
+                for raw in [b'{', b'[]', b'\xff', b' ' * ((64 << 10) + 1), good + b'{}',
+                            good.replace(b'"runtimeErrorCount": 0', b'"runtimeErrorCount": NaN'),
+                            good.replace(b'"runtimeErrorCount": 0', b'"runtimeErrorCount": Infinity'),
+                            good.replace(b'"sourceSha":', b'"sourceSha": "' + SHA.encode() + b'", "sourceSha":'),
+                            good.replace(b'"failed": 1', b'"failed": 1, "failed": 1'),
+                            good.replace(b'"stage":', b'"stage": "real login", "stage":')]:
+                    target.write_bytes(raw); self.assertIsNone(p.lan_failure_location(SHA))
+                target.unlink(); target.mkdir(); self.assertIsNone(p.lan_failure_location(SHA)); target.rmdir()
+                backing = root / 'backing.json'; backing.write_bytes(good)
+                target.symlink_to(backing); self.assertIsNone(p.lan_failure_location(SHA)); target.unlink()
+                target.parent.rmdir(); target.parent.symlink_to(root, target_is_directory=True)
+                (root / target.name).write_bytes(good); self.assertIsNone(p.lan_failure_location(SHA))
+
+    def test_lan_diagnostics_do_not_run_for_smoke_other_flows_or_success(self):
+        with patch.object(p, 'run', side_effect=ValueError('private')), patch.object(p, 'lan_failure_location') as location:
+            with self.assertRaises(ValueError): p.browser_checks({'flows': ['lan'], 'sha': SHA})
+            location.assert_not_called()
+        with patch.object(p, 'run', side_effect=[None, ValueError('private')]), patch.object(p, 'lan_failure_location') as location:
+            with self.assertRaises(ValueError): p.browser_checks({'flows': ['shell'], 'sha': SHA})
+            location.assert_not_called()
+        with patch.object(p, 'run'), patch.object(p, 'browser_report'), patch.object(p, 'lan_failure_location') as location:
+            p.browser_checks({'flows': ['lan'], 'sha': SHA})
+            location.assert_not_called()
+
+    def test_lan_failure_emits_only_fixed_setup_flag_and_still_fails(self):
+        marker = 'PRIVATE_RAW_EXCEPTION_URL_DTO_MUST_STAY_WITHHELD'
+        report = {'sourceSha': SHA, 'createdAt': marker, 'scope': marker,
+                  'faultInjection': marker, 'credentialMaterial': marker, 'screenshots': marker,
+                  'runtimeErrorCount': 0, 'results': [],
+                  'summary': {'passed': 0, 'failed': 0, 'setupFailure': True}}
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp); target = root / 'artifacts/review/lan-browser-results.json'
+            target.parent.mkdir(parents=True)
+            def process(args, **kwargs):
+                kwargs['stdout'].write(marker.encode())
+                if args == ['node', p.FLOWS['lan']]:
+                    target.write_text(json.dumps(report))
+                    return SimpleNamespace(returncode=1)
+                return SimpleNamespace(returncode=0)
+            output = io.StringIO()
+            with patch.object(p, 'ROOT', root), patch.object(p.subprocess, 'run', side_effect=process), \
+                 patch.object(p, 'browser_report') as validate, redirect_stdout(output):
+                with self.assertRaises(ValueError):
+                    p.browser_checks({'flows': ['lan'], 'sha': SHA})
+            self.assertIn('FAIL stage: browser-lan', output.getvalue())
+            self.assertIn('FAIL LAN location: setup-failure', output.getvalue())
+            self.assertNotIn(marker, output.getvalue())
+            validate.assert_not_called()
+
+
+class VitestFailureTests(unittest.TestCase):
+    def fixture(self, root, marker='PRIVATE_RAW_VALUE'):
+        source = root / 'web/src/exact.test.tsx'; source.parent.mkdir(parents=True, exist_ok=True)
+        source.write_text('source fixture')
+        return {'testResults': [{'name': str(source), 'status': 'failed', 'message': marker,
+                'assertionResults': [{'status': 'passed'}, {'status': 'failed', 'fullName': marker, 'failureMessages': [marker]}]}]}
+
+    def test_only_source_file_and_numeric_coordinates_are_released(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp); report = root / 'private.json'; value = self.fixture(root)
+            with patch.object(p, 'ROOT', root):
+                report.write_text(json.dumps(value))
+                self.assertEqual(p.vitest_failure_location(report), 'web/src/exact.test.tsx assertions=2')
+                value['testResults'][0]['assertionResults'] = []
+                report.write_text(json.dumps(value))
+                self.assertEqual(p.vitest_failure_location(report), 'web/src/exact.test.tsx assertions=runner-or-hook')
+
+    def test_unknown_paths_duplicates_invalid_status_and_symlinks_are_withheld(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp); report = root / 'private.json'; value = self.fixture(root)
+            bad = [dict(testResults=[dict(value['testResults'][0], name='/PRIVATE_RAW_PATH')]),
+                   dict(testResults=value['testResults'] * 2),
+                   dict(testResults=[dict(value['testResults'][0], status='PRIVATE_STATUS')]),
+                   dict(testResults=[dict(value['testResults'][0], assertionResults=[{'status': 'PRIVATE_STATUS'}])]),
+                   dict(testResults=[dict(value['testResults'][0], status='passed')])]
+            with patch.object(p, 'ROOT', root):
+                for malformed in bad:
+                    report.write_text(json.dumps(malformed)); self.assertIsNone(p.vitest_failure_location(report))
+                report.write_text('{"testResults":[],"testResults":[]}'); self.assertIsNone(p.vitest_failure_location(report))
+                report.write_text(json.dumps(value)); link = root/'link.json'; link.symlink_to(report)
+                self.assertIsNone(p.vitest_failure_location(link))
+                report.write_bytes(b'x' * ((16 << 20) + 1)); self.assertIsNone(p.vitest_failure_location(report))
+
+    def test_failed_process_stays_failed_and_private_json_is_not_artifact(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp); value = self.fixture(root); seen = []; output = io.StringIO()
+            def failure(args, cwd, stage):
+                seen.append((args, cwd, stage))
+                report = Path(next(a.split('=',1)[1] for a in args if a.startswith('--outputFile=')))
+                self.assertNotIn('artifacts', report.parts); report.write_text(json.dumps(value))
+                raise ValueError('original failure')
+            with patch.object(p, 'ROOT', root), patch.object(p, 'run', side_effect=failure), redirect_stdout(output):
+                with self.assertRaisesRegex(ValueError, 'original failure'):
+                    p.run_vitest(['vitest', 'run', '--maxWorkers=1'], root/'web', stage='ui-test')
+            self.assertEqual(seen[0][0][:3], ['vitest', 'run', '--maxWorkers=1'])
+            self.assertEqual(seen[0][1:], (root/'web', 'ui-test'))
+            self.assertEqual(output.getvalue(), 'FAIL UI location: web/src/exact.test.tsx assertions=2\n')
+            self.assertFalse(Path(seen[0][0][-1].split('=',1)[1]).exists())
 
 
 if __name__ == '__main__':

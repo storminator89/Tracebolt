@@ -23,6 +23,12 @@ does not include Snap, Flatpak or manually installed software. Cached candidates
 are not an installation guarantee; CVE matches are not exploitability verdicts.
 A manager update does not replace an endpoint binary or grant new collection.
 
+The [CVE-to-cached-Updates review flow](linux-cve-warnings.md#review-an-exact-binary-in-cached-updates)
+is implemented in source. It carries an exact binary name/version/architecture
+into cached Updates for manual review, without selecting or installing anything.
+A cached candidate does not prove that the CVE is resolved. This flow is not part
+of published Linux rc.3.
+
 ## Remaining work
 
 1. **Dependable installation and lifecycle.** Confirm fresh supported-host

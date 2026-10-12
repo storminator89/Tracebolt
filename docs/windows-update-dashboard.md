@@ -17,7 +17,8 @@ header grants do not authorize this collection.
 ## Read contract
 
 The existing authenticated `GET /api/devices/{id}/windows-inventory` keeps
-`tracebolt.windows-inventory-view.v1` and its 74 KiB HTTP response bound. Its
+`tracebolt.windows-inventory-view.v1`. The frontend bounded reader now accepts
+up to 160 KiB, including the newer optional context sections. Its
 optional `updates` sibling contains the exact
 `tracebolt.windows-update-inspection.v1` snapshot. Old responses without this
 sibling remain accepted, including every combination of the other five optional
@@ -123,3 +124,43 @@ result; actual harness execution and pixel review must be reported separately.
 
 No native WUA inspection, real endpoint collection, persistent host grant,
 installed-service change or external AI request is performed by these checks.
+
+
+## Explicit cached fleet triage
+
+The collapsed Windows update worklist can freeze at most 50 Windows devices,
+then explicitly **Read cached updates**. One GET-only batch reads the existing
+private inventory endpoint, four devices at a time, with the same 160 KiB reader
+and full inventory validator. Each request is limited to ten seconds and the
+whole batch to one minute. It neither triggers a host scan nor requests readiness.
+Only each device's update rows and original grant, generation and capture evidence
+remain in temporary memory; unrelated inventory sections are discarded.
+
+The compact EN/DE list groups only exact GUID/revision pairs. Title, KB and vendor
+severity remain metadata; equal titles or KBs never merge different revisions.
+Each group shows reporting and downloaded counts. Device-specific metadata and
+source evidence remain collapsed. Partial/truncated, stale and unavailable reports
+are counted separately; a stale report can also be partial. An empty result never
+proves compliance, and downloaded content does not establish install readiness.
+Search operates on retained rows, with ten exact pairs per page.
+
+Choosing a pair narrows only the frozen local device list. Opening a reporting
+device performs its own fresh inventory read and fixes that same GUID/revision in
+the existing job session. Missing or changed exact rows cannot substitute a new
+revision, including during session/CSRF checks. Every device still requires its
+own readiness click and initially unchecked approval. Shared UTC windows, original
+signed readiness, grant/leaf deadlines, exact saved receipts and GET-only uncertain
+write reconciliation remain unchanged. Changing the local filter grants nothing
+and cannot replace an unresolved job or reuse another device's approval.
+
+Read results clear on cancellation, close, blur, hidden-page/navigation, session
+loss or unmount, and after five minutes at most. Original two-minute stale and
+24-hour source limits remain conservative; rereading cannot renew a capture or a
+slow/replayed manager clock. Future captures wait from response acceptance. Late
+or aborted reads cannot restore private rows. There is no browser persistence,
+background fleet polling, bulk approval, backend or consent change.
+
+Source checks cover exact-pair grouping, bounded/canceled reads, separate evidence
+states and two independent approvals. The existing canonical fleet scheduling
+capture manifest adds one triage scene in EN/DE at desktop/mobile sizes. Inert
+fixture tests and a UI build are not hosted-browser/pixel or native acceptance.

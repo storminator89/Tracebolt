@@ -9,7 +9,7 @@ import {fileURLToPath} from 'node:url';
 import {createWindowsServiceActionsFixture,exerciseWindowsServiceActions,windowsServiceActionsRoute,windowsServiceActionsCaseName,windowsServiceActionsDisclosure,windowsServiceActionsFailureStage,requireWindowsServiceActionsEvidence} from './windows-service-actions-browser.mjs';
 import {createWindowsUpdateJobsFixture,windowsUpdateJobsRoute,exerciseWindowsUpdateJobs,windowsUpdateJobsCaseName,windowsUpdateJobsDisclosure,windowsUpdateJobsFailureStage,requireWindowsUpdateJobsEvidence,requireWindowsUpdateWorklistDetails,windowsUpdateJobsOrigin} from './windows-update-jobs-browser.mjs';
 import {createWindowsServiceActionHistoryFixture,windowsServiceActionHistoryRoute,exerciseWindowsServiceActionHistory,windowsServiceActionHistoryCaseName,requireWindowsServiceActionHistoryEvidence} from './windows-service-action-history-browser.mjs';
-import {createWindowsUpdateScheduleFixture,windowsUpdateScheduleRoute,exerciseWindowsUpdateSchedule,windowsUpdateScheduleCaseName,windowsUpdateScheduleDisclosure,windowsUpdateScheduleFailureStage,requireWindowsUpdateScheduleEvidence,windowsBackgroundUpdateScheduleCaseName,windowsBackgroundUpdateScheduleDisclosure,requireWindowsBackgroundUpdateScheduleEvidence,createWindowsFleetUpdateScheduleFixture,exerciseWindowsFleetUpdateSchedule,windowsFleetUpdateScheduleCaseName,windowsFleetUpdateScheduleDisclosure,requireWindowsFleetUpdateScheduleEvidence} from './windows-update-schedule-browser.mjs';
+import {createWindowsUpdateScheduleFixture,windowsUpdateScheduleRoute,exerciseWindowsUpdateSchedule,windowsUpdateScheduleCaseName,windowsUpdateScheduleDisclosure,windowsUpdateScheduleFailureStage,requireWindowsUpdateScheduleEvidence,windowsBackgroundUpdateScheduleCaseName,windowsBackgroundUpdateScheduleDisclosure,requireWindowsBackgroundUpdateScheduleEvidence,createWindowsFleetUpdateScheduleFixture,exerciseWindowsFleetUpdateSchedule,windowsFleetUpdateScheduleCaseName,windowsFleetUpdateScheduleDisclosure,windowsFleetUpdateScheduleScenes,requireWindowsFleetUpdateScheduleEvidence,requireWindowsFleetUpdateScheduleDetails} from './windows-update-schedule-browser.mjs';
 import {createWindowsSoftwareJobsFixture,windowsSoftwareJobsRoute,exerciseWindowsSoftwareJobs,windowsSoftwareJobsCaseName,windowsSoftwareJobsDisclosure,windowsSoftwareJobsFailureStage,requireWindowsSoftwareJobsEvidence,requireWindowsSoftwareJobsDetails} from './windows-software-jobs-browser.mjs';
 import {createWindowsUpdateRetirementFixture,windowsUpdateRetirementRoute,exerciseWindowsUpdateRetirement,windowsUpdateRetirementCaseName,windowsUpdateRetirementDisclosure,windowsUpdateRetirementFailureStage,requireWindowsUpdateRetirementEvidence,requireWindowsUpdateRetirementDetails} from './windows-update-retirement-browser.mjs';
 const retirementScreenshots=[],retirementVariants=[];
@@ -24,7 +24,7 @@ await fs.mkdir(out,{recursive:true});
 const failure=()=>new Error('Synthetic Windows action browser gate failed; raw state withheld.');
 async function shot(page,name,fixtureDisclosure){
  const isRetirement=/^synthetic-windows-update-retirement-review-(1440|390)-(en|de)$/.test(name);
- const isFleetSchedule=/^synthetic-windows-fleet-update-schedule-(shared-window-review|per-device-summary)-(1440|390)-(en|de)$/.test(name);
+ const isFleetSchedule=windowsFleetUpdateScheduleScenes.some(scene=>['en','de'].some(locale=>[1440,390].some(width=>name===`synthetic-windows-fleet-update-schedule-${scene}-${width}-${locale}`)));
  const isSoftware=/^synthetic-windows-software-jobs-(review|result)-(1440|390)-(en|de)$/.test(name);
  const isBackgroundSchedule=/^synthetic-windows-background-update-schedule-(status|review|pending|canceled)-(1440|390)-(en|de)$/.test(name);
  const isSchedule=/^synthetic-windows-update-schedule-(review|pending|canceled)-(1440|390)-(en|de)$/.test(name);
@@ -115,7 +115,7 @@ async function run(){
   const scheduleStorage=await schedulePage.evaluate(()=>JSON.stringify({local:{...localStorage},session:{...sessionStorage}}));for(const value of [scheduleFixture.savedID(),scheduleFixture.digest,scheduleFixture.scheduleDigest,scheduleFixture.session.csrfToken])expect(scheduleStorage.includes(value)).toBe(false);
   if(scheduleProfile==='background'){expect(scheduleDetails.backgroundScheduling).toBe(true);expect(scheduleDetails.compactBackgroundStatus).toBe(true);expect(scheduleDetails.separateManualApproval).toBe(true);backgroundScheduleVariants.push({locale,width,...scheduleDetails});}else scheduleVariants.push({locale,width,...scheduleDetails});await context.close();context=null;
   }
-  // Two additive common-window scenes reuse the same intercepted controller,
+  // Three compact cached-triage/common-window scenes reuse the same intercepted controller,
   // installed browser, original clock/session bounds and screenshot helper.
   const fleetFixture=createWindowsFleetUpdateScheduleFixture(),fleetState={blocked:[],external:[]};
   context=await browser.newContext({viewport:{width,height:width===390?844:1000},locale:'en-GB'});const fleetPage=await context.newPage();fleetPage.on('pageerror',()=>errors++);
@@ -126,7 +126,7 @@ async function run(){
    if(!file.startsWith(realDist+path.sep)||!contentTypes[path.extname(file)])throw failure();
    await route.fulfill({status:200,contentType:contentTypes[path.extname(file)],body:await fs.readFile(file)});
   }}));
-  const fleetDetails=await exerciseWindowsFleetUpdateSchedule({page:fleetPage,expect,base:windowsUpdateJobsOrigin,fixture:fleetFixture,locale,width,shot});
+  const fleetDetails=await exerciseWindowsFleetUpdateSchedule({page:fleetPage,expect,base:windowsUpdateJobsOrigin,fixture:fleetFixture,locale,width,shot});requireWindowsFleetUpdateScheduleDetails(fleetDetails);
   expect(fleetState.blocked).toEqual([]);expect(fleetState.external).toEqual([]);expect(await context.cookies()).toEqual([]);
   const fleetStorage=await fleetPage.evaluate(()=>JSON.stringify({local:{...localStorage},session:{...sessionStorage}}));for(const value of [fleetFixture.savedID(),fleetFixture.secondSavedID,fleetFixture.digest,fleetFixture.scheduleDigest,fleetFixture.session.csrfToken])expect(fleetStorage.includes(value)).toBe(false);
   fleetScheduleVariants.push({locale,width,...fleetDetails});await context.close();context=null;

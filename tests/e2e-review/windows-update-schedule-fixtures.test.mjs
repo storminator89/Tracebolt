@@ -3,7 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {createWindowsUpdateJobsFixture,requireWindowsUpdateJobsEvidence,windowsUpdateJobsOrigin} from './windows-update-jobs-browser.mjs';
-import {createWindowsUpdateScheduleFixture,windowsUpdateScheduleRoute,exerciseWindowsUpdateSchedule,windowsUpdateScheduleCaseName,windowsUpdateScheduleDisclosure,windowsUpdateScheduleFailureStage,requireWindowsUpdateScheduleEvidence,windowsBackgroundUpdateScheduleCaseName,windowsBackgroundUpdateScheduleDisclosure,requireWindowsBackgroundUpdateScheduleEvidence,createWindowsFleetUpdateScheduleFixture,exerciseWindowsFleetUpdateSchedule,windowsFleetUpdateScheduleCaseName,windowsFleetUpdateScheduleDisclosure,windowsFleetUpdateScheduleScenes,requireWindowsFleetUpdateScheduleEvidence} from './windows-update-schedule-browser.mjs';
+import {createWindowsUpdateScheduleFixture,windowsUpdateScheduleRoute,exerciseWindowsUpdateSchedule,windowsUpdateScheduleCaseName,windowsUpdateScheduleDisclosure,windowsUpdateScheduleFailureStage,requireWindowsUpdateScheduleEvidence,windowsBackgroundUpdateScheduleCaseName,windowsBackgroundUpdateScheduleDisclosure,requireWindowsBackgroundUpdateScheduleEvidence,createWindowsFleetUpdateScheduleFixture,exerciseWindowsFleetUpdateSchedule,windowsFleetUpdateScheduleCaseName,windowsFleetUpdateScheduleDisclosure,windowsFleetUpdateScheduleScenes,requireWindowsFleetUpdateScheduleEvidence,requireWindowsFleetUpdateScheduleDetails} from './windows-update-schedule-browser.mjs';
 const read=name=>fs.readFileSync(new URL(name,import.meta.url),'utf8'),id='update_'+'9'.repeat(32);
 function setup(profile='standalone',fixture=createWindowsUpdateScheduleFixture(profile)){
  const base=windowsUpdateJobsOrigin,state={blocked:[],external:[]},prefix='/api/devices/'+fixture.device.id+'/windows-update-jobs';
@@ -151,16 +151,49 @@ test('fleet peer mutation routes stay rejected and counted rather than gaining a
  for(const query of ['?jobId='+id,'?history=1&extra=1'])assert.deepEqual(await f.invokePath(secondPath+query),{abort:'blockedbyclient'});
 });
 const fleetEvidence=()=>windowsFleetUpdateScheduleScenes.flatMap(kind=>['en','de'].flatMap(locale=>[1440,390].map(width=>({file:`synthetic-windows-fleet-update-schedule-${kind}-${width}-${locale}.png`,sourceSha,test:windowsFleetUpdateScheduleCaseName,locale,viewport:{width,height:width===390?844:1000},publicSafe:true,fullPage:false,fixtureDisclosure:windowsFleetUpdateScheduleDisclosure}))));
-test('fleet captures require exactly two distinct scenes in both locales and viewports at the exact source',()=>{
- assert.deepEqual(windowsFleetUpdateScheduleScenes,['shared-window-review','per-device-summary']);assert.deepEqual(requireWindowsFleetUpdateScheduleEvidence(fleetEvidence(),sourceSha),{screens:8,nativeAcceptance:false});
+test('fleet captures require exactly three distinct scenes in both locales and viewports at the exact source',()=>{
+ assert.deepEqual(windowsFleetUpdateScheduleScenes,['cached-triage','shared-window-review','per-device-summary']);assert.equal(Object.isFrozen(windowsFleetUpdateScheduleScenes),true);assert.deepEqual(requireWindowsFleetUpdateScheduleEvidence(fleetEvidence(),sourceSha),{screens:12,nativeAcceptance:false});
  for(const mutate of [r=>r.pop(),r=>r.push(r[0]),r=>{r[1]=r[0];},r=>{r[0].file='synthetic-windows-update-schedule-review-1440-en.png';},r=>{r[0].sourceSha='b'.repeat(40);},r=>{r[0].locale='de';},r=>{r[0].viewport.width=800;},r=>{r[0].viewport.height=844;},r=>{r[0].fullPage=true;},r=>{r[0].publicSafe=false;},r=>{r[0].fixtureDisclosure=windowsBackgroundUpdateScheduleDisclosure;},r=>{r[0].test=windowsBackgroundUpdateScheduleCaseName;}]){const rows=fleetEvidence();mutate(rows);assert.throws(()=>requireWindowsFleetUpdateScheduleEvidence(rows,sourceSha));}
+ assert.throws(()=>requireWindowsFleetUpdateScheduleEvidence(fleetEvidence().filter(row=>!row.file.includes('cached-triage')),sourceSha));
  assert.throws(()=>requireWindowsFleetUpdateScheduleEvidence(fleetEvidence(),null));assert.throws(()=>requireWindowsFleetUpdateScheduleEvidence(backgroundEvidence(),sourceSha));assert.throws(()=>requireWindowsBackgroundUpdateScheduleEvidence(fleetEvidence(),sourceSha));
 });
 test('common-window scenes are additive to the existing intercepted gate without new timeout or weaker original checks',()=>{
  const runner=read('./windows-service-actions-runner.mjs'),helper=read('./windows-update-schedule-browser.mjs'),workflow=read('../../.github/workflows/validate.yml');
- assert.equal(typeof exerciseWindowsFleetUpdateSchedule,'function');assert.match(runner,/createWindowsFleetUpdateScheduleFixture\(\)/);assert.match(runner,/requireWindowsFleetUpdateScheduleEvidence\(fleetScheduleScreenshots,sourceSha\)/);assert.match(runner,/fleetScheduleVariants.length!==4/);assert.match(runner,/\.\.\.fleetScheduleScreenshots/);assert.match(runner,/fleetState.blocked\)\.toEqual\(\[\]\)/);assert.match(runner,/fleetState.external\)\.toEqual\(\[\]\)/);assert.match(runner,/fleetStorage.includes\(value\)/);
+ assert.equal(typeof exerciseWindowsFleetUpdateSchedule,'function');assert.match(runner,/windowsFleetUpdateScheduleScenes.some\(scene=>/);assert.match(runner,/requireWindowsFleetUpdateScheduleDetails\(fleetDetails\)/);assert.match(runner,/createWindowsFleetUpdateScheduleFixture\(\)/);assert.match(runner,/requireWindowsFleetUpdateScheduleEvidence\(fleetScheduleScreenshots,sourceSha\)/);assert.match(runner,/fleetScheduleVariants.length!==4/);assert.match(runner,/\.\.\.fleetScheduleScreenshots/);assert.match(runner,/fleetState.blocked\)\.toEqual\(\[\]\)/);assert.match(runner,/fleetState.external\)\.toEqual\(\[\]\)/);assert.match(runner,/fleetStorage.includes\(value\)/);
  assert.equal((runner.match(/120000/g)||[]).length,1);for(const check of ['requireWindowsServiceActionsEvidence','requireWindowsServiceActionHistoryEvidence','requireWindowsUpdateJobsEvidence','requireWindowsUpdateScheduleEvidence','requireWindowsBackgroundUpdateScheduleEvidence','requireWindowsSoftwareJobsEvidence'])assert.ok(runner.includes(check+'('));
- for(const hook of ["capture('shared-window-review',schedule)","capture('per-device-summary',worklist.locator('.windows-fleet-update-list'))","await expect(ack).not.toBeChecked();await expect(approve).toBeDisabled()","await expect(summary).toBeInViewport({ratio:1})","expect(fixture.secondUpdateCounts.status).toBe(0)","expect(fixture.updateReads.exact).toBeGreaterThan(0)"])assert.ok(helper.includes(hook),hook);
+ for(const hook of ["capture('cached-triage',triage)","await readCached.click()","Reports read: 2/2 · Partial / truncated: 0 · Stale: 0 · Unavailable: 0","Gemeldet: 1 · Heruntergeladen: 1 · Herstellerschweregrad: Kritisch","await expect(row.locator('details')).not.toHaveAttribute('open')","await expect(triage.getByRole('status')).toBeInViewport({ratio:1})","await reviewPair(fixture.selection).click()","await showAll.click()","expect(fixture.fleetInventoryReads).toEqual({first:0,second:0})","expect(fixture.fleetInventoryReads).toEqual({first:1,second:1})","expect(fixture.fleetInventoryReads).toEqual({first:2,second:1})","await expect(panel.getByRole('combobox')).toHaveCount(0)","capture('shared-window-review',schedule)","capture('per-device-summary',worklist.locator('.windows-fleet-update-list'))","await expect(ack).not.toBeChecked();await expect(approve).toBeDisabled()","await expect(summary).toBeInViewport({ratio:1})","expect(fixture.secondUpdateCounts.status).toBe(0)","expect(fixture.updateReads.exact).toBeGreaterThan(0)"])assert.ok(helper.includes(hook),hook);
  assert.match(workflow,/node tests\/e2e-review\/windows-service-actions-runner.mjs/);assert.match(workflow,/artifacts\/review\/synthetic-\*\.png/);assert.match(workflow,/artifacts\/review\/windows-service-actions-manifest.json/);
  assert.match(windowsFleetUpdateScheduleDisclosure,/second device.*GETs only/);assert.match(windowsFleetUpdateScheduleDisclosure,/no real API request or mutation/);assert.doesNotMatch(helper,/chromium\.launch|createServer|writeFile|execFile|spawn\(|fetch\(|page\.request|newContext\(|route\.continue|route\.fetch|setTimeout/);
+});
+
+
+test('fleet cached triage reads exact inventory GETs without readiness, peer mutation or refreshed capture time',async()=>{
+ const f=setup('background',createWindowsFleetUpdateScheduleFixture()),firstPath='/api/devices/'+f.fixture.device.id+'/windows-inventory',secondPath='/api/devices/'+f.fixture.secondDevice.id+'/windows-inventory';
+ assert.deepEqual(f.fixture.fleetInventoryReads,{first:0,second:0});
+ const first=(await f.invokePath(firstPath)).value,second=(await f.invokePath(secondPath)).value;
+ assert.deepEqual(f.fixture.fleetInventoryReads,{first:1,second:1});assert.equal(first.deviceId,f.fixture.device.id);assert.equal(second.deviceId,f.fixture.secondDevice.id);
+ assert.deepEqual(first.updates.rows[0].kbArticleIds,['KB1000000']);assert.deepEqual(second.updates.rows[0].kbArticleIds,first.updates.rows[0].kbArticleIds);assert.equal(second.updates.rows[0].title,first.updates.rows[0].title);
+ assert.notEqual(second.updates.rows[0].updateId,first.updates.rows[0].updateId);assert.notEqual(second.updates.rows[0].revision,first.updates.rows[0].revision);
+ assert.deepEqual((await f.invokePath(firstPath)).value,first);assert.deepEqual(f.fixture.fleetInventoryReads,{first:2,second:1});
+ assert.equal(first.updates.collectedAt,f.fixture.now);assert.equal(second.updates.collectedAt,f.fixture.now);assert.equal(first.updates.cacheFreshness,'unknown');
+ assert.equal(f.fixture.updateCounts.request,0);assert.equal(f.fixture.updateCounts.preview,0);assert.equal(f.fixture.updateCounts.approve,0);
+ assert.deepEqual(f.fixture.updateReads,{current:0,history:0,exact:0});assert.deepEqual(f.fixture.secondUpdateReads,{current:0,history:0,exact:0});assert.deepEqual(f.fixture.secondPostAttempts,{request:0,preview:0,approve:0,other:0});assert.deepEqual(f.fixture.scheduleCounts,{schedule:0,cancel:0,immediateInstallWrites:0});assert.deepEqual(f.state,{blocked:[],external:[]});
+});
+test('fleet inventory read counters exclude invalid method, origin, query and body attempts',async()=>{
+ for(const target of ['device','secondDevice'])for(const change of [{method:'POST'},{method:'PUT'},{raw:'{}'},{origin:'https://outside.invalid'}]){
+  const f=setup('background',createWindowsFleetUpdateScheduleFixture()),path='/api/devices/'+f.fixture[target].id+'/windows-inventory';
+  assert.deepEqual(await f.invokePath(path,change),{abort:'blockedbyclient'});assert.deepEqual(f.fixture.fleetInventoryReads,{first:0,second:0});assert.equal(f.fixture.updateCounts.request,0);assert.equal(f.fixture.scheduleCounts.schedule,0);
+ }
+ for(const target of ['device','secondDevice']){
+  const f=setup('background',createWindowsFleetUpdateScheduleFixture());assert.deepEqual(await f.invokePath('/api/devices/'+f.fixture[target].id+'/windows-inventory?refresh=1'),{abort:'blockedbyclient'});assert.deepEqual(f.fixture.fleetInventoryReads,{first:0,second:0});
+ }
+});
+const fleetDetails=()=>({explicitCachedRead:true,cachedReadGETOnly:true,exactPairsKeptSeparate:true,selectedReportingDevicesOnly:true,freshSelectedInventoryRead:true,fixedExactSelection:true,showAllFrozenDevices:true,compactCachedTriageCapture:true,visibleTriageCounts:true,cachedInventoryReads:2,exactTriagePairs:2,sharedWindowExact:true,explicitUncheckedPerDeviceApproval:true,noAutomaticNextDevice:true,independentSavedStates:true,exactSavedReadback:true,syntheticScheduleRequests:1,secondDeviceMutationRequests:0,immediateInstallWrites:0,requestsToRealAPI:0,nativeAcceptance:false});
+test('fleet behavioral gate rejects omitted or altered triage boundaries even with a complete image manifest',()=>{
+ assert.deepEqual(requireWindowsFleetUpdateScheduleDetails(fleetDetails()),{cachedInventoryReads:2,exactTriagePairs:2,syntheticScheduleRequests:1,secondDeviceMutationRequests:0,nativeAcceptance:false});
+ for(const key of Object.keys(fleetDetails())){
+  const missing=fleetDetails();delete missing[key];assert.throws(()=>requireWindowsFleetUpdateScheduleDetails(missing),key);
+  const altered=fleetDetails();altered[key]=typeof altered[key]==='boolean'?!altered[key]:altered[key]+1;assert.throws(()=>requireWindowsFleetUpdateScheduleDetails(altered),key);
+ }
+ for(const invalid of [null,undefined,false,[],{}])assert.throws(()=>requireWindowsFleetUpdateScheduleDetails(invalid));
 });
