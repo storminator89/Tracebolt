@@ -98,6 +98,39 @@ class CurrentSetupContract(unittest.TestCase):
                     with self.subTest(case=case,stage=stage,key=key),self.assertRaises(r.shared.Rejected):self.validate(bad)
                 v["checks"]["hiddenConsoleExercised"]=True
                 with self.assertRaises(r.shared.Rejected):self.validate(v)
+    def test_initial_chooser_stages_are_finite_failure_only_across_cases(self):
+        go=(r.ROOT/"internal/windowsacceptance/setupgate/initial_chooser.go").read_text()
+        literal=go.split("var InitialChooserFailureStages = []string{",1)[1].split("}",1)[0]
+        self.assertEqual(set(re.findall(r'"([a-z-]+)"',literal)),r.INITIAL_CHOOSER_FAILURE_STAGES)
+        for case in r.CHECKS:
+            for stage in r.INITIAL_CHOOSER_FAILURE_STAGES:
+                v=report(case)
+                v.update(status="failed",stage=stage,reason="operation_failed",startup="inspection_required",frames=0,
+                         frameProgress=r.zero_frame_progress(),receiptProof=report("cancel-hidden-input")["receiptProof"],
+                         checks=dict.fromkeys(r.CHECKS[case],False))
+                self.assertEqual(self.validate(v),v)
+                for key,value in (("stage",stage+"-private"),("stage",stage+"\n"),("reason","private-native-error")):
+                    bad=copy.deepcopy(v);bad[key]=value
+                    with self.assertRaises(r.shared.Rejected):self.validate(bad)
+                bad=copy.deepcopy(v);bad.update(status="blocked",approvalValidated=False,nativeActionsAttempted=False,platformDisposalRequired=False)
+                with self.assertRaises(r.shared.Rejected):self.validate(bad)
+                bad=report(case);bad["stage"]=stage
+                with self.assertRaises(r.shared.Rejected):self.validate(bad)
+    def test_initial_chooser_opt_in_is_only_current_initial_launches(self):
+        driver=(r.ROOT/"cmd/windows-service/current_setup_acceptance_native_windows_test.go").read_text()
+        self.assertEqual(driver.count("setupLaunchInitialObserved("),2)
+        self.assertIn("preflight, err = setupLaunchInitialObserved(ctx, exe, stage)",driver)
+        self.assertIn("g, e := setupLaunchInitialObserved(ctx, exe, func(s string) { r.Stage = s })",driver)
+        native=(r.ROOT/"cmd/windows-service/setup_acceptance_ui_windows_test.go").read_text()
+        self.assertIn("return setupLaunchObserved(ctx, path, nil)",native)
+        self.assertIn("setupgate.NewInitialChooser(time.Now().Add(15*time.Second)",native)
+        self.assertIn('else if setupAwait(ctx, 15*time.Second',native)
+        choose=native.split("func (g *setupGUI) chooseObserved",1)[1].split("func (g *setupGUI) consent",1)[0]
+        self.assertIn("g.initialChooser.Click(stage)",choose)
+        self.assertIn('else if setupClickObserved(g.window, 102, "chooser-click", stage)',choose)
+        for other in r.ROOT.joinpath("cmd/windows-service").glob("*acceptance*go"):
+            if other.name not in ("setup_acceptance_ui_windows_test.go","current_setup_acceptance_native_windows_test.go"):
+                self.assertNotIn("setupLaunchInitialObserved(",other.read_text())
     def test_installer_diagnostics_are_finite_stage_bound_and_match_source(self):
         go=(r.ROOT/"internal/windowsacceptance/currentsetupgate/hidden_input.go").read_text()
         literal=go.split("var hiddenInputPackageCodes = []string{",1)[1].split("}",1)[0]

@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "sourceCommit": "fccc4b00cd8a144afd58e4b995747afab7a10022",
-  "goSourceSha256": "c34584816f77c4821851a2566d85bab24563a80ec845cd0a37b0585a30d90eb2",
+  "goSourceSha256": "e7de16b14b87a0f317d9bfb556ee4eb38425a1b9de26e0287fa3f6bc26613471",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -2916,7 +2916,9 @@
       "TestWindowsSessionContextOldV10RetryBytesAndReplacement",
       "TestWindowsSessionContextPreviewPreservesExistingRecord",
       "TestWindowsSessionContextRetryRestartAndRevocation",
+      "TestWindowsSetupAllContractsReachExactPublicRoute",
       "TestWindowsSetupCompatibilityResponseBoundedAndExact",
+      "TestWindowsSetupCurrentRoutesKeepExactTransportGuards",
       "TestWindowsSetupExplicitHTTPProfileKeepsOriginalTransport",
       "TestWindowsSetupTransportDoesNotBroadenProofTransport",
       "TestWindowsSoftwareExecutorAuthorityNoLockOrSecretEscapesCallback",
@@ -3835,7 +3837,8 @@
       "TestFiniteReportCoverageAndIndeterminateTruth",
       "TestHiddenInputFailureReportNeverBecomesAcceptance",
       "TestHiddenInputInstallerDiagnosticExactFiniteEnvelope",
-      "TestHiddenInputProbeDistinguishesTerminalAndConsoleFailures"
+      "TestHiddenInputProbeDistinguishesTerminalAndConsoleFailures",
+      "TestInitialChooserStagesAreFiniteFailureOnlyAcrossCurrentCases"
     ],
     "localrmm/internal/windowsacceptance/fixture": [
       "TestConcurrentSyntheticObservationAndClose",
@@ -3844,6 +3847,7 @@
       "TestCurrentInitialRenewableEnrollmentAndCapabilities",
       "TestCurrentObservationClosedValidation",
       "TestCurrentOrdinaryAndFourIndependentDomains",
+      "TestCurrentSetupCompatibilityThroughPublicTLSClient",
       "TestCurrentSourceCaptureFloorsAndStrictTelemetry",
       "TestExpandedExactDuplicateBeforeCaptureAge",
       "TestExpandedIndependentCaptureFences",
@@ -4019,6 +4023,16 @@
       "TestFreshFailureStagesStayFiniteAndInert",
       "TestFreshPrerequisitePipelineStopsBeforeLaterChecks",
       "TestFreshTwelveApprovalParsingDoesNotEnableHistoricalNativeGate",
+      "TestInitialChooserEveryGeometryFailureStopsWithoutRetry",
+      "TestInitialChooserExitAndCancellationStopDiscoveryAndReadiness",
+      "TestInitialChooserFailedPostIsSpentAndNeverRepeated",
+      "TestInitialChooserInvalidIdentityAndAPIErrorsAreTerminal",
+      "TestInitialChooserLateCallbacksAndDisabledFinalObservationNeverPost",
+      "TestInitialChooserMalformedCallsAndRepeatedDiscoveryAreInert",
+      "TestInitialChooserPermanentDisabledAndDiscoveryUseOneDeadline",
+      "TestInitialChooserRemainingBudgetCapsWaitAndLateInitialCallFails",
+      "TestInitialChooserTransientDisabledPostsOnceWithinSharedBudget",
+      "TestInitialChooserWaitErrorIsTerminalAndPrivate",
       "TestPreflightSequenceEveryFailureStops",
       "TestRemovalFailureParserExactEnvelopeAndPairs",
       "TestRemovalFailureReportCannotGrantAcceptance",

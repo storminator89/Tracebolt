@@ -181,13 +181,28 @@ func setupInteractiveDesktop() bool {
 }
 
 type setupGUI struct {
-	process, job windows.Handle
-	pid          uint32
-	window       uintptr
-	closed       bool
+	process, job   windows.Handle
+	pid            uint32
+	window         uintptr
+	closed         bool
+	initialChooser *setupgate.InitialChooser
+	initialControl uintptr
 }
 
 func setupLaunch(ctx context.Context, path string) (*setupGUI, error) {
+	return setupLaunchObserved(ctx, path, nil)
+}
+
+// Only the current-profile initial launch opts into readiness. Reopened,
+// uninstall and historical launches retain their original one-shot behavior.
+func setupLaunchInitialObserved(ctx context.Context, path string, stage func(string)) (*setupGUI, error) {
+	if stage == nil {
+		return nil, setupgate.ErrGuard
+	}
+	return setupLaunchObserved(ctx, path, stage)
+}
+
+func setupLaunchObserved(ctx context.Context, path string, initialStage func(string)) (*setupGUI, error) {
 	if ctx.Err() != nil || !filepath.IsAbs(path) {
 		return nil, setupgate.ErrGuard
 	}
@@ -248,12 +263,115 @@ func setupLaunch(ctx context.Context, path string) (*setupGUI, error) {
 		g.dispose()
 		return nil, setupgate.ErrGuard
 	}
-	if setupAwait(ctx, 15*time.Second, func() bool { g.window = setupWindow(g.pid, "TraceboltFreshSetupWizard"); return g.window != 0 }) != nil {
+	if initialStage != nil {
+		// The original discovery budget is absolute and also covers readiness
+		// and the initial BM_CLICK. Nothing starts a second readiness deadline.
+		g.initialChooser = setupgate.NewInitialChooser(time.Now().Add(15*time.Second), g.pid, setupgate.InitialChooserSteps{
+			Now: time.Now, Canceled: func() bool { return ctx.Err() != nil },
+			Process: func() bool {
+				if g.closed || g.process == 0 {
+					return false
+				}
+				state, err := windows.WaitForSingleObject(g.process, 0)
+				return err == nil && state == uint32(windows.WAIT_TIMEOUT)
+			},
+			Wait: func(delay time.Duration) error {
+				timer := time.NewTimer(delay)
+				defer timer.Stop()
+				select {
+				case <-ctx.Done():
+					return setupgate.ErrGuard
+				case <-timer.C:
+					return nil
+				}
+			},
+			Discover: g.discoverInitialChooser,
+			Observe:  g.observeInitialChooser,
+			Visibility: func(stage func(string)) error {
+				return setupVisibleControlObserved(g.initialControl, "chooser-click", stage)
+			},
+			Post: func() bool { return setupCall("PostMessageW", g.initialControl, 0x00f5, 0, 0) != 0 },
+		})
+		if g.initialChooser.Discover(initialStage) != nil {
+			g.dispose()
+			return nil, setupgate.ErrGuard
+		}
+	} else if setupAwait(ctx, 15*time.Second, func() bool { g.window = setupWindow(g.pid, "TraceboltFreshSetupWizard"); return g.window != 0 }) != nil {
 		g.dispose()
 		return nil, setupgate.ErrGuard
 	}
 	return g, nil
 }
+
+// Discovery never substitutes a new root or control after pinning. Enumerate
+// strictly so an API failure or ambiguous owned wizard cannot become absence.
+func (g *setupGUI) discoverInitialChooser() (setupgate.InitialChooserIdentity, error) {
+	var found uintptr
+	failed := false
+	callback := syscall.NewCallback(func(h, _ uintptr) uintptr {
+		var pid uint32
+		thread := setupCall("GetWindowThreadProcessId", h, uintptr(unsafe.Pointer(&pid)))
+		if thread == 0 {
+			failed = true
+			return 0
+		}
+		if pid != g.pid {
+			return 1
+		}
+		var name [128]uint16
+		if setupCall("GetClassNameW", h, uintptr(unsafe.Pointer(&name[0])), uintptr(len(name))) == 0 {
+			failed = true
+			return 0
+		}
+		if windows.UTF16ToString(name[:]) != "TraceboltFreshSetupWizard" || setupCall("IsWindowVisible", h) == 0 {
+			return 1
+		}
+		if found != 0 {
+			failed = true
+			return 0
+		}
+		found = h
+		return 1
+	})
+	if setupCall("EnumWindows", callback, 0) == 0 || failed {
+		return setupgate.InitialChooserIdentity{}, setupgate.ErrGuard
+	}
+	if found == 0 {
+		return setupgate.InitialChooserIdentity{}, nil
+	}
+	g.window, g.initialControl = found, setupControl(found, 102)
+	identity, _, err := g.observeInitialChooser()
+	return identity, err
+}
+
+func (g *setupGUI) observeInitialChooser() (setupgate.InitialChooserIdentity, bool, error) {
+	bad := func() (setupgate.InitialChooserIdentity, bool, error) {
+		return setupgate.InitialChooserIdentity{}, false, setupgate.ErrGuard
+	}
+	root, control := g.window, g.initialControl
+	if root == 0 || control == 0 || setupCall("IsWindow", root) == 0 || setupCall("IsWindow", control) == 0 ||
+		setupCall("GetAncestor", root, 2) != root || setupCall("GetAncestor", control, 2) != root || setupControl(root, 102) != control {
+		return bad()
+	}
+	var rootPID, controlPID uint32
+	rootThread := setupCall("GetWindowThreadProcessId", root, uintptr(unsafe.Pointer(&rootPID)))
+	controlThread := setupCall("GetWindowThreadProcessId", control, uintptr(unsafe.Pointer(&controlPID)))
+	if rootThread == 0 || controlThread != rootThread || rootPID != g.pid || controlPID != g.pid {
+		return bad()
+	}
+	var name [128]uint16
+	if setupCall("GetClassNameW", root, uintptr(unsafe.Pointer(&name[0])), uintptr(len(name))) == 0 || windows.UTF16ToString(name[:]) != "TraceboltFreshSetupWizard" {
+		return bad()
+	}
+	enabled := setupEnabled(control)
+	// IsWindowEnabled's zero means either disabled or invalid. Validate again so
+	// an invalid HWND is never deliberately retried as a layout transition.
+	if setupCall("IsWindow", root) == 0 || setupCall("IsWindow", control) == 0 || setupControl(root, 102) != control {
+		return bad()
+	}
+	return setupgate.InitialChooserIdentity{Process: rootPID, Thread: uint32(rootThread), Root: root, Control: control}, enabled, nil
+}
+
 func (g *setupGUI) dispose() {
 	if g == nil || g.closed {
 		return
@@ -291,7 +409,11 @@ func (g *setupGUI) choose(ctx context.Context, path string) error {
 }
 func (g *setupGUI) chooseObserved(ctx context.Context, path string, stage func(string)) error {
 	stage("chooser-click")
-	if setupClickObserved(g.window, 102, "chooser-click", stage) != nil {
+	if g.initialChooser != nil {
+		if g.initialChooser.Click(stage) != nil {
+			return setupgate.ErrGuard
+		}
+	} else if setupClickObserved(g.window, 102, "chooser-click", stage) != nil {
 		return setupgate.ErrGuard
 	}
 	var dialog uintptr
