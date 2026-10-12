@@ -21,10 +21,10 @@ COVERAGE = {
 
 SHARD_COVERAGE = [
     ('  backend-checks:\n', '  go-race:\n', 'df9b077b16ef0d63d97cc727b9436c6169615f9dc344f6e317deafff157e521e'),
-    ('  go-race:\n', '  backend:\n', '105a1ee6f737da7f864e531ba5bcd2131b493349606fa0a016851d7df1f97550'),
+    ('  go-race:\n', '  backend:\n', '63e0c59ad44d2fd84f2c0009c99812c4c742202bbc3013a67be7da6596da0e61'),
     ('  backend:\n', '  transport-smoke:\n', '31fe09e170c4aab4adc0238ad240c639cd8c225fecfa89afe87f27a219bc6740'),
 ]
-RUNNER_SHA256 = '2ebe82250cdb8b21d0072e76ab961613e7ff814a8e2277d90de038addad5fab9'
+RUNNER_SHA256 = 'd8a592c1cbe85176a1b120d3a4fb386de981d7f8d484b922ec85f92f0cf0492b'
 
 
 def between(source, start, end):
@@ -75,9 +75,34 @@ class CoverageTests(unittest.TestCase):
             ("--check-needs", "--help"),
         ]:
             with self.subTest(change=new):
-                self.assertEqual(block.count(old), 1)
+                self.assertEqual(block.count(old), 2 if old == "if-no-files-found: error" else 1)
                 with self.assertRaises(ValueError):
                     check_coverage(self.source.replace(block, block.replace(old, new, 1), 1))
+
+    def test_one_transport_fallback_keeps_same_file_and_fails_closed(self):
+        block = between(self.source, "  go-race:\n", "  backend:\n")
+        primary, fallback = block.split("      - name: Upload normalized completion evidence only\n", 1)[1].split(
+            "      - name: Retry normalized completion upload once\n")
+        action = "uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1"
+        self.assertEqual(block.count(action), 2)
+        self.assertEqual(block.count("        continue-on-error: true\n"), 1)
+        self.assertIn("        id: completion-upload\n        continue-on-error: true\n", primary)
+        self.assertNotIn("        if:", primary)
+        self.assertIn("        if: ${{ !cancelled() && steps.completion-upload.outcome == 'failure' }}\n", fallback)
+        self.assertNotIn("continue-on-error:", fallback)
+        self.assertNotIn("overwrite:", primary + fallback)
+        self.assertNotIn("run:", primary + fallback)
+        for upload, suffix in ((primary, ""), (fallback, "-fallback")):
+            self.assertIn("          name: go-race-${{ github.run_attempt }}-${{ matrix.shard }}" + suffix + "\n", upload)
+            self.assertIn("          path: ${{ runner.temp }}/go-race-report/completion.json\n", upload)
+            self.assertIn("          if-no-files-found: error\n          retention-days: 1\n", upload)
+        self.assertEqual(block.count("--shard"), 1)  # Never rerun tests on transfer failure.
+        for old, new in (("steps.completion-upload.outcome", "steps.completion-upload.conclusion"),
+                         ("&& steps.completion-upload.outcome == 'failure'", "|| true"),
+                         ("${{ matrix.shard }}-fallback", "${{ matrix.shard }}"),
+                         ("- name: Retry normalized completion upload once\n", "- name: Retry normalized completion upload once\n        continue-on-error: true\n")):
+            with self.subTest(change=new), self.assertRaises(ValueError):
+                check_coverage(self.source.replace(old, new, 1))
 
     def test_extra_missing_unanchored_exclusion_or_weakened_runner_fails(self):
         runner = (ROOT / "tests/security/go_race_shards.py").read_bytes()

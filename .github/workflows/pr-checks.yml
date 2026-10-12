@@ -1,0 +1,233 @@
+name: Focused source checks
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: focused-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  select:
+    name: Select affected source checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    outputs:
+      plan: ${{ steps.select.outputs.plan }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Verify selector and full-suite contracts with inert fixtures
+        run: |
+          python3 -I -B tests/security/test_pr_checks.py
+          python3 -I -O -B tests/security/test_pr_checks.py
+          python3 -I -B tests/security/test_full_validation_gate.py
+          python3 -I -O -B tests/security/test_full_validation_gate.py
+          python3 -B tests/security/test_go_aggregate_coverage.py
+      - name: Prepare verified dependencies
+        run: |
+          go mod download
+          go mod verify
+      - name: Select from exact changed source and Go import/test dependencies
+        id: select
+        env:
+          TRACEBOLT_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          GOTOOLCHAIN: local
+          GOPROXY: 'off'
+          GOSUMDB: 'off'
+        run: python3 -I -B tests/security/pr_checks.py select
+
+  backend:
+    name: Focused Go build and safety checks
+    needs: select
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      TRACEBOLT_PR_PLAN: ${{ needs.select.outputs.plan }}
+      GOTOOLCHAIN: local
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Verify dependencies and build all Linux source
+        run: |
+          go mod download
+          go mod verify
+          go build -buildvcs=false ./...
+          go vet -buildvcs=false ./...
+      - name: Cross-build all Windows source without execution
+        env:
+          GOOS: windows
+          GOARCH: amd64
+          CGO_ENABLED: '0'
+        run: go build -buildvcs=false ./...
+      - name: Fixed authorization and durable-state regressions plus affected packages
+        env:
+          GOPROXY: 'off'
+          GOSUMDB: 'off'
+        run: python3 -I -B tests/security/pr_checks.py go
+
+  frontend:
+    name: Focused UI build and interactions
+    needs: select
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      TRACEBOLT_PR_PLAN: ${{ needs.select.outputs.plan }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Prepare Go-backed UI fixture dependencies without running fixtures
+        run: |
+          go mod download
+          go mod verify
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - name: Whole UI type check and production build
+        working-directory: web
+        run: npm ci && npm run build
+      - name: Fixed auth and affected UI tests
+        run: |
+          node --test tests/e2e-review/pr-browser-smoke.test.mjs
+          python3 -I -B tests/security/pr_checks.py web
+
+  browser:
+    name: Focused browser flows
+    needs: select
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      TRACEBOLT_PR_PLAN: ${{ needs.select.outputs.plan }}
+      TRACEBOLT_SOURCE_SHA: ${{ github.sha }}
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - name: Build whole UI and prepare existing browser runtime
+        working-directory: web
+        run: |
+          npm ci
+          npm run build
+          npx playwright install --with-deps chromium
+      - name: Authenticated smoke and affected existing browser flows
+        run: python3 -I -B tests/security/pr_checks.py browser
+      - name: Keep successful focused public-safe screenshots only
+        if: success()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: focused-ui-review-${{ github.sha }}
+          path: |
+            artifacts/review/synthetic-*.png
+            artifacts/review/pr-browser-smoke-results.json
+            artifacts/review/pr-browser-smoke-manifest.json
+            artifacts/review/results.json
+            artifacts/review/screenshot-manifest.json
+            artifacts/review/managed-preview-result.json
+            artifacts/review/lan-browser-results.json
+            artifacts/review/lan-browser-manifest.json
+            artifacts/review/windows-full-services-results.json
+            artifacts/review/windows-full-services-manifest.json
+            artifacts/review/windows-service-actions-results.json
+            artifacts/review/windows-service-actions-manifest.json
+            artifacts/review/windows-managed-msi-results.json
+            artifacts/review/windows-managed-msi-manifest.json
+            artifacts/review/windows-fleet-msi-results.json
+            artifacts/review/windows-fleet-msi-manifest.json
+            artifacts/review/windows-reusable-msi-results.json
+            artifacts/review/windows-reusable-msi-manifest.json
+            artifacts/review/windows-software-catalogue-results.json
+            artifacts/review/windows-saved-msi-manifest.json
+            artifacts/review/windows-saved-msi-results.json
+            artifacts/review/windows-software-catalogue-manifest.json
+            artifacts/review/windows-mutation-coexistence-results.json
+            artifacts/review/windows-mutation-coexistence-manifest.json
+            artifacts/review/enrollment-browser-results.json
+            artifacts/review/enrollment-browser-manifest.json
+            artifacts/review/conditional-browser-results.json
+            artifacts/review/conditional-browser-manifest.json
+            artifacts/review/v3-mvp-browser-results.json
+            artifacts/review/v3-mvp-browser-manifest.json
+            artifacts/review/endpoint-browser-results.json
+            artifacts/review/endpoint-browser-manifest.json
+            artifacts/review/fleet-identity-browser-results.json
+            artifacts/review/fleet-identity-browser-manifest.json
+            artifacts/review/windows-full-software-results.json
+            artifacts/review/windows-full-software-manifest.json
+            artifacts/review/windows-software-history-results.json
+            artifacts/review/windows-software-history-manifest.json
+            artifacts/review/windows-user-software-results.json
+            artifacts/review/windows-user-software-manifest.json
+            artifacts/review/windows-event-history-results.json
+            artifacts/review/windows-event-history-manifest.json
+            artifacts/review/fleet-groups-results.json
+            artifacts/review/fleet-groups-manifest.json
+            artifacts/review/windows-incident-inbox-results.json
+            artifacts/review/windows-incident-inbox-manifest.json
+            artifacts/review/windows-maintenance-results.json
+            artifacts/review/windows-maintenance-manifest.json
+            artifacts/review/windows-full-processes-results.json
+            artifacts/review/windows-full-processes-manifest.json
+            artifacts/review/windows-network-context-results.json
+            artifacts/review/windows-network-context-manifest.json
+            artifacts/review/windows-storage-io/windows-storage-io-results.json
+            artifacts/review/windows-storage-io/windows-storage-io-manifest.json
+            artifacts/review/windows-storage-io/synthetic-windows-storage-io-*.png
+            artifacts/review/journal-browser-results.json
+            artifacts/review/journal-browser-manifest.json
+            artifacts/review/complete-overview-browser-results.json
+            artifacts/review/complete-overview-browser-manifest.json
+            artifacts/review/service-action-browser-results.json
+            artifacts/review/service-action-v2-browser-results.json
+            artifacts/review/service-action-v2-*.png
+          if-no-files-found: warn
+          retention-days: 3
+
+  focused:
+    name: PR build and affected-flow checks
+    if: ${{ always() }}
+    needs: [select, backend, frontend, browser]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      - name: Require every focused prerequisite, including selection
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          python3 - <<'PY'
+          import json, os
+          value = json.loads(os.environ['RESULTS'])
+          if set(value) != {'select', 'backend', 'frontend', 'browser'} or any(item.get('result') != 'success' for item in value.values()):
+              raise SystemExit('FAIL: focused prerequisite failed, skipped, cancelled or missing.')
+          print('PASS: focused source tier only; full Validate and native release gates remain separate.')
+          PY

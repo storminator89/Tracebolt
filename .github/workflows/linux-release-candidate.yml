@@ -3,6 +3,10 @@ name: Build attested Linux release candidate
 on:
   workflow_dispatch:
     inputs:
+      full_validation_run_id:
+        description: 'Exact successful full Validate run ID for the released source SHA (never focused PR checks)'
+        required: true
+        type: string
       version:
         description: 'New reviewed version, for example v0.1.0-rc.1'
         required: true
@@ -18,6 +22,7 @@ on:
 # explicitly selected publication job. No signing secret or host installation.
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: tracebolt-linux-release-${{ inputs.version }}
@@ -28,6 +33,7 @@ jobs:
     if: github.repository == 'storminator89/Tracebolt' && github.ref == 'refs/heads/main'
     permissions:
       contents: read
+      actions: read
       id-token: write
       attestations: write
     runs-on: ubuntu-24.04
@@ -42,6 +48,12 @@ jobs:
         with:
           go-version-file: go.mod
           cache: false
+      - name: Require full validation of the exact released source
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FULL_SOURCE_SHA: ${{ github.sha }}
+          FULL_RUN_ID: ${{ inputs.full_validation_run_id }}
+        run: python3 -I -B tests/security/check_full_validation.py --source-sha "$FULL_SOURCE_SHA" --run-id "$FULL_RUN_ID"
       - name: Verify bootstrap negative and keyless-policy fixture paths
         env:
           PYTHONDONTWRITEBYTECODE: '1'
@@ -88,6 +100,7 @@ jobs:
     if: inputs.publish && github.repository == 'storminator89/Tracebolt' && github.ref == 'refs/heads/main'
     permissions:
       contents: write
+      actions: read
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -100,6 +113,12 @@ jobs:
           artifact-ids: ${{ needs.candidate.outputs.artifact-id }}
           path: ${{ runner.temp }}/tracebolt-publication-input
           merge-multiple: true
+      - name: Require full validation of the exact released source
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FULL_SOURCE_SHA: ${{ github.sha }}
+          FULL_RUN_ID: ${{ inputs.full_validation_run_id }}
+        run: python3 -I -B tests/security/check_full_validation.py --source-sha "$FULL_SOURCE_SHA" --run-id "$FULL_RUN_ID"
       - name: Reverify all provenance and bytes, then publish without overwrite
         env:
           GH_TOKEN: ${{ github.token }}

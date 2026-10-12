@@ -1,5 +1,9 @@
 # Complete Go race coverage across separate runners
 
+Routine PR/main checks now use the separate [focused source tier](two-tier-ci.md).
+This full Validate workflow runs manually/nightly and remains mandatory exact-source
+release evidence; its coverage and aggregate check retain their original meaning.
+
 The Validate workflow keeps the required check name **Go tests and build-only
 platform checks**. It now aggregates three race runners plus the unchanged
 build/runtime checks and the existing four-case dense race gate. It runs with
@@ -76,7 +80,7 @@ Artifacts expire after one day.
 
 ## Why three runners
 
-The weights come from the successful main run
+The original weights came from the successful main run
 [38058537360, Go job 114231878636](https://github.com/storminator89/Tracebolt/actions/runs/38058537360/job/114231878636)
 at source `f3b85720ceee2508b110bbcd3feccb8306a7fcf5`. Its Go command took 2,025
 seconds. The two largest package durations were approximately 593 seconds
@@ -85,13 +89,49 @@ took 2,194 and 2,238 seconds for the Go command. Only the twenty largest package
 durations were exported; the remainder includes both smaller-package execution
 and build/orchestration work. It is not an isolated cold-build measurement.
 
-Three runners balance those measured package weights plus a 3-second scheduling
-estimate for each unmeasured test package. At this baseline the estimated loads
+Three runners originally balanced those measured package weights plus a 3-second scheduling
+estimate for each unmeasured test package. At that baseline the estimated loads
 are approximately 689/688/689 seconds. Those numbers are scheduling inputs, not
 runtime forecasts. The slowest indivisible package imposes a floor. A fourth
 runner lowers the idealized floor by less than two minutes in these samples,
 while the unchanged frontend/browser chain already takes roughly 15–18 minutes.
 Three is therefore the bounded first experiment, not a speed guarantee.
+
+### Refreshed scheduling weights
+
+The current weights use already-recorded normalized completion artifacts from
+two runs of the same tested merge commit
+`504c0c4c15691bd8563cf424ed9b4a5d24f47db0`, with Go-source digest
+`e7de16b14b87a0f317d9bfb556ee4eb38425a1b9de26e0287fa3f6bc26613471`:
+
+- [Run 38278986648, shard 0](https://github.com/storminator89/Tracebolt/actions/runs/38278986648/job/114911351164), attempt 1, artifact `11760799455`
+- [Run 38278986648, shard 1](https://github.com/storminator89/Tracebolt/actions/runs/38278986648/job/114911351155), attempt 1, artifact `11760827513`
+- [Run 38273976221, shard 2](https://github.com/storminator89/Tracebolt/actions/runs/38273976221/job/114894841403), attempt 1, artifact `11760242346`
+
+The schema-v2 weights file records these exact identities plus each artifact ZIP
+and normalized completion file's SHA-256. Its provenance is pinned by the reader.
+These historical reports supply scheduling measurements only: mixing runs here
+does not authorize mixing runs or attempts in current completion evidence. They
+are not a complete successful workflow run or proof that current source passed.
+
+The reports cover 227 distinct packages, including 196 positive test-package
+weights. Each weight is the recorded package elapsed time in integer milliseconds;
+enrollmentstore additionally includes all five inventory groups. Its combined
+1,588,821ms replaces the old 592,837ms weight. API and lanclient become 605,923ms
+and 586,978ms respectively. No-test packages retain zero cost through discovery;
+new unmeasured test packages retain the 3,000ms estimate. Weights never select tests.
+
+Only enrollmentstore's scheduling weight may exceed 900,000ms, bounded by six
+times 900,000ms for its default invocation and five groups. Every individual
+invocation still has the same 15-minute timeout; the job budget stays 60 minutes.
+The package remains on shard 0 with all of its exact root groups unchanged.
+
+Arithmetic replay of the unchanged partition algorithm on those recorded
+packages changes the modeled workloads from 1,770.164 / 779.512 / 2,102.651 seconds
+to 1,588.821 / 1,531.753 / 1,531.753 seconds. The modeled longest workload falls by
+513.830 seconds (24.4%). This is a scheduling estimate, not a benchmark or measured
+new run. It omits compilation, setup and orchestration overhead, and mixes samples
+from two runs; runner variation and newer packages can change actual results.
 
 There is a runner-cost tradeoff: the former single backend job becomes one
 build/runtime job, three race jobs and one aggregate job. Compared with baseline,
